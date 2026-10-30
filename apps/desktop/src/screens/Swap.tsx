@@ -529,7 +529,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
 function TokenPanel({ label, right, amount, sub, token }: { label: string; right: React.ReactNode; amount: React.ReactNode; sub: string; token: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1 rounded-box border border-line bg-bg px-[22px] py-3.5 transition-colors duration-150 focus-within:border-line-3">
+    <div className="flex flex-col gap-1 rounded-box border border-line bg-bg px-[22px] py-3.5 transition-[border-color,box-shadow] duration-150 focus-within:shadow-[0_0_0_1px_rgba(124,196,255,.35)]">
       <div className="flex justify-between text-[13px]">
         <span className="eyebrow">{label}</span>
         <span className="text-text2">{right}</span>

@@ -13,8 +13,9 @@ import { TorIndicator } from '../components/Tor';
 export function StatusFrame({ left, right }: { left: ReactNode; right?: ReactNode }) {
   const { network, demo } = useApp();
   return (
-    <footer className="flex h-7 shrink-0 items-center justify-between border-t border-rail bg-bg-deep px-3.5 font-mono text-[11px] text-faint">
-      <div className="flex min-w-0 items-center gap-[18px] overflow-hidden whitespace-nowrap">{left}</div>
+    <footer className="flex h-7 shrink-0 items-center justify-between gap-2 border-t border-rail bg-bg-deep px-3.5 font-mono text-[11px] text-faint">
+      {/* Fades out instead of being cut mid-word when the window is narrow. */}
+      <div className="flex min-w-0 items-center gap-[18px] overflow-hidden pr-6 whitespace-nowrap [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)]">{left}</div>
       <div className="flex shrink-0 items-center gap-[18px]">
         <TorIndicator />
         {right}

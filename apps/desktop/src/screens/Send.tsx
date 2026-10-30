@@ -464,7 +464,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <label htmlFor="dest" className="eyebrow">
               À
             </label>
-            <div className={cn('overflow-hidden rounded-box border bg-bg transition-colors duration-200', guard.tampered && settings.clipboardGuard ? 'border-down/70' : addrValid ? 'border-ice-line' : 'border-line-2')}>
+            <div className={cn('overflow-hidden rounded-box border bg-bg transition-[border-color,box-shadow] duration-200 focus-within:shadow-[0_0_0_1px_rgba(124,196,255,.35)]', guard.tampered && settings.clipboardGuard ? 'border-down/70' : addrValid ? 'border-ice-line' : 'border-line-2')}>
               <div className={cn('flex h-12 items-center gap-2.5 pr-2 pl-4', addrValid && 'border-b border-control-2')}>
                 <input
                   id="dest"
@@ -940,7 +940,7 @@ function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory
         {children}
         {!contactKnown && !saved && (
           <div className="flex w-full items-center gap-2">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom pour le carnet d’adresses" className="h-10 min-w-0 flex-1 rounded-ctl border border-line-2 bg-bg px-3 text-[13px]" />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom pour le carnet d’adresses" className="h-10 min-w-0 flex-1 rounded-ctl border border-line-2 bg-bg px-3 text-[13px] focus:border-ice-line" />
             <Button
               size="md"
               disabled={!name.trim()}

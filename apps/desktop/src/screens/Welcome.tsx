@@ -33,7 +33,7 @@ export function VaultDial({ footer }: { footer?: ReactNode }) {
       {/* Two hairlines crossing at the dial centre. */}
       <div className="absolute top-[47%] right-0 left-0 h-px bg-line/70" />
       <div className="absolute top-0 bottom-0 left-1/2 w-px bg-line/70" />
-      <div className="absolute top-[47%] left-1/2 h-0 w-0">
+      <div className="dial-scale absolute top-[47%] left-1/2 h-0 w-0">
         <div className="absolute -top-[330px] -left-[330px] size-[660px] rounded-full border border-line/80" />
         <div className="absolute -top-[262px] -left-[262px] size-[524px] rounded-full border border-line bg-bg-deep" />
         <div className="dial-drift absolute top-0 left-0 h-0 w-0">

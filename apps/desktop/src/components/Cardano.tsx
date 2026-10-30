@@ -106,7 +106,7 @@ export function CardanoSendFields({
               Tout ({selected.quantity})
             </button>
           </div>
-          <input id="ada-qty" inputMode="numeric" value={quantity} onChange={(e) => onQuantity(e.target.value.replace(/\D/g, ''))} placeholder="0" className="h-11 rounded-ctl border border-line-3 bg-bg px-3 font-mono text-[16px] font-semibold text-text" />
+          <input id="ada-qty" inputMode="numeric" value={quantity} onChange={(e) => onQuantity(e.target.value.replace(/\D/g, ''))} placeholder="0" className="h-11 rounded-ctl border border-line-3 bg-bg px-3 font-mono text-[16px] font-semibold text-text focus:border-ice-line" />
           <span className="text-[12px] leading-[1.45] text-mute">
             {selected.verified ? '' : 'Unités brutes (le token n’est pas dans la table vérifiée de Kyro, ses décimales sont inconnues). '}
             Policy <span className="font-mono">{selected.policy}</span>. La sortie emporte aussi le minimum d’ADA obligatoire avec un token (min-ADA), affiché dans la vérification.
@@ -124,7 +124,7 @@ export function CardanoSendFields({
           <span>Message (facultatif, CIP-20)</span>
           <span className={memoBytes > 1024 ? 'text-down' : 'text-faint'}>{memoBytes} / 1024 octets</span>
         </label>
-        <input id="ada-memo" value={memo} onChange={(e) => onMemo(e.target.value)} placeholder="ex. Facture 2026-11" className="h-11 rounded-ctl border border-line-2 bg-raised px-3 text-[14px] text-text" />
+        <input id="ada-memo" value={memo} onChange={(e) => onMemo(e.target.value)} placeholder="ex. Facture 2026-11" className="h-11 rounded-ctl border border-line-2 bg-bg px-3 text-[14px] text-text focus:border-ice-line" />
         {memo.trim() && <span className="text-[12px] leading-[1.45] text-warn">Le message est public et permanent : il reste lisible par tous sur la blockchain, pour toujours. N’y mets rien de personnel.</span>}
       </div>
     </div>

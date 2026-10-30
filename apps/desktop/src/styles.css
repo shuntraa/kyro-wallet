@@ -27,7 +27,7 @@
   --color-primary-hover: #ffffff;
   --color-on-primary: #08090b;
   --color-ice: #7cc4ff;
-  --color-ice-line: #2a4762;
+  --color-ice-line: #355b80;
   --color-ice-deep: #16263a;
   --color-ice-text: #cde9ff;
   --color-ice-text2: #a9d8ff;
@@ -82,6 +82,18 @@ svg {
 :focus-visible {
   outline: 1.5px solid var(--color-ice);
   outline-offset: 2px;
+}
+/* Text fields show focus through their frame (border → ice), not a second outline inside it. */
+input:not([type='checkbox']):not([type='radio']):focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+
+/* Welcome dial: below 1280 px the panel is narrower than the bezel. */
+@media (max-width: 1279px) {
+  .dial-scale {
+    scale: 0.86;
+  }
 }
 
 html,
