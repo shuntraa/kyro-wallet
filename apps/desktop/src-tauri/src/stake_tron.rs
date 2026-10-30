@@ -18,13 +18,13 @@ use wallet_core::{
 };
 use zeroize::Zeroizing;
 
+use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
 use crate::commands_tron::ctx;
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::tron_backend::{self, request, TronCtx, TronEstimate, EXPIRATION_MS};
 
-const INDEX: u32 = 0;
 /// java-tron `UNFREEZE_MAX_TIMES`: at most 32 unstakes waiting at the same time.
 const MAX_PENDING_UNFREEZE: usize = 32;
 /// Minimum stake (java-tron: `frozen_balance` ≥ 1 TRX).
@@ -281,13 +281,16 @@ async fn brokerage(c: &TronCtx<'_>, sr: &str) -> AppResult<u64> {
         .ok_or_else(|| AppError::ServerUnreachable("TRON : getBrokerage invalide".into()))
 }
 
-fn our_address(state: &AppState) -> AppResult<String> {
-    state.with_seed(|seed| Ok(wallet_core::tron_address(seed, INDEX)?))
+fn our_address(state: &AppState, account: Option<u32>) -> AppResult<String> {
+    crate::commands_tron::our_address(state, account_arg(account)?)
 }
 
 #[tauri::command]
-pub async fn tron_stake_overview(state: State<'_, AppState>) -> AppResult<TronStakeAccount> {
-    let me = our_address(&state)?;
+pub async fn tron_stake_overview(
+    state: State<'_, AppState>,
+    account: Option<u32>,
+) -> AppResult<TronStakeAccount> {
+    let me = our_address(&state, account)?;
     stake_account(&ctx(&state), &me).await
 }
 
@@ -579,8 +582,9 @@ pub(crate) async fn build(
 pub async fn tron_stake_build(
     state: State<'_, AppState>,
     action: TronStakeRequest,
+    account: Option<u32>,
 ) -> AppResult<TronStakeBuilt> {
-    let me = our_address(&state)?;
+    let me = our_address(&state, account)?;
     build(&ctx(&state), &me, &action).await
 }
 
@@ -740,11 +744,14 @@ pub async fn tron_stake_sign(
     state: State<'_, AppState>,
     raw: String,
     password: String,
+    account: Option<u32>,
 ) -> AppResult<TronStakeSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
-    let me = our_address(&state)?;
+    let a = account_arg(account)?;
+    let me = our_address(&state, Some(a))?;
+    let signer = SignerInfo::new(&state, Chain::Tron, a, wallet_core::tron_path(a));
     let summary = wallet_core::tron_decode_stake_raw(&raw, &me)?;
     tron_backend::check_expiration_ms(summary.expiration, now_ms())?;
     let c = ctx(&state);
@@ -753,9 +760,10 @@ pub async fn tron_stake_sign(
     confirm_native(
         &app,
         "Confirmer l'opération de staking TRON",
-        describe(&summary, &context, state.network, now_ms()),
+        signer.body(&describe(&summary, &context, state.network, now_ms())),
     )
     .await?;
+    confirm_signer(&app, &signer).await?;
     if context.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -765,8 +773,7 @@ pub async fn tron_stake_sign(
         .await?;
     }
     let r = raw.clone();
-    let (sig, again) =
-        blocking(move || Ok(wallet_core::tron_stake_sign(&seed, INDEX, &r)?)).await?;
+    let (sig, again) = blocking(move || Ok(wallet_core::tron_stake_sign(&seed, a, &r)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
             "résumé différent entre l'aperçu et la signature".into(),
@@ -1043,7 +1050,7 @@ mod live {
                 describe_extra(&ctx2)
             );
         }
-        let (sig, again) = wallet_core::tron_stake_sign(seed, INDEX, &built.raw).unwrap();
+        let (sig, again) = wallet_core::tron_stake_sign(seed, 0, &built.raw).unwrap();
         assert_eq!(again, summary);
         if std::env::var("KYRO_TRON_STAKE").as_deref() != Ok("yes") {
             eprintln!("{label}: KYRO_TRON_STAKE != yes, not broadcast");
@@ -1085,7 +1092,7 @@ mod live {
     fn tron_stake_live_nile() {
         let net = NetClient::new(std::env::temp_dir().join("kyro-tron-stake-live")).unwrap();
         let seed = wallet_core::Mnemonic::parse(ALL).unwrap().to_seed("");
-        let me = wallet_core::tron_address(&seed, INDEX).unwrap();
+        let me = wallet_core::tron_address(&seed, 0).unwrap();
         tauri::async_runtime::block_on(async {
             net.tor.restart();
             while net.tor.status().state != TorState::Ready {

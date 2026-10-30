@@ -11,6 +11,7 @@ use wallet_core::{
 };
 use zeroize::Zeroizing;
 
+use crate::accounts::{account_arg, btc_paths, confirm_signer, Chain, SignerInfo};
 use crate::error::{AppError, AppResult};
 use crate::net::{FetchRequest, FetchResponse};
 use crate::solana;
@@ -237,6 +238,8 @@ pub struct BtcAccountOut {
 #[derive(Serialize)]
 pub struct AddressOut {
     address: String,
+    /// Derivation path of the key behind `address`.
+    path: String,
 }
 
 #[derive(Serialize)]
@@ -258,23 +261,30 @@ pub struct UtxoAccountOut {
 #[derive(Serialize)]
 pub struct Accounts {
     network: &'static str,
+    /// Account index these addresses belong to (`accounts_get({ account })`).
+    account: u32,
     btc: BtcAccounts,
     evm: AddressOut,
     sol: AddressOut,
     ltc: UtxoAccountOut,
     doge: UtxoAccountOut,
-    /// `m/44'/195'/0'/0/0`.
+    /// `m/44'/195'/a'/0/0`.
     tron: AddressOut,
-    /// `m/44'/144'/0'/0/0`.
+    /// `m/44'/144'/a'/0/0`.
     xrp: AddressOut,
-    /// Base address `m/1852'/1815'/0'/0/0` + stake key `…/2/0` (CIP-1852, Icarus).
+    /// Base address `m/1852'/1815'/a'/0/0` + stake key `…/2/0` (CIP-1852, Icarus).
     cardano: AddressOut,
 }
 
-fn utxo_account_out(seed: &Seed, net: Network, coin: UtxoCoin) -> AppResult<UtxoAccountOut> {
-    let acc = wallet_core::utxo_account(seed, net, coin, 0)?;
+fn utxo_account_out(
+    seed: &Seed,
+    net: Network,
+    coin: UtxoCoin,
+    account: u32,
+) -> AppResult<UtxoAccountOut> {
+    let acc = wallet_core::utxo_account(seed, net, coin, account)?;
     Ok(UtxoAccountOut {
-        address: wallet_core::utxo_address(seed, net, coin, 0, false, 0)?,
+        address: wallet_core::utxo_address(seed, net, coin, account, false, 0)?,
         xpub: acc.xpub,
         fingerprint: acc.fingerprint,
         path: acc.path,
@@ -288,43 +298,59 @@ pub(crate) fn network_name(n: Network) -> &'static str {
     }
 }
 
-fn btc_account_out(seed: &Seed, net: Network, kind: BtcKind) -> AppResult<BtcAccountOut> {
-    let acc = wallet_core::btc_account(seed, net, kind, 0)?;
+fn btc_account_out(
+    seed: &Seed,
+    net: Network,
+    kind: BtcKind,
+    account: u32,
+) -> AppResult<BtcAccountOut> {
+    let acc = wallet_core::btc_account(seed, net, kind, account)?;
     Ok(BtcAccountOut {
-        address: wallet_core::btc_address(seed, net, kind, 0, false, 0)?,
+        address: wallet_core::btc_address(seed, net, kind, account, false, 0)?,
         xpub: acc.xpub,
         fingerprint: acc.fingerprint,
         path: acc.path,
     })
 }
 
+/// Public data of account `account` (absent = 0) on every chain. Used for the accounts of the
+/// user's lists and to preview the next one before adding it (`vault_account_add`).
 #[tauri::command]
-pub fn accounts_get(state: State<'_, AppState>) -> AppResult<Accounts> {
+pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResult<Accounts> {
+    let a = account_arg(account)?;
     let net = state.network;
     // Separate lock scope: `with_seed` and `with_cardano` take the same (non-reentrant) mutex.
-    let cardano = state.with_cardano(|r| Ok(wallet_core::cardano_address(r, net, 0, 0)?))?;
+    let cardano = state.with_cardano(|r| Ok(wallet_core::cardano_address(r, net, a, 0)?))?;
     state.with_seed(|seed| {
         Ok(Accounts {
             network: network_name(net),
+            account: a,
             btc: BtcAccounts {
-                segwit: btc_account_out(seed, net, BtcKind::Segwit)?,
-                taproot: btc_account_out(seed, net, BtcKind::Taproot)?,
+                segwit: btc_account_out(seed, net, BtcKind::Segwit, a)?,
+                taproot: btc_account_out(seed, net, BtcKind::Taproot, a)?,
             },
             evm: AddressOut {
-                address: wallet_core::evm_address(seed, 0)?,
+                address: wallet_core::evm_address(seed, a)?,
+                path: wallet_core::evm_path(a),
             },
             sol: AddressOut {
-                address: wallet_core::sol_address(seed, 0)?,
+                address: wallet_core::sol_address(seed, a)?,
+                path: wallet_core::sol_path(a),
             },
-            ltc: utxo_account_out(seed, net, UtxoCoin::Litecoin)?,
-            doge: utxo_account_out(seed, net, UtxoCoin::Dogecoin)?,
+            ltc: utxo_account_out(seed, net, UtxoCoin::Litecoin, a)?,
+            doge: utxo_account_out(seed, net, UtxoCoin::Dogecoin, a)?,
             tron: AddressOut {
-                address: wallet_core::tron_address(seed, 0)?,
+                address: wallet_core::tron_address(seed, a)?,
+                path: wallet_core::tron_path(a),
             },
             xrp: AddressOut {
-                address: wallet_core::xrp_address(seed, 0)?,
+                address: wallet_core::xrp_address(seed, a)?,
+                path: wallet_core::xrp_path(a),
             },
-            cardano: AddressOut { address: cardano },
+            cardano: AddressOut {
+                address: cardano,
+                path: format!("{}/0/0", wallet_core::cardano_account_path(a)),
+            },
         })
     })
 }
@@ -345,10 +371,12 @@ pub fn btc_address(
     kind: String,
     change: bool,
     index: u32,
+    account: Option<u32>,
 ) -> AppResult<String> {
     let kind = parse_kind(&kind)?;
+    let a = account_arg(account)?;
     let net = state.network;
-    state.with_seed(|seed| Ok(wallet_core::btc_address(seed, net, kind, 0, change, index)?))
+    state.with_seed(|seed| Ok(wallet_core::btc_address(seed, net, kind, a, change, index)?))
 }
 
 // ---------------------------------------------------------------- signing
@@ -514,18 +542,26 @@ pub async fn evm_sign_tx(
     tx: EvmTxRequest,
     password: String,
     token: Option<TokenHint>,
+    account: Option<u32>,
 ) -> AppResult<EvmSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
+    let a = account_arg(account)?;
     let summary = wallet_core::evm_decode(&tx)?;
+    let from = state.with_seed(|seed| Ok(wallet_core::evm_address(seed, a)?))?;
+    let signer = SignerInfo::new(&state, Chain::Evm, a, wallet_core::evm_path(a));
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     confirm_native(
         &app,
         "Confirmer la transaction",
-        describe_evm(&summary, token.as_ref()),
+        signer.body(&format!(
+            "De : {from}\n{}",
+            describe_evm(&summary, token.as_ref())
+        )),
     )
     .await?;
+    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -534,7 +570,7 @@ pub async fn evm_sign_tx(
         )
         .await?;
     }
-    let (raw_tx, hash) = blocking(move || Ok(wallet_core::evm_sign_tx(&seed, 0, &tx)?)).await?;
+    let (raw_tx, hash) = blocking(move || Ok(wallet_core::evm_sign_tx(&seed, a, &tx)?)).await?;
     state.touch();
     Ok(EvmSigned { raw_tx, hash })
 }
@@ -595,16 +631,26 @@ pub async fn btc_sign_psbt(
     state: State<'_, AppState>,
     psbt: String,
     password: String,
+    account: Option<u32>,
 ) -> AppResult<BtcSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
+    let a = account_arg(account)?;
     let net = state.network;
+    let signer = SignerInfo::new(&state, Chain::Btc, a, btc_paths(net, a));
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
-    // Same summary as the signature computes (change and own inputs by key origin).
+    // Same summary as the signature computes (change and own inputs by key origin, in this
+    // account only: the other accounts' inputs are foreign and stay unsigned).
     let (s, p) = (seed.clone(), psbt.clone());
-    let summary = blocking(move || Ok(wallet_core::btc_psbt_summary(&s, net, 0, &p)?)).await?;
-    confirm_native(&app, "Confirmer la transaction", describe_btc(&summary)).await?;
+    let summary = blocking(move || Ok(wallet_core::btc_psbt_summary(&s, net, a, &p)?)).await?;
+    confirm_native(
+        &app,
+        "Confirmer la transaction",
+        signer.body(&describe_btc(&summary)),
+    )
+    .await?;
+    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -614,7 +660,7 @@ pub async fn btc_sign_psbt(
         .await?;
     }
     let (signed, again) =
-        blocking(move || Ok(wallet_core::btc_sign_psbt(&seed, net, 0, &psbt)?)).await?;
+        blocking(move || Ok(wallet_core::btc_sign_psbt(&seed, net, a, &psbt)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
             "résumé différent entre l'aperçu et la signature".into(),
@@ -627,9 +673,9 @@ pub async fn btc_sign_psbt(
     })
 }
 
-/// Our Solana address (account 0) from the unlocked session.
-fn sol_own_address(state: &AppState) -> AppResult<String> {
-    state.with_seed(|seed| Ok(wallet_core::sol_address(seed, 0)?))
+/// Our Solana address of `account` from the unlocked session.
+fn sol_own_address(state: &AppState, account: u32) -> AppResult<String> {
+    state.with_seed(|seed| Ok(wallet_core::sol_address(seed, account)?))
 }
 
 /// Preview for the UI: decoded in Rust, lookup tables fetched by the shell.
@@ -637,9 +683,10 @@ fn sol_own_address(state: &AppState) -> AppResult<String> {
 pub async fn sol_decode_tx(
     state: State<'_, AppState>,
     message: String,
+    account: Option<u32>,
 ) -> AppResult<wallet_core::SolTxSummary> {
     let bytes = solana::message_bytes(&message)?;
-    let me = sol_own_address(&state)?;
+    let me = sol_own_address(&state, account_arg(account)?)?;
     solana::decode(&state, &bytes, &me).await
 }
 
@@ -655,12 +702,15 @@ pub async fn sol_sign_tx(
     state: State<'_, AppState>,
     message: String,
     password: String,
+    account: Option<u32>,
 ) -> AppResult<SolSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
+    let a = account_arg(account)?;
     let bytes = solana::message_bytes(&message)?;
-    let me = sol_own_address(&state)?;
+    let me = sol_own_address(&state, a)?;
+    let signer = SignerInfo::new(&state, Chain::Sol, a, wallet_core::sol_path(a));
     // Decoded (and lookup tables resolved) in Rust only — nothing from the UI is trusted.
     let summary = solana::decode(&state, &bytes, &me).await?;
     if summary.our_signer_index.is_none() {
@@ -672,9 +722,10 @@ pub async fn sol_sign_tx(
     confirm_native(
         &app,
         "Confirmer la transaction Solana",
-        solana::describe(&summary, &me, state.network),
+        signer.body(&solana::describe(&summary, &me, state.network)),
     )
     .await?;
+    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -683,7 +734,7 @@ pub async fn sol_sign_tx(
         )
         .await?;
     }
-    let sig = blocking(move || Ok(wallet_core::sol_sign_message(&seed, 0, &bytes)?)).await?;
+    let sig = blocking(move || Ok(wallet_core::sol_sign_message(&seed, a, &bytes)?)).await?;
     state.touch();
     Ok(SolSigned {
         signature: base64::engine::general_purpose::STANDARD.encode(sig),

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-vault-account-add"
+description = "Enables the vault_account_add command without any pre-configured scope."
+commands.allow = ["vault_account_add"]
+
+[[permission]]
+identifier = "deny-vault-account-add"
+description = "Denies the vault_account_add command without any pre-configured scope."
+commands.deny = ["vault_account_add"]

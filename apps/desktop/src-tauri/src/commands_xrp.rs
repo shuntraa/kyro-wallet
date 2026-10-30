@@ -10,14 +10,12 @@ use tauri::{AppHandle, State};
 use wallet_core::{Network, XrpAmount, XrpAmountView, XrpPayment, XrpTxSummary, XrpWarning};
 use zeroize::Zeroizing;
 
+use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
 use crate::error::{AppError, AppResult};
 use crate::servers::{host_of, utxo_network_key, XrpServer};
 use crate::state::AppState;
 use crate::xrp_backend::{self, PaymentCheck, XrpAccountInfo, XrpCtx, XrpServerInfo, LLS_OFFSET};
-
-/// Account index used for XRP (`m/44'/144'/0'/0/0`).
-const INDEX: u32 = 0;
 
 pub(crate) fn ctx(state: &AppState) -> XrpCtx<'_> {
     let s = state.settings();
@@ -29,11 +27,12 @@ pub(crate) fn ctx(state: &AppState) -> XrpCtx<'_> {
     }
 }
 
-fn ours(state: &AppState) -> AppResult<(String, [u8; 33])> {
+/// Address and public key of XRP account `account` (`m/44'/144'/account'/0/0`).
+fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     state.with_seed(|seed| {
         Ok((
-            wallet_core::xrp_address(seed, INDEX)?,
-            wallet_core::xrp_public_key(seed, INDEX)?,
+            wallet_core::xrp_address(seed, account)?,
+            wallet_core::xrp_public_key(seed, account)?,
         ))
     })
 }
@@ -166,9 +165,20 @@ pub fn xrp_backend_info(state: State<'_, AppState>) -> XrpBackendInfo {
     }
 }
 
+/// Address of XRP account `account` (absent = 0). `index` is accepted for older callers and
+/// must be 0 (one address per account).
 #[tauri::command]
-pub fn xrp_address(state: State<'_, AppState>, index: u32) -> AppResult<String> {
-    state.with_seed(|seed| Ok(wallet_core::xrp_address(seed, index)?))
+pub fn xrp_address(
+    state: State<'_, AppState>,
+    index: Option<u32>,
+    account: Option<u32>,
+) -> AppResult<String> {
+    if index.unwrap_or(0) != 0 {
+        return Err(AppError::InvalidInput(
+            "XRP : une seule adresse par compte (index 0)".into(),
+        ));
+    }
+    Ok(ours(&state, account_arg(account)?)?.0)
 }
 
 #[tauri::command]
@@ -303,8 +313,9 @@ pub async fn xrp_build_tx(
     amount: String,
     destination_tag: Option<u32>,
     issued: Option<IssuedSpec>,
+    account: Option<u32>,
 ) -> AppResult<XrpBuilt> {
-    let (me, pk) = ours(&state)?;
+    let (me, pk) = ours(&state, account_arg(account)?)?;
     build(
         &ctx(&state),
         &me,
@@ -365,20 +376,24 @@ pub async fn xrp_sign_tx(
     state: State<'_, AppState>,
     blob: String,
     password: String,
+    account: Option<u32>,
 ) -> AppResult<XrpSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
-    let (me, pk) = ours(&state)?;
+    let a = account_arg(account)?;
+    let (me, pk) = ours(&state, a)?;
+    let signer = SignerInfo::new(&state, Chain::Xrp, a, wallet_core::xrp_path(a));
     let c = ctx(&state);
     let (summary, context) = prepare_sign(&c, &me, &pk, &blob).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     confirm_native(
         &app,
         "Confirmer le paiement XRP",
-        describe_xrp(&summary, &context, state.network),
+        signer.body(&describe_xrp(&summary, &context, state.network)),
     )
     .await?;
+    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -388,8 +403,7 @@ pub async fn xrp_sign_tx(
         .await?;
     }
     let b = blob.clone();
-    let (signed, hash, again) =
-        blocking(move || Ok(wallet_core::xrp_sign(&seed, INDEX, &b)?)).await?;
+    let (signed, hash, again) = blocking(move || Ok(wallet_core::xrp_sign(&seed, a, &b)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
             "résumé différent entre l'aperçu et la signature".into(),
@@ -440,8 +454,12 @@ pub async fn xrp_tx_status(state: State<'_, AppState>, hash: String) -> AppResul
 }
 
 #[tauri::command]
-pub async fn xrp_broadcast(state: State<'_, AppState>, blob: String) -> AppResult<String> {
-    let (me, _) = ours(&state)?;
+pub async fn xrp_broadcast(
+    state: State<'_, AppState>,
+    blob: String,
+    account: Option<u32>,
+) -> AppResult<String> {
+    let (me, _) = ours(&state, account_arg(account)?)?;
     broadcast_checked(&ctx(&state), &me, &blob).await
 }
 

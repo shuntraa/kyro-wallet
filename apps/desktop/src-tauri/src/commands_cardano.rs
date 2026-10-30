@@ -2,7 +2,7 @@
 //! tokens, history, payment building **by Kyro** (UTxOs and protocol parameters from Koios,
 //! encoded by wallet-core), signing behind the password and the native dialog (every output with
 //! its ADA, tokens and min-ADA; fee, ttl, memo), and `submittx` with transaction-id check.
-//! Single-address mode: receive and change both use `m/1852'/1815'/0'/0/0`.
+//! Single-address mode: receive and change both use `m/1852'/1815'/a'/0/0` of account `a`.
 //! Contract: docs/IPC.md §2.7.
 
 use serde::{Deserialize, Serialize};
@@ -11,6 +11,7 @@ use tauri::{AppHandle, State};
 use wallet_core::{CardanoContext, CardanoTxSummary, CardanoWarning, Network};
 use zeroize::Zeroizing;
 
+use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::cardano_backend::{
     self, CardanoAccount, CardanoCtx, Params, PaymentSpec, Tip, Utxo, TTL_OFFSET,
 };
@@ -19,8 +20,7 @@ use crate::error::{AppError, AppResult};
 use crate::servers::{host_of, utxo_network_key, CardanoServer};
 use crate::state::AppState;
 
-/// Account and address index used for Cardano.
-const ACCOUNT: u32 = 0;
+/// Address index used for Cardano (single-address mode; the account is the caller's).
 const INDEX: u32 = 0;
 
 pub(crate) fn ctx(state: &AppState) -> CardanoCtx<'_> {
@@ -33,15 +33,20 @@ pub(crate) fn ctx(state: &AppState) -> CardanoCtx<'_> {
     }
 }
 
-/// Our address and payment public key.
-fn ours(state: &AppState) -> AppResult<(String, [u8; 32])> {
+/// Our address and payment public key of Cardano account `account`.
+fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
     let net = state.network;
     state.with_cardano(|r| {
         Ok((
-            wallet_core::cardano_address(r, net, ACCOUNT, INDEX)?,
-            wallet_core::cardano_payment_public_key(r, ACCOUNT, INDEX)?,
+            wallet_core::cardano_address(r, net, account, INDEX)?,
+            wallet_core::cardano_payment_public_key(r, account, INDEX)?,
         ))
     })
+}
+
+/// Path of the payment key of account `account`.
+pub(crate) fn payment_path(account: u32) -> String {
+    format!("{}/0/{INDEX}", wallet_core::cardano_account_path(account))
 }
 
 fn ada(lovelace: &str) -> String {
@@ -201,19 +206,24 @@ pub struct CardanoAddressOut {
     pub address: String,
     pub path: String,
     pub stake_address: String,
-    /// Account public key `m/1852'/1815'/0'` (public key ‖ chain code, hex).
+    /// Account public key `m/1852'/1815'/a'` (public key ‖ chain code, hex).
     pub account_xpub: String,
 }
 
 #[tauri::command]
-pub fn ada_address(state: State<'_, AppState>, index: u32) -> AppResult<CardanoAddressOut> {
+pub fn ada_address(
+    state: State<'_, AppState>,
+    index: u32,
+    account: Option<u32>,
+) -> AppResult<CardanoAddressOut> {
     let net = state.network;
+    let a = account_arg(account)?;
     state.with_cardano(|r| {
         Ok(CardanoAddressOut {
-            address: wallet_core::cardano_address(r, net, ACCOUNT, index)?,
-            path: format!("m/1852'/1815'/{ACCOUNT}'/0/{index}"),
-            stake_address: wallet_core::cardano_account_stake_address(r, net, ACCOUNT)?,
-            account_xpub: wallet_core::cardano_account_xpub(r, ACCOUNT)?,
+            address: wallet_core::cardano_address(r, net, a, index)?,
+            path: format!("{}/0/{index}", wallet_core::cardano_account_path(a)),
+            stake_address: wallet_core::cardano_account_stake_address(r, net, a)?,
+            account_xpub: wallet_core::cardano_account_xpub(r, a)?,
         })
     })
 }
@@ -385,8 +395,9 @@ pub async fn ada_build_tx(
     lovelace: Option<String>,
     token: Option<TokenSpec>,
     memo: Option<String>,
+    account: Option<u32>,
 ) -> AppResult<CardanoBuilt> {
-    let (me, _) = ours(&state)?;
+    let (me, _) = ours(&state, account_arg(account)?)?;
     build(
         &ctx(&state),
         &me,
@@ -459,20 +470,24 @@ pub async fn ada_sign_tx(
     state: State<'_, AppState>,
     tx: String,
     password: String,
+    account: Option<u32>,
 ) -> AppResult<CardanoSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
-    let (me, _) = ours(&state)?;
+    let a = account_arg(account)?;
+    let (me, _) = ours(&state, a)?;
+    let signer = SignerInfo::new(&state, Chain::Ada, a, payment_path(a));
     let c = ctx(&state);
     let (summary, context) = prepare_sign(&c, &me, &tx).await?;
     let root = cardano_root_from_password(&state, Zeroizing::new(password)).await?;
     confirm_native(
         &app,
         "Confirmer la transaction Cardano",
-        describe_ada(&summary, &context, state.network),
+        signer.body(&describe_ada(&summary, &context, state.network)),
     )
     .await?;
+    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -494,7 +509,7 @@ pub async fn ada_sign_tx(
             verified_tokens: &verified,
             coins_per_byte,
         };
-        Ok(wallet_core::cardano_sign(&root, ACCOUNT, INDEX, &t, &dctx)?)
+        Ok(wallet_core::cardano_sign(&root, a, INDEX, &t, &dctx)?)
     })
     .await?;
     if again != summary {
@@ -529,8 +544,12 @@ pub(crate) async fn broadcast_checked(
 }
 
 #[tauri::command]
-pub async fn ada_broadcast(state: State<'_, AppState>, tx: String) -> AppResult<String> {
-    let (_, pk) = ours(&state)?;
+pub async fn ada_broadcast(
+    state: State<'_, AppState>,
+    tx: String,
+    account: Option<u32>,
+) -> AppResult<String> {
+    let (_, pk) = ours(&state, account_arg(account)?)?;
     broadcast_checked(&ctx(&state), &pk, &tx).await
 }
 

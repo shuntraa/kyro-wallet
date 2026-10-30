@@ -9,14 +9,12 @@ use tauri::{AppHandle, State};
 use wallet_core::{Network, TronAction, TronContract, TronRaw, TronTxSummary, TronWarning};
 use zeroize::Zeroizing;
 
+use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
 use crate::error::{AppError, AppResult};
 use crate::servers::{host_of, utxo_network_key, TronServer};
 use crate::state::AppState;
 use crate::tron_backend::{self, TronCtx, TronEstimate, EXPIRATION_MS};
-
-/// Account index used for TRON (`m/44'/195'/0'/0/0`).
-const INDEX: u32 = 0;
 
 /// TRC-20 tokens Kyro names itself in the dialog (contract, symbol, decimals). Sources:
 /// mainnet USDT (Tether); Nile USDT `TXYZopYR…` checked on chain 2026-10-30 (`symbol()` =
@@ -60,8 +58,9 @@ pub(crate) fn ctx(state: &AppState) -> TronCtx<'_> {
     }
 }
 
-fn our_address(state: &AppState) -> AppResult<String> {
-    state.with_seed(|seed| Ok(wallet_core::tron_address(seed, INDEX)?))
+/// Our address of TRON account `account` (`m/44'/195'/account'/0/0`).
+pub(crate) fn our_address(state: &AppState, account: u32) -> AppResult<String> {
+    state.with_seed(|seed| Ok(wallet_core::tron_address(seed, account)?))
 }
 
 fn now_ms() -> i64 {
@@ -238,9 +237,20 @@ pub fn tron_backend_info(state: State<'_, AppState>) -> TronBackendInfo {
     }
 }
 
+/// Address of TRON account `account` (absent = 0). `index` is accepted for older callers and
+/// must be 0 (one address per account).
 #[tauri::command]
-pub fn tron_address(state: State<'_, AppState>, index: u32) -> AppResult<String> {
-    state.with_seed(|seed| Ok(wallet_core::tron_address(seed, index)?))
+pub fn tron_address(
+    state: State<'_, AppState>,
+    index: Option<u32>,
+    account: Option<u32>,
+) -> AppResult<String> {
+    if index.unwrap_or(0) != 0 {
+        return Err(AppError::InvalidInput(
+            "TRON : une seule adresse par compte (index 0)".into(),
+        ));
+    }
+    our_address(&state, account_arg(account)?)
 }
 
 #[tauri::command]
@@ -366,8 +376,9 @@ pub async fn tron_build_tx(
     to: String,
     amount: String,
     token: Option<String>,
+    account: Option<u32>,
 ) -> AppResult<TronBuilt> {
-    let owner = our_address(&state)?;
+    let owner = our_address(&state, account_arg(account)?)?;
     build(&ctx(&state), &owner, &to, &amount, token.as_deref()).await
 }
 
@@ -388,11 +399,14 @@ pub async fn tron_sign_tx(
     raw: String,
     password: String,
     token: Option<TokenHint>,
+    account: Option<u32>,
 ) -> AppResult<TronSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
-    let me = our_address(&state)?;
+    let a = account_arg(account)?;
+    let me = our_address(&state, a)?;
+    let signer = SignerInfo::new(&state, Chain::Tron, a, wallet_core::tron_path(a));
     let summary = wallet_core::tron_decode_raw(&raw, &me)?;
     tron_backend::check_expiration(&summary, now_ms())?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
@@ -401,9 +415,16 @@ pub async fn tron_sign_tx(
     confirm_native(
         &app,
         "Confirmer la transaction TRON",
-        describe_tron(&summary, &estimate, state.network, token.as_ref(), now_ms()),
+        signer.body(&describe_tron(
+            &summary,
+            &estimate,
+            state.network,
+            token.as_ref(),
+            now_ms(),
+        )),
     )
     .await?;
+    confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -413,7 +434,7 @@ pub async fn tron_sign_tx(
         .await?;
     }
     let raw2 = raw.clone();
-    let (sig, again) = blocking(move || Ok(wallet_core::tron_sign(&seed, INDEX, &raw2)?)).await?;
+    let (sig, again) = blocking(move || Ok(wallet_core::tron_sign(&seed, a, &raw2)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
             "résumé différent entre l'aperçu et la signature".into(),
@@ -452,8 +473,9 @@ pub async fn tron_broadcast(
     state: State<'_, AppState>,
     raw: String,
     signature: String,
+    account: Option<u32>,
 ) -> AppResult<String> {
-    let me = our_address(&state)?;
+    let me = our_address(&state, account_arg(account)?)?;
     broadcast_checked(&ctx(&state), &me, &raw, &signature).await
 }
 

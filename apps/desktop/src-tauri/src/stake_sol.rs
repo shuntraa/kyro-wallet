@@ -19,6 +19,7 @@ use wallet_core::{
 };
 use zeroize::Zeroizing;
 
+use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
 use crate::error::{AppError, AppResult};
 use crate::net::FetchRequest;
@@ -436,8 +437,9 @@ pub struct SolStakeOverview {
     pub accounts: Vec<SolStakePosition>,
 }
 
-fn our_address(state: &AppState) -> AppResult<String> {
-    state.with_seed(|seed| Ok(wallet_core::sol_address(seed, 0)?))
+/// Our address of Solana account `account` (`m/44'/501'/account'/0'`).
+fn our_address(state: &AppState, account: u32) -> AppResult<String> {
+    state.with_seed(|seed| Ok(wallet_core::sol_address(seed, account)?))
 }
 
 pub(crate) async fn overview(state: &AppState, me: &str) -> AppResult<SolStakeOverview> {
@@ -468,8 +470,11 @@ pub(crate) async fn overview(state: &AppState, me: &str) -> AppResult<SolStakeOv
 }
 
 #[tauri::command]
-pub async fn sol_stake_overview(state: State<'_, AppState>) -> AppResult<SolStakeOverview> {
-    let me = our_address(&state)?;
+pub async fn sol_stake_overview(
+    state: State<'_, AppState>,
+    account: Option<u32>,
+) -> AppResult<SolStakeOverview> {
+    let me = our_address(&state, account_arg(account)?)?;
     overview(&state, &me).await
 }
 
@@ -939,8 +944,9 @@ pub(crate) async fn build(
 pub async fn sol_stake_build(
     state: State<'_, AppState>,
     action: SolStakeRequest,
+    account: Option<u32>,
 ) -> AppResult<SolStakeBuilt> {
-    let me = our_address(&state)?;
+    let me = our_address(&state, account_arg(account)?)?;
     build(&state, &me, &action).await
 }
 
@@ -1111,20 +1117,24 @@ pub async fn sol_stake_sign(
     state: State<'_, AppState>,
     message: String,
     password: String,
+    account: Option<u32>,
 ) -> AppResult<SolStakeSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
+    let a = account_arg(account)?;
     let bytes = solana::message_bytes(&message)?;
-    let me = our_address(&state)?;
+    let me = our_address(&state, a)?;
+    let signer = SignerInfo::new(&state, Chain::Sol, a, wallet_core::sol_path(a));
     let (summary, stake) = prepare_sign(&state, &me, &bytes).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     confirm_native(
         &app,
         "Confirmer l'opération de staking Solana",
-        describe(&stake, state.network),
+        signer.body(&describe(&stake, state.network)),
     )
     .await?;
+    confirm_signer(&app, &signer).await?;
     if stake.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -1135,7 +1145,7 @@ pub async fn sol_stake_sign(
     }
     let m = me.clone();
     let sig = blocking(move || {
-        let sig = wallet_core::sol_sign_message(&seed, 0, &bytes)?;
+        let sig = wallet_core::sol_sign_message(&seed, a, &bytes)?;
         wallet_core::sol_verify_signature(&m, &bytes, &sig)?;
         Ok(sig)
     })
@@ -1185,8 +1195,9 @@ pub async fn sol_stake_broadcast(
     state: State<'_, AppState>,
     message: String,
     signature: String,
+    account: Option<u32>,
 ) -> AppResult<String> {
-    let me = our_address(&state)?;
+    let me = our_address(&state, account_arg(account)?)?;
     let bytes = solana::message_bytes(&message)?;
     let sig = base64::engine::general_purpose::STANDARD
         .decode(signature.trim())

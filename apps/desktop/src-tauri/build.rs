@@ -9,6 +9,11 @@ const COMMANDS: &[&str] = &[
     "vault_reveal_mnemonic",
     "session_touch",
     "accounts_get",
+    // Account lists of the vault (docs/IPC.md §2.9).
+    "vault_accounts_get",
+    "vault_account_add",
+    "vault_account_rename",
+    "vault_account_remove",
     "btc_address",
     "evm_decode_tx",
     "evm_sign_tx",
