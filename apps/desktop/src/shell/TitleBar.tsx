@@ -14,7 +14,7 @@ async function win(action: 'minimize' | 'toggleMaximize' | 'close') {
 }
 
 export function WindowControls() {
-  const btn = 'flex h-10 w-[46px] items-center justify-center text-mute hover:bg-raised hover:text-text';
+  const btn = 'flex h-10 w-[46px] items-center justify-center text-mute transition-colors duration-150 hover:bg-raised hover:text-text';
   return (
     <div className="flex h-10">
       <button type="button" aria-label="Réduire" className={btn} onClick={() => void win('minimize')}>
@@ -45,30 +45,40 @@ export interface SearchResult {
 
 export function TitleBar({ crumbs, center, search, bordered = true, account }: { crumbs?: string[]; center?: ReactNode; search?: (q: string) => SearchResult[]; bordered?: boolean; account?: ReactNode }) {
   return (
-    <header data-tauri-drag-region className={`flex h-10 shrink-0 items-center justify-between pl-4 ${bordered ? 'border-b border-rail' : ''}`}>
-      <div data-tauri-drag-region className="flex w-[300px] min-w-0 items-center gap-2">
-        <KyroMark size={16} />
-        <span className="text-[13px] font-semibold tracking-[-0.01em]">Kyro</span>
+    // Three columns: the side ones share what the search leaves, so the breadcrumb gets ~380 px
+    // even at the 1100 px minimum (it used to be boxed in 300 px and cut to « Sola… »).
+    <header data-tauri-drag-region className={`grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center pl-4 ${bordered ? 'border-b border-rail' : ''}`}>
+      <div data-tauri-drag-region className="flex min-w-0 items-center gap-2 pr-4">
+        <KyroMark size={15} className="shrink-0" />
+        <span className="shrink-0 text-[13px] font-semibold tracking-[-0.02em]">Kyro</span>
         {account && (
-          <span className="flex min-w-0 items-center gap-1">
-            <span className="text-[13px] text-faint">/</span>
+          <span className="flex min-w-0 max-w-[220px] shrink items-center gap-1">
+            <Slash />
             {account}
           </span>
         )}
         {crumbs?.map((c, i) => (
-          <span key={i} className="flex min-w-0 items-center gap-2">
-            <span className="text-[13px] text-faint">/</span>
-            <span className="truncate text-[13px] text-mute">{c}</span>
+          <span key={`${i}:${c}`} className={`fade-in flex items-center gap-2 ${i === crumbs.length - 1 ? 'min-w-0' : 'shrink-0'}`}>
+            <Slash />
+            <span className={`truncate text-[13px] ${i === crumbs.length - 1 ? 'text-text2' : 'text-mute'}`}>{c}</span>
           </span>
         ))}
       </div>
-      <div data-tauri-drag-region className="flex min-w-0 flex-1 justify-center">
+      <div data-tauri-drag-region className="flex min-w-0 justify-center">
         {search ? <SearchBox search={search} /> : center}
       </div>
-      <div className="flex w-[300px] justify-end">
+      <div className="flex min-w-0 justify-end">
         <WindowControls />
       </div>
     </header>
+  );
+}
+
+function Slash() {
+  return (
+    <svg width="7" height="14" viewBox="0 0 7 14" aria-hidden="true" className="shrink-0 text-line-3">
+      <path d="M6 1 1 13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -100,8 +110,8 @@ function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
   };
 
   return (
-    <div className="relative w-[380px]">
-      <label className="flex h-7 items-center gap-2 rounded-[8px] border border-line bg-[#141417] px-2.5 text-[12px] text-mute focus-within:border-ice-line">
+    <div className="relative w-[clamp(260px,28vw,380px)]">
+      <label className="flex h-7 items-center gap-2 rounded-ctl border border-line bg-bg-deep px-2.5 text-[12px] text-mute transition-colors hover:border-line-2 focus-within:border-ice-line focus-within:bg-bg">
         <IconSearch size={14} />
         <span className="sr-only">Rechercher</span>
         <input
@@ -133,10 +143,10 @@ function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
           }}
           className="min-w-0 flex-1 bg-transparent text-[12px] text-text"
         />
-        <span className="rounded-[4px] border border-line-3 px-[5px] py-px font-mono text-[10px] text-mute">Ctrl K</span>
+        <kbd className="rounded-[3px] border border-line-2 px-[5px] py-px font-mono text-[10px] text-faint">Ctrl K</kbd>
       </label>
       {open && q.trim() && (
-        <div className="absolute top-9 right-0 left-0 z-50 overflow-hidden rounded-[12px] border border-line-2 bg-[#15171b] p-1.5">
+        <div className="pop-in absolute top-9 right-0 left-0 z-50 overflow-hidden rounded-box border border-line-2 bg-[#121418] p-1 shadow-[0_16px_40px_-16px_rgba(0,0,0,.8)]">
           {results.length === 0 ? (
             <div className="px-3 py-2.5 text-[12px] text-mute">Aucun résultat.</div>
           ) : (
@@ -146,10 +156,11 @@ function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(r)}
-                className={`flex w-full items-center justify-between gap-3 rounded-[8px] px-3 py-2 text-left text-[13px] ${i === sel ? 'bg-control' : ''}`}
+                onMouseEnter={() => setSel(i)}
+                className={`flex w-full items-center justify-between gap-3 rounded-[5px] px-3 py-2 text-left text-[13px] transition-colors duration-100 ${i === sel ? 'bg-control' : ''}`}
               >
                 <span className="truncate font-medium">{r.label}</span>
-                <span className="shrink-0 text-[11px] text-mute">{r.hint}</span>
+                <span className="shrink-0 font-mono text-[10.5px] text-faint">{r.hint}</span>
               </button>
             ))
           )}

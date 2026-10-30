@@ -2,6 +2,7 @@
 // Navigation rail (84 px).
 
 import type { ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { cn } from '../lib/cn';
 import { useApp, type Route } from '../state/app';
 import { IconClock, IconLayers, IconLock, IconSliders, IconStake, IconSwap, IconWallet } from '../components/icons';
@@ -28,11 +29,16 @@ function RailItem({ active, label, icon, onClick }: { active: boolean; label: st
       type="button"
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
-      className={cn('relative flex h-[60px] w-[68px] flex-col items-center justify-center gap-[5px] rounded-[14px]', active ? 'bg-raised text-text' : 'text-mute hover:bg-raised/60 hover:text-text2')}
+      className={cn('group press relative flex h-[58px] w-[72px] flex-col items-center justify-center gap-[6px] rounded-ctl', active ? 'text-text' : 'text-faint hover:text-text2')}
     >
-      {active && <span aria-hidden="true" className="absolute top-[18px] -left-2 h-6 w-[3px] rounded-r-[3px] bg-ice" />}
-      <span className={active ? 'text-ice' : ''}>{icon}</span>
-      <span className="text-[10px] font-medium">{label}</span>
+      {/* The active mark slides from item to item (shared layout). */}
+      {active && (
+        <motion.span layoutId="rail-active" aria-hidden="true" className="absolute inset-0 rounded-ctl border border-line-2 bg-raised" transition={{ type: 'spring', stiffness: 480, damping: 38, mass: 0.8 }}>
+          <span className="absolute top-1/2 -left-[7px] h-5 w-[2px] -translate-y-1/2 rounded-full bg-ice" />
+        </motion.span>
+      )}
+      <span className={cn('relative transition-transform duration-200 ease-[cubic-bezier(.22,1,.36,1)] group-hover:-translate-y-px', active && 'text-ice')}>{icon}</span>
+      <span className={cn('relative text-[10px] tracking-[0.01em]', active ? 'font-medium' : 'font-normal')}>{label}</span>
     </button>
   );
 }
@@ -41,7 +47,7 @@ export function NavRail() {
   const { route, navigate, lock, hwOnly } = useApp();
   const k = railKeyOf(route);
   return (
-    <nav aria-label="Navigation" className="flex w-[84px] shrink-0 flex-col items-center gap-1 border-r border-rail py-3.5">
+    <nav aria-label="Navigation" className="flex w-[84px] shrink-0 flex-col items-center gap-0.5 border-r border-rail bg-bg-deep py-3">
       <RailItem active={k === 'portfolio'} label="Portefeuille" icon={<IconWallet size={20} />} onClick={() => navigate({ name: 'portfolio' })} />
       <RailItem active={k === 'assets'} label="Actifs" icon={<IconLayers size={20} />} onClick={() => navigate({ name: 'assets' })} />
       <RailItem active={k === 'swap'} label="Swap" icon={<IconSwap size={20} />} onClick={() => navigate({ name: 'swap' })} />
@@ -55,7 +61,7 @@ export function NavRail() {
         aria-label="Verrouiller le coffre"
         title="Verrouiller le coffre"
         onClick={() => void lock()}
-        className="mt-1.5 flex size-12 items-center justify-center rounded-full border border-line-2 bg-card text-text hover:bg-raised"
+        className="press group mt-2 flex size-11 items-center justify-center rounded-ctl border border-line-2 text-mute hover:border-line-3 hover:bg-raised hover:text-text"
       >
         <IconLock size={18} />
       </button>

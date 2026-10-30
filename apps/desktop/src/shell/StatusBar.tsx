@@ -18,8 +18,8 @@ export function StatusFrame({ left, right }: { left: ReactNode; right?: ReactNod
       <div className="flex shrink-0 items-center gap-[18px]">
         <TorIndicator />
         {right}
-        {demo && <span className="font-semibold text-ice">MODE DÉMO</span>}
-        {network === 'testnet' && <span className="text-warn">TESTNET</span>}
+        {demo && <span className="rounded-[3px] border border-ice/30 px-1.5 py-px leading-none font-medium tracking-[0.06em] text-ice">MODE DÉMO</span>}
+        {network === 'testnet' && <span className="rounded-[3px] border border-warn/40 bg-warn/[.08] px-1.5 py-px leading-none font-medium tracking-[0.06em] text-warn">TESTNET</span>}
         <span>zéro télémétrie</span>
         <span>v{__APP_VERSION__} · GPLv3</span>
       </div>
@@ -27,8 +27,13 @@ export function StatusFrame({ left, right }: { left: ReactNode; right?: ReactNod
   );
 }
 
-export function Dot({ color }: { color: string }) {
-  return <span className="size-1.5 rounded-full" style={{ background: color }} />;
+export function Dot({ color, live }: { color: string; live?: boolean }) {
+  return (
+    <span className="relative flex size-1.5">
+      {live && <span className="absolute inset-0 animate-ping rounded-full opacity-60" style={{ background: color }} />}
+      <span className="relative size-1.5 rounded-full" style={{ background: color }} />
+    </span>
+  );
 }
 
 interface NetStat {
@@ -115,7 +120,7 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
       left={
         <>
           <span className="flex items-center gap-1.5 text-mute">
-            <Dot color={torBlocked ? '#8C929D' : syncing ? '#7CC4FF' : degraded ? '#F5B74F' : '#3DDC97'} />
+            <Dot color={torBlocked ? '#8C929D' : syncing ? '#7CC4FF' : degraded ? '#F5B74F' : '#3DDC97'} live={syncing && !torBlocked} />
             {torBlocked
               ? 'En attente de Tor…'
               : cbfMode && cbf && cbf.state !== 'synced' && cbf.state !== 'error' && cbf.state !== 'idle'
