@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ltc-sign-psbt"
+description = "Enables the ltc_sign_psbt command without any pre-configured scope."
+commands.allow = ["ltc_sign_psbt"]
+
+[[permission]]
+identifier = "deny-ltc-sign-psbt"
+description = "Denies the ltc_sign_psbt command without any pre-configured scope."
+commands.deny = ["ltc_sign_psbt"]

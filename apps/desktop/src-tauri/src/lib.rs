@@ -4,6 +4,7 @@ mod cbf;
 mod commands;
 mod commands_hw;
 mod commands_servers;
+mod commands_utxo;
 mod core_rpc;
 mod electrum;
 mod error;
@@ -14,6 +15,7 @@ mod settings;
 mod solana;
 mod state;
 mod tor;
+mod utxo_backend;
 
 use std::time::Duration;
 
@@ -77,11 +79,32 @@ pub fn run() {
             commands_servers::btc_address_txs,
             commands_servers::btc_fee_rates,
             commands_servers::btc_tip_height,
+            commands_servers::btc_tx_hex,
             commands_servers::btc_broadcast,
             commands_servers::btc_core_setup,
             commands_servers::btc_core_status,
             commands_servers::btc_cbf_status,
             commands_servers::btc_cbf_sync,
+            commands_utxo::ltc_backend_info,
+            commands_utxo::ltc_address,
+            commands_utxo::ltc_address_info,
+            commands_utxo::ltc_address_utxos,
+            commands_utxo::ltc_address_txs,
+            commands_utxo::ltc_tx_hex,
+            commands_utxo::ltc_fee_rates,
+            commands_utxo::ltc_tip_height,
+            commands_utxo::ltc_broadcast,
+            commands_utxo::ltc_sign_psbt,
+            commands_utxo::doge_backend_info,
+            commands_utxo::doge_address,
+            commands_utxo::doge_address_info,
+            commands_utxo::doge_address_utxos,
+            commands_utxo::doge_address_txs,
+            commands_utxo::doge_tx_hex,
+            commands_utxo::doge_fee_rates,
+            commands_utxo::doge_tip_height,
+            commands_utxo::doge_broadcast,
+            commands_utxo::doge_sign_psbt,
             commands::set_capture_protection,
             commands::config_get,
             commands::tor_status,

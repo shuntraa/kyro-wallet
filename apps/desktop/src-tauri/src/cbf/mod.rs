@@ -685,6 +685,20 @@ pub fn address_txs(data_dir: &Path, net: Network, address: &str) -> AppResult<Va
     ledger(data_dir, net)?.1.address_txs(address, net, 50)
 }
 
+/// Raw transaction from the local store (transactions of the matched blocks that touch our
+/// scripts, and our own broadcasts). Anything else is unknown to the compact-filter backend.
+pub fn tx_hex(data_dir: &Path, net: Network, txid: &str) -> AppResult<String> {
+    let store = Store::load(&store_path(data_dir, net));
+    let t = txid.trim().to_ascii_lowercase();
+    let stored = store.txs.get(&t).ok_or_else(|| {
+        AppError::InvalidInput(format!(
+            "filtres compacts : transaction {t} absente des blocs synchronisés (seules les \
+             transactions qui touchent tes adresses sont gardées ; relance une synchronisation)"
+        ))
+    })?;
+    crate::btc_backend::verified_tx_hex(&stored.hex, &t, "filtres compacts")
+}
+
 pub fn tip_height(data_dir: &Path, net: Network) -> AppResult<u64> {
     Store::load(&store_path(data_dir, net))
         .tip_height
@@ -719,6 +733,30 @@ pub fn fee_rates(data_dir: &Path, net: Network) -> AppResult<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tx_hex_from_the_store_is_verified() {
+        let raw = "01000000019d53382244ce54a4129e041d0b29cedd293d1cfcd2cff7930d6e800332441876010000006a473044022020cdcc4c5072aca5e52f18d78d811308f8d79fd92e0198b998f06ac8dcacd6d2022053f6ca9c4e1f80dc8714c77914fad862e78064adbd4710dceb507b43fef3b6b7012103648adbede7ed318fc35e2b7d310046111f626e975d87e103a11e8cd84e5a1b76ffffffff02a23694fa010000001976a914e6c7989b8836301af965531c39865a73d745e46788acb0cc81d86c2b00001976a91498b24d9d9928caab02f40a57b9e7fdcc9dd8e34e88ac00000000";
+        let txid = "386f6e9cc89fcc9d2ceb037677bdfd65d8ff2c46a371be688069784d1b3711c5";
+        let wrong = "ab".repeat(32);
+        let dir = std::env::temp_dir().join(format!("kyro-cbf-txhex-{}", std::process::id()));
+        let mut store = Store::default();
+        let stored = |hex: &str| StoredTx {
+            hex: hex.into(),
+            height: Some(1),
+            block_hash: None,
+            time: None,
+        };
+        store.txs.insert(txid.into(), stored(raw));
+        // A corrupted store entry (key ≠ hash of the stored transaction).
+        store.txs.insert(wrong.clone(), stored(raw));
+        store.save(&store_path(&dir, Network::Testnet)).unwrap();
+        assert_eq!(tx_hex(&dir, Network::Testnet, txid).unwrap(), raw);
+        assert!(tx_hex(&dir, Network::Testnet, &wrong).is_err());
+        let missing = tx_hex(&dir, Network::Testnet, &"cd".repeat(32));
+        assert!(matches!(missing, Err(AppError::InvalidInput(ref m)) if m.contains("absente")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn default_peer_lists_parse() {

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ltc-broadcast"
+description = "Enables the ltc_broadcast command without any pre-configured scope."
+commands.allow = ["ltc_broadcast"]
+
+[[permission]]
+identifier = "deny-ltc-broadcast"
+description = "Denies the ltc_broadcast command without any pre-configured scope."
+commands.deny = ["ltc_broadcast"]

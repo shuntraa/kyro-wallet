@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-doge-backend-info"
+description = "Enables the doge_backend_info command without any pre-configured scope."
+commands.allow = ["doge_backend_info"]
+
+[[permission]]
+identifier = "deny-doge-backend-info"
+description = "Denies the doge_backend_info command without any pre-configured scope."
+commands.deny = ["doge_backend_info"]

@@ -304,7 +304,7 @@ pub struct DeviceStatus {
     pub kind: HwDeviceKind,
     pub model: String,
     pub locked: bool,
-    /// Ledger: the app open right now (`BOLOS` = dashboard).
+    /// Ledger: the app open right now (the dashboard is reported as « Tableau de bord »).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app: Option<AppInfo>,
     /// Trezor: firmware version.

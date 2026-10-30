@@ -144,6 +144,40 @@ export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
   { key: 'xrp', name: 'XRP', symbol: 'XRP', coingeckoId: 'ripple', color: '#22252B', glyph: 'X', watchOnly: true, phase: 4 },
 ];
 
+/**
+ * Phase 4 UTXO chains with a full send path: Rust `ltc_*` / `doge_*` commands and the
+ * `LitecoinAdapter` / `DogecoinAdapter` (`createUtxoAdapters`). Not part of `allChains()` /
+ * `assetsFor()` (their `Family` is not one the UI handles yet), and still listed in
+ * `WATCH_ONLY_CHAINS` (« Bientôt ») until the UI shows them: see docs/IPC.md §2.4.
+ */
+export interface UtxoChain extends Omit<ChainBase, 'phase'> {
+  family: 'ltc' | 'doge';
+  phase: 4;
+}
+
+const utxoChain = (c: Omit<UtxoChain, 'phase' | 'nativeDecimals'>): UtxoChain => ({ ...c, phase: 4, nativeDecimals: 8 });
+
+const LTC_CHAINS: Record<Network, UtxoChain> = {
+  testnet: utxoChain({ family: 'ltc', key: 'litecoin', name: 'Litecoin testnet4', label: 'LTC testnet', network: 'testnet', color: '#345D9D', glyph: 'Ł',
+    nativeSymbol: 'LTC', nativeName: 'Litecoin', coingeckoId: 'litecoin', blockTimeSecs: 150 }),
+  mainnet: utxoChain({ family: 'ltc', key: 'litecoin', name: 'Litecoin', label: 'LTC', network: 'mainnet', color: '#345D9D', glyph: 'Ł',
+    nativeSymbol: 'LTC', nativeName: 'Litecoin', coingeckoId: 'litecoin', blockTimeSecs: 150 }),
+};
+
+const DOGE_CHAINS: Record<Network, UtxoChain> = {
+  testnet: utxoChain({ family: 'doge', key: 'dogecoin', name: 'Dogecoin testnet', label: 'DOGE testnet', network: 'testnet', color: '#C2A633', glyph: 'Ð',
+    nativeSymbol: 'DOGE', nativeName: 'Dogecoin', coingeckoId: 'dogecoin', blockTimeSecs: 60 }),
+  mainnet: utxoChain({ family: 'doge', key: 'dogecoin', name: 'Dogecoin', label: 'DOGE', network: 'mainnet', color: '#C2A633', glyph: 'Ð',
+    nativeSymbol: 'DOGE', nativeName: 'Dogecoin', coingeckoId: 'dogecoin', blockTimeSecs: 60 }),
+};
+
+export function ltcChain(network: Network): UtxoChain {
+  return LTC_CHAINS[network];
+}
+export function dogeChain(network: Network): UtxoChain {
+  return DOGE_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;

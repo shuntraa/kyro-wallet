@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use serde::{Deserialize, Serialize};
-use wallet_core::Network;
+use wallet_core::{Network, UtxoCoin};
 
 use crate::error::{AppError, AppResult};
 use crate::net::{Family, MEMPOOL_ONION};
@@ -141,11 +141,100 @@ pub struct BtcServers {
     pub testnet4: Option<BtcServer>,
 }
 
+/// Server of a Litecoin or Dogecoin network: an Esplora-compatible REST API, the same kind as
+/// the default (litecoinspace.org for Litecoin; none for Dogecoin, see `utxo_backend`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum UtxoServer {
+    #[default]
+    Default,
+    /// e.g. `https://my-node.example/api` (electrs / mempool backend for that chain).
+    Esplora { url: String },
+}
+
+impl UtxoServer {
+    pub fn is_default(&self) -> bool {
+        matches!(self, UtxoServer::Default)
+    }
+
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            UtxoServer::Default => "default",
+            UtxoServer::Esplora { .. } => "esplora",
+        }
+    }
+}
+
+/// Key `testnet` = Litecoin testnet4 / Dogecoin testnet (the chain checked by its genesis).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UtxoServers {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mainnet: Option<UtxoServer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub testnet: Option<UtxoServer>,
+}
+
+impl UtxoServers {
+    pub fn for_network(&self, net: Network) -> UtxoServer {
+        match net {
+            Network::Mainnet => self.mainnet.clone(),
+            Network::Testnet => self.testnet.clone(),
+        }
+        .unwrap_or_default()
+    }
+
+    pub fn entries(&self) -> [(&'static str, &Option<UtxoServer>); 2] {
+        [("mainnet", &self.mainnet), ("testnet", &self.testnet)]
+    }
+}
+
+/// Default Esplora base URL of a UTXO chain, or `None` when Kyro has no public default.
+pub fn utxo_default_base(coin: UtxoCoin, net: Network) -> Option<&'static str> {
+    match (coin, net) {
+        (UtxoCoin::Litecoin, Network::Mainnet) => Some("https://litecoinspace.org/api"),
+        (UtxoCoin::Litecoin, Network::Testnet) => Some("https://litecoinspace.org/testnet/api"),
+        // No free, maintained public Dogecoin API with a testnet and broadcast was found
+        // (2026-10-30, see docs/NETWORK.md): the user configures their own Esplora server.
+        (UtxoCoin::Dogecoin, _) => None,
+    }
+}
+
+/// Hosts of the default servers of a UTXO chain (refused once replaced).
+pub fn utxo_default_hosts(coin: UtxoCoin) -> &'static [&'static str] {
+    match coin {
+        UtxoCoin::Litecoin => &["litecoinspace.org"],
+        UtxoCoin::Dogecoin => &[],
+    }
+}
+
+pub fn utxo_network_key(net: Network) -> &'static str {
+    match net {
+        Network::Mainnet => "mainnet",
+        Network::Testnet => "testnet",
+    }
+}
+
+pub fn utxo_family(coin: UtxoCoin) -> Family {
+    match coin {
+        UtxoCoin::Litecoin => Family::Litecoin,
+        UtxoCoin::Dogecoin => Family::Dogecoin,
+    }
+}
+
 /// `settings.servers`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Servers {
     pub bitcoin: BtcServers,
+    /// Litecoin: Esplora only (as the default, litecoinspace.org).
+    pub litecoin: UtxoServers,
+    /// Dogecoin: Esplora only (electrs-dogecoin); no public default.
+    pub dogecoin: UtxoServers,
     /// Key: EVM chain id in decimal (e.g. `"11155111"`).
     pub evm: BTreeMap<String, RpcServer>,
     /// Key: `"devnet"` or `"mainnet-beta"`.
@@ -174,6 +263,25 @@ impl Servers {
             Network::Testnet => self.bitcoin.testnet4.clone(),
         }
         .unwrap_or_default()
+    }
+
+    pub fn utxo(&self, coin: UtxoCoin) -> &UtxoServers {
+        match coin {
+            UtxoCoin::Litecoin => &self.litecoin,
+            UtxoCoin::Dogecoin => &self.dogecoin,
+        }
+    }
+
+    pub fn utxo_mut(&mut self, coin: UtxoCoin) -> &mut UtxoServers {
+        match coin {
+            UtxoCoin::Litecoin => &mut self.litecoin,
+            UtxoCoin::Dogecoin => &mut self.dogecoin,
+        }
+    }
+
+    /// Litecoin / Dogecoin server for the app's network (`Default` when unset).
+    pub fn utxo_for(&self, coin: UtxoCoin, net: Network) -> UtxoServer {
+        self.utxo(coin).for_network(net)
     }
 
     pub fn solana_for(&self, net: Network) -> Option<&RpcServer> {
@@ -213,6 +321,11 @@ impl Servers {
         if !self.bitcoin_for(net).is_default() {
             out.extend(["mempool.space", MEMPOOL_ONION]);
         }
+        for coin in [UtxoCoin::Litecoin, UtxoCoin::Dogecoin] {
+            if !self.utxo_for(coin, net).is_default() {
+                out.extend(utxo_default_hosts(coin));
+            }
+        }
         for (chain, host) in EVM_DEFAULTS {
             if self.evm.contains_key(&chain.to_string()) {
                 out.push(*host);
@@ -234,6 +347,14 @@ impl Servers {
         ] {
             if let Some(s) = s {
                 validate_btc(s, tor).map_err(|e| prefix(e, &format!("bitcoin {key}")))?;
+            }
+        }
+        for coin in [UtxoCoin::Litecoin, UtxoCoin::Dogecoin] {
+            for (key, s) in self.utxo(coin).entries() {
+                if let Some(UtxoServer::Esplora { url }) = s {
+                    let what = format!("{} {key}", coin.name().to_lowercase());
+                    validate_http_url(url, tor, false).map_err(|e| prefix(e, &what))?;
+                }
             }
         }
         for (chain, s) in &self.evm {
@@ -939,6 +1060,59 @@ mod tests {
         assert!(s
             .disabled_defaults(Network::Testnet)
             .contains(&"mempool.space"));
+    }
+
+    #[test]
+    fn litecoin_dogecoin_servers() {
+        let mut s = Servers::default();
+        assert_eq!(
+            s.utxo_for(UtxoCoin::Litecoin, Network::Testnet),
+            UtxoServer::Default
+        );
+        assert!(!s
+            .disabled_defaults(Network::Testnet)
+            .contains(&"litecoinspace.org"));
+        s.litecoin.testnet = Some(UtxoServer::Esplora {
+            url: "https://ltc.my-node.example/api".into(),
+        });
+        s.dogecoin.mainnet = Some(UtxoServer::Esplora {
+            url: "http://abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.onion/api".into(),
+        });
+        assert!(s.validate(true).is_ok());
+        // .onion without Tor, plain http: refused like every other server.
+        assert!(
+            matches!(s.validate(false), Err(AppError::ServerInvalid(ref m)) if m.starts_with("dogecoin mainnet"))
+        );
+        s.dogecoin.mainnet = Some(UtxoServer::Esplora {
+            url: "http://doge.example/api".into(),
+        });
+        assert!(s.validate(true).is_err());
+        s.dogecoin.mainnet = Some(UtxoServer::Esplora {
+            url: "https://u:p@doge.example/api".into(),
+        });
+        assert!(s.validate(true).is_err());
+        s.dogecoin.mainnet = None;
+        // The replaced default is refused, on that network only.
+        assert!(s
+            .disabled_defaults(Network::Testnet)
+            .contains(&"litecoinspace.org"));
+        assert!(!s
+            .disabled_defaults(Network::Mainnet)
+            .contains(&"litecoinspace.org"));
+        // JSON: `servers.litecoin.testnet = { kind: 'esplora', url }`; absent = default.
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["litecoin"]["testnet"]["kind"], "esplora");
+        assert_eq!(v["dogecoin"], serde_json::json!({}));
+        let back: Servers = serde_json::from_value(serde_json::json!({
+            "bitcoin": {}, "evm": {}, "solana": {}
+        }))
+        .unwrap();
+        assert_eq!(back.litecoin, UtxoServers::default());
+        assert!(utxo_default_base(UtxoCoin::Dogecoin, Network::Testnet).is_none());
+        assert_eq!(
+            utxo_default_base(UtxoCoin::Litecoin, Network::Testnet),
+            Some("https://litecoinspace.org/testnet/api")
+        );
     }
 
     #[test]

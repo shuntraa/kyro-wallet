@@ -2,8 +2,9 @@
 //!
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
-//! Bitcoin derivation and PSBT signing, EVM (EIP-1559) signing and Solana
-//! (SLIP-10 ed25519) signing, plus human-readable transaction decoding.
+//! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
+//! signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! human-readable transaction decoding.
 //!
 //! Design rules:
 //! - no network, no filesystem, no async, no Tauri;
@@ -32,6 +33,7 @@ mod mnemonic;
 mod network;
 mod sol;
 mod sol_decode;
+mod utxo;
 mod vault;
 mod watch;
 
@@ -42,8 +44,8 @@ pub use btc_hw::{
 };
 pub use btc_watch::{
     btc_address_from_xpub, btc_address_of_script, btc_decode_raw_tx, btc_descriptors,
-    btc_genesis_hash, btc_script_pubkey, btc_scripthash, btc_scripthash_of_script, BtcDescriptor,
-    BtcRawTx,
+    btc_genesis_hash, btc_script_pubkey, btc_scripthash, btc_scripthash_of_script, verify_tx_hex,
+    BtcDescriptor, BtcRawTx,
 };
 pub use error::{Error, Result};
 pub use evm::{
@@ -61,6 +63,13 @@ pub use sol::{sol_address, sol_address_of_pubkey, sol_sign_message, sol_verify_s
 pub use sol_decode::{
     sol_decode_message, sol_message_lookup_tables, sol_parse_lookup_table, SolInstruction,
     SolLookupTable, SolTokenProgram, SolTxSummary, SolWarning, SOL_LOOKUP_TABLE_PROGRAM,
+};
+pub use utxo::{
+    utxo_account, utxo_address, utxo_address_from_xpub, utxo_address_of_script, utxo_decode_raw_tx,
+    utxo_dust_threshold, utxo_genesis_hash, utxo_psbt_summary, utxo_script_pubkey, utxo_sign_psbt,
+    UtxoAccount, UtxoCoin, UtxoOutput, UtxoOutputKind, UtxoTxSummary, UtxoWarning, DOGE_HARD_DUST,
+    DOGE_MIN_RELAY_FEE_PER_KB, DOGE_RECOMMENDED_FEE_PER_KB, DOGE_SOFT_DUST,
+    LTC_DUST_RELAY_FEE_PER_KVB, LTC_MIN_RELAY_FEE_PER_KVB,
 };
 pub use vault::{open, seal, KdfParams, VaultFile, VAULT_VERSION};
 pub use watch::{

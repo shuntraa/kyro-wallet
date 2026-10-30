@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use wallet_core::{
-    BtcKind, EvmTxKind, EvmTxRequest, KdfParams, Mnemonic, Network, Seed, WordCount,
+    BtcKind, EvmTxKind, EvmTxRequest, KdfParams, Mnemonic, Network, Seed, UtxoCoin, WordCount,
 };
 use zeroize::Zeroizing;
 
@@ -31,7 +31,10 @@ pub(crate) async fn blocking<T: Send + 'static>(
 }
 
 /// Decrypts the vault with `password` (rate-limited) and returns its seed.
-async fn seed_from_password(state: &AppState, password: Zeroizing<String>) -> AppResult<Seed> {
+pub(crate) async fn seed_from_password(
+    state: &AppState,
+    password: Zeroizing<String>,
+) -> AppResult<Seed> {
     state.check_attempts()?;
     let file = state.read_vault()?;
     let result = blocking(move || Ok(wallet_core::open(&file, &password)?)).await;
@@ -219,12 +222,34 @@ pub struct BtcAccounts {
     taproot: BtcAccountOut,
 }
 
+/// Litecoin (BIP84) / Dogecoin (BIP44) account: first receive address and public data.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UtxoAccountOut {
+    address: String,
+    xpub: String,
+    fingerprint: String,
+    path: String,
+}
+
 #[derive(Serialize)]
 pub struct Accounts {
     network: &'static str,
     btc: BtcAccounts,
     evm: AddressOut,
     sol: AddressOut,
+    ltc: UtxoAccountOut,
+    doge: UtxoAccountOut,
+}
+
+fn utxo_account_out(seed: &Seed, net: Network, coin: UtxoCoin) -> AppResult<UtxoAccountOut> {
+    let acc = wallet_core::utxo_account(seed, net, coin, 0)?;
+    Ok(UtxoAccountOut {
+        address: wallet_core::utxo_address(seed, net, coin, 0, false, 0)?,
+        xpub: acc.xpub,
+        fingerprint: acc.fingerprint,
+        path: acc.path,
+    })
 }
 
 pub(crate) fn network_name(n: Network) -> &'static str {
@@ -260,6 +285,8 @@ pub fn accounts_get(state: State<'_, AppState>) -> AppResult<Accounts> {
             sol: AddressOut {
                 address: wallet_core::sol_address(seed, 0)?,
             },
+            ltc: utxo_account_out(seed, net, UtxoCoin::Litecoin)?,
+            doge: utxo_account_out(seed, net, UtxoCoin::Dogecoin)?,
         })
     })
 }

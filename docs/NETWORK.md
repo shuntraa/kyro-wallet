@@ -18,10 +18,10 @@ Kyro embarque un client Tor (Arti, de The Tor Project). Il démarre en arrière-
 | Ton adresse IP | **Cachée** : le serveur voit l'IP d'un relais de sortie Tor. Ton fournisseur d'accès voit seulement que tu utilises Tor. | Visible par chaque serveur contacté et par ton fournisseur d'accès (qui voit les noms d'hôtes). |
 | Contenu des requêtes | Chiffré de bout en bout en TLS jusqu'au serveur (le relais de sortie ne voit que le nom d'hôte et le volume). | Chiffré en TLS. |
 | Tes adresses publiques, tes transactions | **Toujours visibles par le serveur interrogé** : Tor cache *qui* tu es sur le réseau, pas *ce que* tu demandes. | Visibles par le serveur interrogé, et associées à ton IP. |
-| Liens entre activités | Chaque famille — **bitcoin**, **evm**, **solana**, **marché** (CoinGecko), **swap** — utilise ses propres circuits isolés : un relais de sortie ou un serveur ne peut pas relier, par le circuit, ta consultation Bitcoin et ta consultation Solana. | Toutes les requêtes partent de la même IP. |
+| Liens entre activités | Chaque famille — **bitcoin**, **litecoin**, **dogecoin**, **evm**, **solana**, **marché** (CoinGecko), **swap** — utilise ses propres circuits isolés : un relais de sortie ou un serveur ne peut pas relier, par le circuit, ta consultation Bitcoin et ta consultation Solana. | Toutes les requêtes partent de la même IP. |
 | Panne | **Échec fermé** : si Tor n'est pas prêt dans les 60 s, la requête échoue (`TOR_UNAVAILABLE`) et **rien n'est envoyé en clair**. Aucun repli automatique. | — |
 
-Par serveur, en mode Tor : CoinGecko voit les cryptos et la devise demandées ; mempool, les RPC EVM et Solana voient les adresses et transactions demandées ; les API de swap voient les tokens, montants et l'adresse destinataire — mais aucun ne voit ton IP, et deux familles différentes ne partagent jamais un circuit.
+Par serveur, en mode Tor : CoinGecko voit les cryptos et la devise demandées ; mempool, litecoinspace, les RPC EVM et Solana voient les adresses et transactions demandées ; les API de swap voient les tokens, montants et l'adresse destinataire — mais aucun ne voit ton IP, et deux familles différentes ne partagent jamais un circuit.
 
 **Bitcoin en mode Tor : service onion de mempool.** En mode Tor, Rust réécrit automatiquement `https://mempool.space/…` en `http://mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion/…` (même chemin). La connexion reste **entièrement dans le réseau Tor** : aucun relais de sortie n'intervient, donc aucun relais ne voit ni le nom d'hôte, ni le volume, ni ne peut altérer le trafic. Le `http://` n'est pas un affaiblissement : une adresse onion *est* la clé publique du service, que le protocole authentifie, et la connexion est chiffrée de bout en bout — ce qui remplace TLS. Cette exception vaut **uniquement** pour cette adresse onion précise et **uniquement via Tor** ; toute autre URL `http://` reste refusée, et toute adresse `.onion` est refusée en mode clair. Mempool voit toujours les adresses et transactions demandées, mais ni ton IP ni celle d'un relais de sortie.
 
@@ -40,6 +40,7 @@ En mode clair, tout serveur contacté voit ton **adresse IP** ; en mode Tor (dé
 | `api.coingecko.com` (`pro-api.coingecko.com` avec clé) | Prix du top 200, variations, graphiques | Devise d'affichage, identifiants de cryptos. **Aucune adresse.** |
 | `mempool.space` (mode clair) | Bitcoin : UTXO, historique, frais, diffusion des transactions | Tes adresses Bitcoin, tes transactions signées |
 | `mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion` (mode Tor uniquement, `http://`) | Même service que `mempool.space`, via son service onion officiel | Tes adresses Bitcoin, tes transactions signées (jamais ton IP) |
+| `litecoinspace.org` (`/api` mainnet, `/testnet/api` testnet4) | Litecoin : soldes, UTXO, historique, frais, transactions précédentes, diffusion — appelé **par Rust** (`ltc_*`) ; l'interface n'a pas à le joindre (il est dans l'allowlist comme `mempool.space`). Mode Tor : via un relais de sortie (pas de service onion : l'en-tête `Onion-Location` du site est un modèle non configuré, `__NGINX_MEMPOOL_ONION__`, vérifié le 30/10/2026) ; joignable par Tor, testé le 30/10/2026 | Tes adresses Litecoin (une par requête, le serveur peut les regrouper), les txid de tes pièces, tes transactions signées |
 | `ethereum-sepolia-rpc.publicnode.com` / `ethereum-rpc.publicnode.com` | Ethereum : soldes, nonce, gas, diffusion | Ton adresse EVM, tes transactions signées |
 | `arbitrum-one-rpc`, `optimism-rpc`, `base-rpc`, `polygon-bor-rpc`, `bsc-rpc`, `avalanche-c-chain-rpc` `.publicnode.com` | Chaînes EVM (phase 2), mêmes usages | Ton adresse EVM, tes transactions signées |
 | `api.devnet.solana.com` / `api.mainnet-beta.solana.com` | Solana : solde, blockhash, diffusion ; lecture par Rust des tables d'adresses (ALT) d'une transaction v0 avant de l'afficher et de la signer | Ton adresse Solana, tes transactions signées, les adresses des tables utilisées par la transaction à signer |
@@ -50,13 +51,28 @@ En mode clair, tout serveur contacté voit ton **adresse IP** ; en mode Tor (dé
 
 Les devis de swap ne sont demandés que lorsque tu ouvres l'écran Swap et saisis un montant.
 
+### Dogecoin : pas de serveur par défaut
+
+Kyro ne contacte **aucun** serveur Dogecoin tant que tu n'en as pas configuré un (Réglages → Réseaux, type Esplora, par exemple ton instance d'[electrs-dogecoin](https://github.com/dogecoin/dogecoin/discussions/3626)) : les commandes `doge_*` répondent `SERVER_INVALID`. Raison : au 30/10/2026, aucune API publique **gratuite, maintenue, avec un testnet et la diffusion** n'a été trouvée.
+
+| Candidat vérifié le 30/10/2026 | Résultat |
+|---|---|
+| QED electrs (`doge-electrs-demo.qed.me`, `doge-electrs-testnet-demo.qed.me`, forme Esplora, mainnet + testnet) | HTTP 522 (origine injoignable derrière Cloudflare) en clair et via Tor, à plusieurs reprises |
+| SoChain v3 (`sochain.com/api/v3`, `DOGETEST`) | lecture sans clé possible, mais **pas de diffusion** (`broadcast_transaction` retiré), forme non Esplora, quotas |
+| BlockCypher (`api.blockcypher.com/v1/doge/main`) | mainnet seulement (pas de testnet Dogecoin), 100 requêtes/h sans clé |
+| Blockchair | mainnet seulement, quotas |
+| Blockbook de Trezor (`doge1.trezor.io`) | bloqué par Cloudflare pour les clients autres que Trezor |
+| NOWNodes, Tatum, QuickNode (Blockbook) | testnet disponible mais **clé API payante** |
+
+Options : héberger electrs-dogecoin (avec un nœud Dogecoin Core) et l'entrer comme serveur Esplora ; ajouter QED comme défaut s'il redevient joignable (une ligne dans `servers.rs` + cette page + l'allowlist) ; écrire un adaptateur Blockbook (forme différente) pour un fournisseur à clé.
+
 Les tables d'adresses (ALT) d'une transaction Solana v0 sont lues par Rust auprès du RPC Solana (celui des réglages, sinon le RPC par défaut ci-dessus), jamais transmises par l'interface. Kyro fait confiance à ce RPC pour leur contenu, comme pour les soldes ; une table introuvable, désactivée ou incomplète bloque l'aperçu et la signature.
 
 ## Serveurs personnalisés (Réglages → Réseaux)
 
-Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, Electrum ou ton nœud Bitcoin Core), chaque chaîne EVM, chaque cluster Solana. Règles communes :
+Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, Electrum ou ton nœud Bitcoin Core), Litecoin et Dogecoin (Esplora, le même type que le défaut), chaque chaîne EVM, chaque cluster Solana. Règles communes :
 - un serveur personnalisé n'est autorisé **que pour sa propre famille** et passe par les **circuits Tor isolés** de cette famille ;
-- il est vérifié à l'enregistrement : il doit être sur le bon réseau (genesis Bitcoin, `eth_chainId`, genesis Solana), sinon il est refusé ;
+- il est vérifié à l'enregistrement : il doit être sur le bon réseau (genesis Bitcoin, Litecoin ou Dogecoin, `eth_chainId`, genesis Solana), sinon il est refusé ;
 - dès qu'il est configuré, le serveur par défaut de cette chaîne est **refusé** : si ton serveur tombe, Kyro affiche une erreur (`SERVER_UNREACHABLE`) et **ne se rabat jamais** sur le serveur par défaut — sinon tes adresses partiraient chez le tiers que tu as justement voulu éviter ;
 - jamais d'identifiants dans une URL ; `http://` en clair n'est permis que pour une adresse `.onion` via Tor (le protocole onion authentifie le service et chiffre de bout en bout) et, pour Bitcoin Core seulement, pour une adresse locale.
 
@@ -67,6 +83,8 @@ Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, E
 | Electrum (TLS, ou TCP vers un `.onion`) | Tes *script hashes* (équivalent de tes adresses), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés |
 | Bitcoin Core **local/LAN** (127.0.0.0/8, ::1, RFC 1918, fc00::/7) | Joint **directement, sans Tor** (Tor ne peut pas atteindre ton réseau local, et rien ne sort de ta machine/ton réseau) : ton propre nœud voit tes descripteurs publics (xpub) et tes transactions | Idem | Ta phrase, tes clés privées (portefeuille de surveillance sans clé privée) |
 | Bitcoin Core **distant** (`https://` ou `.onion`) | Tes descripteurs publics (xpub : **tout l'historique de ton compte**, présent et futur), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés privées |
+| litecoinspace.org (défaut Litecoin) | Tes adresses Litecoin, les txid de tes pièces, tes transactions ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
+| Esplora Litecoin / Dogecoin personnalisé (`https://` ou `.onion`) | Tes adresses, les txid de tes pièces (Dogecoin : chaque transaction précédente que tu dépenses), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés |
 | RPC EVM personnalisé | Ton adresse EVM, tes transactions signées ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
 | RPC Solana personnalisé | Ton adresse Solana, tes transactions signées, les tables d'adresses lues ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
 

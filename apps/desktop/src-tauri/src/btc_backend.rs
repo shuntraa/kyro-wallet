@@ -141,7 +141,7 @@ where
 }
 
 /// mempool.space `/v1/fees/recommended` from a plain Esplora `/fee-estimates` map.
-fn fees_from_estimates(est: &Value) -> Value {
+pub(crate) fn fees_from_estimates(est: &Value) -> Value {
     let at = |n: &str| {
         est.get(n)
             .and_then(Value::as_f64)
@@ -687,6 +687,86 @@ pub async fn tip_height(ctx: &Ctx<'_>) -> AppResult<u64> {
             .await
             .map_err(AppError::from)?;
         return r.as_u64().ok_or_else(|| bad("getblockcount invalide"));
+    }
+    Err(AppError::Internal("backend Bitcoin inconnu".into()))
+}
+
+fn check_txid(txid: &str) -> AppResult<String> {
+    let t = txid.trim().to_ascii_lowercase();
+    if t.len() != 64 || !t.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(AppError::InvalidInput(
+            "txid : 64 caractères hexadécimaux".into(),
+        ));
+    }
+    Ok(t)
+}
+
+/// A raw transaction from a server is kept only if it hashes to the requested txid.
+pub fn verified_tx_hex(raw: &str, txid: &str, source: &str) -> AppResult<String> {
+    let raw = raw.trim().to_owned();
+    wallet_core::verify_tx_hex(&raw, txid).map_err(|_| {
+        bad(format!(
+            "{source} : transaction illisible ou différente de {txid} (son hash ne correspond pas)"
+        ))
+    })?;
+    Ok(raw)
+}
+
+/// Raw transaction (hex) by txid, from the configured backend — e.g. the full previous
+/// transaction a hardware wallet needs as `non_witness_utxo`. Esplora `GET /tx/{txid}/hex`,
+/// Electrum `blockchain.transaction.get`, Core `gettransaction` (watch wallet) then
+/// `getrawtransaction` (needs `-txindex=1` for confirmed transactions outside the wallet).
+/// Whatever the backend, the answer must hash to `txid` ([`verified_tx_hex`]).
+pub async fn tx_hex(ctx: &Ctx<'_>, txid: &str) -> AppResult<String> {
+    let t = check_txid(txid)?;
+    if let Some(base) = esplora_base(ctx)? {
+        let body = esplora_get(ctx, &base, &format!("/tx/{t}/hex")).await?;
+        return verified_tx_hex(&String::from_utf8_lossy(&body), &t, "Esplora");
+    }
+    if let Some(target) = electrum_target(&ctx.server)? {
+        let mut conn = electrum::connect(ctx.net_client, &target, ctx.tor).await?;
+        let r = conn
+            .call("blockchain.transaction.get", json!([t, false]))
+            .await?;
+        let raw = r
+            .as_str()
+            .ok_or_else(|| bad("Electrum : transaction non hexadécimale"))?;
+        return verified_tx_hex(raw, &t, "Electrum");
+    }
+    if let Some((c, w)) = core_client(ctx)? {
+        core_wallet(&c, &w).await?;
+        let raw = match c
+            .call(Some(&w), "gettransaction", json!([t, true]), false)
+            .await
+        {
+            Ok(v) => v
+                .get("hex")
+                .and_then(Value::as_str)
+                .ok_or_else(|| bad("gettransaction : hex manquant"))?
+                .to_owned(),
+            // -5: not a wallet transaction: ask the node itself.
+            Err(CallError::Rpc(r)) if r.code == -5 => {
+                match c
+                    .call(None, "getrawtransaction", json!([t, false]), false)
+                    .await
+                {
+                    Ok(v) => v
+                        .as_str()
+                        .ok_or_else(|| bad("getrawtransaction : hex manquant"))?
+                        .to_owned(),
+                    Err(CallError::Rpc(r)) if r.code == -5 => {
+                        return Err(AppError::InvalidInput(format!(
+                            "Bitcoin Core : transaction {t} introuvable — elle n'est pas dans le \
+                             portefeuille de surveillance, et le nœud ne la trouve pas (pour une \
+                             transaction confirmée hors portefeuille, il faut -txindex=1)"
+                        )))
+                    }
+                    Err(e) => return Err(e.into()),
+                }
+            }
+            Err(e) => return Err(e.into()),
+        };
+        return verified_tx_hex(&raw, &t, "Bitcoin Core");
     }
     Err(AppError::Internal("backend Bitcoin inconnu".into()))
 }
@@ -1326,6 +1406,100 @@ mod tests {
                 .all(|(d, _)| d.ends_with("#abcdefgh")));
             assert_eq!(get_job(&job.key).unwrap().state, "importing");
             assert!(get_job(&job_key(Network::Mainnet, &url, &job.wallet)).is_none());
+        });
+    }
+
+    #[test]
+    fn raw_transactions_are_checked_against_their_txid() {
+        let raw = "01000000019d53382244ce54a4129e041d0b29cedd293d1cfcd2cff7930d6e800332441876010000006a473044022020cdcc4c5072aca5e52f18d78d811308f8d79fd92e0198b998f06ac8dcacd6d2022053f6ca9c4e1f80dc8714c77914fad862e78064adbd4710dceb507b43fef3b6b7012103648adbede7ed318fc35e2b7d310046111f626e975d87e103a11e8cd84e5a1b76ffffffff02a23694fa010000001976a914e6c7989b8836301af965531c39865a73d745e46788acb0cc81d86c2b00001976a91498b24d9d9928caab02f40a57b9e7fdcc9dd8e34e88ac00000000";
+        let txid = "386f6e9cc89fcc9d2ceb037677bdfd65d8ff2c46a371be688069784d1b3711c5";
+        assert_eq!(
+            verified_tx_hex(&format!("{raw}\n"), txid, "x").unwrap(),
+            raw
+        );
+        assert!(matches!(
+            verified_tx_hex(raw, &"ab".repeat(32), "x"),
+            Err(AppError::ServerUnreachable(_))
+        ));
+        assert!(check_txid("../tx").is_err());
+        assert_eq!(check_txid(&txid.to_uppercase()).unwrap(), txid);
+    }
+
+    /// Bitcoin Core: wallet transaction first, then the node; a wrong transaction or a missing
+    /// txindex give typed errors.
+    #[test]
+    fn core_tx_hex_paths() {
+        let raw = "01000000019d53382244ce54a4129e041d0b29cedd293d1cfcd2cff7930d6e800332441876010000006a473044022020cdcc4c5072aca5e52f18d78d811308f8d79fd92e0198b998f06ac8dcacd6d2022053f6ca9c4e1f80dc8714c77914fad862e78064adbd4710dceb507b43fef3b6b7012103648adbede7ed318fc35e2b7d310046111f626e975d87e103a11e8cd84e5a1b76ffffffff02a23694fa010000001976a914e6c7989b8836301af965531c39865a73d745e46788acb0cc81d86c2b00001976a91498b24d9d9928caab02f40a57b9e7fdcc9dd8e34e88ac00000000";
+        let txid = "386f6e9cc89fcc9d2ceb037677bdfd65d8ff2c46a371be688069784d1b3711c5";
+        let not_wallet = (
+            500,
+            r#"{"result":null,"error":{"code":-5,"message":"Invalid or non-wallet transaction id"},"id":"kyro"}"#.to_string(),
+        );
+        let no_index = (
+            500,
+            r#"{"result":null,"error":{"code":-5,"message":"No such mempool transaction. Use -txindex or provide a block hash to enable blockchain transaction queries."},"id":"kyro"}"#.to_string(),
+        );
+        let loaded = ("listwallets", ok(json!(["kyro-watch-73c5da0a"])));
+        tauri::async_runtime::block_on(async {
+            let net = NetClient::new(std::env::temp_dir().join("kyro-core-txhex")).unwrap();
+            let run = |answers: HashMap<&'static str, (u16, String)>| {
+                let net = &net;
+                async move {
+                    let url = fake_core(answers).await;
+                    let ctx = Ctx {
+                        net_client: net,
+                        network: Network::Testnet,
+                        tor: false,
+                        server: BtcServer::Core {
+                            url,
+                            auth: CoreAuth::Userpass {
+                                user: "kyro".into(),
+                                password: Some("pw".into()),
+                                has_password: true,
+                            },
+                        },
+                        fingerprint: Some("73c5da0a".into()),
+                    };
+                    tx_hex(&ctx, txid).await
+                }
+            };
+            // In the watch wallet.
+            let r = run(HashMap::from([
+                loaded.clone(),
+                ("gettransaction", ok(json!({ "hex": raw }))),
+            ]))
+            .await;
+            assert_eq!(r.unwrap(), raw);
+            // Not in the wallet: the node's getrawtransaction.
+            let r = run(HashMap::from([
+                loaded.clone(),
+                ("gettransaction", not_wallet.clone()),
+                ("getrawtransaction", ok(json!(raw))),
+            ]))
+            .await;
+            assert_eq!(r.unwrap(), raw);
+            // Neither: clear txindex error.
+            let r = run(HashMap::from([
+                loaded.clone(),
+                ("gettransaction", not_wallet.clone()),
+                ("getrawtransaction", no_index),
+            ]))
+            .await;
+            assert!(
+                matches!(r, Err(AppError::InvalidInput(ref m)) if m.contains("-txindex=1")),
+                "{r:?}"
+            );
+            // A node that answers another transaction: refused.
+            let other = raw.replacen("a23694fa01", "a23694fa02", 1);
+            let r = run(HashMap::from([
+                loaded,
+                ("gettransaction", ok(json!({ "hex": other }))),
+            ]))
+            .await;
+            assert!(
+                matches!(r, Err(AppError::ServerUnreachable(ref m)) if m.contains("hash")),
+                "{r:?}"
+            );
         });
     }
 

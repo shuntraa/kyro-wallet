@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ltc-address-txs"
+description = "Enables the ltc_address_txs command without any pre-configured scope."
+commands.allow = ["ltc_address_txs"]
+
+[[permission]]
+identifier = "deny-ltc-address-txs"
+description = "Denies the ltc_address_txs command without any pre-configured scope."
+commands.deny = ["ltc_address_txs"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-doge-address-info"
+description = "Enables the doge_address_info command without any pre-configured scope."
+commands.allow = ["doge_address_info"]
+
+[[permission]]
+identifier = "deny-doge-address-info"
+description = "Denies the doge_address_info command without any pre-configured scope."
+commands.deny = ["doge_address_info"]

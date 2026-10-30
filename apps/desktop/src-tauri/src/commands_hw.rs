@@ -133,8 +133,9 @@ pub fn hw_cancel(state: State<'_, AppState>, id: String) -> AppResult<bool> {
     Ok(state.hw.cancel(&id)?)
 }
 
-/// Trezor One PIN matrix: `positions` are digits 1–9 = cells of the 3×3 grid (numbered like a
-/// phone keypad from the top-left as the UI draws it), never the PIN digits themselves.
+/// Trezor One PIN matrix: `positions` are digits 1–9 = cells of the 3×3 grid in Trezor's
+/// numeric-keypad layout (top row 7 8 9, middle 4 5 6, bottom 1 2 3: top-left cell = "7"),
+/// passed to the device unchanged. Never the PIN digits themselves.
 #[tauri::command]
 pub fn hw_pin_matrix(state: State<'_, AppState>, id: String, positions: String) -> AppResult<()> {
     let positions = Zeroizing::new(positions);

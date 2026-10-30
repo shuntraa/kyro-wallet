@@ -204,7 +204,7 @@ pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String]) -> Result<B
 }
 
 /// `true` iff `path` is `m/purpose'/coin'/account'/{0,1}/index` for our purpose and coin type.
-fn is_our_path(path: &DerivationPath, purpose: u32, coin: u32) -> bool {
+pub(crate) fn is_our_path(path: &DerivationPath, purpose: u32, coin: u32) -> bool {
     match path.as_ref() {
         [ChildNumber::Hardened { index: p }, ChildNumber::Hardened { index: c }, ChildNumber::Hardened { .. }, ChildNumber::Normal { index: change }, ChildNumber::Normal { .. }] => {
             *p == purpose && *c == coin && *change <= 1

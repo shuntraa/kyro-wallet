@@ -7,13 +7,13 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{Manager, State};
-use wallet_core::{BtcKind, Network};
+use wallet_core::{BtcKind, Network, UtxoCoin};
 
 use crate::btc_backend::{self, Ctx, Detected};
 use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient, ServerRequest};
 use crate::servers::{
-    btc_network_key, validate_http_url, BtcServer, RpcServer, Servers, SOLANA_GENESIS,
+    btc_network_key, validate_http_url, BtcServer, RpcServer, Servers, UtxoServer, SOLANA_GENESIS,
 };
 use crate::settings::Settings;
 use crate::state::AppState;
@@ -24,6 +24,17 @@ fn network_of(key: &str) -> AppResult<Network> {
         "testnet4" => Ok(Network::Testnet),
         other => Err(AppError::ServerInvalid(format!(
             "réseau Bitcoin inconnu « {other} » (mainnet ou testnet4)"
+        ))),
+    }
+}
+
+/// Litecoin / Dogecoin network key of `servers.{litecoin,dogecoin}`.
+fn utxo_network_of(key: &str) -> AppResult<Network> {
+    match key {
+        "mainnet" => Ok(Network::Mainnet),
+        "testnet" => Ok(Network::Testnet),
+        other => Err(AppError::ServerInvalid(format!(
+            "réseau inconnu « {other} » (mainnet ou testnet)"
         ))),
     }
 }
@@ -146,6 +157,18 @@ async fn probe_changes(net: &NetClient, new: &Servers, old: &Servers, tor: bool)
             probe_btc(net, network_of(key)?, s, tor).await?;
         }
     }
+    for coin in [UtxoCoin::Litecoin, UtxoCoin::Dogecoin] {
+        for ((key, n), (_, o)) in new
+            .utxo(coin)
+            .entries()
+            .into_iter()
+            .zip(old.utxo(coin).entries())
+        {
+            if let Some(s) = n.as_ref().filter(|s| !s.is_default() && *n != *o) {
+                crate::commands_utxo::probe(net, utxo_network_of(key)?, coin, s, tor).await?;
+            }
+        }
+    }
     for (chain, s) in &new.evm {
         if old.evm.get(chain) != Some(s) {
             let id = chain
@@ -204,9 +227,28 @@ pub async fn settings_set(state: State<'_, AppState>, settings: Value) -> AppRes
     rename_all_fields = "camelCase"
 )]
 pub enum ServerTestTarget {
-    Bitcoin { network: String, server: BtcServer },
-    Evm { chain_id: u64, server: RpcServer },
-    Solana { cluster: String, server: RpcServer },
+    Bitcoin {
+        network: String,
+        server: BtcServer,
+    },
+    /// `network`: `mainnet` | `testnet` (Litecoin testnet4).
+    Litecoin {
+        network: String,
+        server: UtxoServer,
+    },
+    /// `network`: `mainnet` | `testnet`.
+    Dogecoin {
+        network: String,
+        server: UtxoServer,
+    },
+    Evm {
+        chain_id: u64,
+        server: RpcServer,
+    },
+    Solana {
+        cluster: String,
+        server: RpcServer,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -239,6 +281,12 @@ pub async fn server_test(
             let s = probe.bitcoin_for(net);
             probe_btc(&state.net, net, &s, tor).await?
         }
+        ServerTestTarget::Litecoin { network, server } => {
+            probe_utxo(&state, UtxoCoin::Litecoin, &network, server, tor).await?
+        }
+        ServerTestTarget::Dogecoin { network, server } => {
+            probe_utxo(&state, UtxoCoin::Dogecoin, &network, server, tor).await?
+        }
         ServerTestTarget::Evm { chain_id, server } => {
             let mut probe = Servers::default();
             probe.evm.insert(chain_id.to_string(), server.clone());
@@ -256,6 +304,26 @@ pub async fn server_test(
         latency_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
         detected,
     })
+}
+
+async fn probe_utxo(
+    state: &AppState,
+    coin: UtxoCoin,
+    network: &str,
+    server: UtxoServer,
+    tor: bool,
+) -> AppResult<Detected> {
+    let net = utxo_network_of(network)?;
+    if server.is_default() && crate::servers::utxo_default_base(coin, net).is_none() {
+        return Err(crate::utxo_backend::no_default_server(coin));
+    }
+    let mut probe = Servers::default();
+    *match net {
+        Network::Mainnet => &mut probe.utxo_mut(coin).mainnet,
+        Network::Testnet => &mut probe.utxo_mut(coin).testnet,
+    } = Some(server.clone());
+    probe.validate(tor)?;
+    crate::commands_utxo::probe(&state.net, net, coin, &server, tor).await
 }
 
 /// Fetches an Electrum server's TLS certificate fingerprint for the trust-on-first-use prompt.
@@ -370,6 +438,25 @@ pub async fn btc_tip_height(app: tauri::AppHandle, state: State<'_, AppState>) -
     }
     let s = state.settings();
     btc_backend::tip_height(&ctx(&state, &s)?).await
+}
+
+/// Raw transaction (hex) by txid from the configured Bitcoin backend, verified to hash to
+/// `txid` (e.g. `non_witness_utxo` for hardware-wallet SegWit v0 spends).
+#[tauri::command]
+pub async fn btc_tx_hex(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    txid: String,
+) -> AppResult<String> {
+    if let Some(r) = cbf_read(&app, &state, "txhex", Some(&txid)) {
+        return r.and_then(|v| {
+            v.as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| AppError::Internal("cbf : réponse inattendue".into()))
+        });
+    }
+    let s = state.settings();
+    btc_backend::tx_hex(&ctx(&state, &s)?, &txid).await
 }
 
 #[tauri::command]
@@ -584,6 +671,7 @@ fn cbf_read(
             ("txs", Some(a)) => crate::cbf::address_txs(&dir, net, a),
             ("fees", _) => crate::cbf::fee_rates(&dir, net),
             ("tip", _) => crate::cbf::tip_height(&dir, net).map(|h| json!(h)),
+            ("txhex", Some(t)) => crate::cbf::tx_hex(&dir, net, t).map(Value::String),
             _ => Err(AppError::Internal("cbf : requête inconnue".into())),
         };
         Some(r)

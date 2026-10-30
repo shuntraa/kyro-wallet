@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-doge-tip-height"
+description = "Enables the doge_tip_height command without any pre-configured scope."
+commands.allow = ["doge_tip_height"]
+
+[[permission]]
+identifier = "deny-doge-tip-height"
+description = "Denies the doge_tip_height command without any pre-configured scope."
+commands.deny = ["doge_tip_height"]

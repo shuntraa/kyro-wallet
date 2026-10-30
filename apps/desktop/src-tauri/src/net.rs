@@ -24,6 +24,8 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "api.coingecko.com",
     "pro-api.coingecko.com",
     "mempool.space",
+    // Litecoin (Esplora/mempool API, mainnet + testnet4): only Rust's `ltc_*` commands use it.
+    "litecoinspace.org",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -187,6 +189,8 @@ pub fn onion_rewrite(url: &mut url::Url) -> AppResult<()> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Family {
     Bitcoin,
+    Litecoin,
+    Dogecoin,
     Evm,
     Solana,
     Market,
@@ -200,6 +204,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
     }
     if host == "mempool.space" || host == MEMPOOL_ONION {
         Family::Bitcoin
+    } else if host == "litecoinspace.org" {
+        Family::Litecoin
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -869,6 +875,12 @@ mod tests {
         assert_eq!(family_for("api.devnet.solana.com", &c), Family::Solana);
         assert_eq!(family_for("api.coingecko.com", &c), Family::Market);
         assert_eq!(family_for("lite-api.jup.ag", &c), Family::Swap);
+        assert_eq!(family_for("litecoinspace.org", &c), Family::Litecoin);
+        let doge = NetContext {
+            custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
+            ..ctx(true)
+        };
+        assert_eq!(family_for("doge.my-node.example", &doge), Family::Dogecoin);
         assert_eq!(family_for("unknown.example", &c), Family::Other);
         for h in ALLOWED_HOSTS {
             assert_ne!(family_for(h, &NetContext::default()), Family::Other, "{h}");

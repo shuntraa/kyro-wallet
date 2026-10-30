@@ -134,6 +134,23 @@ pub fn btc_decode_raw_tx(raw_hex: &str, net: Network) -> Result<BtcRawTx> {
     })
 }
 
+/// Checks that `raw_hex` is one complete consensus-serialized transaction whose txid — the
+/// double SHA-256 of its non-witness serialization, display order — is `txid`. Used on every
+/// raw transaction a server returns (Bitcoin, Litecoin, Dogecoin: same serialization and txid),
+/// e.g. before it becomes a PSBT `non_witness_utxo`. A mismatch is an error.
+pub fn verify_tx_hex(raw_hex: &str, txid: &str) -> Result<()> {
+    let bytes = hex::decode(raw_hex.trim()).map_err(|_| Error::input("transaction is not hex"))?;
+    let tx: bitcoin::Transaction = bitcoin::consensus::deserialize(&bytes)
+        .map_err(|_| Error::input("malformed transaction"))?;
+    let want = bitcoin::Txid::from_str(txid.trim()).map_err(|_| Error::input("invalid txid"))?;
+    if tx.compute_txid() != want {
+        return Err(Error::input(
+            "transaction does not hash to the requested txid",
+        ));
+    }
+    Ok(())
+}
+
 /// One ranged output descriptor of the wallet (without checksum).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -234,6 +251,29 @@ mod tests {
         assert!(btc_decode_raw_tx("zz", Network::Mainnet).is_err());
         assert!(btc_decode_raw_tx(&raw[..raw.len() - 2], Network::Mainnet).is_err());
         assert!(btc_decode_raw_tx(&format!("{raw}00"), Network::Mainnet).is_err());
+    }
+
+    #[test]
+    fn raw_transaction_must_hash_to_the_requested_txid() {
+        // Genesis coinbase of `decode_genesis_coinbase_and_errors`.
+        let raw = concat!(
+            "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff",
+            "4d04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72",
+            "206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73ffffffff",
+            "0100f2052a01000000434104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f",
+            "61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000"
+        );
+        let txid = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
+        assert!(verify_tx_hex(raw, txid).is_ok());
+        assert!(verify_tx_hex(&format!(" {raw}\n"), &txid.to_uppercase()).is_ok());
+        // Another txid, a tampered byte (amount), trailing bytes, garbage: refused.
+        let other = "0000000000000000000000000000000000000000000000000000000000000001";
+        assert!(verify_tx_hex(raw, other).is_err());
+        let tampered = raw.replacen("00f2052a01", "00f2052a02", 1);
+        assert!(verify_tx_hex(&tampered, txid).is_err());
+        assert!(verify_tx_hex(&format!("{raw}00"), txid).is_err());
+        assert!(verify_tx_hex("zz", txid).is_err());
+        assert!(verify_tx_hex(raw, "../x").is_err());
     }
 
     #[test]
