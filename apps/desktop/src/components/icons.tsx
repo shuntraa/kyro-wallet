@@ -32,6 +32,15 @@ export const IconSwap = (p: P) => (
     <path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7" />
   </Svg>
 );
+/** Staking: a sprout growing from a coin. */
+export const IconStake = (p: P) => (
+  <Svg {...p}>
+    <ellipse cx="12" cy="18" rx="7" ry="3" />
+    <path d="M12 15V8" />
+    <path d="M12 10c0-3 2-5 5-5 0 3-2 5-5 5z" />
+    <path d="M12 12c0-2.5-1.7-4-4-4 0 2.5 1.7 4 4 4z" />
+  </Svg>
+);
 export const IconClock = (p: P) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="9" />

@@ -43,6 +43,16 @@ export function instructionLabel(i: SolInstruction): string {
       return 'priority fee';
     case 'memo':
       return 'mémo';
+    case 'systemCreateAccountWithSeed':
+      return 'création du compte de staking (adresse dérivée de la tienne)';
+    case 'stakeInitialize':
+      return 'initialisation du compte de staking';
+    case 'stakeDelegate':
+      return 'délégation à un validateur';
+    case 'stakeDeactivate':
+      return 'désactivation du stake';
+    case 'stakeWithdraw':
+      return 'retrait du compte de staking';
     case 'unknown':
       return 'inconnue';
     default:

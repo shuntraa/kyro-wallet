@@ -15,10 +15,10 @@ import { SmoothChart } from '../components/charts';
 import { HistoryRow } from '../components/HistoryRow';
 import { useFavorites } from '../components/AssetLists';
 import { Badge, Button, IconButton, Segmented, Skeleton } from '../components/ui/primitives';
-import { IconBack, IconDown, IconStar, IconSwap, IconUp } from '../components/icons';
+import { IconBack, IconDown, IconStake, IconStar, IconSwap, IconUp } from '../components/icons';
 
 export function AssetDetail({ id }: { id: string }) {
-  const { back, settings, navigate, hideBalances, network } = useApp();
+  const { back, settings, navigate, hideBalances, network, activeHw } = useApp();
   const { accounts, adapters } = useVault();
   const pf = usePortfolio();
   const { favs, toggle } = useFavorites();
@@ -64,6 +64,7 @@ export function AssetDetail({ id }: { id: string }) {
   const activity = (history.data?.entries ?? []).filter((e) => supported && e.assetId === supported.id).slice(0, 6);
   const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address }[supported.family] ?? null) : null;
   const fav = favs.includes(coinId);
+  const stakeChain = supported ? ({ sol: 'sol', ada: 'ada', tron: 'tron' } as const)[supported.family as 'sol' | 'ada' | 'tron'] : undefined;
   // Cardano: ADA tied to tokens and the native tokens themselves (not separate assets).
   const adaAccount = useAsync(supported?.family === 'ada' && adapters.cardano ? () => adapters.cardano!.account() : null, [supported?.id, adapters.cardano], { intervalMs: 30_000 });
 
@@ -98,6 +99,17 @@ export function AssetDetail({ id }: { id: string }) {
             >
               <IconSwap size={16} sw={2.2} /> Swap
             </Button>
+            {/* Native staking: SOL, ADA, TRX only (none for BTC / LTC / DOGE / XRP, ETH out of scope). */}
+            {supported.kind === 'native' && stakeChain && (
+              <Button
+                size="lg"
+                disabled={!!activeHw}
+                title={activeHw ? 'Staking indisponible sur un hardware wallet' : undefined}
+                onClick={() => navigate({ name: 'staking', chain: stakeChain })}
+              >
+                <IconStake size={16} /> Staking
+              </Button>
+            )}
           </div>
         ) : (
           <Badge tone="ice" className="h-7 px-3 text-[12px]">

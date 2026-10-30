@@ -22,6 +22,7 @@ export type Route =
   | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' }
   | { name: 'swap'; sellAssetId?: string }
   | { name: 'history' }
+  | { name: 'staking'; chain?: 'sol' | 'ada' | 'tron' }
   | { name: 'settings'; section?: SettingsSection };
 
 export type Phase = 'boot' | 'welcome' | 'locked' | 'ready' | 'fatal';

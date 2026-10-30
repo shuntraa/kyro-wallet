@@ -489,7 +489,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     return { network: want, chainId: network === 'mainnet' ? 764_824_073 : 1, blockHeight: tip().blockHeight };
   };
 
-  const handlers: Record<Extract<keyof Commands, `ada_${string}`>, (a: Record<string, unknown>) => unknown> = {
+  const handlers: Record<Exclude<Extract<keyof Commands, `ada_${string}`>, `ada_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
     ada_backend_info: (): CardanoBackendInfo => {
       const s = serverOf();
       return { kind: s.kind, network: netKey, label: s.kind === 'koios' ? hostOf(s.url) : defaultHost, tor: torOn() };
@@ -591,6 +591,14 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     state,
     handlers,
     probe,
+    /** Staking (mock-stake.ts): our account, and a net cost taken from the plain-ADA UTxO. */
+    stakeHooks: {
+      account: () => accountOf(me),
+      spend(lovelace: bigint) {
+        const u = (state.utxos.get(me) ?? []).find((x) => x.assets.size === 0);
+        if (u) u.lovelace -= lovelace;
+      },
+    },
     validate: (servers: Settings['servers'], tor: boolean) => {
       for (const nk of ['mainnet', 'testnet'] as const) {
         const s = servers.cardano?.[nk];

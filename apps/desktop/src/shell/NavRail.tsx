@@ -4,9 +4,9 @@
 import type { ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { useApp, type Route } from '../state/app';
-import { IconClock, IconLayers, IconLock, IconSliders, IconSwap, IconWallet } from '../components/icons';
+import { IconClock, IconLayers, IconLock, IconSliders, IconStake, IconSwap, IconWallet } from '../components/icons';
 
-type RailKey = 'portfolio' | 'assets' | 'swap' | 'history' | 'settings';
+type RailKey = 'portfolio' | 'assets' | 'swap' | 'staking' | 'history' | 'settings';
 
 export function railKeyOf(r: Route): RailKey {
   switch (r.name) {
@@ -45,6 +45,7 @@ export function NavRail() {
       <RailItem active={k === 'portfolio'} label="Portefeuille" icon={<IconWallet size={20} />} onClick={() => navigate({ name: 'portfolio' })} />
       <RailItem active={k === 'assets'} label="Actifs" icon={<IconLayers size={20} />} onClick={() => navigate({ name: 'assets' })} />
       <RailItem active={k === 'swap'} label="Swap" icon={<IconSwap size={20} />} onClick={() => navigate({ name: 'swap' })} />
+      <RailItem active={k === 'staking'} label="Staking" icon={<IconStake size={20} />} onClick={() => navigate({ name: 'staking' })} />
       <RailItem active={k === 'history'} label="Historique" icon={<IconClock size={20} />} onClick={() => navigate({ name: 'history' })} />
       <div className="flex-1" />
       <RailItem active={k === 'settings'} label="Réglages" icon={<IconSliders size={20} />} onClick={() => navigate({ name: 'settings' })} />

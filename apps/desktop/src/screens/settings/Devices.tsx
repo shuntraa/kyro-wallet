@@ -4,7 +4,8 @@
 // adding goes through the device (HwSetup), removal needs a confirmation.
 
 import { useState } from 'react';
-import { call, toIpcError, type WatchOnlyAccount } from '@kyro/shared';
+import { call, toIpcError, type HwThpPairing, type WatchOnlyAccount } from '@kyro/shared';
+import { useAsync } from '../../lib/useAsync';
 import { useApp } from '../../state/app';
 import { DeviceBadge, HwAccountSummary, HwSetup } from '../../components/hw';
 import { Dialog } from '../../components/ui/dialog';
@@ -84,6 +85,7 @@ export function Devices() {
           </div>
         )}
       </section>
+      <ThpPairings />
 
       <Dialog open={removing !== null} onOpenChange={(v) => (v ? undefined : setRemoving(null))} title="Supprimer ce compte hardware wallet ?" className="w-[520px]">
         {removing && (
@@ -109,5 +111,64 @@ export function Devices() {
         )}
       </Dialog>
     </>
+  );
+}
+
+/**
+ * Trezor Safe 7 (THP) pairings of this installation. Forgetting one removes Kyro's identifier
+ * (the next connection asks for a new code); « Tout oublier » also drops Kyro's THP key. The
+ * device keeps « Kyro Wallet » in its own list until it is reset.
+ */
+function ThpPairings() {
+  const list = useAsync(() => call('hw_thp_pairings'), []);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const forget = async (key?: string) => {
+    setBusy(key ?? 'all');
+    setError(null);
+    try {
+      await call('hw_thp_forget', key ? { key } : {});
+      list.reload();
+    } catch (e) {
+      setError(toIpcError(e).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const items: HwThpPairing[] = list.data ?? [];
+  if (!list.data && !list.error) return null;
+  return (
+    <section className="flex flex-col gap-3 rounded-[22px] border border-line bg-card px-[22px] py-[18px]">
+      <div className="flex items-center justify-between">
+        <span className="text-[15px] font-semibold">Appareils Trezor appairés</span>
+        <Badge>Trezor Safe 7 · canal chiffré</Badge>
+      </div>
+      <p className="m-0 text-[13px] leading-[1.55] text-text2">
+        Un Trezor Safe 7 s’appaire une fois avec Kyro (code à 6 chiffres affiché sur l’appareil), puis la connexion se fait sur un canal chiffré. « Oublier » efface l’appairage dans Kyro : la prochaine connexion demandera un nouveau code. <strong className="font-semibold text-text">L’appareil, lui, garde Kyro dans sa liste</strong> jusqu’à sa réinitialisation.
+      </p>
+      {list.error && <Notice tone="error">{list.error.message}</Notice>}
+      {list.data && items.length === 0 && <span className="text-[13px] text-faint">Aucun Trezor Safe 7 appairé.</span>}
+      {items.map((p) => (
+        <div key={p.key} className="flex items-center justify-between gap-3 rounded-[14px] border border-line bg-raised px-4 py-2.5">
+          <span className="flex min-w-0 flex-col">
+            <span className="text-[13px] font-semibold">{p.model === 'T3W1' ? 'Trezor Safe 7' : p.model}</span>
+            <span className="truncate font-mono text-[11px] text-mute">
+              clé {p.key.slice(0, 12)}…{p.key.slice(-6)} · appairé le {new Date(p.added * 1000).toLocaleDateString('fr-FR')}
+            </span>
+          </span>
+          <Button size="sm" variant="dangerOutline" onClick={() => void forget(p.key)} disabled={busy !== null}>
+            {busy === p.key && <Spinner />} Oublier
+          </Button>
+        </div>
+      ))}
+      {items.length > 0 && (
+        <div>
+          <Button size="sm" variant="dangerOutline" onClick={() => void forget()} disabled={busy !== null}>
+            {busy === 'all' && <Spinner />} Tout oublier
+          </Button>
+        </div>
+      )}
+      {error && <Notice tone="error">{error}</Notice>}
+    </section>
   );
 }

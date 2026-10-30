@@ -90,6 +90,8 @@ export interface DemoTronDeps {
   checkPassword: (password: unknown) => void;
   confirm: (text: string) => boolean;
   now: () => number;
+  /** Staking raw_data (§2.8) goes through `tron_broadcast` too: null = not a staking tx. */
+  stakeBroadcast?: (raw: string, signature: string) => string | null;
 }
 
 /** Demo chain state (exposed for tests). */
@@ -333,7 +335,7 @@ export function createDemoTron(d: DemoTronDeps) {
     return { network: want, genesisHash: GENESIS[network], blockHeight: state.block };
   };
 
-  const handlers: Record<Extract<keyof Commands, `tron_${string}`>, (a: Record<string, unknown>) => unknown> = {
+  const handlers: Record<Exclude<Extract<keyof Commands, `tron_${string}`>, `tron_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
     tron_backend_info: (): TronBackendInfo => {
       const s = serverOf();
       return { kind: s.kind, network: netKey, label: baseHost(s), tor: torOn() };
@@ -416,6 +418,11 @@ export function createDemoTron(d: DemoTronDeps) {
     },
     tron_broadcast: async (a) => {
       if (!/^[0-9a-f]{130}$/i.test(String(a.signature ?? '').trim())) throw invalidInput('signature : 65 octets hex');
+      const staked = d.stakeBroadcast?.(String(a.raw ?? ''), String(a.signature));
+      if (staked) {
+        await backend();
+        return staked;
+      }
       const { summary } = decodeRaw(a.raw);
       await backend();
       const est = estimateFor(summary);

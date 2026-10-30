@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useCallback, useMemo } from 'react';
+import { lazy, Suspense, useCallback, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { WATCH_ONLY_CHAINS } from '@kyro/chains';
 import { AppProvider, useApp, type Route } from './state/app';
@@ -23,6 +23,9 @@ import { TorDialogs } from './components/Tor';
 import { HwPromptLayer } from './components/hw';
 import { AccountSwitcher } from './components/AccountSwitcher';
 import { serverDown, serverMissing } from './components/ServerDown';
+
+// Staking screens: loaded on first visit (keeps the main chunk smaller).
+const Staking = lazy(() => import('./screens/Staking').then((m) => ({ default: m.Staking })));
 
 export function App() {
   return (
@@ -93,6 +96,8 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
       return ['Swap'];
     case 'history':
       return ['Historique'];
+    case 'staking':
+      return r.chain ? ['Staking', { sol: 'Solana', ada: 'Cardano', tron: 'TRON' }[r.chain]] : ['Staking'];
     case 'settings':
       return ['Réglages'];
   }
@@ -155,6 +160,18 @@ function Unlocked() {
         return <Swap {...(route.sellAssetId ? { sellAssetId: route.sellAssetId } : {})} />;
       case 'history':
         return <History />;
+      case 'staking':
+        return (
+          <Suspense
+            fallback={
+              <div className="flex flex-1 items-center justify-center gap-3 text-[13px] text-mute">
+                <Spinner /> Chargement…
+              </div>
+            }
+          >
+            <Staking {...(route.chain ? { chain: route.chain } : {})} />
+          </Suspense>
+        );
       case 'settings':
         return <SettingsScreen {...(route.section ? { section: route.section } : {})} />;
     }

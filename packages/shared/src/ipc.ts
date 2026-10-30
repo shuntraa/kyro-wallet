@@ -628,6 +628,240 @@ export interface CardanoTokenSpec {
   quantity: string;
 }
 
+// ---------------------------------------------------------------- Staking (§2.8)
+// Rust builds, decodes, re-reads live and signs; the UI only chooses an operation and shows the
+// decoded result with its live context BEFORE the password. Amounts: smallest unit, decimal strings.
+
+// --- Solana (native Stake program; stake accounts createWithSeed(you, "kyro-stake-N", Stake))
+export type SolStakeRequest =
+  | { kind: 'createAndDelegate'; lamports: string; voteAccount: string }
+  | { kind: 'delegate'; stakeAccount: string; voteAccount: string }
+  | { kind: 'deactivate'; stakeAccount: string }
+  | { kind: 'withdraw'; stakeAccount: string; lamports?: string };
+export interface SolEpoch {
+  epoch: number;
+  slotIndex: number;
+  slotsInEpoch: number;
+  absoluteSlot: number;
+  /** ≈, 400 ms per slot. */
+  secondsLeft: number;
+}
+export type SolStakeState = 'initialized' | 'activating' | 'active' | 'deactivating' | 'inactive';
+export interface SolStakePosition {
+  address: string;
+  lamports: string;
+  state: SolStakeState;
+  rentExemptReserve: string;
+  staker: string;
+  withdrawer: string;
+  /** staker = withdrawer = you and no lockup in force: Kyro can manage it. */
+  ours: boolean;
+  lockupInForce: boolean;
+  voteAccount: string | null;
+  delegated: string | null;
+  activationEpoch: number | null;
+  deactivationEpoch: number | null;
+  effective: string;
+  activating: string;
+  deactivating: string;
+  /** Largest partial withdrawal that keeps the account. */
+  withdrawable: string;
+  /** The whole balance can be withdrawn (closes the account). */
+  canClose: boolean;
+}
+export interface SolStakeOverview {
+  address: string;
+  balance: string;
+  epoch: SolEpoch;
+  minimumDelegation: string;
+  rentExemptReserve: string;
+  accounts: SolStakePosition[];
+}
+export interface SolValidator {
+  voteAccount: string;
+  identity: string;
+  /** Declared in validator-info, NOT verified. */
+  name: string | null;
+  /** %. */
+  commission: number;
+  activatedStake: string;
+  delinquent: boolean;
+  lastVote: number;
+  epochVoteAccount: boolean;
+}
+export type SolStakeWarning = { kind: 'delinquent' } | { kind: 'highCommission'; commission: number };
+export interface SolStakePreview {
+  kind: 'createAndDelegate' | 'delegate' | 'deactivate' | 'withdraw';
+  stakeAccount: string;
+  seed: string | null;
+  /** Paid into the new account, or withdrawn. */
+  lamports: string | null;
+  delegated: string | null;
+  rentExemptReserve: string;
+  validator: SolValidator | null;
+  /** Current state of an existing account. */
+  account: SolStakePosition | null;
+  balance: string;
+  fee: string;
+  epoch: SolEpoch;
+  closesAccount: boolean;
+  warnings: SolStakeWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+// --- Cardano (pool delegation + vote delegation, Conway; stake key m/1852'/1815'/0'/2/0)
+export type AdaDrepChoice = 'alwaysAbstain' | 'alwaysNoConfidence' | string;
+export type AdaStakeRequest =
+  | { kind: 'delegate'; poolId: string; drep?: AdaDrepChoice }
+  | { kind: 'voteDelegate'; drep: AdaDrepChoice }
+  | { kind: 'withdraw' }
+  | { kind: 'deregister' };
+export interface AdaStakeAccount {
+  stakeAddress: string;
+  registered: boolean;
+  delegatedPool: string | null;
+  /** 'alwaysAbstain' | 'alwaysNoConfidence' | 'drep1…' */
+  delegatedDrep: string | null;
+  rewardsAvailable: string;
+  deposit: string;
+  totalBalance: string;
+}
+export interface AdaEpoch {
+  epoch: number;
+  slotInEpoch: number;
+  epochLength: number;
+  secondsLeft: number;
+  slot: number;
+}
+export interface AdaPool {
+  poolId: string;
+  poolHash: string;
+  /** Declared (ticker, name, homepage). */
+  ticker: string | null;
+  name: string | null;
+  homepage: string | null;
+  /** 0..1 */
+  margin: number;
+  fixedCost: string;
+  pledge: string;
+  activeStake: string | null;
+  liveStake: string | null;
+  /** %. */
+  liveSaturation: number | null;
+  liveDelegators: number | null;
+  status: 'registered' | 'retiring' | 'retired' | string;
+  retiringEpoch: number | null;
+}
+export interface AdaStakeOverview {
+  address: string;
+  stake: AdaStakeAccount;
+  pool: AdaPool | null;
+  keyDeposit: string;
+  epoch: AdaEpoch;
+  /** Rewards > 0 and the vote is delegated. */
+  canWithdraw: boolean;
+}
+export type CardanoDrepView = { kind: 'key' | 'script'; id: string; hash: string } | { kind: 'alwaysAbstain' } | { kind: 'alwaysNoConfidence' };
+export type CardanoCertView =
+  | { type: 'stakeRegistration'; deposit: string }
+  | { type: 'stakeDeregistration'; refund: string }
+  | { type: 'stakeDelegation'; poolId: string; poolHash: string }
+  | { type: 'voteDelegation'; drep: CardanoDrepView };
+export interface CardanoStakeSummary {
+  tx: CardanoTxSummary;
+  stakeAddress: string;
+  certificates: CardanoCertView[];
+  withdrawals: { rewardAddress: string; lovelace: string }[];
+  deposit: string;
+  refund: string;
+  withdrawn: string;
+}
+export type AdaStakeWarning = { kind: 'poolRetiring'; epoch: number } | { kind: 'highMargin'; margin: number } | { kind: 'poolSaturated'; saturation: number } | { kind: 'drepInactive' };
+export interface AdaStakeContext {
+  account: CardanoAccount;
+  /** Before the transaction. */
+  stake: AdaStakeAccount;
+  pool: AdaPool | null;
+  drep: { drep: CardanoDrepView; registered: boolean; active: boolean } | null;
+  params: { minFeeA: number; minFeeB: number; coinsPerByte: number; maxTxSize: number };
+  keyDeposit: string;
+  epoch: AdaEpoch;
+  /** Signed: fee + deposit − refund − withdrawal. */
+  netCost: string;
+  warnings: AdaStakeWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+// --- TRON (Stake 2.0 + SR votes)
+export type TronResource = 'BANDWIDTH' | 'ENERGY';
+export type TronStakeRequest =
+  | { kind: 'freeze'; resource: TronResource; amount: string }
+  | { kind: 'unfreeze'; resource: TronResource; amount: string }
+  | { kind: 'withdrawUnfrozen' }
+  | { kind: 'cancelAllUnfreeze' }
+  | { kind: 'vote'; votes: { address: string; count: string }[] }
+  | { kind: 'claimRewards' };
+export interface TronStakeAccount {
+  address: string;
+  balance: string;
+  stakedBandwidth: string;
+  stakedEnergy: string;
+  unfreezing: { resource: TronResource; amount: string; expireTime: number }[];
+  withdrawableNow: string;
+  tronPowerLimit: number;
+  /** 1 = 1 staked TRX. */
+  tronPowerUsed: number;
+  votes: { address: string; count: string }[];
+  reward: string;
+  /** ms, 0 = now. */
+  nextClaimTime: number;
+  unfreezeDelayDays: number;
+  /** ms. */
+  nextMaintenanceTime: number;
+  energyLimit: number;
+  energyUsed: number;
+  bandwidthLimit: number;
+  bandwidthUsed: number;
+}
+export interface TronWitness {
+  address: string;
+  /** The only « name » of an SR: declared, NOT verified. */
+  url: string;
+  voteCount: number;
+  rank: number;
+  /** ≤ 27. */
+  isSr: boolean;
+  /** ≤ 127 (paid). */
+  isPaid: boolean;
+  producing: boolean;
+  /** % kept by the SR (read for the SRs of a vote). */
+  brokerage: number | null;
+}
+export type TronStakeAction =
+  | { type: 'freeze' | 'unfreeze'; resource: TronResource; amount: string }
+  | { type: 'withdrawUnfrozen' }
+  | { type: 'cancelAllUnfreeze' }
+  | { type: 'vote'; votes: { address: string; count: string }[]; total: string }
+  | { type: 'claimRewards' };
+export interface TronStakeSummary {
+  txid: string;
+  owner: string;
+  action: TronStakeAction;
+  expiration: number;
+  timestamp: number;
+  refBlockBytes: string;
+  refBlockHash: string;
+  rawSize: number;
+}
+export type TronStakeWarning = { kind: 'srNotPaid'; address: string; rank: number } | { kind: 'brokerageAll'; address: string } | { kind: 'votesReduced' };
+export interface TronStakeContext {
+  account: TronStakeAccount;
+  estimate: TronEstimate;
+  witnesses: TronWitness[];
+  warnings: TronStakeWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
 export interface TronBuilt {
   /** `raw_data` hex: what `tron_sign_tx` signs. */
   raw: string;
@@ -789,6 +1023,11 @@ export type SolInstruction =
   | { type: 'computeUnitLimit'; units: number }
   | { type: 'computeUnitPrice'; microLamports: string }
   | { type: 'memo'; text: string }
+  // Stake program (§2.8): every authority is always our address.
+  | { type: 'stakeInitialize'; stakeAccount: string; staker: string; withdrawer: string }
+  | { type: 'stakeDelegate'; stakeAccount: string; voteAccount: string; authority: string }
+  | { type: 'stakeDeactivate'; stakeAccount: string; authority: string }
+  | { type: 'stakeWithdraw'; stakeAccount: string; to: string; lamports: string; authority: string }
   | { type: 'unknown'; programId: string; accounts: number; accountKeys: string[]; dataLen: number };
 
 /** Reasons for caution, tagged by `kind`. */
@@ -859,6 +1098,8 @@ export interface HwDeviceStatus {
   firmware?: string;
   /** Trezor: passphrase protection enabled. */
   passphrase?: boolean;
+  /** Trezor Safe 7: encrypted, paired THP channel. */
+  protocol?: 'thp';
   chains: HwChainStatus[];
 }
 
@@ -899,7 +1140,22 @@ export interface WatchOnlyAccount {
 /** Event `hw-prompt`: what to tell the user while a device call is pending. */
 export interface HwPrompt {
   id: string;
-  kind: 'confirm-on-device' | 'pin-on-device' | 'passphrase-on-device' | 'pin-matrix';
+  /**
+   * `thp-*`: Trezor Safe 7 (THP, §2.3). `thp-confirm-pairing`: allow « Kyro Wallet » on the device;
+   * `thp-pairing-code`: the device shows a 6-digit code to type (`hw_thp_pairing_code`);
+   * `thp-confirm-connection`: confirm the connection on the device.
+   */
+  kind: 'confirm-on-device' | 'pin-on-device' | 'passphrase-on-device' | 'pin-matrix' | 'thp-confirm-pairing' | 'thp-pairing-code' | 'thp-confirm-connection';
+}
+
+/** `hw_thp_pairings` entry: a Trezor Safe 7 paired with this installation (public data). */
+export interface HwThpPairing {
+  /** Device static public key, hex. */
+  key: string;
+  /** e.g. `T3W1`. */
+  model: string;
+  /** UNIX seconds. */
+  added: number;
 }
 
 /** Highest account number accepted by Rust (`MAX_HW_ACCOUNT`). */
@@ -1000,6 +1256,23 @@ export interface Commands {
   ada_sign_tx: { args: { tx: string; password: string }; ret: { tx: string; txId: string; summary: CardanoTxSummary; context: CardanoContext } };
   /** Koios `submittx`; id must be blake2b-256(body). Node refusal → INVALID_INPUT with its message. */
   ada_broadcast: { args: { tx: string }; ret: string };
+  // Staking (§2.8): not available on hardware-wallet accounts (no hw_* command offers it).
+  sol_stake_overview: { args: undefined; ret: SolStakeOverview };
+  sol_stake_validators: { args: { withNames?: boolean }; ret: { validators: SolValidator[]; namesAvailable: boolean } };
+  sol_stake_build: { args: { action: SolStakeRequest }; ret: { message: string; summary: SolTxSummary; stake: SolStakePreview } };
+  sol_stake_sign: { args: { message: string; password: string }; ret: { signature: string; summary: SolTxSummary; stake: SolStakePreview } };
+  sol_stake_broadcast: { args: { message: string; signature: string }; ret: string };
+  ada_stake_overview: { args: undefined; ret: AdaStakeOverview };
+  ada_stake_pools: { args: { limit?: number }; ret: AdaPool[] };
+  ada_stake_pool: { args: { poolId: string }; ret: AdaPool };
+  ada_stake_build: { args: { action: AdaStakeRequest }; ret: { tx: string; summary: CardanoStakeSummary; context: AdaStakeContext } };
+  ada_stake_sign: { args: { tx: string; password: string }; ret: { tx: string; txId: string; summary: CardanoStakeSummary; context: AdaStakeContext } };
+  ada_stake_broadcast: { args: { tx: string }; ret: string };
+  tron_stake_overview: { args: undefined; ret: TronStakeAccount };
+  tron_stake_witnesses: { args: undefined; ret: TronWitness[] };
+  tron_stake_build: { args: { action: TronStakeRequest }; ret: { raw: string; txid: string; summary: TronStakeSummary; context: TronStakeContext } };
+  /** Broadcast with the existing `tron_broadcast`. */
+  tron_stake_sign: { args: { raw: string; password: string }; ret: { signature: string; txid: string; summary: TronStakeSummary; context: TronStakeContext } };
   /**
    * Bitcoin Core only, unlocked. Pre-flight checks are synchronous (reachable, auth, chain, watch
    * wallet created or loaded without private keys); only `importdescriptors` runs in the background.
@@ -1019,6 +1292,15 @@ export interface Commands {
   hw_cancel: { args: { id: string }; ret: boolean };
   /** Trezor One, after `hw-prompt: pin-matrix`: POSITIONS in the blank 3×3 grid, never the PIN. */
   hw_pin_matrix: { args: { id: string; positions: string }; ret: void };
+  /**
+   * Trezor Safe 7, after `hw-prompt: thp-pairing-code`: the 6 digits shown ON THE DEVICE.
+   * Not 6 ASCII digits: INVALID_INPUT (hw_open keeps waiting); none pending: HW_BAD_RESPONSE;
+   * wrong code: hw_open fails with HW_PAIRING_FAILED.
+   */
+  hw_thp_pairing_code: { args: { id: string; code: string }; ret: void };
+  hw_thp_pairings: { args: undefined; ret: HwThpPairing[] };
+  /** Forgets one pairing (`key`) or all (no key: Kyro's THP key too). Returns how many. The device keeps Kyro until it is reset. */
+  hw_thp_forget: { args: { key?: string }; ret: number };
   /** Reads public keys, shows and stores nothing. */
   hw_get_xpub: { args: { id: string; chain: HwChain; account: number }; ret: HwXpub };
   hw_accounts_get: { args: undefined; ret: WatchOnlyAccount[] };
@@ -1087,6 +1369,10 @@ export const ERROR_CODES = [
   /** `data: { device, expected }` — do NOT use the address. */
   'HW_ADDRESS_MISMATCH',
   'HW_WRONG_DEVICE',
+  /** Trezor Safe 7 not (or no longer) paired and the command is not hw_open: pair through hw_open first. */
+  'HW_PAIRING_REQUIRED',
+  /** THP pairing failed: wrong code (or the device did not prove it); nothing stored. */
+  'HW_PAIRING_FAILED',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 

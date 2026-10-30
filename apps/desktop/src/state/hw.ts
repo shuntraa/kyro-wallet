@@ -136,6 +136,10 @@ export function hwErrorView(e: unknown): HwErrorView {
       return { title: 'Réponse de l’appareil refusée', detail: `Kyro a vérifié la réponse de l’appareil et la refuse : rien n’a été envoyé. ${err.message.replace(/^Réponse de l’appareil refusée par Kyro\s*:\s*/, '').replace(/^Réponse de l'appareil refusée par Kyro\s*:\s*/, '')}`, safe: true };
     case 'HW_ADDRESS_MISMATCH':
       return { title: 'Adresses différentes', detail: 'L’appareil affiche une autre adresse que celle calculée par Kyro. Ne reçois pas de fonds sur cette adresse.', safe: false };
+    case 'HW_PAIRING_FAILED':
+      return { title: 'Code incorrect', detail: 'Le code saisi ne correspond pas à celui affiché par ton Trezor (ou l’appareil ne l’a pas confirmé) : rien n’a été enregistré. Recommence : l’appareil affichera un nouveau code.', safe: true };
+    case 'HW_PAIRING_REQUIRED':
+      return { title: 'Trezor à appairer', detail: 'Ce Trezor Safe 7 n’est pas (ou plus) appairé avec Kyro. Connecte-le d’abord : Réglages › Appareils › Ajouter un appareil (un code s’affichera sur l’appareil).', safe: true };
     case 'HW_WRONG_DEVICE':
       return { title: 'Pas le bon appareil', detail: 'Les clés de cet appareil ne sont pas celles du compte (autre appareil, autre passphrase, ou compte modifié). Branche l’appareil de ce compte.', safe: true };
     case 'USER_REJECTED':

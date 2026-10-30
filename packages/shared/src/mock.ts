@@ -48,12 +48,13 @@ import { EMPTY_SERVERS, redactServers } from './servers';
 import { createDemoTor, detectDemoTorDisabled, detectDemoTorScenario, type DemoTor, type DemoTorScenario } from './mock-tor';
 export { DEMO_TOR_BOOTSTRAP_MS, type DemoTor, type DemoTorScenario } from './mock-tor';
 export { DEMO_RESCAN_MS, demoElectrumCert } from './mock-servers';
-export { DEMO_HW_DELAYS, DEMO_TREZOR_LAYOUT, DEMO_TREZOR_PIN, TREZOR_KEYPAD, demoDecodePin, type DemoHwScenario } from './mock-hw';
+export { DEMO_HW_DELAYS, DEMO_TREZOR_LAYOUT, DEMO_TREZOR_PIN, TREZOR_KEYPAD, demoDecodePin, demoThpCode, type DemoHwScenario } from './mock-hw';
 export { DEMO_CBF_CONNECT_MS, DEMO_CBF_FILTERS_MS, DEMO_CBF_HEADERS_MS } from './mock-cbf';
 import { demoHash, handleDemoNet, type DemoChainState } from './mock-net';
 import { btcWarnings, evmWarnings } from './warnings';
 import { demoRenderScript, demoVsize } from './mock-tx';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
+import { createDemoStake } from './mock-stake';
 
 bitcoin.initEccLib(ecc);
 
@@ -267,6 +268,8 @@ export interface MockBackend {
   xrp: DemoXrpState;
   /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
+  /** Staking demo (tests). */
+  stake: ReturnType<typeof createDemoStake>;
 }
 
 export function createMockBackend(opts: MockOptions = {}): MockBackend {
@@ -318,6 +321,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     checkPassword: (p) => checkPassword(p),
     confirm: (text) => confirmFn(text),
     now: () => now(),
+    stakeBroadcast: (raw, sig) => stake.tronStakeBroadcast(raw, sig),
   });
   // XRP Ledger (§2.6): `xrp_*`, reserves and destination-tag rules like Rust.
   const xrpChain = createDemoXrp({
@@ -339,6 +343,17 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     checkPassword: (p) => checkPassword(p),
     confirm: (text) => confirmFn(text),
     now: () => now(),
+  });
+  // Staking (§2.8): Solana, Cardano, TRON.
+  const stake = createDemoStake({
+    network,
+    now: () => now(),
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    sol: { address: keys.accounts.sol.address, lamports: () => chain.solLamports, setLamports: (v) => (chain.solLamports = v) },
+    ada: { address: cardanoChain.state.me, account: () => cardanoChain.stakeHooks.account(), spend: (l) => cardanoChain.stakeHooks.spend(l) },
+    tron: { address: tronChain.state.me, trx: () => tronChain.state.trx.get(tronChain.state.me) ?? 0n, setTrx: (v) => tronChain.state.trx.set(tronChain.state.me, v) },
   });
   // Custom servers (B2b): live checks, Bitcoin backends, Core watch wallet.
   const servers = createDemoServers({
@@ -657,6 +672,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     ...tronChain.handlers,
     ...xrpChain.handlers,
     ...cardanoChain.handlers,
+    ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
     btc_cbf_status: () => servers.cbf.status(),
@@ -665,6 +681,9 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     hw_open: (a) => hw.open(a.id),
     hw_cancel: (a) => hw.cancel(a.id),
     hw_pin_matrix: (a) => hw.pinMatrix(a.id, a.positions),
+    hw_thp_pairing_code: (a) => hw.thpPairingCode(a.id, a.code),
+    hw_thp_pairings: () => hw.thpPairings(),
+    hw_thp_forget: (a) => hw.thpForget(a.key),
     hw_get_xpub: (a) => hw.getXpub(a),
     hw_accounts_get: () => hw.accountsGet(),
     hw_account_add: (a) => hw.accountAdd(a),
@@ -683,6 +702,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     tron: tronChain.state,
     xrp: xrpChain.state,
     cardano: cardanoChain.state,
+    stake,
     advance(ms: number) {
       clockOffset += ms;
     },

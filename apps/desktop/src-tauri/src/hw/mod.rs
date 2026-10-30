@@ -179,7 +179,7 @@ pub enum Prompt {
     PassphraseOnDevice,
     /// Trezor One: show the 3×3 blind matrix, then call `hw_pin_matrix`.
     PinMatrix,
-    /// THP (Safe 7): the device asks whether "Kyro Wallet on <computer>" may pair; confirm there.
+    /// THP (Safe 7): the device asks whether "Kyro Wallet" (fixed label, no computer name) may pair; confirm there.
     ThpConfirmPairing,
     /// THP: the device shows a 6-digit code; ask the user to type it, then `hw_thp_pairing_code`.
     ThpPairingCode,

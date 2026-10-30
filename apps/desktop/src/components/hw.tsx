@@ -5,11 +5,12 @@
 // the add-device flow (Welcome and Réglages › Appareils). Contract: docs/IPC.md §2.3.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { call, errorData, isDemoMode, MAX_HW_ACCOUNT, type HwChain, type HwChainStatus, type HwDeviceInfo, type HwDeviceKind, type HwDeviceStatus, type HwImplementedChain, type WatchOnlyAccount } from '@kyro/shared';
+import { call, errorData, ipcErrorIn, isDemoMode, MAX_HW_ACCOUNT, type HwChain, type HwChainStatus, type HwDeviceInfo, type HwDeviceKind, type HwDeviceStatus, type HwImplementedChain, type WatchOnlyAccount } from '@kyro/shared';
 import { hwFingerprint, hwToAccounts } from '@kyro/chains';
 import { BRAND, hwErrorView, hwPromptStore, pinPosition, useHwPrompts, withDevice, PIN_MATRIX_KEYPAD } from '../state/hw';
 import { cn } from '../lib/cn';
 import { shortAddress } from '../lib/format';
+import { useApp } from '../state/app';
 import { Dialog } from './ui/dialog';
 import { Badge, Button, Input, Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconInfo, IconPhoneKey, IconRefresh, IconUsbKey, IconWarn, IconX } from './icons';
@@ -30,6 +31,9 @@ const PROMPT_TEXT: Record<string, { title: string; detail: string }> = {
   'pin-on-device': { title: 'Saisis ton PIN sur l’appareil', detail: 'Le PIN se tape sur l’appareil lui-même : il ne passe jamais par l’ordinateur.' },
   'passphrase-on-device': { title: 'Saisis ta passphrase sur l’appareil', detail: 'La passphrase se tape sur l’appareil : Kyro ne la voit jamais.' },
   'pin-matrix': { title: 'Saisis ton PIN dans la grille', detail: 'Regarde l’écran de ta Trezor et clique les cases aux mêmes positions.' },
+  'thp-confirm-pairing': { title: 'Autorise Kyro Wallet sur ton Trezor', detail: 'Ton Trezor Safe 7 demande s’il peut s’appairer avec « Kyro Wallet » : accepte sur son écran. Kyro ne donne jamais le nom de ton ordinateur.' },
+  'thp-pairing-code': { title: 'Recopie le code affiché sur ton Trezor', detail: 'Ton Trezor affiche un code à 6 chiffres : saisis-le dans la fenêtre de Kyro.' },
+  'thp-confirm-connection': { title: 'Confirme la connexion sur ton Trezor', detail: 'Ton Trezor Safe 7 demande de confirmer la connexion de « Kyro Wallet » : accepte sur son écran.' },
 };
 
 /** "Waiting for the device" panel with Cancel (`hw_cancel`). */
@@ -64,14 +68,23 @@ export function HwWaiting({ deviceId, idle, className, confirm }: { deviceId: st
 
 export function HwErrorNotice({ error, onRetry, className }: { error: unknown; onRetry?: () => void; className?: string }) {
   const v = hwErrorView(error);
+  const { navigate } = useApp();
+  // Safe 7 not paired (any command but hw_open): the way out is « Connecter ».
+  const pairing = ipcErrorIn(error)?.code === 'HW_PAIRING_REQUIRED';
   return (
     <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />} {...(className ? { className } : {})}>
       <span className="block font-semibold">{v.title}</span>
       <span className="block">{v.detail}</span>
-      {onRetry && (
-        <button type="button" onClick={onRetry} className="mt-1.5 font-semibold text-ice hover:underline">
-          Réessayer
+      {pairing ? (
+        <button type="button" onClick={() => navigate({ name: 'settings', section: 'hardware' })} className="mt-1.5 font-semibold text-ice hover:underline">
+          Connecter
         </button>
+      ) : (
+        onRetry && (
+          <button type="button" onClick={onRetry} className="mt-1.5 font-semibold text-ice hover:underline">
+            Réessayer
+          </button>
+        )
       )}
     </Notice>
   );
@@ -121,7 +134,77 @@ export function AddressMismatchStop({ error, onClose }: { error: unknown; onClos
 export function HwPromptLayer() {
   const { byDevice } = useHwPrompts();
   const id = Object.entries(byDevice).find(([, k]) => k === 'pin-matrix')?.[0] ?? null;
-  return <PinMatrixDialog deviceId={id} />;
+  const thp = Object.entries(byDevice).find(([, k]) => k === 'thp-pairing-code')?.[0] ?? null;
+  return (
+    <>
+      <PinMatrixDialog deviceId={id} />
+      <ThpCodeDialog deviceId={thp} />
+    </>
+  );
+}
+
+/**
+ * Trezor Safe 7 pairing (THP): the device shows a 6-digit code, the user types it here
+ * (`hw_thp_pairing_code`). A malformed code (INVALID_INPUT) keeps this open; a wrong one makes
+ * hw_open fail with HW_PAIRING_FAILED (shown where hw_open was called, with « Réessayer »).
+ */
+export function ThpCodeDialog({ deviceId }: { deviceId: string | null }) {
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [demoCode, setDemoCode] = useState<string | null>(null);
+  useEffect(() => {
+    setCode('');
+    setError(null);
+    setDemoCode(null);
+    if (!deviceId || !isDemoMode()) return;
+    void import('@kyro/shared/mock').then((m) => setDemoCode(m.demoThpCode()));
+  }, [deviceId]);
+  if (!deviceId) return null;
+  const valid = /^[0-9]{6}$/.test(code);
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await call('hw_thp_pairing_code', { id: deviceId, code });
+      hwPromptStore.clear(deviceId);
+    } catch (e) {
+      // INVALID_INPUT: hw_open keeps waiting, the entry stays open.
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onOpenChange={(v) => (v ? undefined : void call('hw_cancel', { id: deviceId }).catch(() => undefined))} title="Code d’appairage du Trezor" className="w-[440px]">
+      <p className="m-0 text-[13px] leading-[1.55] text-text2">
+        Ton <strong className="font-semibold text-text">Trezor Safe 7</strong> affiche un code à 6 chiffres. Recopie-le ici : il prouve que Kyro parle bien à l’appareil que tu as sous les yeux. Le code ne sert qu’une fois.
+      </p>
+      <input
+        autoFocus
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        aria-label="Code à 6 chiffres affiché sur le Trezor"
+        value={code}
+        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && valid && !busy) void submit();
+        }}
+        placeholder="••••••"
+        className="h-14 rounded-[12px] border border-line-3 bg-bg text-center font-mono text-[28px] font-semibold tracking-[0.5em] text-text focus:border-ice-line"
+      />
+      {demoCode && <span className="text-[12px] text-ice-text2">Mode démo : l’écran du Trezor simulé affiche {demoCode}.</span>}
+      {error !== null && <HwErrorNotice error={error} />}
+      <div className="flex justify-end gap-2">
+        <Button onClick={() => void call('hw_cancel', { id: deviceId }).catch(() => undefined)} disabled={busy}>
+          Annuler
+        </Button>
+        <Button variant="primary" onClick={() => void submit()} disabled={!valid || busy}>
+          {busy && <Spinner />} Valider
+        </Button>
+      </div>
+    </Dialog>
+  );
 }
 
 export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
@@ -364,9 +447,10 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
       {step === 'device' && device && (
         <div className="flex flex-col gap-3.5">
           <div className="flex items-center gap-3">
-            <DeviceBadge device={device.kind} model={device.model} />
+            <DeviceBadge device={device.kind} model={status?.model ?? device.model} />
             {status?.app && <span className="text-[12px] text-mute">App ouverte : {status.app.name}{status.app.version ? ` ${status.app.version}` : ''}</span>}
             {status?.firmware && <span className="text-[12px] text-mute">Firmware {status.firmware}</span>}
+            {status?.protocol === 'thp' && <Badge tone="up">canal chiffré et appairé</Badge>}
           </div>
           {busy === 'open' && <HwWaiting deviceId={device.id} idle="Lecture de l’état de l’appareil…" />}
           {status && (

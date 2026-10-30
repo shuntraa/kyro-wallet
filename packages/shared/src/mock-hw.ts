@@ -16,6 +16,10 @@
 //   mismatch        the device shows another address (HW_ADDRESS_MISMATCH)
 //   timeout         no answer on the device (HW_TIMEOUT)
 //   old             Trezor One firmware 1.9.0, too old (HW_UNSUPPORTED, min 1.10.4)
+//   safe7           Trezor Safe 7 (THP), never paired: hw_open asks to allow « Kyro Wallet », shows a
+//                   6-digit code (demo: `demoThpCode()`), checks it (HW_PAIRING_FAILED if wrong), then
+//                   confirms the connection; any other command before that: HW_PAIRING_REQUIRED
+//   safe7-paired    Trezor Safe 7 already paired: hw_open only asks to confirm the connection
 // A wrong app or a locked device is "fixed" by the simulated user right after the error, so
 // « Réessayer » works, as on a real device once the user opened the app / unlocked it.
 
@@ -36,6 +40,7 @@ import {
   type HwChainStatus,
   type HwDeviceInfo,
   type HwDeviceStatus,
+  type HwPrompt,
   type HwXpub,
   type Network,
   type SolTxSummary,
@@ -48,8 +53,15 @@ import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 
 bitcoin.initEccLib(ecc);
 
-export type DemoHwScenario = 'none' | 'ledger' | 'trezor' | 'trezor-one' | 'trezor-one-passphrase' | 'locked' | 'wrongapp' | 'reject' | 'unplug' | 'mismatch' | 'timeout' | 'old';
-const SCENARIOS: DemoHwScenario[] = ['none', 'ledger', 'trezor', 'trezor-one', 'trezor-one-passphrase', 'locked', 'wrongapp', 'reject', 'unplug', 'mismatch', 'timeout', 'old'];
+export type DemoHwScenario = 'none' | 'ledger' | 'trezor' | 'trezor-one' | 'trezor-one-passphrase' | 'locked' | 'wrongapp' | 'reject' | 'unplug' | 'mismatch' | 'timeout' | 'old' | 'safe7' | 'safe7-paired';
+const SCENARIOS: DemoHwScenario[] = ['none', 'ledger', 'trezor', 'trezor-one', 'trezor-one-passphrase', 'locked', 'wrongapp', 'reject', 'unplug', 'mismatch', 'timeout', 'old', 'safe7', 'safe7-paired'];
+
+/** DEMO ONLY: the code the simulated Safe 7 « shows on its screen » for the current pairing attempt. */
+let thpCodeOnDevice: string | null = null;
+export function demoThpCode(): string | null {
+  return thpCodeOnDevice;
+}
+const DEMO_THP_KEY = 'a3f9c27e51d84b0f6e2c9a7d31b58e04f6a2d9c17e3b85f04a6c2e9d17b3f58a';
 
 /** Simulated device delays (1–3 s). Tests use fake timers. */
 export const DEMO_HW_DELAYS = { list: 800, open: 1000, keys: 1500, verify: 2000, sign: 2500, unplugAfter: 1200, timeoutAfter: 3000 };
@@ -156,11 +168,18 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   const fingerprint = master.fingerprint.toString(16).padStart(8, '0');
   const evmNode = HDKey.fromMasterSeed(seed).derive("m/44'/60'/0'/0");
 
-  const ledger = !scenario.startsWith('trezor') && scenario !== 'old';
+  const safe7 = scenario === 'safe7' || scenario === 'safe7-paired';
+  const ledger = !scenario.startsWith('trezor') && scenario !== 'old' && !safe7;
   const one = scenario === 'trezor-one' || scenario === 'trezor-one-passphrase' || scenario === 'old';
   const device: HwDeviceInfo | null =
-    scenario === 'none' ? null : ledger ? { id: 'ledger-1', kind: 'ledger', model: 'Ledger Nano S Plus', transport: 'hid' } : { id: 'trezor-1', kind: 'trezor', model: one ? 'Trezor One' : 'Trezor Safe 5', transport: 'webusb' };
-  const firmware = scenario === 'old' ? '1.9.0' : one ? '1.12.1' : '2.8.7';
+    scenario === 'none' ? null : ledger ? { id: 'ledger-1', kind: 'ledger', model: 'Ledger Nano S Plus', transport: 'hid' } : { id: 'trezor-1', kind: 'trezor', model: safe7 ? 'Trezor' : one ? 'Trezor One' : 'Trezor Safe 5', transport: 'webusb' };
+  // Safe 7: listed as « Trezor » (same USB id), the real model comes from hw_open (THP).
+  /** THP pairings of this installation (`trezor-thp.json`). */
+  let thpPairings: Array<{ key: string; model: string; added: number }> = scenario === 'safe7-paired' ? [{ key: DEMO_THP_KEY, model: 'T3W1', added: Math.floor(Date.now() / 1000) - 86_400 }] : [];
+  /** The THP channel is open (pairing + connection done this session). */
+  let thpConnected = false;
+  let thpCodeWaiter: ((code: string) => void) | null = null;
+  const firmware = scenario === 'old' ? '1.9.0' : one ? '1.12.1' : safe7 ? '2.9.3' : '2.8.7';
 
   let locked = scenario === 'locked';
   let openApp = scenario === 'wrongapp' ? 'Tableau de bord' : testnet ? 'Bitcoin Test' : 'Bitcoin';
@@ -204,10 +223,48 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
     } finally {
       pending = null;
       pinWaiter = null;
+      thpCodeWaiter = null;
+      thpCodeOnDevice = null;
     }
   };
 
-  const prompt = (kind: 'confirm-on-device' | 'pin-on-device' | 'passphrase-on-device' | 'pin-matrix') => {
+  /** Safe 7: every command but hw_open needs the paired THP channel. */
+  const requirePaired = () => {
+    if (safe7 && (!thpConnected || !thpPairings.some((p) => p.key === DEMO_THP_KEY))) {
+      thpConnected = false;
+      throw new IpcError('HW_PAIRING_REQUIRED', 'Appairage requis : ce Trezor Safe 7 n’est pas (ou plus) appairé avec Kyro. Connecte-le d’abord (hw_open).');
+    }
+  };
+
+  /** Safe 7 THP: pairing by code (first time) then connection confirmation. */
+  const connectThp = async (wait: (ms: number) => Promise<void>) => {
+    if (!safe7 || thpConnected) return;
+    if (!thpPairings.some((p) => p.key === DEMO_THP_KEY)) {
+      prompt('thp-confirm-pairing');
+      await wait(1500);
+      thpCodeOnDevice = String(Math.floor(100_000 + Math.random() * 900_000));
+      prompt('thp-pairing-code');
+      const box: { code: string | null } = { code: null };
+      thpCodeWaiter = (c) => {
+        box.code = c;
+      };
+      // 180 s, polled in 100 ms slices (cancellable: hw_cancel → USER_REJECTED).
+      for (let i = 0; box.code === null; i++) {
+        if (i >= 1800) throw new IpcError('HW_TIMEOUT', 'Délai dépassé : pas de réponse de l’appareil à temps. Opération abandonnée.');
+        await wait(100);
+      }
+      thpCodeWaiter = null;
+      const ok = box.code === thpCodeOnDevice;
+      thpCodeOnDevice = null;
+      if (!ok) throw new IpcError('HW_PAIRING_FAILED', 'Appairage échoué : code incorrect. Relance la connexion : l’appareil affichera un nouveau code.');
+      thpPairings = [...thpPairings, { key: DEMO_THP_KEY, model: 'T3W1', added: Math.floor(Date.now() / 1000) }];
+    }
+    prompt('thp-confirm-connection');
+    await wait(1200);
+    thpConnected = true;
+  };
+
+  const prompt = (kind: HwPrompt['kind']) => {
     if (device) emitDemoEvent('hw-prompt', { id: device.id, kind });
   };
 
@@ -271,7 +328,8 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       if (scenario === 'old') return { chain: c, state: 'unsupported', min: '1.10.4', reason: 'firmware trop ancien' };
       return { chain: c, state: pinOk ? 'ready' : 'unlock' };
     };
-    const st: HwDeviceStatus = { id: device.id, kind: device.kind, model: device.model, locked: ledger ? locked : !pinOk, chains: (['btc', 'evm', 'sol', ...PHASE4] as HwChain[]).map(chain) };
+    const st: HwDeviceStatus = { id: device.id, kind: device.kind, model: safe7 ? 'Trezor Safe 7' : device.model, locked: ledger ? locked : !pinOk, chains: (['btc', 'evm', 'sol', ...PHASE4] as HwChain[]).map(chain) };
+    if (safe7) st.protocol = 'thp';
     if (ledger) st.app = { name: openApp, version: openApp === 'Tableau de bord' ? '' : '2.2.4' };
     else {
       st.firmware = firmware;
@@ -297,6 +355,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   const readKeys = async (id: string, chain: HwChain, account: number): Promise<HwXpub> => {
     if (!Number.isInteger(account) || account < 0 || account > 100) throw new IpcError('INVALID_INPUT', 'Entrée invalide : numéro de compte : 0 à 100');
     return run(id, async (wait) => {
+      requirePaired();
       await ensure(chain, wait);
       await wait(DEMO_HW_DELAYS.keys);
       return keysFor(chain, account);
@@ -373,6 +432,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
     open: (id: unknown) =>
       run(String(id), async (wait) => {
         await wait(DEMO_HW_DELAYS.open);
+        await connectThp(wait);
         if (!ledger && !pinOk && scenario !== 'old') {
           // Reading the Trezor state may ask for the PIN.
           await unlockTrezor(wait);
@@ -384,6 +444,20 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       if (!pending) return false;
       pending.cancel();
       return true;
+    },
+    thpPairingCode(id: unknown, code: unknown) {
+      const c = String(code ?? '');
+      if (!/^[0-9]{6}$/.test(c)) throw new IpcError('INVALID_INPUT', 'Entrée invalide : code d’appairage : 6 chiffres');
+      if (!device || id !== device.id || !thpCodeWaiter) throw new IpcError('HW_BAD_RESPONSE', 'Réponse de l’appareil refusée par Kyro : aucun appairage en attente');
+      thpCodeWaiter(c);
+    },
+    thpPairings: () => structuredClone(thpPairings),
+    thpForget(key: unknown): number {
+      d.guard();
+      const before = thpPairings.length;
+      thpPairings = typeof key === 'string' ? thpPairings.filter((p) => p.key !== key) : [];
+      thpConnected = false;
+      return before - thpPairings.length;
     },
     pinMatrix(id: unknown, positions: unknown) {
       const p = String(positions ?? '');
@@ -441,6 +515,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       const path = String(a.path ?? '');
       const expected = resolvePath(acc, chain, path);
       return run(String(a.id), async (wait) => {
+        requirePaired();
         await sameDevice(acc, chain, wait);
         await onDevice(wait);
         if (scenario === 'mismatch') {
@@ -483,6 +558,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       const feeSats = Number(inSum - psbt.txOutputs.reduce((s, o) => s + o.value, 0n));
       const summary: BtcTxSummary = { outputs, feeSats, ...btcWarnings({ outputs, feeSats, vsize: demoVsize(psbt) }) };
       return run(String(a.id), async (wait) => {
+        requirePaired();
         await sameDevice(acc, 'btc', wait);
         const lines = outputs.map(([ad, v, ch]) => `${ch ? '(monnaie) ' : ''}${ad} : ${v} sats`).join('\n');
         if (!d.confirm(`Confirmer la transaction (hardware wallet)\n${lines}\nFrais : ${summary.feeSats} sats${deviceLine()}`)) throw new IpcError('USER_REJECTED', 'Action annulée.');
@@ -518,6 +594,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
         (!ledger && s.kind === 'Erc20Transfer') ||
         (ledger && (s.kind === 'Erc20Transfer' || s.kind === 'Erc20Approve') && LEDGER_CLEAR.some(([c, addr]) => c === tx.chainId && addr === s.tokenContract?.toLowerCase()));
       return run(String(a.id), async (wait) => {
+        requirePaired();
         await sameDevice(acc, 'evm', wait);
         if (!d.confirm(`Confirmer la transaction (hardware wallet)\n${s.kind} vers ${s.to}\nMontant : ${s.amount}\nFrais max. : ${s.maxFeeWei} wei${deviceLine()}`)) throw new IpcError('USER_REJECTED', 'Action annulée.');
         if (!clear || s.kind === 'ContractCall') {
@@ -544,6 +621,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       const summary = demoDecodeSolMessage(message, acc.sol.address);
       if (summary.ourSignerIndex === null) throw new IpcError('INVALID_INPUT', 'Entrée invalide : cette transaction ne demande pas la signature de cette adresse Solana');
       return run(String(a.id), async (wait) => {
+        requirePaired();
         await sameDevice(acc, 'sol', wait);
         if (!d.confirm(`Confirmer la transaction Solana (hardware wallet)\n${demoSolSummaryText(summary)}${deviceLine()}`)) throw new IpcError('USER_REJECTED', 'Action annulée.');
         await onDevice(wait);

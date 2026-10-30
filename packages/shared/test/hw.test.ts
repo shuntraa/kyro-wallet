@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { call, errorData, IpcError, onHwPrompt, setBackend, toIpcError, type HwPrompt } from '../src';
-import { createMockBackend, DEMO_HW_DELAYS, DEMO_TREZOR_LAYOUT, demoDecodePin, TREZOR_KEYPAD, type DemoHwScenario } from '../src/mock';
+import { createMockBackend, DEMO_HW_DELAYS, DEMO_TREZOR_LAYOUT, demoDecodePin, demoThpCode, TREZOR_KEYPAD, type DemoHwScenario } from '../src/mock';
 
 let prompts: HwPrompt[] = [];
 let unlisten: (() => void) | null = null;
@@ -198,6 +198,68 @@ describe('mock hardware wallets', () => {
     expect(await call('hw_cancel', { id: 'trezor-1' })).toBe(true);
     expect(((await pending) as IpcError).code).toBe('USER_REJECTED');
     expect(await call('hw_cancel', { id: 'trezor-1' })).toBe(false);
+  });
+
+  it('Safe 7 (THP): first pairing asks to allow Kyro, a 6-digit code, then the connection; status says thp', async () => {
+    setup('safe7');
+    expect((await settle(call('hw_list')))[0]).toMatchObject({ id: 'trezor-1', kind: 'trezor', model: 'Trezor' });
+    // Not paired yet: any command but hw_open → HW_PAIRING_REQUIRED.
+    expect((await code(call('hw_get_xpub', { id: 'trezor-1', chain: 'btc', account: 0 }))).code).toBe('HW_PAIRING_REQUIRED');
+    const p = call('hw_open', { id: 'trezor-1' }).then((v) => v, (e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(prompts.at(-1)).toEqual({ id: 'trezor-1', kind: 'thp-confirm-pairing' });
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(prompts.at(-1)).toEqual({ id: 'trezor-1', kind: 'thp-pairing-code' });
+    const shown = demoThpCode();
+    expect(shown).toMatch(/^[0-9]{6}$/);
+    // Malformed: INVALID_INPUT, the pairing keeps waiting.
+    expect((await code(call('hw_thp_pairing_code', { id: 'trezor-1', code: '12345' }))).code).toBe('INVALID_INPUT');
+    await call('hw_thp_pairing_code', { id: 'trezor-1', code: shown! });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(prompts.some((x) => x.kind === 'thp-confirm-connection')).toBe(true);
+    await vi.advanceTimersByTimeAsync(4000);
+    const st = (await p) as { model: string; protocol?: string };
+    expect(st).toMatchObject({ model: 'Trezor Safe 7', protocol: 'thp' });
+    const list = await call('hw_thp_pairings');
+    expect(list).toHaveLength(1);
+    expect(list[0]?.model).toBe('T3W1');
+    expect((await settle(call('hw_get_xpub', { id: 'trezor-1', chain: 'btc', account: 0 }))).btc?.length).toBeTruthy();
+    // Forget: the next command needs pairing again.
+    expect(await call('hw_thp_forget', { key: list[0]!.key })).toBe(1);
+    expect(await call('hw_thp_pairings')).toEqual([]);
+    expect((await code(call('hw_get_xpub', { id: 'trezor-1', chain: 'btc', account: 0 }))).code).toBe('HW_PAIRING_REQUIRED');
+  });
+
+  it('Safe 7: a wrong code → HW_PAIRING_FAILED, nothing stored; a retry shows a new code', async () => {
+    setup('safe7');
+    const p = call('hw_open', { id: 'trezor-1' }).then((v) => v, (e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(2700);
+    const first = demoThpCode()!;
+    await call('hw_thp_pairing_code', { id: 'trezor-1', code: first === '000000' ? '111111' : '000000' });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(((await p) as IpcError).code).toBe('HW_PAIRING_FAILED');
+    expect(await call('hw_thp_pairings')).toEqual([]);
+    // No pairing pending any more.
+    expect((await code(call('hw_thp_pairing_code', { id: 'trezor-1', code: '123456' }))).code).toBe('HW_BAD_RESPONSE');
+    // hw_cancel during the code entry ends hw_open in USER_REJECTED.
+    const again = call('hw_open', { id: 'trezor-1' }).then((v) => v, (e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(2700);
+    expect(demoThpCode()).toMatch(/^[0-9]{6}$/);
+    expect(await call('hw_cancel', { id: 'trezor-1' })).toBe(true);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(((await again) as IpcError).code).toBe('USER_REJECTED');
+  });
+
+  it('?hw=safe7-paired: only the connection is confirmed; « Tout oublier » clears the list', async () => {
+    setup('safe7-paired');
+    expect(await call('hw_thp_pairings')).toHaveLength(1);
+    const p = call('hw_open', { id: 'trezor-1' }).then((v) => v, (e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(prompts.some((x) => x.kind === 'thp-pairing-code' || x.kind === 'thp-confirm-pairing')).toBe(false);
+    expect(prompts.some((x) => x.kind === 'thp-confirm-connection')).toBe(true);
+    expect(((await p) as { protocol?: string }).protocol).toBe('thp');
+    expect(await call('hw_thp_forget', {})).toBe(1);
+    expect(await call('hw_thp_pairings')).toEqual([]);
   });
 
   it('delays are in the 1–3 s range', () => {
