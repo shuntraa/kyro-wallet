@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["crates/wallet-core", "apps/desktop/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/kyro-wallet/kyro"
+rust-version = "1.85"
+
+[profile.release]
+# Smaller, more reproducible binaries; panics abort so no unwinding through secret-holding frames.
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[profile.dev.package."*"]
+# Argon2id with production parameters is unusably slow without optimisations, even in debug builds.
+opt-level = 2

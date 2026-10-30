@@ -1,0 +1,16 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Supply-chain hardening: refuse versions published less than 3 days ago
+# (most malicious npm releases are caught and pulled within hours).
+minimumReleaseAge: 4320
+
+# Only these packages may run install scripts.
+onlyBuiltDependencies:
+  - esbuild
+
+# Refuse a version whose publish trust (provenance / trusted publisher) is weaker
+# than an earlier version's. Also makes pnpm fetch full metadata, which the
+# minimumReleaseAge check needs for packages with very frequent canary releases.
+trustPolicy: no-downgrade

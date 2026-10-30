@@ -1,0 +1,28 @@
+{
+  "name": "kyro",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "packageManager": "pnpm@11.0.9",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @kyro/desktop tauri dev",
+    "build": "pnpm --filter @kyro/desktop tauri build",
+    "test": "pnpm -r test && cargo test --workspace",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint . --max-warnings=0 && cargo clippy --workspace --all-targets -- -D warnings",
+    "audit": "pnpm audit --prod && cargo audit",
+    "lint:ts": "eslint . --max-warnings=0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.2",
+    "eslint": "10.13.0",
+    "globals": "17.13.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.0.5"
+  },
+  "type": "module"
+}

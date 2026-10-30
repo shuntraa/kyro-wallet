@@ -1,0 +1,33 @@
+# Build output
+target/
+dist/
+node_modules/
+apps/desktop/src-tauri/gen/
+
+# Local secrets and config
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Never commit a vault, even a test one
+*.kyrovault
+
+# Local agent/editor config
+.claude/
+
+# Key material of any kind (signing keys, certificates, keystores)
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+keystore*.json
+tauri-signing*.key
