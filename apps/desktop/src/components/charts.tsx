@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Charts: smooth Catmull-Rom curves (no angles), ice-blue line, dark-blue
-// gradient 42 % → 0 %, hover dot + tooltip. Sparklines and allocation ring.
+// Charts: smooth Catmull-Rom curves (no angles), ice-blue line drawn from the left on mount,
+// a faint ice wash under it, hover crosshair + tooltip. Sparklines, allocation bar and ring.
 
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { areaPath, downsample, fitSeries, smoothPath } from '../lib/smooth';
+import { EASE_OUT } from './motion';
 
 const VB_W = 1000;
 
@@ -56,23 +58,24 @@ export function SmoothChart({ values, height, renderTooltip, defaultPoint = 'las
 
   return (
     <div ref={ref} className={className} style={{ position: 'relative', height }} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
-      <svg width="100%" height={height} viewBox={`0 0 ${VB_W} ${height}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel}>
+      <svg width="100%" height={height} viewBox={`0 0 ${VB_W} ${height}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel} className="chart-reveal">
         <defs>
           <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#2F6BFF" stopOpacity="0.42" />
-            <stop offset="0.55" stopColor="#2F6BFF" stopOpacity="0.12" />
-            <stop offset="1" stopColor="#2F6BFF" stopOpacity="0" />
+            <stop offset="0" stopColor={stroke} stopOpacity="0.16" />
+            <stop offset="0.6" stopColor={stroke} stopOpacity="0.04" />
+            <stop offset="1" stopColor={stroke} stopOpacity="0" />
           </linearGradient>
         </defs>
         {area && <path d={area} fill={`url(#g${gid})`} />}
-        {line && <path d={line} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
+        {line && <path d={line} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
       </svg>
       {p && (
         <>
-          <div aria-hidden="true" style={{ position: 'absolute', left: `${(p.x / VB_W) * 100}%`, top: 0, bottom: 0, borderLeft: '1px dashed rgba(124,196,255,.45)' }} />
+          <div aria-hidden="true" style={{ position: 'absolute', left: `${(p.x / VB_W) * 100}%`, top: 0, bottom: 0, borderLeft: '1px solid rgba(124,196,255,.22)' }} />
           <div
             aria-hidden="true"
-            style={{ position: 'absolute', left: `${(p.x / VB_W) * 100}%`, top: p.y, width: 12, height: 12, margin: '-6px 0 0 -6px', borderRadius: 999, background: stroke, boxShadow: '0 0 0 4px #101215, 0 0 0 9px rgba(124,196,255,.22)' }}
+            className="fade-in"
+            style={{ position: 'absolute', left: `${(p.x / VB_W) * 100}%`, top: p.y, width: 9, height: 9, margin: '-4.5px 0 0 -4.5px', borderRadius: 999, background: '#090a0c', border: `2px solid ${stroke}`, transition: 'top 120ms ease-out' }}
           />
           {tip && (
             <div
@@ -82,10 +85,10 @@ export function SmoothChart({ values, height, renderTooltip, defaultPoint = 'las
                 top: Math.max(0, p.y - 64),
                 transform: 'translateX(-50%)',
               }}
-              className="pointer-events-none flex flex-col items-center gap-px rounded-[8px] border border-line-3 bg-control px-2.5 py-1.5 whitespace-nowrap"
+              className="pointer-events-none flex flex-col items-center gap-px rounded-ctl border border-line-2 bg-[#121418]/95 px-2.5 py-1.5 whitespace-nowrap"
             >
-              <span className="font-mono text-[10px] text-mute">{hover === null && defaultLabel ? `${tip.label} · ${defaultLabel}` : tip.label}</span>
-              <span className="text-[13px] font-semibold">{tip.value}</span>
+              <span className="font-mono text-[10px] tracking-[0.04em] text-faint">{hover === null && defaultLabel ? `${tip.label} · ${defaultLabel}` : tip.label}</span>
+              <span className="text-[13px] font-medium">{tip.value}</span>
             </div>
           )}
         </>
@@ -99,7 +102,7 @@ export function Sparkline({ values, color, width = 96, height = 28 }: { values: 
   if (!d) return <span style={{ width, height }} className="inline-block" />;
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }
@@ -109,6 +112,27 @@ export interface RingSlice {
   label: string;
   value: number;
   color: string;
+}
+
+/** Allocation as one ruled bar: slices grow from the left on mount, 2 px gaps between them. */
+export function AllocationBar({ slices, className }: { slices: RingSlice[]; className?: string }) {
+  const total = slices.reduce((s, x) => s + x.value, 0);
+  const label = slices.map((s) => `${s.label} ${total ? Math.round((s.value / total) * 100) : 0} %`).join(', ');
+  return (
+    <div role="img" aria-label={label || 'Aucune répartition'} className={`flex h-2 w-full gap-[2px] overflow-hidden rounded-[2px] bg-control ${className ?? ''}`}>
+      {total > 0 &&
+        slices.map((s, i) => (
+          <motion.span
+            key={s.id}
+            className="h-full basis-0 first:rounded-l-[2px] last:rounded-r-[2px]"
+            style={{ background: s.color }}
+            initial={{ flexGrow: 0 }}
+            animate={{ flexGrow: s.value / total }}
+            transition={{ duration: 0.5, delay: 0.06 * i, ease: EASE_OUT }}
+          />
+        ))}
+    </div>
+  );
 }
 
 /** Allocation ring (r = 48, stroke 10) with gaps between slices. */

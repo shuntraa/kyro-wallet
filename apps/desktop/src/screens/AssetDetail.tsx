@@ -16,6 +16,7 @@ import { HistoryRow } from '../components/HistoryRow';
 import { useFavorites } from '../components/AssetLists';
 import { Badge, Button, IconButton, Segmented, Skeleton } from '../components/ui/primitives';
 import { IconBack, IconDown, IconStake, IconStar, IconSwap, IconUp } from '../components/icons';
+import { idx } from '../components/motion';
 
 export function AssetDetail({ id }: { id: string }) {
   const { back, settings, navigate, hideBalances, network, activeHw } = useApp();
@@ -69,18 +70,20 @@ export function AssetDetail({ id }: { id: string }) {
   const adaAccount = useAsync(supported?.family === 'ada' && adapters.cardano ? () => adapters.cardano!.account() : null, [supported?.id, adapters.cardano], { intervalMs: 30_000 });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
       <header className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3.5">
-          <IconButton label="Retour" onClick={back} className="size-10 border-control-2">
+          <IconButton label="Retour" onClick={back} className="size-9">
             <IconBack size={16} />
           </IconButton>
-          <CoinIcon glyph={glyph} color={color} size={44} />
-          <h1 className="m-0 truncate text-[28px] font-semibold tracking-[-0.03em]">{name}</h1>
-          <span className="rounded-[6px] bg-control-2 px-2 py-0.5 text-[12px] font-semibold text-text2">{symbol}</span>
-          {coin?.rank && <span className="text-[13px] text-faint">Rang #{coin.rank}</span>}
-          <button type="button" aria-label={fav ? 'Retirer des favoris' : 'Ajouter aux favoris'} aria-pressed={fav} onClick={() => toggle(coinId)} className={cn('flex size-8 items-center justify-center rounded-full', fav ? 'text-ice' : 'text-faint hover:text-text2')}>
-            <IconStar size={18} filled={fav} />
+          <CoinIcon glyph={glyph} color={color} size={36} />
+          <h1 className="screen-title truncate">{name}</h1>
+          <span className="rounded-[4px] border border-line-3 px-1.5 py-0.5 font-mono text-[11px] font-medium text-text2">{symbol}</span>
+          {coin?.rank && <span className="font-mono text-[11px] text-faint">Rang #{coin.rank}</span>}
+          <button type="button" aria-label={fav ? 'Retirer des favoris' : 'Ajouter aux favoris'} aria-pressed={fav} onClick={() => toggle(coinId)} className={cn('press flex size-8 items-center justify-center rounded-ctl', fav ? 'text-ice' : 'text-faint hover:text-text2')}>
+            <span key={String(fav)} className={fav ? 'pop-in inline-flex' : 'inline-flex'}>
+              <IconStar size={18} filled={fav} />
+            </span>
           </button>
         </div>
         {supported && !watch ? (
@@ -112,20 +115,21 @@ export function AssetDetail({ id }: { id: string }) {
             )}
           </div>
         ) : (
-          <Badge tone="ice" className="h-7 px-3 text-[12px]">
+          <Badge tone="ice" className="h-6 px-2">
             {watch ? 'Bientôt · lecture seule' : 'Non pris en charge'}
           </Badge>
         )}
       </header>
 
-      <div className="flex min-h-0 flex-[1.15] gap-4">
-        <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card-hero">
-          <div className="flex items-start justify-between px-7 pt-6">
-            <div className="flex flex-col gap-2">
-              <span className="text-[13px] text-mute">
+      <div className="flex min-h-0 flex-[1.15] gap-5">
+        {/* Price + curve on the page itself, on a ruled baseline (no box). */}
+        <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden border-b border-line">
+          <div className="flex items-start justify-between pt-2">
+            <div className="flex flex-col gap-2.5">
+              <span className="eyebrow">
                 Cours {symbol} / {cur}
               </span>
-              <span className="text-[52px] leading-none font-semibold tracking-[-0.045em]">{price ? <BigFiat value={price.price} currency={cur} /> : <Skeleton className="h-12 w-56" />}</span>
+              <span className="figure text-[56px] leading-none">{price ? <BigFiat value={price.price} currency={cur} tick className="fade-in inline-block" /> : <Skeleton className="h-12 w-56" />}</span>
               {changeAbs !== null && change !== null && (
                 <span>
                   <TrendPill change={change}>
@@ -139,6 +143,7 @@ export function AssetDetail({ id }: { id: string }) {
           <div className="mt-auto">
             {values.length > 1 ? (
               <SmoothChart
+                key={period}
                 values={values}
                 height={250}
                 defaultPoint="max"
@@ -148,38 +153,38 @@ export function AssetDetail({ id }: { id: string }) {
                 renderTooltip={(i) => ({ label: fmtChartTime(points[i]?.[0] ?? Date.now()), value: fmtFiat(values[i] ?? 0, cur) })}
               />
             ) : chart.error ? (
-              <ErrorLine className="px-7 pb-8" onRetry={chart.reload} error={chart.error}>
+              <ErrorLine className="pb-8" onRetry={chart.reload} error={chart.error}>
                 Graphique indisponible : {chart.error.message}
               </ErrorLine>
             ) : (
-              <div className="px-7 pb-8">
+              <div className="pb-8">
                 <Skeleton className="h-[180px] w-full" />
               </div>
             )}
           </div>
         </section>
 
-        <aside className="flex w-[360px] shrink-0 flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-5">
+        <aside className="rise flex w-[360px] shrink-0 flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-5">
           {supported && !watch ? (
             <>
-              <span className="text-[13px] text-mute">Ton solde</span>
-              <span className="text-[32px] leading-none font-semibold tracking-[-0.03em]">{hideBalances ? HIDDEN : holding ? fmtCrypto(holding.amount, supported.decimals, supported.symbol) : '—'}</span>
+              <span className="eyebrow">Ton solde</span>
+              <span className="figure text-[34px] leading-none">{hideBalances ? HIDDEN : holding ? fmtCrypto(holding.amount, supported.decimals, supported.symbol) : '—'}</span>
               <span className="text-[14px] text-text2">
                 {hideBalances ? HIDDEN : holding?.value !== null && holding?.value !== undefined ? `≈ ${fmtFiat(holding.value, cur)} · ${fmtNumber(holding.share * 100, 0)} % du portefeuille` : 'Prix indisponible'}
               </span>
-              <div className="h-1 overflow-hidden rounded-full bg-control-2">
-                <div className="h-1 rounded-full bg-ice" style={{ width: `${Math.round((holding?.share ?? 0) * 100)}%` }} />
+              <div className="h-[3px] overflow-hidden rounded-full bg-control-2">
+                <div className="h-full origin-left rounded-full bg-ice transition-[width] duration-500" style={{ width: `${Math.round((holding?.share ?? 0) * 100)}%` }} />
               </div>
               {perNetwork.length > 0 && (
                 <div className="mt-2 flex flex-col">
-                  <span className="pb-2 text-[12px] text-faint">Par réseau · même adresse</span>
+                  <span className="eyebrow pb-2">Par réseau · même adresse</span>
                   {perNetwork.map(({ chain, asset: a, amount }) => (
                     <div key={chain.key} className="flex h-9 items-center justify-between border-t border-line text-[13px]">
                       <span className="flex items-center gap-2 text-text2">
                         <span className={cn('size-1.5 rounded-full', a && amount && amount > 0n ? 'bg-ice' : 'bg-faint')} />
                         {chain.name}
                       </span>
-                      <span className={a && amount && amount > 0n ? 'font-semibold' : 'text-mute'}>{!a ? 'non listé' : amount === null ? '—' : hideBalances ? HIDDEN : `${fmtCrypto(amount, a.decimals)}${chain.phase === 2 ? ' · phase 2' : ''}`}</span>
+                      <span className={a && amount && amount > 0n ? 'font-medium' : 'text-mute'}>{!a ? 'non listé' : amount === null ? '—' : hideBalances ? HIDDEN : `${fmtCrypto(amount, a.decimals)}${chain.phase === 2 ? ' · phase 2' : ''}`}</span>
                     </div>
                   ))}
                   {network === 'testnet' && <span className="pt-2 text-[11px] text-faint">Arbitrum, Base, Optimism, Polygon, BNB et Avalanche : en mainnet.</span>}
@@ -189,7 +194,7 @@ export function AssetDetail({ id }: { id: string }) {
               <div className="flex-1" />
               {/* Cardano: the tokens panel takes this room; « Recevoir » shows the same single address. */}
               {address && supported.family !== 'ada' && (
-                <div className="flex items-center justify-between gap-2 rounded-box bg-raised py-2 pr-2 pl-3.5">
+                <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
                   <AddressShort address={address} />
                   <Button size="sm" onClick={() => navigate({ name: 'receive', family: supported.family })}>
                     QR code
@@ -205,11 +210,11 @@ export function AssetDetail({ id }: { id: string }) {
         </aside>
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-4">
-        <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card">
+      <div className="flex min-h-0 flex-1 gap-5">
+        <section className="rise flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card" style={idx(1)}>
           <div className="flex h-[50px] shrink-0 items-center justify-between border-b border-line px-5">
-            <span className="text-[15px] font-semibold">Activité {symbol}</span>
-            <button type="button" onClick={() => navigate({ name: 'history' })} className="text-[13px] font-semibold text-ice hover:underline">
+            <span className="text-[15px] font-medium tracking-[-0.01em]">Activité {symbol}</span>
+            <button type="button" onClick={() => navigate({ name: 'history' })} className="text-[13px] font-medium text-ice hover:underline">
               Tout voir
             </button>
           </div>
@@ -219,14 +224,14 @@ export function AssetDetail({ id }: { id: string }) {
             ) : activity.length === 0 ? (
               <EmptyState title="Aucune activité">{supported ? 'Les transactions de cet actif apparaîtront ici.' : 'Aucun compte Kyro sur ce réseau.'}</EmptyState>
             ) : (
-              activity.map((e) => <HistoryRow key={e.id} e={e} compact price={price?.price ?? null} currency={cur} hidden={hideBalances} />)
+              <div className="stagger">{activity.map((e, i) => <HistoryRow key={e.id} i={i} e={e} compact price={price?.price ?? null} currency={cur} hidden={hideBalances} />)}</div>
             )}
           </div>
         </section>
-        <section className="flex w-[360px] shrink-0 flex-col rounded-panel border border-line bg-card px-5 py-4">
+        <section className="rise flex w-[360px] shrink-0 flex-col rounded-panel border border-line bg-card px-5 py-4" style={idx(2)}>
           <div className="flex items-baseline justify-between pb-3">
-            <span className="text-[15px] font-semibold">Marché</span>
-            <span className="text-[11px] text-faint">CoinGecko{pf.marketUpdatedAt ? ` · ${fmtAgo(pf.marketUpdatedAt, now)}` : ''}</span>
+            <span className="text-[15px] font-medium tracking-[-0.01em]">Marché</span>
+            <span className="font-mono text-[10.5px] text-faint">CoinGecko{pf.marketUpdatedAt ? ` · ${fmtAgo(pf.marketUpdatedAt, now)}` : ''}</span>
           </div>
           {[
             ['Plus haut 24 h', coin?.high24h !== null && coin?.high24h !== undefined ? fmtFiat(coin.high24h, cur) : '—', ''],
@@ -236,7 +241,7 @@ export function AssetDetail({ id }: { id: string }) {
           ].map(([k, v, c]) => (
             <div key={k} className="flex h-9 items-center justify-between border-t border-line text-[13px]">
               <span className="text-mute">{k}</span>
-              <span className={cn('font-semibold', v === '—' ? 'text-mute' : c)}>{v}</span>
+              <span className={cn('font-medium', v === '—' ? 'text-mute' : c)}>{v}</span>
             </div>
           ))}
           {supported && findChain(network, supported.chainKey)?.network === 'testnet' && <p className="mt-auto pt-3 text-[11px] leading-[1.5] text-faint">Cours du mainnet : les jetons de test n’ont pas de valeur réelle.</p>}

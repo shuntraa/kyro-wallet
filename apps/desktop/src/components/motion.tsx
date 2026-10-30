@@ -37,6 +37,19 @@ export function useTicker(value: number, { duration = 0.5, from }: { duration?: 
   return shown;
 }
 
+/** Live `matchMedia` (e.g. a shorter hero when the window is at its 720 px minimum height). */
+export function useMedia(query: string): boolean {
+  const [on, setOn] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    const f = () => setOn(m.matches);
+    f();
+    m.addEventListener('change', f);
+    return () => m.removeEventListener('change', f);
+  }, [query]);
+  return on;
+}
+
 /** Index for the CSS `.stagger` / `.rise` entrances. */
 export function idx(i: number): CSSProperties {
   return { ['--i' as string]: i } as CSSProperties;

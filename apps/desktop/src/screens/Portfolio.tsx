@@ -3,14 +3,15 @@ import { useState } from 'react';
 import { useApp } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { PERIODS, usePortfolioChart, type Period } from '../state/charts';
-import { fmtChartTime, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
+import { NNBSP, fmtChartTime, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
 import { BigFiat, HIDDEN, TrendPill } from '../components/kit';
-import { AllocationRing, SmoothChart } from '../components/charts';
+import { AllocationBar, SmoothChart } from '../components/charts';
 import { AssetListsCard } from '../components/AssetLists';
 import { VaultCard } from '../components/VaultCard';
 import { Button, Segmented, Skeleton } from '../components/ui/primitives';
 import { useTorBlocked } from '../components/Tor';
 import { useOnTorReady } from '../state/tor';
+import { idx, useMedia } from '../components/motion';
 import { IconDown, IconEye, IconEyeOff, IconSwap, IconUp } from '../components/icons';
 
 export function Portfolio() {
@@ -27,6 +28,9 @@ export function Portfolio() {
   const periodDelta = first !== undefined && values.length > 1 ? pf.total - first : null;
   const delta = period === '1J' ? pf.change24hFiat : periodDelta;
   const deltaPct = period === '1J' ? pf.change24hPct : first ? ((pf.total - first) / first) * 100 : null;
+  // At the 720 px minimum height the hero gives room back to the asset list.
+  const tall = useMedia('(min-height: 820px)');
+  const chartH = tall ? 170 : 120;
   const periodLabel = { '1J': 'aujourd’hui', '1S': 'sur 7 jours', '1M': 'sur 30 jours', '1A': 'sur un an', Tout: 'depuis le début' }[period];
 
   const alloc = pf.holdings.filter((h) => (h.value ?? 0) > 0);
@@ -35,36 +39,35 @@ export function Portfolio() {
   const slices = [...top.map((h) => ({ id: h.asset.id, label: top.filter((x) => x.asset.name === h.asset.name).length > 1 ? `${h.asset.name} · ${h.asset.kind === 'spl' ? 'Solana' : h.asset.kind === 'erc20' ? 'ERC-20' : h.asset.kind === 'trc20' ? 'TRC-20' : h.asset.symbol}` : h.asset.name, value: h.value ?? 0, color: h.asset.color })), ...(rest > 0 ? [{ id: 'other', label: 'Autres', value: rest, color: '#5E6470' }] : [])];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">
-      <section aria-label="Valeur du portefeuille" className="relative h-[340px] shrink-0 overflow-hidden rounded-panel border border-line bg-card-hero">
-        <div aria-hidden="true" className="absolute -top-40 -right-30 size-[520px] rounded-full border border-[#1A1D23]" />
-        <div aria-hidden="true" className="absolute -top-20 -right-10 size-[360px] rounded-full border border-[#1A1D23]" />
-        <div className="relative flex items-start justify-between px-7 pt-[26px]">
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-2 text-[13px] text-mute">
-              Valeur totale
-              <button type="button" aria-label={hideBalances ? 'Afficher les soldes' : 'Masquer les soldes'} onClick={() => setHideBalances(!hideBalances)} className="flex size-[26px] items-center justify-center rounded-[6px] hover:bg-raised hover:text-text">
-                {hideBalances ? <IconEyeOff size={15} /> : <IconEye size={15} />}
+    <div className="flex min-h-0 flex-1 flex-col gap-5 px-7 pt-6 pb-5">
+      {/* The balance sits on the page, not in a box: figure, then the curve on a ruled baseline. */}
+      <section aria-label="Valeur du portefeuille" className={`relative flex shrink-0 flex-col border-b border-line ${tall ? 'h-[300px]' : 'h-[250px]'}`}>
+        <div className="relative z-10 flex items-start justify-between gap-6">
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <span className="eyebrow">Valeur totale</span>
+              <button type="button" aria-label={hideBalances ? 'Afficher les soldes' : 'Masquer les soldes'} onClick={() => setHideBalances(!hideBalances)} className="press flex size-[24px] items-center justify-center rounded-[5px] text-faint hover:bg-raised hover:text-text">
+                {hideBalances ? <IconEyeOff size={14} /> : <IconEye size={14} />}
               </button>
               {network === 'testnet' && <span className="text-[11px] text-faint">· prix mainnet, valeur indicative</span>}
             </div>
-            <div className="text-[64px] leading-[0.95] font-semibold tracking-[-0.045em]">
-              {pf.balancesLoaded && pf.markets ? <BigFiat value={pf.total} currency={cur} hidden={hideBalances} /> : <Skeleton className="h-[60px] w-[340px]" />}
+            <div className="figure text-[clamp(56px,5.4vw,76px)] leading-[0.92]">
+              {pf.balancesLoaded && pf.markets ? <BigFiat value={pf.total} currency={cur} hidden={hideBalances} tick className="fade-in inline-block" /> : <Skeleton className="h-[64px] w-[340px]" />}
             </div>
             <div className="flex h-6 items-center gap-2.5 text-[13px]">
               {delta !== null && pf.total > 0 ? (
-                <>
+                <span key={period} className="fade-in flex items-center gap-2.5">
                   <TrendPill change={delta}>
                     {hideBalances ? HIDDEN : fmtFiat(Math.abs(delta), cur)} · {fmtPct(deltaPct === null ? null : Math.abs(deltaPct), { sign: false })}
                   </TrendPill>
                   <span className="text-mute">{periodLabel}</span>
-                </>
+                </span>
               ) : (
                 <span className="text-mute">{pf.balancesLoaded ? (pf.total === 0 ? 'Aucun fonds pour l’instant' : '') : 'Chargement des soldes…'}</span>
               )}
             </div>
           </div>
-          <div className="flex flex-col items-end gap-4">
+          <div className="flex shrink-0 flex-col items-end gap-4">
             <Segmented label="Période" value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p, label: p }))} />
             <div className="flex gap-2">
               <Button variant="primary" size="lg" onClick={() => navigate({ name: 'send' })}>
@@ -79,46 +82,50 @@ export function Portfolio() {
             </div>
           </div>
         </div>
-        <div className="absolute right-0 bottom-0 left-0 h-[190px]">
+        <div className="absolute right-0 bottom-0 left-0" style={{ height: chartH }}>
           {values.length > 1 ? (
             <SmoothChart
+              key={period}
               values={values}
-              height={190}
+              height={chartH}
               defaultPoint="last"
+              padBottom={10}
               ariaLabel={`Courbe du portefeuille ${periodLabel}`}
               renderTooltip={(i) => ({ label: fmtChartTime(series[i]?.[0] ?? Date.now()), value: hideBalances ? HIDDEN : fmtFiat(values[i] ?? 0, cur) })}
             />
           ) : (
             <div className="flex h-full items-end">
               <svg width="100%" height="60" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
-                <path d="M0,40 L1000,40" stroke="#22252B" strokeWidth="2" strokeDasharray="6 8" vectorEffect="non-scaling-stroke" />
+                <path d="M0,40 L1000,40" stroke="#22252B" strokeWidth="1.5" strokeDasharray="3 6" vectorEffect="non-scaling-stroke" />
               </svg>
-              <span className="absolute bottom-16 left-7 text-[12px] text-faint">{chart.loading ? 'Chargement de la courbe…' : chart.error ? (torBlocked ? 'En attente de Tor…' : `Courbe indisponible : ${chart.error.message}`) : 'La courbe apparaîtra avec tes premiers fonds.'}</span>
+              <span className="absolute bottom-14 left-0 text-[12px] text-faint">{chart.loading ? 'Chargement de la courbe…' : chart.error ? (torBlocked ? 'En attente de Tor…' : `Courbe indisponible : ${chart.error.message}`) : 'La courbe apparaîtra avec tes premiers fonds.'}</span>
             </div>
           )}
         </div>
       </section>
 
-      <div className="flex min-h-0 flex-1 gap-4">
-        <AssetListsCard className="flex-1" />
-        <div className="flex w-[352px] shrink-0 flex-col gap-4">
-          <section aria-label="Répartition" className="flex items-center gap-5 rounded-panel border border-line bg-card px-5 py-[18px]">
-            <AllocationRing
-              slices={slices}
-              center={
-                <>
-                  <span className="text-[20px] font-semibold">{alloc.length}</span>
-                  <span className="text-[11px] text-mute">actif{alloc.length > 1 ? 's' : ''}</span>
-                </>
-              }
-            />
-            <div className="flex flex-1 flex-col gap-[7px] text-[13px]">
-              {slices.length === 0 && <span className="text-mute">La répartition s’affichera avec tes premiers fonds.</span>}
+      <div className="flex min-h-0 flex-1 gap-5">
+        <AssetListsCard className="rise flex-1" />
+        {/* One column, two ruled sections: allocation, then the vault. */}
+        <div className="rise flex w-[340px] shrink-0 flex-col overflow-y-auto rounded-panel border border-line bg-card scroll-thin" style={idx(1)}>
+          <section aria-label="Répartition" className="flex flex-col gap-3.5 border-b border-line px-5 pt-4 pb-[18px]">
+            <div className="flex items-baseline justify-between">
+              <span className="eyebrow">Répartition</span>
+              <span className="font-mono text-[11px] text-mute">
+                {alloc.length} actif{alloc.length > 1 ? 's' : ''}
+              </span>
+            </div>
+            <AllocationBar slices={slices} />
+            <div className="grid grid-cols-2 gap-x-5 gap-y-[7px] text-[13px]">
+              {slices.length === 0 && <span className="col-span-2 text-mute">La répartition s’affichera avec tes premiers fonds.</span>}
               {slices.map((s) => (
-                <span key={s.id} className="flex items-center gap-2">
-                  <span className="size-2 shrink-0 rounded-full" style={{ background: s.color }} />
+                <span key={s.id} className="flex min-w-0 items-center gap-2">
+                  <span className="size-[7px] shrink-0 rounded-[1.5px]" style={{ background: s.color }} />
                   <span className="min-w-0 flex-1 truncate text-text2">{s.label}</span>
-                  <span className="font-semibold">{fmtNumber(pf.total ? (s.value / pf.total) * 100 : 0, 0)}{' '}%</span>
+                  <span className="font-mono text-[12px] text-text">
+                    {fmtNumber(pf.total ? (s.value / pf.total) * 100 : 0, 0)}
+                    {NNBSP}%
+                  </span>
                 </span>
               ))}
             </div>

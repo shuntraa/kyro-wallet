@@ -8,10 +8,10 @@ export function Assets({ initialTab }: { initialTab: ListTab }) {
   const pf = usePortfolio();
   const now = useNow(5000);
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">
-      <header className="flex items-end justify-between">
-        <h1 className="m-0 text-[28px] font-semibold tracking-[-0.03em]">Actifs</h1>
-        <span className="text-[12px] text-faint">{pf.marketUpdatedAt ? `CoinGecko · ${fmtAgo(pf.marketUpdatedAt, now)}` : 'CoinGecko'}</span>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
+      <header className="flex items-end justify-between border-b border-line pb-4">
+        <h1 className="screen-title">Actifs</h1>
+        <span className="font-mono text-[11px] text-faint">{pf.marketUpdatedAt ? `CoinGecko · ${fmtAgo(pf.marketUpdatedAt, now)}` : 'CoinGecko'}</span>
       </header>
       <AssetListsCard initialTab={initialTab} className="min-h-0 flex-1" />
     </div>

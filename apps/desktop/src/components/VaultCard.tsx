@@ -29,13 +29,11 @@ export function VaultCard() {
   if (activeHw) {
     // Hardware-wallet account: no key in Kyro, nothing to lock here.
     return (
-      <section aria-label="Hardware wallet" className="flex flex-1 flex-col gap-3.5 rounded-panel border border-line bg-card px-5 py-[18px]">
+      <section aria-label="Hardware wallet" className="flex flex-1 flex-col gap-3.5 px-5 pt-4 pb-[18px]">
         <div className="flex items-center gap-3">
-          <span className="flex size-[38px] items-center justify-center rounded-ctl bg-ice/12 text-ice">
-            <IconUsbKey size={18} />
-          </span>
-          <span className="flex flex-1 flex-col">
-            <span className="text-[15px] font-semibold">{activeHw.label}</span>
+          <IconUsbKey size={18} className="shrink-0 text-ice" />
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-[15px] font-medium tracking-[-0.01em]">{activeHw.label}</span>
             <span className="text-[12px] text-mute">Clés dans l’appareil, jamais dans Kyro</span>
           </span>
           <DeviceBadge device={activeHw.device} model={activeHw.model} />
@@ -63,26 +61,24 @@ export function VaultCard() {
   }
 
   return (
-    <section aria-label="Coffre" className="flex flex-1 flex-col gap-3.5 rounded-panel border border-line bg-card px-5 py-[18px]">
+    <section aria-label="Coffre" className="flex flex-1 flex-col gap-3.5 px-5 pt-4 pb-[18px]">
       <div className="flex items-center gap-3">
-        <span className="flex size-[38px] items-center justify-center rounded-ctl bg-ice/12 text-ice">
-          <IconShield size={18} sw={2} />
-        </span>
+        <IconShield size={18} sw={1.8} className="shrink-0 text-ice" />
         <span className="flex flex-1 flex-col">
-          <span className="text-[15px] font-semibold">Coffre</span>
+          <span className="text-[15px] font-medium tracking-[-0.01em]">Coffre</span>
           <span className="text-[12px] text-mute">Clés chiffrées sur cet appareil</span>
         </span>
-        <Badge tone={status?.unlocked ? 'up' : 'mute'} className="h-6 text-[12px]">
+        <Badge tone={status?.unlocked ? 'up' : 'mute'}>
           {status?.unlocked ? 'Ouvert' : 'Fermé'}
         </Badge>
       </div>
       <div className="flex flex-col gap-[7px]">
         <div className="flex justify-between text-[12px]">
           <span className="text-mute">Verrouillage auto</span>
-          <span className="font-mono">{left !== null ? fmtCountdown(left) : '—'}</span>
+          <span className="font-mono text-text2">{left !== null ? fmtCountdown(left) : '—'}</span>
         </div>
-        <div className="h-1 overflow-hidden rounded-full bg-control-2">
-          <div className="h-1 rounded-full bg-ice transition-[width] duration-1000 ease-linear" style={{ width: `${pct}%` }} />
+        <div className="h-[3px] overflow-hidden rounded-full bg-control-2">
+          <div className="h-full rounded-full bg-ice transition-[width] duration-1000 ease-linear" style={{ width: `${pct}%` }} />
         </div>
       </div>
       <div className="flex flex-col text-[13px]">
@@ -114,7 +110,7 @@ export function VaultCard() {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex h-[38px] items-center justify-between border-t border-line">
+    <div className="flex h-9 items-center justify-between border-t border-line">
       <span className="text-text2">{label}</span>
       {children}
     </div>
