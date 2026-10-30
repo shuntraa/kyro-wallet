@@ -55,7 +55,8 @@ import { instructionLabel } from '../components/SolSummaryView';
 import { SecondConfirmNotice } from '../components/SecondConfirm';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Card, Input, Notice, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
-import { IconCheck, IconInfo, IconShield, IconWarn } from '../components/icons';
+import { IconCheck, IconChevronRight, IconInfo, IconShield, IconWarn } from '../components/icons';
+import { idx } from '../components/motion';
 
 type Ret<K extends keyof Commands> = Commands[K]['ret'];
 
@@ -75,10 +76,10 @@ export function Staking({ chain }: { chain?: StakeChain }) {
   const tab: 'home' | StakeChain = chain ?? 'home';
   const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron };
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-[26px] py-[22px] scroll-thin">
-      <header className="flex items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="m-0 text-[28px] font-semibold tracking-[-0.03em]">Staking</h1>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-7 pt-6 pb-5 scroll-thin">
+      <header className="flex items-end justify-between gap-4 border-b border-line pb-4">
+        <div className="flex flex-col gap-2">
+          <h1 className="screen-title">Staking</h1>
           <span className="text-[13px] text-mute">Délègue tes SOL, ADA ou TRX sans les confier à personne : ta clé signe, rien ne quitte ton contrôle.</span>
         </div>
         <Segmented
@@ -147,16 +148,20 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
   ];
   return (
     <>
-      <div className="grid grid-cols-3 gap-4">
-        {cards.map((c) => (
-          <Card key={c.chain} className="flex flex-col gap-3 px-5 py-5">
-            <div className="flex items-center gap-3">
-              <CoinIcon glyph={c.glyph} color={c.color} size={36} />
-              <span className="text-[17px] font-semibold">{c.name}</span>
+      {/* One sheet, three ruled columns: no three identical cards. */}
+      <div className="grid shrink-0 grid-cols-3 divide-x divide-line overflow-hidden rounded-panel border border-line bg-card">
+        {cards.map((c, i) => (
+          <div key={c.chain} className="rise group flex flex-col gap-3 px-5 pt-4 pb-5" style={idx(i)}>
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[11px] text-faint">{String(i + 1).padStart(2, '0')}</span>
               <Badge tone="ice">{networkLabel(c.chain, network)}</Badge>
             </div>
+            <div className="flex items-center gap-2.5">
+              <CoinIcon glyph={c.glyph} color={c.color} size={26} />
+              <span className="text-[22px] font-[560] tracking-[-0.03em]">{c.name}</span>
+            </div>
             <p className="m-0 text-[13px] leading-[1.55] text-text2">{c.what}</p>
-            <div className="min-h-5 text-[13px] font-semibold">
+            <div className="min-h-5 border-t border-line pt-3 text-[13px] font-medium">
               {disabled || !has[c.chain] ? (
                 <span className="font-normal text-mute">{disabled ? 'Indisponible sur un hardware wallet' : 'Aucun compte sur cette chaîne'}</span>
               ) : c.error ? (
@@ -166,14 +171,15 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
               )}
             </div>
             <div className="flex-1" />
-            <Button variant="primary" disabled={disabled || !has[c.chain]} onClick={() => navigate({ name: 'staking', chain: c.chain })}>
+            <Button variant="outline" className="justify-between" disabled={disabled || !has[c.chain]} onClick={() => navigate({ name: 'staking', chain: c.chain })}>
               Ouvrir le staking {c.name}
+              <IconChevronRight size={15} className="nudge text-mute" />
             </Button>
-          </Card>
+          </div>
         ))}
       </div>
-      <Card className="flex flex-col gap-2 px-5 py-4">
-        <span className="flex items-center gap-2 text-[14px] font-semibold">
+      <Card className="flex flex-col gap-2 border-l-2 border-l-ice/70 px-5 py-4">
+        <span className="flex items-center gap-2 text-[14px] font-medium">
           <IconShield size={16} className="text-ice" /> Les risques, sans détour
         </span>
         <p className="m-0 text-[13px] leading-[1.6] text-text2">
@@ -187,7 +193,7 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
           ['Ethereum et chaînes EVM', 'Non proposé : le staking natif exige 32 ETH et un validateur qui tourne en permanence, et Kyro ne passe pas par le contrat d’un tiers.'],
         ].map(([k, v]) => (
           <div key={k} className="flex min-h-11 items-center justify-between gap-4 border-b border-line py-2 text-[13px] last:border-b-0">
-            <span className="font-semibold text-text2">{k}</span>
+            <span className="font-medium text-text2">{k}</span>
             <span className="text-right text-mute">{v}</span>
           </div>
         ))}
@@ -316,11 +322,11 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
       )}
       {step === 'done' && txid && (
         <div className="flex flex-col items-center gap-4 py-2 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-up/12 text-up">
+          <span className="dialog flex size-12 items-center justify-center rounded-full border border-up/40 text-up" data-state="open">
             <IconCheck size={22} />
           </span>
           <p className="m-0 text-[14px] leading-[1.6] text-text2">{spec.doneText}</p>
-          <div className="flex w-full items-center justify-between gap-2 rounded-ctl bg-raised py-2 pr-2 pl-3.5">
+          <div className="flex w-full items-center justify-between gap-2 rounded-ctl border border-line bg-bg py-2 pr-2 pl-3.5">
             <span className="truncate font-mono text-[12px] text-text2">{txid}</span>
             <CopyButton text={txid} />
           </div>
@@ -345,8 +351,8 @@ function Row({ k, v, tone }: { k: string; v: ReactNode; tone?: 'warn' | 'up' }) 
 function Stat({ k, v, sub }: { k: string; v: ReactNode; sub?: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <span className="text-[12px] text-mute">{k}</span>
-      <span className="truncate text-[18px] font-semibold tracking-[-0.02em]">{v}</span>
+      <span className="eyebrow">{k}</span>
+      <span className="figure truncate text-[20px]">{v}</span>
       {sub && <span className="text-[12px] text-faint">{sub}</span>}
     </div>
   );
@@ -364,13 +370,13 @@ function Hint({ children }: { children: ReactNode }) {
 function AmountField({ id, label, value, onChange, unit, onMax, hint }: { id: string; label: string; value: string; onChange: (v: string) => void; unit: { decimals: number; symbol: string }; onMax?: () => void; hint?: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-[12px] font-medium text-mute">
+      <label htmlFor={id} className="eyebrow">
         {label}
       </label>
       <div className="flex items-center gap-2">
-        <div className="flex h-11 flex-1 items-center rounded-ctl border border-line-2 bg-bg pr-3 pl-3.5 focus-within:border-ice-line">
+        <div className="flex h-11 flex-1 items-center rounded-ctl border border-line-2 bg-bg pr-3 pl-3.5 transition-colors hover:border-line-3 focus-within:border-ice-line">
           <input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(sanitizeDecimalInput(e.target.value, unit.decimals))} placeholder="0" className="min-w-0 flex-1 bg-transparent text-[15px]" />
-          <span className="text-[13px] font-semibold text-mute">{unit.symbol}</span>
+          <span className="font-mono text-[12px] font-medium text-mute">{unit.symbol}</span>
         </div>
         {onMax && (
           <Button size="md" onClick={onMax}>
@@ -391,13 +397,13 @@ function EpochBar({ epoch, slotsInEpoch, slotSecs, secondsLeft, loadedAt, label 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between text-[13px]">
-        <span className="font-semibold">
-          {label} {epoch}
+        <span className="font-medium">
+          {label} <span className="font-mono">{epoch}</span>
         </span>
         <span className="text-mute">fin dans {fmtDuration(left)}</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-control-2" role="progressbar" aria-label={`Avancement de l’${label.toLowerCase()} ${epoch}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-        <div className="h-1.5 rounded-full bg-ice" style={{ width: `${pct}%` }} />
+      <div className="h-[3px] overflow-hidden rounded-full bg-control-2" role="progressbar" aria-label={`Avancement de l’${label.toLowerCase()} ${epoch}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+        <div className="h-full rounded-full bg-ice transition-[width] duration-1000 ease-linear" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -406,7 +412,7 @@ function EpochBar({ epoch, slotsInEpoch, slotSecs, secondsLeft, loadedAt, label 
 function SortBar<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; label: string }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[12px] font-medium text-mute">{label}</span>
+      <span className="eyebrow">{label}</span>
       <Segmented size="sm" label="Trier par" value={value} onChange={onChange} options={options} />
     </div>
   );
@@ -442,10 +448,10 @@ function ValidatorPicker({ value, onChange }: { value: string; onChange: (v: str
 
 function ValidatorRow({ v, selected, onSelect }: { v: SolValidator; selected: boolean; onSelect: () => void }) {
   return (
-    <button type="button" role="radio" aria-checked={selected} onClick={onSelect} className={cn('flex items-center gap-3 border-b border-line px-3 py-2 text-left text-[13px] last:border-b-0', selected ? 'bg-ice/10' : 'hover:bg-raised')}>
-      <span className={cn('size-3.5 shrink-0 rounded-full border-2', selected ? 'border-ice bg-ice' : 'border-line-3')} />
+    <button type="button" role="radio" aria-checked={selected} onClick={onSelect} className={cn('flex items-center gap-3 border-b border-line px-3 py-2 text-left text-[13px] last:border-b-0', selected ? 'bg-ice/[.07]' : 'hover:bg-raised')}>
+      <span className={cn('size-3.5 shrink-0 rounded-full border-2 transition-colors duration-150', selected ? 'border-ice bg-ice shadow-[inset_0_0_0_2px_var(--color-bg)]' : 'border-line-3')} />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-semibold">
+        <span className="truncate font-medium">
           {v.name ?? 'Sans nom'} {v.name && <span className="font-normal text-faint">(déclaré)</span>}
         </span>
         <span className="truncate font-mono text-[11px] text-faint">{shortAddress(v.voteAccount, 8, 6)}</span>
@@ -497,7 +503,7 @@ function SolStaking() {
       </Card>
 
       <Card className="flex flex-col">
-        <div className="flex h-[50px] items-center border-b border-line px-5 text-[15px] font-semibold">Tes comptes de staking</div>
+        <div className="flex h-[50px] items-center border-b border-line px-5 text-[15px] font-medium tracking-[-0.01em]">Tes comptes de staking</div>
         {o.accounts.length === 0 ? (
           <EmptyState title="Aucun compte de staking">« Staker des SOL » crée un compte de staking à ton nom (toi seul peux le gérer et le retirer) et le délègue au validateur choisi.</EmptyState>
         ) : (
@@ -696,7 +702,7 @@ function DrepChoice({ mode, onMode, custom, onCustom, keepCurrent }: { mode: Dre
         Depuis la mise à jour Conway, chaque compte qui stake délègue aussi son <strong className="font-semibold text-text2">vote de gouvernance</strong> à un « DRep ». Sans délégation de vote, le réseau refuse le retrait de tes récompenses. Ça ne touche ni à tes ADA, ni au pool.
       </p>
       {opts.map((o) => (
-        <label key={o.value} className={cn('flex cursor-pointer items-start gap-3 rounded-ctl border px-3 py-2.5 text-[13px]', mode === o.value ? 'border-ice/50 bg-ice/8' : 'border-line hover:bg-raised')}>
+        <label key={o.value} className={cn('flex cursor-pointer items-start gap-3 rounded-ctl border px-3 py-2.5 text-[13px]', mode === o.value ? 'border-ice/50 bg-ice/[.06]' : 'border-line hover:bg-raised')}>
           <input type="radio" name="drep" className="mt-1 accent-[#7CC4FF]" checked={mode === o.value} onChange={() => onMode(o.value)} />
           <span className="flex flex-col gap-0.5">
             <span className="font-semibold">{o.title}</span>
@@ -751,7 +757,7 @@ function PoolPicker({ value, onChange }: { value: string; onChange: (id: string,
             const selected = p.poolId === value;
             return (
               <button key={p.poolId} type="button" role="radio" aria-checked={selected} onClick={() => onChange(p.poolId, p)} className={cn('flex items-center gap-3 border-b border-line px-3 py-2 text-left text-[13px] last:border-b-0', selected ? 'bg-ice/10' : 'hover:bg-raised')}>
-                <span className={cn('size-3.5 shrink-0 rounded-full border-2', selected ? 'border-ice bg-ice' : 'border-line-3')} />
+                <span className={cn('size-3.5 shrink-0 rounded-full border-2 transition-colors duration-150', selected ? 'border-ice bg-ice shadow-[inset_0_0_0_2px_var(--color-bg)]' : 'border-line-3')} />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-semibold">
                     {p.ticker ?? '—'} <span className="font-normal text-text2">{p.name ?? ''}</span> <span className="font-normal text-faint">(déclaré)</span>
@@ -820,7 +826,7 @@ function AdaStaking() {
 
       <Card className="flex flex-col">
         <div className="flex h-[50px] items-center justify-between border-b border-line px-5">
-          <span className="text-[15px] font-semibold">Ta délégation ({networkLabel('ada', network)})</span>
+          <span className="text-[15px] font-medium tracking-[-0.01em]">Ta délégation ({networkLabel('ada', network)})</span>
           <span className="font-mono text-[11px] text-faint">{shortAddress(s.stakeAddress, 12, 6)}</span>
         </div>
         <dl className="m-0 flex flex-col px-5 py-1 text-[13px]">
@@ -1016,7 +1022,7 @@ function TronStaking() {
       <div className="grid grid-cols-2 gap-4">
         <Card className="flex flex-col">
           <div className="flex h-[50px] items-center justify-between border-b border-line px-5">
-            <span className="text-[15px] font-semibold">Tes votes</span>
+            <span className="text-[15px] font-medium tracking-[-0.01em]">Tes votes</span>
             <Button size="sm" disabled={a.tronPowerLimit === 0} onClick={() => setOp('vote')}>
               Voter
             </Button>
@@ -1056,7 +1062,7 @@ function TronStaking() {
 
         <Card className="flex flex-col">
           <div className="flex h-[50px] items-center justify-between border-b border-line px-5">
-            <span className="text-[15px] font-semibold">Dégels en cours</span>
+            <span className="text-[15px] font-medium tracking-[-0.01em]">Dégels en cours</span>
             <div className="flex gap-2">
               <Button size="sm" disabled={a.unfreezing.length === 0} onClick={() => setOp('cancel')}>
                 Annuler les dégels

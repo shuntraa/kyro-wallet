@@ -19,6 +19,7 @@ import { HistoryRow, entryTitle } from '../components/HistoryRow';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Notice, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
 import { IconImport } from '../components/icons';
+import { idx } from '../components/motion';
 
 type Filter = 'all' | 'out' | 'in' | 'swap' | 'approval';
 
@@ -93,9 +94,9 @@ export function History() {
   const pending = (history.data?.entries ?? []).filter((e) => e.status === 'pending').length;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="m-0 text-[28px] font-semibold tracking-[-0.03em]">Historique</h1>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
+      <header className="flex items-center justify-between gap-4 border-b border-line pb-4">
+        <h1 className="screen-title">Historique</h1>
         <div className="flex items-center gap-2.5">
           <Segmented<Filter>
             label="Filtre"
@@ -115,19 +116,24 @@ export function History() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 gap-4">
+      <div className="flex min-h-0 flex-1 gap-5">
         <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card">
-          <div className="min-h-0 flex-1 overflow-y-auto py-2 scroll-thin">
+          <div key={`${filter}:${history.data ? 'data' : 'loading'}`} className="min-h-0 flex-1 overflow-y-auto pb-2 scroll-thin">
             {history.loading && !history.data ? (
               <div className="flex flex-col gap-3 p-5">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-11 w-full" />)}</div>
             ) : groups.length === 0 ? (
               <EmptyState title="Aucune transaction">{filter === 'all' ? 'Tes envois, réceptions, swaps et autorisations apparaîtront ici.' : 'Rien pour ce filtre.'}</EmptyState>
             ) : (
-              groups.map((g) => (
-                <div key={g.label}>
-                  <div className="px-[22px] pt-3 pb-2 text-[13px] font-semibold text-mute">{g.label}</div>
-                  {g.items.map((e) => (
-                    <HistoryRow key={e.id} e={e} price={priceOf(e)} currency={cur} hidden={hideBalances} />
+              groups.map((g, gi) => (
+                <div key={g.label} className="stagger">
+                  {/* Day header stays on top while its rows scroll under it. */}
+                  <div className="eyebrow sticky top-0 z-10 flex items-center gap-3 bg-card/95 px-5 pt-4 pb-2 backdrop-blur-[2px]" style={idx(gi * 3)}>
+                    {g.label}
+                    <span className="h-px flex-1 bg-line" />
+                    <span className="text-faint">{g.items.length}</span>
+                  </div>
+                  {g.items.map((e, i) => (
+                    <HistoryRow key={e.id} i={gi * 3 + i + 1} e={e} price={priceOf(e)} currency={cur} hidden={hideBalances} />
                   ))}
                 </div>
               ))
@@ -149,10 +155,10 @@ export function History() {
           </div>
         </section>
 
-        <div className="flex w-[380px] shrink-0 flex-col gap-4">
+        <div className="rise flex w-[380px] shrink-0 flex-col gap-4" style={idx(1)}>
           <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
-            <span className="text-[15px] font-semibold">{month.label}</span>
-            <div className="grid grid-cols-3 gap-2">
+            <span className="eyebrow">{month.label}</span>
+            <div className="grid grid-cols-3 divide-x divide-line border-y border-line">
               <MonthStat label="Reçu" value={hideBalances ? '•••' : `+${fmtFiat(month.received, cur, { decimals: 0 })}`} tone="text-up" />
               <MonthStat label="Envoyé" value={hideBalances ? '•••' : `−${fmtFiat(month.sent, cur, { decimals: 0 })}`} />
               <MonthStat label="Frais" value={hideBalances ? '•••' : fmtFiat(month.fees, cur)} />
@@ -168,9 +174,9 @@ export function History() {
 
 function MonthStat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-ctl bg-raised px-3 py-2.5">
+    <div className="flex flex-col gap-1 px-3 py-3 first:pl-0">
       <span className="text-[12px] text-mute">{label}</span>
-      <span className={cn('truncate text-[16px] font-semibold', tone)}>{value}</span>
+      <span className={cn('figure truncate text-[18px] tracking-[-0.03em]', tone)}>{value}</span>
     </div>
   );
 }
@@ -208,7 +214,7 @@ function Approvals() {
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-panel border border-line bg-card px-[22px] py-[18px] scroll-thin">
       <div className="flex items-center justify-between">
-        <span className="text-[15px] font-semibold">Autorisations actives</span>
+        <span className="text-[15px] font-medium tracking-[-0.01em]">Autorisations actives</span>
         {risky > 0 && <Badge tone="down">{risky} à risque</Badge>}
       </div>
       <p className="m-0 text-[13px] leading-[1.55] text-mute">Ces contrats peuvent encore dépenser tes tokens. Révoque ce dont tu ne te sers plus.</p>
@@ -218,7 +224,7 @@ function Approvals() {
         const unlimited = isUnlimitedAllowance(a.current);
         const asset = assetsFor(network).find((x) => x.contract?.toLowerCase() === a.token.toLowerCase());
         return (
-          <div key={`${a.chainId}:${a.token}:${a.spender}`} className={cn('flex flex-col gap-2.5 rounded-box border px-4 py-3.5', unlimited ? 'border-down/40' : 'border-line')}>
+          <div key={`${a.chainId}:${a.token}:${a.spender}`} className={cn('fade-in flex flex-col gap-2.5 rounded-box border border-l-2 px-4 py-3.5', unlimited ? 'border-down/35 border-l-down bg-down/[.04]' : 'border-line border-l-line-3')}>
             <div className="flex items-center justify-between gap-2">
               <span className="text-[14px] font-semibold">
                 {a.tokenSymbol} → {a.spenderLabel}

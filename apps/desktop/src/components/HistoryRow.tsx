@@ -23,7 +23,8 @@ export function entryTitle(e: HistoryEntry): string {
 export function statusBadge(e: HistoryEntry) {
   if (e.status === 'pending') return <Badge tone="warn">En attente</Badge>;
   if (e.status === 'failed') return <Badge tone="down">Échoué</Badge>;
-  return <Badge tone="up">{e.asset?.family === 'sol' ? 'Finalisé' : 'Confirmé'}</Badge>;
+  // The normal case stays quiet; only pending and failed carry a colour.
+  return <Badge tone="mute">{e.asset?.family === 'sol' ? 'Finalisé' : 'Confirmé'}</Badge>;
 }
 
 export function HistoryRow({ e, price, currency, hidden, compact, i = 0 }: { e: HistoryEntry; price: number | null; currency: Currency; hidden: boolean; compact?: boolean; /** Row index, for the staggered entrance. */ i?: number }) {

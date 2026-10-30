@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useState, type ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { call, toIpcError, type ApiKeyName, type Settings } from '@kyro/shared';
 import { outgoingHosts } from '@kyro/chains';
 import { useApp, useVault, type SettingsSection } from '../state/app';
@@ -14,6 +15,7 @@ import { Badge, Button, Input, Notice, Segmented, Spinner, Switch } from '../com
 import { IconCheck, IconEye, IconTor, IconTrash, IconWarn, IconX } from '../components/icons';
 import { TorIndicator } from '../components/Tor';
 import { torStore, useTor } from '../state/tor';
+import { useMedia } from '../components/motion';
 
 const SECTIONS: Array<{ key: SettingsSection; label: string }> = [
   { key: 'security', label: 'Sécurité' },
@@ -31,6 +33,9 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
   const { settings, saveSettings } = useApp();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Below 1280 px the outgoing-connections summary moves under the section instead of
+  // squeezing it into a 300 px column.
+  const wide = useMedia('(min-width: 1280px)');
 
   const save = async (patch: Partial<Settings>) => {
     setError(null);
@@ -45,29 +50,34 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
 
   return (
     <div className="flex min-h-0 flex-1">
-      <nav aria-label="Sections des réglages" className="flex w-[240px] shrink-0 flex-col gap-1 border-r border-rail px-3.5 py-[22px]">
-        <h1 className="m-0 px-2.5 pb-4 text-[24px] font-semibold tracking-[-0.03em]">Réglages</h1>
-        {SECTIONS.map((s) => (
+      <nav aria-label="Sections des réglages" className="flex w-[240px] shrink-0 flex-col gap-0.5 border-r border-rail px-3.5 pt-6 pb-5">
+        <h1 className="screen-title px-2.5 pb-5">Réglages</h1>
+        {SECTIONS.map((s, i) => (
           <button
             key={s.key}
             type="button"
             aria-current={section === s.key ? 'page' : undefined}
             onClick={() => setSection(s.key)}
-            className={cn('flex h-10 items-center gap-2.5 rounded-ctl px-3.5 text-left text-[14px]', section === s.key ? 'bg-raised font-semibold' : 'text-text2 hover:bg-raised/60')}
+            className={cn('group relative flex h-9 items-center gap-3 rounded-ctl px-2.5 text-left text-[13.5px] transition-colors duration-150', section === s.key ? 'font-medium text-text' : 'text-mute hover:text-text2')}
           >
-            {section === s.key && <span className="size-1.5 rounded-full bg-ice" />}
-            <span className={section === s.key ? '' : 'pl-4'}>{s.label}</span>
+            {section === s.key && (
+              <motion.span layoutId="settings-section" aria-hidden="true" className="absolute inset-0 rounded-ctl border border-line-2 bg-raised" transition={{ type: 'spring', stiffness: 520, damping: 42 }}>
+                <span className="absolute top-1/2 left-0 h-4 w-[2px] -translate-y-1/2 rounded-full bg-ice" />
+              </motion.span>
+            )}
+            <span className={cn('relative z-10 w-5 font-mono text-[10.5px] transition-colors', section === s.key ? 'text-ice' : 'text-faint group-hover:text-mute')}>{String(i + 1).padStart(2, '0')}</span>
+            <span className="relative z-10 truncate">{s.label}</span>
           </button>
         ))}
         <div className="flex-1" />
-        <div className="rounded-box border border-line bg-card px-4 py-3.5">
-          <div className="text-[14px] font-semibold">Kyro v{__APP_VERSION__}</div>
+        <div className="flex flex-col gap-1 border-t border-line px-2.5 pt-4">
+          <div className="font-mono text-[11px] font-medium tracking-[0.04em] text-text2">Kyro v{__APP_VERSION__}</div>
           <div className="text-[12px] leading-[1.5] text-mute">Open source · GPLv3. Build vérifiable depuis le code.</div>
         </div>
       </nav>
 
-      <div className="flex min-w-0 flex-1 gap-4 px-[26px] py-[22px]">
-        <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto scroll-thin">
+      <div className="flex min-w-0 flex-1 gap-5 px-7 pt-6 pb-5">
+        <div key={section} className="rise flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto scroll-thin">
           {error && <Notice tone="error">{error}</Notice>}
           {section === 'security' && <Security save={save} />}
           {section === 'privacy' && <Privacy />}
@@ -77,9 +87,14 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
           {section === 'apikeys' && <ApiKeys />}
           {section === 'connections' && <Connections />}
           {section === 'contacts' && <Contacts />}
-          {saved && <span className="text-[12px] text-up">✓ Réglage enregistré sur cet appareil</span>}
+          {saved && <span className="fade-in text-[12px] text-up">✓ Réglage enregistré sur cet appareil</span>}
+          {section !== 'connections' && !wide && (
+            <div className="shrink-0">
+              <Connections compact />
+            </div>
+          )}
         </div>
-        {section !== 'connections' && (
+        {section !== 'connections' && wide && (
           <aside className="w-[400px] shrink-0">
             <Connections compact />
           </aside>
@@ -99,7 +114,7 @@ function SettingRow({ title, desc, children, last }: { title: string; desc: stri
   return (
     <div className={cn('flex items-center justify-between gap-6 py-4', !last && 'border-b border-line')}>
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-[14px] font-semibold">{title}</span>
+        <span className="text-[14px] font-medium">{title}</span>
         <span className="text-[12px] text-mute">{desc}</span>
       </div>
       {children}
@@ -167,7 +182,7 @@ function Privacy() {
       </Panel>
       <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
         <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-2 text-[15px] font-semibold">
+          <span className="flex items-center gap-2 text-[15px] font-medium tracking-[-0.01em]">
             <IconTor size={16} className="text-mute" /> État de la connexion
           </span>
           <span className="font-mono text-[11px]">
@@ -332,7 +347,7 @@ function ApiKeys() {
   ];
   return (
     <Panel className="gap-4 py-5">
-      <span className="text-[15px] font-semibold">Clés API</span>
+      <span className="text-[15px] font-medium tracking-[-0.01em]">Clés API</span>
       <p className="m-0 -mt-2 text-[13px] leading-[1.5] text-mute">
         Stockées dans le dossier de l’app et ajoutées aux requêtes par le noyau. Kyro ne réaffiche jamais une clé enregistrée : tu peux la remplacer ou la supprimer. Une clé intégrée à un binaire distribué est publique : utilise tes propres clés.
       </p>
@@ -413,7 +428,7 @@ function Connections({ compact }: { compact?: boolean }) {
   return (
     <section className="flex h-full flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-5">
       <div className="flex items-center justify-between">
-        <span className="text-[15px] font-semibold">Connexions sortantes</span>
+        <span className="text-[15px] font-medium tracking-[-0.01em]">Connexions sortantes</span>
         <Badge tone="ice" className="h-[26px] px-3 text-[12px]">
           0 télémétrie
         </Badge>
@@ -456,7 +471,7 @@ function Contacts() {
   void accounts;
   return (
     <Panel className="gap-4 py-5">
-      <span className="text-[15px] font-semibold">Carnet d’adresses</span>
+      <span className="text-[15px] font-medium tracking-[-0.01em]">Carnet d’adresses</span>
       <p className="m-0 -mt-2 text-[13px] text-mute">Stocké sur cet appareil uniquement. Kyro reconnaît ces adresses à l’envoi.</p>
       <div className="flex flex-col gap-2">
         {list.length === 0 && <span className="text-[13px] text-faint">Aucun contact.</span>}
