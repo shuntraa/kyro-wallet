@@ -56,8 +56,9 @@ export function xrpAddressOfId(id: Uint8Array): string {
   return base58xrp.encode(new Uint8Array([...payload, ...sum]));
 }
 
-export function demoXrpAddress(seed: Uint8Array, index: number): string {
-  const pk = HDKey.fromMasterSeed(seed).derive(`m/44'/144'/0'/0/${index}`).publicKey;
+/** Demo address of XRP account `account` (`m/44'/144'/account'/0/0`, like Rust). */
+export function demoXrpAddress(seed: Uint8Array, account: number): string {
+  const pk = HDKey.fromMasterSeed(seed).derive(`m/44'/144'/${account}'/0/0`).publicKey;
   if (!pk) throw new IpcError('INTERNAL', 'dérivation XRP');
   return xrpAddressOfId(bitcoin.crypto.hash160(pk));
 }
@@ -309,9 +310,10 @@ export function createDemoXrp(d: DemoXrpDeps) {
     },
     xrp_address: (a) => {
       d.requireUnlocked();
-      const index = Number(a.index);
-      if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw invalidInput('index invalide');
-      return demoXrpAddress(d.seed, index);
+      if ((a.index ?? 0) !== 0) throw invalidInput('XRP : une seule adresse par compte (index 0)');
+      const account = a.account === undefined ? 0 : Number(a.account);
+      if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput('numéro de compte : au plus 100');
+      return demoXrpAddress(d.seed, account);
     },
     xrp_account: async (a) => {
       const addr = checkXrpAddress(a.address);

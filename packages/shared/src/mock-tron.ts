@@ -66,8 +66,9 @@ export function tronAddressOf(pubkey: Uint8Array): string {
   return bitcoin.address.toBase58Check(hash, 0x41);
 }
 
-export function demoTronAddress(seed: Uint8Array, index: number): string {
-  const pk = HDKey.fromMasterSeed(seed).derive(`m/44'/195'/0'/0/${index}`).publicKey;
+/** Demo address of TRON account `account` (`m/44'/195'/account'/0/0`, like Rust). */
+export function demoTronAddress(seed: Uint8Array, account: number): string {
+  const pk = HDKey.fromMasterSeed(seed).derive(`m/44'/195'/${account}'/0/0`).publicKey;
   if (!pk) throw new IpcError('INTERNAL', 'dérivation TRON');
   return tronAddressOf(pk);
 }
@@ -342,9 +343,10 @@ export function createDemoTron(d: DemoTronDeps) {
     },
     tron_address: (a) => {
       d.requireUnlocked();
-      const index = Number(a.index);
-      if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw invalidInput('index invalide');
-      return demoTronAddress(d.seed, index);
+      if ((a.index ?? 0) !== 0) throw invalidInput('TRON : une seule adresse par compte (index 0)');
+      const account = a.account === undefined ? 0 : Number(a.account);
+      if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput('numéro de compte : au plus 100');
+      return demoTronAddress(d.seed, account);
     },
     tron_account: async (a) => {
       const addr = checkAddress(a.address);

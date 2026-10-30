@@ -29,6 +29,7 @@ import {
 import { checkServerUrl } from './servers';
 import { demoEsploraAddress, demoEsploraTxs, demoEsploraUtxos, type DemoChainState } from './mock-net';
 import type { DemoTor } from './mock-tor';
+import type { DemoAccountHooks } from './mock-accounts';
 
 bitcoin.initEccLib(ecc);
 
@@ -52,11 +53,17 @@ const NAME: Record<Coin, string> = { ltc: 'Litecoin', doge: 'Dogecoin' };
 
 const netsOf = (coin: Coin) => (coin === 'ltc' ? DEMO_LTC_NETWORKS : DEMO_DOGE_NETWORKS);
 
+/** Account path of `coin` (`m/84'/2'/a'`, `m/44'/3'/a'`; testnet coin type 1), like Rust. */
+export function demoUtxoPath(network: Network, coin: Coin, account: number): string {
+  const testnet = network === 'testnet';
+  return coin === 'ltc' ? `m/84'/${testnet ? 1 : 2}'/${account}'` : `m/44'/${testnet ? 1 : 3}'/${account}'`;
+}
+
 /** Account node of `coin` (standard xpub/tpub encoding, as Rust serializes them). */
-export function demoUtxoAccount(seed: Uint8Array, network: Network, coin: Coin): { info: UtxoAccountInfo; node: HDKey } {
+export function demoUtxoAccount(seed: Uint8Array, network: Network, coin: Coin, account = 0): { info: UtxoAccountInfo; node: HDKey } {
   const testnet = network === 'testnet';
   const master = HDKey.fromMasterSeed(seed, testnet ? { private: 0x04358394, public: 0x043587cf } : undefined);
-  const path = coin === 'ltc' ? `m/84'/${testnet ? 1 : 2}'/0'` : `m/44'/${testnet ? 1 : 3}'/0'`;
+  const path = demoUtxoPath(network, coin, account);
   const node = master.derive(path);
   const fingerprint = master.fingerprint.toString(16).padStart(8, '0');
   return { info: { address: demoUtxoAddress(node, network, coin, 0, 0), xpub: node.publicExtendedKey, fingerprint, path }, node };
@@ -75,6 +82,8 @@ export interface DemoUtxoDeps {
   chain: DemoChainState;
   network: Network;
   nodes: Record<Coin, HDKey>;
+  /** Vault accounts (§2.9): account node, signer line of the dialog. */
+  accounts: DemoAccountHooks;
   tor: DemoTor;
   settings: () => Settings;
   requireUnlocked: () => void;
@@ -123,9 +132,10 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
     return addr;
   };
 
-  const own = (coin: Coin): Set<string> => {
+  const nodeOf = (coin: Coin, account: number): HDKey => (account === 0 ? d.nodes[coin] : d.accounts.utxoNode(coin, account));
+  const own = (coin: Coin, account: number): Set<string> => {
     const out = new Set<string>();
-    for (const ch of [0, 1]) for (let i = 0; i < 20; i++) out.add(demoUtxoAddress(d.nodes[coin], d.network, coin, ch, i));
+    for (const ch of [0, 1]) for (let i = 0; i < 20; i++) out.add(demoUtxoAddress(nodeOf(coin, account), d.network, coin, ch, i));
     return out;
   };
 
@@ -154,6 +164,7 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
 
   const sign = async (coin: Coin, a: Record<string, unknown>) => {
     d.requireUnlocked();
+    const account = d.accounts.arg(a.account);
     d.checkPassword(a.password);
     let psbt: bitcoin.Psbt;
     try {
@@ -173,7 +184,7 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
         inSum += input.witnessUtxo.value;
       }
     });
-    const mine = own(coin);
+    const mine = own(coin, account);
     const warnings: UtxoWarning[] = [];
     const outputs = psbt.txOutputs.map((o, index) => {
       const address = ((): string | null => {
@@ -209,7 +220,11 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
     const unit = coin === 'ltc' ? 'litoshis' : 'koinus';
     const lines = outputs.map((o) => `${o.isChange ? '(monnaie) ' : ''}${o.address ?? 'INCONNUE'} : ${o.amount} ${unit}`).join('\n');
     const text = `Confirmer la transaction ${NAME[coin]}\n${lines}\nFrais : ${summary.fee} ${unit} (${summary.size} ${coin === 'ltc' ? 'vB' : 'octets'})${summary.hasChange ? '' : '\nPas de monnaie : le reste (sous le seuil de poussière) va aux frais.'}`;
-    if (!d.confirm(text)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+    const signer = d.accounts.signer(coin, account, demoUtxoPath(d.network, coin, account));
+    if (!d.confirm(`${signer.line}
+
+${text}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+    if (signer.unknown && !d.confirm(signer.unknownText)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
     if (summary.requiresExtraConfirmation && !d.confirm('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
     psbt.data.inputs.forEach((input, i) => {
       const pubkey = input.bip32Derivation![0]!.pubkey;
@@ -229,7 +244,7 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
       d.requireUnlocked();
       const index = Number(a.index);
       if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw new IpcError('INVALID_INPUT', 'Index invalide.');
-      return demoUtxoAddress(d.nodes[coin], d.network, coin, a.change ? 1 : 0, index);
+      return demoUtxoAddress(nodeOf(coin, d.accounts.arg(a.account)), d.network, coin, a.change ? 1 : 0, index);
     },
     address_info: async (a: Record<string, unknown>) => {
       const addr = checkAddress(coin, a.address);
