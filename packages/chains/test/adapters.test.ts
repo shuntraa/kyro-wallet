@@ -17,34 +17,34 @@ beforeAll(async () => {
 
 describe('BitcoinAdapter', () => {
   it('derives the same first addresses as the vault from the xpubs', () => {
-    expect(adapters.btc.addressAt('segwit', 0, 0).address).toBe(accounts.btc.segwit.address);
-    expect(adapters.btc.addressAt('taproot', 0, 0).address).toBe(accounts.btc.taproot.address);
+    expect(adapters.btc!.addressAt('segwit', 0, 0).address).toBe(accounts.btc.segwit.address);
+    expect(adapters.btc!.addressAt('taproot', 0, 0).address).toBe(accounts.btc.taproot.address);
   });
 
   it('scans balances across SegWit + Taproot', async () => {
-    const [b] = await adapters.btc.getBalance();
+    const [b] = await adapters.btc!.getBalance();
     expect(b).toEqual({ assetId: 'btc', amount: 4_120_000n + 890_000n + 210_000n + 350_000n });
   });
 
   it('builds a PSBT with derivation info, signs via IPC and extracts a tx', async () => {
     const asset = findAsset('testnet', 'btc');
     if (!asset) throw new Error('asset');
-    const unsigned = await adapters.btc.buildTx({ asset, to: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx', amount: 1_000_000n, fee: { family: 'btc', satPerVb: 5 } });
+    const unsigned = await adapters.btc!.buildTx({ asset, to: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx', amount: 1_000_000n, fee: { family: 'btc', satPerVb: 5 } });
     expect(unsigned.summary.outputs[0]).toEqual(['tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx', 1_000_000, false]);
     expect(unsigned.summary.outputs[1]?.[2]).toBe(true);
     expect(unsigned.fee).toBeGreaterThan(0n);
-    const signed = await adapters.btc.signTx(unsigned, PASSWORD);
+    const signed = await adapters.btc!.signTx(unsigned, PASSWORD);
     expect(signed.hex).toMatch(/^02000000/);
-    expect(await adapters.btc.broadcast(signed)).toMatch(/^[0-9a-f]{64}$/);
+    expect(await adapters.btc!.broadcast(signed)).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('rejects addresses of the wrong network', () => {
-    expect(adapters.btc.isValidAddress('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4')).toBe(false);
-    expect(adapters.btc.isValidAddress(accounts.btc.taproot.address)).toBe(true);
+    expect(adapters.btc!.isValidAddress('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4')).toBe(false);
+    expect(adapters.btc!.isValidAddress(accounts.btc.taproot.address)).toBe(true);
   });
 
   it('lists incoming history', async () => {
-    const h = await adapters.btc.getHistory();
+    const h = await adapters.btc!.getHistory();
     expect(h.length).toBeGreaterThan(0);
     expect(h.every((x) => x.direction === 'in')).toBe(true);
   });
@@ -82,16 +82,16 @@ describe('EvmAdapter (Sepolia, viem custom transport → net_fetch)', () => {
 
 describe('SolanaAdapter', () => {
   it('reads SOL + SPL balances', async () => {
-    const bal = await adapters.sol.getBalance();
+    const bal = await adapters.sol!.getBalance();
     expect(bal[0]).toEqual({ assetId: 'sol', amount: 3_200_000_000n });
     expect(bal.find((b) => b.assetId.startsWith('spl:'))?.amount).toBe(42_000_000n);
   });
 
   it('builds, signs (message bytes via IPC) and broadcasts a SOL transfer', async () => {
     const sol = findAsset('testnet', 'sol')!;
-    const unsigned = await adapters.sol.buildTx({ asset: sol, to: '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin', amount: parseUnits('0,5', 9), fee: { family: 'sol', microLamports: 1000n } });
+    const unsigned = await adapters.sol!.buildTx({ asset: sol, to: '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin', amount: parseUnits('0,5', 9), fee: { family: 'sol', microLamports: 1000n } });
     expect(unsigned.maxFee).toBe(5001n);
-    const signed = await adapters.sol.signTx(unsigned, PASSWORD);
-    expect(await adapters.sol.broadcast(signed)).toBe(signed.signature);
+    const signed = await adapters.sol!.signTx(unsigned, PASSWORD);
+    expect(await adapters.sol!.broadcast(signed)).toBe(signed.signature);
   });
 });

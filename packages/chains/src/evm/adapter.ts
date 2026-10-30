@@ -18,6 +18,7 @@ import { call, jsonRpc, netFetch, type EvmTokenHint, type EvmTxRequest, type Evm
 import { ERC20_TOKENS, nativeAssetId, type AssetDef, type EvmChain } from '../registry';
 import { evmFeeOptionsFromHistory } from '../fees';
 import type { Balance, BuildParams, ChainAdapter, EvmSigned, EvmUnsigned, FeeEstimates, FeeParams, HistoryItem } from '../types';
+import type { HwSigner } from '../hw';
 
 export interface EvmAdapterOptions {
   chain: EvmChain;
@@ -27,6 +28,8 @@ export interface EvmAdapterOptions {
   fetch?: NetFetch;
   /** Blocks scanned for ERC-20 Transfer logs in getHistory. */
   logRange?: bigint;
+  /** Hardware-wallet account (signing through `hw_sign_evm_tx`). */
+  hw?: HwSigner;
 }
 
 export interface ContractCallParams {
@@ -67,6 +70,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
   private readonly address: `0x${string}`;
   private readonly fetcher: NetFetch;
   private readonly logRange: bigint;
+  readonly hw: HwSigner | null;
 
   constructor(opts: EvmAdapterOptions) {
     this.chain = opts.chain;
@@ -74,6 +78,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     this.fetcher = opts.fetch ?? netFetch;
     this.rpcUrl = opts.rpcUrl || opts.chain.rpcUrl;
     this.logRange = opts.logRange ?? 5_000n;
+    this.hw = opts.hw ?? null;
     this.client = createPublicClient({
       transport: netTransport(this.rpcUrl, this.fetcher, (ms) => {
         this.latencyMs = ms;
@@ -232,6 +237,15 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     const args: { tx: EvmTxRequest; password: string; token?: EvmTokenHint } = { tx: unsigned.tx, password };
     if (unsigned.token) args.token = unsigned.token;
     const res = await call('evm_sign_tx', args);
+    return { family: 'evm', rawTx: res.rawTx, hash: res.hash };
+  }
+
+  /** Signs on the hardware wallet `deviceId` (native dialog, 2nd one if blind signing, device). */
+  async signTxHw(unsigned: EvmUnsigned, deviceId: string): Promise<EvmSigned> {
+    if (!this.hw) throw new Error('Ce compte n’est pas un hardware wallet');
+    const args: { id: string; accountId: string; tx: EvmTxRequest; token?: EvmTokenHint } = { id: deviceId, accountId: this.hw.accountId, tx: unsigned.tx };
+    if (unsigned.token) args.token = unsigned.token;
+    const res = await call('hw_sign_evm_tx', args);
     return { family: 'evm', rawTx: res.rawTx, hash: res.hash };
   }
 

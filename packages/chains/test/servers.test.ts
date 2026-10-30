@@ -48,7 +48,7 @@ beforeEach(async () => {
 
 describe('Bitcoin adapter over the Rust btc_* commands', () => {
   it('reads, builds, signs and broadcasts without a single net_fetch', async () => {
-    const { btc } = createAdapters(accounts);
+    const btc = createAdapters(accounts).btc!;
     expect((await btc.getBalance())[0]?.amount).toBe(EXPECTED_BTC);
     expect(await btc.tipHeight()).toBeGreaterThan(0);
     const fees = await btc.estimateFees();
@@ -63,7 +63,7 @@ describe('Bitcoin adapter over the Rust btc_* commands', () => {
   });
 
   it('flags a history capped at BTC_TXS_CAP transactions per address', async () => {
-    const { btc } = createAdapters(accounts);
+    const btc = createAdapters(accounts).btc!;
     await btc.getHistory();
     expect(btc.historyCapped).toBe(false);
     const fake = (i: number): EsploraTx => ({
@@ -74,7 +74,7 @@ describe('Bitcoin adapter over the Rust btc_* commands', () => {
       vout: [{ scriptpubkey: '00', scriptpubkey_address: accounts.btc.segwit.address, value: 1000 }],
     });
     install((cmd) => (cmd === 'btc_address_txs' ? Promise.resolve(Array.from({ length: BTC_TXS_CAP }, (_, i) => fake(i))) : undefined));
-    const capped = createAdapters(accounts).btc;
+    const capped = createAdapters(accounts).btc!;
     const h = await capped.getHistory();
     expect(capped.historyCapped).toBe(true);
     expect(h).toHaveLength(BTC_TXS_CAP);
@@ -84,16 +84,16 @@ describe('Bitcoin adapter over the Rust btc_* commands', () => {
 
   it('compact filters: block-average fee rates are flagged for the UI', async () => {
     install((cmd) => (cmd === 'btc_fee_rates' ? Promise.resolve({ fastestFee: 8, halfHourFee: 5, hourFee: 3, economyFee: 1, minimumFee: 1, source: 'block-average' }) : undefined));
-    const f = await createAdapters(accounts).btc.estimateFees();
+    const f = await createAdapters(accounts).btc!.estimateFees();
     expect(f.source).toBe('block-average');
     expect(f.options.normal.params).toEqual({ family: 'btc', satPerVb: 5 });
     install();
-    expect((await createAdapters(accounts).btc.estimateFees()).source).toBeUndefined();
+    expect((await createAdapters(accounts).btc!.estimateFees()).source).toBeUndefined();
   });
 
   it('a custom Bitcoin server that goes down fails with SERVER_UNREACHABLE, no net_fetch fallback', async () => {
     install((cmd) => (cmd.startsWith('btc_address') ? Promise.reject({ code: 'SERVER_UNREACHABLE', message: 'Serveur injoignable : node.example : délai dépassé' }) : undefined));
-    const { btc } = createAdapters(accounts);
+    const btc = createAdapters(accounts).btc!;
     expect(await code(btc.getBalance())).toBe('SERVER_UNREACHABLE');
     expect(sent.filter((c) => c.startsWith('net_fetch'))).toEqual([]);
   });
@@ -103,14 +103,14 @@ describe('Bitcoin adapter over the Rust btc_* commands', () => {
     expect(cert.webpkiValid).toBe(false);
     await saveServers((s) => ({ ...s.servers, bitcoin: { testnet4: { kind: 'electrum', host: 'electrum-self.example', port: 50002, tls: 'pinned', certSha256: cert.sha256 } } }));
     expect(await call('btc_backend_info')).toMatchObject({ kind: 'electrum', network: 'testnet4', label: 'electrum-self.example:50002' });
-    expect((await createAdapters(accounts).btc.getBalance())[0]?.amount).toBe(EXPECTED_BTC);
+    expect((await createAdapters(accounts).btc!.getBalance())[0]?.amount).toBe(EXPECTED_BTC);
     // The default (mempool) is now refused for this chain.
     expect(await code(call('net_fetch', { req: { url: 'https://mempool.space/testnet4/api/blocks/tip/height', method: 'GET' } }))).toBe('DEFAULT_SERVER_DISABLED');
   });
 
   it('Bitcoin Core: SERVER_INVALID until the watch wallet is set up, then reads work', async () => {
     await saveServers((s) => ({ ...s.servers, bitcoin: { testnet4: { kind: 'core', url: 'http://127.0.0.1:48332', auth: { kind: 'cookie', cookiePath: '/home/me/.bitcoin/testnet4/.cookie' } } } }));
-    const { btc } = createAdapters(accounts);
+    const btc = createAdapters(accounts).btc!;
     expect(await code(btc.getBalance())).toBe('SERVER_INVALID');
     expect((await call('btc_core_status')).state).toBe('idle');
     expect(await call('btc_core_setup', { rescanFrom: 'now' })).toMatchObject({ state: 'importing', wallet: `kyro-watch-${accounts.btc.segwit.fingerprint}` });
@@ -125,16 +125,16 @@ describe('EVM and Solana on the user RPC', () => {
     const saved = await saveServers((s) => ({ ...s.servers, evm: { '11155111': { url: 'https://my-sepolia.example/rpc' } }, solana: { devnet: { url: 'https://my-devnet.example' } } }));
     const ad = createAdapters(accounts, saved.servers);
     expect(ad.evm.get('sepolia')?.rpcUrl).toBe('https://my-sepolia.example/rpc');
-    expect(ad.sol.rpcUrl).toBe('https://my-devnet.example');
+    expect(ad.sol!.rpcUrl).toBe('https://my-devnet.example');
     expect((await ad.evm.get('sepolia')!.getBalance()).length).toBeGreaterThan(0);
-    expect((await ad.sol.getBalance()).length).toBeGreaterThan(0);
+    expect((await ad.sol!.getBalance()).length).toBeGreaterThan(0);
     const urls = sent.filter((c) => c.startsWith('net_fetch')).map((c) => new URL(c.slice(10)).host);
     expect(new Set(urls)).toEqual(new Set(['my-sepolia.example', 'my-devnet.example']));
 
     // An adapter built without the servers would hit the default: Rust (and the demo) refuse it.
     const stale = createAdapters(accounts);
     expect(await code(stale.evm.get('sepolia')!.getBalance())).toBe('DEFAULT_SERVER_DISABLED');
-    expect(await code(stale.sol.getBalance())).toBe('DEFAULT_SERVER_DISABLED');
+    expect(await code(stale.sol!.getBalance())).toBe('DEFAULT_SERVER_DISABLED');
     // What the UI tests to show « Ton serveur ne répond pas » (also through viem's wrapper).
     expect(isCustomServerDown(await stale.evm.get('sepolia')!.getBalance().catch((e: unknown) => e))).toBe(true);
   });

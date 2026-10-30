@@ -26,3 +26,4 @@ export {
   ATA_PROGRAM,
   type SolanaAdapterOptions,
 } from './solana/adapter';
+export * from './hw';

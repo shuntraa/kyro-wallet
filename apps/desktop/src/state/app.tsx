@@ -5,8 +5,8 @@
 // them; the recovery phrase lives only in the onboarding/reveal components).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { call, EMPTY_SERVERS, isDemoMode, listenShell, toIpcError, type Accounts, type AppConfig, type Network, type Settings, type VaultStatus } from '@kyro/shared';
-import { createAdapters, type AdapterSet } from '@kyro/chains';
+import { call, EMPTY_SERVERS, isDemoMode, listenShell, toIpcError, type Accounts, type AppConfig, type Network, type Settings, type VaultStatus, type WatchOnlyAccount } from '@kyro/shared';
+import { createAdapters, hwToAccounts, type AdapterSet, type WalletAccounts } from '@kyro/chains';
 import { CoinGeckoClient } from '@kyro/market';
 import { createProviders, type SwapProvider } from '@kyro/swap';
 import { torStore } from './tor';
@@ -46,9 +46,21 @@ interface AppContextValue {
   saveSettings: (next: Settings) => Promise<void>;
   status: VaultStatus | null;
   refreshStatus: () => Promise<VaultStatus | null>;
-  accounts: Accounts | null;
+  /** Accounts of the ACTIVE wallet: the vault, or a hardware-wallet account (only its chains). */
+  accounts: WalletAccounts | null;
   adapters: AdapterSet | null;
-  /** Called after create/import/unlock. */
+  /** Hardware-wallet accounts stored on this computer (public keys only). */
+  hwAccounts: WatchOnlyAccount[];
+  /** The active hardware-wallet account, or null when the vault is active. */
+  activeHw: WatchOnlyAccount | null;
+  /** `'vault'` or a hardware-wallet account id. */
+  activeAccountId: string;
+  selectAccount: (id: string) => void;
+  /** Re-reads `hw_accounts_get` (after add / remove). Activates `select` when given. */
+  refreshHwAccounts: (select?: string) => Promise<void>;
+  /** No vault on this computer: hardware-wallet-only user (no Kyro password, nothing to lock). */
+  hwOnly: boolean;
+  /** Called after create/import/unlock, or after adding the first hardware wallet. */
   enterVault: () => Promise<void>;
   lock: () => Promise<void>;
   route: Route;
@@ -69,10 +81,10 @@ export function useApp(): AppContextValue {
 }
 
 /** Convenience: only valid inside the unlocked app. */
-export function useVault(): AppContextValue & { accounts: Accounts; adapters: AdapterSet } {
+export function useVault(): AppContextValue & { accounts: WalletAccounts; adapters: AdapterSet } {
   const v = useApp();
   if (!v.accounts || !v.adapters) throw new Error('Coffre verrouillé');
-  return v as AppContextValue & { accounts: Accounts; adapters: AdapterSet };
+  return v as AppContextValue & { accounts: WalletAccounts; adapters: AdapterSet };
 }
 
 const TOUCH_THROTTLE_MS = 15_000;
@@ -83,8 +95,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [status, setStatus] = useState<VaultStatus | null>(null);
-  const [accounts, setAccounts] = useState<Accounts | null>(null);
-  const [adapters, setAdapters] = useState<AdapterSet | null>(null);
+  const [vaultAccounts, setVaultAccounts] = useState<Accounts | null>(null);
+  const [hwAccounts, setHwAccounts] = useState<WatchOnlyAccount[]>([]);
+  const [activeAccountId, setActiveAccountId] = useState<string>('vault');
   const [history, setHistory] = useState<Route[]>([{ name: 'portfolio' }]);
   const [hideBalances, setHideBalances] = useState(false);
   const settingsRef = useRef(settings);
@@ -103,8 +116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const toLocked = useCallback(() => {
-    setAccounts(null);
-    setAdapters(null);
+    setVaultAccounts(null);
     setHistory([{ name: 'portfolio' }]);
     setPhase('locked');
   }, []);
@@ -122,8 +134,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const enterVault = useCallback(async () => {
     const s = await call('vault_status');
     setStatus(s);
+    const hw = await call('hw_accounts_get').catch(() => [] as WatchOnlyAccount[]);
+    setHwAccounts(hw);
     if (!s.exists) {
-      setPhase('welcome');
+      // Hardware-wallet-only user: no vault, no password; the device confirms everything.
+      if (hw.length === 0) {
+        setPhase('welcome');
+        return;
+      }
+      setVaultAccounts(null);
+      setActiveAccountId((prev) => (hw.some((a) => a.id === prev) ? prev : (hw[0]?.id ?? 'vault')));
+      setHideBalances(settingsRef.current.hideBalancesOnStart);
+      setHistory([{ name: 'portfolio' }]);
+      setPhase('ready');
       return;
     }
     if (!s.unlocked) {
@@ -131,8 +154,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     const acc = await call('accounts_get');
-    setAccounts(acc);
-    setAdapters(createAdapters(acc, settingsRef.current.servers));
+    setVaultAccounts(acc);
+    setActiveAccountId((prev) => (prev === 'vault' || hw.some((a) => a.id === prev) ? prev : 'vault'));
     setHideBalances(settingsRef.current.hideBalancesOnStart);
     setHistory([{ name: 'portfolio' }]);
     setPhase('ready');
@@ -183,7 +206,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (phase !== 'ready') return;
     const id = window.setInterval(async () => {
       const s = await refreshStatus();
-      if (s && !s.unlocked) toLocked();
+      // Hardware-wallet-only user: no vault, nothing to lock.
+      if (s && s.exists && !s.unlocked) toLocked();
     }, 5000);
     return () => window.clearInterval(id);
   }, [phase, refreshStatus, toLocked]);
@@ -212,22 +236,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSettings(saved);
       settingsRef.current = saved;
       torStore.setEnabled(saved.tor.enabled);
-      // New servers → new adapters (EVM / Solana URLs; Bitcoin: fresh scan cache on the new backend).
-      if (JSON.stringify(saved.servers) !== JSON.stringify(prev.servers) && accounts) setAdapters(createAdapters(accounts, saved.servers));
+      // New servers → new adapters (memo below, keyed on the servers).
       if (saved.apiKeys.coingecko !== prev.apiKeys.coingecko) market.clear();
       void refreshStatus();
     },
-    [accounts, market, refreshStatus],
+    [market, refreshStatus],
+  );
+
+  const activeHw = activeAccountId === 'vault' ? null : (hwAccounts.find((a) => a.id === activeAccountId) ?? null);
+  const accounts = useMemo<WalletAccounts | null>(() => {
+    if (activeHw) {
+      try {
+        return hwToAccounts(activeHw);
+      } catch {
+        return null;
+      }
+    }
+    return vaultAccounts;
+  }, [activeHw, vaultAccounts]);
+  const serversKey = JSON.stringify(settings.servers);
+  const adapters = useMemo<AdapterSet | null>(
+    () => (accounts ? createAdapters(accounts, settingsRef.current.servers, undefined, activeHw ? { accountId: activeHw.id, device: activeHw.device } : undefined) : null),
+    [accounts, serversKey, activeHw?.id],
+  );
+
+  const selectAccount = useCallback((id: string) => {
+    setActiveAccountId(id);
+    setHistory([{ name: 'portfolio' }]);
+  }, []);
+
+  const refreshHwAccounts = useCallback(
+    async (select?: string) => {
+      const hw = await call('hw_accounts_get');
+      setHwAccounts(hw);
+      if (select) setActiveAccountId(select);
+      else setActiveAccountId((prev) => (prev === 'vault' || hw.some((a) => a.id === prev) ? prev : status?.exists ? 'vault' : (hw[0]?.id ?? 'vault')));
+      if (!status?.exists && hw.length === 0) setPhase('welcome');
+    },
+    [status?.exists],
   );
 
   const lock = useCallback(async () => {
+    if (status && !status.exists) return; // hardware-wallet-only: no vault to lock
     try {
       await call('vault_lock');
     } finally {
       toLocked();
       void refreshStatus();
     }
-  }, [toLocked, refreshStatus]);
+  }, [toLocked, refreshStatus, status]);
 
   const navigate = useCallback((r: Route) => {
     setHistory((h) => {
@@ -252,6 +309,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshStatus,
     accounts,
     adapters,
+    hwAccounts,
+    activeHw,
+    activeAccountId,
+    selectAccount,
+    refreshHwAccounts,
+    hwOnly: status !== null && !status.exists,
     enterVault,
     lock,
     route: history[history.length - 1] ?? { name: 'portfolio' },

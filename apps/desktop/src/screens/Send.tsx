@@ -9,7 +9,9 @@ import {
   checkSolSummary,
   feeCost,
   findChain,
+  evmHwDisplay,
   signAndBroadcast,
+  signAndBroadcastHw,
   tryParseUnits,
   unitsToNumber,
   validateBtcFeeRate,
@@ -36,6 +38,8 @@ import { useAsync, useDebounced } from '../lib/useAsync';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
 import { useTorBlocked } from '../components/Tor';
 import { ServerDownLine, serverDown } from '../components/ServerDown';
+import { DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
+import { BRAND, pickDevice, withDevice } from '../state/hw';
 import { useOnTorReady } from '../state/tor';
 import { SolSummaryView } from '../components/SolSummaryView';
 import { Menu } from '../components/ui/menu';
@@ -45,8 +49,8 @@ import { IconBack, IconCheck, IconChevronDown, IconLock, IconShield, IconUpDown,
 type Built = { unsigned: AnyUnsigned; summary: EvmTxSummary | null; sol: SolTxSummary | null; key: string };
 
 function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adapters']): AnyAdapter | undefined {
-  if (asset.family === 'btc') return adapters.btc;
-  if (asset.family === 'sol') return adapters.sol;
+  if (asset.family === 'btc') return adapters.btc ?? undefined;
+  if (asset.family === 'sol') return adapters.sol ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -58,12 +62,13 @@ const LEVELS: Array<{ level: FeeLevel; label: string }> = [
 
 export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string }) {
   const { back, settings, navigate, hideBalances } = useApp();
-  const { adapters, accounts } = useVault();
+  const { adapters, accounts, activeHw } = useVault();
   const pf = usePortfolio();
   const network = accounts.network;
   const cur = settings.currency;
 
-  const sendable = useMemo(() => assetsFor(network).filter((a) => !a.readOnly && (a.kind === 'native' || (pf.balances.get(a.id) ?? 0n) > 0n)), [network, pf.balances]);
+  // Only the chains of the active account (a hardware wallet may hold only some of them).
+  const sendable = useMemo(() => assetsFor(network).filter((a) => !a.readOnly && !!adapterFor(a, adapters) && (a.kind === 'native' || (pf.balances.get(a.id) ?? 0n) > 0n)), [network, pf.balances, adapters]);
   const defaultAsset = sendable.find((a) => a.id === assetId) ?? pf.holdings.find((h) => h.amount > 0n && !h.asset.readOnly)?.asset ?? sendable[0];
   const [selectedId, setSelectedId] = useState(defaultAsset?.id ?? '');
   const asset = sendable.find((a) => a.id === selectedId) ?? defaultAsset;
@@ -81,7 +86,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const toTrim = to.trim();
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
-  const ownAddresses = [accounts.btc.segwit.address, accounts.btc.taproot.address, accounts.evm.address.toLowerCase(), accounts.sol.address];
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address].filter((a): a is string => !!a);
   const isOwn = ownAddresses.includes(asset?.family === 'evm' ? toTrim.toLowerCase() : toTrim);
   const noChecksum = asset?.family === 'evm' && addrValid && toTrim.slice(2) === toTrim.slice(2).toLowerCase();
 
@@ -188,9 +193,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [password, setPassword] = useState('');
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
+  /** Hardware wallet: the device in use while signing, and its error (precise HW_* message). */
+  const [hwDevice, setHwDevice] = useState<string | null>(null);
+  const [hwError, setHwError] = useState<unknown>(null);
   const [done, setDone] = useState<{ id: string } | null>(null);
   const guardOk = guardAllowsSend(guard, settings.clipboardGuard);
-  const canSign = !!built && !building && !!password && guardOk && !signing && !buildError;
+  // Hardware wallet: no Kyro password (no key in Kyro); native dialog then the device's screen.
+  const canSign = !!built && !building && (activeHw ? true : !!password) && guardOk && !signing && !buildError;
+  const blindSigning = !!activeHw && built?.unsigned.family === 'evm' && built.summary !== null && evmHwDisplay(activeHw.device, built.unsigned.tx.chainId, built.summary) === 'blind';
 
   const sign = async () => {
     if (!asset || !adapter || !built) return;
@@ -199,10 +209,18 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     if (!guardAllowsSend(verified, settings.clipboardGuard)) return;
     setSigning(true);
     setSignError(null);
+    setHwError(null);
     try {
       // Fresh build (nonce, blockhash) with the same inputs, re-decoded by Rust.
       const fresh = await doBuild();
-      const id = await signAndBroadcast(adapter, fresh.unsigned, password);
+      let id: string;
+      if (activeHw) {
+        const device = await pickDevice(activeHw.device);
+        setHwDevice(device.id);
+        id = await withDevice(device.id, () => signAndBroadcastHw(adapter, fresh.unsigned, device.id));
+      } else {
+        id = await signAndBroadcast(adapter, fresh.unsigned, password);
+      }
       setPassword('');
       addLocalTx({
         id,
@@ -222,9 +240,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       pf.refresh();
     } catch (e) {
       const err = toIpcError(e);
-      setSignError(err.code === 'USER_REJECTED' ? 'Signature annulée dans la fenêtre système. Rien n’a été envoyé.' : err.message);
+      if (activeHw && (err.code.startsWith('HW_') || err.code === 'USER_REJECTED')) setHwError(e);
+      else setSignError(err.code === 'USER_REJECTED' ? 'Signature annulée dans la fenêtre système. Rien n’a été envoyé.' : err.message);
     } finally {
       setSigning(false);
+      setHwDevice(null);
     }
   };
 
@@ -290,7 +310,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   <CoinIcon glyph={asset.glyph} color={asset.color} />
                   <span className="flex flex-1 flex-col">
                     <span className="text-[14px] font-semibold">
-                      {asset.name} · Compte principal
+                      {asset.name} · {activeHw ? activeHw.label : 'Compte principal'}
                     </span>
                     <span className="text-[12px] text-mute">
                       {hideBalances ? '•••••' : fmtCrypto(balance, decimals, asset.symbol)} disponibles · {chain.name}
@@ -536,13 +556,38 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           )}
           {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? 'Saisis ou colle l’adresse du destinataire.' : 'Indique un montant pour voir le récapitulatif décodé.'}</p>}
 
+          {blindSigning && activeHw && (
+            <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+              <strong className="font-semibold">Signature à l’aveugle :</strong> ton {BRAND[activeHw.device]} ne pourra pas afficher le détail de cette transaction (seulement des données brutes ou une empreinte). Seul le résumé de Kyro la décrit ; une 2ᵉ confirmation te sera demandée.
+              {activeHw.device === 'ledger' ? ' Sur Ledger, le réglage « Blind signing » de l’app Ethereum doit être activé, sinon l’appareil refusera.' : ''}
+            </Notice>
+          )}
+
           <div className="flex-1" />
-          <PasswordField id="send-pw" value={password} onChange={setPassword} onEnter={() => canSign && void sign()} />
+          {activeHw ? (
+            <div className="flex items-center gap-2 rounded-[12px] border border-line bg-raised px-3.5 py-2.5 text-[12px] text-mute">
+              <DeviceBadge device={activeHw.device} model={activeHw.model} />
+              <span>Pas de mot de passe : fenêtre système de Kyro, puis confirmation sur l’écran de l’appareil.</span>
+            </div>
+          ) : (
+            <PasswordField id="send-pw" value={password} onChange={setPassword} onEnter={() => canSign && void sign()} />
+          )}
+          {signing && activeHw && hwDevice && (
+            <HwWaiting
+              deviceId={hwDevice}
+              idle="Kyro vérifie que c’est le bon appareil…"
+              confirm={{ title: 'Confirme sur ton appareil', detail: 'Vérifie le destinataire, le montant et les frais sur l’écran de l’appareil : ils doivent être identiques au récapitulatif. Sinon, refuse sur l’appareil.' }}
+            />
+          )}
+          {hwError !== null && <HwErrorNotice error={hwError} onRetry={() => void sign()} />}
           {signError && (serverDown(signError) ? <ServerDownLine /> : <Notice tone="error">{signError}</Notice>)}
           <Button variant="primary" size="xl" disabled={!canSign} onClick={() => void sign()}>
-            {signing && <Spinner />} Signer et envoyer
+            {signing && <Spinner />} {activeHw ? 'Signer sur l’appareil et envoyer' : 'Signer et envoyer'}
           </Button>
-          <span className="text-center text-[11px] leading-[1.5] text-faint">Une fenêtre système te montrera ce récapitulatif une dernière fois{recipientName ? '' : ''}.</span>
+          <span className="text-center text-[11px] leading-[1.5] text-faint">
+            {activeHw ? 'Une fenêtre système te montrera ce récapitulatif, puis ton appareil te demandera de confirmer.' : 'Une fenêtre système te montrera ce récapitulatif une dernière fois.'}
+            {recipientName ? '' : ''}
+          </span>
         </aside>
       </div>
     </div>

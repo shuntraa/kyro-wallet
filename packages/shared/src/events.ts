@@ -4,14 +4,16 @@
 //   - `vault-locked` (no payload): the session was zeroized (auto-lock, sleep…).
 //   - `tor-status` (`TorStatus`): every state or bootstrap-progress change of the embedded Tor.
 //   - `cbf-status` (`CbfStatus`): compact-filter sync progress (at most 2 per second).
+//   - `hw-prompt` (`HwPrompt`): what to tell the user during a hardware-wallet call.
 
-import { isTauri, type CbfStatus, type TorStatus } from './ipc';
+import { isTauri, type CbfStatus, type HwPrompt, type TorStatus } from './ipc';
 
 /** Payload of each shell event (`undefined` = none). */
 export interface ShellEventPayloads {
   'vault-locked': undefined;
   'tor-status': TorStatus;
   'cbf-status': CbfStatus;
+  'hw-prompt': HwPrompt;
 }
 
 export type ShellEvent = keyof ShellEventPayloads;
@@ -60,4 +62,9 @@ export function onTorStatus(cb: (status: TorStatus) => void): Promise<Unlisten> 
 /** Subscribe to `cbf-status` (compact-filter sync). Pair it with `btc_cbf_status` for the current state. */
 export function onCbfStatus(cb: (status: CbfStatus) => void): Promise<Unlisten> {
   return listenShell('cbf-status', cb);
+}
+
+/** Subscribe to `hw-prompt` (confirm / PIN / passphrase on the device, Trezor One PIN matrix). */
+export function onHwPrompt(cb: (p: HwPrompt) => void): Promise<Unlisten> {
+  return listenShell('hw-prompt', cb);
 }

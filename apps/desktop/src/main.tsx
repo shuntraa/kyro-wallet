@@ -8,6 +8,7 @@ import './styles.css';
 import { App } from './App';
 import { torStore } from './state/tor';
 import { cbfStore } from './state/cbf';
+import { hwPromptStore } from './state/hw';
 
 const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.closest('input, textarea, [contenteditable="true"]') !== null);
 
@@ -23,6 +24,8 @@ document.addEventListener('dragstart', (e) => {
 void torStore.start();
 // Compact filters: availability (FEATURE_DISABLED in today's build) and `cbf-status` events.
 void cbfStore.start();
+// Hardware wallets: `hw-prompt` (confirm / PIN on the device, Trezor One PIN matrix).
+void hwPromptStore.start();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root introuvable');

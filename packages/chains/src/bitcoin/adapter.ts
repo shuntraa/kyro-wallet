@@ -17,7 +17,8 @@ import type { HDKey } from '@scure/bip32';
 import { BTC_TXS_CAP, call, type Accounts, type BtcKind, type BtcTxSummary, type EsploraTx } from '@kyro/shared';
 import type { BtcChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
-import { outputTypeOf, selectAll, selectCoins, type SelectableUtxo } from './coinselect';
+import { outputTypeOf, selectAll, selectCoins, type SelectableUtxo, type Selection } from './coinselect';
+import type { HwSigner } from '../hw';
 import { derivePubkey, fingerprintBytes, parseXpub } from './xpub';
 
 bitcoin.initEccLib(ecc);
@@ -36,6 +37,13 @@ export interface DerivedAddress {
 export interface BitcoinAdapterOptions {
   chain: BtcChain;
   accounts: Accounts['btc'];
+  /**
+   * Hardware-wallet account: input rules of the devices (docs/IPC.md §2.3).
+   * - every SegWit v0 input needs `non_witness_utxo` (the full previous transaction): only
+   *   possible with `prevTx`; without it, SegWit coins are not spendable on the device;
+   * - Ledger: one kind of input per transaction (SegWit OR Taproot), never mixed.
+   */
+  hw?: HwSigner & { prevTx?: (txid: string) => Promise<string | null> };
   /** Consecutive unused addresses before stopping a scan. */
   gapLimit?: number;
 }
@@ -49,6 +57,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   private readonly net: bitcoin.Network;
   private readonly gap: number;
   private readonly accounts: Accounts['btc'];
+  readonly hw: BitcoinAdapterOptions['hw'] | null;
   private readonly keys: Record<BtcKind, HDKey>;
   private scanCache: { at: number; addrs: DerivedAddress[] } | null = null;
   private scanning: Promise<DerivedAddress[]> | null = null;
@@ -61,6 +70,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   constructor(opts: BitcoinAdapterOptions) {
     this.chain = opts.chain;
     this.accounts = opts.accounts;
+    this.hw = opts.hw ?? null;
     this.net = opts.chain.network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
     this.gap = opts.gapLimit ?? 5;
     this.keys = { segwit: parseXpub(opts.accounts.segwit.xpub), taproot: parseXpub(opts.accounts.taproot.xpub) };
@@ -177,20 +187,58 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     return this.addressAt('segwit', 1, MAX_SCAN);
   }
 
+  /**
+   * Candidate input sets. Vault: everything. Hardware wallet: SegWit coins only when the full
+   * previous transaction can be attached, and never SegWit + Taproot together on a Ledger.
+   */
+  inputGroups<T extends { owner: { kind: BtcKind } }>(utxos: T[]): T[][] {
+    if (!this.hw) return [utxos];
+    const allowed = this.hw.prevTx ? utxos : utxos.filter((u) => u.owner.kind === 'taproot');
+    if (this.hw.device === 'trezor') return [allowed];
+    const groups = (['segwit', 'taproot'] as const).map((k) => allowed.filter((u) => u.owner.kind === k)).filter((g) => g.length > 0);
+    return groups.length ? groups : [[]];
+  }
+
   async buildTx(params: BuildParams): Promise<BtcUnsigned> {
     if (params.fee.family !== 'btc') throw new Error('Frais Bitcoin attendus');
     const to = params.to.trim();
     if (!this.isValidAddress(to)) throw new Error('Adresse Bitcoin invalide pour ce réseau');
     const utxos = await this.utxos();
     const recipientType = outputTypeOf(to);
-    const sel = params.max ? selectAll(utxos, params.fee.satPerVb, recipientType) : selectCoins(utxos, params.amount, params.fee.satPerVb, recipientType, 'p2wpkh');
+    const feeRate = params.fee.satPerVb;
+    let sel: Selection | null = null;
+    let lastError: unknown = null;
+    for (const group of this.inputGroups(utxos)) {
+      try {
+        const s = params.max ? selectAll(group, feeRate, recipientType) : selectCoins(group, params.amount, feeRate, recipientType, 'p2wpkh');
+        // Max: the largest group wins; otherwise the cheapest.
+        if (!sel || (params.max ? s.amount > sel.amount : s.fee < sel.fee)) sel = s;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (!sel) {
+      if (this.hw && !this.hw.prevTx && utxos.some((u) => u.owner.kind === 'segwit')) {
+        throw new Error(
+          'Fonds insuffisants sur tes adresses Taproot. Pour dépenser des fonds SegWit, l’appareil exige la transaction précédente complète, que Kyro ne sait pas encore récupérer : seuls les fonds Taproot sont dépensables avec ce hardware wallet pour l’instant.',
+        );
+      }
+      throw lastError instanceof Error ? lastError : new Error('Sélection des entrées impossible');
+    }
     const psbt = new bitcoin.Psbt({ network: this.net });
     for (const u of sel.inputs) {
       const owner = (u as (typeof utxos)[number]).owner;
       const fp = fingerprintBytes(this.accounts[owner.kind].fingerprint);
       const script = bitcoin.address.toOutputScript(owner.address, this.net);
       if (owner.kind === 'segwit') {
-        psbt.addInput({ hash: u.txid, index: u.vout, witnessUtxo: { script, value: u.value }, bip32Derivation: [{ masterFingerprint: fp, pubkey: owner.pubkey, path: owner.path }] });
+        const input: Parameters<typeof psbt.addInput>[0] = { hash: u.txid, index: u.vout, witnessUtxo: { script, value: u.value }, bip32Derivation: [{ masterFingerprint: fp, pubkey: owner.pubkey, path: owner.path }] };
+        if (this.hw) {
+          // Rust refuses a SegWit v0 input without its previous transaction (INVALID_INPUT).
+          const hex = this.hw.prevTx ? await this.hw.prevTx(u.txid) : null;
+          if (!hex) throw new Error(`Transaction précédente de l’entrée ${u.txid.slice(0, 10)}… introuvable : signature sur l’appareil impossible.`);
+          input.nonWitnessUtxo = hexBytes(hex);
+        }
+        psbt.addInput(input);
       } else {
         const xonly = owner.pubkey.slice(1, 33);
         psbt.addInput({
@@ -227,6 +275,17 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
 
   async signTx(unsigned: BtcUnsigned, password: string): Promise<BtcSigned> {
     const res = await call('btc_sign_psbt', { psbt: unsigned.psbt, password });
+    const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
+    const finalized = psbt.data.inputs.every((i) => i.finalScriptWitness || i.finalScriptSig);
+    if (!finalized) psbt.finalizeAllInputs();
+    const tx = psbt.extractTransaction();
+    return { family: 'btc', hex: tx.toHex(), txid: tx.getId() };
+  }
+
+  /** Signs on the hardware wallet `deviceId` (no password: native dialog + device screen). */
+  async signTxHw(unsigned: BtcUnsigned, deviceId: string): Promise<BtcSigned> {
+    if (!this.hw) throw new Error('Ce compte n’est pas un hardware wallet');
+    const res = await call('hw_sign_btc_psbt', { id: deviceId, accountId: this.hw.accountId, psbt: unsigned.psbt });
     const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
     const finalized = psbt.data.inputs.every((i) => i.finalScriptWitness || i.finalScriptSig);
     if (!finalized) psbt.finalizeAllInputs();
@@ -275,4 +334,10 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     }
     return items.sort((a, b) => (b.time ?? Infinity) - (a.time ?? Infinity));
   }
+}
+
+function hexBytes(hex: string): Uint8Array {
+  const clean = hex.trim();
+  if (!/^([0-9a-fA-F]{2})+$/.test(clean)) throw new Error('Transaction précédente invalide');
+  return Uint8Array.from(clean.match(/../g)!.map((b) => parseInt(b, 16)));
 }

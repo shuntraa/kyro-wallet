@@ -185,28 +185,28 @@ describe('SolanaAdapter against the demo backend', () => {
     if (!usdc) throw new Error('asset');
     expect(usdc.readOnly).toBeUndefined();
     const to = '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin';
-    const unsigned = await adapters.sol.buildTx({ asset: usdc, to, amount: parseUnits('12,5', 6), fee: { family: 'sol', microLamports: 50_000n } });
+    const unsigned = await adapters.sol!.buildTx({ asset: usdc, to, amount: parseUnits('12,5', 6), fee: { family: 'sol', microLamports: 50_000n } });
     expect(unsigned.createsAta).toBe(true);
     expect(unsigned.ataRent).toBe(2_039_280n);
     expect(unsigned.tokenProgram).toBe('token');
     expect(unsigned.destinationTokenAccount).toBe(await findAssociatedTokenAddress(address(to), address(usdc.contract ?? ''), TOKEN_PROGRAM));
     expect(unsigned.maxFee).toBe(5000n + 2000n);
 
-    const summary = await adapters.sol.decode(unsigned);
+    const summary = await adapters.sol!.decode(unsigned);
     expect(summary.ourSignerIndex).toBe(0);
     expect(summary.requiresExtraConfirmation).toBe(false);
     expect(summary.priorityFeeLamports).toBe('2000');
     expect(summary.instructions.map((i) => i.type)).toEqual(['computeUnitLimit', 'computeUnitPrice', 'ataCreate', 'tokenTransfer']);
     expect(checkSolSummary(unsigned, summary, accounts.sol.address)).toBeNull();
 
-    const signed = await adapters.sol.signTx(unsigned, PASSWORD);
-    expect(await adapters.sol.broadcast(signed)).toBe(signed.signature);
+    const signed = await adapters.sol!.signTx(unsigned, PASSWORD);
+    expect(await adapters.sol!.broadcast(signed)).toBe(signed.signature);
   });
 
   it('detects a summary that differs from what was built', async () => {
     const usdc = findAsset('testnet', 'spl:4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')!;
-    const unsigned = await adapters.sol.buildTx({ asset: usdc, to: '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin', amount: 1_000_000n, fee: { family: 'sol', microLamports: 0n } });
-    const s = await adapters.sol.decode(unsigned);
+    const unsigned = await adapters.sol!.buildTx({ asset: usdc, to: '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin', amount: 1_000_000n, fee: { family: 'sol', microLamports: 0n } });
+    const s = await adapters.sol!.decode(unsigned);
     const tampered: SolTxSummary = { ...s, instructions: s.instructions.map((i) => (i.type === 'tokenTransfer' ? { ...i, amount: '999999999' } : i)) };
     expect(checkSolSummary(unsigned, tampered, accounts.sol.address)).toMatch(/différent/);
     expect(checkSolSummary(unsigned, { ...s, feePayer: DEVNET.feePayer }, accounts.sol.address)).toMatch(/payeur/);
@@ -214,7 +214,7 @@ describe('SolanaAdapter against the demo backend', () => {
 
   it('refuses decimals that disagree with the mint', async () => {
     const usdc = findAsset('testnet', 'spl:4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')!;
-    await expect(adapters.sol.buildTx({ asset: { ...usdc, decimals: 9 }, to: '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin', amount: 1n, fee: { family: 'sol', microLamports: 0n } })).rejects.toThrow(/Décimales/);
+    await expect(adapters.sol!.buildTx({ asset: { ...usdc, decimals: 9 }, to: '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin', amount: 1n, fee: { family: 'sol', microLamports: 0n } })).rejects.toThrow(/Décimales/);
   });
 
   it('signs a foreign transaction at our index (1) with a second confirmation', async () => {
@@ -228,7 +228,7 @@ describe('SolanaAdapter against the demo backend', () => {
       ),
     );
     confirms.length = 0;
-    const signed = await adapters.sol.signWireTransaction(getBase64EncodedWireTransaction(tx), PASSWORD);
+    const signed = await adapters.sol!.signWireTransaction(getBase64EncodedWireTransaction(tx), PASSWORD);
     expect(signed.summary.ourSignerIndex).toBe(1);
     expect(signed.summary.requiresExtraConfirmation).toBe(true);
     expect(confirms).toHaveLength(2);

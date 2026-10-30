@@ -8,16 +8,17 @@ import { shortAddress } from '../lib/format';
 import { getBackupState, getContacts, saveContacts, type Contact, type ContactFamily } from '../lib/storage';
 import { PasswordField } from '../components/kit';
 import { ServersSection } from './settings/Servers';
+import { Devices } from './settings/Devices';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
-import { IconCheck, IconEye, IconPhoneKey, IconTor, IconTrash, IconUsbKey, IconWarn, IconX } from '../components/icons';
+import { IconCheck, IconEye, IconTor, IconTrash, IconWarn, IconX } from '../components/icons';
 import { TorIndicator } from '../components/Tor';
 import { torStore, useTor } from '../state/tor';
 
 const SECTIONS: Array<{ key: SettingsSection; label: string }> = [
   { key: 'security', label: 'Sécurité' },
   { key: 'privacy', label: 'Confidentialité' },
-  { key: 'hardware', label: 'Hardware wallets' },
+  { key: 'hardware', label: 'Appareils' },
   { key: 'networks', label: 'Réseaux et serveurs' },
   { key: 'display', label: 'Affichage et devise' },
   { key: 'apikeys', label: 'Clés API' },
@@ -70,7 +71,7 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
           {error && <Notice tone="error">{error}</Notice>}
           {section === 'security' && <Security save={save} />}
           {section === 'privacy' && <Privacy />}
-          {section === 'hardware' && <Hardware />}
+          {section === 'hardware' && <Devices />}
           {section === 'networks' && <ServersSection />}
           {section === 'display' && <Display save={save} />}
           {section === 'apikeys' && <ApiKeys save={save} />}
@@ -140,7 +141,6 @@ function Security({ save }: { save: Save }) {
         </SettingRow>
       </Panel>
       <RevealPhrase />
-      <Hardware />
     </>
   );
 }
@@ -298,35 +298,6 @@ function RevealPhrase() {
           </>
         )}
       </Dialog>
-    </section>
-  );
-}
-
-function Hardware() {
-  return (
-    <section className="flex flex-col gap-3.5 rounded-[22px] border border-line bg-card px-[22px] py-[18px]">
-      <div className="flex items-center justify-between">
-        <span className="text-[15px] font-semibold">Hardware wallets</span>
-        <Badge tone="ice">Bientôt</Badge>
-      </div>
-      <p className="m-0 text-[13px] text-text2">Chaque signature se fera sur l’appareil. Même un ordinateur infecté ne pourra pas voler tes clés.</p>
-      <div className="grid grid-cols-2 gap-2.5">
-        {[
-          ['Ledger', 'USB · Bluetooth plus tard', <IconUsbKey key="l" size={16} />],
-          ['Trezor', 'USB', <IconPhoneKey key="t" size={16} />],
-        ].map(([name, sub, icon]) => (
-          <div key={String(name)} className="flex items-center gap-3 rounded-[16px] border border-line bg-raised px-4 py-3.5 opacity-75">
-            <span className="flex size-[34px] items-center justify-center rounded-[10px] bg-control-2">{icon}</span>
-            <span className="flex flex-col">
-              <span className="text-[14px] font-semibold">{name}</span>
-              <span className="text-[12px] text-mute">{sub}</span>
-            </span>
-          </div>
-        ))}
-      </div>
-      <span className="flex items-center gap-2 text-[12px] text-faint">
-        <span className="size-1.5 rounded-full bg-faint" /> Aucun appareil connecté · prise en charge en préparation
-      </span>
     </section>
   );
 }

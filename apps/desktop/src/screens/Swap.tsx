@@ -33,7 +33,29 @@ function tokenOf(a: AssetDef, price?: number): SwapToken {
   return t;
 }
 
+/** Swaps sign through the vault only for now: a hardware-wallet account gets a clear note. */
 export function Swap({ sellAssetId }: { sellAssetId?: string }) {
+  const { activeHw, navigate } = useApp();
+  if (activeHw) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-10">
+        <EmptyState
+          title="Swap : pas encore disponible avec un hardware wallet"
+          action={
+            <button type="button" onClick={() => navigate({ name: 'send' })} className="text-[13px] font-semibold text-ice hover:underline">
+              Envoyer depuis ce compte
+            </button>
+          }
+        >
+          Les swaps signent des transactions de tiers (agrégateurs) que ton appareil afficherait souvent à l’aveugle. Ils arrivent dans une prochaine version ; les envois et réceptions fonctionnent déjà avec ton {activeHw.device === 'ledger' ? 'Ledger' : 'Trezor'}.
+        </EmptyState>
+      </div>
+    );
+  }
+  return <SwapVault {...(sellAssetId ? { sellAssetId } : {})} />;
+}
+
+function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const { settings, network, swapProviders, navigate } = useApp();
   const { adapters, accounts } = useVault();
   const pf = usePortfolio();
@@ -75,7 +97,7 @@ export function Swap({ sellAssetId }: { sellAssetId?: string }) {
   const balance = sell ? pf.balances.get(sell.id) ?? 0n : 0n;
   const sellAmount = sell && amountStr ? tryParseUnits(amountStr, sell.decimals) : null;
   const over = sellAmount !== null && sellAmount > balance;
-  const taker = chainKey === 'solana' ? accounts.sol.address : accounts.evm.address;
+  const taker = (chainKey === 'solana' ? accounts.sol?.address : accounts.evm?.address) ?? '';
   const evmAdapter: EvmAdapter | undefined = chain?.family === 'evm' ? adapters.evm.get(chainKey) : undefined;
 
   const params: QuoteParams | null = useMemo(() => {
@@ -137,6 +159,7 @@ export function Swap({ sellAssetId }: { sellAssetId?: string }) {
         setPhase('swapping');
         const wire = await chosen.tx.build();
         // Rust decodes this third-party transaction and shows it in the native dialog (+ 2nd warning if unusual).
+        if (!adapters.sol) throw new Error('Pas de compte Solana sur ce portefeuille.');
         const signed = await adapters.sol.signWireTransaction(wire, password);
         const id = await adapters.sol.broadcast(signed);
         addLocalTx({ id, network, chainKey, assetId: sell.id, kind: 'swap', direction: 'out', amount: sellAmount.toString(), label: `Swap ${sell.symbol} → ${buy.symbol}`, time: Date.now(), status: 'pending' });

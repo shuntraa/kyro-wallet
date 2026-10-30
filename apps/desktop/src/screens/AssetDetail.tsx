@@ -61,7 +61,7 @@ export function AssetDetail({ id }: { id: string }) {
   }, [supported, network, pf.balances]);
 
   const activity = (history.data?.entries ?? []).filter((e) => supported && e.assetId === supported.id).slice(0, 6);
-  const address = supported ? (supported.family === 'btc' ? accounts.btc.segwit.address : supported.family === 'sol' ? accounts.sol.address : accounts.evm.address) : null;
+  const address = supported ? (supported.family === 'btc' ? accounts.btc?.segwit.address : supported.family === 'sol' ? accounts.sol?.address : accounts.evm?.address) ?? null : null;
   const fav = favs.includes(coinId);
 
   return (

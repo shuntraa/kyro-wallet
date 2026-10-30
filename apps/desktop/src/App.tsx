@@ -20,6 +20,8 @@ import { SettingsScreen } from './screens/Settings';
 import { KyroMark } from './components/kit';
 import { Spinner } from './components/ui/primitives';
 import { TorDialogs } from './components/Tor';
+import { HwPromptLayer } from './components/hw';
+import { AccountSwitcher } from './components/AccountSwitcher';
 import { serverDown } from './components/ServerDown';
 
 export function App() {
@@ -28,6 +30,8 @@ export function App() {
       <Root />
       {/* Tor failure / "continue without Tor" dialogs: reachable from every phase. */}
       <TorDialogs />
+      {/* Trezor One blind PIN matrix, whatever screen started the device call. */}
+      <HwPromptLayer />
     </AppProvider>
   );
 }
@@ -76,7 +80,7 @@ function Frame({ children }: { children: React.ReactNode }) {
 function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
   switch (r.name) {
     case 'portfolio':
-      return ['Compte principal'];
+      return [];
     case 'assets':
       return ['Actifs'];
     case 'asset':
@@ -160,7 +164,7 @@ function Unlocked() {
 
   return (
     <div className="flex h-full flex-col bg-bg text-text">
-      <TitleBar crumbs={crumbsOf(route, assetName)} search={search} />
+      <TitleBar crumbs={crumbsOf(route, assetName)} search={search} account={<AccountSwitcher />} />
       <div className="flex min-h-0 flex-1">
         <NavRail />
         {/* Enter-only transition: the next screen mounts at once (an exit animation

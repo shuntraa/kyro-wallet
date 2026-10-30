@@ -38,7 +38,7 @@ function RailItem({ active, label, icon, onClick }: { active: boolean; label: st
 }
 
 export function NavRail() {
-  const { route, navigate, lock } = useApp();
+  const { route, navigate, lock, hwOnly } = useApp();
   const k = railKeyOf(route);
   return (
     <nav aria-label="Navigation" className="flex w-[84px] shrink-0 flex-col items-center gap-1 border-r border-rail py-3.5">
@@ -48,6 +48,7 @@ export function NavRail() {
       <RailItem active={k === 'history'} label="Historique" icon={<IconClock size={20} />} onClick={() => navigate({ name: 'history' })} />
       <div className="flex-1" />
       <RailItem active={k === 'settings'} label="Réglages" icon={<IconSliders size={20} />} onClick={() => navigate({ name: 'settings' })} />
+      {!hwOnly && (
       <button
         type="button"
         aria-label="Verrouiller le coffre"
@@ -57,6 +58,7 @@ export function NavRail() {
       >
         <IconLock size={18} />
       </button>
+      )}
     </nav>
   );
 }

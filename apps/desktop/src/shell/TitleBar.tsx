@@ -43,12 +43,18 @@ export interface SearchResult {
   onSelect: () => void;
 }
 
-export function TitleBar({ crumbs, center, search, bordered = true }: { crumbs?: string[]; center?: ReactNode; search?: (q: string) => SearchResult[]; bordered?: boolean }) {
+export function TitleBar({ crumbs, center, search, bordered = true, account }: { crumbs?: string[]; center?: ReactNode; search?: (q: string) => SearchResult[]; bordered?: boolean; account?: ReactNode }) {
   return (
     <header data-tauri-drag-region className={`flex h-10 shrink-0 items-center justify-between pl-4 ${bordered ? 'border-b border-rail' : ''}`}>
       <div data-tauri-drag-region className="flex w-[300px] min-w-0 items-center gap-2">
         <KyroMark size={16} />
         <span className="text-[13px] font-semibold tracking-[-0.01em]">Kyro</span>
+        {account && (
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="text-[13px] text-faint">/</span>
+            {account}
+          </span>
+        )}
         {crumbs?.map((c, i) => (
           <span key={i} className="flex min-w-0 items-center gap-2">
             <span className="text-[13px] text-faint">/</span>

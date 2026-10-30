@@ -45,7 +45,7 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
   const custom = {
     btc: bitcoinServerFor(settings.servers, network).kind !== 'default',
     evm: adapters ? settings.servers.evm[String([...adapters.evm.values()][0]?.chain.chainId)] !== undefined : false,
-    sol: adapters ? settings.servers.solana[adapters.sol.chain.cluster] !== undefined : false,
+    sol: adapters?.sol ? settings.servers.solana[adapters.sol.chain.cluster] !== undefined : false,
   };
   const perso = (on: boolean) => (on ? <span className="text-mute" title="Serveur personnalisé (Réglages › Réseaux et serveurs)"> · perso</span> : null);
   const tor = useTor();
@@ -62,13 +62,16 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
     const probe = async () => {
       const evm = [...adapters.evm.values()][0];
       const [btc, e, s] = await Promise.allSettled([
-        adapters.btc.tipHeight(),
+        // A hardware-wallet account may lack a chain: nothing to probe, not an error.
+        adapters.btc ? adapters.btc.tipHeight() : Promise.resolve(null),
         (async () => {
+          if (!evm) return null;
           const t0 = performance.now();
-          await evm?.blockNumber();
+          await evm.blockNumber();
           return Math.round(performance.now() - t0);
         })(),
         (async () => {
+          if (!adapters.sol) return null;
           const t0 = performance.now();
           await adapters.sol.slot();
           return Math.round(performance.now() - t0);
@@ -91,7 +94,7 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
   }, [adapters, torReady, cbfSyncedAt]);
 
   const evmLabel = adapters ? [...adapters.evm.values()][0]?.chain.label ?? 'EVM' : 'EVM';
-  const solLabel = adapters?.sol.chain.label ?? 'Solana';
+  const solLabel = adapters?.sol?.chain.label ?? 'Solana';
   const btcLabel = accounts?.network === 'testnet' ? 'BTC testnet' : 'BTC';
   // Compact filters: the sync phase replaces the block height (driven by `cbf-status`).
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
@@ -125,6 +128,7 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
                     ? `Partiel${failedChains.length ? ` · ${failedChains.join(', ')} injoignable` : ''}`
                     : 'Synchronisé'}
           </span>
+          {adapters?.btc !== null && (
           <span>
             {btcLabel}
             {cbfMode ? (
@@ -135,14 +139,20 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
               </>
             )}
           </span>
-          <span>
-            {evmLabel}
-            {perso(custom.evm)} · {stat.evmMs !== null ? `${stat.evmMs} ms` : 'hors ligne'}
-          </span>
-          <span>
-            {solLabel}
-            {perso(custom.sol)} · {stat.solMs !== null ? `${stat.solMs} ms` : 'hors ligne'}
-          </span>
+          )}
+          {/* A hardware-wallet account only shows the chains read from the device. */}
+          {(!adapters || adapters.evm.size > 0) && (
+            <span>
+              {evmLabel}
+              {perso(custom.evm)} · {stat.evmMs !== null ? `${stat.evmMs} ms` : 'hors ligne'}
+            </span>
+          )}
+          {adapters?.sol !== null && (
+            <span>
+              {solLabel}
+              {perso(custom.sol)} · {stat.solMs !== null ? `${stat.solMs} ms` : 'hors ligne'}
+            </span>
+          )}
           {extra}
         </>
       }

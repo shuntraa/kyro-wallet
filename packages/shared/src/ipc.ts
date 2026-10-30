@@ -352,6 +352,91 @@ export interface SolTxSummary {
   requiresExtraConfirmation: boolean;
 }
 
+// ---------------------------------------------------------------- hardware wallets (docs/IPC.md §2.3)
+
+export type HwDeviceKind = 'ledger' | 'trezor';
+/** Phase 4 chains (`ltc`…`xrp`) answer HW_UNSUPPORTED. */
+export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp';
+/** The chains Kyro implements today. */
+export type HwImplementedChain = 'btc' | 'evm' | 'sol';
+
+export interface HwDeviceInfo {
+  /** Stable for the session while the device stays on the same port (`ledger-1`, `trezor-1`…). */
+  id: string;
+  kind: HwDeviceKind;
+  model: string;
+  transport: 'hid' | 'webusb';
+}
+
+export type HwChainState = 'ready' | 'open-app' | 'unlock' | 'unsupported';
+
+export interface HwChainStatus {
+  chain: HwChain;
+  state: HwChainState;
+  /** Ledger app to open. */
+  app?: string;
+  /** Minimum version. */
+  min?: string;
+  reason?: string;
+}
+
+export interface HwDeviceStatus {
+  id: string;
+  kind: HwDeviceKind;
+  model: string;
+  locked: boolean;
+  /** Ledger: app open right now ("Tableau de bord" = dashboard). */
+  app?: { name: string; version: string };
+  /** Trezor firmware. */
+  firmware?: string;
+  /** Trezor: passphrase protection enabled. */
+  passphrase?: boolean;
+  chains: HwChainStatus[];
+}
+
+export interface HwBtcKey {
+  kind: BtcKind;
+  xpub: string;
+  /** Master fingerprint, 8 lowercase hex. */
+  fingerprint: string;
+  /** Account path, e.g. `m/84'/1'/0'`. */
+  path: string;
+}
+
+export interface HwXpub {
+  chain: HwChain;
+  account: number;
+  /** BIP84 + BIP86, same fingerprint. */
+  btc?: HwBtcKey[];
+  /** Node `m/44'/60'/0'/0`; `address` = `…/0/{account}`. */
+  evm?: { xpub: string; path: string; address: string };
+  sol?: { address: string; path: string };
+}
+
+/** Watch-only account backed by a hardware wallet (public keys only). */
+export interface WatchOnlyAccount {
+  /** `hw-` + 16 hex. */
+  id: string;
+  label: string;
+  device: HwDeviceKind;
+  model: string;
+  network: Network;
+  /** BIP44 account number (Bitcoin and Solana account, EVM address index). */
+  account: number;
+  btc?: HwBtcKey[];
+  evm?: { xpub: string; path: string };
+  sol?: { address: string; path: string };
+}
+
+/** Event `hw-prompt`: what to tell the user while a device call is pending. */
+export interface HwPrompt {
+  id: string;
+  kind: 'confirm-on-device' | 'pin-on-device' | 'passphrase-on-device' | 'pin-matrix';
+}
+
+/** Highest account number accepted by Rust (`MAX_HW_ACCOUNT`). */
+export const MAX_HW_ACCOUNT = 100;
+
 /** Every command: its arguments (`undefined` = none) and its resolved value. */
 export interface Commands {
   vault_status: { args: undefined; ret: VaultStatus };
@@ -400,6 +485,27 @@ export interface Commands {
   btc_cbf_status: { args: undefined; ret: CbfStatus };
   /** Starts (or joins) a background sync; progress through the `cbf-status` event. */
   btc_cbf_sync: { args: undefined; ret: CbfStatus };
+  /** Ledger (HID) and Trezor (WebUSB) plugged in; 10 s max. */
+  hw_list: { args: undefined; ret: HwDeviceInfo[] };
+  /** Opens the device and reads its state (lock, Ledger app, Trezor firmware, per chain). */
+  hw_open: { args: { id: string }; ret: HwDeviceStatus };
+  /** Abandons the pending operation on `id` (`true` if there was one); it ends in USER_REJECTED. */
+  hw_cancel: { args: { id: string }; ret: boolean };
+  /** Trezor One, after `hw-prompt: pin-matrix`: POSITIONS in the blank 3×3 grid, never the PIN. */
+  hw_pin_matrix: { args: { id: string; positions: string }; ret: void };
+  /** Reads public keys, shows and stores nothing. */
+  hw_get_xpub: { args: { id: string; chain: HwChain; account: number }; ret: HwXpub };
+  hw_accounts_get: { args: undefined; ret: WatchOnlyAccount[] };
+  /** Reads the keys of `chain` and stores them (new account, or merged into `accountId`). */
+  hw_account_add: { args: { id: string; chain: HwChain; account: number; accountId?: string; label?: string }; ret: WatchOnlyAccount };
+  hw_account_remove: { args: { accountId: string }; ret: void };
+  /** Shows the address ON THE DEVICE; must equal Kyro's derivation, else HW_ADDRESS_MISMATCH. */
+  hw_verify_address: { args: { id: string; accountId: string; chain: HwChain; path: string }; ret: { address: string; path: string } };
+  /** Native dialog → device → each signature verified. Signed, NOT finalized. */
+  hw_sign_btc_psbt: { args: { id: string; accountId: string; psbt: string }; ret: { psbt: string; summary: BtcTxSummary } };
+  /** 2nd dialog for a contract call or blind signing. Signs for `m/44'/60'/0'/0/{account}`. */
+  hw_sign_evm_tx: { args: { id: string; accountId: string; tx: EvmTxRequest; token?: EvmTokenHint }; ret: { rawTx: string; hash: string } };
+  hw_sign_sol_tx: { args: { id: string; accountId: string; message: string }; ret: { signature: string; summary: SolTxSummary } };
   /** Restarts the bootstrap (after `error`). `INVALID_INPUT` when Tor is disabled. */
   tor_retry: { args: undefined; ret: TorStatus };
   settings_get: { args: undefined; ret: Settings };
@@ -437,22 +543,55 @@ export const ERROR_CODES = [
   'DEFAULT_SERVER_DISABLED',
   /** Feature not in this build (today: compact block filters `cbf`, off until review). */
   'FEATURE_DISABLED',
+  // ---- hardware wallets (§2.3) ----
+  'HW_NOT_FOUND',
+  'HW_LOCKED',
+  /** `data: { expected, open }` */
+  'HW_WRONG_APP',
+  'HW_REJECTED',
+  'HW_DISCONNECTED',
+  /** `data: { min: string | null }` */
+  'HW_UNSUPPORTED',
+  'HW_BUSY',
+  'HW_TIMEOUT',
+  'HW_BAD_RESPONSE',
+  /** `data: { device, expected }` — do NOT use the address. */
+  'HW_ADDRESS_MISMATCH',
+  'HW_WRONG_DEVICE',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
 /** Shape of a rejected command promise. `message` is user-facing French. */
+/** `data` of the hardware-wallet errors that carry details. */
+export interface IpcErrorData {
+  HW_WRONG_APP: { expected: string; open: string };
+  HW_UNSUPPORTED: { min: string | null };
+  HW_ADDRESS_MISMATCH: { device: string; expected: string };
+}
+
 export interface IpcErrorPayload {
   code: ErrorCode;
   message: string;
+  data?: unknown;
 }
 
 export class IpcError extends Error {
   readonly code: ErrorCode;
-  constructor(code: ErrorCode, message: string) {
+  /** Only for HW_WRONG_APP, HW_UNSUPPORTED, HW_ADDRESS_MISMATCH (see `IpcErrorData`). */
+  readonly data: unknown;
+  constructor(code: ErrorCode, message: string, data?: unknown) {
     super(message);
     this.name = 'IpcError';
     this.code = code;
+    this.data = data;
   }
+}
+
+/** Typed `data` of an error, or null when it has none / another code. */
+export function errorData<K extends keyof IpcErrorData>(e: unknown, code: K): IpcErrorData[K] | null {
+  const err = ipcErrorIn(e);
+  if (!err || err.code !== code || typeof err.data !== 'object' || err.data === null) return null;
+  return err.data as IpcErrorData[K];
 }
 
 export function isIpcError(e: unknown): e is IpcError {
@@ -479,7 +618,7 @@ export function toIpcError(e: unknown): IpcError {
     const code = (e as { code: unknown }).code;
     const message = (e as { message?: unknown }).message;
     if (typeof code === 'string' && (ERROR_CODES as readonly string[]).includes(code)) {
-      return new IpcError(code as ErrorCode, typeof message === 'string' ? message : code);
+      return new IpcError(code as ErrorCode, typeof message === 'string' ? message : code, (e as { data?: unknown }).data);
     }
   }
   if (typeof e === 'string') return new IpcError('INTERNAL', e);

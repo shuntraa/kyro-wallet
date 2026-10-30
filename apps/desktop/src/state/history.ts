@@ -63,7 +63,7 @@ export function useHistory() {
       });
       entries.sort((a, b) => (b.time ?? Date.now()) - (a.time ?? Date.now()));
       // Bitcoin servers return at most BTC_TXS_CAP transactions per address: say so.
-      return { entries, errors, btcCapped: adapters.btc.historyCapped };
+      return { entries, errors, btcCapped: adapters.btc?.historyCapped ?? false };
     },
     [adapters, network],
     { intervalMs: 60_000 },

@@ -35,6 +35,7 @@ import { call, jsonRpc, netFetch, type NetFetch, type SolTxSummary } from '@kyro
 import { SPL_TOKENS, type SolChain } from '../registry';
 import { feeCost } from '../fees';
 import { formatUnits } from '../units';
+import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem, SolSigned, SolUnsigned } from '../types';
 
 export const SYSTEM_PROGRAM = address('11111111111111111111111111111111');
@@ -58,6 +59,8 @@ export interface SolanaAdapterOptions {
   address: string;
   rpcUrl?: string;
   fetch?: NetFetch;
+  /** Hardware-wallet account (signing through `hw_sign_sol_tx`). */
+  hw?: HwSigner;
 }
 
 interface RpcCtx<T> {
@@ -191,6 +194,7 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
   latencyMs: number | null = null;
   private readonly me: Address;
   private readonly fetcher: NetFetch;
+  readonly hw: HwSigner | null;
 
   constructor(opts: SolanaAdapterOptions) {
     if (!isAddress(opts.address)) throw new Error('Adresse Solana du coffre invalide');
@@ -198,6 +202,7 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     this.me = address(opts.address);
     this.fetcher = opts.fetch ?? netFetch;
     this.rpcUrl = opts.rpcUrl || opts.chain.rpcUrl;
+    this.hw = opts.hw ?? null;
   }
 
   private async rpc<T>(method: string, params: unknown[] = []): Promise<T> {
@@ -393,6 +398,21 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     const sig = getBase64Encoder().encode(res.signature) as SignatureBytes;
     const placed = placeSignature(tx, index, sig, this.me);
     return { family: 'sol', wire: getBase64EncodedWireTransaction(placed), signature: getBase58Decoder().decode(sig), summary: res.summary };
+  }
+
+  /** Signs on the hardware wallet `deviceId` (same Rust decoding as `sol_sign_tx`). */
+  async signTxHw(unsigned: SolUnsigned, deviceId: string): Promise<SolSigned> {
+    if (!this.hw) throw new Error('Ce compte n’est pas un hardware wallet');
+    const tx = getTransactionDecoder().decode(getBase64Encoder().encode(unsigned.wire));
+    const message = getBase64Decoder().decode(tx.messageBytes);
+    const res = await call('hw_sign_sol_tx', { id: deviceId, accountId: this.hw.accountId, message });
+    const index = res.summary.ourSignerIndex;
+    if (index === null) throw new Error('Ce compte ne signe pas cette transaction');
+    const problem = checkSolSummary(unsigned, res.summary, this.me);
+    if (problem) throw new Error(`${problem} Signature écartée.`);
+    const sig = getBase64Encoder().encode(res.signature) as SignatureBytes;
+    const placed = placeSignature(tx, index, sig, this.me);
+    return { family: 'sol', wire: getBase64EncodedWireTransaction(placed), signature: getBase58Decoder().decode(sig) };
   }
 
   async broadcast(signed: SolSigned): Promise<string> {

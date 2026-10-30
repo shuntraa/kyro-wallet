@@ -1,0 +1,121 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Hardware-wallet accounts, TS side (docs/IPC.md §2.3): public derivation from the stored
+// xpubs, the input rules of the devices, and the clear-signing table. No key, no signature
+// here: signing is the Rust `hw_sign_*` commands (native dialog, device, verification).
+
+import * as bitcoin from 'bitcoinjs-lib';
+import * as ecc from '@bitcoinerlab/secp256k1';
+import { publicKeyToAddress } from 'viem/accounts';
+import { bytesToHex } from 'viem';
+import type { BtcKind, EvmTxSummary, HwDeviceKind, Network, WatchOnlyAccount } from '@kyro/shared';
+import { derivePubkey, parseXpub } from './bitcoin/xpub';
+import type { AnyAdapter, AnyUnsigned } from './types';
+
+bitcoin.initEccLib(ecc);
+
+/**
+ * Accounts of the active wallet: the vault (all chains) or a hardware-wallet account (only the
+ * chains read from the device). Same shape as `Accounts`, each chain optional.
+ */
+export interface WalletAccounts {
+  network: Network;
+  btc?: { segwit: BtcAccountView; taproot: BtcAccountView };
+  evm?: { address: string };
+  sol?: { address: string };
+}
+
+export interface BtcAccountView {
+  address: string;
+  xpub: string;
+  fingerprint: string;
+  path: string;
+}
+
+/** Hardware-wallet signer of an adapter. */
+export interface HwSigner {
+  accountId: string;
+  device: HwDeviceKind;
+}
+
+/** First receive address (`0/0`) of a BIP84 / BIP86 account xpub. */
+export function btcAddressFromXpub(xpub: string, network: Network, kind: BtcKind, change: 0 | 1 = 0, index = 0): string {
+  const net = network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
+  const pubkey = derivePubkey(parseXpub(xpub), change, index);
+  const p = kind === 'segwit' ? bitcoin.payments.p2wpkh({ pubkey, network: net }) : bitcoin.payments.p2tr({ internalPubkey: pubkey.slice(1, 33), network: net });
+  if (!p.address) throw new Error('Adresse Bitcoin introuvable');
+  return p.address;
+}
+
+/** EVM address `m/44'/60'/0'/0/{index}` from the stored node xpub (EIP-55). */
+export function evmAddressFromNode(nodeXpub: string, index: number): string {
+  const pk = parseXpub(nodeXpub).deriveChild(index).publicKey;
+  if (!pk) throw new Error('Dérivation EVM impossible');
+  const uncompressed = ecc.pointCompress(pk, false);
+  return publicKeyToAddress(bytesToHex(uncompressed));
+}
+
+/** Accounts of a hardware-wallet account (derived locally from its public keys). */
+export function hwToAccounts(acc: WatchOnlyAccount): WalletAccounts {
+  const out: WalletAccounts = { network: acc.network };
+  const seg = acc.btc?.find((b) => b.kind === 'segwit');
+  const tap = acc.btc?.find((b) => b.kind === 'taproot');
+  if (seg && tap) {
+    const view = (b: typeof seg): BtcAccountView => ({ address: btcAddressFromXpub(b.xpub, acc.network, b.kind), xpub: b.xpub, fingerprint: b.fingerprint, path: b.path });
+    out.btc = { segwit: view(seg), taproot: view(tap) };
+  }
+  if (acc.evm) out.evm = { address: evmAddressFromNode(acc.evm.xpub, acc.account) };
+  if (acc.sol) out.sol = { address: acc.sol.address };
+  return out;
+}
+
+/** Master fingerprint of the account (Bitcoin keys), for display. */
+export function hwFingerprint(acc: WatchOnlyAccount): string | null {
+  return acc.btc?.[0]?.fingerprint ?? null;
+}
+
+/** Derivation paths shown / verified on the device. */
+export const hwPaths = {
+  btc: (acc: WatchOnlyAccount, kind: BtcKind, change: 0 | 1, index: number): string | null => {
+    const b = acc.btc?.find((x) => x.kind === kind);
+    return b ? `${b.path}/${change}/${index}` : null;
+  },
+  evm: (acc: WatchOnlyAccount): string => `m/44'/60'/0'/0/${acc.account}`,
+  sol: (acc: WatchOnlyAccount): string | null => acc.sol?.path ?? null,
+};
+
+/** ERC-20 tokens for which Kyro ships a Ledger-signed descriptor (wallet-core `ledger_cal.rs`). */
+const LEDGER_CLEAR_TOKENS: Array<[number, string]> = [
+  [1, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'], // USDC
+  [1, '0xdac17f958d2ee523a2206206994597c13d831ec7'], // USDT
+  [11155111, '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238'], // tUSDC Sepolia
+];
+
+/**
+ * What the device will be able to show (mirror of `evm_clear_signs` in hw/ledger.rs and
+ * hw/trezor.rs): `clear`, or `blind` (raw data / hash only: Rust adds a reinforced dialog).
+ */
+export function evmHwDisplay(device: HwDeviceKind, chainId: number, summary: Pick<EvmTxSummary, 'kind' | 'tokenContract'>): 'clear' | 'blind' {
+  switch (summary.kind) {
+    case 'NativeTransfer':
+      return 'clear';
+    case 'ContractCall':
+      return 'blind';
+    case 'Erc20Transfer':
+      if (device === 'trezor') return 'clear';
+      break;
+    case 'Erc20Approve':
+      if (device === 'trezor') return 'blind';
+      break;
+  }
+  const c = summary.tokenContract?.toLowerCase();
+  return LEDGER_CLEAR_TOKENS.some(([id, addr]) => id === chainId && addr === c) ? 'clear' : 'blind';
+}
+
+/** Sign on the hardware wallet `deviceId` (Rust `hw_sign_*`), then broadcast. */
+export async function signAndBroadcastHw(adapter: AnyAdapter, unsigned: AnyUnsigned, deviceId: string): Promise<string> {
+  if (adapter.family !== unsigned.family) throw new Error('Famille de transaction incohérente');
+  const a = adapter as unknown as { hw: HwSigner | null; signTxHw(u: never, id: string): Promise<never>; broadcast(s: never): Promise<string> };
+  if (!a.hw) throw new Error('Ce compte n’est pas un hardware wallet');
+  return a.broadcast(await a.signTxHw(unsigned as never, deviceId));
+}

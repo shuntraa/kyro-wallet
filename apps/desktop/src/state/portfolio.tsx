@@ -152,6 +152,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const { holdings, total, change24hFiat } = useMemo(() => {
     const rows: Holding[] = [];
     for (const asset of assetsFor(network)) {
+      // Only the chains of the active account (a hardware wallet may hold only some of them).
+      if (asset.family === 'btc' ? !adapters.btc : asset.family === 'sol' ? !adapters.sol : !adapters.evm.has(asset.chainKey)) continue;
       const amount = balances.get(asset.id) ?? 0n;
       const chain = findChain(network, asset.chainKey);
       const always = asset.kind === 'native' && chain?.phase === 1;
@@ -180,7 +182,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     }
     rows.sort((a, b) => (b.value ?? -1) - (a.value ?? -1) || Number(b.amount - a.amount));
     return { holdings: rows, total: sum, change24hFiat: delta };
-  }, [network, balances, marketById, price, chainErrors]);
+  }, [network, balances, marketById, price, chainErrors, adapters]);
 
   const value: PortfolioValue = {
     balances,

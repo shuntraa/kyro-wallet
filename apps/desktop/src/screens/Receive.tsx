@@ -3,23 +3,34 @@
 // (BIP21 / EIP-681 / Solana Pay URI), network warning.
 
 import { useMemo, useState } from 'react';
-import { bitcoinServerFor, call, toIpcError, type BtcKind } from '@kyro/shared';
-import { btcChain, primaryEvmChain, solChain, tryParseUnits } from '@kyro/chains';
+import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
+import { btcChain, hwPaths, primaryEvmChain, solChain, tryParseUnits } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { cn } from '../lib/cn';
 import { sanitizeDecimalInput } from '../lib/format';
 import { AddressBlocks, CoinIcon, CopyButton } from '../components/kit';
 import { QrCode } from '../components/QrCode';
 import { Button, IconButton, Notice, Segmented } from '../components/ui/primitives';
-import { IconBack, IconInfo, IconRefresh, IconUsbKey, IconWarn } from '../components/icons';
+import { IconBack, IconCheck, IconInfo, IconRefresh, IconUsbKey, IconWarn } from '../components/icons';
+import { AddressMismatchStop, DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
+import { BRAND, isAddressMismatch, pickDevice, withDevice } from '../state/hw';
 
 type Family = 'btc' | 'evm' | 'sol';
 
 export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const { back, network, settings } = useApp();
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
-  const { accounts } = useVault();
-  const [family, setFamily] = useState<Family>(initial);
+  const { accounts, adapters, activeHw } = useVault();
+  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol };
+  const [family, setFamilyRaw] = useState<Family>(has[initial] ? initial : (['btc', 'evm', 'sol'] as const).find((f) => has[f]) ?? initial);
+  // Hardware wallet: on-device verification of the shown address (hw_verify_address).
+  type Verify = { state: 'idle' } | { state: 'running'; deviceId: string } | { state: 'ok'; address: string } | { state: 'error'; error: unknown; address: string };
+  const [verify, setVerify] = useState<Verify>({ state: 'idle' });
+  const [mismatch, setMismatch] = useState<unknown>(null);
+  const setFamily = (f: Family) => {
+    setFamilyRaw(f);
+    setVerify({ state: 'idle' });
+  };
   const [kind, setKind] = useState<BtcKind>('segwit');
   const [index, setIndex] = useState(0);
   const [derived, setDerived] = useState<Record<string, string>>({});
@@ -31,9 +42,21 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const evm = primaryEvmChain(network);
   const sol = solChain(network);
 
+  const btcAcc = accounts.btc?.[kind];
   const address =
-    family === 'btc' ? (index === 0 ? accounts.btc[kind].address : derived[`${kind}:${index}`] ?? accounts.btc[kind].address) : family === 'evm' ? accounts.evm.address : accounts.sol.address;
-  const path = family === 'btc' ? `${accounts.btc[kind].path}/0/${index}` : family === 'evm' ? "m/44'/60'/0'/0/0" : "m/44'/501'/0'/0'";
+    (family === 'btc' ? (index === 0 ? btcAcc?.address : (derived[`${kind}:${index}`] ?? btcAcc?.address)) : family === 'evm' ? accounts.evm?.address : accounts.sol?.address) ?? '';
+  const path =
+    family === 'btc'
+      ? `${btcAcc?.path ?? ''}/0/${index}`
+      : family === 'evm'
+        ? activeHw
+          ? hwPaths.evm(activeHw)
+          : "m/44'/60'/0'/0/0"
+        : activeHw
+          ? (hwPaths.sol(activeHw) ?? '')
+          : "m/44'/501'/0'/0'";
+  const verifiedHere = verify.state === 'ok' && verify.address === address;
+  const blocked = mismatch !== null || (verify.state === 'error' && isAddressMismatch(verify.error) && verify.address === address);
   const chainName = family === 'btc' ? btc.name : family === 'evm' ? evm.name : sol.name;
   const decimals = family === 'btc' ? 8 : family === 'evm' ? 18 : 9;
   const symbol = family === 'btc' ? 'BTC' : family === 'evm' ? 'ETH' : 'SOL';
@@ -51,11 +74,32 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
     setDeriveError(null);
     const next = index + 1;
     try {
-      const a = await call('btc_address', { kind, change: false, index: next });
+      // Vault: Rust derives from the seed. Hardware wallet: public derivation from the stored xpub
+      // (then verify it on the device).
+      const a = activeHw ? (adapters.btc?.addressAt(kind, 0, next).address ?? '') : await call('btc_address', { kind, change: false, index: next });
       setDerived((d) => ({ ...d, [`${kind}:${next}`]: a }));
       setIndex(next);
+      setVerify({ state: 'idle' });
     } catch (e) {
       setDeriveError(toIpcError(e).message);
+    }
+  };
+
+  const verifyOnDevice = async () => {
+    if (!activeHw) return;
+    const chain: HwImplementedChain = family;
+    const shown = address;
+    let deviceId = '';
+    try {
+      const d = await pickDevice(activeHw.device);
+      deviceId = d.id;
+      setVerify({ state: 'running', deviceId });
+      const res = await withDevice(deviceId, () => call('hw_verify_address', { id: deviceId, accountId: activeHw.id, chain, path }));
+      if (res.address.toLowerCase() !== shown.toLowerCase()) throw new Error('Adresse vérifiée différente de celle affichée : ne l’utilise pas.');
+      setVerify({ state: 'ok', address: shown });
+    } catch (e) {
+      setVerify({ state: 'error', error: e, address: shown });
+      if (isAddressMismatch(e)) setMismatch(e);
     }
   };
 
@@ -91,12 +135,14 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               key={f}
               type="button"
               aria-pressed={family === f}
+              disabled={!has[f]}
+              title={has[f] ? undefined : 'Ce compte hardware wallet n’a pas de clés pour cette chaîne'}
               onClick={() => {
                 setFamily(f);
                 setAmount('');
                 setAskAmount(false);
               }}
-              className={cn('flex h-10 items-center gap-2 rounded-full pr-4 pl-1.5 text-[13px]', family === f ? 'bg-control-2 font-semibold' : 'text-text2 hover:bg-raised')}
+              className={cn('flex h-10 items-center gap-2 rounded-full pr-4 pl-1.5 text-[13px] disabled:opacity-35', family === f ? 'bg-control-2 font-semibold' : 'text-text2 hover:bg-raised')}
             >
               <CoinIcon glyph={glyph} color={color} size={26} />
               {label}
@@ -109,7 +155,9 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
         <div aria-hidden="true" className="absolute top-1/2 left-[34%] size-[760px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#16191E]" />
         <div aria-hidden="true" className="absolute top-1/2 left-[34%] size-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#16191E]" />
         <div className="relative flex flex-col items-center gap-3">
-          <QrCode value={uri} size={300} />
+          <div className={cn(blocked && 'pointer-events-none opacity-20 blur-md')} aria-hidden={blocked || undefined}>
+            <QrCode value={uri} size={300} />
+          </div>
           <span className="font-mono text-[11px] tracking-[0.06em] text-faint">{askAmount && amountBase ? 'QR AVEC MONTANT' : 'QR DE L’ADRESSE'}</span>
         </div>
 
@@ -126,6 +174,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                 onChange={(k) => {
                   setKind(k);
                   setIndex(0);
+                  setVerify({ state: 'idle' });
                 }}
                 options={[
                   { value: 'segwit', label: 'SegWit' },
@@ -137,13 +186,43 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               </Button>
             </div>
           )}
-          <AddressBlocks address={address} size="xl" />
-          <div className="flex gap-2.5">
-            <CopyButton text={address} variant="primary" size="xl" className="flex-1" />
-            <Button size="xl" className="flex-1" disabled title="Hardware wallets : bientôt">
-              <IconUsbKey size={16} /> Vérifier sur Ledger
-            </Button>
+          <div className={cn(blocked && 'pointer-events-none opacity-30 blur-[3px]')} aria-hidden={blocked || undefined}>
+            <AddressBlocks address={address} size="xl" />
           </div>
+          {activeHw ? (
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center gap-2 text-[12px] text-mute">
+                <DeviceBadge device={activeHw.device} model={activeHw.model} />
+                <span>Compte hardware wallet : vérifie l’adresse sur l’écran de l’appareil avant de la communiquer.</span>
+              </div>
+              <Button variant="primary" size="xl" disabled={blocked || verify.state === 'running' || !address} onClick={() => void verifyOnDevice()}>
+                <IconUsbKey size={16} /> Vérifier sur l’appareil
+              </Button>
+              {verify.state === 'running' && (
+                <HwWaiting
+                  deviceId={verify.deviceId}
+                  idle={`Connexion au ${BRAND[activeHw.device]}…`}
+                  confirm={{ title: 'Compare l’adresse affichée sur ton appareil', detail: 'Elle doit être identique, caractère par caractère, à celle affichée ici. Confirme sur l’appareil seulement si c’est le cas.' }}
+                />
+              )}
+              {verifiedHere && (
+                <Notice tone="success" icon={<IconCheck size={16} className="mt-0.5 shrink-0 text-up" />}>
+                  Vérifiée : ton appareil affiche la même adresse que Kyro. Tu peux la communiquer.
+                </Notice>
+              )}
+              {verify.state === 'error' && !isAddressMismatch(verify.error) && verify.address === address && <HwErrorNotice error={verify.error} onRetry={() => void verifyOnDevice()} />}
+              {blocked && (
+                <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
+                  <strong className="font-semibold">Adresse bloquée :</strong> l’appareil a affiché une autre adresse. Ne reçois pas de fonds sur cette adresse.
+                </Notice>
+              )}
+              <CopyButton text={address} size="xl" className={cn(blocked && 'pointer-events-none opacity-40')} />
+            </div>
+          ) : (
+            <div className="flex gap-2.5">
+              <CopyButton text={address} variant="primary" size="xl" className="flex-1" />
+            </div>
+          )}
           {deriveError && <Notice tone="error">{deriveError}</Notice>}
           <dl className="m-0 flex flex-col overflow-hidden rounded-[14px] border border-line text-[13px]">
             <div className="flex h-11 items-center justify-between border-b border-line px-4">
@@ -193,6 +272,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           </Notice>
         </div>
       </section>
+      {mismatch !== null && <AddressMismatchStop error={mismatch} onClose={() => setMismatch(null)} />}
     </div>
   );
 }

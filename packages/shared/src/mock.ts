@@ -32,10 +32,12 @@ import {
 import { emitDemoEvent } from './events';
 import { createDemoServers } from './mock-servers';
 import { createDemoCbf, detectDemoCbf } from './mock-cbf';
+import { createDemoHw, detectDemoHwScenario, type DemoHw, type DemoHwScenario } from './mock-hw';
 import { EMPTY_SERVERS, redactServers } from './servers';
 import { createDemoTor, detectDemoTorDisabled, detectDemoTorScenario, type DemoTor, type DemoTorScenario } from './mock-tor';
 export { DEMO_TOR_BOOTSTRAP_MS, type DemoTor, type DemoTorScenario } from './mock-tor';
 export { DEMO_RESCAN_MS, demoElectrumCert } from './mock-servers';
+export { DEMO_HW_DELAYS, DEMO_TREZOR_LAYOUT, DEMO_TREZOR_PIN, TREZOR_KEYPAD, demoDecodePin, type DemoHwScenario } from './mock-hw';
 export { DEMO_CBF_CONNECT_MS, DEMO_CBF_FILTERS_MS, DEMO_CBF_HEADERS_MS } from './mock-cbf';
 import { demoHash, handleDemoNet, type DemoChainState } from './mock-net';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
@@ -191,6 +193,8 @@ export interface MockOptions {
   torEnabled?: boolean;
   /** Compact filters available (cargo feature `cbf`). Default: false, like today's build (`?cbf=on` → true). */
   cbf?: boolean;
+  /** Simulated hardware wallet (see mock-hw.ts). Default: `?hw=…`, else none plugged in. */
+  hw?: DemoHwScenario;
 }
 
 export interface MockBackend {
@@ -199,6 +203,8 @@ export interface MockBackend {
   chain: DemoChainState;
   /** Advance the fake clock (tests). */
   advance(ms: number): void;
+  /** Simulated hardware wallet (tests). */
+  hw: DemoHw;
   /** Simulated Tor (tests). */
   tor: DemoTor;
 }
@@ -329,6 +335,27 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     const outSum = psbt.txOutputs.reduce((a, o) => a + o.value, 0n);
     return { psbt: psbt.toBase64(), summary: { outputs, feeSats: Number(inSum - outSum) } };
   };
+
+  // Hardware wallets: keys from a separate public demo seed, same native-dialog emulation.
+  const hw = createDemoHw(opts.hw ?? detectDemoHwScenario(), {
+    network,
+    guard: () => {
+      lockIfExpired();
+      if (vault && !unlocked) throw new IpcError('LOCKED', 'Le coffre est verrouillé.');
+    },
+    confirm: (text) => confirmFn(text),
+    decodeEvm: (tx) => decodeEvm(tx),
+    registerEvm: (raw, hash, tx, from) => chain.signedEvm.set(raw, { hash, tx, from }),
+    fund: (_acc, addr) => {
+      const tip = chain.tipHeight;
+      if (addr.taproot && !chain.btcUtxos.has(addr.taproot)) chain.btcUtxos.set(addr.taproot, [{ txid: demoHash(`hw-tap:${addr.taproot}`), vout: 0, value: 640_000, height: tip - 30 }]);
+      if (addr.segwit && !chain.btcUtxos.has(addr.segwit)) chain.btcUtxos.set(addr.segwit, [{ txid: demoHash(`hw-seg:${addr.segwit}`), vout: 1, value: 310_000, height: tip - 80 }]);
+      if (addr.evm) {
+        const key = `${network === 'testnet' ? 11155111 : 1}:${addr.evm.toLowerCase()}`;
+        if (!chain.evmNative.has(key)) chain.evmNative.set(key, 312_000_000_000_000_000n);
+      }
+    },
+  });
 
   const handlers: { [K in keyof Commands]: (args: Record<string, unknown>) => unknown } = {
     vault_status: () => status(),
@@ -483,12 +510,25 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     btc_core_status: () => servers.coreStatus(),
     btc_cbf_status: () => servers.cbf.status(),
     btc_cbf_sync: () => servers.cbf.sync(),
+    hw_list: () => hw.list(),
+    hw_open: (a) => hw.open(a.id),
+    hw_cancel: (a) => hw.cancel(a.id),
+    hw_pin_matrix: (a) => hw.pinMatrix(a.id, a.positions),
+    hw_get_xpub: (a) => hw.getXpub(a),
+    hw_accounts_get: () => hw.accountsGet(),
+    hw_account_add: (a) => hw.accountAdd(a),
+    hw_account_remove: (a) => hw.accountRemove(a.accountId),
+    hw_verify_address: (a) => hw.verifyAddress(a),
+    hw_sign_btc_psbt: (a) => hw.signBtc(a),
+    hw_sign_evm_tx: (a) => hw.signEvm(a),
+    hw_sign_sol_tx: (a) => hw.signSol(a),
     config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasOneinchKey: true, hasCoingeckoKey: false }),
   };
 
   return {
     chain,
     tor,
+    hw,
     advance(ms: number) {
       clockOffset += ms;
     },

@@ -15,6 +15,7 @@ import { StatusFrame } from '../shell/StatusBar';
 import { KyroMark, PasswordField } from '../components/kit';
 import { Badge, Button, Notice, Segmented, Spinner } from '../components/ui/primitives';
 import { Dialog } from '../components/ui/dialog';
+import { HwSetup } from '../components/hw';
 import { IconBack, IconChevronRight, IconImport, IconPlus, IconUsbKey, IconWarn } from '../components/icons';
 import { DEMO_PASSWORD_HINT } from './demoHint';
 
@@ -56,15 +57,27 @@ export function OnboardingFrame({ children, status }: { children: ReactNode; sta
   );
 }
 
-type Mode = 'home' | 'create' | 'import';
+type Mode = 'home' | 'create' | 'import' | 'hw';
 
 export function Welcome() {
   const [mode, setMode] = useState<Mode>('home');
   const [info, setInfo] = useState<null | 'threat' | 'code' | 'network'>(null);
-  const { network } = useApp();
+  const { network, enterVault } = useApp();
 
   if (mode === 'create') return <CreateFlow onCancel={() => setMode('home')} />;
   if (mode === 'import') return <ImportFlow onCancel={() => setMode('home')} />;
+  if (mode === 'hw') {
+    return (
+      <OnboardingFrame status={<span className="text-mute">Hardware wallet seul : pas de coffre ni de mot de passe Kyro</span>}>
+        <div className="flex max-w-[600px] flex-col gap-6">
+          <StepHeader step={1} total={1} title="Utiliser un Ledger ou une Trezor" onBack={() => setMode('home')}>
+            Tes clés restent dans l’appareil. Kyro n’enregistre que des clés publiques ; chaque transaction se confirme sur l’écran de l’appareil. Pas de coffre ni de mot de passe Kyro dans ce mode.
+          </StepHeader>
+          <HwSetup onCancel={() => setMode('home')} onDone={() => void enterVault()} />
+        </div>
+      </OnboardingFrame>
+    );
+  }
 
   return (
     <OnboardingFrame>
@@ -84,15 +97,15 @@ export function Welcome() {
 
         <div className="flex max-w-[540px] flex-col gap-2.5">
           <ChoiceCard
-            disabled
             icon={<IconUsbKey size={20} />}
-            iconClass="bg-control-2 text-mute"
+            iconClass="bg-ice/12 text-ice"
             title={
               <>
-                Connecter un hardware wallet <Badge tone="ice">Bientôt</Badge>
+                Utiliser un Ledger / Trezor <Badge tone="ice">Recommandé</Badge>
               </>
             }
-            subtitle="Ledger ou Trezor : tes clés ne quitteront jamais l’appareil. Arrive dans une prochaine version."
+            subtitle="Tes clés ne quittent jamais l’appareil ; chaque transaction se vérifie sur son écran."
+            onClick={() => setMode('hw')}
           />
           <ChoiceCard icon={<IconPlus size={20} />} title="Créer un nouveau coffre" subtitle="24 mots à écrire sur papier, jamais copiés." onClick={() => setMode('create')} />
           <ChoiceCard icon={<IconImport size={20} />} title="Importer une phrase de récupération" subtitle="12 ou 24 mots BIP39, depuis un autre wallet." onClick={() => setMode('import')} />
