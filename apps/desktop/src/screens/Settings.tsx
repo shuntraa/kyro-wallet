@@ -323,6 +323,8 @@ function ApiKeys({ save }: { save: Save }) {
     { key: 'coingecko', label: 'CoinGecko', desc: 'Optionnelle : quota plus large pour les prix.', env: !!config?.hasCoingeckoKey },
     { key: 'zerox', label: '0x', desc: 'Requise pour les devis 0x.', env: !!config?.hasZeroxKey },
     { key: 'oneinch', label: '1inch', desc: 'Requise pour les devis 1inch.', env: !!config?.hasOneinchKey },
+    // hasTrongridKey is also true for a key saved here: « environnement » only when none is saved.
+    { key: 'trongrid', label: 'TronGrid', desc: 'Optionnelle : limites de débit plus hautes pour TRON (TRON-PRO-API-KEY).', env: !!config?.hasTrongridKey && !settings.apiKeys.trongrid },
   ];
   return (
     <Panel className="gap-4 py-5">
@@ -427,7 +429,7 @@ function Contacts() {
         <span className="text-[13px] font-semibold">Ajouter</span>
         <div className="flex gap-2">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom" className="w-[160px]" />
-          <Segmented label="Réseau" value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'tron', label: 'TRON' }]} />
+          <Segmented label="Réseau" value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'tron', label: 'TRON' }, { value: 'xrp', label: 'XRP' }]} />
         </div>
         <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Adresse" className="font-mono text-[13px]" />
         {address && !valid && <span className="text-[12px] text-down">Adresse invalide pour ce réseau.</span>}

@@ -40,7 +40,7 @@ describe('TRON in the app', () => {
     expect(assetsFor('testnet').filter((a) => a.family === 'tron')).toHaveLength(2);
     expect(outgoingHosts('testnet').map((h) => h.host)).toContain('nile.trongrid.io');
     expect(outgoingHosts('mainnet').map((h) => h.host)).toContain('api.trongrid.io');
-    const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, tron: { testnet: { kind: 'http', url: 'https://tron.my-node.example' } } });
+    const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, xrp: {}, tron: { testnet: { kind: 'http', url: 'https://tron.my-node.example' } } });
     expect(custom.find((h) => h.host === 'tron.my-node.example')).toMatchObject({ custom: true });
     expect(custom.map((h) => h.host)).not.toContain('nile.trongrid.io');
   });

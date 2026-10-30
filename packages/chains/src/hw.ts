@@ -28,6 +28,8 @@ export interface WalletAccounts {
   doge?: { address: string; xpub: string; fingerprint: string; path: string };
   /** Vault only, like Litecoin / Dogecoin: TRON on a hardware wallet is HW_UNSUPPORTED. */
   tron?: { address: string };
+  /** Vault only: XRP on a hardware wallet is HW_UNSUPPORTED. */
+  xrp?: { address: string };
 }
 
 export interface BtcAccountView {

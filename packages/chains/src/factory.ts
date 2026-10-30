@@ -12,6 +12,8 @@ import { DogecoinAdapter } from './dogecoin/adapter';
 import type { UtxoAccountView, UtxoBackend } from './utxo/utxo';
 import { dogeChain, ltcChain, tronChain } from './registry';
 import { TronAdapter } from './tron/adapter';
+import { XrpAdapter } from './xrp/adapter';
+import { xrpChain } from './registry';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -26,6 +28,8 @@ export interface AdapterSet {
   doge: DogecoinAdapter | null;
   /** TRON: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   tron: TronAdapter | null;
+  /** XRP Ledger: vault only (hardware wallets: HW_UNSUPPORTED for now). */
+  xrp: XrpAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -60,8 +64,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const { ltc, doge } = createUtxoAdapters(accounts);
   // TRON: Rust picks the server (servers.tron, default TronGrid).
   const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : [])];
-  return { btc, evm, sol, ltc, doge, tron, all, hw: hw ?? null };
+  // XRP Ledger: Rust picks the server (servers.xrp, default rippled).
+  const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : [])];
+  return { btc, evm, sol, ltc, doge, tron, xrp, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin
@@ -133,7 +139,7 @@ export {
   isKnownTronToken,
 } from './tron/adapter';
 
-// ---------------------------------------------------------------- phase 4: XRP Ledger (B4c)
+// ---------------------------------------------------------------- phase 4: XRP Ledger
 
 export {
   XrpAdapter,
@@ -151,4 +157,5 @@ export {
   type XrpIssued,
   type XrpUnsigned,
   type XrpSigned,
+  isXAddress,
 } from './xrp/adapter';

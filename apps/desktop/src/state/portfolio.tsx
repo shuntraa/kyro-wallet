@@ -156,8 +156,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       if (asset.family === 'evm' ? !adapters.evm.has(asset.chainKey) : !adapters[asset.family]) continue;
       const amount = balances.get(asset.id) ?? 0n;
       const chain = findChain(network, asset.chainKey);
-      // Phase 1 natives, Litecoin / Dogecoin (« configure ton serveur ») and TRX always show.
-      const always = asset.kind === 'native' && (chain?.phase === 1 || asset.family === 'ltc' || asset.family === 'doge' || asset.family === 'tron');
+      // Phase 1 natives, Litecoin / Dogecoin (« configure ton serveur »), TRX and XRP always show.
+      const always = asset.kind === 'native' && (chain?.phase === 1 || asset.family === 'ltc' || asset.family === 'doge' || asset.family === 'tron' || asset.family === 'xrp');
       if (!always && amount === 0n) continue;
       const m = marketById.get(asset.coingeckoId);
       const p = price(asset.coingeckoId);

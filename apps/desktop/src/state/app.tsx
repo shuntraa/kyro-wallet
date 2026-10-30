@@ -18,7 +18,7 @@ export type Route =
   | { name: 'assets'; tab?: 'mine' | 'market' | 'favorites' }
   | { name: 'asset'; id: string }
   | { name: 'send'; assetId?: string; to?: string }
-  | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' }
+  | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' }
   | { name: 'swap'; sellAssetId?: string }
   | { name: 'history' }
   | { name: 'settings'; section?: SettingsSection };

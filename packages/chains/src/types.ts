@@ -4,6 +4,7 @@ import type { BtcTxSummary, EvmTokenHint, EvmTxRequest, EvmTxSummary } from '@ky
 import type { AssetDef, Chain, Family } from './registry';
 import type { UtxoSigned, UtxoUnsigned } from './utxo/utxo';
 import type { TronSigned, TronUnsigned } from './tron/adapter';
+import type { XrpSigned, XrpUnsigned } from './xrp/adapter';
 
 export type FeeLevel = 'slow' | 'normal' | 'fast';
 export type FeeChoice = FeeLevel | 'custom';
@@ -14,7 +15,9 @@ export type FeeParams =
   | { family: 'btc'; satPerVb: number }
   | { family: 'sol'; microLamports: bigint }
   /** TRON: no fee to choose. Rust burns bandwidth / energy (estimate shown, `fee_limit` caps it). */
-  | { family: 'tron' };
+  | { family: 'tron' }
+  /** XRP Ledger: no fee to choose. Rust sets `Fee` from the open ledger (≈ 12 drops). */
+  | { family: 'xrp' };
 
 export interface FeeOption {
   level: FeeLevel;
@@ -43,7 +46,8 @@ export type SizeHint =
   | { family: 'btc'; vsize: number }
   | { family: 'sol'; computeUnits: number; signatures: number }
   /** TRON: bandwidth bytes charged, energy simulated (TRC-20). */
-  | { family: 'tron'; bandwidth: number; energy: number };
+  | { family: 'tron'; bandwidth: number; energy: number }
+  | { family: 'xrp' };
 
 export interface Balance {
   assetId: string;
@@ -58,6 +62,8 @@ export interface BuildParams {
   fee: FeeParams;
   /** Send everything (native: balance minus fee). */
   max?: boolean;
+  /** XRP Ledger only: destination tag (0 … 4 294 967 295). */
+  destinationTag?: number;
 }
 
 export interface EvmUnsigned {
@@ -132,9 +138,11 @@ export interface FamilyTypes {
   doge: { unsigned: UtxoUnsigned; signed: UtxoSigned };
   /** TRON: `raw_data` built and decoded by Rust, its resource estimate. */
   tron: { unsigned: TronUnsigned; signed: TronSigned };
+  /** XRP Ledger: Payment built and strictly decoded by Rust, with the live context. */
+  xrp: { unsigned: XrpUnsigned; signed: XrpSigned };
 }
-export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned;
-export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned;
+export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned;
+export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned;
 
 export type HistoryDirection = 'in' | 'out' | 'self';
 export type HistoryStatus = 'pending' | 'confirmed' | 'failed';
@@ -169,7 +177,7 @@ export interface ChainAdapter<F extends Family = Family> {
   getHistory(): Promise<HistoryItem[]>;
 }
 
-export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'tron'>;
+export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'tron'> | ChainAdapter<'xrp'>;
 
 /** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin: Bitcoin's PSBT shape). */
 export function unsignedFamilyOf(family: Family): AnyUnsigned['family'] {

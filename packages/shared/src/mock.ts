@@ -35,6 +35,8 @@ import { createDemoCbf, detectDemoCbf } from './mock-cbf';
 import { createDemoUtxo, demoUtxoAccount, DEMO_DOGE_NETWORKS, DEMO_LTC_NETWORKS } from './mock-utxo';
 import { createDemoTron, demoTronAddress, type DemoTronState } from './mock-tron';
 export { demoTronAddress } from './mock-tron';
+import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
+export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
 import { demoFund } from './mock-tx';
 import { createDemoHw, detectDemoHwScenario, type DemoHw, type DemoHwScenario } from './mock-hw';
 import { EMPTY_SERVERS, redactServers } from './servers';
@@ -139,6 +141,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       ltc: ltc.info,
       doge: doge.info,
       tron: { address: demoTronAddress(demoSeed(), 0) },
+      xrp: { address: demoXrpAddress(demoSeed(), 0) },
     },
     ownBtc,
     receive,
@@ -240,6 +243,8 @@ export interface MockBackend {
   tor: DemoTor;
   /** TRON demo chain (tests). */
   tron: DemoTronState;
+  /** XRP Ledger demo chain (tests). */
+  xrp: DemoXrpState;
 }
 
 export function createMockBackend(opts: MockOptions = {}): MockBackend {
@@ -285,10 +290,22 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
+  // XRP Ledger (§2.6): `xrp_*`, reserves and destination-tag rules like Rust.
+  const xrpChain = createDemoXrp({
+    network,
+    seed: demoSeed(),
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
   // Custom servers (B2b): live checks, Bitcoin backends, Core watch wallet.
   const servers = createDemoServers({
     utxo: utxoChains,
     tron: tronChain,
+    xrp: xrpChain,
     chain,
     network,
     fingerprint: keys.accounts.btc.segwit.fingerprint,
@@ -566,6 +583,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     btc_broadcast: (a) => servers.btc.broadcast(a.hex),
     btc_tx_hex: (a) => servers.btc.txHex(a.txid),
     ...tronChain.handlers,
+    ...xrpChain.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
     btc_cbf_status: () => servers.cbf.status(),
@@ -582,7 +600,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     hw_sign_btc_psbt: (a) => hw.signBtc(a),
     hw_sign_evm_tx: (a) => hw.signEvm(a),
     hw_sign_sol_tx: (a) => hw.signSol(a),
-    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasOneinchKey: true, hasCoingeckoKey: false }),
+    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasOneinchKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(settings.apiKeys.trongrid) }),
   };
 
   return {
@@ -590,6 +608,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     tor,
     hw,
     tron: tronChain.state,
+    xrp: xrpChain.state,
     advance(ms: number) {
       clockOffset += ms;
     },

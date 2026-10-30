@@ -5,71 +5,22 @@
 // `submit` are Rust commands (`xrp_*`, docs/IPC.md §2.6). This adapter only validates input and
 // checks that what Rust built is what was asked (destination, amount, **destination tag**).
 
-import { call } from '@kyro/shared';
+import {
+  call,
+  type XrpAccountInfo,
+  type XrpAmountView,
+  type XrpContext,
+  type XrpHistoryEntry,
+  type XrpTrustLine,
+  type XrpTxSummary,
+  type XrpWarning,
+} from '@kyro/shared';
 import type { XrpChain } from '../registry';
-import type { HistoryItem } from '../types';
+import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 // ---------------------------------------------------------------- Rust contract (§2.6)
 
-export interface XrpAccountInfo {
-  address: string;
-  /** Activated (funded with at least the base reserve). */
-  exists: boolean;
-  /** Drops (1 XRP = 1 000 000 drops), decimal strings. */
-  balance: string;
-  sequence: number;
-  ownerCount: number;
-  flags: number;
-  /** The account refuses payments without a destination tag: make the tag field mandatory. */
-  requireDestTag: boolean;
-  disallowXrp: boolean;
-  /** Locked: base reserve + owner reserve × owned objects (drops). */
-  reserve: string;
-  /** Balance − reserve (drops). */
-  spendable: string;
-}
-
-export type XrpAmountView = { kind: 'xrp'; drops: string } | { kind: 'issued'; value: string; currency: string; issuer: string };
-
-export type XrpWarning = { kind: 'sendMax' } | { kind: 'pathFlags' } | { kind: 'memo' } | { kind: 'highFee' } | { kind: 'invoiceId' };
-
-export interface XrpTxSummary {
-  account: string;
-  destination: string;
-  /** null = no tag. Show it prominently. */
-  destinationTag: number | null;
-  amount: XrpAmountView;
-  fee: string;
-  sequence: number;
-  lastLedgerSequence: number | null;
-  flags: number;
-  sendMax: XrpAmountView | null;
-  sourceTag: number | null;
-  invoiceId: string | null;
-  memos: Array<{ memoType: string | null; memoData: string | null; memoFormat: string | null; text: string | null }>;
-  warnings: XrpWarning[];
-  requiresExtraConfirmation: boolean;
-}
-
-export interface XrpContext {
-  account: XrpAccountInfo;
-  destination: XrpAccountInfo;
-  reserveBase: string;
-  reserveInc: string;
-}
-
-export interface XrpHistoryEntry {
-  hash: string;
-  from: string;
-  to: string;
-  destinationTag: number | null;
-  /** Delivered amount (not `Amount`: partial payments deliver less). */
-  amount: XrpAmountView | null;
-  fee: string;
-  ledger: number | null;
-  time: number | null;
-  result: string;
-}
+export type { XrpAccountInfo, XrpAmountView, XrpContext, XrpHistoryEntry, XrpTrustLine, XrpTxSummary, XrpWarning };
 
 export interface XrpIssued {
   currency: string;
@@ -78,7 +29,7 @@ export interface XrpIssued {
 
 export interface XrpBackend {
   account(address: string): Promise<XrpAccountInfo>;
-  lines(address: string): Promise<Array<{ currency: string; issuer: string; balance: string; limit: string }>>;
+  lines(address: string): Promise<XrpTrustLine[]>;
   txs(address: string): Promise<XrpHistoryEntry[]>;
   build(to: string, amount: string, destinationTag?: number, issued?: XrpIssued): Promise<{ blob: string; summary: XrpTxSummary; context: XrpContext }>;
   sign(blob: string, password: string): Promise<{ blob: string; hash: string; summary: XrpTxSummary; context: XrpContext }>;
@@ -86,20 +37,16 @@ export interface XrpBackend {
   txStatus(hash: string): Promise<{ validated: boolean; result: string }>;
 }
 
-/** `xrp_*` are not (yet) in `@kyro/shared`'s typed `Commands`: untyped view of `call`, typed here. */
-type RawCall = <R>(cmd: string, args?: Record<string, unknown>) => Promise<R>;
-const rawCall = call as unknown as RawCall;
-
-export function rustXrpBackend(invoke: RawCall = rawCall): XrpBackend {
+/** The typed `xrp_*` commands of `@kyro/shared` (docs/IPC.md §2.6). */
+export function rustXrpBackend(): XrpBackend {
   return {
-    account: (address) => invoke('xrp_account', { address }),
-    lines: (address) => invoke('xrp_lines', { address }),
-    txs: (address) => invoke('xrp_txs', { address }),
-    build: (to, amount, destinationTag, issued) =>
-      invoke('xrp_build_tx', { to, amount, ...(destinationTag !== undefined ? { destinationTag } : {}), ...(issued ? { issued } : {}) }),
-    sign: (blob, password) => invoke('xrp_sign_tx', { blob, password }),
-    broadcast: (blob) => invoke('xrp_broadcast', { blob }),
-    txStatus: (hash) => invoke('xrp_tx_status', { hash }),
+    account: (address) => call('xrp_account', { address }),
+    lines: (address) => call('xrp_lines', { address }),
+    txs: (address) => call('xrp_txs', { address }),
+    build: (to, amount, destinationTag, issued) => call('xrp_build_tx', { to, amount, ...(destinationTag !== undefined ? { destinationTag } : {}), ...(issued ? { issued } : {}) }),
+    sign: (blob, password) => call('xrp_sign_tx', { blob, password }),
+    broadcast: (blob) => call('xrp_broadcast', { blob }),
+    txStatus: (hash) => call('xrp_tx_status', { hash }),
   };
 }
 
@@ -114,6 +61,15 @@ const RIPPLE_ALPHABET = 'rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvA
 export function isXrpAddress(address: string): boolean {
   const a = address.trim();
   return /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(a) && [...a].every((c) => RIPPLE_ALPHABET.includes(c));
+}
+
+/**
+ * X-address (`X…` mainnet / `T…` testnet, destination tag embedded): Rust refuses them
+ * (wallet-core `xrp_account_id`, same rule). The UI asks for the classic address + tag instead.
+ */
+export function isXAddress(address: string): boolean {
+  const a = address.trim();
+  return (a.startsWith('X') || a.startsWith('T')) && a.length >= 46 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(a);
 }
 
 /** Destination tag: an integer 0 … 4 294 967 295, or empty. */
@@ -134,8 +90,14 @@ export interface XrpUnsigned {
   summary: XrpTxSummary;
   context: XrpContext;
   recipient: string;
-  amount: string;
+  /** Drops (XRP). 0n for an issued currency (its value is `drops`/`summary.amount`). */
+  amount: bigint;
+  /** What was asked: drops (XRP) or the decimal value (issued). */
+  drops: string;
   destinationTag?: number;
+  /** Fee set by Rust (drops): the whole cost on top of the amount. */
+  maxFee: bigint;
+  size: { family: 'xrp' };
 }
 
 export interface XrpSigned {
@@ -151,7 +113,7 @@ export interface XrpAdapterOptions {
   backend?: XrpBackend;
 }
 
-export class XrpAdapter {
+export class XrpAdapter implements ChainAdapter<'xrp'> {
   readonly family = 'xrp' as const;
   readonly chain: XrpChain;
   private readonly address: string;
@@ -182,18 +144,47 @@ export class XrpAdapter {
   }
 
   /** XRP balance, plus `spendable` = balance − reserve (what can actually be sent). */
-  async getBalance(): Promise<Array<{ assetId: string; amount: bigint; spendable: bigint }>> {
+  async getBalance(): Promise<Array<Balance & { spendable: bigint }>> {
     const acc = await this.backend.account(this.address);
     return [{ assetId: 'xrp', amount: BigInt(acc.balance), spendable: BigInt(acc.spendable) }];
   }
 
   /** Issued-currency balances (trust lines); values are decimal strings (≤ 16 significant digits). */
-  trustLines(): Promise<Array<{ currency: string; issuer: string; balance: string; limit: string }>> {
+  trustLines(): Promise<XrpTrustLine[]> {
     return this.backend.lines(this.address);
   }
 
+  /** No fee to choose: Rust sets `Fee` from the open ledger (usually 10–12 drops). */
+  estimateFees(): Promise<FeeEstimates> {
+    const p = { family: 'xrp' as const };
+    const eta = this.chain.blockTimeSecs;
+    return Promise.resolve({
+      options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
+      minimum: p,
+      hint: 'frais fixés par le registre (≈ 0,000012 XRP)',
+      fetchedAt: Date.now(),
+    });
+  }
+
+  /**
+   * `ChainAdapter` entry point (XRP only; issued currencies go through `buildPayment`). `max`:
+   * spendable (balance − reserve) minus the fee Rust sets, built twice.
+   */
+  async buildTx(params: BuildParams): Promise<XrpUnsigned> {
+    if (params.asset.kind !== 'native') throw new Error('Actif XRP Ledger inattendu');
+    const tag = params.destinationTag !== undefined ? { destinationTag: params.destinationTag } : {};
+    if (!params.max) return this.buildPayment({ to: params.to, amount: params.amount.toString(), ...tag });
+    const spendable = BigInt((await this.backend.account(this.address)).spendable);
+    // First pass with a fee ceiling of 0.001 XRP; then exactly spendable − fee.
+    const first = await this.buildPayment({ to: params.to, amount: (spendable - 1_000n).toString(), ...tag }).catch(() => null);
+    const fee = first ? BigInt(first.summary.fee) : 12n;
+    const amount = spendable - fee;
+    if (amount <= 0n) throw new Error('Rien à envoyer : tout ton solde est bloqué par la réserve');
+    return this.buildPayment({ to: params.to, amount: amount.toString(), ...tag });
+  }
+
   /** `amount`: drops (XRP) or decimal value (issued). Rust re-checks reserve, tag and balance. */
-  async buildTx(params: { to: string; amount: string; destinationTag?: number; issued?: XrpIssued }): Promise<XrpUnsigned> {
+  async buildPayment(params: { to: string; amount: string; destinationTag?: number; issued?: XrpIssued }): Promise<XrpUnsigned> {
     const to = params.to.trim();
     if (!isXrpAddress(to)) throw new Error('Adresse XRP invalide (adresse classique r… attendue)');
     if (to === this.address) throw new Error('Paiement à soi-même impossible');
@@ -207,7 +198,18 @@ export class XrpAdapter {
     if (!amountOk || !tagOk || s.destination !== to || s.account !== this.address || s.requiresExtraConfirmation) {
       throw new Error('Le paiement construit par Rust ne correspond pas à la demande');
     }
-    return { family: 'xrp', blob: built.blob, summary: s, context: built.context, recipient: to, amount: params.amount, ...(params.destinationTag !== undefined ? { destinationTag: params.destinationTag } : {}) };
+    return {
+      family: 'xrp',
+      blob: built.blob,
+      summary: s,
+      context: built.context,
+      recipient: to,
+      amount: params.issued ? 0n : BigInt(params.amount),
+      drops: params.amount,
+      ...(params.destinationTag !== undefined ? { destinationTag: params.destinationTag } : {}),
+      maxFee: BigInt(s.fee),
+      size: { family: 'xrp' },
+    };
   }
 
   /** Rust: live checks, native dialog (tag highlighted, reserve), signature. */

@@ -36,7 +36,8 @@ export function setFavorites(ids: string[]): void {
 
 // ---------------------------------------------------------------- address book
 
-export type ContactFamily = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron';
+/** XRP contacts: the classic address only (the destination tag is per payment). */
+export type ContactFamily = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp';
 export interface Contact {
   id: string;
   name: string;

@@ -9,6 +9,8 @@ import {
   checkSolSummary,
   feeCost,
   findChain,
+  isXAddress,
+  parseDestinationTag,
   DOGE_SOFT_DUST,
   evmHwDisplay,
   litecoinDust,
@@ -30,6 +32,7 @@ import {
   type FeeLevel,
   type FeeParams,
   type SolanaAdapter,
+  type XrpAdapter,
 } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -46,6 +49,7 @@ import { BRAND, pickDevice, withDevice } from '../state/hw';
 import { useOnTorReady } from '../state/tor';
 import { SolSummaryView } from '../components/SolSummaryView';
 import { TronEstimateView } from '../components/TronEstimateView';
+import { XRP_ACTIVATION, XrpSpendable, XrpSummaryView, XrpTagField, XrpTxStatusLine } from '../components/XrpSend';
 import { Menu } from '../components/ui/menu';
 import { Button, IconButton, Notice, Spinner } from '../components/ui/primitives';
 import { IconBack, IconCheck, IconChevronDown, IconLock, IconShield, IconUpDown, IconWarn } from '../components/icons';
@@ -58,6 +62,7 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   if (asset.family === 'ltc') return adapters.ltc ?? undefined;
   if (asset.family === 'doge') return adapters.doge ?? undefined;
   if (asset.family === 'tron') return adapters.tron ?? undefined;
+  if (asset.family === 'xrp') return adapters.xrp ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -93,7 +98,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const toTrim = to.trim();
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
-  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address].filter((a): a is string => !!a);
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address].filter((a): a is string => !!a);
   const isOwn = ownAddresses.includes(asset?.family === 'evm' ? toTrim.toLowerCase() : toTrim);
   const noChecksum = asset?.family === 'evm' && addrValid && toTrim.slice(2) === toTrim.slice(2).toLowerCase();
 
@@ -107,6 +112,24 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const rateUnit = asset?.family === 'ltc' ? 'litoshi/vB' : asset?.family === 'doge' ? 'koinus/octet' : 'sat/vB';
   /** TRON: no fee to choose; Rust's resource estimate is shown with the summary. */
   const isTron = asset?.family === 'tron';
+  /** XRP Ledger: no fee to choose; destination tag, reserve and activation rules (§2.6). */
+  const isXrp = asset?.family === 'xrp';
+  const xrpAdapter = isXrp ? (adapter as XrpAdapter | undefined) : undefined;
+  const [tagStr, setTagStr] = useState('');
+  const tagParsed = useMemo((): { tag?: number; error: string | null } => {
+    try {
+      const t = parseDestinationTag(tagStr);
+      return t === undefined ? { error: null } : { tag: t, error: null };
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  }, [tagStr]);
+  /** A pasted X-address (tag embedded): Rust refuses it, Kyro asks for the classic address + tag. */
+  const xAddress = isXrp && isXAddress(toTrim);
+  // Destination as Rust reads it (exists? lsfRequireDestTag?), and our own reserve / spendable.
+  const xrpDest = useAsync(xrpAdapter && addrValid ? () => xrpAdapter.destinationInfo(toTrim) : null, [xrpAdapter, addrValid, toTrim]);
+  const xrpDestInfo = xrpDest.data?.address === toTrim ? xrpDest.data : undefined;
+  const xrpMe = useAsync(xrpAdapter ? () => xrpAdapter.account() : null, [xrpAdapter], { intervalMs: 30_000 });
   const amountBase = useMemo(() => {
     if (!amountStr) return null;
     if (fiatMode) {
@@ -116,6 +139,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     }
     return tryParseUnits(amountStr, decimals);
   }, [amountStr, fiatMode, price, decimals]);
+  // XRP: a new account needs at least the base reserve (1 XRP), else tecNO_DST_INSUF_XRP.
+  const xrpBelowActivation = isXrp && !!xrpDestInfo && !xrpDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XRP_ACTIVATION;
+  const xrpTagMissing = isXrp && !!xrpDestInfo?.requireDestTag && tagParsed.tag === undefined;
+  /** XRP: everything that must be right before Rust is even asked to build. */
+  const xrpBlocked = isXrp && (!xrpDestInfo || !!tagParsed.error || xrpTagMissing || xrpBelowActivation);
   // Dogecoin dust (Dogecoin Core policy): no output under 0.01 DOGE.
   const dogeBelowDust = asset?.family === 'doge' && amountBase !== null && amountBase > 0n && amountBase < DOGE_SOFT_DUST && !max;
 
@@ -148,15 +176,18 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const feeParams: FeeParams | null = choice === 'custom' ? custom?.params ?? null : fees.data?.options[choice].params ?? null;
 
   // Build (debounced) → unsigned tx + Rust decoding for EVM.
-  const buildKey = useDebounced(JSON.stringify([asset?.id, toTrim, amountBase?.toString(), max, feeParams, addrValid], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), 450);
+  const buildKey = useDebounced(JSON.stringify([asset?.id, toTrim, amountBase?.toString(), max, feeParams, addrValid, isXrp ? tagStr : null, xrpBlocked], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), 450);
   const [built, setBuilt] = useState<Built | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
-  const overBalance = !max && amountBase !== null && amountBase > balance;
+  // XRP: what can be sent is the spendable part (balance − reserve), not the balance.
+  const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : null;
+  const overBalance = !max && amountBase !== null && amountBase > (xrpSpendable ?? balance);
 
   const doBuild = async (): Promise<Built> => {
     if (!asset || !adapter || !feeParams) throw new Error('Paramètres incomplets');
-    const unsigned = (await (adapter as { buildTx: (p: unknown) => Promise<AnyUnsigned> }).buildTx({ asset, to: toTrim, amount: amountBase ?? 0n, fee: feeParams, max })) as AnyUnsigned;
+    const tag = isXrp && tagParsed.tag !== undefined ? { destinationTag: tagParsed.tag } : {};
+    const unsigned = (await (adapter as { buildTx: (p: unknown) => Promise<AnyUnsigned> }).buildTx({ asset, to: toTrim, amount: amountBase ?? 0n, fee: feeParams, max, ...tag })) as AnyUnsigned;
     let summary: EvmTxSummary | null = null;
     if (unsigned.family === 'evm') {
       summary = await (adapter as EvmAdapter).decode(unsigned);
@@ -178,7 +209,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   useEffect(() => {
     setBuilt(null);
     setBuildError(null);
-    if (!addrValid || !feeParams || overBalance || dogeBelowDust || (!max && (amountBase === null || amountBase <= 0n))) return;
+    if (!addrValid || !feeParams || overBalance || dogeBelowDust || xrpBlocked || (!max && (amountBase === null || amountBase <= 0n))) return;
     let alive = true;
     setBuilding(true);
     doBuild()
@@ -279,7 +310,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const step2 = !!built;
 
   if (done) {
-    return <SendDone id={done.id} asset={asset} amount={built?.unsigned.amount ?? 0n} to={toTrim} contactKnown={!!contact} onBack={back} onHistory={() => navigate({ name: 'history' })} />;
+    return (
+      <SendDone id={done.id} asset={asset} amount={built?.unsigned.amount ?? 0n} to={toTrim} contactKnown={!!contact} onBack={back} onHistory={() => navigate({ name: 'history' })}>
+        {xrpAdapter && <XrpTxStatusLine adapter={xrpAdapter} hash={done.id} recipient={toTrim} onValidated={pf.refresh} />}
+      </SendDone>
+    );
   }
 
   return (
@@ -315,6 +350,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 setCustomEvm({ maxFeeGwei: '', priorityGwei: '' });
                 setCustomBtc('');
                 setCustomSol('');
+                setTagStr('');
               }}
               className="w-[520px]"
               items={sendable.map((a) => ({
@@ -338,7 +374,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 </button>
               }
             />
-            {activeHw && <span className="text-[12px] text-faint">Litecoin, Dogecoin et TRON : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).</span>}
+            {activeHw && <span className="text-[12px] text-faint">Litecoin, Dogecoin, TRON et XRP : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).</span>}
             {fees.error && serverMissing(fees.error) && <ServerMissingLine coin={asset.name} />}
           </div>
 
@@ -356,7 +392,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
+                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? 'r… (adresse classique)' : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -403,7 +439,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 </div>
               )}
             </div>
-            {toTrim && !addrValid && <span className="text-[12px] text-down">Adresse invalide pour {chain.name}.</span>}
+            {toTrim && !addrValid && !xAddress && <span className="text-[12px] text-down">Adresse invalide pour {chain.name}.</span>}
+            {xAddress && (
+              <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+                <strong className="font-semibold">Adresse X (X… / T…) :</strong> elle contient l’adresse et le tag mélangés. Kyro veut l’adresse classique (r…) et le tag de destination séparément, pour que tu les voies tous les deux : demande-les à ton destinataire ou à ta plateforme (rubrique « dépôt XRP »).
+              </Notice>
+            )}
+            {isXrp && <XrpTagField value={tagStr} onChange={setTagStr} error={tagParsed.error} dest={xrpDestInfo} destLoading={addrValid && xrpDest.loading && !xrpDestInfo} />}
+            {isXrp && xrpDest.error && addrValid && <span className="text-[12px] text-down">Compte destinataire illisible : {xrpDest.error.message}</span>}
             {guard.tampered && settings.clipboardGuard && (
               <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
                 L’adresse a changé après ton collage sans que tu tapes : envoi bloqué. Efface le champ et recolle l’adresse depuis une source sûre.
@@ -453,7 +496,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 MAX
               </button>
             </div>
-            {overBalance && <span className="text-[12px] text-down">Montant supérieur à ton solde.</span>}
+            {overBalance && <span className="text-[12px] text-down">{isXrp ? 'Montant supérieur à ton solde dépensable (la réserve reste bloquée).' : 'Montant supérieur à ton solde.'}</span>}
+            {isXrp && <XrpSpendable account={xrpMe.data} hidden={hideBalances} />}
+            {xrpBelowActivation && <span className="text-[12px] text-down">Ce compte n’existe pas encore : il faut lui envoyer au moins 1 XRP pour activer ce compte.</span>}
             {dogeBelowDust && <span className="text-[12px] text-down">Minimum 0,01 DOGE par destinataire : en dessous, Dogecoin considère la sortie comme de la poussière et Kyro la refuse.</span>}
             {asset.family === 'doge' && (
               <span className="text-[12px] leading-[1.5] text-mute">
@@ -468,7 +513,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           </div>
 
           {/* Fees */}
-          {isTron ? (
+          {isXrp ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-[12px] font-medium text-mute">Frais réseau</span>
+              <div className="rounded-[14px] border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
+                <strong className="font-semibold text-text">Rien à choisir sur le XRP Ledger.</strong> Le coffre fixe les frais du registre ouvert (d’habitude 10 à 12 drops, soit 0,000012 XRP) ; ils sont détruits, personne ne les reçoit.
+              </div>
+            </div>
+          ) : isTron ? (
             <div className="flex flex-col gap-2">
               <span className="text-[12px] font-medium text-mute">Frais réseau</span>
               <div className="flex flex-col gap-1 rounded-[14px] border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
@@ -536,7 +588,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-semibold">Vérification</span>
             <span className="inline-flex h-[26px] items-center gap-1.5 rounded-full border border-control-2 bg-raised px-2.5 text-[11px] font-medium text-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol || built?.unsigned.family === 'tron' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
+              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 pt-2 pb-1">
@@ -583,6 +635,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <SolSummaryView s={built.sol} unsigned={built.unsigned} asset={asset} sol={nativeAsset} solPrice={nativePrice} currency={cur} />
           )}
           {built?.unsigned.family === 'tron' && <TronEstimateView u={built.unsigned} network={network} trxPrice={nativePrice} currency={cur} />}
+          {built?.unsigned.family === 'xrp' && <XrpSummaryView u={built.unsigned} xrpPrice={nativePrice} currency={cur} />}
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
@@ -599,7 +652,22 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {tronShort ? ' Ton solde TRX ne suffit pas : envoi bloqué.' : ''}
             </EnClair>
           )}
-          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && (
+          {built && addrValid && sendAmount !== null && built.unsigned.family === 'xrp' && (
+            <EnClair tone={built.unsigned.summary.destinationTag === null ? 'warn' : 'ice'}>
+              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>
+              {built.unsigned.summary.destinationTag !== null ? (
+                <>
+                  {' '}avec le tag de destination <strong className="font-mono">{built.unsigned.summary.destinationTag}</strong>
+                </>
+              ) : (
+                ', sans tag de destination'
+              )}
+              . Frais : {fmtCrypto(built.unsigned.maxFee, 6, 'XRP', 6)}.
+              {!built.unsigned.context.destination.exists ? ' Ce paiement crée son compte : 1 XRP de réserve y reste bloqué.' : ''}
+              {built.unsigned.summary.destinationTag === null ? ' Si c’est une plateforme d’échange, vérifie qu’elle ne t’a pas donné de tag.' : ''}
+            </EnClair>
+          )}
+          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && (
             <EnClair>
               Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>
               {utxoLike && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? ', la monnaie revient sur ton adresse de change' : ''}. Personne d’autre ne reçoit rien, et tu paies au maximum{' '}
@@ -610,7 +678,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 : ''}
             </EnClair>
           )}
-          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? 'Saisis ou colle l’adresse du destinataire.' : dogeBelowDust ? 'Montant sous 0,01 DOGE : aucune transaction construite.' : 'Indique un montant pour voir le récapitulatif décodé.'}</p>}
+          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? (xAddress ? 'Adresse X : saisis l’adresse classique r… et le tag séparément.' : 'Saisis ou colle l’adresse du destinataire.') : dogeBelowDust ? 'Montant sous 0,01 DOGE : aucune transaction construite.' : xrpTagMissing ? 'Tag de destination obligatoire pour ce destinataire : aucun paiement construit sans lui.' : xrpBelowActivation ? 'Moins de 1 XRP vers un compte inexistant : aucun paiement construit.' : isXrp && !xrpDestInfo ? 'Lecture du compte destinataire…' : 'Indique un montant pour voir le récapitulatif décodé.'}</p>}
 
           {blindSigning && activeHw && (
             <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
@@ -672,6 +740,7 @@ function dataLabel(b: Built | null, family?: string): string {
     // Dogecoin has no SegWit: bytes, not vbytes.
     return `${outs} sortie${outs > 1 ? 's' : ''} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' ? 'octets' : 'vB'}`;
   }
+  if (u.family === 'xrp') return `Payment${u.summary.destinationTag !== null ? ` · tag ${u.summary.destinationTag}` : ' · sans tag'}`;
   if (u.family === 'tron') return u.token ? `transfer() TRC-20 · ${u.size.bandwidth} octets` : `TransferContract · ${u.size.bandwidth} octets`;
   if (u.family === 'sol') return u.mint ? `TransferChecked ${u.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL'}${u.createsAta ? ' + création du compte' : ''}` : 'Aucune · transfert système';
   if (b.summary?.kind === 'NativeTransfer') return 'Aucune · transfert simple';
@@ -725,7 +794,7 @@ function Row({ k, v }: { k: string; v: ReactNode }) {
   );
 }
 
-function SendDone({ id, asset, amount, to, contactKnown, onBack, onHistory }: { id: string; asset: AssetDef; amount: bigint; to: string; contactKnown: boolean; onBack: () => void; onHistory: () => void }) {
+function SendDone({ id, asset, amount, to, contactKnown, onBack, onHistory, children }: { id: string; asset: AssetDef; amount: bigint; to: string; contactKnown: boolean; onBack: () => void; onHistory: () => void; children?: ReactNode }) {
   const [name, setName] = useState('');
   const [saved, setSaved] = useState(false);
   return (
@@ -742,6 +811,7 @@ function SendDone({ id, asset, amount, to, contactKnown, onBack, onHistory }: { 
           <span className="truncate font-mono text-[12px] text-text2">{id}</span>
           <CopyButton text={id} />
         </div>
+        {children}
         {!contactKnown && !saved && (
           <div className="flex w-full items-center gap-2">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom pour le carnet d’adresses" className="h-10 min-w-0 flex-1 rounded-[10px] border border-line-2 bg-bg px-3 text-[13px]" />

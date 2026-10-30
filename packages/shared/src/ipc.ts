@@ -38,6 +38,8 @@ export interface Accounts {
   doge: UtxoAccountInfo;
   /** TRON `m/44'/195'/0'/0/0` (same path on Nile), `T…` (§2.5). */
   tron: { address: string };
+  /** XRP Ledger `m/44'/144'/0'/0/0` (same path on testnet), classic `r…`. Rust signs with index 0 only (§2.6). */
+  xrp: { address: string };
 }
 
 /** One Litecoin / Dogecoin account (standard `xpub` / `tpub` encoding, also for Dogecoin). */
@@ -56,7 +58,8 @@ export interface Settings {
   clipboardGuard: boolean;
   /** Custom server per chain (B2b). Replaces the old `rpc` (still accepted by Rust on input, never returned). */
   servers: Servers;
-  apiKeys: { coingecko?: string; zerox?: string; oneinch?: string };
+  /** `trongrid`: TronGrid `TRON-PRO-API-KEY` (optional, higher rate limits). */
+  apiKeys: { coingecko?: string; zerox?: string; oneinch?: string; trongrid?: string };
   /** Embedded Tor for every `net_fetch`. Default `{ enabled: true }`; turning it off needs an explicit UI confirmation. */
   tor: { enabled: boolean };
 }
@@ -111,7 +114,12 @@ export interface Servers {
   dogecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };
   /** TRON (`testnet` = Nile). Default: TronGrid (api.trongrid.io / nile.trongrid.io). */
   tron: { mainnet?: TronServer; testnet?: TronServer };
+  /** XRP Ledger (`testnet` = XRPL Testnet). Default: s.altnet.rippletest.net / xrplcluster.com. */
+  xrp: { mainnet?: XrpServer; testnet?: XrpServer };
 }
+
+/** XRP Ledger server: the default rippled, or the user's rippled JSON-RPC endpoint. */
+export type XrpServer = { kind: 'default' } | { kind: 'jsonRpc'; url: string };
 
 /**
  * TRON server: TronGrid by default, or a java-tron HTTP API (FullNode). History (`tron_txs`)
@@ -132,7 +140,9 @@ export type ServerTestTarget =
   | { family: 'litecoin'; network: UtxoNetworkKey; server: UtxoServer }
   | { family: 'dogecoin'; network: UtxoNetworkKey; server: UtxoServer }
   /** `testnet` = Nile. */
-  | { family: 'tron'; network: UtxoNetworkKey; server: TronServer };
+  | { family: 'tron'; network: UtxoNetworkKey; server: TronServer }
+  /** `testnet` = XRPL Testnet (network_id 1). */
+  | { family: 'xrp'; network: UtxoNetworkKey; server: XrpServer };
 
 export interface ServerTestResult {
   latencyMs: number;
@@ -399,6 +409,89 @@ export interface TronHistoryEntry {
   status: 'confirmed' | 'failed';
 }
 
+// ---------------------------------------------------------------- XRP Ledger (§2.6)
+
+export interface XrpBackendInfo {
+  kind: 'default' | 'jsonRpc';
+  network: UtxoNetworkKey;
+  label: string;
+  tor: boolean;
+}
+
+/** `xrp_account`: `account_info` + reserves of `server_info.validated_ledger`. Amounts: drops. */
+export interface XrpAccountInfo {
+  address: string;
+  /** Activated (funded with at least the base reserve). `false`: never funded. */
+  exists: boolean;
+  balance: string;
+  sequence: number;
+  ownerCount: number;
+  flags: number;
+  /** `lsfRequireDestTag`: payments without a destination tag are refused. */
+  requireDestTag: boolean;
+  /** `lsfDisallowXRP` (advisory). */
+  disallowXrp: boolean;
+  /** Locked: base reserve + owner reserve × owned objects. */
+  reserve: string;
+  /** Balance − reserve (0 if negative): what can be sent. */
+  spendable: string;
+}
+
+/** serde tag `kind`. */
+export type XrpAmountView = { kind: 'xrp'; drops: string } | { kind: 'issued'; value: string; currency: string; issuer: string };
+
+/** Every warning → reinforced confirmation. */
+export type XrpWarning = { kind: 'sendMax' } | { kind: 'pathFlags' } | { kind: 'memo' } | { kind: 'highFee' } | { kind: 'invoiceId' };
+
+/** wallet-core `XrpTxSummary`: Rust's strict decoding of the Payment. */
+export interface XrpTxSummary {
+  account: string;
+  destination: string;
+  /** null = no tag. */
+  destinationTag: number | null;
+  amount: XrpAmountView;
+  /** Drops. */
+  fee: string;
+  sequence: number;
+  lastLedgerSequence: number | null;
+  flags: number;
+  sendMax: XrpAmountView | null;
+  sourceTag: number | null;
+  invoiceId: string | null;
+  memos: Array<{ memoType: string | null; memoData: string | null; memoFormat: string | null; text: string | null }>;
+  warnings: XrpWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+/** Live context Rust read for the dialog: both accounts and the reserves (drops). */
+export interface XrpContext {
+  account: XrpAccountInfo;
+  destination: XrpAccountInfo;
+  reserveBase: string;
+  reserveInc: string;
+}
+
+/** `xrp_txs` entry: last 50 Payments; `amount` = delivered amount. */
+export interface XrpHistoryEntry {
+  hash: string;
+  from: string;
+  to: string;
+  destinationTag: number | null;
+  amount: XrpAmountView | null;
+  fee: string;
+  ledger: number | null;
+  /** ms epoch. */
+  time: number | null;
+  result: string;
+}
+
+export interface XrpTrustLine {
+  currency: string;
+  issuer: string;
+  balance: string;
+  limit: string;
+}
+
 export interface TronBuilt {
   /** `raw_data` hex: what `tron_sign_tx` signs. */
   raw: string;
@@ -483,8 +576,8 @@ export interface AppConfig {
   hasZeroxKey: boolean;
   hasOneinchKey: boolean;
   hasCoingeckoKey: boolean;
-  /** TronGrid API key configured in the shell (not yet sent by every build). */
-  hasTrongridKey?: boolean;
+  /** TronGrid API key: build environment or `settings.apiKeys.trongrid`. */
+  hasTrongridKey: boolean;
 }
 
 /** Token metadata passed to `evm_sign_tx` so the native dialog can show a readable amount. */
@@ -702,6 +795,26 @@ export interface Commands {
   tron_sign_tx: { args: { raw: string; password: string; token?: { symbol: string; decimals: number } }; ret: { signature: string; txid: string; summary: TronTxSummary; estimate: TronEstimate } };
   /** Signature must recover to our address; server txid = sha256(raw). */
   tron_broadcast: { args: { raw: string; signature: string }; ret: string };
+  // XRP Ledger (§2.6): Rust builds the Payment (Sequence, Fee, LastLedgerSequence), decodes it
+  // strictly, re-reads both accounts and the reserves live, signs behind the password and the
+  // native dialog (destination tag framed). Hardware wallets: HW_UNSUPPORTED.
+  xrp_backend_info: { args: undefined; ret: XrpBackendInfo };
+  /** `m/44'/144'/0'/0/{index}`; Rust only signs with index 0. */
+  xrp_address: { args: { index: number }; ret: string };
+  xrp_account: { args: { address: string }; ret: XrpAccountInfo };
+  xrp_lines: { args: { address: string }; ret: XrpTrustLine[] };
+  xrp_txs: { args: { address: string }; ret: XrpHistoryEntry[] };
+  /**
+   * `amount`: drops (XRP) or decimal value (issued). Refused before building: missing tag for a
+   * `requireDestTag` destination; unfunded destination with < base reserve; issued to an
+   * unfunded account; amount + fee > spendable; our account not activated.
+   */
+  xrp_build_tx: { args: { to: string; amount: string; destinationTag?: number; issued?: { currency: string; issuer: string } }; ret: { blob: string; summary: XrpTxSummary; context: XrpContext } };
+  xrp_sign_tx: { args: { blob: string; password: string }; ret: { blob: string; hash: string; summary: XrpTxSummary; context: XrpContext } };
+  /** `tesSUCCESS` / `terQUEUED` accepted, else INVALID_INPUT with the engine code. */
+  xrp_broadcast: { args: { blob: string }; ret: string };
+  /** `validated: true` + `result: 'tesSUCCESS'` once in a validated ledger; not found yet: `{ false, '' }`. */
+  xrp_tx_status: { args: { hash: string }; ret: { validated: boolean; result: string } };
   /**
    * Bitcoin Core only, unlocked. Pre-flight checks are synchronous (reachable, auth, chain, watch
    * wallet created or loaded without private keys); only `importdescriptors` runs in the background.

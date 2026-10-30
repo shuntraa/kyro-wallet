@@ -66,12 +66,12 @@ describe('XrpAdapter (testnet)', () => {
 
   it('builds through Rust and checks destination, amount and destination tag', async () => {
     const a = new XrpAdapter({ chain: xrpChain('testnet'), address: ME, backend: backend() });
-    const u = await a.buildTx({ to: OTHER, amount: '5000000', destinationTag: 12345 });
+    const u = await a.buildPayment({ to: OTHER, amount: '5000000', destinationTag: 12345 });
     expect(u.summary.destinationTag).toBe(12345);
-    const v = await a.buildTx({ to: OTHER, amount: '5000000' });
+    const v = await a.buildPayment({ to: OTHER, amount: '5000000' });
     expect(v.summary.destinationTag).toBeNull();
-    await expect(a.buildTx({ to: ME, amount: '1' })).rejects.toThrow(/soi-même/);
-    await expect(a.buildTx({ to: OTHER, amount: '1.5' })).rejects.toThrow(/drops/);
+    await expect(a.buildPayment({ to: ME, amount: '1' })).rejects.toThrow(/soi-même/);
+    await expect(a.buildPayment({ to: OTHER, amount: '1.5' })).rejects.toThrow(/drops/);
     for (const over of [
       { build: async () => ({ blob: '', summary: summary({ destinationTag: 999 }), context: ctx }) }, // tag changed
       { build: async () => ({ blob: '', summary: summary({ amount: { kind: 'xrp', drops: '1' } }), context: ctx }) },
@@ -79,14 +79,14 @@ describe('XrpAdapter (testnet)', () => {
       { build: async () => ({ blob: '', summary: summary({ requiresExtraConfirmation: true, warnings: [{ kind: 'memo' }] }), context: ctx }) },
     ] satisfies Partial<XrpBackend>[]) {
       const x = new XrpAdapter({ chain: xrpChain('testnet'), address: ME, backend: backend(over) });
-      await expect(x.buildTx({ to: OTHER, amount: '5000000' })).rejects.toThrow(/ne correspond pas/);
+      await expect(x.buildPayment({ to: OTHER, amount: '5000000' })).rejects.toThrow(/ne correspond pas/);
     }
   });
 
   it('signs and submits through Rust, hash checked', async () => {
     const b = backend();
     const a = new XrpAdapter({ chain: xrpChain('testnet'), address: ME, backend: b });
-    const s = await a.signTx(await a.buildTx({ to: OTHER, amount: '5000000' }), 'pw');
+    const s = await a.signTx(await a.buildPayment({ to: OTHER, amount: '5000000' }), 'pw');
     expect(await a.broadcast(s)).toBe('CD'.repeat(32));
     expect(b.submitted).toEqual(['1200AB']);
     expect(await a.txStatus(s.hash)).toEqual({ validated: true, result: 'tesSUCCESS' });

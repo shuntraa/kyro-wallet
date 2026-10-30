@@ -80,12 +80,13 @@ function FailureNotice({ failure }: { failure: Failure }) {
   );
 }
 
-function TestOk({ result }: { result: ServerTestResult }) {
+/** `chainLabel`: what `detected.chainId` is for that family (XRP Ledger: `network_id`). */
+function TestOk({ result, chainLabel = 'chainId', ledgerLabel = 'bloc' }: { result: ServerTestResult; chainLabel?: string; ledgerLabel?: string }) {
   const d = result.detected;
   const parts = [`${result.latencyMs} ms`];
   if (d.network) parts.push(`réseau ${d.network}`);
-  if (d.chainId !== undefined) parts.push(`chainId ${d.chainId}`);
-  if (d.blockHeight !== undefined) parts.push(`bloc ${fmtNumber(d.blockHeight, 0)}`);
+  if (d.chainId !== undefined) parts.push(`${chainLabel} ${d.chainId}`);
+  if (d.blockHeight !== undefined) parts.push(`${ledgerLabel} ${fmtNumber(d.blockHeight, 0)}`);
   if (d.serverVersion) parts.push(d.serverVersion);
   if (d.genesisHash) parts.push(`genesis ${d.genesisHash.slice(0, 8)}…${d.genesisHash.slice(-6)}`);
   return (
@@ -185,7 +186,7 @@ export function ServersSection() {
     <>
       <Card title="Réseaux et serveurs" badge={<Badge tone={network === 'testnet' ? 'warn' : 'up'}>{network === 'testnet' ? 'Testnet' : 'Mainnet'}</Badge>}>
         <p className="m-0 text-[13px] leading-[1.55] text-mute">
-          {network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia, Solana devnet, Litecoin testnet4, Dogecoin testnet et TRON Nile. ' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana, Litecoin, Dogecoin, TRON. '}
+          {network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia, Solana devnet, Litecoin testnet4, Dogecoin testnet, TRON Nile et XRP Ledger testnet. ' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana, Litecoin, Dogecoin, TRON, XRP Ledger. '}
           Le réseau est fixé au lancement. Pour chaque chaîne, tu peux remplacer le serveur par défaut par le tien : Kyro vérifie qu’il est sur le bon réseau avant de l’enregistrer.
         </p>
         <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
@@ -197,6 +198,7 @@ export function ServersSection() {
       <UtxoServerCard coin="litecoin" />
       <UtxoServerCard coin="dogecoin" />
       <TronServerCard />
+      <XrpServerCard />
       <EvmCard />
       <SolanaCard />
     </>
@@ -1328,7 +1330,7 @@ function TronServerCard() {
           <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mon-noeud-tron.example" aria-label="URL du nœud TRON" className="font-mono text-[13px]" />
         </Field>
       )}
-      {config?.hasTrongridKey && kind === 'default' && <span className="text-[12px] text-mute">Clé API TronGrid fournie par l’application : limites de débit plus hautes.</span>}
+      {config?.hasTrongridKey && kind === 'default' && <span className="text-[12px] text-mute">Clé API TronGrid configurée (Réglages › Clés API ou environnement) : limites de débit plus hautes.</span>}
       {hint && (
         <span className="flex items-center gap-1.5 text-[12px] text-warn">
           <IconWarn size={13} /> {hint}
@@ -1355,6 +1357,126 @@ function TronServerCard() {
         onCancel={() => {
           setConfirmDefault(false);
           setKind('http');
+        }}
+      />
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------- XRP Ledger
+
+/**
+ * XRP Ledger: Ripple's public rippled by default (s.altnet.rippletest.net on testnet,
+ * xrplcluster.com on mainnet) or the user's rippled JSON-RPC. Kyro checks `network_id` before
+ * saving (0 mainnet, 1 testnet). Everything (reserve, tags, history) comes from that server.
+ */
+function XrpServerCard() {
+  const { settings, network } = useApp();
+  const tor = settings.tor.enabled;
+  const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
+  const defaultHost = network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net';
+  const saved = settings.servers.xrp?.[nk];
+  const savedUrl = saved?.kind === 'jsonRpc' ? saved.url : '';
+  const [kind, setKind] = useState<'default' | 'jsonRpc'>(savedUrl ? 'jsonRpc' : 'default');
+  const [url, setUrl] = useState(savedUrl);
+  useEffect(() => {
+    setKind(savedUrl ? 'jsonRpc' : 'default');
+    setUrl(savedUrl);
+  }, [savedUrl]);
+  const saveServers = useSaveServers();
+  const [busy, setBusy] = useState<'test' | 'save' | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [result, setResult] = useState<ServerTestResult | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDefault, setConfirmDefault] = useState(false);
+  const clean = url.trim();
+  const hint = kind === 'jsonRpc' && clean ? checkServerUrl(clean, tor) : null;
+  const dirty = kind === 'jsonRpc' ? clean !== savedUrl : !!savedUrl;
+  const reset = () => {
+    setFailure(null);
+    setResult(null);
+    setNotice(null);
+  };
+  const test = async () => {
+    reset();
+    setBusy('test');
+    try {
+      setResult(await call('server_test', { target: { family: 'xrp', network: nk, server: kind === 'jsonRpc' ? { kind: 'jsonRpc', url: clean } : { kind: 'default' } } }));
+    } catch (e) {
+      setFailure(toFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const save = async (toDefault: boolean) => {
+    reset();
+    setBusy('save');
+    try {
+      await saveServers((s) => {
+        s.xrp = { ...(s.xrp ?? {}) };
+        if (toDefault) delete s.xrp[nk];
+        else s.xrp[nk] = { kind: 'jsonRpc', url: clean };
+      });
+      setConfirmDefault(false);
+      setNotice(toDefault ? `Serveur par défaut rétabli : ${defaultHost} voit maintenant ton adresse XRP et tes paiements.` : 'Serveur XRP Ledger enregistré. Kyro n’utilise plus que lui pour XRP.');
+    } catch (e) {
+      setFailure(toFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card title={network === 'testnet' ? 'XRP Ledger testnet' : 'XRP Ledger'} badge={savedUrl ? <Badge tone="ice">Serveur perso · rippled</Badge> : <Badge>Par défaut</Badge>}>
+      <Segmented
+        label="Serveur XRP Ledger"
+        value={kind}
+        onChange={(k) => {
+          reset();
+          setKind(k);
+        }}
+        options={[
+          { value: 'default', label: 'Par défaut' },
+          { value: 'jsonRpc', label: 'Mon serveur rippled' },
+        ]}
+        className="self-start"
+      />
+      <Sees>
+        {kind === 'default'
+          ? `${defaultHost} voit ton adresse XRP et tes paiements ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.`
+          : `Ton serveur rippled voit ton adresse XRP et tes paiements ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`}
+      </Sees>
+      {kind === 'jsonRpc' && (
+        <Field label="URL JSON-RPC de ton rippled" hint={`Kyro vérifie le réseau (network_id ${network === 'mainnet' ? '0, mainnet' : '1, testnet'}) avant d’enregistrer. https://, ou http:// pour une adresse .onion (Tor).`}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mon-rippled.example:51234/" aria-label="URL du serveur XRP" className="font-mono text-[13px]" />
+        </Field>
+      )}
+      {hint && (
+        <span className="flex items-center gap-1.5 text-[12px] text-warn">
+          <IconWarn size={13} /> {hint}
+        </span>
+      )}
+      {failure && <FailureNotice failure={failure} />}
+      {result && !failure && <TestOk result={result} chainLabel="network_id" ledgerLabel="registre validé" />}
+      {notice && !failure && <Notice tone={notice.startsWith('Serveur par défaut') ? 'warn' : 'success'}>{notice}</Notice>}
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => void test()} disabled={busy !== null || (kind === 'jsonRpc' && !clean)}>
+          {busy === 'test' && <Spinner />} Tester la connexion
+        </Button>
+        <Button variant="primary" onClick={() => (kind === 'jsonRpc' ? void save(false) : setConfirmDefault(true))} disabled={busy !== null || !dirty || (kind === 'jsonRpc' && !clean)}>
+          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? 'Revenir au serveur par défaut' : 'Enregistrer'}
+        </Button>
+      </div>
+      <BackToDefaultDialog
+        open={confirmDefault}
+        host={defaultHost}
+        sees="ton adresse XRP et tes paiements"
+        busy={busy === 'save'}
+        failure={confirmDefault ? failure : null}
+        onConfirm={() => void save(true)}
+        onCancel={() => {
+          setConfirmDefault(false);
+          setKind('jsonRpc');
         }}
       />
     </Card>

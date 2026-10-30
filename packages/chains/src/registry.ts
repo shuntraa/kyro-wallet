@@ -9,7 +9,7 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `ltc` / `doge`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*`, docs/IPC.md §2.4).
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron';
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp';
 
 interface ChainBase {
   key: string;
@@ -46,7 +46,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -139,10 +139,9 @@ const SOL: Record<Network, SolChain> = {
   },
 };
 
-/** Phase 4: listed with their price, shown as "Bientôt". (Litecoin, Dogecoin and TRON now have a full send path.) */
+/** Phase 4: listed with their price, shown as "Bientôt". (Litecoin, Dogecoin, TRON and XRP now have a full send path.) */
 export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
   { key: 'cardano', name: 'Cardano', symbol: 'ADA', coingeckoId: 'cardano', color: '#3468D1', glyph: 'A', watchOnly: true, phase: 4 },
-  { key: 'xrp', name: 'XRP', symbol: 'XRP', coingeckoId: 'ripple', color: '#22252B', glyph: 'X', watchOnly: true, phase: 4 },
 ];
 
 /**
@@ -200,9 +199,9 @@ export function tronChain(network: Network): TronChain {
 }
 
 /**
- * XRP Ledger (phase 4, B4c): Rust `xrp_*` commands and `XrpAdapter` (`packages/chains/src/xrp/`).
- * Testnet = XRPL Testnet. Not in `Family` / `allChains()` yet: the UI work is listed in
- * docs/IPC.md §2.6 (destination tag field, reserve, spendable).
+ * XRP Ledger (phase 4): Rust `xrp_*` commands and `XrpAdapter` (`packages/chains/src/xrp/`).
+ * Testnet = XRPL Testnet. Part of `allChains()` / `assetsFor()` (XRP; issued currencies are read
+ * as trust lines). Hardware wallets: HW_UNSUPPORTED, the UI disables XRP for such accounts.
  */
 export interface XrpChain extends Omit<ChainBase, 'phase'> {
   family: 'xrp';
@@ -279,7 +278,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -371,6 +370,13 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   if (doge?.kind === 'esplora') list.push({ host: host(doge.url), purpose: 'Dogecoin : ton serveur Esplora', custom: true });
   else list.push({ host: 'aucun serveur', purpose: 'Dogecoin : aucun serveur public gratuit, configure le tien (rien n’est contacté)' });
   // TRON: reached by Rust only (tron_*), Tor circuits of the `tron` family.
+  // XRP Ledger: reached by Rust only (xrp_*), Tor circuits of the `xrp` family.
+  const xrp = servers.xrp?.[nk];
+  list.push(
+    xrp?.kind === 'jsonRpc'
+      ? { host: host(xrp.url), purpose: 'XRP Ledger : ton serveur rippled', custom: true }
+      : { host: network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net', purpose: `XRP Ledger${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (rippled)` },
+  );
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'
