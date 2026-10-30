@@ -49,7 +49,7 @@ pub fn btc_sign_psbt(seed: &Seed, net: Network, psbt_b64: &str) -> Result<(Strin
 pub struct EvmTxRequest { pub chain_id: u64, pub nonce: u64, pub to: String, pub value_wei: String, pub data: String /*0x…*/,
                           pub gas_limit: u64, pub max_fee_per_gas: String, pub max_priority_fee_per_gas: String }
 pub fn evm_sign_tx(seed: &Seed, index: u32, tx: &EvmTxRequest) -> Result<(String /*raw 0x… EIP-1559*/, String /*tx hash*/)>;
-pub fn sol_sign_message(seed: &Seed, account: u32, message: &[u8]) -> Result<[u8; 64]>;
+pub fn sol_sign_message(seed: &Seed, account: u32, message: &[u8]) -> Result<[u8; 64]>; // ed25519 sur les octets du message ; ne JAMAIS appeler sans sol_decode_message avant
 
 // --- decoding (résumé « en clair », indépendant du frontend) ---
 pub struct EvmTxSummary { pub kind: EvmTxKind /*NativeTransfer|Erc20Transfer|Erc20Approve|ContractCall*/,
@@ -58,6 +58,35 @@ pub struct EvmTxSummary { pub kind: EvmTxKind /*NativeTransfer|Erc20Transfer|Erc
 pub fn evm_decode(tx: &EvmTxRequest) -> Result<EvmTxSummary>;
 pub struct BtcTxSummary { pub outputs: Vec<(String /*address*/, u64 /*sats*/, bool /*is_change*/)>, pub fee_sats: u64 }
 pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String] /*our addresses*/) -> Result<BtcTxSummary>;
+
+// --- Solana : décodage des messages legacy et v0 (parseur écrit à la main, format filaire documenté) ---
+pub struct SolLookupTable { pub key: String, pub addresses: Vec<String> }            // base58
+pub fn sol_message_lookup_tables(message: &[u8]) -> Result<Vec<String>>;             // tables à récupérer (v0)
+pub fn sol_parse_lookup_table(account_data: &[u8]) -> Result<Vec<String>>;           // compte AddressLookupTable : en-tête 56 o + n×32 ; refuse non initialisée / désactivée
+pub const SOL_LOOKUP_TABLE_PROGRAM: &str;                                            // owner attendu du compte table
+pub fn sol_decode_message(message: &[u8], tables: &[SolLookupTable], our_address: &str) -> Result<SolTxSummary>;
+// Échec (Error) si : message tronqué / short-vec non canonique / index hors bornes / octets en trop /
+// clés dupliquées / version ≠ 0 / table manquante ou index de table absent / données mal formées pour un programme reconnu.
+pub struct SolTxSummary {                       // serde camelCase ; montants u64 en chaînes décimales
+    pub version: String /*"legacy"|"v0"*/, pub fee_payer: String, pub signers: Vec<String>, pub our_signer_index: Option<usize>,
+    pub recent_blockhash: String, pub instructions: Vec<SolInstruction>, pub lookup_tables: Vec<String>,
+    pub base_fee_lamports: String /*5000 × signatures*/, pub compute_unit_limit: Option<u32>,
+    pub compute_unit_price_micro_lamports: Option<String>, pub priority_fee_lamports: Option<String> /*ceil(prix × limite / 1e6)*/,
+    pub warnings: Vec<SolWarning>, pub requires_extra_confirmation: bool }
+pub enum SolInstruction {                       // JSON : { "type": "systemTransfer", ...champs camelCase }
+    SystemTransfer { from, to, lamports }, SystemTransferWithSeed { from, base, to, lamports, seed },
+    SystemCreateAccount { from, new_account, lamports, space, owner },
+    SystemCreateAccountWithSeed { from, new_account, base, seed, lamports, space, owner },
+    TokenTransfer { token_program /*token|token2022*/, checked, source, destination, authority, mint?, amount, decimals?, multisig_signers },
+    TokenApprove { token_program, checked, source, delegate, owner, mint?, amount, decimals?, multisig_signers },   // DÉLÉGATION
+    AtaCreate { idempotent, payer, account, owner, mint, token_program? },
+    ComputeUnitLimit { units }, ComputeUnitPrice { micro_lamports }, Memo { text },
+    Unknown { program_id, accounts, account_keys, data_len } }
+pub enum SolWarning {                           // JSON : { "kind": "feePayerNotUs", ... }
+    FeePayerNotUs { fee_payer }, ExtraWritableSigner { address }, AuthorityNotUs { instruction, authority },
+    Delegation { instruction }, UnknownInstruction { instruction, program_id },
+    Token2022ExtensionsUnverified { instruction } /*informatif*/, PriorityFeeEstimated /*informatif*/ }
+// requires_extra_confirmation = instruction inconnue, délégation, payeur ≠ nous, autre signataire inscriptible ou autorité ≠ nous.
 ```
 
 ## 2. Commandes Tauri (exposées au frontend)
@@ -78,7 +107,8 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `evm_decode_tx` | `{ tx: EvmTxRequest }` | `EvmTxSummary` | pour l'aperçu avant mot de passe |
 | `evm_sign_tx` | `{ tx, password, token?: { symbol, decimals } }` | `{ rawTx, hash }` | dialogue natif obligatoire ; `token` = indication d'affichage seulement (le contrat et le montant brut viennent du décodage Rust) |
 | `btc_sign_psbt` | `{ psbt, password }` | `{ psbt, summary }` | dialogue natif obligatoire |
-| `sol_sign_message` | `{ message /*b64*/, password, summary }` | `{ signature /*b64*/ }` | dialogue natif obligatoire |
+| `sol_decode_tx` | `{ message /*b64, message sérialisé sans signatures*/ }` | `SolTxSummary` | aperçu avant mot de passe ; décodé en Rust, tables d'adresses (v0) récupérées par Rust (`getAccountInfo`) — jamais fournies par l'UI ; session déverrouillée requise |
+| `sol_sign_tx` | `{ message /*b64*/, password }` | `{ signature /*b64*/, summary: SolTxSummary }` | même décodage ; refuse si notre adresse n'est pas signataire ; dialogue natif construit depuis le résumé Rust, puis 2ᵉ dialogue « Instruction non reconnue — signer quand même ? » si `requiresExtraConfirmation` ; la signature va à l'index `summary.ourSignerIndex` |
 | `net_fetch` | `{ req: { url, method, headers?, body? } }` | `{ status, body }` | allowlist + cache + rate-limit ; seuls `accept`, `content-type`, `0x-version` sont transmis, les clés API sont ajoutées par Rust |
 | `settings_get` / `settings_set` | — / `{ settings: Settings }` | `Settings` | stocké dans le dossier de l'app |
 | `set_capture_protection` | `{ enabled }` | `void` | `set_content_protected` |
@@ -110,7 +140,7 @@ Erreurs : rejet de la promesse avec `{ code: 'WRONG_PASSWORD' | 'LOCKED' | 'RATE
 | `mempool.space` | Bitcoin : UTXO, frais, diffusion (Esplora) |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |
 | `arbitrum-one-rpc.publicnode.com`, `optimism-rpc.publicnode.com`, `base-rpc.publicnode.com`, `polygon-bor-rpc.publicnode.com`, `bsc-rpc.publicnode.com`, `avalanche-c-chain-rpc.publicnode.com` | RPC EVM (phase 2) |
-| `api.devnet.solana.com`, `api.mainnet-beta.solana.com` | RPC Solana |
+| `api.devnet.solana.com`, `api.mainnet-beta.solana.com` | RPC Solana (aussi : tables d'adresses v0 lues par Rust pour `sol_decode_tx` / `sol_sign_tx`, ou l'RPC `rpc.solana` des réglages) |
 | `api.0x.org`, `api.1inch.dev`, `li.quest`, `lite-api.jup.ag` | devis de swap |
 | + hôtes des RPC personnalisés saisis par l'utilisateur | |
 

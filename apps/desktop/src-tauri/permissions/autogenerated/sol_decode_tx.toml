@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sol-decode-tx"
+description = "Enables the sol_decode_tx command without any pre-configured scope."
+commands.allow = ["sol_decode_tx"]
+
+[[permission]]
+identifier = "deny-sol-decode-tx"
+description = "Denies the sol_decode_tx command without any pre-configured scope."
+commands.deny = ["sol_decode_tx"]

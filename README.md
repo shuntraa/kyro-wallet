@@ -14,12 +14,12 @@ Tes clés restent chiffrées sur ton appareil ; toutes les signatures se font da
 | Phrase BIP39 12/24 mots, coffre Argon2id + XChaCha20-Poly1305 | ✅ | vecteurs officiels Trezor, refus mot de passe/fichier modifié |
 | Adresses BTC SegWit (BIP84) et Taproot (BIP86), EVM, Solana | ✅ | vecteurs BIP84/BIP86/SLIP-10, adresses de référence |
 | Signature PSBT Bitcoin, EIP-1559, message Solana (en Rust) | ✅ | sighash recalculés, vraie transaction mainnet Ethereum |
-| Décodage avant signature (fenêtre native) | BTC ✅ · EVM ✅ · **Solana ❌** (résumé fourni par l'interface) | tests unitaires |
+| Décodage avant signature (fenêtre native) | BTC ✅ · EVM ✅ · Solana ✅ (legacy + v0, tables d'adresses lues par Rust) | tests unitaires ; Solana : 6 vraies transactions devnet, comparaison au parseur officiel, 9 000 messages mutés |
 | Coque Tauri : allowlist de commandes, CSP, réseau filtré, auto-lock, captures bloquées | ✅ compile, tests unitaires | pas encore exercée à la main contre un testnet |
 | Interface (10 écrans) | ✅ | parcourue en mode démo (backend simulé), 0 erreur console |
 | Envoi BTC / ETH / ERC-20 / SOL sur testnet | ⚠️ code complet | testé contre le backend simulé uniquement |
 | Chaînes EVM (Arbitrum, Optimism, Base, Polygon, BNB, Avalanche) | ⚠️ registre + même adresse | non testé sur leurs testnets |
-| Tokens SPL | lecture seule | — |
+| Tokens SPL et Token-2022 (envoi) | ⚠️ code complet | testé contre le backend simulé ; encodage vérifié sur une vraie transaction devnet |
 | Swap 0x / 1inch / LI.FI / Jupiter | ⚠️ devis + approval exact | testé contre des réponses simulées |
 | Ledger / Trezor | ❌ pas encore | — |
 | Litecoin, Dogecoin, Tron, Cardano, XRP | ❌ lecture seule (« Bientôt ») | — |

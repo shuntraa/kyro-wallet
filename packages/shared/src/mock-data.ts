@@ -83,6 +83,7 @@ export const DEMO_TOKENS: Record<string, { coin: string; decimals: number }> = {
   So11111111111111111111111111111111111111112: { coin: 'solana', decimals: 9 },
   EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: { coin: 'usd-coin', decimals: 6 },
   '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU': { coin: 'usd-coin', decimals: 6 },
+  Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: { coin: 'tether', decimals: 6 },
 };
 
 export function demoPrice(coinId: string): number {

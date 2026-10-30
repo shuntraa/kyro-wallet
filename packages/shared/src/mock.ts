@@ -31,6 +31,7 @@ import {
 } from './ipc';
 import { emitDemoEvent } from './events';
 import { demoHash, handleDemoNet, type DemoChainState } from './mock-net';
+import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 
 bitcoin.initEccLib(ecc);
 
@@ -368,16 +369,26 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       if (!confirmFn(`Signer cette transaction Bitcoin ?\n${lines}\nFrais : ${out.summary.feeSats} sats`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
       return out;
     },
-    sol_sign_message: (a) => {
+    sol_decode_tx: (a) => {
       requireUnlocked();
+      return demoDecodeSolMessage(decodeSolMessageArg(a.message), keys.accounts.sol.address);
+    },
+    sol_sign_tx: (a) => {
+      requireUnlocked();
+      const message = decodeSolMessageArg(a.message);
+      const summary = demoDecodeSolMessage(message, keys.accounts.sol.address);
+      if (summary.ourSignerIndex === null) throw new IpcError('INVALID_INPUT', 'Ce compte ne signe pas cette transaction.');
       checkPassword(a.password);
-      const message = base64.decode(String(a.message ?? ''));
-      if (message.length === 0) throw new IpcError('INVALID_INPUT', 'Message vide.');
-      if (!confirmFn(`Signer ce message Solana ?\n${String(a.summary ?? '')}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!confirmFn(`Signer cette transaction Solana ?
+${demoSolSummaryText(summary)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (summary.requiresExtraConfirmation && !confirmFn(`Instruction non reconnue ou inhabituelle : signer quand même ?
+${summary.warnings.map((w) => w.kind).join(', ')}`)) {
+        throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      }
       const sig = new Uint8Array(64);
       sig.set(sha256(message), 0);
       sig.set(sha256(sha256(message)), 32);
-      return { signature: base64.encode(sig) };
+      return { signature: base64.encode(sig), summary };
     },
     net_fetch: (a) => handleDemoNet(a.req as Parameters<typeof handleDemoNet>[0], chain),
     settings_get: () => structuredClone(settings),
@@ -411,6 +422,16 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       return await h(args);
     },
   };
+}
+
+function decodeSolMessageArg(m: unknown): Uint8Array {
+  try {
+    const bytes = base64.decode(String(m ?? ''));
+    if (bytes.length === 0) throw new Error('vide');
+    return bytes;
+  } catch {
+    throw new IpcError('INVALID_INPUT', 'Message Solana invalide (base64 attendu).');
+  }
 }
 
 function detectDemoNetwork(): Network {

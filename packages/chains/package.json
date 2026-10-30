@@ -19,5 +19,8 @@
     "@solana/kit": "8.5.0",
     "bitcoinjs-lib": "7.0.5",
     "viem": "2.57.12"
+  },
+  "devDependencies": {
+    "@scure/base": "1.2.6"
   }
 }

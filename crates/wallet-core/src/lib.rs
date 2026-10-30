@@ -28,6 +28,7 @@ mod keys;
 mod mnemonic;
 mod network;
 mod sol;
+mod sol_decode;
 mod vault;
 
 pub use btc::{btc_account, btc_address, btc_decode_psbt, btc_sign_psbt, BtcAccount, BtcTxSummary};
@@ -36,6 +37,10 @@ pub use evm::{evm_address, evm_decode, evm_sign_tx, EvmTxKind, EvmTxRequest, Evm
 pub use mnemonic::{Mnemonic, Seed, WordCount};
 pub use network::{BtcKind, Network};
 pub use sol::{sol_address, sol_sign_message};
+pub use sol_decode::{
+    sol_decode_message, sol_message_lookup_tables, sol_parse_lookup_table, SolInstruction,
+    SolLookupTable, SolTokenProgram, SolTxSummary, SolWarning, SOL_LOOKUP_TABLE_PROGRAM,
+};
 pub use vault::{open, seal, KdfParams, VaultFile, VAULT_VERSION};
 
 /// Re-exported so callers can build [`Seed`] values and wipe their own buffers

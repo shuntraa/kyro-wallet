@@ -8,4 +8,21 @@ export * from './bitcoin/coinselect';
 export { BitcoinAdapter, type DerivedAddress, type BitcoinAdapterOptions } from './bitcoin/adapter';
 export { parseXpub } from './bitcoin/xpub';
 export { EvmAdapter, netTransport, type EvmAdapterOptions, type ContractCallParams } from './evm/adapter';
-export { SolanaAdapter, systemTransferInstruction, SOL_TRANSFER_CU, type SolanaAdapterOptions } from './solana/adapter';
+export {
+  SolanaAdapter,
+  systemTransferInstruction,
+  transferCheckedInstruction,
+  createAtaIdempotentInstruction,
+  findAssociatedTokenAddress,
+  parseMintAccount,
+  placeSignature,
+  checkSolSummary,
+  splComputeUnits,
+  SOL_TRANSFER_CU,
+  TOKEN_ACCOUNT_SIZE,
+  SYSTEM_PROGRAM,
+  TOKEN_PROGRAM,
+  TOKEN_2022_PROGRAM,
+  ATA_PROGRAM,
+  type SolanaAdapterOptions,
+} from './solana/adapter';

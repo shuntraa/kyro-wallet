@@ -18,13 +18,15 @@ Tout serveur contacté voit ton **adresse IP**. Les nœuds blockchain voient aus
 | `mempool.space` | Bitcoin : UTXO, historique, frais, diffusion des transactions | Tes adresses Bitcoin, tes transactions signées |
 | `ethereum-sepolia-rpc.publicnode.com` / `ethereum-rpc.publicnode.com` | Ethereum : soldes, nonce, gas, diffusion | Ton adresse EVM, tes transactions signées |
 | `arbitrum-one-rpc`, `optimism-rpc`, `base-rpc`, `polygon-bor-rpc`, `bsc-rpc`, `avalanche-c-chain-rpc` `.publicnode.com` | Chaînes EVM (phase 2), mêmes usages | Ton adresse EVM, tes transactions signées |
-| `api.devnet.solana.com` / `api.mainnet-beta.solana.com` | Solana : solde, blockhash, diffusion | Ton adresse Solana, tes transactions signées |
+| `api.devnet.solana.com` / `api.mainnet-beta.solana.com` | Solana : solde, blockhash, diffusion ; lecture par Rust des tables d'adresses (ALT) d'une transaction v0 avant de l'afficher et de la signer | Ton adresse Solana, tes transactions signées, les adresses des tables utilisées par la transaction à signer |
 | `api.0x.org` | Devis de swap EVM (si clé configurée) | Tokens, montant, ton adresse (destinataire du swap) |
 | `api.1inch.dev` | Devis de swap EVM (si clé configurée) | Tokens, montant, ton adresse |
 | `li.quest` | Devis de swap cross-chain | Tokens, montant, chaînes, ton adresse |
 | `lite-api.jup.ag` | Devis de swap Solana | Tokens, montant, ton adresse |
 
 Les devis de swap ne sont demandés que lorsque tu ouvres l'écran Swap et saisis un montant.
+
+Les tables d'adresses (ALT) d'une transaction Solana v0 sont lues par Rust auprès du RPC Solana (celui des réglages, sinon le RPC par défaut ci-dessus), jamais transmises par l'interface. Kyro fait confiance à ce RPC pour leur contenu, comme pour les soldes ; une table introuvable, désactivée ou incomplète bloque l'aperçu et la signature.
 
 ## Ajouter un serveur
 

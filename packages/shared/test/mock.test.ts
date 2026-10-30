@@ -3,6 +3,8 @@ import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { call, IpcError, setBackend } from '../src';
 import { createMockBackend, type MockBackend } from '../src/mock';
+import { demoSolanaWireTx } from '../src/mock-net';
+import { base64 } from '@scure/base';
 
 let mock: MockBackend;
 
@@ -109,5 +111,26 @@ describe('mock IPC backend', () => {
     await call('vault_reveal_mnemonic', { password: 'correct horse' });
     await call('vault_reveal_mnemonic', { password: 'correct horse' });
     expect(await rejectCode(call('vault_reveal_mnemonic', { password: 'correct horse' }))).toBe('RATE_LIMITED');
+  });
+
+  it('sol_decode_tx / sol_sign_tx replace sol_sign_message', async () => {
+    const confirms: string[] = [];
+    const m = createMockBackend({ network: 'testnet', confirm: (x) => (confirms.push(x), true), preset: { password: 'correct horse', unlocked: true } });
+    setBackend(m.invoke);
+    const me = (await call('accounts_get')).sol.address;
+    const wire = base64.decode(demoSolanaWireTx(me));
+    const message = base64.encode(wire.slice(65));
+    const s = await call('sol_decode_tx', { message });
+    expect(s).toMatchObject({ version: 'legacy', feePayer: me, ourSignerIndex: 0, baseFeeLamports: '5000', requiresExtraConfirmation: false, priorityFeeLamports: null });
+    expect(s.instructions[0]).toEqual({ type: 'systemTransfer', from: me, to: me, lamports: '0' });
+    expect(await rejectCode(call('sol_sign_tx', { message, password: 'wrong password' }))).toBe('WRONG_PASSWORD');
+    const signed = await call('sol_sign_tx', { message, password: 'correct horse' });
+    expect(base64.decode(signed.signature)).toHaveLength(64);
+    expect(signed.summary.ourSignerIndex).toBe(0);
+    expect(confirms).toHaveLength(1);
+    expect(await rejectCode(call('sol_decode_tx', { message: base64.encode(new Uint8Array([1, 0, 0])) }))).toBe('INVALID_INPUT');
+    expect(await rejectCode(m.invoke('sol_sign_message', {}))).toBe('INVALID_INPUT');
+    await call('vault_lock');
+    expect(await rejectCode(call('sol_decode_tx', { message }))).toBe('LOCKED');
   });
 });

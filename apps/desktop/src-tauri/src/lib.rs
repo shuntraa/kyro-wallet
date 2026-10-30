@@ -2,6 +2,7 @@ mod commands;
 mod error;
 mod net;
 mod settings;
+mod solana;
 mod state;
 
 use std::time::Duration;
@@ -45,7 +46,8 @@ pub fn run() {
             commands::evm_decode_tx,
             commands::evm_sign_tx,
             commands::btc_sign_psbt,
-            commands::sol_sign_message,
+            commands::sol_decode_tx,
+            commands::sol_sign_tx,
             commands::net_fetch,
             commands::settings_get,
             commands::settings_set,

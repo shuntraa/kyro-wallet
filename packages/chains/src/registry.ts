@@ -183,7 +183,7 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
   avalanche: [USDC('0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E'), USDT('0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7')],
 };
 
-/** SPL tokens (read-only for now). */
+/** SPL tokens (Token or Token-2022: the program is read from the mint account). */
 export const SPL_TOKENS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')],
   mainnet: [USDC('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'), USDT('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB')],
@@ -238,7 +238,7 @@ export function assetsFor(network: Network): AssetDef[] {
     }
     if (chain.family === 'sol') {
       for (const t of SPL_TOKENS[network]) {
-        out.push({ id: `spl:${t.contract}`, chainKey: chain.key, family: 'sol', kind: 'spl', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract, readOnly: true });
+        out.push({ id: `spl:${t.contract}`, chainKey: chain.key, family: 'sol', kind: 'spl', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
       }
     }
   }

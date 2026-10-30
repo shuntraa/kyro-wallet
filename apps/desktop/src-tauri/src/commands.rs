@@ -14,6 +14,7 @@ use zeroize::Zeroizing;
 use crate::error::{AppError, AppResult};
 use crate::net::{FetchRequest, FetchResponse};
 use crate::settings::Settings;
+use crate::solana;
 use crate::state::AppState;
 
 const MIN_PASSWORD_LEN: usize = 10;
@@ -283,7 +284,7 @@ pub fn btc_address(
 
 // ---------------------------------------------------------------- signing
 
-fn format_units(raw: &str, decimals: usize) -> String {
+pub(crate) fn format_units(raw: &str, decimals: usize) -> String {
     let digits = raw.trim_start_matches('0');
     if digits.is_empty() {
         return "0".into();
@@ -464,37 +465,67 @@ pub async fn btc_sign_psbt(
     })
 }
 
+/// Our Solana address (account 0) from the unlocked session.
+fn sol_own_address(state: &AppState) -> AppResult<String> {
+    state.with_seed(|seed| Ok(wallet_core::sol_address(seed, 0)?))
+}
+
+/// Preview for the UI: decoded in Rust, lookup tables fetched by the shell.
+#[tauri::command]
+pub async fn sol_decode_tx(
+    state: State<'_, AppState>,
+    message: String,
+) -> AppResult<wallet_core::SolTxSummary> {
+    let bytes = solana::message_bytes(&message)?;
+    let me = sol_own_address(&state)?;
+    solana::decode(&state, &bytes, &me).await
+}
+
 #[derive(Serialize)]
 pub struct SolSigned {
     signature: String,
+    summary: wallet_core::SolTxSummary,
 }
 
 #[tauri::command]
-pub async fn sol_sign_message(
+pub async fn sol_sign_tx(
     app: AppHandle,
     state: State<'_, AppState>,
     message: String,
     password: String,
-    summary: String,
 ) -> AppResult<SolSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
-    let b64 = base64::engine::general_purpose::STANDARD;
-    let bytes = b64
-        .decode(message.as_bytes())
-        .map_err(|_| AppError::InvalidInput("message Solana invalide".into()))?;
+    let bytes = solana::message_bytes(&message)?;
+    let me = sol_own_address(&state)?;
+    // Decoded (and lookup tables resolved) in Rust only — nothing from the UI is trusted.
+    let summary = solana::decode(&state, &bytes, &me).await?;
+    if summary.our_signer_index.is_none() {
+        return Err(AppError::InvalidInput(
+            "cette transaction ne demande pas la signature de ton adresse Solana".into(),
+        ));
+    }
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
-    // Solana messages are not decoded in Rust yet: the summary comes from the UI and is labelled as such.
-    let body = format!(
-        "Transaction Solana\n\n{}\n\n(Résumé fourni par l'interface — le décodage Solana côté Rust arrive dans une prochaine version.)",
-        summary.chars().take(600).collect::<String>()
-    );
-    confirm_native(&app, "Confirmer la transaction", body).await?;
+    confirm_native(
+        &app,
+        "Confirmer la transaction Solana",
+        solana::describe(&summary, &me, state.network),
+    )
+    .await?;
+    if summary.requires_extra_confirmation {
+        confirm_native(
+            &app,
+            "Attention : transaction non vérifiée",
+            solana::describe_extra(&summary),
+        )
+        .await?;
+    }
     let sig = blocking(move || Ok(wallet_core::sol_sign_message(&seed, 0, &bytes)?)).await?;
     state.touch();
     Ok(SolSigned {
-        signature: b64.encode(sig),
+        signature: base64::engine::general_purpose::STANDARD.encode(sig),
+        summary,
     })
 }
 

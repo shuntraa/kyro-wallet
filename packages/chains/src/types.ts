@@ -72,11 +72,23 @@ export interface BtcUnsigned {
 }
 export interface SolUnsigned {
   family: 'sol';
-  /** base64 compiled message bytes. */
+  /** base64 compiled message bytes (what Rust decodes and signs). */
   message: string;
+  /** base64 wire transaction with empty signature slots. */
+  wire: string;
   amount: bigint;
+  /** Recipient wallet (owner of the destination token account for SPL). */
   recipient: string;
+  /** Base fee + priority fee, lamports (rent for a new token account excluded). */
   maxFee: bigint;
+  /** Rent deposit for the recipient's new token account, lamports (0n if it exists / SOL send). */
+  ataRent: bigint;
+  createsAta: boolean;
+  /** SPL only. */
+  mint?: string;
+  destinationTokenAccount?: string;
+  tokenProgram?: 'token' | 'token2022';
+  /** Local one-liner (logs only; the UI shows the Rust decoding). */
   summary: string;
   size: SizeHint;
 }

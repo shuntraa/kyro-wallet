@@ -9,6 +9,7 @@ Cœur cryptographique de Kyro, en Rust pur. Licence GPL-3.0-or-later. Le contrat
 - **Bitcoin** : comptes BIP84 (P2WPKH) et BIP86 (P2TR), xpub, adresses, signature PSBT et résumé (sorties, monnaie rendue, frais).
 - **EVM** : adresse `m/44'/60'/0'/0/i` (EIP-55), signature EIP-1559 (type 2), décodage des transferts natifs, des appels ERC-20 `transfer`/`approve` (avec détection des approbations illimitées) et des autres appels de contrat.
 - **Solana** : dérivation SLIP-10 ed25519 `m/44'/501'/i'/0'` (même convention que Phantom et Solflare), signature ed25519 d'un message de transaction.
+- **Décodage Solana** (legacy et v0, tables d'adresses) : transferts SOL et SPL/Token-2022, délégations, comptes token associés, frais prioritaires, mémos. Ce qui n'est pas reconnu est signalé et exige une confirmation de plus. Vérifié sur de vraies transactions devnet et comparé à la crate de référence `solana-message` (en dev-dependency seulement).
 
 ## Ce qu'il ne fait jamais
 

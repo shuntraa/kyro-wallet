@@ -136,7 +136,7 @@ function MineList({ sort }: { sort: Sort }) {
                     <span className="truncate text-[14px] font-semibold">{h.asset.name}</span>
                     <span className="truncate text-[12px] text-mute">
                       {h.asset.symbol}
-                      {h.asset.kind === 'erc20' ? ' · ERC-20' : h.asset.kind === 'spl' ? ' · SPL · lecture seule' : ''}
+                      {h.asset.kind === 'erc20' ? ' · ERC-20' : h.asset.kind === 'spl' ? ' · SPL' : ''}
                     </span>
                   </span>
                 </span>

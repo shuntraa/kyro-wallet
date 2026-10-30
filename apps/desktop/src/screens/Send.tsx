@@ -3,9 +3,10 @@
 // fees slow/normal/fast/custom, recap decoded by the Rust core, password.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { toIpcError, type EvmTxSummary } from '@kyro/shared';
+import { toIpcError, type EvmTxSummary, type SolTxSummary } from '@kyro/shared';
 import {
   assetsFor,
+  checkSolSummary,
   feeCost,
   findChain,
   signAndBroadcast,
@@ -23,6 +24,7 @@ import {
   type FeeEstimates,
   type FeeLevel,
   type FeeParams,
+  type SolanaAdapter,
 } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -32,11 +34,12 @@ import { guardAllowsSend, guardOnInput, guardVerify, initialGuard, type GuardSta
 import { addLocalTx, bumpContactSends, findContact, getContacts, saveContacts, type ContactFamily } from '../lib/storage';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
+import { SolSummaryView } from '../components/SolSummaryView';
 import { Menu } from '../components/ui/menu';
 import { Button, IconButton, Notice, Spinner } from '../components/ui/primitives';
 import { IconBack, IconCheck, IconChevronDown, IconLock, IconShield, IconUpDown, IconWarn } from '../components/icons';
 
-type Built = { unsigned: AnyUnsigned; summary: EvmTxSummary | null; key: string };
+type Built = { unsigned: AnyUnsigned; summary: EvmTxSummary | null; sol: SolTxSummary | null; key: string };
 
 function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adapters']): AnyAdapter | undefined {
   if (asset.family === 'btc') return adapters.btc;
@@ -134,7 +137,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
         throw new Error('Le résumé décodé par le coffre ne correspond pas à ta saisie : envoi bloqué.');
       }
     }
-    return { unsigned, summary, key: buildKey };
+    let sol: SolTxSummary | null = null;
+    if (unsigned.family === 'sol') {
+      // Solana: the recap comes from the Rust decoder only (sol_decode_tx).
+      sol = await (adapter as SolanaAdapter).decode(unsigned);
+      const problem = checkSolSummary(unsigned, sol, adapter.getAddress());
+      if (problem) throw new Error(`${problem} Envoi bloqué.`);
+    }
+    return { unsigned, summary, sol, key: buildKey };
   };
 
   useEffect(() => {
@@ -161,7 +171,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const optionCost = (p: FeeParams | null | undefined): bigint | null => (p && size ? safeCost(p, size) : null);
   const maxFee = built?.unsigned.maxFee ?? null;
   const sendAmount = built?.unsigned.amount ?? amountBase;
+  const rent = built?.unsigned.family === 'sol' ? built.unsigned.ataRent : 0n;
   const feeFiat = maxFee !== null && nativeAsset && nativePrice !== null ? unitsToNumber(maxFee, nativeAsset.decimals) * nativePrice : null;
+  const rentFiat = rent > 0n && nativeAsset && nativePrice !== null ? unitsToNumber(rent, nativeAsset.decimals) * nativePrice : 0;
   const amountFiat = sendAmount !== null && price !== null ? unitsToNumber(sendAmount, decimals) * price : null;
   const after = sendAmount !== null ? balance - sendAmount - (asset?.kind === 'native' && maxFee !== null ? maxFee : 0n) : null;
 
@@ -446,7 +458,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-semibold">Vérification</span>
             <span className="inline-flex h-[26px] items-center gap-1.5 rounded-full border border-control-2 bg-raised px-2.5 text-[11px] font-medium text-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary ? 'Décodé dans le coffre' : asset.family === 'btc' ? 'PSBT vérifiée localement' : 'Résumé local'}
+              {built?.summary || built?.sol ? 'Décodé dans le coffre' : asset.family === 'btc' ? 'PSBT vérifiée localement' : 'Résumé local'}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 pt-2 pb-1">
@@ -486,9 +498,12 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <Row k="Données" v={dataLabel(built)} />
             <div className="flex h-[42px] items-center justify-between">
               <dt className="font-semibold">Total</dt>
-              <dd className="m-0 text-[17px] font-semibold">{amountFiat !== null ? fmtFiat(amountFiat + (feeFiat ?? 0), cur) : '—'}</dd>
+              <dd className="m-0 text-[17px] font-semibold">{amountFiat !== null ? fmtFiat(amountFiat + (feeFiat ?? 0) + rentFiat, cur) : '—'}</dd>
             </div>
           </dl>
+          {built?.sol && built.unsigned.family === 'sol' && nativeAsset && (
+            <SolSummaryView s={built.sol} unsigned={built.unsigned} asset={asset} sol={nativeAsset} solPrice={nativePrice} currency={cur} />
+          )}
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
@@ -501,6 +516,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>
               {asset.family === 'btc' && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? ', la monnaie revient sur ton adresse de change' : ''}. Personne d’autre ne reçoit rien, et tu paies au maximum{' '}
               {feeFiat !== null ? fmtFiat(feeFiat, cur) : maxFee !== null && nativeAsset ? fmtCrypto(maxFee, nativeAsset.decimals, nativeAsset.symbol) : '—'} de frais{choice === 'custom' ? ' (ton réglage)' : ''}.
+              {rent > 0n && nativeAsset ? ` Son compte de token n’existe pas encore : tu déposes ${fmtCrypto(rent, nativeAsset.decimals, nativeAsset.symbol)} de loyer pour le créer.` : ''}
             </EnClair>
           )}
           {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? 'Saisis ou colle l’adresse du destinataire.' : 'Indique un montant pour voir le récapitulatif décodé.'}</p>}
@@ -539,7 +555,7 @@ function dataLabel(b: Built | null): string {
     const outs = u.summary.outputs.length;
     return `${outs} sortie${outs > 1 ? 's' : ''} · ${u.size.family === 'btc' ? u.size.vsize : '?'} vB`;
   }
-  if (u.family === 'sol') return 'Transfert système';
+  if (u.family === 'sol') return u.mint ? `TransferChecked ${u.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL'}${u.createsAta ? ' + création du compte' : ''}` : 'Aucune · transfert système';
   if (b.summary?.kind === 'NativeTransfer') return 'Aucune · transfert simple';
   if (b.summary?.kind === 'Erc20Transfer') return 'transfer() ERC-20';
   return b.summary?.kind ?? 'Appel de contrat';

@@ -131,8 +131,8 @@ export function Swap({ sellAssetId }: { sellAssetId?: string }) {
       if (chosen.tx.kind === 'solana') {
         setPhase('swapping');
         const wire = await chosen.tx.build();
-        const summary = `Swap ${fmtCrypto(sellAmount, sell.decimals, sell.symbol)} → au moins ${fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol)} via ${chosen.providerName}`;
-        const signed = await adapters.sol.signWireTransaction(wire, password, summary);
+        // Rust decodes this third-party transaction and shows it in the native dialog (+ 2nd warning if unusual).
+        const signed = await adapters.sol.signWireTransaction(wire, password);
         const id = await adapters.sol.broadcast(signed);
         addLocalTx({ id, network, chainKey, assetId: sell.id, kind: 'swap', direction: 'out', amount: sellAmount.toString(), label: `Swap ${sell.symbol} → ${buy.symbol}`, time: Date.now(), status: 'pending' });
         setDoneId(id);

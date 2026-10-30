@@ -106,6 +106,75 @@ export interface EvmTokenHint {
   decimals: number;
 }
 
+// ---------------------------------------------------------------- Solana (crates/wallet-core/src/sol_decode.rs)
+
+export type SolTokenProgram = 'token' | 'token2022';
+
+/** Decoded instruction, tagged by `type`. Amounts: decimal strings in base units. */
+export type SolInstruction =
+  | { type: 'systemTransfer'; from: string; to: string; lamports: string }
+  | { type: 'systemTransferWithSeed'; from: string; base: string; to: string; lamports: string; seed: string }
+  | { type: 'systemCreateAccount'; from: string; newAccount: string; lamports: string; space: string; owner: string }
+  | { type: 'systemCreateAccountWithSeed'; from: string; newAccount: string; base: string; seed: string; lamports: string; space: string; owner: string }
+  | {
+      type: 'tokenTransfer';
+      tokenProgram: SolTokenProgram;
+      checked: boolean;
+      source: string;
+      destination: string;
+      authority: string;
+      mint: string | null;
+      amount: string;
+      decimals: number | null;
+      multisigSigners: string[];
+    }
+  | {
+      type: 'tokenApprove';
+      tokenProgram: SolTokenProgram;
+      checked: boolean;
+      source: string;
+      delegate: string;
+      owner: string;
+      mint: string | null;
+      amount: string;
+      decimals: number | null;
+      multisigSigners: string[];
+    }
+  | { type: 'ataCreate'; idempotent: boolean; payer: string; account: string; owner: string; mint: string; tokenProgram: string | null }
+  | { type: 'computeUnitLimit'; units: number }
+  | { type: 'computeUnitPrice'; microLamports: string }
+  | { type: 'memo'; text: string }
+  | { type: 'unknown'; programId: string; accounts: number; accountKeys: string[]; dataLen: number };
+
+/** Reasons for caution, tagged by `kind`. */
+export type SolWarning =
+  | { kind: 'feePayerNotUs'; feePayer: string }
+  | { kind: 'extraWritableSigner'; address: string }
+  | { kind: 'authorityNotUs'; instruction: number; authority: string }
+  | { kind: 'delegation'; instruction: number }
+  | { kind: 'unknownInstruction'; instruction: number; programId: string }
+  | { kind: 'token2022ExtensionsUnverified'; instruction: number }
+  | { kind: 'priorityFeeEstimated' };
+
+export interface SolTxSummary {
+  version: 'legacy' | 'v0' | string;
+  feePayer: string;
+  /** Every required signer, in signature order. */
+  signers: string[];
+  /** Index of our signature in the transaction's signature list, null if we don't sign. */
+  ourSignerIndex: number | null;
+  recentBlockhash: string;
+  instructions: SolInstruction[];
+  lookupTables: string[];
+  baseFeeLamports: string;
+  computeUnitLimit: number | null;
+  computeUnitPriceMicroLamports: string | null;
+  /** ceil(price × limit / 1e6) lamports; null without a price. */
+  priorityFeeLamports: string | null;
+  warnings: SolWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
 /** Every command: its arguments (`undefined` = none) and its resolved value. */
 export interface Commands {
   vault_status: { args: undefined; ret: VaultStatus };
@@ -123,11 +192,10 @@ export interface Commands {
     ret: { rawTx: string; hash: string };
   };
   btc_sign_psbt: { args: { psbt: string; password: string }; ret: { psbt: string; summary: BtcTxSummary } };
-  sol_sign_message: {
-    /** `message` = base64 of the compiled message bytes; `summary` = sentence shown in the native dialog. */
-    args: { message: string; password: string; summary: string };
-    ret: { signature: string };
-  };
+  /** Rust decodes the message (v0 lookup tables fetched by Rust). Unlocked session required. */
+  sol_decode_tx: { args: { message: string }; ret: SolTxSummary };
+  /** Native dialog (+ a 2nd one when `requiresExtraConfirmation`). Place `signature` at `summary.ourSignerIndex`. */
+  sol_sign_tx: { args: { message: string; password: string }; ret: { signature: string; summary: SolTxSummary } };
   net_fetch: { args: { req: NetRequest }; ret: NetResponse };
   settings_get: { args: undefined; ret: Settings };
   settings_set: { args: { settings: Settings }; ret: Settings };

@@ -358,22 +358,42 @@ function solRpc(req: NetRequest, s: DemoChainState): NetResponse {
     case 'getFeeForMessage':
       return rpcResult(id, { context: ctx, value: 5000 });
     case 'getTokenAccountsByOwner': {
-      if (p[0] !== me) return rpcResult(id, { context: ctx, value: [] });
+      const filter = (p[1] ?? {}) as { programId?: string; mint?: string };
+      if (p[0] !== me || (filter.programId && filter.programId !== TOKEN_PROGRAM)) return rpcResult(id, { context: ctx, value: [] });
       return rpcResult(id, {
         context: ctx,
-        value: [...s.solTokens.entries()].map(([mint, amount]) => ({
-          pubkey: base58.encode(sha256(new TextEncoder().encode(`ata:${mint}`))),
-          account: {
-            lamports: 2_039_280,
-            owner: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
-            executable: false,
-            rentEpoch: 0,
-            space: 165,
-            data: { program: 'spl-token', space: 165, parsed: { type: 'account', info: { mint, owner: me, state: 'initialized', tokenAmount: { amount: amount.toString(), decimals: DEMO_TOKENS[mint]?.decimals ?? 6, uiAmountString: '' } } } },
-          },
-        })),
+        value: [...s.solTokens.entries()]
+          .filter(([mint]) => !filter.mint || filter.mint === mint)
+          .map(([mint, amount]) => ({
+            pubkey: demoTokenAccount(mint),
+            account: {
+              lamports: 2_039_280,
+              owner: TOKEN_PROGRAM,
+              executable: false,
+              rentEpoch: 0,
+              space: 165,
+              data: { program: 'spl-token', space: 165, parsed: { type: 'account', info: { mint, owner: me, state: 'initialized', tokenAmount: { amount: amount.toString(), decimals: DEMO_TOKENS[mint]?.decimals ?? 6, uiAmountString: '' } } } },
+            },
+          })),
       });
     }
+    case 'getAccountInfo': {
+      const addr = String(p[0] ?? '');
+      const acct = (owner: string, data: Uint8Array, lamports: number) => ({ context: ctx, value: { lamports, owner, executable: false, rentEpoch: 0, space: data.length, data: [base64.encode(data), 'base64'] } });
+      const token = DEMO_TOKENS[addr];
+      if (token && !addr.startsWith('0x')) {
+        // SPL Mint layout: COption<authority>(36) supply(8) decimals(1) initialized(1) COption<freeze>(36) = 82 bytes.
+        const mint = new Uint8Array(82);
+        mint[44] = token.decimals;
+        mint[45] = 1;
+        return rpcResult(id, acct(TOKEN_PROGRAM, mint, 1_461_600));
+      }
+      if (addr === me) return rpcResult(id, acct('11111111111111111111111111111111', new Uint8Array(0), Number(s.solLamports)));
+      for (const mintAddr of s.solTokens.keys()) if (demoTokenAccount(mintAddr) === addr) return rpcResult(id, acct(TOKEN_PROGRAM, new Uint8Array(165), 2_039_280));
+      return rpcResult(id, { context: ctx, value: null });
+    }
+    case 'getMinimumBalanceForRentExemption':
+      return rpcResult(id, (Number(p[0] ?? 0) + 128) * 3480 * 2);
     case 'getSignaturesForAddress': {
       if (p[0] !== me) return rpcResult(id, []);
       return rpcResult(id, [{ signature: demoSig('incoming-1'), slot: slot - 90_000, blockTime: Math.floor(Date.now() / 1000) - 86_400 * 2, err: null, memo: null, confirmationStatus: 'finalized' }]);
@@ -397,6 +417,13 @@ function solRpc(req: NetRequest, s: DemoChainState): NetResponse {
     default:
       return rpcError(id, -32601, `Method not found (demo): ${body.method ?? '?'}`);
   }
+}
+
+const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+
+/** Our demo token account for a mint (stands in for the derived ATA). */
+export function demoTokenAccount(mint: string): string {
+  return base58.encode(sha256(new TextEncoder().encode(`ata:${mint}`)));
 }
 
 function demoSig(seed: string): string {

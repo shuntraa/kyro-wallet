@@ -37,6 +37,9 @@ serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.145" }
 base64 = { version = "=0.22.1" }
 hex = { version = "=0.4.3" }
-thiserror = { version = "=2.0.17" }
+thiserror = { version = "=2.0.18" }
 
 [dev-dependencies]
+# Differential tests only: decode the same devnet messages with Anza's reference crate.
+solana-message = { version = "=5.1.0", default-features = false, features = ["wincode"] }
+wincode = { version = "=0.6.3", default-features = false, features = ["std"] }

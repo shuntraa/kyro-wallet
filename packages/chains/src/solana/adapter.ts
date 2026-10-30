@@ -1,19 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Solana adapter. Messages are built with @solana/kit; the compiled message
-// bytes are signed in Rust (`sol_sign_message`), then assembled into a wire
-// transaction here. SPL balances are read-only for now.
+// Solana adapter. Messages are built with @solana/kit. Rust decodes them
+// (`sol_decode_tx`, shown before the password) and signs them (`sol_sign_tx`,
+// native dialog); the UI places the signature at `summary.ourSignerIndex`.
+// SPL sends: TransferChecked (Token or Token-2022, program read from the mint
+// owner, decimals read on-chain), recipient ATA created idempotently if absent.
 
 import {
   AccountRole,
   address,
-  appendTransactionMessageInstruction,
+  appendTransactionMessageInstructions,
   compileTransaction,
   createTransactionMessage,
+  getAddressEncoder,
   getBase58Decoder,
   getBase64Decoder,
   getBase64EncodedWireTransaction,
   getBase64Encoder,
+  getProgramDerivedAddress,
   getTransactionDecoder,
   isAddress,
   pipe,
@@ -27,16 +31,27 @@ import {
   type SignatureBytes,
   type Transaction,
 } from '@solana/kit';
-import { call, jsonRpc, netFetch, type NetFetch } from '@kyro/shared';
+import { call, jsonRpc, netFetch, type NetFetch, type SolTxSummary } from '@kyro/shared';
 import { SPL_TOKENS, type SolChain } from '../registry';
 import { feeCost } from '../fees';
 import { formatUnits } from '../units';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem, SolSigned, SolUnsigned } from '../types';
 
-const SYSTEM_PROGRAM = address('11111111111111111111111111111111');
-const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+export const SYSTEM_PROGRAM = address('11111111111111111111111111111111');
+export const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+export const TOKEN_2022_PROGRAM = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+export const ATA_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+
 /** System transfer (~150 CU) + 2 compute-budget instructions (~150 CU each), with margin. */
 export const SOL_TRANSFER_CU = 600;
+/** Token account sizes: legacy 165 bytes; Token-2022 ATA carries the ImmutableOwner extension (170). */
+export const TOKEN_ACCOUNT_SIZE = { token: 165, token2022: 170 } as const;
+
+/** Compute-unit limit for an SPL send (TransferChecked ≈ 6k CU, ATA create ≈ 25k CU; Token-2022 costs more). */
+export function splComputeUnits(createsAta: boolean, token2022: boolean): number {
+  const base = token2022 ? 20_000 : 10_000;
+  return base + (createsAta ? (token2022 ? 60_000 : 30_000) : 0);
+}
 
 export interface SolanaAdapterOptions {
   chain: SolChain;
@@ -49,8 +64,17 @@ interface RpcCtx<T> {
   context: { slot: number };
   value: T;
 }
+interface RpcAccount {
+  owner: string;
+  lamports: number;
+  data: [string, string] | { parsed: unknown };
+}
+interface ParsedTokenAccount {
+  pubkey: string;
+  account: { owner: string; data: { parsed: { info: { mint: string; tokenAmount: { amount: string } } } } };
+}
 
-/** SystemProgram::Transfer instruction (index 2, u64 LE lamports). */
+/** SystemProgram::Transfer (index 2, u64 LE lamports). */
 export function systemTransferInstruction(from: Address, to: Address, lamports: bigint): Instruction {
   const data = new Uint8Array(12);
   const view = new DataView(data.buffer);
@@ -64,6 +88,100 @@ export function systemTransferInstruction(from: Address, to: Address, lamports: 
     ],
     data,
   };
+}
+
+/** SPL Token / Token-2022 `TransferChecked` (12): [12, amount u64 LE, decimals u8]. */
+export function transferCheckedInstruction(p: { source: Address; mint: Address; destination: Address; authority: Address; amount: bigint; decimals: number; tokenProgram: Address }): Instruction {
+  if (!Number.isInteger(p.decimals) || p.decimals < 0 || p.decimals > 255) throw new Error('Décimales invalides');
+  const data = new Uint8Array(10);
+  data[0] = 12;
+  new DataView(data.buffer).setBigUint64(1, p.amount, true);
+  data[9] = p.decimals;
+  return {
+    programAddress: p.tokenProgram,
+    accounts: [
+      { address: p.source, role: AccountRole.WRITABLE },
+      { address: p.mint, role: AccountRole.READONLY },
+      { address: p.destination, role: AccountRole.WRITABLE },
+      { address: p.authority, role: AccountRole.READONLY_SIGNER },
+    ],
+    data,
+  };
+}
+
+/** Associated Token Account program `CreateIdempotent` (1). */
+export function createAtaIdempotentInstruction(p: { payer: Address; ata: Address; owner: Address; mint: Address; tokenProgram: Address }): Instruction {
+  return {
+    programAddress: ATA_PROGRAM,
+    accounts: [
+      { address: p.payer, role: AccountRole.WRITABLE_SIGNER },
+      { address: p.ata, role: AccountRole.WRITABLE },
+      { address: p.owner, role: AccountRole.READONLY },
+      { address: p.mint, role: AccountRole.READONLY },
+      { address: SYSTEM_PROGRAM, role: AccountRole.READONLY },
+      { address: p.tokenProgram, role: AccountRole.READONLY },
+    ],
+    data: new Uint8Array([1]),
+  };
+}
+
+/** ATA = PDA(ATA program, [owner, token program, mint]). */
+export async function findAssociatedTokenAddress(owner: Address, mint: Address, tokenProgram: Address = TOKEN_PROGRAM): Promise<Address> {
+  const enc = getAddressEncoder();
+  const [ata] = await getProgramDerivedAddress({ programAddress: ATA_PROGRAM, seeds: [enc.encode(owner), enc.encode(tokenProgram), enc.encode(mint)] });
+  return ata;
+}
+
+/** Read program + decimals from a mint account (base64 data, owner = token program). */
+export function parseMintAccount(account: RpcAccount | null): { tokenProgram: Address; decimals: number } {
+  if (!account) throw new Error('Mint introuvable sur ce réseau');
+  if (account.owner !== TOKEN_PROGRAM && account.owner !== TOKEN_2022_PROGRAM) throw new Error('Ce compte n’est pas un mint SPL');
+  if (!Array.isArray(account.data) || account.data[1] !== 'base64') throw new Error('Données du mint illisibles');
+  const bytes = getBase64Encoder().encode(account.data[0]);
+  // Mint layout: COption<Pubkey> authority (36) · supply u64 (8) · decimals u8 · is_initialized u8 …
+  if (bytes.length < 82 || bytes[45] !== 1) throw new Error('Mint non initialisé');
+  return { tokenProgram: address(account.owner), decimals: bytes[44] ?? 0 };
+}
+
+/**
+ * Put our signature in the slot `index` of the transaction's ordered signature
+ * map, after checking that this slot belongs to `expected`.
+ */
+export function placeSignature(tx: Transaction, index: number, signature: SignatureBytes, expected: string): Transaction {
+  const entries = Object.entries(tx.signatures) as Array<[Address, SignatureBytes | null]>;
+  const slot = entries[index];
+  if (!slot) throw new Error(`Index de signature ${index} hors limites (${entries.length} signataires)`);
+  if (slot[0] !== expected) throw new Error('L’index de signature ne correspond pas à notre adresse');
+  if (signature.length !== 64) throw new Error('Signature Solana invalide');
+  const next = entries.map(([k, v], i): [Address, SignatureBytes | null] => [k, i === index ? signature : v]);
+  return { ...tx, signatures: Object.fromEntries(next) as Transaction['signatures'] };
+}
+
+/**
+ * Cross-check the Rust decoding against what the UI built. Returns a French
+ * error message when something differs (the send must then be blocked).
+ */
+export function checkSolSummary(u: SolUnsigned, s: SolTxSummary, me: string): string | null {
+  if (s.ourSignerIndex === null) return 'Ton adresse ne signe pas cette transaction.';
+  if (s.feePayer !== me) return 'Le payeur des frais n’est pas ton adresse.';
+  const extra = s.instructions.filter((i) => i.type !== 'computeUnitLimit' && i.type !== 'computeUnitPrice');
+  if (!u.mint) {
+    const t = extra[0];
+    if (extra.length !== 1 || t?.type !== 'systemTransfer') return 'Le décodage ne montre pas un simple transfert de SOL.';
+    if (t.to !== u.recipient || t.lamports !== u.amount.toString() || t.from !== me) return 'Destinataire ou montant décodé différent de ta saisie.';
+    return null;
+  }
+  const transfers = extra.filter((i) => i.type === 'tokenTransfer');
+  const creates = extra.filter((i) => i.type === 'ataCreate');
+  if (transfers.length !== 1 || extra.length !== transfers.length + creates.length) return 'Le décodage contient des instructions inattendues.';
+  const t = transfers[0];
+  if (t?.type !== 'tokenTransfer' || !t.checked || t.mint !== u.mint || t.destination !== u.destinationTokenAccount || t.amount !== u.amount.toString() || t.authority !== me) {
+    return 'Transfert de token décodé différent de ta saisie (mint, compte destinataire ou montant).';
+  }
+  if (creates.length !== (u.createsAta ? 1 : 0)) return 'Création de compte de token inattendue.';
+  const c = creates[0];
+  if (c?.type === 'ataCreate' && (c.owner !== u.recipient || c.account !== u.destinationTokenAccount || c.mint !== u.mint || c.payer !== me)) return 'Création de compte de token incohérente.';
+  return null;
 }
 
 export class SolanaAdapter implements ChainAdapter<'sol'> {
@@ -103,21 +221,25 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     return this.rpc<number>('getSlot', [{ commitment: 'confirmed' }]);
   }
 
+  private accountInfo(addr: string): Promise<RpcAccount | null> {
+    return this.rpc<RpcCtx<RpcAccount | null>>('getAccountInfo', [addr, { encoding: 'base64', commitment: 'confirmed' }]).then((r) => r.value);
+  }
+
+  private async lamports(): Promise<bigint> {
+    const bal = await this.rpc<RpcCtx<number>>('getBalance', [this.me, { commitment: 'confirmed' }]);
+    return BigInt(bal.value);
+  }
+
   async getBalance(): Promise<Balance[]> {
-    const [bal, tokens] = await Promise.all([
-      this.rpc<RpcCtx<number>>('getBalance', [this.me, { commitment: 'confirmed' }]),
-      this.rpc<RpcCtx<Array<{ account: { data: { parsed: { info: { mint: string; tokenAmount: { amount: string } } } } } }>>>('getTokenAccountsByOwner', [
-        this.me,
-        { programId: TOKEN_PROGRAM },
-        { encoding: 'jsonParsed', commitment: 'confirmed' },
-      ]).catch(() => null),
-    ]);
-    const out: Balance[] = [{ assetId: 'sol', amount: BigInt(bal.value) }];
-    const known = SPL_TOKENS[this.chain.network];
-    for (const t of known) {
-      const amount = (tokens?.value ?? [])
-        .filter((a) => a.account.data.parsed.info.mint === t.contract)
-        .reduce((s, a) => s + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
+    const tokenAccounts = (programId: string) =>
+      this.rpc<RpcCtx<ParsedTokenAccount[]>>('getTokenAccountsByOwner', [this.me, { programId }, { encoding: 'jsonParsed', commitment: 'confirmed' }])
+        .then((r) => r.value)
+        .catch(() => [] as ParsedTokenAccount[]);
+    const [lamports, legacy, t22] = await Promise.all([this.lamports(), tokenAccounts(TOKEN_PROGRAM), tokenAccounts(TOKEN_2022_PROGRAM)]);
+    const all = [...legacy, ...t22];
+    const out: Balance[] = [{ assetId: 'sol', amount: lamports }];
+    for (const t of SPL_TOKENS[this.chain.network]) {
+      const amount = all.filter((a) => a.account.data.parsed.info.mint === t.contract).reduce((s, a) => s + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
       out.push({ assetId: `spl:${t.contract}`, amount });
     }
     return out;
@@ -147,68 +269,130 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     };
   }
 
-  async buildTx(params: BuildParams): Promise<SolUnsigned> {
-    if (params.fee.family !== 'sol') throw new Error('Frais Solana attendus');
-    if (params.asset.kind !== 'native') throw new Error('Les envois de tokens SPL arrivent bientôt (lecture seule pour l’instant)');
-    const to = params.to.trim();
-    if (!this.isValidAddress(to)) throw new Error('Adresse Solana invalide');
-    const size = { family: 'sol' as const, computeUnits: SOL_TRANSFER_CU, signatures: 1 };
-    const maxFee = feeCost(params.fee, size);
-    let lamports = params.amount;
-    if (params.max) {
-      const bal = await this.rpc<RpcCtx<number>>('getBalance', [this.me, { commitment: 'confirmed' }]);
-      lamports = BigInt(bal.value) - maxFee;
-    }
-    if (lamports <= 0n) throw new Error('Solde insuffisant pour couvrir les frais');
+  private async compile(instructions: Instruction[], computeUnits: number, microLamports: bigint): Promise<{ message: string; wire: string }> {
     const { value: bh } = await this.rpc<RpcCtx<{ blockhash: string; lastValidBlockHeight: number }>>('getLatestBlockhash', [{ commitment: 'confirmed' }]);
-    const priority = params.fee.microLamports;
     const msg = pipe(
       createTransactionMessage({ version: 0 }),
       (m) => setTransactionMessageFeePayer(this.me, m),
       (m) => setTransactionMessageLifetimeUsingBlockhash({ blockhash: bh.blockhash as Blockhash, lastValidBlockHeight: BigInt(bh.lastValidBlockHeight) }, m),
-      (m) => setTransactionMessageComputeUnitLimit(SOL_TRANSFER_CU, m),
-      (m) => (priority > 0n ? setTransactionMessageComputeUnitPrice(priority, m) : m),
-      (m) => appendTransactionMessageInstruction(systemTransferInstruction(this.me, address(to), lamports), m),
+      (m) => setTransactionMessageComputeUnitLimit(computeUnits, m),
+      (m) => (microLamports > 0n ? setTransactionMessageComputeUnitPrice(microLamports, m) : m),
+      (m) => appendTransactionMessageInstructions(instructions, m),
     );
     const compiled = compileTransaction(msg);
-    const message = getBase64Decoder().decode(compiled.messageBytes);
+    return { message: getBase64Decoder().decode(compiled.messageBytes), wire: getBase64EncodedWireTransaction(compiled) };
+  }
+
+  async buildTx(params: BuildParams): Promise<SolUnsigned> {
+    if (params.fee.family !== 'sol') throw new Error('Frais Solana attendus');
+    const to = params.to.trim();
+    if (!this.isValidAddress(to)) throw new Error('Adresse Solana invalide');
+    const recipient = address(to);
+    const priority = params.fee.microLamports;
+    if (params.asset.kind === 'spl') return this.buildSpl(params, recipient, priority);
+    if (params.asset.kind !== 'native') throw new Error('Actif non pris en charge sur Solana');
+
+    const size = { family: 'sol' as const, computeUnits: SOL_TRANSFER_CU, signatures: 1 };
+    const maxFee = feeCost(params.fee, size);
+    const lamports = params.max ? (await this.lamports()) - maxFee : params.amount;
+    if (lamports <= 0n) throw new Error('Solde insuffisant pour couvrir les frais');
+    const { message, wire } = await this.compile([systemTransferInstruction(this.me, recipient, lamports)], SOL_TRANSFER_CU, priority);
     return {
       family: 'sol',
       message,
+      wire,
       amount: lamports,
       recipient: to,
       maxFee,
-      summary: `Envoyer ${formatUnits(lamports, 9)} SOL à ${to} · frais max. ${formatUnits(maxFee, 9)} SOL`,
+      ataRent: 0n,
+      createsAta: false,
+      summary: `Envoyer ${formatUnits(lamports, 9)} SOL à ${to}`,
       size,
     };
   }
 
-  private async signMessageBytes(messageB64: string, password: string, summary: string): Promise<SignatureBytes> {
-    const res = await call('sol_sign_message', { message: messageB64, password, summary });
-    const sig = getBase64Encoder().encode(res.signature);
-    if (sig.length !== 64) throw new Error('Signature Solana invalide');
-    return sig as SignatureBytes;
+  private async buildSpl(params: BuildParams, recipient: Address, priority: bigint): Promise<SolUnsigned> {
+    const mintStr = params.asset.contract;
+    if (!mintStr || !isAddress(mintStr)) throw new Error('Mint du token inconnu');
+    const mint = address(mintStr);
+    if (recipient === this.me) throw new Error('Envoi de token vers ton propre compte : rien à faire.');
+
+    // Mint: program (Token vs Token-2022) from its owner, decimals from its data.
+    const [mintAcc, recipientAcc] = await Promise.all([this.accountInfo(mint), this.accountInfo(recipient)]);
+    const { tokenProgram, decimals } = parseMintAccount(mintAcc);
+    if (decimals !== params.asset.decimals) throw new Error(`Décimales du mint (${decimals}) différentes du registre (${params.asset.decimals}) : envoi bloqué.`);
+    if (recipientAcc && (recipientAcc.owner === TOKEN_PROGRAM || recipientAcc.owner === TOKEN_2022_PROGRAM)) {
+      throw new Error('Cette adresse est un compte de token, pas un portefeuille : demande l’adresse du portefeuille.');
+    }
+    const token2022 = tokenProgram === TOKEN_2022_PROGRAM;
+
+    // Source: our token account for this mint (prefer the canonical ATA).
+    const ourAta = await findAssociatedTokenAddress(this.me, mint, tokenProgram);
+    const { value: accounts } = await this.rpc<RpcCtx<ParsedTokenAccount[]>>('getTokenAccountsByOwner', [this.me, { mint }, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
+    const owned = accounts.filter((a) => a.account.owner === tokenProgram).map((a) => ({ pubkey: a.pubkey, amount: BigInt(a.account.data.parsed.info.tokenAmount.amount) }));
+    const balance = owned.reduce((s, a) => s + a.amount, 0n);
+    const amount = params.max ? owned.find((a) => a.pubkey === ourAta)?.amount ?? owned.reduce((m, a) => (a.amount > m ? a.amount : m), 0n) : params.amount;
+    if (amount <= 0n) throw new Error('Montant invalide');
+    if (amount > balance) throw new Error('Solde de token insuffisant');
+    const source = owned.find((a) => a.pubkey === ourAta && a.amount >= amount) ?? owned.filter((a) => a.amount >= amount).sort((a, b) => (b.amount > a.amount ? 1 : -1))[0];
+    if (!source) throw new Error('Aucun compte de token ne couvre ce montant (fonds répartis sur plusieurs comptes).');
+
+    // Destination ATA, created if missing.
+    const destination = await findAssociatedTokenAddress(recipient, mint, tokenProgram);
+    const destAcc = await this.accountInfo(destination);
+    if (destAcc && destAcc.owner !== tokenProgram) throw new Error('Le compte de token du destinataire est invalide.');
+    const createsAta = destAcc === null;
+    const ataRent = createsAta ? BigInt(await this.rpc<number>('getMinimumBalanceForRentExemption', [token2022 ? TOKEN_ACCOUNT_SIZE.token2022 : TOKEN_ACCOUNT_SIZE.token])) : 0n;
+
+    const cu = splComputeUnits(createsAta, token2022);
+    const size = { family: 'sol' as const, computeUnits: cu, signatures: 1 };
+    const maxFee = feeCost(params.fee, size);
+    const lamports = await this.lamports();
+    if (lamports < maxFee + ataRent) throw new Error(`SOL insuffisant pour les frais${createsAta ? ' et la création du compte de token du destinataire' : ''}.`);
+
+    const ixs: Instruction[] = [];
+    if (createsAta) ixs.push(createAtaIdempotentInstruction({ payer: this.me, ata: destination, owner: recipient, mint, tokenProgram }));
+    ixs.push(transferCheckedInstruction({ source: address(source.pubkey), mint, destination, authority: this.me, amount, decimals, tokenProgram }));
+    const { message, wire } = await this.compile(ixs, cu, priority);
+    return {
+      family: 'sol',
+      message,
+      wire,
+      amount,
+      recipient: recipient,
+      maxFee,
+      ataRent,
+      createsAta,
+      mint,
+      destinationTokenAccount: destination,
+      tokenProgram: token2022 ? 'token2022' : 'token',
+      summary: `Envoyer ${formatUnits(amount, decimals)} ${params.asset.symbol} à ${recipient}`,
+      size,
+    };
   }
 
-  private assemble(tx: Transaction, sig: SignatureBytes): SolSigned {
-    if (!(this.me in tx.signatures)) throw new Error('La transaction ne demande pas la signature de ce compte');
-    const signed: Transaction = { ...tx, signatures: { ...tx.signatures, [this.me]: sig } };
-    return { family: 'sol', wire: getBase64EncodedWireTransaction(signed), signature: getBase58Decoder().decode(sig) };
+  /** Rust decoding for the "Vérification" panel (before the password). */
+  decode(unsigned: SolUnsigned): Promise<SolTxSummary> {
+    return call('sol_decode_tx', { message: unsigned.message });
   }
 
   async signTx(unsigned: SolUnsigned, password: string): Promise<SolSigned> {
-    const sig = await this.signMessageBytes(unsigned.message, password, unsigned.summary);
-    const messageBytes = getBase64Encoder().encode(unsigned.message);
-    // Re-wrap the exact bytes that were signed; only our signature slot exists.
-    const tx = { messageBytes, signatures: { [this.me]: null } } as unknown as Transaction;
-    return this.assemble(tx, sig);
+    const signed = await this.signWireTransaction(unsigned.wire, password);
+    const problem = checkSolSummary(unsigned, signed.summary, this.me);
+    if (problem) throw new Error(`${problem} Signature écartée.`);
+    return signed;
   }
 
-  /** Sign a ready-made wire transaction (e.g. Jupiter swap). */
-  async signWireTransaction(wireB64: string, password: string, summary: string): Promise<SolSigned> {
+  /** Sign any wire transaction we are a signer of (our builds, Jupiter swaps…). */
+  async signWireTransaction(wireB64: string, password: string): Promise<SolSigned & { summary: SolTxSummary }> {
     const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wireB64));
-    const sig = await this.signMessageBytes(getBase64Decoder().decode(tx.messageBytes), password, summary);
-    return this.assemble(tx, sig);
+    const message = getBase64Decoder().decode(tx.messageBytes);
+    const res = await call('sol_sign_tx', { message, password });
+    const index = res.summary.ourSignerIndex;
+    if (index === null) throw new Error('Ce compte ne signe pas cette transaction');
+    const sig = getBase64Encoder().encode(res.signature) as SignatureBytes;
+    const placed = placeSignature(tx, index, sig, this.me);
+    return { family: 'sol', wire: getBase64EncodedWireTransaction(placed), signature: getBase58Decoder().decode(sig), summary: res.summary };
   }
 
   async broadcast(signed: SolSigned): Promise<string> {
