@@ -30,6 +30,8 @@ export interface WalletAccounts {
   tron?: { address: string };
   /** Vault only: XRP on a hardware wallet is HW_UNSUPPORTED. */
   xrp?: { address: string };
+  /** Vault only: Cardano on a hardware wallet is HW_UNSUPPORTED. */
+  cardano?: { address: string };
 }
 
 export interface BtcAccountView {

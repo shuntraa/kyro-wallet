@@ -5,6 +5,8 @@ import type { AssetDef, Chain, Family } from './registry';
 import type { UtxoSigned, UtxoUnsigned } from './utxo/utxo';
 import type { TronSigned, TronUnsigned } from './tron/adapter';
 import type { XrpSigned, XrpUnsigned } from './xrp/adapter';
+import type { CardanoSigned, CardanoUnsigned } from './cardano/adapter';
+import type { CardanoTokenSpec } from '@kyro/shared';
 
 export type FeeLevel = 'slow' | 'normal' | 'fast';
 export type FeeChoice = FeeLevel | 'custom';
@@ -17,7 +19,9 @@ export type FeeParams =
   /** TRON: no fee to choose. Rust burns bandwidth / energy (estimate shown, `fee_limit` caps it). */
   | { family: 'tron' }
   /** XRP Ledger: no fee to choose. Rust sets `Fee` from the open ledger (≈ 12 drops). */
-  | { family: 'xrp' };
+  | { family: 'xrp' }
+  /** Cardano: no fee to choose. Rust computes min_fee_a × size + min_fee_b. */
+  | { family: 'ada' };
 
 export interface FeeOption {
   level: FeeLevel;
@@ -47,7 +51,8 @@ export type SizeHint =
   | { family: 'sol'; computeUnits: number; signatures: number }
   /** TRON: bandwidth bytes charged, energy simulated (TRC-20). */
   | { family: 'tron'; bandwidth: number; energy: number }
-  | { family: 'xrp' };
+  | { family: 'xrp' }
+  | { family: 'ada' };
 
 export interface Balance {
   assetId: string;
@@ -64,6 +69,10 @@ export interface BuildParams {
   max?: boolean;
   /** XRP Ledger only: destination tag (0 … 4 294 967 295). */
   destinationTag?: number;
+  /** Cardano only: native token to send (its output carries the min-ADA; `amount` is then ignored). */
+  cardanoToken?: CardanoTokenSpec;
+  /** Cardano only: CIP-20 message, public and permanent. */
+  memo?: string;
 }
 
 export interface EvmUnsigned {
@@ -140,9 +149,11 @@ export interface FamilyTypes {
   tron: { unsigned: TronUnsigned; signed: TronSigned };
   /** XRP Ledger: Payment built and strictly decoded by Rust, with the live context. */
   xrp: { unsigned: XrpUnsigned; signed: XrpSigned };
+  /** Cardano: transaction built (selection, fee, min-UTxO) and decoded by Rust. */
+  ada: { unsigned: CardanoUnsigned; signed: CardanoSigned };
 }
-export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned;
-export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned;
+export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned;
+export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned;
 
 export type HistoryDirection = 'in' | 'out' | 'self';
 export type HistoryStatus = 'pending' | 'confirmed' | 'failed';
@@ -160,6 +171,8 @@ export interface HistoryItem {
   time?: number;
   status: HistoryStatus;
   kind: 'transfer' | 'swap' | 'approval' | 'contract';
+  /** Extra line (Cardano: tokens moved, CIP-20 message). */
+  note?: string;
 }
 
 export interface ChainAdapter<F extends Family = Family> {
@@ -177,7 +190,7 @@ export interface ChainAdapter<F extends Family = Family> {
   getHistory(): Promise<HistoryItem[]>;
 }
 
-export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'tron'> | ChainAdapter<'xrp'>;
+export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'tron'> | ChainAdapter<'xrp'> | ChainAdapter<'ada'>;
 
 /** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin: Bitcoin's PSBT shape). */
 export function unsignedFamilyOf(family: Family): AnyUnsigned['family'] {

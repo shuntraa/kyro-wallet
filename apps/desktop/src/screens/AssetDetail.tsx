@@ -8,7 +8,8 @@ import { useHistory } from '../state/history';
 import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
 import { fmtAgo, fmtChartTime, fmtCrypto, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
-import { useNow } from '../lib/useAsync';
+import { useAsync, useNow } from '../lib/useAsync';
+import { CardanoTokensPanel } from '../components/Cardano';
 import { AddressShort, BigFiat, CoinIcon, EmptyState, ErrorLine, HIDDEN, TrendPill } from '../components/kit';
 import { SmoothChart } from '../components/charts';
 import { HistoryRow } from '../components/HistoryRow';
@@ -18,7 +19,7 @@ import { IconBack, IconDown, IconStar, IconSwap, IconUp } from '../components/ic
 
 export function AssetDetail({ id }: { id: string }) {
   const { back, settings, navigate, hideBalances, network } = useApp();
-  const { accounts } = useVault();
+  const { accounts, adapters } = useVault();
   const pf = usePortfolio();
   const { favs, toggle } = useFavorites();
   const [period, setPeriod] = useState<Period>('1J');
@@ -61,8 +62,10 @@ export function AssetDetail({ id }: { id: string }) {
   }, [supported, network, pf.balances]);
 
   const activity = (history.data?.entries ?? []).filter((e) => supported && e.assetId === supported.id).slice(0, 6);
-  const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address }[supported.family] ?? null) : null;
+  const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address }[supported.family] ?? null) : null;
   const fav = favs.includes(coinId);
+  // Cardano: ADA tied to tokens and the native tokens themselves (not separate assets).
+  const adaAccount = useAsync(supported?.family === 'ada' && adapters.cardano ? () => adapters.cardano!.account() : null, [supported?.id, adapters.cardano], { intervalMs: 30_000 });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">
@@ -170,8 +173,10 @@ export function AssetDetail({ id }: { id: string }) {
                   {network === 'testnet' && <span className="pt-2 text-[11px] text-faint">Arbitrum, Base, Optimism, Polygon, BNB et Avalanche : en mainnet.</span>}
                 </div>
               )}
+              {supported.family === 'ada' && <CardanoTokensPanel account={adaAccount.data} hidden={hideBalances} />}
               <div className="flex-1" />
-              {address && (
+              {/* Cardano: the tokens panel takes this room; « Recevoir » shows the same single address. */}
+              {address && supported.family !== 'ada' && (
                 <div className="flex items-center justify-between gap-2 rounded-[14px] bg-raised py-2 pr-2 pl-3.5">
                   <AddressShort address={address} />
                   <Button size="sm" onClick={() => navigate({ name: 'receive', family: supported.family })}>

@@ -9,7 +9,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `ltc` / `doge`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*`, docs/IPC.md §2.4).
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp';
+/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
 
 interface ChainBase {
   key: string;
@@ -46,7 +47,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -139,9 +140,8 @@ const SOL: Record<Network, SolChain> = {
   },
 };
 
-/** Phase 4: listed with their price, shown as "Bientôt". (Litecoin, Dogecoin, TRON and XRP now have a full send path.) */
+/** Phase 4: listed with their price, shown as "Bientôt". Empty now: Litecoin, Dogecoin, TRON, XRP and Cardano all have a full send path. */
 export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
-  { key: 'cardano', name: 'Cardano', symbol: 'ADA', coingeckoId: 'cardano', color: '#3468D1', glyph: 'A', watchOnly: true, phase: 4 },
 ];
 
 /**
@@ -220,9 +220,9 @@ export function xrpChain(network: Network): XrpChain {
 }
 
 /**
- * Cardano (phase 4, B4d): Rust `ada_*` commands and `CardanoAdapter`
- * (`packages/chains/src/cardano/`). Testnet = preprod. Not yet in `Family` / `allChains()`:
- * wiring it into the UI is listed in docs/IPC.md §2.7. Hardware wallets: HW_UNSUPPORTED.
+ * Cardano (phase 4): Rust `ada_*` commands and `CardanoAdapter` (`packages/chains/src/cardano/`).
+ * Testnet = preprod. Part of `allChains()` / `assetsFor()` (ADA; native tokens are read from the
+ * balance, not listed). Single-address mode. Hardware wallets: HW_UNSUPPORTED.
  */
 export interface CardanoChain extends Omit<ChainBase, 'phase'> {
   family: 'ada';
@@ -299,7 +299,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -391,6 +391,13 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   if (doge?.kind === 'esplora') list.push({ host: host(doge.url), purpose: 'Dogecoin : ton serveur Esplora', custom: true });
   else list.push({ host: 'aucun serveur', purpose: 'Dogecoin : aucun serveur public gratuit, configure le tien (rien n’est contacté)' });
   // TRON: reached by Rust only (tron_*), Tor circuits of the `tron` family.
+  // Cardano: reached by Rust only (ada_*), Tor circuits of the `cardano` family.
+  const ada = servers.cardano?.[nk];
+  list.push(
+    ada?.kind === 'koios'
+      ? { host: host(ada.url), purpose: 'Cardano : ton serveur Koios', custom: true }
+      : { host: network === 'mainnet' ? 'api.koios.rest' : 'preprod.koios.rest', purpose: `Cardano${network === 'mainnet' ? '' : ' preprod'} : UTxO, paramètres, historique, diffusion (Koios)` },
+  );
   // XRP Ledger: reached by Rust only (xrp_*), Tor circuits of the `xrp` family.
   const xrp = servers.xrp?.[nk];
   list.push(

@@ -27,3 +27,4 @@ export {
   type SolanaAdapterOptions,
 } from './solana/adapter';
 export * from './hw';
+export * from './poisoning';

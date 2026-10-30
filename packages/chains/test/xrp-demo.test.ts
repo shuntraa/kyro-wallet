@@ -38,7 +38,7 @@ describe('XRP Ledger in the app', () => {
     expect(assetsFor('mainnet').some((a) => a.id === 'xrp')).toBe(true);
     expect(outgoingHosts('testnet').map((h) => h.host)).toContain('s.altnet.rippletest.net');
     expect(outgoingHosts('mainnet').map((h) => h.host)).toContain('xrplcluster.com');
-    const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, tron: {}, xrp: { testnet: { kind: 'jsonRpc', url: 'https://my-rippled.example:51234/' } } });
+    const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, tron: {}, cardano: {}, xrp: { testnet: { kind: 'jsonRpc', url: 'https://my-rippled.example:51234/' } } });
     expect(custom.find((h) => h.host === 'my-rippled.example:51234')).toMatchObject({ custom: true });
     expect(custom.map((h) => h.host)).not.toContain('s.altnet.rippletest.net');
   });
@@ -109,13 +109,13 @@ describe('XRP Ledger in the app', () => {
     const xa = 'XVLhHMPHU98es4dbozjVtdWzVrDjtV18pX8yuPT7y4xaEHi';
     expect(isXAddress(xa)).toBe(true);
     expect(isXrpAddress(xa)).toBe(false);
-    expect((await err(call('xrp_account', { address: xa }))).message).toMatch(/X-addresses are not supported/);
+    expect((await err(call('xrp_account', { address: xa }))).message).toMatch(/les X-addresses ne sont pas prises en charge : demande l'adresse classique r… et le tag de destination/);
     const base = { account: accounts.xrp.address, destination: mock.xrp.friend, destinationTag: null, amount: { kind: 'xrp', drops: '1000000' }, fee: '12', sequence: 4_812_307, lastLedgerSequence: 99_999_999, flags: 0x80000000 };
     for (const [over, msg] of [
-      [{ paths: [[{ currency: 'USD' }]] }, /Paths are not supported/],
-      [{ deliverMin: '1' }, /DeliverMin/],
-      [{ flags: 0x80020000 }, /partial payments/],
-      [{ account: mock.xrp.friend }, /not from our account/],
+      [{ paths: [[{ currency: 'USD' }]] }, /les chemins \(Paths\) ne sont pas pris en charge/],
+      [{ deliverMin: '1' }, /DeliverMin \(paiements partiels\)/],
+      [{ flags: 0x80020000 }, /paiements partiels \(tfPartialPayment\) sont refusés/],
+      [{ account: mock.xrp.friend }, /l'Account n'est pas l'adresse de ce portefeuille/],
     ] as const) {
       expect((await err(call('xrp_sign_tx', { blob: hex({ ...base, ...over }), password: PASSWORD }))).message).toMatch(msg);
     }
@@ -150,10 +150,11 @@ describe('XRP Ledger in the app', () => {
     expect((await err(call('settings_set', { settings: { ...st, servers: { ...st.servers, xrp: { testnet: { kind: 'jsonRpc', url: 'https://down-rippled.example/' } } } } }))).code).toBe('SERVER_UNREACHABLE');
   });
 
-  it('config_get: hasTrongridKey follows settings.apiKeys.trongrid', async () => {
+  it('config_get: hasTrongridKey follows a saved apiKeys.trongrid (write-only)', async () => {
     expect((await call('config_get')).hasTrongridKey).toBe(false);
     const st = await call('settings_get');
-    await call('settings_set', { settings: { ...st, apiKeys: { ...st.apiKeys, trongrid: 'k' } } });
+    const { apiKeysSet: _set, ...rest } = st;
+    await call('settings_set', { settings: { ...rest, apiKeys: { trongrid: 'k' } } });
     expect((await call('config_get')).hasTrongridKey).toBe(true);
   });
 });

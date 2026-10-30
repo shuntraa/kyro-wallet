@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useState, type ReactNode } from 'react';
-import { call, toIpcError, type Settings } from '@kyro/shared';
+import { call, toIpcError, type ApiKeyName, type Settings } from '@kyro/shared';
 import { outgoingHosts } from '@kyro/chains';
 import { useApp, useVault, type SettingsSection } from '../state/app';
 import { cn } from '../lib/cn';
@@ -74,7 +74,7 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
           {section === 'hardware' && <Devices />}
           {section === 'networks' && <ServersSection />}
           {section === 'display' && <Display save={save} />}
-          {section === 'apikeys' && <ApiKeys save={save} />}
+          {section === 'apikeys' && <ApiKeys />}
           {section === 'connections' && <Connections />}
           {section === 'contacts' && <Contacts />}
           {saved && <span className="text-[12px] text-up">✓ Réglage enregistré sur cet appareil</span>}
@@ -316,44 +316,94 @@ function Display({ save }: { save: Save }) {
   );
 }
 
-function ApiKeys({ save }: { save: Save }) {
+/**
+ * API keys are write-only (settings_get returns `apiKeysSet` only): a saved key shows
+ * « Clé enregistrée » with Remplacer / Supprimer, never its value. The field holds only what the
+ * user is typing now, is cleared once saved, and is the only key value ever sent.
+ */
+function ApiKeys() {
   const { settings, config } = useApp();
-  const [keys, setKeys] = useState(settings.apiKeys);
-  const rows: Array<{ key: keyof Settings['apiKeys']; label: string; desc: string; env: boolean }> = [
-    { key: 'coingecko', label: 'CoinGecko', desc: 'Optionnelle : quota plus large pour les prix.', env: !!config?.hasCoingeckoKey },
-    { key: 'zerox', label: '0x', desc: 'Requise pour les devis 0x.', env: !!config?.hasZeroxKey },
-    { key: 'oneinch', label: '1inch', desc: 'Requise pour les devis 1inch.', env: !!config?.hasOneinchKey },
-    // hasTrongridKey is also true for a key saved here: « environnement » only when none is saved.
-    { key: 'trongrid', label: 'TronGrid', desc: 'Optionnelle : limites de débit plus hautes pour TRON (TRON-PRO-API-KEY).', env: !!config?.hasTrongridKey && !settings.apiKeys.trongrid },
+  // config flags are « environment OR saved key »: environment only when nothing is saved.
+  const rows: Array<{ key: ApiKeyName; label: string; desc: string; env: boolean }> = [
+    { key: 'coingecko', label: 'CoinGecko', desc: 'Optionnelle : quota plus large pour les prix.', env: !!config?.hasCoingeckoKey && !settings.apiKeysSet.coingecko },
+    { key: 'zerox', label: '0x', desc: 'Requise pour les devis 0x.', env: !!config?.hasZeroxKey && !settings.apiKeysSet.zerox },
+    { key: 'oneinch', label: '1inch', desc: 'Requise pour les devis 1inch.', env: !!config?.hasOneinchKey && !settings.apiKeysSet.oneinch },
+    { key: 'trongrid', label: 'TronGrid', desc: 'Optionnelle : limites de débit plus hautes pour TRON (TRON-PRO-API-KEY).', env: !!config?.hasTrongridKey && !settings.apiKeysSet.trongrid },
   ];
   return (
     <Panel className="gap-4 py-5">
       <span className="text-[15px] font-semibold">Clés API</span>
-      <p className="m-0 -mt-2 text-[13px] leading-[1.5] text-mute">Stockées dans le dossier de l’app et ajoutées aux requêtes par le noyau. Une clé intégrée à un binaire distribué est publique : utilise tes propres clés.</p>
+      <p className="m-0 -mt-2 text-[13px] leading-[1.5] text-mute">
+        Stockées dans le dossier de l’app et ajoutées aux requêtes par le noyau. Kyro ne réaffiche jamais une clé enregistrée : tu peux la remplacer ou la supprimer. Une clé intégrée à un binaire distribué est publique : utilise tes propres clés.
+      </p>
       {rows.map((r) => (
-        <label key={r.key} className="flex flex-col gap-1.5">
-          <span className="flex items-center gap-2 text-[12px] font-medium text-mute">
-            {r.label} {r.env && <Badge tone="up">fournie par l’environnement</Badge>}
-          </span>
-          <Input type="password" autoComplete="off" value={keys[r.key] ?? ''} placeholder={r.desc} onChange={(e) => setKeys((k) => ({ ...k, [r.key]: e.target.value.trim() }))} className="font-mono text-[13px]" />
-        </label>
+        <ApiKeyRow key={r.key} name={r.key} label={r.label} desc={r.desc} env={r.env} saved={!!settings.apiKeysSet[r.key]} />
       ))}
-      <div className="pb-1">
-        <Button
-          variant="primary"
-          onClick={() => {
-            const clean: Settings['apiKeys'] = {};
-            for (const r of rows) {
-              const v = keys[r.key];
-              if (v) clean[r.key] = v;
-            }
-            void save({ apiKeys: clean });
-          }}
-        >
-          Enregistrer
-        </Button>
-      </div>
     </Panel>
+  );
+}
+
+function ApiKeyRow({ name, label, desc, env, saved }: { name: ApiKeyName; label: string; desc: string; env: boolean; saved: boolean }) {
+  const { settings, saveSettings } = useApp();
+  const [editing, setEditing] = useState(!saved);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  useEffect(() => setEditing(!saved), [saved]);
+  const write = async (v: string) => {
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    try {
+      await saveSettings(settings, { [name]: v });
+      setValue('');
+      setDone(v ? 'Clé enregistrée.' : 'Clé supprimée.');
+    } catch (e) {
+      setError(toIpcError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-1.5" data-api-key={name}>
+      <span className="flex items-center gap-2 text-[12px] font-medium text-mute">
+        {label} {env && <Badge tone="up">fournie par l’environnement</Badge>}
+      </span>
+      {saved && !editing ? (
+        <div className="flex items-center gap-2 rounded-[10px] border border-line-2 bg-raised px-3 py-2">
+          <IconCheck size={14} className="text-up" />
+          <span className="flex-1 text-[13px] text-text2">Clé enregistrée</span>
+          <Button size="sm" onClick={() => setEditing(true)} disabled={busy}>
+            Remplacer
+          </Button>
+          <Button size="sm" variant="dangerOutline" onClick={() => void write('')} disabled={busy}>
+            {busy && <Spinner />} Supprimer
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Input type="password" autoComplete="off" value={value} placeholder={saved ? 'Nouvelle clé (remplace l’actuelle)' : desc} onChange={(e) => setValue(e.target.value)} aria-label={`Clé API ${label}`} className="flex-1 font-mono text-[13px]" />
+          <Button variant="primary" size="sm" disabled={busy || value.trim() === ''} onClick={() => void write(value.trim())}>
+            {busy && <Spinner />} Enregistrer
+          </Button>
+          {saved && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditing(false);
+                setValue('');
+              }}
+              disabled={busy}
+            >
+              Annuler
+            </Button>
+          )}
+        </div>
+      )}
+      {error && <span className="text-[12px] text-down">{error}</span>}
+      {done && !error && <span className="text-[12px] text-up">{done}</span>}
+    </div>
   );
 }
 
@@ -397,7 +447,7 @@ function Contacts() {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [family, setFamily] = useState<ContactFamily>('evm');
-  const adapter = family === 'evm' ? [...adapters.evm.values()][0] : adapters[family];
+  const adapter = family === 'evm' ? [...adapters.evm.values()][0] : family === 'ada' ? adapters.cardano : adapters[family];
   const valid = !!adapter && adapter.isValidAddress(address.trim());
   const persist = (l: Contact[]) => {
     setList(l);
@@ -429,7 +479,7 @@ function Contacts() {
         <span className="text-[13px] font-semibold">Ajouter</span>
         <div className="flex gap-2">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom" className="w-[160px]" />
-          <Segmented label="Réseau" value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'tron', label: 'TRON' }, { value: 'xrp', label: 'XRP' }]} />
+          <Segmented label="Réseau" value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'tron', label: 'TRON' }, { value: 'xrp', label: 'XRP' }, { value: 'ada', label: 'ADA' }]} />
         </div>
         <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Adresse" className="font-mono text-[13px]" />
         {address && !valid && <span className="text-[12px] text-down">Adresse invalide pour ce réseau.</span>}

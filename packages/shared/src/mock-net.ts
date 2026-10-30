@@ -35,6 +35,11 @@ export interface DemoChainState {
   /** rawTx → request (filled by evm_sign_tx, applied on eth_sendRawTransaction) */
   signedEvm: Map<string, { hash: string; tx: EvmTxRequest; from: string }>;
   minedEvm: Map<string, { blockNumber: number }>;
+  /**
+   * ERC-20 Transfer logs (`eth_getLogs`). `blocksAgo`: relative to the current block. Seeded
+   * with the demo's address-poisoning scenario (a zero-value transfer from a look-alike).
+   */
+  evmLogs: Array<{ chainId: number; token: string; from: string; to: string; value: bigint; blocksAgo: number; txHash: string }>;
   solLamports: bigint;
   solTokens: Map<string, bigint>;
 }
@@ -264,12 +269,14 @@ function evmRpc(chainId: number, req: NetRequest, s: DemoChainState): NetRespons
       return rpcResult(id, { oldestBlock: hex(block - count), baseFeePerGas: baseFees, gasUsedRatio: Array(count).fill(0.5), reward });
     }
     case 'eth_getBlockByNumber':
-    case 'eth_getBlockByHash':
+    case 'eth_getBlockByHash': {
+      // A past block (by number) gets a past timestamp (~12 s per block).
+      const asked = body.method === 'eth_getBlockByNumber' && typeof p[0] === 'string' && p[0].startsWith('0x') ? Number(BigInt(p[0])) : block;
       return rpcResult(id, {
-        number: hex(block),
-        hash: '0x' + demoHash(`block:${chainId}:${block}`),
-        parentHash: '0x' + demoHash(`block:${chainId}:${block - 1}`),
-        timestamp: hex(Math.floor(Date.now() / 1000)),
+        number: hex(asked),
+        hash: '0x' + demoHash(`block:${chainId}:${asked}`),
+        parentHash: '0x' + demoHash(`block:${chainId}:${asked - 1}`),
+        timestamp: hex(Math.floor(Date.now() / 1000) - Math.max(0, block - asked) * 12),
         baseFeePerGas: hex(baseFee),
         gasLimit: hex(30_000_000),
         gasUsed: hex(15_000_000),
@@ -288,10 +295,34 @@ function evmRpc(chainId: number, req: NetRequest, s: DemoChainState): NetRespons
         mixHash: '0x' + '0'.repeat(64),
         uncles: [],
       });
+    }
     case 'eth_getCode':
       return rpcResult(id, '0x');
-    case 'eth_getLogs':
-      return rpcResult(id, []);
+    case 'eth_getLogs': {
+      const f = (p[0] ?? {}) as { address?: string | string[]; topics?: Array<string | string[] | null>; fromBlock?: string; toBlock?: string };
+      const tokens = (Array.isArray(f.address) ? f.address : f.address ? [f.address] : []).map((a) => a.toLowerCase());
+      const topicAddr = (t: string | string[] | null | undefined) => (typeof t === 'string' ? '0x' + t.slice(-40).toLowerCase() : null);
+      const from = topicAddr(f.topics?.[1]);
+      const to = topicAddr(f.topics?.[2]);
+      const lo = f.fromBlock && f.fromBlock.startsWith('0x') ? Number(BigInt(f.fromBlock)) : 0;
+      const hi = f.toBlock && f.toBlock.startsWith('0x') ? Number(BigInt(f.toBlock)) : block;
+      const topic = (a: string) => '0x' + a.slice(2).toLowerCase().padStart(64, '0');
+      const logs = s.evmLogs
+        .map((l, i) => ({ l, i, bn: block - l.blocksAgo }))
+        .filter(({ l, bn }) => l.chainId === chainId && (tokens.length === 0 || tokens.includes(l.token.toLowerCase())) && (!from || l.from.toLowerCase() === from) && (!to || l.to.toLowerCase() === to) && bn >= lo && bn <= hi)
+        .map(({ l, i, bn }) => ({
+          address: l.token,
+          topics: ['0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef', topic(l.from), topic(l.to)],
+          data: '0x' + l.value.toString(16).padStart(64, '0'),
+          blockNumber: hex(bn),
+          blockHash: '0x' + demoHash(`block:${chainId}:${bn}`),
+          transactionHash: l.txHash,
+          transactionIndex: '0x0',
+          logIndex: hex(i),
+          removed: false,
+        }));
+      return rpcResult(id, logs);
+    }
     case 'eth_call': {
       const call = (p[0] ?? {}) as { to?: string; data?: string; input?: string; from?: string };
       const to = (call.to ?? '').toLowerCase();

@@ -40,6 +40,11 @@ export interface Accounts {
   tron: { address: string };
   /** XRP Ledger `m/44'/144'/0'/0/0` (same path on testnet), classic `r…`. Rust signs with index 0 only (§2.6). */
   xrp: { address: string };
+  /**
+   * Cardano CIP-1852 (Icarus) base address `m/1852'/1815'/0'/0/0`. Single-address mode: receive
+   * and change both use it; Rust signs with index 0 only (§2.7).
+   */
+  cardano: { address: string };
 }
 
 /** One Litecoin / Dogecoin account (standard `xpub` / `tpub` encoding, also for Dogecoin). */
@@ -50,6 +55,20 @@ export interface UtxoAccountInfo {
   path: string;
 }
 
+/** API keys the shell knows. `trongrid`: TronGrid `TRON-PRO-API-KEY` (optional, higher rate limits). */
+export type ApiKeyName = 'coingecko' | 'zerox' | 'oneinch' | 'trongrid';
+export const API_KEY_NAMES: readonly ApiKeyName[] = ['coingecko', 'zerox', 'oneinch', 'trongrid'];
+
+/**
+ * Write-only API key changes in `settings_set`: name absent or `null` = unchanged, `""` = remove,
+ * non-empty = set after trim (blank after trim or a control character → INVALID_INPUT). The UI
+ * only ever sends a value the user just typed.
+ */
+export type ApiKeysUpdate = Partial<Record<ApiKeyName, string | null>>;
+
+/** What `settings_set` takes: the settings without `apiKeysSet`, plus optional key changes. */
+export type SettingsInput = Omit<Settings, 'apiKeysSet'> & { apiKeys?: ApiKeysUpdate };
+
 export interface Settings {
   currency: Currency;
   autoLockSecs: number;
@@ -58,8 +77,11 @@ export interface Settings {
   clipboardGuard: boolean;
   /** Custom server per chain (B2b). Replaces the old `rpc` (still accepted by Rust on input, never returned). */
   servers: Servers;
-  /** `trongrid`: TronGrid `TRON-PRO-API-KEY` (optional, higher rate limits). */
-  apiKeys: { coingecko?: string; zerox?: string; oneinch?: string; trongrid?: string };
+  /**
+   * Which API keys are saved. The values are NEVER returned by `settings_get` / `settings_set`
+   * (redacted); a key is only ever written through `SettingsInput.apiKeys`.
+   */
+  apiKeysSet: Partial<Record<ApiKeyName, boolean>>;
   /** Embedded Tor for every `net_fetch`. Default `{ enabled: true }`; turning it off needs an explicit UI confirmation. */
   tor: { enabled: boolean };
 }
@@ -116,7 +138,12 @@ export interface Servers {
   tron: { mainnet?: TronServer; testnet?: TronServer };
   /** XRP Ledger (`testnet` = XRPL Testnet). Default: s.altnet.rippletest.net / xrplcluster.com. */
   xrp: { mainnet?: XrpServer; testnet?: XrpServer };
+  /** Cardano (`testnet` = preprod). Default: Koios (preprod.koios.rest / api.koios.rest). */
+  cardano: { mainnet?: CardanoServer; testnet?: CardanoServer };
 }
+
+/** Cardano server: Koios by default, or a Koios-compatible REST API (`…/api/v1`). */
+export type CardanoServer = { kind: 'default' } | { kind: 'koios'; url: string };
 
 /** XRP Ledger server: the default rippled, or the user's rippled JSON-RPC endpoint. */
 export type XrpServer = { kind: 'default' } | { kind: 'jsonRpc'; url: string };
@@ -142,7 +169,9 @@ export type ServerTestTarget =
   /** `testnet` = Nile. */
   | { family: 'tron'; network: UtxoNetworkKey; server: TronServer }
   /** `testnet` = XRPL Testnet (network_id 1). */
-  | { family: 'xrp'; network: UtxoNetworkKey; server: XrpServer };
+  | { family: 'xrp'; network: UtxoNetworkKey; server: XrpServer }
+  /** `testnet` = preprod (network magic 1). */
+  | { family: 'cardano'; network: UtxoNetworkKey; server: CardanoServer };
 
 export interface ServerTestResult {
   latencyMs: number;
@@ -492,6 +521,113 @@ export interface XrpTrustLine {
   limit: string;
 }
 
+// ---------------------------------------------------------------- Cardano (§2.7)
+
+export interface CardanoBackendInfo {
+  kind: 'default' | 'koios';
+  network: UtxoNetworkKey;
+  label: string;
+  tor: boolean;
+}
+
+/** `ada_address`. Only index 0 is ever signed: the UI shows that address only. */
+export interface CardanoAddressInfo {
+  address: string;
+  path: string;
+  stakeAddress: string;
+  /** `m/1852'/1815'/0'` public key ‖ chain code, hex. */
+  accountXpub: string;
+}
+
+/** A native token in an output (wallet-core `CardanoTokenView`). */
+export interface CardanoTokenView {
+  policy: string;
+  /** Asset name, hex (may be empty). */
+  name: string;
+  /** Printable UTF-8 form of the name, else null. */
+  nameText: string | null;
+  quantity: string;
+  /** In Kyro's verified table (mainnet: DJED, USDM, iUSD; preprod: none). */
+  verified: boolean;
+}
+
+export interface CardanoOutputView {
+  address: string;
+  kind: 'base' | 'enterprise';
+  isChange: boolean;
+  lovelace: string;
+  tokens: CardanoTokenView[];
+  /** Minimum lovelace this output must carry (min-UTxO). */
+  minLovelace: string;
+}
+
+/** serde tag `kind`; every warning → reinforced confirmation. */
+export type CardanoWarning = { kind: 'memo' } | { kind: 'unknownToken'; policy: string; name: string } | { kind: 'highFee' } | { kind: 'noTtl' };
+
+export interface CardanoTxSummary {
+  /** blake2b-256 of the body, hex. */
+  txId: string;
+  /** `txhash#index`. */
+  inputs: string[];
+  outputs: CardanoOutputView[];
+  fee: string;
+  ttl: number | null;
+  validFrom: number | null;
+  /** CIP-20 message lines. */
+  memo: string[] | null;
+  warnings: CardanoWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+export interface CardanoTokenBalance {
+  policy: string;
+  name: string;
+  nameText: string | null;
+  quantity: string;
+  verified: boolean;
+  /** Verified tokens only. */
+  ticker?: string;
+  decimals?: number;
+}
+
+/** `ada_account`. Lovelace amounts are decimal strings. */
+export interface CardanoAccount {
+  address: string;
+  balance: string;
+  tokens: CardanoTokenBalance[];
+  utxoCount: number;
+  /** Lovelace the tokens tie up (their outputs' min-UTxO): cannot leave without them. */
+  lockedWithTokens: string;
+}
+
+export interface CardanoContext {
+  account: CardanoAccount;
+  params: { minFeeA: number; minFeeB: number; coinsPerByte: number; maxTxSize: number };
+  tip: { slot: number; blockHeight: number; epoch: number };
+  /** Lovelace leaving the wallet: outputs to other addresses + fee. */
+  leaving: string;
+}
+
+export interface CardanoHistoryEntry {
+  hash: string;
+  time: number | null;
+  blockHeight: number | null;
+  fee: string;
+  /** Received − spent by our address, signed decimal lovelace. */
+  lovelaceDelta: string;
+  tokenDeltas: { policy: string; name: string; nameText: string | null; delta: string }[];
+  /** CIP-20 message. */
+  memo: string | null;
+}
+
+export interface CardanoTokenSpec {
+  policy: string;
+  /** Asset name, hex. */
+  name: string;
+  /** Integer quantity (raw units), decimal string. */
+  quantity: string;
+}
+
 export interface TronBuilt {
   /** `raw_data` hex: what `tron_sign_tx` signs. */
   raw: string;
@@ -576,7 +712,7 @@ export interface AppConfig {
   hasZeroxKey: boolean;
   hasOneinchKey: boolean;
   hasCoingeckoKey: boolean;
-  /** TronGrid API key: build environment or `settings.apiKeys.trongrid`. */
+  /** TronGrid API key: build environment or a saved `apiKeys.trongrid`. */
   hasTrongridKey: boolean;
 }
 
@@ -815,6 +951,26 @@ export interface Commands {
   xrp_broadcast: { args: { blob: string }; ret: string };
   /** `validated: true` + `result: 'tesSUCCESS'` once in a validated ledger; not found yet: `{ false, '' }`. */
   xrp_tx_status: { args: { hash: string }; ret: { validated: boolean; result: string } };
+  // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
+  // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
+  // Hardware wallets: HW_UNSUPPORTED.
+  ada_backend_info: { args: undefined; ret: CardanoBackendInfo };
+  /** Vault unlocked. Rust signs index 0 only. */
+  ada_address: { args: { index: number }; ret: CardanoAddressInfo };
+  ada_account: { args: { address: string }; ret: CardanoAccount };
+  /** Last 20, newest first. */
+  ada_txs: { args: { address: string }; ret: CardanoHistoryEntry[] };
+  /** `confirmations: null`: not seen by the indexer yet. */
+  ada_tx_status: { args: { hash: string }; ret: { confirmations: number | null } };
+  /**
+   * `lovelace` absent with a token = exactly the output's min-UTxO. Refused before building:
+   * refused address types, amount under the min-UTxO (the message gives it), not enough ADA or
+   * token, change under its min-UTxO, transaction > max_tx_size.
+   */
+  ada_build_tx: { args: { to: string; lovelace?: string; token?: CardanoTokenSpec; memo?: string }; ret: { tx: string; summary: CardanoTxSummary; context: CardanoContext } };
+  ada_sign_tx: { args: { tx: string; password: string }; ret: { tx: string; txId: string; summary: CardanoTxSummary; context: CardanoContext } };
+  /** Koios `submittx`; id must be blake2b-256(body). Node refusal → INVALID_INPUT with its message. */
+  ada_broadcast: { args: { tx: string }; ret: string };
   /**
    * Bitcoin Core only, unlocked. Pre-flight checks are synchronous (reachable, auth, chain, watch
    * wallet created or loaded without private keys); only `importdescriptors` runs in the background.
@@ -854,7 +1010,7 @@ export interface Commands {
    * Async: live-checks every changed custom server before saving (`SERVER_INVALID`,
    * `SERVER_WRONG_NETWORK`, `SERVER_UNREACHABLE`, `TOR_UNAVAILABLE`); nothing saved on failure.
    */
-  settings_set: { args: { settings: Settings }; ret: Settings };
+  settings_set: { args: { settings: SettingsInput }; ret: Settings };
   set_capture_protection: { args: { enabled: boolean }; ret: void };
   config_get: { args: undefined; ret: AppConfig };
 }

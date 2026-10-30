@@ -5,11 +5,12 @@
 // them; the recovery phrase lives only in the onboarding/reveal components).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { call, EMPTY_SERVERS, isDemoMode, listenShell, toIpcError, type Accounts, type AppConfig, type Network, type Settings, type VaultStatus, type WatchOnlyAccount } from '@kyro/shared';
+import { call, EMPTY_SERVERS, isDemoMode, listenShell, toIpcError, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultStatus, type WatchOnlyAccount } from '@kyro/shared';
 import { createAdapters, hwToAccounts, type AdapterSet, type WalletAccounts } from '@kyro/chains';
 import { CoinGeckoClient } from '@kyro/market';
 import { createProviders, type SwapProvider } from '@kyro/swap';
 import { torStore } from './tor';
+import { settingsPayload } from '../lib/settingsPayload';
 
 export type SettingsSection = 'security' | 'privacy' | 'hardware' | 'networks' | 'display' | 'apikeys' | 'connections' | 'contacts';
 
@@ -18,7 +19,7 @@ export type Route =
   | { name: 'assets'; tab?: 'mine' | 'market' | 'favorites' }
   | { name: 'asset'; id: string }
   | { name: 'send'; assetId?: string; to?: string }
-  | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' }
+  | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' }
   | { name: 'swap'; sellAssetId?: string }
   | { name: 'history' }
   | { name: 'settings'; section?: SettingsSection };
@@ -32,7 +33,7 @@ const DEFAULT_SETTINGS: Settings = {
   captureProtection: true,
   clipboardGuard: true,
   servers: EMPTY_SERVERS,
-  apiKeys: {},
+  apiKeysSet: {},
   tor: { enabled: true },
 };
 
@@ -43,7 +44,8 @@ interface AppContextValue {
   network: Network;
   config: AppConfig | null;
   settings: Settings;
-  saveSettings: (next: Settings) => Promise<void>;
+  /** `apiKeys`: key changes the user just typed (absent = unchanged, "" = remove). Never a stored key. */
+  saveSettings: (next: Settings, apiKeys?: ApiKeysUpdate) => Promise<void>;
   status: VaultStatus | null;
   refreshStatus: () => Promise<VaultStatus | null>;
   /** Accounts of the ACTIVE wallet: the vault, or a hardware-wallet account (only its chains). */
@@ -109,8 +111,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const swapProviders = useMemo(
     () =>
       createProviders({
-        hasZeroxKey: () => Boolean(configRef.current?.hasZeroxKey || settingsRef.current.apiKeys.zerox),
-        hasOneinchKey: () => Boolean(configRef.current?.hasOneinchKey || settingsRef.current.apiKeys.oneinch),
+        hasZeroxKey: () => Boolean(configRef.current?.hasZeroxKey || settingsRef.current.apiKeysSet.zerox),
+        hasOneinchKey: () => Boolean(configRef.current?.hasOneinchKey || settingsRef.current.apiKeysSet.oneinch),
       }),
     [],
   );
@@ -230,14 +232,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [phase, refreshStatus]);
 
   const saveSettings = useCallback(
-    async (next: Settings) => {
-      const prev = settingsRef.current;
-      const saved = await call('settings_set', { settings: next });
+    async (next: Settings, apiKeys?: ApiKeysUpdate) => {
+      const saved = await call('settings_set', { settings: settingsPayload(next, apiKeys) });
       setSettings(saved);
       settingsRef.current = saved;
       torStore.setEnabled(saved.tor.enabled);
       // New servers → new adapters (memo below, keyed on the servers).
-      if (saved.apiKeys.coingecko !== prev.apiKeys.coingecko) market.clear();
+      if (apiKeys?.coingecko !== undefined) market.clear();
+      // The shell's view of the keys (hasTrongridKey…) changes with them.
+      if (apiKeys && Object.keys(apiKeys).length > 0) void call('config_get').then(setConfig).catch(() => undefined);
       void refreshStatus();
     },
     [market, refreshStatus],

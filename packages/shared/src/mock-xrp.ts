@@ -78,21 +78,21 @@ const xrpText = (drops: bigint | string) => {
   return `${v / 1_000_000n}${frac ? `,${frac}` : ''} XRP`;
 };
 
-/** wallet-core `xrp_account_id`: X-addresses refused, checksum verified (same English messages). */
+/** wallet-core `xrp_account_id`: X-addresses refused, checksum verified (same messages as Rust). */
 export function checkXrpAddress(a: unknown): string {
   const s = String(a ?? '').trim();
   if ((s.startsWith('X') || s.startsWith('T')) && s.length >= 46) {
-    throw invalidInput('X-addresses are not supported: use the classic r… address and its destination tag');
+    throw invalidInput("les X-addresses ne sont pas prises en charge : demande l'adresse classique r… et le tag de destination");
   }
   let raw: Uint8Array;
   try {
     raw = base58xrp.decode(s);
   } catch {
-    throw invalidInput('invalid XRP address');
+    throw invalidInput('adresse XRP invalide');
   }
-  if (raw.length !== 25 || raw[0] !== 0) throw invalidInput('invalid XRP address');
+  if (raw.length !== 25 || raw[0] !== 0) throw invalidInput('adresse XRP invalide');
   const sum = sha256(sha256(raw.slice(0, 21)));
-  if (!raw.slice(21).every((b, i) => b === sum[i])) throw invalidInput('invalid XRP address (checksum)');
+  if (!raw.slice(21).every((b, i) => b === sum[i])) throw invalidInput('adresse XRP invalide (somme de contrôle)');
   return s;
 }
 
@@ -243,12 +243,12 @@ export function createDemoXrp(d: DemoXrpDeps) {
     } catch {
       throw invalidInput('blob XRP illisible');
     }
-    if (p.account !== me) throw invalidInput('this payment is not from our account');
+    if (p.account !== me) throw invalidInput("transaction XRP : l'Account n'est pas l'adresse de ce portefeuille");
     checkXrpAddress(p.destination);
-    if (p.paths !== undefined) throw invalidInput('Paths are not supported');
-    if (p.deliverMin !== undefined) throw invalidInput('DeliverMin (partial payments) is not supported');
-    if ((p.flags & TF_PARTIAL_PAYMENT) !== 0) throw invalidInput('partial payments (tfPartialPayment) are not supported');
-    if ((p.flags & ~TF_FULLY_CANONICAL_SIG) !== 0) throw invalidInput('unknown Payment flags');
+    if (p.paths !== undefined) throw invalidInput('transaction XRP : les chemins (Paths) ne sont pas pris en charge');
+    if (p.deliverMin !== undefined) throw invalidInput("transaction XRP : DeliverMin (paiements partiels) n'est pas pris en charge");
+    if ((p.flags & TF_PARTIAL_PAYMENT) !== 0) throw invalidInput('transaction XRP : les paiements partiels (tfPartialPayment) sont refusés : le montant livré pourrait être presque nul');
+    if ((p.flags & ~TF_FULLY_CANONICAL_SIG) >>> 0 !== 0) throw invalidInput(`transaction XRP : flags inconnus 0x${((p.flags & ~TF_FULLY_CANONICAL_SIG) >>> 0).toString(16).padStart(8, '0')}`);
     const warnings: XrpWarning[] = [];
     if (BigInt(p.fee) > 1_000_000n) warnings.push({ kind: 'highFee' });
     const summary: XrpTxSummary = {

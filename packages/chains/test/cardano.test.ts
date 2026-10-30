@@ -104,7 +104,7 @@ describe('CardanoAdapter (preprod)', () => {
   });
 
   it('balance: spendable excludes the ADA tied to tokens', async () => {
-    const b = await adapter().getBalance();
+    const b = await adapter().balances();
     expect(b.ada).toEqual({ amount: 12_000_000n, spendable: 10_810_440n });
     expect(b.tokens[0]?.policy).toBe(POLICY);
   });
@@ -138,7 +138,7 @@ describe('CardanoAdapter (preprod)', () => {
     expect(b.submitted).toEqual(['84a4a1']);
     const other = backend({ broadcast: async () => 'ff'.repeat(32) });
     await expect(adapter(other).broadcast(s)).rejects.toThrow(/inattendu/);
-    const h = await a.getHistory();
+    const h = await a.historyEntries();
     expect(h[0]).toMatchObject({ direction: 'out', amount: 2_172_497n, fee: 172_497n, memo: 'merci' });
     expect(h[1]).toMatchObject({ direction: 'in', amount: 10_000_000n });
     expect(await a.txStatus('ab'.repeat(32))).toEqual({ confirmations: 2 });

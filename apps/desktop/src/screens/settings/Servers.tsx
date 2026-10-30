@@ -186,7 +186,7 @@ export function ServersSection() {
     <>
       <Card title="Réseaux et serveurs" badge={<Badge tone={network === 'testnet' ? 'warn' : 'up'}>{network === 'testnet' ? 'Testnet' : 'Mainnet'}</Badge>}>
         <p className="m-0 text-[13px] leading-[1.55] text-mute">
-          {network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia, Solana devnet, Litecoin testnet4, Dogecoin testnet, TRON Nile et XRP Ledger testnet. ' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana, Litecoin, Dogecoin, TRON, XRP Ledger. '}
+          {network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia, Solana devnet, Litecoin testnet4, Dogecoin testnet, TRON Nile, XRP Ledger testnet et Cardano preprod. ' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana, Litecoin, Dogecoin, TRON, XRP Ledger, Cardano. '}
           Le réseau est fixé au lancement. Pour chaque chaîne, tu peux remplacer le serveur par défaut par le tien : Kyro vérifie qu’il est sur le bon réseau avant de l’enregistrer.
         </p>
         <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
@@ -199,6 +199,7 @@ export function ServersSection() {
       <UtxoServerCard coin="dogecoin" />
       <TronServerCard />
       <XrpServerCard />
+      <CardanoServerCard />
       <EvmCard />
       <SolanaCard />
     </>
@@ -1477,6 +1478,126 @@ function XrpServerCard() {
         onCancel={() => {
           setConfirmDefault(false);
           setKind('jsonRpc');
+        }}
+      />
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------- Cardano
+
+/**
+ * Cardano: Koios by default (preprod.koios.rest / api.koios.rest, free keyless tier) or the user's
+ * Koios-compatible REST API (`…/api/v1`). Kyro checks the genesis network magic before saving
+ * (preprod 1, mainnet 764824073; preview refused). UTxOs, parameters, history and submission.
+ */
+function CardanoServerCard() {
+  const { settings, network } = useApp();
+  const tor = settings.tor.enabled;
+  const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
+  const defaultHost = network === 'mainnet' ? 'api.koios.rest' : 'preprod.koios.rest';
+  const saved = settings.servers.cardano?.[nk];
+  const savedUrl = saved?.kind === 'koios' ? saved.url : '';
+  const [kind, setKind] = useState<'default' | 'koios'>(savedUrl ? 'koios' : 'default');
+  const [url, setUrl] = useState(savedUrl);
+  useEffect(() => {
+    setKind(savedUrl ? 'koios' : 'default');
+    setUrl(savedUrl);
+  }, [savedUrl]);
+  const saveServers = useSaveServers();
+  const [busy, setBusy] = useState<'test' | 'save' | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [result, setResult] = useState<ServerTestResult | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDefault, setConfirmDefault] = useState(false);
+  const clean = url.trim();
+  const hint = kind === 'koios' && clean ? checkServerUrl(clean, tor) : null;
+  const dirty = kind === 'koios' ? clean !== savedUrl : !!savedUrl;
+  const reset = () => {
+    setFailure(null);
+    setResult(null);
+    setNotice(null);
+  };
+  const test = async () => {
+    reset();
+    setBusy('test');
+    try {
+      setResult(await call('server_test', { target: { family: 'cardano', network: nk, server: kind === 'koios' ? { kind: 'koios', url: clean } : { kind: 'default' } } }));
+    } catch (e) {
+      setFailure(toFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const save = async (toDefault: boolean) => {
+    reset();
+    setBusy('save');
+    try {
+      await saveServers((s) => {
+        s.cardano = { ...(s.cardano ?? {}) };
+        if (toDefault) delete s.cardano[nk];
+        else s.cardano[nk] = { kind: 'koios', url: clean };
+      });
+      setConfirmDefault(false);
+      setNotice(toDefault ? `Serveur par défaut rétabli : ${defaultHost} voit maintenant ton adresse Cardano et tes transactions.` : 'Serveur Cardano enregistré. Kyro n’utilise plus que lui pour Cardano.');
+    } catch (e) {
+      setFailure(toFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card title={network === 'testnet' ? 'Cardano preprod' : 'Cardano'} badge={savedUrl ? <Badge tone="ice">Serveur perso · Koios</Badge> : <Badge>Par défaut · Koios</Badge>}>
+      <Segmented
+        label="Serveur Cardano"
+        value={kind}
+        onChange={(k) => {
+          reset();
+          setKind(k);
+        }}
+        options={[
+          { value: 'default', label: 'Par défaut' },
+          { value: 'koios', label: 'Mon serveur Koios' },
+        ]}
+        className="self-start"
+      />
+      <Sees>
+        {kind === 'default'
+          ? `${defaultHost} voit ton adresse Cardano (et donc tout ton historique : une seule adresse) ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.`
+          : `Ton serveur Koios voit ton adresse Cardano (et donc tout ton historique : une seule adresse) ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`}
+      </Sees>
+      {kind === 'koios' && (
+        <Field label="URL de l’API Koios (…/api/v1)" hint={`Kyro vérifie le réseau (magic ${network === 'mainnet' ? '764824073, mainnet' : '1, preprod'}) avant d’enregistrer. https://, ou http:// pour une adresse .onion (Tor). Blockfrost n’est pas pris en charge.`}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mon-koios.example/api/v1" aria-label="URL du serveur Cardano" className="font-mono text-[13px]" />
+        </Field>
+      )}
+      {hint && (
+        <span className="flex items-center gap-1.5 text-[12px] text-warn">
+          <IconWarn size={13} /> {hint}
+        </span>
+      )}
+      {failure && <FailureNotice failure={failure} />}
+      {result && !failure && <TestOk result={result} chainLabel="magic" />}
+      {notice && !failure && <Notice tone={notice.startsWith('Serveur par défaut') ? 'warn' : 'success'}>{notice}</Notice>}
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => void test()} disabled={busy !== null || (kind === 'koios' && !clean)}>
+          {busy === 'test' && <Spinner />} Tester la connexion
+        </Button>
+        <Button variant="primary" onClick={() => (kind === 'koios' ? void save(false) : setConfirmDefault(true))} disabled={busy !== null || !dirty || (kind === 'koios' && !clean)}>
+          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? 'Revenir au serveur par défaut' : 'Enregistrer'}
+        </Button>
+      </div>
+      <BackToDefaultDialog
+        open={confirmDefault}
+        host={defaultHost}
+        sees="ton adresse Cardano et tes transactions"
+        busy={busy === 'save'}
+        failure={confirmDefault ? failure : null}
+        onConfirm={() => void save(true)}
+        onCancel={() => {
+          setConfirmDefault(false);
+          setKind('koios');
         }}
       />
     </Card>

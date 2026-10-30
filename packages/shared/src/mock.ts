@@ -17,8 +17,10 @@ import { bytesToHex } from '@noble/hashes/utils';
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import {
+  API_KEY_NAMES,
   IpcError,
   type Accounts,
+  type ApiKeyName,
   type AppConfig,
   type BtcKind,
   type BtcTxSummary,
@@ -27,6 +29,7 @@ import {
   type EvmTxSummary,
   type Network,
   type Settings,
+  type SettingsInput,
   type VaultStatus,
 } from './ipc';
 import { emitDemoEvent } from './events';
@@ -37,6 +40,8 @@ import { createDemoTron, demoTronAddress, type DemoTronState } from './mock-tron
 export { demoTronAddress } from './mock-tron';
 import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
 export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
+import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
+export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
 import { demoFund } from './mock-tx';
 import { createDemoHw, detectDemoHwScenario, type DemoHw, type DemoHwScenario } from './mock-hw';
 import { EMPTY_SERVERS, redactServers } from './servers';
@@ -52,6 +57,10 @@ bitcoin.initEccLib(ecc);
 
 export const DEMO_PASSWORD_HINT = 'Mode démo : n’importe quel mot de passe de 8 caractères ou plus.';
 
+/** Demo address-poisoning scenario (Sepolia): the colleague paid before, and its look-alike. */
+export const DEMO_EVM_COLLEAGUE = '0x5e1f9b3c8a2d47e6b0c19f4a7d23e8c6b5a2d4c7';
+export const DEMO_EVM_LOOKALIKE = '0x5e1f00aa77ee11bb33cc99dd22ff44889a13d4c7';
+
 export const DEFAULT_SETTINGS: Settings = {
   currency: 'EUR',
   autoLockSecs: 900,
@@ -59,7 +68,7 @@ export const DEFAULT_SETTINGS: Settings = {
   captureProtection: true,
   clipboardGuard: true,
   servers: EMPTY_SERVERS,
-  apiKeys: {},
+  apiKeysSet: {},
   tor: { enabled: true },
 };
 
@@ -142,6 +151,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       doge: doge.info,
       tron: { address: demoTronAddress(demoSeed(), 0) },
       xrp: { address: demoXrpAddress(demoSeed(), 0) },
+      cardano: { address: demoCardanoAddress(network) },
     },
     ownBtc,
     receive,
@@ -201,6 +211,14 @@ function seedChainState(keys: DemoKeys, network: Network): DemoChainState {
     nonces: new Map(),
     signedEvm: new Map(),
     minedEvm: new Map(),
+    evmLogs: testnet
+      ? [
+          // Address-poisoning demo: a real USDC payment to a colleague, then a zero-value
+          // « transfer » from an address forged to share its first and last characters.
+          { chainId: 11155111, token: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', from: me, to: DEMO_EVM_COLLEAGUE, value: 25_000_000n, blocksAgo: 3_600, txHash: '0x' + demoHash('evm-log-colleague') },
+          { chainId: 11155111, token: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', from: DEMO_EVM_LOOKALIKE, to: me, value: 0n, blocksAgo: 400, txHash: '0x' + demoHash('evm-log-poison') },
+        ]
+      : [],
     solLamports: 3_200_000_000n,
     solTokens: new Map([[usdcMint, 42_000_000n]]),
   };
@@ -245,6 +263,8 @@ export interface MockBackend {
   tron: DemoTronState;
   /** XRP Ledger demo chain (tests). */
   xrp: DemoXrpState;
+  /** Cardano demo chain (tests). */
+  cardano: DemoCardanoState;
 }
 
 export function createMockBackend(opts: MockOptions = {}): MockBackend {
@@ -263,6 +283,13 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   let blockedUntil = 0;
   let reveals: number[] = [];
   let settings: Settings = structuredClone(DEFAULT_SETTINGS);
+  /** API key values: write-only, never returned (settings_get / settings_set give `apiKeysSet`). */
+  let apiKeys: Partial<Record<ApiKeyName, string>> = {};
+  const publicSettings = (): Settings => ({
+    ...structuredClone(settings),
+    servers: redactServers(settings.servers),
+    apiKeysSet: Object.fromEntries(API_KEY_NAMES.map((n) => [n, !!apiKeys[n]])),
+  });
   let captureProtected = false;
   settings.tor.enabled = opts.torEnabled ?? !detectDemoTorDisabled();
   // Like the shell's setup: Tor starts in the background when enabled.
@@ -301,11 +328,22 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
+  // Cardano (§2.7): `ada_*`, min-UTxO / fee / coin selection like Rust.
+  const cardanoChain = createDemoCardano({
+    network,
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
   // Custom servers (B2b): live checks, Bitcoin backends, Core watch wallet.
   const servers = createDemoServers({
     utxo: utxoChains,
     tron: tronChain,
     xrp: xrpChain,
+    cardano: cardanoChain,
     chain,
     network,
     fingerprint: keys.accounts.btc.segwit.fingerprint,
@@ -545,9 +583,9 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       return tor.status();
     },
     // Never the Core password: `hasPassword` instead (servers.rs `redacted`).
-    settings_get: () => ({ ...structuredClone(settings), servers: redactServers(settings.servers) }),
+    settings_get: () => publicSettings(),
     settings_set: async (a) => {
-      const next = a.settings as Settings | undefined;
+      const next = a.settings as (SettingsInput & { apiKeysSet?: unknown }) | undefined;
       if (!next || (next.currency !== 'EUR' && next.currency !== 'USD')) throw new IpcError('INVALID_INPUT', 'Réglages invalides.');
       if (!Number.isInteger(next.autoLockSecs) || next.autoLockSecs < 60 || next.autoLockSecs > 4 * 3600) {
         throw new IpcError('INVALID_INPUT', 'Délai de verrouillage invalide (1 min à 4 h).');
@@ -562,12 +600,31 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       // No `servers` key (older caller) → keep the stored ones. Legacy `rpc` is ignored here:
       // Rust migrates it once at load, the UI never sends it.
       const incoming = 'servers' in next && next.servers ? next.servers : settings.servers;
-      const { rpc: _legacy, ...rest } = next as Settings & { rpc?: unknown };
+      const { rpc: _legacy, apiKeys: keyUpdate, apiKeysSet: _ignored, ...rest } = next as SettingsInput & { rpc?: unknown; apiKeysSet?: unknown };
+      // API keys (settings.rs ApiKeys::apply_patch): absent or null = unchanged, "" = remove,
+      // non-empty = set after trim; blank after trim or a control character → INVALID_INPUT.
+      const nextKeys = { ...apiKeys };
+      if (keyUpdate !== undefined) {
+        if (typeof keyUpdate !== 'object' || keyUpdate === null) throw new IpcError('INVALID_INPUT', 'Entrée invalide : apiKeys : objet attendu');
+        for (const [name, v] of Object.entries(keyUpdate as Record<string, unknown>)) {
+          if (!(API_KEY_NAMES as readonly string[]).includes(name)) throw new IpcError('INVALID_INPUT', `Entrée invalide : clé API inconnue « ${name} »`);
+          if (v === null) continue;
+          if (typeof v !== 'string') throw new IpcError('INVALID_INPUT', `Entrée invalide : clé API « ${name} » : texte attendu`);
+          if (v === '') {
+            delete nextKeys[name as ApiKeyName];
+            continue;
+          }
+          const t = v.trim();
+          if (!t || /\p{Cc}/u.test(t)) throw new IpcError('INVALID_INPUT', `Entrée invalide : clé API « ${name} » invalide (vide ou caractères de contrôle)`);
+          nextKeys[name as ApiKeyName] = t;
+        }
+      }
       const storedServers = await servers.prepareSave({ ...EMPTY_SERVERS, ...structuredClone(incoming) }, settings.servers, torEnabled);
-      settings = { ...structuredClone(rest), servers: storedServers, tor: { enabled: torEnabled } };
+      apiKeys = nextKeys;
+      settings = { ...structuredClone(rest), servers: storedServers, tor: { enabled: torEnabled }, apiKeysSet: {} };
       if (!wasEnabled && settings.tor.enabled) tor.start();
       if (wasEnabled && !settings.tor.enabled) tor.stop();
-      return { ...structuredClone(settings), servers: redactServers(settings.servers) };
+      return publicSettings();
     },
     set_capture_protection: (a) => {
       captureProtected = Boolean(a.enabled);
@@ -584,6 +641,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     btc_tx_hex: (a) => servers.btc.txHex(a.txid),
     ...tronChain.handlers,
     ...xrpChain.handlers,
+    ...cardanoChain.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
     btc_cbf_status: () => servers.cbf.status(),
@@ -600,7 +658,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     hw_sign_btc_psbt: (a) => hw.signBtc(a),
     hw_sign_evm_tx: (a) => hw.signEvm(a),
     hw_sign_sol_tx: (a) => hw.signSol(a),
-    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasOneinchKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(settings.apiKeys.trongrid) }),
+    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasOneinchKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid) }),
   };
 
   return {
@@ -609,6 +667,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     hw,
     tron: tronChain.state,
     xrp: xrpChain.state,
+    cardano: cardanoChain.state,
     advance(ms: number) {
       clockOffset += ms;
     },

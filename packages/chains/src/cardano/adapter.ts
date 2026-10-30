@@ -4,106 +4,37 @@
 // protocol parameters from Koios, coin selection, fee and min-UTxO by Rust, CBOR by
 // wallet-core), signature and `submittx` are Rust commands (`ada_*`, docs/IPC.md §2.7). This
 // adapter only validates input and checks that what Rust built is what was asked.
-//
-// Not yet wired into `Family` / `ChainAdapter` / `createAdapters` / `@kyro/shared`'s typed
-// `call` (those files belong to the UI work): the types of the `ada_*` commands live here
-// until they move to `packages/shared/src/ipc.ts`. See docs/IPC.md §2.7 "À faire côté UI".
 
-import { call } from '@kyro/shared';
+import {
+  call,
+  type CardanoAccount,
+  type CardanoAddressInfo,
+  type CardanoContext,
+  type CardanoHistoryEntry,
+  type CardanoOutputView,
+  type CardanoTokenBalance,
+  type CardanoTokenSpec,
+  type CardanoTokenView,
+  type CardanoTxSummary,
+  type CardanoWarning,
+} from '@kyro/shared';
 import type { CardanoChain } from '../registry';
+import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 // ---------------------------------------------------------------- Rust contract (§2.7)
 
-export interface CardanoTokenView {
-  policy: string;
-  /** Asset name, hex (may be empty). */
-  name: string;
-  /** Printable UTF-8 form of the name, else null. */
-  nameText: string | null;
-  quantity: string;
-  verified: boolean;
-}
-
-export interface CardanoOutputView {
-  address: string;
-  kind: 'base' | 'enterprise';
-  isChange: boolean;
-  lovelace: string;
-  tokens: CardanoTokenView[];
-  /** Minimum lovelace this output must carry (min-UTxO). */
-  minLovelace: string;
-}
-
-export type CardanoWarning =
-  | { kind: 'memo' }
-  | { kind: 'unknownToken'; policy: string; name: string }
-  | { kind: 'highFee' }
-  | { kind: 'noTtl' };
-
-export interface CardanoTxSummary {
-  txId: string;
-  /** `txhash#index`. */
-  inputs: string[];
-  outputs: CardanoOutputView[];
-  fee: string;
-  ttl: number | null;
-  validFrom: number | null;
-  memo: string[] | null;
-  warnings: CardanoWarning[];
-  requiresExtraConfirmation: boolean;
-}
-
-export interface CardanoTokenBalance {
-  policy: string;
-  name: string;
-  nameText: string | null;
-  quantity: string;
-  verified: boolean;
-  ticker?: string;
-  decimals?: number;
-}
-
-export interface CardanoAccount {
-  address: string;
-  /** Lovelace. */
-  balance: string;
-  tokens: CardanoTokenBalance[];
-  utxoCount: number;
-  /** Lovelace that the tokens tie up (their outputs' min-UTxO). */
-  lockedWithTokens: string;
-}
-
-export interface CardanoContext {
-  account: CardanoAccount;
-  params: { minFeeA: number; minFeeB: number; coinsPerByte: number; maxTxSize: number };
-  tip: { slot: number; blockHeight: number; epoch: number };
-  /** Lovelace leaving the wallet: outputs to other addresses + fee. */
-  leaving: string;
-}
-
-export interface CardanoHistoryEntry {
-  hash: string;
-  time: number | null;
-  blockHeight: number | null;
-  fee: string;
-  /** Received − spent by our address, signed decimal lovelace. */
-  lovelaceDelta: string;
-  tokenDeltas: { policy: string; name: string; nameText: string | null; delta: string }[];
-  memo: string | null;
-}
-
-export interface CardanoTokenSpec {
-  policy: string;
-  name: string;
-  quantity: string;
-}
-
-export interface CardanoAddressInfo {
-  address: string;
-  path: string;
-  stakeAddress: string;
-  accountXpub: string;
-}
+export type {
+  CardanoAccount,
+  CardanoAddressInfo,
+  CardanoContext,
+  CardanoHistoryEntry,
+  CardanoOutputView,
+  CardanoTokenBalance,
+  CardanoTokenSpec,
+  CardanoTokenView,
+  CardanoTxSummary,
+  CardanoWarning,
+};
 
 export interface CardanoBackend {
   address(index: number): Promise<CardanoAddressInfo>;
@@ -115,21 +46,16 @@ export interface CardanoBackend {
   txStatus(hash: string): Promise<{ confirmations: number | null }>;
 }
 
-/** `call` of `@kyro/shared` without its command typing (the `ada_*` entries are not there yet). */
-const raw = call as unknown as (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
-const ada = <T>(cmd: string, args?: Record<string, unknown>) => raw(cmd, args) as Promise<T>;
-
-/** The `ada_*` commands (docs/IPC.md §2.7). */
+/** The typed `ada_*` commands of `@kyro/shared` (docs/IPC.md §2.7). */
 export function rustCardanoBackend(): CardanoBackend {
   return {
-    address: (index) => ada('ada_address', { index }),
-    account: (address) => ada('ada_account', { address }),
-    txs: (address) => ada('ada_txs', { address }),
-    build: (to, lovelace, token, memo) =>
-      ada('ada_build_tx', { to, ...(lovelace !== undefined ? { lovelace } : {}), ...(token ? { token } : {}), ...(memo ? { memo } : {}) }),
-    sign: (tx, password) => ada('ada_sign_tx', { tx, password }),
-    broadcast: (tx) => ada('ada_broadcast', { tx }),
-    txStatus: (hash) => ada('ada_tx_status', { hash }),
+    address: (index) => call('ada_address', { index }),
+    account: (address) => call('ada_account', { address }),
+    txs: (address) => call('ada_txs', { address }),
+    build: (to, lovelace, token, memo) => call('ada_build_tx', { to, ...(lovelace !== undefined ? { lovelace } : {}), ...(token ? { token } : {}), ...(memo ? { memo } : {}) }),
+    sign: (tx, password) => call('ada_sign_tx', { tx, password }),
+    broadcast: (tx) => call('ada_broadcast', { tx }),
+    txStatus: (hash) => call('ada_tx_status', { hash }),
   };
 }
 
@@ -153,6 +79,33 @@ export function isCardanoAddress(address: string, network: 'mainnet' | 'testnet'
   const kind = BECH32.indexOf(data[0] ?? '?') >> 1;
   // Base (57 bytes → 92 characters) or enterprise (29 bytes → 47), plus a 6-character checksum.
   return (kind === 0 || kind === 2 || kind === 6) && (data.length === 92 + 6 || data.length === 47 + 6);
+}
+
+/**
+ * Why an address is refused, in Rust's words (wallet-core `cardano_address_bytes`), or null when
+ * its shape is acceptable. Read from the bech32 prefix and the header's type nibble (first data
+ * character); the checksum itself is verified by Rust.
+ */
+export function cardanoAddressProblem(address: string, network: 'mainnet' | 'testnet'): string | null {
+  const a = address.trim();
+  if (!a) return null;
+  if (isByronAddress(a) || /^(Ae2|DdzFF|37btjrVyb4K)/.test(a)) return 'les adresses Byron ne sont pas prises en charge : demande au destinataire une adresse Shelley (addr1…)';
+  const lower = a.toLowerCase();
+  const pay = network === 'mainnet' ? 'addr1' : 'addr_test1';
+  const stake = network === 'mainnet' ? 'stake1' : 'stake_test1';
+  if (lower.startsWith(stake)) return 'une adresse de staking (stake…) ne peut pas recevoir de paiement';
+  if (lower.startsWith(network === 'mainnet' ? 'addr_test1' : 'addr1') || lower.startsWith(network === 'mainnet' ? 'stake_test1' : 'stake1')) return "adresse Cardano d'un autre réseau, ou pas une adresse de paiement";
+  if (!lower.startsWith(pay)) return 'adresse Cardano invalide';
+  const kind = BECH32.indexOf(lower[pay.length] ?? '?') >> 1;
+  if (kind === 1 || kind === 3 || kind === 5 || kind === 7) return 'adresses de script refusées : un paiement sans datum pourrait bloquer les fonds';
+  if (kind === 4) return 'adresses pointeur obsolètes (Conway) : refusées';
+  if (kind === 14 || kind === 15) return 'une adresse de staking (stake…) ne peut pas recevoir de paiement';
+  return isCardanoAddress(a, network) ? null : 'adresse Cardano invalide';
+}
+
+/** Display name of a native token: ticker (verified), printable name, else the hex. */
+export function cardanoTokenLabel(t: { name: string; nameText: string | null; ticker?: string }): string {
+  return t.ticker ?? t.nameText ?? (t.name ? `0x${t.name.slice(0, 16)}${t.name.length > 16 ? '…' : ''}` : '(nom vide)');
 }
 
 /** Byron (bootstrap) addresses: refused by Kyro, the UI says why. */
@@ -182,6 +135,7 @@ export interface CardanoUnsigned {
   token?: CardanoTokenSpec;
   memo?: string;
   maxFee: bigint;
+  size: { family: 'ada' };
 }
 
 export interface CardanoSigned {
@@ -197,7 +151,7 @@ export interface CardanoAdapterOptions {
   backend?: CardanoBackend;
 }
 
-export class CardanoAdapter {
+export class CardanoAdapter implements ChainAdapter<'ada'> {
   readonly family = 'ada' as const;
   readonly chain: CardanoChain;
   private readonly address: string;
@@ -222,8 +176,58 @@ export class CardanoAdapter {
     return this.backend.account(this.address);
   }
 
+  /** `ChainAdapter`: the ADA balance (native tokens: `balances()`). */
+  async getBalance(): Promise<Balance[]> {
+    const acc = await this.backend.account(this.address);
+    return [{ assetId: 'ada', amount: BigInt(acc.balance) }];
+  }
+
+  /** No fee to choose: Rust computes min_fee_a × size + min_fee_b (≈ 0,17 ADA). */
+  estimateFees(): Promise<FeeEstimates> {
+    const p = { family: 'ada' as const };
+    const eta = this.chain.blockTimeSecs;
+    return Promise.resolve({
+      options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
+      minimum: p,
+      hint: 'frais calculés par le coffre (≈ 0,17 ADA)',
+      fetchedAt: Date.now(),
+    });
+  }
+
+  /**
+   * `ChainAdapter` entry point. `cardanoToken`: a native token (its output carries exactly its
+   * min-ADA). `max` (ADA): everything except the fee and the change output Rust always keeps
+   * (its min-UTxO, plus every token), built until it fits.
+   */
+  async buildTx(params: BuildParams): Promise<CardanoUnsigned> {
+    if (params.asset.kind !== 'native') throw new Error('Actif Cardano inattendu');
+    const memo = params.memo?.trim() ? { memo: params.memo.trim() } : {};
+    if (params.cardanoToken) return this.buildPayment({ to: params.to, token: params.cardanoToken, ...memo });
+    if (!params.max) return this.buildPayment({ to: params.to, lovelace: params.amount, ...memo });
+    const acc = await this.backend.account(this.address);
+    const balance = BigInt(acc.balance);
+    const probe = await this.buildPayment({ to: params.to, lovelace: 1_500_000n, ...memo });
+    const change = probe.summary.outputs.find((o) => o.isChange);
+    let amount = balance - BigInt(probe.summary.fee) - BigInt(change?.minLovelace ?? '1000000');
+    // Sending everything pulls every UTxO in: the change then carries all the tokens and needs a
+    // larger min-UTxO. Rust's refusal gives both numbers; step down by the shortfall.
+    const toLovelace = (s: string) => adaToLovelace(s);
+    for (let i = 0; i < 5; i++) {
+      if (amount <= 0n) break;
+      try {
+        return await this.buildPayment({ to: params.to, lovelace: amount, ...memo });
+      } catch (e) {
+        if (i === 4) throw e;
+        const m = /\(([\d,]+) ADA\) serait sous son minimum de ([\d,]+) ADA/.exec(e instanceof Error ? e.message : String(e));
+        const shortfall = m?.[1] && m[2] ? toLovelace(m[2]) - toLovelace(m[1]) : 0n;
+        amount -= shortfall > 0n ? shortfall : 10_000n;
+      }
+    }
+    throw new Error('Solde trop faible : Kyro garde toujours une sortie de monnaie (≈ 1 ADA minimum)');
+  }
+
   /** ADA balance (`spendable` = balance − ADA tied to the tokens) and native tokens. */
-  async getBalance(): Promise<{ ada: { amount: bigint; spendable: bigint }; tokens: CardanoTokenBalance[] }> {
+  async balances(): Promise<{ ada: { amount: bigint; spendable: bigint }; tokens: CardanoTokenBalance[] }> {
     const acc = await this.backend.account(this.address);
     const amount = BigInt(acc.balance);
     return { ada: { amount, spendable: amount - BigInt(acc.lockedWithTokens) }, tokens: acc.tokens };
@@ -262,6 +266,7 @@ export class CardanoAdapter {
       ...(params.token ? { token: params.token } : {}),
       ...(params.memo ? { memo: params.memo } : {}),
       maxFee: BigInt(s.fee),
+      size: { family: 'ada' },
     };
   }
 
@@ -283,7 +288,22 @@ export class CardanoAdapter {
     return this.backend.txStatus(hash);
   }
 
-  async getHistory(): Promise<Array<{ id: string; direction: 'in' | 'out'; amount: bigint; fee?: bigint; time?: number; memo?: string; tokenDeltas: CardanoHistoryEntry['tokenDeltas'] }>> {
+  /** `ChainAdapter`: ADA movements; tokens and the CIP-20 message go in `note`. */
+  async getHistory(): Promise<HistoryItem[]> {
+    const list = await this.historyEntries();
+    return list.map((t) => {
+      const parts = t.tokenDeltas.map((d) => `${d.delta.startsWith('-') ? '−' : '+'}${d.delta.replace('-', '')} ${d.nameText ?? (d.name ? `0x${d.name.slice(0, 12)}…` : 'token')}`);
+      if (t.memo) parts.push(`« ${t.memo} »`);
+      const item: HistoryItem = { id: t.id, chainKey: this.chain.key, assetId: 'ada', direction: t.direction, amount: t.amount, status: 'confirmed', kind: 'transfer' };
+      if (t.fee !== undefined) item.fee = t.fee;
+      if (t.time) item.time = t.time;
+      if (parts.length) item.note = parts.join(' · ');
+      return item;
+    });
+  }
+
+  /** Rich history: signed ADA delta, token deltas, CIP-20 message. */
+  async historyEntries(): Promise<Array<{ id: string; direction: 'in' | 'out'; amount: bigint; fee?: bigint; time?: number; memo?: string; tokenDeltas: CardanoHistoryEntry['tokenDeltas'] }>> {
     const list = await this.backend.txs(this.address);
     return list.map((t) => {
       const delta = BigInt(t.lovelaceDelta);

@@ -13,6 +13,8 @@ import type { UtxoAccountView, UtxoBackend } from './utxo/utxo';
 import { dogeChain, ltcChain, tronChain } from './registry';
 import { TronAdapter } from './tron/adapter';
 import { XrpAdapter } from './xrp/adapter';
+import { CardanoAdapter } from './cardano/adapter';
+import { cardanoChain } from './registry';
 import { xrpChain } from './registry';
 import type { Network } from '@kyro/shared';
 
@@ -30,6 +32,8 @@ export interface AdapterSet {
   tron: TronAdapter | null;
   /** XRP Ledger: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   xrp: XrpAdapter | null;
+  /** Cardano: vault only (hardware wallets: HW_UNSUPPORTED for now). */
+  cardano: CardanoAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -66,8 +70,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address }) : null;
   // XRP Ledger: Rust picks the server (servers.xrp, default rippled).
   const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : [])];
-  return { btc, evm, sol, ltc, doge, tron, xrp, all, hw: hw ?? null };
+  // Cardano: Rust picks the server (servers.cardano, default Koios).
+  const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : [])];
+  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin
@@ -179,4 +185,6 @@ export {
   type CardanoTxSummary,
   type CardanoUnsigned,
   type CardanoWarning,
+  cardanoAddressProblem,
+  cardanoTokenLabel,
 } from './cardano/adapter';

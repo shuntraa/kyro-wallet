@@ -32,7 +32,7 @@ export function HistoryRow({ e, price, currency, hidden, compact }: { e: History
   const symbol = e.asset?.symbol ?? '';
   const units = Number(e.amount) / 10 ** decimals;
   const sign = e.kind === 'approval' ? '' : e.direction === 'in' ? '+' : MINUS;
-  const sub = [e.time ? fmtWhen(e.time) : 'en cours', e.chainLabel, e.fee && e.feeAsset && e.direction !== 'in' ? `frais ${fmtCrypto(e.fee, e.feeAsset.decimals, e.feeAsset.symbol)}` : null].filter(Boolean).join(' · ');
+  const sub = [e.time ? fmtWhen(e.time) : 'en cours', e.chainLabel, e.fee && e.feeAsset && e.direction !== 'in' ? `frais ${fmtCrypto(e.fee, e.feeAsset.decimals, e.feeAsset.symbol)}` : null, e.note ?? null].filter(Boolean).join(' · ');
   return (
     <div className={cn('flex items-center gap-3.5 border-t border-[#191B20] px-5', compact ? 'h-[58px]' : 'h-[62px]')}>
       <span className={cn('relative flex size-9 shrink-0 items-center justify-center rounded-full bg-control', e.direction === 'in' && e.kind === 'transfer' ? 'bg-up/12 text-up' : 'text-text')}>
