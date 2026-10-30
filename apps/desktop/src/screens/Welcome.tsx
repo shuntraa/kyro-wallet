@@ -68,7 +68,7 @@ export function VaultDial({ footer }: { footer?: ReactNode }) {
         {/* Index: settles at 3 o'clock on the bezel. */}
         <div className="dial-index absolute top-0 left-0 h-0 w-0">
           <div className="absolute -top-[9px] left-[239px] h-[18px] w-[18px] rounded-[3px] bg-ice" />
-          <div className="absolute -top-px left-[184px] h-px w-[50px] bg-ice/50" />
+          <div className="absolute -top-px left-[257px] h-px w-[40px] bg-ice/40" />
         </div>
       </div>
       <div className="absolute right-12 bottom-10 left-12 flex justify-between font-mono text-[10.5px] tracking-[0.1em] text-faint">{footer ?? <><span>ARGON2ID · XCHACHA20-POLY1305</span><span>NON-CUSTODIAL</span></>}</div>
