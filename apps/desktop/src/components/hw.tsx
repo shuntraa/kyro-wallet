@@ -42,7 +42,7 @@ export function HwWaiting({ deviceId, idle, className, confirm }: { deviceId: st
   const [cancelling, setCancelling] = useState(false);
   const t = prompt === 'confirm-on-device' && confirm ? confirm : prompt ? PROMPT_TEXT[prompt] : null;
   return (
-    <div role="status" aria-live="polite" className={cn('flex items-start gap-3.5 rounded-box border border-ice-line bg-ice/[.06] px-4 py-3.5', className)}>
+    <div role="status" aria-live="polite" className={cn('fade-in flex items-start gap-3.5 rounded-box border border-l-2 border-ice-line border-l-ice bg-ice/[.05] px-4 py-3.5', className)}>
       <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-ctl bg-ice/12 text-ice">
         <Spinner className="size-4" />
       </span>
@@ -95,7 +95,7 @@ export function AddressMismatchStop({ error, onClose }: { error: unknown; onClos
   const d = errorData(error, 'HW_ADDRESS_MISMATCH');
   return (
     <div role="alertdialog" aria-modal="true" aria-labelledby="mismatch-title" className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2a0707]/95 p-8 backdrop-blur-[2px]">
-      <div className="flex max-w-[640px] flex-col gap-5 rounded-panel border-2 border-down bg-[#1a0a0a] p-8">
+      <div className="dialog flex max-w-[640px] flex-col gap-5 rounded-panel border-2 border-down bg-[#1a0a0a] p-8" data-state="open">
         <span className="flex size-14 items-center justify-center rounded-full bg-down/20 text-down">
           <IconWarn size={28} />
         </span>
@@ -251,7 +251,7 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
                 aria-label={`Case ligne ${r + 1}, colonne ${c + 1}`}
                 disabled={busy || positions.length >= 9}
                 onClick={() => setPositions((p) => p + pinPosition(r, c))}
-                className="flex size-16 items-center justify-center rounded-box border border-line-2 bg-raised text-[22px] text-faint hover:border-ice-line hover:bg-control"
+                className="flex size-16 items-center justify-center rounded-box border border-line-2 bg-bg text-[22px] text-faint hover:border-ice-line hover:bg-control"
               >
                 •
               </button>
@@ -473,11 +473,11 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
               <span className="text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet (disponibles dans le coffre Kyro).</span>
               <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-2.5">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-[12px] font-medium text-mute">N° de compte</span>
+                  <span className="eyebrow">N° de compte</span>
                   <Input value={account} inputMode="numeric" onChange={(e) => setAccount(e.target.value.replace(/\D/g, '').slice(0, 3))} className="font-mono" />
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-[12px] font-medium text-mute">Nom (facultatif)</span>
+                  <span className="eyebrow">Nom (facultatif)</span>
                   <Input value={label} maxLength={64} onChange={(e) => setLabel(e.target.value)} placeholder={`${device.model} ${(accountValid ? accountNumber : 0) + 1}`} />
                 </label>
               </div>
@@ -573,7 +573,7 @@ export function HwAccountSummary({ acc, action }: { acc: WatchOnlyAccount; actio
     <div className="flex flex-col gap-3 rounded-box border border-line bg-raised px-4 py-3.5">
       <div className="flex items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
-          <span className="text-[15px] font-semibold">{acc.label}</span>
+          <span className="text-[15px] font-medium tracking-[-0.01em]">{acc.label}</span>
           <span className="text-[12px] text-mute">
             Compte n° {acc.account} · {acc.network === 'testnet' ? 'testnet' : 'mainnet'}
           </span>
