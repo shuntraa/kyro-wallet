@@ -190,7 +190,7 @@ async fn sign(
     let net = state.network;
     let seed = seed_from_password(state, Zeroizing::new(password)).await?;
     let (seed, psbt, summary) = blocking(move || {
-        let s = wallet_core::utxo_psbt_summary(&seed, net, coin, &psbt)?;
+        let s = wallet_core::utxo_psbt_summary(&seed, net, coin, 0, &psbt)?;
         Ok((seed, psbt, s))
     })
     .await?;
@@ -208,7 +208,7 @@ async fn sign(
         .await?;
     }
     let (signed, again) =
-        blocking(move || Ok(wallet_core::utxo_sign_psbt(&seed, net, coin, &psbt)?)).await?;
+        blocking(move || Ok(wallet_core::utxo_sign_psbt(&seed, net, coin, 0, &psbt)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
             "résumé différent entre l'aperçu et la signature".into(),

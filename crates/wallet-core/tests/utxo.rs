@@ -556,8 +556,8 @@ fn litecoin_sign_verify_finalize() {
     let s = seed(ABANDON);
     let (psbt, me) = ltc_psbt();
     let b64 = psbt.to_string();
-    let preview = utxo_psbt_summary(&s, Network::Testnet, LTC, &b64).unwrap();
-    let (signed, summary) = utxo_sign_psbt(&s, Network::Testnet, LTC, &b64).unwrap();
+    let preview = utxo_psbt_summary(&s, Network::Testnet, LTC, 0, &b64).unwrap();
+    let (signed, summary) = utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &b64).unwrap();
     assert_eq!(preview, summary);
     assert_eq!(summary.fee, "141");
     assert_eq!(summary.size, 141, "1-in 2-out P2WPKH: 141 vB");
@@ -642,10 +642,10 @@ fn dogecoin_sign_verify_finalize() {
     // 226 B × 0.01 DOGE/kB = 226 000 koinus.
     let (psbt, _, me) = doge_psbt(226_000);
     let b64 = psbt.to_string();
-    let (signed, summary) = utxo_sign_psbt(&s, Network::Testnet, DOGE, &b64).unwrap();
+    let (signed, summary) = utxo_sign_psbt(&s, Network::Testnet, DOGE, 0, &b64).unwrap();
     assert_eq!(
         summary,
-        utxo_psbt_summary(&s, Network::Testnet, DOGE, &b64).unwrap()
+        utxo_psbt_summary(&s, Network::Testnet, DOGE, 0, &b64).unwrap()
     );
     assert_eq!(summary.size, 226, "1-in 2-out P2PKH: 226 B");
     assert_eq!(summary.fee, "226000");
@@ -703,7 +703,7 @@ fn psbt_err(r: Result<(String, wallet_core::UtxoTxSummary), Error>) -> String {
 #[test]
 fn dogecoin_requires_a_matching_previous_transaction() {
     let s = seed(ABANDON);
-    let sign = |p: &Psbt| utxo_sign_psbt(&s, Network::Testnet, DOGE, &p.to_string());
+    let sign = |p: &Psbt| utxo_sign_psbt(&s, Network::Testnet, DOGE, 0, &p.to_string());
 
     let (mut p, prev, _) = doge_psbt(226_000);
     p.inputs[0].non_witness_utxo = None;
@@ -727,7 +727,7 @@ fn litecoin_requires_witness_utxo_and_refuses_bitcoin_paths() {
     let (mut p, _) = ltc_psbt();
     p.inputs[0].witness_utxo = None;
     assert!(
-        psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, &p.to_string()))
+        psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &p.to_string()))
             .contains("witness_utxo")
     );
 
@@ -751,7 +751,7 @@ fn litecoin_requires_witness_utxo_and_refuses_bitcoin_paths() {
     p.inputs[0].bip32_derivation.clear();
     p.inputs[0].bip32_derivation.insert(btc.0, (btc.1, btc.2));
     assert!(
-        psbt_err(utxo_sign_psbt(&s, Network::Mainnet, LTC, &p.to_string())).contains("no input")
+        psbt_err(utxo_sign_psbt(&s, Network::Mainnet, LTC, 0, &p.to_string())).contains("no input")
     );
 
     // A key origin of ours whose key does not match the spent script.
@@ -766,7 +766,7 @@ fn litecoin_requires_witness_utxo_and_refuses_bitcoin_paths() {
         100_000_000,
     ));
     assert!(
-        psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, &p.to_string())).contains("not ours")
+        psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &p.to_string())).contains("not ours")
     );
 
     // Only SIGHASH_ALL.
@@ -775,7 +775,8 @@ fn litecoin_requires_witness_utxo_and_refuses_bitcoin_paths() {
         EcdsaSighashType::SinglePlusAnyoneCanPay,
     ));
     assert!(
-        psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, &p.to_string())).contains("SIGHASH_ALL")
+        psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &p.to_string()))
+            .contains("SIGHASH_ALL")
     );
 
     // Wrong seed: nothing of ours.
@@ -784,6 +785,7 @@ fn litecoin_requires_witness_utxo_and_refuses_bitcoin_paths() {
         &seed(LEGAL),
         Network::Testnet,
         LTC,
+        0,
         &p.to_string()
     ))
     .contains("no input"));
@@ -795,17 +797,26 @@ fn dust_outputs_are_refused() {
     // Litecoin: 2 939 < 2 940 (P2WPKH dust at 30 000 litoshis/kvB).
     let (mut p, _) = ltc_psbt();
     p.unsigned_tx.output[0].value = Amount::from_sat(2_939);
-    assert!(psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, &p.to_string())).contains("dust"));
+    assert!(
+        psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &p.to_string())).contains("dust")
+    );
     let (mut p, _) = ltc_psbt();
     p.unsigned_tx.output[0].value = Amount::from_sat(2_940);
-    assert!(utxo_sign_psbt(&s, Network::Testnet, LTC, &p.to_string()).is_ok());
+    assert!(utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &p.to_string()).is_ok());
     // Dogecoin: below the hard dust limit (0.001 DOGE) refused; soft dust warned.
     let (mut p, _, _) = doge_psbt(226_000);
     p.unsigned_tx.output[0].value = Amount::from_sat(99_999);
-    assert!(psbt_err(utxo_sign_psbt(&s, Network::Testnet, DOGE, &p.to_string())).contains("dust"));
+    assert!(psbt_err(utxo_sign_psbt(
+        &s,
+        Network::Testnet,
+        DOGE,
+        0,
+        &p.to_string()
+    ))
+    .contains("dust"));
     let (mut p, _, _) = doge_psbt(226_000);
     p.unsigned_tx.output[0].value = Amount::from_sat(500_000);
-    let (_, sum) = utxo_sign_psbt(&s, Network::Testnet, DOGE, &p.to_string()).unwrap();
+    let (_, sum) = utxo_sign_psbt(&s, Network::Testnet, DOGE, 0, &p.to_string()).unwrap();
     assert!(sum.warnings.contains(&UtxoWarning::SoftDust { index: 0 }));
     assert!(sum.requires_extra_confirmation);
 }
@@ -814,7 +825,7 @@ fn dust_outputs_are_refused() {
 fn unknown_scripts_foreign_inputs_and_high_fees_need_a_reinforced_confirmation() {
     let s = seed(ABANDON);
     let summary =
-        |coin, p: &Psbt| utxo_psbt_summary(&s, Network::Testnet, coin, &p.to_string()).unwrap();
+        |coin, p: &Psbt| utxo_psbt_summary(&s, Network::Testnet, coin, 0, &p.to_string()).unwrap();
 
     // Bare multisig-like unknown script and OP_RETURN.
     let (mut p, _) = ltc_psbt();
@@ -876,7 +887,7 @@ fn unknown_scripts_foreign_inputs_and_high_fees_need_a_reinforced_confirmation()
         .warnings
         .contains(&UtxoWarning::ForeignInput { index: 1 }));
     assert!(sum.requires_extra_confirmation);
-    let (signed, _) = utxo_sign_psbt(&s, Network::Testnet, DOGE, &p.to_string()).unwrap();
+    let (signed, _) = utxo_sign_psbt(&s, Network::Testnet, DOGE, 0, &p.to_string()).unwrap();
     let signed = Psbt::from_str(&signed).unwrap();
     assert_eq!(signed.inputs[0].partial_sigs.len(), 1);
     assert!(signed.inputs[1].partial_sigs.is_empty());
@@ -886,9 +897,10 @@ fn unknown_scripts_foreign_inputs_and_high_fees_need_a_reinforced_confirmation()
 fn summary_json_shape() {
     let s = seed(ABANDON);
     let (p, _) = ltc_psbt();
-    let v =
-        serde_json::to_value(utxo_psbt_summary(&s, Network::Testnet, LTC, &p.to_string()).unwrap())
-            .unwrap();
+    let v = serde_json::to_value(
+        utxo_psbt_summary(&s, Network::Testnet, LTC, 0, &p.to_string()).unwrap(),
+    )
+    .unwrap();
     assert_eq!(v["coin"], "litecoin");
     assert_eq!(v["fee"], "141");
     assert_eq!(v["feePerKb"], 1000);
@@ -914,7 +926,7 @@ const TS_DOGE_PSBT: &str = "cHNidP8BAHcCAAAAARJmgqwvI6lsL36LtKJLSB3aGOxwYXu6cubZ
 #[test]
 fn psbts_built_by_the_ts_adapters_are_decoded_and_signed() {
     let s = seed(ABANDON);
-    let (signed, sum) = utxo_sign_psbt(&s, Network::Testnet, LTC, TS_LTC_PSBT).unwrap();
+    let (signed, sum) = utxo_sign_psbt(&s, Network::Testnet, LTC, 0, TS_LTC_PSBT).unwrap();
     assert_eq!((sum.inputs, sum.our_inputs), (1, 1));
     assert_eq!(sum.fee, "141");
     assert_eq!(sum.size, 141, "TS and Rust size models agree");
@@ -935,7 +947,7 @@ fn psbts_built_by_the_ts_adapters_are_decoded_and_signed() {
         1
     );
 
-    let (signed, sum) = utxo_sign_psbt(&s, Network::Testnet, DOGE, TS_DOGE_PSBT).unwrap();
+    let (signed, sum) = utxo_sign_psbt(&s, Network::Testnet, DOGE, 0, TS_DOGE_PSBT).unwrap();
     assert_eq!(sum.fee, "226000");
     assert_eq!(sum.size, 226, "TS and Rust size models agree");
     assert_eq!(sum.fee_per_kb, 1_000_000);
@@ -956,4 +968,50 @@ fn psbts_built_by_the_ts_adapters_are_decoded_and_signed() {
             .len(),
         1
     );
+}
+
+/// Litecoin account 1 (`m/84'/1'/1'` on testnet) signs only its own coins: account 0 refuses
+/// the PSBT (nothing of its own), account 1 signs it and recognises its change.
+#[test]
+fn litecoin_signs_only_the_requested_account() {
+    let me = key(ABANDON, "m/84'/1'/1'/0/0");
+    let change = key(ABANDON, "m/84'/1'/1'/1/0");
+    let s = seed(ABANDON);
+    let spk = |change: bool| {
+        utxo_script_pubkey(
+            &utxo_address(&s, Network::Testnet, LTC, 1, change, 0).unwrap(),
+            Network::Testnet,
+            LTC,
+        )
+        .unwrap()
+    };
+    let dest = utxo_script_pubkey(
+        "tltc1qv99w6gxa67tgy89xgrmtcf9nydnsws7sflulmg",
+        Network::Testnet,
+        LTC,
+    )
+    .unwrap();
+    let prev = prev_tx(spk(false), 100_000_000);
+    let mut psbt = unsigned(
+        &prev,
+        vec![out(dest, 50_000_000), out(spk(true), 49_999_859)],
+    );
+    psbt.inputs[0].witness_utxo = Some(prev.output[1].clone());
+    psbt.inputs[0]
+        .bip32_derivation
+        .insert(me.pk, (me.fp, me.path.clone()));
+    psbt.outputs[1]
+        .bip32_derivation
+        .insert(change.pk, (change.fp, change.path.clone()));
+    let b64 = psbt.to_string();
+    let (signed, summary) = utxo_sign_psbt(&s, Network::Testnet, LTC, 1, &b64).unwrap();
+    assert!(summary.outputs[1].is_change && summary.warnings.is_empty());
+    assert_eq!(
+        Psbt::from_str(&signed).unwrap().inputs[0]
+            .partial_sigs
+            .len(),
+        1
+    );
+    assert!(psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &b64)).contains("no input"));
+    assert!(utxo_psbt_summary(&s, Network::Testnet, LTC, 0, &b64).is_err());
 }

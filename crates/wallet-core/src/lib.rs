@@ -55,13 +55,13 @@ pub use btc_watch::{
     BtcDescriptor, BtcRawTx,
 };
 pub use cardano::{
-    cardano_account_stake_address, cardano_account_xpub, cardano_address, cardano_address_bytes,
-    cardano_address_string, cardano_base_address, cardano_blake2b256, cardano_cip20_aux,
-    cardano_decode_tx, cardano_enterprise_address, cardano_min_utxo, cardano_payment_public_key,
-    cardano_sign, cardano_signed_size, cardano_signed_witnesses, cardano_stake_address,
-    cardano_tx_body, cardano_unsigned_tx, cardano_verify, CardanoAssets, CardanoBody,
-    CardanoContext, CardanoInput, CardanoOutput, CardanoOutputView, CardanoRoot, CardanoTokenView,
-    CardanoTxSummary, CardanoWarning,
+    cardano_account_path, cardano_account_stake_address, cardano_account_xpub, cardano_address,
+    cardano_address_bytes, cardano_address_string, cardano_base_address, cardano_blake2b256,
+    cardano_cip20_aux, cardano_decode_tx, cardano_enterprise_address, cardano_min_utxo,
+    cardano_payment_public_key, cardano_sign, cardano_signed_size, cardano_signed_witnesses,
+    cardano_stake_address, cardano_tx_body, cardano_unsigned_tx, cardano_verify, CardanoAssets,
+    CardanoBody, CardanoContext, CardanoInput, CardanoOutput, CardanoOutputView, CardanoRoot,
+    CardanoTokenView, CardanoTxSummary, CardanoWarning,
 };
 pub use cardano::{
     cardano_blake2b224, cardano_decode_stake_tx, cardano_drep_id, cardano_drep_parse,
@@ -72,9 +72,9 @@ pub use cardano::{
 pub use error::{Error, Result};
 pub use evm::{
     evm_address, evm_address_from_xpub, evm_address_of_pubkey, evm_checksum_address, evm_decode,
-    evm_high_fee_threshold_wei, evm_hw_finalize, evm_sign_tx, evm_signing_payload, evm_tx_fields,
-    evm_xpub_from_node, EvmTxFields, EvmTxKind, EvmTxRequest, EvmTxSummary, EvmWarning,
-    EVM_KNOWN_CHAINS,
+    evm_high_fee_threshold_wei, evm_hw_finalize, evm_path, evm_sign_tx, evm_signing_payload,
+    evm_tx_fields, evm_xpub_from_node, EvmTxFields, EvmTxKind, EvmTxRequest, EvmTxSummary,
+    EvmWarning, EVM_KNOWN_CHAINS,
 };
 pub use ledger_cal::{
     ledger_erc20_lookup, ledger_erc20_payload, ledger_erc20_verify, LedgerErc20Descriptor,
@@ -94,10 +94,10 @@ pub use sol_stake::{
     SOL_STAKE_PROGRAM,
 };
 pub use tron::{
-    tron_address, tron_address_bytes, tron_address_from_bytes, tron_address_of_pubkey,
-    tron_decode_raw, tron_recover_signer, tron_ref_block, tron_sign, tron_signed_transaction,
-    tron_trc20_transfer_data, TronAction, TronContract, TronRaw, TronTxSummary, TronWarning,
-    TRC20_TRANSFER_SELECTOR, TRON_ADDRESS_PREFIX,
+    tron_address, tron_address_at, tron_address_bytes, tron_address_from_bytes,
+    tron_address_of_pubkey, tron_decode_raw, tron_path, tron_recover_signer, tron_ref_block,
+    tron_sign, tron_signed_transaction, tron_trc20_transfer_data, TronAction, TronContract,
+    TronRaw, TronTxSummary, TronWarning, TRC20_TRANSFER_SELECTOR, TRON_ADDRESS_PREFIX,
 };
 pub use tron::{
     tron_decode_stake_raw, tron_stake_sign, TronResource, TronStakeAction, TronStakeSummary,
@@ -119,10 +119,10 @@ pub use watch::{
 /// Re-exported so callers can build [`Seed`] values and wipe their own buffers
 /// without adding a direct dependency.
 pub use xrp::{
-    xrp_account_id, xrp_address, xrp_address_from_id, xrp_address_of_pubkey, xrp_currency_code,
-    xrp_decode_tx, xrp_issued_amount, xrp_public_key, xrp_sign, xrp_verify_signed, XrpAmount,
-    XrpAmountView, XrpMemo, XrpMemoView, XrpPayment, XrpTxSummary, XrpWarning, LSF_DISALLOW_XRP,
-    LSF_REQUIRE_DEST_TAG, TF_FULLY_CANONICAL_SIG, TF_LIMIT_QUALITY, TF_NO_RIPPLE_DIRECT,
-    TF_PARTIAL_PAYMENT,
+    xrp_account_id, xrp_address, xrp_address_at, xrp_address_from_id, xrp_address_of_pubkey,
+    xrp_currency_code, xrp_decode_tx, xrp_issued_amount, xrp_path, xrp_public_key,
+    xrp_public_key_at, xrp_sign, xrp_sign_at, xrp_verify_signed, XrpAmount, XrpAmountView, XrpMemo,
+    XrpMemoView, XrpPayment, XrpTxSummary, XrpWarning, LSF_DISALLOW_XRP, LSF_REQUIRE_DEST_TAG,
+    TF_FULLY_CANONICAL_SIG, TF_LIMIT_QUALITY, TF_NO_RIPPLE_DIRECT, TF_PARTIAL_PAYMENT,
 };
 pub use zeroize::{Zeroize, Zeroizing};

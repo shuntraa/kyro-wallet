@@ -139,7 +139,8 @@ fn mixed_psbt() -> Psbt {
 
 /// What an honest device returns for `psbt`: the software signer's signatures.
 fn honest_sigs(psbt: &Psbt) -> Vec<HwBtcSignature> {
-    let (signed, _) = btc_sign_psbt(&seed(ABANDON), Network::Testnet, &psbt.to_string()).unwrap();
+    let (signed, _) =
+        btc_sign_psbt(&seed(ABANDON), Network::Testnet, 0, &psbt.to_string()).unwrap();
     let signed = Psbt::from_str(&signed).unwrap();
     let mut out = Vec::new();
     for (i, input) in signed.inputs.iter().enumerate() {
@@ -320,7 +321,7 @@ fn btc_finalize_rejects_wrong_signatures() {
         &btc_address(&seed(LEGAL), Network::Testnet, BtcKind::Segwit, 0, false, 0).unwrap(),
     );
     let (their_signed, _) =
-        btc_sign_psbt(&seed(LEGAL), Network::Testnet, &foreign.to_string()).unwrap();
+        btc_sign_psbt(&seed(LEGAL), Network::Testnet, 0, &foreign.to_string()).unwrap();
     let their_sig = Psbt::from_str(&their_signed).unwrap().inputs[0]
         .partial_sigs
         .values()

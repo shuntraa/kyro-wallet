@@ -383,7 +383,7 @@ mod tests {
         let plan = wallet_core::btc_hw_plan(net, &b64, &accounts).unwrap();
 
         // The signature an honest device returns (DER, no sighash byte).
-        let (soft, _) = wallet_core::btc_sign_psbt(&seed, net, &b64).unwrap();
+        let (soft, _) = wallet_core::btc_sign_psbt(&seed, net, 0, &b64).unwrap();
         let soft = Psbt::from_str(&soft).unwrap();
         let der = soft.inputs[0]
             .partial_sigs

@@ -603,7 +603,7 @@ pub async fn btc_sign_psbt(
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     // Same summary as the signature computes (change and own inputs by key origin).
     let (s, p) = (seed.clone(), psbt.clone());
-    let summary = blocking(move || Ok(wallet_core::btc_psbt_summary(&s, net, &p)?)).await?;
+    let summary = blocking(move || Ok(wallet_core::btc_psbt_summary(&s, net, 0, &p)?)).await?;
     confirm_native(&app, "Confirmer la transaction", describe_btc(&summary)).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
@@ -614,7 +614,7 @@ pub async fn btc_sign_psbt(
         .await?;
     }
     let (signed, again) =
-        blocking(move || Ok(wallet_core::btc_sign_psbt(&seed, net, &psbt)?)).await?;
+        blocking(move || Ok(wallet_core::btc_sign_psbt(&seed, net, 0, &psbt)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
             "résumé différent entre l'aperçu et la signature".into(),

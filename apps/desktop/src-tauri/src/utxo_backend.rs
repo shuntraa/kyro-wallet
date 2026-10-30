@@ -531,7 +531,7 @@ mod live {
         let net = Network::Testnet;
         let coin = UtxoCoin::Litecoin;
 
-        let summary = wallet_core::utxo_psbt_summary(&seed, net, coin, b64).unwrap();
+        let summary = wallet_core::utxo_psbt_summary(&seed, net, coin, 0, b64).unwrap();
         eprintln!(
             "--- native dialog text ---\n{}\n--------------------------",
             crate::commands_utxo::describe_utxo(&summary, net)
@@ -554,7 +554,7 @@ mod live {
         assert!(!summary.requires_extra_confirmation);
         assert!(summary.fee_per_kb <= 2_000, "minimum fee only");
 
-        let (signed, again) = wallet_core::utxo_sign_psbt(&seed, net, coin, b64).unwrap();
+        let (signed, again) = wallet_core::utxo_sign_psbt(&seed, net, coin, 0, b64).unwrap();
         assert_eq!(again, summary, "same summary as the dialog");
         let mut p = Psbt::from_str(&signed).unwrap();
         for input in &mut p.inputs {
@@ -657,6 +657,7 @@ mod live {
             seed,
             Network::Testnet,
             UtxoCoin::Litecoin,
+            0,
             &psbt.to_string(),
         )
         .unwrap();

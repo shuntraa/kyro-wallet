@@ -41,11 +41,15 @@ pub enum BtcKind { Segwit /* BIP84 */, Taproot /* BIP86 */ }
 pub struct BtcAccount { pub kind: BtcKind, pub xpub: String, pub fingerprint: String /*hex 8*/, pub path: String /*m/84'/1'/0'*/ }
 pub fn btc_account(seed: &Seed, net: Network, kind: BtcKind, account: u32) -> Result<BtcAccount>;
 pub fn btc_address(seed: &Seed, net: Network, kind: BtcKind, account: u32, change: bool, index: u32) -> Result<String>;
-pub fn evm_address(seed: &Seed, index: u32) -> Result<String>;          // m/44'/60'/0'/0/i, EIP-55
+pub fn evm_address(seed: &Seed, index: u32) -> Result<String>;          // m/44'/60'/0'/0/i, EIP-55 — compte EVM n° i = index d'adresse (voir « Comptes » ci-dessous)
+pub fn evm_path(index) -> String;  pub fn sol_path(account) -> String;  pub fn tron_path(account) -> String;
+pub fn xrp_path(account) -> String;  pub fn cardano_account_path(account) -> String;   // chemins affichés (dialogue natif, UI)
 pub fn sol_address(seed: &Seed, account: u32) -> Result<String>;        // m/44'/501'/i'/0' (SLIP-10 ed25519), base58
 
 // --- signing (clés dérivées à la demande, zeroizées aussitôt) ---
-pub fn btc_sign_psbt(seed: &Seed, net: Network, psbt_b64: &str) -> Result<(String /*signed b64*/, BtcTxSummary)>;
+pub fn btc_sign_psbt(seed: &Seed, net: Network, account: u32, psbt_b64: &str) -> Result<(String /*signed b64*/, BtcTxSummary)>;
+// ne signe QUE les entrées du compte `account` (origine m/84'|86'/coin'/account'/…) ; celles des autres comptes du même coffre
+// sont étrangères (ForeignInput → 2ᵉ dialogue) et la monnaie n'est reconnue que dans ce compte
 pub struct EvmTxRequest { pub chain_id: u64, pub nonce: u64, pub to: String, pub value_wei: String, pub data: String /*0x…*/,
                           pub gas_limit: u64, pub max_fee_per_gas: String, pub max_priority_fee_per_gas: String }
 pub fn evm_sign_tx(seed: &Seed, index: u32, tx: &EvmTxRequest) -> Result<(String /*raw 0x… EIP-1559*/, String /*tx hash*/)>;
@@ -73,7 +77,7 @@ pub enum BtcWarning {   // JSON { "kind": "unknownScript" | "opReturn" | "foreig
     HighFee { sat_per_vb } /*> BTC_HIGH_FEE_SAT_PER_VB = 100 sat/vB (100 × le minimum de relais), ou frais > total des sorties*/ }
 // Un sighash autre que ALL / DEFAULT sur une de nos entrées n'est pas un avertissement : la signature est REFUSÉE.
 pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String] /*our addresses*/) -> Result<BtcTxSummary>;
-pub fn btc_psbt_summary(seed, net, psbt_b64) -> Result<BtcTxSummary>;   // résumé de btc_sign_psbt sans signer (monnaie et entrées par origine de clé)
+pub fn btc_psbt_summary(seed, net, account, psbt_b64) -> Result<BtcTxSummary>;   // résumé de btc_sign_psbt sans signer (monnaie et entrées par origine de clé)
 
 // --- Bitcoin, données publiques pour un serveur choisi (B2b) ---
 pub fn btc_scripthash(address: &str, net: Network) -> Result<String>;   // Electrum : sha256(scriptPubKey) inversé, hex
@@ -100,8 +104,8 @@ pub fn utxo_address_of_script(script, net, coin) -> Option<String>;
 pub fn utxo_genesis_hash(net, coin) -> &'static str;                    // LTC mainnet 12a765e3…, testnet4 4966625a… · DOGE mainnet 1a91e3da…, testnet bb0a7826…
 pub fn utxo_decode_raw_tx(raw_hex, net, coin) -> Result<BtcRawTx>;      // DOGE : données témoin refusées
 pub fn utxo_dust_threshold(coin, script) -> u64;                        // LTC : GetDustThreshold à 30 000 lit/kvB (P2WPKH 2 940) · DOGE : 0,001 DOGE (poussière dure)
-pub fn utxo_psbt_summary(seed, net, coin, psbt_b64) -> Result<UtxoTxSummary>;     // décodage pour le dialogue, sans signer
-pub fn utxo_sign_psbt(seed, net, coin, psbt_b64) -> Result<(String /*PSBT signée, non finalisée*/, UtxoTxSummary)>;
+pub fn utxo_psbt_summary(seed, net, coin, account, psbt_b64) -> Result<UtxoTxSummary>;     // décodage pour le dialogue, sans signer
+pub fn utxo_sign_psbt(seed, net, coin, account, psbt_b64) -> Result<(String /*PSBT signée, non finalisée*/, UtxoTxSummary)>;   // comme Bitcoin : compte `account` seulement
 // Refusé : PSBT mal formée ; entrée LTC sans witness_utxo ; entrée DOGE sans non_witness_utxo dont le txid = l'outpoint, ou avec témoin ;
 // origine de clé « à nous » qui ne correspond pas à la clé ou au script ; sighash ≠ ALL ; sortie sous la poussière ; frais négatifs ; aucune entrée à nous.
 // Signature : LTC BIP143 (P2WPKH), DOGE legacy (P2PKH), SIGHASH_ALL, chaque signature vérifiée avant d'être gardée.
@@ -118,9 +122,10 @@ pub enum UtxoWarning {                         // JSON { "kind": "softDust", "in
 // Constantes : LTC_MIN_RELAY_FEE_PER_KVB 1 000, LTC_DUST_RELAY_FEE_PER_KVB 30 000 ; DOGE_RECOMMENDED_FEE_PER_KB 1 000 000 (0,01 DOGE/kB),
 // DOGE_MIN_RELAY_FEE_PER_KB 100 000, DOGE_SOFT_DUST 1 000 000, DOGE_HARD_DUST 100 000.
 
-// --- TRON : m/44'/195'/0'/0/i, adresse = base58check(0x41 || keccak256(pubkey)[12..]) ; raw_data protobuf
+// --- TRON : m/44'/195'/a'/0/0 (un compte = une adresse, comme Ledger Live ; compte 0 = l'historique m/44'/195'/0'/0/0), adresse = base58check(0x41 || keccak256(pubkey)[12..]) ; raw_data protobuf
 //     (codec écrit à la main, strict : refusé si le ré-encodage diffère d'un seul octet)
-pub fn tron_address(seed, index) -> Result<String>;                     // T…
+pub fn tron_address(seed, account) -> Result<String>;                   // T…, m/44'/195'/account'/0/0
+pub fn tron_address_at(seed, account, index) -> Result<String>;         // m/44'/195'/account'/0/index (vecteurs d'autres portefeuilles)
 pub fn tron_address_bytes(address) -> Result<[u8; 21]>; pub fn tron_address_from_bytes(&[u8; 21]) -> String;
 pub fn tron_address_of_pubkey(sec1) -> Result<String>;
 pub struct TronRaw { ref_block_bytes: [u8; 2], ref_block_hash: [u8; 8], expiration: i64, memo: Vec<u8>,
@@ -137,14 +142,15 @@ pub struct TronTxSummary { txid, owner, action: TronAction, fee_limit, expiratio
 pub enum TronAction { TrxTransfer { to, amount }, Trc20Transfer { contract, to, amount, call_value },
                       ContractCall { contract, selector, data, call_value } }   // JSON { "type": "trxTransfer", … }
 pub enum TronWarning { UnknownCall { selector }, CallValue, Memo, HighFeeLimit /*> 100 TRX*/ }   // tous → confirmation renforcée
-pub fn tron_sign(seed, index, raw_hex) -> Result<([u8; 65] /*r‖s‖v, v = 27 + recid*/, TronTxSummary)>;   // décode d'abord ; libsecp256k1 RFC 6979
+pub fn tron_sign(seed, account, raw_hex) -> Result<([u8; 65] /*r‖s‖v, v = 27 + recid*/, TronTxSummary)>;   // décode d'abord ; libsecp256k1 RFC 6979
 pub fn tron_recover_signer(raw_hex, sig65 /*v ∈ 0,1,27,28*/) -> Result<String>;
 pub fn tron_signed_transaction(raw_hex, sig) -> Result<String>;          // Transaction { raw_data = 1, signature = 2 }, pour broadcasthex
 
-// --- XRP Ledger : m/44'/144'/0'/0/i (route BIP44 de Ledger, Trezor, Xaman — pas la « family seed » de rippled),
+// --- XRP Ledger : m/44'/144'/a'/0/0, compte 0 = l'historique m/44'/144'/0'/0/0 (route BIP44 de Ledger, Trezor, Xaman — pas la « family seed » de rippled),
 //     adresse r… = base58 (alphabet Ripple) de 0x00 || RIPEMD160(SHA256(pubkey)) + somme SHA-256d ; codec binaire
 //     Payment écrit à la main, strict (ré-encodage identique exigé)
-pub fn xrp_address(seed, index) -> Result<String>; pub fn xrp_public_key(seed, index) -> Result<[u8; 33]>;
+pub fn xrp_address(seed, account) -> Result<String>; pub fn xrp_public_key(seed, account) -> Result<[u8; 33]>;   // m/44'/144'/account'/0/0
+pub fn xrp_address_at(seed, account, index); pub fn xrp_public_key_at(seed, account, index); pub fn xrp_sign_at(seed, account, index, blob);   // …/0/index (vecteurs Trezor)
 pub fn xrp_account_id(address) -> Result<[u8; 20]>;        // X-addresses refusées (adresse classique + tag séparé)
 pub fn xrp_address_from_id(&[u8; 20]) -> String; pub fn xrp_address_of_pubkey(sec1) -> Result<String>;
 pub enum XrpAmount { Xrp(u64 /*drops*/), Issued { mantissa, exponent, negative, currency: [u8; 20], issuer: [u8; 20] } }   // STAmount
@@ -162,7 +168,7 @@ pub struct XrpTxSummary { account, destination, destination_tag: Option<u32>, am
                           requires_extra_confirmation }          // serde camelCase
 pub enum XrpAmountView { Xrp { drops }, Issued { value, currency, issuer } }   // JSON { "kind": "xrp", … }
 pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, Memo, HighFee /*> 1 XRP*/, InvoiceId }   // → renforcée
-pub fn xrp_sign(seed, index, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
+pub fn xrp_sign(seed, account, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
 pub fn xrp_verify_signed(blob_hex) -> Result<String /*hash*/>;   // signature DER low-S de SigningPubKey, clé = Account
 
 // --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
@@ -285,7 +291,7 @@ pub fn cardano_drep_id(drep) -> Option<String>;                     // CIP-129
 pub enum TronResource { Bandwidth, Energy }                          // JSON "BANDWIDTH" | "ENERGY"
 pub fn tron_decode_stake_raw(raw_hex, our_address) -> Result<TronStakeSummary>;   // + refuse : owner ≠ nous, montant ≤ 0, mémo,
 // fee_limit ≠ 0, 0 ou plus de 30 votes (TRON_MAX_VOTES), un SR deux fois, un vote nul, un transfert / appel de contrat
-pub fn tron_stake_sign(seed, index, raw_hex) -> Result<([u8; 65], TronStakeSummary)>;
+pub fn tron_stake_sign(seed, account, raw_hex) -> Result<([u8; 65], TronStakeSummary)>;
 pub struct TronStakeSummary { txid, owner, action: TronStakeAction, expiration, timestamp, ref_block_bytes, ref_block_hash, raw_size }
 pub enum TronStakeAction { Freeze { resource, amount }, Unfreeze { resource, amount }, WithdrawUnfrozen, CancelAllUnfreeze,
                            Vote { votes: Vec<TronVote { address, count }>, total }, ClaimRewards }   // JSON { "type": "freeze", … }

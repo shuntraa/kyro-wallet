@@ -1841,7 +1841,7 @@ mod live_send {
         let seed = wallet_core::Mnemonic::parse(phrase()).unwrap().to_seed("");
         let net = Network::Testnet;
 
-        let summary = wallet_core::btc_psbt_summary(&seed, net, b64).unwrap();
+        let summary = wallet_core::btc_psbt_summary(&seed, net, 0, b64).unwrap();
         eprintln!(
             "--- native dialog text ---\n{}\n--------------------------",
             crate::commands::describe_btc(&summary)
@@ -1858,7 +1858,7 @@ mod live_send {
         }
         assert!(!summary.requires_extra_confirmation);
 
-        let (signed, again) = wallet_core::btc_sign_psbt(&seed, net, b64).unwrap();
+        let (signed, again) = wallet_core::btc_sign_psbt(&seed, net, 0, b64).unwrap();
         assert_eq!(again, summary, "same summary as the dialog");
         let mut p = Psbt::from_str(&signed).unwrap();
         for input in &mut p.inputs {

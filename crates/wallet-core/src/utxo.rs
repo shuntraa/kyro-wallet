@@ -555,10 +555,12 @@ struct Signer {
     coin: UtxoCoin,
     purpose: u32,
     coin_type: u32,
+    account: u32,
 }
 
 impl Signer {
-    fn new(seed: &Seed, net: Network, coin: UtxoCoin) -> Result<Signer> {
+    fn new(seed: &Seed, net: Network, coin: UtxoCoin, account: u32) -> Result<Signer> {
+        crate::keys::hardened(account)?;
         let secp = secp()?;
         let master = XprivGuard::master(seed, net.btc_kind())?;
         let fingerprint = master.fingerprint(&secp);
@@ -570,11 +572,13 @@ impl Signer {
             coin,
             purpose: p.purpose,
             coin_type: p.coin_type,
+            account,
         })
     }
 
+    /// Our fingerprint and a path of **this account** (other accounts of the wallet are foreign).
     fn ours(&self, fp: &Fingerprint, path: &DerivationPath) -> bool {
-        *fp == self.fingerprint && is_our_path(path, self.purpose, self.coin_type)
+        *fp == self.fingerprint && is_our_path(path, self.purpose, self.coin_type, self.account)
     }
 
     fn derive(&self, path: &DerivationPath) -> Result<XprivGuard> {
@@ -760,7 +764,9 @@ fn analyse(signer: &Signer, net: Network, psbt_b64: &str) -> Result<Analysis> {
 }
 
 /// Decodes a Litecoin/Dogecoin PSBT for the confirmation dialog, without signing. Needs the
-/// seed only to prove which inputs and outputs are ours (key origin + derived key + script).
+/// seed only to prove which inputs and outputs are ours (key origin + derived key + script),
+/// where "ours" means **account `account`** (`m/84'/2'/account'/…`, `m/44'/3'/account'/…`): the
+/// wallet's other accounts count as foreign.
 ///
 /// Refused: malformed PSBT; Litecoin input without `witness_utxo`; Dogecoin input without a
 /// `non_witness_utxo` matching its outpoint, or with witness data; a key origin of ours that
@@ -770,9 +776,10 @@ pub fn utxo_psbt_summary(
     seed: &Seed,
     net: Network,
     coin: UtxoCoin,
+    account: u32,
     psbt_b64: &str,
 ) -> Result<UtxoTxSummary> {
-    let signer = Signer::new(seed, net, coin)?;
+    let signer = Signer::new(seed, net, coin, account)?;
     Ok(analyse(&signer, net, psbt_b64)?.summary)
 }
 
@@ -785,9 +792,10 @@ pub fn utxo_sign_psbt(
     seed: &Seed,
     net: Network,
     coin: UtxoCoin,
+    account: u32,
     psbt_b64: &str,
 ) -> Result<(String, UtxoTxSummary)> {
-    let signer = Signer::new(seed, net, coin)?;
+    let signer = Signer::new(seed, net, coin, account)?;
     let Analysis {
         mut psbt,
         prevouts,
