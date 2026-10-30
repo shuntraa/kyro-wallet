@@ -7,6 +7,7 @@ import { Button, Notice, Spinner } from '../components/ui/primitives';
 import { IconLock } from '../components/icons';
 import { OnboardingFrame } from './Welcome';
 import { DEMO_PASSWORD_HINT } from './demoHint';
+import { idx } from '../components/motion';
 
 export function Unlock() {
   const { enterVault, demo } = useApp();
@@ -31,16 +32,20 @@ export function Unlock() {
 
   return (
     <OnboardingFrame status={<span className="flex items-center gap-1.5 text-mute"><span className="size-1.5 rounded-full bg-faint" />Coffre verrouillé · session effacée</span>}>
-      <div className="flex max-w-[460px] flex-col gap-7">
+      <div className="flex max-w-[440px] flex-col gap-8">
         <div className="flex flex-col gap-4">
-          <span className="flex size-12 items-center justify-center rounded-[14px] bg-ice/12 text-ice">
-            <IconLock size={20} />
+          <span className="rise eyebrow flex items-center gap-2 text-mute">
+            <IconLock size={13} className="text-ice" />
+            Kyro
           </span>
-          <h1 className="m-0 text-[44px] leading-[1.05] font-semibold tracking-[-0.04em]">Coffre verrouillé</h1>
-          <p className="m-0 text-[15px] leading-[1.6] text-mute">Saisis ton mot de passe pour déchiffrer le coffre sur cet appareil.</p>
+          <h1 className="rise m-0 text-[52px] leading-[1] font-[560] tracking-[-0.05em]" style={idx(1)}>
+            Coffre verrouillé<span className="text-ice">.</span>
+          </h1>
+          <p className="rise m-0 text-[15px] leading-[1.6] text-mute" style={idx(2)}>Saisis ton mot de passe pour déchiffrer le coffre sur cet appareil.</p>
         </div>
         <form
-          className="flex flex-col gap-4"
+          className="rise flex flex-col gap-4"
+          style={idx(3)}
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
@@ -53,7 +58,7 @@ export function Unlock() {
             {busy && <Spinner />} Déverrouiller
           </Button>
         </form>
-        <p className="m-0 text-[12px] leading-[1.6] text-faint">Kyro ne peut pas récupérer ton mot de passe. Si tu l’as perdu, seule ta phrase de récupération permet de restaurer tes fonds.</p>
+        <p className="m-0 border-t border-line pt-4 text-[12px] leading-[1.6] text-faint">Kyro ne peut pas récupérer ton mot de passe. Si tu l’as perdu, seule ta phrase de récupération permet de restaurer tes fonds.</p>
       </div>
     </OnboardingFrame>
   );

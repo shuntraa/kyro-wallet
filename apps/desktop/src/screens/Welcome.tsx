@@ -18,28 +18,60 @@ import { Dialog } from '../components/ui/dialog';
 import { HwSetup } from '../components/hw';
 import { IconBack, IconChevronRight, IconImport, IconPlus, IconUsbKey, IconWarn } from '../components/icons';
 import { DEMO_PASSWORD_HINT } from './demoHint';
+import { idx } from '../components/motion';
 
+/**
+ * Vault dial: a cold instrument. Hairline rings, a graduated bezel whose ticks light up in a
+ * sweep, the bezel drifting very slowly, and the ice-blue index settling at three o'clock like
+ * a combination being set. Static under prefers-reduced-motion.
+ */
 export function VaultDial({ footer }: { footer?: ReactNode }) {
-  const ticks = useMemo(() => Array.from({ length: 72 }, (_, i) => ({ a: i * 5, major: i % 6 === 0 })), []);
+  const ticks = useMemo(() => Array.from({ length: 120 }, (_, i) => ({ a: i * 3, major: i % 10 === 0, mid: i % 5 === 0 })), []);
+  const labels = useMemo(() => Array.from({ length: 12 }, (_, i) => i * 30), []);
   return (
     <section aria-hidden="true" className="relative w-[46%] max-w-[700px] min-w-[420px] shrink-0 overflow-hidden border-r border-rail bg-panel">
+      {/* Two hairlines crossing at the dial centre. */}
+      <div className="absolute top-[47%] right-0 left-0 h-px bg-line/70" />
+      <div className="absolute top-0 bottom-0 left-1/2 w-px bg-line/70" />
       <div className="absolute top-[47%] left-1/2 h-0 w-0">
-        <div className="absolute -top-[330px] -left-[330px] size-[660px] rounded-full border border-[#1A1A20]" />
-        <div className="absolute -top-[250px] -left-[250px] size-[500px] rounded-full border border-[#1F1F26] bg-[#111115]" />
-        {ticks.map((t) => (
-          <div
-            key={t.a}
-            className="absolute top-0 -left-px w-0.5 rounded-[2px]"
-            style={{ height: t.major ? 18 : 9, background: t.major ? '#3A4A60' : '#262A31', transformOrigin: '1px 0', transform: `rotate(${t.a}deg) translateY(-238px)` }}
-          />
-        ))}
-        <div className="absolute -top-[180px] -left-[180px] size-[360px] rounded-full border border-ice-deep bg-[#131318]" />
-        <div className="absolute -top-[120px] -left-[120px] flex size-[240px] items-center justify-center rounded-full border border-control-2 bg-bg shadow-[0_0_0_10px_rgba(124,196,255,.05),0_0_90px_rgba(124,196,255,.16)]">
-          <KyroMark size={132} />
+        <div className="absolute -top-[330px] -left-[330px] size-[660px] rounded-full border border-line/80" />
+        <div className="absolute -top-[262px] -left-[262px] size-[524px] rounded-full border border-line bg-bg-deep" />
+        <div className="dial-drift absolute top-0 left-0 h-0 w-0">
+          {ticks.map((t, i) => (
+            <div
+              key={t.a}
+              className="dial-tick absolute top-0 -left-px w-px"
+              style={{
+                height: t.major ? 16 : t.mid ? 10 : 5,
+                background: t.major ? '#4a6580' : t.mid ? '#2c333c' : '#20252b',
+                transformOrigin: '0.5px 0',
+                transform: `rotate(${t.a}deg) translateY(-248px)`,
+                animationDelay: `${120 + i * 4}ms`,
+              }}
+            />
+          ))}
+          {labels.map((a, i) => (
+            <span
+              key={a}
+              className="dial-tick absolute top-0 left-0 font-mono text-[9px] tracking-[0.08em] text-faint"
+              style={{ transform: `rotate(${a}deg) translateY(-218px) rotate(${-a}deg) translate(-50%, -50%)`, animationDelay: `${160 + i * 40}ms` }}
+            >
+              {String(a).padStart(3, '0')}
+            </span>
+          ))}
         </div>
-        <div className="absolute -top-[14px] left-[196px] size-7 rounded-[8px] bg-ice" />
+        <div className="absolute -top-[180px] -left-[180px] size-[360px] rounded-full border border-dashed border-line-2" />
+        <div className="absolute -top-[118px] -left-[118px] flex size-[236px] items-center justify-center rounded-full border border-line-2 bg-bg">
+          <div className="absolute inset-[10px] rounded-full border border-line" />
+          <KyroMark size={116} />
+        </div>
+        {/* Index: settles at 3 o'clock on the bezel. */}
+        <div className="dial-index absolute top-0 left-0 h-0 w-0">
+          <div className="absolute -top-[9px] left-[239px] h-[18px] w-[18px] rounded-[3px] bg-ice" />
+          <div className="absolute -top-px left-[184px] h-px w-[50px] bg-ice/50" />
+        </div>
       </div>
-      <div className="absolute right-12 bottom-10 left-12 flex justify-between font-mono text-[11px] tracking-[0.06em] text-faint">{footer ?? <><span>ARGON2ID · XCHACHA20-POLY1305</span><span>NON-CUSTODIAL</span></>}</div>
+      <div className="absolute right-12 bottom-10 left-12 flex justify-between font-mono text-[10.5px] tracking-[0.1em] text-faint">{footer ?? <><span>ARGON2ID · XCHACHA20-POLY1305</span><span>NON-CUSTODIAL</span></>}</div>
     </section>
   );
 }
@@ -50,7 +82,7 @@ export function OnboardingFrame({ children, status }: { children: ReactNode; sta
       <TitleBar bordered={false} />
       <div className="flex min-h-0 flex-1">
         <VaultDial />
-        <main className="flex min-w-0 flex-1 flex-col justify-center overflow-y-auto px-[min(80px,6vw)] py-8 scroll-thin">{children}</main>
+        <main className="flex min-w-0 flex-1 flex-col justify-center overflow-y-auto px-[min(88px,6.5vw)] py-8 scroll-thin">{children}</main>
       </div>
       <StatusFrame left={status ?? <span className="text-mute">Aucun coffre sur cet appareil</span>} />
     </div>
@@ -81,24 +113,26 @@ export function Welcome() {
 
   return (
     <OnboardingFrame>
-      <div className="flex max-w-[560px] flex-col gap-9">
-        <div className="flex flex-col gap-[18px]">
-          <span className="inline-flex h-7 items-center gap-2 self-start rounded-full border border-control-2 bg-raised px-3 text-[12px] text-text2">
+      <div className="flex max-w-[560px] flex-col gap-10">
+        <div className="flex flex-col gap-5">
+          <span className="rise eyebrow flex items-center gap-2.5 text-mute" style={idx(0)}>
             <span className="size-1.5 rounded-full bg-up" />
             Open source · GPLv3 · zéro télémétrie
           </span>
-          <h1 className="m-0 text-[60px] leading-[1.02] font-semibold tracking-[-0.045em]">
+          <h1 className="rise m-0 text-[64px] leading-[0.98] font-[560] tracking-[-0.052em]" style={idx(1)}>
             Tes clés restent
             <br />
-            <span className="text-ice">au froid.</span>
+            <span className="text-text2">au froid</span>
+            <span className="text-ice">.</span>
           </h1>
-          <p className="m-0 max-w-[470px] text-[17px] leading-[1.6] text-mute">Kyro chiffre tes clés sur ton appareil et ne les envoie jamais. Chaque transaction t’est expliquée avant que tu signes.</p>
+          <p className="rise m-0 max-w-[440px] text-[16px] leading-[1.6] text-mute" style={idx(2)}>Kyro chiffre tes clés sur ton appareil et ne les envoie jamais. Chaque transaction t’est expliquée avant que tu signes.</p>
         </div>
 
-        <div className="flex max-w-[540px] flex-col gap-2.5">
+        <div className="rise flex max-w-[540px] flex-col border-t border-line" style={idx(3)}>
           <ChoiceCard
+            n={1}
             icon={<IconUsbKey size={20} />}
-            iconClass="bg-ice/12 text-ice"
+            iconClass="text-ice"
             title={
               <>
                 Utiliser un Ledger / Trezor <Badge tone="ice">Recommandé</Badge>
@@ -107,20 +141,22 @@ export function Welcome() {
             subtitle="Tes clés ne quittent jamais l’appareil ; chaque transaction se vérifie sur son écran."
             onClick={() => setMode('hw')}
           />
-          <ChoiceCard icon={<IconPlus size={20} />} title="Créer un nouveau coffre" subtitle="24 mots à écrire sur papier, jamais copiés." onClick={() => setMode('create')} />
-          <ChoiceCard icon={<IconImport size={20} />} title="Importer une phrase de récupération" subtitle="12 ou 24 mots BIP39, depuis un autre wallet." onClick={() => setMode('import')} />
+          <ChoiceCard n={2} icon={<IconPlus size={20} />} title="Créer un nouveau coffre" subtitle="24 mots à écrire sur papier, jamais copiés." onClick={() => setMode('create')} />
+          <ChoiceCard n={3} icon={<IconImport size={20} />} title="Importer une phrase de récupération" subtitle="12 ou 24 mots BIP39, depuis un autre wallet." onClick={() => setMode('import')} />
         </div>
 
-        <div className="flex gap-[22px] text-[13px]">
-          <button type="button" className="text-mute hover:text-text" onClick={() => setInfo('threat')}>
-            Modèle de menace
-          </button>
-          <button type="button" className="text-mute hover:text-text" onClick={() => setInfo('code')}>
-            Code source
-          </button>
-          <button type="button" className="text-mute hover:text-text" onClick={() => setInfo('network')}>
-            Requêtes réseau
-          </button>
+        <div className="rise flex gap-6 text-[13px]" style={idx(4)}>
+          {(
+            [
+              ['threat', 'Modèle de menace'],
+              ['code', 'Code source'],
+              ['network', 'Requêtes réseau'],
+            ] as const
+          ).map(([k, label]) => (
+            <button key={k} type="button" className="text-mute underline decoration-line-3 underline-offset-[5px] transition-colors hover:text-text hover:decoration-ice" onClick={() => setInfo(k)}>
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -138,7 +174,7 @@ export function Welcome() {
       <Dialog open={info === 'network'} onOpenChange={() => setInfo(null)} title="Requêtes réseau" description="La liste complète des serveurs que Kyro peut contacter. Tout le reste est bloqué par le noyau.">
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
           {outgoingHosts(network).map((h) => (
-            <li key={h.host + h.purpose} className="flex flex-col rounded-[10px] bg-raised px-3 py-2">
+            <li key={h.host + h.purpose} className="flex flex-col border-t border-line py-2 first:border-t-0">
               <span className="font-mono text-[12px]">{h.host}</span>
               <span className="text-[12px] text-mute">{h.purpose}</span>
             </li>
@@ -149,20 +185,22 @@ export function Welcome() {
   );
 }
 
-function ChoiceCard({ icon, title, subtitle, onClick, disabled, iconClass }: { icon: ReactNode; title: ReactNode; subtitle: string; onClick?: () => void; disabled?: boolean; iconClass?: string }) {
+/** One row of the welcome list: numbered, ruled, no box. */
+function ChoiceCard({ n, icon, title, subtitle, onClick, disabled, iconClass }: { n: number; icon: ReactNode; title: ReactNode; subtitle: string; onClick?: () => void; disabled?: boolean; iconClass?: string }) {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={cn('flex items-center gap-4 rounded-[18px] border border-line bg-card px-5 py-[18px] text-left', disabled ? 'opacity-70' : 'hover:border-ice-line hover:bg-raised')}
+      className={cn('group relative flex items-center gap-4 border-b border-line py-[18px] pr-2 pl-1 text-left transition-colors duration-150', disabled ? 'opacity-70' : 'hover:bg-raised/40')}
     >
-      <span className={cn('flex size-[46px] shrink-0 items-center justify-center rounded-[14px] bg-control text-text', iconClass)}>{icon}</span>
+      <span className="w-6 shrink-0 font-mono text-[11px] text-faint transition-colors group-hover:text-ice">{String(n).padStart(2, '0')}</span>
+      <span className={cn('flex shrink-0 items-center justify-center text-mute transition-colors group-hover:text-text', iconClass)}>{icon}</span>
       <span className="flex flex-1 flex-col gap-[3px]">
-        <span className="flex items-center gap-2 text-[16px] font-semibold">{title}</span>
+        <span className="flex items-center gap-2.5 text-[16px] font-medium tracking-[-0.01em]">{title}</span>
         <span className="text-[13px] text-mute">{subtitle}</span>
       </span>
-      {!disabled && <IconChevronRight size={18} className="text-faint" />}
+      {!disabled && <IconChevronRight size={18} className="nudge text-faint group-hover:text-text" />}
     </button>
   );
 }
@@ -172,16 +210,21 @@ function StepHeader({ step, total, title, onBack, children }: { step: number; to
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
         {onBack && (
-          <button type="button" aria-label="Retour" onClick={onBack} className="flex size-10 items-center justify-center rounded-full border border-control-2 bg-raised hover:bg-control">
+          <button type="button" aria-label="Retour" onClick={onBack} className="press flex size-9 items-center justify-center rounded-ctl border border-line-2 text-mute hover:border-line-3 hover:bg-raised hover:text-text">
             <IconBack size={16} />
           </button>
         )}
-        <span className="font-mono text-[11px] tracking-[0.06em] text-faint">
+        <span className="eyebrow">
           ÉTAPE {step} / {total}
         </span>
+        <span aria-hidden="true" className="flex gap-1">
+          {Array.from({ length: total }, (_, i) => (
+            <span key={i} className={cn('h-[3px] w-5 rounded-full transition-colors duration-300', i < step ? 'bg-ice' : 'bg-line-2')} />
+          ))}
+        </span>
       </div>
-      <h1 className="m-0 text-[36px] leading-[1.1] font-semibold tracking-[-0.035em]">{title}</h1>
-      {children && <p className="m-0 max-w-[520px] text-[15px] leading-[1.6] text-mute">{children}</p>}
+      <h1 className="rise m-0 text-[38px] leading-[1.06] font-[560] tracking-[-0.042em]">{title}</h1>
+      {children && <p className="rise m-0 max-w-[520px] text-[15px] leading-[1.6] text-mute" style={idx(1)}>{children}</p>}
     </div>
   );
 }
@@ -316,10 +359,10 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
           <StepHeader step={2} total={3} title="Écris ces mots sur papier">
             Dans l’ordre, au stylo. Pas de photo, pas de copie, pas de cloud. Quiconque lit ces {words.length} mots contrôle tes fonds.
           </StepHeader>
-          <ol className={cn('m-0 grid max-w-[640px] list-none gap-2 p-0', words.length === 24 ? 'grid-cols-4' : 'grid-cols-3')}>
+          <ol className={cn('stagger m-0 grid max-w-[640px] list-none gap-2 p-0', words.length === 24 ? 'grid-cols-4' : 'grid-cols-3')}>
             {words.map((w, i) => (
-              <li key={i} className="flex h-11 items-center gap-2.5 rounded-[12px] border border-line bg-card px-3">
-                <span className="w-5 font-mono text-[11px] text-faint">{i + 1}</span>
+              <li key={i} className="flex h-11 items-center gap-2.5 rounded-ctl border border-line bg-card px-3" style={idx(i)}>
+                <span className="w-5 font-mono text-[11px] text-faint">{String(i + 1).padStart(2, '0')}</span>
                 <span className="font-mono text-[15px] font-medium">{w}</span>
               </li>
             ))}
@@ -328,7 +371,7 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
             Il n’y a pas de bouton « Copier » : c’est volontaire. Kyro ne pourra plus jamais te réafficher cette phrase sans ton mot de passe.
           </Notice>
           <label className="flex items-center gap-3 text-[14px]">
-            <input type="checkbox" checked={written} onChange={(e) => setWritten(e.target.checked)} className="size-4 accent-[#2F6BFF]" />
+            <input type="checkbox" checked={written} onChange={(e) => setWritten(e.target.checked)} className="size-4" />
             J’ai écrit les {words.length} mots, dans l’ordre.
           </label>
           <Button variant="primary" size="xl" className="self-start" disabled={!written} onClick={goVerify}>
@@ -381,7 +424,7 @@ function WordInput({ index, value, onChange, autoFocus, onEnter, onPasteMany, co
   const show = focused && suggestions.length > 0 && !(suggestions.length === 1 && suggestions[0] === v);
   return (
     <div className="relative">
-      <label className={cn('flex items-center gap-2.5 rounded-[12px] border bg-card px-3 focus-within:border-ice-line', compact ? 'h-10' : 'h-12', invalid ? 'border-down/60' : 'border-line')}>
+      <label className={cn('flex items-center gap-2.5 rounded-ctl border bg-card px-3 transition-colors focus-within:border-ice-line', compact ? 'h-10' : 'h-12', invalid ? 'border-down/60' : 'border-line hover:border-line-2')}>
         <span className="w-6 font-mono text-[11px] text-faint">{index + 1}</span>
         <span className="sr-only">Mot {index + 1}</span>
         <input
@@ -413,7 +456,7 @@ function WordInput({ index, value, onChange, autoFocus, onEnter, onPasteMany, co
         {known && <span className="text-[11px] text-up">✓</span>}
       </label>
       {show && (
-        <div className="absolute top-full right-0 left-0 z-20 mt-1 flex gap-1 rounded-[10px] border border-line-2 bg-[#15171b] p-1">
+        <div className="pop-in absolute top-full right-0 left-0 z-20 mt-1 flex gap-1 rounded-ctl border border-line-2 bg-[#121418] p-1">
           {suggestions.map((s) => (
             <button key={s} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onChange(s)} className="rounded-[7px] px-2 py-1 font-mono text-[12px] text-text2 hover:bg-control">
               {s}
