@@ -66,7 +66,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 
 export function Label({ children, className, htmlFor }: { children: ReactNode; className?: string; htmlFor?: string }) {
   return (
-    <label htmlFor={htmlFor} className={cn('text-[12px] font-medium text-mute', className)}>
+    <label htmlFor={htmlFor} className={cn('eyebrow', className)}>
       {children}
     </label>
   );
@@ -135,7 +135,7 @@ export function Segmented<T extends string | number>({ options, value, onChange,
             className={cn('relative rounded-[5px] whitespace-nowrap transition-colors duration-150', size === 'sm' ? 'h-7 px-2.5 text-[12px]' : 'h-8 px-3 text-[12px]', active ? 'font-medium text-text' : 'font-medium text-mute hover:text-text2', o.disabled && 'opacity-40')}
           >
             {active && <motion.span layoutId={`seg-${id}`} aria-hidden="true" className="absolute inset-0 rounded-[5px] border border-line-3 bg-control-2" transition={{ type: 'spring', stiffness: 520, damping: 40, mass: 0.7 }} />}
-            <span className="relative">{o.label}</span>
+            <span className="relative z-10">{o.label}</span>
           </button>
         );
       })}

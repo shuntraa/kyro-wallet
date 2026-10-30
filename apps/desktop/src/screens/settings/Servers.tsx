@@ -104,7 +104,7 @@ function Card({ title, badge, children }: { title: string; badge?: ReactNode; ch
   return (
     <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[15px] font-semibold">{title}</span>
+        <span className="text-[15px] font-medium tracking-[-0.01em]">{title}</span>
         {badge}
       </div>
       {children}
@@ -115,7 +115,7 @@ function Card({ title, badge, children }: { title: string; badge?: ReactNode; ch
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
   return (
     <label className="flex min-w-0 flex-col gap-1.5">
-      <span className="text-[12px] font-medium text-mute">{label}</span>
+      <span className="eyebrow">{label}</span>
       {children}
       {hint && <span className="text-[12px] leading-[1.45] text-faint">{hint}</span>}
     </label>
@@ -671,7 +671,7 @@ function CbfForm({ d, set, network, tor }: { d: BtcDraft; set: (p: Partial<BtcDr
         />
       </Field>
       <div className="flex flex-col gap-2">
-        <span className="text-[12px] font-medium text-mute">Point de départ (date de naissance du coffre)</span>
+        <span className="eyebrow">Point de départ (date de naissance du coffre)</span>
         <Segmented
           label="Point de départ des filtres"
           value={d.birthMode}
@@ -811,7 +811,7 @@ function CoreForm({ d, set, savedIsCore, passwordLost, tor }: { d: BtcDraft; set
           <span className="text-[12px] text-mute">Nœud distant : {tor ? 'joint via Tor.' : 'joint directement (Tor désactivé) : il voit ton adresse IP.'}</span>
         ))}
       <div className="flex flex-col gap-2">
-        <span className="text-[12px] font-medium text-mute">Authentification</span>
+        <span className="eyebrow">Authentification</span>
         <Segmented
           label="Authentification Bitcoin Core"
           value={d.authKind}

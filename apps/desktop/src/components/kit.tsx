@@ -149,7 +149,7 @@ export function PasswordField({
   const [show, setShow] = useState(false);
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor={id} className="text-[12px] font-medium text-mute">
+      <label htmlFor={id} className="eyebrow">
         {label}
       </label>
       <div className={cn('flex h-11 items-center rounded-ctl border bg-bg pr-1.5 pl-3.5 transition-colors focus-within:border-ice-line', invalid ? 'border-down/60' : 'border-line-2 hover:border-line-3')}>

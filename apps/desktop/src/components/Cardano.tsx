@@ -83,7 +83,7 @@ export function CardanoSendFields({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="ada-what" className="text-[12px] font-medium text-mute">
+        <label htmlFor="ada-what" className="eyebrow">
           Quoi envoyer
         </label>
         <select id="ada-what" value={tokenSel} onChange={(e) => onTokenSel(e.target.value)} className="h-11 rounded-ctl border border-line-2 bg-raised px-3 text-[14px] text-text">
@@ -97,7 +97,7 @@ export function CardanoSendFields({
         </select>
       </div>
       {selected && (
-        <div className="flex flex-col gap-1.5 rounded-box border border-line-2 bg-raised px-4 py-3">
+        <div className="flex flex-col gap-1.5 rounded-box border border-line-2 bg-bg px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             <label htmlFor="ada-qty" className="text-[13px] font-semibold text-text">
               Quantité de {cardanoTokenLabel(selected)} <TokenBadge verified={selected.verified} />

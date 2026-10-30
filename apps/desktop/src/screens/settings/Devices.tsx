@@ -38,7 +38,7 @@ export function Devices() {
     <>
       <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
         <div className="flex items-center justify-between">
-          <span className="text-[15px] font-semibold">Appareils</span>
+          <span className="text-[15px] font-medium tracking-[-0.01em]">Appareils</span>
           <Badge tone="ice">Ledger · Trezor</Badge>
         </div>
         <p className="m-0 text-[13px] leading-[1.55] text-text2">
@@ -140,7 +140,7 @@ function ThpPairings() {
   return (
     <section className="flex flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-[18px]">
       <div className="flex items-center justify-between">
-        <span className="text-[15px] font-semibold">Appareils Trezor appairés</span>
+        <span className="text-[15px] font-medium tracking-[-0.01em]">Appareils Trezor appairés</span>
         <Badge>Trezor Safe 7 · canal chiffré</Badge>
       </div>
       <p className="m-0 text-[13px] leading-[1.55] text-text2">

@@ -51,7 +51,7 @@ export function Portfolio() {
               </button>
               {network === 'testnet' && <span className="text-[11px] text-faint">· prix mainnet, valeur indicative</span>}
             </div>
-            <div className="figure text-[clamp(56px,5.4vw,76px)] leading-[0.92]">
+            <div className="figure text-[clamp(56px,5.4vw,76px)] leading-[0.92] tracking-[-0.05em]">
               {pf.balancesLoaded && pf.markets ? <BigFiat value={pf.total} currency={cur} hidden={hideBalances} tick className="fade-in inline-block" /> : <Skeleton className="h-[64px] w-[340px]" />}
             </div>
             <div className="flex h-6 items-center gap-2.5 text-[13px]">

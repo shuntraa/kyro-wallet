@@ -14,9 +14,9 @@
   --color-raised: #13161a;
   --color-control: #191c21;
   --color-control-2: #20242a;
-  --color-line: #1a1d22;
-  --color-line-2: #252930;
-  --color-line-3: #2f343c;
+  --color-line: #1e2228;
+  --color-line-2: #292e35;
+  --color-line-3: #353b44;
   --color-rail: #15181c;
   --color-text: #eef1f4;
   --color-text2: #c3c9d1;
@@ -161,7 +161,7 @@ input[type='radio'] {
   /* Big figures: tabular, tight, light weight so the digits carry the hierarchy. */
   .figure {
     font-weight: 480;
-    letter-spacing: -0.05em;
+    letter-spacing: -0.025em;
     font-variant-numeric: tabular-nums;
     font-feature-settings: 'tnum' 1, 'cv11' 1;
   }
@@ -216,7 +216,7 @@ input[type='radio'] {
   }
 }
 .skeleton {
-  background: linear-gradient(90deg, #15181c 0%, #15181c 35%, #1d2126 50%, #15181c 65%, #15181c 100%);
+  background: linear-gradient(90deg, #191c21 0%, #191c21 35%, #252a31 50%, #191c21 65%, #191c21 100%);
   background-size: 300% 100%;
   border-radius: 4px;
   animation: kyro-shimmer 1.6s linear infinite;
@@ -232,7 +232,7 @@ input[type='radio'] {
   }
 }
 .fade-in {
-  animation: kyro-fade 260ms var(--ease-out-quint) both;
+  animation: kyro-fade 260ms var(--ease-out-quint) backwards;
 }
 
 /* Staggered entrance for list rows: set --i on each row (index). */
@@ -247,11 +247,11 @@ input[type='radio'] {
   }
 }
 .stagger > * {
-  animation: kyro-rise 320ms var(--ease-out-quint) both;
+  animation: kyro-rise 320ms var(--ease-out-quint) backwards;
   animation-delay: calc(min(var(--i, 0), 14) * 22ms);
 }
 .rise {
-  animation: kyro-rise 320ms var(--ease-out-quint) both;
+  animation: kyro-rise 320ms var(--ease-out-quint) backwards;
   animation-delay: calc(var(--i, 0) * 40ms);
 }
 
@@ -265,7 +265,7 @@ input[type='radio'] {
   }
 }
 .chart-reveal {
-  animation: kyro-reveal 520ms var(--ease-out-quint) both;
+  animation: kyro-reveal 520ms var(--ease-out-quint) backwards;
 }
 
 /* Radix overlays: dialog, dropdown. Radix waits for the closing animation. */
@@ -323,7 +323,7 @@ input[type='radio'] {
   animation: kyro-pop-out 110ms ease-in;
 }
 .pop-in {
-  animation: kyro-pop-in 180ms var(--ease-out-quint) both;
+  animation: kyro-pop-in 180ms var(--ease-out-quint) backwards;
 }
 
 /* Press feedback on every button-like control. */
@@ -357,7 +357,7 @@ input[type='radio'] {
   }
 }
 .dial-tick {
-  animation: kyro-tick 420ms ease-out both;
+  animation: kyro-tick 420ms ease-out backwards;
 }
 @keyframes kyro-drift {
   to {
@@ -377,7 +377,7 @@ input[type='radio'] {
   }
 }
 .dial-index {
-  animation: kyro-index 760ms var(--ease-spring) 260ms both;
+  animation: kyro-index 760ms var(--ease-spring) 260ms backwards;
 }
 @keyframes kyro-breathe {
   0%,
@@ -420,7 +420,7 @@ input[type='radio'] {
   }
   .skeleton {
     animation: none !important;
-    background: #171a1e;
+    background: #1c1f24;
   }
   .dial-drift,
   .breathe {

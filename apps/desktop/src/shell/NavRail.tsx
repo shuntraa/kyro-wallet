@@ -37,8 +37,8 @@ function RailItem({ active, label, icon, onClick }: { active: boolean; label: st
           <span className="absolute top-1/2 -left-[7px] h-5 w-[2px] -translate-y-1/2 rounded-full bg-ice" />
         </motion.span>
       )}
-      <span className={cn('relative transition-transform duration-200 ease-[cubic-bezier(.22,1,.36,1)] group-hover:-translate-y-px', active && 'text-ice')}>{icon}</span>
-      <span className={cn('relative text-[10px] tracking-[0.01em]', active ? 'font-medium' : 'font-normal')}>{label}</span>
+      <span className={cn('relative z-10 transition-transform duration-200 ease-[cubic-bezier(.22,1,.36,1)] group-hover:-translate-y-px', active && 'text-ice')}>{icon}</span>
+      <span className={cn('relative z-10 text-[10px] tracking-[0.01em]', active ? 'font-medium' : 'font-normal')}>{label}</span>
     </button>
   );
 }

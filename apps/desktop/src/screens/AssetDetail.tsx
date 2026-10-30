@@ -129,7 +129,7 @@ export function AssetDetail({ id }: { id: string }) {
               <span className="eyebrow">
                 Cours {symbol} / {cur}
               </span>
-              <span className="figure text-[56px] leading-none">{price ? <BigFiat value={price.price} currency={cur} tick className="fade-in inline-block" /> : <Skeleton className="h-12 w-56" />}</span>
+              <span className="figure text-[56px] leading-none tracking-[-0.045em]">{price ? <BigFiat value={price.price} currency={cur} tick className="fade-in inline-block" /> : <Skeleton className="h-12 w-56" />}</span>
               {changeAbs !== null && change !== null && (
                 <span>
                   <TrendPill change={change}>
