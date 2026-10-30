@@ -23,6 +23,7 @@ import { Menu } from '../components/ui/menu';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
 import { IconCheck, IconChevronDown, IconDown, IconWarn } from '../components/icons';
+import { idx } from '../components/motion';
 
 type Slip = 10 | 50 | 100 | 'custom';
 type Phase = 'idle' | 'approving' | 'waiting' | 'simulating' | 'swapping' | 'done';
@@ -244,10 +245,10 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       .map((t) => ({ value: t.id, label: t.symbol, hint: `${t.name} · ${fmtCrypto(pf.balances.get(t.id) ?? 0n, t.decimals)}`, icon: <CoinIcon glyph={t.glyph} color={t.color} size={24} /> }));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">
-      <header className="flex items-center justify-between gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
+      <header className="flex items-center justify-between gap-4 border-b border-line pb-4">
         <div className="flex items-center gap-4">
-          <h1 className="m-0 text-[28px] font-semibold tracking-[-0.03em]">Swap</h1>
+          <h1 className="screen-title">Swap</h1>
           <Menu
             value={chainKey}
             onSelect={(k) => {
@@ -257,14 +258,14 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             }}
             items={chains.map((c) => ({ value: c.key, label: c.label }))}
             trigger={
-              <button type="button" className="flex h-9 items-center gap-2 rounded-full border border-line-2 bg-card px-3.5 text-[13px] text-text2 hover:text-text">
+              <button type="button" className="press flex h-9 items-center gap-2 rounded-ctl border border-line-2 px-3.5 text-[13px] text-text2 hover:border-line-3 hover:bg-raised hover:text-text">
                 {chain.name} <IconChevronDown size={13} />
               </button>
             }
           />
         </div>
         <div className="flex items-center gap-2.5">
-          <span className="text-[13px] text-mute">Slippage max.</span>
+          <span className="eyebrow">Slippage max.</span>
           <Segmented<Slip>
             label="Slippage"
             value={slip}
@@ -277,7 +278,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             ]}
           />
           {slip === 'custom' && (
-            <label className="flex h-9 items-center gap-1 rounded-ctl border border-line-2 bg-bg px-2.5">
+            <label className="pop-in flex h-9 items-center gap-1 rounded-ctl border border-line-2 bg-bg px-2.5 focus-within:border-ice-line">
               <span className="sr-only">Slippage personnalisé</span>
               <input value={slipCustom} inputMode="decimal" onChange={(e) => setSlipCustom(sanitizeDecimalInput(e.target.value, 2))} className="w-10 bg-transparent text-right text-[13px]" />
               <span className="text-[12px] text-mute">%</span>
@@ -288,7 +289,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       {slip === 'custom' && !slipValid && <span className="-mt-2 text-right text-[12px] text-down">Slippage entre 0,01 % et 50 %.</span>}
       {slip === 'custom' && slipValid && slippageBps > 300 && <span className="-mt-2 text-right text-[12px] text-warn">Slippage élevé : tu peux recevoir nettement moins que prévu.</span>}
 
-      <div className="flex min-h-0 flex-1 gap-4">
+      <div className="flex min-h-0 flex-1 gap-5">
         <section className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-panel border border-line bg-card p-[22px] scroll-thin">
           <div className="relative flex flex-col gap-2">
             <TokenPanel
@@ -308,7 +309,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                   inputMode="decimal"
                   placeholder="0"
                   onChange={(e) => setAmountStr(sanitizeDecimalInput(e.target.value, sell.decimals))}
-                  className={cn('w-full min-w-0 bg-transparent text-[40px] font-semibold tracking-[-0.03em]', over && 'text-down')}
+                  className={cn('figure w-full min-w-0 bg-transparent text-[42px] tracking-[-0.035em]', over && 'text-down')}
                 />
               }
               sub={sellAmount && sellPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(sellAmount, sell.decimals) * sellPrice, cur)}` : over ? 'Solde insuffisant' : ' '}
@@ -322,14 +323,14 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                 setBuyId(sell.id);
                 setAmountStr('');
               }}
-              className="absolute top-1/2 left-1/2 z-10 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-ctl border-4 border-card bg-control-2 text-text hover:bg-control"
+              className="group absolute top-1/2 left-1/2 z-10 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-ctl border border-line-3 bg-card text-text shadow-[0_0_0_4px_var(--color-card)] transition-colors hover:border-ice-line hover:bg-raised active:scale-95"
             >
               <IconDown size={15} />
             </button>
             <TokenPanel
               label="Tu reçois (estimé)"
               right={<>Solde {fmtCrypto(pf.balances.get(buy.id) ?? 0n, buy.decimals)}</>}
-              amount={<span className={cn('block truncate text-[40px] font-semibold tracking-[-0.03em]', !buyAmount && 'text-faint')}>{buyAmount ? fmtCrypto(buyAmount, buy.decimals, undefined, 6) : quotes.loading ? '…' : '0'}</span>}
+              amount={<span key={buyAmount ? String(buyAmount) : 'none'} className={cn('figure fade-in block truncate text-[42px]', !buyAmount && 'text-faint')}>{buyAmount ? fmtCrypto(buyAmount, buy.decimals, undefined, 6) : quotes.loading ? '…' : '0'}</span>}
               sub={buyAmount && buyPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(buyAmount, buy.decimals) * buyPrice, cur)}${chosen?.priceImpact !== null && chosen?.priceImpact !== undefined ? ` · impact ${fmtPct(chosen.priceImpact * 100, { sign: false })}` : ''}` : ' '}
               token={<TokenButton asset={buy} items={tokenItems(sell.id)} onSelect={setBuyId} />}
             />
@@ -339,7 +340,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             <div className="flex items-center gap-3 px-1">
               <CoinIcon glyph={sell.glyph} color={sell.color} size={22} />
               <span className="h-0 flex-1 border-t border-dashed border-line-3" />
-              <span className="rounded-full bg-ice-deep px-3 py-1 text-[12px] font-semibold text-ice-text">
+              <span className="rounded-[4px] border border-ice/25 px-2.5 py-1 font-mono text-[11px] font-medium text-ice-text2">
                 via {chosen.providerName}
                 {chosen.route ? ` · ${chosen.route}` : ''}
               </span>
@@ -349,9 +350,9 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
           )}
 
           {chosen && needsAllowanceCheck && (
-            <div className="flex flex-col gap-2.5 rounded-box border border-line bg-raised px-4 py-3.5">
+            <div className="fade-in flex flex-col gap-2.5 rounded-box border border-line border-l-2 border-l-ice/60 bg-bg px-4 py-3.5">
               <div className="flex items-center justify-between">
-                <span className="text-[14px] font-semibold">Autorisation {sell.symbol}</span>
+                <span className="text-[14px] font-medium">Autorisation {sell.symbol}</span>
                 <span className="text-[12px] text-mute">{needsApproval ? 'Étape 1 sur 2' : allowance.loading ? 'Vérification…' : 'Déjà autorisée'}</span>
               </div>
               <div className="flex items-center justify-between text-[13px]">
@@ -406,17 +407,17 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             <div className="min-w-0 flex-1">
               <PasswordField id="swap-pw" value={password} onChange={setPassword} onEnter={() => canSwap && void execute()} />
             </div>
-            <Button variant="primary" size="xl" className="h-[46px] w-[300px] text-[15px]" disabled={!canSwap} onClick={() => void execute()}>
+            <Button variant="primary" size="xl" className="h-[46px] w-[300px]" disabled={!canSwap} onClick={() => void execute()}>
               {busy && <Spinner />} {ctaLabel}
             </Button>
           </div>
         </section>
 
-        <div className="flex w-[400px] shrink-0 flex-col gap-4">
+        <div className="rise flex w-[400px] shrink-0 flex-col gap-4">
           <section className="flex flex-col gap-2.5 rounded-panel border border-line bg-card p-[18px]">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[15px] font-semibold">Devis comparés</span>
-              <span className="text-[12px] text-mute">{quotes.loading ? 'actualisation…' : quotes.updatedAt ? `actualisé ${fmtAgo(quotes.updatedAt, now)}` : ''}</span>
+              <span className="text-[15px] font-medium tracking-[-0.01em]">Devis comparés</span>
+              <span className="font-mono text-[10.5px] text-faint">{quotes.loading ? 'actualisation…' : quotes.updatedAt ? `actualisé ${fmtAgo(quotes.updatedAt, now)}` : ''}</span>
             </div>
             {!params && <p className="m-0 px-1 py-4 text-[13px] text-mute">Saisis un montant pour comparer les devis.</p>}
             {params && quotes.loading && !quotes.data && [0, 1, 2].map((i) => <div key={i} className="skeleton h-[62px] rounded-box" />)}
@@ -428,13 +429,14 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                   key={q.provider}
                   type="button"
                   onClick={() => setSelected(q.provider)}
-                  className={cn('flex flex-col gap-1 rounded-box px-4 py-3 text-left', active ? 'border-[1.5px] border-ice bg-ice/8' : 'border border-line bg-raised hover:border-line-3')}
+                  style={idx(i)}
+                  className={cn('press rise flex flex-col gap-1 rounded-box border px-4 py-3 text-left', active ? 'border-ice bg-ice/[.07] shadow-[inset_0_0_0_0.5px_var(--color-ice)]' : 'border-line bg-bg hover:border-line-3 hover:bg-raised/50')}
                 >
                   <span className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 text-[14px] font-semibold">
+                    <span className="flex items-center gap-2 text-[14px] font-medium">
                       {q.providerName} {i === 0 && <Badge tone="up">Meilleur net</Badge>}
                     </span>
-                    <span className="text-[15px] font-semibold">{fmtCrypto(q.buyAmount, buy.decimals, buy.symbol, 6)}</span>
+                    <span className="text-[15px] font-medium tracking-[-0.01em]">{fmtCrypto(q.buyAmount, buy.decimals, buy.symbol, 6)}</span>
                   </span>
                   <span className={cn('text-[12px]', active ? 'text-ice-text2' : 'text-mute')}>
                     Réseau {q.gasFeeFiat !== null ? fmtFiat(q.gasFeeFiat, cur) : '—'} · Provider {q.providerFeeFiat !== null ? fmtFiat(q.providerFeeFiat, cur) : '—'}
@@ -460,15 +462,15 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             <div className="flex flex-col text-[13px]">
               <div className="flex h-9 items-center justify-between border-b border-line">
                 <span className="text-mute">Taux</span>
-                <span className="font-semibold">{execRate ? `1 ${buy.symbol} = ${fmtNumber(execRate, execRate >= 100 ? 2 : 6)} ${sell.symbol}` : '—'}</span>
+                <span className="font-medium">{execRate ? `1 ${buy.symbol} = ${fmtNumber(execRate, execRate >= 100 ? 2 : 6)} ${sell.symbol}` : '—'}</span>
               </div>
               <div className="flex h-9 items-center justify-between border-b border-line">
                 <span className="text-mute">Contrat autorisé</span>
-                <span className="font-mono text-[12px] font-semibold">{chosen?.allowanceTarget ? <>{shortAddress(chosen.allowanceTarget)} <span className="text-up">✓</span></> : chosen ? 'aucun (actif natif)' : '—'}</span>
+                <span className="font-mono text-[12px] font-medium">{chosen?.allowanceTarget ? <>{shortAddress(chosen.allowanceTarget)} <span className="text-up">✓</span></> : chosen ? 'aucun (actif natif)' : '—'}</span>
               </div>
               <div className="flex h-9 items-center justify-between">
                 <span className="text-mute">Minimum reçu</span>
-                <span className="font-semibold">{chosen ? fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6) : '—'}</span>
+                <span className="font-medium">{chosen ? fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6) : '—'}</span>
               </div>
             </div>
             {chosen && sellAmount && (
@@ -527,9 +529,9 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
 function TokenPanel({ label, right, amount, sub, token }: { label: string; right: React.ReactNode; amount: React.ReactNode; sub: string; token: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1 rounded-box border border-line bg-raised px-[22px] py-3.5">
+    <div className="flex flex-col gap-1 rounded-box border border-line bg-bg px-[22px] py-3.5 transition-colors duration-150 focus-within:border-line-3">
       <div className="flex justify-between text-[13px]">
-        <span className="text-mute">{label}</span>
+        <span className="eyebrow">{label}</span>
         <span className="text-text2">{right}</span>
       </div>
       <div className="flex items-center gap-3">
@@ -549,7 +551,7 @@ function TokenButton({ asset, items, onSelect }: { asset: AssetDef; items: Array
       onSelect={onSelect}
       items={items}
       trigger={
-        <button type="button" className="flex h-11 shrink-0 items-center gap-2 rounded-full border border-line-2 bg-card pr-3 pl-1.5 text-[15px] font-semibold hover:border-line-3">
+        <button type="button" className="press flex h-11 shrink-0 items-center gap-2 rounded-ctl border border-line-2 bg-card pr-3 pl-1.5 text-[15px] font-medium tracking-[-0.01em] hover:border-line-3 hover:bg-raised">
           <CoinIcon glyph={asset.glyph} color={asset.color} size={30} />
           {asset.symbol}
           <IconChevronDown size={13} className="text-mute" />
@@ -561,9 +563,9 @@ function TokenButton({ asset, items, onSelect }: { asset: AssetDef; items: Array
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-box border border-line bg-raised px-4 py-3">
+    <div className="flex flex-col gap-1 border-t border-line pt-2.5">
       <span className="text-[12px] text-mute">{label}</span>
-      <span className={cn('text-[17px] font-semibold', tone)}>{value}</span>
+      <span className={cn('figure text-[18px] tracking-[-0.03em]', tone)}>{value}</span>
     </div>
   );
 }

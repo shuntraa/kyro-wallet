@@ -396,28 +396,28 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
       <header className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <IconButton label="Retour au portefeuille" onClick={back} className="size-10 border-control-2">
+          <IconButton label="Retour au portefeuille" onClick={back} className="size-9">
             <IconBack size={16} />
           </IconButton>
-          <h1 className="m-0 text-[28px] font-semibold tracking-[-0.03em]">Envoyer</h1>
+          <h1 className="screen-title">Envoyer</h1>
         </div>
-        <ol aria-label="Étapes" className="m-0 flex list-none items-center gap-2 p-0 text-[13px]">
+        <ol aria-label="Étapes" className="m-0 flex list-none items-center gap-2.5 p-0 text-[13px]">
           <Step n={1} done={step1} current={!step1} label="Destinataire" />
-          <li aria-hidden="true" className="h-px w-[18px] bg-line-3" />
+          <li aria-hidden="true" className={cn('h-px w-6 transition-colors duration-300', step1 ? 'bg-ice/60' : 'bg-line-3')} />
           <Step n={2} done={step2} current={step1 && !step2} label="Montant" />
-          <li aria-hidden="true" className="h-px w-[18px] bg-line-3" />
+          <li aria-hidden="true" className={cn('h-px w-6 transition-colors duration-300', step2 ? 'bg-ice/60' : 'bg-line-3')} />
           <Step n={3} done={false} current={step2} label="Vérifier et signer" />
         </ol>
       </header>
 
-      <div className="flex min-h-0 flex-1 gap-4">
-        <form onSubmit={(e) => e.preventDefault()} className="flex min-w-0 flex-1 flex-col gap-5 overflow-y-auto rounded-panel border border-line bg-card px-[26px] py-6 scroll-thin">
+      <div className="flex min-h-0 flex-1 gap-5">
+        <form onSubmit={(e) => e.preventDefault()} className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto rounded-panel border border-line bg-card px-[26px] py-6 scroll-thin">
           {/* From */}
           <div className="flex flex-col gap-2">
-            <span className="text-[12px] font-medium text-mute">Depuis</span>
+            <span className="eyebrow">Depuis</span>
             <Menu
               value={asset.id}
               onSelect={(id) => {
@@ -441,10 +441,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 icon: <CoinIcon glyph={a.glyph} color={a.color} size={26} />,
               }))}
               trigger={
-                <button type="button" className="flex h-[60px] items-center gap-3 rounded-box border border-line-2 bg-raised px-4 text-left hover:border-ice-line">
+                <button type="button" className="press flex h-[58px] items-center gap-3 rounded-box border border-line-2 bg-bg px-4 text-left hover:border-line-3 hover:bg-raised/50">
                   <CoinIcon glyph={asset.glyph} color={asset.color} />
                   <span className="flex flex-1 flex-col">
-                    <span className="text-[14px] font-semibold">
+                    <span className="text-[14px] font-medium">
                       {asset.name} · {activeHw ? activeHw.label : 'Compte principal'}
                     </span>
                     <span className="text-[12px] text-mute">
@@ -461,10 +461,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
           {/* To */}
           <div className="flex flex-col gap-2">
-            <label htmlFor="dest" className="text-[12px] font-medium text-mute">
+            <label htmlFor="dest" className="eyebrow">
               À
             </label>
-            <div className={cn('overflow-hidden rounded-box border bg-raised', guard.tampered && settings.clipboardGuard ? 'border-down/70' : addrValid ? 'border-ice-line' : 'border-line-2')}>
+            <div className={cn('overflow-hidden rounded-box border bg-bg transition-colors duration-200', guard.tampered && settings.clipboardGuard ? 'border-down/70' : addrValid ? 'border-ice-line' : 'border-line-2')}>
               <div className={cn('flex h-12 items-center gap-2.5 pr-2 pl-4', addrValid && 'border-b border-control-2')}>
                 <input
                   id="dest"
@@ -481,8 +481,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   }}
                   className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-text2"
                 />
-                {guard.source === 'paste' && <span className="inline-flex h-7 items-center rounded-[8px] bg-control-2 px-2.5 text-[12px] text-text2">Collé</span>}
-                {guard.source === 'typed' && <span className="inline-flex h-7 items-center rounded-[8px] bg-control-2 px-2.5 text-[12px] text-text2">Saisi</span>}
+                {guard.source === 'paste' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Collé</span>}
+                {guard.source === 'typed' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Saisi</span>}
                 <Menu
                   align="end"
                   label="Carnet d’adresses"
@@ -494,18 +494,18 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                     .filter((c) => c.family === asset.family)
                     .map((c) => ({ value: c.address, label: c.name, hint: shortAddress(c.address) }))}
                   trigger={
-                    <button type="button" className="h-7 rounded-[8px] px-2.5 text-[12px] font-medium text-ice hover:bg-control">
+                    <button type="button" className="press h-7 rounded-[5px] px-2.5 text-[12px] font-medium text-ice hover:bg-control">
                       Carnet
                     </button>
                   }
                 />
               </div>
               {addrValid && (
-                <div className="flex flex-col gap-3 p-4">
+                <div className="fade-in flex flex-col gap-3 p-4">
                   <div className="flex items-center gap-2.5">
                     <span className="flex size-8 items-center justify-center rounded-full bg-ice-deep text-[13px] font-semibold text-ice-text">{(contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
                     <span className="flex flex-col">
-                      <span className="text-[14px] font-semibold">{contact ? contact.name : isOwn ? 'Ton propre compte' : 'Adresse inconnue'}</span>
+                      <span className="text-[14px] font-medium">{contact ? contact.name : isOwn ? 'Ton propre compte' : 'Adresse inconnue'}</span>
                       <span className="text-[12px] text-mute">{contact ? `Carnet d’adresses · ${contact.sends ?? 0} envoi${(contact.sends ?? 0) > 1 ? 's' : ''}` : isOwn ? 'Cette adresse appartient à ce coffre' : 'Première fois : compare chaque bloc avec ton destinataire'}</span>
                     </span>
                   </div>
@@ -547,12 +547,12 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {/* Amount */}
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
-              <label htmlFor="amount" className="text-[12px] font-medium text-mute">
+              <label htmlFor="amount" className="eyebrow">
                 Montant
               </label>
               <span className="text-[12px] text-mute">{after !== null && after >= 0n && !hideBalances ? `Solde après envoi : ${fmtCrypto(after, decimals, asset.symbol)}` : ''}</span>
             </div>
-            <div className={cn('flex h-[72px] items-center gap-3 rounded-box border bg-raised pr-2.5 pl-[18px] focus-within:border-ice-line', overBalance ? 'border-down/60' : 'border-line-2')}>
+            <div className={cn('flex h-[72px] items-center gap-3 rounded-box border bg-bg pr-2.5 pl-[18px] transition-colors duration-150 focus-within:border-ice-line', overBalance ? 'border-down/60' : 'border-line-2 hover:border-line-3')}>
               <input
                 id="amount"
                 type="text"
@@ -563,9 +563,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   setMax(false);
                   setAmountStr(sanitizeDecimalInput(e.target.value, fiatMode ? 2 : decimals));
                 }}
-                className="w-[200px] bg-transparent text-[34px] font-semibold tracking-[-0.02em]"
+                className="figure w-[200px] bg-transparent text-[36px] tracking-[-0.035em]"
               />
-              <span className="text-[16px] font-semibold text-mute">{fiatMode ? cur : asset.symbol}</span>
+              <span className="font-mono text-[14px] font-medium text-mute">{fiatMode ? cur : asset.symbol}</span>
               <span className="flex-1 text-[14px] text-faint">
                 {fiatMode ? (amountBase !== null ? `≈ ${fmtCrypto(amountBase, decimals, asset.symbol)}` : '') : amountFiat !== null ? `≈ ${fmtFiat(amountFiat, cur)}` : ''}
               </span>
@@ -578,11 +578,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   setAmountStr('');
                   setMax(false);
                 }}
-                className="flex size-10 items-center justify-center rounded-ctl bg-control-2 text-text2 hover:text-text disabled:opacity-40"
+                className="press flex size-10 items-center justify-center rounded-ctl border border-line-2 text-text2 hover:border-line-3 hover:bg-raised hover:text-text disabled:opacity-40"
               >
                 <IconUpDown size={16} />
               </button>
-              <button type="button" onClick={() => setMax(true)} className={cn('h-10 rounded-ctl px-3.5 text-[12px] font-semibold', max ? 'bg-ice/16 text-ice-text' : 'bg-control-2 text-text hover:bg-control')}>
+              <button type="button" onClick={() => setMax(true)} className={cn('press h-10 rounded-ctl border px-3.5 font-mono text-[11px] font-medium tracking-[0.06em]', max ? 'border-ice/40 bg-ice/[.1] text-ice-text' : 'border-line-2 text-text hover:border-line-3 hover:bg-raised')}>
                 MAX
               </button>
             </div>
@@ -613,22 +613,22 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {/* Fees */}
           {isAda ? (
             <div className="flex flex-col gap-2">
-              <span className="text-[12px] font-medium text-mute">Frais réseau</span>
-              <div className="rounded-box border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
+              <span className="eyebrow">Frais réseau</span>
+              <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
                 <strong className="font-semibold text-text">Rien à choisir sur Cardano.</strong> Les frais dépendent de la taille de la transaction (44 lovelace par octet + 0,155381 ADA) : d’habitude ≈ 0,17 ADA, un peu plus avec un token ou un message. Le coffre les calcule ; le montant exact est dans la vérification.
               </div>
             </div>
           ) : isXrp ? (
             <div className="flex flex-col gap-2">
-              <span className="text-[12px] font-medium text-mute">Frais réseau</span>
-              <div className="rounded-box border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
+              <span className="eyebrow">Frais réseau</span>
+              <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
                 <strong className="font-semibold text-text">Rien à choisir sur le XRP Ledger.</strong> Le coffre fixe les frais du registre ouvert (d’habitude 10 à 12 drops, soit 0,000012 XRP) ; ils sont détruits, personne ne les reçoit.
               </div>
             </div>
           ) : isTron ? (
             <div className="flex flex-col gap-2">
-              <span className="text-[12px] font-medium text-mute">Frais réseau</span>
-              <div className="flex flex-col gap-1 rounded-box border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
+              <span className="eyebrow">Frais réseau</span>
+              <div className="flex flex-col gap-1 rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
                 <span>
                   <strong className="font-semibold text-text">Rien à choisir sur TRON.</strong> Chaque transaction consomme de la bande passante (octets) et, pour un token TRC-20, de l’énergie. Ce que ta bande passante gratuite ou tes TRX gelés ne couvrent pas est payé en TRX brûlés.
                 </span>
@@ -638,7 +638,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           ) : (
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
-              <span className="text-[12px] font-medium text-mute">Frais réseau</span>
+              <span className="eyebrow">Frais réseau</span>
               <span className="text-[12px] text-faint">{fees.data ? `Réseau actuel : ${fees.data.hint.replace('.', ',')}` : fees.error ? (feesTorBlocked ? 'En attente de Tor…' : serverMissing(fees.error) ? <span className="text-warn">Aucun serveur configuré</span> : serverDown(fees.error) ? <span className="text-warn">Ton serveur ne répond pas</span> : <span className="text-down">Frais indisponibles</span>) : 'Estimation…'}</span>
             </div>
             <div role="radiogroup" aria-label="Frais réseau" className="flex gap-2">
@@ -661,7 +661,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               </span>
             )}
             {choice === 'custom' && (
-              <div className="flex items-end gap-3 rounded-box border border-ice-line bg-raised px-4 py-3.5">
+              <div className="fade-in flex items-end gap-3 rounded-box border border-ice-line bg-bg px-4 py-3.5">
                 {asset.family === 'evm' && (
                   <>
                     <UnitField label="Frais max. par gas" unit="gwei" value={customEvm.maxFeeGwei} onChange={(v) => setCustomEvm((c) => ({ ...c, maxFeeGwei: v }))} />
@@ -671,7 +671,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 {utxoLike && <UnitField label="Taux" unit={rateUnit} value={customBtc} onChange={setCustomBtc} decimals={asset.family === 'doge' ? 0 : 2} />}
                 {asset.family === 'sol' && <UnitField label="Priority fee" unit="µL/CU" value={customSol} onChange={(v) => setCustomSol(v.replace(/\D/g, ''))} decimals={0} wide />}
                 <span className="flex flex-1 flex-col items-end gap-0.5 pb-0.5">
-                  <span className="text-[18px] font-semibold">{feeFiat !== null && choice === 'custom' && built ? fmtFiat(feeFiat, cur) : '—'}</span>
+                  <span className="text-[18px] font-medium">{feeFiat !== null && choice === 'custom' && built ? fmtFiat(feeFiat, cur) : '—'}</span>
                   <span className="text-[12px] text-mute">{maxFee !== null && nativeAsset && built ? `${fmtCrypto(maxFee, nativeAsset.decimals, nativeAsset.symbol)} max.` : 'Coût recalculé en direct'}</span>
                 </span>
               </div>
@@ -681,36 +681,37 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           </div>
           )}
 
-          <div className="mt-auto flex items-center gap-3 rounded-box border border-control-2 bg-raised px-4 py-3 text-[13px] text-text2">
+          <div className="mt-auto flex items-center gap-3 border-t border-line pt-4 text-[13px] text-text2">
             <IconLock size={18} className="shrink-0 text-mute" />
             <span>{settings.clipboardGuard ? 'Le presse-papier est surveillé : si l’adresse change après ton collage, l’envoi est bloqué.' : 'Alerte presse-papier désactivée dans les réglages.'}</span>
           </div>
         </form>
 
         {/* Verification */}
-        <aside aria-label="Vérification" className="flex w-[400px] shrink-0 flex-col gap-4 overflow-y-auto rounded-panel border border-line bg-card px-6 py-[22px] scroll-thin">
+        {/* Verification: a receipt. Ice top rule, dashed tear lines between parts. */}
+        <aside aria-label="Vérification" className="relative flex w-[400px] shrink-0 flex-col gap-4 overflow-y-auto rounded-panel border border-line bg-panel px-6 py-[22px] scroll-thin before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-ice/70">
           <div className="flex items-center justify-between">
-            <span className="text-[15px] font-semibold">Vérification</span>
-            <span className="inline-flex h-[26px] items-center gap-1.5 rounded-full border border-control-2 bg-raised px-2.5 text-[11px] font-medium text-text2">
+            <span className="text-[15px] font-medium tracking-[-0.01em]">Vérification</span>
+            <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[10.5px] font-medium tracking-[0.02em] text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
               {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'ada' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
             </span>
           </div>
-          <div className="flex flex-col items-center gap-1 pt-2 pb-1">
-            <span className="text-[38px] font-semibold tracking-[-0.03em]">{sendAmount !== null && sendAmount > 0n ? fmtCrypto(sendAmount, decimals, asset.symbol) : `0 ${asset.symbol}`}</span>
+          <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
+            <span key={asset.id} className="figure fade-in text-[40px] leading-[1.05]">{sendAmount !== null && sendAmount > 0n ? fmtCrypto(sendAmount, decimals, asset.symbol) : `0 ${asset.symbol}`}</span>
             <span className="text-[13px] text-mute">{amountFiat !== null ? fmtFiat(amountFiat, cur) : '—'}</span>
           </div>
-          <div className="flex items-center gap-2.5 rounded-box bg-raised px-3.5 py-3">
+          <div className="flex items-center gap-2.5 rounded-box border border-line bg-bg px-3.5 py-3">
             <CoinIcon glyph={asset.glyph} color={asset.color} size={30} />
             <span className="flex flex-col text-[12px]">
-              <span className="font-semibold">Toi</span>
+              <span className="font-medium">Toi</span>
               <span className="font-mono text-[11px] text-mute">{shortAddress(adapter.getAddress())}</span>
             </span>
             <span aria-hidden="true" className="relative h-0 flex-1 border-t-[1.5px] border-dashed border-ice-line">
               <span className="absolute -top-[7px] -right-0.5 text-[10px] text-ice">▶</span>
             </span>
             <span className="flex flex-col items-end text-[12px]">
-              <span className="font-semibold">{addrValid ? (contact?.name ?? 'Destinataire') : '—'}</span>
+              <span className="font-medium">{addrValid ? (contact?.name ?? 'Destinataire') : '—'}</span>
               <span className="font-mono text-[11px] text-mute">{addrValid ? shortAddress(toTrim) : ''}</span>
             </span>
             <span className="flex size-[30px] items-center justify-center rounded-full bg-ice-deep text-[12px] font-semibold text-ice-text">{(contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
@@ -732,8 +733,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             />
             <Row k="Données" v={dataLabel(built, asset.family)} />
             <div className="flex h-[42px] items-center justify-between">
-              <dt className="font-semibold">Total</dt>
-              <dd className="m-0 text-[17px] font-semibold">{amountFiat !== null ? fmtFiat(amountFiat + (feeFiat ?? 0) + rentFiat, cur) : '—'}</dd>
+              <dt className="font-medium">Total</dt>
+              <dd className="figure m-0 text-[19px] tracking-[-0.03em]">{amountFiat !== null ? fmtFiat(amountFiat + (feeFiat ?? 0) + rentFiat, cur) : '—'}</dd>
             </div>
           </dl>
           {built?.sol && built.unsigned.family === 'sol' && nativeAsset && (
@@ -811,7 +812,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
           <div className="flex-1" />
           {activeHw ? (
-            <div className="flex items-center gap-2 rounded-ctl border border-line bg-raised px-3.5 py-2.5 text-[12px] text-mute">
+            <div className="flex items-center gap-2 rounded-ctl border border-line bg-bg px-3.5 py-2.5 text-[12px] text-mute">
               <DeviceBadge device={activeHw.device} model={activeHw.model} />
               <span>Pas de mot de passe : fenêtre système de Kyro, puis confirmation sur l’écran de l’appareil.</span>
             </div>
@@ -873,8 +874,10 @@ function dataLabel(b: Built | null, family?: string): string {
 
 function Step({ n, done, current, label }: { n: number; done: boolean; current: boolean; label: string }) {
   return (
-    <li aria-current={current ? 'step' : undefined} className={cn('flex h-8 items-center gap-2 rounded-full pr-3 pl-1.5', current ? 'bg-ice/14 font-semibold text-ice-text' : 'bg-raised text-text2')}>
-      <span className={cn('flex size-5 items-center justify-center rounded-full text-[11px]', done ? 'bg-up/14 text-up' : current ? 'bg-primary font-bold text-white' : 'bg-control-2 text-mute')}>{done ? '✓' : n}</span>
+    <li aria-current={current ? 'step' : undefined} className={cn('flex h-8 items-center gap-2 transition-colors duration-200', current ? 'font-medium text-text' : done ? 'text-text2' : 'text-faint')}>
+      <span className={cn('flex size-5 items-center justify-center rounded-[4px] border font-mono text-[10.5px] transition-colors duration-200', done ? 'border-up/40 text-up' : current ? 'border-ice bg-ice text-on-primary' : 'border-line-3 text-faint')}>
+        <span key={done ? 'done' : 'n'} className="pop-in">{done ? '✓' : n}</span>
+      </span>
       {label}
     </li>
   );
@@ -888,9 +891,9 @@ function FeeOption({ active, onClick, title, sub, ice, disabled }: { active: boo
       aria-checked={active}
       disabled={disabled}
       onClick={onClick}
-      className={cn('flex h-14 flex-1 basis-0 flex-col items-start justify-center gap-0.5 rounded-box px-3.5 text-left disabled:opacity-50', active ? 'border-[1.5px] border-ice bg-ice/8' : 'border border-line-2 bg-raised hover:border-line-3')}
+      className={cn('press flex h-14 flex-1 basis-0 flex-col items-start justify-center gap-0.5 rounded-box border px-3.5 text-left disabled:opacity-50', active ? 'border-ice bg-ice/[.07] shadow-[inset_0_0_0_0.5px_var(--color-ice)]' : 'border-line-2 bg-bg hover:border-line-3 hover:bg-raised/50')}
     >
-      <span className="truncate text-[13px] font-semibold">{title}</span>
+      <span className="truncate text-[13px] font-medium">{title}</span>
       <span className={cn('text-[11px]', active && ice ? 'text-ice-text2' : 'text-mute')}>{sub}</span>
     </button>
   );
@@ -901,7 +904,7 @@ function UnitField({ label, unit, value, onChange, decimals = 9, wide }: { label
     <label className="flex flex-col gap-1.5 text-[12px] text-mute">
       {label}
       <span className={cn('flex h-[42px] items-center gap-2 rounded-ctl border border-line-3 bg-bg px-3 focus-within:border-ice-line', wide ? 'w-[210px]' : 'w-[170px]')}>
-        <input type="text" inputMode="decimal" value={value} onChange={(e) => onChange(decimals === 0 ? e.target.value : sanitizeDecimalInput(e.target.value, decimals))} className="w-full min-w-0 bg-transparent text-[16px] font-semibold text-text" />
+        <input type="text" inputMode="decimal" value={value} onChange={(e) => onChange(decimals === 0 ? e.target.value : sanitizeDecimalInput(e.target.value, decimals))} className="w-full min-w-0 bg-transparent text-[16px] font-medium text-text" />
         <span className="shrink-0 text-[13px] text-mute">{unit}</span>
       </span>
     </label>
@@ -922,15 +925,15 @@ function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory
   const [saved, setSaved] = useState(false);
   return (
     <div className="flex flex-1 items-center justify-center p-8">
-      <div className="flex w-[520px] flex-col items-center gap-5 rounded-panel border border-line bg-card px-8 py-9 text-center">
-        <span className="flex size-14 items-center justify-center rounded-full bg-up/12 text-up">
+      <div className="rise flex w-[520px] flex-col items-center gap-5 rounded-panel border border-line bg-card px-8 py-9 text-center">
+        <span className="dialog flex size-14 items-center justify-center rounded-full border border-up/40 text-up" data-state="open">
           <IconCheck size={26} />
         </span>
-        <h1 className="m-0 text-[26px] font-semibold tracking-[-0.03em]">Transaction diffusée</h1>
+        <h1 className="m-0 text-[28px] font-[560] tracking-[-0.035em]">Transaction diffusée</h1>
         <p className="m-0 text-[14px] leading-[1.6] text-mute">
           {what ?? fmtCrypto(amount, asset.decimals, asset.symbol)} vers {shortAddress(to)}. Elle apparaîtra comme confirmée dans l’historique dès son inclusion dans un bloc.
         </p>
-        <div className="flex w-full items-center justify-between gap-2 rounded-ctl bg-raised py-2 pr-2 pl-3.5">
+        <div className="flex w-full items-center justify-between gap-2 rounded-ctl border border-line bg-bg py-2 pr-2 pl-3.5">
           <span className="truncate font-mono text-[12px] text-text2">{id}</span>
           <CopyButton text={id} />
         </div>

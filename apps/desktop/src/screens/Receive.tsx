@@ -3,6 +3,7 @@
 // requested amount (BIP21-style / EIP-681 / Solana Pay URI; none for TRON, XRP, Cardano), network warning.
 
 import { useMemo, useState } from 'react';
+import { motion } from 'motion/react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
 import { btcChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain } from '@kyro/chains';
 import { useAsync } from '../lib/useAsync';
@@ -183,15 +184,15 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                   : 'Pour SOL et les tokens SPL.';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
       <header className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <IconButton label="Retour au portefeuille" onClick={back} className="size-10 border-control-2">
+          <IconButton label="Retour au portefeuille" onClick={back} className="size-9">
             <IconBack size={16} />
           </IconButton>
-          <h1 className="m-0 text-[28px] font-semibold tracking-[-0.03em]">Recevoir</h1>
+          <h1 className="screen-title">Recevoir</h1>
         </div>
-        <div role="group" aria-label="Réseau" className="flex gap-1 rounded-full border border-line bg-card p-1">
+        <div role="group" aria-label="Réseau" className="flex min-w-0 gap-0.5 overflow-x-auto rounded-[8px] border border-line bg-bg p-[3px] scroll-thin">
           {(
             [
               ['btc', 'Bitcoin', '₿', '#F7931A'],
@@ -215,10 +216,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                 setAmount('');
                 setAskAmount(false);
               }}
-              className={cn('flex h-10 items-center gap-2 rounded-full pr-4 pl-1.5 text-[13px] disabled:opacity-35', family === f ? 'bg-control-2 font-semibold' : 'text-text2 hover:bg-raised')}
+              className={cn('relative flex h-8 shrink-0 items-center gap-2 rounded-[5px] pr-3 pl-1.5 text-[12.5px] transition-colors duration-150 disabled:opacity-35', family === f ? 'font-medium text-text' : 'text-mute hover:text-text2')}
             >
-              <CoinIcon glyph={glyph} color={color} size={26} />
-              {label}
+              {family === f && <motion.span layoutId="receive-family" aria-hidden="true" className="absolute inset-0 rounded-[5px] border border-line-3 bg-control-2" transition={{ type: 'spring', stiffness: 520, damping: 40 }} />}
+              <CoinIcon glyph={glyph} color={color} size={20} className="relative z-10" />
+              <span className="relative z-10">{label}</span>
             </button>
           ))}
         </div>
@@ -227,19 +229,17 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
         <span className="-mt-2 self-end text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet. Ils restent disponibles dans le coffre Kyro (Compte principal).</span>
       )}
 
-      <section className="relative flex min-h-0 flex-1 items-center justify-center gap-14 overflow-hidden rounded-panel border border-line bg-card-hero p-8">
-        <div aria-hidden="true" className="absolute top-1/2 left-[34%] size-[760px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#16191E]" />
-        <div aria-hidden="true" className="absolute top-1/2 left-[34%] size-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#16191E]" />
+      <section className="relative flex min-h-0 flex-1 items-center-safe justify-center gap-14 overflow-y-auto rounded-panel border border-line bg-card p-8 scroll-thin">
         <div className="relative flex flex-col items-center gap-3">
-          <div className={cn(blocked && 'pointer-events-none opacity-20 blur-md')} aria-hidden={blocked || undefined}>
+          <div key={uri} className={cn('pop-in transition-[opacity,filter] duration-300', blocked && 'pointer-events-none opacity-20 blur-md')} aria-hidden={blocked || undefined}>
             <QrCode value={uri} size={300} />
           </div>
-          <span className="font-mono text-[11px] tracking-[0.06em] text-faint">{askAmount && amountBase ? 'QR AVEC MONTANT' : 'QR DE L’ADRESSE'}</span>
+          <span className="eyebrow">{askAmount && amountBase ? 'QR AVEC MONTANT' : 'QR DE L’ADRESSE'}</span>
         </div>
 
-        <div className="relative flex w-[460px] flex-col gap-4">
+        <div key={family} className="rise relative flex w-[460px] flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-mute">Ton adresse {{ btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', xrp: 'XRP', ada: 'Cardano' }[family]}</span>
+            <span className="eyebrow">Ton adresse {{ btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', xrp: 'XRP', ada: 'Cardano' }[family]}</span>
             <span className="text-[15px] leading-[1.45] text-text2">{desc}</span>
           </div>
           {(family === 'ltc' || family === 'doge') && (
@@ -334,7 +334,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                   <span className="text-[12px] text-faint">pas de lien de paiement standard sur {family === 'xrp' ? 'XRP Ledger' : family === 'ada' ? 'Cardano' : 'TRON'}</span>
                 ) : askAmount ? (
                   <span className="flex items-center gap-2">
-                    <input autoFocus value={amount} inputMode="decimal" placeholder="0" onChange={(e) => setAmount(sanitizeDecimalInput(e.target.value, decimals))} className="h-8 w-[120px] rounded-[8px] border border-line-2 bg-bg px-2 text-right text-[13px]" />
+                    <input autoFocus value={amount} inputMode="decimal" placeholder="0" onChange={(e) => setAmount(sanitizeDecimalInput(e.target.value, decimals))} className="h-8 w-[120px] rounded-ctl border border-line-2 bg-bg px-2 text-right text-[13px] focus:border-ice-line" />
                     <span className="text-mute">{symbol}</span>
                     <button type="button" onClick={() => { setAskAmount(false); setAmount(''); }} className="text-[12px] text-mute hover:text-text">
                       Retirer
