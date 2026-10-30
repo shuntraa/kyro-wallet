@@ -32,14 +32,14 @@ Le TypeScript peut donc se tromper ou être compromis sans pouvoir détourner de
 
 ## Phases
 
-| Phase | Contenu | État v0.1 |
-|---|---|---|
-| 0 | Monorepo, coffre, BIP39/32, CI, interface | ✅ |
-| 1 | Bitcoin SegWit + Taproot, Ethereum + ERC-20 (testnet d'abord) | ✅ testnet |
-| 1.5 | Ledger, Trezor | ⏳ interface prévue, transport non branché |
-| 2 | Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche | ✅ registre (même adresse), à tester sur chaque testnet |
-| 3 | Solana + SPL | ✅ SOL ; SPL en lecture |
-| 4 | Litecoin, Dogecoin, Tron, Cardano, XRP… | ⏳ lecture seule (« Bientôt ») |
-| Swap | 0x, 1inch, Jupiter, LI.FI | ✅ devis comparés ; exécution EVM |
+Légende : ✅ fonctionne de bout en bout **et** testé · ⚠️ code écrit, testé seulement contre un backend simulé · ❌ pas fait.
 
-*(Ce tableau est tenu à jour à chaque phase ; voir le README pour l'état exact.)*
+| Phase | Contenu | État réel |
+|---|---|---|
+| 0 | Monorepo, coffre chiffré, BIP39/32, CI, interface | ✅ noyau (47 tests, vecteurs officiels) · ⚠️ interface (mode démo) |
+| 1 | Bitcoin SegWit + Taproot, Ethereum + ERC-20 | ⚠️ signature testée en Rust ; envoi complet jamais exécuté sur un testnet réel |
+| 1.5 | Ledger, Trezor | ❌ |
+| 2 | Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche | ⚠️ registre et même adresse ; non testé sur leurs testnets |
+| 3 | Solana + SPL | ⚠️ SOL (pas de décodage Rust) ; SPL en lecture seule |
+| 4 | Litecoin, Dogecoin, Tron, Cardano, XRP | ❌ lecture seule (« Bientôt ») |
+| Swap | 0x, 1inch, Jupiter, LI.FI | ⚠️ devis et approvals testés contre des réponses simulées |

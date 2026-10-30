@@ -1,0 +1,5 @@
+# Same bytes on every OS (reproducible builds, stable hashes).
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary
