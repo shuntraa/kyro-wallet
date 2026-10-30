@@ -1,9 +1,15 @@
-//! Trezor over WebUSB (libusb via rusb, vendored and statically linked), protocol v1
-//! (`?##` framing), messages from Trezor's official `trezor-client` protobuf bindings.
+//! Trezor over WebUSB (libusb via rusb, vendored and statically linked), messages from
+//! Trezor's official `trezor-client` protobuf bindings, carried by either:
+//! - protocol v1 (`?##` framing, `trezor-client`'s framing code): Trezor One, Model T, Safe 3,
+//!   Safe 5;
+//! - the Trezor Host Protocol ([`super::thp`], encrypted and paired): Trezor Safe 7 and later.
 //!
-//! Supported: Trezor One (firmware ≥ 1.10.4), Model T, Safe 3, Safe 5 (≥ 2.4.3; Solana ≥ 2.6.4,
-//! not on the One). Not supported: Safe 7 (THP channel protocol, not implemented by the Rust
-//! client), bootloader mode, uninitialized devices, Trezor One firmware < 1.7 (HID only).
+//! [`open`] tells them apart the way python-trezorlib does: a THP device answers a v1 message
+//! with `Failure(InvalidProtocol)`.
+//!
+//! Supported: Trezor One (firmware ≥ 1.10.4), Model T, Safe 3, Safe 5, Safe 7 (≥ 2.4.3; Solana
+//! ≥ 2.6.4, not on the One). Not supported: bootloader mode, uninitialized devices, Trezor One
+//! firmware < 1.7 (HID only).
 //!
 //! PIN: on the device for T/Safe (Kyro only shows "enter your PIN on the device"); Trezor One
 //! uses the blind 3×3 matrix (event `hw-prompt: pin-matrix`, then `hw_pin_matrix` with the
@@ -16,7 +22,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use protobuf::Message;
+use protobuf::{Enum, Message};
 use rusb::{DeviceHandle, GlobalContext};
 use trezor_client::protos::{self, MessageType};
 use trezor_client::transport::error::Error as TErr;
@@ -25,6 +31,8 @@ use trezor_client::transport::ProtoMessage;
 use trezor_client::TrezorMessage;
 use wallet_core::{BtcAccount, BtcKind, EvmTxKind, HwBtcSignature, HwDeviceKind, Network};
 
+use super::thp::{self, Packet, PacketIo, PACKET};
+use super::thp_store::ThpEnv;
 use super::{
     btc_account_path, evm_path, lock, path_string, sol_path, version_at_least, BtcSignRequest,
     Chain, ChainState, ChainStatus, Ctl, DeviceStatus, EvmSignRequest, Found, HardwareWallet,
@@ -101,7 +109,7 @@ fn usb_err(e: rusb::Error) -> HwError {
     }
 }
 
-pub fn open(loc: &Locator) -> HwResult<Box<dyn HardwareWallet>> {
+pub fn open(loc: &Locator, ctl: &Ctl, thp_env: &ThpEnv) -> HwResult<Box<dyn HardwareWallet>> {
     let list = rusb::devices().map_err(usb_err)?;
     let dev = list
         .iter()
@@ -110,30 +118,97 @@ pub fn open(loc: &Locator) -> HwResult<Box<dyn HardwareWallet>> {
     let handle = dev.open().map_err(usb_err)?;
     handle.claim_interface(IFACE).map_err(usb_err)?;
     let limit = Arc::new(Mutex::new(Limit::idle()));
+    let link = UsbLink {
+        handle,
+        limit: limit.clone(),
+    };
+    open_link(link, limit, ctl, thp_env)
+}
+
+/// Protocol detection, then either a v1 [`Trezor`] (features already read) or a THP channel
+/// (connected, paired if needed and allowed, session created).
+pub(super) fn open_link<L>(
+    mut link: L,
+    limit: Arc<Mutex<Limit>>,
+    ctl: &Ctl,
+    thp_env: &ThpEnv,
+) -> HwResult<Box<dyn HardwareWallet>>
+where
+    L: Link + PacketIo + Send + 'static,
+{
+    arm(&limit, Instant::now() + Duration::from_secs(5), None);
+    // Stale packets (e.g. an answer to a previous Kyro run) would confuse the probe.
+    for _ in 0..32 {
+        if link.read_packet()?.is_none() {
+            break;
+        }
+    }
+    let mut v1 = ProtocolV1 { link };
+    if let Some(features) = probe_v1(&mut v1, &limit)? {
+        return Ok(Box::new(Trezor {
+            proto: v1,
+            limit,
+            features: Some(features),
+        }));
+    }
+    arm(&limit, ctl.deadline(), Some(ctl.cancel_flag()));
+    let ch = thp::connect(v1.link, &limit, ctl, thp_env)?;
     let mut t = Trezor {
-        proto: ProtocolV1 {
-            link: UsbLink {
-                handle,
-                limit: limit.clone(),
-            },
-        },
+        proto: ThpWire { ch, session: 0 },
         limit,
         features: None,
     };
-    t.initialize()?;
+    t.init_thp_session(ctl)?;
     Ok(Box::new(t))
 }
 
+/// Protocol v1 `Initialize`: `Features` from a v1 device, `None` from a THP device (which
+/// answers `Failure(InvalidProtocol)`, see trezorlib `protocol_v1.probe`).
+fn probe_v1<L: Link>(
+    v1: &mut ProtocolV1<L>,
+    limit: &Mutex<Limit>,
+) -> HwResult<Option<protos::Features>> {
+    v1.write(ProtoMessage::new(
+        MessageType::MessageType_Initialize,
+        encode(&protos::Initialize::new())?,
+    ))
+    .map_err(|e| map_terr(limit, e))?;
+    for _ in 0..8 {
+        let resp = match v1.read() {
+            Ok(r) => r,
+            // Leftover THP packets from an earlier channel: skip them.
+            Err(TErr::DeviceBadMagic) => continue,
+            Err(e) => return Err(map_terr(limit, e)),
+        };
+        if resp.message_type() == MessageType::MessageType_Failure {
+            let f: protos::Failure = decode(resp)?;
+            if f.code() == protos::failure::FailureType::Failure_InvalidProtocol {
+                return Ok(None);
+            }
+            return Err(map_failure(&f));
+        }
+        return decode(resp).map(Some);
+    }
+    Err(HwError::bad("réponse illisible à Initialize"))
+}
+
+fn arm(limit: &Mutex<Limit>, deadline: Instant, cancel: Option<Arc<AtomicBool>>) {
+    let mut l = lock(limit);
+    l.deadline = deadline;
+    l.cancel = cancel;
+    l.stopped = None;
+}
+
 /// Deadline/cancellation shared with the link (the `Link` trait has no context argument).
-struct Limit {
-    deadline: Instant,
-    cancel: Option<Arc<AtomicBool>>,
+pub struct Limit {
+    pub(super) deadline: Instant,
+    pub(super) cancel: Option<Arc<AtomicBool>>,
     /// Why the last read gave up (`Timeout` or `Cancelled`).
     stopped: Option<HwError>,
 }
 
 impl Limit {
-    fn idle() -> Self {
+    pub(super) fn idle() -> Self {
         Limit {
             deadline: Instant::now() + Duration::from_secs(10),
             cancel: None,
@@ -145,6 +220,37 @@ impl Limit {
 pub struct UsbLink {
     handle: DeviceHandle<GlobalContext>,
     limit: Arc<Mutex<Limit>>,
+}
+
+/// USB errors while a channel is open: an unplugged device is `Disconnected`.
+fn usb_io_err(e: rusb::Error) -> HwError {
+    match e {
+        rusb::Error::Busy | rusb::Error::Access => usb_err(e),
+        _ => HwError::Disconnected,
+    }
+}
+
+impl PacketIo for UsbLink {
+    fn write_packet(&mut self, packet: &Packet) -> HwResult<()> {
+        match self
+            .handle
+            .write_interrupt(EP_OUT, packet, Duration::from_secs(2))
+        {
+            Ok(PACKET) => Ok(()),
+            Ok(_) => Err(HwError::Disconnected),
+            Err(e) => Err(usb_io_err(e)),
+        }
+    }
+
+    fn read_packet(&mut self) -> HwResult<Option<Packet>> {
+        let mut buf = [0u8; PACKET];
+        match self.handle.read_interrupt(EP_IN, &mut buf, POLL) {
+            Ok(PACKET) => Ok(Some(buf)),
+            Ok(n) => Err(HwError::bad(format!("paquet USB de {n} octets"))),
+            Err(rusb::Error::Timeout) => Ok(None),
+            Err(e) => Err(usb_io_err(e)),
+        }
+    }
 }
 
 impl Link for UsbLink {
@@ -186,8 +292,72 @@ pub trait TrezorIo {
     fn call(&mut self, ctl: &Ctl, mt: MessageType, payload: Vec<u8>) -> HwResult<ProtoMessage>;
 }
 
-pub struct Trezor<L: Link> {
-    proto: ProtocolV1<L>,
+/// How protobuf messages reach the device: protocol v1 framing or a THP channel.
+pub trait Wire: Send {
+    fn send_msg(&mut self, limit: &Mutex<Limit>, msg: ProtoMessage) -> HwResult<()>;
+    fn recv_msg(&mut self, limit: &Mutex<Limit>) -> HwResult<ProtoMessage>;
+    /// THP only: route the following messages to this session.
+    fn set_session(&mut self, _session: u8) {}
+    fn is_thp(&self) -> bool {
+        false
+    }
+}
+
+fn map_terr(limit: &Mutex<Limit>, e: TErr) -> HwError {
+    match e {
+        TErr::DeviceReadTimeout => lock(limit).stopped.take().unwrap_or(HwError::Timeout),
+        TErr::Usb(rusb::Error::Busy | rusb::Error::Access) => usb_err(rusb::Error::Busy),
+        TErr::Usb(_) | TErr::DeviceDisconnected | TErr::IO(_) => HwError::Disconnected,
+        other => HwError::bad(format!("transport Trezor : {other}")),
+    }
+}
+
+impl<L: Link + Send> Wire for ProtocolV1<L> {
+    fn send_msg(&mut self, limit: &Mutex<Limit>, msg: ProtoMessage) -> HwResult<()> {
+        self.write(msg).map_err(|e| map_terr(limit, e))
+    }
+
+    fn recv_msg(&mut self, limit: &Mutex<Limit>) -> HwResult<ProtoMessage> {
+        self.read().map_err(|e| map_terr(limit, e))
+    }
+}
+
+/// A THP channel in the encrypted transport state, and the session Kyro uses on it.
+pub struct ThpWire<P: PacketIo> {
+    ch: thp::Channel<P>,
+    session: u8,
+}
+
+impl<P: PacketIo> Wire for ThpWire<P> {
+    fn send_msg(&mut self, limit: &Mutex<Limit>, msg: ProtoMessage) -> HwResult<()> {
+        let mt = u16::try_from(msg.message_type().value())
+            .map_err(|_| HwError::bad("type de message hors limites"))?;
+        self.ch.send_app(limit, self.session, mt, msg.payload())
+    }
+
+    fn recv_msg(&mut self, limit: &Mutex<Limit>) -> HwResult<ProtoMessage> {
+        loop {
+            let (session, mt, data) = self.ch.recv_app(limit)?;
+            if session != self.session {
+                continue; // not ours (Kyro only ever opens one session per channel)
+            }
+            let mt = MessageType::from_i32(i32::from(mt))
+                .ok_or_else(|| HwError::bad(format!("type de message inconnu {mt}")))?;
+            return Ok(ProtoMessage::new(mt, data));
+        }
+    }
+
+    fn set_session(&mut self, session: u8) {
+        self.session = session;
+    }
+
+    fn is_thp(&self) -> bool {
+        true
+    }
+}
+
+pub struct Trezor<W: Wire> {
+    proto: W,
     limit: Arc<Mutex<Limit>>,
     features: Option<protos::Features>,
 }
@@ -216,9 +386,9 @@ fn map_failure(f: &protos::Failure) -> HwError {
         F::Failure_PinInvalid | F::Failure_PinExpected => HwError::Locked,
         F::Failure_Busy | F::Failure_InProgress => HwError::Busy("l'appareil est occupé".into()),
         F::Failure_NotInitialized => HwError::unsupported("appareil non initialisé"),
-        F::Failure_InvalidProtocol | F::Failure_ThpUnallocatedSession => {
-            HwError::unsupported("protocole THP (Trezor Safe 7) non pris en charge")
-        }
+        // THP: the device forgot Kyro's session (restart, eviction): reconnect.
+        F::Failure_ThpUnallocatedSession => HwError::Disconnected,
+        F::Failure_InvalidProtocol => HwError::bad("protocole refusé par l'appareil"),
         code => HwError::bad(format!("Trezor : {code:?} « {} »", f.message())),
     }
 }
@@ -235,31 +405,18 @@ pub fn model_name(internal: &str) -> &'static str {
     }
 }
 
-impl<L: Link> Trezor<L> {
-    fn map_terr(&self, e: TErr) -> HwError {
-        match e {
-            TErr::DeviceReadTimeout => lock(&self.limit).stopped.take().unwrap_or(HwError::Timeout),
-            TErr::Usb(rusb::Error::Busy | rusb::Error::Access) => usb_err(rusb::Error::Busy),
-            TErr::Usb(_) | TErr::DeviceDisconnected | TErr::IO(_) => HwError::Disconnected,
-            other => HwError::bad(format!("transport Trezor : {other}")),
-        }
-    }
-
+impl<W: Wire> Trezor<W> {
     fn arm(&self, deadline: Instant, cancel: Option<Arc<AtomicBool>>) {
-        let mut l = lock(&self.limit);
-        l.deadline = deadline;
-        l.cancel = cancel;
-        l.stopped = None;
+        arm(&self.limit, deadline, cancel);
     }
 
     fn write(&mut self, mt: MessageType, payload: Vec<u8>) -> HwResult<()> {
         self.proto
-            .write(ProtoMessage::new(mt, payload))
-            .map_err(|e| self.map_terr(e))
+            .send_msg(&self.limit, ProtoMessage::new(mt, payload))
     }
 
     fn read(&mut self) -> HwResult<ProtoMessage> {
-        self.proto.read().map_err(|e| self.map_terr(e))
+        self.proto.recv_msg(&self.limit)
     }
 
     /// Best effort: tell the device to abandon the current workflow (it answers `Failure`).
@@ -287,15 +444,32 @@ impl<L: Link> Trezor<L> {
         })
     }
 
-    fn initialize(&mut self) -> HwResult<()> {
-        self.arm(Instant::now() + Duration::from_secs(5), None);
-        let mut init = protos::Initialize::new();
-        if let Some(sid) = self.features.as_ref().and_then(|f| f.session_id.clone()) {
-            init.set_session_id(sid);
-        }
-        self.write(MessageType::MessageType_Initialize, encode(&init)?)?;
-        let f: protos::Features = decode(self.read()?)?;
+    /// THP: features on the seedless session 0, then Kyro's session 1 (`ThpCreateNewSession`),
+    /// with the passphrase entered on the device when passphrase protection is on (Kyro never
+    /// carries a passphrase).
+    fn init_thp_session(&mut self, ctl: &Ctl) -> HwResult<()> {
+        self.proto.set_session(0);
+        let f: protos::Features = self.send(ctl, &protos::GetFeatures::new())?;
+        let ready = f.initialized() && !f.bootloader_mode();
+        let passphrase = f.passphrase_protection();
         self.features = Some(f);
+        if !ready {
+            return Ok(()); // `status` reports why nothing can be done
+        }
+        let mut req = protos::ThpCreateNewSession::new();
+        if passphrase {
+            if !self.passphrase_on_device() {
+                return Err(HwError::unsupported(
+                    "passphrase à saisir sur l'ordinateur : Kyro ne fait jamais passer une \
+                     passphrase par l'interface",
+                ));
+            }
+            req.set_on_device(true);
+        } else {
+            req.set_passphrase(String::new());
+        }
+        self.proto.set_session(1);
+        let _: protos::Success = self.send(ctl, &req)?;
         Ok(())
     }
 
@@ -338,13 +512,6 @@ impl<L: Link> Trezor<L> {
         }
         if !f.initialized() {
             return Ok(refuse(st, "appareil non initialisé", None));
-        }
-        if internal == "T3W1" {
-            return Ok(refuse(
-                st,
-                "Trezor Safe 7 : protocole THP pas encore pris en charge par Kyro",
-                None,
-            ));
         }
         let (cap, min) = match chain {
             Chain::Btc => (C::Capability_Bitcoin, if one { "1.10.4" } else { "2.4.3" }),
@@ -398,7 +565,7 @@ fn script_type(kind: BtcKind) -> protos::InputScriptType {
     }
 }
 
-impl<L: Link> TrezorIo for Trezor<L> {
+impl<W: Wire> TrezorIo for Trezor<W> {
     fn call(&mut self, ctl: &Ctl, mt: MessageType, payload: Vec<u8>) -> HwResult<ProtoMessage> {
         use protos::button_request::ButtonRequestType as B;
         ctl.check()?;
@@ -463,7 +630,7 @@ impl<L: Link> TrezorIo for Trezor<L> {
     }
 }
 
-impl<L: Link + Send> HardwareWallet for Trezor<L> {
+impl<W: Wire> HardwareWallet for Trezor<W> {
     fn status(&mut self, ctl: &Ctl, _net: Network) -> HwResult<DeviceStatus> {
         let f: protos::Features = self.send(ctl, &protos::GetFeatures::new())?;
         self.features = Some(f);
@@ -480,6 +647,7 @@ impl<L: Link + Send> HardwareWallet for Trezor<L> {
             app: None,
             firmware: Some(self.firmware()?),
             passphrase: Some(f.passphrase_protection()),
+            protocol: self.proto.is_thp().then_some("thp"),
             chains,
         })
     }
@@ -689,7 +857,7 @@ mod tests {
             .collect()
     }
 
-    fn trezor(replies: Vec<Result<Vec<u8>, TErr>>) -> Trezor<FakeLink> {
+    fn trezor(replies: Vec<Result<Vec<u8>, TErr>>) -> Trezor<ProtocolV1<FakeLink>> {
         let mut f = protos::Features::new();
         f.set_major_version(2);
         f.set_minor_version(8);
@@ -883,16 +1051,15 @@ mod tests {
         let btc = one.chain_status(Chain::Btc).unwrap();
         assert_eq!(btc.state, ChainState::Unsupported);
         assert_eq!(btc.min.as_deref(), Some("1.10.4"));
+        // Safe 7 (THP) is handled like the other T/Safe models once connected.
         let mut safe7 = trezor(vec![]);
         safe7
             .features
             .as_mut()
             .unwrap()
             .set_internal_model("T3W1".into());
-        assert!(matches!(
-            safe7.ensure(Chain::Btc),
-            Err(HwError::Unsupported { .. })
-        ));
+        assert!(safe7.ensure(Chain::Btc).is_ok());
+        assert_eq!(model_name("T3W1"), "Trezor Safe 7");
         assert_eq!(model_name("T3B1"), "Trezor Safe 3");
     }
 }

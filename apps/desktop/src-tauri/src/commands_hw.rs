@@ -120,9 +120,11 @@ pub async fn hw_open(
     id: String,
 ) -> AppResult<DeviceStatus> {
     let net = state.network;
+    // The only command that may pair a Trezor Safe 7 (THP): confirm on the device, then the
+    // user types the 6-digit code (`thp-pairing-code` → `hw_thp_pairing_code`).
     let mut st = state
         .hw
-        .run(&id, T_READ, prompt_fn(&app, &id), move |dev, ctl| {
+        .run_pairing(&id, T_CONFIRM, prompt_fn(&app, &id), move |dev, ctl| {
             dev.status(ctl, net)
         })
         .await?;
@@ -148,6 +150,48 @@ pub fn hw_pin_matrix(state: State<'_, AppState>, id: String, positions: String) 
         return Err(AppError::InvalidInput("positions : chiffres 1 à 9".into()));
     }
     Ok(state.hw.submit_pin(&id, positions)?)
+}
+
+// ---------------------------------------------------------------- THP pairing (Safe 7)
+
+fn check_pairing_code(code: &str) -> AppResult<()> {
+    if code.len() != 6 || !code.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(AppError::InvalidInput(
+            "code d'appairage : les 6 chiffres affichés sur l'appareil".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn parse_thp_key(key: &str) -> AppResult<[u8; 32]> {
+    let bad = || AppError::InvalidInput("clé d'appareil invalide".into());
+    let v = hex::decode(key.trim()).map_err(|_| bad())?;
+    v.try_into().map_err(|_| bad())
+}
+
+/// After the `thp-pairing-code` prompt: the 6 digits the device shows. A wrong code makes the
+/// pending `hw_open` fail with `HW_PAIRING_FAILED` (the device then needs a new attempt).
+#[tauri::command]
+pub fn hw_thp_pairing_code(state: State<'_, AppState>, id: String, code: String) -> AppResult<()> {
+    let code = Zeroizing::new(code);
+    check_pairing_code(&code)?;
+    Ok(state.hw.submit_pairing_code(&id, code)?)
+}
+
+/// Trezor devices paired over THP with this installation (public keys only).
+#[tauri::command]
+pub fn hw_thp_pairings(state: State<'_, AppState>) -> AppResult<Vec<hw::thp_store::PairingInfo>> {
+    Ok(state.hw.thp_pairings()?)
+}
+
+/// Forgets the THP pairing of one device (`key` from `hw_thp_pairings`) or, without `key`,
+/// all of them and Kyro's THP host key. Only on this computer: the device keeps its record of
+/// Kyro until reset or until its own host list is cleared. Returns how many were removed.
+#[tauri::command]
+pub fn hw_thp_forget(state: State<'_, AppState>, key: Option<String>) -> AppResult<usize> {
+    guard(&state)?;
+    let key = key.as_deref().map(parse_thp_key).transpose()?;
+    Ok(state.hw.thp_forget(key.as_ref())?)
 }
 
 // ---------------------------------------------------------------- keys
@@ -850,6 +894,17 @@ mod tests {
                 path: wallet_core::sol_path(0),
             }),
         }
+    }
+
+    #[test]
+    fn thp_inputs_are_validated() {
+        assert!(check_pairing_code("012345").is_ok());
+        for bad in ["", "12345", "1234567", "12a456", "１２３４５６", " 12345"] {
+            assert!(check_pairing_code(bad).is_err(), "{bad}");
+        }
+        assert_eq!(parse_thp_key(&"ab".repeat(32)).unwrap(), [0xab; 32]);
+        assert!(parse_thp_key("abcd").is_err());
+        assert!(parse_thp_key(&"zz".repeat(32)).is_err());
     }
 
     #[test]

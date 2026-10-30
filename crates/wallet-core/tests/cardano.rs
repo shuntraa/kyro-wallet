@@ -180,6 +180,8 @@ fn tz_body(outputs: Vec<CardanoOutput>, ttl: Option<u64>) -> CardanoBody {
         outputs,
         fee: 42,
         ttl,
+        certs: vec![],
+        withdrawals: vec![],
         aux_hash: None,
         validity_start: None,
     }
@@ -477,6 +479,8 @@ fn memo_tagged_sets_and_min_utxo() {
         }],
         fee: 180_000,
         ttl: Some(90_000_000),
+        certs: vec![],
+        withdrawals: vec![],
         aux_hash: Some(cardano_blake2b256(&aux)),
         validity_start: None,
     };

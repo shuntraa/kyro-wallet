@@ -54,6 +54,12 @@ pub enum AppError {
     HwAddressMismatch { device: String, expected: String },
     #[error("Ce n'est pas l'appareil de ce compte (clés différentes).")]
     HwWrongDevice,
+    #[error("Appareil pas encore appairé avec Kyro : connecte-le depuis l'écran des appareils pour l'appairer (code à 6 chiffres affiché sur l'appareil).")]
+    HwPairingRequired,
+    #[error(
+        "Appairage échoué : {0}. Recommence la connexion : l'appareil affichera un nouveau code."
+    )]
+    HwPairingFailed(String),
 }
 
 pub type AppResult<T> = Result<T, AppError>;
@@ -85,6 +91,8 @@ impl AppError {
             AppError::HwBadResponse(_) => "HW_BAD_RESPONSE",
             AppError::HwAddressMismatch { .. } => "HW_ADDRESS_MISMATCH",
             AppError::HwWrongDevice => "HW_WRONG_DEVICE",
+            AppError::HwPairingRequired => "HW_PAIRING_REQUIRED",
+            AppError::HwPairingFailed(_) => "HW_PAIRING_FAILED",
         }
     }
 

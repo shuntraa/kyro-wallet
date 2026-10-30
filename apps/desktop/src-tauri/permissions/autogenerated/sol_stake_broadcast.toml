@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sol-stake-broadcast"
+description = "Enables the sol_stake_broadcast command without any pre-configured scope."
+commands.allow = ["sol_stake_broadcast"]
+
+[[permission]]
+identifier = "deny-sol-stake-broadcast"
+description = "Denies the sol_stake_broadcast command without any pre-configured scope."
+commands.deny = ["sol_stake_broadcast"]

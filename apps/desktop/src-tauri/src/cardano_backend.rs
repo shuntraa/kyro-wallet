@@ -54,7 +54,11 @@ fn snippet(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).chars().take(200).collect()
 }
 
-async fn call(ctx: &CardanoCtx<'_>, path: &str, body: Option<Value>) -> AppResult<Value> {
+pub(crate) async fn call(
+    ctx: &CardanoCtx<'_>,
+    path: &str,
+    body: Option<Value>,
+) -> AppResult<Value> {
     let u = endpoint(ctx, path)?;
     let req = match body {
         None => ServerRequest::get(u, Family::Cardano),
@@ -70,7 +74,7 @@ async fn call(ctx: &CardanoCtx<'_>, path: &str, body: Option<Value>) -> AppResul
     serde_json::from_slice(&bytes).map_err(|_| bad(format!("Koios : JSON invalide sur {path}")))
 }
 
-fn first(v: &Value, what: &str) -> AppResult<Value> {
+pub(crate) fn first(v: &Value, what: &str) -> AppResult<Value> {
     v.as_array()
         .and_then(|a| a.first())
         .cloned()
@@ -78,7 +82,7 @@ fn first(v: &Value, what: &str) -> AppResult<Value> {
 }
 
 /// Koios returns some numbers as strings, others as JSON numbers.
-fn num(v: &Value) -> Option<u64> {
+pub(crate) fn num(v: &Value) -> Option<u64> {
     match v {
         Value::String(s) => s.parse().ok(),
         Value::Number(n) => n.as_u64(),
@@ -463,7 +467,7 @@ pub async fn submit(ctx: &CardanoCtx<'_>, tx_cbor: Vec<u8>, tx_id: &str) -> AppR
 
 // ---------------------------------------------------------------- building
 
-fn to_assets(m: &AssetMap) -> AppResult<CardanoAssets> {
+pub(crate) fn to_assets(m: &AssetMap) -> AppResult<CardanoAssets> {
     let mut by_policy: BTreeMap<[u8; 28], Vec<(Vec<u8>, u64)>> = BTreeMap::new();
     for ((p, n), q) in m {
         if *q == 0 {
@@ -661,6 +665,8 @@ fn finish(
             ],
             fee,
             ttl: Some(ttl),
+            certs: Vec::new(),
+            withdrawals: Vec::new(),
             aux_hash,
             validity_start: None,
         };

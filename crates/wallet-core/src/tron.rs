@@ -44,6 +44,23 @@ const TRANSFER_CONTRACT: u64 = 1;
 const TRIGGER_SMART_CONTRACT: u64 = 31;
 const TRANSFER_URL: &str = "type.googleapis.com/protocol.TransferContract";
 const TRIGGER_URL: &str = "type.googleapis.com/protocol.TriggerSmartContract";
+// Stake 2.0 and voting (java-tron `Tron.proto` ContractType / `*Contract.proto`).
+const VOTE_WITNESS_CONTRACT: u64 = 4;
+const WITHDRAW_BALANCE_CONTRACT: u64 = 13;
+const FREEZE_V2_CONTRACT: u64 = 54;
+const UNFREEZE_V2_CONTRACT: u64 = 55;
+const WITHDRAW_EXPIRE_UNFREEZE_CONTRACT: u64 = 56;
+const DELEGATE_RESOURCE_CONTRACT: u64 = 57;
+const UNDELEGATE_RESOURCE_CONTRACT: u64 = 58;
+const CANCEL_ALL_UNFREEZE_V2_CONTRACT: u64 = 59;
+const VOTE_URL: &str = "type.googleapis.com/protocol.VoteWitnessContract";
+const WITHDRAW_BALANCE_URL: &str = "type.googleapis.com/protocol.WithdrawBalanceContract";
+const FREEZE_V2_URL: &str = "type.googleapis.com/protocol.FreezeBalanceV2Contract";
+const UNFREEZE_V2_URL: &str = "type.googleapis.com/protocol.UnfreezeBalanceV2Contract";
+const WITHDRAW_EXPIRE_URL: &str = "type.googleapis.com/protocol.WithdrawExpireUnfreezeContract";
+const CANCEL_ALL_URL: &str = "type.googleapis.com/protocol.CancelAllUnfreezeV2Contract";
+/// java-tron `MAX_VOTE_NUMBER`: at most 30 votes per `VoteWitnessContract`.
+pub const TRON_MAX_VOTES: usize = 30;
 /// Raw transactions larger than this are refused (a TRC-20 transfer is ~200 bytes).
 const MAX_RAW: usize = 4096;
 
@@ -210,9 +227,70 @@ fn addr21(b: &[u8], what: &str) -> Result<[u8; 21]> {
 // Transaction.raw
 // ---------------------------------------------------------------------------------------------
 
-/// The single contract of a transaction Kyro accepts.
+/// Resource a Stake 2.0 freeze / unfreeze applies to (`ResourceCode`; `TRON_POWER` is refused).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TronResource {
+    /// `BANDWIDTH` (0, the protobuf default: field omitted).
+    Bandwidth,
+    /// `ENERGY` (1).
+    Energy,
+}
+
+impl TronResource {
+    fn code(self) -> u64 {
+        match self {
+            TronResource::Bandwidth => 0,
+            TronResource::Energy => 1,
+        }
+    }
+}
+
+/// The single contract of a transaction Kyro accepts. Transfers and contract calls go through
+/// [`tron_decode_raw`]; the Stake 2.0 / voting variants only through [`tron_decode_stake_raw`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TronContract {
+    /// `FreezeBalanceV2Contract` (54): stakes `amount` sun for `resource`.
+    FreezeV2 {
+        /// Staker.
+        owner: [u8; 21],
+        /// Sun.
+        amount: i64,
+        /// Bandwidth or energy.
+        resource: TronResource,
+    },
+    /// `UnfreezeBalanceV2Contract` (55): starts unstaking `amount` sun of `resource`.
+    UnfreezeV2 {
+        /// Staker.
+        owner: [u8; 21],
+        /// Sun.
+        amount: i64,
+        /// Bandwidth or energy.
+        resource: TronResource,
+    },
+    /// `WithdrawExpireUnfreezeContract` (56): claims the unstaked TRX whose wait has ended.
+    WithdrawExpireUnfreeze {
+        /// Staker.
+        owner: [u8; 21],
+    },
+    /// `CancelAllUnfreezeV2Contract` (59): cancels every pending unstake (re-stakes it; what is
+    /// already claimable is withdrawn).
+    CancelAllUnfreezeV2 {
+        /// Staker.
+        owner: [u8; 21],
+    },
+    /// `VoteWitnessContract` (4): replaces all our votes by these `(SR, TRON Power)` pairs.
+    VoteWitness {
+        /// Voter.
+        owner: [u8; 21],
+        /// `(super representative, votes)`, 1 to 30 entries.
+        votes: Vec<([u8; 21], i64)>,
+    },
+    /// `WithdrawBalanceContract` (13): claims the voting rewards.
+    WithdrawBalance {
+        /// Voter.
+        owner: [u8; 21],
+    },
     /// `TransferContract` (type 1): TRX.
     Transfer {
         /// Sender.
@@ -278,6 +356,55 @@ impl TronRaw {
                 put_uint(&mut p, 3, *call_value as u64);
                 put_bytes(&mut p, 4, data);
                 (TRIGGER_SMART_CONTRACT, TRIGGER_URL, p)
+            }
+            TronContract::FreezeV2 {
+                owner,
+                amount,
+                resource,
+            }
+            | TronContract::UnfreezeV2 {
+                owner,
+                amount,
+                resource,
+            } => {
+                let mut p = Vec::new();
+                put_bytes(&mut p, 1, owner);
+                put_uint(&mut p, 2, *amount as u64);
+                put_uint(&mut p, 3, resource.code());
+                if matches!(self.contract, TronContract::FreezeV2 { .. }) {
+                    (FREEZE_V2_CONTRACT, FREEZE_V2_URL, p)
+                } else {
+                    (UNFREEZE_V2_CONTRACT, UNFREEZE_V2_URL, p)
+                }
+            }
+            TronContract::WithdrawExpireUnfreeze { owner } => {
+                let mut p = Vec::new();
+                put_bytes(&mut p, 1, owner);
+                (WITHDRAW_EXPIRE_UNFREEZE_CONTRACT, WITHDRAW_EXPIRE_URL, p)
+            }
+            TronContract::CancelAllUnfreezeV2 { owner } => {
+                let mut p = Vec::new();
+                put_bytes(&mut p, 1, owner);
+                (CANCEL_ALL_UNFREEZE_V2_CONTRACT, CANCEL_ALL_URL, p)
+            }
+            TronContract::WithdrawBalance { owner } => {
+                let mut p = Vec::new();
+                put_bytes(&mut p, 1, owner);
+                (WITHDRAW_BALANCE_CONTRACT, WITHDRAW_BALANCE_URL, p)
+            }
+            TronContract::VoteWitness { owner, votes } => {
+                let mut p = Vec::new();
+                put_bytes(&mut p, 1, owner);
+                for (sr, count) in votes {
+                    let mut v = Vec::new();
+                    put_bytes(&mut v, 1, sr);
+                    put_uint(&mut v, 2, *count as u64);
+                    // A vote is always written, even if empty (repeated message field).
+                    put_key(&mut p, 2, 2);
+                    put_varint(&mut p, v.len() as u64);
+                    p.extend_from_slice(&v);
+                }
+                (VOTE_WITNESS_CONTRACT, VOTE_URL, p)
             }
         };
         let mut any = Vec::new();
@@ -368,9 +495,73 @@ impl TronRaw {
     /// The account that signs.
     pub fn owner(&self) -> &[u8; 21] {
         match &self.contract {
-            TronContract::Transfer { owner, .. } | TronContract::Trigger { owner, .. } => owner,
+            TronContract::Transfer { owner, .. }
+            | TronContract::Trigger { owner, .. }
+            | TronContract::FreezeV2 { owner, .. }
+            | TronContract::UnfreezeV2 { owner, .. }
+            | TronContract::WithdrawExpireUnfreeze { owner }
+            | TronContract::CancelAllUnfreezeV2 { owner }
+            | TronContract::VoteWitness { owner, .. }
+            | TronContract::WithdrawBalance { owner } => owner,
         }
     }
+
+    /// A Stake 2.0 / voting contract (handled by [`tron_decode_stake_raw`] only).
+    pub fn is_staking(&self) -> bool {
+        !matches!(
+            self.contract,
+            TronContract::Transfer { .. } | TronContract::Trigger { .. }
+        )
+    }
+}
+
+/// `owner_address`-only contracts (56, 59, 13).
+fn owner_only(value: &[u8], name: &str) -> Result<[u8; 21]> {
+    let mut owner = None;
+    for (f, v) in fields(value)? {
+        match f {
+            1 => owner = Some(addr21(as_bytes(&v, "owner_address")?, "owner_address")?),
+            other => return Err(bad(format!("champ {name} inconnu {other}"))),
+        }
+    }
+    owner.ok_or_else(|| bad("owner_address manquant"))
+}
+
+/// Freeze / unfreeze V2: `owner_address = 1`, `frozen_balance` / `unfreeze_balance = 2`,
+/// `resource = 3` (BANDWIDTH = 0 omitted, ENERGY = 1; TRON_POWER = 2 refused).
+fn freeze_fields(value: &[u8], name: &str) -> Result<([u8; 21], i64, TronResource)> {
+    let (mut owner, mut amount, mut resource) = (None, 0, TronResource::Bandwidth);
+    for (f, v) in fields(value)? {
+        match f {
+            1 => owner = Some(addr21(as_bytes(&v, "owner_address")?, "owner_address")?),
+            2 => amount = as_i64(&v, "montant")?,
+            3 => {
+                resource = match v {
+                    Value::Varint(0) => TronResource::Bandwidth,
+                    Value::Varint(1) => TronResource::Energy,
+                    Value::Varint(2) => {
+                        return Err(bad(
+                            "ressource TRON_POWER : refusée (seules BANDWIDTH et ENERGY)",
+                        ))
+                    }
+                    _ => return Err(bad("ressource inconnue")),
+                }
+            }
+            other => return Err(bad(format!("champ {name} inconnu {other}"))),
+        }
+    }
+    Ok((
+        owner.ok_or_else(|| bad("owner_address manquant"))?,
+        amount,
+        resource,
+    ))
+}
+
+fn check_url(url: &[u8], want: &str, name: &str) -> Result<()> {
+    if url != want.as_bytes() {
+        return Err(bad(format!("type_url ne correspond pas à {name}")));
+    }
+    Ok(())
 }
 
 fn decode_contract(b: &[u8]) -> Result<TronContract> {
@@ -453,8 +644,73 @@ fn decode_contract(b: &[u8]) -> Result<TronContract> {
                 data,
             })
         }
+        FREEZE_V2_CONTRACT => {
+            check_url(url, FREEZE_V2_URL, "FreezeBalanceV2Contract")?;
+            let (owner, amount, resource) = freeze_fields(value, "FreezeBalanceV2Contract")?;
+            Ok(TronContract::FreezeV2 {
+                owner,
+                amount,
+                resource,
+            })
+        }
+        UNFREEZE_V2_CONTRACT => {
+            check_url(url, UNFREEZE_V2_URL, "UnfreezeBalanceV2Contract")?;
+            let (owner, amount, resource) = freeze_fields(value, "UnfreezeBalanceV2Contract")?;
+            Ok(TronContract::UnfreezeV2 {
+                owner,
+                amount,
+                resource,
+            })
+        }
+        WITHDRAW_EXPIRE_UNFREEZE_CONTRACT => {
+            check_url(url, WITHDRAW_EXPIRE_URL, "WithdrawExpireUnfreezeContract")?;
+            Ok(TronContract::WithdrawExpireUnfreeze {
+                owner: owner_only(value, "WithdrawExpireUnfreezeContract")?,
+            })
+        }
+        CANCEL_ALL_UNFREEZE_V2_CONTRACT => {
+            check_url(url, CANCEL_ALL_URL, "CancelAllUnfreezeV2Contract")?;
+            Ok(TronContract::CancelAllUnfreezeV2 {
+                owner: owner_only(value, "CancelAllUnfreezeV2Contract")?,
+            })
+        }
+        WITHDRAW_BALANCE_CONTRACT => {
+            check_url(url, WITHDRAW_BALANCE_URL, "WithdrawBalanceContract")?;
+            Ok(TronContract::WithdrawBalance {
+                owner: owner_only(value, "WithdrawBalanceContract")?,
+            })
+        }
+        VOTE_WITNESS_CONTRACT => {
+            check_url(url, VOTE_URL, "VoteWitnessContract")?;
+            let (mut owner, mut votes) = (None, Vec::new());
+            for (f, v) in fields(value)? {
+                match f {
+                    1 => owner = Some(addr21(as_bytes(&v, "owner_address")?, "owner_address")?),
+                    2 => {
+                        let (mut sr, mut count) = (None, 0);
+                        for (g, w) in fields(as_bytes(&v, "vote")?)? {
+                            match g {
+                                1 => sr = Some(addr21(as_bytes(&w, "vote_address")?, "vote_address")?),
+                                2 => count = as_i64(&w, "vote_count")?,
+                                other => return Err(bad(format!("champ Vote inconnu {other}"))),
+                            }
+                        }
+                        votes.push((sr.ok_or_else(|| bad("vote_address manquant"))?, count));
+                    }
+                    3 => return Err(bad("champ « support » (obsolète) : refusé")),
+                    other => return Err(bad(format!("champ VoteWitnessContract inconnu {other}"))),
+                }
+            }
+            Ok(TronContract::VoteWitness {
+                owner: owner.ok_or_else(|| bad("owner_address manquant"))?,
+                votes,
+            })
+        }
+        DELEGATE_RESOURCE_CONTRACT | UNDELEGATE_RESOURCE_CONTRACT => Err(bad(
+            "délégation de ressources (DelegateResource / UnDelegateResource) : refusée",
+        )),
         other => Err(bad(format!(
-            "le type de contrat {other} n'est pas pris en charge (uniquement les transferts TRX et TRC-20)"
+            "le type de contrat {other} n'est pas pris en charge (transferts TRX / TRC-20 et Stake 2.0 uniquement)"
         ))),
     }
 }
@@ -647,6 +903,11 @@ pub fn tron_decode_raw(raw_hex: &str, our_address: &str) -> Result<TronTxSummary
                 }
             }
         }
+        _ => {
+            return Err(bad(
+                "contrat de staking (gel, dégel, vote, récompenses) : refusé ici, il passe par tron_stake_sign",
+            ))
+        }
     };
     if !tx.memo.is_empty() {
         warnings.push(TronWarning::Memo);
@@ -668,6 +929,189 @@ pub fn tron_decode_raw(raw_hex: &str, our_address: &str) -> Result<TronTxSummary
         requires_extra_confirmation: !warnings.is_empty(),
         warnings,
     })
+}
+
+// ---------------------------------------------------------------------------------------------
+// Stake 2.0 and voting
+// ---------------------------------------------------------------------------------------------
+
+/// One vote, as decoded.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TronVote {
+    /// Super representative (`T…`).
+    pub address: String,
+    /// Votes (TRON Power; 1 vote = 1 TRX staked).
+    pub count: String,
+}
+
+/// What a staking transaction does, as decoded by Rust.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum TronStakeAction {
+    /// `FreezeBalanceV2`.
+    Freeze {
+        /// `BANDWIDTH` | `ENERGY`.
+        resource: TronResource,
+        /// Sun.
+        amount: String,
+    },
+    /// `UnfreezeBalanceV2`.
+    Unfreeze {
+        /// `BANDWIDTH` | `ENERGY`.
+        resource: TronResource,
+        /// Sun.
+        amount: String,
+    },
+    /// `WithdrawExpireUnfreeze`.
+    WithdrawUnfrozen,
+    /// `CancelAllUnfreezeV2`.
+    CancelAllUnfreeze,
+    /// `VoteWitness` (replaces every previous vote).
+    Vote {
+        /// Votes.
+        votes: Vec<TronVote>,
+        /// Sum of the votes.
+        total: String,
+    },
+    /// `WithdrawBalance` (voting rewards).
+    ClaimRewards,
+}
+
+/// Plain-language summary of a raw TRON staking transaction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TronStakeSummary {
+    /// `sha256(raw_data)`, hex.
+    pub txid: String,
+    /// Signer (`T…`), always our address (checked).
+    pub owner: String,
+    /// What it does.
+    pub action: TronStakeAction,
+    /// Milliseconds since the epoch.
+    pub expiration: i64,
+    /// Milliseconds since the epoch (0 if absent).
+    pub timestamp: i64,
+    /// Hex.
+    pub ref_block_bytes: String,
+    /// Hex.
+    pub ref_block_hash: String,
+    /// Size of `raw_data`, bytes.
+    pub raw_size: usize,
+}
+
+/// Decodes a **staking** `raw_data` (hex): `FreezeBalanceV2` / `UnfreezeBalanceV2` (BANDWIDTH
+/// or ENERGY, amount > 0), `WithdrawExpireUnfreeze`, `CancelAllUnfreezeV2`, `VoteWitness` (1 to
+/// 30 votes, each > 0, no SR twice, `support` absent) and `WithdrawBalance`. Refused: everything
+/// [`TronRaw::decode`] refuses (including `DelegateResource` / `UnDelegateResource`, i.e. lending
+/// resources to another account, and `TRON_POWER`), a transfer or contract call, an owner other
+/// than `our_address`, a memo and a `fee_limit` (system contracts burn no energy).
+pub fn tron_decode_stake_raw(raw_hex: &str, our_address: &str) -> Result<TronStakeSummary> {
+    let raw = hex::decode(raw_hex.trim())
+        .map_err(|_| Error::input("raw_data n'est pas en hexadécimal"))?;
+    let tx = TronRaw::decode(&raw)?;
+    let ours = tron_address_bytes(our_address)?;
+    if *tx.owner() != ours {
+        return Err(bad(
+            "le propriétaire (owner) n'est pas l'adresse de ce portefeuille",
+        ));
+    }
+    if !tx.memo.is_empty() {
+        return Err(bad("mémo dans une transaction de staking : refusé"));
+    }
+    if tx.fee_limit != 0 {
+        return Err(bad("fee_limit dans une transaction de staking : refusé"));
+    }
+    let positive = |a: i64| -> Result<String> {
+        if a <= 0 {
+            return Err(bad("le montant doit être positif"));
+        }
+        Ok(a.to_string())
+    };
+    let action = match &tx.contract {
+        TronContract::FreezeV2 {
+            amount, resource, ..
+        } => TronStakeAction::Freeze {
+            resource: *resource,
+            amount: positive(*amount)?,
+        },
+        TronContract::UnfreezeV2 {
+            amount, resource, ..
+        } => TronStakeAction::Unfreeze {
+            resource: *resource,
+            amount: positive(*amount)?,
+        },
+        TronContract::WithdrawExpireUnfreeze { .. } => TronStakeAction::WithdrawUnfrozen,
+        TronContract::CancelAllUnfreezeV2 { .. } => TronStakeAction::CancelAllUnfreeze,
+        TronContract::WithdrawBalance { .. } => TronStakeAction::ClaimRewards,
+        TronContract::VoteWitness { votes, .. } => {
+            if votes.is_empty() || votes.len() > TRON_MAX_VOTES {
+                return Err(bad(format!(
+                    "1 à {TRON_MAX_VOTES} votes par transaction (ici {})",
+                    votes.len()
+                )));
+            }
+            let mut seen: Vec<&[u8; 21]> = Vec::new();
+            let mut total: i64 = 0;
+            let mut out = Vec::with_capacity(votes.len());
+            for (sr, count) in votes {
+                if seen.contains(&sr) {
+                    return Err(bad("le même SR apparaît deux fois : refusé"));
+                }
+                seen.push(sr);
+                total = total
+                    .checked_add(*count)
+                    .ok_or_else(|| bad("total des votes trop grand"))?;
+                out.push(TronVote {
+                    address: tron_address_from_bytes(sr),
+                    count: positive(*count)?,
+                });
+            }
+            TronStakeAction::Vote {
+                votes: out,
+                total: total.to_string(),
+            }
+        }
+        TronContract::Transfer { .. } | TronContract::Trigger { .. } => {
+            return Err(bad(
+                "pas une transaction de staking (transfert ou appel de contrat) : refusée ici",
+            ))
+        }
+    };
+    Ok(TronStakeSummary {
+        txid: hex::encode(tx.txid()),
+        owner: tron_address_from_bytes(tx.owner()),
+        action,
+        expiration: tx.expiration,
+        timestamp: tx.timestamp,
+        ref_block_bytes: hex::encode(tx.ref_block_bytes),
+        ref_block_hash: hex::encode(tx.ref_block_hash),
+        raw_size: raw.len(),
+    })
+}
+
+/// Signs a staking `raw_data` (hex) with the key at `m/44'/195'/0'/0/index`, after decoding it
+/// like [`tron_decode_stake_raw`] (owner must be that key's address).
+pub fn tron_stake_sign(
+    seed: &Seed,
+    index: u32,
+    raw_hex: &str,
+) -> Result<([u8; 65], TronStakeSummary)> {
+    let secp = secp()?;
+    let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
+    let key = master.derive(&secp, &path(index)?)?;
+    let sk = key.xpriv().private_key;
+    let ours = tron_address_from_bytes(&address_bytes_of_pubkey(&sk.public_key(&secp)));
+    let summary = tron_decode_stake_raw(raw_hex, &ours)?;
+    let raw = hex::decode(raw_hex.trim())
+        .map_err(|_| Error::input("raw_data n'est pas en hexadécimal"))?;
+    let digest = sha256::Hash::hash(&raw).to_byte_array();
+    let sig = sign_digest(&secp, &sk, digest)?;
+    Ok((sig, summary))
 }
 
 // ---------------------------------------------------------------------------------------------

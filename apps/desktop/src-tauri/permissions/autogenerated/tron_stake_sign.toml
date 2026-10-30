@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tron-stake-sign"
+description = "Enables the tron_stake_sign command without any pre-configured scope."
+commands.allow = ["tron_stake_sign"]
+
+[[permission]]
+identifier = "deny-tron-stake-sign"
+description = "Denies the tron_stake_sign command without any pre-configured scope."
+commands.deny = ["tron_stake_sign"]

@@ -34,6 +34,7 @@ mod mnemonic;
 mod network;
 mod sol;
 mod sol_decode;
+mod sol_stake;
 mod tron;
 mod utxo;
 mod vault;
@@ -62,6 +63,12 @@ pub use cardano::{
     CardanoContext, CardanoInput, CardanoOutput, CardanoOutputView, CardanoRoot, CardanoTokenView,
     CardanoTxSummary, CardanoWarning,
 };
+pub use cardano::{
+    cardano_blake2b224, cardano_decode_stake_tx, cardano_drep_id, cardano_drep_parse,
+    cardano_pool_bech32, cardano_pool_id, cardano_reward_address_bytes, cardano_sign_stake,
+    cardano_stake_public_key, cardano_stake_tx_body, CardanoCert, CardanoCertView, CardanoDrep,
+    CardanoDrepView, CardanoStakeSummary, CardanoWithdrawalView,
+};
 pub use error::{Error, Result};
 pub use evm::{
     evm_address, evm_address_from_xpub, evm_address_of_pubkey, evm_checksum_address, evm_decode,
@@ -80,11 +87,21 @@ pub use sol_decode::{
     sol_decode_message, sol_message_lookup_tables, sol_parse_lookup_table, SolInstruction,
     SolLookupTable, SolTokenProgram, SolTxSummary, SolWarning, SOL_LOOKUP_TABLE_PROGRAM,
 };
+pub use sol_stake::{
+    sol_create_with_seed, sol_parse_stake_account, sol_parse_stake_history, sol_stake_activation,
+    sol_stake_message, sol_stake_withdrawable, SolDelegation, SolStakeAccount, SolStakeActivation,
+    SolStakeHistoryEntry, SolStakeOp, SOL_STAKE_ACCOUNT_SIZE, SOL_STAKE_HISTORY_SYSVAR,
+    SOL_STAKE_PROGRAM,
+};
 pub use tron::{
     tron_address, tron_address_bytes, tron_address_from_bytes, tron_address_of_pubkey,
     tron_decode_raw, tron_recover_signer, tron_ref_block, tron_sign, tron_signed_transaction,
     tron_trc20_transfer_data, TronAction, TronContract, TronRaw, TronTxSummary, TronWarning,
     TRC20_TRANSFER_SELECTOR, TRON_ADDRESS_PREFIX,
+};
+pub use tron::{
+    tron_decode_stake_raw, tron_stake_sign, TronResource, TronStakeAction, TronStakeSummary,
+    TronVote, TRON_MAX_VOTES,
 };
 pub use utxo::{
     utxo_account, utxo_address, utxo_address_from_xpub, utxo_address_of_script, utxo_decode_raw_tx,

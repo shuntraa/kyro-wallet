@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-thp-pairings"
+description = "Enables the hw_thp_pairings command without any pre-configured scope."
+commands.allow = ["hw_thp_pairings"]
+
+[[permission]]
+identifier = "deny-hw-thp-pairings"
+description = "Denies the hw_thp_pairings command without any pre-configured scope."
+commands.deny = ["hw_thp_pairings"]

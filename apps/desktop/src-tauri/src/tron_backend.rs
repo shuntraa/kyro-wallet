@@ -52,7 +52,11 @@ pub fn base(ctx: &TronCtx<'_>) -> AppResult<String> {
     })
 }
 
-async fn request(ctx: &TronCtx<'_>, path: &str, body: Option<Value>) -> AppResult<Value> {
+pub(crate) async fn request(
+    ctx: &TronCtx<'_>,
+    path: &str,
+    body: Option<Value>,
+) -> AppResult<Value> {
     let base = base(ctx)?;
     let url = url::Url::parse(&format!("{base}{path}"))
         .map_err(|_| AppError::ServerInvalid("URL TRON invalide".into()))?;
@@ -289,7 +293,7 @@ pub async fn simulate_energy(
 }
 
 /// TronGrid error messages are often hex-encoded text.
-fn message(v: &Value) -> String {
+pub(crate) fn message(v: &Value) -> String {
     let m = v["message"].as_str().unwrap_or("");
     hex::decode(m)
         .ok()
@@ -430,12 +434,17 @@ pub async fn estimate_for(ctx: &TronCtx<'_>, summary: &TronTxSummary) -> AppResu
 
 /// Refuses a transaction that is expired or expires more than 24 h ahead.
 pub fn check_expiration(summary: &TronTxSummary, now_ms: i64) -> AppResult<()> {
-    if summary.expiration <= now_ms {
+    check_expiration_ms(summary.expiration, now_ms)
+}
+
+/// Same rule from the expiration alone (staking transactions).
+pub fn check_expiration_ms(expiration: i64, now_ms: i64) -> AppResult<()> {
+    if expiration <= now_ms {
         return Err(AppError::InvalidInput(
             "transaction TRON expirée : reconstruis-la".into(),
         ));
     }
-    if summary.expiration > now_ms + MAX_EXPIRATION_MS {
+    if expiration > now_ms + MAX_EXPIRATION_MS {
         return Err(AppError::InvalidInput(
             "expiration TRON à plus de 24 h : refusée".into(),
         ));

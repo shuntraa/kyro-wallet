@@ -87,6 +87,21 @@
     "allow-ada-build-tx",
     "allow-ada-sign-tx",
     "allow-ada-broadcast",
+    "allow-sol-stake-overview",
+    "allow-sol-stake-validators",
+    "allow-sol-stake-build",
+    "allow-sol-stake-sign",
+    "allow-sol-stake-broadcast",
+    "allow-ada-stake-overview",
+    "allow-ada-stake-pools",
+    "allow-ada-stake-pool",
+    "allow-ada-stake-build",
+    "allow-ada-stake-sign",
+    "allow-ada-stake-broadcast",
+    "allow-tron-stake-overview",
+    "allow-tron-stake-witnesses",
+    "allow-tron-stake-build",
+    "allow-tron-stake-sign",
     "allow-set-capture-protection",
     "allow-config-get",
     "allow-tor-status",
@@ -102,6 +117,9 @@
     "allow-hw-verify-address",
     "allow-hw-sign-btc-psbt",
     "allow-hw-sign-evm-tx",
-    "allow-hw-sign-sol-tx"
+    "allow-hw-sign-sol-tx",
+    "allow-hw-thp-pairing-code",
+    "allow-hw-thp-pairings",
+    "allow-hw-thp-forget"
   ]
 }

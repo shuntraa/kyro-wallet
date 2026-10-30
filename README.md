@@ -25,12 +25,13 @@ Tes clés restent chiffrées sur ton appareil ; toutes les signatures se font da
 | TRON (TRX, TRC-20 USDT), Nile | ✅ (headless) | diffusions réelles TRX (`4c280894…a59208`) et TRC-20 (`9863fe55…d2de1c`) ; vecteurs Trezor (signatures identiques), Trust Wallet Core |
 | XRP Ledger (XRP + monnaies émises), testnet | ✅ (headless) | deux paiements réels validés (`02DFFDBC…57FB2EE` vers un compte inexistant, `2F324A9E…578EB0B7` avec tag) ; vecteurs Trezor, xrpl.js |
 | Cardano (ADA + tokens natifs), preprod | ✅ (headless) | une diffusion réelle preprod (`d1d77438…f06c0d30`, envoi à soi-même, frais minimum) depuis l'adresse publique CIP-19 ; vecteurs CIP-0003, CIP-0019, Trezor (4 transactions, signatures identiques) |
-| Ledger / Trezor (BTC, EVM, Solana) | ⚠️ jamais sur un vrai appareil ni un émulateur · ❌ Trezor Safe 7 | échanges APDU **enregistrés par Ledger** rejoués, firmware Trezor simulé, descripteurs ERC-20 Ledger vérifiés hors ligne |
+| Ledger / Trezor (BTC, EVM, Solana) | ⚠️ jamais sur un vrai appareil ni un émulateur | échanges APDU **enregistrés par Ledger** rejoués, firmware Trezor simulé, descripteurs ERC-20 Ledger vérifiés hors ligne |
+| Trezor Safe 7 (protocole THP, appairage par code) | ⚠️ Rust seulement (UI à faire) · jamais sur un vrai Safe 7 | contre le code THP côté appareil de Trezor (`trezor-thp`) ; vecteurs trezorlib et Trezor Suite ; authenticité de l'appareil non vérifiée (à faire dans Trezor Suite) |
 | Tor intégré (Arti), échec fermé, circuits isolés par chaîne | ✅ lectures · ⚠️ jamais dans l'app réelle | vraies requêtes via Tor : mempool .onion, CoinGecko, Sepolia, Solana devnet, litecoinspace, TronGrid, XRPL, Koios |
 | Serveurs personnalisés par chaîne | ✅ vérification réseau en direct · ⚠️ Bitcoin Core jamais testé contre un vrai nœud | Esplora et Electrum testnet4, RPC Sepolia, Solana devnet, rippled, Koios : bon réseau accepté, mauvais refusé (via Tor) |
 | Filtres compacts BIP157/158 | ⚠️ désactivés par défaut (fonction `cbf`) jusqu'à revue (≥ 2026-11-11) | synchronisation réelle testnet4 via Tor, soldes identiques à mempool |
 | Swap 0x / 1inch / LI.FI / Jupiter | ⚠️ | devis + approval exact testés contre des réponses simulées uniquement |
-| Staking | ❌ | — |
+| Staking Solana (devnet), Cardano (preprod), TRON Stake 2.0 (Nile) | ✅ (headless) Rust · ❌ écrans | 11 transactions réelles par le chemin Rust (Solana : créer + déléguer, désactiver, retirer ; Cardano : enregistrement + délégation + vote « s'abstenir », désinscription ; TRON : gel, vote, dégel, annulation) ; fixtures Trezor (signatures identiques) ; retrait de récompenses Cardano/TRON et retrait des dégels TRON : unitaires seulement ; BTC/LTC/DOGE/XRP : pas de staking natif ; ETH : hors périmètre. Détail : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#phases) |
 
 ## Installer les outils
 

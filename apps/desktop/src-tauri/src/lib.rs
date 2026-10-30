@@ -17,6 +17,9 @@ mod net;
 mod servers;
 mod settings;
 mod solana;
+mod stake_ada;
+mod stake_sol;
+mod stake_tron;
 mod state;
 mod tor;
 mod tron_backend;
@@ -41,6 +44,8 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             app.manage(state::AppState::new(dir)?);
             let st = app.state::<state::AppState>();
+            // THP pairings (Trezor Safe 7): next to the vault, see SECURITY.md.
+            st.hw.set_thp_store(st.data_dir().join("trezor-thp.json"));
             let handle = app.handle().clone();
             st.net.tor.set_emitter(move |s| {
                 let _ = handle.emit("tor-status", s);
@@ -136,6 +141,21 @@ pub fn run() {
             commands_cardano::ada_build_tx,
             commands_cardano::ada_sign_tx,
             commands_cardano::ada_broadcast,
+            stake_sol::sol_stake_overview,
+            stake_sol::sol_stake_validators,
+            stake_sol::sol_stake_build,
+            stake_sol::sol_stake_sign,
+            stake_sol::sol_stake_broadcast,
+            stake_ada::ada_stake_overview,
+            stake_ada::ada_stake_pools,
+            stake_ada::ada_stake_pool,
+            stake_ada::ada_stake_build,
+            stake_ada::ada_stake_sign,
+            stake_ada::ada_stake_broadcast,
+            stake_tron::tron_stake_overview,
+            stake_tron::tron_stake_witnesses,
+            stake_tron::tron_stake_build,
+            stake_tron::tron_stake_sign,
             commands::set_capture_protection,
             commands::config_get,
             commands::tor_status,
@@ -152,6 +172,9 @@ pub fn run() {
             commands_hw::hw_sign_btc_psbt,
             commands_hw::hw_sign_evm_tx,
             commands_hw::hw_sign_sol_tx,
+            commands_hw::hw_thp_pairing_code,
+            commands_hw::hw_thp_pairings,
+            commands_hw::hw_thp_forget,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kyro");

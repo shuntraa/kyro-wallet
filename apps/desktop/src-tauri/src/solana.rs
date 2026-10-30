@@ -19,7 +19,7 @@ const DEFAULT_RPC_MAINNET: &str = "https://api.mainnet-beta.solana.com";
 const DEFAULT_RPC_DEVNET: &str = "https://api.devnet.solana.com";
 
 /// Solana RPC endpoint: the user's override from settings, else the allowlisted default.
-fn rpc_url(state: &AppState) -> String {
+pub(crate) fn rpc_url(state: &AppState) -> String {
     // A custom cluster RPC replaces the default (which is then refused by the policy).
     match state.settings().servers.solana_for(state.network) {
         Some(s) => s.url.clone(),
@@ -242,6 +242,40 @@ fn describe_instruction(ins: &SolInstruction, me: &str) -> String {
             let t: String = text.chars().take(200).collect();
             format!("Mémo : « {t} »")
         }
+        SolInstruction::StakeInitialize {
+            stake_account,
+            staker,
+            withdrawer,
+        } => format!(
+            "Staking : initialisation du compte {stake_account}\n   Autorités : {} (staker), {} (withdrawer), aucun blocage",
+            who(staker),
+            who(withdrawer)
+        ),
+        SolInstruction::StakeDelegate {
+            stake_account,
+            vote_account,
+            authority,
+        } => format!(
+            "Staking : délégation du compte {stake_account}\n   Au validateur (compte de vote) : {vote_account}\n   Autorité : {}",
+            who(authority)
+        ),
+        SolInstruction::StakeDeactivate {
+            stake_account,
+            authority,
+        } => format!(
+            "Staking : désactivation du compte {stake_account}\n   Autorité : {}",
+            who(authority)
+        ),
+        SolInstruction::StakeWithdraw {
+            stake_account,
+            to,
+            lamports,
+            ..
+        } => format!(
+            "Staking : retrait de {} du compte {stake_account}\n   Vers : {}",
+            sol(lamports),
+            who(to)
+        ),
         SolInstruction::Unknown {
             program_id,
             accounts,

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sol-stake-overview"
+description = "Enables the sol_stake_overview command without any pre-configured scope."
+commands.allow = ["sol_stake_overview"]
+
+[[permission]]
+identifier = "deny-sol-stake-overview"
+description = "Denies the sol_stake_overview command without any pre-configured scope."
+commands.deny = ["sol_stake_overview"]

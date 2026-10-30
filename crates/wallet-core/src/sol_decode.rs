@@ -26,6 +26,15 @@ const COMPUTE_BUDGET_PROGRAM: &str = "ComputeBudget11111111111111111111111111111
 const MEMO_PROGRAM_V2: &str = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 const MEMO_PROGRAM_V1: &str = "Memo1UhkJRfHyvLMcVucJwxXeuD728EqVDDwQDxFMNo";
 const LOOKUP_TABLE_PROGRAM: &str = "AddressLookupTab1e1111111111111111111111111";
+pub(crate) const STAKE_PROGRAM: &str = "Stake11111111111111111111111111111111111111";
+pub(crate) const STAKE_CONFIG: &str = "StakeConfig11111111111111111111111111111111";
+pub(crate) const SYSVAR_CLOCK: &str = "SysvarC1ock11111111111111111111111111111111";
+pub(crate) const SYSVAR_RENT: &str = "SysvarRent111111111111111111111111111111111";
+pub(crate) const SYSVAR_STAKE_HISTORY: &str = "SysvarStakeHistory1111111111111111111111111";
+/// `StakeStateV2` serialized size: every stake account Kyro accepts to create has this space.
+pub(crate) const STAKE_STATE_SIZE: u64 = 200;
+/// `MAX_SEED_LEN` of `create_with_seed`.
+pub(crate) const MAX_SEED_LEN: usize = 32;
 
 /// Lamports charged per required signature (base fee).
 const LAMPORTS_PER_SIGNATURE: u64 = 5_000;
@@ -190,6 +199,44 @@ pub enum SolInstruction {
     Memo {
         /// Memo text (UTF-8, truncated for display).
         text: String,
+    },
+    /// Stake program `Initialize`, accepted only with staker = withdrawer = our address and a
+    /// zero lockup (no custodian): anything else is refused by the decoder.
+    StakeInitialize {
+        /// Stake account being initialised.
+        stake_account: String,
+        /// Stake authority (always our address).
+        staker: String,
+        /// Withdraw authority (always our address).
+        withdrawer: String,
+    },
+    /// Stake program `DelegateStake`: delegates the stake account to a validator's vote account.
+    /// The stake authority must be our address.
+    StakeDelegate {
+        /// Stake account.
+        stake_account: String,
+        /// Validator vote account.
+        vote_account: String,
+        /// Stake authority (always our address).
+        authority: String,
+    },
+    /// Stake program `Deactivate` (start of the cool-down). The stake authority must be us.
+    StakeDeactivate {
+        /// Stake account.
+        stake_account: String,
+        /// Stake authority (always our address).
+        authority: String,
+    },
+    /// Stake program `Withdraw`, accepted only to our own address with our withdraw authority.
+    StakeWithdraw {
+        /// Stake account.
+        stake_account: String,
+        /// Recipient (always our address).
+        to: String,
+        /// Lamports withdrawn.
+        lamports: String,
+        /// Withdraw authority (always our address).
+        authority: String,
     },
     /// Not recognised: shown with its program id and requires an extra confirmation.
     Unknown {
@@ -595,6 +642,8 @@ fn resolve_accounts(raw: &RawMessage<'_>, tables: &[SolLookupTable]) -> Result<V
 
 struct Ctx<'a> {
     accounts: &'a [Account],
+    /// Our address (base58): staking authorities must be it.
+    me: &'a str,
 }
 
 impl Ctx<'_> {
@@ -768,9 +817,208 @@ fn decode_memo(ix: &CompiledIx<'_>) -> Option<SolInstruction> {
     })
 }
 
+fn stake_refused(msg: impl Into<String>) -> Error {
+    Error::input(format!("staking Solana : {}", msg.into()))
+}
+
+/// Name of a Stake program instruction Kyro refuses (for the error message).
+fn stake_instruction_name(tag: u32) -> &'static str {
+    match tag {
+        1 => "Authorize (changement d'autorité)",
+        3 => "Split",
+        6 => "SetLockup (blocage)",
+        7 => "Merge",
+        8 => "AuthorizeWithSeed (changement d'autorité)",
+        9 => "InitializeChecked",
+        10 => "AuthorizeChecked (changement d'autorité)",
+        11 => "AuthorizeCheckedWithSeed (changement d'autorité)",
+        12 => "SetLockupChecked (blocage)",
+        13 => "GetMinimumDelegation",
+        14 => "DeactivateDelinquent",
+        15 => "Redelegate",
+        16 => "MoveStake",
+        17 => "MoveLamports",
+        _ => "inconnue",
+    }
+}
+
+/// Stake program: only `Initialize` (zero lockup, staker = withdrawer = us), `DelegateStake`,
+/// `Deactivate` and `Withdraw` (to us), each with its exact account list and our authority.
+/// Every other instruction of the program — authority changes, lockups, split, merge… — and any
+/// authority that is not us is an error, not an "unknown instruction".
+fn decode_stake(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
+    let mut r = Reader::new(ix.data);
+    let tag = r.u32_le().map_err(|_| bad_data("Stake"))?;
+    let accounts = |n: &[usize]| -> Result<()> {
+        if n.contains(&ix.accounts.len()) {
+            Ok(())
+        } else {
+            Err(stake_refused(format!(
+                "nombre de comptes inattendu ({}) pour l'instruction {tag}",
+                ix.accounts.len()
+            )))
+        }
+    };
+    let expect = |n: usize, key: &str, what: &str| -> Result<()> {
+        if ctx.acc(ix, n, what)? == key {
+            Ok(())
+        } else {
+            Err(stake_refused(format!("{what} attendu à la position {n}")))
+        }
+    };
+    let ours = |n: usize, what: &str| -> Result<String> {
+        let a = ctx.acc(ix, n, what)?;
+        if a != ctx.me {
+            return Err(stake_refused(format!(
+                "{what} ({a}) n'est pas ton adresse : refusé"
+            )));
+        }
+        Ok(a)
+    };
+    let decoded = match tag {
+        0 => {
+            accounts(&[2])?;
+            let staker = b58(&r.key()?);
+            let withdrawer = b58(&r.key()?);
+            let unix_timestamp = r.u64_le()?;
+            let epoch = r.u64_le()?;
+            let custodian = r.key()?;
+            if unix_timestamp != 0 || epoch != 0 || custodian != [0u8; 32] {
+                return Err(stake_refused(
+                    "blocage (lockup) ou dépositaire non nul : refusé",
+                ));
+            }
+            if staker != ctx.me || withdrawer != ctx.me {
+                return Err(stake_refused(format!(
+                    "les autorités du compte de staking doivent être ton adresse (staker {staker}, withdrawer {withdrawer}) : refusé"
+                )));
+            }
+            expect(1, SYSVAR_RENT, "sysvar Rent")?;
+            SolInstruction::StakeInitialize {
+                stake_account: ctx.acc(ix, 0, "stake account")?,
+                staker,
+                withdrawer,
+            }
+        }
+        2 => {
+            accounts(&[6])?;
+            expect(2, SYSVAR_CLOCK, "sysvar Clock")?;
+            expect(3, SYSVAR_STAKE_HISTORY, "sysvar StakeHistory")?;
+            expect(4, STAKE_CONFIG, "compte StakeConfig")?;
+            SolInstruction::StakeDelegate {
+                stake_account: ctx.acc(ix, 0, "stake account")?,
+                vote_account: ctx.acc(ix, 1, "vote account")?,
+                authority: ours(5, "autorité de staking")?,
+            }
+        }
+        5 => {
+            accounts(&[3])?;
+            expect(1, SYSVAR_CLOCK, "sysvar Clock")?;
+            SolInstruction::StakeDeactivate {
+                stake_account: ctx.acc(ix, 0, "stake account")?,
+                authority: ours(2, "autorité de staking")?,
+            }
+        }
+        4 => {
+            accounts(&[5, 6])?;
+            let lamports = r.u64_le()?;
+            expect(2, SYSVAR_CLOCK, "sysvar Clock")?;
+            expect(3, SYSVAR_STAKE_HISTORY, "sysvar StakeHistory")?;
+            let authority = ours(4, "autorité de retrait")?;
+            if ix.accounts.len() == 6 {
+                // Lockup custodian: only accepted when it is us (Kyro never sets a lockup).
+                ours(5, "dépositaire (custodian)")?;
+            }
+            SolInstruction::StakeWithdraw {
+                stake_account: ctx.acc(ix, 0, "stake account")?,
+                to: ours(1, "destinataire du retrait")?,
+                lamports: lamports.to_string(),
+                authority,
+            }
+        }
+        other => {
+            return Err(stake_refused(format!(
+                "instruction {other} ({}) refusée par Kyro",
+                stake_instruction_name(other)
+            )))
+        }
+    };
+    r.finish().map_err(|_| bad_data("Stake"))?;
+    Ok(decoded)
+}
+
+/// `Pubkey::create_with_seed`: sha256(base ‖ seed ‖ owner).
+pub(crate) fn create_with_seed(base: &[u8; 32], seed: &str, owner: &[u8; 32]) -> Result<[u8; 32]> {
+    use sha2::{Digest, Sha256};
+    if seed.len() > MAX_SEED_LEN {
+        return Err(Error::input("seed longer than 32 bytes"));
+    }
+    if owner.ends_with(b"ProgramDerivedAddress") {
+        return Err(Error::input("illegal owner for create_with_seed"));
+    }
+    let mut h = Sha256::new();
+    h.update(base);
+    h.update(seed.as_bytes());
+    h.update(owner);
+    Ok(h.finalize().into())
+}
+
+/// Checks every account creation: a `CreateAccountWithSeed` must create the address derived
+/// from its base, seed and owner; an account created for the Stake program must have the stake
+/// account size and be initialised by a later instruction of the same message (an
+/// uninitialised stake account can be initialised by anyone, with any authority).
+fn check_creations(instructions: &[SolInstruction]) -> Result<()> {
+    for (i, ins) in instructions.iter().enumerate() {
+        let (new_account, space, owner) = match ins {
+            SolInstruction::SystemCreateAccountWithSeed {
+                new_account,
+                base,
+                seed,
+                space,
+                owner,
+                ..
+            } => {
+                let derived =
+                    create_with_seed(&decode_pubkey(base)?, seed, &decode_pubkey(owner)?)?;
+                if b58(&derived) != *new_account {
+                    return Err(Error::input(
+                        "CreateAccountWithSeed: the created address is not derived from base, seed and owner",
+                    ));
+                }
+                (new_account, space, owner)
+            }
+            SolInstruction::SystemCreateAccount {
+                new_account,
+                space,
+                owner,
+                ..
+            } => (new_account, space, owner),
+            _ => continue,
+        };
+        if owner != STAKE_PROGRAM {
+            continue;
+        }
+        if *space != STAKE_STATE_SIZE.to_string() {
+            return Err(stake_refused(format!(
+                "compte de staking créé avec {space} octets au lieu de {STAKE_STATE_SIZE}"
+            )));
+        }
+        let initialized = instructions[i + 1..].iter().any(|later| {
+            matches!(later, SolInstruction::StakeInitialize { stake_account, .. } if stake_account == new_account)
+        });
+        if !initialized {
+            return Err(stake_refused(
+                "compte de staking créé sans être initialisé dans la même transaction : refusé",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn decode_instruction(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
     let program = ctx.accounts[ix.program_index].key.as_str();
     let decoded = match program {
+        STAKE_PROGRAM => Some(decode_stake(ctx, ix)?),
         SYSTEM_PROGRAM => decode_system(ctx, ix)?,
         TOKEN_PROGRAM => decode_token(ctx, ix, SolTokenProgram::Token)?,
         TOKEN_2022_PROGRAM => decode_token(ctx, ix, SolTokenProgram::Token2022)?,
@@ -806,12 +1054,14 @@ pub fn sol_decode_message(
     let accounts = resolve_accounts(&raw, tables)?;
     let ctx = Ctx {
         accounts: &accounts,
+        me: our_address.trim(),
     };
 
     let mut instructions = Vec::with_capacity(raw.instructions.len());
     for ix in &raw.instructions {
         instructions.push(decode_instruction(&ctx, ix)?);
     }
+    check_creations(&instructions)?;
 
     let signers: Vec<String> = accounts[..raw.num_required_signatures]
         .iter()
@@ -847,6 +1097,10 @@ pub fn sol_decode_message(
             SolInstruction::SystemTransferWithSeed { base, .. } => Some(base),
             SolInstruction::TokenTransfer { authority, .. } => Some(authority),
             SolInstruction::TokenApprove { owner, .. } => Some(owner),
+            // Stake authorities are checked (= us) by the decoder itself.
+            SolInstruction::StakeDelegate { authority, .. }
+            | SolInstruction::StakeDeactivate { authority, .. }
+            | SolInstruction::StakeWithdraw { authority, .. } => Some(authority),
             _ => None,
         };
         if let Some(a) = authority {

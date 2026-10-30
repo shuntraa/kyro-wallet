@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tron-stake-build"
+description = "Enables the tron_stake_build command without any pre-configured scope."
+commands.allow = ["tron_stake_build"]
+
+[[permission]]
+identifier = "deny-tron-stake-build"
+description = "Denies the tron_stake_build command without any pre-configured scope."
+commands.deny = ["tron_stake_build"]

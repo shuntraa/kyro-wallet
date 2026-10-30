@@ -29,7 +29,8 @@
 - `solana-remote-wallet` : exige Rust 1.98.1.
 - ~~Filtres compacts BIP157/158 à travers le Tor intégré~~ : fait en B2c derrière la fonction `cbf` (pont SOCKS interne verrouillé sur la liste de pairs, voir NETWORK.md).
 - Clear signing ERC-20 / SPL sur Ledger : dépend des descripteurs signés du service de métadonnées de Ledger ; sans eux l'appareil affiche des données brutes. B3 embarque trois descripteurs ERC-20 vérifiés (USDC, USDT mainnet ; tUSDC Sepolia) ; les autres tokens et SPL restent en blind signing (dialogue renforcé).
-- Signature Solana sur Trezor (support expérimental) et modèles Trezor à canal THP (non vérifié).
+- Signature Solana sur Trezor (support expérimental). ~~Modèles Trezor à canal THP~~ : Trezor Safe 7 fait côté Rust (`hw/thp.rs`, appairage par code ; testé contre le code THP côté appareil de Trezor, pas sur un vrai Safe 7 ; UI de saisie du code à faire, IPC.md §2.3).
+- Contrôle d'authenticité Trezor (`AuthenticateDevice`, Safe 3/5/7) : chaînes X.509 P-256 / Ed25519 / ML-DSA-44 jusqu'aux racines Trezor ; demande un parseur X.509, `ml-dsa` (RustCrypto, 0.1, jeune) et un P-256 sans `crypto-bigint` 0.5 (avis RUSTSEC-2026-0387). Non fait : à faire dans Trezor Suite.
 - Testnet Dogecoin via une API publique : aucune ne fonctionne ; il faut un nœud testnet perso.
 - Dérivation Cardano sur du code audité : la seule implémentation Icarus maintenue s'appuie sur `cryptoxide`, non audité (atténué par les vecteurs CIP et une vérification croisée avec ed25519-dalek).
 - `arti` vend une dépendance `rsa` 0.9 (RUSTSEC-2023-0071, attaque Marvin) : non exploitable ici (vérification RSA uniquement), mais à ignorer explicitement et à documenter dans `cargo audit`.

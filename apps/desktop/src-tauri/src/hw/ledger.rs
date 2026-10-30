@@ -360,6 +360,7 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
             }),
             firmware: None,
             passphrase: None,
+            protocol: None,
             chains,
         })
     }

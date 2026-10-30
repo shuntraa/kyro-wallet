@@ -1,6 +1,8 @@
 //! Hardware wallets (Ledger over USB HID, Trezor over WebUSB).
 //!
 //! - [`HardwareWallet`] is what the commands use; [`ledger`] and [`trezor`] implement it.
+//!   Trezor Safe 7 (and later) devices speak the encrypted Trezor Host Protocol ([`thp`]) on the
+//!   same USB interface; their pairings live in [`thp_store`].
 //! - [`HwManager`] keeps the devices seen in this session (stable `ledger-1`, `trezor-1`… ids),
 //!   **one lock per device** (a second operation gets `HW_BUSY`), and runs every device call on
 //!   a blocking thread with a **deadline**. Transports read in 100 ms slices and check the
@@ -16,6 +18,10 @@
 pub mod ledger;
 pub mod ledger_apdu;
 pub mod store;
+pub mod thp;
+#[cfg(test)]
+mod thp_sim;
+pub mod thp_store;
 pub mod trezor;
 pub mod trezor_btc;
 
@@ -98,6 +104,12 @@ pub enum HwError {
     /// Cancelled by Kyro (`hw_cancel`), not by the user on the device.
     Cancelled,
     BadResponse(String),
+    /// THP device not paired with Kyro, and this operation may not pair (only `hw_open` does).
+    PairingRequired,
+    /// THP pairing did not complete: wrong code, or the device did not prove the code.
+    PairingFailed(String),
+    /// Local problem (pairing file, OS randomness), not the device's fault.
+    Internal(String),
 }
 
 pub type HwResult<T> = Result<T, HwError>;
@@ -125,7 +137,12 @@ impl HwError {
     fn poisons_connection(&self) -> bool {
         matches!(
             self,
-            HwError::Disconnected | HwError::Timeout | HwError::Cancelled | HwError::BadResponse(_)
+            HwError::Disconnected
+                | HwError::Timeout
+                | HwError::Cancelled
+                | HwError::BadResponse(_)
+                | HwError::PairingRequired
+                | HwError::PairingFailed(_)
         )
     }
 }
@@ -143,6 +160,9 @@ impl From<HwError> for AppError {
             HwError::Timeout => AppError::HwTimeout,
             HwError::Cancelled => AppError::UserRejected,
             HwError::BadResponse(m) => AppError::HwBadResponse(m),
+            HwError::PairingRequired => AppError::HwPairingRequired,
+            HwError::PairingFailed(m) => AppError::HwPairingFailed(m),
+            HwError::Internal(m) => AppError::Internal(m),
         }
     }
 }
@@ -159,6 +179,12 @@ pub enum Prompt {
     PassphraseOnDevice,
     /// Trezor One: show the 3×3 blind matrix, then call `hw_pin_matrix`.
     PinMatrix,
+    /// THP (Safe 7): the device asks whether "Kyro Wallet on <computer>" may pair; confirm there.
+    ThpConfirmPairing,
+    /// THP: the device shows a 6-digit code; ask the user to type it, then `hw_thp_pairing_code`.
+    ThpPairingCode,
+    /// THP: a paired device asks to confirm the connection of Kyro on its screen.
+    ThpConfirmConnection,
 }
 
 pub type PromptFn = Arc<dyn Fn(Prompt) + Send + Sync>;
@@ -169,6 +195,10 @@ pub struct Ctl {
     cancel: Arc<AtomicBool>,
     prompt: PromptFn,
     pin: Mutex<Option<Receiver<Zeroizing<String>>>>,
+    /// THP pairing code typed by the user (`hw_thp_pairing_code`).
+    code: Mutex<Option<Receiver<Zeroizing<String>>>>,
+    /// Whether this call may pair a THP device (only `hw_open`).
+    pairing: bool,
 }
 
 /// Transports wait for the device in slices this long, checking [`Ctl::check`] in between.
@@ -181,7 +211,47 @@ impl Ctl {
             cancel: Arc::new(AtomicBool::new(false)),
             prompt,
             pin: Mutex::new(None),
+            code: Mutex::new(None),
+            pairing: false,
         }
+    }
+
+    /// This call may pair a THP device (and wait for the code typed by the user).
+    pub fn allow_pairing(mut self) -> Self {
+        self.pairing = true;
+        self
+    }
+
+    pub fn pairing_allowed(&self) -> bool {
+        self.pairing
+    }
+
+    /// Waits for `hw_thp_pairing_code` (the 6 digits shown on the device).
+    pub fn wait_pairing_code(&self) -> HwResult<Zeroizing<String>> {
+        let guard = lock(&self.code);
+        let rx = guard
+            .as_ref()
+            .ok_or_else(|| HwError::bad("no pairing-code channel"))?;
+        loop {
+            self.check()?;
+            match rx.recv_timeout(POLL) {
+                Ok(c) => return Ok(c),
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => return Err(HwError::Cancelled),
+            }
+        }
+    }
+
+    /// Tests: a control that may pair, fed with pairing codes through the returned sender.
+    #[cfg(test)]
+    pub fn for_pairing_tests(
+        timeout: Duration,
+        prompt: PromptFn,
+    ) -> (Self, SyncSender<Zeroizing<String>>) {
+        let (tx, rx) = sync_channel(1);
+        let ctl = Ctl::new(timeout, prompt).allow_pairing();
+        *lock(&ctl.code) = Some(rx);
+        (ctl, tx)
     }
 
     /// `Cancelled` if `hw_cancel` was called, `Timeout` past the deadline.
@@ -313,6 +383,9 @@ pub struct DeviceStatus {
     /// Trezor: passphrase protection enabled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub passphrase: Option<bool>,
+    /// Trezor Safe 7 and later: `"thp"` (encrypted, paired channel). Absent otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<&'static str>,
     pub chains: Vec<ChainStatus>,
 }
 
@@ -405,6 +478,22 @@ struct Slot {
     busy: AtomicBool,
     cancel: Mutex<Arc<AtomicBool>>,
     pin_tx: Mutex<Option<SyncSender<Zeroizing<String>>>>,
+    code_tx: Mutex<Option<SyncSender<Zeroizing<String>>>>,
+}
+
+impl Slot {
+    fn new(info: DeviceInfo, key: String, locator: Locator) -> Self {
+        Slot {
+            info,
+            key,
+            locator,
+            conn: Mutex::new(None),
+            busy: AtomicBool::new(false),
+            cancel: Mutex::new(Arc::new(AtomicBool::new(false))),
+            pin_tx: Mutex::new(None),
+            code_tx: Mutex::new(None),
+        }
+    }
 }
 
 /// Clears `busy` when the blocking call ends, however it ends.
@@ -413,6 +502,7 @@ struct BusyGuard(Arc<Slot>);
 impl Drop for BusyGuard {
     fn drop(&mut self) {
         *lock(&self.0.pin_tx) = None;
+        *lock(&self.0.code_tx) = None;
         self.0.busy.store(false, Ordering::SeqCst);
     }
 }
@@ -421,6 +511,8 @@ impl Drop for BusyGuard {
 pub struct HwManager {
     slots: Mutex<HashMap<String, Arc<Slot>>>,
     counter: AtomicU32,
+    /// THP pairings (Trezor Safe 7): file location and its lock.
+    thp: Arc<thp_store::ThpEnv>,
 }
 
 impl HwManager {
@@ -451,15 +543,7 @@ impl HwManager {
             };
             slots.insert(
                 info.id.clone(),
-                Arc::new(Slot {
-                    info: info.clone(),
-                    key: f.key,
-                    locator: f.locator,
-                    conn: Mutex::new(None),
-                    busy: AtomicBool::new(false),
-                    cancel: Mutex::new(Arc::new(AtomicBool::new(false))),
-                    pin_tx: Mutex::new(None),
-                }),
+                Arc::new(Slot::new(info.clone(), f.key, f.locator)),
             );
             out.push(info);
         }
@@ -474,13 +558,42 @@ impl HwManager {
             .ok_or(HwError::NotFound)
     }
 
+    /// Where THP pairings are stored (`trezor-thp.json` in the app data directory). Without
+    /// it (tests), pairings are kept in memory only.
+    pub fn set_thp_store(&self, path: std::path::PathBuf) {
+        self.thp.set_path(path);
+    }
+
     /// Runs `f` against device `id` on a blocking thread, with the device lock held and a
-    /// deadline of `timeout`.
+    /// deadline of `timeout`. A THP device that is not paired yet gives `PairingRequired`.
     pub async fn run<T: Send + 'static>(
         &self,
         id: &str,
         timeout: Duration,
         prompt: PromptFn,
+        f: impl FnOnce(&mut dyn HardwareWallet, &Ctl) -> HwResult<T> + Send + 'static,
+    ) -> HwResult<T> {
+        self.run_inner(id, timeout, prompt, false, f).await
+    }
+
+    /// Like [`HwManager::run`], but connecting may pair a THP device: the `thp-pairing-code`
+    /// prompt is emitted and the call waits for `hw_thp_pairing_code` (used by `hw_open`).
+    pub async fn run_pairing<T: Send + 'static>(
+        &self,
+        id: &str,
+        timeout: Duration,
+        prompt: PromptFn,
+        f: impl FnOnce(&mut dyn HardwareWallet, &Ctl) -> HwResult<T> + Send + 'static,
+    ) -> HwResult<T> {
+        self.run_inner(id, timeout, prompt, true, f).await
+    }
+
+    async fn run_inner<T: Send + 'static>(
+        &self,
+        id: &str,
+        timeout: Duration,
+        prompt: PromptFn,
+        pairing: bool,
         f: impl FnOnce(&mut dyn HardwareWallet, &Ctl) -> HwResult<T> + Send + 'static,
     ) -> HwResult<T> {
         let slot = lock(&self.slots)
@@ -492,18 +605,25 @@ impl HwManager {
                 "une autre opération est en cours sur cet appareil".into(),
             ));
         }
-        let ctl = Ctl::new(timeout, prompt);
+        let mut ctl = Ctl::new(timeout, prompt);
+        if pairing {
+            ctl = ctl.allow_pairing();
+        }
         *lock(&slot.cancel) = ctl.cancel.clone();
         let (tx, rx) = sync_channel(1);
         *lock(&slot.pin_tx) = Some(tx);
         *lock(&ctl.pin) = Some(rx);
+        let (tx, rx) = sync_channel(1);
+        *lock(&slot.code_tx) = Some(tx);
+        *lock(&ctl.code) = Some(rx);
         let cancel = ctl.cancel.clone();
         let worker = slot.clone();
+        let thp = self.thp.clone();
         let handle = tauri::async_runtime::spawn_blocking(move || {
             let _busy = BusyGuard(worker.clone());
             let mut conn = lock(&worker.conn);
             if conn.is_none() {
-                *conn = Some(open(&worker.locator, &worker.info)?);
+                *conn = Some(open(&worker.locator, &worker.info, &ctl, &thp)?);
             }
             let Some(dev) = conn.as_mut() else {
                 return Err(HwError::Disconnected);
@@ -535,18 +655,9 @@ impl HwManager {
             model: "fake".into(),
             transport: "hid",
         };
-        lock(&self.slots).insert(
-            id.into(),
-            Arc::new(Slot {
-                info,
-                key: id.into(),
-                locator: Locator::Test,
-                conn: Mutex::new(Some(dev)),
-                busy: AtomicBool::new(false),
-                cancel: Mutex::new(Arc::new(AtomicBool::new(false))),
-                pin_tx: Mutex::new(None),
-            }),
-        );
+        let slot = Slot::new(info, id.into(), Locator::Test);
+        *lock(&slot.conn) = Some(dev);
+        lock(&self.slots).insert(id.into(), Arc::new(slot));
     }
 
     /// Aborts the pending call on `id`, if any (returns whether one was pending).
@@ -575,14 +686,55 @@ impl HwManager {
         tx.try_send(positions)
             .map_err(|_| HwError::bad("aucune saisie de PIN en attente"))
     }
+
+    /// Hands the THP pairing code typed by the user to the pending `hw_open` on `id`.
+    pub fn submit_pairing_code(&self, id: &str, code: Zeroizing<String>) -> HwResult<()> {
+        let slot = lock(&self.slots)
+            .get(id)
+            .cloned()
+            .ok_or(HwError::NotFound)?;
+        let tx = lock(&slot.code_tx);
+        let tx = tx
+            .as_ref()
+            .ok_or_else(|| HwError::bad("aucun appairage en attente"))?;
+        tx.try_send(code)
+            .map_err(|_| HwError::bad("aucun appairage en attente"))
+    }
+
+    /// THP devices paired with this installation (public keys only).
+    pub fn thp_pairings(&self) -> HwResult<Vec<thp_store::PairingInfo>> {
+        self.thp.list()
+    }
+
+    /// Forgets one THP pairing (`key` = hex of the device's static key) or all of them, and
+    /// closes idle Trezor connections so that the next operation reconnects (and re-pairs).
+    pub fn thp_forget(&self, key: Option<&[u8; 32]>) -> HwResult<usize> {
+        let n = self.thp.forget(key)?;
+        for slot in lock(&self.slots).values() {
+            if slot.info.kind == HwDeviceKind::Trezor && !slot.busy.load(Ordering::SeqCst) {
+                if let Ok(mut conn) = slot.conn.try_lock() {
+                    *conn = None;
+                }
+            }
+        }
+        Ok(n)
+    }
 }
 
-fn open(locator: &Locator, info: &DeviceInfo) -> HwResult<Box<dyn HardwareWallet>> {
+fn open(
+    locator: &Locator,
+    info: &DeviceInfo,
+    ctl: &Ctl,
+    thp: &thp_store::ThpEnv,
+) -> HwResult<Box<dyn HardwareWallet>> {
     match locator {
         Locator::Ledger(l) => ledger::open(l, &info.model),
-        Locator::Trezor(t) => trezor::open(t),
+        Locator::Trezor(t) => trezor::open(t, ctl, thp),
         #[cfg(test)]
-        Locator::Test => Err(HwError::NotFound),
+        Locator::Test => {
+            let _ = (ctl, thp);
+            Err(HwError::NotFound)
+        }
     }
 }
 
@@ -693,6 +845,12 @@ mod tests {
         assert_eq!(code(HwError::Timeout), "HW_TIMEOUT");
         assert_eq!(code(HwError::Cancelled), "USER_REJECTED");
         assert_eq!(code(HwError::bad("x")), "HW_BAD_RESPONSE");
+        assert_eq!(code(HwError::PairingRequired), "HW_PAIRING_REQUIRED");
+        assert_eq!(
+            code(HwError::PairingFailed("x".into())),
+            "HW_PAIRING_FAILED"
+        );
+        assert_eq!(code(HwError::Internal("x".into())), "INTERNAL");
         let v = serde_json::to_value(AppError::from(HwError::WrongApp {
             expected: "Bitcoin Test".into(),
             open: "Ethereum".into(),
@@ -852,6 +1010,55 @@ mod tests {
                     println!("{}: first receive address (Kyro derivation) {addr:?}", d.id);
                 }
             }
+        });
+    }
+
+    /// READ-ONLY test against a real Trezor Safe 7 (THP), never signs or displays an address:
+    /// `cargo test -p kyro-desktop --lib real_thp_device_read_only -- --ignored --nocapture`.
+    /// Confirm the pairing on the device, then type the 6-digit code it shows into this
+    /// terminal. The pairing is kept in `<temp>/kyro-thp-real-test.json` (delete it to re-pair);
+    /// a second run must connect without a code.
+    #[test]
+    #[ignore = "needs a real Trezor Safe 7 plugged in and a person to type the code"]
+    fn real_thp_device_read_only() {
+        tauri::async_runtime::block_on(async {
+            let m = Arc::new(HwManager::default());
+            m.set_thp_store(std::env::temp_dir().join("kyro-thp-real-test.json"));
+            let list = m.list();
+            println!("devices: {list:?}");
+            let d = list
+                .iter()
+                .find(|d| d.kind == HwDeviceKind::Trezor)
+                .expect("no Trezor found")
+                .clone();
+            let (m2, id) = (m.clone(), d.id.clone());
+            let prompt: PromptFn = Arc::new(move |p| {
+                println!("hw-prompt: {p:?}");
+                if p == Prompt::ThpPairingCode {
+                    let (m3, id) = (m2.clone(), id.clone());
+                    std::thread::spawn(move || {
+                        println!("type the 6-digit code shown on the Trezor, then Enter:");
+                        let mut line = String::new();
+                        let _ = std::io::stdin().read_line(&mut line);
+                        let r = m3.submit_pairing_code(&id, Zeroizing::new(line.trim().into()));
+                        println!("code submitted: {r:?}");
+                    });
+                }
+            });
+            let st = m
+                .run_pairing(&d.id, Duration::from_secs(180), prompt.clone(), |dev, c| {
+                    dev.status(c, Network::Testnet)
+                })
+                .await;
+            println!("status: {st:?}");
+            println!("pairings: {:?}", m.thp_pairings());
+            let acc = m
+                .run(&d.id, Duration::from_secs(60), prompt, |dev, c| {
+                    dev.btc_account(c, Network::Testnet, BtcKind::Segwit, 0)
+                })
+                .await;
+            println!("m/84'/1'/0': {acc:?}");
+            assert!(acc.is_ok());
         });
     }
 

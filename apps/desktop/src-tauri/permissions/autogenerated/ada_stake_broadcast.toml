@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ada-stake-broadcast"
+description = "Enables the ada_stake_broadcast command without any pre-configured scope."
+commands.allow = ["ada_stake_broadcast"]
+
+[[permission]]
+identifier = "deny-ada-stake-broadcast"
+description = "Denies the ada_stake_broadcast command without any pre-configured scope."
+commands.deny = ["ada_stake_broadcast"]

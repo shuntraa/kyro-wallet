@@ -77,6 +77,22 @@ const COMMANDS: &[&str] = &[
     "ada_build_tx",
     "ada_sign_tx",
     "ada_broadcast",
+    // Staking (docs/IPC.md §2.8).
+    "sol_stake_overview",
+    "sol_stake_validators",
+    "sol_stake_build",
+    "sol_stake_sign",
+    "sol_stake_broadcast",
+    "ada_stake_overview",
+    "ada_stake_pools",
+    "ada_stake_pool",
+    "ada_stake_build",
+    "ada_stake_sign",
+    "ada_stake_broadcast",
+    "tron_stake_overview",
+    "tron_stake_witnesses",
+    "tron_stake_build",
+    "tron_stake_sign",
     "set_capture_protection",
     "config_get",
     "tor_status",
@@ -93,6 +109,9 @@ const COMMANDS: &[&str] = &[
     "hw_sign_btc_psbt",
     "hw_sign_evm_tx",
     "hw_sign_sol_tx",
+    "hw_thp_pairing_code",
+    "hw_thp_pairings",
+    "hw_thp_forget",
 ];
 
 fn main() {

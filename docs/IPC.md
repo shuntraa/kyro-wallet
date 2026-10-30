@@ -231,6 +231,65 @@ pub enum SolWarning {                           // JSON : { "kind": "feePayerNot
     Token2022ExtensionsUnverified { instruction } /*informatif*/, PriorityFeeEstimated /*informatif*/ }
 // requires_extra_confirmation = instruction inconnue, délégation, payeur ≠ nous, autre signataire inscriptible ou autorité ≠ nous.
 
+// --- Staking (§2.8). Solana : programme Stake11111111111111111111111111111111111111, décodé dans sol_decode_message ---
+// SolInstruction gagne 4 variantes (JSON "type") : StakeInitialize { stake_account, staker, withdrawer },
+//   StakeDelegate { stake_account, vote_account, authority }, StakeDeactivate { stake_account, authority },
+//   StakeWithdraw { stake_account, to, lamports, authority }.
+// sol_decode_message REFUSE (Error, pas « inconnu ») : toute autre instruction du programme Stake (Authorize*, SetLockup*,
+// Split, Merge, InitializeChecked, Redelegate, MoveStake, MoveLamports, DeactivateDelinquent, GetMinimumDelegation) ;
+// Initialize avec staker ou withdrawer ≠ nous, ou un lockup / dépositaire non nul ; Delegate / Deactivate / Withdraw dont
+// l'autorité ≠ nous, un Withdraw vers une autre adresse (ou un dépositaire ≠ nous) ; un sysvar / StakeConfig / nombre de
+// comptes inattendu ; un compte créé pour le programme Stake d'une taille ≠ 200 octets ou non initialisé dans la même
+// transaction ; un CreateAccountWithSeed dont l'adresse n'est pas sha256(base ‖ seed ‖ owner).
+pub enum SolStakeOp { CreateAndDelegate { seed, lamports /*stake + réserve de rent*/, vote_account },
+                      Delegate { stake_account, vote_account }, Deactivate { stake_account }, Withdraw { stake_account, lamports } }
+pub fn sol_stake_message(me, op: &SolStakeOp, blockhash) -> Result<Vec<u8>>;  // message legacy, un seul signataire (nous) ; création
+// par CreateAccountWithSeed (base = nous, owner = Stake, 200 o) + Initialize (staker = withdrawer = nous, lockup nul) + DelegateStake
+pub fn sol_create_with_seed(base, seed /*≤ 32 o*/, owner) -> Result<String>;
+pub fn sol_parse_stake_account(data /*200 o*/) -> Result<SolStakeAccount { state, rent_exempt_reserve, staker, withdrawer,
+    lockup_unix_timestamp, lockup_epoch, lockup_custodian, delegation: Option<SolDelegation { vote_account, stake, activation_epoch,
+    deactivation_epoch }> }>;
+pub fn sol_parse_stake_history(data) -> Result<Vec<SolStakeHistoryEntry { epoch, effective, activating, deactivating }>>;
+pub fn sol_stake_activation(delegation, target_epoch, history) -> SolStakeActivation { effective, activating, deactivating };
+// = Delegation::stake_activating_and_deactivating du programme Stake (taux 9 %/époque) ; getStakeActivation n'existe plus (Agave 2.0)
+pub fn sol_stake_withdrawable(account, balance, epoch, history) -> (u64 /*retrait partiel max*/, bool /*tout retirer (fermer) possible*/);
+
+// --- Staking Cardano (Conway) : CardanoBody gagne `certs: Vec<CardanoCert>` (clé 4, set 258 si tagged_sets) et
+//     `withdrawals: Vec<(Vec<u8> /*adresse de récompenses*/, u64)>` (clé 5). cardano_decode_tx (paiements) les refuse toujours.
+pub enum CardanoCert { StakeRegistration { stake, deposit } /*cert 7*/, StakeDeregistration { stake, refund } /*8*/,
+                       StakeDelegation { stake, pool } /*2*/, VoteDelegation { stake, drep: CardanoDrep } /*9*/ }   // identifiant de CLÉ seulement
+pub enum CardanoDrep { Key([u8; 28]), Script([u8; 28]), AlwaysAbstain, AlwaysNoConfidence }
+pub fn cardano_decode_stake_tx(tx_hex, ctx, stake_pk, key_deposit) -> Result<CardanoStakeSummary>;
+pub fn cardano_stake_tx_body(tx_hex, ctx, stake_pk, key_deposit) -> Result<CardanoBody>;
+pub fn cardano_sign_stake(root, account, index, stake_account, tx_hex, ctx, key_deposit) -> Result<(String, String, CardanoStakeSummary)>;
+// témoins : clé de paiement …/account'/0/index puis clé de staking …/stake_account'/2/0, chacun vérifié (verify_strict)
+// cardano_decode_stake_tx REFUSE : certificats 0, 1 (anciens formats), 3, 4 (pools), 5, 6 (genesis, MIR), 10–13 (combinés),
+// 14–18 (comité, DRep) ; identifiant de script ; un certificat ou un retrait pour une autre clé que stake_pk ; dépôt ≠ key_deposit ;
+// certificat en double ; enregistrement + désinscription, ou délégation + désinscription, ensemble ; enregistrement pas en premier ;
+// plusieurs retraits ; retrait de 0 ; métadonnées ; aucune opération de staking. Les votes (19) et propositions (20) restent refusés.
+pub struct CardanoStakeSummary { tx: CardanoTxSummary, stake_address, certificates: Vec<CardanoCertView>, withdrawals:
+    Vec<CardanoWithdrawalView { reward_address, lovelace }>, deposit, refund, withdrawn }   // serde camelCase, montants en chaînes
+pub enum CardanoCertView { StakeRegistration { deposit }, StakeDeregistration { refund }, StakeDelegation { pool_id /*pool1…*/,
+    pool_hash }, VoteDelegation { drep: CardanoDrepView } }          // JSON { "type": "stakeDelegation", … }
+pub enum CardanoDrepView { Key { id /*CIP-129 drep1…*/, hash }, Script { id, hash }, AlwaysAbstain, AlwaysNoConfidence }   // JSON { "kind": … }
+pub fn cardano_stake_public_key(root, account) -> Result<[u8; 32]>; pub fn cardano_blake2b224(data) -> [u8; 28];
+pub fn cardano_reward_address_bytes(net, stake_hash) -> Vec<u8>;    // 0xE0 | réseau ‖ hash
+pub fn cardano_pool_id(s /*pool1… ou 56 hex*/) -> Result<[u8; 28]>; pub fn cardano_pool_bech32(hash) -> Result<String>;
+pub fn cardano_drep_parse(s /*alwaysAbstain | alwaysNoConfidence | drep1… (CIP-129 ou CIP-105) | drep_script1…*/) -> Result<CardanoDrep>;
+pub fn cardano_drep_id(drep) -> Option<String>;                     // CIP-129
+
+// --- Staking TRON (Stake 2.0) : TronContract gagne FreezeV2 { owner, amount, resource }, UnfreezeV2 { … }, WithdrawExpireUnfreeze,
+//     CancelAllUnfreezeV2, VoteWitness { owner, votes: Vec<([u8; 21], i64)> }, WithdrawBalance (types 54, 55, 56, 59, 4, 13).
+//     TronRaw::decode refuse toujours DelegateResource / UnDelegateResource (57, 58), TRON_POWER, le champ `support`.
+//     tron_decode_raw (paiements) refuse ces contrats de staking.
+pub enum TronResource { Bandwidth, Energy }                          // JSON "BANDWIDTH" | "ENERGY"
+pub fn tron_decode_stake_raw(raw_hex, our_address) -> Result<TronStakeSummary>;   // + refuse : owner ≠ nous, montant ≤ 0, mémo,
+// fee_limit ≠ 0, 0 ou plus de 30 votes (TRON_MAX_VOTES), un SR deux fois, un vote nul, un transfert / appel de contrat
+pub fn tron_stake_sign(seed, index, raw_hex) -> Result<([u8; 65], TronStakeSummary)>;
+pub struct TronStakeSummary { txid, owner, action: TronStakeAction, expiration, timestamp, ref_block_bytes, ref_block_hash, raw_size }
+pub enum TronStakeAction { Freeze { resource, amount }, Unfreeze { resource, amount }, WithdrawUnfrozen, CancelAllUnfreeze,
+                           Vote { votes: Vec<TronVote { address, count }>, total }, ClaimRewards }   // JSON { "type": "freeze", … }
+
 // --- hardware wallets (B3) : aucune clé privée ; on ne fait jamais confiance à l'appareil ---
 pub enum HwDeviceKind { Ledger, Trezor }                                  // JSON "ledger" | "trezor"
 pub struct WatchOnlyAccount { pub id: String /*"hw-"+16 hex*/, pub label: String, pub device: HwDeviceKind,
@@ -299,6 +358,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `ada_*` | voir §2.7 | | Cardano : transaction construite **par Rust** depuis les UTxO et les paramètres de protocole, chaque sortie détaillée (ADA, tokens, min-ADA) |
 | `xrp_*` | voir §2.6 | | XRP Ledger : paiement construit **par Rust** (Sequence, Fee, LastLedgerSequence), tag de destination mis en évidence, réserve |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
+| `sol_stake_*`, `ada_stake_*`, `tron_stake_*` | voir §2.8 | | Staking : Solana natif, délégation Cardano, TRON Stake 2.0 ; opérations construites **par Rust**, décodées et vérifiées en direct avant le dialogue natif |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
 | `btc_core_status` | — | `CoreStatus` | progression du rescan (`getwalletinfo.scanning`). L'état d'import est propre à **(réseau, URL, portefeuille)** : un autre nœud ou un autre réseau ne voit pas l'import d'un premier. Aucun nœud Core configuré : réponse normale `{ state: 'not-configured', wallet: '', walletLoaded: false }` (pas d'erreur) |
 | `btc_cbf_status` | — | `CbfStatus` | mode filtres compacts (fonction `cbf`) ; build sans la fonction : `FEATURE_DISABLED` |
@@ -306,7 +366,10 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `set_capture_protection` | `{ enabled }` | `void` | `set_content_protected` |
 | `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasOneinchKey, hasTrongridKey }` | jamais les clés elles-mêmes ; chaque `hasXKey` = variable d'environnement **ou** clé enregistrée dans les réglages (ex. TronGrid : `KYRO_TRONGRID_API_KEY` ou `apiKeys.trongrid`) |
 | `hw_list` | — | `DeviceInfo[]` | détecte les Ledger (HID) et Trezor (WebUSB) branchés ; ids stables pour la session (`ledger-1`, `trezor-1`…) tant que l'appareil reste sur le même port ; 10 s max. Voir §2.3 |
-| `hw_open` | `{ id }` | `DeviceStatus` | ouvre l'appareil et lit son état : verrouillé, app Ledger ouverte, firmware Trezor, état par chaîne |
+| `hw_open` | `{ id }` | `DeviceStatus` | ouvre l'appareil et lit son état : verrouillé, app Ledger ouverte, firmware Trezor, état par chaîne. **Seule commande qui peut appairer un Trezor Safe 7** (THP, §2.3) : `hw-prompt` `thp-confirm-pairing` puis `thp-pairing-code` → `hw_thp_pairing_code` ; délai 180 s |
+| `hw_thp_pairing_code` | `{ id, code /*6 chiffres*/ }` | `void` | Trezor Safe 7, après `hw-prompt` `thp-pairing-code` : le code affiché **sur l'écran de l'appareil**, recopié par l'utilisateur. Autre chose que 6 chiffres ASCII : `INVALID_INPUT` (l'appel `hw_open` continue d'attendre) ; aucun appairage en attente : `HW_BAD_RESPONSE`. Code faux : `hw_open` échoue en `HW_PAIRING_FAILED` |
+| `hw_thp_pairings` | — | `{ key /*hex, clé statique publique de l'appareil*/; model /*"T3W1"*/; added /*s UNIX*/ }[]` | appareils THP appairés avec cette installation (données publiques) |
+| `hw_thp_forget` | `{ key? }` | `number` | session déverrouillée si un coffre existe. Oublie l'appairage d'un appareil (`key` de `hw_thp_pairings`), ou **tous** sans `key` (supprime aussi la clé THP de Kyro : nouvelle clé au prochain appairage). Ferme les connexions Trezor inactives. Côté appareil, Kyro reste connu jusqu'à sa réinitialisation |
 | `hw_cancel` | `{ id }` | `boolean` | abandonne l'opération en cours sur `id` (`true` s'il y en avait une) ; elle se termine en `USER_REJECTED` |
 | `hw_pin_matrix` | `{ id, positions /*"1"…"9"*/ }` | `void` | Trezor One uniquement, après l'événement `hw-prompt` `pin-matrix` : **positions** dans la grille 3×3 vierge, jamais le PIN ; disposition du pavé numérique Trezor : ligne du haut 7 8 9, milieu 4 5 6, bas 1 2 3 (case en haut à gauche = « 7 »), transmise telle quelle |
 | `hw_get_xpub` | `{ id, chain: 'btc' \| 'evm' \| 'sol', account }` | `HwXpub` | lit les clés publiques sur l'appareil, sans rien afficher ni enregistrer |
@@ -406,7 +469,7 @@ type TorStatus = { state: 'off' | 'bootstrapping' | 'ready' | 'error'; progress:
 - `vault-locked` (sans contenu) émis par Rust à l'auto-lock ;
 - `cbf-status` (`CbfStatus`) pendant une synchronisation par filtres compacts (au plus 2 par seconde) ;
 - `tor-status` (`TorStatus`) émis à chaque changement d'état ou de progression du démarrage de Tor. Un démarrage bloqué passe en `error` après 120 s (jamais de `bootstrapping` infini).
-- `hw-prompt` (`{ id, kind: 'confirm-on-device' | 'pin-on-device' | 'passphrase-on-device' | 'pin-matrix' }`) pendant une opération hardware wallet : ce que l'UI doit dire à l'utilisateur (voir §2.3).
+- `hw-prompt` (`{ id, kind: 'confirm-on-device' | 'pin-on-device' | 'passphrase-on-device' | 'pin-matrix' | 'thp-confirm-pairing' | 'thp-pairing-code' | 'thp-confirm-connection' }`) pendant une opération hardware wallet : ce que l'UI doit dire à l'utilisateur (voir §2.3 ; les trois `thp-*` : Trezor Safe 7).
 
 Erreurs : rejet de la promesse avec `{ code: 'WRONG_PASSWORD' | 'LOCKED' | 'RATE_LIMITED' | 'USER_REJECTED' | 'HOST_NOT_ALLOWED' | 'INVALID_INPUT' | 'INTERNAL' | 'TOR_UNAVAILABLE' | 'SERVER_INVALID' | 'SERVER_WRONG_NETWORK' | 'SERVER_UNREACHABLE' | 'DEFAULT_SERVER_DISABLED' | 'FEATURE_DISABLED' | 'HW_NOT_FOUND' | 'HW_LOCKED' | 'HW_WRONG_APP' | 'HW_REJECTED' | 'HW_DISCONNECTED' | 'HW_UNSUPPORTED' | 'HW_BUSY' | 'HW_TIMEOUT' | 'HW_BAD_RESPONSE' | 'HW_ADDRESS_MISMATCH' | 'HW_WRONG_DEVICE', message, data? }`. `data` n'existe que pour `HW_WRONG_APP` (`{ expected, open }`), `HW_UNSUPPORTED` (`{ min: string | null }`) et `HW_ADDRESS_MISMATCH` (`{ device, expected }`) ; les codes hardware wallet sont détaillés au §2.3. `TOR_UNAVAILABLE` : Tor activé mais pas prêt (démarrage trop long, échec, arrêté) — la requête n'a **pas** été envoyée.
 
@@ -455,7 +518,7 @@ Différences à connaître :
 
 ### 2.3 Hardware wallets (Ledger, Trezor)
 
-Transport USB en Rust : Ledger en HID (hidapi), Trezor en WebUSB (libusb via rusb, compilée et liée statiquement). Rien ne passe par l'UI ni par le réseau. Chaque appareil a **un verrou** (2ᵉ opération simultanée : `HW_BUSY`) ; chaque appel tourne hors du thread UI avec un **délai** (lecture de clés 90 s, PIN Trezor compris ; affichage d'adresse et signature 180 s ; `hw_list` 10 s). Les transports lisent par tranches de 100 ms : délai dépassé, `hw_cancel` ou débranchement terminent l'appel proprement (Trezor reçoit `Cancel`), la connexion est fermée puis rouverte à l'appel suivant, et rien n'est renvoyé.
+Transport USB en Rust : Ledger en HID (hidapi), Trezor en WebUSB (libusb via rusb, compilée et liée statiquement) ; Trezor Safe 7 par-dessus le même WebUSB avec le protocole chiffré **THP** (voir « Trezor Safe 7 » plus bas). Rien ne passe par l'UI ni par le réseau. Chaque appareil a **un verrou** (2ᵉ opération simultanée : `HW_BUSY`) ; chaque appel tourne hors du thread UI avec un **délai** (lecture de clés 90 s, PIN Trezor compris ; affichage d'adresse et signature 180 s ; `hw_list` 10 s). Les transports lisent par tranches de 100 ms : délai dépassé, `hw_cancel` ou débranchement terminent l'appel proprement (Trezor reçoit `Cancel`), la connexion est fermée puis rouverte à l'appel suivant, et rien n'est renvoyé.
 
 Avec un coffre sur cet ordinateur, toutes les commandes `hw_*` qui lisent des clés, enregistrent ou signent exigent la session déverrouillée (`LOCKED`) ; un utilisateur « hardware wallet seul » n'a pas de coffre et pas de mot de passe Kyro (la confirmation se fait sur l'appareil). Les signatures hardware wallet ne demandent **pas** le mot de passe du coffre.
 
@@ -465,6 +528,7 @@ type Chain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp'
 type DeviceStatus = { id: string; kind: 'ledger' | 'trezor'; model: string; locked: boolean;
   app?: { name: string; version: string };        // Ledger : app ouverte ("Tableau de bord" = dashboard)
   firmware?: string; passphrase?: boolean;        // Trezor
+  protocol?: 'thp';                               // Trezor Safe 7 : canal THP chiffré et appairé
   chains: { chain: Chain; state: 'ready' | 'open-app' | 'unlock' | 'unsupported';
             app?: string /*app Ledger à ouvrir*/; min?: string /*version minimale*/; reason?: string }[] };
 type HwXpub = { chain: Chain; account: number;
@@ -484,13 +548,28 @@ type WatchOnlyAccount = { id: string; label: string; device: 'ledger' | 'trezor'
 
 | | Ledger (app à ouvrir, version min.) | Trezor (firmware min.) |
 |---|---|---|
-| Bitcoin (BIP84, BIP86, PSBT) | « Bitcoin Test » (testnet) / « Bitcoin » (mainnet) ≥ 2.1.0 | One ≥ 1.10.4 ; T, Safe 3, Safe 5 ≥ 2.4.3 |
+| Bitcoin (BIP84, BIP86, PSBT) | « Bitcoin Test » (testnet) / « Bitcoin » (mainnet) ≥ 2.1.0 | One ≥ 1.10.4 ; T, Safe 3, Safe 5, Safe 7 ≥ 2.4.3 (Safe 7 : tout firmware publié, ≥ 2.9.3) |
 | EVM (EIP-1559) | « Ethereum » ≥ 1.9.0 (toutes les chaînes EVM) | One ≥ 1.10.4 ; T/Safe ≥ 2.4.2 |
 | ERC-20 en clair | descripteur signé par Ledger requis : embarqué pour USDC et USDT (mainnet) et tUSDC (Sepolia) ; sinon blind signing (réglage de l'app) + dialogue renforcé | transfert : destinataire, montant brut et contrat affichés (« Unknown token » hors liste) ; `approve` et autres appels : dialogue renforcé |
 | Solana | « Solana » ≥ 1.3.1 (blind signing requis pour les instructions qu'il ne décode pas : `HW_UNSUPPORTED`) | T/Safe ≥ 2.6.4 ; pas sur la One |
-| Non pris en charge | — | Safe 7 (protocole THP), mode bootloader, One < 1.7 (HID) |
+| Non pris en charge | — | mode bootloader, One < 1.7 (HID) ; Safe 7 : appairage autre que par code (QR, NFC : pas proposés par le firmware de production) |
 
 PIN et passphrase : Ledger se déverrouille sur l'appareil (`HW_LOCKED` → l'UI demande de le déverrouiller puis de réessayer). Trezor T/Safe : PIN et passphrase saisis **sur l'appareil** (`hw-prompt`). Trezor One : PIN par la grille aveugle (`pin-matrix` → `hw_pin_matrix`) ; passphrase à saisir sur l'ordinateur → refusée (`HW_UNSUPPORTED`) : aucun secret ne transite par l'UI.
+
+**Trezor Safe 7 (THP, Trezor Host Protocol)** — `hw/thp.rs`, `hw/thp_store.rs`. Même identifiant USB que les T/Safe (`1209:53c1`, interface WebUSB 0, paquets de 64 octets) : `hw_list` le liste comme `model: "Trezor"`, et `hw_open` le reconnaît à sa réponse `Failure(InvalidProtocol)` au premier message v1 (méthode de trezorlib), puis bascule en THP. Le modèle réel (« Trezor Safe 7 ») est dans `DeviceStatus.model`, avec `protocol: 'thp'`. Une fois connecté, **toutes les commandes existantes** marchent comme pour un Safe 5 (mêmes messages protobuf, mêmes vérifications Rust) : `hw_get_xpub`, `hw_account_add`, `hw_verify_address`, `hw_sign_btc_psbt` / `evm_tx` / `sol_tx`. Ce que fait Rust :
+1. **Canal** : allocation sur le canal de diffusion, poignée de main `Noise_XX_25519_AESGCM_SHA256` (crate `snow`), puis tout est chiffré (AES-256-GCM). Appareil verrouillé : `hw-prompt` `pin-on-device`, le PIN se tape sur l'appareil pendant la poignée de main.
+2. **Appareil déjà appairé** (identifiant THP enregistré) : pas de code ; l'appareil demande en général de **confirmer la connexion** de « Kyro Wallet » sur son écran (`hw-prompt` `thp-confirm-connection`). Kyro ne demande jamais l'option « autoconnect » (connexion sans confirmation).
+3. **Appareil inconnu** : seulement dans `hw_open` (toute autre commande répond `HW_PAIRING_REQUIRED`). (a) l'appareil demande d'autoriser « Kyro Wallet » à s'appairer → `hw-prompt` `thp-confirm-pairing`. Kyro s'annonce avec le libellé fixe « Kyro Wallet » (champs `host_name` et `app_name` de `ThpPairingRequest`), **jamais le nom de l'ordinateur** ; aucun identifiant d'installation n'est nécessaire (l'identifiant THP est lié à la clé de Kyro, pas au libellé) ; (b) il affiche un **code à 6 chiffres** → `hw-prompt` `thp-pairing-code` : l'UI affiche un champ de saisie et appelle `hw_thp_pairing_code { id, code }` ; (c) Rust vérifie par CPace que l'appareil connaît le même code, puis que son secret correspond à l'engagement envoyé **avant** le défi de Kyro ; (d) l'appareil délivre un identifiant, enregistré dans `trezor-thp.json` (voir SECURITY.md) ; (e) confirmation de connexion éventuelle (`thp-confirm-connection`). Code faux, ou appareil qui ne prouve pas le code : `HW_PAIRING_FAILED` (rien n'est enregistré ; relancer `hw_open` : l'appareil affiche un nouveau code). Refus sur l'appareil : `HW_REJECTED`. Personne ne tape le code : `HW_TIMEOUT` après 180 s, et l'appareil reçoit `Cancel` pour quitter l'écran du code. `hw_cancel` : `USER_REJECTED`, idem.
+4. Identifiant refusé par l'appareil (réinitialisé, hôtes oubliés) : Kyro l'efface et il faut réappairer (`HW_PAIRING_REQUIRED` hors `hw_open`).
+5. **Sessions** : `GetFeatures` sur la session 0 (sans graine), puis `ThpCreateNewSession` (session 1) : passphrase **sur l'appareil** si elle est activée, sinon passphrase vide. Session oubliée par l'appareil (`ThpUnallocatedSession`) ou canal perdu (`UNALLOCATED_CHANNEL`, `DECRYPTION_FAILED`) : `HW_DISCONNECTED`, reconnexion à l'appel suivant (avec l'identifiant : pas de nouveau code).
+6. **Authenticité** : THP authentifie l'appareil **auprès de Kyro** par l'appairage (le code vu sur l'écran physique), pas par un certificat du fabricant. Le contrôle « appareil authentique » de Trezor (`AuthenticateDevice` : chaînes X.509 Optiga P-256, Tropic Ed25519, MCU ML-DSA-44 jusqu'aux clés racines Trezor) est un message séparé, aussi disponible sur Safe 3/5, **non implémenté** par Kyro (voir SECURITY.md) ; à faire dans Trezor Suite.
+
+*Ce que l'UI doit ajouter (rien n'est fait côté UI)* :
+- Gérer les trois nouveaux `hw-prompt` dans l'écran d'opération hardware wallet : `thp-confirm-pairing` (« Sur ton Trezor, autorise Kyro Wallet à s'appairer »), `thp-pairing-code` (écran de saisie : 6 cases numériques, clavier numérique, bouton « Valider » → `hw_thp_pairing_code` ; bouton « Annuler » → `hw_cancel`), `thp-confirm-connection` (« Confirme la connexion sur ton Trezor »).
+- Sur `INVALID_INPUT` de `hw_thp_pairing_code` : laisser la saisie ouverte. Sur `HW_PAIRING_FAILED` : expliquer « code incorrect », proposer de recommencer (`hw_open`, nouveau code).
+- Sur `HW_PAIRING_REQUIRED` (n'importe quelle commande) : envoyer l'utilisateur vers « Connecter » (`hw_open`).
+- Une petite liste « Appareils Trezor appairés » (`hw_thp_pairings`) avec « Oublier » (`hw_thp_forget { key }`) et « Tout oublier » (`hw_thp_forget {}`), en précisant que l'appareil, lui, garde Kyro dans sa liste jusqu'à sa réinitialisation.
+- Afficher `DeviceStatus.protocol === 'thp'` (« canal chiffré, appairé ») si utile ; aucun autre changement des écrans BTC / EVM / Solana.
 
 **Erreurs**
 
@@ -501,12 +580,15 @@ PIN et passphrase : Ledger se déverrouille sur l'appareil (`HW_LOCKED` → l'UI
 | `HW_WRONG_APP` | Ledger : mauvaise app ouverte (dashboard compris ; `6E00`, `6E01`, `6D00`, `6D02`, `6511`) | `{ expected, open }` |
 | `HW_REJECTED` | refus sur l'appareil (Ledger `6985`, `5501`, `6982` en signature ; Trezor `ActionCancelled` / `PinCancelled`) | |
 | `HW_DISCONNECTED` | erreur USB / débranchement, y compris pendant une signature : opération abandonnée, connexion fermée | |
-| `HW_UNSUPPORTED` | chaîne de phase 4, firmware/app trop ancien, Safe 7, blind signing désactivé (Ledger `6A80` en signature EVM, `6808` Solana), passphrase Trezor One, entrées mixtes Ledger | `{ min }` |
+| `HW_UNSUPPORTED` | chaîne de phase 4, firmware/app trop ancien, blind signing désactivé (Ledger `6A80` en signature EVM, `6808` Solana), passphrase Trezor One, entrées mixtes Ledger ; Safe 7 : version THP ≠ 2.x, appairage par code non proposé | `{ min }` |
 | `HW_BUSY` | autre opération en cours sur cet appareil ; interface USB prise par une autre application (Trezor Suite, Ledger Live) ; Linux sans règles udev | |
 | `HW_TIMEOUT` | pas de réponse dans le délai : opération abandonnée | |
 | `HW_BAD_RESPONSE` | réponse mal formée, ou signature/adresse/clé qui ne passe pas la vérification de Kyro | |
 | `HW_ADDRESS_MISMATCH` | l'adresse affichée par l'appareil ≠ celle dérivée par Kyro de l'xpub enregistrée : **ne pas utiliser l'adresse** | `{ device, expected }` |
 | `HW_WRONG_DEVICE` | les clés de l'appareil ne sont pas celles du compte (autre appareil, autre passphrase, compte enregistré modifié) | |
+| `HW_PAIRING_REQUIRED` | Trezor Safe 7 pas (ou plus) appairé avec Kyro, et la commande n'est pas `hw_open` : appairer d'abord par `hw_open` | |
+| `HW_PAIRING_FAILED` | appairage THP échoué : code incorrect (refusé par l'appareil), ou l'appareil n'a pas prouvé le code (engagement/secret incohérents) ; rien n'est enregistré | |
+| `INTERNAL` | (hardware wallet) fichier `trezor-thp.json` illisible ou non inscriptible, aléa du système indisponible ; `hw_thp_forget {}` remet le fichier à zéro | |
 | `USER_REJECTED` | refus dans le dialogue natif de Kyro, ou `hw_cancel` | |
 
 **Phase 4 (pas encore implémentée ; l'abstraction `HardwareWallet` a déjà les chaînes)** : Ledger — apps « Litecoin », « Dogecoin » (protocole Bitcoin historique, pas l'app v2), « Tron », « Cardano ADA », « XRP » ; Trezor — Litecoin et Dogecoin (même flux `SignTx` que Bitcoin, firmware universel), XRP (`RippleSignTx`), Cardano (T/Safe), Tron (firmware récent, `Capability_Tron`).
@@ -559,7 +641,7 @@ Rust choisit le serveur (`servers.tron`, sinon TronGrid), famille Tor `tron`, ja
 
 **Clé TronGrid (optionnelle)** : `KYRO_TRONGRID_API_KEY` (env, développement) ou `settings.apiKeys.trongrid`. Rust l'ajoute en en-tête `TRON-PRO-API-KEY` **uniquement** vers `api.trongrid.io` et `nile.trongrid.io` (jamais vers un nœud personnel ni un autre hôte) ; l'UI ne voit jamais la clé (`config_get.hasTrongridKey`). Sans clé : quotas réduits, et des relais de sortie Tor peuvent recevoir un 403.
 
-Refusé avant toute signature : autre type de contrat que TRX / appel de contrat (gel, vote, délégation, **changement de permissions**…), `Permission_id` (multi-signature), autre propriétaire, `auths`, `scripts`, valeur TRC-10, encodage non canonique. Estimation de bande passante : taille signée + 64 octets (comme java-tron). Hardware wallets : `HW_UNSUPPORTED` (Trezor a `TronSignTx`, Ledger l'app « Tron » : non faits).
+Refusé avant toute signature : autre type de contrat que TRX / appel de contrat (**délégation de ressources**, **changement de permissions**… ; gel, dégel, vote et récompenses passent uniquement par `tron_stake_*`, §2.8), `Permission_id` (multi-signature), autre propriétaire, `auths`, `scripts`, valeur TRC-10, encodage non canonique. Estimation de bande passante : taille signée + 64 octets (comme java-tron). Hardware wallets : `HW_UNSUPPORTED` (Trezor a `TronSignTx`, Ledger l'app « Tron » : non faits).
 
 **Fait côté UI** (commit de l'UI TRON) : `Family` `'tron'`, types `Commands` (`tron_*`, `Accounts.tron`, `Servers.tron`, `ServerTestTarget`), backend démo, écrans Envoyer (afficher `estimate` avant le mot de passe : bande passante, énergie, activation), Recevoir, Actif (TRX, USDT), Historique, réglage serveur TRON, « Connexions sortantes », sortie de TRON de `WATCH_ONLY_CHAINS`. Adaptateur : `TronAdapter` (`packages/chains/src/tron/`), `tronChain(network)`, `TRON_USDT`.
 
@@ -587,7 +669,7 @@ Refusé avant toute signature : tout autre type de transaction (AccountSet, SetR
 
 Rust choisit le serveur (`servers.cardano`, sinon Koios : `preprod.koios.rest` / `api.koios.rest`, offre publique gratuite sans clé), famille Tor `cardano`, jamais de repli. Blockfrost n'est pas utilisé : Koios fournit tout ce qu'il faut (UTxO, paramètres, tip, historique, `submittx`). **Rust construit la transaction** : UTxO de notre adresse (`address_utxos`), paramètres (`epoch_params` : `min_fee_a`, `min_fee_b`, `coins_per_utxo_size`, `max_tx_size`, bornés contre un serveur hostile), sélection des UTxO (ceux qui portent le token demandé d'abord, puis ADA seuls par valeur décroissante, ceux avec tokens en dernier), une sortie destinataire + une sortie de monnaie qui rend **tous** les tokens restants, frais = `min_fee_a × taille signée + min_fee_b` (itéré), chaque sortie ≥ son min-UTxO, `ttl` = slot courant + 3 600 (≈ 1 h), ensembles taggés 258 (Conway), aucun collatéral, aucun certificat. Encodé par wallet-core ; une transaction construite par le serveur n'est jamais signée.
 
-**Mode une seule adresse** : réception et monnaie sur `m/1852'/1815'/0'/0/0` (staking `…/2/0`), comme les portefeuilles « single address » ; plus simple et plus sûr à vérifier, mais tous les paiements sont liés à une adresse (et à une clé de staking) visible. Le staking (délégation, retraits) n'est pas fait.
+**Mode une seule adresse** : réception et monnaie sur `m/1852'/1815'/0'/0/0` (staking `…/2/0`), comme les portefeuilles « single address » ; plus simple et plus sûr à vérifier, mais tous les paiements sont liés à une adresse (et à une clé de staking) visible. Staking (enregistrement, délégation, vote, retraits) : §2.8, toujours avec cette clé `…/0'/2/0` ; `ada_sign_tx` refuse toujours certificats et retraits.
 
 | Commande | Arguments | Retour | Notes |
 |---|---|---|---|
@@ -606,6 +688,137 @@ Hardware wallets : `HW_UNSUPPORTED`. Ce qu'il faudrait : Ledger app « Cardano A
 
 **Fait côté UI** (commit 45208d5) : `Family` `'ada'` (aujourd'hui `CardanoChain` / `cardanoChain(network)` existent dans le registre mais hors `Family` et `allChains()`), types `Commands` de `@kyro/shared` (`ada_*`, `Accounts.cardano`, `Servers.cardano`, `CardanoServer`, `ServerTestTarget` `cardano` ; les types sont aujourd'hui dans `packages/chains/src/cardano/adapter.ts`, à déplacer dans `ipc.ts`), `WalletAccounts.cardano` et `AdapterSet.cardano` (`createAdapters`), backend démo, écrans Envoyer (adresse, montant ADA avec `adaToLovelace`, token facultatif avec quantité, message facultatif public, aperçu du `summary` avant le mot de passe : sorties, min-ADA, frais), Recevoir (adresse de base seule), Actif (ADA, `spendable` = solde − `lockedWithTokens`, liste des tokens avec policy id et mention « non vérifié »), Historique (`lovelaceDelta`, tokens, message), réglage serveur Cardano (Koios), « Connexions sortantes » (`preprod.koios.rest` / `api.koios.rest`), sortie de Cardano de `WATCH_ONLY_CHAINS`. Adaptateur : `CardanoAdapter` (`packages/chains/src/cardano/`), `isCardanoAddress`, `isByronAddress`.
 
+### 2.8 Staking (Solana, Cardano, TRON)
+
+**Chaînes concernées.** Solana (staking natif, programme Stake), Cardano (délégation à un pool + délégation de vote, Conway) et TRON (Stake 2.0 + votes pour les SR). **Pas de staking** pour Bitcoin, Litecoin, Dogecoin et XRP Ledger : ces protocoles n'en ont pas. **Ethereum (et chaînes EVM) : hors périmètre** — le staking natif exige 32 ETH et un validateur qui tourne en permanence ; le « staking liquide » (Lido, Rocket Pool…) n'est qu'un appel au contrat d'un tiers (risque de contrat et de garde), que Kyro ne décode pas : il n'est pas proposé.
+
+**Principe commun.** L'UI ne construit rien : elle choisit une opération, `*_stake_build({ action })` la fait **construire par Rust** (données lues en direct via Tor, familles `solana` / `cardano` / `tron`, aucun nouvel hôte) et renvoie le résultat **décodé par wallet-core** avec le contexte vivant (validateur / pool / SR, montants, calendrier) à afficher **avant** le mot de passe. `*_stake_sign({ …, password })` redécode, **relit tout en direct** et refait chaque vérification, demande le mot de passe, ouvre la **fenêtre native** (texte construit par Rust), puis la **2ᵉ fenêtre renforcée** si `requiresExtraConfirmation`, signe et vérifie la signature ; le résumé signé doit être identique à celui affiché. Toute opération qui n'est pas exactement une de celles listées ici est refusée (`INVALID_INPUT`, message en français). Montants : chaînes décimales en plus petite unité (lamports, lovelace, sun). Coffre verrouillé : `LOCKED`. Serveur en panne ou réponse invalide : `SERVER_UNREACHABLE` (jamais de repli). Pas de hardware wallet pour le staking (`HW_UNSUPPORTED` n'est pas renvoyé : les commandes `hw_*` ne le proposent simplement pas).
+
+#### Solana (`sol_stake_*`) — compte de staking dérivé de ton adresse (`createWithSeed(toi, "kyro-stake-N", Stake)`), toi comme staker **et** withdrawer, aucun blocage
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `sol_stake_overview` | — | `SolStakeOverview` | comptes de staking dont tu es le **withdrawer** (`getProgramAccounts`, filtre `memcmp` offset 44, revérifié par Rust après lecture), état calculé par Rust depuis le sysvar StakeHistory, époque, minimum de délégation (`getStakeMinimumDelegation` : **1 SOL sur devnet** le 30/10/2026), réserve de rent d'un nouveau compte (`getMinimumBalanceForRentExemption(200)`) |
+| `sol_stake_validators` | `{ withNames?: boolean /*défaut true*/ }` | `{ validators: SolValidator[], namesAvailable: boolean }` | `getVoteAccounts` (en cours puis en retard), triés par stake actif ; noms des comptes validator-info (programme Config, **déclarés, non vérifiés**) ; mainnet : ≈ 2 Mo à lire via Tor, `withNames: false` pour s'en passer (`namesAvailable: false` si la lecture échoue) |
+| `sol_stake_build` | `{ action: SolStakeRequest }` | `{ message /*b64, legacy, non signé*/, summary: SolTxSummary, stake: SolStakePreview }` | refusé avant construction : montant < minimum de délégation, solde < montant + rent + frais, compte de vote inconnu de `getVoteAccounts`, compte de staking pas entièrement à toi (staker, withdrawer, blocage), délégation d'un compte qui n'est pas inactif, désactivation d'un compte non délégué, retrait au-delà de `withdrawable` (ou tout le solde alors que du stake reste actif) |
+| `sol_stake_sign` | `{ message, password }` | `{ signature /*b64*/, summary, stake }` | décodage wallet-core (`sol_decode_message`) ; le message doit être **exactement** une des 4 opérations Kyro (payeur et seul signataire = toi, pas de table d'adresses) ; relit en direct l'époque, la rent, le solde, le compte de staking et le validateur ; dialogue natif : opération, compte, montants (délégué, réserve de rent, total), validateur (compte de vote, identité, nom déclaré, commission, stake actif, en retard ou non), autorités, époque en cours et temps restant, activation à l'époque N+1 ou refroidissement, frais, « pas de slashing » ; **renforcé** si le validateur est en retard (`delinquent`) ou garde plus de 10 % de commission |
+| `sol_stake_broadcast` | `{ message, signature }` | `string` (signature base58 = id) | le message doit être une opération de staking Kyro, la signature doit se vérifier pour ton adresse ; `sendTransaction` (preflight) ; l'id renvoyé doit être la signature ; refus du réseau → `INVALID_INPUT` avec son message. Suivi : `getSignatureStatuses` par `net_fetch`, comme les envois |
+
+```ts
+type SolStakeRequest =
+  | { kind: 'createAndDelegate'; lamports: string /*montant délégué ; Kyro ajoute la réserve de rent*/; voteAccount: string }
+  | { kind: 'delegate'; stakeAccount: string; voteAccount: string }        // compte « initialized » ou « inactive » uniquement
+  | { kind: 'deactivate'; stakeAccount: string }                           // compte « activating » ou « active »
+  | { kind: 'withdraw'; stakeAccount: string; lamports?: string };         // absent = le maximum (tout le solde si canClose)
+type SolEpoch = { epoch: number; slotIndex: number; slotsInEpoch: number; absoluteSlot: number; secondsLeft: number /*≈, 400 ms par slot*/ };
+type SolStakePosition = {
+  address: string; lamports: string; state: 'initialized' | 'activating' | 'active' | 'deactivating' | 'inactive';
+  rentExemptReserve: string; staker: string; withdrawer: string;
+  ours: boolean /*staker = withdrawer = toi et pas de blocage en cours : gérable par Kyro*/; lockupInForce: boolean;
+  voteAccount: string | null; delegated: string | null; activationEpoch: number | null; deactivationEpoch: number | null;
+  effective: string; activating: string; deactivating: string;   // lamports
+  withdrawable: string /*retrait partiel max sans fermer le compte*/; canClose: boolean /*tout le solde retirable (ferme le compte)*/ };
+type SolStakeOverview = { address: string; balance: string; epoch: SolEpoch; minimumDelegation: string; rentExemptReserve: string;
+                          accounts: SolStakePosition[] };
+type SolValidator = { voteAccount: string; identity: string; name: string | null /*déclaré, non vérifié*/; commission: number /*%*/;
+                      activatedStake: string; delinquent: boolean; lastVote: number; epochVoteAccount: boolean };
+type SolStakeWarning = { kind: 'delinquent' } | { kind: 'highCommission'; commission: number };
+type SolStakePreview = {
+  kind: 'createAndDelegate' | 'delegate' | 'deactivate' | 'withdraw'; stakeAccount: string; seed: string | null;
+  lamports: string | null /*versés au nouveau compte, ou retirés*/; delegated: string | null; rentExemptReserve: string;
+  validator: SolValidator | null; account: SolStakePosition | null /*état actuel d'un compte existant*/;
+  balance: string; fee: string; epoch: SolEpoch; closesAccount: boolean;
+  warnings: SolStakeWarning[]; requiresExtraConfirmation: boolean };
+```
+`summary.instructions` contient les variantes `stakeInitialize`, `stakeDelegate`, `stakeDeactivate`, `stakeWithdraw` (§1), plus `systemCreateAccountWithSeed` pour une création.
+
+Calendrier : une délégation s'active au début de l'époque suivante (≈ 2 jours par époque sur devnet et mainnet : 432 000 slots), plus si le réseau limite la montée (9 % du stake total par époque) ; même chose pour le refroidissement après `deactivate`, pendant lequel il n'y a pas de récompense. **Exception utile** : désactivé dans l'époque même de sa délégation, le stake n'a jamais été actif et se retire aussitôt (`canClose: true`). Les récompenses s'ajoutent au compte de staking (elles se retirent avec `withdraw`).
+
+#### Cardano (`ada_stake_*`) — clé de staking `m/1852'/1815'/0'/2/0` (celle de ton adresse unique), certificats Conway
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `ada_stake_overview` | — | `AdaStakeOverview` | Koios `account_info` (enregistrée, pool, DRep, récompenses, dépôt), `pool_info` du pool actuel, `epoch_params` (`key_deposit` : **2 ADA**), `tip` + `genesis` (époque, fin) |
+| `ada_stake_pools` | `{ limit?: number /*défaut 50, max 200*/ }` | `AdaPool[]` | `pool_list` (pools enregistrés, par stake actif décroissant) puis `pool_info` |
+| `ada_stake_pool` | `{ poolId /*pool1… ou 56 hex*/ }` | `AdaPool` | pour un id saisi ; inconnu → `INVALID_INPUT` |
+| `ada_stake_build` | `{ action: AdaStakeRequest }` | `{ tx /*CBOR hex non signé*/, summary: CardanoStakeSummary, context: AdaStakeContext }` | Rust choisit les UTxO (ADA seuls d'abord), **une seule sortie : la monnaie vers ton adresse**, frais calculés pour 2 témoins, `ttl` = slot + 1 h ; puis exactement les vérifications de `ada_stake_sign` |
+| `ada_stake_sign` | `{ tx, password }` | `{ tx /*signée*/, txId, summary, context }` | décodage wallet-core (`cardano_decode_stake_tx` avec **ta** clé de staking et le `key_deposit` lu en direct) ; refusé aussi : une sortie qui n'est pas ton adresse, entrée inconnue ou dépensée, déséquilibre (entrées + retrait + remboursement ≠ sortie + frais + dépôt), frais sous le minimum, ttl dépassé, enregistrement d'une clé déjà enregistrée (ou opération sur une clé non enregistrée), remboursement ≠ dépôt payé, retrait ≠ toutes les récompenses disponibles, **retrait sans délégation de vote** (règle du réseau depuis Plomin), désinscription sans retrait des récompenses, pool inconnu ou retiré, DRep non enregistré ; dialogue natif : chaque certificat (dépôt 2 ADA, pool : ticker, nom déclaré, marge, coût fixe, pledge, saturation, délégants ; DRep), retrait, monnaie, frais, coût ou gain net, époque, calendrier (compte à l'époque N+2, premières récompenses au début de N+4), « pas de blocage, pas de slashing » ; **renforcé** si le pool part à la retraite, a une marge > 10 % ou est saturé (> 100 %), ou si le DRep est inactif |
+| `ada_stake_broadcast` | `{ tx }` | `string` (tx id) | témoins = **exactement** ta clé de paiement et ta clé de staking, chacun vérifié ; `submittx` ; id renvoyé = blake2b-256(corps) ; suivi : `ada_tx_status` (§2.7) |
+
+```ts
+type AdaStakeRequest =
+  | { kind: 'delegate'; poolId: string; drep?: string }    // enregistre la clé d'abord si besoin (dépôt 2 ADA) ; drep facultatif
+  | { kind: 'voteDelegate'; drep: string }                  // idem ; drep = 'alwaysAbstain' | 'alwaysNoConfidence' | 'drep1…' | 'drep_script1…'
+  | { kind: 'withdraw' }                                    // toutes les récompenses (le réseau n'accepte pas un retrait partiel)
+  | { kind: 'deregister' };                                 // retire les récompenses et rembourse le dépôt
+type AdaStakeAccount = { stakeAddress: string; registered: boolean; delegatedPool: string | null;
+                         delegatedDrep: string | null /*'alwaysAbstain' | 'alwaysNoConfidence' | 'drep1…'*/;
+                         rewardsAvailable: string; deposit: string; totalBalance: string };
+type AdaEpoch = { epoch: number; slotInEpoch: number; epochLength: number; secondsLeft: number; slot: number };
+type AdaPool = { poolId: string; poolHash: string; ticker: string | null; name: string | null; homepage: string | null /*déclarés*/;
+                 margin: number /*0..1*/; fixedCost: string; pledge: string; activeStake: string | null; liveStake: string | null;
+                 liveSaturation: number | null /*%*/; liveDelegators: number | null; status: 'registered' | 'retiring' | 'retired' | string;
+                 retiringEpoch: number | null };
+type AdaStakeOverview = { address: string; stake: AdaStakeAccount; pool: AdaPool | null; keyDeposit: string; epoch: AdaEpoch;
+                          canWithdraw: boolean /*récompenses > 0 et vote délégué*/ };
+type CardanoDrepView = { kind: 'key' | 'script'; id: string /*CIP-129*/; hash: string } | { kind: 'alwaysAbstain' } | { kind: 'alwaysNoConfidence' };
+type CardanoCertView = { type: 'stakeRegistration'; deposit: string } | { type: 'stakeDeregistration'; refund: string }
+                     | { type: 'stakeDelegation'; poolId: string; poolHash: string } | { type: 'voteDelegation'; drep: CardanoDrepView };
+type CardanoStakeSummary = { tx: CardanoTxSummary /*§2.7*/; stakeAddress: string; certificates: CardanoCertView[];
+                             withdrawals: { rewardAddress: string; lovelace: string }[]; deposit: string; refund: string; withdrawn: string };
+type AdaStakeWarning = { kind: 'poolRetiring'; epoch: number } | { kind: 'highMargin'; margin: number /*%*/ }
+                     | { kind: 'poolSaturated'; saturation: number } | { kind: 'drepInactive' };
+type AdaStakeContext = { account: CardanoAccount /*§2.7*/; stake: AdaStakeAccount /*avant la transaction*/; pool: AdaPool | null;
+                         drep: { drep: CardanoDrepView; registered: boolean; active: boolean } | null; params: { minFeeA: number; minFeeB: number; coinsPerByte: number; maxTxSize: number };
+                         keyDeposit: string; epoch: AdaEpoch; netCost: string /*signé : frais + dépôt − remboursement − retrait*/;
+                         warnings: AdaStakeWarning[]; requiresExtraConfirmation: boolean };
+```
+Les ADA délégués **restent sur ton adresse et restent dépensables** ; la délégation porte sur tout ce que contrôle la clé de staking (`totalBalance`). Les récompenses s'accumulent sur le compte de récompenses (`stake…`) et ne sont dépensables qu'après `withdraw`.
+
+#### TRON (`tron_stake_*`) — Stake 2.0, adresse `m/44'/195'/0'/0/0`
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `tron_stake_overview` | — | `TronStakeAccount` | `getaccount` (`frozenV2`, `unfrozenV2`, `votes`, `latest_withdraw_time`), `getaccountresource` (TRON Power, énergie, bande passante), `getReward`, `getchainparameters` (`getUnfreezeDelayDays` : **14 j sur mainnet, 1 j sur Nile**, lus le 30/10/2026), `getnextmaintenancetime` |
+| `tron_stake_witnesses` | — | `TronWitness[]` | `listwitnesses`, classés par votes ; `url` = seul « nom » d'un SR, **déclaré, non vérifié** ; `brokerage` n'est lu que pour les SR d'un vote (dans `context`) |
+| `tron_stake_build` | `{ action: TronStakeRequest }` | `{ raw /*hex*/, txid, summary: TronStakeSummary, context: TronStakeContext }` | `raw_data` construit par Rust (dernier bloc, expiration + 10 min, **pas de `fee_limit`, pas de mémo**) ; refusé : stake < 1 TRX ou > solde, dégel > staké pour cette ressource, 32 dégels déjà en attente, rien à retirer, aucun dégel à annuler, récompense nulle ou réclamée il y a moins de 24 h, 0 ou > 30 SR, votes > TRON Power, adresse qui n'est pas un candidat SR |
+| `tron_stake_sign` | `{ raw, password }` | `{ signature /*65 o hex*/, txid, summary, context }` | décodage wallet-core (`tron_decode_stake_raw`, owner = toi), expiration vérifiée, **relit en direct** compte, ressources, SR et `getBrokerage` ; dialogue natif : opération, montant et ressource, délai de dégel du réseau, TRON Power, votes (remplacent **tous** les votes actuels) avec url, rang, part gardée par le SR, bande passante et TRX brûlés, « pas de slashing », expiration, txid ; **renforcé** si un SR est hors des 127 premiers (aucune récompense), garde 100 %, ou si un dégel va réduire tes votes |
+| `tron_broadcast` | `{ raw, signature }` | `string` (txid) | la commande existante (§2.5) : signature → ton adresse, txid = sha256(raw) |
+
+```ts
+type TronResource = 'BANDWIDTH' | 'ENERGY';
+type TronStakeRequest =
+  | { kind: 'freeze'; resource: TronResource; amount: string /*sun, ≥ 1 TRX*/ }
+  | { kind: 'unfreeze'; resource: TronResource; amount: string }
+  | { kind: 'withdrawUnfrozen' }                      // retire les dégels dont le délai est fini
+  | { kind: 'cancelAllUnfreeze' }                     // annule tous les dégels en cours (re-stake ; les dégels finis sont retirés)
+  | { kind: 'vote'; votes: { address: string; count: string /*TRON Power*/ }[] }   // 1 à 30 SR ; remplace tous les votes
+  | { kind: 'claimRewards' };                         // WithdrawBalance : récompenses de vote, une fois par 24 h
+type TronStakeAccount = { address: string; balance: string; stakedBandwidth: string; stakedEnergy: string;
+  unfreezing: { resource: TronResource; amount: string; expireTime: number /*ms*/ }[]; withdrawableNow: string;
+  tronPowerLimit: number; tronPowerUsed: number /*1 = 1 TRX staké*/; votes: { address: string; count: string }[];
+  reward: string; nextClaimTime: number /*ms, 0 = maintenant*/; unfreezeDelayDays: number; nextMaintenanceTime: number /*ms*/;
+  energyLimit: number; energyUsed: number; bandwidthLimit: number; bandwidthUsed: number };
+type TronWitness = { address: string; url: string; voteCount: number; rank: number; isSr: boolean /*≤ 27*/; isPaid: boolean /*≤ 127*/;
+                     producing: boolean; brokerage: number | null /*% gardé par le SR*/ };
+type TronStakeAction = { type: 'freeze' | 'unfreeze'; resource: TronResource; amount: string } | { type: 'withdrawUnfrozen' }
+  | { type: 'cancelAllUnfreeze' } | { type: 'vote'; votes: { address: string; count: string }[]; total: string } | { type: 'claimRewards' };
+type TronStakeSummary = { txid: string; owner: string; action: TronStakeAction; expiration: number; timestamp: number;
+                          refBlockBytes: string; refBlockHash: string; rawSize: number };
+type TronStakeWarning = { kind: 'srNotPaid'; address: string; rank: number } | { kind: 'brokerageAll'; address: string } | { kind: 'votesReduced' };
+type TronStakeContext = { account: TronStakeAccount /*avant*/; estimate: TronEstimate /*§2.5 : bande passante*/; witnesses: TronWitness[];
+                          warnings: TronStakeWarning[]; requiresExtraConfirmation: boolean };
+```
+Refusé par wallet-core avant toute signature : `DelegateResource` / `UnDelegateResource` (prêter son énergie ou sa bande passante à **un autre compte**), ressource `TRON_POWER`, champ obsolète `support` d'un vote, tout autre contrat. Il n'y a pas de commande de suivi TRON dédiée : rafraîchir `tron_stake_overview` après la diffusion.
+
+#### Ce que l'UI doit faire (écrans Staking)
+
+- **Accueil Staking** : une carte par chaîne (Solana, Cardano, TRON) ; BTC / LTC / DOGE / XRP : « pas de staking natif » ; EVM : « non proposé (32 ETH ou contrat tiers) ».
+- **Solana** : `sol_stake_overview` → liste des comptes (état, délégué, effectif / en activation / en refroidissement, validateur, retirable) et compte à rebours d'époque (`secondsLeft`) ; « Staker » : montant (≥ `minimumDelegation`, afficher en plus la réserve `rentExemptReserve`) + choix du validateur dans `sol_stake_validators` (commission, stake actif, en retard, nom marqué « déclaré ») ; boutons par compte selon `state` : `active`/`activating` → Désactiver ; `initialized`/`inactive` → Déléguer ; `withdrawable > 0` ou `canClose` → Retirer ; un compte `ours: false` est en lecture seule.
+- **Cardano** : `ada_stake_overview` (enregistrée ? pool actuel, DRep, récompenses, dépôt) ; « Déléguer » : liste `ada_stake_pools` (ticker, nom déclaré, marge, coût fixe, saturation) ou saisie d'un `pool1…` (`ada_stake_pool`), et choix du vote (« toujours s'abstenir » par défaut proposé, « toujours défiance », ou un `drep1…`) ; afficher le **dépôt de 2 ADA** quand `registered: false` ; « Retirer » seulement si `canWithdraw` (sinon expliquer qu'il faut d'abord déléguer son vote) ; « Arrêter le staking » = `deregister` (rembourse le dépôt).
+- **TRON** : `tron_stake_overview` (staké par ressource, dégels avec date `expireTime`, retirable maintenant, TRON Power utilisé / total, votes, récompense et `nextClaimTime`) ; « Staker » / « Dégeler » (ressource + montant ; rappeler le délai `unfreezeDelayDays`) ; « Voter » : liste `tron_stake_witnesses` (rang, url déclarée, votes) et répartition du TRON Power (le total ≤ `tronPowerLimit`) en rappelant que **le vote remplace les votes actuels** ; « Retirer » (`withdrawableNow > 0`), « Annuler les dégels », « Réclamer » (`reward > 0` et `nextClaimTime` passé).
+- Dans tous les cas : afficher `summary` + `stake`/`context` **avant** le mot de passe, puis `*_stake_sign` (les fenêtres natives, y compris la renforcée, sont ouvertes par Rust), puis la diffusion ; ne jamais construire ni modifier un message, un CBOR ou un `raw_data` côté UI.
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -614,12 +827,12 @@ Hardware wallets : `HW_UNSUPPORTED`. Ce qu'il faudrait : Ledger app « Cardano A
 | `mempool.space` | Bitcoin : UTXO, frais, diffusion (Esplora) |
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`) : utilisé par les commandes Rust `ltc_*`, famille Tor `litecoin` |
 | `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet et mainnet (JSON-RPC rippled) : utilisés par les commandes Rust `xrp_*`, famille Tor `xrp` |
-| `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*`, famille Tor `cardano` |
-| `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*`, famille Tor `tron` |
+| `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
+| `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |
 | `arbitrum-one-rpc.publicnode.com`, `optimism-rpc.publicnode.com`, `base-rpc.publicnode.com`, `polygon-bor-rpc.publicnode.com`, `bsc-rpc.publicnode.com`, `avalanche-c-chain-rpc.publicnode.com` | RPC EVM (phase 2) |
 | `mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion` | Bitcoin (Esplora) en mode Tor uniquement, `http://` (service onion officiel de mempool) ; réécriture automatique de `mempool.space` |
-| `api.devnet.solana.com`, `api.mainnet-beta.solana.com` | RPC Solana (aussi : tables d'adresses v0 lues par Rust pour `sol_decode_tx` / `sol_sign_tx`, ou le RPC `servers.solana[cluster]` des réglages) |
+| `api.devnet.solana.com`, `api.mainnet-beta.solana.com` | RPC Solana (aussi : tables d'adresses v0 lues par Rust pour `sol_decode_tx` / `sol_sign_tx` ; staking `sol_stake_*` lu et diffusé par Rust : `getProgramAccounts`, `getVoteAccounts`, sysvar StakeHistory, `sendTransaction` ; ou le RPC `servers.solana[cluster]` des réglages) |
 | `api.0x.org`, `api.1inch.dev`, `li.quest`, `lite-api.jup.ag` | devis de swap |
 | + hôtes des serveurs HTTP personnalisés (`servers.bitcoin.*` de type `esplora`, `servers.evm.*`, `servers.solana.*`) | autorisés **uniquement pour leur famille** (circuits Tor de la famille) ; le serveur par défaut remplacé est refusé (`DEFAULT_SERVER_DISABLED`) |
 | Electrum et Bitcoin Core | **pas** joignables par `net_fetch` : uniquement via les commandes `btc_*` (Rust) |

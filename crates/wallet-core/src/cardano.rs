@@ -1,6 +1,7 @@
 //! Cardano: CIP-0003 **Icarus** master key, CIP-1852 derivation `m/1852'/1815'/account'/role/i`
 //! (BIP32-Ed25519, Khovratovich–Law "V2"), CIP-19 Shelley addresses, and Conway-era transaction
-//! bodies restricted to **plain payments** (ADA + native tokens, optional CIP-20 memo).
+//! bodies for **plain payments** (ADA + native tokens, optional CIP-20 memo) and, through a
+//! separate decoder, **staking** of our own stake key (Conway certificates 7, 8, 2, 9, withdrawals).
 //!
 //! Cryptography (none written here):
 //! - Icarus: PBKDF2-HMAC-SHA512 (RustCrypto `pbkdf2`), 4096 iterations, salt = BIP39 entropy,
@@ -202,7 +203,7 @@ pub fn cardano_payment_public_key(
     Ok(public(&root.key(account, ROLE_EXTERNAL, index)?))
 }
 
-/// Stake address of the account (`…/2/0`), for display (staking itself is not supported).
+/// Stake (reward) address of the account (`…/2/0`).
 pub fn cardano_account_stake_address(
     root: &CardanoRoot,
     net: Network,
@@ -466,9 +467,177 @@ pub struct CardanoOutput {
     pub map_form: bool,
 }
 
+/// Governance vote delegation target (CIP-1694 `drep`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardanoDrep {
+    /// A DRep identified by a key hash.
+    Key([u8; 28]),
+    /// A DRep identified by a script hash.
+    Script([u8; 28]),
+    /// Predefined "always abstain".
+    AlwaysAbstain,
+    /// Predefined "always no confidence".
+    AlwaysNoConfidence,
+}
+
+/// The only certificates Kyro accepts (Conway forms), always for a **key** stake credential.
+/// Legacy registration / deregistration (0, 1), combined certificates (10–13), pool, committee,
+/// DRep and MIR certificates are refused by the decoder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CardanoCert {
+    /// `reg_cert` (7): registers the stake key, paying `deposit` (protocol `keyDeposit`).
+    StakeRegistration {
+        /// Stake key hash.
+        stake: [u8; 28],
+        /// Deposit, lovelace.
+        deposit: u64,
+    },
+    /// `unreg_cert` (8): deregisters the stake key, refunding `refund` (the deposit paid).
+    StakeDeregistration {
+        /// Stake key hash.
+        stake: [u8; 28],
+        /// Refund, lovelace.
+        refund: u64,
+    },
+    /// `stake_delegation` (2): delegates the stake to `pool`.
+    StakeDelegation {
+        /// Stake key hash.
+        stake: [u8; 28],
+        /// Pool key hash.
+        pool: [u8; 28],
+    },
+    /// `vote_deleg_cert` (9): delegates the governance vote to `drep`.
+    VoteDelegation {
+        /// Stake key hash.
+        stake: [u8; 28],
+        /// DRep.
+        drep: CardanoDrep,
+    },
+}
+
+impl CardanoCert {
+    /// The stake key hash the certificate is about.
+    pub fn stake(&self) -> &[u8; 28] {
+        match self {
+            CardanoCert::StakeRegistration { stake, .. }
+            | CardanoCert::StakeDeregistration { stake, .. }
+            | CardanoCert::StakeDelegation { stake, .. }
+            | CardanoCert::VoteDelegation { stake, .. } => stake,
+        }
+    }
+
+    fn cbor(&self) -> Cbor {
+        let cred = |h: &[u8; 28]| Cbor::Array(vec![Cbor::Uint(0), Cbor::Bytes(h.to_vec())]);
+        match self {
+            CardanoCert::StakeRegistration { stake, deposit } => {
+                Cbor::Array(vec![Cbor::Uint(7), cred(stake), Cbor::Uint(*deposit)])
+            }
+            CardanoCert::StakeDeregistration { stake, refund } => {
+                Cbor::Array(vec![Cbor::Uint(8), cred(stake), Cbor::Uint(*refund)])
+            }
+            CardanoCert::StakeDelegation { stake, pool } => {
+                Cbor::Array(vec![Cbor::Uint(2), cred(stake), Cbor::Bytes(pool.to_vec())])
+            }
+            CardanoCert::VoteDelegation { stake, drep } => {
+                let d = match drep {
+                    CardanoDrep::Key(h) => {
+                        Cbor::Array(vec![Cbor::Uint(0), Cbor::Bytes(h.to_vec())])
+                    }
+                    CardanoDrep::Script(h) => {
+                        Cbor::Array(vec![Cbor::Uint(1), Cbor::Bytes(h.to_vec())])
+                    }
+                    CardanoDrep::AlwaysAbstain => Cbor::Array(vec![Cbor::Uint(2)]),
+                    CardanoDrep::AlwaysNoConfidence => Cbor::Array(vec![Cbor::Uint(3)]),
+                };
+                Cbor::Array(vec![Cbor::Uint(9), cred(stake), d])
+            }
+        }
+    }
+}
+
+fn hash28(c: &Cbor, what: &str) -> Result<[u8; 28]> {
+    match c {
+        Cbor::Bytes(b) => b
+            .as_slice()
+            .try_into()
+            .map_err(|_| bad(format!("{what} : 28 octets attendus"))),
+        _ => Err(bad(format!("{what} : octets attendus"))),
+    }
+}
+
+fn cert_name(t: u64) -> &'static str {
+    match t {
+        0 => "enregistrement de clé de staking ancien format (dépôt implicite)",
+        1 => "désinscription ancien format",
+        3 => "enregistrement de pool",
+        4 => "retrait de pool",
+        5 => "délégation genesis",
+        6 => "transfert de récompenses (MIR)",
+        10..=13 => "certificat combiné (enregistrement / délégation / vote)",
+        14 | 15 => "comité constitutionnel",
+        16..=18 => "enregistrement / mise à jour de DRep",
+        _ => "inconnu",
+    }
+}
+
+fn decode_cert(c: &Cbor) -> Result<CardanoCert> {
+    let Cbor::Array(a) = c else {
+        return Err(bad("certificat"));
+    };
+    let Some(Cbor::Uint(t)) = a.first() else {
+        return Err(bad("type de certificat"));
+    };
+    let cred = |c: &Cbor| -> Result<[u8; 28]> {
+        match c {
+            Cbor::Array(x) => match x.as_slice() {
+                [Cbor::Uint(0), h] => hash28(h, "clé de staking"),
+                [Cbor::Uint(1), _] => Err(bad(
+                    "identifiant de staking de script : refusé (seule ta clé de staking est acceptée)",
+                )),
+                _ => Err(bad("identifiant de staking")),
+            },
+            _ => Err(bad("identifiant de staking")),
+        }
+    };
+    match (*t, a.as_slice()) {
+        (7, [_, s, Cbor::Uint(d)]) => Ok(CardanoCert::StakeRegistration {
+            stake: cred(s)?,
+            deposit: *d,
+        }),
+        (8, [_, s, Cbor::Uint(r)]) => Ok(CardanoCert::StakeDeregistration {
+            stake: cred(s)?,
+            refund: *r,
+        }),
+        (2, [_, s, p]) => Ok(CardanoCert::StakeDelegation {
+            stake: cred(s)?,
+            pool: hash28(p, "pool")?,
+        }),
+        (9, [_, s, Cbor::Array(d)]) => {
+            let drep = match d.as_slice() {
+                [Cbor::Uint(0), h] => CardanoDrep::Key(hash28(h, "DRep")?),
+                [Cbor::Uint(1), h] => CardanoDrep::Script(hash28(h, "DRep")?),
+                [Cbor::Uint(2)] => CardanoDrep::AlwaysAbstain,
+                [Cbor::Uint(3)] => CardanoDrep::AlwaysNoConfidence,
+                _ => return Err(bad("DRep")),
+            };
+            Ok(CardanoCert::VoteDelegation {
+                stake: cred(s)?,
+                drep,
+            })
+        }
+        (2 | 7 | 8 | 9, _) => Err(bad("certificat mal formé")),
+        (other, _) => Err(bad(format!(
+            "certificat {other} ({}) : refusé",
+            cert_name(other)
+        ))),
+    }
+}
+
 /// A Conway transaction body restricted to keys 0 (inputs), 1 (outputs), 2 (fee), 3 (ttl),
-/// 7 (auxiliary data hash) and 8 (validity interval start, accepted and shown; Kyro does not set
-/// it).
+/// 4 (certificates, staking only), 5 (reward withdrawals), 7 (auxiliary data hash) and 8
+/// (validity interval start, accepted and shown; Kyro does not set it). Certificates and
+/// withdrawals are refused by the payment decoder ([`cardano_decode_tx`]) and accepted, for our
+/// own stake key only, by the staking decoder ([`cardano_decode_stake_tx`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardanoBody {
     /// Inputs.
@@ -481,6 +650,10 @@ pub struct CardanoBody {
     pub fee: u64,
     /// Slot after which the transaction is invalid.
     pub ttl: Option<u64>,
+    /// Certificates (staking), in order; encoded as a tag-258 set when `tagged_sets`.
+    pub certs: Vec<CardanoCert>,
+    /// Reward withdrawals: `(reward address bytes, lovelace)`.
+    pub withdrawals: Vec<(Vec<u8>, u64)>,
     /// blake2b-256 of the auxiliary data.
     pub aux_hash: Option<[u8; 32]>,
     /// Slot before which the transaction is invalid.
@@ -574,6 +747,28 @@ impl CardanoBody {
         if let Some(t) = self.ttl {
             m.push((Cbor::Uint(3), Cbor::Uint(t)));
         }
+        if !self.certs.is_empty() {
+            let list = Cbor::Array(self.certs.iter().map(CardanoCert::cbor).collect());
+            m.push((
+                Cbor::Uint(4),
+                if self.tagged_sets {
+                    Cbor::Tag(258, Box::new(list))
+                } else {
+                    list
+                },
+            ));
+        }
+        if !self.withdrawals.is_empty() {
+            m.push((
+                Cbor::Uint(5),
+                Cbor::Map(
+                    self.withdrawals
+                        .iter()
+                        .map(|(a, c)| (Cbor::Bytes(a.clone()), Cbor::Uint(*c)))
+                        .collect(),
+                ),
+            ));
+        }
         if let Some(h) = self.aux_hash {
             m.push((Cbor::Uint(7), Cbor::Bytes(h.to_vec())));
         }
@@ -599,6 +794,7 @@ impl CardanoBody {
         };
         let (mut inputs, mut tagged, mut outputs, mut fee, mut ttl, mut aux, mut start) =
             (None, false, None, None, None, None, None);
+        let (mut certs, mut withdrawals) = (Vec::new(), Vec::new());
         for (k, v) in m {
             let Cbor::Uint(k) = k else {
                 return Err(bad("clé du corps"));
@@ -656,8 +852,33 @@ impl CardanoBody {
                     }
                     _ => return Err(bad("hash des métadonnées")),
                 },
-                4 => return Err(bad("certificats (staking, délégation) : refusés")),
-                5 => return Err(bad("retraits de récompenses : refusés")),
+                4 => {
+                    let list = match v {
+                        Cbor::Tag(258, inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    let Cbor::Array(a) = list else {
+                        return Err(bad("certificats"));
+                    };
+                    if a.is_empty() || a.len() > 8 {
+                        return Err(bad("liste de certificats vide ou trop longue"));
+                    }
+                    certs = a.iter().map(decode_cert).collect::<Result<Vec<_>>>()?;
+                }
+                5 => {
+                    let Cbor::Map(w) = v else {
+                        return Err(bad("retraits"));
+                    };
+                    if w.is_empty() {
+                        return Err(bad("liste de retraits vide"));
+                    }
+                    for (a, c) in w {
+                        match (a, c) {
+                            (Cbor::Bytes(a), Cbor::Uint(c)) => withdrawals.push((a.clone(), *c)),
+                            _ => return Err(bad("retrait")),
+                        }
+                    }
+                }
                 6 => return Err(bad("mises à jour de paramètres de protocole : refusées")),
                 8 => match v {
                     Cbor::Uint(t) => start = Some(*t),
@@ -681,6 +902,8 @@ impl CardanoBody {
             outputs: outputs.ok_or_else(|| bad("sorties absentes"))?,
             fee: fee.ok_or_else(|| bad("frais absents"))?,
             ttl,
+            certs,
+            withdrawals,
             aux_hash: aux,
             validity_start: start,
         };
@@ -962,7 +1185,11 @@ struct Decoded {
     summary: CardanoTxSummary,
 }
 
-fn decode_full(raw_hex: &str, ctx: &CardanoContext<'_>) -> Result<Decoded> {
+fn decode_full(
+    raw_hex: &str,
+    ctx: &CardanoContext<'_>,
+    stake: Option<&StakeMode>,
+) -> Result<Decoded> {
     let raw = hex::decode(raw_hex.trim())
         .map_err(|_| Error::input("transaction : hexadécimal attendu"))?;
     if raw.len() > MAX_TX {
@@ -982,6 +1209,28 @@ fn decode_full(raw_hex: &str, ctx: &CardanoContext<'_>) -> Result<Decoded> {
         return Err(bad("is_valid doit valoir true"));
     }
     let body = CardanoBody::decode_cbor(body_c)?;
+    match stake {
+        None => {
+            if !body.certs.is_empty() {
+                return Err(bad(
+                    "certificats (staking, délégation) : refusés dans un paiement (écran Staking)",
+                ));
+            }
+            if !body.withdrawals.is_empty() {
+                return Err(bad(
+                    "retraits de récompenses : refusés dans un paiement (écran Staking)",
+                ));
+            }
+        }
+        Some(s) => {
+            if !matches!(aux, Cbor::Null) || body.aux_hash.is_some() {
+                return Err(bad(
+                    "métadonnées dans une transaction de staking : refusées",
+                ));
+            }
+            check_stake(&body, s, ctx.net)?;
+        }
+    }
     let aux = match aux {
         Cbor::Null => None,
         other => Some(other.clone()),
@@ -1111,12 +1360,435 @@ fn decode_full(raw_hex: &str, ctx: &CardanoContext<'_>) -> Result<Decoded> {
 /// wrong hash), duplicated inputs, a non-empty witness set, and any non-canonical
 /// encoding.
 pub fn cardano_decode_tx(raw_hex: &str, ctx: &CardanoContext<'_>) -> Result<CardanoTxSummary> {
-    Ok(decode_full(raw_hex, ctx)?.summary)
+    Ok(decode_full(raw_hex, ctx, None)?.summary)
 }
 
 /// Body of a decoded unsigned transaction (for the shell's balance check against UTxOs).
 pub fn cardano_tx_body(raw_hex: &str, ctx: &CardanoContext<'_>) -> Result<CardanoBody> {
-    Ok(decode_full(raw_hex, ctx)?.body)
+    Ok(decode_full(raw_hex, ctx, None)?.body)
+}
+
+// ---------------------------------------------------------------------------------------------
+// Staking (Conway): registration, pool delegation, vote delegation, withdrawal, deregistration
+// ---------------------------------------------------------------------------------------------
+
+/// Staking decoder parameters.
+struct StakeMode {
+    /// blake2b-224 of our stake public key.
+    stake_hash: [u8; 28],
+    /// Protocol `keyDeposit` (lovelace): the only deposit a registration may carry.
+    key_deposit: u64,
+}
+
+/// blake2b-224 (key hash of an Ed25519 public key, pool ids, DRep key ids).
+pub fn cardano_blake2b224(data: &[u8]) -> [u8; 28] {
+    blake2b224(data)
+}
+
+/// Ed25519 public key of the stake key `m/1852'/1815'/account'/2/0`.
+pub fn cardano_stake_public_key(root: &CardanoRoot, account: u32) -> Result<[u8; 32]> {
+    Ok(public(&root.key(account, ROLE_STAKE, 0)?))
+}
+
+/// Reward address bytes (type 14, key credential) of a stake key hash.
+pub fn cardano_reward_address_bytes(net: Network, stake_hash: &[u8; 28]) -> Vec<u8> {
+    let mut b = Vec::with_capacity(29);
+    b.push(0xE0 | network_id(net));
+    b.extend_from_slice(stake_hash);
+    b
+}
+
+fn bech32_bytes(s: &str, hrps: &[&str]) -> Result<(String, Vec<u8>)> {
+    let checked = CheckedHrpstring::new::<Bech32>(s.trim())
+        .map_err(|_| Error::input(format!("identifiant bech32 invalide : {}", s.trim())))?;
+    let h = checked.hrp().as_str().to_owned();
+    if !hrps.contains(&h.as_str()) {
+        return Err(Error::input(format!(
+            "préfixe « {h} » inattendu (attendu : {})",
+            hrps.join(", ")
+        )));
+    }
+    Ok((h, checked.byte_iter().collect()))
+}
+
+/// Pool id from `pool1…` (bech32) or 56 hex characters.
+pub fn cardano_pool_id(s: &str) -> Result<[u8; 28]> {
+    let t = s.trim();
+    let bytes = if t.starts_with("pool1") {
+        bech32_bytes(t, &["pool"])?.1
+    } else {
+        hex::decode(t).map_err(|_| Error::input("identifiant de pool : pool1… ou 56 hex"))?
+    };
+    bytes
+        .try_into()
+        .map_err(|_| Error::input("identifiant de pool : 28 octets attendus"))
+}
+
+/// `pool1…` form of a pool key hash.
+pub fn cardano_pool_bech32(hash: &[u8; 28]) -> Result<String> {
+    bech32_encode("pool", hash)
+}
+
+/// Parses a DRep: `alwaysAbstain`, `alwaysNoConfidence`, a CIP-129 id (`drep1…`, 29 bytes:
+/// header `0x22` key / `0x23` script) or a CIP-105 id (`drep1…` 28-byte key hash,
+/// `drep_script1…` 28-byte script hash).
+pub fn cardano_drep_parse(s: &str) -> Result<CardanoDrep> {
+    match s.trim() {
+        "alwaysAbstain" => return Ok(CardanoDrep::AlwaysAbstain),
+        "alwaysNoConfidence" => return Ok(CardanoDrep::AlwaysNoConfidence),
+        _ => {}
+    }
+    let (h, b) = bech32_bytes(s, &["drep", "drep_script"])?;
+    let h28 = |x: &[u8]| -> Result<[u8; 28]> {
+        x.try_into()
+            .map_err(|_| Error::input("identifiant de DRep : longueur invalide"))
+    };
+    match (h.as_str(), b.len()) {
+        ("drep", 29) => match b[0] {
+            0x22 => Ok(CardanoDrep::Key(h28(&b[1..])?)),
+            0x23 => Ok(CardanoDrep::Script(h28(&b[1..])?)),
+            _ => Err(Error::input(
+                "identifiant de DRep (CIP-129) : en-tête inconnu",
+            )),
+        },
+        ("drep", 28) => Ok(CardanoDrep::Key(h28(&b)?)),
+        ("drep_script", 28) => Ok(CardanoDrep::Script(h28(&b)?)),
+        _ => Err(Error::input("identifiant de DRep : longueur invalide")),
+    }
+}
+
+/// CIP-129 `drep1…` id of a DRep (`None` for the predefined ones).
+pub fn cardano_drep_id(d: &CardanoDrep) -> Option<String> {
+    let (header, h) = match d {
+        CardanoDrep::Key(h) => (0x22u8, h),
+        CardanoDrep::Script(h) => (0x23u8, h),
+        _ => return None,
+    };
+    let mut b = vec![header];
+    b.extend_from_slice(h);
+    bech32_encode("drep", &b).ok()
+}
+
+/// A DRep for display.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum CardanoDrepView {
+    /// Key-hash DRep.
+    Key {
+        /// CIP-129 `drep1…`.
+        id: String,
+        /// Key hash, hex.
+        hash: String,
+    },
+    /// Script-hash DRep.
+    Script {
+        /// CIP-129 `drep1…`.
+        id: String,
+        /// Script hash, hex.
+        hash: String,
+    },
+    /// Always abstain.
+    AlwaysAbstain,
+    /// Always no confidence.
+    AlwaysNoConfidence,
+}
+
+impl From<&CardanoDrep> for CardanoDrepView {
+    fn from(d: &CardanoDrep) -> Self {
+        let id = cardano_drep_id(d).unwrap_or_default();
+        match d {
+            CardanoDrep::Key(h) => CardanoDrepView::Key {
+                id,
+                hash: hex::encode(h),
+            },
+            CardanoDrep::Script(h) => CardanoDrepView::Script {
+                id,
+                hash: hex::encode(h),
+            },
+            CardanoDrep::AlwaysAbstain => CardanoDrepView::AlwaysAbstain,
+            CardanoDrep::AlwaysNoConfidence => CardanoDrepView::AlwaysNoConfidence,
+        }
+    }
+}
+
+/// A certificate for display.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum CardanoCertView {
+    /// Registration of our stake key, deposit paid (lovelace).
+    StakeRegistration {
+        /// Lovelace.
+        deposit: String,
+    },
+    /// Deregistration of our stake key, deposit refunded (lovelace).
+    StakeDeregistration {
+        /// Lovelace.
+        refund: String,
+    },
+    /// Delegation to a pool.
+    StakeDelegation {
+        /// `pool1…`.
+        pool_id: String,
+        /// Pool key hash, hex.
+        pool_hash: String,
+    },
+    /// Governance vote delegation.
+    VoteDelegation {
+        /// The DRep.
+        drep: CardanoDrepView,
+    },
+}
+
+/// A reward withdrawal for display.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CardanoWithdrawalView {
+    /// `stake…` / `stake_test…` (always ours).
+    pub reward_address: String,
+    /// Lovelace.
+    pub lovelace: String,
+}
+
+/// Summary of a staking transaction: the payment part (inputs, outputs, fee, ttl) plus every
+/// certificate and withdrawal, all for our stake key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CardanoStakeSummary {
+    /// Inputs, outputs, fee, ttl (no memo: refused in staking transactions).
+    pub tx: CardanoTxSummary,
+    /// Our reward (stake) address.
+    pub stake_address: String,
+    /// Certificates, in order.
+    pub certificates: Vec<CardanoCertView>,
+    /// Reward withdrawals (ours only).
+    pub withdrawals: Vec<CardanoWithdrawalView>,
+    /// Deposit paid by a registration, lovelace.
+    pub deposit: String,
+    /// Deposit refunded by a deregistration, lovelace.
+    pub refund: String,
+    /// Rewards withdrawn, lovelace.
+    pub withdrawn: String,
+}
+
+fn check_stake(body: &CardanoBody, s: &StakeMode, net: Network) -> Result<()> {
+    if body.certs.is_empty() && body.withdrawals.is_empty() {
+        return Err(bad("aucune opération de staking dans cette transaction"));
+    }
+    let mut kinds = Vec::new();
+    for c in &body.certs {
+        if c.stake() != &s.stake_hash {
+            return Err(bad(
+                "certificat pour une autre clé de staking que la tienne : refusé",
+            ));
+        }
+        let k = match c {
+            CardanoCert::StakeRegistration { deposit, .. } => {
+                if *deposit != s.key_deposit {
+                    return Err(bad(format!(
+                        "dépôt d'enregistrement de {deposit} lovelace, le protocole demande {} : refusé",
+                        s.key_deposit
+                    )));
+                }
+                7
+            }
+            CardanoCert::StakeDeregistration { .. } => 8,
+            CardanoCert::StakeDelegation { .. } => 2,
+            CardanoCert::VoteDelegation { .. } => 9,
+        };
+        if kinds.contains(&k) {
+            return Err(bad("certificat en double : refusé"));
+        }
+        kinds.push(k);
+    }
+    if kinds.contains(&7) && kinds.contains(&8) {
+        return Err(bad(
+            "enregistrement et désinscription dans la même transaction : refusé",
+        ));
+    }
+    if kinds.contains(&8) && (kinds.contains(&2) || kinds.contains(&9)) {
+        return Err(bad(
+            "délégation et désinscription dans la même transaction : refusé",
+        ));
+    }
+    if let Some(i) = kinds.iter().position(|k| *k == 7) {
+        if i != 0 {
+            return Err(bad("l'enregistrement doit être le premier certificat"));
+        }
+    }
+    let ours = cardano_reward_address_bytes(net, &s.stake_hash);
+    if body.withdrawals.len() > 1 {
+        return Err(bad("plusieurs retraits : refusé"));
+    }
+    for (a, c) in &body.withdrawals {
+        if *a != ours {
+            return Err(bad(
+                "retrait depuis un autre compte de récompenses que le tien : refusé",
+            ));
+        }
+        if *c == 0 {
+            return Err(bad("retrait de 0 lovelace : refusé"));
+        }
+    }
+    Ok(())
+}
+
+fn stake_views(body: &CardanoBody, net: Network) -> Result<CardanoStakeViews> {
+    let (mut deposit, mut refund, mut withdrawn) = (0u64, 0u64, 0u64);
+    let mut certificates = Vec::new();
+    for c in &body.certs {
+        certificates.push(match c {
+            CardanoCert::StakeRegistration { deposit: d, .. } => {
+                deposit = deposit.saturating_add(*d);
+                CardanoCertView::StakeRegistration {
+                    deposit: d.to_string(),
+                }
+            }
+            CardanoCert::StakeDeregistration { refund: r, .. } => {
+                refund = refund.saturating_add(*r);
+                CardanoCertView::StakeDeregistration {
+                    refund: r.to_string(),
+                }
+            }
+            CardanoCert::StakeDelegation { pool, .. } => CardanoCertView::StakeDelegation {
+                pool_id: cardano_pool_bech32(pool)?,
+                pool_hash: hex::encode(pool),
+            },
+            CardanoCert::VoteDelegation { drep, .. } => {
+                CardanoCertView::VoteDelegation { drep: drep.into() }
+            }
+        });
+    }
+    let mut withdrawals = Vec::new();
+    for (a, c) in &body.withdrawals {
+        withdrawn = withdrawn.saturating_add(*c);
+        withdrawals.push(CardanoWithdrawalView {
+            reward_address: bech32_encode(
+                match net {
+                    Network::Mainnet => "stake",
+                    Network::Testnet => "stake_test",
+                },
+                a,
+            )?,
+            lovelace: c.to_string(),
+        });
+    }
+    Ok(CardanoStakeViews {
+        certificates,
+        withdrawals,
+        deposit,
+        refund,
+        withdrawn,
+    })
+}
+
+struct CardanoStakeViews {
+    certificates: Vec<CardanoCertView>,
+    withdrawals: Vec<CardanoWithdrawalView>,
+    deposit: u64,
+    refund: u64,
+    withdrawn: u64,
+}
+
+fn stake_summary(d: &Decoded, net: Network, stake_pk: &[u8; 32]) -> Result<CardanoStakeSummary> {
+    let v = stake_views(&d.body, net)?;
+    Ok(CardanoStakeSummary {
+        tx: d.summary.clone(),
+        stake_address: cardano_stake_address(net, stake_pk)?,
+        certificates: v.certificates,
+        withdrawals: v.withdrawals,
+        deposit: v.deposit.to_string(),
+        refund: v.refund.to_string(),
+        withdrawn: v.withdrawn.to_string(),
+    })
+}
+
+/// Decodes an unsigned **staking** transaction for the dialog. On top of the payment rules
+/// ([`cardano_decode_tx`]), it requires at least one certificate or withdrawal, and refuses:
+/// a certificate or withdrawal for any stake credential other than `stake_pk`'s (another key or
+/// a script), a registration whose deposit is not `key_deposit`, duplicate certificates,
+/// registration + deregistration (or delegation + deregistration) together, more than one
+/// withdrawal, a zero withdrawal, metadata, and every certificate type other than Conway
+/// registration (7), deregistration (8), pool delegation (2) and vote delegation (9).
+pub fn cardano_decode_stake_tx(
+    raw_hex: &str,
+    ctx: &CardanoContext<'_>,
+    stake_pk: &[u8; 32],
+    key_deposit: u64,
+) -> Result<CardanoStakeSummary> {
+    let mode = StakeMode {
+        stake_hash: blake2b224(stake_pk),
+        key_deposit,
+    };
+    let d = decode_full(raw_hex, ctx, Some(&mode))?;
+    stake_summary(&d, ctx.net, stake_pk)
+}
+
+/// Body of a decoded staking transaction (for the shell's balance check).
+pub fn cardano_stake_tx_body(
+    raw_hex: &str,
+    ctx: &CardanoContext<'_>,
+    stake_pk: &[u8; 32],
+    key_deposit: u64,
+) -> Result<CardanoBody> {
+    let mode = StakeMode {
+        stake_hash: blake2b224(stake_pk),
+        key_deposit,
+    };
+    Ok(decode_full(raw_hex, ctx, Some(&mode))?.body)
+}
+
+/// Signs a staking transaction with the payment key `m/1852'/1815'/account'/0/index` and the
+/// stake key `m/1852'/1815'/stake_account'/2/0` (Kyro: `stake_account` = `account` = 0), after
+/// decoding it like [`cardano_decode_stake_tx`] with **that** stake key. Both signatures are
+/// made by ed25519-dalek and verified before they are returned.
+pub fn cardano_sign_stake(
+    root: &CardanoRoot,
+    account: u32,
+    index: u32,
+    stake_account: u32,
+    raw_hex: &str,
+    ctx: &CardanoContext<'_>,
+    key_deposit: u64,
+) -> Result<(String, String, CardanoStakeSummary)> {
+    let stake_key = root.key(stake_account, ROLE_STAKE, 0)?;
+    let stake_pk = public(&stake_key);
+    let mode = StakeMode {
+        stake_hash: blake2b224(&stake_pk),
+        key_deposit,
+    };
+    let d = decode_full(raw_hex, ctx, Some(&mode))?;
+    let summary = stake_summary(&d, ctx.net, &stake_pk)?;
+    let pay_key = root.key(account, ROLE_EXTERNAL, index)?;
+    let pay_pk = public(&pay_key);
+    let tx_id = cardano_blake2b256(&d.body_cbor.to_vec());
+    let mut wits = Vec::with_capacity(2);
+    for (k, pk) in [(&pay_key, &pay_pk), (&stake_key, &stake_pk)] {
+        let sig = sign_extended(k, &tx_id, pk)?;
+        wits.push(Cbor::Array(vec![
+            Cbor::Bytes(pk.to_vec()),
+            Cbor::Bytes(sig.to_vec()),
+        ]));
+    }
+    let list = Cbor::Array(wits);
+    let set = if d.body.tagged_sets {
+        Cbor::Tag(258, Box::new(list))
+    } else {
+        list
+    };
+    let signed = tx_cbor(
+        &d.body_cbor,
+        Cbor::Map(vec![(Cbor::Uint(0), set)]),
+        d.aux.as_ref(),
+    );
+    Ok((hex::encode(signed), hex::encode(tx_id), summary))
 }
 
 /// Signs with the payment key `m/1852'/1815'/account'/0/index`: Ed25519 over the transaction
@@ -1129,7 +1801,7 @@ pub fn cardano_sign(
     raw_hex: &str,
     ctx: &CardanoContext<'_>,
 ) -> Result<(String, String, CardanoTxSummary)> {
-    let d = decode_full(raw_hex, ctx)?;
+    let d = decode_full(raw_hex, ctx, None)?;
     let key = root.key(account, ROLE_EXTERNAL, index)?;
     let bip32_pk = public(&key);
     let tx_id = cardano_blake2b256(&d.body_cbor.to_vec());
