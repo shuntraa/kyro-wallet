@@ -246,7 +246,7 @@ fn psbt_segwit_sign_and_verify() {
     assert_eq!(*pk.inner.serialize().first().unwrap() & 0xfe, 0x02);
 
     // Decoding without secrets gives the same summary.
-    let decoded = btc_decode_psbt(Network::Testnet, &signed_b64, &[change]).unwrap();
+    let decoded = btc_decode_psbt(Network::Testnet, &signed_b64, &[change, _ours]).unwrap();
     assert_eq!(decoded, summary);
 }
 
@@ -473,4 +473,88 @@ fn address_from_xpub_matches_seed_derivation() {
     assert!(
         btc_address_from_xpub("xpubnope", Network::Mainnet, BtcKind::Segwit, false, 0).is_err()
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Reinforced-confirmation triggers (vault and hardware wallet share BtcTxSummary.warnings)
+// ---------------------------------------------------------------------------------------------
+
+fn warnings_of(psbt: &Psbt) -> (Vec<wallet_core::BtcWarning>, bool) {
+    let s = seed(ABANDON);
+    let preview = wallet_core::btc_psbt_summary(&s, Network::Testnet, &psbt.to_string()).unwrap();
+    let (_, signed) = btc_sign_psbt(&s, Network::Testnet, &psbt.to_string()).unwrap();
+    assert_eq!(preview, signed, "dialog summary = signature summary");
+    (signed.warnings, signed.requires_extra_confirmation)
+}
+
+#[test]
+fn btc_plain_payment_needs_no_reinforced_dialog() {
+    let (psbt, ..) = segwit_psbt();
+    assert_eq!(warnings_of(&psbt), (vec![], false));
+}
+
+#[test]
+fn btc_op_return_and_unknown_script_are_reinforced() {
+    use wallet_core::BtcWarning;
+    let (mut psbt, ..) = segwit_psbt();
+    psbt.unsigned_tx.output.push(TxOut {
+        value: Amount::ZERO,
+        script_pubkey: ScriptBuf::new_op_return([0x6b, 0x79, 0x72, 0x6f]),
+    });
+    psbt.outputs.push(Default::default());
+    // Bare OP_TRUE: anyone can spend it.
+    psbt.unsigned_tx.output.push(TxOut {
+        value: Amount::from_sat(500),
+        script_pubkey: ScriptBuf::from_bytes(vec![0x51]),
+    });
+    psbt.outputs.push(Default::default());
+    let (w, extra) = warnings_of(&psbt);
+    assert!(extra);
+    assert_eq!(
+        w,
+        vec![
+            BtcWarning::OpReturn { output: 2 },
+            BtcWarning::UnknownScript { output: 3 }
+        ]
+    );
+}
+
+#[test]
+fn btc_foreign_input_is_reinforced() {
+    let (mut psbt, ..) = segwit_psbt();
+    let foreign =
+        btc_address(&seed(LEGAL), Network::Testnet, BtcKind::Segwit, 0, false, 5).unwrap();
+    psbt.unsigned_tx.input.push(txin(0xcc));
+    psbt.inputs.push(Default::default());
+    psbt.inputs[1].witness_utxo = Some(TxOut {
+        value: Amount::from_sat(1_000),
+        script_pubkey: script_of(&foreign),
+    });
+    let (w, extra) = warnings_of(&psbt);
+    assert!(extra);
+    assert_eq!(w, vec![wallet_core::BtcWarning::ForeignInput { input: 1 }]);
+}
+
+#[test]
+fn btc_high_fee_is_reinforced() {
+    let (mut psbt, ..) = segwit_psbt();
+    // 100 000 in, 60 000 + 10 000 out: 30 000 sats for ~141 vB ≈ 212 sat/vB (> 100).
+    psbt.unsigned_tx.output[1].value = Amount::from_sat(10_000);
+    let (w, extra) = warnings_of(&psbt);
+    assert!(extra);
+    assert!(
+        matches!(w.as_slice(), [wallet_core::BtcWarning::HighFee { sat_per_vb }] if *sat_per_vb > 100)
+    );
+    // Just under the threshold: ~13 000 sats ≈ 92 sat/vB, no warning.
+    psbt.unsigned_tx.output[1].value = Amount::from_sat(27_000);
+    assert_eq!(warnings_of(&psbt), (vec![], false));
+}
+
+#[test]
+fn btc_sighash_other_than_all_is_refused_not_just_warned() {
+    let (mut psbt, ..) = segwit_psbt();
+    psbt.inputs[0].sighash_type = Some(PsbtSighashType::from(
+        EcdsaSighashType::SinglePlusAnyoneCanPay,
+    ));
+    assert!(btc_sign_psbt(&seed(ABANDON), Network::Testnet, &psbt.to_string()).is_err());
 }

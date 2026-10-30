@@ -3280,6 +3280,7 @@ dependencies = [
  "bip157",
  "bitcoin",
  "bytes",
+ "curve25519-dalek",
  "dotenvy",
  "futures-util",
  "hex",

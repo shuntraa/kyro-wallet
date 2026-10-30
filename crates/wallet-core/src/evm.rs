@@ -115,6 +115,58 @@ pub enum EvmTxKind {
     ContractCall,
 }
 
+/// Chains Kyro knows by name; any other chain id needs the reinforced confirmation.
+pub const EVM_KNOWN_CHAINS: &[u64] = &[1, 11_155_111, 42_161, 10, 8_453, 137, 56, 43_114];
+
+/// Worst-case fee (`gas_limit × max_fee_per_gas`, native units in wei) above which the
+/// reinforced confirmation is required: 0.05 of the native coin on ETH-native chains (Ethereum,
+/// Sepolia, Arbitrum, Optimism, Base) and BNB Chain, 50 POL on Polygon, 1 AVAX on Avalanche,
+/// 0.05 elsewhere. A plain transfer costs ~0.0005 ETH at 20 gwei; a swap ~0.005–0.02 ETH.
+pub fn evm_high_fee_threshold_wei(chain_id: u64) -> U256 {
+    let milli = U256::exp10(15); // 0.001 native
+    match chain_id {
+        137 => milli * 50_000u64,
+        43_114 => milli * 1_000u64,
+        _ => milli * 50u64,
+    }
+}
+
+/// Reasons for caution in an EVM transaction (each one requires the reinforced confirmation).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum EvmWarning {
+    /// Contract call that is not a decoded ERC-20 transfer: Kyro cannot tell what it does.
+    ContractCall,
+    /// ERC-20 approval: `spender` may move `amount` of the token at any time.
+    Approval {
+        /// Spender, EIP-55.
+        spender: String,
+        /// Raw token units, decimal string.
+        amount: String,
+        /// `≥ 2^128` (max or close to it): shown as ILLIMITÉ.
+        unlimited: bool,
+    },
+    /// Native value attached to a contract call (non-empty calldata).
+    ValueToContract {
+        /// Wei, decimal string.
+        value_wei: String,
+    },
+    /// Chain id not in [`EVM_KNOWN_CHAINS`].
+    UnknownChain {
+        /// Chain id.
+        chain_id: u64,
+    },
+    /// Worst-case fee above [`evm_high_fee_threshold_wei`].
+    HighFee {
+        /// Wei, decimal string.
+        max_fee_wei: String,
+    },
+}
+
 /// Plain-language summary of an [`EvmTxRequest`]. Addresses are EIP-55 checksummed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -138,6 +190,12 @@ pub struct EvmTxSummary {
     pub chain_id: u64,
     /// Native value attached to the transaction, in wei (always present, even for ERC-20 calls).
     pub value_wei: String,
+    /// Reasons for caution.
+    #[serde(default)]
+    pub warnings: Vec<EvmWarning>,
+    /// The native dialog must be followed by a reinforced one.
+    #[serde(default)]
+    pub requires_extra_confirmation: bool,
 }
 
 fn parse_decimal_u256(field: &str, s: &str) -> Result<U256> {
@@ -300,12 +358,15 @@ pub fn evm_decode(tx: &EvmTxRequest) -> Result<EvmTxSummary> {
         max_fee_wei: max_fee_wei.to_string(),
         chain_id: tx.chain_id,
         value_wei: p.value.to_string(),
+        warnings: Vec::new(),
+        requires_extra_confirmation: false,
     };
 
     if p.data.is_empty() {
         summary.kind = EvmTxKind::NativeTransfer;
-        return Ok(summary);
+        return Ok(with_warnings(summary, &p, max_fee_wei, U256::zero()));
     }
+    let mut approved = U256::zero();
     // Strict ABI shape: selector + exactly two 32-byte words; anything else is a ContractCall.
     if p.data.len() == 4 + 64 {
         let (selector, args) = p.data.split_at(4);
@@ -324,10 +385,47 @@ pub fn evm_decode(tx: &EvmTxRequest) -> Result<EvmTxSummary> {
                 summary.amount = amount.to_string();
                 // >= 2^255 (covers uint256::MAX).
                 summary.unlimited_approval = amount.bit(255);
+                approved = amount;
             }
         }
     }
-    Ok(summary)
+    Ok(with_warnings(summary, &p, max_fee_wei, approved))
+}
+
+fn with_warnings(
+    mut s: EvmTxSummary,
+    p: &Eip1559,
+    max_fee_wei: U256,
+    approved: U256,
+) -> EvmTxSummary {
+    let mut w = Vec::new();
+    match s.kind {
+        EvmTxKind::ContractCall => w.push(EvmWarning::ContractCall),
+        EvmTxKind::Erc20Approve => w.push(EvmWarning::Approval {
+            spender: s.spender.clone().unwrap_or_default(),
+            amount: s.amount.clone(),
+            unlimited: s.unlimited_approval || approved.bits() > 128,
+        }),
+        EvmTxKind::NativeTransfer | EvmTxKind::Erc20Transfer => {}
+    }
+    if !p.data.is_empty() && !p.value.is_zero() {
+        w.push(EvmWarning::ValueToContract {
+            value_wei: p.value.to_string(),
+        });
+    }
+    if !EVM_KNOWN_CHAINS.contains(&s.chain_id) {
+        w.push(EvmWarning::UnknownChain {
+            chain_id: s.chain_id,
+        });
+    }
+    if max_fee_wei > evm_high_fee_threshold_wei(s.chain_id) {
+        w.push(EvmWarning::HighFee {
+            max_fee_wei: max_fee_wei.to_string(),
+        });
+    }
+    s.requires_extra_confirmation = !w.is_empty();
+    s.warnings = w;
+    s
 }
 
 /// Derives the key at `m/44'/60'/0'/0/index`. The returned guard erases it on drop.

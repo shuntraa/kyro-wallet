@@ -54,10 +54,26 @@ pub fn sol_sign_message(seed: &Seed, account: u32, message: &[u8]) -> Result<[u8
 // --- decoding (résumé « en clair », indépendant du frontend) ---
 pub struct EvmTxSummary { pub kind: EvmTxKind /*NativeTransfer|Erc20Transfer|Erc20Approve|ContractCall*/,
                           pub to: String, pub token_contract: Option<String>, pub amount: String, pub spender: Option<String>,
-                          pub unlimited_approval: bool, pub max_fee_wei: String, pub chain_id: u64 }
+                          pub unlimited_approval: bool /*≥ 2^255*/, pub max_fee_wei: String, pub chain_id: u64, pub value_wei: String,
+                          pub warnings: Vec<EvmWarning>, pub requires_extra_confirmation: bool }
+pub enum EvmWarning {   // JSON { "kind": "contractCall" | "approval" | … } → 2ᵉ fenêtre renforcée
+    ContractCall /*tout appel autre qu'un transfer ERC-20 décodé*/,
+    Approval { spender, amount, unlimited /*≥ 2^128 : affiché ILLIMITÉ*/ },
+    ValueToContract { value_wei } /*valeur native avec un appel (calldata non vide)*/,
+    UnknownChain { chain_id } /*hors EVM_KNOWN_CHAINS : 1, 11155111, 42161, 10, 8453, 137, 56, 43114*/,
+    HighFee { max_fee_wei } /*gas_limit × max_fee_per_gas > evm_high_fee_threshold_wei(chain)*/ }
+// Seuil de frais : 0,05 de la monnaie native (ETH, Sepolia, Arbitrum, Optimism, Base, BNB Chain, chaînes inconnues),
+// 50 POL (Polygon), 1 AVAX (Avalanche). Limite : un envoi de valeur SANS calldata vers une adresse de contrat
+// n'est pas détecté (il faudrait eth_getCode ; Rust ne contacte pas le RPC pour signer).
 pub fn evm_decode(tx: &EvmTxRequest) -> Result<EvmTxSummary>;
-pub struct BtcTxSummary { pub outputs: Vec<(String /*address*/, u64 /*sats*/, bool /*is_change*/)>, pub fee_sats: u64 }
+pub struct BtcTxSummary { pub outputs: Vec<(String /*address*/, u64 /*sats*/, bool /*is_change*/)>, pub fee_sats: u64,
+                          pub warnings: Vec<BtcWarning>, pub requires_extra_confirmation: bool }
+pub enum BtcWarning {   // JSON { "kind": "unknownScript" | "opReturn" | "foreignInput" | "highFee", … } → 2ᵉ fenêtre renforcée
+    UnknownScript { output }, OpReturn { output }, ForeignInput { input } /*entrée non signée par nous*/,
+    HighFee { sat_per_vb } /*> BTC_HIGH_FEE_SAT_PER_VB = 100 sat/vB (100 × le minimum de relais), ou frais > total des sorties*/ }
+// Un sighash autre que ALL / DEFAULT sur une de nos entrées n'est pas un avertissement : la signature est REFUSÉE.
 pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String] /*our addresses*/) -> Result<BtcTxSummary>;
+pub fn btc_psbt_summary(seed, net, psbt_b64) -> Result<BtcTxSummary>;   // résumé de btc_sign_psbt sans signer (monnaie et entrées par origine de clé)
 
 // --- Bitcoin, données publiques pour un serveur choisi (B2b) ---
 pub fn btc_scripthash(address: &str, net: Network) -> Result<String>;   // Electrum : sha256(scriptPubKey) inversé, hex
@@ -261,14 +277,14 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `accounts_get` | — | `Accounts` | adresses publiques uniquement ; contient aussi `ltc` et `doge` (§2.4) |
 | `btc_address` | `{ kind, change, index }` | `string` | |
 | `evm_decode_tx` | `{ tx: EvmTxRequest }` | `EvmTxSummary` | pour l'aperçu avant mot de passe |
-| `evm_sign_tx` | `{ tx, password, token?: { symbol, decimals } }` | `{ rawTx, hash }` | dialogue natif obligatoire ; `token` = indication d'affichage seulement (le contrat et le montant brut viennent du décodage Rust) |
-| `btc_sign_psbt` | `{ psbt, password }` | `{ psbt, summary }` | dialogue natif obligatoire |
+| `evm_sign_tx` | `{ tx, password, token?: { symbol, decimals } }` | `{ rawTx, hash }` | dialogue natif obligatoire ; `token` = indication d'affichage seulement (le contrat et le montant brut viennent du décodage Rust) ; **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` : appel de contrat autre qu'un transfer ERC-20, **toute** autorisation (`approve` : bénéficiaire et montant, « ILLIMITÉ » si ≥ 2^128), valeur native envoyée avec un appel, chainId inconnu, frais maximum au-dessus du seuil (voir §1) |
+| `btc_sign_psbt` | `{ psbt, password }` | `{ psbt, summary }` | dialogue natif obligatoire (résumé `btc_psbt_summary`) ; **2ᵉ dialogue renforcé** si `summary.requiresExtraConfirmation` (script inconnu, OP_RETURN, entrée qui n'est pas à nous, frais > 100 sat/vB ou > total des sorties) ; le résumé de la signature doit être identique à celui affiché |
 | `sol_decode_tx` | `{ message /*b64, message sérialisé sans signatures*/ }` | `SolTxSummary` | aperçu avant mot de passe ; décodé en Rust, tables d'adresses (v0) récupérées par Rust (`getAccountInfo`) — jamais fournies par l'UI ; session déverrouillée requise |
 | `sol_sign_tx` | `{ message /*b64*/, password }` | `{ signature /*b64*/, summary: SolTxSummary }` | même décodage ; refuse si notre adresse n'est pas signataire ; dialogue natif construit depuis le résumé Rust, puis 2ᵉ dialogue « Instruction non reconnue — signer quand même ? » si `requiresExtraConfirmation` ; la signature va à l'index `summary.ourSignerIndex` |
 | `net_fetch` | `{ req: { url, method, headers?, body? } }` | `{ status, body }` | allowlist + cache + rate-limit ; seuls `accept`, `content-type`, `0x-version` sont transmis, les clés API sont ajoutées par Rust. **Via Tor si `settings.tor.enabled` (défaut)** : attend le démarrage de Tor (60 s max) puis échoue en `TOR_UNAVAILABLE` — jamais de repli en clair. En mode Tor, `https://mempool.space/…` est servi de façon transparente par le service onion de mempool (même chemin, même réponse) ; l'UI continue d'appeler `https://mempool.space/…`. Toute URL `.onion` est refusée (`HOST_NOT_ALLOWED`) en mode clair |
 | `tor_status` | — | `TorStatus` | état courant de Tor intégré |
 | `tor_retry` | — | `TorStatus` | relance le démarrage depuis zéro (quel que soit l'état : utile après `error`) ; refusé (`INVALID_INPUT`) si Tor est désactivé |
-| `settings_get` / `settings_set` | — / `{ settings: Settings }` | `Settings` (sans secrets : `hasPassword` au lieu du mot de passe Core) | stocké dans le dossier de l'app ; passer `tor.enabled` de `true` à `false` coupe Tor (l'UI doit d'abord demander une confirmation explicite), l'inverse le démarre ; **`settings_set` est asynchrone** et vérifie en direct chaque serveur personnalisé modifié (voir §2.1) avant d'enregistrer — erreurs typées `SERVER_INVALID`, `SERVER_WRONG_NETWORK`, `SERVER_UNREACHABLE`, `TOR_UNAVAILABLE`, rien n'est enregistré en cas d'échec ; si l'objet envoyé n'a pas de clé `servers`, les serveurs enregistrés sont conservés |
+| `settings_get` / `settings_set` | — / `{ settings: SettingsInput }` | `Settings` (sans secrets : `hasPassword` au lieu du mot de passe Core, `apiKeysSet` au lieu des clés API) | stocké dans le dossier de l'app ; passer `tor.enabled` de `true` à `false` coupe Tor (l'UI doit d'abord demander une confirmation explicite), l'inverse le démarre ; **`settings_set` est asynchrone** et vérifie en direct chaque serveur personnalisé modifié (voir §2.1) avant d'enregistrer — erreurs typées `SERVER_INVALID`, `SERVER_WRONG_NETWORK`, `SERVER_UNREACHABLE`, `TOR_UNAVAILABLE`, rien n'est enregistré en cas d'échec ; si l'objet envoyé n'a pas de clé `servers`, les serveurs enregistrés sont conservés |
 | `server_test` | `{ target: ServerTestTarget }` | `ServerTestResult` | teste un serveur **sans l'enregistrer** (mêmes vérifications que `settings_set`). Bitcoin Core `userpass` envoyé **sans** `password` : le mot de passe enregistré est réutilisé s'il s'agit du même emplacement (même réseau), de la même URL et du même utilisateur ; sinon `SERVER_INVALID` (mot de passe manquant) |
 | `electrum_fetch_cert` | `{ host, port }` | `{ sha256, webpkiValid }` | empreinte SHA-256 du certificat TLS d'un serveur Electrum, pour la confirmation TOFU ; la poignée de main est interrompue dès la réception du certificat (aucune donnée envoyée) |
 | `btc_backend_info` | — | `{ kind, network, label, tor }` | serveur Bitcoin actif : `kind` = `default` \| `esplora` \| `electrum` \| `core` \| `cbf`, `network` = `mainnet` \| `testnet4`, `label` = hôte (jamais d'identifiants) |
@@ -288,7 +304,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_cbf_status` | — | `CbfStatus` | mode filtres compacts (fonction `cbf`) ; build sans la fonction : `FEATURE_DISABLED` |
 | `btc_cbf_sync` | — | `CbfStatus` | lance (ou rejoint) une synchronisation en arrière-plan ; progression par l'événement `cbf-status` ; exige le coffre déverrouillé (lit les xpubs) — une lecture coffre verrouillé ne lance pas de synchro ; build sans la fonction : `FEATURE_DISABLED` |
 | `set_capture_protection` | `{ enabled }` | `void` | `set_content_protected` |
-| `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasOneinchKey, hasTrongridKey }` | jamais les clés elles-mêmes ; clé TronGrid : `KYRO_TRONGRID_API_KEY` (env) ou `settings.apiKeys.trongrid` |
+| `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasOneinchKey, hasTrongridKey }` | jamais les clés elles-mêmes ; chaque `hasXKey` = variable d'environnement **ou** clé enregistrée dans les réglages (ex. TronGrid : `KYRO_TRONGRID_API_KEY` ou `apiKeys.trongrid`) |
 | `hw_list` | — | `DeviceInfo[]` | détecte les Ledger (HID) et Trezor (WebUSB) branchés ; ids stables pour la session (`ledger-1`, `trezor-1`…) tant que l'appareil reste sur le même port ; 10 s max. Voir §2.3 |
 | `hw_open` | `{ id }` | `DeviceStatus` | ouvre l'appareil et lit son état : verrouillé, app Ledger ouverte, firmware Trezor, état par chaîne |
 | `hw_cancel` | `{ id }` | `boolean` | abandonne l'opération en cours sur `id` (`true` s'il y en avait une) ; elle se termine en `USER_REJECTED` |
@@ -315,14 +331,20 @@ type Accounts = {
   xrp: { address: string };                                                     // m/44'/144'/0'/0/0
   cardano: { address: string };   // adresse de base m/1852'/1815'/0'/0/0 + staking …/2/0 (CIP-1852, Icarus) ; addr_test1… sur preprod
 };
-type Settings = { currency: 'EUR' | 'USD'; autoLockSecs: number; hideBalancesOnStart: boolean;
+type ApiKeyName = 'coingecko' | 'zerox' | 'oneinch' | 'trongrid';   // toutes les clés que Settings connaît
+// coingecko : en-tête x-cg-demo-api-key / x-cg-pro-api-key (api / pro-api.coingecko.com) ; zerox : 0x-api-key (api.0x.org) ;
+// oneinch : authorization Bearer (api.1inch.dev) ; trongrid : TRON-PRO-API-KEY (api.trongrid.io, nile.trongrid.io, §2.5).
+// (LI.FI et Jupiter : variables d'environnement seulement, pas de clé dans Settings.)
+type Settings = { currency: 'EUR' | 'USD'; autoLockSecs: number; hideBalancesOnStart: boolean;   // ce que RENVOIENT settings_get / settings_set
                   captureProtection: boolean; clipboardGuard: boolean;
                   servers: Servers;               // remplace l'ancien `rpc` (encore accepté en entrée, migré, jamais renvoyé)
-                  apiKeys: { coingecko?: string; zerox?: string; oneinch?: string;
-                             trongrid?: string };   // TronGrid (en-tête TRON-PRO-API-KEY, §2.5) ; comme les autres clés de
-                                                    // `apiKeys`, renvoyée par `settings_get` (saisie par l'utilisateur) ;
-                                                    // `KYRO_TRONGRID_API_KEY` (env) n'est jamais renvoyée (`config_get.hasTrongridKey`)
+                  apiKeysSet: { [K in ApiKeyName]: boolean };   // clé enregistrée ou non ; JAMAIS la valeur (pas de champ `apiKeys`)
                   tor: { enabled: boolean } };   // défaut : { enabled: true }
+type SettingsInput = Omit<Settings, 'apiKeysSet'> & {   // ce qu'ACCEPTE settings_set (`apiKeysSet` envoyé en retour est ignoré)
+                  apiKeys?: { [K in ApiKeyName]?: string | null } };
+// Règle de fusion de `apiKeys.<nom>` dans settings_set : absent (ou null) = inchangé ; "" = supprimé ;
+// chaîne non vide = enregistrée après trim (vide après trim ou caractère de contrôle → INVALID_INPUT ; nom inconnu → INVALID_INPUT).
+// `config_get.hasXKey` = clé d'environnement (KYRO_…) OU clé enregistrée ; les clés d'environnement ne sont jamais renvoyées non plus.
 // ---- serveurs personnalisés (B2b) ----
 // Clé absente = serveur par défaut. Un serveur personnalisé n'est autorisé que pour sa famille
 // et emprunte les circuits Tor isolés de cette famille ; le serveur par défaut de la même chaîne
@@ -402,7 +424,7 @@ Erreurs : rejet de la promesse avec `{ code: 'WRONG_PASSWORD' | 'LOCKED' | 'RATE
 | Electrum | `host` + `port` ; `tls: 'none'` uniquement pour un `.onion` via Tor ; `pinned` exige `certSha256` | `server.version` (protocole 1.4) puis `server.features.genesis_hash` = genesis du réseau |
 | Bitcoin Core | `http://` uniquement pour une adresse locale/LAN (127.0.0.0/8, ::1, RFC 1918, fc00::/7, fe80::/10, `localhost`) ; sinon `https://` ou `.onion` via Tor | `getblockchaininfo.chain` = `main` ou `testnet4` |
 | XRP (`jsonRpc`) | comme Esplora | `server_info` → `info.network_id` = 0 (mainnet) ou 1 (testnet) ; devnet (2) et autres réseaux nommés dans l'erreur. `server_test` renvoie ce `network_id` dans `detected.chainId` (et `detected.blockHeight` = dernier registre validé) |
-| Cardano (`koios`) | comme Esplora | `GET {url}/genesis` → `networkmagic` = 764824073 (mainnet) ou 1 (preprod) ; preview (2) et autres nommés dans l'erreur. `detected.chainId` = `networkmagic`, `detected.blockHeight` = `GET {url}/tip` |
+| Cardano (`koios`) | comme Esplora | `GET {url}/genesis` → `networkmagic` = 764824073 (mainnet) ou 1 (preprod) ; preview (2) et autres nommés dans l'erreur. `server_test` renvoie ce `networkmagic` dans `detected.chainId`. `detected.chainId` = `networkmagic`, `detected.blockHeight` = `GET {url}/tip` |
 | TRON (`http`) | comme Esplora | `POST {url}/wallet/getblockbynum {num:0}` → `blockID` = mainnet `00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc` ou Nile `0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc` ; Shasta (`…de1aa882…a9059e`) est reconnu et nommé dans l'erreur |
 | Esplora Litecoin / Dogecoin | comme Esplora | `GET {url}/block-height/0` = genesis de la chaîne (Litecoin mainnet `12a765e3…04bfe2`, testnet4 `4966625a…3e29a0` ; Dogecoin mainnet `1a91e3da…355691`, testnet `bb0a7826…50559e`) ; le message nomme la chaîne trouvée si c'en est une connue |
 | EVM | comme Esplora | `eth_chainId` = la clé (`chainId`) |
@@ -574,7 +596,7 @@ Rust choisit le serveur (`servers.cardano`, sinon Koios : `preprod.koios.rest` /
 | `ada_account` | `{ address }` | `{ address, balance /*lovelace*/, tokens: [{ policy, name /*hex*/, nameText, quantity, verified, ticker?, decimals? }], utxoCount, lockedWithTokens }` | `lockedWithTokens` = ADA immobilisés par les tokens (min-UTxO de leurs sorties) : ce qui ne peut pas partir sans eux |
 | `ada_txs` | `{ address }` | `[{ hash, time, blockHeight, fee, lovelaceDelta /*signé*/, tokenDeltas: [{ policy, name, nameText, delta }], memo }]` | 20 dernières (`address_txs` + `tx_info`), plus récente d'abord ; `memo` = message CIP-20 |
 | `ada_tx_status` | `{ hash }` | `{ confirmations: number \| null }` | `null` : pas encore vue par l'indexeur |
-| `ada_build_tx` | `{ to, lovelace?, token?: { policy, name, quantity }, memo? }` | `{ tx /*non signée, CBOR hex*/, summary: CardanoTxSummary, context: { account, params, tip, leaving } }` | `lovelace` absent avec un token = exactement le min-UTxO de la sortie ; refusé avant toute construction : adresse refusée (voir §1), montant sous le min-UTxO (le message donne le minimum), token ou ADA insuffisants, monnaie sous son min-UTxO, transaction > `max_tx_size`. `leaving` = sorties vers d'autres adresses + frais |
+| `ada_build_tx` | `{ to, lovelace?, token?: { policy, name, quantity }, memo? }` | `{ tx /*non signée, CBOR hex*/, summary: CardanoTxSummary, context: { account, params, tip, leaving } }` | **garde toujours une sortie de monnaie** (au moins son min-UTxO, ≈ 1 ADA) : « tout envoyer » laisse donc environ 1 ADA sur l'adresse ; `lovelace` absent avec un token = exactement le min-UTxO de la sortie ; refusé avant toute construction : adresse refusée (voir §1), montant sous le min-UTxO (le message donne le minimum), token ou ADA insuffisants, monnaie sous son min-UTxO, transaction > `max_tx_size`. `leaving` = sorties vers d'autres adresses + frais |
 | `ada_sign_tx` | `{ tx, password }` | `{ tx /*signée*/, txId, summary, context }` | décode (strict), refuse `ttl` dépassé, **relit en direct** nos UTxO : chaque entrée doit être un de nos UTxO non dépensés, et entrées = sorties + frais (ADA et chaque token) ; frais ≥ minimum ; mot de passe → racine Icarus re-dérivée du coffre → dialogue natif : **chaque sortie** (destinataire ou monnaie, adresse complète, ADA, « dont X ADA minimum obligatoire avec les tokens », chaque token : quantité, nom texte et hex, policy id, vérifié ou NON VÉRIFIÉ), frais, total qui quitte le portefeuille, validité (slot, ≈ minutes), message ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` (message CIP-20, token hors table vérifiée, frais > 5 ADA, pas de ttl) ; résumé de la signature = résumé affiché |
 | `ada_broadcast` | `{ tx }` | `string` (tx id) | `cardano_signed_witnesses` (chaque signature vérifiée sur blake2b-256 du corps, **un seul témoin : notre clé de paiement**) puis Koios `POST /submittx` (CBOR brut, `application/cbor`) ; l'id renvoyé doit être blake2b-256(corps), sinon `SERVER_UNREACHABLE` ; refus du nœud → `INVALID_INPUT` avec son message |
 
@@ -582,7 +604,7 @@ Table de tokens vérifiés (mainnet seulement, vérifiée le 30/10/2026 via Koio
 
 Hardware wallets : `HW_UNSUPPORTED`. Ce qu'il faudrait : Ledger app « Cardano ADA » (APDU `DERIVE_ADDRESS` / `GET_EXT_PUBKEY` pour `m/1852'/1815'/a'`, `SIGN_TX` qui reçoit la transaction champ par champ et rend les témoins ; dérivation « Ledger » ≠ Icarus pour une même phrase de 24 mots) ; Trezor `CardanoGetPublicKey` / `CardanoGetAddress` / `CardanoSignTxInit` + flux d'entrées / sorties / tokens (`derivation_type` ICARUS ou ICARUS_TREZOR, qui diffère d'Icarus pour 24 mots). Dans les deux cas Kyro reconstruirait le corps lui-même et vérifierait chaque témoin contre blake2b-256 du corps, comme `btc_hw_finalize`.
 
-**À faire côté UI** (pas dans ce lot) : `Family` `'ada'` (aujourd'hui `CardanoChain` / `cardanoChain(network)` existent dans le registre mais hors `Family` et `allChains()`), types `Commands` de `@kyro/shared` (`ada_*`, `Accounts.cardano`, `Servers.cardano`, `CardanoServer`, `ServerTestTarget` `cardano` ; les types sont aujourd'hui dans `packages/chains/src/cardano/adapter.ts`, à déplacer dans `ipc.ts`), `WalletAccounts.cardano` et `AdapterSet.cardano` (`createAdapters`), backend démo, écrans Envoyer (adresse, montant ADA avec `adaToLovelace`, token facultatif avec quantité, message facultatif public, aperçu du `summary` avant le mot de passe : sorties, min-ADA, frais), Recevoir (adresse de base seule), Actif (ADA, `spendable` = solde − `lockedWithTokens`, liste des tokens avec policy id et mention « non vérifié »), Historique (`lovelaceDelta`, tokens, message), réglage serveur Cardano (Koios), « Connexions sortantes » (`preprod.koios.rest` / `api.koios.rest`), sortie de Cardano de `WATCH_ONLY_CHAINS`. Adaptateur : `CardanoAdapter` (`packages/chains/src/cardano/`), `isCardanoAddress`, `isByronAddress`.
+**Fait côté UI** (commit 45208d5) : `Family` `'ada'` (aujourd'hui `CardanoChain` / `cardanoChain(network)` existent dans le registre mais hors `Family` et `allChains()`), types `Commands` de `@kyro/shared` (`ada_*`, `Accounts.cardano`, `Servers.cardano`, `CardanoServer`, `ServerTestTarget` `cardano` ; les types sont aujourd'hui dans `packages/chains/src/cardano/adapter.ts`, à déplacer dans `ipc.ts`), `WalletAccounts.cardano` et `AdapterSet.cardano` (`createAdapters`), backend démo, écrans Envoyer (adresse, montant ADA avec `adaToLovelace`, token facultatif avec quantité, message facultatif public, aperçu du `summary` avant le mot de passe : sorties, min-ADA, frais), Recevoir (adresse de base seule), Actif (ADA, `spendable` = solde − `lockedWithTokens`, liste des tokens avec policy id et mention « non vérifié »), Historique (`lovelaceDelta`, tokens, message), réglage serveur Cardano (Koios), « Connexions sortantes » (`preprod.koios.rest` / `api.koios.rest`), sortie de Cardano de `WATCH_ONLY_CHAINS`. Adaptateur : `CardanoAdapter` (`packages/chains/src/cardano/`), `isCardanoAddress`, `isByronAddress`.
 
 ## 3. Allowlist réseau (`net_fetch`)
 

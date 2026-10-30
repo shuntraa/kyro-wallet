@@ -29,6 +29,42 @@ pub struct BtcAccount {
     pub path: String,
 }
 
+/// Fee rate above which a Bitcoin transaction needs the reinforced confirmation: 100 sat/vB,
+/// i.e. 100 × the 1 sat/vB relay minimum (same rule as Litecoin's `HighFee`).
+pub const BTC_HIGH_FEE_SAT_PER_VB: u64 = 100;
+
+/// Reasons for caution in a Bitcoin PSBT (each one requires the reinforced confirmation).
+/// A sighash other than ALL / DEFAULT on one of our inputs is not a warning: it is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum BtcWarning {
+    /// Output whose script is not a standard address (`script:<hex>`).
+    UnknownScript {
+        /// Output index.
+        output: usize,
+    },
+    /// `OP_RETURN` output (data, burns its value).
+    OpReturn {
+        /// Output index.
+        output: usize,
+    },
+    /// Input that does not belong to this wallet (not signed by Kyro; someone else adds funds
+    /// or co-signs — coinjoin, payjoin, or a trap).
+    ForeignInput {
+        /// Input index.
+        input: usize,
+    },
+    /// Fee rate above [`BTC_HIGH_FEE_SAT_PER_VB`], or fee larger than all outputs together.
+    HighFee {
+        /// Estimated fee rate, sat/vB.
+        sat_per_vb: u64,
+    },
+}
+
 /// Plain-language summary of a PSBT.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +76,23 @@ pub struct BtcTxSummary {
     pub outputs: Vec<(String, u64, bool)>,
     /// Sum of inputs (from `witness_utxo`) minus sum of outputs.
     pub fee_sats: u64,
+    /// Reasons for caution.
+    #[serde(default)]
+    pub warnings: Vec<BtcWarning>,
+    /// The native dialog must be followed by a reinforced one.
+    #[serde(default)]
+    pub requires_extra_confirmation: bool,
+}
+
+/// Estimated virtual size once signed: P2WPKH inputs 108 weight units of witness, P2TR
+/// key-path 66 (a lower bound for other scripts, so the fee rate is never underestimated).
+fn estimated_vsize(psbt: &Psbt, prevouts: &[TxOut]) -> u64 {
+    let base = psbt.unsigned_tx.base_size() as u64;
+    let witness: u64 = prevouts
+        .iter()
+        .map(|p| if p.script_pubkey.is_p2tr() { 66 } else { 108 })
+        .sum();
+    (base * 4 + 2 + witness).div_ceil(4)
 }
 
 pub(crate) fn account_path(net: Network, kind: BtcKind, account: u32) -> Result<[ChildNumber; 3]> {
@@ -159,6 +212,7 @@ pub(crate) fn summarize(
     psbt: &Psbt,
     prevouts: &[TxOut],
     is_own: impl Fn(usize, &Script) -> bool,
+    is_own_input: impl Fn(usize) -> bool,
 ) -> Result<BtcTxSummary> {
     let mut total_in: u64 = 0;
     for p in prevouts {
@@ -182,7 +236,29 @@ pub(crate) fn summarize(
     let fee_sats = total_in
         .checked_sub(total_out)
         .ok_or_else(|| Error::psbt("outputs exceed inputs (negative fee)"))?;
-    Ok(BtcTxSummary { outputs, fee_sats })
+    let mut warnings = Vec::new();
+    for i in 0..prevouts.len() {
+        if !is_own_input(i) {
+            warnings.push(BtcWarning::ForeignInput { input: i });
+        }
+    }
+    for (j, (addr, _, _)) in outputs.iter().enumerate() {
+        if addr.starts_with("op_return:") {
+            warnings.push(BtcWarning::OpReturn { output: j });
+        } else if addr.starts_with("script:") {
+            warnings.push(BtcWarning::UnknownScript { output: j });
+        }
+    }
+    let rate = fee_sats / estimated_vsize(psbt, prevouts).max(1);
+    if rate > BTC_HIGH_FEE_SAT_PER_VB || fee_sats > total_out {
+        warnings.push(BtcWarning::HighFee { sat_per_vb: rate });
+    }
+    Ok(BtcTxSummary {
+        outputs,
+        fee_sats,
+        requires_extra_confirmation: !warnings.is_empty(),
+        warnings,
+    })
 }
 
 /// Decodes a PSBT without any secret. `own` lists the wallet's addresses: outputs paying to
@@ -198,9 +274,17 @@ pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String]) -> Result<B
             .map_err(|_| Error::input("own address is for another network"))?;
         own_scripts.push(addr.script_pubkey());
     }
-    summarize(net, &psbt, &prevouts, |_, spk| {
-        own_scripts.iter().any(|s| s.as_script() == spk)
-    })
+    summarize(
+        net,
+        &psbt,
+        &prevouts,
+        |_, spk| own_scripts.iter().any(|s| s.as_script() == spk),
+        |i| {
+            prevouts
+                .get(i)
+                .is_some_and(|p| own_scripts.contains(&p.script_pubkey))
+        },
+    )
 }
 
 /// `true` iff `path` is `m/purpose'/coin'/account'/{0,1}/index` for our purpose and coin type.
@@ -241,6 +325,29 @@ impl Signer {
         self.master.derive(&self.secp, path.as_ref())
     }
 
+    /// Whether Kyro would sign this input: a key origin with our fingerprint and path for the
+    /// spent script type (the signing loop then checks key and script, or fails).
+    fn input_is_ours(&self, input: &bitcoin::psbt::Input, prevout: &TxOut) -> bool {
+        let spk = &prevout.script_pubkey;
+        if spk.is_p2wpkh() {
+            input
+                .bip32_derivation
+                .values()
+                .any(|(fp, path)| self.ours(fp, path, BtcKind::Segwit))
+        } else if spk.is_p2tr() {
+            input
+                .tap_key_origins
+                .iter()
+                .any(|(x, (leaves, (fp, path)))| {
+                    leaves.is_empty()
+                        && input.tap_internal_key == Some(*x)
+                        && self.ours(fp, path, BtcKind::Taproot)
+                })
+        } else {
+            false
+        }
+    }
+
     /// Whether a PSBT output provably pays to one of our keys (key origin + script match).
     fn output_is_ours(&self, spk: &Script, meta: &PsbtOutput) -> Result<bool> {
         if spk.is_p2wpkh() {
@@ -274,6 +381,44 @@ impl Signer {
     }
 }
 
+/// Summary as `btc_sign_psbt` computes it (change and own inputs by key origin), without
+/// signing: what the native dialog shows before the password-protected signature.
+fn sign_summary(
+    signer: &Signer,
+    net: Network,
+    psbt: &Psbt,
+    prevouts: &[TxOut],
+) -> Result<BtcTxSummary> {
+    if psbt.outputs.len() != psbt.unsigned_tx.output.len() {
+        return Err(Error::psbt("output count mismatch"));
+    }
+    let mut own = Vec::with_capacity(psbt.outputs.len());
+    for (out, meta) in psbt.unsigned_tx.output.iter().zip(&psbt.outputs) {
+        own.push(signer.output_is_ours(&out.script_pubkey, meta)?);
+    }
+    let own_inputs: Vec<bool> = psbt
+        .inputs
+        .iter()
+        .zip(prevouts)
+        .map(|(i, p)| signer.input_is_ours(i, p))
+        .collect();
+    summarize(
+        net,
+        psbt,
+        prevouts,
+        |j, _| own.get(j).copied().unwrap_or(false),
+        |i| own_inputs.get(i).copied().unwrap_or(false),
+    )
+}
+
+/// [`btc_sign_psbt`]'s summary without signing (for the dialog shown before signing).
+pub fn btc_psbt_summary(seed: &Seed, net: Network, psbt_b64: &str) -> Result<BtcTxSummary> {
+    let psbt = parse_psbt(psbt_b64)?;
+    let prevouts = prevouts(&psbt)?;
+    let signer = Signer::new(seed, net)?;
+    sign_summary(&signer, net, &psbt, &prevouts)
+}
+
 /// Signs every P2WPKH (BIP84) and P2TR key-path (BIP86) input whose key origin
 /// (`bip32_derivation` / `tap_key_origins`) carries our master fingerprint and a path
 /// `m/purpose'/coin'/account'/{0,1}/index` for this network. Other inputs are left untouched.
@@ -290,16 +435,7 @@ pub fn btc_sign_psbt(seed: &Seed, net: Network, psbt_b64: &str) -> Result<(Strin
     let signer = Signer::new(seed, net)?;
     let secp = &signer.secp;
 
-    if psbt.outputs.len() != psbt.unsigned_tx.output.len() {
-        return Err(Error::psbt("output count mismatch"));
-    }
-    let mut own = Vec::with_capacity(psbt.outputs.len());
-    for (out, meta) in psbt.unsigned_tx.output.iter().zip(&psbt.outputs) {
-        own.push(signer.output_is_ours(&out.script_pubkey, meta)?);
-    }
-    let summary = summarize(net, &psbt, &prevouts, |j, _| {
-        own.get(j).copied().unwrap_or(false)
-    })?;
+    let summary = sign_summary(&signer, net, &psbt, &prevouts)?;
 
     let tx = psbt.unsigned_tx.clone();
     let mut cache = SighashCache::new(&tx);

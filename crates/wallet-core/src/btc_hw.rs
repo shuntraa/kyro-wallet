@@ -307,9 +307,13 @@ fn plan_of(net: Network, psbt: &Psbt, accounts: &[BtcAccount]) -> Result<HwBtcPl
             }
         }
     }
-    let summary = summarize(net, psbt, &prevouts, |j, _| {
-        change.iter().any(|c| c.index == j)
-    })?;
+    let summary = summarize(
+        net,
+        psbt,
+        &prevouts,
+        |j, _| change.iter().any(|c| c.index == j),
+        |i| !external_inputs.contains(&i),
+    )?;
     Ok(HwBtcPlan {
         inputs,
         external_inputs,

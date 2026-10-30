@@ -204,7 +204,7 @@ async fn probe_changes(net: &NetClient, new: &Servers, old: &Servers, tor: bool)
 // ---------------------------------------------------------------- settings
 
 #[tauri::command]
-pub fn settings_get(state: State<'_, AppState>) -> Settings {
+pub fn settings_get(state: State<'_, AppState>) -> Value {
     state.settings().for_ui()
 }
 
@@ -212,12 +212,12 @@ pub fn settings_get(state: State<'_, AppState>) -> Settings {
 /// saves, and starts/stops Tor. Errors: `SERVER_INVALID`, `SERVER_WRONG_NETWORK`,
 /// `SERVER_UNREACHABLE`, `TOR_UNAVAILABLE`, `INVALID_INPUT`.
 #[tauri::command]
-pub async fn settings_set(state: State<'_, AppState>, settings: Value) -> AppResult<Settings> {
+pub async fn settings_set(state: State<'_, AppState>, settings: Value) -> AppResult<Value> {
     let old = state.settings();
     // A caller that does not know `servers` yet (older UI) must not wipe them.
     let has_servers = settings.get("servers").is_some();
-    let mut new: Settings = serde_json::from_value(settings)
-        .map_err(|e| AppError::InvalidInput(format!("réglages invalides : {e}")))?;
+    // `apiKeys` is a patch (absent = unchanged, "" = removed); keys are never sent to the UI.
+    let mut new = Settings::from_ui(settings, &old.api_keys)?;
     if !has_servers {
         new.servers = old.servers.clone();
     }

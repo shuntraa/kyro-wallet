@@ -394,3 +394,495 @@ mod tests {
         assert_eq!(message_bytes("AQID").unwrap(), vec![1, 2, 3]);
     }
 }
+
+/// Real devnet sends through the Rust path of `sol_sign_tx`: `decode` (lookup tables read by
+/// Rust), dialog text (+ reinforced text), `sol_sign_message`, signature verification, then
+/// `sendTransaction` through `net_fetch` (`NetClient::fetch`, the UI's path), signature check
+/// and confirmation. Messages are built here (the TS `SolanaAdapter` is not exercised).
+/// Key: a NEW random devnet mnemonic in the gitignored `.env.solana-devnet`; funding:
+/// `requestAirdrop` (plain RPC, no captcha). Run with
+/// `cargo test -p kyro-desktop --lib -- --ignored --nocapture sol_live`
+/// (`KYRO_SOL_CLEAR=yes`: clear mode, if devnet rate-limits Tor exits).
+#[cfg(test)]
+mod live {
+    use super::*;
+    use crate::settings::Settings;
+    use crate::tor::TorState;
+    use sha2::{Digest, Sha256};
+
+    const SYSTEM: &str = "11111111111111111111111111111111";
+    const TOKEN: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+    const TOKEN22: &str = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+    const ATA: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+    const ALT: &str = "AddressLookupTab1e1111111111111111111111111";
+
+    type Key = [u8; 32];
+
+    fn key(s: &str) -> Key {
+        bitcoin::base58::decode(s).unwrap().try_into().unwrap()
+    }
+    fn b58(k: &Key) -> String {
+        bitcoin::base58::encode(k)
+    }
+
+    fn compact(n: usize, out: &mut Vec<u8>) {
+        let mut n = n;
+        loop {
+            let mut b = (n & 0x7f) as u8;
+            n >>= 7;
+            if n != 0 {
+                b |= 0x80;
+            }
+            out.push(b);
+            if n == 0 {
+                break;
+            }
+        }
+    }
+
+    /// Program-derived address (`find_program_address`).
+    fn pda(seeds: &[&[u8]], program: &Key) -> (Key, u8) {
+        for bump in (0..=255u8).rev() {
+            let mut h = Sha256::new();
+            for s in seeds {
+                h.update(s);
+            }
+            h.update([bump]);
+            h.update(program);
+            h.update(b"ProgramDerivedAddress");
+            let k: Key = h.finalize().into();
+            if curve25519_dalek::edwards::CompressedEdwardsY(k)
+                .decompress()
+                .is_none()
+            {
+                return (k, bump);
+            }
+        }
+        panic!("no PDA")
+    }
+
+    fn ata(owner: &Key, mint: &Key, program: &str) -> Key {
+        pda(&[owner, &key(program), mint], &key(ATA)).0
+    }
+
+    struct Ix {
+        program: Key,
+        accounts: Vec<Key>,
+        data: Vec<u8>,
+    }
+
+    /// Legacy message, one signer (`payer`): keys = payer, `writable`, `readonly`.
+    fn legacy(
+        payer: &Key,
+        writable: &[Key],
+        readonly: &[Key],
+        blockhash: &Key,
+        ixs: &[Ix],
+    ) -> Vec<u8> {
+        let mut keys = vec![*payer];
+        keys.extend_from_slice(writable);
+        keys.extend_from_slice(readonly);
+        let mut m = vec![1, 0, readonly.len() as u8];
+        compact(keys.len(), &mut m);
+        for k in &keys {
+            m.extend_from_slice(k);
+        }
+        m.extend_from_slice(blockhash);
+        compact(ixs.len(), &mut m);
+        let idx = |k: &Key| keys.iter().position(|x| x == k).expect("key in message") as u8;
+        for ix in ixs {
+            m.push(idx(&ix.program));
+            compact(ix.accounts.len(), &mut m);
+            for a in &ix.accounts {
+                m.push(idx(a));
+            }
+            compact(ix.data.len(), &mut m);
+            m.extend_from_slice(&ix.data);
+        }
+        m
+    }
+
+    fn transfer_data(lamports: u64) -> Vec<u8> {
+        let mut d = 2u32.to_le_bytes().to_vec();
+        d.extend_from_slice(&lamports.to_le_bytes());
+        d
+    }
+
+    fn seed() -> wallet_core::Seed {
+        // The RPC faucet of devnet answers 410 "closed" (2026-10-30); the web faucet has a
+        // captcha. Fallback: the public "abandon … about" wallet, which holds devnet SOL.
+        if std::env::var("KYRO_SOL_WALLET").as_deref() == Ok("abandon") {
+            return wallet_core::Mnemonic::parse(
+                "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            )
+            .unwrap()
+            .to_seed("");
+        }
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.env.solana-devnet");
+        let words = match std::fs::read_to_string(&path) {
+            Ok(s) => s
+                .lines()
+                .find_map(|l| l.strip_prefix("KYRO_SOL_TEST_MNEMONIC="))
+                .expect("mnemonic line")
+                .trim()
+                .to_owned(),
+            Err(_) => {
+                let m = wallet_core::Mnemonic::generate(wallet_core::WordCount::W12).unwrap();
+                let w = m.words().join(" ");
+                std::fs::write(
+                    &path,
+                    format!("# SOLANA DEVNET ONLY - random test mnemonic generated by the Kyro live test (solana.rs).\n# Never use it for real funds. This file is gitignored (.env.*).\nKYRO_SOL_TEST_MNEMONIC={w}\n"),
+                )
+                .unwrap();
+                eprintln!("new test mnemonic written to {}", path.display());
+                w
+            }
+        };
+        wallet_core::Mnemonic::parse(&words).unwrap().to_seed("")
+    }
+
+    struct Live {
+        state: AppState,
+        settings: Settings,
+        seed: wallet_core::Seed,
+        me: String,
+    }
+
+    impl Live {
+        async fn rpc(&self, method: &str, params: Value) -> Value {
+            let body = json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
+            for attempt in 0..5 {
+                let r = self
+                    .state
+                    .net
+                    .fetch(
+                        FetchRequest {
+                            url: DEFAULT_RPC_DEVNET.into(),
+                            method: "POST".into(),
+                            headers: [("content-type".to_owned(), "application/json".to_owned())]
+                                .into(),
+                            body: Some(body.to_string()),
+                        },
+                        &self.settings,
+                        &self.state.env_keys,
+                        Network::Testnet,
+                    )
+                    .await;
+                match r {
+                    Ok(resp) if resp.status == 200 => {
+                        let v: Value = serde_json::from_str(&resp.body).unwrap();
+                        if v.get("error").is_some() && method == "requestAirdrop" && attempt < 4 {
+                            eprintln!("{method}: {} (retry)", v["error"]);
+                            tokio::time::sleep(std::time::Duration::from_secs(15 * (attempt + 1)))
+                                .await;
+                            continue;
+                        }
+                        return v;
+                    }
+                    other => {
+                        eprintln!("{method}: {other:?} (retry {attempt})");
+                        tokio::time::sleep(std::time::Duration::from_secs(10 * (attempt + 1)))
+                            .await;
+                    }
+                }
+            }
+            panic!("{method}: no answer");
+        }
+
+        async fn blockhash(&self) -> Key {
+            let v = self
+                .rpc("getLatestBlockhash", json!([{ "commitment": "confirmed" }]))
+                .await;
+            key(v["result"]["value"]["blockhash"].as_str().unwrap())
+        }
+
+        async fn balance(&self, a: &str) -> u64 {
+            self.rpc("getBalance", json!([a, { "commitment": "confirmed" }]))
+                .await["result"]["value"]
+                .as_u64()
+                .unwrap()
+        }
+
+        /// What `sol_sign_tx` does, then `sendTransaction` and confirmation. Returns the
+        /// signature (transaction id).
+        async fn send(&self, label: &str, message: Vec<u8>, expect_extra: bool) -> String {
+            let summary = decode(&self.state, &message, &self.me).await.unwrap();
+            eprintln!(
+                "--- {label}: dialog ---\n{}",
+                describe(&summary, &self.me, Network::Testnet)
+            );
+            if summary.requires_extra_confirmation {
+                eprintln!("--- {label}: reinforced ---\n{}", describe_extra(&summary));
+            }
+            assert_eq!(
+                summary.requires_extra_confirmation, expect_extra,
+                "{label}: {:?}",
+                summary.warnings
+            );
+            assert_eq!(summary.our_signer_index, Some(0));
+            let sig = wallet_core::sol_sign_message(&self.seed, 0, &message).unwrap();
+            wallet_core::sol_verify_signature(&self.me, &message, &sig).unwrap();
+            let mut tx = vec![1u8];
+            tx.extend_from_slice(&sig);
+            tx.extend_from_slice(&message);
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&tx);
+            let expected = bitcoin::base58::encode(&sig);
+            let v = self
+                .rpc(
+                    "sendTransaction",
+                    json!([b64, { "encoding": "base64", "preflightCommitment": "confirmed" }]),
+                )
+                .await;
+            assert_eq!(
+                v["result"].as_str(),
+                Some(expected.as_str()),
+                "{label}: {v}"
+            );
+            for _ in 0..40 {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                let s = self
+                    .rpc(
+                        "getSignatureStatuses",
+                        json!([[expected], { "searchTransactionHistory": true }]),
+                    )
+                    .await;
+                let st = &s["result"]["value"][0];
+                if st["confirmationStatus"] == "confirmed"
+                    || st["confirmationStatus"] == "finalized"
+                {
+                    assert!(st["err"].is_null(), "{label}: {st}");
+                    eprintln!("{label}: CONFIRMED {expected} (slot {})", st["slot"]);
+                    return expected;
+                }
+            }
+            panic!("{label}: {expected} not confirmed");
+        }
+    }
+
+    /// `seed_str` + create + initialize mint, our ATA, mint 1 000 units, then a TransferChecked
+    /// of 250 to the ATA of our address #1. `program`: Token or Token-2022.
+    async fn spl_round(
+        l: &Live,
+        me: &Key,
+        other: &Key,
+        program: &str,
+        seed_str: &str,
+    ) -> (String, String) {
+        let prog = key(program);
+        let mint = {
+            let mut h = Sha256::new();
+            h.update(me);
+            h.update(seed_str.as_bytes());
+            h.update(prog);
+            let k: Key = h.finalize().into();
+            k
+        };
+        let rent = l
+            .rpc("getMinimumBalanceForRentExemption", json!([82]))
+            .await["result"]
+            .as_u64()
+            .unwrap();
+        let mut create = 3u32.to_le_bytes().to_vec();
+        create.extend_from_slice(me);
+        create.extend_from_slice(&(seed_str.len() as u64).to_le_bytes());
+        create.extend_from_slice(seed_str.as_bytes());
+        create.extend_from_slice(&rent.to_le_bytes());
+        create.extend_from_slice(&82u64.to_le_bytes());
+        create.extend_from_slice(&prog);
+        let mut init = vec![20u8, 2];
+        init.extend_from_slice(me);
+        init.push(0);
+        let my_ata = ata(me, &mint, program);
+        let mut mint_to = vec![7u8];
+        mint_to.extend_from_slice(&1_000u64.to_le_bytes());
+        let (sys, ata_p) = (key(SYSTEM), key(ATA));
+        let m1 = legacy(
+            me,
+            &[mint, my_ata],
+            &[sys, prog, ata_p],
+            &l.blockhash().await,
+            &[
+                Ix {
+                    program: sys,
+                    accounts: vec![*me, mint, *me],
+                    data: create,
+                },
+                Ix {
+                    program: prog,
+                    accounts: vec![mint],
+                    data: init,
+                },
+                Ix {
+                    program: ata_p,
+                    accounts: vec![*me, my_ata, *me, mint, sys, prog],
+                    data: vec![1],
+                },
+                Ix {
+                    program: prog,
+                    accounts: vec![mint, my_ata, *me],
+                    data: mint_to,
+                },
+            ],
+        );
+        // InitializeMint2 and MintTo are not decoded by Kyro: reinforced confirmation.
+        let t1 = l.send(&format!("{program} mint"), m1, true).await;
+        let their_ata = ata(other, &mint, program);
+        let mut xfer = vec![12u8];
+        xfer.extend_from_slice(&250u64.to_le_bytes());
+        xfer.push(2);
+        let m2 = legacy(
+            me,
+            &[their_ata, my_ata],
+            &[*other, mint, sys, prog, ata_p],
+            &l.blockhash().await,
+            &[
+                Ix {
+                    program: ata_p,
+                    accounts: vec![*me, their_ata, *other, mint, sys, prog],
+                    data: vec![1],
+                },
+                Ix {
+                    program: prog,
+                    accounts: vec![my_ata, mint, their_ata, *me],
+                    data: xfer,
+                },
+            ],
+        );
+        let t2 = l.send(&format!("{program} transfer"), m2, false).await;
+        (t1, t2)
+    }
+
+    #[test]
+    #[ignore]
+    fn sol_live_devnet_sends() {
+        let dir = std::env::temp_dir().join("kyro-sol-live");
+        let _ = std::fs::create_dir_all(&dir);
+        let state = AppState::new(dir).unwrap();
+        let mut settings = state.settings();
+        if std::env::var("KYRO_SOL_CLEAR").as_deref() == Ok("yes") {
+            settings.tor.enabled = false;
+        }
+        let seed = seed();
+        let me = wallet_core::sol_address(&seed, 0).unwrap();
+        let other = wallet_core::sol_address(&seed, 1).unwrap();
+        eprintln!("addresses {me} {other} (tor: {})", settings.tor.enabled);
+        let l = Live {
+            state,
+            settings,
+            seed,
+            me: me.clone(),
+        };
+        tauri::async_runtime::block_on(async {
+            if l.settings.tor.enabled {
+                l.state.net.tor.restart();
+                while l.state.net.tor.status().state != TorState::Ready {
+                    assert_ne!(l.state.net.tor.status().state, TorState::Error);
+                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                }
+            }
+            let mut bal = l.balance(&me).await;
+            if bal < 50_000_000 {
+                let v = l.rpc("requestAirdrop", json!([me, 1_000_000_000u64])).await;
+                eprintln!("airdrop: {v}");
+                for _ in 0..30 {
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    bal = l.balance(&me).await;
+                    if bal >= 200_000_000 {
+                        break;
+                    }
+                }
+            }
+            eprintln!("balance {bal} lamports");
+            assert!(bal >= 50_000_000, "not funded");
+            let (a, b) = (key(&me), key(&other));
+            let sys = key(SYSTEM);
+
+            // 1. SOL to our own address #1.
+            let m = legacy(
+                &a,
+                &[b],
+                &[sys],
+                &l.blockhash().await,
+                &[Ix {
+                    program: sys,
+                    accounts: vec![a, b],
+                    data: transfer_data(10_000_000),
+                }],
+            );
+            let t = l.send("SOL", m, false).await;
+            eprintln!("SOL SELF-SEND: {t}");
+
+            // 2. SPL Token and Token-2022: our own test mint, then a transfer.
+            let tag = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                % 1_000_000;
+            let (m1, t1) = spl_round(&l, &a, &b, TOKEN, &format!("kyro-spl-{tag}")).await;
+            eprintln!("SPL MINT: {m1}\nSPL TRANSFER: {t1}");
+            let (m2, t2) = spl_round(&l, &a, &b, TOKEN22, &format!("kyro-t22-{tag}")).await;
+            eprintln!("TOKEN-2022 MINT: {m2}\nTOKEN-2022 TRANSFER: {t2}");
+
+            // 3. Address lookup table (create + extend), then a v0 SOL transfer through it.
+            let slot = l
+                .rpc("getSlot", json!([{ "commitment": "finalized" }]))
+                .await["result"]
+                .as_u64()
+                .unwrap();
+            let alt = key(ALT);
+            let (table, bump) = pda(&[&a, &slot.to_le_bytes()], &alt);
+            let mut create = 0u32.to_le_bytes().to_vec();
+            create.extend_from_slice(&slot.to_le_bytes());
+            create.push(bump);
+            let mut extend = 2u32.to_le_bytes().to_vec();
+            extend.extend_from_slice(&1u64.to_le_bytes());
+            extend.extend_from_slice(&b);
+            let m = legacy(
+                &a,
+                &[table],
+                &[sys, alt],
+                &l.blockhash().await,
+                &[
+                    Ix {
+                        program: alt,
+                        accounts: vec![table, a, a, sys],
+                        data: create,
+                    },
+                    Ix {
+                        program: alt,
+                        accounts: vec![table, a, a, sys],
+                        data: extend,
+                    },
+                ],
+            );
+            let t = l.send("ALT create+extend", m, true).await;
+            eprintln!("LOOKUP TABLE {}: {t}", b58(&table));
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            let mut v0 = vec![0x80, 1, 0, 1];
+            compact(2, &mut v0);
+            v0.extend_from_slice(&a);
+            v0.extend_from_slice(&sys);
+            v0.extend_from_slice(&l.blockhash().await);
+            compact(1, &mut v0);
+            v0.push(1);
+            compact(2, &mut v0);
+            v0.extend_from_slice(&[0, 2]);
+            let d = transfer_data(1_000_000);
+            compact(d.len(), &mut v0);
+            v0.extend_from_slice(&d);
+            compact(1, &mut v0);
+            v0.extend_from_slice(&table);
+            compact(1, &mut v0);
+            v0.push(0);
+            compact(0, &mut v0);
+            let t = l.send("v0 + lookup table", v0, false).await;
+            eprintln!("V0 TRANSFER: {t}");
+            eprintln!(
+                "final balance {} / {}",
+                l.balance(&me).await,
+                l.balance(&other).await
+            );
+        });
+    }
+}

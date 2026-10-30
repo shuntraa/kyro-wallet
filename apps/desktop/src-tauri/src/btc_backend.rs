@@ -1729,3 +1729,189 @@ mod live {
         }
     }
 }
+
+/// Bitcoin testnet4 broadcast from the public "abandon … about" wallet (BIP84 and BIP86),
+/// in three phases like Litecoin's: (1) Rust reads the wallet over Tor (the `btc_*` code,
+/// default backend = mempool's onion) and dumps it to `$KYRO_BTC_DUMP`; (2) the TS
+/// `BitcoinAdapter` builds the PSBT from that dump; (3) Rust runs exactly what `btc_sign_psbt`
+/// runs (summary, dialog text, reinforced dialog if required, signature, identical summary),
+/// finalizes, and calls the `btc_broadcast` code over Tor (txid check), then waits for
+/// `btc_address_txs`. Broadcasts only when `KYRO_BTC_BROADCAST=yes`.
+#[cfg(test)]
+mod live_send {
+    use super::*;
+    use crate::tor::TorState;
+    use serde_json::json;
+
+    const ABANDON: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    const ALL: &str = "all all all all all all all all all all all all";
+    const SCAN: u32 = 20;
+
+    /// `KYRO_BTC_WALLET=trezor` uses Trezor's public `all × 12` test wallet instead.
+    fn phrase() -> &'static str {
+        match std::env::var("KYRO_BTC_WALLET").as_deref() {
+            Ok("trezor") => ALL,
+            _ => ABANDON,
+        }
+    }
+
+    async fn wait_tor(net: &NetClient) {
+        net.tor.restart();
+        loop {
+            match net.tor.status().state {
+                TorState::Ready => break,
+                TorState::Error => panic!("tor: {:?}", net.tor.status().message),
+                _ => tokio::time::sleep(std::time::Duration::from_millis(200)).await,
+            }
+        }
+    }
+
+    fn ctx(net: &NetClient) -> Ctx<'_> {
+        Ctx {
+            net_client: net,
+            network: Network::Testnet,
+            tor: true,
+            server: BtcServer::Default,
+            fingerprint: None,
+        }
+    }
+
+    fn addresses(seed: &wallet_core::Seed) -> Vec<String> {
+        let mut out = Vec::new();
+        for kind in [wallet_core::BtcKind::Segwit, wallet_core::BtcKind::Taproot] {
+            for change in [false, true] {
+                for i in 0..SCAN {
+                    out.push(
+                        wallet_core::btc_address(seed, Network::Testnet, kind, 0, change, i)
+                            .unwrap(),
+                    );
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    #[ignore]
+    fn btc_broadcast_1_fetch() {
+        let out = std::env::var("KYRO_BTC_DUMP").expect("KYRO_BTC_DUMP");
+        let net = NetClient::new(std::env::temp_dir().join("kyro-btc-bcast")).unwrap();
+        let seed = wallet_core::Mnemonic::parse(phrase()).unwrap().to_seed("");
+        let acc = |k| {
+            let a = wallet_core::btc_account(&seed, Network::Testnet, k, 0).unwrap();
+            json!({
+                "address": wallet_core::btc_address(&seed, Network::Testnet, k, 0, false, 0).unwrap(),
+                "xpub": a.xpub, "fingerprint": a.fingerprint, "path": a.path
+            })
+        };
+        let accounts = json!({
+            "segwit": acc(wallet_core::BtcKind::Segwit),
+            "taproot": acc(wallet_core::BtcKind::Taproot),
+        });
+        tauri::async_runtime::block_on(async {
+            wait_tor(&net).await;
+            let c = ctx(&net);
+            let mut info = serde_json::Map::new();
+            let mut utxos = serde_json::Map::new();
+            for a in addresses(&seed) {
+                let i = address_info(&c, &a).await.unwrap();
+                let u = address_utxos(&c, &a).await.unwrap();
+                if u.as_array().is_some_and(|x| !x.is_empty()) {
+                    eprintln!("{a}: {u}");
+                }
+                info.insert(a.clone(), i);
+                utxos.insert(a, u);
+            }
+            let fees = fee_rates(&c).await.unwrap();
+            let tip = tip_height(&c).await.unwrap();
+            let dump = json!({ "accounts": accounts, "info": info, "utxos": utxos, "fees": fees, "tip": tip });
+            std::fs::write(&out, serde_json::to_string_pretty(&dump).unwrap()).unwrap();
+            eprintln!("wrote {out}; fees {fees}; tip {tip}");
+        });
+    }
+
+    #[test]
+    #[ignore]
+    fn btc_broadcast_2_sign_and_send() {
+        use bitcoin::psbt::Psbt;
+        use std::str::FromStr;
+        let b64 = std::fs::read_to_string(std::env::var("KYRO_BTC_PSBT").expect("KYRO_BTC_PSBT"))
+            .unwrap();
+        let b64 = b64.trim();
+        let seed = wallet_core::Mnemonic::parse(phrase()).unwrap().to_seed("");
+        let net = Network::Testnet;
+
+        let summary = wallet_core::btc_psbt_summary(&seed, net, b64).unwrap();
+        eprintln!(
+            "--- native dialog text ---\n{}\n--------------------------",
+            crate::commands::describe_btc(&summary)
+        );
+        if summary.requires_extra_confirmation {
+            eprintln!(
+                "--- reinforced dialog ---\n{}",
+                crate::commands::describe_btc_extra(&summary)
+            );
+        }
+        let ours = addresses(&seed);
+        for (a, _, _) in &summary.outputs {
+            assert!(ours.iter().any(|x| x == a), "{a} is not in the test wallet");
+        }
+        assert!(!summary.requires_extra_confirmation);
+
+        let (signed, again) = wallet_core::btc_sign_psbt(&seed, net, b64).unwrap();
+        assert_eq!(again, summary, "same summary as the dialog");
+        let mut p = Psbt::from_str(&signed).unwrap();
+        for input in &mut p.inputs {
+            if let Some(sig) = input.tap_key_sig {
+                input.final_script_witness = Some(bitcoin::Witness::p2tr_key_spend(&sig));
+                input.tap_key_sig = None;
+                input.tap_key_origins.clear();
+                input.tap_internal_key = None;
+            } else {
+                let (pk, sig) = input
+                    .partial_sigs
+                    .iter()
+                    .next()
+                    .map(|(k, s)| (*k, *s))
+                    .expect("signed input");
+                input.final_script_witness = Some(bitcoin::Witness::p2wpkh(&sig, &pk.inner));
+                input.partial_sigs.clear();
+                input.bip32_derivation.clear();
+            }
+        }
+        let tx = p.extract_tx().expect("fee sane");
+        let hex_tx = bitcoin::consensus::encode::serialize_hex(&tx);
+        let txid = tx.compute_txid().to_string();
+        eprintln!("signed tx {txid} ({} vB): {hex_tx}", tx.vsize());
+        if std::env::var("KYRO_BTC_BROADCAST").as_deref() != Ok("yes") {
+            eprintln!("KYRO_BTC_BROADCAST != yes: not broadcast");
+            return;
+        }
+        let client = NetClient::new(std::env::temp_dir().join("kyro-btc-bcast")).unwrap();
+        tauri::async_runtime::block_on(async {
+            wait_tor(&client).await;
+            let c = ctx(&client);
+            let got = broadcast(&c, &hex_tx).await.unwrap();
+            assert_eq!(got, txid);
+            eprintln!("BROADCAST OK: {got}");
+            let dest = summary.outputs[0].0.clone();
+            for attempt in 0..30 {
+                let txs = address_txs(&c, &dest).await.unwrap();
+                if let Some(t) = txs
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|t| t["txid"] == txid.as_str())
+                {
+                    eprintln!(
+                        "seen by btc_address_txs({dest}) after {attempt} retries: status {}",
+                        t["status"]
+                    );
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+            panic!("{txid} not seen");
+        });
+    }
+}

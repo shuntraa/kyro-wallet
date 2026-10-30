@@ -267,3 +267,111 @@ fn request_serde_is_camel_case() {
     assert_eq!(sum["kind"], "NativeTransfer");
     assert!(sum.get("maxFeeWei").is_some());
 }
+
+// ---------------------------------------------------------------------------------------------
+// Reinforced-confirmation triggers
+// ---------------------------------------------------------------------------------------------
+
+const OTHER: &str = "0x9858EfFD232B4033E47d90003D41EC34EcaEda94";
+
+fn w(tx: &EvmTxRequest) -> (Vec<wallet_core::EvmWarning>, bool) {
+    let s = evm_decode(tx).unwrap();
+    (s.warnings, s.requires_extra_confirmation)
+}
+
+#[test]
+fn evm_plain_transfers_need_no_reinforced_dialog() {
+    assert_eq!(w(&req(OTHER, "1000", "0x")), (vec![], false));
+    let t = req(TOKEN, "0", &calldata("a9059cbb", OTHER, U256::from(5u64)));
+    assert_eq!(w(&t), (vec![], false));
+}
+
+#[test]
+fn evm_approvals_are_reinforced_and_unlimited_flagged() {
+    use wallet_core::EvmWarning;
+    let approve = |amount: U256| req(TOKEN, "0", &calldata("095ea7b3", OTHER, amount));
+    let (warn, extra) = w(&approve(U256::from(1_000_000u64)));
+    assert!(extra);
+    assert_eq!(
+        warn,
+        vec![EvmWarning::Approval {
+            spender: OTHER.into(),
+            amount: "1000000".into(),
+            unlimited: false
+        }]
+    );
+    for big in [
+        U256::MAX,
+        U256::one() << 255,
+        U256::one() << 200,
+        (U256::one() << 128) + U256::one(),
+    ] {
+        assert!(
+            matches!(
+                w(&approve(big)).0.as_slice(),
+                [EvmWarning::Approval {
+                    unlimited: true,
+                    ..
+                }]
+            ),
+            "{big}"
+        );
+    }
+    assert!(matches!(
+        w(&approve(U256::one() << 127)).0.as_slice(),
+        [EvmWarning::Approval {
+            unlimited: false,
+            ..
+        }]
+    ));
+}
+
+#[test]
+fn evm_contract_call_value_chain_and_fee_triggers() {
+    use wallet_core::EvmWarning;
+    assert_eq!(
+        w(&req(TOKEN, "0", "0xdeadbeef")).0,
+        vec![EvmWarning::ContractCall]
+    );
+    assert_eq!(
+        w(&req(TOKEN, "5", "0xdeadbeef")).0,
+        vec![
+            EvmWarning::ContractCall,
+            EvmWarning::ValueToContract {
+                value_wei: "5".into()
+            }
+        ]
+    );
+    // ERC-20 transfer carrying native value: reinforced too.
+    let t = req(TOKEN, "7", &calldata("a9059cbb", OTHER, U256::from(5u64)));
+    assert_eq!(
+        w(&t).0,
+        vec![EvmWarning::ValueToContract {
+            value_wei: "7".into()
+        }]
+    );
+    let mut unknown = req(OTHER, "1", "0x");
+    unknown.chain_id = 999_999;
+    assert_eq!(
+        w(&unknown).0,
+        vec![EvmWarning::UnknownChain { chain_id: 999_999 }]
+    );
+    // 1 000 000 gas × 100 gwei = 0.1 ETH > 0.05 ETH.
+    let mut fee = req(OTHER, "1", "0x");
+    fee.gas_limit = 1_000_000;
+    fee.max_fee_per_gas = "100000000000".into();
+    assert_eq!(
+        w(&fee).0,
+        vec![EvmWarning::HighFee {
+            max_fee_wei: "100000000000000000".into()
+        }]
+    );
+    // The same 0.1 POL on Polygon is normal (threshold 50 POL).
+    fee.chain_id = 137;
+    assert_eq!(w(&fee), (vec![], false));
+    // Exactly at the threshold: not above it.
+    let mut at = req(OTHER, "1", "0x");
+    at.gas_limit = 500_000;
+    at.max_fee_per_gas = "100000000000".into();
+    assert_eq!(w(&at), (vec![], false));
+}

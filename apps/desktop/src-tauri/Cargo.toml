@@ -79,5 +79,8 @@ libusb1-sys = { version = "=0.7.0", features = ["vendored"] }
 basic-udev = { version = "=0.1.2" }
 
 [dev-dependencies]
+# Only for the #[ignore]d Solana devnet test: off-curve check of program-derived addresses
+# (already in the tree through ed25519-dalek).
+curve25519-dalek = { version = "=4.1.3", default-features = false }
 # Only for the #[ignore]d real-network Tor test (KYRO_TOR_TRACE=<filter> shows arti logs).
 tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt", "env-filter", "ansi"] }

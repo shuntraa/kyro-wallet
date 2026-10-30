@@ -694,3 +694,38 @@ fn real_preprod_transactions() {
     assert_eq!(s.outputs[1].tokens.len(), 5);
     assert_eq!(s.outputs[1].tokens[1].name_text.as_deref(), Some("RIGEL"));
 }
+
+/// The CIP-0019 test keys come from the published test mnemonic (cardano-addresses test
+/// suite): payment key = m/1852'/1815'/0'/0/0, stake key = m/1852'/1815'/1'/2/0 (account 1).
+/// Its preprod address is therefore spendable by anyone, like the "abandon" wallets.
+#[test]
+fn cip19_keys_come_from_the_published_test_mnemonic() {
+    let r = root(
+        "test walk nut penalty hip pave soap entry language right filter choice",
+        "",
+    );
+    let cip19 = "addr_test1qz2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgs68faae";
+    let pay = wallet_core::cardano_payment_public_key(&r, 0, 0).unwrap();
+    let stake_of_account_1 = cardano_address(&r, Network::Testnet, 1, 0).unwrap();
+    let stake_pk: [u8; 32] = {
+        // Rebuild the CIP-19 base address from the two derived keys.
+        let pay_vk: [u8; 32] =
+            bech_data("addr_vk1w0l2sr2zgfm26ztc6nl9xy8ghsk5sh6ldwemlpmp9xylzy4dtf7st80zhd")
+                .try_into()
+                .unwrap();
+        assert_eq!(pay, pay_vk, "payment key = m/1852'/1815'/0'/0/0");
+        bech_data("stake_vk1px4j0r2fk7ux5p23shz8f3y5y2qam7s954rgf3lg5merqcj6aetsft99wu")
+            .try_into()
+            .unwrap()
+    };
+    assert_eq!(
+        cardano_base_address(Network::Testnet, &pay, &stake_pk).unwrap(),
+        cip19
+    );
+    // The stake key is account 1's (m/1852'/1815'/1'/2/0).
+    assert!(stake_of_account_1.starts_with("addr_test1"));
+    assert_eq!(
+        cardano_account_stake_address(&r, Network::Testnet, 1).unwrap(),
+        "stake_test1uqehkck0lajq8gr28t9uxnuvgcqrc6070x3k9r8048z8y5gssrtvn"
+    );
+}

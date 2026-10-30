@@ -33,6 +33,76 @@ pub struct ApiKeys {
     pub trongrid: Option<String>,
 }
 
+impl ApiKeys {
+    /// Every key name Settings supports (`settings_get.apiKeysSet`, `settings_set.apiKeys`).
+    pub const NAMES: [&'static str; 4] = ["coingecko", "zerox", "oneinch", "trongrid"];
+
+    fn get(&self, name: &str) -> Option<&Option<String>> {
+        Some(match name {
+            "coingecko" => &self.coingecko,
+            "zerox" => &self.zerox,
+            "oneinch" => &self.oneinch,
+            "trongrid" => &self.trongrid,
+            _ => return None,
+        })
+    }
+
+    fn slot(&mut self, name: &str) -> Option<&mut Option<String>> {
+        Some(match name {
+            "coingecko" => &mut self.coingecko,
+            "zerox" => &mut self.zerox,
+            "oneinch" => &mut self.oneinch,
+            "trongrid" => &mut self.trongrid,
+            _ => return None,
+        })
+    }
+
+    /// `{ coingecko: bool, zerox: bool, … }`: which keys are saved, never their values.
+    pub fn set_flags(&self) -> serde_json::Value {
+        serde_json::Value::Object(
+            Self::NAMES
+                .iter()
+                .map(|n| {
+                    let set = self.get(n).is_some_and(Option::is_some);
+                    ((*n).to_owned(), serde_json::Value::Bool(set))
+                })
+                .collect(),
+        )
+    }
+
+    /// `settings_set` merge rule for `apiKeys.<name>`: absent (or `null`) = unchanged, `""` =
+    /// removed, a non-empty string = set (trimmed; control characters refused).
+    pub fn apply_patch(&mut self, patch: &serde_json::Value) -> AppResult<()> {
+        let obj = patch
+            .as_object()
+            .ok_or_else(|| AppError::InvalidInput("apiKeys : objet attendu".into()))?;
+        for (name, v) in obj {
+            let slot = self
+                .slot(name)
+                .ok_or_else(|| AppError::InvalidInput(format!("clé API inconnue « {name} »")))?;
+            match v {
+                serde_json::Value::Null => {}
+                serde_json::Value::String(s) if s.is_empty() => *slot = None,
+                serde_json::Value::String(s) => {
+                    let t = s.trim();
+                    if t.is_empty() || t.chars().any(char::is_control) {
+                        return Err(AppError::InvalidInput(format!(
+                            "clé API « {name} » invalide (vide ou caractères de contrôle)"
+                        )));
+                    }
+                    *slot = Some(t.to_owned());
+                }
+                _ => {
+                    return Err(AppError::InvalidInput(format!(
+                        "clé API « {name} » : texte attendu"
+                    )))
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Tor is ON by default; turning it off is an explicit user choice (the UI confirms it).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -119,11 +189,35 @@ impl Settings {
         }
     }
 
-    /// What `settings_get` returns: secrets removed (`hasPassword` instead).
-    pub fn for_ui(&self) -> Settings {
+    /// What `settings_get` / `settings_set` return: secrets removed — `hasPassword` instead of
+    /// the Bitcoin Core password, `apiKeysSet` (booleans) instead of `apiKeys`.
+    pub fn for_ui(&self) -> serde_json::Value {
         let mut s = self.clone();
         s.servers = s.servers.redacted();
-        s
+        let flags = s.api_keys.set_flags();
+        s.api_keys = ApiKeys::default();
+        let mut v = serde_json::to_value(&s).unwrap_or_default();
+        if let Some(o) = v.as_object_mut() {
+            o.remove("apiKeys");
+            o.insert("apiKeysSet".into(), flags);
+        }
+        v
+    }
+
+    /// Parses a `settings_set` payload: `apiKeys` is a patch applied to `current`'s keys (see
+    /// [`ApiKeys::apply_patch`]); `apiKeysSet` is ignored.
+    pub fn from_ui(mut v: serde_json::Value, current: &ApiKeys) -> AppResult<Settings> {
+        let patch = v.as_object_mut().and_then(|o| {
+            o.remove("apiKeysSet");
+            o.remove("apiKeys")
+        });
+        let mut s: Settings = serde_json::from_value(v)
+            .map_err(|e| AppError::InvalidInput(format!("réglages invalides : {e}")))?;
+        s.api_keys = current.clone();
+        if let Some(p) = patch.filter(|p| !p.is_null()) {
+            s.api_keys.apply_patch(&p)?;
+        }
+        Ok(s)
     }
 
     pub fn save(&self, path: &Path) -> AppResult<()> {
@@ -194,5 +288,67 @@ mod tests {
         assert!(ui.contains("hasPassword"));
         // ...but the file on disk keeps it.
         assert!(serde_json::to_string(&s).unwrap().contains("hunter2"));
+    }
+
+    fn with_keys() -> Settings {
+        Settings {
+            api_keys: ApiKeys {
+                coingecko: Some("CG-secret-1".into()),
+                zerox: None,
+                oneinch: Some("1inch-secret-2".into()),
+                trongrid: Some("tron-secret-3".into()),
+            },
+            ..Settings::default()
+        }
+    }
+
+    #[test]
+    fn ui_view_never_contains_api_keys() {
+        let s = with_keys();
+        let ui = s.for_ui();
+        let text = ui.to_string();
+        for secret in ["CG-secret-1", "1inch-secret-2", "tron-secret-3"] {
+            assert!(!text.contains(secret), "{secret} leaked");
+        }
+        assert!(ui.get("apiKeys").is_none());
+        assert_eq!(
+            ui["apiKeysSet"],
+            serde_json::json!({ "coingecko": true, "zerox": false, "oneinch": true, "trongrid": true })
+        );
+        // Round trip: the UI sends back what it got (apiKeysSet, no apiKeys): nothing changes,
+        // and the response still leaks nothing.
+        let back = Settings::from_ui(ui.clone(), &s.api_keys).unwrap();
+        assert_eq!(back.api_keys.coingecko.as_deref(), Some("CG-secret-1"));
+        assert_eq!(back.api_keys.trongrid.as_deref(), Some("tron-secret-3"));
+        assert!(!back.for_ui().to_string().contains("secret"));
+        // The file on disk keeps them.
+        assert!(serde_json::to_string(&s).unwrap().contains("tron-secret-3"));
+    }
+
+    #[test]
+    fn api_key_merge_rule() {
+        let s = with_keys();
+        let mut ui = s.for_ui();
+        // Absent = unchanged, "" = removed, non-empty = set (trimmed), null = unchanged.
+        ui["apiKeys"] =
+            serde_json::json!({ "coingecko": "", "zerox": "  0x-new \t", "trongrid": null });
+        let n = Settings::from_ui(ui.clone(), &s.api_keys).unwrap();
+        assert_eq!(n.api_keys.coingecko, None);
+        assert_eq!(n.api_keys.zerox.as_deref(), Some("0x-new"));
+        assert_eq!(n.api_keys.oneinch.as_deref(), Some("1inch-secret-2"));
+        assert_eq!(n.api_keys.trongrid.as_deref(), Some("tron-secret-3"));
+        assert_eq!(n.for_ui()["apiKeysSet"]["coingecko"], false);
+        // Refused: control characters, blank, unknown name, non-string, not an object.
+        for bad in [
+            serde_json::json!({ "zerox": "abc\ndef" }),
+            serde_json::json!({ "zerox": "abc\u{7f}" }),
+            serde_json::json!({ "zerox": "   " }),
+            serde_json::json!({ "lifi": "x" }),
+            serde_json::json!({ "zerox": 42 }),
+            serde_json::json!("nope"),
+        ] {
+            ui["apiKeys"] = bad.clone();
+            assert!(Settings::from_ui(ui.clone(), &s.api_keys).is_err(), "{bad}");
+        }
     }
 }

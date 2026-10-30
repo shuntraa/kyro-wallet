@@ -20,7 +20,9 @@ use wallet_core::{
     WatchSol, Zeroizing, EVM_NODE_PATH, MAX_HW_ACCOUNT,
 };
 
-use crate::commands::{confirm_native, describe_btc, describe_evm, TokenHint};
+use crate::commands::{
+    confirm_native, describe_btc, describe_btc_extra, describe_evm, evm_warning_lines, TokenHint,
+};
 use crate::error::{AppError, AppResult};
 use crate::hw::{
     self, path_string, store, BtcSignRequest, Chain, DeviceInfo, DeviceStatus, EvmSignRequest,
@@ -557,12 +559,6 @@ pub struct HwBtcSigned {
     summary: wallet_core::BtcTxSummary,
 }
 
-fn has_unknown_output(s: &wallet_core::BtcTxSummary) -> bool {
-    s.outputs
-        .iter()
-        .any(|(a, _, _)| a.starts_with("script:") || a.starts_with("op_return:"))
-}
-
 #[tauri::command]
 pub async fn hw_sign_btc_psbt(
     app: AppHandle,
@@ -629,13 +625,11 @@ pub async fn hw_sign_btc_psbt(
         describe_btc(&summary) + &device_line(&info),
     )
     .await?;
-    if has_unknown_output(&summary) {
+    if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : sortie inconnue",
-            "Cette transaction contient une sortie que Kyro ne sait pas décoder (script \
-             « inconnu » ou OP_RETURN). Ne continue que si tu sais exactement pourquoi."
-                .into(),
+            "Attention : transaction à vérifier",
+            describe_btc_extra(&summary),
         )
         .await?;
     }
@@ -724,11 +718,11 @@ pub async fn hw_sign_evm_tx(
         describe_evm(&summary, hint.as_ref()) + &device_line(&info),
     )
     .await?;
-    if !clear || summary.kind == EvmTxKind::ContractCall {
+    if !clear || summary.requires_extra_confirmation {
         let mut body = String::new();
-        if summary.kind == EvmTxKind::ContractCall {
-            body +=
-                "Appel de contrat : action « inconnue », Kyro ne peut pas en décoder l'effet.\n\n";
+        if summary.requires_extra_confirmation {
+            body += &evm_warning_lines(&summary, hint.as_ref());
+            body += "\n";
         }
         if !clear {
             body += "Ton appareil ne pourra PAS afficher le détail de cette transaction \
@@ -926,7 +920,9 @@ mod tests {
                 ("op_return:6a00".into(), 0, false),
             ],
             fee_sats: 1,
+            warnings: vec![wallet_core::BtcWarning::OpReturn { output: 1 }],
+            requires_extra_confirmation: true,
         };
-        assert!(has_unknown_output(&s));
+        assert!(describe_btc_extra(&s).contains("sortie 2 : OP_RETURN"));
     }
 }

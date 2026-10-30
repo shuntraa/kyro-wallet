@@ -18,8 +18,6 @@ use crate::state::AppState;
 use crate::tor::TorStatus;
 
 const MIN_PASSWORD_LEN: usize = 10;
-/// Receive + change addresses scanned per kind to recognise our own outputs in a PSBT.
-const OWN_ADDRESS_GAP: u32 = 20;
 
 /// Argon2id and signing are CPU-heavy: keep them off the async runtime's workers.
 pub(crate) async fn blocking<T: Send + 'static>(
@@ -441,6 +439,62 @@ pub(crate) fn describe_evm(s: &wallet_core::EvmTxSummary, hint: Option<&TokenHin
     out
 }
 
+/// Reasons for caution of an EVM transaction, one bullet each (reinforced dialog).
+pub(crate) fn evm_warning_lines(s: &wallet_core::EvmTxSummary, hint: Option<&TokenHint>) -> String {
+    use wallet_core::EvmWarning;
+    let mut out = String::new();
+    for w in &s.warnings {
+        out += &match w {
+            EvmWarning::ContractCall => format!(
+                "• appel de contrat sur {} : action INCONNUE, Kyro ne décode pas ce qu'elle fait (données de l'appel non vérifiées)\n",
+                s.to
+            ),
+            EvmWarning::Approval { spender, amount, unlimited } => {
+                let shown = if *unlimited {
+                    "ILLIMITÉ".to_string()
+                } else {
+                    match hint {
+                        Some(h) => format!(
+                            "{} {} (unités brutes : {amount})",
+                            format_units(amount, h.decimals as usize),
+                            h.symbol
+                        ),
+                        None => format!("{amount} unités brutes"),
+                    }
+                };
+                format!(
+                    "• AUTORISATION : {spender} pourra dépenser {shown} de ce token ({}), à tout moment, jusqu'à révocation\n",
+                    s.token_contract.as_deref().unwrap_or("?")
+                )
+            }
+            EvmWarning::ValueToContract { value_wei } => format!(
+                "• {} ETH (valeur native) envoyés au contrat avec l'appel\n",
+                format_units(value_wei, 18)
+            ),
+            EvmWarning::UnknownChain { chain_id } => format!(
+                "• réseau INCONNU de Kyro (chainId {chain_id}) : vérifie que c'est bien celui que tu veux\n"
+            ),
+            EvmWarning::HighFee { max_fee_wei } => format!(
+                "• frais maximum très élevés : {} (seuil {})\n",
+                format_units(max_fee_wei, 18),
+                format_units(&wallet_core::evm_high_fee_threshold_wei(s.chain_id).to_string(), 18)
+            ),
+        };
+    }
+    out
+}
+
+/// Text of the reinforced dialog for EVM transactions signed by the vault.
+pub(crate) fn describe_evm_extra(
+    s: &wallet_core::EvmTxSummary,
+    hint: Option<&TokenHint>,
+) -> String {
+    format!(
+        "Kyro a trouvé des éléments à vérifier dans cette transaction :\n{}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?",
+        evm_warning_lines(s, hint)
+    )
+}
+
 #[tauri::command]
 pub fn evm_decode_tx(tx: EvmTxRequest) -> AppResult<wallet_core::EvmTxSummary> {
     Ok(wallet_core::evm_decode(&tx)?)
@@ -472,21 +526,17 @@ pub async fn evm_sign_tx(
         describe_evm(&summary, token.as_ref()),
     )
     .await?;
+    if summary.requires_extra_confirmation {
+        confirm_native(
+            &app,
+            "Attention : transaction à vérifier",
+            describe_evm_extra(&summary, token.as_ref()),
+        )
+        .await?;
+    }
     let (raw_tx, hash) = blocking(move || Ok(wallet_core::evm_sign_tx(&seed, 0, &tx)?)).await?;
     state.touch();
     Ok(EvmSigned { raw_tx, hash })
-}
-
-fn own_btc_addresses(seed: &Seed, net: Network) -> AppResult<Vec<String>> {
-    let mut out = Vec::new();
-    for kind in [BtcKind::Segwit, BtcKind::Taproot] {
-        for change in [false, true] {
-            for i in 0..OWN_ADDRESS_GAP {
-                out.push(wallet_core::btc_address(seed, net, kind, 0, change, i)?);
-            }
-        }
-    }
-    Ok(out)
 }
 
 pub(crate) fn describe_btc(s: &wallet_core::BtcTxSummary) -> String {
@@ -503,6 +553,33 @@ pub(crate) fn describe_btc(s: &wallet_core::BtcTxSummary) -> String {
         }
     }
     out += &format!("\nFrais : {} BTC ({} sats)", sats(s.fee_sats), s.fee_sats);
+    out
+}
+
+/// Text of the reinforced dialog for Bitcoin (vault and hardware wallet).
+pub(crate) fn describe_btc_extra(s: &wallet_core::BtcTxSummary) -> String {
+    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans cette transaction :\n");
+    for w in &s.warnings {
+        out += &match w {
+            wallet_core::BtcWarning::UnknownScript { output } => format!(
+                "• sortie {} : script INCONNU (pas une adresse standard), Kyro ne sait pas qui peut la dépenser\n",
+                output + 1
+            ),
+            wallet_core::BtcWarning::OpReturn { output } => format!(
+                "• sortie {} : OP_RETURN (données inscrites sur la chaîne ; son montant est détruit)\n",
+                output + 1
+            ),
+            wallet_core::BtcWarning::ForeignInput { input } => format!(
+                "• entrée {} : n'appartient PAS à ce portefeuille (Kyro ne la signe pas ; quelqu'un d'autre participe à cette transaction)\n",
+                input + 1
+            ),
+            wallet_core::BtcWarning::HighFee { sat_per_vb } => format!(
+                "• frais très élevés : ≈ {sat_per_vb} sat/vB (seuil {} sat/vB), ou plus que tous les montants envoyés\n",
+                wallet_core::BTC_HIGH_FEE_SAT_PER_VB
+            ),
+        };
+    }
+    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
     out
 }
 
@@ -524,11 +601,25 @@ pub async fn btc_sign_psbt(
     }
     let net = state.network;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
-    let own = own_btc_addresses(&seed, net)?;
-    let summary = wallet_core::btc_decode_psbt(net, &psbt, &own)?;
+    // Same summary as the signature computes (change and own inputs by key origin).
+    let (s, p) = (seed.clone(), psbt.clone());
+    let summary = blocking(move || Ok(wallet_core::btc_psbt_summary(&s, net, &p)?)).await?;
     confirm_native(&app, "Confirmer la transaction", describe_btc(&summary)).await?;
-    let (signed, summary) =
+    if summary.requires_extra_confirmation {
+        confirm_native(
+            &app,
+            "Attention : transaction à vérifier",
+            describe_btc_extra(&summary),
+        )
+        .await?;
+    }
+    let (signed, again) =
         blocking(move || Ok(wallet_core::btc_sign_psbt(&seed, net, &psbt)?)).await?;
+    if again != summary {
+        return Err(AppError::Internal(
+            "résumé différent entre l'aperçu et la signature".into(),
+        ));
+    }
     state.touch();
     Ok(BtcSigned {
         psbt: signed,
@@ -664,7 +755,66 @@ pub fn lock_on_exit(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::format_units;
+    use super::*;
+
+    #[test]
+    fn evm_reinforced_dialog_text() {
+        let tx = |data: &str, chain_id: u64, value: &str| EvmTxRequest {
+            chain_id,
+            nonce: 0,
+            to: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238".into(),
+            value_wei: value.into(),
+            data: data.into(),
+            gas_limit: 60_000,
+            max_fee_per_gas: "2000000000".into(),
+            max_priority_fee_per_gas: "1000000000".into(),
+        };
+        let spender = "9858effd232b4033e47d90003d41ec34ecaeda94";
+        let max = format!("0x095ea7b3{:0>64}{}", spender, "f".repeat(64));
+        let s = wallet_core::evm_decode(&tx(&max, 11_155_111, "0")).unwrap();
+        assert!(s.requires_extra_confirmation);
+        let d = describe_evm_extra(&s, None);
+        assert!(d.contains("AUTORISATION : 0x9858EfFD232B4033E47d90003D41EC34EcaEda94 pourra dépenser ILLIMITÉ"), "{d}");
+        let exact = format!("0x095ea7b3{:0>64}{:0>64}", spender, "f4240");
+        let s = wallet_core::evm_decode(&tx(&exact, 11_155_111, "0")).unwrap();
+        let hint = TokenHint {
+            symbol: "USDC".into(),
+            decimals: 6,
+        };
+        assert!(describe_evm_extra(&s, Some(&hint))
+            .contains("dépenser 1 USDC (unités brutes : 1000000)"));
+        let s = wallet_core::evm_decode(&tx("0xdeadbeef", 999, "1000000000000000000")).unwrap();
+        let d = describe_evm_extra(&s, None);
+        for needle in [
+            "action INCONNUE",
+            "1 ETH (valeur native) envoyés au contrat",
+            "réseau INCONNU de Kyro (chainId 999)",
+        ] {
+            assert!(d.contains(needle), "{needle} in {d}");
+        }
+    }
+
+    #[test]
+    fn btc_reinforced_dialog_text() {
+        let s = wallet_core::BtcTxSummary {
+            outputs: vec![],
+            fee_sats: 30_000,
+            warnings: vec![
+                wallet_core::BtcWarning::UnknownScript { output: 0 },
+                wallet_core::BtcWarning::ForeignInput { input: 1 },
+                wallet_core::BtcWarning::HighFee { sat_per_vb: 212 },
+            ],
+            requires_extra_confirmation: true,
+        };
+        let d = describe_btc_extra(&s);
+        for needle in [
+            "sortie 1 : script INCONNU",
+            "entrée 2 : n'appartient PAS",
+            "≈ 212 sat/vB (seuil 100 sat/vB)",
+        ] {
+            assert!(d.contains(needle), "{needle} in {d}");
+        }
+    }
 
     #[test]
     fn units() {

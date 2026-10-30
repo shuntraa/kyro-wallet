@@ -1021,6 +1021,87 @@ mod live {
         panic!("{id} not confirmed");
     }
 
+    /// Self-send on preprod from the public CIP-19 test-vector address, whose payment key is
+    /// m/1852'/1815'/0'/0/0 of the published test mnemonic (verified in wallet-core's
+    /// `cip19_keys_come_from_the_published_test_mnemonic`): ADA only, minimum fee, back to the
+    /// same address; plus a native-token self-send if it holds a token. Only with
+    /// `KYRO_ADA_SEND=yes`.
+    /// `KYRO_ADA_SEND=yes cargo test -p kyro-desktop --lib -- --ignored --nocapture ada_live_cip19`
+    #[test]
+    #[ignore]
+    fn ada_live_cip19_self_send() {
+        let net = NetClient::new(std::env::temp_dir().join("kyro-ada-cip19")).unwrap();
+        let root = wallet_core::CardanoRoot::from_mnemonic(
+            &wallet_core::Mnemonic::parse(
+                "test walk nut penalty hip pave soap entry language right filter choice",
+            )
+            .unwrap(),
+            "",
+        );
+        tauri::async_runtime::block_on(async {
+            net.tor.restart();
+            while net.tor.status().state != TorState::Ready {
+                assert_ne!(net.tor.status().state, TorState::Error);
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+            let c = CardanoCtx {
+                net_client: &net,
+                network: Network::Testnet,
+                tor: true,
+                server: CardanoServer::Default,
+            };
+            let p = params(&c).await.unwrap();
+            let u = utxos(&c, CIP19_PREPROD).await.unwrap();
+            let acc = account_of(Network::Testnet, CIP19_PREPROD, &u, p.coins_per_byte).unwrap();
+            eprintln!("CIP-19 account {acc:?}");
+            if std::env::var("KYRO_ADA_SEND").as_deref() != Ok("yes") || u.is_empty() {
+                eprintln!("KYRO_ADA_SEND != yes or no funds: no payment");
+                return;
+            }
+            let h = pay(
+                &c,
+                &root,
+                CIP19_PREPROD,
+                CIP19_PREPROD,
+                Some("1500000"),
+                None,
+                None,
+            )
+            .await;
+            eprintln!("ADA SELF-SEND: {h}");
+            if let Some(t) = acc.tokens.first() {
+                let spec = crate::commands_cardano::TokenSpec {
+                    policy: t.policy.clone(),
+                    name: t.name.clone(),
+                    quantity: "1".into(),
+                };
+                let h = pay(
+                    &c,
+                    &root,
+                    CIP19_PREPROD,
+                    CIP19_PREPROD,
+                    None,
+                    Some(&spec),
+                    None,
+                )
+                .await;
+                eprintln!("TOKEN SELF-SEND: {h}");
+            } else {
+                eprintln!("no native token held: no token self-send");
+            }
+            eprintln!(
+                "history: {}",
+                txs(&c, CIP19_PREPROD)
+                    .await
+                    .unwrap()
+                    .to_string()
+                    .chars()
+                    .take(600)
+                    .collect::<String>()
+            );
+        });
+    }
+
     #[test]
     #[ignore]
     fn ada_live_preprod_over_tor() {

@@ -40,7 +40,10 @@ mod vault;
 mod watch;
 mod xrp;
 
-pub use btc::{btc_account, btc_address, btc_decode_psbt, btc_sign_psbt, BtcAccount, BtcTxSummary};
+pub use btc::{
+    btc_account, btc_address, btc_decode_psbt, btc_psbt_summary, btc_sign_psbt, BtcAccount,
+    BtcTxSummary, BtcWarning, BTC_HIGH_FEE_SAT_PER_VB,
+};
 pub use btc_hw::{
     btc_hw_finalize, btc_hw_own_addresses, btc_hw_plan, HwBtcChange, HwBtcInput, HwBtcPlan,
     HwBtcSignature,
@@ -62,8 +65,9 @@ pub use cardano::{
 pub use error::{Error, Result};
 pub use evm::{
     evm_address, evm_address_from_xpub, evm_address_of_pubkey, evm_checksum_address, evm_decode,
-    evm_hw_finalize, evm_sign_tx, evm_signing_payload, evm_tx_fields, evm_xpub_from_node,
-    EvmTxFields, EvmTxKind, EvmTxRequest, EvmTxSummary,
+    evm_high_fee_threshold_wei, evm_hw_finalize, evm_sign_tx, evm_signing_payload, evm_tx_fields,
+    evm_xpub_from_node, EvmTxFields, EvmTxKind, EvmTxRequest, EvmTxSummary, EvmWarning,
+    EVM_KNOWN_CHAINS,
 };
 pub use ledger_cal::{
     ledger_erc20_lookup, ledger_erc20_payload, ledger_erc20_verify, LedgerErc20Descriptor,
