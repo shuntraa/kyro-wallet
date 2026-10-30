@@ -54,7 +54,7 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
     <div className="flex min-h-0 flex-1">
       <nav aria-label="Sections des réglages" className="flex w-[240px] shrink-0 flex-col gap-0.5 border-r border-rail px-3.5 pt-6 pb-5">
         <h1 className="screen-title px-2.5 pb-5">Réglages</h1>
-        {SECTIONS.map((s, i) => (
+        {SECTIONS.map((s) => (
           <button
             key={s.key}
             type="button"
@@ -67,15 +67,11 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
                 <span className="absolute top-1/2 left-0 h-4 w-[2px] -translate-y-1/2 rounded-full bg-ice" />
               </motion.span>
             )}
-            <span className={cn('relative z-10 w-5 font-mono text-[10.5px] transition-colors', section === s.key ? 'text-ice' : 'text-faint group-hover:text-mute')}>{String(i + 1).padStart(2, '0')}</span>
             <span className="relative z-10 truncate">{s.label}</span>
           </button>
         ))}
         <div className="flex-1" />
-        <div className="flex flex-col gap-1 border-t border-line px-2.5 pt-4">
-          <div className="font-mono text-[11px] font-medium tracking-[0.04em] text-text2">Kyro v{__APP_VERSION__}</div>
-          <div className="text-[12px] leading-[1.5] text-mute">Open source · GPLv3. Build vérifiable depuis le code.</div>
-        </div>
+        <div className="border-t border-line px-2.5 pt-4 text-[12px] text-mute">Kyro {__APP_VERSION__}</div>
       </nav>
 
       <div className="flex min-w-0 flex-1 gap-5 px-7 pt-6 pb-5">
@@ -430,12 +426,7 @@ function Connections({ compact }: { compact?: boolean }) {
   const hosts = outgoingHosts(network, settings.servers);
   return (
     <section className="flex h-full flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-5">
-      <div className="flex items-center justify-between">
-        <span className="text-[15px] font-medium tracking-[-0.01em]">Connexions sortantes</span>
-        <Badge tone="ice" className="h-[26px] px-3 text-[12px]">
-          0 télémétrie
-        </Badge>
-      </div>
+      <span className="text-[15px] font-medium tracking-[-0.01em]">Connexions sortantes</span>
       <p className="m-0 text-[13px] leading-[1.55] text-mute">La liste complète des serveurs que Kyro contacte. Tout le reste est bloqué par le coffre.</p>
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto scroll-thin">
         {hosts.map((h) => (

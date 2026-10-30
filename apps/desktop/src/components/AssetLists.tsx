@@ -119,12 +119,12 @@ function MineList({ sort }: { sort: Sort }) {
   const rows = sortHoldings(pf.accountHoldings, sort);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className={cn(GRID, 'eyebrow h-8 shrink-0 px-5 text-[10px] whitespace-nowrap')}>
-        <span>ACTIF</span>
-        <span>PRIX · 24 H</span>
-        <span>7 JOURS</span>
-        <span className="text-right">SOLDE</span>
-        <span>PART</span>
+      <div className={cn(GRID, 'eyebrow h-8 shrink-0 px-5 whitespace-nowrap')}>
+        <span>Actif</span>
+        <span>Prix · 24 h</span>
+        <span>7 jours</span>
+        <span className="text-right">Solde</span>
+        <span>Part</span>
       </div>
       <div key={pf.balancesLoaded ? 'rows' : 'skeleton'} className="stagger min-h-0 flex-1 overflow-y-auto scroll-thin">
         {!pf.balancesLoaded
@@ -250,12 +250,12 @@ function MarketList({ sort, query, favs, toggle, onlyFavs }: { sort: Sort; query
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className={cn(MG, 'eyebrow h-8 shrink-0 px-5 text-[10px] whitespace-nowrap')}>
+      <div className={cn(MG, 'eyebrow h-8 shrink-0 px-5 whitespace-nowrap')}>
         <span>#</span>
-        <span>ACTIF</span>
-        <span>PRIX · 24 H</span>
-        <span>7 JOURS</span>
-        <span className="text-right">CAPITALISATION</span>
+        <span>Actif</span>
+        <span>Prix · 24 h</span>
+        <span>7 jours</span>
+        <span className="text-right">Capitalisation</span>
         <span />
       </div>
       <div className="stagger min-h-0 flex-1 overflow-y-auto scroll-thin">

@@ -9,7 +9,7 @@ Signature : **« Tes clés restent au froid. »**
 ## Direction
 
 - **Sombre en permanence.** Pas de thème clair : un coffre, c'est noir. Toute l'interface est pensée pour un fond quasi noir.
-- **Un instrument de froid, pas un tableau de bord.** Encre bleu-noir, filets fins plutôt qu'une carte autour de tout, chiffres tabulaires, petites capitales mono pour les libellés de section. Le solde et les courbes reposent sur la page, sur une ligne de base.
+- **Un instrument de froid, pas un tableau de bord.** Encre bleu-noir, filets fins plutôt qu'une carte autour de tout, chiffres tabulaires, libellés en texte normal. Le solde et les courbes reposent sur la page, sur une ligne de base.
 - **Un seul accent.** Le **bleu givre** (`#7CC4FF`) est réservé à la sélection, aux courbes et à ce qu'il faut vérifier (blocs d'adresse, reçu de vérification). L'action principale est en **blanc givré** (`#E4ECF3`, texte encre) ; tout le reste est un contour discret.
 - **Courbes arrondies** : tous les graphiques passent par une interpolation Catmull-Rom → Bézier (aucun angle), avec un voile givre très léger sous la ligne.
 - **Une vraie application desktop**, pas une page web : barre de titre intégrée, rail de navigation, barre d'état en bas (synchronisation, blocs, latence RPC, testnet, version).
@@ -88,16 +88,17 @@ Le coût en crypto et en euros, et le délai estimé se recalculent en direct ; 
 ## Typographie
 
 - **Geist** (400, 500, 560) : interface. Titres d'écran à 30 px (−0,038 em), grands montants à 56–76 px en graisse 480, chiffres tabulaires, décimales en `faint`.
-- **Petites capitales mono** (`.eyebrow`, Geist Mono 10,5 px, +0,1 em) : libellés de section et de champ, en-têtes de tableau.
+- **Libellés** (`.eyebrow`, Geist 12 px, 500, `mute`) : libellés de section et de champ, en-têtes de tableau, en minuscules comme une phrase. Pas de capitales espacées, pas de mono décoratif.
 - **Geist Mono** (400, 500) : adresses, barre d'état, heures.
 - Les deux polices (licence OFL) seront **embarquées dans l'app** : aucun appel à Google Fonts en production (CSP).
 
 ## Formes
 
 - Trois rayons seulement : surfaces 10 px (`rounded-panel`), boîtes 7 px (`rounded-box`), contrôles 6 px (`rounded-ctl`). Pas de pilules, sauf pastilles et interrupteurs.
-- Badges en **étiquettes** (cadre fin, mono en capitales) ; seuls les états qui demandent l'attention ont une couleur.
+- Badges en **étiquettes** (cadre fin, texte normal) ; seuls les états qui demandent l'attention ont une couleur.
 - Avertissements : filet gauche de la couleur du ton (ambre, rouge), jamais atténués.
 - Pas de halo ni de dégradé décoratif ; une ombre seulement sous les dialogues et menus.
+- **Rien de décoratif « façon IA »** : pas de slogans, pas de numérotation 01/02/03 sur des choix, pas de faux instruments (cadrans, graduations), pas de mentions techniques en accroche (algorithmes, licence, « zéro télémétrie ») hors des écrans qui les expliquent. Accueil : le logo, le nom, trois choix.
 - Graphiques : courbe lissée bleu givre 1,75 px, voile givre de 16 % à 0 %, point de survol cerclé avec infobulle.
 
 ## Mouvement
@@ -106,13 +107,12 @@ Le coût en crypto et en euros, et le délai estimé se recalculent en direct ; 
 - Écrans : fondu + glissé de 8 px. Listes : entrée échelonnée (`.stagger`, `--i`). Courbes : tracées de gauche à droite. Soldes : compteur (`useTicker`).
 - Indicateurs glissants (`layoutId`) : rail, onglets, `Segmented`, sections des Réglages, réseau de Recevoir.
 - Dialogues et menus : entrée ressort, sortie courte. Boutons : légère pression.
-- Cadran d'accueil : graduations qui s'allument en balayage, lunette qui dérive (240 s par tour), index qui se cale à 3 h.
 - `prefers-reduced-motion` : tout est coupé (`MotionConfig reducedMotion="user"` + règle CSS), seules les roues de chargement tournent, lentement.
 
 ## Composants signature
 
 - **Solde + graphique pleine largeur** sur le Portefeuille, hors carte, avec actions Envoyer / Recevoir / Swap.
-- **Cadran de coffre** (graduations autour du logo) sur l'écran de bienvenue.
+- **Panneau de marque** (logo et nom, rien d'autre) sur l'écran de bienvenue.
 - **Adresse en blocs** : `0x4F2a 9C83 … 6c19 D7b2`, deux premiers et deux derniers blocs sur fond bleu givre.
 - **Encadré « En clair »** : étiquette bleu givre + une phrase.
 - **Carte Coffre** : état du verrou, compte à rebours, hardware wallet, autorisations illimitées.

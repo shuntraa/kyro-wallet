@@ -112,7 +112,7 @@ export function XrpSummaryView({ u, xrpPrice, currency }: { u: XrpUnsigned; xrpP
         <span className="text-[11px] text-mute">décodé par le coffre</span>
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', s.destinationTag !== null ? 'border-ice-line' : c.destination.requireDestTag ? 'border-down/60' : 'border-warn/50')}>
-        <span className="block text-[10px] font-semibold tracking-[0.08em] text-mute">TAG DE DESTINATION</span>
+        <span className="block text-[12px] font-medium text-mute">Tag de destination</span>
         <span className={cn('block font-mono text-[18px] font-semibold', s.destinationTag !== null ? 'text-text' : 'text-warn')}>{s.destinationTag !== null ? s.destinationTag : 'AUCUN'}</span>
       </div>
       {!c.destination.exists && <Line k="Compte destinataire" v="créé par ce paiement (réserve 1 XRP bloquée chez lui)" warn />}

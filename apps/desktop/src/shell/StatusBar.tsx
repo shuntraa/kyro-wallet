@@ -21,8 +21,7 @@ export function StatusFrame({ left, right }: { left: ReactNode; right?: ReactNod
         {right}
         {demo && <span className="rounded-[3px] border border-ice/30 px-1.5 py-px leading-none font-medium tracking-[0.06em] text-ice">MODE DÉMO</span>}
         {network === 'testnet' && <span className="rounded-[3px] border border-warn/40 bg-warn/[.08] px-1.5 py-px leading-none font-medium tracking-[0.06em] text-warn">TESTNET</span>}
-        <span>zéro télémétrie</span>
-        <span>v{__APP_VERSION__} · GPLv3</span>
+        <span>v{__APP_VERSION__}</span>
       </div>
     </footer>
   );

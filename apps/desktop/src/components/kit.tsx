@@ -75,7 +75,7 @@ export function AddressShort({ address, className }: { address: string; classNam
 export function EnClair({ children, className, tone = 'ice' }: { children: ReactNode; className?: string; tone?: 'ice' | 'warn' }) {
   return (
     <div className={cn('fade-in flex flex-col gap-1.5 rounded-box border border-l-2 px-4 py-3.5', tone === 'ice' ? 'border-ice/20 border-l-ice bg-ice/[.05]' : 'border-warn/30 border-l-warn bg-warn/[.06]', className)}>
-      <span className={cn('font-mono text-[10.5px] font-medium tracking-[0.12em]', tone === 'ice' ? 'text-ice-text2' : 'text-warn')}>EN CLAIR</span>
+      <span className={cn('text-[12px] font-medium', tone === 'ice' ? 'text-ice-text2' : 'text-warn')}>En clair</span>
       <p className="m-0 text-[14px] leading-[1.5]">{children}</p>
     </div>
   );

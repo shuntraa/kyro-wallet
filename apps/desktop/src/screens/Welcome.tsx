@@ -13,65 +13,19 @@ import { cn } from '../lib/cn';
 import { TitleBar } from '../shell/TitleBar';
 import { StatusFrame } from '../shell/StatusBar';
 import { KyroMark, PasswordField } from '../components/kit';
-import { Badge, Button, Notice, Segmented, Spinner } from '../components/ui/primitives';
+import { Button, Notice, Segmented, Spinner } from '../components/ui/primitives';
 import { Dialog } from '../components/ui/dialog';
 import { HwSetup } from '../components/hw';
 import { IconBack, IconChevronRight, IconImport, IconPlus, IconUsbKey, IconWarn } from '../components/icons';
 import { DEMO_PASSWORD_HINT } from './demoHint';
 import { idx } from '../components/motion';
 
-/**
- * Vault dial: a cold instrument. Hairline rings, a graduated bezel whose ticks light up in a
- * sweep, the bezel drifting very slowly, and the ice-blue index settling at three o'clock like
- * a combination being set. Static under prefers-reduced-motion.
- */
-export function VaultDial({ footer }: { footer?: ReactNode }) {
-  const ticks = useMemo(() => Array.from({ length: 120 }, (_, i) => ({ a: i * 3, major: i % 10 === 0, mid: i % 5 === 0 })), []);
-  const labels = useMemo(() => Array.from({ length: 12 }, (_, i) => i * 30), []);
+/** Onboarding side panel: the logo and the name, nothing decorative. */
+function BrandPanel() {
   return (
-    <section aria-hidden="true" className="relative w-[46%] max-w-[700px] min-w-[420px] shrink-0 overflow-hidden border-r border-rail bg-panel">
-      {/* Two hairlines crossing at the dial centre. */}
-      <div className="absolute top-[47%] right-0 left-0 h-px bg-line/70" />
-      <div className="absolute top-0 bottom-0 left-1/2 w-px bg-line/70" />
-      <div className="dial-scale absolute top-[47%] left-1/2 h-0 w-0">
-        <div className="absolute -top-[330px] -left-[330px] size-[660px] rounded-full border border-line/80" />
-        <div className="absolute -top-[262px] -left-[262px] size-[524px] rounded-full border border-line bg-bg-deep" />
-        <div className="dial-drift absolute top-0 left-0 h-0 w-0">
-          {ticks.map((t, i) => (
-            <div
-              key={t.a}
-              className="dial-tick absolute top-0 -left-px w-px"
-              style={{
-                height: t.major ? 16 : t.mid ? 10 : 5,
-                background: t.major ? '#4a6580' : t.mid ? '#2c333c' : '#20252b',
-                transformOrigin: '0.5px 0',
-                transform: `rotate(${t.a}deg) translateY(-248px)`,
-                animationDelay: `${120 + i * 4}ms`,
-              }}
-            />
-          ))}
-          {labels.map((a, i) => (
-            <span
-              key={a}
-              className="dial-tick absolute top-0 left-0 font-mono text-[9px] tracking-[0.08em] text-faint"
-              style={{ transform: `rotate(${a}deg) translateY(-218px) rotate(${-a}deg) translate(-50%, -50%)`, animationDelay: `${160 + i * 40}ms` }}
-            >
-              {String(a).padStart(3, '0')}
-            </span>
-          ))}
-        </div>
-        <div className="absolute -top-[180px] -left-[180px] size-[360px] rounded-full border border-dashed border-line-2" />
-        <div className="absolute -top-[118px] -left-[118px] flex size-[236px] items-center justify-center rounded-full border border-line-2 bg-bg">
-          <div className="absolute inset-[10px] rounded-full border border-line" />
-          <KyroMark size={116} />
-        </div>
-        {/* Index: settles at 3 o'clock on the bezel. */}
-        <div className="dial-index absolute top-0 left-0 h-0 w-0">
-          <div className="absolute -top-[9px] left-[239px] h-[18px] w-[18px] rounded-[3px] bg-ice" />
-          <div className="absolute -top-px left-[257px] h-px w-[40px] bg-ice/40" />
-        </div>
-      </div>
-      <div className="absolute right-12 bottom-10 left-12 flex justify-between font-mono text-[10.5px] tracking-[0.1em] text-faint">{footer ?? <><span>ARGON2ID · XCHACHA20-POLY1305</span><span>NON-CUSTODIAL</span></>}</div>
+    <section aria-hidden="true" className="flex w-[40%] max-w-[560px] min-w-[360px] shrink-0 flex-col items-center justify-center gap-5 border-r border-rail bg-panel">
+      <KyroMark size={88} />
+      <span className="text-[22px] font-semibold tracking-[-0.02em]">Kyro</span>
     </section>
   );
 }
@@ -81,7 +35,7 @@ export function OnboardingFrame({ children, status }: { children: ReactNode; sta
     <div className="flex h-full flex-col bg-bg text-text">
       <TitleBar bordered={false} />
       <div className="flex min-h-0 flex-1">
-        <VaultDial />
+        <BrandPanel />
         <main className="flex min-w-0 flex-1 flex-col justify-center overflow-y-auto px-[min(88px,6.5vw)] py-8 scroll-thin">{children}</main>
       </div>
       <StatusFrame left={status ?? <span className="text-mute">Aucun coffre sur cet appareil</span>} />
@@ -114,38 +68,26 @@ export function Welcome() {
   return (
     <OnboardingFrame>
       <div className="flex max-w-[560px] flex-col gap-10">
-        <div className="flex flex-col gap-5">
-          <span className="rise eyebrow flex items-center gap-2.5 text-mute" style={idx(0)}>
-            <span className="size-1.5 rounded-full bg-up" />
-            Open source · GPLv3 · zéro télémétrie
-          </span>
-          <h1 className="rise m-0 text-[64px] leading-[0.98] font-[560] tracking-[-0.052em]" style={idx(1)}>
-            Tes clés restent
-            <br />
-            <span className="text-text2">au froid</span>
-            <span className="text-ice">.</span>
+        <div className="flex flex-col gap-3">
+          <h1 className="rise m-0 text-[32px] leading-[1.15] font-semibold tracking-[-0.02em]" style={idx(0)}>
+            Bienvenue sur Kyro
           </h1>
-          <p className="rise m-0 max-w-[440px] text-[16px] leading-[1.6] text-mute" style={idx(2)}>Kyro chiffre tes clés sur ton appareil et ne les envoie jamais. Chaque transaction t’est expliquée avant que tu signes.</p>
+          <p className="rise m-0 max-w-[440px] text-[15px] leading-[1.6] text-mute" style={idx(1)}>Choisis comment tu veux commencer. Tes clés restent sur cet ordinateur ou dans ton hardware wallet.</p>
         </div>
 
-        <div className="rise flex max-w-[540px] flex-col border-t border-line" style={idx(3)}>
+        <div className="rise flex max-w-[540px] flex-col border-t border-line" style={idx(2)}>
           <ChoiceCard
-            n={1}
             icon={<IconUsbKey size={20} />}
             iconClass="text-ice"
-            title={
-              <>
-                Utiliser un Ledger / Trezor <Badge tone="ice">Recommandé</Badge>
-              </>
-            }
-            subtitle="Tes clés ne quittent jamais l’appareil ; chaque transaction se vérifie sur son écran."
+            title="Utiliser un Ledger / Trezor"
+            subtitle="Recommandé. Tes clés ne quittent jamais l’appareil ; chaque transaction se vérifie sur son écran."
             onClick={() => setMode('hw')}
           />
-          <ChoiceCard n={2} icon={<IconPlus size={20} />} title="Créer un nouveau coffre" subtitle="24 mots à écrire sur papier, jamais copiés." onClick={() => setMode('create')} />
-          <ChoiceCard n={3} icon={<IconImport size={20} />} title="Importer une phrase de récupération" subtitle="12 ou 24 mots BIP39, depuis un autre wallet." onClick={() => setMode('import')} />
+          <ChoiceCard icon={<IconPlus size={20} />} title="Créer un nouveau coffre" subtitle="24 mots à écrire sur papier, jamais copiés." onClick={() => setMode('create')} />
+          <ChoiceCard icon={<IconImport size={20} />} title="Importer une phrase de récupération" subtitle="12 ou 24 mots BIP39, depuis un autre wallet." onClick={() => setMode('import')} />
         </div>
 
-        <div className="rise flex gap-6 text-[13px]" style={idx(4)}>
+        <div className="rise flex gap-6 text-[13px]" style={idx(3)}>
           {(
             [
               ['threat', 'Modèle de menace'],
@@ -186,7 +128,7 @@ export function Welcome() {
 }
 
 /** One row of the welcome list: numbered, ruled, no box. */
-function ChoiceCard({ n, icon, title, subtitle, onClick, disabled, iconClass }: { n: number; icon: ReactNode; title: ReactNode; subtitle: string; onClick?: () => void; disabled?: boolean; iconClass?: string }) {
+function ChoiceCard({ icon, title, subtitle, onClick, disabled, iconClass }: { icon: ReactNode; title: ReactNode; subtitle: string; onClick?: () => void; disabled?: boolean; iconClass?: string }) {
   return (
     <button
       type="button"
@@ -194,7 +136,6 @@ function ChoiceCard({ n, icon, title, subtitle, onClick, disabled, iconClass }: 
       onClick={onClick}
       className={cn('group relative flex items-center gap-4 border-b border-line py-[18px] pr-2 pl-1 text-left transition-colors duration-150', disabled ? 'opacity-70' : 'hover:bg-raised/40')}
     >
-      <span className="w-6 shrink-0 font-mono text-[11px] text-faint transition-colors group-hover:text-ice">{String(n).padStart(2, '0')}</span>
       <span className={cn('flex shrink-0 items-center justify-center text-mute transition-colors group-hover:text-text', iconClass)}>{icon}</span>
       <span className="flex flex-1 flex-col gap-[3px]">
         <span className="flex items-center gap-2.5 text-[16px] font-medium tracking-[-0.01em]">{title}</span>
@@ -215,7 +156,7 @@ function StepHeader({ step, total, title, onBack, children }: { step: number; to
           </button>
         )}
         <span className="eyebrow">
-          ÉTAPE {step} / {total}
+          Étape {step} sur {total}
         </span>
         <span aria-hidden="true" className="flex gap-1">
           {Array.from({ length: total }, (_, i) => (
@@ -223,7 +164,7 @@ function StepHeader({ step, total, title, onBack, children }: { step: number; to
           ))}
         </span>
       </div>
-      <h1 className="rise m-0 text-[38px] leading-[1.06] font-[560] tracking-[-0.042em]">{title}</h1>
+      <h1 className="rise m-0 text-[28px] leading-[1.15] font-semibold tracking-[-0.02em]">{title}</h1>
       {children && <p className="rise m-0 max-w-[520px] text-[15px] leading-[1.6] text-mute" style={idx(1)}>{children}</p>}
     </div>
   );

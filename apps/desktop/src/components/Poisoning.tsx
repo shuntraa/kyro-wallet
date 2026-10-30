@@ -33,9 +33,9 @@ export function PoisoningWarning({ recipient, known, family, acknowledged, onAck
         </span>
       </span>
       <div className="flex flex-col gap-1.5 rounded-ctl border border-down/20 bg-bg/70 px-3 py-2.5">
-        <span className="font-mono text-[10.5px] font-medium tracking-[0.1em] text-mute">TU VAS ENVOYER À</span>
+        <span className="text-[12px] font-medium text-mute">Tu vas envoyer à</span>
         <Highlighted address={recipient} family={family} />
-        <span className="pt-1 font-mono text-[10.5px] font-medium tracking-[0.1em] text-mute">ADRESSE CONNUE ({knownName.toUpperCase()})</span>
+        <span className="pt-1 text-[12px] font-medium text-mute">Adresse connue ({knownName})</span>
         <Highlighted address={known.address} family={family} />
         <span className="text-[11px] text-mute">Le début et la fin sont identiques ; le milieu (surligné) diffère.</span>
       </div>

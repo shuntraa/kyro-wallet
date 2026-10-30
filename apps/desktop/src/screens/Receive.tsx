@@ -244,7 +244,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           <div key={uri} className={cn('pop-in transition-[opacity,filter] duration-300', blocked && 'pointer-events-none opacity-20 blur-md')} aria-hidden={blocked || undefined}>
             <QrCode value={uri} size={300} />
           </div>
-          <span className="eyebrow">{askAmount && amountBase ? 'QR AVEC MONTANT' : 'QR DE L’ADRESSE'}</span>
+          <span className="eyebrow">{askAmount && amountBase ? 'QR avec montant' : 'QR de l’adresse'}</span>
         </div>
 
         <div key={family} className="rise relative flex w-[460px] flex-col gap-4">

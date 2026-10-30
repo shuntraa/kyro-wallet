@@ -33,13 +33,10 @@ export function Unlock() {
   return (
     <OnboardingFrame status={<span className="flex items-center gap-1.5 text-mute"><span className="size-1.5 rounded-full bg-faint" />Coffre verrouillé · session effacée</span>}>
       <div className="flex max-w-[440px] flex-col gap-8">
-        <div className="flex flex-col gap-4">
-          <span className="rise eyebrow flex items-center gap-2 text-mute">
-            <IconLock size={13} className="text-ice" />
-            Kyro
-          </span>
-          <h1 className="rise m-0 text-[52px] leading-[1] font-[560] tracking-[-0.05em]" style={idx(1)}>
-            Coffre verrouillé<span className="text-ice">.</span>
+        <div className="flex flex-col gap-3">
+          <h1 className="rise m-0 flex items-center gap-3 text-[32px] leading-[1.15] font-semibold tracking-[-0.02em]" style={idx(0)}>
+            <IconLock size={22} className="text-mute" />
+            Coffre verrouillé
           </h1>
           <p className="rise m-0 text-[15px] leading-[1.6] text-mute" style={idx(2)}>Saisis ton mot de passe pour déchiffrer le coffre sur cet appareil.</p>
         </div>

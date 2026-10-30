@@ -89,13 +89,6 @@ textarea:focus-visible {
   outline: none;
 }
 
-/* Welcome dial: below 1280 px the panel is narrower than the bezel. */
-@media (max-width: 1279px) {
-  .dial-scale {
-    scale: 0.86;
-  }
-}
-
 html,
 body,
 #root {
@@ -162,13 +155,11 @@ input[type='radio'] {
     letter-spacing: -0.038em;
   }
   /* Mono small caps label above a section ("SOLDE", "FRAIS RÉSEAU"…). */
+  /* Plain field / section label: sentence case, no tracking, no mono. */
   .eyebrow {
-    font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 12px;
     font-weight: 500;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--color-faint);
+    color: var(--color-mute);
   }
   /* Big figures: tabular, tight, light weight so the digits carry the hierarchy. */
   .figure {
@@ -359,38 +350,6 @@ input[type='radio'] {
   transform: translateX(3px);
 }
 
-/* Welcome dial: ticks light up in a sweep, the ring drifts very slowly. */
-@keyframes kyro-tick {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-.dial-tick {
-  animation: kyro-tick 420ms ease-out backwards;
-}
-@keyframes kyro-drift {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.dial-drift {
-  animation: kyro-drift 240s linear infinite;
-}
-@keyframes kyro-index {
-  from {
-    opacity: 0;
-    transform: rotate(-140deg);
-  }
-  40% {
-    opacity: 1;
-  }
-}
-.dial-index {
-  animation: kyro-index 760ms var(--ease-spring) 260ms backwards;
-}
 @keyframes kyro-breathe {
   0%,
   100% {
@@ -434,7 +393,6 @@ input[type='radio'] {
     animation: none !important;
     background: #1c1f24;
   }
-  .dial-drift,
   .breathe {
     animation: none !important;
   }

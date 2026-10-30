@@ -87,7 +87,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
       <header className="flex items-end justify-between gap-4 border-b border-line pb-4">
         <div className="flex flex-col gap-2">
           <h1 className="screen-title">Staking</h1>
-          <span className="text-[13px] text-mute">Délègue tes SOL, ADA ou TRX sans les confier à personne : ta clé signe, rien ne quitte ton contrôle.</span>
+          <span className="text-[13px] text-mute">Délègue tes SOL, ADA ou TRX depuis tes propres comptes. Tes fonds restent à toi.</span>
         </div>
         {tab !== 'home' && !activeHw && <AccountPicker family={tab} />}
         <Segmented
@@ -157,17 +157,13 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
   ];
   return (
     <>
-      {/* One sheet, three ruled columns: no three identical cards. */}
       <div className="grid shrink-0 grid-cols-3 divide-x divide-line overflow-hidden rounded-panel border border-line bg-card">
         {cards.map((c, i) => (
           <div key={c.chain} className="rise group flex flex-col gap-3 px-5 pt-4 pb-5" style={idx(i)}>
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[11px] text-faint">{String(i + 1).padStart(2, '0')}</span>
-              <Badge tone="ice">{networkLabel(c.chain, network)}</Badge>
-            </div>
             <div className="flex items-center gap-2.5">
               <CoinIcon glyph={c.glyph} color={c.color} size={26} />
-              <span className="text-[22px] font-[560] tracking-[-0.03em]">{c.name}</span>
+              <span className="text-[20px] font-semibold tracking-[-0.02em]">{c.name}</span>
+              <span className="text-[12px] text-mute">{networkLabel(c.chain, network)}</span>
             </div>
             <p className="m-0 text-[13px] leading-[1.55] text-text2">{c.what}</p>
             <div className="min-h-5 border-t border-line pt-3 text-[13px] font-medium">
@@ -189,7 +185,7 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
       </div>
       <Card className="flex flex-col gap-2 border-l-2 border-l-ice/70 px-5 py-4">
         <span className="flex items-center gap-2 text-[14px] font-medium">
-          <IconShield size={16} className="text-ice" /> Les risques, sans détour
+          <IconShield size={16} className="text-ice" /> Risques
         </span>
         <p className="m-0 text-[13px] leading-[1.6] text-text2">
           Sur Solana, Cardano et TRON, il n’y a <strong className="font-semibold text-text">pas de slashing</strong> : un validateur, un pool ou un SR qui se comporte mal ne peut pas te prendre tes fonds. En revanche, <strong className="font-semibold text-text">tes récompenses dépendent de lui</strong> (sa commission, sa marge, sa fiabilité) et elles ne sont jamais garanties. Les noms affichés sont déclarés par leurs opérateurs, pas vérifiés.
