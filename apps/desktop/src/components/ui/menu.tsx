@@ -34,14 +34,14 @@ export function Menu<T extends string>({
     <M.Root modal={false}>
       <M.Trigger asChild>{trigger}</M.Trigger>
       <M.Portal>
-        <M.Content align={align} sideOffset={6} className={cn('z-50 max-h-[360px] min-w-[220px] overflow-y-auto rounded-[14px] border border-line-2 bg-[#15171b] p-1.5 scroll-thin', className)}>
-          {label && <M.Label className="px-2.5 pt-1.5 pb-1 text-[11px] font-medium tracking-[0.04em] text-faint uppercase">{label}</M.Label>}
+        <M.Content align={align} sideOffset={6} className={cn('popover z-50 max-h-[360px] min-w-[220px] overflow-y-auto rounded-box border border-line-2 bg-[#121418] p-1 shadow-[0_16px_40px_-16px_rgba(0,0,0,.8)] scroll-thin', className)}>
+          {label && <M.Label className="eyebrow px-2.5 pt-2 pb-1.5">{label}</M.Label>}
           {items.map((it) => (
             <M.Item
               key={it.value}
               disabled={it.disabled}
               onSelect={() => onSelect(it.value)}
-              className="flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13px] outline-none data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45 data-[highlighted]:bg-control"
+              className="flex cursor-pointer items-center gap-2.5 rounded-[5px] px-2.5 py-2 text-[13px] outline-none transition-colors duration-100 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45 data-[highlighted]:bg-control"
             >
               {it.icon}
               <span className="flex min-w-0 flex-1 flex-col">

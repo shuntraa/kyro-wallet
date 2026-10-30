@@ -9,6 +9,7 @@ import { addressChunks, splitFiat } from '../lib/format';
 import { copyText } from '../lib/copy';
 import { IconCheck, IconCopy, IconEye, IconEyeOff, IconWarn } from './icons';
 import { Button } from './ui/primitives';
+import { useTicker } from './motion';
 import { TorWait, useTorBlocked } from './Tor';
 import { ServerDownLine, ServerMissingLine, TronNoHistoryLine, cbfPending, serverDown, serverMissing, tronNoHistory } from './ServerDown';
 
@@ -32,7 +33,7 @@ function luminance(hex: string): number {
 export function CoinIcon({ glyph, color, size = 34, fg, className, badge }: { glyph: string; color: string; size?: number; fg?: string; className?: string; badge?: { glyph: string; color: string } }) {
   const text = fg ?? (luminance(color) > 0.55 ? '#0A0B0D' : '#FFFFFF');
   return (
-    <span className={cn('relative inline-flex shrink-0 items-center justify-center rounded-full font-bold', className)} style={{ width: size, height: size, background: color, color: text, fontSize: Math.round(size * 0.46) }} aria-hidden="true">
+    <span className={cn('relative inline-flex shrink-0 items-center justify-center rounded-full font-semibold', className)} style={{ width: size, height: size, background: color, color: text, fontSize: Math.round(size * 0.46) }} aria-hidden="true">
       {glyph}
       {badge && (
         <span className="absolute -right-1 -bottom-1 flex items-center justify-center rounded-full border-2 border-card font-bold" style={{ width: 16, height: 16, background: badge.color, color: '#fff', fontSize: 8 }}>
@@ -49,7 +50,7 @@ export function AddressBlocks({ address, size = 'lg', className, wrap = true }: 
   return (
     <div className={cn('flex gap-1.5 font-mono', wrap ? 'flex-wrap' : 'flex-nowrap', fs, className)} aria-label={`Adresse ${address}`}>
       {addressChunks(address).map((c, i) => (
-        <span key={i} className={cn('rounded-[6px] px-1.5 py-[3px]', c.highlight ? 'bg-ice/14 text-ice-text' : 'text-mute')}>
+        <span key={i} className={cn('rounded-[4px] px-1.5 py-[3px]', c.highlight ? 'bg-ice/[.12] text-ice-text shadow-[inset_0_-1px_0_rgba(124,196,255,.35)]' : 'text-mute')}>
           {c.text}
         </span>
       ))}
@@ -73,8 +74,8 @@ export function AddressShort({ address, className }: { address: string; classNam
 /** "En clair" box: one plain-language sentence before any signature. */
 export function EnClair({ children, className, tone = 'ice' }: { children: ReactNode; className?: string; tone?: 'ice' | 'warn' }) {
   return (
-    <div className={cn('flex flex-col gap-1.5 rounded-[14px] border px-4 py-3.5', tone === 'ice' ? 'border-ice/22 bg-ice/8' : 'border-warn/35 bg-warn/8', className)}>
-      <span className={cn('text-[11px] font-semibold tracking-[0.06em]', tone === 'ice' ? 'text-ice-text2' : 'text-warn')}>EN CLAIR</span>
+    <div className={cn('fade-in flex flex-col gap-1.5 rounded-box border border-l-2 px-4 py-3.5', tone === 'ice' ? 'border-ice/20 border-l-ice bg-ice/[.05]' : 'border-warn/30 border-l-warn bg-warn/[.06]', className)}>
+      <span className={cn('font-mono text-[10.5px] font-medium tracking-[0.12em]', tone === 'ice' ? 'text-ice-text2' : 'text-warn')}>EN CLAIR</span>
       <p className="m-0 text-[14px] leading-[1.5]">{children}</p>
     </div>
   );
@@ -83,13 +84,28 @@ export function EnClair({ children, className, tone = 'ice' }: { children: React
 export const HIDDEN = '•••••';
 
 /** Big fiat amount: integer bright, decimals + symbol faint. */
-export function BigFiat({ value, currency, hidden, className }: { value: number; currency: Currency; hidden?: boolean; className?: string }) {
+export function BigFiat({ value, currency, hidden, className, tick }: { value: number; currency: Currency; hidden?: boolean; className?: string; /** Count to the value (number ticker). */ tick?: boolean }) {
   if (hidden) return <span className={className}>{HIDDEN}</span>;
+  if (tick) return <TickingFiat value={value} currency={currency} {...(className ? { className } : {})} />;
   const { int, rest } = splitFiat(value, currency);
   return (
     <span className={className}>
       {int}
       <span className="text-faint">{rest}</span>
+    </span>
+  );
+}
+
+function TickingFiat({ value, currency, className }: { value: number; currency: Currency; className?: string }) {
+  const shown = useTicker(value, { from: value * 0.96, duration: 0.6 });
+  const { int, rest } = splitFiat(shown, currency);
+  const real = splitFiat(value, currency);
+  return (
+    <span className={className} aria-label={`${real.int}${real.rest}`}>
+      <span aria-hidden="true">
+        {int}
+        <span className="text-faint">{rest}</span>
+      </span>
     </span>
   );
 }
@@ -103,7 +119,7 @@ export function CopyButton({ text, label = 'Copier', className, variant = 'secon
   }, [done]);
   return (
     <Button variant={variant} size={size} className={className} onClick={async () => setDone(await copyText(text))}>
-      {done ? <IconCheck size={15} /> : <IconCopy size={15} />}
+      <span key={String(done)} className="pop-in inline-flex">{done ? <IconCheck size={15} className="text-up" /> : <IconCopy size={15} />}</span>
       {done === null ? label : done ? 'Copié' : 'Échec de la copie'}
     </Button>
   );
@@ -136,7 +152,7 @@ export function PasswordField({
       <label htmlFor={id} className="text-[12px] font-medium text-mute">
         {label}
       </label>
-      <div className={cn('flex h-[46px] items-center rounded-[12px] border bg-bg pr-1.5 pl-3.5 focus-within:border-ice-line', invalid ? 'border-down/60' : 'border-line-2')}>
+      <div className={cn('flex h-11 items-center rounded-ctl border bg-bg pr-1.5 pl-3.5 transition-colors focus-within:border-ice-line', invalid ? 'border-down/60' : 'border-line-2 hover:border-line-3')}>
         <input
           id={id}
           type={show ? 'text' : 'password'}
@@ -151,7 +167,7 @@ export function PasswordField({
           }}
           className="min-w-0 flex-1 bg-transparent text-[15px]"
         />
-        <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} className="flex size-8 items-center justify-center rounded-[8px] text-mute hover:text-text">
+        <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? 'Masquer le mot de passe' : 'Afficher le mot de passe'} className="press flex size-8 items-center justify-center rounded-[5px] text-mute hover:bg-raised hover:text-text">
           {show ? <IconEyeOff size={16} /> : <IconEye size={16} />}
         </button>
       </div>
@@ -161,8 +177,12 @@ export function PasswordField({
 
 export function EmptyState({ title, children, action, className }: { title: string; children?: ReactNode; action?: ReactNode; className?: string }) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-2 px-6 py-10 text-center', className)}>
-      <span className="text-[14px] font-semibold text-text2">{title}</span>
+    <div className={cn('fade-in flex flex-col items-center justify-center gap-2 px-6 py-10 text-center', className)}>
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true" className="mb-1 text-line-3">
+        <circle cx="14" cy="14" r="12.5" fill="none" stroke="currentColor" strokeDasharray="2 3" />
+        <rect x="11" y="11" width="6" height="6" fill="currentColor" />
+      </svg>
+      <span className="text-[14px] font-medium text-text2">{title}</span>
       {children && <span className="max-w-[360px] text-[13px] leading-[1.5] text-mute">{children}</span>}
       {action && <div className="mt-2">{action}</div>}
     </div>
@@ -217,9 +237,9 @@ export function TrendPill({ change, children }: { change: number | null; childre
   const up = (change ?? 0) >= 0;
   const flat = change === null || Math.abs(change) < 0.005;
   return (
-    <span className={cn('inline-flex h-6 items-center gap-[5px] rounded-full px-[9px] text-[13px] font-semibold', flat ? 'bg-control-2 text-mute' : up ? 'bg-up/12 text-up' : 'bg-down/12 text-down')}>
+    <span className={cn('inline-flex h-6 items-center gap-[6px] text-[13px] font-medium', flat ? 'text-mute' : up ? 'text-up' : 'text-down')}>
       {!flat && (
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+        <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true">
           <path d={up ? 'M5 1l4 6H1z' : 'M5 9l4-6H1z'} fill="currentColor" />
         </svg>
       )}

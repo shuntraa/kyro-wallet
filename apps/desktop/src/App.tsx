@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { lazy, Suspense, useCallback, useMemo } from 'react';
-import { motion } from 'motion/react';
+import { MotionConfig, motion } from 'motion/react';
 import { WATCH_ONLY_CHAINS } from '@kyro/chains';
 import { AppProvider, useApp, type Route } from './state/app';
 import { PortfolioProvider, usePortfolio } from './state/portfolio';
@@ -23,19 +23,23 @@ import { TorDialogs } from './components/Tor';
 import { HwPromptLayer } from './components/hw';
 import { AccountSwitcher } from './components/AccountSwitcher';
 import { serverDown, serverMissing } from './components/ServerDown';
+import { screenEnter } from './components/motion';
 
 // Staking screens: loaded on first visit (keeps the main chunk smaller).
 const Staking = lazy(() => import('./screens/Staking').then((m) => ({ default: m.Staking })));
 
 export function App() {
   return (
-    <AppProvider>
-      <Root />
-      {/* Tor failure / "continue without Tor" dialogs: reachable from every phase. */}
-      <TorDialogs />
-      {/* Trezor One blind PIN matrix, whatever screen started the device call. */}
-      <HwPromptLayer />
-    </AppProvider>
+    // reducedMotion="user": every motion/react animation honours prefers-reduced-motion.
+    <MotionConfig reducedMotion="user">
+      <AppProvider>
+        <Root />
+        {/* Tor failure / "continue without Tor" dialogs: reachable from every phase. */}
+        <TorDialogs />
+        {/* Trezor One blind PIN matrix, whatever screen started the device call. */}
+        <HwPromptLayer />
+      </AppProvider>
+    </MotionConfig>
   );
 }
 
@@ -55,7 +59,7 @@ function Root() {
       <Frame>
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-10 text-center">
           <KyroMark size={48} />
-          <h1 className="m-0 text-[22px] font-semibold">Kyro n’a pas pu démarrer</h1>
+          <h1 className="m-0 text-[24px] font-[560] tracking-[-0.03em]">Kyro n’a pas pu démarrer</h1>
           <p className="m-0 max-w-[480px] text-[14px] text-mute">{fatal}</p>
         </div>
       </Frame>
@@ -189,9 +193,7 @@ function Unlocked() {
             would block navigation while the window is hidden and rAF is paused). */}
         <motion.main
           key={JSON.stringify(route)}
-          initial={{ opacity: 0.4, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.16, ease: 'easeOut' }}
+          {...screenEnter}
           className="flex min-w-0 flex-1 flex-col overflow-hidden"
         >
           {screen}
