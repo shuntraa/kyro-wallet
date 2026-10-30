@@ -2,6 +2,7 @@
 
 import type { BtcTxSummary, EvmTokenHint, EvmTxRequest, EvmTxSummary } from '@kyro/shared';
 import type { AssetDef, Chain, Family } from './registry';
+import type { UtxoSigned, UtxoUnsigned } from './utxo/utxo';
 
 export type FeeLevel = 'slow' | 'normal' | 'fast';
 export type FeeChoice = FeeLevel | 'custom';
@@ -118,6 +119,9 @@ export interface FamilyTypes {
   evm: { unsigned: EvmUnsigned; signed: EvmSigned };
   btc: { unsigned: BtcUnsigned; signed: BtcSigned };
   sol: { unsigned: SolUnsigned; signed: SolSigned };
+  /** Litecoin / Dogecoin: Bitcoin shapes (PSBT, hex), the unsigned tx tagged `family: 'btc'`. */
+  ltc: { unsigned: UtxoUnsigned; signed: UtxoSigned };
+  doge: { unsigned: UtxoUnsigned; signed: UtxoSigned };
 }
 export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned;
 export type AnySigned = EvmSigned | BtcSigned | SolSigned;
@@ -155,11 +159,16 @@ export interface ChainAdapter<F extends Family = Family> {
   getHistory(): Promise<HistoryItem[]>;
 }
 
-export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'>;
+export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'>;
+
+/** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin: Bitcoin's PSBT shape). */
+export function unsignedFamilyOf(family: Family): AnyUnsigned['family'] {
+  return family === 'ltc' || family === 'doge' ? 'btc' : family;
+}
 
 /** Sign + broadcast with a union-typed adapter. */
 export async function signAndBroadcast(adapter: AnyAdapter, unsigned: AnyUnsigned, password: string): Promise<string> {
-  if (adapter.family !== unsigned.family) throw new Error('Famille de transaction incohérente');
+  if (unsignedFamilyOf(adapter.family) !== unsigned.family) throw new Error('Famille de transaction incohérente');
   const a = adapter as ChainAdapter<Family>;
   const signed = await a.signTx(unsigned as never, password);
   return a.broadcast(signed as never);

@@ -43,10 +43,8 @@ async function addAccount(id: string, chains: Array<'btc' | 'evm' | 'sol'>): Pro
   return acc;
 }
 
-function adaptersFor(acc: WatchOnlyAccount, prevTx?: (txid: string) => Promise<string | null>): AdapterSet {
-  const set = createAdapters(hwToAccounts(acc), undefined, undefined, { accountId: acc.id, device: acc.device });
-  if (prevTx && set.btc) (set.btc as unknown as { hw: { prevTx?: unknown } }).hw.prevTx = prevTx;
-  return set;
+function adaptersFor(acc: WatchOnlyAccount): AdapterSet {
+  return createAdapters(hwToAccounts(acc), undefined, undefined, { accountId: acc.id, device: acc.device });
 }
 
 beforeEach(() => {
@@ -78,44 +76,44 @@ describe('hardware-wallet accounts', () => {
     expect(ad.hw).toEqual({ accountId: acc.id, device: 'trezor' });
   });
 
-  it('Bitcoin without previous transactions: spends Taproot only, never SegWit', async () => {
+  it('SegWit coins: non_witness_utxo fetched with btc_tx_hex (hash-checked); a Ledger never mixes kinds, a Trezor may', async () => {
     setup('ledger');
     const acc = await addAccount('ledger-1', ['btc']);
-    const btc = adaptersFor(acc).btc!;
-    expect((await drive(btc.getBalance()))[0]?.amount).toBe(640_000n + 310_000n);
-    const unsigned = await drive(btc.buildTx({ asset: { id: 'btc' } as never, to: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx', amount: 200_000n, fee: { family: 'btc', satPerVb: 2 } }));
-    const psbt = bitcoin.Psbt.fromBase64(unsigned.psbt, { network: bitcoin.networks.testnet });
-    expect(psbt.data.inputs.every((i) => (i.tapBip32Derivation?.length ?? 0) > 0)).toBe(true);
-    // More than the Taproot funds: refused with the explanation (SegWit needs the previous tx).
-    await expect(drive(btc.buildTx({ asset: { id: 'btc' } as never, to: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx', amount: 800_000n, fee: { family: 'btc', satPerVb: 2 } }))).rejects.toThrow(/transaction précédente complète/);
+    const kinds = (b64: string) => new Set(bitcoin.Psbt.fromBase64(b64, { network: bitcoin.networks.testnet }).data.inputs.map((i) => (i.tapBip32Derivation?.length ? 'taproot' : 'segwit')));
+    const to = 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx';
+    const ledger = adaptersFor(acc).btc!;
+    expect((await drive(ledger.getBalance()))[0]?.amount).toBe(640_000n + 310_000n);
+    // Ledger: one kind per transaction; 300k fits in either (the cheapest wins).
+    const small = await drive(ledger.buildTx({ asset: { id: 'btc' } as never, to, amount: 300_000n, fee: { family: 'btc', satPerVb: 2 } }));
+    expect(kinds(small.psbt).size).toBe(1);
+    // 800k needs both kinds: impossible on a Ledger, with an explanation…
+    await expect(drive(ledger.buildTx({ asset: { id: 'btc' } as never, to, amount: 800_000n, fee: { family: 'btc', satPerVb: 2 } }))).rejects.toThrow(/mélanger des entrées SegWit et Taproot/);
+    // …fine on a Trezor: the SegWit input carries its full previous transaction.
+    sent = [];
+    const trezor = adaptersFor({ ...acc, device: 'trezor' }).btc!;
+    const big = await drive(trezor.buildTx({ asset: { id: 'btc' } as never, to, amount: 800_000n, fee: { family: 'btc', satPerVb: 2 } }));
+    expect(kinds(big.psbt)).toEqual(new Set(['segwit', 'taproot']));
+    const inputs = bitcoin.Psbt.fromBase64(big.psbt, { network: bitcoin.networks.testnet }).data.inputs;
+    const seg = inputs.filter((i) => i.bip32Derivation?.length);
+    expect(seg.length).toBeGreaterThan(0);
+    expect(seg.every((i) => i.nonWitnessUtxo !== undefined)).toBe(true);
+    expect(sent).toContain('btc_tx_hex');
+    // Ledger, SegWit only: spends the SegWit coin when it is the only kind that fits.
+    const segOnly = adaptersFor(acc).btc!;
+    mock.chain.btcUtxos.delete(hwToAccounts(acc).btc!.taproot.address);
+    const s = await drive(segOnly.buildTx({ asset: { id: 'btc' } as never, to, amount: 200_000n, fee: { family: 'btc', satPerVb: 2 } }));
+    expect(kinds(s.psbt)).toEqual(new Set(['segwit']));
+    expect(bitcoin.Psbt.fromBase64(s.psbt, { network: bitcoin.networks.testnet }).data.inputs.every((i) => i.nonWitnessUtxo)).toBe(true);
   });
 
-  it('with previous transactions: SegWit inputs carry non_witness_utxo; a Ledger never mixes kinds, a Trezor may', async () => {
-    setup('ledger');
-    const acc = await addAccount('ledger-1', ['btc']);
-    const view = hwToAccounts(acc);
-    // A real previous transaction paying our SegWit address, so its txid matches.
-    const prev = new bitcoin.Transaction();
-    prev.version = 2;
-    prev.addInput(new Uint8Array(32).fill(7), 0);
-    prev.addOutput(bitcoin.address.toOutputScript(view.btc!.segwit.address, bitcoin.networks.testnet), 310_000n);
-    mock.chain.btcUtxos.set(view.btc!.segwit.address, [{ txid: prev.getId(), vout: 0, value: 310_000, height: mock.chain.tipHeight - 10 }]);
-    const prevTx = async (txid: string) => (txid === prev.getId() ? prev.toHex() : null);
-
-    const ledger = adaptersFor(acc, prevTx).btc!;
-    const to = 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx';
-    const small = await drive(ledger.buildTx({ asset: { id: 'btc' } as never, to, amount: 250_000n, fee: { family: 'btc', satPerVb: 2 } }));
-    const kinds = (b64: string) => new Set(bitcoin.Psbt.fromBase64(b64, { network: bitcoin.networks.testnet }).data.inputs.map((i) => (i.tapBip32Derivation?.length ? 'taproot' : 'segwit')));
-    expect(kinds(small.psbt).size).toBe(1);
-    // 800k needs both kinds: impossible on a Ledger (one kind per transaction)…
-    await expect(drive(ledger.buildTx({ asset: { id: 'btc' } as never, to, amount: 800_000n, fee: { family: 'btc', satPerVb: 2 } }))).rejects.toThrow();
-    // …fine on a Trezor, with non_witness_utxo on the SegWit input.
-    const trezorAcc: WatchOnlyAccount = { ...acc, device: 'trezor' };
-    const trezor = adaptersFor(trezorAcc, prevTx).btc!;
-    const big = await drive(trezor.buildTx({ asset: { id: 'btc' } as never, to, amount: 800_000n, fee: { family: 'btc', satPerVb: 2 } }));
-    const inputs = bitcoin.Psbt.fromBase64(big.psbt, { network: bitcoin.networks.testnet }).data.inputs;
-    expect(kinds(big.psbt).size).toBe(2);
-    expect(inputs.filter((i) => i.bip32Derivation?.length).every((i) => i.nonWitnessUtxo !== undefined)).toBe(true);
+  it('a previous transaction whose txid does not match the input is refused', async () => {
+    setup('trezor');
+    const acc = await addAccount('trezor-1', ['btc']);
+    const ad = adaptersFor(acc);
+    // A wrong raw tx for every txid: bitcoinjs refuses it (Rust would too: SERVER_UNREACHABLE).
+    for (const k of [...mock.chain.rawTx.keys()]) mock.chain.rawTx.set(k, mock.chain.rawTx.values().next().value as string);
+    mock.chain.btcUtxos.delete(hwToAccounts(acc).btc!.taproot.address);
+    await expect(drive(ad.btc!.buildTx({ asset: { id: 'btc' } as never, to: 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx', amount: 100_000n, fee: { family: 'btc', satPerVb: 2 } }))).rejects.toThrow();
   });
 
   it('signs on the device (hw_sign_*), no password command, then broadcasts', async () => {

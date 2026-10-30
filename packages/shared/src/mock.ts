@@ -32,6 +32,8 @@ import {
 import { emitDemoEvent } from './events';
 import { createDemoServers } from './mock-servers';
 import { createDemoCbf, detectDemoCbf } from './mock-cbf';
+import { createDemoUtxo, demoUtxoAccount, DEMO_DOGE_NETWORKS, DEMO_LTC_NETWORKS } from './mock-utxo';
+import { demoFund } from './mock-tx';
 import { createDemoHw, detectDemoHwScenario, type DemoHw, type DemoHwScenario } from './mock-hw';
 import { EMPTY_SERVERS, redactServers } from './servers';
 import { createDemoTor, detectDemoTorDisabled, detectDemoTorScenario, type DemoTor, type DemoTorScenario } from './mock-tor';
@@ -65,6 +67,8 @@ interface DemoKeys {
   /** Every address we own (receive + change, both kinds), for change detection. */
   ownBtc: Set<string>;
   receive: Record<BtcKind, HDKey>;
+  /** Litecoin / Dogecoin account nodes. */
+  utxo: { ltc: HDKey; doge: HDKey };
 }
 
 function demoSeed(): Uint8Array {
@@ -121,8 +125,11 @@ export function deriveDemoKeys(network: Network): DemoKeys {
   const uncompressed = ecc.pointCompress(evmKey, false);
   const evmAddr = toChecksumAddress(bytesToHex(keccak_256(uncompressed.slice(1))).slice(-40));
   const solAddr = base58.encode(sha256(new TextEncoder().encode('kyro-demo-solana-account')));
+  const ltc = demoUtxoAccount(demoSeed(), network, 'ltc');
+  const doge = demoUtxoAccount(demoSeed(), network, 'doge');
   return {
-    accounts: { network, btc: { segwit: info('segwit'), taproot: info('taproot') }, evm: { address: evmAddr }, sol: { address: solAddr } },
+    utxo: { ltc: ltc.node, doge: doge.node },
+    accounts: { network, btc: { segwit: info('segwit'), taproot: info('taproot') }, evm: { address: evmAddr }, sol: { address: solAddr }, ltc: ltc.info, doge: doge.info },
     ownBtc,
     receive,
   };
@@ -138,12 +145,21 @@ function seedChainState(keys: DemoKeys, network: Network): DemoChainState {
     return pk ? btcAddressFor(kind, pk, net) : '';
   };
   const tip = testnet ? 98_430 : 871_402;
-  const utxo = (seed: string, value: number, age: number) => ({ txid: demoHash(seed), vout: 0, value, height: tip - age });
-  const btcUtxos = new Map([
-    [a.btc.segwit.address, [utxo('u1', 4_120_000, 1_200), utxo('u2', 890_000, 300)]],
-    [addrAt('segwit', 1), [utxo('u3', 210_000, 40)]],
-    [a.btc.taproot.address, [utxo('u4', 350_000, 12)]],
-  ]);
+  // Every demo UTXO comes from a real funding transaction (raw hex kept for *_tx_hex).
+  const rawTx = new Map<string, string>();
+  const btcUtxos = new Map<string, Array<{ txid: string; vout: number; value: number; height: number }>>();
+  demoFund(btcUtxos, rawTx, a.btc.segwit.address, net, 'u1', 4_120_000, tip - 1_200);
+  demoFund(btcUtxos, rawTx, a.btc.segwit.address, net, 'u2', 890_000, tip - 300);
+  demoFund(btcUtxos, rawTx, addrAt('segwit', 1), net, 'u3', 210_000, tip - 40);
+  demoFund(btcUtxos, rawTx, a.btc.taproot.address, net, 'u4', 350_000, tip - 12);
+  const ltcTip = testnet ? 121_640 : 2_905_118;
+  const dogeTip = testnet ? 6_120_448 : 5_471_902;
+  const ltcUtxos = new Map<string, Array<{ txid: string; vout: number; value: number; height: number }>>();
+  const dogeUtxos = new Map<string, Array<{ txid: string; vout: number; value: number; height: number }>>();
+  demoFund(ltcUtxos, rawTx, a.ltc.address, DEMO_LTC_NETWORKS[network], 'l1', 125_000_000, ltcTip - 900);
+  demoFund(ltcUtxos, rawTx, a.ltc.address, DEMO_LTC_NETWORKS[network], 'l2', 30_500_000, ltcTip - 120);
+  demoFund(dogeUtxos, rawTx, a.doge.address, DEMO_DOGE_NETWORKS[network], 'd1', 420_000_000_000, dogeTip - 4_000);
+  demoFund(dogeUtxos, rawTx, a.doge.address, DEMO_DOGE_NETWORKS[network], 'd2', 150_000_000, dogeTip - 60);
   const evmNative = new Map<string, bigint>();
   const evmTokens = new Map<string, bigint>();
   if (testnet) {
@@ -161,6 +177,11 @@ function seedChainState(keys: DemoKeys, network: Network): DemoChainState {
     accounts: a,
     tipHeight: tip,
     btcUtxos,
+    rawTx,
+    ltcUtxos,
+    dogeUtxos,
+    ltcTip,
+    dogeTip,
     evmNative,
     evmTokens,
     allowances: new Map(),
@@ -230,8 +251,20 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   // Like the shell's setup: Tor starts in the background when enabled.
   const tor = createDemoTor(opts.tor ?? detectDemoTorScenario());
   if (settings.tor.enabled) tor.start();
+  // Litecoin / Dogecoin (§2.4): `ltc_*` / `doge_*`.
+  const utxoChains = createDemoUtxo({
+    chain,
+    network,
+    nodes: keys.utxo,
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+  });
   // Custom servers (B2b): live checks, Bitcoin backends, Core watch wallet.
   const servers = createDemoServers({
+    utxo: utxoChains,
     chain,
     network,
     fingerprint: keys.accounts.btc.segwit.fingerprint,
@@ -348,8 +381,9 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     registerEvm: (raw, hash, tx, from) => chain.signedEvm.set(raw, { hash, tx, from }),
     fund: (_acc, addr) => {
       const tip = chain.tipHeight;
-      if (addr.taproot && !chain.btcUtxos.has(addr.taproot)) chain.btcUtxos.set(addr.taproot, [{ txid: demoHash(`hw-tap:${addr.taproot}`), vout: 0, value: 640_000, height: tip - 30 }]);
-      if (addr.segwit && !chain.btcUtxos.has(addr.segwit)) chain.btcUtxos.set(addr.segwit, [{ txid: demoHash(`hw-seg:${addr.segwit}`), vout: 1, value: 310_000, height: tip - 80 }]);
+      const net = network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
+      if (addr.taproot && !chain.btcUtxos.has(addr.taproot)) demoFund(chain.btcUtxos, chain.rawTx, addr.taproot, net, 'hw-tap', 640_000, tip - 30);
+      if (addr.segwit && !chain.btcUtxos.has(addr.segwit)) demoFund(chain.btcUtxos, chain.rawTx, addr.segwit, net, 'hw-seg', 310_000, tip - 80);
       if (addr.evm) {
         const key = `${network === 'testnet' ? 11155111 : 1}:${addr.evm.toLowerCase()}`;
         if (!chain.evmNative.has(key)) chain.evmNative.set(key, 312_000_000_000_000_000n);
@@ -506,6 +540,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     btc_fee_rates: () => servers.btc.feeRates(),
     btc_tip_height: () => servers.btc.tipHeight(),
     btc_broadcast: (a) => servers.btc.broadcast(a.hex),
+    btc_tx_hex: (a) => servers.btc.txHex(a.txid),
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
     btc_cbf_status: () => servers.cbf.status(),
@@ -533,7 +568,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       clockOffset += ms;
     },
     invoke: async (cmd, args = {}) => {
-      const h = (handlers as Record<string, ((a: Record<string, unknown>) => unknown) | undefined>)[cmd];
+      const h = (handlers as Record<string, ((a: Record<string, unknown>) => unknown) | undefined>)[cmd] ?? utxoChains.handlers[cmd];
       if (!h) throw new IpcError('INVALID_INPUT', `Commande inconnue : ${cmd}`);
       void captureProtected;
       return await h(args);

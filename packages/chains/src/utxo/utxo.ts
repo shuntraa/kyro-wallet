@@ -9,9 +9,6 @@
 // - the unsigned PSBT carries the key origins (and, for legacy P2PKH, the full previous
 //   transactions); Rust decodes it, shows the native dialog and signs.
 //
-// Kept under `litecoin/` because the files this work may touch are `litecoin*` / `dogecoin*`;
-// it is meant to move to `src/utxo/` (docs/IPC.md §2.4).
-//
 // Fee unit: the chain's smallest unit per virtual byte (litoshis/vB; koinus/byte for Dogecoin,
 // which has no SegWit, so vbytes = bytes). It travels in `FeeParams { family: 'btc', satPerVb }`
 // so the shared fee types can be reused as they are.
@@ -19,7 +16,7 @@
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { HDKey } from '@scure/bip32';
-import { BTC_TXS_CAP, call, type EsploraAddressInfo, type EsploraTx, type EsploraUtxo, type Network } from '@kyro/shared';
+import { BTC_TXS_CAP, call, type EsploraAddressInfo, type EsploraTx, type EsploraUtxo, type Network, type UtxoAccountInfo, type UtxoFeeRates, type UtxoTxSummary } from '@kyro/shared';
 import type { UtxoChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, FeeEstimates, HistoryItem } from '../types';
 import { derivePubkey, fingerprintBytes, parseXpub } from '../bitcoin/xpub';
@@ -29,44 +26,8 @@ bitcoin.initEccLib(ecc);
 // ---------------------------------------------------------------- Rust contract (§2.4)
 
 /** One chain's account, as returned by `accounts_get` (`ltc`, `doge`). */
-export interface UtxoAccountView {
-  address: string;
-  xpub: string;
-  fingerprint: string;
-  path: string;
-}
-
-export interface UtxoFeeRates {
-  fastestFee: number;
-  halfHourFee: number;
-  hourFee: number;
-  economyFee: number;
-  minimumFee: number;
-  /** Dogecoin server without estimates: Dogecoin Core's recommended 0.01 DOGE/kB. */
-  source?: 'policy';
-}
-
-export type UtxoWarning =
-  | { kind: 'unknownOutput'; index: number }
-  | { kind: 'opReturn'; index: number }
-  | { kind: 'foreignInput'; index: number }
-  | { kind: 'softDust'; index: number }
-  | { kind: 'highFee' }
-  | { kind: 'feeBelowMinimum'; minimum: string };
-
-/** Rust's decoding of the PSBT it signed (`wallet_core::UtxoTxSummary`). Amounts: decimal strings. */
-export interface UtxoTxSummary {
-  coin: 'litecoin' | 'dogecoin';
-  outputs: Array<{ address: string | null; script: string; amount: string; isChange: boolean; kind: 'address' | 'opReturn' | 'unknown' }>;
-  inputs: number;
-  ourInputs: number;
-  fee: string;
-  size: number;
-  feePerKb: number;
-  hasChange: boolean;
-  warnings: UtxoWarning[];
-  requiresExtraConfirmation: boolean;
-}
+export type UtxoAccountView = UtxoAccountInfo;
+export type { UtxoFeeRates, UtxoTxSummary, UtxoWarning } from '@kyro/shared';
 
 /** What the adapter needs from Rust: one method per `{prefix}_*` command. */
 export interface UtxoBackend {
@@ -80,23 +41,29 @@ export interface UtxoBackend {
   signPsbt(psbt: string, password: string): Promise<{ psbt: string; summary: UtxoTxSummary }>;
 }
 
-/**
- * The `{ltc,doge}_*` commands are not (yet) in `@kyro/shared`'s typed `Commands` map, which this
- * package must not edit; they are called through an untyped view of `call` and typed here.
- */
-type RawCall = <R>(cmd: string, args?: Record<string, unknown>) => Promise<R>;
-const rawCall = call as unknown as RawCall;
-
-export function rustUtxoBackend(prefix: 'ltc' | 'doge', invoke: RawCall = rawCall): UtxoBackend {
+/** The typed `{ltc,doge}_*` commands of `@kyro/shared` (docs/IPC.md §2.4). */
+export function rustUtxoBackend(prefix: 'ltc' | 'doge'): UtxoBackend {
+  if (prefix === 'ltc') {
+    return {
+      addressInfo: (address) => call('ltc_address_info', { address }),
+      addressUtxos: (address) => call('ltc_address_utxos', { address }),
+      addressTxs: (address) => call('ltc_address_txs', { address }),
+      txHex: (txid) => call('ltc_tx_hex', { txid }),
+      feeRates: () => call('ltc_fee_rates'),
+      tipHeight: async () => Number(await call('ltc_tip_height')),
+      broadcast: (hex) => call('ltc_broadcast', { hex }),
+      signPsbt: (psbt, password) => call('ltc_sign_psbt', { psbt, password }),
+    };
+  }
   return {
-    addressInfo: (address) => invoke(`${prefix}_address_info`, { address }),
-    addressUtxos: (address) => invoke(`${prefix}_address_utxos`, { address }),
-    addressTxs: (address) => invoke(`${prefix}_address_txs`, { address }),
-    txHex: (txid) => invoke(`${prefix}_tx_hex`, { txid }),
-    feeRates: () => invoke(`${prefix}_fee_rates`),
-    tipHeight: async () => Number(await invoke<number>(`${prefix}_tip_height`)),
-    broadcast: (hex) => invoke(`${prefix}_broadcast`, { hex }),
-    signPsbt: (psbt, password) => invoke(`${prefix}_sign_psbt`, { psbt, password }),
+    addressInfo: (address) => call('doge_address_info', { address }),
+    addressUtxos: (address) => call('doge_address_utxos', { address }),
+    addressTxs: (address) => call('doge_address_txs', { address }),
+    txHex: (txid) => call('doge_tx_hex', { txid }),
+    feeRates: () => call('doge_fee_rates'),
+    tipHeight: async () => Number(await call('doge_tip_height')),
+    broadcast: (hex) => call('doge_broadcast', { hex }),
+    signPsbt: (psbt, password) => call('doge_sign_psbt', { psbt, password }),
   };
 }
 

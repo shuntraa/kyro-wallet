@@ -10,7 +10,7 @@ import { copyText } from '../lib/copy';
 import { IconCheck, IconCopy, IconEye, IconEyeOff, IconWarn } from './icons';
 import { Button } from './ui/primitives';
 import { TorWait, useTorBlocked } from './Tor';
-import { ServerDownLine, cbfPending, serverDown } from './ServerDown';
+import { ServerDownLine, ServerMissingLine, cbfPending, serverDown, serverMissing } from './ServerDown';
 
 export function KyroMark({ size = 16, className }: { size?: number; className?: string }) {
   return (
@@ -178,6 +178,7 @@ export function EmptyState({ title, children, action, className }: { title: stri
 export function ErrorLine({ children, onRetry, className, error }: { children: ReactNode; onRetry?: () => void; className?: string; error?: unknown }) {
   const torBlocked = useTorBlocked(error);
   if (torBlocked) return <TorWait {...(className ? { className } : {})} />;
+  if (serverMissing(error)) return <ServerMissingLine {...(className ? { className } : {})} />;
   if (serverDown(error)) return <ServerDownLine {...(className ? { className } : {})} />;
   if (cbfPending(error)) {
     return (

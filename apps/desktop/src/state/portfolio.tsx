@@ -153,10 +153,11 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     const rows: Holding[] = [];
     for (const asset of assetsFor(network)) {
       // Only the chains of the active account (a hardware wallet may hold only some of them).
-      if (asset.family === 'btc' ? !adapters.btc : asset.family === 'sol' ? !adapters.sol : !adapters.evm.has(asset.chainKey)) continue;
+      if (asset.family === 'evm' ? !adapters.evm.has(asset.chainKey) : !adapters[asset.family]) continue;
       const amount = balances.get(asset.id) ?? 0n;
       const chain = findChain(network, asset.chainKey);
-      const always = asset.kind === 'native' && chain?.phase === 1;
+      // Phase 1 natives and Litecoin / Dogecoin always show (Dogecoin: « configure ton serveur »).
+      const always = asset.kind === 'native' && (chain?.phase === 1 || asset.family === 'ltc' || asset.family === 'doge');
       if (!always && amount === 0n) continue;
       const m = marketById.get(asset.coingeckoId);
       const p = price(asset.coingeckoId);

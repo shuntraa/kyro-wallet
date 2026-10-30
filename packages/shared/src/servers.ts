@@ -7,7 +7,7 @@
 
 import type { BtcNetworkKey, BtcServer, Network, Servers, SolanaCluster } from './ipc';
 
-export const EMPTY_SERVERS: Servers = { bitcoin: {}, evm: {}, solana: {} };
+export const EMPTY_SERVERS: Servers = { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {} };
 
 export function btcNetworkKey(network: Network): BtcNetworkKey {
   return network === 'mainnet' ? 'mainnet' : 'testnet4';

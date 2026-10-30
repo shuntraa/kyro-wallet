@@ -23,6 +23,9 @@ export interface WalletAccounts {
   btc?: { segwit: BtcAccountView; taproot: BtcAccountView };
   evm?: { address: string };
   sol?: { address: string };
+  /** Vault only: hardware wallets cannot sign Litecoin / Dogecoin yet (HW_UNSUPPORTED). */
+  ltc?: { address: string; xpub: string; fingerprint: string; path: string };
+  doge?: { address: string; xpub: string; fingerprint: string; path: string };
 }
 
 export interface BtcAccountView {

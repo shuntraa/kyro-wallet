@@ -5,7 +5,8 @@
 
 import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@kyro/shared';
 
-export type Family = 'btc' | 'evm' | 'sol';
+/** `ltc` / `doge`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*`, docs/IPC.md §2.4). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge';
 
 interface ChainBase {
   key: string;
@@ -42,7 +43,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -135,10 +136,8 @@ const SOL: Record<Network, SolChain> = {
   },
 };
 
-/** Phase 4: listed with their price, shown as "Bientôt". */
+/** Phase 4: listed with their price, shown as "Bientôt". (Litecoin and Dogecoin now have a full send path.) */
 export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
-  { key: 'litecoin', name: 'Litecoin', symbol: 'LTC', coingeckoId: 'litecoin', color: '#345D9D', glyph: 'Ł', watchOnly: true, phase: 4 },
-  { key: 'dogecoin', name: 'Dogecoin', symbol: 'DOGE', coingeckoId: 'dogecoin', color: '#C2A633', glyph: 'Ð', watchOnly: true, phase: 4 },
   { key: 'tron', name: 'TRON', symbol: 'TRX', coingeckoId: 'tron', color: '#EB0029', glyph: 'T', watchOnly: true, phase: 4 },
   { key: 'cardano', name: 'Cardano', symbol: 'ADA', coingeckoId: 'cardano', color: '#3468D1', glyph: 'A', watchOnly: true, phase: 4 },
   { key: 'xrp', name: 'XRP', symbol: 'XRP', coingeckoId: 'ripple', color: '#22252B', glyph: 'X', watchOnly: true, phase: 4 },
@@ -146,9 +145,8 @@ export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
 
 /**
  * Phase 4 UTXO chains with a full send path: Rust `ltc_*` / `doge_*` commands and the
- * `LitecoinAdapter` / `DogecoinAdapter` (`createUtxoAdapters`). Not part of `allChains()` /
- * `assetsFor()` (their `Family` is not one the UI handles yet), and still listed in
- * `WATCH_ONLY_CHAINS` (« Bientôt ») until the UI shows them: see docs/IPC.md §2.4.
+ * `LitecoinAdapter` / `DogecoinAdapter`. Part of `allChains()` / `assetsFor()` like Bitcoin.
+ * Hardware wallets: not supported yet (HW_UNSUPPORTED), the UI hides them for such accounts.
  */
 export interface UtxoChain extends Omit<ChainBase, 'phase'> {
   family: 'ltc' | 'doge';
@@ -176,6 +174,27 @@ export function ltcChain(network: Network): UtxoChain {
 }
 export function dogeChain(network: Network): UtxoChain {
   return DOGE_CHAINS[network];
+}
+
+/**
+ * TRON (phase 4, B4b): Rust `tron_*` commands and `TronAdapter` (`packages/chains/src/tron/`).
+ * Testnet = Nile. Not in `Family` / `allChains()` yet (the UI does not know it): still
+ * « Bientôt » in `WATCH_ONLY_CHAINS` until the UI shows it (docs/IPC.md §2.5).
+ */
+export interface TronChain extends Omit<ChainBase, 'phase'> {
+  family: 'tron';
+  phase: 4;
+}
+
+const TRON_CHAINS: Record<Network, TronChain> = {
+  testnet: { family: 'tron', key: 'tron', name: 'TRON Nile', label: 'TRON Nile', network: 'testnet', color: '#EB0029', glyph: 'T',
+    nativeSymbol: 'TRX', nativeName: 'TRON', nativeDecimals: 6, coingeckoId: 'tron', phase: 4, blockTimeSecs: 3 },
+  mainnet: { family: 'tron', key: 'tron', name: 'TRON', label: 'TRON', network: 'mainnet', color: '#EB0029', glyph: 'T',
+    nativeSymbol: 'TRX', nativeName: 'TRON', nativeDecimals: 6, coingeckoId: 'tron', phase: 4, blockTimeSecs: 3 },
+};
+
+export function tronChain(network: Network): TronChain {
+  return TRON_CHAINS[network];
 }
 
 interface TokenSpec {
@@ -237,14 +256,14 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
 }
 
 export function nativeAssetId(chain: Chain): string {
-  return chain.family === 'btc' ? 'btc' : chain.family === 'sol' ? 'sol' : `eth:${chain.chainId}`;
+  return chain.family === 'evm' ? `eth:${chain.chainId}` : chain.family;
 }
 
 /** Every asset Kyro tracks on a network, natives first. */
@@ -305,6 +324,13 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   const sol = solChain(network);
   const solCustom = servers.solana[sol.cluster]?.url;
   list.push(solCustom ? { host: host(solCustom), purpose: 'Solana : ton nœud RPC', custom: true } : { host: host(sol.rpcUrl), purpose: 'Solana : nœud RPC' });
+  // Litecoin / Dogecoin: reached by Rust only (ltc_* / doge_*), Tor circuits of their family.
+  const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
+  const ltc = servers.litecoin?.[nk];
+  list.push(ltc?.kind === 'esplora' ? { host: host(ltc.url), purpose: 'Litecoin : ton serveur Esplora', custom: true } : { host: 'litecoinspace.org', purpose: 'Litecoin : soldes, frais, diffusion' });
+  const doge = servers.dogecoin?.[nk];
+  if (doge?.kind === 'esplora') list.push({ host: host(doge.url), purpose: 'Dogecoin : ton serveur Esplora', custom: true });
+  else list.push({ host: 'aucun serveur', purpose: 'Dogecoin : aucun serveur public gratuit, configure le tien (rien n’est contacté)' });
   list.push({ host: 'api.0x.org', purpose: 'Devis de swap EVM (clé requise)' });
   list.push({ host: 'api.1inch.dev', purpose: 'Devis de swap EVM (clé requise)' });
   list.push({ host: 'li.quest', purpose: 'Devis de swap cross-chain' });

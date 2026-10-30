@@ -10,18 +10,21 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { IpcError, type Accounts, type EvmTxRequest, type Network, type NetRequest, type NetResponse } from './ipc';
 import { DEMO_COINS, DEMO_EUR_USD, DEMO_TOKENS, demoPrice, demoSeries } from './mock-data';
 
-export interface DemoUtxo {
-  txid: string;
-  vout: number;
-  value: number;
-  height: number;
-}
+import type { DemoUtxo } from './mock-tx';
+export type { DemoUtxo } from './mock-tx';
 
 export interface DemoChainState {
   network: Network;
   accounts: Accounts;
   tipHeight: number;
   btcUtxos: Map<string, DemoUtxo[]>;
+  /** Raw funding transactions of every demo UTXO (all chains), by txid. */
+  rawTx: Map<string, string>;
+  /** Litecoin / Dogecoin UTXOs by address, and their tips. */
+  ltcUtxos: Map<string, DemoUtxo[]>;
+  dogeUtxos: Map<string, DemoUtxo[]>;
+  ltcTip: number;
+  dogeTip: number;
   /** `${chainId}:${owner}` → wei */
   evmNative: Map<string, bigint>;
   /** `${chainId}:${token}:${owner}` → base units */
@@ -165,29 +168,35 @@ export const DEMO_FEE_RATES = { fastestFee: 12, halfHourFee: 6, hourFee: 3, econ
  * Esplora `GET /address/{a}`. Nothing is ever spent in the demo, so funded = net balance and
  * spent = 0: the shape Electrum / Core produce too.
  */
-export function demoEsploraAddress(s: DemoChainState, addr: string) {
-  const utxos = s.btcUtxos.get(addr) ?? [];
+export function demoEsploraAddress(s: DemoChainState, addr: string, map: Map<string, DemoUtxo[]> = s.btcUtxos) {
+  const utxos = map.get(addr) ?? [];
   const sum = utxos.reduce((a, u) => a + u.value, 0);
   const stats = { funded_txo_count: utxos.length, funded_txo_sum: sum, spent_txo_count: 0, spent_txo_sum: 0, tx_count: utxos.length };
   return { address: addr, chain_stats: stats, mempool_stats: { funded_txo_count: 0, funded_txo_sum: 0, spent_txo_count: 0, spent_txo_sum: 0, tx_count: 0 } };
 }
 
-export function demoEsploraUtxos(s: DemoChainState, addr: string) {
-  return (s.btcUtxos.get(addr) ?? []).map((u) => ({ txid: u.txid, vout: u.vout, value: u.value, status: { confirmed: true, block_height: u.height } }));
+export function demoEsploraUtxos(s: DemoChainState, addr: string, map: Map<string, DemoUtxo[]> = s.btcUtxos) {
+  return (map.get(addr) ?? []).map((u) => ({ txid: u.txid, vout: u.vout, value: u.value, status: { confirmed: true, block_height: u.height } }));
 }
 
 /** Esplora `GET /address/{a}/txs` (incoming demo transactions). */
-export function demoEsploraTxs(s: DemoChainState, addr: string) {
-  const utxos = s.btcUtxos.get(addr) ?? [];
+export function demoEsploraTxs(
+  s: DemoChainState,
+  addr: string,
+  map: Map<string, DemoUtxo[]> = s.btcUtxos,
+  /** Placeholder addresses of the external sender / its change, in the coin's own format. */
+  foreign: { sender: string; change: string } = { sender: 'tb1qdemoexternalsender0000000000000000000', change: 'tb1qdemoexternalchange000000000000000000' },
+) {
+  const utxos = map.get(addr) ?? [];
   const spk = (a: string) => `0014${demoHash(a).slice(0, 40)}`;
   return utxos.map((u, i) => ({
     txid: u.txid,
     fee: 141 + i * 12,
     status: { confirmed: true, block_height: u.height, block_time: Math.floor(Date.now() / 1000) - (i + 1) * 86_400 * 3 },
-    vin: [{ txid: demoHash(`${u.txid}:in`), vout: 0, prevout: { scriptpubkey: spk('ext'), scriptpubkey_address: 'tb1qdemoexternalsender0000000000000000000', value: u.value + 5000 } }],
+    vin: [{ txid: demoHash(`${u.txid}:in`), vout: 0, prevout: { scriptpubkey: spk('ext'), scriptpubkey_address: foreign.sender, value: u.value + 5000 } }],
     vout: [
       { scriptpubkey: spk(addr), scriptpubkey_address: addr, value: u.value },
-      { scriptpubkey: spk('chg'), scriptpubkey_address: 'tb1qdemoexternalchange000000000000000000', value: 4859 },
+      { scriptpubkey: spk('chg'), scriptpubkey_address: foreign.change, value: 4859 },
     ],
   }));
 }

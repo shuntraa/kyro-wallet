@@ -39,6 +39,7 @@ import { bitcoinServerFor, btcNetworkKey, checkBtcServer, checkServerUrl, coreIs
 import { DEMO_FEE_RATES, EVM_HOSTS, demoEsploraAddress, demoEsploraTxs, demoEsploraUtxos, handleDemoNet, type DemoChainState, type DemoRoute } from './mock-net';
 import type { DemoTor } from './mock-tor';
 import { cbfDisabled, type DemoCbf } from './mock-cbf';
+import type { createDemoUtxo } from './mock-utxo';
 
 const BTC_GENESIS: Record<BtcNetworkKey, string> = {
   mainnet: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f',
@@ -95,6 +96,8 @@ export interface DemoServersDeps {
   requireUnlocked: () => void;
   /** Compact filters (feature `cbf`: FEATURE_DISABLED unless enabled). */
   cbf: DemoCbf;
+  /** Litecoin / Dogecoin servers (checks and probes). */
+  utxo: Pick<ReturnType<typeof createDemoUtxo>, 'probe' | 'validate'>;
 }
 
 export function createDemoServers(d: DemoServersDeps) {
@@ -182,6 +185,7 @@ export function createDemoServers(d: DemoServersDeps) {
       const bad = s ? checkServerUrl(s.url, tor) : null;
       if (bad) throw invalid(`solana ${cluster} : ${bad}`);
     }
+    d.utxo.validate(servers, tor);
   };
 
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -199,6 +203,12 @@ export function createDemoServers(d: DemoServersDeps) {
       const s = merged.solana[cluster];
       if (s && !same(s, stored.solana[cluster])) await probeSol(cluster, s);
     }
+    for (const [coin, key] of [['ltc', 'litecoin'], ['doge', 'dogecoin']] as const) {
+      for (const nk of ['mainnet', 'testnet'] as const) {
+        const s = merged[key]?.[nk];
+        if (s && s.kind !== 'default' && !same(s, stored[key]?.[nk])) await d.utxo.probe(coin, nk, s);
+      }
+    }
     return merged;
   };
 
@@ -208,15 +218,21 @@ export function createDemoServers(d: DemoServersDeps) {
     let detected: ServerTestResult['detected'];
     if (target.family === 'bitcoin') {
       if (target.network !== 'mainnet' && target.network !== 'testnet4') throw invalid(`réseau Bitcoin inconnu « ${String(target.network)} » (mainnet ou testnet4)`);
-      const probe: Servers = { bitcoin: { [target.network]: target.server }, evm: {}, solana: {} };
+      const probe: Servers = { bitcoin: { [target.network]: target.server }, evm: {}, solana: {}, litecoin: {}, dogecoin: {} };
       const merged = mergeServerSecrets(probe, d.settings().servers);
       validate(merged, tor);
       detected = await probeBtc(target.network, merged.bitcoin[target.network] ?? { kind: 'default' });
+    } else if (target.family === 'litecoin' || target.family === 'dogecoin') {
+      if (target.server.kind === 'esplora') {
+        const bad = checkServerUrl(target.server.url, tor);
+        if (bad) throw invalid(`${target.family} ${target.network} : ${bad}`);
+      }
+      detected = await d.utxo.probe(target.family === 'litecoin' ? 'ltc' : 'doge', target.network, target.server);
     } else if (target.family === 'evm') {
-      validate({ bitcoin: {}, evm: { [String(target.chainId)]: target.server }, solana: {} }, tor);
+      validate({ bitcoin: {}, evm: { [String(target.chainId)]: target.server }, solana: {}, litecoin: {}, dogecoin: {} }, tor);
       detected = await probeEvm(target.chainId, target.server);
     } else {
-      validate({ bitcoin: {}, evm: {}, solana: { [target.cluster]: target.server } }, tor);
+      validate({ bitcoin: {}, evm: {}, solana: { [target.cluster]: target.server }, litecoin: {}, dogecoin: {} }, tor);
       detected = await probeSol(target.cluster, target.server);
     }
     return { latencyMs: Math.max(1, Date.now() - t0), detected };
@@ -298,6 +314,15 @@ export function createDemoServers(d: DemoServersDeps) {
     async tipHeight() {
       await backend();
       return d.chain.tipHeight;
+    },
+    /** Raw transaction, as Rust returns it after checking its txid. */
+    async txHex(txid: unknown) {
+      const t = String(txid ?? '');
+      if (!/^[0-9a-f]{64}$/.test(t)) throw new IpcError('INVALID_INPUT', 'Entrée invalide : txid : 64 caractères hexadécimaux attendus');
+      await backend();
+      const hex = d.chain.rawTx.get(t);
+      if (!hex) throw new IpcError('INVALID_INPUT', `Entrée invalide : transaction ${t.slice(0, 10)}… inconnue du serveur`);
+      return hex;
     },
     async broadcast(hex: unknown) {
       const raw = String(hex ?? '').trim();

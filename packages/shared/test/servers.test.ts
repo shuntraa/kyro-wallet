@@ -64,7 +64,7 @@ describe('server rules (mirror of servers.rs)', () => {
   });
 
   it('password: redacted for the UI; omitted = kept (same URL + user), "" = cleared, other user = dropped', () => {
-    const stored: Servers = { bitcoin: { testnet4: { kind: 'core', url: 'http://127.0.0.1:48332', auth: { kind: 'userpass', user: 'kyro', password: 's3cret' } } }, evm: {}, solana: {} };
+    const stored: Servers = { bitcoin: { testnet4: { kind: 'core', url: 'http://127.0.0.1:48332', auth: { kind: 'userpass', user: 'kyro', password: 's3cret' } } }, evm: {}, solana: {}, litecoin: {}, dogecoin: {} };
     const ui = redactServers(stored);
     expect(JSON.stringify(ui)).not.toContain('s3cret');
     expect(ui.bitcoin.testnet4).toMatchObject({ auth: { hasPassword: true } });

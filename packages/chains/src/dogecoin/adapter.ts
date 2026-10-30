@@ -16,7 +16,7 @@
 
 import * as bitcoin from 'bitcoinjs-lib';
 import type { Network } from '@kyro/shared';
-import { UtxoAdapter, type UtxoAdapterOptions, type UtxoCoinSpec } from '../litecoin/utxo';
+import { UtxoAdapter, type UtxoAdapterOptions, type UtxoCoinSpec } from '../utxo/utxo';
 
 export const DOGECOIN_NETWORKS: Record<Network, bitcoin.Network> = {
   mainnet: {
@@ -64,6 +64,7 @@ export const DOGECOIN_SPEC: UtxoCoinSpec = {
 };
 
 export class DogecoinAdapter extends UtxoAdapter {
+  declare readonly family: 'doge';
   constructor(opts: UtxoAdapterOptions) {
     super(DOGECOIN_SPEC, opts);
   }

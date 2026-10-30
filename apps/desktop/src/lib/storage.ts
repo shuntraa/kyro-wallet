@@ -36,7 +36,7 @@ export function setFavorites(ids: string[]): void {
 
 // ---------------------------------------------------------------- address book
 
-export type ContactFamily = 'btc' | 'evm' | 'sol';
+export type ContactFamily = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge';
 export interface Contact {
   id: string;
   name: string;

@@ -73,17 +73,29 @@ export function validateEvmCustomFee(input: EvmCustomFeeInput, estimates?: Pick<
 }
 
 /** Parse + validate a Bitcoin fee rate (sat/vB). */
-export function validateBtcFeeRate(input: string, estimates?: Pick<FeeEstimates, 'minimum'>): FeeValidation & { params?: FeeParams } {
+/**
+ * Bitcoin-style fee rate in the smallest unit per vbyte. `opts` adapts the bounds and the unit
+ * for Litecoin (litoshi/vB) and Dogecoin (koinus/octet: floor 1 000 = 0,01 DOGE/kB, ceiling
+ * 100 000 = 1 DOGE/kB, Rust's bounds).
+ */
+export function validateBtcFeeRate(
+  input: string,
+  estimates?: Pick<FeeEstimates, 'minimum'>,
+  opts: { unit?: string; floor?: number; ceiling?: number; high?: number } = {},
+): FeeValidation & { params?: FeeParams } {
+  const unit = opts.unit ?? 'sat/vB';
+  const floor = opts.floor ?? 1;
+  const ceiling = opts.ceiling ?? 2000;
   const s = input.trim().replace(',', '.');
   const rate = Number(s);
-  if (s === '' || !Number.isFinite(rate) || !/^\d*\.?\d*$/.test(s)) return result(['Taux invalide (sat/vB).'], []);
+  if (s === '' || !Number.isFinite(rate) || !/^\d*\.?\d*$/.test(s)) return result([`Taux invalide (${unit}).`], []);
   const errors: string[] = [];
   const warnings: string[] = [];
-  if (rate < 1) errors.push('Minimum 1 sat/vB (règle de relais des nœuds).');
-  if (rate > 2000) errors.push('Taux absurde (> 2000 sat/vB).');
-  else if (rate > 500) warnings.push('Taux très élevé : vérifie avant de signer.');
+  if (rate < floor) errors.push(`Minimum ${floor.toLocaleString('fr-FR')} ${unit} (règle de relais des nœuds).`);
+  if (rate > ceiling) errors.push(`Taux absurde (> ${ceiling.toLocaleString('fr-FR')} ${unit}).`);
+  else if (rate > (opts.high ?? 500)) warnings.push('Taux très élevé : vérifie avant de signer.');
   if (estimates?.minimum.family === 'btc' && rate < estimates.minimum.satPerVb) {
-    warnings.push(`Sous le minimum actuel du mempool (${estimates.minimum.satPerVb} sat/vB) : la transaction risque de ne jamais confirmer.`);
+    warnings.push(`Sous le minimum actuel (${estimates.minimum.satPerVb.toLocaleString('fr-FR')} ${unit}) : la transaction risque de ne jamais confirmer.`);
   }
   const out = result(errors, warnings);
   return out.ok ? { ...out, params: { family: 'btc', satPerVb: rate } } : out;

@@ -3,7 +3,7 @@
 // with the transactions sent from this device (local records).
 
 import { useEffect } from 'react';
-import { findAsset, findChain, type AssetDef, type HistoryItem } from '@kyro/chains';
+import { findAsset, findChain, nativeAssetId, type AssetDef, type HistoryItem } from '@kyro/chains';
 import { getLocalTxs, updateLocalTx, type LocalTx } from '../lib/storage';
 import { useAsync } from '../lib/useAsync';
 import { useVault } from './app';
@@ -58,7 +58,7 @@ export function useHistory() {
       const entries: HistoryEntry[] = merged.map((x) => {
         const chain = findChain(network, x.chainKey);
         const asset = findAsset(network, x.assetId);
-        const feeAsset = chain ? findAsset(network, chain.family === 'btc' ? 'btc' : chain.family === 'sol' ? 'sol' : `eth:${chain.chainId}`) : undefined;
+        const feeAsset = chain ? findAsset(network, nativeAssetId(chain)) : undefined;
         return { ...x, asset, feeAsset, chainLabel: chain?.label ?? x.chainKey, local: localIds.has(x.id) };
       });
       entries.sort((a, b) => (b.time ?? Date.now()) - (a.time ?? Date.now()));

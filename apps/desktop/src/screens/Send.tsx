@@ -9,7 +9,9 @@ import {
   checkSolSummary,
   feeCost,
   findChain,
+  DOGE_SOFT_DUST,
   evmHwDisplay,
+  litecoinDust,
   signAndBroadcast,
   signAndBroadcastHw,
   tryParseUnits,
@@ -37,7 +39,7 @@ import { addLocalTx, bumpContactSends, findContact, getContacts, saveContacts, t
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
 import { useTorBlocked } from '../components/Tor';
-import { ServerDownLine, serverDown } from '../components/ServerDown';
+import { ServerDownLine, ServerMissingLine, serverDown, serverMissing } from '../components/ServerDown';
 import { DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
 import { BRAND, pickDevice, withDevice } from '../state/hw';
 import { useOnTorReady } from '../state/tor';
@@ -51,6 +53,8 @@ type Built = { unsigned: AnyUnsigned; summary: EvmTxSummary | null; sol: SolTxSu
 function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adapters']): AnyAdapter | undefined {
   if (asset.family === 'btc') return adapters.btc ?? undefined;
   if (asset.family === 'sol') return adapters.sol ?? undefined;
+  if (asset.family === 'ltc') return adapters.ltc ?? undefined;
+  if (asset.family === 'doge') return adapters.doge ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -95,6 +99,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [fiatMode, setFiatMode] = useState(false);
   const [max, setMax] = useState(false);
   const decimals = asset?.decimals ?? 18;
+  /** Litecoin / Dogecoin: Bitcoin-style UTXO chains (same fee field, PSBT, change). */
+  const utxoLike = asset?.family === 'btc' || asset?.family === 'ltc' || asset?.family === 'doge';
+  const rateUnit = asset?.family === 'ltc' ? 'litoshi/vB' : asset?.family === 'doge' ? 'koinus/octet' : 'sat/vB';
   const amountBase = useMemo(() => {
     if (!amountStr) return null;
     if (fiatMode) {
@@ -104,6 +111,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     }
     return tryParseUnits(amountStr, decimals);
   }, [amountStr, fiatMode, price, decimals]);
+  // Dogecoin dust (Dogecoin Core policy): no output under 0.01 DOGE.
+  const dogeBelowDust = asset?.family === 'doge' && amountBase !== null && amountBase > 0n && amountBase < DOGE_SOFT_DUST && !max;
 
   // Fees.
   const fees = useAsync<FeeEstimates>(adapter ? () => adapter.estimateFees() : null, [adapter], { intervalMs: 30_000 });
@@ -127,6 +136,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     if (choice !== 'custom' || !asset) return null;
     if (asset.family === 'evm') return validateEvmCustomFee(customEvm, fees.data);
     if (asset.family === 'btc') return validateBtcFeeRate(customBtc, fees.data);
+    if (asset.family === 'ltc') return validateBtcFeeRate(customBtc, fees.data, { unit: 'litoshi/vB' });
+    if (asset.family === 'doge') return validateBtcFeeRate(customBtc, fees.data, { unit: 'koinus/octet', floor: 1_000, ceiling: 100_000, high: 10_000 });
     return validateSolPriorityFee(customSol);
   }, [choice, asset, customEvm, customBtc, customSol, fees.data]);
   const feeParams: FeeParams | null = choice === 'custom' ? custom?.params ?? null : fees.data?.options[choice].params ?? null;
@@ -162,7 +173,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   useEffect(() => {
     setBuilt(null);
     setBuildError(null);
-    if (!addrValid || !feeParams || overBalance || (!max && (amountBase === null || amountBase <= 0n))) return;
+    if (!addrValid || !feeParams || overBalance || dogeBelowDust || (!max && (amountBase === null || amountBase <= 0n))) return;
     let alive = true;
     setBuilding(true);
     doBuild()
@@ -320,6 +331,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 </button>
               }
             />
+            {activeHw && <span className="text-[12px] text-faint">Litecoin et Dogecoin : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).</span>}
+            {fees.error && serverMissing(fees.error) && <ServerMissingLine coin={asset.name} />}
           </div>
 
           {/* To */}
@@ -336,7 +349,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
+                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -434,13 +447,24 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               </button>
             </div>
             {overBalance && <span className="text-[12px] text-down">Montant supérieur à ton solde.</span>}
+            {dogeBelowDust && <span className="text-[12px] text-down">Minimum 0,01 DOGE par destinataire : en dessous, Dogecoin considère la sortie comme de la poussière et Kyro la refuse.</span>}
+            {asset.family === 'doge' && (
+              <span className="text-[12px] leading-[1.5] text-mute">
+                Dogecoin : un destinataire sous 0,01 DOGE est refusé ; une monnaie sous 0,01 DOGE n’est pas créée, elle est ajoutée aux frais (« Pas de monnaie… » dans la fenêtre de confirmation).
+              </span>
+            )}
+            {asset.family === 'ltc' && (
+              <span className="text-[12px] leading-[1.5] text-mute">
+                Litecoin : un destinataire sous le seuil de poussière ({litecoinDust('p2wpkh').toString()} litoshis pour une adresse ltc1…) est refusé ; une monnaie plus petite est ajoutée aux frais.
+              </span>
+            )}
           </div>
 
           {/* Fees */}
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
               <span className="text-[12px] font-medium text-mute">Frais réseau</span>
-              <span className="text-[12px] text-faint">{fees.data ? `Réseau actuel : ${fees.data.hint.replace('.', ',')}` : fees.error ? (feesTorBlocked ? 'En attente de Tor…' : serverDown(fees.error) ? <span className="text-warn">Ton serveur ne répond pas</span> : <span className="text-down">Frais indisponibles</span>) : 'Estimation…'}</span>
+              <span className="text-[12px] text-faint">{fees.data ? `Réseau actuel : ${fees.data.hint.replace('.', ',')}` : fees.error ? (feesTorBlocked ? 'En attente de Tor…' : serverMissing(fees.error) ? <span className="text-warn">Aucun serveur configuré</span> : serverDown(fees.error) ? <span className="text-warn">Ton serveur ne répond pas</span> : <span className="text-down">Frais indisponibles</span>) : 'Estimation…'}</span>
             </div>
             <div role="radiogroup" aria-label="Frais réseau" className="flex gap-2">
               {LEVELS.map(({ level, label }) => {
@@ -469,7 +493,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                     <UnitField label="Pourboire prioritaire" unit="gwei" value={customEvm.priorityGwei} onChange={(v) => setCustomEvm((c) => ({ ...c, priorityGwei: v }))} />
                   </>
                 )}
-                {asset.family === 'btc' && <UnitField label="Taux" unit="sat/vB" value={customBtc} onChange={setCustomBtc} />}
+                {utxoLike && <UnitField label="Taux" unit={rateUnit} value={customBtc} onChange={setCustomBtc} decimals={asset.family === 'doge' ? 0 : 2} />}
                 {asset.family === 'sol' && <UnitField label="Priority fee" unit="µL/CU" value={customSol} onChange={(v) => setCustomSol(v.replace(/\D/g, ''))} decimals={0} wide />}
                 <span className="flex flex-1 flex-col items-end gap-0.5 pb-0.5">
                   <span className="text-[18px] font-semibold">{feeFiat !== null && choice === 'custom' && built ? fmtFiat(feeFiat, cur) : '—'}</span>
@@ -493,7 +517,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-semibold">Vérification</span>
             <span className="inline-flex h-[26px] items-center gap-1.5 rounded-full border border-control-2 bg-raised px-2.5 text-[11px] font-medium text-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol ? 'Décodé dans le coffre' : asset.family === 'btc' ? 'PSBT vérifiée localement' : 'Résumé local'}
+              {built?.summary || built?.sol ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 pt-2 pb-1">
@@ -530,7 +554,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 )
               }
             />
-            <Row k="Données" v={dataLabel(built)} />
+            <Row k="Données" v={dataLabel(built, asset.family)} />
             <div className="flex h-[42px] items-center justify-between">
               <dt className="font-semibold">Total</dt>
               <dd className="m-0 text-[17px] font-semibold">{amountFiat !== null ? fmtFiat(amountFiat + (feeFiat ?? 0) + rentFiat, cur) : '—'}</dd>
@@ -545,16 +569,19 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               <Spinner /> Préparation et décodage…
             </span>
           )}
-          {buildError && (serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
+          {buildError && (serverMissing(buildError) ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
           {built && addrValid && sendAmount !== null && (
             <EnClair>
               Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>
-              {asset.family === 'btc' && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? ', la monnaie revient sur ton adresse de change' : ''}. Personne d’autre ne reçoit rien, et tu paies au maximum{' '}
+              {utxoLike && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? ', la monnaie revient sur ton adresse de change' : ''}. Personne d’autre ne reçoit rien, et tu paies au maximum{' '}
               {feeFiat !== null ? fmtFiat(feeFiat, cur) : maxFee !== null && nativeAsset ? fmtCrypto(maxFee, nativeAsset.decimals, nativeAsset.symbol) : '—'} de frais{choice === 'custom' ? ' (ton réglage)' : ''}.
               {rent > 0n && nativeAsset ? ` Son compte de token n’existe pas encore : tu déposes ${fmtCrypto(rent, nativeAsset.decimals, nativeAsset.symbol)} de loyer pour le créer.` : ''}
+              {'dustFolded' in built.unsigned && typeof built.unsigned.dustFolded === 'bigint' && built.unsigned.dustFolded > 0n
+                ? ` Pas de monnaie : le reste (${fmtCrypto(built.unsigned.dustFolded, decimals, asset.symbol)}, sous le seuil de poussière) est ajouté aux frais.`
+                : ''}
             </EnClair>
           )}
-          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? 'Saisis ou colle l’adresse du destinataire.' : 'Indique un montant pour voir le récapitulatif décodé.'}</p>}
+          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? 'Saisis ou colle l’adresse du destinataire.' : dogeBelowDust ? 'Montant sous 0,01 DOGE : aucune transaction construite.' : 'Indique un montant pour voir le récapitulatif décodé.'}</p>}
 
           {blindSigning && activeHw && (
             <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
@@ -608,12 +635,13 @@ function trimNum(s: string): string {
   return String(n >= 10 ? Math.ceil(n) : Math.ceil(n * 100) / 100).replace('.', ',');
 }
 
-function dataLabel(b: Built | null): string {
+function dataLabel(b: Built | null, family?: string): string {
   if (!b) return '—';
   const u = b.unsigned;
   if (u.family === 'btc') {
     const outs = u.summary.outputs.length;
-    return `${outs} sortie${outs > 1 ? 's' : ''} · ${u.size.family === 'btc' ? u.size.vsize : '?'} vB`;
+    // Dogecoin has no SegWit: bytes, not vbytes.
+    return `${outs} sortie${outs > 1 ? 's' : ''} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' ? 'octets' : 'vB'}`;
   }
   if (u.family === 'sol') return u.mint ? `TransferChecked ${u.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL'}${u.createsAta ? ' + création du compte' : ''}` : 'Aucune · transfert système';
   if (b.summary?.kind === 'NativeTransfer') return 'Aucune · transfert simple';

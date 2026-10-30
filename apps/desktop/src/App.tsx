@@ -22,7 +22,7 @@ import { Spinner } from './components/ui/primitives';
 import { TorDialogs } from './components/Tor';
 import { HwPromptLayer } from './components/hw';
 import { AccountSwitcher } from './components/AccountSwitcher';
-import { serverDown } from './components/ServerDown';
+import { serverDown, serverMissing } from './components/ServerDown';
 
 export function App() {
   return (
@@ -160,7 +160,8 @@ function Unlocked() {
     }
   }, [route]);
 
-  const failed = Object.keys(pf.chainErrors);
+  // A chain without any server (Dogecoin by default) is a missing setting, not a failure.
+  const failed = Object.entries(pf.chainErrors).filter(([, m]) => !serverMissing(m)).map(([k]) => k);
 
   return (
     <div className="flex h-full flex-col bg-bg text-text">

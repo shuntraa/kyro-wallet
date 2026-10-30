@@ -32,6 +32,18 @@ export interface Accounts {
   btc: { segwit: BtcAccountInfo; taproot: BtcAccountInfo };
   evm: { address: string };
   sol: { address: string };
+  /** Litecoin BIP84 `m/84'/2'/0'` (testnet `m/84'/1'/0'`); `address` = `…/0/0` (§2.4). */
+  ltc: UtxoAccountInfo;
+  /** Dogecoin BIP44 P2PKH `m/44'/3'/0'` (testnet `m/44'/1'/0'`). */
+  doge: UtxoAccountInfo;
+}
+
+/** One Litecoin / Dogecoin account (standard `xpub` / `tpub` encoding, also for Dogecoin). */
+export interface UtxoAccountInfo {
+  address: string;
+  xpub: string;
+  fingerprint: string;
+  path: string;
 }
 
 export interface Settings {
@@ -91,12 +103,24 @@ export interface Servers {
   /** Key: decimal chain id, e.g. `"11155111"`. */
   evm: Record<string, RpcServer>;
   solana: Partial<Record<SolanaCluster, RpcServer>>;
+  /** Litecoin (`testnet` = Litecoin testnet4). Default: litecoinspace.org. */
+  litecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };
+  /** Dogecoin. NO default public server: reads fail with SERVER_INVALID until one is set. */
+  dogecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };
 }
+
+/** Litecoin / Dogecoin server: the default (Litecoin: litecoinspace.org; Dogecoin: none) or an Esplora. */
+export type UtxoServer = { kind: 'default' } | { kind: 'esplora'; url: string };
+export type UtxoCoinKey = 'litecoin' | 'dogecoin';
+/** Network key of `servers.litecoin` / `servers.dogecoin`. */
+export type UtxoNetworkKey = 'mainnet' | 'testnet';
 
 export type ServerTestTarget =
   | { family: 'bitcoin'; network: BtcNetworkKey; server: BtcServer }
   | { family: 'evm'; chainId: number; server: RpcServer }
-  | { family: 'solana'; cluster: SolanaCluster; server: RpcServer };
+  | { family: 'solana'; cluster: SolanaCluster; server: RpcServer }
+  | { family: 'litecoin'; network: UtxoNetworkKey; server: UtxoServer }
+  | { family: 'dogecoin'; network: UtxoNetworkKey; server: UtxoServer };
 
 export interface ServerTestResult {
   latencyMs: number;
@@ -198,6 +222,73 @@ export interface CbfStatus {
   matchedBlocks: number;
   message?: string;
 }
+
+// ---------------------------------------------------------------- Litecoin, Dogecoin (§2.4)
+
+export interface UtxoBackendInfo {
+  kind: 'default' | 'esplora';
+  network: UtxoNetworkKey;
+  /** Host, `""` when there is none (Dogecoin without a configured server). */
+  label: string;
+  /** `false`: no server at all, every read fails with SERVER_INVALID until one is set. */
+  available: boolean;
+  tor: boolean;
+}
+
+export interface UtxoFeeRates {
+  /** Smallest unit per vbyte: litoshis/vB, koinus/byte. */
+  fastestFee: number;
+  halfHourFee: number;
+  hourFee: number;
+  economyFee: number;
+  minimumFee: number;
+  /** Dogecoin server without estimates: Dogecoin Core's recommended 0.01 DOGE/kB. */
+  source?: 'policy';
+}
+
+export type UtxoWarning =
+  | { kind: 'unknownOutput'; index: number }
+  | { kind: 'opReturn'; index: number }
+  | { kind: 'foreignInput'; index: number }
+  | { kind: 'softDust'; index: number }
+  | { kind: 'highFee' }
+  | { kind: 'feeBelowMinimum'; minimum: string };
+
+/** Rust's decoding of the PSBT it signs (`wallet_core::UtxoTxSummary`). Amounts: decimal strings. */
+export interface UtxoTxSummary {
+  coin: UtxoCoinKey;
+  outputs: Array<{ address: string | null; script: string; amount: string; isChange: boolean; kind: 'address' | 'opReturn' | 'unknown' }>;
+  inputs: number;
+  ourInputs: number;
+  fee: string;
+  /** vbytes (Litecoin) or bytes (Dogecoin), worst-case signature. */
+  size: number;
+  feePerKb: number;
+  /** `false`: what is not sent is fee (a remainder below the dust limit cannot be change). */
+  hasChange: boolean;
+  warnings: UtxoWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+/** The `{ltc,doge}_*` commands, same shapes (§2.4). */
+export interface UtxoCommands<P extends 'ltc' | 'doge'> {
+  backend_info: { args: undefined; ret: UtxoBackendInfo };
+  /** Vault unlocked. */
+  address: { args: { change: boolean; index: number }; ret: string };
+  address_info: { args: { address: string }; ret: EsploraAddressInfo };
+  address_utxos: { args: { address: string }; ret: EsploraUtxo[] };
+  /** At most `BTC_TXS_CAP`, unconfirmed first. */
+  address_txs: { args: { address: string }; ret: EsploraTx[] };
+  /** Raw transaction, txid recomputed by Rust (and no witness for Dogecoin). */
+  tx_hex: { args: { txid: string }; ret: string };
+  fee_rates: { args: undefined; ret: UtxoFeeRates };
+  tip_height: { args: undefined; ret: number };
+  broadcast: { args: { hex: string }; ret: string };
+  /** Password → Rust summary → native dialog (+ reinforced) → signed, NOT finalized. */
+  sign_psbt: { args: { psbt: string; password: string }; ret: { psbt: string; summary: UtxoTxSummary & { coin: P extends 'ltc' ? 'litecoin' : 'dogecoin' } } };
+}
+
+type Prefixed<P extends 'ltc' | 'doge'> = { [K in keyof UtxoCommands<P> as `${P}_${K & string}`]: UtxoCommands<P>[K] };
 
 /**
  * `btc_address_txs` returns at most this many transactions per address, for every backend
@@ -474,6 +565,8 @@ export interface Commands {
   btc_tip_height: { args: undefined; ret: number };
   /** Returns the txid; Rust checks it matches the transaction. */
   btc_broadcast: { args: { hex: string }; ret: string };
+  /** Raw previous transaction (e.g. `non_witness_utxo` of a SegWit v0 input on a hardware wallet); Rust checks its txid. */
+  btc_tx_hex: { args: { txid: string }; ret: string };
   /**
    * Bitcoin Core only, unlocked. Pre-flight checks are synchronous (reachable, auth, chain, watch
    * wallet created or loaded without private keys); only `importdescriptors` runs in the background.
@@ -518,9 +611,12 @@ export interface Commands {
   config_get: { args: undefined; ret: AppConfig };
 }
 
-export type CommandName = keyof Commands;
-export type ArgsOf<K extends CommandName> = Commands[K]['args'];
-export type RetOf<K extends CommandName> = Commands[K]['ret'];
+/** Every command, including the generated `ltc_*` / `doge_*` ones. */
+export interface AllCommands extends Commands, Prefixed<'ltc'>, Prefixed<'doge'> {}
+
+export type CommandName = keyof AllCommands;
+export type ArgsOf<K extends CommandName> = AllCommands[K]['args'];
+export type RetOf<K extends CommandName> = AllCommands[K]['ret'];
 export type CallArgs<K extends CommandName> = ArgsOf<K> extends undefined ? [] : [args: ArgsOf<K>];
 
 export const ERROR_CODES = [

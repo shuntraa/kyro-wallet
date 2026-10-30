@@ -39,11 +39,11 @@ export interface BitcoinAdapterOptions {
   accounts: Accounts['btc'];
   /**
    * Hardware-wallet account: input rules of the devices (docs/IPC.md §2.3).
-   * - every SegWit v0 input needs `non_witness_utxo` (the full previous transaction): only
-   *   possible with `prevTx`; without it, SegWit coins are not spendable on the device;
+   * - every SegWit v0 input carries `non_witness_utxo`, the full previous transaction, from
+   *   `prevTx` (`btc_tx_hex`: Rust checks its txid; bitcoinjs checks it again here);
    * - Ledger: one kind of input per transaction (SegWit OR Taproot), never mixed.
    */
-  hw?: HwSigner & { prevTx?: (txid: string) => Promise<string | null> };
+  hw?: HwSigner & { prevTx: (txid: string) => Promise<string> };
   /** Consecutive unused addresses before stopping a scan. */
   gapLimit?: number;
 }
@@ -188,14 +188,12 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   }
 
   /**
-   * Candidate input sets. Vault: everything. Hardware wallet: SegWit coins only when the full
-   * previous transaction can be attached, and never SegWit + Taproot together on a Ledger.
+   * Candidate input sets. Vault and Trezor: everything. Ledger: never SegWit + Taproot in the
+   * same transaction (its Bitcoin app refuses mixed inputs), so one set per kind.
    */
   inputGroups<T extends { owner: { kind: BtcKind } }>(utxos: T[]): T[][] {
-    if (!this.hw) return [utxos];
-    const allowed = this.hw.prevTx ? utxos : utxos.filter((u) => u.owner.kind === 'taproot');
-    if (this.hw.device === 'trezor') return [allowed];
-    const groups = (['segwit', 'taproot'] as const).map((k) => allowed.filter((u) => u.owner.kind === k)).filter((g) => g.length > 0);
+    if (!this.hw || this.hw.device === 'trezor') return [utxos];
+    const groups = (['segwit', 'taproot'] as const).map((k) => utxos.filter((u) => u.owner.kind === k)).filter((g) => g.length > 0);
     return groups.length ? groups : [[]];
   }
 
@@ -218,10 +216,13 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
       }
     }
     if (!sel) {
-      if (this.hw && !this.hw.prevTx && utxos.some((u) => u.owner.kind === 'segwit')) {
-        throw new Error(
-          'Fonds insuffisants sur tes adresses Taproot. Pour dépenser des fonds SegWit, l’appareil exige la transaction précédente complète, que Kyro ne sait pas encore récupérer : seuls les fonds Taproot sont dépensables avec ce hardware wallet pour l’instant.',
-        );
+      if (this.hw?.device === 'ledger' && utxos.some((u) => u.owner.kind === 'segwit') && utxos.some((u) => u.owner.kind === 'taproot')) {
+        const total = utxos.reduce((s, u) => s + u.value, 0n);
+        if (params.max || total >= params.amount) {
+          throw new Error(
+            'Ledger : une transaction ne peut pas mélanger des entrées SegWit et Taproot, et aucun des deux soldes ne suffit seul. Envoie un montant plus petit, ou regroupe d’abord tes fonds sur un seul type d’adresse.',
+          );
+        }
       }
       throw lastError instanceof Error ? lastError : new Error('Sélection des entrées impossible');
     }
@@ -233,10 +234,14 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
       if (owner.kind === 'segwit') {
         const input: Parameters<typeof psbt.addInput>[0] = { hash: u.txid, index: u.vout, witnessUtxo: { script, value: u.value }, bip32Derivation: [{ masterFingerprint: fp, pubkey: owner.pubkey, path: owner.path }] };
         if (this.hw) {
-          // Rust refuses a SegWit v0 input without its previous transaction (INVALID_INPUT).
-          const hex = this.hw.prevTx ? await this.hw.prevTx(u.txid) : null;
-          if (!hex) throw new Error(`Transaction précédente de l’entrée ${u.txid.slice(0, 10)}… introuvable : signature sur l’appareil impossible.`);
-          input.nonWitnessUtxo = hexBytes(hex);
+          // Rust refuses a SegWit v0 input without its previous transaction (INVALID_INPUT) and
+          // checks its txid; checked here too (txid and the spent output), never trusted blindly.
+          const prev = bitcoin.Transaction.fromHex(await this.hw.prevTx(u.txid));
+          const out = prev.outs[u.vout];
+          if (prev.getId() !== u.txid || !out || out.value !== u.value || !bytesEqual(out.script, script)) {
+            throw new Error(`Transaction précédente incohérente pour l’entrée ${u.txid.slice(0, 10)}… : signature refusée.`);
+          }
+          input.nonWitnessUtxo = prev.toBuffer();
         }
         psbt.addInput(input);
       } else {
@@ -336,8 +341,6 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   }
 }
 
-function hexBytes(hex: string): Uint8Array {
-  const clean = hex.trim();
-  if (!/^([0-9a-fA-F]{2})+$/.test(clean)) throw new Error('Transaction précédente invalide');
-  return Uint8Array.from(clean.match(/../g)!.map((b) => parseInt(b, 16)));
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }

@@ -9,7 +9,7 @@
 
 import type * as bitcoin from 'bitcoinjs-lib';
 import type { Network } from '@kyro/shared';
-import { UtxoAdapter, type UtxoAdapterOptions, type UtxoCoinSpec, type UtxoScriptType, OUTPUT_BYTES } from './utxo';
+import { UtxoAdapter, type UtxoAdapterOptions, type UtxoCoinSpec, type UtxoScriptType, OUTPUT_BYTES } from '../utxo/utxo';
 
 export const LITECOIN_NETWORKS: Record<Network, bitcoin.Network> = {
   mainnet: {
@@ -54,6 +54,7 @@ export const LITECOIN_SPEC: UtxoCoinSpec = {
 };
 
 export class LitecoinAdapter extends UtxoAdapter {
+  declare readonly family: 'ltc';
   constructor(opts: UtxoAdapterOptions) {
     super(LITECOIN_SPEC, opts);
   }

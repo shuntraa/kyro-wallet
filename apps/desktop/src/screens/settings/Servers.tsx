@@ -153,11 +153,15 @@ function useSaveServers() {
   };
 }
 
-function BackToDefaultDialog({ open, host, sees, busy, failure, onConfirm, onCancel }: { open: boolean; host: string; sees: string; busy: boolean; failure: Failure | null; onConfirm: () => void; onCancel: () => void }) {
+function BackToDefaultDialog({ open, host, sees, busy, failure, onConfirm, onCancel, title, body }: { open: boolean; host: string; sees: string; busy: boolean; failure: Failure | null; onConfirm: () => void; onCancel: () => void; title?: string; body?: ReactNode }) {
   return (
-    <Dialog open={open} onOpenChange={(v) => (v ? undefined : onCancel())} title={`Revenir à ${host} ?`} className="w-[520px]">
+    <Dialog open={open} onOpenChange={(v) => (v ? undefined : onCancel())} title={title ?? `Revenir à ${host} ?`} className="w-[520px]">
       <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-        Ton serveur ne sera plus utilisé. <strong className="font-semibold text-text">{host}</strong> verra de nouveau {sees}.
+        {body ?? (
+          <>
+            Ton serveur ne sera plus utilisé. <strong className="font-semibold text-text">{host}</strong> verra de nouveau {sees}.
+          </>
+        )}
       </Notice>
       {failure && <FailureNotice failure={failure} />}
       <div className="flex justify-end gap-2">
@@ -190,6 +194,8 @@ export function ServersSection() {
         </Notice>
       </Card>
       <BitcoinCard />
+      <UtxoServerCard coin="litecoin" />
+      <UtxoServerCard coin="dogecoin" />
       <EvmCard />
       <SolanaCard />
     </>
@@ -1088,6 +1094,142 @@ function RpcRow({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Litecoin / Dogecoin: Rust accepts the default or an Esplora server (docs/IPC.md §2.4).
+ * Dogecoin has NO public default: an unconfigured Dogecoin says so, it never pretends to load.
+ */
+function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
+  const { settings, network } = useApp();
+  const tor = settings.tor.enabled;
+  const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
+  const saved = settings.servers[coin]?.[nk];
+  const savedUrl = saved?.kind === 'esplora' ? saved.url : '';
+  const doge = coin === 'dogecoin';
+  const name = doge ? 'Dogecoin' : 'Litecoin';
+  const [kind, setKind] = useState<'default' | 'esplora'>(savedUrl ? 'esplora' : 'default');
+  const [url, setUrl] = useState(savedUrl);
+  useEffect(() => {
+    setKind(savedUrl ? 'esplora' : 'default');
+    setUrl(savedUrl);
+  }, [savedUrl]);
+  const saveServers = useSaveServers();
+  const [busy, setBusy] = useState<'test' | 'save' | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [result, setResult] = useState<ServerTestResult | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDefault, setConfirmDefault] = useState(false);
+  const clean = url.trim();
+  const hint = kind === 'esplora' && clean ? checkServerUrl(clean, tor) : null;
+  const dirty = kind === 'esplora' ? clean !== savedUrl : !!savedUrl;
+  const reset = () => {
+    setFailure(null);
+    setResult(null);
+    setNotice(null);
+  };
+  const test = async () => {
+    reset();
+    setBusy('test');
+    try {
+      setResult(await call('server_test', { target: { family: coin, network: nk, server: kind === 'esplora' ? { kind: 'esplora', url: clean } : { kind: 'default' } } }));
+    } catch (e) {
+      setFailure(toFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const save = async (toDefault: boolean) => {
+    reset();
+    setBusy('save');
+    try {
+      await saveServers((s) => {
+        s[coin] = { ...(s[coin] ?? {}) };
+        if (toDefault) delete s[coin][nk];
+        else s[coin][nk] = { kind: 'esplora', url: clean };
+      });
+      setConfirmDefault(false);
+      setNotice(
+        toDefault
+          ? doge
+            ? 'Serveur retiré : Dogecoin n’a plus de serveur, soldes et envois indisponibles jusqu’à ce que tu en configures un.'
+            : 'Serveur par défaut rétabli : litecoinspace.org voit maintenant tes adresses Litecoin et tes transactions.'
+          : `Serveur ${name} enregistré. Kyro n’utilise plus que lui pour ${name}.`,
+      );
+    } catch (e) {
+      setFailure(toFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card
+      title={network === 'testnet' ? `${name} ${doge ? 'testnet' : 'testnet4'}` : name}
+      badge={savedUrl ? <Badge tone="ice">Serveur perso · Esplora</Badge> : doge ? <Badge tone="warn">Aucun serveur</Badge> : <Badge>Par défaut</Badge>}
+    >
+      <Segmented
+        label={`Serveur ${name}`}
+        value={kind}
+        onChange={(k) => {
+          reset();
+          setKind(k);
+        }}
+        options={[
+          { value: 'default', label: doge ? 'Aucun (pas de serveur public)' : 'Par défaut' },
+          { value: 'esplora', label: 'Esplora perso' },
+        ]}
+        className="self-start"
+      />
+      {kind === 'default' && doge ? (
+        <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+          <strong className="font-semibold">Aucun serveur public gratuit : configure ton serveur.</strong> Dogecoin n’a pas d’API publique gratuite avec testnet et diffusion. Tant que tu n’as pas indiqué ton serveur Esplora (electrs-dogecoin), Kyro n’affiche ni solde ni historique Dogecoin et ne peut pas envoyer.
+        </Notice>
+      ) : (
+        <Sees>
+          {kind === 'default'
+            ? `litecoinspace.org voit tes adresses Litecoin et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.`
+            : `Ton serveur Esplora voit tes adresses ${name} et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`}
+        </Sees>
+      )}
+      {kind === 'esplora' && (
+        <Field label={`URL de l’API Esplora ${name}`} hint={doge ? 'Par exemple un electrs-dogecoin (API Esplora). https://, ou http:// pour une adresse .onion (Tor).' : 'https://, ou http:// pour une adresse .onion (Tor). Jamais d’identifiants dans l’URL.'}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={doge ? 'https://mon-electrs-dogecoin.example/api' : 'https://mon-noeud-litecoin.example/api'} aria-label={`URL Esplora ${name}`} className="font-mono text-[13px]" />
+        </Field>
+      )}
+      {hint && (
+        <span className="flex items-center gap-1.5 text-[12px] text-warn">
+          <IconWarn size={13} /> {hint}
+        </span>
+      )}
+      {failure && <FailureNotice failure={failure} />}
+      {result && !failure && <TestOk result={result} />}
+      {notice && !failure && <Notice tone={notice.startsWith('Serveur par défaut') || notice.startsWith('Serveur retiré') ? 'warn' : 'success'}>{notice}</Notice>}
+      <div className="flex flex-wrap gap-2">
+        {(kind === 'esplora' || !doge) && (
+          <Button onClick={() => void test()} disabled={busy !== null || (kind === 'esplora' && !clean)}>
+            {busy === 'test' && <Spinner />} Tester la connexion
+          </Button>
+        )}
+        <Button variant="primary" onClick={() => (kind === 'esplora' ? void save(false) : setConfirmDefault(true))} disabled={busy !== null || !dirty || (kind === 'esplora' && !clean)}>
+          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? (doge ? 'Retirer le serveur' : 'Revenir au serveur par défaut') : 'Enregistrer'}
+        </Button>
+      </div>
+      <BackToDefaultDialog
+        open={confirmDefault}
+        host={doge ? 'Dogecoin' : 'litecoinspace.org'}
+        {...(doge ? { title: 'Retirer ton serveur Dogecoin ?', body: 'Dogecoin n’a pas de serveur public : sans le tien, Kyro n’affiche plus ni solde ni historique Dogecoin et ne peut plus envoyer.' } : {})}
+        sees={doge ? 'rien : Dogecoin n’aura plus de serveur (soldes et envois indisponibles)' : 'tes adresses Litecoin et tes transactions'}
+        busy={busy === 'save'}
+        failure={confirmDefault ? failure : null}
+        onConfirm={() => void save(true)}
+        onCancel={() => {
+          setConfirmDefault(false);
+          setKind('esplora');
+        }}
+      />
+    </Card>
   );
 }
 

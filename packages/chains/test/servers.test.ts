@@ -171,7 +171,7 @@ describe('settings_set and server_test validation', () => {
     const again = await call('settings_set', { settings: saved });
     expect(again.servers.bitcoin.testnet4).toMatchObject({ auth: { hasPassword: true } });
     // Explicit "" clears it → "mot de passe RPC manquant".
-    expect(await code(saveServers(() => ({ bitcoin: { testnet4: core('') }, evm: {}, solana: {} })))).toBe('SERVER_INVALID');
+    expect(await code(saveServers(() => ({ bitcoin: { testnet4: core('') }, evm: {}, solana: {}, litecoin: {}, dogecoin: {} })))).toBe('SERVER_INVALID');
     // Removing the server goes back to the default.
     const back = await saveServers((s) => ({ ...s.servers, bitcoin: {} }));
     expect(back.servers.bitcoin.testnet4).toBeUndefined();

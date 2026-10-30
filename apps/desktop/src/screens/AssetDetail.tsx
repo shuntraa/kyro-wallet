@@ -61,7 +61,7 @@ export function AssetDetail({ id }: { id: string }) {
   }, [supported, network, pf.balances]);
 
   const activity = (history.data?.entries ?? []).filter((e) => supported && e.assetId === supported.id).slice(0, 6);
-  const address = supported ? (supported.family === 'btc' ? accounts.btc?.segwit.address : supported.family === 'sol' ? accounts.sol?.address : accounts.evm?.address) ?? null : null;
+  const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address }[supported.family] ?? null) : null;
   const fav = favs.includes(coinId);
 
   return (
@@ -87,7 +87,12 @@ export function AssetDetail({ id }: { id: string }) {
             <Button size="lg" onClick={() => navigate({ name: 'receive', family: supported.family })}>
               <IconDown size={16} /> Recevoir
             </Button>
-            <Button size="lg" disabled={supported.family === 'btc'} title={supported.family === 'btc' ? 'Swap Bitcoin : bientôt' : undefined} onClick={() => navigate({ name: 'swap', sellAssetId: supported.id })}>
+            <Button
+              size="lg"
+              disabled={supported.family !== 'evm' && supported.family !== 'sol'}
+              title={supported.family !== 'evm' && supported.family !== 'sol' ? `Swap ${supported.name} : bientôt` : undefined}
+              onClick={() => navigate({ name: 'swap', sellAssetId: supported.id })}
+            >
               <IconSwap size={16} sw={2.2} /> Swap
             </Button>
           </div>

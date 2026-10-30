@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { solanaCluster, type NetFetch, type Servers } from '@kyro/shared';
+import { call, solanaCluster, type NetFetch, type Servers } from '@kyro/shared';
 import type { HwSigner, WalletAccounts } from './hw';
 import { BitcoinAdapter } from './bitcoin/adapter';
 import { EvmAdapter } from './evm/adapter';
@@ -9,7 +9,7 @@ import { btcChain, evmChains, solChain } from './registry';
 import type { AnyAdapter } from './types';
 import { LitecoinAdapter } from './litecoin/adapter';
 import { DogecoinAdapter } from './dogecoin/adapter';
-import type { UtxoAccountView, UtxoBackend } from './litecoin/utxo';
+import type { UtxoAccountView, UtxoBackend } from './utxo/utxo';
 import { dogeChain, ltcChain } from './registry';
 import type { Network } from '@kyro/shared';
 
@@ -20,6 +20,9 @@ export interface AdapterSet {
   evm: Map<string, EvmAdapter>;
   /** Null for a hardware-wallet account without Solana keys (e.g. Trezor One). */
   sol: SolanaAdapter | null;
+  /** Litecoin / Dogecoin: vault only (hardware wallets: HW_UNSUPPORTED for now). */
+  ltc: LitecoinAdapter | null;
+  doge: DogecoinAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -37,9 +40,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const network = accounts.network;
   const f = fetch ? { fetch } : {};
   const h = hw ? { hw } : {};
-  // Hardware wallet: no source of full previous transactions yet (no raw-tx command), so the
-  // Bitcoin adapter spends Taproot coins only (see BitcoinAdapterOptions.hw).
-  const btc = accounts.btc ? new BitcoinAdapter({ chain: btcChain(network), accounts: accounts.btc, ...h }) : null;
+  // Hardware wallet: SegWit v0 inputs carry their full previous transaction (`non_witness_utxo`),
+  // fetched by `btc_tx_hex` (Rust checks its txid against the input).
+  const btcHw = hw ? { hw: { ...hw, prevTx: (txid: string) => call('btc_tx_hex', { txid }) } } : {};
+  const btc = accounts.btc ? new BitcoinAdapter({ chain: btcChain(network), accounts: accounts.btc, ...btcHw }) : null;
   const evm = new Map<string, EvmAdapter>();
   if (accounts.evm) {
     for (const chain of evmChains(network)) {
@@ -49,8 +53,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   }
   const solCustom = servers?.solana[solanaCluster(network)]?.url;
   const sol = accounts.sol ? new SolanaAdapter({ chain: solChain(network), address: accounts.sol.address, ...(solCustom ? { rpcUrl: solCustom } : {}), ...f, ...h }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : [])];
-  return { btc, evm, sol, all, hw: hw ?? null };
+  // Litecoin / Dogecoin: Rust picks their servers (servers.litecoin / servers.dogecoin).
+  const { ltc, doge } = createUtxoAdapters(accounts);
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : [])];
+  return { btc, evm, sol, ltc, doge, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin
@@ -75,7 +81,7 @@ export {
   type UtxoSigned,
   type UtxoScriptType,
   type DerivedUtxoAddress,
-} from './litecoin/utxo';
+} from './utxo/utxo';
 
 export interface UtxoAdapterSet {
   ltc: LitecoinAdapter | null;
@@ -84,9 +90,8 @@ export interface UtxoAdapterSet {
 
 /**
  * Litecoin and Dogecoin adapters from the `ltc` / `doge` entries of `accounts_get` (vault only:
- * hardware wallets answer `HW_UNSUPPORTED` for these chains). Kept apart from `createAdapters`
- * (and its `all` list) until the UI knows these families; Rust picks their servers
- * (`servers.litecoin` / `servers.dogecoin`), so nothing here depends on the settings.
+ * hardware wallets answer `HW_UNSUPPORTED` for these chains). Also part of `createAdapters`;
+ * Rust picks their servers, so nothing here depends on the settings.
  */
 export function createUtxoAdapters(
   accounts: { network: Network; ltc?: UtxoAccountView; doge?: UtxoAccountView },
@@ -98,3 +103,24 @@ export function createUtxoAdapters(
     doge: accounts.doge ? new DogecoinAdapter({ chain: dogeChain(n), account: accounts.doge, ...(backends.doge ? { backend: backends.doge } : {}) }) : null,
   };
 }
+
+// ---------------------------------------------------------------- phase 4: TRON (B4b)
+
+export {
+  TronAdapter,
+  rustTronBackend,
+  isTronAddress,
+  tronAssetId,
+  TRON_USDT,
+  type TronAdapterOptions,
+  type TronBackend,
+  type TronAccountInfo,
+  type TronAction,
+  type TronWarning,
+  type TronTxSummary,
+  type TronEstimate,
+  type TronHistoryEntry,
+  type TronUnsigned,
+  type TronSigned,
+  type Trc20Token,
+} from './tron/adapter';
