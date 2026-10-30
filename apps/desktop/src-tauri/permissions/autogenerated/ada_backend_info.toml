@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ada-backend-info"
+description = "Enables the ada_backend_info command without any pre-configured scope."
+commands.allow = ["ada_backend_info"]
+
+[[permission]]
+identifier = "deny-ada-backend-info"
+description = "Denies the ada_backend_info command without any pre-configured scope."
+commands.deny = ["ada_backend_info"]

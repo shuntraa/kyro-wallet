@@ -1149,6 +1149,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cryptoxide"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6572a18bf8335f71cb3813d5f0e0a8381e3caa1d91d73aa1209c78645ba33f1b"
+
+[[package]]
 name = "cssparser"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1678,6 +1684,15 @@ checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
  "pkcs8",
  "signature",
+]
+
+[[package]]
+name = "ed25519-bip32"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e52ba86da72b02c3456cbe0fdbb668869c819417781eabbfe811c6b2f124b0c"
+dependencies = [
+ "cryptoxide",
 ]
 
 [[package]]
@@ -4135,6 +4150,16 @@ name = "pastey"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
+
+[[package]]
+name = "pbkdf2"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8ed6a7761f76e3b9f92dfb0a60a6a6477c61024b775147ff0973a02653abaf2"
+dependencies = [
+ "digest",
+ "hmac",
+]
 
 [[package]]
 name = "pem-rfc7468"
@@ -8019,14 +8044,21 @@ dependencies = [
  "base64 0.22.1",
  "bip39",
  "bitcoin",
+ "blake2",
  "bs58",
  "chacha20poly1305",
+ "cryptoxide",
+ "curve25519-dalek",
+ "ed25519-bip32",
  "ed25519-dalek",
  "ed25519-dalek-bip32",
  "getrandom 0.2.17",
  "hex",
+ "hmac",
+ "pbkdf2",
  "serde",
  "serde_json",
+ "sha2",
  "sha3",
  "solana-message",
  "thiserror 2.0.18",

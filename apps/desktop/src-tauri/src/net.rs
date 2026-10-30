@@ -32,6 +32,9 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // XRP Ledger JSON-RPC (testnet :51234, mainnet): only Rust's `xrp_*` commands.
     "s.altnet.rippletest.net",
     "xrplcluster.com",
+    // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
+    "preprod.koios.rest",
+    "api.koios.rest",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -201,6 +204,7 @@ pub enum Family {
     Dogecoin,
     Tron,
     Xrp,
+    Cardano,
     Evm,
     Solana,
     Market,
@@ -220,6 +224,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Tron
     } else if host == "s.altnet.rippletest.net" || host == "xrplcluster.com" {
         Family::Xrp
+    } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
+        Family::Cardano
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -261,7 +267,8 @@ pub struct Prepared {
     pub headers: Vec<(String, String)>,
     /// Names of the injected API-key headers (dropped if a redirect changes host).
     pub secret_headers: Vec<String>,
-    pub body: Option<String>,
+    /// Raw request body (JSON text, hex text, or binary CBOR for Koios `submittx`).
+    pub body: Option<Vec<u8>>,
     /// Tor family whose isolated circuits carry this request.
     pub family: Family,
     /// The host is a user-configured server: transport failures are `SERVER_UNREACHABLE`.
@@ -319,7 +326,7 @@ pub fn prepare(
         method,
         headers,
         secret_headers,
-        body: req.body,
+        body: req.body.map(String::into_bytes),
         custom,
     })
 }
@@ -331,7 +338,7 @@ pub struct ServerRequest {
     pub url: url::Url,
     pub method: Method,
     pub headers: Vec<(String, String)>,
-    pub body: Option<String>,
+    pub body: Option<Vec<u8>>,
     pub family: Family,
     /// Bitcoin Core on loopback/LAN: reached directly (Tor cannot reach the user's LAN).
     pub direct_private: bool,
@@ -357,6 +364,19 @@ impl ServerRequest {
             url,
             method: Method::Post,
             headers: vec![("content-type".into(), "application/json".into())],
+            body: Some(body.into_bytes()),
+            family,
+            direct_private: false,
+            long: false,
+        }
+    }
+
+    /// POST of raw bytes with an explicit content type (Koios `submittx`: `application/cbor`).
+    pub fn post_bytes(url: url::Url, family: Family, content_type: &str, body: Vec<u8>) -> Self {
+        Self {
+            url,
+            method: Method::Post,
+            headers: vec![("content-type".into(), content_type.into())],
             body: Some(body),
             family,
             direct_private: false,
@@ -917,6 +937,8 @@ mod tests {
         assert_eq!(family_for("api.trongrid.io", &c), Family::Tron);
         assert_eq!(family_for("s.altnet.rippletest.net", &c), Family::Xrp);
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
+        assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
+        assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

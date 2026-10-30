@@ -121,6 +121,16 @@ impl From<wallet_core::Error> for AppError {
         match e {
             wallet_core::Error::WrongPassword => AppError::WrongPassword,
             wallet_core::Error::Device(m) => AppError::HwBadResponse(m),
+            // The core's own Display is English ("invalid input: …"): its inner messages are
+            // French for the chains the user sees, so only they are shown, after a French prefix.
+            wallet_core::Error::InvalidInput(m) => AppError::InvalidInput(m),
+            wallet_core::Error::InvalidMnemonic => {
+                AppError::InvalidInput("phrase de récupération invalide".into())
+            }
+            wallet_core::Error::Psbt(m) => AppError::InvalidInput(format!("PSBT invalide : {m}")),
+            wallet_core::Error::Crypto(m) => {
+                AppError::InvalidInput(format!("échec cryptographique : {m}"))
+            }
             other => AppError::InvalidInput(other.to_string()),
         }
     }

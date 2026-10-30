@@ -78,19 +78,19 @@ pub fn tron_address_from_bytes(bytes: &[u8; 21]) -> String {
 /// Parses a `T…` address (base58check, prefix 0x41, 21 bytes).
 pub fn tron_address_bytes(address: &str) -> Result<[u8; 21]> {
     let raw = bitcoin::base58::decode_check(address.trim())
-        .map_err(|_| Error::input("invalid TRON address"))?;
+        .map_err(|_| Error::input("adresse TRON invalide"))?;
     let bytes: [u8; 21] = raw
         .try_into()
-        .map_err(|_| Error::input("invalid TRON address"))?;
+        .map_err(|_| Error::input("adresse TRON invalide"))?;
     if bytes[0] != TRON_ADDRESS_PREFIX {
-        return Err(Error::input("invalid TRON address (prefix)"));
+        return Err(Error::input("adresse TRON invalide (préfixe)"));
     }
     Ok(bytes)
 }
 
 /// `T…` address of a SEC1 public key (33 or 65 bytes).
 pub fn tron_address_of_pubkey(sec1: &[u8]) -> Result<String> {
-    let pk = PublicKey::from_slice(sec1).map_err(|_| Error::input("invalid public key"))?;
+    let pk = PublicKey::from_slice(sec1).map_err(|_| Error::input("clé publique invalide"))?;
     Ok(tron_address_from_bytes(&address_bytes_of_pubkey(&pk)))
 }
 
@@ -144,17 +144,17 @@ fn fields(mut b: &[u8]) -> Result<Vec<(u64, Value<'_>)>> {
     fn varint(b: &mut &[u8]) -> Result<u64> {
         let mut v: u64 = 0;
         for i in 0..10 {
-            let (&byte, rest) = b.split_first().ok_or_else(|| bad("truncated varint"))?;
+            let (&byte, rest) = b.split_first().ok_or_else(|| bad("varint tronqué"))?;
             *b = rest;
             if i == 9 && byte > 1 {
-                return Err(bad("varint overflow"));
+                return Err(bad("dépassement de varint"));
             }
             v |= u64::from(byte & 0x7f) << (7 * i);
             if byte & 0x80 == 0 {
                 return Ok(v);
             }
         }
-        Err(bad("varint too long"))
+        Err(bad("varint trop long"))
     }
     let mut out = Vec::new();
     while !b.is_empty() {
@@ -163,45 +163,45 @@ fn fields(mut b: &[u8]) -> Result<Vec<(u64, Value<'_>)>> {
         match wire {
             0 => out.push((field, Value::Varint(varint(&mut b)?))),
             2 => {
-                let len = usize::try_from(varint(&mut b)?).map_err(|_| bad("length"))?;
+                let len = usize::try_from(varint(&mut b)?).map_err(|_| bad("longueur"))?;
                 if len > b.len() {
-                    return Err(bad("truncated field"));
+                    return Err(bad("champ tronqué"));
                 }
                 let (v, rest) = b.split_at(len);
                 out.push((field, Value::Bytes(v)));
                 b = rest;
             }
-            _ => return Err(bad(format!("unsupported wire type {wire}"))),
+            _ => return Err(bad(format!("wire type {wire} non pris en charge"))),
         }
     }
     Ok(out)
 }
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("TRON transaction: {}", msg.into()))
+    Error::input(format!("transaction TRON : {}", msg.into()))
 }
 
 fn as_bytes<'a>(v: &Value<'a>, what: &str) -> Result<&'a [u8]> {
     match v {
         Value::Bytes(b) => Ok(b),
-        Value::Varint(_) => Err(bad(format!("{what}: bytes expected"))),
+        Value::Varint(_) => Err(bad(format!("{what} : octets attendus"))),
     }
 }
 
 fn as_i64(v: &Value<'_>, what: &str) -> Result<i64> {
     match v {
         // Negative int64 would be a 10-byte varint above i64::MAX: refused.
-        Value::Varint(n) => i64::try_from(*n).map_err(|_| bad(format!("{what}: negative"))),
-        Value::Bytes(_) => Err(bad(format!("{what}: integer expected"))),
+        Value::Varint(n) => i64::try_from(*n).map_err(|_| bad(format!("{what} : négatif"))),
+        Value::Bytes(_) => Err(bad(format!("{what} : entier attendu"))),
     }
 }
 
 fn addr21(b: &[u8], what: &str) -> Result<[u8; 21]> {
     let a: [u8; 21] = b
         .try_into()
-        .map_err(|_| bad(format!("{what}: 21-byte address expected")))?;
+        .map_err(|_| bad(format!("{what} : adresse de 21 octets attendue")))?;
     if a[0] != TRON_ADDRESS_PREFIX {
-        return Err(bad(format!("{what}: address prefix")));
+        return Err(bad(format!("{what} : préfixe d'adresse")));
     }
     Ok(a)
 }
@@ -303,7 +303,7 @@ impl TronRaw {
     /// contract, negative integers, and any encoding that does not re-encode identically.
     pub fn decode(raw: &[u8]) -> Result<TronRaw> {
         if raw.len() > MAX_RAW {
-            return Err(bad("too large"));
+            return Err(bad("trop grande"));
         }
         let mut ref_block_bytes = None;
         let mut ref_block_hash = None;
@@ -317,13 +317,13 @@ impl TronRaw {
                 1 => {
                     ref_block_bytes = Some(
                         <[u8; 2]>::try_from(as_bytes(&v, "ref_block_bytes")?)
-                            .map_err(|_| bad("ref_block_bytes: 2 bytes"))?,
+                            .map_err(|_| bad("ref_block_bytes : 2 octets"))?,
                     )
                 }
                 4 => {
                     ref_block_hash = Some(
                         <[u8; 8]>::try_from(as_bytes(&v, "ref_block_hash")?)
-                            .map_err(|_| bad("ref_block_hash: 8 bytes"))?,
+                            .map_err(|_| bad("ref_block_hash : 8 octets"))?,
                     )
                 }
                 8 => expiration = as_i64(&v, "expiration")?,
@@ -331,18 +331,18 @@ impl TronRaw {
                 11 => contracts.push(decode_contract(as_bytes(&v, "contract")?)?),
                 14 => timestamp = as_i64(&v, "timestamp")?,
                 18 => fee_limit = as_i64(&v, "fee_limit")?,
-                3 => return Err(bad("ref_block_num is not supported")),
-                9 => return Err(bad("auths are not supported")),
-                12 => return Err(bad("scripts are not supported")),
-                other => return Err(bad(format!("unknown field {other}"))),
+                3 => return Err(bad("ref_block_num n'est pas pris en charge")),
+                9 => return Err(bad("auths n'est pas pris en charge")),
+                12 => return Err(bad("scripts n'est pas pris en charge")),
+                other => return Err(bad(format!("champ inconnu {other}"))),
             }
         }
         if contracts.len() != 1 {
-            return Err(bad("exactly one contract expected"));
+            return Err(bad("un seul contrat attendu"));
         }
         let decoded = TronRaw {
-            ref_block_bytes: ref_block_bytes.ok_or_else(|| bad("missing ref_block_bytes"))?,
-            ref_block_hash: ref_block_hash.ok_or_else(|| bad("missing ref_block_hash"))?,
+            ref_block_bytes: ref_block_bytes.ok_or_else(|| bad("ref_block_bytes manquant"))?,
+            ref_block_hash: ref_block_hash.ok_or_else(|| bad("ref_block_hash manquant"))?,
             expiration,
             memo,
             contract: contracts.remove(0),
@@ -350,11 +350,11 @@ impl TronRaw {
             fee_limit,
         };
         if expiration <= 0 {
-            return Err(bad("missing expiration"));
+            return Err(bad("expiration manquante"));
         }
         if decoded.encode() != raw {
             return Err(bad(
-                "non-canonical encoding (order, duplicate or non-minimal field)",
+                "encodage non canonique (ordre, doublon ou champ non minimal)",
             ));
         }
         Ok(decoded)
@@ -380,30 +380,34 @@ fn decode_contract(b: &[u8]) -> Result<TronContract> {
         match f {
             1 => match v {
                 Value::Varint(t) => ty = t,
-                Value::Bytes(_) => return Err(bad("contract type")),
+                Value::Bytes(_) => return Err(bad("type de contrat")),
             },
             2 => param = Some(as_bytes(&v, "parameter")?),
-            5 => return Err(bad("Permission_id is not supported (multi-signature)")),
-            3 | 4 => return Err(bad("provider / ContractName are not supported")),
-            other => return Err(bad(format!("unknown contract field {other}"))),
+            5 => {
+                return Err(bad(
+                    "Permission_id n'est pas pris en charge (multi-signature)",
+                ))
+            }
+            3 | 4 => return Err(bad("provider / ContractName ne sont pas pris en charge")),
+            other => return Err(bad(format!("champ de contrat inconnu {other}"))),
         }
     }
-    let any = param.ok_or_else(|| bad("missing parameter"))?;
+    let any = param.ok_or_else(|| bad("parameter manquant"))?;
     let mut url = None;
     let mut value = None;
     for (f, v) in fields(any)? {
         match f {
             1 => url = Some(as_bytes(&v, "type_url")?),
             2 => value = Some(as_bytes(&v, "value")?),
-            other => return Err(bad(format!("unknown Any field {other}"))),
+            other => return Err(bad(format!("champ Any inconnu {other}"))),
         }
     }
-    let url = url.ok_or_else(|| bad("missing type_url"))?;
+    let url = url.ok_or_else(|| bad("type_url manquant"))?;
     let value = value.unwrap_or_default();
     match ty {
         TRANSFER_CONTRACT => {
             if url != TRANSFER_URL.as_bytes() {
-                return Err(bad("type_url does not match TransferContract"));
+                return Err(bad("type_url ne correspond pas à TransferContract"));
             }
             let (mut owner, mut to, mut amount) = (None, None, 0);
             for (f, v) in fields(value)? {
@@ -411,18 +415,18 @@ fn decode_contract(b: &[u8]) -> Result<TronContract> {
                     1 => owner = Some(addr21(as_bytes(&v, "owner_address")?, "owner_address")?),
                     2 => to = Some(addr21(as_bytes(&v, "to_address")?, "to_address")?),
                     3 => amount = as_i64(&v, "amount")?,
-                    other => return Err(bad(format!("unknown TransferContract field {other}"))),
+                    other => return Err(bad(format!("champ TransferContract inconnu {other}"))),
                 }
             }
             Ok(TronContract::Transfer {
-                owner: owner.ok_or_else(|| bad("missing owner_address"))?,
-                to: to.ok_or_else(|| bad("missing to_address"))?,
+                owner: owner.ok_or_else(|| bad("owner_address manquant"))?,
+                to: to.ok_or_else(|| bad("to_address manquant"))?,
                 amount,
             })
         }
         TRIGGER_SMART_CONTRACT => {
             if url != TRIGGER_URL.as_bytes() {
-                return Err(bad("type_url does not match TriggerSmartContract"));
+                return Err(bad("type_url ne correspond pas à TriggerSmartContract"));
             }
             let (mut owner, mut contract, mut call_value, mut data) = (None, None, 0, Vec::new());
             for (f, v) in fields(value)? {
@@ -436,21 +440,21 @@ fn decode_contract(b: &[u8]) -> Result<TronContract> {
                     }
                     3 => call_value = as_i64(&v, "call_value")?,
                     4 => data = as_bytes(&v, "data")?.to_vec(),
-                    5 | 6 => return Err(bad("TRC-10 token value is not supported")),
+                    5 | 6 => return Err(bad("la valeur en token TRC-10 n'est pas prise en charge")),
                     other => {
-                        return Err(bad(format!("unknown TriggerSmartContract field {other}")))
+                        return Err(bad(format!("champ TriggerSmartContract inconnu {other}")))
                     }
                 }
             }
             Ok(TronContract::Trigger {
-                owner: owner.ok_or_else(|| bad("missing owner_address"))?,
-                contract: contract.ok_or_else(|| bad("missing contract_address"))?,
+                owner: owner.ok_or_else(|| bad("owner_address manquant"))?,
+                contract: contract.ok_or_else(|| bad("contract_address manquant"))?,
                 call_value,
                 data,
             })
         }
         other => Err(bad(format!(
-            "contract type {other} is not supported (only TRX transfers and TRC-20 transfers)"
+            "le type de contrat {other} n'est pas pris en charge (uniquement les transferts TRX et TRC-20)"
         ))),
     }
 }
@@ -462,9 +466,11 @@ pub fn tron_ref_block(number: u64, block_id_hex: &str) -> Result<([u8; 2], [u8; 
     let id: [u8; 32] = hex::decode(block_id_hex.trim())
         .ok()
         .and_then(|v| v.try_into().ok())
-        .ok_or_else(|| Error::input("block id: 32 bytes hex expected"))?;
+        .ok_or_else(|| Error::input("id de bloc : 32 octets hexadécimaux attendus"))?;
     if id[..8] != number.to_be_bytes() {
-        return Err(Error::input("block id does not match the block number"));
+        return Err(Error::input(
+            "l'id de bloc ne correspond pas au numéro de bloc",
+        ));
     }
     let n = number.to_be_bytes();
     let mut hash = [0u8; 8];
@@ -475,7 +481,7 @@ pub fn tron_ref_block(number: u64, block_id_hex: &str) -> Result<([u8; 2], [u8; 
 /// ABI call data of `transfer(to, amount)`; `amount` is a decimal string (uint256).
 pub fn tron_trc20_transfer_data(to: &str, amount: &str) -> Result<Vec<u8>> {
     let to = tron_address_bytes(to)?;
-    let amount = U256::from_dec_str(amount.trim()).map_err(|_| Error::input("invalid amount"))?;
+    let amount = U256::from_dec_str(amount.trim()).map_err(|_| Error::input("montant invalide"))?;
     let mut data = Vec::with_capacity(68);
     data.extend_from_slice(&TRC20_TRANSFER_SELECTOR);
     data.extend_from_slice(&[0u8; 12]);
@@ -583,20 +589,23 @@ const HIGH_FEE_LIMIT: i64 = 100_000_000;
 /// Decodes `raw` (hex `raw_data`) for the confirmation dialog. Refused: anything
 /// [`TronRaw::decode`] refuses, and an owner other than `our_address`.
 pub fn tron_decode_raw(raw_hex: &str, our_address: &str) -> Result<TronTxSummary> {
-    let raw = hex::decode(raw_hex.trim()).map_err(|_| Error::input("raw_data is not hex"))?;
+    let raw = hex::decode(raw_hex.trim())
+        .map_err(|_| Error::input("raw_data n'est pas en hexadécimal"))?;
     let tx = TronRaw::decode(&raw)?;
     let ours = tron_address_bytes(our_address)?;
     if *tx.owner() != ours {
-        return Err(bad("the owner is not this wallet's address"));
+        return Err(bad(
+            "le propriétaire (owner) n'est pas l'adresse de ce portefeuille",
+        ));
     }
     let mut warnings = Vec::new();
     let action = match &tx.contract {
         TronContract::Transfer { to, amount, .. } => {
             if *amount <= 0 {
-                return Err(bad("amount must be positive"));
+                return Err(bad("le montant doit être positif"));
             }
             if to == tx.owner() {
-                return Err(bad("TRON refuses a transfer to oneself"));
+                return Err(bad("TRON refuse un transfert à soi-même"));
             }
             TronAction::TrxTransfer {
                 to: tron_address_from_bytes(to),
@@ -674,15 +683,15 @@ fn sign_digest(
     let rec = secp.sign_ecdsa_recoverable(&msg, sk);
     let recovered = secp
         .recover_ecdsa(&msg, &rec)
-        .map_err(|_| Error::crypto("signature self-check failed"))?;
+        .map_err(|_| Error::crypto("échec de la vérification de la signature"))?;
     if recovered != sk.public_key(secp) {
-        return Err(Error::crypto("signature self-check failed"));
+        return Err(Error::crypto("échec de la vérification de la signature"));
     }
     let (recid, compact) = rec.serialize_compact();
     let v = match recid.to_i32() {
         0 => 27,
         1 => 28,
-        _ => return Err(Error::crypto("unexpected recovery id")),
+        _ => return Err(Error::crypto("recovery id inattendu")),
     };
     let mut out = [0u8; 65];
     out[..64].copy_from_slice(&compact);
@@ -700,7 +709,8 @@ pub fn tron_sign(seed: &Seed, index: u32, raw_hex: &str) -> Result<([u8; 65], Tr
     let sk = key.xpriv().private_key;
     let ours = tron_address_from_bytes(&address_bytes_of_pubkey(&sk.public_key(&secp)));
     let summary = tron_decode_raw(raw_hex, &ours)?;
-    let raw = hex::decode(raw_hex.trim()).map_err(|_| Error::input("raw_data is not hex"))?;
+    let raw = hex::decode(raw_hex.trim())
+        .map_err(|_| Error::input("raw_data n'est pas en hexadécimal"))?;
     let digest = sha256::Hash::hash(&raw).to_byte_array();
     let sig = sign_digest(&secp, &sk, digest)?;
     Ok((sig, summary))
@@ -708,31 +718,33 @@ pub fn tron_sign(seed: &Seed, index: u32, raw_hex: &str) -> Result<([u8; 65], Tr
 
 /// Address that produced `signature` (65 bytes, `v` ∈ {0, 1, 27, 28}) over `raw_data` (hex).
 pub fn tron_recover_signer(raw_hex: &str, signature: &[u8]) -> Result<String> {
-    let raw = hex::decode(raw_hex.trim()).map_err(|_| Error::input("raw_data is not hex"))?;
+    let raw = hex::decode(raw_hex.trim())
+        .map_err(|_| Error::input("raw_data n'est pas en hexadécimal"))?;
     let sig: [u8; 65] = signature
         .try_into()
-        .map_err(|_| Error::input("signature: 65 bytes expected"))?;
+        .map_err(|_| Error::input("signature : 65 octets attendus"))?;
     let v = match sig[64] {
         0 | 27 => 0,
         1 | 28 => 1,
-        _ => return Err(Error::input("signature: invalid v")),
+        _ => return Err(Error::input("signature : v invalide")),
     };
     let rec = RecoverableSignature::from_compact(
         &sig[..64],
-        RecoveryId::from_i32(v).map_err(|_| Error::input("signature: invalid v"))?,
+        RecoveryId::from_i32(v).map_err(|_| Error::input("signature : v invalide"))?,
     )
-    .map_err(|_| Error::input("signature: invalid r/s"))?;
+    .map_err(|_| Error::input("signature : r/s invalides"))?;
     let msg = Message::from_digest(sha256::Hash::hash(&raw).to_byte_array());
     let pk = Secp256k1::verification_only()
         .recover_ecdsa(&msg, &rec)
-        .map_err(|_| Error::input("signature does not recover"))?;
+        .map_err(|_| Error::input("la signature ne permet pas de retrouver la clé"))?;
     Ok(tron_address_from_bytes(&address_bytes_of_pubkey(&pk)))
 }
 
 /// Serialized `Transaction { raw_data = 1; repeated bytes signature = 2 }`, hex — what
 /// `/wallet/broadcasthex` takes.
 pub fn tron_signed_transaction(raw_hex: &str, signature: &[u8; 65]) -> Result<String> {
-    let raw = hex::decode(raw_hex.trim()).map_err(|_| Error::input("raw_data is not hex"))?;
+    let raw = hex::decode(raw_hex.trim())
+        .map_err(|_| Error::input("raw_data n'est pas en hexadécimal"))?;
     TronRaw::decode(&raw)?;
     let mut out = Vec::with_capacity(raw.len() + 72);
     put_bytes(&mut out, 1, &raw);

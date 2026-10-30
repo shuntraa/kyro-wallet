@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, TRON (TRX / TRC-20) and XRP Ledger (Payment) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -25,6 +25,7 @@
 mod btc;
 mod btc_hw;
 mod btc_watch;
+mod cardano;
 mod error;
 mod evm;
 mod keys;
@@ -48,6 +49,15 @@ pub use btc_watch::{
     btc_address_from_xpub, btc_address_of_script, btc_decode_raw_tx, btc_descriptors,
     btc_genesis_hash, btc_script_pubkey, btc_scripthash, btc_scripthash_of_script, verify_tx_hex,
     BtcDescriptor, BtcRawTx,
+};
+pub use cardano::{
+    cardano_account_stake_address, cardano_account_xpub, cardano_address, cardano_address_bytes,
+    cardano_address_string, cardano_base_address, cardano_blake2b256, cardano_cip20_aux,
+    cardano_decode_tx, cardano_enterprise_address, cardano_min_utxo, cardano_payment_public_key,
+    cardano_sign, cardano_signed_size, cardano_signed_witnesses, cardano_stake_address,
+    cardano_tx_body, cardano_unsigned_tx, cardano_verify, CardanoAssets, CardanoBody,
+    CardanoContext, CardanoInput, CardanoOutput, CardanoOutputView, CardanoRoot, CardanoTokenView,
+    CardanoTxSummary, CardanoWarning,
 };
 pub use error::{Error, Result};
 pub use evm::{

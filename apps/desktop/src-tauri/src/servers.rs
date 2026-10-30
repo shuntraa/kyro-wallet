@@ -371,6 +371,73 @@ pub fn xrp_network_id(net: Network) -> u64 {
     }
 }
 
+/// Cardano server: a Koios REST instance (`…/api/v1`), the same API as the defaults.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum CardanoServer {
+    #[default]
+    Default,
+    /// Base URL of the API, e.g. `https://koios.example/api/v1`.
+    Koios { url: String },
+}
+
+impl CardanoServer {
+    pub fn is_default(&self) -> bool {
+        matches!(self, CardanoServer::Default)
+    }
+
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            CardanoServer::Default => "default",
+            CardanoServer::Koios { .. } => "koios",
+        }
+    }
+}
+
+/// Key `testnet` = preprod (network magic 1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CardanoServers {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mainnet: Option<CardanoServer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub testnet: Option<CardanoServer>,
+}
+
+impl CardanoServers {
+    pub fn for_network(&self, net: Network) -> CardanoServer {
+        match net {
+            Network::Mainnet => self.mainnet.clone(),
+            Network::Testnet => self.testnet.clone(),
+        }
+        .unwrap_or_default()
+    }
+
+    pub fn entries(&self) -> [(&'static str, &Option<CardanoServer>); 2] {
+        [("mainnet", &self.mainnet), ("testnet", &self.testnet)]
+    }
+}
+
+/// Koios (free, keyless public tier): preprod and mainnet.
+pub fn cardano_default_url(net: Network) -> &'static str {
+    match net {
+        Network::Mainnet => "https://api.koios.rest/api/v1",
+        Network::Testnet => "https://preprod.koios.rest/api/v1",
+    }
+}
+
+/// Genesis `networkmagic`: mainnet 764824073, preprod 1 (preview is 2, refused).
+pub fn cardano_network_magic(net: Network) -> u64 {
+    match net {
+        Network::Mainnet => 764_824_073,
+        Network::Testnet => 1,
+    }
+}
+
 /// `settings.servers`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -384,6 +451,8 @@ pub struct Servers {
     pub tron: TronServers,
     /// XRP Ledger: rippled JSON-RPC. Key `testnet` = XRPL Testnet.
     pub xrp: XrpServers,
+    /// Cardano: Koios REST. Key `testnet` = preprod.
+    pub cardano: CardanoServers,
     /// Key: EVM chain id in decimal (e.g. `"11155111"`).
     pub evm: BTreeMap<String, RpcServer>,
     /// Key: `"devnet"` or `"mainnet-beta"`.
@@ -481,6 +550,12 @@ impl Servers {
                 Network::Testnet => "s.altnet.rippletest.net",
             });
         }
+        if !self.cardano.for_network(net).is_default() {
+            out.push(match net {
+                Network::Mainnet => "api.koios.rest",
+                Network::Testnet => "preprod.koios.rest",
+            });
+        }
         if !self.tron.for_network(net).is_default() {
             out.push(match net {
                 Network::Mainnet => "api.trongrid.io",
@@ -521,6 +596,12 @@ impl Servers {
         for (key, s) in self.xrp.entries() {
             if let Some(XrpServer::JsonRpc { url }) = s {
                 validate_http_url(url, tor, false).map_err(|e| prefix(e, &format!("xrp {key}")))?;
+            }
+        }
+        for (key, s) in self.cardano.entries() {
+            if let Some(CardanoServer::Koios { url }) = s {
+                validate_http_url(url, tor, false)
+                    .map_err(|e| prefix(e, &format!("cardano {key}")))?;
             }
         }
         for (key, s) in self.tron.entries() {
@@ -1232,6 +1313,44 @@ mod tests {
         assert!(s
             .disabled_defaults(Network::Testnet)
             .contains(&"mempool.space"));
+    }
+
+    #[test]
+    fn cardano_servers() {
+        let mut s = Servers::default();
+        assert_eq!(
+            s.cardano.for_network(Network::Testnet),
+            CardanoServer::Default
+        );
+        assert!(s
+            .disabled_defaults(Network::Testnet)
+            .iter()
+            .all(|h| !h.contains("koios")));
+        s.cardano.testnet = Some(CardanoServer::Koios {
+            url: "https://koios.example/api/v1".into(),
+        });
+        assert!(s.validate(true).is_ok());
+        assert!(s
+            .disabled_defaults(Network::Testnet)
+            .contains(&"preprod.koios.rest"));
+        assert!(!s
+            .disabled_defaults(Network::Mainnet)
+            .contains(&"api.koios.rest"));
+        s.cardano.mainnet = Some(CardanoServer::Koios {
+            url: "http://koios.example/".into(),
+        });
+        assert!(
+            matches!(s.validate(true), Err(AppError::ServerInvalid(ref m)) if m.starts_with("cardano mainnet"))
+        );
+        assert_eq!(
+            serde_json::to_value(CardanoServer::Koios {
+                url: "https://k/".into()
+            })
+            .unwrap(),
+            serde_json::json!({ "kind": "koios", "url": "https://k/" })
+        );
+        assert_eq!(cardano_network_magic(Network::Testnet), 1);
+        assert_eq!(cardano_network_magic(Network::Mainnet), 764_824_073);
     }
 
     #[test]

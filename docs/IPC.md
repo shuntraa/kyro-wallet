@@ -149,6 +149,43 @@ pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, M
 pub fn xrp_sign(seed, index, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
 pub fn xrp_verify_signed(blob_hex) -> Result<String /*hash*/>;   // signature DER low-S de SigningPubKey, clé = Account
 
+// --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
+//     sel = ENTROPIE BIP39, puis clamping), dérivation BIP32-Ed25519 V2 par le crate ed25519-bip32 (aucune crypto écrite
+//     ici), signature ed25519-dalek (hazmat::raw_sign avec le scalaire étendu kL ‖ kR) vérifiée (verify_strict) ;
+//     CBOR : sous-ensemble écrit à la main, strict (ré-encodage identique exigé, formes minimales, ordre canonique)
+pub struct CardanoRoot;   // XPrv 96 o, effacé au drop ; créé à l'ouverture de session (le coffre ne change pas)
+impl CardanoRoot { pub fn from_mnemonic(&Mnemonic, passphrase) -> CardanoRoot }
+pub fn cardano_address(root, net, account, index) -> Result<String>;       // adresse de base (type 0) : paiement …/0/index + staking …/2/0
+pub fn cardano_payment_public_key(root, account, index) -> Result<[u8; 32]>;
+pub fn cardano_account_xpub(root, account) -> Result<String>;              // clé publique ‖ chain code de m/1852'/1815'/account', hex
+pub fn cardano_account_stake_address(root, net, account) -> Result<String>; // stake1… / stake_test1… (affichage ; pas de staking)
+pub fn cardano_base_address(net, pay_pk, stake_pk); pub fn cardano_enterprise_address(net, pay_pk); pub fn cardano_stake_address(net, stake_pk);
+pub fn cardano_address_bytes(address, net) -> Result<Vec<u8>>;   // destinataire : base clé (types 0, 2) ou enterprise clé (6), bon réseau.
+// Refusés : Byron (Ae2…, DdzFF…), script en paiement (1, 3, 5, 7 : fonds bloqués sans datum), pointeur (4, 5 : obsolètes en Conway),
+// staking (14, 15), autre réseau, somme bech32 fausse.
+pub struct CardanoBody { inputs: Vec<CardanoInput { tx_hash, index }>, tagged_sets /*tag 258*/, outputs: Vec<CardanoOutput { address, coin, assets, map_form }>,
+                         fee, ttl: Option<u64>, aux_hash: Option<[u8; 32]>, validity_start: Option<u64> }   // clés 0, 1, 2, 3, 7, 8 uniquement
+impl CardanoBody { pub fn encode(&self) -> Vec<u8>; pub fn decode(raw) -> Result<Self>; pub fn tx_id(&self) -> [u8; 32] /*blake2b-256(corps)*/ }
+pub fn cardano_min_utxo(address, assets, coins_per_utxo_byte) -> u64;      // (160 + taille de la sortie) × coinsPerUTxOByte
+pub fn cardano_cip20_aux(message) -> Result<Vec<u8>>;                      // {674: {"msg": [lignes ≤ 64 o]}}, 1 024 o max.
+pub fn cardano_unsigned_tx(body, aux) -> Result<Vec<u8>>;                  // [corps, {}, true, aux | null]
+pub fn cardano_signed_size(body, aux, keys) -> Result<usize>;               // taille signée (frais = a × taille + b)
+pub struct CardanoContext<'a> { net, own: &[String], verified_tokens: &[(policy_hex, name_hex)], coins_per_byte }
+pub fn cardano_decode_tx(tx_hex, ctx) -> Result<CardanoTxSummary>;  pub fn cardano_tx_body(tx_hex, ctx) -> Result<CardanoBody>;
+// decode refuse : certificats (4), retraits (5), mises à jour (6), mint (9), script_data_hash (11), collatéral (13, 16, 17),
+// signataires requis (14), network id (15), entrées de référence (18), votes (19), propositions (20), trésor (21, 22), champ inconnu ;
+// sorties avec datum / hash de datum / script de référence ; sortie sous son min-UTxO ; quantité de token nulle ; métadonnées autres
+// qu'un message CIP-20 ou au hash faux ; entrée en double ; témoins déjà présents ; tout CBOR non canonique (longueur indéfinie, entier
+// non minimal, ordre des clés ou des tokens, doublon, octets en trop) ; plus de 16 384 octets.
+pub struct CardanoTxSummary { tx_id, inputs /*"hash#i"*/, outputs: Vec<CardanoOutputView { address, kind /*base|enterprise*/, is_change,
+                              lovelace, tokens: Vec<CardanoTokenView { policy, name /*hex*/, name_text?, quantity, verified }>, min_lovelace }>,
+                              fee, ttl, valid_from, memo: Option<Vec<String>>, warnings: Vec<CardanoWarning>, requires_extra_confirmation }   // serde camelCase
+pub enum CardanoWarning { Memo, UnknownToken { policy, name }, HighFee /*> 5 ADA*/, NoTtl }   // → confirmation renforcée
+pub fn cardano_sign(root, account, index, tx_hex, ctx) -> Result<(String /*tx signée*/, String /*tx id*/, CardanoTxSummary)>;
+// témoin vkey = (clé publique, Ed25519 sur blake2b-256(corps CBOR)), vérifié ; clé publique dalek = clé ed25519-bip32 sinon erreur
+pub fn cardano_signed_witnesses(tx_hex) -> Result<(String /*tx id*/, Vec<[u8; 32]>)>;   // chaque témoin vérifié contre le tx id
+pub fn cardano_verify(pk, msg, sig) -> Result<()>; pub fn cardano_blake2b256(data) -> [u8; 32];
+
 // --- Solana : décodage des messages legacy et v0 (parseur écrit à la main, format filaire documenté) ---
 pub struct SolLookupTable { pub key: String, pub addresses: Vec<String> }            // base58
 pub fn sol_message_lookup_tables(message: &[u8]) -> Result<Vec<String>>;             // tables à récupérer (v0)
@@ -243,6 +280,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_tx_hex` | `{ txid }` | `string` (transaction brute, hex) | transaction complète, par exemple le `non_witness_utxo` d'une entrée SegWit v0 pour un hardware wallet. Esplora/défaut `GET /tx/{txid}/hex` ; Electrum `blockchain.transaction.get` ; Core `gettransaction` (portefeuille de surveillance) puis `getrawtransaction` — hors portefeuille et sans `-txindex=1` : `INVALID_INPUT` explicite ; filtres compacts : transactions gardées des blocs synchronisés, sinon `INVALID_INPUT` explicite. **Toujours** : Rust vérifie que la réponse est une transaction dont le txid (double SHA-256 de la sérialisation sans témoin) = `txid`, sinon `SERVER_UNREACHABLE` ; `txid` mal formé : `INVALID_INPUT` |
 | `btc_broadcast` | `{ hex }` | `string` (txid) | le txid renvoyé par le serveur doit correspondre à la transaction, sinon erreur |
 | `ltc_*`, `doge_*` | voir §2.4 | | Litecoin, Dogecoin : mêmes formes Esplora que `btc_*`, signature avec dialogue natif |
+| `ada_*` | voir §2.7 | | Cardano : transaction construite **par Rust** depuis les UTxO et les paramètres de protocole, chaque sortie détaillée (ADA, tokens, min-ADA) |
 | `xrp_*` | voir §2.6 | | XRP Ledger : paiement construit **par Rust** (Sequence, Fee, LastLedgerSequence), tag de destination mis en évidence, réserve |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
@@ -275,11 +313,15 @@ type Accounts = {
   doge: { address: string; xpub: string; fingerprint: string; path: string };  // m/44'/3'/0' (testnet m/44'/1'/0')
   tron: { address: string };                                                    // m/44'/195'/0'/0/0 (même chemin sur Nile)
   xrp: { address: string };                                                     // m/44'/144'/0'/0/0
+  cardano: { address: string };   // adresse de base m/1852'/1815'/0'/0/0 + staking …/2/0 (CIP-1852, Icarus) ; addr_test1… sur preprod
 };
 type Settings = { currency: 'EUR' | 'USD'; autoLockSecs: number; hideBalancesOnStart: boolean;
                   captureProtection: boolean; clipboardGuard: boolean;
                   servers: Servers;               // remplace l'ancien `rpc` (encore accepté en entrée, migré, jamais renvoyé)
-                  apiKeys: { coingecko?: string; zerox?: string; oneinch?: string };
+                  apiKeys: { coingecko?: string; zerox?: string; oneinch?: string;
+                             trongrid?: string };   // TronGrid (en-tête TRON-PRO-API-KEY, §2.5) ; comme les autres clés de
+                                                    // `apiKeys`, renvoyée par `settings_get` (saisie par l'utilisateur) ;
+                                                    // `KYRO_TRONGRID_API_KEY` (env) n'est jamais renvoyée (`config_get.hasTrongridKey`)
                   tor: { enabled: boolean } };   // défaut : { enabled: true }
 // ---- serveurs personnalisés (B2b) ----
 // Clé absente = serveur par défaut. Un serveur personnalisé n'est autorisé que pour sa famille
@@ -293,6 +335,7 @@ type Servers = {
   dogecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };
   tron: { mainnet?: TronServer; testnet?: TronServer };       // testnet = Nile
   xrp: { mainnet?: XrpServer; testnet?: XrpServer };          // testnet = XRPL Testnet
+  cardano: { mainnet?: CardanoServer; testnet?: CardanoServer };  // testnet = preprod
 };
 type UtxoServer = { kind: 'default' }       // Litecoin : litecoinspace.org ; Dogecoin : AUCUN (lectures → SERVER_INVALID, voir §2.4)
                 | { kind: 'esplora'; url: string };   // même type que le serveur par défaut (Esplora : electrs, mempool)
@@ -322,7 +365,10 @@ type ServerTestTarget =
   | { family: 'solana'; cluster: 'devnet' | 'mainnet-beta'; server: { url: string } }
   | { family: 'litecoin' | 'dogecoin'; network: 'mainnet' | 'testnet'; server: UtxoServer }   // { kind: 'default' } Dogecoin : SERVER_INVALID
   | { family: 'tron'; network: 'mainnet' | 'testnet'; server: TronServer }
-  | { family: 'xrp'; network: 'mainnet' | 'testnet'; server: XrpServer };
+  | { family: 'xrp'; network: 'mainnet' | 'testnet'; server: XrpServer }       // detected.chainId = network_id XRPL (0 mainnet, 1 testnet)
+  | { family: 'cardano'; network: 'mainnet' | 'testnet'; server: CardanoServer };   // detected.chainId = networkmagic (764824073 / 1)
+type CardanoServer = { kind: 'default' }    // Koios : preprod.koios.rest / api.koios.rest (offre publique gratuite, sans clé)
+                   | { kind: 'koios'; url: string };   // instance Koios, URL de base de l'API, ex. "https://koios.example/api/v1"
 type XrpServer = { kind: 'default' }        // s.altnet.rippletest.net:51234 (testnet) / xrplcluster.com (mainnet)
                | { kind: 'jsonRpc'; url: string };   // JSON-RPC rippled, même type que les serveurs par défaut
 type TronServer = { kind: 'default' }       // TronGrid : api.trongrid.io / nile.trongrid.io
@@ -343,7 +389,7 @@ type TorStatus = { state: 'off' | 'bootstrapping' | 'ready' | 'error'; progress:
 Erreurs : rejet de la promesse avec `{ code: 'WRONG_PASSWORD' | 'LOCKED' | 'RATE_LIMITED' | 'USER_REJECTED' | 'HOST_NOT_ALLOWED' | 'INVALID_INPUT' | 'INTERNAL' | 'TOR_UNAVAILABLE' | 'SERVER_INVALID' | 'SERVER_WRONG_NETWORK' | 'SERVER_UNREACHABLE' | 'DEFAULT_SERVER_DISABLED' | 'FEATURE_DISABLED' | 'HW_NOT_FOUND' | 'HW_LOCKED' | 'HW_WRONG_APP' | 'HW_REJECTED' | 'HW_DISCONNECTED' | 'HW_UNSUPPORTED' | 'HW_BUSY' | 'HW_TIMEOUT' | 'HW_BAD_RESPONSE' | 'HW_ADDRESS_MISMATCH' | 'HW_WRONG_DEVICE', message, data? }`. `data` n'existe que pour `HW_WRONG_APP` (`{ expected, open }`), `HW_UNSUPPORTED` (`{ min: string | null }`) et `HW_ADDRESS_MISMATCH` (`{ device, expected }`) ; les codes hardware wallet sont détaillés au §2.3. `TOR_UNAVAILABLE` : Tor activé mais pas prêt (démarrage trop long, échec, arrêté) — la requête n'a **pas** été envoyée.
 
 - `SERVER_INVALID` : configuration refusée avant tout réseau (URL, schéma, identifiants dans l'URL, `.onion` sans Tor, empreinte mal formée, mot de passe manquant, fichier `.cookie` illisible, authentification RPC refusée, portefeuille `kyro-watch-…` absent).
-- `SERVER_WRONG_NETWORK` : le serveur répond mais n'est pas sur la bonne chaîne (genesis Bitcoin, `getblockchaininfo.chain`, `eth_chainId`, `getGenesisHash`).
+- `SERVER_WRONG_NETWORK` : le serveur répond mais n'est pas sur la bonne chaîne (genesis Bitcoin, `getblockchaininfo.chain`, `eth_chainId`, `getGenesisHash`, `network_id` XRPL, bloc 0 TRON, `networkmagic` Cardano).
 - `SERVER_UNREACHABLE` : le serveur personnalisé ne répond pas (connexion, TLS, épinglage non concordant, délai, réponse invalide). **Kyro ne se rabat jamais sur le serveur par défaut.**
 - `FEATURE_DISABLED` : fonction absente de ce build (aujourd'hui : filtres compacts `cbf`, désactivés par défaut jusqu'à revue).
 - `DEFAULT_SERVER_DISABLED` : requête vers le serveur par défaut d'une chaîne pour laquelle un serveur personnalisé est configuré (signe que l'UI n'utilise pas encore le bon serveur).
@@ -355,7 +401,8 @@ Erreurs : rejet de la promesse avec `{ code: 'WRONG_PASSWORD' | 'LOCKED' | 'RATE
 | Esplora | `https://` ; `http://` uniquement pour un `.onion`, via Tor ; jamais d'identifiants dans l'URL | `GET {url}/block-height/0` = genesis du réseau (mainnet `000000000019d6…e26f`, testnet4 `00000000da84f2…f043`) |
 | Electrum | `host` + `port` ; `tls: 'none'` uniquement pour un `.onion` via Tor ; `pinned` exige `certSha256` | `server.version` (protocole 1.4) puis `server.features.genesis_hash` = genesis du réseau |
 | Bitcoin Core | `http://` uniquement pour une adresse locale/LAN (127.0.0.0/8, ::1, RFC 1918, fc00::/7, fe80::/10, `localhost`) ; sinon `https://` ou `.onion` via Tor | `getblockchaininfo.chain` = `main` ou `testnet4` |
-| XRP (`jsonRpc`) | comme Esplora | `server_info` → `info.network_id` = 0 (mainnet) ou 1 (testnet) ; devnet (2) et autres réseaux nommés dans l'erreur |
+| XRP (`jsonRpc`) | comme Esplora | `server_info` → `info.network_id` = 0 (mainnet) ou 1 (testnet) ; devnet (2) et autres réseaux nommés dans l'erreur. `server_test` renvoie ce `network_id` dans `detected.chainId` (et `detected.blockHeight` = dernier registre validé) |
+| Cardano (`koios`) | comme Esplora | `GET {url}/genesis` → `networkmagic` = 764824073 (mainnet) ou 1 (preprod) ; preview (2) et autres nommés dans l'erreur. `detected.chainId` = `networkmagic`, `detected.blockHeight` = `GET {url}/tip` |
 | TRON (`http`) | comme Esplora | `POST {url}/wallet/getblockbynum {num:0}` → `blockID` = mainnet `00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc` ou Nile `0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc` ; Shasta (`…de1aa882…a9059e`) est reconnu et nommé dans l'erreur |
 | Esplora Litecoin / Dogecoin | comme Esplora | `GET {url}/block-height/0` = genesis de la chaîne (Litecoin mainnet `12a765e3…04bfe2`, testnet4 `4966625a…3e29a0` ; Dogecoin mainnet `1a91e3da…355691`, testnet `bb0a7826…50559e`) ; le message nomme la chaîne trouvée si c'en est une connue |
 | EVM | comme Esplora | `eth_chainId` = la clé (`chainId`) |
@@ -469,7 +516,7 @@ Règles de construction (TS) vérifiées par Rust :
 - **Dogecoin n'a pas de serveur par défaut** : `{ kind: 'default' }` → toute lecture `SERVER_INVALID` (« configure ton serveur Esplora (electrs-dogecoin) »). Voir NETWORK.md.
 - Montants JSON : une sortie au-delà de 2⁵³ unités (≈ 90 millions de DOGE) n'est pas lisible sans perte en JS : l'adaptateur la refuse (la signature, elle, prend les montants dans les transactions précédentes, en Rust).
 
-À faire côté UI (pas dans ce lot) : types `Commands` de `@kyro/shared` (`ltc_*`, `doge_*`, `btc_tx_hex`, `Accounts.ltc/doge`, `Servers.litecoin/dogecoin`, `ServerTestTarget`), backend démo, écrans Envoyer/Recevoir/Actif/Historique pour ces familles, réglages serveurs, liste « Connexions sortantes », sortie de `WATCH_ONLY_CHAINS`.
+**Fait côté UI** (commit de l'UI Litecoin / Dogecoin) : types `Commands` de `@kyro/shared` (`ltc_*`, `doge_*`, `btc_tx_hex`, `Accounts.ltc/doge`, `Servers.litecoin/dogecoin`, `ServerTestTarget`), backend démo, écrans Envoyer/Recevoir/Actif/Historique pour ces familles, réglages serveurs, liste « Connexions sortantes », sortie de `WATCH_ONLY_CHAINS`.
 
 ### 2.5 TRON (TRX, TRC-20)
 
@@ -492,7 +539,7 @@ Rust choisit le serveur (`servers.tron`, sinon TronGrid), famille Tor `tron`, ja
 
 Refusé avant toute signature : autre type de contrat que TRX / appel de contrat (gel, vote, délégation, **changement de permissions**…), `Permission_id` (multi-signature), autre propriétaire, `auths`, `scripts`, valeur TRC-10, encodage non canonique. Estimation de bande passante : taille signée + 64 octets (comme java-tron). Hardware wallets : `HW_UNSUPPORTED` (Trezor a `TronSignTx`, Ledger l'app « Tron » : non faits).
 
-À faire côté UI (pas dans ce lot) : `Family` `'tron'`, types `Commands` (`tron_*`, `Accounts.tron`, `Servers.tron`, `ServerTestTarget`), backend démo, écrans Envoyer (afficher `estimate` avant le mot de passe : bande passante, énergie, activation), Recevoir, Actif (TRX, USDT), Historique, réglage serveur TRON, « Connexions sortantes », sortie de TRON de `WATCH_ONLY_CHAINS`. Adaptateur : `TronAdapter` (`packages/chains/src/tron/`), `tronChain(network)`, `TRON_USDT`.
+**Fait côté UI** (commit de l'UI TRON) : `Family` `'tron'`, types `Commands` (`tron_*`, `Accounts.tron`, `Servers.tron`, `ServerTestTarget`), backend démo, écrans Envoyer (afficher `estimate` avant le mot de passe : bande passante, énergie, activation), Recevoir, Actif (TRX, USDT), Historique, réglage serveur TRON, « Connexions sortantes », sortie de TRON de `WATCH_ONLY_CHAINS`. Adaptateur : `TronAdapter` (`packages/chains/src/tron/`), `tronChain(network)`, `TRON_USDT`.
 
 ### 2.6 XRP Ledger (paiements XRP et monnaies émises)
 
@@ -501,7 +548,7 @@ Rust choisit le serveur (`servers.xrp`, sinon le défaut), famille Tor `xrp`, ja
 | Commande | Arguments | Retour | Notes |
 |---|---|---|---|
 | `xrp_backend_info` | — | `{ kind: 'default' \| 'jsonRpc', network: 'mainnet' \| 'testnet', label, tor }` | |
-| `xrp_address` | `{ index }` | `string` | `m/44'/144'/0'/0/{index}` |
+| `xrp_address` | `{ index }` | `string` | `m/44'/144'/0'/0/{index}`, coffre déverrouillé ; **la signature n'utilise que l'index 0** (`xrp_build_tx` / `xrp_sign_tx` / `xrp_broadcast`) : l'UI ne doit afficher que cette adresse |
 | `xrp_account` | `{ address }` | `{ address, exists, balance /*drops*/, sequence, ownerCount, flags, requireDestTag, disallowXrp, reserve, spendable }` | `account_info` + réserves de `server_info.validated_ledger` (`reserve_base_xrp`, `reserve_inc_xrp` : **1 XRP et 0,2 XRP**, lus en direct le 30/10/2026 sur testnet et mainnet) ; `reserve` = base + 0,2 × objets possédés ; `spendable` = solde − réserve ; compte inexistant : `exists: false` |
 | `xrp_lines` | `{ address }` | `[{ currency, issuer, balance, limit }]` | lignes de confiance (monnaies émises) |
 | `xrp_txs` | `{ address }` | `[{ hash, from, to, destinationTag, amount, fee, ledger, time, result }]` | 50 derniers Payment ; `amount` = **montant réellement livré** (`delivered_amount`) |
@@ -512,7 +559,30 @@ Rust choisit le serveur (`servers.xrp`, sinon le défaut), famille Tor `xrp`, ja
 
 Refusé avant toute signature : tout autre type de transaction (AccountSet, SetRegularKey, SignerListSet, TrustSet, OfferCreate, EscrowCreate…), **paiement partiel** (`tfPartialPayment` : le montant livré pourrait être presque nul), `Paths`, `DeliverMin`, `TicketSequence`, `NetworkID`, drapeaux inconnus, champs inconnus. Plus strict que « inconnu → confirmation renforcée » : un champ que Kyro ne sait pas décoder n'est jamais signé. Hardware wallets : `HW_UNSUPPORTED` (Trezor `RippleSignTx`, Ledger app « XRP » : non faits).
 
-**Pour l'UI** : le champ **Tag de destination** doit être visible en permanence sur l'écran Envoyer XRP (pas caché dans « options »), avec `parseDestinationTag` (entier 0 … 4 294 967 295) ; s'il est vide, afficher l'avertissement ; si `xrp_account(destination).requireDestTag`, le rendre **obligatoire** (Rust refuse de toute façon) ; afficher `spendable` (pas seulement le solde) et, pour un destinataire inexistant, « au moins 1 XRP » ; après `xrp_broadcast`, suivre `xrp_tx_status`. À faire (pas dans ce lot) : `Family` `'xrp'`, types `Commands` (`xrp_*`, `Accounts.xrp`, `Servers.xrp`, `ServerTestTarget`), backend démo, écrans Envoyer / Recevoir (adresse + tag éventuel) / Actif (XRP, lignes de confiance) / Historique, réglage serveur XRPL, « Connexions sortantes », sortie de XRP de `WATCH_ONLY_CHAINS`. Adaptateur : `XrpAdapter` (`packages/chains/src/xrp/`), `xrpChain(network)`.
+**Pour l'UI** : le champ **Tag de destination** doit être visible en permanence sur l'écran Envoyer XRP (pas caché dans « options »), avec `parseDestinationTag` (entier 0 … 4 294 967 295) ; s'il est vide, afficher l'avertissement ; si `xrp_account(destination).requireDestTag`, le rendre **obligatoire** (Rust refuse de toute façon) ; afficher `spendable` (pas seulement le solde) et, pour un destinataire inexistant, « au moins 1 XRP » ; après `xrp_broadcast`, suivre `xrp_tx_status`. **Fait côté UI** (commit 158b505) : `Family` `'xrp'`, types `Commands` (`xrp_*`, `Accounts.xrp`, `Servers.xrp`, `ServerTestTarget`), backend démo, écrans Envoyer / Recevoir (adresse + tag éventuel) / Actif (XRP, lignes de confiance) / Historique, réglage serveur XRPL, « Connexions sortantes », sortie de XRP de `WATCH_ONLY_CHAINS`. Adaptateur : `XrpAdapter` (`packages/chains/src/xrp/`), `xrpChain(network)`.
+
+### 2.7 Cardano (ADA et tokens natifs)
+
+Rust choisit le serveur (`servers.cardano`, sinon Koios : `preprod.koios.rest` / `api.koios.rest`, offre publique gratuite sans clé), famille Tor `cardano`, jamais de repli. Blockfrost n'est pas utilisé : Koios fournit tout ce qu'il faut (UTxO, paramètres, tip, historique, `submittx`). **Rust construit la transaction** : UTxO de notre adresse (`address_utxos`), paramètres (`epoch_params` : `min_fee_a`, `min_fee_b`, `coins_per_utxo_size`, `max_tx_size`, bornés contre un serveur hostile), sélection des UTxO (ceux qui portent le token demandé d'abord, puis ADA seuls par valeur décroissante, ceux avec tokens en dernier), une sortie destinataire + une sortie de monnaie qui rend **tous** les tokens restants, frais = `min_fee_a × taille signée + min_fee_b` (itéré), chaque sortie ≥ son min-UTxO, `ttl` = slot courant + 3 600 (≈ 1 h), ensembles taggés 258 (Conway), aucun collatéral, aucun certificat. Encodé par wallet-core ; une transaction construite par le serveur n'est jamais signée.
+
+**Mode une seule adresse** : réception et monnaie sur `m/1852'/1815'/0'/0/0` (staking `…/2/0`), comme les portefeuilles « single address » ; plus simple et plus sûr à vérifier, mais tous les paiements sont liés à une adresse (et à une clé de staking) visible. Le staking (délégation, retraits) n'est pas fait.
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `ada_backend_info` | — | `{ kind: 'default' \| 'koios', network: 'mainnet' \| 'testnet', label, tor }` | |
+| `ada_address` | `{ index }` | `{ address, path, stakeAddress, accountXpub }` | coffre déverrouillé ; **la signature n'utilise que l'index 0** : l'UI ne doit afficher que cette adresse ; `accountXpub` = clé publique ‖ chain code de `m/1852'/1815'/0'` (hex) |
+| `ada_account` | `{ address }` | `{ address, balance /*lovelace*/, tokens: [{ policy, name /*hex*/, nameText, quantity, verified, ticker?, decimals? }], utxoCount, lockedWithTokens }` | `lockedWithTokens` = ADA immobilisés par les tokens (min-UTxO de leurs sorties) : ce qui ne peut pas partir sans eux |
+| `ada_txs` | `{ address }` | `[{ hash, time, blockHeight, fee, lovelaceDelta /*signé*/, tokenDeltas: [{ policy, name, nameText, delta }], memo }]` | 20 dernières (`address_txs` + `tx_info`), plus récente d'abord ; `memo` = message CIP-20 |
+| `ada_tx_status` | `{ hash }` | `{ confirmations: number \| null }` | `null` : pas encore vue par l'indexeur |
+| `ada_build_tx` | `{ to, lovelace?, token?: { policy, name, quantity }, memo? }` | `{ tx /*non signée, CBOR hex*/, summary: CardanoTxSummary, context: { account, params, tip, leaving } }` | `lovelace` absent avec un token = exactement le min-UTxO de la sortie ; refusé avant toute construction : adresse refusée (voir §1), montant sous le min-UTxO (le message donne le minimum), token ou ADA insuffisants, monnaie sous son min-UTxO, transaction > `max_tx_size`. `leaving` = sorties vers d'autres adresses + frais |
+| `ada_sign_tx` | `{ tx, password }` | `{ tx /*signée*/, txId, summary, context }` | décode (strict), refuse `ttl` dépassé, **relit en direct** nos UTxO : chaque entrée doit être un de nos UTxO non dépensés, et entrées = sorties + frais (ADA et chaque token) ; frais ≥ minimum ; mot de passe → racine Icarus re-dérivée du coffre → dialogue natif : **chaque sortie** (destinataire ou monnaie, adresse complète, ADA, « dont X ADA minimum obligatoire avec les tokens », chaque token : quantité, nom texte et hex, policy id, vérifié ou NON VÉRIFIÉ), frais, total qui quitte le portefeuille, validité (slot, ≈ minutes), message ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` (message CIP-20, token hors table vérifiée, frais > 5 ADA, pas de ttl) ; résumé de la signature = résumé affiché |
+| `ada_broadcast` | `{ tx }` | `string` (tx id) | `cardano_signed_witnesses` (chaque signature vérifiée sur blake2b-256 du corps, **un seul témoin : notre clé de paiement**) puis Koios `POST /submittx` (CBOR brut, `application/cbor`) ; l'id renvoyé doit être blake2b-256(corps), sinon `SERVER_UNREACHABLE` ; refus du nœud → `INVALID_INPUT` avec son message |
+
+Table de tokens vérifiés (mainnet seulement, vérifiée le 30/10/2026 via Koios `asset_info` / registre de tokens Cardano) : DJED (`8db269c3…cd61` / `446a65644d6963726f555344`), USDM (`c48cbb3d…47ad` / `0014df105553444d`), iUSD (`f66d78b4…9880` / `69555344`). Sur preprod : aucune, tout token demande la confirmation renforcée. N'importe qui peut créer un token au même nom : seule la policy id compte.
+
+Hardware wallets : `HW_UNSUPPORTED`. Ce qu'il faudrait : Ledger app « Cardano ADA » (APDU `DERIVE_ADDRESS` / `GET_EXT_PUBKEY` pour `m/1852'/1815'/a'`, `SIGN_TX` qui reçoit la transaction champ par champ et rend les témoins ; dérivation « Ledger » ≠ Icarus pour une même phrase de 24 mots) ; Trezor `CardanoGetPublicKey` / `CardanoGetAddress` / `CardanoSignTxInit` + flux d'entrées / sorties / tokens (`derivation_type` ICARUS ou ICARUS_TREZOR, qui diffère d'Icarus pour 24 mots). Dans les deux cas Kyro reconstruirait le corps lui-même et vérifierait chaque témoin contre blake2b-256 du corps, comme `btc_hw_finalize`.
+
+**À faire côté UI** (pas dans ce lot) : `Family` `'ada'` (aujourd'hui `CardanoChain` / `cardanoChain(network)` existent dans le registre mais hors `Family` et `allChains()`), types `Commands` de `@kyro/shared` (`ada_*`, `Accounts.cardano`, `Servers.cardano`, `CardanoServer`, `ServerTestTarget` `cardano` ; les types sont aujourd'hui dans `packages/chains/src/cardano/adapter.ts`, à déplacer dans `ipc.ts`), `WalletAccounts.cardano` et `AdapterSet.cardano` (`createAdapters`), backend démo, écrans Envoyer (adresse, montant ADA avec `adaToLovelace`, token facultatif avec quantité, message facultatif public, aperçu du `summary` avant le mot de passe : sorties, min-ADA, frais), Recevoir (adresse de base seule), Actif (ADA, `spendable` = solde − `lockedWithTokens`, liste des tokens avec policy id et mention « non vérifié »), Historique (`lovelaceDelta`, tokens, message), réglage serveur Cardano (Koios), « Connexions sortantes » (`preprod.koios.rest` / `api.koios.rest`), sortie de Cardano de `WATCH_ONLY_CHAINS`. Adaptateur : `CardanoAdapter` (`packages/chains/src/cardano/`), `isCardanoAddress`, `isByronAddress`.
 
 ## 3. Allowlist réseau (`net_fetch`)
 
@@ -522,6 +592,7 @@ Refusé avant toute signature : tout autre type de transaction (AccountSet, SetR
 | `mempool.space` | Bitcoin : UTXO, frais, diffusion (Esplora) |
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`) : utilisé par les commandes Rust `ltc_*`, famille Tor `litecoin` |
 | `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet et mainnet (JSON-RPC rippled) : utilisés par les commandes Rust `xrp_*`, famille Tor `xrp` |
+| `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*`, famille Tor `cardano` |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*`, famille Tor `tron` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |
 | `arbitrum-one-rpc.publicnode.com`, `optimism-rpc.publicnode.com`, `base-rpc.publicnode.com`, `polygon-bor-rpc.publicnode.com`, `bsc-rpc.publicnode.com`, `avalanche-c-chain-rpc.publicnode.com` | RPC EVM (phase 2) |

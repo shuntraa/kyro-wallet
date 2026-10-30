@@ -450,8 +450,8 @@ pub async fn broadcast(
     raw_hex: &str,
     signature: &[u8; 65],
 ) -> AppResult<String> {
-    let raw =
-        hex::decode(raw_hex.trim()).map_err(|_| AppError::InvalidInput("raw_data hex".into()))?;
+    let raw = hex::decode(raw_hex.trim())
+        .map_err(|_| AppError::InvalidInput("raw_data : hexadécimal attendu".into()))?;
     let tx = wallet_core::TronRaw::decode(&raw)?;
     let txid = hex::encode(tx.txid());
     let signed = wallet_core::tron_signed_transaction(raw_hex, signature)?;

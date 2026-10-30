@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ada-sign-tx"
+description = "Enables the ada_sign_tx command without any pre-configured scope."
+commands.allow = ["ada_sign_tx"]
+
+[[permission]]
+identifier = "deny-ada-sign-tx"
+description = "Denies the ada_sign_tx command without any pre-configured scope."
+commands.deny = ["ada_sign_tx"]

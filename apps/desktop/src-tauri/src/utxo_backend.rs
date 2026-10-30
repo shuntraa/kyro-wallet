@@ -275,7 +275,7 @@ pub async fn broadcast(ctx: &UtxoCtx<'_>, hex_tx: &str) -> AppResult<String> {
         url: url(&base, "/tx")?,
         method: Method::Post,
         headers: vec![("content-type".into(), "text/plain".into())],
-        body: Some(hex_tx.trim().to_owned()),
+        body: Some(hex_tx.trim().as_bytes().to_vec()),
         family: utxo_family(ctx.coin),
         direct_private: false,
         long: false,

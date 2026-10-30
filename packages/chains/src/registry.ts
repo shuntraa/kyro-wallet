@@ -219,6 +219,27 @@ export function xrpChain(network: Network): XrpChain {
   return XRP_CHAINS[network];
 }
 
+/**
+ * Cardano (phase 4, B4d): Rust `ada_*` commands and `CardanoAdapter`
+ * (`packages/chains/src/cardano/`). Testnet = preprod. Not yet in `Family` / `allChains()`:
+ * wiring it into the UI is listed in docs/IPC.md §2.7. Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface CardanoChain extends Omit<ChainBase, 'phase'> {
+  family: 'ada';
+  phase: 4;
+}
+
+const CARDANO_CHAINS: Record<Network, CardanoChain> = {
+  testnet: { family: 'ada', key: 'cardano', name: 'Cardano preprod', label: 'ADA preprod', network: 'testnet', color: '#3468D1', glyph: 'A',
+    nativeSymbol: 'ADA', nativeName: 'Cardano', nativeDecimals: 6, coingeckoId: 'cardano', phase: 4, blockTimeSecs: 20 },
+  mainnet: { family: 'ada', key: 'cardano', name: 'Cardano', label: 'ADA', network: 'mainnet', color: '#3468D1', glyph: 'A',
+    nativeSymbol: 'ADA', nativeName: 'Cardano', nativeDecimals: 6, coingeckoId: 'cardano', phase: 4, blockTimeSecs: 20 },
+};
+
+export function cardanoChain(network: Network): CardanoChain {
+  return CARDANO_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;

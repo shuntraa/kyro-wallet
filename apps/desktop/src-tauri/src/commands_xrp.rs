@@ -408,7 +408,8 @@ pub async fn xrp_sign_tx(
 pub(crate) async fn broadcast_checked(c: &XrpCtx<'_>, me: &str, blob: &str) -> AppResult<String> {
     let hash = wallet_core::xrp_verify_signed(blob)?;
     let p = XrpPayment::decode(
-        &hex::decode(blob.trim()).map_err(|_| AppError::InvalidInput("blob hex".into()))?,
+        &hex::decode(blob.trim())
+            .map_err(|_| AppError::InvalidInput("blob : hexadécimal attendu".into()))?,
     )?;
     if p.account != wallet_core::xrp_account_id(me)? {
         return Err(AppError::InvalidInput(

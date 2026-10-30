@@ -6,7 +6,7 @@
 //!   redirects, size cap) lives in `net.rs` and is identical to the clear transport.
 //! - **Fail closed**: if Tor is not ready within [`READY_WAIT`], the request fails with
 //!   `TOR_UNAVAILABLE`; it is never retried in clear.
-//! - Each activity family (bitcoin / litecoin / dogecoin / tron / xrp / evm / solana / market / swap) uses its own
+//! - Each activity family (bitcoin / litecoin / dogecoin / tron / xrp / cardano / evm / solana / market / swap) uses its own
 //!   `isolated_client()`, so their streams never share a circuit.
 
 use std::collections::HashMap;
@@ -320,7 +320,7 @@ impl TorManager {
         url: &url::Url,
         method: Method,
         headers: &[(String, String)],
-        body: Option<&str>,
+        body: Option<&[u8]>,
         allow_plain: bool,
     ) -> AppResult<(u16, Option<String>, Vec<u8>)> {
         let host = url
@@ -371,7 +371,7 @@ async fn http_exchange<S>(
     host: &str,
     method: Method,
     headers: &[(String, String)],
-    body: Option<&str>,
+    body: Option<&[u8]>,
 ) -> AppResult<(u16, Option<String>, Vec<u8>)>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
@@ -403,7 +403,7 @@ where
         builder = builder.header(k.as_str(), v.as_str());
     }
     let request = builder
-        .body(Full::new(Bytes::from(body.unwrap_or_default().to_owned())))
+        .body(Full::new(Bytes::copy_from_slice(body.unwrap_or_default())))
         .map_err(|e| net_err(&e))?;
     let response = sender
         .send_request(request)

@@ -72,19 +72,19 @@ pub fn xrp_account_id(address: &str) -> Result<[u8; 20]> {
     let a = address.trim();
     if (a.starts_with('X') || a.starts_with('T')) && a.len() >= 46 {
         return Err(Error::input(
-            "X-addresses are not supported: use the classic r… address and its destination tag",
+            "les X-addresses ne sont pas prises en charge : demande l'adresse classique r… et le tag de destination",
         ));
     }
     let raw = bs58::decode(a)
         .with_alphabet(bs58::Alphabet::RIPPLE)
         .into_vec()
-        .map_err(|_| Error::input("invalid XRP address"))?;
+        .map_err(|_| Error::input("adresse XRP invalide"))?;
     if raw.len() != 25 || raw[0] != 0 {
-        return Err(Error::input("invalid XRP address"));
+        return Err(Error::input("adresse XRP invalide"));
     }
     let sum = sha256d::Hash::hash(&raw[..21]).to_byte_array();
     if raw[21..] != sum[..4] {
-        return Err(Error::input("invalid XRP address (checksum)"));
+        return Err(Error::input("adresse XRP invalide (somme de contrôle)"));
     }
     let mut id = [0u8; 20];
     id.copy_from_slice(&raw[1..21]);
@@ -98,7 +98,7 @@ fn id_of_pubkey(pk: &[u8; 33]) -> [u8; 20] {
 /// `r…` address of a compressed secp256k1 public key.
 pub fn xrp_address_of_pubkey(pk: &[u8]) -> Result<String> {
     let pk: [u8; 33] = PublicKey::from_slice(pk)
-        .map_err(|_| Error::input("invalid public key"))?
+        .map_err(|_| Error::input("clé publique invalide"))?
         .serialize();
     Ok(xrp_address_from_id(&id_of_pubkey(&pk)))
 }
@@ -173,24 +173,24 @@ impl XrpAmount {
 
     fn decode(b: &mut &[u8]) -> Result<XrpAmount> {
         let head = take(b, 8)?;
-        let v = u64::from_be_bytes(head.try_into().map_err(|_| bad("amount"))?);
+        let v = u64::from_be_bytes(head.try_into().map_err(|_| bad("montant"))?);
         if v & (1 << 63) == 0 {
             if v & (1 << 61) != 0 {
-                return Err(bad("MPT amounts are not supported"));
+                return Err(bad("les montants MPT ne sont pas pris en charge"));
             }
             if v & (1 << 62) == 0 {
-                return Err(bad("negative XRP amount"));
+                return Err(bad("montant XRP négatif"));
             }
             let drops = v & 0x3FFF_FFFF_FFFF_FFFF;
             if drops > MAX_DROPS {
-                return Err(bad("XRP amount too large"));
+                return Err(bad("montant XRP trop grand"));
             }
             return Ok(XrpAmount::Xrp(drops));
         }
-        let currency: [u8; 20] = take(b, 20)?.try_into().map_err(|_| bad("currency"))?;
-        let issuer: [u8; 20] = take(b, 20)?.try_into().map_err(|_| bad("issuer"))?;
+        let currency: [u8; 20] = take(b, 20)?.try_into().map_err(|_| bad("devise"))?;
+        let issuer: [u8; 20] = take(b, 20)?.try_into().map_err(|_| bad("émetteur"))?;
         if currency == [0u8; 20] {
-            return Err(bad("issued amount with the XRP currency code"));
+            return Err(bad("montant émis avec le code de devise XRP"));
         }
         if v == 0x8000_0000_0000_0000 {
             return Ok(XrpAmount::Issued {
@@ -205,7 +205,7 @@ impl XrpAmount {
         let exponent = ((v >> 54) & 0xFF) as i32 - 97;
         let mantissa = v & ((1 << 54) - 1);
         if !(MIN_MANTISSA..=MAX_MANTISSA).contains(&mantissa) || !(-96..=80).contains(&exponent) {
-            return Err(bad("non-normalized issued amount"));
+            return Err(bad("montant émis non normalisé"));
         }
         Ok(XrpAmount::Issued {
             mantissa,
@@ -229,7 +229,7 @@ fn parse_iou_value(s: &str) -> Result<(u64, i32, bool)> {
         || !int.bytes().all(|c| c.is_ascii_digit())
         || !frac.bytes().all(|c| c.is_ascii_digit())
     {
-        return Err(Error::input("invalid amount"));
+        return Err(Error::input("montant invalide"));
     }
     let digits: String = format!("{int}{frac}");
     let digits = digits.trim_start_matches('0');
@@ -240,17 +240,17 @@ fn parse_iou_value(s: &str) -> Result<(u64, i32, bool)> {
         return Ok((0, 0, false));
     }
     if trimmed.len() > 16 {
-        return Err(Error::input("more than 16 significant digits"));
+        return Err(Error::input("plus de 16 chiffres significatifs"));
     }
     let mut m: u64 = trimmed
         .parse()
-        .map_err(|_| Error::input("invalid amount"))?;
+        .map_err(|_| Error::input("montant invalide"))?;
     while m < MIN_MANTISSA {
         m *= 10;
         exponent -= 1;
     }
     if !(-96..=80).contains(&exponent) {
-        return Err(Error::input("amount out of range"));
+        return Err(Error::input("montant hors limites"));
     }
     Ok((m, exponent as i32, negative))
 }
@@ -291,19 +291,21 @@ pub fn xrp_currency_code(code: &str) -> Result<[u8; 20]> {
     let mut out = [0u8; 20];
     if c.len() == 3 && c.bytes().all(|b| b.is_ascii_graphic()) {
         if c.eq_ignore_ascii_case("XRP") {
-            return Err(Error::input("XRP is not an issued currency"));
+            return Err(Error::input("XRP n'est pas une devise émise"));
         }
         out[12..15].copy_from_slice(c.as_bytes());
         return Ok(out);
     }
     if c.len() == 40 {
-        hex::decode_to_slice(c, &mut out).map_err(|_| Error::input("invalid currency code"))?;
+        hex::decode_to_slice(c, &mut out).map_err(|_| Error::input("code de devise invalide"))?;
         if out[0] == 0 {
-            return Err(Error::input("invalid non-standard currency code"));
+            return Err(Error::input("code de devise non standard invalide"));
         }
         return Ok(out);
     }
-    Err(Error::input("currency: 3 characters or 40 hex characters"))
+    Err(Error::input(
+        "devise : 3 caractères ou 40 caractères hexadécimaux",
+    ))
 }
 
 fn currency_string(c: &[u8; 20]) -> String {
@@ -378,12 +380,12 @@ impl XrpAmount {
 // ---------------------------------------------------------------------------------------------
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("XRP transaction: {}", msg.into()))
+    Error::input(format!("transaction XRP : {}", msg.into()))
 }
 
 fn take<'a>(b: &mut &'a [u8], n: usize) -> Result<&'a [u8]> {
     if b.len() < n {
-        return Err(bad("truncated"));
+        return Err(bad("tronquée"));
     }
     let (head, rest) = b.split_at(n);
     *b = rest;
@@ -439,7 +441,7 @@ fn read_vl<'a>(b: &mut &'a [u8]) -> Result<&'a [u8]> {
         let x = take(b, 2)?;
         12_481 + (b1 - 241) * 65_536 + usize::from(x[0]) * 256 + usize::from(x[1])
     } else {
-        return Err(bad("length prefix"));
+        return Err(bad("préfixe de longueur"));
     };
     take(b, len)
 }
@@ -458,7 +460,7 @@ fn read_u32(b: &mut &[u8]) -> Result<u32> {
 fn read_account(b: &mut &[u8]) -> Result<[u8; 20]> {
     read_vl(b)?
         .try_into()
-        .map_err(|_| bad("account: 20 bytes expected"))
+        .map_err(|_| bad("compte : 20 octets attendus"))
 }
 
 /// One memo (all three fields optional).
@@ -572,7 +574,7 @@ impl XrpPayment {
     /// that does not re-encode identically.
     pub fn decode(raw: &[u8]) -> Result<XrpPayment> {
         if raw.len() > MAX_BLOB {
-            return Err(bad("too large"));
+            return Err(bad("trop grande"));
         }
         let mut b = raw;
         let (mut ty, mut flags, mut source_tag, mut sequence) = (None, None, None, None);
@@ -589,7 +591,7 @@ impl XrpPayment {
                 }
                 (2, 1) => {
                     return Err(bad(
-                        "NetworkID is not supported (XRPL mainnet/testnet only)",
+                        "NetworkID n'est pas pris en charge (XRPL mainnet / testnet uniquement)",
                     ))
                 }
                 (2, 2) => flags = Some(read_u32(&mut b)?),
@@ -597,7 +599,7 @@ impl XrpPayment {
                 (2, 4) => sequence = Some(read_u32(&mut b)?),
                 (2, 14) => destination_tag = Some(read_u32(&mut b)?),
                 (2, 27) => lls = Some(read_u32(&mut b)?),
-                (2, 41) => return Err(bad("TicketSequence is not supported")),
+                (2, 41) => return Err(bad("TicketSequence n'est pas pris en charge")),
                 (5, 17) => {
                     invoice_id = Some(
                         <[u8; 32]>::try_from(take(&mut b, 32)?).map_err(|_| bad("InvoiceID"))?,
@@ -606,47 +608,51 @@ impl XrpPayment {
                 (6, 1) => amount = Some(XrpAmount::decode(&mut b)?),
                 (6, 8) => match XrpAmount::decode(&mut b)? {
                     XrpAmount::Xrp(d) => fee = Some(d),
-                    XrpAmount::Issued { .. } => return Err(bad("Fee must be XRP")),
+                    XrpAmount::Issued { .. } => return Err(bad("Fee doit être en XRP")),
                 },
                 (6, 9) => send_max = Some(XrpAmount::decode(&mut b)?),
-                (6, 10) => return Err(bad("DeliverMin (partial payments) is not supported")),
+                (6, 10) => {
+                    return Err(bad(
+                        "DeliverMin (paiements partiels) n'est pas pris en charge",
+                    ))
+                }
                 (7, 3) => spk = Some(read_vl(&mut b)?.to_vec()),
                 (7, 4) => sig = Some(read_vl(&mut b)?.to_vec()),
                 (8, 1) => account = Some(read_account(&mut b)?),
                 (8, 3) => destination = Some(read_account(&mut b)?),
                 (15, 9) => memos = read_memos(&mut b)?,
-                (18, 1) => return Err(bad("Paths are not supported")),
-                (t, n) => return Err(bad(format!("unknown field (type {t}, field {n})"))),
+                (18, 1) => return Err(bad("les chemins (Paths) ne sont pas pris en charge")),
+                (t, n) => return Err(bad(format!("champ inconnu (type {t}, champ {n})"))),
             }
         }
         match ty {
             Some(0) => {}
             Some(other) => {
                 return Err(bad(format!(
-                    "transaction type {other} is not a Payment: refused"
+                    "le type de transaction {other} n'est pas un Payment : refusé"
                 )))
             }
-            None => return Err(bad("missing TransactionType")),
+            None => return Err(bad("TransactionType manquant")),
         }
         let p = XrpPayment {
             flags,
             source_tag,
-            sequence: sequence.ok_or_else(|| bad("missing Sequence"))?,
+            sequence: sequence.ok_or_else(|| bad("Sequence manquant"))?,
             destination_tag,
             last_ledger_sequence: lls,
             invoice_id,
-            amount: amount.ok_or_else(|| bad("missing Amount"))?,
-            fee: fee.ok_or_else(|| bad("missing Fee"))?,
+            amount: amount.ok_or_else(|| bad("Amount manquant"))?,
+            fee: fee.ok_or_else(|| bad("Fee manquant"))?,
             send_max,
             signing_pub_key: spk,
             txn_signature: sig,
-            account: account.ok_or_else(|| bad("missing Account"))?,
-            destination: destination.ok_or_else(|| bad("missing Destination"))?,
+            account: account.ok_or_else(|| bad("Account manquant"))?,
+            destination: destination.ok_or_else(|| bad("Destination manquante"))?,
             memos,
         };
         if p.encode(true) != raw {
             return Err(bad(
-                "non-canonical encoding (order, duplicate or unknown layout)",
+                "encodage non canonique (ordre, doublon ou disposition inconnue)",
             ));
         }
         Ok(p)
@@ -688,13 +694,13 @@ fn read_memos(b: &mut &[u8]) -> Result<Vec<XrpMemo>> {
                         (7, 13) => m.memo_data = Some(read_vl(b)?.to_vec()),
                         (7, 14) => m.memo_format = Some(read_vl(b)?.to_vec()),
                         (t, n) => {
-                            return Err(bad(format!("unknown memo field (type {t}, field {n})")))
+                            return Err(bad(format!("champ de mémo inconnu (type {t}, champ {n})")))
                         }
                     }
                 }
                 out.push(m);
             }
-            (t, n) => return Err(bad(format!("unknown Memos entry (type {t}, field {n})"))),
+            (t, n) => return Err(bad(format!("entrée Memos inconnue (type {t}, champ {n})"))),
         }
     }
 }
@@ -772,7 +778,8 @@ pub struct XrpTxSummary {
 /// `SigningPubKey` ≠ `our_pubkey`, `tfPartialPayment`, unknown flags, a payment to oneself,
 /// a non-positive amount, a zero fee.
 pub fn xrp_decode_tx(blob_hex: &str, our_address: &str, our_pubkey: &[u8]) -> Result<XrpTxSummary> {
-    let raw = hex::decode(blob_hex.trim()).map_err(|_| Error::input("blob is not hex"))?;
+    let raw = hex::decode(blob_hex.trim())
+        .map_err(|_| Error::input("le blob n'est pas en hexadécimal"))?;
     let p = XrpPayment::decode(&raw)?;
     summarize(&p, our_address, our_pubkey, false)
 }
@@ -784,37 +791,37 @@ fn summarize(
     signed: bool,
 ) -> Result<XrpTxSummary> {
     if p.txn_signature.is_some() && !signed {
-        return Err(bad("already signed"));
+        return Err(bad("déjà signée"));
     }
     if p.account != xrp_account_id(our_address)? {
-        return Err(bad("the Account is not this wallet's address"));
+        return Err(bad("l'Account n'est pas l'adresse de ce portefeuille"));
     }
     if p.signing_pub_key.as_deref() != Some(our_pubkey) {
-        return Err(bad("SigningPubKey is not this wallet's key"));
+        return Err(bad("SigningPubKey n'est pas la clé de ce portefeuille"));
     }
     let flags = p.flags.unwrap_or(0);
     if flags & TF_PARTIAL_PAYMENT != 0 {
-        return Err(bad("partial payments (tfPartialPayment) are refused: the amount delivered could be almost nothing"));
+        return Err(bad("les paiements partiels (tfPartialPayment) sont refusés : le montant livré pourrait être presque nul"));
     }
     let known = TF_FULLY_CANONICAL_SIG | TF_NO_RIPPLE_DIRECT | TF_LIMIT_QUALITY;
     if flags & !known != 0 {
-        return Err(bad(format!("unknown flags {:#010x}", flags & !known)));
+        return Err(bad(format!("flags inconnus {:#010x}", flags & !known)));
     }
     if p.destination == p.account {
-        return Err(bad("payment to oneself"));
+        return Err(bad("paiement à soi-même"));
     }
     match &p.amount {
-        XrpAmount::Xrp(0) => return Err(bad("zero amount")),
+        XrpAmount::Xrp(0) => return Err(bad("montant nul")),
         XrpAmount::Issued {
             mantissa, negative, ..
-        } if *mantissa == 0 || *negative => return Err(bad("issued amount must be positive")),
+        } if *mantissa == 0 || *negative => return Err(bad("le montant émis doit être positif")),
         _ => {}
     }
     if let Some(XrpAmount::Issued { negative: true, .. }) = &p.send_max {
-        return Err(bad("negative SendMax"));
+        return Err(bad("SendMax négatif"));
     }
     if p.fee == 0 {
-        return Err(bad("zero fee"));
+        return Err(bad("frais nuls"));
     }
     let mut warnings = Vec::new();
     if p.send_max.is_some() {
@@ -873,14 +880,15 @@ pub fn xrp_sign(seed: &Seed, index: u32, blob_hex: &str) -> Result<(String, Stri
     let sk = key.xpriv().private_key;
     let pk = sk.public_key(&secp).serialize();
     let ours = xrp_address_from_id(&id_of_pubkey(&pk));
-    let raw = hex::decode(blob_hex.trim()).map_err(|_| Error::input("blob is not hex"))?;
+    let raw = hex::decode(blob_hex.trim())
+        .map_err(|_| Error::input("le blob n'est pas en hexadécimal"))?;
     let mut p = XrpPayment::decode(&raw)?;
     let summary = summarize(&p, &ours, &pk, false)?;
     let msg = Message::from_digest(p.signing_hash());
     let mut sig = secp.sign_ecdsa(&msg, &sk);
     sig.normalize_s();
     secp.verify_ecdsa(&msg, &sig, &sk.public_key(&secp))
-        .map_err(|_| Error::crypto("signature self-check failed"))?;
+        .map_err(|_| Error::crypto("échec de la vérification de la signature"))?;
     p.txn_signature = Some(sig.serialize_der().to_vec());
     let signed = p.encode(true);
     let hash = hex::encode_upper(p.hash());
@@ -890,23 +898,24 @@ pub fn xrp_sign(seed: &Seed, index: u32, blob_hex: &str) -> Result<(String, Stri
 /// Hash of a signed blob, after checking that it decodes, that its signature is a canonical
 /// (DER, low-S) signature by its `SigningPubKey`, and that this key is `Account`'s.
 pub fn xrp_verify_signed(blob_hex: &str) -> Result<String> {
-    let raw = hex::decode(blob_hex.trim()).map_err(|_| Error::input("blob is not hex"))?;
+    let raw = hex::decode(blob_hex.trim())
+        .map_err(|_| Error::input("le blob n'est pas en hexadécimal"))?;
     let p = XrpPayment::decode(&raw)?;
-    let der = p.txn_signature.as_ref().ok_or_else(|| bad("not signed"))?;
-    let sig = Signature::from_der(der).map_err(|_| bad("signature: invalid DER"))?;
+    let der = p.txn_signature.as_ref().ok_or_else(|| bad("non signée"))?;
+    let sig = Signature::from_der(der).map_err(|_| bad("signature : DER invalide"))?;
     let mut low = sig;
     low.normalize_s();
     if low != sig {
-        return Err(bad("signature is not low-S (non-canonical)"));
+        return Err(bad("la signature n'est pas low-S (non canonique)"));
     }
     let pk = PublicKey::from_slice(p.signing_pub_key.as_deref().unwrap_or_default())
         .map_err(|_| bad("SigningPubKey"))?;
     if id_of_pubkey(&pk.serialize()) != p.account {
-        return Err(bad("SigningPubKey is not the Account's key"));
+        return Err(bad("SigningPubKey n'est pas la clé de l'Account"));
     }
     Secp256k1::verification_only()
         .verify_ecdsa(&Message::from_digest(p.signing_hash()), &sig, &pk)
-        .map_err(|_| bad("signature does not verify"))?;
+        .map_err(|_| bad("la signature ne se vérifie pas"))?;
     Ok(hex::encode_upper(p.hash()))
 }
 

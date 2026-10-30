@@ -35,11 +35,28 @@ pub(crate) async fn seed_from_password(
     state: &AppState,
     password: Zeroizing<String>,
 ) -> AppResult<Seed> {
+    Ok(mnemonic_from_password(state, password).await?.to_seed(""))
+}
+
+/// Opens the vault with `password` (attempt limiting applies).
+pub(crate) async fn mnemonic_from_password(
+    state: &AppState,
+    password: Zeroizing<String>,
+) -> AppResult<Mnemonic> {
     state.check_attempts()?;
     let file = state.read_vault()?;
     let result = blocking(move || Ok(wallet_core::open(&file, &password)?)).await;
     state.record_attempt(result.is_ok());
-    Ok(result?.to_seed(""))
+    result
+}
+
+/// Cardano Icarus root key re-derived from the vault (signing asks for the password again).
+pub(crate) async fn cardano_root_from_password(
+    state: &AppState,
+    password: Zeroizing<String>,
+) -> AppResult<wallet_core::CardanoRoot> {
+    let m = mnemonic_from_password(state, password).await?;
+    blocking(move || Ok(wallet_core::CardanoRoot::from_mnemonic(&m, ""))).await
 }
 
 /// Native OS dialog — rendered outside the webview, so a compromised UI cannot fake or skip it.
@@ -116,6 +133,7 @@ async fn seal_and_start(
     }
     check_password_strength(&password)?;
     let seed = mnemonic.to_seed("");
+    let cardano = wallet_core::CardanoRoot::from_mnemonic(&mnemonic, "");
     let file = blocking(move || {
         Ok(wallet_core::seal(
             &mnemonic,
@@ -125,7 +143,7 @@ async fn seal_and_start(
     })
     .await?;
     state.write_vault(&file)?;
-    state.start_session(seed);
+    state.start_session(seed, cardano);
     Ok(())
 }
 
@@ -163,8 +181,15 @@ pub async fn vault_import(
 
 #[tauri::command]
 pub async fn vault_unlock(state: State<'_, AppState>, password: String) -> AppResult<()> {
-    let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
-    state.start_session(seed);
+    let m = mnemonic_from_password(&state, Zeroizing::new(password)).await?;
+    let (seed, cardano) = blocking(move || {
+        Ok((
+            m.to_seed(""),
+            wallet_core::CardanoRoot::from_mnemonic(&m, ""),
+        ))
+    })
+    .await?;
+    state.start_session(seed, cardano);
     Ok(())
 }
 
@@ -244,6 +269,8 @@ pub struct Accounts {
     tron: AddressOut,
     /// `m/44'/144'/0'/0/0`.
     xrp: AddressOut,
+    /// Base address `m/1852'/1815'/0'/0/0` + stake key `…/2/0` (CIP-1852, Icarus).
+    cardano: AddressOut,
 }
 
 fn utxo_account_out(seed: &Seed, net: Network, coin: UtxoCoin) -> AppResult<UtxoAccountOut> {
@@ -276,6 +303,8 @@ fn btc_account_out(seed: &Seed, net: Network, kind: BtcKind) -> AppResult<BtcAcc
 #[tauri::command]
 pub fn accounts_get(state: State<'_, AppState>) -> AppResult<Accounts> {
     let net = state.network;
+    // Separate lock scope: `with_seed` and `with_cardano` take the same (non-reentrant) mutex.
+    let cardano = state.with_cardano(|r| Ok(wallet_core::cardano_address(r, net, 0, 0)?))?;
     state.with_seed(|seed| {
         Ok(Accounts {
             network: network_name(net),
@@ -297,6 +326,7 @@ pub fn accounts_get(state: State<'_, AppState>) -> AppResult<Accounts> {
             xrp: AddressOut {
                 address: wallet_core::xrp_address(seed, 0)?,
             },
+            cardano: AddressOut { address: cardano },
         })
     })
 }

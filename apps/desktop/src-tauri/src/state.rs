@@ -3,16 +3,19 @@ use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use wallet_core::{Network, Seed, VaultFile};
+use wallet_core::{CardanoRoot, Network, Seed, VaultFile};
 
 use crate::error::{AppError, AppResult};
 use crate::hw::HwManager;
 use crate::net::{EnvKeys, NetClient};
 use crate::settings::Settings;
 
-/// Unlocked session. The seed is zeroized when the session is dropped (lock, auto-lock, exit).
+/// Unlocked session. The seed and the Cardano root key are zeroized when the session is dropped
+/// (lock, auto-lock, exit).
 pub struct Session {
     pub seed: Seed,
+    /// CIP-0003 Icarus root (Cardano derives from the BIP39 *entropy*, not from the seed).
+    pub cardano: CardanoRoot,
     pub last_activity: Instant,
 }
 
@@ -99,9 +102,10 @@ impl AppState {
 
     // ---- session ----
 
-    pub fn start_session(&self, seed: Seed) {
+    pub fn start_session(&self, seed: Seed, cardano: CardanoRoot) {
         *lock(&self.session) = Some(Session {
             seed,
+            cardano,
             last_activity: Instant::now(),
         });
     }
@@ -125,6 +129,13 @@ impl AppState {
         let guard = lock(&self.session);
         let session = guard.as_ref().ok_or(AppError::Locked)?;
         f(&session.seed)
+    }
+
+    /// Runs `f` with the session's Cardano root key, or fails with `Locked`.
+    pub fn with_cardano<T>(&self, f: impl FnOnce(&CardanoRoot) -> AppResult<T>) -> AppResult<T> {
+        let guard = lock(&self.session);
+        let session = guard.as_ref().ok_or(AppError::Locked)?;
+        f(&session.cardano)
     }
 
     pub fn lock_in_secs(&self) -> Option<u64> {

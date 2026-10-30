@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ada-txs"
+description = "Enables the ada_txs command without any pre-configured scope."
+commands.allow = ["ada_txs"]
+
+[[permission]]
+identifier = "deny-ada-txs"
+description = "Denies the ada_txs command without any pre-configured scope."
+commands.deny = ["ada_txs"]

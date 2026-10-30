@@ -13,8 +13,8 @@ use crate::btc_backend::{self, Ctx, Detected};
 use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient, ServerRequest};
 use crate::servers::{
-    btc_network_key, validate_http_url, BtcServer, RpcServer, Servers, TronServer, UtxoServer,
-    XrpServer, SOLANA_GENESIS,
+    btc_network_key, validate_http_url, BtcServer, CardanoServer, RpcServer, Servers, TronServer,
+    UtxoServer, XrpServer, SOLANA_GENESIS,
 };
 use crate::settings::Settings;
 use crate::state::AppState;
@@ -175,6 +175,11 @@ async fn probe_changes(net: &NetClient, new: &Servers, old: &Servers, tor: bool)
             crate::commands_xrp::probe(net, utxo_network_of(key)?, s, tor).await?;
         }
     }
+    for ((key, n), (_, o)) in new.cardano.entries().into_iter().zip(old.cardano.entries()) {
+        if let Some(s) = n.as_ref().filter(|s| !s.is_default() && *n != *o) {
+            crate::commands_cardano::probe(net, utxo_network_of(key)?, s, tor).await?;
+        }
+    }
     for ((key, n), (_, o)) in new.tron.entries().into_iter().zip(old.tron.entries()) {
         if let Some(s) = n.as_ref().filter(|s| !s.is_default() && *n != *o) {
             crate::commands_tron::probe(net, utxo_network_of(key)?, s, tor).await?;
@@ -262,6 +267,11 @@ pub enum ServerTestTarget {
         network: String,
         server: XrpServer,
     },
+    /// `network`: `mainnet` | `testnet` (preprod).
+    Cardano {
+        network: String,
+        server: CardanoServer,
+    },
     Evm {
         chain_id: u64,
         server: RpcServer,
@@ -317,6 +327,16 @@ pub async fn server_test(
             } = Some(server.clone());
             probe.validate(tor)?;
             crate::commands_xrp::probe(&state.net, net, &server, tor).await?
+        }
+        ServerTestTarget::Cardano { network, server } => {
+            let net = utxo_network_of(&network)?;
+            let mut probe = Servers::default();
+            *match net {
+                Network::Mainnet => &mut probe.cardano.mainnet,
+                Network::Testnet => &mut probe.cardano.testnet,
+            } = Some(server.clone());
+            probe.validate(tor)?;
+            crate::commands_cardano::probe(&state.net, net, &server, tor).await?
         }
         ServerTestTarget::Tron { network, server } => {
             let net = utxo_network_of(&network)?;

@@ -781,7 +781,7 @@ pub async fn broadcast(ctx: &Ctx<'_>, hex_tx: &str) -> AppResult<String> {
             url,
             method: Method::Post,
             headers: vec![("content-type".into(), "text/plain".into())],
-            body: Some(hex_tx.trim().to_owned()),
+            body: Some(hex_tx.trim().as_bytes().to_vec()),
             family: Family::Bitcoin,
             direct_private: false,
             long: false,

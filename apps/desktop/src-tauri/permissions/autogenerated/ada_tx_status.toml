@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ada-tx-status"
+description = "Enables the ada_tx_status command without any pre-configured scope."
+commands.allow = ["ada_tx_status"]
+
+[[permission]]
+identifier = "deny-ada-tx-status"
+description = "Denies the ada_tx_status command without any pre-configured scope."
+commands.deny = ["ada_tx_status"]

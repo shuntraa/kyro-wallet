@@ -1,7 +1,9 @@
 mod btc_backend;
+mod cardano_backend;
 #[cfg(feature = "cbf")]
 mod cbf;
 mod commands;
+mod commands_cardano;
 mod commands_hw;
 mod commands_servers;
 mod commands_tron;
@@ -126,6 +128,14 @@ pub fn run() {
             commands_xrp::xrp_sign_tx,
             commands_xrp::xrp_broadcast,
             commands_xrp::xrp_tx_status,
+            commands_cardano::ada_backend_info,
+            commands_cardano::ada_address,
+            commands_cardano::ada_account,
+            commands_cardano::ada_txs,
+            commands_cardano::ada_tx_status,
+            commands_cardano::ada_build_tx,
+            commands_cardano::ada_sign_tx,
+            commands_cardano::ada_broadcast,
             commands::set_capture_protection,
             commands::config_get,
             commands::tor_status,

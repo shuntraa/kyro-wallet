@@ -75,6 +75,15 @@ impl Mnemonic {
         self.0.word_count()
     }
 
+    /// BIP39 entropy (16 to 32 bytes), wiped on drop. Cardano's Icarus master key is derived
+    /// from the entropy, not from the BIP39 seed.
+    pub(crate) fn entropy(&self) -> Zeroizing<Vec<u8>> {
+        let (mut arr, len) = self.0.to_entropy_array();
+        let out = Zeroizing::new(arr[..len].to_vec());
+        arr.zeroize();
+        out
+    }
+
     /// BIP39 seed (PBKDF2-HMAC-SHA512, 2048 rounds). The optional passphrase is NFKD-normalised.
     pub fn to_seed(&self, passphrase: &str) -> Seed {
         Zeroizing::new(self.0.to_seed(passphrase))
