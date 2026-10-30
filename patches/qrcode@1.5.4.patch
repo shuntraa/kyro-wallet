@@ -1,0 +1,45 @@
+diff --git a/lib/browser.js b/lib/browser.js
+index dc8a9998249e4d8814b38732190c7ed2bbc3b6aa..89faa0e6e4ef0435391e2983eb053443c2e9d166 100644
+--- a/lib/browser.js	
++++ b/lib/browser.js
+@@ -71,6 +71,10 @@ exports.toCanvas = renderCanvas.bind(null, CanvasRenderer.render)
+ exports.toDataURL = renderCanvas.bind(null, CanvasRenderer.renderToDataURL)
+ 
+ // only svg for now.
++// Kyro: own writable `toString` first, so the assignment below also works when
++// Object.prototype is frozen (Tauri freezePrototype; the "override mistake").
++Object.defineProperty(exports, "toString", { value: undefined, writable: true, enumerable: true, configurable: true })
++
+ exports.toString = renderCanvas.bind(null, function (data, _, opts) {
+   return SvgRenderer.render(data, opts)
+ })
+diff --git a/lib/core/mode.js b/lib/core/mode.js
+index fd95a6ef72b2414042cb9cf73fd7f4fe7ce054fe..3abe504ef8cf5126852d87f390c35a89c2d5734b 100644
+--- a/lib/core/mode.js	
++++ b/lib/core/mode.js
+@@ -104,6 +104,10 @@ exports.getBestModeForData = function getBestModeForData (dataStr) {
+  * @param {Mode} mode Mode object
+  * @returns {String}  Mode name
+  */
++// Kyro: own writable `toString` first, so the assignment below also works when
++// Object.prototype is frozen (Tauri freezePrototype; the "override mistake").
++Object.defineProperty(exports, "toString", { value: undefined, writable: true, enumerable: true, configurable: true })
++
+ exports.toString = function toString (mode) {
+   if (mode && mode.id) return mode.id
+   throw new Error('Invalid mode')
+diff --git a/lib/server.js b/lib/server.js
+index 619e398ed653c91ff39ff708180d531344924c97..dbe201a2c21ac4466f57c82edf852bb5fae6342a 100644
+--- a/lib/server.js	
++++ b/lib/server.js
+@@ -90,6 +90,10 @@ exports.create = QRCode.create
+ 
+ exports.toCanvas = require('./browser').toCanvas
+ 
++// Kyro: own writable `toString` first, so the assignment below also works when
++// Object.prototype is frozen (Tauri freezePrototype; the "override mistake").
++Object.defineProperty(exports, "toString", { value: undefined, writable: true, enumerable: true, configurable: true })
++
+ exports.toString = function toString (text, opts, cb) {
+   const params = checkParams(text, opts, cb)
+   const type = params.opts ? params.opts.type : undefined

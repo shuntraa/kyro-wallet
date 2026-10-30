@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  qrcode@1.5.4: fb717fa2dd875add6f9b50bb386f4e68bc6df008a2e58fe23d5bbe22b0f36c91
+
 importers:
 
   .:
@@ -73,7 +76,7 @@ importers:
         version: 14.6.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       qrcode:
         specifier: 1.5.4
-        version: 1.5.4
+        version: 1.5.4(patch_hash=fb717fa2dd875add6f9b50bb386f4e68bc6df008a2e58fe23d5bbe22b0f36c91)
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -4053,7 +4056,7 @@ snapshots:
     dependencies:
       hookified: 2.2.0
 
-  qrcode@1.5.4:
+  qrcode@1.5.4(patch_hash=fb717fa2dd875add6f9b50bb386f4e68bc6df008a2e58fe23d5bbe22b0f36c91):
     dependencies:
       dijkstrajs: 1.0.3
       pngjs: 5.0.0

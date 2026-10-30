@@ -10,6 +10,9 @@ minimumReleaseAge: 4320
 onlyBuiltDependencies:
   - esbuild
 
+patchedDependencies:
+  qrcode@1.5.4: patches/qrcode@1.5.4.patch
+
 # Refuse a version whose publish trust (provenance / trusted publisher) is weaker
 # than an earlier version's. Also makes pnpm fetch full metadata, which the
 # minimumReleaseAge check needs for packages with very frequent canary releases.
