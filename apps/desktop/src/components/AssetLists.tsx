@@ -11,6 +11,7 @@ import { useApp } from '../state/app';
 import { usePortfolio, type Holding } from '../state/portfolio';
 import { CoinIcon, EmptyState, ErrorLine, HIDDEN, trendColor, trendHex } from './kit';
 import { Sparkline } from './charts';
+import { useTorBlocked } from './Tor';
 import { Menu } from './ui/menu';
 import { Badge, Skeleton } from './ui/primitives';
 import { IconChevronDown, IconSearch, IconStar } from './icons';
@@ -102,6 +103,7 @@ function sortHoldings(rows: Holding[], sort: Sort): Holding[] {
 
 function MineList({ sort }: { sort: Sort }) {
   const pf = usePortfolio();
+  const torBlocked = useTorBlocked(Object.values(pf.chainErrors).join(' ') || undefined);
   const { settings, hideBalances, navigate } = useApp();
   const cur = settings.currency;
   const rows = sortHoldings(pf.holdings, sort);
@@ -147,7 +149,7 @@ function MineList({ sort }: { sort: Sort }) {
                 {h.spark.length > 1 ? <Sparkline values={h.spark} color={trendHex(h.change7d)} /> : <span className="text-[12px] text-faint">—</span>}
                 <span className="flex flex-col items-end">
                   <span className="text-[14px] font-semibold">{hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}</span>
-                  <span className="text-[12px] text-mute">{h.failed ? <span className="text-warn">solde indisponible</span> : hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
+                  <span className="text-[12px] text-mute">{h.failed ? (torBlocked ? <span className="text-mute">en attente de Tor…</span> : <span className="text-warn">solde indisponible</span>) : hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
                 </span>
                 <span className="flex items-center gap-2.5">
                   <span className="h-1 w-16 overflow-hidden rounded-full bg-control-2">
@@ -163,7 +165,7 @@ function MineList({ sort }: { sort: Sort }) {
             Tes soldes apparaîtront ici dès la première réception.
           </EmptyState>
         )}
-        {pf.marketError && <ErrorLine className="px-5 py-3">Prix indisponibles : {pf.marketError}</ErrorLine>}
+        {pf.marketError && <ErrorLine className="px-5 py-3" error={pf.marketError}>Prix indisponibles : {pf.marketError}</ErrorLine>}
       </div>
     </div>
   );
@@ -217,7 +219,7 @@ function MarketList({ sort, query, favs, toggle, onlyFavs }: { sort: Sort; query
 
   if (!pf.markets) {
     return pf.marketError ? (
-      <ErrorLine className="px-5 py-6" onRetry={pf.refresh}>
+      <ErrorLine className="px-5 py-6" onRetry={pf.refresh} error={pf.marketError}>
         Marché indisponible : {pf.marketError}
       </ErrorLine>
     ) : (

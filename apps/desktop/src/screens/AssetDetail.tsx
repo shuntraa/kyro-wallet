@@ -5,6 +5,7 @@ import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { PERIODS, useCoinChart, type Period } from '../state/charts';
 import { useHistory } from '../state/history';
+import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
 import { fmtAgo, fmtChartTime, fmtCrypto, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
 import { useNow } from '../lib/useAsync';
@@ -32,6 +33,7 @@ export function AssetDetail({ id }: { id: string }) {
   const supported = asset ?? assetsFor(network).find((a) => a.coingeckoId === coinId && a.kind === 'native');
   const holding = supported ? pf.holdings.find((h) => h.asset.id === supported.id) : undefined;
   const chart = useCoinChart(coinId, period);
+  useOnTorReady(chart.reload);
   const month = useCoinChart(coinId, '1M');
   const history = useHistory();
 
@@ -126,7 +128,7 @@ export function AssetDetail({ id }: { id: string }) {
                 renderTooltip={(i) => ({ label: fmtChartTime(points[i]?.[0] ?? Date.now()), value: fmtFiat(values[i] ?? 0, cur) })}
               />
             ) : chart.error ? (
-              <ErrorLine className="px-7 pb-8" onRetry={chart.reload}>
+              <ErrorLine className="px-7 pb-8" onRetry={chart.reload} error={chart.error}>
                 Graphique indisponible : {chart.error.message}
               </ErrorLine>
             ) : (

@@ -26,3 +26,21 @@ url = "2"
 zeroize = "1"
 base64 = "0.22"
 dotenvy = "0.15"
+# Embedded Tor (B2a). rustls + ring only (no native-tls, no aws-lc-rs), SQLite compiled in.
+arti-client = { version = "=0.47.0", default-features = false, features = ["tokio", "rustls", "static-sqlite", "compression", "onion-service-client"] }
+tor-rtcompat = { version = "=0.47.0", default-features = false, features = ["tokio", "rustls"] }
+# HTTP/1.1 over Tor streams: tokio-rustls (webpki roots) + hyper 1.
+hyper = { version = "=1.12.0", default-features = false, features = ["client", "http1"] }
+hyper-util = { version = "=0.1.21", default-features = false, features = ["tokio"] }
+http = { version = "=1.5.0" }
+http-body-util = { version = "=0.1.5" }
+bytes = { version = "=1.12.1" }
+tokio = { version = "=1.54.1", default-features = false, features = ["time", "sync", "rt"] }
+tokio-rustls = { version = "=0.26.6", default-features = false, features = ["ring", "tls12", "logging"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+webpki-roots = { version = "=1.0.11" }
+futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+# Only for the #[ignore]d real-network Tor test (KYRO_TOR_TRACE=<filter> shows arti logs).
+tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt", "env-filter", "ansi"] }

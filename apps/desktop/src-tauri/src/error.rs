@@ -19,6 +19,8 @@ pub enum AppError {
     InvalidInput(String),
     #[error("Erreur interne : {0}")]
     Internal(String),
+    #[error("Tor indisponible : {0}")]
+    TorUnavailable(String),
 }
 
 pub type AppResult<T> = Result<T, AppError>;
@@ -33,6 +35,7 @@ impl AppError {
             AppError::HostNotAllowed(_) => "HOST_NOT_ALLOWED",
             AppError::InvalidInput(_) => "INVALID_INPUT",
             AppError::Internal(_) => "INTERNAL",
+            AppError::TorUnavailable(_) => "TOR_UNAVAILABLE",
         }
     }
 }

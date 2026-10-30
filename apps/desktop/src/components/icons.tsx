@@ -178,3 +178,17 @@ export const IconX = (p: P) => (
     <path d="M6 6l12 12M18 6L6 18" />
   </Svg>
 );
+export const IconTor = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="13.5" r="7.5" />
+    <path d="M12 6c-2.6 1.6-4.2 4.4-4.2 7.5S9.4 19.4 12 21" />
+    <path d="M12 6c1.6 1.8 2.4 4.4 2.4 7.5S13.6 19.2 12 21" />
+    <path d="M12 6V3" />
+  </Svg>
+);
+export const IconGlobe = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
+  </Svg>
+);

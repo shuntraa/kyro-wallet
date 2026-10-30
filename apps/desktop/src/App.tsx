@@ -19,11 +19,14 @@ import { History } from './screens/History';
 import { SettingsScreen } from './screens/Settings';
 import { KyroMark } from './components/kit';
 import { Spinner } from './components/ui/primitives';
+import { TorDialogs } from './components/Tor';
 
 export function App() {
   return (
     <AppProvider>
       <Root />
+      {/* Tor failure / "continue without Tor" dialogs: reachable from every phase. */}
+      <TorDialogs />
     </AppProvider>
   );
 }

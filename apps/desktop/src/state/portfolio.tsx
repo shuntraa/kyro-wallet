@@ -7,6 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { assetsFor, findChain, unitsToNumber, type AssetDef } from '@kyro/chains';
 import type { MarketCoin, SimplePrice } from '@kyro/market';
 import { useVault } from './app';
+import { useOnTorReady } from './tor';
 
 export interface Holding {
   asset: AssetDef;
@@ -69,6 +70,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(() => setTick((t) => t + 1), []);
   const adaptersRef = useRef(adapters);
   adaptersRef.current = adapters;
+
+  // Tor just became ready (after a bootstrap, a retry or a re-enable): reload now rather than at the next poll.
+  useOnTorReady(refresh);
 
   // Balances.
   useEffect(() => {

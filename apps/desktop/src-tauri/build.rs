@@ -20,6 +20,8 @@ const COMMANDS: &[&str] = &[
     "settings_set",
     "set_capture_protection",
     "config_get",
+    "tor_status",
+    "tor_retry",
 ];
 
 fn main() {

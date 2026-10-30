@@ -6,6 +6,7 @@ import '@fontsource-variable/geist';
 import '@fontsource-variable/geist-mono';
 import './styles.css';
 import { App } from './App';
+import { torStore } from './state/tor';
 
 const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.closest('input, textarea, [contenteditable="true"]') !== null);
 
@@ -16,6 +17,9 @@ document.addEventListener('contextmenu', (e) => {
 document.addEventListener('dragstart', (e) => {
   if (!isField(e.target)) e.preventDefault();
 });
+
+// Tor state: subscribed once for the whole app lifetime (status bar, dialogs, screens).
+void torStore.start();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root introuvable');

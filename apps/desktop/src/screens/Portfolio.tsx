@@ -9,6 +9,8 @@ import { AllocationRing, SmoothChart } from '../components/charts';
 import { AssetListsCard } from '../components/AssetLists';
 import { VaultCard } from '../components/VaultCard';
 import { Button, Segmented, Skeleton } from '../components/ui/primitives';
+import { useTorBlocked } from '../components/Tor';
+import { useOnTorReady } from '../state/tor';
 import { IconDown, IconEye, IconEyeOff, IconSwap, IconUp } from '../components/icons';
 
 export function Portfolio() {
@@ -16,6 +18,8 @@ export function Portfolio() {
   const pf = usePortfolio();
   const [period, setPeriod] = useState<Period>('1J');
   const chart = usePortfolioChart(period);
+  useOnTorReady(chart.reload);
+  const torBlocked = useTorBlocked(chart.error);
   const cur = settings.currency;
   const series = chart.data ?? [];
   const values = series.map((p) => p[1]);
@@ -89,7 +93,7 @@ export function Portfolio() {
               <svg width="100%" height="60" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
                 <path d="M0,40 L1000,40" stroke="#22252B" strokeWidth="2" strokeDasharray="6 8" vectorEffect="non-scaling-stroke" />
               </svg>
-              <span className="absolute bottom-16 left-7 text-[12px] text-faint">{chart.loading ? 'Chargement de la courbe…' : chart.error ? `Courbe indisponible : ${chart.error.message}` : 'La courbe apparaîtra avec tes premiers fonds.'}</span>
+              <span className="absolute bottom-16 left-7 text-[12px] text-faint">{chart.loading ? 'Chargement de la courbe…' : chart.error ? (torBlocked ? 'En attente de Tor…' : `Courbe indisponible : ${chart.error.message}`) : 'La courbe apparaîtra avec tes premiers fonds.'}</span>
             </div>
           )}
         </div>

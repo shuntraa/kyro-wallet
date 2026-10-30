@@ -23,7 +23,8 @@ Tes clés restent chiffrées sur ton appareil ; toutes les signatures se font da
 | Swap 0x / 1inch / LI.FI / Jupiter | ⚠️ devis + approval exact | testé contre des réponses simulées |
 | Ledger / Trezor | ❌ pas encore | — |
 | Litecoin, Dogecoin, Tron, Cardano, XRP | ❌ lecture seule (« Bientôt ») | — |
-| Tor, nœud perso Bitcoin, filtres compacts | ❌ pas encore | — |
+| Tor intégré (Arti), activé par défaut, échec fermé, circuits isolés par chaîne, mempool via .onion | ⚠️ code complet | tests unitaires + vraies requêtes via Tor (mempool .onion, CoinGecko, Solana devnet) ; UI vérifiée en mode démo ; pas encore lancé dans l'app réelle |
+| Serveur perso par chaîne, filtres compacts BIP157/158 | ❌ pas encore | — |
 
 ## Installer les outils
 

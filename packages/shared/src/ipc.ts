@@ -42,6 +42,24 @@ export interface Settings {
   clipboardGuard: boolean;
   rpc: { ethereum?: string; solana?: string; esplora?: string };
   apiKeys: { coingecko?: string; zerox?: string; oneinch?: string };
+  /** Embedded Tor for every `net_fetch`. Default `{ enabled: true }`; turning it off needs an explicit UI confirmation. */
+  tor: { enabled: boolean };
+}
+
+/**
+ * State of the embedded Tor client (`tor_status`, `tor-status` event).
+ * - `off`: not started (Tor disabled in the settings);
+ * - `bootstrapping`: connecting, `progress` 0..99;
+ * - `ready`: requests go through Tor (`progress` = 100);
+ * - `error`: bootstrap failed, `message` says why. Requests fail with `TOR_UNAVAILABLE`, never in clear.
+ */
+export type TorState = 'off' | 'bootstrapping' | 'ready' | 'error';
+
+export interface TorStatus {
+  state: TorState;
+  /** 0..100 */
+  progress: number;
+  message?: string;
 }
 
 export interface EvmTxRequest {
@@ -196,7 +214,11 @@ export interface Commands {
   sol_decode_tx: { args: { message: string }; ret: SolTxSummary };
   /** Native dialog (+ a 2nd one when `requiresExtraConfirmation`). Place `signature` at `summary.ourSignerIndex`. */
   sol_sign_tx: { args: { message: string; password: string }; ret: { signature: string; summary: SolTxSummary } };
+  /** Over Tor when `settings.tor.enabled` (default); fails closed with `TOR_UNAVAILABLE`, never retried in clear. */
   net_fetch: { args: { req: NetRequest }; ret: NetResponse };
+  tor_status: { args: undefined; ret: TorStatus };
+  /** Restarts the bootstrap (after `error`). `INVALID_INPUT` when Tor is disabled. */
+  tor_retry: { args: undefined; ret: TorStatus };
   settings_get: { args: undefined; ret: Settings };
   settings_set: { args: { settings: Settings }; ret: Settings };
   set_capture_protection: { args: { enabled: boolean }; ret: void };
@@ -216,6 +238,8 @@ export const ERROR_CODES = [
   'HOST_NOT_ALLOWED',
   'INVALID_INPUT',
   'INTERNAL',
+  /** Tor enabled but not ready (bootstrap too long, failed, stopped): the request was NOT sent. */
+  'TOR_UNAVAILABLE',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -236,6 +260,18 @@ export class IpcError extends Error {
 
 export function isIpcError(e: unknown): e is IpcError {
   return e instanceof IpcError;
+}
+
+/**
+ * True when `e` means "Tor is not ready, nothing was sent". Accepts an `IpcError`, any error
+ * or a plain message (adapters sometimes keep only the message, possibly prefixed): the
+ * shell's French message for `TOR_UNAVAILABLE` always contains « Tor indisponible ».
+ */
+export function isTorUnavailable(e: unknown): boolean {
+  if (e instanceof IpcError) return e.code === 'TOR_UNAVAILABLE';
+  if (typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 'TOR_UNAVAILABLE') return true;
+  const message = typeof e === 'string' ? e : e instanceof Error ? e.message : '';
+  return message.includes('Tor indisponible');
 }
 
 /** Normalise anything a command can reject with into an `IpcError`. */
@@ -310,6 +346,41 @@ export async function call<K extends CommandName>(cmd: K, ...args: CallArgs<K>):
     const payload = args[0] as Record<string, unknown> | undefined;
     return (await invoke(cmd, payload)) as RetOf<K>;
   } catch (e) {
-    throw toIpcError(e);
+    const err = toIpcError(e);
+    notifyIpcError(cmd, err);
+    throw err;
   }
 }
+
+// ---------------------------------------------------------------- error observers
+
+export type IpcErrorListener = (cmd: CommandName, error: IpcError) => void;
+const errorListeners = new Set<IpcErrorListener>();
+
+/**
+ * Observe every rejected command, whatever the caller does with the error afterwards
+ * (adapters may wrap or swallow it). Used to catch `TOR_UNAVAILABLE` from any `net_fetch`.
+ */
+export function onIpcError(cb: IpcErrorListener): () => void {
+  errorListeners.add(cb);
+  return () => {
+    errorListeners.delete(cb);
+  };
+}
+
+function notifyIpcError(cmd: CommandName, error: IpcError): void {
+  errorListeners.forEach((cb) => {
+    try {
+      cb(cmd, error);
+    } catch {
+      /* an observer must never change the caller's outcome */
+    }
+  });
+}
+
+// ---------------------------------------------------------------- Tor
+
+/** Current state of the embedded Tor client. */
+export const torStatus = (): Promise<TorStatus> => call('tor_status');
+/** Restarts the Tor bootstrap after a failure. Rejects with `INVALID_INPUT` when Tor is disabled. */
+export const torRetry = (): Promise<TorStatus> => call('tor_retry');

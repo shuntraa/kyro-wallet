@@ -4,6 +4,7 @@ mod net;
 mod settings;
 mod solana;
 mod state;
+mod tor;
 
 use std::time::Duration;
 
@@ -22,6 +23,14 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             app.manage(state::AppState::new(dir)?);
+            let st = app.state::<state::AppState>();
+            let handle = app.handle().clone();
+            st.net.tor.set_emitter(move |s| {
+                let _ = handle.emit("tor-status", s);
+            });
+            if st.settings().tor.enabled {
+                st.net.tor.start();
+            }
             spawn_auto_lock(app.handle().clone());
             Ok(())
         })
@@ -53,6 +62,8 @@ pub fn run() {
             commands::settings_set,
             commands::set_capture_protection,
             commands::config_get,
+            commands::tor_status,
+            commands::tor_retry,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kyro");

@@ -27,6 +27,19 @@ pub struct ApiKeys {
     pub oneinch: Option<String>,
 }
 
+/// Tor is ON by default; turning it off is an explicit user choice (the UI confirms it).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TorSettings {
+    pub enabled: bool,
+}
+
+impl Default for TorSettings {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -37,6 +50,7 @@ pub struct Settings {
     pub clipboard_guard: bool,
     pub rpc: RpcOverrides,
     pub api_keys: ApiKeys,
+    pub tor: TorSettings,
 }
 
 impl Default for Settings {
@@ -49,6 +63,7 @@ impl Default for Settings {
             clipboard_guard: true,
             rpc: RpcOverrides::default(),
             api_keys: ApiKeys::default(),
+            tor: TorSettings::default(),
         }
     }
 }

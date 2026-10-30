@@ -87,12 +87,16 @@ body {
   cursor: default;
   -webkit-font-smoothing: antialiased;
 }
-button,
-input,
-textarea,
-select {
-  font: inherit;
-  color: inherit;
+/* In the base layer so that text-colour utilities on buttons (text-down, text-white…) win:
+   unlayered, this reset overrode every utility colour on <button>. */
+@layer base {
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
 }
 button:not(:disabled) {
   cursor: pointer;

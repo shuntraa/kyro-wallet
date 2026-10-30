@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["crates/wallet-core", "apps/desktop/src-tauri"]
+# Vendored third-party crate (see [patch.crates-io]); not a Kyro workspace member.
+exclude = ["apps/desktop/src-tauri/vendor"]
 
 [workspace.package]
 version = "0.1.0"
@@ -20,3 +22,8 @@ strip = true
 [profile.dev.package."*"]
 # Argon2id with production parameters is unusably slow without optimisations, even in debug builds.
 opt-level = 2
+
+[patch.crates-io]
+# arti 0.47 hangs forever on Windows (saturating-time 0.5.0 `find_limit`, rust-lang/rust#149995).
+# Backport of the fix already on arti `main`; see apps/desktop/src-tauri/vendor/saturating-time/Cargo.toml.
+saturating-time = { path = "apps/desktop/src-tauri/vendor/saturating-time" }

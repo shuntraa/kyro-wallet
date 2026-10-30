@@ -54,7 +54,7 @@ impl AppState {
             vault_path: data_dir.join(format!("coffre-{suffix}.kyrovault")),
             settings: Mutex::new(Settings::load(&settings_path)),
             settings_path,
-            net: NetClient::new()?,
+            net: NetClient::new(data_dir.join("tor"))?,
             env_keys: EnvKeys::from_env(),
             session: Mutex::new(None),
             guard: Mutex::new(Guard::default()),

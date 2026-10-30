@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Status bar (28 px, Geist Mono): sync state, BTC block, RPC latencies,
-// TESTNET / MODE DÉMO badges, version.
+// Tor state (always visible), TESTNET / MODE DÉMO badges, version.
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { fmtNumber } from '../lib/format';
 import { useApp } from '../state/app';
+import { torWaiting, useTor } from '../state/tor';
+import { TorIndicator } from '../components/Tor';
 
 export function StatusFrame({ left, right }: { left: ReactNode; right?: ReactNode }) {
   const { network, demo } = useApp();
@@ -12,6 +14,7 @@ export function StatusFrame({ left, right }: { left: ReactNode; right?: ReactNod
     <footer className="flex h-7 shrink-0 items-center justify-between border-t border-rail bg-bg-deep px-3.5 font-mono text-[11px] text-faint">
       <div className="flex min-w-0 items-center gap-[18px] overflow-hidden whitespace-nowrap">{left}</div>
       <div className="flex shrink-0 items-center gap-[18px]">
+        <TorIndicator />
         {right}
         {demo && <span className="font-semibold text-ice">MODE DÉMO</span>}
         {network === 'testnet' && <span className="text-warn">TESTNET</span>}
@@ -36,6 +39,10 @@ interface NetStat {
 /** Live status bar of the unlocked app. */
 export function StatusBar({ syncing, failedChains, extra }: { syncing: boolean; failedChains: string[]; extra?: ReactNode }) {
   const { adapters, accounts } = useApp();
+  const tor = useTor();
+  const torBlocked = torWaiting(tor);
+  // Re-probe as soon as Tor comes up instead of waiting for the next 30 s tick.
+  const torReady = tor.status?.state === 'ready';
   const [stat, setStat] = useState<NetStat>({ btcHeight: null, evmMs: null, solMs: null, errors: 0 });
 
   useEffect(() => {
@@ -70,7 +77,7 @@ export function StatusBar({ syncing, failedChains, extra }: { syncing: boolean; 
       alive = false;
       window.clearInterval(id);
     };
-  }, [adapters]);
+  }, [adapters, torReady]);
 
   const evmLabel = adapters ? [...adapters.evm.values()][0]?.chain.label ?? 'EVM' : 'EVM';
   const solLabel = adapters?.sol.chain.label ?? 'Solana';
@@ -82,8 +89,8 @@ export function StatusBar({ syncing, failedChains, extra }: { syncing: boolean; 
       left={
         <>
           <span className="flex items-center gap-1.5 text-mute">
-            <Dot color={syncing ? '#7CC4FF' : degraded ? '#F5B74F' : '#3DDC97'} />
-            {syncing ? 'Synchronisation…' : degraded ? `Partiel${failedChains.length ? ` · ${failedChains.join(', ')} injoignable` : ''}` : 'Synchronisé'}
+            <Dot color={torBlocked ? '#8C929D' : syncing ? '#7CC4FF' : degraded ? '#F5B74F' : '#3DDC97'} />
+            {torBlocked ? 'En attente de Tor…' : syncing ? 'Synchronisation…' : degraded ? `Partiel${failedChains.length ? ` · ${failedChains.join(', ')} injoignable` : ''}` : 'Synchronisé'}
           </span>
           <span>
             {btcLabel} · {stat.btcHeight !== null ? `bloc ${fmtNumber(stat.btcHeight, 0)}` : 'hors ligne'}

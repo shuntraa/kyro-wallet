@@ -1,0 +1,18 @@
+# cargo audit configuration (read automatically from the repository root).
+# Plain ASCII on purpose. Every ignore must say why, and must be re-checked on each bump.
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071 - rsa 0.9, "Marvin" timing side channel in RSA *private-key*
+    # operations (decryption/signing). Pulled only by arti (embedded Tor: tor-llcrypto,
+    # ssh-key-fork-arti). A Tor client uses RSA public keys only, to verify directory and
+    # relay signatures; Kyro never generates, loads or uses an RSA private key. No patched
+    # rsa release exists. Same justification in deny.toml. Re-check on each arti bump.
+    "RUSTSEC-2023-0071",
+    # RUSTSEC-2026-0387 - crypto-bigint 0.5.5, timing variability in constant-time ops.
+    # Lockfile-only: it is listed in Cargo.lock because ssh-key-fork-arti (arti) declares
+    # optional p256/p384/p521 (ECDSA) features, which are never enabled, so crypto-bigint is
+    # never compiled. Verified with `cargo tree -i crypto-bigint --target all -e normal,build`
+    # printing nothing (cargo deny, which reads the compiled graph, passes without an ignore).
+    # Kyro itself does not use k256/crypto-bigint at all. Re-check on each arti bump.
+    "RUSTSEC-2026-0387",
+]

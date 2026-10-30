@@ -9,8 +9,9 @@ import { call, isDemoMode, listenShell, toIpcError, type Accounts, type AppConfi
 import { createAdapters, type AdapterSet } from '@kyro/chains';
 import { CoinGeckoClient } from '@kyro/market';
 import { createProviders, type SwapProvider } from '@kyro/swap';
+import { torStore } from './tor';
 
-export type SettingsSection = 'security' | 'hardware' | 'networks' | 'display' | 'apikeys' | 'connections' | 'contacts';
+export type SettingsSection = 'security' | 'privacy' | 'hardware' | 'networks' | 'display' | 'apikeys' | 'connections' | 'contacts';
 
 export type Route =
   | { name: 'portfolio' }
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS: Settings = {
   clipboardGuard: true,
   rpc: {},
   apiKeys: {},
+  tor: { enabled: true },
 };
 
 interface AppContextValue {
@@ -146,6 +148,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setConfig(cfg);
         setSettings(st);
         settingsRef.current = st;
+        torStore.setEnabled(st.tor.enabled);
         await enterVault();
       } catch (e) {
         if (!alive) return;
@@ -208,6 +211,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const saved = await call('settings_set', { settings: next });
       setSettings(saved);
       settingsRef.current = saved;
+      torStore.setEnabled(saved.tor.enabled);
       if (JSON.stringify(saved.rpc) !== JSON.stringify(prev.rpc) && accounts) setAdapters(createAdapters(accounts, saved.rpc));
       if (saved.apiKeys.coingecko !== prev.apiKeys.coingecko) market.clear();
       void refreshStatus();

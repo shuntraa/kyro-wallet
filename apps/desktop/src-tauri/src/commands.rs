@@ -16,6 +16,7 @@ use crate::net::{FetchRequest, FetchResponse};
 use crate::settings::Settings;
 use crate::solana;
 use crate::state::AppState;
+use crate::tor::TorStatus;
 
 const MIN_PASSWORD_LEN: usize = 10;
 /// Receive + change addresses scanned per kind to recognise our own outputs in a PSBT.
@@ -534,15 +535,24 @@ pub async fn sol_sign_tx(
 #[tauri::command]
 pub async fn net_fetch(state: State<'_, AppState>, req: FetchRequest) -> AppResult<FetchResponse> {
     let settings = state.settings();
-    state
-        .net
-        .fetch(
-            req,
-            &settings.rpc_hosts(),
-            &state.env_keys,
-            &settings.api_keys,
-        )
-        .await
+    state.net.fetch(req, &settings, &state.env_keys).await
+}
+
+#[tauri::command]
+pub fn tor_status(state: State<'_, AppState>) -> TorStatus {
+    state.net.tor.status()
+}
+
+/// Restarts the Tor bootstrap (after an error). Refused when Tor is disabled in settings.
+#[tauri::command]
+pub fn tor_retry(state: State<'_, AppState>) -> AppResult<TorStatus> {
+    if !state.settings().tor.enabled {
+        return Err(AppError::InvalidInput(
+            "Tor est désactivé dans les réglages".into(),
+        ));
+    }
+    state.net.tor.restart();
+    Ok(state.net.tor.status())
 }
 
 #[tauri::command]
@@ -552,7 +562,14 @@ pub fn settings_get(state: State<'_, AppState>) -> Settings {
 
 #[tauri::command]
 pub fn settings_set(state: State<'_, AppState>, settings: Settings) -> AppResult<Settings> {
-    state.save_settings(settings)
+    let was_enabled = state.settings().tor.enabled;
+    let saved = state.save_settings(settings)?;
+    match (was_enabled, saved.tor.enabled) {
+        (false, true) => state.net.tor.start(),
+        (true, false) => state.net.tor.stop(),
+        _ => {}
+    }
+    Ok(saved)
 }
 
 #[tauri::command]

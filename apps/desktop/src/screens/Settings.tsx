@@ -9,10 +9,13 @@ import { getBackupState, getContacts, saveContacts, type Contact, type ContactFa
 import { PasswordField } from '../components/kit';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
-import { IconEye, IconPhoneKey, IconTrash, IconUsbKey, IconWarn } from '../components/icons';
+import { IconCheck, IconEye, IconPhoneKey, IconTor, IconTrash, IconUsbKey, IconWarn, IconX } from '../components/icons';
+import { TorIndicator } from '../components/Tor';
+import { torStore, useTor } from '../state/tor';
 
 const SECTIONS: Array<{ key: SettingsSection; label: string }> = [
   { key: 'security', label: 'Sécurité' },
+  { key: 'privacy', label: 'Confidentialité' },
   { key: 'hardware', label: 'Hardware wallets' },
   { key: 'networks', label: 'Réseaux et RPC' },
   { key: 'display', label: 'Affichage et devise' },
@@ -65,6 +68,7 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
         <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto scroll-thin">
           {error && <Notice tone="error">{error}</Notice>}
           {section === 'security' && <Security save={save} />}
+          {section === 'privacy' && <Privacy />}
           {section === 'hardware' && <Hardware />}
           {section === 'networks' && <Networks save={save} />}
           {section === 'display' && <Display save={save} />}
@@ -136,6 +140,63 @@ function Security({ save }: { save: Save }) {
       </Panel>
       <RevealPhrase />
       <Hardware />
+    </>
+  );
+}
+
+function Privacy() {
+  const { settings, saveSettings } = useApp();
+  const tor = useTor();
+  const enabled = settings.tor.enabled;
+  return (
+    <>
+      <Panel>
+        <SettingRow title="Passer par Tor" desc="Activé par défaut. Toutes les requêtes réseau de Kyro passent par Tor, intégré à l’app." last>
+          <Switch
+            label="Passer par Tor"
+            checked={enabled}
+            disabled={tor.busy}
+            onCheckedChange={(v) => {
+              // Off: explicit confirmation first (nothing is saved before it). On: immediate.
+              if (v) void torStore.enable(() => saveSettings({ ...settings, tor: { enabled: true } }));
+              else torStore.requestDisable('settings');
+            }}
+          />
+        </SettingRow>
+      </Panel>
+      <section className="flex flex-col gap-3.5 rounded-[22px] border border-line bg-card px-[22px] py-[18px]">
+        <div className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-2 text-[15px] font-semibold">
+            <IconTor size={16} className="text-mute" /> État de la connexion
+          </span>
+          <span className="font-mono text-[11px]">
+            <TorIndicator />
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="flex flex-col gap-1.5 rounded-[16px] border border-line bg-raised px-4 py-3.5">
+            <span className="flex items-center gap-2 text-[13px] font-semibold">
+              <IconCheck size={14} className="text-up" /> Ce que Tor cache
+            </span>
+            <span className="text-[12px] leading-[1.5] text-mute">Ton adresse IP. Les serveurs voient celle d’un relais Tor, et deux familles de requêtes (Bitcoin, EVM, Solana, prix, swap) ne partagent jamais un circuit.</span>
+          </div>
+          <div className="flex flex-col gap-1.5 rounded-[16px] border border-line bg-raised px-4 py-3.5">
+            <span className="flex items-center gap-2 text-[13px] font-semibold">
+              <IconX size={14} className="text-warn" /> Ce qu’il ne cache pas
+            </span>
+            <span className="text-[12px] leading-[1.5] text-mute">Ce que tu demandes : les serveurs voient toujours les adresses et les transactions que tu consultes. Pour l’éviter, utilise tes propres nœuds.</span>
+          </div>
+        </div>
+        <p className="m-0 text-[12px] leading-[1.55] text-mute">
+          Si Tor ne se connecte pas, Kyro bloque les requêtes et te demande quoi faire : jamais de repli en clair sans ton accord. Les détails sont dans la documentation de Kyro (page « Réseau »).
+        </p>
+        {!enabled && (
+          <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+            Connexion directe : les serveurs contactés voient ton adresse IP. Réactive Tor ci-dessus pour la cacher.
+          </Notice>
+        )}
+        {tor.actionError && tor.dialog === 'none' && <Notice tone="error">{tor.actionError}</Notice>}
+      </section>
     </>
   );
 }

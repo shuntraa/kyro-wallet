@@ -6,6 +6,7 @@ import { buildRevoke, isUnlimitedAllowance } from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { useHistory, type HistoryEntry } from '../state/history';
+import { useOnTorReady } from '../state/tor';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtDayGroup, fmtFiat, fmtMonth, shortAddress } from '../lib/format';
 import { addLocalTx, getApprovals, removeApproval, type ApprovalRecord } from '../lib/storage';
@@ -31,6 +32,7 @@ export function History() {
   const { settings, hideBalances, network } = useApp();
   const pf = usePortfolio();
   const history = useHistory();
+  useOnTorReady(history.reload);
   const [filter, setFilter] = useState<Filter>('all');
   const cur = settings.currency;
   const priceOf = (e: HistoryEntry) => (e.asset ? pf.price(e.asset.coingeckoId)?.price ?? null : null);
@@ -128,7 +130,7 @@ export function History() {
               ))
             )}
             {history.data && Object.keys(history.data.errors).length > 0 && (
-              <ErrorLine className="px-5 py-3" onRetry={history.reload}>
+              <ErrorLine className="px-5 py-3" onRetry={history.reload} error={Object.values(history.data.errors).join(' ')}>
                 Historique partiel : {Object.entries(history.data.errors).map(([k, v]) => `${k} (${v})`).join(', ')}
               </ErrorLine>
             )}

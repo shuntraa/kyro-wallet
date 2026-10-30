@@ -9,6 +9,7 @@ import { addressChunks, splitFiat } from '../lib/format';
 import { copyText } from '../lib/copy';
 import { IconCheck, IconCopy, IconEye, IconEyeOff, IconWarn } from './icons';
 import { Button } from './ui/primitives';
+import { TorWait, useTorBlocked } from './Tor';
 
 export function KyroMark({ size = 16, className }: { size?: number; className?: string }) {
   return (
@@ -167,7 +168,13 @@ export function EmptyState({ title, children, action, className }: { title: stri
   );
 }
 
-export function ErrorLine({ children, onRetry, className }: { children: ReactNode; onRetry?: () => void; className?: string }) {
+/**
+ * Network data error. While Tor (enabled) is not ready, or when `error` is TOR_UNAVAILABLE,
+ * it shows "En attente de Tor…" instead: nothing failed, Kyro is refusing to go out in clear.
+ */
+export function ErrorLine({ children, onRetry, className, error }: { children: ReactNode; onRetry?: () => void; className?: string; error?: unknown }) {
+  const torBlocked = useTorBlocked(error);
+  if (torBlocked) return <TorWait {...(className ? { className } : {})} />;
   return (
     <div role="alert" className={cn('flex items-center gap-2 text-[12px] text-down', className)}>
       <IconWarn size={14} />

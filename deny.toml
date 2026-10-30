@@ -8,6 +8,13 @@ yanked = "deny"
 # Vulnerabilities always fail. "Unmaintained" only fails for our direct dependencies:
 # transitive ones from Tauri/alloy (paste, proc-macro-error, derivative) are tracked upstream.
 unmaintained = "workspace"
+ignore = [
+  # rsa 0.9 (Marvin attack: timing leak in RSA *private-key* operations). Pulled by arti
+  # (tor-llcrypto, ssh-key-fork-arti). A Tor client only uses RSA *public* keys, to verify
+  # directory/relay signatures; arti documents that "Tor clients never actually need RSA
+  # private keys", and we never create or load one. No fixed rsa release exists yet.
+  { id = "RUSTSEC-2023-0071", reason = "arti client: RSA signature verification only, no private-key operation" },
+]
 
 [licenses]
 version = 2
@@ -29,6 +36,11 @@ allow = [
   "GPL-3.0-or-later",
   # hex_lit (via rust-bitcoin): MIT plus a "no false attribution" clause — permissive.
   "MITNFA",
+]
+# async_executors (arti's runtime abstraction) is public-domain-style "Unlicense", GPL-compatible.
+# Allowed for that crate only.
+exceptions = [
+  { name = "async_executors", allow = ["Unlicense"] },
 ]
 
 [bans]

@@ -34,6 +34,8 @@ import { guardAllowsSend, guardOnInput, guardVerify, initialGuard, type GuardSta
 import { addLocalTx, bumpContactSends, findContact, getContacts, saveContacts, type ContactFamily } from '../lib/storage';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
+import { useTorBlocked } from '../components/Tor';
+import { useOnTorReady } from '../state/tor';
 import { SolSummaryView } from '../components/SolSummaryView';
 import { Menu } from '../components/ui/menu';
 import { Button, IconButton, Notice, Spinner } from '../components/ui/primitives';
@@ -99,6 +101,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
   // Fees.
   const fees = useAsync<FeeEstimates>(adapter ? () => adapter.estimateFees() : null, [adapter], { intervalMs: 30_000 });
+  const feesTorBlocked = useTorBlocked(fees.error);
+  useOnTorReady(fees.reload);
   const [choice, setChoice] = useState<FeeChoice>('normal');
   const [customEvm, setCustomEvm] = useState({ maxFeeGwei: '', priorityGwei: '' });
   const [customBtc, setCustomBtc] = useState('');
@@ -413,7 +417,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
               <span className="text-[12px] font-medium text-mute">Frais réseau</span>
-              <span className="text-[12px] text-faint">{fees.data ? `Réseau actuel : ${fees.data.hint.replace('.', ',')}` : fees.error ? <span className="text-down">Frais indisponibles</span> : 'Estimation…'}</span>
+              <span className="text-[12px] text-faint">{fees.data ? `Réseau actuel : ${fees.data.hint.replace('.', ',')}` : fees.error ? (feesTorBlocked ? 'En attente de Tor…' : <span className="text-down">Frais indisponibles</span>) : 'Estimation…'}</span>
             </div>
             <div role="radiogroup" aria-label="Frais réseau" className="flex gap-2">
               {LEVELS.map(({ level, label }) => {

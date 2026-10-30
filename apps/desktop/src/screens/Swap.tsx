@@ -15,6 +15,8 @@ import { addApproval, addLocalTx } from '../lib/storage';
 import { priceAt } from '../lib/portfolioSeries';
 import { useAsync, useDebounced, useNow } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
+import { TorWait, useTorBlocked } from '../components/Tor';
+import { useOnTorReady } from '../state/tor';
 import { SmoothChart } from '../components/charts';
 import { Menu } from '../components/ui/menu';
 import { Dialog } from '../components/ui/dialog';
@@ -96,6 +98,9 @@ export function Swap({ sellAssetId }: { sellAssetId?: string }) {
   const list = quotes.data?.quotes ?? [];
   const chosen = list.find((q) => q.provider === selected) ?? list[0];
   const failures = (quotes.data?.results ?? []).filter((r) => r.error);
+  useOnTorReady(quotes.reload);
+  // Quotes blocked by Tor: one inline "waiting for Tor" line instead of a red error per provider.
+  const quotesTorBlocked = useTorBlocked(quotes.error ?? (failures.length > 0 && failures.length === (quotes.data?.results.length ?? 0) ? failures.map((f) => f.error).join(' ') : undefined));
 
   // Allowance needed?
   const needsAllowanceCheck = !!chosen && !!evmAdapter && sell?.kind === 'erc20' && !!chosen.allowanceTarget && !!sell.contract;
@@ -415,7 +420,8 @@ export function Swap({ sellAssetId }: { sellAssetId?: string }) {
               );
             })}
             {params && quotes.data && list.length === 0 && <p className="m-0 px-1 text-[13px] text-mute">Aucun devis disponible pour cette paire{network === 'testnet' ? ' : les agrégateurs fonctionnent surtout en mainnet' : ''}.</p>}
-            {failures.map((f) => (
+            {quotesTorBlocked && (failures.length > 0 || quotes.error) && <TorWait className="px-1" />}
+            {!quotesTorBlocked && failures.map((f) => (
               <div key={f.provider} className="flex items-center justify-between gap-3 rounded-[12px] border border-dashed border-line px-4 py-2 text-[12px]">
                 <span className="font-semibold text-mute">{f.providerName}</span>
                 <span className="truncate text-faint" title={f.error}>
@@ -423,7 +429,7 @@ export function Swap({ sellAssetId }: { sellAssetId?: string }) {
                 </span>
               </div>
             ))}
-            {quotes.error && <Notice tone="error">{quotes.error.message}</Notice>}
+            {quotes.error && !quotesTorBlocked && <Notice tone="error">{quotes.error.message}</Notice>}
           </section>
 
           <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-[22px] border border-line bg-card px-[22px] py-[18px] scroll-thin">

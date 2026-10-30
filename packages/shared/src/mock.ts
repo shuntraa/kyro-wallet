@@ -30,6 +30,8 @@ import {
   type VaultStatus,
 } from './ipc';
 import { emitDemoEvent } from './events';
+import { createDemoTor, detectDemoTorDisabled, detectDemoTorScenario, type DemoTor, type DemoTorScenario } from './mock-tor';
+export { DEMO_TOR_BOOTSTRAP_MS, type DemoTor, type DemoTorScenario } from './mock-tor';
 import { demoHash, handleDemoNet, type DemoChainState } from './mock-net';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 
@@ -45,6 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   clipboardGuard: true,
   rpc: {},
   apiKeys: {},
+  tor: { enabled: true },
 };
 
 const TESTNET_VERSIONS = { private: 0x04358394, public: 0x043587cf };
@@ -177,6 +180,10 @@ export interface MockOptions {
   confirm?: (summary: string) => boolean;
   /** Start with an existing vault (tests). */
   preset?: { password: string; words?: string[]; unlocked?: boolean };
+  /** Simulated Tor (see mock-tor.ts). Default: `?tor=…` in a browser, `ready` without `window`. */
+  tor?: DemoTorScenario;
+  /** Initial `settings.tor.enabled`. Default: true (`?tor=off` → false). */
+  torEnabled?: boolean;
 }
 
 export interface MockBackend {
@@ -185,6 +192,8 @@ export interface MockBackend {
   chain: DemoChainState;
   /** Advance the fake clock (tests). */
   advance(ms: number): void;
+  /** Simulated Tor (tests). */
+  tor: DemoTor;
 }
 
 export function createMockBackend(opts: MockOptions = {}): MockBackend {
@@ -204,6 +213,10 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   let reveals: number[] = [];
   let settings: Settings = structuredClone(DEFAULT_SETTINGS);
   let captureProtected = false;
+  settings.tor.enabled = opts.torEnabled ?? !detectDemoTorDisabled();
+  // Like the shell's setup: Tor starts in the background when enabled.
+  const tor = createDemoTor(opts.tor ?? detectDemoTorScenario());
+  if (settings.tor.enabled) tor.start();
 
   const confirmFn =
     opts.confirm ??
@@ -390,7 +403,17 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       sig.set(sha256(sha256(message)), 32);
       return { signature: base64.encode(sig), summary };
     },
-    net_fetch: (a) => handleDemoNet(a.req as Parameters<typeof handleDemoNet>[0], chain),
+    net_fetch: async (a) => {
+      // Fail closed, like net.rs: over Tor only when enabled, never retried in clear.
+      if (settings.tor.enabled) await tor.waitReady();
+      return handleDemoNet(a.req as Parameters<typeof handleDemoNet>[0], chain);
+    },
+    tor_status: () => tor.status(),
+    tor_retry: () => {
+      if (!settings.tor.enabled) throw new IpcError('INVALID_INPUT', 'Tor est désactivé dans les réglages.');
+      tor.restart();
+      return tor.status();
+    },
     settings_get: () => structuredClone(settings),
     settings_set: (a) => {
       const next = a.settings as Settings | undefined;
@@ -401,7 +424,15 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       for (const url of Object.values(next.rpc)) {
         if (url !== undefined && url !== '' && !/^https:\/\//.test(url)) throw new IpcError('INVALID_INPUT', 'Les nœuds RPC doivent être en HTTPS.');
       }
-      settings = structuredClone(next);
+      const torIn: unknown = (next as { tor?: unknown }).tor;
+      if (torIn !== undefined && (typeof torIn !== 'object' || torIn === null || typeof (torIn as { enabled?: unknown }).enabled !== 'boolean')) {
+        throw new IpcError('INVALID_INPUT', 'Réglages invalides (tor).');
+      }
+      const wasEnabled = settings.tor.enabled;
+      // Missing `tor` → default (enabled), like serde's `#[serde(default)]`.
+      settings = { ...structuredClone(next), tor: { enabled: torIn === undefined ? true : (torIn as { enabled: boolean }).enabled } };
+      if (!wasEnabled && settings.tor.enabled) tor.start();
+      if (wasEnabled && !settings.tor.enabled) tor.stop();
       return structuredClone(settings);
     },
     set_capture_protection: (a) => {
@@ -412,6 +443,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
 
   return {
     chain,
+    tor,
     advance(ms: number) {
       clockOffset += ms;
     },

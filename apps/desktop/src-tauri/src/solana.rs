@@ -67,9 +67,8 @@ async fn fetch_lookup_table(state: &AppState, url: &str, key: &str) -> AppResult
                 headers: [("content-type".to_owned(), "application/json".to_owned())].into(),
                 body: Some(body.to_string()),
             },
-            &settings.rpc_hosts(),
+            &settings,
             &state.env_keys,
-            &settings.api_keys,
         )
         .await?;
     let fail = |why: &str| AppError::InvalidInput(format!("table d'adresses {key} : {why}"));
