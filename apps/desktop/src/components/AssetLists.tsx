@@ -110,9 +110,10 @@ function MineList({ sort }: { sort: Sort }) {
   const downChains = Object.entries(pf.chainErrors)
     .filter(([, m]) => serverDown(m))
     .map(([k]) => findChain(network, k)?.label ?? k);
-  const { settings, hideBalances, navigate } = useApp();
+  const { settings, hideBalances, navigate, selectChainAccount } = useApp();
   const cur = settings.currency;
-  const rows = sortHoldings(pf.holdings, sort);
+  // A chain with several vault accounts: one row per account (§2.9).
+  const rows = sortHoldings(pf.accountHoldings, sort);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={cn(GRID, 'h-8 shrink-0 px-5 text-[11px] font-medium tracking-[0.04em] text-faint')}>
@@ -137,7 +138,14 @@ function MineList({ sort }: { sort: Sort }) {
               </div>
             ))
           : rows.map((h) => (
-              <button key={h.asset.id} type="button" onClick={() => navigate({ name: 'asset', id: h.asset.id })} className={cn(GRID, 'h-[54px] w-full border-t border-[#191B20] px-5 text-left hover:bg-raised/50')}>
+              <button
+                key={h.key}
+                type="button"
+                onClick={() => {
+                  if (h.account) selectChainAccount(h.account.family, h.account.index);
+                  navigate({ name: 'asset', id: h.asset.id });
+                }}
+                className={cn(GRID, 'h-[54px] w-full border-t border-[#191B20] px-5 text-left hover:bg-raised/50')}>
                 <span className="flex min-w-0 items-center gap-3">
                   <CoinIcon glyph={h.asset.glyph} color={h.asset.color} />
                   <span className="flex min-w-0 flex-col">
@@ -145,6 +153,7 @@ function MineList({ sort }: { sort: Sort }) {
                     <span className="truncate text-[12px] text-mute">
                       {h.asset.symbol}
                       {h.asset.kind === 'erc20' ? ' · ERC-20' : h.asset.kind === 'spl' ? ' · SPL' : h.asset.kind === 'trc20' ? ' · TRC-20' : ''}
+                      {h.account ? ` · ${h.account.name}` : ''}
                     </span>
                   </span>
                 </span>

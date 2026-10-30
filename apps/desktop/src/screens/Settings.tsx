@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useEffect, useState, type ReactNode } from 'react';
-import { call, toIpcError, type ApiKeyName, type Settings } from '@kyro/shared';
+import { call, toIpcError, type AccountChain, type ApiKeyName, type Settings } from '@kyro/shared';
 import { outgoingHosts } from '@kyro/chains';
 import { useApp, useVault, type SettingsSection } from '../state/app';
 import { cn } from '../lib/cn';
@@ -9,6 +9,7 @@ import { getBackupState, getContacts, saveContacts, type Contact, type ContactFa
 import { PasswordField } from '../components/kit';
 import { ServersSection } from './settings/Servers';
 import { Devices } from './settings/Devices';
+import { AccountsSection } from './settings/Accounts';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
 import { IconCheck, IconEye, IconTor, IconTrash, IconWarn, IconX } from '../components/icons';
@@ -18,6 +19,7 @@ import { torStore, useTor } from '../state/tor';
 const SECTIONS: Array<{ key: SettingsSection; label: string }> = [
   { key: 'security', label: 'Sécurité' },
   { key: 'privacy', label: 'Confidentialité' },
+  { key: 'accounts', label: 'Comptes' },
   { key: 'hardware', label: 'Appareils' },
   { key: 'networks', label: 'Réseaux et serveurs' },
   { key: 'display', label: 'Affichage et devise' },
@@ -26,7 +28,7 @@ const SECTIONS: Array<{ key: SettingsSection; label: string }> = [
   { key: 'contacts', label: 'Carnet d’adresses' },
 ];
 
-export function SettingsScreen({ section: initial = 'security' }: { section?: SettingsSection }) {
+export function SettingsScreen({ section: initial = 'security', family }: { section?: SettingsSection; family?: AccountChain }) {
   const [section, setSection] = useState<SettingsSection>(initial);
   const { settings, saveSettings } = useApp();
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
           {error && <Notice tone="error">{error}</Notice>}
           {section === 'security' && <Security save={save} />}
           {section === 'privacy' && <Privacy />}
+          {section === 'accounts' && <AccountsSection {...(family ? { family } : {})} />}
           {section === 'hardware' && <Devices />}
           {section === 'networks' && <ServersSection />}
           {section === 'display' && <Display save={save} />}
@@ -79,7 +82,7 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
           {section === 'contacts' && <Contacts />}
           {saved && <span className="text-[12px] text-up">✓ Réglage enregistré sur cet appareil</span>}
         </div>
-        {section !== 'connections' && (
+        {section !== 'connections' && section !== 'accounts' && (
           <aside className="w-[400px] shrink-0">
             <Connections compact />
           </aside>

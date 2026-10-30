@@ -14,11 +14,12 @@ import { AddressShort, BigFiat, CoinIcon, EmptyState, ErrorLine, HIDDEN, TrendPi
 import { SmoothChart } from '../components/charts';
 import { HistoryRow } from '../components/HistoryRow';
 import { useFavorites } from '../components/AssetLists';
+import { AccountPicker } from '../components/AccountPicker';
 import { Badge, Button, IconButton, Segmented, Skeleton } from '../components/ui/primitives';
 import { IconBack, IconDown, IconStake, IconStar, IconSwap, IconUp } from '../components/icons';
 
 export function AssetDetail({ id }: { id: string }) {
-  const { back, settings, navigate, hideBalances, network, activeHw } = useApp();
+  const { back, settings, navigate, hideBalances, network, activeHw, isMultiAccount, selectedAccounts } = useApp();
   const { accounts, adapters } = useVault();
   const pf = usePortfolio();
   const { favs, toggle } = useFavorites();
@@ -32,7 +33,9 @@ export function AssetDetail({ id }: { id: string }) {
   const watch = WATCH_ONLY_CHAINS.find((w) => w.coingeckoId === coinId);
   // A market coin we support natively → its native asset.
   const supported = asset ?? assetsFor(network).find((a) => a.coingeckoId === coinId && a.kind === 'native');
-  const holding = supported ? pf.holdings.find((h) => h.asset.id === supported.id) : undefined;
+  // Several vault accounts on this chain (§2.9): the selected account's balance.
+  const multi = !!supported && isMultiAccount(supported.family);
+  const holding = supported ? (multi ? pf.accountHoldings.find((h) => h.asset.id === supported.id && h.account?.index === selectedAccounts[supported.family]) : pf.holdings.find((h) => h.asset.id === supported.id)) : undefined;
   const chart = useCoinChart(coinId, period);
   useOnTorReady(chart.reload);
   const month = useCoinChart(coinId, '1M');
@@ -79,6 +82,7 @@ export function AssetDetail({ id }: { id: string }) {
           <h1 className="m-0 truncate text-[28px] font-semibold tracking-[-0.03em]">{name}</h1>
           <span className="rounded-[6px] bg-control-2 px-2 py-0.5 text-[12px] font-semibold text-text2">{symbol}</span>
           {coin?.rank && <span className="text-[13px] text-faint">Rang #{coin.rank}</span>}
+          {supported && <AccountPicker family={supported.family} />}
           <button type="button" aria-label={fav ? 'Retirer des favoris' : 'Ajouter aux favoris'} aria-pressed={fav} onClick={() => toggle(coinId)} className={cn('flex size-8 items-center justify-center rounded-full', fav ? 'text-ice' : 'text-faint hover:text-text2')}>
             <IconStar size={18} filled={fav} />
           </button>

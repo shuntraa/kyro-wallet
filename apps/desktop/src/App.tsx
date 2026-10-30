@@ -173,7 +173,7 @@ function Unlocked() {
           </Suspense>
         );
       case 'settings':
-        return <SettingsScreen {...(route.section ? { section: route.section } : {})} />;
+        return <SettingsScreen {...(route.section ? { section: route.section } : {})} {...(route.family ? { family: route.family } : {})} />;
     }
   }, [route]);
 

@@ -2,7 +2,7 @@
 // Receive: real QR (qrcode), BTC SegWit/Taproot, Litecoin, Dogecoin, TRON, XRP, Cardano, optional
 // requested amount (BIP21-style / EIP-681 / Solana Pay URI; none for TRON, XRP, Cardano), network warning.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
 import { btcChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain } from '@kyro/chains';
 import { useAsync } from '../lib/useAsync';
@@ -14,6 +14,7 @@ import { QrCode } from '../components/QrCode';
 import { Button, IconButton, Notice, Segmented } from '../components/ui/primitives';
 import { IconBack, IconCheck, IconInfo, IconRefresh, IconUsbKey, IconWarn } from '../components/icons';
 import { AddressMismatchStop, DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
+import { AccountPicker } from '../components/AccountPicker';
 import { BRAND, isAddressMismatch, pickDevice, withDevice } from '../state/hw';
 
 type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
@@ -22,7 +23,7 @@ const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', '
 const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'tron', 'xrp', 'ada'];
 
 export function Receive({ family: initial = 'evm' }: { family?: Family }) {
-  const { back, network, settings, navigate } = useApp();
+  const { back, network, settings, navigate, selectedAccounts } = useApp();
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts, adapters, activeHw } = useVault();
   // Hardware-wallet accounts have no Litecoin / Dogecoin / TRON (HW_UNSUPPORTED for now).
@@ -45,6 +46,13 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const [deriveError, setDeriveError] = useState<string | null>(null);
   const [askAmount, setAskAmount] = useState(false);
   const [amount, setAmount] = useState('');
+  // Vault account of this chain (§2.9): another account → back to its first address.
+  const account = activeHw ? 0 : selectedAccounts[family];
+  useEffect(() => {
+    setIndex(0);
+    setDerived({});
+    setVerify({ state: 'idle' });
+  }, [account]);
 
   const btc = btcChain(network);
   const evm = primaryEvmChain(network);
@@ -127,12 +135,12 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
       // (then verify it on the device).
       const a =
         family === 'ltc'
-          ? await call('ltc_address', { change: false, index: next })
+          ? await call('ltc_address', { change: false, index: next, ...(account ? { account } : {}) })
           : family === 'doge'
-            ? await call('doge_address', { change: false, index: next })
+            ? await call('doge_address', { change: false, index: next, ...(account ? { account } : {}) })
             : activeHw
               ? (adapters.btc?.addressAt(kind, 0, next).address ?? '')
-              : await call('btc_address', { kind, change: false, index: next });
+              : await call('btc_address', { kind, change: false, index: next, ...(account ? { account } : {}) });
       setDerived((d) => ({ ...d, [family === 'btc' ? `${kind}:${next}` : `${family}:${next}`]: a }));
       setIndex(next);
       setVerify({ state: 'idle' });
@@ -190,6 +198,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             <IconBack size={16} />
           </IconButton>
           <h1 className="m-0 text-[28px] font-semibold tracking-[-0.03em]">Recevoir</h1>
+          <AccountPicker family={family} />
         </div>
         <div role="group" aria-label="Réseau" className="flex gap-1 rounded-full border border-line bg-card p-1">
           {(

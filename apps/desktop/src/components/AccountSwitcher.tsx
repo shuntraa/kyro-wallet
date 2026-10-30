@@ -8,6 +8,7 @@ import { IconChevronDown, IconPlus, IconShield, IconUsbKey } from './icons';
 import { BRAND } from '../state/hw';
 
 const ADD = '__add__';
+const ACCOUNTS = '__accounts__';
 
 export function AccountSwitcher() {
   const { hwAccounts, activeAccountId, activeHw, selectAccount, navigate, hwOnly } = useApp();
@@ -19,6 +20,7 @@ export function AccountSwitcher() {
       hint: `${BRAND[a.device]} · ${a.model}${hwFingerprint(a) ? ` · ${hwFingerprint(a)}` : ''}`,
       icon: <IconUsbKey size={15} className="text-ice" />,
     })),
+    ...(hwOnly ? [] : [{ value: ACCOUNTS, label: 'Comptes par chaîne', hint: 'Ajouter, renommer (coffre)', icon: <IconPlus size={15} className="text-mute" /> }]),
     { value: ADD, label: 'Ajouter un appareil', hint: 'Ledger ou Trezor', icon: <IconPlus size={15} className="text-mute" /> },
   ];
   return (
@@ -26,7 +28,7 @@ export function AccountSwitcher() {
       label="Compte actif"
       value={activeAccountId}
       items={items}
-      onSelect={(v) => (v === ADD ? navigate({ name: 'settings', section: 'hardware' }) : selectAccount(v))}
+      onSelect={(v) => (v === ADD ? navigate({ name: 'settings', section: 'hardware' }) : v === ACCOUNTS ? navigate({ name: 'settings', section: 'accounts' }) : selectAccount(v))}
       trigger={
         <button type="button" aria-label="Changer de compte" className="flex min-w-0 items-center gap-1.5 rounded-[8px] px-1.5 py-0.5 text-[13px] text-mute hover:bg-raised hover:text-text">
           {activeHw && <IconUsbKey size={13} className="shrink-0 text-ice" />}

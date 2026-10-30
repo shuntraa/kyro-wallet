@@ -61,6 +61,7 @@ import { CardanoSendFields, CardanoSummaryView, CardanoTxStatusLine, tokenKey } 
 import { DustOnlyNote, PoisoningWarning } from '../components/Poisoning';
 import { SecondConfirmNotice, btcWarningText, evmWarningText } from '../components/SecondConfirm';
 import { useHistory } from '../state/history';
+import { AccountPicker } from '../components/AccountPicker';
 import { Menu } from '../components/ui/menu';
 import { Button, IconButton, Notice, Spinner } from '../components/ui/primitives';
 import { IconBack, IconCheck, IconChevronDown, IconLock, IconShield, IconUpDown, IconWarn } from '../components/icons';
@@ -85,7 +86,7 @@ const LEVELS: Array<{ level: FeeLevel; label: string }> = [
 ];
 
 export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string }) {
-  const { back, settings, navigate, hideBalances } = useApp();
+  const { back, settings, navigate, hideBalances, accountSources, accountName } = useApp();
   const { adapters, accounts, activeHw } = useVault();
   const pf = usePortfolio();
   const network = accounts.network;
@@ -110,7 +111,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const toTrim = to.trim();
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
-  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address].filter((a): a is string => !!a);
+  // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
   const isOwn = ownAddresses.includes(asset?.family === 'evm' ? toTrim.toLowerCase() : toTrim);
   const noChecksum = asset?.family === 'evm' && addrValid && toTrim.slice(2) === toTrim.slice(2).toLowerCase();
 
@@ -131,6 +133,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       xrp: [accounts.xrp?.address],
       ada: [accounts.cardano?.address],
     };
+    // The other accounts of the vault are trusted too.
+    for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
     const events = (history.data?.entries ?? [])
       .filter((e) => e.asset?.family === family && e.counterparty)
       .map((e) => {
@@ -147,7 +151,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       ...trusted.map((address) => ({ address, source: 'history' as const })),
     ];
     return { lookalike: findLookalike(toTrim, known, family), dustOnly: isDustOnlyAddress(toTrim, dustOnly, family) };
-  }, [asset, addrValid, toTrim, accounts, history.data, pf]);
+  }, [asset, addrValid, toTrim, accounts, accountSources, history.data, pf]);
   const [poisonAck, setPoisonAck] = useState(false);
   useEffect(() => setPoisonAck(false), [toTrim, asset?.id]);
   const poisonBlocked = !!poisoning.lookalike && !poisonAck;
@@ -445,7 +449,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   <CoinIcon glyph={asset.glyph} color={asset.color} />
                   <span className="flex flex-1 flex-col">
                     <span className="text-[14px] font-semibold">
-                      {asset.name} · {activeHw ? activeHw.label : 'Compte principal'}
+                      {asset.name} · {accountName(asset.family)}
                     </span>
                     <span className="text-[12px] text-mute">
                       {hideBalances ? '•••••' : fmtCrypto(balance, decimals, asset.symbol)} disponibles · {chain.name}
@@ -455,6 +459,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 </button>
               }
             />
+            <AccountPicker family={asset.family} label="Compte" />
             {activeHw && <span className="text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).</span>}
             {fees.error && serverMissing(fees.error) && <ServerMissingLine coin={asset.name} />}
           </div>
