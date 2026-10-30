@@ -36,7 +36,7 @@ export function Portfolio() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">
-      <section aria-label="Valeur du portefeuille" className="relative h-[340px] shrink-0 overflow-hidden rounded-[22px] border border-line bg-card-hero">
+      <section aria-label="Valeur du portefeuille" className="relative h-[340px] shrink-0 overflow-hidden rounded-panel border border-line bg-card-hero">
         <div aria-hidden="true" className="absolute -top-40 -right-30 size-[520px] rounded-full border border-[#1A1D23]" />
         <div aria-hidden="true" className="absolute -top-20 -right-10 size-[360px] rounded-full border border-[#1A1D23]" />
         <div className="relative flex items-start justify-between px-7 pt-[26px]">
@@ -102,7 +102,7 @@ export function Portfolio() {
       <div className="flex min-h-0 flex-1 gap-4">
         <AssetListsCard className="flex-1" />
         <div className="flex w-[352px] shrink-0 flex-col gap-4">
-          <section aria-label="Répartition" className="flex items-center gap-5 rounded-[20px] border border-line bg-card px-5 py-[18px]">
+          <section aria-label="Répartition" className="flex items-center gap-5 rounded-panel border border-line bg-card px-5 py-[18px]">
             <AllocationRing
               slices={slices}
               center={

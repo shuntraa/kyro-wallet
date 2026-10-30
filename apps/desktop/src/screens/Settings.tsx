@@ -53,14 +53,14 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
             type="button"
             aria-current={section === s.key ? 'page' : undefined}
             onClick={() => setSection(s.key)}
-            className={cn('flex h-10 items-center gap-2.5 rounded-[12px] px-3.5 text-left text-[14px]', section === s.key ? 'bg-raised font-semibold' : 'text-text2 hover:bg-raised/60')}
+            className={cn('flex h-10 items-center gap-2.5 rounded-ctl px-3.5 text-left text-[14px]', section === s.key ? 'bg-raised font-semibold' : 'text-text2 hover:bg-raised/60')}
           >
             {section === s.key && <span className="size-1.5 rounded-full bg-ice" />}
             <span className={section === s.key ? '' : 'pl-4'}>{s.label}</span>
           </button>
         ))}
         <div className="flex-1" />
-        <div className="rounded-[16px] border border-line bg-card px-4 py-3.5">
+        <div className="rounded-box border border-line bg-card px-4 py-3.5">
           <div className="text-[14px] font-semibold">Kyro v{__APP_VERSION__}</div>
           <div className="text-[12px] leading-[1.5] text-mute">Open source · GPLv3. Build vérifiable depuis le code.</div>
         </div>
@@ -92,7 +92,7 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
 type Save = (patch: Partial<Settings>) => Promise<void>;
 
 function Panel({ children, className, tone }: { children: ReactNode; className?: string; tone?: 'danger' }) {
-  return <section className={cn('flex flex-col rounded-[22px] border bg-card px-[22px] py-1.5', tone === 'danger' ? 'border-down/30' : 'border-line', className)}>{children}</section>;
+  return <section className={cn('flex flex-col rounded-panel border bg-card px-[22px] py-1.5', tone === 'danger' ? 'border-down/30' : 'border-line', className)}>{children}</section>;
 }
 
 function SettingRow({ title, desc, children, last }: { title: string; desc: string; children: ReactNode; last?: boolean }) {
@@ -165,7 +165,7 @@ function Privacy() {
           />
         </SettingRow>
       </Panel>
-      <section className="flex flex-col gap-3.5 rounded-[22px] border border-line bg-card px-[22px] py-[18px]">
+      <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
         <div className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-2 text-[15px] font-semibold">
             <IconTor size={16} className="text-mute" /> État de la connexion
@@ -175,13 +175,13 @@ function Privacy() {
           </span>
         </div>
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="flex flex-col gap-1.5 rounded-[16px] border border-line bg-raised px-4 py-3.5">
+          <div className="flex flex-col gap-1.5 rounded-box border border-line bg-raised px-4 py-3.5">
             <span className="flex items-center gap-2 text-[13px] font-semibold">
               <IconCheck size={14} className="text-up" /> Ce que Tor cache
             </span>
             <span className="text-[12px] leading-[1.5] text-mute">Ton adresse IP. Les serveurs voient celle d’un relais Tor, et deux familles de requêtes (Bitcoin, EVM, Solana, prix, swap) ne partagent jamais un circuit.</span>
           </div>
-          <div className="flex flex-col gap-1.5 rounded-[16px] border border-line bg-raised px-4 py-3.5">
+          <div className="flex flex-col gap-1.5 rounded-box border border-line bg-raised px-4 py-3.5">
             <span className="flex items-center gap-2 text-[13px] font-semibold">
               <IconX size={14} className="text-warn" /> Ce qu’il ne cache pas
             </span>
@@ -248,8 +248,8 @@ function RevealPhrase() {
   };
 
   return (
-    <section className="flex items-center gap-4 rounded-[22px] border border-down/30 bg-card px-[22px] py-[18px]">
-      <span className="flex size-11 shrink-0 items-center justify-center rounded-[12px] bg-down/12 text-down">
+    <section className="flex items-center gap-4 rounded-panel border border-down/30 bg-card px-[22px] py-[18px]">
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-ctl bg-down/12 text-down">
         <IconEye size={18} />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -283,7 +283,7 @@ function RevealPhrase() {
           <>
             <ol className={cn('m-0 grid list-none gap-2 p-0', words.length === 24 ? 'grid-cols-4' : 'grid-cols-3')}>
               {words.map((w, i) => (
-                <li key={i} className="flex h-10 items-center gap-2 rounded-[10px] border border-line bg-raised px-2.5">
+                <li key={i} className="flex h-10 items-center gap-2 rounded-ctl border border-line bg-raised px-2.5">
                   <span className="w-5 font-mono text-[11px] text-faint">{i + 1}</span>
                   <span className="font-mono text-[14px]">{w}</span>
                 </li>
@@ -371,7 +371,7 @@ function ApiKeyRow({ name, label, desc, env, saved }: { name: ApiKeyName; label:
         {label} {env && <Badge tone="up">fournie par l’environnement</Badge>}
       </span>
       {saved && !editing ? (
-        <div className="flex items-center gap-2 rounded-[10px] border border-line-2 bg-raised px-3 py-2">
+        <div className="flex items-center gap-2 rounded-ctl border border-line-2 bg-raised px-3 py-2">
           <IconCheck size={14} className="text-up" />
           <span className="flex-1 text-[13px] text-text2">Clé enregistrée</span>
           <Button size="sm" onClick={() => setEditing(true)} disabled={busy}>
@@ -411,7 +411,7 @@ function Connections({ compact }: { compact?: boolean }) {
   const { settings, network, navigate } = useApp();
   const hosts = outgoingHosts(network, settings.servers);
   return (
-    <section className="flex h-full flex-col gap-3 rounded-[22px] border border-line bg-card px-[22px] py-5">
+    <section className="flex h-full flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-5">
       <div className="flex items-center justify-between">
         <span className="text-[15px] font-semibold">Connexions sortantes</span>
         <Badge tone="ice" className="h-[26px] px-3 text-[12px]">
@@ -421,7 +421,7 @@ function Connections({ compact }: { compact?: boolean }) {
       <p className="m-0 text-[13px] leading-[1.55] text-mute">La liste complète des serveurs que Kyro contacte. Tout le reste est bloqué par le coffre.</p>
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto scroll-thin">
         {hosts.map((h) => (
-          <div key={h.host + h.purpose} className="flex items-center gap-3 rounded-[12px] bg-raised px-4 py-2.5">
+          <div key={h.host + h.purpose} className="flex items-center gap-3 rounded-ctl bg-raised px-4 py-2.5">
             <span className="size-1.5 shrink-0 rounded-full bg-up" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate font-mono text-[12px]">{h.host}</span>
@@ -461,7 +461,7 @@ function Contacts() {
       <div className="flex flex-col gap-2">
         {list.length === 0 && <span className="text-[13px] text-faint">Aucun contact.</span>}
         {list.map((c) => (
-          <div key={c.id} className="flex items-center gap-3 rounded-[12px] bg-raised px-4 py-2.5">
+          <div key={c.id} className="flex items-center gap-3 rounded-ctl bg-raised px-4 py-2.5">
             <span className="flex size-8 items-center justify-center rounded-full bg-ice-deep text-[13px] font-semibold text-ice-text">{c.name.slice(0, 1).toUpperCase()}</span>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="text-[14px] font-semibold">{c.name}</span>

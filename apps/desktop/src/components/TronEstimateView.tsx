@@ -27,7 +27,7 @@ export function TronEstimateView({ u, network, trxPrice, currency }: { u: TronUn
 
   return (
     <div className="flex flex-col gap-3" aria-label="Ressources TRON">
-      <div className="flex flex-col gap-0 rounded-[14px] border border-line text-[12px]">
+      <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]">
         <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
           <span className="text-[12px] font-semibold text-text">Ressources TRON</span>
           <span className="text-[11px] text-mute">estimées par le coffre</span>

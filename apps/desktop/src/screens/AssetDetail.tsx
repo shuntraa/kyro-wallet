@@ -119,7 +119,7 @@ export function AssetDetail({ id }: { id: string }) {
       </header>
 
       <div className="flex min-h-0 flex-[1.15] gap-4">
-        <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-line bg-card-hero">
+        <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card-hero">
           <div className="flex items-start justify-between px-7 pt-6">
             <div className="flex flex-col gap-2">
               <span className="text-[13px] text-mute">
@@ -159,7 +159,7 @@ export function AssetDetail({ id }: { id: string }) {
           </div>
         </section>
 
-        <aside className="flex w-[360px] shrink-0 flex-col gap-3 rounded-[22px] border border-line bg-card px-[22px] py-5">
+        <aside className="flex w-[360px] shrink-0 flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-5">
           {supported && !watch ? (
             <>
               <span className="text-[13px] text-mute">Ton solde</span>
@@ -189,7 +189,7 @@ export function AssetDetail({ id }: { id: string }) {
               <div className="flex-1" />
               {/* Cardano: the tokens panel takes this room; « Recevoir » shows the same single address. */}
               {address && supported.family !== 'ada' && (
-                <div className="flex items-center justify-between gap-2 rounded-[14px] bg-raised py-2 pr-2 pl-3.5">
+                <div className="flex items-center justify-between gap-2 rounded-box bg-raised py-2 pr-2 pl-3.5">
                   <AddressShort address={address} />
                   <Button size="sm" onClick={() => navigate({ name: 'receive', family: supported.family })}>
                     QR code
@@ -206,7 +206,7 @@ export function AssetDetail({ id }: { id: string }) {
       </div>
 
       <div className="flex min-h-0 flex-1 gap-4">
-        <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-line bg-card">
+        <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card">
           <div className="flex h-[50px] shrink-0 items-center justify-between border-b border-line px-5">
             <span className="text-[15px] font-semibold">Activité {symbol}</span>
             <button type="button" onClick={() => navigate({ name: 'history' })} className="text-[13px] font-semibold text-ice hover:underline">
@@ -223,7 +223,7 @@ export function AssetDetail({ id }: { id: string }) {
             )}
           </div>
         </section>
-        <section className="flex w-[360px] shrink-0 flex-col rounded-[20px] border border-line bg-card px-5 py-4">
+        <section className="flex w-[360px] shrink-0 flex-col rounded-panel border border-line bg-card px-5 py-4">
           <div className="flex items-baseline justify-between pb-3">
             <span className="text-[15px] font-semibold">Marché</span>
             <span className="text-[11px] text-faint">CoinGecko{pf.marketUpdatedAt ? ` · ${fmtAgo(pf.marketUpdatedAt, now)}` : ''}</span>

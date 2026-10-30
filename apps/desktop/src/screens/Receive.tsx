@@ -227,7 +227,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
         <span className="-mt-2 self-end text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet. Ils restent disponibles dans le coffre Kyro (Compte principal).</span>
       )}
 
-      <section className="relative flex min-h-0 flex-1 items-center justify-center gap-14 overflow-hidden rounded-[22px] border border-line bg-card-hero p-8">
+      <section className="relative flex min-h-0 flex-1 items-center justify-center gap-14 overflow-hidden rounded-panel border border-line bg-card-hero p-8">
         <div aria-hidden="true" className="absolute top-1/2 left-[34%] size-[760px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#16191E]" />
         <div aria-hidden="true" className="absolute top-1/2 left-[34%] size-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#16191E]" />
         <div className="relative flex flex-col items-center gap-3">
@@ -315,7 +315,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             </div>
           )}
           {deriveError && <Notice tone="error">{deriveError}</Notice>}
-          <dl className="m-0 flex flex-col overflow-hidden rounded-[14px] border border-line text-[13px]">
+          <dl className="m-0 flex flex-col overflow-hidden rounded-box border border-line text-[13px]">
             <div className="flex h-11 items-center justify-between border-b border-line px-4">
               <dt className="text-mute">Réseau</dt>
               <dd className="m-0">
@@ -349,7 +349,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             </div>
           </dl>
           {askAmount && amountBase !== null && amountBase > 0n && (
-            <div className="flex items-center justify-between gap-2 rounded-[12px] bg-raised py-1.5 pr-1.5 pl-3">
+            <div className="flex items-center justify-between gap-2 rounded-ctl bg-raised py-1.5 pr-1.5 pl-3">
               <span className="truncate font-mono text-[11px] text-mute">{uri}</span>
               <CopyButton text={uri} label="Copier le lien" />
             </div>

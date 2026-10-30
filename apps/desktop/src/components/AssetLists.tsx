@@ -44,7 +44,7 @@ export function AssetListsCard({ initialTab = 'mine', className }: { initialTab?
   const mineCount = pf.holdings.filter((h) => h.amount > 0n).length;
 
   return (
-    <section aria-label="Actifs" className={cn('flex min-w-0 flex-col overflow-hidden rounded-[20px] border border-line bg-card', className)}>
+    <section aria-label="Actifs" className={cn('flex min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-card', className)}>
       <div className="flex h-[52px] shrink-0 items-center justify-between gap-3 border-b border-line px-5">
         <div role="tablist" aria-label="Listes" className="flex h-[52px] gap-[22px]">
           {(

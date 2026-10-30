@@ -116,7 +116,7 @@ export function History() {
       </header>
 
       <div className="flex min-h-0 flex-1 gap-4">
-        <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[22px] border border-line bg-card">
+        <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card">
           <div className="min-h-0 flex-1 overflow-y-auto py-2 scroll-thin">
             {history.loading && !history.data ? (
               <div className="flex flex-col gap-3 p-5">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-11 w-full" />)}</div>
@@ -150,7 +150,7 @@ export function History() {
         </section>
 
         <div className="flex w-[380px] shrink-0 flex-col gap-4">
-          <section className="flex flex-col gap-3.5 rounded-[22px] border border-line bg-card px-[22px] py-[18px]">
+          <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
             <span className="text-[15px] font-semibold">{month.label}</span>
             <div className="grid grid-cols-3 gap-2">
               <MonthStat label="Reçu" value={hideBalances ? '•••' : `+${fmtFiat(month.received, cur, { decimals: 0 })}`} tone="text-up" />
@@ -168,7 +168,7 @@ export function History() {
 
 function MonthStat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-[12px] bg-raised px-3 py-2.5">
+    <div className="flex flex-col gap-1 rounded-ctl bg-raised px-3 py-2.5">
       <span className="text-[12px] text-mute">{label}</span>
       <span className={cn('truncate text-[16px] font-semibold', tone)}>{value}</span>
     </div>
@@ -206,7 +206,7 @@ function Approvals() {
   const risky = list.filter((a) => isUnlimitedAllowance(a.current)).length;
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-[22px] border border-line bg-card px-[22px] py-[18px] scroll-thin">
+    <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-panel border border-line bg-card px-[22px] py-[18px] scroll-thin">
       <div className="flex items-center justify-between">
         <span className="text-[15px] font-semibold">Autorisations actives</span>
         {risky > 0 && <Badge tone="down">{risky} à risque</Badge>}
@@ -218,7 +218,7 @@ function Approvals() {
         const unlimited = isUnlimitedAllowance(a.current);
         const asset = assetsFor(network).find((x) => x.contract?.toLowerCase() === a.token.toLowerCase());
         return (
-          <div key={`${a.chainId}:${a.token}:${a.spender}`} className={cn('flex flex-col gap-2.5 rounded-[16px] border px-4 py-3.5', unlimited ? 'border-down/40' : 'border-line')}>
+          <div key={`${a.chainId}:${a.token}:${a.spender}`} className={cn('flex flex-col gap-2.5 rounded-box border px-4 py-3.5', unlimited ? 'border-down/40' : 'border-line')}>
             <div className="flex items-center justify-between gap-2">
               <span className="text-[14px] font-semibold">
                 {a.tokenSymbol} → {a.spenderLabel}

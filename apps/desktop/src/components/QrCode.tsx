@@ -25,7 +25,7 @@ export function QrCode({ value, size = 300 }: { value: string; size?: number }) 
   }, [value]);
 
   return (
-    <div className="relative rounded-[28px] bg-white p-[22px] shadow-[0_0_0_6px_#1A1D23]" style={{ width: size + 44, height: size + 44 }}>
+    <div className="relative rounded-panel bg-white p-[22px] shadow-[0_0_0_6px_#1A1D23]" style={{ width: size + 44, height: size + 44 }}>
       {svg ? (
         // The SVG is generated locally by `qrcode` from our own address string.
         <div role="img" aria-label="QR code de l’adresse" style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: svg }} className="[&>svg]:h-full [&>svg]:w-full" />
@@ -35,7 +35,7 @@ export function QrCode({ value, size = 300 }: { value: string; size?: number }) 
         </div>
       )}
       {svg && (
-        <span className="absolute top-1/2 left-1/2 flex size-[66px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[18px] bg-[#0A0B0D] ring-[6px] ring-white">
+        <span className="absolute top-1/2 left-1/2 flex size-[66px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-box bg-[#0A0B0D] ring-[6px] ring-white">
           <KyroMark size={40} />
         </span>
       )}

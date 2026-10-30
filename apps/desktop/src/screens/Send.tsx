@@ -414,7 +414,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       </header>
 
       <div className="flex min-h-0 flex-1 gap-4">
-        <form onSubmit={(e) => e.preventDefault()} className="flex min-w-0 flex-1 flex-col gap-5 overflow-y-auto rounded-[22px] border border-line bg-card px-[26px] py-6 scroll-thin">
+        <form onSubmit={(e) => e.preventDefault()} className="flex min-w-0 flex-1 flex-col gap-5 overflow-y-auto rounded-panel border border-line bg-card px-[26px] py-6 scroll-thin">
           {/* From */}
           <div className="flex flex-col gap-2">
             <span className="text-[12px] font-medium text-mute">Depuis</span>
@@ -441,7 +441,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 icon: <CoinIcon glyph={a.glyph} color={a.color} size={26} />,
               }))}
               trigger={
-                <button type="button" className="flex h-[60px] items-center gap-3 rounded-[14px] border border-line-2 bg-raised px-4 text-left hover:border-ice-line">
+                <button type="button" className="flex h-[60px] items-center gap-3 rounded-box border border-line-2 bg-raised px-4 text-left hover:border-ice-line">
                   <CoinIcon glyph={asset.glyph} color={asset.color} />
                   <span className="flex flex-1 flex-col">
                     <span className="text-[14px] font-semibold">
@@ -464,7 +464,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <label htmlFor="dest" className="text-[12px] font-medium text-mute">
               À
             </label>
-            <div className={cn('overflow-hidden rounded-[14px] border bg-raised', guard.tampered && settings.clipboardGuard ? 'border-down/70' : addrValid ? 'border-ice-line' : 'border-line-2')}>
+            <div className={cn('overflow-hidden rounded-box border bg-raised', guard.tampered && settings.clipboardGuard ? 'border-down/70' : addrValid ? 'border-ice-line' : 'border-line-2')}>
               <div className={cn('flex h-12 items-center gap-2.5 pr-2 pl-4', addrValid && 'border-b border-control-2')}>
                 <input
                   id="dest"
@@ -552,7 +552,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               </label>
               <span className="text-[12px] text-mute">{after !== null && after >= 0n && !hideBalances ? `Solde après envoi : ${fmtCrypto(after, decimals, asset.symbol)}` : ''}</span>
             </div>
-            <div className={cn('flex h-[72px] items-center gap-3 rounded-[14px] border bg-raised pr-2.5 pl-[18px] focus-within:border-ice-line', overBalance ? 'border-down/60' : 'border-line-2')}>
+            <div className={cn('flex h-[72px] items-center gap-3 rounded-box border bg-raised pr-2.5 pl-[18px] focus-within:border-ice-line', overBalance ? 'border-down/60' : 'border-line-2')}>
               <input
                 id="amount"
                 type="text"
@@ -578,11 +578,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   setAmountStr('');
                   setMax(false);
                 }}
-                className="flex size-10 items-center justify-center rounded-[10px] bg-control-2 text-text2 hover:text-text disabled:opacity-40"
+                className="flex size-10 items-center justify-center rounded-ctl bg-control-2 text-text2 hover:text-text disabled:opacity-40"
               >
                 <IconUpDown size={16} />
               </button>
-              <button type="button" onClick={() => setMax(true)} className={cn('h-10 rounded-[10px] px-3.5 text-[12px] font-semibold', max ? 'bg-ice/16 text-ice-text' : 'bg-control-2 text-text hover:bg-control')}>
+              <button type="button" onClick={() => setMax(true)} className={cn('h-10 rounded-ctl px-3.5 text-[12px] font-semibold', max ? 'bg-ice/16 text-ice-text' : 'bg-control-2 text-text hover:bg-control')}>
                 MAX
               </button>
             </div>
@@ -614,21 +614,21 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {isAda ? (
             <div className="flex flex-col gap-2">
               <span className="text-[12px] font-medium text-mute">Frais réseau</span>
-              <div className="rounded-[14px] border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
+              <div className="rounded-box border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
                 <strong className="font-semibold text-text">Rien à choisir sur Cardano.</strong> Les frais dépendent de la taille de la transaction (44 lovelace par octet + 0,155381 ADA) : d’habitude ≈ 0,17 ADA, un peu plus avec un token ou un message. Le coffre les calcule ; le montant exact est dans la vérification.
               </div>
             </div>
           ) : isXrp ? (
             <div className="flex flex-col gap-2">
               <span className="text-[12px] font-medium text-mute">Frais réseau</span>
-              <div className="rounded-[14px] border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
+              <div className="rounded-box border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
                 <strong className="font-semibold text-text">Rien à choisir sur le XRP Ledger.</strong> Le coffre fixe les frais du registre ouvert (d’habitude 10 à 12 drops, soit 0,000012 XRP) ; ils sont détruits, personne ne les reçoit.
               </div>
             </div>
           ) : isTron ? (
             <div className="flex flex-col gap-2">
               <span className="text-[12px] font-medium text-mute">Frais réseau</span>
-              <div className="flex flex-col gap-1 rounded-[14px] border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
+              <div className="flex flex-col gap-1 rounded-box border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
                 <span>
                   <strong className="font-semibold text-text">Rien à choisir sur TRON.</strong> Chaque transaction consomme de la bande passante (octets) et, pour un token TRC-20, de l’énergie. Ce que ta bande passante gratuite ou tes TRX gelés ne couvrent pas est payé en TRX brûlés.
                 </span>
@@ -661,7 +661,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               </span>
             )}
             {choice === 'custom' && (
-              <div className="flex items-end gap-3 rounded-[14px] border border-ice-line bg-raised px-4 py-3.5">
+              <div className="flex items-end gap-3 rounded-box border border-ice-line bg-raised px-4 py-3.5">
                 {asset.family === 'evm' && (
                   <>
                     <UnitField label="Frais max. par gas" unit="gwei" value={customEvm.maxFeeGwei} onChange={(v) => setCustomEvm((c) => ({ ...c, maxFeeGwei: v }))} />
@@ -681,14 +681,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           </div>
           )}
 
-          <div className="mt-auto flex items-center gap-3 rounded-[14px] border border-control-2 bg-raised px-4 py-3 text-[13px] text-text2">
+          <div className="mt-auto flex items-center gap-3 rounded-box border border-control-2 bg-raised px-4 py-3 text-[13px] text-text2">
             <IconLock size={18} className="shrink-0 text-mute" />
             <span>{settings.clipboardGuard ? 'Le presse-papier est surveillé : si l’adresse change après ton collage, l’envoi est bloqué.' : 'Alerte presse-papier désactivée dans les réglages.'}</span>
           </div>
         </form>
 
         {/* Verification */}
-        <aside aria-label="Vérification" className="flex w-[400px] shrink-0 flex-col gap-4 overflow-y-auto rounded-[22px] border border-line bg-card px-6 py-[22px] scroll-thin">
+        <aside aria-label="Vérification" className="flex w-[400px] shrink-0 flex-col gap-4 overflow-y-auto rounded-panel border border-line bg-card px-6 py-[22px] scroll-thin">
           <div className="flex items-center justify-between">
             <span className="text-[15px] font-semibold">Vérification</span>
             <span className="inline-flex h-[26px] items-center gap-1.5 rounded-full border border-control-2 bg-raised px-2.5 text-[11px] font-medium text-text2">
@@ -700,7 +700,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[38px] font-semibold tracking-[-0.03em]">{sendAmount !== null && sendAmount > 0n ? fmtCrypto(sendAmount, decimals, asset.symbol) : `0 ${asset.symbol}`}</span>
             <span className="text-[13px] text-mute">{amountFiat !== null ? fmtFiat(amountFiat, cur) : '—'}</span>
           </div>
-          <div className="flex items-center gap-2.5 rounded-[14px] bg-raised px-3.5 py-3">
+          <div className="flex items-center gap-2.5 rounded-box bg-raised px-3.5 py-3">
             <CoinIcon glyph={asset.glyph} color={asset.color} size={30} />
             <span className="flex flex-col text-[12px]">
               <span className="font-semibold">Toi</span>
@@ -811,7 +811,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
           <div className="flex-1" />
           {activeHw ? (
-            <div className="flex items-center gap-2 rounded-[12px] border border-line bg-raised px-3.5 py-2.5 text-[12px] text-mute">
+            <div className="flex items-center gap-2 rounded-ctl border border-line bg-raised px-3.5 py-2.5 text-[12px] text-mute">
               <DeviceBadge device={activeHw.device} model={activeHw.model} />
               <span>Pas de mot de passe : fenêtre système de Kyro, puis confirmation sur l’écran de l’appareil.</span>
             </div>
@@ -888,7 +888,7 @@ function FeeOption({ active, onClick, title, sub, ice, disabled }: { active: boo
       aria-checked={active}
       disabled={disabled}
       onClick={onClick}
-      className={cn('flex h-14 flex-1 basis-0 flex-col items-start justify-center gap-0.5 rounded-[14px] px-3.5 text-left disabled:opacity-50', active ? 'border-[1.5px] border-ice bg-ice/8' : 'border border-line-2 bg-raised hover:border-line-3')}
+      className={cn('flex h-14 flex-1 basis-0 flex-col items-start justify-center gap-0.5 rounded-box px-3.5 text-left disabled:opacity-50', active ? 'border-[1.5px] border-ice bg-ice/8' : 'border border-line-2 bg-raised hover:border-line-3')}
     >
       <span className="truncate text-[13px] font-semibold">{title}</span>
       <span className={cn('text-[11px]', active && ice ? 'text-ice-text2' : 'text-mute')}>{sub}</span>
@@ -900,7 +900,7 @@ function UnitField({ label, unit, value, onChange, decimals = 9, wide }: { label
   return (
     <label className="flex flex-col gap-1.5 text-[12px] text-mute">
       {label}
-      <span className={cn('flex h-[42px] items-center gap-2 rounded-[10px] border border-line-3 bg-bg px-3 focus-within:border-ice-line', wide ? 'w-[210px]' : 'w-[170px]')}>
+      <span className={cn('flex h-[42px] items-center gap-2 rounded-ctl border border-line-3 bg-bg px-3 focus-within:border-ice-line', wide ? 'w-[210px]' : 'w-[170px]')}>
         <input type="text" inputMode="decimal" value={value} onChange={(e) => onChange(decimals === 0 ? e.target.value : sanitizeDecimalInput(e.target.value, decimals))} className="w-full min-w-0 bg-transparent text-[16px] font-semibold text-text" />
         <span className="shrink-0 text-[13px] text-mute">{unit}</span>
       </span>
@@ -922,7 +922,7 @@ function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory
   const [saved, setSaved] = useState(false);
   return (
     <div className="flex flex-1 items-center justify-center p-8">
-      <div className="flex w-[520px] flex-col items-center gap-5 rounded-[22px] border border-line bg-card px-8 py-9 text-center">
+      <div className="flex w-[520px] flex-col items-center gap-5 rounded-panel border border-line bg-card px-8 py-9 text-center">
         <span className="flex size-14 items-center justify-center rounded-full bg-up/12 text-up">
           <IconCheck size={26} />
         </span>
@@ -930,14 +930,14 @@ function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory
         <p className="m-0 text-[14px] leading-[1.6] text-mute">
           {what ?? fmtCrypto(amount, asset.decimals, asset.symbol)} vers {shortAddress(to)}. Elle apparaîtra comme confirmée dans l’historique dès son inclusion dans un bloc.
         </p>
-        <div className="flex w-full items-center justify-between gap-2 rounded-[12px] bg-raised py-2 pr-2 pl-3.5">
+        <div className="flex w-full items-center justify-between gap-2 rounded-ctl bg-raised py-2 pr-2 pl-3.5">
           <span className="truncate font-mono text-[12px] text-text2">{id}</span>
           <CopyButton text={id} />
         </div>
         {children}
         {!contactKnown && !saved && (
           <div className="flex w-full items-center gap-2">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom pour le carnet d’adresses" className="h-10 min-w-0 flex-1 rounded-[10px] border border-line-2 bg-bg px-3 text-[13px]" />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom pour le carnet d’adresses" className="h-10 min-w-0 flex-1 rounded-ctl border border-line-2 bg-bg px-3 text-[13px]" />
             <Button
               size="md"
               disabled={!name.trim()}

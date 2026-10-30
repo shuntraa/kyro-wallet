@@ -36,7 +36,7 @@ export function Devices() {
 
   return (
     <>
-      <section className="flex flex-col gap-3.5 rounded-[22px] border border-line bg-card px-[22px] py-[18px]">
+      <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
         <div className="flex items-center justify-between">
           <span className="text-[15px] font-semibold">Appareils</span>
           <Badge tone="ice">Ledger · Trezor</Badge>
@@ -68,7 +68,7 @@ export function Devices() {
           ))}
         </div>
         {adding ? (
-          <div className="rounded-[16px] border border-ice-line bg-bg px-4 py-4">
+          <div className="rounded-box border border-ice-line bg-bg px-4 py-4">
             <HwSetup
               onCancel={() => setAdding(false)}
               onDone={(acc) => {
@@ -138,7 +138,7 @@ function ThpPairings() {
   const items: HwThpPairing[] = list.data ?? [];
   if (!list.data && !list.error) return null;
   return (
-    <section className="flex flex-col gap-3 rounded-[22px] border border-line bg-card px-[22px] py-[18px]">
+    <section className="flex flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-[18px]">
       <div className="flex items-center justify-between">
         <span className="text-[15px] font-semibold">Appareils Trezor appairés</span>
         <Badge>Trezor Safe 7 · canal chiffré</Badge>
@@ -149,7 +149,7 @@ function ThpPairings() {
       {list.error && <Notice tone="error">{list.error.message}</Notice>}
       {list.data && items.length === 0 && <span className="text-[13px] text-faint">Aucun Trezor Safe 7 appairé.</span>}
       {items.map((p) => (
-        <div key={p.key} className="flex items-center justify-between gap-3 rounded-[14px] border border-line bg-raised px-4 py-2.5">
+        <div key={p.key} className="flex items-center justify-between gap-3 rounded-box border border-line bg-raised px-4 py-2.5">
           <span className="flex min-w-0 flex-col">
             <span className="text-[13px] font-semibold">{p.model === 'T3W1' ? 'Trezor Safe 7' : p.model}</span>
             <span className="truncate font-mono text-[11px] text-mute">

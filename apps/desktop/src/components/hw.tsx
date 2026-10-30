@@ -42,8 +42,8 @@ export function HwWaiting({ deviceId, idle, className, confirm }: { deviceId: st
   const [cancelling, setCancelling] = useState(false);
   const t = prompt === 'confirm-on-device' && confirm ? confirm : prompt ? PROMPT_TEXT[prompt] : null;
   return (
-    <div role="status" aria-live="polite" className={cn('flex items-start gap-3.5 rounded-[16px] border border-ice-line bg-ice/[.06] px-4 py-3.5', className)}>
-      <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-ice/12 text-ice">
+    <div role="status" aria-live="polite" className={cn('flex items-start gap-3.5 rounded-box border border-ice-line bg-ice/[.06] px-4 py-3.5', className)}>
+      <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-ctl bg-ice/12 text-ice">
         <Spinner className="size-4" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -95,7 +95,7 @@ export function AddressMismatchStop({ error, onClose }: { error: unknown; onClos
   const d = errorData(error, 'HW_ADDRESS_MISMATCH');
   return (
     <div role="alertdialog" aria-modal="true" aria-labelledby="mismatch-title" className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2a0707]/95 p-8 backdrop-blur-[2px]">
-      <div className="flex max-w-[640px] flex-col gap-5 rounded-[22px] border-2 border-down bg-[#1a0a0a] p-8">
+      <div className="flex max-w-[640px] flex-col gap-5 rounded-panel border-2 border-down bg-[#1a0a0a] p-8">
         <span className="flex size-14 items-center justify-center rounded-full bg-down/20 text-down">
           <IconWarn size={28} />
         </span>
@@ -106,7 +106,7 @@ export function AddressMismatchStop({ error, onClose }: { error: unknown; onClos
           L’adresse affichée par ton appareil n’est pas celle que Kyro a calculée. Quelqu’un a peut-être modifié les comptes enregistrés sur cet ordinateur, ou ce n’est pas le bon appareil. N’envoie et ne communique aucune de ces deux adresses.
         </p>
         {d && (
-          <dl className="m-0 flex flex-col gap-2 rounded-[14px] border border-down/40 bg-black/30 p-4 font-mono text-[12px]">
+          <dl className="m-0 flex flex-col gap-2 rounded-box border border-down/40 bg-black/30 p-4 font-mono text-[12px]">
             <div className="flex flex-col gap-0.5">
               <dt className="font-sans text-[12px] text-[#ff9a9a]">Affichée par l’appareil</dt>
               <dd className="m-0 break-all text-[#ffd6d6]">{d.device}</dd>
@@ -191,7 +191,7 @@ export function ThpCodeDialog({ deviceId }: { deviceId: string | null }) {
           if (e.key === 'Enter' && valid && !busy) void submit();
         }}
         placeholder="••••••"
-        className="h-14 rounded-[12px] border border-line-3 bg-bg text-center font-mono text-[28px] font-semibold tracking-[0.5em] text-text focus:border-ice-line"
+        className="h-14 rounded-ctl border border-line-3 bg-bg text-center font-mono text-[28px] font-semibold tracking-[0.5em] text-text focus:border-ice-line"
       />
       {demoCode && <span className="text-[12px] text-ice-text2">Mode démo : l’écran du Trezor simulé affiche {demoCode}.</span>}
       {error !== null && <HwErrorNotice error={error} />}
@@ -251,7 +251,7 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
                 aria-label={`Case ligne ${r + 1}, colonne ${c + 1}`}
                 disabled={busy || positions.length >= 9}
                 onClick={() => setPositions((p) => p + pinPosition(r, c))}
-                className="flex size-16 items-center justify-center rounded-[14px] border border-line-2 bg-raised text-[22px] text-faint hover:border-ice-line hover:bg-control"
+                className="flex size-16 items-center justify-center rounded-box border border-line-2 bg-raised text-[22px] text-faint hover:border-ice-line hover:bg-control"
               >
                 •
               </button>
@@ -261,7 +261,7 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
         {demoLayout && (
           <div className="flex flex-col items-center gap-1.5" aria-label="Écran simulé de l’appareil">
             <span className="text-[11px] font-semibold tracking-[0.04em] text-ice uppercase">Mode démo</span>
-            <div className="grid grid-cols-3 gap-1 rounded-[10px] border border-line bg-black p-2 font-mono text-[14px] text-text">
+            <div className="grid grid-cols-3 gap-1 rounded-ctl border border-line bg-black p-2 font-mono text-[14px] text-text">
               {demoLayout.flat().map((n, i) => (
                 <span key={i} className="flex size-7 items-center justify-center">
                   {n}
@@ -427,7 +427,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
           {devices && devices.length > 1 && (
             <div className="flex flex-col gap-2">
               {devices.map((d) => (
-                <button key={d.id} type="button" onClick={() => void open(d)} className="flex items-center gap-3 rounded-[14px] border border-line bg-raised px-4 py-3 text-left hover:border-ice-line">
+                <button key={d.id} type="button" onClick={() => void open(d)} className="flex items-center gap-3 rounded-box border border-line bg-raised px-4 py-3 text-left hover:border-ice-line">
                   <DeviceBadge device={d.kind} model={d.model} />
                   <span className="font-mono text-[12px] text-mute">{d.id}</span>
                 </button>
@@ -507,7 +507,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
               const st = progress[c];
               const app = status?.chains.find((x) => x.chain === c)?.app;
               return (
-                <li key={c} className="flex items-center gap-3 rounded-[12px] border border-line bg-raised px-4 py-2.5">
+                <li key={c} className="flex items-center gap-3 rounded-ctl border border-line bg-raised px-4 py-2.5">
                   {st === 'ok' ? <IconCheck size={15} className="text-up" /> : st === 'reading' ? <Spinner className="size-3.5 text-ice" /> : st === 'error' ? <IconX size={15} className="text-down" /> : <span className="size-1.5 rounded-full bg-faint" />}
                   <span className="flex-1 text-[13px] font-semibold">{CHAIN_LABEL[c]}</span>
                   {device.kind === 'ledger' && app && <span className="text-[12px] text-mute">app « {app} »</span>}
@@ -550,7 +550,7 @@ function ChainRow({ st, chain, checked, onToggle }: { st: HwChainStatus | undefi
               `${(st.reason ?? 'Non pris en charge').replace(/^(Bitcoin|EVM|Ethereum|Solana)\s*:\s*/, '')}${st.min ? ` (minimum ${st.min})` : ''}`;
   return (
     <li>
-      <label className={cn('flex items-center gap-3 rounded-[12px] border px-4 py-2.5', unsupported ? 'border-line bg-card opacity-60' : 'cursor-pointer border-line bg-raised hover:border-line-3')}>
+      <label className={cn('flex items-center gap-3 rounded-ctl border px-4 py-2.5', unsupported ? 'border-line bg-card opacity-60' : 'cursor-pointer border-line bg-raised hover:border-line-3')}>
         <input type="checkbox" checked={checked && !unsupported} disabled={unsupported} onChange={(e) => onToggle(e.target.checked)} className="size-4 accent-[#7cc4ff]" />
         <span className="flex-1 text-[13px] font-semibold">{CHAIN_LABEL[chain]}</span>
         <span className={cn('text-[12px]', st?.state === 'ready' ? 'text-up' : st?.state === 'unsupported' ? 'text-faint' : 'text-warn')}>{hint}</span>
@@ -570,7 +570,7 @@ export function HwAccountSummary({ acc, action }: { acc: WatchOnlyAccount; actio
   })();
   const fp = hwFingerprint(acc);
   return (
-    <div className="flex flex-col gap-3 rounded-[16px] border border-line bg-raised px-4 py-3.5">
+    <div className="flex flex-col gap-3 rounded-box border border-line bg-raised px-4 py-3.5">
       <div className="flex items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
           <span className="text-[15px] font-semibold">{acc.label}</span>

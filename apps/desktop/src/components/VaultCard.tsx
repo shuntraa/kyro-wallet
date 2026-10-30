@@ -29,9 +29,9 @@ export function VaultCard() {
   if (activeHw) {
     // Hardware-wallet account: no key in Kyro, nothing to lock here.
     return (
-      <section aria-label="Hardware wallet" className="flex flex-1 flex-col gap-3.5 rounded-[20px] border border-line bg-card px-5 py-[18px]">
+      <section aria-label="Hardware wallet" className="flex flex-1 flex-col gap-3.5 rounded-panel border border-line bg-card px-5 py-[18px]">
         <div className="flex items-center gap-3">
-          <span className="flex size-[38px] items-center justify-center rounded-[12px] bg-ice/12 text-ice">
+          <span className="flex size-[38px] items-center justify-center rounded-ctl bg-ice/12 text-ice">
             <IconUsbKey size={18} />
           </span>
           <span className="flex flex-1 flex-col">
@@ -63,9 +63,9 @@ export function VaultCard() {
   }
 
   return (
-    <section aria-label="Coffre" className="flex flex-1 flex-col gap-3.5 rounded-[20px] border border-line bg-card px-5 py-[18px]">
+    <section aria-label="Coffre" className="flex flex-1 flex-col gap-3.5 rounded-panel border border-line bg-card px-5 py-[18px]">
       <div className="flex items-center gap-3">
-        <span className="flex size-[38px] items-center justify-center rounded-[12px] bg-ice/12 text-ice">
+        <span className="flex size-[38px] items-center justify-center rounded-ctl bg-ice/12 text-ice">
           <IconShield size={18} sw={2} />
         </span>
         <span className="flex flex-1 flex-col">

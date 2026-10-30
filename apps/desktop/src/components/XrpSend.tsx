@@ -36,7 +36,7 @@ export function XrpTagField({
   const required = !!dest?.requireDestTag;
   const missing = required && value.trim() === '';
   return (
-    <div className={cn('flex flex-col gap-2 rounded-[14px] border px-4 py-3.5', missing || error ? 'border-down/60 bg-down/[.05]' : 'border-ice-line bg-ice/[.05]')}>
+    <div className={cn('flex flex-col gap-2 rounded-box border px-4 py-3.5', missing || error ? 'border-down/60 bg-down/[.05]' : 'border-ice-line bg-ice/[.05]')}>
       <div className="flex items-center justify-between gap-2">
         <label htmlFor="xrp-tag" className="text-[13px] font-semibold text-text">
           Tag de destination {required ? <span className="text-down">· obligatoire pour ce destinataire</span> : <span className="font-normal text-mute">· facultatif</span>}
@@ -57,7 +57,7 @@ export function XrpTagField({
         placeholder="ex. 104857"
         onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, '').slice(0, 10))}
         aria-invalid={missing || !!error}
-        className="h-11 rounded-[10px] border border-line-3 bg-bg px-3 font-mono text-[16px] font-semibold text-text focus:border-ice-line"
+        className="h-11 rounded-ctl border border-line-3 bg-bg px-3 font-mono text-[16px] font-semibold text-text focus:border-ice-line"
       />
       {error && <span className="text-[12px] text-down">{error}</span>}
       {required ? (
@@ -106,12 +106,12 @@ export function XrpSummaryView({ u, xrpPrice, currency }: { u: XrpUnsigned; xrpP
     return v >= 0.01 ? ` · ${fmtFiat(v, currency)}` : '';
   };
   return (
-    <div className="flex flex-col gap-0 rounded-[14px] border border-line text-[12px]" aria-label="Paiement XRP décodé">
+    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label="Paiement XRP décodé">
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">Paiement XRP Ledger</span>
         <span className="text-[11px] text-mute">décodé par le coffre</span>
       </div>
-      <div className={cn('mx-3 my-2.5 rounded-[10px] border-2 px-3 py-2 text-center', s.destinationTag !== null ? 'border-ice-line' : c.destination.requireDestTag ? 'border-down/60' : 'border-warn/50')}>
+      <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', s.destinationTag !== null ? 'border-ice-line' : c.destination.requireDestTag ? 'border-down/60' : 'border-warn/50')}>
         <span className="block text-[10px] font-semibold tracking-[0.08em] text-mute">TAG DE DESTINATION</span>
         <span className={cn('block font-mono text-[18px] font-semibold', s.destinationTag !== null ? 'text-text' : 'text-warn')}>{s.destinationTag !== null ? s.destinationTag : 'AUCUN'}</span>
       </div>
@@ -177,7 +177,7 @@ export function XrpTxStatusLine({ adapter, hash, recipient, onValidated }: { ada
 
   if (status.state === 'pending') {
     return (
-      <div role="status" className="flex w-full items-center gap-2 rounded-[12px] border border-line bg-raised px-3.5 py-2.5 text-[13px] text-text2">
+      <div role="status" className="flex w-full items-center gap-2 rounded-ctl border border-line bg-raised px-3.5 py-2.5 text-[13px] text-text2">
         <Spinner /> En attente de validation par le registre XRP (quelques secondes)…
       </div>
     );

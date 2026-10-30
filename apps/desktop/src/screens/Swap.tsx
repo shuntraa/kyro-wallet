@@ -277,7 +277,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             ]}
           />
           {slip === 'custom' && (
-            <label className="flex h-9 items-center gap-1 rounded-[10px] border border-line-2 bg-bg px-2.5">
+            <label className="flex h-9 items-center gap-1 rounded-ctl border border-line-2 bg-bg px-2.5">
               <span className="sr-only">Slippage personnalisé</span>
               <input value={slipCustom} inputMode="decimal" onChange={(e) => setSlipCustom(sanitizeDecimalInput(e.target.value, 2))} className="w-10 bg-transparent text-right text-[13px]" />
               <span className="text-[12px] text-mute">%</span>
@@ -289,7 +289,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       {slip === 'custom' && slipValid && slippageBps > 300 && <span className="-mt-2 text-right text-[12px] text-warn">Slippage élevé : tu peux recevoir nettement moins que prévu.</span>}
 
       <div className="flex min-h-0 flex-1 gap-4">
-        <section className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-[22px] border border-line bg-card p-[22px] scroll-thin">
+        <section className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto rounded-panel border border-line bg-card p-[22px] scroll-thin">
           <div className="relative flex flex-col gap-2">
             <TokenPanel
               label="Tu donnes"
@@ -322,7 +322,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                 setBuyId(sell.id);
                 setAmountStr('');
               }}
-              className="absolute top-1/2 left-1/2 z-10 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[10px] border-4 border-card bg-control-2 text-text hover:bg-control"
+              className="absolute top-1/2 left-1/2 z-10 flex size-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-ctl border-4 border-card bg-control-2 text-text hover:bg-control"
             >
               <IconDown size={15} />
             </button>
@@ -349,7 +349,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
           )}
 
           {chosen && needsAllowanceCheck && (
-            <div className="flex flex-col gap-2.5 rounded-[14px] border border-line bg-raised px-4 py-3.5">
+            <div className="flex flex-col gap-2.5 rounded-box border border-line bg-raised px-4 py-3.5">
               <div className="flex items-center justify-between">
                 <span className="text-[14px] font-semibold">Autorisation {sell.symbol}</span>
                 <span className="text-[12px] text-mute">{needsApproval ? 'Étape 1 sur 2' : allowance.loading ? 'Vérification…' : 'Déjà autorisée'}</span>
@@ -413,13 +413,13 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
         </section>
 
         <div className="flex w-[400px] shrink-0 flex-col gap-4">
-          <section className="flex flex-col gap-2.5 rounded-[22px] border border-line bg-card p-[18px]">
+          <section className="flex flex-col gap-2.5 rounded-panel border border-line bg-card p-[18px]">
             <div className="flex items-center justify-between px-1">
               <span className="text-[15px] font-semibold">Devis comparés</span>
               <span className="text-[12px] text-mute">{quotes.loading ? 'actualisation…' : quotes.updatedAt ? `actualisé ${fmtAgo(quotes.updatedAt, now)}` : ''}</span>
             </div>
             {!params && <p className="m-0 px-1 py-4 text-[13px] text-mute">Saisis un montant pour comparer les devis.</p>}
-            {params && quotes.loading && !quotes.data && [0, 1, 2].map((i) => <div key={i} className="skeleton h-[62px] rounded-[14px]" />)}
+            {params && quotes.loading && !quotes.data && [0, 1, 2].map((i) => <div key={i} className="skeleton h-[62px] rounded-box" />)}
             {list.map((q, i) => {
               const net = netValueFiat(q, params?.buy ?? tokenOf(buy));
               const active = chosen?.provider === q.provider;
@@ -428,7 +428,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                   key={q.provider}
                   type="button"
                   onClick={() => setSelected(q.provider)}
-                  className={cn('flex flex-col gap-1 rounded-[14px] px-4 py-3 text-left', active ? 'border-[1.5px] border-ice bg-ice/8' : 'border border-line bg-raised hover:border-line-3')}
+                  className={cn('flex flex-col gap-1 rounded-box px-4 py-3 text-left', active ? 'border-[1.5px] border-ice bg-ice/8' : 'border border-line bg-raised hover:border-line-3')}
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-2 text-[14px] font-semibold">
@@ -446,7 +446,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             {params && quotes.data && list.length === 0 && <p className="m-0 px-1 text-[13px] text-mute">Aucun devis disponible pour cette paire{network === 'testnet' ? ' : les agrégateurs fonctionnent surtout en mainnet' : ''}.</p>}
             {quotesTorBlocked && (failures.length > 0 || quotes.error) && <TorWait className="px-1" />}
             {!quotesTorBlocked && failures.map((f) => (
-              <div key={f.provider} className="flex items-center justify-between gap-3 rounded-[12px] border border-dashed border-line px-4 py-2 text-[12px]">
+              <div key={f.provider} className="flex items-center justify-between gap-3 rounded-ctl border border-dashed border-line px-4 py-2 text-[12px]">
                 <span className="font-semibold text-mute">{f.providerName}</span>
                 <span className="truncate text-faint" title={f.error}>
                   {f.error}
@@ -456,7 +456,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             {quotes.error && !quotesTorBlocked && <Notice tone="error">{quotes.error.message}</Notice>}
           </section>
 
-          <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-[22px] border border-line bg-card px-[22px] py-[18px] scroll-thin">
+          <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-panel border border-line bg-card px-[22px] py-[18px] scroll-thin">
             <div className="flex flex-col text-[13px]">
               <div className="flex h-9 items-center justify-between border-b border-line">
                 <span className="text-mute">Taux</span>
@@ -527,7 +527,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
 function TokenPanel({ label, right, amount, sub, token }: { label: string; right: React.ReactNode; amount: React.ReactNode; sub: string; token: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1 rounded-[18px] border border-line bg-raised px-[22px] py-3.5">
+    <div className="flex flex-col gap-1 rounded-box border border-line bg-raised px-[22px] py-3.5">
       <div className="flex justify-between text-[13px]">
         <span className="text-mute">{label}</span>
         <span className="text-text2">{right}</span>
@@ -561,7 +561,7 @@ function TokenButton({ asset, items, onSelect }: { asset: AssetDef; items: Array
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-[14px] border border-line bg-raised px-4 py-3">
+    <div className="flex flex-col gap-1 rounded-box border border-line bg-raised px-4 py-3">
       <span className="text-[12px] text-mute">{label}</span>
       <span className={cn('text-[17px] font-semibold', tone)}>{value}</span>
     </div>

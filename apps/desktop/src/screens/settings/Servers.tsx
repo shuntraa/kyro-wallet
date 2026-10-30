@@ -90,7 +90,7 @@ function TestOk({ result, chainLabel = 'chainId', ledgerLabel = 'bloc' }: { resu
   if (d.serverVersion) parts.push(d.serverVersion);
   if (d.genesisHash) parts.push(`genesis ${d.genesisHash.slice(0, 8)}…${d.genesisHash.slice(-6)}`);
   return (
-    <div role="status" className="flex items-start gap-2 rounded-[12px] border border-up/30 bg-up/[.06] px-3.5 py-2.5 text-[12px] text-[#b8f3d8]">
+    <div role="status" className="flex items-start gap-2 rounded-ctl border border-up/30 bg-up/[.06] px-3.5 py-2.5 text-[12px] text-[#b8f3d8]">
       <IconCheck size={14} className="mt-0.5 shrink-0 text-up" />
       <span>
         <span className="font-semibold">Connexion réussie</span> · {parts.join(' · ')}
@@ -102,7 +102,7 @@ function TestOk({ result, chainLabel = 'chainId', ledgerLabel = 'bloc' }: { resu
 
 function Card({ title, badge, children }: { title: string; badge?: ReactNode; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-3.5 rounded-[22px] border border-line bg-card px-[22px] py-[18px]">
+    <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
       <div className="flex items-center justify-between gap-3">
         <span className="text-[15px] font-semibold">{title}</span>
         {badge}
@@ -521,7 +521,7 @@ function BitcoinCard() {
               <Input value={d.port} inputMode="numeric" onChange={(e) => set({ port: e.target.value.replace(/\D/g, '').slice(0, 5) })} placeholder="50002" className="font-mono text-[13px]" />
             </Field>
           </div>
-          <div className="flex items-center justify-between gap-4 rounded-[14px] border border-line bg-raised px-4 py-3">
+          <div className="flex items-center justify-between gap-4 rounded-box border border-line bg-raised px-4 py-3">
             <span className="flex flex-col gap-0.5">
               <span className="text-[13px] font-semibold">TLS (chiffrement)</span>
               <span className="text-[12px] text-mute">{onionHost && tor ? 'Sans TLS possible : l’adresse .onion authentifie et chiffre déjà la connexion.' : 'Obligatoire sauf pour une adresse .onion via Tor.'}</span>
@@ -607,7 +607,7 @@ function BitcoinCard() {
 function Fingerprint({ hex, compact }: { hex: string; compact?: boolean }) {
   const groups = fingerprintGroups(hex);
   return (
-    <div aria-label={`Empreinte SHA-256 ${groups.join(' ')}`} className={cn('grid grid-cols-8 gap-x-2 gap-y-1 rounded-[12px] border border-ice-line bg-ice/[.06] font-mono text-ice-text', compact ? 'px-3 py-2 text-[11px]' : 'px-4 py-3 text-[13px]')}>
+    <div aria-label={`Empreinte SHA-256 ${groups.join(' ')}`} className={cn('grid grid-cols-8 gap-x-2 gap-y-1 rounded-ctl border border-ice-line bg-ice/[.06] font-mono text-ice-text', compact ? 'px-3 py-2 text-[11px]' : 'px-4 py-3 text-[13px]')}>
       {groups.map((g, i) => (
         <span key={i}>{g}</span>
       ))}
@@ -667,7 +667,7 @@ function CbfForm({ d, set, network, tor }: { d: BtcDraft; set: (p: Partial<BtcDr
           rows={3}
           spellCheck={false}
           placeholder={network === 'testnet' ? 'exemple.onion:48333\n203.0.113.5:48333' : 'exemple.onion:8333\n203.0.113.5:8333'}
-          className="w-full resize-y rounded-[12px] border border-line-2 bg-bg px-3.5 py-2.5 font-mono text-[13px] text-text placeholder:text-faint focus:border-ice-line"
+          className="w-full resize-y rounded-ctl border border-line-2 bg-bg px-3.5 py-2.5 font-mono text-[13px] text-text placeholder:text-faint focus:border-ice-line"
         />
       </Field>
       <div className="flex flex-col gap-2">
@@ -726,7 +726,7 @@ function CbfPanel() {
     setBusy(false);
   };
   return (
-    <div className="flex flex-col gap-3 rounded-[16px] border border-line bg-raised px-4 py-3.5">
+    <div className="flex flex-col gap-3 rounded-box border border-line bg-raised px-4 py-3.5">
       <div className="flex items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
           <span className="text-[13px] font-semibold">Synchronisation par filtres compacts</span>
@@ -752,7 +752,7 @@ function CbfPanel() {
                   : `depuis le bloc ${fmtNumber(st?.birthHeight ?? 0, 0)}`
                 : `${st?.matchedBlocks ?? 0} téléchargé${(st?.matchedBlocks ?? 0) > 1 ? 's' : ''}`;
           return (
-            <li key={step.key} aria-current={active ? 'step' : undefined} className={cn('flex flex-col gap-0.5 rounded-[12px] border px-3 py-2', done ? 'border-up/30 bg-up/[.05]' : active ? 'border-ice-line bg-ice/[.06]' : 'border-line bg-card')}>
+            <li key={step.key} aria-current={active ? 'step' : undefined} className={cn('flex flex-col gap-0.5 rounded-ctl border px-3 py-2', done ? 'border-up/30 bg-up/[.05]' : active ? 'border-ice-line bg-ice/[.06]' : 'border-line bg-card')}>
               <span className="flex items-center gap-1.5 text-[12px] font-semibold">
                 {done ? <IconCheck size={12} className="text-up" /> : active ? <Spinner className="size-3 border-[1.5px] text-ice" /> : <span className="size-1.5 rounded-full bg-faint" />}
                 {step.label}
@@ -913,7 +913,7 @@ function CoreWallet() {
   const pct = status?.scanProgress !== undefined ? Math.round(status.scanProgress * 100) : null;
 
   return (
-    <div className="flex flex-col gap-3 rounded-[16px] border border-line bg-raised px-4 py-3.5">
+    <div className="flex flex-col gap-3 rounded-box border border-line bg-raised px-4 py-3.5">
       <div className="flex items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
           <span className="text-[13px] font-semibold">Portefeuille de surveillance</span>
@@ -963,7 +963,7 @@ function CoreWallet() {
               role="radio"
               aria-checked={mode === value}
               onClick={() => setMode(value)}
-              className={cn('flex flex-col gap-0.5 rounded-[14px] px-4 py-3 text-left', mode === value ? 'border-[1.5px] border-ice bg-ice/8' : 'border border-line bg-raised hover:border-line-3')}
+              className={cn('flex flex-col gap-0.5 rounded-box px-4 py-3 text-left', mode === value ? 'border-[1.5px] border-ice bg-ice/8' : 'border border-line bg-raised hover:border-line-3')}
             >
               <span className="text-[14px] font-semibold">{label}</span>
               <span className="text-[12px] leading-[1.5] text-mute">{desc}</span>

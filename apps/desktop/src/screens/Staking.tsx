@@ -320,7 +320,7 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
             <IconCheck size={22} />
           </span>
           <p className="m-0 text-[14px] leading-[1.6] text-text2">{spec.doneText}</p>
-          <div className="flex w-full items-center justify-between gap-2 rounded-[12px] bg-raised py-2 pr-2 pl-3.5">
+          <div className="flex w-full items-center justify-between gap-2 rounded-ctl bg-raised py-2 pr-2 pl-3.5">
             <span className="truncate font-mono text-[12px] text-text2">{txid}</span>
             <CopyButton text={txid} />
           </div>
@@ -368,7 +368,7 @@ function AmountField({ id, label, value, onChange, unit, onMax, hint }: { id: st
         {label}
       </label>
       <div className="flex items-center gap-2">
-        <div className="flex h-11 flex-1 items-center rounded-[12px] border border-line-2 bg-bg pr-3 pl-3.5 focus-within:border-ice-line">
+        <div className="flex h-11 flex-1 items-center rounded-ctl border border-line-2 bg-bg pr-3 pl-3.5 focus-within:border-ice-line">
           <input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(sanitizeDecimalInput(e.target.value, unit.decimals))} placeholder="0" className="min-w-0 flex-1 bg-transparent text-[15px]" />
           <span className="text-[13px] font-semibold text-mute">{unit.symbol}</span>
         </div>
@@ -428,7 +428,7 @@ function ValidatorPicker({ value, onChange }: { value: string; onChange: (v: str
       ) : !list.data ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <div role="radiogroup" aria-label="Validateurs" className="flex max-h-[240px] flex-col overflow-y-auto rounded-[12px] border border-line scroll-thin">
+        <div role="radiogroup" aria-label="Validateurs" className="flex max-h-[240px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
           {sorted.map((v) => (
             <ValidatorRow key={v.voteAccount} v={v} selected={v.voteAccount === value} onSelect={() => onChange(v.voteAccount)} />
           ))}
@@ -696,7 +696,7 @@ function DrepChoice({ mode, onMode, custom, onCustom, keepCurrent }: { mode: Dre
         Depuis la mise à jour Conway, chaque compte qui stake délègue aussi son <strong className="font-semibold text-text2">vote de gouvernance</strong> à un « DRep ». Sans délégation de vote, le réseau refuse le retrait de tes récompenses. Ça ne touche ni à tes ADA, ni au pool.
       </p>
       {opts.map((o) => (
-        <label key={o.value} className={cn('flex cursor-pointer items-start gap-3 rounded-[12px] border px-3 py-2.5 text-[13px]', mode === o.value ? 'border-ice/50 bg-ice/8' : 'border-line hover:bg-raised')}>
+        <label key={o.value} className={cn('flex cursor-pointer items-start gap-3 rounded-ctl border px-3 py-2.5 text-[13px]', mode === o.value ? 'border-ice/50 bg-ice/8' : 'border-line hover:bg-raised')}>
           <input type="radio" name="drep" className="mt-1 accent-[#7CC4FF]" checked={mode === o.value} onChange={() => onMode(o.value)} />
           <span className="flex flex-col gap-0.5">
             <span className="font-semibold">{o.title}</span>
@@ -746,7 +746,7 @@ function PoolPicker({ value, onChange }: { value: string; onChange: (id: string,
       ) : !list.data ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <div role="radiogroup" aria-label="Pools" className="flex max-h-[220px] flex-col overflow-y-auto rounded-[12px] border border-line scroll-thin">
+        <div role="radiogroup" aria-label="Pools" className="flex max-h-[220px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
           {rows.map((p) => {
             const selected = p.poolId === value;
             return (
@@ -1097,7 +1097,7 @@ function VoteEditor({ witnesses, counts, onCounts, power }: { witnesses: TronWit
         <strong className="font-semibold text-text">Un vote remplace tous tes votes actuels.</strong> Les SR que tu ne remets pas ici perdent tes voix.
       </Notice>
       <SortBar label="Super Representatives" value={sort} onChange={setSort} options={[{ value: 'rank', label: 'Rang' }, { value: 'votes', label: 'Votes' }]} />
-      <div className="flex max-h-[260px] flex-col overflow-y-auto rounded-[12px] border border-line scroll-thin">
+      <div className="flex max-h-[260px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
         {sorted.map((w) => (
           <div key={w.address} className="flex items-center gap-3 border-b border-line px-3 py-1.5 text-[13px] last:border-b-0">
             <span className="w-9 shrink-0 text-right text-mute">#{w.rank}</span>

@@ -41,7 +41,7 @@ export function evmWarningText(w: EvmWarning, native: { symbol: string; decimals
 export function SecondConfirmNotice({ lines }: { lines: string[] }) {
   if (lines.length === 0) return null;
   return (
-    <div role="status" className="flex flex-col gap-1.5 rounded-[14px] border border-warn/40 bg-warn/[.07] px-4 py-3 text-[12px] leading-[1.5] text-[#f7d9a4]">
+    <div role="status" className="flex flex-col gap-1.5 rounded-box border border-warn/40 bg-warn/[.07] px-4 py-3 text-[12px] leading-[1.5] text-[#f7d9a4]">
       <span className="flex items-center gap-1.5 text-[13px] font-semibold">
         <IconWarn size={14} className="shrink-0 text-warn" /> À vérifier avant de signer
       </span>

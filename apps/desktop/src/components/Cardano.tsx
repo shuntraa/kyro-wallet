@@ -86,7 +86,7 @@ export function CardanoSendFields({
         <label htmlFor="ada-what" className="text-[12px] font-medium text-mute">
           Quoi envoyer
         </label>
-        <select id="ada-what" value={tokenSel} onChange={(e) => onTokenSel(e.target.value)} className="h-11 rounded-[12px] border border-line-2 bg-raised px-3 text-[14px] text-text">
+        <select id="ada-what" value={tokenSel} onChange={(e) => onTokenSel(e.target.value)} className="h-11 rounded-ctl border border-line-2 bg-raised px-3 text-[14px] text-text">
           <option value="">ADA</option>
           {tokens.map((t) => (
             <option key={tokenKey(t)} value={tokenKey(t)}>
@@ -97,7 +97,7 @@ export function CardanoSendFields({
         </select>
       </div>
       {selected && (
-        <div className="flex flex-col gap-1.5 rounded-[14px] border border-line-2 bg-raised px-4 py-3">
+        <div className="flex flex-col gap-1.5 rounded-box border border-line-2 bg-raised px-4 py-3">
           <div className="flex items-center justify-between gap-2">
             <label htmlFor="ada-qty" className="text-[13px] font-semibold text-text">
               Quantité de {cardanoTokenLabel(selected)} <TokenBadge verified={selected.verified} />
@@ -106,7 +106,7 @@ export function CardanoSendFields({
               Tout ({selected.quantity})
             </button>
           </div>
-          <input id="ada-qty" inputMode="numeric" value={quantity} onChange={(e) => onQuantity(e.target.value.replace(/\D/g, ''))} placeholder="0" className="h-11 rounded-[10px] border border-line-3 bg-bg px-3 font-mono text-[16px] font-semibold text-text" />
+          <input id="ada-qty" inputMode="numeric" value={quantity} onChange={(e) => onQuantity(e.target.value.replace(/\D/g, ''))} placeholder="0" className="h-11 rounded-ctl border border-line-3 bg-bg px-3 font-mono text-[16px] font-semibold text-text" />
           <span className="text-[12px] leading-[1.45] text-mute">
             {selected.verified ? '' : 'Unités brutes (le token n’est pas dans la table vérifiée de Kyro, ses décimales sont inconnues). '}
             Policy <span className="font-mono">{selected.policy}</span>. La sortie emporte aussi le minimum d’ADA obligatoire avec un token (min-ADA), affiché dans la vérification.
@@ -124,7 +124,7 @@ export function CardanoSendFields({
           <span>Message (facultatif, CIP-20)</span>
           <span className={memoBytes > 1024 ? 'text-down' : 'text-faint'}>{memoBytes} / 1024 octets</span>
         </label>
-        <input id="ada-memo" value={memo} onChange={(e) => onMemo(e.target.value)} placeholder="ex. Facture 2026-11" className="h-11 rounded-[12px] border border-line-2 bg-raised px-3 text-[14px] text-text" />
+        <input id="ada-memo" value={memo} onChange={(e) => onMemo(e.target.value)} placeholder="ex. Facture 2026-11" className="h-11 rounded-ctl border border-line-2 bg-raised px-3 text-[14px] text-text" />
         {memo.trim() && <span className="text-[12px] leading-[1.45] text-warn">Le message est public et permanent : il reste lisible par tous sur la blockchain, pour toujours. N’y mets rien de personnel.</span>}
       </div>
     </div>
@@ -140,7 +140,7 @@ export function CardanoSummaryView({ u, adaPrice, currency }: { u: CardanoUnsign
   };
   const minutes = s.ttl !== null ? Math.max(0, Math.floor((s.ttl - u.context.tip.slot) / 60)) : null;
   return (
-    <div className="flex flex-col rounded-[14px] border border-line text-[12px]" aria-label="Transaction Cardano décodée">
+    <div className="flex flex-col rounded-box border border-line text-[12px]" aria-label="Transaction Cardano décodée">
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">Transaction Cardano</span>
         <span className="text-[11px] text-mute">décodée par le coffre</span>
@@ -220,7 +220,7 @@ export function CardanoTxStatusLine({ adapter, hash, onConfirmed }: { adapter: C
   }
   if (confirmations === null) {
     return (
-      <div role="status" className="flex w-full items-center gap-2 rounded-[12px] border border-line bg-raised px-3.5 py-2.5 text-[13px] text-text2">
+      <div role="status" className="flex w-full items-center gap-2 rounded-ctl border border-line bg-raised px-3.5 py-2.5 text-[13px] text-text2">
         <Spinner /> Pas encore vue par l’indexeur Koios : inclusion dans un bloc en cours (≈ 20 s par bloc)…
       </div>
     );
