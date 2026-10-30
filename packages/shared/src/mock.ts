@@ -33,6 +33,8 @@ import { emitDemoEvent } from './events';
 import { createDemoServers } from './mock-servers';
 import { createDemoCbf, detectDemoCbf } from './mock-cbf';
 import { createDemoUtxo, demoUtxoAccount, DEMO_DOGE_NETWORKS, DEMO_LTC_NETWORKS } from './mock-utxo';
+import { createDemoTron, demoTronAddress, type DemoTronState } from './mock-tron';
+export { demoTronAddress } from './mock-tron';
 import { demoFund } from './mock-tx';
 import { createDemoHw, detectDemoHwScenario, type DemoHw, type DemoHwScenario } from './mock-hw';
 import { EMPTY_SERVERS, redactServers } from './servers';
@@ -129,7 +131,15 @@ export function deriveDemoKeys(network: Network): DemoKeys {
   const doge = demoUtxoAccount(demoSeed(), network, 'doge');
   return {
     utxo: { ltc: ltc.node, doge: doge.node },
-    accounts: { network, btc: { segwit: info('segwit'), taproot: info('taproot') }, evm: { address: evmAddr }, sol: { address: solAddr }, ltc: ltc.info, doge: doge.info },
+    accounts: {
+      network,
+      btc: { segwit: info('segwit'), taproot: info('taproot') },
+      evm: { address: evmAddr },
+      sol: { address: solAddr },
+      ltc: ltc.info,
+      doge: doge.info,
+      tron: { address: demoTronAddress(demoSeed(), 0) },
+    },
     ownBtc,
     receive,
   };
@@ -228,6 +238,8 @@ export interface MockBackend {
   hw: DemoHw;
   /** Simulated Tor (tests). */
   tor: DemoTor;
+  /** TRON demo chain (tests). */
+  tron: DemoTronState;
 }
 
 export function createMockBackend(opts: MockOptions = {}): MockBackend {
@@ -262,9 +274,21 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     checkPassword: (p) => checkPassword(p),
     confirm: (text) => confirmFn(text),
   });
+  // TRON (§2.5): `tron_*`, resources estimated like Rust.
+  const tronChain = createDemoTron({
+    network,
+    seed: demoSeed(),
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
   // Custom servers (B2b): live checks, Bitcoin backends, Core watch wallet.
   const servers = createDemoServers({
     utxo: utxoChains,
+    tron: tronChain,
     chain,
     network,
     fingerprint: keys.accounts.btc.segwit.fingerprint,
@@ -541,6 +565,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     btc_tip_height: () => servers.btc.tipHeight(),
     btc_broadcast: (a) => servers.btc.broadcast(a.hex),
     btc_tx_hex: (a) => servers.btc.txHex(a.txid),
+    ...tronChain.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
     btc_cbf_status: () => servers.cbf.status(),
@@ -564,6 +589,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     chain,
     tor,
     hw,
+    tron: tronChain.state,
     advance(ms: number) {
       clockOffset += ms;
     },

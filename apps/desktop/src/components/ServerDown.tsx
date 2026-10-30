@@ -46,9 +46,36 @@ export function ServerMissingLine({ className, coin = 'Dogecoin' }: { className?
   );
 }
 
+/**
+ * TRON with a plain java-tron node: everything works but the history, which needs TronGrid's
+ * `/v1` API (Rust: SERVER_UNREACHABLE « …l'historique exige l'API /v1 de TronGrid »). Not a
+ * server failure: a limitation of that kind of server.
+ */
+export function tronNoHistory(error: unknown): boolean {
+  const m = typeof error === 'string' ? error : error instanceof Error ? error.message : typeof error === 'object' && error !== null ? String((error as { message?: unknown }).message ?? '') : '';
+  return /exige l.API \/v1 de TronGrid/.test(m);
+}
+
+export function TronNoHistoryLine({ className }: { className?: string }) {
+  const { navigate, phase } = useApp();
+  return (
+    <div role="status" className={cn('flex items-center gap-2 text-[12px] text-mute', className)}>
+      <IconWarn size={14} className="shrink-0 text-warn" />
+      <span className="min-w-0 flex-1">
+        <span className="font-semibold text-text2">Historique TRON indisponible avec ton nœud.</span> Un nœud java-tron seul n’a pas l’API /v1 de TronGrid ; soldes et envois TRON marchent normalement.
+      </span>
+      {phase === 'ready' && (
+        <button type="button" onClick={() => navigate({ name: 'settings', section: 'networks' })} className="shrink-0 font-semibold text-ice hover:underline">
+          Réglages
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** True when `error` (an error, or a message) means "your custom server is down". */
 export function serverDown(error: unknown): boolean {
-  return error !== undefined && error !== null && error !== '' && isCustomServerDown(error) && !cbfPending(error);
+  return error !== undefined && error !== null && error !== '' && isCustomServerDown(error) && !cbfPending(error) && !tronNoHistory(error);
 }
 
 export function ServerDownLine({ className, what }: { className?: string; what?: string }) {

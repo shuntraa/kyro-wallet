@@ -9,77 +9,22 @@
 // - this adapter only checks that what Rust built is what was asked (recipient, amount, token).
 
 import * as bitcoin from 'bitcoinjs-lib';
-import { call, type Network } from '@kyro/shared';
-import type { TronChain } from '../registry';
-import type { HistoryItem } from '../types';
+import {
+  call,
+  type Network,
+  type TronAccountInfo,
+  type TronAction,
+  type TronEstimate,
+  type TronHistoryEntry,
+  type TronTxSummary,
+  type TronWarning,
+} from '@kyro/shared';
+import type { AssetDef, TronChain } from '../registry';
+import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 // ---------------------------------------------------------------- Rust contract (§2.5)
 
-export interface TronAccountInfo {
-  address: string;
-  /** Has received TRX at least once. Sending TRX to a non-existing account activates it (≈ 1.1 TRX burned). */
-  exists: boolean;
-  /** Sun, decimal string. */
-  balance: string;
-  freeBandwidthLimit: number;
-  freeBandwidthUsed: number;
-  bandwidthLimit: number;
-  bandwidthUsed: number;
-  energyLimit: number;
-  energyUsed: number;
-}
-
-export type TronAction =
-  | { type: 'trxTransfer'; to: string; amount: string }
-  | { type: 'trc20Transfer'; contract: string; to: string; amount: string; callValue: string }
-  | { type: 'contractCall'; contract: string; selector: string; data: string; callValue: string };
-
-export type TronWarning = { kind: 'unknownCall'; selector: string } | { kind: 'callValue' } | { kind: 'memo' } | { kind: 'highFeeLimit' };
-
-export interface TronTxSummary {
-  txid: string;
-  owner: string;
-  action: TronAction;
-  feeLimit: string;
-  expiration: number;
-  timestamp: number;
-  refBlockBytes: string;
-  refBlockHash: string;
-  memo: string;
-  rawSize: number;
-  warnings: TronWarning[];
-  requiresExtraConfirmation: boolean;
-}
-
-/** Amounts in sun (decimal strings) unless stated. */
-export interface TronEstimate {
-  bandwidthNeeded: number;
-  freeBandwidth: number;
-  stakedBandwidth: number;
-  bandwidthBurn: string;
-  activationFee: string;
-  recipientExists: boolean;
-  energyNeeded: number;
-  energyAvailable: number;
-  /** Sun per energy unit. */
-  energyFee: number;
-  energyBurn: string;
-  feeLimit: string;
-  totalBurn: string;
-  totalBurnMax: string;
-  balance: string;
-}
-
-export interface TronHistoryEntry {
-  txid: string;
-  kind: 'trx' | 'trc20';
-  from: string | null;
-  to: string | null;
-  amount: string;
-  token?: { contract: string; symbol: string; decimals: number };
-  timestamp: number | null;
-  status: 'confirmed' | 'failed';
-}
+export type { TronAccountInfo, TronAction, TronEstimate, TronHistoryEntry, TronTxSummary, TronWarning };
 
 export interface TronBackend {
   account(address: string): Promise<TronAccountInfo>;
@@ -90,18 +35,15 @@ export interface TronBackend {
   broadcast(raw: string, signature: string): Promise<string>;
 }
 
-/** `tron_*` are not (yet) in `@kyro/shared`'s typed `Commands`: untyped view of `call`, typed here. */
-type RawCall = <R>(cmd: string, args?: Record<string, unknown>) => Promise<R>;
-const rawCall = call as unknown as RawCall;
-
-export function rustTronBackend(invoke: RawCall = rawCall): TronBackend {
+/** The typed `tron_*` commands of `@kyro/shared` (docs/IPC.md §2.5). */
+export function rustTronBackend(): TronBackend {
   return {
-    account: (address) => invoke('tron_account', { address }),
-    trc20Balance: (contract, address) => invoke('tron_trc20_balance', { contract, address }),
-    txs: (address) => invoke('tron_txs', { address }),
-    build: (to, amount, token) => invoke('tron_build_tx', { to, amount, ...(token ? { token } : {}) }),
-    sign: (raw, password, token) => invoke('tron_sign_tx', { raw, password, ...(token ? { token } : {}) }),
-    broadcast: (raw, signature) => invoke('tron_broadcast', { raw, signature }),
+    account: (address) => call('tron_account', { address }),
+    trc20Balance: (contract, address) => call('tron_trc20_balance', { contract, address }),
+    txs: (address) => call('tron_txs', { address }),
+    build: (to, amount, token) => call('tron_build_tx', { to, amount, ...(token ? { token } : {}) }),
+    sign: (raw, password, token) => call('tron_sign_tx', { raw, password, ...(token ? { token } : {}) }),
+    broadcast: (raw, signature) => call('tron_broadcast', { raw, signature }),
   };
 }
 
@@ -126,6 +68,39 @@ export const TRON_USDT: Record<Network, Trc20Token> = {
 
 export const tronAssetId = (token?: Trc20Token): string => (token ? `trc20:${token.contract}` : 'trx');
 
+/** Whether Rust names this token itself in the dialog (USDT of the network); others are « non vérifié ». */
+export function isKnownTronToken(network: Network, contract: string): boolean {
+  return TRON_USDT[network].contract === contract;
+}
+
+/**
+ * Can the TRX balance pay what this transaction burns? `sent`: TRX leaving (sun, 0 for a token).
+ * - `expected`: balance covers sent + expected burn (bandwidth + activation + energy);
+ * - `worst`: balance covers sent + the maximum (energy up to `fee_limit`).
+ * Below `expected`, the network refuses the TRX transfer or the TRC-20 call runs out of energy
+ * (and still burns TRX): the UI blocks it. Between the two, it may fail if energy costs more.
+ */
+export interface TronCoverage {
+  expected: boolean;
+  worst: boolean;
+  /** Sun missing for the expected case (0n when covered). */
+  missing: bigint;
+  /** Sun missing for the worst case (0n when covered). */
+  missingWorst: bigint;
+}
+
+export function tronCoverage(estimate: TronEstimate, sent: bigint): TronCoverage {
+  const balance = BigInt(estimate.balance);
+  const need = sent + BigInt(estimate.totalBurn);
+  const needMax = sent + BigInt(estimate.totalBurnMax);
+  return {
+    expected: balance >= need,
+    worst: balance >= needMax,
+    missing: balance >= need ? 0n : need - balance,
+    missingWorst: balance >= needMax ? 0n : needMax - balance,
+  };
+}
+
 /** `T…` address: base58check, 21 bytes, prefix 0x41. */
 export function isTronAddress(address: string): boolean {
   try {
@@ -148,6 +123,9 @@ export interface TronUnsigned {
   amount: bigint;
   recipient: string;
   token?: Trc20Token;
+  /** Most TRX this may burn (sun): `estimate.totalBurnMax`. */
+  maxFee: bigint;
+  size: { family: 'tron'; bandwidth: number; energy: number };
 }
 
 export interface TronSigned {
@@ -168,7 +146,7 @@ export interface TronAdapterOptions {
   tokens?: Trc20Token[];
 }
 
-export class TronAdapter {
+export class TronAdapter implements ChainAdapter<'tron'> {
   readonly family = 'tron' as const;
   readonly chain: TronChain;
   readonly tokens: Trc20Token[];
@@ -195,16 +173,62 @@ export class TronAdapter {
     return this.backend.account(this.address);
   }
 
-  async getBalance(): Promise<Array<{ assetId: string; amount: bigint }>> {
+  async getBalance(): Promise<Balance[]> {
     const [acc, ...tokens] = await Promise.all([this.backend.account(this.address), ...this.tokens.map((t) => this.backend.trc20Balance(t.contract, this.address))]);
     return [{ assetId: tronAssetId(), amount: BigInt(acc.balance) }, ...this.tokens.map((t, i) => ({ assetId: tronAssetId(t), amount: BigInt(tokens[i] ?? '0') }))];
+  }
+
+  /** No fee to choose on TRON: Rust estimates the burn when it builds (shown before signing). */
+  estimateFees(): Promise<FeeEstimates> {
+    const p = { family: 'tron' as const };
+    const eta = this.chain.blockTimeSecs;
+    return Promise.resolve({
+      options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
+      minimum: p,
+      hint: 'bande passante et énergie, estimées par Rust',
+      fetchedAt: Date.now(),
+    });
+  }
+
+  /** The TRC-20 token of an asset: the curated one, or (unknown contract) the asset's own metadata. */
+  tokenOf(asset: AssetDef): Trc20Token | undefined {
+    if (asset.kind === 'native') return undefined;
+    if (asset.kind !== 'trc20' || !asset.contract || !isTronAddress(asset.contract)) throw new Error('Actif TRON inattendu');
+    return this.tokens.find((t) => t.contract === asset.contract) ?? { contract: asset.contract, symbol: asset.symbol, name: asset.name, decimals: asset.decimals };
+  }
+
+  /**
+   * `ChainAdapter` entry point. `max`: a token → its whole balance; TRX → balance minus the most
+   * the transfer may burn (built twice: the burn depends on the recipient and the size).
+   */
+  async buildTx(params: BuildParams): Promise<TronUnsigned> {
+    const token = this.tokenOf(params.asset);
+    if (!params.max) return this.buildTransfer({ to: params.to, amount: params.amount, ...(token ? { token } : {}) });
+    const balances = await this.getBalance();
+    const held = balances.find((b) => b.assetId === tronAssetId(token))?.amount ?? 0n;
+    if (token) {
+      if (held <= 0n) throw new Error(`Aucun ${token.symbol} à envoyer`);
+      return this.buildTransfer({ to: params.to, amount: held, token });
+    }
+    // First pass with a placeholder amount gives the burn (activation, bandwidth) for this recipient.
+    const probe = await this.buildTransfer({ to: params.to, amount: held > 1n ? held / 2n : 1n });
+    let amount = held - BigInt(probe.estimate.totalBurnMax);
+    if (amount <= 0n) throw new Error('Solde TRX trop faible pour couvrir les frais brûlés');
+    let built = await this.buildTransfer({ to: params.to, amount });
+    const over = amount + BigInt(built.estimate.totalBurnMax) - held;
+    if (over > 0n) {
+      amount -= over;
+      if (amount <= 0n) throw new Error('Solde TRX trop faible pour couvrir les frais brûlés');
+      built = await this.buildTransfer({ to: params.to, amount });
+    }
+    return built;
   }
 
   /**
    * Rust builds from the latest block. `amount`: sun (TRX) or token units. The adapter checks
    * that Rust's decoding is exactly the request.
    */
-  async buildTx(params: { to: string; amount: bigint; token?: Trc20Token }): Promise<TronUnsigned> {
+  async buildTransfer(params: { to: string; amount: bigint; token?: Trc20Token }): Promise<TronUnsigned> {
     const to = params.to.trim();
     if (!isTronAddress(to)) throw new Error('Adresse TRON invalide');
     if (params.amount <= 0n) throw new Error('Montant invalide');
@@ -220,12 +244,24 @@ export class TronAdapter {
     if (!ok || built.summary.owner !== this.address || built.summary.txid !== built.txid || unexpected) {
       throw new Error('La transaction construite par Rust ne correspond pas à la demande');
     }
-    return { family: 'tron', raw: built.raw, txid: built.txid, summary: built.summary, estimate: built.estimate, amount: params.amount, recipient: to, ...(params.token ? { token: params.token } : {}) };
+    return {
+      family: 'tron',
+      raw: built.raw,
+      txid: built.txid,
+      summary: built.summary,
+      estimate: built.estimate,
+      amount: params.amount,
+      recipient: to,
+      ...(params.token ? { token: params.token } : {}),
+      maxFee: BigInt(built.estimate.totalBurnMax),
+      size: { family: 'tron', bandwidth: built.estimate.bandwidthNeeded, energy: built.estimate.energyNeeded },
+    };
   }
 
   /** Rust: password, decoding, live resources, native dialog (+ reinforced one), signature. */
   async signTx(unsigned: TronUnsigned, password: string): Promise<TronSigned> {
-    const hint = unsigned.token ? { symbol: unsigned.token.symbol, decimals: unsigned.token.decimals } : undefined;
+    // Hint for a token Rust does not know (shown « selon l'interface, non vérifié »); never for USDT.
+    const hint = unsigned.token && !isKnownTronToken(this.chain.network, unsigned.token.contract) ? { symbol: unsigned.token.symbol, decimals: unsigned.token.decimals } : undefined;
     const res = await this.backend.sign(unsigned.raw, password, hint);
     if (res.txid !== unsigned.txid || !/^[0-9a-f]{130}$/.test(res.signature)) throw new Error('Signature TRON inattendue');
     return { family: 'tron', raw: unsigned.raw, signature: res.signature, txid: res.txid, summary: res.summary, estimate: res.estimate };

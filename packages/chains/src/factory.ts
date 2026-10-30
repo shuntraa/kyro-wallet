@@ -10,7 +10,8 @@ import type { AnyAdapter } from './types';
 import { LitecoinAdapter } from './litecoin/adapter';
 import { DogecoinAdapter } from './dogecoin/adapter';
 import type { UtxoAccountView, UtxoBackend } from './utxo/utxo';
-import { dogeChain, ltcChain } from './registry';
+import { dogeChain, ltcChain, tronChain } from './registry';
+import { TronAdapter } from './tron/adapter';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -23,6 +24,8 @@ export interface AdapterSet {
   /** Litecoin / Dogecoin: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   ltc: LitecoinAdapter | null;
   doge: DogecoinAdapter | null;
+  /** TRON: vault only (hardware wallets: HW_UNSUPPORTED for now). */
+  tron: TronAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -55,8 +58,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const sol = accounts.sol ? new SolanaAdapter({ chain: solChain(network), address: accounts.sol.address, ...(solCustom ? { rpcUrl: solCustom } : {}), ...f, ...h }) : null;
   // Litecoin / Dogecoin: Rust picks their servers (servers.litecoin / servers.dogecoin).
   const { ltc, doge } = createUtxoAdapters(accounts);
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : [])];
-  return { btc, evm, sol, ltc, doge, all, hw: hw ?? null };
+  // TRON: Rust picks the server (servers.tron, default TronGrid).
+  const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : [])];
+  return { btc, evm, sol, ltc, doge, tron, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin
@@ -104,7 +109,7 @@ export function createUtxoAdapters(
   };
 }
 
-// ---------------------------------------------------------------- phase 4: TRON (B4b)
+// ---------------------------------------------------------------- phase 4: TRON
 
 export {
   TronAdapter,
@@ -123,4 +128,27 @@ export {
   type TronUnsigned,
   type TronSigned,
   type Trc20Token,
+  type TronCoverage,
+  tronCoverage,
+  isKnownTronToken,
 } from './tron/adapter';
+
+// ---------------------------------------------------------------- phase 4: XRP Ledger (B4c)
+
+export {
+  XrpAdapter,
+  rustXrpBackend,
+  isXrpAddress,
+  parseDestinationTag,
+  type XrpAdapterOptions,
+  type XrpBackend,
+  type XrpAccountInfo,
+  type XrpAmountView,
+  type XrpWarning,
+  type XrpTxSummary,
+  type XrpContext,
+  type XrpHistoryEntry,
+  type XrpIssued,
+  type XrpUnsigned,
+  type XrpSigned,
+} from './xrp/adapter';

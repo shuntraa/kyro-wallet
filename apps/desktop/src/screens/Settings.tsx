@@ -427,7 +427,7 @@ function Contacts() {
         <span className="text-[13px] font-semibold">Ajouter</span>
         <div className="flex gap-2">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom" className="w-[160px]" />
-          <Segmented label="Réseau" value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }]} />
+          <Segmented label="Réseau" value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'tron', label: 'TRON' }]} />
         </div>
         <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Adresse" className="font-mono text-[13px]" />
         {address && !valid && <span className="text-[12px] text-down">Adresse invalide pour ce réseau.</span>}

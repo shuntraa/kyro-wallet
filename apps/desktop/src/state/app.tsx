@@ -18,7 +18,7 @@ export type Route =
   | { name: 'assets'; tab?: 'mine' | 'market' | 'favorites' }
   | { name: 'asset'; id: string }
   | { name: 'send'; assetId?: string; to?: string }
-  | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' }
+  | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' }
   | { name: 'swap'; sellAssetId?: string }
   | { name: 'history' }
   | { name: 'settings'; section?: SettingsSection };
@@ -260,7 +260,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [accounts, serversKey, activeHw?.id],
   );
 
+  const activeAccountRef = useRef(activeAccountId);
+  activeAccountRef.current = activeAccountId;
+  // Re-picking the active account (title-bar switcher) must not wipe the screen in use
+  // (e.g. « Transaction diffusée »): only a real switch resets the stack.
   const selectAccount = useCallback((id: string) => {
+    if (id === activeAccountRef.current) return;
     setActiveAccountId(id);
     setHistory([{ name: 'portfolio' }]);
   }, []);

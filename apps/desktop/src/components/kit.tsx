@@ -10,7 +10,7 @@ import { copyText } from '../lib/copy';
 import { IconCheck, IconCopy, IconEye, IconEyeOff, IconWarn } from './icons';
 import { Button } from './ui/primitives';
 import { TorWait, useTorBlocked } from './Tor';
-import { ServerDownLine, ServerMissingLine, cbfPending, serverDown, serverMissing } from './ServerDown';
+import { ServerDownLine, ServerMissingLine, TronNoHistoryLine, cbfPending, serverDown, serverMissing, tronNoHistory } from './ServerDown';
 
 export function KyroMark({ size = 16, className }: { size?: number; className?: string }) {
   return (
@@ -179,6 +179,7 @@ export function ErrorLine({ children, onRetry, className, error }: { children: R
   const torBlocked = useTorBlocked(error);
   if (torBlocked) return <TorWait {...(className ? { className } : {})} />;
   if (serverMissing(error)) return <ServerMissingLine {...(className ? { className } : {})} />;
+  if (tronNoHistory(error)) return <TronNoHistoryLine {...(className ? { className } : {})} />;
   if (serverDown(error)) return <ServerDownLine {...(className ? { className } : {})} />;
   if (cbfPending(error)) {
     return (

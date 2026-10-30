@@ -3,6 +3,7 @@
 import type { BtcTxSummary, EvmTokenHint, EvmTxRequest, EvmTxSummary } from '@kyro/shared';
 import type { AssetDef, Chain, Family } from './registry';
 import type { UtxoSigned, UtxoUnsigned } from './utxo/utxo';
+import type { TronSigned, TronUnsigned } from './tron/adapter';
 
 export type FeeLevel = 'slow' | 'normal' | 'fast';
 export type FeeChoice = FeeLevel | 'custom';
@@ -11,7 +12,9 @@ export type FeeChoice = FeeLevel | 'custom';
 export type FeeParams =
   | { family: 'evm'; maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }
   | { family: 'btc'; satPerVb: number }
-  | { family: 'sol'; microLamports: bigint };
+  | { family: 'sol'; microLamports: bigint }
+  /** TRON: no fee to choose. Rust burns bandwidth / energy (estimate shown, `fee_limit` caps it). */
+  | { family: 'tron' };
 
 export interface FeeOption {
   level: FeeLevel;
@@ -35,7 +38,12 @@ export interface FeeEstimates {
 }
 
 /** What the size of a tx is, so fee options can be priced without rebuilding. */
-export type SizeHint = { family: 'evm'; gasLimit: bigint } | { family: 'btc'; vsize: number } | { family: 'sol'; computeUnits: number; signatures: number };
+export type SizeHint =
+  | { family: 'evm'; gasLimit: bigint }
+  | { family: 'btc'; vsize: number }
+  | { family: 'sol'; computeUnits: number; signatures: number }
+  /** TRON: bandwidth bytes charged, energy simulated (TRC-20). */
+  | { family: 'tron'; bandwidth: number; energy: number };
 
 export interface Balance {
   assetId: string;
@@ -122,9 +130,11 @@ export interface FamilyTypes {
   /** Litecoin / Dogecoin: Bitcoin shapes (PSBT, hex), the unsigned tx tagged `family: 'btc'`. */
   ltc: { unsigned: UtxoUnsigned; signed: UtxoSigned };
   doge: { unsigned: UtxoUnsigned; signed: UtxoSigned };
+  /** TRON: `raw_data` built and decoded by Rust, its resource estimate. */
+  tron: { unsigned: TronUnsigned; signed: TronSigned };
 }
-export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned;
-export type AnySigned = EvmSigned | BtcSigned | SolSigned;
+export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned;
+export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned;
 
 export type HistoryDirection = 'in' | 'out' | 'self';
 export type HistoryStatus = 'pending' | 'confirmed' | 'failed';
@@ -159,7 +169,7 @@ export interface ChainAdapter<F extends Family = Family> {
   getHistory(): Promise<HistoryItem[]>;
 }
 
-export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'>;
+export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'tron'>;
 
 /** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin: Bitcoin's PSBT shape). */
 export function unsignedFamilyOf(family: Family): AnyUnsigned['family'] {

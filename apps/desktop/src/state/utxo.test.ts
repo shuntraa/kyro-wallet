@@ -20,7 +20,7 @@ describe('Litecoin / Dogecoin in the UI', () => {
     const hosts = outgoingHosts('testnet');
     expect(hosts.find((h) => h.host === 'litecoinspace.org')?.purpose).toMatch(/Litecoin/);
     expect(hosts.find((h) => h.purpose.startsWith('Dogecoin'))?.purpose).toMatch(/aucun serveur public/);
-    const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: { testnet: { kind: 'esplora', url: 'https://my-doge.example/api' } } });
+    const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, tron: {}, dogecoin: { testnet: { kind: 'esplora', url: 'https://my-doge.example/api' } } });
     expect(custom.find((h) => h.purpose.startsWith('Dogecoin'))).toMatchObject({ host: 'my-doge.example', custom: true });
   });
 

@@ -14,6 +14,7 @@ import { addLocalTx, getApprovals, removeApproval, type ApprovalRecord } from '.
 import { downloadText, toCsv } from '../lib/csv';
 import { useAsync } from '../lib/useAsync';
 import { EmptyState, ErrorLine, PasswordField } from '../components/kit';
+import { TronNoHistoryLine, tronNoHistory } from '../components/ServerDown';
 import { HistoryRow, entryTitle } from '../components/HistoryRow';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Notice, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
@@ -131,9 +132,10 @@ export function History() {
                 </div>
               ))
             )}
-            {history.data && Object.keys(history.data.errors).length > 0 && (
-              <ErrorLine className="px-5 py-3" onRetry={history.reload} error={Object.values(history.data.errors).join(' ')}>
-                Historique partiel : {Object.entries(history.data.errors).map(([k, v]) => `${k} (${v})`).join(', ')}
+            {history.data && Object.entries(history.data.errors).some(([, v]) => tronNoHistory(v)) && <TronNoHistoryLine className="px-5 py-3" />}
+            {history.data && Object.entries(history.data.errors).some(([, v]) => !tronNoHistory(v)) && (
+              <ErrorLine className="px-5 py-3" onRetry={history.reload} error={Object.values(history.data.errors).filter((v) => !tronNoHistory(v)).join(' ')}>
+                Historique partiel : {Object.entries(history.data.errors).filter(([, v]) => !tronNoHistory(v)).map(([k, v]) => `${k} (${v})`).join(', ')}
               </ErrorLine>
             )}
             {history.data?.btcCapped && (

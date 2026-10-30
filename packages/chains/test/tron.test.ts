@@ -70,13 +70,13 @@ describe('TronAdapter (Nile)', () => {
   it('builds through Rust and checks the decoding matches the request', async () => {
     const b = backend();
     const a = new TronAdapter({ chain: tronChain('testnet'), address: ME, backend: b });
-    const u = await a.buildTx({ to: OTHER, amount: 1_000_000n });
+    const u = await a.buildTransfer({ to: OTHER, amount: 1_000_000n });
     expect(u.summary.action).toEqual({ type: 'trxTransfer', to: OTHER, amount: '1000000' });
     expect(u.estimate.activationFee).toBe('1100000');
-    const t = await a.buildTx({ to: OTHER, amount: 1_500_000n, token: USDT });
+    const t = await a.buildTransfer({ to: OTHER, amount: 1_500_000n, token: USDT });
     expect(t.token).toBe(USDT);
-    await expect(a.buildTx({ to: ME, amount: 1n })).rejects.toThrow(/soi-même/);
-    await expect(a.buildTx({ to: 'bad', amount: 1n })).rejects.toThrow(/invalide/);
+    await expect(a.buildTransfer({ to: ME, amount: 1n })).rejects.toThrow(/soi-même/);
+    await expect(a.buildTransfer({ to: 'bad', amount: 1n })).rejects.toThrow(/invalide/);
     // Rust built something else (amount, recipient, unknown call): refused.
     for (const over of [
       { build: async (to: string) => ({ raw: '', txid: 'ab'.repeat(32), summary: summary({ type: 'trxTransfer', to, amount: '2' }), estimate }) },
@@ -86,14 +86,14 @@ describe('TronAdapter (Nile)', () => {
       { build: async (to: string, amount: string) => ({ raw: '', txid: 'ab'.repeat(32), summary: summary({ type: 'trxTransfer', to, amount }, { warnings: [{ kind: 'memo' }] }), estimate }) },
     ]) {
       const x = new TronAdapter({ chain: tronChain('testnet'), address: ME, backend: backend(over) });
-      await expect(x.buildTx({ to: OTHER, amount: 1_000_000n })).rejects.toThrow(/ne correspond pas/);
+      await expect(x.buildTransfer({ to: OTHER, amount: 1_000_000n })).rejects.toThrow(/ne correspond pas/);
     }
   });
 
   it('signs and broadcasts through Rust, txid checked', async () => {
     const b = backend();
     const a = new TronAdapter({ chain: tronChain('testnet'), address: ME, backend: b });
-    const u = await a.buildTx({ to: OTHER, amount: 1_000_000n });
+    const u = await a.buildTransfer({ to: OTHER, amount: 1_000_000n });
     const s = await a.signTx(u, 'pw');
     expect(s.signature).toHaveLength(130);
     expect(await a.broadcast(s)).toBe('ab'.repeat(32));

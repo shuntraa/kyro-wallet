@@ -14,6 +14,7 @@ import {
   litecoinDust,
   signAndBroadcast,
   signAndBroadcastHw,
+  tronCoverage,
   tryParseUnits,
   unitsToNumber,
   validateBtcFeeRate,
@@ -44,6 +45,7 @@ import { DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
 import { BRAND, pickDevice, withDevice } from '../state/hw';
 import { useOnTorReady } from '../state/tor';
 import { SolSummaryView } from '../components/SolSummaryView';
+import { TronEstimateView } from '../components/TronEstimateView';
 import { Menu } from '../components/ui/menu';
 import { Button, IconButton, Notice, Spinner } from '../components/ui/primitives';
 import { IconBack, IconCheck, IconChevronDown, IconLock, IconShield, IconUpDown, IconWarn } from '../components/icons';
@@ -55,6 +57,7 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   if (asset.family === 'sol') return adapters.sol ?? undefined;
   if (asset.family === 'ltc') return adapters.ltc ?? undefined;
   if (asset.family === 'doge') return adapters.doge ?? undefined;
+  if (asset.family === 'tron') return adapters.tron ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -90,7 +93,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const toTrim = to.trim();
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
-  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address].filter((a): a is string => !!a);
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address].filter((a): a is string => !!a);
   const isOwn = ownAddresses.includes(asset?.family === 'evm' ? toTrim.toLowerCase() : toTrim);
   const noChecksum = asset?.family === 'evm' && addrValid && toTrim.slice(2) === toTrim.slice(2).toLowerCase();
 
@@ -102,6 +105,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   /** Litecoin / Dogecoin: Bitcoin-style UTXO chains (same fee field, PSBT, change). */
   const utxoLike = asset?.family === 'btc' || asset?.family === 'ltc' || asset?.family === 'doge';
   const rateUnit = asset?.family === 'ltc' ? 'litoshi/vB' : asset?.family === 'doge' ? 'koinus/octet' : 'sat/vB';
+  /** TRON: no fee to choose; Rust's resource estimate is shown with the summary. */
+  const isTron = asset?.family === 'tron';
   const amountBase = useMemo(() => {
     if (!amountStr) return null;
     if (fiatMode) {
@@ -209,8 +214,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [hwError, setHwError] = useState<unknown>(null);
   const [done, setDone] = useState<{ id: string } | null>(null);
   const guardOk = guardAllowsSend(guard, settings.clipboardGuard);
+  // TRON: the TRX balance must cover the amount (TRX) plus the expected burn, else the network refuses it.
+  const tronShort = built?.unsigned.family === 'tron' && !tronCoverage(built.unsigned.estimate, built.unsigned.token ? 0n : built.unsigned.amount).expected;
   // Hardware wallet: no Kyro password (no key in Kyro); native dialog then the device's screen.
-  const canSign = !!built && !building && (activeHw ? true : !!password) && guardOk && !signing && !buildError;
+  const canSign = !!built && !building && (activeHw ? true : !!password) && guardOk && !signing && !buildError && !tronShort;
   const blindSigning = !!activeHw && built?.unsigned.family === 'evm' && built.summary !== null && evmHwDisplay(activeHw.device, built.unsigned.tx.chainId, built.summary) === 'blind';
 
   const sign = async () => {
@@ -331,7 +338,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 </button>
               }
             />
-            {activeHw && <span className="text-[12px] text-faint">Litecoin et Dogecoin : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).</span>}
+            {activeHw && <span className="text-[12px] text-faint">Litecoin, Dogecoin et TRON : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).</span>}
             {fees.error && serverMissing(fees.error) && <ServerMissingLine coin={asset.name} />}
           </div>
 
@@ -349,7 +356,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
+                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -461,6 +468,17 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           </div>
 
           {/* Fees */}
+          {isTron ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-[12px] font-medium text-mute">Frais réseau</span>
+              <div className="flex flex-col gap-1 rounded-[14px] border border-line-2 bg-raised px-4 py-3 text-[13px] leading-[1.5] text-text2">
+                <span>
+                  <strong className="font-semibold text-text">Rien à choisir sur TRON.</strong> Chaque transaction consomme de la bande passante (octets) et, pour un token TRC-20, de l’énergie. Ce que ta bande passante gratuite ou tes TRX gelés ne couvrent pas est payé en TRX brûlés.
+                </span>
+                <span className="text-[12px] text-mute">Le coffre construit la transaction depuis le dernier bloc et simule l’énergie : le détail s’affiche dans la vérification, avant le mot de passe.</span>
+              </div>
+            </div>
+          ) : (
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
               <span className="text-[12px] font-medium text-mute">Frais réseau</span>
@@ -504,6 +522,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {custom && custom.errors.map((e) => <span key={e} className="text-[12px] text-down">{e}</span>)}
             {custom && custom.warnings.map((w) => <span key={w} className="text-[12px] text-warn">{w}</span>)}
           </div>
+          )}
 
           <div className="mt-auto flex items-center gap-3 rounded-[14px] border border-control-2 bg-raised px-4 py-3 text-[13px] text-text2">
             <IconLock size={18} className="shrink-0 text-mute" />
@@ -517,7 +536,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-semibold">Vérification</span>
             <span className="inline-flex h-[26px] items-center gap-1.5 rounded-full border border-control-2 bg-raised px-2.5 text-[11px] font-medium text-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
+              {built?.summary || built?.sol || built?.unsigned.family === 'tron' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 pt-2 pb-1">
@@ -542,7 +561,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           <dl className="m-0 flex flex-col text-[13px]">
             <Row k="Réseau" v={chain.name} />
             <Row
-              k="Frais max."
+              k={isTron ? 'Brûlé max.' : 'Frais max.'}
               v={
                 maxFee !== null && nativeAsset ? (
                   <>
@@ -563,6 +582,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {built?.sol && built.unsigned.family === 'sol' && nativeAsset && (
             <SolSummaryView s={built.sol} unsigned={built.unsigned} asset={asset} sol={nativeAsset} solPrice={nativePrice} currency={cur} />
           )}
+          {built?.unsigned.family === 'tron' && <TronEstimateView u={built.unsigned} network={network} trxPrice={nativePrice} currency={cur} />}
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
@@ -570,7 +590,16 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             </span>
           )}
           {buildError && (serverMissing(buildError) ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
-          {built && addrValid && sendAmount !== null && (
+          {built && addrValid && sendAmount !== null && built.unsigned.family === 'tron' && (
+            <EnClair tone={tronShort ? 'warn' : 'ice'}>
+              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>. TRON ne prend pas de frais fixes : cette transaction brûle environ{' '}
+              <strong>{fmtCrypto(BigInt(built.unsigned.estimate.totalBurn), 6, 'TRX', 6)}</strong>, au plus {fmtCrypto(BigInt(built.unsigned.estimate.totalBurnMax), 6, 'TRX', 6)}
+              {feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : ''}.
+              {!built.unsigned.estimate.recipientExists ? ' Son compte n’existe pas encore : l’activer fait partie de ce brûlé.' : ''}
+              {tronShort ? ' Ton solde TRX ne suffit pas : envoi bloqué.' : ''}
+            </EnClair>
+          )}
+          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && (
             <EnClair>
               Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>
               {utxoLike && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? ', la monnaie revient sur ton adresse de change' : ''}. Personne d’autre ne reçoit rien, et tu paies au maximum{' '}
@@ -643,6 +672,7 @@ function dataLabel(b: Built | null, family?: string): string {
     // Dogecoin has no SegWit: bytes, not vbytes.
     return `${outs} sortie${outs > 1 ? 's' : ''} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' ? 'octets' : 'vB'}`;
   }
+  if (u.family === 'tron') return u.token ? `transfer() TRC-20 · ${u.size.bandwidth} octets` : `TransferContract · ${u.size.bandwidth} octets`;
   if (u.family === 'sol') return u.mint ? `TransferChecked ${u.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL'}${u.createsAta ? ' + création du compte' : ''}` : 'Aucune · transfert système';
   if (b.summary?.kind === 'NativeTransfer') return 'Aucune · transfert simple';
   if (b.summary?.kind === 'Erc20Transfer') return 'transfer() ERC-20';

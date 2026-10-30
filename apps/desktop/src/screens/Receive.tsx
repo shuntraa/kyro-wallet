@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Receive: real QR (qrcode), BTC SegWit/Taproot, Litecoin, Dogecoin, optional requested amount
-// (BIP21-style / EIP-681 / Solana Pay URI), network warning.
+// Receive: real QR (qrcode), BTC SegWit/Taproot, Litecoin, Dogecoin, TRON, optional requested
+// amount (BIP21-style / EIP-681 / Solana Pay URI; none for TRON), network warning.
 
 import { useMemo, useState } from 'react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
-import { btcChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tryParseUnits } from '@kyro/chains';
+import { btcChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits } from '@kyro/chains';
 import { useAsync } from '../lib/useAsync';
 import { useApp, useVault } from '../state/app';
 import { cn } from '../lib/cn';
@@ -16,15 +16,17 @@ import { IconBack, IconCheck, IconInfo, IconRefresh, IconUsbKey, IconWarn } from
 import { AddressMismatchStop, DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
 import { BRAND, isAddressMismatch, pickDevice, withDevice } from '../state/hw';
 
-type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge';
-const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge'];
+type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron';
+const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron'];
+/** Vault-only chains (hardware wallets: HW_UNSUPPORTED for now). */
+const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'tron'];
 
 export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const { back, network, settings, navigate } = useApp();
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts, adapters, activeHw } = useVault();
-  // Hardware-wallet accounts have no Litecoin / Dogecoin (HW_UNSUPPORTED for now).
-  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge };
+  // Hardware-wallet accounts have no Litecoin / Dogecoin / TRON (HW_UNSUPPORTED for now).
+  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, tron: !!accounts.tron };
   const [family, setFamilyRaw] = useState<Family>(has[initial] ? initial : FAMILIES.find((f) => has[f]) ?? initial);
   // Dogecoin has no public server: say so instead of showing an address as if payments would appear.
   const dogeInfo = useAsync(family === 'doge' ? () => call('doge_backend_info') : null, [family, JSON.stringify(settings.servers.dogecoin)]);
@@ -49,6 +51,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const sol = solChain(network);
   const ltc = ltcChain(network);
   const doge = dogeChain(network);
+  const tron = tronChain(network);
 
   const btcAcc = accounts.btc?.[kind];
   const utxoAcc = family === 'ltc' ? accounts.ltc : family === 'doge' ? accounts.doge : undefined;
@@ -62,15 +65,20 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
         ? index === 0
           ? utxoAcc.address
           : (derived[indexKey] ?? utxoAcc.address)
-        : family === 'evm'
-          ? accounts.evm?.address
-          : accounts.sol?.address) ?? '';
+        : family === 'tron'
+          ? accounts.tron?.address
+          : family === 'evm'
+            ? accounts.evm?.address
+            : accounts.sol?.address) ?? '';
   const path =
     family === 'btc'
       ? `${btcAcc?.path ?? ''}/0/${index}`
       : utxoAcc
         ? `${utxoAcc.path}/0/${index}`
-        : family === 'evm'
+        : family === 'tron'
+          ? // One TRON account: Rust signs with m/44'/195'/0'/0/0 only (commands_tron.rs INDEX), so no « Nouvelle adresse ».
+            "m/44'/195'/0'/0/0"
+          : family === 'evm'
           ? activeHw
             ? hwPaths.evm(activeHw)
             : "m/44'/60'/0'/0/0"
@@ -79,9 +87,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             : "m/44'/501'/0'/0'";
   const verifiedHere = verify.state === 'ok' && verify.address === address;
   const blocked = mismatch !== null || (verify.state === 'error' && isAddressMismatch(verify.error) && verify.address === address);
-  const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name }[family];
-  const decimals = { btc: 8, evm: 18, sol: 9, ltc: 8, doge: 8 }[family];
-  const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE' }[family];
+  const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name, tron: tron.name }[family];
+  const decimals = { btc: 8, evm: 18, sol: 9, ltc: 8, doge: 8, tron: 6 }[family];
+  const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', tron: 'TRX' }[family];
+  // TRON has no standard payment-link format: the QR is the bare address.
+  const amountLink = family !== 'tron';
   const uriScheme = { btc: 'bitcoin', ltc: 'litecoin', doge: 'dogecoin' } as const;
   const amountBase = amount ? tryParseUnits(amount, decimals) : null;
 
@@ -90,6 +100,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
     const scheme = family === 'btc' || family === 'ltc' || family === 'doge' ? uriScheme[family] : null;
     if (!askAmount || !amountBase || amountBase <= 0n) return scheme ? `${scheme}:${address}` : address;
     if (scheme) return `${scheme}:${address}?amount=${dec}`;
+    if (family === 'tron') return address;
     if (family === 'evm') return `ethereum:${address}@${evm.chainId}?value=${amountBase.toString()}`;
     return `solana:${address}?amount=${dec}`;
   }, [askAmount, amountBase, amount, family, address, evm.chainId]);
@@ -117,7 +128,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   };
 
   const verifyOnDevice = async () => {
-    if (!activeHw || family === 'ltc' || family === 'doge') return;
+    if (!activeHw || family === 'ltc' || family === 'doge' || family === 'tron') return;
     const chain: HwImplementedChain = family;
     const shown = address;
     let deviceId = '';
@@ -147,7 +158,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           ? 'Adresse SegWit native (BIP84) Litecoin : même principe que Bitcoin, frais réduits.'
           : family === 'doge'
             ? 'Adresse Dogecoin classique (P2PKH). Un paiement sous 0,01 DOGE n’est pas standard : demande au moins 0,01 DOGE.'
-            : 'Pour SOL et les tokens SPL.';
+            : family === 'tron'
+              ? network === 'testnet'
+                ? 'Adresse TRON (T…) : pour les TRX et l’USDT TRC-20 de Nile.'
+                : 'Adresse TRON (T…) : pour les TRX et l’USDT TRC-20.'
+              : 'Pour SOL et les tokens SPL.';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">
@@ -166,6 +181,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               ['sol', 'Solana', 'S', '#35D0BA'],
               ['ltc', 'Litecoin', 'Ł', '#345D9D'],
               ['doge', 'Dogecoin', 'Ð', '#C2A633'],
+              ['tron', 'TRON', 'T', '#EB0029'],
             ] as const
           ).map(([f, label, glyph, color]) => (
             <button
@@ -173,7 +189,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               type="button"
               aria-pressed={family === f}
               disabled={!has[f]}
-              title={has[f] ? undefined : f === 'ltc' || f === 'doge' ? 'Litecoin et Dogecoin : pas encore sur hardware wallet (dans le coffre Kyro, oui)' : 'Ce compte hardware wallet n’a pas de clés pour cette chaîne'}
+              title={has[f] ? undefined : VAULT_ONLY.includes(f) ? 'Litecoin, Dogecoin et TRON : pas encore sur hardware wallet (dans le coffre Kyro, oui)' : 'Ce compte hardware wallet n’a pas de clés pour cette chaîne'}
               onClick={() => {
                 setFamily(f);
                 setAmount('');
@@ -187,6 +203,9 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           ))}
         </div>
       </header>
+      {activeHw && (
+        <span className="-mt-2 self-end text-[12px] text-faint">Litecoin, Dogecoin et TRON : pas encore sur hardware wallet. Ils restent disponibles dans le coffre Kyro (Compte principal).</span>
+      )}
 
       <section className="relative flex min-h-0 flex-1 items-center justify-center gap-14 overflow-hidden rounded-[22px] border border-line bg-card-hero p-8">
         <div aria-hidden="true" className="absolute top-1/2 left-[34%] size-[760px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#16191E]" />
@@ -200,7 +219,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
 
         <div className="relative flex w-[460px] flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-mute">Ton adresse {{ btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin' }[family]}</span>
+            <span className="text-[13px] text-mute">Ton adresse {{ btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON' }[family]}</span>
             <span className="text-[15px] leading-[1.45] text-text2">{desc}</span>
           </div>
           {(family === 'ltc' || family === 'doge') && (
@@ -291,7 +310,9 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-1.5">
               <dt className="text-mute">Montant demandé</dt>
               <dd className="m-0">
-                {askAmount ? (
+                {!amountLink ? (
+                  <span className="text-[12px] text-faint">pas de lien de paiement standard sur TRON</span>
+                ) : askAmount ? (
                   <span className="flex items-center gap-2">
                     <input autoFocus value={amount} inputMode="decimal" placeholder="0" onChange={(e) => setAmount(sanitizeDecimalInput(e.target.value, decimals))} className="h-8 w-[120px] rounded-[8px] border border-line-2 bg-bg px-2 text-right text-[13px]" />
                     <span className="text-mute">{symbol}</span>
@@ -312,6 +333,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               <span className="truncate font-mono text-[11px] text-mute">{uri}</span>
               <CopyButton text={uri} label="Copier le lien" />
             </div>
+          )}
+          {family === 'tron' && (
+            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
+              <strong className="font-semibold text-text">USDT TRC-20 seulement :</strong> l’USDT d’Ethereum (ERC-20) ou d’une autre chaîne envoyé ici est perdu. Un compte TRON n’existe qu’après avoir reçu des TRX : c’est l’expéditeur qui paie son activation (≈ 1,1 TRX).
+            </Notice>
           )}
           {family === 'btc' && cbfMode && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>

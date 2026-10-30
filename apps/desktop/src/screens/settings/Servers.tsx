@@ -185,7 +185,7 @@ export function ServersSection() {
     <>
       <Card title="Réseaux et serveurs" badge={<Badge tone={network === 'testnet' ? 'warn' : 'up'}>{network === 'testnet' ? 'Testnet' : 'Mainnet'}</Badge>}>
         <p className="m-0 text-[13px] leading-[1.55] text-mute">
-          {network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia et Solana devnet. ' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana. '}
+          {network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia, Solana devnet, Litecoin testnet4, Dogecoin testnet et TRON Nile. ' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana, Litecoin, Dogecoin, TRON. '}
           Le réseau est fixé au lancement. Pour chaque chaîne, tu peux remplacer le serveur par défaut par le tien : Kyro vérifie qu’il est sur le bon réseau avant de l’enregistrer.
         </p>
         <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
@@ -196,6 +196,7 @@ export function ServersSection() {
       <BitcoinCard />
       <UtxoServerCard coin="litecoin" />
       <UtxoServerCard coin="dogecoin" />
+      <TronServerCard />
       <EvmCard />
       <SolanaCard />
     </>
@@ -1227,6 +1228,133 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
         onCancel={() => {
           setConfirmDefault(false);
           setKind('esplora');
+        }}
+      />
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------- TRON
+
+/**
+ * TRON: TronGrid by default (api.trongrid.io / nile.trongrid.io) or the user's java-tron HTTP API
+ * (FullNode). Balances, resources, building and broadcast work with any java-tron node; the
+ * history needs TronGrid's `/v1` API, which a plain node does not have (tron_txs then fails).
+ */
+function TronServerCard() {
+  const { settings, network, config } = useApp();
+  const tor = settings.tor.enabled;
+  const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
+  const defaultHost = network === 'mainnet' ? 'api.trongrid.io' : 'nile.trongrid.io';
+  const saved = settings.servers.tron?.[nk];
+  const savedUrl = saved?.kind === 'http' ? saved.url : '';
+  const [kind, setKind] = useState<'default' | 'http'>(savedUrl ? 'http' : 'default');
+  const [url, setUrl] = useState(savedUrl);
+  useEffect(() => {
+    setKind(savedUrl ? 'http' : 'default');
+    setUrl(savedUrl);
+  }, [savedUrl]);
+  const saveServers = useSaveServers();
+  const [busy, setBusy] = useState<'test' | 'save' | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [result, setResult] = useState<ServerTestResult | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDefault, setConfirmDefault] = useState(false);
+  const clean = url.trim();
+  const hint = kind === 'http' && clean ? checkServerUrl(clean, tor) : null;
+  const dirty = kind === 'http' ? clean !== savedUrl : !!savedUrl;
+  const reset = () => {
+    setFailure(null);
+    setResult(null);
+    setNotice(null);
+  };
+  const test = async () => {
+    reset();
+    setBusy('test');
+    try {
+      setResult(await call('server_test', { target: { family: 'tron', network: nk, server: kind === 'http' ? { kind: 'http', url: clean } : { kind: 'default' } } }));
+    } catch (e) {
+      setFailure(toFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const save = async (toDefault: boolean) => {
+    reset();
+    setBusy('save');
+    try {
+      await saveServers((s) => {
+        s.tron = { ...(s.tron ?? {}) };
+        if (toDefault) delete s.tron[nk];
+        else s.tron[nk] = { kind: 'http', url: clean };
+      });
+      setConfirmDefault(false);
+      setNotice(toDefault ? `Serveur par défaut rétabli : ${defaultHost} voit maintenant ton adresse TRON et tes transactions.` : 'Serveur TRON enregistré. Kyro n’utilise plus que lui pour TRON.');
+    } catch (e) {
+      setFailure(toFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card
+      title={network === 'testnet' ? 'TRON Nile (testnet)' : 'TRON'}
+      badge={savedUrl ? <Badge tone="ice">Nœud perso · java-tron</Badge> : <Badge>Par défaut · TronGrid</Badge>}
+    >
+      <Segmented
+        label="Serveur TRON"
+        value={kind}
+        onChange={(k) => {
+          reset();
+          setKind(k);
+        }}
+        options={[
+          { value: 'default', label: 'TronGrid' },
+          { value: 'http', label: 'Nœud java-tron perso' },
+        ]}
+        className="self-start"
+      />
+      <Sees>
+        {kind === 'default'
+          ? `${defaultHost} voit ton adresse TRON et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.`
+          : `Ton nœud voit ton adresse TRON et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`}
+      </Sees>
+      <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
+        <strong className="font-semibold text-text">Historique : API /v1 de TronGrid requise.</strong> Soldes, ressources, construction et diffusion marchent avec n’importe quel nœud java-tron (API HTTP <span className="font-mono">/wallet</span>). L’historique, lui, vient de l’API <span className="font-mono">/v1</span> de TronGrid : un nœud java-tron seul ne la fournit pas, l’historique TRON restera alors indisponible.
+      </Notice>
+      {kind === 'http' && (
+        <Field label="URL de l’API HTTP java-tron (FullNode)" hint="https://, ou http:// pour une adresse .onion (Tor). Jamais d’identifiants dans l’URL.">
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mon-noeud-tron.example" aria-label="URL du nœud TRON" className="font-mono text-[13px]" />
+        </Field>
+      )}
+      {config?.hasTrongridKey && kind === 'default' && <span className="text-[12px] text-mute">Clé API TronGrid fournie par l’application : limites de débit plus hautes.</span>}
+      {hint && (
+        <span className="flex items-center gap-1.5 text-[12px] text-warn">
+          <IconWarn size={13} /> {hint}
+        </span>
+      )}
+      {failure && <FailureNotice failure={failure} />}
+      {result && !failure && <TestOk result={result} />}
+      {notice && !failure && <Notice tone={notice.startsWith('Serveur par défaut') ? 'warn' : 'success'}>{notice}</Notice>}
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => void test()} disabled={busy !== null || (kind === 'http' && !clean)}>
+          {busy === 'test' && <Spinner />} Tester la connexion
+        </Button>
+        <Button variant="primary" onClick={() => (kind === 'http' ? void save(false) : setConfirmDefault(true))} disabled={busy !== null || !dirty || (kind === 'http' && !clean)}>
+          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? 'Revenir à TronGrid' : 'Enregistrer'}
+        </Button>
+      </div>
+      <BackToDefaultDialog
+        open={confirmDefault}
+        host={defaultHost}
+        sees="ton adresse TRON et tes transactions"
+        busy={busy === 'save'}
+        failure={confirmDefault ? failure : null}
+        onConfirm={() => void save(true)}
+        onCancel={() => {
+          setConfirmDefault(false);
+          setKind('http');
         }}
       />
     </Card>

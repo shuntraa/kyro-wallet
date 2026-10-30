@@ -32,7 +32,7 @@ export function Portfolio() {
   const alloc = pf.holdings.filter((h) => (h.value ?? 0) > 0);
   const top = alloc.slice(0, 5);
   const rest = alloc.slice(5).reduce((s, h) => s + (h.value ?? 0), 0);
-  const slices = [...top.map((h) => ({ id: h.asset.id, label: top.filter((x) => x.asset.name === h.asset.name).length > 1 ? `${h.asset.name} · ${h.asset.kind === 'spl' ? 'Solana' : h.asset.kind === 'erc20' ? 'ERC-20' : h.asset.symbol}` : h.asset.name, value: h.value ?? 0, color: h.asset.color })), ...(rest > 0 ? [{ id: 'other', label: 'Autres', value: rest, color: '#5E6470' }] : [])];
+  const slices = [...top.map((h) => ({ id: h.asset.id, label: top.filter((x) => x.asset.name === h.asset.name).length > 1 ? `${h.asset.name} · ${h.asset.kind === 'spl' ? 'Solana' : h.asset.kind === 'erc20' ? 'ERC-20' : h.asset.kind === 'trc20' ? 'TRC-20' : h.asset.symbol}` : h.asset.name, value: h.value ?? 0, color: h.asset.color })), ...(rest > 0 ? [{ id: 'other', label: 'Autres', value: rest, color: '#5E6470' }] : [])];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-[26px] py-[22px]">

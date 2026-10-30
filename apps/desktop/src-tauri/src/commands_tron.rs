@@ -146,7 +146,12 @@ pub(crate) fn describe_tron(
             );
         }
     }
-    let bw_source = if e.staked_bandwidth >= e.bandwidth_needed {
+    // Creating an account always burns 0.1 TRX of bandwidth (free bandwidth does not apply);
+    // that amount is already part of the activation fee shown above.
+    let new_account = e.activation_fee != "0";
+    let bw_source = if new_account {
+        "compris dans l'activation"
+    } else if e.staked_bandwidth >= e.bandwidth_needed {
         "bande passante gelée"
     } else if e.free_bandwidth >= e.bandwidth_needed {
         "bande passante gratuite"

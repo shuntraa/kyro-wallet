@@ -36,6 +36,8 @@ export interface Accounts {
   ltc: UtxoAccountInfo;
   /** Dogecoin BIP44 P2PKH `m/44'/3'/0'` (testnet `m/44'/1'/0'`). */
   doge: UtxoAccountInfo;
+  /** TRON `m/44'/195'/0'/0/0` (same path on Nile), `T…` (§2.5). */
+  tron: { address: string };
 }
 
 /** One Litecoin / Dogecoin account (standard `xpub` / `tpub` encoding, also for Dogecoin). */
@@ -107,7 +109,15 @@ export interface Servers {
   litecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };
   /** Dogecoin. NO default public server: reads fail with SERVER_INVALID until one is set. */
   dogecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };
+  /** TRON (`testnet` = Nile). Default: TronGrid (api.trongrid.io / nile.trongrid.io). */
+  tron: { mainnet?: TronServer; testnet?: TronServer };
 }
+
+/**
+ * TRON server: TronGrid by default, or a java-tron HTTP API (FullNode). History (`tron_txs`)
+ * needs TronGrid's `/v1` API in addition: a plain java-tron node has none.
+ */
+export type TronServer = { kind: 'default' } | { kind: 'http'; url: string };
 
 /** Litecoin / Dogecoin server: the default (Litecoin: litecoinspace.org; Dogecoin: none) or an Esplora. */
 export type UtxoServer = { kind: 'default' } | { kind: 'esplora'; url: string };
@@ -120,7 +130,9 @@ export type ServerTestTarget =
   | { family: 'evm'; chainId: number; server: RpcServer }
   | { family: 'solana'; cluster: SolanaCluster; server: RpcServer }
   | { family: 'litecoin'; network: UtxoNetworkKey; server: UtxoServer }
-  | { family: 'dogecoin'; network: UtxoNetworkKey; server: UtxoServer };
+  | { family: 'dogecoin'; network: UtxoNetworkKey; server: UtxoServer }
+  /** `testnet` = Nile. */
+  | { family: 'tron'; network: UtxoNetworkKey; server: TronServer };
 
 export interface ServerTestResult {
   latencyMs: number;
@@ -290,6 +302,111 @@ export interface UtxoCommands<P extends 'ltc' | 'doge'> {
 
 type Prefixed<P extends 'ltc' | 'doge'> = { [K in keyof UtxoCommands<P> as `${P}_${K & string}`]: UtxoCommands<P>[K] };
 
+// ---------------------------------------------------------------- TRON (§2.5)
+
+export interface TronBackendInfo {
+  kind: 'default' | 'http';
+  /** `testnet` = Nile. */
+  network: UtxoNetworkKey;
+  /** Host of the server in use. */
+  label: string;
+  tor: boolean;
+}
+
+/** `tron_account`: `getaccount` + `getaccountresource`. */
+export interface TronAccountInfo {
+  address: string;
+  /** Has received TRX at least once. Sending TRX to a non-existing account activates it (≈ 1.1 TRX burned). */
+  exists: boolean;
+  /** Sun, decimal string. */
+  balance: string;
+  /** Daily free bandwidth (bytes) and what is used of it. */
+  freeBandwidthLimit: number;
+  freeBandwidthUsed: number;
+  /** Bandwidth / energy from staked TRX. */
+  bandwidthLimit: number;
+  bandwidthUsed: number;
+  energyLimit: number;
+  energyUsed: number;
+}
+
+/** wallet-core `TronAction` (serde tag `type`). Amounts: decimal strings (sun or raw token units). */
+export type TronAction =
+  | { type: 'trxTransfer'; to: string; amount: string }
+  | { type: 'trc20Transfer'; contract: string; to: string; amount: string; callValue: string }
+  | { type: 'contractCall'; contract: string; selector: string; data: string; callValue: string };
+
+/** Every warning → reinforced confirmation. */
+export type TronWarning = { kind: 'unknownCall'; selector: string } | { kind: 'callValue' } | { kind: 'memo' } | { kind: 'highFeeLimit' };
+
+/** Rust's decoding of `raw_data` (`wallet_core::TronTxSummary`). */
+export interface TronTxSummary {
+  txid: string;
+  owner: string;
+  action: TronAction;
+  /** Sun: the most the energy may burn. */
+  feeLimit: string;
+  /** ms epoch. */
+  expiration: number;
+  timestamp: number;
+  refBlockBytes: string;
+  refBlockHash: string;
+  /** Hex. */
+  memo: string;
+  rawSize: number;
+  warnings: TronWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+/** Resources and TRX burned (`tron_backend::TronEstimate`). Amounts: sun, decimal strings. */
+export interface TronEstimate {
+  /** Bytes charged: signed size + 64. */
+  bandwidthNeeded: number;
+  freeBandwidth: number;
+  stakedBandwidth: number;
+  /** Burned for bandwidth when neither free nor staked bandwidth covers it. */
+  bandwidthBurn: string;
+  /** TRX to an account that does not exist yet: creation fee (+ bandwidth of the creation); 0 otherwise. */
+  activationFee: string;
+  recipientExists: boolean;
+  /** TRC-20: simulated energy (`energy_used + energy_penalty`), energy from staking. */
+  energyNeeded: number;
+  energyAvailable: number;
+  /** Sun per energy unit. */
+  energyFee: number;
+  /** Expected burn for energy (not covered × energyFee, at most feeLimit). */
+  energyBurn: string;
+  /** `fee_limit`: most the energy may burn. */
+  feeLimit: string;
+  /** Expected total burn: bandwidth + activation + energy. */
+  totalBurn: string;
+  /** Upper bound: bandwidth + activation + fee_limit. */
+  totalBurnMax: string;
+  /** Our TRX balance, sun. */
+  balance: string;
+}
+
+/** `tron_txs` entry (TronGrid `/v1`, newest first, 50 TRX + 50 TRC-20 at most). */
+export interface TronHistoryEntry {
+  txid: string;
+  kind: 'trx' | 'trc20';
+  from: string | null;
+  to: string | null;
+  /** Sun or raw token units. */
+  amount: string;
+  token?: { contract: string; symbol: string; decimals: number };
+  timestamp: number | null;
+  status: 'confirmed' | 'failed';
+}
+
+export interface TronBuilt {
+  /** `raw_data` hex: what `tron_sign_tx` signs. */
+  raw: string;
+  txid: string;
+  summary: TronTxSummary;
+  estimate: TronEstimate;
+}
+
 /**
  * `btc_address_txs` returns at most this many transactions per address, for every backend
  * (most recent first; Rust follows Esplora's pagination). 50 entries = there may be more.
@@ -366,6 +483,8 @@ export interface AppConfig {
   hasZeroxKey: boolean;
   hasOneinchKey: boolean;
   hasCoingeckoKey: boolean;
+  /** TronGrid API key configured in the shell (not yet sent by every build). */
+  hasTrongridKey?: boolean;
 }
 
 /** Token metadata passed to `evm_sign_tx` so the native dialog can show a readable amount. */
@@ -567,6 +686,22 @@ export interface Commands {
   btc_broadcast: { args: { hex: string }; ret: string };
   /** Raw previous transaction (e.g. `non_witness_utxo` of a SegWit v0 input on a hardware wallet); Rust checks its txid. */
   btc_tx_hex: { args: { txid: string }; ret: string };
+  // TRON (§2.5): Rust builds raw_data itself from the latest block, signs behind the password
+  // and the native dialog (resources and TRX burned re-read live). Hardware wallets: HW_UNSUPPORTED.
+  tron_backend_info: { args: undefined; ret: TronBackendInfo };
+  /** `m/44'/195'/0'/0/{index}`, vault unlocked. */
+  tron_address: { args: { index: number }; ret: string };
+  tron_account: { args: { address: string }; ret: TronAccountInfo };
+  /** Raw units, decimal string. */
+  tron_trc20_balance: { args: { contract: string; address: string }; ret: string };
+  /** TronGrid `/v1` only: a plain java-tron node → SERVER_UNREACHABLE « …exige l'API /v1 de TronGrid ». */
+  tron_txs: { args: { address: string }; ret: TronHistoryEntry[] };
+  /** `amount`: sun (TRX) or raw token units. TRC-20: energy simulated, a failing transfer is refused. */
+  tron_build_tx: { args: { to: string; amount: string; token?: string }; ret: TronBuilt };
+  /** `token`: UI hint for an unknown TRC-20 (shown « selon l'interface, non vérifié »). */
+  tron_sign_tx: { args: { raw: string; password: string; token?: { symbol: string; decimals: number } }; ret: { signature: string; txid: string; summary: TronTxSummary; estimate: TronEstimate } };
+  /** Signature must recover to our address; server txid = sha256(raw). */
+  tron_broadcast: { args: { raw: string; signature: string }; ret: string };
   /**
    * Bitcoin Core only, unlocked. Pre-flight checks are synchronous (reachable, auth, chain, watch
    * wallet created or loaded without private keys); only `importdescriptors` runs in the background.
