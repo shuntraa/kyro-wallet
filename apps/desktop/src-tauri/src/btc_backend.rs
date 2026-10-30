@@ -837,6 +837,14 @@ pub async fn probe(ctx: &Ctx<'_>) -> AppResult<Detected> {
             ..Default::default()
         });
     }
+    // CBF has no server to probe: peers are checked syntactically by `validate_btc`, and the
+    // chain itself is verified header by header during sync (proof of work from genesis).
+    if matches!(ctx.server, BtcServer::Cbf { .. }) {
+        return Ok(Detected {
+            network: Some(net_label(ctx.network).into()),
+            ..Default::default()
+        });
+    }
     Err(AppError::Internal("backend Bitcoin inconnu".into()))
 }
 

@@ -103,6 +103,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   // Fees.
   const fees = useAsync<FeeEstimates>(adapter ? () => adapter.estimateFees() : null, [adapter], { intervalMs: 30_000 });
   const feesTorBlocked = useTorBlocked(fees.error);
+  // Compact filters: rates are an average of recent blocks, not a mempool estimate.
+  const blockAverage = fees.data?.source === 'block-average';
   useOnTorReady(fees.reload);
   const [choice, setChoice] = useState<FeeChoice>('normal');
   const [customEvm, setCustomEvm] = useState({ maxFeeGwei: '', priorityGwei: '' });
@@ -429,8 +431,16 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   <FeeOption key={level} active={choice === level} onClick={() => setChoice(level)} title={`${label}${fiat ? ` · ${fiat}` : ''}`} sub={opt ? fmtEta(opt.etaSecs) : '…'} disabled={!opt} />
                 );
               })}
-              <FeeOption active={choice === 'custom'} onClick={() => setChoice('custom')} title="Personnalisé" sub="tu choisis" ice disabled={!fees.data} />
+              <FeeOption active={choice === 'custom'} onClick={() => setChoice('custom')} title="Personnalisé" sub={blockAverage ? 'suggéré' : 'tu choisis'} ice disabled={!fees.data} />
             </div>
+            {blockAverage && (
+              <span className="flex items-start gap-1.5 text-[12px] leading-[1.45] text-mute">
+                <IconWarn size={13} className="mt-0.5 shrink-0 text-warn" />
+                <span>
+                  Mode filtres compacts : ces tarifs sont la moyenne des frais payés dans les derniers blocs, pas une estimation du mempool. Si c’est urgent ou que le réseau est chargé, choisis « Personnalisé » et fixe ton tarif.
+                </span>
+              </span>
+            )}
             {choice === 'custom' && (
               <div className="flex items-end gap-3 rounded-[14px] border border-ice-line bg-raised px-4 py-3.5">
                 {asset.family === 'evm' && (

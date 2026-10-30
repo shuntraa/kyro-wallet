@@ -31,10 +31,12 @@ import {
 } from './ipc';
 import { emitDemoEvent } from './events';
 import { createDemoServers } from './mock-servers';
+import { createDemoCbf, detectDemoCbf } from './mock-cbf';
 import { EMPTY_SERVERS, redactServers } from './servers';
 import { createDemoTor, detectDemoTorDisabled, detectDemoTorScenario, type DemoTor, type DemoTorScenario } from './mock-tor';
 export { DEMO_TOR_BOOTSTRAP_MS, type DemoTor, type DemoTorScenario } from './mock-tor';
 export { DEMO_RESCAN_MS, demoElectrumCert } from './mock-servers';
+export { DEMO_CBF_CONNECT_MS, DEMO_CBF_FILTERS_MS, DEMO_CBF_HEADERS_MS } from './mock-cbf';
 import { demoHash, handleDemoNet, type DemoChainState } from './mock-net';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 
@@ -187,6 +189,8 @@ export interface MockOptions {
   tor?: DemoTorScenario;
   /** Initial `settings.tor.enabled`. Default: true (`?tor=off` → false). */
   torEnabled?: boolean;
+  /** Compact filters available (cargo feature `cbf`). Default: false, like today's build (`?cbf=on` → true). */
+  cbf?: boolean;
 }
 
 export interface MockBackend {
@@ -228,6 +232,18 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
+    cbf: createDemoCbf({
+      enabled: opts.cbf ?? detectDemoCbf(),
+      network,
+      tor,
+      torOn: () => settings.tor.enabled,
+      tipHeight: () => chain.tipHeight,
+      server: () => {
+        const s = settings.servers.bitcoin[network === 'mainnet' ? 'mainnet' : 'testnet4'];
+        return s?.kind === 'cbf' ? s : null;
+      },
+      requireUnlocked: () => requireUnlocked(),
+    }),
   });
 
   const confirmFn =
@@ -465,6 +481,8 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     btc_broadcast: (a) => servers.btc.broadcast(a.hex),
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
+    btc_cbf_status: () => servers.cbf.status(),
+    btc_cbf_sync: () => servers.cbf.sync(),
     config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasOneinchKey: true, hasCoingeckoKey: false }),
   };
 

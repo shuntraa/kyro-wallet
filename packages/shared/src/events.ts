@@ -3,13 +3,15 @@
 // Events emitted by the shell (Rust → UI).
 //   - `vault-locked` (no payload): the session was zeroized (auto-lock, sleep…).
 //   - `tor-status` (`TorStatus`): every state or bootstrap-progress change of the embedded Tor.
+//   - `cbf-status` (`CbfStatus`): compact-filter sync progress (at most 2 per second).
 
-import { isTauri, type TorStatus } from './ipc';
+import { isTauri, type CbfStatus, type TorStatus } from './ipc';
 
 /** Payload of each shell event (`undefined` = none). */
 export interface ShellEventPayloads {
   'vault-locked': undefined;
   'tor-status': TorStatus;
+  'cbf-status': CbfStatus;
 }
 
 export type ShellEvent = keyof ShellEventPayloads;
@@ -53,4 +55,9 @@ export async function listenShell<E extends ShellEvent>(name: E, cb: Listener<E>
 /** Subscribe to `tor-status`. Pair it with `torStatus()` for the current state (see the Tor store). */
 export function onTorStatus(cb: (status: TorStatus) => void): Promise<Unlisten> {
   return listenShell('tor-status', cb);
+}
+
+/** Subscribe to `cbf-status` (compact-filter sync). Pair it with `btc_cbf_status` for the current state. */
+export function onCbfStatus(cb: (status: CbfStatus) => void): Promise<Unlisten> {
+  return listenShell('cbf-status', cb);
 }

@@ -38,6 +38,7 @@ import {
 import { bitcoinServerFor, btcNetworkKey, checkBtcServer, checkServerUrl, coreIsLocal, isOnion, mergeServerSecrets, solanaCluster } from './servers';
 import { DEMO_FEE_RATES, EVM_HOSTS, demoEsploraAddress, demoEsploraTxs, demoEsploraUtxos, handleDemoNet, type DemoChainState, type DemoRoute } from './mock-net';
 import type { DemoTor } from './mock-tor';
+import { cbfDisabled, type DemoCbf } from './mock-cbf';
 
 const BTC_GENESIS: Record<BtcNetworkKey, string> = {
   mainnet: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f',
@@ -79,7 +80,7 @@ export function demoElectrumCert(host: string, port: number): ElectrumCertInfo {
 function scenarioText(s: BtcServer | RpcServer): string {
   if ('kind' in s) {
     if (s.kind === 'electrum') return s.host;
-    if (s.kind === 'default') return '';
+    if (s.kind === 'default' || s.kind === 'cbf') return '';
   }
   return (s as { url: string }).url;
 }
@@ -92,6 +93,8 @@ export interface DemoServersDeps {
   tor: DemoTor;
   settings: () => Settings;
   requireUnlocked: () => void;
+  /** Compact filters (feature `cbf`: FEATURE_DISABLED unless enabled). */
+  cbf: DemoCbf;
 }
 
 export function createDemoServers(d: DemoServersDeps) {
@@ -126,6 +129,11 @@ export function createDemoServers(d: DemoServersDeps) {
   /** Live check of a Bitcoin server on `net` (btc_backend::probe). */
   const probeBtc = async (net: BtcNetworkKey, s: BtcServer): Promise<ServerTestResult['detected']> => {
     if (s.kind === 'default') return { network: net, genesisHash: BTC_GENESIS[net], blockHeight: d.chain.tipHeight };
+    if (s.kind === 'cbf') {
+      // Peers are checked at sync time (no server to probe): the intended Rust behaviour.
+      if (!d.cbf.enabled) throw cbfDisabled();
+      return { network: net, genesisHash: BTC_GENESIS[net] };
+    }
     await gate(s.kind === 'core' && coreIsLocal(s.url));
     const text = scenarioText(s);
     if (has(text, 'down')) throw unreachable(`${s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(text)} : délai de connexion dépassé`);
@@ -160,6 +168,7 @@ export function createDemoServers(d: DemoServersDeps) {
     for (const key of ['mainnet', 'testnet4'] as const) {
       const s = servers.bitcoin[key];
       if (!s) continue;
+      if (s.kind === 'cbf' && !d.cbf.enabled) throw cbfDisabled();
       const bad = checkBtcServer(s, tor) ?? (s.kind === 'core' && s.auth.kind === 'userpass' && !s.auth.password ? 'mot de passe RPC manquant' : null);
       if (bad) throw invalid(`bitcoin ${key} : ${bad}`);
     }
@@ -234,6 +243,14 @@ export function createDemoServers(d: DemoServersDeps) {
       await gate();
       return s;
     }
+    if (s.kind === 'cbf') {
+      // Answered from the local store, never a network request during the call.
+      if (!d.cbf.enabled) throw cbfDisabled();
+      d.cbf.refreshIfStale();
+      if (!d.cbf.synced()) throw unreachable('filtres compacts : pas encore synchronisé (synchronisation en cours)');
+      await wait(20);
+      return s;
+    }
     await gate(s.kind === 'core' && coreIsLocal(s.url));
     const text = scenarioText(s);
     if (downLater(text)) throw unreachable(`${s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(text)} : délai de connexion dépassé`);
@@ -274,8 +291,9 @@ export function createDemoServers(d: DemoServersDeps) {
       return s.kind === 'core' ? txs.map(({ fee: _fee, ...t }) => ({ ...t, vin: t.vin.map((i) => ({ ...i, prevout: null })) })) : txs;
     },
     async feeRates() {
-      await backend();
-      return { ...DEMO_FEE_RATES };
+      const s = await backend();
+      // CBF: no mempool, average of the fees paid in the last blocks.
+      return s.kind === 'cbf' ? { fastestFee: 8, halfHourFee: 5, hourFee: 3, economyFee: 1, minimumFee: 1, source: 'block-average' as const } : { ...DEMO_FEE_RATES };
     },
     async tipHeight() {
       await backend();
@@ -294,7 +312,7 @@ export function createDemoServers(d: DemoServersDeps) {
     },
     info() {
       const s = current();
-      const label = s.kind === 'default' ? 'mempool.space' : s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(s.url);
+      const label = s.kind === 'default' ? 'mempool.space' : s.kind === 'cbf' ? 'P2P (filtres compacts)' : s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(s.url);
       return { kind: s.kind, network: btcNetworkKey(d.network), label, tor: torOn() };
     },
   };
@@ -308,7 +326,10 @@ export function createDemoServers(d: DemoServersDeps) {
   };
 
   const coreStatus = async (): Promise<CoreStatus> => {
-    const s = coreServer();
+    const cur = current();
+    // No Core server for this network: a normal answer, not an error.
+    if (cur.kind !== 'core') return { wallet: '', state: 'not-configured', walletLoaded: false };
+    const s = cur;
     d.requireUnlocked();
     await gate(coreIsLocal(s.url));
     if (has(s.url, 'down')) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
@@ -334,10 +355,11 @@ export function createDemoServers(d: DemoServersDeps) {
     if (rescanFrom !== 'now' && !(typeof rescanFrom === 'number' && Number.isInteger(rescanFrom) && rescanFrom >= 0)) {
       throw new IpcError('INVALID_INPUT', `Entrée invalide : rescanFrom : « now » ou un horodatage UNIX attendu (reçu « ${String(rescanFrom)} »)`);
     }
-    // Validation happens in the background job in Rust; the demo checks reachability up front.
+    // Synchronous pre-flight, like Rust: reachable, auth, chain, watch wallet. Only the import runs in the background.
     await gate(coreIsLocal(s.url));
-    if (has(s.url, 'down')) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
+    if (downLater(s.url)) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
     checkCoreAuth(s);
+    if (has(s.url, 'wrong')) throw wrongNet('le nœud n’est pas sur le réseau de l’app');
     wallets.add(s.url);
     job = { url: s.url, state: 'importing', started: Date.now(), rescanMs: (rescanFrom as CoreRescanFrom) === 'now' ? 0 : DEMO_RESCAN_MS };
     return { wallet: walletName, state: 'importing', walletLoaded: false };
@@ -377,5 +399,5 @@ export function createDemoServers(d: DemoServersDeps) {
 
   const netFetch = (req: NetRequest): Promise<NetResponse> => handleDemoNet(req, d.chain, routeNet(req));
 
-  return { prepareSave, serverTest, electrumFetchCert, btc, coreSetup, coreStatus, netFetch, solanaCluster: () => solanaCluster(d.network) };
+  return { prepareSave, serverTest, electrumFetchCert, btc, coreSetup, coreStatus, netFetch, cbf: d.cbf, solanaCluster: () => solanaCluster(d.network) };
 }

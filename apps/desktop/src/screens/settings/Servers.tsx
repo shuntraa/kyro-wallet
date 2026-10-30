@@ -9,7 +9,9 @@
 // - every save is checked live by Rust; its typed error is shown inline, in the card;
 // - the Core password is never received (`hasPassword`): an empty field = unchanged;
 // - removing a custom server goes back to the default, with a note that the default now
-//   sees the addresses again.
+//   sees the addresses again;
+// - compact block filters (BIP157/158) stay visible but disabled while the build answers
+//   FEATURE_DISABLED (cargo feature `cbf`, off until the security review).
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -34,6 +36,7 @@ import {
 } from '@kyro/shared';
 import { evmChains, solChain } from '@kyro/chains';
 import { useApp } from '../../state/app';
+import { cbfPhaseLabel, cbfStore, useCbf } from '../../state/cbf';
 import { usePortfolio } from '../../state/portfolio';
 import { cn } from '../../lib/cn';
 import { fmtNumber } from '../../lib/format';
@@ -210,6 +213,11 @@ interface BtcDraft {
   /** Empty = unchanged (the stored one is kept by Rust if URL and user are the same). */
   password: string;
   hasPassword: boolean;
+  /** Compact filters: extra peers, one per line ("ip:port" or "onion:port"). */
+  cbfPeers: string;
+  birthMode: 'genesis' | 'height' | 'date';
+  birthHeight: string;
+  birthDate: string;
 }
 
 function draftOf(s: BtcServer, network: 'mainnet' | 'testnet'): BtcDraft {
@@ -227,8 +235,19 @@ function draftOf(s: BtcServer, network: 'mainnet' | 'testnet'): BtcDraft {
     user: '',
     password: '',
     hasPassword: false,
+    cbfPeers: '',
+    birthMode: 'genesis',
+    birthHeight: '',
+    birthDate: '',
   };
   if (s.kind === 'esplora') d.esploraUrl = s.url;
+  if (s.kind === 'cbf') {
+    d.cbfPeers = (s.peers ?? []).join('\n');
+    if (s.birthHeight !== undefined) {
+      d.birthMode = 'height';
+      d.birthHeight = String(s.birthHeight);
+    }
+  }
   if (s.kind === 'electrum') {
     d.host = s.host;
     d.port = String(s.port);
@@ -248,10 +267,33 @@ function draftOf(s: BtcServer, network: 'mainnet' | 'testnet'): BtcDraft {
   return d;
 }
 
-function serverOf(d: BtcDraft): BtcServer {
+/**
+ * Approximate block height at a date, minus a one-week safety margin (1008 blocks). Reference
+ * points: mainnet block 840 000 (halving, 2024-04-20), testnet4 genesis (2024-05-03); about
+ * one block per 10 minutes. Starting earlier only costs time, starting later would miss funds.
+ */
+export function estimateBirthHeight(dateIso: string, network: 'mainnet' | 'testnet'): number | null {
+  const t = Date.parse(`${dateIso}T00:00:00Z`) / 1000;
+  if (!Number.isFinite(t)) return null;
+  const [refHeight, refTime] = network === 'mainnet' ? [840_000, 1_713_571_767] : [0, 1_714_777_860];
+  return Math.max(0, Math.floor(refHeight + (t - refTime) / 600) - 1008);
+}
+
+function birthOf(d: BtcDraft, network: 'mainnet' | 'testnet'): number | undefined {
+  if (d.birthMode === 'height' && /^\d+$/.test(d.birthHeight.trim())) return Number(d.birthHeight.trim());
+  if (d.birthMode === 'date') return estimateBirthHeight(d.birthDate, network) ?? undefined;
+  return undefined;
+}
+
+function serverOf(d: BtcDraft, network: 'mainnet' | 'testnet' = 'testnet'): BtcServer {
   switch (d.kind) {
     case 'default':
       return { kind: 'default' };
+    case 'cbf': {
+      const peers = d.cbfPeers.split(/[\s,]+/).map((p) => p.trim()).filter(Boolean);
+      const birthHeight = birthOf(d, network);
+      return { kind: 'cbf', ...(peers.length ? { peers } : {}), ...(birthHeight !== undefined ? { birthHeight } : {}) };
+    }
     case 'esplora':
       return { kind: 'esplora', url: d.esploraUrl.trim() };
     case 'electrum': {
@@ -280,6 +322,7 @@ const BTC_KINDS: Array<{ value: BtcServerKind; label: string }> = [
   { value: 'esplora', label: 'Esplora perso' },
   { value: 'electrum', label: 'Electrum' },
   { value: 'core', label: 'Bitcoin Core' },
+  { value: 'cbf', label: 'Filtres compacts (BIP157/158)' },
 ];
 
 function btcSees(d: BtcDraft, tor: boolean): string {
@@ -292,6 +335,8 @@ function btcSees(d: BtcDraft, tor: boolean): string {
       return `Ton serveur Esplora voit tes adresses et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`;
     case 'electrum':
       return `Le serveur Electrum voit tes script hashes (l’équivalent de tes adresses) et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`;
+    case 'cbf':
+      return `Aucun serveur n’apprend tes adresses : Kyro télécharge les filtres de blocs et vérifie sur ta machine lesquels te concernent. Les pairs voient quels blocs tu télécharges en entier${tor ? ' ; avec Tor, ton IP leur est cachée' : ', et ton adresse IP (Tor désactivé)'}.`;
     case 'core':
       return coreIsLocal(d.coreUrl)
         ? 'Ton propre nœud voit tes descripteurs publics (xpub) et tes transactions. Rien ne sort de ta machine ou de ton réseau local. Jamais ta phrase ni tes clés privées.'
@@ -317,7 +362,12 @@ function BitcoinCard() {
   const [cert, setCert] = useState<{ info: ElectrumCertInfo; host: string; port: number; changed: boolean } | null>(null);
   const [confirmDefault, setConfirmDefault] = useState(false);
 
-  const server = serverOf(d);
+  const cbf = useCbf();
+  useEffect(() => {
+    void cbfStore.refresh();
+  }, []);
+  const cbfOff = cbf.availability === 'disabled';
+  const server = serverOf(d, network);
   const dirty = comparable(server) !== savedKey || (d.kind === 'core' && d.authKind === 'userpass' && d.password !== '');
   // URL or user changed: Rust does not keep the stored password (merge rule) → must be re-entered.
   const passwordLost = saved.kind === 'core' && saved.auth.kind === 'userpass' && d.kind === 'core' && d.authKind === 'userpass' && d.password === '' && (saved.url !== d.coreUrl.trim() || saved.auth.user !== d.user.trim());
@@ -374,7 +424,7 @@ function BitcoinCard() {
     setCert(null);
     const nd = { ...d, ...next };
     setD(nd);
-    await runTest(serverOf(nd));
+    await runTest(serverOf(nd, network));
   };
 
   const save = async () => {
@@ -388,8 +438,9 @@ function BitcoinCard() {
       await saveServers((s) => {
         s.bitcoin[netKey] = server;
       });
-      setNotice('Serveur Bitcoin enregistré. Kyro n’utilise plus que lui pour Bitcoin.');
+      setNotice(d.kind === 'cbf' ? 'Mode filtres compacts enregistré : première synchronisation lancée.' : 'Serveur Bitcoin enregistré. Kyro n’utilise plus que lui pour Bitcoin.');
       if (d.kind === 'core') set({ password: '' });
+      if (d.kind === 'cbf') void cbfStore.sync();
     } catch (e) {
       setFailure(toFailure(e));
     } finally {
@@ -425,9 +476,14 @@ function BitcoinCard() {
           reset();
           set({ kind });
         }}
-        options={BTC_KINDS}
-        className="self-start"
+        options={BTC_KINDS.map((k) => (k.value === 'cbf' && cbfOff && saved.kind !== 'cbf' ? { ...k, disabled: true } : k))}
+        className="max-w-full flex-wrap gap-y-[3px] self-start"
       />
+      {cbfOff && (
+        <span className="flex items-center gap-1.5 text-[12px] text-faint">
+          <IconInfo size={13} /> Filtres compacts (BIP157/158) : disponible après revue de sécurité (à partir du 11/11/2026).
+        </span>
+      )}
       <Sees>{btcSees(d, tor)}</Sees>
 
       {d.kind === 'esplora' && (
@@ -490,6 +546,8 @@ function BitcoinCard() {
         </div>
       )}
 
+      {d.kind === 'cbf' && <CbfForm d={d} set={set} network={network} tor={tor} />}
+
       {d.kind === 'core' && (
         <CoreForm d={d} set={set} savedIsCore={saved.kind === 'core'} passwordLost={passwordLost} tor={tor} />
       )}
@@ -520,6 +578,7 @@ function BitcoinCard() {
       </div>
 
       {saved.kind === 'core' && d.kind === 'core' && <CoreWallet />}
+      {saved.kind === 'cbf' && d.kind === 'cbf' && <CbfPanel />}
 
       <BackToDefaultDialog
         open={confirmDefault}
@@ -581,6 +640,148 @@ function CertDialog({ cert, onCancel, onChoose }: { cert: { info: ElectrumCertIn
         </>
       )}
     </Dialog>
+  );
+}
+
+function CbfForm({ d, set, network, tor }: { d: BtcDraft; set: (p: Partial<BtcDraft>) => void; network: 'mainnet' | 'testnet'; tor: boolean }) {
+  const estimate = d.birthMode === 'date' ? estimateBirthHeight(d.birthDate, network) : null;
+  return (
+    <div className="flex flex-col gap-3">
+      <Field
+        label="Pairs supplémentaires (facultatif)"
+        hint={`Un par ligne : « ip:port » ou « adresse.onion:port » (v3), jamais un nom d’hôte (aucune requête DNS). Kyro a déjà sa liste de pairs servant les filtres${tor ? ', .onion d’abord' : ''}.`}
+      >
+        <textarea
+          value={d.cbfPeers}
+          onChange={(e) => set({ cbfPeers: e.target.value })}
+          rows={3}
+          spellCheck={false}
+          placeholder={network === 'testnet' ? 'exemple.onion:48333\n203.0.113.5:48333' : 'exemple.onion:8333\n203.0.113.5:8333'}
+          className="w-full resize-y rounded-[12px] border border-line-2 bg-bg px-3.5 py-2.5 font-mono text-[13px] text-text placeholder:text-faint focus:border-ice-line"
+        />
+      </Field>
+      <div className="flex flex-col gap-2">
+        <span className="text-[12px] font-medium text-mute">Point de départ (date de naissance du coffre)</span>
+        <Segmented
+          label="Point de départ des filtres"
+          value={d.birthMode}
+          onChange={(birthMode) => set({ birthMode })}
+          options={[
+            { value: 'genesis', label: 'Depuis le début' },
+            { value: 'date', label: 'Depuis une date' },
+            { value: 'height', label: 'Depuis un bloc' },
+          ]}
+          className="self-start"
+        />
+        {d.birthMode === 'date' && (
+          <div className="flex items-center gap-3">
+            <Input type="date" value={d.birthDate} onChange={(e) => set({ birthDate: e.target.value })} max={new Date().toISOString().slice(0, 10)} className="w-[200px]" />
+            {estimate !== null && <span className="text-[12px] text-mute">≈ bloc {fmtNumber(estimate, 0)} (marge d’une semaine incluse)</span>}
+          </div>
+        )}
+        {d.birthMode === 'height' && <Input value={d.birthHeight} inputMode="numeric" onChange={(e) => set({ birthHeight: e.target.value.replace(/\D/g, '') })} placeholder="ex. 90000" className="w-[200px] font-mono text-[13px]" />}
+        <span className="text-[12px] leading-[1.45] text-faint">
+          Accélère la première synchronisation : les filtres des blocs plus anciens ne sont pas lus. Choisis une date antérieure à ta première transaction, sinon elle n’apparaîtra pas.
+        </span>
+      </div>
+      <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+        <span className="block">
+          <strong className="font-semibold">Pas de mempool :</strong> un paiement reçu n’apparaît qu’une fois inclus dans un bloc ; tes propres envois s’affichent « en attente ».
+        </span>
+        <span className="block">
+          <strong className="font-semibold">Frais :</strong> moyenne des frais payés dans les derniers blocs, pas une estimation du mempool. Le tarif personnalisé reste disponible.
+        </span>
+      </Notice>
+    </div>
+  );
+}
+
+const CBF_STEPS: Array<{ key: 'headers' | 'filters' | 'blocks'; label: string }> = [
+  { key: 'headers', label: 'En-têtes' },
+  { key: 'filters', label: 'Filtres' },
+  { key: 'blocks', label: 'Blocs' },
+];
+
+/** Compact-filter sync: phases, progress, peers. Driven by the `cbf-status` event. */
+function CbfPanel() {
+  const { status, error } = useCbf();
+  const [busy, setBusy] = useState(false);
+  const st = status;
+  const running = st !== null && (st.state === 'connecting' || st.state === 'headers' || st.state === 'filters');
+  const phaseIndex = !st ? -1 : st.state === 'headers' || st.state === 'connecting' ? 0 : st.state === 'filters' ? 1 : st.state === 'synced' ? 3 : -1;
+  const pct = st?.state === 'filters' ? Math.round(st.progress * 100) : st?.state === 'synced' ? 100 : null;
+  const sync = async () => {
+    setBusy(true);
+    await cbfStore.sync();
+    setBusy(false);
+  };
+  return (
+    <div className="flex flex-col gap-3 rounded-[16px] border border-line bg-raised px-4 py-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex flex-col gap-0.5">
+          <span className="text-[13px] font-semibold">Synchronisation par filtres compacts</span>
+          <span className="text-[12px] text-mute">
+            {st ? `${cbfPhaseLabel(st)} · ${st.peers.length} pair${st.peers.length > 1 ? 's' : ''}${st.tor ? ' via Tor' : ' en direct'}` : 'État inconnu'}
+          </span>
+        </span>
+        {st && <Badge tone={st.state === 'synced' ? 'up' : st.state === 'error' ? 'down' : running ? 'ice' : 'mute'}>{st.state === 'synced' ? 'À jour' : st.state === 'error' ? 'Erreur' : running ? 'En cours' : 'En attente'}</Badge>}
+      </div>
+      <ol className="m-0 grid list-none grid-cols-3 gap-2 p-0" aria-label="Étapes de la synchronisation">
+        {CBF_STEPS.map((step, i) => {
+          // Blocks matching our scripts are downloaded during the filter scan.
+          const done = phaseIndex > i || (step.key === 'blocks' && phaseIndex >= 3);
+          const active = phaseIndex === i || (step.key === 'blocks' && phaseIndex === 1 && (st?.matchedBlocks ?? 0) > 0);
+          const detail =
+            step.key === 'headers'
+              ? st?.tipHeight != null
+                ? `bloc ${fmtNumber(st.tipHeight, 0)}`
+                : '—'
+              : step.key === 'filters'
+                ? st?.scannedHeight != null
+                  ? `jusqu’au bloc ${fmtNumber(st.scannedHeight, 0)}`
+                  : `depuis le bloc ${fmtNumber(st?.birthHeight ?? 0, 0)}`
+                : `${st?.matchedBlocks ?? 0} téléchargé${(st?.matchedBlocks ?? 0) > 1 ? 's' : ''}`;
+          return (
+            <li key={step.key} aria-current={active ? 'step' : undefined} className={cn('flex flex-col gap-0.5 rounded-[12px] border px-3 py-2', done ? 'border-up/30 bg-up/[.05]' : active ? 'border-ice-line bg-ice/[.06]' : 'border-line bg-card')}>
+              <span className="flex items-center gap-1.5 text-[12px] font-semibold">
+                {done ? <IconCheck size={12} className="text-up" /> : active ? <Spinner className="size-3 border-[1.5px] text-ice" /> : <span className="size-1.5 rounded-full bg-faint" />}
+                {step.label}
+              </span>
+              <span className="font-mono text-[11px] text-mute">{detail}</span>
+            </li>
+          );
+        })}
+      </ol>
+      {pct !== null && (
+        <div role="status" className="flex flex-col gap-1.5">
+          <div className="h-1.5 overflow-hidden rounded-full bg-control-2">
+            <div className="h-full rounded-full bg-ice transition-[width]" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="text-[12px] text-mute">
+            {st?.state === 'synced' ? `À jour${st.lastSyncUnix ? ` · dernière synchronisation à ${new Date(st.lastSyncUnix * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : ''}` : `Filtres : ${pct}\u202f%`} · {st?.watchedScripts ?? 0} scripts surveillés
+          </span>
+        </div>
+      )}
+      {st && st.peers.length > 0 && (
+        <details className="text-[12px] text-mute">
+          <summary className="cursor-pointer select-none">Pairs connectés ({st.peers.length})</summary>
+          <ul className="m-0 mt-1.5 flex list-none flex-col gap-0.5 p-0 font-mono text-[11px]">
+            {st.peers.map((p) => (
+              <li key={p} className="truncate">
+                {p}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {st?.state === 'error' && st.message && <Notice tone="error">{st.message}</Notice>}
+      {error && <Notice tone="error">{error}</Notice>}
+      <div>
+        <Button variant="outline" size="sm" onClick={() => void sync()} disabled={busy || running}>
+          {(busy || running) && <Spinner />} {running ? 'Synchronisation en cours' : 'Synchroniser maintenant'}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -710,7 +911,7 @@ function CoreWallet() {
         </span>
         {status && (
           <Badge tone={status.state === 'ready' ? 'up' : status.state === 'error' ? 'down' : status.state === 'importing' ? 'ice' : 'warn'}>
-            {status.state === 'ready' ? 'Prêt' : status.state === 'importing' ? 'Import en cours' : status.state === 'error' ? 'Erreur' : 'À configurer'}
+            {status.state === 'ready' ? 'Prêt' : status.state === 'importing' ? 'Import en cours' : status.state === 'error' ? 'Erreur' : status.state === 'not-configured' ? 'Nœud non enregistré' : 'À configurer'}
           </Badge>
         )}
       </div>

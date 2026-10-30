@@ -3,7 +3,7 @@
 // (BIP21 / EIP-681 / Solana Pay URI), network warning.
 
 import { useMemo, useState } from 'react';
-import { call, toIpcError, type BtcKind } from '@kyro/shared';
+import { bitcoinServerFor, call, toIpcError, type BtcKind } from '@kyro/shared';
 import { btcChain, primaryEvmChain, solChain, tryParseUnits } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { cn } from '../lib/cn';
@@ -11,12 +11,13 @@ import { sanitizeDecimalInput } from '../lib/format';
 import { AddressBlocks, CoinIcon, CopyButton } from '../components/kit';
 import { QrCode } from '../components/QrCode';
 import { Button, IconButton, Notice, Segmented } from '../components/ui/primitives';
-import { IconBack, IconRefresh, IconUsbKey, IconWarn } from '../components/icons';
+import { IconBack, IconInfo, IconRefresh, IconUsbKey, IconWarn } from '../components/icons';
 
 type Family = 'btc' | 'evm' | 'sol';
 
 export function Receive({ family: initial = 'evm' }: { family?: Family }) {
-  const { back, network } = useApp();
+  const { back, network, settings } = useApp();
+  const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts } = useVault();
   const [family, setFamily] = useState<Family>(initial);
   const [kind, setKind] = useState<BtcKind>('segwit');
@@ -180,6 +181,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               <span className="truncate font-mono text-[11px] text-mute">{uri}</span>
               <CopyButton text={uri} label="Copier le lien" />
             </div>
+          )}
+          {family === 'btc' && cbfMode && (
+            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
+              <strong className="font-semibold text-text">Mode filtres compacts :</strong> un paiement reçu n’apparaît qu’une fois inclus dans un bloc (environ 10 minutes), pas dès son envoi. Kyro ne voit pas le mempool dans ce mode.
+            </Notice>
           )}
           <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
             N’envoie ici que des actifs du réseau {chainName}. Un autre réseau = fonds perdus.

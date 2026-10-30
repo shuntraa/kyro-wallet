@@ -9,9 +9,18 @@ import { useApp } from '../state/app';
 import { cn } from '../lib/cn';
 import { IconWarn } from './icons';
 
+/**
+ * Compact filters before their first sync: Rust answers SERVER_UNREACHABLE « pas encore
+ * synchronisé ». Not a server failure: the sync is running.
+ */
+export function cbfPending(error: unknown): boolean {
+  const m = typeof error === 'string' ? error : error instanceof Error ? error.message : '';
+  return m.includes('filtres compacts') && m.includes('synchronis');
+}
+
 /** True when `error` (an error, or a message) means "your custom server is down". */
 export function serverDown(error: unknown): boolean {
-  return error !== undefined && error !== null && error !== '' && isCustomServerDown(error);
+  return error !== undefined && error !== null && error !== '' && isCustomServerDown(error) && !cbfPending(error);
 }
 
 export function ServerDownLine({ className, what }: { className?: string; what?: string }) {

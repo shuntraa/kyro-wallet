@@ -53,8 +53,8 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   private scanCache: { at: number; addrs: DerivedAddress[] } | null = null;
   private scanning: Promise<DerivedAddress[]> | null = null;
   /**
-   * True when the last `getHistory` hit the server cap (`BTC_TXS_CAP` transactions for at
-   * least one address): older transactions are not shown. The UI says "50 dernières".
+   * True when the last `getHistory` hit the cap (`BTC_TXS_CAP` transactions for at least one
+   * address, every backend): older ones may exist and are not shown. The UI says "50 dernières".
    */
   historyCapped = false;
 
@@ -151,6 +151,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
       minimum: { family: 'btc', satPerVb: min },
       hint: `${normal} sat/vB`,
       fetchedAt: Date.now(),
+      ...(f.source === 'block-average' ? { source: 'block-average' as const } : {}),
     };
   }
 

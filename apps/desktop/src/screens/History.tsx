@@ -7,6 +7,7 @@ import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { useHistory, type HistoryEntry } from '../state/history';
 import { useOnTorReady } from '../state/tor';
+import { useOnCbfSynced } from '../state/cbf';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtDayGroup, fmtFiat, fmtMonth, shortAddress } from '../lib/format';
 import { addLocalTx, getApprovals, removeApproval, type ApprovalRecord } from '../lib/storage';
@@ -33,6 +34,7 @@ export function History() {
   const pf = usePortfolio();
   const history = useHistory();
   useOnTorReady(history.reload);
+  useOnCbfSynced(history.reload);
   const [filter, setFilter] = useState<Filter>('all');
   const cur = settings.currency;
   const priceOf = (e: HistoryEntry) => (e.asset ? pf.price(e.asset.coingeckoId)?.price ?? null : null);

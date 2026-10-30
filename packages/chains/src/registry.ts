@@ -261,6 +261,7 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     btc.kind === 'default' ? { host: 'mempool.space', purpose: 'Bitcoin : soldes, frais, diffusion (service .onion avec Tor)' }
     : btc.kind === 'electrum' ? { host: `${btc.host}:${btc.port}`, purpose: 'Bitcoin : ton serveur Electrum', custom: true }
     : btc.kind === 'core' ? { host: host(btc.url), purpose: 'Bitcoin : ton nœud Bitcoin Core', custom: true }
+    : btc.kind === 'cbf' ? { host: 'pairs Bitcoin (P2P)', purpose: 'Bitcoin : filtres compacts, aucun serveur ne voit tes adresses', custom: true }
     : { host: host(btc.url), purpose: 'Bitcoin : ton serveur Esplora', custom: true };
   const list: { host: string; purpose: string; custom?: boolean }[] = [{ host: 'api.coingecko.com', purpose: 'Prix du top 200' }, btcHost];
   for (const c of evmChains(network)) {

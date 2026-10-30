@@ -68,7 +68,13 @@ export type BtcServer =
   | { kind: 'default' }
   | { kind: 'esplora'; url: string }
   | { kind: 'electrum'; host: string; port: number; tls: ElectrumTls; /** 64 hex, required when `pinned`. */ certSha256?: string }
-  | { kind: 'core'; url: string; auth: CoreAuth };
+  | { kind: 'core'; url: string; auth: CoreAuth }
+  /**
+   * Compact block filters BIP157/158 (cargo feature `cbf`). `peers`: extra peers "onion:port"
+   * or "ip:port", never a host name. `birthHeight`: first block to scan (wallet birthday).
+   * In a build without the feature, `settings_set` / `server_test` answer `FEATURE_DISABLED`.
+   */
+  | { kind: 'cbf'; peers?: string[]; birthHeight?: number };
 
 export type BtcServerKind = BtcServer['kind'];
 
@@ -112,7 +118,8 @@ export interface BtcBackendInfo {
   tor: boolean;
 }
 
-export type CoreState = 'idle' | 'importing' | 'ready' | 'error';
+/** `not-configured`: no Bitcoin Core server for this network (a normal answer, not an error). */
+export type CoreState = 'not-configured' | 'idle' | 'importing' | 'ready' | 'error';
 
 export interface CoreStatus {
   /** `kyro-watch-<fingerprint8>` */
@@ -166,9 +173,36 @@ export interface BtcFeeRates {
   hourFee: number;
   economyFee: number;
   minimumFee: number;
+  /** Compact filters: average of the fees paid in the last blocks, not a mempool estimate. */
+  source?: 'block-average';
 }
 
-/** `btc_address_txs` returns at most this many transactions per address (most recent first). */
+/** `idle` | `connecting` | `headers` | `filters` (blocks matching our scripts are fetched during this phase) | `synced` | `error`. */
+export type CbfState = 'idle' | 'connecting' | 'headers' | 'filters' | 'synced' | 'error';
+
+/** Compact-filter sync state (`btc_cbf_status`, `btc_cbf_sync`, `cbf-status` event). */
+export interface CbfStatus {
+  state: CbfState;
+  /** Rust serializes absent values as `null`. */
+  tipHeight?: number | null;
+  scannedHeight?: number | null;
+  birthHeight: number;
+  /** 0..1 over the filter range being scanned. */
+  progress: number;
+  /** Connected peers (onion name or ip:port). */
+  peers: string[];
+  tor: boolean;
+  lastSyncUnix?: number | null;
+  watchedScripts: number;
+  /** Blocks whose filter matched our scripts (downloaded in full). */
+  matchedBlocks: number;
+  message?: string;
+}
+
+/**
+ * `btc_address_txs` returns at most this many transactions per address, for every backend
+ * (most recent first; Rust follows Esplora's pagination). 50 entries = there may be more.
+ */
 export const BTC_TXS_CAP = 50;
 
 /**
@@ -355,9 +389,17 @@ export interface Commands {
   btc_tip_height: { args: undefined; ret: number };
   /** Returns the txid; Rust checks it matches the transaction. */
   btc_broadcast: { args: { hex: string }; ret: string };
-  /** Bitcoin Core only, unlocked: creates the watch-only wallet, imports the descriptors (background). */
+  /**
+   * Bitcoin Core only, unlocked. Pre-flight checks are synchronous (reachable, auth, chain, watch
+   * wallet created or loaded without private keys); only `importdescriptors` runs in the background.
+   */
   btc_core_setup: { args: { rescanFrom: CoreRescanFrom }; ret: CoreStatus };
+  /** `{ state: 'not-configured' }` when no Core server is set for this network. */
   btc_core_status: { args: undefined; ret: CoreStatus };
+  /** Compact filters (feature `cbf`); `FEATURE_DISABLED` in a build without it. */
+  btc_cbf_status: { args: undefined; ret: CbfStatus };
+  /** Starts (or joins) a background sync; progress through the `cbf-status` event. */
+  btc_cbf_sync: { args: undefined; ret: CbfStatus };
   /** Restarts the bootstrap (after `error`). `INVALID_INPUT` when Tor is disabled. */
   tor_retry: { args: undefined; ret: TorStatus };
   settings_get: { args: undefined; ret: Settings };
@@ -393,6 +435,8 @@ export const ERROR_CODES = [
   'SERVER_UNREACHABLE',
   /** Request to the default server of a chain that has a custom one (the UI used the wrong URL). */
   'DEFAULT_SERVER_DISABLED',
+  /** Feature not in this build (today: compact block filters `cbf`, off until review). */
+  'FEATURE_DISABLED',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 

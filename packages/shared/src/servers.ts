@@ -78,11 +78,45 @@ export function fingerprintGroups(hex: string): string[] {
   return clean.match(/.{1,4}/g) ?? [];
 }
 
+/** Onion v3 host: 56 base32 characters + `.onion`. */
+export function isOnionV3(host: string): boolean {
+  return /^[a-z2-7]{56}\.onion$/.test(host.toLowerCase());
+}
+
+/**
+ * Compact-filter peer rule (servers.rs `parse_peer`): "onion:port" (v3) or "ip:port"
+ * ("[v6]:port"), never a host name (no DNS). Returns the reason, or null.
+ */
+export function checkCbfPeer(peer: string): string | null {
+  const p = peer.trim();
+  const i = p.lastIndexOf(':');
+  if (i <= 0) return `pair « ${p} » : hôte:port attendu`;
+  const port = Number(p.slice(i + 1));
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return `pair « ${p} » : port invalide`;
+  const host = p.slice(0, i).replace(/^\[|\]$/g, '').toLowerCase();
+  if (host.endsWith('.onion')) return isOnionV3(host) ? null : `pair « ${p} » : adresse .onion v3 attendue (56 caractères)`;
+  const v4 = /^(\d{1,3})(\.\d{1,3}){3}$/.test(host) && host.split('.').every((x) => Number(x) <= 255);
+  const v6 = host.includes(':') && /^[0-9a-f:.]+$/.test(host);
+  return v4 || v6 ? null : `pair « ${p} » : adresse IP ou .onion attendue (pas de nom d’hôte : aucune requête DNS)`;
+}
+
 /** Syntax check of a Bitcoin server (no network). Returns the reason, or null. */
 export function checkBtcServer(s: BtcServer, tor: boolean): string | null {
   switch (s.kind) {
     case 'default':
       return null;
+    case 'cbf': {
+      const peers = s.peers ?? [];
+      for (const p of peers) {
+        const bad = checkCbfPeer(p);
+        if (bad) return bad;
+      }
+      if (!tor && peers.length > 0 && peers.every((p) => p.trim().toLowerCase().replace(/:\d+$/, '').endsWith('.onion'))) {
+        return 'pairs .onion uniquement : exige Tor activé (ajoute un pair IP pour le mode clair)';
+      }
+      if (s.birthHeight !== undefined && (!Number.isInteger(s.birthHeight) || s.birthHeight < 0)) return 'hauteur de départ invalide';
+      return null;
+    }
     case 'esplora':
       return checkServerUrl(s.url, tor);
     case 'electrum': {

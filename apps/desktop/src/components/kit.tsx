@@ -10,7 +10,7 @@ import { copyText } from '../lib/copy';
 import { IconCheck, IconCopy, IconEye, IconEyeOff, IconWarn } from './icons';
 import { Button } from './ui/primitives';
 import { TorWait, useTorBlocked } from './Tor';
-import { ServerDownLine, serverDown } from './ServerDown';
+import { ServerDownLine, cbfPending, serverDown } from './ServerDown';
 
 export function KyroMark({ size = 16, className }: { size?: number; className?: string }) {
   return (
@@ -179,6 +179,14 @@ export function ErrorLine({ children, onRetry, className, error }: { children: R
   const torBlocked = useTorBlocked(error);
   if (torBlocked) return <TorWait {...(className ? { className } : {})} />;
   if (serverDown(error)) return <ServerDownLine {...(className ? { className } : {})} />;
+  if (cbfPending(error)) {
+    return (
+      <div role="status" className={cn('flex items-center gap-2 text-[12px] text-mute', className)}>
+        <span aria-hidden="true" className="inline-block size-3 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
+        Bitcoin : synchronisation des filtres compacts en cours, les données arrivent ensuite.
+      </div>
+    );
+  }
   return (
     <div role="alert" className={cn('flex items-center gap-2 text-[12px] text-down', className)}>
       <IconWarn size={14} />

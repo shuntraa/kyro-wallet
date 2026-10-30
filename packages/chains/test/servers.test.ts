@@ -82,6 +82,15 @@ describe('Bitcoin adapter over the Rust btc_* commands', () => {
     expect(h.every((x) => x.direction === 'in')).toBe(true);
   });
 
+  it('compact filters: block-average fee rates are flagged for the UI', async () => {
+    install((cmd) => (cmd === 'btc_fee_rates' ? Promise.resolve({ fastestFee: 8, halfHourFee: 5, hourFee: 3, economyFee: 1, minimumFee: 1, source: 'block-average' }) : undefined));
+    const f = await createAdapters(accounts).btc.estimateFees();
+    expect(f.source).toBe('block-average');
+    expect(f.options.normal.params).toEqual({ family: 'btc', satPerVb: 5 });
+    install();
+    expect((await createAdapters(accounts).btc.estimateFees()).source).toBeUndefined();
+  });
+
   it('a custom Bitcoin server that goes down fails with SERVER_UNREACHABLE, no net_fetch fallback', async () => {
     install((cmd) => (cmd.startsWith('btc_address') ? Promise.reject({ code: 'SERVER_UNREACHABLE', message: 'Serveur injoignable : node.example : délai dépassé' }) : undefined));
     const { btc } = createAdapters(accounts);

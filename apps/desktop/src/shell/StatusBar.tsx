@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { fmtNumber } from '../lib/format';
 import { bitcoinServerFor } from '@kyro/shared';
 import { useApp } from '../state/app';
+import { cbfPhaseLabel, useCbf } from '../state/cbf';
 import { torWaiting, useTor } from '../state/tor';
 import { TorIndicator } from '../components/Tor';
 
@@ -51,6 +52,8 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
   const torBlocked = torWaiting(tor);
   // Re-probe as soon as Tor comes up instead of waiting for the next 30 s tick.
   const torReady = tor.status?.state === 'ready';
+  // …and as soon as a compact-filter sync completes.
+  const cbfSyncedAt = useCbf().status?.lastSyncUnix ?? null;
   const [stat, setStat] = useState<NetStat>({ btcHeight: null, evmMs: null, solMs: null, errors: 0 });
 
   useEffect(() => {
@@ -85,11 +88,23 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
       alive = false;
       window.clearInterval(id);
     };
-  }, [adapters, torReady]);
+  }, [adapters, torReady, cbfSyncedAt]);
 
   const evmLabel = adapters ? [...adapters.evm.values()][0]?.chain.label ?? 'EVM' : 'EVM';
   const solLabel = adapters?.sol.chain.label ?? 'Solana';
   const btcLabel = accounts?.network === 'testnet' ? 'BTC testnet' : 'BTC';
+  // Compact filters: the sync phase replaces the block height (driven by `cbf-status`).
+  const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
+  const cbf = useCbf().status;
+  const cbfText = !cbf
+    ? 'filtres compacts'
+    : cbf.state === 'filters'
+      ? `filtres ${Math.round(cbf.progress * 100)}\u202f%`
+      : cbf.state === 'headers'
+        ? `en-têtes${cbf.tipHeight != null ? ` ${fmtNumber(cbf.tipHeight, 0)}` : ''}`
+        : cbf.state === 'synced'
+          ? `${cbf.peers.length} pair${cbf.peers.length > 1 ? 's' : ''}${stat.btcHeight !== null ? ` · bloc ${fmtNumber(stat.btcHeight, 0)}` : ''}`
+          : cbfPhaseLabel(cbf);
   const degraded = failedChains.length > 0 || stat.errors > 0;
 
   return (
@@ -100,7 +115,9 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
             <Dot color={torBlocked ? '#8C929D' : syncing ? '#7CC4FF' : degraded ? '#F5B74F' : '#3DDC97'} />
             {torBlocked
               ? 'En attente de Tor…'
-              : syncing
+              : cbfMode && cbf && cbf.state !== 'synced' && cbf.state !== 'error' && cbf.state !== 'idle'
+                ? 'Synchronisation des filtres…'
+                : syncing
                 ? 'Synchronisation…'
                 : serverDownChains.length > 0
                   ? `Ton serveur ne répond pas · ${serverDownChains.map((k) => adapters?.all.find((x) => x.chain.key === k)?.chain.label ?? k).join(', ')}`
@@ -110,7 +127,13 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
           </span>
           <span>
             {btcLabel}
-            {perso(custom.btc)} · {stat.btcHeight !== null ? `bloc ${fmtNumber(stat.btcHeight, 0)}` : 'hors ligne'}
+            {cbfMode ? (
+              <span title="Bitcoin par filtres compacts (BIP157/158) : aucun serveur ne voit tes adresses"> · CBF · {cbfText}</span>
+            ) : (
+              <>
+                {perso(custom.btc)} · {stat.btcHeight !== null ? `bloc ${fmtNumber(stat.btcHeight, 0)}` : 'hors ligne'}
+              </>
+            )}
           </span>
           <span>
             {evmLabel}

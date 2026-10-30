@@ -12,7 +12,7 @@ import { usePortfolio, type Holding } from '../state/portfolio';
 import { CoinIcon, EmptyState, ErrorLine, HIDDEN, trendColor, trendHex } from './kit';
 import { Sparkline } from './charts';
 import { useTorBlocked } from './Tor';
-import { ServerDownLine, serverDown } from './ServerDown';
+import { ServerDownLine, cbfPending, serverDown } from './ServerDown';
 import { findChain } from '@kyro/chains';
 import { Menu } from './ui/menu';
 import { Badge, Skeleton } from './ui/primitives';
@@ -155,7 +155,7 @@ function MineList({ sort }: { sort: Sort }) {
                 {h.spark.length > 1 ? <Sparkline values={h.spark} color={trendHex(h.change7d)} /> : <span className="text-[12px] text-faint">—</span>}
                 <span className="flex flex-col items-end">
                   <span className="text-[14px] font-semibold">{hideBalances ? HIDDEN : h.value !== null ? fmtFiat(h.value, cur) : '—'}</span>
-                  <span className="text-[12px] text-mute">{h.failed ? (torBlocked ? <span className="text-mute">en attente de Tor…</span> : serverDown(pf.chainErrors[h.asset.chainKey]) ? <span className="text-warn">ton serveur ne répond pas</span> : <span className="text-warn">solde indisponible</span>) : hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
+                  <span className="text-[12px] text-mute">{h.failed ? (torBlocked ? <span className="text-mute">en attente de Tor…</span> : serverDown(pf.chainErrors[h.asset.chainKey]) ? <span className="text-warn">ton serveur ne répond pas</span> : cbfPending(pf.chainErrors[h.asset.chainKey]) ? <span className="text-mute">synchronisation des filtres…</span> : <span className="text-warn">solde indisponible</span>) : hideBalances ? HIDDEN : fmtCrypto(h.amount, h.asset.decimals, h.asset.symbol)}</span>
                 </span>
                 <span className="flex items-center gap-2.5">
                   <span className="h-1 w-16 overflow-hidden rounded-full bg-control-2">

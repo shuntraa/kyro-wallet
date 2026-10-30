@@ -112,9 +112,22 @@ describe('mock: Bitcoin Core watch wallet', () => {
     await expect(call('btc_core_setup', { rescanFrom: 'yesterday' as unknown as 'now' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 
-  it('btc_core_* without a Core server is refused; locked vault is refused', async () => {
-    const mock = createMockBackend({ network: 'testnet', preset: { password: 'correct horse', unlocked: false } });
+  it('without a Core server: btc_core_status answers not-configured, btc_core_setup is refused', async () => {
+    const mock = createMockBackend({ network: 'testnet', preset: { password: 'correct horse', unlocked: true } });
     setBackend(mock.invoke);
-    await expect(call('btc_core_status')).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(await call('btc_core_status')).toEqual({ wallet: '', state: 'not-configured', walletLoaded: false });
+    await expect(call('btc_core_setup', { rescanFrom: 'now' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+  });
+
+  it('btc_core_setup pre-flight errors come back synchronously from the call', async () => {
+    const mock = createMockBackend({ network: 'testnet', preset: { password: 'correct horse', unlocked: true } });
+    setBackend(mock.invoke);
+    const s = await call('settings_get');
+    const core = (url: string, cookiePath = '/home/me/.bitcoin/testnet4/.cookie') => ({ ...s, servers: { ...s.servers, bitcoin: { testnet4: { kind: 'core' as const, url, auth: { kind: 'cookie' as const, cookiePath } } } } });
+    // A node that went down after the save: the setup call itself rejects (not a later status).
+    await call('settings_set', { settings: core('http://127.0.0.1:48332/flaky') });
+    await expect(call('btc_core_setup', { rescanFrom: 'now' })).rejects.toMatchObject({ code: 'SERVER_UNREACHABLE' });
+    await call('settings_set', { settings: core('http://127.0.0.1:48332') });
+    expect((await call('btc_core_setup', { rescanFrom: 'now' })).state).toBe('importing');
   });
 });

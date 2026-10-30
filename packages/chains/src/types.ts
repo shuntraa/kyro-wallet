@@ -26,6 +26,11 @@ export interface FeeEstimates {
   /** Human hint ("4,2 gwei", "3 sat/vB"). */
   hint: string;
   fetchedAt: number;
+  /**
+   * Bitcoin compact filters: rates are the average of the fees paid in the last blocks, not a
+   * mempool estimate. The UI says so and suggests the custom rate.
+   */
+  source?: 'block-average';
 }
 
 /** What the size of a tx is, so fee options can be priced without rebuilding. */
