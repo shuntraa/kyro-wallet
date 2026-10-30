@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-evm-decode-tx"
+description = "Enables the evm_decode_tx command without any pre-configured scope."
+commands.allow = ["evm_decode_tx"]
+
+[[permission]]
+identifier = "deny-evm-decode-tx"
+description = "Denies the evm_decode_tx command without any pre-configured scope."
+commands.deny = ["evm_decode_tx"]

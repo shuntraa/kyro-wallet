@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-accounts-get"
+description = "Enables the accounts_get command without any pre-configured scope."
+commands.allow = ["accounts_get"]
+
+[[permission]]
+identifier = "deny-accounts-get"
+description = "Denies the accounts_get command without any pre-configured scope."
+commands.deny = ["accounts_get"]

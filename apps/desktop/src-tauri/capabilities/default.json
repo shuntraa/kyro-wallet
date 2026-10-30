@@ -1,0 +1,33 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Seules permissions de la fenêtre principale : nos commandes et le contrôle de la fenêtre (barre de titre personnalisée). Pas de fs, pas de shell, pas d'http côté webview.",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "core:window:allow-is-maximized",
+    "allow-vault-status",
+    "allow-vault-create",
+    "allow-vault-import",
+    "allow-vault-unlock",
+    "allow-vault-lock",
+    "allow-vault-reveal-mnemonic",
+    "allow-session-touch",
+    "allow-accounts-get",
+    "allow-btc-address",
+    "allow-evm-decode-tx",
+    "allow-evm-sign-tx",
+    "allow-btc-sign-psbt",
+    "allow-sol-sign-message",
+    "allow-net-fetch",
+    "allow-settings-get",
+    "allow-settings-set",
+    "allow-set-capture-protection",
+    "allow-config-get"
+  ]
+}

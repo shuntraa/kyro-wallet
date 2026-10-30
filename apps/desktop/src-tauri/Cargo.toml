@@ -1,0 +1,28 @@
+[package]
+name = "kyro-desktop"
+description = "Kyro Wallet — coque Tauri (session, réseau filtré, confirmations natives)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "kyro_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.7.3", features = [] }
+
+[dependencies]
+wallet-core = { path = "../../../crates/wallet-core", version = "=0.1.0" }
+tauri = { version = "=2.12.4", features = [] }
+tauri-plugin-dialog = "=2.8.3"
+reqwest = { version = "=0.12.28", default-features = false, features = ["rustls-tls", "http2"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+url = "2"
+zeroize = "1"
+base64 = "0.22"
+dotenvy = "0.15"
