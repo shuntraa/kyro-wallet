@@ -434,7 +434,8 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
   const [error, setError] = useState<string | null>(null);
 
   useCaptureProtection(true);
-  useEffect(() => () => setWords([]), []);
+  // No unmount cleanup clearing `words`: StrictMode's mount/unmount/remount ran it right away and
+  // left the grid empty. The state dies with the component; `submit` clears it explicitly.
 
   const resize = (n: 12 | 24) => {
     setCount(n);
