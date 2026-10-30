@@ -21,6 +21,16 @@ pub enum AppError {
     Internal(String),
     #[error("Tor indisponible : {0}")]
     TorUnavailable(String),
+    #[error("Serveur invalide : {0}")]
+    ServerInvalid(String),
+    #[error("Mauvais réseau : {0}")]
+    ServerWrongNetwork(String),
+    #[error("Serveur injoignable : {0}")]
+    ServerUnreachable(String),
+    #[error("Fonction désactivée : {0}")]
+    FeatureDisabled(String),
+    #[error("Serveur par défaut désactivé : {0} (un serveur personnalisé est configuré pour cette chaîne)")]
+    DefaultServerDisabled(String),
 }
 
 pub type AppResult<T> = Result<T, AppError>;
@@ -36,6 +46,11 @@ impl AppError {
             AppError::InvalidInput(_) => "INVALID_INPUT",
             AppError::Internal(_) => "INTERNAL",
             AppError::TorUnavailable(_) => "TOR_UNAVAILABLE",
+            AppError::ServerInvalid(_) => "SERVER_INVALID",
+            AppError::ServerWrongNetwork(_) => "SERVER_WRONG_NETWORK",
+            AppError::ServerUnreachable(_) => "SERVER_UNREACHABLE",
+            AppError::DefaultServerDisabled(_) => "DEFAULT_SERVER_DISABLED",
+            AppError::FeatureDisabled(_) => "FEATURE_DISABLED",
         }
     }
 }

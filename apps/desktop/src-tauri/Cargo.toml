@@ -14,6 +14,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "=2.7.3", features = [] }
 
+[features]
+default = []
+# Compact block filters (BIP157/158) Bitcoin backend. Off by default.
+cbf = ["dep:bip157", "dep:tor-socksproto", "dep:bitcoin"]
+
 [dependencies]
 wallet-core = { path = "../../../crates/wallet-core", version = "=0.1.0" }
 tauri = { version = "=2.12.4", features = [] }
@@ -35,11 +40,23 @@ hyper-util = { version = "=0.1.21", default-features = false, features = ["tokio
 http = { version = "=1.5.0" }
 http-body-util = { version = "=0.1.5" }
 bytes = { version = "=1.12.1" }
-tokio = { version = "=1.54.1", default-features = false, features = ["time", "sync", "rt"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["time", "sync", "rt", "net", "io-util"] }
 tokio-rustls = { version = "=0.26.6", default-features = false, features = ["ring", "tls12", "logging"] }
 rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 webpki-roots = { version = "=1.0.11" }
 futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
+# B2b: Electrum certificate pinning (SHA-256 of the DER certificate), hex fingerprints.
+sha2 = { version = "=0.10.9" }
+hex = { version = "=0.4.3" }
+# B2c: BIP157/158 compact block filters. OPTIONAL, behind the `cbf` feature (off by default)
+# until bip157 0.8.1 is >= 2 weeks old and re-reviewed (see docs/ROADMAP.md).
+bip157 = { version = "=0.8.1", default-features = false, optional = true }
+# Same versions as already in the tree (no new crate): SOCKS5 server-side parsing for the CBF
+# bridge (arti's own parser), and bitcoin types for block/transaction handling.
+tor-socksproto = { version = "=0.47.0", default-features = false, features = ["proxy-handshake"], optional = true }
+bitcoin = { version = "=0.32.11", default-features = false, features = ["std"], optional = true }
+# Onion v3 checksum (SHA3-256), already in the tree via wallet-core.
+sha3 = { version = "=0.10.9" }
 
 [dev-dependencies]
 # Only for the #[ignore]d real-network Tor test (KYRO_TOR_TRACE=<filter> shows arti logs).

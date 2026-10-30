@@ -257,10 +257,24 @@ impl TorManager {
         ))
     }
 
-    /// Sends a request that already passed the policy, over Tor only.
-    pub async fn send(&self, p: &Prepared, family: Family) -> AppResult<(u16, Vec<u8>)> {
-        let client = self.client_for(family).await?;
+    /// Sends a request that already passed the policy, over Tor only, on `p.family`'s circuits.
+    pub async fn send(&self, p: &Prepared) -> AppResult<(u16, Vec<u8>)> {
+        let client = self.client_for(p.family).await?;
         self.send_following_redirects(&client, p).await
+    }
+
+    /// Opens a raw Tor stream to `host:port` on `family`'s isolated circuits (Electrum).
+    pub async fn connect_stream(
+        &self,
+        family: Family,
+        host: &str,
+        port: u16,
+    ) -> AppResult<arti_client::DataStream> {
+        let client = self.client_for(family).await?;
+        tokio::time::timeout(CONNECT_TIMEOUT, connect_with_retry(&client, host, port))
+            .await
+            .map_err(|_| AppError::Internal("réseau (Tor) : circuit non établi à temps".into()))?
+            .map_err(|e| AppError::Internal(format!("réseau (Tor) : {e}")))
     }
 
     async fn send_following_redirects(
@@ -274,8 +288,10 @@ impl TorManager {
         let mut headers = p.headers.clone();
         let mut hops = 0;
         loop {
+            // Plain HTTP stays limited to the original onion host the policy approved.
+            let allow_plain = p.allow_plain && url.host_str() == Some(p.host.as_str());
             let (status, location, bytes) = self
-                .one_request(client, &url, method, &headers, body.as_deref())
+                .one_request(client, &url, method, &headers, body.as_deref(), allow_plain)
                 .await?;
             let next = match (status, location) {
                 (301 | 302 | 303 | 307 | 308, Some(loc)) => url.join(&loc).ok(),
@@ -305,6 +321,7 @@ impl TorManager {
         method: Method,
         headers: &[(String, String)],
         body: Option<&str>,
+        allow_plain: bool,
     ) -> AppResult<(u16, Option<String>, Vec<u8>)> {
         let host = url
             .host_str()
@@ -316,7 +333,9 @@ impl TorManager {
         // Plain HTTP is only ever used for an allowlisted onion service (checked again here,
         // defence in depth): the onion protocol authenticates the service and encrypts.
         let plain = url.scheme() == "http";
-        if plain && !net::ONION_HOSTS.contains(&host.as_str()) {
+        let onion_ok =
+            net::ONION_HOSTS.contains(&host.as_str()) || (allow_plain && host.ends_with(".onion"));
+        if plain && !onion_ok {
             return Err(AppError::HostNotAllowed(format!(
                 "{url} (HTTPS obligatoire)"
             )));
@@ -474,10 +493,12 @@ mod tests {
                 headers: Default::default(),
                 body: None,
             },
-            &[],
+            &crate::net::NetContext {
+                tor: true,
+                ..Default::default()
+            },
             &EnvKeys::default(),
             &ApiKeys::default(),
-            true,
         )
         .unwrap()
     }
@@ -488,14 +509,14 @@ mod tests {
     fn fails_closed_when_not_ready() {
         let m = manager();
         let p = prepared("https://mempool.space/testnet4/api/blocks/tip/height");
-        let r = tauri::async_runtime::block_on(m.send(&p, Family::Bitcoin));
+        let r = tauri::async_runtime::block_on(m.send(&p));
         assert!(matches!(r, Err(AppError::TorUnavailable(_))), "{r:?}");
         let generation = *net::lock(&m.generation);
         m.publish(
             generation,
             TorStatus::new(TorState::Error, 0, Some("boom".into())),
         );
-        let r = tauri::async_runtime::block_on(m.send(&p, Family::Bitcoin));
+        let r = tauri::async_runtime::block_on(m.send(&p));
         assert!(
             matches!(r, Err(AppError::TorUnavailable(ref m)) if m == "boom"),
             "{r:?}"
@@ -544,9 +565,8 @@ mod tests {
             let mut onion_ok = 0;
             for url in &urls {
                 let p = prepared(url);
-                let family = net::family_for(&p.host, &Default::default());
                 let t = std::time::Instant::now();
-                match m.send(&p, family).await {
+                match m.send(&p).await {
                     Ok((status, body)) => {
                         let text = String::from_utf8_lossy(&body);
                         eprintln!(

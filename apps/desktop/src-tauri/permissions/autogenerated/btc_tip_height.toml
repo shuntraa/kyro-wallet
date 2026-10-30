@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-btc-tip-height"
+description = "Enables the btc_tip_height command without any pre-configured scope."
+commands.allow = ["btc_tip_height"]
+
+[[permission]]
+identifier = "deny-btc-tip-height"
+description = "Denies the btc_tip_height command without any pre-configured scope."
+commands.deny = ["btc_tip_height"]

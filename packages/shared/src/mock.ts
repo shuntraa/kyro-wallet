@@ -30,8 +30,11 @@ import {
   type VaultStatus,
 } from './ipc';
 import { emitDemoEvent } from './events';
+import { createDemoServers } from './mock-servers';
+import { EMPTY_SERVERS, redactServers } from './servers';
 import { createDemoTor, detectDemoTorDisabled, detectDemoTorScenario, type DemoTor, type DemoTorScenario } from './mock-tor';
 export { DEMO_TOR_BOOTSTRAP_MS, type DemoTor, type DemoTorScenario } from './mock-tor';
+export { DEMO_RESCAN_MS, demoElectrumCert } from './mock-servers';
 import { demoHash, handleDemoNet, type DemoChainState } from './mock-net';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 
@@ -45,7 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hideBalancesOnStart: false,
   captureProtection: true,
   clipboardGuard: true,
-  rpc: {},
+  servers: EMPTY_SERVERS,
   apiKeys: {},
   tor: { enabled: true },
 };
@@ -217,6 +220,15 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   // Like the shell's setup: Tor starts in the background when enabled.
   const tor = createDemoTor(opts.tor ?? detectDemoTorScenario());
   if (settings.tor.enabled) tor.start();
+  // Custom servers (B2b): live checks, Bitcoin backends, Core watch wallet.
+  const servers = createDemoServers({
+    chain,
+    network,
+    fingerprint: keys.accounts.btc.segwit.fingerprint,
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+  });
 
   const confirmFn =
     opts.confirm ??
@@ -406,7 +418,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     net_fetch: async (a) => {
       // Fail closed, like net.rs: over Tor only when enabled, never retried in clear.
       if (settings.tor.enabled) await tor.waitReady();
-      return handleDemoNet(a.req as Parameters<typeof handleDemoNet>[0], chain);
+      return servers.netFetch(a.req as Parameters<typeof handleDemoNet>[0]);
     },
     tor_status: () => tor.status(),
     tor_retry: () => {
@@ -414,15 +426,13 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       tor.restart();
       return tor.status();
     },
-    settings_get: () => structuredClone(settings),
-    settings_set: (a) => {
+    // Never the Core password: `hasPassword` instead (servers.rs `redacted`).
+    settings_get: () => ({ ...structuredClone(settings), servers: redactServers(settings.servers) }),
+    settings_set: async (a) => {
       const next = a.settings as Settings | undefined;
       if (!next || (next.currency !== 'EUR' && next.currency !== 'USD')) throw new IpcError('INVALID_INPUT', 'Réglages invalides.');
       if (!Number.isInteger(next.autoLockSecs) || next.autoLockSecs < 60 || next.autoLockSecs > 4 * 3600) {
         throw new IpcError('INVALID_INPUT', 'Délai de verrouillage invalide (1 min à 4 h).');
-      }
-      for (const url of Object.values(next.rpc)) {
-        if (url !== undefined && url !== '' && !/^https:\/\//.test(url)) throw new IpcError('INVALID_INPUT', 'Les nœuds RPC doivent être en HTTPS.');
       }
       const torIn: unknown = (next as { tor?: unknown }).tor;
       if (torIn !== undefined && (typeof torIn !== 'object' || torIn === null || typeof (torIn as { enabled?: unknown }).enabled !== 'boolean')) {
@@ -430,14 +440,31 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       }
       const wasEnabled = settings.tor.enabled;
       // Missing `tor` → default (enabled), like serde's `#[serde(default)]`.
-      settings = { ...structuredClone(next), tor: { enabled: torIn === undefined ? true : (torIn as { enabled: boolean }).enabled } };
+      const torEnabled = torIn === undefined ? true : (torIn as { enabled: boolean }).enabled;
+      // No `servers` key (older caller) → keep the stored ones. Legacy `rpc` is ignored here:
+      // Rust migrates it once at load, the UI never sends it.
+      const incoming = 'servers' in next && next.servers ? next.servers : settings.servers;
+      const { rpc: _legacy, ...rest } = next as Settings & { rpc?: unknown };
+      const storedServers = await servers.prepareSave({ ...EMPTY_SERVERS, ...structuredClone(incoming) }, settings.servers, torEnabled);
+      settings = { ...structuredClone(rest), servers: storedServers, tor: { enabled: torEnabled } };
       if (!wasEnabled && settings.tor.enabled) tor.start();
       if (wasEnabled && !settings.tor.enabled) tor.stop();
-      return structuredClone(settings);
+      return { ...structuredClone(settings), servers: redactServers(settings.servers) };
     },
     set_capture_protection: (a) => {
       captureProtected = Boolean(a.enabled);
     },
+    server_test: (a) => servers.serverTest(a.target as Parameters<typeof servers.serverTest>[0]),
+    electrum_fetch_cert: (a) => servers.electrumFetchCert(a.host, a.port),
+    btc_backend_info: () => servers.btc.info(),
+    btc_address_info: (a) => servers.btc.addressInfo(a.address),
+    btc_address_utxos: (a) => servers.btc.addressUtxos(a.address),
+    btc_address_txs: (a) => servers.btc.addressTxs(a.address),
+    btc_fee_rates: () => servers.btc.feeRates(),
+    btc_tip_height: () => servers.btc.tipHeight(),
+    btc_broadcast: (a) => servers.btc.broadcast(a.hex),
+    btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
+    btc_core_status: () => servers.coreStatus(),
     config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasOneinchKey: true, hasCoingeckoKey: false }),
   };
 

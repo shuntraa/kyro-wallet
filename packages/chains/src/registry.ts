@@ -3,7 +3,7 @@
 // Chain & asset registry. Same seed / same EVM address on every EVM chain.
 // RPC hosts must match the net_fetch allowlist (docs/IPC.md §3).
 
-import type { Network } from '@kyro/shared';
+import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@kyro/shared';
 
 export type Family = 'btc' | 'evm' | 'sol';
 
@@ -25,9 +25,9 @@ interface ChainBase {
   blockTimeSecs: number;
 }
 
+/** Bitcoin: no URL in the registry, Rust picks the server (default mempool.space, or the user's). */
 export interface BtcChain extends ChainBase {
   family: 'btc';
-  esploraUrl: string;
 }
 
 export interface EvmChain extends ChainBase {
@@ -91,12 +91,10 @@ const BTC: Record<Network, BtcChain> = {
   testnet: {
     family: 'btc', key: 'bitcoin', name: 'Bitcoin testnet4', label: 'BTC testnet', network: 'testnet', color: CHAIN_COLORS.bitcoin, glyph: '₿',
     nativeSymbol: 'BTC', nativeName: 'Bitcoin', nativeDecimals: 8, coingeckoId: 'bitcoin', phase: 1, blockTimeSecs: 600,
-    esploraUrl: 'https://mempool.space/testnet4/api',
   },
   mainnet: {
     family: 'btc', key: 'bitcoin', name: 'Bitcoin', label: 'BTC', network: 'mainnet', color: CHAIN_COLORS.bitcoin, glyph: '₿',
     nativeSymbol: 'BTC', nativeName: 'Bitcoin', nativeDecimals: 8, coingeckoId: 'bitcoin', phase: 1, blockTimeSecs: 600,
-    esploraUrl: 'https://mempool.space/api',
   },
 };
 
@@ -249,8 +247,8 @@ export function findAsset(network: Network, id: string): AssetDef | undefined {
   return assetsFor(network).find((a) => a.id === id);
 }
 
-/** Hosts contacted for a network (+ user overrides) — shown in Settings › Connexions sortantes. */
-export function outgoingHosts(network: Network, overrides: { ethereum?: string; solana?: string; esplora?: string } = {}): { host: string; purpose: string }[] {
+/** Hosts contacted for a network (+ the user's servers) — shown in Settings › Connexions sortantes. */
+export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS): { host: string; purpose: string; custom?: boolean }[] {
   const host = (u: string) => {
     try {
       return new URL(u).host;
@@ -258,14 +256,20 @@ export function outgoingHosts(network: Network, overrides: { ethereum?: string; 
       return u;
     }
   };
-  const list: { host: string; purpose: string }[] = [
-    { host: 'api.coingecko.com', purpose: 'Prix du top 200' },
-    { host: host(overrides.esplora || btcChain(network).esploraUrl), purpose: 'Bitcoin : soldes, frais, diffusion' },
-  ];
-  evmChains(network).forEach((c, i) => {
-    list.push({ host: host(i === 0 && overrides.ethereum ? overrides.ethereum : c.rpcUrl), purpose: `${c.name} : nœud RPC` });
-  });
-  list.push({ host: host(overrides.solana || solChain(network).rpcUrl), purpose: 'Solana : nœud RPC' });
+  const btc = bitcoinServerFor(servers, network);
+  const btcHost =
+    btc.kind === 'default' ? { host: 'mempool.space', purpose: 'Bitcoin : soldes, frais, diffusion (service .onion avec Tor)' }
+    : btc.kind === 'electrum' ? { host: `${btc.host}:${btc.port}`, purpose: 'Bitcoin : ton serveur Electrum', custom: true }
+    : btc.kind === 'core' ? { host: host(btc.url), purpose: 'Bitcoin : ton nœud Bitcoin Core', custom: true }
+    : { host: host(btc.url), purpose: 'Bitcoin : ton serveur Esplora', custom: true };
+  const list: { host: string; purpose: string; custom?: boolean }[] = [{ host: 'api.coingecko.com', purpose: 'Prix du top 200' }, btcHost];
+  for (const c of evmChains(network)) {
+    const custom = servers.evm[String(c.chainId)]?.url;
+    list.push(custom ? { host: host(custom), purpose: `${c.name} : ton nœud RPC`, custom: true } : { host: host(c.rpcUrl), purpose: `${c.name} : nœud RPC` });
+  }
+  const sol = solChain(network);
+  const solCustom = servers.solana[sol.cluster]?.url;
+  list.push(solCustom ? { host: host(solCustom), purpose: 'Solana : ton nœud RPC', custom: true } : { host: host(sol.rpcUrl), purpose: 'Solana : nœud RPC' });
   list.push({ host: 'api.0x.org', purpose: 'Devis de swap EVM (clé requise)' });
   list.push({ host: 'api.1inch.dev', purpose: 'Devis de swap EVM (clé requise)' });
   list.push({ host: 'li.quest', purpose: 'Devis de swap cross-chain' });

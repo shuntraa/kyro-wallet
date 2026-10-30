@@ -62,7 +62,8 @@ export function useHistory() {
         return { ...x, asset, feeAsset, chainLabel: chain?.label ?? x.chainKey, local: localIds.has(x.id) };
       });
       entries.sort((a, b) => (b.time ?? Date.now()) - (a.time ?? Date.now()));
-      return { entries, errors };
+      // Bitcoin servers return at most BTC_TXS_CAP transactions per address: say so.
+      return { entries, errors, btcCapped: adapters.btc.historyCapped };
     },
     [adapters, network],
     { intervalMs: 60_000 },

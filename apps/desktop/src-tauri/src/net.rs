@@ -15,7 +15,9 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, AppResult};
-use crate::settings::{ApiKeys, RpcOverrides, Settings};
+use wallet_core::Network;
+
+use crate::settings::{ApiKeys, Settings};
 use crate::tor::TorManager;
 
 pub const ALLOWED_HOSTS: &[&str] = &[
@@ -103,24 +105,49 @@ impl EnvKeys {
 
 // ---------------------------------------------------------------- policy
 
-pub fn host_allowed(host: &str, extra: &[String]) -> bool {
-    ALLOWED_HOSTS.contains(&host) || extra.iter().any(|h| h == host)
+/// Per-request network context derived from the settings and the app's network.
+#[derive(Debug, Clone, Default)]
+pub struct NetContext {
+    /// Requests go over Tor (settings.tor.enabled).
+    pub tor: bool,
+    /// Custom HTTP servers' hosts (EVM/Solana RPC, Esplora), each with its own family only.
+    pub custom: Vec<(String, Family)>,
+    /// Default hosts replaced by a custom server: refused (`DEFAULT_SERVER_DISABLED`).
+    pub disabled: Vec<&'static str>,
 }
 
-/// Scheme rule shared by requests and redirects: HTTPS for clearnet hosts; plain HTTP only
-/// for an allowlisted onion service and only over Tor; any `.onion` is refused in clear.
-fn scheme_ok(url: &url::Url, host: &str, tor: bool) -> Result<(), String> {
+impl NetContext {
+    pub fn from_settings(s: &Settings, net: Network) -> Self {
+        Self {
+            tor: s.tor.enabled,
+            custom: s.servers.custom_http_hosts(),
+            disabled: s.servers.disabled_defaults(net),
+        }
+    }
+
+    fn custom_family(&self, host: &str) -> Option<Family> {
+        self.custom.iter().find(|(h, _)| h == host).map(|(_, f)| *f)
+    }
+}
+
+/// Scheme rule shared by requests and redirects: HTTPS for clearnet hosts; `.onion` only over
+/// Tor, and only allowlisted ones (mempool's, plain `http://`; or a user's own onion server,
+/// `http://` or `https://`); any `.onion` is refused in clear.
+fn scheme_ok(url: &url::Url, host: &str, tor: bool, custom_onion: bool) -> Result<(), String> {
     if host.ends_with(".onion") {
         if !tor {
             return Err(format!("{host} (adresse .onion refusée hors Tor)"));
         }
-        if !ONION_HOSTS.contains(&host) {
-            return Err(host.to_owned());
+        if ONION_HOSTS.contains(&host) {
+            if url.scheme() != "http" {
+                return Err(format!("{url} (service onion : http:// attendu)"));
+            }
+            return Ok(());
         }
-        if url.scheme() != "http" {
-            return Err(format!("{url} (service onion : http:// attendu)"));
+        if custom_onion && matches!(url.scheme(), "http" | "https") {
+            return Ok(());
         }
-        return Ok(());
+        return Err(host.to_owned());
     }
     if url.scheme() != "https" {
         return Err(format!("{url} (HTTPS obligatoire)"));
@@ -136,11 +163,11 @@ pub fn redirect_allowed(next: &url::Url, hops_done: usize, tor: bool) -> bool {
     };
     hops_done < MAX_REDIRECTS
         && (ALLOWED_HOSTS.contains(&host) || ONION_HOSTS.contains(&host))
-        && scheme_ok(next, host, tor).is_ok()
+        && scheme_ok(next, host, tor, false).is_ok()
 }
 
-/// In Tor mode, rewrites `https://mempool.space/…` to `http://<mempool onion>/…`.
-fn onion_rewrite(url: &mut url::Url) -> AppResult<()> {
+/// In Tor mode, rewrites `https://mempool.space/...` to `http://<mempool onion>/...`.
+pub fn onion_rewrite(url: &mut url::Url) -> AppResult<()> {
     let Some(host) = url.host_str() else {
         return Ok(());
     };
@@ -167,18 +194,15 @@ pub enum Family {
     Other,
 }
 
-pub fn family_for(host: &str, rpc: &RpcOverrides) -> Family {
-    let user_host = |u: &Option<String>| {
-        u.as_deref()
-            .and_then(|u| url::Url::parse(u).ok())
-            .and_then(|u| u.host_str().map(str::to_owned))
-            .is_some_and(|h| h == host)
-    };
-    if host == "mempool.space" || host == MEMPOOL_ONION || user_host(&rpc.esplora) {
+pub fn family_for(host: &str, ctx: &NetContext) -> Family {
+    if let Some(f) = ctx.custom_family(host) {
+        return f;
+    }
+    if host == "mempool.space" || host == MEMPOOL_ONION {
         Family::Bitcoin
-    } else if host.ends_with("-rpc.publicnode.com") || user_host(&rpc.ethereum) {
+    } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
-    } else if host.ends_with(".solana.com") || user_host(&rpc.solana) {
+    } else if host.ends_with(".solana.com") {
         Family::Solana
     } else if host.ends_with("coingecko.com") {
         Family::Market
@@ -218,15 +242,19 @@ pub struct Prepared {
     /// Names of the injected API-key headers (dropped if a redirect changes host).
     pub secret_headers: Vec<String>,
     pub body: Option<String>,
+    /// Tor family whose isolated circuits carry this request.
+    pub family: Family,
+    /// The host is a user-configured server: transport failures are `SERVER_UNREACHABLE`.
+    pub custom: bool,
+    /// Plain HTTP allowed for this (onion) host, over Tor only.
+    pub allow_plain: bool,
 }
 
-/// `tor` = the request will go over Tor (settings.tor.enabled).
 pub fn prepare(
     req: FetchRequest,
-    extra_hosts: &[String],
+    ctx: &NetContext,
     env: &EnvKeys,
     saved: &ApiKeys,
-    tor: bool,
 ) -> AppResult<Prepared> {
     let mut url =
         url::Url::parse(&req.url).map_err(|_| AppError::InvalidInput("URL invalide".into()))?;
@@ -235,15 +263,19 @@ pub fn prepare(
             "URL avec identifiants refusée".into(),
         ));
     }
-    if tor {
+    if ctx.tor {
         onion_rewrite(&mut url)?;
     }
     let host = url.host_str().unwrap_or_default().to_owned();
+    if let Some(d) = ctx.disabled.iter().find(|d| **d == host) {
+        return Err(AppError::DefaultServerDisabled((*d).to_owned()));
+    }
+    let custom = ctx.custom_family(&host).is_some();
     let is_onion = host.ends_with(".onion");
-    if !is_onion && !host_allowed(&host, extra_hosts) {
+    if !is_onion && !custom && !ALLOWED_HOSTS.contains(&host.as_str()) {
         return Err(AppError::HostNotAllowed(host));
     }
-    scheme_ok(&url, &host, tor).map_err(AppError::HostNotAllowed)?;
+    scheme_ok(&url, &host, ctx.tor, custom).map_err(AppError::HostNotAllowed)?;
     let method = match req.method.to_ascii_uppercase().as_str() {
         "GET" => Method::Get,
         "POST" => Method::Post,
@@ -260,13 +292,57 @@ pub fn prepare(
     let secret_headers = secrets.iter().map(|(k, _)| k.clone()).collect();
     headers.extend(secrets);
     Ok(Prepared {
+        allow_plain: is_onion && url.scheme() == "http",
+        family: family_for(&host, ctx),
         url,
         host,
         method,
         headers,
         secret_headers,
         body: req.body,
+        custom,
     })
+}
+
+/// A request issued by Rust itself to a server (Esplora, Bitcoin Core, validation probes).
+/// The caller has validated the URL with `servers::validate_http_url`.
+#[derive(Debug, Clone)]
+pub struct ServerRequest {
+    pub url: url::Url,
+    pub method: Method,
+    pub headers: Vec<(String, String)>,
+    pub body: Option<String>,
+    pub family: Family,
+    /// Bitcoin Core on loopback/LAN: reached directly (Tor cannot reach the user's LAN).
+    pub direct_private: bool,
+    /// Longer timeout (Bitcoin Core `importdescriptors` with rescan; direct connections only).
+    pub long: bool,
+}
+
+impl ServerRequest {
+    pub fn get(url: url::Url, family: Family) -> Self {
+        Self {
+            url,
+            method: Method::Get,
+            headers: Vec::new(),
+            body: None,
+            family,
+            direct_private: false,
+            long: false,
+        }
+    }
+
+    pub fn post_json(url: url::Url, family: Family, body: String) -> Self {
+        Self {
+            url,
+            method: Method::Post,
+            headers: vec![("content-type".into(), "application/json".into())],
+            body: Some(body),
+            family,
+            direct_private: false,
+            long: false,
+        }
+    }
 }
 
 /// API keys are injected here so they never need to live in the webview.
@@ -318,16 +394,21 @@ pub fn is_cacheable(p: &Prepared) -> bool {
 
 pub struct NetClient {
     clear: reqwest::Client,
+    /// For a Bitcoin Core node on loopback/LAN only: no proxy, no redirect, http allowed.
+    local: reqwest::Client,
     pub tor: Arc<TorManager>,
     cache: Mutex<HashMap<String, (Instant, FetchResponse)>>,
     backoff: Mutex<HashMap<String, Instant>>,
 }
+
+const LONG_TIMEOUT: Duration = Duration::from_secs(6 * 3600);
 
 impl NetClient {
     pub fn new(tor_dir: PathBuf) -> AppResult<Self> {
         let clear = reqwest::Client::builder()
             .timeout(TIMEOUT)
             .https_only(true)
+            .no_proxy()
             .user_agent(USER_AGENT)
             .redirect(reqwest::redirect::Policy::custom(|attempt| {
                 // `previous()` includes the original URL: redirects already followed = len - 1.
@@ -343,28 +424,33 @@ impl NetClient {
             }))
             .build()
             .map_err(|e| AppError::Internal(e.to_string()))?;
+        let local = reqwest::Client::builder()
+            .timeout(TIMEOUT)
+            .no_proxy()
+            .user_agent(USER_AGENT)
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|e| AppError::Internal(e.to_string()))?;
         Ok(Self {
             clear,
+            local,
             tor: Arc::new(TorManager::new(tor_dir)?),
             cache: Mutex::new(HashMap::new()),
             backoff: Mutex::new(HashMap::new()),
         })
     }
 
-    /// Applies the policy, then sends over Tor (if enabled in `settings`) or in clear.
+    /// Webview requests (`net_fetch`): applies the policy, then sends over Tor (if enabled)
+    /// or in clear.
     pub async fn fetch(
         &self,
         req: FetchRequest,
         settings: &Settings,
         env: &EnvKeys,
+        net: Network,
     ) -> AppResult<FetchResponse> {
-        let p = prepare(
-            req,
-            &settings.rpc_hosts(),
-            env,
-            &settings.api_keys,
-            settings.tor.enabled,
-        )?;
+        let ctx = NetContext::from_settings(settings, net);
+        let p = prepare(req, &ctx, env, &settings.api_keys)?;
 
         if let Some(until) = lock(&self.backoff).get(&p.host).copied() {
             let now = Instant::now();
@@ -382,12 +468,16 @@ impl NetClient {
             }
         }
 
-        let (status, bytes) = if settings.tor.enabled {
-            self.tor
-                .send(&p, family_for(&p.host, &settings.rpc))
-                .await?
+        let sent = if ctx.tor {
+            self.tor.send(&p).await
         } else {
-            self.send_clear(&p).await?
+            self.send_clear(&self.clear, &p, None).await
+        };
+        let (status, bytes) = match sent {
+            Err(e) if p.custom && !matches!(e, AppError::TorUnavailable(_)) => {
+                return Err(AppError::ServerUnreachable(format!("{} : {e}", p.host)))
+            }
+            other => other?,
         };
 
         if status == 429 {
@@ -403,12 +493,74 @@ impl NetClient {
         Ok(out)
     }
 
-    async fn send_clear(&self, p: &Prepared) -> AppResult<(u16, Vec<u8>)> {
+    /// Requests issued by Rust to a server (custom or default). Same transport rules:
+    /// Tor when enabled (onion allowed), clear HTTPS otherwise; Bitcoin Core on a private
+    /// address goes direct. Transport failures map to `SERVER_UNREACHABLE` (never a fallback).
+    pub async fn server_request(&self, r: ServerRequest, tor: bool) -> AppResult<(u16, Vec<u8>)> {
+        let mut url = r.url.clone();
+        if tor {
+            onion_rewrite(&mut url)?;
+        }
+        let host = url
+            .host_str()
+            .ok_or_else(|| AppError::ServerInvalid("URL sans hôte".into()))?
+            .to_owned();
+        let onion = host.ends_with(".onion");
+        let private = crate::servers::is_private_host(&host);
+        let p = Prepared {
+            allow_plain: onion && url.scheme() == "http",
+            url,
+            host: host.clone(),
+            method: r.method,
+            headers: r.headers,
+            secret_headers: Vec::new(),
+            body: r.body,
+            family: r.family,
+            custom: true,
+        };
+        let result = if r.direct_private && private {
+            let timeout = r.long.then_some(LONG_TIMEOUT);
+            self.send_clear(&self.local, &p, timeout).await
+        } else if onion {
+            if !tor {
+                return Err(AppError::ServerInvalid(format!(
+                    "{host} : adresse .onion refusée hors Tor"
+                )));
+            }
+            self.tor.send(&p).await
+        } else {
+            if p.url.scheme() != "https" {
+                return Err(AppError::ServerInvalid(format!(
+                    "{} : HTTPS obligatoire",
+                    p.url
+                )));
+            }
+            if tor {
+                self.tor.send(&p).await
+            } else {
+                self.send_clear(&self.clear, &p, None).await
+            }
+        };
+        result.map_err(|e| match e {
+            AppError::TorUnavailable(_) | AppError::ServerInvalid(_) => e,
+            other => AppError::ServerUnreachable(format!("{host} : {other}")),
+        })
+    }
+
+    async fn send_clear(
+        &self,
+        client: &reqwest::Client,
+        p: &Prepared,
+        timeout: Option<Duration>,
+    ) -> AppResult<(u16, Vec<u8>)> {
         let method = match p.method {
             Method::Get => reqwest::Method::GET,
             Method::Post => reqwest::Method::POST,
         };
-        let mut builder = self.clear.request(method, p.url.clone());
+        let mut builder = client.request(method, p.url.clone());
+        if let Some(t) = timeout {
+            builder = builder.timeout(t);
+        }
         for (k, v) in &p.headers {
             builder = builder.header(k, v);
         }
@@ -460,24 +612,47 @@ mod tests {
         )
     }
 
+    fn ctx(tor: bool) -> NetContext {
+        NetContext {
+            tor,
+            ..Default::default()
+        }
+    }
+
+    fn prep(url: &str, c: &NetContext) -> AppResult<Prepared> {
+        let (env, saved) = keys();
+        prepare(req(url, "GET", &[]), c, &env, &saved)
+    }
+
     #[test]
     fn allowlist() {
-        assert!(host_allowed("mempool.space", &[]));
-        assert!(!host_allowed("evil.example", &[]));
-        assert!(!host_allowed("mempool.space.evil.example", &[]));
-        assert!(host_allowed("my-node.example", &["my-node.example".into()]));
+        let c = ctx(false);
+        assert!(prep("https://mempool.space/api", &c).is_ok());
+        assert!(matches!(
+            prep("https://evil.example/", &c),
+            Err(AppError::HostNotAllowed(_))
+        ));
+        assert!(matches!(
+            prep("https://mempool.space.evil.example/", &c),
+            Err(AppError::HostNotAllowed(_))
+        ));
+        let custom = NetContext {
+            custom: vec![("my-node.example".into(), Family::Evm)],
+            ..ctx(false)
+        };
+        let p = prep("https://my-node.example/rpc", &custom).unwrap();
+        assert!(p.custom);
+        assert_eq!(p.family, Family::Evm);
+        assert!(!prep("https://mempool.space/api", &custom).unwrap().custom);
     }
 
     #[test]
     fn prepare_enforces_policy() {
         let (env, saved) = keys();
-        let ok = |r| prepare(r, &[], &env, &saved, false);
+        let c = ctx(false);
+        let ok = |r| prepare(r, &c, &env, &saved);
         assert!(matches!(
             ok(req("http://mempool.space/api", "GET", &[])),
-            Err(AppError::HostNotAllowed(_))
-        ));
-        assert!(matches!(
-            ok(req("https://evil.example/", "GET", &[])),
             Err(AppError::HostNotAllowed(_))
         ));
         assert!(matches!(
@@ -492,20 +667,13 @@ mod tests {
         let p = ok(req("https://mempool.space/api", "get", &[])).unwrap();
         assert_eq!(p.method, Method::Get);
         assert_eq!(p.host, "mempool.space");
-        // User RPC host is allowed only through `extra`.
-        assert!(prepare(
-            req("https://my-node.example/", "POST", &[]),
-            &["my-node.example".into()],
-            &env,
-            &saved,
-            false
-        )
-        .is_ok());
+        assert_eq!(p.family, Family::Bitcoin);
     }
 
     #[test]
     fn header_filtering_and_key_injection() {
         let (env, saved) = keys();
+        let c = ctx(false);
         let p = prepare(
             req(
                 "https://api.coingecko.com/api/v3/ping",
@@ -518,10 +686,9 @@ mod tests {
                     ("Content-Type", "a\r\nInjected: 1"),
                 ],
             ),
-            &[],
+            &c,
             &env,
             &saved,
-            false,
         )
         .unwrap();
         assert_eq!(
@@ -532,27 +699,12 @@ mod tests {
             ]
         );
         assert_eq!(p.secret_headers, vec!["x-cg-demo-api-key".to_string()]);
-        let p = prepare(
-            req("https://api.1inch.dev/swap", "GET", &[]),
-            &[],
-            &env,
-            &saved,
-            false,
-        )
-        .unwrap();
+        let p = prep("https://api.1inch.dev/swap", &c).unwrap();
         assert_eq!(
             p.headers,
             vec![("authorization".to_string(), "Bearer inch".to_string())]
         );
-        // No key for an unrelated host.
-        let p = prepare(
-            req("https://mempool.space/", "GET", &[]),
-            &[],
-            &env,
-            &saved,
-            false,
-        )
-        .unwrap();
+        let p = prep("https://mempool.space/", &c).unwrap();
         assert!(p.headers.is_empty() && p.secret_headers.is_empty());
     }
 
@@ -565,9 +717,9 @@ mod tests {
             assert!(!redirect_allowed(&u("https://mempool.space/x"), 3, tor));
             assert!(!redirect_allowed(&u("http://mempool.space/x"), 0, tor));
             assert!(!redirect_allowed(&u("https://evil.example/x"), 0, tor));
+            // User RPC hosts are never redirect targets.
             assert!(!redirect_allowed(&u("https://my-node.example/"), 0, tor));
         }
-        // Onion redirect targets: only the allowlisted onion, http, and only over Tor.
         let onion = format!("http://{MEMPOOL_ONION}/api");
         assert!(redirect_allowed(&u(&onion), 0, true));
         assert!(!redirect_allowed(&u(&onion), 0, false));
@@ -585,13 +737,11 @@ mod tests {
 
     #[test]
     fn onion_policy() {
-        let (env, saved) = keys();
-        let prep = |url: &str, tor: bool| prepare(req(url, "GET", &[]), &[], &env, &saved, tor);
-
-        // Tor mode: the default Esplora host is rewritten to mempool's onion, path and query kept.
+        let tor = ctx(true);
+        let clear = ctx(false);
         let p = prep(
             "https://mempool.space/testnet4/api/address/tb1qx/utxo?x=1",
-            true,
+            &tor,
         )
         .unwrap();
         assert_eq!(
@@ -599,64 +749,95 @@ mod tests {
             format!("http://{MEMPOOL_ONION}/testnet4/api/address/tb1qx/utxo?x=1")
         );
         assert_eq!(p.host, MEMPOOL_ONION);
-        assert_eq!(
-            family_for(&p.host, &RpcOverrides::default()),
-            Family::Bitcoin
-        );
-        // Clear mode: untouched.
-        let p = prep("https://mempool.space/api/blocks/tip/height", false).unwrap();
+        assert_eq!(p.family, Family::Bitcoin);
+        assert!(p.allow_plain);
+        let p = prep("https://mempool.space/api/blocks/tip/height", &clear).unwrap();
         assert_eq!(
             p.url.as_str(),
             "https://mempool.space/api/blocks/tip/height"
         );
-        // Other hosts are never rewritten.
-        let p = prep("https://api.coingecko.com/api/v3/ping", true).unwrap();
-        assert_eq!(p.url.scheme(), "https");
+        assert!(!p.allow_plain);
+        assert_eq!(
+            prep("https://api.coingecko.com/api/v3/ping", &tor)
+                .unwrap()
+                .url
+                .scheme(),
+            "https"
+        );
 
-        // The onion URL itself: allowed over Tor (http only), refused in clear.
         let onion = format!("http://{MEMPOOL_ONION}/api/blocks/tip/height");
-        assert!(prep(&onion, true).is_ok());
+        assert!(prep(&onion, &tor).is_ok());
         assert!(matches!(
-            prep(&onion, false),
+            prep(&onion, &clear),
             Err(AppError::HostNotAllowed(_))
         ));
         assert!(matches!(
-            prep(&format!("https://{MEMPOOL_ONION}/api"), true),
+            prep(&format!("https://{MEMPOOL_ONION}/api"), &tor),
             Err(AppError::HostNotAllowed(_))
         ));
-        // Any other onion: refused in both modes.
-        for tor in [false, true] {
+        for c in [&clear, &tor] {
             assert!(matches!(
                 prep(
                     "http://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/",
-                    tor
+                    c
                 ),
                 Err(AppError::HostNotAllowed(_))
             ));
-        }
-        // Plain http:// stays refused for every clearnet host, Tor or not (no rewrite of http).
-        for tor in [false, true] {
             assert!(matches!(
-                prep("http://mempool.space/api", tor),
+                prep("http://mempool.space/api", c),
                 Err(AppError::HostNotAllowed(_))
             ));
             assert!(matches!(
-                prep("http://api.coingecko.com/api/v3/ping", tor),
+                prep("http://api.coingecko.com/api/v3/ping", c),
                 Err(AppError::HostNotAllowed(_))
             ));
         }
-        // A user RPC host can't smuggle an onion in clear mode.
-        assert!(prepare(
-            req(&onion, "GET", &[]),
-            &[MEMPOOL_ONION.to_string()],
-            &env,
-            &saved,
-            false
-        )
-        .is_err());
-        // Non-default port: not rewritten (and still HTTPS). (`:443` is normalised away by `url`.)
-        let p = prep("https://mempool.space:8443/api", true).unwrap();
+        let p = prep("https://mempool.space:8443/api", &tor).unwrap();
         assert_eq!(p.url.scheme(), "https");
+    }
+
+    #[test]
+    fn custom_onion_server_only_over_tor_and_only_its_family() {
+        let host = "abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.onion";
+        let mk = |tor| NetContext {
+            tor,
+            custom: vec![(host.into(), Family::Bitcoin)],
+            disabled: Vec::new(),
+        };
+        let p = prep(&format!("http://{host}/api/blocks/tip/height"), &mk(true)).unwrap();
+        assert!(p.custom && p.allow_plain);
+        assert_eq!(p.family, Family::Bitcoin);
+        assert!(prep(&format!("https://{host}/api"), &mk(true)).is_ok());
+        assert!(matches!(
+            prep(&format!("http://{host}/api"), &mk(false)),
+            Err(AppError::HostNotAllowed(_))
+        ));
+    }
+
+    #[test]
+    fn defaults_replaced_by_a_custom_server_are_refused() {
+        let c = NetContext {
+            tor: true,
+            custom: vec![("my-esplora.example".into(), Family::Bitcoin)],
+            disabled: vec![
+                "mempool.space",
+                MEMPOOL_ONION,
+                "ethereum-sepolia-rpc.publicnode.com",
+            ],
+        };
+        for url in [
+            "https://mempool.space/testnet4/api/blocks/tip/height".to_string(),
+            format!("http://{MEMPOOL_ONION}/api"),
+            "https://ethereum-sepolia-rpc.publicnode.com/".to_string(),
+        ] {
+            assert!(
+                matches!(prep(&url, &c), Err(AppError::DefaultServerDisabled(_))),
+                "{url}"
+            );
+        }
+        // Other defaults are untouched.
+        assert!(prep("https://ethereum-rpc.publicnode.com/", &c).is_ok());
+        assert!(prep("https://my-esplora.example/api", &c).is_ok());
     }
 
     #[test]
@@ -670,29 +851,78 @@ mod tests {
 
     #[test]
     fn families_are_isolated() {
-        let rpc = RpcOverrides {
-            ethereum: Some("https://eth.my-node.example/rpc".into()),
-            solana: None,
-            esplora: Some("https://btc.my-node.example".into()),
+        let c = NetContext {
+            custom: vec![
+                ("eth.my-node.example".into(), Family::Evm),
+                ("btc.my-node.example".into(), Family::Bitcoin),
+            ],
+            ..ctx(true)
         };
-        assert_eq!(family_for("mempool.space", &rpc), Family::Bitcoin);
-        assert_eq!(family_for("btc.my-node.example", &rpc), Family::Bitcoin);
+        assert_eq!(family_for("mempool.space", &c), Family::Bitcoin);
+        assert_eq!(family_for(MEMPOOL_ONION, &c), Family::Bitcoin);
+        assert_eq!(family_for("btc.my-node.example", &c), Family::Bitcoin);
         assert_eq!(
-            family_for("ethereum-sepolia-rpc.publicnode.com", &rpc),
+            family_for("ethereum-sepolia-rpc.publicnode.com", &c),
             Family::Evm
         );
-        assert_eq!(family_for("eth.my-node.example", &rpc), Family::Evm);
-        assert_eq!(family_for("api.devnet.solana.com", &rpc), Family::Solana);
-        assert_eq!(family_for("api.coingecko.com", &rpc), Family::Market);
-        assert_eq!(family_for("lite-api.jup.ag", &rpc), Family::Swap);
-        assert_eq!(family_for("unknown.example", &rpc), Family::Other);
-        // Every allowlisted host maps to a real family.
+        assert_eq!(family_for("eth.my-node.example", &c), Family::Evm);
+        assert_eq!(family_for("api.devnet.solana.com", &c), Family::Solana);
+        assert_eq!(family_for("api.coingecko.com", &c), Family::Market);
+        assert_eq!(family_for("lite-api.jup.ag", &c), Family::Swap);
+        assert_eq!(family_for("unknown.example", &c), Family::Other);
         for h in ALLOWED_HOSTS {
-            assert_ne!(
-                family_for(h, &RpcOverrides::default()),
-                Family::Other,
-                "{h}"
-            );
+            assert_ne!(family_for(h, &NetContext::default()), Family::Other, "{h}");
         }
+    }
+
+    #[test]
+    fn context_from_settings() {
+        use crate::servers::{BtcServer, RpcServer};
+        let mut s = Settings::default();
+        s.servers.bitcoin.testnet4 = Some(BtcServer::Esplora {
+            url: "https://esplora.example/api".into(),
+        });
+        s.servers.solana.insert(
+            "devnet".into(),
+            RpcServer {
+                url: "https://sol.example".into(),
+            },
+        );
+        let c = NetContext::from_settings(&s, Network::Testnet);
+        assert!(c.tor);
+        assert!(c.disabled.contains(&"mempool.space"));
+        assert!(c.disabled.contains(&"api.devnet.solana.com"));
+        assert_eq!(family_for("esplora.example", &c), Family::Bitcoin);
+        assert_eq!(family_for("sol.example", &c), Family::Solana);
+        // Mainnet app: bitcoin mainnet still on the default server.
+        let m = NetContext::from_settings(&s, Network::Mainnet);
+        assert!(!m.disabled.contains(&"mempool.space"));
+    }
+
+    #[test]
+    fn server_request_refuses_plain_http_and_clear_onion() {
+        let dir = std::env::temp_dir().join("kyro-net-test");
+        let n = NetClient::new(dir).unwrap();
+        let run = |u: &str, tor: bool| {
+            let r = ServerRequest::get(url::Url::parse(u).unwrap(), Family::Bitcoin);
+            tauri::async_runtime::block_on(n.server_request(r, tor))
+        };
+        assert!(matches!(
+            run("http://node.example/api", false),
+            Err(AppError::ServerInvalid(_))
+        ));
+        assert!(matches!(
+            run("http://node.example/api", true),
+            Err(AppError::ServerInvalid(_))
+        ));
+        assert!(matches!(
+            run("http://x.onion/api", false),
+            Err(AppError::ServerInvalid(_))
+        ));
+        // Private http is only direct when the caller asks for it (Bitcoin Core).
+        assert!(matches!(
+            run("http://127.0.0.1:9/", false),
+            Err(AppError::ServerInvalid(_))
+        ));
     }
 }

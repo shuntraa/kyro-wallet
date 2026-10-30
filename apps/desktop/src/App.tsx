@@ -20,6 +20,7 @@ import { SettingsScreen } from './screens/Settings';
 import { KyroMark } from './components/kit';
 import { Spinner } from './components/ui/primitives';
 import { TorDialogs } from './components/Tor';
+import { serverDown } from './components/ServerDown';
 
 export function App() {
   return (
@@ -174,7 +175,7 @@ function Unlocked() {
           {screen}
         </motion.main>
       </div>
-      <StatusBar syncing={pf.balancesLoading && !pf.balancesLoaded} failedChains={failed} />
+      <StatusBar syncing={pf.balancesLoading && !pf.balancesLoaded} failedChains={failed} serverDownChains={Object.entries(pf.chainErrors).filter(([, m]) => serverDown(m)).map(([k]) => k)} />
     </div>
   );
 }

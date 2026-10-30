@@ -33,7 +33,7 @@ Pourquoi l'onion : `mempool.space` ne répond pas aux relais de sortie Tor (dél
 
 ## Ce que chaque serveur voit
 
-En mode clair, tout serveur contacté voit ton **adresse IP** ; en mode Tor (défaut), il voit celle d'un relais de sortie. Dans les deux modes, les nœuds blockchain voient les **adresses publiques** dont tu demandes le solde. Pour éviter ça : utilise **tes propres nœuds** (Réglages → Réseaux et RPC).
+En mode clair, tout serveur contacté voit ton **adresse IP** ; en mode Tor (défaut), il voit celle d'un relais de sortie. Dans les deux modes, les nœuds blockchain voient les **adresses publiques** dont tu demandes le solde. Pour éviter ça : utilise **tes propres nœuds** (Réglages → Réseaux et serveurs).
 
 | Hôte | Pourquoi | Données envoyées |
 |---|---|---|
@@ -51,6 +51,46 @@ En mode clair, tout serveur contacté voit ton **adresse IP** ; en mode Tor (dé
 Les devis de swap ne sont demandés que lorsque tu ouvres l'écran Swap et saisis un montant.
 
 Les tables d'adresses (ALT) d'une transaction Solana v0 sont lues par Rust auprès du RPC Solana (celui des réglages, sinon le RPC par défaut ci-dessus), jamais transmises par l'interface. Kyro fait confiance à ce RPC pour leur contenu, comme pour les soldes ; une table introuvable, désactivée ou incomplète bloque l'aperçu et la signature.
+
+## Serveurs personnalisés (Réglages → Réseaux)
+
+Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, Electrum ou ton nœud Bitcoin Core), chaque chaîne EVM, chaque cluster Solana. Règles communes :
+- un serveur personnalisé n'est autorisé **que pour sa propre famille** et passe par les **circuits Tor isolés** de cette famille ;
+- il est vérifié à l'enregistrement : il doit être sur le bon réseau (genesis Bitcoin, `eth_chainId`, genesis Solana), sinon il est refusé ;
+- dès qu'il est configuré, le serveur par défaut de cette chaîne est **refusé** : si ton serveur tombe, Kyro affiche une erreur (`SERVER_UNREACHABLE`) et **ne se rabat jamais** sur le serveur par défaut — sinon tes adresses partiraient chez le tiers que tu as justement voulu éviter ;
+- jamais d'identifiants dans une URL ; `http://` en clair n'est permis que pour une adresse `.onion` via Tor (le protocole onion authentifie le service et chiffre de bout en bout) et, pour Bitcoin Core seulement, pour une adresse locale.
+
+| Serveur | Mode Tor (défaut) : ce que le serveur voit | Mode clair : ce que le serveur voit | Ne voit jamais |
+|---|---|---|---|
+| mempool.space (défaut Bitcoin) | Ton adresse Bitcoin et tes transactions, via son service **.onion** : aucun relais de sortie, aucune IP | Tes adresses, tes transactions **et ton IP** | Ta phrase, tes clés |
+| Esplora personnalisé (`https://` ou `.onion`) | Tes adresses et transactions ; l'IP d'un relais de sortie (ou aucune si `.onion`) | Tes adresses, transactions et ton IP ; `.onion` refusé | Ta phrase, tes clés |
+| Electrum (TLS, ou TCP vers un `.onion`) | Tes *script hashes* (équivalent de tes adresses), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés |
+| Bitcoin Core **local/LAN** (127.0.0.0/8, ::1, RFC 1918, fc00::/7) | Joint **directement, sans Tor** (Tor ne peut pas atteindre ton réseau local, et rien ne sort de ta machine/ton réseau) : ton propre nœud voit tes descripteurs publics (xpub) et tes transactions | Idem | Ta phrase, tes clés privées (portefeuille de surveillance sans clé privée) |
+| Bitcoin Core **distant** (`https://` ou `.onion`) | Tes descripteurs publics (xpub : **tout l'historique de ton compte**, présent et futur), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés privées |
+| RPC EVM personnalisé | Ton adresse EVM, tes transactions signées ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
+| RPC Solana personnalisé | Ton adresse Solana, tes transactions signées, les tables d'adresses lues ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
+
+### Bitcoin par filtres compacts (BIP157/158) — fonction `cbf`, désactivée par défaut jusqu'à revue
+
+Kyro télécharge les **filtres de blocs** auprès de pairs Bitcoin, vérifie **sur ta machine** quels blocs concernent tes scripts (BIP84 et BIP86, réception et monnaie, avec une marge d'adresses inutilisées), puis ne télécharge que ces blocs. Aucun serveur n'apprend tes adresses.
+
+| | Mode Tor (défaut) | Mode clair (choix explicite) |
+|---|---|---|
+| Transport | **Uniquement via Tor** : la bibliothèque P2P ne peut sortir que par un pont SOCKS interne (127.0.0.1, port aléatoire, actif seulement pendant une synchronisation ou une diffusion) qui n'accepte que les pairs que Kyro lui a donnés et refuse tout le reste (y compris les noms d'hôtes : aucune requête DNS). Pairs `.onion` d'abord, pairs IPv4 via un relais de sortie seulement en secours. Échec fermé : jamais de connexion directe. | Connexion directe aux pairs IPv4/IPv6 ; les pairs `.onion` sont ignorés. |
+| Pairs | Liste fournie par Kyro (pairs servant les filtres, vérifiés le 30/10/2026 : testnet4 11 pairs dont 6 `.onion` ; mainnet 14 pairs dont 11 `.onion`, sur un échantillon de 75) + les tiens. **Pas de seeds DNS, pas de découverte par les pairs.** | Idem, IP seulement. |
+| Ce que voit un pair | Une connexion venant de Tor (ni ton IP, ni de quoi te relier à tes autres activités) ; **quels blocs tu télécharges en entier** : un signal faible mais réel (un pair qui voit les mêmes demandes répétées peut deviner que tu as une transaction dans ces blocs). Les filtres eux-mêmes sont identiques pour tout le monde et ne révèlent rien. | Idem **et ton IP**. |
+| Ce que voit ton FAI | Que tu utilises Tor. | Que tu parles le protocole Bitcoin avec ces pairs. |
+| Diffusion | Ta transaction est envoyée à un pair via Tor. | Envoyée directement à un pair. |
+
+Limites honnêtes :
+- **Pas de mempool** : un paiement reçu n'apparaît qu'une fois miné ; tes propres envois apparaissent « en attente » jusqu'à leur inclusion.
+- **Frais** : moyenne des frais réellement payés (frais ÷ poids) dans les 3 derniers blocs, avec le minimum de relais des pairs comme plancher. Ce n'est pas une estimation de mempool ; tu peux toujours saisir un tarif manuel.
+- **Première synchronisation** : en-têtes depuis le bloc genesis puis filtres depuis ta « date de naissance » (`birthHeight`) ; elle peut prendre plusieurs minutes via Tor. Les en-têtes récents et l'avancement sont gardés dans le dossier de l'app (`cbf/`).
+
+Remarques :
+- Avec Electrum ou Esplora, chaque consultation porte sur une adresse : le serveur peut regrouper tes adresses s'il les voit dans la même session. Avec Bitcoin Core, le nœud connaît ton xpub : n'utilise un nœud **distant** que s'il t'appartient.
+- Electrum : certificat validé normalement (autorités de certification), ou **épinglé** par son empreinte SHA-256 pour les serveurs auto-signés (Kyro affiche l'empreinte et te demande de la confirmer). Un certificat non validé et non épinglé n'est jamais accepté.
+- Un nœud Bitcoin Core local est joint en `http://` sur ta machine ou ton réseau local, sans Tor ni proxy.
 
 ## Ajouter un serveur
 

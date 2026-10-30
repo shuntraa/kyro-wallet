@@ -52,7 +52,7 @@ impl AppState {
         Ok(Self {
             network,
             vault_path: data_dir.join(format!("coffre-{suffix}.kyrovault")),
-            settings: Mutex::new(Settings::load(&settings_path)),
+            settings: Mutex::new(Settings::load(&settings_path, network)),
             settings_path,
             net: NetClient::new(data_dir.join("tor"))?,
             env_keys: EnvKeys::from_env(),
@@ -63,6 +63,15 @@ impl AppState {
     }
 
     // ---- vault file ----
+
+    /// App data directory (holds the vault, settings, Tor and CBF state).
+    #[cfg_attr(not(feature = "cbf"), allow(dead_code))]
+    pub fn data_dir(&self) -> PathBuf {
+        self.vault_path
+            .parent()
+            .map(PathBuf::from)
+            .unwrap_or_default()
+    }
 
     pub fn vault_exists(&self) -> bool {
         self.vault_path.exists()

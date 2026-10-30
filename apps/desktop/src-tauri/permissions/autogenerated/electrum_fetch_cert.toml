@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-electrum-fetch-cert"
+description = "Enables the electrum_fetch_cert command without any pre-configured scope."
+commands.allow = ["electrum_fetch_cert"]
+
+[[permission]]
+identifier = "deny-electrum-fetch-cert"
+description = "Denies the electrum_fetch_cert command without any pre-configured scope."
+commands.deny = ["electrum_fetch_cert"]

@@ -22,6 +22,7 @@
 )]
 
 mod btc;
+mod btc_watch;
 mod error;
 mod evm;
 mod keys;
@@ -32,6 +33,11 @@ mod sol_decode;
 mod vault;
 
 pub use btc::{btc_account, btc_address, btc_decode_psbt, btc_sign_psbt, BtcAccount, BtcTxSummary};
+pub use btc_watch::{
+    btc_address_from_xpub, btc_address_of_script, btc_decode_raw_tx, btc_descriptors,
+    btc_genesis_hash, btc_script_pubkey, btc_scripthash, btc_scripthash_of_script, BtcDescriptor,
+    BtcRawTx,
+};
 pub use error::{Error, Result};
 pub use evm::{evm_address, evm_decode, evm_sign_tx, EvmTxKind, EvmTxRequest, EvmTxSummary};
 pub use mnemonic::{Mnemonic, Seed, WordCount};

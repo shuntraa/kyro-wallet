@@ -40,11 +40,136 @@ export interface Settings {
   hideBalancesOnStart: boolean;
   captureProtection: boolean;
   clipboardGuard: boolean;
-  rpc: { ethereum?: string; solana?: string; esplora?: string };
+  /** Custom server per chain (B2b). Replaces the old `rpc` (still accepted by Rust on input, never returned). */
+  servers: Servers;
   apiKeys: { coingecko?: string; zerox?: string; oneinch?: string };
   /** Embedded Tor for every `net_fetch`. Default `{ enabled: true }`; turning it off needs an explicit UI confirmation. */
   tor: { enabled: boolean };
 }
+
+// ---------------------------------------------------------------- custom servers (B2b, docs/IPC.md §2–2.2)
+
+/** Bitcoin network key of `servers.bitcoin` (≠ `Network`: testnet is testnet4). */
+export type BtcNetworkKey = 'mainnet' | 'testnet4';
+export type SolanaCluster = 'devnet' | 'mainnet-beta';
+
+export type ElectrumTls = 'webpki' | 'pinned' | 'none';
+
+export type CoreAuth =
+  | { kind: 'cookie'; cookiePath: string }
+  /**
+   * `password` is NEVER returned by `settings_get` (`hasPassword` instead). In `settings_set`:
+   * absent = keep the stored one (same URL and same user), `""` = clear it, a value = replace it.
+   */
+  | { kind: 'userpass'; user: string; password?: string; hasPassword?: boolean };
+
+/** Bitcoin server. Key absent in `servers.bitcoin` = default. */
+export type BtcServer =
+  | { kind: 'default' }
+  | { kind: 'esplora'; url: string }
+  | { kind: 'electrum'; host: string; port: number; tls: ElectrumTls; /** 64 hex, required when `pinned`. */ certSha256?: string }
+  | { kind: 'core'; url: string; auth: CoreAuth };
+
+export type BtcServerKind = BtcServer['kind'];
+
+export interface RpcServer {
+  url: string;
+}
+
+/**
+ * Absent key = default server. Once a custom server is set for a chain, Rust REFUSES that
+ * chain's default (`DEFAULT_SERVER_DISABLED`): never a silent fallback.
+ */
+export interface Servers {
+  bitcoin: { mainnet?: BtcServer; testnet4?: BtcServer };
+  /** Key: decimal chain id, e.g. `"11155111"`. */
+  evm: Record<string, RpcServer>;
+  solana: Partial<Record<SolanaCluster, RpcServer>>;
+}
+
+export type ServerTestTarget =
+  | { family: 'bitcoin'; network: BtcNetworkKey; server: BtcServer }
+  | { family: 'evm'; chainId: number; server: RpcServer }
+  | { family: 'solana'; cluster: SolanaCluster; server: RpcServer };
+
+export interface ServerTestResult {
+  latencyMs: number;
+  detected: { network?: string; genesisHash?: string; chainId?: number; serverVersion?: string; blockHeight?: number };
+}
+
+export interface ElectrumCertInfo {
+  /** SHA-256 of the DER certificate, lowercase hex: pin it as `certSha256`. */
+  sha256: string;
+  /** Whether normal (CA) validation accepts it for this host name. */
+  webpkiValid: boolean;
+}
+
+export interface BtcBackendInfo {
+  kind: BtcServerKind;
+  network: BtcNetworkKey;
+  /** Host (or host:port), never credentials. */
+  label: string;
+  tor: boolean;
+}
+
+export type CoreState = 'idle' | 'importing' | 'ready' | 'error';
+
+export interface CoreStatus {
+  /** `kyro-watch-<fingerprint8>` */
+  wallet: string;
+  state: CoreState;
+  walletLoaded: boolean;
+  /** 0..1 while a rescan runs. */
+  scanProgress?: number;
+  scanDurationSecs?: number;
+  error?: string;
+}
+
+/** `'now'` (no rescan, new wallet) or a UNIX timestamp in seconds. */
+export type CoreRescanFrom = 'now' | number;
+
+// Esplora shapes returned by the btc_* commands, whatever the backend (§2.2).
+export interface EsploraStats {
+  funded_txo_sum: number;
+  spent_txo_sum: number;
+  tx_count: number;
+}
+export interface EsploraAddressInfo {
+  address: string;
+  /** With Electrum / Core: funded = net balance, spent = 0 (or the negative part). `tx_count` is exact. */
+  chain_stats: EsploraStats;
+  mempool_stats: EsploraStats;
+}
+export interface EsploraUtxo {
+  txid: string;
+  vout: number;
+  value: number;
+  status: { confirmed: boolean; block_height?: number };
+}
+export interface EsploraTxOut {
+  scriptpubkey: string;
+  scriptpubkey_address?: string;
+  value: number;
+}
+export interface EsploraTx {
+  txid: string;
+  /** Absent when an input's prevout is unknown. */
+  fee?: number;
+  status: { confirmed: boolean; block_height?: number; block_time?: number };
+  /** `prevout: null` when the server does not have the funding tx (Core: outside the wallet). */
+  vin: Array<{ txid: string; vout: number; prevout: EsploraTxOut | null }>;
+  vout: EsploraTxOut[];
+}
+export interface BtcFeeRates {
+  fastestFee: number;
+  halfHourFee: number;
+  hourFee: number;
+  economyFee: number;
+  minimumFee: number;
+}
+
+/** `btc_address_txs` returns at most this many transactions per address (most recent first). */
+export const BTC_TXS_CAP = 50;
 
 /**
  * State of the embedded Tor client (`tor_status`, `tor-status` event).
@@ -217,9 +342,29 @@ export interface Commands {
   /** Over Tor when `settings.tor.enabled` (default); fails closed with `TOR_UNAVAILABLE`, never retried in clear. */
   net_fetch: { args: { req: NetRequest }; ret: NetResponse };
   tor_status: { args: undefined; ret: TorStatus };
+  /** Tests a server WITHOUT saving it (same checks as `settings_set`). */
+  server_test: { args: { target: ServerTestTarget }; ret: ServerTestResult };
+  /** TLS certificate fingerprint of an Electrum server, for the trust-on-first-use prompt. */
+  electrum_fetch_cert: { args: { host: string; port: number }; ret: ElectrumCertInfo };
+  btc_backend_info: { args: undefined; ret: BtcBackendInfo };
+  btc_address_info: { args: { address: string }; ret: EsploraAddressInfo };
+  btc_address_utxos: { args: { address: string }; ret: EsploraUtxo[] };
+  /** At most `BTC_TXS_CAP`, most recent first (unconfirmed first). */
+  btc_address_txs: { args: { address: string }; ret: EsploraTx[] };
+  btc_fee_rates: { args: undefined; ret: BtcFeeRates };
+  btc_tip_height: { args: undefined; ret: number };
+  /** Returns the txid; Rust checks it matches the transaction. */
+  btc_broadcast: { args: { hex: string }; ret: string };
+  /** Bitcoin Core only, unlocked: creates the watch-only wallet, imports the descriptors (background). */
+  btc_core_setup: { args: { rescanFrom: CoreRescanFrom }; ret: CoreStatus };
+  btc_core_status: { args: undefined; ret: CoreStatus };
   /** Restarts the bootstrap (after `error`). `INVALID_INPUT` when Tor is disabled. */
   tor_retry: { args: undefined; ret: TorStatus };
   settings_get: { args: undefined; ret: Settings };
+  /**
+   * Async: live-checks every changed custom server before saving (`SERVER_INVALID`,
+   * `SERVER_WRONG_NETWORK`, `SERVER_UNREACHABLE`, `TOR_UNAVAILABLE`); nothing saved on failure.
+   */
   settings_set: { args: { settings: Settings }; ret: Settings };
   set_capture_protection: { args: { enabled: boolean }; ret: void };
   config_get: { args: undefined; ret: AppConfig };
@@ -240,6 +385,14 @@ export const ERROR_CODES = [
   'INTERNAL',
   /** Tor enabled but not ready (bootstrap too long, failed, stopped): the request was NOT sent. */
   'TOR_UNAVAILABLE',
+  /** Configuration refused before any network (URL, scheme, credentials, .onion without Tor, fingerprint, password, cookie, RPC auth, missing watch wallet). */
+  'SERVER_INVALID',
+  /** The server answers but is on another chain (genesis, chain, chainId). */
+  'SERVER_WRONG_NETWORK',
+  /** The custom server does not answer. Kyro never falls back to the default. */
+  'SERVER_UNREACHABLE',
+  /** Request to the default server of a chain that has a custom one (the UI used the wrong URL). */
+  'DEFAULT_SERVER_DISABLED',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -268,7 +421,8 @@ export function isIpcError(e: unknown): e is IpcError {
  * shell's French message for `TOR_UNAVAILABLE` always contains « Tor indisponible ».
  */
 export function isTorUnavailable(e: unknown): boolean {
-  if (e instanceof IpcError) return e.code === 'TOR_UNAVAILABLE';
+  const ipc = ipcErrorIn(e);
+  if (ipc) return ipc.code === 'TOR_UNAVAILABLE';
   if (typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 'TOR_UNAVAILABLE') return true;
   const message = typeof e === 'string' ? e : e instanceof Error ? e.message : '';
   return message.includes('Tor indisponible');
@@ -350,6 +504,33 @@ export async function call<K extends CommandName>(cmd: K, ...args: CallArgs<K>):
     notifyIpcError(cmd, err);
     throw err;
   }
+}
+
+/** Shell message prefixes of the server-down codes (error.rs), for errors reduced to a message. */
+const SERVER_DOWN_PREFIXES = ['Serveur injoignable', 'Serveur par défaut désactivé'];
+
+/**
+ * True when the user's custom server is down (`SERVER_UNREACHABLE`) or the UI hit a replaced
+ * default (`DEFAULT_SERVER_DISABLED`). The fix is in the settings, never a fallback.
+ */
+export function isCustomServerDown(e: unknown): boolean {
+  const ipc = ipcErrorIn(e);
+  if (ipc) return ipc.code === 'SERVER_UNREACHABLE' || ipc.code === 'DEFAULT_SERVER_DISABLED';
+  const message = typeof e === 'string' ? e : e instanceof Error ? e.message : '';
+  return SERVER_DOWN_PREFIXES.some((p) => message.includes(p));
+}
+
+/**
+ * The `IpcError` behind `e`, following `cause` chains (viem wraps transport errors in its own
+ * `UnknownRpcError` whose `cause` is our IpcError). Null when there is none.
+ */
+export function ipcErrorIn(e: unknown): IpcError | null {
+  let cur: unknown = e;
+  for (let depth = 0; depth < 6 && cur; depth++) {
+    if (cur instanceof IpcError) return cur;
+    cur = typeof cur === 'object' && cur !== null ? (cur as { cause?: unknown }).cause : undefined;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- error observers

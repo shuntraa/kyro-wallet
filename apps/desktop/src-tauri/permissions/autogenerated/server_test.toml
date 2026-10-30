@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-server-test"
+description = "Enables the server_test command without any pre-configured scope."
+commands.allow = ["server_test"]
+
+[[permission]]
+identifier = "deny-server-test"
+description = "Denies the server_test command without any pre-configured scope."
+commands.deny = ["server_test"]

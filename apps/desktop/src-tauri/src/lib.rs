@@ -1,6 +1,13 @@
+mod btc_backend;
+#[cfg(feature = "cbf")]
+mod cbf;
 mod commands;
+mod commands_servers;
+mod core_rpc;
+mod electrum;
 mod error;
 mod net;
+mod servers;
 mod settings;
 mod solana;
 mod state;
@@ -58,8 +65,21 @@ pub fn run() {
             commands::sol_decode_tx,
             commands::sol_sign_tx,
             commands::net_fetch,
-            commands::settings_get,
-            commands::settings_set,
+            commands_servers::settings_get,
+            commands_servers::settings_set,
+            commands_servers::server_test,
+            commands_servers::electrum_fetch_cert,
+            commands_servers::btc_backend_info,
+            commands_servers::btc_address_info,
+            commands_servers::btc_address_utxos,
+            commands_servers::btc_address_txs,
+            commands_servers::btc_fee_rates,
+            commands_servers::btc_tip_height,
+            commands_servers::btc_broadcast,
+            commands_servers::btc_core_setup,
+            commands_servers::btc_core_status,
+            commands_servers::btc_cbf_status,
+            commands_servers::btc_cbf_sync,
             commands::set_capture_protection,
             commands::config_get,
             commands::tor_status,

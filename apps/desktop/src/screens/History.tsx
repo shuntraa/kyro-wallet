@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { useMemo, useState } from 'react';
-import { toIpcError } from '@kyro/shared';
+import { BTC_TXS_CAP, toIpcError } from '@kyro/shared';
 import { assetsFor, findAsset, unitsToNumber } from '@kyro/chains';
 import { buildRevoke, isUnlimitedAllowance } from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
@@ -133,6 +133,11 @@ export function History() {
               <ErrorLine className="px-5 py-3" onRetry={history.reload} error={Object.values(history.data.errors).join(' ')}>
                 Historique partiel : {Object.entries(history.data.errors).map(([k, v]) => `${k} (${v})`).join(', ')}
               </ErrorLine>
+            )}
+            {history.data?.btcCapped && (
+              <p className="m-0 px-[22px] pt-3 text-[12px] leading-[1.5] text-mute">
+                Bitcoin : {BTC_TXS_CAP} dernières transactions par adresse. Les plus anciennes ne sont pas listées (limite du serveur), ton solde reste exact.
+              </p>
             )}
             <p className="m-0 px-[22px] py-3 text-[11px] leading-[1.5] text-faint">
               Sans indexeur tiers, les envois d’ETH natif n’apparaissent que s’ils ont été faits depuis cet appareil. Les transferts ERC-20 des {network === 'testnet' ? '5 000' : '5 000'} derniers blocs sont lus directement sur le nœud.

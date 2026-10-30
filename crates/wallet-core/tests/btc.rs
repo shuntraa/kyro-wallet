@@ -15,7 +15,8 @@ use bitcoin::{
 };
 use common::{seed, ABANDON, LEGAL};
 use wallet_core::{
-    btc_account, btc_address, btc_decode_psbt, btc_sign_psbt, BtcKind, Error, Network,
+    btc_account, btc_address, btc_address_from_xpub, btc_decode_psbt, btc_descriptors,
+    btc_sign_psbt, BtcKind, Error, Network,
 };
 
 // ------------------------------------------------------------------------------------------
@@ -403,4 +404,73 @@ fn psbt_decode_flags_own_outputs_only() {
         vec![(external, 60_000, false), (change, 39_000, false)]
     );
     assert_eq!(summary.fee_sats, 1_000);
+}
+
+/// Descriptors are built from the official BIP84 / BIP86 account keys and fingerprint.
+#[test]
+fn watch_only_descriptors_from_bip_vectors() {
+    let s = seed(ABANDON);
+    let d = btc_descriptors(&s, Network::Mainnet, 0).unwrap();
+    let xpub84 = zpub_to_xpub("zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs");
+    let xpub86 = "xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ";
+    let got: Vec<_> = d
+        .iter()
+        .map(|x| (x.kind, x.internal, x.descriptor.clone()))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            (
+                BtcKind::Segwit,
+                false,
+                format!("wpkh([73c5da0a/84h/0h/0h]{xpub84}/0/*)")
+            ),
+            (
+                BtcKind::Segwit,
+                true,
+                format!("wpkh([73c5da0a/84h/0h/0h]{xpub84}/1/*)")
+            ),
+            (
+                BtcKind::Taproot,
+                false,
+                format!("tr([73c5da0a/86h/0h/0h]{xpub86}/0/*)")
+            ),
+            (
+                BtcKind::Taproot,
+                true,
+                format!("tr([73c5da0a/86h/0h/0h]{xpub86}/1/*)")
+            ),
+        ]
+    );
+    let t = btc_descriptors(&s, Network::Testnet, 0).unwrap();
+    assert!(t[0].descriptor.starts_with("wpkh([73c5da0a/84h/1h/0h]tpub"));
+    assert!(t.iter().all(|x| !x.descriptor.contains("prv")));
+}
+
+#[test]
+fn address_from_xpub_matches_seed_derivation() {
+    let s = seed(ABANDON);
+    for net in [Network::Mainnet, Network::Testnet] {
+        for kind in [BtcKind::Segwit, BtcKind::Taproot] {
+            let xpub = btc_account(&s, net, kind, 0).unwrap().xpub;
+            for change in [false, true] {
+                for i in [0, 1, 7, 1000] {
+                    assert_eq!(
+                        btc_address_from_xpub(&xpub, net, kind, change, i).unwrap(),
+                        btc_address(&s, net, kind, 0, change, i).unwrap()
+                    );
+                }
+            }
+        }
+    }
+    // BIP86 vector, from the account xpub alone.
+    let xpub86 = "xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ";
+    assert_eq!(
+        btc_address_from_xpub(xpub86, Network::Mainnet, BtcKind::Taproot, false, 0).unwrap(),
+        "bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr"
+    );
+    assert!(btc_address_from_xpub(xpub86, Network::Testnet, BtcKind::Taproot, false, 0).is_err());
+    assert!(
+        btc_address_from_xpub("xpubnope", Network::Mainnet, BtcKind::Segwit, false, 0).is_err()
+    );
 }

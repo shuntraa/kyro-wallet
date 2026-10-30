@@ -18,11 +18,16 @@
 
 **Total estimé : 60 à 90 jours de travail.**
 
+## Suivis B2c (filtres compacts)
+
+- **Activer `cbf` par défaut le 2026-11-11 ou après**, une fois `bip157 0.8.1` (publiée le 2026-10-28) et `bitcoin-address-book 0.2.2` (2026-10-23) âgées d'au moins deux semaines : relancer `cargo audit` et `cargo deny check` avec la fonction, et relire le diff de chaque crate par rapport à la version revue le 2026-10-30 (pas de `build.rs`, pas de macro procédurale, accès fichiers uniquement dans du code mort ou des tests).
+- **Proposer en amont (bip157) l'authentification SOCKS5 RFC 1929** (nom d'utilisateur / mot de passe) : notre pont pourrait alors exiger un jeton aléatoire par lancement, en plus de la liste de pairs. Ne pas maintenir de correctif local.
+
 ## Ce qui n'est pas faisable de façon sûre aujourd'hui
 
 - Signeurs Ledger/Trezor d'alloy et crate `xrpl-rust` : ils réintroduisent `k256` ou `crypto-bigint` 0.5.
 - `solana-remote-wallet` : exige Rust 1.98.1.
-- Filtres compacts BIP157/158 (Kyoto) **à travers le Tor intégré** : ne sait passer que par un proxy SOCKS local, exposé aux autres programmes de la machine. Possible avec un Tor système ; sinon reporté.
+- ~~Filtres compacts BIP157/158 à travers le Tor intégré~~ : fait en B2c derrière la fonction `cbf` (pont SOCKS interne verrouillé sur la liste de pairs, voir NETWORK.md).
 - Clear signing ERC-20 / SPL sur Ledger : dépend des descripteurs signés du service de métadonnées de Ledger ; sans eux l'appareil affiche des données brutes.
 - Signature Solana sur Trezor (support expérimental) et modèles Trezor à canal THP (non vérifié).
 - Testnet Dogecoin via une API publique : aucune ne fonctionne ; il faut un nœud testnet perso.

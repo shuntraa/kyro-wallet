@@ -100,7 +100,7 @@ describe('mock IPC backend', () => {
     const s = await call('settings_get');
     const next = await call('settings_set', { settings: { ...s, currency: 'USD', autoLockSecs: 300 } });
     expect(next.currency).toBe('USD');
-    expect(await rejectCode(call('settings_set', { settings: { ...s, rpc: { ethereum: 'http://insecure' } } }))).toBe('INVALID_INPUT');
+    expect(await rejectCode(call('settings_set', { settings: { ...s, servers: { ...s.servers, evm: { '11155111': { url: 'http://insecure.example' } } } } }))).toBe('SERVER_INVALID');
     const cfg = await call('config_get');
     expect(Object.keys(cfg).sort()).toEqual(['hasCoingeckoKey', 'hasOneinchKey', 'hasZeroxKey', 'network']);
   });

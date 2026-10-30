@@ -36,7 +36,7 @@ export interface DemoChainState {
   solTokens: Map<string, bigint>;
 }
 
-const EVM_HOSTS: Record<string, number> = {
+export const EVM_HOSTS: Record<string, number> = {
   'ethereum-sepolia-rpc.publicnode.com': 11155111,
   'ethereum-rpc.publicnode.com': 1,
   'arbitrum-one-rpc.publicnode.com': 42161,
@@ -51,7 +51,7 @@ const BASE_FEE_GWEI: Record<number, number> = {
   1: 4.2, 11155111: 4.2, 42161: 0.01, 10: 0.002, 8453: 0.004, 137: 32, 56: 1, 43114: 25,
 };
 
-const SOL_HOSTS = new Set(['api.devnet.solana.com', 'api.mainnet-beta.solana.com']);
+export const SOL_HOSTS = new Set(['api.devnet.solana.com', 'api.mainnet-beta.solana.com']);
 const ALLOWANCE_HOLDER = '0x0000000000001ff3684f28c67538d4d072c22734';
 const ONEINCH_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65';
 const LIFI_DIAMOND = '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae';
@@ -72,18 +72,26 @@ function rpcError(id: unknown, code: number, message: string): NetResponse {
   return json(200, { jsonrpc: '2.0', id, error: { code, message } });
 }
 
-/** Route a `net_fetch` request to the matching fake service. */
-export async function handleDemoNet(req: NetRequest, s: DemoChainState): Promise<NetResponse> {
+/** Fake service for a user's custom server (its host is not one of the known ones). */
+export type DemoRoute = { kind: 'evm'; chainId: number } | { kind: 'sol' } | { kind: 'esplora' };
+
+/** Route a `net_fetch` request to the matching fake service (`route`: a custom server's host). */
+export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: DemoRoute): Promise<NetResponse> {
   let url: URL;
   try {
     url = new URL(req.url);
   } catch {
     throw new IpcError('INVALID_INPUT', 'URL invalide.');
   }
-  if (url.protocol !== 'https:') throw new IpcError('HOST_NOT_ALLOWED', 'Seules les connexions HTTPS sont autorisées.');
+  // http:// only for a custom .onion server (over Tor, checked by the caller), like net.rs.
+  const onionCustom = route !== undefined && url.protocol === 'http:' && url.hostname.endsWith('.onion');
+  if (url.protocol !== 'https:' && !onionCustom) throw new IpcError('HOST_NOT_ALLOWED', 'Seules les connexions HTTPS sont autorisées.');
   // Small artificial latency so loading states are visible in the demo.
   await new Promise((r) => setTimeout(r, 60 + Math.random() * 120));
   const host = url.host;
+  if (route?.kind === 'evm') return evmRpc(route.chainId, req, s);
+  if (route?.kind === 'sol') return solRpc(req, s);
+  if (route?.kind === 'esplora') return esplora(url, req, s);
   if (host === 'api.coingecko.com' || host === 'pro-api.coingecko.com') return coingecko(url);
   if (host === 'mempool.space') return esplora(url, req, s);
   if (host in EVM_HOSTS) return evmRpc(EVM_HOSTS[host] ?? 1, req, s);
@@ -151,12 +159,43 @@ function coingecko(url: URL): NetResponse {
 
 // ---------------------------------------------------------------- Esplora
 
+export const DEMO_FEE_RATES = { fastestFee: 12, halfHourFee: 6, hourFee: 3, economyFee: 2, minimumFee: 1 };
+
+/**
+ * Esplora `GET /address/{a}`. Nothing is ever spent in the demo, so funded = net balance and
+ * spent = 0: the shape Electrum / Core produce too.
+ */
+export function demoEsploraAddress(s: DemoChainState, addr: string) {
+  const utxos = s.btcUtxos.get(addr) ?? [];
+  const sum = utxos.reduce((a, u) => a + u.value, 0);
+  const stats = { funded_txo_count: utxos.length, funded_txo_sum: sum, spent_txo_count: 0, spent_txo_sum: 0, tx_count: utxos.length };
+  return { address: addr, chain_stats: stats, mempool_stats: { funded_txo_count: 0, funded_txo_sum: 0, spent_txo_count: 0, spent_txo_sum: 0, tx_count: 0 } };
+}
+
+export function demoEsploraUtxos(s: DemoChainState, addr: string) {
+  return (s.btcUtxos.get(addr) ?? []).map((u) => ({ txid: u.txid, vout: u.vout, value: u.value, status: { confirmed: true, block_height: u.height } }));
+}
+
+/** Esplora `GET /address/{a}/txs` (incoming demo transactions). */
+export function demoEsploraTxs(s: DemoChainState, addr: string) {
+  const utxos = s.btcUtxos.get(addr) ?? [];
+  const spk = (a: string) => `0014${demoHash(a).slice(0, 40)}`;
+  return utxos.map((u, i) => ({
+    txid: u.txid,
+    fee: 141 + i * 12,
+    status: { confirmed: true, block_height: u.height, block_time: Math.floor(Date.now() / 1000) - (i + 1) * 86_400 * 3 },
+    vin: [{ txid: demoHash(`${u.txid}:in`), vout: 0, prevout: { scriptpubkey: spk('ext'), scriptpubkey_address: 'tb1qdemoexternalsender0000000000000000000', value: u.value + 5000 } }],
+    vout: [
+      { scriptpubkey: spk(addr), scriptpubkey_address: addr, value: u.value },
+      { scriptpubkey: spk('chg'), scriptpubkey_address: 'tb1qdemoexternalchange000000000000000000', value: 4859 },
+    ],
+  }));
+}
+
 function esplora(url: URL, req: NetRequest, s: DemoChainState): NetResponse {
   const path = url.pathname.replace(/^\/(testnet4\/|testnet\/|signet\/)?api/, '');
   if (path === '/blocks/tip/height') return text(200, String(s.tipHeight));
-  if (path === '/v1/fees/recommended') {
-    return json(200, { fastestFee: 12, halfHourFee: 6, hourFee: 3, economyFee: 2, minimumFee: 1 });
-  }
+  if (path === '/v1/fees/recommended') return json(200, DEMO_FEE_RATES);
   if (path === '/tx' && req.method === 'POST') {
     const raw = (req.body ?? '').trim();
     if (!/^[0-9a-f]+$/i.test(raw)) return text(400, 'sendrawtransaction RPC error: TX decode failed');
@@ -165,28 +204,9 @@ function esplora(url: URL, req: NetRequest, s: DemoChainState): NetResponse {
   const m = /^\/address\/([^/]+)(\/utxo|\/txs)?$/.exec(path);
   if (m) {
     const addr = m[1] ?? '';
-    const utxos = s.btcUtxos.get(addr) ?? [];
-    if (m[2] === '/utxo') {
-      return json(200, utxos.map((u) => ({ txid: u.txid, vout: u.vout, value: u.value, status: { confirmed: true, block_height: u.height } })));
-    }
-    if (m[2] === '/txs') {
-      return json(
-        200,
-        utxos.map((u, i) => ({
-          txid: u.txid,
-          fee: 141 + i * 12,
-          status: { confirmed: true, block_height: u.height, block_time: Math.floor(Date.now() / 1000) - (i + 1) * 86_400 * 3 },
-          vin: [{ txid: demoHash(`${u.txid}:in`), vout: 0, prevout: { scriptpubkey_address: 'tb1qdemoexternalsender0000000000000000000', value: u.value + 5000 } }],
-          vout: [
-            { scriptpubkey_address: addr, value: u.value },
-            { scriptpubkey_address: 'tb1qdemoexternalchange000000000000000000', value: 4859 },
-          ],
-        })),
-      );
-    }
-    const sum = utxos.reduce((a, u) => a + u.value, 0);
-    const stats = { funded_txo_count: utxos.length, funded_txo_sum: sum, spent_txo_count: 0, spent_txo_sum: 0, tx_count: utxos.length };
-    return json(200, { address: addr, chain_stats: stats, mempool_stats: { funded_txo_count: 0, funded_txo_sum: 0, spent_txo_count: 0, spent_txo_sum: 0, tx_count: 0 } });
+    if (m[2] === '/utxo') return json(200, demoEsploraUtxos(s, addr));
+    if (m[2] === '/txs') return json(200, demoEsploraTxs(s, addr));
+    return json(200, demoEsploraAddress(s, addr));
   }
   return text(404, 'Not found');
 }

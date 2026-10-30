@@ -5,7 +5,7 @@
 // them; the recovery phrase lives only in the onboarding/reveal components).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { call, isDemoMode, listenShell, toIpcError, type Accounts, type AppConfig, type Network, type Settings, type VaultStatus } from '@kyro/shared';
+import { call, EMPTY_SERVERS, isDemoMode, listenShell, toIpcError, type Accounts, type AppConfig, type Network, type Settings, type VaultStatus } from '@kyro/shared';
 import { createAdapters, type AdapterSet } from '@kyro/chains';
 import { CoinGeckoClient } from '@kyro/market';
 import { createProviders, type SwapProvider } from '@kyro/swap';
@@ -31,7 +31,7 @@ const DEFAULT_SETTINGS: Settings = {
   hideBalancesOnStart: false,
   captureProtection: true,
   clipboardGuard: true,
-  rpc: {},
+  servers: EMPTY_SERVERS,
   apiKeys: {},
   tor: { enabled: true },
 };
@@ -132,7 +132,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const acc = await call('accounts_get');
     setAccounts(acc);
-    setAdapters(createAdapters(acc, settingsRef.current.rpc));
+    setAdapters(createAdapters(acc, settingsRef.current.servers));
     setHideBalances(settingsRef.current.hideBalancesOnStart);
     setHistory([{ name: 'portfolio' }]);
     setPhase('ready');
@@ -212,7 +212,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSettings(saved);
       settingsRef.current = saved;
       torStore.setEnabled(saved.tor.enabled);
-      if (JSON.stringify(saved.rpc) !== JSON.stringify(prev.rpc) && accounts) setAdapters(createAdapters(accounts, saved.rpc));
+      // New servers → new adapters (EVM / Solana URLs; Bitcoin: fresh scan cache on the new backend).
+      if (JSON.stringify(saved.servers) !== JSON.stringify(prev.servers) && accounts) setAdapters(createAdapters(accounts, saved.servers));
       if (saved.apiKeys.coingecko !== prev.apiKeys.coingecko) market.clear();
       void refreshStatus();
     },

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-btc-address-utxos"
+description = "Enables the btc_address_utxos command without any pre-configured scope."
+commands.allow = ["btc_address_utxos"]
+
+[[permission]]
+identifier = "deny-btc-address-utxos"
+description = "Denies the btc_address_utxos command without any pre-configured scope."
+commands.deny = ["btc_address_utxos"]

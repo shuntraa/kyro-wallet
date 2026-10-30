@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Bitcoin adapter (BIP84 SegWit + BIP86 Taproot) over an Esplora API
-// (mempool.space) reached through `net_fetch`.
+// Bitcoin adapter (BIP84 SegWit + BIP86 Taproot).
+//
+// Every read and the broadcast go through the Rust `btc_*` commands (docs/IPC.md §2.2),
+// which return Esplora shapes whatever the user's server (default mempool.space, Esplora,
+// Electrum, Bitcoin Core). Rust picks the server and never falls back to the default:
+// this adapter never calls `net_fetch` for Bitcoin.
 //
 // - Addresses are derived from the account xpubs (public derivation only).
 // - Unsigned PSBTs carry witnessUtxo + bip32Derivation / tapBip32Derivation so
@@ -10,43 +14,13 @@
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { HDKey } from '@scure/bip32';
-import { call, fetchJson, fetchText, netFetch, type Accounts, type BtcKind, type BtcTxSummary, type NetFetch } from '@kyro/shared';
+import { BTC_TXS_CAP, call, type Accounts, type BtcKind, type BtcTxSummary, type EsploraTx } from '@kyro/shared';
 import type { BtcChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 import { outputTypeOf, selectAll, selectCoins, type SelectableUtxo } from './coinselect';
 import { derivePubkey, fingerprintBytes, parseXpub } from './xpub';
 
 bitcoin.initEccLib(ecc);
-
-interface EsploraStats {
-  funded_txo_sum: number;
-  spent_txo_sum: number;
-  tx_count: number;
-}
-interface EsploraAddress {
-  chain_stats: EsploraStats;
-  mempool_stats: EsploraStats;
-}
-interface EsploraUtxo {
-  txid: string;
-  vout: number;
-  value: number;
-  status: { confirmed: boolean };
-}
-interface EsploraTx {
-  txid: string;
-  fee?: number;
-  status: { confirmed: boolean; block_time?: number };
-  vin: Array<{ prevout?: { scriptpubkey_address?: string; value: number } | null }>;
-  vout: Array<{ scriptpubkey_address?: string; value: number }>;
-}
-interface FeesRecommended {
-  fastestFee: number;
-  halfHourFee: number;
-  hourFee: number;
-  economyFee: number;
-  minimumFee: number;
-}
 
 export interface DerivedAddress {
   kind: BtcKind;
@@ -62,9 +36,6 @@ export interface DerivedAddress {
 export interface BitcoinAdapterOptions {
   chain: BtcChain;
   accounts: Accounts['btc'];
-  /** Esplora base URL override (Settings › RPC). */
-  esploraUrl?: string;
-  fetch?: NetFetch;
   /** Consecutive unused addresses before stopping a scan. */
   gapLimit?: number;
 }
@@ -76,20 +47,21 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   readonly family = 'btc' as const;
   readonly chain: BtcChain;
   private readonly net: bitcoin.Network;
-  private readonly fetcher: NetFetch;
-  private readonly base: string;
   private readonly gap: number;
   private readonly accounts: Accounts['btc'];
   private readonly keys: Record<BtcKind, HDKey>;
   private scanCache: { at: number; addrs: DerivedAddress[] } | null = null;
   private scanning: Promise<DerivedAddress[]> | null = null;
+  /**
+   * True when the last `getHistory` hit the server cap (`BTC_TXS_CAP` transactions for at
+   * least one address): older transactions are not shown. The UI says "50 dernières".
+   */
+  historyCapped = false;
 
   constructor(opts: BitcoinAdapterOptions) {
     this.chain = opts.chain;
     this.accounts = opts.accounts;
     this.net = opts.chain.network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
-    this.fetcher = opts.fetch ?? netFetch;
-    this.base = (opts.esploraUrl || opts.chain.esploraUrl).replace(/\/+$/, '');
     this.gap = opts.gapLimit ?? 5;
     this.keys = { segwit: parseXpub(opts.accounts.segwit.xpub), taproot: parseXpub(opts.accounts.taproot.xpub) };
     // Sanity check: our derivation must match what Rust derived.
@@ -134,9 +106,11 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
           let unused = 0;
           for (let i = 0; i < MAX_SCAN && unused < (change === 0 ? this.gap : Math.max(2, this.gap - 2)); i++) {
             const d = this.addressAt(kind, change, i);
-            const info = await fetchJson<EsploraAddress>(this.fetcher, `${this.base}/address/${d.address}`);
+            const info = await call('btc_address_info', { address: d.address });
             const txs = info.chain_stats.tx_count + info.mempool_stats.tx_count;
             d.used = txs > 0;
+            // Esplora: funded − spent. Electrum / Core: funded already carries the net balance
+            // (spent = 0, or the negative part of an unconfirmed spend): same formula.
             d.balance = BigInt(info.chain_stats.funded_txo_sum - info.chain_stats.spent_txo_sum + info.mempool_stats.funded_txo_sum - info.mempool_stats.spent_txo_sum);
             out.push(d);
             unused = d.used ? 0 : unused + 1;
@@ -159,11 +133,11 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   }
 
   async tipHeight(): Promise<number> {
-    return Number(await fetchText(this.fetcher, `${this.base}/blocks/tip/height`));
+    return Number(await call('btc_tip_height'));
   }
 
   async estimateFees(): Promise<FeeEstimates> {
-    const f = await fetchJson<FeesRecommended>(this.fetcher, `${this.base}/v1/fees/recommended`);
+    const f = await call('btc_fee_rates');
     const min = Math.max(1, f.minimumFee);
     const slow = Math.max(min, f.hourFee);
     const normal = Math.max(slow, f.halfHourFee);
@@ -184,7 +158,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     const addrs = (await this.scan()).filter((a) => a.used);
     const lists = await Promise.all(
       addrs.map(async (owner) => {
-        const list = await fetchJson<EsploraUtxo[]>(this.fetcher, `${this.base}/address/${owner.address}/utxo`);
+        const list = await call('btc_address_utxos', { address: owner.address });
         return list.map((u) => ({ txid: u.txid, vout: u.vout, value: BigInt(u.value), type: owner.kind === 'segwit' ? ('p2wpkh' as const) : ('p2tr' as const), owner }));
       }),
     );
@@ -260,7 +234,8 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   }
 
   async broadcast(signed: BtcSigned): Promise<string> {
-    const txid = (await fetchText(this.fetcher, `${this.base}/tx`, { method: 'POST', body: signed.hex, headers: { 'content-type': 'text/plain' } })).trim();
+    // Rust checks that the server's txid matches the transaction.
+    const txid = (await call('btc_broadcast', { hex: signed.hex })).trim();
     return txid || signed.txid;
   }
 
@@ -268,10 +243,13 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     const addrs = (await this.scan()).filter((a) => a.used);
     const own = new Set(addrs.map((a) => a.address));
     const seen = new Map<string, EsploraTx>();
-    const lists = await Promise.all(addrs.map((a) => fetchJson<EsploraTx[]>(this.fetcher, `${this.base}/address/${a.address}/txs`)));
+    // At most BTC_TXS_CAP most recent per address (unconfirmed first).
+    const lists = await Promise.all(addrs.map((a) => call('btc_address_txs', { address: a.address })));
+    this.historyCapped = lists.some((l) => l.length >= BTC_TXS_CAP);
     for (const list of lists) for (const tx of list) seen.set(tx.txid, tx);
     const items: HistoryItem[] = [];
     for (const tx of seen.values()) {
+      // `prevout: null` = funding tx unknown to the server (Core: outside the wallet), never ours.
       const spent = tx.vin.reduce((s, i) => s + (i.prevout?.scriptpubkey_address && own.has(i.prevout.scriptpubkey_address) ? BigInt(i.prevout.value) : 0n), 0n);
       const received = tx.vout.reduce((s, o) => s + (o.scriptpubkey_address && own.has(o.scriptpubkey_address) ? BigInt(o.value) : 0n), 0n);
       const fee = BigInt(tx.fee ?? 0);

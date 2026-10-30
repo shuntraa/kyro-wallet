@@ -4,6 +4,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { fmtNumber } from '../lib/format';
+import { bitcoinServerFor } from '@kyro/shared';
 import { useApp } from '../state/app';
 import { torWaiting, useTor } from '../state/tor';
 import { TorIndicator } from '../components/Tor';
@@ -37,8 +38,15 @@ interface NetStat {
 }
 
 /** Live status bar of the unlocked app. */
-export function StatusBar({ syncing, failedChains, extra }: { syncing: boolean; failedChains: string[]; extra?: ReactNode }) {
-  const { adapters, accounts } = useApp();
+export function StatusBar({ syncing, failedChains, serverDownChains = [], extra }: { syncing: boolean; failedChains: string[]; serverDownChains?: string[]; extra?: ReactNode }) {
+  const { adapters, accounts, settings, network } = useApp();
+  // Small "perso" hint next to a chain served by the user's own server.
+  const custom = {
+    btc: bitcoinServerFor(settings.servers, network).kind !== 'default',
+    evm: adapters ? settings.servers.evm[String([...adapters.evm.values()][0]?.chain.chainId)] !== undefined : false,
+    sol: adapters ? settings.servers.solana[adapters.sol.chain.cluster] !== undefined : false,
+  };
+  const perso = (on: boolean) => (on ? <span className="text-mute" title="Serveur personnalisé (Réglages › Réseaux et serveurs)"> · perso</span> : null);
   const tor = useTor();
   const torBlocked = torWaiting(tor);
   // Re-probe as soon as Tor comes up instead of waiting for the next 30 s tick.
@@ -90,16 +98,27 @@ export function StatusBar({ syncing, failedChains, extra }: { syncing: boolean; 
         <>
           <span className="flex items-center gap-1.5 text-mute">
             <Dot color={torBlocked ? '#8C929D' : syncing ? '#7CC4FF' : degraded ? '#F5B74F' : '#3DDC97'} />
-            {torBlocked ? 'En attente de Tor…' : syncing ? 'Synchronisation…' : degraded ? `Partiel${failedChains.length ? ` · ${failedChains.join(', ')} injoignable` : ''}` : 'Synchronisé'}
+            {torBlocked
+              ? 'En attente de Tor…'
+              : syncing
+                ? 'Synchronisation…'
+                : serverDownChains.length > 0
+                  ? `Ton serveur ne répond pas · ${serverDownChains.map((k) => adapters?.all.find((x) => x.chain.key === k)?.chain.label ?? k).join(', ')}`
+                  : degraded
+                    ? `Partiel${failedChains.length ? ` · ${failedChains.join(', ')} injoignable` : ''}`
+                    : 'Synchronisé'}
           </span>
           <span>
-            {btcLabel} · {stat.btcHeight !== null ? `bloc ${fmtNumber(stat.btcHeight, 0)}` : 'hors ligne'}
+            {btcLabel}
+            {perso(custom.btc)} · {stat.btcHeight !== null ? `bloc ${fmtNumber(stat.btcHeight, 0)}` : 'hors ligne'}
           </span>
           <span>
-            {evmLabel} · {stat.evmMs !== null ? `${stat.evmMs} ms` : 'hors ligne'}
+            {evmLabel}
+            {perso(custom.evm)} · {stat.evmMs !== null ? `${stat.evmMs} ms` : 'hors ligne'}
           </span>
           <span>
-            {solLabel} · {stat.solMs !== null ? `${stat.solMs} ms` : 'hors ligne'}
+            {solLabel}
+            {perso(custom.sol)} · {stat.solMs !== null ? `${stat.solMs} ms` : 'hors ligne'}
           </span>
           {extra}
         </>

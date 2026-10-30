@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-btc-cbf-status"
+description = "Enables the btc_cbf_status command without any pre-configured scope."
+commands.allow = ["btc_cbf_status"]
+
+[[permission]]
+identifier = "deny-btc-cbf-status"
+description = "Denies the btc_cbf_status command without any pre-configured scope."
+commands.deny = ["btc_cbf_status"]

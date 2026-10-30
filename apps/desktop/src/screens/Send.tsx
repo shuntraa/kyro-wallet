@@ -35,6 +35,7 @@ import { addLocalTx, bumpContactSends, findContact, getContacts, saveContacts, t
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
 import { useTorBlocked } from '../components/Tor';
+import { ServerDownLine, serverDown } from '../components/ServerDown';
 import { useOnTorReady } from '../state/tor';
 import { SolSummaryView } from '../components/SolSummaryView';
 import { Menu } from '../components/ui/menu';
@@ -417,7 +418,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
               <span className="text-[12px] font-medium text-mute">Frais réseau</span>
-              <span className="text-[12px] text-faint">{fees.data ? `Réseau actuel : ${fees.data.hint.replace('.', ',')}` : fees.error ? (feesTorBlocked ? 'En attente de Tor…' : <span className="text-down">Frais indisponibles</span>) : 'Estimation…'}</span>
+              <span className="text-[12px] text-faint">{fees.data ? `Réseau actuel : ${fees.data.hint.replace('.', ',')}` : fees.error ? (feesTorBlocked ? 'En attente de Tor…' : serverDown(fees.error) ? <span className="text-warn">Ton serveur ne répond pas</span> : <span className="text-down">Frais indisponibles</span>) : 'Estimation…'}</span>
             </div>
             <div role="radiogroup" aria-label="Frais réseau" className="flex gap-2">
               {LEVELS.map(({ level, label }) => {
@@ -514,7 +515,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               <Spinner /> Préparation et décodage…
             </span>
           )}
-          {buildError && <Notice tone="error">{buildError}</Notice>}
+          {buildError && (serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
           {built && addrValid && sendAmount !== null && (
             <EnClair>
               Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>
@@ -527,7 +528,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
           <div className="flex-1" />
           <PasswordField id="send-pw" value={password} onChange={setPassword} onEnter={() => canSign && void sign()} />
-          {signError && <Notice tone="error">{signError}</Notice>}
+          {signError && (serverDown(signError) ? <ServerDownLine /> : <Notice tone="error">{signError}</Notice>)}
           <Button variant="primary" size="xl" disabled={!canSign} onClick={() => void sign()}>
             {signing && <Spinner />} Signer et envoyer
           </Button>

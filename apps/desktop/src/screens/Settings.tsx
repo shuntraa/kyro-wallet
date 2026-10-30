@@ -7,6 +7,7 @@ import { cn } from '../lib/cn';
 import { shortAddress } from '../lib/format';
 import { getBackupState, getContacts, saveContacts, type Contact, type ContactFamily } from '../lib/storage';
 import { PasswordField } from '../components/kit';
+import { ServersSection } from './settings/Servers';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
 import { IconCheck, IconEye, IconPhoneKey, IconTor, IconTrash, IconUsbKey, IconWarn, IconX } from '../components/icons';
@@ -17,7 +18,7 @@ const SECTIONS: Array<{ key: SettingsSection; label: string }> = [
   { key: 'security', label: 'Sécurité' },
   { key: 'privacy', label: 'Confidentialité' },
   { key: 'hardware', label: 'Hardware wallets' },
-  { key: 'networks', label: 'Réseaux et RPC' },
+  { key: 'networks', label: 'Réseaux et serveurs' },
   { key: 'display', label: 'Affichage et devise' },
   { key: 'apikeys', label: 'Clés API' },
   { key: 'connections', label: 'Connexions sortantes' },
@@ -70,7 +71,7 @@ export function SettingsScreen({ section: initial = 'security' }: { section?: Se
           {section === 'security' && <Security save={save} />}
           {section === 'privacy' && <Privacy />}
           {section === 'hardware' && <Hardware />}
-          {section === 'networks' && <Networks save={save} />}
+          {section === 'networks' && <ServersSection />}
           {section === 'display' && <Display save={save} />}
           {section === 'apikeys' && <ApiKeys save={save} />}
           {section === 'connections' && <Connections />}
@@ -330,52 +331,6 @@ function Hardware() {
   );
 }
 
-function Networks({ save }: { save: Save }) {
-  const { settings, network } = useApp();
-  const [rpc, setRpc] = useState(settings.rpc);
-  const fields: Array<{ key: keyof Settings['rpc']; label: string; placeholder: string }> = [
-    { key: 'ethereum', label: network === 'testnet' ? 'Ethereum Sepolia (RPC)' : 'Ethereum (RPC)', placeholder: network === 'testnet' ? 'https://ethereum-sepolia-rpc.publicnode.com' : 'https://ethereum-rpc.publicnode.com' },
-    { key: 'solana', label: 'Solana (RPC)', placeholder: network === 'testnet' ? 'https://api.devnet.solana.com' : 'https://api.mainnet-beta.solana.com' },
-    { key: 'esplora', label: 'Bitcoin (Esplora)', placeholder: network === 'testnet' ? 'https://mempool.space/testnet4/api' : 'https://mempool.space/api' },
-  ];
-  const invalid = Object.values(rpc).some((u) => u && !/^https:\/\/[^/\s]+/.test(u));
-  return (
-    <Panel className="gap-4 py-5">
-      <div className="flex items-center justify-between">
-        <span className="text-[15px] font-semibold">Réseau</span>
-        <Badge tone={network === 'testnet' ? 'warn' : 'up'}>{network === 'testnet' ? 'Testnet' : 'Mainnet'}</Badge>
-      </div>
-      <p className="m-0 text-[13px] leading-[1.5] text-mute">{network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia et Solana devnet. Les jetons n’ont aucune valeur.' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana.'} Le réseau est fixé au lancement (KYRO_NETWORK).</p>
-      <span className="pt-2 text-[15px] font-semibold">Nœuds personnalisés</span>
-      <p className="m-0 -mt-2 text-[13px] text-mute">Laisse vide pour utiliser les nœuds publics. HTTPS uniquement ; l’hôte saisi est ajouté à la liste autorisée.</p>
-      {fields.map((f) => (
-        <label key={f.key} className="flex flex-col gap-1.5">
-          <span className="text-[12px] font-medium text-mute">{f.label}</span>
-          <Input value={rpc[f.key] ?? ''} placeholder={f.placeholder} onChange={(e) => setRpc((r) => ({ ...r, [f.key]: e.target.value.trim() }))} className="font-mono text-[13px]" />
-        </label>
-      ))}
-      {invalid && <span className="text-[12px] text-down">Adresse invalide : https:// obligatoire.</span>}
-      <div className="flex gap-2 pb-1">
-        <Button
-          variant="primary"
-          disabled={invalid}
-          onClick={() => {
-            const clean: Settings['rpc'] = {};
-            for (const f of fields) {
-              const v = rpc[f.key];
-              if (v) clean[f.key] = v;
-            }
-            void save({ rpc: clean });
-          }}
-        >
-          Enregistrer
-        </Button>
-        <Button onClick={() => setRpc({})}>Revenir aux nœuds publics</Button>
-      </div>
-    </Panel>
-  );
-}
-
 function Display({ save }: { save: Save }) {
   const { settings } = useApp();
   return (
@@ -431,7 +386,7 @@ function ApiKeys({ save }: { save: Save }) {
 
 function Connections({ compact }: { compact?: boolean }) {
   const { settings, network, navigate } = useApp();
-  const hosts = outgoingHosts(network, settings.rpc);
+  const hosts = outgoingHosts(network, settings.servers);
   return (
     <section className="flex h-full flex-col gap-3 rounded-[22px] border border-line bg-card px-[22px] py-5">
       <div className="flex items-center justify-between">
@@ -445,16 +400,17 @@ function Connections({ compact }: { compact?: boolean }) {
         {hosts.map((h) => (
           <div key={h.host + h.purpose} className="flex items-center gap-3 rounded-[12px] bg-raised px-4 py-2.5">
             <span className="size-1.5 shrink-0 rounded-full bg-up" />
-            <span className="flex min-w-0 flex-col">
+            <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate font-mono text-[12px]">{h.host}</span>
               <span className="text-[12px] text-mute">{h.purpose}</span>
             </span>
+            {h.custom && <Badge tone="ice">perso</Badge>}
           </div>
         ))}
       </div>
       {compact && (
         <Button variant="outline" size="lg" onClick={() => navigate({ name: 'settings', section: 'networks' })}>
-          Utiliser mes propres nœuds RPC
+          Utiliser mes propres serveurs
         </Button>
       )}
     </section>

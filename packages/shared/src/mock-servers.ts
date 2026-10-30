@@ -1,0 +1,381 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// DEMO ONLY — custom servers (B2b): live checks, Electrum certificates, Bitcoin data in
+// Esplora shapes whatever the backend, Bitcoin Core watch-only wallet. Mirrors
+// apps/desktop/src-tauri/src/{servers,commands_servers,btc_backend}.rs.
+//
+// Scenarios are chosen by the URL / host the user types (like `?tor=fail` for Tor):
+//   - contains « down »    → SERVER_UNREACHABLE (connection, TLS, timeout);
+//   - contains « flaky »   → passes the check at save, then SERVER_UNREACHABLE on every data
+//     request (a server that went down later: the UI must say so, never fall back);
+//   - contains « wrong »   → SERVER_WRONG_NETWORK (other genesis / chainId);
+//   - Electrum host with « self » → self-signed certificate (webpkiValid = false, must be pinned);
+//   - Core: user/password « wrong » → SERVER_INVALID (RPC auth refused); a cookie path
+//     containing « missing » → SERVER_INVALID (unreadable .cookie).
+// Once a custom server is set for a chain, the default host of that chain is refused
+// (DEFAULT_SERVER_DISABLED), exactly like Rust: never a silent fallback.
+
+import * as bitcoin from 'bitcoinjs-lib';
+import { sha256 } from '@noble/hashes/sha2';
+import { bytesToHex } from '@noble/hashes/utils';
+import {
+  IpcError,
+  type BtcNetworkKey,
+  type BtcServer,
+  type CoreRescanFrom,
+  type CoreStatus,
+  type ElectrumCertInfo,
+  type Network,
+  type NetRequest,
+  type NetResponse,
+  type RpcServer,
+  type ServerTestResult,
+  type ServerTestTarget,
+  type Servers,
+  type Settings,
+  type SolanaCluster,
+} from './ipc';
+import { bitcoinServerFor, btcNetworkKey, checkBtcServer, checkServerUrl, coreIsLocal, isOnion, mergeServerSecrets, solanaCluster } from './servers';
+import { DEMO_FEE_RATES, EVM_HOSTS, demoEsploraAddress, demoEsploraTxs, demoEsploraUtxos, handleDemoNet, type DemoChainState, type DemoRoute } from './mock-net';
+import type { DemoTor } from './mock-tor';
+
+const BTC_GENESIS: Record<BtcNetworkKey, string> = {
+  mainnet: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f',
+  testnet4: '00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043',
+};
+const SOL_GENESIS: Record<SolanaCluster, string> = {
+  devnet: 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',
+  'mainnet-beta': '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d',
+};
+const SOL_DEFAULT_HOST: Record<SolanaCluster, string> = { devnet: 'api.devnet.solana.com', 'mainnet-beta': 'api.mainnet-beta.solana.com' };
+const EVM_DEFAULT_HOST = new Map(Object.entries(EVM_HOSTS).map(([host, id]) => [id, host]));
+
+/** Simulated rescan duration of `btc_core_setup` with a date (a real one can take hours). */
+export const DEMO_RESCAN_MS = 8000;
+const IMPORT_MS = 1200;
+
+const invalid = (m: string) => new IpcError('SERVER_INVALID', `Serveur invalide : ${m}`);
+const wrongNet = (m: string) => new IpcError('SERVER_WRONG_NETWORK', `Mauvais réseau : ${m}`);
+const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', `Serveur injoignable : ${m}`);
+
+const hostOfUrl = (url: string): string => {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+};
+const has = (s: string, word: string) => s.toLowerCase().includes(word);
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Down for data requests (not for the live check when only « flaky »). */
+const downLater = (s: string) => has(s, 'down') || has(s, 'flaky');
+
+/** Deterministic demo certificate of `host:port`. */
+export function demoElectrumCert(host: string, port: number): ElectrumCertInfo {
+  return { sha256: bytesToHex(sha256(new TextEncoder().encode(`kyro-demo-cert:${host.toLowerCase()}:${port}`))), webpkiValid: !has(host, 'self') };
+}
+
+/** Text of a server for scenario words (url, or host for Electrum). */
+function scenarioText(s: BtcServer | RpcServer): string {
+  if ('kind' in s) {
+    if (s.kind === 'electrum') return s.host;
+    if (s.kind === 'default') return '';
+  }
+  return (s as { url: string }).url;
+}
+
+export interface DemoServersDeps {
+  chain: DemoChainState;
+  network: Network;
+  /** Master fingerprint (8 hex) → `kyro-watch-<fp>`. */
+  fingerprint: string;
+  tor: DemoTor;
+  settings: () => Settings;
+  requireUnlocked: () => void;
+}
+
+export function createDemoServers(d: DemoServersDeps) {
+  const wallets = new Set<string>(); // Core watch wallets created (per node URL)
+  let job: { url: string; state: 'importing' | 'ready' | 'error'; started: number; rescanMs: number; error?: string } | null = null;
+  const walletName = `kyro-watch-${d.fingerprint}`;
+
+  const torOn = () => d.settings().tor.enabled;
+  /** Through Tor when enabled (fail closed), except a local/LAN Bitcoin Core reached directly. */
+  const gate = async (direct = false) => {
+    if (torOn() && !direct) await d.tor.waitReady();
+    await wait(80 + Math.random() * 180);
+  };
+
+  const checkElectrumCert = (s: Extract<BtcServer, { kind: 'electrum' }>) => {
+    if (s.tls === 'none') return;
+    const cert = demoElectrumCert(s.host, s.port);
+    if (s.tls === 'pinned' && cert.sha256 !== (s.certSha256 ?? '').replace(/[:\s]/g, '').toLowerCase()) {
+      throw unreachable(`${s.host}:${s.port} : le certificat ne correspond pas à l’empreinte épinglée`);
+    }
+    if (s.tls === 'webpki' && !cert.webpkiValid) throw unreachable(`${s.host}:${s.port} : certificat non reconnu par les autorités (auto-signé ?) — épingle-le`);
+  };
+
+  const checkCoreAuth = (s: Extract<BtcServer, { kind: 'core' }>) => {
+    if (s.auth.kind === 'cookie' && has(s.auth.cookiePath, 'missing')) throw invalid(`fichier .cookie illisible (${s.auth.cookiePath})`);
+    if (s.auth.kind === 'userpass') {
+      if (!s.auth.password) throw invalid('mot de passe RPC manquant');
+      if (s.auth.user === 'wrong' || s.auth.password === 'wrong') throw invalid('authentification RPC refusée par le nœud (HTTP 401)');
+    }
+  };
+
+  /** Live check of a Bitcoin server on `net` (btc_backend::probe). */
+  const probeBtc = async (net: BtcNetworkKey, s: BtcServer): Promise<ServerTestResult['detected']> => {
+    if (s.kind === 'default') return { network: net, genesisHash: BTC_GENESIS[net], blockHeight: d.chain.tipHeight };
+    await gate(s.kind === 'core' && coreIsLocal(s.url));
+    const text = scenarioText(s);
+    if (has(text, 'down')) throw unreachable(`${s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(text)} : délai de connexion dépassé`);
+    if (s.kind === 'electrum') checkElectrumCert(s);
+    if (s.kind === 'core') checkCoreAuth(s);
+    const other: BtcNetworkKey = net === 'mainnet' ? 'testnet4' : 'mainnet';
+    if (has(text, 'wrong')) {
+      throw wrongNet(s.kind === 'core' ? `le nœud est sur « ${other === 'mainnet' ? 'main' : 'testnet4'} », pas sur « ${net === 'mainnet' ? 'main' : 'testnet4'} »` : `genesis de ${other} au lieu de ${net}`);
+    }
+    const out: ServerTestResult['detected'] = { network: net, genesisHash: BTC_GENESIS[net], blockHeight: d.chain.tipHeight };
+    if (s.kind === 'electrum') out.serverVersion = 'ElectrumX 1.18.0 (démo)';
+    if (s.kind === 'core') out.serverVersion = '/Satoshi:28.1.0/ (démo)';
+    return out;
+  };
+
+  const probeEvm = async (chainId: number, s: RpcServer): Promise<ServerTestResult['detected']> => {
+    await gate();
+    if (has(s.url, 'down')) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
+    if (has(s.url, 'wrong')) throw wrongNet(`chainId ${chainId === 1 ? 11155111 : 1} au lieu de ${chainId}`);
+    return { chainId };
+  };
+
+  const probeSol = async (cluster: SolanaCluster, s: RpcServer): Promise<ServerTestResult['detected']> => {
+    await gate();
+    if (has(s.url, 'down')) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
+    if (has(s.url, 'wrong')) throw wrongNet(`ce RPC est sur ${cluster === 'devnet' ? 'mainnet-beta' : 'devnet'}, pas sur ${cluster}`);
+    return { network: cluster, genesisHash: SOL_GENESIS[cluster] };
+  };
+
+  /** Syntax validation of all servers (servers.rs `validate`), SERVER_INVALID prefixed by the slot. */
+  const validate = (servers: Servers, tor: boolean) => {
+    for (const key of ['mainnet', 'testnet4'] as const) {
+      const s = servers.bitcoin[key];
+      if (!s) continue;
+      const bad = checkBtcServer(s, tor) ?? (s.kind === 'core' && s.auth.kind === 'userpass' && !s.auth.password ? 'mot de passe RPC manquant' : null);
+      if (bad) throw invalid(`bitcoin ${key} : ${bad}`);
+    }
+    for (const [chain, s] of Object.entries(servers.evm)) {
+      if (!/^[1-9]\d*$/.test(chain)) throw invalid(`evm : chainId invalide « ${chain} »`);
+      const bad = checkServerUrl(s.url, tor);
+      if (bad) throw invalid(`evm ${chain} : ${bad}`);
+    }
+    for (const [cluster, s] of Object.entries(servers.solana)) {
+      if (cluster !== 'devnet' && cluster !== 'mainnet-beta') throw invalid(`solana : cluster inconnu « ${cluster} » (devnet ou mainnet-beta)`);
+      const bad = s ? checkServerUrl(s.url, tor) : null;
+      if (bad) throw invalid(`solana ${cluster} : ${bad}`);
+    }
+  };
+
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+  /** `settings_set` server part: merge secrets, validate, live-check what changed. Returns the servers to store. */
+  const prepareSave = async (next: Servers, stored: Servers, tor: boolean): Promise<Servers> => {
+    const merged = mergeServerSecrets(next, stored);
+    validate(merged, tor);
+    for (const key of ['mainnet', 'testnet4'] as const) {
+      const s = merged.bitcoin[key];
+      if (s && s.kind !== 'default' && !same(s, stored.bitcoin[key])) await probeBtc(key, s);
+    }
+    for (const [chain, s] of Object.entries(merged.evm)) if (!same(s, stored.evm[chain])) await probeEvm(Number(chain), s);
+    for (const cluster of ['devnet', 'mainnet-beta'] as const) {
+      const s = merged.solana[cluster];
+      if (s && !same(s, stored.solana[cluster])) await probeSol(cluster, s);
+    }
+    return merged;
+  };
+
+  const serverTest = async (target: ServerTestTarget): Promise<ServerTestResult> => {
+    const tor = torOn();
+    const t0 = Date.now();
+    let detected: ServerTestResult['detected'];
+    if (target.family === 'bitcoin') {
+      if (target.network !== 'mainnet' && target.network !== 'testnet4') throw invalid(`réseau Bitcoin inconnu « ${String(target.network)} » (mainnet ou testnet4)`);
+      const probe: Servers = { bitcoin: { [target.network]: target.server }, evm: {}, solana: {} };
+      const merged = mergeServerSecrets(probe, d.settings().servers);
+      validate(merged, tor);
+      detected = await probeBtc(target.network, merged.bitcoin[target.network] ?? { kind: 'default' });
+    } else if (target.family === 'evm') {
+      validate({ bitcoin: {}, evm: { [String(target.chainId)]: target.server }, solana: {} }, tor);
+      detected = await probeEvm(target.chainId, target.server);
+    } else {
+      validate({ bitcoin: {}, evm: {}, solana: { [target.cluster]: target.server } }, tor);
+      detected = await probeSol(target.cluster, target.server);
+    }
+    return { latencyMs: Math.max(1, Date.now() - t0), detected };
+  };
+
+  const electrumFetchCert = async (host: unknown, port: unknown): Promise<ElectrumCertInfo> => {
+    const h = String(host ?? '').trim();
+    const p = Number(port);
+    if (!h || /[/@\s]/.test(h) || !Number.isInteger(p) || p < 1 || p > 65535) throw invalid('hôte ou port Electrum invalide');
+    if (isOnion(h) && !torOn()) throw invalid('adresse .onion : exige Tor activé');
+    await gate();
+    if (has(h, 'down')) throw unreachable(`${h}:${p} : délai de connexion dépassé`);
+    return demoElectrumCert(h, p);
+  };
+
+  // ------------------------------------------------------------ Bitcoin data (Esplora shapes)
+
+  const current = (): BtcServer => bitcoinServerFor(d.settings().servers, d.network);
+
+  /** Gate + checks of the active backend before a read or a broadcast. */
+  const backend = async (): Promise<BtcServer> => {
+    const s = current();
+    if (s.kind === 'default') {
+      await gate();
+      return s;
+    }
+    await gate(s.kind === 'core' && coreIsLocal(s.url));
+    const text = scenarioText(s);
+    if (downLater(text)) throw unreachable(`${s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(text)} : délai de connexion dépassé`);
+    if (s.kind === 'electrum') checkElectrumCert(s);
+    if (s.kind === 'core') {
+      checkCoreAuth(s);
+      if (!wallets.has(s.url)) throw invalid(`portefeuille de surveillance « ${walletName} » absent sur le nœud : lance la configuration (btc_core_setup)`);
+    }
+    return s;
+  };
+
+  const checkAddress = (a: unknown): string => {
+    const addr = String(a ?? '');
+    try {
+      bitcoin.address.toOutputScript(addr, d.network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin);
+    } catch {
+      throw new IpcError('INVALID_INPUT', `Entrée invalide : adresse Bitcoin invalide pour ce réseau « ${addr} »`);
+    }
+    return addr;
+  };
+
+  const btc = {
+    async addressInfo(a: unknown) {
+      const addr = checkAddress(a);
+      await backend();
+      return demoEsploraAddress(d.chain, addr);
+    },
+    async addressUtxos(a: unknown) {
+      const addr = checkAddress(a);
+      await backend();
+      return demoEsploraUtxos(d.chain, addr);
+    },
+    async addressTxs(a: unknown) {
+      const addr = checkAddress(a);
+      const s = await backend();
+      const txs = demoEsploraTxs(d.chain, addr);
+      // Core only knows wallet transactions: inputs from outside the wallet have no prevout.
+      return s.kind === 'core' ? txs.map(({ fee: _fee, ...t }) => ({ ...t, vin: t.vin.map((i) => ({ ...i, prevout: null })) })) : txs;
+    },
+    async feeRates() {
+      await backend();
+      return { ...DEMO_FEE_RATES };
+    },
+    async tipHeight() {
+      await backend();
+      return d.chain.tipHeight;
+    },
+    async broadcast(hex: unknown) {
+      const raw = String(hex ?? '').trim();
+      let txid: string;
+      try {
+        txid = bitcoin.Transaction.fromHex(raw).getId();
+      } catch {
+        throw new IpcError('INVALID_INPUT', 'Entrée invalide : transaction hexadécimale invalide');
+      }
+      await backend();
+      return txid;
+    },
+    info() {
+      const s = current();
+      const label = s.kind === 'default' ? 'mempool.space' : s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(s.url);
+      return { kind: s.kind, network: btcNetworkKey(d.network), label, tor: torOn() };
+    },
+  };
+
+  // ------------------------------------------------------------ Bitcoin Core watch-only wallet
+
+  const coreServer = (): Extract<BtcServer, { kind: 'core' }> => {
+    const s = current();
+    if (s.kind !== 'core') throw new IpcError('INVALID_INPUT', 'Entrée invalide : aucun nœud Bitcoin Core n’est configuré pour ce réseau');
+    return s;
+  };
+
+  const coreStatus = async (): Promise<CoreStatus> => {
+    const s = coreServer();
+    d.requireUnlocked();
+    await gate(coreIsLocal(s.url));
+    if (has(s.url, 'down')) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
+    checkCoreAuth(s);
+    const loaded = wallets.has(s.url);
+    const st: CoreStatus = { wallet: walletName, state: loaded ? 'ready' : 'idle', walletLoaded: loaded };
+    if (job && job.url === s.url) {
+      const elapsed = Date.now() - job.started;
+      if (job.state === 'importing' && elapsed >= IMPORT_MS + job.rescanMs) job.state = 'ready';
+      st.state = job.state;
+      if (job.error) st.error = job.error;
+      if (job.state === 'importing' && job.rescanMs > 0 && elapsed >= IMPORT_MS) {
+        st.scanProgress = Math.min(0.999, (elapsed - IMPORT_MS) / job.rescanMs);
+        st.scanDurationSecs = Math.floor((elapsed - IMPORT_MS) / 1000);
+      }
+    }
+    return st;
+  };
+
+  const coreSetup = async (rescanFrom: unknown): Promise<CoreStatus> => {
+    const s = coreServer();
+    d.requireUnlocked();
+    if (rescanFrom !== 'now' && !(typeof rescanFrom === 'number' && Number.isInteger(rescanFrom) && rescanFrom >= 0)) {
+      throw new IpcError('INVALID_INPUT', `Entrée invalide : rescanFrom : « now » ou un horodatage UNIX attendu (reçu « ${String(rescanFrom)} »)`);
+    }
+    // Validation happens in the background job in Rust; the demo checks reachability up front.
+    await gate(coreIsLocal(s.url));
+    if (has(s.url, 'down')) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
+    checkCoreAuth(s);
+    wallets.add(s.url);
+    job = { url: s.url, state: 'importing', started: Date.now(), rescanMs: (rescanFrom as CoreRescanFrom) === 'now' ? 0 : DEMO_RESCAN_MS };
+    return { wallet: walletName, state: 'importing', walletLoaded: false };
+  };
+
+  // ------------------------------------------------------------ net_fetch routing
+
+  /** Custom-server policy of `net_fetch`: replaced defaults refused, custom hosts served (or down). */
+  const routeNet = (req: NetRequest): DemoRoute | undefined => {
+    const host = hostOfUrl(req.url);
+    const servers = d.settings().servers;
+    const disabled = (what: string) => new IpcError('DEFAULT_SERVER_DISABLED', `Serveur par défaut désactivé : ${what} (un serveur personnalisé est configuré pour cette chaîne)`);
+    const btcSrv = bitcoinServerFor(servers, d.network);
+    if (host === 'mempool.space' && btcSrv.kind !== 'default') throw disabled(host);
+    for (const [chain, s] of Object.entries(servers.evm)) {
+      if (EVM_DEFAULT_HOST.get(Number(chain)) === host) throw disabled(host);
+      if (hostOfUrl(s.url) === host) {
+        if (downLater(s.url)) throw unreachable(`${host} : délai de connexion dépassé`);
+        return { kind: 'evm', chainId: Number(chain) };
+      }
+    }
+    for (const cluster of ['devnet', 'mainnet-beta'] as const) {
+      const s = servers.solana[cluster];
+      if (!s) continue;
+      if (SOL_DEFAULT_HOST[cluster] === host) throw disabled(host);
+      if (hostOfUrl(s.url) === host) {
+        if (downLater(s.url)) throw unreachable(`${host} : délai de connexion dépassé`);
+        return { kind: 'sol' };
+      }
+    }
+    if (btcSrv.kind === 'esplora' && hostOfUrl(btcSrv.url) === host) {
+      if (downLater(btcSrv.url)) throw unreachable(`${host} : délai de connexion dépassé`);
+      return { kind: 'esplora' };
+    }
+    return undefined;
+  };
+
+  const netFetch = (req: NetRequest): Promise<NetResponse> => handleDemoNet(req, d.chain, routeNet(req));
+
+  return { prepareSave, serverTest, electrumFetchCert, btc, coreSetup, coreStatus, netFetch, solanaCluster: () => solanaCluster(d.network) };
+}

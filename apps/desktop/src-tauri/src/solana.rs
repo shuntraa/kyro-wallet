@@ -20,13 +20,15 @@ const DEFAULT_RPC_DEVNET: &str = "https://api.devnet.solana.com";
 
 /// Solana RPC endpoint: the user's override from settings, else the allowlisted default.
 fn rpc_url(state: &AppState) -> String {
-    state.settings().rpc.solana.unwrap_or_else(|| {
-        match state.network {
+    // A custom cluster RPC replaces the default (which is then refused by the policy).
+    match state.settings().servers.solana_for(state.network) {
+        Some(s) => s.url.clone(),
+        None => match state.network {
             Network::Mainnet => DEFAULT_RPC_MAINNET,
             Network::Testnet => DEFAULT_RPC_DEVNET,
         }
-        .to_owned()
-    })
+        .to_owned(),
+    }
 }
 
 pub fn network_label(net: Network) -> &'static str {
@@ -69,6 +71,7 @@ async fn fetch_lookup_table(state: &AppState, url: &str, key: &str) -> AppResult
             },
             &settings,
             &state.env_keys,
+            state.network,
         )
         .await?;
     let fail = |why: &str| AppError::InvalidInput(format!("table d'adresses {key} : {why}"));

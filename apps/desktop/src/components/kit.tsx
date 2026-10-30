@@ -10,6 +10,7 @@ import { copyText } from '../lib/copy';
 import { IconCheck, IconCopy, IconEye, IconEyeOff, IconWarn } from './icons';
 import { Button } from './ui/primitives';
 import { TorWait, useTorBlocked } from './Tor';
+import { ServerDownLine, serverDown } from './ServerDown';
 
 export function KyroMark({ size = 16, className }: { size?: number; className?: string }) {
   return (
@@ -171,10 +172,13 @@ export function EmptyState({ title, children, action, className }: { title: stri
 /**
  * Network data error. While Tor (enabled) is not ready, or when `error` is TOR_UNAVAILABLE,
  * it shows "En attente de Tor…" instead: nothing failed, Kyro is refusing to go out in clear.
+ * When `error` says the user's own server is down, it shows « Ton serveur ne répond pas »
+ * with a way to the settings (never a fallback to the default).
  */
 export function ErrorLine({ children, onRetry, className, error }: { children: ReactNode; onRetry?: () => void; className?: string; error?: unknown }) {
   const torBlocked = useTorBlocked(error);
   if (torBlocked) return <TorWait {...(className ? { className } : {})} />;
+  if (serverDown(error)) return <ServerDownLine {...(className ? { className } : {})} />;
   return (
     <div role="alert" className={cn('flex items-center gap-2 text-[12px] text-down', className)}>
       <IconWarn size={14} />
