@@ -4,7 +4,9 @@ mod cbf;
 mod commands;
 mod commands_hw;
 mod commands_servers;
+mod commands_tron;
 mod commands_utxo;
+mod commands_xrp;
 mod core_rpc;
 mod electrum;
 mod error;
@@ -15,7 +17,9 @@ mod settings;
 mod solana;
 mod state;
 mod tor;
+mod tron_backend;
 mod utxo_backend;
+mod xrp_backend;
 
 use std::time::Duration;
 
@@ -105,6 +109,23 @@ pub fn run() {
             commands_utxo::doge_tip_height,
             commands_utxo::doge_broadcast,
             commands_utxo::doge_sign_psbt,
+            commands_tron::tron_backend_info,
+            commands_tron::tron_address,
+            commands_tron::tron_account,
+            commands_tron::tron_trc20_balance,
+            commands_tron::tron_txs,
+            commands_tron::tron_build_tx,
+            commands_tron::tron_sign_tx,
+            commands_tron::tron_broadcast,
+            commands_xrp::xrp_backend_info,
+            commands_xrp::xrp_address,
+            commands_xrp::xrp_account,
+            commands_xrp::xrp_lines,
+            commands_xrp::xrp_txs,
+            commands_xrp::xrp_build_tx,
+            commands_xrp::xrp_sign_tx,
+            commands_xrp::xrp_broadcast,
+            commands_xrp::xrp_tx_status,
             commands::set_capture_protection,
             commands::config_get,
             commands::tor_status,

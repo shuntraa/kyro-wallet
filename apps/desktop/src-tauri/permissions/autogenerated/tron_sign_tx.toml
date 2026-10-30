@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tron-sign-tx"
+description = "Enables the tron_sign_tx command without any pre-configured scope."
+commands.allow = ["tron_sign_tx"]
+
+[[permission]]
+identifier = "deny-tron-sign-tx"
+description = "Denies the tron_sign_tx command without any pre-configured scope."
+commands.deny = ["tron_sign_tx"]

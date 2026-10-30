@@ -41,5 +41,5 @@ Légende : ✅ fonctionne de bout en bout **et** testé · ⚠️ code écrit, t
 | 1.5 | Ledger, Trezor | ⚠️ côté Rust complet, testé sur échanges enregistrés et simulations ; pas d'appareil ni d'émulateur ; UI à faire |
 | 2 | Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche | ⚠️ registre et même adresse ; non testé sur leurs testnets |
 | 3 | Solana + SPL | ⚠️ SOL (pas de décodage Rust) ; SPL en lecture seule |
-| 4 | Litecoin, Dogecoin, Tron, Cardano, XRP | ⚠️ Litecoin et Dogecoin : Rust + adaptateurs TS complets, Litecoin lu en direct sur testnet4 (signé, jamais diffusé), Dogecoin sans serveur par défaut ; UI à faire · ❌ Tron, Cardano, XRP (« Bientôt ») |
+| 4 | Litecoin, Dogecoin, Tron, Cardano, XRP | ⚠️ Litecoin et Dogecoin : Rust + adaptateurs TS complets, Litecoin diffusé pour de vrai sur testnet4 (une transaction), Dogecoin sans serveur par défaut ; UI à faire · ⚠️ TRON : Rust + adaptateur TS, diffusions TRX et TRC-20 réelles sur Nile ; UI en cours · ⚠️ XRP : Rust + adaptateur TS, deux paiements réels sur le testnet XRPL ; UI à faire · ❌ Cardano (« Bientôt ») |
 | Swap | 0x, 1inch, Jupiter, LI.FI | ⚠️ devis et approvals testés contre des réponses simulées |

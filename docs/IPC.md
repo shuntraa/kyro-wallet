@@ -102,6 +102,53 @@ pub enum UtxoWarning {                         // JSON { "kind": "softDust", "in
 // Constantes : LTC_MIN_RELAY_FEE_PER_KVB 1 000, LTC_DUST_RELAY_FEE_PER_KVB 30 000 ; DOGE_RECOMMENDED_FEE_PER_KB 1 000 000 (0,01 DOGE/kB),
 // DOGE_MIN_RELAY_FEE_PER_KB 100 000, DOGE_SOFT_DUST 1 000 000, DOGE_HARD_DUST 100 000.
 
+// --- TRON : m/44'/195'/0'/0/i, adresse = base58check(0x41 || keccak256(pubkey)[12..]) ; raw_data protobuf
+//     (codec écrit à la main, strict : refusé si le ré-encodage diffère d'un seul octet)
+pub fn tron_address(seed, index) -> Result<String>;                     // T…
+pub fn tron_address_bytes(address) -> Result<[u8; 21]>; pub fn tron_address_from_bytes(&[u8; 21]) -> String;
+pub fn tron_address_of_pubkey(sec1) -> Result<String>;
+pub struct TronRaw { ref_block_bytes: [u8; 2], ref_block_hash: [u8; 8], expiration: i64, memo: Vec<u8>,
+                     contract: TronContract, timestamp: i64, fee_limit: i64 }
+pub enum TronContract { Transfer { owner, to, amount }, Trigger { owner, contract, call_value, data } }   // types 1 et 31 seulement
+impl TronRaw { pub fn encode(&self) -> Vec<u8>; pub fn decode(raw) -> Result<TronRaw>; pub fn txid(&self) -> [u8; 32] /*sha256(raw)*/ }
+// decode refuse : champ inconnu, ref_block_num, auths, scripts, provider, ContractName, Permission_id, valeur TRC-10,
+// autre type de contrat, ≠ 1 contrat, entier négatif, encodage non canonique (ordre, doublon, varint non minimal).
+pub fn tron_ref_block(number, block_id_hex) -> Result<([u8; 2], [u8; 8])>;   // octets 6..8 du numéro, 8..16 de l'id ; id doit commencer par le numéro
+pub fn tron_trc20_transfer_data(to, amount /*décimal uint256*/) -> Result<Vec<u8>>;   // a9059cbb || to || amount
+pub fn tron_decode_raw(raw_hex, our_address) -> Result<TronTxSummary>;  // + refuse : owner ≠ nous, montant TRX ≤ 0, TRX à soi-même
+pub struct TronTxSummary { txid, owner, action: TronAction, fee_limit, expiration, timestamp, ref_block_bytes, ref_block_hash,
+                           memo /*hex*/, raw_size, warnings: Vec<TronWarning>, requires_extra_confirmation }   // serde camelCase
+pub enum TronAction { TrxTransfer { to, amount }, Trc20Transfer { contract, to, amount, call_value },
+                      ContractCall { contract, selector, data, call_value } }   // JSON { "type": "trxTransfer", … }
+pub enum TronWarning { UnknownCall { selector }, CallValue, Memo, HighFeeLimit /*> 100 TRX*/ }   // tous → confirmation renforcée
+pub fn tron_sign(seed, index, raw_hex) -> Result<([u8; 65] /*r‖s‖v, v = 27 + recid*/, TronTxSummary)>;   // décode d'abord ; libsecp256k1 RFC 6979
+pub fn tron_recover_signer(raw_hex, sig65 /*v ∈ 0,1,27,28*/) -> Result<String>;
+pub fn tron_signed_transaction(raw_hex, sig) -> Result<String>;          // Transaction { raw_data = 1, signature = 2 }, pour broadcasthex
+
+// --- XRP Ledger : m/44'/144'/0'/0/i (route BIP44 de Ledger, Trezor, Xaman — pas la « family seed » de rippled),
+//     adresse r… = base58 (alphabet Ripple) de 0x00 || RIPEMD160(SHA256(pubkey)) + somme SHA-256d ; codec binaire
+//     Payment écrit à la main, strict (ré-encodage identique exigé)
+pub fn xrp_address(seed, index) -> Result<String>; pub fn xrp_public_key(seed, index) -> Result<[u8; 33]>;
+pub fn xrp_account_id(address) -> Result<[u8; 20]>;        // X-addresses refusées (adresse classique + tag séparé)
+pub fn xrp_address_from_id(&[u8; 20]) -> String; pub fn xrp_address_of_pubkey(sec1) -> Result<String>;
+pub enum XrpAmount { Xrp(u64 /*drops*/), Issued { mantissa, exponent, negative, currency: [u8; 20], issuer: [u8; 20] } }   // STAmount
+pub fn xrp_issued_amount(value /*décimal*/, currency /*3 car. ou 40 hex*/, issuer) -> Result<XrpAmount>;   // ≤ 16 chiffres significatifs
+pub struct XrpPayment { flags: Option<u32>, source_tag, sequence, destination_tag, last_ledger_sequence, invoice_id,
+                        amount, fee /*drops*/, send_max, signing_pub_key, txn_signature, account, destination, memos }
+impl XrpPayment { pub fn encode(&self, with_signature) -> Vec<u8>; pub fn decode(raw) -> Result<Self>;
+                  pub fn signing_hash(&self) -> [u8; 32] /*SHA-512Half("STX\0"||…)*/; pub fn hash(&self) -> [u8; 32] /*SHA-512Half("TXN\0"||…)*/ }
+// decode refuse : autre TransactionType (AccountSet, SetRegularKey, SignerListSet, TrustSet…), NetworkID, TicketSequence,
+// Paths, DeliverMin, montants MPT, champ inconnu, encodage non canonique.
+pub fn xrp_decode_tx(blob_hex, our_address, our_pubkey) -> Result<XrpTxSummary>;   // + refuse : déjà signée, Account / SigningPubKey ≠ nous,
+// tfPartialPayment, drapeau inconnu, paiement à soi-même, montant ≤ 0, frais 0
+pub struct XrpTxSummary { account, destination, destination_tag: Option<u32>, amount: XrpAmountView, fee, sequence,
+                          last_ledger_sequence, flags, send_max, source_tag, invoice_id, memos, warnings: Vec<XrpWarning>,
+                          requires_extra_confirmation }          // serde camelCase
+pub enum XrpAmountView { Xrp { drops }, Issued { value, currency, issuer } }   // JSON { "kind": "xrp", … }
+pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, Memo, HighFee /*> 1 XRP*/, InvoiceId }   // → renforcée
+pub fn xrp_sign(seed, index, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
+pub fn xrp_verify_signed(blob_hex) -> Result<String /*hash*/>;   // signature DER low-S de SigningPubKey, clé = Account
+
 // --- Solana : décodage des messages legacy et v0 (parseur écrit à la main, format filaire documenté) ---
 pub struct SolLookupTable { pub key: String, pub addresses: Vec<String> }            // base58
 pub fn sol_message_lookup_tables(message: &[u8]) -> Result<Vec<String>>;             // tables à récupérer (v0)
@@ -196,12 +243,14 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_tx_hex` | `{ txid }` | `string` (transaction brute, hex) | transaction complète, par exemple le `non_witness_utxo` d'une entrée SegWit v0 pour un hardware wallet. Esplora/défaut `GET /tx/{txid}/hex` ; Electrum `blockchain.transaction.get` ; Core `gettransaction` (portefeuille de surveillance) puis `getrawtransaction` — hors portefeuille et sans `-txindex=1` : `INVALID_INPUT` explicite ; filtres compacts : transactions gardées des blocs synchronisés, sinon `INVALID_INPUT` explicite. **Toujours** : Rust vérifie que la réponse est une transaction dont le txid (double SHA-256 de la sérialisation sans témoin) = `txid`, sinon `SERVER_UNREACHABLE` ; `txid` mal formé : `INVALID_INPUT` |
 | `btc_broadcast` | `{ hex }` | `string` (txid) | le txid renvoyé par le serveur doit correspondre à la transaction, sinon erreur |
 | `ltc_*`, `doge_*` | voir §2.4 | | Litecoin, Dogecoin : mêmes formes Esplora que `btc_*`, signature avec dialogue natif |
+| `xrp_*` | voir §2.6 | | XRP Ledger : paiement construit **par Rust** (Sequence, Fee, LastLedgerSequence), tag de destination mis en évidence, réserve |
+| `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
 | `btc_core_status` | — | `CoreStatus` | progression du rescan (`getwalletinfo.scanning`). L'état d'import est propre à **(réseau, URL, portefeuille)** : un autre nœud ou un autre réseau ne voit pas l'import d'un premier. Aucun nœud Core configuré : réponse normale `{ state: 'not-configured', wallet: '', walletLoaded: false }` (pas d'erreur) |
 | `btc_cbf_status` | — | `CbfStatus` | mode filtres compacts (fonction `cbf`) ; build sans la fonction : `FEATURE_DISABLED` |
 | `btc_cbf_sync` | — | `CbfStatus` | lance (ou rejoint) une synchronisation en arrière-plan ; progression par l'événement `cbf-status` ; exige le coffre déverrouillé (lit les xpubs) — une lecture coffre verrouillé ne lance pas de synchro ; build sans la fonction : `FEATURE_DISABLED` |
 | `set_capture_protection` | `{ enabled }` | `void` | `set_content_protected` |
-| `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasOneinchKey }` | jamais les clés elles-mêmes |
+| `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasOneinchKey, hasTrongridKey }` | jamais les clés elles-mêmes ; clé TronGrid : `KYRO_TRONGRID_API_KEY` (env) ou `settings.apiKeys.trongrid` |
 | `hw_list` | — | `DeviceInfo[]` | détecte les Ledger (HID) et Trezor (WebUSB) branchés ; ids stables pour la session (`ledger-1`, `trezor-1`…) tant que l'appareil reste sur le même port ; 10 s max. Voir §2.3 |
 | `hw_open` | `{ id }` | `DeviceStatus` | ouvre l'appareil et lit son état : verrouillé, app Ledger ouverte, firmware Trezor, état par chaîne |
 | `hw_cancel` | `{ id }` | `boolean` | abandonne l'opération en cours sur `id` (`true` s'il y en avait une) ; elle se termine en `USER_REJECTED` |
@@ -224,6 +273,8 @@ type Accounts = {
   sol: { address: string };
   ltc: { address: string; xpub: string; fingerprint: string; path: string };   // m/84'/2'/0' (testnet m/84'/1'/0'), address = …/0/0
   doge: { address: string; xpub: string; fingerprint: string; path: string };  // m/44'/3'/0' (testnet m/44'/1'/0')
+  tron: { address: string };                                                    // m/44'/195'/0'/0/0 (même chemin sur Nile)
+  xrp: { address: string };                                                     // m/44'/144'/0'/0/0
 };
 type Settings = { currency: 'EUR' | 'USD'; autoLockSecs: number; hideBalancesOnStart: boolean;
                   captureProtection: boolean; clipboardGuard: boolean;
@@ -240,6 +291,8 @@ type Servers = {
   solana: { 'devnet'?: { url: string }; 'mainnet-beta'?: { url: string } };
   litecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };   // testnet = Litecoin testnet4
   dogecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };
+  tron: { mainnet?: TronServer; testnet?: TronServer };       // testnet = Nile
+  xrp: { mainnet?: XrpServer; testnet?: XrpServer };          // testnet = XRPL Testnet
 };
 type UtxoServer = { kind: 'default' }       // Litecoin : litecoinspace.org ; Dogecoin : AUCUN (lectures → SERVER_INVALID, voir §2.4)
                 | { kind: 'esplora'; url: string };   // même type que le serveur par défaut (Esplora : electrs, mempool)
@@ -267,7 +320,13 @@ type ServerTestTarget =
   | { family: 'bitcoin'; network: 'mainnet' | 'testnet4'; server: BtcServer }
   | { family: 'evm'; chainId: number; server: { url: string } }
   | { family: 'solana'; cluster: 'devnet' | 'mainnet-beta'; server: { url: string } }
-  | { family: 'litecoin' | 'dogecoin'; network: 'mainnet' | 'testnet'; server: UtxoServer };   // { kind: 'default' } Dogecoin : SERVER_INVALID
+  | { family: 'litecoin' | 'dogecoin'; network: 'mainnet' | 'testnet'; server: UtxoServer }   // { kind: 'default' } Dogecoin : SERVER_INVALID
+  | { family: 'tron'; network: 'mainnet' | 'testnet'; server: TronServer }
+  | { family: 'xrp'; network: 'mainnet' | 'testnet'; server: XrpServer };
+type XrpServer = { kind: 'default' }        // s.altnet.rippletest.net:51234 (testnet) / xrplcluster.com (mainnet)
+               | { kind: 'jsonRpc'; url: string };   // JSON-RPC rippled, même type que les serveurs par défaut
+type TronServer = { kind: 'default' }       // TronGrid : api.trongrid.io / nile.trongrid.io
+                | { kind: 'http'; url: string };   // API HTTP java-tron (FullNode), même type que TronGrid ; l'historique exige en plus l'API /v1 de TronGrid
 type ServerTestResult = { latencyMs: number; detected: { network?: string; genesisHash?: string;
                           chainId?: number; serverVersion?: string; blockHeight?: number } };
 type CoreStatus = { wallet: string; state: 'not-configured' | 'idle' | 'importing' | 'ready' | 'error'; walletLoaded: boolean;
@@ -296,6 +355,8 @@ Erreurs : rejet de la promesse avec `{ code: 'WRONG_PASSWORD' | 'LOCKED' | 'RATE
 | Esplora | `https://` ; `http://` uniquement pour un `.onion`, via Tor ; jamais d'identifiants dans l'URL | `GET {url}/block-height/0` = genesis du réseau (mainnet `000000000019d6…e26f`, testnet4 `00000000da84f2…f043`) |
 | Electrum | `host` + `port` ; `tls: 'none'` uniquement pour un `.onion` via Tor ; `pinned` exige `certSha256` | `server.version` (protocole 1.4) puis `server.features.genesis_hash` = genesis du réseau |
 | Bitcoin Core | `http://` uniquement pour une adresse locale/LAN (127.0.0.0/8, ::1, RFC 1918, fc00::/7, fe80::/10, `localhost`) ; sinon `https://` ou `.onion` via Tor | `getblockchaininfo.chain` = `main` ou `testnet4` |
+| XRP (`jsonRpc`) | comme Esplora | `server_info` → `info.network_id` = 0 (mainnet) ou 1 (testnet) ; devnet (2) et autres réseaux nommés dans l'erreur |
+| TRON (`http`) | comme Esplora | `POST {url}/wallet/getblockbynum {num:0}` → `blockID` = mainnet `00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc` ou Nile `0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc` ; Shasta (`…de1aa882…a9059e`) est reconnu et nommé dans l'erreur |
 | Esplora Litecoin / Dogecoin | comme Esplora | `GET {url}/block-height/0` = genesis de la chaîne (Litecoin mainnet `12a765e3…04bfe2`, testnet4 `4966625a…3e29a0` ; Dogecoin mainnet `1a91e3da…355691`, testnet `bb0a7826…50559e`) ; le message nomme la chaîne trouvée si c'en est une connue |
 | EVM | comme Esplora | `eth_chainId` = la clé (`chainId`) |
 | Solana | comme Esplora ; clé `devnet` ou `mainnet-beta` | `getGenesisHash` = devnet `EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`, mainnet-beta `5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d` |
@@ -410,6 +471,49 @@ Règles de construction (TS) vérifiées par Rust :
 
 À faire côté UI (pas dans ce lot) : types `Commands` de `@kyro/shared` (`ltc_*`, `doge_*`, `btc_tx_hex`, `Accounts.ltc/doge`, `Servers.litecoin/dogecoin`, `ServerTestTarget`), backend démo, écrans Envoyer/Recevoir/Actif/Historique pour ces familles, réglages serveurs, liste « Connexions sortantes », sortie de `WATCH_ONLY_CHAINS`.
 
+### 2.5 TRON (TRX, TRC-20)
+
+Rust choisit le serveur (`servers.tron`, sinon TronGrid), famille Tor `tron`, jamais de repli. **Rust construit lui-même `raw_data`** (wallet-core `TronRaw`) depuis `/wallet/getnowblock` : `ref_block_bytes` = octets 6..8 du numéro, `ref_block_hash` = octets 8..16 du `blockID` (vérifié : l'id commence par le numéro), `timestamp` = horodatage du bloc, `expiration` = bloc + 10 min. `createtransaction` du serveur n'est **jamais** utilisé pour ce qui est signé (le test réel compare seulement l'encodage de Kyro au sien : identique octet pour octet).
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `tron_backend_info` | — | `{ kind: 'default' \| 'http', network: 'mainnet' \| 'testnet', label, tor }` | |
+| `tron_address` | `{ index }` | `string` | `m/44'/195'/0'/0/{index}`, coffre déverrouillé |
+| `tron_account` | `{ address }` | `{ address, exists, balance /*sun*/, freeBandwidthLimit, freeBandwidthUsed, bandwidthLimit, bandwidthUsed, energyLimit, energyUsed }` | `getaccount` + `getaccountresource` ; `exists: false` = compte jamais activé |
+| `tron_trc20_balance` | `{ contract, address }` | `string` (unités brutes) | `balanceOf` par `triggerconstantcontract` |
+| `tron_txs` | `{ address }` | `[{ txid, kind: 'trx' \| 'trc20', from, to, amount, token?: { contract, symbol, decimals }, timestamp, status: 'confirmed' \| 'failed' }]` | API `/v1` de TronGrid (50 TRX + 50 TRC-20 au plus, plus récentes d'abord) ; un nœud java-tron seul n'a pas d'historique → `SERVER_UNREACHABLE` explicite |
+| `tron_build_tx` | `{ to, amount /*sun ou unités du token*/, token? /*contrat T…*/ }` | `{ raw /*hex*/, txid, summary: TronTxSummary, estimate: TronEstimate }` | TRX : `TransferContract`. TRC-20 : `transfer(to, amount)`, énergie **simulée** (`triggerconstantcontract`, `energy_used + energy_penalty`) ; un transfert qui échouerait (solde de token insuffisant) est refusé ; `fee_limit` = énergie × prix × 1,3, au moins 1 TRX, au plus `getMaxFeeLimit`. Rust re-décode ce qu'il a construit |
+| `tron_sign_tx` | `{ raw, password, token?: { symbol, decimals } }` | `{ signature /*65 octets hex*/, txid, summary, estimate }` | décode (`tron_decode_raw`, owner = nous), refuse expirée ou expiration > 24 h, mot de passe, **relit en direct** compte, paramètres de chaîne, existence du destinataire et énergie simulée → dialogue natif : destinataire, montant (USDT nommé par Rust : mainnet `TR7NHq…`, Nile `TXYZop…` ; autre token : unités brutes, `token` de l'UI affiché comme « selon l'interface, non vérifié »), **bande passante nécessaire / disponible (gratuite, gelée) et TRX brûlés**, **énergie estimée / disponible, TRX brûlés estimés et au maximum (`fee_limit`)**, **activation d'un compte inexistant** (création 1 TRX + 0,1 TRX sans bande passante gelée, valeurs lues dans `getchainparameters`), total estimé et maximum, solde, mémo, expiration, bloc de référence, txid ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` (appel autre que `transfer`, TRX envoyés au contrat, mémo, `fee_limit` > 100 TRX) ; résumé de la signature = résumé affiché |
+| `tron_broadcast` | `{ raw, signature }` | `string` (txid) | la signature doit redonner notre adresse ; `/wallet/broadcasthex` ; txid du serveur = `sha256(raw)` sinon `SERVER_UNREACHABLE` ; refus du réseau → `INVALID_INPUT` avec le message décodé |
+
+**Historique et nœud personnel** : `tron_txs` utilise l'API `/v1` propre à TronGrid. Un nœud java-tron seul (serveur `http` personnalisé) ne l'a pas : la commande échoue alors avec `SERVER_UNREACHABLE` et un message explicite (« l'historique exige l'API /v1 de TronGrid »), sans jamais se rabattre sur TronGrid. Soldes, ressources, construction, signature et diffusion fonctionnent avec n'importe quel nœud java-tron.
+
+**Clé TronGrid (optionnelle)** : `KYRO_TRONGRID_API_KEY` (env, développement) ou `settings.apiKeys.trongrid`. Rust l'ajoute en en-tête `TRON-PRO-API-KEY` **uniquement** vers `api.trongrid.io` et `nile.trongrid.io` (jamais vers un nœud personnel ni un autre hôte) ; l'UI ne voit jamais la clé (`config_get.hasTrongridKey`). Sans clé : quotas réduits, et des relais de sortie Tor peuvent recevoir un 403.
+
+Refusé avant toute signature : autre type de contrat que TRX / appel de contrat (gel, vote, délégation, **changement de permissions**…), `Permission_id` (multi-signature), autre propriétaire, `auths`, `scripts`, valeur TRC-10, encodage non canonique. Estimation de bande passante : taille signée + 64 octets (comme java-tron). Hardware wallets : `HW_UNSUPPORTED` (Trezor a `TronSignTx`, Ledger l'app « Tron » : non faits).
+
+À faire côté UI (pas dans ce lot) : `Family` `'tron'`, types `Commands` (`tron_*`, `Accounts.tron`, `Servers.tron`, `ServerTestTarget`), backend démo, écrans Envoyer (afficher `estimate` avant le mot de passe : bande passante, énergie, activation), Recevoir, Actif (TRX, USDT), Historique, réglage serveur TRON, « Connexions sortantes », sortie de TRON de `WATCH_ONLY_CHAINS`. Adaptateur : `TronAdapter` (`packages/chains/src/tron/`), `tronChain(network)`, `TRON_USDT`.
+
+### 2.6 XRP Ledger (paiements XRP et monnaies émises)
+
+Rust choisit le serveur (`servers.xrp`, sinon le défaut), famille Tor `xrp`, jamais de repli. **Rust construit le Payment** : `Sequence` (`account_info`, registre courant), `Fee` (`fee` : frais du registre ouvert, au moins le frais de référence), `LastLedgerSequence` = registre courant + 20 (≈ 1 min), `Flags` = `tfFullyCanonicalSig`, `SigningPubKey` = notre clé ; encodé par wallet-core. Un blob construit par le serveur n'est jamais signé.
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `xrp_backend_info` | — | `{ kind: 'default' \| 'jsonRpc', network: 'mainnet' \| 'testnet', label, tor }` | |
+| `xrp_address` | `{ index }` | `string` | `m/44'/144'/0'/0/{index}` |
+| `xrp_account` | `{ address }` | `{ address, exists, balance /*drops*/, sequence, ownerCount, flags, requireDestTag, disallowXrp, reserve, spendable }` | `account_info` + réserves de `server_info.validated_ledger` (`reserve_base_xrp`, `reserve_inc_xrp` : **1 XRP et 0,2 XRP**, lus en direct le 30/10/2026 sur testnet et mainnet) ; `reserve` = base + 0,2 × objets possédés ; `spendable` = solde − réserve ; compte inexistant : `exists: false` |
+| `xrp_lines` | `{ address }` | `[{ currency, issuer, balance, limit }]` | lignes de confiance (monnaies émises) |
+| `xrp_txs` | `{ address }` | `[{ hash, from, to, destinationTag, amount, fee, ledger, time, result }]` | 50 derniers Payment ; `amount` = **montant réellement livré** (`delivered_amount`) |
+| `xrp_build_tx` | `{ to, amount /*drops, ou valeur décimale si issued*/, destinationTag?, issued?: { currency, issuer } }` | `{ blob /*non signé, hex*/, summary: XrpTxSummary, context: { account, destination, reserveBase, reserveInc } }` | refusé avant toute construction : destinataire avec `lsfRequireDestTag` **sans tag** ; compte destinataire inexistant et montant XRP < réserve de base (`tecNO_DST_INSUF_XRP`) ; monnaie émise vers un compte inexistant (`tecNO_DST`) ; montant + frais > disponible ; notre compte non activé |
+| `xrp_sign_tx` | `{ blob, password }` | `{ blob /*signé*/, hash, summary, context }` | décode (strict, Account et clé = nous), refuse `LastLedgerSequence` dépassé et séquence périmée, **relit en direct** les deux comptes et les réserves et refait les vérifications ci-dessus, mot de passe → dialogue natif : destinataire, **TAG DE DESTINATION encadré sur sa propre ligne** (ou « AUCUN TAG DE DESTINATION » avec l'avertissement), montant, SendMax, création du compte destinataire, frais, solde, réserve bloquée (base + objets), disponible, registre limite, mémos ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` ; résumé de la signature = résumé affiché |
+| `xrp_broadcast` | `{ blob }` | `string` (hash) | `xrp_verify_signed` (DER low-S, clé = Account = nous) puis `submit` ; `tesSUCCESS` ou `terQUEUED` acceptés, sinon `INVALID_INPUT` avec le code ; hash du serveur = `SHA-512Half("TXN\0"‖blob)` sinon `SERVER_UNREACHABLE` |
+| `xrp_tx_status` | `{ hash }` | `{ validated, result }` | `tx` : `validated: true` et `result: 'tesSUCCESS'` une fois dans un registre validé |
+
+Refusé avant toute signature : tout autre type de transaction (AccountSet, SetRegularKey, SignerListSet, TrustSet, OfferCreate, EscrowCreate…), **paiement partiel** (`tfPartialPayment` : le montant livré pourrait être presque nul), `Paths`, `DeliverMin`, `TicketSequence`, `NetworkID`, drapeaux inconnus, champs inconnus. Plus strict que « inconnu → confirmation renforcée » : un champ que Kyro ne sait pas décoder n'est jamais signé. Hardware wallets : `HW_UNSUPPORTED` (Trezor `RippleSignTx`, Ledger app « XRP » : non faits).
+
+**Pour l'UI** : le champ **Tag de destination** doit être visible en permanence sur l'écran Envoyer XRP (pas caché dans « options »), avec `parseDestinationTag` (entier 0 … 4 294 967 295) ; s'il est vide, afficher l'avertissement ; si `xrp_account(destination).requireDestTag`, le rendre **obligatoire** (Rust refuse de toute façon) ; afficher `spendable` (pas seulement le solde) et, pour un destinataire inexistant, « au moins 1 XRP » ; après `xrp_broadcast`, suivre `xrp_tx_status`. À faire (pas dans ce lot) : `Family` `'xrp'`, types `Commands` (`xrp_*`, `Accounts.xrp`, `Servers.xrp`, `ServerTestTarget`), backend démo, écrans Envoyer / Recevoir (adresse + tag éventuel) / Actif (XRP, lignes de confiance) / Historique, réglage serveur XRPL, « Connexions sortantes », sortie de XRP de `WATCH_ONLY_CHAINS`. Adaptateur : `XrpAdapter` (`packages/chains/src/xrp/`), `xrpChain(network)`.
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -417,6 +521,8 @@ Règles de construction (TS) vérifiées par Rust :
 | `api.coingecko.com`, `pro-api.coingecko.com` | prix, top 200, graphiques |
 | `mempool.space` | Bitcoin : UTXO, frais, diffusion (Esplora) |
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`) : utilisé par les commandes Rust `ltc_*`, famille Tor `litecoin` |
+| `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet et mainnet (JSON-RPC rippled) : utilisés par les commandes Rust `xrp_*`, famille Tor `xrp` |
+| `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*`, famille Tor `tron` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |
 | `arbitrum-one-rpc.publicnode.com`, `optimism-rpc.publicnode.com`, `base-rpc.publicnode.com`, `polygon-bor-rpc.publicnode.com`, `bsc-rpc.publicnode.com`, `avalanche-c-chain-rpc.publicnode.com` | RPC EVM (phase 2) |
 | `mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion` | Bitcoin (Esplora) en mode Tor uniquement, `http://` (service onion officiel de mempool) ; réécriture automatique de `mempool.space` |

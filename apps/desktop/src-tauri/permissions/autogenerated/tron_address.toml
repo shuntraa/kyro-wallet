@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tron-address"
+description = "Enables the tron_address command without any pre-configured scope."
+commands.allow = ["tron_address"]
+
+[[permission]]
+identifier = "deny-tron-address"
+description = "Denies the tron_address command without any pre-configured scope."
+commands.deny = ["tron_address"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xrp-sign-tx"
+description = "Enables the xrp_sign_tx command without any pre-configured scope."
+commands.allow = ["xrp_sign_tx"]
+
+[[permission]]
+identifier = "deny-xrp-sign-tx"
+description = "Denies the xrp_sign_tx command without any pre-configured scope."
+commands.deny = ["xrp_sign_tx"]

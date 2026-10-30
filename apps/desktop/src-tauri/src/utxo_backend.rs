@@ -455,6 +455,154 @@ mod live {
         eprintln!("tor ready in {:.1?}", t0.elapsed());
     }
 
+    const ABANDON: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+    fn ltc_ctx(net: &NetClient) -> UtxoCtx<'_> {
+        UtxoCtx {
+            net_client: net,
+            network: Network::Testnet,
+            coin: UtxoCoin::Litecoin,
+            tor: true,
+            server: UtxoServer::Default,
+        }
+    }
+
+    /// The public test wallet's first receive and change addresses (what the TS scan reads).
+    fn abandon_addresses(seed: &wallet_core::Seed, n: u32) -> Vec<(bool, u32, String)> {
+        let mut out = Vec::new();
+        for change in [false, true] {
+            for i in 0..n {
+                let a = wallet_core::utxo_address(
+                    seed,
+                    Network::Testnet,
+                    UtxoCoin::Litecoin,
+                    0,
+                    change,
+                    i,
+                )
+                .unwrap();
+                out.push((change, i, a));
+            }
+        }
+        out
+    }
+
+    /// Litecoin testnet4 broadcast, phase 1 of 2: reads the public "abandon … about" wallet
+    /// over Tor (`ltc_address_info` / `ltc_address_utxos` code) and writes it to
+    /// `$KYRO_LTC_DUMP` for the TS adapter, which builds the self-send PSBT.
+    /// `KYRO_LTC_DUMP=… cargo test -p kyro-desktop -- --ignored --nocapture ltc_broadcast_1_fetch`
+    #[test]
+    #[ignore]
+    fn ltc_broadcast_1_fetch() {
+        let out = std::env::var("KYRO_LTC_DUMP").expect("KYRO_LTC_DUMP");
+        let net = NetClient::new(std::env::temp_dir().join("kyro-ltc-bcast")).unwrap();
+        let seed = wallet_core::Mnemonic::parse(ABANDON).unwrap().to_seed("");
+        tauri::async_runtime::block_on(async {
+            wait_tor(&net).await;
+            let c = ltc_ctx(&net);
+            let mut info = serde_json::Map::new();
+            let mut utxos = serde_json::Map::new();
+            for (_, _, a) in abandon_addresses(&seed, 40) {
+                info.insert(a.clone(), address_info(&c, &a).await.unwrap());
+                utxos.insert(a.clone(), address_utxos(&c, &a).await.unwrap());
+            }
+            let fees = fee_rates(&c).await.unwrap();
+            let dump = json!({ "info": info, "utxos": utxos, "fees": fees });
+            std::fs::write(&out, serde_json::to_string_pretty(&dump).unwrap()).unwrap();
+            eprintln!("wrote {out}; fees {fees}");
+        });
+    }
+
+    /// Phase 2 of 2: reads the TS-built PSBT from `$KYRO_LTC_PSBT`, runs exactly what
+    /// `ltc_sign_psbt` runs (decoding, dialog text, second dialog if required, signature,
+    /// identical summary) — the native dialog itself cannot be shown headless, its text is
+    /// printed — checks that every output pays this same public wallet, finalizes, then calls
+    /// the `ltc_broadcast` code over Tor (txid check) and waits for `ltc_address_txs` to show it.
+    /// Broadcasts only when `KYRO_LTC_BROADCAST=yes`.
+    #[test]
+    #[ignore]
+    fn ltc_broadcast_2_sign_and_send() {
+        use bitcoin::psbt::Psbt;
+        use std::str::FromStr;
+        let b64 = std::fs::read_to_string(std::env::var("KYRO_LTC_PSBT").expect("KYRO_LTC_PSBT"))
+            .unwrap();
+        let b64 = b64.trim();
+        let seed = wallet_core::Mnemonic::parse(ABANDON).unwrap().to_seed("");
+        let net = Network::Testnet;
+        let coin = UtxoCoin::Litecoin;
+
+        let summary = wallet_core::utxo_psbt_summary(&seed, net, coin, b64).unwrap();
+        eprintln!(
+            "--- native dialog text ---\n{}\n--------------------------",
+            crate::commands_utxo::describe_utxo(&summary, net)
+        );
+        if summary.requires_extra_confirmation {
+            eprintln!(
+                "--- reinforced dialog ---\n{}",
+                crate::commands_utxo::describe_utxo_extra(&summary)
+            );
+        }
+        // Self-send only: every output must be an address of this public wallet.
+        let ours: Vec<String> = abandon_addresses(&seed, 40)
+            .into_iter()
+            .map(|(_, _, a)| a)
+            .collect();
+        for o in &summary.outputs {
+            let a = o.address.as_deref().expect("standard output");
+            assert!(ours.iter().any(|x| x == a), "{a} is not in the test wallet");
+        }
+        assert!(!summary.requires_extra_confirmation);
+        assert!(summary.fee_per_kb <= 2_000, "minimum fee only");
+
+        let (signed, again) = wallet_core::utxo_sign_psbt(&seed, net, coin, b64).unwrap();
+        assert_eq!(again, summary, "same summary as the dialog");
+        let mut p = Psbt::from_str(&signed).unwrap();
+        for input in &mut p.inputs {
+            let (pk, sig) = input
+                .partial_sigs
+                .iter()
+                .next()
+                .map(|(k, s)| (*k, *s))
+                .unwrap();
+            input.final_script_witness = Some(bitcoin::Witness::p2wpkh(&sig, &pk.inner));
+            input.partial_sigs.clear();
+        }
+        let tx = p.extract_tx_unchecked_fee_rate();
+        let hex_tx = bitcoin::consensus::encode::serialize_hex(&tx);
+        let txid = tx.compute_txid().to_string();
+        eprintln!("signed tx {txid} ({} vB): {hex_tx}", tx.vsize());
+        if std::env::var("KYRO_LTC_BROADCAST").as_deref() != Ok("yes") {
+            eprintln!("KYRO_LTC_BROADCAST != yes: not broadcast");
+            return;
+        }
+        let client = NetClient::new(std::env::temp_dir().join("kyro-ltc-bcast")).unwrap();
+        tauri::async_runtime::block_on(async {
+            wait_tor(&client).await;
+            let c = ltc_ctx(&client);
+            let got = broadcast(&c, &hex_tx).await.unwrap();
+            assert_eq!(got, txid);
+            eprintln!("BROADCAST OK: {got}");
+            let dest = summary.outputs[0].address.clone().unwrap();
+            for attempt in 0..20 {
+                let txs = address_txs(&c, &dest).await.unwrap();
+                if let Some(t) = txs
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|t| t["txid"] == txid.as_str())
+                {
+                    eprintln!(
+                        "seen by ltc_address_txs({dest}) after {attempt} retries: status {}",
+                        t["status"]
+                    );
+                    return;
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+            panic!("{txid} not visible in ltc_address_txs");
+        });
+    }
+
     /// Self-send of one real UTXO to our own change address at 1 litoshi/vB, signed by
     /// wallet-core; returns a one-line report. Never broadcast.
     fn live_self_send(

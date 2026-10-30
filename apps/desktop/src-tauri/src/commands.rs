@@ -240,6 +240,10 @@ pub struct Accounts {
     sol: AddressOut,
     ltc: UtxoAccountOut,
     doge: UtxoAccountOut,
+    /// `m/44'/195'/0'/0/0`.
+    tron: AddressOut,
+    /// `m/44'/144'/0'/0/0`.
+    xrp: AddressOut,
 }
 
 fn utxo_account_out(seed: &Seed, net: Network, coin: UtxoCoin) -> AppResult<UtxoAccountOut> {
@@ -287,6 +291,12 @@ pub fn accounts_get(state: State<'_, AppState>) -> AppResult<Accounts> {
             },
             ltc: utxo_account_out(seed, net, UtxoCoin::Litecoin)?,
             doge: utxo_account_out(seed, net, UtxoCoin::Dogecoin)?,
+            tron: AddressOut {
+                address: wallet_core::tron_address(seed, 0)?,
+            },
+            xrp: AddressOut {
+                address: wallet_core::xrp_address(seed, 0)?,
+            },
         })
     })
 }
@@ -601,6 +611,7 @@ pub struct ConfigOut {
     has_zerox_key: bool,
     has_oneinch_key: bool,
     has_coingecko_key: bool,
+    has_trongrid_key: bool,
 }
 
 #[tauri::command]
@@ -612,6 +623,7 @@ pub fn config_get(state: State<'_, AppState>) -> ConfigOut {
         has_zerox_key: env.zerox.is_some() || s.api_keys.zerox.is_some(),
         has_oneinch_key: env.oneinch.is_some() || s.api_keys.oneinch.is_some(),
         has_coingecko_key: env.coingecko.is_some() || s.api_keys.coingecko.is_some(),
+        has_trongrid_key: env.trongrid.is_some() || s.api_keys.trongrid.is_some(),
     }
 }
 

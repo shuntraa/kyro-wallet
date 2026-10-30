@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tron-build-tx"
+description = "Enables the tron_build_tx command without any pre-configured scope."
+commands.allow = ["tron_build_tx"]
+
+[[permission]]
+identifier = "deny-tron-build-tx"
+description = "Denies the tron_build_tx command without any pre-configured scope."
+commands.deny = ["tron_build_tx"]

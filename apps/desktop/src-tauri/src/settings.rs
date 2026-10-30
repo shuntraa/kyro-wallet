@@ -28,6 +28,9 @@ pub struct ApiKeys {
     pub zerox: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oneinch: Option<String>,
+    /// TronGrid (`TRON-PRO-API-KEY`), optional.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trongrid: Option<String>,
 }
 
 /// Tor is ON by default; turning it off is an explicit user choice (the UI confirms it).

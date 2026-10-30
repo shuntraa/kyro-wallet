@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tron-backend-info"
+description = "Enables the tron_backend_info command without any pre-configured scope."
+commands.allow = ["tron_backend_info"]
+
+[[permission]]
+identifier = "deny-tron-backend-info"
+description = "Denies the tron_backend_info command without any pre-configured scope."
+commands.deny = ["tron_backend_info"]

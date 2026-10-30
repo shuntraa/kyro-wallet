@@ -226,6 +226,151 @@ pub fn utxo_family(coin: UtxoCoin) -> Family {
     }
 }
 
+/// TRON server: a java-tron HTTP API (`/wallet/*`), the same kind as the default TronGrid.
+/// History (`tron_txs`) also needs TronGrid's `/v1` API.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum TronServer {
+    #[default]
+    Default,
+    /// e.g. `https://my-node.example` (java-tron FullNode HTTP port).
+    Http { url: String },
+}
+
+impl TronServer {
+    pub fn is_default(&self) -> bool {
+        matches!(self, TronServer::Default)
+    }
+
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            TronServer::Default => "default",
+            TronServer::Http { .. } => "http",
+        }
+    }
+}
+
+/// Key `testnet` = Nile.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TronServers {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mainnet: Option<TronServer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub testnet: Option<TronServer>,
+}
+
+impl TronServers {
+    pub fn for_network(&self, net: Network) -> TronServer {
+        match net {
+            Network::Mainnet => self.mainnet.clone(),
+            Network::Testnet => self.testnet.clone(),
+        }
+        .unwrap_or_default()
+    }
+
+    pub fn entries(&self) -> [(&'static str, &Option<TronServer>); 2] {
+        [("mainnet", &self.mainnet), ("testnet", &self.testnet)]
+    }
+}
+
+/// TronGrid: mainnet and Nile. Shasta is not used (Nile is TRON's recommended testnet and the
+/// one with a test USDT).
+pub fn tron_default_base(net: Network) -> &'static str {
+    match net {
+        Network::Mainnet => "https://api.trongrid.io",
+        Network::Testnet => "https://nile.trongrid.io",
+    }
+}
+
+/// `blockID` of block 0 (`/wallet/getblockbynum {num:0}`), read on 2026-10-30 from
+/// api.trongrid.io, nile.trongrid.io and api.shasta.trongrid.io.
+pub const TRON_GENESIS: &[(&str, &str)] = &[
+    (
+        "mainnet",
+        "00000000000000001ebf88508a03865c71d452e25f4d51194196a1d22b6653dc",
+    ),
+    (
+        "nile",
+        "0000000000000000d698d4192c56cb6be724a558448e2684802de4d6cd8690dc",
+    ),
+    (
+        "shasta",
+        "0000000000000000de1aa88295e1fcf982742f773e0419c5a9c134c994a9059e",
+    ),
+];
+
+/// XRP Ledger server: a rippled JSON-RPC endpoint, the same kind as the defaults.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum XrpServer {
+    #[default]
+    Default,
+    /// e.g. `https://my-rippled.example:51234/`.
+    JsonRpc { url: String },
+}
+
+impl XrpServer {
+    pub fn is_default(&self) -> bool {
+        matches!(self, XrpServer::Default)
+    }
+
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            XrpServer::Default => "default",
+            XrpServer::JsonRpc { .. } => "jsonRpc",
+        }
+    }
+}
+
+/// Key `testnet` = XRPL Testnet (network_id 1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct XrpServers {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mainnet: Option<XrpServer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub testnet: Option<XrpServer>,
+}
+
+impl XrpServers {
+    pub fn for_network(&self, net: Network) -> XrpServer {
+        match net {
+            Network::Mainnet => self.mainnet.clone(),
+            Network::Testnet => self.testnet.clone(),
+        }
+        .unwrap_or_default()
+    }
+
+    pub fn entries(&self) -> [(&'static str, &Option<XrpServer>); 2] {
+        [("mainnet", &self.mainnet), ("testnet", &self.testnet)]
+    }
+}
+
+/// rippled JSON-RPC: XRPL Testnet (Ripple's public server) and mainnet (xrplcluster.com).
+pub fn xrp_default_url(net: Network) -> &'static str {
+    match net {
+        Network::Mainnet => "https://xrplcluster.com/",
+        Network::Testnet => "https://s.altnet.rippletest.net:51234/",
+    }
+}
+
+/// `server_info.info.network_id`: 0 mainnet, 1 testnet, 2 devnet.
+pub fn xrp_network_id(net: Network) -> u64 {
+    match net {
+        Network::Mainnet => 0,
+        Network::Testnet => 1,
+    }
+}
+
 /// `settings.servers`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -235,6 +380,10 @@ pub struct Servers {
     pub litecoin: UtxoServers,
     /// Dogecoin: Esplora only (electrs-dogecoin); no public default.
     pub dogecoin: UtxoServers,
+    /// TRON: java-tron HTTP API (default TronGrid). Key `testnet` = Nile.
+    pub tron: TronServers,
+    /// XRP Ledger: rippled JSON-RPC. Key `testnet` = XRPL Testnet.
+    pub xrp: XrpServers,
     /// Key: EVM chain id in decimal (e.g. `"11155111"`).
     pub evm: BTreeMap<String, RpcServer>,
     /// Key: `"devnet"` or `"mainnet-beta"`.
@@ -326,6 +475,18 @@ impl Servers {
                 out.extend(utxo_default_hosts(coin));
             }
         }
+        if !self.xrp.for_network(net).is_default() {
+            out.push(match net {
+                Network::Mainnet => "xrplcluster.com",
+                Network::Testnet => "s.altnet.rippletest.net",
+            });
+        }
+        if !self.tron.for_network(net).is_default() {
+            out.push(match net {
+                Network::Mainnet => "api.trongrid.io",
+                Network::Testnet => "nile.trongrid.io",
+            });
+        }
         for (chain, host) in EVM_DEFAULTS {
             if self.evm.contains_key(&chain.to_string()) {
                 out.push(*host);
@@ -355,6 +516,17 @@ impl Servers {
                     let what = format!("{} {key}", coin.name().to_lowercase());
                     validate_http_url(url, tor, false).map_err(|e| prefix(e, &what))?;
                 }
+            }
+        }
+        for (key, s) in self.xrp.entries() {
+            if let Some(XrpServer::JsonRpc { url }) = s {
+                validate_http_url(url, tor, false).map_err(|e| prefix(e, &format!("xrp {key}")))?;
+            }
+        }
+        for (key, s) in self.tron.entries() {
+            if let Some(TronServer::Http { url }) = s {
+                validate_http_url(url, tor, false)
+                    .map_err(|e| prefix(e, &format!("tron {key}")))?;
             }
         }
         for (chain, s) in &self.evm {
@@ -1060,6 +1232,64 @@ mod tests {
         assert!(s
             .disabled_defaults(Network::Testnet)
             .contains(&"mempool.space"));
+    }
+
+    #[test]
+    fn xrp_servers() {
+        let mut s = Servers::default();
+        assert_eq!(s.xrp.for_network(Network::Testnet), XrpServer::Default);
+        s.xrp.testnet = Some(XrpServer::JsonRpc {
+            url: "https://rippled.my-node.example:51234/".into(),
+        });
+        assert!(s.validate(true).is_ok());
+        assert!(s
+            .disabled_defaults(Network::Testnet)
+            .contains(&"s.altnet.rippletest.net"));
+        s.xrp.mainnet = Some(XrpServer::JsonRpc {
+            url: "http://x.example".into(),
+        });
+        assert!(
+            matches!(s.validate(true), Err(AppError::ServerInvalid(ref m)) if m.starts_with("xrp mainnet"))
+        );
+        assert_eq!(
+            serde_json::to_value(XrpServer::JsonRpc {
+                url: "https://x".into()
+            })
+            .unwrap(),
+            serde_json::json!({ "kind": "jsonRpc", "url": "https://x" })
+        );
+        assert_eq!(xrp_network_id(Network::Testnet), 1);
+    }
+
+    #[test]
+    fn tron_servers() {
+        let mut s = Servers::default();
+        assert_eq!(s.tron.for_network(Network::Testnet), TronServer::Default);
+        s.tron.testnet = Some(TronServer::Http {
+            url: "https://tron.my-node.example".into(),
+        });
+        assert!(s.validate(true).is_ok());
+        assert!(s
+            .disabled_defaults(Network::Testnet)
+            .contains(&"nile.trongrid.io"));
+        assert!(!s
+            .disabled_defaults(Network::Mainnet)
+            .contains(&"api.trongrid.io"));
+        s.tron.mainnet = Some(TronServer::Http {
+            url: "http://tron.example".into(),
+        });
+        assert!(
+            matches!(s.validate(true), Err(AppError::ServerInvalid(ref m)) if m.starts_with("tron mainnet"))
+        );
+        let v = serde_json::to_value(TronServer::Http {
+            url: "https://x".into(),
+        })
+        .unwrap();
+        assert_eq!(v, serde_json::json!({ "kind": "http", "url": "https://x" }));
+        assert_eq!(
+            tron_default_base(Network::Testnet),
+            "https://nile.trongrid.io"
+        );
     }
 
     #[test]

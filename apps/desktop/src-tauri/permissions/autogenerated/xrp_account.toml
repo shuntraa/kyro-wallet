@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xrp-account"
+description = "Enables the xrp_account command without any pre-configured scope."
+commands.allow = ["xrp_account"]
+
+[[permission]]
+identifier = "deny-xrp-account"
+description = "Denies the xrp_account command without any pre-configured scope."
+commands.deny = ["xrp_account"]

@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! signing, TRON (TRX / TRC-20) and XRP Ledger (Payment) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -33,9 +33,11 @@ mod mnemonic;
 mod network;
 mod sol;
 mod sol_decode;
+mod tron;
 mod utxo;
 mod vault;
 mod watch;
+mod xrp;
 
 pub use btc::{btc_account, btc_address, btc_decode_psbt, btc_sign_psbt, BtcAccount, BtcTxSummary};
 pub use btc_hw::{
@@ -64,6 +66,12 @@ pub use sol_decode::{
     sol_decode_message, sol_message_lookup_tables, sol_parse_lookup_table, SolInstruction,
     SolLookupTable, SolTokenProgram, SolTxSummary, SolWarning, SOL_LOOKUP_TABLE_PROGRAM,
 };
+pub use tron::{
+    tron_address, tron_address_bytes, tron_address_from_bytes, tron_address_of_pubkey,
+    tron_decode_raw, tron_recover_signer, tron_ref_block, tron_sign, tron_signed_transaction,
+    tron_trc20_transfer_data, TronAction, TronContract, TronRaw, TronTxSummary, TronWarning,
+    TRC20_TRANSFER_SELECTOR, TRON_ADDRESS_PREFIX,
+};
 pub use utxo::{
     utxo_account, utxo_address, utxo_address_from_xpub, utxo_address_of_script, utxo_decode_raw_tx,
     utxo_dust_threshold, utxo_genesis_hash, utxo_psbt_summary, utxo_script_pubkey, utxo_sign_psbt,
@@ -79,4 +87,11 @@ pub use watch::{
 
 /// Re-exported so callers can build [`Seed`] values and wipe their own buffers
 /// without adding a direct dependency.
+pub use xrp::{
+    xrp_account_id, xrp_address, xrp_address_from_id, xrp_address_of_pubkey, xrp_currency_code,
+    xrp_decode_tx, xrp_issued_amount, xrp_public_key, xrp_sign, xrp_verify_signed, XrpAmount,
+    XrpAmountView, XrpMemo, XrpMemoView, XrpPayment, XrpTxSummary, XrpWarning, LSF_DISALLOW_XRP,
+    LSF_REQUIRE_DEST_TAG, TF_FULLY_CANONICAL_SIG, TF_LIMIT_QUALITY, TF_NO_RIPPLE_DIRECT,
+    TF_PARTIAL_PAYMENT,
+};
 pub use zeroize::{Zeroize, Zeroizing};

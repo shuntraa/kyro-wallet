@@ -26,6 +26,12 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "mempool.space",
     // Litecoin (Esplora/mempool API, mainnet + testnet4): only Rust's `ltc_*` commands use it.
     "litecoinspace.org",
+    // TRON (TronGrid, java-tron HTTP API): mainnet and Nile; only Rust's `tron_*` commands.
+    "api.trongrid.io",
+    "nile.trongrid.io",
+    // XRP Ledger JSON-RPC (testnet :51234, mainnet): only Rust's `xrp_*` commands.
+    "s.altnet.rippletest.net",
+    "xrplcluster.com",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -90,6 +96,7 @@ pub struct EnvKeys {
     pub oneinch: Option<String>,
     pub lifi: Option<String>,
     pub jupiter: Option<String>,
+    pub trongrid: Option<String>,
 }
 
 impl EnvKeys {
@@ -101,6 +108,7 @@ impl EnvKeys {
             oneinch: get("KYRO_ONEINCH_API_KEY"),
             lifi: get("KYRO_LIFI_API_KEY"),
             jupiter: get("KYRO_JUPITER_API_KEY"),
+            trongrid: get("KYRO_TRONGRID_API_KEY"),
         }
     }
 }
@@ -191,6 +199,8 @@ pub enum Family {
     Bitcoin,
     Litecoin,
     Dogecoin,
+    Tron,
+    Xrp,
     Evm,
     Solana,
     Market,
@@ -206,6 +216,10 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Bitcoin
     } else if host == "litecoinspace.org" {
         Family::Litecoin
+    } else if host.ends_with("trongrid.io") {
+        Family::Tron
+    } else if host == "s.altnet.rippletest.net" || host == "xrplcluster.com" {
+        Family::Xrp
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -351,8 +365,9 @@ impl ServerRequest {
     }
 }
 
-/// API keys are injected here so they never need to live in the webview.
-fn api_key_headers(host: &str, env: &EnvKeys, saved: &ApiKeys) -> Vec<(String, String)> {
+/// API keys are injected here so they never need to live in the webview. Also used for the
+/// requests Rust issues itself to TronGrid (`tron_backend`).
+pub fn api_key_headers(host: &str, env: &EnvKeys, saved: &ApiKeys) -> Vec<(String, String)> {
     let pick = |e: &Option<String>, s: &Option<String>| e.clone().or_else(|| s.clone());
     let (name, value) = match host {
         "api.coingecko.com" => ("x-cg-demo-api-key", pick(&env.coingecko, &saved.coingecko)),
@@ -364,6 +379,9 @@ fn api_key_headers(host: &str, env: &EnvKeys, saved: &ApiKeys) -> Vec<(String, S
         ),
         "li.quest" => ("x-lifi-api-key", env.lifi.clone()),
         "lite-api.jup.ag" => ("x-api-key", env.jupiter.clone()),
+        "api.trongrid.io" | "nile.trongrid.io" => {
+            ("tron-pro-api-key", pick(&env.trongrid, &saved.trongrid))
+        }
         _ => return Vec::new(),
     };
     value
@@ -712,6 +730,25 @@ mod tests {
         );
         let p = prep("https://mempool.space/", &c).unwrap();
         assert!(p.headers.is_empty() && p.secret_headers.is_empty());
+        // TronGrid key: TronGrid hosts only, from the env first, then the settings.
+        let env = EnvKeys {
+            trongrid: Some("tg-env".into()),
+            ..Default::default()
+        };
+        let saved = ApiKeys {
+            trongrid: Some("tg-saved".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            api_key_headers("nile.trongrid.io", &env, &saved),
+            vec![("tron-pro-api-key".to_string(), "tg-env".to_string())]
+        );
+        assert_eq!(
+            api_key_headers("api.trongrid.io", &EnvKeys::default(), &saved),
+            vec![("tron-pro-api-key".to_string(), "tg-saved".to_string())]
+        );
+        assert!(api_key_headers("my-tron-node.example", &env, &saved).is_empty());
+        assert!(api_key_headers("api.shasta.trongrid.io", &env, &saved).is_empty());
     }
 
     #[test]
@@ -876,6 +913,10 @@ mod tests {
         assert_eq!(family_for("api.coingecko.com", &c), Family::Market);
         assert_eq!(family_for("lite-api.jup.ag", &c), Family::Swap);
         assert_eq!(family_for("litecoinspace.org", &c), Family::Litecoin);
+        assert_eq!(family_for("nile.trongrid.io", &c), Family::Tron);
+        assert_eq!(family_for("api.trongrid.io", &c), Family::Tron);
+        assert_eq!(family_for("s.altnet.rippletest.net", &c), Family::Xrp);
+        assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

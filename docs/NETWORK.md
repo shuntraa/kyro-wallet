@@ -18,10 +18,10 @@ Kyro embarque un client Tor (Arti, de The Tor Project). Il démarre en arrière-
 | Ton adresse IP | **Cachée** : le serveur voit l'IP d'un relais de sortie Tor. Ton fournisseur d'accès voit seulement que tu utilises Tor. | Visible par chaque serveur contacté et par ton fournisseur d'accès (qui voit les noms d'hôtes). |
 | Contenu des requêtes | Chiffré de bout en bout en TLS jusqu'au serveur (le relais de sortie ne voit que le nom d'hôte et le volume). | Chiffré en TLS. |
 | Tes adresses publiques, tes transactions | **Toujours visibles par le serveur interrogé** : Tor cache *qui* tu es sur le réseau, pas *ce que* tu demandes. | Visibles par le serveur interrogé, et associées à ton IP. |
-| Liens entre activités | Chaque famille — **bitcoin**, **litecoin**, **dogecoin**, **evm**, **solana**, **marché** (CoinGecko), **swap** — utilise ses propres circuits isolés : un relais de sortie ou un serveur ne peut pas relier, par le circuit, ta consultation Bitcoin et ta consultation Solana. | Toutes les requêtes partent de la même IP. |
+| Liens entre activités | Chaque famille — **bitcoin**, **litecoin**, **dogecoin**, **tron**, **xrp**, **evm**, **solana**, **marché** (CoinGecko), **swap** — utilise ses propres circuits isolés : un relais de sortie ou un serveur ne peut pas relier, par le circuit, ta consultation Bitcoin et ta consultation Solana. | Toutes les requêtes partent de la même IP. |
 | Panne | **Échec fermé** : si Tor n'est pas prêt dans les 60 s, la requête échoue (`TOR_UNAVAILABLE`) et **rien n'est envoyé en clair**. Aucun repli automatique. | — |
 
-Par serveur, en mode Tor : CoinGecko voit les cryptos et la devise demandées ; mempool, litecoinspace, les RPC EVM et Solana voient les adresses et transactions demandées ; les API de swap voient les tokens, montants et l'adresse destinataire — mais aucun ne voit ton IP, et deux familles différentes ne partagent jamais un circuit.
+Par serveur, en mode Tor : CoinGecko voit les cryptos et la devise demandées ; mempool, litecoinspace, TronGrid, les serveurs XRPL, les RPC EVM et Solana voient les adresses et transactions demandées ; les API de swap voient les tokens, montants et l'adresse destinataire — mais aucun ne voit ton IP, et deux familles différentes ne partagent jamais un circuit.
 
 **Bitcoin en mode Tor : service onion de mempool.** En mode Tor, Rust réécrit automatiquement `https://mempool.space/…` en `http://mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion/…` (même chemin). La connexion reste **entièrement dans le réseau Tor** : aucun relais de sortie n'intervient, donc aucun relais ne voit ni le nom d'hôte, ni le volume, ni ne peut altérer le trafic. Le `http://` n'est pas un affaiblissement : une adresse onion *est* la clé publique du service, que le protocole authentifie, et la connexion est chiffrée de bout en bout — ce qui remplace TLS. Cette exception vaut **uniquement** pour cette adresse onion précise et **uniquement via Tor** ; toute autre URL `http://` reste refusée, et toute adresse `.onion` est refusée en mode clair. Mempool voit toujours les adresses et transactions demandées, mais ni ton IP ni celle d'un relais de sortie.
 
@@ -41,6 +41,8 @@ En mode clair, tout serveur contacté voit ton **adresse IP** ; en mode Tor (dé
 | `mempool.space` (mode clair) | Bitcoin : UTXO, historique, frais, diffusion des transactions | Tes adresses Bitcoin, tes transactions signées |
 | `mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion` (mode Tor uniquement, `http://`) | Même service que `mempool.space`, via son service onion officiel | Tes adresses Bitcoin, tes transactions signées (jamais ton IP) |
 | `litecoinspace.org` (`/api` mainnet, `/testnet/api` testnet4) | Litecoin : soldes, UTXO, historique, frais, transactions précédentes, diffusion — appelé **par Rust** (`ltc_*`) ; l'interface n'a pas à le joindre (il est dans l'allowlist comme `mempool.space`). Mode Tor : via un relais de sortie (pas de service onion : l'en-tête `Onion-Location` du site est un modèle non configuré, `__NGINX_MEMPOOL_ONION__`, vérifié le 30/10/2026) ; joignable par Tor, testé le 30/10/2026 | Tes adresses Litecoin (une par requête, le serveur peut les regrouper), les txid de tes pièces, tes transactions signées |
+| `nile.trongrid.io` (testnet) / `api.trongrid.io` (mainnet) | TRON : dernier bloc (référence de la transaction que **Kyro construit lui-même**), compte et ressources (bande passante, énergie), paramètres de frais, simulation d'énergie d'un transfert TRC-20, solde USDT, historique (`/v1`), diffusion — appelés par Rust (`tron_*`). Sans clé API (vérifié le 30/10/2026, quotas sans clé) ; clé optionnelle `KYRO_TRONGRID_API_KEY` / Réglages, envoyée en en-tête `TRON-PRO-API-KEY` à ces deux hôtes seulement : TronGrid relie alors tes requêtes à ton compte TronGrid. Via Tor : Nile répond ; mainnet a répondu, mais une fois **403** depuis un relais de sortie (TronGrid peut refuser certaines sorties Tor sans clé) : la requête échoue alors, sans repli | Ton adresse TRON, le destinataire et le montant des transferts que tu prépares (simulation d'énergie), tes transactions signées |
+| `s.altnet.rippletest.net:51234` (testnet, serveur public de Ripple) / `xrplcluster.com` (mainnet, cluster communautaire XRPL) | XRP Ledger : réseau et réserves (`server_info`), compte et compte destinataire (`account_info` : existence, drapeau « tag exigé »), frais et registre courant (`fee`), lignes de confiance, historique (`account_tx`), diffusion (`submit`), suivi (`tx`) — appelés par Rust (`xrp_*`). Sans clé. Via Tor : les deux répondent (testé le 30/10/2026, y compris le port 51234) | Ton adresse XRP, l'adresse du destinataire avant envoi, tes transactions signées |
 | `ethereum-sepolia-rpc.publicnode.com` / `ethereum-rpc.publicnode.com` | Ethereum : soldes, nonce, gas, diffusion | Ton adresse EVM, tes transactions signées |
 | `arbitrum-one-rpc`, `optimism-rpc`, `base-rpc`, `polygon-bor-rpc`, `bsc-rpc`, `avalanche-c-chain-rpc` `.publicnode.com` | Chaînes EVM (phase 2), mêmes usages | Ton adresse EVM, tes transactions signées |
 | `api.devnet.solana.com` / `api.mainnet-beta.solana.com` | Solana : solde, blockhash, diffusion ; lecture par Rust des tables d'adresses (ALT) d'une transaction v0 avant de l'afficher et de la signer | Ton adresse Solana, tes transactions signées, les adresses des tables utilisées par la transaction à signer |
@@ -50,6 +52,8 @@ En mode clair, tout serveur contacté voit ton **adresse IP** ; en mode Tor (dé
 | `lite-api.jup.ag` | Devis de swap Solana | Tokens, montant, ton adresse |
 
 Les devis de swap ne sont demandés que lorsque tu ouvres l'écran Swap et saisis un montant.
+
+Le robinet du testnet XRPL (`faucet.altnet.rippletest.net`) n'est **pas** contacté par l'application : seul le test réel du dépôt l'utilise (financement d'une adresse de test).
 
 ### Dogecoin : pas de serveur par défaut
 
@@ -70,9 +74,9 @@ Les tables d'adresses (ALT) d'une transaction Solana v0 sont lues par Rust aupr�
 
 ## Serveurs personnalisés (Réglages → Réseaux)
 
-Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, Electrum ou ton nœud Bitcoin Core), Litecoin et Dogecoin (Esplora, le même type que le défaut), chaque chaîne EVM, chaque cluster Solana. Règles communes :
+Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, Electrum ou ton nœud Bitcoin Core), Litecoin et Dogecoin (Esplora, le même type que le défaut), TRON (API HTTP java-tron, comme TronGrid ; l'historique exige l'API `/v1` de TronGrid : avec un nœud seul, il est refusé avec un message clair), XRP Ledger (JSON-RPC rippled), chaque chaîne EVM, chaque cluster Solana. Règles communes :
 - un serveur personnalisé n'est autorisé **que pour sa propre famille** et passe par les **circuits Tor isolés** de cette famille ;
-- il est vérifié à l'enregistrement : il doit être sur le bon réseau (genesis Bitcoin, Litecoin ou Dogecoin, `eth_chainId`, genesis Solana), sinon il est refusé ;
+- il est vérifié à l'enregistrement : il doit être sur le bon réseau (genesis Bitcoin, Litecoin, Dogecoin ou TRON, `network_id` XRPL, `eth_chainId`, genesis Solana), sinon il est refusé ;
 - dès qu'il est configuré, le serveur par défaut de cette chaîne est **refusé** : si ton serveur tombe, Kyro affiche une erreur (`SERVER_UNREACHABLE`) et **ne se rabat jamais** sur le serveur par défaut — sinon tes adresses partiraient chez le tiers que tu as justement voulu éviter ;
 - jamais d'identifiants dans une URL ; `http://` en clair n'est permis que pour une adresse `.onion` via Tor (le protocole onion authentifie le service et chiffre de bout en bout) et, pour Bitcoin Core seulement, pour une adresse locale.
 
@@ -85,6 +89,8 @@ Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, E
 | Bitcoin Core **distant** (`https://` ou `.onion`) | Tes descripteurs publics (xpub : **tout l'historique de ton compte**, présent et futur), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés privées |
 | litecoinspace.org (défaut Litecoin) | Tes adresses Litecoin, les txid de tes pièces, tes transactions ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
 | Esplora Litecoin / Dogecoin personnalisé (`https://` ou `.onion`) | Tes adresses, les txid de tes pièces (Dogecoin : chaque transaction précédente que tu dépenses), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés |
+| TronGrid (défaut TRON) / nœud java-tron personnalisé | Ton adresse TRON, tes soldes et ressources, le destinataire et le montant simulés, tes transactions signées ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** | Ta phrase, tes clés |
+| Serveur XRPL par défaut / rippled personnalisé | Ton adresse XRP, l'adresse des destinataires, tes transactions signées ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** | Ta phrase, tes clés |
 | RPC EVM personnalisé | Ton adresse EVM, tes transactions signées ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
 | RPC Solana personnalisé | Ton adresse Solana, tes transactions signées, les tables d'adresses lues ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
 

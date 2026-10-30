@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xrp-backend-info"
+description = "Enables the xrp_backend_info command without any pre-configured scope."
+commands.allow = ["xrp_backend_info"]
+
+[[permission]]
+identifier = "deny-xrp-backend-info"
+description = "Denies the xrp_backend_info command without any pre-configured scope."
+commands.deny = ["xrp_backend_info"]
