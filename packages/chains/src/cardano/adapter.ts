@@ -5,6 +5,7 @@
 // wallet-core), signature and `submittx` are Rust commands (`ada_*`, docs/IPC.md §2.7). This
 // adapter only validates input and checks that what Rust built is what was asked.
 
+import { accountArg } from '../types';
 import {
   call,
   type CardanoAccount,
@@ -46,15 +47,16 @@ export interface CardanoBackend {
   txStatus(hash: string): Promise<{ confirmations: number | null }>;
 }
 
-/** The typed `ada_*` commands of `@kyro/shared` (docs/IPC.md §2.7). */
-export function rustCardanoBackend(): CardanoBackend {
+/** The typed `ada_*` commands of `@kyro/shared` (docs/IPC.md §2.7), for vault account `account`. */
+export function rustCardanoBackend(account = 0): CardanoBackend {
+  const acct = accountArg(account);
   return {
-    address: (index) => call('ada_address', { index }),
+    address: (index) => call('ada_address', { index, ...acct }),
     account: (address) => call('ada_account', { address }),
     txs: (address) => call('ada_txs', { address }),
-    build: (to, lovelace, token, memo) => call('ada_build_tx', { to, ...(lovelace !== undefined ? { lovelace } : {}), ...(token ? { token } : {}), ...(memo ? { memo } : {}) }),
-    sign: (tx, password) => call('ada_sign_tx', { tx, password }),
-    broadcast: (tx) => call('ada_broadcast', { tx }),
+    build: (to, lovelace, token, memo) => call('ada_build_tx', { to, ...(lovelace !== undefined ? { lovelace } : {}), ...(token ? { token } : {}), ...(memo ? { memo } : {}), ...acct }),
+    sign: (tx, password) => call('ada_sign_tx', { tx, password, ...acct }),
+    broadcast: (tx) => call('ada_broadcast', { tx, ...acct }),
     txStatus: (hash) => call('ada_tx_status', { hash }),
   };
 }
@@ -149,6 +151,8 @@ export interface CardanoAdapterOptions {
   chain: CardanoChain;
   address: string;
   backend?: CardanoBackend;
+  /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
+  account?: number;
 }
 
 export class CardanoAdapter implements ChainAdapter<'ada'> {
@@ -161,7 +165,7 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
     if (!isCardanoAddress(opts.address, opts.chain.network)) throw new Error('Adresse Cardano invalide');
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustCardanoBackend();
+    this.backend = opts.backend ?? rustCardanoBackend(opts.account ?? 0);
   }
 
   getAddress(): string {

@@ -206,3 +206,8 @@ export async function signAndBroadcast(adapter: AnyAdapter, unsigned: AnyUnsigne
 }
 
 export type { EvmTxSummary };
+
+/** `{ account }` for a vault command, or nothing for account 0 (the call stays exactly as before). */
+export function accountArg(account: number | undefined): { account?: number } {
+  return account ? { account } : {};
+}

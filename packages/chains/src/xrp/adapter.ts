@@ -5,6 +5,7 @@
 // `submit` are Rust commands (`xrp_*`, docs/IPC.md §2.6). This adapter only validates input and
 // checks that what Rust built is what was asked (destination, amount, **destination tag**).
 
+import { accountArg } from '../types';
 import {
   call,
   type XrpAccountInfo,
@@ -37,15 +38,16 @@ export interface XrpBackend {
   txStatus(hash: string): Promise<{ validated: boolean; result: string }>;
 }
 
-/** The typed `xrp_*` commands of `@kyro/shared` (docs/IPC.md §2.6). */
-export function rustXrpBackend(): XrpBackend {
+/** The typed `xrp_*` commands of `@kyro/shared` (docs/IPC.md §2.6), for vault account `account`. */
+export function rustXrpBackend(account = 0): XrpBackend {
+  const acct = accountArg(account);
   return {
     account: (address) => call('xrp_account', { address }),
     lines: (address) => call('xrp_lines', { address }),
     txs: (address) => call('xrp_txs', { address }),
-    build: (to, amount, destinationTag, issued) => call('xrp_build_tx', { to, amount, ...(destinationTag !== undefined ? { destinationTag } : {}), ...(issued ? { issued } : {}) }),
-    sign: (blob, password) => call('xrp_sign_tx', { blob, password }),
-    broadcast: (blob) => call('xrp_broadcast', { blob }),
+    build: (to, amount, destinationTag, issued) => call('xrp_build_tx', { to, amount, ...(destinationTag !== undefined ? { destinationTag } : {}), ...(issued ? { issued } : {}), ...acct }),
+    sign: (blob, password) => call('xrp_sign_tx', { blob, password, ...acct }),
+    broadcast: (blob) => call('xrp_broadcast', { blob, ...acct }),
     txStatus: (hash) => call('xrp_tx_status', { hash }),
   };
 }
@@ -111,6 +113,8 @@ export interface XrpAdapterOptions {
   chain: XrpChain;
   address: string;
   backend?: XrpBackend;
+  /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
+  account?: number;
 }
 
 export class XrpAdapter implements ChainAdapter<'xrp'> {
@@ -123,7 +127,7 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
     if (!isXrpAddress(opts.address)) throw new Error('Adresse XRP invalide');
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustXrpBackend();
+    this.backend = opts.backend ?? rustXrpBackend(opts.account ?? 0);
   }
 
   getAddress(): string {

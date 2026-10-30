@@ -3,6 +3,7 @@
 // One EVM adapter, parametrised by the chain registry. JSON-RPC goes through a
 // viem *custom transport* that calls `net_fetch` — viem never touches fetch.
 
+import { accountArg } from '../types';
 import {
   createPublicClient,
   custom,
@@ -30,6 +31,8 @@ export interface EvmAdapterOptions {
   logRange?: bigint;
   /** Hardware-wallet account (signing through `hw_sign_evm_tx`). */
   hw?: HwSigner;
+  /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
+  account?: number;
 }
 
 export interface ContractCallParams {
@@ -71,6 +74,8 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
   private readonly fetcher: NetFetch;
   private readonly logRange: bigint;
   readonly hw: HwSigner | null;
+  /** Vault account index: the address index of `m/44'/60'/0'/0/i`. */
+  readonly account: number;
 
   constructor(opts: EvmAdapterOptions) {
     this.chain = opts.chain;
@@ -79,6 +84,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     this.rpcUrl = opts.rpcUrl || opts.chain.rpcUrl;
     this.logRange = opts.logRange ?? 5_000n;
     this.hw = opts.hw ?? null;
+    this.account = opts.account ?? 0;
     this.client = createPublicClient({
       transport: netTransport(this.rpcUrl, this.fetcher, (ms) => {
         this.latencyMs = ms;
@@ -234,7 +240,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
   }
 
   async signTx(unsigned: EvmUnsigned, password: string): Promise<EvmSigned> {
-    const args: { tx: EvmTxRequest; password: string; token?: EvmTokenHint } = { tx: unsigned.tx, password };
+    const args: { tx: EvmTxRequest; password: string; token?: EvmTokenHint; account?: number } = { tx: unsigned.tx, password, ...accountArg(this.account) };
     if (unsigned.token) args.token = unsigned.token;
     const res = await call('evm_sign_tx', args);
     return { family: 'evm', rawTx: res.rawTx, hash: res.hash };

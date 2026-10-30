@@ -47,31 +47,33 @@ export interface AdapterSet {
  *   else the registry default. Never both: Rust refuses a replaced default
  *   (`DEFAULT_SERVER_DISABLED`), so there is no fallback to retry against.
  */
-export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers, 'evm' | 'solana'>, fetch?: NetFetch, hw?: HwSigner): AdapterSet {
+export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers, 'evm' | 'solana'>, fetch?: NetFetch, hw?: HwSigner, account = 0): AdapterSet {
   const network = accounts.network;
   const f = fetch ? { fetch } : {};
   const h = hw ? { hw } : {};
+  // Vault account (§2.9): every signing command of these adapters carries it (absent = 0).
+  const a = !hw && account ? { account } : {};
   // Hardware wallet: SegWit v0 inputs carry their full previous transaction (`non_witness_utxo`),
   // fetched by `btc_tx_hex` (Rust checks its txid against the input).
   const btcHw = hw ? { hw: { ...hw, prevTx: (txid: string) => call('btc_tx_hex', { txid }) } } : {};
-  const btc = accounts.btc ? new BitcoinAdapter({ chain: btcChain(network), accounts: accounts.btc, ...btcHw }) : null;
+  const btc = accounts.btc ? new BitcoinAdapter({ chain: btcChain(network), accounts: accounts.btc, ...btcHw, ...a }) : null;
   const evm = new Map<string, EvmAdapter>();
   if (accounts.evm) {
     for (const chain of evmChains(network)) {
       const custom = servers?.evm[String(chain.chainId)]?.url;
-      evm.set(chain.key, new EvmAdapter({ chain, address: accounts.evm.address, ...(custom ? { rpcUrl: custom } : {}), ...f, ...h }));
+      evm.set(chain.key, new EvmAdapter({ chain, address: accounts.evm.address, ...(custom ? { rpcUrl: custom } : {}), ...f, ...h, ...a }));
     }
   }
   const solCustom = servers?.solana[solanaCluster(network)]?.url;
-  const sol = accounts.sol ? new SolanaAdapter({ chain: solChain(network), address: accounts.sol.address, ...(solCustom ? { rpcUrl: solCustom } : {}), ...f, ...h }) : null;
+  const sol = accounts.sol ? new SolanaAdapter({ chain: solChain(network), address: accounts.sol.address, ...(solCustom ? { rpcUrl: solCustom } : {}), ...f, ...h, ...a }) : null;
   // Litecoin / Dogecoin: Rust picks their servers (servers.litecoin / servers.dogecoin).
-  const { ltc, doge } = createUtxoAdapters(accounts);
+  const { ltc, doge } = createUtxoAdapters(accounts, {}, hw ? 0 : account);
   // TRON: Rust picks the server (servers.tron, default TronGrid).
-  const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address }) : null;
+  const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address, ...a }) : null;
   // XRP Ledger: Rust picks the server (servers.xrp, default rippled).
-  const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address }) : null;
+  const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...a }) : null;
   // Cardano: Rust picks the server (servers.cardano, default Koios).
-  const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address }) : null;
+  const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...a }) : null;
   const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : [])];
   return { btc, evm, sol, ltc, doge, tron, xrp, cardano, all, hw: hw ?? null };
 }
@@ -113,11 +115,13 @@ export interface UtxoAdapterSet {
 export function createUtxoAdapters(
   accounts: { network: Network; ltc?: UtxoAccountView; doge?: UtxoAccountView },
   backends: { ltc?: UtxoBackend; doge?: UtxoBackend } = {},
+  vaultAccount = 0,
 ): UtxoAdapterSet {
   const n = accounts.network;
+  const a = vaultAccount ? { vaultAccount } : {};
   return {
-    ltc: accounts.ltc ? new LitecoinAdapter({ chain: ltcChain(n), account: accounts.ltc, ...(backends.ltc ? { backend: backends.ltc } : {}) }) : null,
-    doge: accounts.doge ? new DogecoinAdapter({ chain: dogeChain(n), account: accounts.doge, ...(backends.doge ? { backend: backends.doge } : {}) }) : null,
+    ltc: accounts.ltc ? new LitecoinAdapter({ chain: ltcChain(n), account: accounts.ltc, ...(backends.ltc ? { backend: backends.ltc } : {}), ...a }) : null,
+    doge: accounts.doge ? new DogecoinAdapter({ chain: dogeChain(n), account: accounts.doge, ...(backends.doge ? { backend: backends.doge } : {}), ...a }) : null,
   };
 }
 
