@@ -681,14 +681,43 @@ export interface EvmTxSummary {
   unlimitedApproval: boolean;
   maxFeeWei: string;
   chainId: number;
+  /** Native value attached, wei (always present, also for ERC-20 calls). */
+  valueWei: string;
+  /** Reasons for the reinforced (2nd) native dialog. */
+  warnings: EvmWarning[];
+  requiresExtraConfirmation: boolean;
 }
 
-/** `[address, sats, isChange]` */
+/** wallet-core `EvmWarning` (serde tag `kind`); each one → reinforced confirmation. */
+export type EvmWarning =
+  /** A call that is not a decoded ERC-20 transfer: Kyro cannot tell what it does. */
+  | { kind: 'contractCall' }
+  /** Every approval; `unlimited` (≥ 2^128) is shown ILLIMITÉ. `amount`: raw token units. */
+  | { kind: 'approval'; spender: string; amount: string; unlimited: boolean }
+  /** Native value sent with calldata. */
+  | { kind: 'valueToContract'; valueWei: string }
+  /** Chain id outside EVM_KNOWN_CHAINS. */
+  | { kind: 'unknownChain'; chainId: number }
+  /** gas_limit × max_fee_per_gas above the chain's threshold (0.05 native, 50 POL, 1 AVAX). */
+  | { kind: 'highFee'; maxFeeWei: string };
+
+/** `[address, sats, isChange]`. Non-address outputs: `op_return:<hex>` / `script:<hex>`. */
 export type BtcSummaryOutput = [address: string, sats: number, isChange: boolean];
+
+/** wallet-core `BtcWarning` (serde tag `kind`); each one → reinforced confirmation. */
+export type BtcWarning =
+  | { kind: 'unknownScript'; output: number }
+  | { kind: 'opReturn'; output: number }
+  /** Input not signed by this wallet (coinjoin, payjoin… or a trap). */
+  | { kind: 'foreignInput'; input: number }
+  /** Fee rate above 100 sat/vB, or fee larger than all outputs together. */
+  | { kind: 'highFee'; satPerVb: number };
 
 export interface BtcTxSummary {
   outputs: BtcSummaryOutput[];
   feeSats: number;
+  warnings: BtcWarning[];
+  requiresExtraConfirmation: boolean;
 }
 
 export type HttpMethod = 'GET' | 'POST';

@@ -51,6 +51,8 @@ export { DEMO_RESCAN_MS, demoElectrumCert } from './mock-servers';
 export { DEMO_HW_DELAYS, DEMO_TREZOR_LAYOUT, DEMO_TREZOR_PIN, TREZOR_KEYPAD, demoDecodePin, type DemoHwScenario } from './mock-hw';
 export { DEMO_CBF_CONNECT_MS, DEMO_CBF_FILTERS_MS, DEMO_CBF_HEADERS_MS } from './mock-cbf';
 import { demoHash, handleDemoNet, type DemoChainState } from './mock-net';
+import { btcWarnings, evmWarnings } from './warnings';
+import { demoRenderScript, demoVsize } from './mock-tx';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 
 bitcoin.initEccLib(ecc);
@@ -407,6 +409,10 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   };
 
   const decodeEvm = (tx: EvmTxRequest): EvmTxSummary => {
+    const s = decodeEvmKind(tx);
+    return { ...s, valueWei: BigInt(tx.valueWei).toString(), ...evmWarnings(s, tx) };
+  };
+  const decodeEvmKind = (tx: EvmTxRequest): Omit<EvmTxSummary, 'warnings' | 'requiresExtraConfirmation' | 'valueWei'> => {
     const data = tx.data.toLowerCase();
     const maxFeeWei = (BigInt(tx.gasLimit) * BigInt(tx.maxFeePerGas)).toString();
     const word = (i: number) => data.slice(10 + i * 64, 10 + (i + 1) * 64);
@@ -441,11 +447,13 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       }
     });
     const outputs = psbt.txOutputs.map((o) => {
-      const address = o.address ?? bitcoin.address.fromOutputScript(o.script, net);
+      const address = demoRenderScript(o.script, net);
       return [address, Number(o.value), keys.ownBtc.has(address)] as [string, number, boolean];
     });
     const outSum = psbt.txOutputs.reduce((a, o) => a + o.value, 0n);
-    return { psbt: psbt.toBase64(), summary: { outputs, feeSats: Number(inSum - outSum) } };
+    const feeSats = Number(inSum - outSum);
+    const vsize = demoVsize(psbt);
+    return { psbt: psbt.toBase64(), summary: { outputs, feeSats, ...btcWarnings({ outputs, feeSats, vsize }) } };
   };
 
   // Hardware wallets: keys from a separate public demo seed, same native-dialog emulation.
@@ -537,6 +545,10 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       if (!confirmFn(`Signer une transaction ${s.kind} sur la chaîne ${tx.chainId}\nVers : ${s.to}\nMontant : ${s.amount}${token ? ` (${token.symbol}, ${token.decimals} déc.)` : ' wei'}\nFrais max. : ${s.maxFeeWei} wei`)) {
         throw new IpcError('USER_REJECTED', 'Signature refusée.');
       }
+      // Rust: reinforced 2nd dialog when the summary says so (contract call, approval…).
+      if (s.requiresExtraConfirmation && !confirmFn(`Attention : transaction à vérifier\n${s.warnings.map((w) => `• ${w.kind}`).join('\n')}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`)) {
+        throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      }
       const raw = '0x02' + bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(tx) + Math.random()))) + '00'.repeat(40);
       const hash = '0x' + demoHash(raw);
       chain.signedEvm.set(raw, { hash, tx, from: keys.accounts.evm.address });
@@ -548,6 +560,9 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       const out = signPsbt(String(a.psbt ?? ''));
       const lines = out.summary.outputs.map(([ad, v, ch]) => `${ch ? '(monnaie) ' : ''}${ad} : ${v} sats`).join('\n');
       if (!confirmFn(`Signer cette transaction Bitcoin ?\n${lines}\nFrais : ${out.summary.feeSats} sats`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (out.summary.requiresExtraConfirmation && !confirmFn(`Attention : transaction à vérifier\n${out.summary.warnings.map((w) => `• ${w.kind}`).join('\n')}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`)) {
+        throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      }
       return out;
     },
     sol_decode_tx: (a) => {

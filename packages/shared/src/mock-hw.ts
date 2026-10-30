@@ -42,6 +42,8 @@ import {
   type WatchOnlyAccount,
 } from './ipc';
 import { emitDemoEvent } from './events';
+import { btcWarnings } from './warnings';
+import { demoVsize } from './mock-tx';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 
 bitcoin.initEccLib(ecc);
@@ -478,7 +480,8 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
         const address = o.address ?? bitcoin.address.fromOutputScript(o.script, net);
         return [address, Number(o.value), own.has(address)] as [string, number, boolean];
       });
-      const summary: BtcTxSummary = { outputs, feeSats: Number(inSum - psbt.txOutputs.reduce((s, o) => s + o.value, 0n)) };
+      const feeSats = Number(inSum - psbt.txOutputs.reduce((s, o) => s + o.value, 0n));
+      const summary: BtcTxSummary = { outputs, feeSats, ...btcWarnings({ outputs, feeSats, vsize: demoVsize(psbt) }) };
       return run(String(a.id), async (wait) => {
         await sameDevice(acc, 'btc', wait);
         const lines = outputs.map(([ad, v, ch]) => `${ch ? '(monnaie) ' : ''}${ad} : ${v} sats`).join('\n');

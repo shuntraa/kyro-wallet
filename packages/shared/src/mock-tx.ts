@@ -7,6 +7,7 @@
 
 import * as bitcoin from 'bitcoinjs-lib';
 import { sha256 } from '@noble/hashes/sha2';
+import { bytesToHex } from '@noble/hashes/utils';
 
 export interface DemoUtxo {
   txid: string;
@@ -35,4 +36,21 @@ export function demoFund(utxos: Map<string, DemoUtxo[]>, raw: Map<string, string
   const u: DemoUtxo = { txid, vout: 0, value, height };
   utxos.set(address, [...(utxos.get(address) ?? []), u]);
   return u;
+}
+
+/** Rust `render_script`: address, else `op_return:<hex>` / `script:<hex>`. */
+export function demoRenderScript(script: Uint8Array, net: bitcoin.Network): string {
+  try {
+    return bitcoin.address.fromOutputScript(script, net);
+  } catch {
+    const hexs = bytesToHex(script);
+    return script[0] === 0x6a ? `op_return:${hexs}` : `script:${hexs}`;
+  }
+}
+
+/** Estimated vsize: 10.5 + 68 per SegWit input (57.5 Taproot) + 31 per output (43 Taproot). */
+export function demoVsize(psbt: bitcoin.Psbt): number {
+  const ins = psbt.data.inputs.reduce((s, i) => s + (i.tapInternalKey || i.tapBip32Derivation?.length ? 57.5 : 68), 0);
+  const outs = psbt.txOutputs.reduce((s, o) => s + (o.script.length === 34 && o.script[0] === 0x51 ? 43 : 31), 0);
+  return Math.ceil(10.5 + ins + outs);
 }

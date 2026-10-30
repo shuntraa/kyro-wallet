@@ -14,7 +14,7 @@
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { HDKey } from '@scure/bip32';
-import { BTC_TXS_CAP, call, type Accounts, type BtcKind, type BtcTxSummary, type EsploraTx } from '@kyro/shared';
+import { BTC_TXS_CAP, btcWarnings, call, type Accounts, type BtcKind, type BtcTxSummary, type EsploraTx } from '@kyro/shared';
 import type { BtcChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 import { outputTypeOf, selectAll, selectCoins, type SelectableUtxo, type Selection } from './coinselect';
@@ -273,7 +273,8 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
       recipient: to,
       fee: sel.fee,
       maxFee: sel.fee,
-      summary: { outputs, feeSats: Number(sel.fee) },
+      // Same triggers as Rust's summary (it re-decodes before signing; this shows them earlier).
+      summary: { outputs, feeSats: Number(sel.fee), ...btcWarnings({ outputs, feeSats: Number(sel.fee), vsize: sel.vsize }) },
       size: { family: 'btc', vsize: sel.vsize },
     };
   }

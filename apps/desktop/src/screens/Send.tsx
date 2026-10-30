@@ -59,6 +59,7 @@ import { TronEstimateView } from '../components/TronEstimateView';
 import { XRP_ACTIVATION, XrpSpendable, XrpSummaryView, XrpTagField, XrpTxStatusLine } from '../components/XrpSend';
 import { CardanoSendFields, CardanoSummaryView, CardanoTxStatusLine, tokenKey } from '../components/Cardano';
 import { DustOnlyNote, PoisoningWarning } from '../components/Poisoning';
+import { SecondConfirmNotice, btcWarningText, evmWarningText } from '../components/SecondConfirm';
 import { useHistory } from '../state/history';
 import { Menu } from '../components/ui/menu';
 import { Button, IconButton, Notice, Spinner } from '../components/ui/primitives';
@@ -739,6 +740,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <SolSummaryView s={built.sol} unsigned={built.unsigned} asset={asset} sol={nativeAsset} solPrice={nativePrice} currency={cur} />
           )}
           {built?.unsigned.family === 'tron' && <TronEstimateView u={built.unsigned} network={network} trxPrice={nativePrice} currency={cur} />}
+          {/* Bitcoin / EVM: Rust's reinforced-confirmation triggers, before the password. */}
+          {built && asset.family === 'btc' && built.unsigned.family === 'btc' && built.unsigned.summary.requiresExtraConfirmation && <SecondConfirmNotice lines={built.unsigned.summary.warnings.map(btcWarningText)} />}
+          {built?.summary?.requiresExtraConfirmation && nativeAsset && (
+            <SecondConfirmNotice lines={built.summary.warnings.map((w) => evmWarningText(w, nativeAsset, asset.kind === 'erc20' ? asset : undefined))} />
+          )}
           {built?.unsigned.family === 'xrp' && <XrpSummaryView u={built.unsigned} xrpPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'ada' && <CardanoSummaryView u={built.unsigned} adaPrice={nativePrice} currency={cur} />}
 

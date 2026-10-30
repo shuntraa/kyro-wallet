@@ -15,6 +15,7 @@ import { addApproval, addLocalTx } from '../lib/storage';
 import { priceAt } from '../lib/portfolioSeries';
 import { useAsync, useDebounced, useNow } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
+import { SecondConfirmNotice } from '../components/SecondConfirm';
 import { TorWait, useTorBlocked } from '../components/Tor';
 import { useOnTorReady } from '../state/tor';
 import { SmoothChart } from '../components/charts';
@@ -479,6 +480,16 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                     : ` Le contrat ${chosen.providerName} pourra dépenser exactement ${fmtCrypto(sellAmount, sell.decimals, sell.symbol)}, une seule fois.`
                   : ''}
               </EnClair>
+            )}
+            {/* Rust asks a 2nd confirmation for every approval and every non-transfer contract call (a swap is one). */}
+            {chosen && sellAmount && chosen.tx.kind === 'evm' && (
+              <SecondConfirmNotice
+                lines={[
+                  ...(needsApproval ? [`Autorisation : ${chosen.providerName} (${shortAddress(chosen.allowanceTarget ?? '')}) pourra dépenser ${unlimited ? `un montant ILLIMITÉ de ${sell.symbol}` : fmtCrypto(sellAmount, sell.decimals, sell.symbol)} sans nouvelle signature.`] : []),
+                  `Swap : appel du contrat ${chosen.providerName}, pas un simple transfert ; Kyro ne peut pas dire tout ce qu’il fait (la simulation le vérifie).`,
+                  ...(sell.kind === 'native' ? [`${fmtCrypto(sellAmount, sell.decimals, sell.symbol)} envoyés au contrat avec l’appel.`] : []),
+                ]}
+              />
             )}
             <div className="flex-1" />
             <div className="flex items-center justify-between text-[12px]">

@@ -411,7 +411,9 @@ export class UtxoAdapter {
       recipient: to,
       fee: sel.fee,
       maxFee: sel.fee,
-      summary: { outputs, feeSats: Number(sel.fee) },
+      // Bitcoin's thresholds (100 sat/vB) do not apply to litoshis / koinus: Rust's own
+      // UtxoTxSummary warnings (ltc_/doge_sign_psbt) decide the reinforced confirmation.
+      summary: { outputs, feeSats: Number(sel.fee), warnings: [], requiresExtraConfirmation: false },
       size: { family: 'btc', vsize: sel.vsize },
       dustFolded: sel.dustFolded,
     };
