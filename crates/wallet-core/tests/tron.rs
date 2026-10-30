@@ -13,7 +13,7 @@ mod common;
 use bitcoin::hashes::{sha256, Hash};
 use common::seed;
 use wallet_core::{
-    tron_address, tron_address_bytes, tron_address_from_bytes, tron_decode_raw,
+    tron_address, tron_address_at, tron_address_bytes, tron_address_from_bytes, tron_decode_raw,
     tron_recover_signer, tron_ref_block, tron_sign, tron_signed_transaction,
     tron_trc20_transfer_data, Error, TronAction, TronContract, TronRaw, TronWarning,
 };
@@ -37,11 +37,11 @@ fn trezor_address_vectors() {
         "TY72iA3SBtrds3QLYsS7LwYfkzXwAXCRWT"
     );
     assert_eq!(
-        tron_address(&s, 1).unwrap(),
+        tron_address_at(&s, 0, 1).unwrap(),
         "TFz2CJn9CJb8C4i1Gke3jmZX2fRMJxniH2"
     );
     assert_eq!(
-        tron_address(&s, 2).unwrap(),
+        tron_address_at(&s, 0, 2).unwrap(),
         "TQSw9qVAigRwfgPdf7aW4wxbG9tFitexg2"
     );
     assert_eq!(

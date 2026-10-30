@@ -11,6 +11,7 @@
 // - Unsigned PSBTs carry witnessUtxo + bip32Derivation / tapBip32Derivation so
 //   that wallet-core can find the keys; signing happens in Rust.
 
+import { accountArg } from '../types';
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { HDKey } from '@scure/bip32';
@@ -46,6 +47,8 @@ export interface BitcoinAdapterOptions {
   hw?: HwSigner & { prevTx: (txid: string) => Promise<string> };
   /** Consecutive unused addresses before stopping a scan. */
   gapLimit?: number;
+  /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
+  account?: number;
 }
 
 const SCAN_TTL_MS = 30_000;
@@ -58,6 +61,8 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   private readonly gap: number;
   private readonly accounts: Accounts['btc'];
   readonly hw: BitcoinAdapterOptions['hw'] | null;
+  /** Vault account index (0 = the historical account). */
+  readonly account: number;
   private readonly keys: Record<BtcKind, HDKey>;
   private scanCache: { at: number; addrs: DerivedAddress[] } | null = null;
   private scanning: Promise<DerivedAddress[]> | null = null;
@@ -71,6 +76,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     this.chain = opts.chain;
     this.accounts = opts.accounts;
     this.hw = opts.hw ?? null;
+    this.account = opts.account ?? 0;
     this.net = opts.chain.network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
     this.gap = opts.gapLimit ?? 5;
     this.keys = { segwit: parseXpub(opts.accounts.segwit.xpub), taproot: parseXpub(opts.accounts.taproot.xpub) };
@@ -280,7 +286,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   }
 
   async signTx(unsigned: BtcUnsigned, password: string): Promise<BtcSigned> {
-    const res = await call('btc_sign_psbt', { psbt: unsigned.psbt, password });
+    const res = await call('btc_sign_psbt', { psbt: unsigned.psbt, password, ...accountArg(this.account) });
     const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
     const finalized = psbt.data.inputs.every((i) => i.finalScriptWitness || i.finalScriptSig);
     if (!finalized) psbt.finalizeAllInputs();

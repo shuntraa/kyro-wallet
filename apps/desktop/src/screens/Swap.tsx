@@ -20,6 +20,7 @@ import { TorWait, useTorBlocked } from '../components/Tor';
 import { useOnTorReady } from '../state/tor';
 import { SmoothChart } from '../components/charts';
 import { Menu } from '../components/ui/menu';
+import { AccountPicker } from '../components/AccountPicker';
 import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
 import { IconCheck, IconChevronDown, IconDown, IconWarn } from '../components/icons';
@@ -263,6 +264,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               </button>
             }
           />
+          <AccountPicker family={chainKey === 'solana' ? 'sol' : 'evm'} />
         </div>
         <div className="flex items-center gap-2.5">
           <span className="eyebrow">Slippage max.</span>

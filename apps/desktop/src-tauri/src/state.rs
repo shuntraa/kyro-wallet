@@ -204,11 +204,28 @@ impl AppState {
         lock(&self.settings).clone()
     }
 
-    pub fn save_settings(&self, new: Settings) -> AppResult<Settings> {
+    /// Saves `new`, keeping the stored account lists (they only change through
+    /// [`AppState::update_accounts`], even if `settings_set` raced with it).
+    pub fn save_settings(&self, mut new: Settings) -> AppResult<Settings> {
         new.validate()?;
+        let mut current = lock(&self.settings);
+        new.accounts = current.accounts.clone();
         new.save(&self.settings_path)?;
-        *lock(&self.settings) = new.clone();
+        *current = new.clone();
         Ok(new)
+    }
+
+    /// Read-modify-write of the vault's account lists, saved atomically with the settings.
+    pub fn update_accounts<T>(
+        &self,
+        f: impl FnOnce(&mut crate::accounts::VaultAccounts) -> AppResult<T>,
+    ) -> AppResult<T> {
+        let mut current = lock(&self.settings);
+        let mut next = current.clone();
+        let out = f(&mut next.accounts)?;
+        next.save(&self.settings_path)?;
+        *current = next;
+        Ok(out)
     }
 }
 

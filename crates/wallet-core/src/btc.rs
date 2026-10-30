@@ -287,11 +287,12 @@ pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String]) -> Result<B
     )
 }
 
-/// `true` iff `path` is `m/purpose'/coin'/account'/{0,1}/index` for our purpose and coin type.
-pub(crate) fn is_our_path(path: &DerivationPath, purpose: u32, coin: u32) -> bool {
+/// `true` iff `path` is `m/purpose'/coin'/account'/{0,1}/index` for our purpose, coin type and
+/// account: keys of the wallet's other accounts are not "ours" for a signature by `account`.
+pub(crate) fn is_our_path(path: &DerivationPath, purpose: u32, coin: u32, account: u32) -> bool {
     match path.as_ref() {
-        [ChildNumber::Hardened { index: p }, ChildNumber::Hardened { index: c }, ChildNumber::Hardened { .. }, ChildNumber::Normal { index: change }, ChildNumber::Normal { .. }] => {
-            *p == purpose && *c == coin && *change <= 1
+        [ChildNumber::Hardened { index: p }, ChildNumber::Hardened { index: c }, ChildNumber::Hardened { index: a }, ChildNumber::Normal { index: change }, ChildNumber::Normal { .. }] => {
+            *p == purpose && *c == coin && *a == account && *change <= 1
         }
         _ => false,
     }
@@ -302,10 +303,13 @@ struct Signer {
     master: XprivGuard,
     fingerprint: Fingerprint,
     coin: u32,
+    account: u32,
 }
 
 impl Signer {
-    fn new(seed: &Seed, net: Network) -> Result<Signer> {
+    fn new(seed: &Seed, net: Network, account: u32) -> Result<Signer> {
+        // Refuse an out-of-range account up front (it could never match a key origin).
+        hardened(account)?;
         let secp = secp()?;
         let master = XprivGuard::master(seed, net.btc_kind())?;
         let fingerprint = master.fingerprint(&secp);
@@ -314,11 +318,12 @@ impl Signer {
             master,
             fingerprint,
             coin: net.btc_coin_type(),
+            account,
         })
     }
 
     fn ours(&self, fp: &Fingerprint, path: &DerivationPath, kind: BtcKind) -> bool {
-        *fp == self.fingerprint && is_our_path(path, kind.purpose(), self.coin)
+        *fp == self.fingerprint && is_our_path(path, kind.purpose(), self.coin, self.account)
     }
 
     fn derive(&self, path: &DerivationPath) -> Result<XprivGuard> {
@@ -412,16 +417,23 @@ fn sign_summary(
 }
 
 /// [`btc_sign_psbt`]'s summary without signing (for the dialog shown before signing).
-pub fn btc_psbt_summary(seed: &Seed, net: Network, psbt_b64: &str) -> Result<BtcTxSummary> {
+pub fn btc_psbt_summary(
+    seed: &Seed,
+    net: Network,
+    account: u32,
+    psbt_b64: &str,
+) -> Result<BtcTxSummary> {
     let psbt = parse_psbt(psbt_b64)?;
     let prevouts = prevouts(&psbt)?;
-    let signer = Signer::new(seed, net)?;
+    let signer = Signer::new(seed, net, account)?;
     sign_summary(&signer, net, &psbt, &prevouts)
 }
 
 /// Signs every P2WPKH (BIP84) and P2TR key-path (BIP86) input whose key origin
 /// (`bip32_derivation` / `tap_key_origins`) carries our master fingerprint and a path
-/// `m/purpose'/coin'/account'/{0,1}/index` for this network. Other inputs are left untouched.
+/// `m/purpose'/coin'/account'/{0,1}/index` for this network **and this `account`**. Other
+/// inputs — including those of the wallet's other accounts — are left untouched (and reported
+/// as [`BtcWarning::ForeignInput`]); change is recognised in this account only.
 ///
 /// Safety checks: every input must have a `witness_utxo`; the derived key must match the key
 /// in the PSBT and the spent script; only `SIGHASH_ALL` / `SIGHASH_DEFAULT` are signed;
@@ -429,10 +441,15 @@ pub fn btc_psbt_summary(seed: &Seed, net: Network, psbt_b64: &str) -> Result<Btc
 ///
 /// Returns the signed (not finalized) PSBT in base64 and a summary in which `is_change`
 /// marks outputs whose key origin provably belongs to this wallet.
-pub fn btc_sign_psbt(seed: &Seed, net: Network, psbt_b64: &str) -> Result<(String, BtcTxSummary)> {
+pub fn btc_sign_psbt(
+    seed: &Seed,
+    net: Network,
+    account: u32,
+    psbt_b64: &str,
+) -> Result<(String, BtcTxSummary)> {
     let mut psbt = parse_psbt(psbt_b64)?;
     let prevouts = prevouts(&psbt)?;
-    let signer = Signer::new(seed, net)?;
+    let signer = Signer::new(seed, net, account)?;
     let secp = &signer.secp;
 
     let summary = sign_summary(&signer, net, &psbt, &prevouts)?;
@@ -559,9 +576,16 @@ mod tests {
     #[test]
     fn our_path_filter() {
         let ok = DerivationPath::from_str("m/84'/1'/0'/1/7").unwrap();
-        assert!(is_our_path(&ok, 84, 1));
-        assert!(!is_our_path(&ok, 84, 0));
-        assert!(!is_our_path(&ok, 86, 1));
+        assert!(is_our_path(&ok, 84, 1, 0));
+        assert!(!is_our_path(&ok, 84, 0, 0));
+        assert!(!is_our_path(&ok, 86, 1, 0));
+        assert!(
+            !is_our_path(&ok, 84, 1, 1),
+            "another account of the same wallet"
+        );
+        let acct1 = DerivationPath::from_str("m/84'/1'/1'/0/0").unwrap();
+        assert!(is_our_path(&acct1, 84, 1, 1));
+        assert!(!is_our_path(&acct1, 84, 1, 0));
         for bad in [
             "m/84'/1'/0'/2/0",
             "m/84'/1'/0/0/0",
@@ -569,7 +593,7 @@ mod tests {
             "m/84'/1'/0'/0",
         ] {
             assert!(
-                !is_our_path(&DerivationPath::from_str(bad).unwrap(), 84, 1),
+                !is_our_path(&DerivationPath::from_str(bad).unwrap(), 84, 1, 0),
                 "{bad}"
             );
         }

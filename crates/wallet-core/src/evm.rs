@@ -441,6 +441,16 @@ fn derive_key(secp: &Secp256k1<All>, seed: &Seed, index: u32) -> Result<XprivGua
     master.derive(secp, &path)
 }
 
+/// Path of EVM account `index`: `m/44'/60'/0'/0/index`.
+///
+/// Kyro's EVM accounts are **address indices** below one BIP44 account (MetaMask, Trezor Suite
+/// and Kyro's own hardware-wallet accounts), not Ledger Live's `m/44'/60'/index'/0/0`: account 0
+/// is the same in both layouts, and this one keeps a seed imported from MetaMask showing the
+/// same accounts in the same order.
+pub fn evm_path(index: u32) -> String {
+    format!("m/44'/60'/0'/0/{index}")
+}
+
 /// EIP-55 address at `m/44'/60'/0'/0/index`.
 pub fn evm_address(seed: &Seed, index: u32) -> Result<String> {
     let secp = secp()?;

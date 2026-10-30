@@ -19,6 +19,7 @@ use wallet_core::{
 };
 use zeroize::Zeroizing;
 
+use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::cardano_backend::{
     self, call, first, num, AssetMap, CardanoAccount, CardanoCtx, Params, Utxo, TTL_OFFSET,
 };
@@ -45,11 +46,13 @@ fn ada(lovelace: &str) -> String {
 }
 
 /// Our keys for staking: the address that pays (and receives the change) and the stake key.
-/// The commands use account 0 (`…/0'/0/0` + `…/0'/2/0`); the live test uses the public CIP-19
-/// vector address, whose stake key is account 1's.
+/// The commands use one account `a` for both (`…/a'/0/0` + `…/a'/2/0`); the live test uses the
+/// public CIP-19 vector address, whose stake key is account 1's and payment key account 0's.
 #[derive(Debug, Clone)]
 pub(crate) struct AdaStakeKeys {
     pub address: String,
+    /// Account of the payment key `m/1852'/1815'/account'/0/0` (signing).
+    pub account: u32,
     pub payment_pk: [u8; 32],
     pub stake_pk: [u8; 32],
     /// Account of the stake key `m/1852'/1815'/stake_account'/2/0` (signing).
@@ -77,14 +80,16 @@ impl AdaStakeKeys {
     }
 }
 
-fn our_keys(state: &AppState) -> AppResult<AdaStakeKeys> {
+fn our_keys(state: &AppState, account: Option<u32>) -> AppResult<AdaStakeKeys> {
     let net = state.network;
+    let a = account_arg(account)?;
     state.with_cardano(|r| {
         Ok(AdaStakeKeys {
-            address: wallet_core::cardano_address(r, net, 0, 0)?,
-            payment_pk: wallet_core::cardano_payment_public_key(r, 0, 0)?,
-            stake_pk: wallet_core::cardano_stake_public_key(r, 0)?,
-            stake_account: 0,
+            address: wallet_core::cardano_address(r, net, a, 0)?,
+            account: a,
+            payment_pk: wallet_core::cardano_payment_public_key(r, a, 0)?,
+            stake_pk: wallet_core::cardano_stake_public_key(r, a)?,
+            stake_account: a,
         })
     })
 }
@@ -334,8 +339,11 @@ pub(crate) async fn overview(
 }
 
 #[tauri::command]
-pub async fn ada_stake_overview(state: State<'_, AppState>) -> AppResult<AdaStakeOverview> {
-    let keys = our_keys(&state)?;
+pub async fn ada_stake_overview(
+    state: State<'_, AppState>,
+    account: Option<u32>,
+) -> AppResult<AdaStakeOverview> {
+    let keys = our_keys(&state, account)?;
     overview(&crate::commands_cardano::ctx(&state), &keys).await
 }
 
@@ -822,8 +830,9 @@ pub(crate) async fn build(
 pub async fn ada_stake_build(
     state: State<'_, AppState>,
     action: AdaStakeRequest,
+    account: Option<u32>,
 ) -> AppResult<AdaStakeBuilt> {
-    let keys = our_keys(&state)?;
+    let keys = our_keys(&state, account)?;
     build(&crate::commands_cardano::ctx(&state), &keys, &action).await
 }
 
@@ -997,20 +1006,31 @@ pub async fn ada_stake_sign(
     state: State<'_, AppState>,
     tx: String,
     password: String,
+    account: Option<u32>,
 ) -> AppResult<AdaStakeSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
-    let keys = our_keys(&state)?;
+    let keys = our_keys(&state, account)?;
+    let signer = SignerInfo::new(
+        &state,
+        Chain::Ada,
+        keys.account,
+        format!(
+            "{} (paiement), …/2/0 (staking)",
+            crate::commands_cardano::payment_path(keys.account)
+        ),
+    );
     let c = crate::commands_cardano::ctx(&state);
     let (summary, context) = prepare_sign(&c, &keys, &tx).await?;
     let root = cardano_root_from_password(&state, Zeroizing::new(password)).await?;
     confirm_native(
         &app,
         "Confirmer l'opération de staking Cardano",
-        describe(&summary, &context, state.network),
+        signer.body(&describe(&summary, &context, state.network)),
     )
     .await?;
+    confirm_signer(&app, &signer).await?;
     if context.requires_extra_confirmation {
         confirm_native(
             &app,
@@ -1022,7 +1042,12 @@ pub async fn ada_stake_sign(
     let net = state.network;
     let cpb = context.params.coins_per_byte;
     let kd: u64 = context.key_deposit.parse().unwrap_or(0);
-    let (t, own, sa) = (tx.clone(), keys.address.clone(), keys.stake_account);
+    let (t, own, pa, sa) = (
+        tx.clone(),
+        keys.address.clone(),
+        keys.account,
+        keys.stake_account,
+    );
     let (signed, tx_id, again) = blocking(move || {
         let own = [own];
         let dctx = decode_ctx(
@@ -1036,7 +1061,7 @@ pub async fn ada_stake_sign(
             },
         );
         Ok(wallet_core::cardano_sign_stake(
-            &root, 0, 0, sa, &t, &dctx, kd,
+            &root, pa, 0, sa, &t, &dctx, kd,
         )?)
     })
     .await?;
@@ -1075,8 +1100,12 @@ pub(crate) async fn broadcast_checked(
 }
 
 #[tauri::command]
-pub async fn ada_stake_broadcast(state: State<'_, AppState>, tx: String) -> AppResult<String> {
-    let keys = our_keys(&state)?;
+pub async fn ada_stake_broadcast(
+    state: State<'_, AppState>,
+    tx: String,
+    account: Option<u32>,
+) -> AppResult<String> {
+    let keys = our_keys(&state, account)?;
     broadcast_checked(&crate::commands_cardano::ctx(&state), &keys, &tx).await
 }
 
@@ -1099,6 +1128,7 @@ mod tests {
         );
         let k = AdaStakeKeys {
             address: wallet_core::cardano_address(&r, Network::Testnet, 0, 0).unwrap(),
+            account: 0,
             payment_pk: wallet_core::cardano_payment_public_key(&r, 0, 0).unwrap(),
             stake_pk: wallet_core::cardano_stake_public_key(&r, 0).unwrap(),
             stake_account: 0,
@@ -1400,6 +1430,7 @@ mod live {
         );
         let keys = AdaStakeKeys {
             address: CIP19_PREPROD.into(),
+            account: 0,
             payment_pk: wallet_core::cardano_payment_public_key(&root, 0, 0).unwrap(),
             stake_pk: wallet_core::cardano_stake_public_key(&root, 1).unwrap(),
             stake_account: 1,

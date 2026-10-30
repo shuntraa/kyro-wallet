@@ -12,9 +12,9 @@ mod common;
 
 use common::seed;
 use wallet_core::{
-    xrp_account_id, xrp_address, xrp_address_from_id, xrp_decode_tx, xrp_issued_amount,
-    xrp_public_key, xrp_sign, xrp_verify_signed, Error, Mnemonic, XrpAmount, XrpAmountView,
-    XrpMemo, XrpPayment, XrpWarning, TF_FULLY_CANONICAL_SIG,
+    xrp_account_id, xrp_address, xrp_address_at, xrp_address_from_id, xrp_decode_tx,
+    xrp_issued_amount, xrp_public_key, xrp_public_key_at, xrp_sign_at, xrp_verify_signed, Error,
+    Mnemonic, XrpAmount, XrpAmountView, XrpMemo, XrpPayment, XrpWarning, TF_FULLY_CANONICAL_SIG,
 };
 
 const ALL: &str = "all all all all all all all all all all all all";
@@ -31,7 +31,7 @@ fn trezor_address_vectors() {
         "rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4H"
     );
     assert_eq!(
-        xrp_address(&s, 1).unwrap(),
+        xrp_address_at(&s, 0, 1).unwrap(),
         "rBKz5MC2iXdoS3XgnNSYmF69K1Yo4NS3Ws"
     );
     let custom = Mnemonic::parse(
@@ -44,7 +44,7 @@ fn trezor_address_vectors() {
         "r4ocGE47gm4G4LkA9mriVHQqzpMLBTgnTY"
     );
     assert_eq!(
-        xrp_address(&custom, 1).unwrap(),
+        xrp_address_at(&custom, 0, 1).unwrap(),
         "rUt9ULSrUvfCmke8HTFU1szbmFpWzVbBXW"
     );
     // Round trip and refusals.
@@ -75,7 +75,7 @@ fn trezor_payment(
     lls: Option<u32>,
 ) -> XrpPayment {
     let s = seed(ALL);
-    let pk = xrp_public_key(&s, index).unwrap().to_vec();
+    let pk = xrp_public_key_at(&s, 0, index).unwrap().to_vec();
     XrpPayment {
         flags: Some(TF_FULLY_CANONICAL_SIG),
         source_tag: None,
@@ -88,7 +88,7 @@ fn trezor_payment(
         send_max: None,
         signing_pub_key: Some(pk),
         txn_signature: None,
-        account: xrp_account_id(&xrp_address(&s, index).unwrap()).unwrap(),
+        account: xrp_account_id(&xrp_address_at(&s, 0, index).unwrap()).unwrap(),
         destination: xrp_account_id(dest).unwrap(),
         memos: vec![],
     }
@@ -107,8 +107,8 @@ fn trezor_signed_payments_byte_for_byte() {
          "120000228000000024000000642e0001e240201b00051537614000000005f5e109684000000000000064732103dbed1e77cb91a005e2ec71afbccce5444c9be58276665a3859040f692de8fed2744730450221008770743a472bb2d1c746a53ef131cc17cc118d538ec910ca928d221db4494cf702201e4ef242d6c3bff110c3cc3897a471fed0f5ac10987ea57da63f98dfa01e94df8114bdf86f3ae715ba346b7772ea0e133f48828b766483148fb40e1ffa5d557ce9851a535af94965e0dd0988"),
     ] {
         let unsigned = hex::encode(p.encode(false));
-        let summary = xrp_decode_tx(&unsigned, &xrp_address(&s, index).unwrap(), &xrp_public_key(&s, index).unwrap()).unwrap();
-        let (signed, hash, again) = xrp_sign(&s, index, &unsigned).unwrap();
+        let summary = xrp_decode_tx(&unsigned, &xrp_address_at(&s, 0, index).unwrap(), &xrp_public_key_at(&s, 0, index).unwrap()).unwrap();
+        let (signed, hash, again) = xrp_sign_at(&s, 0, index, &unsigned).unwrap();
         assert_eq!(signed.to_lowercase(), expected);
         assert_eq!(again, summary);
         assert_eq!(xrp_verify_signed(&signed).unwrap(), hash);
@@ -126,8 +126,8 @@ fn trezor_signed_payments_byte_for_byte() {
     );
     let sum = xrp_decode_tx(
         &hex::encode(p.encode(false)),
-        &xrp_address(&s, 2).unwrap(),
-        &xrp_public_key(&s, 2).unwrap(),
+        &xrp_address_at(&s, 0, 2).unwrap(),
+        &xrp_public_key_at(&s, 0, 2).unwrap(),
     )
     .unwrap();
     assert_eq!(sum.destination_tag, Some(123_456));

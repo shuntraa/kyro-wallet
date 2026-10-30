@@ -13,6 +13,7 @@
 // which has no SegWit, so vbytes = bytes). It travels in `FeeParams { family: 'btc', satPerVb }`
 // so the shared fee types can be reused as they are.
 
+import { accountArg } from '../types';
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { HDKey } from '@scure/bip32';
@@ -41,8 +42,9 @@ export interface UtxoBackend {
   signPsbt(psbt: string, password: string): Promise<{ psbt: string; summary: UtxoTxSummary }>;
 }
 
-/** The typed `{ltc,doge}_*` commands of `@kyro/shared` (docs/IPC.md §2.4). */
-export function rustUtxoBackend(prefix: 'ltc' | 'doge'): UtxoBackend {
+/** The typed `{ltc,doge}_*` commands of `@kyro/shared` (docs/IPC.md §2.4), signing with vault account `account`. */
+export function rustUtxoBackend(prefix: 'ltc' | 'doge', account = 0): UtxoBackend {
+  const acct = accountArg(account);
   if (prefix === 'ltc') {
     return {
       addressInfo: (address) => call('ltc_address_info', { address }),
@@ -52,7 +54,7 @@ export function rustUtxoBackend(prefix: 'ltc' | 'doge'): UtxoBackend {
       feeRates: () => call('ltc_fee_rates'),
       tipHeight: async () => Number(await call('ltc_tip_height')),
       broadcast: (hex) => call('ltc_broadcast', { hex }),
-      signPsbt: (psbt, password) => call('ltc_sign_psbt', { psbt, password }),
+      signPsbt: (psbt, password) => call('ltc_sign_psbt', { psbt, password, ...acct }),
     };
   }
   return {
@@ -63,7 +65,7 @@ export function rustUtxoBackend(prefix: 'ltc' | 'doge'): UtxoBackend {
     feeRates: () => call('doge_fee_rates'),
     tipHeight: async () => Number(await call('doge_tip_height')),
     broadcast: (hex) => call('doge_broadcast', { hex }),
-    signPsbt: (psbt, password) => call('doge_sign_psbt', { psbt, password }),
+    signPsbt: (psbt, password) => call('doge_sign_psbt', { psbt, password, ...acct }),
   };
 }
 
@@ -211,6 +213,8 @@ export interface UtxoAdapterOptions {
   account: UtxoAccountView;
   backend?: UtxoBackend;
   gapLimit?: number;
+  /** Vault account index (docs/IPC.md §2.9) passed to `*_sign_psbt`; absent = 0. (`account` is the xpub view.) */
+  vaultAccount?: number;
 }
 
 /** Local build result: the Bitcoin shapes plus what was folded into the fee. */
@@ -249,7 +253,7 @@ export class UtxoAdapter {
     this.assetId = spec.prefix;
     this.account = opts.account;
     this.net = spec.network(opts.chain.network);
-    this.backend = opts.backend ?? rustUtxoBackend(spec.prefix);
+    this.backend = opts.backend ?? rustUtxoBackend(spec.prefix, opts.vaultAccount ?? 0);
     this.gap = opts.gapLimit ?? 5;
     this.key = parseXpub(opts.account.xpub);
     const first = this.addressAt(0, 0);

@@ -5,13 +5,18 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { assetsFor, findChain, unitsToNumber, type AssetDef } from '@kyro/chains';
+import type { AccountChain } from '@kyro/shared';
 import type { MarketCoin, SimplePrice } from '@kyro/market';
-import { useVault } from './app';
+import { useVault, type AccountSource } from './app';
 import { useOnTorReady } from './tor';
 import { useOnCbfSynced } from './cbf';
 
 export interface Holding {
+  /** Unique row key: the asset id, plus `@index` for a row of one account among several. */
+  key: string;
   asset: AssetDef;
+  /** Set on per-account rows of a chain with several vault accounts (§2.9). */
+  account?: { family: AccountChain; index: number; name: string };
   amount: bigint;
   units: number;
   price: number | null;
@@ -26,7 +31,10 @@ export interface Holding {
 }
 
 interface PortfolioValue {
+  /** Balances of the SELECTED account of each chain (what Envoyer / Swap spend from). */
   balances: Map<string, bigint>;
+  /** Balances per account: key `${family}:${index}` → asset id → amount. */
+  accountBalances: Map<string, Map<string, bigint>>;
   balancesLoading: boolean;
   balancesLoaded: boolean;
   /** chainKey → error message */
@@ -36,7 +44,10 @@ interface PortfolioValue {
   marketError: string | null;
   marketUpdatedAt: number | null;
   price: (coinId: string) => SimplePrice | null;
+  /** One row per asset, all accounts added together (totals, allocation, charts). */
   holdings: Holding[];
+  /** Like `holdings`, but a chain with several vault accounts gets one row per account. */
+  accountHoldings: Holding[];
   total: number;
   change24hFiat: number;
   change24hPct: number | null;
@@ -56,9 +67,9 @@ const BALANCE_REFRESH_MS = 30_000;
 const MARKET_REFRESH_MS = 60_000;
 
 export function PortfolioProvider({ children }: { children: ReactNode }) {
-  const { adapters, accounts, market, settings } = useVault();
+  const { adapters, accounts, market, settings, accountSources } = useVault();
   const network = accounts.network;
-  const [balances, setBalances] = useState<Map<string, bigint>>(new Map());
+  const [accountBalances, setAccountBalances] = useState<Map<string, Map<string, bigint>>>(new Map());
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [balancesLoaded, setBalancesLoaded] = useState(false);
   const [chainErrors, setChainErrors] = useState<Record<string, string>>({});
@@ -69,8 +80,10 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
   const refresh = useCallback(() => setTick((t) => t + 1), []);
-  const adaptersRef = useRef(adapters);
-  adaptersRef.current = adapters;
+  const sourcesRef = useRef<AccountSource[]>(accountSources);
+  sourcesRef.current = accountSources;
+  // Reload when the set of accounts (or their adapters) changes, not on every selection.
+  const sourcesKey = accountSources.map((x) => `${x.family}:${x.index}:${x.addresses.join(',')}`).join('|');
 
   // Tor just became ready (after a bootstrap, a retry or a re-enable): reload now rather than at the next poll.
   useOnTorReady(refresh);
@@ -81,20 +94,30 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     let alive = true;
     const load = async () => {
       setBalancesLoading(true);
-      const results = await Promise.allSettled(adaptersRef.current.all.map((a) => a.getBalance()));
+      // Every account of every chain (§2.9): one request per account and chain.
+      const jobs = sourcesRef.current.flatMap((src) => src.adapters.map((a) => ({ key: `${src.family}:${src.index}`, a })));
+      const results = await Promise.allSettled(jobs.map((j) => j.a.getBalance()));
       if (!alive) return;
-      const next = new Map<string, bigint>();
+      const next = new Map<string, Map<string, bigint>>();
       const errors: Record<string, string> = {};
       results.forEach((r, i) => {
-        const a = adaptersRef.current.all[i];
-        if (!a) return;
-        if (r.status === 'fulfilled') r.value.forEach((b) => next.set(b.assetId, b.amount));
-        else errors[a.chain.key] = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        const j = jobs[i];
+        if (!j) return;
+        if (r.status === 'fulfilled') {
+          const m = next.get(j.key) ?? new Map<string, bigint>();
+          r.value.forEach((b) => m.set(b.assetId, b.amount));
+          next.set(j.key, m);
+        } else errors[j.a.chain.key] ??= r.reason instanceof Error ? r.reason.message : String(r.reason);
       });
-      setBalances((prev) => {
+      setAccountBalances((prev) => {
         // Keep the last known value of chains that failed this round.
-        const merged = new Map(prev);
-        next.forEach((v, k) => merged.set(k, v));
+        const merged = new Map<string, Map<string, bigint>>();
+        for (const [k, m] of prev) merged.set(k, new Map(m));
+        next.forEach((m, k) => {
+          const cur = merged.get(k) ?? new Map<string, bigint>();
+          m.forEach((v, id) => cur.set(id, v));
+          merged.set(k, cur);
+        });
         return merged;
       });
       setChainErrors(errors);
@@ -108,7 +131,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       alive = false;
       window.clearInterval(id);
     };
-  }, [adapters, tick]);
+  }, [sourcesKey, tick]);
 
   // Market data.
   useEffect(() => {
@@ -149,21 +172,28 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     [marketById, extraPrices],
   );
 
-  const { holdings, total, change24hFiat } = useMemo(() => {
-    const rows: Holding[] = [];
-    for (const asset of assetsFor(network)) {
-      // Only the chains of the active account (a hardware wallet may hold only some of them).
-      if (asset.family === 'evm' ? !adapters.evm.has(asset.chainKey) : asset.family === 'ada' ? !adapters.cardano : !adapters[asset.family]) continue;
-      const amount = balances.get(asset.id) ?? 0n;
-      const chain = findChain(network, asset.chainKey);
-      // Phase 1 natives, Litecoin / Dogecoin (« configure ton serveur »), TRX, XRP and ADA always show.
-      const always = asset.kind === 'native' && (chain?.phase === 1 || asset.family === 'ltc' || asset.family === 'doge' || asset.family === 'tron' || asset.family === 'xrp' || asset.family === 'ada');
-      if (!always && amount === 0n) continue;
+  // What Envoyer / Swap spend: the selected account of each chain.
+  const balances = useMemo(() => {
+    const out = new Map<string, bigint>();
+    for (const src of accountSources) {
+      // Selected = its adapters are the active ones (vault: the chain's selected account).
+      if (!src.adapters.some((a) => adapters.all.includes(a))) continue;
+      accountBalances.get(`${src.family}:${src.index}`)?.forEach((v, k) => out.set(k, v));
+    }
+    return out;
+  }, [accountSources, accountBalances, adapters]);
+
+  const { holdings, accountHoldings, total, change24hFiat } = useMemo(() => {
+    const perAccount: Holding[] = [];
+    const aggregate: Holding[] = [];
+    const row = (asset: AssetDef, amount: bigint, failed: boolean, key: string, account?: Holding['account']): Holding => {
       const m = marketById.get(asset.coingeckoId);
       const p = price(asset.coingeckoId);
       const units = unitsToNumber(amount, asset.decimals);
-      rows.push({
+      return {
+        key,
         asset,
+        ...(account ? { account } : {}),
         amount,
         units,
         price: p?.price ?? null,
@@ -172,21 +202,51 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         value: p ? units * p.price : null,
         spark: m?.sparkline7d ?? [],
         share: 0,
-        failed: chainErrors[asset.chainKey] !== undefined && !balances.has(asset.id),
-      });
+        failed,
+      };
+    };
+    for (const asset of assetsFor(network)) {
+      const family = asset.family as AccountChain;
+      // Only the chains of the active wallet (a hardware wallet may hold only some of them),
+      // and every account of the chain that has this asset's chain.
+      const sources = accountSources.filter((x) => x.family === family && x.adapters.some((a) => a.chain.key === asset.chainKey));
+      if (sources.length === 0) continue;
+      const chain = findChain(network, asset.chainKey);
+      // Phase 1 natives, Litecoin / Dogecoin (« configure ton serveur »), TRX, XRP and ADA always show.
+      const always = asset.kind === 'native' && (chain?.phase === 1 || asset.family === 'ltc' || asset.family === 'doge' || asset.family === 'tron' || asset.family === 'xrp' || asset.family === 'ada');
+      const errored = chainErrors[asset.chainKey] !== undefined;
+      let sum = 0n;
+      let known = false;
+      const multi = sources.length > 1;
+      for (const src of sources) {
+        const m = accountBalances.get(`${src.family}:${src.index}`);
+        const amount = m?.get(asset.id) ?? 0n;
+        const has = m?.has(asset.id) ?? false;
+        sum += amount;
+        known ||= has;
+        if (multi && (always || amount > 0n)) perAccount.push(row(asset, amount, errored && !has, `${asset.id}@${src.index}`, { family, index: src.index, name: src.name }));
+      }
+      if (!always && sum === 0n) continue;
+      const agg = row(asset, sum, errored && !known, asset.id);
+      aggregate.push(agg);
+      if (!multi) perAccount.push(agg);
     }
-    const sum = rows.reduce((s, r) => s + (r.value ?? 0), 0);
+    const sum = aggregate.reduce((s, r) => s + (r.value ?? 0), 0);
     let delta = 0;
-    for (const r of rows) {
+    for (const r of aggregate) {
       r.share = sum > 0 && r.value ? r.value / sum : 0;
       if (r.value && r.change24h !== null) delta += r.value - r.value / (1 + r.change24h / 100);
     }
-    rows.sort((a, b) => (b.value ?? -1) - (a.value ?? -1) || Number(b.amount - a.amount));
-    return { holdings: rows, total: sum, change24hFiat: delta };
-  }, [network, balances, marketById, price, chainErrors, adapters]);
+    for (const r of perAccount) if (r.account) r.share = sum > 0 && r.value ? r.value / sum : 0;
+    const order = (a: Holding, b: Holding) => (b.value ?? -1) - (a.value ?? -1) || Number(b.amount - a.amount);
+    aggregate.sort(order);
+    perAccount.sort(order);
+    return { holdings: aggregate, accountHoldings: perAccount, total: sum, change24hFiat: delta };
+  }, [network, accountBalances, marketById, price, chainErrors, accountSources]);
 
   const value: PortfolioValue = {
     balances,
+    accountBalances,
     balancesLoading,
     balancesLoaded,
     chainErrors,
@@ -196,6 +256,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     marketUpdatedAt,
     price,
     holdings,
+    accountHoldings,
     total,
     change24hFiat,
     change24hPct: total > 0 && total - change24hFiat !== 0 ? (change24hFiat / (total - change24hFiat)) * 100 : null,

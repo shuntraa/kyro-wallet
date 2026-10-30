@@ -3,6 +3,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::accounts::VaultAccounts;
 use crate::error::{AppError, AppResult};
 use crate::servers::{RpcServer, Servers};
 
@@ -129,6 +130,9 @@ pub struct Settings {
     pub servers: Servers,
     pub api_keys: ApiKeys,
     pub tor: TorSettings,
+    /// The vault's account lists (see `accounts.rs`). Managed only by the `vault_account_*`
+    /// commands: never sent by `settings_get`, never taken from `settings_set`.
+    pub accounts: VaultAccounts,
 }
 
 impl Default for Settings {
@@ -143,6 +147,7 @@ impl Default for Settings {
             servers: Servers::default(),
             api_keys: ApiKeys::default(),
             tor: TorSettings::default(),
+            accounts: VaultAccounts::default(),
         }
     }
 }
@@ -199,6 +204,7 @@ impl Settings {
         let mut v = serde_json::to_value(&s).unwrap_or_default();
         if let Some(o) = v.as_object_mut() {
             o.remove("apiKeys");
+            o.remove("accounts");
             o.insert("apiKeysSet".into(), flags);
         }
         v
@@ -209,6 +215,7 @@ impl Settings {
     pub fn from_ui(mut v: serde_json::Value, current: &ApiKeys) -> AppResult<Settings> {
         let patch = v.as_object_mut().and_then(|o| {
             o.remove("apiKeysSet");
+            o.remove("accounts");
             o.remove("apiKeys")
         });
         let mut s: Settings = serde_json::from_value(v)
@@ -323,6 +330,31 @@ mod tests {
         assert!(!back.for_ui().to_string().contains("secret"));
         // The file on disk keeps them.
         assert!(serde_json::to_string(&s).unwrap().contains("tron-secret-3"));
+    }
+
+    #[test]
+    fn account_lists_never_go_through_settings_get_or_set() {
+        let mut s = Settings::default();
+        s.accounts
+            .add(
+                Network::Testnet,
+                crate::accounts::Chain::Btc,
+                1,
+                "Bitcoin 2",
+            )
+            .unwrap();
+        let ui = s.for_ui();
+        assert!(ui.get("accounts").is_none());
+        // A UI sending `accounts` back (or a forged list) is ignored: the caller keeps the
+        // stored lists (AppState::save_settings).
+        let mut forged = ui.clone();
+        forged["accounts"] =
+            serde_json::json!({ "testnet": { "btc": [{ "index": 9, "name": "x" }] } });
+        let back = Settings::from_ui(forged, &s.api_keys).unwrap();
+        assert_eq!(back.accounts, VaultAccounts::default());
+        // On disk, the lists are kept.
+        let disk: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(disk.accounts, s.accounts);
     }
 
     #[test]

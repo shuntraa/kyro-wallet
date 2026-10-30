@@ -57,6 +57,13 @@ import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Card, Input, Notice, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
 import { IconCheck, IconChevronRight, IconInfo, IconShield, IconWarn } from '../components/icons';
 import { idx } from '../components/motion';
+import { AccountPicker } from '../components/AccountPicker';
+
+/** `{ account }` of the selected vault account of a staking chain (§2.9; nothing for account 0). */
+function useStakeAccount(): (chain: StakeChain) => { account?: number } {
+  const { selectedAccounts } = useApp();
+  return (chain) => (selectedAccounts[chain] ? { account: selectedAccounts[chain] } : {});
+}
 
 type Ret<K extends keyof Commands> = Commands[K]['ret'];
 
@@ -82,6 +89,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
           <h1 className="screen-title">Staking</h1>
           <span className="text-[13px] text-mute">Délègue tes SOL, ADA ou TRX sans les confier à personne : ta clé signe, rien ne quitte ton contrôle.</span>
         </div>
+        {tab !== 'home' && !activeHw && <AccountPicker family={tab} />}
         <Segmented
           label="Chaîne"
           value={tab}
@@ -106,9 +114,10 @@ export function Staking({ chain }: { chain?: StakeChain }) {
 
 function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeChain, boolean> }) {
   const { navigate, network, hideBalances } = useApp();
-  const sol = useAsync(!disabled && has.sol ? () => call('sol_stake_overview') : null, [disabled, has.sol]);
-  const ada = useAsync(!disabled && has.ada ? () => call('ada_stake_overview') : null, [disabled, has.ada]);
-  const tron = useAsync(!disabled && has.tron ? () => call('tron_stake_overview') : null, [disabled, has.tron]);
+  const acct = useStakeAccount();
+  const sol = useAsync(!disabled && has.sol ? () => call('sol_stake_overview', acct('sol')) : null, [disabled, has.sol, acct('sol').account]);
+  const ada = useAsync(!disabled && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [disabled, has.ada, acct('ada').account]);
+  const tron = useAsync(!disabled && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [disabled, has.tron, acct('tron').account]);
   useOnTorReady(() => {
     sol.reload();
     ada.reload();
@@ -475,7 +484,8 @@ type SolOp = { kind: 'create' } | { kind: 'delegate'; acc: SolStakePosition } | 
 
 function SolStaking() {
   const { network, hideBalances } = useApp();
-  const ov = useAsync(() => call('sol_stake_overview'), [], { intervalMs: 60_000 });
+  const acct = useStakeAccount();
+  const ov = useAsync(() => call('sol_stake_overview', acct('sol')), [acct('sol').account], { intervalMs: 60_000 });
   const vals = useAsync(() => call('sol_stake_validators', {}), []);
   useOnTorReady(ov.reload);
   const [op, setOp] = useState<SolOp | null>(null);
@@ -572,6 +582,7 @@ function SolStaking() {
 
 function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOverview; onClose: () => void; onDone: () => void }) {
   const { network } = useApp();
+  const acct = useStakeAccount();
   const [amount, setAmount] = useState(op.kind === 'withdraw' ? toInputDecimal(BigInt(op.acc.canClose ? op.acc.lamports : op.acc.withdrawable), 9) : '');
   const [vote, setVote] = useState('');
   const lamports = tryParseUnits(amount, 9);
@@ -637,7 +648,7 @@ function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOvervie
     title,
     ...(form ? { form } : {}),
     canBuild,
-    build: () => call('sol_stake_build', { action }),
+    build: () => call('sol_stake_build', { action, ...acct('sol') }),
     enClair: (b) => {
       const s = b.stake;
       const v = s.validator ? `${s.validator.name ?? shortAddress(s.validator.voteAccount)} (commission ${s.validator.commission} %)` : '';
@@ -679,8 +690,8 @@ function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOvervie
       );
     },
     warnings: (b) => b.stake.warnings.map(solWarningText),
-    sign: async (b, password) => ({ ...(await call('sol_stake_sign', { message: b.message, password })), message: b.message }),
-    broadcast: (s) => call('sol_stake_broadcast', { message: s.message, signature: s.signature }),
+    sign: async (b, password) => ({ ...(await call('sol_stake_sign', { message: b.message, password, ...acct('sol') })), message: b.message }),
+    broadcast: (s) => call('sol_stake_broadcast', { message: s.message, signature: s.signature, ...acct('sol') }),
     doneText: 'Opération de staking diffusée. L’état du compte se met à jour au prochain rafraîchissement (l’activation ou le refroidissement suit le calendrier des époques).',
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
@@ -798,7 +809,8 @@ type AdaOp = 'delegate' | 'vote' | 'withdraw' | 'deregister';
 
 function AdaStaking() {
   const { hideBalances, network } = useApp();
-  const ov = useAsync(() => call('ada_stake_overview'), [], { intervalMs: 60_000 });
+  const acct = useStakeAccount();
+  const ov = useAsync(() => call('ada_stake_overview', acct('ada')), [acct('ada').account], { intervalMs: 60_000 });
   useOnTorReady(ov.reload);
   const [op, setOp] = useState<AdaOp | null>(null);
   const o = ov.data;
@@ -880,6 +892,7 @@ function AdaStaking() {
 }
 
 function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOverview; onClose: () => void; onDone: () => void }) {
+  const acct = useStakeAccount();
   const current = o.stake.delegatedDrep;
   const [poolId, setPoolId] = useState('');
   const [mode, setMode] = useState<DrepMode | 'keep'>(op === 'delegate' && current ? 'keep' : 'alwaysAbstain');
@@ -928,7 +941,7 @@ function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOvervie
     title,
     ...(form ? { form } : {}),
     canBuild,
-    build: () => call('ada_stake_build', { action }),
+    build: () => call('ada_stake_build', { action, ...acct('ada') }),
     enClair: (b) => {
       const s = b.summary;
       const parts: string[] = [];
@@ -968,8 +981,8 @@ function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOvervie
       );
     },
     warnings: (b) => b.context.warnings.map(adaWarningText),
-    sign: (b, password) => call('ada_stake_sign', { tx: b.tx, password }),
-    broadcast: (s) => call('ada_stake_broadcast', { tx: s.tx }),
+    sign: (b, password) => call('ada_stake_sign', { tx: b.tx, password, ...acct('ada') }),
+    broadcast: (s) => call('ada_stake_broadcast', { tx: s.tx, ...acct('ada') }),
     doneText: 'Transaction de staking Cardano diffusée. Les changements apparaissent dans l’aperçu après son inclusion dans un bloc.',
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
@@ -983,7 +996,8 @@ type TronOp = 'freeze' | 'unfreeze' | 'vote' | 'withdraw' | 'cancel' | 'claim';
 
 function TronStaking() {
   const { hideBalances, network } = useApp();
-  const ov = useAsync(() => call('tron_stake_overview'), [], { intervalMs: 60_000 });
+  const acct = useStakeAccount();
+  const ov = useAsync(() => call('tron_stake_overview', acct('tron')), [acct('tron').account], { intervalMs: 60_000 });
   const ws = useAsync(() => call('tron_stake_witnesses'), []);
   useOnTorReady(ov.reload);
   const now = useNow(1000);
@@ -1143,6 +1157,7 @@ function VoteEditor({ witnesses, counts, onCounts, power }: { witnesses: TronWit
 }
 
 function TronOpDialog({ op, a, witnesses, onClose, onDone }: { op: TronOp; a: TronStakeAccount; witnesses: TronWitness[]; onClose: () => void; onDone: () => void }) {
+  const acct = useStakeAccount();
   const [resource, setResource] = useState<TronResource>('ENERGY');
   const [amount, setAmount] = useState('');
   const [counts, setCounts] = useState<Record<string, string>>(() => Object.fromEntries(a.votes.map((v) => [v.address, v.count])));
@@ -1195,7 +1210,7 @@ function TronOpDialog({ op, a, witnesses, onClose, onDone }: { op: TronOp; a: Tr
     title,
     ...(form ? { form } : {}),
     canBuild,
-    build: () => call('tron_stake_build', { action }),
+    build: () => call('tron_stake_build', { action, ...acct('tron') }),
     enClair: (b) => {
       const x = b.summary.action;
       const c = b.context.account;
@@ -1236,8 +1251,8 @@ function TronOpDialog({ op, a, witnesses, onClose, onDone }: { op: TronOp; a: Tr
       );
     },
     warnings: (b) => b.context.warnings.map((w) => tronWarningText(w, b.context.witnesses)),
-    sign: async (b, password) => ({ ...(await call('tron_stake_sign', { raw: b.raw, password })), raw: b.raw }),
-    broadcast: (s) => call('tron_broadcast', { raw: s.raw, signature: s.signature }),
+    sign: async (b, password) => ({ ...(await call('tron_stake_sign', { raw: b.raw, password, ...acct('tron') })), raw: b.raw }),
+    broadcast: (s) => call('tron_broadcast', { raw: s.raw, signature: s.signature, ...acct('tron') }),
     doneText: 'Transaction TRON diffusée. L’aperçu est relu aussitôt ; s’il n’a pas encore changé, le bloc arrive dans quelques secondes.',
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;

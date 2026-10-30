@@ -579,7 +579,18 @@ pub async fn btc_core_setup(
     };
     let net = state.network;
     let fp = fingerprint(&state)?;
-    let descriptors = state.with_seed(|seed| Ok(wallet_core::btc_descriptors(seed, net, 0)?))?;
+    // Every Bitcoin account of the user's list (an account added later needs a new setup).
+    let accounts = state
+        .settings()
+        .accounts
+        .indices(net, crate::accounts::Chain::Btc);
+    let descriptors = state.with_seed(|seed| {
+        let mut all = Vec::new();
+        for a in accounts {
+            all.extend(wallet_core::btc_descriptors(seed, net, a)?);
+        }
+        Ok(all)
+    })?;
     let mut job =
         btc_backend::core_prepare(&state.net, net, &url, &auth, tor, &fp, &descriptors).await?;
     job.timestamp = timestamp;

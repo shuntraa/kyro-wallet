@@ -1,5 +1,6 @@
-//! XRP Ledger: secp256k1 keys at `m/44'/144'/0'/0/i` (the BIP44 route of Ledger, Trezor and
-//! Xumm/Xaman-compatible wallets — not rippled's "family seed" derivation), classic `r…`
+//! XRP Ledger: secp256k1 keys at `m/44'/144'/account'/0/0` (the BIP44 route of Ledger, Trezor and
+//! Xumm/Xaman-compatible wallets — not rippled's "family seed" derivation; one address per
+//! account like Ledger Live, account 0 = the historical `m/44'/144'/0'/0/0`), classic `r…`
 //! addresses, and the XRPL binary codec for **Payment** transactions only.
 //!
 //! - Account ID = `RIPEMD160(SHA256(compressed pubkey))`; address = base58check with the Ripple
@@ -44,14 +45,19 @@ const MAX_BLOB: usize = 4096;
 // Keys and addresses
 // ---------------------------------------------------------------------------------------------
 
-fn path(index: u32) -> Result<[bitcoin::bip32::ChildNumber; 5]> {
+fn path(account: u32, index: u32) -> Result<[bitcoin::bip32::ChildNumber; 5]> {
     Ok([
         hardened(44)?,
         hardened(144)?,
-        hardened(0)?,
+        hardened(account)?,
         normal(0)?,
         normal(index)?,
     ])
+}
+
+/// Path of the key of XRP account `account`: `m/44'/144'/account'/0/0`.
+pub fn xrp_path(account: u32) -> String {
+    format!("m/44'/144'/{account}'/0/0")
 }
 
 /// `r…` address of a 20-byte account ID.
@@ -103,18 +109,30 @@ pub fn xrp_address_of_pubkey(pk: &[u8]) -> Result<String> {
     Ok(xrp_address_from_id(&id_of_pubkey(&pk)))
 }
 
-/// Compressed public key at `m/44'/144'/0'/0/index` (the transaction's `SigningPubKey`).
-pub fn xrp_public_key(seed: &Seed, index: u32) -> Result<[u8; 33]> {
+/// Compressed public key of account `account` (`m/44'/144'/account'/0/0`, the transaction's
+/// `SigningPubKey`).
+pub fn xrp_public_key(seed: &Seed, account: u32) -> Result<[u8; 33]> {
+    xrp_public_key_at(seed, account, 0)
+}
+
+/// Compressed public key at `m/44'/144'/account'/0/index` (Kyro only uses `index` 0; other
+/// indices exist for test vectors of other wallets).
+pub fn xrp_public_key_at(seed: &Seed, account: u32, index: u32) -> Result<[u8; 33]> {
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
-    let key = master.derive(&secp, &path(index)?)?;
+    let key = master.derive(&secp, &path(account, index)?)?;
     Ok(key.xpriv().private_key.public_key(&secp).serialize())
 }
 
-/// Address at `m/44'/144'/0'/0/index`.
-pub fn xrp_address(seed: &Seed, index: u32) -> Result<String> {
-    Ok(xrp_address_from_id(&id_of_pubkey(&xrp_public_key(
-        seed, index,
+/// Address of account `account` (`m/44'/144'/account'/0/0`, see [`xrp_path`]).
+pub fn xrp_address(seed: &Seed, account: u32) -> Result<String> {
+    xrp_address_at(seed, account, 0)
+}
+
+/// Address at `m/44'/144'/account'/0/index`.
+pub fn xrp_address_at(seed: &Seed, account: u32, index: u32) -> Result<String> {
+    Ok(xrp_address_from_id(&id_of_pubkey(&xrp_public_key_at(
+        seed, account, index,
     )?)))
 }
 
@@ -870,13 +888,27 @@ fn summarize(
     })
 }
 
-/// Signs an unsigned Payment blob (hex) with the key at `m/44'/144'/0'/0/index`, after
-/// decoding it like [`xrp_decode_tx`]. Returns `(signed blob hex, transaction hash hex,
-/// summary)`. DER, low-S, verified before it is returned.
-pub fn xrp_sign(seed: &Seed, index: u32, blob_hex: &str) -> Result<(String, String, XrpTxSummary)> {
+/// Signs an unsigned Payment blob (hex) with the key of account `account`
+/// (`m/44'/144'/account'/0/0`), after decoding it like [`xrp_decode_tx`]. Returns `(signed blob
+/// hex, transaction hash hex, summary)`. DER, low-S, verified before it is returned.
+pub fn xrp_sign(
+    seed: &Seed,
+    account: u32,
+    blob_hex: &str,
+) -> Result<(String, String, XrpTxSummary)> {
+    xrp_sign_at(seed, account, 0, blob_hex)
+}
+
+/// [`xrp_sign`] with the key at `m/44'/144'/account'/0/index` (test vectors of other wallets).
+pub fn xrp_sign_at(
+    seed: &Seed,
+    account: u32,
+    index: u32,
+    blob_hex: &str,
+) -> Result<(String, String, XrpTxSummary)> {
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
-    let key = master.derive(&secp, &path(index)?)?;
+    let key = master.derive(&secp, &path(account, index)?)?;
     let sk = key.xpriv().private_key;
     let pk = sk.public_key(&secp).serialize();
     let ours = xrp_address_from_id(&id_of_pubkey(&pk));

@@ -6,6 +6,7 @@
 // SPL sends: TransferChecked (Token or Token-2022, program read from the mint
 // owner, decimals read on-chain), recipient ATA created idempotently if absent.
 
+import { accountArg } from '../types';
 import {
   AccountRole,
   address,
@@ -61,6 +62,8 @@ export interface SolanaAdapterOptions {
   fetch?: NetFetch;
   /** Hardware-wallet account (signing through `hw_sign_sol_tx`). */
   hw?: HwSigner;
+  /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
+  account?: number;
 }
 
 interface RpcCtx<T> {
@@ -195,6 +198,8 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
   private readonly me: Address;
   private readonly fetcher: NetFetch;
   readonly hw: HwSigner | null;
+  /** Vault account index (`m/44'/501'/i'/0'`). */
+  readonly account: number;
 
   constructor(opts: SolanaAdapterOptions) {
     if (!isAddress(opts.address)) throw new Error('Adresse Solana du coffre invalide');
@@ -203,6 +208,7 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     this.fetcher = opts.fetch ?? netFetch;
     this.rpcUrl = opts.rpcUrl || opts.chain.rpcUrl;
     this.hw = opts.hw ?? null;
+    this.account = opts.account ?? 0;
   }
 
   private async rpc<T>(method: string, params: unknown[] = []): Promise<T> {
@@ -378,7 +384,7 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
 
   /** Rust decoding for the "Vérification" panel (before the password). */
   decode(unsigned: SolUnsigned): Promise<SolTxSummary> {
-    return call('sol_decode_tx', { message: unsigned.message });
+    return call('sol_decode_tx', { message: unsigned.message, ...accountArg(this.account) });
   }
 
   async signTx(unsigned: SolUnsigned, password: string): Promise<SolSigned> {
@@ -392,7 +398,7 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
   async signWireTransaction(wireB64: string, password: string): Promise<SolSigned & { summary: SolTxSummary }> {
     const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wireB64));
     const message = getBase64Decoder().decode(tx.messageBytes);
-    const res = await call('sol_sign_tx', { message, password });
+    const res = await call('sol_sign_tx', { message, password, ...accountArg(this.account) });
     const index = res.summary.ourSignerIndex;
     if (index === null) throw new Error('Ce compte ne signe pas cette transaction');
     const sig = getBase64Encoder().encode(res.signature) as SignatureBytes;

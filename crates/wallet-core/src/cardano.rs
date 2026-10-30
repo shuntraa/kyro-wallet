@@ -114,6 +114,12 @@ fn public(k: &XPrv) -> [u8; 32] {
     k.public().public_key()
 }
 
+/// Path of Cardano account `account`: `m/1852'/1815'/account'` (Kyro uses its payment key
+/// `…/0/0` and stake key `…/2/0`).
+pub fn cardano_account_path(account: u32) -> String {
+    format!("m/1852'/1815'/{account}'")
+}
+
 /// Account-level extended public key `m/1852'/1815'/account'`: public key ‖ chain code, hex.
 pub fn cardano_account_xpub(root: &CardanoRoot, account: u32) -> Result<String> {
     let x = root.account(account)?.public();

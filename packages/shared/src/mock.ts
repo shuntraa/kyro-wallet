@@ -55,6 +55,8 @@ import { btcWarnings, evmWarnings } from './warnings';
 import { demoRenderScript, demoVsize } from './mock-tx';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 import { createDemoStake } from './mock-stake';
+import { createDemoAccounts } from './mock-accounts';
+export { ACCOUNT_CHAIN_LABEL, defaultAccountName } from './mock-accounts';
 
 bitcoin.initEccLib(ecc);
 
@@ -147,14 +149,15 @@ export function deriveDemoKeys(network: Network): DemoKeys {
     utxo: { ltc: ltc.node, doge: doge.node },
     accounts: {
       network,
+      account: 0,
       btc: { segwit: info('segwit'), taproot: info('taproot') },
-      evm: { address: evmAddr },
-      sol: { address: solAddr },
+      evm: { address: evmAddr, path: "m/44'/60'/0'/0/0" },
+      sol: { address: solAddr, path: "m/44'/501'/0'/0'" },
       ltc: ltc.info,
       doge: doge.info,
-      tron: { address: demoTronAddress(demoSeed(), 0) },
-      xrp: { address: demoXrpAddress(demoSeed(), 0) },
-      cardano: { address: demoCardanoAddress(network) },
+      tron: { address: demoTronAddress(demoSeed(), 0), path: "m/44'/195'/0'/0/0" },
+      xrp: { address: demoXrpAddress(demoSeed(), 0), path: "m/44'/144'/0'/0/0" },
+      cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
     },
     ownBtc,
     receive,
@@ -300,11 +303,14 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   // Like the shell's setup: Tor starts in the background when enabled.
   const tor = createDemoTor(opts.tor ?? detectDemoTorScenario());
   if (settings.tor.enabled) tor.start();
+  // Several accounts per chain (§2.9): lists, accounts_get({ account }), signer line.
+  const accts = createDemoAccounts({ network, seed: demoSeed(), base: keys.accounts, baseOwnBtc: keys.ownBtc, chain, requireUnlocked: () => requireUnlocked() });
   // Litecoin / Dogecoin (§2.4): `ltc_*` / `doge_*`.
   const utxoChains = createDemoUtxo({
     chain,
     network,
     nodes: keys.utxo,
+    accounts: accts,
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -443,7 +449,8 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     return { ...base, kind: 'ContractCall', to: tx.to, amount: BigInt(tx.valueWei).toString() };
   };
 
-  const signPsbt = (psbtB64: string): { psbt: string; summary: BtcTxSummary } => {
+  const signPsbt = (psbtB64: string, account: number): { psbt: string; summary: BtcTxSummary } => {
+    const own = accts.ownBtc(account);
     const net = network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
     const psbt = bitcoin.Psbt.fromBase64(psbtB64, { network: net });
     let inSum = 0n;
@@ -463,7 +470,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     });
     const outputs = psbt.txOutputs.map((o) => {
       const address = demoRenderScript(o.script, net);
-      return [address, Number(o.value), keys.ownBtc.has(address)] as [string, number, boolean];
+      return [address, Number(o.value), own.has(address)] as [string, number, boolean];
     });
     const outSum = psbt.txOutputs.reduce((a, o) => a + o.value, 0n);
     const feeSats = Number(inSum - outSum);
@@ -534,10 +541,14 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       lockIfExpired();
       if (unlocked) lastTouch = now();
     },
-    accounts_get: () => {
+    accounts_get: (a) => {
       requireUnlocked();
-      return structuredClone(keys.accounts);
+      return accts.get(accts.arg(a.account));
     },
+    vault_accounts_get: () => accts.lists(),
+    vault_account_add: (a) => accts.add(a.chain, a.account, a.name),
+    vault_account_rename: (a) => accts.rename(a.chain, a.account, a.name),
+    vault_account_remove: (a) => accts.remove(a.chain, a.account),
     btc_address: (a) => {
       requireUnlocked();
       const kind: BtcKind = a.kind === 'taproot' ? 'taproot' : 'segwit';
@@ -545,7 +556,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw new IpcError('INVALID_INPUT', 'Index invalide.');
       const testnet = network === 'testnet';
       const master = HDKey.fromMasterSeed(demoSeed(), testnet ? TESTNET_VERSIONS : undefined);
-      const path = `m/${kind === 'segwit' ? 84 : 86}'/${testnet ? 1 : 0}'/0'/${a.change ? 1 : 0}/${index}`;
+      const path = `m/${kind === 'segwit' ? 84 : 86}'/${testnet ? 1 : 0}'/${accts.arg(a.account)}'/${a.change ? 1 : 0}/${index}`;
       const pk = master.derive(path).publicKey;
       if (!pk) throw new IpcError('INTERNAL', 'Dérivation impossible.');
       return btcAddressFor(kind, pk, testnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin);
@@ -553,28 +564,36 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     evm_decode_tx: (a) => decodeEvm(a.tx as EvmTxRequest),
     evm_sign_tx: (a) => {
       requireUnlocked();
+      const account = accts.arg(a.account);
       checkPassword(a.password);
       const tx = a.tx as EvmTxRequest;
       const s = decodeEvm(tx);
       const token = a.token as { symbol: string; decimals: number } | undefined;
-      if (!confirmFn(`Signer une transaction ${s.kind} sur la chaîne ${tx.chainId}\nVers : ${s.to}\nMontant : ${s.amount}${token ? ` (${token.symbol}, ${token.decimals} déc.)` : ' wei'}\nFrais max. : ${s.maxFeeWei} wei`)) {
+      const from = accts.get(account).evm;
+      const signer = accts.signer('evm', account, from.path);
+      if (!confirmFn(`${signer.line}\n\nDe : ${from.address}\nSigner une transaction ${s.kind} sur la chaîne ${tx.chainId}\nVers : ${s.to}\nMontant : ${s.amount}${token ? ` (${token.symbol}, ${token.decimals} déc.)` : ' wei'}\nFrais max. : ${s.maxFeeWei} wei`)) {
         throw new IpcError('USER_REJECTED', 'Signature refusée.');
       }
+      if (signer.unknown && !confirmFn(signer.unknownText)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
       // Rust: reinforced 2nd dialog when the summary says so (contract call, approval…).
       if (s.requiresExtraConfirmation && !confirmFn(`Attention : transaction à vérifier\n${s.warnings.map((w) => `• ${w.kind}`).join('\n')}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`)) {
         throw new IpcError('USER_REJECTED', 'Signature refusée.');
       }
       const raw = '0x02' + bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(tx) + Math.random()))) + '00'.repeat(40);
       const hash = '0x' + demoHash(raw);
-      chain.signedEvm.set(raw, { hash, tx, from: keys.accounts.evm.address });
+      chain.signedEvm.set(raw, { hash, tx, from: from.address });
       return { rawTx: raw, hash };
     },
     btc_sign_psbt: (a) => {
       requireUnlocked();
+      const account = accts.arg(a.account);
       checkPassword(a.password);
-      const out = signPsbt(String(a.psbt ?? ''));
+      const out = signPsbt(String(a.psbt ?? ''), account);
       const lines = out.summary.outputs.map(([ad, v, ch]) => `${ch ? '(monnaie) ' : ''}${ad} : ${v} sats`).join('\n');
-      if (!confirmFn(`Signer cette transaction Bitcoin ?\n${lines}\nFrais : ${out.summary.feeSats} sats`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      const c = network === 'testnet' ? 1 : 0;
+      const signer = accts.signer('btc', account, `m/84'/${c}'/${account}' (SegWit), m/86'/${c}'/${account}' (Taproot)`);
+      if (!confirmFn(`${signer.line}\n\nSigner cette transaction Bitcoin ?\n${lines}\nFrais : ${out.summary.feeSats} sats`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (signer.unknown && !confirmFn(signer.unknownText)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
       if (out.summary.requiresExtraConfirmation && !confirmFn(`Attention : transaction à vérifier\n${out.summary.warnings.map((w) => `• ${w.kind}`).join('\n')}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`)) {
         throw new IpcError('USER_REJECTED', 'Signature refusée.');
       }
@@ -582,16 +601,22 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     },
     sol_decode_tx: (a) => {
       requireUnlocked();
-      return demoDecodeSolMessage(decodeSolMessageArg(a.message), keys.accounts.sol.address);
+      return demoDecodeSolMessage(decodeSolMessageArg(a.message), accts.get(accts.arg(a.account)).sol.address);
     },
     sol_sign_tx: (a) => {
       requireUnlocked();
+      const account = accts.arg(a.account);
+      const me = accts.get(account).sol;
       const message = decodeSolMessageArg(a.message);
-      const summary = demoDecodeSolMessage(message, keys.accounts.sol.address);
+      const summary = demoDecodeSolMessage(message, me.address);
       if (summary.ourSignerIndex === null) throw new IpcError('INVALID_INPUT', 'Ce compte ne signe pas cette transaction.');
       checkPassword(a.password);
-      if (!confirmFn(`Signer cette transaction Solana ?
+      const signer = accts.signer('sol', account, me.path);
+      if (!confirmFn(`${signer.line}
+
+Signer cette transaction Solana ?
 ${demoSolSummaryText(summary)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (signer.unknown && !confirmFn(signer.unknownText)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
       if (summary.requiresExtraConfirmation && !confirmFn(`Instruction non reconnue ou inhabituelle : signer quand même ?
 ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
         throw new IpcError('USER_REJECTED', 'Signature refusée.');
@@ -709,11 +734,23 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     invoke: async (cmd, args = {}) => {
       const h = (handlers as Record<string, ((a: Record<string, unknown>) => unknown) | undefined>)[cmd] ?? utxoChains.handlers[cmd];
       if (!h) throw new IpcError('INVALID_INPUT', `Commande inconnue : ${cmd}`);
+      // §2.9: the TRON, XRP, Cardano and staking demo modules simulate account 0 only.
+      if (cmd === 'ada_address' && accts.arg(args.account) !== 0) {
+        requireUnlocked();
+        if (Number(args.index ?? 0) !== 0) throw new IpcError('INVALID_INPUT', 'Entrée invalide : démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)');
+        return accts.adaAddress(accts.arg(args.account));
+      }
+      if (DEMO_ACCOUNT0_ONLY.test(cmd) && accts.arg(args.account) !== 0) {
+        throw new IpcError('INVALID_INPUT', 'Mode démo : les comptes supplémentaires TRON, XRP et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).');
+      }
       void captureProtected;
       return await h(args);
     },
   };
 }
+
+/** Demo commands simulated for account 0 only (§2.9). */
+const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|ada_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
 
 function decodeSolMessageArg(m: unknown): Uint8Array {
   try {

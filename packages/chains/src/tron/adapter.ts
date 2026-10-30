@@ -8,6 +8,7 @@
 //   available, TRX burned at most, activation of a new account) and signs `sha256(raw_data)`;
 // - this adapter only checks that what Rust built is what was asked (recipient, amount, token).
 
+import { accountArg } from '../types';
 import * as bitcoin from 'bitcoinjs-lib';
 import {
   call,
@@ -35,15 +36,16 @@ export interface TronBackend {
   broadcast(raw: string, signature: string): Promise<string>;
 }
 
-/** The typed `tron_*` commands of `@kyro/shared` (docs/IPC.md §2.5). */
-export function rustTronBackend(): TronBackend {
+/** The typed `tron_*` commands of `@kyro/shared` (docs/IPC.md §2.5), for vault account `account`. */
+export function rustTronBackend(account = 0): TronBackend {
+  const acct = accountArg(account);
   return {
     account: (address) => call('tron_account', { address }),
     trc20Balance: (contract, address) => call('tron_trc20_balance', { contract, address }),
     txs: (address) => call('tron_txs', { address }),
-    build: (to, amount, token) => call('tron_build_tx', { to, amount, ...(token ? { token } : {}) }),
-    sign: (raw, password, token) => call('tron_sign_tx', { raw, password, ...(token ? { token } : {}) }),
-    broadcast: (raw, signature) => call('tron_broadcast', { raw, signature }),
+    build: (to, amount, token) => call('tron_build_tx', { to, amount, ...(token ? { token } : {}), ...acct }),
+    sign: (raw, password, token) => call('tron_sign_tx', { raw, password, ...(token ? { token } : {}), ...acct }),
+    broadcast: (raw, signature) => call('tron_broadcast', { raw, signature, ...acct }),
   };
 }
 
@@ -144,6 +146,8 @@ export interface TronAdapterOptions {
   backend?: TronBackend;
   /** TRC-20 tokens shown (default: USDT of the network). */
   tokens?: Trc20Token[];
+  /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
+  account?: number;
 }
 
 export class TronAdapter implements ChainAdapter<'tron'> {
@@ -157,7 +161,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
     if (!isTronAddress(opts.address)) throw new Error('Adresse TRON invalide');
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustTronBackend();
+    this.backend = opts.backend ?? rustTronBackend(opts.account ?? 0);
     this.tokens = opts.tokens ?? [TRON_USDT[opts.chain.network]];
   }
 

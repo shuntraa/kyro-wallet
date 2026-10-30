@@ -1,5 +1,6 @@
-//! TRON: secp256k1 keys at `m/44'/195'/0'/0/i` (SLIP-44 coin type 195, the same path on Nile,
-//! Shasta and mainnet), `T…` addresses, and the protobuf `Transaction.raw` of the two
+//! TRON: secp256k1 keys at `m/44'/195'/account'/0/0` (SLIP-44 coin type 195, the same path on
+//! Nile, Shasta and mainnet; one address per account, Ledger Live's layout — account 0 is the
+//! historical `m/44'/195'/0'/0/0`), `T…` addresses, and the protobuf `Transaction.raw` of the two
 //! transactions Kyro sends: `TransferContract` (TRX) and `TriggerSmartContract` (TRC-20
 //! `transfer(address,uint256)`).
 //!
@@ -68,14 +69,19 @@ const MAX_RAW: usize = 4096;
 // Addresses
 // ---------------------------------------------------------------------------------------------
 
-fn path(index: u32) -> Result<[bitcoin::bip32::ChildNumber; 5]> {
+fn path(account: u32, index: u32) -> Result<[bitcoin::bip32::ChildNumber; 5]> {
     Ok([
         hardened(44)?,
         hardened(195)?,
-        hardened(0)?,
+        hardened(account)?,
         normal(0)?,
         normal(index)?,
     ])
+}
+
+/// Path of the key of TRON account `account`: `m/44'/195'/account'/0/0`.
+pub fn tron_path(account: u32) -> String {
+    format!("m/44'/195'/{account}'/0/0")
 }
 
 fn address_bytes_of_pubkey(pk: &PublicKey) -> [u8; 21] {
@@ -111,11 +117,17 @@ pub fn tron_address_of_pubkey(sec1: &[u8]) -> Result<String> {
     Ok(tron_address_from_bytes(&address_bytes_of_pubkey(&pk)))
 }
 
-/// Address at `m/44'/195'/0'/0/index`.
-pub fn tron_address(seed: &Seed, index: u32) -> Result<String> {
+/// Address of account `account`: `m/44'/195'/account'/0/0` (see [`tron_path`]).
+pub fn tron_address(seed: &Seed, account: u32) -> Result<String> {
+    tron_address_at(seed, account, 0)
+}
+
+/// Address at `m/44'/195'/account'/0/index` (Kyro only uses `index` 0; other indices exist for
+/// test vectors of other wallets).
+pub fn tron_address_at(seed: &Seed, account: u32, index: u32) -> Result<String> {
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
-    let key = master.derive(&secp, &path(index)?)?;
+    let key = master.derive(&secp, &path(account, index)?)?;
     let pk = key.xpriv().private_key.public_key(&secp);
     Ok(tron_address_from_bytes(&address_bytes_of_pubkey(&pk)))
 }
@@ -1094,16 +1106,16 @@ pub fn tron_decode_stake_raw(raw_hex: &str, our_address: &str) -> Result<TronSta
     })
 }
 
-/// Signs a staking `raw_data` (hex) with the key at `m/44'/195'/0'/0/index`, after decoding it
-/// like [`tron_decode_stake_raw`] (owner must be that key's address).
+/// Signs a staking `raw_data` (hex) with the key of account `account` (`m/44'/195'/account'/0/0`),
+/// after decoding it like [`tron_decode_stake_raw`] (owner must be that key's address).
 pub fn tron_stake_sign(
     seed: &Seed,
-    index: u32,
+    account: u32,
     raw_hex: &str,
 ) -> Result<([u8; 65], TronStakeSummary)> {
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
-    let key = master.derive(&secp, &path(index)?)?;
+    let key = master.derive(&secp, &path(account, 0)?)?;
     let sk = key.xpriv().private_key;
     let ours = tron_address_from_bytes(&address_bytes_of_pubkey(&sk.public_key(&secp)));
     let summary = tron_decode_stake_raw(raw_hex, &ours)?;
@@ -1143,13 +1155,13 @@ fn sign_digest(
     Ok(out)
 }
 
-/// Signs `raw_data` (hex) with the key at `m/44'/195'/0'/0/index`, after decoding it like
-/// [`tron_decode_raw`] (owner must be that key's address). Returns the 65-byte signature
-/// `r || s || v` (`v` = 27/28) and the summary.
-pub fn tron_sign(seed: &Seed, index: u32, raw_hex: &str) -> Result<([u8; 65], TronTxSummary)> {
+/// Signs `raw_data` (hex) with the key of account `account` (`m/44'/195'/account'/0/0`), after
+/// decoding it like [`tron_decode_raw`] (owner must be that key's address). Returns the 65-byte
+/// signature `r || s || v` (`v` = 27/28) and the summary.
+pub fn tron_sign(seed: &Seed, account: u32, raw_hex: &str) -> Result<([u8; 65], TronTxSummary)> {
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
-    let key = master.derive(&secp, &path(index)?)?;
+    let key = master.derive(&secp, &path(account, 0)?)?;
     let sk = key.xpriv().private_key;
     let ours = tron_address_from_bytes(&address_bytes_of_pubkey(&sk.public_key(&secp)));
     let summary = tron_decode_raw(raw_hex, &ours)?;

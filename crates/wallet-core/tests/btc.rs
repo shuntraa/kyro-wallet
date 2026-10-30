@@ -213,7 +213,7 @@ fn segwit_psbt() -> (Psbt, String, String, String) {
 fn psbt_segwit_sign_and_verify() {
     let (psbt, _ours, change, external) = segwit_psbt();
     let s = seed(ABANDON);
-    let (signed_b64, summary) = btc_sign_psbt(&s, Network::Testnet, &psbt.to_string()).unwrap();
+    let (signed_b64, summary) = btc_sign_psbt(&s, Network::Testnet, 0, &psbt.to_string()).unwrap();
 
     assert_eq!(summary.fee_sats, 1_000);
     assert_eq!(
@@ -286,7 +286,7 @@ fn psbt_taproot_sign_and_verify() {
         .tap_key_origins
         .insert(xonly, (vec![], (us.fp, p)));
 
-    let (signed_b64, summary) = btc_sign_psbt(&s, Network::Testnet, &psbt.to_string()).unwrap();
+    let (signed_b64, summary) = btc_sign_psbt(&s, Network::Testnet, 0, &psbt.to_string()).unwrap();
     assert_eq!(summary.fee_sats, 500);
     assert_eq!(summary.outputs, vec![(external, 49_500, false)]);
 
@@ -322,7 +322,7 @@ fn psbt_foreign_inputs_left_untouched() {
         .insert(them.pubkey(&p), (them.fp, p));
 
     let (signed_b64, summary) =
-        btc_sign_psbt(&seed(ABANDON), Network::Testnet, &psbt.to_string()).unwrap();
+        btc_sign_psbt(&seed(ABANDON), Network::Testnet, 0, &psbt.to_string()).unwrap();
     assert_eq!(summary.fee_sats, 11_000);
     let signed = Psbt::from_str(&signed_b64).unwrap();
     assert_eq!(signed.inputs[0].partial_sigs.len(), 1);
@@ -344,17 +344,17 @@ fn psbt_errors() {
         Err(Error::Psbt(_))
     ));
     assert!(matches!(
-        btc_sign_psbt(&s, Network::Testnet, &b64),
+        btc_sign_psbt(&s, Network::Testnet, 0, &b64),
         Err(Error::Psbt(_))
     ));
 
     // Not our wallet / wrong network: nothing to sign.
     assert!(matches!(
-        btc_sign_psbt(&seed(LEGAL), Network::Testnet, &psbt.to_string()),
+        btc_sign_psbt(&seed(LEGAL), Network::Testnet, 0, &psbt.to_string()),
         Err(Error::Psbt(_))
     ));
     assert!(matches!(
-        btc_sign_psbt(&s, Network::Mainnet, &psbt.to_string()),
+        btc_sign_psbt(&s, Network::Mainnet, 0, &psbt.to_string()),
         Err(Error::Psbt(_))
     ));
 
@@ -362,7 +362,7 @@ fn psbt_errors() {
     let mut sighash_none = psbt.clone();
     sighash_none.inputs[0].sighash_type = Some(PsbtSighashType::from(EcdsaSighashType::None));
     assert!(matches!(
-        btc_sign_psbt(&s, Network::Testnet, &sighash_none.to_string()),
+        btc_sign_psbt(&s, Network::Testnet, 0, &sighash_none.to_string()),
         Err(Error::Psbt(_))
     ));
 
@@ -380,7 +380,7 @@ fn psbt_errors() {
         Err(Error::Psbt(_))
     ));
     assert!(matches!(
-        btc_sign_psbt(&s, Network::Testnet, ""),
+        btc_sign_psbt(&s, Network::Testnet, 0, ""),
         Err(Error::Psbt(_))
     ));
 
@@ -481,8 +481,9 @@ fn address_from_xpub_matches_seed_derivation() {
 
 fn warnings_of(psbt: &Psbt) -> (Vec<wallet_core::BtcWarning>, bool) {
     let s = seed(ABANDON);
-    let preview = wallet_core::btc_psbt_summary(&s, Network::Testnet, &psbt.to_string()).unwrap();
-    let (_, signed) = btc_sign_psbt(&s, Network::Testnet, &psbt.to_string()).unwrap();
+    let preview =
+        wallet_core::btc_psbt_summary(&s, Network::Testnet, 0, &psbt.to_string()).unwrap();
+    let (_, signed) = btc_sign_psbt(&s, Network::Testnet, 0, &psbt.to_string()).unwrap();
     assert_eq!(preview, signed, "dialog summary = signature summary");
     (signed.warnings, signed.requires_extra_confirmation)
 }
@@ -556,5 +557,88 @@ fn btc_sighash_other_than_all_is_refused_not_just_warned() {
     psbt.inputs[0].sighash_type = Some(PsbtSighashType::from(
         EcdsaSighashType::SinglePlusAnyoneCanPay,
     ));
-    assert!(btc_sign_psbt(&seed(ABANDON), Network::Testnet, &psbt.to_string()).is_err());
+    assert!(btc_sign_psbt(&seed(ABANDON), Network::Testnet, 0, &psbt.to_string()).is_err());
+}
+
+/// Accounts are separate wallets: a PSBT spending one input of account 0 and one of account 1,
+/// with change to account 1. Signed "as account 1", only account 1's input is signed, account
+/// 0's is foreign (reinforced dialog) and the change is recognised; "as account 0" it is the
+/// reverse (account 1's change is then an ordinary output); another account signs nothing.
+#[test]
+fn psbt_signs_only_the_requested_account() {
+    let us = Wallet::new(ABANDON);
+    let s = seed(ABANDON);
+    let a0 = btc_address(&s, Network::Testnet, BtcKind::Segwit, 0, false, 0).unwrap();
+    let a1 = btc_address(&s, Network::Testnet, BtcKind::Segwit, 1, false, 0).unwrap();
+    let change1 = btc_address(&s, Network::Testnet, BtcKind::Segwit, 1, true, 0).unwrap();
+    let external =
+        btc_address(&seed(LEGAL), Network::Testnet, BtcKind::Segwit, 0, false, 0).unwrap();
+    let tx = Transaction {
+        version: Version::TWO,
+        lock_time: LockTime::ZERO,
+        input: vec![txin(0xa0), txin(0xa1)],
+        output: vec![
+            TxOut {
+                value: Amount::from_sat(150_000),
+                script_pubkey: script_of(&external),
+            },
+            TxOut {
+                value: Amount::from_sat(49_000),
+                script_pubkey: script_of(&change1),
+            },
+        ],
+    };
+    let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
+    for (i, (addr, p)) in [(&a0, "m/84'/1'/0'/0/0"), (&a1, "m/84'/1'/1'/0/0")]
+        .into_iter()
+        .enumerate()
+    {
+        psbt.inputs[i].witness_utxo = Some(TxOut {
+            value: Amount::from_sat(100_000),
+            script_pubkey: script_of(addr),
+        });
+        let p = path(p);
+        psbt.inputs[i]
+            .bip32_derivation
+            .insert(us.pubkey(&p), (us.fp, p));
+    }
+    let pc = path("m/84'/1'/1'/1/0");
+    psbt.outputs[1]
+        .bip32_derivation
+        .insert(us.pubkey(&pc), (us.fp, pc));
+    let b64 = psbt.to_string();
+
+    let (signed, summary) = btc_sign_psbt(&s, Network::Testnet, 1, &b64).unwrap();
+    assert_eq!(
+        summary.warnings,
+        vec![wallet_core::BtcWarning::ForeignInput { input: 0 }]
+    );
+    assert!(summary.requires_extra_confirmation);
+    assert!(summary.outputs[1].2, "account 1's change");
+    let signed = Psbt::from_str(&signed).unwrap();
+    assert!(
+        signed.inputs[0].partial_sigs.is_empty(),
+        "account 0 untouched"
+    );
+    assert_eq!(signed.inputs[1].partial_sigs.len(), 1);
+    assert_eq!(
+        wallet_core::btc_psbt_summary(&s, Network::Testnet, 1, &b64).unwrap(),
+        summary
+    );
+
+    let (signed0, summary0) = btc_sign_psbt(&s, Network::Testnet, 0, &b64).unwrap();
+    assert_eq!(
+        summary0.warnings,
+        vec![wallet_core::BtcWarning::ForeignInput { input: 1 }]
+    );
+    assert!(!summary0.outputs[1].2, "not account 0's change");
+    let signed0 = Psbt::from_str(&signed0).unwrap();
+    assert_eq!(signed0.inputs[0].partial_sigs.len(), 1);
+    assert!(signed0.inputs[1].partial_sigs.is_empty());
+
+    assert!(btc_sign_psbt(&s, Network::Testnet, 2, &b64)
+        .unwrap_err()
+        .to_string()
+        .contains("no input"));
+    assert!(btc_sign_psbt(&s, Network::Testnet, 1 << 31, &b64).is_err());
 }

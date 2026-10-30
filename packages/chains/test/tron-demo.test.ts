@@ -48,7 +48,7 @@ describe('TRON in the app', () => {
   it('vault account: real T… address (m/44’/195’/0’/0/0), adapter, balances', async () => {
     expect(isTronAddress(accounts.tron.address)).toBe(true);
     expect(await call('tron_address', { index: 0 })).toBe(accounts.tron.address);
-    expect(await call('tron_address', { index: 1 })).not.toBe(accounts.tron.address);
+    expect(await call('tron_address', { account: 1 })).not.toBe(accounts.tron.address);
     const ad = createAdapters(accounts);
     expect(ad.tron?.getAddress()).toBe(accounts.tron.address);
     expect(ad.all.map((a) => a.family)).toContain('tron');

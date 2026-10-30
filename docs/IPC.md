@@ -41,11 +41,15 @@ pub enum BtcKind { Segwit /* BIP84 */, Taproot /* BIP86 */ }
 pub struct BtcAccount { pub kind: BtcKind, pub xpub: String, pub fingerprint: String /*hex 8*/, pub path: String /*m/84'/1'/0'*/ }
 pub fn btc_account(seed: &Seed, net: Network, kind: BtcKind, account: u32) -> Result<BtcAccount>;
 pub fn btc_address(seed: &Seed, net: Network, kind: BtcKind, account: u32, change: bool, index: u32) -> Result<String>;
-pub fn evm_address(seed: &Seed, index: u32) -> Result<String>;          // m/44'/60'/0'/0/i, EIP-55
+pub fn evm_address(seed: &Seed, index: u32) -> Result<String>;          // m/44'/60'/0'/0/i, EIP-55 — compte EVM n° i = index d'adresse (voir « Comptes » ci-dessous)
+pub fn evm_path(index) -> String;  pub fn sol_path(account) -> String;  pub fn tron_path(account) -> String;
+pub fn xrp_path(account) -> String;  pub fn cardano_account_path(account) -> String;   // chemins affichés (dialogue natif, UI)
 pub fn sol_address(seed: &Seed, account: u32) -> Result<String>;        // m/44'/501'/i'/0' (SLIP-10 ed25519), base58
 
 // --- signing (clés dérivées à la demande, zeroizées aussitôt) ---
-pub fn btc_sign_psbt(seed: &Seed, net: Network, psbt_b64: &str) -> Result<(String /*signed b64*/, BtcTxSummary)>;
+pub fn btc_sign_psbt(seed: &Seed, net: Network, account: u32, psbt_b64: &str) -> Result<(String /*signed b64*/, BtcTxSummary)>;
+// ne signe QUE les entrées du compte `account` (origine m/84'|86'/coin'/account'/…) ; celles des autres comptes du même coffre
+// sont étrangères (ForeignInput → 2ᵉ dialogue) et la monnaie n'est reconnue que dans ce compte
 pub struct EvmTxRequest { pub chain_id: u64, pub nonce: u64, pub to: String, pub value_wei: String, pub data: String /*0x…*/,
                           pub gas_limit: u64, pub max_fee_per_gas: String, pub max_priority_fee_per_gas: String }
 pub fn evm_sign_tx(seed: &Seed, index: u32, tx: &EvmTxRequest) -> Result<(String /*raw 0x… EIP-1559*/, String /*tx hash*/)>;
@@ -73,7 +77,7 @@ pub enum BtcWarning {   // JSON { "kind": "unknownScript" | "opReturn" | "foreig
     HighFee { sat_per_vb } /*> BTC_HIGH_FEE_SAT_PER_VB = 100 sat/vB (100 × le minimum de relais), ou frais > total des sorties*/ }
 // Un sighash autre que ALL / DEFAULT sur une de nos entrées n'est pas un avertissement : la signature est REFUSÉE.
 pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String] /*our addresses*/) -> Result<BtcTxSummary>;
-pub fn btc_psbt_summary(seed, net, psbt_b64) -> Result<BtcTxSummary>;   // résumé de btc_sign_psbt sans signer (monnaie et entrées par origine de clé)
+pub fn btc_psbt_summary(seed, net, account, psbt_b64) -> Result<BtcTxSummary>;   // résumé de btc_sign_psbt sans signer (monnaie et entrées par origine de clé)
 
 // --- Bitcoin, données publiques pour un serveur choisi (B2b) ---
 pub fn btc_scripthash(address: &str, net: Network) -> Result<String>;   // Electrum : sha256(scriptPubKey) inversé, hex
@@ -100,8 +104,8 @@ pub fn utxo_address_of_script(script, net, coin) -> Option<String>;
 pub fn utxo_genesis_hash(net, coin) -> &'static str;                    // LTC mainnet 12a765e3…, testnet4 4966625a… · DOGE mainnet 1a91e3da…, testnet bb0a7826…
 pub fn utxo_decode_raw_tx(raw_hex, net, coin) -> Result<BtcRawTx>;      // DOGE : données témoin refusées
 pub fn utxo_dust_threshold(coin, script) -> u64;                        // LTC : GetDustThreshold à 30 000 lit/kvB (P2WPKH 2 940) · DOGE : 0,001 DOGE (poussière dure)
-pub fn utxo_psbt_summary(seed, net, coin, psbt_b64) -> Result<UtxoTxSummary>;     // décodage pour le dialogue, sans signer
-pub fn utxo_sign_psbt(seed, net, coin, psbt_b64) -> Result<(String /*PSBT signée, non finalisée*/, UtxoTxSummary)>;
+pub fn utxo_psbt_summary(seed, net, coin, account, psbt_b64) -> Result<UtxoTxSummary>;     // décodage pour le dialogue, sans signer
+pub fn utxo_sign_psbt(seed, net, coin, account, psbt_b64) -> Result<(String /*PSBT signée, non finalisée*/, UtxoTxSummary)>;   // comme Bitcoin : compte `account` seulement
 // Refusé : PSBT mal formée ; entrée LTC sans witness_utxo ; entrée DOGE sans non_witness_utxo dont le txid = l'outpoint, ou avec témoin ;
 // origine de clé « à nous » qui ne correspond pas à la clé ou au script ; sighash ≠ ALL ; sortie sous la poussière ; frais négatifs ; aucune entrée à nous.
 // Signature : LTC BIP143 (P2WPKH), DOGE legacy (P2PKH), SIGHASH_ALL, chaque signature vérifiée avant d'être gardée.
@@ -118,9 +122,10 @@ pub enum UtxoWarning {                         // JSON { "kind": "softDust", "in
 // Constantes : LTC_MIN_RELAY_FEE_PER_KVB 1 000, LTC_DUST_RELAY_FEE_PER_KVB 30 000 ; DOGE_RECOMMENDED_FEE_PER_KB 1 000 000 (0,01 DOGE/kB),
 // DOGE_MIN_RELAY_FEE_PER_KB 100 000, DOGE_SOFT_DUST 1 000 000, DOGE_HARD_DUST 100 000.
 
-// --- TRON : m/44'/195'/0'/0/i, adresse = base58check(0x41 || keccak256(pubkey)[12..]) ; raw_data protobuf
+// --- TRON : m/44'/195'/a'/0/0 (un compte = une adresse, comme Ledger Live ; compte 0 = l'historique m/44'/195'/0'/0/0), adresse = base58check(0x41 || keccak256(pubkey)[12..]) ; raw_data protobuf
 //     (codec écrit à la main, strict : refusé si le ré-encodage diffère d'un seul octet)
-pub fn tron_address(seed, index) -> Result<String>;                     // T…
+pub fn tron_address(seed, account) -> Result<String>;                   // T…, m/44'/195'/account'/0/0
+pub fn tron_address_at(seed, account, index) -> Result<String>;         // m/44'/195'/account'/0/index (vecteurs d'autres portefeuilles)
 pub fn tron_address_bytes(address) -> Result<[u8; 21]>; pub fn tron_address_from_bytes(&[u8; 21]) -> String;
 pub fn tron_address_of_pubkey(sec1) -> Result<String>;
 pub struct TronRaw { ref_block_bytes: [u8; 2], ref_block_hash: [u8; 8], expiration: i64, memo: Vec<u8>,
@@ -137,14 +142,15 @@ pub struct TronTxSummary { txid, owner, action: TronAction, fee_limit, expiratio
 pub enum TronAction { TrxTransfer { to, amount }, Trc20Transfer { contract, to, amount, call_value },
                       ContractCall { contract, selector, data, call_value } }   // JSON { "type": "trxTransfer", … }
 pub enum TronWarning { UnknownCall { selector }, CallValue, Memo, HighFeeLimit /*> 100 TRX*/ }   // tous → confirmation renforcée
-pub fn tron_sign(seed, index, raw_hex) -> Result<([u8; 65] /*r‖s‖v, v = 27 + recid*/, TronTxSummary)>;   // décode d'abord ; libsecp256k1 RFC 6979
+pub fn tron_sign(seed, account, raw_hex) -> Result<([u8; 65] /*r‖s‖v, v = 27 + recid*/, TronTxSummary)>;   // décode d'abord ; libsecp256k1 RFC 6979
 pub fn tron_recover_signer(raw_hex, sig65 /*v ∈ 0,1,27,28*/) -> Result<String>;
 pub fn tron_signed_transaction(raw_hex, sig) -> Result<String>;          // Transaction { raw_data = 1, signature = 2 }, pour broadcasthex
 
-// --- XRP Ledger : m/44'/144'/0'/0/i (route BIP44 de Ledger, Trezor, Xaman — pas la « family seed » de rippled),
+// --- XRP Ledger : m/44'/144'/a'/0/0, compte 0 = l'historique m/44'/144'/0'/0/0 (route BIP44 de Ledger, Trezor, Xaman — pas la « family seed » de rippled),
 //     adresse r… = base58 (alphabet Ripple) de 0x00 || RIPEMD160(SHA256(pubkey)) + somme SHA-256d ; codec binaire
 //     Payment écrit à la main, strict (ré-encodage identique exigé)
-pub fn xrp_address(seed, index) -> Result<String>; pub fn xrp_public_key(seed, index) -> Result<[u8; 33]>;
+pub fn xrp_address(seed, account) -> Result<String>; pub fn xrp_public_key(seed, account) -> Result<[u8; 33]>;   // m/44'/144'/account'/0/0
+pub fn xrp_address_at(seed, account, index); pub fn xrp_public_key_at(seed, account, index); pub fn xrp_sign_at(seed, account, index, blob);   // …/0/index (vecteurs Trezor)
 pub fn xrp_account_id(address) -> Result<[u8; 20]>;        // X-addresses refusées (adresse classique + tag séparé)
 pub fn xrp_address_from_id(&[u8; 20]) -> String; pub fn xrp_address_of_pubkey(sec1) -> Result<String>;
 pub enum XrpAmount { Xrp(u64 /*drops*/), Issued { mantissa, exponent, negative, currency: [u8; 20], issuer: [u8; 20] } }   // STAmount
@@ -162,7 +168,7 @@ pub struct XrpTxSummary { account, destination, destination_tag: Option<u32>, am
                           requires_extra_confirmation }          // serde camelCase
 pub enum XrpAmountView { Xrp { drops }, Issued { value, currency, issuer } }   // JSON { "kind": "xrp", … }
 pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, Memo, HighFee /*> 1 XRP*/, InvoiceId }   // → renforcée
-pub fn xrp_sign(seed, index, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
+pub fn xrp_sign(seed, account, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
 pub fn xrp_verify_signed(blob_hex) -> Result<String /*hash*/>;   // signature DER low-S de SigningPubKey, clé = Account
 
 // --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
@@ -285,7 +291,7 @@ pub fn cardano_drep_id(drep) -> Option<String>;                     // CIP-129
 pub enum TronResource { Bandwidth, Energy }                          // JSON "BANDWIDTH" | "ENERGY"
 pub fn tron_decode_stake_raw(raw_hex, our_address) -> Result<TronStakeSummary>;   // + refuse : owner ≠ nous, montant ≤ 0, mémo,
 // fee_limit ≠ 0, 0 ou plus de 30 votes (TRON_MAX_VOTES), un SR deux fois, un vote nul, un transfert / appel de contrat
-pub fn tron_stake_sign(seed, index, raw_hex) -> Result<([u8; 65], TronStakeSummary)>;
+pub fn tron_stake_sign(seed, account, raw_hex) -> Result<([u8; 65], TronStakeSummary)>;
 pub struct TronStakeSummary { txid, owner, action: TronStakeAction, expiration, timestamp, ref_block_bytes, ref_block_hash, raw_size }
 pub enum TronStakeAction { Freeze { resource, amount }, Unfreeze { resource, amount }, WithdrawUnfrozen, CancelAllUnfreeze,
                            Vote { votes: Vec<TronVote { address, count }>, total }, ClaimRewards }   // JSON { "type": "freeze", … }
@@ -333,13 +339,14 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `vault_lock` | — | `void` | zeroize de la session |
 | `vault_reveal_mnemonic` | `{ password }` | `{ words: string[] }` | rate-limité, capture d'écran bloquée |
 | `session_touch` | — | `void` | activité utilisateur → repousse l'auto-lock |
-| `accounts_get` | — | `Accounts` | adresses publiques uniquement ; contient aussi `ltc` et `doge` (§2.4) |
-| `btc_address` | `{ kind, change, index }` | `string` | |
+| `accounts_get` | `{ account? }` | `Accounts` | adresses publiques uniquement, du compte `account` (absent = 0) de chaque chaîne ; contient aussi `ltc` et `doge` (§2.4). Comptes multiples : §2.9 |
+| `vault_accounts_get` / `vault_account_add` / `vault_account_rename` / `vault_account_remove` | voir §2.9 | `VaultAccountLists` | listes de comptes du coffre, par chaîne |
+| `btc_address` | `{ kind, change, index, account? }` | `string` | `m/84'\|86'/coin'/account'/change/index` |
 | `evm_decode_tx` | `{ tx: EvmTxRequest }` | `EvmTxSummary` | pour l'aperçu avant mot de passe |
-| `evm_sign_tx` | `{ tx, password, token?: { symbol, decimals } }` | `{ rawTx, hash }` | dialogue natif obligatoire ; `token` = indication d'affichage seulement (le contrat et le montant brut viennent du décodage Rust) ; **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` : appel de contrat autre qu'un transfer ERC-20, **toute** autorisation (`approve` : bénéficiaire et montant, « ILLIMITÉ » si ≥ 2^128), valeur native envoyée avec un appel, chainId inconnu, frais maximum au-dessus du seuil (voir §1) |
-| `btc_sign_psbt` | `{ psbt, password }` | `{ psbt, summary }` | dialogue natif obligatoire (résumé `btc_psbt_summary`) ; **2ᵉ dialogue renforcé** si `summary.requiresExtraConfirmation` (script inconnu, OP_RETURN, entrée qui n'est pas à nous, frais > 100 sat/vB ou > total des sorties) ; le résumé de la signature doit être identique à celui affiché |
-| `sol_decode_tx` | `{ message /*b64, message sérialisé sans signatures*/ }` | `SolTxSummary` | aperçu avant mot de passe ; décodé en Rust, tables d'adresses (v0) récupérées par Rust (`getAccountInfo`) — jamais fournies par l'UI ; session déverrouillée requise |
-| `sol_sign_tx` | `{ message /*b64*/, password }` | `{ signature /*b64*/, summary: SolTxSummary }` | même décodage ; refuse si notre adresse n'est pas signataire ; dialogue natif construit depuis le résumé Rust, puis 2ᵉ dialogue « Instruction non reconnue — signer quand même ? » si `requiresExtraConfirmation` ; la signature va à l'index `summary.ourSignerIndex` |
+| `evm_sign_tx` | `{ tx, password, token?: { symbol, decimals }, account? }` | `{ rawTx, hash }` | clé `m/44'/60'/0'/0/{account}` ; dialogue natif obligatoire (compte signataire et adresse « De » en tête, §2.9) ; `token` = indication d'affichage seulement (le contrat et le montant brut viennent du décodage Rust) ; **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` : appel de contrat autre qu'un transfer ERC-20, **toute** autorisation (`approve` : bénéficiaire et montant, « ILLIMITÉ » si ≥ 2^128), valeur native envoyée avec un appel, chainId inconnu, frais maximum au-dessus du seuil (voir §1) |
+| `btc_sign_psbt` | `{ psbt, password, account? }` | `{ psbt, summary }` | ne signe que les entrées du compte `account` (celles des autres comptes : `foreignInput`) ; dialogue natif obligatoire (résumé `btc_psbt_summary`, compte signataire en tête) ; **2ᵉ dialogue renforcé** si `summary.requiresExtraConfirmation` (script inconnu, OP_RETURN, entrée qui n'est pas à nous, frais > 100 sat/vB ou > total des sorties) ; le résumé de la signature doit être identique à celui affiché |
+| `sol_decode_tx` | `{ message /*b64, message sérialisé sans signatures*/, account? }` | `SolTxSummary` | aperçu avant mot de passe ; décodé en Rust, tables d'adresses (v0) récupérées par Rust (`getAccountInfo`) — jamais fournies par l'UI ; session déverrouillée requise |
+| `sol_sign_tx` | `{ message /*b64*/, password, account? }` | `{ signature /*b64*/, summary: SolTxSummary }` | même décodage ; refuse si notre adresse n'est pas signataire ; dialogue natif construit depuis le résumé Rust, puis 2ᵉ dialogue « Instruction non reconnue — signer quand même ? » si `requiresExtraConfirmation` ; la signature va à l'index `summary.ourSignerIndex` |
 | `net_fetch` | `{ req: { url, method, headers?, body? } }` | `{ status, body }` | allowlist + cache + rate-limit ; seuls `accept`, `content-type`, `0x-version` sont transmis, les clés API sont ajoutées par Rust. **Via Tor si `settings.tor.enabled` (défaut)** : attend le démarrage de Tor (60 s max) puis échoue en `TOR_UNAVAILABLE` — jamais de repli en clair. En mode Tor, `https://mempool.space/…` est servi de façon transparente par le service onion de mempool (même chemin, même réponse) ; l'UI continue d'appeler `https://mempool.space/…`. Toute URL `.onion` est refusée (`HOST_NOT_ALLOWED`) en mode clair |
 | `tor_status` | — | `TorStatus` | état courant de Tor intégré |
 | `tor_retry` | — | `TorStatus` | relance le démarrage depuis zéro (quel que soit l'état : utile après `error`) ; refusé (`INVALID_INPUT`) si Tor est désactivé |
@@ -382,8 +389,10 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `hw_sign_sol_tx` | `{ id, accountId, message /*b64*/ }` | `{ signature /*b64*/, summary: SolTxSummary }` | même décodage que `sol_sign_tx` ; signature vérifiée (ed25519 strict) contre l'adresse enregistrée |
 
 ```ts
-type Accounts = {
+type Accounts = {                 // accounts_get({ account? }) : tout est celui du compte `account` (0 = l'historique)
   network: 'mainnet' | 'testnet';
+  account: number;
+  // evm, sol, tron, xrp, cardano : { address, path } (path = chemin de la clé, ex. m/44'/60'/0'/0/1)
   btc: { segwit: { address: string; xpub: string; fingerprint: string; path: string };
          taproot: { address: string; xpub: string; fingerprint: string; path: string } };
   evm: { address: string };
@@ -605,13 +614,13 @@ Mêmes principes que Bitcoin (§2.2) : Rust choisit le serveur (`servers.litecoi
 | Commande (`ltc_…` / `doge_…`) | Arguments | Retour | Notes |
 |---|---|---|---|
 | `…_backend_info` | — | `{ kind: 'default' \| 'esplora', network: 'mainnet' \| 'testnet', label, available, tor }` | `available: false` = Dogecoin sans serveur configuré |
-| `…_address` | `{ change, index }` | `string` | coffre déverrouillé |
+| `…_address` | `{ change, index, account? }` | `string` | coffre déverrouillé ; `m/84'/2'/account'/…` (LTC), `m/44'/3'/account'/…` (DOGE) |
 | `…_address_info` / `…_address_utxos` / `…_address_txs` | `{ address }` | formes Esplora (§2.2) | adresse validée par Rust pour la chaîne et le réseau avant toute requête ; `txs` : 50 au plus, non confirmées d'abord |
 | `…_tx_hex` | `{ txid }` | `string` | `GET /tx/{txid}/hex`, vérifié : txid recalculé = `txid` (et pas de témoin pour Dogecoin), sinon `SERVER_UNREACHABLE` |
 | `…_fee_rates` | — | `{ fastestFee, halfHourFee, hourFee, economyFee, minimumFee, source? }` | unité minimale **par vbyte** (litoshis/vB ; koinus/octet). `/v1/fees/recommended` puis `/fee-estimates`. Dogecoin : bornes [0,01 ; 1] DOGE/kB (1 000–100 000 koinus/o) ; serveur sans estimation (404) → 0,01 DOGE/kB, `source: 'policy'` |
 | `…_tip_height` | — | `number` | |
 | `…_broadcast` | `{ hex }` | `string` (txid) | transaction décodée d'abord ; txid du serveur = le nôtre, sinon erreur |
-| `…_sign_psbt` | `{ psbt, password }` | `{ psbt /*signée, non finalisée*/, summary: UtxoTxSummary }` | mot de passe → `utxo_psbt_summary` → dialogue natif (destinataires, montants, monnaie, frais, taux, taille ; « Pas de monnaie… » si aucune ; entrées étrangères) → **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` (sortie inconnue « INCONNUE », OP_RETURN, entrée étrangère, poussière douce DOGE, frais très élevés) → signature ; le résumé de la signature doit être identique à celui affiché |
+| `…_sign_psbt` | `{ psbt, password, account? }` | `{ psbt /*signée, non finalisée*/, summary: UtxoTxSummary }` | mot de passe → `utxo_psbt_summary` → dialogue natif (destinataires, montants, monnaie, frais, taux, taille ; « Pas de monnaie… » si aucune ; entrées étrangères) → **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` (sortie inconnue « INCONNUE », OP_RETURN, entrée étrangère, poussière douce DOGE, frais très élevés) → signature ; le résumé de la signature doit être identique à celui affiché |
 
 Règles de construction (TS) vérifiées par Rust :
 - **Litecoin** : chaque entrée a `witness_utxo` + `bip32_derivation` (`m/84'/2'|1'/0'/…`) ; la monnaie porte sa dérivation (sinon elle s'affiche comme un destinataire) ; poussière = `GetDustThreshold` de Litecoin Core à 30 000 lit/kvB (P2WPKH 2 940 litoshis, P2PKH 5 460) : destinataire en dessous refusé, monnaie en dessous ajoutée aux frais ; minimum 1 litoshi/vB.
@@ -629,13 +638,13 @@ Rust choisit le serveur (`servers.tron`, sinon TronGrid), famille Tor `tron`, ja
 | Commande | Arguments | Retour | Notes |
 |---|---|---|---|
 | `tron_backend_info` | — | `{ kind: 'default' \| 'http', network: 'mainnet' \| 'testnet', label, tor }` | |
-| `tron_address` | `{ index }` | `string` | `m/44'/195'/0'/0/{index}`, coffre déverrouillé ; **la signature n'utilise que l'index 0** : l'UI ne doit afficher que cette adresse |
+| `tron_address` | `{ account?, index? }` | `string` | `m/44'/195'/{account}'/0/0`, coffre déverrouillé ; une adresse par compte (`index` ≠ 0 refusé) ; `tron_build_tx`, `tron_sign_tx`, `tron_broadcast` et `tron_stake_*` prennent le même `account?` |
 | `tron_account` | `{ address }` | `{ address, exists, balance /*sun*/, freeBandwidthLimit, freeBandwidthUsed, bandwidthLimit, bandwidthUsed, energyLimit, energyUsed }` | `getaccount` + `getaccountresource` ; `exists: false` = compte jamais activé |
 | `tron_trc20_balance` | `{ contract, address }` | `string` (unités brutes) | `balanceOf` par `triggerconstantcontract` |
 | `tron_txs` | `{ address }` | `[{ txid, kind: 'trx' \| 'trc20', from, to, amount, token?: { contract, symbol, decimals }, timestamp, status: 'confirmed' \| 'failed' }]` | API `/v1` de TronGrid (50 TRX + 50 TRC-20 au plus, plus récentes d'abord) ; un nœud java-tron seul n'a pas d'historique → `SERVER_UNREACHABLE` explicite ; pas de frais dans la réponse, et les transferts TRC-20 sont toujours marqués `confirmed` (l'API /v1 ne donne pas leur résultat) |
-| `tron_build_tx` | `{ to, amount /*sun ou unités du token*/, token? /*contrat T…*/ }` | `{ raw /*hex*/, txid, summary: TronTxSummary, estimate: TronEstimate }` | TRX : `TransferContract`. TRC-20 : `transfer(to, amount)`, énergie **simulée** (`triggerconstantcontract`, `energy_used + energy_penalty`) ; un transfert qui échouerait (solde de token insuffisant) est refusé ; `fee_limit` = énergie × prix × 1,3, au moins 1 TRX, au plus `getMaxFeeLimit`. Rust re-décode ce qu'il a construit |
-| `tron_sign_tx` | `{ raw, password, token?: { symbol, decimals } }` | `{ signature /*65 octets hex*/, txid, summary, estimate }` | décode (`tron_decode_raw`, owner = nous), refuse expirée ou expiration > 24 h, mot de passe, **relit en direct** compte, paramètres de chaîne, existence du destinataire et énergie simulée → dialogue natif : destinataire, montant (USDT nommé par Rust : mainnet `TR7NHq…`, Nile `TXYZop…` ; autre token : unités brutes, `token` de l'UI affiché comme « selon l'interface, non vérifié »), **bande passante nécessaire / disponible (gratuite, gelée) et TRX brûlés**, **énergie estimée / disponible, TRX brûlés estimés et au maximum (`fee_limit`)**, **activation d'un compte inexistant** (création 1 TRX + 0,1 TRX sans bande passante gelée, valeurs lues dans `getchainparameters`), total estimé et maximum, solde, mémo, expiration, bloc de référence, txid ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` (appel autre que `transfer`, TRX envoyés au contrat, mémo, `fee_limit` > 100 TRX) ; résumé de la signature = résumé affiché |
-| `tron_broadcast` | `{ raw, signature }` | `string` (txid) | la signature doit redonner notre adresse ; `/wallet/broadcasthex` ; txid du serveur = `sha256(raw)` sinon `SERVER_UNREACHABLE` ; refus du réseau → `INVALID_INPUT` avec le message décodé |
+| `tron_build_tx` | `{ to, amount /*sun ou unités du token*/, token? /*contrat T…*/, account? }` | `{ raw /*hex*/, txid, summary: TronTxSummary, estimate: TronEstimate }` | TRX : `TransferContract`. TRC-20 : `transfer(to, amount)`, énergie **simulée** (`triggerconstantcontract`, `energy_used + energy_penalty`) ; un transfert qui échouerait (solde de token insuffisant) est refusé ; `fee_limit` = énergie × prix × 1,3, au moins 1 TRX, au plus `getMaxFeeLimit`. Rust re-décode ce qu'il a construit |
+| `tron_sign_tx` | `{ raw, password, token?: { symbol, decimals }, account? }` | `{ signature /*65 octets hex*/, txid, summary, estimate }` | décode (`tron_decode_raw`, owner = nous), refuse expirée ou expiration > 24 h, mot de passe, **relit en direct** compte, paramètres de chaîne, existence du destinataire et énergie simulée → dialogue natif : destinataire, montant (USDT nommé par Rust : mainnet `TR7NHq…`, Nile `TXYZop…` ; autre token : unités brutes, `token` de l'UI affiché comme « selon l'interface, non vérifié »), **bande passante nécessaire / disponible (gratuite, gelée) et TRX brûlés**, **énergie estimée / disponible, TRX brûlés estimés et au maximum (`fee_limit`)**, **activation d'un compte inexistant** (création 1 TRX + 0,1 TRX sans bande passante gelée, valeurs lues dans `getchainparameters`), total estimé et maximum, solde, mémo, expiration, bloc de référence, txid ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` (appel autre que `transfer`, TRX envoyés au contrat, mémo, `fee_limit` > 100 TRX) ; résumé de la signature = résumé affiché |
+| `tron_broadcast` | `{ raw, signature, account? }` | `string` (txid) | la signature doit redonner notre adresse ; `/wallet/broadcasthex` ; txid du serveur = `sha256(raw)` sinon `SERVER_UNREACHABLE` ; refus du réseau → `INVALID_INPUT` avec le message décodé |
 
 **Historique et nœud personnel** : `tron_txs` utilise l'API `/v1` propre à TronGrid. Un nœud java-tron seul (serveur `http` personnalisé) ne l'a pas : la commande échoue alors avec `SERVER_UNREACHABLE` et un message explicite (« l'historique exige l'API /v1 de TronGrid »), sans jamais se rabattre sur TronGrid. Soldes, ressources, construction, signature et diffusion fonctionnent avec n'importe quel nœud java-tron.
 
@@ -652,13 +661,13 @@ Rust choisit le serveur (`servers.xrp`, sinon le défaut), famille Tor `xrp`, ja
 | Commande | Arguments | Retour | Notes |
 |---|---|---|---|
 | `xrp_backend_info` | — | `{ kind: 'default' \| 'jsonRpc', network: 'mainnet' \| 'testnet', label, tor }` | |
-| `xrp_address` | `{ index }` | `string` | `m/44'/144'/0'/0/{index}`, coffre déverrouillé ; **la signature n'utilise que l'index 0** (`xrp_build_tx` / `xrp_sign_tx` / `xrp_broadcast`) : l'UI ne doit afficher que cette adresse |
+| `xrp_address` | `{ account?, index? }` | `string` | `m/44'/144'/{account}'/0/0`, coffre déverrouillé ; une adresse par compte (`index` ≠ 0 refusé) ; `xrp_build_tx`, `xrp_sign_tx`, `xrp_broadcast` prennent le même `account?` |
 | `xrp_account` | `{ address }` | `{ address, exists, balance /*drops*/, sequence, ownerCount, flags, requireDestTag, disallowXrp, reserve, spendable }` | `account_info` + réserves de `server_info.validated_ledger` (`reserve_base_xrp`, `reserve_inc_xrp` : **1 XRP et 0,2 XRP**, lus en direct le 30/10/2026 sur testnet et mainnet) ; `reserve` = base + 0,2 × objets possédés ; `spendable` = solde − réserve ; compte inexistant : `exists: false` |
 | `xrp_lines` | `{ address }` | `[{ currency, issuer, balance, limit }]` | lignes de confiance (monnaies émises) |
 | `xrp_txs` | `{ address }` | `[{ hash, from, to, destinationTag, amount, fee, ledger, time, result }]` | 50 derniers Payment ; `amount` = **montant réellement livré** (`delivered_amount`) |
-| `xrp_build_tx` | `{ to, amount /*drops, ou valeur décimale si issued*/, destinationTag?, issued?: { currency, issuer } }` | `{ blob /*non signé, hex*/, summary: XrpTxSummary, context: { account, destination, reserveBase, reserveInc } }` | refusé avant toute construction : destinataire avec `lsfRequireDestTag` **sans tag** ; compte destinataire inexistant et montant XRP < réserve de base (`tecNO_DST_INSUF_XRP`) ; monnaie émise vers un compte inexistant (`tecNO_DST`) ; montant + frais > disponible ; notre compte non activé |
-| `xrp_sign_tx` | `{ blob, password }` | `{ blob /*signé*/, hash, summary, context }` | décode (strict, Account et clé = nous), refuse `LastLedgerSequence` dépassé et séquence périmée, **relit en direct** les deux comptes et les réserves et refait les vérifications ci-dessus, mot de passe → dialogue natif : destinataire, **TAG DE DESTINATION encadré sur sa propre ligne** (ou « AUCUN TAG DE DESTINATION » avec l'avertissement), montant, SendMax, création du compte destinataire, frais, solde, réserve bloquée (base + objets), disponible, registre limite, mémos ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` ; résumé de la signature = résumé affiché |
-| `xrp_broadcast` | `{ blob }` | `string` (hash) | `xrp_verify_signed` (DER low-S, clé = Account = nous) puis `submit` ; `tesSUCCESS` ou `terQUEUED` acceptés, sinon `INVALID_INPUT` avec le code ; hash du serveur = `SHA-512Half("TXN\0"‖blob)` sinon `SERVER_UNREACHABLE` |
+| `xrp_build_tx` | `{ to, amount /*drops, ou valeur décimale si issued*/, destinationTag?, issued?: { currency, issuer }, account? }` | `{ blob /*non signé, hex*/, summary: XrpTxSummary, context: { account, destination, reserveBase, reserveInc } }` | refusé avant toute construction : destinataire avec `lsfRequireDestTag` **sans tag** ; compte destinataire inexistant et montant XRP < réserve de base (`tecNO_DST_INSUF_XRP`) ; monnaie émise vers un compte inexistant (`tecNO_DST`) ; montant + frais > disponible ; notre compte non activé |
+| `xrp_sign_tx` | `{ blob, password, account? }` | `{ blob /*signé*/, hash, summary, context }` | décode (strict, Account et clé = nous), refuse `LastLedgerSequence` dépassé et séquence périmée, **relit en direct** les deux comptes et les réserves et refait les vérifications ci-dessus, mot de passe → dialogue natif : destinataire, **TAG DE DESTINATION encadré sur sa propre ligne** (ou « AUCUN TAG DE DESTINATION » avec l'avertissement), montant, SendMax, création du compte destinataire, frais, solde, réserve bloquée (base + objets), disponible, registre limite, mémos ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` ; résumé de la signature = résumé affiché |
+| `xrp_broadcast` | `{ blob, account? }` | `string` (hash) | `xrp_verify_signed` (DER low-S, clé = Account = nous) puis `submit` ; `tesSUCCESS` ou `terQUEUED` acceptés, sinon `INVALID_INPUT` avec le code ; hash du serveur = `SHA-512Half("TXN\0"‖blob)` sinon `SERVER_UNREACHABLE` |
 | `xrp_tx_status` | `{ hash }` | `{ validated, result }` | `tx` : `validated: true` et `result: 'tesSUCCESS'` une fois dans un registre validé |
 
 Refusé avant toute signature : tout autre type de transaction (AccountSet, SetRegularKey, SignerListSet, TrustSet, OfferCreate, EscrowCreate…), **paiement partiel** (`tfPartialPayment` : le montant livré pourrait être presque nul), `Paths`, `DeliverMin`, `TicketSequence`, `NetworkID`, drapeaux inconnus, champs inconnus. Plus strict que « inconnu → confirmation renforcée » : un champ que Kyro ne sait pas décoder n'est jamais signé. Hardware wallets : `HW_UNSUPPORTED` (Trezor `RippleSignTx`, Ledger app « XRP » : non faits).
@@ -669,18 +678,18 @@ Refusé avant toute signature : tout autre type de transaction (AccountSet, SetR
 
 Rust choisit le serveur (`servers.cardano`, sinon Koios : `preprod.koios.rest` / `api.koios.rest`, offre publique gratuite sans clé), famille Tor `cardano`, jamais de repli. Blockfrost n'est pas utilisé : Koios fournit tout ce qu'il faut (UTxO, paramètres, tip, historique, `submittx`). **Rust construit la transaction** : UTxO de notre adresse (`address_utxos`), paramètres (`epoch_params` : `min_fee_a`, `min_fee_b`, `coins_per_utxo_size`, `max_tx_size`, bornés contre un serveur hostile), sélection des UTxO (ceux qui portent le token demandé d'abord, puis ADA seuls par valeur décroissante, ceux avec tokens en dernier), une sortie destinataire + une sortie de monnaie qui rend **tous** les tokens restants, frais = `min_fee_a × taille signée + min_fee_b` (itéré), chaque sortie ≥ son min-UTxO, `ttl` = slot courant + 3 600 (≈ 1 h), ensembles taggés 258 (Conway), aucun collatéral, aucun certificat. Encodé par wallet-core ; une transaction construite par le serveur n'est jamais signée.
 
-**Mode une seule adresse** : réception et monnaie sur `m/1852'/1815'/0'/0/0` (staking `…/2/0`), comme les portefeuilles « single address » ; plus simple et plus sûr à vérifier, mais tous les paiements sont liés à une adresse (et à une clé de staking) visible. Staking (enregistrement, délégation, vote, retraits) : §2.8, toujours avec cette clé `…/0'/2/0` ; `ada_sign_tx` refuse toujours certificats et retraits.
+**Mode une seule adresse** (par compte) : réception et monnaie sur `m/1852'/1815'/a'/0/0` (staking `…/a'/2/0`) du compte `a` (0 = l'historique `m/1852'/1815'/0'/0/0`), comme les portefeuilles « single address » ; plus simple et plus sûr à vérifier, mais tous les paiements sont liés à une adresse (et à une clé de staking) visible. Staking (enregistrement, délégation, vote, retraits) : §2.8, toujours avec cette clé `…/0'/2/0` ; `ada_sign_tx` refuse toujours certificats et retraits.
 
 | Commande | Arguments | Retour | Notes |
 |---|---|---|---|
 | `ada_backend_info` | — | `{ kind: 'default' \| 'koios', network: 'mainnet' \| 'testnet', label, tor }` | |
-| `ada_address` | `{ index }` | `{ address, path, stakeAddress, accountXpub }` | coffre déverrouillé ; **la signature n'utilise que l'index 0** : l'UI ne doit afficher que cette adresse ; `accountXpub` = clé publique ‖ chain code de `m/1852'/1815'/0'` (hex) |
+| `ada_address` | `{ index, account? }` | `{ address, path, stakeAddress, accountXpub }` | coffre déverrouillé ; **la signature n'utilise que l'index 0** du compte : l'UI ne doit afficher que cette adresse ; `accountXpub` = clé publique ‖ chain code de `m/1852'/1815'/{account}'` (hex) ; `ada_build_tx`, `ada_sign_tx`, `ada_broadcast` et `ada_stake_*` prennent le même `account?` |
 | `ada_account` | `{ address }` | `{ address, balance /*lovelace*/, tokens: [{ policy, name /*hex*/, nameText, quantity, verified, ticker?, decimals? }], utxoCount, lockedWithTokens }` | `lockedWithTokens` = ADA immobilisés par les tokens (min-UTxO de leurs sorties) : ce qui ne peut pas partir sans eux |
 | `ada_txs` | `{ address }` | `[{ hash, time, blockHeight, fee, lovelaceDelta /*signé*/, tokenDeltas: [{ policy, name, nameText, delta }], memo }]` | 20 dernières (`address_txs` + `tx_info`), plus récente d'abord ; `memo` = message CIP-20 |
 | `ada_tx_status` | `{ hash }` | `{ confirmations: number \| null }` | `null` : pas encore vue par l'indexeur |
-| `ada_build_tx` | `{ to, lovelace?, token?: { policy, name, quantity }, memo? }` | `{ tx /*non signée, CBOR hex*/, summary: CardanoTxSummary, context: { account, params, tip, leaving } }` | **garde toujours une sortie de monnaie** (au moins son min-UTxO, ≈ 1 ADA) : « tout envoyer » laisse donc environ 1 ADA sur l'adresse ; `lovelace` absent avec un token = exactement le min-UTxO de la sortie ; refusé avant toute construction : adresse refusée (voir §1), montant sous le min-UTxO (le message donne le minimum), token ou ADA insuffisants, monnaie sous son min-UTxO, transaction > `max_tx_size`. `leaving` = sorties vers d'autres adresses + frais |
-| `ada_sign_tx` | `{ tx, password }` | `{ tx /*signée*/, txId, summary, context }` | décode (strict), refuse `ttl` dépassé, **relit en direct** nos UTxO : chaque entrée doit être un de nos UTxO non dépensés, et entrées = sorties + frais (ADA et chaque token) ; frais ≥ minimum ; mot de passe → racine Icarus re-dérivée du coffre → dialogue natif : **chaque sortie** (destinataire ou monnaie, adresse complète, ADA, « dont X ADA minimum obligatoire avec les tokens », chaque token : quantité, nom texte et hex, policy id, vérifié ou NON VÉRIFIÉ), frais, total qui quitte le portefeuille, validité (slot, ≈ minutes), message ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` (message CIP-20, token hors table vérifiée, frais > 5 ADA, pas de ttl) ; résumé de la signature = résumé affiché |
-| `ada_broadcast` | `{ tx }` | `string` (tx id) | `cardano_signed_witnesses` (chaque signature vérifiée sur blake2b-256 du corps, **un seul témoin : notre clé de paiement**) puis Koios `POST /submittx` (CBOR brut, `application/cbor`) ; l'id renvoyé doit être blake2b-256(corps), sinon `SERVER_UNREACHABLE` ; refus du nœud → `INVALID_INPUT` avec son message |
+| `ada_build_tx` | `{ to, lovelace?, token?: { policy, name, quantity }, memo?, account? }` | `{ tx /*non signée, CBOR hex*/, summary: CardanoTxSummary, context: { account, params, tip, leaving } }` | **garde toujours une sortie de monnaie** (au moins son min-UTxO, ≈ 1 ADA) : « tout envoyer » laisse donc environ 1 ADA sur l'adresse ; `lovelace` absent avec un token = exactement le min-UTxO de la sortie ; refusé avant toute construction : adresse refusée (voir §1), montant sous le min-UTxO (le message donne le minimum), token ou ADA insuffisants, monnaie sous son min-UTxO, transaction > `max_tx_size`. `leaving` = sorties vers d'autres adresses + frais |
+| `ada_sign_tx` | `{ tx, password, account? }` | `{ tx /*signée*/, txId, summary, context }` | décode (strict), refuse `ttl` dépassé, **relit en direct** nos UTxO : chaque entrée doit être un de nos UTxO non dépensés, et entrées = sorties + frais (ADA et chaque token) ; frais ≥ minimum ; mot de passe → racine Icarus re-dérivée du coffre → dialogue natif : **chaque sortie** (destinataire ou monnaie, adresse complète, ADA, « dont X ADA minimum obligatoire avec les tokens », chaque token : quantité, nom texte et hex, policy id, vérifié ou NON VÉRIFIÉ), frais, total qui quitte le portefeuille, validité (slot, ≈ minutes), message ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` (message CIP-20, token hors table vérifiée, frais > 5 ADA, pas de ttl) ; résumé de la signature = résumé affiché |
+| `ada_broadcast` | `{ tx, account? }` | `string` (tx id) | `cardano_signed_witnesses` (chaque signature vérifiée sur blake2b-256 du corps, **un seul témoin : notre clé de paiement**) puis Koios `POST /submittx` (CBOR brut, `application/cbor`) ; l'id renvoyé doit être blake2b-256(corps), sinon `SERVER_UNREACHABLE` ; refus du nœud → `INVALID_INPUT` avec son message |
 
 Table de tokens vérifiés (mainnet seulement, vérifiée le 30/10/2026 via Koios `asset_info` / registre de tokens Cardano) : DJED (`8db269c3…cd61` / `446a65644d6963726f555344`), USDM (`c48cbb3d…47ad` / `0014df105553444d`), iUSD (`f66d78b4…9880` / `69555344`). Sur preprod : aucune, tout token demande la confirmation renforcée. N'importe qui peut créer un token au même nom : seule la policy id compte.
 
@@ -783,7 +792,7 @@ Les ADA délégués **restent sur ton adresse et restent dépensables** ; la dé
 | `tron_stake_witnesses` | — | `TronWitness[]` | `listwitnesses`, classés par votes ; `url` = seul « nom » d'un SR, **déclaré, non vérifié** ; `brokerage` n'est lu que pour les SR d'un vote (dans `context`) |
 | `tron_stake_build` | `{ action: TronStakeRequest }` | `{ raw /*hex*/, txid, summary: TronStakeSummary, context: TronStakeContext }` | `raw_data` construit par Rust (dernier bloc, expiration + 10 min, **pas de `fee_limit`, pas de mémo**) ; refusé : stake < 1 TRX ou > solde, dégel > staké pour cette ressource, 32 dégels déjà en attente, rien à retirer, aucun dégel à annuler, récompense nulle ou réclamée il y a moins de 24 h, 0 ou > 30 SR, votes > TRON Power, adresse qui n'est pas un candidat SR |
 | `tron_stake_sign` | `{ raw, password }` | `{ signature /*65 o hex*/, txid, summary, context }` | décodage wallet-core (`tron_decode_stake_raw`, owner = toi), expiration vérifiée, **relit en direct** compte, ressources, SR et `getBrokerage` ; dialogue natif : opération, montant et ressource, délai de dégel du réseau, TRON Power, votes (remplacent **tous** les votes actuels) avec url, rang, part gardée par le SR, bande passante et TRX brûlés, « pas de slashing », expiration, txid ; **renforcé** si un SR est hors des 127 premiers (aucune récompense), garde 100 %, ou si un dégel va réduire tes votes |
-| `tron_broadcast` | `{ raw, signature }` | `string` (txid) | la commande existante (§2.5) : signature → ton adresse, txid = sha256(raw) |
+| `tron_broadcast` | `{ raw, signature, account? }` | `string` (txid) | la commande existante (§2.5) : signature → ton adresse, txid = sha256(raw) |
 
 ```ts
 type TronResource = 'BANDWIDTH' | 'ENERGY';
@@ -818,6 +827,40 @@ Refusé par wallet-core avant toute signature : `DelegateResource` / `UnDelegate
 - **Cardano** : `ada_stake_overview` (enregistrée ? pool actuel, DRep, récompenses, dépôt) ; « Déléguer » : liste `ada_stake_pools` (ticker, nom déclaré, marge, coût fixe, saturation) ou saisie d'un `pool1…` (`ada_stake_pool`), et choix du vote (« toujours s'abstenir » par défaut proposé, « toujours défiance », ou un `drep1…`) ; afficher le **dépôt de 2 ADA** quand `registered: false` ; « Retirer » seulement si `canWithdraw` (sinon expliquer qu'il faut d'abord déléguer son vote) ; « Arrêter le staking » = `deregister` (rembourse le dépôt).
 - **TRON** : `tron_stake_overview` (staké par ressource, dégels avec date `expireTime`, retirable maintenant, TRON Power utilisé / total, votes, récompense et `nextClaimTime`) ; « Staker » / « Dégeler » (ressource + montant ; rappeler le délai `unfreezeDelayDays`) ; « Voter » : liste `tron_stake_witnesses` (rang, url déclarée, votes) et répartition du TRON Power (le total ≤ `tronPowerLimit`) en rappelant que **le vote remplace les votes actuels** ; « Retirer » (`withdrawableNow > 0`), « Annuler les dégels », « Réclamer » (`reward > 0` et `nextClaimTime` passé).
 - Dans tous les cas : afficher `summary` + `stake`/`context` **avant** le mot de passe, puis `*_stake_sign` (les fenêtres natives, y compris la renforcée, sont ouvertes par Rust), puis la diffusion ; ne jamais construire ni modifier un message, un CBOR ou un `raw_data` côté UI.
+
+### 2.9 Comptes multiples du coffre (modèle Ledger Live)
+
+Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-page public** (numéro + nom) par chaîne, enregistré dans `settings.json` (`accounts.<mainnet|testnet>.<chaîne>`), jamais renvoyé par `settings_get` ni accepté par `settings_set` (qui garde toujours les listes enregistrées). Retirer un compte ne retire que le marque-page : l'ajouter de nouveau redonne les mêmes adresses. Le **compte 0** de chaque chaîne existe toujours (c'est l'historique : ses chemins et adresses n'ont pas changé, tests `crates/wallet-core/tests/accounts.rs`) ; il peut être renommé, pas retiré.
+
+| Chaîne (`chain`) | Compte `a` | Compte 0 (inchangé) |
+|---|---|---|
+| `btc` | BIP84 `m/84'/c'/a'` + BIP86 `m/86'/c'/a'` (adresses `…/0\|1/i`) | `m/84'/c'/0'`, `m/86'/c'/0'` |
+| `ltc` / `doge` | `m/84'/2'/a'` / `m/44'/3'/a'` (testnet : `c` = 1) | `…/0'` |
+| `evm` | **`m/44'/60'/0'/0/a`** (index d'adresse : MetaMask, Trezor Suite et les comptes hardware wallet de Kyro ; pas `m/44'/60'/a'/0/0` de Ledger Live — identique pour le compte 0, et une phrase importée de MetaMask retrouve ses comptes dans le même ordre) ; une seule liste pour toutes les chaînes EVM | `m/44'/60'/0'/0/0` |
+| `sol` | `m/44'/501'/a'/0'` (Phantom, Solflare) | `m/44'/501'/0'/0'` |
+| `tron` | `m/44'/195'/a'/0/0` (Ledger Live) | `m/44'/195'/0'/0/0` |
+| `xrp` | `m/44'/144'/a'/0/0` (Ledger Live, Trezor Suite) | `m/44'/144'/0'/0/0` |
+| `ada` | CIP-1852 `m/1852'/1815'/a'/0/0` + staking `…/a'/2/0` | `m/1852'/1815'/0'/…` |
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `vault_accounts_get` | — | `VaultAccountLists` | listes du réseau courant ; chaque chaîne a au moins `{ index: 0, name }` |
+| `vault_account_add` | `{ chain, account, name }` | `VaultAccountLists` | coffre déverrouillé ; `account` ≤ 100, au plus 20 comptes par chaîne, nom 1–32 caractères sans caractère de contrôle (espaces de bord retirés) ; déjà présent → `INVALID_INPUT`. L'UI prévisualise d'abord le compte avec `accounts_get({ account })` (adresse, chemin) et son solde |
+| `vault_account_rename` | `{ chain, account, name }` | `VaultAccountLists` | coffre déverrouillé ; absent de la liste → `INVALID_INPUT` |
+| `vault_account_remove` | `{ chain, account }` | `VaultAccountLists` | coffre déverrouillé ; compte 0 → `INVALID_INPUT` |
+
+```ts
+type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[] };   // triées par index ; nom par défaut « Bitcoin 2 » pour l'index 1
+```
+
+**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`. Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
+
+**Dialogue natif.** La première ligne de chaque fenêtre de signature du coffre dit **quel compte signe** : « Compte signataire : Bitcoin 2 — m/84'/1'/1' (SegWit), m/86'/1'/1' (Taproot) » (EVM : plus l'adresse « De »). Un compte qui n'est **pas** dans la liste de l'utilisateur est affiché « inconnu » (« n° N, absent de ta liste ») avec son chemin, et la signature exige une **2ᵉ fenêtre renforcée** (« Attention : compte inconnu »). Bitcoin, Litecoin, Dogecoin : seules les entrées du compte choisi sont signées ; une entrée d'un autre compte du coffre est étrangère (2ᵉ fenêtre déjà existante) et la monnaie n'est reconnue que dans le compte choisi.
+
+**Fait côté UI** (commit de l'UI des comptes) : Réglages › Comptes (liste par chaîne, « Ajouter un compte » qui prévisualise `accounts_get({ account })` et son solde, renommer, retirer), un jeu d'adaptateurs par compte (`createAdapters(…, account)`, chaque adaptateur passe `account` à ses commandes de signature), le compte choisi par chaîne (mémorisé par réseau dans `localStorage`, donnée publique) utilisé par Envoyer / Recevoir / Swap / Staking / Actif, sélecteur « Compte » quand la chaîne en a plusieurs, une ligne par compte dans Actifs (totaux additionnés), historique de tous les comptes. **Mode démo** : listes, adresses, soldes et signatures BTC / EVM / Solana / LTC / DOGE par compte ; TRON, XRP, Cardano et staking simulés pour le premier compte seulement (erreur explicite sinon).
+
+**Hardware wallets.** Déjà multi-comptes à leur façon : `hw_account_add({ account })` enregistre un compte par numéro (BTC `m/84'|86'/c'/a'`, EVM `m/44'/60'/0'/0/a`, Solana `m/44'/501'/a'/0'`), affiché comme un portefeuille à part dans le sélecteur de la barre de titre ; ils ne sont pas (encore) regroupés par chaîne comme les comptes du coffre.
 
 ## 3. Allowlist réseau (`net_fetch`)
 

@@ -5,14 +5,16 @@
 // them; the recovery phrase lives only in the onboarding/reveal components).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { call, EMPTY_SERVERS, isDemoMode, listenShell, toIpcError, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultStatus, type WatchOnlyAccount } from '@kyro/shared';
-import { createAdapters, hwToAccounts, type AdapterSet, type WalletAccounts } from '@kyro/chains';
+import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WatchOnlyAccount } from '@kyro/shared';
+import { createAdapters, hwToAccounts, type AdapterSet, type AnyAdapter, type WalletAccounts } from '@kyro/chains';
+import { readJson, writeJson } from '../lib/storage';
+import { accountAddress, defaultAccountName, familyAdapters } from '../lib/accounts';
 import { CoinGeckoClient } from '@kyro/market';
 import { createProviders, type SwapProvider } from '@kyro/swap';
 import { torStore } from './tor';
 import { settingsPayload } from '../lib/settingsPayload';
 
-export type SettingsSection = 'security' | 'privacy' | 'hardware' | 'networks' | 'display' | 'apikeys' | 'connections' | 'contacts';
+export type SettingsSection = 'security' | 'privacy' | 'accounts' | 'hardware' | 'networks' | 'display' | 'apikeys' | 'connections' | 'contacts';
 
 export type Route =
   | { name: 'portfolio' }
@@ -23,7 +25,24 @@ export type Route =
   | { name: 'swap'; sellAssetId?: string }
   | { name: 'history' }
   | { name: 'staking'; chain?: 'sol' | 'ada' | 'tron' }
-  | { name: 'settings'; section?: SettingsSection };
+  | { name: 'settings'; section?: SettingsSection; family?: AccountChain };
+
+/**
+ * One account of the active wallet on one chain family: a vault account of the user's list
+ * (docs/IPC.md §2.9), or the hardware-wallet account. Public data only.
+ */
+export interface AccountSource {
+  family: AccountChain;
+  /** Vault account index (hardware wallet: its account number). */
+  index: number;
+  name: string;
+  /** This account's adapters of the family (EVM: one per chain). */
+  adapters: AnyAdapter[];
+  /** Addresses of this account on the family (own addresses, poisoning check). */
+  addresses: string[];
+  /** Derivation path(s) of the account (vault; empty for a hardware wallet). */
+  path: string;
+}
 
 export type Phase = 'boot' | 'welcome' | 'locked' | 'ready' | 'fatal';
 
@@ -49,9 +68,26 @@ interface AppContextValue {
   saveSettings: (next: Settings, apiKeys?: ApiKeysUpdate) => Promise<void>;
   status: VaultStatus | null;
   refreshStatus: () => Promise<VaultStatus | null>;
-  /** Accounts of the ACTIVE wallet: the vault, or a hardware-wallet account (only its chains). */
+  /**
+   * Accounts of the ACTIVE wallet: the vault, or a hardware-wallet account (only its chains).
+   * Vault: per chain, the account selected with `selectChainAccount` (0 by default).
+   */
   accounts: WalletAccounts | null;
+  /** Adapters of `accounts` (vault: each family's adapter is its selected account's). */
   adapters: AdapterSet | null;
+  /** Vault account lists per chain (§2.9); null while loading or without a vault. */
+  vaultLists: VaultAccountLists | null;
+  /** Re-reads the lists (after add / rename / remove); `select` activates an account. */
+  refreshVaultAccounts: (select?: { family: AccountChain; index: number }) => Promise<void>;
+  /** Selected vault account per chain (always 0 for a hardware-wallet account). */
+  selectedAccounts: Record<AccountChain, number>;
+  selectChainAccount: (family: AccountChain, index: number) => void;
+  /** Every account of the active wallet, per family (portfolio, history, own addresses). */
+  accountSources: AccountSource[];
+  /** The vault has more than one account on `family` (show pickers and account names). */
+  isMultiAccount: (family: AccountChain) => boolean;
+  /** Name of the selected account of `family` (vault), or of the active wallet. */
+  accountName: (family: AccountChain) => string;
   /** Hardware-wallet accounts stored on this computer (public keys only). */
   hwAccounts: WatchOnlyAccount[];
   /** The active hardware-wallet account, or null when the vault is active. */
@@ -99,6 +135,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [status, setStatus] = useState<VaultStatus | null>(null);
   const [vaultAccounts, setVaultAccounts] = useState<Accounts | null>(null);
+  const [vaultLists, setVaultLists] = useState<VaultAccountLists | null>(null);
+  /** accounts_get({ account }) of every listed index other than 0. */
+  const [extraAccounts, setExtraAccounts] = useState<ReadonlyMap<number, Accounts>>(new Map());
+  const [selection, setSelection] = useState<Partial<Record<AccountChain, number>>>({});
   const [hwAccounts, setHwAccounts] = useState<WatchOnlyAccount[]>([]);
   const [activeAccountId, setActiveAccountId] = useState<string>('vault');
   const [history, setHistory] = useState<Route[]>([{ name: 'portfolio' }]);
@@ -120,6 +160,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toLocked = useCallback(() => {
     setVaultAccounts(null);
+    setVaultLists(null);
+    setExtraAccounts(new Map());
     setHistory([{ name: 'portfolio' }]);
     setPhase('locked');
   }, []);
@@ -158,6 +200,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const acc = await call('accounts_get');
     setVaultAccounts(acc);
+    setVaultLists(await call('vault_accounts_get').catch(() => null));
+    setSelection(readJson<Partial<Record<AccountChain, number>>>(`accountSelection.${acc.network}`, {}));
     setActiveAccountId((prev) => (prev === 'vault' || hw.some((a) => a.id === prev) ? prev : 'vault'));
     setHideBalances(settingsRef.current.hideBalancesOnStart);
     setHistory([{ name: 'portfolio' }]);
@@ -248,6 +292,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const activeHw = activeAccountId === 'vault' ? null : (hwAccounts.find((a) => a.id === activeAccountId) ?? null);
+  const serversKey = JSON.stringify(settings.servers);
+
+  // ---- vault accounts (§2.9): public data of every listed account index ----
+  const listedIndices = useMemo(() => {
+    const set = new Set<number>([0]);
+    if (vaultLists) for (const c of ACCOUNT_CHAINS) for (const e of vaultLists[c] ?? []) set.add(e.index);
+    return [...set].sort((a, b) => a - b);
+  }, [vaultLists]);
+  useEffect(() => {
+    if (!vaultAccounts) return;
+    const missing = listedIndices.filter((i) => i !== 0 && !extraAccounts.has(i));
+    if (missing.length === 0) return;
+    let alive = true;
+    void Promise.all(missing.map((i) => call('accounts_get', { account: i }).then((a) => [i, a] as const))).then(
+      (got) => {
+        if (!alive) return;
+        setExtraAccounts((prev) => {
+          const next = new Map(prev);
+          for (const [i, a] of got) next.set(i, a);
+          return next;
+        });
+      },
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+    };
+  }, [vaultAccounts, listedIndices, extraAccounts]);
+  /** Adapters per vault account index (signing commands carry the index). */
+  const vaultSets = useMemo(() => {
+    const out = new Map<number, { accounts: Accounts; adapters: AdapterSet }>();
+    if (!vaultAccounts) return out;
+    for (const i of listedIndices) {
+      const acc = i === 0 ? vaultAccounts : extraAccounts.get(i);
+      if (acc) out.set(i, { accounts: acc, adapters: createAdapters(acc, settingsRef.current.servers, undefined, undefined, i) });
+    }
+    return out;
+  }, [vaultAccounts, extraAccounts, listedIndices, serversKey]);
+  const selectedAccounts = useMemo(() => {
+    const out = {} as Record<AccountChain, number>;
+    for (const c of ACCOUNT_CHAINS) {
+      const want = selection[c] ?? 0;
+      const listed = vaultLists?.[c]?.some((e) => e.index === want) ?? want === 0;
+      out[c] = !activeHw && listed && vaultSets.has(want) ? want : 0;
+    }
+    return out;
+  }, [selection, vaultLists, vaultSets, activeHw]);
+
   const accounts = useMemo<WalletAccounts | null>(() => {
     if (activeHw) {
       try {
@@ -256,12 +348,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return null;
       }
     }
-    return vaultAccounts;
-  }, [activeHw, vaultAccounts]);
-  const serversKey = JSON.stringify(settings.servers);
-  const adapters = useMemo<AdapterSet | null>(
-    () => (accounts ? createAdapters(accounts, settingsRef.current.servers, undefined, activeHw ? { accountId: activeHw.id, device: activeHw.device } : undefined) : null),
+    if (!vaultAccounts) return null;
+    const of = (c: AccountChain) => vaultSets.get(selectedAccounts[c])?.accounts ?? vaultAccounts;
+    return { network: vaultAccounts.network, btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano };
+  }, [activeHw, vaultAccounts, vaultSets, selectedAccounts]);
+  const hwAdapters = useMemo<AdapterSet | null>(
+    () => (activeHw && accounts ? createAdapters(accounts, settingsRef.current.servers, undefined, { accountId: activeHw.id, device: activeHw.device }) : null),
     [accounts, serversKey, activeHw?.id],
+  );
+  const adapters = useMemo<AdapterSet | null>(() => {
+    if (activeHw) return hwAdapters;
+    const base = vaultSets.get(0)?.adapters;
+    if (!base) return null;
+    const of = (c: AccountChain) => vaultSets.get(selectedAccounts[c])?.adapters ?? base;
+    const set: AdapterSet = { btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, all: [], hw: null };
+    set.all = ACCOUNT_CHAINS.flatMap((c) => familyAdapters(set, c));
+    return set;
+  }, [activeHw, hwAdapters, vaultSets, selectedAccounts]);
+
+  const accountSources = useMemo<AccountSource[]>(() => {
+    const addrs = (a: WalletAccounts | Accounts, c: AccountChain): string[] =>
+      ({
+        btc: [a.btc?.segwit.address, a.btc?.taproot.address],
+        evm: [a.evm?.address],
+        sol: [a.sol?.address],
+        ltc: [a.ltc?.address],
+        doge: [a.doge?.address],
+        tron: [a.tron?.address],
+        xrp: [a.xrp?.address],
+        ada: [a.cardano?.address],
+      })[c].filter((x): x is string => !!x);
+    if (activeHw) {
+      if (!hwAdapters || !accounts) return [];
+      return ACCOUNT_CHAINS.map((c) => ({ family: c, index: activeHw.account, name: activeHw.label, adapters: familyAdapters(hwAdapters, c), addresses: addrs(accounts, c), path: '' })).filter((x) => x.adapters.length > 0);
+    }
+    const out: AccountSource[] = [];
+    for (const c of ACCOUNT_CHAINS) {
+      for (const e of vaultLists?.[c] ?? [{ index: 0, name: defaultAccountName(c, 0) }]) {
+        const set = vaultSets.get(e.index);
+        if (set) out.push({ family: c, index: e.index, name: e.name, adapters: familyAdapters(set.adapters, c), addresses: addrs(set.accounts, c), path: accountAddress(set.accounts, c).path });
+      }
+    }
+    return out;
+  }, [activeHw, hwAdapters, accounts, vaultLists, vaultSets]);
+
+  const isMultiAccount = useCallback((c: AccountChain) => !activeHw && (vaultLists?.[c]?.length ?? 1) > 1, [activeHw, vaultLists]);
+  const accountName = useCallback(
+    (c: AccountChain) => (activeHw ? activeHw.label : (vaultLists?.[c]?.find((e) => e.index === selectedAccounts[c])?.name ?? 'Compte principal')),
+    [activeHw, vaultLists, selectedAccounts],
+  );
+  const networkRef = useRef<Network | null>(null);
+  networkRef.current = vaultAccounts?.network ?? null;
+  const selectChainAccount = useCallback((c: AccountChain, index: number) => {
+    setSelection((prev) => {
+      const next = { ...prev, [c]: index };
+      if (networkRef.current) writeJson(`accountSelection.${networkRef.current}`, next);
+      return next;
+    });
+  }, []);
+  const refreshVaultAccounts = useCallback(
+    async (select?: { family: AccountChain; index: number }) => {
+      const lists = await call('vault_accounts_get');
+      setVaultLists(lists);
+      if (select) selectChainAccount(select.family, select.index);
+    },
+    [selectChainAccount],
   );
 
   const activeAccountRef = useRef(activeAccountId);
@@ -318,6 +469,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refreshStatus,
     accounts,
     adapters,
+    vaultLists,
+    refreshVaultAccounts,
+    selectedAccounts,
+    selectChainAccount,
+    accountSources,
+    isMultiAccount,
+    accountName,
     hwAccounts,
     activeHw,
     activeAccountId,

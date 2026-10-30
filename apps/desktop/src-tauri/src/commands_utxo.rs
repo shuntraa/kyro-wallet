@@ -9,6 +9,7 @@ use tauri::{AppHandle, State};
 use wallet_core::{Network, UtxoCoin, UtxoOutputKind, UtxoTxSummary, UtxoWarning};
 use zeroize::Zeroizing;
 
+use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
 use crate::error::{AppError, AppResult};
 use crate::servers::{host_of, utxo_network_key, UtxoServer};
@@ -57,13 +58,27 @@ fn backend_info(state: &AppState, coin: UtxoCoin) -> UtxoBackendInfo {
     }
 }
 
-fn address(state: &AppState, coin: UtxoCoin, change: bool, index: u32) -> AppResult<String> {
+fn address(
+    state: &AppState,
+    coin: UtxoCoin,
+    change: bool,
+    index: u32,
+    account: Option<u32>,
+) -> AppResult<String> {
     let net = state.network;
+    let a = account_arg(account)?;
     state.with_seed(|seed| {
         Ok(wallet_core::utxo_address(
-            seed, net, coin, 0, change, index,
+            seed, net, coin, a, change, index,
         )?)
     })
+}
+
+fn chain_of(coin: UtxoCoin) -> Chain {
+    match coin {
+        UtxoCoin::Litecoin => Chain::Ltc,
+        UtxoCoin::Dogecoin => Chain::Doge,
+    }
 }
 
 fn coin_amount(coin: UtxoCoin, raw: &str) -> String {
@@ -183,14 +198,18 @@ async fn sign(
     coin: UtxoCoin,
     psbt: String,
     password: String,
+    account: Option<u32>,
 ) -> AppResult<UtxoSigned> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
     let net = state.network;
+    let a = account_arg(account)?;
+    let path = state.with_seed(|seed| Ok(wallet_core::utxo_account(seed, net, coin, a)?.path))?;
+    let signer = SignerInfo::new(state, chain_of(coin), a, path);
     let seed = seed_from_password(state, Zeroizing::new(password)).await?;
     let (seed, psbt, summary) = blocking(move || {
-        let s = wallet_core::utxo_psbt_summary(&seed, net, coin, &psbt)?;
+        let s = wallet_core::utxo_psbt_summary(&seed, net, coin, a, &psbt)?;
         Ok((seed, psbt, s))
     })
     .await?;
@@ -198,7 +217,8 @@ async fn sign(
         UtxoCoin::Litecoin => "Confirmer la transaction Litecoin",
         UtxoCoin::Dogecoin => "Confirmer la transaction Dogecoin",
     };
-    confirm_native(app, title, describe_utxo(&summary, net)).await?;
+    confirm_native(app, title, signer.body(&describe_utxo(&summary, net))).await?;
+    confirm_signer(app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             app,
@@ -208,7 +228,7 @@ async fn sign(
         .await?;
     }
     let (signed, again) =
-        blocking(move || Ok(wallet_core::utxo_sign_psbt(&seed, net, coin, &psbt)?)).await?;
+        blocking(move || Ok(wallet_core::utxo_sign_psbt(&seed, net, coin, a, &psbt)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
             "résumé différent entre l'aperçu et la signature".into(),
@@ -229,8 +249,13 @@ pub fn ltc_backend_info(state: State<'_, AppState>) -> UtxoBackendInfo {
 }
 
 #[tauri::command]
-pub fn ltc_address(state: State<'_, AppState>, change: bool, index: u32) -> AppResult<String> {
-    address(&state, LTC, change, index)
+pub fn ltc_address(
+    state: State<'_, AppState>,
+    change: bool,
+    index: u32,
+    account: Option<u32>,
+) -> AppResult<String> {
+    address(&state, LTC, change, index, account)
 }
 
 #[tauri::command]
@@ -274,8 +299,9 @@ pub async fn ltc_sign_psbt(
     state: State<'_, AppState>,
     psbt: String,
     password: String,
+    account: Option<u32>,
 ) -> AppResult<UtxoSigned> {
-    sign(&app, &state, LTC, psbt, password).await
+    sign(&app, &state, LTC, psbt, password, account).await
 }
 
 // ---------------------------------------------------------------- Dogecoin
@@ -286,8 +312,13 @@ pub fn doge_backend_info(state: State<'_, AppState>) -> UtxoBackendInfo {
 }
 
 #[tauri::command]
-pub fn doge_address(state: State<'_, AppState>, change: bool, index: u32) -> AppResult<String> {
-    address(&state, DOGE, change, index)
+pub fn doge_address(
+    state: State<'_, AppState>,
+    change: bool,
+    index: u32,
+    account: Option<u32>,
+) -> AppResult<String> {
+    address(&state, DOGE, change, index, account)
 }
 
 #[tauri::command]
@@ -331,8 +362,9 @@ pub async fn doge_sign_psbt(
     state: State<'_, AppState>,
     psbt: String,
     password: String,
+    account: Option<u32>,
 ) -> AppResult<UtxoSigned> {
-    sign(&app, &state, DOGE, psbt, password).await
+    sign(&app, &state, DOGE, psbt, password, account).await
 }
 
 /// Probe used by `settings_set` / `server_test` (network checked by genesis hash).

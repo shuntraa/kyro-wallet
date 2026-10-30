@@ -1,3 +1,4 @@
+mod accounts;
 mod btc_backend;
 mod cardano_backend;
 #[cfg(feature = "cbf")]
@@ -73,6 +74,10 @@ pub fn run() {
             commands::vault_reveal_mnemonic,
             commands::session_touch,
             commands::accounts_get,
+            accounts::vault_accounts_get,
+            accounts::vault_account_add,
+            accounts::vault_account_rename,
+            accounts::vault_account_remove,
             commands::btc_address,
             commands::evm_decode_tx,
             commands::evm_sign_tx,

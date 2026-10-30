@@ -27,24 +27,63 @@ export interface BtcAccountInfo {
   path: string;
 }
 
+/** An address and the derivation path of its key. */
+export interface AddressInfo {
+  address: string;
+  /** e.g. `m/44'/60'/0'/0/1`. */
+  path: string;
+}
+
+/**
+ * `accounts_get({ account? })`: public data of account `account` (0 = the historical one) on
+ * every chain (§2.9). Paths below are for account `a`.
+ */
 export interface Accounts {
   network: Network;
+  /** Account index of everything below. */
+  account: number;
   btc: { segwit: BtcAccountInfo; taproot: BtcAccountInfo };
-  evm: { address: string };
-  sol: { address: string };
-  /** Litecoin BIP84 `m/84'/2'/0'` (testnet `m/84'/1'/0'`); `address` = `…/0/0` (§2.4). */
+  /** `m/44'/60'/0'/0/a` (address index, MetaMask / Trezor Suite layout). */
+  evm: AddressInfo;
+  /** `m/44'/501'/a'/0'`. */
+  sol: AddressInfo;
+  /** Litecoin BIP84 `m/84'/2'/a'` (testnet `m/84'/1'/a'`); `address` = `…/0/0` (§2.4). */
   ltc: UtxoAccountInfo;
-  /** Dogecoin BIP44 P2PKH `m/44'/3'/0'` (testnet `m/44'/1'/0'`). */
+  /** Dogecoin BIP44 P2PKH `m/44'/3'/a'` (testnet `m/44'/1'/a'`). */
   doge: UtxoAccountInfo;
-  /** TRON `m/44'/195'/0'/0/0` (same path on Nile), `T…` (§2.5). */
-  tron: { address: string };
-  /** XRP Ledger `m/44'/144'/0'/0/0` (same path on testnet), classic `r…`. Rust signs with index 0 only (§2.6). */
-  xrp: { address: string };
+  /** TRON `m/44'/195'/a'/0/0` (same path on Nile), `T…` (§2.5). */
+  tron: AddressInfo;
+  /** XRP Ledger `m/44'/144'/a'/0/0` (same path on testnet), classic `r…` (§2.6). */
+  xrp: AddressInfo;
   /**
-   * Cardano CIP-1852 (Icarus) base address `m/1852'/1815'/0'/0/0`. Single-address mode: receive
-   * and change both use it; Rust signs with index 0 only (§2.7).
+   * Cardano CIP-1852 (Icarus) base address `m/1852'/1815'/a'/0/0`. Single-address mode: receive
+   * and change both use it; Rust signs with index 0 of the account only (§2.7).
    */
-  cardano: { address: string };
+  cardano: AddressInfo;
+}
+
+/** Chains with an account list in the vault (§2.9). EVM chains share one list. */
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+
+/** One account of the user's list: a public bookmark (keys come from the seed). */
+export interface VaultAccountEntry {
+  index: number;
+  name: string;
+}
+
+/** `vault_accounts_get`: per chain, sorted by index, account 0 always first. */
+export type VaultAccountLists = Record<AccountChain, VaultAccountEntry[]>;
+
+/** Highest vault account index accepted by Rust; at most this many accounts per chain. */
+export const MAX_VAULT_ACCOUNT = 100;
+export const MAX_ACCOUNTS_PER_CHAIN = 20;
+/** Account names: 1–32 characters, no control character (trimmed by Rust). */
+export const MAX_ACCOUNT_NAME = 32;
+
+/** Optional vault account of a command (absent = 0). */
+export interface WithAccount {
+  account?: number;
 }
 
 /** One Litecoin / Dogecoin account (standard `xpub` / `tpub` encoding, also for Dogecoin). */
@@ -325,7 +364,7 @@ export interface UtxoTxSummary {
 export interface UtxoCommands<P extends 'ltc' | 'doge'> {
   backend_info: { args: undefined; ret: UtxoBackendInfo };
   /** Vault unlocked. */
-  address: { args: { change: boolean; index: number }; ret: string };
+  address: { args: { change: boolean; index: number } & WithAccount; ret: string };
   address_info: { args: { address: string }; ret: EsploraAddressInfo };
   address_utxos: { args: { address: string }; ret: EsploraUtxo[] };
   /** At most `BTC_TXS_CAP`, unconfirmed first. */
@@ -336,7 +375,7 @@ export interface UtxoCommands<P extends 'ltc' | 'doge'> {
   tip_height: { args: undefined; ret: number };
   broadcast: { args: { hex: string }; ret: string };
   /** Password → Rust summary → native dialog (+ reinforced) → signed, NOT finalized. */
-  sign_psbt: { args: { psbt: string; password: string }; ret: { psbt: string; summary: UtxoTxSummary & { coin: P extends 'ltc' ? 'litecoin' : 'dogecoin' } } };
+  sign_psbt: { args: { psbt: string; password: string } & WithAccount; ret: { psbt: string; summary: UtxoTxSummary & { coin: P extends 'ltc' ? 'litecoin' : 'dogecoin' } } };
 }
 
 type Prefixed<P extends 'ltc' | 'doge'> = { [K in keyof UtxoCommands<P> as `${P}_${K & string}`]: UtxoCommands<P>[K] };
@@ -1170,18 +1209,25 @@ export interface Commands {
   vault_lock: { args: undefined; ret: void };
   vault_reveal_mnemonic: { args: { password: string }; ret: { words: string[] } };
   session_touch: { args: undefined; ret: void };
-  accounts_get: { args: undefined; ret: Accounts };
-  btc_address: { args: { kind: BtcKind; change: boolean; index: number }; ret: string };
+  accounts_get: { args: WithAccount | undefined; ret: Accounts };
+  /** Account lists of the vault (§2.9). Add / rename / remove: vault unlocked. */
+  vault_accounts_get: { args: undefined; ret: VaultAccountLists };
+  vault_account_add: { args: { chain: AccountChain; account: number; name: string }; ret: VaultAccountLists };
+  vault_account_rename: { args: { chain: AccountChain; account: number; name: string }; ret: VaultAccountLists };
+  /** Account 0 cannot be removed. Removal only drops the bookmark: re-adding gives the same keys. */
+  vault_account_remove: { args: { chain: AccountChain; account: number }; ret: VaultAccountLists };
+  btc_address: { args: { kind: BtcKind; change: boolean; index: number } & WithAccount; ret: string };
   evm_decode_tx: { args: { tx: EvmTxRequest }; ret: EvmTxSummary };
   evm_sign_tx: {
-    args: { tx: EvmTxRequest; password: string; token?: EvmTokenHint };
+    args: { tx: EvmTxRequest; password: string; token?: EvmTokenHint } & WithAccount;
     ret: { rawTx: string; hash: string };
   };
-  btc_sign_psbt: { args: { psbt: string; password: string }; ret: { psbt: string; summary: BtcTxSummary } };
+  /** Signs only the inputs of `account` (others: `foreignInput`). */
+  btc_sign_psbt: { args: { psbt: string; password: string } & WithAccount; ret: { psbt: string; summary: BtcTxSummary } };
   /** Rust decodes the message (v0 lookup tables fetched by Rust). Unlocked session required. */
-  sol_decode_tx: { args: { message: string }; ret: SolTxSummary };
+  sol_decode_tx: { args: { message: string } & WithAccount; ret: SolTxSummary };
   /** Native dialog (+ a 2nd one when `requiresExtraConfirmation`). Place `signature` at `summary.ourSignerIndex`. */
-  sol_sign_tx: { args: { message: string; password: string }; ret: { signature: string; summary: SolTxSummary } };
+  sol_sign_tx: { args: { message: string; password: string } & WithAccount; ret: { signature: string; summary: SolTxSummary } };
   /** Over Tor when `settings.tor.enabled` (default); fails closed with `TOR_UNAVAILABLE`, never retried in clear. */
   net_fetch: { args: { req: NetRequest }; ret: NetResponse };
   tor_status: { args: undefined; ret: TorStatus };
@@ -1203,25 +1249,25 @@ export interface Commands {
   // TRON (§2.5): Rust builds raw_data itself from the latest block, signs behind the password
   // and the native dialog (resources and TRX burned re-read live). Hardware wallets: HW_UNSUPPORTED.
   tron_backend_info: { args: undefined; ret: TronBackendInfo };
-  /** `m/44'/195'/0'/0/{index}`, vault unlocked. */
-  tron_address: { args: { index: number }; ret: string };
+  /** `m/44'/195'/{account}'/0/0`, vault unlocked (`index` other than 0 refused). */
+  tron_address: { args: { index?: number } & WithAccount; ret: string };
   tron_account: { args: { address: string }; ret: TronAccountInfo };
   /** Raw units, decimal string. */
   tron_trc20_balance: { args: { contract: string; address: string }; ret: string };
   /** TronGrid `/v1` only: a plain java-tron node → SERVER_UNREACHABLE « …exige l'API /v1 de TronGrid ». */
   tron_txs: { args: { address: string }; ret: TronHistoryEntry[] };
   /** `amount`: sun (TRX) or raw token units. TRC-20: energy simulated, a failing transfer is refused. */
-  tron_build_tx: { args: { to: string; amount: string; token?: string }; ret: TronBuilt };
+  tron_build_tx: { args: { to: string; amount: string; token?: string } & WithAccount; ret: TronBuilt };
   /** `token`: UI hint for an unknown TRC-20 (shown « selon l'interface, non vérifié »). */
-  tron_sign_tx: { args: { raw: string; password: string; token?: { symbol: string; decimals: number } }; ret: { signature: string; txid: string; summary: TronTxSummary; estimate: TronEstimate } };
+  tron_sign_tx: { args: { raw: string; password: string; token?: { symbol: string; decimals: number } } & WithAccount; ret: { signature: string; txid: string; summary: TronTxSummary; estimate: TronEstimate } };
   /** Signature must recover to our address; server txid = sha256(raw). */
-  tron_broadcast: { args: { raw: string; signature: string }; ret: string };
+  tron_broadcast: { args: { raw: string; signature: string } & WithAccount; ret: string };
   // XRP Ledger (§2.6): Rust builds the Payment (Sequence, Fee, LastLedgerSequence), decodes it
   // strictly, re-reads both accounts and the reserves live, signs behind the password and the
   // native dialog (destination tag framed). Hardware wallets: HW_UNSUPPORTED.
   xrp_backend_info: { args: undefined; ret: XrpBackendInfo };
-  /** `m/44'/144'/0'/0/{index}`; Rust only signs with index 0. */
-  xrp_address: { args: { index: number }; ret: string };
+  /** `m/44'/144'/{account}'/0/0` (`index` other than 0 refused). */
+  xrp_address: { args: { index?: number } & WithAccount; ret: string };
   xrp_account: { args: { address: string }; ret: XrpAccountInfo };
   xrp_lines: { args: { address: string }; ret: XrpTrustLine[] };
   xrp_txs: { args: { address: string }; ret: XrpHistoryEntry[] };
@@ -1230,18 +1276,18 @@ export interface Commands {
    * `requireDestTag` destination; unfunded destination with < base reserve; issued to an
    * unfunded account; amount + fee > spendable; our account not activated.
    */
-  xrp_build_tx: { args: { to: string; amount: string; destinationTag?: number; issued?: { currency: string; issuer: string } }; ret: { blob: string; summary: XrpTxSummary; context: XrpContext } };
-  xrp_sign_tx: { args: { blob: string; password: string }; ret: { blob: string; hash: string; summary: XrpTxSummary; context: XrpContext } };
+  xrp_build_tx: { args: { to: string; amount: string; destinationTag?: number; issued?: { currency: string; issuer: string } } & WithAccount; ret: { blob: string; summary: XrpTxSummary; context: XrpContext } };
+  xrp_sign_tx: { args: { blob: string; password: string } & WithAccount; ret: { blob: string; hash: string; summary: XrpTxSummary; context: XrpContext } };
   /** `tesSUCCESS` / `terQUEUED` accepted, else INVALID_INPUT with the engine code. */
-  xrp_broadcast: { args: { blob: string }; ret: string };
+  xrp_broadcast: { args: { blob: string } & WithAccount; ret: string };
   /** `validated: true` + `result: 'tesSUCCESS'` once in a validated ledger; not found yet: `{ false, '' }`. */
   xrp_tx_status: { args: { hash: string }; ret: { validated: boolean; result: string } };
   // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
   // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
   // Hardware wallets: HW_UNSUPPORTED.
   ada_backend_info: { args: undefined; ret: CardanoBackendInfo };
-  /** Vault unlocked. Rust signs index 0 only. */
-  ada_address: { args: { index: number }; ret: CardanoAddressInfo };
+  /** Vault unlocked. Rust signs index 0 (of the account) only. */
+  ada_address: { args: { index: number } & WithAccount; ret: CardanoAddressInfo };
   ada_account: { args: { address: string }; ret: CardanoAccount };
   /** Last 20, newest first. */
   ada_txs: { args: { address: string }; ret: CardanoHistoryEntry[] };
@@ -1252,27 +1298,27 @@ export interface Commands {
    * refused address types, amount under the min-UTxO (the message gives it), not enough ADA or
    * token, change under its min-UTxO, transaction > max_tx_size.
    */
-  ada_build_tx: { args: { to: string; lovelace?: string; token?: CardanoTokenSpec; memo?: string }; ret: { tx: string; summary: CardanoTxSummary; context: CardanoContext } };
-  ada_sign_tx: { args: { tx: string; password: string }; ret: { tx: string; txId: string; summary: CardanoTxSummary; context: CardanoContext } };
+  ada_build_tx: { args: { to: string; lovelace?: string; token?: CardanoTokenSpec; memo?: string } & WithAccount; ret: { tx: string; summary: CardanoTxSummary; context: CardanoContext } };
+  ada_sign_tx: { args: { tx: string; password: string } & WithAccount; ret: { tx: string; txId: string; summary: CardanoTxSummary; context: CardanoContext } };
   /** Koios `submittx`; id must be blake2b-256(body). Node refusal → INVALID_INPUT with its message. */
-  ada_broadcast: { args: { tx: string }; ret: string };
+  ada_broadcast: { args: { tx: string } & WithAccount; ret: string };
   // Staking (§2.8): not available on hardware-wallet accounts (no hw_* command offers it).
-  sol_stake_overview: { args: undefined; ret: SolStakeOverview };
+  sol_stake_overview: { args: WithAccount | undefined; ret: SolStakeOverview };
   sol_stake_validators: { args: { withNames?: boolean }; ret: { validators: SolValidator[]; namesAvailable: boolean } };
-  sol_stake_build: { args: { action: SolStakeRequest }; ret: { message: string; summary: SolTxSummary; stake: SolStakePreview } };
-  sol_stake_sign: { args: { message: string; password: string }; ret: { signature: string; summary: SolTxSummary; stake: SolStakePreview } };
-  sol_stake_broadcast: { args: { message: string; signature: string }; ret: string };
-  ada_stake_overview: { args: undefined; ret: AdaStakeOverview };
+  sol_stake_build: { args: { action: SolStakeRequest } & WithAccount; ret: { message: string; summary: SolTxSummary; stake: SolStakePreview } };
+  sol_stake_sign: { args: { message: string; password: string } & WithAccount; ret: { signature: string; summary: SolTxSummary; stake: SolStakePreview } };
+  sol_stake_broadcast: { args: { message: string; signature: string } & WithAccount; ret: string };
+  ada_stake_overview: { args: WithAccount | undefined; ret: AdaStakeOverview };
   ada_stake_pools: { args: { limit?: number }; ret: AdaPool[] };
   ada_stake_pool: { args: { poolId: string }; ret: AdaPool };
-  ada_stake_build: { args: { action: AdaStakeRequest }; ret: { tx: string; summary: CardanoStakeSummary; context: AdaStakeContext } };
-  ada_stake_sign: { args: { tx: string; password: string }; ret: { tx: string; txId: string; summary: CardanoStakeSummary; context: AdaStakeContext } };
-  ada_stake_broadcast: { args: { tx: string }; ret: string };
-  tron_stake_overview: { args: undefined; ret: TronStakeAccount };
+  ada_stake_build: { args: { action: AdaStakeRequest } & WithAccount; ret: { tx: string; summary: CardanoStakeSummary; context: AdaStakeContext } };
+  ada_stake_sign: { args: { tx: string; password: string } & WithAccount; ret: { tx: string; txId: string; summary: CardanoStakeSummary; context: AdaStakeContext } };
+  ada_stake_broadcast: { args: { tx: string } & WithAccount; ret: string };
+  tron_stake_overview: { args: WithAccount | undefined; ret: TronStakeAccount };
   tron_stake_witnesses: { args: undefined; ret: TronWitness[] };
-  tron_stake_build: { args: { action: TronStakeRequest }; ret: { raw: string; txid: string; summary: TronStakeSummary; context: TronStakeContext } };
+  tron_stake_build: { args: { action: TronStakeRequest } & WithAccount; ret: { raw: string; txid: string; summary: TronStakeSummary; context: TronStakeContext } };
   /** Broadcast with the existing `tron_broadcast`. */
-  tron_stake_sign: { args: { raw: string; password: string }; ret: { signature: string; txid: string; summary: TronStakeSummary; context: TronStakeContext } };
+  tron_stake_sign: { args: { raw: string; password: string } & WithAccount; ret: { signature: string; txid: string; summary: TronStakeSummary; context: TronStakeContext } };
   /**
    * Bitcoin Core only, unlocked. Pre-flight checks are synchronous (reachable, auth, chain, watch
    * wallet created or loaded without private keys); only `importdescriptors` runs in the background.
@@ -1332,7 +1378,7 @@ export interface AllCommands extends Commands, Prefixed<'ltc'>, Prefixed<'doge'>
 export type CommandName = keyof AllCommands;
 export type ArgsOf<K extends CommandName> = AllCommands[K]['args'];
 export type RetOf<K extends CommandName> = AllCommands[K]['ret'];
-export type CallArgs<K extends CommandName> = ArgsOf<K> extends undefined ? [] : [args: ArgsOf<K>];
+export type CallArgs<K extends CommandName> = ArgsOf<K> extends undefined ? [] : undefined extends ArgsOf<K> ? [args?: ArgsOf<K>] : [args: ArgsOf<K>];
 
 export const ERROR_CODES = [
   'WRONG_PASSWORD',

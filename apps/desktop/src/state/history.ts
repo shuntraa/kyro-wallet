@@ -34,38 +34,45 @@ function fromLocal(t: LocalTx): HistoryItem & { label?: string } {
 }
 
 export function useHistory() {
-  const { adapters, accounts } = useVault();
+  const { adapters, accounts, accountSources, isMultiAccount } = useVault();
   const network = accounts.network;
+  const sourcesKey = accountSources.map((x) => `${x.family}:${x.index}:${x.name}:${x.addresses.join(',')}`).join('|');
 
   const state = useAsync(
     async () => {
-      const results = await Promise.allSettled(adapters.all.map((a) => a.getHistory()));
+      // Every account of every chain (§2.9); with several accounts on a chain, each entry says
+      // which one (« Sepolia · Ethereum 2 ») and keeps a distinct id (a transfer between two of
+      // your accounts appears in both).
+      const jobs = accountSources.flatMap((src) => src.adapters.map((a) => ({ a, src })));
+      const results = await Promise.allSettled(jobs.map((j) => j.a.getHistory()));
       const errors: Record<string, string> = {};
-      const remote: HistoryItem[] = [];
+      const remote: Array<HistoryItem & { account?: string }> = [];
       results.forEach((r, i) => {
-        const a = adapters.all[i];
-        if (!a) return;
-        if (r.status === 'fulfilled') remote.push(...r.value);
-        else errors[a.chain.key] = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        const j = jobs[i];
+        if (!j) return;
+        const multi = isMultiAccount(j.src.family);
+        if (r.status === 'fulfilled') remote.push(...r.value.map((x) => (multi ? { ...x, id: j.src.index ? `${x.id}@${j.src.index}` : x.id, account: j.src.name } : x)));
+        else errors[j.a.chain.key] ??= r.reason instanceof Error ? r.reason.message : String(r.reason);
       });
-      const remoteIds = new Set(remote.map((x) => x.id.split(':')[0]));
+      const remoteIds = new Set(remote.map((x) => x.id.split(/[:@]/)[0]));
       const local = getLocalTxs(network)
         .filter((t) => !remoteIds.has(t.id) || t.kind !== 'transfer')
         .map(fromLocal);
       // Local swap/approval records replace the raw ERC-20 log of the same tx.
       const localIds = new Set(local.map((l) => l.id));
-      const merged = [...remote.filter((x) => !localIds.has(x.id.split(':')[0] ?? '')), ...local];
-      const entries: HistoryEntry[] = merged.map((x) => {
+      const merged: Array<HistoryItem & { label?: string; account?: string }> = [...remote.filter((x) => !localIds.has(x.id.split(/[:@]/)[0] ?? '')), ...local];
+      const entries: HistoryEntry[] = merged.map(({ account, ...x }) => {
         const chain = findChain(network, x.chainKey);
         const asset = findAsset(network, x.assetId);
         const feeAsset = chain ? findAsset(network, nativeAssetId(chain)) : undefined;
-        return { ...x, asset, feeAsset, chainLabel: chain?.label ?? x.chainKey, local: localIds.has(x.id) };
+        const chainLabel = chain?.label ?? x.chainKey;
+        return { ...x, asset, feeAsset, chainLabel: account ? `${chainLabel} · ${account}` : chainLabel, local: localIds.has(x.id) };
       });
       entries.sort((a, b) => (b.time ?? Date.now()) - (a.time ?? Date.now()));
       // Bitcoin servers return at most BTC_TXS_CAP transactions per address: say so.
-      return { entries, errors, btcCapped: adapters.btc?.historyCapped ?? false };
+      return { entries, errors, btcCapped: jobs.some((j) => j.a.family === 'btc' && (j.a as { historyCapped?: boolean }).historyCapped) };
     },
-    [adapters, network],
+    [sourcesKey, network],
     { intervalMs: 60_000 },
   );
 
