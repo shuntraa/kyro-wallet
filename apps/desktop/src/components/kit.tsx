@@ -97,7 +97,8 @@ export function BigFiat({ value, currency, hidden, className, tick }: { value: n
 }
 
 function TickingFiat({ value, currency, className }: { value: number; currency: Currency; className?: string }) {
-  const shown = useTicker(value, { from: value * 0.96, duration: 0.6 });
+  // No made-up starting value: first paint is the real total, the ticker only runs between real values.
+  const shown = useTicker(value, { duration: 0.6 });
   const { int, rest } = splitFiat(shown, currency);
   const real = splitFiat(value, currency);
   return (
