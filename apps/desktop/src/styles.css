@@ -1,0 +1,143 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+@import 'tailwindcss';
+
+/* Design tokens — docs/DESIGN.md. Dark only. */
+@theme {
+  --color-bg: #0a0b0d;
+  --color-bg-deep: #08090b;
+  --color-panel: #0d0f12;
+  --color-card: #121418;
+  --color-card-hero: #101215;
+  --color-raised: #16181c;
+  --color-control: #1d1f24;
+  --color-control-2: #22252b;
+  --color-line: #1e2126;
+  --color-line-2: #25282e;
+  --color-line-3: #2a2d34;
+  --color-rail: #16181c;
+  --color-text: #f5f7fa;
+  --color-text2: #c8cdd6;
+  --color-mute: #8c929d;
+  --color-faint: #5e6470;
+  --color-primary: #2f6bff;
+  --color-primary-hover: #4a7dff;
+  --color-ice: #7cc4ff;
+  --color-ice-line: #24405e;
+  --color-ice-deep: #1a2b40;
+  --color-ice-text: #cde9ff;
+  --color-ice-text2: #a9d8ff;
+  --color-up: #3ddc97;
+  --color-down: #ff6b6b;
+  --color-warn: #f5b74f;
+
+  --font-sans: 'Geist Variable', 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, monospace;
+
+  --radius-card: 20px;
+  --radius-hero: 22px;
+  --radius-field: 14px;
+}
+
+/* ---------------------------------------------------------------- "app" behaviour (mandatory) */
+* {
+  box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+::selection {
+  background: transparent;
+}
+input::selection,
+textarea::selection {
+  background: rgba(124, 196, 255, 0.35);
+  color: #ffffff;
+}
+img,
+svg {
+  -webkit-user-drag: none;
+}
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--color-ice);
+  outline-offset: 2px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+body {
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+  -webkit-font-smoothing: antialiased;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+button:not(:disabled) {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+input[type='search']::-webkit-search-cancel-button {
+  display: none;
+}
+input::placeholder {
+  color: var(--color-faint);
+}
+input[type='number']::-webkit-inner-spin-button {
+  display: none;
+}
+
+/* Thin dark scrollbars inside scrollable panels. */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #25282e transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: #25282e;
+  border-radius: 8px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes kyro-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.skeleton {
+  background: #1a1d22;
+  border-radius: 8px;
+  animation: kyro-pulse 1.4s ease-in-out infinite;
+}

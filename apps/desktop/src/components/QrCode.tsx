@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Real QR code (qrcode lib, error correction H so the centre logo is safe).
+
+import { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
+import { KyroMark } from './kit';
+
+export function QrCode({ value, size = 300 }: { value: string; size?: number }) {
+  const [svg, setSvg] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    QRCode.toString(value, { type: 'svg', errorCorrectionLevel: 'H', margin: 0, color: { dark: '#0A0B0D', light: '#FFFFFF' } })
+      .then((s) => {
+        if (alive) {
+          setSvg(s);
+          setError(false);
+        }
+      })
+      .catch(() => alive && setError(true));
+    return () => {
+      alive = false;
+    };
+  }, [value]);
+
+  return (
+    <div className="relative rounded-[28px] bg-white p-[22px] shadow-[0_0_0_6px_#1A1D23]" style={{ width: size + 44, height: size + 44 }}>
+      {svg ? (
+        // The SVG is generated locally by `qrcode` from our own address string.
+        <div role="img" aria-label="QR code de l’adresse" style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: svg }} className="[&>svg]:h-full [&>svg]:w-full" />
+      ) : (
+        <div style={{ width: size, height: size }} className="flex items-center justify-center text-[13px] text-faint">
+          {error ? 'QR indisponible' : '…'}
+        </div>
+      )}
+      {svg && (
+        <span className="absolute top-1/2 left-1/2 flex size-[66px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[18px] bg-[#0A0B0D] ring-[6px] ring-white">
+          <KyroMark size={40} />
+        </span>
+      )}
+    </div>
+  );
+}
