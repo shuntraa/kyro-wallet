@@ -1,0 +1,25 @@
+{
+  "name": "@kyro/shared",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./mock": "./src/mock.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bitcoinerlab/secp256k1": "1.2.0",
+    "@noble/hashes": "1.8.0",
+    "@scure/base": "1.2.6",
+    "@scure/bip32": "1.7.0",
+    "@scure/bip39": "1.6.0",
+    "@tauri-apps/api": "2.12.4",
+    "bitcoinjs-lib": "7.0.5"
+  }
+}
