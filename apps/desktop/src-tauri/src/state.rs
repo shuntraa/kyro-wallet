@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use wallet_core::{Network, Seed, VaultFile};
 
 use crate::error::{AppError, AppResult};
+use crate::hw::HwManager;
 use crate::net::{EnvKeys, NetClient};
 use crate::settings::Settings;
 
@@ -27,6 +28,12 @@ pub struct AppState {
     pub settings_path: PathBuf,
     pub net: NetClient,
     pub env_keys: EnvKeys,
+    /// Hardware wallets seen in this session (one lock per device).
+    pub hw: HwManager,
+    /// Watch-only hardware-wallet accounts (public keys only), next to the vault.
+    pub hw_accounts_path: PathBuf,
+    /// Serialises read-modify-write of `hw_accounts_path`.
+    pub hw_store_lock: Mutex<()>,
     session: Mutex<Option<Session>>,
     settings: Mutex<Settings>,
     guard: Mutex<Guard>,
@@ -56,6 +63,9 @@ impl AppState {
             settings_path,
             net: NetClient::new(data_dir.join("tor"))?,
             env_keys: EnvKeys::from_env(),
+            hw: HwManager::default(),
+            hw_accounts_path: data_dir.join(format!("hw-accounts-{suffix}.json")),
+            hw_store_lock: Mutex::new(()),
             session: Mutex::new(None),
             guard: Mutex::new(Guard::default()),
             last_reveal: Mutex::new(None),

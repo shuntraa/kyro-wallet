@@ -42,7 +42,7 @@ pub struct BtcTxSummary {
     pub fee_sats: u64,
 }
 
-fn account_path(net: Network, kind: BtcKind, account: u32) -> Result<[ChildNumber; 3]> {
+pub(crate) fn account_path(net: Network, kind: BtcKind, account: u32) -> Result<[ChildNumber; 3]> {
     Ok([
         hardened(kind.purpose())?,
         hardened(net.btc_coin_type())?,
@@ -113,13 +113,13 @@ pub fn btc_address(
 // PSBT
 // ---------------------------------------------------------------------------------------------
 
-fn parse_psbt(psbt_b64: &str) -> Result<Psbt> {
+pub(crate) fn parse_psbt(psbt_b64: &str) -> Result<Psbt> {
     Psbt::from_str(psbt_b64.trim()).map_err(|_| Error::psbt("not a valid base64 PSBT"))
 }
 
 /// Spent outputs of every input, from `witness_utxo` (mandatory). When a `non_witness_utxo`
 /// is also present it must be consistent with the outpoint and the `witness_utxo`.
-fn prevouts(psbt: &Psbt) -> Result<Vec<TxOut>> {
+pub(crate) fn prevouts(psbt: &Psbt) -> Result<Vec<TxOut>> {
     if psbt.inputs.len() != psbt.unsigned_tx.input.len() {
         return Err(Error::psbt("input count mismatch"));
     }
@@ -154,7 +154,7 @@ fn render_script(net: Network, spk: &Script) -> String {
     }
 }
 
-fn summarize(
+pub(crate) fn summarize(
     net: Network,
     psbt: &Psbt,
     prevouts: &[TxOut],

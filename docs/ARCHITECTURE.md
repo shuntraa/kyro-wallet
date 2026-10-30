@@ -38,7 +38,7 @@ Légende : ✅ fonctionne de bout en bout **et** testé · ⚠️ code écrit, t
 |---|---|---|
 | 0 | Monorepo, coffre chiffré, BIP39/32, CI, interface | ✅ noyau (47 tests, vecteurs officiels) · ⚠️ interface (mode démo) |
 | 1 | Bitcoin SegWit + Taproot, Ethereum + ERC-20 | ⚠️ signature testée en Rust ; envoi complet jamais exécuté sur un testnet réel |
-| 1.5 | Ledger, Trezor | ❌ |
+| 1.5 | Ledger, Trezor | ⚠️ côté Rust complet, testé sur échanges enregistrés et simulations ; pas d'appareil ni d'émulateur ; UI à faire |
 | 2 | Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche | ⚠️ registre et même adresse ; non testé sur leurs testnets |
 | 3 | Solana + SPL | ⚠️ SOL (pas de décodage Rust) ; SPL en lecture seule |
 | 4 | Litecoin, Dogecoin, Tron, Cardano, XRP | ❌ lecture seule (« Bientôt ») |

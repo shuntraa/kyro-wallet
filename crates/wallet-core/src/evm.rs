@@ -394,6 +394,159 @@ pub fn evm_sign_tx(seed: &Seed, index: u32, tx: &EvmTxRequest) -> Result<(String
     ))
 }
 
+// ---------------------------------------------------------------------------------------------
+// Hardware wallets (no private key): payloads for the device, and checks of what it returns.
+// ---------------------------------------------------------------------------------------------
+
+/// Big-endian integer fields of an EIP-1559 transaction, minimal encoding (no leading zero
+/// byte, zero is empty), as hardware-wallet protocols expect them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvmTxFields {
+    /// Chain id.
+    pub chain_id: u64,
+    /// Nonce.
+    pub nonce: Vec<u8>,
+    /// Gas limit.
+    pub gas_limit: Vec<u8>,
+    /// Max fee per gas (wei).
+    pub max_fee_per_gas: Vec<u8>,
+    /// Max priority fee per gas (wei).
+    pub max_priority_fee_per_gas: Vec<u8>,
+    /// Recipient, EIP-55.
+    pub to: String,
+    /// Raw 20-byte recipient.
+    pub to_bytes: [u8; 20],
+    /// Native value (wei).
+    pub value: Vec<u8>,
+    /// Calldata.
+    pub data: Vec<u8>,
+}
+
+/// Validated fields of `tx` for a device (same validation as [`evm_decode`]).
+pub fn evm_tx_fields(tx: &EvmTxRequest) -> Result<EvmTxFields> {
+    let p = parse_request(tx)?;
+    Ok(EvmTxFields {
+        chain_id: p.chain_id,
+        nonce: trim_be(&p.nonce.to_be_bytes()).to_vec(),
+        gas_limit: trim_be(&p.gas_limit.to_be_bytes()).to_vec(),
+        max_fee_per_gas: trim_be(&p.max_fee_per_gas.to_be_bytes()).to_vec(),
+        max_priority_fee_per_gas: trim_be(&p.max_priority_fee_per_gas.to_be_bytes()).to_vec(),
+        to: p.to.to_checksum(),
+        to_bytes: p.to.0,
+        value: trim_be(&p.value.to_big_endian()).to_vec(),
+        data: p.data,
+    })
+}
+
+/// The exact bytes whose Keccak-256 is signed: `0x02 || rlp(unsigned fields)` (EIP-2718 /
+/// EIP-1559). This is what the Ledger Ethereum app receives in SIGN ETH TRANSACTION.
+pub fn evm_signing_payload(tx: &EvmTxRequest) -> Result<Vec<u8>> {
+    Ok(parse_request(tx)?.envelope(None))
+}
+
+/// EIP-55 address of a SEC1 public key (33-byte compressed or 65-byte uncompressed).
+pub fn evm_address_of_pubkey(sec1: &[u8]) -> Result<String> {
+    let pk =
+        PublicKey::from_slice(sec1).map_err(|_| Error::input("invalid secp256k1 public key"))?;
+    Ok(Address::from_pubkey(&pk).to_checksum())
+}
+
+/// Encodes the node at `m/44'/60'/0'/0` (public key + chain code, as returned by a device)
+/// as a standard `xpub` string, so addresses `…/0/i` can be derived publicly. The parent
+/// fingerprint is not known to the device protocol and is left zero; it is unused for
+/// derivation.
+pub fn evm_xpub_from_node(sec1: &[u8], chain_code: &[u8]) -> Result<String> {
+    use bitcoin::bip32::{ChainCode, ChildNumber, Fingerprint, Xpub};
+    let public_key =
+        PublicKey::from_slice(sec1).map_err(|_| Error::input("invalid secp256k1 public key"))?;
+    let chain_code: [u8; 32] = chain_code
+        .try_into()
+        .map_err(|_| Error::input("chain code must be 32 bytes"))?;
+    Ok(Xpub {
+        network: bitcoin::NetworkKind::Main,
+        depth: 4,
+        parent_fingerprint: Fingerprint::default(),
+        child_number: ChildNumber::Normal { index: 0 },
+        public_key,
+        chain_code: ChainCode::from(chain_code),
+    }
+    .to_string())
+}
+
+/// EIP-55 address `index` below a node encoded by [`evm_xpub_from_node`] (`m/44'/60'/0'/0`).
+pub fn evm_address_from_xpub(xpub: &str, index: u32) -> Result<String> {
+    use bitcoin::bip32::Xpub;
+    use core::str::FromStr;
+    let xpub = Xpub::from_str(xpub.trim()).map_err(|_| Error::input("invalid EVM xpub"))?;
+    if xpub.depth != 4 {
+        return Err(Error::input("EVM xpub must be the m/44'/60'/0'/0 node"));
+    }
+    let child = xpub
+        .derive_pub(&Secp256k1::verification_only(), &[normal(index)?])
+        .map_err(|_| Error::crypto("public derivation failed"))?;
+    Ok(Address::from_pubkey(&child.public_key).to_checksum())
+}
+
+/// Checks a signature `(r, s)` returned by a device for `tx` and builds the signed transaction.
+///
+/// The device's `v` is ignored: both recovery ids are tried and the one that recovers
+/// `expected_address` over the signing hash computed here is used. Fails with
+/// [`Error::Device`] if `s` is not low (EIP-2) or if no recovery id gives the expected address
+/// (wrong key, wrong transaction, forged signature). Returns `(raw "0x02…", tx hash)`.
+pub fn evm_hw_finalize(
+    tx: &EvmTxRequest,
+    r: &[u8],
+    s: &[u8],
+    expected_address: &str,
+) -> Result<(String, String)> {
+    use bitcoin::secp256k1::ecdsa::{RecoverableSignature, RecoveryId, Signature};
+    let unsigned = parse_request(tx)?;
+    let expected = parse_address(expected_address)?;
+    let (r, s): ([u8; 32], [u8; 32]) = match (r.try_into(), s.try_into()) {
+        (Ok(r), Ok(s)) => (r, s),
+        _ => return Err(Error::Device("r and s must be 32 bytes".into())),
+    };
+    let mut compact = [0u8; 64];
+    compact[..32].copy_from_slice(&r);
+    compact[32..].copy_from_slice(&s);
+    let plain = Signature::from_compact(&compact)
+        .map_err(|_| Error::Device("malformed ECDSA signature".into()))?;
+    let mut normalized = plain;
+    normalized.normalize_s();
+    if normalized != plain {
+        return Err(Error::Device("high-S signature (EIP-2)".into()));
+    }
+    let msg = Message::from_digest(unsigned.signing_hash());
+    let secp = Secp256k1::verification_only();
+    let mut parity = None;
+    for (id, y) in [(0, false), (1, true)] {
+        let recid = RecoveryId::from_i32(id).map_err(|_| Error::crypto("recovery id"))?;
+        let Ok(rs) = RecoverableSignature::from_compact(&compact, recid) else {
+            continue;
+        };
+        if let Ok(pk) = secp.recover_ecdsa(&msg, &rs) {
+            if Address::from_pubkey(&pk) == expected {
+                parity = Some(y);
+                break;
+            }
+        }
+    }
+    let y_parity = parity.ok_or_else(|| {
+        Error::Device("signature does not match the expected address for this transaction".into())
+    })?;
+    let raw = unsigned.envelope(Some(&EcdsaSig { y_parity, r, s }));
+    let hash = keccak256(&raw);
+    Ok((
+        format!("0x{}", hex::encode(raw)),
+        format!("0x{}", hex::encode(hash)),
+    ))
+}
+
+/// Normalises and validates an EVM address (EIP-55 output).
+pub fn evm_checksum_address(address: &str) -> Result<String> {
+    Ok(parse_address(address.trim())?.to_checksum())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

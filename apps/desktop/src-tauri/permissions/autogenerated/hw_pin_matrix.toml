@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-pin-matrix"
+description = "Enables the hw_pin_matrix command without any pre-configured scope."
+commands.allow = ["hw_pin_matrix"]
+
+[[permission]]
+identifier = "deny-hw-pin-matrix"
+description = "Denies the hw_pin_matrix command without any pre-configured scope."
+commands.deny = ["hw_pin_matrix"]

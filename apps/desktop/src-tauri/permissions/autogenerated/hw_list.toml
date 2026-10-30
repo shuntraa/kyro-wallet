@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-list"
+description = "Enables the hw_list command without any pre-configured scope."
+commands.allow = ["hw_list"]
+
+[[permission]]
+identifier = "deny-hw-list"
+description = "Denies the hw_list command without any pre-configured scope."
+commands.deny = ["hw_list"]

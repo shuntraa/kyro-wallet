@@ -9,7 +9,7 @@ React (apps/desktop/src)  ──invoke()──►  Tauri shell (apps/desktop/src
 
 Règles :
 - **Aucun secret ne remonte au frontend**, sauf la phrase de récupération affichée *une fois* à la création et via `vault_reveal_mnemonic` (mot de passe requis). Le frontend ne la stocke jamais (pas de state global, pas de localStorage).
-- Toute signature exige le **mot de passe** (re-vérifié par Argon2id) **et** une **confirmation native** (dialogue système) affichant le résumé décodé par Rust.
+- Toute signature exige le **mot de passe** (re-vérifié par Argon2id) **et** une **confirmation native** (dialogue système) affichant le résumé décodé par Rust. Hardware wallet (§2.3) : pas de mot de passe (aucune clé dans Kyro), mais le même dialogue natif, **puis** la confirmation sur l'écran de l'appareil, puis la vérification par Rust de ce que l'appareil renvoie.
 - Le frontend n'a **aucun accès réseau direct** : CSP `connect-src ipc: http://ipc.localhost`. Tout passe par `net_fetch`, qui applique une allowlist de domaines.
 - Les montants circulent en **chaînes décimales en plus petite unité** (sats, wei, lamports) pour éviter les flottants.
 
@@ -99,6 +99,35 @@ pub enum SolWarning {                           // JSON : { "kind": "feePayerNot
     Delegation { instruction }, UnknownInstruction { instruction, program_id },
     Token2022ExtensionsUnverified { instruction } /*informatif*/, PriorityFeeEstimated /*informatif*/ }
 // requires_extra_confirmation = instruction inconnue, délégation, payeur ≠ nous, autre signataire inscriptible ou autorité ≠ nous.
+
+// --- hardware wallets (B3) : aucune clé privée ; on ne fait jamais confiance à l'appareil ---
+pub enum HwDeviceKind { Ledger, Trezor }                                  // JSON "ledger" | "trezor"
+pub struct WatchOnlyAccount { pub id: String /*"hw-"+16 hex*/, pub label: String, pub device: HwDeviceKind,
+    pub model: String, pub network: Network, pub account: u32 /*≤ 100*/,
+    pub btc: Vec<BtcAccount> /*≤ 1 par type, même empreinte*/, pub evm: Option<WatchEvm { xpub /*nœud m/44'/60'/0'/0*/, path }>,
+    pub sol: Option<WatchSol { address, path /*m/44'/501'/account'/0'*/ }> }   // serde camelCase, deny_unknown_fields
+pub struct WatchOnlyStore { pub version: u8 /*1*/, pub accounts: Vec<WatchOnlyAccount> }
+impl WatchOnlyStore { pub fn from_json(json, network) -> Result<Self>; pub fn validate(&self, network); pub fn to_json(&self) }
+// Fichier séparé du coffre (le format VaultFile v1 est inchangé) ; validation complète à la lecture.
+pub fn btc_hw_plan(net, psbt_b64, accounts: &[BtcAccount]) -> Result<HwBtcPlan>;   // nos entrées/monnaie, vérifiées contre l'xpub
+pub struct HwBtcPlan { pub inputs: Vec<HwBtcInput { index, kind, path: Vec<u32>, pubkey, amount, has_prev_tx }>,
+    pub external_inputs: Vec<usize>, pub change: Vec<HwBtcChange { index, kind, path }>, pub summary: BtcTxSummary }
+pub struct HwBtcSignature { pub input: usize, pub pubkey: Option<Vec<u8>>, pub signature: Vec<u8> }
+pub fn btc_hw_finalize(net, psbt_b64, accounts, sigs: &[HwBtcSignature]) -> Result<(String /*PSBT signée*/, BtcTxSummary)>;
+// Recalcule chaque sighash (BIP143 / BIP341) et vérifie chaque signature contre la clé dérivée de l'xpub ;
+// signature manquante, en double, pour une entrée étrangère, autre clé, sighash ≠ ALL/DEFAULT, high-S → Error::Device.
+pub fn btc_hw_own_addresses(net, accounts, gap) -> Result<Vec<String>>;
+pub fn evm_signing_payload(tx) -> Result<Vec<u8>>;          // 0x02 || rlp(champs non signés) — ce que reçoit le Ledger
+pub fn evm_tx_fields(tx) -> Result<EvmTxFields>;              // entiers big-endian minimaux (Trezor)
+pub fn evm_hw_finalize(tx, r, s, expected_address) -> Result<(String /*raw*/, String /*hash*/)>; // v ignoré, low-S exigé, récupération = adresse attendue
+pub fn evm_xpub_from_node(sec1, chain_code) -> Result<String>; pub fn evm_address_from_xpub(xpub, index) -> Result<String>;
+pub fn evm_address_of_pubkey(sec1) -> Result<String>;       pub fn evm_checksum_address(addr) -> Result<String>;
+pub fn sol_address_of_pubkey(bytes) -> Result<String>;      pub fn sol_verify_signature(address, message, sig) -> Result<[u8; 64]>; // verify_strict
+pub struct LedgerErc20Descriptor { chain_id, contract: [u8; 20], ticker, decimals, signature /*DER*/ }
+pub fn ledger_erc20_lookup(chain_id, contract) -> Option<LedgerErc20Descriptor>;   // table embarquée (voir §2.3)
+pub fn ledger_erc20_verify(d) -> Result<()>;                // contre LEDGER_ERC20_SIGNER (clé publiée par Ledger)
+pub fn ledger_erc20_payload(d) -> Result<Vec<u8>>;          // données de l'APDU PROVIDE ERC 20 TOKEN INFORMATION
+// Error::Device(String) : réponse d'un appareil rejetée par une vérification indépendante (code HW_BAD_RESPONSE).
 ```
 
 ## 2. Commandes Tauri (exposées au frontend)
@@ -140,6 +169,18 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_cbf_sync` | — | `CbfStatus` | lance (ou rejoint) une synchronisation en arrière-plan ; progression par l'événement `cbf-status` ; exige le coffre déverrouillé (lit les xpubs) — une lecture coffre verrouillé ne lance pas de synchro ; build sans la fonction : `FEATURE_DISABLED` |
 | `set_capture_protection` | `{ enabled }` | `void` | `set_content_protected` |
 | `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasOneinchKey }` | jamais les clés elles-mêmes |
+| `hw_list` | — | `DeviceInfo[]` | détecte les Ledger (HID) et Trezor (WebUSB) branchés ; ids stables pour la session (`ledger-1`, `trezor-1`…) tant que l'appareil reste sur le même port ; 10 s max. Voir §2.3 |
+| `hw_open` | `{ id }` | `DeviceStatus` | ouvre l'appareil et lit son état : verrouillé, app Ledger ouverte, firmware Trezor, état par chaîne |
+| `hw_cancel` | `{ id }` | `boolean` | abandonne l'opération en cours sur `id` (`true` s'il y en avait une) ; elle se termine en `USER_REJECTED` |
+| `hw_pin_matrix` | `{ id, positions /*"1"…"9"*/ }` | `void` | Trezor One uniquement, après l'événement `hw-prompt` `pin-matrix` : **positions** dans la grille 3×3 vierge, jamais le PIN |
+| `hw_get_xpub` | `{ id, chain: 'btc' \| 'evm' \| 'sol', account }` | `HwXpub` | lit les clés publiques sur l'appareil, sans rien afficher ni enregistrer |
+| `hw_accounts_get` | — | `WatchOnlyAccount[]` | comptes hardware wallet enregistrés (lecture seule, clés publiques) |
+| `hw_account_add` | `{ id, chain, account, accountId?, label? }` | `WatchOnlyAccount` | lit les clés de `chain` sur l'appareil et les enregistre (nouveau compte, ou ajout à `accountId` : même marque, même numéro, même empreinte sinon `HW_WRONG_DEVICE`) |
+| `hw_account_remove` | `{ accountId }` | `void` | |
+| `hw_verify_address` | `{ id, accountId, chain, path }` | `{ address, path }` | **affiche l'adresse sur l'écran de l'appareil** ; avant, relit les clés de l'appareil (`HW_WRONG_DEVICE` si ce n'est pas le bon) ; l'adresse affichée doit être identique à celle que Kyro dérive de l'xpub enregistrée, sinon `HW_ADDRESS_MISMATCH` (erreur bloquante : ne pas utiliser l'adresse) |
+| `hw_sign_btc_psbt` | `{ id, accountId, psbt }` | `{ psbt, summary }` | décodage Rust → dialogue natif Kyro (+ 2ᵉ dialogue si sortie inconnue) → confirmation sur l'appareil → vérification de chaque signature. PSBT signée, **non finalisée** |
+| `hw_sign_evm_tx` | `{ id, accountId, tx: EvmTxRequest, token?: { symbol, decimals } }` | `{ rawTx, hash }` | idem ; 2ᵉ dialogue si appel de contrat ou si l'appareil ne peut pas afficher le détail (blind signing) ; signe pour l'adresse `m/44'/60'/0'/0/{account}` |
+| `hw_sign_sol_tx` | `{ id, accountId, message /*b64*/ }` | `{ signature /*b64*/, summary: SolTxSummary }` | même décodage que `sol_sign_tx` ; signature vérifiée (ed25519 strict) contre l'adresse enregistrée |
 
 ```ts
 type Accounts = {
@@ -198,8 +239,9 @@ type TorStatus = { state: 'off' | 'bootstrapping' | 'ready' | 'error'; progress:
 - `vault-locked` (sans contenu) émis par Rust à l'auto-lock ;
 - `cbf-status` (`CbfStatus`) pendant une synchronisation par filtres compacts (au plus 2 par seconde) ;
 - `tor-status` (`TorStatus`) émis à chaque changement d'état ou de progression du démarrage de Tor. Un démarrage bloqué passe en `error` après 120 s (jamais de `bootstrapping` infini).
+- `hw-prompt` (`{ id, kind: 'confirm-on-device' | 'pin-on-device' | 'passphrase-on-device' | 'pin-matrix' }`) pendant une opération hardware wallet : ce que l'UI doit dire à l'utilisateur (voir §2.3).
 
-Erreurs : rejet de la promesse avec `{ code: 'WRONG_PASSWORD' | 'LOCKED' | 'RATE_LIMITED' | 'USER_REJECTED' | 'HOST_NOT_ALLOWED' | 'INVALID_INPUT' | 'INTERNAL' | 'TOR_UNAVAILABLE' | 'SERVER_INVALID' | 'SERVER_WRONG_NETWORK' | 'SERVER_UNREACHABLE' | 'DEFAULT_SERVER_DISABLED' | 'FEATURE_DISABLED', message }`. `TOR_UNAVAILABLE` : Tor activé mais pas prêt (démarrage trop long, échec, arrêté) — la requête n'a **pas** été envoyée.
+Erreurs : rejet de la promesse avec `{ code: 'WRONG_PASSWORD' | 'LOCKED' | 'RATE_LIMITED' | 'USER_REJECTED' | 'HOST_NOT_ALLOWED' | 'INVALID_INPUT' | 'INTERNAL' | 'TOR_UNAVAILABLE' | 'SERVER_INVALID' | 'SERVER_WRONG_NETWORK' | 'SERVER_UNREACHABLE' | 'DEFAULT_SERVER_DISABLED' | 'FEATURE_DISABLED' | 'HW_NOT_FOUND' | 'HW_LOCKED' | 'HW_WRONG_APP' | 'HW_REJECTED' | 'HW_DISCONNECTED' | 'HW_UNSUPPORTED' | 'HW_BUSY' | 'HW_TIMEOUT' | 'HW_BAD_RESPONSE' | 'HW_ADDRESS_MISMATCH' | 'HW_WRONG_DEVICE', message, data? }`. `data` n'existe que pour `HW_WRONG_APP` (`{ expected, open }`), `HW_UNSUPPORTED` (`{ min: string | null }`) et `HW_ADDRESS_MISMATCH` (`{ device, expected }`) ; les codes hardware wallet sont détaillés au §2.3. `TOR_UNAVAILABLE` : Tor activé mais pas prêt (démarrage trop long, échec, arrêté) — la requête n'a **pas** été envoyée.
 
 - `SERVER_INVALID` : configuration refusée avant tout réseau (URL, schéma, identifiants dans l'URL, `.onion` sans Tor, empreinte mal formée, mot de passe manquant, fichier `.cookie` illisible, authentification RPC refusée, portefeuille `kyro-watch-…` absent).
 - `SERVER_WRONG_NETWORK` : le serveur répond mais n'est pas sur la bonne chaîne (genesis Bitcoin, `getblockchaininfo.chain`, `eth_chainId`, `getGenesisHash`).
@@ -239,6 +281,64 @@ Différences à connaître :
 - `esploraUrl` (registre) et `settings.rpc.esplora` ne servent plus : supprimer l'option `esploraUrl` de l'adaptateur. Le scan d'adresses et la construction des PSBT ne changent pas.
 - Filtres compacts (`cbf`) : les mêmes commandes répondent depuis l'état local (jamais de requête réseau pendant l'appel) et relancent une synchronisation en arrière-plan si la dernière date de plus de 2 min. Avant la première synchronisation : `SERVER_UNREACHABLE` (« pas encore synchronisé »). Les paiements entrants **non confirmés** ne sont pas visibles (pas de mempool) ; seules nos propres diffusions apparaissent en attente. `btc_fee_rates` ajoute `source: 'block-average'` (moyenne des frais payés dans les derniers blocs, voir NETWORK.md).
 - EVM et Solana restent sur `net_fetch` : l'UI utilise `servers.evm[chainId].url` ou `servers.solana[cluster].url` s'ils existent, sinon l'URL par défaut du registre.
+
+### 2.3 Hardware wallets (Ledger, Trezor)
+
+Transport USB en Rust : Ledger en HID (hidapi), Trezor en WebUSB (libusb via rusb, compilée et liée statiquement). Rien ne passe par l'UI ni par le réseau. Chaque appareil a **un verrou** (2ᵉ opération simultanée : `HW_BUSY`) ; chaque appel tourne hors du thread UI avec un **délai** (lecture de clés 90 s, PIN Trezor compris ; affichage d'adresse et signature 180 s ; `hw_list` 10 s). Les transports lisent par tranches de 100 ms : délai dépassé, `hw_cancel` ou débranchement terminent l'appel proprement (Trezor reçoit `Cancel`), la connexion est fermée puis rouverte à l'appel suivant, et rien n'est renvoyé.
+
+Avec un coffre sur cet ordinateur, toutes les commandes `hw_*` qui lisent des clés, enregistrent ou signent exigent la session déverrouillée (`LOCKED`) ; un utilisateur « hardware wallet seul » n'a pas de coffre et pas de mot de passe Kyro (la confirmation se fait sur l'appareil). Les signatures hardware wallet ne demandent **pas** le mot de passe du coffre.
+
+```ts
+type DeviceInfo = { id: string; kind: 'ledger' | 'trezor'; model: string; transport: 'hid' | 'webusb' };
+type Chain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp';   // phase 4 : HW_UNSUPPORTED
+type DeviceStatus = { id: string; kind: 'ledger' | 'trezor'; model: string; locked: boolean;
+  app?: { name: string; version: string };        // Ledger : app ouverte ("Tableau de bord" = dashboard)
+  firmware?: string; passphrase?: boolean;        // Trezor
+  chains: { chain: Chain; state: 'ready' | 'open-app' | 'unlock' | 'unsupported';
+            app?: string /*app Ledger à ouvrir*/; min?: string /*version minimale*/; reason?: string }[] };
+type HwXpub = { chain: Chain; account: number;
+  btc?: { kind: 'segwit' | 'taproot'; xpub: string; fingerprint: string; path: string }[];   // BIP84 + BIP86
+  evm?: { xpub: string /*nœud m/44'/60'/0'/0*/; path: string; address: string /*…/0/{account}*/ };
+  sol?: { address: string; path: string /*m/44'/501'/{account}'/0'*/ } };
+type WatchOnlyAccount = { id: string; label: string; device: 'ledger' | 'trezor'; model: string;
+  network: 'mainnet' | 'testnet'; account: number; btc?: HwXpub['btc']; evm?: { xpub: string; path: string };
+  sol?: { address: string; path: string } };
+```
+
+**Déroulé d'une signature** : (1) Rust décode (`btc_hw_plan` / `evm_decode` / `sol_decode_message`) ; (2) Rust relit les clés de l'appareil et les compare au compte enregistré (`HW_WRONG_DEVICE`) ; (3) dialogue natif Kyro avec le résumé décodé + « vérifie les mêmes informations sur l'appareil », puis 2ᵉ dialogue renforcé si quelque chose est « inconnu » (sortie BTC non décodée, appel de contrat EVM, instruction Solana inconnue) ou si l'appareil ne pourra pas afficher le détail (blind signing) ; (4) confirmation finale sur l'écran de l'appareil (`hw-prompt: confirm-on-device`) ; (5) Rust vérifie chaque signature (sighash recalculé, clé dérivée de l'xpub enregistrée ; EVM : adresse récupérée = adresse attendue, low-S ; Solana : ed25519 strict) avant de répondre. Une réponse de l'appareil qui ne passe pas : `HW_BAD_RESPONSE`, rien n'est renvoyé.
+
+**PSBT pour hardware wallet** : chaque entrée doit avoir `witness_utxo` et la dérivation (`bip32_derivation` ou `tap_key_origins`, empreinte et chemin du compte) ; chaque entrée SegWit v0 doit aussi avoir **`non_witness_utxo`** (transaction précédente complète : exigée par Trezor, avertissement « entrées non vérifiées » sur Ledger sinon) — sinon `INVALID_INPUT` avant tout échange avec l'appareil. Les sorties de monnaie doivent porter leur dérivation pour être reconnues (sinon l'appareil les affiche comme des destinataires). Entrées étrangères : `HW_UNSUPPORTED`. Ledger : une seule sorte d'entrée (SegWit **ou** Taproot) par transaction.
+
+**Applications et versions minimales**
+
+| | Ledger (app à ouvrir, version min.) | Trezor (firmware min.) |
+|---|---|---|
+| Bitcoin (BIP84, BIP86, PSBT) | « Bitcoin Test » (testnet) / « Bitcoin » (mainnet) ≥ 2.1.0 | One ≥ 1.10.4 ; T, Safe 3, Safe 5 ≥ 2.4.3 |
+| EVM (EIP-1559) | « Ethereum » ≥ 1.9.0 (toutes les chaînes EVM) | One ≥ 1.10.4 ; T/Safe ≥ 2.4.2 |
+| ERC-20 en clair | descripteur signé par Ledger requis : embarqué pour USDC et USDT (mainnet) et tUSDC (Sepolia) ; sinon blind signing (réglage de l'app) + dialogue renforcé | transfert : destinataire, montant brut et contrat affichés (« Unknown token » hors liste) ; `approve` et autres appels : dialogue renforcé |
+| Solana | « Solana » ≥ 1.3.1 (blind signing requis pour les instructions qu'il ne décode pas : `HW_UNSUPPORTED`) | T/Safe ≥ 2.6.4 ; pas sur la One |
+| Non pris en charge | — | Safe 7 (protocole THP), mode bootloader, One < 1.7 (HID) |
+
+PIN et passphrase : Ledger se déverrouille sur l'appareil (`HW_LOCKED` → l'UI demande de le déverrouiller puis de réessayer). Trezor T/Safe : PIN et passphrase saisis **sur l'appareil** (`hw-prompt`). Trezor One : PIN par la grille aveugle (`pin-matrix` → `hw_pin_matrix`) ; passphrase à saisir sur l'ordinateur → refusée (`HW_UNSUPPORTED`) : aucun secret ne transite par l'UI.
+
+**Erreurs**
+
+| Code | Quand | `data` |
+|---|---|---|
+| `HW_NOT_FOUND` | id inconnu (relancer `hw_list`) ou appareil introuvable à l'ouverture | |
+| `HW_LOCKED` | appareil verrouillé (Ledger `5515`, ou `6982` hors signature) ; PIN Trezor incorrect | |
+| `HW_WRONG_APP` | Ledger : mauvaise app ouverte (dashboard compris ; `6E00`, `6E01`, `6D00`, `6D02`, `6511`) | `{ expected, open }` |
+| `HW_REJECTED` | refus sur l'appareil (Ledger `6985`, `5501`, `6982` en signature ; Trezor `ActionCancelled` / `PinCancelled`) | |
+| `HW_DISCONNECTED` | erreur USB / débranchement, y compris pendant une signature : opération abandonnée, connexion fermée | |
+| `HW_UNSUPPORTED` | chaîne de phase 4, firmware/app trop ancien, Safe 7, blind signing désactivé (Ledger `6A80` en signature EVM, `6808` Solana), passphrase Trezor One, entrées mixtes Ledger | `{ min }` |
+| `HW_BUSY` | autre opération en cours sur cet appareil ; interface USB prise par une autre application (Trezor Suite, Ledger Live) ; Linux sans règles udev | |
+| `HW_TIMEOUT` | pas de réponse dans le délai : opération abandonnée | |
+| `HW_BAD_RESPONSE` | réponse mal formée, ou signature/adresse/clé qui ne passe pas la vérification de Kyro | |
+| `HW_ADDRESS_MISMATCH` | l'adresse affichée par l'appareil ≠ celle dérivée par Kyro de l'xpub enregistrée : **ne pas utiliser l'adresse** | `{ device, expected }` |
+| `HW_WRONG_DEVICE` | les clés de l'appareil ne sont pas celles du compte (autre appareil, autre passphrase, compte enregistré modifié) | |
+| `USER_REJECTED` | refus dans le dialogue natif de Kyro, ou `hw_cancel` | |
+
+**Phase 4 (pas encore implémentée ; l'abstraction `HardwareWallet` a déjà les chaînes)** : Ledger — apps « Litecoin », « Dogecoin » (protocole Bitcoin historique, pas l'app v2), « Tron », « Cardano ADA », « XRP » ; Trezor — Litecoin et Dogecoin (même flux `SignTx` que Bitcoin, firmware universel), XRP (`RippleSignTx`), Cardano (T/Safe), Tron (firmware récent, `Capability_Tron`).
 
 ## 3. Allowlist réseau (`net_fetch`)
 

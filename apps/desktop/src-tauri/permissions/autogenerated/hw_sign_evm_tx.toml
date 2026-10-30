@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-sign-evm-tx"
+description = "Enables the hw_sign_evm_tx command without any pre-configured scope."
+commands.allow = ["hw_sign_evm_tx"]
+
+[[permission]]
+identifier = "deny-hw-sign-evm-tx"
+description = "Denies the hw_sign_evm_tx command without any pre-configured scope."
+commands.deny = ["hw_sign_evm_tx"]

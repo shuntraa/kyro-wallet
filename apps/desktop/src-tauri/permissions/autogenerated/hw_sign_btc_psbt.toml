@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-sign-btc-psbt"
+description = "Enables the hw_sign_btc_psbt command without any pre-configured scope."
+commands.allow = ["hw_sign_btc_psbt"]
+
+[[permission]]
+identifier = "deny-hw-sign-btc-psbt"
+description = "Denies the hw_sign_btc_psbt command without any pre-configured scope."
+commands.deny = ["hw_sign_btc_psbt"]

@@ -44,6 +44,18 @@
     "allow-set-capture-protection",
     "allow-config-get",
     "allow-tor-status",
-    "allow-tor-retry"
+    "allow-tor-retry",
+    "allow-hw-list",
+    "allow-hw-open",
+    "allow-hw-cancel",
+    "allow-hw-pin-matrix",
+    "allow-hw-get-xpub",
+    "allow-hw-accounts-get",
+    "allow-hw-account-add",
+    "allow-hw-account-remove",
+    "allow-hw-verify-address",
+    "allow-hw-sign-btc-psbt",
+    "allow-hw-sign-evm-tx",
+    "allow-hw-sign-sol-tx"
   ]
 }

@@ -56,7 +56,35 @@ Ne publie pas la faille dans une issue publique. Écris à l'adresse indiquée d
 - Toi qui donnes ta phrase de récupération (faux support, faux site, faux « airdrop »). **Personne de légitime ne te la demandera jamais.**
 - La coercition physique.
 
-**D'où notre recommandation : utilise un hardware wallet** (Ledger, Trezor). Les clés restent dans l'appareil et chaque transaction se vérifie sur son écran, même si l'ordinateur est infecté. *(Support prévu : phase 1.5, pas encore disponible dans la v0.1.)*
+**D'où notre recommandation : utilise un hardware wallet** (Ledger, Trezor). Les clés restent dans l'appareil et chaque transaction se vérifie sur son écran, même si l'ordinateur est infecté. *(Code écrit en phase 1.5, testé contre des échanges enregistrés et des simulations, **pas encore contre un vrai appareil ni un émulateur** : voir ci-dessous.)*
+
+## Hardware wallets (Ledger, Trezor)
+
+Détails techniques : [docs/IPC.md §2.3](docs/IPC.md).
+
+### Ce que l'appareil protège
+
+- **Les clés privées** ne quittent jamais l'appareil ; Kyro ne stocke que des clés publiques (xpubs, adresses) dans `hw-accounts-<réseau>.json`, à côté du coffre (le coffre lui-même n'est pas modifié).
+- **La confirmation finale** se fait sur l'écran de l'appareil, que l'ordinateur ne contrôle pas. Un malware peut modifier ce que Kyro affiche, mais pas ce que l'appareil affiche ni ce qu'il signe sans ton accord physique.
+- Le PIN (et la passphrase sur Trezor T / Safe) se saisit **sur l'appareil**. Sur Trezor One, le PIN passe par une grille aveugle : Kyro ne reçoit que des positions, inutiles sans l'appareil. Une passphrase à taper sur l'ordinateur (Trezor One) est refusée.
+
+### Ce que Kyro fait quand même (ne jamais faire confiance à l'appareil ni à l'ordinateur)
+
+| Étape | Mesure |
+|---|---|
+| Avant de signer | Rust décode la transaction et l'affiche dans la **fenêtre système native** (destinataire, montant, token, frais, monnaie, mémo) ; tout ce qui est inconnu (sortie BTC non décodée, appel de contrat, instruction Solana inconnue) ou que l'appareil ne pourra pas afficher (**blind signing**) exige une **2ᵉ confirmation renforcée**. |
+| Bon appareil ? | Avant toute signature ou tout affichage d'adresse, Kyro relit les clés de l'appareil et les compare au compte enregistré (`HW_WRONG_DEVICE`). |
+| Adresse de réception | `hw_verify_address` affiche l'adresse **sur l'appareil** et la compare à celle que Kyro dérive lui-même de l'xpub enregistrée ; toute différence est une erreur bloquante (`HW_ADDRESS_MISMATCH`). Vérifie-la sur l'écran de l'appareil avant de la communiquer. |
+| Après la signature | Chaque signature est vérifiée par libsecp256k1 / ed25519-dalek contre la clé attendue et le sighash (BIP143/BIP341) ou le hash (EIP-1559) recalculé par Rust ; adresse EVM récupérée = adresse attendue, low-S exigé ; Solana en vérification stricte. Une signature fausse, manquante ou pour une autre entrée est refusée (`HW_BAD_RESPONSE`). |
+| Transport | Un verrou par appareil, délais bornés, annulation et débranchement gérés : l'opération est abandonnée proprement, jamais d'attente infinie, rien n'est renvoyé à moitié. |
+
+### Ce qui reste à risque
+
+- **Blind signing.** Quand l'appareil ne sait pas décoder (appel de contrat, ERC-20 sans descripteur sur Ledger, certaines instructions Solana), son écran ne montre qu'une empreinte ou des données brutes : seul le résumé de Kyro décrit la transaction, et un ordinateur compromis peut falsifier ce résumé. Kyro le signale par une confirmation renforcée ; garde le blind signing **désactivé** dans les apps Ledger tant que tu n'en as pas besoin.
+- **Descripteurs ERC-20 Ledger (« CAL »).** Pour qu'un Ledger affiche un token en clair, Ledger signe un descripteur (symbole, contrat, décimales, chaîne). Kyro n'appelle **pas** le service de Ledger : il embarque quelques descripteurs (USDC et USDT mainnet, tUSDC Sepolia) téléchargés une fois et **vérifiés** contre la clé publique publiée par Ledger (dans les tests et avant chaque usage). C'est une confiance déléguée à Ledger : un descripteur signé par erreur par Ledger serait affiché comme authentique. Ajouter des tokens demanderait soit de les embarquer à chaque version, soit d'interroger `crypto-assets-service.api.ledger.com` (nouvel hôte, via l'allowlist et Tor) — non fait.
+- **Chaîne d'approvisionnement de l'appareil.** Un appareil contrefait, intercepté ou au firmware piégé peut afficher une chose et en signer une autre, ou générer des clés prévisibles. Achète-le directement chez le fabricant, vérifie son authenticité (Ledger : vérification « Genuine » ; Trezor : contrôle d'authenticité dans Trezor Suite), garde le firmware à jour, et ne l'initialise qu'avec une phrase générée par l'appareil lui-même. Kyro ne peut pas détecter un appareil malveillant qui signe correctement la transaction affichée par Kyro.
+- **Fichier des comptes.** `hw-accounts-*.json` contient des xpubs en clair : quiconque lit ce fichier connaît toutes tes adresses et ton historique (vie privée, pas les fonds). Quelqu'un qui peut l'**écrire** pourrait y mettre ses propres xpubs : Kyro afficherait alors de fausses adresses de réception tant que l'appareil n'est pas branché. D'où la règle : **vérifie toujours une adresse de réception sur l'appareil** (`hw_verify_address`), qui détecte la substitution ; la signature, elle, relit toujours les clés de l'appareil d'abord.
+- **Bibliothèques C.** Le transport USB s'appuie sur hidapi (Ledger, C sur Windows/macOS) et libusb (Trezor, C, LGPL-2.1+, liée statiquement), les voies standard ; elles tournent dans le processus de Kyro.
 
 ## Vérifier une release
 

@@ -22,32 +22,51 @@
 )]
 
 mod btc;
+mod btc_hw;
 mod btc_watch;
 mod error;
 mod evm;
 mod keys;
+mod ledger_cal;
 mod mnemonic;
 mod network;
 mod sol;
 mod sol_decode;
 mod vault;
+mod watch;
 
 pub use btc::{btc_account, btc_address, btc_decode_psbt, btc_sign_psbt, BtcAccount, BtcTxSummary};
+pub use btc_hw::{
+    btc_hw_finalize, btc_hw_own_addresses, btc_hw_plan, HwBtcChange, HwBtcInput, HwBtcPlan,
+    HwBtcSignature,
+};
 pub use btc_watch::{
     btc_address_from_xpub, btc_address_of_script, btc_decode_raw_tx, btc_descriptors,
     btc_genesis_hash, btc_script_pubkey, btc_scripthash, btc_scripthash_of_script, BtcDescriptor,
     BtcRawTx,
 };
 pub use error::{Error, Result};
-pub use evm::{evm_address, evm_decode, evm_sign_tx, EvmTxKind, EvmTxRequest, EvmTxSummary};
+pub use evm::{
+    evm_address, evm_address_from_xpub, evm_address_of_pubkey, evm_checksum_address, evm_decode,
+    evm_hw_finalize, evm_sign_tx, evm_signing_payload, evm_tx_fields, evm_xpub_from_node,
+    EvmTxFields, EvmTxKind, EvmTxRequest, EvmTxSummary,
+};
+pub use ledger_cal::{
+    ledger_erc20_lookup, ledger_erc20_payload, ledger_erc20_verify, LedgerErc20Descriptor,
+    LEDGER_ERC20_SIGNER,
+};
 pub use mnemonic::{Mnemonic, Seed, WordCount};
 pub use network::{BtcKind, Network};
-pub use sol::{sol_address, sol_sign_message};
+pub use sol::{sol_address, sol_address_of_pubkey, sol_sign_message, sol_verify_signature};
 pub use sol_decode::{
     sol_decode_message, sol_message_lookup_tables, sol_parse_lookup_table, SolInstruction,
     SolLookupTable, SolTokenProgram, SolTxSummary, SolWarning, SOL_LOOKUP_TABLE_PROGRAM,
 };
 pub use vault::{open, seal, KdfParams, VaultFile, VAULT_VERSION};
+pub use watch::{
+    sol_path, HwDeviceKind, WatchEvm, WatchOnlyAccount, WatchOnlyStore, WatchSol, EVM_NODE_PATH,
+    MAX_HW_ACCOUNT, WATCH_ONLY_VERSION,
+};
 
 /// Re-exported so callers can build [`Seed`] values and wipe their own buffers
 /// without adding a direct dependency.

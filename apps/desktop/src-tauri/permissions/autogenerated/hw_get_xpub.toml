@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-get-xpub"
+description = "Enables the hw_get_xpub command without any pre-configured scope."
+commands.allow = ["hw_get_xpub"]
+
+[[permission]]
+identifier = "deny-hw-get-xpub"
+description = "Denies the hw_get_xpub command without any pre-configured scope."
+commands.deny = ["hw_get_xpub"]

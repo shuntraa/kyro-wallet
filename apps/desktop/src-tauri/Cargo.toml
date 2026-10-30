@@ -17,7 +17,7 @@ tauri-build = { version = "=2.7.3", features = [] }
 [features]
 default = []
 # Compact block filters (BIP157/158) Bitcoin backend. Off by default.
-cbf = ["dep:bip157", "dep:tor-socksproto", "dep:bitcoin"]
+cbf = ["dep:bip157", "dep:tor-socksproto"]
 
 [dependencies]
 wallet-core = { path = "../../../crates/wallet-core", version = "=0.1.0" }
@@ -54,9 +54,29 @@ bip157 = { version = "=0.8.1", default-features = false, optional = true }
 # Same versions as already in the tree (no new crate): SOCKS5 server-side parsing for the CBF
 # bridge (arti's own parser), and bitcoin types for block/transaction handling.
 tor-socksproto = { version = "=0.47.0", default-features = false, features = ["proxy-handshake"], optional = true }
-bitcoin = { version = "=0.32.11", default-features = false, features = ["std"], optional = true }
+# Bitcoin types (CBF blocks, PSBTs for hardware wallets). Same version as wallet-core.
+bitcoin = { version = "=0.32.11", default-features = false, features = ["std", "base64"] }
 # Onion v3 checksum (SHA3-256), already in the tree via wallet-core.
 sha3 = { version = "=0.10.9" }
+# B3: hardware wallets (see docs/IPC.md §2.3 and SECURITY.md).
+# Ledger: USB HID. hidapi compiles its vendored C backend on Windows/macOS (no system
+# library), and the pure-Rust hidraw backend on Linux (no libudev needed).
+hidapi = { version = "=2.6.7", default-features = false, features = ["linux-native-basic-udev"] }
+# Ledger's official client for the Bitcoin app v2 (PSBT + wallet policies). Transport is ours.
+# `paranoid_client` (miniscript) is off: Kyro checks every address and signature itself.
+ledger_bitcoin_client = { version = "=0.7.0", default-features = false }
+# Trezor's official Rust crate (trezor-firmware repo): protobuf messages and wire framing.
+# Its own USB enumeration/transport is not used (infinite read timeout, panics on libusb
+# errors); Kyro drives rusb with bounded timeouts and cancellation.
+trezor-client = { version = "=0.1.6", default-features = false, features = ["bitcoin", "ethereum", "solana"] }
+protobuf = { version = "=3.7.2" }
+rusb = { version = "=0.9.4" }
+# Force the vendored, statically linked libusb (else macOS links Homebrew's dylib if present).
+libusb1-sys = { version = "=0.7.0", features = ["vendored"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Pinned below 0.1.3 (published 2026-10-23, < 2 weeks old); pulled by hidapi's Linux backend.
+basic-udev = { version = "=0.1.2" }
 
 [dev-dependencies]
 # Only for the #[ignore]d real-network Tor test (KYRO_TOR_TRACE=<filter> shows arti logs).

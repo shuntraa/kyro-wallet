@@ -2,10 +2,12 @@ mod btc_backend;
 #[cfg(feature = "cbf")]
 mod cbf;
 mod commands;
+mod commands_hw;
 mod commands_servers;
 mod core_rpc;
 mod electrum;
 mod error;
+mod hw;
 mod net;
 mod servers;
 mod settings;
@@ -84,6 +86,18 @@ pub fn run() {
             commands::config_get,
             commands::tor_status,
             commands::tor_retry,
+            commands_hw::hw_list,
+            commands_hw::hw_open,
+            commands_hw::hw_cancel,
+            commands_hw::hw_pin_matrix,
+            commands_hw::hw_get_xpub,
+            commands_hw::hw_accounts_get,
+            commands_hw::hw_account_add,
+            commands_hw::hw_account_remove,
+            commands_hw::hw_verify_address,
+            commands_hw::hw_sign_btc_psbt,
+            commands_hw::hw_sign_evm_tx,
+            commands_hw::hw_sign_sol_tx,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Kyro");

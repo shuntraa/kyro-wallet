@@ -21,7 +21,7 @@ Tes clés restent chiffrées sur ton appareil ; toutes les signatures se font da
 | Chaînes EVM (Arbitrum, Optimism, Base, Polygon, BNB, Avalanche) | ⚠️ registre + même adresse | non testé sur leurs testnets |
 | Tokens SPL et Token-2022 (envoi) | ⚠️ code complet | testé contre le backend simulé ; encodage vérifié sur une vraie transaction devnet |
 | Swap 0x / 1inch / LI.FI / Jupiter | ⚠️ devis + approval exact | testé contre des réponses simulées |
-| Ledger / Trezor | ❌ pas encore | — |
+| Ledger / Trezor (USB) : détection, état, xpub BIP84/BIP86/EVM/Solana, adresse vérifiée sur l'appareil, signature PSBT / EIP-1559 / Solana avec vérification de chaque signature | ⚠️ code complet (Rust ; UI à faire) | tests unitaires : échanges APDU **enregistrés par Ledger** rejoués (adresse Taproot, signature PSBT de 448 APDU), flux Trezor contre un firmware simulé, descripteurs ERC-20 vérifiés contre la clé de Ledger, signatures fausses refusées ; **jamais exécuté contre un vrai appareil ni un émulateur** |
 | Litecoin, Dogecoin, Tron, Cardano, XRP | ❌ lecture seule (« Bientôt ») | — |
 | Tor intégré (Arti), activé par défaut, échec fermé, circuits isolés par chaîne, mempool via .onion | ⚠️ code complet | tests unitaires + vraies requêtes via Tor (mempool .onion, CoinGecko, Solana devnet) ; UI vérifiée en mode démo ; pas encore lancé dans l'app réelle |
 | Serveur perso par chaîne, filtres compacts BIP157/158 | ❌ pas encore | — |
@@ -31,6 +31,7 @@ Tes clés restent chiffrées sur ton appareil ; toutes les signatures se font da
 - Rust (la version est épinglée dans `rust-toolchain.toml`, installée automatiquement par `rustup`)
 - Node.js ≥ 22 et pnpm 11 (`corepack enable`)
 - Windows : Visual Studio Build Tools (C++) et WebView2 · Linux : `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev` · macOS : Xcode Command Line Tools
+- Hardware wallets : aucune bibliothèque système à installer (hidapi et libusb sont compilées avec Kyro). Linux : installer les règles udev de [Ledger](https://github.com/LedgerHQ/udev-rules) et de [Trezor](https://trezor.io/learn/a/udev-rules) pour l'accès USB sans root.
 
 ## Lancer
 
@@ -68,3 +69,5 @@ pnpm --filter @kyro/desktop tauri build --no-bundle   # binaire seul
 ## Licence
 
 [GPL-3.0-or-later](LICENSE). Tout fork distribué doit rester open source.
+
+Dépendance C embarquée sous licence différente : **libusb** (LGPL-2.1-or-later, liée statiquement pour Trezor), compatible avec la GPL-3.0 ; son code source est celui de la crate `libusb1-sys` 0.7.0.

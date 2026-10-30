@@ -35,6 +35,18 @@ const COMMANDS: &[&str] = &[
     "config_get",
     "tor_status",
     "tor_retry",
+    "hw_list",
+    "hw_open",
+    "hw_cancel",
+    "hw_pin_matrix",
+    "hw_get_xpub",
+    "hw_accounts_get",
+    "hw_account_add",
+    "hw_account_remove",
+    "hw_verify_address",
+    "hw_sign_btc_psbt",
+    "hw_sign_evm_tx",
+    "hw_sign_sol_tx",
 ];
 
 fn main() {

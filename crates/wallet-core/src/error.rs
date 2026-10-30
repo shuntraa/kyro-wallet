@@ -28,6 +28,10 @@ pub enum Error {
     /// A cryptographic primitive failed unexpectedly (RNG, KDF, derivation, signing).
     #[error("cryptographic failure: {0}")]
     Crypto(String),
+    /// Something a hardware wallet returned was rejected by an independent check (signature
+    /// that does not verify, unexpected key or input, malformed data).
+    #[error("hardware wallet response rejected: {0}")]
+    Device(String),
 }
 
 impl Error {
@@ -39,6 +43,7 @@ impl Error {
             Error::UnsupportedVaultVersion(_) | Error::InvalidVault(_) | Error::Crypto(_) => {
                 "INTERNAL"
             }
+            Error::Device(_) => "HW_BAD_RESPONSE",
         }
     }
 

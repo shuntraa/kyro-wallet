@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-account-remove"
+description = "Enables the hw_account_remove command without any pre-configured scope."
+commands.allow = ["hw_account_remove"]
+
+[[permission]]
+identifier = "deny-hw-account-remove"
+description = "Denies the hw_account_remove command without any pre-configured scope."
+commands.deny = ["hw_account_remove"]

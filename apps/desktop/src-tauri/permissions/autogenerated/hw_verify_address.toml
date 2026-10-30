@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-verify-address"
+description = "Enables the hw_verify_address command without any pre-configured scope."
+commands.allow = ["hw_verify_address"]
+
+[[permission]]
+identifier = "deny-hw-verify-address"
+description = "Denies the hw_verify_address command without any pre-configured scope."
+commands.deny = ["hw_verify_address"]

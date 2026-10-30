@@ -49,3 +49,33 @@ pub fn sol_sign_message(seed: &Seed, account: u32, message: &[u8]) -> Result<[u8
         .map_err(|_| Error::crypto("signature self-check failed"))?;
     Ok(signature.to_bytes())
 }
+
+/// Base58 address of a raw 32-byte ed25519 public key (as returned by a hardware wallet).
+/// Fails if the bytes are not a valid curve point.
+pub fn sol_address_of_pubkey(pubkey: &[u8]) -> Result<String> {
+    let bytes: [u8; 32] = pubkey
+        .try_into()
+        .map_err(|_| Error::input("ed25519 public key must be 32 bytes"))?;
+    ed25519_dalek::VerifyingKey::from_bytes(&bytes)
+        .map_err(|_| Error::input("invalid ed25519 public key"))?;
+    Ok(bs58::encode(bytes).into_string())
+}
+
+/// Verifies (strictly: canonical `S`, no small-order key) a 64-byte ed25519 signature returned
+/// by a hardware wallet over `message`, against the expected base58 `address`. Fails with
+/// [`Error::Device`] on any mismatch; returns the signature bytes otherwise.
+pub fn sol_verify_signature(address: &str, message: &[u8], signature: &[u8]) -> Result<[u8; 64]> {
+    let key: [u8; 32] = bs58::decode(address.trim())
+        .into_vec()
+        .ok()
+        .and_then(|v| v.try_into().ok())
+        .ok_or_else(|| Error::input("invalid Solana address"))?;
+    let key = ed25519_dalek::VerifyingKey::from_bytes(&key)
+        .map_err(|_| Error::input("invalid Solana address"))?;
+    let sig: [u8; 64] = signature
+        .try_into()
+        .map_err(|_| Error::Device("ed25519 signature must be 64 bytes".into()))?;
+    key.verify_strict(message, &ed25519_dalek::Signature::from_bytes(&sig))
+        .map_err(|_| Error::Device("signature does not verify for this address".into()))?;
+    Ok(sig)
+}

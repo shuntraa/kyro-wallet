@@ -22,7 +22,7 @@ const MIN_PASSWORD_LEN: usize = 10;
 const OWN_ADDRESS_GAP: u32 = 20;
 
 /// Argon2id and signing are CPU-heavy: keep them off the async runtime's workers.
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> AppResult<T> + Send + 'static,
 ) -> AppResult<T> {
     tauri::async_runtime::spawn_blocking(f)
@@ -40,7 +40,11 @@ async fn seed_from_password(state: &AppState, password: Zeroizing<String>) -> Ap
 }
 
 /// Native OS dialog — rendered outside the webview, so a compromised UI cannot fake or skip it.
-async fn confirm_native(app: &AppHandle, title: &'static str, body: String) -> AppResult<()> {
+pub(crate) async fn confirm_native(
+    app: &AppHandle,
+    title: &'static str,
+    body: String,
+) -> AppResult<()> {
     let app = app.clone();
     let approved = blocking(move || {
         Ok(app
@@ -223,7 +227,7 @@ pub struct Accounts {
     sol: AddressOut,
 }
 
-fn network_name(n: Network) -> &'static str {
+pub(crate) fn network_name(n: Network) -> &'static str {
     match n {
         Network::Mainnet => "mainnet",
         Network::Testnet => "testnet",
@@ -316,11 +320,11 @@ fn chain_name(id: u64) -> String {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TokenHint {
-    symbol: String,
-    decimals: u8,
+    pub(crate) symbol: String,
+    pub(crate) decimals: u8,
 }
 
-fn describe_evm(s: &wallet_core::EvmTxSummary, hint: Option<&TokenHint>) -> String {
+pub(crate) fn describe_evm(s: &wallet_core::EvmTxSummary, hint: Option<&TokenHint>) -> String {
     let token_amount = |raw: &str| match hint {
         Some(h) => format!(
             "{} {} (unités brutes : {raw})",
@@ -418,7 +422,7 @@ fn own_btc_addresses(seed: &Seed, net: Network) -> AppResult<Vec<String>> {
     Ok(out)
 }
 
-fn describe_btc(s: &wallet_core::BtcTxSummary) -> String {
+pub(crate) fn describe_btc(s: &wallet_core::BtcTxSummary) -> String {
     let sats = |v: u64| format_units(&v.to_string(), 8);
     let mut out = String::from("Envoi Bitcoin\n\n");
     for (addr, value, is_change) in &s.outputs {
