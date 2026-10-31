@@ -50,6 +50,27 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "lite-api.jup.ag",
 ];
 
+/// Electrum servers (raw TLS sockets, not HTTP) that Rust itself may open **as defaults**,
+/// each with its family's isolated Tor circuits. `net_fetch` never reaches them (the webview
+/// cannot open sockets); a user's own Electrum server is validated separately (`servers.rs`).
+///
+/// Dogecoin mainnet: Komodo Platform's public ElectrumX servers, listed in
+/// https://github.com/KomodoPlatform/coins/blob/master/electrums/DOGE (operator « cipig »),
+/// TLS port 20060, Let's Encrypt certificate (`*.cipig.net`, checked 2026-10-31): validated
+/// normally. `doge.electrum3.cipig.net`, also listed, refused connections on 2026-10-31.
+/// See docs/NETWORK.md.
+pub const ELECTRUM_HOSTS: &[(&str, u16, Family)] = &[
+    ("doge.electrum1.cipig.net", 20060, Family::Dogecoin),
+    ("doge.electrum2.cipig.net", 20060, Family::Dogecoin),
+];
+
+/// Whether `host:port` is an allowlisted default Electrum server of `family`.
+pub fn electrum_default_allowed(host: &str, port: u16, family: Family) -> bool {
+    ELECTRUM_HOSTS
+        .iter()
+        .any(|(h, p, f)| *h == host && *p == port && *f == family)
+}
+
 /// mempool.space's official onion service. Source: the `Onion-Location` response header
 /// served by https://mempool.space/ (checked 2026-10-30), see docs/NETWORK.md.
 pub const MEMPOOL_ONION: &str = "mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion";
@@ -217,6 +238,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Bitcoin
     } else if host == "litecoinspace.org" {
         Family::Litecoin
+    } else if let Some((_, _, f)) = ELECTRUM_HOSTS.iter().find(|(h, _, _)| *h == host) {
+        *f
     } else if host.ends_with("trongrid.io") {
         Family::Tron
     } else if host == "s.altnet.rippletest.net" || host == "xrplcluster.com" {
@@ -938,6 +961,27 @@ mod tests {
         };
         assert_eq!(family_for("doge.my-node.example", &doge), Family::Dogecoin);
         assert_eq!(family_for("unknown.example", &c), Family::Other);
+        assert_eq!(family_for("doge.electrum1.cipig.net", &c), Family::Dogecoin);
+        assert!(electrum_default_allowed(
+            "doge.electrum2.cipig.net",
+            20060,
+            Family::Dogecoin
+        ));
+        assert!(!electrum_default_allowed(
+            "doge.electrum2.cipig.net",
+            20060,
+            Family::Bitcoin
+        ));
+        assert!(!electrum_default_allowed(
+            "doge.electrum2.cipig.net",
+            10060,
+            Family::Dogecoin
+        ));
+        for (h, _, f) in ELECTRUM_HOSTS {
+            assert_eq!(family_for(h, &NetContext::default()), *f, "{h}");
+            // Raw sockets only: never reachable through `net_fetch`.
+            assert!(!ALLOWED_HOSTS.contains(h), "{h}");
+        }
         for h in ALLOWED_HOSTS {
             assert_ne!(family_for(h, &NetContext::default()), Family::Other, "{h}");
         }

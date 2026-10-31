@@ -12,7 +12,7 @@ use zeroize::Zeroizing;
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
 use crate::error::{AppError, AppResult};
-use crate::servers::{host_of, utxo_network_key, UtxoServer};
+use crate::servers::{utxo_network_key, UtxoServer};
 use crate::state::AppState;
 use crate::utxo_backend::{self, UtxoCtx};
 
@@ -35,7 +35,7 @@ fn ctx<'a>(state: &'a AppState, coin: UtxoCoin) -> UtxoCtx<'a> {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UtxoBackendInfo {
-    /// `default` | `esplora`
+    /// `default` | `esplora` (the setting; the default of Dogecoin mainnet speaks Electrum)
     pub kind: &'static str,
     /// `mainnet` | `testnet` (Litecoin testnet4 / Dogecoin testnet)
     pub network: &'static str,
@@ -48,12 +48,12 @@ pub struct UtxoBackendInfo {
 
 fn backend_info(state: &AppState, coin: UtxoCoin) -> UtxoBackendInfo {
     let c = ctx(state, coin);
-    let base = utxo_backend::base(&c).ok();
+    let backend = utxo_backend::backend(&c).ok();
     UtxoBackendInfo {
         kind: c.server.kind_name(),
         network: utxo_network_key(state.network),
-        label: base.as_deref().and_then(host_of).unwrap_or_default(),
-        available: base.is_some(),
+        label: backend.as_ref().map(|b| b.label()).unwrap_or_default(),
+        available: backend.is_some(),
         tor: c.tor,
     }
 }
