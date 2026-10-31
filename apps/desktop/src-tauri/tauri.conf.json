@@ -14,6 +14,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Kyro",
         "width": 1440,
         "height": 900,

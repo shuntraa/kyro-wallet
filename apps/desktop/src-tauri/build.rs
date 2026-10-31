@@ -7,6 +7,9 @@ const COMMANDS: &[&str] = &[
     "vault_unlock",
     "vault_lock",
     "vault_reveal_mnemonic",
+    // Recovery phrase of a new vault: shown natively, checked in Rust (docs/IPC.md §2.1).
+    "vault_backup_show",
+    "vault_backup_verify",
     "session_touch",
     "accounts_get",
     // Account lists of the vault (docs/IPC.md §2.9).
@@ -33,6 +36,7 @@ const COMMANDS: &[&str] = &[
     "btc_tip_height",
     "btc_tx_hex",
     "btc_broadcast",
+    "btc_core_pick_cookie",
     "btc_core_setup",
     "btc_core_status",
     "btc_cbf_status",

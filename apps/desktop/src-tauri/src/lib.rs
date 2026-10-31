@@ -16,8 +16,10 @@ mod electrum;
 mod error;
 mod hw;
 mod known_tokens;
+mod nav_guard;
 mod net;
 mod network;
+mod server_approval;
 mod servers;
 mod settings;
 mod solana;
@@ -41,7 +43,11 @@ pub fn run() {
         let _ = dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../.env"));
     }
 
+    let context = tauri::generate_context!();
+    let dev_url = context.config().build.dev_url.clone();
     tauri::Builder::default()
+        // Every navigation outside the app's own origin is refused (docs/NETWORK.md).
+        .plugin(nav_guard::init(dev_url))
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
@@ -58,6 +64,20 @@ pub fn run() {
                 st.net.tor.start();
             }
             spawn_auto_lock(app.handle().clone());
+            // The main window is created here, after the state exists (`"create": false` in
+            // tauri.conf.json), so that `window.open` can be refused: a new window would load
+            // any URL, outside the navigation guard and outside Tor.
+            let main = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|w| w.label == "main")
+                .cloned()
+                .ok_or("fenêtre principale absente de la configuration")?;
+            tauri::WebviewWindowBuilder::from_config(app.handle(), &main)?
+                .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Deny)
+                .build()?;
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -75,6 +95,8 @@ pub fn run() {
             commands::vault_unlock,
             commands::vault_lock,
             commands::vault_reveal_mnemonic,
+            commands::vault_backup_show,
+            commands::vault_backup_verify,
             commands::session_touch,
             commands::accounts_get,
             accounts::vault_accounts_get,
@@ -100,6 +122,7 @@ pub fn run() {
             commands_servers::btc_tip_height,
             commands_servers::btc_tx_hex,
             commands_servers::btc_broadcast,
+            commands_servers::btc_core_pick_cookie,
             commands_servers::btc_core_setup,
             commands_servers::btc_core_status,
             commands_servers::btc_cbf_status,
@@ -186,16 +209,58 @@ pub fn run() {
             commands_hw::hw_thp_pairings,
             commands_hw::hw_thp_forget,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running Kyro");
 }
 
-/// Checks idleness every second; drops (and zeroizes) the session and tells the UI.
+/// A 1 s tick that took longer than this means the machine was suspended (or the process was
+/// frozen): the session is locked.
+const SLEEP_GAP: Duration = Duration::from_secs(20);
+
+/// True when one tick of `expected` took `monotonic` (process clock) or `wall` (system clock)
+/// much longer: system sleep / hibernation. Both clocks are checked because the monotonic
+/// clock stops during sleep on Linux and macOS, and the wall clock may be adjusted.
+fn slept(expected: Duration, monotonic: Duration, wall: Option<Duration>) -> bool {
+    let limit = expected + SLEEP_GAP;
+    monotonic > limit || wall.is_some_and(|w| w > limit)
+}
+
+/// Checks idleness every second; drops (and zeroizes) the session and tells the UI. Also
+/// locks after a system sleep, detected when the machine wakes up (portable, no OS hook).
 fn spawn_auto_lock(app: tauri::AppHandle) {
-    std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_secs(1));
-        if app.state::<state::AppState>().expire_if_idle() {
-            let _ = app.emit("vault-locked", ());
+    std::thread::spawn(move || {
+        let tick = Duration::from_secs(1);
+        loop {
+            let (mono, wall) = (std::time::Instant::now(), std::time::SystemTime::now());
+            std::thread::sleep(tick);
+            let st = app.state::<state::AppState>();
+            let woke = slept(tick, mono.elapsed(), wall.elapsed().ok());
+            let locked = if woke {
+                st.lock_if_unlocked()
+            } else {
+                st.expire_if_idle()
+            };
+            if locked {
+                let _ = app.emit("vault-locked", ());
+            }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sleep_detection() {
+        let s = Duration::from_secs;
+        assert!(!slept(s(1), s(1), Some(s(1))));
+        assert!(!slept(s(1), s(5), Some(s(5))), "busy machine, not asleep");
+        // Windows: the monotonic clock includes the sleep.
+        assert!(slept(s(1), s(3600), Some(s(3600))));
+        // Linux / macOS: it does not, the wall clock jumps.
+        assert!(slept(s(1), s(1), Some(s(600))));
+        // Wall clock moved backwards: `elapsed()` fails, the monotonic clock decides.
+        assert!(!slept(s(1), s(1), None));
+    }
 }
