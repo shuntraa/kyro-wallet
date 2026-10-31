@@ -417,6 +417,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshVaultAccounts = useCallback(
     async (select?: { family: AccountChain; index: number }) => {
       const lists = await call('vault_accounts_get');
+      // A just-created account: read its public addresses first, so the selection shows it at
+      // once instead of falling back to account 0 until the background load ends.
+      if (select && select.index !== 0) {
+        const acc = await call('accounts_get', { account: select.index }).catch(() => null);
+        if (acc) setExtraAccounts((prev) => (prev.has(select.index) ? prev : new Map(prev).set(select.index, acc)));
+      }
       setVaultLists(lists);
       if (select) selectChainAccount(select.family, select.index);
     },

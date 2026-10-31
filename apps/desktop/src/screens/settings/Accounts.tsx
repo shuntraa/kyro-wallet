@@ -4,7 +4,8 @@
 // Live. Keys come from the recovery phrase: an account is a public bookmark (number + name).
 // « Ajouter un compte » scans the next account number (address, path, balance), then adds it
 // with an editable name; renaming and removing only touch the bookmark (re-adding a removed
-// account gives back the same addresses and funds).
+// account gives back the same addresses and funds). « Créer plusieurs… » adds up to 10 accounts
+// at once with their default names (same command, one call per account, Rust checks each).
 
 import { useEffect, useState } from 'react';
 import { ACCOUNT_CHAINS, MAX_ACCOUNTS_PER_CHAIN, MAX_VAULT_ACCOUNT, call, toIpcError, type AccountChain, type VaultAccountEntry } from '@kyro/shared';
@@ -12,8 +13,8 @@ import { assetsFor, createAdapters, type Balance } from '@kyro/chains';
 import { useApp } from '../../state/app';
 import { useAsync } from '../../lib/useAsync';
 import { fmtCrypto, shortAddress } from '../../lib/format';
-import { ACCOUNT_CHAIN_HINT, ACCOUNT_CHAIN_LABEL, accountAddress, accountNameProblem, defaultAccountName, familyAdapters, nextAccountIndex } from '../../lib/accounts';
-import { useAccountBalanceText } from '../../components/AccountPicker';
+import { ACCOUNT_CHAIN_HINT, ACCOUNT_CHAIN_LABEL, accountAddress, accountNameProblem, defaultAccountName, familyAdapters, nextAccountIndex, planNewAccounts } from '../../lib/accounts';
+import { useAccountBalanceText, useCreateAccounts } from '../../components/AccountPicker';
 import { CopyButton } from '../../components/kit';
 import { Dialog } from '../../components/ui/dialog';
 import { Badge, Button, Input, Label, Notice, Spinner } from '../../components/ui/primitives';
@@ -22,6 +23,7 @@ import { IconPlus, IconTrash } from '../../components/icons';
 export function AccountsSection({ family }: { family?: AccountChain }) {
   const { vaultLists, hwOnly, activeHw, refreshVaultAccounts } = useApp();
   const [adding, setAdding] = useState<AccountChain | null>(family ?? null);
+  const [bulk, setBulk] = useState<AccountChain | null>(null);
   const [renaming, setRenaming] = useState<{ family: AccountChain; entry: VaultAccountEntry } | null>(null);
   const [removing, setRemoving] = useState<{ family: AccountChain; entry: VaultAccountEntry } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,9 +52,10 @@ export function AccountsSection({ family }: { family?: AccountChain }) {
         {error && <Notice tone="error">{error}</Notice>}
       </section>
       {ACCOUNT_CHAINS.map((c) => (
-        <ChainAccounts key={c} family={c} list={vaultLists[c]} onAdd={() => setAdding(c)} onRename={(entry) => setRenaming({ family: c, entry })} onRemove={(entry) => setRemoving({ family: c, entry })} />
+        <ChainAccounts key={c} family={c} list={vaultLists[c]} onAdd={() => setAdding(c)} onBulk={() => setBulk(c)} onRename={(entry) => setRenaming({ family: c, entry })} onRemove={(entry) => setRemoving({ family: c, entry })} />
       ))}
       {adding && <AddAccountDialog family={adding} list={vaultLists[adding]} onClose={() => setAdding(null)} />}
+      {bulk && <BulkCreateDialog family={bulk} list={vaultLists[bulk]} onClose={() => setBulk(null)} />}
       {renaming && <RenameDialog {...renaming} onClose={() => setRenaming(null)} />}
       {removing && (
         <Dialog open onOpenChange={(v) => !v && setRemoving(null)} title={`Retirer « ${removing.entry.name} » ?`}>
@@ -81,7 +84,7 @@ export function AccountsSection({ family }: { family?: AccountChain }) {
   );
 }
 
-function ChainAccounts({ family, list, onAdd, onRename, onRemove }: { family: AccountChain; list: VaultAccountEntry[]; onAdd: () => void; onRename: (e: VaultAccountEntry) => void; onRemove: (e: VaultAccountEntry) => void }) {
+function ChainAccounts({ family, list, onAdd, onBulk, onRename, onRemove }: { family: AccountChain; list: VaultAccountEntry[]; onAdd: () => void; onBulk: () => void; onRename: (e: VaultAccountEntry) => void; onRemove: (e: VaultAccountEntry) => void }) {
   const { accountSources, selectedAccounts, selectChainAccount } = useApp();
   const balance = useAccountBalanceText();
   const full = list.length >= MAX_ACCOUNTS_PER_CHAIN || nextAccountIndex(list, MAX_VAULT_ACCOUNT) === null;
@@ -92,9 +95,14 @@ function ChainAccounts({ family, list, onAdd, onRename, onRemove }: { family: Ac
           <span className="text-[14px] font-semibold">{ACCOUNT_CHAIN_LABEL[family]}</span>
           <span className="text-[12px] text-mute">{ACCOUNT_CHAIN_HINT[family]}</span>
         </span>
-        <Button size="sm" variant="outline" onClick={onAdd} disabled={full}>
-          <IconPlus size={14} /> Ajouter un compte
-        </Button>
+        <span className="flex shrink-0 gap-1.5">
+          <Button size="sm" variant="ghost" onClick={onBulk} disabled={full} aria-label={`Créer plusieurs comptes ${ACCOUNT_CHAIN_LABEL[family]}`}>
+            Créer plusieurs…
+          </Button>
+          <Button size="sm" variant="outline" onClick={onAdd} disabled={full}>
+            <IconPlus size={14} /> Ajouter un compte
+          </Button>
+        </span>
       </div>
       {list.map((e) => {
         const src = accountSources.find((s) => s.family === family && s.index === e.index);
@@ -279,6 +287,57 @@ function AddAccountDialog({ family, list, onClose }: { family: AccountChain; lis
         <Button onClick={onClose}>Annuler</Button>
         <Button variant="primary" disabled={index === null || !!problem || busy} onClick={() => void add()}>
           {busy ? <Spinner /> : 'Ajouter le compte'}
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** Highest number of accounts « Créer plusieurs… » adds in one go. */
+const BULK_MAX = 10;
+
+function BulkCreateDialog({ family, list, onClose }: { family: AccountChain; list: VaultAccountEntry[]; onClose: () => void }) {
+  const create = useCreateAccounts();
+  const room = Math.min(BULK_MAX, planNewAccounts(list, BULK_MAX, MAX_ACCOUNTS_PER_CHAIN, MAX_VAULT_ACCOUNT).length);
+  const [countStr, setCountStr] = useState(String(Math.min(5, room)));
+  const n = /^\d{1,2}$/.test(countStr.trim()) ? Number(countStr.trim()) : NaN;
+  const count = Number.isInteger(n) && n >= 1 && n <= room ? n : null;
+  const planned = count === null ? [] : planNewAccounts(list, count, MAX_ACCOUNTS_PER_CHAIN, MAX_VAULT_ACCOUNT);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async () => {
+    if (count === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await create(family, count);
+      onClose();
+    } catch (e) {
+      setError(`${toIpcError(e).message} Les comptes déjà créés restent dans ta liste.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const names = planned.map((i) => defaultAccountName(family, i));
+  return (
+    <Dialog open onOpenChange={(v) => !v && !busy && onClose()} title={`Créer plusieurs comptes ${ACCOUNT_CHAIN_LABEL[family]}`} description={`Chaque compte vient de ta phrase de récupération, avec ses propres adresses. Au plus ${MAX_ACCOUNTS_PER_CHAIN} comptes par chaîne (tu en as ${list.length}). Rien n’est signé.`}>
+      <div className="flex w-[160px] flex-col gap-1.5">
+        <Label htmlFor="bulk-count">Nombre de comptes</Label>
+        <Input id="bulk-count" inputMode="numeric" value={countStr} onChange={(e) => setCountStr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && count !== null && !busy && void run()} />
+      </div>
+      {count === null && <span className="text-[12px] text-warn">{room === 0 ? `Limite de ${MAX_ACCOUNTS_PER_CHAIN} comptes atteinte.` : `Entre 1 et ${room}.`}</span>}
+      {names.length > 0 && (
+        <p className="m-0 text-[13px] leading-[1.55] text-text2">
+          {names.length === 1 ? `Nouveau compte : ${names[0]}.` : `Nouveaux comptes : ${names.length <= 4 ? names.join(', ') : `${names.slice(0, 3).join(', ')}… ${names[names.length - 1]}`}.`} Tu pourras les renommer ici.
+        </p>
+      )}
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="flex justify-end gap-2">
+        <Button onClick={onClose} disabled={busy}>
+          Annuler
+        </Button>
+        <Button variant="primary" disabled={count === null || busy} onClick={() => void run()}>
+          {busy ? <Spinner /> : count !== null && count > 1 ? `Créer ${count} comptes` : 'Créer le compte'}
         </Button>
       </div>
     </Dialog>
