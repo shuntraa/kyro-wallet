@@ -4,31 +4,14 @@
 // screen of the unlocked app.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { assetsFor, findChain, unitsToNumber, type AssetDef } from '@kyro/chains';
-import type { AccountChain } from '@kyro/shared';
+import { assetsFor } from '@kyro/chains';
 import type { MarketCoin, SimplePrice } from '@kyro/market';
+import { computeHoldings, type Holding } from '../lib/holdings';
 import { useVault, type AccountSource } from './app';
 import { useOnTorReady } from './tor';
 import { useOnCbfSynced } from './cbf';
 
-export interface Holding {
-  /** Unique row key: the asset id, plus `@index` for a row of one account among several. */
-  key: string;
-  asset: AssetDef;
-  /** Set on per-account rows of a chain with several vault accounts (§2.9). */
-  account?: { family: AccountChain; index: number; name: string };
-  amount: bigint;
-  units: number;
-  price: number | null;
-  change24h: number | null;
-  change7d: number | null;
-  value: number | null;
-  spark: number[];
-  /** 0..1 of the portfolio value. */
-  share: number;
-  /** Balance could not be loaded (RPC error). */
-  failed: boolean;
-}
+export type { Holding } from '../lib/holdings';
 
 interface PortfolioValue {
   /** Balances of the SELECTED account of each chain (what Envoyer / Swap spend from). */
@@ -183,66 +166,19 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     return out;
   }, [accountSources, accountBalances, adapters]);
 
-  const { holdings, accountHoldings, total, change24hFiat } = useMemo(() => {
-    const perAccount: Holding[] = [];
-    const aggregate: Holding[] = [];
-    const row = (asset: AssetDef, amount: bigint, failed: boolean, key: string, account?: Holding['account']): Holding => {
-      const m = marketById.get(asset.coingeckoId);
-      const p = price(asset.coingeckoId);
-      const units = unitsToNumber(amount, asset.decimals);
-      return {
-        key,
-        asset,
-        ...(account ? { account } : {}),
-        amount,
-        units,
-        price: p?.price ?? null,
-        change24h: p?.change24h ?? null,
-        change7d: m?.change7d ?? null,
-        value: p ? units * p.price : null,
-        spark: m?.sparkline7d ?? [],
-        share: 0,
-        failed,
-      };
-    };
-    for (const asset of assetsFor(network)) {
-      const family = asset.family as AccountChain;
-      // Only the chains of the active wallet (a hardware wallet may hold only some of them),
-      // and every account of the chain that has this asset's chain.
-      const sources = accountSources.filter((x) => x.family === family && x.adapters.some((a) => a.chain.key === asset.chainKey));
-      if (sources.length === 0) continue;
-      const chain = findChain(network, asset.chainKey);
-      // Phase 1 natives, Litecoin / Dogecoin (« configure ton serveur »), TRX, XRP and ADA always show.
-      const always = asset.kind === 'native' && (chain?.phase === 1 || asset.family === 'ltc' || asset.family === 'doge' || asset.family === 'tron' || asset.family === 'xrp' || asset.family === 'ada');
-      const errored = chainErrors[asset.chainKey] !== undefined;
-      let sum = 0n;
-      let known = false;
-      const multi = sources.length > 1;
-      for (const src of sources) {
-        const m = accountBalances.get(`${src.family}:${src.index}`);
-        const amount = m?.get(asset.id) ?? 0n;
-        const has = m?.has(asset.id) ?? false;
-        sum += amount;
-        known ||= has;
-        if (multi && (always || amount > 0n)) perAccount.push(row(asset, amount, errored && !has, `${asset.id}@${src.index}`, { family, index: src.index, name: src.name }));
-      }
-      if (!always && sum === 0n) continue;
-      const agg = row(asset, sum, errored && !known, asset.id);
-      aggregate.push(agg);
-      if (!multi) perAccount.push(agg);
-    }
-    const sum = aggregate.reduce((s, r) => s + (r.value ?? 0), 0);
-    let delta = 0;
-    for (const r of aggregate) {
-      r.share = sum > 0 && r.value ? r.value / sum : 0;
-      if (r.value && r.change24h !== null) delta += r.value - r.value / (1 + r.change24h / 100);
-    }
-    for (const r of perAccount) if (r.account) r.share = sum > 0 && r.value ? r.value / sum : 0;
-    const order = (a: Holding, b: Holding) => (b.value ?? -1) - (a.value ?? -1) || Number(b.amount - a.amount);
-    aggregate.sort(order);
-    perAccount.sort(order);
-    return { holdings: aggregate, accountHoldings: perAccount, total: sum, change24hFiat: delta };
-  }, [network, accountBalances, marketById, price, chainErrors, accountSources]);
+  // Totals: every account of every chain added together, each account once (lib/holdings.ts).
+  const { holdings, accountHoldings, total, change24hFiat } = useMemo(
+    () =>
+      computeHoldings({
+        network,
+        sources: accountSources.map((x) => ({ family: x.family, index: x.index, name: x.name, chainKeys: x.adapters.map((a) => a.chain.key) })),
+        accountBalances,
+        chainErrors,
+        price,
+        marketById,
+      }),
+    [network, accountBalances, marketById, price, chainErrors, accountSources],
+  );
 
   const value: PortfolioValue = {
     balances,
