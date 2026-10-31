@@ -32,10 +32,13 @@ import {
   type ServerTestResult,
   type ServerTestTarget,
   type Servers,
+  type Network,
   type SolanaCluster,
 } from '@kyro/shared';
 import { evmChains, solChain } from '@kyro/chains';
 import { useApp } from '../../state/app';
+import { NetworkSwitchDialog, useNetworkInfo } from '../../components/NetworkSwitch';
+import { NETWORK_HINT, NETWORK_LABEL } from '../../lib/network';
 import { cbfPhaseLabel, cbfStore, useCbf } from '../../state/cbf';
 import { usePortfolio } from '../../state/portfolio';
 import { cn } from '../../lib/cn';
@@ -184,10 +187,11 @@ export function ServersSection() {
   const tor = settings.tor.enabled;
   return (
     <>
+      <NetworkChoiceCard />
       <Card title="Réseaux et serveurs" badge={<Badge tone={network === 'testnet' ? 'warn' : 'up'}>{network === 'testnet' ? 'Testnet' : 'Mainnet'}</Badge>}>
         <p className="m-0 text-[13px] leading-[1.55] text-mute">
           {network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia, Solana devnet, Litecoin testnet4, Dogecoin testnet, TRON Nile, XRP Ledger testnet et Cardano preprod. ' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana, Litecoin, Dogecoin, TRON, XRP Ledger, Cardano. '}
-          Le réseau est fixé au lancement. Pour chaque chaîne, tu peux remplacer le serveur par défaut par le tien : Kyro vérifie qu’il est sur le bon réseau avant de l’enregistrer.
+          Pour chaque chaîne, tu peux remplacer le serveur par défaut par le tien : Kyro vérifie qu’il est sur le bon réseau avant de l’enregistrer.
         </p>
         <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
           Un serveur personnalisé remplace celui par défaut <strong className="font-semibold text-text">sans repli</strong> : s’il ne répond plus, Kyro affiche une erreur et n’interroge jamais le serveur par défaut à sa place.{' '}
@@ -203,6 +207,51 @@ export function ServersSection() {
       <EvmCard />
       <SolanaCard />
     </>
+  );
+}
+
+/** Réseau principal / réseau de test (docs/IPC.md §2.10): saved by the shell, applied by a restart. */
+function NetworkChoiceCard() {
+  const { network, status, demo } = useApp();
+  const info = useNetworkInfo();
+  const [target, setTarget] = useState<Network | null>(null);
+  const current = info.data?.network ?? network;
+  const locked = info.data ? !info.data.canSwitch : true;
+  return (
+    <Card title="Réseau" badge={<Badge tone={current === 'testnet' ? 'warn' : 'up'}>{NETWORK_LABEL[current]}</Badge>}>
+      <div role="radiogroup" aria-label="Réseau" className="flex gap-2.5">
+        {(['mainnet', 'testnet'] as const).map((n) => {
+          const active = current === n;
+          return (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              disabled={!active && locked}
+              onClick={() => !active && setTarget(n)}
+              className={cn(
+                'press flex min-h-14 flex-1 basis-0 flex-col items-start justify-center gap-0.5 rounded-box border px-3.5 py-2.5 text-left disabled:opacity-50',
+                active ? 'border-ice bg-ice/[.07] shadow-[inset_0_0_0_0.5px_var(--color-ice)]' : 'border-line-2 bg-bg hover:border-line-3 hover:bg-raised/50',
+              )}
+            >
+              <span className="text-[13px] font-medium">
+                {NETWORK_LABEL[n]} {active && <span className="font-normal text-ice-text2">· utilisé</span>}
+              </span>
+              <span className="text-[12px] text-mute">{n === 'mainnet' ? 'Fonds réels' : 'Jetons sans valeur'}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="m-0 text-[13px] leading-[1.55] text-mute">
+        Chaque réseau a son propre coffre et ses propres comptes : changer de réseau garde l’autre coffre sur cet ordinateur (rien n’est supprimé), verrouille Kyro et le redémarre. Tu es sur le {NETWORK_LABEL[current].toLowerCase()} ({NETWORK_HINT[current]}).
+      </p>
+      {info.data && !info.data.canSwitch && (
+        <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>{demo ? 'Mode démo : le réseau est imposé par l’adresse de la page (?network=). Retire-la pour choisir ici.' : 'Le réseau est imposé par la variable d’environnement KYRO_NETWORK (développement). Retire-la pour choisir ici.'}</Notice>
+      )}
+      {info.error && <Notice tone="error">Réseau illisible : {info.error.message}</Notice>}
+      {info.data && <NetworkSwitchDialog info={info.data} target={target} hasVault={status?.exists ?? true} onClose={() => setTarget(null)} />}
+    </Card>
   );
 }
 

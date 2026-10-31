@@ -18,6 +18,8 @@ import { Dialog } from '../components/ui/dialog';
 import { HwSetup } from '../components/hw';
 import { IconBack, IconChevronRight, IconImport, IconPlus, IconUsbKey, IconWarn } from '../components/icons';
 import { DEMO_PASSWORD_HINT } from './demoHint';
+import { NetworkSwitchDialog, useNetworkInfo } from '../components/NetworkSwitch';
+import { NETWORK_HINT, NETWORK_LABEL } from '../lib/network';
 import { idx } from '../components/motion';
 
 /** Onboarding side panel: the logo and the name, nothing decorative. */
@@ -49,6 +51,8 @@ export function Welcome() {
   const [mode, setMode] = useState<Mode>('home');
   const [info, setInfo] = useState<null | 'threat' | 'code' | 'network'>(null);
   const { network, enterVault } = useApp();
+  const netInfo = useNetworkInfo();
+  const [switchTo, setSwitchTo] = useState<'mainnet' | 'testnet' | null>(null);
 
   if (mode === 'create') return <CreateFlow onCancel={() => setMode('home')} />;
   if (mode === 'import') return <ImportFlow onCancel={() => setMode('home')} />;
@@ -87,7 +91,16 @@ export function Welcome() {
           <ChoiceCard icon={<IconImport size={20} />} title="Importer une phrase de récupération" subtitle="12 ou 24 mots BIP39, depuis un autre wallet." onClick={() => setMode('import')} />
         </div>
 
-        <div className="rise flex gap-6 text-[13px]" style={idx(3)}>
+        <p className="rise -mt-6 m-0 text-[13px] text-mute" style={idx(3)}>
+          Le coffre sera créé sur le <span className="text-text2">{NETWORK_LABEL[network].toLowerCase()}</span> ({NETWORK_HINT[network]}).{' '}
+          {netInfo.data?.canSwitch && (
+            <button type="button" className="text-ice underline decoration-ice/40 underline-offset-[4px] hover:decoration-ice" onClick={() => setSwitchTo(network === 'mainnet' ? 'testnet' : 'mainnet')}>
+              Passer sur le {NETWORK_LABEL[network === 'mainnet' ? 'testnet' : 'mainnet'].toLowerCase()}
+            </button>
+          )}
+        </p>
+
+        <div className="rise flex gap-6 text-[13px]" style={idx(4)}>
           {(
             [
               ['threat', 'Modèle de menace'],
@@ -102,6 +115,7 @@ export function Welcome() {
         </div>
       </div>
 
+      {netInfo.data && <NetworkSwitchDialog info={netInfo.data} target={switchTo} hasVault={false} onClose={() => setSwitchTo(null)} />}
       <Dialog open={info === 'threat'} onOpenChange={() => setInfo(null)} title="Modèle de menace">
         <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-[13px] leading-[1.55] text-text2">
           <li>Ta phrase est chiffrée sur cet appareil (Argon2id + XChaCha20-Poly1305). Sans ton mot de passe, le fichier du coffre est inutilisable.</li>
