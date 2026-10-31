@@ -122,6 +122,19 @@ export function updateLocalTx(network: Network, id: string, patch: Partial<Local
   writeJson(`txs.${network}`, getLocalTxs(network).map((t) => (t.id === id ? { ...t, ...patch } : t)));
 }
 
+// ---------------------------------------------------------------- last known prices
+
+/** Last plausible price seen on this device, per coin and currency (fiat-entry check in Envoyer). */
+export function getLastPrice(coinId: string, currency: string): { price: number; at: number } | null {
+  const v = readJson<unknown>(`price.${currency}.${coinId}`, null);
+  if (!v || typeof v !== 'object') return null;
+  const { price, at } = v as { price?: unknown; at?: unknown };
+  return typeof price === 'number' && Number.isFinite(price) && price > 0 && typeof at === 'number' && Number.isFinite(at) ? { price, at } : null;
+}
+export function setLastPrice(coinId: string, currency: string, price: number): void {
+  if (Number.isFinite(price) && price > 0) writeJson(`price.${currency}.${coinId}`, { price, at: Date.now() });
+}
+
 // ---------------------------------------------------------------- approvals
 
 export interface ApprovalRecord {

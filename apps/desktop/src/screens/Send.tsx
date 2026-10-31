@@ -47,7 +47,8 @@ import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtEta, fmtFiat, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { guardAllowsSend, guardOnInput, guardVerify, handedOverGuard, initialGuard, pickedGuard, type GuardState } from '../lib/clipboardGuard';
-import { addLocalTx, bumpContactSends, findContact, getContacts, getLocalTxs, saveContacts, type ContactFamily } from '../lib/storage';
+import { addLocalTx, bumpContactSends, findContact, getContacts, getLastPrice, getLocalTxs, saveContacts, setLastPrice, type ContactFamily } from '../lib/storage';
+import { checkPricePlausible } from '@kyro/market';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
 import { useTorBlocked } from '../components/Tor';
@@ -104,6 +105,16 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const nativeAsset = chain ? assetsFor(network).find((a) => a.chainKey === chain.key && a.kind === 'native') : undefined;
   const balance = asset ? pf.balances.get(asset.id) ?? 0n : 0n;
   const price = asset ? pf.price(asset.coingeckoId)?.price ?? null : null;
+  // Fiat entry turns a price from the network into a crypto amount: only with a plausible price
+  // (close to the last one seen here and to the 7-day median), never an unbounded one.
+  const priceCheck = useMemo(
+    () => (asset ? checkPricePlausible(price, { sparkline7d: pf.marketById.get(asset.coingeckoId)?.sparkline7d ?? [], lastKnown: getLastPrice(asset.coingeckoId, cur) }) : { ok: false, deviation: null }),
+    [asset, price, pf.marketById, cur],
+  );
+  useEffect(() => {
+    if (asset && priceCheck.ok && price !== null) setLastPrice(asset.coingeckoId, cur, price);
+  }, [asset, priceCheck.ok, price, cur]);
+  const fiatPrice = priceCheck.ok ? price : null;
   const nativePrice = nativeAsset ? pf.price(nativeAsset.coingeckoId)?.price ?? null : null;
 
   // Recipient + clipboard guard.
@@ -240,11 +251,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     if (!amountStr) return null;
     if (fiatMode) {
       const f = Number(amountStr.replace(',', '.'));
-      if (!price || !Number.isFinite(f) || f <= 0) return null;
-      return tryParseUnits((f / price).toFixed(Math.min(decimals, 12)), decimals);
+      if (!fiatPrice || !Number.isFinite(f) || f <= 0) return null;
+      return tryParseUnits((f / fiatPrice).toFixed(Math.min(decimals, 12)), decimals);
     }
     return tryParseUnits(amountStr, decimals);
-  }, [amountStr, fiatMode, price, decimals]);
+  }, [amountStr, fiatMode, fiatPrice, decimals]);
+  /** Share of the balance this amount represents (fiat entry: the market price decided it). */
+  const balanceShare = amountBase !== null && balance > 0n ? Number((amountBase * 10_000n) / balance) / 100 : null;
   // XRP: a new account needs at least the base reserve (1 XRP), else tecNO_DST_INSUF_XRP.
   const xrpBelowActivation = isXrp && !!xrpDestInfo && !xrpDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XRP_ACTIVATION;
   const xrpTagMissing = isXrp && !!xrpDestInfo?.requireDestTag && tagParsed.tag === undefined;
@@ -644,7 +657,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               <button
                 type="button"
                 aria-label={fiatMode ? `Saisir en ${asset.symbol}` : `Saisir en ${cur}`}
-                disabled={price === null}
+                disabled={fiatPrice === null && !fiatMode}
+                title={!priceCheck.ok && priceCheck.reason ? `${priceCheck.reason} Saisie en ${cur} désactivée.` : undefined}
                 onClick={() => {
                   setFiatMode((f) => !f);
                   setAmountStr('');
@@ -659,6 +673,12 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               </button>
             </div>
             {overBalance && <span className="text-[12px] text-down">{isXrp ? 'Montant supérieur à ton solde dépensable (la réserve reste bloquée).' : 'Montant supérieur à ton solde.'}</span>}
+            {fiatMode && !priceCheck.ok && <span className="text-[12px] text-down">{priceCheck.reason ?? 'Prix indisponible.'} Saisis le montant en {asset.symbol}.</span>}
+            {fiatMode && !overBalance && amountBase !== null && balanceShare !== null && balanceShare >= 50 && (
+              <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+                <strong className="font-semibold">{fmtCrypto(amountBase, decimals, asset.symbol)}, soit {Math.round(balanceShare)} % de ton solde.</strong> En saisie {cur}, c’est le prix du marché qui fixe la quantité envoyée : vérifie ce montant en {asset.symbol}, c’est lui que tu signes.
+              </Notice>
+            )}
             {isXrp && <XrpSpendable account={xrpMe.data} hidden={hideBalances} />}
             {isAda && adaMe.data && (
               <span className="text-[12px] leading-[1.45] text-mute">
@@ -772,6 +792,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
             <span key={asset.id} className="figure fade-in text-[40px] leading-[1.05]">{sendAmount !== null && sendAmount > 0n ? fmtCrypto(sendAmount, decimals, asset.symbol) : `0 ${asset.symbol}`}</span>
             <span className="text-[13px] text-mute">{amountFiat !== null ? fmtFiat(amountFiat, cur) : '—'}</span>
+            {fiatMode && fiatPrice !== null && sendAmount !== null && sendAmount > 0n && (
+              <span className="text-center text-[12px] text-warn">Saisi en {cur} au prix de {fmtFiat(fiatPrice, cur)} le {asset.symbol} : tu signes le montant en {asset.symbol} ci-dessus.</span>
+            )}
           </div>
           <div className="flex items-center gap-2.5 rounded-box border border-line bg-bg px-3.5 py-3">
             <CoinIcon glyph={asset.glyph} color={asset.color} size={30} />
