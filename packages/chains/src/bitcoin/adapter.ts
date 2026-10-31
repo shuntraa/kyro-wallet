@@ -21,6 +21,7 @@ import type { Balance, BtcSigned, BtcUnsigned, BuildParams, ChainAdapter, FeeEst
 import { outputTypeOf, selectAll, selectCoins, type SelectableUtxo, type Selection } from './coinselect';
 import type { HwSigner } from '../hw';
 import { derivePubkey, fingerprintBytes, parseXpub } from './xpub';
+import { scriptTypeOf } from '../utxo/utxo';
 
 bitcoin.initEccLib(ecc);
 
@@ -93,10 +94,14 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     return this.accounts[kind].address;
   }
 
+  /**
+   * Only the five standard types: P2PKH, P2SH, P2WPKH, P2WSH, P2TR. A « future » SegWit address
+   * (witness v2 to v16, or v1 that is not 32 bytes) is valid bech32m but nobody can spend it
+   * today: coins sent there are lost (or taken by whoever first defines the rule).
+   */
   isValidAddress(address: string): boolean {
     try {
-      bitcoin.address.toOutputScript(address.trim(), this.net);
-      return true;
+      return scriptTypeOf(bitcoin.address.toOutputScript(address.trim(), this.net)) !== null;
     } catch {
       return false;
     }

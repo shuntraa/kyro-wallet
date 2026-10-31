@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodeFunctionData, erc20Abi, maxUint256 } from 'viem';
 import type { NetRequest, NetResponse } from '@kyro/shared';
+import { zeroExData } from './calldata';
 import { applySlippage, buildApproval, buildRevoke, compareQuotes, fetchQuotes, isUnlimitedAllowance, netValueFiat, NATIVE_EVM, ZeroExProvider, type Quote } from '../src';
 
 const TOKEN = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
@@ -83,7 +84,7 @@ describe('providers', () => {
       seen.push(req);
       return {
         status: 200,
-        body: JSON.stringify({ buyAmount: '100', minBuyAmount: '99', transaction: { to: SPENDER, data: '0x12', gas: '100000', gasPrice: '1000000000', value: '0' }, issues: { allowance: { actual: '0', spender: SPENDER } } }),
+        body: JSON.stringify({ buyAmount: '100', minBuyAmount: '99', transaction: { to: SPENDER, data: zeroExData({ sellToken: TOKEN, sellAmount: 1_000_000n, recipient: SPENDER, buyToken: NATIVE_EVM, minAmountOut: 99n }), gas: '100000', gasPrice: '1000000000', value: '0' }, issues: { allowance: { actual: '0', spender: SPENDER } } }),
       };
     };
     const params = {

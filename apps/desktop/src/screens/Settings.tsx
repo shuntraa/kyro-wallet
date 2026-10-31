@@ -2,12 +2,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { call, toIpcError, type AccountChain, type ApiKeyName, type Settings } from '@kyro/shared';
-import { outgoingHosts } from '@kyro/chains';
+import { findLookalike, outgoingHosts, type KnownAddress } from '@kyro/chains';
 import { useApp, useVault, type SettingsSection } from '../state/app';
 import { cn } from '../lib/cn';
 import { shortAddress } from '../lib/format';
 import { getBackupState, getContacts, saveContacts, type Contact, type ContactFamily } from '../lib/storage';
 import { PasswordField } from '../components/kit';
+import { PoisoningWarning } from '../components/Poisoning';
 import { ServersSection } from './settings/Servers';
 import { Devices } from './settings/Devices';
 import { AccountsSection } from './settings/Accounts';
@@ -449,8 +450,8 @@ function Connections({ compact }: { compact?: boolean }) {
 }
 
 function Contacts() {
-  const { accounts } = useVault();
-  const { adapters } = useVault();
+  const { accounts, adapters } = useVault();
+  const { accountSources } = useApp();
   const [list, setList] = useState<Contact[]>(() => getContacts());
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
@@ -461,7 +462,20 @@ function Contacts() {
     setList(l);
     saveContacts(l);
   };
-  void accounts;
+  // Address poisoning: a contact saved from a look-alike would become a « known » address. Compare
+  // the new one with the other contacts and your own addresses before it goes into the book.
+  const lookalike = (() => {
+    if (!valid) return null;
+    const own = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address, accounts.sol?.address, accounts.ltc?.address, accounts.doge?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, ...accountSources.filter((x) => x.family === family).flatMap((x) => x.addresses)];
+    const ownOfFamily = own.filter((a): a is string => !!a && (adapter?.isValidAddress(a) ?? false));
+    const known: KnownAddress[] = [
+      ...list.filter((c) => c.family === family).map((c) => ({ address: c.address, source: 'contact' as const, label: c.name })),
+      ...ownOfFamily.map((a) => ({ address: a, source: 'own' as const, label: 'ton adresse' })),
+    ];
+    return findLookalike(address.trim(), known, family);
+  })();
+  const [ack, setAck] = useState(false);
+  useEffect(() => setAck(false), [address, family]);
   return (
     <Panel className="gap-4 py-5">
       <span className="text-[15px] font-medium tracking-[-0.01em]">Carnet d’adresses</span>
@@ -491,10 +505,11 @@ function Contacts() {
         </div>
         <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Adresse" className="font-mono text-[13px]" />
         {address && !valid && <span className="text-[12px] text-down">Adresse invalide pour ce réseau.</span>}
+        {lookalike && <PoisoningWarning recipient={address.trim()} lookalike={lookalike} family={family} acknowledged={ack} onAcknowledge={setAck} />}
         <div>
           <Button
             variant="primary"
-            disabled={!name.trim() || !valid}
+            disabled={!name.trim() || !valid || (!!lookalike && !ack)}
             onClick={() => {
               persist([...list, { id: crypto.randomUUID(), name: name.trim(), address: address.trim(), family, sends: 0 }]);
               setName('');

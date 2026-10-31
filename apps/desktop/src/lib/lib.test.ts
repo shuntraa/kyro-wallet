@@ -15,7 +15,7 @@ import {
   toInputDecimal,
 } from './format';
 import { areaPath, downsample, fitSeries, smoothPath } from './smooth';
-import { guardAllowsSend, guardOnInput, guardVerify, initialGuard } from './clipboardGuard';
+import { guardAllowsSend, guardOnInput, guardVerify, handedOverGuard, initialGuard, pickedGuard } from './clipboardGuard';
 import { portfolioSeries, priceAt } from './portfolioSeries';
 import { toCsv } from './csv';
 
@@ -90,6 +90,14 @@ describe('format: misc', () => {
     expect(sanitizeDecimalInput('00012', 8)).toBe('12');
     expect(sanitizeDecimalInput('1,123456789', 6)).toBe('1,123456');
     expect(sanitizeDecimalInput('abc', 6)).toBe('');
+    // Pasted amounts with thousands grouping: the last separator is the decimal mark.
+    expect(sanitizeDecimalInput('1,234.56', 6)).toBe('1234,56');
+    expect(sanitizeDecimalInput('1.234,56', 6)).toBe('1234,56');
+    expect(sanitizeDecimalInput('12,345,678.9', 6)).toBe('12345678,9');
+    expect(sanitizeDecimalInput('1 234,56', 6)).toBe('1234,56');
+    // A stray key while typing never multiplies the amount.
+    expect(sanitizeDecimalInput('0,5.', 6)).toBe('0,5');
+    expect(sanitizeDecimalInput('0,5.3', 6)).toBe('0,53');
     expect(toInputDecimal(250_000_000_000_000_000n, 18)).toBe('0,25');
   });
   it('CSV escaping', () => {
@@ -161,6 +169,13 @@ describe('clipboard guard', () => {
     s = guardOnInput(s, addr.slice(0, -1), 'deleteContentBackward');
     expect(s).toEqual({ pasted: null, tampered: false, source: 'typed' });
     expect(guardOnInput(s, '', 'deleteContentBackward')).toEqual(initialGuard);
+  });
+  it('an address picked from Kyro\'s lists is watched like a paste, a handed-over one is « typed »', () => {
+    const picked = pickedGuard(addr);
+    expect(picked.source).toBe('picked');
+    expect(guardOnInput(picked, '0xBAD0000000000000000000000000000000000000', undefined).tampered).toBe(true);
+    // The search palette's address: origin unknown, never shown as pasted.
+    expect(handedOverGuard).toEqual({ pasted: null, tampered: false, source: 'typed' });
   });
 });
 

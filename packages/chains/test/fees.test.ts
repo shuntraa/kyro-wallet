@@ -129,6 +129,16 @@ describe('evmFeeOptionsFromHistory', () => {
     expect(e.minimum).toEqual({ family: 'evm', maxFeePerGas: 10n * GWEI, maxPriorityFeePerGas: 0n });
     expect(e.hint).toBe('10 gwei');
   });
+  it('caps tips an RPC inflates: fast ≤ 3 × normal ≤ 9 × slow, all ≤ 3 × base fee + 2 gwei', () => {
+    const tip = (e: ReturnType<typeof evmFeeOptionsFromHistory>, l: 'slow' | 'normal' | 'fast') => (e.options[l].params as { maxPriorityFeePerGas: bigint }).maxPriorityFeePerGas;
+    const e = evmFeeOptionsFromHistory(10n * GWEI, [[1n * GWEI, 2n * GWEI, 500n * GWEI]], 12);
+    expect(tip(e, 'fast')).toBe(6n * GWEI);
+    const n = evmFeeOptionsFromHistory(10n * GWEI, [[1n * GWEI, 40n * GWEI, 80n * GWEI]], 12);
+    expect(tip(n, 'normal')).toBe(3n * GWEI);
+    // L2 with a tiny base fee: a « 100 gwei » tip is cut to 3 × base + 2 gwei.
+    const l2 = evmFeeOptionsFromHistory(10_000_000n, [[0n, 0n, 100n * GWEI]], 0.25);
+    expect(tip(l2, 'fast')).toBe(2_030_000_000n);
+  });
   it('median helper', () => {
     expect(medianBig([3n, 1n, 2n])).toBe(2n);
     expect(medianBig([])).toBe(0n);

@@ -37,6 +37,16 @@ export function buildRevoke(token: string, spender: string): ApprovalCall {
   return { to: getAddress(token), data: encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [s, 0n] }), value: 0n, spender: s, amount: 0n, unlimited: false };
 }
 
+/**
+ * Tokens whose `approve` reverts when changing a non-zero allowance to another non-zero one (USDT
+ * on Ethereum: « approve to zero first »). Kyro then signs `approve(spender, 0)` before the new one.
+ */
+const ZERO_FIRST: Record<number, string[]> = { 1: ['0xdac17f958d2ee523a2206206994597c13d831ec7'] };
+
+export function requiresZeroAllowanceFirst(chainId: number, token: string, current: bigint): boolean {
+  return current > 0n && (ZERO_FIRST[chainId] ?? []).includes(token.toLowerCase());
+}
+
 /** True when an allowance should be treated as "unlimited" (≥ 2^255). */
 export function isUnlimitedAllowance(amount: bigint): boolean {
   return amount >= 1n << 255n;

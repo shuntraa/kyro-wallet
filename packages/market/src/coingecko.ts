@@ -191,7 +191,8 @@ export class CoinGeckoClient {
     const out: Record<string, SimplePrice> = {};
     for (const [id, v] of Object.entries(raw)) {
       const price = v[vs];
-      if (typeof price === 'number') out[id] = { price, change24h: v[`${vs}_24h_change`] ?? null };
+      // A price that is not a finite positive number is no price at all.
+      if (typeof price === 'number' && Number.isFinite(price) && price > 0) out[id] = { price, change24h: v[`${vs}_24h_change`] ?? null };
     }
     return out;
   }

@@ -21,6 +21,7 @@ import {
   getProgramDerivedAddress,
   getTransactionDecoder,
   isAddress,
+  isOffCurveAddress,
   pipe,
   setTransactionMessageComputeUnitLimit,
   setTransactionMessageComputeUnitPrice,
@@ -74,6 +75,22 @@ interface RpcAccount {
   owner: string;
   lamports: number;
   data: [string, string] | { parsed: unknown };
+  executable?: boolean;
+}
+
+/**
+ * Why this recipient would lose the funds, or null. Kyro sends to WALLETS only:
+ * - an address off the ed25519 curve (a PDA, owned by a program: nobody signs for it);
+ * - a program (executable account);
+ * - a token account or a mint (owned by the Token programs): native SOL sent there is stuck, and
+ *   a token sent to the ATA of a token account is unreachable.
+ */
+export function solanaRecipientProblem(recipient: string, acc: Pick<RpcAccount, 'owner' | 'executable'> | null): string | null {
+  if (!isAddress(recipient)) return 'Adresse Solana invalide.';
+  if (isOffCurveAddress(address(recipient))) return 'Cette adresse est dérivée d’un programme (PDA), pas un portefeuille : personne ne peut signer pour elle, les fonds seraient perdus. Demande l’adresse du portefeuille.';
+  if (acc?.executable) return 'Cette adresse est un programme, pas un portefeuille : les fonds seraient perdus.';
+  if (acc && (acc.owner === TOKEN_PROGRAM || acc.owner === TOKEN_2022_PROGRAM)) return 'Cette adresse est un compte de token ou un mint, pas un portefeuille : les fonds y seraient bloqués. Demande l’adresse du portefeuille.';
+  return null;
 }
 interface ParsedTokenAccount {
   pubkey: string;
@@ -300,8 +317,10 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     if (!this.isValidAddress(to)) throw new Error('Adresse Solana invalide');
     const recipient = address(to);
     const priority = params.fee.microLamports;
+    if (params.asset.kind !== 'native' && params.asset.kind !== 'spl') throw new Error('Actif non pris en charge sur Solana');
+    const problem = solanaRecipientProblem(to, await this.accountInfo(recipient));
+    if (problem) throw new Error(problem);
     if (params.asset.kind === 'spl') return this.buildSpl(params, recipient, priority);
-    if (params.asset.kind !== 'native') throw new Error('Actif non pris en charge sur Solana');
 
     const size = { family: 'sol' as const, computeUnits: SOL_TRANSFER_CU, signatures: 1 };
     const maxFee = feeCost(params.fee, size);
@@ -387,6 +406,12 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     return call('sol_decode_tx', { message: unsigned.message, ...accountArg(this.account) });
   }
 
+  /** Rust decoding of a third-party wire transaction (a Jupiter swap), before the password. */
+  decodeWire(wireB64: string): Promise<SolTxSummary> {
+    const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wireB64));
+    return call('sol_decode_tx', { message: getBase64Decoder().decode(tx.messageBytes), ...accountArg(this.account) });
+  }
+
   async signTx(unsigned: SolUnsigned, password: string): Promise<SolSigned> {
     const signed = await this.signWireTransaction(unsigned.wire, password);
     const problem = checkSolSummary(unsigned, signed.summary, this.me);
@@ -433,28 +458,22 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
           const tx = await this.rpc<{
             blockTime: number | null;
             meta: { err: unknown; fee: number; preBalances: number[]; postBalances: number[] } | null;
-            transaction: { message: { accountKeys: Array<{ pubkey: string }> } };
+            transaction: { message: { accountKeys: Array<{ pubkey: string }>; instructions?: ParsedIx[] } };
           } | null>('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]);
           if (!tx?.meta) return null;
           const keys = tx.transaction.message.accountKeys.map((k) => k.pubkey);
           const i = keys.indexOf(this.me);
           if (i < 0) return null;
-          const delta = BigInt(tx.meta.postBalances[i] ?? 0) - BigInt(tx.meta.preBalances[i] ?? 0);
-          const isPayer = i === 0;
-          const fee = BigInt(tx.meta.fee);
-          const direction = delta > 0n ? 'in' : 'out';
-          const other = keys.find((k, j) => j !== i && k !== SYSTEM_PROGRAM && !k.startsWith('ComputeBudget'));
-          const item: HistoryItem = {
-            id: s.signature,
-            chainKey: this.chain.key,
-            assetId: 'sol',
-            direction,
-            amount: direction === 'in' ? delta : -delta - (isPayer ? fee : 0n),
-            status: tx.meta.err || s.err ? 'failed' : s.confirmationStatus === 'finalized' || s.confirmationStatus === 'confirmed' ? 'confirmed' : 'pending',
-            kind: 'transfer',
-          };
-          if (isPayer) item.fee = fee;
-          if (other) item.counterparty = other;
+          const item = solHistoryItem({
+            me: this.me,
+            isPayer: i === 0,
+            delta: BigInt(tx.meta.postBalances[i] ?? 0) - BigInt(tx.meta.preBalances[i] ?? 0),
+            fee: BigInt(tx.meta.fee),
+            instructions: tx.transaction.message.instructions ?? [],
+          });
+          item.id = s.signature;
+          item.chainKey = this.chain.key;
+          item.status = tx.meta.err || s.err ? 'failed' : s.confirmationStatus === 'finalized' || s.confirmationStatus === 'confirmed' ? 'confirmed' : 'pending';
           const bt = tx.blockTime ?? s.blockTime;
           if (bt) item.time = bt * 1000;
           return item;
@@ -465,4 +484,53 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     );
     return items.filter((x): x is HistoryItem => x !== null);
   }
+}
+
+/** A top-level instruction of a `jsonParsed` transaction (only what the history reads). */
+export interface ParsedIx {
+  program?: string;
+  programId?: string;
+  parsed?: { type?: string; info?: { source?: string; destination?: string; lamports?: number | string } } | string;
+}
+
+/**
+ * One SOL history entry from our balance change and the transaction's decoded instructions.
+ *
+ * - A change of 0 for an account that did not pay the fees (a 0-lamport transfer involving us,
+ *   sent by someone else) is neither received nor sent: a poisoning lure (`suspect: 'zero'`,
+ *   shown as a received 0), never an outgoing payment.
+ * - The counterparty comes from the decoded System transfers that involve us, never from the
+ *   fee payer or « the first other account key » (an attacker who pays the fees would otherwise
+ *   be shown as an address we paid). No decoded transfer: no counterparty.
+ */
+export function solHistoryItem(p: { me: string; isPayer: boolean; delta: bigint; fee: bigint; instructions: ParsedIx[] }): HistoryItem {
+  const transfers = p.instructions
+    .filter((ix) => ix.program === 'system' || ix.programId === SYSTEM_PROGRAM)
+    .map((ix) => (typeof ix.parsed === 'object' && ix.parsed?.type === 'transfer' ? ix.parsed.info : undefined))
+    .filter((info): info is NonNullable<typeof info> => !!info && (info.source === p.me || info.destination === p.me));
+  let direction: HistoryItem['direction'];
+  let amount: bigint;
+  if (p.delta > 0n) {
+    direction = 'in';
+    amount = p.delta;
+  } else if (p.isPayer) {
+    direction = 'out';
+    amount = -p.delta - p.fee > 0n ? -p.delta - p.fee : 0n;
+  } else if (p.delta < 0n) {
+    direction = 'out';
+    amount = -p.delta;
+  } else {
+    direction = 'in';
+    amount = 0n;
+  }
+  const item: HistoryItem = { id: '', chainKey: '', assetId: 'sol', direction, amount, status: 'confirmed', kind: 'transfer' };
+  if (p.isPayer) item.fee = p.fee;
+  const t =
+    direction === 'in'
+      ? (transfers.find((x) => x.destination === p.me && x.source !== p.me) ?? transfers.find((x) => x.source === p.me && x.destination !== p.me))
+      : transfers.find((x) => x.source === p.me && x.destination !== p.me);
+  const other = t ? (t.source === p.me ? t.destination : t.source) : undefined;
+  if (other) item.counterparty = other;
+  if (!p.isPayer && p.delta === 0n) item.suspect = 'zero';
+  return item;
 }

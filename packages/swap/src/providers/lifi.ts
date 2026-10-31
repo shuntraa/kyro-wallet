@@ -5,11 +5,16 @@
 // 0.007 = 0,7 %) (docs.li.fi, « Monetizing the integration »): paid straight to the receiver, no
 // portal registration needed. Taken from the sent token and `included` in `toAmount`. The quote must
 // list it back (feeCosts « Distributions » with our receiver and percentage), otherwise it is refused.
+// Every answer then goes through verify.ts: `to` and spender = the LI.FI Diamond, `value`, the
+// GenericSwapFacetV3 calldata (`_receiver` = taker, `_minAmountOut`, first and last steps) and the
+// FeeForwarder step (Kyro recipient, amount ≤ the configured rate). Cross-chain routes are not
+// offered by the UI and their calldata (`BridgeData.receiver`) is not decoded: refused.
 
 import { fetchJson, netFetch, type NetFetch } from '@kyro/shared';
 import type { Quote, QuoteParams, SwapProvider } from '../types';
 import type { ProviderFee } from '../fees';
 import { ZERO_ADDRESS, isNative, providerError, qs, toBig, unavailableReason, type ProviderOptions } from './common';
+import { verifyEvmSwap } from '../verify';
 
 interface LifiQuote {
   toolDetails?: { name: string };
@@ -78,18 +83,36 @@ export class LifiProvider implements SwapProvider {
     const sum = (xs: Array<{ amountUSD?: string }> | undefined) => (xs ?? []).reduce((s, x) => s + Number(x.amountUSD ?? 0), 0);
     const fees = r.estimate.feeCosts ?? [];
     const gas = toBig(r.transactionRequest.gasLimit);
+    if (toChain !== p.chain) throw new Error('LI.FI : routes entre deux chaînes non prises en charge par Kyro');
+    const allowanceTarget = isNative(p.sell.address) ? null : r.estimate.approvalAddress ?? r.transactionRequest.to;
+    const value = toBig(r.transactionRequest.value);
+    const check = verifyEvmSwap({
+      provider: 'lifi',
+      chainId: p.chain,
+      sell: p.sell,
+      buy: p.buy,
+      sellAmount: p.sellAmount,
+      taker: p.taker,
+      slippageBps: p.slippageBps,
+      buyAmount: toBig(r.estimate.toAmount),
+      tx: { to: r.transactionRequest.to, data: r.transactionRequest.data, value },
+      allowanceTarget,
+      fee: this.fee,
+    });
     const out: Quote = {
       provider: this.id,
       providerName: this.name,
       buyAmount: toBig(r.estimate.toAmount),
-      minBuyAmount: toBig(r.estimate.toAmountMin),
+      // What the Diamond enforces (decoded `_minAmountOut`), never only what the answer claims.
+      minBuyAmount: check.minBuyAmount < toBig(r.estimate.toAmountMin) ? check.minBuyAmount : toBig(r.estimate.toAmountMin),
       gasFeeFiat: sum(r.estimate.gasCosts) * fx,
       providerFeeFiat: sum(fees) * fx,
       providerFeeIncluded: fees.every((f) => f.included !== false),
       kyroFeeBps: this.fee.kind === 'fee' ? this.fee.bps : 0,
       priceImpact: null,
-      allowanceTarget: isNative(p.sell.address) ? null : r.estimate.approvalAddress ?? r.transactionRequest.to,
-      tx: { kind: 'evm', chainId: p.chain, to: r.transactionRequest.to, data: r.transactionRequest.data, value: toBig(r.transactionRequest.value), ...(gas > 0n ? { gas } : {}) },
+      allowanceTarget: allowanceTarget === null ? null : check.contract,
+      tx: { kind: 'evm', chainId: p.chain, to: check.contract, data: r.transactionRequest.data, value, ...(gas > 0n ? { gas } : {}) },
+      evmCheck: check,
     };
     if (r.toolDetails?.name) out.route = `via ${r.toolDetails.name}`;
     if (r.estimate.executionDuration !== undefined) out.etaSecs = r.estimate.executionDuration;

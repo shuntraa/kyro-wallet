@@ -2,11 +2,36 @@
 // Swap: best quote after the Kyro fee (0x, LI.FI, Jupiter — the provider is not shown on
 // the main screen, only in the confirmation before signing), slippage, exact approval by default
 // (unlimited only after explicit confirmation), simulation, "En clair".
+// Every third-party transaction is checked before the password: EVM calldata decoded by
+// @kyro/swap (verify.ts: contract, spender, value, recipient, minimum, fee), Jupiter decoded by
+// Rust then checked by jupiter-verify.ts. The confirmation shows a frozen quote; a fresh quote
+// that guarantees less asks again instead of being accepted silently.
 
 import { useEffect, useMemo, useState } from 'react';
 import { toIpcError } from '@kyro/shared';
 import { assetsFor, evmChains, findChain, solChain, tryParseUnits, unitsToNumber, type AssetDef, type EvmAdapter } from '@kyro/chains';
-import { buildApproval, feeLabel, fetchQuotes, isUnlimitedAllowance, NATIVE_EVM, WSOL_MINT, type Quote, type QuoteParams, type QuoteResult, type SwapToken } from '@kyro/swap';
+import {
+  buildApproval,
+  buildRevoke,
+  compareFreshQuote,
+  feeLabel,
+  fetchQuotes,
+  isCurrentZeroExSettler,
+  isNative,
+  isUnlimitedAllowance,
+  knownSwapContract,
+  NATIVE_EVM,
+  requiresZeroAllowanceFirst,
+  verifyJupiterSwap,
+  WSOL_MINT,
+  ZEROX_REGISTRY_ABI,
+  ZEROX_SETTLER_REGISTRY,
+  ZEROX_TAKER_SETTLER_FEATURE,
+  type Quote,
+  type QuoteParams,
+  type QuoteResult,
+  type SwapToken,
+} from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { useCoinChart } from '../state/charts';
@@ -27,7 +52,10 @@ import { Button, Notice, Segmented, Spinner, Switch } from '../components/ui/pri
 import { IconCheck, IconChevronDown, IconDown, IconWarn } from '../components/icons';
 
 type Slip = 10 | 50 | 100 | 'custom';
-type Phase = 'idle' | 'approving' | 'waiting' | 'simulating' | 'swapping' | 'done';
+type Phase = 'idle' | 'approving' | 'waiting' | 'simulating' | 'checking' | 'swapping' | 'done';
+
+/** Custom slippage cap: above 15 %, a swap is mostly a gift to whoever front-runs it. */
+const MAX_SLIPPAGE_BPS = 1_500;
 
 function tokenOf(a: AssetDef, price?: number): SwapToken {
   const address = a.kind === 'native' ? (a.family === 'sol' ? WSOL_MINT : NATIVE_EVM) : a.contract ?? '';
@@ -77,7 +105,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const [slip, setSlip] = useState<Slip>(50);
   const [slipCustom, setSlipCustom] = useState('2');
   const slippageBps = slip === 'custom' ? Math.round(Number(slipCustom.replace(',', '.')) * 100) : slip;
-  const slipValid = Number.isInteger(slippageBps) && slippageBps > 0 && slippageBps <= 5000;
+  const slipValid = Number.isInteger(slippageBps) && slippageBps > 0 && slippageBps <= MAX_SLIPPAGE_BPS;
   const [unlimited, setUnlimited] = useState(false);
   const [confirmUnlimited, setConfirmUnlimited] = useState(false);
   const [password, setPassword] = useState('');
@@ -85,6 +113,8 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const [execError, setExecError] = useState<string | null>(null);
   const [doneId, setDoneId] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  /** The quote shown in the confirmation, frozen while it is open (the live list keeps refreshing). */
+  const [reviewed, setReviewed] = useState<Quote | null>(null);
 
   useEffect(() => {
     // Keep the pair valid when the chain changes.
@@ -136,7 +166,10 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
   // Simulation (only possible once the allowance is in place).
   const simKey = chosen && chosen.tx.kind === 'evm' && !needsApproval && allowance.data !== undefined ? `${chosen.provider}:${chosen.tx.data.slice(0, 66)}:${chosen.buyAmount}` : chosen && chosen.tx.kind === 'evm' && !needsAllowanceCheck ? `${chosen.provider}:${chosen.buyAmount}` : null;
-  const sim = useAsync(simKey && evmAdapter && chosen?.tx.kind === 'evm' ? () => evmAdapter.simulate({ to: chosen.tx.kind === 'evm' ? chosen.tx.to : '', data: chosen.tx.kind === 'evm' ? chosen.tx.data : '0x', value: chosen.tx.kind === 'evm' ? chosen.tx.value : 0n }) : null, [simKey]);
+  const sim = useAsync(
+    simKey && evmAdapter && chosen?.tx.kind === 'evm' && buy ? () => evmAdapter.simulateReceived({ to: chosen.tx.kind === 'evm' ? chosen.tx.to : '', data: chosen.tx.kind === 'evm' ? chosen.tx.data : '0x', value: chosen.tx.kind === 'evm' ? chosen.tx.value : 0n }, buy.kind === 'native' ? 'native' : buy.contract ?? '') : null,
+    [simKey],
+  );
 
   // Rate chart (buy priced in sell units, 24 h).
   const sellChart = useCoinChart(sell?.coingeckoId ?? null, '1J');
@@ -156,18 +189,57 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   // Reasons that are about the Kyro fee configuration (no provider name in them) are worth showing.
   const feeReasons = [...new Set(failures.map((f) => f.error ?? '').filter((e) => e.includes('Kyro')))];
   const busy = phase !== 'idle' && phase !== 'done';
-  const canSwap = !!chosen && !!password && !over && !busy && (chosen.tx.kind !== 'evm' || !!evmAdapter);
+  /** What the confirmation shows and what gets signed. */
+  const shown = confirmOpen ? reviewed ?? chosen : chosen;
+  const canSwap = !!shown && !!password && !over && !busy && (shown.tx.kind !== 'evm' || (!!evmAdapter && !!shown.evmCheck));
+
+  // Most the swap may cost in network fees (gas limit × max fee per gas), shown before signing.
+  const dialogFees = useAsync(confirmOpen && evmAdapter ? () => evmAdapter.estimateFees() : null, [confirmOpen, evmAdapter]);
+  const dialogFee = dialogFees.data?.options.normal.params;
+  const swapGas = shown?.tx.kind === 'evm' && shown.tx.gas ? (shown.tx.gas * 12n) / 10n : null;
+  const swapMaxFee = dialogFee?.family === 'evm' && swapGas !== null ? swapGas * dialogFee.maxFeePerGas : null;
+  const approvalMaxFee = dialogFee?.family === 'evm' && needsApproval ? 120_000n * dialogFee.maxFeePerGas : 0n;
+
+  const openConfirm = () => {
+    setReviewed(chosen ?? null);
+    setExecError(null);
+    setConfirmOpen(true);
+  };
+
+  /** 0x: the Settler that AllowanceHolder calls must be the registry's current (or previous) one. */
+  const assertSettler = async (settler: string) => {
+    if (!evmAdapter) throw new Error('Réseau EVM introuvable');
+    const ok = await isCurrentZeroExSettler(settler, (fn) =>
+      evmAdapter.client.readContract({ address: ZEROX_SETTLER_REGISTRY, abi: ZEROX_REGISTRY_ABI, functionName: fn, args: [ZEROX_TAKER_SETTLER_FEATURE] }) as Promise<string>,
+    );
+    if (!ok) throw new Error('0x : le contrat Settler appelé n’est pas celui du registre officiel de 0x. Arrêt, rien n’a été signé.');
+  };
 
   const execute = async () => {
-    if (!chosen || !sell || !buy || !sellAmount || !params) return;
+    const quote = shown;
+    if (!quote || !sell || !buy || !sellAmount || !params) return;
     setExecError(null);
     try {
-      if (chosen.tx.kind === 'solana') {
-        setPhase('swapping');
-        const wire = await chosen.tx.build();
-        // Rust decodes this third-party transaction and shows it in the native dialog (+ 2nd warning if unusual).
+      if (quote.tx.kind === 'solana') {
         if (!adapters.sol) throw new Error('Pas de compte Solana sur ce portefeuille.');
+        setPhase('checking');
+        const wire = await quote.tx.build();
+        // Third-party transaction: decoded by Rust, then checked against what you reviewed, BEFORE the password is used.
+        const check = {
+          wire,
+          taker,
+          sellMint: tokenOf(sell).address,
+          buyMint: tokenOf(buy).address,
+          sellAmount,
+          slippageBps,
+          quotedOut: quote.buyAmount,
+          fee: quote.kyroFeeBps > 0 ? { bps: quote.kyroFeeBps, account: quote.solFeeAccount ?? '' } : null,
+        };
+        await verifyJupiterSwap({ ...check, summary: await adapters.sol.decodeWire(wire) });
+        setPhase('swapping');
         const signed = await adapters.sol.signWireTransaction(wire, password);
+        // Same check on what Rust actually signed, before broadcasting.
+        await verifyJupiterSwap({ ...check, summary: signed.summary });
         const id = await adapters.sol.broadcast(signed);
         addLocalTx({ id, network, chainKey, assetId: sell.id, kind: 'swap', direction: 'out', amount: sellAmount.toString(), label: `Swap ${sell.symbol} → ${buy.symbol}`, time: Date.now(), status: 'pending' });
         setDoneId(id);
@@ -178,13 +250,27 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
         return;
       }
       if (!evmAdapter || chain?.family !== 'evm') throw new Error('Réseau EVM introuvable');
-      const fees = await evmAdapter.estimateFees();
-      const fee = fees.options.normal.params;
+      const known = knownSwapContract(quote.provider, chain.chainId);
+      const check0 = quote.evmCheck;
+      if (!check0 || !known || check0.contract.toLowerCase() !== known.toLowerCase()) throw new Error('Devis non vérifié par Kyro : arrêt.');
+      setPhase('checking');
+      if (check0.settler) await assertSettler(check0.settler);
+      const fee = dialogFee ?? (await evmAdapter.estimateFees()).options.normal.params;
       if (fee.family !== 'evm') throw new Error('Frais EVM indisponibles');
 
-      if (needsApproval && chosen.allowanceTarget && sell.contract) {
+      if (needsApproval && quote.allowanceTarget && sell.contract) {
+        if (quote.allowanceTarget.toLowerCase() !== known.toLowerCase()) throw new Error('Autorisation demandée pour un contrat inconnu : arrêt.');
         setPhase('approving');
-        const approval = buildApproval({ token: sell.contract, spender: chosen.allowanceTarget, amount: sellAmount, unlimited });
+        // USDT (Ethereum) refuses a non-zero → non-zero change: back to 0 first.
+        if (requiresZeroAllowanceFirst(chain.chainId, sell.contract, allowance.data ?? 0n)) {
+          const reset = buildRevoke(sell.contract, quote.allowanceTarget);
+          const u0 = await evmAdapter.buildCall({ to: reset.to, data: reset.data, fee, kind: 'approval', asset: sell, amount: 0n, token: { symbol: sell.symbol, decimals: sell.decimals } });
+          const h0 = await evmAdapter.broadcast(await evmAdapter.signTx(u0, password));
+          setPhase('waiting');
+          if (!(await evmAdapter.waitForReceipt(h0))) throw new Error('La remise à zéro de l’autorisation a échoué on-chain.');
+          setPhase('approving');
+        }
+        const approval = buildApproval({ token: sell.contract, spender: quote.allowanceTarget, amount: sellAmount, unlimited });
         const unsigned = await evmAdapter.buildCall({ to: approval.to, data: approval.data, fee, kind: 'approval', asset: sell, amount: approval.amount, token: { symbol: sell.symbol, decimals: sell.decimals } });
         const decoded = await evmAdapter.decode(unsigned);
         if (decoded.kind !== 'Erc20Approve' || decoded.spender?.toLowerCase() !== approval.spender.toLowerCase() || decoded.unlimitedApproval !== unlimited) {
@@ -192,26 +278,46 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
         }
         const signed = await evmAdapter.signTx(unsigned, password);
         const hash = await evmAdapter.broadcast(signed);
-        addApproval({ network, chainId: chain.chainId, chainKey, token: sell.contract, tokenSymbol: sell.symbol, tokenDecimals: sell.decimals, spender: approval.spender, spenderLabel: chosen.providerName, amount: approval.amount.toString(), unlimited, time: Date.now(), txHash: hash });
-        addLocalTx({ id: hash, network, chainKey, assetId: sell.id, kind: 'approval', direction: 'self', amount: unlimited ? '0' : sellAmount.toString(), label: `Autorisation ${sell.symbol} pour ${chosen.providerName}${unlimited ? ' (illimitée)' : ''}`, time: Date.now(), status: 'pending' });
+        addApproval({ network, chainId: chain.chainId, chainKey, token: sell.contract, tokenSymbol: sell.symbol, tokenDecimals: sell.decimals, spender: approval.spender, spenderLabel: quote.providerName, amount: approval.amount.toString(), unlimited, time: Date.now(), txHash: hash });
+        addLocalTx({ id: hash, network, chainKey, assetId: sell.id, kind: 'approval', direction: 'self', amount: unlimited ? '0' : sellAmount.toString(), label: `Autorisation ${sell.symbol} pour ${quote.providerName}${unlimited ? ' (illimitée)' : ''}`, time: Date.now(), status: 'pending' });
         setPhase('waiting');
         const ok = await evmAdapter.waitForReceipt(hash);
         if (!ok) throw new Error('L’autorisation a échoué on-chain.');
       }
 
-      // Fresh quote (calldata may depend on the allowance / block), then simulate.
+      // Fresh quote (calldata may depend on the allowance / block): checked again by the provider
+      // (verify.ts), then against the reviewed one, then simulated.
       setPhase('simulating');
-      const provider = swapProviders.find((p) => p.id === chosen.provider);
-      const fresh = provider ? await provider.quote(params) : chosen;
-      if (fresh.tx.kind !== 'evm') throw new Error('Transaction de swap inattendue');
-      if (fresh.minBuyAmount < chosen.minBuyAmount * 98n / 100n) throw new Error('Le devis a changé de plus de 2 % : vérifie à nouveau avant de signer.');
-      const s = await evmAdapter.simulate({ to: fresh.tx.to, data: fresh.tx.data, value: fresh.tx.value });
+      const provider = swapProviders.find((p) => p.id === quote.provider);
+      if (!provider) throw new Error('Fournisseur introuvable');
+      const fresh = await provider.quote(params);
+      if (fresh.tx.kind !== 'evm' || quote.tx.kind !== 'evm' || !fresh.evmCheck) throw new Error('Transaction de swap inattendue');
+      const cmp = compareFreshQuote({ ...quote, tx: quote.tx }, { ...fresh, tx: fresh.tx });
+      if (!cmp.ok) throw new Error(cmp.reason);
+      if (cmp.degraded) {
+        // Never accepted silently: show the new minimum and ask again.
+        setReviewed(fresh);
+        setPhase('idle');
+        allowance.reload();
+        setExecError(`Le prix a bougé : le nouveau devis garantit ${fmtCrypto(fresh.minBuyAmount, buy.decimals, buy.symbol, 6)} au lieu de ${fmtCrypto(quote.minBuyAmount, buy.decimals, buy.symbol, 6)}. Vérifie les nouveaux montants ci-dessus, puis confirme à nouveau.`);
+        return;
+      }
+      if (fresh.evmCheck.settler && fresh.evmCheck.settler !== check0.settler) await assertSettler(fresh.evmCheck.settler);
+      const s = await evmAdapter.simulateReceived({ to: fresh.tx.to, data: fresh.tx.data, value: fresh.tx.value }, buy.kind === 'native' || isNative(tokenOf(buy).address) ? 'native' : tokenOf(buy).address);
       if (!s.ok) throw new Error(`La simulation échoue : ${s.reason}`);
+      if (s.received !== null && s.received < fresh.minBuyAmount) throw new Error(`La simulation ne reçoit que ${fmtCrypto(s.received, buy.decimals, buy.symbol, 6)}, moins que le minimum garanti : arrêt.`);
 
       setPhase('swapping');
       const unsigned = await evmAdapter.buildCall({ to: fresh.tx.to, data: fresh.tx.data, value: fresh.tx.value, fee, kind: 'swap', asset: sell, amount: sellAmount, ...(fresh.tx.gas ? { gas: (fresh.tx.gas * 12n) / 10n } : {}) });
+      if (swapMaxFee !== null && unsigned.maxFee > (swapMaxFee * 12n) / 10n) {
+        setReviewed(fresh);
+        setPhase('idle');
+        setExecError(`Les frais réseau maximum ont augmenté (${native ? fmtCrypto(unsigned.maxFee, native.decimals, native.symbol) : unsigned.maxFee.toString()}). Vérifie puis confirme à nouveau.`);
+        return;
+      }
+      // Rust's decoding must be exactly the call that was checked (contract from Kyro's list, same data and value).
       const decoded = await evmAdapter.decode(unsigned);
-      if (decoded.to.toLowerCase() !== fresh.tx.to.toLowerCase()) throw new Error('Destinataire décodé inattendu : arrêt.');
+      if (decoded.to.toLowerCase() !== known.toLowerCase() || unsigned.tx.data !== fresh.tx.data || unsigned.tx.valueWei !== fresh.tx.value.toString()) throw new Error('La transaction à signer ne correspond pas au devis vérifié : arrêt.');
       const signed = await evmAdapter.signTx(unsigned, password);
       const hash = await evmAdapter.broadcast(signed);
       addLocalTx({
@@ -242,7 +348,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   };
 
   const ctaLabel = needsApproval ? 'Autoriser puis échanger' : 'Échanger';
-  const phaseLabel: Record<Phase, string> = { idle: '', approving: 'Signature de l’autorisation…', waiting: 'Attente de la confirmation de l’autorisation…', simulating: 'Nouveau devis et simulation…', swapping: 'Signature du swap…', done: '' };
+  const phaseLabel: Record<Phase, string> = { idle: '', approving: 'Signature de l’autorisation…', waiting: 'Attente de la confirmation de l’autorisation…', simulating: 'Nouveau devis et simulation…', checking: 'Vérification de la transaction…', swapping: 'Signature du swap…', done: '' };
 
   if (!sell || !buy || !chain) return <EmptyState title="Aucun actif échangeable sur ce réseau" />;
 
@@ -293,7 +399,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
           )}
         </div>
       </header>
-      {slip === 'custom' && !slipValid && <span className="-mt-2 text-right text-[12px] text-down">Slippage entre 0,01 % et 50 %.</span>}
+      {slip === 'custom' && !slipValid && <span className="-mt-2 text-right text-[12px] text-down">Slippage entre 0,01 % et 15 %.</span>}
       {slip === 'custom' && slipValid && slippageBps > 300 && <span className="-mt-2 text-right text-[12px] text-warn">Slippage élevé : tu peux recevoir nettement moins que prévu.</span>}
 
       <div className="flex min-h-0 flex-1 gap-5">
@@ -390,8 +496,12 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                 <span className="text-mute">La simulation sera faite après l’autorisation, juste avant de signer le swap.</span>
               ) : sim.loading ? (
                 <span className="flex items-center gap-2 text-mute"><Spinner /> Simulation…</span>
+              ) : sim.data?.ok && sim.data.received !== null && chosen.minBuyAmount > 0n && sim.data.received < chosen.minBuyAmount ? (
+                <span className="flex items-center gap-2 text-down"><IconWarn size={15} /> La simulation reçoit moins que le minimum garanti : ne signe pas.</span>
               ) : sim.data?.ok ? (
-                <span className="flex items-center gap-2 text-up"><IconCheck size={15} /> Simulation réussie : la transaction passe sur l’état actuel du réseau.</span>
+                <span className="flex items-center gap-2 text-up">
+                  <IconCheck size={15} /> {sim.data.received !== null ? `Simulation réussie : tu reçois ${fmtCrypto(sim.data.received, buy.decimals, buy.symbol, 6)} sur l’état actuel du réseau.` : 'Simulation réussie : la transaction passe (montant reçu non mesuré par ce serveur).'}
+                </span>
               ) : sim.data && !sim.data.ok ? (
                 <span className="flex items-center gap-2 text-down"><IconWarn size={15} /> La simulation échoue : {sim.data.reason}</span>
               ) : null}
@@ -412,7 +522,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               </button>
             </Notice>
           )}
-          <Button variant="primary" size="xl" className="h-[46px] self-end px-10" disabled={!chosen || over || busy || (chosen.tx.kind === 'evm' && !evmAdapter)} onClick={() => setConfirmOpen(true)}>
+          <Button variant="primary" size="xl" className="h-[46px] self-end px-10" disabled={!chosen || over || busy || (chosen.tx.kind === 'evm' && !evmAdapter)} onClick={openConfirm}>
             Vérifier le swap
           </Button>
         </section>
@@ -458,8 +568,8 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       </div>
 
       {/* Confirmation before signing: the only place that names the contract (security), then the native dialog. */}
-      <Dialog open={confirmOpen && !!chosen && !!sellAmount} onOpenChange={(o) => !busy && setConfirmOpen(o)} title="Confirmer le swap">
-        {chosen && sellAmount && (
+      <Dialog open={confirmOpen && !!shown && !!sellAmount} onOpenChange={(o) => !busy && setConfirmOpen(o)} title="Confirmer le swap">
+        {shown && sellAmount && (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col rounded-box border border-line bg-bg px-4 text-[13px]">
               <div className="flex h-10 items-center justify-between border-b border-line">
@@ -468,44 +578,56 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               </div>
               <div className="flex h-10 items-center justify-between border-b border-line">
                 <span className="text-mute">Tu reçois</span>
-                <span className="font-medium">≈ {fmtCrypto(chosen.buyAmount, buy.decimals, buy.symbol, 6)}</span>
+                <span className="font-medium">≈ {fmtCrypto(shown.buyAmount, buy.decimals, buy.symbol, 6)}</span>
               </div>
               <div className="flex h-10 items-center justify-between border-b border-line">
                 <span className="text-mute">Minimum garanti</span>
-                <span className="font-medium">{fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6)}</span>
+                <span className="font-medium">{fmtCrypto(shown.minBuyAmount, buy.decimals, buy.symbol, 6)}</span>
               </div>
-              {chosen.kyroFeeBps > 0 && (
+              {shown.kyroFeeBps > 0 && (
                 <div className="flex h-10 items-center justify-between border-b border-line">
-                  <span className="text-mute">Frais Kyro {feeLabel(chosen.kyroFeeBps)}</span>
+                  <span className="text-mute">Frais Kyro {feeLabel(shown.kyroFeeBps)}</span>
                   <span className="text-text2">{kyroFeeFiat !== null ? `≈ ${fmtFiat(kyroFeeFiat, cur)}, inclus` : 'inclus'}</span>
                 </div>
               )}
+              {shown.tx.kind === 'evm' && (
+                <div className="flex h-10 items-center justify-between border-b border-line">
+                  <span className="text-mute">Frais réseau max.</span>
+                  <span className="font-medium">
+                    {swapMaxFee !== null && native ? `${fmtCrypto(swapMaxFee + approvalMaxFee, native.decimals, native.symbol)}${nativePrice !== undefined ? ` · ${fmtFiat(unitsToNumber(swapMaxFee + approvalMaxFee, native.decimals) * nativePrice, cur)}` : ''}${needsApproval ? ' (avec l’autorisation)' : ''}` : dialogFees.loading ? '…' : '—'}
+                  </span>
+                </div>
+              )}
+              <div className="flex h-10 items-center justify-between border-b border-line">
+                <span className="text-mute">Destinataire</span>
+                <span className="text-text2">{shown.tx.kind === 'evm' ? (shown.evmCheck ? 'toi (lu dans la transaction)' : '—') : 'toi (vérifié avant signature)'}</span>
+              </div>
               <div className="flex h-10 items-center justify-between">
                 <span className="text-mute">Contrat</span>
                 <span className="font-mono text-[12px] font-medium">
-                  {chosen.providerName} · {shortAddress(chosen.tx.kind === 'evm' ? chosen.tx.to : chosen.allowanceTarget ?? '') || 'programme Jupiter'}
+                  {shown.providerName} · {shown.tx.kind === 'evm' ? shortAddress(shown.evmCheck?.contract ?? shown.tx.to) : 'programme Jupiter'}
                 </span>
               </div>
             </div>
             <EnClair tone={needsApproval && unlimited ? 'warn' : 'ice'}>
-              Tu donnes {fmtCrypto(sellAmount, sell.decimals, sell.symbol)} et reçois au moins {fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6)}.
+              Tu donnes {fmtCrypto(sellAmount, sell.decimals, sell.symbol)} et reçois au moins {fmtCrypto(shown.minBuyAmount, buy.decimals, buy.symbol, 6)}, sur ton adresse.
               {needsApproval
                 ? unlimited
-                  ? ` Le contrat ${chosen.providerName} pourra dépenser TOUS tes ${sell.symbol}, sans limite, jusqu’à révocation.`
-                  : ` Le contrat ${chosen.providerName} pourra dépenser exactement ${fmtCrypto(sellAmount, sell.decimals, sell.symbol)}, une seule fois.`
+                  ? ` Le contrat ${shown.providerName} pourra dépenser TOUS tes ${sell.symbol}, sans limite, jusqu’à révocation.`
+                  : ` Le contrat ${shown.providerName} pourra dépenser exactement ${fmtCrypto(sellAmount, sell.decimals, sell.symbol)}, une seule fois.`
                 : ''}
             </EnClair>
             {/* Rust asks a 2nd confirmation for every approval and every non-transfer contract call (a swap is one). */}
-            {chosen.tx.kind === 'evm' && (
+            {shown.tx.kind === 'evm' && (
               <SecondConfirmNotice
                 lines={[
-                  ...(needsApproval ? [`Autorisation : ${chosen.providerName} (${shortAddress(chosen.allowanceTarget ?? '')}) pourra dépenser ${unlimited ? `un montant ILLIMITÉ de ${sell.symbol}` : fmtCrypto(sellAmount, sell.decimals, sell.symbol)} sans nouvelle signature.`] : []),
-                  `Swap : appel du contrat ${chosen.providerName}, pas un simple transfert ; Kyro ne peut pas dire tout ce qu’il fait (la simulation le vérifie).`,
+                  ...(needsApproval ? [`Autorisation : ${shown.providerName} (${shortAddress(shown.allowanceTarget ?? '')}) pourra dépenser ${unlimited ? `un montant ILLIMITÉ de ${sell.symbol}` : fmtCrypto(sellAmount, sell.decimals, sell.symbol)} sans nouvelle signature.`] : []),
+                  `Swap : appel du contrat officiel de ${shown.providerName}. Kyro a lu dans la transaction le destinataire (toi), le minimum garanti et les frais ; le reste du trajet (les échanges eux-mêmes) n’est vérifié que par la simulation.`,
                   ...(sell.kind === 'native' ? [`${fmtCrypto(sellAmount, sell.decimals, sell.symbol)} envoyés au contrat avec l’appel.`] : []),
                 ]}
               />
             )}
-            {chosen.tx.kind === 'solana' && <span className="text-[13px] text-mute">Transaction construite par {chosen.providerName}, décodée et signée dans le coffre après la fenêtre système.</span>}
+            {shown.tx.kind === 'solana' && <span className="text-[13px] text-mute">Transaction construite par {shown.providerName} : décodée par le coffre et comparée à ce récapitulatif avant d’utiliser ton mot de passe, puis fenêtre système.</span>}
             {phase !== 'idle' && phase !== 'done' && (
               <span className="flex items-center gap-2 text-[13px] text-ice-text2">
                 <Spinner /> {phaseLabel[phase]}
@@ -525,7 +647,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
       <Dialog open={confirmUnlimited} onOpenChange={setConfirmUnlimited} title="Autoriser un montant illimité ?">
         <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-          Le contrat {chosen ? `${chosen.providerName} (${shortAddress(chosen.allowanceTarget ?? '')})` : ''} pourra dépenser tous tes {sell.symbol}, maintenant et plus tard, sans nouvelle signature. Si ce contrat est piraté, tes {sell.symbol} sont exposés.
+          Le contrat {shown ? `${shown.providerName} (${shortAddress(shown.allowanceTarget ?? '')})` : ''} pourra dépenser tous tes {sell.symbol}, maintenant et plus tard, sans nouvelle signature. Si ce contrat est piraté, tes {sell.symbol} sont exposés.
         </Notice>
         <p className="m-0 text-[13px] leading-[1.55] text-mute">L’autorisation exacte coûte une signature de plus à chaque swap, mais rien ne reste ouvert. Tu pourras révoquer depuis l’Historique.</p>
         <div className="flex justify-end gap-2">

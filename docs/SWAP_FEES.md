@@ -26,6 +26,18 @@ Sources :
 - LI.FI : [Monetizing the integration](https://docs.li.fi/introduction/integrating-lifi/monetizing-integration)
 - Jupiter : [Add fees to swap](https://developers.jup.ag/docs/swap-api/add-fees-to-swap)
 
+## Ce que Kyro vérifie dans chaque devis
+
+Les paramètres envoyés ne suffisent pas : un fournisseur pourrait renvoyer une transaction qui ne les respecte pas. Kyro décode donc la transaction **avant** de l'afficher, et de nouveau juste avant de signer (code : [`packages/swap/src/verify.ts`](../packages/swap/src/verify.ts), [`jupiter-verify.ts`](../packages/swap/src/jupiter-verify.ts)).
+
+| Fournisseur | Frais Kyro contrôlés | Autres contrôles |
+|---|---|---|
+| **0x** | `fees.integratorFee` présent, pris dans le jeton vendu, **montant ≤ montant vendu × 70 / 10 000** ; l'adresse de frais doit figurer dans la transaction. Le détail de l'action Settler qui paie les frais n'est pas décodé. | `to` et autorisation = AllowanceHolder `0x0000000000001fF3684f28c67538d4D072C22734` ; Settler appelé = celui du registre `0x00000000000004533Fe15556B1E086BB1A72cEae` (`ownerOf(2)` ou `prev(2)`) ; destinataire = toi, minimum ≥ annoncé − slippage. |
+| **LI.FI** | Étape `FeeForwarder` (`0xCE40449B773a3E6E5e769ADb4e567179d4828cbd`) décodée : un versement à `recipients.evm`, **≤ montant vendu × 70 / 10 000** ; total des frais de cette étape ≤ 0,7 % + 0,5 % (part de LI.FI comprise). | `to` et autorisation = Diamond `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` ; `_receiver` = toi, `_minAmountOut` ≥ annoncé − slippage ; première et dernière étapes = jetons et montant de la paire. Routes entre chaînes refusées. |
+| **Jupiter** | `platform_fee_bps` = 70 et compte de frais = le compte attendu de `recipients.solana` (lus dans l'instruction de route). | Payeur et seul signataire = toi ; programmes autorisés seulement (budget de calcul, ATA, emballage SOL, une route Jupiter v6) ; comptes débité et crédité à toi ; montant et slippage ; frais de priorité ≤ 0,01 SOL. |
+
+Adresses relevées dans les dépôts officiels (0x : docs.0x.org et 0x-settler ; LI.FI : `lifinance/contracts`, `deployments/<chaîne>.json`) le 01/11/2026, identiques sur Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain et Avalanche. Sur un autre réseau (testnet compris), aucun contrat n'est connu : les devis 0x et LI.FI sont refusés.
+
 ## Ce qu'il faut configurer avant d'encaisser
 
 Tant que ces réglages manquent, les fournisseurs concernés sont écartés, et aucun swap ne part sans frais.
@@ -51,6 +63,7 @@ Ce sont les frais propres à chaque fournisseur, en plus de ceux de Kyro et sans
 
 ## Non vérifié à ce jour
 
-- **Aucun swap réel n'a été envoyé** : tout est testé contre des réponses simulées. Les agrégateurs ne fonctionnent pas sur testnet.
+- **Aucun swap réel n'a été envoyé** : tout est testé contre des réponses simulées, plus deux vraies réponses li.quest et deux vraies transactions Jupiter (01/11/2026, non signées) que le décodeur accepte telles quelles. Les agrégateurs ne fonctionnent pas sur testnet.
+- **0x** : le décodage n'a pas été confronté à une vraie réponse (clé API nécessaire) ; il suit les interfaces publiées (`IAllowanceHolder.exec`, `ISettlerTakerSubmitted.execute`). Une vente de jeton natif dont `transaction.to` ne serait pas AllowanceHolder est refusée (comportement non documenté par 0x), tout comme un échange ETH ⇄ WETH (adressé directement au contrat WETH).
 - **0x** : la documentation ne dit pas noir sur blanc si `buyAmount` est déjà net des frais intégrateur. Kyro prélève les frais sur le jeton vendu : le montant annoncé correspond à ce qui est réellement échangé.
 - **Jupiter** : la doc de Metis le déclare désormais « plus maintenu », remplacé par Swap V2 (`api.jup.ag/swap/v2`), et `lite-api.jup.ag` est retiré petit à petit. Migrer change d'hôte, donc il faudra mettre à jour en même temps l'allowlist, `NETWORK.md` et `IPC.md`.

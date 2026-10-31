@@ -15,7 +15,8 @@ import {
   cardanoTokenLabel,
   classifyHistoryAddresses,
   findLookalike,
-  isDustOnlyAddress,
+  isDustAmount,
+  isSuspectAddress,
   type KnownAddress,
   DOGE_SOFT_DUST,
   evmHwDisplay,
@@ -45,8 +46,9 @@ import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtEta, fmtFiat, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
-import { guardAllowsSend, guardOnInput, guardVerify, initialGuard, type GuardState } from '../lib/clipboardGuard';
-import { addLocalTx, bumpContactSends, findContact, getContacts, saveContacts, type ContactFamily } from '../lib/storage';
+import { guardAllowsSend, guardOnInput, guardVerify, handedOverGuard, initialGuard, pickedGuard, type GuardState } from '../lib/clipboardGuard';
+import { addLocalTx, bumpContactSends, findContact, getContacts, getLastPrice, getLocalTxs, saveContacts, setLastPrice, type ContactFamily } from '../lib/storage';
+import { checkPricePlausible } from '@kyro/market';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
 import { useTorBlocked } from '../components/Tor';
@@ -103,11 +105,22 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const nativeAsset = chain ? assetsFor(network).find((a) => a.chainKey === chain.key && a.kind === 'native') : undefined;
   const balance = asset ? pf.balances.get(asset.id) ?? 0n : 0n;
   const price = asset ? pf.price(asset.coingeckoId)?.price ?? null : null;
+  // Fiat entry turns a price from the network into a crypto amount: only with a plausible price
+  // (close to the last one seen here and to the 7-day median), never an unbounded one.
+  const priceCheck = useMemo(
+    () => (asset ? checkPricePlausible(price, { sparkline7d: pf.marketById.get(asset.coingeckoId)?.sparkline7d ?? [], lastKnown: getLastPrice(asset.coingeckoId, cur) }) : { ok: false, deviation: null }),
+    [asset, price, pf.marketById, cur],
+  );
+  useEffect(() => {
+    if (asset && priceCheck.ok && price !== null) setLastPrice(asset.coingeckoId, cur, price);
+  }, [asset, priceCheck.ok, price, cur]);
+  const fiatPrice = priceCheck.ok ? price : null;
   const nativePrice = nativeAsset ? pf.price(nativeAsset.coingeckoId)?.price ?? null : null;
 
   // Recipient + clipboard guard.
   const [to, setTo] = useState(initialTo ?? '');
-  const [guard, setGuard] = useState<GuardState>(initialTo ? { pasted: initialTo, tampered: false, source: 'paste' } : initialGuard);
+  // An address handed over by the search palette: its origin is unknown (typed or pasted there), never « pasted here ».
+  const [guard, setGuard] = useState<GuardState>(initialTo ? handedOverGuard : initialGuard);
   const toRef = useRef<HTMLInputElement>(null);
   const toTrim = to.trim();
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
@@ -126,7 +139,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [ownError, setOwnError] = useState<string | null>(null);
   const pickRecipient = (addr: string) => {
     setTo(addr);
-    setGuard({ pasted: addr, tampered: false, source: 'paste' });
+    setGuard(pickedGuard(addr));
   };
   /** Creates the next account of this chain (without switching the sending one) and fills its address. */
   const createOwnRecipient = async () => {
@@ -145,12 +158,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   };
   const noChecksum = asset?.family === 'evm' && addrValid && toTrim.slice(2) === toTrim.slice(2).toLowerCase();
 
-  // Address poisoning: compare the recipient with every trusted address of this chain family
-  // (address book, own addresses, real past counterparties). Senders of incoming dust or
-  // zero-value transfers are suspects, never references (see packages/chains/src/poisoning.ts).
+  // Address poisoning: compare the recipient with every reference address of this chain family
+  // (address book, own addresses, recipients of sends signed by this device, other non-suspect
+  // counterparties). The server's history is never « trusted »: zero-value, dust and unsigned
+  // transfers are suspects, never references (see packages/chains/src/poisoning.ts).
   const history = useHistory();
   const poisoning = useMemo(() => {
-    if (!asset || !addrValid) return { lookalike: null, dustOnly: false };
+    if (!asset || !addrValid) return { lookalike: null, suspect: false };
     const family = asset.family;
     const own: Record<string, Array<string | undefined>> = {
       btc: [accounts.btc?.segwit.address, accounts.btc?.taproot.address],
@@ -164,23 +178,28 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     };
     // The other accounts of the vault are trusted too.
     for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
+    // Recipients of transfers this device signed and broadcast (Kyro's own record, by txid).
+    const signedHere = getLocalTxs(network)
+      .filter((t) => t.kind === 'transfer' && t.status !== 'failed' && !!t.counterparty && findChain(network, t.chainKey)?.family === family)
+      .map((t) => t.counterparty as string);
     const events = (history.data?.entries ?? [])
-      .filter((e) => e.asset?.family === family && e.counterparty)
+      .filter((e) => e.asset?.family === family && e.counterparty && e.kind === 'transfer')
       .map((e) => {
         const p = e.asset ? pf.price(e.asset.coingeckoId)?.price ?? null : null;
         const fiat = p !== null && e.asset ? unitsToNumber(e.amount, e.asset.decimals) * p : null;
-        return { counterparty: e.counterparty!, direction: e.direction, dust: e.direction === 'in' && (e.amount === 0n || (fiat !== null && fiat < 0.01)) };
+        return { counterparty: e.counterparty!, suspect: !!e.suspect || isDustAmount(family, e.amount, fiat) };
       });
-    const { trusted, dustOnly } = classifyHistoryAddresses(events, family);
+    const { trusted, references, suspects } = classifyHistoryAddresses(events, signedHere, family);
     const known: KnownAddress[] = [
       ...getContacts()
         .filter((c) => c.family === family)
         .map((c) => ({ address: c.address, source: 'contact' as const, label: c.name })),
       ...(own[family] ?? []).filter((a): a is string => !!a).map((address) => ({ address, source: 'own' as const, label: 'ton adresse' })),
-      ...trusted.map((address) => ({ address, source: 'history' as const })),
+      ...trusted.map((address) => ({ address, source: 'sent' as const })),
+      ...references.map((address) => ({ address, source: 'history' as const })),
     ];
-    return { lookalike: findLookalike(toTrim, known, family), dustOnly: isDustOnlyAddress(toTrim, dustOnly, family) };
-  }, [asset, addrValid, toTrim, accounts, accountSources, history.data, pf]);
+    return { lookalike: findLookalike(toTrim, known, family), suspect: isSuspectAddress(toTrim, suspects, family) };
+  }, [asset, addrValid, toTrim, accounts, accountSources, history.data, pf, network]);
   const [poisonAck, setPoisonAck] = useState(false);
   useEffect(() => setPoisonAck(false), [toTrim, asset?.id]);
   const poisonBlocked = !!poisoning.lookalike && !poisonAck;
@@ -232,11 +251,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     if (!amountStr) return null;
     if (fiatMode) {
       const f = Number(amountStr.replace(',', '.'));
-      if (!price || !Number.isFinite(f) || f <= 0) return null;
-      return tryParseUnits((f / price).toFixed(Math.min(decimals, 12)), decimals);
+      if (!fiatPrice || !Number.isFinite(f) || f <= 0) return null;
+      return tryParseUnits((f / fiatPrice).toFixed(Math.min(decimals, 12)), decimals);
     }
     return tryParseUnits(amountStr, decimals);
-  }, [amountStr, fiatMode, price, decimals]);
+  }, [amountStr, fiatMode, fiatPrice, decimals]);
+  /** Share of the balance this amount represents (fiat entry: the market price decided it). */
+  const balanceShare = amountBase !== null && balance > 0n ? Number((amountBase * 10_000n) / balance) / 100 : null;
   // XRP: a new account needs at least the base reserve (1 XRP), else tecNO_DST_INSUF_XRP.
   const xrpBelowActivation = isXrp && !!xrpDestInfo && !xrpDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XRP_ACTIVATION;
   const xrpTagMissing = isXrp && !!xrpDestInfo?.requireDestTag && tagParsed.tag === undefined;
@@ -518,6 +539,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 />
                 {guard.source === 'paste' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Collé</span>}
                 {guard.source === 'typed' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Saisi</span>}
+                {guard.source === 'picked' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Choisi</span>}
                 {!activeHw && (
                   <Menu
                     align="end"
@@ -567,12 +589,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                     <span className="flex size-8 items-center justify-center rounded-full bg-ice-deep text-[13px] font-semibold text-ice-text">{(ownAccount?.name ?? contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
                     <span className="flex flex-col">
                       <span className="text-[14px] font-medium">{ownAccount ? ownAccountLabel(ownAccount.name) : contact ? contact.name : isOwn ? 'Ton propre compte' : 'Adresse inconnue'}</span>
-                      <span className="text-[12px] text-mute">{ownAccount ? `Un de tes comptes ${ACCOUNT_CHAIN_LABEL[ownAccount.family]} (n° ${ownAccount.index + 1}) : même vérification qu’un envoi normal` : contact ? `Carnet d’adresses · ${contact.sends ?? 0} envoi${(contact.sends ?? 0) > 1 ? 's' : ''}` : isOwn ? 'Cette adresse appartient à ce coffre' : 'Première fois : compare chaque bloc avec ton destinataire'}</span>
+                      <span className="text-[12px] text-mute">{ownAccount ? `Un de tes comptes ${ACCOUNT_CHAIN_LABEL[ownAccount.family]} (n° ${ownAccount.index + 1}) : même vérification qu’un envoi normal` : contact ? `Carnet d’adresses · ${contact.sends ?? 0} envoi${(contact.sends ?? 0) > 1 ? 's' : ''}` : isOwn ? 'Cette adresse appartient à ce coffre' : 'Ni dans ton carnet ni à toi : un logiciel espion peut remplacer une adresse copiée'}</span>
                     </span>
                   </div>
                   <AddressBlocks address={toTrim} />
                   <div className="flex flex-wrap gap-[18px] text-[12px] font-medium">
-                    {settings.clipboardGuard && guard.source === 'paste' && !guard.tampered && <span className="text-up">✓ Identique à ce que tu as collé</span>}
+                    {/* No « identical to what you pasted »: a clipper swaps the clipboard BEFORE the paste. */}
+                    {!contact && !isOwn && !ownAccount && <span className="text-warn">Adresse inconnue : compare-la avec ta source</span>}
                     {guard.source === 'typed' && <span className="text-warn">Saisie manuelle : vérifie chaque bloc</span>}
                     {contact && <span className="text-up">✓ Adresse connue</span>}
                     {noChecksum && <span className="text-warn">Sans somme de contrôle EIP-55 (minuscules)</span>}
@@ -584,8 +607,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {ownError && <span className="text-[12px] text-down">{ownError}</span>}
             {toTrim && !addrValid && !xAddress && !adaProblem && <span className="text-[12px] text-down">Adresse invalide pour {chain.name}.</span>}
             {adaProblem && <span className="text-[12px] text-down">{adaProblem.charAt(0).toUpperCase() + adaProblem.slice(1)}.</span>}
-            {poisoning.lookalike && <PoisoningWarning recipient={toTrim} known={poisoning.lookalike.known} family={asset.family} acknowledged={poisonAck} onAcknowledge={setPoisonAck} />}
-            {!poisoning.lookalike && poisoning.dustOnly && guard.source === 'paste' && <DustOnlyNote />}
+            {poisoning.lookalike && <PoisoningWarning recipient={toTrim} lookalike={poisoning.lookalike} family={asset.family} acknowledged={poisonAck} onAcknowledge={setPoisonAck} />}
+            {!poisoning.lookalike && poisoning.suspect && !contact && !isOwn && <DustOnlyNote />}
             {xAddress && (
               <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
                 <strong className="font-semibold">Adresse X (X… / T…) :</strong> elle contient l’adresse et le tag mélangés. Kyro veut l’adresse classique (r…) et le tag de destination séparément, pour que tu les voies tous les deux : demande-les à ton destinataire ou à ta plateforme (rubrique « dépôt XRP »).
@@ -634,7 +657,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               <button
                 type="button"
                 aria-label={fiatMode ? `Saisir en ${asset.symbol}` : `Saisir en ${cur}`}
-                disabled={price === null}
+                disabled={fiatPrice === null && !fiatMode}
+                title={!priceCheck.ok && priceCheck.reason ? `${priceCheck.reason} Saisie en ${cur} désactivée.` : undefined}
                 onClick={() => {
                   setFiatMode((f) => !f);
                   setAmountStr('');
@@ -649,6 +673,12 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               </button>
             </div>
             {overBalance && <span className="text-[12px] text-down">{isXrp ? 'Montant supérieur à ton solde dépensable (la réserve reste bloquée).' : 'Montant supérieur à ton solde.'}</span>}
+            {fiatMode && !priceCheck.ok && <span className="text-[12px] text-down">{priceCheck.reason ?? 'Prix indisponible.'} Saisis le montant en {asset.symbol}.</span>}
+            {fiatMode && !overBalance && amountBase !== null && balanceShare !== null && balanceShare >= 50 && (
+              <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+                <strong className="font-semibold">{fmtCrypto(amountBase, decimals, asset.symbol)}, soit {Math.round(balanceShare)} % de ton solde.</strong> En saisie {cur}, c’est le prix du marché qui fixe la quantité envoyée : vérifie ce montant en {asset.symbol}, c’est lui que tu signes.
+              </Notice>
+            )}
             {isXrp && <XrpSpendable account={xrpMe.data} hidden={hideBalances} />}
             {isAda && adaMe.data && (
               <span className="text-[12px] leading-[1.45] text-mute">
@@ -745,7 +775,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
           <div className="mt-auto flex items-center gap-3 border-t border-line pt-4 text-[13px] text-text2">
             <IconLock size={18} className="shrink-0 text-mute" />
-            <span>{settings.clipboardGuard ? 'Le presse-papier est surveillé : si l’adresse change après ton collage, l’envoi est bloqué.' : 'Alerte presse-papier désactivée dans les réglages.'}</span>
+            <span>{settings.clipboardGuard ? 'Si l’adresse change après ton collage, l’envoi est bloqué. Un logiciel qui remplace l’adresse avant le collage ne se voit pas : compare-la avec ta source.' : 'Alerte presse-papier désactivée dans les réglages.'}</span>
           </div>
         </form>
 
@@ -762,6 +792,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
             <span key={asset.id} className="figure fade-in text-[40px] leading-[1.05]">{sendAmount !== null && sendAmount > 0n ? fmtCrypto(sendAmount, decimals, asset.symbol) : `0 ${asset.symbol}`}</span>
             <span className="text-[13px] text-mute">{amountFiat !== null ? fmtFiat(amountFiat, cur) : '—'}</span>
+            {fiatMode && fiatPrice !== null && sendAmount !== null && sendAmount > 0n && (
+              <span className="text-center text-[12px] text-warn">Saisi en {cur} au prix de {fmtFiat(fiatPrice, cur)} le {asset.symbol} : tu signes le montant en {asset.symbol} ci-dessus.</span>
+            )}
           </div>
           <div className="flex items-center gap-2.5 rounded-box border border-line bg-bg px-3.5 py-3">
             <CoinIcon glyph={asset.glyph} color={asset.color} size={30} />

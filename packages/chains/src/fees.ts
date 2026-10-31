@@ -130,9 +130,18 @@ export function medianBig(values: bigint[]): bigint {
  */
 export function evmFeeOptionsFromHistory(nextBaseFee: bigint, rewards: bigint[][], blockTimeSecs: number): FeeEstimates {
   const col = (i: number) => medianBig(rewards.map((r) => r[i] ?? 0n));
-  const p10 = col(0);
-  const p50 = col(1);
-  const p90 = col(2);
+  // The RPC is not trusted: a tip is never above 3 × the next lower percentile (fast ≤ 3 × normal,
+  // normal ≤ 3 × slow when slow is not 0), nor above 3 × the base fee + 2 gwei. A server that lies
+  // about all of them at once is still bounded by the maximum shown before signing (and Rust's
+  // 2nd confirmation above its fee threshold).
+  const ceiling = nextBaseFee * 3n + 2_000_000_000n;
+  const cap = (v: bigint, below: bigint | null) => {
+    const c = below !== null && below > 0n && v > below * 3n ? below * 3n : v;
+    return c > ceiling ? ceiling : c;
+  };
+  const p10 = cap(col(0), null);
+  const p50 = cap(col(1), p10);
+  const p90 = cap(col(2), p50);
   const mk = (num: bigint, den: bigint, tip: bigint): FeeParams => ({ family: 'evm', maxFeePerGas: (nextBaseFee * num) / den + tip, maxPriorityFeePerGas: tip });
   const block = Math.max(1, blockTimeSecs);
   return {

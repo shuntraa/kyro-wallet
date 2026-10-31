@@ -1,0 +1,69 @@
+{
+  "note": "Live lite-api.jup.ag /swap/v1 transactions, 01/11/2026: taker 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM, platformFeeBps 70, feeAccount = Kyro fee wallet USDC account. accountKeys = static keys + lookup-table keys resolved from mainnet (as Rust does).",
+  "taker": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+  "feeAccount": "CFPWYSxLRh79CobY4gLWzh15zgRgEgo2Cqb4e7gBQx7C",
+  "cases": [
+    {
+      "name": "usdc-sol",
+      "wire": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQAEC36MCIdgv94d3c8ywX8gm4JC7lKq8TH6zYjQ6ixtCwbyA9cFqcMAiFoMc/h2WSU3gH9ZbkWAsqJhSHzhs0KINOcX4CyXZjtyigX6nvg2C62/13ZWH5c3wHYuOdqf9kdfxW0P33zfPSjM0tZqCq98Q/nmi4xSw/d1Lu/+nwgoaEVvpyAjkCNdSCQ9sTAWFEm7gZylF0P6ueAlOXXxoudHZLvT6oz1rKyozQUgdRIXXEPO9Upd2Z7eIKFrVSU3OPOX3NvTQaQiPr1yOaQuIe7eTyvhC9xf/AEjzKPPkL4P2BlwAwZGb+UhFzL/7K26csOb57yM5bvF9xJrLEObOkAAAAAEedVb8jHAbu50xW7OaBUH/bGy3qP0jlECsc2iVrwTjwbd9uHXZaGT2cvhRs7reawctIXtX1s3kTqM9YV+/wCptD/6J/XX9kp0wJsfKVh53ksJqzbfyd1RSzIap7OM5egVXgTrLlayf2mz81NX3vuFF7AH2GUNJGJDCJWbH3dP7gMHAAUCQzUBAAgYCQAFAwgQBAoIEgARDAUDDw0LCQEOBgIII+UXy5d6460qAQAAABpkAAGAlpgAAAAAAHd7NQYAAAAAMgBGCQMDAAABCQEwnkiTLEInGU6MXi909/14An6bWsf+riEzIWTmOs6RFQXq8euY8AMG7Jk=",
+      "sellMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "buyMint": "So11111111111111111111111111111111111111112",
+      "sellAmount": "10000000",
+      "slippageBps": 50,
+      "quotedOut": "104168311",
+      "otherAmountThreshold": "103647470",
+      "accountKeys": [
+        "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+        "FzPc7SsRzizWmV5DX6THFLP12ukfH9RzHEFFokpU4gW",
+        "2cCdzg8HBxBqC82ACTt4tULtCpEk4raL1eY3dmFnEVdN",
+        "8LjUgMjzZuHj8VdyxzkmLLQVmW4C3gd56md1nLd76TNW",
+        "CFPWYSxLRh79CobY4gLWzh15zgRgEgo2Cqb4e7gBQx7C",
+        "FGETo8T8wMcN2wCjav8VK6eh3dLk63evNDPxzLSJra8B",
+        "Fo785aUnEHMNeJfQ2vF5kp4aypx9cS4D2RxdmkdQJeDm",
+        "ComputeBudget111111111111111111111111111111",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf",
+        "2h4rB9TSGFehKrvKzrMM4RrWqBefGV1STdpekc3cTyBy",
+        "4QU2NpRaqmKMvPSwVKQDeW4V6JFEKJdkzbzdauumD9qN",
+        "8JL1ZnyMvd48AqF9YTCE4UnEV8dDydU2cYQSa6bzykYP",
+        "AP4Jafrw8jzASGrgZHEiNvYxhdapUYPAqxFiMsKLyvXu",
+        "FVDSv2aymcXu5ubgFePqPmp24nrKiwpUFc21b2Kqh6gC",
+        "So11111111111111111111111111111111111111112",
+        "2zmg7259ahZkrSn6M3PEM7eFvEfBU8obgfVHT3AL9Qwu",
+        "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq"
+      ]
+    },
+    {
+      "name": "sol-usdc",
+      "wire": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQAGCn6MCIdgv94d3c8ywX8gm4JC7lKq8TH6zYjQ6ixtCwbybQ/ffN89KMzS1moKr3xD+eaLjFLD93Uu7/6fCChoRW+nICOQI11IJD2xMBYUSbuBnKUXQ/q54CU5dfGi50dku9PqjPWsrKjNBSB1EhdcQ871Sl3Znt4goWtVJTc485fcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADBkZv5SEXMv/srbpyw5vnvIzlu8X3EmssQ5s6QAAAAAR51VvyMcBu7nTFbs5oFQf9sbLeo/SOUQKxzaJWvBOPBt324ddloZPZy+FGzut5rBy0he1fWzeROoz1hX7/AKm0P/on9df2SnTAmx8pWHneSwmrNt/J3VFLMhqns4zl6PzRPaBBVZATz0rroahO1wI61P8hqEdH/zsFqzD6ggfDgh7q/7iu3/fcQVVEtjN3TkSyGqno7U1V46Hq/2qNcuUGBQAFAopvAQAFAAkDpIYBAAAAAAAEAgABDAIAAACA8PoCAAAAAAcBAQERBhgHAAEDBhICCAYPAAwBAwoLDRIQEQ4HBwkk5RfLl3rjrSoBAAAAlwBkAAGA8PoCAAAAAIk4SAAAAAAAMgBGBwMBAAABCQG1Dh+3xL8b+dTiI1DcM69hfXHQaeljCtwigIUwexkpUQPq7/EGEi6F8jEF",
+      "sellMint": "So11111111111111111111111111111111111111112",
+      "buyMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "sellAmount": "50000000",
+      "slippageBps": 50,
+      "quotedOut": "4733065",
+      "otherAmountThreshold": "4709400",
+      "accountKeys": [
+        "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+        "8LjUgMjzZuHj8VdyxzkmLLQVmW4C3gd56md1nLd76TNW",
+        "CFPWYSxLRh79CobY4gLWzh15zgRgEgo2Cqb4e7gBQx7C",
+        "FGETo8T8wMcN2wCjav8VK6eh3dLk63evNDPxzLSJra8B",
+        "11111111111111111111111111111111",
+        "ComputeBudget111111111111111111111111111111",
+        "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf",
+        "J1to1yufRnoWn81KYg1XkTWzmKjnYSnmE2VY8DGUJ9Qv",
+        "8ncU5YW1CQwvr4gs7buH57bW58e86TDau4STrCJBuz8z",
+        "EunHLeqeJKvxnCPQSytnBP63HJVk2fbHceiKKpngyAo8",
+        "GMCJvYGf5Ex2ARiMquaBDqU6iKM8uiEQkB8jCnoNfHpC",
+        "So11111111111111111111111111111111111111112",
+        "Sysvar1nstructions1111111111111111111111111",
+        "goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE",
+        "7yecFG22heommABQ5svcbQLK1Ua4ZrJsHPiktZ17jfm3",
+        "BNrK9LpEn65QA4TyBLVSMdngW3XHj3xLfFPwGdCBv8wV",
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+      ]
+    }
+  ]
+}

@@ -5,12 +5,16 @@
 // Kyro fee: swapFeeRecipient + swapFeeBps + swapFeeToken=sellToken (docs.0x.org, « Monetize your app
 // using Swap »). Taken from the sell token, so `buyAmount` is what the remaining amount buys; the
 // response must echo it in `fees.integratorFee`, otherwise the quote is refused.
+// Every answer then goes through verify.ts: `to` and spender = AllowanceHolder, `value`, the
+// AllowanceHolder.exec → Settler.execute calldata (recipient = taker, enforced minimum, buy token)
+// and the fee (sell token, ≤ the configured rate, recipient written in the transaction).
 
 import { fetchJson, netFetch, type NetFetch } from '@kyro/shared';
 import { gasFiat } from '../compare';
 import type { Quote, QuoteParams, SwapProvider } from '../types';
 import type { ProviderFee } from '../fees';
 import { isNative, providerError, qs, toBig, unavailableReason, type ProviderOptions } from './common';
+import { verifyEvmSwap } from '../verify';
 
 interface ZeroExQuote {
   liquidityAvailable?: boolean;
@@ -80,18 +84,37 @@ export class ZeroExProvider implements SwapProvider {
       providerFeeFiat = t?.priceFiat !== undefined ? (Number(fee.amount) / 10 ** t.decimals) * t.priceFiat : null;
     }
     const sources = [...new Set((r.route?.fills ?? []).map((f) => f.source.replace(/_/g, ' ')))];
+    const allowanceTarget = isNative(p.sell.address) ? null : r.issues?.allowance?.spender ?? r.allowanceTarget ?? r.transaction.to;
+    const value = toBig(r.transaction.value);
+    const integrator = r.fees?.integratorFee;
+    const check = verifyEvmSwap({
+      provider: 'zerox',
+      chainId: p.chain,
+      sell: p.sell,
+      buy: p.buy,
+      sellAmount: p.sellAmount,
+      taker: p.taker,
+      slippageBps: p.slippageBps,
+      buyAmount: toBig(r.buyAmount),
+      tx: { to: r.transaction.to, data: r.transaction.data, value },
+      allowanceTarget,
+      fee: this.fee,
+      integratorFee: integrator ? { amount: toBig(integrator.amount), token: integrator.token } : null,
+    });
     const out: Quote = {
       provider: this.id,
       providerName: this.name,
       buyAmount: toBig(r.buyAmount),
-      minBuyAmount: toBig(r.minBuyAmount),
+      // What the Settler enforces (decoded), never only what the answer claims.
+      minBuyAmount: check.minBuyAmount < toBig(r.minBuyAmount) ? check.minBuyAmount : toBig(r.minBuyAmount),
       gasFeeFiat: gasFiat(networkWei, 1n, p.nativePriceFiat),
       providerFeeFiat,
       providerFeeIncluded: true,
       kyroFeeBps: this.fee.kind === 'fee' ? this.fee.bps : 0,
       priceImpact: null,
-      allowanceTarget: isNative(p.sell.address) ? null : r.issues?.allowance?.spender ?? r.allowanceTarget ?? r.transaction.to,
-      tx: { kind: 'evm', chainId: p.chain, to: r.transaction.to, data: r.transaction.data, value: toBig(r.transaction.value), ...(gas > 0n ? { gas } : {}) },
+      allowanceTarget: allowanceTarget === null ? null : check.contract,
+      tx: { kind: 'evm', chainId: p.chain, to: check.contract, data: r.transaction.data, value, ...(gas > 0n ? { gas } : {}) },
+      evmCheck: check,
       etaSecs: 15,
     };
     if (sources.length) out.route = sources.join(' + ');

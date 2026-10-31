@@ -6,6 +6,8 @@
 // swap », Metis). `feeAccount` must be an initialised token account of the input or output mint:
 // we use the fee wallet's associated token account for the first of the pair's mints found in
 // `solanaFeeMints` (output first: `outAmount` is documented as net of platform fees).
+// The transaction it returns is third-party: before the password, the UI decodes it in Rust and
+// checks it with jupiter-verify.ts (programs, accounts, amounts, fee account).
 
 import { fetchJson, netFetch, type NetFetch } from '@kyro/shared';
 import { address, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
@@ -30,10 +32,10 @@ const MINT_LABELS: Record<string, string> = {
 };
 const mintLabel = (m: string) => MINT_LABELS[m] ?? `${m.slice(0, 4)}…`;
 
-/** Associated token account of `owner` for `mint` (classic SPL Token program). */
-export async function associatedTokenAccount(owner: string, mint: string): Promise<string> {
+/** Associated token account of `owner` for `mint` (classic SPL Token program by default). */
+export async function associatedTokenAccount(owner: string, mint: string, tokenProgram: string = TOKEN_PROGRAM): Promise<string> {
   const enc = getAddressEncoder();
-  const [ata] = await getProgramDerivedAddress({ programAddress: ATA_PROGRAM, seeds: [enc.encode(address(owner)), enc.encode(TOKEN_PROGRAM), enc.encode(address(mint))] });
+  const [ata] = await getProgramDerivedAddress({ programAddress: ATA_PROGRAM, seeds: [enc.encode(address(owner)), enc.encode(address(tokenProgram)), enc.encode(address(mint))] });
   return ata;
 }
 
@@ -99,6 +101,7 @@ export class JupiterProvider implements SwapProvider {
       kyroFeeBps: fee ? fee.bps : 0,
       priceImpact: Number.isFinite(impact) ? impact : null,
       allowanceTarget: null,
+      solFeeAccount: feeAccount,
       tx: {
         kind: 'solana',
         build: async () => {

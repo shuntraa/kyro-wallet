@@ -1,5 +1,6 @@
 // End-to-end adapter flows against the demo backend (fake vault + fake chains).
 import { beforeAll, describe, expect, it } from 'vitest';
+import * as bitcoin from 'bitcoinjs-lib';
 import { call, setBackend, type Accounts } from '@kyro/shared';
 import { createMockBackend } from '@kyro/shared/mock';
 import { assetsFor, createAdapters, findAsset, parseUnits, type AdapterSet } from '../src';
@@ -41,6 +42,18 @@ describe('BitcoinAdapter', () => {
   it('rejects addresses of the wrong network', () => {
     expect(adapters.btc!.isValidAddress('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4')).toBe(false);
     expect(adapters.btc!.isValidAddress(accounts.btc.taproot.address)).toBe(true);
+  });
+
+  it('accepts only P2PKH, P2SH, P2WPKH, P2WSH, P2TR — never a future SegWit version', () => {
+    const btc = adapters.btc!;
+    expect(btc.isValidAddress(bitcoin.address.toBech32(new Uint8Array(32).fill(7), 0, 'tb'))).toBe(true); // P2WSH
+    expect(btc.isValidAddress(bitcoin.address.toBech32(new Uint8Array(32).fill(7), 1, 'tb'))).toBe(true); // P2TR
+    expect(btc.isValidAddress(bitcoin.address.toBase58Check(new Uint8Array(20).fill(7), 0xc4))).toBe(true); // P2SH testnet
+    expect(btc.isValidAddress(bitcoin.address.toBase58Check(new Uint8Array(20).fill(7), 0x6f))).toBe(true); // P2PKH testnet
+    // Valid bech32m, but unspendable today: refused (funds would be lost).
+    for (const v of [2, 3, 16]) expect(btc.isValidAddress(bitcoin.address.toBech32(new Uint8Array(32).fill(7), v, 'tb'))).toBe(false);
+    expect(btc.isValidAddress(bitcoin.address.toBech32(new Uint8Array(20).fill(7), 1, 'tb'))).toBe(false); // v1, not 32 bytes
+    expect(btc.isValidAddress(bitcoin.address.toBech32(new Uint8Array(2).fill(7), 16, 'tb'))).toBe(false);
   });
 
   it('lists incoming history', async () => {
