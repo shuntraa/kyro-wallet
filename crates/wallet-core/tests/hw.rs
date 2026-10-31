@@ -565,15 +565,25 @@ fn watch_only_store_roundtrip_and_validation() {
     }));
 }
 
-/// A v1 vault written before hardware-wallet support (frozen bytes): still opens, and the
-/// vault format is untouched by the watch-only store (which lives in its own file).
+/// A v1 vault (frozen bytes, minimum KDF parameters): still opens, and the vault format is
+/// untouched by the watch-only store (which lives in its own file).
 #[test]
 fn vault_v1_fixture_still_opens() {
-    let json = r#"{"version":1,"kdf":{"m_cost_kib":1024,"t_cost":1,"p_cost":1},"salt":"dtXEFQtrVj8HlzwKrxaxKw==","nonce":"3YEMAf1YazFtbLg2G5xKYhPPYZx1X3NQ","ciphertext":"xDqwZSPGiU5aDqx0eryE58S+RqFqM0WtHEdggVXkAvirFVf2E+D0Kg8TuYkygkSOiUO48kX8q+H9WqR8GgFoLHJfCMPnNiwexZ8zvvmY4LG6gcrFwWMe2coO6slOyUk+V5+0Q6ftFCN6RZnbxw=="}"#;
+    let json = r#"{"version":1,"kdf":{"m_cost_kib":65536,"t_cost":2,"p_cost":1},"salt":"rvr2EjvXY8Uu+xmPMYv8KA==","nonce":"pNpbiCLhmKrV/OIth2S7cSTfBYFx1B9N","ciphertext":"Ux7Bfob3SAlWHIsYk2oQFWlk40jn3HixH/QjNRezGCmi+Nyi2+vZuPj2/KlGC72Q3IAcOBkEHvMJ7eIfjDcz/RheqwQneajmzOKgMZmoyIvDK3CTAfwXHAqsKJOaSnCJWoTBxO7LdA6K3ghAgg=="}"#;
     let file = VaultFile::from_json(json).unwrap();
     assert_eq!(file.version, 1);
     let m = open(&file, "correct horse battery staple").unwrap();
     assert_eq!(m.phrase().as_str(), ABANDON);
+    // The former fixture of this test (1 MiB, 1 pass: below the KDF floor) is now refused
+    // before any key derivation, with the right password.
+    let weak = r#"{"version":1,"kdf":{"m_cost_kib":1024,"t_cost":1,"p_cost":1},"salt":"dtXEFQtrVj8HlzwKrxaxKw==","nonce":"3YEMAf1YazFtbLg2G5xKYhPPYZx1X3NQ","ciphertext":"xDqwZSPGiU5aDqx0eryE58S+RqFqM0WtHEdggVXkAvirFVf2E+D0Kg8TuYkygkSOiUO48kX8q+H9WqR8GgFoLHJfCMPnNiwexZ8zvvmY4LG6gcrFwWMe2coO6slOyUk+V5+0Q6ftFCN6RZnbxw=="}"#;
+    assert!(matches!(
+        open(
+            &VaultFile::from_json(weak).unwrap(),
+            "correct horse battery staple"
+        ),
+        Err(Error::InvalidVault(_))
+    ));
     // A watch-only store is not a vault and vice versa.
     assert!(VaultFile::from_json(&WatchOnlyStore::default().to_json().unwrap()).is_err());
     assert!(WatchOnlyStore::from_json(json, Network::Testnet).is_err());
