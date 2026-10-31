@@ -725,7 +725,7 @@ pub async fn hw_sign_evm_tx(
     let expected = acc
         .evm_address()?
         .ok_or_else(|| AppError::InvalidInput("ce compte n'a pas de clé EVM".into()))?;
-    let summary = wallet_core::evm_decode(&tx)?;
+    let summary = wallet_core::evm_decode(&tx, state.network)?;
     let descriptor = match (info.kind, summary.kind, summary.token_contract.as_deref()) {
         (
             HwDeviceKind::Ledger,
