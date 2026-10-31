@@ -40,6 +40,23 @@
     "longDescription": "Kyro Wallet : wallet non-custodial open source (GPLv3). Clés chiffrées sur l'appareil, signature dans un noyau Rust, aucune télémétrie.",
     "copyright": "GPL-3.0-or-later",
     "license": "GPL-3.0-or-later",
+    "licenseFile": "../../../LICENSE",
+    "publisher": "Kyro",
+    "homepage": "https://kyrowallet.com",
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["French"],
+        "displayLanguageSelector": false,
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "uninstallerHeaderImage": "installer/header.bmp",
+        "startMenuFolder": "Kyro",
+        "compression": "lzma"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
