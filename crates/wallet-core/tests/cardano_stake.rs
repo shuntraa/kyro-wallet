@@ -62,10 +62,11 @@ fn body(certs: Vec<CardanoCert>, withdrawals: Vec<(Vec<u8>, u64)>, tagged: bool)
 }
 
 /// Trezor pays 1 lovelace: the min-UTxO rule is disabled (coinsPerUTxOByte = 0) to reproduce it.
+/// Trezor's single output plays our own address (a staking transaction pays only us).
 fn ctx() -> CardanoContext<'static> {
     CardanoContext {
         net: Network::Mainnet,
-        own: &[],
+        own: Box::leak(vec![TZ_DEST.to_string()].into_boxed_slice()),
         verified_tokens: &[],
         coins_per_byte: 0,
     }
@@ -313,6 +314,36 @@ fn trezor_legacy_certificates_are_rebuilt_and_refused() {
         .unwrap_err()
         .to_string();
     assert!(e.contains("autre compte de récompenses"), "{e}");
+}
+
+/// Audit finding: « the only output is our own address » was a shell rule; wallet-core signed a
+/// staking transaction paying anyone.
+#[test]
+fn staking_transaction_pays_only_our_address() {
+    let stake_pk: [u8; 32] = hex::decode(STAKE_PK).unwrap().try_into().unwrap();
+    let deleg = || {
+        vec![CardanoCert::StakeDelegation {
+            stake: stake_hash(),
+            pool: h28(POOL),
+        }]
+    };
+    let decode = |b: &CardanoBody, c: &CardanoContext<'_>| {
+        let u = hex::encode(cardano_unsigned_tx(b, None).unwrap());
+        cardano_decode_stake_tx(&u, c, &stake_pk, DEPOSIT)
+    };
+    let b = body(deleg(), vec![], true);
+    assert!(decode(&b, &ctx()).is_ok());
+    // Same transaction, but the output is not one of our addresses.
+    let not_ours = CardanoContext { own: &[], ..ctx() };
+    let e = decode(&b, &not_ours).unwrap_err().to_string();
+    assert!(e.contains("ne paie que ta propre adresse"), "{e}");
+    let u = hex::encode(cardano_unsigned_tx(&b, None).unwrap());
+    assert!(cardano_sign_stake(&root(), 0, 0, 0, &u, &not_ours, DEPOSIT).is_err());
+    // A second output, even to our own address.
+    let mut two = body(deleg(), vec![], true);
+    two.outputs.push(two.outputs[0].clone());
+    let e = decode(&two, &ctx()).unwrap_err().to_string();
+    assert!(e.contains("qu'une sortie"), "{e}");
 }
 
 #[test]

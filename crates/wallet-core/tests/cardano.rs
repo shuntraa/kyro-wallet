@@ -356,6 +356,8 @@ fn trezor_different_policies() {
             Some("te$tCoin".to_string())
         ]
     );
+    assert!(s.warnings.contains(&CardanoWarning::UnusualText));
+    assert!(s.requires_extra_confirmation);
 }
 
 #[test]
@@ -732,4 +734,72 @@ fn cip19_keys_come_from_the_published_test_mnemonic() {
         cardano_account_stake_address(&r, Network::Testnet, 1).unwrap(),
         "stake_test1uqehkck0lajq8gr28t9uxnuvgcqrc6070x3k9r8048z8y5gssrtvn"
     );
+}
+
+fn memo_body(own_b: &[u8], aux: &[u8]) -> CardanoBody {
+    CardanoBody {
+        inputs: vec![CardanoInput {
+            tx_hash: h32(TZ_PREV),
+            index: 0,
+        }],
+        tagged_sets: true,
+        outputs: vec![CardanoOutput {
+            address: own_b.to_vec(),
+            coin: 1_000_000,
+            assets: vec![],
+            map_form: false,
+        }],
+        fee: 180_000,
+        ttl: Some(90_000_000),
+        certs: vec![],
+        withdrawals: vec![],
+        aux_hash: Some(cardano_blake2b256(aux)),
+        validity_start: None,
+    }
+}
+
+/// Audit finding: CIP-20 lines were shown with their control / bidi characters.
+#[test]
+fn cip20_lines_are_sanitized() {
+    let r = root(ALL, "");
+    let own = cardano_address(&r, Network::Testnet, 0, 0).unwrap();
+    let own_b = cardano_address_bytes(&own, Network::Testnet).unwrap();
+    let aux = cardano_cip20_aux("merci\u{202E}lave\n\nfin\u{FEFF}").unwrap();
+    let body = memo_body(&own_b, &aux);
+    let u = hex::encode(cardano_unsigned_tx(&body, Some(&aux)).unwrap());
+    let own_list = [own];
+    let s = cardano_decode_tx(&u, &testnet(&own_list, 4310)).unwrap();
+    assert_eq!(s.memo, Some(vec!["mercilave  fin".to_string()]));
+    assert_eq!(
+        s.warnings,
+        vec![CardanoWarning::Memo, CardanoWarning::UnusualText]
+    );
+    assert!(s.requires_extra_confirmation);
+}
+
+/// Audit finding: `(160 + size) × coinsPerUTxOByte` could overflow (a wrapped, tiny minimum in
+/// release builds) with an absurd protocol parameter.
+#[test]
+fn min_utxo_overflow_fails_closed() {
+    let r = root(ALL, "");
+    let own = cardano_address(&r, Network::Testnet, 0, 0).unwrap();
+    let own_b = cardano_address_bytes(&own, Network::Testnet).unwrap();
+    let huge = u64::MAX / 100;
+    assert_eq!(cardano_min_utxo(&own_b, &vec![], huge), u64::MAX);
+    let aux = cardano_cip20_aux("x").unwrap();
+    let body = memo_body(&own_b, &aux);
+    let u = hex::encode(cardano_unsigned_tx(&body, Some(&aux)).unwrap());
+    let own_list = [own];
+    assert!(cardano_decode_tx(&u, &testnet(&own_list, 4310)).is_ok());
+    let e = cardano_decode_tx(&u, &testnet(&own_list, huge))
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("min-UTxO"), "{e}");
+}
+
+fn testnet(own: &[String], cpb: u64) -> CardanoContext<'_> {
+    CardanoContext {
+        net: Network::Testnet,
+        ..ctx(own, &[], cpb)
+    }
 }
