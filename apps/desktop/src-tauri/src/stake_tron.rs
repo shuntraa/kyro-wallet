@@ -661,7 +661,11 @@ pub(crate) fn describe(
                     v.address,
                     w.map(|w| format!(
                         "url déclarée : {} · rang {}{} · garde {} % des récompenses",
-                        if w.url.is_empty() { "aucune" } else { &w.url },
+                        if w.url.is_empty() {
+                            "aucune".to_owned()
+                        } else {
+                            crate::dialog_text::field(&w.url, 80)
+                        },
                         w.rank,
                         if w.is_sr {
                             " (SR)"
@@ -915,7 +919,7 @@ mod tests {
             "TRON Nile (testnet)",
             "remplace TOUS tes votes actuels",
             "10 votes pour TJmka325",
-            "url déclarée : http://sr-8.com · rang 200 (hors des 127 : aucune récompense) · garde 100 %",
+            "url déclarée : « http://sr-8.com » · rang 200 (hors des 127 : aucune récompense) · garde 100 %",
             "Votes actuels remplacés : 1",
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");

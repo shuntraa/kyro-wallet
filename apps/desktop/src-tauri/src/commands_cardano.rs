@@ -67,7 +67,8 @@ pub struct CardanoContextOut {
 fn token_line(t: &wallet_core::CardanoTokenView) -> String {
     let name = match &t.name_text {
         Some(text) => format!(
-            "« {text} » (hex {})",
+            "{} (hex {})",
+            crate::dialog_text::field(text, 40),
             if t.name.is_empty() { "vide" } else { &t.name }
         ),
         None if t.name.is_empty() => "(nom vide)".to_owned(),
@@ -140,15 +141,19 @@ pub(crate) fn describe_ada(s: &CardanoTxSummary, c: &CardanoContextOut, net: Net
     if let Some(v) = s.valid_from {
         out += &format!("Pas valable avant le slot {v}\n");
     }
-    if let Some(m) = &s.memo {
-        out += &format!("Message (CIP-20, public à jamais) : {}\n", m.concat());
-    }
     out += &format!(
         "\nSolde : {} · {} entrée(s) · id {}\n",
         ada(&c.account.balance),
         s.inputs.len(),
         s.tx_id
     );
+    // Untrusted text: one quoted line, after the amounts, fees and validity.
+    if let Some(m) = &s.memo {
+        out += &format!(
+            "\nMessage (CIP-20, public à jamais, texte libre non vérifié) : {}\n",
+            crate::dialog_text::field(&m.concat(), crate::dialog_text::MAX_FIELD)
+        );
+    }
     out
 }
 
@@ -652,7 +657,7 @@ mod tests {
             "Frais : 0,175513 ADA (175513 lovelace)",
             "Total qui quitte le portefeuille : 1,365073 ADA",
             "Valable jusqu'au slot 1003600 (≈ 60 min)",
-            "Message (CIP-20, public à jamais) : merci",
+            "Message (CIP-20, public à jamais, texte libre non vérifié) : « merci »",
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
