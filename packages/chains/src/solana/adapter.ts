@@ -406,6 +406,12 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     return call('sol_decode_tx', { message: unsigned.message, ...accountArg(this.account) });
   }
 
+  /** Rust decoding of a third-party wire transaction (a Jupiter swap), before the password. */
+  decodeWire(wireB64: string): Promise<SolTxSummary> {
+    const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wireB64));
+    return call('sol_decode_tx', { message: getBase64Decoder().decode(tx.messageBytes), ...accountArg(this.account) });
+  }
+
   async signTx(unsigned: SolUnsigned, password: string): Promise<SolSigned> {
     const signed = await this.signWireTransaction(unsigned.wire, password);
     const problem = checkSolSummary(unsigned, signed.summary, this.me);

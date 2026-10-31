@@ -10,6 +10,7 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { IpcError, type Accounts, type EvmTxRequest, type Network, type NetRequest, type NetResponse } from './ipc';
 import { DEMO_COINS, DEMO_EUR_USD, DEMO_TOKENS, demoPrice, demoSeries } from './mock-data';
 import { encodeCall, type AbiValue } from './mock-abi';
+import { demoJupiterWireTx } from './mock-jupiter';
 
 import type { DemoUtxo } from './mock-tx';
 export type { DemoUtxo } from './mock-tx';
@@ -684,7 +685,25 @@ function jupiter(url: URL, req: NetRequest, s: DemoChainState): NetResponse {
     });
   }
   if (url.pathname.endsWith('/swap') && req.method === 'POST') {
-    return json(200, { swapTransaction: demoSolanaWireTx(s.accounts.sol.address), lastValidBlockHeight: 312_000_150 });
+    // Same instructions and account layout as a live Jupiter `route` (mock-jupiter.ts).
+    let body: { quoteResponse?: { inputMint?: string; outputMint?: string; inAmount?: string; outAmount?: string; slippageBps?: number; platformFee?: { feeBps?: number } | null }; userPublicKey?: string; feeAccount?: string } = {};
+    try {
+      body = JSON.parse(req.body ?? '{}') as typeof body;
+    } catch {
+      return json(400, { error: 'invalid body' });
+    }
+    const q = body.quoteResponse ?? {};
+    const wire = demoJupiterWireTx({
+      taker: body.userPublicKey ?? s.accounts.sol.address,
+      inputMint: q.inputMint ?? '',
+      outputMint: q.outputMint ?? '',
+      inAmount: BigInt(q.inAmount ?? '0'),
+      outAmount: BigInt(q.outAmount ?? '0'),
+      slippageBps: q.slippageBps ?? 50,
+      platformFeeBps: q.platformFee?.feeBps ?? 0,
+      feeAccount: body.feeAccount ?? null,
+    });
+    return json(200, { swapTransaction: wire, lastValidBlockHeight: 312_000_150 });
   }
   return json(404, { error: 'not found' });
 }
