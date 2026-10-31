@@ -1207,7 +1207,7 @@ mod tests {
         // Bounds: never under 0.01 DOGE/kB (Dogecoin Core's recommended minimum, 10× the
         // 0.001 DOGE/kB relay floor), never over 1 DOGE/kB (wallet-core's high-fee threshold).
         assert_eq!(DOGE_FEE_FLOOR, 1_000);
-        assert!(DOGE_FEE_FLOOR * 1_000 >= wallet_core::DOGE_MIN_RELAY_FEE_PER_KB);
+        const { assert!(DOGE_FEE_FLOOR * 1_000 >= wallet_core::DOGE_MIN_RELAY_FEE_PER_KB) };
         assert_eq!(DOGE_FEE_CEIL * 1_000, 100_000_000);
         let absurd = electrum_fees(&[
             json!(5_000.0),
