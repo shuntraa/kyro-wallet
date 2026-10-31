@@ -21,17 +21,18 @@ bitcoin.initEccLib(ecc);
 export interface WalletAccounts {
   network: Network;
   btc?: { segwit: BtcAccountView; taproot: BtcAccountView };
-  evm?: { address: string };
-  sol?: { address: string };
+  /** `path`: derivation path of the chosen vault account (Rust `accounts_get`), for display. */
+  evm?: { address: string; path?: string };
+  sol?: { address: string; path?: string };
   /** Vault only: hardware wallets cannot sign Litecoin / Dogecoin yet (HW_UNSUPPORTED). */
   ltc?: { address: string; xpub: string; fingerprint: string; path: string };
   doge?: { address: string; xpub: string; fingerprint: string; path: string };
   /** Vault only, like Litecoin / Dogecoin: TRON on a hardware wallet is HW_UNSUPPORTED. */
-  tron?: { address: string };
+  tron?: { address: string; path?: string };
   /** Vault only: XRP on a hardware wallet is HW_UNSUPPORTED. */
-  xrp?: { address: string };
+  xrp?: { address: string; path?: string };
   /** Vault only: Cardano on a hardware wallet is HW_UNSUPPORTED. */
-  cardano?: { address: string };
+  cardano?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {

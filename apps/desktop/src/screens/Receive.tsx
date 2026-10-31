@@ -15,7 +15,7 @@ import { QrCode } from '../components/QrCode';
 import { Button, IconButton, Notice, Segmented } from '../components/ui/primitives';
 import { IconBack, IconCheck, IconInfo, IconRefresh, IconUsbKey, IconWarn } from '../components/icons';
 import { AddressMismatchStop, DeviceBadge, HwErrorNotice, HwWaiting } from '../components/hw';
-import { AccountPicker } from '../components/AccountPicker';
+import { AccountPicker, NewAccountButton } from '../components/AccountPicker';
 import { BRAND, isAddressMismatch, pickDevice, withDevice } from '../state/hw';
 
 type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
@@ -90,22 +90,21 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
       ? `${btcAcc?.path ?? ''}/0/${index}`
       : utxoAcc
         ? `${utxoAcc.path}/0/${index}`
-        : family === 'tron'
-          ? // One TRON account: Rust signs with m/44'/195'/0'/0/0 only (commands_tron.rs INDEX), so no « Nouvelle adresse ».
-            "m/44'/195'/0'/0/0"
+        : // One address per account (no « Nouvelle adresse »): the path comes from Rust (`accounts_get`)
+          // and follows the chosen account, e.g. m/44'/60'/0'/0/1 for « Ethereum 2 ».
+          family === 'tron'
+          ? (accounts.tron?.path ?? "m/44'/195'/0'/0/0")
           : family === 'xrp'
-            ? // Same for XRP: Rust signs with m/44'/144'/0'/0/0 only (commands_xrp.rs INDEX).
-              "m/44'/144'/0'/0/0"
+            ? (accounts.xrp?.path ?? "m/44'/144'/0'/0/0")
             : family === 'ada'
-              ? // Cardano single-address mode: receive and change on m/1852'/1815'/0'/0/0 (commands_cardano.rs INDEX).
-                "m/1852'/1815'/0'/0/0"
+              ? (accounts.cardano?.path ?? "m/1852'/1815'/0'/0/0")
               : family === 'evm'
           ? activeHw
             ? hwPaths.evm(activeHw)
-            : "m/44'/60'/0'/0/0"
+            : (accounts.evm?.path ?? "m/44'/60'/0'/0/0")
           : activeHw
             ? (hwPaths.sol(activeHw) ?? '')
-            : "m/44'/501'/0'/0'";
+            : (accounts.sol?.path ?? "m/44'/501'/0'/0'");
   const verifiedHere = verify.state === 'ok' && verify.address === address;
   const blocked = mismatch !== null || (verify.state === 'error' && isAddressMismatch(verify.error) && verify.address === address);
   const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name, tron: tron.name, xrp: xrp.name, ada: ada.name }[family];
@@ -200,7 +199,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           </IconButton>
           <h1 className="screen-title">Recevoir</h1>
           <AccountPicker family={family} />
-
+          <NewAccountButton family={family} />
         </div>
         <div role="group" aria-label="Réseau" className="flex min-w-0 gap-0.5 overflow-x-auto rounded-[8px] border border-line bg-bg p-[3px] scroll-thin">
           {(
