@@ -431,7 +431,7 @@ type Servers = {
   xrp: { mainnet?: XrpServer; testnet?: XrpServer };          // testnet = XRPL Testnet
   cardano: { mainnet?: CardanoServer; testnet?: CardanoServer };  // testnet = preprod
 };
-type UtxoServer = { kind: 'default' }       // Litecoin : litecoinspace.org ; Dogecoin : AUCUN (lectures → SERVER_INVALID, voir §2.4)
+type UtxoServer = { kind: 'default' }       // Litecoin : litecoinspace.org ; Dogecoin mainnet : ElectrumX de Komodo ; Dogecoin testnet : AUCUN (lectures → SERVER_INVALID, voir §2.4)
                 | { kind: 'esplora'; url: string };   // même type que le serveur par défaut (Esplora : electrs, mempool)
 type BtcServer =
   | { kind: 'default' }                                   // mempool.space (son .onion en mode Tor)
@@ -457,7 +457,7 @@ type ServerTestTarget =
   | { family: 'bitcoin'; network: 'mainnet' | 'testnet4'; server: BtcServer }
   | { family: 'evm'; chainId: number; server: { url: string } }
   | { family: 'solana'; cluster: 'devnet' | 'mainnet-beta'; server: { url: string } }
-  | { family: 'litecoin' | 'dogecoin'; network: 'mainnet' | 'testnet'; server: UtxoServer }   // { kind: 'default' } Dogecoin : SERVER_INVALID
+  | { family: 'litecoin' | 'dogecoin'; network: 'mainnet' | 'testnet'; server: UtxoServer }   // { kind: 'default' } Dogecoin testnet : SERVER_INVALID
   | { family: 'tron'; network: 'mainnet' | 'testnet'; server: TronServer }
   | { family: 'xrp'; network: 'mainnet' | 'testnet'; server: XrpServer }       // detected.chainId = network_id XRPL (0 mainnet, 1 testnet)
   | { family: 'cardano'; network: 'mainnet' | 'testnet'; server: CardanoServer };   // detected.chainId = networkmagic (764824073 / 1)
@@ -613,20 +613,21 @@ Mêmes principes que Bitcoin (§2.2) : Rust choisit le serveur (`servers.litecoi
 
 | Commande (`ltc_…` / `doge_…`) | Arguments | Retour | Notes |
 |---|---|---|---|
-| `…_backend_info` | — | `{ kind: 'default' \| 'esplora', network: 'mainnet' \| 'testnet', label, available, tor }` | `available: false` = Dogecoin sans serveur configuré |
+| `…_backend_info` | — | `{ kind: 'default' \| 'esplora', network: 'mainnet' \| 'testnet', label, available, tor }` | `kind` = le réglage (`default` même quand le défaut Dogecoin mainnet parle Electrum) ; `label` = hôte (Dogecoin mainnet par défaut : `doge.electrum1.cipig.net`) ; `available: false` = Dogecoin **testnet** sans serveur configuré |
 | `…_address` | `{ change, index, account? }` | `string` | coffre déverrouillé ; `m/84'/2'/account'/…` (LTC), `m/44'/3'/account'/…` (DOGE) |
-| `…_address_info` / `…_address_utxos` / `…_address_txs` | `{ address }` | formes Esplora (§2.2) | adresse validée par Rust pour la chaîne et le réseau avant toute requête ; `txs` : 50 au plus, non confirmées d'abord |
-| `…_tx_hex` | `{ txid }` | `string` | `GET /tx/{txid}/hex`, vérifié : txid recalculé = `txid` (et pas de témoin pour Dogecoin), sinon `SERVER_UNREACHABLE` |
-| `…_fee_rates` | — | `{ fastestFee, halfHourFee, hourFee, economyFee, minimumFee, source? }` | unité minimale **par vbyte** (litoshis/vB ; koinus/octet). `/v1/fees/recommended` puis `/fee-estimates`. Dogecoin : bornes [0,01 ; 1] DOGE/kB (1 000–100 000 koinus/o) ; serveur sans estimation (404) → 0,01 DOGE/kB, `source: 'policy'` |
+| `…_address_info` / `…_address_utxos` / `…_address_txs` | `{ address }` | formes Esplora (§2.2) | adresse validée par Rust pour la chaîne et le réseau avant toute requête ; `txs` : 50 au plus, non confirmées d'abord. **Défaut Dogecoin mainnet (ElectrumX)** : `get_balance` + `get_history` (`funded_txo_sum`/`spent_txo_sum` portent le solde net, comme Electrum Bitcoin) ; `listunspent` puis **chaque UTXO confronté à sa transaction précédente** (`transaction.get`, hash recalculé ; la sortie doit exister, payer notre script et valoir exactement le montant annoncé, sinon `SERVER_UNREACHABLE` pour toute la liste ; 1 000 pièces au plus) ; historique : `get_history` + `transaction.get` des transactions et de leurs entrées + `block.header`, toute transaction qui ne touche pas l'adresse est écartée. Types stricts : txid 64 hex, montants entiers en koinus, `tx_pos` u32 |
+| `…_tx_hex` | `{ txid }` | `string` | `GET /tx/{txid}/hex` (Electrum : `blockchain.transaction.get`), vérifié : txid recalculé = `txid` (et pas de témoin pour Dogecoin), sinon `SERVER_UNREACHABLE` |
+| `…_fee_rates` | — | `{ fastestFee, halfHourFee, hourFee, economyFee, minimumFee, source? }` | unité minimale **par vbyte** (litoshis/vB ; koinus/octet). `/v1/fees/recommended` puis `/fee-estimates`. Dogecoin : bornes [0,01 ; 1] DOGE/kB (1 000–100 000 koinus/o) ; serveur sans estimation (404) → 0,01 DOGE/kB, `source: 'policy'`. Electrum (Dogecoin mainnet) : `estimatefee` à 2 / 30 / 60 / 144 blocs (≈ 2 min / ½ h / 1 h / 1 j) + `relayfee`, mêmes bornes ; aucune estimation → `source: 'policy'` |
 | `…_tip_height` | — | `number` | |
-| `…_broadcast` | `{ hex }` | `string` (txid) | transaction décodée d'abord ; txid du serveur = le nôtre, sinon erreur |
+| `…_broadcast` | `{ hex }` | `string` (txid) | transaction décodée d'abord ; txid du serveur = le nôtre, sinon erreur (Electrum : `blockchain.transaction.broadcast`) |
 | `…_sign_psbt` | `{ psbt, password, account? }` | `{ psbt /*signée, non finalisée*/, summary: UtxoTxSummary }` | mot de passe → `utxo_psbt_summary` → dialogue natif (destinataires, montants, monnaie, frais, taux, taille ; « Pas de monnaie… » si aucune ; entrées étrangères) → **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` (sortie inconnue « INCONNUE », OP_RETURN, entrée étrangère, poussière douce DOGE, frais très élevés) → signature ; le résumé de la signature doit être identique à celui affiché |
 
 Règles de construction (TS) vérifiées par Rust :
 - **Litecoin** : chaque entrée a `witness_utxo` + `bip32_derivation` (`m/84'/2'|1'/0'/…`) ; la monnaie porte sa dérivation (sinon elle s'affiche comme un destinataire) ; poussière = `GetDustThreshold` de Litecoin Core à 30 000 lit/kvB (P2WPKH 2 940 litoshis, P2PKH 5 460) : destinataire en dessous refusé, monnaie en dessous ajoutée aux frais ; minimum 1 litoshi/vB.
 - **Dogecoin** : chaque entrée a **`non_witness_utxo`** (transaction précédente complète, `doge_tx_hex`) — c'est ce qui prouve les montants, que le sighash legacy n'engage pas — et **pas** de `witness_utxo` ; frais par taille (0,01 DOGE/kB recommandé = minimum de Kyro ; relais 0,001 DOGE/kB) ; aucune sortie sous 0,01 DOGE (poussière douce : chaque sortie en dessous coûte 0,01 DOGE de frais en plus ; sous 0,001 DOGE, non standard → Rust refuse).
 - Taille (identique TS/Rust, signature la plus longue) : P2WPKH 10,5 + 68 par entrée + sorties (31 P2WPKH) vB ; P2PKH 10 + 148 par entrée + 34 par sortie octets.
-- **Dogecoin n'a pas de serveur par défaut** : `{ kind: 'default' }` → toute lecture `SERVER_INVALID` (« configure ton serveur Esplora (electrs-dogecoin) »). Voir NETWORK.md.
+- **Serveur par défaut Dogecoin** : mainnet → ElectrumX publics de Komodo (`doge.electrum1.cipig.net:20060`, secours `doge.electrum2.cipig.net:20060`, allowlist `net::ELECTRUM_HOSTS`, TLS validé, genesis vérifié à chaque session, circuits Tor `dogecoin`) ; **testnet → aucun** : `{ kind: 'default' }` → toute lecture `SERVER_INVALID` (« configure ton serveur Esplora (electrs-dogecoin) »). Voir NETWORK.md.
+- **Avant toute signature Dogecoin** (et toute entrée Litecoin qui porte `non_witness_utxo`), Rust (`wallet-core`) recalcule le hash de la transaction précédente : il doit égaler le txid de l'outpoint ; le `vout` doit exister ; son script doit être le nôtre ; **le montant (et donc les frais du dialogue natif) vient uniquement de cette transaction**, jamais de la liste d'UTXO du serveur. Sinon : refus (`INVALID_INPUT`), avant le dialogue.
 - Montants JSON : une sortie au-delà de 2⁵³ unités (≈ 90 millions de DOGE) n'est pas lisible sans perte en JS : l'adaptateur la refuse (la signature, elle, prend les montants dans les transactions précédentes, en Rust).
 
 **Fait côté UI** (commit de l'UI Litecoin / Dogecoin) : types `Commands` de `@kyro/shared` (`ltc_*`, `doge_*`, `btc_tx_hex`, `Accounts.ltc/doge`, `Servers.litecoin/dogecoin`, `ServerTestTarget`), backend démo, écrans Envoyer/Recevoir/Actif/Historique pour ces familles, réglages serveurs, liste « Connexions sortantes », sortie de `WATCH_ONLY_CHAINS`.
@@ -879,6 +880,7 @@ type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[
 | `api.0x.org`, `li.quest`, `lite-api.jup.ag` | devis de swap |
 | + hôtes des serveurs HTTP personnalisés (`servers.bitcoin.*` de type `esplora`, `servers.evm.*`, `servers.solana.*`) | autorisés **uniquement pour leur famille** (circuits Tor de la famille) ; le serveur par défaut remplacé est refusé (`DEFAULT_SERVER_DISABLED`) |
 | Electrum et Bitcoin Core | **pas** joignables par `net_fetch` : uniquement via les commandes `btc_*` (Rust) |
+| `doge.electrum1.cipig.net:20060`, `doge.electrum2.cipig.net:20060` (ElectrumX de Komodo, défaut Dogecoin mainnet ; `net::ELECTRUM_HOSTS`) | **pas** joignables par `net_fetch` (sockets TLS brutes, hors `ALLOWED_HOSTS`) : uniquement via `doge_*` (Rust), circuits Tor `dogecoin`, hôte **et** port vérifiés |
 | serveurs Esplora Litecoin / Dogecoin personnalisés (`servers.litecoin.*`, `servers.dogecoin.*`) | **pas** joignables par `net_fetch` : uniquement via `ltc_*` / `doge_*` (Rust), circuits Tor de leur famille ; le défaut remplacé (`litecoinspace.org`) est refusé (`DEFAULT_SERVER_DISABLED`) |
 
 HTTPS uniquement (sauf `.onion` via Tor : mempool, ou un serveur personnalisé), pas de redirection vers un hôte hors liste ni vers un serveur personnalisé, réponse plafonnée à 5 Mo, timeout 20 s.

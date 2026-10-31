@@ -57,11 +57,25 @@ Le robinet du testnet XRPL (`faucet.altnet.rippletest.net`) n'est **pas** contac
 
 Le robinet Cardano preprod (`faucet.preprod.world.dev.cardano.org`) n'est contacté **ni** par l'application **ni** par les tests : il est protégé par un reCAPTCHA Google, que Kyro ne contourne pas (financement d'une adresse de test : à la main, dans un navigateur).
 
-### Dogecoin : pas de serveur par défaut
+### Dogecoin : ElectrumX publics de Komodo (mainnet) ; pas de défaut sur testnet
 
-Kyro ne contacte **aucun** serveur Dogecoin tant que tu n'en as pas configuré un (Réglages → Réseaux, type Esplora, par exemple ton instance d'[electrs-dogecoin](https://github.com/dogecoin/dogecoin/discussions/3626)) : les commandes `doge_*` répondent `SERVER_INVALID`. Raison : au 30/10/2026, aucune API publique **gratuite, maintenue, avec un testnet et la diffusion** n'a été trouvée.
+**Mainnet** : Kyro utilise par défaut les serveurs **ElectrumX publics de Komodo Platform** (opérateur « cipig »), listés dans le dépôt officiel des pièces de Komodo : [KomodoPlatform/coins › electrums/DOGE](https://github.com/KomodoPlatform/coins/blob/master/electrums/DOGE). Gratuits, sans clé API, protocole Electrum 1.4 ([documentation du protocole](https://electrumx-spesmilo.readthedocs.io/en/latest/protocol-methods.html)).
 
-| Candidat vérifié le 30/10/2026 | Résultat |
+| Hôte (Rust uniquement, socket TLS brute — **pas** `net_fetch`) | Rôle | Ce qu'il voit |
+|---|---|---|
+| `doge.electrum1.cipig.net:20060` | serveur principal : `server.features` (genesis vérifié à chaque session), `scripthash.get_balance` / `get_history` / `listunspent`, `transaction.get`, `block.header`, `estimatefee` / `relayfee`, `headers.subscribe`, `transaction.broadcast` | Tes *script hashes* Dogecoin (= tes adresses), les txid de tes pièces et de leurs transactions précédentes, tes transactions signées ; l'IP d'un relais de sortie Tor (ton IP en mode clair) |
+| `doge.electrum2.cipig.net:20060` | secours, essayé **seulement** si le premier est injoignable (même famille Tor, même transport ; jamais en clair si Tor est activé) | Idem |
+
+- Allowlist : `net::ELECTRUM_HOSTS` (famille `dogecoin`, hôte **et** port) ; liste affichée dans Réglages › Connexions sortantes (`outgoingHosts`, `packages/chains/src/registry.ts`). Ces hôtes ne sont **pas** dans `ALLOWED_HOSTS` : l'interface ne peut pas les joindre.
+- TLS : certificat Let's Encrypt `*.cipig.net`, validé normalement (webpki), aucune exception (vérifié le 31/10/2026). `doge.electrum3.cipig.net`, aussi listé, refusait les connexions le 31/10/2026 : non retenu.
+- Tor par défaut (circuits isolés de la famille `dogecoin`) ; mode clair : connexion directe, ton IP visible.
+- Vérifié en direct les 31/10 et 01/11/2026 (en clair, lectures seulement ; **le test via Tor, `doge_live_mainnet_electrum_over_tor`, existe mais n'a pas encore été exécuté jusqu'au bout**) : ElectrumX 2.0.0, genesis Dogecoin mainnet `1a91e3da…355691`, `estimatefee` répond (souvent `-1` au-delà de 2 blocs), `relayfee` 0,001 DOGE/kB. Réponses réelles enregistrées dans `apps/desktop/src-tauri/src/testdata/doge_electrum_mainnet.json` (lectures seulement, rien n'a été diffusé).
+- **Un serveur Electrum peut mentir** (solde, historique, liste d'UTXO). Ce qui le neutralise pour la signature : chaque UTXO annoncé est confronté à sa **transaction précédente complète**, dont Rust recalcule le hash ; montant et script viennent de cette transaction, jamais de la liste du serveur (voir SECURITY.md). Une transaction de l'historique qui ne touche pas ton adresse est écartée.
+- Si tu configures ton serveur Esplora Dogecoin, les serveurs de Komodo ne sont **plus jamais contactés** : si ton serveur tombe, erreur, sans repli.
+
+**Testnet** : toujours **aucun** serveur par défaut (les commandes `doge_*` répondent `SERVER_INVALID` tant que tu n'as pas configuré un Esplora, par exemple ton [electrs-dogecoin](https://github.com/dogecoin/dogecoin/discussions/3626)). Komodo ne publie pas de serveur Dogecoin testnet, et les autres candidats ont échoué :
+
+| Candidat vérifié le 30–31/10/2026 | Résultat |
 |---|---|
 | QED electrs (`doge-electrs-demo.qed.me`, `doge-electrs-testnet-demo.qed.me`, forme Esplora, mainnet + testnet) | HTTP 522 (origine injoignable derrière Cloudflare) en clair et via Tor, à plusieurs reprises |
 | SoChain v3 (`sochain.com/api/v3`, `DOGETEST`) | lecture sans clé possible, mais **pas de diffusion** (`broadcast_transaction` retiré), forme non Esplora, quotas |
@@ -70,13 +84,11 @@ Kyro ne contacte **aucun** serveur Dogecoin tant que tu n'en as pas configuré u
 | Blockbook de Trezor (`doge1.trezor.io`) | bloqué par Cloudflare pour les clients autres que Trezor |
 | NOWNodes, Tatum, QuickNode (Blockbook) | testnet disponible mais **clé API payante** |
 
-Options : héberger electrs-dogecoin (avec un nœud Dogecoin Core) et l'entrer comme serveur Esplora ; ajouter QED comme défaut s'il redevient joignable (une ligne dans `servers.rs` + cette page + l'allowlist) ; écrire un adaptateur Blockbook (forme différente) pour un fournisseur à clé.
-
 Les tables d'adresses (ALT) d'une transaction Solana v0 sont lues par Rust auprès du RPC Solana (celui des réglages, sinon le RPC par défaut ci-dessus), jamais transmises par l'interface. Kyro fait confiance à ce RPC pour leur contenu, comme pour les soldes ; une table introuvable, désactivée ou incomplète bloque l'aperçu et la signature.
 
 ## Serveurs personnalisés (Réglages → Réseaux)
 
-Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, Electrum ou ton nœud Bitcoin Core), Litecoin et Dogecoin (Esplora, le même type que le défaut), TRON (API HTTP java-tron, comme TronGrid ; l'historique exige l'API `/v1` de TronGrid : avec un nœud seul, il est refusé avec un message clair), XRP Ledger (JSON-RPC rippled), Cardano (instance Koios), chaque chaîne EVM, chaque cluster Solana. Règles communes :
+Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, Electrum ou ton nœud Bitcoin Core), Litecoin et Dogecoin (Esplora ; pour Dogecoin mainnet, il remplace les ElectrumX de Komodo), TRON (API HTTP java-tron, comme TronGrid ; l'historique exige l'API `/v1` de TronGrid : avec un nœud seul, il est refusé avec un message clair), XRP Ledger (JSON-RPC rippled), Cardano (instance Koios), chaque chaîne EVM, chaque cluster Solana. Règles communes :
 - un serveur personnalisé n'est autorisé **que pour sa propre famille** et passe par les **circuits Tor isolés** de cette famille ;
 - il est vérifié à l'enregistrement : il doit être sur le bon réseau (genesis Bitcoin, Litecoin, Dogecoin ou TRON, `network_id` XRPL, `networkmagic` Cardano, `eth_chainId`, genesis Solana), sinon il est refusé ;
 - dès qu'il est configuré, le serveur par défaut de cette chaîne est **refusé** : si ton serveur tombe, Kyro affiche une erreur (`SERVER_UNREACHABLE`) et **ne se rabat jamais** sur le serveur par défaut — sinon tes adresses partiraient chez le tiers que tu as justement voulu éviter ;
@@ -90,6 +102,7 @@ Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, E
 | Bitcoin Core **local/LAN** (127.0.0.0/8, ::1, RFC 1918, fc00::/7) | Joint **directement, sans Tor** (Tor ne peut pas atteindre ton réseau local, et rien ne sort de ta machine/ton réseau) : ton propre nœud voit tes descripteurs publics (xpub) et tes transactions | Idem | Ta phrase, tes clés privées (portefeuille de surveillance sans clé privée) |
 | Bitcoin Core **distant** (`https://` ou `.onion`) | Tes descripteurs publics (xpub : **tout l'historique de ton compte**, présent et futur), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés privées |
 | litecoinspace.org (défaut Litecoin) | Tes adresses Litecoin, les txid de tes pièces, tes transactions ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
+| ElectrumX de Komodo (défaut Dogecoin mainnet) | Tes *script hashes* Dogecoin, les txid de tes pièces et de leurs transactions précédentes, tes transactions ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
 | Esplora Litecoin / Dogecoin personnalisé (`https://` ou `.onion`) | Tes adresses, les txid de tes pièces (Dogecoin : chaque transaction précédente que tu dépenses), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés |
 | TronGrid (défaut TRON) / nœud java-tron personnalisé | Ton adresse TRON, tes soldes et ressources, le destinataire et le montant simulés, tes transactions signées ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** | Ta phrase, tes clés |
 | Serveur XRPL par défaut / rippled personnalisé | Ton adresse XRP, l'adresse des destinataires, tes transactions signées ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** | Ta phrase, tes clés |
