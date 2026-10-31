@@ -261,6 +261,8 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
     USDT('0xdAC17F958D2ee523a2206206994597C13D831ec7'),
     { symbol: 'DAI', name: 'Dai', decimals: 18, coingeckoId: 'dai', contract: '0x6B175474E89094C44Da98b954EedeAC495271d0F', color: '#F5AC37', glyph: 'D' },
     { symbol: 'WBTC', name: 'Wrapped Bitcoin', decimals: 8, coingeckoId: 'wrapped-bitcoin', contract: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', color: '#F09242', glyph: '₿' },
+    // Quant: name/symbol/decimals read from the contract on Ethereum mainnet (31/10/2026).
+    { symbol: 'QNT', name: 'Quant', decimals: 18, coingeckoId: 'quant-network', contract: '0x4a220E6096B25EADb88358cb44068A3248254675', color: '#5C6670', glyph: 'Q' },
   ],
   arbitrum: [
     USDC('0xaf88d065e77c8cC2239327C5EDb3A432268e5831'),
