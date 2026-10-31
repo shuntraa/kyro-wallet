@@ -70,6 +70,9 @@ pub const MAX_BODY: usize = 5 * 1024 * 1024;
 pub const TIMEOUT: Duration = Duration::from_secs(20);
 pub const MAX_REDIRECTS: usize = 3;
 const CACHE_TTL: Duration = Duration::from_secs(60);
+/// CoinGecko cache bounds: entries and total body bytes (oldest evicted first).
+const MAX_CACHE_ENTRIES: usize = 128;
+const MAX_CACHE_BYTES: usize = 16 * 1024 * 1024;
 const BACKOFF_429: Duration = Duration::from_secs(30);
 pub const USER_AGENT: &str = concat!("Kyro/", env!("CARGO_PKG_VERSION"));
 
@@ -174,6 +177,74 @@ pub fn redirect_allowed(next: &url::Url, hops_done: usize, tor: bool) -> bool {
     hops_done < MAX_REDIRECTS
         && (ALLOWED_HOSTS.contains(&host) || ONION_HOSTS.contains(&host))
         && scheme_ok(next, host, tor, false).is_ok()
+}
+
+/// What a request carries from one redirect hop to the next.
+#[derive(Debug, Clone)]
+pub struct Hop {
+    pub url: url::Url,
+    pub method: Method,
+    pub headers: Vec<(String, String)>,
+    pub body: Option<Vec<u8>>,
+}
+
+/// One redirect step, shared by both transports: `None` = not a redirect (or not allowed: the
+/// 3xx itself is returned). 301–303 become a GET without body; when the host changes, the
+/// injected API-key headers (`secret`) are dropped, so a key never follows a redirect to
+/// another host (even an allowlisted one).
+pub fn redirect_hop(
+    status: u16,
+    location: Option<&str>,
+    cur: &Hop,
+    secret: &[String],
+    hops_done: usize,
+    tor: bool,
+) -> Option<Hop> {
+    if !matches!(status, 301 | 302 | 303 | 307 | 308) {
+        return None;
+    }
+    let next = cur.url.join(location?).ok()?;
+    if !redirect_allowed(&next, hops_done, tor) {
+        return None;
+    }
+    let mut hop = cur.clone();
+    if matches!(status, 301..=303) {
+        hop.method = Method::Get;
+        hop.body = None;
+    }
+    if next.host_str() != cur.url.host_str() {
+        hop.headers.retain(|(k, _)| !secret.contains(k));
+    }
+    hop.url = next;
+    Some(hop)
+}
+
+/// Adds a CoinGecko response to the cache, keeping it bounded: expired entries go first, then
+/// the oldest ones, until both [`MAX_CACHE_ENTRIES`] and [`MAX_CACHE_BYTES`] hold.
+fn cache_insert(
+    cache: &mut HashMap<String, (Instant, FetchResponse)>,
+    key: String,
+    resp: FetchResponse,
+    now: Instant,
+) {
+    if resp.body.len() > MAX_CACHE_BYTES {
+        return;
+    }
+    cache.retain(|_, (at, _)| now.saturating_duration_since(*at) < CACHE_TTL);
+    cache.insert(key, (now, resp));
+    let bytes = |c: &HashMap<String, (Instant, FetchResponse)>| {
+        c.values().map(|(_, r)| r.body.len()).sum::<usize>()
+    };
+    while cache.len() > MAX_CACHE_ENTRIES || bytes(cache) > MAX_CACHE_BYTES {
+        let Some(oldest) = cache
+            .iter()
+            .min_by_key(|(_, (at, _))| *at)
+            .map(|(k, _)| k.clone())
+        else {
+            break;
+        };
+        cache.remove(&oldest);
+    }
 }
 
 /// In Tor mode, rewrites `https://mempool.space/...` to `http://<mempool onion>/...`.
@@ -439,23 +510,15 @@ const LONG_TIMEOUT: Duration = Duration::from_secs(6 * 3600);
 
 impl NetClient {
     pub fn new(tor_dir: PathBuf) -> AppResult<Self> {
+        // Redirects are followed by `send_clear` itself (same rule as Tor, `redirect_hop`): reqwest
+        // would forward our API-key headers to another host (it only strips the standard
+        // `authorization` / `cookie` ones).
         let clear = reqwest::Client::builder()
             .timeout(TIMEOUT)
             .https_only(true)
             .no_proxy()
             .user_agent(USER_AGENT)
-            .redirect(reqwest::redirect::Policy::custom(|attempt| {
-                // `previous()` includes the original URL: redirects already followed = len - 1.
-                if redirect_allowed(
-                    attempt.url(),
-                    attempt.previous().len().saturating_sub(1),
-                    false,
-                ) {
-                    attempt.follow()
-                } else {
-                    attempt.stop()
-                }
-            }))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| AppError::Internal(e.to_string()))?;
         let local = reqwest::Client::builder()
@@ -505,7 +568,7 @@ impl NetClient {
         let sent = if ctx.tor {
             self.tor.send(&p).await
         } else {
-            self.send_clear(&self.clear, &p, None).await
+            self.send_clear(&self.clear, &p, None, true).await
         };
         let (status, bytes) = match sent {
             Err(e) if p.custom && !matches!(e, AppError::TorUnavailable(_)) => {
@@ -522,7 +585,12 @@ impl NetClient {
             body: String::from_utf8_lossy(&bytes).into_owned(),
         };
         if cacheable && status == 200 {
-            lock(&self.cache).insert(cache_key, (Instant::now(), out.clone()));
+            cache_insert(
+                &mut lock(&self.cache),
+                cache_key,
+                out.clone(),
+                Instant::now(),
+            );
         }
         Ok(out)
     }
@@ -554,7 +622,7 @@ impl NetClient {
         };
         let result = if r.direct_private && private {
             let timeout = r.long.then_some(LONG_TIMEOUT);
-            self.send_clear(&self.local, &p, timeout).await
+            self.send_clear(&self.local, &p, timeout, false).await
         } else if onion {
             if !tor {
                 return Err(AppError::ServerInvalid(format!(
@@ -572,7 +640,7 @@ impl NetClient {
             if tor {
                 self.tor.send(&p).await
             } else {
-                self.send_clear(&self.clear, &p, None).await
+                self.send_clear(&self.clear, &p, None, true).await
             }
         };
         result.map_err(|e| match e {
@@ -581,35 +649,79 @@ impl NetClient {
         })
     }
 
+    /// Clear transport. `follow`: redirects are followed with [`redirect_hop`] (API keys never
+    /// cross hosts); `false` for a Bitcoin Core node on the LAN (no redirect at all).
     async fn send_clear(
         &self,
         client: &reqwest::Client,
         p: &Prepared,
         timeout: Option<Duration>,
+        follow: bool,
     ) -> AppResult<(u16, Vec<u8>)> {
-        let method = match p.method {
+        let mut hop = Hop {
+            url: p.url.clone(),
+            method: p.method,
+            headers: p.headers.clone(),
+            body: p.body.clone(),
+        };
+        let mut hops = 0;
+        loop {
+            let (status, location, bytes) = Self::one_clear(client, &hop, timeout).await?;
+            let next = if follow {
+                redirect_hop(
+                    status,
+                    location.as_deref(),
+                    &hop,
+                    &p.secret_headers,
+                    hops,
+                    false,
+                )
+            } else {
+                None
+            };
+            match next {
+                Some(n) => {
+                    hop = n;
+                    hops += 1;
+                }
+                None => return Ok((status, bytes)),
+            }
+        }
+    }
+
+    async fn one_clear(
+        client: &reqwest::Client,
+        hop: &Hop,
+        timeout: Option<Duration>,
+    ) -> AppResult<(u16, Option<String>, Vec<u8>)> {
+        let method = match hop.method {
             Method::Get => reqwest::Method::GET,
             Method::Post => reqwest::Method::POST,
         };
-        let mut builder = client.request(method, p.url.clone());
+        let mut builder = client.request(method, hop.url.clone());
         if let Some(t) = timeout {
             builder = builder.timeout(t);
         }
-        for (k, v) in &p.headers {
+        for (k, v) in &hop.headers {
             builder = builder.header(k, v);
         }
-        if let Some(body) = &p.body {
+        if let Some(body) = &hop.body {
             builder = builder.body(body.clone());
         }
         let net_err =
             |e: reqwest::Error| AppError::Internal(format!("réseau : {}", e.without_url()));
         let mut resp = builder.send().await.map_err(net_err)?;
         let status = resp.status().as_u16();
+        let location = resp
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
         let mut cap = BodyCap::default();
         while let Some(chunk) = resp.chunk().await.map_err(net_err)? {
             cap.push(&chunk)?;
         }
-        Ok((status, cap.into_inner()))
+        Ok((status, location, cap.into_inner()))
     }
 }
 
@@ -992,5 +1104,108 @@ mod tests {
             run("http://127.0.0.1:9/", false),
             Err(AppError::ServerInvalid(_))
         ));
+    }
+
+    /// F2: in both transports an API key never follows a redirect to another host.
+    #[test]
+    fn redirect_drops_api_keys_across_hosts() {
+        let (env, saved) = keys();
+        let p = prepare(
+            req("https://api.0x.org/swap/v1/quote", "POST", &[]),
+            &ctx(false),
+            &env,
+            &saved,
+        )
+        .unwrap();
+        assert_eq!(p.secret_headers, ["0x-api-key"]);
+        let start = Hop {
+            url: p.url.clone(),
+            method: p.method,
+            headers: p.headers.clone(),
+            body: Some(b"{}".to_vec()),
+        };
+        let has_key = |h: &Hop| h.headers.iter().any(|(k, _)| k == "0x-api-key");
+        assert!(has_key(&start));
+        // Same host: the key stays (307 keeps method and body).
+        let same =
+            redirect_hop(307, Some("/v2/quote"), &start, &p.secret_headers, 0, false).unwrap();
+        assert!(has_key(&same));
+        assert_eq!(same.method, Method::Post);
+        assert!(same.body.is_some());
+        // Other allowlisted host: the key is dropped; 302 becomes a GET without body.
+        let other = redirect_hop(
+            302,
+            Some("https://li.quest/v1/quote"),
+            &start,
+            &p.secret_headers,
+            0,
+            false,
+        )
+        .unwrap();
+        assert!(!has_key(&other));
+        assert_eq!(other.method, Method::Get);
+        assert!(other.body.is_none());
+        // Off the allowlist, not a redirect, or too many hops: not followed.
+        assert!(redirect_hop(
+            302,
+            Some("https://evil.example/"),
+            &start,
+            &p.secret_headers,
+            0,
+            false
+        )
+        .is_none());
+        assert!(redirect_hop(200, Some("/x"), &start, &p.secret_headers, 0, false).is_none());
+        assert!(redirect_hop(302, None, &start, &p.secret_headers, 0, false).is_none());
+        assert!(redirect_hop(
+            302,
+            Some("/x"),
+            &start,
+            &p.secret_headers,
+            MAX_REDIRECTS,
+            false
+        )
+        .is_none());
+    }
+
+    /// INFO: the CoinGecko cache is bounded in entries and bytes.
+    #[test]
+    fn cache_is_bounded() {
+        let mut c = HashMap::new();
+        let t0 = Instant::now();
+        let resp = |n: usize| FetchResponse {
+            status: 200,
+            body: "x".repeat(n),
+        };
+        for i in 0..(MAX_CACHE_ENTRIES + 50) {
+            cache_insert(
+                &mut c,
+                format!("k{i}"),
+                resp(10),
+                t0 + Duration::from_millis(i as u64),
+            );
+        }
+        assert_eq!(c.len(), MAX_CACHE_ENTRIES);
+        assert!(!c.contains_key("k0"), "oldest evicted first");
+        assert!(c.contains_key(&format!("k{}", MAX_CACHE_ENTRIES + 49)));
+        // Big bodies: total bytes capped.
+        for i in 0..10 {
+            cache_insert(
+                &mut c,
+                format!("big{i}"),
+                resp(4 * 1024 * 1024),
+                t0 + Duration::from_secs(1),
+            );
+        }
+        let total: usize = c.values().map(|(_, r)| r.body.len()).sum();
+        assert!(total <= MAX_CACHE_BYTES);
+        // Expired entries are dropped on the next insert.
+        cache_insert(
+            &mut c,
+            "late".into(),
+            resp(1),
+            t0 + CACHE_TTL + Duration::from_secs(5),
+        );
+        assert_eq!(c.len(), 1);
     }
 }
