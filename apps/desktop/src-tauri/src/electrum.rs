@@ -6,7 +6,8 @@
 //!
 //! Transport (see docs/NETWORK.md):
 //! - loopback/LAN host → direct TCP (Tor cannot reach the user's LAN), TLS required;
-//! - Tor enabled → arti stream on the Bitcoin family's isolated circuits;
+//! - Tor enabled → arti stream on the chain family's isolated circuits (Bitcoin for the user's
+//!   Bitcoin servers, Dogecoin for Kyro's default Dogecoin servers);
 //! - Tor disabled → direct TCP; `.onion` refused.
 //!
 //! TLS: webpki validation (default) or a pinned SHA-256 of the server certificate. Plain TCP
@@ -72,7 +73,13 @@ fn unreachable(host: &str, e: impl std::fmt::Display) -> AppError {
 }
 
 /// Raw transport (no TLS yet), following the transport rules above.
-async fn raw_stream(net: &NetClient, host: &str, port: u16, tor: bool) -> AppResult<BoxStream> {
+async fn raw_stream(
+    net: &NetClient,
+    host: &str,
+    port: u16,
+    tor: bool,
+    family: Family,
+) -> AppResult<BoxStream> {
     let onion = host.ends_with(".onion");
     if is_private_host(host) {
         let s = tokio::time::timeout(
@@ -87,7 +94,7 @@ async fn raw_stream(net: &NetClient, host: &str, port: u16, tor: bool) -> AppRes
     if tor {
         let s = net
             .tor
-            .connect_stream(Family::Bitcoin, host, port)
+            .connect_stream(family, host, port)
             .await
             .map_err(|e| match e {
                 AppError::TorUnavailable(_) => e,
@@ -271,7 +278,7 @@ pub async fn fetch_certificate(
     port: u16,
     tor: bool,
 ) -> AppResult<CertInfo> {
-    let raw = raw_stream(net, host, port, tor).await?;
+    let raw = raw_stream(net, host, port, tor, Family::Bitcoin).await?;
     let verifier = Arc::new(CaptureVerifier {
         webpki: webpki_verifier()?,
         seen: Mutex::new(None),
@@ -286,14 +293,25 @@ pub async fn fetch_certificate(
     .ok_or_else(|| unreachable(host, "aucun certificat TLS reçu"))
 }
 
-/// Opens an Electrum session (transport + TLS + `server.version` handshake).
+/// Opens an Electrum session (transport + TLS + `server.version` handshake) on the Bitcoin
+/// family's circuits (the user's Bitcoin Electrum server).
 pub async fn connect(net: &NetClient, t: &Target, tor: bool) -> AppResult<Conn<BoxStream>> {
+    connect_family(net, t, tor, Family::Bitcoin).await
+}
+
+/// Same as [`connect`], on `family`'s isolated Tor circuits.
+pub async fn connect_family(
+    net: &NetClient,
+    t: &Target,
+    tor: bool,
+    family: Family,
+) -> AppResult<Conn<BoxStream>> {
     if t.tls == TlsMode::None && !(tor && t.host.ends_with(".onion")) {
         return Err(AppError::ServerInvalid(
             "Electrum sans TLS : uniquement vers une adresse .onion via Tor".into(),
         ));
     }
-    let raw = raw_stream(net, &t.host, t.port, tor).await?;
+    let raw = raw_stream(net, &t.host, t.port, tor, family).await?;
     let stream: BoxStream = match t.tls {
         TlsMode::None => raw,
         TlsMode::Webpki | TlsMode::Pinned(_) => {

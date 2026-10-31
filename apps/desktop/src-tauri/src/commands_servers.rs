@@ -375,7 +375,7 @@ async fn probe_utxo(
     tor: bool,
 ) -> AppResult<Detected> {
     let net = utxo_network_of(network)?;
-    if server.is_default() && crate::servers::utxo_default_base(coin, net).is_none() {
+    if server.is_default() && !crate::servers::utxo_has_default(coin, net) {
         return Err(crate::utxo_backend::no_default_server(coin));
     }
     let mut probe = Servers::default();

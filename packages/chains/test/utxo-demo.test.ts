@@ -1,5 +1,6 @@
 // Litecoin / Dogecoin end to end against the demo backend: typed ltc_* / doge_* commands,
-// accounts_get, servers (Dogecoin has no default), dust rules, signing and broadcast.
+// accounts_get, servers (Dogecoin: public ElectrumX default on mainnet, none on testnet), dust
+// rules, signing (previous transaction checked) and broadcast.
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as bitcoin from 'bitcoinjs-lib';
 import { call, IpcError, setBackend, type Accounts } from '@kyro/shared';
@@ -51,7 +52,7 @@ describe('Litecoin and Dogecoin in the app', () => {
     expect((await ltc.getHistory()).length).toBeGreaterThan(0);
   });
 
-  it('Dogecoin: no default server → SERVER_INVALID (never pretends to load); works once configured', async () => {
+  it('Dogecoin testnet: no default server → SERVER_INVALID (never pretends to load); works once configured', async () => {
     expect(await call('doge_backend_info')).toMatchObject({ kind: 'default', available: false, label: '' });
     const doge = createAdapters(accounts).doge!;
     expect(await code(doge.getBalance())).toBe('SERVER_INVALID');
@@ -62,6 +63,41 @@ describe('Litecoin and Dogecoin in the app', () => {
     await call('settings_set', { settings: { ...s, servers: { ...s.servers, dogecoin: { testnet: { kind: 'esplora', url: 'https://my-doge.example/api' } } } } });
     expect(await call('doge_backend_info')).toMatchObject({ kind: 'esplora', available: true, label: 'my-doge.example' });
     expect((await doge.getBalance())[0]?.amount).toBe(420_000_000_000n + 150_000_000n);
+  });
+
+  it('Dogecoin mainnet: works out of the box (Komodo ElectrumX default), custom server still possible', async () => {
+    setBackend(createMockBackend({ network: 'mainnet', confirm: () => true, preset: { password: PASSWORD, unlocked: true } }).invoke);
+    const main = await call('accounts_get');
+    expect(await call('doge_backend_info')).toMatchObject({ kind: 'default', available: true, label: 'doge.electrum1.cipig.net', network: 'mainnet' });
+    expect((await call('server_test', { target: { family: 'dogecoin', network: 'mainnet', server: { kind: 'default' } } })).detected).toMatchObject({ network: 'mainnet' });
+    const doge = createAdapters(main).doge!;
+    expect(main.doge.address.startsWith('D')).toBe(true);
+    expect((await doge.getBalance())[0]?.amount).toBe(420_000_000_000n + 150_000_000n);
+    expect((await doge.getHistory()).length).toBeGreaterThan(0);
+    const asset = findAsset('mainnet', 'doge')!;
+    const fee = (await doge.estimateFees()).options.normal.params;
+    const unsigned = await doge.buildTx({ asset, to: main.doge.address, amount: 100_000_000n, fee });
+    const signed = await doge.signTx(unsigned, PASSWORD);
+    expect(await doge.broadcast(signed)).toBe(signed.txid);
+    const s = await call('settings_get');
+    await call('settings_set', { settings: { ...s, servers: { ...s.servers, dogecoin: { mainnet: { kind: 'esplora', url: 'https://my-doge.example/api' } } } } });
+    expect(await call('doge_backend_info')).toMatchObject({ kind: 'esplora', available: true, label: 'my-doge.example' });
+  });
+
+  it('Dogecoin signing: the previous transaction must match the outpoint and pay us (demo mirrors Rust)', async () => {
+    const doge = createAdapters(accounts).doge!;
+    const s = await call('settings_get');
+    await call('settings_set', { settings: { ...s, servers: { ...s.servers, dogecoin: { testnet: { kind: 'esplora', url: 'https://my-doge.example/api' } } } } });
+    const asset = findAsset('testnet', 'doge')!;
+    const fee = (await doge.estimateFees()).options.normal.params;
+    const unsigned = await doge.buildTx({ asset, to: accounts.doge.address, amount: 100_000_000n, fee });
+    const psbt = bitcoin.Psbt.fromBase64(unsigned.psbt);
+    const prev = bitcoin.Transaction.fromBuffer(psbt.data.inputs[0]!.nonWitnessUtxo!);
+    // A previous transaction forged to claim another amount no longer hashes to the outpoint.
+    const forged = prev.clone();
+    forged.outs[psbt.txInputs[0]!.index]!.value += 1_000_000n;
+    psbt.data.inputs[0]!.nonWitnessUtxo = forged.toBuffer();
+    await expect(call('doge_sign_psbt', { psbt: psbt.toBase64(), password: PASSWORD })).rejects.toThrow(/ne correspond pas à l’outpoint/);
   });
 
   it('Dogecoin dust: recipient < 0.01 DOGE refused; change < 0.01 DOGE goes to fees (no change output)', async () => {

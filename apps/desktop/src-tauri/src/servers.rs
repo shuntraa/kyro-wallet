@@ -141,8 +141,9 @@ pub struct BtcServers {
     pub testnet4: Option<BtcServer>,
 }
 
-/// Server of a Litecoin or Dogecoin network: an Esplora-compatible REST API, the same kind as
-/// the default (litecoinspace.org for Litecoin; none for Dogecoin, see `utxo_backend`).
+/// Server of a Litecoin or Dogecoin network: Kyro's default (litecoinspace.org for Litecoin;
+/// Komodo's public ElectrumX servers for Dogecoin mainnet, none for Dogecoin testnet — see
+/// `utxo_backend`) or the user's Esplora-compatible REST API.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(
     tag = "kind",
@@ -193,22 +194,41 @@ impl UtxoServers {
     }
 }
 
-/// Default Esplora base URL of a UTXO chain, or `None` when Kyro has no public default.
+/// Default Esplora base URL of a UTXO chain, or `None` when its default is not Esplora
+/// (Dogecoin mainnet: Electrum, see [`utxo_default_electrum`]) or when there is no default
+/// (Dogecoin testnet).
 pub fn utxo_default_base(coin: UtxoCoin, net: Network) -> Option<&'static str> {
     match (coin, net) {
         (UtxoCoin::Litecoin, Network::Mainnet) => Some("https://litecoinspace.org/api"),
         (UtxoCoin::Litecoin, Network::Testnet) => Some("https://litecoinspace.org/testnet/api"),
-        // No free, maintained public Dogecoin API with a testnet and broadcast was found
-        // (2026-10-30, see docs/NETWORK.md): the user configures their own Esplora server.
         (UtxoCoin::Dogecoin, _) => None,
     }
+}
+
+/// Default Electrum servers of a UTXO chain, in the order they are tried (allowlist:
+/// `net::ELECTRUM_HOSTS`). Dogecoin mainnet: Komodo's public ElectrumX servers (no free public
+/// Dogecoin **testnet** server was found, 2026-10-31: the user configures one).
+pub fn utxo_default_electrum(coin: UtxoCoin, net: Network) -> Vec<(&'static str, u16)> {
+    match (coin, net) {
+        (UtxoCoin::Dogecoin, Network::Mainnet) => crate::net::ELECTRUM_HOSTS
+            .iter()
+            .filter(|(_, _, f)| *f == Family::Dogecoin)
+            .map(|(h, p, _)| (*h, *p))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Whether Kyro has a default server for this chain and network.
+pub fn utxo_has_default(coin: UtxoCoin, net: Network) -> bool {
+    utxo_default_base(coin, net).is_some() || !utxo_default_electrum(coin, net).is_empty()
 }
 
 /// Hosts of the default servers of a UTXO chain (refused once replaced).
 pub fn utxo_default_hosts(coin: UtxoCoin) -> &'static [&'static str] {
     match coin {
         UtxoCoin::Litecoin => &["litecoinspace.org"],
-        UtxoCoin::Dogecoin => &[],
+        UtxoCoin::Dogecoin => &["doge.electrum1.cipig.net", "doge.electrum2.cipig.net"],
     }
 }
 
@@ -445,7 +465,8 @@ pub struct Servers {
     pub bitcoin: BtcServers,
     /// Litecoin: Esplora only (as the default, litecoinspace.org).
     pub litecoin: UtxoServers,
-    /// Dogecoin: Esplora only (electrs-dogecoin); no public default.
+    /// Dogecoin: the user's Esplora (electrs-dogecoin), or the default (mainnet: public
+    /// ElectrumX servers; testnet: none).
     pub dogecoin: UtxoServers,
     /// TRON: java-tron HTTP API (default TronGrid). Key `testnet` = Nile.
     pub tron: TronServers,
@@ -1458,6 +1479,27 @@ mod tests {
         .unwrap();
         assert_eq!(back.litecoin, UtxoServers::default());
         assert!(utxo_default_base(UtxoCoin::Dogecoin, Network::Testnet).is_none());
+        // Dogecoin: Electrum default on mainnet only, from the allowlist; none on testnet.
+        assert_eq!(
+            utxo_default_electrum(UtxoCoin::Dogecoin, Network::Mainnet),
+            vec![
+                ("doge.electrum1.cipig.net", 20060),
+                ("doge.electrum2.cipig.net", 20060)
+            ]
+        );
+        assert!(utxo_has_default(UtxoCoin::Dogecoin, Network::Mainnet));
+        assert!(!utxo_has_default(UtxoCoin::Dogecoin, Network::Testnet));
+        assert!(utxo_default_electrum(UtxoCoin::Litecoin, Network::Mainnet).is_empty());
+        for (h, _) in utxo_default_electrum(UtxoCoin::Dogecoin, Network::Mainnet) {
+            assert!(utxo_default_hosts(UtxoCoin::Dogecoin).contains(&h));
+        }
+        s.dogecoin.mainnet = Some(UtxoServer::Esplora {
+            url: "https://doge.example/api".into(),
+        });
+        assert!(s
+            .disabled_defaults(Network::Mainnet)
+            .contains(&"doge.electrum1.cipig.net"));
+        s.dogecoin.mainnet = None;
         assert_eq!(
             utxo_default_base(UtxoCoin::Litecoin, Network::Testnet),
             Some("https://litecoinspace.org/testnet/api")

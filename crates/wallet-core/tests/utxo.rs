@@ -721,6 +721,101 @@ fn dogecoin_requires_a_matching_previous_transaction() {
     assert!(psbt_err(sign(&p)).contains("SegWit"));
 }
 
+/// Regression (owner's rule): a Dogecoin input's amount and script come **only** from the full
+/// previous transaction carried as `non_witness_utxo`, checked against the outpoint's txid —
+/// never from what a server's UTXO listing claimed. The legacy sighash does not commit to the
+/// amount, so this is what stops a lying server from making the user overpay fees.
+#[test]
+fn dogecoin_amounts_come_only_from_the_verified_previous_transaction() {
+    let s = seed(ABANDON);
+    let summary = |p: &Psbt| utxo_psbt_summary(&s, Network::Testnet, DOGE, 0, &p.to_string());
+    let sign = |p: &Psbt| utxo_sign_psbt(&s, Network::Testnet, DOGE, 0, &p.to_string());
+
+    // (1) The server claims the UTXO holds 50 DOGE; the real previous transaction says 100.
+    // The adapter, trusting the claim, builds 10 DOGE out + 39.99774 DOGE change: the real fee
+    // would be 50 DOGE. Rust computes the fee from the real previous transaction, flags it, and
+    // requires the reinforced confirmation — the dialog never shows the server's figure.
+    let (mut p, prev, _) = doge_psbt(226_000);
+    assert_eq!(
+        prev.output[1].value.to_sat(),
+        10_000_000_000,
+        "real: 100 DOGE"
+    );
+    let claimed: u64 = 5_000_000_000;
+    p.unsigned_tx.output[1].value = Amount::from_sat(claimed - 1_000_000_000 - 226_000);
+    let sum = summary(&p).unwrap();
+    assert_eq!(sum.fee, (10_000_000_000 - claimed + 226_000).to_string());
+    assert!(sum.warnings.contains(&UtxoWarning::HighFee));
+    assert!(sum.requires_extra_confirmation);
+    // The signed summary (what the dialog showed) carries the same real fee.
+    assert_eq!(sign(&p).unwrap().1, sum);
+
+    // A previous transaction forged to match the lie (output = 50 DOGE) no longer hashes to
+    // the outpoint's txid: refused before any signature.
+    let mut forged = prev.clone();
+    forged.output[1].value = Amount::from_sat(claimed);
+    p.inputs[0].non_witness_utxo = Some(forged);
+    assert!(psbt_err(sign(&p)).contains("does not match"));
+    assert!(matches!(summary(&p), Err(Error::Psbt(_))));
+
+    // (2) A previous transaction with another hash (any other transaction): refused.
+    let (mut p, _, _) = doge_psbt(226_000);
+    let other = prev_tx(spk("76a914e6c7989b8836301af965531c39865a73d745e46788ac"), 7);
+    p.inputs[0].non_witness_utxo = Some(other);
+    assert!(psbt_err(sign(&p)).contains("does not match"));
+    // The right transaction but an output index it does not have: refused.
+    let (mut p, prev, _) = doge_psbt(226_000);
+    p.unsigned_tx.input[0].previous_output = OutPoint {
+        txid: prev.compute_txid(),
+        vout: 9,
+    };
+    assert!(psbt_err(sign(&p)).contains("vout out of range"));
+
+    // (3) The spent output (by the verified previous transaction) pays a script that is not
+    // ours, while the PSBT claims our key: refused.
+    let (mut p, _, _) = doge_psbt(226_000);
+    let theirs = utxo_script_pubkey(
+        &utxo_address(&seed(LEGAL), Network::Testnet, DOGE, 0, false, 0).unwrap(),
+        Network::Testnet,
+        DOGE,
+    )
+    .unwrap();
+    let not_ours = prev_tx(theirs, 10_000_000_000);
+    p.unsigned_tx.input[0].previous_output.txid = not_ours.compute_txid();
+    p.inputs[0].non_witness_utxo = Some(not_ours.clone());
+    assert!(psbt_err(sign(&p)).contains("script is not ours"));
+    // Same coin without our key origin: nothing of ours to sign.
+    p.inputs[0].bip32_derivation.clear();
+    assert!(psbt_err(sign(&p)).contains("no input belongs to this wallet"));
+}
+
+/// Litecoin: only P2WPKH inputs are signed (BIP143 commits to the amount). If the previous
+/// transaction is also present, it must agree with `witness_utxo` (a lying amount is refused);
+/// a legacy (P2PKH) Litecoin coin is never signed.
+#[test]
+fn litecoin_witness_amount_must_match_a_given_previous_transaction() {
+    let s = seed(ABANDON);
+    let sign = |p: &Psbt| utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &p.to_string());
+    let (mut p, _) = ltc_psbt();
+    let prev_spk = p.inputs[0].witness_utxo.clone().unwrap().script_pubkey;
+    let prev = prev_tx(prev_spk, 100_000_000);
+    assert_eq!(
+        prev.compute_txid(),
+        p.unsigned_tx.input[0].previous_output.txid
+    );
+    p.inputs[0].non_witness_utxo = Some(prev);
+    assert!(sign(&p).is_ok());
+    p.inputs[0].witness_utxo.as_mut().unwrap().value = Amount::from_sat(50_000_000);
+    assert!(psbt_err(sign(&p)).contains("inconsistent"));
+
+    // A legacy P2PKH Litecoin coin with our (BIP84) key origin: not our script, refused.
+    let (mut p, me) = ltc_psbt();
+    p.inputs[0].witness_utxo.as_mut().unwrap().script_pubkey =
+        ScriptBuf::new_p2pkh(&bitcoin::PublicKey::new(me.pk).pubkey_hash());
+    p.inputs[0].non_witness_utxo = None;
+    assert!(psbt_err(sign(&p)).contains("not ours"));
+}
+
 #[test]
 fn litecoin_requires_witness_utxo_and_refuses_bitcoin_paths() {
     let s = seed(ABANDON);

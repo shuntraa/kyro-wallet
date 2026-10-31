@@ -389,7 +389,12 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   list.push(ltc?.kind === 'esplora' ? { host: host(ltc.url), purpose: 'Litecoin : ton serveur Esplora', custom: true } : { host: 'litecoinspace.org', purpose: 'Litecoin : soldes, frais, diffusion' });
   const doge = servers.dogecoin?.[nk];
   if (doge?.kind === 'esplora') list.push({ host: host(doge.url), purpose: 'Dogecoin : ton serveur Esplora', custom: true });
-  else list.push({ host: 'aucun serveur', purpose: 'Dogecoin : aucun serveur public gratuit, configure le tien (rien n’est contacté)' });
+  else if (network === 'mainnet') {
+    // Komodo's public ElectrumX servers (Rust only, raw TLS sockets; the second one is a
+    // fallback). Every UTXO is checked against its previous transaction before signing.
+    list.push({ host: 'doge.electrum1.cipig.net:20060', purpose: 'Dogecoin : soldes, historique, frais, diffusion (ElectrumX public de Komodo)' });
+    list.push({ host: 'doge.electrum2.cipig.net:20060', purpose: 'Dogecoin : serveur de secours (ElectrumX public de Komodo)' });
+  } else list.push({ host: 'aucun serveur', purpose: 'Dogecoin testnet : aucun serveur public gratuit, configure le tien (rien n’est contacté)' });
   // TRON: reached by Rust only (tron_*), Tor circuits of the `tron` family.
   // Cardano: reached by Rust only (ada_*), Tor circuits of the `cardano` family.
   const ada = servers.cardano?.[nk];

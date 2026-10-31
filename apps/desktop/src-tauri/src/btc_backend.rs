@@ -414,7 +414,7 @@ pub async fn address_info(ctx: &Ctx<'_>, address: &str) -> AppResult<Value> {
     Err(AppError::Internal("backend Bitcoin inconnu".into()))
 }
 
-fn stats_json(
+pub fn stats_json(
     address: &str,
     confirmed: i64,
     unconfirmed: i64,

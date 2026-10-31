@@ -2,8 +2,11 @@
 //
 // DEMO ONLY — Litecoin and Dogecoin (`ltc_*` / `doge_*`, docs/IPC.md §2.4), mirroring
 // apps/desktop/src-tauri/src/commands_utxo.rs. Same Esplora shapes as Bitcoin, the server is
-// picked here (Litecoin: litecoinspace.org by default; Dogecoin: NO default, every read
-// fails with SERVER_INVALID until an Esplora server is set), fake signatures.
+// picked here (Litecoin: litecoinspace.org by default; Dogecoin mainnet: Komodo's public
+// ElectrumX servers by default; Dogecoin testnet: NO default, every read fails with
+// SERVER_INVALID until an Esplora server is set), fake signatures. Like Rust, a Dogecoin input
+// is signed only if its previous transaction hashes to the outpoint's txid and its output pays
+// one of our addresses; the amount (fee of the dialog) comes from that transaction.
 //
 // Scenario words in a custom Esplora URL, like Bitcoin: « down » / « flaky » → SERVER_UNREACHABLE,
 // « wrong » → SERVER_WRONG_NETWORK.
@@ -46,6 +49,9 @@ export const DEMO_DOGE_NETWORKS: Record<Network, bitcoin.Network> = {
 /** Soft dust of Dogecoin (0.01 DOGE) and its hard limit (0.001 DOGE, non-standard below). */
 const DOGE_SOFT_DUST = 1_000_000;
 const DOGE_HARD_DUST = 100_000;
+
+/** First default Dogecoin mainnet server (Rust: `net::ELECTRUM_HOSTS`). */
+export const DOGE_DEFAULT_ELECTRUM = 'doge.electrum1.cipig.net';
 
 type Coin = 'ltc' | 'doge';
 const KEY: Record<Coin, UtxoCoinKey> = { ltc: 'litecoin', doge: 'dogecoin' };
@@ -110,10 +116,14 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
   const net = (coin: Coin) => netsOf(coin)[d.network];
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+  /** Kyro's default server exists for this coin on this network (not Dogecoin testnet). */
+  const hasDefault = (coin: Coin) => coin === 'ltc' || d.network === 'mainnet';
+  const defaultLabel = (coin: Coin) => (coin === 'ltc' ? 'litecoinspace.org' : hasDefault(coin) ? DOGE_DEFAULT_ELECTRUM : '');
+
   /** Gate of every read: the right server, Tor, no fallback. */
   const backend = async (coin: Coin) => {
     const s = serverOf(coin);
-    if (coin === 'doge' && s.kind === 'default') {
+    if (s.kind === 'default' && !hasDefault(coin)) {
       throw invalid('dogecoin : aucun serveur public gratuit — configure ton serveur Esplora (electrs-dogecoin) dans Réglages › Réseaux et serveurs');
     }
     if (torOn()) await d.tor.waitReady();
@@ -142,8 +152,8 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
   const probe = async (coin: Coin, network: string, s: UtxoServer): Promise<ServerTestResult['detected']> => {
     if (network !== 'mainnet' && network !== 'testnet') throw invalid(`${KEY[coin]} : réseau inconnu « ${network} » (mainnet ou testnet)`);
     if (s.kind === 'default') {
-      if (coin === 'doge') throw invalid('dogecoin : aucun serveur public gratuit, configure ton serveur Esplora');
-      return { network, blockHeight: d.chain.ltcTip };
+      if (!hasDefault(coin)) throw invalid('dogecoin : aucun serveur public gratuit sur testnet, configure ton serveur Esplora');
+      return { network, blockHeight: coin === 'ltc' ? d.chain.ltcTip : d.chain.dogeTip };
     }
     const bad = checkServerUrl(s.url, torOn());
     if (bad) throw invalid(`${KEY[coin]} ${network} : ${bad}`);
@@ -177,8 +187,21 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
       if (!input.bip32Derivation?.length) throw new IpcError('INVALID_INPUT', `Entrée invalide : entrée ${i} sans dérivation`);
       if (coin === 'doge') {
         if (!input.nonWitnessUtxo || input.witnessUtxo) throw new IpcError('INVALID_INPUT', `Entrée invalide : Dogecoin, l’entrée ${i} doit porter la transaction précédente (non_witness_utxo) et pas de witness_utxo`);
+        // Amount and script ONLY from the previous transaction, checked against the outpoint.
         const prev = bitcoin.Transaction.fromBuffer(input.nonWitnessUtxo);
-        inSum += prev.outs[psbt.txInputs[i]?.index ?? 0]?.value ?? 0n;
+        const txIn = psbt.txInputs[i]!;
+        if (prev.getId() !== bytesToHex(Uint8Array.from(txIn.hash).reverse())) throw new IpcError('INVALID_INPUT', `Entrée invalide : entrée ${i}, la transaction précédente ne correspond pas à l’outpoint`);
+        const spent = prev.outs[txIn.index];
+        if (!spent) throw new IpcError('INVALID_INPUT', `Entrée invalide : entrée ${i}, sortie précédente absente`);
+        const payee = ((): string | null => {
+          try {
+            return bitcoin.address.fromOutputScript(spent.script, net(coin));
+          } catch {
+            return null;
+          }
+        })();
+        if (!payee || !own(coin, d.accounts.arg(a.account)).has(payee)) throw new IpcError('INVALID_INPUT', `Entrée invalide : entrée ${i}, la pièce dépensée ne paie pas ce portefeuille`);
+        inSum += spent.value;
       } else {
         if (!input.witnessUtxo) throw new IpcError('INVALID_INPUT', `Entrée invalide : Litecoin, l’entrée ${i} doit porter witness_utxo`);
         inSum += input.witnessUtxo.value;
@@ -236,8 +259,8 @@ ${text}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
   const commands = (coin: Coin) => ({
     backend_info: (): UtxoBackendInfo => {
       const s = serverOf(coin);
-      const available = !(coin === 'doge' && s.kind === 'default');
-      const label = s.kind === 'esplora' ? hostOf(s.url) : coin === 'ltc' ? 'litecoinspace.org' : '';
+      const available = s.kind === 'esplora' || hasDefault(coin);
+      const label = s.kind === 'esplora' ? hostOf(s.url) : defaultLabel(coin);
       return { kind: s.kind, network: netKey, label, available, tor: torOn() };
     },
     address: (a: Record<string, unknown>) => {
