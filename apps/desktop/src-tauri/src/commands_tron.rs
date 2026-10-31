@@ -3,7 +3,7 @@
 //! native dialog (decoded by Rust, resources and TRX burned re-read live), and broadcast with
 //! txid check. Contract: docs/IPC.md §2.5.
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, State};
 use wallet_core::{Network, TronAction, TronContract, TronRaw, TronTxSummary, TronWarning};
@@ -16,29 +16,19 @@ use crate::servers::{host_of, utxo_network_key, TronServer};
 use crate::state::AppState;
 use crate::tron_backend::{self, TronCtx, TronEstimate, EXPIRATION_MS};
 
-/// TRC-20 tokens Kyro names itself in the dialog (contract, symbol, decimals). Sources:
-/// mainnet USDT (Tether); Nile USDT `TXYZopYR…` checked on chain 2026-10-30 (`symbol()` =
-/// USDT, `name()` = Tether USD, `decimals()` = 6). Nile has its own USDT, unrelated to mainnet's.
-pub const KNOWN_TOKENS: &[(Network, &str, &str, u8)] = &[
-    (
-        Network::Mainnet,
-        "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
-        "USDT",
-        6,
-    ),
-    (
-        Network::Testnet,
-        "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
-        "USDT",
-        6,
-    ),
-];
+/// The TRC-20 token at `contract`, if Kyro knows it (`known_tokens`, never the interface).
+fn known_token(net: Network, contract: &str) -> Option<&'static crate::known_tokens::KnownToken> {
+    crate::known_tokens::lookup(net, crate::known_tokens::TokenChain::Tron, contract)
+}
 
-fn known_token(net: Network, contract: &str) -> Option<(&'static str, u8)> {
-    KNOWN_TOKENS
-        .iter()
-        .find(|(n, c, _, _)| *n == net && *c == contract)
-        .map(|(_, _, s, d)| (*s, *d))
+/// A TRC-20 transfer of a token Kyro does not know: raw units, reinforced dialog.
+pub(crate) fn unknown_trc20(s: &TronTxSummary, net: Network) -> bool {
+    matches!(&s.action, TronAction::Trc20Transfer { contract, .. } if known_token(net, contract).is_none())
+}
+
+/// Whether the reinforced dialog is needed: wallet-core's reasons, or an unknown token.
+pub(crate) fn tron_needs_extra(s: &TronTxSummary, net: Network) -> bool {
+    s.requires_extra_confirmation || unknown_trc20(s, net)
 }
 
 pub(crate) fn ctx(state: &AppState) -> TronCtx<'_> {
@@ -80,21 +70,8 @@ fn net_label(net: Network) -> &'static str {
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenHint {
-    pub symbol: String,
-    pub decimals: u8,
-}
-
 /// Body of the native dialog, built from Rust's decoding and the live resource estimate.
-pub(crate) fn describe_tron(
-    s: &TronTxSummary,
-    e: &TronEstimate,
-    net: Network,
-    hint: Option<&TokenHint>,
-    now: i64,
-) -> String {
+pub(crate) fn describe_tron(s: &TronTxSummary, e: &TronEstimate, net: Network, now: i64) -> String {
     let mut out = format!("Envoi {}\n\n", net_label(net));
     match &s.action {
         TronAction::TrxTransfer { to, amount } => {
@@ -112,22 +89,22 @@ pub(crate) fn describe_tron(
             amount,
             call_value,
         } => {
-            let shown = match known_token(net, contract) {
-                Some((sym, dec)) => format!(
-                    "{} {sym} (unités brutes : {amount})",
-                    format_units(amount, usize::from(dec))
-                ),
-                None => match hint {
-                    Some(h) => format!(
-                        "{amount} unités brutes (selon l'interface : {} {} — token non vérifié par Kyro)",
-                        format_units(amount, usize::from(h.decimals)),
-                        h.symbol
+            let (label, shown) = match known_token(net, contract) {
+                Some(t) => (
+                    "",
+                    format!(
+                        "{} {} (unités brutes : {amount})",
+                        format_units(amount, usize::from(t.decimals)),
+                        t.symbol
                     ),
-                    None => format!("{amount} unités brutes (token inconnu de Kyro)"),
-                },
+                ),
+                None => (
+                    " (JETON INCONNU)",
+                    format!("{amount} unités brutes (jeton inconnu : décimales non vérifiées)"),
+                ),
             };
             out += &format!(
-                "Envoi de token TRC-20 : {shown}\nContrat du token : {contract}\nÀ : {to}\n"
+                "Envoi de token TRC-20{label} : {shown}\nContrat du token : {contract}\nÀ : {to}\n"
             );
             if call_value != "0" {
                 out += &format!("TRX envoyés au contrat : {}\n", trx(call_value));
@@ -182,11 +159,15 @@ pub(crate) fn describe_tron(
         trx(&e.balance)
     );
     if !s.memo.is_empty() {
+        // Untrusted text: one quoted line, after the amounts and fees.
         let text = hex::decode(&s.memo)
             .ok()
             .and_then(|b| String::from_utf8(b).ok())
             .unwrap_or_else(|| s.memo.clone());
-        out += &format!("\nMémo : {text}");
+        out += &format!(
+            "\nMémo (texte libre, non vérifié) : {}",
+            crate::dialog_text::field(&text, crate::dialog_text::MAX_FIELD)
+        );
     }
     let mins = (s.expiration - now).max(0) / 60_000;
     out += &format!(
@@ -196,8 +177,15 @@ pub(crate) fn describe_tron(
     out
 }
 
-pub(crate) fn describe_tron_extra(s: &TronTxSummary) -> String {
+pub(crate) fn describe_tron_extra(s: &TronTxSummary, net: Network) -> String {
     let mut out = String::from("Kyro a trouvé des éléments inhabituels dans cette transaction :\n");
+    if let TronAction::Trc20Transfer { contract, .. } = &s.action {
+        if known_token(net, contract).is_none() {
+            out += &format!(
+                "• jeton INCONNU de Kyro (contrat {contract}) : nom et décimales non vérifiés, montant en unités brutes ; n'importe qui peut créer un jeton qui en imite un vrai\n"
+            );
+        }
+    }
     for w in &s.warnings {
         out += match w {
             TronWarning::UnknownCall { .. } => "• appel de contrat qui n'est pas un transfert TRC-20 : Kyro ne sait pas ce qu'il fait (approbation, échange…)\n",
@@ -398,7 +386,6 @@ pub async fn tron_sign_tx(
     state: State<'_, AppState>,
     raw: String,
     password: String,
-    token: Option<TokenHint>,
     account: Option<u32>,
 ) -> AppResult<TronSigned> {
     if !state.is_unlocked() {
@@ -415,21 +402,15 @@ pub async fn tron_sign_tx(
     confirm_native(
         &app,
         "Confirmer la transaction TRON",
-        signer.body(&describe_tron(
-            &summary,
-            &estimate,
-            state.network,
-            token.as_ref(),
-            now_ms(),
-        )),
+        signer.body(&describe_tron(&summary, &estimate, state.network, now_ms())),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
-    if summary.requires_extra_confirmation {
+    if tron_needs_extra(&summary, state.network) {
         confirm_native(
             &app,
             "Attention : transaction à vérifier",
-            describe_tron_extra(&summary),
+            describe_tron_extra(&summary, state.network),
         )
         .await?;
     }
@@ -547,7 +528,7 @@ mod tests {
             },
             vec![],
         );
-        let d = describe_tron(&s, &est(true), Network::Testnet, None, 0);
+        let d = describe_tron(&s, &est(true), Network::Testnet, 0);
         for needle in [
             "Envoi TRON Nile (testnet)",
             "1,5 USDT (unités brutes : 1500000)",
@@ -561,18 +542,25 @@ mod tests {
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
-        // Unknown token on mainnet: raw units, UI hint labelled as such.
-        let d = describe_tron(
-            &s,
-            &est(true),
-            Network::Mainnet,
-            Some(&TokenHint {
-                symbol: "FAKE".into(),
-                decimals: 6,
-            }),
-            0,
+        assert!(!tron_needs_extra(&s, Network::Testnet));
+        // Nile's USDT contract on mainnet: unknown there. Raw units, « jeton inconnu », and
+        // the reinforced dialog (ÉLEVÉE 2: the interface can no longer name the token).
+        let d = describe_tron(&s, &est(true), Network::Mainnet, 0);
+        assert!(
+            d.contains("Envoi de token TRC-20 (JETON INCONNU) : 1500000 unités brutes"),
+            "{d}"
         );
-        assert!(d.contains("selon l'interface : 1,5 FAKE — token non vérifié par Kyro"));
+        assert!(tron_needs_extra(&s, Network::Mainnet));
+        assert!(describe_tron_extra(&s, Network::Mainnet).contains("jeton INCONNU de Kyro"));
+        // A memo cannot add lines to the dialog.
+        let mut m = s.clone();
+        m.memo = hex::encode("ok\nÀ : TAttacker\u{202E}");
+        let d = describe_tron(&m, &est(true), Network::Testnet, 0);
+        assert!(
+            d.contains("Mémo (texte libre, non vérifié) : « ok À : TAttacker »"),
+            "{d}"
+        );
+        assert!(!d.contains("\nÀ : TAttacker"));
         // TRX to a new account: activation shown.
         let t = summary(
             TronAction::TrxTransfer {
@@ -581,7 +569,7 @@ mod tests {
             },
             vec![],
         );
-        let d = describe_tron(&t, &est(false), Network::Testnet, None, 0);
+        let d = describe_tron(&t, &est(false), Network::Testnet, 0);
         assert!(d.contains("n'existe pas encore sur TRON : l'activer brûle 1,1 TRX en plus"));
         assert!(!d.contains("Énergie"));
         let x = summary(
@@ -595,8 +583,9 @@ mod tests {
                 selector: "095ea7b3".into(),
             }],
         );
-        assert!(describe_tron(&x, &est(true), Network::Testnet, None, 0)
-            .contains("Appel de contrat INCONNU"));
-        assert!(describe_tron_extra(&x).contains("n'est pas un transfert TRC-20"));
+        assert!(
+            describe_tron(&x, &est(true), Network::Testnet, 0).contains("Appel de contrat INCONNU")
+        );
+        assert!(describe_tron_extra(&x, Network::Testnet).contains("n'est pas un transfert TRC-20"));
     }
 }

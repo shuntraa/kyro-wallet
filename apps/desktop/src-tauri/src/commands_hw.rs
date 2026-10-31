@@ -21,7 +21,8 @@ use wallet_core::{
 };
 
 use crate::commands::{
-    confirm_native, describe_btc, describe_btc_extra, describe_evm, evm_warning_lines, TokenHint,
+    confirm_native, describe_btc, describe_btc_extra, describe_evm, evm_needs_extra,
+    evm_token_label, evm_warning_lines, TokenLabel,
 };
 use crate::error::{AppError, AppResult};
 use crate::hw::{
@@ -96,7 +97,7 @@ fn device_line(info: &DeviceInfo) -> String {
     format!(
         "\n\n— Appareil : {brand} {} —\nAprès « Signer », vérifie les MÊMES informations sur l'écran de \
          l'appareil et confirme-les là-bas. S'il affiche autre chose, refuse sur l'appareil.",
-        info.model
+        crate::dialog_text::sanitize(&info.model, 40)
     )
 }
 
@@ -301,6 +302,8 @@ pub async fn hw_get_xpub(
 
 #[tauri::command]
 pub fn hw_accounts_get(state: State<'_, AppState>) -> AppResult<Vec<WatchOnlyAccount>> {
+    // xpubs reveal every address: only while unlocked (or in hardware-only mode, no vault).
+    guard(&state)?;
     Ok(store::load(&state.hw_accounts_path, state.network)?.accounts)
 }
 
@@ -716,7 +719,6 @@ pub async fn hw_sign_evm_tx(
     id: String,
     account_id: String,
     tx: EvmTxRequest,
-    token: Option<TokenHint>,
 ) -> AppResult<HwEvmSigned> {
     guard(&state)?;
     let acc = load_account(&state, &account_id)?;
@@ -735,14 +737,16 @@ pub async fn hw_sign_evm_tx(
             .filter(|d| wallet_core::ledger_erc20_verify(d).is_ok()),
         _ => None,
     };
-    // A Ledger-signed descriptor is a trusted symbol/decimals source; the UI hint is not.
+    // Symbol/decimals: a Ledger-signed descriptor (verified offline) or Rust's own table.
+    // Never the interface: a fake `decimals` would hide the real amount.
     let hint = descriptor
         .as_ref()
-        .map(|d| TokenHint {
+        .map(|d| TokenLabel {
             symbol: d.ticker.clone(),
             decimals: d.decimals,
         })
-        .or(token);
+        .or_else(|| evm_token_label(state.network, &summary));
+    let extra = evm_needs_extra(&summary, hint.as_ref());
 
     let acc2 = acc.clone();
     let (kind, has_desc) = (summary.kind, descriptor.is_some());
@@ -762,9 +766,9 @@ pub async fn hw_sign_evm_tx(
         describe_evm(&summary, hint.as_ref()) + &device_line(&info),
     )
     .await?;
-    if !clear || summary.requires_extra_confirmation {
+    if !clear || extra {
         let mut body = String::new();
-        if summary.requires_extra_confirmation {
+        if extra {
             body += &evm_warning_lines(&summary, hint.as_ref());
             body += "\n";
         }
@@ -820,7 +824,8 @@ pub async fn hw_sign_sol_tx(
         .map(|s| s.address.clone())
         .ok_or_else(|| AppError::InvalidInput("ce compte n'a pas de clé Solana".into()))?;
     let bytes = solana::message_bytes(&message)?;
-    let summary = solana::decode(&state, &bytes, &me).await?;
+    let decoded = solana::decode(&state, &bytes, &me).await?;
+    let summary = decoded.summary.clone();
     if summary.our_signer_index.is_none() {
         return Err(AppError::InvalidInput(
             "cette transaction ne demande pas la signature de cette adresse Solana".into(),
@@ -839,14 +844,14 @@ pub async fn hw_sign_sol_tx(
     confirm_native(
         &app,
         "Confirmer la transaction Solana (hardware wallet)",
-        solana::describe(&summary, &me, state.network) + &device_line(&info),
+        solana::describe(&decoded, &me, state.network) + &device_line(&info),
     )
     .await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
             "Attention : transaction non vérifiée",
-            solana::describe_extra(&summary),
+            solana::describe_extra(&decoded),
         )
         .await?;
     }

@@ -3,7 +3,7 @@
 //! except the recovery phrase on creation and on an explicit, password-gated reveal.
 
 use base64::Engine as _;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use wallet_core::{
@@ -67,6 +67,8 @@ pub(crate) async fn confirm_native(
     // Counted while shown: `network_set` (app restart) is refused until it is answered.
     let _open = app.state::<AppState>().dialogs.enter();
     let app = app.clone();
+    // Last pass: no bidi / invisible / stray control character from any field can survive.
+    let body = crate::dialog_text::body(&body);
     let approved = blocking(move || {
         Ok(app
             .dialog()
@@ -412,46 +414,100 @@ fn chain_name(id: u64) -> String {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TokenHint {
+/// Native currency of an EVM chain (what `value` and the fees are paid in).
+fn native_symbol(id: u64) -> &'static str {
+    match id {
+        137 => "POL",
+        56 => "BNB",
+        43114 => "AVAX",
+        1 | 11155111 | 42161 | 10 | 8453 => "ETH",
+        _ => "(monnaie native)",
+    }
+}
+
+/// Symbol and decimals of a token, from a source Rust trusts: the `known_tokens` table, or a
+/// Ledger-signed descriptor verified offline. Never from the interface.
+#[derive(Debug, Clone)]
+pub(crate) struct TokenLabel {
     pub(crate) symbol: String,
     pub(crate) decimals: u8,
 }
 
-pub(crate) fn describe_evm(s: &wallet_core::EvmTxSummary, hint: Option<&TokenHint>) -> String {
-    let token_amount = |raw: &str| match hint {
-        Some(h) => format!(
+impl TokenLabel {
+    pub(crate) fn from_known(t: &crate::known_tokens::KnownToken) -> Self {
+        Self {
+            symbol: t.symbol.to_owned(),
+            decimals: t.decimals,
+        }
+    }
+}
+
+/// The token of an ERC-20 transfer/approve, if Kyro knows its contract on this chain.
+pub(crate) fn evm_token_label(net: Network, s: &wallet_core::EvmTxSummary) -> Option<TokenLabel> {
+    let contract = s.token_contract.as_deref()?;
+    crate::known_tokens::lookup(
+        net,
+        crate::known_tokens::TokenChain::Evm(s.chain_id),
+        contract,
+    )
+    .map(TokenLabel::from_known)
+}
+
+/// ERC-20 call on a contract Kyro does not know: the amount can only be shown in raw units.
+pub(crate) fn evm_unknown_token(s: &wallet_core::EvmTxSummary, token: Option<&TokenLabel>) -> bool {
+    matches!(s.kind, EvmTxKind::Erc20Transfer | EvmTxKind::Erc20Approve) && token.is_none()
+}
+
+/// Whether the reinforced dialog is needed: wallet-core's reasons, or an unknown token.
+pub(crate) fn evm_needs_extra(s: &wallet_core::EvmTxSummary, token: Option<&TokenLabel>) -> bool {
+    s.requires_extra_confirmation || evm_unknown_token(s, token)
+}
+
+fn evm_token_amount(raw: &str, token: Option<&TokenLabel>) -> String {
+    match token {
+        Some(t) => format!(
             "{} {} (unités brutes : {raw})",
-            format_units(raw, h.decimals as usize),
-            h.symbol
+            format_units(raw, t.decimals as usize),
+            crate::dialog_text::sanitize(&t.symbol, 16)
         ),
-        None => format!("{raw} unités brutes"),
+        None => format!("{raw} unités brutes (jeton inconnu : décimales non vérifiées)"),
+    }
+}
+
+pub(crate) fn describe_evm(s: &wallet_core::EvmTxSummary, token: Option<&TokenLabel>) -> String {
+    let native = native_symbol(s.chain_id);
+    let unknown = if token.is_none() {
+        " (JETON INCONNU)"
+    } else {
+        ""
     };
     let mut out = format!("Réseau : {}\n\n", chain_name(s.chain_id));
     match s.kind {
         EvmTxKind::NativeTransfer => {
             out += &format!(
-                "Envoi de {} ETH\nÀ : {}\n",
+                "Envoi de {} {native}\nÀ : {}\n",
                 format_units(&s.amount, 18),
                 s.to
             );
         }
         EvmTxKind::Erc20Transfer => {
             out += &format!(
-                "Envoi de token : {}\nContrat du token : {}\nÀ : {}\n",
-                token_amount(&s.amount),
+                "Envoi de token{unknown} : {}\nContrat du token : {}\nÀ : {}\n",
+                evm_token_amount(&s.amount, token),
                 s.token_contract.as_deref().unwrap_or("?"),
                 s.to
             );
         }
         EvmTxKind::Erc20Approve => {
-            out +=
-                &format!(
-                "AUTORISATION de dépense\nContrat du token : {}\nBénéficiaire : {}\nMontant : {}\n",
+            out += &format!(
+                "AUTORISATION de dépense{unknown}\nContrat du token : {}\nBénéficiaire : {}\nMontant : {}\n",
                 s.token_contract.as_deref().unwrap_or("?"),
                 s.spender.as_deref().unwrap_or("?"),
-                if s.unlimited_approval { "ILLIMITÉ".to_string() } else { token_amount(&s.amount) }
+                if s.unlimited_approval {
+                    "ILLIMITÉ".to_string()
+                } else {
+                    evm_token_amount(&s.amount, token)
+                }
             );
             if s.unlimited_approval {
                 out += "\n⚠ Ce contrat pourra dépenser TOUS ces tokens, sans limite de temps.\n";
@@ -459,20 +515,33 @@ pub(crate) fn describe_evm(s: &wallet_core::EvmTxSummary, hint: Option<&TokenHin
         }
         EvmTxKind::ContractCall => {
             out += &format!(
-                "Appel de contrat : {}\nValeur envoyée : {} ETH\n",
+                "Appel de contrat : {}\nValeur envoyée : {} {native}\n",
                 s.to,
                 format_units(&s.amount, 18)
             );
         }
     }
-    out += &format!("\nFrais maximum : {} ETH", format_units(&s.max_fee_wei, 18));
+    out += &format!(
+        "\nFrais maximum : {} {native}",
+        format_units(&s.max_fee_wei, 18)
+    );
     out
 }
 
 /// Reasons for caution of an EVM transaction, one bullet each (reinforced dialog).
-pub(crate) fn evm_warning_lines(s: &wallet_core::EvmTxSummary, hint: Option<&TokenHint>) -> String {
+pub(crate) fn evm_warning_lines(
+    s: &wallet_core::EvmTxSummary,
+    token: Option<&TokenLabel>,
+) -> String {
     use wallet_core::EvmWarning;
+    let native = native_symbol(s.chain_id);
     let mut out = String::new();
+    if evm_unknown_token(s, token) {
+        out += &format!(
+            "• jeton INCONNU de Kyro (contrat {}) : nom et décimales non vérifiés, montant en unités brutes ; n'importe qui peut créer un jeton qui en imite un vrai\n",
+            s.token_contract.as_deref().unwrap_or("?")
+        );
+    }
     for w in &s.warnings {
         out += &match w {
             EvmWarning::ContractCall => format!(
@@ -483,14 +552,7 @@ pub(crate) fn evm_warning_lines(s: &wallet_core::EvmTxSummary, hint: Option<&Tok
                 let shown = if *unlimited {
                     "ILLIMITÉ".to_string()
                 } else {
-                    match hint {
-                        Some(h) => format!(
-                            "{} {} (unités brutes : {amount})",
-                            format_units(amount, h.decimals as usize),
-                            h.symbol
-                        ),
-                        None => format!("{amount} unités brutes"),
-                    }
+                    evm_token_amount(amount, token)
                 };
                 format!(
                     "• AUTORISATION : {spender} pourra dépenser {shown} de ce token ({}), à tout moment, jusqu'à révocation\n",
@@ -498,7 +560,7 @@ pub(crate) fn evm_warning_lines(s: &wallet_core::EvmTxSummary, hint: Option<&Tok
                 )
             }
             EvmWarning::ValueToContract { value_wei } => format!(
-                "• {} ETH (valeur native) envoyés au contrat avec l'appel\n",
+                "• valeur native envoyée au contrat avec l'appel : {} {native}\n",
                 format_units(value_wei, 18)
             ),
             EvmWarning::UnknownChain { chain_id } => format!(
@@ -517,11 +579,11 @@ pub(crate) fn evm_warning_lines(s: &wallet_core::EvmTxSummary, hint: Option<&Tok
 /// Text of the reinforced dialog for EVM transactions signed by the vault.
 pub(crate) fn describe_evm_extra(
     s: &wallet_core::EvmTxSummary,
-    hint: Option<&TokenHint>,
+    token: Option<&TokenLabel>,
 ) -> String {
     format!(
         "Kyro a trouvé des éléments à vérifier dans cette transaction :\n{}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?",
-        evm_warning_lines(s, hint)
+        evm_warning_lines(s, token)
     )
 }
 
@@ -543,7 +605,6 @@ pub async fn evm_sign_tx(
     state: State<'_, AppState>,
     tx: EvmTxRequest,
     password: String,
-    token: Option<TokenHint>,
     account: Option<u32>,
 ) -> AppResult<EvmSigned> {
     if !state.is_unlocked() {
@@ -551,6 +612,8 @@ pub async fn evm_sign_tx(
     }
     let a = account_arg(account)?;
     let summary = wallet_core::evm_decode(&tx)?;
+    // Symbol and decimals come from Rust's own table only (never from the interface).
+    let token = evm_token_label(state.network, &summary);
     let from = state.with_seed(|seed| Ok(wallet_core::evm_address(seed, a)?))?;
     let signer = SignerInfo::new(&state, Chain::Evm, a, wallet_core::evm_path(a));
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
@@ -564,7 +627,7 @@ pub async fn evm_sign_tx(
     )
     .await?;
     confirm_signer(&app, &signer).await?;
-    if summary.requires_extra_confirmation {
+    if evm_needs_extra(&summary, token.as_ref()) {
         confirm_native(
             &app,
             "Attention : transaction à vérifier",
@@ -689,7 +752,7 @@ pub async fn sol_decode_tx(
 ) -> AppResult<wallet_core::SolTxSummary> {
     let bytes = solana::message_bytes(&message)?;
     let me = sol_own_address(&state, account_arg(account)?)?;
-    solana::decode(&state, &bytes, &me).await
+    Ok(solana::decode(&state, &bytes, &me).await?.summary)
 }
 
 #[derive(Serialize)]
@@ -714,7 +777,8 @@ pub async fn sol_sign_tx(
     let me = sol_own_address(&state, a)?;
     let signer = SignerInfo::new(&state, Chain::Sol, a, wallet_core::sol_path(a));
     // Decoded (and lookup tables resolved) in Rust only — nothing from the UI is trusted.
-    let summary = solana::decode(&state, &bytes, &me).await?;
+    let decoded = solana::decode(&state, &bytes, &me).await?;
+    let summary = decoded.summary.clone();
     if summary.our_signer_index.is_none() {
         return Err(AppError::InvalidInput(
             "cette transaction ne demande pas la signature de ton adresse Solana".into(),
@@ -724,7 +788,7 @@ pub async fn sol_sign_tx(
     confirm_native(
         &app,
         "Confirmer la transaction Solana",
-        signer.body(&solana::describe(&summary, &me, state.network)),
+        signer.body(&solana::describe(&decoded, &me, state.network)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
@@ -732,7 +796,7 @@ pub async fn sol_sign_tx(
         confirm_native(
             &app,
             "Attention : transaction non vérifiée",
-            solana::describe_extra(&summary),
+            solana::describe_extra(&decoded),
         )
         .await?;
     }
@@ -828,21 +892,71 @@ mod tests {
         assert!(d.contains("AUTORISATION : 0x9858EfFD232B4033E47d90003D41EC34EcaEda94 pourra dépenser ILLIMITÉ"), "{d}");
         let exact = format!("0x095ea7b3{:0>64}{:0>64}", spender, "f4240");
         let s = wallet_core::evm_decode(&tx(&exact, 11_155_111, "0")).unwrap();
-        let hint = TokenHint {
-            symbol: "USDC".into(),
-            decimals: 6,
-        };
-        assert!(describe_evm_extra(&s, Some(&hint))
+        // The token is named from Rust's table (Sepolia test USDC), never from the interface.
+        let token = evm_token_label(Network::Testnet, &s);
+        assert!(token.is_some());
+        assert!(describe_evm_extra(&s, token.as_ref())
             .contains("dépenser 1 USDC (unités brutes : 1000000)"));
+        // Same contract on mainnet chain id 1: not a known token there.
+        let s1 = wallet_core::evm_decode(&tx(&exact, 1, "0")).unwrap();
+        assert!(evm_token_label(Network::Mainnet, &s1).is_none());
         let s = wallet_core::evm_decode(&tx("0xdeadbeef", 999, "1000000000000000000")).unwrap();
         let d = describe_evm_extra(&s, None);
         for needle in [
             "action INCONNUE",
-            "1 ETH (valeur native) envoyés au contrat",
+            "valeur native envoyée au contrat avec l'appel : 1 (monnaie native)",
             "réseau INCONNU de Kyro (chainId 999)",
         ] {
             assert!(d.contains(needle), "{needle} in {d}");
         }
+    }
+
+    /// ÉLEVÉE 2: an ERC-20 transfer on a contract Kyro does not know is labelled « jeton
+    /// inconnu », shown in raw units, and needs the reinforced dialog even though wallet-core
+    /// sees a plain transfer.
+    #[test]
+    fn unknown_erc20_is_raw_and_reinforced() {
+        let to = "9858effd232b4033e47d90003d41ec34ecaeda94";
+        let data = format!("0xa9059cbb{:0>64}{:0>64}", to, "f4240");
+        let tx = |contract: &str, chain_id: u64| EvmTxRequest {
+            chain_id,
+            nonce: 0,
+            to: contract.into(),
+            value_wei: "0".into(),
+            data: data.clone(),
+            gas_limit: 60_000,
+            max_fee_per_gas: "2000000000".into(),
+            max_priority_fee_per_gas: "1000000000".into(),
+        };
+        // Fake token contract on mainnet.
+        let s =
+            wallet_core::evm_decode(&tx("0x00000000000000000000000000000000DeaDBeef", 1)).unwrap();
+        assert_eq!(s.kind, EvmTxKind::Erc20Transfer);
+        assert!(!s.requires_extra_confirmation);
+        let token = evm_token_label(Network::Mainnet, &s);
+        assert!(token.is_none());
+        assert!(evm_needs_extra(&s, token.as_ref()));
+        let d = describe_evm(&s, None);
+        assert!(
+            d.contains("Envoi de token (JETON INCONNU) : 1000000 unités brutes"),
+            "{d}"
+        );
+        assert!(describe_evm_extra(&s, None).contains("jeton INCONNU de Kyro"));
+        // Real USDC on mainnet: named by Rust, 6 decimals, no extra dialog.
+        let s =
+            wallet_core::evm_decode(&tx("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", 1)).unwrap();
+        let token = evm_token_label(Network::Mainnet, &s);
+        assert!(!evm_needs_extra(&s, token.as_ref()));
+        assert!(describe_evm(&s, token.as_ref())
+            .contains("Envoi de token : 1 USDC (unités brutes : 1000000)"));
+        // Polygon: native currency is POL, not ETH.
+        let native = wallet_core::evm_decode(&EvmTxRequest {
+            data: "0x".into(),
+            value_wei: "1000000000000000000".into(),
+            ..tx("0x9858EfFD232B4033E47d90003D41EC34EcaEda94", 137)
+        })
+        .unwrap();
+        assert!(describe_evm(&native, None).contains("Envoi de 1 POL"));
     }
 
     #[test]
