@@ -24,6 +24,14 @@ interface ZeroExQuote {
   transaction: { to: string; data: `0x${string}`; gas?: string | null; gasPrice?: string | null; value?: string | null };
 }
 
+/**
+ * Kyro chains served by the 0x Swap API (docs.0x.org « Supported Chains », read 2026-10-31):
+ * Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche, Mantle, Sonic, HyperEVM.
+ * Not Cronos, Flare, Kaia, Gnosis, Sei nor Conflux. Sepolia: kept as before (the API answers
+ * itself whether it serves it).
+ */
+export const ZEROX_CHAINS: ReadonlySet<number> = new Set([1, 11_155_111, 42_161, 10, 8_453, 137, 56, 43_114, 5_000, 146, 999]);
+
 export class ZeroExProvider implements SwapProvider {
   readonly id = 'zerox' as const;
   readonly name = '0x';
@@ -47,7 +55,7 @@ export class ZeroExProvider implements SwapProvider {
   }
 
   supports(p: QuoteParams): boolean {
-    return typeof p.chain === 'number' && (p.toChain === undefined || p.toChain === p.chain);
+    return typeof p.chain === 'number' && ZEROX_CHAINS.has(p.chain) && (p.toChain === undefined || p.toChain === p.chain);
   }
 
   async quote(p: QuoteParams): Promise<Quote> {

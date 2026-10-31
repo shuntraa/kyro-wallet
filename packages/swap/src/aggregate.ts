@@ -3,8 +3,8 @@
 import type { NetFetch } from '@kyro/shared';
 import { compareQuotes, type QuoteResult } from './compare';
 import { JupiterProvider } from './providers/jupiter';
-import { LifiProvider } from './providers/lifi';
-import { ZeroExProvider } from './providers/zerox';
+import { LIFI_CHAINS, LifiProvider } from './providers/lifi';
+import { ZEROX_CHAINS, ZeroExProvider } from './providers/zerox';
 import { KYRO_SWAP_FEE, providerFee, type SwapFeeConfig } from './fees';
 import type { Quote, QuoteParams, SwapProvider } from './types';
 
@@ -16,6 +16,11 @@ export function createProviders(opts: { fetch?: NetFetch; hasZeroxKey: () => boo
     new LifiProvider({ ...f, fee: providerFee('lifi', cfg) }),
     new JupiterProvider({ ...f, fee: providerFee('jupiter', cfg), feeMints: cfg.solanaFeeMints }),
   ];
+}
+
+/** Whether at least one EVM provider (0x, LI.FI) serves this chain id. */
+export function evmSwapSupported(chainId: number): boolean {
+  return ZEROX_CHAINS.has(chainId) || LIFI_CHAINS.has(chainId);
 }
 
 /** Ask every relevant provider in parallel. Returns quotes sorted best first + per-provider status. */

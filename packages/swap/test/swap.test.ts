@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodeFunctionData, erc20Abi, maxUint256 } from 'viem';
 import type { NetRequest, NetResponse } from '@kyro/shared';
-import { applySlippage, buildApproval, buildRevoke, compareQuotes, fetchQuotes, isUnlimitedAllowance, netValueFiat, NATIVE_EVM, ZeroExProvider, type Quote } from '../src';
+import { applySlippage, buildApproval, buildRevoke, compareQuotes, evmSwapSupported, fetchQuotes, isUnlimitedAllowance, LifiProvider, netValueFiat, NATIVE_EVM, ZeroExProvider, type Quote } from '../src';
 
 const TOKEN = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
 const SPENDER = '0x0000000000001fF3684f28c67538d4D072C22734';
@@ -105,5 +105,18 @@ describe('providers', () => {
     expect(seen[0]?.url).toContain('api.0x.org/swap/allowance-holder/quote');
     expect(seen[0]?.headers?.['0x-version']).toBe('v2');
     expect(Object.keys(seen[0]?.headers ?? {}).some((h) => /key|authorization/i.test(h))).toBe(false);
+  });
+
+  it('ask only the providers that serve the chain', () => {
+    const params = (chain: number) => ({ chain, sell: { address: TOKEN, symbol: 'USDC', decimals: 6 }, buy: { address: NATIVE_EVM, symbol: 'ETH', decimals: 18 }, sellAmount: 1n, taker: SPENDER, slippageBps: 50 });
+    const zerox = new ZeroExProvider({ hasKey: () => true });
+    const lifi = new LifiProvider();
+    expect([1, 5_000, 146, 999].every((c) => zerox.supports(params(c)))).toBe(true);
+    expect([25, 14, 8_217, 100, 1_329, 1_030].some((c) => zerox.supports(params(c)))).toBe(false);
+    expect([1, 25, 14, 8_217, 100, 1_329, 999].every((c) => lifi.supports(params(c)))).toBe(true);
+    expect(lifi.supports(params(1_030))).toBe(false);
+    expect(lifi.supports({ ...params(1), toChain: 1_030 })).toBe(false);
+    expect(evmSwapSupported(1_030)).toBe(false);
+    expect(evmSwapSupported(25)).toBe(true);
   });
 });
