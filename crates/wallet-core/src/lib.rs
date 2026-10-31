@@ -26,6 +26,7 @@ mod btc;
 mod btc_hw;
 mod btc_watch;
 mod cardano;
+mod display;
 mod error;
 mod evm;
 mod keys;
@@ -69,6 +70,7 @@ pub use cardano::{
     cardano_stake_public_key, cardano_stake_tx_body, CardanoCert, CardanoCertView, CardanoDrep,
     CardanoDrepView, CardanoStakeSummary, CardanoWithdrawalView,
 };
+pub use display::{sanitize_text, SanitizedText, CONTROL_MARKER};
 pub use error::{Error, Result};
 pub use evm::{
     evm_address, evm_address_from_xpub, evm_address_of_pubkey, evm_checksum_address, evm_decode,
