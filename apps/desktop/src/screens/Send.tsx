@@ -46,7 +46,7 @@ import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtEta, fmtFiat, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
-import { guardAllowsSend, guardOnInput, guardVerify, initialGuard, type GuardState } from '../lib/clipboardGuard';
+import { guardAllowsSend, guardOnInput, guardVerify, handedOverGuard, initialGuard, pickedGuard, type GuardState } from '../lib/clipboardGuard';
 import { addLocalTx, bumpContactSends, findContact, getContacts, getLocalTxs, saveContacts, type ContactFamily } from '../lib/storage';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
@@ -108,7 +108,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
   // Recipient + clipboard guard.
   const [to, setTo] = useState(initialTo ?? '');
-  const [guard, setGuard] = useState<GuardState>(initialTo ? { pasted: initialTo, tampered: false, source: 'paste' } : initialGuard);
+  // An address handed over by the search palette: its origin is unknown (typed or pasted there), never « pasted here ».
+  const [guard, setGuard] = useState<GuardState>(initialTo ? handedOverGuard : initialGuard);
   const toRef = useRef<HTMLInputElement>(null);
   const toTrim = to.trim();
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
@@ -127,7 +128,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [ownError, setOwnError] = useState<string | null>(null);
   const pickRecipient = (addr: string) => {
     setTo(addr);
-    setGuard({ pasted: addr, tampered: false, source: 'paste' });
+    setGuard(pickedGuard(addr));
   };
   /** Creates the next account of this chain (without switching the sending one) and fills its address. */
   const createOwnRecipient = async () => {
@@ -525,6 +526,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 />
                 {guard.source === 'paste' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Collé</span>}
                 {guard.source === 'typed' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Saisi</span>}
+                {guard.source === 'picked' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Choisi</span>}
                 {!activeHw && (
                   <Menu
                     align="end"
@@ -574,12 +576,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                     <span className="flex size-8 items-center justify-center rounded-full bg-ice-deep text-[13px] font-semibold text-ice-text">{(ownAccount?.name ?? contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
                     <span className="flex flex-col">
                       <span className="text-[14px] font-medium">{ownAccount ? ownAccountLabel(ownAccount.name) : contact ? contact.name : isOwn ? 'Ton propre compte' : 'Adresse inconnue'}</span>
-                      <span className="text-[12px] text-mute">{ownAccount ? `Un de tes comptes ${ACCOUNT_CHAIN_LABEL[ownAccount.family]} (n° ${ownAccount.index + 1}) : même vérification qu’un envoi normal` : contact ? `Carnet d’adresses · ${contact.sends ?? 0} envoi${(contact.sends ?? 0) > 1 ? 's' : ''}` : isOwn ? 'Cette adresse appartient à ce coffre' : 'Première fois : compare chaque bloc avec ton destinataire'}</span>
+                      <span className="text-[12px] text-mute">{ownAccount ? `Un de tes comptes ${ACCOUNT_CHAIN_LABEL[ownAccount.family]} (n° ${ownAccount.index + 1}) : même vérification qu’un envoi normal` : contact ? `Carnet d’adresses · ${contact.sends ?? 0} envoi${(contact.sends ?? 0) > 1 ? 's' : ''}` : isOwn ? 'Cette adresse appartient à ce coffre' : 'Ni dans ton carnet ni à toi : un logiciel espion peut remplacer une adresse copiée'}</span>
                     </span>
                   </div>
                   <AddressBlocks address={toTrim} />
                   <div className="flex flex-wrap gap-[18px] text-[12px] font-medium">
-                    {settings.clipboardGuard && guard.source === 'paste' && !guard.tampered && <span className="text-up">✓ Identique à ce que tu as collé</span>}
+                    {/* No « identical to what you pasted »: a clipper swaps the clipboard BEFORE the paste. */}
+                    {!contact && !isOwn && !ownAccount && <span className="text-warn">Adresse inconnue : compare-la avec ta source</span>}
                     {guard.source === 'typed' && <span className="text-warn">Saisie manuelle : vérifie chaque bloc</span>}
                     {contact && <span className="text-up">✓ Adresse connue</span>}
                     {noChecksum && <span className="text-warn">Sans somme de contrôle EIP-55 (minuscules)</span>}
@@ -752,7 +755,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
           <div className="mt-auto flex items-center gap-3 border-t border-line pt-4 text-[13px] text-text2">
             <IconLock size={18} className="shrink-0 text-mute" />
-            <span>{settings.clipboardGuard ? 'Le presse-papier est surveillé : si l’adresse change après ton collage, l’envoi est bloqué.' : 'Alerte presse-papier désactivée dans les réglages.'}</span>
+            <span>{settings.clipboardGuard ? 'Si l’adresse change après ton collage, l’envoi est bloqué. Un logiciel qui remplace l’adresse avant le collage ne se voit pas : compare-la avec ta source.' : 'Alerte presse-papier désactivée dans les réglages.'}</span>
           </div>
         </form>
 
