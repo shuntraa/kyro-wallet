@@ -84,8 +84,9 @@ pub use mnemonic::{Mnemonic, Seed, WordCount};
 pub use network::{BtcKind, Network};
 pub use sol::{sol_address, sol_address_of_pubkey, sol_sign_message, sol_verify_signature};
 pub use sol_decode::{
-    sol_decode_message, sol_message_lookup_tables, sol_parse_lookup_table, SolInstruction,
-    SolLookupTable, SolTokenProgram, SolTxSummary, SolWarning, SOL_LOOKUP_TABLE_PROGRAM,
+    sol_decode_message, sol_message_lookup_tables, sol_message_static_keys, sol_parse_lookup_table,
+    SolInstruction, SolLookupTable, SolTokenProgram, SolTxSummary, SolWarning,
+    SOL_LOOKUP_TABLE_PROGRAM,
 };
 pub use sol_stake::{
     sol_create_with_seed, sol_parse_stake_account, sol_parse_stake_history, sol_stake_activation,
