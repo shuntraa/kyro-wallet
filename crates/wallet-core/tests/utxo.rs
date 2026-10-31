@@ -1015,3 +1015,51 @@ fn litecoin_signs_only_the_requested_account() {
     assert!(psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &b64)).contains("no input"));
     assert!(utxo_psbt_summary(&s, Network::Testnet, LTC, 0, &b64).is_err());
 }
+
+/// Audit finding: Litecoin / Dogecoin change at any index < 2^31 was labelled change.
+#[test]
+fn change_beyond_max_index_is_a_reinforced_payment() {
+    use wallet_core::MAX_CHANGE_INDEX;
+    let s = seed(ABANDON);
+    let at = |index: u32| {
+        let (mut p, _) = ltc_psbt();
+        let k = key(ABANDON, &format!("m/84'/1'/0'/1/{index}"));
+        p.unsigned_tx.output[1].script_pubkey = utxo_script_pubkey(
+            &utxo_address(&s, Network::Testnet, LTC, 0, true, index).unwrap(),
+            Network::Testnet,
+            LTC,
+        )
+        .unwrap();
+        p.outputs[1].bip32_derivation.clear();
+        p.outputs[1].bip32_derivation.insert(k.pk, (k.fp, k.path));
+        utxo_psbt_summary(&s, Network::Testnet, LTC, 0, &p.to_string()).unwrap()
+    };
+    let sum = at(MAX_CHANGE_INDEX);
+    assert!(sum.outputs[1].is_change && sum.has_change);
+    assert!(!sum.requires_extra_confirmation);
+    for index in [MAX_CHANGE_INDEX + 1, 2_000_000_000] {
+        let sum = at(index);
+        assert!(!sum.outputs[1].is_change, "{index}");
+        assert_eq!(
+            sum.warnings,
+            vec![UtxoWarning::ChangeIndexOutOfRange { index: 1 }]
+        );
+        assert!(sum.requires_extra_confirmation);
+    }
+}
+
+/// Audit finding: a Litecoin witness v2+ output was shown as an ordinary `tltc1z…` address.
+#[test]
+fn litecoin_witness_v2_output_is_unknown() {
+    let s = seed(ABANDON);
+    let (mut p, _) = ltc_psbt();
+    p.unsigned_tx.output[0].script_pubkey =
+        spk("52200707070707070707070707070707070707070707070707070707070707070707");
+    let sum = utxo_psbt_summary(&s, Network::Testnet, LTC, 0, &p.to_string()).unwrap();
+    assert_eq!(sum.outputs[0].kind, UtxoOutputKind::Unknown);
+    assert_eq!(sum.outputs[0].address, None);
+    assert!(sum
+        .warnings
+        .contains(&UtxoWarning::UnknownOutput { index: 0 }));
+    assert!(sum.requires_extra_confirmation);
+}

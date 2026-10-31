@@ -19,7 +19,9 @@ use bitcoin::secp256k1::{ecdsa, Message, PublicKey, Secp256k1, VerifyOnly, XOnly
 use bitcoin::sighash::{EcdsaSighashType, Prevouts, SighashCache, TapSighashType};
 use bitcoin::ScriptBuf;
 
-use crate::btc::{account_path, parse_psbt, prevouts, summarize, BtcAccount, BtcTxSummary};
+use crate::btc::{
+    account_path, change_index_in_range, parse_psbt, prevouts, summarize, BtcAccount, BtcTxSummary,
+};
 use crate::error::{Error, Result};
 use crate::network::{BtcKind, Network};
 
@@ -263,6 +265,8 @@ fn plan_of(net: Network, psbt: &Psbt, accounts: &[BtcAccount]) -> Result<HwBtcPl
     }
 
     let mut change = Vec::new();
+    // Ours, but beyond MAX_CHANGE_INDEX: shown as a payment, with a warning.
+    let mut far = Vec::new();
     for (j, (out, meta)) in psbt
         .unsigned_tx
         .output
@@ -279,11 +283,15 @@ fn plan_of(net: Network, psbt: &Psbt, accounts: &[BtcAccount]) -> Result<HwBtcPl
                         && ScriptBuf::new_p2wpkh(&CompressedPublicKey(derived).wpubkey_hash())
                             == *spk
                     {
-                        change.push(HwBtcChange {
-                            index: j,
-                            kind: BtcKind::Segwit,
-                            path: raw_path(path),
-                        });
+                        if change_index_in_range(path) {
+                            change.push(HwBtcChange {
+                                index: j,
+                                kind: BtcKind::Segwit,
+                                path: raw_path(path),
+                            });
+                        } else {
+                            far.push(j);
+                        }
                         break;
                     }
                 }
@@ -296,11 +304,15 @@ fn plan_of(net: Network, psbt: &Psbt, accounts: &[BtcAccount]) -> Result<HwBtcPl
                 if let Some((acct, tail)) = match_origin(&accounts, BtcKind::Taproot, fp, path) {
                     let derived = derive(&secp, acct, &tail)?.x_only_public_key().0;
                     if derived == *xonly && ScriptBuf::new_p2tr(&secp, derived, None) == *spk {
-                        change.push(HwBtcChange {
-                            index: j,
-                            kind: BtcKind::Taproot,
-                            path: raw_path(path),
-                        });
+                        if change_index_in_range(path) {
+                            change.push(HwBtcChange {
+                                index: j,
+                                kind: BtcKind::Taproot,
+                                path: raw_path(path),
+                            });
+                        } else {
+                            far.push(j);
+                        }
                         break;
                     }
                 }
@@ -313,6 +325,7 @@ fn plan_of(net: Network, psbt: &Psbt, accounts: &[BtcAccount]) -> Result<HwBtcPl
         &prevouts,
         |j, _| change.iter().any(|c| c.index == j),
         |i| !external_inputs.contains(&i),
+        &far,
     )?;
     Ok(HwBtcPlan {
         inputs,

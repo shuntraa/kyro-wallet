@@ -613,6 +613,10 @@ pub(crate) fn describe_btc_extra(s: &wallet_core::BtcTxSummary) -> String {
                 "• frais très élevés : ≈ {sat_per_vb} sat/vB (seuil {} sat/vB), ou plus que tous les montants envoyés\n",
                 wallet_core::BTC_HIGH_FEE_SAT_PER_VB
             ),
+            wallet_core::BtcWarning::ChangeIndexOutOfRange { output } => format!(
+                "• sortie {} : une de tes clés, mais à un index d'adresse anormalement élevé (affichée comme un paiement, pas comme ta monnaie)\n",
+                output + 1
+            ),
         };
     }
     out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";

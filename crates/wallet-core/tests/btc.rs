@@ -642,3 +642,60 @@ fn psbt_signs_only_the_requested_account() {
         .contains("no input"));
     assert!(btc_sign_psbt(&s, Network::Testnet, 1 << 31, &b64).is_err());
 }
+
+/// `segwit_psbt` with its change output moved to `m/84'/1'/0'/1/index`.
+fn psbt_with_change_at(index: u32) -> (Psbt, String) {
+    let us = Wallet::new(ABANDON);
+    let s = seed(ABANDON);
+    let (mut psbt, ..) = segwit_psbt();
+    let change = btc_address(&s, Network::Testnet, BtcKind::Segwit, 0, true, index).unwrap();
+    psbt.unsigned_tx.output[1].script_pubkey = script_of(&change);
+    let p = path(&format!("m/84'/1'/0'/1/{index}"));
+    psbt.outputs[1].bip32_derivation.clear();
+    psbt.outputs[1]
+        .bip32_derivation
+        .insert(us.pubkey(&p), (us.fp, p));
+    (psbt, change)
+}
+
+/// Audit finding: an output to our key at any index < 2^31 was labelled change, although no
+/// wallet scanning with a gap limit would ever see the coins sent there.
+#[test]
+fn btc_change_beyond_max_index_is_a_reinforced_payment() {
+    use wallet_core::{BtcWarning, MAX_CHANGE_INDEX};
+    let s = seed(ABANDON);
+    let (psbt, change) = psbt_with_change_at(MAX_CHANGE_INDEX);
+    let (_, sum) = btc_sign_psbt(&s, Network::Testnet, 0, &psbt.to_string()).unwrap();
+    assert_eq!(sum.outputs[1], (change, 39_000, true));
+    assert!(!sum.requires_extra_confirmation);
+    for index in [MAX_CHANGE_INDEX + 1, 2_000_000_000] {
+        let (psbt, change) = psbt_with_change_at(index);
+        let (_, sum) = btc_sign_psbt(&s, Network::Testnet, 0, &psbt.to_string()).unwrap();
+        assert_eq!(sum.outputs[1], (change, 39_000, false), "{index}");
+        let (w, extra) = warnings_of(&psbt);
+        assert_eq!(w, vec![BtcWarning::ChangeIndexOutOfRange { output: 1 }]);
+        assert!(extra);
+    }
+}
+
+/// Audit finding: a witness v2+ output was rendered as an ordinary `tb1z…` address, without
+/// any warning (nobody can say who spends it once a soft fork gives it a meaning).
+#[test]
+fn btc_witness_v2_output_is_an_unknown_script() {
+    use wallet_core::BtcWarning;
+    let (mut psbt, ..) = segwit_psbt();
+    let mut v2 = vec![0x52, 0x20];
+    v2.extend_from_slice(&[7u8; 32]);
+    psbt.unsigned_tx.output[0].script_pubkey = ScriptBuf::from_bytes(v2.clone());
+    let s = seed(ABANDON);
+    let (_, sum) = btc_sign_psbt(&s, Network::Testnet, 0, &psbt.to_string()).unwrap();
+    assert_eq!(sum.outputs[0].0, format!("script:{}", hex::encode(&v2)));
+    assert_eq!(
+        warnings_of(&psbt),
+        (vec![BtcWarning::UnknownScript { output: 0 }], true)
+    );
+    // Witness v1 that is not a 32-byte taproot output: same.
+    psbt.unsigned_tx.output[0].script_pubkey = ScriptBuf::from_bytes(vec![0x51, 0x02, 0xab, 0xcd]);
+    let (w, _) = warnings_of(&psbt);
+    assert_eq!(w, vec![BtcWarning::UnknownScript { output: 0 }]);
+}

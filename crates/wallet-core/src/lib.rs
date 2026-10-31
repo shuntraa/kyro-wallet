@@ -44,7 +44,7 @@ mod xrp;
 
 pub use btc::{
     btc_account, btc_address, btc_decode_psbt, btc_psbt_summary, btc_sign_psbt, BtcAccount,
-    BtcTxSummary, BtcWarning, BTC_HIGH_FEE_SAT_PER_VB,
+    BtcTxSummary, BtcWarning, BTC_HIGH_FEE_SAT_PER_VB, MAX_CHANGE_INDEX,
 };
 pub use btc_hw::{
     btc_hw_finalize, btc_hw_own_addresses, btc_hw_plan, HwBtcChange, HwBtcInput, HwBtcPlan,

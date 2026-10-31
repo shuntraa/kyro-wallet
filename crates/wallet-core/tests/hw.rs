@@ -578,3 +578,32 @@ fn vault_v1_fixture_still_opens() {
     assert!(VaultFile::from_json(&WatchOnlyStore::default().to_json().unwrap()).is_err());
     assert!(WatchOnlyStore::from_json(json, Network::Testnet).is_err());
 }
+
+/// Audit finding: a hardware-wallet change output at any index < 2^31 was labelled change (and
+/// sent to the device as change, so the device would not show it either).
+#[test]
+fn btc_plan_change_beyond_max_index_is_a_payment() {
+    use wallet_core::{BtcWarning, MAX_CHANGE_INDEX};
+    let us = Wallet::new(ABANDON);
+    let s = seed(ABANDON);
+    for (index, is_change) in [(MAX_CHANGE_INDEX, true), (MAX_CHANGE_INDEX + 1, false)] {
+        let mut psbt = mixed_psbt();
+        let change = btc_address(&s, Network::Testnet, BtcKind::Segwit, 0, true, index).unwrap();
+        psbt.unsigned_tx.output[1].script_pubkey = script_of(&change);
+        let p = path(&format!("m/84'/1'/0'/1/{index}"));
+        psbt.outputs[1].bip32_derivation.clear();
+        psbt.outputs[1]
+            .bip32_derivation
+            .insert(us.pubkey(&p), (us.fp, p));
+        let plan = btc_hw_plan(Network::Testnet, &psbt.to_string(), &accounts(ABANDON)).unwrap();
+        assert_eq!(plan.change.len(), usize::from(is_change), "{index}");
+        assert_eq!(plan.summary.outputs[1].2, is_change);
+        assert_eq!(
+            plan.summary
+                .warnings
+                .contains(&BtcWarning::ChangeIndexOutOfRange { output: 1 }),
+            !is_change
+        );
+        assert_eq!(plan.summary.requires_extra_confirmation, !is_change);
+    }
+}
