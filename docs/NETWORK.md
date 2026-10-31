@@ -37,7 +37,7 @@ En mode clair, tout serveur contacté voit ton **adresse IP** ; en mode Tor (dé
 
 | Hôte | Pourquoi | Données envoyées |
 |---|---|---|
-| `api.coingecko.com` (`pro-api.coingecko.com` avec clé) | Prix du top 200, variations, graphiques | Devise d'affichage, identifiants de cryptos. **Aucune adresse.** |
+| `api.coingecko.com` (`pro-api.coingecko.com` avec clé) | Prix du top 250, variations, graphiques | Devise d'affichage, identifiants de cryptos. **Aucune adresse.** |
 | `mempool.space` (mode clair) | Bitcoin : UTXO, historique, frais, diffusion des transactions | Tes adresses Bitcoin, tes transactions signées |
 | `mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion` (mode Tor uniquement, `http://`) | Même service que `mempool.space`, via son service onion officiel | Tes adresses Bitcoin, tes transactions signées (jamais ton IP) |
 | `litecoinspace.org` (`/api` mainnet, `/testnet/api` testnet4) | Litecoin : soldes, UTXO, historique, frais, transactions précédentes, diffusion — appelé **par Rust** (`ltc_*`) ; l'interface n'a pas à le joindre (il est dans l'allowlist comme `mempool.space`). Mode Tor : via un relais de sortie (pas de service onion : l'en-tête `Onion-Location` du site est un modèle non configuré, `__NGINX_MEMPOOL_ONION__`, vérifié le 30/10/2026) ; joignable par Tor, testé le 30/10/2026 | Tes adresses Litecoin (une par requête, le serveur peut les regrouper), les txid de tes pièces, tes transactions signées |

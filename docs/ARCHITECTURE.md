@@ -11,7 +11,7 @@ kyro/
 ├─ packages/
 │  ├─ shared/                 Types du contrat IPC + backend simulé pour le mode démo navigateur
 │  ├─ chains/                 ChainAdapter : bitcoin (Esplora), evm (viem, registre de chaînes), solana (@solana/kit)
-│  ├─ market/                 CoinGecko : top 200, graphiques, cache, backoff
+│  ├─ market/                 CoinGecko : top 250, graphiques, cache, backoff
 │  └─ swap/                   SwapProvider : 0x, Jupiter, LI.FI ; meilleur prix après frais Kyro (fees.ts) ; approvals exacts
 ├─ brand/                     Logos et icônes (SVG)
 └─ docs/                      IPC.md (contrat), NETWORK.md, DESIGN.md, ARCHITECTURE.md

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// "Mes actifs" / "Marché · top 200" / "Favoris" lists.
+// "Mes actifs" / "Marché · top 250" / "Favoris" lists.
 
 import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
@@ -52,7 +52,7 @@ export function AssetListsCard({ initialTab = 'mine', className }: { initialTab?
           {(
             [
               ['mine', <>Mes actifs <span className="font-medium text-mute">{mineCount}</span></>],
-              ['market', 'Marché · top 200'],
+              ['market', 'Marché · top 250'],
               ['favorites', <>Favoris {favs.length > 0 && <span className="font-medium text-mute">{favs.length}</span>}</>],
             ] as const
           ).map(([k, label]) => (

@@ -868,7 +868,7 @@ type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[
 
 | Hôte | Usage |
 |---|---|
-| `api.coingecko.com`, `pro-api.coingecko.com` | prix, top 200, graphiques |
+| `api.coingecko.com`, `pro-api.coingecko.com` | prix, top 250, graphiques |
 | `mempool.space` | Bitcoin : UTXO, frais, diffusion (Esplora) |
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`) : utilisé par les commandes Rust `ltc_*`, famille Tor `litecoin` |
 | `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet et mainnet (JSON-RPC rippled) : utilisés par les commandes Rust `xrp_*`, famille Tor `xrp` |

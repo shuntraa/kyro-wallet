@@ -398,7 +398,7 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     : btc.kind === 'core' ? { host: host(btc.url), purpose: 'Bitcoin : ton nœud Bitcoin Core', custom: true }
     : btc.kind === 'cbf' ? { host: 'pairs Bitcoin (P2P)', purpose: 'Bitcoin : filtres compacts, aucun serveur ne voit tes adresses', custom: true }
     : { host: host(btc.url), purpose: 'Bitcoin : ton serveur Esplora', custom: true };
-  const list: { host: string; purpose: string; custom?: boolean }[] = [{ host: 'api.coingecko.com', purpose: 'Prix du top 200' }, btcHost];
+  const list: { host: string; purpose: string; custom?: boolean }[] = [{ host: 'api.coingecko.com', purpose: 'Prix du top 250' }, btcHost];
   for (const c of evmChains(network)) {
     const custom = servers.evm[String(c.chainId)]?.url;
     list.push(custom ? { host: host(custom), purpose: `${c.name} : ton nœud RPC`, custom: true } : { host: host(c.rpcUrl), purpose: `${c.name} : nœud RPC` });

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Balances (all adapters) + market data (CoinGecko top 200), shared by every
+// Balances (all adapters) + market data (CoinGecko top 250), shared by every
 // screen of the unlocked app.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -138,7 +138,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     let alive = true;
     const load = async () => {
       try {
-        const list = await market.markets(settings.currency, 200);
+        const list = await market.markets(settings.currency, 250);
         if (!alive) return;
         setMarkets(list);
         setMarketError(null);

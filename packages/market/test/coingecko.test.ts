@@ -10,7 +10,7 @@ function memStorage() {
 const market = [{ id: 'bitcoin', symbol: 'btc', name: 'Bitcoin', market_cap_rank: 1, current_price: 60000, market_cap: 1, total_volume: 1, high_24h: 1, low_24h: 1, price_change_percentage_24h_in_currency: 1.5, price_change_percentage_7d_in_currency: -2, sparkline_in_7d: { price: [1, 2, 3] } }];
 
 describe('CoinGeckoClient', () => {
-  it('requests the top 200 with sparkline and caches for the TTL', async () => {
+  it('requests the top 250 with sparkline and caches for the TTL', async () => {
     const urls: string[] = [];
     let now = 1_000;
     const fetch = async (req: NetRequest): Promise<NetResponse> => {
@@ -21,7 +21,7 @@ describe('CoinGeckoClient', () => {
     const a = await cg.markets('EUR');
     expect(a[0]).toMatchObject({ id: 'bitcoin', symbol: 'BTC', price: 60000, change24h: 1.5, change7d: -2, sparkline7d: [1, 2, 3] });
     expect(urls[0]).toContain('/coins/markets?vs_currency=eur');
-    expect(urls[0]).toContain('per_page=200');
+    expect(urls[0]).toContain('per_page=250');
     expect(urls[0]).toContain('sparkline=true');
     expect(urls[0]).toContain('price_change_percentage=24h,7d');
     await cg.markets('EUR');

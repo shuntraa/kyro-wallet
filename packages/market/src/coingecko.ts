@@ -163,7 +163,7 @@ export class CoinGeckoClient {
   }
 
   /** Top coins by market cap, with 7-day sparkline. */
-  async markets(currency: Currency, perPage = 200): Promise<MarketCoin[]> {
+  async markets(currency: Currency, perPage = 250): Promise<MarketCoin[]> {
     const vs = currency.toLowerCase();
     const raw = await this.get<RawMarket[]>(
       `markets:${vs}:${perPage}`,
