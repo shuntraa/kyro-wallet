@@ -182,10 +182,8 @@ pub(crate) fn describe_tron(
         trx(&e.balance)
     );
     if !s.memo.is_empty() {
-        let text = hex::decode(&s.memo)
-            .ok()
-            .and_then(|b| String::from_utf8(b).ok())
-            .unwrap_or_else(|| s.memo.clone());
+        // Text cleaned by wallet-core (control / bidi characters), otherwise the exact hex.
+        let text = s.memo_text.as_deref().unwrap_or(&s.memo);
         out += &format!("\nMémo : {text}");
     }
     let mins = (s.expiration - now).max(0) / 60_000;
@@ -204,6 +202,7 @@ pub(crate) fn describe_tron_extra(s: &TronTxSummary) -> String {
             TronWarning::CallValue => "• des TRX sont envoyés au contrat en plus de l'appel\n",
             TronWarning::Memo => "• la transaction porte un mémo (sur mainnet, un mémo coûte des TRX en plus)\n",
             TronWarning::HighFeeLimit => "• plafond de frais (fee_limit) supérieur à 100 TRX\n",
+            TronWarning::UnusualText => "• mémo contenant des caractères invisibles / de contrôle, ou trop long (affiché nettoyé)\n",
         };
     }
     out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
@@ -511,6 +510,7 @@ mod tests {
             ref_block_bytes: "cab8".into(),
             ref_block_hash: "883caa0677c5a7f3".into(),
             memo: String::new(),
+            memo_text: None,
             raw_size: 210,
             requires_extra_confirmation: !warnings.is_empty(),
             warnings,
