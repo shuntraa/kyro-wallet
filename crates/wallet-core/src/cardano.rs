@@ -85,9 +85,11 @@ impl CardanoRoot {
         out[0] &= 0b1111_1000;
         out[31] &= 0b0001_1111;
         out[31] |= 0b0100_0000;
-        CardanoRoot(
-            XPrv::from_slice_verified(&out[..]).expect("clamped 96-byte key: always accepted"),
-        )
+        // `from_slice_verified` only checks the length (96) and the clamping bits set just
+        // above: it cannot fail here, whatever the mnemonic or passphrase.
+        #[allow(clippy::expect_used)]
+        let root = XPrv::from_slice_verified(&out[..]).expect("clamped 96-byte key");
+        CardanoRoot(root)
     }
 
     /// The 96-byte root key, hex (tests only: compared with CIP-0003 vectors).

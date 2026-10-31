@@ -438,11 +438,8 @@ fn stake_and_activating(d: &SolDelegation, target: u64, h: &[SolStakeHistoryEntr
     };
     let mut prev_epoch = d.activation_epoch;
     let mut effective: u64 = 0;
-    loop {
-        // Epochs come from the chain (StakeHistory via RPC): never wrap around.
-        let Some(current) = prev_epoch.checked_add(1) else {
-            break;
-        };
+    // Epochs come from the chain (StakeHistory via RPC): never wrap around.
+    while let Some(current) = prev_epoch.checked_add(1) {
         if prev.activating == 0 {
             break;
         }
@@ -496,10 +493,7 @@ pub fn sol_stake_activation(
     };
     let mut prev_epoch = d.deactivation_epoch;
     let mut current_effective = effective;
-    loop {
-        let Some(current) = prev_epoch.checked_add(1) else {
-            break;
-        };
+    while let Some(current) = prev_epoch.checked_add(1) {
         if prev.deactivating == 0 {
             break;
         }
