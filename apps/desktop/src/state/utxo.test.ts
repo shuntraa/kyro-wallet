@@ -14,12 +14,16 @@ describe('Litecoin / Dogecoin in the UI', () => {
     expect(serverMissing('Serveur injoignable : node.example : délai')).toBe(false);
   });
 
-  it('LTC / DOGE are regular assets, not « Bientôt »; outgoing hosts list litecoinspace.org and no Dogecoin default', () => {
+  it('LTC / DOGE are regular assets, not « Bientôt »; outgoing hosts list litecoinspace.org, Komodo ElectrumX on Dogecoin mainnet, no Dogecoin testnet default', () => {
     expect(WATCH_ONLY_CHAINS.some((w) => w.key === 'litecoin' || w.key === 'dogecoin')).toBe(false);
     expect(assetsFor('mainnet').map((a) => a.id)).toEqual(expect.arrayContaining(['ltc', 'doge']));
     const hosts = outgoingHosts('testnet');
     expect(hosts.find((h) => h.host === 'litecoinspace.org')?.purpose).toMatch(/Litecoin/);
     expect(hosts.find((h) => h.purpose.startsWith('Dogecoin'))?.purpose).toMatch(/aucun serveur public/);
+    const main = outgoingHosts('mainnet').filter((h) => h.purpose.startsWith('Dogecoin'));
+    // Same list as Rust's `net::ELECTRUM_HOSTS` (Dogecoin family).
+    expect(main.map((h) => h.host)).toEqual(['doge.electrum1.cipig.net:20060', 'doge.electrum2.cipig.net:20060']);
+    expect(main.some((h) => /aucun serveur/.test(h.purpose))).toBe(false);
     const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, tron: {}, xrp: {}, cardano: {}, dogecoin: { testnet: { kind: 'esplora', url: 'https://my-doge.example/api' } } });
     expect(custom.find((h) => h.purpose.startsWith('Dogecoin'))).toMatchObject({ host: 'my-doge.example', custom: true });
   });
