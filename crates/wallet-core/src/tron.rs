@@ -24,6 +24,7 @@ use bitcoin::secp256k1::{Message, PublicKey, Secp256k1};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
 
+use crate::display::sanitize_text;
 use crate::error::{Error, Result};
 use crate::keys::{hardened, normal, secp, XprivGuard};
 use crate::mnemonic::Seed;
@@ -820,6 +821,9 @@ pub enum TronWarning {
     Memo,
     /// `fee_limit` above 100 TRX.
     HighFeeLimit,
+    /// The memo text had control / invisible / bidi characters removed or was cut: the dialog
+    /// shows a cleaned version (`memo`, hex, is exact).
+    UnusualText,
 }
 
 /// Plain-language summary of a raw TRON transaction.
@@ -844,6 +848,8 @@ pub struct TronTxSummary {
     pub ref_block_hash: String,
     /// Memo bytes, hex (empty if none).
     pub memo: String,
+    /// Memo as text when it is valid UTF-8, cleaned for display ([`crate::sanitize_text`]).
+    pub memo_text: Option<String>,
     /// Size of `raw_data`, bytes.
     pub raw_size: usize,
     /// Reasons for caution.
@@ -853,13 +859,42 @@ pub struct TronTxSummary {
 }
 
 const HIGH_FEE_LIMIT: i64 = 100_000_000;
+/// Longest memo text shown in the dialog (characters).
+const MAX_MEMO_TEXT: usize = 256;
+/// java-tron refuses an expiration more than 24 h after the head block; Kyro refuses to sign one
+/// more than 24 h after its own clock, whatever the caller says.
+pub const TRON_MAX_EXPIRATION_MS: i64 = 24 * 60 * 60 * 1000;
+
+/// Current time in ms since the epoch (system clock). A clock before 1970 fails closed.
+fn now_ms() -> Result<i64> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|d| i64::try_from(d.as_millis()).ok())
+        .ok_or_else(|| Error::input("horloge système invalide"))
+}
+
+/// Refuses an expiration more than [`TRON_MAX_EXPIRATION_MS`] after `now` (ms). An expiration
+/// in the past is left to the caller (java-tron refuses it at broadcast).
+fn check_expiration_at(expiration: i64, now: i64) -> Result<()> {
+    if expiration > now.saturating_add(TRON_MAX_EXPIRATION_MS) {
+        return Err(bad("expiration à plus de 24 h : refusée"));
+    }
+    Ok(())
+}
 
 /// Decodes `raw` (hex `raw_data`) for the confirmation dialog. Refused: anything
-/// [`TronRaw::decode`] refuses, and an owner other than `our_address`.
+/// [`TronRaw::decode`] refuses, an owner other than `our_address` and an expiration more than
+/// 24 h ahead of the system clock.
 pub fn tron_decode_raw(raw_hex: &str, our_address: &str) -> Result<TronTxSummary> {
+    tron_decode_raw_at(raw_hex, our_address, now_ms()?)
+}
+
+fn tron_decode_raw_at(raw_hex: &str, our_address: &str, now: i64) -> Result<TronTxSummary> {
     let raw = hex::decode(raw_hex.trim())
         .map_err(|_| Error::input("raw_data n'est pas en hexadécimal"))?;
     let tx = TronRaw::decode(&raw)?;
+    check_expiration_at(tx.expiration, now)?;
     let ours = tron_address_bytes(our_address)?;
     if *tx.owner() != ours {
         return Err(bad(
@@ -927,6 +962,16 @@ pub fn tron_decode_raw(raw_hex: &str, our_address: &str) -> Result<TronTxSummary
     if tx.fee_limit > HIGH_FEE_LIMIT {
         warnings.push(TronWarning::HighFeeLimit);
     }
+    let memo_text = core::str::from_utf8(&tx.memo)
+        .ok()
+        .filter(|t| !t.is_empty())
+        .map(|t| {
+            let clean = sanitize_text(t, MAX_MEMO_TEXT);
+            if clean.altered {
+                warnings.push(TronWarning::UnusualText);
+            }
+            clean.text
+        });
     Ok(TronTxSummary {
         txid: hex::encode(tx.txid()),
         owner: tron_address_from_bytes(tx.owner()),
@@ -937,6 +982,7 @@ pub fn tron_decode_raw(raw_hex: &str, our_address: &str) -> Result<TronTxSummary
         ref_block_bytes: hex::encode(tx.ref_block_bytes),
         ref_block_hash: hex::encode(tx.ref_block_hash),
         memo: hex::encode(&tx.memo),
+        memo_text,
         raw_size: raw.len(),
         requires_extra_confirmation: !warnings.is_empty(),
         warnings,
@@ -1021,11 +1067,21 @@ pub struct TronStakeSummary {
 /// 30 votes, each > 0, no SR twice, `support` absent) and `WithdrawBalance`. Refused: everything
 /// [`TronRaw::decode`] refuses (including `DelegateResource` / `UnDelegateResource`, i.e. lending
 /// resources to another account, and `TRON_POWER`), a transfer or contract call, an owner other
-/// than `our_address`, a memo and a `fee_limit` (system contracts burn no energy).
+/// than `our_address`, a memo, a `fee_limit` (system contracts burn no energy) and an expiration
+/// more than 24 h ahead of the system clock.
 pub fn tron_decode_stake_raw(raw_hex: &str, our_address: &str) -> Result<TronStakeSummary> {
+    tron_decode_stake_raw_at(raw_hex, our_address, now_ms()?)
+}
+
+fn tron_decode_stake_raw_at(
+    raw_hex: &str,
+    our_address: &str,
+    now: i64,
+) -> Result<TronStakeSummary> {
     let raw = hex::decode(raw_hex.trim())
         .map_err(|_| Error::input("raw_data n'est pas en hexadécimal"))?;
     let tx = TronRaw::decode(&raw)?;
+    check_expiration_at(tx.expiration, now)?;
     let ours = tron_address_bytes(our_address)?;
     if *tx.owner() != ours {
         return Err(bad(
@@ -1116,13 +1172,14 @@ pub fn tron_stake_sign(
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
     let key = master.derive(&secp, &path(account, 0)?)?;
-    let sk = key.xpriv().private_key;
+    // A reference: `SecretKey` is `Copy`, a copy here would outlive the guard's erasure.
+    let sk = &key.xpriv().private_key;
     let ours = tron_address_from_bytes(&address_bytes_of_pubkey(&sk.public_key(&secp)));
     let summary = tron_decode_stake_raw(raw_hex, &ours)?;
     let raw = hex::decode(raw_hex.trim())
         .map_err(|_| Error::input("raw_data n'est pas en hexadécimal"))?;
     let digest = sha256::Hash::hash(&raw).to_byte_array();
-    let sig = sign_digest(&secp, &sk, digest)?;
+    let sig = sign_digest(&secp, sk, digest)?;
     Ok((sig, summary))
 }
 
@@ -1162,13 +1219,14 @@ pub fn tron_sign(seed: &Seed, account: u32, raw_hex: &str) -> Result<([u8; 65], 
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
     let key = master.derive(&secp, &path(account, 0)?)?;
-    let sk = key.xpriv().private_key;
+    // A reference: `SecretKey` is `Copy`, a copy here would outlive the guard's erasure.
+    let sk = &key.xpriv().private_key;
     let ours = tron_address_from_bytes(&address_bytes_of_pubkey(&sk.public_key(&secp)));
     let summary = tron_decode_raw(raw_hex, &ours)?;
     let raw = hex::decode(raw_hex.trim())
         .map_err(|_| Error::input("raw_data n'est pas en hexadécimal"))?;
     let digest = sha256::Hash::hash(&raw).to_byte_array();
-    let sig = sign_digest(&secp, &sk, digest)?;
+    let sig = sign_digest(&secp, sk, digest)?;
     Ok((sig, summary))
 }
 
@@ -1269,5 +1327,89 @@ mod tests {
         );
         assert!(fields(&[0x0d, 0, 0, 0, 0]).is_err());
         assert!(fields(&[0x0a, 0x05, 0x01]).is_err());
+    }
+
+    const NOW: i64 = 1_800_000_000_000;
+
+    fn raw_hex(contract: TronContract, expiration: i64, memo: &[u8]) -> String {
+        hex::encode(
+            TronRaw {
+                ref_block_bytes: [1, 2],
+                ref_block_hash: [3; 8],
+                expiration,
+                memo: memo.to_vec(),
+                contract,
+                timestamp: NOW,
+                fee_limit: 0,
+            }
+            .encode(),
+        )
+    }
+
+    fn me() -> [u8; 21] {
+        let mut a = [7u8; 21];
+        a[0] = TRON_ADDRESS_PREFIX;
+        a
+    }
+
+    fn trx(memo: &[u8], expiration: i64) -> String {
+        let mut to = [9u8; 21];
+        to[0] = TRON_ADDRESS_PREFIX;
+        raw_hex(
+            TronContract::Transfer {
+                owner: me(),
+                to,
+                amount: 1,
+            },
+            expiration,
+            memo,
+        )
+    }
+
+    /// Audit finding: the 24 h expiration ceiling was only enforced by the shell.
+    #[test]
+    fn expiration_more_than_24h_ahead_is_refused() {
+        let ours = tron_address_from_bytes(&me());
+        let limit = NOW + TRON_MAX_EXPIRATION_MS;
+        assert!(tron_decode_raw_at(&trx(b"", limit), &ours, NOW).is_ok());
+        assert!(tron_decode_raw_at(&trx(b"", limit + 1), &ours, NOW).is_err());
+        let stake = |expiration| {
+            raw_hex(
+                TronContract::FreezeV2 {
+                    owner: me(),
+                    amount: 1_000_000,
+                    resource: TronResource::Energy,
+                },
+                expiration,
+                b"",
+            )
+        };
+        assert!(tron_decode_stake_raw_at(&stake(limit), &ours, NOW).is_ok());
+        assert!(tron_decode_stake_raw_at(&stake(limit + 1), &ours, NOW).is_err());
+        // The public entry points use the system clock: a year ahead is refused.
+        let year = now_ms().unwrap() + 365 * TRON_MAX_EXPIRATION_MS;
+        assert!(tron_decode_raw(&trx(b"", year), &ours).is_err());
+        assert!(tron_decode_stake_raw(&stake(year), &ours).is_err());
+    }
+
+    /// Audit finding: the memo was shown by the shell with its control / bidi characters.
+    #[test]
+    fn memo_text_is_sanitized() {
+        let ours = tron_address_from_bytes(&me());
+        let s = tron_decode_raw_at(&trx(b"merci", NOW + 60_000), &ours, NOW).unwrap();
+        assert_eq!(s.memo_text.as_deref(), Some("merci"));
+        assert_eq!(s.warnings, vec![TronWarning::Memo]);
+        let tricky = "pay\u{202E}evil\r\nok\u{2066}".as_bytes();
+        let s = tron_decode_raw_at(&trx(tricky, NOW + 60_000), &ours, NOW).unwrap();
+        assert_eq!(s.memo_text.as_deref(), Some("payevil  ok"));
+        assert_eq!(s.memo, hex::encode(tricky));
+        assert_eq!(
+            s.warnings,
+            vec![TronWarning::Memo, TronWarning::UnusualText]
+        );
+        assert!(s.requires_extra_confirmation);
+        // Not UTF-8: no text, only the hex.
+        let s = tron_decode_raw_at(&trx(&[0xff, 0xfe], NOW + 60_000), &ours, NOW).unwrap();
+        assert_eq!(s.memo_text, None);
     }
 }

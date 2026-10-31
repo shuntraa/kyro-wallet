@@ -38,7 +38,9 @@ use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::{PubkeyHash, Script, ScriptBuf, ScriptHash, TxOut, WitnessProgram, WitnessVersion};
 use serde::{Deserialize, Serialize};
 
-use crate::btc::{is_our_path, parse_psbt, prevouts as witness_prevouts};
+use crate::btc::{
+    is_our_path, is_unknown_witness, ownership, parse_psbt, prevouts as witness_prevouts, Ownership,
+};
 use crate::btc_watch::BtcRawTx;
 use crate::error::{Error, Result};
 use crate::keys::{hardened, normal, path_string, secp, XprivGuard};
@@ -208,6 +210,10 @@ pub fn utxo_address_of_script(script: &[u8], net: Network, coin: UtxoCoin) -> Op
     let (Some(hrp), Some(version)) = (hrp(&p), spk.witness_version()) else {
         return None;
     };
+    // Witness v2+ (and v1 other than taproot): not shown as an ordinary address.
+    if is_unknown_witness(spk) {
+        return None;
+    }
     bech32::segwit::encode(hrp, version.to_fe(), &script[2..]).ok()
 }
 
@@ -459,6 +465,12 @@ pub enum UtxoWarning {
     /// Fee rate above 100× the usual rate, or fee larger than everything sent
     /// (reinforced confirmation).
     HighFee,
+    /// Output paying one of our keys at an address index beyond
+    /// [`crate::MAX_CHANGE_INDEX`]: not shown as change (reinforced confirmation).
+    ChangeIndexOutOfRange {
+        /// Output index.
+        index: usize,
+    },
     /// Fee below the network's relay minimum: the transaction will probably not propagate
     /// (informative).
     FeeBelowMinimum {
@@ -585,17 +597,17 @@ impl Signer {
         self.master.derive(&self.secp, path.as_ref())
     }
 
-    fn output_is_ours(&self, spk: &Script, meta: &PsbtOutput) -> Result<bool> {
+    fn output_is_ours(&self, spk: &Script, meta: &PsbtOutput) -> Result<Ownership> {
         for (pk, (fp, path)) in &meta.bip32_derivation {
             if self.ours(fp, path) {
                 let k = self.derive(path)?;
                 let derived = k.xpriv().private_key.public_key(&self.secp);
                 if derived == *pk && own_script(self.coin, derived) == *spk {
-                    return Ok(true);
+                    return Ok(ownership(path));
                 }
             }
         }
-        Ok(false)
+        Ok(Ownership::Foreign)
     }
 
     /// Our keys for input `i`: every key origin with our fingerprint and path, checked against
@@ -712,11 +724,15 @@ fn analyse(signer: &Signer, net: Network, psbt_b64: &str) -> Result<Analysis> {
             soft_dust += 1;
             warnings.push(UtxoWarning::SoftDust { index: j });
         }
+        let owner = signer.output_is_ours(spk, meta)?;
+        if owner == Ownership::FarIndex {
+            warnings.push(UtxoWarning::ChangeIndexOutOfRange { index: j });
+        }
         outputs.push(UtxoOutput {
             address,
             script: hex::encode(spk.as_bytes()),
             amount: value.to_string(),
-            is_change: signer.output_is_ours(spk, meta)?,
+            is_change: owner == Ownership::Change,
             kind,
         });
     }

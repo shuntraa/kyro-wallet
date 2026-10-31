@@ -438,12 +438,12 @@ fn stake_and_activating(d: &SolDelegation, target: u64, h: &[SolStakeHistoryEntr
     };
     let mut prev_epoch = d.activation_epoch;
     let mut effective: u64 = 0;
-    loop {
-        let current = prev_epoch + 1;
+    // Epochs come from the chain (StakeHistory via RPC): never wrap around.
+    while let Some(current) = prev_epoch.checked_add(1) {
         if prev.activating == 0 {
             break;
         }
-        let remaining = delegated - effective;
+        let remaining = delegated.saturating_sub(effective);
         let weight = remaining as f64 / prev.activating as f64;
         let newly_cluster = prev.effective as f64 * WARMUP_COOLDOWN_RATE;
         let newly = ((weight * newly_cluster) as u64).max(1);
@@ -463,7 +463,7 @@ fn stake_and_activating(d: &SolDelegation, target: u64, h: &[SolStakeHistoryEntr
             None => break,
         }
     }
-    (effective, delegated - effective)
+    (effective, delegated.saturating_sub(effective))
 }
 
 /// The Stake program's `Delegation::stake_activating_and_deactivating` at `target_epoch`
@@ -493,8 +493,7 @@ pub fn sol_stake_activation(
     };
     let mut prev_epoch = d.deactivation_epoch;
     let mut current_effective = effective;
-    loop {
-        let current = prev_epoch + 1;
+    while let Some(current) = prev_epoch.checked_add(1) {
         if prev.deactivating == 0 {
             break;
         }

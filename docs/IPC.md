@@ -31,9 +31,11 @@ impl Mnemonic {
 #[derive(Serialize, Deserialize)]
 pub struct VaultFile { pub version: u8, pub kdf: KdfParams, pub salt: String /*b64*/, pub nonce: String /*b64, 24 o*/, pub ciphertext: String /*b64*/ }
 pub struct KdfParams { pub m_cost_kib: u32, pub t_cost: u32, pub p_cost: u32 }     // défaut : 262144, 3, 4
-impl KdfParams { pub fn production() -> Self; pub fn insecure_for_tests() -> Self; }
+impl KdfParams { pub fn production() -> Self; pub fn minimum() -> Self /*65536, 2, 1 : tests*/; }   // insecure_for_tests : tests unitaires de wallet-core seulement
 pub fn seal(mnemonic: &Mnemonic, password: &str, kdf: KdfParams) -> Result<VaultFile>; // AAD = version||kdf||salt
 pub fn open(file: &VaultFile, password: &str) -> Result<Mnemonic>;                    // Error::WrongPassword si tag invalide
+// seal ET open : Error::InvalidVault si m < 64 Mio, t < 2, p = 0, ou m > 1 Gio, t > 10, p > 16 (vérifié avant toute dérivation ;
+// un coffre plus faible est refusé, pas re-chiffré)
 
 // --- networks & derivation ---
 pub enum Network { Mainnet, Testnet }   // Testnet = BTC testnet4 (tb1…), Sepolia (chainId 11155111), Solana devnet
@@ -52,29 +54,36 @@ pub fn btc_sign_psbt(seed: &Seed, net: Network, account: u32, psbt_b64: &str) ->
 // sont étrangères (ForeignInput → 2ᵉ dialogue) et la monnaie n'est reconnue que dans ce compte
 pub struct EvmTxRequest { pub chain_id: u64, pub nonce: u64, pub to: String, pub value_wei: String, pub data: String /*0x…*/,
                           pub gas_limit: u64, pub max_fee_per_gas: String, pub max_priority_fee_per_gas: String }
-pub fn evm_sign_tx(seed: &Seed, index: u32, tx: &EvmTxRequest) -> Result<(String /*raw 0x… EIP-1559*/, String /*tx hash*/)>;
+pub fn evm_sign_tx(seed: &Seed, index: u32, tx: &EvmTxRequest, net: Network) -> Result<(String /*raw 0x… EIP-1559*/, String /*tx hash*/)>;
+// refuse un chain_id de l'autre famille que `net` (EVM_KNOWN_CHAINS), comme evm_decode
 pub fn sol_sign_message(seed: &Seed, account: u32, message: &[u8]) -> Result<[u8; 64]>; // ed25519 sur les octets du message ; ne JAMAIS appeler sans sol_decode_message avant
 
 // --- decoding (résumé « en clair », indépendant du frontend) ---
 pub struct EvmTxSummary { pub kind: EvmTxKind /*NativeTransfer|Erc20Transfer|Erc20Approve|ContractCall*/,
                           pub to: String, pub token_contract: Option<String>, pub amount: String, pub spender: Option<String>,
-                          pub unlimited_approval: bool /*≥ 2^255*/, pub max_fee_wei: String, pub chain_id: u64, pub value_wei: String,
+                          pub unlimited_approval: bool /*≥ 2^128, même règle que Approval.unlimited*/, pub max_fee_wei: String, pub chain_id: u64, pub value_wei: String,
                           pub warnings: Vec<EvmWarning>, pub requires_extra_confirmation: bool }
 pub enum EvmWarning {   // JSON { "kind": "contractCall" | "approval" | … } → 2ᵉ fenêtre renforcée
     ContractCall /*tout appel autre qu'un transfer ERC-20 décodé*/,
     Approval { spender, amount, unlimited /*≥ 2^128 : affiché ILLIMITÉ*/ },
     ValueToContract { value_wei } /*valeur native avec un appel (calldata non vide)*/,
-    UnknownChain { chain_id } /*hors EVM_KNOWN_CHAINS : 1, 11155111, 42161, 10, 8453, 137, 56, 43114*/,
+    UnknownChain { chain_id } /*hors EVM_KNOWN_CHAINS*/,
     HighFee { max_fee_wei } /*gas_limit × max_fee_per_gas > evm_high_fee_threshold_wei(chain)*/ }
 // Seuil de frais : 0,05 de la monnaie native (ETH, Sepolia, Arbitrum, Optimism, Base, BNB Chain, chaînes inconnues),
 // 50 POL (Polygon), 1 AVAX (Avalanche). Limite : un envoi de valeur SANS calldata vers une adresse de contrat
 // n'est pas détecté (il faudrait eth_getCode ; Rust ne contacte pas le RPC pour signer).
-pub fn evm_decode(tx: &EvmTxRequest) -> Result<EvmTxSummary>;
+pub fn evm_decode(tx: &EvmTxRequest, net: Network) -> Result<EvmTxSummary>;
+pub const EVM_KNOWN_CHAINS: &[(u64, Network)];   // LA liste : mainnet 1, 42161, 10, 8453, 137, 56, 43114, 61, 25, 5000, 146, 14, 8217, 100, 999, 1329, 1030 ; testnet 11155111
+pub fn evm_chain_network(chain_id) -> Option<Network>;
+// evm_decode / evm_sign_tx REFUSENT (INVALID_INPUT) un chain id connu de l'autre famille que `net` (mode test ↔ mainnet) ;
+// un chain id inconnu reste accepté avec UnknownChain (2ᵉ dialogue).
 pub struct BtcTxSummary { pub outputs: Vec<(String /*address*/, u64 /*sats*/, bool /*is_change*/)>, pub fee_sats: u64,
                           pub warnings: Vec<BtcWarning>, pub requires_extra_confirmation: bool }
-pub enum BtcWarning {   // JSON { "kind": "unknownScript" | "opReturn" | "foreignInput" | "highFee", … } → 2ᵉ fenêtre renforcée
-    UnknownScript { output }, OpReturn { output }, ForeignInput { input } /*entrée non signée par nous*/,
-    HighFee { sat_per_vb } /*> BTC_HIGH_FEE_SAT_PER_VB = 100 sat/vB (100 × le minimum de relais), ou frais > total des sorties*/ }
+pub enum BtcWarning {   // JSON { "kind": "unknownScript" | "opReturn" | "foreignInput" | "highFee" | "changeIndexOutOfRange", … } → 2ᵉ fenêtre renforcée
+    UnknownScript { output } /*dont witness v2+ et v1 non taproot, rendus "script:<hex>"*/, OpReturn { output },
+    ForeignInput { input } /*entrée non signée par nous*/,
+    HighFee { sat_per_vb } /*> BTC_HIGH_FEE_SAT_PER_VB = 100 sat/vB (100 × le minimum de relais), ou frais > total des sorties*/,
+    ChangeIndexOutOfRange { output } /*sortie vers nos clés à un index > MAX_CHANGE_INDEX = 1000 : is_change = false*/ }
 // Un sighash autre que ALL / DEFAULT sur une de nos entrées n'est pas un avertissement : la signature est REFUSÉE.
 pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String] /*our addresses*/) -> Result<BtcTxSummary>;
 pub fn btc_psbt_summary(seed, net, account, psbt_b64) -> Result<BtcTxSummary>;   // résumé de btc_sign_psbt sans signer (monnaie et entrées par origine de clé)
@@ -116,7 +125,8 @@ pub struct UtxoTxSummary {                     // serde camelCase ; montants en 
     pub has_change: bool /*false : tout ce qui n'est pas envoyé — poussière comprise — part en frais*/,
     pub warnings: Vec<UtxoWarning>, pub requires_extra_confirmation: bool }
 pub enum UtxoWarning {                         // JSON { "kind": "softDust", "index": 2 }
-    UnknownOutput { index }, OpReturn { index }, ForeignInput { index }, SoftDust { index } /*DOGE < 0,01*/, HighFee /*> 100× le taux usuel ou > total envoyé*/,
+    UnknownOutput { index } /*dont witness v2+ LTC*/, OpReturn { index }, ForeignInput { index }, SoftDust { index } /*DOGE < 0,01*/, HighFee /*> 100× le taux usuel ou > total envoyé*/,
+    ChangeIndexOutOfRange { index } /*nos clés au-delà de l'index 1000 : is_change = false*/,
     FeeBelowMinimum { minimum } /*informatif*/ }
 // requires_extra_confirmation = tout avertissement sauf FeeBelowMinimum.
 // Constantes : LTC_MIN_RELAY_FEE_PER_KVB 1 000, LTC_DUST_RELAY_FEE_PER_KVB 30 000 ; DOGE_RECOMMENDED_FEE_PER_KB 1 000 000 (0,01 DOGE/kB),
@@ -136,12 +146,14 @@ impl TronRaw { pub fn encode(&self) -> Vec<u8>; pub fn decode(raw) -> Result<Tro
 // autre type de contrat, ≠ 1 contrat, entier négatif, encodage non canonique (ordre, doublon, varint non minimal).
 pub fn tron_ref_block(number, block_id_hex) -> Result<([u8; 2], [u8; 8])>;   // octets 6..8 du numéro, 8..16 de l'id ; id doit commencer par le numéro
 pub fn tron_trc20_transfer_data(to, amount /*décimal uint256*/) -> Result<Vec<u8>>;   // a9059cbb || to || amount
-pub fn tron_decode_raw(raw_hex, our_address) -> Result<TronTxSummary>;  // + refuse : owner ≠ nous, montant TRX ≤ 0, TRX à soi-même
+pub fn tron_decode_raw(raw_hex, our_address) -> Result<TronTxSummary>;  // + refuse : owner ≠ nous, montant TRX ≤ 0, TRX à soi-même,
+// expiration > horloge système + 24 h (TRON_MAX_EXPIRATION_MS, aussi dans tron_decode_stake_raw, donc à la signature)
 pub struct TronTxSummary { txid, owner, action: TronAction, fee_limit, expiration, timestamp, ref_block_bytes, ref_block_hash,
-                           memo /*hex*/, raw_size, warnings: Vec<TronWarning>, requires_extra_confirmation }   // serde camelCase
+                           memo /*hex*/, memo_text: Option<String> /*UTF-8 nettoyé (sanitize_text, 256 car.)*/, raw_size,
+                           warnings: Vec<TronWarning>, requires_extra_confirmation }   // serde camelCase
 pub enum TronAction { TrxTransfer { to, amount }, Trc20Transfer { contract, to, amount, call_value },
                       ContractCall { contract, selector, data, call_value } }   // JSON { "type": "trxTransfer", … }
-pub enum TronWarning { UnknownCall { selector }, CallValue, Memo, HighFeeLimit /*> 100 TRX*/ }   // tous → confirmation renforcée
+pub enum TronWarning { UnknownCall { selector }, CallValue, Memo, HighFeeLimit /*> 100 TRX*/, UnusualText /*mémo nettoyé*/ }   // tous → confirmation renforcée
 pub fn tron_sign(seed, account, raw_hex) -> Result<([u8; 65] /*r‖s‖v, v = 27 + recid*/, TronTxSummary)>;   // décode d'abord ; libsecp256k1 RFC 6979
 pub fn tron_recover_signer(raw_hex, sig65 /*v ∈ 0,1,27,28*/) -> Result<String>;
 pub fn tron_signed_transaction(raw_hex, sig) -> Result<String>;          // Transaction { raw_data = 1, signature = 2 }, pour broadcasthex
@@ -162,12 +174,13 @@ impl XrpPayment { pub fn encode(&self, with_signature) -> Vec<u8>; pub fn decode
 // decode refuse : autre TransactionType (AccountSet, SetRegularKey, SignerListSet, TrustSet…), NetworkID, TicketSequence,
 // Paths, DeliverMin, montants MPT, champ inconnu, encodage non canonique.
 pub fn xrp_decode_tx(blob_hex, our_address, our_pubkey) -> Result<XrpTxSummary>;   // + refuse : déjà signée, Account / SigningPubKey ≠ nous,
-// tfPartialPayment, drapeau inconnu, paiement à soi-même, montant ≤ 0, frais 0
+// tfPartialPayment, drapeau inconnu, paiement à soi-même, montant ≤ 0, frais 0, LastLedgerSequence absent
 pub struct XrpTxSummary { account, destination, destination_tag: Option<u32>, amount: XrpAmountView, fee, sequence,
                           last_ledger_sequence, flags, send_max, source_tag, invoice_id, memos, warnings: Vec<XrpWarning>,
                           requires_extra_confirmation }          // serde camelCase
 pub enum XrpAmountView { Xrp { drops }, Issued { value, currency, issuer } }   // JSON { "kind": "xrp", … }
-pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, Memo, HighFee /*> 1 XRP*/, InvoiceId }   // → renforcée
+pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, Memo, HighFee /*> 1 XRP*/, InvoiceId,
+                      UnusualText /*MemoData nettoyé : memos[].text est la version nettoyée (256 car.), memo_data l'hexadécimal exact*/ }   // → renforcée
 pub fn xrp_sign(seed, account, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
 pub fn xrp_verify_signed(blob_hex) -> Result<String /*hash*/>;   // signature DER low-S de SigningPubKey, clé = Account
 
@@ -188,7 +201,7 @@ pub fn cardano_address_bytes(address, net) -> Result<Vec<u8>>;   // destinataire
 pub struct CardanoBody { inputs: Vec<CardanoInput { tx_hash, index }>, tagged_sets /*tag 258*/, outputs: Vec<CardanoOutput { address, coin, assets, map_form }>,
                          fee, ttl: Option<u64>, aux_hash: Option<[u8; 32]>, validity_start: Option<u64> }   // clés 0, 1, 2, 3, 7, 8 uniquement
 impl CardanoBody { pub fn encode(&self) -> Vec<u8>; pub fn decode(raw) -> Result<Self>; pub fn tx_id(&self) -> [u8; 32] /*blake2b-256(corps)*/ }
-pub fn cardano_min_utxo(address, assets, coins_per_utxo_byte) -> u64;      // (160 + taille de la sortie) × coinsPerUTxOByte
+pub fn cardano_min_utxo(address, assets, coins_per_utxo_byte) -> u64;      // (160 + taille de la sortie) × coinsPerUTxOByte ; u64::MAX en cas de débordement (donc refus)
 pub fn cardano_cip20_aux(message) -> Result<Vec<u8>>;                      // {674: {"msg": [lignes ≤ 64 o]}}, 1 024 o max.
 pub fn cardano_unsigned_tx(body, aux) -> Result<Vec<u8>>;                  // [corps, {}, true, aux | null]
 pub fn cardano_signed_size(body, aux, keys) -> Result<usize>;               // taille signée (frais = a × taille + b)
@@ -202,7 +215,9 @@ pub fn cardano_decode_tx(tx_hex, ctx) -> Result<CardanoTxSummary>;  pub fn carda
 pub struct CardanoTxSummary { tx_id, inputs /*"hash#i"*/, outputs: Vec<CardanoOutputView { address, kind /*base|enterprise*/, is_change,
                               lovelace, tokens: Vec<CardanoTokenView { policy, name /*hex*/, name_text?, quantity, verified }>, min_lovelace }>,
                               fee, ttl, valid_from, memo: Option<Vec<String>>, warnings: Vec<CardanoWarning>, requires_extra_confirmation }   // serde camelCase
-pub enum CardanoWarning { Memo, UnknownToken { policy, name }, HighFee /*> 5 ADA*/, NoTtl }   // → confirmation renforcée
+pub enum CardanoWarning { Memo, UnknownToken { policy, name }, HighFee /*> 5 ADA*/, NoTtl,
+                          UnusualText /*ligne CIP-20 nettoyée, ou nom de token à nettoyer (name_text = None : hex seul)*/ }   // → confirmation renforcée
+// memo : lignes passées par sanitize_text. Staking (cardano_decode_stake_tx / cardano_sign_stake) : une seule sortie, vers ctx.own, sinon refus.
 pub fn cardano_sign(root, account, index, tx_hex, ctx) -> Result<(String /*tx signée*/, String /*tx id*/, CardanoTxSummary)>;
 // témoin vkey = (clé publique, Ed25519 sur blake2b-256(corps CBOR)), vérifié ; clé publique dalek = clé ed25519-bip32 sinon erreur
 pub fn cardano_signed_witnesses(tx_hex) -> Result<(String /*tx id*/, Vec<[u8; 32]>)>;   // chaque témoin vérifié contre le tx id
@@ -234,8 +249,18 @@ pub enum SolInstruction {                       // JSON : { "type": "systemTrans
 pub enum SolWarning {                           // JSON : { "kind": "feePayerNotUs", ... }
     FeePayerNotUs { fee_payer }, ExtraWritableSigner { address }, AuthorityNotUs { instruction, authority },
     Delegation { instruction }, UnknownInstruction { instruction, program_id },
-    Token2022ExtensionsUnverified { instruction } /*informatif*/, PriorityFeeEstimated /*informatif*/ }
-// requires_extra_confirmation = instruction inconnue, délégation, payeur ≠ nous, autre signataire inscriptible ou autorité ≠ nous.
+    Token2022ExtensionsUnverified { instruction } /*informatif*/, PriorityFeeEstimated /*informatif*/,
+    UnknownOwnerProgram { instruction, owner, space } /*CreateAccount(WithSeed) pour un programme hors liste fermée*/,
+    UncheckedTokenTransfer { instruction } /*Transfer SPL tag 3, sans mint ni décimales*/,
+    UnusualText { instruction } /*mémo ou seed nettoyé, ou mémo > 80 caractères*/ }
+// requires_extra_confirmation = instruction inconnue, délégation, payeur ≠ nous, autre signataire inscriptible, autorité ≠ nous,
+// UnknownOwnerProgram, UncheckedTokenTransfer, UnusualText. Memo.text et les seeds sont nettoyés (sanitize_text ; mémo 566 car. max).
+// Liste fermée des propriétaires : System ; Token (165 ou 82 octets) ; Token-2022 (82, ou 165 à 1024 octets) ; Stake (règles du staking).
+
+// --- Texte venu de la chaîne : UN seul nettoyeur, exporté pour le shell ---
+pub fn sanitize_text(s: &str, max_chars: usize) -> SanitizedText { text, altered, truncated };   // contrôles (\n \r \t → espace, autres → U+FFFD),
+// bidi / invisibles retirés (U+200B–200F, U+202A–202E, U+2060–206F, U+FEFF, U+00AD, U+061C, U+180E, U+FFF9–FFFB, tags U+E0000–E007F),
+// longueur bornée avec « … » ; altered = quelque chose a changé → avertissement + 2ᵉ dialogue chez l'appelant.
 
 // --- Staking (§2.8). Solana : programme Stake11111111111111111111111111111111111111, décodé dans sol_decode_message ---
 // SolInstruction gagne 4 variantes (JSON "type") : StakeInitialize { stake_account, staker, withdrawer },
@@ -342,8 +367,8 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `accounts_get` | `{ account? }` | `Accounts` | adresses publiques uniquement, du compte `account` (absent = 0) de chaque chaîne ; contient aussi `ltc` et `doge` (§2.4). Comptes multiples : §2.9 |
 | `vault_accounts_get` / `vault_account_add` / `vault_account_rename` / `vault_account_remove` | voir §2.9 | `VaultAccountLists` | listes de comptes du coffre, par chaîne |
 | `btc_address` | `{ kind, change, index, account? }` | `string` | `m/84'\|86'/coin'/account'/change/index` |
-| `evm_decode_tx` | `{ tx: EvmTxRequest }` | `EvmTxSummary` | pour l'aperçu avant mot de passe |
-| `evm_sign_tx` | `{ tx, password, token?: { symbol, decimals }, account? }` | `{ rawTx, hash }` | clé `m/44'/60'/0'/0/{account}` ; dialogue natif obligatoire (compte signataire et adresse « De » en tête, §2.9) ; `token` = indication d'affichage seulement (le contrat et le montant brut viennent du décodage Rust) ; **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` : appel de contrat autre qu'un transfer ERC-20, **toute** autorisation (`approve` : bénéficiaire et montant, « ILLIMITÉ » si ≥ 2^128), valeur native envoyée avec un appel, chainId inconnu, frais maximum au-dessus du seuil (voir §1) |
+| `evm_decode_tx` | `{ tx: EvmTxRequest }` | `EvmTxSummary` | pour l'aperçu avant mot de passe ; `INVALID_INPUT` si le chainId est d'un réseau principal en mode test (ou Sepolia en mainnet) |
+| `evm_sign_tx` | `{ tx, password, token?: { symbol, decimals }, account? }` | `{ rawTx, hash }` | clé `m/44'/60'/0'/0/{account}` ; dialogue natif obligatoire (compte signataire et adresse « De » en tête, §2.9) ; `token` = indication d'affichage seulement (le contrat et le montant brut viennent du décodage Rust) ; **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` : appel de contrat autre qu'un transfer ERC-20, **toute** autorisation (`approve` : bénéficiaire et montant, « ILLIMITÉ » si ≥ 2^128), valeur native envoyée avec un appel, chainId inconnu, frais maximum au-dessus du seuil (voir §1) ; chainId de l'autre famille de réseaux : refusé (`INVALID_INPUT`) |
 | `btc_sign_psbt` | `{ psbt, password, account? }` | `{ psbt, summary }` | ne signe que les entrées du compte `account` (celles des autres comptes : `foreignInput`) ; dialogue natif obligatoire (résumé `btc_psbt_summary`, compte signataire en tête) ; **2ᵉ dialogue renforcé** si `summary.requiresExtraConfirmation` (script inconnu, OP_RETURN, entrée qui n'est pas à nous, frais > 100 sat/vB ou > total des sorties) ; le résumé de la signature doit être identique à celui affiché |
 | `sol_decode_tx` | `{ message /*b64, message sérialisé sans signatures*/, account? }` | `SolTxSummary` | aperçu avant mot de passe ; décodé en Rust, tables d'adresses (v0) récupérées par Rust (`getAccountInfo`) — jamais fournies par l'UI ; session déverrouillée requise |
 | `sol_sign_tx` | `{ message /*b64*/, password, account? }` | `{ signature /*b64*/, summary: SolTxSummary }` | même décodage ; refuse si notre adresse n'est pas signataire ; dialogue natif construit depuis le résumé Rust, puis 2ᵉ dialogue « Instruction non reconnue — signer quand même ? » si `requiresExtraConfirmation` ; la signature va à l'index `summary.ourSignerIndex` |

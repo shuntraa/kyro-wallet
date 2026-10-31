@@ -98,21 +98,64 @@ fn trezor_payment(
 #[test]
 fn trezor_signed_payments_byte_for_byte() {
     let s = seed(ALL);
-    for (index, p, expected) in [
-        (0, trezor_payment(0, "rBKz5MC2iXdoS3XgnNSYmF69K1Yo4NS3Ws", 100_000_000, 100_000, 25, None, None),
-         "12000022800000002400000019614000000005f5e1006840000000000186a0732102131facd1eab748d6cddc492f54b04e8c35658894f4add2232ebc5afe7521dbe474473045022100e243ef623675eeeb95965c35c3e06d63a9fc68bb37e17dc87af9c0af83ec057e02206ca8aa5eaab8396397aef6d38d25710441faf7c79d292ee1d627df15ad9346c081148fb40e1ffa5d557ce9851a535af94965e0dd098883147148ebebf7304ccdf1676fefcf9734cf1e780826"),
-        (2, trezor_payment(2, "rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4H", 1, 10, 1, None, None),
-         "1200002280000000240000000161400000000000000168400000000000000a732103dbed1e77cb91a005e2ec71afbccce5444c9be58276665a3859040f692de8fed274463044022069900e6e578997fad5189981b74b16badc7ba8b9f1052694033fa2779113ddc002206c8006ada310edf099fb22c0c12073550c8fc73247b236a974c5f1144831dd5f8114bdf86f3ae715ba346b7772ea0e133f48828b766483148fb40e1ffa5d557ce9851a535af94965e0dd0988"),
-        (2, trezor_payment(2, "rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4H", 100_000_009, 100, 100, Some(123_456), Some(333_111)),
-         "120000228000000024000000642e0001e240201b00051537614000000005f5e109684000000000000064732103dbed1e77cb91a005e2ec71afbccce5444c9be58276665a3859040f692de8fed2744730450221008770743a472bb2d1c746a53ef131cc17cc118d538ec910ca928d221db4494cf702201e4ef242d6c3bff110c3cc3897a471fed0f5ac10987ea57da63f98dfa01e94df8114bdf86f3ae715ba346b7772ea0e133f48828b766483148fb40e1ffa5d557ce9851a535af94965e0dd0988"),
+    // The first two Trezor vectors carry no LastLedgerSequence: Kyro now refuses to sign them
+    // (a payment without it stays valid for ever).
+    for (index, p) in [
+        (
+            0,
+            trezor_payment(
+                0,
+                "rBKz5MC2iXdoS3XgnNSYmF69K1Yo4NS3Ws",
+                100_000_000,
+                100_000,
+                25,
+                None,
+                None,
+            ),
+        ),
+        (
+            2,
+            trezor_payment(
+                2,
+                "rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4H",
+                1,
+                10,
+                1,
+                None,
+                None,
+            ),
+        ),
     ] {
         let unsigned = hex::encode(p.encode(false));
-        let summary = xrp_decode_tx(&unsigned, &xrp_address_at(&s, 0, index).unwrap(), &xrp_public_key_at(&s, 0, index).unwrap()).unwrap();
+        assert!(xrp_decode_tx(
+            &unsigned,
+            &xrp_address_at(&s, 0, index).unwrap(),
+            &xrp_public_key_at(&s, 0, index).unwrap()
+        )
+        .is_err());
+        assert!(xrp_sign_at(&s, 0, index, &unsigned).is_err());
+    }
+    // The third vector (with LastLedgerSequence): byte for byte.
+    {
+        let (index, p, expected) = (2, trezor_payment(2, "rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4H", 100_000_009, 100, 100, Some(123_456), Some(333_111)),
+         "120000228000000024000000642e0001e240201b00051537614000000005f5e109684000000000000064732103dbed1e77cb91a005e2ec71afbccce5444c9be58276665a3859040f692de8fed2744730450221008770743a472bb2d1c746a53ef131cc17cc118d538ec910ca928d221db4494cf702201e4ef242d6c3bff110c3cc3897a471fed0f5ac10987ea57da63f98dfa01e94df8114bdf86f3ae715ba346b7772ea0e133f48828b766483148fb40e1ffa5d557ce9851a535af94965e0dd0988");
+        let unsigned = hex::encode(p.encode(false));
+        let summary = xrp_decode_tx(
+            &unsigned,
+            &xrp_address_at(&s, 0, index).unwrap(),
+            &xrp_public_key_at(&s, 0, index).unwrap(),
+        )
+        .unwrap();
         let (signed, hash, again) = xrp_sign_at(&s, 0, index, &unsigned).unwrap();
         assert_eq!(signed.to_lowercase(), expected);
         assert_eq!(again, summary);
         assert_eq!(xrp_verify_signed(&signed).unwrap(), hash);
-        assert_eq!(XrpPayment::decode(&hex::decode(expected).unwrap()).unwrap().encode(true), hex::decode(expected).unwrap());
+        assert_eq!(
+            XrpPayment::decode(&hex::decode(expected).unwrap())
+                .unwrap()
+                .encode(true),
+            hex::decode(expected).unwrap()
+        );
     }
     // Destination tag and LastLedgerSequence in the summary.
     let p = trezor_payment(
@@ -273,7 +316,7 @@ fn memos_encode_like_xrpl_js() {
             12,
             1,
             None,
-            None,
+            Some(1_000),
         )
     };
     let enc = hex::encode_upper(p.encode(true));
@@ -291,6 +334,40 @@ fn memos_encode_like_xrpl_js() {
     .unwrap();
     assert_eq!(sum.memos[0].text.as_deref(), Some("2.20965"));
     assert_eq!(sum.warnings, vec![XrpWarning::Memo]);
+    assert!(sum.requires_extra_confirmation);
+}
+
+/// Audit finding: MemoData was shown as is, control and bidi characters included.
+#[test]
+fn memo_text_is_sanitized() {
+    let p = XrpPayment {
+        memos: vec![XrpMemo {
+            memo_type: None,
+            memo_data: Some("ok\u{202E}evil\n\nfin\u{200B}".as_bytes().to_vec()),
+            memo_format: None,
+        }],
+        ..trezor_payment(
+            0,
+            "rBKz5MC2iXdoS3XgnNSYmF69K1Yo4NS3Ws",
+            1,
+            12,
+            1,
+            None,
+            Some(1_000),
+        )
+    };
+    let s = seed(ALL);
+    let sum = xrp_decode_tx(
+        &hex::encode(p.encode(false)),
+        &xrp_address(&s, 0).unwrap(),
+        &xrp_public_key(&s, 0).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(sum.memos[0].text.as_deref(), Some("okevil  fin"));
+    assert_eq!(
+        sum.warnings,
+        vec![XrpWarning::Memo, XrpWarning::UnusualText]
+    );
     assert!(sum.requires_extra_confirmation);
 }
 
@@ -320,7 +397,7 @@ fn refusals() {
         12,
         1,
         None,
-        None,
+        Some(1_000),
     );
     let refused = |p: &XrpPayment| {
         let h = hex::encode(p.encode(true));
@@ -352,6 +429,11 @@ fn refusals() {
     });
     refused(&XrpPayment {
         amount: xrp_issued_amount("-5", "USD", "rrrrrrrrrrrrrrrrrrrrBZbvji").unwrap(),
+        ..base.clone()
+    });
+    // Audit finding: no LastLedgerSequence (valid for ever) used to be signed.
+    refused(&XrpPayment {
+        last_ledger_sequence: None,
         ..base.clone()
     });
     // Another sender, another signing key, already signed.

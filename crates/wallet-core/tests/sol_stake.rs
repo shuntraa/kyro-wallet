@@ -803,3 +803,21 @@ fn stake_history_sysvar_layout() {
     );
     assert!(sol_parse_stake_history(&data[..60]).is_err());
 }
+
+/// Epochs and amounts come from the RPC (StakeHistory sysvar): extreme values must neither
+/// panic nor wrap (hardening — no overflow was reachable before, see SECURITY.md).
+#[test]
+fn activation_with_extreme_epochs_does_not_wrap() {
+    let d = |act, deact| SolDelegation {
+        vote_account: VOTE.into(),
+        stake: u64::MAX,
+        activation_epoch: act,
+        deactivation_epoch: deact,
+    };
+    let m = u64::MAX;
+    let hist = [h(m - 2, u64::MAX, 1, 0), h(m - 1, u64::MAX, 1, u64::MAX)];
+    let a = sol_stake_activation(&d(m - 2, m), m - 1, &hist);
+    assert_eq!(a.effective.checked_add(a.activating), Some(u64::MAX));
+    let a = sol_stake_activation(&d(0, m - 1), m, &hist);
+    assert_eq!(a.activating, 0);
+}

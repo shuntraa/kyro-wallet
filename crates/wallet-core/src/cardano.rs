@@ -28,6 +28,7 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
+use crate::display::sanitize_text;
 use crate::error::{Error, Result};
 use crate::mnemonic::Mnemonic;
 use crate::network::Network;
@@ -43,6 +44,10 @@ const ROLE_STAKE: u32 = 2;
 const MAX_TX: usize = 16_384;
 /// CIP-20 transaction message label.
 const CIP20_LABEL: u64 = 674;
+/// A CIP-20 line is at most 64 bytes, hence at most 64 characters.
+const MAX_CIP20_LINE: usize = 64;
+/// An asset name is at most 32 bytes, hence at most 32 characters.
+const MAX_TOKEN_NAME: usize = 32;
 /// Fees above 5 ADA need a reinforced confirmation (a payment costs ~0.17–0.3 ADA).
 const HIGH_FEE: u64 = 5_000_000;
 
@@ -75,7 +80,16 @@ impl CardanoRoot {
         let entropy = mnemonic.entropy();
         let mut out = Zeroizing::new([0u8; 96]);
         pbkdf2::pbkdf2_hmac::<sha2::Sha512>(passphrase.as_bytes(), &entropy, 4096, &mut out[..]);
-        CardanoRoot(XPrv::normalize_bytes_force3rd(*out))
+        // Clamping of `XPrv::normalize_bytes_force3rd`, done in place: that function takes the
+        // array by value, and `*out` would leave an unerased copy of the root key behind.
+        out[0] &= 0b1111_1000;
+        out[31] &= 0b0001_1111;
+        out[31] |= 0b0100_0000;
+        // `from_slice_verified` only checks the length (96) and the clamping bits set just
+        // above: it cannot fail here, whatever the mnemonic or passphrase.
+        #[allow(clippy::expect_used)]
+        let root = XPrv::from_slice_verified(&out[..]).expect("clamped 96-byte key");
+        CardanoRoot(root)
     }
 
     /// The 96-byte root key, hex (tests only: compared with CIP-0003 vectors).
@@ -711,7 +725,9 @@ impl CardanoOutput {
 }
 
 /// Babbage/Conway minimum lovelace of an output: `(160 + size) × coinsPerUTxOByte`, computed
-/// with the coin field at its final width (iterated to a fixed point).
+/// with the coin field at its final width (iterated to a fixed point). On overflow (absurd
+/// `coinsPerUTxOByte`) the result is `u64::MAX`: no output can satisfy it, so it is refused,
+/// instead of a wrapped — tiny — minimum.
 pub fn cardano_min_utxo(address: &[u8], assets: &CardanoAssets, coins_per_byte: u64) -> u64 {
     let mut coin = 1_000_000u64;
     for _ in 0..4 {
@@ -721,7 +737,11 @@ pub fn cardano_min_utxo(address: &[u8], assets: &CardanoAssets, coins_per_byte: 
             assets: assets.clone(),
             map_form: false,
         };
-        let need = (160 + o.size() as u64) * coins_per_byte;
+        let need = u64::try_from(o.size())
+            .ok()
+            .and_then(|size| size.checked_add(160))
+            .and_then(|bytes| bytes.checked_mul(coins_per_byte))
+            .unwrap_or(u64::MAX);
         if need == coin {
             break;
         }
@@ -1146,6 +1166,9 @@ pub enum CardanoWarning {
     HighFee,
     /// No validity limit (ttl absent): the transaction stays valid for ever.
     NoTtl,
+    /// A CIP-20 line or a token name had control / invisible / bidi characters removed or was
+    /// cut: the dialog shows a cleaned version (the hex name is exact).
+    UnusualText,
 }
 
 /// Plain-language summary of a Cardano payment, decoded by Rust.
@@ -1234,7 +1257,7 @@ fn decode_full(
                     "métadonnées dans une transaction de staking : refusées",
                 ));
             }
-            check_stake(&body, s, ctx.net)?;
+            check_stake(&body, s, ctx)?;
         }
     }
     let aux = match aux {
@@ -1266,6 +1289,17 @@ fn decode_full(
         return Err(bad("entrée en double"));
     }
     let mut warnings = Vec::new();
+    let mut unusual_text = false;
+    let memo = memo.map(|lines| {
+        lines
+            .iter()
+            .map(|l| {
+                let clean = sanitize_text(l, MAX_CIP20_LINE);
+                unusual_text |= clean.altered;
+                clean.text
+            })
+            .collect::<Vec<_>>()
+    });
     let mut outputs = Vec::with_capacity(body.outputs.len());
     for o in &body.outputs {
         check_address_bytes(&o.address, ctx.net)?;
@@ -1296,10 +1330,18 @@ fn decode_full(
                         name: nh.clone(),
                     });
                 }
+                // A name that needs cleaning is shown as hex only (and flagged): a cleaned name
+                // could pass for another token's.
+                let name_text = core::str::from_utf8(n)
+                    .ok()
+                    .filter(|t| !t.is_empty())
+                    .and_then(|t| {
+                        let clean = sanitize_text(t, MAX_TOKEN_NAME);
+                        unusual_text |= clean.altered;
+                        (!clean.altered).then_some(clean.text)
+                    });
                 tokens.push(CardanoTokenView {
-                    name_text: String::from_utf8(n.clone())
-                        .ok()
-                        .filter(|t| !t.is_empty() && t.chars().all(|c| !c.is_control())),
+                    name_text,
                     policy: ph,
                     name: nh,
                     quantity: q.to_string(),
@@ -1334,6 +1376,9 @@ fn decode_full(
     }
     if body.ttl.is_none() {
         warnings.push(CardanoWarning::NoTtl);
+    }
+    if unusual_text {
+        warnings.push(CardanoWarning::UnusualText);
     }
     let summary = CardanoTxSummary {
         tx_id: hex::encode(cardano_blake2b256(&body_c.to_vec())),
@@ -1584,9 +1629,22 @@ pub struct CardanoStakeSummary {
     pub withdrawn: String,
 }
 
-fn check_stake(body: &CardanoBody, s: &StakeMode, net: Network) -> Result<()> {
+fn check_stake(body: &CardanoBody, s: &StakeMode, ctx: &CardanoContext<'_>) -> Result<()> {
+    let net = ctx.net;
     if body.certs.is_empty() && body.withdrawals.is_empty() {
         return Err(bad("aucune opération de staking dans cette transaction"));
+    }
+    // The only output is the change, back to our own address: a staking transaction pays no
+    // one (deposits and fees are not outputs).
+    let [out] = body.outputs.as_slice() else {
+        return Err(bad(
+            "une transaction de staking n'a qu'une sortie, vers ta propre adresse : refusée",
+        ));
+    };
+    if !ctx.own.contains(&bech32_encode(hrp(net), &out.address)?) {
+        return Err(bad(
+            "une transaction de staking ne paie que ta propre adresse : refusée",
+        ));
     }
     let mut kinds = Vec::new();
     for c in &body.certs {
@@ -1833,12 +1891,13 @@ fn sign_extended(key: &XPrv, msg: &[u8], expected_pk: &[u8; 32]) -> Result<[u8; 
     let ext = Zeroizing::new(key.extended_secret_key());
     let mut kl = Zeroizing::new([0u8; 32]);
     kl.copy_from_slice(&ext[..32]);
-    let mut kr = [0u8; 32];
-    kr.copy_from_slice(&ext[32..]);
-    let esk = ExpandedSecretKey {
+    // `hash_prefix` is filled in place: a local `[u8; 32]` moved into the struct would stay
+    // on the stack, unerased (`ExpandedSecretKey` erases itself on drop).
+    let mut esk = ExpandedSecretKey {
         scalar: curve25519_dalek::Scalar::from_bytes_mod_order(*kl),
-        hash_prefix: kr,
+        hash_prefix: [0u8; 32],
     };
+    esk.hash_prefix.copy_from_slice(&ext[32..]);
     let vk = VerifyingKey::from(&esk);
     if vk.as_bytes() != expected_pk {
         return Err(Error::crypto(

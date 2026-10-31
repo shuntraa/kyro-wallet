@@ -5,6 +5,12 @@
 //! `aad = "kyro-vault" || version || m_cost_kib (LE u32) || t_cost (LE u32) || p_cost (LE u32) || salt`.
 //! Any change to the header (version, KDF parameters, salt) or to the ciphertext makes
 //! decryption fail.
+//!
+//! The KDF cost has a floor ([`KdfParams::minimum`]: 64 MiB, 2 passes) and a ceiling, checked
+//! by both [`seal`] and [`open`]. A vault below the floor is **refused** at open, not re-sealed:
+//! Kyro has only ever written vaults with [`KdfParams::production`], so a weaker header can
+//! only come from another tool or from tampering, and opening it would mean running the
+//! password through a cheap KDF chosen by whoever wrote the file.
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::engine::general_purpose::STANDARD as B64;
@@ -26,11 +32,14 @@ const KEY_LEN: usize = 32;
 const TAG_LEN: usize = 16;
 const AAD_DOMAIN: &[u8] = b"kyro-vault";
 
-// Bounds accepted when opening a file, so a tampered header cannot make us allocate
-// unbounded memory or spin forever before the tag check fails.
+// Floor: below this, a stolen vault file is cheap to brute-force (OWASP's Argon2id minimum is
+// 19 MiB / 2 passes; Kyro asks for more). Ceiling: a tampered header cannot make us allocate
+// unbounded memory or spin for minutes before the tag check fails.
+const MIN_M_COST_KIB: u32 = 64 * 1024; // 64 MiB
+const MIN_T_COST: u32 = 2;
 const MAX_M_COST_KIB: u32 = 1024 * 1024; // 1 GiB = 4x production
-const MAX_T_COST: u32 = 64;
-const MAX_P_COST: u32 = 64;
+const MAX_T_COST: u32 = 10;
+const MAX_P_COST: u32 = 16;
 
 /// Argon2id cost parameters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -54,8 +63,20 @@ impl KdfParams {
         }
     }
 
-    /// Very weak parameters for unit tests only (1 MiB, 1 pass, 1 lane). Never use in the app.
-    pub fn insecure_for_tests() -> Self {
+    /// The weakest parameters [`seal`] and [`open`] accept: 64 MiB, 2 passes, 1 lane. For tests
+    /// that need a real (if cheap) KDF; the app uses [`KdfParams::production`].
+    pub fn minimum() -> Self {
+        KdfParams {
+            m_cost_kib: MIN_M_COST_KIB,
+            t_cost: MIN_T_COST,
+            p_cost: 1,
+        }
+    }
+
+    /// Very weak parameters (1 MiB, 1 pass, 1 lane), **unit tests only**: refused by [`seal`]
+    /// and [`open`], used to build the vaults that must be refused.
+    #[cfg(test)]
+    pub(crate) fn insecure_for_tests() -> Self {
         KdfParams {
             m_cost_kib: 1024,
             t_cost: 1,
@@ -63,26 +84,37 @@ impl KdfParams {
         }
     }
 
-    fn argon2(&self) -> Result<Argon2<'static>> {
-        if self.m_cost_kib > MAX_M_COST_KIB
-            || self.t_cost == 0
-            || self.t_cost > MAX_T_COST
+    /// Floor and ceiling, for sealing and opening alike.
+    fn check(&self) -> Result<()> {
+        if self.m_cost_kib < MIN_M_COST_KIB
+            || self.t_cost < MIN_T_COST
             || self.p_cost == 0
             || self.p_cost > MAX_P_COST
+            || self.m_cost_kib < 8 * self.p_cost
         {
+            return Err(Error::InvalidVault(
+                "KDF parameters too weak (minimum 64 MiB, 2 passes)".into(),
+            ));
+        }
+        if self.m_cost_kib > MAX_M_COST_KIB || self.t_cost > MAX_T_COST {
             return Err(Error::InvalidVault("KDF parameters out of range".into()));
         }
+        Ok(())
+    }
+
+    fn argon2(&self) -> Result<Argon2<'static>> {
+        self.check()?;
+        self.argon2_unchecked()
+    }
+
+    fn argon2_unchecked(&self) -> Result<Argon2<'static>> {
         let params = Params::new(self.m_cost_kib, self.t_cost, self.p_cost, Some(KEY_LEN))
             .map_err(|_| Error::InvalidVault("KDF parameters out of range".into()))?;
         Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
     }
 
     fn derive_key(&self, password: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>> {
-        let mut key = Zeroizing::new([0u8; KEY_LEN]);
-        self.argon2()?
-            .hash_password_into(password.as_bytes(), salt, &mut key[..])
-            .map_err(|_| Error::crypto("Argon2id failed"))?;
-        Ok(key)
+        derive_with(self.argon2()?, password, salt)
     }
 }
 
@@ -121,6 +153,18 @@ impl VaultFile {
     }
 }
 
+fn derive_with(
+    argon2: Argon2<'static>,
+    password: &str,
+    salt: &[u8],
+) -> Result<Zeroizing<[u8; KEY_LEN]>> {
+    let mut key = Zeroizing::new([0u8; KEY_LEN]);
+    argon2
+        .hash_password_into(password.as_bytes(), salt, &mut key[..])
+        .map_err(|_| Error::crypto("Argon2id failed"))?;
+    Ok(key)
+}
+
 fn aad(version: u8, kdf: &KdfParams, salt: &[u8]) -> Vec<u8> {
     let mut aad = Vec::with_capacity(AAD_DOMAIN.len() + 1 + 12 + salt.len());
     aad.extend_from_slice(AAD_DOMAIN);
@@ -147,14 +191,24 @@ fn b64_fixed<const N: usize>(field: &str, s: &str) -> Result<[u8; N]> {
         .map_err(|_| Error::InvalidVault(format!("{field} must be {N} bytes")))
 }
 
-/// Encrypts the recovery phrase under `password`. The password must not be empty.
+/// Encrypts the recovery phrase under `password`. The password must not be empty; `kdf` must
+/// be at least [`KdfParams::minimum`].
 pub fn seal(mnemonic: &Mnemonic, password: &str, kdf: KdfParams) -> Result<VaultFile> {
+    seal_with(mnemonic, password, kdf, kdf.argon2()?)
+}
+
+fn seal_with(
+    mnemonic: &Mnemonic,
+    password: &str,
+    kdf: KdfParams,
+    argon2: Argon2<'static>,
+) -> Result<VaultFile> {
     if password.is_empty() {
         return Err(Error::input("password must not be empty"));
     }
     let salt: [u8; SALT_LEN] = random()?;
     let nonce: [u8; NONCE_LEN] = random()?;
-    let key = kdf.derive_key(password, &salt)?;
+    let key = derive_with(argon2, password, &salt)?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key[..])
         .map_err(|_| Error::crypto("cipher init failed"))?;
     let phrase = mnemonic.phrase();
@@ -178,11 +232,13 @@ pub fn seal(mnemonic: &Mnemonic, password: &str, kdf: KdfParams) -> Result<Vault
 }
 
 /// Decrypts a vault. Returns [`Error::WrongPassword`] if authentication fails (wrong password
-/// or any tampering with header or ciphertext).
+/// or any tampering with header or ciphertext), [`Error::InvalidVault`] if its KDF parameters
+/// are below [`KdfParams::minimum`] or absurdly high (checked before any key derivation).
 pub fn open(file: &VaultFile, password: &str) -> Result<Mnemonic> {
     if file.version != VAULT_VERSION {
         return Err(Error::UnsupportedVaultVersion(file.version));
     }
+    file.kdf.check()?;
     let salt: [u8; SALT_LEN] = b64_fixed("salt", &file.salt)?;
     let nonce: [u8; NONCE_LEN] = b64_fixed("nonce", &file.nonce)?;
     let ciphertext = B64
@@ -209,4 +265,64 @@ pub fn open(file: &VaultFile, password: &str) -> Result<Mnemonic> {
     let phrase = core::str::from_utf8(&plaintext)
         .map_err(|_| Error::InvalidVault("decrypted payload is not UTF-8".into()))?;
     Mnemonic::parse(phrase)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ABANDON: &str = "abandon abandon abandon abandon abandon abandon abandon abandon \
+                           abandon abandon abandon about";
+
+    /// A vault sealed with weak parameters (as another tool, or an attacker rewriting the
+    /// header, could produce), bypassing `seal`'s check.
+    fn weak_vault(kdf: KdfParams) -> VaultFile {
+        let m = Mnemonic::parse(ABANDON).unwrap();
+        seal_with(&m, "pw", kdf, kdf.argon2_unchecked().unwrap()).unwrap()
+    }
+
+    /// Audit finding: any KDF cost was accepted, down to 8 KiB / 1 pass.
+    #[test]
+    fn weak_kdf_is_refused_at_seal_and_open() {
+        let m = Mnemonic::parse(ABANDON).unwrap();
+        let weak = KdfParams::insecure_for_tests();
+        for kdf in [
+            weak,
+            KdfParams {
+                t_cost: 1,
+                ..KdfParams::minimum()
+            },
+            KdfParams {
+                m_cost_kib: MIN_M_COST_KIB - 1,
+                ..KdfParams::minimum()
+            },
+        ] {
+            assert!(matches!(seal(&m, "pw", kdf), Err(Error::InvalidVault(_))));
+            let f = weak_vault(kdf);
+            // Refused before any derivation, even with the right password.
+            assert!(
+                matches!(open(&f, "pw"), Err(Error::InvalidVault(_))),
+                "{kdf:?}"
+            );
+        }
+        // Ceiling.
+        for kdf in [
+            KdfParams {
+                t_cost: MAX_T_COST + 1,
+                ..KdfParams::minimum()
+            },
+            KdfParams {
+                p_cost: MAX_P_COST + 1,
+                ..KdfParams::minimum()
+            },
+            KdfParams {
+                m_cost_kib: MAX_M_COST_KIB + 1,
+                ..KdfParams::minimum()
+            },
+        ] {
+            assert!(kdf.check().is_err(), "{kdf:?}");
+        }
+        assert!(KdfParams::minimum().check().is_ok());
+        assert!(KdfParams::production().check().is_ok());
+    }
 }

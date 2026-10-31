@@ -168,6 +168,10 @@ pub(crate) fn describe_ada_extra(s: &CardanoTxSummary) -> String {
                 "• aucune limite de validité : la transaction resterait valable indéfiniment\n"
                     .to_owned()
             }
+            CardanoWarning::UnusualText => {
+                "• message ou nom de token contenant des caractères invisibles / de contrôle (affiché nettoyé)\n"
+                    .to_owned()
+            }
         };
     }
     out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";

@@ -672,6 +672,7 @@ mod tests {
             ref_block_bytes: String::new(),
             ref_block_hash: String::new(),
             memo: String::new(),
+            memo_text: None,
             raw_size: 0,
             warnings: vec![],
             requires_extra_confirmation: false,

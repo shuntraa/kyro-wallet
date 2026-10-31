@@ -565,16 +565,55 @@ fn watch_only_store_roundtrip_and_validation() {
     }));
 }
 
-/// A v1 vault written before hardware-wallet support (frozen bytes): still opens, and the
-/// vault format is untouched by the watch-only store (which lives in its own file).
+/// A v1 vault (frozen bytes, minimum KDF parameters): still opens, and the vault format is
+/// untouched by the watch-only store (which lives in its own file).
 #[test]
 fn vault_v1_fixture_still_opens() {
-    let json = r#"{"version":1,"kdf":{"m_cost_kib":1024,"t_cost":1,"p_cost":1},"salt":"dtXEFQtrVj8HlzwKrxaxKw==","nonce":"3YEMAf1YazFtbLg2G5xKYhPPYZx1X3NQ","ciphertext":"xDqwZSPGiU5aDqx0eryE58S+RqFqM0WtHEdggVXkAvirFVf2E+D0Kg8TuYkygkSOiUO48kX8q+H9WqR8GgFoLHJfCMPnNiwexZ8zvvmY4LG6gcrFwWMe2coO6slOyUk+V5+0Q6ftFCN6RZnbxw=="}"#;
+    let json = r#"{"version":1,"kdf":{"m_cost_kib":65536,"t_cost":2,"p_cost":1},"salt":"rvr2EjvXY8Uu+xmPMYv8KA==","nonce":"pNpbiCLhmKrV/OIth2S7cSTfBYFx1B9N","ciphertext":"Ux7Bfob3SAlWHIsYk2oQFWlk40jn3HixH/QjNRezGCmi+Nyi2+vZuPj2/KlGC72Q3IAcOBkEHvMJ7eIfjDcz/RheqwQneajmzOKgMZmoyIvDK3CTAfwXHAqsKJOaSnCJWoTBxO7LdA6K3ghAgg=="}"#;
     let file = VaultFile::from_json(json).unwrap();
     assert_eq!(file.version, 1);
     let m = open(&file, "correct horse battery staple").unwrap();
     assert_eq!(m.phrase().as_str(), ABANDON);
+    // The former fixture of this test (1 MiB, 1 pass: below the KDF floor) is now refused
+    // before any key derivation, with the right password.
+    let weak = r#"{"version":1,"kdf":{"m_cost_kib":1024,"t_cost":1,"p_cost":1},"salt":"dtXEFQtrVj8HlzwKrxaxKw==","nonce":"3YEMAf1YazFtbLg2G5xKYhPPYZx1X3NQ","ciphertext":"xDqwZSPGiU5aDqx0eryE58S+RqFqM0WtHEdggVXkAvirFVf2E+D0Kg8TuYkygkSOiUO48kX8q+H9WqR8GgFoLHJfCMPnNiwexZ8zvvmY4LG6gcrFwWMe2coO6slOyUk+V5+0Q6ftFCN6RZnbxw=="}"#;
+    assert!(matches!(
+        open(
+            &VaultFile::from_json(weak).unwrap(),
+            "correct horse battery staple"
+        ),
+        Err(Error::InvalidVault(_))
+    ));
     // A watch-only store is not a vault and vice versa.
     assert!(VaultFile::from_json(&WatchOnlyStore::default().to_json().unwrap()).is_err());
     assert!(WatchOnlyStore::from_json(json, Network::Testnet).is_err());
+}
+
+/// Audit finding: a hardware-wallet change output at any index < 2^31 was labelled change (and
+/// sent to the device as change, so the device would not show it either).
+#[test]
+fn btc_plan_change_beyond_max_index_is_a_payment() {
+    use wallet_core::{BtcWarning, MAX_CHANGE_INDEX};
+    let us = Wallet::new(ABANDON);
+    let s = seed(ABANDON);
+    for (index, is_change) in [(MAX_CHANGE_INDEX, true), (MAX_CHANGE_INDEX + 1, false)] {
+        let mut psbt = mixed_psbt();
+        let change = btc_address(&s, Network::Testnet, BtcKind::Segwit, 0, true, index).unwrap();
+        psbt.unsigned_tx.output[1].script_pubkey = script_of(&change);
+        let p = path(&format!("m/84'/1'/0'/1/{index}"));
+        psbt.outputs[1].bip32_derivation.clear();
+        psbt.outputs[1]
+            .bip32_derivation
+            .insert(us.pubkey(&p), (us.fp, p));
+        let plan = btc_hw_plan(Network::Testnet, &psbt.to_string(), &accounts(ABANDON)).unwrap();
+        assert_eq!(plan.change.len(), usize::from(is_change), "{index}");
+        assert_eq!(plan.summary.outputs[1].2, is_change);
+        assert_eq!(
+            plan.summary
+                .warnings
+                .contains(&BtcWarning::ChangeIndexOutOfRange { output: 1 }),
+            !is_change
+        );
+        assert_eq!(plan.summary.requires_extra_confirmation, !is_change);
+    }
 }

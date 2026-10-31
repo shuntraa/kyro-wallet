@@ -15,6 +15,7 @@ use sha3::{Digest, Keccak256};
 use crate::error::{Error, Result};
 use crate::keys::{hardened, normal, secp, XprivGuard};
 use crate::mnemonic::Seed;
+use crate::network::Network;
 
 #[allow(clippy::all, clippy::pedantic, missing_docs, unexpected_cfgs)]
 mod u256 {
@@ -115,8 +116,59 @@ pub enum EvmTxKind {
     ContractCall,
 }
 
-/// Chains Kyro knows by name; any other chain id needs the reinforced confirmation.
-pub const EVM_KNOWN_CHAINS: &[u64] = &[1, 11_155_111, 42_161, 10, 8_453, 137, 56, 43_114];
+/// The one list of EVM chains Kyro knows, with the network family each belongs to. A chain of
+/// the other family is refused ([`evm_decode`], [`evm_sign_tx`]): a wallet in test mode never
+/// signs a mainnet transaction, and the other way round. Any chain id not listed needs the
+/// reinforced confirmation ([`EvmWarning::UnknownChain`]).
+pub const EVM_KNOWN_CHAINS: &[(u64, Network)] = &[
+    (1, Network::Mainnet),          // Ethereum
+    (42_161, Network::Mainnet),     // Arbitrum One
+    (10, Network::Mainnet),         // OP Mainnet
+    (8_453, Network::Mainnet),      // Base
+    (137, Network::Mainnet),        // Polygon PoS
+    (56, Network::Mainnet),         // BNB Smart Chain
+    (43_114, Network::Mainnet),     // Avalanche C-Chain
+    (61, Network::Mainnet),         // Ethereum Classic
+    (25, Network::Mainnet),         // Cronos
+    (5_000, Network::Mainnet),      // Mantle
+    (146, Network::Mainnet),        // Sonic
+    (14, Network::Mainnet),         // Flare
+    (8_217, Network::Mainnet),      // Kaia
+    (100, Network::Mainnet),        // Gnosis
+    (999, Network::Mainnet),        // HyperEVM
+    (1_329, Network::Mainnet),      // Sei
+    (1_030, Network::Mainnet),      // Conflux eSpace
+    (11_155_111, Network::Testnet), // Sepolia
+];
+
+/// Network family of a known chain id (see [`EVM_KNOWN_CHAINS`]), `None` if unknown.
+pub fn evm_chain_network(chain_id: u64) -> Option<Network> {
+    EVM_KNOWN_CHAINS
+        .iter()
+        .find(|(id, _)| *id == chain_id)
+        .map(|(_, n)| *n)
+}
+
+/// Refuses a chain id that Kyro knows as belonging to the other network family.
+fn check_chain_family(chain_id: u64, net: Network) -> Result<()> {
+    match evm_chain_network(chain_id) {
+        Some(n) if n != net => Err(Error::input(match net {
+            Network::Mainnet => format!(
+                "chainId {chain_id} est un réseau de test : refusé par un portefeuille mainnet"
+            ),
+            Network::Testnet => format!(
+                "chainId {chain_id} est un réseau principal (argent réel) : refusé en mode test"
+            ),
+        })),
+        _ => Ok(()),
+    }
+}
+
+/// Approval amounts with more than 128 significant bits (≥ 2^128) are shown as ILLIMITÉ: no
+/// token has that much supply; it is `uint256::MAX` or close to it.
+fn is_unlimited(amount: U256) -> bool {
+    amount.bits() > 128
+}
 
 /// Worst-case fee (`gas_limit × max_fee_per_gas`, native units in wei) above which the
 /// reinforced confirmation is required: 0.05 of the native coin on ETH-native chains (Ethereum,
@@ -147,7 +199,8 @@ pub enum EvmWarning {
         spender: String,
         /// Raw token units, decimal string.
         amount: String,
-        /// `≥ 2^128` (max or close to it): shown as ILLIMITÉ.
+        /// `≥ 2^128` (max or close to it): shown as ILLIMITÉ (same as
+        /// [`EvmTxSummary::unlimited_approval`]).
         unlimited: bool,
     },
     /// Native value attached to a contract call (non-empty calldata).
@@ -182,7 +235,7 @@ pub struct EvmTxSummary {
     pub amount: String,
     /// Spender, for `Erc20Approve`.
     pub spender: Option<String>,
-    /// `true` for an approval of at least 2^255 (including `uint256::MAX`).
+    /// `true` for an approval of at least 2^128 (including `uint256::MAX`): shown as ILLIMITÉ.
     pub unlimited_approval: bool,
     /// Worst-case fee: `gas_limit * max_fee_per_gas`, in wei.
     pub max_fee_wei: String,
@@ -342,9 +395,11 @@ fn parse_request(tx: &EvmTxRequest) -> Result<Eip1559> {
     })
 }
 
-/// Decodes a request into a plain-language summary (no secret needed).
-pub fn evm_decode(tx: &EvmTxRequest) -> Result<EvmTxSummary> {
+/// Decodes a request into a plain-language summary (no secret needed). Refused: a chain id
+/// of the other network family than `net` (see [`EVM_KNOWN_CHAINS`]).
+pub fn evm_decode(tx: &EvmTxRequest, net: Network) -> Result<EvmTxSummary> {
     let p = parse_request(tx)?;
+    check_chain_family(p.chain_id, net)?;
     let max_fee_wei = U256::from(tx.gas_limit)
         .checked_mul(U256::from(p.max_fee_per_gas))
         .ok_or_else(|| Error::input("fee overflow"))?;
@@ -364,9 +419,8 @@ pub fn evm_decode(tx: &EvmTxRequest) -> Result<EvmTxSummary> {
 
     if p.data.is_empty() {
         summary.kind = EvmTxKind::NativeTransfer;
-        return Ok(with_warnings(summary, &p, max_fee_wei, U256::zero()));
+        return Ok(with_warnings(summary, &p, max_fee_wei));
     }
-    let mut approved = U256::zero();
     // Strict ABI shape: selector + exactly two 32-byte words; anything else is a ContractCall.
     if p.data.len() == 4 + 64 {
         let (selector, args) = p.data.split_at(4);
@@ -383,28 +437,21 @@ pub fn evm_decode(tx: &EvmTxRequest) -> Result<EvmTxSummary> {
                 summary.token_contract = Some(p.to.to_checksum());
                 summary.spender = Some(addr.to_checksum());
                 summary.amount = amount.to_string();
-                // >= 2^255 (covers uint256::MAX).
-                summary.unlimited_approval = amount.bit(255);
-                approved = amount;
+                summary.unlimited_approval = is_unlimited(amount);
             }
         }
     }
-    Ok(with_warnings(summary, &p, max_fee_wei, approved))
+    Ok(with_warnings(summary, &p, max_fee_wei))
 }
 
-fn with_warnings(
-    mut s: EvmTxSummary,
-    p: &Eip1559,
-    max_fee_wei: U256,
-    approved: U256,
-) -> EvmTxSummary {
+fn with_warnings(mut s: EvmTxSummary, p: &Eip1559, max_fee_wei: U256) -> EvmTxSummary {
     let mut w = Vec::new();
     match s.kind {
         EvmTxKind::ContractCall => w.push(EvmWarning::ContractCall),
         EvmTxKind::Erc20Approve => w.push(EvmWarning::Approval {
             spender: s.spender.clone().unwrap_or_default(),
             amount: s.amount.clone(),
-            unlimited: s.unlimited_approval || approved.bits() > 128,
+            unlimited: s.unlimited_approval,
         }),
         EvmTxKind::NativeTransfer | EvmTxKind::Erc20Transfer => {}
     }
@@ -413,7 +460,7 @@ fn with_warnings(
             value_wei: p.value.to_string(),
         });
     }
-    if !EVM_KNOWN_CHAINS.contains(&s.chain_id) {
+    if evm_chain_network(s.chain_id).is_none() {
         w.push(EvmWarning::UnknownChain {
             chain_id: s.chain_id,
         });
@@ -459,10 +506,17 @@ pub fn evm_address(seed: &Seed, index: u32) -> Result<String> {
     Ok(Address::from_pubkey(&pk).to_checksum())
 }
 
-/// Signs an EIP-1559 (type 2) transaction with the key at `m/44'/60'/0'/0/index`.
+/// Signs an EIP-1559 (type 2) transaction with the key at `m/44'/60'/0'/0/index`, for a
+/// wallet on `net` (a chain id of the other family is refused, as in [`evm_decode`]).
 /// Returns `(raw "0x02..." hex, transaction hash "0x...")`.
-pub fn evm_sign_tx(seed: &Seed, index: u32, tx: &EvmTxRequest) -> Result<(String, String)> {
+pub fn evm_sign_tx(
+    seed: &Seed,
+    index: u32,
+    tx: &EvmTxRequest,
+    net: Network,
+) -> Result<(String, String)> {
     let unsigned = parse_request(tx)?;
+    check_chain_family(unsigned.chain_id, net)?;
     let msg = Message::from_digest(unsigned.signing_hash());
 
     let secp = secp()?;

@@ -526,8 +526,11 @@ pub(crate) fn describe_evm_extra(
 }
 
 #[tauri::command]
-pub fn evm_decode_tx(tx: EvmTxRequest) -> AppResult<wallet_core::EvmTxSummary> {
-    Ok(wallet_core::evm_decode(&tx)?)
+pub fn evm_decode_tx(
+    state: State<'_, AppState>,
+    tx: EvmTxRequest,
+) -> AppResult<wallet_core::EvmTxSummary> {
+    Ok(wallet_core::evm_decode(&tx, state.network)?)
 }
 
 #[derive(Serialize)]
@@ -550,7 +553,7 @@ pub async fn evm_sign_tx(
         return Err(AppError::Locked);
     }
     let a = account_arg(account)?;
-    let summary = wallet_core::evm_decode(&tx)?;
+    let summary = wallet_core::evm_decode(&tx, state.network)?;
     let from = state.with_seed(|seed| Ok(wallet_core::evm_address(seed, a)?))?;
     let signer = SignerInfo::new(&state, Chain::Evm, a, wallet_core::evm_path(a));
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
@@ -572,7 +575,9 @@ pub async fn evm_sign_tx(
         )
         .await?;
     }
-    let (raw_tx, hash) = blocking(move || Ok(wallet_core::evm_sign_tx(&seed, a, &tx)?)).await?;
+    let net = state.network;
+    let (raw_tx, hash) =
+        blocking(move || Ok(wallet_core::evm_sign_tx(&seed, a, &tx, net)?)).await?;
     state.touch();
     Ok(EvmSigned { raw_tx, hash })
 }
@@ -614,6 +619,10 @@ pub(crate) fn describe_btc_extra(s: &wallet_core::BtcTxSummary) -> String {
             wallet_core::BtcWarning::HighFee { sat_per_vb } => format!(
                 "• frais très élevés : ≈ {sat_per_vb} sat/vB (seuil {} sat/vB), ou plus que tous les montants envoyés\n",
                 wallet_core::BTC_HIGH_FEE_SAT_PER_VB
+            ),
+            wallet_core::BtcWarning::ChangeIndexOutOfRange { output } => format!(
+                "• sortie {} : une de tes clés, mais à un index d'adresse anormalement élevé (affichée comme un paiement, pas comme ta monnaie)\n",
+                output + 1
             ),
         };
     }
@@ -822,24 +831,27 @@ mod tests {
         };
         let spender = "9858effd232b4033e47d90003d41ec34ecaeda94";
         let max = format!("0x095ea7b3{:0>64}{}", spender, "f".repeat(64));
-        let s = wallet_core::evm_decode(&tx(&max, 11_155_111, "0")).unwrap();
+        let net = wallet_core::Network::Testnet;
+        let s = wallet_core::evm_decode(&tx(&max, 11_155_111, "0"), net).unwrap();
         assert!(s.requires_extra_confirmation);
         let d = describe_evm_extra(&s, None);
         assert!(d.contains("AUTORISATION : 0x9858EfFD232B4033E47d90003D41EC34EcaEda94 pourra dépenser ILLIMITÉ"), "{d}");
         let exact = format!("0x095ea7b3{:0>64}{:0>64}", spender, "f4240");
-        let s = wallet_core::evm_decode(&tx(&exact, 11_155_111, "0")).unwrap();
+        let s = wallet_core::evm_decode(&tx(&exact, 11_155_111, "0"), net).unwrap();
         let hint = TokenHint {
             symbol: "USDC".into(),
             decimals: 6,
         };
         assert!(describe_evm_extra(&s, Some(&hint))
             .contains("dépenser 1 USDC (unités brutes : 1000000)"));
-        let s = wallet_core::evm_decode(&tx("0xdeadbeef", 999, "1000000000000000000")).unwrap();
+        // 31337 (a local devnet): unknown to Kyro.
+        let s =
+            wallet_core::evm_decode(&tx("0xdeadbeef", 31_337, "1000000000000000000"), net).unwrap();
         let d = describe_evm_extra(&s, None);
         for needle in [
             "action INCONNUE",
             "1 ETH (valeur native) envoyés au contrat",
-            "réseau INCONNU de Kyro (chainId 999)",
+            "réseau INCONNU de Kyro (chainId 31337)",
         ] {
             assert!(d.contains(needle), "{needle} in {d}");
         }

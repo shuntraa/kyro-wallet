@@ -177,6 +177,9 @@ pub(crate) fn describe_utxo_extra(s: &UtxoTxSummary) -> String {
                 "• sortie {index} : sous 0,01 DOGE, le réseau exige 0,01 DOGE de frais en plus par sortie de ce type"
             ),
             UtxoWarning::HighFee => "• frais très élevés (plus de 100 fois le taux habituel, ou plus que le montant envoyé)".into(),
+            UtxoWarning::ChangeIndexOutOfRange { index } => format!(
+                "• sortie {index} : une de tes clés, mais à un index d'adresse anormalement élevé (affichée comme un paiement, pas comme ta monnaie)"
+            ),
             UtxoWarning::FeeBelowMinimum { .. } => continue,
         };
         out += &line;

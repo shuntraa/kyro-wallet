@@ -10,12 +10,7 @@ use wallet_core::{open, seal, Error, KdfParams, Mnemonic, Seed, VaultFile, WordC
 const PW: &str = "correct horse battery staple";
 
 fn sealed() -> VaultFile {
-    seal(
-        &Mnemonic::parse(ABANDON).unwrap(),
-        PW,
-        KdfParams::insecure_for_tests(),
-    )
-    .unwrap()
+    seal(&Mnemonic::parse(ABANDON).unwrap(), PW, KdfParams::minimum()).unwrap()
 }
 
 fn flip_b64(s: &str, idx: usize) -> String {
@@ -27,7 +22,7 @@ fn flip_b64(s: &str, idx: usize) -> String {
 #[test]
 fn roundtrip() {
     let m = Mnemonic::generate(WordCount::W24).unwrap();
-    let file = seal(&m, PW, KdfParams::insecure_for_tests()).unwrap();
+    let file = seal(&m, PW, KdfParams::minimum()).unwrap();
     assert_eq!(file.version, 1);
     assert_eq!(B64.decode(&file.salt).unwrap().len(), 16);
     assert_eq!(B64.decode(&file.nonce).unwrap().len(), 24);
@@ -87,16 +82,16 @@ fn tampered_header() {
     // KDF params are bound twice: different key AND different AAD.
     for kdf in [
         KdfParams {
-            t_cost: 2,
-            ..KdfParams::insecure_for_tests()
+            t_cost: 3,
+            ..KdfParams::minimum()
         },
         KdfParams {
-            m_cost_kib: 2048,
-            ..KdfParams::insecure_for_tests()
+            m_cost_kib: 65_536 + 1024,
+            ..KdfParams::minimum()
         },
         KdfParams {
             p_cost: 2,
-            ..KdfParams::insecure_for_tests()
+            ..KdfParams::minimum()
         },
     ] {
         let mut f = sealed();
@@ -126,7 +121,7 @@ fn tampered_header() {
 fn json_roundtrip_and_strictness() {
     let f = sealed();
     let json = f.to_json().unwrap();
-    assert!(json.contains("\"m_cost_kib\": 1024"));
+    assert!(json.contains("\"m_cost_kib\": 65536"));
     let back = VaultFile::from_json(&json).unwrap();
     assert_eq!(back, f);
     assert!(open(&back, PW).is_ok());
@@ -140,7 +135,7 @@ fn json_roundtrip_and_strictness() {
 fn empty_password_rejected_on_seal() {
     let m = Mnemonic::parse(ABANDON).unwrap();
     assert!(matches!(
-        seal(&m, "", KdfParams::insecure_for_tests()),
+        seal(&m, "", KdfParams::minimum()),
         Err(Error::InvalidInput(_))
     ));
 }
@@ -149,8 +144,8 @@ fn empty_password_rejected_on_seal() {
 fn production_params() {
     let p = KdfParams::production();
     assert_eq!((p.m_cost_kib, p.t_cost, p.p_cost), (262_144, 3, 4));
-    let t = KdfParams::insecure_for_tests();
-    assert_eq!((t.m_cost_kib, t.t_cost, t.p_cost), (1024, 1, 1));
+    let t = KdfParams::minimum();
+    assert_eq!((t.m_cost_kib, t.t_cost, t.p_cost), (65_536, 2, 1));
 }
 
 #[test]

@@ -7,7 +7,7 @@ use bitcoin::key::{CompressedPublicKey, Keypair, TapTweak};
 use bitcoin::psbt::{Output as PsbtOutput, Psbt};
 use bitcoin::secp256k1::{All, Message, Secp256k1};
 use bitcoin::sighash::{EcdsaSighashType, Prevouts, SighashCache, TapSighashType};
-use bitcoin::{Address, KnownHrp, Script, ScriptBuf, TxOut};
+use bitcoin::{Address, KnownHrp, Script, ScriptBuf, TxOut, WitnessVersion};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
@@ -32,6 +32,48 @@ pub struct BtcAccount {
 /// Fee rate above which a Bitcoin transaction needs the reinforced confirmation: 100 sat/vB,
 /// i.e. 100 × the 1 sat/vB relay minimum (same rule as Litecoin's `HighFee`).
 pub const BTC_HIGH_FEE_SAT_PER_VB: u64 = 100;
+
+/// Highest address index (`…/{0,1}/index`) Kyro labels as change, on every UTXO chain and for
+/// hardware wallets. Kyro's own accounts never get near it; beyond it an output is shown as a
+/// payment (with [`BtcWarning::ChangeIndexOutOfRange`]): a key at index 2 000 000 000 is ours,
+/// but no wallet scanning with a gap limit would ever find the coins sent there.
+pub const MAX_CHANGE_INDEX: u32 = 1_000;
+
+/// Whether the address index of `path` (its last step) is at most [`MAX_CHANGE_INDEX`].
+pub(crate) fn change_index_in_range(path: &DerivationPath) -> bool {
+    matches!(path.as_ref().last(), Some(ChildNumber::Normal { index }) if *index <= MAX_CHANGE_INDEX)
+}
+
+/// How a PSBT output relates to the signing account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Ownership {
+    /// Not provably ours.
+    Foreign,
+    /// Ours, at an index up to [`MAX_CHANGE_INDEX`]: change.
+    Change,
+    /// Ours, but beyond [`MAX_CHANGE_INDEX`]: shown as a payment, with a warning.
+    FarIndex,
+}
+
+/// [`Ownership`] of an output whose key origin matched one of our keys.
+pub(crate) fn ownership(path: &DerivationPath) -> Ownership {
+    if change_index_in_range(path) {
+        Ownership::Change
+    } else {
+        Ownership::FarIndex
+    }
+}
+
+/// A witness program Kyro does not know: any version from 2 on (reserved for future soft
+/// forks) and version 1 other than a 32-byte taproot output. Shown as `script:<hex>` (unknown
+/// script, reinforced confirmation) rather than as an ordinary-looking `bc1z…` address.
+pub(crate) fn is_unknown_witness(spk: &Script) -> bool {
+    match spk.witness_version() {
+        None | Some(WitnessVersion::V0) => false,
+        Some(WitnessVersion::V1) => !spk.is_p2tr(),
+        Some(_) => true,
+    }
+}
 
 /// Reasons for caution in a Bitcoin PSBT (each one requires the reinforced confirmation).
 /// A sighash other than ALL / DEFAULT on one of our inputs is not a warning: it is refused.
@@ -62,6 +104,12 @@ pub enum BtcWarning {
     HighFee {
         /// Estimated fee rate, sat/vB.
         sat_per_vb: u64,
+    },
+    /// Output paying one of our keys at an address index beyond [`MAX_CHANGE_INDEX`]: not
+    /// shown as change.
+    ChangeIndexOutOfRange {
+        /// Output index.
+        output: usize,
     },
 }
 
@@ -200,6 +248,9 @@ pub(crate) fn prevouts(psbt: &Psbt) -> Result<Vec<TxOut>> {
 }
 
 fn render_script(net: Network, spk: &Script) -> String {
+    if is_unknown_witness(spk) {
+        return format!("script:{}", spk.to_hex_string());
+    }
     match Address::from_script(spk, net.btc()) {
         Ok(addr) => addr.to_string(),
         Err(_) if spk.is_op_return() => format!("op_return:{}", spk.to_hex_string()),
@@ -213,6 +264,7 @@ pub(crate) fn summarize(
     prevouts: &[TxOut],
     is_own: impl Fn(usize, &Script) -> bool,
     is_own_input: impl Fn(usize) -> bool,
+    far_change: &[usize],
 ) -> Result<BtcTxSummary> {
     let mut total_in: u64 = 0;
     for p in prevouts {
@@ -247,6 +299,9 @@ pub(crate) fn summarize(
             warnings.push(BtcWarning::OpReturn { output: j });
         } else if addr.starts_with("script:") {
             warnings.push(BtcWarning::UnknownScript { output: j });
+        }
+        if far_change.contains(&j) {
+            warnings.push(BtcWarning::ChangeIndexOutOfRange { output: j });
         }
     }
     let rate = fee_sats / estimated_vsize(psbt, prevouts).max(1);
@@ -284,6 +339,7 @@ pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String]) -> Result<B
                 .get(i)
                 .is_some_and(|p| own_scripts.contains(&p.script_pubkey))
         },
+        &[],
     )
 }
 
@@ -353,8 +409,9 @@ impl Signer {
         }
     }
 
-    /// Whether a PSBT output provably pays to one of our keys (key origin + script match).
-    fn output_is_ours(&self, spk: &Script, meta: &PsbtOutput) -> Result<bool> {
+    /// Whether a PSBT output provably pays to one of our keys (key origin + script match), and
+    /// at which kind of index.
+    fn output_is_ours(&self, spk: &Script, meta: &PsbtOutput) -> Result<Ownership> {
         if spk.is_p2wpkh() {
             for (pk, (fp, path)) in &meta.bip32_derivation {
                 if self.ours(fp, path, BtcKind::Segwit) {
@@ -364,7 +421,7 @@ impl Signer {
                         && ScriptBuf::new_p2wpkh(&CompressedPublicKey(derived).wpubkey_hash())
                             == *spk
                     {
-                        return Ok(true);
+                        return Ok(ownership(path));
                     }
                 }
             }
@@ -377,12 +434,12 @@ impl Signer {
                     let k = self.derive(path)?;
                     let derived = k.xpriv().private_key.x_only_public_key(&self.secp).0;
                     if derived == *xonly && ScriptBuf::new_p2tr(&self.secp, derived, None) == *spk {
-                        return Ok(true);
+                        return Ok(ownership(path));
                     }
                 }
             }
         }
-        Ok(false)
+        Ok(Ownership::Foreign)
     }
 }
 
@@ -407,12 +464,16 @@ fn sign_summary(
         .zip(prevouts)
         .map(|(i, p)| signer.input_is_ours(i, p))
         .collect();
+    let far: Vec<usize> = (0..own.len())
+        .filter(|j| own[*j] == Ownership::FarIndex)
+        .collect();
     summarize(
         net,
         psbt,
         prevouts,
-        |j, _| own.get(j).copied().unwrap_or(false),
+        |j, _| own.get(j) == Some(&Ownership::Change),
         |i| own_inputs.get(i).copied().unwrap_or(false),
+        &far,
     )
 }
 

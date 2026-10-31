@@ -11,7 +11,20 @@ use bitcoin::secp256k1::ecdsa::{RecoverableSignature, RecoveryId};
 use bitcoin::secp256k1::{Message, Secp256k1};
 use common::{seed, ABANDON};
 use sha3::{Digest, Keccak256};
-use wallet_core::{evm_address, evm_decode, evm_sign_tx, Error, EvmTxKind, EvmTxRequest};
+use wallet_core::{evm_address, Error, EvmTxKind, EvmTxRequest, Network};
+
+/// Every request below is on Sepolia: decoded and signed by a testnet wallet.
+fn evm_decode(tx: &EvmTxRequest) -> wallet_core::Result<wallet_core::EvmTxSummary> {
+    wallet_core::evm_decode(tx, Network::Testnet)
+}
+
+fn evm_sign_tx(
+    s: &wallet_core::Seed,
+    index: u32,
+    tx: &EvmTxRequest,
+) -> wallet_core::Result<(String, String)> {
+    wallet_core::evm_sign_tx(s, index, tx, Network::Testnet)
+}
 
 #[allow(clippy::all, missing_docs)]
 mod u256 {
@@ -227,13 +240,58 @@ fn decode_erc20_approve_limited_and_unlimited() {
     ))
     .unwrap();
     assert!(half.unlimited_approval);
-    let below = evm_decode(&req(
-        TOKEN,
-        "0",
-        &calldata("095ea7b3", BOB, (U256::one() << 255) - U256::one()),
-    ))
-    .unwrap();
-    assert!(!below.unlimited_approval);
+    // Audit finding: the summary flag (2^255) and the warning (2^128) disagreed. One rule now:
+    // ≥ 2^128 is ILLIMITÉ, in both.
+    for (amount, unlimited) in [
+        ((U256::one() << 255) - U256::one(), true),
+        (U256::one() << 128, true),
+        ((U256::one() << 128) - U256::one(), false),
+    ] {
+        let s = evm_decode(&req(TOKEN, "0", &calldata("095ea7b3", BOB, amount))).unwrap();
+        assert_eq!(s.unlimited_approval, unlimited, "{amount}");
+        assert!(matches!(
+            &s.warnings[0],
+            wallet_core::EvmWarning::Approval { unlimited: u, .. } if *u == unlimited
+        ));
+    }
+}
+
+/// Audit finding: a testnet wallet signed mainnet chain ids (and the other way round) after a
+/// mere « unknown chain »-free dialog; the known-chain list was also incomplete.
+#[test]
+fn chain_of_the_other_network_family_is_refused() {
+    let s = seed(ABANDON);
+    let on = |chain_id| EvmTxRequest {
+        chain_id,
+        ..req(BOB, "1", "0x")
+    };
+    for chain in [
+        1, 42_161, 137, 61, 25, 5_000, 146, 14, 8_217, 100, 999, 1_329, 1_030,
+    ] {
+        let tx = on(chain);
+        assert!(
+            matches!(
+                wallet_core::evm_decode(&tx, Network::Testnet),
+                Err(Error::InvalidInput(_))
+            ),
+            "{chain}"
+        );
+        assert!(wallet_core::evm_sign_tx(&s, 0, &tx, Network::Testnet).is_err());
+        let sum = wallet_core::evm_decode(&tx, Network::Mainnet).unwrap();
+        assert!(sum.warnings.is_empty(), "{chain}: {:?}", sum.warnings);
+        assert!(wallet_core::evm_sign_tx(&s, 0, &tx, Network::Mainnet).is_ok());
+    }
+    let sepolia = on(11_155_111);
+    assert!(wallet_core::evm_decode(&sepolia, Network::Mainnet).is_err());
+    assert!(wallet_core::evm_sign_tx(&s, 0, &sepolia, Network::Mainnet).is_err());
+    // Unknown everywhere: allowed on both, with the reinforced confirmation.
+    for net in [Network::Mainnet, Network::Testnet] {
+        let sum = wallet_core::evm_decode(&on(31_337), net).unwrap();
+        assert_eq!(
+            sum.warnings,
+            vec![wallet_core::EvmWarning::UnknownChain { chain_id: 31_337 }]
+        );
+    }
 }
 
 #[test]
@@ -274,8 +332,10 @@ fn request_serde_is_camel_case() {
 
 const OTHER: &str = "0x9858EfFD232B4033E47d90003D41EC34EcaEda94";
 
+/// Warnings for a wallet on the chain's own network family (testnet for unknown chains).
 fn w(tx: &EvmTxRequest) -> (Vec<wallet_core::EvmWarning>, bool) {
-    let s = evm_decode(tx).unwrap();
+    let net = wallet_core::evm_chain_network(tx.chain_id).unwrap_or(Network::Testnet);
+    let s = wallet_core::evm_decode(tx, net).unwrap();
     (s.warnings, s.requires_extra_confirmation)
 }
 

@@ -19,6 +19,7 @@ use bitcoin::hashes::{hash160, sha256d, sha512, Hash};
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, Secp256k1};
 use serde::{Deserialize, Serialize};
 
+use crate::display::sanitize_text;
 use crate::error::{Error, Result};
 use crate::keys::{hardened, normal, secp, XprivGuard};
 use crate::mnemonic::Seed;
@@ -37,6 +38,8 @@ pub const LSF_REQUIRE_DEST_TAG: u32 = 0x0002_0000;
 pub const LSF_DISALLOW_XRP: u32 = 0x0008_0000;
 /// Fees above 1 XRP need a reinforced confirmation (the usual fee is 10–20 drops).
 const HIGH_FEE_DROPS: u64 = 1_000_000;
+/// Longest memo text shown in the dialog (characters).
+const MAX_MEMO_TEXT: usize = 256;
 /// 100 billion XRP in drops: the largest valid native amount.
 const MAX_DROPS: u64 = 100_000_000_000_000_000;
 const MAX_BLOB: usize = 4096;
@@ -737,7 +740,7 @@ pub struct XrpMemoView {
     pub memo_data: Option<String>,
     /// Hex.
     pub memo_format: Option<String>,
-    /// `MemoData` as text, if valid UTF-8.
+    /// `MemoData` as text, if valid UTF-8, cleaned for display ([`crate::sanitize_text`]).
     pub text: Option<String>,
 }
 
@@ -755,6 +758,9 @@ pub enum XrpWarning {
     HighFee,
     /// `InvoiceID` present.
     InvoiceId,
+    /// A memo text had control / invisible / bidi characters removed or was cut: the dialog
+    /// shows a cleaned version (the hex fields are exact).
+    UnusualText,
 }
 
 /// Plain-language summary of a Payment, decoded by Rust.
@@ -794,7 +800,7 @@ pub struct XrpTxSummary {
 /// Decodes an **unsigned** Payment blob (hex) for the dialog. Refused: anything
 /// [`XrpPayment::decode`] refuses, an already signed blob, `Account` ≠ `our_address`,
 /// `SigningPubKey` ≠ `our_pubkey`, `tfPartialPayment`, unknown flags, a payment to oneself,
-/// a non-positive amount, a zero fee.
+/// a non-positive amount, a zero fee, a missing `LastLedgerSequence`.
 pub fn xrp_decode_tx(blob_hex: &str, our_address: &str, our_pubkey: &[u8]) -> Result<XrpTxSummary> {
     let raw = hex::decode(blob_hex.trim())
         .map_err(|_| Error::input("le blob n'est pas en hexadécimal"))?;
@@ -841,6 +847,13 @@ fn summarize(
     if p.fee == 0 {
         return Err(bad("frais nuls"));
     }
+    // Without LastLedgerSequence a signed payment stays valid for ever: whoever holds the blob
+    // (a node, a log) could submit it months later.
+    if p.last_ledger_sequence.is_none() {
+        return Err(bad(
+            "LastLedgerSequence absent : la transaction resterait valable indéfiniment",
+        ));
+    }
     let mut warnings = Vec::new();
     if p.send_max.is_some() {
         warnings.push(XrpWarning::SendMax);
@@ -857,7 +870,32 @@ fn summarize(
     if p.invoice_id.is_some() {
         warnings.push(XrpWarning::InvoiceId);
     }
-    let h = |v: &Option<Vec<u8>>| v.as_ref().map(hex::encode_upper);
+    let mut unusual_text = false;
+    let memos = p
+        .memos
+        .iter()
+        .map(|m| {
+            let h = |v: &Option<Vec<u8>>| v.as_ref().map(hex::encode_upper);
+            let text = m
+                .memo_data
+                .as_deref()
+                .and_then(|d| core::str::from_utf8(d).ok())
+                .map(|t| {
+                    let clean = sanitize_text(t, MAX_MEMO_TEXT);
+                    unusual_text |= clean.altered;
+                    clean.text
+                });
+            XrpMemoView {
+                memo_type: h(&m.memo_type),
+                memo_data: h(&m.memo_data),
+                memo_format: h(&m.memo_format),
+                text,
+            }
+        })
+        .collect();
+    if unusual_text {
+        warnings.push(XrpWarning::UnusualText);
+    }
     Ok(XrpTxSummary {
         account: xrp_address_from_id(&p.account),
         destination: xrp_address_from_id(&p.destination),
@@ -870,19 +908,7 @@ fn summarize(
         send_max: p.send_max.as_ref().map(XrpAmount::view),
         source_tag: p.source_tag,
         invoice_id: p.invoice_id.map(hex::encode_upper),
-        memos: p
-            .memos
-            .iter()
-            .map(|m| XrpMemoView {
-                memo_type: h(&m.memo_type),
-                memo_data: h(&m.memo_data),
-                memo_format: h(&m.memo_format),
-                text: m
-                    .memo_data
-                    .as_ref()
-                    .and_then(|d| String::from_utf8(d.clone()).ok()),
-            })
-            .collect(),
+        memos,
         requires_extra_confirmation: !warnings.is_empty(),
         warnings,
     })
@@ -909,7 +935,8 @@ pub fn xrp_sign_at(
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
     let key = master.derive(&secp, &path(account, index)?)?;
-    let sk = key.xpriv().private_key;
+    // A reference: `SecretKey` is `Copy`, a copy here would outlive the guard's erasure.
+    let sk = &key.xpriv().private_key;
     let pk = sk.public_key(&secp).serialize();
     let ours = xrp_address_from_id(&id_of_pubkey(&pk));
     let raw = hex::decode(blob_hex.trim())
@@ -917,7 +944,7 @@ pub fn xrp_sign_at(
     let mut p = XrpPayment::decode(&raw)?;
     let summary = summarize(&p, &ours, &pk, false)?;
     let msg = Message::from_digest(p.signing_hash());
-    let mut sig = secp.sign_ecdsa(&msg, &sk);
+    let mut sig = secp.sign_ecdsa(&msg, sk);
     sig.normalize_s();
     secp.verify_ecdsa(&msg, &sig, &sk.public_key(&secp))
         .map_err(|_| Error::crypto("échec de la vérification de la signature"))?;

@@ -9,8 +9,8 @@
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine as _;
 use wallet_core::{
-    sol_decode_message, sol_message_lookup_tables, sol_parse_lookup_table, Error, SolInstruction,
-    SolLookupTable, SolTokenProgram, SolTxSummary, SolWarning,
+    sanitize_text, sol_decode_message, sol_message_lookup_tables, sol_parse_lookup_table, Error,
+    SolInstruction, SolLookupTable, SolTokenProgram, SolTxSummary, SolWarning,
 };
 
 fn b64(s: &str) -> Vec<u8> {
@@ -120,8 +120,10 @@ fn check_sol_transfer_with_compute_budget(s: &SolTxSummary) {
 }
 
 fn check_memo_and_sol_transfer(s: &SolTxSummary) {
-    assert!(s.warnings.is_empty(), "{:?}", s.warnings);
-    assert!(!s.requires_extra_confirmation);
+    // The memo is a 252-character JSON blob: longer than a glance (80 characters), so the
+    // reinforced confirmation is required.
+    assert_eq!(s.warnings, vec![SolWarning::UnusualText { instruction: 0 }]);
+    assert!(s.requires_extra_confirmation);
 }
 
 fn check_spl_transfer_checked_ata_memo(s: &SolTxSummary) {
@@ -138,6 +140,7 @@ fn check_spl_transfer_ata_memo_unknown(s: &SolTxSummary) {
                 instruction: 4,
                 authority: "4tvnspM9Af164V6sBLrCB14p4nKUrJeNWTRRDRVUVWHo".into()
             },
+            SolWarning::UncheckedTokenTransfer { instruction: 4 },
             SolWarning::UnknownInstruction {
                 instruction: 5,
                 program_id: "Bz4AoAXL8vkTSFPqR52GwNxFixAbKPJ3VShhgoS2eV2G".into()
@@ -664,7 +667,8 @@ fn assert_matches_reference(ours: &SolTxSummary, r: &Reference) {
             }
             SolInstruction::Memo { text } => {
                 assert_eq!(p, "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-                assert_eq!(text.as_bytes(), data.as_slice());
+                let raw = std::str::from_utf8(data).expect("memo decoded from valid UTF-8");
+                assert_eq!(text, &sanitize_text(raw, 566).text);
             }
             other => panic!("not covered by the devnet set: {other:?}"),
         }
