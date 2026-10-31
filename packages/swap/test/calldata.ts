@@ -5,7 +5,7 @@ import { LIFI_ABI, LIFI_FEE_FORWARDER, LIFI_FEE_FORWARDER_ABI, NATIVE_EVM, ZERO_
 export const SETTLER = '0x7f6ceE965959295cC64d0E6c00d99d6532d8e86b';
 
 /** AllowanceHolder.exec(settler, token, amount, settler, Settler.execute(slippage, actions, zid)). */
-export function zeroExData(o: { sellToken: string; sellAmount: bigint; recipient: string; buyToken: string; minAmountOut: bigint; feeRecipient?: string; settler?: string; operator?: string }): Hex {
+export function zeroExData(o: { sellToken: string; sellAmount: bigint; recipient: string; buyToken: string; minAmountOut: bigint; feeRecipient?: string | undefined; settler?: string; operator?: string }): Hex {
   const settler = o.settler ?? SETTLER;
   // A fee transfer action carries the recipient (the exact action encoding does not matter to Kyro).
   const action = o.feeRecipient ? encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [o.sellToken === NATIVE_EVM ? ZERO_ADDRESS : (o.sellToken as Hex), o.feeRecipient as Hex, 70n]) : '0x';
