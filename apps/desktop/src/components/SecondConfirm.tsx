@@ -19,6 +19,8 @@ export function btcWarningText(w: BtcWarning): string {
       return `Entrée ${w.input + 1} : n’appartient pas à ce portefeuille (quelqu’un d’autre ajoute des fonds ou cosigne).`;
     case 'highFee':
       return `Frais très élevés : ${w.satPerVb} sat/vB (au-delà de 100 sat/vB, ou plus que le total des sorties).`;
+    case 'changeIndexOutOfRange':
+      return `Sortie ${w.output + 1} : monnaie vers une adresse lointaine que Kyro ne surveille pas (au-delà de l’index 1000).`;
   }
 }
 

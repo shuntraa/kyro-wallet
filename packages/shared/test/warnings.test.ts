@@ -33,7 +33,7 @@ describe('EVM warnings', () => {
     expect(exact.warnings).toEqual([{ kind: 'approval', spender: '0xS', amount: '1000000', unlimited: false }]);
     const big = (1n << 128n).toString();
     expect(evmWarnings({ ...base, kind: 'Erc20Approve', spender: '0xS', amount: big }, { data: '0x095ea7b3', valueWei: '0' }).warnings[0]).toMatchObject({ unlimited: true });
-    expect(evmWarnings({ ...base, kind: 'NativeTransfer', chainId: 999 }, { data: '0x', valueWei: '1' }).warnings).toEqual([{ kind: 'unknownChain', chainId: 999 }]);
+    expect(evmWarnings({ ...base, kind: 'NativeTransfer', chainId: 31_337 }, { data: '0x', valueWei: '1' }).warnings).toEqual([{ kind: 'unknownChain', chainId: 31_337 }]);
     const over = (evmHighFeeThresholdWei(1) + 1n).toString();
     expect(evmWarnings({ ...base, kind: 'NativeTransfer', chainId: 1, maxFeeWei: over }, { data: '0x', valueWei: '1' }).warnings).toEqual([{ kind: 'highFee', maxFeeWei: over }]);
     // Polygon's threshold is 50 POL: the same fee is fine there.

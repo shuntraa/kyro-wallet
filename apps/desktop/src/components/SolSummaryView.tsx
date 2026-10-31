@@ -24,6 +24,12 @@ export function solWarningText(w: SolWarning, s: SolTxSummary): string {
       return `Token-2022 : les extensions du mint (frais de transfert, hook…) ne sont pas vérifiées (${ix(w.instruction)}).`;
     case 'priorityFeeEstimated':
       return 'Pas de limite de calcul explicite : la priority fee affichée est un maximum estimé.';
+    case 'unknownOwnerProgram':
+      return `Le compte créé appartient à un programme inconnu (${shortAddress(w.owner)}) : il pourra dépenser ces SOL (${ix(w.instruction)}).`;
+    case 'uncheckedTokenTransfer':
+      return `Transfert de token sans mint ni décimales (Transfer, ${ix(w.instruction)}) : le token envoyé n’est pas vérifié.`;
+    case 'unusualText':
+      return `Texte inhabituel (mémo ou seed nettoyé, ou très long) dans l’${ix(w.instruction)}.`;
   }
 }
 

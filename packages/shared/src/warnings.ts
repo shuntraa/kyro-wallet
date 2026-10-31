@@ -10,7 +10,7 @@ import type { BtcSummaryOutput, BtcWarning, EvmTxRequest, EvmWarning } from './i
 export const BTC_HIGH_FEE_SAT_PER_VB = 100;
 
 /** wallet-core `EVM_KNOWN_CHAINS`. */
-export const EVM_KNOWN_CHAINS: readonly number[] = [1, 11_155_111, 42_161, 10, 8_453, 137, 56, 43_114];
+export const EVM_KNOWN_CHAINS: readonly number[] = [1, 42_161, 10, 8_453, 137, 56, 43_114, 61, 25, 5_000, 146, 14, 8_217, 100, 999, 1_329, 1_030, 11_155_111];
 
 /** wallet-core `evm_high_fee_threshold_wei`: 0.05 native, 50 POL on Polygon, 1 AVAX on Avalanche. */
 export function evmHighFeeThresholdWei(chainId: number): bigint {

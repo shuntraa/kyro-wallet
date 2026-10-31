@@ -342,6 +342,8 @@ export type UtxoWarning =
   | { kind: 'foreignInput'; index: number }
   | { kind: 'softDust'; index: number }
   | { kind: 'highFee' }
+  /** Our key beyond MAX_CHANGE_INDEX (1000): counted as a payment, not change. */
+  | { kind: 'changeIndexOutOfRange'; index: number }
   | { kind: 'feeBelowMinimum'; minimum: string };
 
 /** Rust's decoding of the PSBT it signs (`wallet_core::UtxoTxSummary`). Amounts: decimal strings. */
@@ -415,7 +417,7 @@ export type TronAction =
   | { type: 'contractCall'; contract: string; selector: string; data: string; callValue: string };
 
 /** Every warning → reinforced confirmation. */
-export type TronWarning = { kind: 'unknownCall'; selector: string } | { kind: 'callValue' } | { kind: 'memo' } | { kind: 'highFeeLimit' };
+export type TronWarning = { kind: 'unknownCall'; selector: string } | { kind: 'callValue' } | { kind: 'memo' } | { kind: 'highFeeLimit' } | { kind: 'unusualText' };
 
 /** Rust's decoding of `raw_data` (`wallet_core::TronTxSummary`). */
 export interface TronTxSummary {
@@ -431,6 +433,8 @@ export interface TronTxSummary {
   refBlockHash: string;
   /** Hex. */
   memo: string;
+  /** Memo as sanitized text (wallet-core `sanitize_text`), null when not UTF-8. */
+  memoText?: string | null;
   rawSize: number;
   warnings: TronWarning[];
   requiresExtraConfirmation: boolean;
@@ -509,7 +513,7 @@ export interface XrpAccountInfo {
 export type XrpAmountView = { kind: 'xrp'; drops: string } | { kind: 'issued'; value: string; currency: string; issuer: string };
 
 /** Every warning → reinforced confirmation. */
-export type XrpWarning = { kind: 'sendMax' } | { kind: 'pathFlags' } | { kind: 'memo' } | { kind: 'highFee' } | { kind: 'invoiceId' };
+export type XrpWarning = { kind: 'sendMax' } | { kind: 'pathFlags' } | { kind: 'memo' } | { kind: 'highFee' } | { kind: 'invoiceId' } | { kind: 'unusualText' };
 
 /** wallet-core `XrpTxSummary`: Rust's strict decoding of the Payment. */
 export interface XrpTxSummary {
@@ -601,7 +605,7 @@ export interface CardanoOutputView {
 }
 
 /** serde tag `kind`; every warning → reinforced confirmation. */
-export type CardanoWarning = { kind: 'memo' } | { kind: 'unknownToken'; policy: string; name: string } | { kind: 'highFee' } | { kind: 'noTtl' };
+export type CardanoWarning = { kind: 'memo' } | { kind: 'unknownToken'; policy: string; name: string } | { kind: 'highFee' } | { kind: 'noTtl' } | { kind: 'unusualText' };
 
 export interface CardanoTxSummary {
   /** blake2b-256 of the body, hex. */
@@ -984,7 +988,9 @@ export type BtcWarning =
   /** Input not signed by this wallet (coinjoin, payjoin… or a trap). */
   | { kind: 'foreignInput'; input: number }
   /** Fee rate above 100 sat/vB, or fee larger than all outputs together. */
-  | { kind: 'highFee'; satPerVb: number };
+  | { kind: 'highFee'; satPerVb: number }
+  /** Our key beyond MAX_CHANGE_INDEX (1000): counted as a payment, not change. */
+  | { kind: 'changeIndexOutOfRange'; output: number };
 
 export interface BtcTxSummary {
   outputs: BtcSummaryOutput[];
@@ -1094,7 +1100,13 @@ export type SolWarning =
   | { kind: 'delegation'; instruction: number }
   | { kind: 'unknownInstruction'; instruction: number; programId: string }
   | { kind: 'token2022ExtensionsUnverified'; instruction: number }
-  | { kind: 'priorityFeeEstimated' };
+  | { kind: 'priorityFeeEstimated' }
+  /** CreateAccount(WithSeed) for an owner program outside the closed list. */
+  | { kind: 'unknownOwnerProgram'; instruction: number; owner: string; space: string }
+  /** SPL `Transfer` (tag 3): no mint, no decimals. */
+  | { kind: 'uncheckedTokenTransfer'; instruction: number }
+  /** Memo / seed text that had to be sanitized, or a long memo. */
+  | { kind: 'unusualText'; instruction: number };
 
 export interface SolTxSummary {
   version: 'legacy' | 'v0' | string;
