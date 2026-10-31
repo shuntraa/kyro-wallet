@@ -372,6 +372,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_cbf_sync` | — | `CbfStatus` | lance (ou rejoint) une synchronisation en arrière-plan ; progression par l'événement `cbf-status` ; exige le coffre déverrouillé (lit les xpubs) — une lecture coffre verrouillé ne lance pas de synchro ; build sans la fonction : `FEATURE_DISABLED` |
 | `set_capture_protection` | `{ enabled }` | `void` | `set_content_protected` |
 | `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasTrongridKey }` | jamais les clés elles-mêmes ; chaque `hasXKey` = variable d'environnement **ou** clé enregistrée dans les réglages (ex. TronGrid : `KYRO_TRONGRID_API_KEY` ou `apiKeys.trongrid`) |
+| `network_get` / `network_set` | — / `{ network: 'mainnet' \| 'testnet' }` | `NetworkInfo` / `boolean` | choix du réseau depuis l'application, appliqué en **redémarrant** l'app : voir §2.10 |
 | `hw_list` | — | `DeviceInfo[]` | détecte les Ledger (HID) et Trezor (WebUSB) branchés ; ids stables pour la session (`ledger-1`, `trezor-1`…) tant que l'appareil reste sur le même port ; 10 s max. Voir §2.3 |
 | `hw_open` | `{ id }` | `DeviceStatus` | ouvre l'appareil et lit son état : verrouillé, app Ledger ouverte, firmware Trezor, état par chaîne. **Seule commande qui peut appairer un Trezor Safe 7** (THP, §2.3) : `hw-prompt` `thp-confirm-pairing` puis `thp-pairing-code` → `hw_thp_pairing_code` ; délai 180 s |
 | `hw_thp_pairing_code` | `{ id, code /*6 chiffres*/ }` | `void` | Trezor Safe 7, après `hw-prompt` `thp-pairing-code` : le code affiché **sur l'écran de l'appareil**, recopié par l'utilisateur. Autre chose que 6 chiffres ASCII : `INVALID_INPUT` (l'appel `hw_open` continue d'attendre) ; aucun appairage en attente : `HW_BAD_RESPONSE`. Code faux : `hw_open` échoue en `HW_PAIRING_FAILED` |
@@ -861,6 +862,35 @@ type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[
 **Fait côté UI** (commit de l'UI des comptes) : Réglages › Comptes (liste par chaîne, « Ajouter un compte » qui prévisualise `accounts_get({ account })` et son solde, renommer, retirer), un jeu d'adaptateurs par compte (`createAdapters(…, account)`, chaque adaptateur passe `account` à ses commandes de signature), le compte choisi par chaîne (mémorisé par réseau dans `localStorage`, donnée publique) utilisé par Envoyer / Recevoir / Swap / Staking / Actif, sélecteur « Compte » quand la chaîne en a plusieurs, une ligne par compte dans Actifs (totaux additionnés), historique de tous les comptes. **Mode démo** : listes, adresses, soldes et signatures BTC / EVM / Solana / LTC / DOGE par compte ; TRON, XRP, Cardano et staking simulés pour le premier compte seulement (erreur explicite sinon).
 
 **Hardware wallets.** Déjà multi-comptes à leur façon : `hw_account_add({ account })` enregistre un compte par numéro (BTC `m/84'|86'/c'/a'`, EVM `m/44'/60'/0'/0/a`, Solana `m/44'/501'/a'/0'`), affiché comme un portefeuille à part dans le sélecteur de la barre de titre ; ils ne sont pas (encore) regroupés par chaîne comme les comptes du coffre.
+
+### 2.10 Choix du réseau (réseau principal / réseau de test)
+
+Le réseau est fixé **au lancement** et ne change jamais pendant que l'app tourne. Ordre de priorité (`src-tauri/src/network.rs`) :
+
+1. variable d'environnement `KYRO_NETWORK` (`mainnet` ou `testnet`, insensible à la casse ; toute autre valeur est ignorée) — réservée au développement ;
+2. le choix enregistré par `network_set` dans `network.json` (dossier de l'app, donnée publique : `{ "network": "mainnet" }`) ;
+3. sans choix enregistré, si un coffre existe sur **un seul** des deux réseaux (installation antérieure au choix) : ce réseau-là, pour qu'une mise à jour n'affiche jamais « Bienvenue » à quelqu'un qui a déjà un coffre ;
+4. sinon le défaut du build : **mainnet en release**, **testnet en debug** (`cfg!(debug_assertions)`).
+
+Chaque réseau a ses propres fichiers : `coffre-{mainnet|testnet}.kyrovault`, `hw-accounts-{mainnet|testnet}.json`, et ses propres listes de comptes (`settings.json › accounts.<réseau>`). Changer de réseau **ne supprime rien** : le coffre de l'autre réseau est gardé et retrouvé en y revenant. Les réglages (`settings.json`) sont communs, les serveurs personnalisés sont rangés par réseau.
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `network_get` | — | `NetworkInfo` | lecture seule, coffre verrouillé ou non |
+| `network_set` | `{ network }` | `boolean` (`true` = redémarrage demandé) | enregistre le choix ; s'il diffère du réseau courant : verrouille la session (zeroize) puis redémarre l'app (`AppHandle::request_restart`). Même réseau : enregistre seulement (`false`). Refusé (`INVALID_INPUT`, rien n'est enregistré) : valeur autre que `mainnet`/`testnet` ; réseau imposé par `KYRO_NETWORK` ; **une fenêtre de signature native est ouverte** (compteur tenu par `confirm_native`) ; une opération hardware wallet est en cours. Aucun nouvel hôte réseau |
+
+```ts
+type NetworkInfo = {
+  network: 'mainnet' | 'testnet';                       // réseau de cette exécution
+  source: 'env' | 'saved' | 'vault' | 'default';        // d'où il vient (ordre ci-dessus)
+  saved: 'mainnet' | 'testnet' | null;                  // contenu de network.json
+  default: 'mainnet' | 'testnet';                       // défaut du build
+  canSwitch: boolean;                                   // false si KYRO_NETWORK impose le réseau
+  otherVaultExists: boolean;                            // un coffre existe déjà sur l'autre réseau (gardé)
+};
+```
+
+**Fait côté UI** : Réglages › Réseaux et serveurs › « Réseau » (Réseau principal — fonds réels / Réseau de test — jetons sans valeur), fenêtre de confirmation qui rappelle que chaque réseau a son propre coffre (l'autre est gardé, pas supprimé), puis redémarrage ; écran d'accueil : une ligne « Le coffre sera créé sur le réseau … » avec un lien pour changer ; badge TESTNET de la barre d'état inchangé. **Mode démo** : `network_set` mémorise le choix (`localStorage`, comme l'environnement) et recharge la page sur `?network=…` ; `?network=` dans l'URL joue le rôle de `KYRO_NETWORK`.
 
 ## 3. Allowlist réseau (`net_fetch`)
 

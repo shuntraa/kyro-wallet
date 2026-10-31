@@ -15,6 +15,7 @@ mod electrum;
 mod error;
 mod hw;
 mod net;
+mod network;
 mod servers;
 mod settings;
 mod solana;
@@ -163,6 +164,8 @@ pub fn run() {
             stake_tron::tron_stake_sign,
             commands::set_capture_protection,
             commands::config_get,
+            network::network_get,
+            network::network_set,
             commands::tor_status,
             commands::tor_retry,
             commands_hw::hw_list,

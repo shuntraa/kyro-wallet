@@ -46,7 +46,7 @@ Tes clés restent chiffrées sur ton appareil ; toutes les signatures se font da
 ```bash
 pnpm install --frozen-lockfile
 cp .env.example .env          # optionnel : clés CoinGecko / 0x / TronGrid (KYRO_TRONGRID_API_KEY)
-pnpm dev                      # application Tauri (testnet)
+pnpm dev                      # application Tauri (testnet en debug ; réseau au choix dans Réglages › Réseaux et serveurs)
 pnpm --filter @kyro/desktop dev   # interface seule dans un navigateur, MODE DÉMO (aucune vraie clé)
 ```
 

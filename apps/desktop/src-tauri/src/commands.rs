@@ -64,6 +64,8 @@ pub(crate) async fn confirm_native(
     title: &'static str,
     body: String,
 ) -> AppResult<()> {
+    // Counted while shown: `network_set` (app restart) is refused until it is answered.
+    let _open = app.state::<AppState>().dialogs.enter();
     let app = app.clone();
     let approved = blocking(move || {
         Ok(app

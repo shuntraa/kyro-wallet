@@ -516,6 +516,13 @@ pub struct HwManager {
 }
 
 impl HwManager {
+    /// A device call (open, read, signature…) is in progress on some device.
+    pub fn any_busy(&self) -> bool {
+        lock(&self.slots)
+            .values()
+            .any(|s| s.busy.load(Ordering::SeqCst))
+    }
+
     /// Enumerates devices (blocking: call from a blocking thread). Ids stay the same for a
     /// device that stays plugged in the same port; unplugged devices are forgotten.
     pub fn list(&self) -> Vec<DeviceInfo> {

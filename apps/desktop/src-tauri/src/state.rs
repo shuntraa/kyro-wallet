@@ -27,6 +27,10 @@ struct Guard {
 
 pub struct AppState {
     pub network: Network,
+    /// Where `network` comes from (env override, saved choice, build default).
+    pub network_source: crate::network::Source,
+    /// Native signature dialogs currently open (the network cannot be switched meanwhile).
+    pub dialogs: crate::network::DialogCounter,
     pub vault_path: PathBuf,
     pub settings_path: PathBuf,
     pub net: NetClient,
@@ -50,24 +54,20 @@ const REVEAL_COOLDOWN: Duration = Duration::from_secs(10);
 
 impl AppState {
     pub fn new(data_dir: PathBuf) -> AppResult<Self> {
-        let network = match std::env::var("KYRO_NETWORK").as_deref() {
-            Ok("mainnet") => Network::Mainnet,
-            _ => Network::Testnet,
-        };
-        let suffix = match network {
-            Network::Mainnet => "mainnet",
-            Network::Testnet => "testnet",
-        };
+        // Env `KYRO_NETWORK` > saved choice (`network.json`) > build default (network.rs).
+        let (network, network_source) = crate::network::startup(&data_dir);
         let settings_path = data_dir.join("settings.json");
         Ok(Self {
             network,
-            vault_path: data_dir.join(format!("coffre-{suffix}.kyrovault")),
+            network_source,
+            dialogs: crate::network::DialogCounter::default(),
+            vault_path: crate::network::vault_file(&data_dir, network),
             settings: Mutex::new(Settings::load(&settings_path, network)),
             settings_path,
             net: NetClient::new(data_dir.join("tor"))?,
             env_keys: EnvKeys::from_env(),
             hw: HwManager::default(),
-            hw_accounts_path: data_dir.join(format!("hw-accounts-{suffix}.json")),
+            hw_accounts_path: crate::network::hw_accounts_file(&data_dir, network),
             hw_store_lock: Mutex::new(()),
             session: Mutex::new(None),
             guard: Mutex::new(Guard::default()),

@@ -100,6 +100,9 @@ const COMMANDS: &[&str] = &[
     "tron_stake_sign",
     "set_capture_protection",
     "config_get",
+    // Network choice (docs/IPC.md §2.10): saved, applied by restarting the app.
+    "network_get",
+    "network_set",
     "tor_status",
     "tor_retry",
     "hw_list",
