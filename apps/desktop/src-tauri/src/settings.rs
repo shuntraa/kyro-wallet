@@ -242,12 +242,65 @@ impl Settings {
     }
 }
 
-/// Write to a temp file then rename, so a crash never leaves a half-written vault or settings file.
+/// `<file name>.<suffix>` next to `path` (each file gets its own temporary name).
+fn sibling(path: &Path, suffix: &str) -> std::path::PathBuf {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    path.with_file_name(format!("{name}.{suffix}"))
+}
+
+/// Writes `bytes` to a file readable by the owner only on Unix (0600; settings.json holds API
+/// keys and maybe the Bitcoin Core password), flushed to disk.
+fn write_private(path: &Path, bytes: &[u8], create_new: bool) -> std::io::Result<()> {
+    use std::io::Write as _;
+    let mut opts = fs::OpenOptions::new();
+    opts.write(true);
+    if create_new {
+        opts.create_new(true);
+    } else {
+        opts.create(true).truncate(true);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        opts.mode(0o600);
+    }
+    let mut f = opts.open(path)?;
+    f.write_all(bytes)?;
+    f.sync_all()
+}
+
+/// Write to a temp file then rename, so a crash never leaves a half-written vault or settings
+/// file. Owner-only permissions on Unix (the temp file is created 0600, before any byte).
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
-    let tmp = path.with_extension("tmp");
-    fs::write(&tmp, bytes)?;
+    let tmp = sibling(path, "tmp");
+    let _ = fs::remove_file(&tmp);
+    write_private(&tmp, bytes, true)?;
     fs::rename(&tmp, path)?;
     Ok(())
+}
+
+/// Creates `path` with `bytes`, refusing to replace an existing file (`AlreadyExists`), and
+/// never leaving a half-written file: written to a temp file first, then hard-linked into
+/// place (atomic, fails if the target exists). A file system without hard links falls back to
+/// `create_new` on the target itself.
+pub fn write_new(path: &Path, bytes: &[u8]) -> AppResult<()> {
+    let exists = || AppError::InvalidInput("un coffre existe déjà sur cet appareil".into());
+    let tmp = sibling(path, "new.tmp");
+    let _ = fs::remove_file(&tmp);
+    write_private(&tmp, bytes, true)?;
+    let linked = fs::hard_link(&tmp, path);
+    let _ = fs::remove_file(&tmp);
+    match linked {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(exists()),
+        Err(_) => match write_private(path, bytes, true) {
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(exists()),
+            other => Ok(other?),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -385,5 +438,38 @@ mod tests {
             ui["apiKeys"] = bad.clone();
             assert!(Settings::from_ui(ui.clone(), &s.api_keys).is_err(), "{bad}");
         }
+    }
+
+    /// MOYENNE 3 + F5: a new vault never replaces an existing one; files are owner-only on Unix.
+    #[test]
+    fn write_new_never_overwrites_and_files_are_private() {
+        let dir = std::env::temp_dir().join(format!("kyro-write-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let vault = dir.join("coffre-testnet.kyrovault");
+        write_new(&vault, b"first").unwrap();
+        assert!(matches!(
+            write_new(&vault, b"second"),
+            Err(AppError::InvalidInput(_))
+        ));
+        assert_eq!(fs::read(&vault).unwrap(), b"first");
+        let settings = dir.join("settings.json");
+        write_atomic(&settings, b"{}").unwrap();
+        write_atomic(&settings, b"[1]").unwrap();
+        assert_eq!(fs::read(&settings).unwrap(), b"[1]");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            for p in [&vault, &settings] {
+                assert_eq!(fs::metadata(p).unwrap().permissions().mode() & 0o777, 0o600);
+            }
+        }
+        // No temporary file left behind.
+        let names: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(names.len(), 2, "{names:?}");
+        let _ = fs::remove_dir_all(&dir);
     }
 }

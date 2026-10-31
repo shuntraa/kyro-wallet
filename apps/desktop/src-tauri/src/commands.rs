@@ -1,6 +1,6 @@
 //! Every IPC command exposed to the webview (see docs/IPC.md and build.rs).
-//! Secrets only flow *into* these functions (passwords) and never back out,
-//! except the recovery phrase on creation and on an explicit, password-gated reveal.
+//! Secrets only flow *into* these functions (passwords, an imported phrase) and never back out:
+//! the recovery phrase is only ever displayed in native dialogs (creation, explicit reveal).
 
 use base64::Engine as _;
 use serde::Serialize;
@@ -15,7 +15,7 @@ use crate::accounts::{account_arg, btc_paths, confirm_signer, Chain, SignerInfo}
 use crate::error::{AppError, AppResult};
 use crate::net::{FetchRequest, FetchResponse};
 use crate::solana;
-use crate::state::AppState;
+use crate::state::{AppState, PendingBackup};
 use crate::tor::TorStatus;
 
 const MIN_PASSWORD_LEN: usize = 10;
@@ -37,15 +37,18 @@ pub(crate) async fn seed_from_password(
     Ok(mnemonic_from_password(state, password).await?.to_seed(""))
 }
 
-/// Opens the vault with `password` (attempt limiting applies).
+/// Opens the vault with `password`. The attempt is reserved (counted, persisted) under the
+/// same lock as the delay check before Argon2id runs, so parallel calls cannot bypass it.
 pub(crate) async fn mnemonic_from_password(
     state: &AppState,
     password: Zeroizing<String>,
 ) -> AppResult<Mnemonic> {
-    state.check_attempts()?;
     let file = state.read_vault()?;
+    state.reserve_attempt()?;
     let result = blocking(move || Ok(wallet_core::open(&file, &password)?)).await;
-    state.record_attempt(result.is_ok());
+    if result.is_ok() {
+        state.attempt_succeeded();
+    }
     result
 }
 
@@ -64,6 +67,17 @@ pub(crate) async fn confirm_native(
     title: &'static str,
     body: String,
 ) -> AppResult<()> {
+    confirm_native_with(app, title, body, "Signer", "Annuler").await
+}
+
+/// [`confirm_native`] with its own button labels. `Err(UserRejected)` unless approved.
+pub(crate) async fn confirm_native_with(
+    app: &AppHandle,
+    title: &'static str,
+    body: String,
+    ok: &'static str,
+    cancel: &'static str,
+) -> AppResult<()> {
     // Counted while shown: `network_set` (app restart) is refused until it is answered.
     let _open = app.state::<AppState>().dialogs.enter();
     let app = app.clone();
@@ -76,8 +90,8 @@ pub(crate) async fn confirm_native(
             .title(title)
             .kind(MessageDialogKind::Warning)
             .buttons(MessageDialogButtons::OkCancelCustom(
-                "Signer".into(),
-                "Annuler".into(),
+                ok.into(),
+                cancel.into(),
             ))
             .blocking_show())
     })
@@ -87,6 +101,43 @@ pub(crate) async fn confirm_native(
     } else {
         Err(AppError::UserRejected)
     }
+}
+
+/// Shows the recovery phrase in a native dialog (one button). The words never reach the
+/// webview: a compromised interface cannot read them, even with the password.
+async fn show_words_native(app: &AppHandle, words: Zeroizing<Vec<String>>) -> AppResult<()> {
+    let _open = app.state::<AppState>().dialogs.enter();
+    let app = app.clone();
+    blocking(move || {
+        let body = words_text(&words);
+        app.dialog()
+            .message(body.as_str())
+            .title("Ta phrase de récupération")
+            .kind(MessageDialogKind::Info)
+            .buttons(MessageDialogButtons::OkCustom("J'ai fini de noter".into()))
+            .blocking_show();
+        Ok(())
+    })
+    .await
+}
+
+/// Text of the native recovery-phrase dialog: numbered words, three per line.
+pub(crate) fn words_text(words: &[String]) -> Zeroizing<String> {
+    let mut out = Zeroizing::new(format!(
+        "Écris ces {} mots sur papier, dans l'ordre, au stylo. Pas de photo, pas de copie, pas de \
+         cloud. Quiconque lit ces mots contrôle tes fonds ; personne de légitime ne te les \
+         demandera jamais.\n\n",
+        words.len()
+    ));
+    for (i, w) in words.iter().enumerate() {
+        out.push_str(&format!("{:>2}. {w}", i + 1));
+        out.push_str(if i % 3 == 2 { "\n" } else { "      " });
+    }
+    out.push_str(
+        "\nCette fenêtre appartient au système, pas à l'interface de Kyro : vérifie quand même \
+         que personne ne regarde ton écran et qu'aucun partage d'écran n'est actif.",
+    );
+    out
 }
 
 fn check_password_strength(password: &str) -> AppResult<()> {
@@ -109,11 +160,6 @@ pub struct VaultStatus {
     lock_in_secs: Option<u64>,
 }
 
-#[derive(Serialize)]
-pub struct WordsOut {
-    words: Vec<String>,
-}
-
 #[tauri::command]
 pub fn vault_status(state: State<'_, AppState>) -> VaultStatus {
     VaultStatus {
@@ -124,17 +170,21 @@ pub fn vault_status(state: State<'_, AppState>) -> VaultStatus {
     }
 }
 
+/// Seals `mnemonic` into a NEW vault and starts the session. The creation lock is held from
+/// the existence check until the session is started, and the file is created with
+/// `create_new` semantics: two concurrent calls can never both succeed, nor overwrite a vault.
 async fn seal_and_start(
     state: &AppState,
     mnemonic: Mnemonic,
     password: Zeroizing<String>,
 ) -> AppResult<()> {
+    check_password_strength(&password)?;
+    let _creating = state.vault_create_lock.lock().await;
     if state.vault_exists() {
         return Err(AppError::InvalidInput(
             "un coffre existe déjà sur cet appareil".into(),
         ));
     }
-    check_password_strength(&password)?;
     let seed = mnemonic.to_seed("");
     let cardano = wallet_core::CardanoRoot::from_mnemonic(&mnemonic, "");
     let file = blocking(move || {
@@ -145,17 +195,45 @@ async fn seal_and_start(
         )?)
     })
     .await?;
-    state.write_vault(&file)?;
+    state.write_new_vault(&file)?;
     state.start_session(seed, cardano);
     Ok(())
 }
 
+/// Three distinct positions in `0..n`, from OS randomness, sorted.
+fn random_checks(n: usize) -> AppResult<[usize; 3]> {
+    let mut picked: Vec<usize> = Vec::with_capacity(3);
+    while picked.len() < 3 {
+        let mut b = [0u8; 4];
+        getrandom::getrandom(&mut b).map_err(|e| AppError::Internal(e.to_string()))?;
+        let i = (u32::from_le_bytes(b) as usize) % n;
+        if !picked.contains(&i) {
+            picked.push(i);
+        }
+    }
+    picked.sort_unstable();
+    Ok([picked[0], picked[1], picked[2]])
+}
+
+/// Wrong 3-word checks allowed before the pending phrase is dropped (it can still be shown
+/// later from Réglages › Sécurité, with the password and a native confirmation).
+const MAX_BACKUP_FAILURES: u32 = 5;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedOut {
+    /// 12 or 24. The words themselves are only ever shown natively (`vault_backup_show`).
+    word_count: usize,
+}
+
+/// Creates the vault and keeps its phrase in Rust until the backup check passes. The phrase is
+/// NOT returned: `vault_backup_show` displays it in a native dialog.
 #[tauri::command]
 pub async fn vault_create(
     state: State<'_, AppState>,
     password: String,
     words: u8,
-) -> AppResult<WordsOut> {
+) -> AppResult<CreatedOut> {
     let password = Zeroizing::new(password);
     let count = match words {
         12 => WordCount::W12,
@@ -163,10 +241,92 @@ pub async fn vault_create(
         _ => return Err(AppError::InvalidInput("12 ou 24 mots".into())),
     };
     let mnemonic = Mnemonic::generate(count)?;
-    let shown = mnemonic.words();
+    let words = mnemonic.words();
+    let word_count = words.len();
     seal_and_start(&state, mnemonic, password).await?;
-    Ok(WordsOut {
-        words: shown.to_vec(),
+    state.set_pending_backup(PendingBackup {
+        checks: random_checks(word_count)?,
+        words,
+        failures: 0,
+    });
+    Ok(CreatedOut { word_count })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupChecks {
+    /// 0-based positions of the three words to type back.
+    checks: [usize; 3],
+}
+
+/// Shows the phrase of the vault just created in a native dialog (returns when it is closed),
+/// then picks the three positions to check. Only while that phrase is pending.
+#[tauri::command]
+pub async fn vault_backup_show(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<BackupChecks> {
+    let words = state.with_pending_backup(|p| {
+        Ok(p.as_ref()
+            .map(|p| Zeroizing::new(p.words.to_vec()))
+            .unwrap_or_default())
+    })?;
+    let n = words.len();
+    show_words_native(&app, words).await?;
+    let checks = random_checks(n)?;
+    state.with_pending_backup(|p| {
+        if let Some(p) = p.as_mut() {
+            p.checks = checks;
+        }
+        Ok(())
+    })?;
+    Ok(BackupChecks { checks })
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupVerified {
+    ok: bool,
+    attempts_left: u32,
+}
+
+/// Checks the three words typed by the user against the pending phrase (positions chosen by
+/// Rust). Answers only ok / not ok, a few times: not an oracle for guessing the phrase.
+fn backup_answers_match(p: &PendingBackup, answers: &[String]) -> bool {
+    answers.len() == 3
+        && p.checks.iter().zip(answers).all(|(i, a)| {
+            p.words
+                .get(*i)
+                .is_some_and(|w| *w == a.trim().to_lowercase())
+        })
+}
+
+#[tauri::command]
+pub fn vault_backup_verify(
+    state: State<'_, AppState>,
+    answers: Vec<String>,
+) -> AppResult<BackupVerified> {
+    let answers = Zeroizing::new(answers);
+    state.with_pending_backup(|slot| {
+        let Some(p) = slot.as_mut() else {
+            return Err(AppError::Internal("sauvegarde absente".into()));
+        };
+        if backup_answers_match(p, &answers) {
+            *slot = None;
+            return Ok(BackupVerified {
+                ok: true,
+                attempts_left: 0,
+            });
+        }
+        p.failures += 1;
+        let left = MAX_BACKUP_FAILURES.saturating_sub(p.failures);
+        if left == 0 {
+            *slot = None;
+        }
+        Ok(BackupVerified {
+            ok: false,
+            attempts_left: left,
+        })
     })
 }
 
@@ -201,26 +361,35 @@ pub fn vault_lock(state: State<'_, AppState>) {
     state.lock_session();
 }
 
+/// Shows the recovery phrase again: password (rate-limited), then a native confirmation, then
+/// the words in a native dialog. Nothing is returned to the webview, which knows the password
+/// it typed and so could otherwise read the phrase.
 #[tauri::command]
 pub async fn vault_reveal_mnemonic(
+    app: AppHandle,
     state: State<'_, AppState>,
-    window: WebviewWindow,
     password: String,
-) -> AppResult<WordsOut> {
+) -> AppResult<()> {
     if !state.is_unlocked() {
         return Err(AppError::Locked);
     }
     state.check_reveal_cooldown()?;
-    state.check_attempts()?;
-    let file = state.read_vault()?;
-    let password = Zeroizing::new(password);
-    let result = blocking(move || Ok(wallet_core::open(&file, &password)?)).await;
-    state.record_attempt(result.is_ok());
-    // Best effort: full on Windows, partial on macOS, unavailable on Linux.
-    let _ = window.set_content_protected(true);
-    Ok(WordsOut {
-        words: result?.words().to_vec(),
-    })
+    let mnemonic = mnemonic_from_password(&state, Zeroizing::new(password)).await?;
+    confirm_native_with(
+        &app,
+        "Afficher la phrase de récupération ?",
+        "Kyro va afficher ta phrase de récupération dans une fenêtre du système.\n\nQuiconque la \
+         voit peut prendre tous tes fonds. Vérifie que personne ne regarde ton écran et \
+         qu'aucun partage d'écran ni logiciel de capture n'est actif.\n\nSi tu n'as pas \
+         toi-même demandé à l'afficher, refuse."
+            .into(),
+        "Afficher",
+        "Annuler",
+    )
+    .await?;
+    show_words_native(&app, mnemonic.words()).await?;
+    state.touch();
+    Ok(())
 }
 
 #[tauri::command]
@@ -988,5 +1157,28 @@ mod tests {
         assert_eq!(format_units("1000000", 6), "1");
         assert_eq!(format_units("1234500", 6), "1,2345");
         assert_eq!(format_units("12", 8), "0,00000012");
+    }
+
+    /// CRITIQUE 2: the phrase is shown natively, numbered; the check needs the 3 words Rust
+    /// chose, in order, and nothing else.
+    #[test]
+    fn backup_words_and_check() {
+        let words: Vec<String> = (1..=12).map(|i| format!("mot{i}")).collect();
+        let t = words_text(&words);
+        assert!(t.contains(" 1. mot1"));
+        assert!(t.contains("12. mot12"));
+        assert!(t.contains("Écris ces 12 mots"));
+        let c = random_checks(12).unwrap();
+        assert!(c[0] < c[1] && c[1] < c[2] && c[2] < 12);
+        let p = PendingBackup {
+            words: Zeroizing::new(words),
+            checks: [0, 5, 11],
+            failures: 0,
+        };
+        let a = |x: [&str; 3]| x.map(String::from).to_vec();
+        assert!(backup_answers_match(&p, &a(["mot1", " MOT6 ", "mot12"])));
+        assert!(!backup_answers_match(&p, &a(["mot1", "mot6", "mot11"])));
+        assert!(!backup_answers_match(&p, &a(["mot6", "mot1", "mot12"])));
+        assert!(!backup_answers_match(&p, &["mot1".into(), "mot6".into()]));
     }
 }
