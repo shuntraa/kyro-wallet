@@ -49,6 +49,23 @@ export interface ContractCallParams {
 
 const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
 
+/** OP-stack chains of the registry (L1 data fee charged on top of gas). */
+const OP_STACK_CHAINS = new Set([10, 8453]);
+const GAS_PRICE_ORACLE = '0x420000000000000000000000000000000000000F';
+const GAS_PRICE_ORACLE_ABI = [parseAbiItem('function getL1FeeUpperBound(uint256 unsignedTxSize) view returns (uint256)')] as const;
+const L1_FEE_FALLBACK = 100_000_000_000_000n;
+
+/**
+ * Recipients that burn the funds, refused before building: the zero address, and the token's own
+ * contract (a classic mistake: tokens sent to their contract are lost on almost every token).
+ */
+export function evmRecipientProblem(recipient: string, asset: Pick<AssetDef, 'kind' | 'contract'>): string | null {
+  const r = recipient.trim().toLowerCase();
+  if (/^0x0{40}$/.test(r)) return 'Adresse nulle (0x000…000) : les fonds seraient détruits. Envoi refusé.';
+  if (asset.kind === 'erc20' && asset.contract && asset.contract.toLowerCase() === r) return 'Cette adresse est le contrat du token lui-même, pas un portefeuille : les fonds seraient perdus. Envoi refusé.';
+  return null;
+}
+
 /** Create a viem transport that sends JSON-RPC through `net_fetch`. */
 export function netTransport(url: string, fetcher: NetFetch = netFetch, onLatency?: (ms: number) => void) {
   return custom({
@@ -148,6 +165,21 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     }
   }
 
+  /**
+   * OP-stack chains (Optimism, Base): upper bound of the L1 data fee of a simple transfer, from the
+   * GasPriceOracle predeploy (`getL1FeeUpperBound`, Fjord), doubled; 0,0001 ETH if the RPC cannot
+   * answer. 0 elsewhere (Arbitrum counts its L1 cost in the gas estimate).
+   */
+  async l1DataFeeMargin(): Promise<bigint> {
+    if (!OP_STACK_CHAINS.has(this.chain.chainId)) return 0n;
+    try {
+      const bound = await this.client.readContract({ address: GAS_PRICE_ORACLE, abi: GAS_PRICE_ORACLE_ABI, functionName: 'getL1FeeUpperBound', args: [200n] });
+      return bound > 0n ? bound * 2n : L1_FEE_FALLBACK;
+    } catch {
+      return L1_FEE_FALLBACK;
+    }
+  }
+
   private async nonce(): Promise<number> {
     return this.client.getTransactionCount({ address: this.address, blockTag: 'pending' });
   }
@@ -175,13 +207,17 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     const fee = params.fee;
     const recipient = params.to.trim();
     if (!this.isValidAddress(recipient)) throw new Error('Adresse invalide (format ou somme de contrôle EIP-55)');
+    const problem = evmRecipientProblem(recipient, params.asset);
+    if (problem) throw new Error(problem);
     const nonce = await this.nonce();
     if (params.asset.kind === 'native') {
       const gasLimit = await this.gas(getAddress(recipient), '0x', 0n);
+      // OP-stack L2s also charge an L1 data fee, outside gas × maxFee: MAX keeps room for it.
+      const l1 = await this.l1DataFeeMargin();
       let value = params.amount;
       if (params.max) {
         const bal = await this.client.getBalance({ address: this.address });
-        value = bal - gasLimit * fee.maxFeePerGas;
+        value = bal - gasLimit * fee.maxFeePerGas - l1;
         if (value <= 0n) throw new Error('Solde insuffisant pour couvrir les frais');
       }
       return {
@@ -190,7 +226,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
         asset: params.asset,
         amount: value,
         recipient: getAddress(recipient),
-        maxFee: gasLimit * fee.maxFeePerGas,
+        maxFee: gasLimit * fee.maxFeePerGas + l1,
         size: { family: 'evm', gasLimit },
         kind: 'transfer',
       };
@@ -284,6 +320,40 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
       const msg = e instanceof Error ? (e as { shortMessage?: string }).shortMessage ?? e.message : String(e);
       return { ok: false, reason: msg.split('\n')[0] ?? msg };
     }
+  }
+
+  /**
+   * Dry-run that also measures what we RECEIVE: `eth_simulateV1` with `traceTransfers` (native
+   * transfers then appear as Transfer logs from 0xEeee…), summing the Transfer logs of `token`
+   * (`native` for the chain's coin) to our address. An RPC without `eth_simulateV1` falls back to
+   * the plain `eth_call` (`received: null`: it passes, amount unknown). Note: the RPC is the one
+   * that simulates; a lying RPC can lie here too (the minimum enforced on-chain still holds).
+   */
+  async simulateReceived(tx: { to: string; data: Hex; value?: bigint }, token: string | 'native'): Promise<{ ok: true; received: bigint | null } | { ok: false; reason: string }> {
+    type SimLog = { address: string; topics: string[]; data: string };
+    type SimCall = { status: string; logs?: SimLog[]; error?: { message?: string } };
+    let blocks: Array<{ calls: SimCall[] }>;
+    try {
+      blocks = await jsonRpc<Array<{ calls: SimCall[] }>>(this.fetcher, this.rpcUrl, 'eth_simulateV1', [
+        { blockStateCalls: [{ calls: [{ from: this.address, to: getAddress(tx.to), data: tx.data, value: `0x${(tx.value ?? 0n).toString(16)}` }] }], traceTransfers: true, validation: false },
+        'latest',
+      ]);
+    } catch {
+      // Method missing or refused (a revert is reported inside the result, not as an error).
+      const s = await this.simulate(tx);
+      return s.ok ? { ok: true, received: null } : s;
+    }
+    const c = blocks[0]?.calls[0];
+    if (!c) return { ok: false, reason: 'Réponse de simulation vide' };
+    if (c.status !== '0x1') return { ok: false, reason: c.error?.message ?? 'la transaction échoue' };
+    const want = token === 'native' ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' : token.toLowerCase();
+    const me = this.address.slice(2).toLowerCase().padStart(64, '0');
+    const topic0 = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+    let received = 0n;
+    for (const l of c.logs ?? []) {
+      if (l.address.toLowerCase() === want && l.topics[0]?.toLowerCase() === topic0 && l.topics[2]?.toLowerCase().slice(2) === me) received += BigInt(l.data === '0x' ? 0 : l.data);
+    }
+    return { ok: true, received };
   }
 
   /**

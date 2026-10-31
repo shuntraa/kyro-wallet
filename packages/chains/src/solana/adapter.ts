@@ -21,6 +21,7 @@ import {
   getProgramDerivedAddress,
   getTransactionDecoder,
   isAddress,
+  isOffCurveAddress,
   pipe,
   setTransactionMessageComputeUnitLimit,
   setTransactionMessageComputeUnitPrice,
@@ -74,6 +75,22 @@ interface RpcAccount {
   owner: string;
   lamports: number;
   data: [string, string] | { parsed: unknown };
+  executable?: boolean;
+}
+
+/**
+ * Why this recipient would lose the funds, or null. Kyro sends to WALLETS only:
+ * - an address off the ed25519 curve (a PDA, owned by a program: nobody signs for it);
+ * - a program (executable account);
+ * - a token account or a mint (owned by the Token programs): native SOL sent there is stuck, and
+ *   a token sent to the ATA of a token account is unreachable.
+ */
+export function solanaRecipientProblem(recipient: string, acc: Pick<RpcAccount, 'owner' | 'executable'> | null): string | null {
+  if (!isAddress(recipient)) return 'Adresse Solana invalide.';
+  if (isOffCurveAddress(address(recipient))) return 'Cette adresse est dérivée d’un programme (PDA), pas un portefeuille : personne ne peut signer pour elle, les fonds seraient perdus. Demande l’adresse du portefeuille.';
+  if (acc?.executable) return 'Cette adresse est un programme, pas un portefeuille : les fonds seraient perdus.';
+  if (acc && (acc.owner === TOKEN_PROGRAM || acc.owner === TOKEN_2022_PROGRAM)) return 'Cette adresse est un compte de token ou un mint, pas un portefeuille : les fonds y seraient bloqués. Demande l’adresse du portefeuille.';
+  return null;
 }
 interface ParsedTokenAccount {
   pubkey: string;
@@ -300,8 +317,10 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     if (!this.isValidAddress(to)) throw new Error('Adresse Solana invalide');
     const recipient = address(to);
     const priority = params.fee.microLamports;
+    if (params.asset.kind !== 'native' && params.asset.kind !== 'spl') throw new Error('Actif non pris en charge sur Solana');
+    const problem = solanaRecipientProblem(to, await this.accountInfo(recipient));
+    if (problem) throw new Error(problem);
     if (params.asset.kind === 'spl') return this.buildSpl(params, recipient, priority);
-    if (params.asset.kind !== 'native') throw new Error('Actif non pris en charge sur Solana');
 
     const size = { family: 'sol' as const, computeUnits: SOL_TRANSFER_CU, signatures: 1 };
     const maxFee = feeCost(params.fee, size);

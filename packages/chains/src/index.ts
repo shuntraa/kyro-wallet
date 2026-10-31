@@ -7,7 +7,7 @@ export * from './factory';
 export * from './bitcoin/coinselect';
 export { BitcoinAdapter, type DerivedAddress, type BitcoinAdapterOptions } from './bitcoin/adapter';
 export { parseXpub } from './bitcoin/xpub';
-export { EvmAdapter, netTransport, type EvmAdapterOptions, type ContractCallParams } from './evm/adapter';
+export { EvmAdapter, evmRecipientProblem, netTransport, type EvmAdapterOptions, type ContractCallParams } from './evm/adapter';
 export {
   SolanaAdapter,
   systemTransferInstruction,
@@ -18,6 +18,7 @@ export {
   placeSignature,
   checkSolSummary,
   solHistoryItem,
+  solanaRecipientProblem,
   type ParsedIx,
   splComputeUnits,
   SOL_TRANSFER_CU,
