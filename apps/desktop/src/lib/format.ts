@@ -183,7 +183,19 @@ export function fmtChartTime(ms: number, now = Date.now()): string {
 
 /** Normalise a decimal typed by the user (keeps digits and one comma). */
 export function sanitizeDecimalInput(raw: string, maxDecimals: number): string {
-  let s = raw.replace(/[^\d.,]/g, '').replace('.', ',');
+  let s = raw.replace(/[^\d.,]/g, '');
+  // A pasted « 1,234.56 » or « 1.234,56 »: both separators → the LAST one is the decimal mark,
+  // the other one groups thousands (dropped). Before, « 1,234.56 » became 1,23456 (1 000 × less).
+  // Only when the grouping is a clean thousands pattern and digits follow the decimal mark, so that
+  // a stray key while typing (« 0,5. ») never turns 0,5 into 5. Otherwise, as before, the first
+  // separator is the decimal mark and any later one is dropped.
+  const cut = Math.max(s.lastIndexOf(','), s.lastIndexOf('.'));
+  if (s.includes(',') && s.includes('.') && cut < s.length - 1) {
+    const group = s[cut] === ',' ? '.' : ',';
+    const intPart = s.slice(0, cut);
+    if (new RegExp(`^\\d{1,3}(\\${group}\\d{3})+$`).test(intPart)) s = `${intPart.split(group).join('')},${s.slice(cut + 1)}`;
+  }
+  s = s.replace(/\./g, ',');
   const i = s.indexOf(',');
   if (i >= 0) s = s.slice(0, i + 1) + s.slice(i + 1).replace(/,/g, '');
   const [int = '', frac] = s.split(',');
