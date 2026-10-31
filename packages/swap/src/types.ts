@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import type { EvmSwapCheck } from './verify';
+
 export type ProviderId = 'zerox' | 'jupiter' | 'lifi';
 
 /** EVM chain id, or 'solana'. */
@@ -55,6 +57,13 @@ export interface Quote {
   /** Contract that needs an ERC-20 allowance; null for native sells / Solana. */
   allowanceTarget: string | null;
   tx: SwapTx;
+  /**
+   * EVM: what Kyro decoded and checked in the calldata (verify.ts): entry contract, recipient,
+   * enforced minimum, Kyro fee. A quote without it is never signed.
+   */
+  evmCheck?: EvmSwapCheck;
+  /** Jupiter: the fee account the swap transaction must pay (the Kyro fee wallet's token account), null without fee. */
+  solFeeAccount?: string | null;
   /** Human route ("Uniswap V3 + Curve"). */
   route?: string;
   etaSecs?: number;

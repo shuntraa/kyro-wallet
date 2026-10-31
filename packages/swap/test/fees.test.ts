@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { NetRequest, NetResponse } from '@kyro/shared';
 import { createProviders, feeLabel, fetchQuotes, JupiterProvider, KYRO_SWAP_FEE, LifiProvider, NATIVE_EVM, providerFee, ZeroExProvider, type SwapFeeConfig } from '../src';
 import { associatedTokenAccount } from '../src/providers/jupiter';
+import { LIFI_DIAMOND } from '../src';
+import { lifiData, zeroExData } from './calldata';
 
 const TOKEN = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
 const SPENDER = '0x0000000000001fF3684f28c67538d4D072C22734';
@@ -69,7 +71,9 @@ describe('Kyro fee config', () => {
 });
 
 describe('Kyro fee parameters per provider', () => {
-  const tx = { to: SPENDER, data: '0x12', gas: '100000', gasPrice: '1', value: '0' };
+  // Real ABI encodings (verify.ts decodes them): recipient = taker, minimum = 99, fee to FEE_EVM.
+  const tx = { to: SPENDER, data: zeroExData({ sellToken: TOKEN, sellAmount: 1_000_000n, recipient: SPENDER, buyToken: NATIVE_EVM, minAmountOut: 99n, feeRecipient: FEE_EVM }), gas: '100000', gasPrice: '1', value: '0' };
+  const txNoFee = { ...tx, data: zeroExData({ sellToken: TOKEN, sellAmount: 1_000_000n, recipient: SPENDER, buyToken: NATIVE_EVM, minAmountOut: 99n }) };
 
   it('0x: swapFeeRecipient / swapFeeBps / swapFeeToken = sell token', async () => {
     const r = recorder(() => ({ buyAmount: '100', minBuyAmount: '99', transaction: tx, fees: { integratorFee: { amount: '7000', token: TOKEN } } }));
@@ -87,7 +91,7 @@ describe('Kyro fee parameters per provider', () => {
   });
 
   it('0x: no fee parameter when the fee is off', async () => {
-    const r = recorder(() => ({ buyAmount: '100', minBuyAmount: '99', transaction: tx }));
+    const r = recorder(() => ({ buyAmount: '100', minBuyAmount: '99', transaction: txNoFee }));
     const quote = await new ZeroExProvider({ fetch: r.fetch, hasKey: () => true, fee: { kind: 'none' } }).quote(evmParams);
     expect(new URL(r.seen[0]!.url).searchParams.has('swapFeeBps')).toBe(false);
     expect(quote.kyroFeeBps).toBe(0);
@@ -103,7 +107,7 @@ describe('Kyro fee parameters per provider', () => {
         { name: 'Distributions', percentage, included: true, feeSplit: { integratorFee: '0', lifiFee: '0', recipients: [{ name: receiver, fee: '70000', type: 'DISTRIBUTION', walletAddress: receiver }] } },
       ],
     },
-    transactionRequest: { to: SPENDER, data: '0x12' },
+    transactionRequest: { to: LIFI_DIAMOND, data: lifiData({ sellToken: TOKEN, buyToken: NATIVE_EVM, sellAmount: 1_000_000n, receiver: SPENDER, minAmountOut: 99n, fees: [{ recipient: receiver, amount: 7_000n }] }) },
   });
 
   it('LI.FI: distributionFees[0][receiver] + [percentage] as a FRACTION (0.007), no integrator', async () => {

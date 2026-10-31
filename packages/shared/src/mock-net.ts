@@ -9,6 +9,7 @@ import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex } from '@noble/hashes/utils';
 import { IpcError, type Accounts, type EvmTxRequest, type Network, type NetRequest, type NetResponse } from './ipc';
 import { DEMO_COINS, DEMO_EUR_USD, DEMO_TOKENS, demoPrice, demoSeries } from './mock-data';
+import { encodeCall, type AbiValue } from './mock-abi';
 
 import type { DemoUtxo } from './mock-tx';
 export type { DemoUtxo } from './mock-tx';
@@ -62,6 +63,12 @@ const BASE_FEE_GWEI: Record<number, number> = {
 export const SOL_HOSTS = new Set(['api.devnet.solana.com', 'api.mainnet-beta.solana.com']);
 const ALLOWANCE_HOLDER = '0x0000000000001ff3684f28c67538d4d072c22734';
 const LIFI_DIAMOND = '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae';
+const LIFI_FEE_FORWARDER = '0xce40449b773a3e6e5e769adb4e567179d4828cbd';
+/** 0x Settler registry; `ownerOf(2)` answers the demo's taker-submitted Settler. */
+const ZEROX_REGISTRY = '0x00000000000004533fe15556b1e086bb1a72ceae';
+export const DEMO_ZEROX_SETTLER = '0x7f6cee965959295cc64d0e6c00d99d6532d8e86b';
+const ZERO = '0x0000000000000000000000000000000000000000';
+const NATIVE_EEEE = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
 const json = (status: number, body: unknown): NetResponse => ({ status, body: JSON.stringify(body) });
 const text = (status: number, body: string): NetResponse => ({ status, body });
@@ -329,6 +336,8 @@ function evmRpc(chainId: number, req: NetRequest, s: DemoChainState): NetRespons
       if (data.startsWith('0x70a08231')) return rpcResult(id, '0x' + pad32(s.evmTokens.get(`${chainId}:${to}:${arg(0)}`) ?? 0n));
       if (data.startsWith('0xdd62ed3e')) return rpcResult(id, '0x' + pad32(s.allowances.get(`${chainId}:${to}:${arg(0)}:${arg(1)}`) ?? 0n));
       if (data.startsWith('0x313ce567')) return rpcResult(id, '0x' + pad32(BigInt(DEMO_TOKENS[to]?.decimals ?? 18)));
+      // 0x registry: ownerOf(2) / prev(2) = the demo Settler.
+      if (to === ZEROX_REGISTRY) return rpcResult(id, '0x' + DEMO_ZEROX_SETTLER.slice(2).padStart(64, '0'));
       // Swap simulations: succeed when the allowance is in place, revert otherwise.
       if (to === ALLOWANCE_HOLDER || to === LIFI_DIAMOND) return rpcResult(id, '0x');
       return rpcResult(id, '0x');
@@ -541,7 +550,8 @@ function convert(sellToken: string, buyToken: string, sellAmount: bigint, haircu
   return BigInt(Math.floor(buyUnits * 10 ** b.decimals));
 }
 
-const isNativeEvm = (t: string) => t.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+/** The native coin as 0x (`0xEeee…`) and LI.FI (`0x0000…`) name it. */
+const isNativeEvm = (t: string) => t.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' || t === '0x0000000000000000000000000000000000000000';
 
 /** Integrator fee in bps from a query parameter (0 when absent). */
 const bpsOf = (v: string | null, scale: number) => (v ? Math.round(Number(v) * scale) : 0);
@@ -569,8 +579,52 @@ function zerox(url: URL): NetResponse {
     fees: { zeroExFee: { amount: fee.toString(), token: buyToken, type: 'volume' }, integratorFee: kyroBps ? { amount: integrator.toString(), token: q.get('swapFeeToken') ?? sellToken, type: 'volume' } : null, gasFee: null },
     totalNetworkFee: (gas * gasPrice).toString(),
     route: { fills: [{ source: 'Uniswap_V3', proportionBps: '7000' }, { source: 'Curve', proportionBps: '3000' }] },
-    transaction: { to: ALLOWANCE_HOLDER, data: '0x2213bc0b' + '0'.repeat(256), gas: gas.toString(), gasPrice: gasPrice.toString(), value: isNativeEvm(sellToken) ? sellAmount.toString() : '0' },
+    transaction: { to: ALLOWANCE_HOLDER, data: zeroxCalldata({ taker: q.get('taker') ?? ZERO, sellToken, buyToken, sellAmount, minAmountOut: (((buy - fee) * BigInt(10_000 - bps)) / 10_000n), feeRecipient: q.get('swapFeeRecipient') }), gas: gas.toString(), gasPrice: gasPrice.toString(), value: isNativeEvm(sellToken) ? sellAmount.toString() : '0' },
   });
+}
+
+/** AllowanceHolder.exec(settler, token, amount, settler, Settler.execute((recipient, buyToken, min), actions, zid)), as 0x builds it. */
+function zeroxCalldata(o: { taker: string; sellToken: string; buyToken: string; sellAmount: bigint; minAmountOut: bigint; feeRecipient: string | null }): string {
+  const native = isNativeEvm(o.sellToken);
+  // The fee action names its recipient (Kyro only checks that it is in the transaction).
+  const actions: AbiValue[] = [{ t: 'bytes', v: '0xc1fb425e' + (o.feeRecipient ?? ZERO).slice(2).toLowerCase().padStart(64, '0') }, { t: 'bytes', v: '0x38c9c147' + '00'.repeat(32) }];
+  const inner = encodeCall('execute((address,address,uint256),bytes[],bytes32)', [
+    { t: 'tuple', items: [{ t: 'address', v: o.taker }, { t: 'address', v: isNativeEvm(o.buyToken) ? NATIVE_EEEE : o.buyToken }, { t: 'uint256', v: o.minAmountOut }] },
+    { t: 'array', items: actions },
+    { t: 'bytes32', v: '00' },
+  ]);
+  return encodeCall('exec(address,address,uint256,address,bytes)', [
+    { t: 'address', v: DEMO_ZEROX_SETTLER },
+    { t: 'address', v: native ? ZERO : o.sellToken },
+    { t: 'uint256', v: o.sellAmount },
+    { t: 'address', v: DEMO_ZEROX_SETTLER },
+    { t: 'bytes', v: inner },
+  ]);
+}
+
+/** LI.FI swapTokensMultipleV3*: a FeeForwarder step (LI.FI 0,25 % + the distribution), then the DEX step. */
+function lifiCalldata(o: { receiver: string; from: string; to: string; amount: bigint; minAmountOut: bigint; kyro: { receiver: string; amount: bigint } | null }): string {
+  const sell = isNativeEvm(o.from) ? ZERO : o.from;
+  const buy = isNativeEvm(o.to) ? ZERO : o.to;
+  const lifiFee = (o.amount * 25n) / 10_000n;
+  const dist: AbiValue = { t: 'array', items: [{ t: 'tuple', items: [{ t: 'address', v: '0xc06ebbefd94032b85424d51906e2a335efae264b' }, { t: 'uint256', v: lifiFee }] }, ...(o.kyro ? [{ t: 'tuple' as const, items: [{ t: 'address' as const, v: o.kyro.receiver }, { t: 'uint256' as const, v: o.kyro.amount }] }] : [])] };
+  const feeCall = sell === ZERO ? encodeCall('forwardNativeFees((address,uint256)[])', [dist]) : encodeCall('forwardERC20Fees(address,(address,uint256)[])', [{ t: 'address', v: sell }, dist]);
+  const dex = '0x57f96440f1b1cad53b40a8924bd540b1279a491c';
+  const step = (callTo: string, s: string, r: string, amount: bigint, callData: string, deposit: boolean): AbiValue => ({
+    t: 'tuple',
+    items: [{ t: 'address', v: callTo }, { t: 'address', v: callTo }, { t: 'address', v: s }, { t: 'address', v: r }, { t: 'uint256', v: amount }, { t: 'bytes', v: callData }, { t: 'bool', v: deposit }],
+  });
+  const fees = lifiFee + (o.kyro?.amount ?? 0n);
+  const fn = sell === ZERO ? 'swapTokensMultipleV3NativeToERC20' : buy === ZERO ? 'swapTokensMultipleV3ERC20ToNative' : 'swapTokensMultipleV3ERC20ToERC20';
+  const SD = '(address,address,address,address,uint256,bytes,bool)';
+  return encodeCall(`${fn}(bytes32,string,string,address,uint256,${SD}[])`, [
+    { t: 'bytes32', v: demoHash(`lifi:${o.amount}`) },
+    { t: 'string', v: 'lifi-api' },
+    { t: 'string', v: ZERO },
+    { t: 'address', v: o.receiver },
+    { t: 'uint256', v: o.minAmountOut },
+    { t: 'array', items: [step(LIFI_FEE_FORWARDER, sell, sell, o.amount, feeCall, true), step(dex, sell, buy, o.amount - fees, '0x3f0bde25', false)] },
+  ]);
 }
 
 function lifi(url: URL): NetResponse {
@@ -583,18 +637,25 @@ function lifi(url: URL): NetResponse {
   const kyroBps = bpsOf(q.get('distributionFees[0][percentage]'), 10_000);
   const receiver = q.get('distributionFees[0][receiver]') ?? '';
   const buy = convert(from, to, amount - (amount * BigInt(kyroBps)) / 10_000n, 0.0035);
+  const toAmountMin = (buy * BigInt(Math.round((1 - slip) * 10_000))) / 10_000n;
   return json(200, {
     tool: 'stargate',
     toolDetails: { key: 'stargate', name: 'Stargate' },
     estimate: {
       toAmount: buy.toString(),
-      toAmountMin: ((buy * BigInt(Math.round((1 - slip) * 10_000))) / 10_000n).toString(),
+      toAmountMin: toAmountMin.toString(),
       approvalAddress: LIFI_DIAMOND,
       executionDuration: 45,
       gasCosts: [{ amountUSD: '1.21' }],
       feeCosts: [{ amountUSD: '0.95', included: true, name: 'LI.FI fee' }, ...(kyroBps ? [{ amountUSD: '0', included: true, name: 'Distributions', percentage: (kyroBps / 10_000).toFixed(4), feeSplit: { integratorFee: '0', lifiFee: '0', recipients: [{ name: receiver, type: 'DISTRIBUTION', walletAddress: receiver }] } }] : [])],
     },
-    transactionRequest: { to: LIFI_DIAMOND, data: '0x4630a0d8' + '0'.repeat(256), value: isNativeEvm(from) ? hex(amount) : '0x0', gasLimit: hex(240_000), gasPrice: hex(5_100_000_000) },
+    transactionRequest: {
+      to: LIFI_DIAMOND,
+      data: lifiCalldata({ receiver: q.get('fromAddress') ?? ZERO, from, to, amount, minAmountOut: toAmountMin, kyro: kyroBps ? { receiver, amount: (amount * BigInt(kyroBps)) / 10_000n } : null }),
+      value: isNativeEvm(from) ? hex(amount) : '0x0',
+      gasLimit: hex(240_000),
+      gasPrice: hex(5_100_000_000),
+    },
   });
 }
 

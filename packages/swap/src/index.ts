@@ -3,6 +3,7 @@ export * from './types';
 export * from './approve';
 export * from './compare';
 export * from './fees';
+export * from './verify';
 export * from './providers/common';
 export { ZeroExProvider } from './providers/zerox';
 export { LifiProvider } from './providers/lifi';
