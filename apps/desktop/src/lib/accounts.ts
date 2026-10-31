@@ -79,3 +79,42 @@ export function accountNameProblem(name: string): string | null {
   if (/\p{Cc}/u.test(n)) return 'Caractère non autorisé.';
   return null;
 }
+
+/**
+ * The next `count` account indices to create on a chain (smallest free indices ≥ 1), capped by
+ * the per-chain limit (Rust: 20 accounts, account 0 included) and the highest index (100).
+ */
+export function planNewAccounts(list: VaultAccountEntry[], count: number, maxPerChain = 20, maxIndex = 100): number[] {
+  const room = Math.max(0, Math.min(Math.floor(count), maxPerChain - list.length));
+  const taken = new Set(list.map((e) => e.index));
+  const out: number[] = [];
+  for (let i = 1; i <= maxIndex && out.length < room; i++) if (!taken.has(i)) out.push(i);
+  return out;
+}
+
+/** What an own account looks like to the send screen (public data). */
+export interface OwnAccountRef {
+  family: AccountChain;
+  index: number;
+  name: string;
+  addresses: string[];
+}
+
+const sameAddress = (family: AccountChain, a: string, b: string) => (family === 'evm' ? a.toLowerCase() === b.toLowerCase() : a === b);
+
+/** The user's OTHER accounts of `family` (not `current`), for « Mes comptes » in Envoyer. */
+export function otherOwnAccounts<T extends OwnAccountRef>(sources: T[], family: AccountChain, current: number): T[] {
+  return sources.filter((s) => s.family === family && s.index !== current && s.addresses.length > 0);
+}
+
+/** The account of `family` that owns `address`, if it is one of the user's. */
+export function ownAccountOf<T extends OwnAccountRef>(sources: T[], family: AccountChain, address: string): T | undefined {
+  const a = address.trim();
+  if (!a) return undefined;
+  return sources.find((s) => s.family === family && s.addresses.some((x) => sameAddress(family, x, a)));
+}
+
+/** Review label of a recipient that is one of the user's accounts. */
+export function ownAccountLabel(name: string): string {
+  return `Ton compte « ${name} »`;
+}
