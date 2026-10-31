@@ -3,7 +3,7 @@
 // fees slow/normal/fast/custom, recap decoded by the Rust core, password.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { toIpcError, type EvmTxSummary, type SolTxSummary } from '@kyro/shared';
+import { call, toIpcError, type AccountChain, type EvmTxSummary, type SolTxSummary } from '@kyro/shared';
 import {
   assetsFor,
   checkSolSummary,
@@ -61,7 +61,8 @@ import { CardanoSendFields, CardanoSummaryView, CardanoTxStatusLine, tokenKey } 
 import { DustOnlyNote, PoisoningWarning } from '../components/Poisoning';
 import { SecondConfirmNotice, btcWarningText, evmWarningText } from '../components/SecondConfirm';
 import { useHistory } from '../state/history';
-import { AccountPicker } from '../components/AccountPicker';
+import { AccountPicker, useCreateAccounts } from '../components/AccountPicker';
+import { ACCOUNT_CHAIN_LABEL, accountAddress, defaultAccountName, otherOwnAccounts, ownAccountLabel, ownAccountOf, planNewAccounts } from '../lib/accounts';
 import { Menu } from '../components/ui/menu';
 import { Button, IconButton, Notice, Spinner } from '../components/ui/primitives';
 import { IconBack, IconCheck, IconChevronDown, IconLock, IconShield, IconUpDown, IconWarn } from '../components/icons';
@@ -86,7 +87,7 @@ const LEVELS: Array<{ level: FeeLevel; label: string }> = [
 ];
 
 export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string }) {
-  const { back, settings, navigate, hideBalances, accountSources, accountName } = useApp();
+  const { back, settings, navigate, hideBalances, accountSources, accountName, selectedAccounts, vaultLists } = useApp();
   const { adapters, accounts, activeHw } = useVault();
   const pf = usePortfolio();
   const network = accounts.network;
@@ -114,6 +115,34 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
   const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
   const isOwn = ownAddresses.includes(asset?.family === 'evm' ? toTrim.toLowerCase() : toTrim);
+  // « Mes comptes »: the user's OTHER accounts of this chain. A transfer between two of them is an
+  // ordinary send (same Rust decoding, native dialog, poisoning check: own addresses are known).
+  const family = asset?.family as AccountChain | undefined;
+  const ownAccount = family && addrValid ? ownAccountOf(accountSources, family, toTrim) : undefined;
+  const myOtherAccounts = family && !activeHw ? otherOwnAccounts(accountSources, family, selectedAccounts[family]) : [];
+  const nextOwn = family && !activeHw && vaultLists ? (planNewAccounts(vaultLists[family], 1)[0] ?? null) : null;
+  const createAccounts = useCreateAccounts();
+  const [ownBusy, setOwnBusy] = useState(false);
+  const [ownError, setOwnError] = useState<string | null>(null);
+  const pickRecipient = (addr: string) => {
+    setTo(addr);
+    setGuard({ pasted: addr, tampered: false, source: 'paste' });
+  };
+  /** Creates the next account of this chain (without switching the sending one) and fills its address. */
+  const createOwnRecipient = async () => {
+    if (!family) return;
+    setOwnBusy(true);
+    setOwnError(null);
+    try {
+      const [index] = await createAccounts(family, 1);
+      if (index === undefined) return;
+      pickRecipient(accountAddress(await call('accounts_get', { account: index }), family).address);
+    } catch (e) {
+      setOwnError(toIpcError(e).message);
+    } finally {
+      setOwnBusy(false);
+    }
+  };
   const noChecksum = asset?.family === 'evm' && addrValid && toTrim.slice(2) === toTrim.slice(2).toLowerCase();
 
   // Address poisoning: compare the recipient with every trusted address of this chain family
@@ -377,7 +406,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     );
   }
 
-  const recipientName = contact?.name ?? shortAddress(toTrim || '—');
+  // Review label: « Ton compte "X" » for one of the user's accounts, else the contact or the address.
+  const recipientName = ownAccount ? ownAccountLabel(ownAccount.name) : (contact?.name ?? shortAddress(toTrim || '—'));
   const step1 = addrValid;
   const step2 = !!built;
 
@@ -389,7 +419,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
         amount={built?.unsigned.amount ?? 0n}
         {...(adaTokenMode && adaToken ? { what: `${tokenQty} ${cardanoTokenLabel(adaToken)} (+ ${fmtCrypto(built?.unsigned.amount ?? 0n, 6, 'ADA')} de min-ADA)` } : {})}
         to={toTrim}
-        contactKnown={!!contact}
+        contactKnown={!!contact || !!ownAccount}
         onBack={back}
         onHistory={() => navigate({ name: 'history' })}
       >
@@ -488,13 +518,39 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 />
                 {guard.source === 'paste' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Collé</span>}
                 {guard.source === 'typed' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Saisi</span>}
+                {!activeHw && (
+                  <Menu
+                    align="end"
+                    label={`Mes comptes ${ACCOUNT_CHAIN_LABEL[asset.family as AccountChain]}`}
+                    className="w-[340px]"
+                    onSelect={(v) => (v === '__new__' ? void createOwnRecipient() : pickRecipient(v))}
+                    items={[
+                      ...myOtherAccounts.map((x) => {
+                        const bal = pf.accountBalances.get(`${x.family}:${x.index}`)?.get(asset.id);
+                        return {
+                          value: x.addresses[0] ?? '',
+                          label: x.name,
+                          hint: [shortAddress(x.addresses[0] ?? ''), bal === undefined ? null : hideBalances ? '•••••' : fmtCrypto(bal, asset.decimals, asset.symbol)].filter(Boolean).join(' · '),
+                        };
+                      }),
+                      {
+                        value: '__new__',
+                        label: myOtherAccounts.length === 0 ? 'Créer un autre compte' : 'Nouveau compte',
+                        hint: nextOwn === null ? 'Limite de comptes atteinte' : `${defaultAccountName(asset.family as AccountChain, nextOwn)}, son adresse sera le destinataire`,
+                        disabled: nextOwn === null || ownBusy,
+                      },
+                    ]}
+                    trigger={
+                      <button type="button" className="press h-7 rounded-[5px] px-2.5 text-[12px] font-medium whitespace-nowrap text-ice hover:bg-control">
+                        {ownBusy ? <Spinner /> : 'Mes comptes'}
+                      </button>
+                    }
+                  />
+                )}
                 <Menu
                   align="end"
                   label="Carnet d’adresses"
-                  onSelect={(addr) => {
-                    setTo(addr);
-                    setGuard({ pasted: addr, tampered: false, source: 'paste' });
-                  }}
+                  onSelect={pickRecipient}
                   items={getContacts()
                     .filter((c) => c.family === asset.family)
                     .map((c) => ({ value: c.address, label: c.name, hint: shortAddress(c.address) }))}
@@ -508,10 +564,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {addrValid && (
                 <div className="fade-in flex flex-col gap-3 p-4">
                   <div className="flex items-center gap-2.5">
-                    <span className="flex size-8 items-center justify-center rounded-full bg-ice-deep text-[13px] font-semibold text-ice-text">{(contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
+                    <span className="flex size-8 items-center justify-center rounded-full bg-ice-deep text-[13px] font-semibold text-ice-text">{(ownAccount?.name ?? contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
                     <span className="flex flex-col">
-                      <span className="text-[14px] font-medium">{contact ? contact.name : isOwn ? 'Ton propre compte' : 'Adresse inconnue'}</span>
-                      <span className="text-[12px] text-mute">{contact ? `Carnet d’adresses · ${contact.sends ?? 0} envoi${(contact.sends ?? 0) > 1 ? 's' : ''}` : isOwn ? 'Cette adresse appartient à ce coffre' : 'Première fois : compare chaque bloc avec ton destinataire'}</span>
+                      <span className="text-[14px] font-medium">{ownAccount ? ownAccountLabel(ownAccount.name) : contact ? contact.name : isOwn ? 'Ton propre compte' : 'Adresse inconnue'}</span>
+                      <span className="text-[12px] text-mute">{ownAccount ? `Un de tes comptes ${ACCOUNT_CHAIN_LABEL[ownAccount.family]} (n° ${ownAccount.index + 1}) : même vérification qu’un envoi normal` : contact ? `Carnet d’adresses · ${contact.sends ?? 0} envoi${(contact.sends ?? 0) > 1 ? 's' : ''}` : isOwn ? 'Cette adresse appartient à ce coffre' : 'Première fois : compare chaque bloc avec ton destinataire'}</span>
                     </span>
                   </div>
                   <AddressBlocks address={toTrim} />
@@ -525,6 +581,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 </div>
               )}
             </div>
+            {ownError && <span className="text-[12px] text-down">{ownError}</span>}
             {toTrim && !addrValid && !xAddress && !adaProblem && <span className="text-[12px] text-down">Adresse invalide pour {chain.name}.</span>}
             {adaProblem && <span className="text-[12px] text-down">{adaProblem.charAt(0).toUpperCase() + adaProblem.slice(1)}.</span>}
             {poisoning.lookalike && <PoisoningWarning recipient={toTrim} known={poisoning.lookalike.known} family={asset.family} acknowledged={poisonAck} onAcknowledge={setPoisonAck} />}
@@ -709,17 +766,17 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           <div className="flex items-center gap-2.5 rounded-box border border-line bg-bg px-3.5 py-3">
             <CoinIcon glyph={asset.glyph} color={asset.color} size={30} />
             <span className="flex flex-col text-[12px]">
-              <span className="font-medium">Toi</span>
+              <span className="font-medium">{ownAccount && !activeHw ? accountName(asset.family) : 'Toi'}</span>
               <span className="font-mono text-[11px] text-mute">{shortAddress(adapter.getAddress())}</span>
             </span>
             <span aria-hidden="true" className="relative h-0 flex-1 border-t-[1.5px] border-dashed border-ice-line">
               <span className="absolute -top-[7px] -right-0.5 text-[10px] text-ice">▶</span>
             </span>
             <span className="flex flex-col items-end text-[12px]">
-              <span className="font-medium">{addrValid ? (contact?.name ?? 'Destinataire') : '—'}</span>
+              <span className="font-medium">{addrValid ? (ownAccount ? ownAccountLabel(ownAccount.name) : (contact?.name ?? 'Destinataire')) : '—'}</span>
               <span className="font-mono text-[11px] text-mute">{addrValid ? shortAddress(toTrim) : ''}</span>
             </span>
-            <span className="flex size-[30px] items-center justify-center rounded-full bg-ice-deep text-[12px] font-semibold text-ice-text">{(contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
+            <span className="flex size-[30px] items-center justify-center rounded-full bg-ice-deep text-[12px] font-semibold text-ice-text">{(ownAccount?.name ?? contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
           </div>
           <dl className="m-0 flex flex-col text-[13px]">
             <Row k="Réseau" v={chain.name} />
@@ -762,7 +819,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {buildError && (serverMissing(buildError) ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'tron' && (
             <EnClair tone={tronShort ? 'warn' : 'ice'}>
-              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>. TRON ne prend pas de frais fixes : cette transaction brûle environ{' '}
+              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>. TRON ne prend pas de frais fixes : cette transaction brûle environ{' '}
               <strong>{fmtCrypto(BigInt(built.unsigned.estimate.totalBurn), 6, 'TRX', 6)}</strong>, au plus {fmtCrypto(BigInt(built.unsigned.estimate.totalBurnMax), 6, 'TRX', 6)}
               {feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : ''}.
               {!built.unsigned.estimate.recipientExists ? ' Son compte n’existe pas encore : l’activer fait partie de ce brûlé.' : ''}
@@ -771,7 +828,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           )}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'xrp' && (
             <EnClair tone={built.unsigned.summary.destinationTag === null ? 'warn' : 'ice'}>
-              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>
+              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>
               {built.unsigned.summary.destinationTag !== null ? (
                 <>
                   {' '}avec le tag de destination <strong className="font-mono">{built.unsigned.summary.destinationTag}</strong>
@@ -790,14 +847,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               <strong>
                 {built.unsigned.token && adaToken ? `${built.unsigned.token.quantity} ${cardanoTokenLabel(adaToken)} + ${fmtCrypto(built.unsigned.amount, 6, 'ADA')} (min-ADA)` : fmtCrypto(built.unsigned.amount, 6, 'ADA')}
               </strong>{' '}
-              à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>. Frais : {fmtCrypto(built.unsigned.maxFee, 6, 'ADA')} ; au total {fmtCrypto(BigInt(built.unsigned.context.leaving), 6, 'ADA')} quittent ton portefeuille, le reste revient sur ton adresse.
+              à <strong>{recipientName}</strong>. Frais : {fmtCrypto(built.unsigned.maxFee, 6, 'ADA')} ; au total {fmtCrypto(BigInt(built.unsigned.context.leaving), 6, 'ADA')} quittent ton portefeuille, le reste revient sur ton adresse.
               {built.unsigned.summary.memo ? ' Le message sera public pour toujours.' : ''}
               {built.unsigned.summary.warnings.some((w) => w.kind === 'unknownToken') ? ' Token non vérifié : une 2ᵉ confirmation te sera demandée.' : ''}
             </EnClair>
           )}
           {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'ada' && (
             <EnClair>
-              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{contact?.name ?? shortAddress(toTrim)}</strong>
+              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>
               {utxoLike && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? ', la monnaie revient sur ton adresse de change' : ''}. Personne d’autre ne reçoit rien, et tu paies au maximum{' '}
               {feeFiat !== null ? fmtFiat(feeFiat, cur) : maxFee !== null && nativeAsset ? fmtCrypto(maxFee, nativeAsset.decimals, nativeAsset.symbol) : '—'} de frais{choice === 'custom' ? ' (ton réglage)' : ''}.
               {rent > 0n && nativeAsset ? ` Son compte de token n’existe pas encore : tu déposes ${fmtCrypto(rent, nativeAsset.decimals, nativeAsset.symbol)} de loyer pour le créer.` : ''}
@@ -838,7 +895,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           </Button>
           <span className="text-center text-[11px] leading-[1.5] text-faint">
             {activeHw ? 'Une fenêtre système te montrera ce récapitulatif, puis ton appareil te demandera de confirmer.' : 'Une fenêtre système te montrera ce récapitulatif une dernière fois.'}
-            {recipientName ? '' : ''}
           </span>
         </aside>
       </div>
