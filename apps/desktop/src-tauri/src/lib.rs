@@ -14,6 +14,7 @@ mod core_rpc;
 mod electrum;
 mod error;
 mod hw;
+mod known_tokens;
 mod net;
 mod servers;
 mod settings;

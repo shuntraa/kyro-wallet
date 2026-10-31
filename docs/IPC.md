@@ -64,10 +64,12 @@ pub enum EvmWarning {   // JSON { "kind": "contractCall" | "approval" | … } �
     ContractCall /*tout appel autre qu'un transfer ERC-20 décodé*/,
     Approval { spender, amount, unlimited /*≥ 2^128 : affiché ILLIMITÉ*/ },
     ValueToContract { value_wei } /*valeur native avec un appel (calldata non vide)*/,
-    UnknownChain { chain_id } /*hors EVM_KNOWN_CHAINS : 1, 11155111, 42161, 10, 8453, 137, 56, 43114*/,
+    UnknownChain { chain_id } /*hors EVM_KNOWN_CHAINS : 1, 11155111, 42161, 10, 8453, 137, 56, 43114, 25, 5000, 146, 14, 8217, 100, 999, 1329, 1030*/,
     HighFee { max_fee_wei } /*gas_limit × max_fee_per_gas > evm_high_fee_threshold_wei(chain)*/ }
-// Seuil de frais : 0,05 de la monnaie native (ETH, Sepolia, Arbitrum, Optimism, Base, BNB Chain, chaînes inconnues),
-// 50 POL (Polygon), 1 AVAX (Avalanche). Limite : un envoi de valeur SANS calldata vers une adresse de contrat
+// Seuil de frais : 0,05 de la monnaie native (ETH, Sepolia, Arbitrum, Optimism, Base, BNB Chain, HyperEVM, chaînes inconnues),
+// 50 POL (Polygon), 1 AVAX (Avalanche), ≈ 10 USD sur les chaînes à monnaie bon marché (31/10/2026) : 200 CRO (Cronos),
+// 20 MNT (Mantle), 250 S (Sonic), 2 000 FLR (Flare), 300 KAIA, 10 XDAI (Gnosis), 200 SEI, 200 CFX (Conflux eSpace).
+// Le dialogue nomme la chaîne et sa monnaie native d'après la table générée depuis registry.ts (`known_tokens.rs` de la coque). Limite : un envoi de valeur SANS calldata vers une adresse de contrat
 // n'est pas détecté (il faudrait eth_getCode ; Rust ne contacte pas le RPC pour signer).
 pub fn evm_decode(tx: &EvmTxRequest) -> Result<EvmTxSummary>;
 pub struct BtcTxSummary { pub outputs: Vec<(String /*address*/, u64 /*sats*/, bool /*is_change*/)>, pub fee_sats: u64,
@@ -874,6 +876,7 @@ type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |
 | `arbitrum-one-rpc.publicnode.com`, `optimism-rpc.publicnode.com`, `base-rpc.publicnode.com`, `polygon-bor-rpc.publicnode.com`, `bsc-rpc.publicnode.com`, `avalanche-c-chain-rpc.publicnode.com` | RPC EVM (phase 2) |
+| `cronos-evm-rpc.publicnode.com`, `mantle-rpc.publicnode.com`, `sonic-rpc.publicnode.com`, `gnosis-rpc.publicnode.com`, `hyperliquid-rpc.publicnode.com`, `sei-evm-rpc.publicnode.com` ; `flare-api.flare.network` (Flare), `public-en.node.kaia.io` (Kaia), `evm.confluxrpc.com` (Conflux eSpace) | RPC EVM (phase 2) : Cronos 25, Mantle 5000, Sonic 146, Gnosis 100, HyperEVM 999, Sei 1329 ; RPC publics officiels des trois chaînes sans point d'accès publicnode ; famille Tor `evm` |
 | `mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion` | Bitcoin (Esplora) en mode Tor uniquement, `http://` (service onion officiel de mempool) ; réécriture automatique de `mempool.space` |
 | `api.devnet.solana.com`, `api.mainnet-beta.solana.com` | RPC Solana (aussi : tables d'adresses v0 lues par Rust pour `sol_decode_tx` / `sol_sign_tx` ; staking `sol_stake_*` lu et diffusé par Rust : `getProgramAccounts`, `getVoteAccounts`, sysvar StakeHistory, `sendTransaction` ; ou le RPC `servers.solana[cluster]` des réglages) |
 | `api.0x.org`, `li.quest`, `lite-api.jup.ag` | devis de swap |

@@ -396,18 +396,18 @@ pub(crate) fn format_units(raw: &str, decimals: usize) -> String {
     }
 }
 
+/// Name of an EVM chain for the dialog: Kyro's registry (generated `known_tokens` table).
 fn chain_name(id: u64) -> String {
-    match id {
-        1 => "Ethereum".into(),
-        11155111 => "Ethereum Sepolia (testnet)".into(),
-        42161 => "Arbitrum One".into(),
-        10 => "Optimism".into(),
-        8453 => "Base".into(),
-        137 => "Polygon".into(),
-        56 => "BNB Chain".into(),
-        43114 => "Avalanche C-Chain".into(),
-        other => format!("chaîne {other}"),
+    match crate::known_tokens::evm_chain(id) {
+        Some(c) if c.network == wallet_core::Network::Testnet => format!("{} (testnet)", c.name),
+        Some(c) => c.name.into(),
+        None => format!("chaîne {id}"),
     }
+}
+
+/// Native coin ticker of an EVM chain (ETH, POL, BNB, CRO, …); « unités natives » if unknown.
+pub(crate) fn native_symbol(id: u64) -> &'static str {
+    crate::known_tokens::evm_chain(id).map_or("unités natives", |c| c.native_symbol)
 }
 
 #[derive(Deserialize)]
@@ -430,8 +430,9 @@ pub(crate) fn describe_evm(s: &wallet_core::EvmTxSummary, hint: Option<&TokenHin
     match s.kind {
         EvmTxKind::NativeTransfer => {
             out += &format!(
-                "Envoi de {} ETH\nÀ : {}\n",
+                "Envoi de {} {}\nÀ : {}\n",
                 format_units(&s.amount, 18),
+                native_symbol(s.chain_id),
                 s.to
             );
         }
@@ -457,13 +458,18 @@ pub(crate) fn describe_evm(s: &wallet_core::EvmTxSummary, hint: Option<&TokenHin
         }
         EvmTxKind::ContractCall => {
             out += &format!(
-                "Appel de contrat : {}\nValeur envoyée : {} ETH\n",
+                "Appel de contrat : {}\nValeur envoyée : {} {}\n",
                 s.to,
-                format_units(&s.amount, 18)
+                format_units(&s.amount, 18),
+                native_symbol(s.chain_id)
             );
         }
     }
-    out += &format!("\nFrais maximum : {} ETH", format_units(&s.max_fee_wei, 18));
+    out += &format!(
+        "\nFrais maximum : {} {}",
+        format_units(&s.max_fee_wei, 18),
+        native_symbol(s.chain_id)
+    );
     out
 }
 
@@ -496,16 +502,18 @@ pub(crate) fn evm_warning_lines(s: &wallet_core::EvmTxSummary, hint: Option<&Tok
                 )
             }
             EvmWarning::ValueToContract { value_wei } => format!(
-                "• {} ETH (valeur native) envoyés au contrat avec l'appel\n",
-                format_units(value_wei, 18)
+                "• {} {} (valeur native) envoyés au contrat avec l'appel\n",
+                format_units(value_wei, 18),
+                native_symbol(s.chain_id)
             ),
             EvmWarning::UnknownChain { chain_id } => format!(
                 "• réseau INCONNU de Kyro (chainId {chain_id}) : vérifie que c'est bien celui que tu veux\n"
             ),
             EvmWarning::HighFee { max_fee_wei } => format!(
-                "• frais maximum très élevés : {} (seuil {})\n",
+                "• frais maximum très élevés : {} {sym} (seuil {} {sym})\n",
                 format_units(max_fee_wei, 18),
-                format_units(&wallet_core::evm_high_fee_threshold_wei(s.chain_id).to_string(), 18)
+                format_units(&wallet_core::evm_high_fee_threshold_wei(s.chain_id).to_string(), 18),
+                sym = native_symbol(s.chain_id)
             ),
         };
     }
@@ -832,15 +840,49 @@ mod tests {
         };
         assert!(describe_evm_extra(&s, Some(&hint))
             .contains("dépenser 1 USDC (unités brutes : 1000000)"));
-        let s = wallet_core::evm_decode(&tx("0xdeadbeef", 999, "1000000000000000000")).unwrap();
+        let s = wallet_core::evm_decode(&tx("0xdeadbeef", 424_242, "1000000000000000000")).unwrap();
         let d = describe_evm_extra(&s, None);
         for needle in [
             "action INCONNUE",
-            "1 ETH (valeur native) envoyés au contrat",
-            "réseau INCONNU de Kyro (chainId 999)",
+            "1 unités natives (valeur native) envoyés au contrat",
+            "réseau INCONNU de Kyro (chainId 424242)",
         ] {
             assert!(d.contains(needle), "{needle} in {d}");
         }
+        let s = wallet_core::evm_decode(&tx("0xdeadbeef", 1, "1000000000000000000")).unwrap();
+        assert!(describe_evm_extra(&s, None).contains("1 ETH (valeur native)"));
+    }
+
+    #[test]
+    fn evm_dialog_names_the_chain_and_its_native_coin() {
+        let tx = EvmTxRequest {
+            chain_id: 25,
+            nonce: 0,
+            to: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238".into(),
+            value_wei: "1500000000000000000".into(),
+            data: "0x".into(),
+            gas_limit: 21_000,
+            max_fee_per_gas: "1000000000000".into(),
+            max_priority_fee_per_gas: "1000000000".into(),
+        };
+        let s = wallet_core::evm_decode(&tx).unwrap();
+        assert!(!s.requires_extra_confirmation, "{:?}", s.warnings);
+        let d = describe_evm(&s, None);
+        for needle in [
+            "Réseau : Cronos",
+            "Envoi de 1,5 CRO",
+            "Frais maximum : 0,021 CRO",
+        ] {
+            assert!(d.contains(needle), "{needle} in {d}");
+        }
+        let s = wallet_core::evm_decode(&EvmTxRequest {
+            chain_id: 11_155_111,
+            ..tx
+        })
+        .unwrap();
+        assert!(describe_evm(&s, None).contains("Réseau : Ethereum Sepolia (testnet)"));
+        assert_eq!(native_symbol(137), "POL");
+        assert_eq!(native_symbol(424_242), "unités natives");
     }
 
     #[test]

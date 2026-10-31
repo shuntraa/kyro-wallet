@@ -116,17 +116,32 @@ pub enum EvmTxKind {
 }
 
 /// Chains Kyro knows by name; any other chain id needs the reinforced confirmation.
-pub const EVM_KNOWN_CHAINS: &[u64] = &[1, 11_155_111, 42_161, 10, 8_453, 137, 56, 43_114];
+/// Same list as the EVM chains of `packages/chains` registry.ts (checked by a test of the shell's
+/// generated `known_tokens` table).
+pub const EVM_KNOWN_CHAINS: &[u64] = &[
+    1, 11_155_111, 42_161, 10, 8_453, 137, 56, 43_114, 25, 5_000, 146, 14, 8_217, 100, 999, 1_329,
+    1_030,
+];
 
 /// Worst-case fee (`gas_limit × max_fee_per_gas`, native units in wei) above which the
 /// reinforced confirmation is required: 0.05 of the native coin on ETH-native chains (Ethereum,
-/// Sepolia, Arbitrum, Optimism, Base) and BNB Chain, 50 POL on Polygon, 1 AVAX on Avalanche,
-/// 0.05 elsewhere. A plain transfer costs ~0.0005 ETH at 20 gwei; a swap ~0.005–0.02 ETH.
+/// Sepolia, Arbitrum, Optimism, Base), BNB Chain and HyperEVM, 50 POL on Polygon, 1 AVAX on
+/// Avalanche, 0.05 elsewhere. A plain transfer costs ~0.0005 ETH at 20 gwei; a swap ~0.005–0.02 ETH.
+/// Chains with a low-priced native coin get a threshold of roughly 10 USD (prices of 2026-10-31):
+/// 200 CRO (Cronos, ~380 gwei), 20 MNT (Mantle), 250 S (Sonic), 2 000 FLR (Flare, ~650 gwei),
+/// 300 KAIA, 10 XDAI (Gnosis), 200 SEI, 200 CFX (Conflux eSpace); 0.05 of those coins would flag
+/// ordinary token transfers.
 pub fn evm_high_fee_threshold_wei(chain_id: u64) -> U256 {
     let milli = U256::exp10(15); // 0.001 native
     match chain_id {
         137 => milli * 50_000u64,
         43_114 => milli * 1_000u64,
+        25 | 1_329 | 1_030 => milli * 200_000u64,
+        5_000 => milli * 20_000u64,
+        146 => milli * 250_000u64,
+        14 => milli * 2_000_000u64,
+        8_217 => milli * 300_000u64,
+        100 => milli * 10_000u64,
         _ => milli * 50u64,
     }
 }

@@ -125,6 +125,29 @@ const EVM_MAINNET: EvmChain[] = [
     coingeckoId: 'binancecoin', phase: 2, blockTimeSecs: 3, chainId: 56, rpcUrl: 'https://bsc-rpc.publicnode.com' }),
   evm({ key: 'avalanche', name: 'Avalanche C-Chain', label: 'Avalanche', network: 'mainnet', color: '#E84142', glyph: 'A', nativeSymbol: 'AVAX', nativeName: 'Avalanche',
     coingeckoId: 'avalanche-2', phase: 2, blockTimeSecs: 2, chainId: 43114, rpcUrl: 'https://avalanche-c-chain-rpc.publicnode.com' }),
+  // Other EVM-compatible chains (same address and key). Each RPC was checked on 2026-10-31:
+  // `eth_chainId` matches, EIP-1559 (type 2) transactions accepted by the pool (an unfunded
+  // type-2 transfer is refused for « insufficient funds », not for its type), JSON-RPC batches
+  // answered. Not added: Ethereum Classic (61, type 2 refused: « pool not yet in London », Kyro
+  // only signs EIP-1559), XDC (50, `xdc…` address format; public RPCs answering 502/520).
+  evm({ key: 'cronos', name: 'Cronos', label: 'Cronos', network: 'mainnet', color: '#1D2D5C', glyph: 'C', nativeSymbol: 'CRO', nativeName: 'Cronos',
+    coingeckoId: 'crypto-com-chain', phase: 2, blockTimeSecs: 1, chainId: 25, rpcUrl: 'https://cronos-evm-rpc.publicnode.com' }),
+  evm({ key: 'mantle', name: 'Mantle', label: 'Mantle', network: 'mainnet', color: '#3F8F87', glyph: 'M', nativeSymbol: 'MNT', nativeName: 'Mantle',
+    coingeckoId: 'mantle', phase: 2, blockTimeSecs: 2, chainId: 5000, rpcUrl: 'https://mantle-rpc.publicnode.com' }),
+  evm({ key: 'sonic', name: 'Sonic', label: 'Sonic', network: 'mainnet', color: '#24477A', glyph: 'S', nativeSymbol: 'S', nativeName: 'Sonic',
+    coingeckoId: 'sonic-3', phase: 2, blockTimeSecs: 1, chainId: 146, rpcUrl: 'https://sonic-rpc.publicnode.com' }),
+  evm({ key: 'flare', name: 'Flare', label: 'Flare', network: 'mainnet', color: '#C4234F', glyph: 'F', nativeSymbol: 'FLR', nativeName: 'Flare',
+    coingeckoId: 'flare-networks', phase: 2, blockTimeSecs: 1.8, chainId: 14, rpcUrl: 'https://flare-api.flare.network/ext/C/rpc' }),
+  evm({ key: 'kaia', name: 'Kaia', label: 'Kaia', network: 'mainnet', color: '#5E7A1F', glyph: 'K', nativeSymbol: 'KAIA', nativeName: 'Kaia',
+    coingeckoId: 'kaia', phase: 2, blockTimeSecs: 1, chainId: 8217, rpcUrl: 'https://public-en.node.kaia.io' }),
+  evm({ key: 'gnosis', name: 'Gnosis', label: 'Gnosis', network: 'mainnet', color: '#3E6957', glyph: 'G', nativeSymbol: 'XDAI', nativeName: 'xDAI',
+    coingeckoId: 'xdai', phase: 2, blockTimeSecs: 5, chainId: 100, rpcUrl: 'https://gnosis-rpc.publicnode.com' }),
+  evm({ key: 'hyperevm', name: 'HyperEVM', label: 'HyperEVM', network: 'mainnet', color: '#2E8F7C', glyph: 'H', nativeSymbol: 'HYPE', nativeName: 'Hyperliquid',
+    coingeckoId: 'hyperliquid', phase: 2, blockTimeSecs: 1, chainId: 999, rpcUrl: 'https://hyperliquid-rpc.publicnode.com' }),
+  evm({ key: 'sei', name: 'Sei EVM', label: 'Sei', network: 'mainnet', color: '#8E2A24', glyph: 'S', nativeSymbol: 'SEI', nativeName: 'Sei',
+    coingeckoId: 'sei-network', phase: 2, blockTimeSecs: 0.4, chainId: 1329, rpcUrl: 'https://sei-evm-rpc.publicnode.com' }),
+  evm({ key: 'conflux', name: 'Conflux eSpace', label: 'Conflux', network: 'mainnet', color: '#2C4C7E', glyph: 'C', nativeSymbol: 'CFX', nativeName: 'Conflux',
+    coingeckoId: 'conflux-token', phase: 2, blockTimeSecs: 1, chainId: 1030, rpcUrl: 'https://evm.confluxrpc.com' }),
 ];
 
 const SOL: Record<Network, SolChain> = {

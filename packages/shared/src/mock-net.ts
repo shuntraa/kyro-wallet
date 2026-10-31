@@ -53,10 +53,21 @@ export const EVM_HOSTS: Record<string, number> = {
   'polygon-bor-rpc.publicnode.com': 137,
   'bsc-rpc.publicnode.com': 56,
   'avalanche-c-chain-rpc.publicnode.com': 43114,
+  'cronos-evm-rpc.publicnode.com': 25,
+  'mantle-rpc.publicnode.com': 5000,
+  'sonic-rpc.publicnode.com': 146,
+  'flare-api.flare.network': 14,
+  'public-en.node.kaia.io': 8217,
+  'gnosis-rpc.publicnode.com': 100,
+  'hyperliquid-rpc.publicnode.com': 999,
+  'sei-evm-rpc.publicnode.com': 1329,
+  'evm.confluxrpc.com': 1030,
 };
 
+/** Rough base fees seen on 2026-10-31 (gwei). */
 const BASE_FEE_GWEI: Record<number, number> = {
   1: 4.2, 11155111: 4.2, 42161: 0.01, 10: 0.002, 8453: 0.004, 137: 32, 56: 1, 43114: 25,
+  25: 375, 5000: 50, 146: 50, 14: 500, 8217: 25, 100: 0.001, 999: 0.1, 1329: 50, 1030: 20,
 };
 
 export const SOL_HOSTS = new Set(['api.devnet.solana.com', 'api.mainnet-beta.solana.com']);

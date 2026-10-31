@@ -1,0 +1,301 @@
+{
+  "evmChains": [
+    {
+      "network": "mainnet",
+      "chainId": 1,
+      "name": "Ethereum",
+      "nativeSymbol": "ETH",
+      "rpcHost": "ethereum-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 42161,
+      "name": "Arbitrum One",
+      "nativeSymbol": "ETH",
+      "rpcHost": "arbitrum-one-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 10,
+      "name": "Optimism",
+      "nativeSymbol": "ETH",
+      "rpcHost": "optimism-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 8453,
+      "name": "Base",
+      "nativeSymbol": "ETH",
+      "rpcHost": "base-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 137,
+      "name": "Polygon",
+      "nativeSymbol": "POL",
+      "rpcHost": "polygon-bor-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 56,
+      "name": "BNB Chain",
+      "nativeSymbol": "BNB",
+      "rpcHost": "bsc-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 43114,
+      "name": "Avalanche C-Chain",
+      "nativeSymbol": "AVAX",
+      "rpcHost": "avalanche-c-chain-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 25,
+      "name": "Cronos",
+      "nativeSymbol": "CRO",
+      "rpcHost": "cronos-evm-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 5000,
+      "name": "Mantle",
+      "nativeSymbol": "MNT",
+      "rpcHost": "mantle-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 146,
+      "name": "Sonic",
+      "nativeSymbol": "S",
+      "rpcHost": "sonic-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 14,
+      "name": "Flare",
+      "nativeSymbol": "FLR",
+      "rpcHost": "flare-api.flare.network"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 8217,
+      "name": "Kaia",
+      "nativeSymbol": "KAIA",
+      "rpcHost": "public-en.node.kaia.io"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 100,
+      "name": "Gnosis",
+      "nativeSymbol": "XDAI",
+      "rpcHost": "gnosis-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 999,
+      "name": "HyperEVM",
+      "nativeSymbol": "HYPE",
+      "rpcHost": "hyperliquid-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 1329,
+      "name": "Sei EVM",
+      "nativeSymbol": "SEI",
+      "rpcHost": "sei-evm-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 1030,
+      "name": "Conflux eSpace",
+      "nativeSymbol": "CFX",
+      "rpcHost": "evm.confluxrpc.com"
+    },
+    {
+      "network": "testnet",
+      "chainId": 11155111,
+      "name": "Ethereum Sepolia",
+      "nativeSymbol": "ETH",
+      "rpcHost": "ethereum-sepolia-rpc.publicnode.com"
+    }
+  ],
+  "tokens": [
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+      "symbol": "DAI",
+      "name": "Dai",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+      "symbol": "WBTC",
+      "name": "Wrapped Bitcoin",
+      "decimals": 8
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+      "symbol": "ARB",
+      "name": "Arbitrum",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0x4200000000000000000000000000000000000042",
+      "symbol": "OP",
+      "name": "Optimism",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x55d398326f99059fF775485246999027B3197955",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:43114",
+      "contract": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:43114",
+      "contract": "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "testnet",
+      "chain": "evm:11155111",
+      "contract": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "tron",
+      "contract": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "testnet",
+      "chain": "solana",
+      "contract": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "testnet",
+      "chain": "tron",
+      "contract": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    }
+  ]
+}
