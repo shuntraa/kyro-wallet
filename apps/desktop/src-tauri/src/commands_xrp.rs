@@ -133,6 +133,9 @@ pub(crate) fn describe_xrp_extra(s: &XrpTxSummary) -> String {
                 "• frais supérieurs à 1 XRP (d'habitude quelques dizaines de drops)\n"
             }
             XrpWarning::InvoiceId => "• identifiant de facture (InvoiceID)\n",
+            XrpWarning::UnusualText => {
+                "• mémo contenant des caractères invisibles / de contrôle, ou trop long (affiché nettoyé)\n"
+            }
         };
     }
     out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
