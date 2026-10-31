@@ -313,9 +313,27 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
         /* time unknown */
       }
     }
+    // A Transfer(from = us) log does not prove that we sent it: anyone can call
+    // `transferFrom(us, lookalike, 0)` (no allowance needed for 0 on most tokens). The sender of
+    // the TRANSACTION (not of the log) must be us; otherwise the entry is a lure, not a payment.
+    const outHashes = [...new Set(all.filter((x) => x.dir === 'out' && x.l.transactionHash).map((x) => x.l.transactionHash as `0x${string}`))].slice(0, 15);
+    const txFrom = new Map<string, string>();
+    await Promise.all(
+      outHashes.map(async (hash) => {
+        try {
+          const tx = await this.client.getTransaction({ hash });
+          txFrom.set(hash.toLowerCase(), tx.from.toLowerCase());
+        } catch {
+          /* unknown sender: the entry stays unverified (never a trusted address anyway) */
+        }
+      }),
+    );
+    const me = this.address.toLowerCase();
     return all.map(({ l, dir }) => {
       const token = tokens.find((t) => t.contract?.toLowerCase() === l.address.toLowerCase());
       const counterparty = dir === 'in' ? l.args.from : l.args.to;
+      const sender = l.transactionHash ? txFrom.get(l.transactionHash.toLowerCase()) : undefined;
+      const suspect = (l.args.value ?? 0n) === 0n ? ('zero' as const) : dir === 'out' && sender !== undefined && sender !== me ? ('notSigned' as const) : undefined;
       const item: HistoryItem = {
         id: `${l.transactionHash ?? ''}:${l.logIndex ?? 0}`,
         chainKey: this.chain.key,
@@ -326,6 +344,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
         kind: 'transfer',
       };
       if (counterparty) item.counterparty = counterparty;
+      if (suspect) item.suspect = suspect;
       const t = l.blockNumber !== null ? blockTimes.get(l.blockNumber) : undefined;
       if (t !== undefined) item.time = t;
       return item;

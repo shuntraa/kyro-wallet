@@ -17,6 +17,8 @@ export {
   parseMintAccount,
   placeSignature,
   checkSolSummary,
+  solHistoryItem,
+  type ParsedIx,
   splComputeUnits,
   SOL_TRANSFER_CU,
   TOKEN_ACCOUNT_SIZE,

@@ -80,9 +80,39 @@ export interface LocalTx {
   status: 'pending' | 'confirmed' | 'failed';
 }
 
+const DECIMAL = /^\d{1,78}$/;
+
+/**
+ * Shape check of a record read back from localStorage (an old version, a manual edit or another
+ * script may have left anything there). Its recipient counts as « already paid from this Kyro »
+ * for the address-poisoning check, so a malformed entry is dropped rather than trusted.
+ */
+export function isLocalTx(x: unknown, network: Network): x is LocalTx {
+  if (!x || typeof x !== 'object') return false;
+  const t = x as Record<string, unknown>;
+  const str = (k: string, max = 200) => typeof t[k] === 'string' && (t[k] as string).length > 0 && (t[k] as string).length <= max;
+  const optStr = (k: string, max = 200) => t[k] === undefined || (typeof t[k] === 'string' && (t[k] as string).length <= max);
+  return (
+    str('id') &&
+    t.network === network &&
+    str('chainKey', 64) &&
+    str('assetId') &&
+    (t.kind === 'transfer' || t.kind === 'swap' || t.kind === 'approval') &&
+    (t.direction === 'out' || t.direction === 'self') &&
+    typeof t.amount === 'string' &&
+    DECIMAL.test(t.amount) &&
+    (t.fee === undefined || (typeof t.fee === 'string' && DECIMAL.test(t.fee))) &&
+    optStr('counterparty', 130) &&
+    optStr('label') &&
+    typeof t.time === 'number' &&
+    Number.isFinite(t.time) &&
+    (t.status === 'pending' || t.status === 'confirmed' || t.status === 'failed')
+  );
+}
+
 export function getLocalTxs(network: Network): LocalTx[] {
   const v = readJson<unknown>(`txs.${network}`, []);
-  return Array.isArray(v) ? (v as LocalTx[]) : [];
+  return Array.isArray(v) ? v.filter((x): x is LocalTx => isLocalTx(x, network)) : [];
 }
 export function addLocalTx(tx: LocalTx): void {
   const list = getLocalTxs(tx.network).filter((t) => t.id !== tx.id);

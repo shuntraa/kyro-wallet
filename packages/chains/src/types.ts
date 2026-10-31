@@ -173,6 +173,13 @@ export interface HistoryItem {
   kind: 'transfer' | 'swap' | 'approval' | 'contract';
   /** Extra line (Cardano: tokens moved, CIP-20 message). */
   note?: string;
+  /**
+   * Address-poisoning lure (packages/chains/src/poisoning.ts): `zero` = a transfer of nothing, in
+   * any direction (EVM / TRON `transferFrom(you, X, 0)`, a 0-lamport Solana transfer…);
+   * `notSigned` = shown as outgoing although this account did not sign the transaction. Its
+   * counterparty is never a reference address.
+   */
+  suspect?: 'zero' | 'notSigned';
 }
 
 export interface ChainAdapter<F extends Family = Family> {

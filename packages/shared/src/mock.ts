@@ -226,6 +226,9 @@ function seedChainState(keys: DemoKeys, network: Network): DemoChainState {
           // « transfer » from an address forged to share its first and last characters.
           { chainId: 11155111, token: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', from: me, to: DEMO_EVM_COLLEAGUE, value: 25_000_000n, blocksAgo: 3_600, txHash: '0x' + demoHash('evm-log-colleague') },
           { chainId: 11155111, token: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', from: DEMO_EVM_LOOKALIKE, to: me, value: 0n, blocksAgo: 400, txHash: '0x' + demoHash('evm-log-poison') },
+          // The same attacker's free « outgoing » lure: transferFrom(you, look-alike, 0), sent by
+          // the attacker. The log says « from you »; the transaction was not signed by you.
+          { chainId: 11155111, token: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', from: me, to: DEMO_EVM_LOOKALIKE, value: 0n, blocksAgo: 390, txHash: '0x' + demoHash('evm-log-poison-out'), sender: DEMO_EVM_LOOKALIKE },
         ]
       : [],
     solLamports: 3_200_000_000n,

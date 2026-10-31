@@ -15,12 +15,16 @@ export function entryTitle(e: HistoryEntry): string {
   const who = e.counterparty ? findContact(e.counterparty, family)?.name ?? shortAddress(e.counterparty) : null;
   if (e.kind === 'approval') return `Autorisation ${e.asset?.symbol ?? ''}`.trim();
   if (e.kind === 'swap') return 'Swap';
+  // Address-poisoning lure: never « sent to X » / « received from X » (that is the bait).
+  if (e.suspect === 'notSigned') return who ? `Transfert suspect vers ${who} (pas signé par toi)` : 'Transfert suspect (pas signé par toi)';
+  if (e.suspect === 'zero') return who ? `Transfert nul suspect · ${who}` : 'Transfert nul suspect';
   if (e.direction === 'in') return who ? `Reçu de ${who}` : 'Reçu';
   if (e.direction === 'self') return 'Vers ton propre compte';
   return who ? `Envoi à ${who}` : 'Envoi';
 }
 
 export function statusBadge(e: HistoryEntry) {
+  if (e.suspect) return <Badge tone="warn">Suspect</Badge>;
   if (e.status === 'pending') return <Badge tone="warn">En attente</Badge>;
   if (e.status === 'failed') return <Badge tone="down">Échoué</Badge>;
   // The normal case stays quiet; only pending and failed carry a colour.

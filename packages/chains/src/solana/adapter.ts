@@ -433,28 +433,22 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
           const tx = await this.rpc<{
             blockTime: number | null;
             meta: { err: unknown; fee: number; preBalances: number[]; postBalances: number[] } | null;
-            transaction: { message: { accountKeys: Array<{ pubkey: string }> } };
+            transaction: { message: { accountKeys: Array<{ pubkey: string }>; instructions?: ParsedIx[] } };
           } | null>('getTransaction', [s.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]);
           if (!tx?.meta) return null;
           const keys = tx.transaction.message.accountKeys.map((k) => k.pubkey);
           const i = keys.indexOf(this.me);
           if (i < 0) return null;
-          const delta = BigInt(tx.meta.postBalances[i] ?? 0) - BigInt(tx.meta.preBalances[i] ?? 0);
-          const isPayer = i === 0;
-          const fee = BigInt(tx.meta.fee);
-          const direction = delta > 0n ? 'in' : 'out';
-          const other = keys.find((k, j) => j !== i && k !== SYSTEM_PROGRAM && !k.startsWith('ComputeBudget'));
-          const item: HistoryItem = {
-            id: s.signature,
-            chainKey: this.chain.key,
-            assetId: 'sol',
-            direction,
-            amount: direction === 'in' ? delta : -delta - (isPayer ? fee : 0n),
-            status: tx.meta.err || s.err ? 'failed' : s.confirmationStatus === 'finalized' || s.confirmationStatus === 'confirmed' ? 'confirmed' : 'pending',
-            kind: 'transfer',
-          };
-          if (isPayer) item.fee = fee;
-          if (other) item.counterparty = other;
+          const item = solHistoryItem({
+            me: this.me,
+            isPayer: i === 0,
+            delta: BigInt(tx.meta.postBalances[i] ?? 0) - BigInt(tx.meta.preBalances[i] ?? 0),
+            fee: BigInt(tx.meta.fee),
+            instructions: tx.transaction.message.instructions ?? [],
+          });
+          item.id = s.signature;
+          item.chainKey = this.chain.key;
+          item.status = tx.meta.err || s.err ? 'failed' : s.confirmationStatus === 'finalized' || s.confirmationStatus === 'confirmed' ? 'confirmed' : 'pending';
           const bt = tx.blockTime ?? s.blockTime;
           if (bt) item.time = bt * 1000;
           return item;
@@ -465,4 +459,53 @@ export class SolanaAdapter implements ChainAdapter<'sol'> {
     );
     return items.filter((x): x is HistoryItem => x !== null);
   }
+}
+
+/** A top-level instruction of a `jsonParsed` transaction (only what the history reads). */
+export interface ParsedIx {
+  program?: string;
+  programId?: string;
+  parsed?: { type?: string; info?: { source?: string; destination?: string; lamports?: number | string } } | string;
+}
+
+/**
+ * One SOL history entry from our balance change and the transaction's decoded instructions.
+ *
+ * - A change of 0 for an account that did not pay the fees (a 0-lamport transfer involving us,
+ *   sent by someone else) is neither received nor sent: a poisoning lure (`suspect: 'zero'`,
+ *   shown as a received 0), never an outgoing payment.
+ * - The counterparty comes from the decoded System transfers that involve us, never from the
+ *   fee payer or « the first other account key » (an attacker who pays the fees would otherwise
+ *   be shown as an address we paid). No decoded transfer: no counterparty.
+ */
+export function solHistoryItem(p: { me: string; isPayer: boolean; delta: bigint; fee: bigint; instructions: ParsedIx[] }): HistoryItem {
+  const transfers = p.instructions
+    .filter((ix) => ix.program === 'system' || ix.programId === SYSTEM_PROGRAM)
+    .map((ix) => (typeof ix.parsed === 'object' && ix.parsed?.type === 'transfer' ? ix.parsed.info : undefined))
+    .filter((info): info is NonNullable<typeof info> => !!info && (info.source === p.me || info.destination === p.me));
+  let direction: HistoryItem['direction'];
+  let amount: bigint;
+  if (p.delta > 0n) {
+    direction = 'in';
+    amount = p.delta;
+  } else if (p.isPayer) {
+    direction = 'out';
+    amount = -p.delta - p.fee > 0n ? -p.delta - p.fee : 0n;
+  } else if (p.delta < 0n) {
+    direction = 'out';
+    amount = -p.delta;
+  } else {
+    direction = 'in';
+    amount = 0n;
+  }
+  const item: HistoryItem = { id: '', chainKey: '', assetId: 'sol', direction, amount, status: 'confirmed', kind: 'transfer' };
+  if (p.isPayer) item.fee = p.fee;
+  const t =
+    direction === 'in'
+      ? (transfers.find((x) => x.destination === p.me && x.source !== p.me) ?? transfers.find((x) => x.source === p.me && x.destination !== p.me))
+      : transfers.find((x) => x.source === p.me && x.destination !== p.me);
+  const other = t ? (t.source === p.me ? t.destination : t.source) : undefined;
+  if (other) item.counterparty = other;
+  if (!p.isPayer && p.delta === 0n) item.suspect = 'zero';
+  return item;
 }

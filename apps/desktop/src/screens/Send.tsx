@@ -15,7 +15,8 @@ import {
   cardanoTokenLabel,
   classifyHistoryAddresses,
   findLookalike,
-  isDustOnlyAddress,
+  isDustAmount,
+  isSuspectAddress,
   type KnownAddress,
   DOGE_SOFT_DUST,
   evmHwDisplay,
@@ -46,7 +47,7 @@ import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
 import { fmtCrypto, fmtEta, fmtFiat, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { guardAllowsSend, guardOnInput, guardVerify, initialGuard, type GuardState } from '../lib/clipboardGuard';
-import { addLocalTx, bumpContactSends, findContact, getContacts, saveContacts, type ContactFamily } from '../lib/storage';
+import { addLocalTx, bumpContactSends, findContact, getContacts, getLocalTxs, saveContacts, type ContactFamily } from '../lib/storage';
 import { useAsync, useDebounced } from '../lib/useAsync';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
 import { useTorBlocked } from '../components/Tor';
@@ -145,12 +146,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   };
   const noChecksum = asset?.family === 'evm' && addrValid && toTrim.slice(2) === toTrim.slice(2).toLowerCase();
 
-  // Address poisoning: compare the recipient with every trusted address of this chain family
-  // (address book, own addresses, real past counterparties). Senders of incoming dust or
-  // zero-value transfers are suspects, never references (see packages/chains/src/poisoning.ts).
+  // Address poisoning: compare the recipient with every reference address of this chain family
+  // (address book, own addresses, recipients of sends signed by this device, other non-suspect
+  // counterparties). The server's history is never « trusted »: zero-value, dust and unsigned
+  // transfers are suspects, never references (see packages/chains/src/poisoning.ts).
   const history = useHistory();
   const poisoning = useMemo(() => {
-    if (!asset || !addrValid) return { lookalike: null, dustOnly: false };
+    if (!asset || !addrValid) return { lookalike: null, suspect: false };
     const family = asset.family;
     const own: Record<string, Array<string | undefined>> = {
       btc: [accounts.btc?.segwit.address, accounts.btc?.taproot.address],
@@ -164,23 +166,28 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     };
     // The other accounts of the vault are trusted too.
     for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
+    // Recipients of transfers this device signed and broadcast (Kyro's own record, by txid).
+    const signedHere = getLocalTxs(network)
+      .filter((t) => t.kind === 'transfer' && t.status !== 'failed' && !!t.counterparty && findChain(network, t.chainKey)?.family === family)
+      .map((t) => t.counterparty as string);
     const events = (history.data?.entries ?? [])
-      .filter((e) => e.asset?.family === family && e.counterparty)
+      .filter((e) => e.asset?.family === family && e.counterparty && e.kind === 'transfer')
       .map((e) => {
         const p = e.asset ? pf.price(e.asset.coingeckoId)?.price ?? null : null;
         const fiat = p !== null && e.asset ? unitsToNumber(e.amount, e.asset.decimals) * p : null;
-        return { counterparty: e.counterparty!, direction: e.direction, dust: e.direction === 'in' && (e.amount === 0n || (fiat !== null && fiat < 0.01)) };
+        return { counterparty: e.counterparty!, suspect: !!e.suspect || isDustAmount(family, e.amount, fiat) };
       });
-    const { trusted, dustOnly } = classifyHistoryAddresses(events, family);
+    const { trusted, references, suspects } = classifyHistoryAddresses(events, signedHere, family);
     const known: KnownAddress[] = [
       ...getContacts()
         .filter((c) => c.family === family)
         .map((c) => ({ address: c.address, source: 'contact' as const, label: c.name })),
       ...(own[family] ?? []).filter((a): a is string => !!a).map((address) => ({ address, source: 'own' as const, label: 'ton adresse' })),
-      ...trusted.map((address) => ({ address, source: 'history' as const })),
+      ...trusted.map((address) => ({ address, source: 'sent' as const })),
+      ...references.map((address) => ({ address, source: 'history' as const })),
     ];
-    return { lookalike: findLookalike(toTrim, known, family), dustOnly: isDustOnlyAddress(toTrim, dustOnly, family) };
-  }, [asset, addrValid, toTrim, accounts, accountSources, history.data, pf]);
+    return { lookalike: findLookalike(toTrim, known, family), suspect: isSuspectAddress(toTrim, suspects, family) };
+  }, [asset, addrValid, toTrim, accounts, accountSources, history.data, pf, network]);
   const [poisonAck, setPoisonAck] = useState(false);
   useEffect(() => setPoisonAck(false), [toTrim, asset?.id]);
   const poisonBlocked = !!poisoning.lookalike && !poisonAck;
@@ -584,8 +591,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {ownError && <span className="text-[12px] text-down">{ownError}</span>}
             {toTrim && !addrValid && !xAddress && !adaProblem && <span className="text-[12px] text-down">Adresse invalide pour {chain.name}.</span>}
             {adaProblem && <span className="text-[12px] text-down">{adaProblem.charAt(0).toUpperCase() + adaProblem.slice(1)}.</span>}
-            {poisoning.lookalike && <PoisoningWarning recipient={toTrim} known={poisoning.lookalike.known} family={asset.family} acknowledged={poisonAck} onAcknowledge={setPoisonAck} />}
-            {!poisoning.lookalike && poisoning.dustOnly && guard.source === 'paste' && <DustOnlyNote />}
+            {poisoning.lookalike && <PoisoningWarning recipient={toTrim} lookalike={poisoning.lookalike} family={asset.family} acknowledged={poisonAck} onAcknowledge={setPoisonAck} />}
+            {!poisoning.lookalike && poisoning.suspect && !contact && !isOwn && <DustOnlyNote />}
             {xAddress && (
               <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
                 <strong className="font-semibold">Adresse X (X… / T…) :</strong> elle contient l’adresse et le tag mélangés. Kyro veut l’adresse classique (r…) et le tag de destination séparément, pour que tu les voies tous les deux : demande-les à ton destinataire ou à ta plateforme (rubrique « dépôt XRP »).

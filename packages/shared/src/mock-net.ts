@@ -39,7 +39,7 @@ export interface DemoChainState {
    * ERC-20 Transfer logs (`eth_getLogs`). `blocksAgo`: relative to the current block. Seeded
    * with the demo's address-poisoning scenario (a zero-value transfer from a look-alike).
    */
-  evmLogs: Array<{ chainId: number; token: string; from: string; to: string; value: bigint; blocksAgo: number; txHash: string }>;
+  evmLogs: Array<{ chainId: number; token: string; from: string; to: string; value: bigint; blocksAgo: number; txHash: string; /** Sender of the transaction (default: the log's `from`); differs for a `transferFrom`. */ sender?: string }>;
   solLamports: bigint;
   solTokens: Map<string, bigint>;
 }
@@ -342,6 +342,36 @@ function evmRpc(chainId: number, req: NetRequest, s: DemoChainState): NetRespons
       s.nonces.set(chainId, (s.nonces.get(chainId) ?? 3) + 1);
       return rpcResult(id, signed.hash);
     }
+    case 'eth_getTransactionByHash': {
+      // Only what the history needs: who sent the transaction (not the log's `from`).
+      const hash = String(p[0] ?? '').toLowerCase();
+      const log = s.evmLogs.find((l) => l.chainId === chainId && l.txHash.toLowerCase() === hash);
+      const ours = s.minedEvm.has(String(p[0] ?? ''));
+      if (!log && !ours) return rpcResult(id, null);
+      const bn = log ? block - log.blocksAgo : (s.minedEvm.get(String(p[0] ?? ''))?.blockNumber ?? block);
+      return rpcResult(id, {
+        hash: String(p[0]),
+        blockHash: '0x' + demoHash(`block:${chainId}:${bn}`),
+        blockNumber: hex(bn),
+        transactionIndex: '0x0',
+        from: (log ? (log.sender ?? log.from) : s.accounts.evm.address).toLowerCase(),
+        to: log ? log.token.toLowerCase() : null,
+        input: '0x',
+        value: '0x0',
+        nonce: '0x0',
+        gas: hex(65_000),
+        gasPrice: hex(baseFee),
+        maxFeePerGas: hex(baseFee * 2n),
+        maxPriorityFeePerGas: hex(1n),
+        type: '0x2',
+        chainId: hex(chainId),
+        v: '0x0',
+        r: '0x' + '1'.padStart(64, '0'),
+        s: '0x' + '1'.padStart(64, '0'),
+        yParity: '0x0',
+        accessList: [],
+      });
+    }
     case 'eth_getTransactionReceipt': {
       const hash = String(p[0] ?? '');
       const mined = s.minedEvm.get(hash);
@@ -462,7 +492,13 @@ function solRpc(req: NetRequest, s: DemoChainState): NetResponse {
         slot: slot - 90_000,
         blockTime: Math.floor(Date.now() / 1000) - 86_400 * 2,
         meta: { err: null, fee: 5000, preBalances: [5_200_005_000, 0], postBalances: [2_000_000_000, 3_200_000_000] },
-        transaction: { message: { accountKeys: [{ pubkey: sender, signer: true, writable: true }, { pubkey: me, signer: false, writable: true }] }, signatures: [String(p[0])] },
+        transaction: {
+          message: {
+            accountKeys: [{ pubkey: sender, signer: true, writable: true }, { pubkey: me, signer: false, writable: true }],
+            instructions: [{ program: 'system', programId: '11111111111111111111111111111111', parsed: { type: 'transfer', info: { source: sender, destination: me, lamports: 3_200_000_000 } } }],
+          },
+          signatures: [String(p[0])],
+        },
       });
     }
     case 'getSignatureStatuses':

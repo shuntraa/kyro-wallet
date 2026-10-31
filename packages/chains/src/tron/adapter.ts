@@ -294,6 +294,10 @@ export class TronAdapter implements ChainAdapter<'tron'> {
       };
       const counterparty = out ? t.to : t.from;
       if (counterparty) item.counterparty = counterparty;
+      // TronGrid's TRC-20 list gives the EVENT's from/to, not who signed: `transferFrom(you, X, 0)`
+      // appears as « sent by you ». A zero amount is a lure in either direction (poisoning.ts);
+      // outgoing entries are never trusted anyway (only sends signed by this device are).
+      if (item.amount === 0n) item.suspect = 'zero';
       if (t.timestamp) item.time = t.timestamp;
       return item;
     });
