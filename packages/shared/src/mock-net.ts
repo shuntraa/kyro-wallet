@@ -107,12 +107,12 @@ export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: 
   // Small artificial latency so loading states are visible in the demo.
   await new Promise((r) => setTimeout(r, 60 + Math.random() * 120));
   const host = url.host;
-  if (route?.kind === 'evm') return evmRpc(route.chainId, req, s);
+  if (route?.kind === 'evm') return evmRpcAny(route.chainId, req, s);
   if (route?.kind === 'sol') return solRpc(req, s);
   if (route?.kind === 'esplora') return esplora(url, req, s);
   if (host === 'api.coingecko.com' || host === 'pro-api.coingecko.com') return coingecko(url);
   if (host === 'mempool.space') return esplora(url, req, s);
-  if (host in EVM_HOSTS) return evmRpc(EVM_HOSTS[host] ?? 1, req, s);
+  if (host in EVM_HOSTS) return evmRpcAny(EVM_HOSTS[host] ?? 1, req, s);
   if (SOL_HOSTS.has(host)) return solRpc(req, s);
   if (host === 'api.0x.org') return zerox(url);
   if (host === 'li.quest') return lifi(url);
@@ -235,6 +235,19 @@ function esplora(url: URL, req: NetRequest, s: DemoChainState): NetResponse {
 }
 
 // ---------------------------------------------------------------- EVM
+
+/** JSON-RPC request or batch (array of requests, answered as an array, like publicnode). */
+function evmRpcAny(chainId: number, req: NetRequest, s: DemoChainState): NetResponse {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(req.body ?? '{}');
+  } catch {
+    return json(400, { error: 'bad json' });
+  }
+  if (!Array.isArray(parsed)) return evmRpc(chainId, req, s);
+  const out = parsed.map((one) => JSON.parse(evmRpc(chainId, { ...req, body: JSON.stringify(one) }, s).body) as unknown);
+  return json(200, out);
+}
 
 function evmRpc(chainId: number, req: NetRequest, s: DemoChainState): NetResponse {
   let body: { id?: unknown; method?: string; params?: unknown[] };

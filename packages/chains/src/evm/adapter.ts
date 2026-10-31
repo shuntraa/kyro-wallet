@@ -15,7 +15,7 @@ import {
   type Hex,
   type PublicClient,
 } from 'viem';
-import { call, jsonRpc, netFetch, type EvmTokenHint, type EvmTxRequest, type EvmTxSummary, type NetFetch } from '@kyro/shared';
+import { call, HttpError, jsonRpc, jsonRpcBatch, JsonRpcError, netFetch, type EvmTokenHint, type JsonRpcOutcome, type EvmTxRequest, type EvmTxSummary, type NetFetch } from '@kyro/shared';
 import { ERC20_TOKENS, nativeAssetId, type AssetDef, type EvmChain } from '../registry';
 import { evmFeeOptionsFromHistory } from '../fees';
 import type { Balance, BuildParams, ChainAdapter, EvmSigned, EvmUnsigned, FeeEstimates, FeeParams, HistoryItem } from '../types';
@@ -46,6 +46,14 @@ export interface ContractCallParams {
   amount?: bigint;
   token?: EvmTokenHint;
 }
+
+/** Calls per JSON-RPC batch for balances (publicnode answers 100 per batch; kept below). */
+export const BALANCE_BATCH = 50;
+
+const hexToBigInt = (v: unknown): bigint => {
+  if (typeof v !== 'string' || !/^0x[0-9a-fA-F]+$/.test(v)) throw new Error('solde natif illisible');
+  return BigInt(v);
+};
 
 const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
 
@@ -120,10 +128,43 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     return this.client.getBlockNumber({ cacheTime: 0 });
   }
 
+  /**
+   * Native balance + `balanceOf` of every curated token. One JSON-RPC batch per
+   * {@link BALANCE_BATCH} calls (100+ tokens on Ethereum, a single host: no new server sees
+   * anything); if the node refuses batches, one call per token as before. A token whose call
+   * fails is left out (unknown), like a missing contract.
+   */
   async getBalance(): Promise<Balance[]> {
+    const tokens = this.tokens();
+    const data = encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [this.address] });
+    const calls = [
+      { method: 'eth_getBalance', params: [this.address, 'latest'] as unknown[] },
+      ...tokens.map((t) => ({ method: 'eth_call', params: [{ to: getAddress(t.contract ?? ''), data }, 'latest'] as unknown[] })),
+    ];
+    let outcomes: JsonRpcOutcome[];
+    try {
+      outcomes = [];
+      for (let i = 0; i < calls.length; i += BALANCE_BATCH) outcomes.push(...(await jsonRpcBatch(this.fetcher, this.rpcUrl, calls.slice(i, i + BALANCE_BATCH))));
+    } catch (e) {
+      // Batch refused (not an array, or 4xx such as « batch too large »): single calls.
+      if (!(e instanceof JsonRpcError) && !(e instanceof HttpError && e.status >= 400 && e.status < 500)) throw e;
+      return this.getBalanceOneByOne(tokens);
+    }
+    const [native, ...rest] = outcomes;
+    if (!native?.ok) throw native?.error ?? new Error('solde natif indisponible');
+    const out: Balance[] = [{ assetId: nativeAssetId(this.chain), amount: hexToBigInt(native.result) }];
+    tokens.forEach((t, i) => {
+      const r = rest[i];
+      // `0x` = no code at that address on this chain: unknown, not zero.
+      if (r?.ok && typeof r.result === 'string' && /^0x[0-9a-fA-F]{1,64}$/.test(r.result)) out.push({ assetId: t.id, amount: BigInt(r.result) });
+    });
+    return out;
+  }
+
+  private async getBalanceOneByOne(tokens: AssetDef[]): Promise<Balance[]> {
     const native = await this.client.getBalance({ address: this.address });
-    const tokens = await Promise.all(
-      this.tokens().map(async (t) => {
+    const balances = await Promise.all(
+      tokens.map(async (t) => {
         try {
           const amount = await this.client.readContract({ address: getAddress(t.contract ?? ''), abi: erc20Abi, functionName: 'balanceOf', args: [this.address] });
           return { assetId: t.id, amount };
@@ -132,7 +173,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
         }
       }),
     );
-    return [{ assetId: nativeAssetId(this.chain), amount: native }, ...tokens.filter((t): t is Balance => t !== null)];
+    return [{ assetId: nativeAssetId(this.chain), amount: native }, ...balances.filter((t): t is Balance => t !== null)];
   }
 
   async estimateFees(): Promise<FeeEstimates> {
