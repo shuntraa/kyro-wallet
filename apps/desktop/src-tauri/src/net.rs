@@ -46,7 +46,6 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "api.devnet.solana.com",
     "api.mainnet-beta.solana.com",
     "api.0x.org",
-    "api.1inch.dev",
     "li.quest",
     "lite-api.jup.ag",
 ];
@@ -96,7 +95,6 @@ pub struct FetchResponse {
 pub struct EnvKeys {
     pub coingecko: Option<String>,
     pub zerox: Option<String>,
-    pub oneinch: Option<String>,
     pub lifi: Option<String>,
     pub jupiter: Option<String>,
     pub trongrid: Option<String>,
@@ -108,7 +106,6 @@ impl EnvKeys {
         Self {
             coingecko: get("KYRO_COINGECKO_API_KEY"),
             zerox: get("KYRO_ZEROX_API_KEY"),
-            oneinch: get("KYRO_ONEINCH_API_KEY"),
             lifi: get("KYRO_LIFI_API_KEY"),
             jupiter: get("KYRO_JUPITER_API_KEY"),
             trongrid: get("KYRO_TRONGRID_API_KEY"),
@@ -232,10 +229,7 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Solana
     } else if host.ends_with("coingecko.com") {
         Family::Market
-    } else if matches!(
-        host,
-        "api.0x.org" | "api.1inch.dev" | "li.quest" | "lite-api.jup.ag"
-    ) {
+    } else if matches!(host, "api.0x.org" | "li.quest" | "lite-api.jup.ag") {
         Family::Swap
     } else {
         Family::Other
@@ -393,10 +387,6 @@ pub fn api_key_headers(host: &str, env: &EnvKeys, saved: &ApiKeys) -> Vec<(Strin
         "api.coingecko.com" => ("x-cg-demo-api-key", pick(&env.coingecko, &saved.coingecko)),
         "pro-api.coingecko.com" => ("x-cg-pro-api-key", pick(&env.coingecko, &saved.coingecko)),
         "api.0x.org" => ("0x-api-key", pick(&env.zerox, &saved.zerox)),
-        "api.1inch.dev" => (
-            "authorization",
-            pick(&env.oneinch, &saved.oneinch).map(|k| format!("Bearer {k}")),
-        ),
         "li.quest" => ("x-lifi-api-key", env.lifi.clone()),
         "lite-api.jup.ag" => ("x-api-key", env.jupiter.clone()),
         "api.trongrid.io" | "nile.trongrid.io" => {
@@ -650,7 +640,7 @@ mod tests {
                 ..Default::default()
             },
             ApiKeys {
-                oneinch: Some("inch".into()),
+                zerox: Some("zx".into()),
                 ..Default::default()
             },
         )
@@ -743,11 +733,14 @@ mod tests {
             ]
         );
         assert_eq!(p.secret_headers, vec!["x-cg-demo-api-key".to_string()]);
-        let p = prep("https://api.1inch.dev/swap", &c).unwrap();
+        // A key saved in settings (no env key): 0x.
+        let p = prep("https://api.0x.org/swap", &c).unwrap();
         assert_eq!(
             p.headers,
-            vec![("authorization".to_string(), "Bearer inch".to_string())]
+            vec![("0x-api-key".to_string(), "zx".to_string())]
         );
+        // 1inch is gone: not on the allowlist any more.
+        assert!(prep("https://api.1inch.dev/swap", &c).is_err());
         let p = prep("https://mempool.space/", &c).unwrap();
         assert!(p.headers.is_empty() && p.secret_headers.is_empty());
         // TronGrid key: TronGrid hosts only, from the env first, then the settings.

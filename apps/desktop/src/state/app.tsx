@@ -10,7 +10,15 @@ import { createAdapters, hwToAccounts, type AdapterSet, type AnyAdapter, type Wa
 import { readJson, writeJson } from '../lib/storage';
 import { accountAddress, defaultAccountName, familyAdapters } from '../lib/accounts';
 import { CoinGeckoClient } from '@kyro/market';
-import { createProviders, type SwapProvider } from '@kyro/swap';
+import { createProviders, KYRO_SWAP_FEE, type SwapFeeConfig, type SwapProvider } from '@kyro/swap';
+
+/** Demo mode only: obviously fake fee recipients so the swap screen has quotes (nothing is ever sent). */
+const DEMO_SWAP_FEES: SwapFeeConfig = {
+  ...KYRO_SWAP_FEE,
+  recipients: { evm: '0x000000000000000000000000000000000000dEaD', solana: 'Vote111111111111111111111111111111111111111' },
+  // Demo runs on devnet mints (USDC devnet) and also accepts wrapped SOL, so every demo pair quotes.
+  solanaFeeMints: [...KYRO_SWAP_FEE.solanaFeeMints, '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 'So11111111111111111111111111111111111111112'],
+};
 import { torStore } from './tor';
 import { settingsPayload } from '../lib/settingsPayload';
 
@@ -153,7 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () =>
       createProviders({
         hasZeroxKey: () => Boolean(configRef.current?.hasZeroxKey || settingsRef.current.apiKeysSet.zerox),
-        hasOneinchKey: () => Boolean(configRef.current?.hasOneinchKey || settingsRef.current.apiKeysSet.oneinch),
+        ...(isDemoMode() ? { fees: DEMO_SWAP_FEES } : {}),
       }),
     [],
   );

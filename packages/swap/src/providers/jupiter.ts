@@ -2,16 +2,39 @@
 //
 // Jupiter (lite-api.jup.ag swap/v1): quote, then the swap transaction is built
 // on demand (it embeds a recent blockhash). The Rust side signs the message bytes.
+// Kyro fee: `platformFeeBps` on /quote + `feeAccount` on /swap (developers.jup.ag, « Add fees to
+// swap », Metis). `feeAccount` must be an initialised token account of the input or output mint:
+// we use the fee wallet's associated token account for the first of the pair's mints found in
+// `solanaFeeMints` (output first: `outAmount` is documented as net of platform fees).
 
 import { fetchJson, netFetch, type NetFetch } from '@kyro/shared';
+import { address, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
+import type { ProviderFee } from '../fees';
 import type { Quote, QuoteParams, SwapProvider } from '../types';
-import { providerError, qs, toBig, type ProviderOptions } from './common';
+import { providerError, qs, toBig, unavailableReason, type ProviderOptions } from './common';
 
 interface JupQuote {
   outAmount: string;
   otherAmountThreshold: string;
   priceImpactPct?: string;
+  platformFee?: { amount?: string; feeBps?: number } | null;
   routePlan?: Array<{ swapInfo?: { label?: string } }>;
+}
+
+const TOKEN_PROGRAM = address('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const ATA_PROGRAM = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+
+const MINT_LABELS: Record<string, string> = {
+  So11111111111111111111111111111111111111112: 'SOL',
+  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: 'USDC',
+};
+const mintLabel = (m: string) => MINT_LABELS[m] ?? `${m.slice(0, 4)}…`;
+
+/** Associated token account of `owner` for `mint` (classic SPL Token program). */
+export async function associatedTokenAccount(owner: string, mint: string): Promise<string> {
+  const enc = getAddressEncoder();
+  const [ata] = await getProgramDerivedAddress({ programAddress: ATA_PROGRAM, seeds: [enc.encode(address(owner)), enc.encode(TOKEN_PROGRAM), enc.encode(address(mint))] });
+  return ata;
 }
 
 /** Network fee of a typical Jupiter swap (base fee + priority), lamports. */
@@ -22,13 +45,21 @@ export class JupiterProvider implements SwapProvider {
   readonly name = 'Jupiter';
   readonly host = 'lite-api.jup.ag';
   private readonly fetcher: NetFetch;
+  private readonly fee: ProviderFee;
+  private readonly feeMints: readonly string[];
 
-  constructor(opts: ProviderOptions = {}) {
+  constructor(opts: ProviderOptions & { feeMints?: readonly string[] } = {}) {
     this.fetcher = opts.fetch ?? netFetch;
+    this.fee = opts.fee ?? { kind: 'none' };
+    this.feeMints = opts.feeMints ?? [];
   }
 
   available(): boolean {
-    return true;
+    return this.unavailableReason() === null;
+  }
+
+  unavailableReason(): string | null {
+    return unavailableReason(this.fee, true);
   }
 
   supports(p: QuoteParams): boolean {
@@ -36,11 +67,15 @@ export class JupiterProvider implements SwapProvider {
   }
 
   async quote(p: QuoteParams): Promise<Quote> {
+    const fee = this.fee.kind === 'fee' ? this.fee : null;
+    const feeMint = fee ? [p.buy.address, p.sell.address].find((m) => this.feeMints.includes(m)) : undefined;
+    if (fee && !feeMint) throw new Error(`Jupiter : frais Kyro possibles seulement si ${this.feeMints.map(mintLabel).join(' ou ')} est dans la paire`);
     const url = `https://lite-api.jup.ag/swap/v1/quote?${qs({
       inputMint: p.sell.address,
       outputMint: p.buy.address,
       amount: p.sellAmount.toString(),
       slippageBps: p.slippageBps,
+      ...(fee ? { platformFeeBps: fee.bps } : {}),
     })}`;
     let raw: JupQuote & Record<string, unknown>;
     try {
@@ -48,6 +83,8 @@ export class JupiterProvider implements SwapProvider {
     } catch (e) {
       throw providerError(this.name, e);
     }
+    if (fee && raw.platformFee?.feeBps !== fee.bps) throw new Error('Jupiter : frais Kyro non appliqués par le devis');
+    const feeAccount = fee && feeMint ? await associatedTokenAccount(fee.recipient, feeMint) : null;
     const fetcher = this.fetcher;
     const labels = [...new Set((raw.routePlan ?? []).map((r) => r.swapInfo?.label).filter((x): x is string => !!x))];
     const impact = raw.priceImpactPct !== undefined ? Number(raw.priceImpactPct) : NaN;
@@ -59,6 +96,7 @@ export class JupiterProvider implements SwapProvider {
       gasFeeFiat: p.nativePriceFiat !== undefined ? (JUP_FEE_LAMPORTS / 1e9) * p.nativePriceFiat : null,
       providerFeeFiat: 0,
       providerFeeIncluded: true,
+      kyroFeeBps: fee ? fee.bps : 0,
       priceImpact: Number.isFinite(impact) ? impact : null,
       allowanceTarget: null,
       tx: {
@@ -67,7 +105,7 @@ export class JupiterProvider implements SwapProvider {
           try {
             const r = await fetchJson<{ swapTransaction: string }>(fetcher, 'https://lite-api.jup.ag/swap/v1/swap', {
               method: 'POST',
-              body: { quoteResponse: raw, userPublicKey: p.taker, dynamicComputeUnitLimit: true, prioritizationFeeLamports: 'auto' },
+              body: { quoteResponse: raw, userPublicKey: p.taker, dynamicComputeUnitLimit: true, prioritizationFeeLamports: 'auto', ...(feeAccount ? { feeAccount } : {}) },
             });
             return r.swapTransaction;
           } catch (e) {

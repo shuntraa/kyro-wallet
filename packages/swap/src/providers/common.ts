@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import { HttpError, type NetFetch } from '@kyro/shared';
+import type { ProviderFee } from '../fees';
 
 export const NATIVE_EVM = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
@@ -13,6 +14,14 @@ export interface ProviderOptions {
    * injected by the Rust shell in net_fetch: it never transits through JS.
    */
   hasKey?: () => boolean;
+  /** Kyro fee for this provider (see fees.ts). Default: no fee. */
+  fee?: ProviderFee;
+}
+
+/** Shared `unavailableReason()`: Kyro fee first (it decides whether the provider may be used), then the API key. */
+export function unavailableReason(fee: ProviderFee, hasKey: boolean): string | null {
+  if (fee.kind === 'unavailable') return fee.reason;
+  return hasKey ? null : 'Clé API non configurée';
 }
 
 export const isNative = (address: string) => address.toLowerCase() === NATIVE_EVM.toLowerCase() || address === ZERO_ADDRESS;

@@ -181,6 +181,12 @@ importers:
       '@kyro/shared':
         specifier: workspace:*
         version: link:../shared
+      '@scure/base':
+        specifier: 1.2.6
+        version: 1.2.6
+      '@solana/kit':
+        specifier: 8.5.0
+        version: 8.5.0(typescript@6.0.3)
       viem:
         specifier: 2.57.12
         version: 2.57.12(typescript@6.0.3)

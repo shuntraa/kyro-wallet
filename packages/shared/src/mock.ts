@@ -717,7 +717,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     hw_sign_btc_psbt: (a) => hw.signBtc(a),
     hw_sign_evm_tx: (a) => hw.signEvm(a),
     hw_sign_sol_tx: (a) => hw.signSol(a),
-    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasOneinchKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid) }),
+    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid) }),
   };
 
   return {

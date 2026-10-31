@@ -781,7 +781,6 @@ pub fn set_capture_protection(window: WebviewWindow, enabled: bool) -> AppResult
 pub struct ConfigOut {
     network: &'static str,
     has_zerox_key: bool,
-    has_oneinch_key: bool,
     has_coingecko_key: bool,
     has_trongrid_key: bool,
 }
@@ -793,7 +792,6 @@ pub fn config_get(state: State<'_, AppState>) -> ConfigOut {
     ConfigOut {
         network: network_name(state.network),
         has_zerox_key: env.zerox.is_some() || s.api_keys.zerox.is_some(),
-        has_oneinch_key: env.oneinch.is_some() || s.api_keys.oneinch.is_some(),
         has_coingecko_key: env.coingecko.is_some() || s.api_keys.coingecko.is_some(),
         has_trongrid_key: env.trongrid.is_some() || s.api_keys.trongrid.is_some(),
     }

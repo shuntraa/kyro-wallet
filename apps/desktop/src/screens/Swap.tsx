@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Swap: quotes compared (0x, 1inch, LI.FI, Jupiter), slippage, exact approval
-// by default (unlimited only after explicit confirmation), simulation, "En clair".
+// Swap: best quote after the Kyro fee (0x, LI.FI, Jupiter — the provider is not shown on
+// the main screen, only in the confirmation before signing), slippage, exact approval by default
+// (unlimited only after explicit confirmation), simulation, "En clair".
 
 import { useEffect, useMemo, useState } from 'react';
 import { toIpcError } from '@kyro/shared';
 import { assetsFor, evmChains, findChain, solChain, tryParseUnits, unitsToNumber, type AssetDef, type EvmAdapter } from '@kyro/chains';
-import { buildApproval, fetchQuotes, isUnlimitedAllowance, NATIVE_EVM, netValueFiat, WSOL_MINT, type Quote, type QuoteParams, type QuoteResult, type SwapToken } from '@kyro/swap';
+import { buildApproval, feeLabel, fetchQuotes, isUnlimitedAllowance, NATIVE_EVM, WSOL_MINT, type Quote, type QuoteParams, type QuoteResult, type SwapToken } from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { useCoinChart } from '../state/charts';
@@ -22,9 +23,8 @@ import { SmoothChart } from '../components/charts';
 import { Menu } from '../components/ui/menu';
 import { AccountPicker } from '../components/AccountPicker';
 import { Dialog } from '../components/ui/dialog';
-import { Badge, Button, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
+import { Button, Notice, Segmented, Spinner, Switch } from '../components/ui/primitives';
 import { IconCheck, IconChevronDown, IconDown, IconWarn } from '../components/icons';
-import { idx } from '../components/motion';
 
 type Slip = 10 | 50 | 100 | 'custom';
 type Phase = 'idle' | 'approving' | 'waiting' | 'simulating' | 'swapping' | 'done';
@@ -78,13 +78,13 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const [slipCustom, setSlipCustom] = useState('2');
   const slippageBps = slip === 'custom' ? Math.round(Number(slipCustom.replace(',', '.')) * 100) : slip;
   const slipValid = Number.isInteger(slippageBps) && slippageBps > 0 && slippageBps <= 5000;
-  const [selected, setSelected] = useState<string | null>(null);
   const [unlimited, setUnlimited] = useState(false);
   const [confirmUnlimited, setConfirmUnlimited] = useState(false);
   const [password, setPassword] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
   const [execError, setExecError] = useState<string | null>(null);
   const [doneId, setDoneId] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     // Keep the pair valid when the chain changes.
@@ -121,7 +121,8 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
   const quotes = useAsync<{ quotes: Quote[]; results: QuoteResult[] }>(params && debouncedKey ? () => fetchQuotes(swapProviders, params) : null, [debouncedKey], { intervalMs: 30_000 });
   const list = quotes.data?.quotes ?? [];
-  const chosen = list.find((q) => q.provider === selected) ?? list[0];
+  // Quotes are sorted best first, all net of the Kyro fee: always take the best one.
+  const chosen = list[0];
   const failures = (quotes.data?.results ?? []).filter((r) => r.error);
   useOnTorReady(quotes.reload);
   // Quotes blocked by Tor: one inline "waiting for Tor" line instead of a red error per provider.
@@ -150,7 +151,10 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
   const buyAmount = chosen?.buyAmount ?? null;
   const execRate = chosen && sell && buy && sellAmount ? unitsToNumber(sellAmount, sell.decimals) / unitsToNumber(chosen.buyAmount, buy.decimals) : null;
-  const totalFees = chosen ? (chosen.gasFeeFiat ?? 0) + (chosen.providerFeeIncluded ? 0 : chosen.providerFeeFiat ?? 0) : null;
+  const networkFees = chosen ? (chosen.gasFeeFiat ?? 0) + (chosen.providerFeeIncluded ? 0 : chosen.providerFeeFiat ?? 0) : null;
+  const kyroFeeFiat = chosen && chosen.kyroFeeBps > 0 && sellAmount && sellPrice !== undefined && sell ? (unitsToNumber(sellAmount, sell.decimals) * sellPrice * chosen.kyroFeeBps) / 10_000 : null;
+  // Reasons that are about the Kyro fee configuration (no provider name in them) are worth showing.
+  const feeReasons = [...new Set(failures.map((f) => f.error ?? '').filter((e) => e.includes('Kyro')))];
   const busy = phase !== 'idle' && phase !== 'done';
   const canSwap = !!chosen && !!password && !over && !busy && (chosen.tx.kind !== 'evm' || !!evmAdapter);
 
@@ -169,6 +173,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
         setDoneId(id);
         setPhase('done');
         setPassword('');
+        setConfirmOpen(false);
         pf.refresh();
         return;
       }
@@ -226,6 +231,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       setDoneId(hash);
       setPhase('done');
       setPassword('');
+      setConfirmOpen(false);
       pf.refresh();
     } catch (e) {
       const err = toIpcError(e);
@@ -254,7 +260,6 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             value={chainKey}
             onSelect={(k) => {
               setChainKey(k);
-              setSelected(null);
               setAmountStr('');
             }}
             items={chains.map((c) => ({ value: c.key, label: c.label }))}
@@ -338,16 +343,18 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             />
           </div>
 
-          {chosen && (
-            <div className="flex items-center gap-3 px-1">
-              <CoinIcon glyph={sell.glyph} color={sell.color} size={22} />
-              <span className="h-0 flex-1 border-t border-dashed border-line-3" />
-              <span className="rounded-[4px] border border-ice/25 px-2.5 py-1 font-mono text-[11px] font-medium text-ice-text2">
-                via {chosen.providerName}
-                {chosen.route ? ` · ${chosen.route}` : ''}
-              </span>
-              <span className="h-0 flex-1 border-t border-dashed border-line-3" />
-              <CoinIcon glyph={buy.glyph} color={buy.color} size={22} />
+          {chosen && buyAmount !== null && (
+            <div className="fade-in flex flex-col rounded-box border border-line bg-bg px-4 text-[14px]">
+              <div className="flex h-11 items-center justify-between">
+                <span className="text-mute">Tu reçois</span>
+                <span className="font-medium">≈ {fmtCrypto(buyAmount, buy.decimals, buy.symbol, 6)}</span>
+              </div>
+              {chosen.kyroFeeBps > 0 && (
+                <div className="flex h-11 items-center justify-between border-t border-line">
+                  <span className="text-mute">Frais Kyro {feeLabel(chosen.kyroFeeBps)}</span>
+                  <span className="text-text2">{kyroFeeFiat !== null ? `≈ ${fmtFiat(kyroFeeFiat, cur)}` : 'inclus'}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -371,7 +378,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
           )}
 
           <div className="grid grid-cols-3 gap-2.5">
-            <Stat label="Frais totaux" value={totalFees !== null ? `≈ ${fmtFiat(totalFees, cur)}` : '—'} />
+            <Stat label="Frais réseau" value={networkFees !== null ? `≈ ${fmtFiat(networkFees, cur)}` : '—'} />
             <Stat label="Durée estimée" value={chosen?.etaSecs !== undefined ? (chosen.etaSecs < 60 ? `≈ ${chosen.etaSecs} s` : fmtEta(chosen.etaSecs)) : '—'} />
             <Stat label="Impact sur le prix" value={chosen?.priceImpact !== null && chosen?.priceImpact !== undefined ? fmtPct(chosen.priceImpact * 100, { sign: false }) : '—'} tone={chosen?.priceImpact && chosen.priceImpact > 0.01 ? 'text-down' : chosen?.priceImpact !== null && chosen?.priceImpact !== undefined ? 'text-up' : ''} />
           </div>
@@ -405,58 +412,25 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               </button>
             </Notice>
           )}
-          <div className="flex items-end gap-3">
-            <div className="min-w-0 flex-1">
-              <PasswordField id="swap-pw" value={password} onChange={setPassword} onEnter={() => canSwap && void execute()} />
-            </div>
-            <Button variant="primary" size="xl" className="h-[46px] w-[300px]" disabled={!canSwap} onClick={() => void execute()}>
-              {busy && <Spinner />} {ctaLabel}
-            </Button>
-          </div>
+          <Button variant="primary" size="xl" className="h-[46px] self-end px-10" disabled={!chosen || over || busy || (chosen.tx.kind === 'evm' && !evmAdapter)} onClick={() => setConfirmOpen(true)}>
+            Vérifier le swap
+          </Button>
         </section>
 
         <div className="rise flex w-[400px] shrink-0 flex-col gap-4">
           <section className="flex flex-col gap-2.5 rounded-panel border border-line bg-card p-[18px]">
             <div className="flex items-center justify-between px-1">
-              <span className="text-[15px] font-medium tracking-[-0.01em]">Devis comparés</span>
-              <span className="font-mono text-[10.5px] text-faint">{quotes.loading ? 'actualisation…' : quotes.updatedAt ? `actualisé ${fmtAgo(quotes.updatedAt, now)}` : ''}</span>
+              <span className="text-[15px] font-medium tracking-[-0.01em]">Meilleur prix</span>
+              <span className="text-[12px] text-faint">{quotes.loading ? 'actualisation…' : quotes.updatedAt ? `actualisé ${fmtAgo(quotes.updatedAt, now)}` : ''}</span>
             </div>
-            {!params && <p className="m-0 px-1 py-4 text-[13px] text-mute">Saisis un montant pour comparer les devis.</p>}
-            {params && quotes.loading && !quotes.data && [0, 1, 2].map((i) => <div key={i} className="skeleton h-[62px] rounded-box" />)}
-            {list.map((q, i) => {
-              const net = netValueFiat(q, params?.buy ?? tokenOf(buy));
-              const active = chosen?.provider === q.provider;
-              return (
-                <button
-                  key={q.provider}
-                  type="button"
-                  onClick={() => setSelected(q.provider)}
-                  style={idx(i)}
-                  className={cn('press rise flex flex-col gap-1 rounded-box border px-4 py-3 text-left', active ? 'border-ice bg-ice/[.07] shadow-[inset_0_0_0_0.5px_var(--color-ice)]' : 'border-line bg-bg hover:border-line-3 hover:bg-raised/50')}
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2 text-[14px] font-medium">
-                      {q.providerName} {i === 0 && <Badge tone="up">Meilleur net</Badge>}
-                    </span>
-                    <span className="text-[15px] font-medium tracking-[-0.01em]">{fmtCrypto(q.buyAmount, buy.decimals, buy.symbol, 6)}</span>
-                  </span>
-                  <span className={cn('text-[12px]', active ? 'text-ice-text2' : 'text-mute')}>
-                    Réseau {q.gasFeeFiat !== null ? fmtFiat(q.gasFeeFiat, cur) : '—'} · Provider {q.providerFeeFiat !== null ? fmtFiat(q.providerFeeFiat, cur) : '—'}
-                    {net !== null ? ` · Net ${fmtFiat(net, cur)}` : ''}
-                  </span>
-                </button>
-              );
-            })}
-            {params && quotes.data && list.length === 0 && <p className="m-0 px-1 text-[13px] text-mute">Aucun devis disponible pour cette paire{network === 'testnet' ? ' : les agrégateurs fonctionnent surtout en mainnet' : ''}.</p>}
+            {!params && <p className="m-0 px-1 py-2 text-[13px] text-mute">Saisis un montant : Kyro cherche le meilleur prix, frais Kyro compris.</p>}
+            {params && quotes.loading && !quotes.data && <div className="skeleton h-[62px] rounded-box" />}
+            {params && chosen && <p className="m-0 px-1 text-[13px] text-text2">Meilleur prix trouvé après frais{chosen.kyroFeeBps > 0 ? ` (frais Kyro ${feeLabel(chosen.kyroFeeBps)} inclus)` : ''}.</p>}
+            {params && quotes.data && list.length === 0 && !quotesTorBlocked && (
+              <p className="m-0 px-1 text-[13px] text-mute">Aucun prix disponible pour cette paire{network === 'testnet' ? ' : les échanges fonctionnent surtout en mainnet' : ''}.</p>
+            )}
+            {list.length === 0 && feeReasons.map((r) => <Notice key={r} tone="warn">{r}</Notice>)}
             {quotesTorBlocked && (failures.length > 0 || quotes.error) && <TorWait className="px-1" />}
-            {!quotesTorBlocked && failures.map((f) => (
-              <div key={f.provider} className="flex items-center justify-between gap-3 rounded-ctl border border-dashed border-line px-4 py-2 text-[12px]">
-                <span className="font-semibold text-mute">{f.providerName}</span>
-                <span className="truncate text-faint" title={f.error}>
-                  {f.error}
-                </span>
-              </div>
-            ))}
             {quotes.error && !quotesTorBlocked && <Notice tone="error">{quotes.error.message}</Notice>}
           </section>
 
@@ -466,35 +440,11 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                 <span className="text-mute">Taux</span>
                 <span className="font-medium">{execRate ? `1 ${buy.symbol} = ${fmtNumber(execRate, execRate >= 100 ? 2 : 6)} ${sell.symbol}` : '—'}</span>
               </div>
-              <div className="flex h-9 items-center justify-between border-b border-line">
-                <span className="text-mute">Contrat autorisé</span>
-                <span className="font-mono text-[12px] font-medium">{chosen?.allowanceTarget ? <>{shortAddress(chosen.allowanceTarget)} <span className="text-up">✓</span></> : chosen ? 'aucun (actif natif)' : '—'}</span>
-              </div>
               <div className="flex h-9 items-center justify-between">
                 <span className="text-mute">Minimum reçu</span>
                 <span className="font-medium">{chosen ? fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6) : '—'}</span>
               </div>
             </div>
-            {chosen && sellAmount && (
-              <EnClair tone={needsApproval && unlimited ? 'warn' : 'ice'}>
-                Tu donnes {fmtCrypto(sellAmount, sell.decimals, sell.symbol)} et reçois au moins {fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6)}.
-                {needsApproval
-                  ? unlimited
-                    ? ` Le contrat ${chosen.providerName} pourra dépenser TOUS tes ${sell.symbol}, sans limite, jusqu’à révocation.`
-                    : ` Le contrat ${chosen.providerName} pourra dépenser exactement ${fmtCrypto(sellAmount, sell.decimals, sell.symbol)}, une seule fois.`
-                  : ''}
-              </EnClair>
-            )}
-            {/* Rust asks a 2nd confirmation for every approval and every non-transfer contract call (a swap is one). */}
-            {chosen && sellAmount && chosen.tx.kind === 'evm' && (
-              <SecondConfirmNotice
-                lines={[
-                  ...(needsApproval ? [`Autorisation : ${chosen.providerName} (${shortAddress(chosen.allowanceTarget ?? '')}) pourra dépenser ${unlimited ? `un montant ILLIMITÉ de ${sell.symbol}` : fmtCrypto(sellAmount, sell.decimals, sell.symbol)} sans nouvelle signature.`] : []),
-                  `Swap : appel du contrat ${chosen.providerName}, pas un simple transfert ; Kyro ne peut pas dire tout ce qu’il fait (la simulation le vérifie).`,
-                  ...(sell.kind === 'native' ? [`${fmtCrypto(sellAmount, sell.decimals, sell.symbol)} envoyés au contrat avec l’appel.`] : []),
-                ]}
-              />
-            )}
             <div className="flex-1" />
             <div className="flex items-center justify-between text-[12px]">
               <span className="text-mute">
@@ -506,6 +456,72 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
           </section>
         </div>
       </div>
+
+      {/* Confirmation before signing: the only place that names the contract (security), then the native dialog. */}
+      <Dialog open={confirmOpen && !!chosen && !!sellAmount} onOpenChange={(o) => !busy && setConfirmOpen(o)} title="Confirmer le swap">
+        {chosen && sellAmount && (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col rounded-box border border-line bg-bg px-4 text-[13px]">
+              <div className="flex h-10 items-center justify-between border-b border-line">
+                <span className="text-mute">Tu donnes</span>
+                <span className="font-medium">{fmtCrypto(sellAmount, sell.decimals, sell.symbol)}</span>
+              </div>
+              <div className="flex h-10 items-center justify-between border-b border-line">
+                <span className="text-mute">Tu reçois</span>
+                <span className="font-medium">≈ {fmtCrypto(chosen.buyAmount, buy.decimals, buy.symbol, 6)}</span>
+              </div>
+              <div className="flex h-10 items-center justify-between border-b border-line">
+                <span className="text-mute">Minimum garanti</span>
+                <span className="font-medium">{fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6)}</span>
+              </div>
+              {chosen.kyroFeeBps > 0 && (
+                <div className="flex h-10 items-center justify-between border-b border-line">
+                  <span className="text-mute">Frais Kyro {feeLabel(chosen.kyroFeeBps)}</span>
+                  <span className="text-text2">{kyroFeeFiat !== null ? `≈ ${fmtFiat(kyroFeeFiat, cur)}, inclus` : 'inclus'}</span>
+                </div>
+              )}
+              <div className="flex h-10 items-center justify-between">
+                <span className="text-mute">Contrat</span>
+                <span className="font-mono text-[12px] font-medium">
+                  {chosen.providerName} · {shortAddress(chosen.tx.kind === 'evm' ? chosen.tx.to : chosen.allowanceTarget ?? '') || 'programme Jupiter'}
+                </span>
+              </div>
+            </div>
+            <EnClair tone={needsApproval && unlimited ? 'warn' : 'ice'}>
+              Tu donnes {fmtCrypto(sellAmount, sell.decimals, sell.symbol)} et reçois au moins {fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6)}.
+              {needsApproval
+                ? unlimited
+                  ? ` Le contrat ${chosen.providerName} pourra dépenser TOUS tes ${sell.symbol}, sans limite, jusqu’à révocation.`
+                  : ` Le contrat ${chosen.providerName} pourra dépenser exactement ${fmtCrypto(sellAmount, sell.decimals, sell.symbol)}, une seule fois.`
+                : ''}
+            </EnClair>
+            {/* Rust asks a 2nd confirmation for every approval and every non-transfer contract call (a swap is one). */}
+            {chosen.tx.kind === 'evm' && (
+              <SecondConfirmNotice
+                lines={[
+                  ...(needsApproval ? [`Autorisation : ${chosen.providerName} (${shortAddress(chosen.allowanceTarget ?? '')}) pourra dépenser ${unlimited ? `un montant ILLIMITÉ de ${sell.symbol}` : fmtCrypto(sellAmount, sell.decimals, sell.symbol)} sans nouvelle signature.`] : []),
+                  `Swap : appel du contrat ${chosen.providerName}, pas un simple transfert ; Kyro ne peut pas dire tout ce qu’il fait (la simulation le vérifie).`,
+                  ...(sell.kind === 'native' ? [`${fmtCrypto(sellAmount, sell.decimals, sell.symbol)} envoyés au contrat avec l’appel.`] : []),
+                ]}
+              />
+            )}
+            {chosen.tx.kind === 'solana' && <span className="text-[13px] text-mute">Transaction construite par {chosen.providerName}, décodée et signée dans le coffre après la fenêtre système.</span>}
+            {phase !== 'idle' && phase !== 'done' && (
+              <span className="flex items-center gap-2 text-[13px] text-ice-text2">
+                <Spinner /> {phaseLabel[phase]}
+              </span>
+            )}
+            {execError && <Notice tone="error">{execError}</Notice>}
+            <PasswordField id="swap-pw" value={password} onChange={setPassword} onEnter={() => canSwap && void execute()} />
+            <div className="flex justify-end gap-2">
+              <Button disabled={busy} onClick={() => setConfirmOpen(false)}>Annuler</Button>
+              <Button variant="primary" disabled={!canSwap} onClick={() => void execute()}>
+                {busy && <Spinner />} {ctaLabel}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
 
       <Dialog open={confirmUnlimited} onOpenChange={setConfirmUnlimited} title="Autoriser un montant illimité ?">
         <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>

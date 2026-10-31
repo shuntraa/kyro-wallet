@@ -371,7 +371,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_cbf_status` | — | `CbfStatus` | mode filtres compacts (fonction `cbf`) ; build sans la fonction : `FEATURE_DISABLED` |
 | `btc_cbf_sync` | — | `CbfStatus` | lance (ou rejoint) une synchronisation en arrière-plan ; progression par l'événement `cbf-status` ; exige le coffre déverrouillé (lit les xpubs) — une lecture coffre verrouillé ne lance pas de synchro ; build sans la fonction : `FEATURE_DISABLED` |
 | `set_capture_protection` | `{ enabled }` | `void` | `set_content_protected` |
-| `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasOneinchKey, hasTrongridKey }` | jamais les clés elles-mêmes ; chaque `hasXKey` = variable d'environnement **ou** clé enregistrée dans les réglages (ex. TronGrid : `KYRO_TRONGRID_API_KEY` ou `apiKeys.trongrid`) |
+| `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasTrongridKey }` | jamais les clés elles-mêmes ; chaque `hasXKey` = variable d'environnement **ou** clé enregistrée dans les réglages (ex. TronGrid : `KYRO_TRONGRID_API_KEY` ou `apiKeys.trongrid`) |
 | `hw_list` | — | `DeviceInfo[]` | détecte les Ledger (HID) et Trezor (WebUSB) branchés ; ids stables pour la session (`ledger-1`, `trezor-1`…) tant que l'appareil reste sur le même port ; 10 s max. Voir §2.3 |
 | `hw_open` | `{ id }` | `DeviceStatus` | ouvre l'appareil et lit son état : verrouillé, app Ledger ouverte, firmware Trezor, état par chaîne. **Seule commande qui peut appairer un Trezor Safe 7** (THP, §2.3) : `hw-prompt` `thp-confirm-pairing` puis `thp-pairing-code` → `hw_thp_pairing_code` ; délai 180 s |
 | `hw_thp_pairing_code` | `{ id, code /*6 chiffres*/ }` | `void` | Trezor Safe 7, après `hw-prompt` `thp-pairing-code` : le code affiché **sur l'écran de l'appareil**, recopié par l'utilisateur. Autre chose que 6 chiffres ASCII : `INVALID_INPUT` (l'appel `hw_open` continue d'attendre) ; aucun appairage en attente : `HW_BAD_RESPONSE`. Code faux : `hw_open` échoue en `HW_PAIRING_FAILED` |
@@ -403,9 +403,9 @@ type Accounts = {                 // accounts_get({ account? }) : tout est celui
   xrp: { address: string };                                                     // m/44'/144'/0'/0/0
   cardano: { address: string };   // adresse de base m/1852'/1815'/0'/0/0 + staking …/2/0 (CIP-1852, Icarus) ; addr_test1… sur preprod
 };
-type ApiKeyName = 'coingecko' | 'zerox' | 'oneinch' | 'trongrid';   // toutes les clés que Settings connaît
+type ApiKeyName = 'coingecko' | 'zerox' | 'trongrid';   // toutes les clés que Settings connaît (1inch retiré : une ancienne clé est ignorée puis effacée)
 // coingecko : en-tête x-cg-demo-api-key / x-cg-pro-api-key (api / pro-api.coingecko.com) ; zerox : 0x-api-key (api.0x.org) ;
-// oneinch : authorization Bearer (api.1inch.dev) ; trongrid : TRON-PRO-API-KEY (api.trongrid.io, nile.trongrid.io, §2.5).
+// trongrid : TRON-PRO-API-KEY (api.trongrid.io, nile.trongrid.io, §2.5).
 // (LI.FI et Jupiter : variables d'environnement seulement, pas de clé dans Settings.)
 type Settings = { currency: 'EUR' | 'USD'; autoLockSecs: number; hideBalancesOnStart: boolean;   // ce que RENVOIENT settings_get / settings_set
                   captureProtection: boolean; clipboardGuard: boolean;
@@ -876,7 +876,7 @@ type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[
 | `arbitrum-one-rpc.publicnode.com`, `optimism-rpc.publicnode.com`, `base-rpc.publicnode.com`, `polygon-bor-rpc.publicnode.com`, `bsc-rpc.publicnode.com`, `avalanche-c-chain-rpc.publicnode.com` | RPC EVM (phase 2) |
 | `mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion` | Bitcoin (Esplora) en mode Tor uniquement, `http://` (service onion officiel de mempool) ; réécriture automatique de `mempool.space` |
 | `api.devnet.solana.com`, `api.mainnet-beta.solana.com` | RPC Solana (aussi : tables d'adresses v0 lues par Rust pour `sol_decode_tx` / `sol_sign_tx` ; staking `sol_stake_*` lu et diffusé par Rust : `getProgramAccounts`, `getVoteAccounts`, sysvar StakeHistory, `sendTransaction` ; ou le RPC `servers.solana[cluster]` des réglages) |
-| `api.0x.org`, `api.1inch.dev`, `li.quest`, `lite-api.jup.ag` | devis de swap |
+| `api.0x.org`, `li.quest`, `lite-api.jup.ag` | devis de swap |
 | + hôtes des serveurs HTTP personnalisés (`servers.bitcoin.*` de type `esplora`, `servers.evm.*`, `servers.solana.*`) | autorisés **uniquement pour leur famille** (circuits Tor de la famille) ; le serveur par défaut remplacé est refusé (`DEFAULT_SERVER_DISABLED`) |
 | Electrum et Bitcoin Core | **pas** joignables par `net_fetch` : uniquement via les commandes `btc_*` (Rust) |
 | serveurs Esplora Litecoin / Dogecoin personnalisés (`servers.litecoin.*`, `servers.dogecoin.*`) | **pas** joignables par `net_fetch` : uniquement via `ltc_*` / `doge_*` (Rust), circuits Tor de leur famille ; le défaut remplacé (`litecoinspace.org`) est refusé (`DEFAULT_SERVER_DISABLED`) |

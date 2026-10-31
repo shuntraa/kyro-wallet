@@ -341,7 +341,6 @@ function ApiKeys() {
   const rows: Array<{ key: ApiKeyName; label: string; desc: string; env: boolean }> = [
     { key: 'coingecko', label: 'CoinGecko', desc: 'Optionnelle : quota plus large pour les prix.', env: !!config?.hasCoingeckoKey && !settings.apiKeysSet.coingecko },
     { key: 'zerox', label: '0x', desc: 'Requise pour les devis 0x.', env: !!config?.hasZeroxKey && !settings.apiKeysSet.zerox },
-    { key: 'oneinch', label: '1inch', desc: 'Requise pour les devis 1inch.', env: !!config?.hasOneinchKey && !settings.apiKeysSet.oneinch },
     { key: 'trongrid', label: 'TronGrid', desc: 'Optionnelle : limites de débit plus hautes pour TRON (TRON-PRO-API-KEY).', env: !!config?.hasTrongridKey && !settings.apiKeysSet.trongrid },
   ];
   return (

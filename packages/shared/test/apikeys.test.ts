@@ -18,7 +18,7 @@ describe('redacted API keys', () => {
   it('settings_get never returns key values, only which ones are set', async () => {
     const s = await call('settings_get');
     expect('apiKeys' in s).toBe(false);
-    expect(s.apiKeysSet).toEqual({ coingecko: false, zerox: false, oneinch: false, trongrid: false });
+    expect(s.apiKeysSet).toEqual({ coingecko: false, zerox: false, trongrid: false });
   });
 
   it('set, keep when absent, remove with "": the value is never echoed', async () => {

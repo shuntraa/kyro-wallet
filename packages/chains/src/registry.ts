@@ -412,7 +412,6 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       : { host: network === 'mainnet' ? 'api.trongrid.io' : 'nile.trongrid.io', purpose: `TRON${network === 'mainnet' ? '' : ' Nile'} : soldes, ressources, historique, diffusion (TronGrid)` },
   );
   list.push({ host: 'api.0x.org', purpose: 'Devis de swap EVM (clé requise)' });
-  list.push({ host: 'api.1inch.dev', purpose: 'Devis de swap EVM (clé requise)' });
   list.push({ host: 'li.quest', purpose: 'Devis de swap cross-chain' });
   list.push({ host: 'lite-api.jup.ag', purpose: 'Devis de swap Solana' });
   return list;

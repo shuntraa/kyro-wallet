@@ -48,7 +48,6 @@ En mode clair, tout serveur contacté voit ton **adresse IP** ; en mode Tor (dé
 | `arbitrum-one-rpc`, `optimism-rpc`, `base-rpc`, `polygon-bor-rpc`, `bsc-rpc`, `avalanche-c-chain-rpc` `.publicnode.com` | Chaînes EVM (phase 2), mêmes usages | Ton adresse EVM, tes transactions signées |
 | `api.devnet.solana.com` / `api.mainnet-beta.solana.com` | Solana : solde, blockhash, diffusion ; lecture par Rust des tables d'adresses (ALT) d'une transaction v0 avant de l'afficher et de la signer ; staking (`sol_stake_*`, par Rust) : tes comptes de staking (`getProgramAccounts` du programme Stake filtré sur ton adresse), validateurs (`getVoteAccounts`, noms validator-info du programme Config), sysvar StakeHistory, époque, minimum de délégation, rent, `getLatestBlockhash`, `sendTransaction` | Ton adresse Solana, tes transactions signées, les adresses des tables utilisées par la transaction à signer, tes comptes de staking et le validateur choisi |
 | `api.0x.org` | Devis de swap EVM (si clé configurée) | Tokens, montant, ton adresse (destinataire du swap) |
-| `api.1inch.dev` | Devis de swap EVM (si clé configurée) | Tokens, montant, ton adresse |
 | `li.quest` | Devis de swap cross-chain | Tokens, montant, chaînes, ton adresse |
 | `lite-api.jup.ag` | Devis de swap Solana | Tokens, montant, ton adresse |
 

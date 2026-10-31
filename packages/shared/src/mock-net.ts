@@ -61,7 +61,6 @@ const BASE_FEE_GWEI: Record<number, number> = {
 
 export const SOL_HOSTS = new Set(['api.devnet.solana.com', 'api.mainnet-beta.solana.com']);
 const ALLOWANCE_HOLDER = '0x0000000000001ff3684f28c67538d4d072c22734';
-const ONEINCH_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65';
 const LIFI_DIAMOND = '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae';
 
 const json = (status: number, body: unknown): NetResponse => ({ status, body: JSON.stringify(body) });
@@ -105,7 +104,6 @@ export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: 
   if (host in EVM_HOSTS) return evmRpc(EVM_HOSTS[host] ?? 1, req, s);
   if (SOL_HOSTS.has(host)) return solRpc(req, s);
   if (host === 'api.0x.org') return zerox(url);
-  if (host === 'api.1inch.dev') return oneinch(url);
   if (host === 'li.quest') return lifi(url);
   if (host === 'lite-api.jup.ag') return jupiter(url, req, s);
   throw new IpcError('HOST_NOT_ALLOWED', `Hôte non autorisé : ${host}`);
@@ -332,7 +330,7 @@ function evmRpc(chainId: number, req: NetRequest, s: DemoChainState): NetRespons
       if (data.startsWith('0xdd62ed3e')) return rpcResult(id, '0x' + pad32(s.allowances.get(`${chainId}:${to}:${arg(0)}:${arg(1)}`) ?? 0n));
       if (data.startsWith('0x313ce567')) return rpcResult(id, '0x' + pad32(BigInt(DEMO_TOKENS[to]?.decimals ?? 18)));
       // Swap simulations: succeed when the allowance is in place, revert otherwise.
-      if (to === ALLOWANCE_HOLDER || to === ONEINCH_ROUTER || to === LIFI_DIAMOND) return rpcResult(id, '0x');
+      if (to === ALLOWANCE_HOLDER || to === LIFI_DIAMOND) return rpcResult(id, '0x');
       return rpcResult(id, '0x');
     }
     case 'eth_sendRawTransaction': {
@@ -509,13 +507,19 @@ function convert(sellToken: string, buyToken: string, sellAmount: bigint, haircu
 
 const isNativeEvm = (t: string) => t.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
+/** Integrator fee in bps from a query parameter (0 when absent). */
+const bpsOf = (v: string | null, scale: number) => (v ? Math.round(Number(v) * scale) : 0);
+
 function zerox(url: URL): NetResponse {
   const q = url.searchParams;
   const sellToken = q.get('sellToken') ?? '';
   const buyToken = q.get('buyToken') ?? '';
   const sellAmount = BigInt(q.get('sellAmount') ?? '0');
   const bps = Number(q.get('slippageBps') ?? '50');
-  const buy = convert(sellToken, buyToken, sellAmount, 0.0018);
+  // Integrator fee (swapFeeBps, taken from the sell token as Kyro asks): less is swapped.
+  const kyroBps = bpsOf(q.get('swapFeeBps'), 1);
+  const integrator = (sellAmount * BigInt(kyroBps)) / 10_000n;
+  const buy = convert(sellToken, buyToken, sellAmount - integrator, 0.0018);
   const fee = (buy * 15n) / 10_000n;
   const gas = 182_000n;
   const gasPrice = 5_000_000_000n;
@@ -526,22 +530,10 @@ function zerox(url: URL): NetResponse {
     sellAmount: sellAmount.toString(),
     allowanceTarget: ALLOWANCE_HOLDER,
     issues: { allowance: isNativeEvm(sellToken) ? null : { actual: '0', spender: ALLOWANCE_HOLDER }, balance: null, simulationIncomplete: false },
-    fees: { zeroExFee: { amount: fee.toString(), token: buyToken, type: 'volume' }, integratorFee: null, gasFee: null },
+    fees: { zeroExFee: { amount: fee.toString(), token: buyToken, type: 'volume' }, integratorFee: kyroBps ? { amount: integrator.toString(), token: q.get('swapFeeToken') ?? sellToken, type: 'volume' } : null, gasFee: null },
     totalNetworkFee: (gas * gasPrice).toString(),
     route: { fills: [{ source: 'Uniswap_V3', proportionBps: '7000' }, { source: 'Curve', proportionBps: '3000' }] },
     transaction: { to: ALLOWANCE_HOLDER, data: '0x2213bc0b' + '0'.repeat(256), gas: gas.toString(), gasPrice: gasPrice.toString(), value: isNativeEvm(sellToken) ? sellAmount.toString() : '0' },
-  });
-}
-
-function oneinch(url: URL): NetResponse {
-  const q = url.searchParams;
-  const src = q.get('src') ?? '';
-  const dst = q.get('dst') ?? '';
-  const amount = BigInt(q.get('amount') ?? '0');
-  const buy = convert(src, dst, amount, 0.0024);
-  return json(200, {
-    dstAmount: buy.toString(),
-    tx: { from: q.get('from') ?? '', to: ONEINCH_ROUTER, data: '0x07ed2379' + '0'.repeat(256), value: isNativeEvm(src) ? amount.toString() : '0', gas: 205_000, gasPrice: '5200000000' },
   });
 }
 
@@ -551,7 +543,10 @@ function lifi(url: URL): NetResponse {
   const to = q.get('toToken') ?? '';
   const amount = BigInt(q.get('fromAmount') ?? '0');
   const slip = Number(q.get('slippage') ?? '0.005');
-  const buy = convert(from, to, amount, 0.0035);
+  // Distribution fee (what Kyro sends): a FRACTION of fromAmount paid to `receiver`, included in toAmount.
+  const kyroBps = bpsOf(q.get('distributionFees[0][percentage]'), 10_000);
+  const receiver = q.get('distributionFees[0][receiver]') ?? '';
+  const buy = convert(from, to, amount - (amount * BigInt(kyroBps)) / 10_000n, 0.0035);
   return json(200, {
     tool: 'stargate',
     toolDetails: { key: 'stargate', name: 'Stargate' },
@@ -561,7 +556,7 @@ function lifi(url: URL): NetResponse {
       approvalAddress: LIFI_DIAMOND,
       executionDuration: 45,
       gasCosts: [{ amountUSD: '1.21' }],
-      feeCosts: [{ amountUSD: '0.95', included: true, name: 'LI.FI fee' }],
+      feeCosts: [{ amountUSD: '0.95', included: true, name: 'LI.FI fee' }, ...(kyroBps ? [{ amountUSD: '0', included: true, name: 'Distributions', percentage: (kyroBps / 10_000).toFixed(4), feeSplit: { integratorFee: '0', lifiFee: '0', recipients: [{ name: receiver, type: 'DISTRIBUTION', walletAddress: receiver }] } }] : [])],
     },
     transactionRequest: { to: LIFI_DIAMOND, data: '0x4630a0d8' + '0'.repeat(256), value: isNativeEvm(from) ? hex(amount) : '0x0', gasLimit: hex(240_000), gasPrice: hex(5_100_000_000) },
   });
@@ -574,7 +569,11 @@ function jupiter(url: URL, req: NetRequest, s: DemoChainState): NetResponse {
     const outputMint = q.get('outputMint') ?? '';
     const amount = BigInt(q.get('amount') ?? '0');
     const bps = Number(q.get('slippageBps') ?? '50');
-    const out = convert(inputMint, outputMint, amount, 0.0012);
+    // Platform fee: outAmount is documented as net of it.
+    const kyroBps = bpsOf(q.get('platformFeeBps'), 1);
+    const gross = convert(inputMint, outputMint, amount, 0.0012);
+    const platform = (gross * BigInt(kyroBps)) / 10_000n;
+    const out = gross - platform;
     return json(200, {
       inputMint,
       outputMint,
@@ -583,6 +582,7 @@ function jupiter(url: URL, req: NetRequest, s: DemoChainState): NetResponse {
       otherAmountThreshold: ((out * BigInt(10_000 - bps)) / 10_000n).toString(),
       slippageBps: bps,
       priceImpactPct: '0.0004',
+      platformFee: kyroBps ? { amount: platform.toString(), feeBps: kyroBps } : null,
       routePlan: [{ swapInfo: { label: 'Orca Whirlpool' }, percent: 100 }],
     });
   }

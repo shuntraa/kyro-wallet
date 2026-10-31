@@ -46,6 +46,7 @@ const q = (over: Partial<Quote>): Quote => ({
   gasFeeFiat: 0,
   providerFeeFiat: 0,
   providerFeeIncluded: true,
+  kyroFeeBps: 0,
   priceImpact: null,
   allowanceTarget: null,
   tx: { kind: 'evm', chainId: 1, to: SPENDER, data: '0x', value: 0n },
@@ -56,17 +57,17 @@ describe('compareQuotes', () => {
   const buy = { address: NATIVE_EVM, symbol: 'ETH', decimals: 18, priceFiat: 2000 };
   it('sorts by net received (value − gas − non-included fee)', () => {
     const a = q({ provider: 'zerox', buyAmount: 305n * 10n ** 15n, gasFeeFiat: 1.12 }); // 610 − 1.12
-    const b = q({ provider: 'oneinch', buyAmount: 306n * 10n ** 15n, gasFeeFiat: 4 }); // 612 − 4
+    const b = q({ provider: 'jupiter', buyAmount: 306n * 10n ** 15n, gasFeeFiat: 4 }); // 612 − 4
     const c = q({ provider: 'lifi', buyAmount: 3065n * 10n ** 14n, gasFeeFiat: 1, providerFeeFiat: 2, providerFeeIncluded: false }); // 613 − 3
     const sorted = compareQuotes([a, b, c], buy).map((x) => x.provider);
-    expect(sorted).toEqual(['lifi', 'zerox', 'oneinch']);
+    expect(sorted).toEqual(['lifi', 'zerox', 'jupiter']);
     expect(netValueFiat(c, buy)).toBeCloseTo(610, 6);
   });
 
   it('falls back to buyAmount when prices are unknown', () => {
     const noPrice = { address: NATIVE_EVM, symbol: 'ETH', decimals: 18 };
-    const sorted = compareQuotes([q({ provider: 'zerox', buyAmount: 1n }), q({ provider: 'lifi', buyAmount: 3n }), q({ provider: 'oneinch', buyAmount: 2n })], noPrice);
-    expect(sorted.map((x) => x.provider)).toEqual(['lifi', 'oneinch', 'zerox']);
+    const sorted = compareQuotes([q({ provider: 'zerox', buyAmount: 1n }), q({ provider: 'lifi', buyAmount: 3n }), q({ provider: 'jupiter', buyAmount: 2n })], noPrice);
+    expect(sorted.map((x) => x.provider)).toEqual(['lifi', 'jupiter', 'zerox']);
   });
 
   it('applies slippage in basis points', () => {

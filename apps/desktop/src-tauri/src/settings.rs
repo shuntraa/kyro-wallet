@@ -27,8 +27,6 @@ pub struct ApiKeys {
     pub coingecko: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub zerox: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub oneinch: Option<String>,
     /// TronGrid (`TRON-PRO-API-KEY`), optional.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trongrid: Option<String>,
@@ -36,13 +34,13 @@ pub struct ApiKeys {
 
 impl ApiKeys {
     /// Every key name Settings supports (`settings_get.apiKeysSet`, `settings_set.apiKeys`).
-    pub const NAMES: [&'static str; 4] = ["coingecko", "zerox", "oneinch", "trongrid"];
+    /// (1inch was removed: a key left in an old settings.json is ignored and dropped on next save.)
+    pub const NAMES: [&'static str; 3] = ["coingecko", "zerox", "trongrid"];
 
     fn get(&self, name: &str) -> Option<&Option<String>> {
         Some(match name {
             "coingecko" => &self.coingecko,
             "zerox" => &self.zerox,
-            "oneinch" => &self.oneinch,
             "trongrid" => &self.trongrid,
             _ => return None,
         })
@@ -52,7 +50,6 @@ impl ApiKeys {
         Some(match name {
             "coingecko" => &mut self.coingecko,
             "zerox" => &mut self.zerox,
-            "oneinch" => &mut self.oneinch,
             "trongrid" => &mut self.trongrid,
             _ => return None,
         })
@@ -302,7 +299,6 @@ mod tests {
             api_keys: ApiKeys {
                 coingecko: Some("CG-secret-1".into()),
                 zerox: None,
-                oneinch: Some("1inch-secret-2".into()),
                 trongrid: Some("tron-secret-3".into()),
             },
             ..Settings::default()
@@ -310,17 +306,25 @@ mod tests {
     }
 
     #[test]
+    fn old_oneinch_key_is_ignored_and_dropped() {
+        let k: ApiKeys =
+            serde_json::from_value(serde_json::json!({ "zerox": "zx", "oneinch": "old" })).unwrap();
+        assert_eq!(k.zerox.as_deref(), Some("zx"));
+        assert!(!serde_json::to_string(&k).unwrap().contains("old"));
+    }
+
+    #[test]
     fn ui_view_never_contains_api_keys() {
         let s = with_keys();
         let ui = s.for_ui();
         let text = ui.to_string();
-        for secret in ["CG-secret-1", "1inch-secret-2", "tron-secret-3"] {
+        for secret in ["CG-secret-1", "tron-secret-3"] {
             assert!(!text.contains(secret), "{secret} leaked");
         }
         assert!(ui.get("apiKeys").is_none());
         assert_eq!(
             ui["apiKeysSet"],
-            serde_json::json!({ "coingecko": true, "zerox": false, "oneinch": true, "trongrid": true })
+            serde_json::json!({ "coingecko": true, "zerox": false, "trongrid": true })
         );
         // Round trip: the UI sends back what it got (apiKeysSet, no apiKeys): nothing changes,
         // and the response still leaks nothing.
@@ -367,7 +371,6 @@ mod tests {
         let n = Settings::from_ui(ui.clone(), &s.api_keys).unwrap();
         assert_eq!(n.api_keys.coingecko, None);
         assert_eq!(n.api_keys.zerox.as_deref(), Some("0x-new"));
-        assert_eq!(n.api_keys.oneinch.as_deref(), Some("1inch-secret-2"));
         assert_eq!(n.api_keys.trongrid.as_deref(), Some("tron-secret-3"));
         assert_eq!(n.for_ui()["apiKeysSet"]["coingecko"], false);
         // Refused: control characters, blank, unknown name, non-string, not an object.

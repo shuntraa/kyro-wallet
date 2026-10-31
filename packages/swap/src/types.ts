@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-export type ProviderId = 'zerox' | 'oneinch' | 'jupiter' | 'lifi';
+export type ProviderId = 'zerox' | 'jupiter' | 'lifi';
 
 /** EVM chain id, or 'solana'. */
 export type SwapChain = number | 'solana';
@@ -48,6 +48,8 @@ export interface Quote {
   providerFeeFiat: number | null;
   /** True when the provider fee is already deducted from buyAmount. */
   providerFeeIncluded: boolean;
+  /** Kyro fee applied to this quote (bps, 0 = none). Already deducted from buyAmount / minBuyAmount. */
+  kyroFeeBps: number;
   /** Fraction (0.0003 = 0.03 %), null when unknown. */
   priceImpact: number | null;
   /** Contract that needs an ERC-20 allowance; null for native sells / Solana. */
@@ -64,6 +66,8 @@ export interface SwapProvider {
   readonly host: string;
   /** False when the provider needs an API key that isn't configured. */
   available(): boolean;
+  /** Why it can't be used right now (missing key, Kyro fee not collectable…), or null. */
+  unavailableReason(): string | null;
   supports(params: QuoteParams): boolean;
   quote(params: QuoteParams): Promise<Quote>;
 }

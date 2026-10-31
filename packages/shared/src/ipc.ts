@@ -95,8 +95,8 @@ export interface UtxoAccountInfo {
 }
 
 /** API keys the shell knows. `trongrid`: TronGrid `TRON-PRO-API-KEY` (optional, higher rate limits). */
-export type ApiKeyName = 'coingecko' | 'zerox' | 'oneinch' | 'trongrid';
-export const API_KEY_NAMES: readonly ApiKeyName[] = ['coingecko', 'zerox', 'oneinch', 'trongrid'];
+export type ApiKeyName = 'coingecko' | 'zerox' | 'trongrid';
+export const API_KEY_NAMES: readonly ApiKeyName[] = ['coingecko', 'zerox', 'trongrid'];
 
 /**
  * Write-only API key changes in `settings_set`: name absent or `null` = unchanged, `""` = remove,
@@ -1012,7 +1012,6 @@ export interface NetResponse {
 export interface AppConfig {
   network: Network;
   hasZeroxKey: boolean;
-  hasOneinchKey: boolean;
   hasCoingeckoKey: boolean;
   /** TronGrid API key: build environment or a saved `apiKeys.trongrid`. */
   hasTrongridKey: boolean;
