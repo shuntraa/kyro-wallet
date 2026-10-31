@@ -801,4 +801,17 @@ mod tests {
         .is_err());
         assert!(parse_decimal_u128("v", "340282366920938463463374607431768211456").is_err());
     }
+
+    #[test]
+    fn high_fee_thresholds_follow_the_native_coin() {
+        let one = U256::exp10(18);
+        assert_eq!(evm_high_fee_threshold_wei(1), one / 20u64);
+        assert_eq!(evm_high_fee_threshold_wei(999), one / 20u64);
+        assert_eq!(evm_high_fee_threshold_wei(137), one * 50u64);
+        assert_eq!(evm_high_fee_threshold_wei(14), one * 2_000u64);
+        assert_eq!(evm_high_fee_threshold_wei(25), one * 200u64);
+        assert_eq!(evm_high_fee_threshold_wei(100), one * 10u64);
+        assert_eq!(evm_high_fee_threshold_wei(424_242), one / 20u64);
+        assert!(EVM_KNOWN_CHAINS.contains(&1_030) && !EVM_KNOWN_CHAINS.contains(&61));
+    }
 }
