@@ -1017,6 +1017,24 @@ export interface AppConfig {
   hasTrongridKey: boolean;
 }
 
+/** Where the running network comes from (docs/IPC.md §2.10). */
+export type NetworkSource = 'env' | 'saved' | 'vault' | 'default';
+
+/** `network_get`: the running network and how to change it (applied by restarting the app). */
+export interface NetworkInfo {
+  network: Network;
+  /** `env` = forced by `KYRO_NETWORK` (demo: `?network=` in the URL); `vault` = the only network with a vault. */
+  source: NetworkSource;
+  /** Saved choice (`network.json`), if any. */
+  saved: Network | null;
+  /** Build default: mainnet in release builds, testnet in debug builds. */
+  default: Network;
+  /** False when the environment forces the network. */
+  canSwitch: boolean;
+  /** A vault already exists on the other network (it is kept when switching). */
+  otherVaultExists: boolean;
+}
+
 /** Token metadata passed to `evm_sign_tx` so the native dialog can show a readable amount. */
 export interface EvmTokenHint {
   symbol: string;
@@ -1369,6 +1387,13 @@ export interface Commands {
   settings_set: { args: { settings: SettingsInput }; ret: Settings };
   set_capture_protection: { args: { enabled: boolean }; ret: void };
   config_get: { args: undefined; ret: AppConfig };
+  network_get: { args: undefined; ret: NetworkInfo };
+  /**
+   * Saves the choice; a different network locks the session and restarts the app (`true`).
+   * `INVALID_INPUT`: unknown value, forced by the environment, a native signature dialog open,
+   * a hardware-wallet call in progress.
+   */
+  network_set: { args: { network: Network }; ret: boolean };
 }
 
 /** Every command, including the generated `ltc_*` / `doge_*` ones. */

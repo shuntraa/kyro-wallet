@@ -28,6 +28,7 @@ import {
   type EvmTxRequest,
   type EvmTxSummary,
   type Network,
+  type NetworkSource,
   type Settings,
   type SettingsInput,
   type VaultStatus,
@@ -56,6 +57,8 @@ import { demoRenderScript, demoVsize } from './mock-tx';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 import { createDemoStake } from './mock-stake';
 import { createDemoAccounts } from './mock-accounts';
+import { createDemoNetwork, demoNetworkParam, demoNetworkStore, resolveDemoNetwork, type DemoNetworkStore } from './mock-network';
+export { DEMO_DEFAULT_NETWORK, DEMO_NETWORK_STORAGE_KEY, resolveDemoNetwork, type DemoNetworkStore } from './mock-network';
 export { ACCOUNT_CHAIN_LABEL, defaultAccountName } from './mock-accounts';
 
 bitcoin.initEccLib(ecc);
@@ -240,7 +243,14 @@ function fakeDerSignature(seed: string): Uint8Array {
 }
 
 export interface MockOptions {
+  /** Running network. Default: `?network=` (forced, like KYRO_NETWORK), else the saved choice, else testnet. */
   network?: Network;
+  /** With `network`: where it comes from (default `'default'`; `'env'` refuses `network_set`). */
+  networkSource?: NetworkSource;
+  /** Saved network choice (default: localStorage, in memory without storage). */
+  networkStore?: DemoNetworkStore;
+  /** Called by `network_set` instead of reloading the page (tests). */
+  onNetworkRestart?: (n: Network) => void;
   /** Emulates the native confirmation dialog. Default: `window.confirm` when available, else accept. */
   confirm?: (summary: string) => boolean;
   /** Start with an existing vault (tests). */
@@ -276,7 +286,10 @@ export interface MockBackend {
 }
 
 export function createMockBackend(opts: MockOptions = {}): MockBackend {
-  const network: Network = opts.network ?? detectDemoNetwork();
+  // Network choice (§2.10): same precedence as the shell (`?network=` = KYRO_NETWORK).
+  const networkStore = opts.networkStore ?? demoNetworkStore();
+  const resolved = opts.network ? { network: opts.network, source: opts.networkSource ?? ('default' as const) } : resolveDemoNetwork(demoNetworkParam(), networkStore.get());
+  const network: Network = resolved.network;
   const keys = deriveDemoKeys(network);
   const chain = seedChainState(keys, network);
   let clockOffset = 0;
@@ -303,6 +316,15 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   // Like the shell's setup: Tor starts in the background when enabled.
   const tor = createDemoTor(opts.tor ?? detectDemoTorScenario());
   if (settings.tor.enabled) tor.start();
+  const networkChoice = createDemoNetwork({
+    network,
+    source: resolved.source,
+    store: networkStore,
+    lock: () => {
+      unlocked = false;
+    },
+    ...(opts.onNetworkRestart ? { onRestart: opts.onNetworkRestart } : {}),
+  });
   // Several accounts per chain (§2.9): lists, accounts_get({ account }), signer line.
   const accts = createDemoAccounts({ network, seed: demoSeed(), base: keys.accounts, baseOwnBtc: keys.ownBtc, chain, requireUnlocked: () => requireUnlocked() });
   // Litecoin / Dogecoin (§2.4): `ltc_*` / `doge_*`.
@@ -718,6 +740,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     hw_sign_evm_tx: (a) => hw.signEvm(a),
     hw_sign_sol_tx: (a) => hw.signSol(a),
     config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid) }),
+    ...networkChoice.handlers,
   };
 
   return {
@@ -760,15 +783,6 @@ function decodeSolMessageArg(m: unknown): Uint8Array {
   } catch {
     throw new IpcError('INVALID_INPUT', 'Message Solana invalide (base64 attendu).');
   }
-}
-
-function detectDemoNetwork(): Network {
-  try {
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('network') === 'mainnet') return 'mainnet';
-  } catch {
-    /* ignore */
-  }
-  return 'testnet';
 }
 
 let singleton: MockBackend | null = null;
