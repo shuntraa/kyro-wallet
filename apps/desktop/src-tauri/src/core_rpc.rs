@@ -118,9 +118,19 @@ pub fn btc_per_kvb_to_sat_per_vb(v: &Value) -> Option<u64> {
 
 impl<'a> CoreClient<'a> {
     pub fn new(net: &'a NetClient, url: &str, auth: &CoreAuth, tor: bool) -> AppResult<Self> {
+        let url = validate_http_url(url, tor, true)?;
+        // Defence in depth (also checked by `servers::validate`): the cookie never leaves the
+        // machine / local network.
+        if matches!(auth, CoreAuth::Cookie { .. })
+            && !url.host_str().is_some_and(crate::servers::is_private_host)
+        {
+            return Err(AppError::ServerInvalid(
+                "Bitcoin Core : fichier .cookie refusé pour un nœud distant".into(),
+            ));
+        }
         Ok(Self {
             net,
-            url: validate_http_url(url, tor, true)?,
+            url,
             auth: auth.clone(),
             tor,
         })
@@ -128,24 +138,18 @@ impl<'a> CoreClient<'a> {
 
     fn authorization(&self) -> AppResult<String> {
         let creds = match &self.auth {
-            CoreAuth::Cookie { cookie_path } => std::fs::read_to_string(cookie_path)
-                .map_err(|e| {
-                    AppError::ServerInvalid(format!(
-                        "Bitcoin Core : fichier .cookie illisible ({cookie_path}) : {e}"
-                    ))
-                })?
-                .trim()
-                .to_owned(),
-            CoreAuth::Userpass { user, password, .. } => format!(
+            // Strict read: `.cookie` name, no symlink, <= 256 bytes, `__cookie__:<64 hex>`.
+            CoreAuth::Cookie { cookie_path } => crate::servers::read_cookie(cookie_path)?,
+            CoreAuth::Userpass { user, password, .. } => zeroize::Zeroizing::new(format!(
                 "{user}:{}",
                 password.as_deref().ok_or_else(|| AppError::ServerInvalid(
                     "Bitcoin Core : mot de passe RPC manquant".into()
                 ))?
-            ),
+            )),
         };
         Ok(format!(
             "Basic {}",
-            base64::engine::general_purpose::STANDARD.encode(creds)
+            base64::engine::general_purpose::STANDARD.encode(creds.as_bytes())
         ))
     }
 
@@ -347,7 +351,9 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("kyro-cookie-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(".cookie");
-        std::fs::write(&path, "__cookie__:abc\n").unwrap();
+        let first = format!("__cookie__:{}", "0f".repeat(32));
+        let rotated = format!("__cookie__:{}", "e2".repeat(32));
+        std::fs::write(&path, format!("{first}\n")).unwrap();
         let net = NetClient::new(dir.join("tor")).unwrap();
         let auth = CoreAuth::Cookie {
             cookie_path: path.to_string_lossy().into_owned(),
@@ -356,16 +362,21 @@ mod tests {
         let b64 = base64::engine::general_purpose::STANDARD;
         assert_eq!(
             c.authorization().unwrap(),
-            format!("Basic {}", b64.encode("__cookie__:abc"))
+            format!("Basic {}", b64.encode(&first))
         );
-        std::fs::write(&path, "__cookie__:rotated").unwrap();
+        std::fs::write(&path, &rotated).unwrap();
         assert_eq!(
             c.authorization().unwrap(),
-            format!("Basic {}", b64.encode("__cookie__:rotated"))
+            format!("Basic {}", b64.encode(&rotated))
         );
+        // Not a cookie: refused, nothing sent.
+        std::fs::write(&path, "{\"apiKeys\":{}}").unwrap();
+        assert!(matches!(c.authorization(), Err(AppError::ServerInvalid(_))));
         std::fs::remove_file(&path).unwrap();
         assert!(matches!(c.authorization(), Err(AppError::ServerInvalid(_))));
-        // Remote plain http is refused at construction.
+        // Remote plain http is refused at construction, and so is a remote HTTPS node with
+        // cookie auth (CRITIQUE 1: the cookie would leave the machine).
         assert!(CoreClient::new(&net, "http://node.example:8332", &auth, true).is_err());
+        assert!(CoreClient::new(&net, "https://node.example:8332", &auth, true).is_err());
     }
 }
