@@ -12,10 +12,14 @@
 //!   must resolve, otherwise the whole decode fails (no "unknown" placeholder);
 //! - a recognised program with malformed instruction data is an error, not "unknown";
 //! - anything not recognised is reported as [`SolInstruction::Unknown`] and sets
-//!   `requires_extra_confirmation`.
+//!   `requires_extra_confirmation`;
+//! - so does every recognised instruction whose effect Kyro cannot fully show: an account
+//!   created for a program outside a closed list, an SPL `Transfer` without mint / decimals, a
+//!   memo or seed that is long or had to be cleaned for display ([`crate::sanitize_text`]).
 
 use serde::{Deserialize, Serialize};
 
+use crate::display::sanitize_text;
 use crate::error::{Error, Result};
 
 const SYSTEM_PROGRAM: &str = "11111111111111111111111111111111";
@@ -46,6 +50,17 @@ const MAX_COMPUTE_UNITS: u64 = 1_400_000;
 /// AddressLookupTable account: 56-byte metadata header, then 32-byte addresses.
 const LOOKUP_TABLE_META_SIZE: usize = 56;
 const MAX_MEMO_DISPLAY: usize = 566;
+/// A memo longer than this (in characters) needs the reinforced confirmation: a short memo is
+/// read at a glance, a long one can hide something in the middle of the dialog.
+const MEMO_PLAIN_MAX_CHARS: usize = 80;
+/// Seeds are at most 32 bytes for `CreateAccountWithSeed`; `TransferWithSeed` is not checked.
+const MAX_SEED_DISPLAY: usize = 64;
+/// SPL Token account (`Account::LEN`) and mint (`Mint::LEN`) sizes.
+const TOKEN_ACCOUNT_SIZE: u64 = 165;
+const TOKEN_MINT_SIZE: u64 = 82;
+/// Largest Token-2022 account Kyro accepts without a warning (token account or mint with
+/// extensions).
+const MAX_TOKEN_2022_SIZE: u64 = 1_024;
 
 /// Resolved contents of an address lookup table, as fetched from the chain by the caller.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -295,6 +310,29 @@ pub enum SolWarning {
     },
     /// No explicit compute-unit limit: the priority fee is an upper-bound estimate.
     PriorityFeeEstimated,
+    /// `CreateAccount` / `CreateAccountWithSeed` for an owner program outside Kyro's closed list
+    /// (System, SPL Token / Token-2022 with a token account or mint size, Stake): that program
+    /// will control — and can spend — the lamports moved into the new account.
+    UnknownOwnerProgram {
+        /// Instruction index.
+        instruction: usize,
+        /// Owner program of the created account.
+        owner: String,
+        /// Allocated space in bytes.
+        space: String,
+    },
+    /// SPL `Transfer` (tag 3): unlike `TransferChecked`, neither the mint nor the decimals are
+    /// stated, so the token and the amount in token units are not verified.
+    UncheckedTokenTransfer {
+        /// Instruction index.
+        instruction: usize,
+    },
+    /// Memo or seed text that had control / invisible / bidi characters removed, was cut, or is
+    /// long: the dialog shows a cleaned version.
+    UnusualText {
+        /// Instruction index.
+        instruction: usize,
+    },
 }
 
 /// Plain-language summary of a Solana message.
@@ -810,11 +848,13 @@ fn decode_compute_budget(ix: &CompiledIx<'_>) -> Result<Option<SolInstruction>> 
     Ok(Some(decoded))
 }
 
-fn decode_memo(ix: &CompiledIx<'_>) -> Option<SolInstruction> {
+/// Memo text, cleaned for display. The flag is set when the memo had to be cleaned or cut, or
+/// is longer than [`MEMO_PLAIN_MAX_CHARS`].
+fn decode_memo(ix: &CompiledIx<'_>) -> Option<(SolInstruction, bool)> {
     let text = core::str::from_utf8(ix.data).ok()?;
-    Some(SolInstruction::Memo {
-        text: text.chars().take(MAX_MEMO_DISPLAY).collect(),
-    })
+    let clean = sanitize_text(text, MAX_MEMO_DISPLAY);
+    let unusual = clean.altered || text.chars().count() > MEMO_PLAIN_MAX_CHARS;
+    Some((SolInstruction::Memo { text: clean.text }, unusual))
 }
 
 fn stake_refused(msg: impl Into<String>) -> Error {
@@ -963,11 +1003,29 @@ pub(crate) fn create_with_seed(base: &[u8; 32], seed: &str, owner: &[u8; 32]) ->
     Ok(h.finalize().into())
 }
 
+/// Whether an account created for `owner` with `space` bytes is one Kyro understands: a plain
+/// System account, or an SPL Token / Token-2022 token account or mint (Token-2022 accounts with
+/// extensions are larger than a plain token account). Stake accounts are checked separately.
+fn known_owner(owner: &str, space: &str) -> bool {
+    let space = space.parse::<u64>().unwrap_or(u64::MAX);
+    match owner {
+        SYSTEM_PROGRAM => true,
+        TOKEN_PROGRAM => space == TOKEN_ACCOUNT_SIZE || space == TOKEN_MINT_SIZE,
+        TOKEN_2022_PROGRAM => {
+            space == TOKEN_MINT_SIZE || (TOKEN_ACCOUNT_SIZE..=MAX_TOKEN_2022_SIZE).contains(&space)
+        }
+        _ => false,
+    }
+}
+
 /// Checks every account creation: a `CreateAccountWithSeed` must create the address derived
 /// from its base, seed and owner; an account created for the Stake program must have the stake
 /// account size and be initialised by a later instruction of the same message (an
-/// uninitialised stake account can be initialised by anyone, with any authority).
-fn check_creations(instructions: &[SolInstruction]) -> Result<()> {
+/// uninitialised stake account can be initialised by anyone, with any authority). Returns the
+/// creations whose owner program is outside the closed list of [`known_owner`] as
+/// `(instruction, owner, space)`: the caller warns and requires the reinforced confirmation.
+fn check_creations(instructions: &[SolInstruction]) -> Result<Vec<(usize, String, String)>> {
+    let mut unknown = Vec::new();
     for (i, ins) in instructions.iter().enumerate() {
         let (new_account, space, owner) = match ins {
             SolInstruction::SystemCreateAccountWithSeed {
@@ -996,6 +1054,9 @@ fn check_creations(instructions: &[SolInstruction]) -> Result<()> {
             _ => continue,
         };
         if owner != STAKE_PROGRAM {
+            if !known_owner(owner, space) {
+                unknown.push((i, owner.clone(), space.clone()));
+            }
             continue;
         }
         if *space != STAKE_STATE_SIZE.to_string() {
@@ -1012,11 +1073,17 @@ fn check_creations(instructions: &[SolInstruction]) -> Result<()> {
             ));
         }
     }
-    Ok(())
+    Ok(unknown)
 }
 
-fn decode_instruction(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
+/// Decodes one instruction; the flag marks memo text that needs the reinforced confirmation.
+fn decode_instruction(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<(SolInstruction, bool)> {
     let program = ctx.accounts[ix.program_index].key.as_str();
+    if matches!(program, MEMO_PROGRAM_V2 | MEMO_PROGRAM_V1) {
+        if let Some(memo) = decode_memo(ix) {
+            return Ok(memo);
+        }
+    }
     let decoded = match program {
         STAKE_PROGRAM => Some(decode_stake(ctx, ix)?),
         SYSTEM_PROGRAM => decode_system(ctx, ix)?,
@@ -1024,15 +1091,22 @@ fn decode_instruction(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstructi
         TOKEN_2022_PROGRAM => decode_token(ctx, ix, SolTokenProgram::Token2022)?,
         ATA_PROGRAM => decode_ata(ctx, ix)?,
         COMPUTE_BUDGET_PROGRAM => decode_compute_budget(ix)?,
-        MEMO_PROGRAM_V2 | MEMO_PROGRAM_V1 => decode_memo(ix),
         _ => None,
     };
-    Ok(decoded.unwrap_or_else(|| SolInstruction::Unknown {
+    let decoded = decoded.unwrap_or_else(|| SolInstruction::Unknown {
         program_id: program.to_owned(),
         accounts: ix.accounts.len(),
         account_keys: ctx.rest(ix, 0),
         data_len: ix.data.len(),
-    }))
+    });
+    Ok((decoded, false))
+}
+
+/// Replaces a seed by its display form; `true` if it had to be cleaned or cut.
+fn sanitize_seed(seed: &mut String) -> bool {
+    let clean = sanitize_text(seed, MAX_SEED_DISPLAY);
+    *seed = clean.text;
+    clean.altered
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1058,10 +1132,21 @@ pub fn sol_decode_message(
     };
 
     let mut instructions = Vec::with_capacity(raw.instructions.len());
+    let mut unusual_text = Vec::with_capacity(raw.instructions.len());
     for ix in &raw.instructions {
-        instructions.push(decode_instruction(&ctx, ix)?);
+        let (ins, unusual) = decode_instruction(&ctx, ix)?;
+        instructions.push(ins);
+        unusual_text.push(unusual);
     }
-    check_creations(&instructions)?;
+    let unknown_owners = check_creations(&instructions)?;
+    // Seeds are cleaned for display only now: the derivation check above used the raw bytes.
+    for (ins, unusual) in instructions.iter_mut().zip(unusual_text.iter_mut()) {
+        if let SolInstruction::SystemCreateAccountWithSeed { seed, .. }
+        | SolInstruction::SystemTransferWithSeed { seed, .. } = ins
+        {
+            *unusual |= sanitize_seed(seed);
+        }
+    }
 
     let signers: Vec<String> = accounts[..raw.num_required_signatures]
         .iter()
@@ -1118,9 +1203,18 @@ pub fn sol_decode_message(
                 extra = true;
             }
             SolInstruction::TokenTransfer {
-                token_program: SolTokenProgram::Token2022,
+                token_program,
+                checked,
                 ..
-            } => warnings.push(SolWarning::Token2022ExtensionsUnverified { instruction: i }),
+            } => {
+                if !checked {
+                    warnings.push(SolWarning::UncheckedTokenTransfer { instruction: i });
+                    extra = true;
+                }
+                if *token_program == SolTokenProgram::Token2022 {
+                    warnings.push(SolWarning::Token2022ExtensionsUnverified { instruction: i });
+                }
+            }
             SolInstruction::Unknown { program_id, .. } => {
                 warnings.push(SolWarning::UnknownInstruction {
                     instruction: i,
@@ -1129,6 +1223,18 @@ pub fn sol_decode_message(
                 extra = true;
             }
             _ => {}
+        }
+        if let Some((_, owner, space)) = unknown_owners.iter().find(|(at, _, _)| *at == i) {
+            warnings.push(SolWarning::UnknownOwnerProgram {
+                instruction: i,
+                owner: owner.clone(),
+                space: space.clone(),
+            });
+            extra = true;
+        }
+        if unusual_text[i] {
+            warnings.push(SolWarning::UnusualText { instruction: i });
+            extra = true;
         }
         match ins {
             SolInstruction::ComputeUnitLimit { units } => {
@@ -1523,6 +1629,160 @@ mod tests {
             addresses: vec![me()],
         };
         assert!(sol_decode_message(&v0_with_lookup(&[0], &[], &[0, 2]), &[dup], &me()).is_err());
+    }
+
+    fn create_account(owner: &[u8; 32], space: u64) -> Vec<u8> {
+        let mut data = 0u32.to_le_bytes().to_vec();
+        data.extend_from_slice(&2_039_280u64.to_le_bytes());
+        data.extend_from_slice(&space.to_le_bytes());
+        data.extend_from_slice(owner);
+        legacy(SYSTEM_PROGRAM, &data, &[0, 1])
+    }
+
+    /// Audit finding: an account created for an arbitrary program used to need no second
+    /// dialog, although that program then controls (and can spend) the lamports moved into it.
+    #[test]
+    fn create_account_for_unknown_owner_needs_extra_confirmation() {
+        let foreign = [42u8; 32];
+        let s = sol_decode_message(&create_account(&foreign, 0), &[], &me()).unwrap();
+        assert!(s.requires_extra_confirmation);
+        assert!(s.warnings.contains(&SolWarning::UnknownOwnerProgram {
+            instruction: 0,
+            owner: b58(&foreign),
+            space: "0".into()
+        }));
+        // Token program, but neither a token account nor a mint size.
+        let s = sol_decode_message(
+            &create_account(&program_key(TOKEN_PROGRAM), 1000),
+            &[],
+            &me(),
+        )
+        .unwrap();
+        assert!(s.requires_extra_confirmation);
+        assert!(matches!(
+            s.warnings[0],
+            SolWarning::UnknownOwnerProgram { .. }
+        ));
+        // Closed list: System, Token account / mint, Token-2022 with extensions.
+        for (owner, space) in [
+            (SYSTEM_PROGRAM, 0),
+            (TOKEN_PROGRAM, 165),
+            (TOKEN_PROGRAM, 82),
+            (TOKEN_2022_PROGRAM, 82),
+            (TOKEN_2022_PROGRAM, 170),
+        ] {
+            let s = sol_decode_message(&create_account(&program_key(owner), space), &[], &me())
+                .unwrap();
+            assert!(s.warnings.is_empty(), "{owner} {space}: {:?}", s.warnings);
+            assert!(!s.requires_extra_confirmation, "{owner} {space}");
+        }
+        // CreateAccountWithSeed (derived address) for an unknown owner: same rule.
+        let base = PAYER;
+        let derived = create_with_seed(&base, "s", &foreign).unwrap();
+        let mut data = 3u32.to_le_bytes().to_vec();
+        data.extend_from_slice(&base);
+        data.extend_from_slice(&1u64.to_le_bytes());
+        data.extend_from_slice(b"s");
+        data.extend_from_slice(&5u64.to_le_bytes());
+        data.extend_from_slice(&0u64.to_le_bytes());
+        data.extend_from_slice(&foreign);
+        let mut m = vec![1, 0, 1];
+        m.extend(sv(3));
+        m.extend_from_slice(&PAYER);
+        m.extend_from_slice(&derived);
+        m.extend_from_slice(&program_key(SYSTEM_PROGRAM));
+        m.extend_from_slice(&[3u8; 32]);
+        m.extend(sv(1));
+        m.push(2);
+        m.extend(sv(2));
+        m.extend_from_slice(&[0, 1]);
+        m.extend(sv(data.len()));
+        m.extend_from_slice(&data);
+        let s = sol_decode_message(&m, &[], &me()).unwrap();
+        assert!(s.requires_extra_confirmation);
+        assert!(matches!(
+            s.warnings[0],
+            SolWarning::UnknownOwnerProgram { instruction: 0, .. }
+        ));
+    }
+
+    /// Audit finding: SPL `Transfer` (no mint, no decimals) used to be signed without the second
+    /// dialog; only `TransferChecked` may skip it.
+    #[test]
+    fn unchecked_spl_transfer_needs_extra_confirmation() {
+        let mut data = vec![3u8];
+        data.extend_from_slice(&1_000u64.to_le_bytes());
+        let s = sol_decode_message(&legacy(TOKEN_PROGRAM, &data, &[1, 1, 0]), &[], &me()).unwrap();
+        assert!(matches!(
+            s.instructions[0],
+            SolInstruction::TokenTransfer { checked: false, .. }
+        ));
+        assert_eq!(
+            s.warnings,
+            vec![SolWarning::UncheckedTokenTransfer { instruction: 0 }]
+        );
+        assert!(s.requires_extra_confirmation);
+        let mut data = vec![12u8];
+        data.extend_from_slice(&1_000u64.to_le_bytes());
+        data.push(6);
+        let s =
+            sol_decode_message(&legacy(TOKEN_PROGRAM, &data, &[1, 1, 1, 0]), &[], &me()).unwrap();
+        assert!(s.warnings.is_empty());
+        assert!(!s.requires_extra_confirmation);
+    }
+
+    /// Audit finding: memo text was shown with its control / bidi characters, and a memo never
+    /// triggered the second dialog.
+    #[test]
+    fn memo_is_sanitized_and_unusual_memos_need_extra_confirmation() {
+        let s = sol_decode_message(&legacy(MEMO_PROGRAM_V2, b"order 42", &[]), &[], &me()).unwrap();
+        assert_eq!(
+            s.instructions[0],
+            SolInstruction::Memo {
+                text: "order 42".into()
+            }
+        );
+        assert!(!s.requires_extra_confirmation);
+        let tricky = "pay\u{202E}evil\n\n\n\nsee below\u{200B}".as_bytes();
+        let s = sol_decode_message(&legacy(MEMO_PROGRAM_V1, tricky, &[]), &[], &me()).unwrap();
+        assert_eq!(
+            s.instructions[0],
+            SolInstruction::Memo {
+                text: "payevil    see below".into()
+            }
+        );
+        assert_eq!(s.warnings, vec![SolWarning::UnusualText { instruction: 0 }]);
+        assert!(s.requires_extra_confirmation);
+        let long = "a".repeat(MEMO_PLAIN_MAX_CHARS + 1);
+        let s =
+            sol_decode_message(&legacy(MEMO_PROGRAM_V2, long.as_bytes(), &[]), &[], &me()).unwrap();
+        assert!(s.requires_extra_confirmation);
+        let huge = "b".repeat(2_000);
+        let s =
+            sol_decode_message(&legacy(MEMO_PROGRAM_V2, huge.as_bytes(), &[]), &[], &me()).unwrap();
+        let SolInstruction::Memo { text } = &s.instructions[0] else {
+            panic!("memo expected");
+        };
+        assert_eq!(text.chars().count(), MAX_MEMO_DISPLAY);
+        assert!(text.ends_with('…'));
+    }
+
+    #[test]
+    fn transfer_with_seed_seed_is_sanitized() {
+        let mut data = 11u32.to_le_bytes().to_vec();
+        data.extend_from_slice(&7u64.to_le_bytes());
+        data.extend_from_slice(&3u64.to_le_bytes());
+        data.extend_from_slice(b"a\nb");
+        data.extend_from_slice(&program_key(SYSTEM_PROGRAM));
+        let s = sol_decode_message(&legacy(SYSTEM_PROGRAM, &data, &[1, 0, 1]), &[], &me()).unwrap();
+        assert!(matches!(
+            &s.instructions[0],
+            SolInstruction::SystemTransferWithSeed { seed, .. } if seed == "a b"
+        ));
+        assert!(s
+            .warnings
+            .contains(&SolWarning::UnusualText { instruction: 0 }));
+        assert!(s.requires_extra_confirmation);
     }
 
     #[test]

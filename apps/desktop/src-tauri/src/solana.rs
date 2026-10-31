@@ -320,6 +320,20 @@ fn describe_warning(w: &SolWarning) -> String {
         SolWarning::PriorityFeeEstimated => {
             "Frais prioritaires estimés au maximum (pas de limite de calcul explicite)".into()
         }
+        SolWarning::UnknownOwnerProgram {
+            instruction, owner, ..
+        } => format!(
+            "Instruction {} : le compte créé appartient à un programme inconnu ({owner}) : il pourra dépenser ces SOL",
+            instruction + 1
+        ),
+        SolWarning::UncheckedTokenTransfer { instruction } => format!(
+            "Instruction {} : envoi de token sans mint ni décimales (Transfer non vérifié)",
+            instruction + 1
+        ),
+        SolWarning::UnusualText { instruction } => format!(
+            "Instruction {} : texte long ou contenant des caractères invisibles / de contrôle (affiché nettoyé)",
+            instruction + 1
+        ),
     }
 }
 
