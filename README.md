@@ -1,81 +1,204 @@
-<p align="center"><img src="brand/kyro-mark-dark.svg" width="72" alt=""></p>
+<p align="center">
+  <img src="https://kyrowallet.com/img/kyro-mark-dark.svg" width="88" alt="Kyro Wallet logo">
+</p>
 
-# Kyro Wallet
+<h1 align="center">Kyro Wallet</h1>
 
-**Wallet crypto non-custodial, open source (GPLv3), pour Windows, macOS et Linux.**
-Tes clés restent chiffrées sur ton appareil ; toutes les signatures se font dans un noyau Rust ; aucune télémétrie.
+<p align="center">
+  <b>A free, open-source, non-custodial desktop wallet.</b><br>
+  One recovery phrase for 37 blockchains. Keys stay in the Rust core. Traffic goes over Tor.
+</p>
 
-> ⚠️ **v0.1 — en développement, non auditée, testnet par défaut.** N'y mets pas d'argent que tu ne peux pas perdre.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="License: GPL-3.0-or-later"></a>
+  <a href="https://github.com/shuntraa/kyro-wallet/releases/latest"><img src="https://img.shields.io/github/v/release/shuntraa/kyro-wallet?label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-informational" alt="Platforms: Windows, macOS, Linux">
+  <img src="https://img.shields.io/badge/built%20with-Tauri%202%20%2B%20Rust-orange" alt="Built with Tauri 2 and Rust">
+</p>
 
-## État réel (v0.1)
+<p align="center">
+  <a href="https://github.com/shuntraa/kyro-wallet/releases/latest"><b>Download</b></a> ·
+  <a href="https://kyrowallet.com">Website</a> ·
+  <a href="SECURITY.md">Security</a> ·
+  <a href="https://github.com/shuntraa/kyro-wallet/security/advisories/new">Report a vulnerability</a>
+</p>
 
-> Rien n'a encore été lancé **dans l'application réelle par un humain** et **aucune fenêtre de confirmation native n'a été cliquée**. Les envois réels marqués **✅ (headless)** ont été faits sans interface, par les **mêmes fonctions Rust** que l'application (construction, décodage, vérifications, signature, diffusion via Tor). Détail et légende : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#phases).
+<p align="center">
+  <img src="docs/assets/hero.webp" width="860" alt="Kyro Wallet portfolio screen">
+</p>
 
-| Fonction | État | Comment c'est testé |
+---
+
+## What Kyro is
+
+Kyro is a desktop wallet for Windows, macOS and Linux. You hold the keys: your recovery phrase is encrypted on your own computer, and nobody else — the developers included — can move your funds.
+
+- **37 blockchains, one recovery phrase**, with **220+ tokens**.
+- **Send, receive and swap** from the same window. Swaps carry a service fee from 0.7%, included in the rate — see [fees](https://kyrowallet.com/fees/).
+- **Staking** where available, from accounts that stay in your name: SOL, ADA and TRX.
+- **Ledger and Trezor** hardware wallets on supported chains (see [below](#hardware-wallets)).
+- **Automatic signed updates**, downloaded silently over Tor, signature-checked, applied at the next start.
+- **Tor by default.** If Tor is unavailable, Kyro stops instead of silently connecting in the clear.
+- **No account, no tracking, no analytics, no telemetry.**
+- Interface in **English and French**.
+
+### Supported blockchains
+
+| Group | Networks |
+|---|---|
+| **Bitcoin & UTXO** | Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash (transparent addresses), Kaspa |
+| **Ethereum & EVM** | Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux |
+| **Other networks** | Solana, TRON, Cardano, XRP Ledger, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Hedera |
+
+Tokens include ERC-20 and other EVM standards, SPL (Solana), TRC-20 (TRON), Cardano native tokens and XRP Ledger issued currencies. Stablecoins are also supported on non-EVM chains: USDT on TON, USDC on Sui, USDC and USDT on Aptos, USDC on Stellar (the account needs a USDC trustline) and USDC and USDT on NEAR. TON's native coin is now named **Gram** (GRAM). Per-chain details: [kyrowallet.com/chains](https://kyrowallet.com/chains/).
+
+## Why Kyro
+
+**Keys never leave the Rust core.** The interface is a sandboxed web view that never sees a secret. Encryption, key derivation and signing happen in `wallet-core`, a pure Rust crate with no network and no file access. Private keys are derived for each signature, then wiped from memory.
+
+**No blind signing.** Every signature needs your password *and* a confirmation in a native system window, drawn by the app shell rather than the web view. It shows what Rust itself decoded from the transaction, not what the interface claims. Unusual transactions get a second, reinforced confirmation.
+
+**Private by default.** All traffic goes through an embedded Tor client, with a separate circuit per blockchain. Kyro contacts only the servers listed in [docs/NETWORK.md](docs/NETWORK.md), and you can point most chains at your own node.
+
+**Scam protection built in.** Address-poisoning alerts, clipboard-tampering detection after a paste, refused invalid recipients, and exact ERC-20 approvals by default — an unlimited approval needs an explicit action and shows a warning.
+
+**Swaps you can check.** Kyro decodes the provider's transaction before asking for your password and checks that it targets the provider's official contract. The fee is collected through each provider's official integrator-fee mechanism; Kyro never adds a separate transfer. Details: [docs/SWAP_FEES.md](docs/SWAP_FEES.md).
+
+**Open and accountable.** GPL-3.0-or-later, dependencies pinned to exact versions, committed lockfiles, `cargo audit`, `cargo deny` and `pnpm audit` in CI, and a pinned Rust toolchain.
+
+## Screenshots
+
+| Portfolio | Swap | Send |
+|:-:|:-:|:-:|
+| <img src="docs/assets/portfolio.webp" width="280" alt="Portfolio screen"> | <img src="docs/assets/swap.webp" width="280" alt="Swap screen"> | <img src="docs/assets/send.webp" width="280" alt="Send screen"> |
+
+## Hardware wallets
+
+Your keys stay in the device and every transaction is confirmed on its screen. Kyro still decodes the transaction in Rust, shows it in a native window, and verifies the device's signature before broadcasting.
+
+| Device | Chains |
+|---|---|
+| **Ledger and Trezor** | Bitcoin, all EVM chains, Solana, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, Cardano (not the Trezor One) |
+| **Ledger only** | XRP, TRON, Sui, Aptos, Algorand, Cosmos Hub, TON, NEAR, Hedera |
+| **Trezor only** | Zcash (transparent) |
+
+Caveats: on NEAR and TON the Ledger account is a different account than the software wallet for the same phrase; on Hedera the Ledger account must first be created with Ledger Live or HashPack. Not available on hardware wallets: Monero, Polkadot, Kaspa. Details in [SECURITY.md](SECURITY.md).
+
+## Automatic updates
+
+Kyro checks for updates over Tor and downloads them silently in the background. Each update is signed; the signature is verified against the public key built into the app before anything is installed, and a bad signature is rejected. The update is installed when you quit Kyro or at the next start, never in the middle of a session.
+
+## Security model
+
+| Layer | Holds | Role |
 |---|---|---|
-| Phrase BIP39 12/24 mots, coffre Argon2id + XChaCha20-Poly1305 | ✅ | vecteurs officiels Trezor, refus mot de passe / fichier modifié |
-| Adresses BTC SegWit (BIP84) et Taproot (BIP86), EVM, Solana | ✅ | vecteurs BIP84/BIP86/SLIP-10, adresses de référence |
-| Interface (écrans, auto-lock, presse-papier) | ⚠️ | parcourue en mode démo (backend simulé) ; jamais dans l'app réelle |
-| Plusieurs comptes par chaîne (coffre, comme Ledger Live) | ⚠️ Rust + UI (Réglages › Comptes, sélecteurs), parcourue en mode démo · aucune diffusion depuis un compte n° 2 ou plus | compte 0 figé pour chaque chaîne (chemins, xpubs, adresses d'avant), compte 1 : vecteurs Trezor (XRP), CIP-19 (Cardano), MetaMask (EVM), sinon recoupé avec @scure/bip32, bitcoinjs-lib et @noble ; PSBT signées pour un seul compte ; fenêtre native : compte signataire, « inconnu » + 2ᵉ fenêtre. Détail : [docs/IPC.md §2.9](docs/IPC.md) |
-| Envoi Bitcoin | ⚠️ aucune diffusion testnet (aucun portefeuille public n'a de pièces testnet4) | sighash BIP143/BIP341 recalculés ; 2ᵉ fenêtre renforcée (script inconnu, OP_RETURN, entrée étrangère, frais > 100 sat/vB) ; lectures réelles via Tor (mempool .onion, Electrum testnet4, filtres compacts) |
-| Envoi Ethereum / ERC-20 | ⚠️ aucune diffusion Sepolia (aucun portefeuille public n'a d'ETH Sepolia) | signature vérifiée contre une vraie transaction mainnet ; 2ᵉ fenêtre renforcée (appel de contrat, toute autorisation, valeur vers un contrat, chainId inconnu, frais élevés) |
-| Chaînes EVM (Arbitrum, Optimism, Base, Polygon, BNB, Avalanche) | ⚠️ | registre + même adresse ; leurs testnets ne sont pas dans le registre de Kyro |
-| Solana + SPL / Token-2022, devnet | ✅ (headless) | 7 transactions réelles par le chemin Rust de `sol_sign_tx` : SOL (`59eS4zti…NWwbvSag`), SPL et Token-2022 (mint créé + transfert), table d'adresses, **v0** avec table ; messages construits par le test, pas par l'adaptateur TS ; décodage aussi testé sur 6 vraies transactions et 9 000 messages mutés |
-| Litecoin (BIP84 `ltc1`) | ✅ (headless) | une diffusion réelle testnet4 (`a45c9688…d431f0`) via Tor ; vecteurs Trust Wallet Core, Trezor, Electrum-LTC |
-| Dogecoin (BIP44 P2PKH) | ⚠️ mainnet : ElectrumX publics de Komodo par défaut · testnet : pas de serveur par défaut | vecteurs Trust Wallet Core, signature d'une vraie transaction mainnet vérifiée ; lectures mainnet réelles (réponses ElectrumX enregistrées + capture en direct passée par les analyseurs Rust) ; montants des entrées pris **uniquement** dans la transaction précédente vérifiée (tests de régression) ; **aucune diffusion réelle** |
-| TRON (TRX, TRC-20 USDT), Nile | ✅ (headless) | diffusions réelles TRX (`4c280894…a59208`) et TRC-20 (`9863fe55…d2de1c`) ; vecteurs Trezor (signatures identiques), Trust Wallet Core |
-| XRP Ledger (XRP + monnaies émises), testnet | ✅ (headless) | deux paiements réels validés (`02DFFDBC…57FB2EE` vers un compte inexistant, `2F324A9E…578EB0B7` avec tag) ; vecteurs Trezor, xrpl.js |
-| Cardano (ADA + tokens natifs), preprod | ✅ (headless) | une diffusion réelle preprod (`d1d77438…f06c0d30`, envoi à soi-même, frais minimum) depuis l'adresse publique CIP-19 ; vecteurs CIP-0003, CIP-0019, Trezor (4 transactions, signatures identiques) |
-| Ledger / Trezor (BTC, EVM, Solana) | ⚠️ jamais sur un vrai appareil ni un émulateur | échanges APDU **enregistrés par Ledger** rejoués, firmware Trezor simulé, descripteurs ERC-20 Ledger vérifiés hors ligne |
-| Trezor Safe 7 (protocole THP, appairage par code) | ⚠️ Rust + UI (appairage par code, mode démo) · jamais sur un vrai Safe 7 | contre le code THP côté appareil de Trezor (`trezor-thp`) ; vecteurs trezorlib et Trezor Suite ; authenticité de l'appareil non vérifiée (à faire dans Trezor Suite) |
-| Tor intégré (Arti), échec fermé, circuits isolés par chaîne | ✅ lectures · ⚠️ jamais dans l'app réelle | vraies requêtes via Tor : mempool .onion, CoinGecko, Sepolia, Solana devnet, litecoinspace, TronGrid, XRPL, Koios |
-| Serveurs personnalisés par chaîne | ✅ vérification réseau en direct · ⚠️ Bitcoin Core jamais testé contre un vrai nœud | Esplora et Electrum testnet4, RPC Sepolia, Solana devnet, rippled, Koios : bon réseau accepté, mauvais refusé (via Tor) |
-| Filtres compacts BIP157/158 | ⚠️ désactivés par défaut (fonction `cbf`) jusqu'à revue (≥ 2026-11-11) | synchronisation réelle testnet4 via Tor, soldes identiques à mempool |
-| Swap 0x / LI.FI / Jupiter | ⚠️ | meilleur prix après frais, **frais Kyro dégressifs (5 % à 5 $ → 0,7 % dès 10 000 $)** via le paramètre intégrateur officiel de chaque fournisseur ([docs/SWAP_FEES.md](docs/SWAP_FEES.md)) ; devis, frais et approval exact testés contre des réponses simulées uniquement |
-| Staking Solana (devnet), Cardano (preprod), TRON Stake 2.0 (Nile) | ✅ (headless) Rust · ⚠️ écrans (mode démo) | 11 transactions réelles par le chemin Rust (Solana : créer + déléguer, désactiver, retirer ; Cardano : enregistrement + délégation + vote « s'abstenir », désinscription ; TRON : gel, vote, dégel, annulation) ; fixtures Trezor (signatures identiques) ; retrait de récompenses Cardano/TRON et retrait des dégels TRON : unitaires seulement ; BTC/LTC/DOGE/XRP : pas de staking natif ; ETH : hors périmètre. Détail : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#phases) |
+| React interface (web view) | No secrets | Calls an allowlist of Tauri commands. Strict CSP, no remote scripts, no direct network or file access. |
+| Tauri shell (Rust) | Session | Auto-lock, filtered network access over Tor, native confirmation windows. |
+| `wallet-core` (pure Rust) | Encrypted vault | Encrypts (Argon2id + XChaCha20-Poly1305), derives, decodes, signs. No network, no files. |
 
-## Installer les outils
+The recovery phrase is only ever displayed in a native window opened by Rust, never in the interface. A compromised interface still cannot sign without your password and the native window.
 
-- Rust (la version est épinglée dans `rust-toolchain.toml`, installée automatiquement par `rustup`)
-- Node.js ≥ 22 et pnpm 11 (`corepack enable`)
-- Windows : Visual Studio Build Tools (C++) et WebView2 · Linux : `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev` · macOS : Xcode Command Line Tools
-- Hardware wallets : aucune bibliothèque système à installer (hidapi et libusb sont compilées avec Kyro). Linux : installer les règles udev de [Ledger](https://github.com/LedgerHQ/udev-rules) et de [Trezor](https://trezor.io/learn/a/udev-rules) pour l'accès USB sans root.
+**Audit status:** an internal security review has been done; no independent external audit has been published yet. Like all GPL software, Kyro comes with no warranty. What Kyro protects against — and what no software can — is described in [SECURITY.md](SECURITY.md), including a per-chain threat model.
 
-## Lancer
+## Architecture at a glance
+
+```
+kyro-wallet/
+├─ crates/wallet-core/     Pure Rust: vault, BIP39/32, derivation, decoding, signing
+├─ apps/desktop/
+│  ├─ src-tauri/           Tauri 2 shell: IPC commands, session + auto-lock, filtered net_fetch, native dialogs
+│  └─ src/                 React + strict TypeScript interface (no secrets)
+├─ packages/
+│  ├─ shared/              IPC contract types
+│  ├─ chains/              Chain adapters (build unsigned transactions)
+│  ├─ market/              Prices and charts (CoinGecko)
+│  └─ swap/                Swap providers and fee logic
+└─ docs/                   ARCHITECTURE, IPC, NETWORK, SWAP_FEES
+```
+
+```mermaid
+flowchart LR
+  UI["React UI<br/>no secrets"] -- "invoke() allowlist" --> Shell["Tauri shell<br/>session · Tor · native dialogs"]
+  Shell --> Core["wallet-core<br/>decode · sign"]
+  Core -- "decoded summary" --> Dialog["Native confirmation window"]
+  Dialog -- "you approve" --> Core
+  Shell -- "Tor" --> Net["Listed servers / your node"]
+```
+
+TypeScript builds unsigned transactions and broadcasts signed ones; Rust decodes what will actually be signed and shows it to you. TypeScript can be wrong or compromised without being able to redirect funds. More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/IPC.md](docs/IPC.md).
+
+## Download & verify
+
+Kyro is published **only** on [GitHub Releases](https://github.com/shuntraa/kyro-wallet/releases/latest). There is no mobile app; anything in an app store using the name is not ours.
+
+| Platform | File |
+|---|---|
+| Windows | [Kyro-windows-x64-setup.exe](https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe) · [.msi](https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64.msi) |
+| macOS (Apple Silicon & Intel) | [Kyro-macos.dmg](https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg) |
+| Linux | [AppImage](https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage) · [.deb](https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-amd64.deb) |
+
+Download [SHA256SUMS](https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS) next to the installer and compare:
 
 ```bash
+Get-FileHash .\Kyro-windows-x64-setup.exe -Algorithm SHA256   # Windows (PowerShell)
+shasum -a 256 Kyro-macos.dmg                                  # macOS
+sha256sum -c SHA256SUMS --ignore-missing                      # Linux
+```
+
+If the hashes differ, delete the file and download it again.
+
+**First launch.** The installers are not code-signed yet, so your OS warns you the first time. Verify the checksum first, then:
+
+- **Windows (SmartScreen):** click **More info → Run anyway**.
+- **macOS (Gatekeeper):** right-click Kyro in Applications → **Open**, or go to *System Settings → Privacy & Security → Open Anyway*.
+
+## Build from source
+
+Requirements: [Rust](https://rustup.rs) **1.97.1** (pinned in `rust-toolchain.toml`; rustup installs it automatically), Node.js 22+, pnpm 11 (`corepack enable`), and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.
+
+```bash
+git clone https://github.com/shuntraa/kyro-wallet.git
+cd kyro-wallet
 pnpm install --frozen-lockfile
-cp .env.example .env          # optionnel : clés CoinGecko / 0x / TronGrid (KYRO_TRONGRID_API_KEY)
-pnpm dev                      # application Tauri (testnet en debug ; réseau au choix dans Réglages › Réseaux et serveurs)
-pnpm --filter @kyro/desktop dev   # interface seule dans un navigateur, MODE DÉMO (aucune vraie clé)
+pnpm dev        # run the app in development mode
+pnpm build      # build the installers
 ```
 
-## Vérifier
+### Tests and checks
 
 ```bash
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-pnpm -r typecheck && pnpm -r test && pnpm lint:ts
-cargo audit && cargo deny check && pnpm audit --prod
+pnpm test       # TypeScript tests in every package + cargo test --workspace
+pnpm typecheck  # TypeScript, every package
+pnpm lint       # ESLint + cargo clippy (warnings are errors)
+pnpm audit      # pnpm audit --prod + cargo audit
 ```
 
-## Construire
+## Contributing
 
-```bash
-pnpm build                    # installeurs (MSI/NSIS, DMG, AppImage/deb selon l'OS)
-pnpm --filter @kyro/desktop tauri build --no-bundle   # binaire seul
-```
+Issues and pull requests are welcome. Before opening a PR, run `pnpm lint`, `pnpm typecheck` and `pnpm test`. Any new server Kyro contacts must be listed in [docs/NETWORK.md](docs/NETWORK.md), and changes to the IPC contract belong in [docs/IPC.md](docs/IPC.md).
 
-## Architecture et sécurité
+**Never post a recovery phrase, private key or password** in an issue, pull request or log.
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — couches et responsabilités
-- [docs/IPC.md](docs/IPC.md) — contrat entre l'interface et Rust
-- [SECURITY.md](SECURITY.md) — modèle de menace, signaler une faille
-- [docs/NETWORK.md](docs/NETWORK.md) — chaque serveur contacté et ce qu'il voit
-- [docs/DESIGN.md](docs/DESIGN.md) — identité visuelle
+## Reporting a vulnerability
 
-## Licence
+Please do **not** open a public issue. Report privately through [GitHub security advisories](https://github.com/shuntraa/kyro-wallet/security/advisories/new) (*Security → Report a vulnerability*), with a proof of concept if possible. Reports are acknowledged within 72 hours, with a fix and coordinated disclosure within 90 days at most. See [SECURITY.md](SECURITY.md).
 
-[GPL-3.0-or-later](LICENSE). Tout fork distribué doit rester open source.
+## Support the project
 
-Dépendance C embarquée sous licence différente : **libusb** (LGPL-2.1-or-later, liée statiquement pour Trezor), compatible avec la GPL-3.0 ; son code source est celui de la crate `libusb1-sys` 0.7.0.
+Kyro is free. If you'd like to help keep it going:
+
+- **GitHub Sponsors:** [github.com/sponsors/shuntraa](https://github.com/sponsors/shuntraa)
+
+| Network | Address |
+|---|---|
+| Bitcoin | `bc1qta8efdy72ge9qy8yj8s0ckwar0lg44ggwnaard` |
+| Ethereum & EVM chains | `0x86cD9af8067fF5e0001c709a550cD62b5e968B44` |
+| Solana | `ptsbLdrhmEfC2eQ9gj4aieF4irdhQqYzK1fdNwHBZcM` |
+| Litecoin | `LWePW8iwa8RxxYB6av4KBriBNkRgLWvNyw` |
+| Dogecoin | `DKCSjtypvD9qg3R175YdijmwvKh5FnAU14` |
+| TRON | `TT9j25bsbBAgxCDEXTN1cpjcD54Jz51pES` |
+| Cardano | `addr1qy9d3jctafj2cgfm8sgllfjkrxrgxn9mz9dy0qzxuwscx6c2mr9sh6ny4ssnk0q3l7n9vxvxsdxtky26g7qydcapsd4sux3dj3` |
+
+## License
+
+Kyro Wallet is free software, released under the [GNU General Public License v3.0 or later](LICENSE).
