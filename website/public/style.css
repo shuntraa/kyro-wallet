@@ -1978,6 +1978,111 @@ figcaption {
   font-weight: 500;
   color: #1c4f7a;
 }
+
+/* One-line install commands (layout.mjs installBlock). */
+.install {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 780px;
+  margin: 36px auto 0;
+  text-align: left;
+}
+.prose .install {
+  margin-top: 28px;
+}
+.install-row {
+  padding: 16px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: 18px;
+  background: rgba(7, 8, 10, 0.6);
+}
+.install-row[data-current='true'] {
+  border-color: rgba(124, 196, 255, 0.45);
+  box-shadow: 0 0 0 3px var(--ice-soft);
+}
+.prose .install-os,
+.install-os {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 560;
+}
+.install-os .mute {
+  font-weight: 400;
+}
+.install-os .os-icon {
+  width: 18px;
+  height: 18px;
+}
+.install-row[data-current='true'] .install-os::after {
+  content: 'Your system';
+  margin-left: auto;
+  color: var(--ice);
+  font-size: 12px;
+  font-weight: 500;
+}
+.cmd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.cmd code,
+.prose .cmd code {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  overflow-x: auto;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.cmd .btn {
+  flex-shrink: 0;
+}
+.prose .install-note,
+.install-note {
+  margin-top: 2px;
+  font-size: 13.5px;
+}
+.install .copy-status {
+  min-height: 0;
+  padding: 0;
+}
+.install .copy-status:empty {
+  display: none;
+}
+.dl-alt {
+  margin-top: 40px;
+  color: var(--mute);
+  font-size: 14px;
+}
+.dl-alt + .os-cards {
+  margin-top: 14px;
+}
+.dl-help {
+  margin-top: 8px;
+}
+.dl-help .answer h3 {
+  margin-top: 24px;
+  font-size: 17px;
+}
+.dl-help .answer ol {
+  margin-top: 10px;
+}
+.dl-help + p {
+  margin-top: 20px;
+}
 .files td,
 .files th {
   padding-left: 0;

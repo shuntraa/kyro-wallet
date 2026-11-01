@@ -58,6 +58,12 @@
     each('.os-row[data-os="' + os + '"]', function (row) {
       row.setAttribute('data-current', 'true');
     });
+    // One-line install commands: the visitor's system first, marked as theirs.
+    each('[data-install-os~="' + os + '"]', function (row) {
+      row.setAttribute('data-current', 'true');
+      var list = row.parentNode;
+      if (list && list.firstElementChild !== row) list.insertBefore(row, list.firstElementChild);
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);

@@ -210,7 +210,7 @@
         <ol class="steps" data-reveal-group>
           <li>
             <h3>Install</h3>
-            <p>Download Kyro from GitHub for Windows, macOS or Linux. <a href="/download/#verify">Check the SHA-256</a> if you want to be sure.</p>
+            <p>Install Kyro with one command, or download it from GitHub for Windows, macOS or Linux. <a href="/download/#verify">Check the SHA-256</a> if you download the file yourself.</p>
           </li>
           <li>
             <h3>Create or import</h3>
@@ -306,6 +306,20 @@
           <h2 id="download-title">Get Kyro</h2>
           <p class="dl-sub">Version 1.0.0 · Free · Windows, macOS and Linux</p>
           
+          <div class="install" data-install data-copy-scope>
+            <div class="install-row" data-install-os="windows">
+              <p class="install-os"><span class="os-icon os-windows" aria-hidden="true"></span>Windows <span class="mute">· PowerShell</span></p>
+              <div class="cmd"><code id="home-win">irm https://kyrowallet.com/install.ps1 | iex</code><button class="btn btn-ghost btn-sm" type="button" data-copy-target="home-win" data-copy-label="Windows command" aria-label="Copy the Windows install command">Copy</button></div>
+            </div>
+            <div class="install-row" data-install-os="macos linux">
+              <p class="install-os"><span class="os-icon os-apple" aria-hidden="true"></span><span class="os-icon os-linux" aria-hidden="true"></span>macOS and Linux <span class="mute">· Terminal</span></p>
+              <div class="cmd"><code id="home-unix">curl -fsSL https://kyrowallet.com/install.sh | sh</code><button class="btn btn-ghost btn-sm" type="button" data-copy-target="home-unix" data-copy-label="macOS and Linux command" aria-label="Copy the macOS and Linux install command">Copy</button></div>
+            </div>
+            <p class="install-note small mute">Downloads the latest release from GitHub, checks its SHA-256 against <code>SHA256SUMS</code>, then installs it. The scripts are open source: <a href="/install.ps1">install.ps1</a> · <a href="/install.sh">install.sh</a> (<a href="https://github.com/shuntraa/kyro-wallet/tree/main/website/src">website/src</a>).</p>
+            <p class="copy-status" role="status" aria-live="polite"></p>
+          </div>
+          <p class="dl-alt">Or download the file</p>
+          
           <div class="os-cards">
             <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
               <span class="os-icon os-windows" aria-hidden="true"></span>
@@ -323,7 +337,7 @@
               <span class="os-file">AppImage</span>
             </a>
           </div>
-          <p class="small mute">Also: <a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64.msi">.msi</a> · <a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-amd64.deb">.deb</a> · <a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS">SHA256SUMS</a> · <a href="/download/#verify">How to verify</a> · <a href="https://github.com/shuntraa/kyro-wallet/releases/latest">Release notes</a></p>
+          <p class="small mute">Also: <a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64.msi">.msi</a> · <a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-amd64.deb">.deb</a> · <a href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS">SHA256SUMS</a> · <a href="/download/#first-launch">Opening a downloaded file</a> · <a href="https://github.com/shuntraa/kyro-wallet/releases/latest">Release notes</a></p>
         </div>
       </div>
     </section>

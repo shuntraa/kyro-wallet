@@ -131,6 +131,24 @@ TypeScript builds unsigned transactions and broadcasts signed ones; Rust decodes
 
 Kyro is published **only** on [GitHub Releases](https://github.com/shuntraa/kyro-wallet/releases/latest). There is no mobile app; anything in an app store using the name is not ours.
 
+### One-line install (recommended)
+
+**Windows** (PowerShell):
+
+```powershell
+irm https://kyrowallet.com/install.ps1 | iex
+```
+
+**macOS and Linux** (Terminal):
+
+```bash
+curl -fsSL https://kyrowallet.com/install.sh | sh
+```
+
+The script downloads the latest release from GitHub, checks its SHA-256 against `SHA256SUMS` (it stops if they differ), then installs it: the normal installer window on Windows, `Kyro.app` in `/Applications` (or `~/Applications`) on macOS, `~/.local/bin/kyro` with a menu entry on Linux x86_64. No telemetry, no sudo. Files fetched by PowerShell or curl are not marked as downloaded from the internet, so SmartScreen and Gatekeeper do not block the first launch. Both scripts are short and open source: read them first in [`website/src/install.ps1`](website/src/install.ps1) and [`website/src/install.sh`](website/src/install.sh).
+
+### Or download the file
+
 | Platform | File |
 |---|---|
 | Windows | [Kyro-windows-x64-setup.exe](https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe) · [.msi](https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64.msi) |

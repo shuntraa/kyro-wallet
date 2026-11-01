@@ -253,6 +253,31 @@ export const osCards = () => html`
             </a>
           </div>`;
 
+/** One-line install commands (scripts in website/src/install.*, served from the site root). */
+export const INSTALL = {
+  windows: `irm ${SITE}/install.ps1 | iex`,
+  unix: `curl -fsSL ${SITE}/install.sh | sh`
+};
+
+/**
+ * Recommended install: one command per system, with a Copy button (copy.js). download.js puts the
+ * visitor's system first. Files fetched by PowerShell or curl carry no "downloaded from the
+ * internet" mark, so SmartScreen and Gatekeeper do not stop the first launch.
+ */
+export const installBlock = (id = 'install') => html`
+          <div class="install" data-install data-copy-scope>
+            <div class="install-row" data-install-os="windows">
+              <p class="install-os"><span class="os-icon os-windows" aria-hidden="true"></span>Windows <span class="mute">· PowerShell</span></p>
+              <div class="cmd"><code id="${id}-win">${esc(INSTALL.windows)}</code><button class="btn btn-ghost btn-sm" type="button" data-copy-target="${id}-win" data-copy-label="Windows command" aria-label="Copy the Windows install command">Copy</button></div>
+            </div>
+            <div class="install-row" data-install-os="macos linux">
+              <p class="install-os"><span class="os-icon os-apple" aria-hidden="true"></span><span class="os-icon os-linux" aria-hidden="true"></span>macOS and Linux <span class="mute">· Terminal</span></p>
+              <div class="cmd"><code id="${id}-unix">${esc(INSTALL.unix)}</code><button class="btn btn-ghost btn-sm" type="button" data-copy-target="${id}-unix" data-copy-label="macOS and Linux command" aria-label="Copy the macOS and Linux install command">Copy</button></div>
+            </div>
+            <p class="install-note small mute">Downloads the latest release from GitHub, checks its SHA-256 against <code>SHA256SUMS</code>, then installs it. The scripts are open source: <a href="/install.ps1">install.ps1</a> · <a href="/install.sh">install.sh</a> (<a href="${REPO}/tree/main/website/src">website/src</a>).</p>
+            <p class="copy-status" role="status" aria-live="polite"></p>
+          </div>`;
+
 /** Closing call to action used at the bottom of inner pages. */
 export const ctaPanel = (title = 'Get Kyro', text = `Version ${VERSION} · Free · Windows, macOS and Linux`) => html`
     <section class="section" aria-labelledby="cta-title">
@@ -262,7 +287,7 @@ export const ctaPanel = (title = 'Get Kyro', text = `Version ${VERSION} · Free 
           <h2 id="cta-title">${title}</h2>
           <p class="dl-sub">${text}</p>
           ${osCards()}
-          <p class="small mute"><a href="/download/">All files, checksums and first-launch help</a></p>
+          <p class="small mute"><a href="/download/">One-line install, all files and checksums</a></p>
         </div>
       </div>
     </section>`;

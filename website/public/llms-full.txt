@@ -88,7 +88,7 @@ Getting started
 
 ### Install
 
-Download Kyro from GitHub for Windows, macOS or Linux. Check the SHA-256 if you want to be sure.
+Install Kyro with one command, or download it from GitHub for Windows, macOS or Linux. Check the SHA-256 if you download the file yourself.
 
 ### Create or import
 
@@ -154,9 +154,21 @@ Swap fee table and an example
 
 Version 1.0.0 · Free · Windows, macOS and Linux
 
+Windows · PowerShell
+
+irm https://kyrowallet.com/install.ps1 | iex
+
+macOS and Linux · Terminal
+
+curl -fsSL https://kyrowallet.com/install.sh | sh
+
+Downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS, then installs it. The scripts are open source: install.ps1 · install.sh (website/src).
+
+Or download the file
+
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-Also: .msi · .deb · SHA256SUMS · How to verify · Release notes
+Also: .msi · .deb · SHA256SUMS · Opening a downloaded file · Release notes
 
 Questions
 
@@ -313,7 +325,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Security: how Kyro Wallet protects your keys
@@ -410,7 +422,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Fees: free to use, swaps from 0.7% | Kyro Wallet
@@ -511,7 +523,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Download Kyro Wallet 1.0.0 for Windows, macOS and Linux
@@ -522,61 +534,36 @@ Version 1.0.0
 
 # Download Kyro Wallet
 
-Free for Windows, macOS and Linux. Kyro is published only on GitHub Releases.
+Free for Windows, macOS and Linux. Install it with one command, or download the file yourself. Kyro is published only on GitHub Releases.
 
-Download Kyro Release notes
+Release notes
+
+Recommended
+
+## Install with one command
+
+Paste the command for your system into PowerShell (Windows) or Terminal (macOS, Linux). It downloads the latest release from GitHub, checks its SHA-256 and installs it. A file fetched this way is not marked as downloaded from the internet, so Windows SmartScreen and macOS Gatekeeper do not block the first launch.
+
+Windows · PowerShell
+
+irm https://kyrowallet.com/install.ps1 | iex
+
+macOS and Linux · Terminal
+
+curl -fsSL https://kyrowallet.com/install.sh | sh
+
+Downloads the latest release from GitHub, checks its SHA-256 against SHA256SUMS, then installs it. The scripts are open source: install.ps1 · install.sh (website/src).
+
+On Windows the usual installer window opens. On macOS Kyro goes to Applications; on Linux to ~/.local/bin/kyro with a menu entry. No administrator password is asked by the script.
+
+Or
+
+## Download the file
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-## All files
-
-Kyro 1.0.0 release files
-
-| File | System | Notes
-
-| Kyro-windows-x64-setup.exe | Windows 64-bit | Installer, recommended
-
-| Kyro-windows-x64.msi | Windows 64-bit | MSI package, for managed installs
-
-| Kyro-macos.dmg | macOS | Apple Silicon and Intel
-
-| Kyro-linux-x86_64.AppImage | Linux x86_64 | Runs on most distributions
-
-| Kyro-linux-amd64.deb | Debian, Ubuntu | Package for apt
-
-| SHA256SUMS | All | SHA-256 checksums of every file
-
-Only from GitHub. The files above come from github.com/shuntraa/kyro-wallet/releases. A copy offered anywhere else is not from us. Kyro has no mobile app: anything in an app store using the name is not ours.
-
-Checksum
-
-## Verify your download
-
-Download SHA256SUMS next to the installer, compute the SHA-256 of your file and compare it with the matching line. If they differ, delete the file and download it again.
-
-### Windows (PowerShell)
-
-```
-Get-FileHash .\Kyro-windows-x64-setup.exe -Algorithm SHA256
-```
-
-### macOS (Terminal)
-
-```
-shasum -a 256 Kyro-macos.dmg
-```
-
-### Linux
-
-```
-sha256sum -c SHA256SUMS --ignore-missing
-```
-
-First launch
-
-## Opening Kyro the first time
-
-The installers are not code-signed yet, so Windows and macOS show a warning the first time. Verify the checksum first, then:
+Q: Downloaded the file in your browser?
+A: The installers are not code-signed yet, so Windows and macOS show a warning the first time you open a file downloaded by a browser. Verify the checksum first, then:
 
 ### Windows: "Windows protected your PC"
 
@@ -603,7 +590,53 @@ chmod +x Kyro-linux-x86_64.AppImage
 sudo apt install ./Kyro-linux-amd64.deb
 ```
 
-For a hardware wallet over USB, install the Ledger or Trezor udev rules.
+The AppImage needs FUSE 2: sudo apt install libfuse2t64 (Ubuntu 24.04 and later) or libfuse2 (older releases).
+
+For a hardware wallet over USB on Linux, install the Ledger or Trezor udev rules.
+
+## All files
+
+Kyro 1.0.0 release files
+
+| File | System | Notes
+
+| Kyro-windows-x64-setup.exe | Windows 64-bit | Installer, recommended
+
+| Kyro-windows-x64.msi | Windows 64-bit | MSI package, for managed installs
+
+| Kyro-macos.dmg | macOS | Apple Silicon and Intel
+
+| Kyro-linux-x86_64.AppImage | Linux x86_64 | Runs on most distributions
+
+| Kyro-linux-amd64.deb | Debian, Ubuntu | Package for apt
+
+| SHA256SUMS | All | SHA-256 checksums of every file
+
+Only from GitHub. The files above come from github.com/shuntraa/kyro-wallet/releases. A copy offered anywhere else is not from us. Kyro has no mobile app: anything in an app store using the name is not ours.
+
+Checksum
+
+## Verify your download
+
+The install commands do this for you. If you downloaded a file yourself, download SHA256SUMS next to it, compute the SHA-256 of your file and compare it with the matching line. If they differ, delete the file and download it again.
+
+### Windows (PowerShell)
+
+```
+Get-FileHash .\Kyro-windows-x64-setup.exe -Algorithm SHA256
+```
+
+### macOS (Terminal)
+
+```
+shasum -a 256 Kyro-macos.dmg
+```
+
+### Linux
+
+```
+sha256sum -c SHA256SUMS --ignore-missing
+```
 
 Source
 
@@ -692,7 +725,7 @@ sha256sum -c SHA256SUMS --ignore-missing                      # Linux
 ```
 
 Q: Windows says "Windows protected your PC". What do I do?
-A: That is SmartScreen: the installer is not code-signed yet. Verify the checksum, then click More info and Run anyway.
+A: That is SmartScreen: the installer is not code-signed yet. Verify the checksum, then click More info and Run anyway. The one-line install command checks the checksum for you and does not trigger this warning.
 
 Q: macOS says Kyro can't be opened. What do I do?
 A: Right-click Kyro in Applications and choose Open, or go to System Settings > Privacy & Security and click Open Anyway.
@@ -703,7 +736,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 37 supported blockchains | Kyro Wallet
@@ -888,7 +921,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Bitcoin wallet for Windows, macOS and Linux | Kyro
@@ -965,7 +998,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Ethereum wallet for Windows, macOS and Linux | Kyro
@@ -1044,7 +1077,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 BNB Chain wallet for Windows, macOS and Linux | Kyro
@@ -1119,7 +1152,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Polygon wallet for Windows, macOS and Linux | Kyro
@@ -1194,7 +1227,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Arbitrum wallet for Windows, macOS and Linux | Kyro
@@ -1269,7 +1302,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Optimism wallet for Windows, macOS and Linux | Kyro
@@ -1344,7 +1377,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Base wallet for Windows, macOS and Linux | Kyro
@@ -1419,7 +1452,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Avalanche wallet for Windows, macOS and Linux | Kyro
@@ -1494,7 +1527,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Cronos wallet for Windows, macOS and Linux | Kyro
@@ -1569,7 +1602,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Mantle wallet for Windows, macOS and Linux | Kyro
@@ -1644,7 +1677,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Sonic wallet for Windows, macOS and Linux | Kyro
@@ -1719,7 +1752,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Flare wallet for Windows, macOS and Linux | Kyro
@@ -1794,7 +1827,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Kaia wallet for Windows, macOS and Linux | Kyro
@@ -1869,7 +1902,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Gnosis wallet for Windows, macOS and Linux | Kyro
@@ -1944,7 +1977,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 HyperEVM wallet for Windows, macOS and Linux | Kyro
@@ -2019,7 +2052,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Sei wallet for Windows, macOS and Linux | Kyro
@@ -2094,7 +2127,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Conflux wallet for Windows, macOS and Linux | Kyro
@@ -2169,7 +2202,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Solana wallet for Windows, macOS and Linux | Kyro
@@ -2246,7 +2279,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 TRON wallet for Windows, macOS and Linux | Kyro
@@ -2323,7 +2356,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Cardano wallet for Windows, macOS and Linux | Kyro
@@ -2400,7 +2433,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 XRP Ledger wallet for Windows, macOS and Linux | Kyro
@@ -2479,7 +2512,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Litecoin wallet for Windows, macOS and Linux | Kyro
@@ -2554,7 +2587,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Dogecoin wallet for Windows, macOS and Linux | Kyro
@@ -2631,7 +2664,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Bitcoin Cash wallet for Windows, macOS and Linux | Kyro
@@ -2704,7 +2737,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Dash wallet for Windows, macOS and Linux | Kyro
@@ -2777,7 +2810,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Stellar wallet for Windows, macOS and Linux | Kyro
@@ -2854,7 +2887,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 NEAR wallet for Windows, macOS and Linux | Kyro
@@ -2929,7 +2962,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Sui wallet for Windows, macOS and Linux | Kyro
@@ -3004,7 +3037,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Monero wallet for Windows, macOS and Linux | Kyro
@@ -3083,7 +3116,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 TON wallet for Windows, macOS and Linux | Kyro
@@ -3162,7 +3195,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Cosmos Hub wallet for Windows, macOS and Linux | Kyro
@@ -3239,7 +3272,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Polkadot wallet for Windows, macOS and Linux | Kyro
@@ -3314,7 +3347,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Aptos wallet for Windows, macOS and Linux | Kyro
@@ -3389,7 +3422,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Algorand wallet for Windows, macOS and Linux | Kyro
@@ -3464,7 +3497,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Kaspa wallet for Windows, macOS and Linux | Kyro
@@ -3539,7 +3572,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Hedera wallet for Windows, macOS and Linux | Kyro
@@ -3612,7 +3645,7 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums
 
 ================================================================
 Zcash wallet for Windows, macOS and Linux | Kyro
@@ -3687,4 +3720,4 @@ Version 1.0.0 · Free · Windows, macOS and Linux
 
 Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 
-All files, checksums and first-launch help
+One-line install, all files and checksums

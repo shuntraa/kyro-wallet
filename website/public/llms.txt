@@ -19,7 +19,7 @@ Key facts:
 - [Features](https://kyrowallet.com/features/): What Kyro Wallet does: one portfolio for 37 blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.
 - [Security](https://kyrowallet.com/security/): Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.
 - [Fees](https://kyrowallet.com/fees/): Kyro Wallet is free. Sending, receiving and staking cost only the network fee. Swaps carry a fee from 0.7% to 5% depending on the swap value, already included in the amount you receive.
-- [Download](https://kyrowallet.com/download/): Download Kyro Wallet 1.0.0: .exe and .msi for Windows, .dmg for macOS, AppImage and .deb for Linux. How to check the SHA-256 checksum and open the app the first time.
+- [Download](https://kyrowallet.com/download/): Install Kyro Wallet 1.0.0 with one command on Windows, macOS or Linux, or download the .exe, .msi, .dmg, AppImage or .deb. How to check the SHA-256 checksum.
 - [FAQ](https://kyrowallet.com/faq/): Answers about Kyro Wallet: is it free, is it custodial, supported blockchains, swap fee, hardware wallets, recovery phrase, Tor, audits, and Windows or macOS warnings.
 - [Supported blockchains](https://kyrowallet.com/chains/): Kyro Wallet supports 37 blockchains and 220+ tokens from one recovery phrase: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche and more. See what works on each.
 

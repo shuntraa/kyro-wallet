@@ -4,7 +4,7 @@
 //   node website/src/build.mjs
 //
 // Writes every HTML page, chains.css (one colour class per blockchain), sitemap.xml, robots.txt,
-// llms.txt and llms-full.txt, removes pages of blockchains that are no longer live, then checks the
+// llms.txt and llms-full.txt, install.ps1 and install.sh (copied from this folder), removes pages of blockchains that are no longer live, then checks the
 // result: every internal link and #anchor resolves, one <h1> per page, no inline script or style.
 // Exits with code 1 if a check fails.
 
@@ -75,6 +75,17 @@ let iconCount = 0;
 for (const f of readdirSync(ICONS).filter((f) => f.endsWith('.svg')).sort()) {
   copyFileSync(join(ICONS, f), join(coinsDir, f));
   iconCount++;
+}
+
+// ------------------------------------------------------------------ install scripts (text/plain, see _headers)
+
+//   irm https://kyrowallet.com/install.ps1 | iex
+//   curl -fsSL https://kyrowallet.com/install.sh | sh
+for (const f of ['install.ps1', 'install.sh']) {
+  const src = readFileSync(join(HERE, f), 'utf8');
+  if (src.includes('\r')) errors.push(`${f}: use LF line endings`);
+  if (/[^\t\n -~]/.test(src)) errors.push(`${f}: keep it plain ASCII (it is piped into iex / sh)`);
+  write(f, src);
 }
 
 // ------------------------------------------------------------------ pages

@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Kyro Wallet site: "Copy" buttons for the donation addresses (no inline handlers, strict CSP).
+// Kyro Wallet site: "Copy" buttons for install commands and donation addresses (no inline handlers, strict CSP).
 (function () {
   'use strict';
 
   var timer = null;
 
-  function announce(text) {
-    var status = document.getElementById('copy-status');
+  // The status line of the button's block ([data-copy-scope]), or the page's #copy-status.
+  function announce(button, text) {
+    var scope = button.closest('[data-copy-scope]');
+    var status = (scope && scope.querySelector('[role="status"]')) || document.getElementById('copy-status');
     if (!status) return;
     status.textContent = text;
     if (timer) window.clearTimeout(timer);
@@ -38,19 +40,21 @@
     if (!target) return;
     var text = target.textContent.trim();
     var row = button.closest('tr');
-    var name = row ? row.querySelector('th').textContent.trim() : 'Address';
+    // data-copy-label names what is copied (install commands); donation rows use their network name.
+    var label = button.getAttribute('data-copy-label');
+    var what = label || (row ? row.querySelector('th').textContent.trim() : 'Address') + ' address';
 
     var done = function () {
       button.textContent = 'Copied';
       button.classList.add('copied');
-      announce(name + ' address copied.');
+      announce(button, what + ' copied.');
       window.setTimeout(function () {
         button.textContent = 'Copy';
         button.classList.remove('copied');
       }, 2000);
     };
     var fail = function () {
-      announce('Could not copy. Select the address manually.');
+      announce(button, 'Could not copy. Select the text manually.');
     };
 
     if (navigator.clipboard && window.isSecureContext) {

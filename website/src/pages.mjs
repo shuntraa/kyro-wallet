@@ -2,7 +2,7 @@
 // Content of every page on kyrowallet.com. Each export returns { path, title, description, body, ld, ... }.
 // Copy rules: short, concrete, plain English. Say what the app does, not how great it is.
 
-import { SITE, VERSION, REPO, DL, FILES, esc, html, coin, pageHero, dlButton, osCards, ctaPanel, shot, breadcrumbLd, window as win, dialog } from './layout.mjs';
+import { SITE, VERSION, REPO, DL, FILES, esc, html, coin, pageHero, dlButton, osCards, installBlock, ctaPanel, shot, breadcrumbLd, window as win, dialog } from './layout.mjs';
 
 // ------------------------------------------------------------------ shared bits
 
@@ -288,7 +288,7 @@ ${tour()}
         <ol class="steps" data-reveal-group>
           <li>
             <h3>Install</h3>
-            <p>Download Kyro from GitHub for Windows, macOS or Linux. <a href="/download/#verify">Check the SHA-256</a> if you want to be sure.</p>
+            <p>Install Kyro with one command, or download it from GitHub for Windows, macOS or Linux. <a href="/download/#verify">Check the SHA-256</a> if you download the file yourself.</p>
           </li>
           <li>
             <h3>Create or import</h3>
@@ -369,8 +369,10 @@ ${tour()}
           <div class="aurora aurora-sm" aria-hidden="true"></div>
           <h2 id="download-title">Get Kyro</h2>
           <p class="dl-sub">Version ${VERSION} · Free · Windows, macOS and Linux</p>
+          ${installBlock('home')}
+          <p class="dl-alt">Or download the file</p>
           ${osCards()}
-          <p class="small mute">Also: <a href="${DL}${FILES.msi}">.msi</a> · <a href="${DL}${FILES.deb}">.deb</a> · <a href="${DL}${FILES.sums}">SHA256SUMS</a> · <a href="/download/#verify">How to verify</a> · <a href="${REPO}/releases/latest">Release notes</a></p>
+          <p class="small mute">Also: <a href="${DL}${FILES.msi}">.msi</a> · <a href="${DL}${FILES.deb}">.deb</a> · <a href="${DL}${FILES.sums}">SHA256SUMS</a> · <a href="/download/#first-launch">Opening a downloaded file</a> · <a href="${REPO}/releases/latest">Release notes</a></p>
         </div>
       </div>
     </section>
@@ -859,7 +861,7 @@ export function download(chains) {
   const path = '/download/';
   const trail = [['/', 'Home'], [path, 'Download']];
   const title = `Download Kyro Wallet ${VERSION} for Windows, macOS and Linux`;
-  const description = `Download Kyro Wallet ${VERSION}: .exe and .msi for Windows, .dmg for macOS, AppImage and .deb for Linux. How to check the SHA-256 checksum and open the app the first time.`;
+  const description = `Install Kyro Wallet ${VERSION} with one command on Windows, macOS or Linux, or download the .exe, .msi, .dmg, AppImage or .deb. How to check the SHA-256 checksum.`;
 
   const files = [
     [FILES.exe, 'Windows 64-bit', 'Installer, recommended'],
@@ -875,15 +877,58 @@ export function download(chains) {
       trail,
       eyebrow: `Version ${VERSION}`,
       h1: 'Download Kyro Wallet',
-      lead: 'Free for Windows, macOS and Linux. Kyro is published only on GitHub Releases.',
-      extra: `<div class="actions" data-reveal>${dlButton()}<a class="btn btn-ghost btn-xl" href="${REPO}/releases/latest">Release notes</a></div>`
+      lead: 'Free for Windows, macOS and Linux. Install it with one command, or download the file yourself. Kyro is published only on GitHub Releases.',
+      extra: `<div class="actions" data-reveal><a class="btn btn-ghost btn-xl" href="${REPO}/releases/latest">Release notes</a></div>`
     })}
 
-    <section class="section section-tight" aria-labelledby="dl-files">
+    <section class="section section-tight" id="install" aria-labelledby="install-title">
       <div class="wrap">
+        <div class="prose" data-reveal>
+          <p class="eyebrow">Recommended</p>
+          <h2 id="install-title">Install with one command</h2>
+          <p>Paste the command for your system into PowerShell (Windows) or Terminal (macOS, Linux). It downloads the latest release from GitHub, checks its SHA-256 and installs it. A file fetched this way is not marked as downloaded from the internet, so Windows SmartScreen and macOS Gatekeeper do not block the first launch.</p>
+          ${installBlock('dl')}
+          <p class="small mute">On Windows the usual installer window opens. On macOS Kyro goes to Applications; on Linux to <code>~/.local/bin/kyro</code> with a menu entry. No administrator password is asked by the script.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tight seam" aria-labelledby="dl-files">
+      <div class="wrap">
+        <div class="prose" data-reveal>
+          <p class="eyebrow">Or</p>
+          <h2 id="dl-files">Download the file</h2>
+        </div>
         <div data-reveal>${osCards()}</div>
         <div class="prose dl-files" data-reveal>
-          <h2 id="dl-files">All files</h2>
+          <div class="faq dl-help" id="first-launch">
+            <details>
+              <summary>Downloaded the file in your browser?</summary>
+              <div class="answer">
+                <p>The installers are not code-signed yet, so Windows and macOS show a warning the first time you open a file downloaded by a browser. <a href="#verify">Verify the checksum</a> first, then:</p>
+                <h3>Windows: “Windows protected your PC”</h3>
+                <ol>
+                  <li>Click <b>More info</b>.</li>
+                  <li>Check that the file name is <code>${FILES.exe}</code>.</li>
+                  <li>Click <b>Run anyway</b>.</li>
+                </ol>
+                <h3>macOS: “Kyro can’t be opened”</h3>
+                <ol>
+                  <li>Drag Kyro into Applications.</li>
+                  <li>Right-click Kyro in Applications and choose <b>Open</b>, then <b>Open</b> again.</li>
+                  <li>Or go to <b>System Settings › Privacy &amp; Security</b> and click <b>Open Anyway</b>.</li>
+                </ol>
+                <h3>Linux</h3>
+                <pre><code>chmod +x ${FILES.appimage}
+./${FILES.appimage}
+# or
+sudo apt install ./${FILES.deb}</code></pre>
+                <p>The AppImage needs FUSE 2: <code>sudo apt install libfuse2t64</code> (Ubuntu 24.04 and later) or <code>libfuse2</code> (older releases).</p>
+              </div>
+            </details>
+          </div>
+          <p>For a hardware wallet over USB on Linux, install the <a href="https://github.com/LedgerHQ/udev-rules">Ledger</a> or <a href="https://trezor.io/learn/a/udev-rules">Trezor</a> udev rules.</p>
+          <h2>All files</h2>
           <div class="table-wrap">
             <table class="matrix files">
               <caption class="visually-hidden">Kyro ${VERSION} release files</caption>
@@ -903,41 +948,13 @@ export function download(chains) {
         <div class="prose" data-reveal>
           <p class="eyebrow">Checksum</p>
           <h2 id="verify-title">Verify your download</h2>
-          <p>Download <a href="${DL}${FILES.sums}">SHA256SUMS</a> next to the installer, compute the SHA-256 of your file and compare it with the matching line. If they differ, delete the file and download it again.</p>
+          <p>The install commands do this for you. If you downloaded a file yourself, download <a href="${DL}${FILES.sums}">SHA256SUMS</a> next to it, compute the SHA-256 of your file and compare it with the matching line. If they differ, delete the file and download it again.</p>
           <h3>Windows (PowerShell)</h3>
           <pre><code>Get-FileHash .\\${FILES.exe} -Algorithm SHA256</code></pre>
           <h3>macOS (Terminal)</h3>
           <pre><code>shasum -a 256 ${FILES.dmg}</code></pre>
           <h3>Linux</h3>
           <pre><code>sha256sum -c SHA256SUMS --ignore-missing</code></pre>
-        </div>
-      </div>
-    </section>
-
-    <section class="section seam" id="first-launch" aria-labelledby="first-title">
-      <div class="wrap">
-        <div class="prose" data-reveal>
-          <p class="eyebrow">First launch</p>
-          <h2 id="first-title">Opening Kyro the first time</h2>
-          <p>The installers are not code-signed yet, so Windows and macOS show a warning the first time. Verify the checksum first, then:</p>
-          <h3>Windows: “Windows protected your PC”</h3>
-          <ol>
-            <li>Click <b>More info</b>.</li>
-            <li>Check that the file name is <code>${FILES.exe}</code>.</li>
-            <li>Click <b>Run anyway</b>.</li>
-          </ol>
-          <h3>macOS: “Kyro can’t be opened”</h3>
-          <ol>
-            <li>Drag Kyro into Applications.</li>
-            <li>Right-click Kyro in Applications and choose <b>Open</b>, then <b>Open</b> again.</li>
-            <li>Or go to <b>System Settings › Privacy &amp; Security</b> and click <b>Open Anyway</b>.</li>
-          </ol>
-          <h3>Linux</h3>
-          <pre><code>chmod +x ${FILES.appimage}
-./${FILES.appimage}
-# or
-sudo apt install ./${FILES.deb}</code></pre>
-          <p>For a hardware wallet over USB, install the <a href="https://github.com/LedgerHQ/udev-rules">Ledger</a> or <a href="https://trezor.io/learn/a/udev-rules">Trezor</a> udev rules.</p>
         </div>
       </div>
     </section>
@@ -961,7 +978,7 @@ pnpm build</code></pre>
     title,
     description,
     body,
-    scripts: ['/download.js'],
+    scripts: ['/download.js', '/copy.js'],
     ld: [...webPage(path, 'Download Kyro Wallet', description, trail), appLd(chains)]
   };
 }
@@ -1006,7 +1023,7 @@ const FAQ = [
       { q: 'How do I verify my download?', a: () => `<p>Compare the SHA-256 of your file with the matching line in <code>SHA256SUMS</code>.</p><pre><code>Get-FileHash .\\${FILES.exe} -Algorithm SHA256   # Windows
 shasum -a 256 ${FILES.dmg}                                  # macOS
 sha256sum -c SHA256SUMS --ignore-missing                      # Linux</code></pre>` },
-      { q: 'Windows says “Windows protected your PC”. What do I do?', a: () => `<p>That is SmartScreen: the installer is not code-signed yet. Verify the checksum, then click <b>More info</b> and <b>Run anyway</b>.</p>` },
+      { q: 'Windows says “Windows protected your PC”. What do I do?', a: () => `<p>That is SmartScreen: the installer is not code-signed yet. Verify the checksum, then click <b>More info</b> and <b>Run anyway</b>. The <a href="/download/#install">one-line install command</a> checks the checksum for you and does not trigger this warning.</p>` },
       { q: 'macOS says Kyro can’t be opened. What do I do?', a: () => `<p>Right-click Kyro in Applications and choose <b>Open</b>, or go to <b>System Settings › Privacy &amp; Security</b> and click <b>Open Anyway</b>.</p>` }
     ]
   }
