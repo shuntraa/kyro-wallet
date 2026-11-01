@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Sui (SUI transfers, BCS) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -36,6 +36,7 @@ mod network;
 mod sol;
 mod sol_decode;
 mod sol_stake;
+mod sui;
 mod tron;
 mod utxo;
 mod vault;
@@ -95,6 +96,10 @@ pub use sol_stake::{
     sol_stake_message, sol_stake_withdrawable, SolDelegation, SolStakeAccount, SolStakeActivation,
     SolStakeHistoryEntry, SolStakeOp, SOL_STAKE_ACCOUNT_SIZE, SOL_STAKE_HISTORY_SYSVAR,
     SOL_STAKE_PROGRAM,
+};
+pub use sui::{
+    sui_address, sui_address_bytes_of_pubkey, sui_address_of_pubkey, sui_address_string,
+    sui_parse_address, sui_path, sui_public_key, SUI_ED25519_FLAG,
 };
 pub use tron::{
     tron_address, tron_address_at, tron_address_bytes, tron_address_from_bytes,
