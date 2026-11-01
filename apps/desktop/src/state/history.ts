@@ -5,7 +5,7 @@
 import { useEffect } from 'react';
 import { findAsset, findChain, nativeAssetId, type AssetDef, type HistoryItem } from '@kyro/chains';
 import { netFetch } from '@kyro/shared';
-import { lifiTransferStatus } from '@kyro/swap';
+import { lifiTransferStatus, nearDepositStatus, type SwapChain } from '@kyro/swap';
 import { getLocalTxs, updateLocalTx, type LocalTx } from '../lib/storage';
 import { crossStatusLabel } from '../lib/crossSwap';
 import { useAsync } from '../lib/useAsync';
@@ -19,7 +19,9 @@ export interface HistoryEntry extends HistoryItem {
   local: boolean;
 }
 
-const swapChain = (c: string) => (/^\d+$/.test(c) ? Number(c) : (c as 'solana' | 'bitcoin'));
+const swapChain = (c: string): SwapChain => (/^\d+$/.test(c) ? Number(c) : (c as SwapChain));
+/** Final statuses: li.quest (DONE, FAILED) and 1Click (SUCCESS, REFUNDED, FAILED). */
+const FINAL = new Set(['DONE', 'FAILED', 'SUCCESS', 'REFUNDED']);
 
 function fromLocal(t: LocalTx, network: LocalTx['network']): HistoryItem & { label?: string } {
   const item: HistoryItem & { label?: string } = {
@@ -105,7 +107,7 @@ export function useHistory() {
 
   // Follow cross-chain swaps until they arrive (li.quest `/v1/status`, read-only, same Tor family as the quotes).
   useEffect(() => {
-    const open = getLocalTxs(network).filter((t) => t.cross && t.status !== 'failed' && t.cross.status !== 'DONE' && t.cross.status !== 'FAILED' && Date.now() - t.time < 7 * 86_400_000);
+    const open = getLocalTxs(network).filter((t) => t.cross && t.status !== 'failed' && !FINAL.has(t.cross.status ?? '') && Date.now() - t.time < 7 * 86_400_000);
     if (open.length === 0) return;
     let changed = false;
     void Promise.all(
@@ -113,7 +115,10 @@ export function useHistory() {
         const c = t.cross;
         if (!c) return;
         try {
-          const st = await lifiTransferStatus(netFetch, { txHash: t.id, fromChain: swapChain(c.fromChain), toChain: swapChain(c.toChain), bridge: c.bridge });
+          // Direct NEAR Intents swap: 1Click's own status of the deposit address; LI.FI route: li.quest.
+          const st = c.bridge === '1click' && c.depositAddress
+            ? await nearDepositStatus(netFetch, c.depositAddress).then((r) => ({ status: r.status, ...(r.destinationTxHash ? { receivingTxHash: r.destinationTxHash } : {}) }))
+            : await lifiTransferStatus(netFetch, { txHash: t.id, fromChain: swapChain(c.fromChain), toChain: swapChain(c.toChain), bridge: c.bridge });
           if (st.status === c.status && st.receivingTxHash === c.receivingTxHash) return;
           updateLocalTx(network, t.id, { cross: { ...c, status: st.status, ...(st.receivingTxHash ? { receivingTxHash: st.receivingTxHash } : {}) } });
           changed = true;

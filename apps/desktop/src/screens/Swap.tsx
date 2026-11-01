@@ -9,10 +9,14 @@
 // « Tu reçois » can be a token on ANOTHER chain (mainnet): LI.FI through NEAR Intents, delivered
 // to YOUR account on that chain (never a typed address); the bridge deposit is confirmed with
 // NEAR Intents before the password (lifi-cross.ts, near-intents.ts).
+// From Bitcoin, Litecoin, Dogecoin, TRON, XRP, Cardano (and to the last five): NEAR Intents 1Click
+// directly (providers/near.ts). No third-party transaction: 1Click confirms a deposit address bound
+// to YOUR accounts, then Kyro builds an ordinary transfer to it (checked by depositTxProblem, decoded
+// and signed by Rust like any send).
 
 import { useEffect, useMemo, useState } from 'react';
-import { toIpcError } from '@kyro/shared';
-import { allChains, assetsFor, evmChains, findChain, solChain, tryParseUnits, unitsToNumber, type AssetDef, type EvmAdapter } from '@kyro/chains';
+import { toIpcError, type AccountChain } from '@kyro/shared';
+import { allChains, assetsFor, evmChains, findChain, signAndBroadcast, solChain, tryParseUnits, unitsToNumber, type AssetDef, type Chain, type EvmAdapter } from '@kyro/chains';
 import {
   buildApproval,
   buildRevoke,
@@ -28,6 +32,7 @@ import {
   ZEROX_REGISTRY_ABI,
   ZEROX_SETTLER_REGISTRY,
   ZEROX_TAKER_SETTLER_FEATURE,
+  type DepositPlan,
   type Quote,
   type QuoteParams,
   type QuoteResult,
@@ -39,7 +44,7 @@ import { useCoinChart } from '../state/charts';
 import { cn } from '../lib/cn';
 import { fmtAgo, fmtCrypto, fmtEta, fmtFiat, fmtNumber, fmtPct, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { addApproval, addLocalTx } from '../lib/storage';
-import { buyGroups, canSwapFrom, ownAddressOn, swapChainOf, swapTokenAddress } from '../lib/crossSwap';
+import { buildDepositTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, swapChainOf, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
 import { priceAt } from '../lib/portfolioSeries';
 import { useAsync, useDebounced, useNow } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
@@ -79,6 +84,9 @@ async function simulateSwap(ad: EvmAdapter, tx: { to: string; data: `0x${string}
   return ad.simulateReceived(call, buy.kind === 'native' || isNative(swapTokenAddress(buy)) ? 'native' : swapTokenAddress(buy));
 }
 
+/** Account list of a chain (EVM chains share one). */
+const accountChainOf = (c: Chain | undefined): AccountChain => (c ? c.family : 'evm');
+
 /** Swaps sign through the vault only for now: a hardware-wallet account gets a clear note. */
 export function Swap({ sellAssetId }: { sellAssetId?: string }) {
   const { activeHw, navigate } = useApp();
@@ -108,9 +116,13 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const cur = settings.currency;
   const now = useNow(1000);
 
-  const chains = useMemo(() => [...evmChains(network).map((c) => ({ key: c.key, label: c.label })), { key: 'solana', label: solChain(network).label }], [network]);
+  // EVM and Solana first, then the chains swaps leave through NEAR Intents (mainnet).
+  const chains = useMemo(
+    () => [...evmChains(network), solChain(network), ...allChains(network).filter((c) => c.family !== 'evm' && c.family !== 'sol' && canSwapFrom(c, network))].map((c) => ({ key: c.key, label: c.label })),
+    [network],
+  );
   const initialSell = sellAssetId ? assetsFor(network).find((a) => a.id === sellAssetId) : undefined;
-  const [chainKey, setChainKey] = useState(initialSell && initialSell.family !== 'btc' ? initialSell.chainKey : chains[0]?.key ?? 'sepolia');
+  const [chainKey, setChainKey] = useState(initialSell && chains.some((c) => c.key === initialSell.chainKey) ? initialSell.chainKey : chains[0]?.key ?? 'sepolia');
   const tokens = useMemo(() => assetsFor(network).filter((a) => a.chainKey === chainKey), [network, chainKey]);
   const [sellId, setSellId] = useState(initialSell?.id ?? tokens.find((t) => t.kind !== 'native')?.id ?? tokens[0]?.id ?? '');
   const [buyId, setBuyId] = useState(tokens.find((t) => t.id !== (initialSell?.id ?? sellId))?.id ?? '');
@@ -153,14 +165,19 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const balance = sell ? pf.balances.get(sell.id) ?? 0n : 0n;
   const sellAmount = sell && amountStr ? tryParseUnits(amountStr, sell.decimals) : null;
   const over = sellAmount !== null && sellAmount > balance;
-  const taker = (chainKey === 'solana' ? accounts.sol?.address : accounts.evm?.address) ?? '';
+  /** Our address on the sell chain: taker, fee payer, and where a bridge refunds. */
+  const taker = ownAddressOn(accounts, chain) ?? '';
   const evmAdapter: EvmAdapter | undefined = chain?.family === 'evm' ? adapters.evm.get(chainKey) : undefined;
+  const sourceAdapter = sell ? depositAdapterFor(sell, adapters) : undefined;
+  /** NEAR Intents deposit being reviewed (prepared when the confirmation opens). */
+  const [deposit, setDeposit] = useState<PreparedDeposit | null>(null);
 
   const params: QuoteParams | null = useMemo(() => {
-    if (!sell || !buy || !chain || !sellAmount || sellAmount <= 0n || !slipValid) return null;
+    const from = swapChainOf(chain);
+    if (!sell || !buy || !chain || from === null || !taker || !sellAmount || sellAmount <= 0n || !slipValid) return null;
     if (cross && (toChain === null || !recipient)) return null;
     const p: QuoteParams = {
-      chain: chain.family === 'sol' ? 'solana' : chain.family === 'evm' ? chain.chainId : 0,
+      chain: from,
       ...(cross && toChain !== null && recipient ? { toChain, recipient } : {}),
       sell: tokenOf(sell, sellPrice),
       buy: tokenOf(buy, buyPrice),
@@ -209,14 +226,15 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
   const buyAmount = chosen?.buyAmount ?? null;
   const execRate = chosen && sell && buy && sellAmount ? unitsToNumber(sellAmount, sell.decimals) / unitsToNumber(chosen.buyAmount, buy.decimals) : null;
-  const networkFees = chosen ? (chosen.gasFeeFiat ?? 0) + (chosen.providerFeeIncluded ? 0 : chosen.providerFeeFiat ?? 0) : null;
+  // NEAR Intents deposit: the network fee is known once the transfer is built (confirmation).
+  const networkFees = chosen && chosen.tx.kind !== 'deposit' ? (chosen.gasFeeFiat ?? 0) + (chosen.providerFeeIncluded ? 0 : chosen.providerFeeFiat ?? 0) : null;
   const kyroFeeFiat = chosen && chosen.kyroFeeBps > 0 && sellAmount && sellPrice !== undefined && sell ? (unitsToNumber(sellAmount, sell.decimals) * sellPrice * chosen.kyroFeeBps) / 10_000 : null;
   // Reasons that are about the Kyro fee configuration (no provider name in them) are worth showing.
   const feeReasons = [...new Set(failures.map((f) => f.error ?? '').filter((e) => e.includes('Kyro')))];
   const busy = phase !== 'idle' && phase !== 'done';
   /** What the confirmation shows and what gets signed. */
   const shown = confirmOpen ? reviewed ?? chosen : chosen;
-  const canSwap = !!shown && !!password && !over && !busy && (shown.tx.kind !== 'evm' || (!!evmAdapter && !!shown.evmCheck));
+  const canSwap = !!shown && !!password && !over && !busy && (shown.tx.kind !== 'evm' || (!!evmAdapter && !!shown.evmCheck)) && (shown.tx.kind !== 'deposit' || (!!deposit && !!sourceAdapter));
 
   // Most the swap may cost in network fees (gas limit × max fee per gas), shown before signing.
   const dialogFees = useAsync(confirmOpen && evmAdapter ? () => evmAdapter.estimateFees() : null, [confirmOpen, evmAdapter]);
@@ -225,10 +243,36 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const swapMaxFee = dialogFee?.family === 'evm' && swapGas !== null ? swapGas * dialogFee.maxFeePerGas : null;
   const approvalMaxFee = dialogFee?.family === 'evm' && needsApproval ? 120_000n * dialogFee.maxFeePerGas : 0n;
 
+  /** NEAR Intents: the ordinary transfer to the confirmed deposit address, built and checked (lib/crossSwap.ts). */
+  const buildDeposit = (plan: DepositPlan): Promise<PreparedDeposit> => {
+    if (!sell) throw new Error('Rien à vendre.');
+    return buildDepositTx(sell, adapters, plan);
+  };
+
+  /** 1Click: real quote (one-time deposit address), checked and confirmed by 1Click, then the transfer built. */
+  const prepareDeposit = async (q: Quote) => {
+    if (q.tx.kind !== 'deposit') return;
+    setDeposit(null);
+    setPhase('checking');
+    try {
+      const plan = await q.tx.prepare();
+      const prepared = await buildDeposit(plan);
+      setDeposit(prepared);
+      // What is shown is what 1Click confirmed for THIS deposit address.
+      setReviewed({ ...q, buyAmount: plan.amountOut, minBuyAmount: plan.minAmountOut });
+    } catch (e) {
+      setExecError(toIpcError(e).message);
+    } finally {
+      setPhase('idle');
+    }
+  };
+
   const openConfirm = () => {
     setReviewed(chosen ?? null);
     setExecError(null);
+    setDeposit(null);
     setConfirmOpen(true);
+    if (chosen?.tx.kind === 'deposit') void prepareDeposit(chosen);
   };
 
   /** 0x: the Settler that AllowanceHolder calls must be the registry's current (or previous) one. */
@@ -245,6 +289,25 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
     if (!quote || !sell || !buy || !sellAmount || !params) return;
     setExecError(null);
     try {
+      if (quote.tx.kind === 'deposit') {
+        if (!deposit || !sourceAdapter) throw new Error('Dépôt non préparé : arrêt.');
+        setPhase('checking');
+        // 1Click again, just before signing: same address, still waiting, same terms, not less.
+        const plan = await quote.tx.reconfirm(deposit.plan);
+        if (plan.depositAddress !== deposit.plan.depositAddress || plan.minAmountOut < deposit.plan.minAmountOut) throw new Error('Le pont a changé les conditions de ce dépôt : arrêt, rien n’a été signé.');
+        // Fresh build (UTXO, nonce, blockhash), checked again against the plan.
+        const fresh = await buildDeposit(plan);
+        setPhase('swapping');
+        const id = await signAndBroadcast(sourceAdapter, fresh.unsigned, password);
+        recordSwap(id, quote, { fee: fresh.unsigned.maxFee.toString(), counterparty: plan.depositAddress }, plan.depositAddress);
+        setDoneId(id);
+        setPhase('done');
+        setPassword('');
+        setConfirmOpen(false);
+        setDeposit(null);
+        pf.refresh();
+        return;
+      }
       if (quote.tx.kind === 'solana') {
         if (!adapters.sol) throw new Error('Pas de compte Solana sur ce portefeuille.');
         setPhase('checking');
@@ -378,7 +441,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   };
 
   /** History entry; a cross-chain swap is then followed until it arrives (state/history.ts). */
-  function recordSwap(id: string, q: Quote, extra: { fee?: string; counterparty?: string } = {}) {
+  function recordSwap(id: string, q: Quote, extra: { fee?: string; counterparty?: string } = {}, depositAddress?: string) {
     if (!sell || !buy || !sellAmount) return;
     const arrival = q.cross && buyChain ? ` (vers ${buyChain.label})` : '';
     addLocalTx({
@@ -393,7 +456,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       label: `Swap ${fmtCrypto(sellAmount, sell.decimals)} ${sell.symbol} → ${buy.symbol}${arrival}`,
       time: Date.now(),
       status: 'pending',
-      ...(q.cross && buyChain ? { cross: { fromChain: String(q.cross.fromChain), toChain: String(q.cross.toChain), toChainKey: buyChain.key, bridge: q.cross.bridge } } : {}),
+      ...(q.cross && buyChain ? { cross: { fromChain: String(q.cross.fromChain), toChain: String(q.cross.toChain), toChainKey: buyChain.key, bridge: q.cross.bridge, ...(depositAddress ? { depositAddress } : {}) } } : {}),
     });
   }
 
@@ -410,7 +473,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const buyItems = groups.flatMap((g) =>
     g.assets.map((t) => ({ value: t.id, group: g.chain.key === chainKey ? `${g.chain.label} · même réseau` : `${g.chain.label} · vers ton compte`, label: t.symbol, hint: `${t.name} · ${fmtCrypto(pf.balances.get(t.id) ?? 0n, t.decimals)}`, icon: <CoinIcon glyph={t.glyph} color={t.color} size={24} /> })),
   );
-  const canInvert = !cross || canSwapFrom(buyChain);
+  const canInvert = !cross || canSwapFrom(buyChain, network);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
@@ -430,7 +493,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               </button>
             }
           />
-          <AccountPicker family={chainKey === 'solana' ? 'sol' : 'evm'} />
+          <AccountPicker family={accountChainOf(chain)} />
         </div>
         <div className="flex items-center gap-2.5">
           <span className="eyebrow">Slippage max.</span>
@@ -571,6 +634,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               ) : null}
             </div>
           )}
+          {chosen?.tx.kind === 'deposit' && <span className="text-[13px] text-mute">Un simple envoi vers une adresse de dépôt que le pont lie à ton compte {buyChain?.label ?? ''}. Kyro la fait confirmer par le pont avant ton mot de passe.</span>}
           {chosen?.tx.kind === 'solana' && <span className="text-[13px] text-mute">{chosen.cross ? 'Transaction construite par l’agrégateur, vérifiée par le coffre et confirmée par le pont avant ton mot de passe.' : 'Transaction construite par Jupiter, signée dans le coffre après la fenêtre système.'}</span>}
           {phase !== 'idle' && phase !== 'done' && (
             <span className="flex items-center gap-2 text-[13px] text-ice-text2">
@@ -586,7 +650,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               </button>
             </Notice>
           )}
-          <Button variant="primary" size="xl" className="h-[46px] self-end px-10" disabled={!chosen || over || busy || (chosen.tx.kind === 'evm' && !evmAdapter)} onClick={openConfirm}>
+          <Button variant="primary" size="xl" className="h-[46px] self-end px-10" disabled={!chosen || over || busy || (chosen.tx.kind === 'evm' && !evmAdapter) || (chosen.tx.kind === 'deposit' && !sourceAdapter)} onClick={openConfirm}>
             Vérifier le swap
           </Button>
         </section>
@@ -655,6 +719,20 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                   <span className="text-text2">{kyroFeeFiat !== null ? `≈ ${fmtFiat(kyroFeeFiat, cur)}, inclus` : 'inclus'}</span>
                 </div>
               )}
+              {shown.tx.kind === 'deposit' && deposit && deposit.plan.oneClickFeeBps > 0 && (
+                <div className="flex h-10 items-center justify-between border-b border-line">
+                  <span className="text-mute">Frais NEAR Intents {feeLabel(deposit.plan.oneClickFeeBps)}</span>
+                  <span className="text-text2">{shown.providerFeeFiat !== null ? `≈ ${fmtFiat(shown.providerFeeFiat, cur)}, inclus` : 'inclus'}</span>
+                </div>
+              )}
+              {shown.tx.kind === 'deposit' && (
+                <div className="flex h-10 items-center justify-between border-b border-line">
+                  <span className="text-mute">Frais réseau max.</span>
+                  <span className="font-medium">
+                    {deposit && native ? `${fmtCrypto(deposit.unsigned.maxFee, native.decimals, native.symbol)}${nativePrice !== undefined ? ` · ${fmtFiat(unitsToNumber(deposit.unsigned.maxFee, native.decimals) * nativePrice, cur)}` : ''}` : phase === 'checking' ? '…' : '—'}
+                  </span>
+                </div>
+              )}
               {shown.tx.kind === 'evm' && (
                 <div className="flex h-10 items-center justify-between border-b border-line">
                   <span className="text-mute">Frais réseau max.</span>
@@ -675,6 +753,12 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                       : 'toi (vérifié avant signature)'}
                 </span>
               </div>
+              {shown.tx.kind === 'deposit' && (
+                <div className="flex h-10 items-center justify-between border-b border-line">
+                  <span className="text-mute">Adresse de dépôt</span>
+                  <span className="font-mono text-[12px] text-text2">{deposit ? shortAddress(deposit.plan.depositAddress, 8, 6) : phase === 'checking' ? 'demandée au pont…' : '—'}</span>
+                </div>
+              )}
               {shown.cross && (
                 <div className="flex h-10 items-center justify-between border-b border-line">
                   <span className="text-mute">Pont</span>
@@ -687,7 +771,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               <div className="flex h-10 items-center justify-between">
                 <span className="text-mute">Contrat</span>
                 <span className="font-mono text-[12px] font-medium">
-                  {shown.providerName} · {shown.tx.kind === 'evm' ? shortAddress(shown.evmCheck?.contract ?? shown.tx.to) : 'programme Jupiter'}
+                  {shown.tx.kind === 'deposit' ? 'aucun : simple envoi' : `${shown.providerName} · ${shown.tx.kind === 'evm' ? shortAddress(shown.evmCheck?.contract ?? shown.tx.to) : shown.cross ? 'transaction LI.FI' : 'programme Jupiter'}`}
                 </span>
               </div>
             </div>
@@ -711,6 +795,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                 ]}
               />
             )}
+            {shown.tx.kind === 'deposit' && <DepositChecks sell={sell} buy={buy} chainLabel={chain.label} buyChainLabel={buyChain?.label ?? ''} sellAmount={sellAmount} quote={shown} deposit={deposit} />}
             {shown.tx.kind === 'solana' && !shown.cross && <span className="text-[13px] text-mute">Transaction construite par {shown.providerName} : décodée par le coffre et comparée à ce récapitulatif avant d’utiliser ton mot de passe, puis fenêtre système.</span>}
             {/* LI.FI from Solana: Rust shows LI.FI's tracking instruction as unknown, hence the reinforced 2nd window. */}
             {shown.tx.kind === 'solana' && shown.cross && (
@@ -757,6 +842,31 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
           </Button>
         </div>
       </Dialog>
+    </div>
+  );
+}
+
+/** What Kyro checked for a NEAR Intents deposit, in plain French (shown before the password). */
+function DepositChecks({ sell, buy, chainLabel, buyChainLabel, sellAmount, quote, deposit }: { sell: AssetDef; buy: AssetDef; chainLabel: string; buyChainLabel: string; sellAmount: bigint; quote: Quote; deposit: PreparedDeposit | null }) {
+  const utxo = sell.family === 'btc' || sell.family === 'ltc' || sell.family === 'doge';
+  const lines = [
+    `Pas de contrat ni de transaction écrite par un tiers : Kyro construit lui-même un envoi ordinaire de ${fmtCrypto(sellAmount, sell.decimals, sell.symbol)} vers l’adresse de dépôt${deposit ? ` ${shortAddress(deposit.plan.depositAddress, 8, 6)}` : ''}. Le coffre le décode et la fenêtre système l’affiche comme un envoi.`,
+    `NEAR Intents a confirmé que cette adresse de dépôt livre à ton compte ${buyChainLabel} (${shortAddress(quote.cross?.recipient ?? '')}), en ${buy.symbol}, au moins ${fmtCrypto(quote.minBuyAmount, buy.decimals, buy.symbol, 6)}, et que tout remboursement revient à ton adresse ${chainLabel}. Kyro le redemande juste avant de signer.`,
+    `Frais Kyro ${feeLabel(quote.kyroFeeBps)}${deposit && deposit.plan.oneClickFeeBps > 0 ? ` et frais NEAR Intents ${feeLabel(deposit.plan.oneClickFeeBps)}` : ''} : pris par NEAR Intents sur le montant déposé, déjà déduits de ce que tu reçois. Kyro a vérifié ces taux dans la réponse du pont.`,
+    ...(utxo
+      ? [`Aucun OP_RETURN. Un OP_RETURN est une petite note publique gravée dans une transaction ${sell.symbol}, sans argent dedans ; certains ponts en demandent une pour savoir à qui livrer. Ici ce n’est pas nécessaire : l’adresse de dépôt sert d’identifiant. Une transaction qui en contiendrait une serait refusée par Kyro (et le coffre la signalerait dans une 2ᵉ fenêtre).`]
+      : []),
+    ...(sell.family === 'xrp' ? ['Sans tag de destination ni mémo : l’adresse de dépôt est propre à ce swap.'] : []),
+    'La livraison elle-même dépend du réseau de solveurs de NEAR Intents ; s’il échoue, les fonds reviennent sur ton adresse de départ (frais de remboursement du pont déduits).',
+  ];
+  return (
+    <div role="status" className="fade-in flex flex-col gap-1.5 rounded-box border border-l-2 border-line-2 border-l-ice/60 bg-raised/60 px-4 py-3 text-[12px] leading-[1.5] text-text2">
+      <span className="text-[13px] font-semibold text-text">Ce que Kyro a vérifié</span>
+      <ul className="m-0 flex list-disc flex-col gap-0.5 pl-5">
+        {lines.map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ul>
     </div>
   );
 }
