@@ -159,12 +159,16 @@ pub(crate) fn describe_tron(s: &TronTxSummary, e: &TronEstimate, net: Network, n
         trx(&e.balance)
     );
     if !s.memo.is_empty() {
-        // Untrusted text: cleaned by wallet-core (control / bidi characters) when UTF-8, otherwise
-        // the exact hex; one quoted line, after the amounts and fees.
-        let text = s.memo_text.clone().unwrap_or_else(|| s.memo.clone());
+        // Untrusted text: wallet-core's cleaned text when present, else the UTF-8 decoding of the
+        // hex, else the exact hex; always one quoted line (dialog_text), after amounts and fees.
+        let text = s.memo_text.clone().unwrap_or_else(|| {
+            hex::decode(&s.memo)
+                .ok()
+                .and_then(|b| String::from_utf8(b).ok())
+                .unwrap_or_else(|| s.memo.clone())
+        });
         out += &format!(
-            "
-Mémo (texte libre, non vérifié) : {}",
+            "\nMémo (texte libre, non vérifié) : {}",
             crate::dialog_text::field(&text, crate::dialog_text::MAX_FIELD)
         );
     }
