@@ -235,7 +235,7 @@ pub(crate) fn describe_algo(
 pub(crate) fn describe_algo_extra(lang: Lang, s: &AlgoTxSummary) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des éléments à vérifier dans ce paiement :\n",
-        "Kyro found elements to check in this payment:\n",
+        "Kyro found some things to check in this payment:\n",
     ));
     for w in &s.warnings {
         out += match w {
@@ -552,7 +552,7 @@ pub async fn algo_build_asset_tx(
         .filter(|a| *a > 0)
         .ok_or_else(|| AppError::InvalidInput("invalid token amount".into()))?;
     if to.trim() == me {
-        return Err(AppError::InvalidInput("send to yourself".into()));
+        return Err(AppError::InvalidInput("cannot send to yourself".into()));
     }
     build_asset(
         &ctx(&state),

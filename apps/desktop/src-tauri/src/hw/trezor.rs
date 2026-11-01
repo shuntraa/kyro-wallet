@@ -401,7 +401,7 @@ fn map_failure(f: &protos::Failure) -> HwError {
         // THP: the device forgot Kyro's session (restart, eviction): reconnect.
         F::Failure_ThpUnallocatedSession => HwError::Disconnected,
         F::Failure_InvalidProtocol => HwError::bad("protocol rejected by the device"),
-        code => HwError::bad(format!("Trezor: {code:?} « {} »", f.message())),
+        code => HwError::bad(format!("Trezor: {code:?} “{}”", f.message())),
     }
 }
 
@@ -472,7 +472,7 @@ impl<W: Wire> Trezor<W> {
         if passphrase {
             if !self.passphrase_on_device() {
                 return Err(HwError::unsupported(
-                    "passphrase to be typed on the computer: Kyro never passes a \
+                    "passphrase entry on the computer: Kyro never passes a \
                      passphrase through its interface",
                 ));
             }
@@ -630,7 +630,7 @@ impl<W: Wire> TrezorIo for Trezor<W> {
                     if !self.passphrase_on_device() {
                         self.abort();
                         return Err(HwError::unsupported(
-                            "passphrase to be typed on the computer (Trezor One): Kyro never \
+                            "passphrase entry on the computer (Trezor One): Kyro never \
                              passes a passphrase through its interface",
                         ));
                     }
@@ -773,7 +773,7 @@ impl<W: Wire> HardwareWallet for Trezor<W> {
             let n = resp.data_length() as usize;
             let chunk = data
                 .get(offset..offset + n)
-                .ok_or_else(|| HwError::bad("the device asks for more data than there is"))?;
+                .ok_or_else(|| HwError::bad("the device requested more data than was sent"))?;
             offset += n;
             let mut ack = protos::EthereumTxAck::new();
             ack.set_data_chunk(chunk.to_vec());

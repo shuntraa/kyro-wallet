@@ -132,7 +132,7 @@ pub(crate) fn describe_ada(
                         ada(&o.min_lovelace)
                     ),
                     Lang::En => format!(
-                        " (of which {} required minimum with the tokens)",
+                        " (including the {} minimum required with the tokens)",
                         ada(&o.min_lovelace)
                     ),
                 }
@@ -144,7 +144,7 @@ pub(crate) fn describe_ada(
         if o.kind == "enterprise" {
             out += lang.pick(
                 "  (adresse « enterprise » : sans partie staking)\n",
-                "  (« enterprise » address: no staking part)\n",
+                "  (“enterprise” address: no staking part)\n",
             );
         }
     }
@@ -215,7 +215,7 @@ pub(crate) fn describe_ada(
 pub(crate) fn describe_ada_extra(lang: Lang, s: &CardanoTxSummary) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des éléments à vérifier dans cette transaction :\n",
-        "Kyro found elements to check in this transaction:\n",
+        "Kyro found some things to check in this transaction:\n",
     ));
     for w in &s.warnings {
         out += &match (w, lang) {
@@ -753,7 +753,7 @@ mod tests {
         let d = describe_ada(Lang::En, &summary(), &context(), Network::Testnet);
         for needle in [
             "Cardano send (preprod)",
-            "Output 1 — RECIPIENT\n  addr_test1qz2f…\n  1.18956 ADA (of which 1.18956 ADA required minimum with the tokens)",
+            "Output 1 — RECIPIENT\n  addr_test1qz2f…\n  1.18956 ADA (including the 1.18956 ADA minimum required with the tokens)",
             "  ⚠ NOT VERIFIED",
             "Output 2 — change returned (your address)",
             "Fee: 0.175513 ADA (175513 lovelace)",

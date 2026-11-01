@@ -59,7 +59,7 @@ impl Lang {
     pub fn unusual_intro(self) -> &'static str {
         self.pick(
             "Kyro a trouvé des éléments inhabituels dans cette transaction :\n",
-            "Kyro found unusual elements in this transaction:\n",
+            "Kyro found unusual details in this transaction:\n",
         )
     }
 
@@ -157,7 +157,7 @@ pub fn detail_fr(en: &str) -> String {
             "verrouillage automatique : entre 1 et 60 minutes",
         ),
         (
-            "language: « auto », « fr » or « en »",
+            "language: auto, fr or en",
             "langue : « auto », « fr » ou « en »",
         ),
         (
@@ -177,7 +177,7 @@ pub fn detail_fr(en: &str) -> String {
             "ce compte n'a pas de clé Solana",
         ),
         (
-            "unknown hardware-wallet account",
+            "unknown hardware wallet account",
             "compte hardware wallet inconnu",
         ),
         (

@@ -242,7 +242,7 @@ pub async fn token_txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
     let (status, v) = send(ctx, req, "/graphql").await?;
     if status != 200 || v["errors"].is_array() {
         return Err(bad(format!(
-            "Aptos : indexeur indisponible (HTTP {status}) {}",
+            "Aptos: indexer unavailable (HTTP {status}) {}",
             v["errors"][0]["message"].as_str().unwrap_or("")
         )));
     }
@@ -325,7 +325,7 @@ pub async fn gas_price(ctx: &AptosCtx<'_>) -> AppResult<u64> {
     let p = u64_at(&v["gas_estimate"]).ok_or_else(|| bad("Aptos: gas_estimate missing"))?;
     if p == 0 || p > MAX_GAS_UNIT_PRICE {
         return Err(bad(format!(
-            "Aptos: announced gas price out of bounds ({p} octas per unit)"
+            "Aptos: gas price from the server out of bounds ({p} octas per unit)"
         )));
     }
     Ok(p)
@@ -368,7 +368,7 @@ pub async fn submit(ctx: &AptosCtx<'_>, signed: Vec<u8>, hash: &str) -> AppResul
     let (status, v) = send(ctx, req, "/transactions").await?;
     if status != 202 && status != 200 {
         return Err(AppError::InvalidInput(format!(
-            "Aptos transaction refused by the node (HTTP {status}): {}",
+            "Aptos transaction rejected by the node (HTTP {status}): {}",
             v["message"]
                 .as_str()
                 .unwrap_or("")
@@ -380,7 +380,7 @@ pub async fn submit(ctx: &AptosCtx<'_>, signed: Vec<u8>, hash: &str) -> AppResul
     let got = v["hash"].as_str().unwrap_or("");
     if !got.eq_ignore_ascii_case(hash) {
         return Err(bad(format!(
-            "the node answered an unexpected hash ({})",
+            "the node returned an unexpected hash ({})",
             got.chars().take(80).collect::<String>()
         )));
     }
@@ -421,7 +421,7 @@ pub async fn txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
     let (status, v) = send(ctx, req, "/graphql").await?;
     if status != 200 || v["errors"].is_array() {
         return Err(bad(format!(
-            "Aptos : indexeur indisponible (HTTP {status}) {}",
+            "Aptos: indexer unavailable (HTTP {status}) {}",
             v["errors"][0]["message"].as_str().unwrap_or("")
         )));
     }
@@ -557,7 +557,7 @@ pub fn max_gas_for(gas_used: u64) -> AppResult<u64> {
 pub fn check_transfer(ours: &AptosAccountInfo, amount: u64, max_fee: u64) -> AppResult<()> {
     if !ours.key_matches {
         return Err(AppError::InvalidInput(format!(
-            "the key of this Aptos account was changed (authentication key {}): Kyro can no longer sign for it",
+            "this Aptos account's key was changed (authentication key {}): Kyro can no longer sign for it",
             ours.authentication_key
         )));
     }

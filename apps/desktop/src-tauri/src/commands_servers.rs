@@ -25,7 +25,7 @@ fn network_of(key: &str) -> AppResult<Network> {
         "mainnet" => Ok(Network::Mainnet),
         "testnet4" => Ok(Network::Testnet),
         other => Err(AppError::ServerInvalid(format!(
-            "unknown Bitcoin network « {other} » (mainnet or testnet4)"
+            "unknown Bitcoin network “{other}” (mainnet or testnet4)"
         ))),
     }
 }
@@ -36,7 +36,7 @@ fn utxo_network_of(key: &str) -> AppResult<Network> {
         "mainnet" => Ok(Network::Mainnet),
         "testnet" => Ok(Network::Testnet),
         other => Err(AppError::ServerInvalid(format!(
-            "unknown network « {other} » (mainnet or testnet)"
+            "unknown network “{other}” (mainnet or testnet)"
         ))),
     }
 }
@@ -112,7 +112,7 @@ async fn probe_solana(
         .iter()
         .find(|(c, _)| *c == cluster)
         .map(|(_, g)| *g)
-        .ok_or_else(|| AppError::ServerInvalid(format!("unknown cluster « {cluster} »")))?;
+        .ok_or_else(|| AppError::ServerInvalid(format!("unknown cluster “{cluster}”")))?;
     let r = json_rpc(net, &s.url, tor, Family::Solana, "getGenesisHash").await?;
     let found = r.as_str().unwrap_or_default().to_owned();
     if found != expected {
@@ -198,7 +198,7 @@ async fn probe_changes(
         if old.evm.get(chain) != Some(s) {
             let id = chain
                 .parse()
-                .map_err(|_| AppError::ServerInvalid(format!("invalid chainId « {chain} »")))?;
+                .map_err(|_| AppError::ServerInvalid(format!("invalid chainId “{chain}”")))?;
             probe_evm(net, id, s, tor).await?;
         }
     }
@@ -239,7 +239,7 @@ pub(crate) fn check_cookie_paths(
     for p in cookie_paths(new) {
         if !known.contains(&p) && picked != Some(p) {
             return Err(AppError::ServerInvalid(
-                ".cookie file: choose it with the « Choose the .cookie file » button".into(),
+                ".cookie file: choose it with the “Choose the .cookie file” button".into(),
             ));
         }
     }
@@ -772,7 +772,7 @@ pub async fn btc_core_setup(
         RescanFrom::Keyword(k) if k == "now" => None,
         RescanFrom::Keyword(k) => {
             return Err(AppError::InvalidInput(format!(
-                "rescanFrom: « now » or a UNIX timestamp expected (got « {k} »)"
+                "rescanFrom: “now” or a UNIX timestamp expected (got “{k}”)"
             )))
         }
         RescanFrom::Timestamp(t) => Some(t),

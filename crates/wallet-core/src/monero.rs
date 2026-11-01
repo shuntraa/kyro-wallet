@@ -460,7 +460,7 @@ pub fn xmr_cache_open(
     let header = cache_header(net, account);
     if data.len() < header.len() + 24 + 16 || data[..header.len()] != header[..] {
         return Err(Error::input(
-            "Monero cache of another network, account or format",
+            "Monero cache from another network, account or format",
         ));
     }
     let key = cache_key(seed, net, account)?;
@@ -476,7 +476,7 @@ pub fn xmr_cache_open(
             },
         )
         .map(Zeroizing::new)
-        .map_err(|_| Error::input("unreadable Monero cache (another phrase or modified file)"))
+        .map_err(|_| Error::input("unreadable Monero cache (different phrase or modified file)"))
 }
 
 // ---------------------------------------------------------------------------------------------

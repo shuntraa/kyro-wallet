@@ -60,7 +60,7 @@ fn parse_user_address(s: &str, net: Network) -> AppResult<wallet_core::TonFriend
     let f = wallet_core::ton_parse_address(s)?;
     if f.testnet && net == Network::Mainnet {
         return Err(AppError::InvalidInput(
-            "testnet TON address (kQ… / 0Q…): refused on mainnet".into(),
+            "testnet TON address (kQ… / 0Q…): not accepted on mainnet".into(),
         ));
     }
     if f.address.workchain != 0 {
@@ -262,7 +262,7 @@ fn utc_hms(t: u32) -> String {
 pub(crate) fn describe_ton_extra(lang: Lang, s: &TonTxSummary) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des éléments inhabituels dans ce transfert :\n",
-        "Kyro found unusual elements in this transfer:\n",
+        "Kyro found unusual details in this transfer:\n",
     ));
     for w in &s.warnings {
         out += match w {
@@ -388,7 +388,7 @@ pub(crate) async fn build(
     let destination = ton_backend::account(c, &dest.address).await?;
     if destination.status == TonStatus::Frozen {
         return Err(AppError::InvalidInput(
-            "the recipient account is frozen (unpaid storage fees): send refused".into(),
+            "the recipient account is frozen (unpaid storage fees): sending refused".into(),
         ));
     }
     let deploy = account.status == TonStatus::Uninit;
@@ -606,7 +606,7 @@ pub struct TonSignedOut {
 fn check_validity(valid_until: u32, now: u32) -> AppResult<()> {
     if valid_until <= now.saturating_add(15) {
         return Err(AppError::InvalidInput(
-            "TON transfer expired (valid for 10 min after its preparation): rebuild it".into(),
+            "TON transfer expired (valid for 10 min after it was prepared): rebuild it".into(),
         ));
     }
     if valid_until > now.saturating_add(VALID_FOR_SECS + 120) {

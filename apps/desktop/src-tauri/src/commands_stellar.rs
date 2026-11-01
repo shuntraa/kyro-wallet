@@ -66,7 +66,9 @@ pub fn parse_memo(m: Option<&MemoSpec>) -> AppResult<StellarMemo> {
                 .chars()
                 .any(|c| c.is_control() || crate::dialog_text::is_invisible(c))
             {
-                return Err(bad("text memo: control or invisible character refused"));
+                return Err(bad(
+                    "text memo: control or invisible characters are not allowed",
+                ));
             }
             StellarMemo::Text(value.as_bytes().to_vec())
         }
@@ -518,7 +520,7 @@ fn check_asset_payment(
     }
     let Some(dest) = trustline(&c.destination, k) else {
         return Err(AppError::InvalidInput(format!(
-            "the recipient has no trustline for {} (issued by {}): they must enable it first, otherwise the payment is refused",
+            "the recipient has no trustline for {} (issued by {}): they must enable it first, otherwise the payment is rejected",
             k.code, k.issuer_name
         )));
     };
@@ -548,7 +550,7 @@ fn check_asset_payment(
     let spendable: i64 = c.account.spendable.parse().unwrap_or(0);
     if i64::from(fee) > spendable {
         return Err(AppError::InvalidInput(
-            "not enough XLM available for the fees (balance − reserve)".into(),
+            "not enough XLM available for the network fee (balance − reserve)".into(),
         ));
     }
     Ok(())
@@ -597,7 +599,7 @@ fn check_trust(k: &StellarKnownAsset, c: &StellarContext, enable: bool, fee: u32
         }
         if i64::from(fee) > spendable {
             return Err(AppError::InvalidInput(
-                "not enough XLM available for the fees".into(),
+                "not enough XLM available for the network fee".into(),
             ));
         }
     }
@@ -769,7 +771,7 @@ pub(crate) async fn prepare_sign(
     let summary = wallet_core::stellar_decode_tx(envelope, me, c.network)?;
     let unknown = || {
         AppError::InvalidInput(
-            "Kyro only signs sends of XLM and of assets it knows (Circle's USDC)".into(),
+            "Kyro only signs payments in XLM and in the assets it knows (Circle's USDC)".into(),
         )
     };
     let (to, shape) = match &summary.operation {
@@ -830,7 +832,7 @@ pub(crate) async fn prepare_sign(
     }
     if summary.max_time > ledger.closed_at + VALIDITY_SECS {
         return Err(AppError::InvalidInput(
-            "time limit too far away (5 minutes at most): rebuild the transaction".into(),
+            "time limit too far in the future (5 minutes at most): rebuild the transaction".into(),
         ));
     }
     if summary.sequence != next_sequence(&context.account)?.to_string() {

@@ -99,8 +99,8 @@ pub(crate) fn device_line(lang: Lang, info: &DeviceInfo) -> String {
              l'appareil et confirme-les là-bas. S'il affiche autre chose, refuse sur l'appareil."
         ),
         Lang::En => format!(
-            "\n\n— Device: {brand} {model} —\nAfter « Sign », check the SAME information on the device's \
-             screen and confirm it there. If it shows anything else, refuse on the device."
+            "\n\n— Device: {brand} {model} —\nAfter “Sign”, check the SAME information on the device's \
+             screen and confirm it there. If it shows anything else, reject it on the device."
         ),
     }
 }
@@ -464,7 +464,7 @@ pub fn hw_account_remove(state: State<'_, AppState>, account_id: String) -> AppR
     s.accounts.retain(|a| a.id != account_id);
     if s.accounts.len() == before {
         return Err(AppError::InvalidInput(
-            "unknown hardware-wallet account".into(),
+            "unknown hardware wallet account".into(),
         ));
     }
     store::save(&state.hw_accounts_path, &s, state.network)
@@ -520,7 +520,7 @@ pub fn resolve_target(
     path: &[u32],
 ) -> AppResult<(Target, String)> {
     let wrong = || {
-        AppError::InvalidInput("this path does not belong to this hardware-wallet account".into())
+        AppError::InvalidInput("this path does not belong to this hardware wallet account".into())
     };
     match chain {
         Chain::Btc => {
@@ -724,7 +724,7 @@ pub async fn hw_sign_btc_psbt(
     {
         return Err(AppError::InvalidInput(format!(
             "the PSBT must include the previous transaction (non_witness_utxo) of input {} \
-             for a hardware-wallet signature",
+             for signing on a hardware wallet",
             i.index
         )));
     }

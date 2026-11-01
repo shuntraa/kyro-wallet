@@ -424,7 +424,7 @@ impl AptosTransfer {
             3 => return Err(bad("multisig transaction: not supported")),
             4 => {
                 return Err(bad(
-                    "payload \"Payload\" (orderless transaction, multisig…): not supported",
+                    "\"Payload\" payload (orderless transaction, multisig…): not supported",
                 ))
             }
             _ => return Err(bad("payload of unknown type")),

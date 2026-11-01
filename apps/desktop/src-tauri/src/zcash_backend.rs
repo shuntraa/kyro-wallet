@@ -50,8 +50,8 @@ fn bad(msg: impl Into<String>) -> AppError {
 
 pub fn no_default_server() -> AppError {
     AppError::ServerInvalid(
-        "Zcash testnet: Kyro has no default public server (no maintained public Zcash \
-         testnet Electrum server was found). Zcash works on mainnet."
+        "Zcash testnet: no free public server (Kyro found no maintained public Zcash \
+         testnet Electrum server). Zcash works on mainnet."
             .into(),
     )
 }
@@ -268,19 +268,19 @@ fn verified_utxos(claimed: &[ClaimedUtxo], raws: &Raws, our_spk: &str) -> AppRes
             .ok_or_else(|| bad(format!("Zcash: previous transaction {} not found", u.txid)))?;
         let (_, value, spk) = tx.outputs.get(u.vout as usize).ok_or_else(|| {
             bad(format!(
-                "Zcash: the server announces an output {}:{} that does not exist",
+                "Zcash: the server reports an output {}:{} that does not exist",
                 u.txid, u.vout
             ))
         })?;
         if spk != our_spk {
             return Err(bad(format!(
-                "Zcash: the announced output {}:{} does not pay this address",
+                "Zcash: the reported output {}:{} does not pay this address",
                 u.txid, u.vout
             )));
         }
         if *value != u.value {
             return Err(bad(format!(
-                "Zcash: the server announces {} for {}:{}, the transaction says {value}",
+                "Zcash: the server reports {} for {}:{}, the transaction says {value}",
                 u.value, u.txid, u.vout
             )));
         }
@@ -563,7 +563,7 @@ pub async fn broadcast(ctx: &ZecCtx<'_>, hex_tx: &str) -> AppResult<String> {
 fn check_broadcast_txid(answer: &str, ours: &str) -> AppResult<String> {
     if answer.trim() != ours {
         return Err(bad(format!(
-            "the server answered an unexpected txid ({})",
+            "the server returned an unexpected txid ({})",
             answer.chars().take(80).collect::<String>()
         )));
     }

@@ -339,7 +339,7 @@ pub fn dot_account_id(address: &str, network: Network) -> Result<[u8; 32]> {
     let (prefix, pk) = dot_ss58_decode(address)?;
     if prefix != chain.ss58 {
         return Err(Error::input(format!(
-            "address of another network (SS58 prefix {prefix}): a {} address starts with prefix {} ({})",
+            "address from another network (SS58 prefix {prefix}): a {} address starts with prefix {} ({})",
             chain.name,
             chain.ss58,
             if chain.ss58 == 0 { "\"1…\"" } else { "\"5…\"" }

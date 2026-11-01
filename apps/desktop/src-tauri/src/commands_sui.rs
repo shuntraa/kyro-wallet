@@ -356,17 +356,17 @@ fn gas_coin_lines(lang: Lang, s: &SuiTxSummary, c: &SuiContext) -> String {
 pub(crate) fn describe_sui_extra(lang: Lang, s: &SuiTxSummary) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des éléments inhabituels dans ce transfert :\n",
-        "Kyro found unusual elements in this transfer:\n",
+        "Kyro found unusual details in this transfer:\n",
     ));
     for w in &s.warnings {
         out += match w {
             SuiWarning::SendAll if s.token.is_some() => lang.pick(
                 "• tout le solde du jeton (pièces listées) part\n",
-                "• the whole token balance (listed coins) goes\n",
+                "• the whole token balance (listed coins) is sent\n",
             ),
             SuiWarning::SendAll => lang.pick(
                 "• tout le solde des pièces de gaz part (il ne restera que ce que les frais n'ont pas utilisé : rien)\n",
-                "• the whole balance of the gas coins goes (only what the fee did not use will remain: nothing)\n",
+                "• the whole balance of the gas coins is sent (all that remains is what the fee did not use: nothing)\n",
             ),
             SuiWarning::SelfTransfer => lang.pick(
                 "• le destinataire est ton propre compte\n",
@@ -374,7 +374,7 @@ pub(crate) fn describe_sui_extra(lang: Lang, s: &SuiTxSummary) -> String {
             ),
             SuiWarning::HighGasBudget => lang.pick(
                 "• budget de gaz supérieur à 0,1 SUI (un transfert coûte d'habitude quelques millièmes)\n",
-                "• gas budget above 0.1 SUI (a transfer usually costs a few thousandths)\n",
+                "• gas budget above 0.1 SUI (a transfer usually costs a few thousandths of a SUI)\n",
             ),
             SuiWarning::NoExpiration => lang.pick(
                 "• aucune époque d'expiration : la transaction signée resterait valable\n",
@@ -521,7 +521,7 @@ pub(crate) async fn build(
     let sim = sui_backend::simulate(c, &b64(&draft), &wallet_core::sui_tx_digest(&draft)).await?;
     if !sim.success {
         return Err(AppError::InvalidInput(format!(
-            "the transfer simulation fails: {}",
+            "transfer simulation failed: {}",
             sim.error.unwrap_or_default()
         )));
     }
@@ -599,7 +599,7 @@ pub(crate) async fn build_token(
     let draft_budget = gas_total.min(DRAFT_BUDGET);
     if draft_budget < min_budget {
         return Err(AppError::InvalidInput(format!(
-            "not enough SUI for the fees: {} in the SUI coins, at least {} needed",
+            "not enough SUI for the network fee: {} in the SUI coins, at least {} needed",
             sui(Lang::Fr, &gas_total.to_string()),
             sui(Lang::Fr, &min_budget.to_string())
         )));
@@ -618,7 +618,7 @@ pub(crate) async fn build_token(
     let sim = sui_backend::simulate(c, &b64(&draft), &wallet_core::sui_tx_digest(&draft)).await?;
     if !sim.success {
         return Err(AppError::InvalidInput(format!(
-            "the transfer simulation fails: {}",
+            "transfer simulation failed: {}",
             sim.error.unwrap_or_default()
         )));
     }
@@ -741,7 +741,7 @@ pub(crate) async fn prepare_sign(
         )?;
         let coin = coins.iter().find(|c| c.r == r).ok_or_else(|| {
             AppError::InvalidInput(
-                "the gas coins changed since the preparation: rebuild the transfer".into(),
+                "the gas coins changed since the transfer was prepared: rebuild it".into(),
             )
         })?;
         gas_total = gas_total.saturating_add(coin.balance);
@@ -770,7 +770,7 @@ pub(crate) async fn prepare_sign(
     let sim = sui_backend::simulate(c, bcs, &summary.digest).await?;
     if !sim.success {
         return Err(AppError::InvalidInput(format!(
-            "the transfer simulation fails: {}",
+            "transfer simulation failed: {}",
             sim.error.unwrap_or_default()
         )));
     }
@@ -841,7 +841,7 @@ async fn prepare_token(
         )?;
         let found = live.iter().find(|x| x.r == r).ok_or_else(|| {
             AppError::InvalidInput(format!(
-                "the {} coins changed since the preparation (or are not of this token): rebuild the transfer",
+                "the {} coins changed since the transfer was prepared (or are not of this token): rebuild it",
                 coin.symbol
             ))
         })?;
@@ -858,7 +858,7 @@ async fn prepare_token(
     let sim = sui_backend::simulate(c, bcs, &summary.digest).await?;
     if !sim.success {
         return Err(AppError::InvalidInput(format!(
-            "the transfer simulation fails: {}",
+            "transfer simulation failed: {}",
             sim.error.unwrap_or_default()
         )));
     }

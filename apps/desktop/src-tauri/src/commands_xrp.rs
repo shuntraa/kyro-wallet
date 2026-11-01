@@ -145,7 +145,7 @@ pub(crate) fn describe_xrp(lang: Lang, s: &XrpTxSummary, c: &XrpContext, net: Ne
                 s.sequence
             ),
             Lang::En => format!(
-                "Valid until ledger no. {l} (≈ 1 min), sequence {}\n",
+                "Valid until ledger #{l} (≈ 1 min), sequence {}\n",
                 s.sequence
             ),
         };
@@ -173,7 +173,7 @@ pub(crate) fn describe_xrp(lang: Lang, s: &XrpTxSummary, c: &XrpContext, net: Ne
 pub(crate) fn describe_xrp_extra(lang: Lang, s: &XrpTxSummary) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des éléments inhabituels dans ce paiement :\n",
-        "Kyro found unusual elements in this payment:\n",
+        "Kyro found unusual details in this payment:\n",
     ));
     for w in &s.warnings {
         out += match w {
@@ -639,7 +639,7 @@ mod tests {
             "Amount: 20 XRP (20000000 drops)",
             "Fee: 0.000012 XRP (12 drops)",
             "locked reserve: 1.2 XRP (1 XRP + 0.2 XRP × 1 object(s)) · available: 98.8 XRP",
-            "Valid until ledger no. 1234",
+            "Valid until ledger #1234",
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }

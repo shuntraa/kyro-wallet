@@ -804,9 +804,9 @@ impl Servers {
             }
         }
         for (chain, s) in &self.evm {
-            let id: u64 = chain.parse().map_err(|_| {
-                AppError::ServerInvalid(format!("evm: invalid chainId « {chain} »"))
-            })?;
+            let id: u64 = chain
+                .parse()
+                .map_err(|_| AppError::ServerInvalid(format!("evm: invalid chainId “{chain}”")))?;
             if id == 0 {
                 return Err(AppError::ServerInvalid("evm: chainId 0".into()));
             }
@@ -816,7 +816,7 @@ impl Servers {
         for (cluster, s) in &self.solana {
             if !SOLANA_DEFAULTS.iter().any(|(c, _)| c == cluster) {
                 return Err(AppError::ServerInvalid(format!(
-                    "solana: unknown cluster « {cluster} » (devnet or mainnet-beta)"
+                    "solana: unknown cluster “{cluster}” (devnet or mainnet-beta)"
                 )));
             }
             validate_http_url(&s.url, tor, false)
@@ -945,7 +945,7 @@ fn invalid(msg: impl Into<String>) -> AppError {
 
 /// HTTP(S) server URL rule. `allow_private_http` = Bitcoin Core only.
 pub fn validate_http_url(url: &str, tor: bool, allow_private_http: bool) -> AppResult<url::Url> {
-    let u = url::Url::parse(url.trim()).map_err(|_| invalid(format!("invalid URL « {url} »")))?;
+    let u = url::Url::parse(url.trim()).map_err(|_| invalid(format!("invalid URL “{url}”")))?;
     if !u.username().is_empty() || u.password().is_some() {
         return Err(invalid(
             "no credentials in the URL (use the authentication fields)",
@@ -966,7 +966,7 @@ pub fn validate_http_url(url: &str, tor: bool, allow_private_http: bool) -> AppR
         "http" => Err(invalid(
             "http:// is only allowed for a .onion address over Tor (or a local Bitcoin Core node)",
         )),
-        other => Err(invalid(format!("scheme not allowed « {other} »"))),
+        other => Err(invalid(format!("scheme not allowed “{other}”"))),
     }
 }
 
@@ -1007,7 +1007,7 @@ fn validate_btc(s: &BtcServer, tor: bool) -> AppResult<()> {
                 || url::Host::parse(h).is_err()
                 || h.contains(['/', ':', '@']) && !h.starts_with('[')
             {
-                return Err(invalid(format!("invalid Electrum host « {host} »")));
+                return Err(invalid(format!("invalid Electrum host “{host}”")));
             }
             if *port == 0 {
                 return Err(invalid("invalid Electrum port"));
@@ -1062,7 +1062,7 @@ pub fn validate_cookie_path(path: &str) -> AppResult<()> {
     let p = std::path::Path::new(path.trim());
     if !p.is_absolute() || p.file_name().and_then(|n| n.to_str()) != Some(".cookie") {
         return Err(invalid(
-            ".cookie file: choose the « .cookie » file in your node's data folder",
+            ".cookie file: choose the “.cookie” file in your node's data folder",
         ));
     }
     Ok(())
@@ -1190,12 +1190,12 @@ pub fn parse_peer(s: &str) -> AppResult<Peer> {
     let s = s.trim();
     let (host, port) = s
         .rsplit_once(':')
-        .ok_or_else(|| invalid(format!("peer « {s} »: host:port expected")))?;
+        .ok_or_else(|| invalid(format!("peer “{s}”: host:port expected")))?;
     let port: u16 = port
         .parse()
         .ok()
         .filter(|p| *p != 0)
-        .ok_or_else(|| invalid(format!("peer « {s} »: invalid port")))?;
+        .ok_or_else(|| invalid(format!("peer “{s}”: invalid port")))?;
     let host = host
         .trim_start_matches('[')
         .trim_end_matches(']')
@@ -1209,7 +1209,7 @@ pub fn parse_peer(s: &str) -> AppResult<Peer> {
     }
     let ip: IpAddr = host.parse().map_err(|_| {
         invalid(format!(
-            "peer « {s} »: IP or .onion address expected (no host name: no DNS query)"
+            "peer “{s}”: IP or .onion address expected (no host name: no DNS query)"
         ))
     })?;
     Ok(Peer {

@@ -126,7 +126,7 @@ pub fn get_app_and_version() -> Vec<u8> {
 
 /// `format (=1) || len || name || len || version || [len || flags]`.
 pub fn parse_app_and_version(data: &[u8]) -> HwResult<(String, String)> {
-    let bad = || HwError::bad("malformed « app and version » response");
+    let bad = || HwError::bad("malformed “app and version” response");
     if data.first() != Some(&0x01) {
         return Err(bad());
     }
@@ -172,12 +172,12 @@ pub fn sw_error(sw: u16, ctx: SwContext) -> HwError {
         },
         0x6A80 if ctx == SwContext::EthSigning => HwError::unsupported(
             "this Ledger cannot show the details of this transaction: turn on \
-             « Blind signing » in the Ethereum app settings (Kyro showed its \
+             “Blind signing” in the Ethereum app settings (Kyro showed its \
              own summary), or reject",
         ),
         0x6808 => HwError::unsupported(
             "this Ledger cannot show the details of this transaction: turn on \
-             « Blind signing » in the Solana app settings, or reject",
+             “Blind signing” in the Solana app settings, or reject",
         ),
         0x6807 => HwError::unsupported("app not installed on the device"),
         0xB008 => HwError::bad("signature or HMAC rejected by the device (B008)"),
@@ -204,7 +204,7 @@ pub struct EthAddress {
 
 /// `len || pubkey || len || ascii address || [chain code 32]`.
 pub fn eth_parse_address(data: &[u8]) -> HwResult<EthAddress> {
-    let bad = || HwError::bad("malformed « Ethereum address » response");
+    let bad = || HwError::bad("malformed “Ethereum address” response");
     let pk_len = usize::from(*data.first().ok_or_else(bad)?);
     let pubkey = data.get(1..1 + pk_len).ok_or_else(bad)?.to_vec();
     let a = 1 + pk_len;

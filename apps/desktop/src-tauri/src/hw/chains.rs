@@ -37,7 +37,7 @@ use wallet_core::{CardanoHwPlan, ZecAccount, ZecHwPlan};
 /// `splitTransaction`). Kyro does not parse those bundles itself, Ledger publishes no recorded
 /// v5 exchanges to test against, and its own host library already refuses v6 previous
 /// transactions ("sign them through the Zcash signer kit"): not done without a device.
-pub const ZEC_LEDGER_REASON: &str = "Zcash: not on Ledger in Kyro (the Zcash app requires every previous transaction in full, shielded parts included) — use a Trezor or the Kyro vault";
+pub const ZEC_LEDGER_REASON: &str = "Zcash: not supported on Ledger in Kyro (the Zcash app requires every previous transaction in full, shielded parts included) — use a Trezor or the Kyro vault";
 
 pub fn utxo_coin(chain: Chain) -> Option<UtxoCoin> {
     match chain {
@@ -185,7 +185,7 @@ pub fn ledger_call(
                 .unwrap_or_else(|_| "?".into()),
         },
         (0x6C66, _) => {
-            HwError::unsupported("turn on « Hash signing » in the Stellar app settings, or reject")
+            HwError::unsupported("turn on “Hash signing” in the Stellar app settings, or reject")
         }
         (0xB004, _) => HwError::unsupported("transaction too large for the Stellar app"),
         (_, e) => e,
@@ -572,7 +572,7 @@ pub fn resolve_target(
     chain: Chain,
     path: &[u32],
 ) -> Result<(Target, String), String> {
-    let wrong = || "this path does not belong to this hardware-wallet account".to_string();
+    let wrong = || "this path does not belong to this hardware wallet account".to_string();
     if let Some(coin) = utxo_coin(chain) {
         let stored = acc.utxo_account(coin).ok_or_else(wrong)?;
         let [a, b, c, change, index] = path else {

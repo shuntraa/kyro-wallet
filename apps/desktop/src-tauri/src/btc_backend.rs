@@ -793,7 +793,7 @@ pub async fn broadcast(ctx: &Ctx<'_>, hex_tx: &str) -> AppResult<String> {
         let text = String::from_utf8_lossy(&body).trim().to_owned();
         if status != 200 {
             return Err(AppError::InvalidInput(format!(
-                "broadcast refused: {}",
+                "broadcast rejected: {}",
                 text.chars().take(300).collect::<String>()
             )));
         }
@@ -815,7 +815,7 @@ pub async fn broadcast(ctx: &Ctx<'_>, hex_tx: &str) -> AppResult<String> {
     };
     if txid != decoded.txid {
         return Err(bad(format!(
-            "the server answered an unexpected txid ({})",
+            "the server returned an unexpected txid ({})",
             txid.chars().take(80).collect::<String>()
         )));
     }

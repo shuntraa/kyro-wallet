@@ -336,14 +336,14 @@ fn staking_transaction_pays_only_our_address() {
     // Same transaction, but the output is not one of our addresses.
     let not_ours = CardanoContext { own: &[], ..ctx() };
     let e = decode(&b, &not_ours).unwrap_err().to_string();
-    assert!(e.contains("pays only your own address"), "{e}");
+    assert!(e.contains("only pay your own address"), "{e}");
     let u = hex::encode(cardano_unsigned_tx(&b, None).unwrap());
     assert!(cardano_sign_stake(&root(), 0, 0, 0, &u, &not_ours, DEPOSIT).is_err());
     // A second output, even to our own address.
     let mut two = body(deleg(), vec![], true);
     two.outputs.push(two.outputs[0].clone());
     let e = decode(&two, &ctx()).unwrap_err().to_string();
-    assert!(e.contains("only one output"), "{e}");
+    assert!(e.contains("a single output"), "{e}");
 }
 
 #[test]
@@ -435,7 +435,7 @@ fn foreign_credentials_and_other_certificates_are_refused() {
     script[0] = 0xF1; // script reward address
     refused(
         body(vec![], vec![(mine.clone(), 5), (script, 5)], false),
-        "several",
+        "multiple withdrawals",
     );
     // A plain payment is not a staking transaction.
     refused(body(vec![], vec![], false), "no staking operation");

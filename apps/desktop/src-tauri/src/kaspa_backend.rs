@@ -118,7 +118,7 @@ pub async fn network_info(ctx: &KaspaCtx<'_>) -> AppResult<u64> {
     let name = v["networkName"].as_str().unwrap_or_default();
     if name != network_name(ctx.network) {
         return Err(AppError::ServerWrongNetwork(format!(
-            "the Kaspa API answers \"{}\" instead of \"{}\"",
+            "the Kaspa API reports \"{}\" instead of \"{}\"",
             crate::dialog_text::field(name, 40),
             network_name(ctx.network)
         )));
@@ -286,7 +286,7 @@ pub async fn submit(ctx: &KaspaCtx<'_>, tx_json: &str, expected_id: &str) -> App
             .map(|m| crate::dialog_text::field(m, 200))
             .unwrap_or_else(|| snippet(&bytes));
         return Err(if status == 400 || status == 422 {
-            AppError::InvalidInput(format!("transaction refused by the Kaspa node: {msg}"))
+            AppError::InvalidInput(format!("transaction rejected by the Kaspa node: {msg}"))
         } else {
             bad(format!("Kaspa API: HTTP {status} on broadcast ({msg})"))
         });

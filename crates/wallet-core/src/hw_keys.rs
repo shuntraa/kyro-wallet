@@ -102,7 +102,7 @@ impl HwKeyChain {
     pub fn address_of(self, pubkey: &[u8], network: Network) -> Result<String> {
         if pubkey.len() != self.key_len() {
             return Err(Error::input(
-                "hardware-wallet public key of the wrong length",
+                "hardware wallet public key of the wrong length",
             ));
         }
         if self != HwKeyChain::Cosmos {

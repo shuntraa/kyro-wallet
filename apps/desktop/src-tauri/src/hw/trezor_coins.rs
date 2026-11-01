@@ -155,7 +155,7 @@ impl Utxo<'_> {
             }
             return Ok(tx);
         }
-        Err(HwError::bad("the device asks for an unknown transaction"))
+        Err(HwError::bad("the device requested an unknown transaction"))
     }
 
     fn ack_input(&self, i: usize) -> HwResult<Vec<u8>> {

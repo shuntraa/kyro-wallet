@@ -746,7 +746,7 @@ fn refusals() {
             fee: 0,
             ..base.clone()
         },
-        "zero fees",
+        "zero fee",
     );
     refused(
         &StellarTransaction {

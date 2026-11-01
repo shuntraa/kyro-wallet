@@ -260,7 +260,7 @@ pub(crate) fn describe_zec(lang: Lang, s: &ZecTxSummary, net: Network) -> String
                 c.index
             ),
             Lang::En => format!(
-                "Change (comes back to you): {}\n  {} (change address no. {})\n",
+                "Change (comes back to you): {}\n  {} (change address #{})\n",
                 z(&c.amount),
                 c.address,
                 c.index

@@ -187,7 +187,7 @@ fn label_in(lang: Lang, label: &str) -> String {
 pub fn approval_text(lang: Lang, list: &[Endpoint]) -> String {
     let mut out = String::from(lang.pick(
         "Kyro va contacter ce(s) serveur(s), choisi(s) dans les réglages :\n\n",
-        "Kyro is about to contact this server (these servers), chosen in the settings:\n\n",
+        "Kyro is about to contact the following server(s), chosen in the settings:\n\n",
     ));
     for e in list.iter().take(12) {
         out += &format!(

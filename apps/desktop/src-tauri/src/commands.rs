@@ -945,7 +945,7 @@ pub(crate) fn describe_evm_extra(
         "{}\n{}\n{}",
         lang.pick(
             "Kyro a trouvé des éléments à vérifier dans cette transaction :",
-            "Kyro found elements to check in this transaction:"
+            "Kyro found some things to check in this transaction:"
         ),
         evm_warning_lines(lang, s, token),
         lang.sign_anyway()

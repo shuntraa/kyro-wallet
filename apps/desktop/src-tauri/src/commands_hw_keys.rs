@@ -29,7 +29,7 @@ pub(crate) fn stored_key(
     let acc = load_account(state, account_id)?;
     let key = acc.key(chain).cloned().ok_or_else(|| {
         AppError::InvalidInput(format!(
-            "this hardware-wallet account has no {} key",
+            "this hardware wallet account has no {} key",
             ledger_apps::hw_chain(chain).label()
         ))
     })?;

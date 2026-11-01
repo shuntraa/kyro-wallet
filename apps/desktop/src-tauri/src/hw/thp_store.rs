@@ -82,7 +82,7 @@ impl Drop for FileV1 {
 
 fn corrupt(why: &str) -> HwError {
     HwError::Internal(format!(
-        "unreadable Trezor pairing file (trezor-thp.json): {why}. « Forget all » \
+        "unreadable Trezor pairing file (trezor-thp.json): {why}. “Forget all” \
          resets it (you will need to pair again)."
     ))
 }

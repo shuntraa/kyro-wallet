@@ -81,7 +81,7 @@ fn account_for(
     };
     if !has {
         return Err(AppError::InvalidInput(format!(
-            "this hardware-wallet account has no {} key",
+            "this hardware wallet account has no {} key",
             chain.label()
         )));
     }

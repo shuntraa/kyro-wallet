@@ -35,7 +35,7 @@ pub fn xrp_get_address(path: &[u32], display: bool) -> HwResult<Vec<u8>> {
 
 /// `len ‖ key ‖ len ‖ address` → (key, address). Shared by the XRP and Tron apps.
 pub fn parse_key_and_address(data: &[u8]) -> HwResult<(Vec<u8>, String)> {
-    let bad = || HwError::bad("malformed « key and address » response");
+    let bad = || HwError::bad("malformed “key and address” response");
     let n = usize::from(*data.first().ok_or_else(bad)?);
     let key = data.get(1..1 + n).ok_or_else(bad)?.to_vec();
     let m = usize::from(*data.get(1 + n).ok_or_else(bad)?);

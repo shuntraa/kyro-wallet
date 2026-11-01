@@ -525,7 +525,7 @@ impl SuiTransfer {
             return Err(bad("unknown TransactionData version"));
         }
         if r.uleb()? != 0 {
-            return Err(bad("system transaction or of unknown type"));
+            return Err(bad("system transaction or unknown type"));
         }
         let n = r.len(SUI_MAX_TOKEN_COINS + 2)?;
         let mut inputs = Vec::with_capacity(n);

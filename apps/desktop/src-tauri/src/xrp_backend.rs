@@ -312,7 +312,7 @@ pub async fn submit(ctx: &XrpCtx<'_>, blob: &str, hash: &str) -> AppResult<Strin
     let got = r["tx_json"]["hash"].as_str().unwrap_or("");
     if !got.eq_ignore_ascii_case(hash) {
         return Err(bad(format!(
-            "the server answered an unexpected hash ({})",
+            "the server returned an unexpected hash ({})",
             got.chars().take(80).collect::<String>()
         )));
     }

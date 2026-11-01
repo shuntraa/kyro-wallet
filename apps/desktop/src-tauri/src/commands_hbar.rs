@@ -300,7 +300,7 @@ pub(crate) fn describe_hbar(
 pub(crate) fn describe_hbar_extra(lang: Lang, s: &HbarTxSummary) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des éléments inhabituels dans ce transfert :\n",
-        "Kyro found unusual elements in this transfer:\n",
+        "Kyro found unusual details in this transfer:\n",
     ));
     for w in &s.warnings {
         out += match w {
@@ -526,7 +526,7 @@ async fn token_context(
     }
     if ours.frozen {
         return Err(AppError::InvalidInput(format!(
-            "your {s} balance is frozen by the issuer: sending is impossible"
+            "your {s} balance is frozen by the issuer: it cannot be sent"
         )));
     }
     let have: u64 = ours.balance.parse().unwrap_or(0);
@@ -971,7 +971,7 @@ pub(crate) async fn broadcast_checked(
             }
             Ok(p) => {
                 return Err(AppError::InvalidInput(format!(
-                    "Hedera transfer refused by node 0.0.{node}: {}",
+                    "Hedera transfer rejected by node 0.0.{node}: {}",
                     wallet_core::hbar_response_name(p.code)
                 )))
             }

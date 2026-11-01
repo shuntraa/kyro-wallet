@@ -165,7 +165,7 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.activeAccount': 'Active account',
   'settings.useThisAccount': 'Use this account',
   'settings.addDevice': 'Add a device',
-  'settings.removeHwTitle': 'Delete this hardware-wallet account?',
+  'settings.removeHwTitle': 'Delete this hardware wallet account?',
   'settings.removeHwBody': 'Kyro forgets this account’s public keys (addresses, displayed history). <b>Your funds do not move</b>: they stay controlled by your device, and you can add the account back by plugging it in again.',
   'settings.removeHwLast': 'It is your only account: Kyro will go back to the welcome screen.',
   'settings.keep': 'Keep',

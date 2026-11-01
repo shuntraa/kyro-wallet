@@ -69,7 +69,7 @@ fn short(bytes: &[u8]) -> String {
 
 async fn rpc_raw(ctx: &DotCtx<'_>, method: &str, params: Value) -> Result<Value, RpcError> {
     let u = url::Url::parse(default_url(ctx.network))
-        .map_err(|_| AppError::Internal("Polkadot URL".into()))?;
+        .map_err(|_| AppError::Internal("invalid Polkadot URL".into()))?;
     let body = json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params }).to_string();
     let (status, bytes) = ctx
         .net_client
@@ -344,7 +344,7 @@ pub async fn submit(ctx: &DotCtx<'_>, extrinsic_hex: &str, hash: &str) -> AppRes
         .to_owned();
     if !got.eq_ignore_ascii_case(hash) {
         return Err(bad(format!(
-            "the node answered an unexpected hash ({})",
+            "the node returned an unexpected hash ({})",
             got.chars().take(80).collect::<String>()
         )));
     }
@@ -441,7 +441,7 @@ pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     let spendable = c.ours.spendable(c.existential_deposit);
     if c.value.saturating_add(c.fee) > spendable {
         return Err(AppError::InvalidInput(format!(
-            "insufficient available balance: {} available (balance − existential deposit − locked part), {} needed with the fees",
+            "insufficient available balance: {} available (balance − existential deposit − locked part), {} needed including the network fee",
             fmt(spendable),
             fmt(c.value.saturating_add(c.fee))
         )));
@@ -476,12 +476,12 @@ pub fn check_asset_transfer(c: &AssetCheck<'_>) -> AppResult<()> {
     let s = c.symbol;
     if !c.details.live {
         return Err(AppError::InvalidInput(format!(
-            "{s} is frozen or being destroyed by its issuer: transfers are impossible"
+            "{s} is frozen or being destroyed by its issuer: it cannot be transferred"
         )));
     }
     if c.mine.frozen || c.mine.blocked {
         return Err(AppError::InvalidInput(format!(
-            "your {s} balance is frozen by the issuer: sending is impossible"
+            "your {s} balance is frozen by the issuer: you cannot send it"
         )));
     }
     if c.dest.blocked {
@@ -493,7 +493,7 @@ pub fn check_asset_transfer(c: &AssetCheck<'_>) -> AppResult<()> {
     let sendable = c.mine.balance.saturating_sub(c.details.min_balance);
     if c.value > sendable {
         return Err(AppError::InvalidInput(format!(
-            "insufficient {s} balance: at most {} (balance {} − {} that stay on the account)",
+            "insufficient {s} balance: at most {} (balance {} − {} that must stay on the account)",
             tok(sendable),
             tok(c.mine.balance),
             tok(c.details.min_balance)
@@ -508,7 +508,7 @@ pub fn check_asset_transfer(c: &AssetCheck<'_>) -> AppResult<()> {
     let spendable = c.ours.spendable(c.existential_deposit);
     if !c.ours.exists() || c.fee > spendable {
         return Err(AppError::InvalidInput(format!(
-            "DOT is needed for the fees: {} available, ≈ {} needed",
+            "DOT is needed for the network fee: {} available, ≈ {} needed",
             dot(spendable),
             dot(c.fee)
         )));
@@ -577,10 +577,13 @@ mod tests {
             "frozen or being destroyed",
         );
         // DOT for the fee.
-        err(check(&me, &h(1), 1, &acc(100_000_000, 0), &det), "fees");
+        err(
+            check(&me, &h(1), 1, &acc(100_000_000, 0), &det),
+            "network fee",
+        );
         err(
             check(&me, &h(1), 1, &DotAccountInfo::default(), &det),
-            "fees",
+            "network fee",
         );
     }
 

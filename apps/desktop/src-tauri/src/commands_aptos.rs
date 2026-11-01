@@ -189,7 +189,7 @@ pub(crate) fn describe_aptos(
 pub(crate) fn describe_aptos_extra(lang: Lang, s: &AptosTxSummary) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des éléments inhabituels dans ce transfert :\n",
-        "Kyro found unusual elements in this transfer:\n",
+        "Kyro found unusual details in this transfer:\n",
     ));
     for w in &s.warnings {
         out += match w {
@@ -343,9 +343,9 @@ pub(crate) async fn build(
         aptos_backend::simulate(c, wallet_core::aptos_simulation_bytes(&raw, pubkey)?).await?;
     if !ok {
         return Err(AppError::InvalidInput(format!(
-            "the transfer simulation fails: {vm_status}{}",
+            "transfer simulation failed: {vm_status}{}",
             if vm_status.contains("INSUFFICIENT_BALANCE") || vm_status.contains("MAX_GAS_UNITS") {
-                " (insufficient balance for the amount and the fees)"
+                " (insufficient balance for the amount and the network fee)"
             } else {
                 ""
             }
@@ -435,9 +435,9 @@ pub(crate) async fn build_token(
         aptos_backend::simulate(c, wallet_core::aptos_simulation_bytes(&raw, pubkey)?).await?;
     if !ok {
         return Err(AppError::InvalidInput(format!(
-            "the transfer simulation fails: {vm_status}{}",
+            "transfer simulation failed: {vm_status}{}",
             if vm_status.contains("MAX_GAS_UNITS") || vm_status.contains("INSUFFICIENT_BALANCE") {
-                " (not enough APT for the fees)"
+                " (not enough APT for the network fee)"
             } else {
                 ""
             }
@@ -522,7 +522,7 @@ pub(crate) async fn prepare_sign(
         > ledger.timestamp_secs + aptos_backend::EXPIRATION_SECS + 60
     {
         return Err(AppError::InvalidInput(
-            "expiration too far away: Kyro does not sign a transfer valid for more than 10 minutes"
+            "expiration too far in the future: Kyro does not sign a transfer valid for more than 10 minutes"
                 .into(),
         ));
     }
@@ -549,7 +549,7 @@ pub(crate) async fn prepare_sign(
         aptos_backend::simulate(c, wallet_core::aptos_simulation_bytes(raw, pubkey)?).await?;
     if !ok {
         return Err(AppError::InvalidInput(format!(
-            "the transfer simulation fails: {vm_status}"
+            "transfer simulation failed: {vm_status}"
         )));
     }
     let recipient_new = match &summary.token {
