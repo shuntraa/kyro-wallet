@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Hedera (HBAR CryptoTransfer) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -29,6 +29,7 @@ mod cardano;
 mod display;
 mod error;
 mod evm;
+mod hedera;
 mod keys;
 mod ledger_cal;
 mod mnemonic;
@@ -77,6 +78,13 @@ pub use evm::{
     evm_checksum_address, evm_decode, evm_high_fee_threshold_wei, evm_hw_finalize, evm_path,
     evm_sign_tx, evm_signing_payload, evm_tx_fields, evm_xpub_from_node, EvmTxFields, EvmTxKind,
     EvmTxRequest, EvmTxSummary, EvmWarning, EVM_KNOWN_CHAINS,
+};
+pub use hedera::{
+    hbar_check_memo, hbar_checksum, hbar_decode_precheck, hbar_decode_tx, hbar_evm_address,
+    hbar_evm_address_of_pubkey, hbar_parse_account_id, hbar_parse_recipient, hbar_path,
+    hbar_public_key, hbar_response_name, hbar_sign, hbar_verify_signed, HbarRecipient,
+    HbarSignedTransfer, HbarTransfer, HbarTxSummary, HbarWarning, HBAR_HIGH_FEE_TINYBARS,
+    HBAR_MAX_MEMO_BYTES, HBAR_MAX_NODES, HBAR_MAX_VALID_DURATION, HBAR_TINYBARS,
 };
 pub use ledger_cal::{
     ledger_erc20_lookup, ledger_erc20_payload, ledger_erc20_verify, LedgerErc20Descriptor,
