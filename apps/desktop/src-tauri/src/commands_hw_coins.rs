@@ -526,6 +526,8 @@ mod tests {
                 pubkey: hex::encode(pk),
                 path: wallet_core::stellar_path(0),
             }),
+            cardano: None,
+            zec: None,
         };
         acc.validate().unwrap();
         let (t, expected) =

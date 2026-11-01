@@ -71,7 +71,7 @@ ledger_bitcoin_client = { version = "=0.7.0", default-features = false }
 # Trezor's official Rust crate (trezor-firmware repo): protobuf messages and wire framing.
 # Its own USB enumeration/transport is not used (infinite read timeout, panics on libusb
 # errors); Kyro drives rusb with bounded timeouts and cancellation.
-trezor-client = { version = "=0.1.6", default-features = false, features = ["bitcoin", "ethereum", "solana", "stellar"] }
+trezor-client = { version = "=0.1.6", default-features = false, features = ["bitcoin", "ethereum", "solana", "stellar", "cardano"] }
 protobuf = { version = "=3.7.2" }
 rusb = { version = "=0.9.4" }
 # Force the vendored, statically linked libusb (else macOS links Homebrew's dylib if present).

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-sign-ada-tx"
+description = "Enables the hw_sign_ada_tx command without any pre-configured scope."
+commands.allow = ["hw_sign_ada_tx"]
+
+[[permission]]
+identifier = "deny-hw-sign-ada-tx"
+description = "Denies the hw_sign_ada_tx command without any pre-configured scope."
+commands.deny = ["hw_sign_ada_tx"]

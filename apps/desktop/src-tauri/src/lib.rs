@@ -16,6 +16,7 @@ mod commands_cosmos;
 mod commands_dot;
 mod commands_hbar;
 mod commands_hw;
+mod commands_hw_ada_zec;
 mod commands_hw_coins;
 mod commands_kaspa;
 mod commands_near;
@@ -368,6 +369,11 @@ pub fn run() {
             commands_hw_coins::hw_stellar_build_tx,
             commands_hw_coins::hw_sign_stellar_tx,
             commands_hw_coins::hw_stellar_broadcast,
+            commands_hw_ada_zec::hw_ada_build_tx,
+            commands_hw_ada_zec::hw_sign_ada_tx,
+            commands_hw_ada_zec::hw_ada_broadcast,
+            commands_hw_ada_zec::hw_zec_send_preview,
+            commands_hw_ada_zec::hw_sign_zec_tx,
         ])
         .run(context)
         .expect("error while running Kyro");

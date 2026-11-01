@@ -259,6 +259,11 @@ const COMMANDS: &[&str] = &[
     "hw_stellar_build_tx",
     "hw_sign_stellar_tx",
     "hw_stellar_broadcast",
+    "hw_ada_build_tx",
+    "hw_sign_ada_tx",
+    "hw_ada_broadcast",
+    "hw_zec_send_preview",
+    "hw_sign_zec_tx",
 ];
 
 fn main() {

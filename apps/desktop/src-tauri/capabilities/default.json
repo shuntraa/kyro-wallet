@@ -260,6 +260,11 @@
     "allow-hw-tron-broadcast",
     "allow-hw-stellar-build-tx",
     "allow-hw-sign-stellar-tx",
-    "allow-hw-stellar-broadcast"
+    "allow-hw-stellar-broadcast",
+    "allow-hw-ada-build-tx",
+    "allow-hw-sign-ada-tx",
+    "allow-hw-ada-broadcast",
+    "allow-hw-zec-send-preview",
+    "allow-hw-sign-zec-tx"
   ]
 }
