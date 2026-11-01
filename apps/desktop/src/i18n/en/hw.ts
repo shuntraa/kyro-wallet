@@ -101,7 +101,7 @@ export const hw: Record<keyof typeof fr, string> = {
   'hw.setup.unlock': '<b>Unlock your device</b> with your PIN, then click “Refresh”.',
   'hw.setup.passphraseOne': 'Passphrase enabled: on the Trezor One it would be typed on the computer, which Kyro refuses (no secret may go through the interface). Disable it on the device to use it with Kyro.',
   'hw.setup.chains': 'Chains',
-  'hw.setup.notYet': 'On hardware wallets: Bitcoin, EVM chains and Solana. The other chains remain available in the Kyro vault.',
+  'hw.setup.notYet': 'On hardware wallets: Bitcoin, EVM chains, Solana, Litecoin, Dogecoin, Bitcoin Cash, Dash and Stellar (Ledger and Trezor), XRP and TRON (Ledger only). The other chains remain available in the Kyro vault.',
   'hw.setup.accountNumber': 'Account no.',
   'hw.setup.nameOptional': 'Name (optional)',
   'hw.setup.accountRange': 'Account number: 0 to {max}.',

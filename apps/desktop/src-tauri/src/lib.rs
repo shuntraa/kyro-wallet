@@ -16,6 +16,7 @@ mod commands_cosmos;
 mod commands_dot;
 mod commands_hbar;
 mod commands_hw;
+mod commands_hw_coins;
 mod commands_kaspa;
 mod commands_near;
 mod commands_servers;
@@ -363,6 +364,16 @@ pub fn run() {
             commands_hw::hw_thp_pairings,
             commands_hw::hw_thp_forget,
             updater::update_status,
+            commands_hw_coins::hw_sign_utxo_psbt,
+            commands_hw_coins::hw_xrp_build_tx,
+            commands_hw_coins::hw_sign_xrp_tx,
+            commands_hw_coins::hw_xrp_broadcast,
+            commands_hw_coins::hw_tron_build_tx,
+            commands_hw_coins::hw_sign_tron_tx,
+            commands_hw_coins::hw_tron_broadcast,
+            commands_hw_coins::hw_stellar_build_tx,
+            commands_hw_coins::hw_sign_stellar_tx,
+            commands_hw_coins::hw_stellar_broadcast,
         ])
         .build(context)
         .expect("error while running Kyro")

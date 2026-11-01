@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::btc::BtcAccount;
 use crate::error::{Error, Result};
 use crate::network::{BtcKind, Network};
+use crate::utxo::UtxoAccount;
 
 /// Current watch-only store format version.
 pub const WATCH_ONLY_VERSION: u8 = 1;
@@ -80,6 +81,38 @@ pub struct WatchOnlyAccount {
     /// Solana address.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sol: Option<WatchSol>,
+    /// Litecoin / Dogecoin / Bitcoin Cash / Dash account xpubs (at most one per coin, same
+    /// master fingerprint as the Bitcoin accounts).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub utxo: Vec<UtxoAccount>,
+    /// XRP key `m/44'/144'/account'/0/0` (secp256k1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xrp: Option<WatchKey>,
+    /// TRON key `m/44'/195'/account'/0/0` (Ledger only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tron: Option<WatchKey>,
+    /// Stellar key `m/44'/148'/account'` (ed25519).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stellar: Option<WatchKey>,
+}
+
+/// An account-based chain key of a watch-only account (XRP, TRON, Stellar).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WatchKey {
+    /// Address, as the chain writes it.
+    pub address: String,
+    /// Public key, hex (XRP: 33-byte compressed, TRON: 65-byte uncompressed, Stellar: 32 bytes).
+    pub pubkey: String,
+    /// Derivation path (the chain's standard path for the account number).
+    pub path: String,
+}
+
+impl WatchKey {
+    /// Public key bytes.
+    pub fn pubkey_bytes(&self) -> Result<Vec<u8>> {
+        hex::decode(&self.pubkey).map_err(|_| Error::input("invalid public key"))
+    }
 }
 
 /// EVM node path stored in [`WatchEvm::path`].
@@ -118,7 +151,14 @@ impl WatchOnlyAccount {
                 "account number must be at most {MAX_HW_ACCOUNT}"
             )));
         }
-        if self.btc.is_empty() && self.evm.is_none() && self.sol.is_none() {
+        if self.btc.is_empty()
+            && self.evm.is_none()
+            && self.sol.is_none()
+            && self.utxo.is_empty()
+            && self.xrp.is_none()
+            && self.tron.is_none()
+            && self.stellar.is_none()
+        {
             return Err(Error::input("watch-only account without any chain"));
         }
         if self.btc.len() > 2 || (self.btc.len() == 2 && self.btc[0].kind == self.btc[1].kind) {
@@ -160,12 +200,70 @@ impl WatchOnlyAccount {
                 .map_err(|_| Error::input("invalid Solana address"))?;
             crate::sol::sol_address_of_pubkey(&bytes)?;
         }
+        self.validate_other_chains()
+    }
+
+    /// UTXO xpubs (standard path, network, account number, one per coin, one fingerprint) and
+    /// the XRP / TRON / Stellar keys (address = the key's, standard path).
+    fn validate_other_chains(&self) -> Result<()> {
+        for (i, u) in self.utxo.iter().enumerate() {
+            if self.utxo[..i].iter().any(|v| v.coin == u.coin) {
+                return Err(Error::input("at most one account per UTXO chain"));
+            }
+            crate::utxo::check_watch_account(self.network, u, self.account)?;
+            if self.fingerprint() != Some(u.fingerprint.as_str()) {
+                return Err(Error::input("UTXO account of another device (fingerprint)"));
+            }
+        }
+        let key = |k: &WatchKey, n: usize| -> Result<Vec<u8>> {
+            let b = k.pubkey_bytes()?;
+            if b.len() != n {
+                return Err(Error::input("public key of unexpected length"));
+            }
+            Ok(b)
+        };
+        if let Some(k) = &self.xrp {
+            let b = key(k, 33)?;
+            if k.path != crate::xrp::xrp_path(self.account)
+                || crate::xrp::xrp_address_of_pubkey(&b)? != k.address
+            {
+                return Err(Error::input("XRP key does not match its address or path"));
+            }
+        }
+        if let Some(k) = &self.tron {
+            let b = key(k, 65)?;
+            if k.path != crate::tron::tron_path(self.account)
+                || crate::tron::tron_address_of_pubkey(&b)? != k.address
+            {
+                return Err(Error::input("TRON key does not match its address or path"));
+            }
+        }
+        if let Some(k) = &self.stellar {
+            let b: [u8; 32] = key(k, 32)?
+                .try_into()
+                .map_err(|_| Error::input("invalid Stellar key"))?;
+            if k.path != crate::stellar::stellar_path(self.account)
+                || crate::stellar::stellar_address_from_key(&b) != k.address
+            {
+                return Err(Error::input(
+                    "Stellar key does not match its address or path",
+                ));
+            }
+        }
         Ok(())
     }
 
-    /// Master fingerprint (from the Bitcoin accounts), if any.
+    /// The Litecoin / Dogecoin / Bitcoin Cash / Dash account of `coin`, if stored.
+    pub fn utxo_account(&self, coin: crate::utxo::UtxoCoin) -> Option<&UtxoAccount> {
+        self.utxo.iter().find(|u| u.coin == coin)
+    }
+
+    /// Master fingerprint (from the Bitcoin accounts, else the UTXO ones), if any.
     pub fn fingerprint(&self) -> Option<&str> {
-        self.btc.first().map(|b| b.fingerprint.as_str())
+        self.btc
+            .first()
+            .map(|b| b.fingerprint.as_str())
+            .or_else(|| self.utxo.first().map(|u| u.fingerprint.as_str()))
     }
 
     /// The Bitcoin account of `kind`, if stored.

@@ -35,13 +35,13 @@ use crate::state::AppState;
 
 const T_LIST: Duration = Duration::from_secs(10);
 /// Reading keys may include the Trezor PIN typed on the device.
-const T_READ: Duration = Duration::from_secs(90);
+pub(crate) const T_READ: Duration = Duration::from_secs(90);
 /// Anything the user must confirm on the device.
-const T_CONFIRM: Duration = Duration::from_secs(180);
+pub(crate) const T_CONFIRM: Duration = Duration::from_secs(180);
 /// Receive + change addresses scanned to flag change in the native summary.
 const OWN_ADDRESS_GAP: u32 = 20;
 
-fn prompt_fn(app: &AppHandle, id: &str) -> PromptFn {
+pub(crate) fn prompt_fn(app: &AppHandle, id: &str) -> PromptFn {
     let app = app.clone();
     let id = id.to_string();
     Arc::new(move |kind| {
@@ -51,7 +51,7 @@ fn prompt_fn(app: &AppHandle, id: &str) -> PromptFn {
 
 /// With a vault on this computer, hardware-wallet operations need the unlocked session
 /// (same lock screen as the rest of the app). Hardware-only users have no vault.
-fn guard(state: &AppState) -> AppResult<()> {
+pub(crate) fn guard(state: &AppState) -> AppResult<()> {
     if state.vault_exists() && !state.is_unlocked() {
         return Err(AppError::Locked);
     }
@@ -77,20 +77,20 @@ fn not_yet(chain: Chain) -> AppError {
     }
 }
 
-fn load_account(state: &AppState, account_id: &str) -> AppResult<WatchOnlyAccount> {
+pub(crate) fn load_account(state: &AppState, account_id: &str) -> AppResult<WatchOnlyAccount> {
     let s = store::load(&state.hw_accounts_path, state.network)?;
     store::find(&s, account_id)
 }
 
 /// The stored account must be for the brand of device `id`.
-fn check_brand(info: &DeviceInfo, acc: &WatchOnlyAccount) -> AppResult<()> {
+pub(crate) fn check_brand(info: &DeviceInfo, acc: &WatchOnlyAccount) -> AppResult<()> {
     if info.kind != acc.device {
         return Err(AppError::HwWrongDevice);
     }
     Ok(())
 }
 
-fn device_line(lang: Lang, info: &DeviceInfo) -> String {
+pub(crate) fn device_line(lang: Lang, info: &DeviceInfo) -> String {
     let brand = match info.kind {
         HwDeviceKind::Ledger => "Ledger",
         HwDeviceKind::Trezor => "Trezor",
@@ -254,6 +254,12 @@ pub struct HwXpub {
     evm: Option<HwEvmKey>,
     #[serde(skip_serializing_if = "Option::is_none")]
     sol: Option<HwSolKey>,
+    /// Litecoin / Dogecoin / Bitcoin Cash / Dash account (`hw/chains.rs`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    utxo: Option<wallet_core::UtxoAccount>,
+    /// XRP / TRON / Stellar key (`hw/chains.rs`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    key: Option<wallet_core::WatchKey>,
 }
 
 async fn read_keys(
@@ -277,6 +283,8 @@ async fn read_keys(
                 btc: Vec::new(),
                 evm: None,
                 sol: None,
+                utxo: None,
+                key: None,
             };
             match chain {
                 Chain::Btc => {
@@ -306,6 +314,11 @@ async fn read_keys(
                         address: dev.sol_address(ctl, account, false)?,
                         path: wallet_core::sol_path(account),
                     });
+                }
+                other if hw::chains::handles(other) => {
+                    let k = hw::chains::read_keys(dev, ctl, net, other, account)?;
+                    out.utxo = k.utxo;
+                    out.key = k.key;
                 }
                 other => return Err(HwError::unsupported(other.label())),
             }
@@ -376,6 +389,10 @@ pub async fn hw_account_add(
             btc: Vec::new(),
             evm: None,
             sol: None,
+            utxo: Vec::new(),
+            xrp: None,
+            tron: None,
+            stellar: None,
         },
     };
     if let Some(l) = label {
@@ -403,6 +420,21 @@ pub async fn hw_account_add(
             address: sol.address,
             path: sol.path,
         });
+    }
+    if let Some(u) = keys.utxo {
+        if acc.fingerprint().is_some_and(|fp| fp != u.fingerprint) {
+            return Err(AppError::HwWrongDevice);
+        }
+        acc.utxo.retain(|x| x.coin != u.coin);
+        acc.utxo.push(u);
+    }
+    if let Some(k) = keys.key {
+        match chain {
+            Chain::Xrp => acc.xrp = Some(k),
+            Chain::Tron => acc.tron = Some(k),
+            Chain::Stellar => acc.stellar = Some(k),
+            _ => {}
+        }
     }
     acc.validate()?;
     s.accounts.retain(|a| a.id != acc.id);
@@ -465,6 +497,8 @@ pub enum Target {
         index: u32,
     },
     Sol,
+    /// LTC / DOGE / BCH / DASH / XRP / TRON / Stellar (`hw/chains.rs`).
+    Other(hw::chains::Target),
 }
 
 /// Resolves `path` against the stored account; returns the target and Kyro's own address.
@@ -525,6 +559,11 @@ pub fn resolve_target(
             }
             Ok((Target::Sol, sol.address.clone()))
         }
+        other if hw::chains::handles(other) => {
+            let (t, expected) =
+                hw::chains::resolve_target(acc, other, path).map_err(AppError::InvalidInput)?;
+            Ok((Target::Other(t), expected))
+        }
         other => Err(not_yet(other)),
     }
 }
@@ -563,6 +602,7 @@ fn same_device(
             Some(s) => dev.sol_address(ctl, acc.account, false)? == s.address,
             None => false,
         },
+        other if hw::chains::handles(other) => hw::chains::same_device(dev, ctl, acc, other)?,
         _ => false,
     })
 }
@@ -594,6 +634,7 @@ pub async fn hw_verify_address(
         _ => Vec::new(),
     };
     let acc2 = acc.clone();
+    let expected2 = expected.clone();
     let shown = state
         .hw
         .run(&id, T_CONFIRM, prompt_fn(&app, &id), move |dev, ctl| {
@@ -609,6 +650,7 @@ pub async fn hw_verify_address(
                 } => dev.btc_display_address(ctl, net, account, *change, *index)?,
                 Target::Evm { index } => dev.evm_address(ctl, *index, true)?,
                 Target::Sol => dev.sol_address(ctl, acc2.account, true)?,
+                Target::Other(t) => hw::chains::display_address(dev, ctl, &acc2, t, &expected2)?,
             }))
         })
         .await?
@@ -942,6 +984,16 @@ mod tests {
                 address: wallet_core::sol_address(&seed, 0).unwrap(),
                 path: wallet_core::sol_path(0),
             }),
+            utxo: vec![wallet_core::utxo_account(
+                &seed,
+                net,
+                wallet_core::UtxoCoin::BitcoinCash,
+                0,
+            )
+            .unwrap()],
+            xrp: None,
+            tron: None,
+            stellar: None,
         }
     }
 
@@ -1030,7 +1082,7 @@ mod tests {
             );
         }
         assert!(matches!(
-            resolve_target(&acc, Chain::Xrp, &[0]),
+            resolve_target(&acc, Chain::Cardano, &[0]),
             Err(AppError::HwUnsupported { .. })
         ));
     }

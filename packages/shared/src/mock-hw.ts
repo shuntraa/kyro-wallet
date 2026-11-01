@@ -159,8 +159,9 @@ const LEDGER_CLEAR: Array<[number, string]> = [
   [11155111, '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238'],
 ];
 
-const PHASE4: HwChain[] = ['ltc', 'doge', 'tron', 'cardano', 'xrp', 'xmr'];
-const LABEL: Record<HwChain, string> = { btc: 'Bitcoin', evm: 'EVM', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', xmr: 'Monero' };
+// Demo mode simulates the Bitcoin / EVM / Solana keys only; the other chains (real devices: see hw/chains.rs) answer HW_UNSUPPORTED here.
+const PHASE4: HwChain[] = ['ltc', 'doge', 'bch', 'dash', 'tron', 'cardano', 'xrp', 'stellar', 'zec', 'xmr'];
+const LABEL: Record<HwChain, string> = { btc: 'Bitcoin', evm: 'EVM', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', stellar: 'Stellar', zec: 'Zcash', xmr: 'Monero' };
 
 export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   const seed = hwSeed();

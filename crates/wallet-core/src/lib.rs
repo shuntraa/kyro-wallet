@@ -35,6 +35,7 @@ mod display;
 mod error;
 mod evm;
 mod hedera;
+mod hw_chains;
 mod kaspa;
 mod keys;
 mod ledger_cal;
@@ -122,6 +123,7 @@ pub use hedera::{
     HbarSignedTransfer, HbarTransfer, HbarTxSummary, HbarWarning, HBAR_HIGH_FEE_TINYBARS,
     HBAR_MAX_MEMO_BYTES, HBAR_MAX_NODES, HBAR_MAX_VALID_DURATION, HBAR_TINYBARS,
 };
+pub use hw_chains::{stellar_hw_assemble, stellar_signature_base, xrp_hw_assemble};
 pub use kaspa::{
     kaspa_account_path, kaspa_address, kaspa_address_decode, kaspa_address_encode,
     kaspa_address_of_script, kaspa_address_of_xonly, kaspa_build_send, kaspa_compute_mass,
@@ -214,16 +216,17 @@ pub use tron::{
 pub use utxo::{
     bch_forkid_sighash, utxo_account, utxo_address, utxo_address_from_xpub, utxo_address_of_script,
     utxo_checkpoint, utxo_decode_raw_tx, utxo_dust_threshold, utxo_genesis_hash, utxo_header_hash,
-    utxo_is_special_tx, utxo_psbt_summary, utxo_script_pubkey, utxo_sign_psbt, UtxoAccount,
-    UtxoCoin, UtxoOutput, UtxoOutputKind, UtxoTxSummary, UtxoWarning,
-    BCH_DASH_DUST_RELAY_FEE_PER_KB, BCH_DASH_MIN_RELAY_FEE_PER_KB, BCH_SIGHASH_ALL_FORKID,
-    DOGE_HARD_DUST, DOGE_MIN_RELAY_FEE_PER_KB, DOGE_RECOMMENDED_FEE_PER_KB, DOGE_SOFT_DUST,
+    utxo_hw_finalize, utxo_hw_plan, utxo_is_special_tx, utxo_psbt_summary, utxo_script_pubkey,
+    utxo_sign_psbt, UtxoAccount, UtxoCoin, UtxoHwChange, UtxoHwInput, UtxoHwPlan, UtxoOutput,
+    UtxoOutputKind, UtxoTxSummary, UtxoWarning, BCH_DASH_DUST_RELAY_FEE_PER_KB,
+    BCH_DASH_MIN_RELAY_FEE_PER_KB, BCH_SIGHASH_ALL_FORKID, DOGE_HARD_DUST,
+    DOGE_MIN_RELAY_FEE_PER_KB, DOGE_RECOMMENDED_FEE_PER_KB, DOGE_SOFT_DUST,
     LTC_DUST_RELAY_FEE_PER_KVB, LTC_MIN_RELAY_FEE_PER_KVB,
 };
 pub use vault::{open, seal, KdfParams, VaultFile, VAULT_VERSION};
 pub use watch::{
-    sol_path, HwDeviceKind, WatchEvm, WatchOnlyAccount, WatchOnlyStore, WatchSol, EVM_NODE_PATH,
-    MAX_HW_ACCOUNT, WATCH_ONLY_VERSION,
+    sol_path, HwDeviceKind, WatchEvm, WatchKey, WatchOnlyAccount, WatchOnlyStore, WatchSol,
+    EVM_NODE_PATH, MAX_HW_ACCOUNT, WATCH_ONLY_VERSION,
 };
 
 /// Re-exported so callers can build [`Seed`] values and wipe their own buffers

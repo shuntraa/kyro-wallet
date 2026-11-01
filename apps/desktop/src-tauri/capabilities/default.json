@@ -252,6 +252,16 @@
     "allow-hw-sign-sol-tx",
     "allow-hw-thp-pairing-code",
     "allow-hw-thp-pairings",
-    "allow-hw-thp-forget"
+    "allow-hw-thp-forget",
+    "allow-hw-sign-utxo-psbt",
+    "allow-hw-xrp-build-tx",
+    "allow-hw-sign-xrp-tx",
+    "allow-hw-xrp-broadcast",
+    "allow-hw-tron-build-tx",
+    "allow-hw-sign-tron-tx",
+    "allow-hw-tron-broadcast",
+    "allow-hw-stellar-build-tx",
+    "allow-hw-sign-stellar-tx",
+    "allow-hw-stellar-broadcast"
   ]
 }

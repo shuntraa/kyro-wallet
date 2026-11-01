@@ -137,16 +137,16 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const solCustom = servers?.solana[solanaCluster(network)]?.url;
   const sol = accounts.sol ? new SolanaAdapter({ chain: solChain(network), address: accounts.sol.address, ...(solCustom ? { rpcUrl: solCustom } : {}), ...f, ...h, ...a }) : null;
   // Litecoin / Dogecoin / Bitcoin Cash / Dash: Rust picks their servers (servers.litecoin…).
-  const { ltc, doge, bch, dash } = createUtxoAdapters(accounts, {}, hw ? 0 : account);
+  const { ltc, doge, bch, dash } = createUtxoAdapters(accounts, {}, hw ? 0 : account, hw);
   // TRON: Rust picks the server (servers.tron, default TronGrid).
   const tronTokens = TRC20_TOKENS[network].map((t) => ({ contract: t.contract, symbol: t.symbol, name: t.name, decimals: t.decimals }));
-  const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address, tokens: tronTokens, ...a }) : null;
+  const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address, tokens: tronTokens, ...h, ...a }) : null;
   // XRP Ledger: Rust picks the server (servers.xrp, default rippled).
-  const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...a }) : null;
+  const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...h, ...a }) : null;
   // Cardano: Rust picks the server (servers.cardano, default Koios).
   const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...a }) : null;
   // Stellar: SDF's Horizon, reached by Rust only.
-  const stellar = accounts.stellar ? new StellarAdapter({ chain: stellarChain(network), address: accounts.stellar.address, ...a }) : null;
+  const stellar = accounts.stellar ? new StellarAdapter({ chain: stellarChain(network), address: accounts.stellar.address, ...h, ...a }) : null;
   // NEAR: Rust picks the server (default FastNEAR).
   const near = accounts.near ? new NearAdapter({ chain: nearChain(network), address: accounts.near.address, ...a }) : null;
   // Sui: Rust picks the server (Sui Foundation GraphQL RPC).
@@ -228,17 +228,18 @@ export interface UtxoAdapterSet {
 
 /**
  * Litecoin, Dogecoin, Bitcoin Cash and Dash adapters from the `ltc` / `doge` / `bch` / `dash`
- * entries of `accounts_get` (vault only: hardware wallets answer `HW_UNSUPPORTED` for these
- * chains). Also part of `createAdapters`; Rust picks their servers, so nothing here depends on
- * the settings.
+ * entries of `accounts_get`, or of a hardware-wallet account (`hw`: signing through
+ * `hw_sign_utxo_psbt`). Also part of `createAdapters`; Rust picks their servers, so nothing here
+ * depends on the settings.
  */
 export function createUtxoAdapters(
   accounts: { network: Network; ltc?: UtxoAccountView; doge?: UtxoAccountView; bch?: UtxoAccountView; dash?: UtxoAccountView },
   backends: { ltc?: UtxoBackend; doge?: UtxoBackend; bch?: UtxoBackend; dash?: UtxoBackend } = {},
   vaultAccount = 0,
+  hw?: HwSigner,
 ): UtxoAdapterSet {
   const n = accounts.network;
-  const a = vaultAccount ? { vaultAccount } : {};
+  const a = { ...(vaultAccount ? { vaultAccount } : {}), ...(hw ? { hw } : {}) };
   return {
     ltc: accounts.ltc ? new LitecoinAdapter({ chain: ltcChain(n), account: accounts.ltc, ...(backends.ltc ? { backend: backends.ltc } : {}), ...a }) : null,
     doge: accounts.doge ? new DogecoinAdapter({ chain: dogeChain(n), account: accounts.doge, ...(backends.doge ? { backend: backends.doge } : {}), ...a }) : null,

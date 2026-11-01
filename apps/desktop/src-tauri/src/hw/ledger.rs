@@ -40,7 +40,7 @@ pub fn app_for(chain: Chain, net: Network) -> Option<(&'static str, &'static str
         )),
         Chain::Evm => Some(("Ethereum", "1.9.0")),
         Chain::Sol => Some(("Solana", "1.3.1")),
-        _ => None,
+        other => super::chains::ledger_app(other, net),
     }
 }
 
@@ -52,6 +52,7 @@ fn phase4_app(chain: Chain) -> Option<&'static str> {
         Chain::Tron => Some("Tron"),
         Chain::Cardano => Some("Cardano ADA"),
         Chain::Xrp => Some("XRP"),
+        Chain::Zec => Some("Zcash"),
         _ => None,
     }
 }
@@ -323,7 +324,10 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
         let mut chains = Vec::new();
         for chain in Chain::ALL {
             let Some((expected, min)) = app_for(chain, net) else {
-                chains.push(ChainStatus::not_yet(chain, phase4_app(chain)));
+                chains.push(
+                    super::chains::ledger_unavailable(chain, net)
+                        .unwrap_or_else(|| ChainStatus::not_yet(chain, phase4_app(chain))),
+                );
                 continue;
             };
             let mut st = ChainStatus::new(chain, ChainState::OpenApp);
@@ -543,6 +547,10 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
         wallet_core::sol_address_of_pubkey(&data).map_err(|e| HwError::bad(e.to_string()))
     }
 
+    fn raw(&mut self) -> super::RawDevice<'_> {
+        super::RawDevice::Ledger(&self.link)
+    }
+
     fn sol_sign(&mut self, ctl: &Ctl, account: u32, message: &[u8]) -> HwResult<Vec<u8>> {
         self.ensure_app(ctl, Chain::Sol, Network::Mainnet)?;
         let apdus = apdu::sol_sign(&sol_path(account), message)?;
@@ -757,10 +765,15 @@ mod tests {
         let mut ledger = Ledger::with_link(Replay::new(&["=> b001000000", "<= 5515"]));
         let st = ledger.status(&ctl(), Network::Testnet).unwrap();
         assert!(st.locked);
-        assert!(st.chains[..3].iter().all(|c| c.state == ChainState::Unlock));
-        assert!(st.chains[3..]
-            .iter()
-            .all(|c| c.state == ChainState::Unsupported));
+        for c in &st.chains {
+            let want = match c.chain {
+                // No Ledger testnet app for these coins; Cardano / Zcash: not offered.
+                Chain::Ltc | Chain::Doge | Chain::Bch | Chain::Dash => ChainState::Unsupported,
+                Chain::Cardano | Chain::Zec => ChainState::Unsupported,
+                _ => ChainState::Unlock,
+            };
+            assert_eq!(c.state, want, "{:?}", c.chain);
+        }
     }
 
     #[test]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-stellar-broadcast"
+description = "Enables the hw_stellar_broadcast command without any pre-configured scope."
+commands.allow = ["hw_stellar_broadcast"]
+
+[[permission]]
+identifier = "deny-hw-stellar-broadcast"
+description = "Denies the hw_stellar_broadcast command without any pre-configured scope."
+commands.deny = ["hw_stellar_broadcast"]

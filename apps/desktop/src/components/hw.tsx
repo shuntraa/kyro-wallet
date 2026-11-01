@@ -4,7 +4,7 @@
 // the full-screen stop for HW_ADDRESS_MISMATCH, the Trezor One blind PIN matrix (global), and
 // the add-device flow (Welcome and Settings › Devices). Contract: docs/IPC.md §2.3.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { call, errorData, ipcErrorIn, isDemoMode, MAX_HW_ACCOUNT, type HwChain, type HwChainStatus, type HwDeviceInfo, type HwDeviceKind, type HwDeviceStatus, type HwImplementedChain, type WatchOnlyAccount } from '@kyro/shared';
 import { hwFingerprint, hwToAccounts } from '@kyro/chains';
 import { BRAND, hwErrorView, hwPromptStore, pinPosition, useHwPrompts, withDevice, PIN_MATRIX_KEYPAD } from '../state/hw';
@@ -308,10 +308,12 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
 
 // ---------------------------------------------------------------- add a device
 
-const CHAIN_NAME: Record<Exclude<HwChain, 'evm'>, string> = { btc: 'Bitcoin', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', xmr: 'Monero' };
+const CHAIN_NAME: Record<Exclude<HwChain, 'evm'>, string> = { btc: 'Bitcoin', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', stellar: 'Stellar', zec: 'Zcash', xmr: 'Monero' };
 /** Chain name shown in the add-device flow (« Ethereum et EVM » is translated). */
 const chainLabel = (c: HwChain): string => (c === 'evm' ? t('hw.chain.evm') : CHAIN_NAME[c]);
-const IMPLEMENTED: HwImplementedChain[] = ['btc', 'evm', 'sol'];
+const IMPLEMENTED: HwImplementedChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar'];
+/** Pre-selected when the device supports them (the others are one click away: each needs its own Ledger app). */
+const DEFAULT_CHAINS: readonly HwImplementedChain[] = ['btc', 'evm', 'sol'];
 
 type Step = 'detect' | 'device' | 'reading' | 'done';
 
@@ -363,7 +365,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
       const st = await withDevice(d.id, () => call('hw_open', { id: d.id }));
       setStatus(st);
       // Default selection: every implemented chain the device supports.
-      setChains(new Set(IMPLEMENTED.filter((c) => st.chains.find((x) => x.chain === c)?.state !== 'unsupported')));
+      setChains(new Set(DEFAULT_CHAINS.filter((c) => st.chains.find((x) => x.chain === c)?.state !== 'unsupported')));
     } catch (e) {
       setError(e);
     } finally {
@@ -478,7 +480,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
                 </Notice>
               )}
               <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label={t('hw.setup.chains')}>
-                {IMPLEMENTED.map((c) => (
+                {IMPLEMENTED.filter((c) => status.chains.some((x) => x.chain === c)).map((c) => (
                   <ChainRow key={c} st={status.chains.find((x) => x.chain === c)} chain={c} checked={chains.has(c)} onToggle={(on) => setChains((s) => { const n = new Set(s); if (on) n.add(c); else n.delete(c); return n; })} />
                 ))}
               </ul>
@@ -550,7 +552,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
 function ChainRow({ st, chain, checked, onToggle }: { st: HwChainStatus | undefined; chain: HwImplementedChain; checked: boolean; onToggle: (on: boolean) => void }) {
   const { t } = useT();
   const unsupported = st?.state === 'unsupported';
-  const reason = (st?.reason ?? t('hw.chainRow.unsupported')).replace(/^(Bitcoin|EVM|Ethereum|Solana)\s*:\s*/, '');
+  const reason = (st?.reason ?? t('hw.chainRow.unsupported')).replace(/^(Bitcoin Cash|Bitcoin|EVM|Ethereum|Solana|Litecoin|Dogecoin|Dash|XRP|TRON|Tron|Stellar)\s*:\s*/, '');
   const hint =
     !st
       ? null
@@ -620,6 +622,16 @@ export function HwAccountSummary({ acc, action }: { acc: WatchOnlyAccount; actio
             <dd className="m-0 font-mono text-text2">{shortAddress(view.sol.address)}</dd>
           </>
         )}
+        {view &&
+          (['ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar'] as const).map((c) => {
+            const a = view[c];
+            return a ? (
+              <Fragment key={c}>
+                <dt className="text-mute">{CHAIN_NAME[c]}</dt>
+                <dd className="m-0 font-mono text-text2">{shortAddress(a.address)}</dd>
+              </Fragment>
+            ) : null;
+          })}
       </dl>
       <span className="text-[12px] leading-[1.5] text-faint">{t('hw.summary.note')}</span>
       {action && <div>{action}</div>}

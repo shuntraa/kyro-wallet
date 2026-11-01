@@ -8,9 +8,14 @@ import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { publicKeyToAddress } from 'viem/accounts';
 import { bytesToHex } from 'viem';
-import type { BtcKind, EvmTxSummary, HwDeviceKind, Network, WatchOnlyAccount } from '@kyro/shared';
+import type { BtcKind, EvmTxSummary, HwChain, HwDeviceKind, Network, WatchOnlyAccount } from '@kyro/shared';
 import { derivePubkey, parseXpub } from './bitcoin/xpub';
-import type { AnyAdapter, AnyUnsigned } from './types';
+import { unsignedFamilyOf, type AnyAdapter, type AnyUnsigned } from './types';
+import { utxoAddressFromXpub, type UtxoCoinSpec } from './utxo/utxo';
+import { LITECOIN_SPEC } from './litecoin/adapter';
+import { DOGECOIN_SPEC } from './dogecoin/adapter';
+import { BITCOINCASH_SPEC } from './bitcoincash/adapter';
+import { DASH_SPEC } from './dash/adapter';
 
 import { l10n } from '@kyro/shared';
 bitcoin.initEccLib(ecc);
@@ -25,21 +30,21 @@ export interface WalletAccounts {
   /** `path`: derivation path of the chosen vault account (Rust `accounts_get`), for display. */
   evm?: { address: string; path?: string };
   sol?: { address: string; path?: string };
-  /** Vault only: hardware wallets cannot sign Litecoin / Dogecoin yet (HW_UNSUPPORTED). */
+  /** Vault, or a hardware wallet (Ledger mainnet / Trezor): `hw_sign_utxo_psbt`. */
   ltc?: { address: string; xpub: string; fingerprint: string; path: string };
   doge?: { address: string; xpub: string; fingerprint: string; path: string };
-  /** Vault only, like Litecoin / Dogecoin. */
+  /** Vault or hardware wallet, like Litecoin / Dogecoin. */
   bch?: { address: string; xpub: string; fingerprint: string; path: string };
   dash?: { address: string; xpub: string; fingerprint: string; path: string };
-  /** Vault only, like Litecoin / Dogecoin: TRON on a hardware wallet is HW_UNSUPPORTED. */
+  /** Vault, or a Ledger (`hw_sign_tron_tx`; not in Trezor's firmware). */
   tron?: { address: string; path?: string };
-  /** Vault only: XRP on a hardware wallet is HW_UNSUPPORTED. */
+  /** Vault, or a Ledger (`hw_sign_xrp_tx`). */
   xrp?: { address: string; path?: string };
   /** Vault only: Hedera on a hardware wallet is HW_UNSUPPORTED. EVM address of the ECDSA key. */
   hbar?: { address: string; path?: string };
   /** Vault only: Cardano on a hardware wallet is HW_UNSUPPORTED. */
   cardano?: { address: string; path?: string };
-  /** Vault only: Stellar on a hardware wallet is HW_UNSUPPORTED. */
+  /** Vault, or a Ledger / Trezor (`hw_sign_stellar_tx`). */
   stellar?: { address: string; path?: string };
   /** Vault only: NEAR implicit account (hardware wallets: not supported). */
   near?: { address: string; path?: string };
@@ -104,8 +109,28 @@ export function hwToAccounts(acc: WatchOnlyAccount): WalletAccounts {
   }
   if (acc.evm) out.evm = { address: evmAddressFromNode(acc.evm.xpub, acc.account) };
   if (acc.sol) out.sol = { address: acc.sol.address };
+  for (const u of acc.utxo ?? []) {
+    const prefix = UTXO_PREFIX[u.coin];
+    const address = utxoAddressFromXpub(UTXO_SPECS[prefix], acc.network, u.xpub);
+    out[prefix] = { address, xpub: u.xpub, fingerprint: u.fingerprint, path: u.path };
+  }
+  if (acc.xrp) out.xrp = { address: acc.xrp.address, path: acc.xrp.path };
+  if (acc.tron) out.tron = { address: acc.tron.address, path: acc.tron.path };
+  if (acc.stellar) out.stellar = { address: acc.stellar.address, path: acc.stellar.path };
   return out;
 }
+
+const UTXO_PREFIX = { litecoin: 'ltc', dogecoin: 'doge', bitcoincash: 'bch', dash: 'dash' } as const;
+const UTXO_SPECS: Record<'ltc' | 'doge' | 'bch' | 'dash', UtxoCoinSpec> = { ltc: LITECOIN_SPEC, doge: DOGECOIN_SPEC, bch: BITCOINCASH_SPEC, dash: DASH_SPEC };
+
+/**
+ * Chains a hardware-wallet brand can hold in Kyro (mirror of `hw/chains.rs`; the device and
+ * its firmware / apps decide in the end, see `hw_open` → `chains`).
+ */
+export const HW_CHAINS: Record<HwDeviceKind, readonly HwChain[]> = {
+  ledger: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar'],
+  trezor: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'stellar'],
+};
 
 /** Master fingerprint of the account (Bitcoin keys), for display. */
 export function hwFingerprint(acc: WatchOnlyAccount): string | null {
@@ -120,6 +145,13 @@ export const hwPaths = {
   },
   evm: (acc: WatchOnlyAccount): string => `m/44'/60'/0'/0/${acc.account}`,
   sol: (acc: WatchOnlyAccount): string | null => acc.sol?.path ?? null,
+  /** Litecoin / Dogecoin / Bitcoin Cash / Dash address `change/index` of the stored account. */
+  utxo: (acc: WatchOnlyAccount, coin: 'litecoin' | 'dogecoin' | 'bitcoincash' | 'dash', change: 0 | 1, index: number): string | null => {
+    const u = acc.utxo?.find((x) => x.coin === coin);
+    return u ? `${u.path}/${change}/${index}` : null;
+  },
+  /** XRP / TRON / Stellar key path. */
+  key: (acc: WatchOnlyAccount, chain: 'xrp' | 'tron' | 'stellar'): string | null => acc[chain]?.path ?? null,
 };
 
 /** ERC-20 tokens for which Kyro ships a Ledger-signed descriptor (wallet-core `ledger_cal.rs`). */
@@ -152,7 +184,7 @@ export function evmHwDisplay(device: HwDeviceKind, chainId: number, summary: Pic
 
 /** Sign on the hardware wallet `deviceId` (Rust `hw_sign_*`), then broadcast. */
 export async function signAndBroadcastHw(adapter: AnyAdapter, unsigned: AnyUnsigned, deviceId: string): Promise<string> {
-  if (adapter.family !== unsigned.family) throw new Error(l10n('Famille de transaction incohérente', 'Inconsistent transaction family'));
+  if (unsignedFamilyOf(adapter.family) !== unsigned.family) throw new Error(l10n('Famille de transaction incohérente', 'Inconsistent transaction family'));
   const a = adapter as unknown as { hw: HwSigner | null; signTxHw(u: never, id: string): Promise<never>; broadcast(s: never): Promise<string> };
   if (!a.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
   return a.broadcast(await a.signTxHw(unsigned as never, deviceId));

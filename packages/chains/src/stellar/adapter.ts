@@ -22,6 +22,7 @@ import {
 } from '@kyro/shared';
 import { accountArg } from '../types';
 import type { StellarChain } from '../registry';
+import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 // ---------------------------------------------------------------- Rust contract (§2.11)
@@ -47,6 +48,19 @@ export function rustStellarBackend(account = 0): StellarBackend {
     sign: (envelope, password) => call('stellar_sign_tx', { envelope, password, ...acct }),
     broadcast: (envelope) => call('stellar_broadcast', { envelope, ...acct }),
     txStatus: (hash) => call('stellar_tx_status', { hash }),
+  };
+}
+
+/**
+ * Hardware-wallet account `accountId` (docs/IPC.md §2.3): Rust builds and broadcasts with the
+ * account's stored key; signing is `hw_sign_stellar_tx`.
+ */
+export function hwStellarBackend(accountId: string): StellarBackend {
+  return {
+    ...rustStellarBackend(0),
+    build: (to, amount, memo) => call('hw_stellar_build_tx', { accountId, to, amount, ...(memo ? { memo } : {}) }),
+    sign: () => Promise.reject(new Error(l10n('Compte hardware wallet : signature sur l’appareil', 'Hardware-wallet account: sign on the device'))),
+    broadcast: (envelope) => call('hw_stellar_broadcast', { accountId, envelope }),
   };
 }
 
@@ -160,6 +174,8 @@ export interface StellarAdapterOptions {
   backend?: StellarBackend;
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (signing through `hw_sign_stellar_tx`). */
+  hw?: HwSigner;
 }
 
 const amountOf = (op: StellarOpView): string | null => (op.kind === 'payment' && op.asset.kind === 'native' ? op.amount : op.kind === 'createAccount' ? op.startingBalance : null);
@@ -169,12 +185,14 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
   readonly chain: StellarChain;
   private readonly address: string;
   private readonly backend: StellarBackend;
+  readonly hw: HwSigner | null;
 
   constructor(opts: StellarAdapterOptions) {
     if (!isStellarAddress(opts.address)) throw new Error('Adresse Stellar invalide');
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustStellarBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? hwStellarBackend(opts.hw.accountId) : rustStellarBackend(opts.account ?? 0));
   }
 
   getAddress(): string {
@@ -256,6 +274,14 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
   /** Rust: live checks, native dialog (memo framed, reserve), signature. */
   async signTx(unsigned: StellarUnsigned, password: string): Promise<StellarSigned> {
     const res = await this.backend.sign(unsigned.envelope, password);
+    if (!/^[0-9a-f]{64}$/i.test(res.hash)) throw new Error('Hash Stellar inattendu');
+    return { family: 'xlm', envelope: res.envelope, hash: res.hash, summary: res.summary };
+  }
+
+  /** Hardware wallet: Rust's checks and dialog, the device, then Rust verifies the signature. */
+  async signTxHw(unsigned: StellarUnsigned, deviceId: string): Promise<StellarSigned> {
+    if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
+    const res = await call('hw_sign_stellar_tx', { id: deviceId, accountId: this.hw.accountId, envelope: unsigned.envelope });
     if (!/^[0-9a-f]{64}$/i.test(res.hash)) throw new Error('Hash Stellar inattendu');
     return { family: 'xlm', envelope: res.envelope, hash: res.hash, summary: res.summary };
   }

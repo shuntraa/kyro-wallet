@@ -9,6 +9,7 @@
 // - this adapter only checks that what Rust built is what was asked (recipient, amount, token).
 
 import { accountArg } from '../types';
+import type { HwSigner } from '../hw';
 import * as bitcoin from 'bitcoinjs-lib';
 import {
   call,
@@ -45,6 +46,19 @@ export function rustTronBackend(account = 0): TronBackend {
     build: (to, amount, token) => call('tron_build_tx', { to, amount, ...(token ? { token } : {}), ...acct }),
     sign: (raw, password) => call('tron_sign_tx', { raw, password, ...acct }),
     broadcast: (raw, signature) => call('tron_broadcast', { raw, signature, ...acct }),
+  };
+}
+
+/**
+ * Hardware-wallet account `accountId` (docs/IPC.md §2.3, Ledger only): Rust builds and
+ * broadcasts with the account's stored address; signing is `hw_sign_tron_tx`.
+ */
+export function hwTronBackend(accountId: string): TronBackend {
+  return {
+    ...rustTronBackend(0),
+    build: (to, amount, token) => call('hw_tron_build_tx', { accountId, to, amount, ...(token ? { token } : {}) }),
+    sign: () => Promise.reject(new Error(l10n('Compte hardware wallet : signature sur l’appareil', 'Hardware-wallet account: sign on the device'))),
+    broadcast: (raw, signature) => call('hw_tron_broadcast', { accountId, raw, signature }),
   };
 }
 
@@ -147,6 +161,8 @@ export interface TronAdapterOptions {
   tokens?: Trc20Token[];
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (signing through `hw_sign_tron_tx`, Ledger only). */
+  hw?: HwSigner;
 }
 
 export class TronAdapter implements ChainAdapter<'tron'> {
@@ -155,12 +171,14 @@ export class TronAdapter implements ChainAdapter<'tron'> {
   readonly tokens: Trc20Token[];
   private readonly address: string;
   private readonly backend: TronBackend;
+  readonly hw: HwSigner | null;
 
   constructor(opts: TronAdapterOptions) {
     if (!isTronAddress(opts.address)) throw new Error(l10n('Adresse TRON invalide', 'Invalid TRON address'));
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustTronBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? hwTronBackend(opts.hw.accountId) : rustTronBackend(opts.account ?? 0));
     this.tokens = opts.tokens ?? [TRON_USDT[opts.chain.network]];
   }
 
@@ -265,6 +283,14 @@ export class TronAdapter implements ChainAdapter<'tron'> {
   async signTx(unsigned: TronUnsigned, password: string): Promise<TronSigned> {
     // No hint: Rust names a TRC-20 from its own table only (unknown: raw units, reinforced dialog).
     const res = await this.backend.sign(unsigned.raw, password);
+    if (res.txid !== unsigned.txid || !/^[0-9a-f]{130}$/.test(res.signature)) throw new Error('Signature TRON inattendue');
+    return { family: 'tron', raw: unsigned.raw, signature: res.signature, txid: res.txid, summary: res.summary, estimate: res.estimate };
+  }
+
+  /** Hardware wallet (Ledger): Rust's decoding and dialog, the device, then Rust checks the signature recovers to our address. */
+  async signTxHw(unsigned: TronUnsigned, deviceId: string): Promise<TronSigned> {
+    if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
+    const res = await call('hw_sign_tron_tx', { id: deviceId, accountId: this.hw.accountId, raw: unsigned.raw });
     if (res.txid !== unsigned.txid || !/^[0-9a-f]{130}$/.test(res.signature)) throw new Error('Signature TRON inattendue');
     return { family: 'tron', raw: unsigned.raw, signature: res.signature, txid: res.txid, summary: res.summary, estimate: res.estimate };
   }
