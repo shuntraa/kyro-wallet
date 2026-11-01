@@ -21,7 +21,7 @@
 // Rust shows an unknown instruction (the tracker), hence the reinforced 2nd window: the UI lists
 // what Kyro checked above.
 
-import type { SolTxSummary } from '@kyro/shared';
+import { l10n, type SolTxSummary } from '@kyro/shared';
 import { getBase64Encoder, getCompiledTransactionMessageDecoder, getTransactionDecoder } from '@solana/kit';
 import { associatedTokenAccount } from './providers/jupiter';
 import { WSOL_MINT } from './providers/common';
@@ -67,7 +67,7 @@ export interface LifiSolanaCheck {
 }
 
 const fail = (why: string): never => {
-  throw new SwapCheckError(`LI.FI : ${why} — transaction refusée, rien n’a été signé.`);
+  throw new SwapCheckError(l10n(`LI.FI : ${why} — transaction refusée, rien n’a été signé.`, `LI.FI: ${why} — transaction refused, nothing was signed.`));
 };
 
 /** Rent of a token account (165 bytes), paid by us when the transaction creates one. */
@@ -102,21 +102,21 @@ export function solWireCostLamports(wire: string): bigint | null {
 /** Checks a Solana-source LI.FI (NEAR Intents) transaction. Throws `SwapCheckError`. */
 export async function verifyLifiSolanaSource(i: LifiSolanaCheckInput): Promise<LifiSolanaCheck> {
   const s = i.summary;
-  if (s.feePayer !== i.taker) fail('le payeur des frais n’est pas ton adresse');
-  if (s.signers.length !== 1 || s.signers[0] !== i.taker || s.ourSignerIndex !== 0) fail('un autre signataire est demandé');
+  if (s.feePayer !== i.taker) fail(l10n('le payeur des frais n’est pas ton adresse', 'the fee payer is not your address'));
+  if (s.signers.length !== 1 || s.signers[0] !== i.taker || s.ourSignerIndex !== 0) fail(l10n('un autre signataire est demandé', 'another signer is requested'));
   const bad = s.warnings.find((w) => w.kind !== 'unknownInstruction' && w.kind !== 'priorityFeeEstimated');
-  if (bad) fail(`avertissement du coffre (${bad.kind})`);
+  if (bad) fail(l10n(`avertissement du coffre (${bad.kind})`, `vault warning (${bad.kind})`));
 
   let raw: Array<{ program: string; data: Uint8Array }>;
   try {
     const tx = getTransactionDecoder().decode(getBase64Encoder().encode(i.wire));
     const msg = getCompiledTransactionMessageDecoder().decode(tx.messageBytes);
-    if (!('instructions' in msg)) return fail('version de transaction non prise en charge');
+    if (!('instructions' in msg)) return fail(l10n('version de transaction non prise en charge', 'transaction version not supported'));
     raw = msg.instructions.map((x: { programAddressIndex: number; data?: ArrayLike<number> }) => ({ program: String(msg.staticAccounts[x.programAddressIndex] ?? ''), data: new Uint8Array(x.data ?? []) }));
   } catch {
-    return fail('transaction illisible');
+    return fail(l10n('transaction illisible', 'unreadable transaction'));
   }
-  if (raw.length !== s.instructions.length) fail('le décodage du coffre ne correspond pas à la transaction');
+  if (raw.length !== s.instructions.length) fail(l10n('le décodage du coffre ne correspond pas à la transaction', 'the vault decoding does not match the transaction'));
 
   const native = i.sellMint === WSOL_MINT || i.sellMint === SYSTEM;
   const ours = native ? [] : [await associatedTokenAccount(i.taker, i.sellMint), await associatedTokenAccount(i.taker, i.sellMint, TOKEN_2022)];
@@ -136,15 +136,15 @@ export async function verifyLifiSolanaSource(i: LifiSolanaCheckInput): Promise<L
     switch (ins.type) {
       case 'computeUnitLimit':
       case 'computeUnitPrice':
-        if (r.program !== COMPUTE_BUDGET) fail(`${at} : programme inattendu`);
+        if (r.program !== COMPUTE_BUDGET) fail(l10n(`${at} : programme inattendu`, `${at}: unexpected program`));
         continue;
       case 'ataCreate':
-        if (native || r.program !== ATA || ins.payer !== i.taker || ins.mint !== i.sellMint) fail(`${at} : création d’un compte de token inattendue`);
-        if (created.size >= 3) fail(`${at} : trop de comptes créés`);
+        if (native || r.program !== ATA || ins.payer !== i.taker || ins.mint !== i.sellMint) fail(l10n(`${at} : création d’un compte de token inattendue`, `${at}: unexpected token account creation`));
+        if (created.size >= 3) fail(l10n(`${at} : trop de comptes créés`, `${at}: too many accounts created`));
         created.set(ins.account, ins.owner);
         continue;
       case 'systemTransfer': {
-        if (!native || r.program !== SYSTEM || ins.from !== i.taker) fail(`${at} : transfert de SOL inattendu`);
+        if (!native || r.program !== SYSTEM || ins.from !== i.taker) fail(l10n(`${at} : transfert de SOL inattendu`, `${at}: unexpected SOL transfer`));
         const v = BigInt(ins.lamports);
         if (kyroDest.includes(ins.to)) kyro += v;
         else if (lifiDest.includes(ins.to)) lifi += v;
@@ -152,41 +152,41 @@ export async function verifyLifiSolanaSource(i: LifiSolanaCheckInput): Promise<L
         continue;
       }
       case 'tokenTransfer': {
-        if (native || (r.program !== TOKEN && r.program !== TOKEN_2022)) fail(`${at} : transfert de token inattendu`);
-        if (!ins.checked || ins.mint !== i.sellMint || ins.authority !== i.taker || !ours.includes(ins.source) || ins.multisigSigners.length > 0) fail(`${at} : transfert qui ne part pas de ton compte du token vendu`);
+        if (native || (r.program !== TOKEN && r.program !== TOKEN_2022)) fail(l10n(`${at} : transfert de token inattendu`, `${at}: unexpected token transfer`));
+        if (!ins.checked || ins.mint !== i.sellMint || ins.authority !== i.taker || !ours.includes(ins.source) || ins.multisigSigners.length > 0) fail(l10n(`${at} : transfert qui ne part pas de ton compte du token vendu`, `${at}: transfer that does not leave from your account of the sold token`));
         const v = BigInt(ins.amount);
         if (kyroDest.includes(ins.destination)) kyro += v;
         else if (lifiDest.includes(ins.destination)) lifi += v;
         else {
           // A deposit token account must be the associated account of an owner created here.
           const owner = created.get(ins.destination);
-          if (!owner || !(await ataOf(owner)).includes(ins.destination)) fail(`${at} : versement vers un compte de token inconnu`);
+          if (!owner || !(await ataOf(owner)).includes(ins.destination)) fail(l10n(`${at} : versement vers un compte de token inconnu`, `${at}: payment to an unknown token account`));
           deposits.set(owner as string, (deposits.get(owner as string) ?? 0n) + v);
         }
         continue;
       }
       case 'unknown': {
-        if (r.program !== ins.programId) fail(`${at} : programme incohérent`);
-        if (ins.programId !== LIFI_SOLANA_TRACKER) fail(`${at} : programme non autorisé (${ins.programId})`);
+        if (r.program !== ins.programId) fail(l10n(`${at} : programme incohérent`, `${at}: inconsistent program`));
+        if (ins.programId !== LIFI_SOLANA_TRACKER) fail(l10n(`${at} : programme non autorisé (${ins.programId})`, `${at}: program not allowed (${ins.programId})`));
         // TrackV1: Borsh enum tag 0 + [u8; 8] transaction id; reads Clock + its epoch PDA.
-        if (tracked || r.data.length !== 9 || r.data[0] !== 0 || ins.accountKeys.length !== 2 || ins.accountKeys[0] !== CLOCK || ins.accountKeys.includes(i.taker)) fail(`${at} : instruction de suivi LI.FI inattendue`);
+        if (tracked || r.data.length !== 9 || r.data[0] !== 0 || ins.accountKeys.length !== 2 || ins.accountKeys[0] !== CLOCK || ins.accountKeys.includes(i.taker)) fail(l10n(`${at} : instruction de suivi LI.FI inattendue`, `${at}: unexpected LI.FI tracking instruction`));
         tracked = true;
         continue;
       }
       default:
-        fail(`${at} : ${ins.type} non autorisé dans ce swap`);
+        fail(l10n(`${at} : ${ins.type} non autorisé dans ce swap`, `${at}: ${ins.type} not allowed in this swap`));
     }
   }
-  if (deposits.size !== 1) fail(deposits.size === 0 ? 'aucun dépôt vers le pont' : 'plusieurs destinataires inconnus');
+  if (deposits.size !== 1) fail(deposits.size === 0 ? l10n('aucun dépôt vers le pont', 'no deposit to the bridge') : l10n('plusieurs destinataires inconnus', 'several unknown recipients'));
   const [depositAddress, amountIn] = [...deposits.entries()][0] as [string, bigint];
-  if (depositAddress === i.taker) fail('dépôt vers ta propre adresse');
+  if (depositAddress === i.taker) fail(l10n('dépôt vers ta propre adresse', 'deposit to your own address'));
   if (i.fee) {
-    if (kyro <= 0n) fail('frais Kyro absents de la transaction');
-    if (kyro > maxKyroFee(i.sellAmount, i.fee.bps)) fail('frais Kyro supérieurs au taux configuré');
-  } else if (kyro !== 0n) fail('frais inattendus');
-  if (lifi > (i.sellAmount * LIFI_OWN_FEE_CAP_BPS + 9_999n) / 10_000n) fail('frais LI.FI plus élevés que prévu');
-  if (kyro + lifi + amountIn !== i.sellAmount) fail('montants envoyés différents du montant vendu');
+    if (kyro <= 0n) fail(l10n('frais Kyro absents de la transaction', 'Kyro fees missing from the transaction'));
+    if (kyro > maxKyroFee(i.sellAmount, i.fee.bps)) fail(l10n('frais Kyro supérieurs au taux configuré', 'Kyro fees above the configured rate'));
+  } else if (kyro !== 0n) fail(l10n('frais inattendus', 'unexpected fees'));
+  if (lifi > (i.sellAmount * LIFI_OWN_FEE_CAP_BPS + 9_999n) / 10_000n) fail(l10n('frais LI.FI plus élevés que prévu', 'LI.FI fees higher than expected'));
+  if (kyro + lifi + amountIn !== i.sellAmount) fail(l10n('montants envoyés différents du montant vendu', 'amounts sent differ from the sold amount'));
   const priority = BigInt(s.priorityFeeLamports ?? '0');
-  if (priority > JUPITER_MAX_PRIORITY_LAMPORTS) fail(`frais de priorité trop élevés (${priority} lamports)`);
+  if (priority > JUPITER_MAX_PRIORITY_LAMPORTS) fail(l10n(`frais de priorité trop élevés (${priority} lamports)`, `priority fee too high (${priority} lamports)`));
   return { depositAddress, amountIn, kyroFee: kyro, lifiFee: lifi, priorityFeeLamports: priority };
 }

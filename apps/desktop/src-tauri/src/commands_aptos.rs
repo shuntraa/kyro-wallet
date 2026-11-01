@@ -12,8 +12,9 @@ use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::aptos_backend::{self, AptosAccountInfo, AptosCtx};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::state::AppState;
 
 pub(crate) fn ctx(state: &AppState) -> AptosCtx<'_> {
@@ -35,8 +36,8 @@ fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
     })
 }
 
-fn apt(octas: &str) -> String {
-    format!("{} APT", format_units(octas, 8))
+fn apt(lang: Lang, octas: &str) -> String {
+    format!("{} APT", format_units_in(lang, octas, 8))
 }
 
 /// Live context shown in the dialog.
@@ -54,55 +55,97 @@ pub struct AptosContext {
 }
 
 /// Body of the native dialog.
-pub(crate) fn describe_aptos(s: &AptosTxSummary, c: &AptosContext, net: Network) -> String {
-    let mut out = format!(
-        "Envoi Aptos{}\n\nÀ : {}\n(adresse sans somme de contrôle : compare-la en entier)\n\nMontant : {} ({} octas)\n",
-        if net == Network::Testnet {
-            " (testnet)"
-        } else {
-            ""
-        },
-        s.recipient,
-        apt(&s.amount),
-        s.amount
-    );
+pub(crate) fn describe_aptos(
+    lang: Lang,
+    s: &AptosTxSummary,
+    c: &AptosContext,
+    net: Network,
+) -> String {
+    let ap = |v: &str| apt(lang, v);
+    let testnet = if net == Network::Testnet {
+        " (testnet)"
+    } else {
+        ""
+    };
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Envoi Aptos{testnet}\n\nÀ : {}\n(adresse sans somme de contrôle : compare-la en entier)\n\nMontant : {} ({} octas)\n",
+            s.recipient,
+            ap(&s.amount),
+            s.amount
+        ),
+        Lang::En => format!(
+            "Aptos send{testnet}\n\nTo: {}\n(address without checksum: compare all of it)\n\nAmount: {} ({} octas)\n",
+            s.recipient,
+            ap(&s.amount),
+            s.amount
+        ),
+    };
     if c.recipient_new {
-        out += "Ce compte n'a encore rien reçu : le transfert le crée (un peu plus de gaz).\n";
+        out += lang.pick(
+            "Ce compte n'a encore rien reçu : le transfert le crée (un peu plus de gaz).\n",
+            "This account has not received anything yet: the transfer creates it (a bit more gas).\n",
+        );
     }
     let gas_used: u64 = c.gas_used.parse().unwrap_or(0);
     let price: u64 = s.gas_unit_price.parse().unwrap_or(0);
-    out += &format!(
-        "\nFrais estimés : {} ({} unités de gaz simulées × {} octas)\nFrais maximum : {} ({} unités × {} octas)\nSolde : {}\n",
-        apt(&gas_used.saturating_mul(price).to_string()),
-        c.gas_used,
-        s.gas_unit_price,
-        apt(&s.max_fee),
-        s.max_gas_amount,
-        s.gas_unit_price,
-        apt(&c.account.balance)
-    );
-    let left = s.expiration_timestamp_secs.saturating_sub(c.ledger_time);
-    out += &format!(
-        "\nFonction : {}\nSéquence {} · chaîne {} · expire dans {} min\n",
-        s.function,
-        s.sequence_number,
-        s.chain_id,
-        left.div_ceil(60)
-    );
+    let estimated = ap(&gas_used.saturating_mul(price).to_string());
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais estimés : {estimated} ({} unités de gaz simulées × {} octas)\nFrais maximum : {} ({} unités × {} octas)\nSolde : {}\n",
+            c.gas_used,
+            s.gas_unit_price,
+            ap(&s.max_fee),
+            s.max_gas_amount,
+            s.gas_unit_price,
+            ap(&c.account.balance)
+        ),
+        Lang::En => format!(
+            "\nEstimated fee: {estimated} ({} simulated gas units × {} octas)\nMaximum fee: {} ({} units × {} octas)\nBalance: {}\n",
+            c.gas_used,
+            s.gas_unit_price,
+            ap(&s.max_fee),
+            s.max_gas_amount,
+            s.gas_unit_price,
+            ap(&c.account.balance)
+        ),
+    };
+    let left = s
+        .expiration_timestamp_secs
+        .saturating_sub(c.ledger_time)
+        .div_ceil(60);
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFonction : {}\nSéquence {} · chaîne {} · expire dans {left} min\n",
+            s.function, s.sequence_number, s.chain_id
+        ),
+        Lang::En => format!(
+            "\nFunction: {}\nSequence {} · chain {} · expires in {left} min\n",
+            s.function, s.sequence_number, s.chain_id
+        ),
+    };
     out
 }
 
-pub(crate) fn describe_aptos_extra(s: &AptosTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans ce transfert :\n");
+pub(crate) fn describe_aptos_extra(lang: Lang, s: &AptosTxSummary) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des éléments inhabituels dans ce transfert :\n",
+        "Kyro found unusual elements in this transfer:\n",
+    ));
     for w in &s.warnings {
         out += match w {
-            AptosWarning::SelfTransfer => "• le destinataire est ton propre compte\n",
-            AptosWarning::HighFee => {
-                "• frais maximum supérieurs à 0,02 APT (d'habitude environ 0,0001 APT)\n"
-            }
+            AptosWarning::SelfTransfer => lang.pick(
+                "• le destinataire est ton propre compte\n",
+                "• the recipient is your own account\n",
+            ),
+            AptosWarning::HighFee => lang.pick(
+                "• frais maximum supérieurs à 0,02 APT (d'habitude environ 0,0001 APT)\n",
+                "• maximum fee above 0.02 APT (usually about 0.0001 APT)\n",
+            ),
         };
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -324,12 +367,13 @@ pub async fn aptos_sign_tx(
     let c = ctx(&state);
     let (summary, context) = prepare_sign(&c, &me, &pk, &raw).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer l'envoi d'APT",
+        lang.pick("Confirmer l'envoi d'APT", "Confirm the APT send"),
         signer.body(
-            crate::i18n::current(),
-            &describe_aptos(&summary, &context, state.network),
+            lang,
+            &describe_aptos(lang, &summary, &context, state.network),
         ),
     )
     .await?;
@@ -337,8 +381,11 @@ pub async fn aptos_sign_tx(
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : transfert à vérifier",
-            describe_aptos_extra(&summary),
+            lang.pick(
+                "Attention : transfert à vérifier",
+                "Warning: transfer to check",
+            ),
+            describe_aptos_extra(lang, &summary),
         )
         .await?;
     }
@@ -454,7 +501,7 @@ mod tests {
 
     #[test]
     fn dialog_shows_what_rust_decoded() {
-        let d = describe_aptos(&summary(), &context(false), Network::Testnet);
+        let d = describe_aptos(Lang::Fr, &summary(), &context(false), Network::Testnet);
         for needle in [
             "Envoi Aptos (testnet)",
             "À : 0x726c91e2852985c2a8c16f32a64c131bd2a0fd1e0aa985a1e0e6002407506ac0\n",
@@ -468,13 +515,17 @@ mod tests {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
         assert!(!d.contains("le transfert le crée"));
-        let d = describe_aptos(&summary(), &context(true), Network::Mainnet);
+        let d = describe_aptos(Lang::Fr, &summary(), &context(true), Network::Mainnet);
         assert!(d.starts_with("Envoi Aptos\n"));
         assert!(d.contains("le transfert le crée"));
         let mut s = summary();
         s.warnings = vec![AptosWarning::SelfTransfer, AptosWarning::HighFee];
-        let x = describe_aptos_extra(&s);
+        let x = describe_aptos_extra(Lang::Fr, &s);
         assert!(x.contains("ton propre compte") && x.contains("0,02 APT"));
+        let en = describe_aptos(Lang::En, &summary(), &context(false), Network::Testnet);
+        assert!(
+            en.contains("Amount: 1.5 APT (150000000 octas)") && en.contains("expires in 10 min")
+        );
     }
 }
 
@@ -622,7 +673,7 @@ mod live {
             assert_eq!(summary, built.summary);
             eprintln!(
                 "--- dialog ---\n{}---",
-                describe_aptos(&summary, &context, Network::Testnet)
+                describe_aptos(Lang::Fr, &summary, &context, Network::Testnet)
             );
             let (signed, hash, again) = wallet_core::aptos_sign(&seed, 0, &built.raw).unwrap();
             assert_eq!(again, summary, "identical summary");

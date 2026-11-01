@@ -5,6 +5,7 @@
 // everything on every command.
 
 import type { NearAccountKind } from './ipc';
+import { l10n } from './i18n';
 
 /** 1 NEAR = 10^24 yoctoNEAR. */
 export const NEAR_DECIMALS = 24;
@@ -28,12 +29,12 @@ export function isNearAccountId(id: string): boolean {
   return nearAccountKind(id) !== null;
 }
 
-/** French explanation of why `id` is not a NEAR account id (`null` when it is one). */
+/** Explanation (current language) of why `id` is not a NEAR account id (`null` when it is one). */
 export function nearAccountIdProblem(input: string): string | null {
   const id = input.trim();
-  if (id === '') return 'Saisis un compte NEAR (nom.near, nom.testnet ou 64 caractères hexadécimaux)';
-  if (id !== id.toLowerCase()) return 'Un compte NEAR s’écrit en minuscules (les majuscules désignent un autre compte, ou aucun)';
-  if (id.length < 2 || id.length > 64) return 'Un compte NEAR fait de 2 à 64 caractères';
-  if (nearAccountKind(id) === null) return 'Compte NEAR invalide : minuscules, chiffres et - _ . seulement, jamais au début, à la fin ni deux à la suite';
+  if (id === '') return l10n('Saisis un compte NEAR (nom.near, nom.testnet ou 64 caractères hexadécimaux)', 'Enter a NEAR account (name.near, name.testnet or 64 hexadecimal characters)');
+  if (id !== id.toLowerCase()) return l10n('Un compte NEAR s’écrit en minuscules (les majuscules désignent un autre compte, ou aucun)', 'A NEAR account is written in lowercase (uppercase means another account, or none)');
+  if (id.length < 2 || id.length > 64) return l10n('Un compte NEAR fait de 2 à 64 caractères', 'A NEAR account is 2 to 64 characters long');
+  if (nearAccountKind(id) === null) return l10n('Compte NEAR invalide : minuscules, chiffres et - _ . seulement, jamais au début, à la fin ni deux à la suite', 'Invalid NEAR account: lowercase letters, digits and - _ . only, never at the start, at the end or two in a row');
   return null;
 }

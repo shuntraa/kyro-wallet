@@ -11,6 +11,7 @@
 import { accountArg } from '../types';
 import {
   call,
+  l10n,
   type HbarAccountInfo,
   type HbarBuilt,
   type HbarContext,
@@ -86,8 +87,8 @@ const MEMO_FORBIDDEN = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u20
 
 /** Rust's rule (`hbar_check_memo`): ≤ 100 bytes UTF-8, no control / invisible / bidi character. `null` = valid. */
 export function hbarMemoError(memo: string): string | null {
-  if (new TextEncoder().encode(memo).length > MEMO_BYTES) return 'Mémo trop long : 100 octets au plus.';
-  if (MEMO_FORBIDDEN.test(memo)) return 'Mémo : caractères de contrôle, invisibles ou de direction refusés.';
+  if (new TextEncoder().encode(memo).length > MEMO_BYTES) return l10n('Mémo trop long : 100 octets au plus.', 'Memo too long: 100 bytes at most.');
+  if (MEMO_FORBIDDEN.test(memo)) return l10n('Mémo : caractères de contrôle, invisibles ou de direction refusés.', 'Memo: control, invisible or direction characters refused.');
   return null;
 }
 
@@ -130,7 +131,7 @@ export class HbarAdapter implements ChainAdapter<'hbar'> {
   private readonly backend: HbarBackend;
 
   constructor(opts: HbarAdapterOptions) {
-    if (!isHbarEvmAddress(opts.address)) throw new Error('Adresse EVM Hedera invalide');
+    if (!isHbarEvmAddress(opts.address)) throw new Error(l10n('Adresse EVM Hedera invalide', 'Invalid Hedera EVM address'));
     this.chain = opts.chain;
     this.address = opts.address;
     this.backend = opts.backend ?? rustHbarBackend(opts.account ?? 0);
@@ -167,29 +168,29 @@ export class HbarAdapter implements ChainAdapter<'hbar'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais fixés par le réseau (≈ 0,0001 $)',
+      hint: l10n('frais fixés par le réseau (≈ 0,0001 $)', 'fee set by the network (≈ $0.0001)'),
       fetchedAt: Date.now(),
     });
   }
 
   /** `ChainAdapter` entry point. `max`: balance minus the max fee Rust sets (built twice). */
   async buildTx(params: BuildParams): Promise<HbarUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif Hedera inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif Hedera inattendu', 'Unexpected Hedera asset'));
     const memo = params.memo !== undefined && params.memo !== '' ? { memo: params.memo } : {};
     if (!params.max) return this.buildTransfer({ to: params.to, amount: params.amount, ...memo });
     const balance = BigInt((await this.backend.account()).balance);
     const first = await this.buildTransfer({ to: params.to, amount: 1n, ...memo });
     const amount = balance - first.maxFee;
-    if (amount <= 0n) throw new Error('Rien à envoyer : ton solde ne couvre pas les frais maximum');
+    if (amount <= 0n) throw new Error(l10n('Rien à envoyer : ton solde ne couvre pas les frais maximum', 'Nothing to send: your balance does not cover the maximum fee'));
     return this.buildTransfer({ to: params.to, amount, ...memo });
   }
 
   /** `amount`: tinybars. Rust re-checks the recipient, the balance and the memo. */
   async buildTransfer(params: { to: string; amount: bigint; memo?: string }): Promise<HbarUnsigned> {
     const to = params.to.trim();
-    if (!isHbarRecipient(to)) throw new Error('Destinataire Hedera invalide (0.0.x ou adresse EVM 0x…)');
-    if (normalizeHbarRecipient(to) === this.address.toLowerCase()) throw new Error('Transfert à soi-même impossible');
-    if (params.amount <= 0n) throw new Error('Montant invalide');
+    if (!isHbarRecipient(to)) throw new Error(l10n('Destinataire Hedera invalide (0.0.x ou adresse EVM 0x…)', 'Invalid Hedera recipient (0.0.x or EVM address 0x…)'));
+    if (normalizeHbarRecipient(to) === this.address.toLowerCase()) throw new Error(l10n('Transfert à soi-même impossible', 'Transfer to yourself not possible'));
+    if (params.amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const memo = params.memo ?? '';
     const memoErr = hbarMemoError(memo);
     if (memoErr) throw new Error(memoErr);
@@ -204,7 +205,7 @@ export class HbarAdapter implements ChainAdapter<'hbar'> {
       built.bodies.length !== s.nodes.length ||
       unusual
     ) {
-      throw new Error('Le transfert construit par Rust ne correspond pas à la demande');
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
     }
     return {
       family: 'hbar',
@@ -222,14 +223,14 @@ export class HbarAdapter implements ChainAdapter<'hbar'> {
   /** Rust: live checks, native dialog (memo framed), signature of every copy. */
   async signTx(unsigned: HbarUnsigned, password: string): Promise<HbarSigned> {
     const res = await this.backend.sign(unsigned.bodies, password);
-    if (res.summary.transactionId !== unsigned.summary.transactionId || res.signed.length !== unsigned.bodies.length) throw new Error('Signature Hedera inattendue');
+    if (res.summary.transactionId !== unsigned.summary.transactionId || res.signed.length !== unsigned.bodies.length) throw new Error(l10n('Signature Hedera inattendue', 'Unexpected Hedera signature'));
     return { family: 'hbar', signed: res.signed, summary: res.summary };
   }
 
   /** Rust re-verifies the signatures, then submits node after node. Returns the transaction ID. */
   async broadcast(signed: HbarSigned): Promise<string> {
     const id = await this.backend.broadcast(signed.signed);
-    if (id !== signed.summary.transactionId) throw new Error('Identifiant de transaction inattendu');
+    if (id !== signed.summary.transactionId) throw new Error(l10n('Identifiant de transaction inattendu', 'Unexpected transaction ID'));
     return id;
   }
 
@@ -256,7 +257,7 @@ export class HbarAdapter implements ChainAdapter<'hbar'> {
       if (t.outgoing && BigInt(t.fee) > 0n) item.fee = BigInt(t.fee);
       if (t.counterparty) item.counterparty = t.counterparty;
       if (t.time) item.time = t.time;
-      if (t.memo) item.note = `Mémo : « ${t.memo} »`;
+      if (t.memo) item.note = l10n(`Mémo : « ${t.memo} »`, `Memo: “${t.memo}”`);
       if (BigInt(t.amount) === 0n) item.suspect = 'zero';
       else if (t.outgoing && payer !== me) item.suspect = 'notSigned';
       return item;

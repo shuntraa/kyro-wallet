@@ -32,6 +32,7 @@ import {
   type Network,
   type Settings,
 } from './ipc';
+import { l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 export const HBAR_TINYBARS = 100_000_000n;
@@ -53,7 +54,7 @@ function toChecksumAddress(hex40: string): string {
 /** EVM address (EIP-55) of Hedera account `account` (`m/44'/3030'/0'/0/account`, like Rust). */
 export function demoHbarAddress(seed: Uint8Array, account: number): string {
   const pk = HDKey.fromMasterSeed(seed).derive(`m/44'/3030'/0'/0/${account}`).publicKey;
-  if (!pk) throw new IpcError('INTERNAL', 'dérivation Hedera');
+  if (!pk) throw new IpcError('INTERNAL', l10n('dérivation Hedera', 'Hedera derivation'));
   return toChecksumAddress(bytesToHex(keccak_256(ecc.pointCompress(pk, false).slice(1))).slice(-40));
 }
 
@@ -83,7 +84,7 @@ export function hbarChecksum(network: Network, num: number | bigint): string {
   return out;
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 const hbarText = (t: bigint | string | number) => {
   const v = BigInt(t);
   const frac = (v % HBAR_TINYBARS).toString().padStart(8, '0').replace(/0+$/, '');
@@ -95,20 +96,20 @@ export function parseHbarRecipient(input: unknown, network: Network): { to: stri
   const t = String(input ?? '').trim();
   if (/^0[xX]/.test(t)) {
     const hex = t.slice(2);
-    if (!/^[0-9a-fA-F]{40}$/.test(hex)) throw invalidInput('adresse EVM invalide (0x + 40 hexadécimaux, EIP-55)');
+    if (!/^[0-9a-fA-F]{40}$/.test(hex)) throw invalidInput(l10n('adresse EVM invalide (0x + 40 hexadécimaux, EIP-55)', 'invalid EVM address (0x + 40 hex characters, EIP-55)'));
     const mixed = /[a-f]/.test(hex) && /[A-F]/.test(hex);
-    if (mixed && toChecksumAddress(hex) !== `0x${hex}`) throw invalidInput('adresse EVM invalide (0x + 40 hexadécimaux, EIP-55)');
+    if (mixed && toChecksumAddress(hex) !== `0x${hex}`) throw invalidInput(l10n('adresse EVM invalide (0x + 40 hexadécimaux, EIP-55)', 'invalid EVM address (0x + 40 hex characters, EIP-55)'));
     if (/^0{24}/.test(hex)) {
       const n = BigInt(`0x${hex.slice(24)}`);
-      if (n === 0n) throw invalidInput('adresse nulle refusée');
+      if (n === 0n) throw invalidInput(l10n('adresse nulle refusée', 'zero address refused'));
       return { to: `0.0.${n}`, isEvm: false, num: Number(n) };
     }
     return { to: toChecksumAddress(hex), isEvm: true, num: null };
   }
   const m = /^0\.0\.([1-9]\d{0,18})(?:-([a-z]{5}))?$/.exec(t);
-  if (!m?.[1]) throw invalidInput(t.startsWith('0.0.') ? 'identifiant Hedera invalide' : 'identifiant Hedera attendu : 0.0.nombre');
+  if (!m?.[1]) throw invalidInput(t.startsWith('0.0.') ? l10n('identifiant Hedera invalide', 'invalid Hedera ID') : l10n('identifiant Hedera attendu : 0.0.nombre', 'Hedera ID expected: 0.0.number'));
   if (m[2] && m[2] !== hbarChecksum(network, BigInt(m[1]))) {
-    throw invalidInput("somme de contrôle de l'identifiant Hedera incorrecte (ou identifiant d'un autre réseau)");
+    throw invalidInput(l10n("somme de contrôle de l'identifiant Hedera incorrecte (ou identifiant d'un autre réseau)", 'incorrect Hedera ID checksum (or ID from another network)'));
   }
   return { to: `0.0.${m[1]}`, isEvm: false, num: Number(m[1]) };
 }
@@ -207,16 +208,16 @@ export function createDemoHbar(d: DemoHbarDeps) {
   const contextFor = (to: string): HbarContext => {
     const recipient = info(lookup(to));
     const account = ours();
-    if (recipient.deleted) throw invalidInput('ce compte Hedera est supprimé : le transfert échouerait');
-    if (recipient.receiverSigRequired) throw invalidInput('ce compte Hedera exige la signature du destinataire pour recevoir : un transfert simple échouerait');
-    if (!to.startsWith('0x') && !recipient.exists) throw invalidInput('ce compte Hedera n’existe pas (identifiant inconnu du nœud miroir)');
-    if (recipient.accountId === account.accountId) throw invalidInput('transfert à soi-même');
+    if (recipient.deleted) throw invalidInput(l10n('ce compte Hedera est supprimé : le transfert échouerait', 'this Hedera account is deleted: the transfer would fail'));
+    if (recipient.receiverSigRequired) throw invalidInput(l10n('ce compte Hedera exige la signature du destinataire pour recevoir : un transfert simple échouerait', 'this Hedera account requires the recipient\'s signature to receive: a simple transfer would fail'));
+    if (!to.startsWith('0x') && !recipient.exists) throw invalidInput(l10n('ce compte Hedera n’existe pas (identifiant inconnu du nœud miroir)', 'this Hedera account does not exist (ID unknown to the mirror node)'));
+    if (recipient.accountId === account.accountId) throw invalidInput(l10n('transfert à soi-même', 'transfer to yourself'));
     return { account, recipient, createsAccount: to.startsWith('0x') && !recipient.exists };
   };
 
   const checkBalance = (amount: bigint, fee: bigint, balance: string) => {
     if (amount + fee > BigInt(balance)) {
-      throw invalidInput(`solde insuffisant : ${hbarText(balance)} disponibles, il en faut ${hbarText(amount + fee)} (montant + frais maximum)`);
+      throw invalidInput(l10n(`solde insuffisant : ${hbarText(balance)} disponibles, il en faut ${hbarText(amount + fee)} (montant + frais maximum)`, `insufficient balance: ${hbarText(balance)} available, ${hbarText(amount + fee)} needed (amount + maximum fee)`));
     }
   };
 
@@ -225,20 +226,20 @@ export function createDemoHbar(d: DemoHbarDeps) {
     try {
       return JSON.parse(new TextDecoder().decode(hexToBytes(String(hex ?? '').trim().toLowerCase()))) as DemoBody;
     } catch {
-      throw invalidInput('transaction Hedera illisible');
+      throw invalidInput(l10n('transaction Hedera illisible', 'unreadable Hedera transaction'));
     }
   };
 
   /** wallet-core hbar_decode_tx: copies identical but for their node, payer = us. */
   const decode = (bodies: unknown): { b: DemoBody; summary: HbarTxSummary } => {
-    if (!Array.isArray(bodies) || bodies.length === 0 || bodies.length > 4) throw invalidInput('transaction Hedera refusée : 1 à 4 copies attendues');
+    if (!Array.isArray(bodies) || bodies.length === 0 || bodies.length > 4) throw invalidInput(l10n('transaction Hedera refusée : 1 à 4 copies attendues', 'Hedera transaction refused: 1 to 4 copies expected'));
     const all = bodies.map(parse);
     const b = all[0] as DemoBody;
     for (const x of all) {
-      if (JSON.stringify({ ...x, node: 0, signature: undefined }) !== JSON.stringify({ ...b, node: 0, signature: undefined })) throw invalidInput('transaction Hedera refusée : les copies pour plusieurs nœuds diffèrent');
-      if (!nodes.includes(x.node)) throw invalidInput(`transaction Hedera refusée : nœud 0.0.${x.node} hors de la liste de Kyro`);
+      if (JSON.stringify({ ...x, node: 0, signature: undefined }) !== JSON.stringify({ ...b, node: 0, signature: undefined })) throw invalidInput(l10n('transaction Hedera refusée : les copies pour plusieurs nœuds diffèrent', 'Hedera transaction refused: the copies for several nodes differ'));
+      if (!nodes.includes(x.node)) throw invalidInput(l10n(`transaction Hedera refusée : nœud 0.0.${x.node} hors de la liste de Kyro`, `Hedera transaction refused: node 0.0.${x.node} not in Kyro's list`));
     }
-    if (b.payer !== num) throw invalidInput('transaction Hedera refusée : le payeur n’est pas le compte de ce portefeuille');
+    if (b.payer !== num) throw invalidInput(l10n('transaction Hedera refusée : le payeur n’est pas le compte de ce portefeuille', 'Hedera transaction refused: the payer is not this wallet\'s account'));
     const warnings: HbarWarning[] = [];
     if (BigInt(b.maxFee) > 200_000_000n) warnings.push({ kind: 'highFee' });
     const summary: HbarTxSummary = {
@@ -263,18 +264,18 @@ export function createDemoHbar(d: DemoHbarDeps) {
   /** commands_hbar.rs describe_hbar: memo framed after the amounts. */
   const describe = (s: HbarTxSummary, c: HbarContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-    let out = `Envoi Hedera${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.to}${s.toIsEvm ? " (adresse EVM : l'alias du compte)" : ''}\n`;
-    out += `Montant : ${hbarText(s.amount)} (${s.amount} tinybars)\n`;
-    if (c.createsAccount) out += '\nCette adresse n’a pas encore de compte Hedera : ce transfert le crée (frais de création ≈ 0,05 $, payés par toi).\n';
-    out += `\nFrais maximum : ${hbarText(s.maxFee)} (seuls les frais réels sont prélevés : ≈ 0,0001 $ pour un transfert)\nDepuis : ${s.from} · solde : ${hbarText(c.account.balance)}\n`;
-    out += `Valable ${s.validDuration} s, identifiant ${s.transactionId}\nSignée pour ${s.nodes.length} nœud(s) (${s.nodes.join(', ')}) : même identifiant, exécutée une seule fois au plus.\n`;
-    out += `${line}\n${s.memo ? `MÉMO (public à jamais) : « ${s.memo} »\n` : "AUCUN MÉMO\n(une plateforme d'échange en exige souvent un : sans lui, les fonds peuvent être perdus)\n"}${line}\n`;
+    let out = l10n(`Envoi Hedera${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.to}${s.toIsEvm ? " (adresse EVM : l'alias du compte)" : ''}\n`, `Hedera send${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.to}${s.toIsEvm ? ' (EVM address: the account alias)' : ''}\n`);
+    out += l10n(`Montant : ${hbarText(s.amount)} (${s.amount} tinybars)\n`, `Amount: ${hbarText(s.amount)} (${s.amount} tinybars)\n`);
+    if (c.createsAccount) out += l10n('\nCette adresse n’a pas encore de compte Hedera : ce transfert le crée (frais de création ≈ 0,05 $, payés par toi).\n', '\nThis address has no Hedera account yet: this transfer creates it (creation fee ≈ $0.05, paid by you).\n');
+    out += l10n(`\nFrais maximum : ${hbarText(s.maxFee)} (seuls les frais réels sont prélevés : ≈ 0,0001 $ pour un transfert)\nDepuis : ${s.from} · solde : ${hbarText(c.account.balance)}\n`, `\nMaximum fee: ${hbarText(s.maxFee)} (only the actual fee is charged: ≈ $0.0001 for a transfer)\nFrom: ${s.from} · balance: ${hbarText(c.account.balance)}\n`);
+    out += l10n(`Valable ${s.validDuration} s, identifiant ${s.transactionId}\nSignée pour ${s.nodes.length} nœud(s) (${s.nodes.join(', ')}) : même identifiant, exécutée une seule fois au plus.\n`, `Valid ${s.validDuration} s, ID ${s.transactionId}\nSigned for ${s.nodes.length} node(s) (${s.nodes.join(', ')}): same ID, executed at most once.\n`);
+    out += `${line}\n${s.memo ? l10n(`MÉMO (public à jamais) : « ${s.memo} »\n`, `MEMO (public forever): “${s.memo}”\n`) : l10n("AUCUN MÉMO\n(une plateforme d'échange en exige souvent un : sans lui, les fonds peuvent être perdus)\n", 'NO MEMO\n(an exchange often requires one: without it, the funds may be lost)\n')}${line}\n`;
     return out;
   };
 
   const accountArg = (v: unknown) => {
     const a = v === undefined || v === null ? 0 : Number(v);
-    if (!Number.isInteger(a) || a < 0 || a > 100) throw invalidInput('numéro de compte : au plus 100');
+    if (!Number.isInteger(a) || a < 0 || a > 100) throw invalidInput(l10n('numéro de compte : au plus 100', 'account number: at most 100'));
     return a;
   };
 
@@ -304,7 +305,7 @@ export function createDemoHbar(d: DemoHbarDeps) {
     },
     hbar_txs: async (a) => {
       const id = String(a.accountId ?? '');
-      if (!/^0\.0\.\d+(-[a-z]{5})?$/.test(id)) throw invalidInput('identifiant Hedera invalide');
+      if (!/^0\.0\.\d+(-[a-z]{5})?$/.test(id)) throw invalidInput(l10n('identifiant Hedera invalide', 'invalid Hedera ID'));
       await backend();
       return Number(id.slice(4).split('-')[0]) === num ? state.history.slice(0, 50) : [];
     },
@@ -312,11 +313,11 @@ export function createDemoHbar(d: DemoHbarDeps) {
       d.requireUnlocked();
       const r = parseHbarRecipient(a.to, d.network);
       const amount = String(a.amount ?? '').trim();
-      if (!/^\d+$/.test(amount) || BigInt(amount) <= 0n) throw invalidInput('montant en tinybars invalide');
+      if (!/^\d+$/.test(amount) || BigInt(amount) <= 0n) throw invalidInput(l10n('montant en tinybars invalide', 'invalid tinybar amount'));
       const memo = String(a.memo ?? '');
-      if (new TextEncoder().encode(memo).length > 100) throw invalidInput('mémo trop long : 100 octets au plus');
+      if (new TextEncoder().encode(memo).length > 100) throw invalidInput(l10n('mémo trop long : 100 octets au plus', 'memo too long: 100 bytes at most'));
       // eslint-disable-next-line no-control-regex
-      if (/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿]/.test(memo)) throw invalidInput('mémo : caractères de contrôle, invisibles ou de direction refusés');
+      if (/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁯﻿]/.test(memo)) throw invalidInput(l10n('mémo : caractères de contrôle, invisibles ou de direction refusés', 'memo: control, invisible or direction characters refused'));
       await backend();
       const context = contextFor(r.to);
       const fee = maxFee(context.createsAccount);
@@ -330,24 +331,24 @@ export function createDemoHbar(d: DemoHbarDeps) {
       const { summary } = decode(a.bodies);
       await backend();
       const context = contextFor(summary.to);
-      if (d.now() / 1000 > summary.validStart + summary.validDuration - MIN_REMAINING) throw invalidInput('transfert Hedera expiré ou presque (fenêtre de 180 s) : reconstruis-le');
+      if (d.now() / 1000 > summary.validStart + summary.validDuration - MIN_REMAINING) throw invalidInput(l10n('transfert Hedera expiré ou presque (fenêtre de 180 s) : reconstruis-le', 'Hedera transfer expired or nearly (180 s window): rebuild it'));
       checkBalance(BigInt(summary.amount), BigInt(summary.maxFee), context.account.balance);
       d.checkPassword(a.password);
-      if (!d.confirm(`Confirmer le transfert Hedera\n${describe(summary, context)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !d.confirm('Attention : transfert à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer le transfert Hedera\n${describe(summary, context)}`, `Confirm the Hedera transfer\n${describe(summary, context)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (summary.requiresExtraConfirmation && !d.confirm(l10n('Attention : transfert à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: transfer to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const signed = (a.bodies as string[]).map((h) => encode({ ...parse(h), signature: bytesToHex(sha256(new TextEncoder().encode(`sig:${h}`))) }));
       return { signed, summary, context };
     },
     hbar_broadcast: async (a) => {
       const { b, summary } = decode(a.signed);
-      if (!b.signature) throw invalidInput('transaction Hedera non signée');
+      if (!b.signature) throw invalidInput(l10n('transaction Hedera non signée', 'Hedera transaction not signed'));
       await backend();
       if (state.submitted.has(summary.mirrorTransactionId)) return summary.transactionId; // DUPLICATE_TRANSACTION
-      if (d.now() / 1000 > summary.validStart + summary.validDuration) throw invalidInput(`transfert Hedera refusé par le nœud ${summary.nodes[0]} : TRANSACTION_EXPIRED`);
+      if (d.now() / 1000 > summary.validStart + summary.validDuration) throw invalidInput(l10n(`transfert Hedera refusé par le nœud ${summary.nodes[0]} : TRANSACTION_EXPIRED`, `Hedera transfer rejected by node ${summary.nodes[0]}: TRANSACTION_EXPIRED`));
       const mine = state.accounts.get(num);
       const amount = BigInt(summary.amount);
       const charged = 83_000n;
-      if (!mine || mine.balance < amount + charged) throw invalidInput(`transfert Hedera refusé par le nœud ${summary.nodes[0]} : INSUFFICIENT_PAYER_BALANCE`);
+      if (!mine || mine.balance < amount + charged) throw invalidInput(l10n(`transfert Hedera refusé par le nœud ${summary.nodes[0]} : INSUFFICIENT_PAYER_BALANCE`, `Hedera transfer rejected by node ${summary.nodes[0]}: INSUFFICIENT_PAYER_BALANCE`));
       mine.balance -= amount + charged;
       let dest = lookup(summary.to);
       if (!dest && summary.toIsEvm) {
@@ -362,7 +363,7 @@ export function createDemoHbar(d: DemoHbarDeps) {
     hbar_tx_status: async (a) => {
       const id = String(a.id ?? '').trim();
       const m = /^0\.0\.(\d+)[@-](\d+)[.-](\d{1,9})$/.exec(id);
-      if (!m) throw invalidInput('identifiant de transaction Hedera invalide');
+      if (!m) throw invalidInput(l10n('identifiant de transaction Hedera invalide', 'invalid Hedera transaction ID'));
       await backend();
       const s = state.submitted.get(`0.0.${m[1]}-${m[2]}-${(m[3] ?? '').padStart(9, '0')}`);
       if (!s || d.now() - s.at < CONSENSUS_MS) return { found: false, result: '' };

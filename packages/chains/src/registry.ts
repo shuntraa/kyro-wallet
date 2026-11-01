@@ -988,27 +988,27 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   // Bitcoin Cash: public Fulcrum servers (Rust only, raw TLS sockets, tried in order). Genesis
   // and a block after the 2017 split checked on every session; CashTokens coins left out.
   const bch = servers.bitcoincash?.[nk];
-  if (bch?.kind === 'esplora') list.push({ host: host(bch.url), purpose: 'Bitcoin Cash : ton serveur Esplora', custom: true });
+  if (bch?.kind === 'esplora') list.push({ host: host(bch.url), purpose: l10n('Bitcoin Cash : ton serveur Esplora', 'Bitcoin Cash: your Esplora server'), custom: true });
   else if (network === 'mainnet') {
-    list.push({ host: 'bch.imaginary.cash:50002', purpose: 'Bitcoin Cash : soldes, historique, frais, diffusion (Fulcrum public)' });
-    list.push({ host: 'bch.loping.net:50002', purpose: 'Bitcoin Cash : serveur de secours (Fulcrum public)' });
-    list.push({ host: 'cashnode.bch.ninja:50002', purpose: 'Bitcoin Cash : serveur de secours (Fulcrum public)' });
+    list.push({ host: 'bch.imaginary.cash:50002', purpose: l10n('Bitcoin Cash : soldes, historique, frais, diffusion (Fulcrum public)', 'Bitcoin Cash: balances, history, fees, broadcast (public Fulcrum)') });
+    list.push({ host: 'bch.loping.net:50002', purpose: l10n('Bitcoin Cash : serveur de secours (Fulcrum public)', 'Bitcoin Cash: backup server (public Fulcrum)') });
+    list.push({ host: 'cashnode.bch.ninja:50002', purpose: l10n('Bitcoin Cash : serveur de secours (Fulcrum public)', 'Bitcoin Cash: backup server (public Fulcrum)') });
   } else {
-    list.push({ host: 'chipnet.imaginary.cash:50002', purpose: 'Bitcoin Cash chipnet : soldes, historique, frais, diffusion (Fulcrum public)' });
-    list.push({ host: 'chipnet.bch.ninja:50002', purpose: 'Bitcoin Cash chipnet : serveur de secours (Fulcrum public)' });
+    list.push({ host: 'chipnet.imaginary.cash:50002', purpose: l10n('Bitcoin Cash chipnet : soldes, historique, frais, diffusion (Fulcrum public)', 'Bitcoin Cash chipnet: balances, history, fees, broadcast (public Fulcrum)') });
+    list.push({ host: 'chipnet.bch.ninja:50002', purpose: l10n('Bitcoin Cash chipnet : serveur de secours (Fulcrum public)', 'Bitcoin Cash chipnet: backup server (public Fulcrum)') });
   }
   // Dash: Komodo's public ElectrumX servers on mainnet (Rust only); none on testnet.
   const dash = servers.dash?.[nk];
-  if (dash?.kind === 'esplora') list.push({ host: host(dash.url), purpose: 'Dash : ton serveur Esplora', custom: true });
+  if (dash?.kind === 'esplora') list.push({ host: host(dash.url), purpose: l10n('Dash : ton serveur Esplora', 'Dash: your Esplora server'), custom: true });
   else if (network === 'mainnet') {
-    list.push({ host: 'dash.electrum1.cipig.net:20061', purpose: 'Dash : soldes, historique, frais, diffusion (ElectrumX public de Komodo)' });
-    list.push({ host: 'dash.electrum2.cipig.net:20061', purpose: 'Dash : serveur de secours (ElectrumX public de Komodo)' });
-  } else list.push({ host: 'aucun serveur', purpose: 'Dash testnet : aucun serveur public gratuit, configure le tien (rien n’est contacté)' });
+    list.push({ host: 'dash.electrum1.cipig.net:20061', purpose: l10n('Dash : soldes, historique, frais, diffusion (ElectrumX public de Komodo)', 'Dash: balances, history, fees, broadcast (Komodo public ElectrumX)') });
+    list.push({ host: 'dash.electrum2.cipig.net:20061', purpose: l10n('Dash : serveur de secours (ElectrumX public de Komodo)', 'Dash: backup server (Komodo public ElectrumX)') });
+  } else list.push({ host: l10n('aucun serveur', 'no server'), purpose: l10n('Dash testnet : aucun serveur public gratuit, configure le tien (rien n’est contacté)', 'Dash testnet: no free public server, set up your own (nothing is contacted)') });
   // Zcash (transparent only): Komodo's public ElectrumX servers, Rust only (zec_*), `zcash` Tor family.
   if (network === 'mainnet') {
-    list.push({ host: 'zec.electrum1.cipig.net:20058', purpose: 'Zcash (transparent) : soldes, historique, mise à niveau réseau, diffusion (ElectrumX public de Komodo)' });
-    list.push({ host: 'zec.electrum2.cipig.net:20058', purpose: 'Zcash : serveur de secours (ElectrumX public de Komodo)' });
-  } else list.push({ host: 'aucun serveur', purpose: 'Zcash testnet : aucun serveur public, rien n’est contacté' });
+    list.push({ host: 'zec.electrum1.cipig.net:20058', purpose: l10n('Zcash (transparent) : soldes, historique, mise à niveau réseau, diffusion (ElectrumX public de Komodo)', 'Zcash (transparent): balances, history, network upgrade, broadcast (Komodo public ElectrumX)') });
+    list.push({ host: 'zec.electrum2.cipig.net:20058', purpose: l10n('Zcash : serveur de secours (ElectrumX public de Komodo)', 'Zcash: backup server (Komodo public ElectrumX)') });
+  } else list.push({ host: l10n('aucun serveur', 'no server'), purpose: l10n('Zcash testnet : aucun serveur public, rien n’est contacté', 'Zcash testnet: no public server, nothing is contacted') });
   // TRON: reached by Rust only (tron_*), Tor circuits of the `tron` family.
   // Cardano: reached by Rust only (ada_*), Tor circuits of the `cardano` family.
   const ada = servers.cardano?.[nk];
@@ -1020,7 +1020,7 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   // Polkadot Asset Hub: reached by Rust only (dot_*), Tor circuits of the `polkadot` family.
   list.push({
     host: network === 'mainnet' ? 'polkadot-asset-hub-rpc.polkadot.io' : 'westend-asset-hub-rpc.polkadot.io',
-    purpose: `Polkadot${network === 'mainnet' ? '' : ' (Westend)'} : soldes, métadonnées du runtime, nonce, frais, diffusion (nœud public de Parity)`,
+    purpose: l10n(`Polkadot${network === 'mainnet' ? '' : ' (Westend)'} : soldes, métadonnées du runtime, nonce, frais, diffusion (nœud public de Parity)`, `Polkadot${network === 'mainnet' ? '' : ' (Westend)'}: balances, runtime metadata, nonce, fees, broadcast (Parity public node)`),
   });
   // XRP Ledger: reached by Rust only (xrp_*), Tor circuits of the `xrp` family.
   const xrp = servers.xrp?.[nk];
@@ -1032,28 +1032,28 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   // Stellar: reached by Rust only (stellar_*), Tor circuits of the `stellar` family; SDF's Horizon.
   list.push({ host: network === 'mainnet' ? 'horizon.stellar.org' : 'horizon-testnet.stellar.org', purpose: l10n(`Stellar${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (Horizon de la SDF)`, `Stellar${network === 'mainnet' ? '' : ' testnet'}: balances, reserve, history, broadcast (SDF Horizon)`) });
   // NEAR: reached by Rust only (near_*), Tor circuits of the `near` family. Defaults only.
-  list.push({ host: network === 'mainnet' ? 'free.rpc.fastnear.com' : 'test.rpc.fastnear.com', purpose: `NEAR${network === 'mainnet' ? '' : ' testnet'} : solde, clé d’accès, frais, diffusion (RPC FastNEAR)` });
-  list.push({ host: network === 'mainnet' ? 'tx.main.fastnear.com' : 'tx.test.fastnear.com', purpose: `NEAR${network === 'mainnet' ? '' : ' testnet'} : historique des transactions (API FastNEAR)` });
+  list.push({ host: network === 'mainnet' ? 'free.rpc.fastnear.com' : 'test.rpc.fastnear.com', purpose: l10n(`NEAR${network === 'mainnet' ? '' : ' testnet'} : solde, clé d’accès, frais, diffusion (RPC FastNEAR)`, `NEAR${network === 'mainnet' ? '' : ' testnet'}: balance, access key, fees, broadcast (FastNEAR RPC)`) });
+  list.push({ host: network === 'mainnet' ? 'tx.main.fastnear.com' : 'tx.test.fastnear.com', purpose: l10n(`NEAR${network === 'mainnet' ? '' : ' testnet'} : historique des transactions (API FastNEAR)`, `NEAR${network === 'mainnet' ? '' : ' testnet'}: transaction history (FastNEAR API)`) });
   // Hedera: reached by Rust only (hbar_*), Tor circuits of the `hedera` family; no custom server.
-  list.push({ host: network === 'mainnet' ? 'mainnet-public.mirrornode.hedera.com' : 'testnet.mirrornode.hedera.com', purpose: `Hedera${network === 'mainnet' ? '' : ' testnet'} : compte, solde, historique, taux de change (nœud miroir)` });
+  list.push({ host: network === 'mainnet' ? 'mainnet-public.mirrornode.hedera.com' : 'testnet.mirrornode.hedera.com', purpose: l10n(`Hedera${network === 'mainnet' ? '' : ' testnet'} : compte, solde, historique, taux de change (nœud miroir)`, `Hedera${network === 'mainnet' ? '' : ' testnet'}: account, balance, history, exchange rate (mirror node)`) });
   list.push({
     host: network === 'mainnet' ? 'node00.swirldslabs.com, node01-00-grpc.swirlds.com, node04.swirldslabs.com' : 'testnet-node00/01/02-00-grpc.hedera.com',
-    purpose: `Hedera${network === 'mainnet' ? '' : ' testnet'} : diffusion des transferts signés (proxys gRPC-web des nœuds de consensus)`,
+    purpose: l10n(`Hedera${network === 'mainnet' ? '' : ' testnet'} : diffusion des transferts signés (proxys gRPC-web des nœuds de consensus)`, `Hedera${network === 'mainnet' ? '' : ' testnet'}: broadcast of signed transfers (consensus nodes’ gRPC-web proxies)`),
   });
   // Kaspa: reached by Rust only (kas_*), Tor circuits of the `kaspa` family. No custom server yet.
   list.push({
     host: network === 'mainnet' ? 'api.kaspa.org' : 'api-tn10.kaspa.org',
-    purpose: `Kaspa${network === 'mainnet' ? '' : ' testnet-10'} : soldes, pièces, frais, historique, diffusion (API REST publique des développeurs Kaspa)`,
+    purpose: l10n(`Kaspa${network === 'mainnet' ? '' : ' testnet-10'} : soldes, pièces, frais, historique, diffusion (API REST publique des développeurs Kaspa)`, `Kaspa${network === 'mainnet' ? '' : ' testnet-10'}: balances, coins, fees, history, broadcast (Kaspa developers’ public REST API)`),
   });
   // Algorand: reached by Rust only (algo_*), Tor circuits of the `algorand` family. No custom server yet.
-  list.push({ host: `${nk}-api.algonode.cloud`, purpose: `Algorand${network === 'mainnet' ? '' : ' TestNet'} : soldes, paramètres, diffusion (algod AlgoNode / Nodely)` });
-  list.push({ host: `${nk}-idx.algonode.cloud`, purpose: `Algorand${network === 'mainnet' ? '' : ' TestNet'} : historique (indexer AlgoNode / Nodely)` });
+  list.push({ host: `${nk}-api.algonode.cloud`, purpose: l10n(`Algorand${network === 'mainnet' ? '' : ' TestNet'} : soldes, paramètres, diffusion (algod AlgoNode / Nodely)`, `Algorand${network === 'mainnet' ? '' : ' TestNet'}: balances, parameters, broadcast (AlgoNode / Nodely algod)`) });
+  list.push({ host: `${nk}-idx.algonode.cloud`, purpose: l10n(`Algorand${network === 'mainnet' ? '' : ' TestNet'} : historique (indexer AlgoNode / Nodely)`, `Algorand${network === 'mainnet' ? '' : ' TestNet'}: history (AlgoNode / Nodely indexer)`) });
   // TON: reached by Rust only (ton_*), Tor circuits of the `ton` family; no custom server yet.
-  list.push({ host: network === 'mainnet' ? 'toncenter.com' : 'testnet.toncenter.com', purpose: `TON${network === 'mainnet' ? '' : ' testnet'} : solde, seqno, historique, frais estimés, diffusion (TON Center, ≈ 1 requête/s sans clé)` });
+  list.push({ host: network === 'mainnet' ? 'toncenter.com' : 'testnet.toncenter.com', purpose: l10n(`TON${network === 'mainnet' ? '' : ' testnet'} : solde, seqno, historique, frais estimés, diffusion (TON Center, ≈ 1 requête/s sans clé)`, `TON${network === 'mainnet' ? '' : ' testnet'}: balance, seqno, history, estimated fees, broadcast (TON Center, ≈ 1 request/s without a key)`) });
   // Cosmos Hub: reached by Rust only (cosmos_*), Tor circuits of the `cosmos` family; no custom server yet.
   list.push({
     host: network === 'mainnet' ? 'cosmos-rest.publicnode.com' : 'rest.provider-sentry-01.hub-testnet.polypore.xyz',
-    purpose: `Cosmos Hub${network === 'mainnet' ? '' : ' testnet'} : compte, soldes, simulation, historique, diffusion (LCD)`,
+    purpose: l10n(`Cosmos Hub${network === 'mainnet' ? '' : ' testnet'} : compte, soldes, simulation, historique, diffusion (LCD)`, `Cosmos Hub${network === 'mainnet' ? '' : ' testnet'}: account, balances, simulation, history, broadcast (LCD)`),
   });
   const tron = servers.tron?.[nk];
   list.push(
@@ -1062,21 +1062,21 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       : { host: network === 'mainnet' ? 'api.trongrid.io' : 'nile.trongrid.io', purpose: l10n(`TRON${network === 'mainnet' ? '' : ' Nile'} : soldes, ressources, historique, diffusion (TronGrid)`, `TRON${network === 'mainnet' ? '' : ' Nile'}: balances, resources, history, broadcast (TronGrid)`) },
   );
   // Sui: reached by Rust only (sui_*), Tor circuits of the `sui` family. No custom server yet.
-  list.push({ host: network === 'mainnet' ? 'graphql.mainnet.sui.io' : 'graphql.testnet.sui.io', purpose: `Sui${network === 'mainnet' ? '' : ' testnet'} : solde, pièces de gaz, simulation, historique, envoi (GraphQL de la Sui Foundation)` });
+  list.push({ host: network === 'mainnet' ? 'graphql.mainnet.sui.io' : 'graphql.testnet.sui.io', purpose: l10n(`Sui${network === 'mainnet' ? '' : ' testnet'} : solde, pièces de gaz, simulation, historique, envoi (GraphQL de la Sui Foundation)`, `Sui${network === 'mainnet' ? '' : ' testnet'}: balance, gas coins, simulation, history, sending (Sui Foundation GraphQL)`) });
   // Monero: reached by Rust only (xmr_*), Tor circuits of the `monero` family. Blocks are
   // scanned locally: the node never receives a key.
   const xmr = servers.monero?.[nk];
   list.push(
     xmr?.kind === 'node'
-      ? { host: host(xmr.url), purpose: 'Monero : ton nœud monerod (aucune clé envoyée)', custom: true }
+      ? { host: host(xmr.url), purpose: l10n('Monero : ton nœud monerod (aucune clé envoyée)', 'Monero: your monerod node (no key sent)'), custom: true }
       : network === 'mainnet'
-        ? { host: 'xmr-node.cakewallet.com:18081', purpose: 'Monero : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Cake Wallet)' }
-        : { host: 'monero-stagenet.stackwallet.com:38081', purpose: 'Monero stagenet : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Stack Wallet)' },
+        ? { host: 'xmr-node.cakewallet.com:18081', purpose: l10n('Monero : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Cake Wallet)', 'Monero: blocks (scanned on your machine), fees, decoys, broadcast (Cake Wallet public node)') }
+        : { host: 'monero-stagenet.stackwallet.com:38081', purpose: l10n('Monero stagenet : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Stack Wallet)', 'Monero stagenet: blocks (scanned on your machine), fees, decoys, broadcast (Stack Wallet public node)') },
   );
   // Aptos: reached by Rust only (aptos_*), Tor circuits of the `aptos` family. No custom server yet.
   list.push({
     host: network === 'mainnet' ? 'api.mainnet.aptoslabs.com' : 'api.testnet.aptoslabs.com',
-    purpose: `Aptos${network === 'mainnet' ? '' : ' testnet'} : solde, simulation, historique (indexeur), diffusion (Aptos Labs, sans clé)`,
+    purpose: l10n(`Aptos${network === 'mainnet' ? '' : ' testnet'} : solde, simulation, historique (indexeur), diffusion (Aptos Labs, sans clé)`, `Aptos${network === 'mainnet' ? '' : ' testnet'}: balance, simulation, history (indexer), broadcast (Aptos Labs, no key)`),
   });
   list.push({ host: 'api.0x.org', purpose: l10n('Devis de swap EVM (clé requise)', 'EVM swap quotes (key required)') });
   list.push({ host: 'li.quest', purpose: l10n('Devis de swap (même chaîne et entre chaînes), suivi des swaps entre chaînes', 'Swap quotes (same chain and cross-chain), cross-chain swap tracking') });

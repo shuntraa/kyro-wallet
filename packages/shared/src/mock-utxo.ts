@@ -255,7 +255,7 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
     const outputs = psbt.txOutputs.map((o, index) => {
       const address = addressOf(coin, o.script);
       if (!address) warnings.push({ kind: 'unknownOutput', index });
-      if ((coin === 'bch' || coin === 'dash') && o.value < BigInt(BCH_DASH_DUST)) throw new IpcError('INVALID_INPUT', `Entrée invalide : sortie ${index} sous ${BCH_DASH_DUST} ${UNIT[coin]} (poussière, non standard)`);
+      if ((coin === 'bch' || coin === 'dash') && o.value < BigInt(BCH_DASH_DUST)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : sortie ${index} sous ${BCH_DASH_DUST} ${UNIT[coin]} (poussière, non standard)`, `Invalid input: output ${index} below ${BCH_DASH_DUST} ${UNIT[coin]} (dust, non-standard)`));
       if (coin === 'doge' && o.value < BigInt(DOGE_HARD_DUST)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : sortie ${index} sous 0,001 DOGE (non standard)`, `Invalid input: output ${index} below 0.001 DOGE (non-standard)`));
       if (coin === 'doge' && o.value < BigInt(DOGE_SOFT_DUST)) warnings.push({ kind: 'softDust', index });
       // Rust: change = key origin on the output + derived key + script match (not just « one of our addresses »).

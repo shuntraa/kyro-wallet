@@ -16,6 +16,7 @@ import type { HDKey } from '@scure/bip32';
 import {
   BTC_TXS_CAP,
   call,
+  l10n,
   zecDestinationKind,
   zecP2pkhAddress,
   zecShieldedRefusal,
@@ -106,8 +107,8 @@ export function zecAddressProblem(address: string, network: ZcashChain['network'
   if (shielded) return shielded;
   if (zecDestinationKind(a, network)) return null;
   const other = network === 'mainnet' ? 'testnet' : 'mainnet';
-  if (zecDestinationKind(a, other)) return `Adresse Zcash ${other} : ce portefeuille est sur ${network}.`;
-  return 'Adresse Zcash invalide (attendu : t1…, t3… ou tex1…).';
+  if (zecDestinationKind(a, other)) return l10n(`Adresse Zcash ${other} : ce portefeuille est sur ${network}.`, `Zcash ${other} address: this wallet is on ${network}.`);
+  return l10n('Adresse Zcash invalide (attendu : t1…, t3… ou tex1…).', 'Invalid Zcash address (expected: t1…, t3… or tex1…).');
 }
 
 export class ZcashAdapter implements ChainAdapter<'zec'> {
@@ -131,7 +132,7 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
     this.key = parseXpub(opts.account.xpub);
     const first = this.addressAt(0, 0);
     if (first.address !== opts.account.address) {
-      throw new Error(`Dérivation Zcash incohérente avec le coffre (${first.address} ≠ ${opts.account.address})`);
+      throw new Error(l10n(`Dérivation Zcash incohérente avec le coffre (${first.address} ≠ ${opts.account.address})`, `Zcash derivation inconsistent with the vault (${first.address} ≠ ${opts.account.address})`));
     }
   }
 
@@ -194,7 +195,7 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta * 2 }, normal: { level: 'normal', params: p, etaSecs: eta * 2 }, fast: { level: 'fast', params: p, etaSecs: eta * 2 } },
       minimum: p,
-      hint: 'frais ZIP 317 calculés par le coffre (≈ 0,0001 ZEC)',
+      hint: l10n('frais ZIP 317 calculés par le coffre (≈ 0,0001 ZEC)', 'ZIP 317 fee computed by the vault (≈ 0.0001 ZEC)'),
       fetchedAt: Date.now(),
     });
   }
@@ -208,7 +209,7 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
     for (const { owner, list } of lists) {
       for (const u of list) {
         if (u.coinbase) continue;
-        if (!Number.isSafeInteger(u.value) || u.value < 0) throw new Error('Montant de sortie hors limites');
+        if (!Number.isSafeInteger(u.value) || u.value < 0) throw new Error(l10n('Montant de sortie hors limites', 'Output amount out of range'));
         coins.push({ txid: u.txid, vout: u.vout, change: owner.change === 1, index: owner.index });
         total += BigInt(u.value);
       }
@@ -226,13 +227,13 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
   }
 
   async buildTx(params: BuildParams): Promise<ZecUnsigned> {
-    if (params.asset.id !== this.assetId) throw new Error('Actif incohérent avec cette chaîne');
+    if (params.asset.id !== this.assetId) throw new Error(l10n('Actif incohérent avec cette chaîne', 'Asset inconsistent with this chain'));
     const to = params.to.trim();
     const problem = zecAddressProblem(to, this.chain.network);
     if (problem) throw new Error(problem);
-    if (!params.max && params.amount <= 0n) throw new Error('Montant invalide');
+    if (!params.max && params.amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const { coins } = await this.candidates();
-    if (coins.length === 0) throw new Error('Aucune pièce Zcash transparente à dépenser');
+    if (coins.length === 0) throw new Error(l10n('Aucune pièce Zcash transparente à dépenser', 'No transparent Zcash coin to spend'));
     const request: ZecSendArgs = { to, amount: params.max ? '' : params.amount.toString(), max: !!params.max, coins, changeIndex: await this.changeIndex() };
     const summary = await this.backend.preview(request);
     const fee = BigInt(summary.fee);
@@ -244,7 +245,7 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
     const res = await this.backend.sign(unsigned.request, password);
     const s = res.summary;
     if (s.toAddress !== unsigned.summary.toAddress || (!unsigned.request.max && s.amount !== unsigned.summary.amount)) {
-      throw new Error('La transaction signée par Rust diffère de l’aperçu');
+      throw new Error(l10n('La transaction signée par Rust diffère de l’aperçu', 'The transaction signed by Rust differs from the preview'));
     }
     return { family: 'zec', hex: res.hex, txid: res.txid, summary: s };
   }
@@ -282,7 +283,7 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
       };
       if (spent > 0n && !tx.shielded) item.fee = fee;
       if (counterparty) item.counterparty = counterparty;
-      if (tx.shielded) item.note = direction === 'in' ? 'Reçu depuis une adresse protégée (détails privés)' : 'Vers une adresse protégée (montant net de ton adresse transparente)';
+      if (tx.shielded) item.note = direction === 'in' ? l10n('Reçu depuis une adresse protégée (détails privés)', 'Received from a shielded address (private details)') : l10n('Vers une adresse protégée (montant net de ton adresse transparente)', 'To a shielded address (net amount from your transparent address)');
       if (tx.status.block_time) item.time = tx.status.block_time * 1000;
       items.push(item);
     }

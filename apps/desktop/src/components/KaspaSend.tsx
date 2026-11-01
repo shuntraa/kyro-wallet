@@ -11,40 +11,44 @@ import { fmtCrypto, fmtFiat, shortAddress } from '../lib/format';
 import { Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconWarn } from './icons';
 import { cn } from '../lib/cn';
+import { t, tp, useT } from '../i18n';
+import { rt } from '../i18n/rich';
 
 const KAS = (sompi: bigint | string) => fmtCrypto(BigInt(sompi), 8, 'KAS', 8);
 
 /** Spendable coins of the whole account (20 receive + 20 change addresses). */
 export function KaspaSpendable({ account, hidden }: { account: KaspaAccountInfo | undefined | null; hidden: boolean }) {
+  useT();
   if (!account) return null;
   return (
     <span className="text-[12px] leading-[1.45] text-mute">
-      Dépensable : {hidden ? '•••••' : KAS(account.spendable)} ({account.utxoCount} pièce{account.utxoCount > 1 ? 's' : ''} sur tes {account.scanned} premières adresses de réception et de monnaie). Minimum 0,2 KAS par envoi : la masse de stockage de Kaspa (KIP-9) rend les petites sorties non standard.
+      {tp('kas.spendable', account.utxoCount, { amount: hidden ? '•••••' : KAS(account.spendable), scanned: account.scanned })}
     </span>
   );
 }
 
 /** Rust's decoding, before the password: each output, change, fee and the mass behind it. */
 export function KaspaSummaryView({ u, kasPrice, currency }: { u: KaspaUnsigned; kasPrice: number | null; currency: Currency }) {
+  useT();
   const s = u.summary;
   const fiat = (v: string) => {
     const f = kasPrice !== null ? (Number(BigInt(v)) / 1e8) * kasPrice : 0;
     return f >= 0.01 ? ` · ${fmtFiat(f, currency)}` : '';
   };
   return (
-    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label="Transaction Kaspa décodée">
+    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('kas.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
-        <span className="font-semibold text-text">Transaction Kaspa</span>
-        <span className="text-[11px] text-mute">décodée par le coffre</span>
+        <span className="font-semibold text-text">{t('kas.title')}</span>
+        <span className="text-[11px] text-mute">{t('kas.decodedByVault')}</span>
       </div>
       {s.outputs.map((o, i) => (
-        <Line key={i} k={o.isChange ? 'Monnaie (revient chez toi)' : 'Destinataire'} v={`${KAS(o.amount)} · ${o.address ? shortAddress(o.address) : 'script inconnu'}`} warn={o.kind !== 'address'} />
+        <Line key={i} k={o.isChange ? t('kas.lChangeBack') : t('kas.lDest')} v={`${KAS(o.amount)} · ${o.address ? shortAddress(o.address) : t('kas.unknownScript')}`} warn={o.kind !== 'address'} />
       ))}
-      {!s.hasChange && <Line k="Monnaie" v="aucune : le petit reste part en frais" warn />}
-      <Line k="Frais" v={`${KAS(s.fee)}${fiat(s.fee)}`} warn={s.warnings.some((w) => w.kind === 'highFee')} />
-      <Line k="Masse" v={`${s.mass.total} g (calcul ${s.mass.compute}, stockage ${s.mass.storage})`} />
-      <Line k="Minimum de relais" v={KAS(s.minimumFee)} />
-      <Line k="Entrées" v={`${s.inputs} pièce${s.inputs > 1 ? 's' : ''} · ${KAS(s.inputTotal)}`} last />
+      {!s.hasChange && <Line k={t('kas.lChange')} v={t('kas.noChange')} warn />}
+      <Line k={t('kas.lFee')} v={`${KAS(s.fee)}${fiat(s.fee)}`} warn={s.warnings.some((w) => w.kind === 'highFee')} />
+      <Line k={t('kas.lMass')} v={t('kas.lMassValue', { total: s.mass.total, compute: s.mass.compute, storage: s.mass.storage })} />
+      <Line k={t('kas.lMinFee')} v={KAS(s.minimumFee)} />
+      <Line k={t('kas.lInputs')} v={tp('kas.lInputsValue', s.inputs, { amount: KAS(s.inputTotal) })} last />
     </div>
   );
 }
@@ -62,6 +66,7 @@ type Status = { state: 'pending' } | { state: 'accepted' } | { state: 'unknown' 
 
 /** After `kas_broadcast`: follows `kas_tx_status` until the transaction is accepted (seconds). */
 export function KaspaTxStatusLine({ adapter, txid, onAccepted }: { adapter: KaspaAdapter; txid: string; onAccepted?: () => void }) {
+  useT();
   const [status, setStatus] = useState<Status>({ state: 'pending' });
   useEffect(() => {
     let alive = true;
@@ -96,27 +101,27 @@ export function KaspaTxStatusLine({ adapter, txid, onAccepted }: { adapter: Kasp
   if (status.state === 'pending') {
     return (
       <div role="status" className="flex w-full items-center gap-2 rounded-ctl border border-line bg-raised px-3.5 py-2.5 text-[13px] text-text2">
-        <Spinner /> En attente d’acceptation par le réseau Kaspa (quelques secondes)…
+        <Spinner /> {t('kas.pending')}
       </div>
     );
   }
   if (status.state === 'accepted') {
     return (
       <Notice tone="success" icon={<IconCheck size={16} className="mt-0.5 shrink-0 text-up" />} className="w-full text-left">
-        <strong className="font-semibold">Acceptée :</strong> la transaction est incluse dans la chaîne Kaspa.
+        {rt('kas.accepted', { b: (c) => <strong className="font-semibold">{c}</strong> })}
       </Notice>
     );
   }
   if (status.state === 'unknown') {
     return (
       <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
-        Toujours pas acceptée après 2 minutes selon l’indexeur : vérifie l’historique avant de renvoyer.
+        {t('kas.unknown')}
       </Notice>
     );
   }
   return (
     <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
-      Suivi de l’acceptation impossible pour l’instant : {status.message}
+      {t('kas.trackError', { message: status.message })}
     </Notice>
   );
 }

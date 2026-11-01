@@ -12,6 +12,7 @@ import { bech32m, createBase58check } from '@scure/base';
 import { ripemd160 } from '@noble/hashes/legacy';
 import { sha256 } from '@noble/hashes/sha2';
 import type { Network } from './ipc';
+import { l10n } from './i18n';
 
 const b58c = createBase58check(sha256);
 
@@ -40,9 +41,9 @@ export function zecP2pkhScriptHex(pubkey: Uint8Array): string {
  */
 export function zecShieldedRefusal(address: string): string | null {
   const a = address.trim().toLowerCase();
-  if (/^(zs1|ztestsapling1|zregtestsapling1)/.test(a)) return 'Adresse protégée Sapling (zs…) : pas encore prise en charge. Kyro n’envoie qu’à des adresses transparentes (t1…, t3…, tex1…).';
-  if (/^(u1|utest1|uregtest1)/.test(a)) return 'Adresse unifiée (u1…) : pas encore prise en charge. Demande au destinataire son adresse transparente (t1…).';
-  if (/^z[ct][1-9a-hj-np-z]{60,}$/.test(a)) return 'Adresse protégée Sprout (zc…) : pas prise en charge. Kyro n’envoie qu’à des adresses transparentes (t1…, t3…).';
+  if (/^(zs1|ztestsapling1|zregtestsapling1)/.test(a)) return l10n('Adresse protégée Sapling (zs…) : pas encore prise en charge. Kyro n’envoie qu’à des adresses transparentes (t1…, t3…, tex1…).', 'Sapling shielded address (zs…): not supported yet. Kyro only sends to transparent addresses (t1…, t3…, tex1…).');
+  if (/^(u1|utest1|uregtest1)/.test(a)) return l10n('Adresse unifiée (u1…) : pas encore prise en charge. Demande au destinataire son adresse transparente (t1…).', 'Unified address (u1…): not supported yet. Ask the recipient for their transparent address (t1…).');
+  if (/^z[ct][1-9a-hj-np-z]{60,}$/.test(a)) return l10n('Adresse protégée Sprout (zc…) : pas prise en charge. Kyro n’envoie qu’à des adresses transparentes (t1…, t3…).', 'Sprout shielded address (zc…): not supported. Kyro only sends to transparent addresses (t1…, t3…).');
   return null;
 }
 

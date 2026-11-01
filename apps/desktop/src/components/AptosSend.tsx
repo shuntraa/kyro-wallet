@@ -10,11 +10,14 @@ import { fmtCrypto, fmtFiat } from '../lib/format';
 import { Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconWarn } from './icons';
 import { cn } from '../lib/cn';
+import { t, useT } from '../i18n';
+import { rt } from '../i18n/rich';
 
 const APT = (octas: bigint | string) => fmtCrypto(BigInt(octas), 8, 'APT', 8);
 
 /** Rust's decoding, before the password. */
 export function AptosSummaryView({ u, aptPrice, currency }: { u: AptosUnsigned; aptPrice: number | null; currency: Currency }) {
+  useT();
   const s = u.summary;
   const c = u.context;
   // No « 0,00 € » for a 0.0001 APT fee: fiat only from one cent.
@@ -24,18 +27,18 @@ export function AptosSummaryView({ u, aptPrice, currency }: { u: AptosUnsigned; 
   };
   const minutes = Math.max(0, Math.ceil((s.expirationTimestampSecs - c.ledgerTime) / 60));
   return (
-    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label="Transfert Aptos décodé">
+    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('aptos.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
-        <span className="font-semibold text-text">Transfert Aptos</span>
-        <span className="text-[11px] text-mute">décodé par le coffre</span>
+        <span className="font-semibold text-text">{t('aptos.title')}</span>
+        <span className="text-[11px] text-mute">{t('aptos.decodedByVault')}</span>
       </div>
-      <Line k="Fonction" v={s.function} mono />
-      {c.recipientNew && <Line k="Compte destinataire" v="créé par ce transfert (il n’a encore rien reçu)" warn />}
-      <Line k="Frais estimés" v={`${APT(u.estimatedFee)}${fiat(u.estimatedFee)} (${c.gasUsed} unités × ${s.gasUnitPrice} octas)`} />
-      <Line k="Frais maximum" v={`${APT(s.maxFee)}${fiat(BigInt(s.maxFee))} (${s.maxGasAmount} unités)`} />
-      <Line k="Ton solde" v={APT(c.account.balance)} />
-      <Line k="Séquence · chaîne" v={`${s.sequenceNumber} · ${s.chainId}`} />
-      <Line k="Expire dans" v={`≈ ${minutes} min`} last />
+      <Line k={t('aptos.lFunction')} v={s.function} mono />
+      {c.recipientNew && <Line k={t('aptos.lDest')} v={t('aptos.lDestCreated')} warn />}
+      <Line k={t('aptos.lFeeEstimate')} v={t('aptos.lFeeEstimateValue', { fee: `${APT(u.estimatedFee)}${fiat(u.estimatedFee)}`, units: c.gasUsed, price: s.gasUnitPrice })} />
+      <Line k={t('aptos.lFeeMax')} v={t('aptos.lFeeMaxValue', { fee: `${APT(s.maxFee)}${fiat(BigInt(s.maxFee))}`, units: s.maxGasAmount })} />
+      <Line k={t('aptos.lBalance')} v={APT(c.account.balance)} />
+      <Line k={t('aptos.lSeqChain')} v={`${s.sequenceNumber} · ${s.chainId}`} />
+      <Line k={t('aptos.lExpires')} v={t('aptos.lExpiresValue', { minutes })} last />
     </div>
   );
 }
@@ -57,6 +60,7 @@ type Status = { state: 'pending' } | { state: 'committed' } | { state: 'failed';
  * after its expiration (10 min) + margin → it can no longer be included.
  */
 export function AptosTxStatusLine({ adapter, hash, onCommitted }: { adapter: AptosAdapter; hash: string; onCommitted?: () => void }) {
+  useT();
   const [status, setStatus] = useState<Status>({ state: 'pending' });
   useEffect(() => {
     let alive = true;
@@ -70,7 +74,7 @@ export function AptosTxStatusLine({ adapter, hash, onCommitted }: { adapter: Apt
           if (s.success) {
             setStatus({ state: 'committed' });
             onCommitted?.();
-          } else setStatus({ state: 'failed', vmStatus: s.vmStatus || 'inconnu' });
+          } else setStatus({ state: 'failed', vmStatus: s.vmStatus || t('aptos.unknown') });
           return;
         }
         if (Date.now() - started > 660_000) {
@@ -93,34 +97,34 @@ export function AptosTxStatusLine({ adapter, hash, onCommitted }: { adapter: Apt
   if (status.state === 'pending') {
     return (
       <div role="status" className="flex w-full items-center gap-2 rounded-ctl border border-line bg-raised px-3.5 py-2.5 text-[13px] text-text2">
-        <Spinner /> En attente de confirmation par le réseau Aptos (quelques secondes)…
+        <Spinner /> {t('aptos.pending')}
       </div>
     );
   }
   if (status.state === 'committed') {
     return (
       <Notice tone="success" icon={<IconCheck size={16} className="mt-0.5 shrink-0 text-up" />} className="w-full text-left">
-        <strong className="font-semibold">Confirmée :</strong> le transfert est exécuté et définitif.
+        {rt('aptos.committed', { b: (c) => <strong className="font-semibold">{c}</strong> })}
       </Notice>
     );
   }
   if (status.state === 'failed') {
     return (
       <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />} className="w-full text-left">
-        <strong className="font-semibold">Échouée ({status.vmStatus}) :</strong> rien n’a été transféré. Le gaz utilisé est tout de même prélevé.
+        {rt('aptos.failed', { b: (c) => <strong className="font-semibold">{c}</strong> }, { vmStatus: status.vmStatus })}
       </Notice>
     );
   }
   if (status.state === 'expired') {
     return (
       <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
-        Toujours pas confirmée après 11 minutes : elle a expiré et ne sera plus incluse. Vérifie l’historique avant de renvoyer.
+        {t('aptos.expired')}
       </Notice>
     );
   }
   return (
     <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
-      Suivi de la confirmation impossible pour l’instant : {status.message}
+      {t('aptos.trackError', { message: status.message })}
     </Notice>
   );
 }

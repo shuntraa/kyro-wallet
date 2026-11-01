@@ -211,13 +211,13 @@ export function AssetDetail({ id }: { id: string }) {
               {supported.family === 'ada' && <CardanoTokensPanel account={adaAccount.data} hidden={hideBalances} />}
               {supported.family === 'hbar' && hbarAccount.data && (
                 <div className="mt-2 flex flex-col gap-1 border-t border-line pt-3 text-[13px]">
-                  <span className="eyebrow">Compte Hedera</span>
+                  <span className="eyebrow">{t('portfolio.hbarAccount')}</span>
                   {hbarAccount.data.exists ? (
                     <span className="font-mono text-text2">{hbarAccount.data.accountIdChecksum ?? hbarAccount.data.accountId}</span>
                   ) : (
-                    <span className="text-[12px] text-warn">Pas encore de compte : le premier HBAR reçu sur ton adresse EVM le crée.</span>
+                    <span className="text-[12px] text-warn">{t('portfolio.hbarNoAccount')}</span>
                   )}
-                  {hbarAccount.data.hollow && <span className="text-[12px] text-mute">Compte créé par un transfert reçu : ton premier envoi fixe sa clé.</span>}
+                  {hbarAccount.data.hollow && <span className="text-[12px] text-mute">{t('portfolio.hbarHollow')}</span>}
                 </div>
               )}
               {supported.family === 'xmr' && (
@@ -257,7 +257,7 @@ export function AssetDetail({ id }: { id: string }) {
             {history.loading && !history.data ? (
               <div className="flex flex-col gap-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
             ) : activity.length === 0 && supported?.family === 'dot' ? (
-              <EmptyState title="Historique non disponible">Polkadot n’a pas d’indexeur public sans clé : Kyro affiche ton solde, et seulement les envois faits depuis cet appareil.</EmptyState>
+              <EmptyState title={t('portfolio.dotNoHistoryTitle')}>{t('portfolio.dotNoHistory')}</EmptyState>
             ) : activity.length === 0 ? (
               <EmptyState title={t('portfolio.noActivity')}>{supported ? t('portfolio.noActivityHint') : t('portfolio.noAccountHere')}</EmptyState>
             ) : (

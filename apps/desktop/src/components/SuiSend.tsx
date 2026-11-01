@@ -12,23 +12,27 @@ import { fmtCrypto, fmtFiat, shortAddress } from '../lib/format';
 import { Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconWarn } from './icons';
 import { cn } from '../lib/cn';
+import { t, useT } from '../i18n';
+import { rt } from '../i18n/rich';
 
 const SUI = (mist: bigint | string) => fmtCrypto(BigInt(mist), 9, 'SUI', 9);
 
 /** Coins vs address balance, with the reason Kyro spends only the former. */
 export function SuiSpendable({ balance, hidden }: { balance: SuiBalance | undefined; hidden: boolean }) {
+  useT();
   if (!balance) return null;
   const ab = BigInt(balance.addressBalance);
   return (
     <span className="text-[12px] leading-[1.45] text-mute">
-      <strong className="font-semibold text-text2">Solde dépensable : {hidden ? '•••••' : SUI(balance.coin)}</strong>
-      {ab > 0n ? ` · ${hidden ? '•••••' : SUI(ab)} sont dans le « solde d’adresse » de Sui, que Kyro ne sait pas encore dépenser.` : ''} Les frais de gaz sont prélevés en plus du montant.
+      {rt('sui.spendable', { b: (c) => <strong className="font-semibold text-text2">{c}</strong> }, { spendable: hidden ? '•••••' : SUI(balance.coin) })}
+      {ab > 0n ? t('sui.addressBalance', { amount: hidden ? '•••••' : SUI(ab) }) : ''} {t('sui.gasOnTop')}
     </span>
   );
 }
 
 /** Rust's decoding, before the password. */
 export function SuiSummaryView({ u, suiPrice, currency }: { u: SuiUnsigned; suiPrice: number | null; currency: Currency }) {
+  useT();
   const s = u.summary;
   const c = u.context;
   const fiat = (mist: string) => {
@@ -37,23 +41,23 @@ export function SuiSummaryView({ u, suiPrice, currency }: { u: SuiUnsigned; suiP
   };
   const fee = BigInt(c.fee);
   return (
-    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label="Transfert Sui décodé">
+    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('sui.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
-        <span className="font-semibold text-text">Transfert Sui</span>
-        <span className="text-[11px] text-mute">décodé par le coffre</span>
+        <span className="font-semibold text-text">{t('sui.title')}</span>
+        <span className="text-[11px] text-mute">{t('sui.decodedByVault')}</span>
       </div>
-      <Line k="Jeton" v={`SUI (${s.coinType})`} />
-      <Line k="Montant" v={s.amount !== null ? SUI(s.amount) : `tout le solde des pièces${c.receives ? ` (≈ ${SUI(c.receives)} reçus)` : ''}`} warn={s.amount === null} />
-      <Line k="Frais estimés (simulation)" v={`${fee < 0n ? '−' : ''}${SUI(fee < 0n ? -fee : fee)}${fiat(c.fee)}`} />
-      <Line k="Budget de gaz max." v={`${SUI(s.gasBudget)}${fiat(s.gasBudget)}`} />
-      <Line k="Prix du gaz" v={`${s.gasPrice} MIST/unité (référence ${c.referenceGasPrice})`} />
-      <Line k="Pièces de gaz" v={`${s.gasCoins.length} · ${SUI(c.gasCoinsTotal)}`} />
+      <Line k={t('sui.lToken')} v={`SUI (${s.coinType})`} />
+      <Line k={t('sui.lAmount')} v={s.amount !== null ? SUI(s.amount) : t('sui.allCoins', { receives: c.receives ? t('sui.receives', { amount: SUI(c.receives) }) : '' })} warn={s.amount === null} />
+      <Line k={t('sui.lFeeSim')} v={`${fee < 0n ? '−' : ''}${SUI(fee < 0n ? -fee : fee)}${fiat(c.fee)}`} />
+      <Line k={t('sui.lGasBudget')} v={`${SUI(s.gasBudget)}${fiat(s.gasBudget)}`} />
+      <Line k={t('sui.lGasPrice')} v={t('sui.lGasPriceValue', { price: s.gasPrice, reference: c.referenceGasPrice })} />
+      <Line k={t('sui.lGasCoins')} v={`${s.gasCoins.length} · ${SUI(c.gasCoinsTotal)}`} />
       {s.gasCoins.slice(0, 5).map((g, i) => (
         <Line key={g.objectId} k={`· ${shortAddress(g.objectId)} v${g.version}`} v={c.gasCoinBalances[i] !== undefined ? SUI(c.gasCoinBalances[i]) : '?'} mono />
       ))}
-      {s.gasCoins.length > 5 && <Line k={`· ${s.gasCoins.length - 5} autres pièces`} v={SUI(c.gasCoinBalances.slice(5).reduce((a, b) => a + BigInt(b), 0n))} />}
-      <Line k="Valable jusqu’à l’époque" v={s.expirationEpoch !== null ? `n° ${s.expirationEpoch} (actuelle ${c.epoch})` : 'aucune limite'} warn={s.expirationEpoch === null} />
-      <Line k="Empreinte" v={shortAddress(s.digest)} last />
+      {s.gasCoins.length > 5 && <Line k={t('sui.otherCoins', { count: s.gasCoins.length - 5 })} v={SUI(c.gasCoinBalances.slice(5).reduce((a, b) => a + BigInt(b), 0n))} />}
+      <Line k={t('sui.lValidEpoch')} v={s.expirationEpoch !== null ? t('sui.lValidEpochValue', { epoch: s.expirationEpoch, current: c.epoch }) : t('sui.noLimit')} warn={s.expirationEpoch === null} />
+      <Line k={t('sui.lDigest')} v={shortAddress(s.digest)} last />
     </div>
   );
 }
@@ -71,6 +75,7 @@ type Status = { state: 'pending' } | { state: 'done' } | { state: 'failed'; erro
 
 /** After `sui_broadcast` (already final): follows `sui_tx_status` until the indexer has it. */
 export function SuiTxStatusLine({ adapter, digest, recipient, onIndexed }: { adapter: SuiAdapter; digest: string; recipient: string; onIndexed?: () => void }) {
+  useT();
   const [status, setStatus] = useState<Status>({ state: 'pending' });
   useEffect(() => {
     let alive = true;
@@ -84,7 +89,7 @@ export function SuiTxStatusLine({ adapter, digest, recipient, onIndexed }: { ada
           if (s.success) {
             setStatus({ state: 'done' });
             onIndexed?.();
-          } else setStatus({ state: 'failed', error: s.error ?? 'inconnue' });
+          } else setStatus({ state: 'failed', error: s.error ?? t('sui.unknown') });
           return;
         }
         if (Date.now() - started > 60_000) {
@@ -107,34 +112,34 @@ export function SuiTxStatusLine({ adapter, digest, recipient, onIndexed }: { ada
   if (status.state === 'pending') {
     return (
       <div role="status" className="flex w-full items-center gap-2 rounded-ctl border border-line bg-raised px-3.5 py-2.5 text-[13px] text-text2">
-        <Spinner /> Transaction finale sur Sui, en attente de l’indexeur (quelques secondes)…
+        <Spinner /> {t('sui.pending')}
       </div>
     );
   }
   if (status.state === 'done') {
     return (
       <Notice tone="success" icon={<IconCheck size={16} className="mt-0.5 shrink-0 text-up" />} className="w-full text-left">
-        <strong className="font-semibold">Exécutée :</strong> le transfert est inclus dans un checkpoint Sui. {shortAddress(recipient)} a reçu les fonds.
+        {rt('sui.done', { b: (c) => <strong className="font-semibold">{c}</strong> }, { recipient: shortAddress(recipient) })}
       </Notice>
     );
   }
   if (status.state === 'failed') {
     return (
       <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />} className="w-full text-left">
-        <strong className="font-semibold">Échouée :</strong> {status.error}. Rien n’a été transféré ; les frais de gaz sont tout de même prélevés.
+        {rt('sui.failed', { b: (c) => <strong className="font-semibold">{c}</strong> }, { error: status.error })}
       </Notice>
     );
   }
   if (status.state === 'slow') {
     return (
       <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
-        L’indexeur ne la montre pas encore après 1 minute. La transaction était finale à l’envoi : vérifie l’historique avant de renvoyer.
+        {t('sui.slow')}
       </Notice>
     );
   }
   return (
     <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
-      Suivi impossible pour l’instant : {status.message}
+      {t('sui.trackError', { message: status.message })}
     </Notice>
   );
 }

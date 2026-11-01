@@ -31,6 +31,7 @@ import {
   type TonWarning,
 } from './ipc';
 import { parseTonAddress, tonAddressProblem, tonFriendly } from './ton-address';
+import { l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 /** Demo fee of a transfer (nanotons), and of a first transfer that deploys the wallet. */
@@ -48,7 +49,7 @@ export function demoTonAddress(account: number, network: Network): string {
   return tonFriendly(0, hashOfLabel(`kyro-demo-ton-${network}-${account}`), false, network === 'testnet');
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 const tonText = (nano: bigint | string) => {
   const v = BigInt(nano);
   const frac = (v % 1_000_000_000n).toString().padStart(9, '0').replace(/0+$/, '');
@@ -143,8 +144,8 @@ export function createDemoTon(d: DemoTonDeps) {
     const problem = tonAddressProblem(s);
     if (problem) throw invalidInput(problem);
     const p = parseTonAddress(s)!;
-    if (p.testnet && d.network === 'mainnet') throw invalidInput('adresse TON de testnet (kQ… / 0Q…) : refusée sur mainnet');
-    if (p.workchain !== 0) throw invalidInput('adresse de la masterchain (-1) : seuls les comptes de la basechain (0) sont pris en charge');
+    if (p.testnet && d.network === 'mainnet') throw invalidInput(l10n('adresse TON de testnet (kQ… / 0Q…) : refusée sur mainnet', 'testnet TON address (kQ… / 0Q…): refused on mainnet'));
+    if (p.workchain !== 0) throw invalidInput(l10n('adresse de la masterchain (-1) : seuls les comptes de la basechain (0) sont pris en charge', 'masterchain address (-1): only basechain (0) accounts are supported'));
     return p;
   };
 
@@ -164,11 +165,11 @@ export function createDemoTon(d: DemoTonDeps) {
   /** ton_backend::check_transfer. */
   const checkTransfer = (ours: TonAccountInfo, amount: bigint | null, fee: bigint) => {
     const balance = BigInt(ours.balance);
-    if (ours.status === 'frozen') throw invalidInput('ton portefeuille TON est gelé (frais de stockage impayés) : il ne peut rien envoyer');
-    if (ours.status === 'nonexist' || (ours.status === 'uninit' && balance === 0n)) throw invalidInput("ton portefeuille TON n'a encore rien reçu : il ne peut rien envoyer");
+    if (ours.status === 'frozen') throw invalidInput(l10n('ton portefeuille TON est gelé (frais de stockage impayés) : il ne peut rien envoyer', 'your TON wallet is frozen (unpaid storage fees): it cannot send anything'));
+    if (ours.status === 'nonexist' || (ours.status === 'uninit' && balance === 0n)) throw invalidInput(l10n("ton portefeuille TON n'a encore rien reçu : il ne peut rien envoyer", 'your TON wallet has not received anything yet: it cannot send anything'));
     const need = (amount ?? 0n) + fee;
     if (need >= balance) {
-      throw invalidInput(`solde TON insuffisant : ${tonText(balance).replace(' TON', '')} TON, il en faut plus de ${tonText(need).replace(' TON', '')} (montant + frais estimés${ours.status === 'uninit' ? ', dont le déploiement du portefeuille' : ''})`);
+      throw invalidInput(l10n(`solde TON insuffisant : ${tonText(balance).replace(' TON', '')} TON, il en faut plus de ${tonText(need).replace(' TON', '')} (montant + frais estimés${ours.status === 'uninit' ? ', dont le déploiement du portefeuille' : ''})`, `insufficient TON balance: ${tonText(balance).replace(' TON', '')} TON, more than ${tonText(need).replace(' TON', '')} needed (amount + estimated fee${ours.status === 'uninit' ? ', including the wallet deployment' : ''})`));
     }
   };
 
@@ -178,9 +179,9 @@ export function createDemoTon(d: DemoTonDeps) {
     try {
       t = JSON.parse(new TextDecoder().decode(base64.decode(String(boc ?? '').trim()))) as DemoTransfer;
     } catch {
-      throw invalidInput('BOC TON invalide');
+      throw invalidInput(l10n('BOC TON invalide', 'invalid TON BOC'));
     }
-    if (t.wallet !== me) throw invalidInput("ce message n'est pas adressé à ton portefeuille TON");
+    if (t.wallet !== me) throw invalidInput(l10n("ce message n'est pas adressé à ton portefeuille TON", 'this message is not addressed to your TON wallet'));
     return t;
   };
 
@@ -210,14 +211,14 @@ export function createDemoTon(d: DemoTonDeps) {
   /** commands_ton.rs describe_ton: the comment gets its own framed block. */
   const describe = (s: TonTxSummary, c: TonContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-    let out = `Envoi TON${testnet ? ' (testnet)' : ''}\n\nÀ : ${s.destination}\n(même compte que ${s.destinationOther} : seul l'indicateur de rebond diffère)\n${line}\n`;
-    out += s.comment !== null ? `COMMENTAIRE : « ${s.comment} »\n` : "AUCUN COMMENTAIRE\n(une plateforme d'échange en exige souvent un, appelé aussi mémo ou tag : sans lui, les fonds peuvent être perdus)\n";
+    let out = l10n(`Envoi TON${testnet ? ' (testnet)' : ''}\n\nÀ : ${s.destination}\n(même compte que ${s.destinationOther} : seul l'indicateur de rebond diffère)\n${line}\n`, `TON send${testnet ? ' (testnet)' : ''}\n\nTo: ${s.destination}\n(same account as ${s.destinationOther}: only the bounce flag differs)\n${line}\n`);
+    out += s.comment !== null ? l10n(`COMMENTAIRE : « ${s.comment} »\n`, `COMMENT: “${s.comment}”\n`) : l10n("AUCUN COMMENTAIRE\n(une plateforme d'échange en exige souvent un, appelé aussi mémo ou tag : sans lui, les fonds peuvent être perdus)\n", 'NO COMMENT\n(an exchange often requires one, also called memo or tag: without it, the funds may be lost)\n');
     out += `${line}\n`;
-    out += s.sendAll ? `Montant : TOUT LE SOLDE, ≈ ${tonText(c.account.balance)} (solde moins les frais) — ton portefeuille restera à 0\n` : `Montant : ${tonText(s.amount)} (${s.amount} nanotons)\n`;
-    out += s.bounce ? 'Rebond : oui (si le destinataire échoue, les fonds reviennent, moins les frais)\n' : c.destination.status === 'active' ? "Rebond : non (adresse non rebondissante UQ… : les fonds restent chez le destinataire quoi qu'il arrive)\n" : "Rebond : non — ce compte n'est pas encore actif (jamais utilisé) : les fonds y arrivent quand même et y restent\n";
-    out += `\nFrais estimés : ≈ ${tonText(c.fee)} (en plus du montant, prélevés sur ton solde)\nSolde : ${tonText(c.account.balance)}\n`;
-    if (s.deploysWallet) out += 'Premier envoi : il déploie aussi ton portefeuille (contrat standard v4R2).\n';
-    out += `Valable encore ≈ ${Math.ceil(Math.max(0, s.validUntil - nowSecs()) / 60)} min, seqno ${s.seqno}\n`;
+    out += s.sendAll ? l10n(`Montant : TOUT LE SOLDE, ≈ ${tonText(c.account.balance)} (solde moins les frais) — ton portefeuille restera à 0\n`, `Amount: THE WHOLE BALANCE, ≈ ${tonText(c.account.balance)} (balance minus fees) — your wallet will be left at 0\n`) : l10n(`Montant : ${tonText(s.amount)} (${s.amount} nanotons)\n`, `Amount: ${tonText(s.amount)} (${s.amount} nanotons)\n`);
+    out += s.bounce ? l10n('Rebond : oui (si le destinataire échoue, les fonds reviennent, moins les frais)\n', 'Bounce: yes (if the recipient fails, the funds come back, minus fees)\n') : c.destination.status === 'active' ? l10n("Rebond : non (adresse non rebondissante UQ… : les fonds restent chez le destinataire quoi qu'il arrive)\n", 'Bounce: no (non-bounceable UQ… address: the funds stay with the recipient whatever happens)\n') : l10n("Rebond : non — ce compte n'est pas encore actif (jamais utilisé) : les fonds y arrivent quand même et y restent\n", 'Bounce: no — this account is not active yet (never used): the funds still arrive there and stay\n');
+    out += l10n(`\nFrais estimés : ≈ ${tonText(c.fee)} (en plus du montant, prélevés sur ton solde)\nSolde : ${tonText(c.account.balance)}\n`, `\nEstimated fee: ≈ ${tonText(c.fee)} (on top of the amount, taken from your balance)\nBalance: ${tonText(c.account.balance)}\n`);
+    if (s.deploysWallet) out += l10n('Premier envoi : il déploie aussi ton portefeuille (contrat standard v4R2).\n', 'First send: it also deploys your wallet (standard v4R2 contract).\n');
+    out += l10n(`Valable encore ≈ ${Math.ceil(Math.max(0, s.validUntil - nowSecs()) / 60)} min, seqno ${s.seqno}\n`, `Still valid ≈ ${Math.ceil(Math.max(0, s.validUntil - nowSecs()) / 60)} min, seqno ${s.seqno}\n`);
     return out;
   };
 
@@ -228,7 +229,7 @@ export function createDemoTon(d: DemoTonDeps) {
     ton_address: (a) => {
       d.requireUnlocked();
       const account = a.account === undefined ? 0 : Number(a.account);
-      if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput('numéro de compte : au plus 100');
+      if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput(l10n('numéro de compte : au plus 100', 'account number: at most 100'));
       return demoTonAddress(account, d.network);
     },
     ton_account: async (a) => {
@@ -246,15 +247,15 @@ export function createDemoTon(d: DemoTonDeps) {
       const dest = userAddress(a.to);
       const sendAll = a.sendAll === true;
       const amountStr = String(a.amount ?? '').trim();
-      if (!sendAll && (!/^\d+$/.test(amountStr) || BigInt(amountStr) <= 0n)) throw invalidInput('montant en nanotons invalide');
+      if (!sendAll && (!/^\d+$/.test(amountStr) || BigInt(amountStr) <= 0n)) throw invalidInput(l10n('montant en nanotons invalide', 'invalid amount in nanotons'));
       const comment = typeof a.comment === 'string' && a.comment !== '' ? a.comment : null;
       if (comment !== null && new TextEncoder().encode(comment).length > MAX_COMMENT_BYTES) {
-        throw invalidInput(`commentaire trop long (${new TextEncoder().encode(comment).length} octets, ${MAX_COMMENT_BYTES} au plus)`);
+        throw invalidInput(l10n(`commentaire trop long (${new TextEncoder().encode(comment).length} octets, ${MAX_COMMENT_BYTES} au plus)`, `comment too long (${new TextEncoder().encode(comment).length} bytes, ${MAX_COMMENT_BYTES} at most)`));
       }
       await backend();
       const account = info(meHash);
       const destination = info(dest.hash);
-      if (destination.status === 'frozen') throw invalidInput('le compte destinataire est gelé (frais de stockage impayés) : envoi refusé');
+      if (destination.status === 'frozen') throw invalidInput(l10n('le compte destinataire est gelé (frais de stockage impayés) : envoi refusé', 'the recipient account is frozen (unpaid storage fees): send refused'));
       const fee = feeFor(account);
       checkTransfer(account, sendAll ? null : BigInt(amountStr), fee);
       const t: DemoTransfer = {
@@ -274,31 +275,31 @@ export function createDemoTon(d: DemoTonDeps) {
     ton_sign_tx: async (a) => {
       d.requireUnlocked();
       const t = decode(a.boc);
-      if (t.signature) throw invalidInput('ce transfert TON est déjà signé');
+      if (t.signature) throw invalidInput(l10n('ce transfert TON est déjà signé', 'this TON transfer is already signed'));
       const summary = summaryOf(t);
-      if (t.validUntil <= nowSecs() + 15) throw invalidInput('transfert TON expiré (valable 10 min après sa préparation) : reconstruis-le');
+      if (t.validUntil <= nowSecs() + 15) throw invalidInput(l10n('transfert TON expiré (valable 10 min après sa préparation) : reconstruis-le', 'TON transfer expired (valid 10 min after it was prepared): rebuild it'));
       await backend();
       const account = info(meHash);
       const destination = info(t.destHash);
       const fresh = account.status === 'uninit' ? t.deploys && t.seqno === 0 : account.status === 'active' && !t.deploys && account.seqno === t.seqno;
-      if (!fresh) throw invalidInput('numéro de séquence (seqno) ou état du portefeuille périmé : reconstruis le transfert');
+      if (!fresh) throw invalidInput(l10n('numéro de séquence (seqno) ou état du portefeuille périmé : reconstruis le transfert', 'stale sequence number (seqno) or wallet state: rebuild the transfer'));
       const fee = feeFor(account);
       checkTransfer(account, t.sendAll ? null : BigInt(t.amount), fee);
       const context: TonContext = { account, destination, fee: fee.toString() };
       d.checkPassword(a.password);
-      if (!d.confirm(`Confirmer l'envoi TON\n${describe(summary, context)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !d.confirm('Attention : transfert à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer l'envoi TON\n${describe(summary, context)}`, `Confirm the TON send\n${describe(summary, context)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (summary.requiresExtraConfirmation && !d.confirm(l10n('Attention : transfert à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: transfer to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const signed = encode({ ...t, signature: hashOfLabel(`sig:${String(a.boc)}`) });
       return { boc: signed, hash: hashOfLabel(`msg:${signed}`), normalizedHash: hashOfLabel(`norm:${signed}`), summary, context };
     },
     ton_broadcast: async (a) => {
       const t = decode(a.boc);
-      if (!t.signature) throw invalidInput('signature TON invalide');
-      if (t.validUntil <= nowSecs()) throw invalidInput('transfert TON expiré : reconstruis-le');
+      if (!t.signature) throw invalidInput(l10n('signature TON invalide', 'invalid TON signature'));
+      if (t.validUntil <= nowSecs()) throw invalidInput(l10n('transfert TON expiré : reconstruis-le', 'TON transfer expired: rebuild it'));
       await backend();
       const ours = state.accounts.get(meHash);
       const seqno = ours?.status === 'active' ? ours.seqno : 0;
-      if (!ours || t.seqno !== seqno) throw invalidInput('transfert TON refusé par le nœud : seqno inattendu');
+      if (!ours || t.seqno !== seqno) throw invalidInput(l10n('transfert TON refusé par le nœud : seqno inattendu', 'TON transfer rejected by the node: unexpected seqno'));
       const fee = t.deploys ? TON_DEMO_DEPLOY_FEE : TON_DEMO_FEE;
       const amount = t.sendAll ? ours.balance - fee : BigInt(t.amount);
       const success = amount > 0n && amount + fee <= ours.balance;
@@ -318,7 +319,7 @@ export function createDemoTon(d: DemoTonDeps) {
     },
     ton_tx_status: async (a): Promise<TonTxStatus> => {
       const h = String(a.hash ?? '').trim().toLowerCase();
-      if (!/^[0-9a-f]{64}$/.test(h)) throw invalidInput('hash : 64 caractères hexadécimaux');
+      if (!/^[0-9a-f]{64}$/.test(h)) throw invalidInput(l10n('hash : 64 caractères hexadécimaux', 'hash: 64 hexadecimal characters'));
       await backend();
       const s = state.sent.get(h);
       if (!s || d.now() - s.at < PROCESS_MS) return { found: false, success: false, txHash: null };

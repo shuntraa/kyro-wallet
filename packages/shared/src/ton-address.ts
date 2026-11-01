@@ -6,6 +6,7 @@
 // workchain 0 or -1. Raw `0:…` forms are refused (no checksum). Used by the interface to give
 // early feedback and by the demo backend; Rust re-checks everything on every command.
 import { crc16Xmodem } from './stellar';
+import { l10n } from './i18n';
 
 export interface TonFriendlyAddress {
   workchain: number;
@@ -46,16 +47,16 @@ function b64urlEncode(b: Uint8Array): string {
 /** Why `s` is not a valid user-friendly TON address, or null. */
 export function tonAddressProblem(s: string): string | null {
   const a = s.trim();
-  if (a.includes(':')) return 'adresse TON brute (0:…) refusée : utilise la forme lisible EQ… / UQ…, qui a une somme de contrôle';
-  if (a.length !== 48) return 'adresse TON invalide (48 caractères attendus)';
-  if (/[-_]/.test(a) && /[+/]/.test(a)) return 'adresse TON invalide (base64 mélangé)';
+  if (a.includes(':')) return l10n('adresse TON brute (0:…) refusée : utilise la forme lisible EQ… / UQ…, qui a une somme de contrôle', 'raw TON address (0:…) refused: use the readable EQ… / UQ… form, which has a checksum');
+  if (a.length !== 48) return l10n('adresse TON invalide (48 caractères attendus)', 'invalid TON address (48 characters expected)');
+  if (/[-_]/.test(a) && /[+/]/.test(a)) return l10n('adresse TON invalide (base64 mélangé)', 'invalid TON address (mixed base64)');
   const b = b64decode(a);
-  if (!b || b.length !== 36) return 'adresse TON invalide';
+  if (!b || b.length !== 36) return l10n('adresse TON invalide', 'invalid TON address');
   const crc = crc16Xmodem(b.slice(0, 34));
-  if (b[34] !== crc >> 8 || b[35] !== (crc & 0xff)) return 'adresse TON invalide (somme de contrôle)';
+  if (b[34] !== crc >> 8 || b[35] !== (crc & 0xff)) return l10n('adresse TON invalide (somme de contrôle)', 'invalid TON address (checksum)');
   const tag = (b[0] ?? 0) & 0x7f;
-  if (tag !== 0x11 && tag !== 0x51) return 'adresse TON invalide (indicateur inconnu)';
-  if (b[1] !== 0 && b[1] !== 0xff) return 'adresse TON invalide (chaîne de travail inconnue)';
+  if (tag !== 0x11 && tag !== 0x51) return l10n('adresse TON invalide (indicateur inconnu)', 'invalid TON address (unknown flag)');
+  if (b[1] !== 0 && b[1] !== 0xff) return l10n('adresse TON invalide (chaîne de travail inconnue)', 'invalid TON address (unknown workchain)');
   return null;
 }
 

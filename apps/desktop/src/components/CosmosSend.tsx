@@ -11,18 +11,22 @@ import { fmtCrypto, fmtFiat, shortAddress } from '../lib/format';
 import { Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconWarn } from './icons';
 import { cn } from '../lib/cn';
+import { locale, t, useT } from '../i18n';
+import { rt } from '../i18n/rich';
+import { cosmos as cosmosFr } from '../i18n/fr/cosmos';
 
 const ATOM = (uatom: bigint | string) => fmtCrypto(BigInt(uatom), 6, 'ATOM', 6);
 
-/** The exchange-deposit hint, shown while the memo is empty. */
-export const EXCHANGE_MEMO_HINT = 'Les plateformes d’échange exigent presque toujours un mémo pour un dépôt d’ATOM : sans lui, les fonds peuvent être perdus.';
+/** The exchange-deposit hint, shown while the memo is empty: its French wording (the UI shows `t('cosmos.exchangeHint')`). */
+export const EXCHANGE_MEMO_HINT: string = cosmosFr['cosmos.exchangeHint'];
 
 export function CosmosMemoField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  useT();
   const problem = cosmosMemoProblem(value);
   return (
     <div className={cn('flex flex-col gap-2 rounded-box border px-4 py-3.5', problem ? 'border-down/60 bg-down/[.05]' : 'border-ice-line bg-ice/[.05]')}>
       <label htmlFor="cosmos-memo" className="text-[13px] font-semibold text-text">
-        Mémo <span className="font-normal text-mute">· facultatif, public pour toujours</span>
+        {t('cosmos.memo')} <span className="font-normal text-mute">{t('cosmos.memoHint')}</span>
       </label>
       <input
         id="cosmos-memo"
@@ -30,7 +34,7 @@ export function CosmosMemoField({ value, onChange }: { value: string; onChange: 
         autoComplete="off"
         spellCheck={false}
         value={value}
-        placeholder="ex. 104857"
+        placeholder={t('cosmos.memoPlaceholder')}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={!!problem}
         className="h-11 rounded-ctl border border-line-3 bg-bg px-3 font-mono text-[15px] font-semibold text-text focus:border-ice-line"
@@ -40,10 +44,10 @@ export function CosmosMemoField({ value, onChange }: { value: string; onChange: 
       ) : value.trim() === '' ? (
         <span className="flex items-start gap-1.5 text-[12px] leading-[1.45] text-mute">
           <IconWarn size={13} className="mt-0.5 shrink-0 text-warn" />
-          <span>Aucun mémo. {EXCHANGE_MEMO_HINT}</span>
+          <span>{t('cosmos.noMemo', { hint: t('cosmos.exchangeHint') })}</span>
         </span>
       ) : (
-        <span className="text-[12px] text-mute">Recopie-le exactement : la fenêtre système l’affiche encadré, tel que le coffre l’a décodé.</span>
+        <span className="text-[12px] text-mute">{t('cosmos.memoCopy')}</span>
       )}
     </div>
   );
@@ -51,18 +55,20 @@ export function CosmosMemoField({ value, onChange }: { value: string; onChange: 
 
 /** What can be sent now (vesting accounts: less than the balance). */
 export function CosmosSpendable({ account, hidden }: { account: CosmosAccountInfo | undefined; hidden: boolean }) {
+  useT();
   if (!account) return null;
-  if (!account.exists) return <span className="text-[12px] text-warn">Ton compte Cosmos n’est pas encore connu du réseau : il doit d’abord recevoir des ATOM.</span>;
+  if (!account.exists) return <span className="text-[12px] text-warn">{t('cosmos.ownMissing')}</span>;
   if (account.spendable === account.balance) return null;
   return (
     <span className="text-[12px] leading-[1.45] text-mute">
-      <strong className="font-semibold text-text2">Disponible : {hidden ? '•••••' : ATOM(account.spendable)}</strong> (solde {hidden ? '•••••' : ATOM(account.balance)}, le reste est encore en vesting).
+      {rt('cosmos.spendable', { b: (c) => <strong className="font-semibold text-text2">{c}</strong> }, { spendable: hidden ? '•••••' : ATOM(account.spendable), balance: hidden ? '•••••' : ATOM(account.balance) })}
     </span>
   );
 }
 
 /** Rust's decoding of the SignDoc, before the password. */
 export function CosmosSummaryView({ u, atomPrice, currency }: { u: CosmosUnsigned; atomPrice: number | null; currency: Currency }) {
+  useT();
   const s = u.summary;
   const fiat = (d: string) => {
     const v = atomPrice !== null ? (Number(BigInt(d)) / 1e6) * atomPrice : 0;
@@ -70,20 +76,20 @@ export function CosmosSummaryView({ u, atomPrice, currency }: { u: CosmosUnsigne
   };
   const minutes = Math.max(1, Math.ceil(((s.timeoutHeight - u.context.height) * 6) / 60));
   return (
-    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label="Transaction Cosmos décodée">
+    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('cosmos.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">MsgSend Cosmos Hub</span>
-        <span className="text-[11px] text-mute">décodé par le coffre</span>
+        <span className="text-[11px] text-mute">{t('cosmos.decodedByVault')}</span>
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', s.memo !== null ? 'border-ice-line' : 'border-warn/50')}>
-        <span className="block text-[12px] font-medium text-mute">Mémo</span>
-        <span className={cn('block font-mono text-[16px] font-semibold break-all', s.memo !== null ? 'text-text' : 'text-warn')}>{s.memo ?? 'AUCUN'}</span>
+        <span className="block text-[12px] font-medium text-mute">{t('cosmos.memo')}</span>
+        <span className={cn('block font-mono text-[16px] font-semibold break-all', s.memo !== null ? 'text-text' : 'text-warn')}>{s.memo ?? t('cosmos.memoNone')}</span>
       </div>
-      <Line k="Frais" v={`${ATOM(s.fee)}${fiat(s.fee)}`} />
-      <Line k="Gas maximum" v={`${s.gasLimit.toLocaleString('fr-FR')} (simulé par le réseau)`} />
-      <Line k="Chain-id" v={s.chainId} />
-      <Line k="Compte / séquence" v={`n° ${s.accountNumber} / ${s.sequence}`} />
-      <Line k="Valable jusqu’au bloc" v={`n° ${s.timeoutHeight} (≈ ${minutes} min)`} last />
+      <Line k={t('cosmos.lFee')} v={`${ATOM(s.fee)}${fiat(s.fee)}`} />
+      <Line k={t('cosmos.lGas')} v={t('cosmos.lGasValue', { gas: s.gasLimit.toLocaleString(locale()) })} />
+      <Line k={t('cosmos.lChainId')} v={s.chainId} />
+      <Line k={t('cosmos.lAccountSeq')} v={t('cosmos.lAccountSeqValue', { account: s.accountNumber, sequence: s.sequence })} />
+      <Line k={t('cosmos.lValidUntil')} v={t('cosmos.lValidUntilValue', { height: s.timeoutHeight, minutes })} last />
     </div>
   );
 }
@@ -105,6 +111,7 @@ type Status = { state: 'pending' } | { state: 'included' } | { state: 'failed'; 
  * timeout height (≈ 10 min) + margin → it can no longer be included.
  */
 export function CosmosTxStatusLine({ adapter, hash, recipient, onIncluded }: { adapter: CosmosAdapter; hash: string; recipient: string; onIncluded?: () => void }) {
+  useT();
   const [status, setStatus] = useState<Status>({ state: 'pending' });
   useEffect(() => {
     let alive = true;
@@ -141,34 +148,34 @@ export function CosmosTxStatusLine({ adapter, hash, recipient, onIncluded }: { a
   if (status.state === 'pending') {
     return (
       <div role="status" className="flex w-full items-center gap-2 rounded-ctl border border-line bg-raised px-3.5 py-2.5 text-[13px] text-text2">
-        <Spinner /> En attente d’inclusion dans un bloc Cosmos Hub (quelques secondes)…
+        <Spinner /> {t('cosmos.pending')}
       </div>
     );
   }
   if (status.state === 'included') {
     return (
       <Notice tone="success" icon={<IconCheck size={16} className="mt-0.5 shrink-0 text-up" />} className="w-full text-left">
-        <strong className="font-semibold">Incluse :</strong> la transaction est dans un bloc (code 0). {shortAddress(recipient)} a reçu les ATOM.
+        {rt('cosmos.included', { b: (c) => <strong className="font-semibold">{c}</strong> }, { recipient: shortAddress(recipient) })}
       </Notice>
     );
   }
   if (status.state === 'failed') {
     return (
       <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />} className="w-full text-left">
-        <strong className="font-semibold">Échouée (code {status.code ?? '?'}) :</strong> le réseau a refusé l’envoi{status.log ? ` (${status.log})` : ''}, rien n’a été livré. Les frais sont tout de même prélevés.
+        {rt('cosmos.failed', { b: (c) => <strong className="font-semibold">{c}</strong> }, { code: status.code ?? '?', log: status.log ? ` (${status.log})` : '' })}
       </Notice>
     );
   }
   if (status.state === 'expired') {
     return (
       <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
-        Toujours pas incluse après 12 minutes : elle a dépassé son bloc limite et ne sera plus incluse. Vérifie l’historique avant de renvoyer.
+        {t('cosmos.expired')}
       </Notice>
     );
   }
   return (
     <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
-      Suivi de l’inclusion impossible pour l’instant : {status.message}
+      {t('cosmos.trackError', { message: status.message })}
     </Notice>
   );
 }

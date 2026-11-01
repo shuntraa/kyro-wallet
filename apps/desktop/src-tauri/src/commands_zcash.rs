@@ -14,9 +14,10 @@ use wallet_core::{Network, ZecAddressKind, ZecCoin, ZecSendRequest, ZecTxSummary
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::dialog_text;
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::state::AppState;
 use crate::zcash_backend::{self, ZecCtx};
 
@@ -213,8 +214,8 @@ pub struct ZecSigned {
     summary: ZecTxSummary,
 }
 
-fn zec(raw: &str) -> String {
-    format!("{} ZEC", format_units(raw, 8))
+fn zec(lang: Lang, raw: &str) -> String {
+    format!("{} ZEC", format_units_in(lang, raw, 8))
 }
 
 fn net_suffix(net: Network) -> &'static str {
@@ -225,77 +226,134 @@ fn net_suffix(net: Network) -> &'static str {
 }
 
 /// Body of the native dialog, built from Rust's own construction and decoding only.
-pub(crate) fn describe_zec(s: &ZecTxSummary, net: Network) -> String {
-    let mut out = format!("Envoi Zcash transparent{}\n\n", net_suffix(net));
+pub(crate) fn describe_zec(lang: Lang, s: &ZecTxSummary, net: Network) -> String {
+    let z = |v: &str| zec(lang, v);
+    let mut out = format!(
+        "{}{}\n\n",
+        lang.pick("Envoi Zcash transparent", "Transparent Zcash send"),
+        net_suffix(net)
+    );
     let to = dialog_text::field(&s.to, 120);
+    let to_label = lang.pick("À : ", "To: ");
     match s.to_kind {
         ZecAddressKind::Tex => {
-            out += &format!(
-                "À : {to}\n  (adresse TEX, ZIP 320 : paie la clé de {})\n",
-                s.to_address
-            );
+            out += &match lang {
+                Lang::Fr => format!(
+                    "{to_label}{to}\n  (adresse TEX, ZIP 320 : paie la clé de {})\n",
+                    s.to_address
+                ),
+                Lang::En => format!(
+                    "{to_label}{to}\n  (TEX address, ZIP 320: pays the key of {})\n",
+                    s.to_address
+                ),
+            };
         }
-        _ => out += &format!("À : {to}\n"),
+        _ => out += &format!("{to_label}{to}\n"),
     }
-    out += &format!("Montant : {}\n", zec(&s.amount));
+    out += &format!("{}{}\n", lang.pick("Montant : ", "Amount: "), z(&s.amount));
     if let Some(c) = &s.change {
-        out += &format!(
-            "Monnaie (revient chez toi) : {}\n  {} (adresse de monnaie n° {})\n",
-            zec(&c.amount),
-            c.address,
-            c.index
-        );
+        out += &match lang {
+            Lang::Fr => format!(
+                "Monnaie (revient chez toi) : {}\n  {} (adresse de monnaie n° {})\n",
+                z(&c.amount),
+                c.address,
+                c.index
+            ),
+            Lang::En => format!(
+                "Change (comes back to you): {}\n  {} (change address no. {})\n",
+                z(&c.amount),
+                c.address,
+                c.index
+            ),
+        };
     }
-    out += &format!(
-        "\nFrais : {} ({} zatoshis ; ZIP 317 : {} zatoshis)",
-        zec(&s.fee),
-        s.fee,
-        s.zip317_fee
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais : {} ({} zatoshis ; ZIP 317 : {} zatoshis)",
+            z(&s.fee),
+            s.fee,
+            s.zip317_fee
+        ),
+        Lang::En => format!(
+            "\nFee: {} ({} zatoshis; ZIP 317: {} zatoshis)",
+            z(&s.fee),
+            s.fee,
+            s.zip317_fee
+        ),
+    };
     if s.folded != "0" {
-        out += &format!(
-            "\nPas de monnaie : le reste ({} zatoshis), trop petit pour une sortie, est ajouté aux frais.",
-            s.folded
-        );
+        out += &match lang {
+            Lang::Fr => format!(
+                "\nPas de monnaie : le reste ({} zatoshis), trop petit pour une sortie, est ajouté aux frais.",
+                s.folded
+            ),
+            Lang::En => format!(
+                "\nNo change: the remainder ({} zatoshis), too small for an output, is added to the fee.",
+                s.folded
+            ),
+        };
     }
-    out += &format!(
-        "\nEntrées : {} pièce(s) à toi, {}",
-        s.inputs,
-        zec(&s.input_total)
-    );
-    out += &format!(
-        "\nRéseau : {} (branche {}) · valable jusqu'au bloc {} (≈ {} min)",
-        s.upgrade,
-        s.branch_id,
-        s.expiry_height,
-        (u64::from(s.expiry_height.saturating_sub(s.target_height)) + 1) * 75 / 60
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nEntrées : {} pièce(s) à toi, {}",
+            s.inputs,
+            z(&s.input_total)
+        ),
+        Lang::En => format!(
+            "\nInputs: {} coin(s) of yours, {}",
+            s.inputs,
+            z(&s.input_total)
+        ),
+    };
+    let minutes = (u64::from(s.expiry_height.saturating_sub(s.target_height)) + 1) * 75 / 60;
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nRéseau : {} (branche {}) · valable jusqu'au bloc {} (≈ {minutes} min)",
+            s.upgrade, s.branch_id, s.expiry_height
+        ),
+        Lang::En => format!(
+            "\nNetwork: {} (branch {}) · valid until block {} (≈ {minutes} min)",
+            s.upgrade, s.branch_id, s.expiry_height
+        ),
+    };
     for w in &s.warnings {
         if let ZecWarning::ExpiryCapped {
             next_upgrade_height,
         } = w
         {
-            out += &format!(
-                "\nMise à niveau du réseau au bloc {next_upgrade_height} : la transaction expire plus tôt que d'habitude."
-            );
+            out += &match lang {
+                Lang::Fr => format!(
+                    "\nMise à niveau du réseau au bloc {next_upgrade_height} : la transaction expire plus tôt que d'habitude."
+                ),
+                Lang::En => format!(
+                    "\nNetwork upgrade at block {next_upgrade_height}: the transaction expires sooner than usual."
+                ),
+            };
         }
     }
-    out += "\n\nTransparent : le montant, ton adresse et le destinataire sont publics sur la chaîne, comme pour Bitcoin.";
+    out += lang.pick(
+        "\n\nTransparent : le montant, ton adresse et le destinataire sont publics sur la chaîne, comme pour Bitcoin.",
+        "\n\nTransparent: the amount, your address and the recipient are public on the chain, as with Bitcoin.",
+    );
     out
 }
 
 /// Body of the reinforced (second) dialog.
-pub(crate) fn describe_zec_extra(s: &ZecTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans cette transaction :\n");
+pub(crate) fn describe_zec_extra(lang: Lang, s: &ZecTxSummary) -> String {
+    let mut out = String::from(lang.unusual_intro());
     for w in &s.warnings {
         match w {
             ZecWarning::HighFee => {
-                out += "• frais très élevés (plus de 10 fois les frais ZIP 317, ou plus que le montant envoyé)\n"
+                out += lang.pick(
+                    "• frais très élevés (plus de 10 fois les frais ZIP 317, ou plus que le montant envoyé)\n",
+                    "• very high fee (more than 10 times the ZIP 317 fee, or more than the amount sent)\n",
+                )
             }
             ZecWarning::ExpiryCapped { .. } => continue,
         }
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -323,18 +381,22 @@ pub async fn zec_sign(
         Ok((seed, req, s))
     })
     .await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer la transaction Zcash",
-        signer.body(crate::i18n::current(), &describe_zec(&summary, net)),
+        lang.pick(
+            "Confirmer la transaction Zcash",
+            "Confirm the Zcash transaction",
+        ),
+        signer.body(lang, &describe_zec(lang, &summary, net)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : transaction à vérifier",
-            describe_zec_extra(&summary),
+            lang.check_tx_title(),
+            describe_zec_extra(lang, &summary),
         )
         .await?;
     }
@@ -385,7 +447,7 @@ mod tests {
 
     #[test]
     fn dialog_shows_what_rust_built() {
-        let d = describe_zec(&summary(), Network::Mainnet);
+        let d = describe_zec(Lang::Fr, &summary(), Network::Mainnet);
         for needle in [
             "Envoi Zcash transparent\n",
             "À : « t1VmmGiyjVNeCjxDZzg7vZmd99WyzVby9yC »",
@@ -413,7 +475,7 @@ mod tests {
             },
         ];
         s.requires_extra_confirmation = true;
-        let d = describe_zec(&s, Network::Testnet);
+        let d = describe_zec(Lang::Fr, &s, Network::Testnet);
         assert!(d.starts_with("Envoi Zcash transparent (testnet)"));
         assert!(
             d.contains("adresse TEX, ZIP 320 : paie la clé de t1VmmGiyjVNeCjxDZzg7vZmd99WyzVby9yC")
@@ -421,9 +483,11 @@ mod tests {
         assert!(d.contains("le reste (4999 zatoshis)"));
         assert!(d.contains("Mise à niveau du réseau au bloc 3543405"));
         assert!(!d.contains("Monnaie (revient"));
-        let x = describe_zec_extra(&s);
+        let x = describe_zec_extra(Lang::Fr, &s);
         assert!(x.contains("frais très élevés"));
         assert!(!x.contains("Mise à niveau"));
+        let en = describe_zec(Lang::En, &summary(), Network::Mainnet);
+        assert!(en.contains("Amount: 0.12345678 ZEC") && en.contains("Fee: 0.0001 ZEC"));
     }
 
     #[test]

@@ -13,6 +13,7 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { IpcError, type Network, type UtxoAccountInfo, type ZecSendArgs, type ZecTxSummary } from './ipc';
 import { zecDestinationKind, zecP2pkhAddress, zecShieldedRefusal } from './zcash';
 import type { DemoTor } from './mock-tor';
+import { l10n } from './i18n';
 import type { DemoAccountHooks } from './mock-accounts';
 
 const TESTNET_VERSIONS = { private: 0x04358394, public: 0x043587cf };
@@ -36,7 +37,7 @@ export function demoZecAccount(seed: Uint8Array, network: Network, account = 0):
 
 export function demoZecAddress(node: HDKey, network: Network, change: number, index: number): string {
   const pk = node.deriveChild(change).deriveChild(index).publicKey;
-  if (!pk) throw new IpcError('INTERNAL', 'dérivation');
+  if (!pk) throw new IpcError('INTERNAL', l10n('dérivation', 'derivation'));
   return zecP2pkhAddress(pk, network);
 }
 
@@ -88,13 +89,13 @@ export function createDemoZec(d: DemoZecDeps) {
   ]);
 
   const gate = async () => {
-    if (!mainnet) throw new IpcError('SERVER_INVALID', 'Serveur invalide : Zcash testnet : Kyro n’a pas de serveur public par défaut (aucun serveur Electrum Zcash testnet public et maintenu n’a été trouvé). Zcash fonctionne sur mainnet.');
+    if (!mainnet) throw new IpcError('SERVER_INVALID', l10n('Serveur invalide : Zcash testnet : Kyro n’a pas de serveur public par défaut (aucun serveur Electrum Zcash testnet public et maintenu n’a été trouvé). Zcash fonctionne sur mainnet.', 'Invalid server: Zcash testnet: Kyro has no default public server (no public, maintained Zcash testnet Electrum server was found). Zcash works on mainnet.'));
     if (d.torOn()) await d.tor.waitReady();
     await new Promise((r) => setTimeout(r, 60 + Math.random() * 140));
   };
   const checkAddress = (a: unknown): string => {
     const addr = String(a ?? '').trim();
-    if (zecDestinationKind(addr, d.network) === 'tex' || !zecDestinationKind(addr, d.network)) throw new IpcError('INVALID_INPUT', 'Entrée invalide : adresse Zcash invalide');
+    if (zecDestinationKind(addr, d.network) === 'tex' || !zecDestinationKind(addr, d.network)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : adresse Zcash invalide', 'Invalid input: invalid Zcash address'));
     return addr;
   };
   const stats = (n: number, sum: number) => ({ funded_txo_count: n, funded_txo_sum: sum, spent_txo_count: 0, spent_txo_sum: 0, tx_count: n });
@@ -103,22 +104,22 @@ export function createDemoZec(d: DemoZecDeps) {
     d.requireUnlocked();
     const account = d.accounts.arg(args.account);
     const req = args.request as ZecSendArgs | undefined;
-    if (!req || typeof req.to !== 'string' || !Array.isArray(req.coins)) throw new IpcError('INVALID_INPUT', 'Entrée invalide : requête Zcash');
+    if (!req || typeof req.to !== 'string' || !Array.isArray(req.coins)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : requête Zcash', 'Invalid input: Zcash request'));
     const refusal = zecShieldedRefusal(req.to);
-    if (refusal) throw new IpcError('INVALID_INPUT', `Entrée invalide : ${refusal}`);
+    if (refusal) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${refusal}`, `Invalid input: ${refusal}`));
     const kind = zecDestinationKind(req.to, d.network);
-    if (!kind) throw new IpcError('INVALID_INPUT', 'Entrée invalide : adresse Zcash invalide');
+    if (!kind) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : adresse Zcash invalide', 'Invalid input: invalid Zcash address'));
     const node = nodeOf(account);
     const candidates: Array<{ owner: string; coin: Coin }> = [];
     for (const c of req.coins) {
       const owner = demoZecAddress(node, d.network, c.change ? 1 : 0, c.index);
       const coin = (utxos.get(owner) ?? []).find((u) => u.txid === c.txid && u.vout === c.vout);
-      if (!coin) throw new IpcError('INVALID_INPUT', `Entrée invalide : pièce ${c.txid}:${c.vout} : la sortie ne paie pas l’adresse ${c.change ? 1 : 0}/${c.index} de ce compte`);
+      if (!coin) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : pièce ${c.txid}:${c.vout} : la sortie ne paie pas l’adresse ${c.change ? 1 : 0}/${c.index} de ce compte`, `Invalid input: coin ${c.txid}:${c.vout}: the output does not pay address ${c.change ? 1 : 0}/${c.index} of this account`));
       candidates.push({ owner, coin });
     }
     candidates.sort((a, b) => b.coin.value - a.coin.value);
     const amount = req.max ? 0 : Number(req.amount);
-    if (!req.max && (!Number.isSafeInteger(amount) || amount < 54)) throw new IpcError('INVALID_INPUT', 'Entrée invalide : montant sous la limite de poussière du réseau (54 zatoshis)');
+    if (!req.max && (!Number.isSafeInteger(amount) || amount < 54)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : montant sous la limite de poussière du réseau (54 zatoshis)', 'Invalid input: amount below the network dust limit (54 zatoshis)'));
     let total = 0;
     const spend: Array<{ owner: string; coin: Coin }> = [];
     let result: { amount: number; change: number; fee: number; folded: number; conv: number } | null = null;
@@ -139,10 +140,10 @@ export function createDemoZec(d: DemoZecDeps) {
     }
     if (req.max) {
       const fee1 = zip317(spend.length, 1);
-      if (total - fee1 < 54) throw new IpcError('INVALID_INPUT', 'Entrée invalide : solde trop faible pour couvrir les frais du réseau');
+      if (total - fee1 < 54) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : solde trop faible pour couvrir les frais du réseau', 'Invalid input: balance too low to cover the network fee'));
       result = { amount: total - fee1, change: 0, fee: fee1, folded: 0, conv: fee1 };
     }
-    if (!result) throw new IpcError('INVALID_INPUT', `Entrée invalide : solde insuffisant : ${total} zatoshis dans ${spend.length} pièce(s), il en faut plus pour le montant et les frais`);
+    if (!result) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : solde insuffisant : ${total} zatoshis dans ${spend.length} pièce(s), il en faut plus pour le montant et les frais`, `Invalid input: insufficient balance: ${total} zatoshis in ${spend.length} coin(s), more is needed for the amount and the fee`));
     const changeAddress = demoZecAddress(node, d.network, 1, req.changeIndex);
     const highFee = result.fee > result.conv * 10 || result.fee > result.amount;
     const summary: ZecTxSummary = {
@@ -226,18 +227,18 @@ export function createDemoZec(d: DemoZecDeps) {
       const text = [
         signer.line,
         '',
-        'Envoi Zcash transparent',
-        `À : ${s.to}`,
-        `Montant : ${fmt(Number(s.amount))} ZEC`,
-        ...(s.change ? [`Monnaie (revient chez toi) : ${fmt(Number(s.change.amount))} ZEC`, `  ${s.change.address} (adresse de monnaie n° ${s.change.index})`] : []),
-        `Frais : ${fmt(Number(s.fee))} ZEC (${s.fee} zatoshis ; ZIP 317 : ${s.zip317Fee} zatoshis)`,
-        `Réseau : ${s.upgrade} (branche ${s.branchId}) · valable jusqu’au bloc ${s.expiryHeight}`,
-        'Transparent : le montant, ton adresse et le destinataire sont publics sur la chaîne.',
+        l10n('Envoi Zcash transparent', 'Transparent Zcash send'),
+        l10n(`À : ${s.to}`, `To: ${s.to}`),
+        l10n(`Montant : ${fmt(Number(s.amount))} ZEC`, `Amount: ${fmt(Number(s.amount))} ZEC`),
+        ...(s.change ? [l10n(`Monnaie (revient chez toi) : ${fmt(Number(s.change.amount))} ZEC`, `Change (comes back to you): ${fmt(Number(s.change.amount))} ZEC`), l10n(`  ${s.change.address} (adresse de monnaie n° ${s.change.index})`, `  ${s.change.address} (change address #${s.change.index})`)] : []),
+        l10n(`Frais : ${fmt(Number(s.fee))} ZEC (${s.fee} zatoshis ; ZIP 317 : ${s.zip317Fee} zatoshis)`, `Fee: ${fmt(Number(s.fee))} ZEC (${s.fee} zatoshis; ZIP 317: ${s.zip317Fee} zatoshis)`),
+        l10n(`Réseau : ${s.upgrade} (branche ${s.branchId}) · valable jusqu’au bloc ${s.expiryHeight}`, `Network: ${s.upgrade} (branch ${s.branchId}) · valid until block ${s.expiryHeight}`),
+        l10n('Transparent : le montant, ton adresse et le destinataire sont publics sur la chaîne.', 'Transparent: the amount, your address and the recipient are public on the chain.'),
       ].join('\n');
-      if (!d.confirm(text)) throw new IpcError('USER_REJECTED', 'Signature refusée dans la fenêtre de confirmation');
-      if (signer.unknown && !d.confirm(signer.unknownText)) throw new IpcError('USER_REJECTED', 'Signature refusée');
-      if (s.requiresExtraConfirmation && !d.confirm('Frais très élevés (plus de 10 fois les frais ZIP 317, ou plus que le montant envoyé). Signer quand même ?')) {
-        throw new IpcError('USER_REJECTED', 'Signature refusée');
+      if (!d.confirm(text)) throw new IpcError('USER_REJECTED', l10n('Signature refusée dans la fenêtre de confirmation', 'Signature refused in the confirmation window'));
+      if (signer.unknown && !d.confirm(signer.unknownText)) throw new IpcError('USER_REJECTED', l10n('Signature refusée', 'Signature refused'));
+      if (s.requiresExtraConfirmation && !d.confirm(l10n('Frais très élevés (plus de 10 fois les frais ZIP 317, ou plus que le montant envoyé). Signer quand même ?', 'Very high fee (more than 10 times the ZIP 317 fee, or more than the amount sent). Sign anyway?'))) {
+        throw new IpcError('USER_REJECTED', l10n('Signature refusée', 'Signature refused'));
       }
       const hex = `05000080${bytesToHex(sha256(new TextEncoder().encode(s.txid)))}`;
       pending.set(hex, b);
@@ -247,7 +248,7 @@ export function createDemoZec(d: DemoZecDeps) {
       await gate();
       const hex = String(a.hex ?? '');
       const b = pending.get(hex);
-      if (!b) throw new IpcError('INVALID_INPUT', 'Entrée invalide : transaction Zcash mal formée');
+      if (!b) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : transaction Zcash mal formée', 'Invalid input: malformed Zcash transaction'));
       pending.delete(hex);
       for (const { owner, coin } of b.spend) utxos.set(owner, (utxos.get(owner) ?? []).filter((u) => u !== coin));
       const s = b.summary;

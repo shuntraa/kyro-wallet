@@ -9,6 +9,7 @@ import {
   call,
   cosmosAddressProblem,
   isCosmosAddress,
+  l10n,
   type CosmosAccountInfo,
   type CosmosContext,
   type CosmosHistoryEntry,
@@ -57,7 +58,7 @@ export { cosmosAddressProblem, isCosmosAddress };
 /** `"1.5"` ATOM → `1500000n` uatom (at most 6 decimals). */
 export function atomToUatom(input: string): bigint {
   const s = input.trim().replace(',', '.');
-  if (!/^\d+(\.\d{1,6})?$/.test(s)) throw new Error('Montant ATOM invalide (6 décimales au plus)');
+  if (!/^\d+(\.\d{1,6})?$/.test(s)) throw new Error(l10n('Montant ATOM invalide (6 décimales au plus)', 'Invalid ATOM amount (6 decimals at most)'));
   const [int = '0', frac = ''] = s.split('.');
   return BigInt(int) * 1_000_000n + BigInt(frac.padEnd(6, '0'));
 }
@@ -70,10 +71,10 @@ export const COSMOS_UI_MAX_MEMO = 256;
 
 /** Memo the user typed: at most 256 characters, no control character. */
 export function cosmosMemoProblem(memo: string): string | null {
-  if ([...memo].length > COSMOS_UI_MAX_MEMO) return `Mémo trop long (${COSMOS_UI_MAX_MEMO} caractères au plus)`;
+  if ([...memo].length > COSMOS_UI_MAX_MEMO) return l10n(`Mémo trop long (${COSMOS_UI_MAX_MEMO} caractères au plus)`, `Memo too long (${COSMOS_UI_MAX_MEMO} characters at most)`);
   for (const c of memo) {
     const n = c.codePointAt(0) ?? 0;
-    if (n < 0x20 || (n >= 0x7f && n <= 0x9f)) return 'Le mémo contient un caractère de contrôle (retour à la ligne…)';
+    if (n < 0x20 || (n >= 0x7f && n <= 0x9f)) return l10n('Le mémo contient un caractère de contrôle (retour à la ligne…)', 'The memo contains a control character (line break…)');
   }
   return null;
 }
@@ -117,7 +118,7 @@ export class CosmosAdapter implements ChainAdapter<'cosmos'> {
   private readonly backend: CosmosBackend;
 
   constructor(opts: CosmosAdapterOptions) {
-    if (!isCosmosAddress(opts.address)) throw new Error('Adresse Cosmos invalide');
+    if (!isCosmosAddress(opts.address)) throw new Error(l10n('Adresse Cosmos invalide', 'Invalid Cosmos address'));
     this.chain = opts.chain;
     this.address = opts.address.trim().toLowerCase();
     this.backend = opts.backend ?? rustCosmosBackend(opts.account ?? 0);
@@ -148,22 +149,22 @@ export class CosmosAdapter implements ChainAdapter<'cosmos'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais calculés par simulation (≈ 0,0008 ATOM)',
+      hint: l10n('frais calculés par simulation (≈ 0,0008 ATOM)', 'fees computed by simulation (≈ 0.0008 ATOM)'),
       fetchedAt: Date.now(),
     });
   }
 
   /** `ChainAdapter` entry point. `max`: spendable minus the fee Rust sets, built twice. */
   async buildTx(params: BuildParams): Promise<CosmosUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif Cosmos inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif Cosmos inattendu', 'Unexpected Cosmos asset'));
     const memo = params.memo ?? '';
     if (!params.max) return this.buildSend({ to: params.to, amount: params.amount.toString(), memo });
     const spendable = BigInt((await this.backend.account(this.address)).spendable);
     // First pass with a fee ceiling of 0.01 ATOM; then exactly spendable − fee.
     const first = await this.buildSend({ to: params.to, amount: (spendable - 10_000n).toString(), memo }).catch(() => null);
-    if (!first) throw new Error('Solde insuffisant pour payer les frais');
+    if (!first) throw new Error(l10n('Solde insuffisant pour payer les frais', 'Insufficient balance to pay the fees'));
     const amount = spendable - BigInt(first.summary.fee);
-    if (amount <= 0n) throw new Error('Rien à envoyer après les frais');
+    if (amount <= 0n) throw new Error(l10n('Rien à envoyer après les frais', 'Nothing to send after fees'));
     return this.buildSend({ to: params.to, amount: amount.toString(), memo });
   }
 
@@ -172,15 +173,15 @@ export class CosmosAdapter implements ChainAdapter<'cosmos'> {
     const to = params.to.trim().toLowerCase();
     const problem = cosmosAddressProblem(to);
     if (problem) throw new Error(problem);
-    if (to === this.address) throw new Error('Envoi à soi-même impossible');
-    if (!/^\d+$/.test(params.amount) || BigInt(params.amount) <= 0n) throw new Error('Montant en uatom invalide');
+    if (to === this.address) throw new Error(l10n('Envoi à soi-même impossible', 'Cannot send to yourself'));
+    if (!/^\d+$/.test(params.amount) || BigInt(params.amount) <= 0n) throw new Error(l10n('Montant en uatom invalide', 'Invalid amount in uatom'));
     const memo = params.memo ?? '';
     const memoProblem = cosmosMemoProblem(memo);
     if (memoProblem) throw new Error(memoProblem);
     const built = await this.backend.build(to, params.amount, memo || undefined);
     const s = built.summary;
     if (s.to !== to || s.from !== this.address || s.amount !== params.amount || (s.memo ?? '') !== memo || s.chainId !== this.chain.chainId || s.requiresExtraConfirmation) {
-      throw new Error('La transaction construite par Rust ne correspond pas à la demande');
+      throw new Error(l10n('La transaction construite par Rust ne correspond pas à la demande', 'The transaction built by Rust does not match the request'));
     }
     return {
       family: 'cosmos',
@@ -198,14 +199,14 @@ export class CosmosAdapter implements ChainAdapter<'cosmos'> {
   /** Rust: live checks, native dialog, signature. */
   async signTx(unsigned: CosmosUnsigned, password: string): Promise<CosmosSigned> {
     const res = await this.backend.sign(unsigned.signDoc, password);
-    if (!/^[0-9A-F]{64}$/i.test(res.hash)) throw new Error('Hash Cosmos inattendu');
+    if (!/^[0-9A-F]{64}$/i.test(res.hash)) throw new Error(l10n('Hash Cosmos inattendu', 'Unexpected Cosmos hash'));
     return { family: 'cosmos', tx: res.tx, hash: res.hash, summary: res.summary };
   }
 
   /** Rust verifies the signature and that the server's hash is ours. */
   async broadcast(signed: CosmosSigned): Promise<string> {
     const hash = await this.backend.broadcast(signed.tx);
-    if (hash.toUpperCase() !== signed.hash.toUpperCase()) throw new Error('Hash diffusé inattendu');
+    if (hash.toUpperCase() !== signed.hash.toUpperCase()) throw new Error(l10n('Hash diffusé inattendu', 'Unexpected broadcast hash'));
     return hash;
   }
 
@@ -230,7 +231,7 @@ export class CosmosAdapter implements ChainAdapter<'cosmos'> {
       const counterparty = out ? t.to : t.from;
       if (counterparty) item.counterparty = counterparty;
       if (t.time) item.time = t.time;
-      if (t.memo) item.note = `Mémo : ${t.memo}`;
+      if (t.memo) item.note = l10n(`Mémo : ${t.memo}`, `Memo: ${t.memo}`);
       return item;
     });
   }

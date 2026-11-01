@@ -15,6 +15,16 @@ import { settings } from './en/settings';
 import { servers } from './en/servers';
 import { hw } from './en/hw';
 import { stellar } from './en/stellar';
+import { near } from './en/near';
+import { algo } from './en/algo';
+import { hbar } from './en/hbar';
+import { dot } from './en/dot';
+import { xmr } from './en/xmr';
+import { ton } from './en/ton';
+import { cosmos } from './en/cosmos';
+import { aptos } from './en/aptos';
+import { sui } from './en/sui';
+import { kas } from './en/kas';
 
 export const en: Record<keyof typeof fr, string> = {
   ...common,
@@ -30,6 +40,16 @@ export const en: Record<keyof typeof fr, string> = {
   ...servers,
   ...hw,
   ...stellar,
+  ...near,
+  ...algo,
+  ...hbar,
+  ...dot,
+  ...xmr,
+  ...ton,
+  ...cosmos,
+  ...aptos,
+  ...sui,
+  ...kas,
 };
 
-export const enAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, settings, servers, hw, stellar } as const;
+export const enAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, settings, servers, hw, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas } as const;

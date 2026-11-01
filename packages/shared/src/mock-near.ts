@@ -30,6 +30,7 @@ import {
   type Settings,
 } from './ipc';
 import { nearAccountKind } from './near';
+import { l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const YOCTO = 10n ** 24n;
@@ -44,7 +45,7 @@ export function demoNearAddress(account: number): string {
   return bytesToHex(sha256(new TextEncoder().encode(`kyro-demo-near-account-${account}`)));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 
 export const nearText = (yocto: bigint | string): string => {
   const v = BigInt(yocto);
@@ -55,7 +56,7 @@ export const nearText = (yocto: bigint | string): string => {
 /** wallet-core `near_account_kind`, same messages family as Rust. */
 export function checkNearAccount(a: unknown): string {
   const s = String(a ?? '').trim();
-  if (nearAccountKind(s) === null) throw invalidInput('identifiant de compte NEAR invalide');
+  if (nearAccountKind(s) === null) throw invalidInput(l10n('identifiant de compte NEAR invalide', 'invalid NEAR account id'));
   return s;
 }
 
@@ -157,14 +158,14 @@ export function createDemoNear(d: DemoNearDeps) {
 
   /** near_backend::check_transfer, same order and messages. */
   const check = (s: NearTxSummary, c: NearContext) => {
-    if (!c.account.exists) throw invalidInput('ton compte NEAR n’existe pas encore : il est créé par le premier NEAR reçu');
+    if (!c.account.exists) throw invalidInput(l10n('ton compte NEAR n’existe pas encore : il est créé par le premier NEAR reçu', 'your NEAR account does not exist yet: it is created by the first NEAR received'));
     if (!c.receiver.exists) {
-      if (s.receiverKind === 'named') throw invalidInput(`le compte « ${s.receiverId} » n’existe pas : un compte nommé doit déjà exister (sinon les frais sont perdus)`);
-      if (s.receiverKind === 'ethImplicit') throw invalidInput('ce compte de style Ethereum (0x…) n’existe pas sur NEAR : Kyro ne le crée pas');
+      if (s.receiverKind === 'named') throw invalidInput(l10n(`le compte « ${s.receiverId} » n’existe pas : un compte nommé doit déjà exister (sinon les frais sont perdus)`, `the account “${s.receiverId}” does not exist: a named account must already exist (otherwise the fees are lost)`));
+      if (s.receiverKind === 'ethImplicit') throw invalidInput(l10n('ce compte de style Ethereum (0x…) n’existe pas sur NEAR : Kyro ne le crée pas', 'this Ethereum-style account (0x…) does not exist on NEAR: Kyro does not create it'));
     }
     const need = BigInt(s.deposit) + BigInt(c.feeBound);
     if (need > BigInt(c.account.spendable)) {
-      throw invalidInput(`solde disponible insuffisant : ${nearText(c.account.spendable)} disponibles (solde − réserve de stockage), il en faut ${nearText(need)} (montant + frais au plus)`);
+      throw invalidInput(l10n(`solde disponible insuffisant : ${nearText(c.account.spendable)} disponibles (solde − réserve de stockage), il en faut ${nearText(need)} (montant + frais au plus)`, `insufficient available balance: ${nearText(c.account.spendable)} available (balance − storage reserve), ${nearText(need)} needed (amount + fees at most)`));
     }
   };
 
@@ -176,13 +177,13 @@ export function createDemoNear(d: DemoNearDeps) {
     try {
       t = JSON.parse(new TextDecoder().decode(hexToBytes(String(tx ?? '').trim().toLowerCase()))) as DemoTransfer;
     } catch {
-      throw invalidInput('transaction NEAR illisible');
+      throw invalidInput(l10n('transaction NEAR illisible', 'unreadable NEAR transaction'));
     }
-    if (t.signerId !== me) throw invalidInput("transaction NEAR : le signataire n'est pas le compte de ce portefeuille");
+    if (t.signerId !== me) throw invalidInput(l10n("transaction NEAR : le signataire n'est pas le compte de ce portefeuille", 'NEAR transaction: the signer is not this wallet’s account'));
     const kind = nearAccountKind(t.receiverId);
-    if (kind === null) throw invalidInput('transaction NEAR : receiver_id invalide');
-    if (t.receiverId === me) throw invalidInput('transaction NEAR : transfert à soi-même');
-    if (!/^\d+$/.test(t.deposit) || BigInt(t.deposit) === 0n) throw invalidInput('transaction NEAR : montant nul');
+    if (kind === null) throw invalidInput(l10n('transaction NEAR : receiver_id invalide', 'NEAR transaction: invalid receiver_id'));
+    if (t.receiverId === me) throw invalidInput(l10n('transaction NEAR : transfert à soi-même', 'NEAR transaction: transfer to yourself'));
+    if (!/^\d+$/.test(t.deposit) || BigInt(t.deposit) === 0n) throw invalidInput(l10n('transaction NEAR : montant nul', 'NEAR transaction: zero amount'));
     const warnings: NearWarning[] = kind === 'ethImplicit' ? [{ kind: 'ethImplicitReceiver' }] : [];
     const { signature: _sig, ...bare } = t;
     void _sig;
@@ -206,12 +207,12 @@ export function createDemoNear(d: DemoNearDeps) {
 
   /** commands_near.rs describe_near. */
   const describe = (s: NearTxSummary, c: NearContext): string => {
-    const kindText = { implicit: 'compte implicite : la clé publique du destinataire, en hexadécimal', ethImplicit: 'compte de style Ethereum, contrôlé par une clé Ethereum', named: 'compte nommé' }[s.receiverKind];
-    let out = `Envoi NEAR${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.receiverId}\n(${kindText})\n\nMontant : ${nearText(s.deposit)} (${s.deposit} yoctoNEAR)\n`;
-    if (c.createsAccount) out += "\nCe compte implicite n'existe pas encore : ce transfert le crée (frais de création inclus ci-dessous).\n";
-    out += `\nFrais : ≈ ${nearText(c.feeEstimate)} — au plus ${nearText(c.feeBound)}\n`;
-    out += `Solde : ${nearText(c.account.balance)} · réservé au stockage : ${nearText(c.account.storageReserve)} · disponible : ${nearText(c.account.spendable)}\n`;
-    out += `\nDe : ${s.signerId}\nClé : ${s.publicKey} · nonce ${s.nonce}\nHash de la transaction : ${s.hash}\n`;
+    const kindText = { implicit: l10n('compte implicite : la clé publique du destinataire, en hexadécimal', 'implicit account: the recipient’s public key, in hexadecimal'), ethImplicit: l10n('compte de style Ethereum, contrôlé par une clé Ethereum', 'Ethereum-style account, controlled by an Ethereum key'), named: l10n('compte nommé', 'named account') }[s.receiverKind];
+    let out = l10n(`Envoi NEAR${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.receiverId}\n(${kindText})\n\nMontant : ${nearText(s.deposit)} (${s.deposit} yoctoNEAR)\n`, `NEAR send${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.receiverId}\n(${kindText})\n\nAmount: ${nearText(s.deposit)} (${s.deposit} yoctoNEAR)\n`);
+    if (c.createsAccount) out += l10n("\nCe compte implicite n'existe pas encore : ce transfert le crée (frais de création inclus ci-dessous).\n", '\nThis implicit account does not exist yet: this transfer creates it (creation fee included below).\n');
+    out += l10n(`\nFrais : ≈ ${nearText(c.feeEstimate)} — au plus ${nearText(c.feeBound)}\n`, `\nFee: ≈ ${nearText(c.feeEstimate)} — at most ${nearText(c.feeBound)}\n`);
+    out += l10n(`Solde : ${nearText(c.account.balance)} · réservé au stockage : ${nearText(c.account.storageReserve)} · disponible : ${nearText(c.account.spendable)}\n`, `Balance: ${nearText(c.account.balance)} · reserved for storage: ${nearText(c.account.storageReserve)} · available: ${nearText(c.account.spendable)}\n`);
+    out += l10n(`\nDe : ${s.signerId}\nClé : ${s.publicKey} · nonce ${s.nonce}\nHash de la transaction : ${s.hash}\n`, `\nFrom: ${s.signerId}\nKey: ${s.publicKey} · nonce ${s.nonce}\nTransaction hash: ${s.hash}\n`);
     return out;
   };
 
@@ -226,7 +227,7 @@ export function createDemoNear(d: DemoNearDeps) {
     near_address: (a) => {
       d.requireUnlocked();
       const n = a.account === undefined ? 0 : Number(a.account);
-      if (!Number.isInteger(n) || n < 0 || n > 100) throw invalidInput('numéro de compte : au plus 100');
+      if (!Number.isInteger(n) || n < 0 || n > 100) throw invalidInput(l10n('numéro de compte : au plus 100', 'account number: at most 100'));
       return demoNearAddress(n);
     },
     near_account: async (a) => {
@@ -243,10 +244,10 @@ export function createDemoNear(d: DemoNearDeps) {
       d.requireUnlocked();
       const to = checkNearAccount(a.to);
       const amount = String(a.amount ?? '').trim();
-      if (!/^\d{1,40}$/.test(amount) || BigInt(amount) === 0n) throw invalidInput('montant en yoctoNEAR invalide');
+      if (!/^\d{1,40}$/.test(amount) || BigInt(amount) === 0n) throw invalidInput(l10n('montant en yoctoNEAR invalide', 'invalid yoctoNEAR amount'));
       await backend();
       const ours = state.accounts.get(me);
-      if (!ours) throw invalidInput('ton compte NEAR n’existe pas encore (aucun NEAR reçu) ou ta clé en a été retirée');
+      if (!ours) throw invalidInput(l10n('ton compte NEAR n’existe pas encore (aucun NEAR reçu) ou ta clé en a été retirée', 'your NEAR account does not exist yet (no NEAR received) or your key was removed from it'));
       const tx = encode({ signerId: me, nonce: (ours.nonce + 1n).toString(), receiverId: to, deposit: amount, blockHash: base58.encode(sha256(new TextEncoder().encode(`block-${height}`))) });
       const { summary } = decode(tx);
       const context = contextFor(to);
@@ -259,24 +260,24 @@ export function createDemoNear(d: DemoNearDeps) {
       await backend();
       const context = contextFor(summary.receiverId);
       const ours = state.accounts.get(me);
-      if (!ours || BigInt(summary.nonce) <= ours.nonce) throw invalidInput('nonce périmé (une autre transaction est passée entre-temps) : reconstruis le transfert');
+      if (!ours || BigInt(summary.nonce) <= ours.nonce) throw invalidInput(l10n('nonce périmé (une autre transaction est passée entre-temps) : reconstruis le transfert', 'stale nonce (another transaction went through in the meantime): rebuild the transfer'));
       check(summary, context);
       d.checkPassword(a.password);
-      if (!d.confirm(`Confirmer l'envoi NEAR\n${describe(summary, context)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !d.confirm('Attention : transfert à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer l'envoi NEAR\n${describe(summary, context)}`, `Confirm the NEAR send\n${describe(summary, context)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (summary.requiresExtraConfirmation && !d.confirm(l10n('Attention : transfert à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: transfer to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const signed = encode({ ...t, signature: bytesToHex(sha256(new TextEncoder().encode(`sig:${String(a.tx)}`))) });
       return { signed, hash: summary.hash, summary, context };
     },
     near_broadcast: async (a): Promise<NearTxOutcome> => {
       const { t, summary } = decode(a.signed);
-      if (!t.signature) throw invalidInput('transaction NEAR non signée');
+      if (!t.signature) throw invalidInput(l10n('transaction NEAR non signée', 'unsigned NEAR transaction'));
       await backend();
       const ours = state.accounts.get(me);
-      if (!ours || BigInt(summary.nonce) <= ours.nonce) throw invalidInput('transaction NEAR refusée par le réseau : InvalidNonce');
+      if (!ours || BigInt(summary.nonce) <= ours.nonce) throw invalidInput(l10n('transaction NEAR refusée par le réseau : InvalidNonce', 'NEAR transaction rejected by the network: InvalidNonce'));
       const c = contextFor(summary.receiverId);
       const fee = BigInt(c.feeEstimate);
       const deposit = BigInt(summary.deposit);
-      if (deposit + fee > BigInt(c.account.spendable)) throw invalidInput('transaction NEAR refusée par le réseau : NotEnoughBalance');
+      if (deposit + fee > BigInt(c.account.spendable)) throw invalidInput(l10n('transaction NEAR refusée par le réseau : NotEnoughBalance', 'NEAR transaction rejected by the network: NotEnoughBalance'));
       ours.nonce = BigInt(summary.nonce);
       ours.balance -= fee;
       const failure = state.failNext;
@@ -299,7 +300,7 @@ export function createDemoNear(d: DemoNearDeps) {
           return false;
         }
       })();
-      if (!ok) throw invalidInput('hash NEAR invalide (32 octets en base58 attendus)');
+      if (!ok) throw invalidInput(l10n('hash NEAR invalide (32 octets en base58 attendus)', 'invalid NEAR hash (32 bytes in base58 expected)'));
       await backend();
       const e = state.history.find((t) => t.hash === h);
       if (!e) return { hash: h, status: 'pending', message: '' };

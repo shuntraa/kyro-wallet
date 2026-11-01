@@ -113,7 +113,7 @@ export function lifiChainId(c: SwapChain): number {
   if (typeof c === 'number') return c;
   if (c === 'solana') return LIFI_CHAIN_SOLANA;
   if (c === 'bitcoin') return LIFI_CHAIN_BITCOIN;
-  throw new SwapCheckError(`LI.FI : chaîne ${c} non prise en charge`);
+  throw new SwapCheckError(l10n(`LI.FI : chaîne ${c} non prise en charge`, `LI.FI: chain ${c} not supported`));
 }
 
 /**
@@ -358,36 +358,36 @@ interface NearData {
  */
 function checkLifiBridge(i: EvmSwapCheckInput, cross: { toChain: SwapChain; recipient: string }, name: string, entry: string): EvmSwapCheck {
   const d = decode(LIFI_NEAR_ABI, i.tx.data);
-  if (!d) return fail(name, 'fonction du Diamond inconnue de Kyro (pont NEAR Intents attendu)');
+  if (!d) return fail(name, l10n('fonction du Diamond inconnue de Kyro (pont NEAR Intents attendu)', 'Diamond function unknown to Kyro (NEAR Intents bridge expected)'));
   const withSwaps = d.functionName === 'swapAndStartBridgeTokensViaNEARIntents';
   const bd = d.args[0] as BridgeData;
   const steps: readonly SwapData[] = withSwaps ? (d.args[1] as readonly SwapData[]) : [];
   const nd = (withSwaps ? d.args[2] : d.args[1]) as NearData;
-  if (bd.destinationChainId !== BigInt(lifiChainId(cross.toChain)) || cross.toChain === i.chainId) fail(name, 'chaîne de destination différente de celle demandée');
-  if (bd.hasDestinationCall) fail(name, 'appel de contrat à l’arrivée non autorisé');
+  if (bd.destinationChainId !== BigInt(lifiChainId(cross.toChain)) || cross.toChain === i.chainId) fail(name, l10n('chaîne de destination différente de celle demandée', 'destination chain differs from the requested one'));
+  if (bd.hasDestinationCall) fail(name, l10n('appel de contrat à l’arrivée non autorisé', 'contract call on arrival not allowed'));
   if (typeof cross.toChain === 'number') {
-    if (!same(bd.receiver, cross.recipient)) fail(name, `destinataire ${bd.receiver} au lieu de ton adresse`);
+    if (!same(bd.receiver, cross.recipient)) fail(name, l10n(`destinataire ${bd.receiver} au lieu de ton adresse`, `recipient ${bd.receiver} instead of your address`));
   } else {
     const want = cross.toChain === 'solana' || cross.toChain === 'bitcoin' ? nonEvmReceiverWord(cross.toChain, cross.recipient) : null;
-    if (!same(bd.receiver, LIFI_NON_EVM_ADDRESS)) fail(name, 'destinataire hors EVM mal indiqué');
-    if (!want || nd.nonEVMReceiver.toLowerCase() !== want.toLowerCase()) fail(name, 'destinataire à l’arrivée différent de ton adresse');
+    if (!same(bd.receiver, LIFI_NON_EVM_ADDRESS)) fail(name, l10n('destinataire hors EVM mal indiqué', 'non-EVM recipient wrongly indicated'));
+    if (!want || nd.nonEVMReceiver.toLowerCase() !== want.toLowerCase()) fail(name, l10n('destinataire à l’arrivée différent de ton adresse', 'recipient on arrival differs from your address'));
   }
-  if (!same(nd.refundRecipient, i.taker)) fail(name, 'remboursement prévu vers une autre adresse que la tienne');
-  if (!minOk(nd.minAmountOut, i.buyAmount, i.slippageBps)) fail(name, 'minimum garanti plus bas que le slippage choisi');
+  if (!same(nd.refundRecipient, i.taker)) fail(name, l10n('remboursement prévu vers une autre adresse que la tienne', 'refund planned to an address other than yours'));
+  if (!minOk(nd.minAmountOut, i.buyAmount, i.slippageBps)) fail(name, l10n('minimum garanti plus bas que le slippage choisi', 'guaranteed minimum lower than the chosen slippage'));
   const asset = nearDestinationAsset(cross.toChain, i.buy.address);
-  if (!asset || nd.destinationAsset.toLowerCase() !== asset.toLowerCase()) fail(name, 'token reçu différent de celui demandé');
-  if (withSwaps !== bd.hasSourceSwaps) fail(name, 'étapes de swap incohérentes');
+  if (!asset || nd.destinationAsset.toLowerCase() !== asset.toLowerCase()) fail(name, l10n('token reçu différent de celui demandé', 'received token differs from the requested one'));
+  if (withSwaps !== bd.hasSourceSwaps) fail(name, l10n('étapes de swap incohérentes', 'inconsistent swap steps'));
   const sold = isNative(i.sell.address) ? ZERO_ADDRESS : i.sell.address;
   if (steps.length > 0) {
     const first = steps[0] as SwapData;
     const last = steps[steps.length - 1] as SwapData;
-    if (!same(first.sendingAssetId, sold) || first.fromAmount !== i.sellAmount) fail(name, 'première étape différente du token ou du montant vendus');
-    if (!same(last.receivingAssetId, bd.sendingAssetId)) fail(name, 'dernière étape différente du token envoyé au pont');
+    if (!same(first.sendingAssetId, sold) || first.fromAmount !== i.sellAmount) fail(name, l10n('première étape différente du token ou du montant vendus', 'first step differs from the sold token or amount'));
+    if (!same(last.receivingAssetId, bd.sendingAssetId)) fail(name, l10n('dernière étape différente du token envoyé au pont', 'last step differs from the token sent to the bridge'));
     // Without a DEX step, the bridged amount is what is left after the fees: never more than sold.
-    if (same(bd.sendingAssetId, sold) && bd.minAmount > i.sellAmount) fail(name, 'montant envoyé au pont incohérent');
-  } else if (!same(bd.sendingAssetId, sold) || bd.minAmount !== i.sellAmount) fail(name, 'montant ou token envoyé au pont différent de ta saisie');
-  if (bd.minAmount <= 0n) fail(name, 'montant envoyé au pont nul');
-  if (same(nd.depositAddress, ZERO_ADDRESS)) fail(name, 'adresse de dépôt du pont invalide');
+    if (same(bd.sendingAssetId, sold) && bd.minAmount > i.sellAmount) fail(name, l10n('montant envoyé au pont incohérent', 'inconsistent amount sent to the bridge'));
+  } else if (!same(bd.sendingAssetId, sold) || bd.minAmount !== i.sellAmount) fail(name, l10n('montant ou token envoyé au pont différent de ta saisie', 'amount or token sent to the bridge differs from what you entered'));
+  if (bd.minAmount <= 0n) fail(name, l10n('montant envoyé au pont nul', 'zero amount sent to the bridge'));
+  if (same(nd.depositAddress, ZERO_ADDRESS)) fail(name, l10n('adresse de dépôt du pont invalide', 'invalid bridge deposit address'));
   const kyro = lifiFees(i, steps, name);
   const out: EvmSwapCheck = {
     contract: getAddress(entry),

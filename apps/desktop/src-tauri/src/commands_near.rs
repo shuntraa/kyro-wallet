@@ -11,8 +11,9 @@ use wallet_core::{NearAccountKind, NearTransfer, NearTxSummary, NearWarning, Net
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::near_backend::{
     self, NearAccountInfo, NearCtx, NearFeeParams, NearTxOutcome, TransferCheck, MAX_BLOCK_AGE,
 };
@@ -37,8 +38,8 @@ fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
     })
 }
 
-fn near(yocto: &str) -> String {
-    format!("{} NEAR", format_units(yocto, 24))
+fn near(lang: Lang, yocto: &str) -> String {
+    format!("{} NEAR", format_units_in(lang, yocto, 24))
 }
 
 /// Live context shown in the dialog.
@@ -57,61 +58,109 @@ pub struct NearContext {
     pub fee_bound: String,
 }
 
-fn kind_text(k: NearAccountKind) -> &'static str {
+fn kind_text(lang: Lang, k: NearAccountKind) -> &'static str {
     match k {
-        NearAccountKind::Implicit => {
-            "compte implicite : la clé publique du destinataire, en hexadécimal"
-        }
-        NearAccountKind::EthImplicit => "compte de style Ethereum, contrôlé par une clé Ethereum",
-        NearAccountKind::Named => "compte nommé",
+        NearAccountKind::Implicit => lang.pick(
+            "compte implicite : la clé publique du destinataire, en hexadécimal",
+            "implicit account: the receiver's public key, in hexadecimal",
+        ),
+        NearAccountKind::EthImplicit => lang.pick(
+            "compte de style Ethereum, contrôlé par une clé Ethereum",
+            "Ethereum-style account, controlled by an Ethereum key",
+        ),
+        NearAccountKind::Named => lang.pick("compte nommé", "named account"),
     }
 }
 
 /// Body of the native dialog.
-pub(crate) fn describe_near(s: &NearTxSummary, c: &NearContext, net: Network) -> String {
-    let mut out = format!(
-        "Envoi NEAR{}\n\nÀ : {}\n({})\n\nMontant : {} ({} yoctoNEAR)\n",
-        if net == Network::Testnet {
-            " (testnet)"
-        } else {
-            ""
-        },
-        s.receiver_id,
-        kind_text(s.receiver_kind),
-        near(&s.deposit),
-        s.deposit
-    );
+pub(crate) fn describe_near(
+    lang: Lang,
+    s: &NearTxSummary,
+    c: &NearContext,
+    net: Network,
+) -> String {
+    let n = |v: &str| near(lang, v);
+    let testnet = if net == Network::Testnet {
+        " (testnet)"
+    } else {
+        ""
+    };
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Envoi NEAR{testnet}\n\nÀ : {}\n({})\n\nMontant : {} ({} yoctoNEAR)\n",
+            s.receiver_id,
+            kind_text(lang, s.receiver_kind),
+            n(&s.deposit),
+            s.deposit
+        ),
+        Lang::En => format!(
+            "NEAR send{testnet}\n\nTo: {}\n({})\n\nAmount: {} ({} yoctoNEAR)\n",
+            s.receiver_id,
+            kind_text(lang, s.receiver_kind),
+            n(&s.deposit),
+            s.deposit
+        ),
+    };
     if c.creates_account {
-        out += "\nCe compte implicite n'existe pas encore : ce transfert le crée (frais de création inclus ci-dessous).\n";
+        out += lang.pick(
+            "\nCe compte implicite n'existe pas encore : ce transfert le crée (frais de création inclus ci-dessous).\n",
+            "\nThis implicit account does not exist yet: this transfer creates it (creation fee included below).\n",
+        );
     }
-    out += &format!(
-        "\nFrais : ≈ {} — au plus {}\n(les frais NEAR ne sont pas écrits dans la transaction : ils sont prélevés au prix du gas du bloc ; Kyro a vérifié que ton solde couvre le montant + cette borne)\n",
-        near(&c.fee_estimate),
-        near(&c.fee_bound)
-    );
-    out += &format!(
-        "Solde : {} · réservé au stockage : {} · disponible : {}\n",
-        near(&c.account.balance),
-        near(&c.account.storage_reserve),
-        near(&c.account.spendable)
-    );
-    out += &format!(
-        "\nDe : {}\nClé : {} · nonce {}\nBloc de référence : {} (transaction valable ≈ 24 h)\nHash de la transaction : {}\n",
-        s.signer_id, s.public_key, s.nonce, s.block_hash, s.hash
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais : ≈ {} — au plus {}\n(les frais NEAR ne sont pas écrits dans la transaction : ils sont prélevés au prix du gas du bloc ; Kyro a vérifié que ton solde couvre le montant + cette borne)\n",
+            n(&c.fee_estimate),
+            n(&c.fee_bound)
+        ),
+        Lang::En => format!(
+            "\nFee: ≈ {} — at most {}\n(NEAR fees are not written in the transaction: they are charged at the block's gas price; Kyro checked that your balance covers the amount + this bound)\n",
+            n(&c.fee_estimate),
+            n(&c.fee_bound)
+        ),
+    };
+    out += &match lang {
+        Lang::Fr => format!(
+            "Solde : {} · réservé au stockage : {} · disponible : {}\n",
+            n(&c.account.balance),
+            n(&c.account.storage_reserve),
+            n(&c.account.spendable)
+        ),
+        Lang::En => format!(
+            "Balance: {} · reserved for storage: {} · available: {}\n",
+            n(&c.account.balance),
+            n(&c.account.storage_reserve),
+            n(&c.account.spendable)
+        ),
+    };
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nDe : {}\nClé : {} · nonce {}\nBloc de référence : {} (transaction valable ≈ 24 h)\nHash de la transaction : {}\n",
+            s.signer_id, s.public_key, s.nonce, s.block_hash, s.hash
+        ),
+        Lang::En => format!(
+            "\nFrom: {}\nKey: {} · nonce {}\nReference block: {} (transaction valid for ≈ 24 h)\nTransaction hash: {}\n",
+            s.signer_id, s.public_key, s.nonce, s.block_hash, s.hash
+        ),
+    };
     out
 }
 
-pub(crate) fn describe_near_extra(s: &NearTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans ce transfert :\n");
+pub(crate) fn describe_near_extra(lang: Lang, s: &NearTxSummary) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des éléments inhabituels dans ce transfert :\n",
+        "Kyro found unusual elements in this transfer:\n",
+    ));
     for w in &s.warnings {
         out += match w {
-            NearWarning::EthImplicitReceiver => {
-                "• le destinataire est un compte NEAR de style Ethereum (0x…) : il est contrôlé par une clé Ethereum. Une adresse de dépôt EVM d'une plateforme n'est PAS un compte NEAR.\n"
-            }
+            NearWarning::EthImplicitReceiver => lang.pick(
+                "• le destinataire est un compte NEAR de style Ethereum (0x…) : il est contrôlé par une clé Ethereum. Une adresse de dépôt EVM d'une plateforme n'est PAS un compte NEAR.\n",
+                "• the receiver is an Ethereum-style NEAR account (0x…): it is controlled by an Ethereum key. An exchange's EVM deposit address is NOT a NEAR account.\n",
+            ),
         };
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -327,16 +376,22 @@ pub async fn near_sign_tx(
     let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer l'envoi NEAR",
-        signer.body(lang, &describe_near(&summary, &context, state.network)),
+        lang.pick("Confirmer l'envoi NEAR", "Confirm the NEAR send"),
+        signer.body(
+            lang,
+            &describe_near(lang, &summary, &context, state.network),
+        ),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : transfert à vérifier",
-            describe_near_extra(&summary),
+            lang.pick(
+                "Attention : transfert à vérifier",
+                "Warning: transfer to check",
+            ),
+            describe_near_extra(lang, &summary),
         )
         .await?;
     }
@@ -439,6 +494,7 @@ mod tests {
     #[test]
     fn dialog_shows_receiver_amount_fee_bound_and_key() {
         let d = describe_near(
+            Lang::Fr,
             &summary(NearAccountKind::Named, vec![]),
             &context(false),
             Network::Testnet,
@@ -456,6 +512,7 @@ mod tests {
         }
         assert!(!d.contains("n'existe pas encore"));
         let d = describe_near(
+            Lang::Fr,
             &summary(NearAccountKind::Implicit, vec![]),
             &context(true),
             Network::Mainnet,
@@ -463,11 +520,27 @@ mod tests {
         assert!(d.starts_with("Envoi NEAR\n"));
         assert!(d.contains("ce transfert le crée"));
         assert!(d.contains("compte implicite"));
-        let x = describe_near_extra(&summary(
-            NearAccountKind::EthImplicit,
-            vec![NearWarning::EthImplicitReceiver],
-        ));
+        let x = describe_near_extra(
+            Lang::Fr,
+            &summary(
+                NearAccountKind::EthImplicit,
+                vec![NearWarning::EthImplicitReceiver],
+            ),
+        );
         assert!(x.contains("style Ethereum") && x.contains("Signer quand même"));
+        let d = describe_near(
+            Lang::En,
+            &summary(NearAccountKind::Named, vec![]),
+            &context(false),
+            Network::Testnet,
+        );
+        assert!(
+            d.contains("Amount: 1.5 NEAR")
+                && d.contains(
+                    "To: bob.testnet
+(named account)"
+                )
+        );
     }
 
     #[test]
@@ -480,6 +553,6 @@ mod tests {
         for bad in ["", "0", "-1", "1.5", "1e24", "x", &"9".repeat(41)] {
             assert!(parse_yocto(bad).is_err(), "{bad:?}");
         }
-        assert_eq!(near("1"), "0,000000000000000000000001 NEAR");
+        assert_eq!(near(Lang::Fr, "1"), "0,000000000000000000000001 NEAR");
     }
 }

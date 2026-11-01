@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// NEAR pieces of the Send screen (components/NearSend.tsx).
+
+import type { near as fr } from '../fr/near';
+
+export const near: Record<keyof typeof fr, string> = {
+  'near.reading': 'Reading the NEAR account…',
+  'near.namedExists': 'Existing NEAR named account{contract}.',
+  'near.hasContract': ' (a contract is deployed on it)',
+  'near.namedMissing': 'This named account does not exist: a transfer to it would fail (and the fee would be lost). Check the spelling (.near / .testnet).',
+  'near.ethExists': 'Ethereum-style NEAR account (0x…), controlled by an Ethereum key. An exchange’s EVM deposit address is NOT a NEAR account: you will be asked for a 2nd confirmation.',
+  'near.ethMissing': 'This Ethereum-style account does not exist on NEAR: Kyro does not create it.',
+  'near.implicitExists': 'Existing NEAR implicit account (64 characters: the recipient’s public key).',
+  'near.implicitMissing': 'This implicit account does not exist yet: this transfer creates it (slightly higher fee). Check it character by character: a typo creates an account nobody controls.',
+  'near.ownMissing': 'Your NEAR account does not exist yet: it is created by the first NEAR you receive.',
+  'near.spendable': '<b>Spendable balance: {spendable}</b> (balance {balance} − storage reserve {reserve}). The reserve pays for the {usage} bytes your account takes up on the chain; the fee (≈ 0.00005 NEAR) comes on top of the amount.',
+  'near.decodedLabel': 'Decoded NEAR transfer',
+  'near.title': 'NEAR transfer',
+  'near.decodedByVault': 'decoded by the vault',
+  'near.lReceiver': 'Recipient',
+  'near.kindNamed': 'named account',
+  'near.kindImplicit': 'implicit account',
+  'near.kindEth': 'Ethereum-style account',
+  'near.createdByThis': ', created by this transfer',
+  'near.lFeeEstimate': 'Estimated fee',
+  'near.lFeeBound': 'Fee at most',
+  'near.lFeeBoundValue': '{fee} (bound checked by Kyro)',
+  'near.lBalance': 'Your balance',
+  'near.lReserve': 'Storage reserve',
+  'near.lSpendable': 'Spendable',
+  'near.lKeyNonce': 'Key · nonce',
+  'near.lHash': 'Hash',
+  'near.pending': 'Waiting for execution on NEAR (a few seconds)…',
+  'near.success': '<b>Executed:</b> {recipient} received the funds.',
+  'near.failed': '<b>Failed:</b> the network rejected the transfer{detail}. The amount returns to your account; the fee is charged.',
+  'near.late': 'Still not executed after 2 minutes. Check the history before sending again: the transaction stays valid for about 24 h.',
+  'near.trackError': 'Tracking unavailable for now: {message}',
+};

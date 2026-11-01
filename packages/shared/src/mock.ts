@@ -201,7 +201,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       sui: { address: demoSuiAddress(0), path: "m/44'/784'/0'/0'/0'" },
       hbar: { address: demoHbarAddress(demoSeed(), 0), path: "m/44'/3030'/0'/0/0" },
       kas: { address: demoKaspaAddress(demoSeed(), network, 0), path: "m/44'/111111'/0'/0/0" },
-      polkadot: { address: demoDotAddress(demoSeed(), 0, network), path: 'sr25519 · phrase (compte racine, comme Polkadot.js)' },
+      polkadot: { address: demoDotAddress(demoSeed(), 0, network), path: l10n('sr25519 · phrase (compte racine, comme Polkadot.js)', 'sr25519 · phrase (root account, like Polkadot.js)') },
       algo: { address: demoAlgoAddress(0), path: "m/44'/283'/0'/0/0" },
       xmr: { address: demoXmrAddress(network, 0), path: "m/44'/128'/0'/0/0" },
       ton: { address: demoTonAddress(0, network), path: "m/44'/607'/0'" },

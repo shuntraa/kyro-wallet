@@ -1657,6 +1657,7 @@ function MoneroServerCard() {
   const tor = settings.tor.enabled;
   const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
   const defaultHost = network === 'mainnet' ? 'xmr-node.cakewallet.com' : 'monero-stagenet.stackwallet.com';
+  const { t } = useT();
   const saved = settings.servers.monero?.[nk];
   const savedUrl = saved?.kind === 'node' ? saved.url : '';
   const [kind, setKind] = useState<'default' | 'node'>(savedUrl ? 'node' : 'default');
@@ -1669,7 +1670,7 @@ function MoneroServerCard() {
   const [busy, setBusy] = useState<'test' | 'save' | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [result, setResult] = useState<ServerTestResult | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Note | null>(null);
   const [confirmDefault, setConfirmDefault] = useState(false);
   const clean = url.trim();
   const hint = kind === 'node' && clean ? checkServerUrl(clean, tor) : null;
@@ -1700,7 +1701,7 @@ function MoneroServerCard() {
         else s.monero[nk] = { kind: 'node', url: clean };
       });
       setConfirmDefault(false);
-      setNotice(toDefault ? `Nœud par défaut rétabli : ${defaultHost} reçoit de nouveau tes demandes de blocs et tes transactions.` : 'Nœud Monero enregistré. Kyro n’utilise plus que lui pour Monero.');
+      setNotice(toDefault ? { text: t('servers.xmr.restored', { host: defaultHost }), warn: true } : { text: t('servers.xmr.saved') });
     } catch (e) {
       setFailure(toFailure(e));
     } finally {
@@ -1709,28 +1710,28 @@ function MoneroServerCard() {
   };
 
   return (
-    <Card title={network === 'testnet' ? 'Monero stagenet' : 'Monero'} badge={savedUrl ? <Badge tone="ice">Nœud perso · monerod</Badge> : <Badge>Par défaut</Badge>}>
+    <Card title={network === 'testnet' ? 'Monero stagenet' : 'Monero'} badge={savedUrl ? <Badge tone="ice">{t('servers.xmr.customBadge')}</Badge> : <Badge>{t('servers.default')}</Badge>}>
       <Segmented
-        label="Nœud Monero"
+        label={t('servers.xmr.nodeLabel')}
         value={kind}
         onChange={(k) => {
           reset();
           setKind(k);
         }}
         options={[
-          { value: 'default', label: 'Par défaut' },
-          { value: 'node', label: 'Mon nœud monerod' },
+          { value: 'default', label: t('servers.default') },
+          { value: 'node', label: t('servers.xmr.customOption') },
         ]}
         className="self-start"
       />
       <Sees>
         {kind === 'default'
-          ? `${defaultHost} ne reçoit aucune clé (Kyro télécharge les blocs et les scanne sur ta machine) ; il voit les transactions que tu publies, les leurres demandés et ${tor ? 'l’IP d’un relais de sortie Tor' : 'ton adresse IP'}.`
-          : `Ton nœud ne reçoit aucune clé ; il voit les transactions que tu publies, les leurres demandés et ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'ton adresse IP'}.`}
+          ? t('servers.xmr.sees.default', { host: defaultHost, ip: tor ? t('servers.ipTor') : t('servers.xmr.ipDirect') })
+          : t('servers.xmr.sees.custom', { ip: tor ? t('servers.ipTorOnion') : t('servers.xmr.ipDirect') })}
       </Sees>
       {kind === 'node' && (
-        <Field label="URL RPC de ton nœud" hint={`Kyro vérifie le réseau (${network === 'mainnet' ? 'mainnet' : 'stagenet'}, bloc 0) avant d’enregistrer. Le RPC restreint suffit (port 18089 en général). https://, ou http:// pour une adresse .onion (Tor). Pas d’identifiants RPC.`}>
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={network === 'mainnet' ? 'https://mon-noeud.example:18089' : 'https://mon-noeud.example:38089'} aria-label="URL du nœud Monero" className="font-mono text-[13px]" />
+        <Field label={t('servers.xmr.url')} hint={t('servers.xmr.hint', { network: network === 'mainnet' ? 'mainnet' : 'stagenet' })}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={network === 'mainnet' ? t('servers.xmr.placeholderMainnet') : t('servers.xmr.placeholderTestnet')} aria-label={t('servers.xmr.urlAria')} className="font-mono text-[13px]" />
         </Field>
       )}
       {hint && (
@@ -1739,20 +1740,20 @@ function MoneroServerCard() {
         </span>
       )}
       {failure && <FailureNotice failure={failure} />}
-      {result && !failure && <TestOk result={result} ledgerLabel="hauteur" />}
-      {notice && !failure && <Notice tone={notice.startsWith('Nœud par défaut') ? 'warn' : 'success'}>{notice}</Notice>}
+      {result && !failure && <TestOk result={result} ledgerLabel={t('servers.xmr.height')} />}
+      {notice && !failure && <Notice tone={notice.warn ? 'warn' : 'success'}>{notice.text}</Notice>}
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void test()} disabled={busy !== null || (kind === 'node' && !clean)}>
-          {busy === 'test' && <Spinner />} Tester la connexion
+          {busy === 'test' && <Spinner />} {t('servers.test')}
         </Button>
         <Button variant="primary" onClick={() => (kind === 'node' ? void save(false) : setConfirmDefault(true))} disabled={busy !== null || !dirty || (kind === 'node' && !clean)}>
-          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? 'Revenir au nœud par défaut' : 'Enregistrer'}
+          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? t('servers.xmr.backConfirm') : t('servers.save')}
         </Button>
       </div>
       <BackToDefaultDialog
         open={confirmDefault}
         host={defaultHost}
-        sees="tes demandes de blocs, les leurres et les transactions que tu publies"
+        sees={t('servers.xmr.backSees')}
         busy={busy === 'save'}
         failure={confirmDefault ? failure : null}
         onConfirm={() => void save(true)}

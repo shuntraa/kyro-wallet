@@ -13,8 +13,9 @@ use wallet_core::{
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::kaspa_backend::{self, KaspaCtx, KaspaHistoryEntry};
 use crate::servers::{host_of, utxo_network_key};
 use crate::state::AppState;
@@ -40,8 +41,8 @@ fn keys(state: &AppState, account: u32) -> AppResult<Vec<KaspaOwnKey>> {
     })
 }
 
-fn kas(sompi: &str) -> String {
-    format!("{} KAS", format_units(sompi, 8))
+fn kas(lang: Lang, sompi: &str) -> String {
+    format!("{} KAS", format_units_in(lang, sompi, 8))
 }
 
 fn net_suffix(net: Network) -> &'static str {
@@ -52,61 +53,110 @@ fn net_suffix(net: Network) -> &'static str {
 }
 
 /// Body of the native dialog, built from Rust's decoding only.
-pub(crate) fn describe_kaspa(s: &KaspaTxSummary, net: Network) -> String {
-    let mut out = format!("Envoi Kaspa{}\n\n", net_suffix(net));
+pub(crate) fn describe_kaspa(lang: Lang, s: &KaspaTxSummary, net: Network) -> String {
+    let mut out = format!(
+        "{}{}\n\n",
+        lang.pick("Envoi Kaspa", "Kaspa send"),
+        net_suffix(net)
+    );
     for o in &s.outputs {
-        let amount = kas(&o.amount);
+        let amount = kas(lang, &o.amount);
         match &o.address {
             Some(a) if o.is_change => {
-                out += &format!("Monnaie (revient chez toi) : {amount}\n  {a}\n");
+                out += &match lang {
+                    Lang::Fr => format!("Monnaie (revient chez toi) : {amount}\n  {a}\n"),
+                    Lang::En => format!("Change (comes back to you): {amount}\n  {a}\n"),
+                };
             }
-            Some(a) => out += &format!("À : {a}\nMontant : {amount}\n"),
+            Some(a) => {
+                out += &match lang {
+                    Lang::Fr => format!("À : {a}\nMontant : {amount}\n"),
+                    Lang::En => format!("To: {a}\nAmount: {amount}\n"),
+                }
+            }
             None => {
-                out += &format!(
-                    "Sortie INCONNUE (script non reconnu) : {amount}\n  script : {}\n",
-                    o.script
-                )
+                out += &match lang {
+                    Lang::Fr => format!(
+                        "Sortie INCONNUE (script non reconnu) : {amount}\n  script : {}\n",
+                        o.script
+                    ),
+                    Lang::En => format!(
+                        "UNKNOWN output (unrecognized script): {amount}\n  script: {}\n",
+                        o.script
+                    ),
+                }
             }
         }
     }
-    out += &format!(
-        "\nFrais : {} ({} sompi)\nMasse : {} g (calcul {} · stockage KIP-9 {} · transitoire {}) · frais minimum de relais : {}",
-        kas(&s.fee),
-        s.fee,
-        s.mass.total,
-        s.mass.compute,
-        s.mass.storage,
-        s.mass.transient.div_ceil(2),
-        kas(&s.minimum_fee)
-    );
-    out += &format!(
-        "\nEntrées : {} pièce(s) de ce compte, {} au total",
-        s.inputs,
-        kas(&s.input_total)
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais : {} ({} sompi)\nMasse : {} g (calcul {} · stockage KIP-9 {} · transitoire {}) · frais minimum de relais : {}",
+            kas(lang, &s.fee),
+            s.fee,
+            s.mass.total,
+            s.mass.compute,
+            s.mass.storage,
+            s.mass.transient.div_ceil(2),
+            kas(lang, &s.minimum_fee)
+        ),
+        Lang::En => format!(
+            "\nFee: {} ({} sompi)\nMass: {} g (compute {} · KIP-9 storage {} · transient {}) · minimum relay fee: {}",
+            kas(lang, &s.fee),
+            s.fee,
+            s.mass.total,
+            s.mass.compute,
+            s.mass.storage,
+            s.mass.transient.div_ceil(2),
+            kas(lang, &s.minimum_fee)
+        ),
+    };
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nEntrées : {} pièce(s) de ce compte, {} au total",
+            s.inputs,
+            kas(lang, &s.input_total)
+        ),
+        Lang::En => format!(
+            "\nInputs: {} coin(s) of this account, {} in total",
+            s.inputs,
+            kas(lang, &s.input_total)
+        ),
+    };
     if !s.has_change {
-        out += "\n\nPas de monnaie : tout ce qui n'est pas envoyé part en frais (un reste trop petit pour une sortie de monnaie — masse de stockage KIP-9 — y est ajouté).";
+        out += lang.pick(
+            "\n\nPas de monnaie : tout ce qui n'est pas envoyé part en frais (un reste trop petit pour une sortie de monnaie — masse de stockage KIP-9 — y est ajouté).",
+            "\n\nNo change: everything not sent goes to the fee (a remainder too small for a change output — KIP-9 storage mass — is added to it).",
+        );
     }
-    out += &format!("\n\nIdentifiant : {}", s.tx_id);
+    out += &format!("\n\n{}{}", lang.pick("Identifiant : ", "ID: "), s.tx_id);
     out
 }
 
 /// Body of the reinforced (second) dialog.
-pub(crate) fn describe_kaspa_extra(s: &KaspaTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans cette transaction :\n");
+pub(crate) fn describe_kaspa_extra(lang: Lang, s: &KaspaTxSummary) -> String {
+    let mut out = String::from(lang.unusual_intro());
     for w in &s.warnings {
-        out += &match w {
-            KaspaWarning::UnknownOutput { index } => {
+        out += &match (w, lang) {
+            (KaspaWarning::UnknownOutput { index }, Lang::Fr) => {
                 format!("• sortie {index} : script inconnu — Kyro ne sait pas à qui elle paie\n")
             }
-            KaspaWarning::HighFee => format!(
+            (KaspaWarning::UnknownOutput { index }, Lang::En) => {
+                format!("• output {index}: unknown script — Kyro does not know whom it pays\n")
+            }
+            (KaspaWarning::HighFee, Lang::Fr) => format!(
                 "• frais élevés : {} (plus de 1 KAS, ou plus de 10 fois le minimum de relais {})\n",
-                kas(&s.fee),
-                kas(&s.minimum_fee)
+                kas(lang, &s.fee),
+                kas(lang, &s.minimum_fee)
+            ),
+            (KaspaWarning::HighFee, Lang::En) => format!(
+                "• high fee: {} (more than 1 KAS, or more than 10 times the minimum relay fee {})\n",
+                kas(lang, &s.fee),
+                kas(lang, &s.minimum_fee)
             ),
         };
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -374,13 +424,18 @@ pub async fn kas_sign_tx(
     let a = account_arg(account)?;
     let net = state.network;
     let ks = keys(&state, a)?;
+    let lang = crate::i18n::current();
     let signer = SignerInfo::new(
         &state,
         Chain::Kas,
         a,
         format!(
-            "{} (réception …/0/i, monnaie …/1/i)",
-            wallet_core::kaspa_account_path(a)?
+            "{} {}",
+            wallet_core::kaspa_account_path(a)?,
+            lang.pick(
+                "(réception …/0/i, monnaie …/1/i)",
+                "(receive …/0/i, change …/1/i)"
+            )
         ),
     );
     let c = ctx(&state);
@@ -388,16 +443,19 @@ pub async fn kas_sign_tx(
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     confirm_native(
         &app,
-        "Confirmer la transaction Kaspa",
-        signer.body(crate::i18n::current(), &describe_kaspa(&summary, net)),
+        lang.pick(
+            "Confirmer la transaction Kaspa",
+            "Confirm the Kaspa transaction",
+        ),
+        signer.body(lang, &describe_kaspa(lang, &summary, net)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : transaction à vérifier",
-            describe_kaspa_extra(&summary),
+            lang.check_tx_title(),
+            describe_kaspa_extra(lang, &summary),
         )
         .await?;
     }
@@ -486,7 +544,7 @@ mod tests {
     #[test]
     fn dialog_shows_what_rust_decoded() {
         let s = summary();
-        let d = describe_kaspa(&s, Network::Testnet);
+        let d = describe_kaspa(Lang::Fr, &s, Network::Testnet);
         for needle in [
             "Envoi Kaspa (testnet-10)",
             "À : kaspa:qdest\nMontant : 10 KAS",
@@ -500,7 +558,7 @@ mod tests {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
         assert!(!d.contains("Pas de monnaie"));
-        assert!(describe_kaspa(&s, Network::Mainnet).starts_with("Envoi Kaspa\n"));
+        assert!(describe_kaspa(Lang::Fr, &s, Network::Mainnet).starts_with("Envoi Kaspa\n"));
 
         let mut x = summary();
         x.outputs[1].address = None;
@@ -511,12 +569,15 @@ mod tests {
             KaspaWarning::UnknownOutput { index: 1 },
             KaspaWarning::HighFee,
         ];
-        let d = describe_kaspa(&x, Network::Mainnet);
+        let d = describe_kaspa(Lang::Fr, &x, Network::Mainnet);
         assert!(d.contains("Sortie INCONNUE (script non reconnu) : 39,997964 KAS\n  script : 20ac"));
         assert!(d.contains("Pas de monnaie"));
-        let e = describe_kaspa_extra(&x);
+        let e = describe_kaspa_extra(Lang::Fr, &x);
         assert!(e.contains("sortie 1 : script inconnu"));
         assert!(e.contains("frais élevés : 0,002036 KAS"));
+        let en = describe_kaspa(Lang::En, &s, Network::Testnet);
+        assert!(en.contains("To: kaspa:qdest\nAmount: 10 KAS") && en.contains("Fee: 0.002036 KAS"));
+        assert!(describe_kaspa_extra(Lang::En, &x).contains("output 1: unknown script"));
     }
 
     #[test]

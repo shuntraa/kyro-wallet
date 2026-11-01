@@ -25,6 +25,7 @@ import {
   type Settings,
 } from './ipc';
 import type { DemoTor } from './mock-tor';
+import { l10n } from './i18n';
 
 export const APTOS_TRANSFER_FUNCTION = '0x1::aptos_account::transfer';
 const GAS_PRICE = 100n;
@@ -42,7 +43,7 @@ export function demoAptosAddress(account: number): string {
   return `0x${bytesToHex(sha3_256(new TextEncoder().encode(`kyro-demo-aptos-account-${account}`)))}`;
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 const aptText = (octas: bigint | string) => {
   const v = BigInt(octas);
   const frac = (v % 100_000_000n).toString().padStart(8, '0').replace(/0+$/, '');
@@ -52,11 +53,11 @@ const aptText = (octas: bigint | string) => {
 /** wallet-core `aptos_parse_address`: `0x` + exactly 64 hex, same messages as Rust. */
 export function checkAptosAddress(a: unknown): string {
   const s = String(a ?? '').trim();
-  if (s.endsWith('.apt')) throw invalidInput("les noms ANS (.apt) ne sont pas pris en charge : colle l'adresse 0x… complète");
-  if (!s.startsWith('0x')) throw invalidInput('adresse Aptos invalide : 0x suivi de 64 caractères hexadécimaux attendu');
+  if (s.endsWith('.apt')) throw invalidInput(l10n("les noms ANS (.apt) ne sont pas pris en charge : colle l'adresse 0x… complète", 'ANS names (.apt) are not supported: paste the full 0x… address'));
+  if (!s.startsWith('0x')) throw invalidInput(l10n('adresse Aptos invalide : 0x suivi de 64 caractères hexadécimaux attendu', 'invalid Aptos address: 0x followed by 64 hexadecimal characters expected'));
   const h = s.slice(2);
-  if (h.length !== 64) throw invalidInput('adresse Aptos invalide : 64 caractères hexadécimaux attendus après 0x (forme courte refusée : demande l’adresse complète)');
-  if (!/^[0-9a-fA-F]{64}$/.test(h)) throw invalidInput('adresse Aptos invalide (caractère non hexadécimal)');
+  if (h.length !== 64) throw invalidInput(l10n('adresse Aptos invalide : 64 caractères hexadécimaux attendus après 0x (forme courte refusée : demande l’adresse complète)', 'invalid Aptos address: 64 hexadecimal characters expected after 0x (short form refused: ask for the full address)'));
+  if (!/^[0-9a-fA-F]{64}$/.test(h)) throw invalidInput(l10n('adresse Aptos invalide (caractère non hexadécimal)', 'invalid Aptos address (non-hexadecimal character)'));
   return `0x${h.toLowerCase()}`;
 }
 
@@ -143,7 +144,7 @@ export function createDemoAptos(d: DemoAptosDeps) {
   const checkTransfer = (ours: AptosAccountInfo, amount: bigint, maxFee: bigint) => {
     const balance = BigInt(ours.balance);
     if (amount + maxFee > balance) {
-      throw invalidInput(`solde insuffisant : ${aptText(balance).replace(' APT', '')} APT disponibles, il en faut ${aptText(amount + maxFee).replace(' APT', '')} (montant + frais maximum, que le réseau exige d'avance)`);
+      throw invalidInput(l10n(`solde insuffisant : ${aptText(balance).replace(' APT', '')} APT disponibles, il en faut ${aptText(amount + maxFee).replace(' APT', '')} (montant + frais maximum, que le réseau exige d'avance)`, `insufficient balance: ${aptText(balance).replace(' APT', '')} APT available, ${aptText(amount + maxFee).replace(' APT', '')} needed (amount + maximum fee, which the network requires upfront)`));
     }
   };
   const encode = (t: DemoTransfer) => bytesToHex(new TextEncoder().encode(JSON.stringify(t)));
@@ -155,9 +156,9 @@ export function createDemoAptos(d: DemoAptosDeps) {
       const bytes = new Uint8Array((hex.match(/../g) ?? []).map((b) => parseInt(b, 16)));
       t = JSON.parse(new TextDecoder().decode(bytes)) as DemoTransfer;
     } catch {
-      throw invalidInput('transaction Aptos refusée : données illisibles');
+      throw invalidInput(l10n('transaction Aptos refusée : données illisibles', 'Aptos transaction refused: unreadable data'));
     }
-    if (t.sender !== me) throw invalidInput("transaction Aptos refusée : l'expéditeur n'est pas l'adresse de ce compte");
+    if (t.sender !== me) throw invalidInput(l10n("transaction Aptos refusée : l'expéditeur n'est pas l'adresse de ce compte", 'Aptos transaction refused: the sender is not the address of this account'));
     checkAptosAddress(t.recipient);
     const maxFee = BigInt(t.maxGasAmount) * BigInt(t.gasUnitPrice);
     const warnings: AptosWarning[] = [];
@@ -183,14 +184,14 @@ export function createDemoAptos(d: DemoAptosDeps) {
   };
   const contextFor = (to: string): AptosContext => ({ account: account(me), recipientNew: recipientNew(to), gasUsed: gasFor(to).toString(), ledgerTime: nowSecs() });
   const describe = (s: AptosTxSummary, c: AptosContext) =>
-    `Envoi Aptos${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.recipient}\n\nMontant : ${aptText(s.amount)} (${s.amount} octas)\n${c.recipientNew ? "Ce compte n'a encore rien reçu : le transfert le crée.\n" : ''}\nFrais maximum : ${aptText(s.maxFee)}\nSolde : ${aptText(c.account.balance)}\nFonction : ${s.function}\nSéquence ${s.sequenceNumber} · chaîne ${s.chainId}`;
+    l10n(`Envoi Aptos${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.recipient}\n\nMontant : ${aptText(s.amount)} (${s.amount} octas)\n${c.recipientNew ? "Ce compte n'a encore rien reçu : le transfert le crée.\n" : ''}\nFrais maximum : ${aptText(s.maxFee)}\nSolde : ${aptText(c.account.balance)}\nFonction : ${s.function}\nSéquence ${s.sequenceNumber} · chaîne ${s.chainId}`, `Aptos send${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.recipient}\n\nAmount: ${aptText(s.amount)} (${s.amount} octas)\n${c.recipientNew ? 'This account has not received anything yet: the transfer creates it.\n' : ''}\nMaximum fee: ${aptText(s.maxFee)}\nBalance: ${aptText(c.account.balance)}\nFunction: ${s.function}\nSequence ${s.sequenceNumber} · chain ${s.chainId}`);
 
   const handlers: Record<Extract<keyof Commands, `aptos_${string}`>, (a: Record<string, unknown>) => unknown> = {
     aptos_backend_info: (): AptosBackendInfo => ({ network: netKey, label: d.network === 'mainnet' ? 'api.mainnet.aptoslabs.com' : 'api.testnet.aptoslabs.com', tor: torOn() }),
     aptos_address: (a) => {
       d.requireUnlocked();
       const n = a.account === undefined ? 0 : Number(a.account);
-      if (!Number.isInteger(n) || n < 0 || n > 100) throw invalidInput('numéro de compte : au plus 100');
+      if (!Number.isInteger(n) || n < 0 || n > 100) throw invalidInput(l10n('numéro de compte : au plus 100', 'account number: at most 100'));
       return demoAptosAddress(n);
     },
     aptos_account: async (a) => {
@@ -207,7 +208,7 @@ export function createDemoAptos(d: DemoAptosDeps) {
       d.requireUnlocked();
       const to = checkAptosAddress(a.to);
       const amountStr = String(a.amount ?? '').trim();
-      if (!/^\d+$/.test(amountStr) || BigInt(amountStr) <= 0n) throw invalidInput('montant en octas invalide');
+      if (!/^\d+$/.test(amountStr) || BigInt(amountStr) <= 0n) throw invalidInput(l10n('montant en octas invalide', 'invalid amount in octas'));
       await backend();
       const context = contextFor(to);
       checkTransfer(context.account, BigInt(amountStr), 0n);
@@ -222,24 +223,24 @@ export function createDemoAptos(d: DemoAptosDeps) {
       const { t, summary } = decode(a.raw);
       await backend();
       const context = contextFor(summary.recipient);
-      if (summary.chainId !== chainId) throw invalidInput(`transaction pour la chaîne ${summary.chainId}, pas pour celle de l'app (${chainId})`);
-      if (summary.expirationTimestampSecs < nowSecs() + 30) throw invalidInput("transfert Aptos expiré ou sur le point de l'être : reconstruis-le");
-      if (summary.sequenceNumber !== context.account.sequenceNumber) throw invalidInput('numéro de séquence périmé : reconstruis le transfert');
+      if (summary.chainId !== chainId) throw invalidInput(l10n(`transaction pour la chaîne ${summary.chainId}, pas pour celle de l'app (${chainId})`, `transaction for chain ${summary.chainId}, not for the app's (${chainId})`));
+      if (summary.expirationTimestampSecs < nowSecs() + 30) throw invalidInput(l10n("transfert Aptos expiré ou sur le point de l'être : reconstruis-le", 'Aptos transfer expired or about to be: rebuild it'));
+      if (summary.sequenceNumber !== context.account.sequenceNumber) throw invalidInput(l10n('numéro de séquence périmé : reconstruis le transfert', 'stale sequence number: rebuild the transfer'));
       checkTransfer(context.account, BigInt(summary.amount), BigInt(summary.maxFee));
       d.checkPassword(a.password);
-      if (!d.confirm(`Confirmer l'envoi d'APT\n${describe(summary, context)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !d.confirm('Attention : transfert à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer l'envoi d'APT\n${describe(summary, context)}`, `Confirm the APT send\n${describe(summary, context)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (summary.requiresExtraConfirmation && !d.confirm(l10n('Attention : transfert à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: transfer to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const signed = encode({ ...t, signature: bytesToHex(sha3_256(new TextEncoder().encode(`sig:${String(a.raw)}`))) });
       return { signed, hash: hashOf(signed), summary, context };
     },
     aptos_broadcast: async (a) => {
       const { t, summary } = decode(a.signed);
-      if (!t.signature) throw invalidInput('transaction Aptos non signée');
+      if (!t.signature) throw invalidInput(l10n('transaction Aptos non signée', 'unsigned Aptos transaction'));
       await backend();
       const hash = hashOf(String(a.signed).trim());
       const ours = state.accounts.get(me);
-      if (!ours || BigInt(summary.sequenceNumber) !== ours.sequence) throw invalidInput('transaction Aptos refusée par le nœud (HTTP 400) : SEQUENCE_NUMBER_TOO_OLD');
-      if (summary.expirationTimestampSecs < nowSecs()) throw invalidInput('transaction Aptos refusée par le nœud (HTTP 400) : TRANSACTION_EXPIRED');
+      if (!ours || BigInt(summary.sequenceNumber) !== ours.sequence) throw invalidInput(l10n('transaction Aptos refusée par le nœud (HTTP 400) : SEQUENCE_NUMBER_TOO_OLD', 'Aptos transaction rejected by the node (HTTP 400): SEQUENCE_NUMBER_TOO_OLD'));
+      if (summary.expirationTimestampSecs < nowSecs()) throw invalidInput(l10n('transaction Aptos refusée par le nœud (HTTP 400) : TRANSACTION_EXPIRED', 'Aptos transaction rejected by the node (HTTP 400): TRANSACTION_EXPIRED'));
       const success = !state.failNext;
       state.failNext = false;
       const to = summary.recipient;
@@ -260,7 +261,7 @@ export function createDemoAptos(d: DemoAptosDeps) {
     },
     aptos_tx_status: async (a) => {
       const h = String(a.hash ?? '').trim().toLowerCase();
-      if (!/^0x[0-9a-f]{64}$/.test(h)) throw invalidInput('hash : 0x suivi de 64 caractères hexadécimaux');
+      if (!/^0x[0-9a-f]{64}$/.test(h)) throw invalidInput(l10n('hash : 0x suivi de 64 caractères hexadécimaux', 'hash: 0x followed by 64 hexadecimal characters'));
       await backend();
       const s = state.submitted.get(h);
       if (!s || d.now() - s.at < COMMIT_MS) return { committed: false, success: false, vmStatus: '' };

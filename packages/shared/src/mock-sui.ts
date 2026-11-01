@@ -27,6 +27,7 @@ import {
   type SuiTxSummary,
   type SuiWarning,
 } from './ipc';
+import { l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const MIST = 1_000_000_000n;
@@ -51,16 +52,16 @@ export function demoSuiAddress(account: number): string {
   return suiAddressOf(sha256(enc(`kyro-demo-sui-account-${account}`)));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 
 /** wallet-core `sui_parse_address`, same messages. */
 export function checkSuiAddress(a: unknown): string {
   const s = String(a ?? '').trim();
-  if (s.endsWith('.sui') || s.startsWith('@')) throw invalidInput("les noms SuiNS ne sont pas pris en charge : colle l'adresse 0x… complète");
-  if (!s.startsWith('0x')) throw invalidInput('adresse Sui invalide : 0x suivi de 64 caractères hexadécimaux attendu');
+  if (s.endsWith('.sui') || s.startsWith('@')) throw invalidInput(l10n("les noms SuiNS ne sont pas pris en charge : colle l'adresse 0x… complète", 'SuiNS names are not supported: paste the full 0x… address'));
+  if (!s.startsWith('0x')) throw invalidInput(l10n('adresse Sui invalide : 0x suivi de 64 caractères hexadécimaux attendu', 'invalid Sui address: 0x followed by 64 hexadecimal characters expected'));
   const h = s.slice(2);
-  if (h.length !== 64) throw invalidInput('adresse Sui invalide : 64 caractères hexadécimaux attendus après 0x (forme courte refusée)');
-  if (!/^[0-9a-fA-F]{64}$/.test(h)) throw invalidInput('adresse Sui invalide (caractère non hexadécimal)');
+  if (h.length !== 64) throw invalidInput(l10n('adresse Sui invalide : 64 caractères hexadécimaux attendus après 0x (forme courte refusée)', 'invalid Sui address: 64 hexadecimal characters expected after 0x (short form refused)'));
+  if (!/^[0-9a-fA-F]{64}$/.test(h)) throw invalidInput(l10n('adresse Sui invalide (caractère non hexadécimal)', 'invalid Sui address (non-hexadecimal character)'));
   return `0x${h.toLowerCase()}`;
 }
 
@@ -151,9 +152,9 @@ export function createDemoSui(d: DemoSuiDeps) {
     try {
       t = JSON.parse(new TextDecoder().decode(base64.decode(String(bcs ?? '').trim()))) as DemoSuiTx;
     } catch {
-      throw invalidInput('transaction : base64 attendu');
+      throw invalidInput(l10n('transaction : base64 attendu', 'transaction: base64 expected'));
     }
-    if (t.sender !== sender) throw invalidInput("transaction Sui refusée : l'expéditeur n'est pas l'adresse de ce compte");
+    if (t.sender !== sender) throw invalidInput(l10n("transaction Sui refusée : l'expéditeur n'est pas l'adresse de ce compte", 'Sui transaction refused: the sender is not this account’s address'));
     checkSuiAddress(t.recipient);
     const warnings: SuiWarning[] = [];
     if (t.amount === null) warnings.push({ kind: 'sendAll' });
@@ -179,18 +180,18 @@ export function createDemoSui(d: DemoSuiDeps) {
   };
 
   const budgetOf = () => COMPUTATION + 1000n * REFERENCE_GAS_PRICE + (STORAGE - REBATE);
-  const insufficient = (have: bigint, need: bigint) => invalidInput(`solde insuffisant : ${suiText(have)} dans les pièces SUI, il en faut ${suiText(need)} (montant + budget de gaz)`);
+  const insufficient = (have: bigint, need: bigint) => invalidInput(l10n(`solde insuffisant : ${suiText(have)} dans les pièces SUI, il en faut ${suiText(need)} (montant + budget de gaz)`, `insufficient balance: ${suiText(have)} in SUI coins, ${suiText(need)} needed (amount + gas budget)`));
 
   /** commands_sui.rs prepare_sign: live checks, then the simulated context. */
   const prepare = (bcs: unknown, sender: string): { t: DemoSuiTx; summary: SuiTxSummary; context: SuiContext } => {
     const { t, summary } = decode(bcs, sender);
-    if (t.expirationEpoch < state.epoch) throw invalidInput(`transfert Sui expiré (époque ${t.expirationEpoch} terminée, époque actuelle ${state.epoch}) : reconstruis-le`);
+    if (t.expirationEpoch < state.epoch) throw invalidInput(l10n(`transfert Sui expiré (époque ${t.expirationEpoch} terminée, époque actuelle ${state.epoch}) : reconstruis-le`, `Sui transfer expired (epoch ${t.expirationEpoch} over, current epoch ${state.epoch}): rebuild it`));
     const coins = coinsOf(sender);
     let gasTotal = 0n;
     const gasCoinBalances: string[] = [];
     for (const g of t.gasCoins) {
       const c = coins.find((x) => x.id === g.objectId && String(x.version) === g.version && digestOfCoin(x) === g.digest);
-      if (!c) throw invalidInput('les pièces de gaz ont changé depuis la préparation : reconstruis le transfert');
+      if (!c) throw invalidInput(l10n('les pièces de gaz ont changé depuis la préparation : reconstruis le transfert', 'the gas coins changed since preparation: rebuild the transfer'));
       gasTotal += c.balance;
       gasCoinBalances.push(c.balance.toString());
     }
@@ -221,28 +222,28 @@ export function createDemoSui(d: DemoSuiDeps) {
   /** commands_sui.rs describe_sui. */
   const describe = (s: SuiTxSummary, c: SuiContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-    let out = `Envoi Sui${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.recipient}\n(adresse Sui complète : 0x + 64 caractères, sans somme de contrôle — compare-la en entier)\n${line}\n`;
-    if (s.amount !== null) out += `Montant : ${suiText(s.amount)} (${s.amount} MIST)\n`;
+    let out = l10n(`Envoi Sui${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.recipient}\n(adresse Sui complète : 0x + 64 caractères, sans somme de contrôle — compare-la en entier)\n${line}\n`, `Sui send${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.recipient}\n(full Sui address: 0x + 64 characters, no checksum — compare all of it)\n${line}\n`);
+    if (s.amount !== null) out += l10n(`Montant : ${suiText(s.amount)} (${s.amount} MIST)\n`, `Amount: ${suiText(s.amount)} (${s.amount} MIST)\n`);
     else {
-      out += 'Montant : TOUT LE SOLDE des pièces de gaz ci-dessous, moins les frais\n';
-      if (c.receives) out += `(le destinataire recevrait ${suiText(c.receives)} selon la simulation)\n`;
+      out += l10n('Montant : TOUT LE SOLDE des pièces de gaz ci-dessous, moins les frais\n', 'Amount: THE WHOLE BALANCE of the gas coins below, minus the fee\n');
+      if (c.receives) out += l10n(`(le destinataire recevrait ${suiText(c.receives)} selon la simulation)\n`, `(the recipient would receive ${suiText(c.receives)} according to the simulation)\n`);
     }
-    out += `Jeton : SUI (${s.coinType})\n${line}\n`;
-    out += `Frais estimés (simulation) : ${suiText(c.fee)} — calcul ${suiText(c.computationCost)} + stockage ${suiText(c.storageCost)} − remboursement ${suiText(c.storageRebate)}\n`;
-    out += `Budget de gaz maximal : ${suiText(s.gasBudget)} (${s.gasBudget} MIST) · prix du gaz : ${s.gasPrice} MIST/unité (référence ${c.referenceGasPrice})\n`;
-    out += `Pièces de gaz : ${s.gasCoins.length} (total ${suiText(c.gasCoinsTotal)}) · solde dépensable : ${suiText(c.balance)}\n`;
-    s.gasCoins.slice(0, SHOWN_GAS_COINS).forEach((g, i) => (out += `  • ${g.objectId} (version ${g.version}) : ${c.gasCoinBalances[i] !== undefined ? suiText(c.gasCoinBalances[i]) : '?'}\n`));
+    out += l10n(`Jeton : SUI (${s.coinType})\n${line}\n`, `Token: SUI (${s.coinType})\n${line}\n`);
+    out += l10n(`Frais estimés (simulation) : ${suiText(c.fee)} — calcul ${suiText(c.computationCost)} + stockage ${suiText(c.storageCost)} − remboursement ${suiText(c.storageRebate)}\n`, `Estimated fee (simulation): ${suiText(c.fee)} — computation ${suiText(c.computationCost)} + storage ${suiText(c.storageCost)} − rebate ${suiText(c.storageRebate)}\n`);
+    out += l10n(`Budget de gaz maximal : ${suiText(s.gasBudget)} (${s.gasBudget} MIST) · prix du gaz : ${s.gasPrice} MIST/unité (référence ${c.referenceGasPrice})\n`, `Maximum gas budget: ${suiText(s.gasBudget)} (${s.gasBudget} MIST) · gas price: ${s.gasPrice} MIST/unit (reference ${c.referenceGasPrice})\n`);
+    out += l10n(`Pièces de gaz : ${s.gasCoins.length} (total ${suiText(c.gasCoinsTotal)}) · solde dépensable : ${suiText(c.balance)}\n`, `Gas coins: ${s.gasCoins.length} (total ${suiText(c.gasCoinsTotal)}) · spendable balance: ${suiText(c.balance)}\n`);
+    s.gasCoins.slice(0, SHOWN_GAS_COINS).forEach((g, i) => (out += `  • ${g.objectId} (version ${g.version})${l10n(' : ', ': ')}${c.gasCoinBalances[i] !== undefined ? suiText(c.gasCoinBalances[i]) : '?'}\n`));
     if (s.gasCoins.length > SHOWN_GAS_COINS) {
       const rest = c.gasCoinBalances.slice(SHOWN_GAS_COINS).reduce((a, b) => a + BigInt(b), 0n);
-      out += `  • … et ${s.gasCoins.length - SHOWN_GAS_COINS} autres pièces (${suiText(rest)})\n`;
+      out += l10n(`  • … et ${s.gasCoins.length - SHOWN_GAS_COINS} autres pièces (${suiText(rest)})\n`, `  • … and ${s.gasCoins.length - SHOWN_GAS_COINS} more coins (${suiText(rest)})\n`);
     }
-    out += `Valable jusqu'à la fin de l'époque n° ${s.expirationEpoch} (époque actuelle ${c.epoch})\nEmpreinte : ${s.digest}\n`;
+    out += l10n(`Valable jusqu'à la fin de l'époque n° ${s.expirationEpoch} (époque actuelle ${c.epoch})\nEmpreinte : ${s.digest}\n`, `Valid until the end of epoch #${s.expirationEpoch} (current epoch ${c.epoch})\nDigest: ${s.digest}\n`);
     return out;
   };
 
   const accountArg = (a: unknown) => {
     const n = a === undefined ? 0 : Number(a);
-    if (!Number.isInteger(n) || n < 0 || n > 100) throw invalidInput('numéro de compte : au plus 100');
+    if (!Number.isInteger(n) || n < 0 || n > 100) throw invalidInput(l10n('numéro de compte : au plus 100', 'account number: at most 100'));
     return n;
   };
 
@@ -272,12 +273,12 @@ export function createDemoSui(d: DemoSuiDeps) {
       let amount: bigint | null = null;
       if (!all) {
         const s = String(a.amount ?? '').trim();
-        if (!/^\d+$/.test(s) || BigInt(s) <= 0n) throw invalidInput('montant en MIST invalide');
+        if (!/^\d+$/.test(s) || BigInt(s) <= 0n) throw invalidInput(l10n('montant en MIST invalide', 'invalid MIST amount'));
         amount = BigInt(s);
       }
       await backend();
       const coins = coinsOf(sender);
-      if (coins.length === 0) throw invalidInput('aucun SUI sur ce compte');
+      if (coins.length === 0) throw invalidInput(l10n('aucun SUI sur ce compte', 'no SUI on this account'));
       const budget = budgetOf();
       const picked: DemoCoin[] = [];
       for (const c of coins) {
@@ -306,15 +307,15 @@ export function createDemoSui(d: DemoSuiDeps) {
       await backend();
       const { summary, context } = prepare(a.bcs, sender);
       d.checkPassword(a.password);
-      if (!d.confirm(`Confirmer le transfert Sui\n${describe(summary, context)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !d.confirm('Attention : transfert à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer le transfert Sui\n${describe(summary, context)}`, `Confirm the Sui transfer\n${describe(summary, context)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (summary.requiresExtraConfirmation && !d.confirm(l10n('Attention : transfert à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: transfer to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const signature = base64.encode(new Uint8Array([0, ...sha256(enc(`sig:${String(a.bcs)}`)), ...sha256(enc('sig2')), ...sha256(enc(sender))]));
       return { bcs: String(a.bcs).trim(), signature, digest: summary.digest, summary, context };
     },
     sui_broadcast: async (a) => {
       const sender = demoSuiAddress(accountArg(a.account));
       const sig = base64.decode(String(a.signature ?? ''));
-      if (sig.length !== 97 || sig[0] !== 0) throw invalidInput('transaction Sui refusée : signature : ed25519 (0x00 || 64 octets || 32 octets) attendue');
+      if (sig.length !== 97 || sig[0] !== 0) throw invalidInput(l10n('transaction Sui refusée : signature : ed25519 (0x00 || 64 octets || 32 octets) attendue', 'Sui transaction refused: signature: ed25519 (0x00 || 64 bytes || 32 bytes) expected'));
       await backend();
       const { t, summary, context } = prepare(a.bcs, sender);
       const fee = BigInt(context.fee);
@@ -340,7 +341,7 @@ export function createDemoSui(d: DemoSuiDeps) {
     },
     sui_tx_status: async (a) => {
       const dg = String(a.digest ?? '').trim();
-      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(dg)) throw invalidInput('empreinte Sui : base58 de 32 octets attendue');
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(dg)) throw invalidInput(l10n('empreinte Sui : base58 de 32 octets attendue', 'Sui digest: base58 of 32 bytes expected'));
       await backend();
       const s = state.executed.get(dg);
       if (!s || d.now() - s.at < INDEX_MS) return { found: false, success: false, error: null, checkpoint: null };

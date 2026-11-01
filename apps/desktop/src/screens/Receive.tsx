@@ -33,7 +33,7 @@ type UtxoReceive = (typeof UTXO_RECEIVE)[number];
 const isUtxoReceive = (f: Family): f is UtxoReceive => (UTXO_RECEIVE as readonly Family[]).includes(f);
 
 export function Receive({ family: initial = 'evm' }: { family?: Family }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const { back, network, settings, navigate, selectedAccounts, hideBalances } = useApp();
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts, adapters, activeHw } = useVault();
@@ -170,7 +170,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               : family === 'algo'
                 ? (accounts.algo?.path ?? "m/44'/283'/0'/0/0")
                 : family === 'xmr'
-                ? `${accounts.xmr?.path ?? "m/44'/128'/0'/0/0"} (adresse principale)`
+                ? t('receive.xmrPrimaryPath', { path: accounts.xmr?.path ?? "m/44'/128'/0'/0/0" })
               : family === 'ton'
                 ? (accounts.ton?.path ?? "m/44'/607'/0'")
               : family === 'cosmos'
@@ -272,11 +272,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           : family === 'doge'
             ? t('receive.descDoge')
             : family === 'zec'
-              ? 'Adresse Zcash transparente (t1…, P2PKH) : publique comme une adresse Bitcoin.'
+              ? t('receive.descZec')
             : family === 'bch'
-              ? 'Adresse Bitcoin Cash au format CashAddr (bitcoincash:q…). Ne donne jamais une adresse Bitcoin 1… pour recevoir des BCH. Les pièces portant des CashTokens ne sont pas affichées.'
+              ? t('receive.descBch')
               : family === 'dash'
-                ? 'Adresse Dash classique (P2PKH, X…). Un paiement sous 546 duffs n’est pas standard.'
+                ? t('receive.descDash')
                 : family === 'tron'
               ? network === 'testnet'
                 ? t('receive.descTronTestnet')
@@ -387,7 +387,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
 
         <div key={family} className="rise relative flex w-[460px] flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', zec: 'Zcash transparente', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', apt: 'Aptos', cosmos: 'Cosmos Hub', ton: 'TON', xmr: 'Monero', algo: 'Algorand', dot: 'Polkadot', kas: 'Kaspa', hbar: hbarShowId ? 'Hedera (compte)' : 'Hedera (adresse EVM)', sui: 'Sui', xlm: 'Stellar', near: 'NEAR' }[family] })}</span>
+            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', zec: t('receive.chainZec'), bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', apt: 'Aptos', cosmos: 'Cosmos Hub', ton: 'TON', xmr: 'Monero', algo: 'Algorand', dot: 'Polkadot', kas: 'Kaspa', hbar: hbarShowId ? t('receive.chainHbarId') : t('receive.chainHbarEvm'), sui: 'Sui', xlm: 'Stellar', near: 'NEAR' }[family] })}</span>
             <span className="text-[15px] leading-[1.45] text-text2">{desc}</span>
           </div>
           {isUtxoReceive(family) && (
@@ -411,8 +411,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               value={hbarView}
               onChange={setHbarView}
               options={[
-                { value: 'id', label: `Compte ${hbarId}` },
-                { value: 'evm', label: 'Adresse EVM' },
+                { value: 'id', label: t('receive.hbarFormatId', { id: hbarId }) },
+                { value: 'evm', label: t('receive.hbarFormatEvm') },
               ]}
             />
           )}
@@ -515,8 +515,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           )}
           {family === 'zec' && (
             <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-              <strong className="font-semibold">Adresses protégées pas encore prises en charge :</strong> Kyro ne gère que les adresses Zcash <strong>transparentes</strong> (t1…). Ton solde, tes paiements et leurs montants sont donc publics, comme sur Bitcoin. Kyro ne voit pas les fonds d’une adresse protégée (zs…) ou unifiée (u1…) d’un autre portefeuille, même issu de la même phrase.
-              {zecInfo.data && !zecInfo.data.available && <span className="mt-1 block font-semibold">Zcash testnet : aucun serveur public, Kyro ne peut pas suivre cette adresse (mainnet seulement).</span>}
+              {rt('receive.zecNote', { b: (c) => <strong className="font-semibold">{c}</strong>, t: (c) => <strong>{c}</strong> })}
+              {zecInfo.data && !zecInfo.data.available && <span className="mt-1 block font-semibold">{t('receive.zecTestnetNoServer')}</span>}
             </Notice>
           )}
           {family === 'tron' && (
@@ -531,19 +531,19 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           )}
           {family === 'kas' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">Au moins 0,2 KAS par paiement :</strong> la masse de stockage de Kaspa (KIP-9) rend les très petites sorties coûteuses ou non standard. Kyro lit les 20 premières adresses de réception et de monnaie de ce compte (m/44’/111111’/…), comme Kaspa NG et Kaspium ; les anciens portefeuilles KDX / web (m/44’/972/…) ne sont pas lus.
+              {rt('receive.kasNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
             </Notice>
           )}
           {family === 'xmr' && adapters.xmr && <XmrReceivePanel adapter={adapters.xmr} hidden={hideBalances} />}
           {family === 'xmr' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">Monero :</strong> un paiement reçu apparaît après sa première confirmation (≈ 2 min), une fois que Kyro a scanné le bloc sur ta machine, puis reste bloqué 10 blocs (≈ 20 min) avant de pouvoir être dépensé. Le nœud ne reçoit aucune de tes clés.
+              {rt('receive.xmrNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
             </Notice>
           )}
           {family === 'ton' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">Portefeuille v4R2 :</strong> ton adresse est celle d’un contrat standard, déployé automatiquement à ton premier envoi (quelques millièmes de TON en plus, une seule fois). Tu peux recevoir avant. Mêmes 12 ou 24 mots que Trust Wallet (même adresse) ; Tonkeeper ou Tonhub utilisent leur propre format de phrase, donc d’autres adresses.
-              {network === 'testnet' ? ' Sur testnet, Kyro utilise un autre identifiant de portefeuille qu’ailleurs (donc une autre adresse) : une signature de test ne peut jamais être rejouée sur mainnet.' : ''}
+              {rt('receive.tonNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+              {network === 'testnet' ? t('receive.tonTestnetId') : ''}
             </Notice>
           )}
           {family === 'xrp' && (
@@ -561,52 +561,54 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           )}
           {family === 'near' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">Compte implicite :</strong> donne exactement ces 64 caractères. Ton compte NEAR n’existe sur la chaîne qu’après avoir reçu des NEAR (le premier envoi le crée, frais payés par l’expéditeur). Kyro n’envoie et ne reçoit que des NEAR, pas encore de tokens (NEP-141).
-              {nearAccount.data && !nearAccount.data.exists && <span className="mt-1 block font-semibold text-warn">Ton compte n’existe pas encore : il sera créé par le premier NEAR reçu.</span>}
+              {rt('receive.nearNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+              {nearAccount.data && !nearAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.nearNotCreated')}</span>}
             </Notice>
           )}
           {family === 'sui' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">Adresse complète, sans somme de contrôle :</strong> une adresse Sui est 0x suivi de 64 caractères ; une seule faute en donne une autre, valide. Fais-la copier ou scanner, jamais recopier à la main. Les noms SuiNS (nom.sui) ne sont pas pris en charge par Kyro.
+              {rt('receive.suiNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
             </Notice>
           )}
           {family === 'hbar' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               {hbarAccount.data && !hbarAccount.data.exists ? (
                 <>
-                  <strong className="font-semibold text-text">Ton compte Hedera n’existe pas encore.</strong> Le premier envoi de HBAR vers cette adresse EVM le crée automatiquement (l’expéditeur paie la création, ≈ 0,05 $). Beaucoup de plateformes d’échange n’envoient qu’à un compte 0.0.x : dans ce cas, fais d’abord envoyer des HBAR par un portefeuille qui accepte les adresses EVM. Kyro affichera ensuite ton identifiant 0.0.x.
+                  {rt('receive.hbarNotCreated', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
                 </>
               ) : !hbarEvmOk ? (
-                <span className="font-semibold text-warn">Ce compte a été trouvé par sa clé publique, pas par l’adresse EVM : donne uniquement l’identifiant {hbarId}. Un envoi vers l’adresse EVM de ta clé créerait un AUTRE compte.</span>
+                <span className="font-semibold text-warn">{t('receive.hbarFoundByKey', { id: hbarId ?? '' })}</span>
               ) : (
                 <>
-                  <strong className="font-semibold text-text">Compte {hbarAccount.data?.accountIdChecksum ?? hbarId ?? '…'} :</strong> l’identifiant 0.0.x et l’adresse EVM désignent le même compte. Seuls les HBAR sont pris en charge par Kyro (pas les tokens HTS).
+                  {rt('receive.hbarNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> }, { id: hbarAccount.data?.accountIdChecksum ?? hbarId ?? '…' })}
                 </>
               )}
             </Notice>
           )}
           {family === 'dot' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">Dépôt existentiel :</strong> un compte n’existe qu’avec au moins {dotAccount.data ? `${String(Number(dotAccount.data.existentialDeposit) / 10 ** dot.nativeDecimals).replace('.', ',')} ${dot.nativeSymbol}` : `0,01 ${dot.nativeSymbol}`}, qui reste toujours dessus ; le premier envoi vers cette adresse doit donc être au moins de ce montant. Les DOT d’un exchange arrivent sur Asset Hub, pas sur la relay chain : vérifie le réseau choisi au retrait. Kyro n’affiche pas d’historique Polkadot (aucun indexeur public sans clé), seulement les soldes.
-              {dotAccount.data && !dotAccount.data.exists && <span className="mt-1 block font-semibold text-warn">Ce compte n’existe pas encore sur la chaîne : aucun {dot.nativeSymbol} reçu.</span>}
+              {rt('receive.dotNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> }, {
+                amount: `${(dotAccount.data ? String(Number(dotAccount.data.existentialDeposit) / 10 ** dot.nativeDecimals) : '0.01').replace('.', lang === 'fr' ? ',' : '.')} ${dot.nativeSymbol}`,
+              })}
+              {dotAccount.data && !dotAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.dotNotCreated', { symbol: dot.nativeSymbol })}</span>}
             </Notice>
           )}
           {family === 'algo' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">Solde minimum de 0,1 ALGO :</strong> un compte Algorand n’existe qu’après avoir reçu au moins 0,1 ALGO, qui doivent toujours y rester (plus 0,1 ALGO par token ASA ou application activés). Le premier envoi vers cette adresse doit donc être d’au moins 0,1 ALGO.
-              <span className="mt-1 block">Phrase Kyro = mêmes adresses que l’app Algorand de Ledger (m/44'/283'/n'/0/0). Une phrase Pera de 25 mots n’est pas compatible.</span>
-              {algoAccount.data && !algoAccount.data.exists && <span className="mt-1 block font-semibold text-warn">Ton compte n’existe pas encore : demande au moins 0,1 ALGO pour commencer.</span>}
-              {algoAccount.data?.authAddr && <span className="mt-1 block font-semibold text-down">Ce compte a été « rekeyé » vers {algoAccount.data.authAddr} : Kyro ne peut plus signer pour lui.</span>}
+              {rt('receive.algoNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+              <span className="mt-1 block">{t('receive.algoLedgerPath')}</span>
+              {algoAccount.data && !algoAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.algoNotCreated')}</span>}
+              {algoAccount.data?.authAddr && <span className="mt-1 block font-semibold text-down">{t('receive.algoRekeyed', { addr: algoAccount.data.authAddr })}</span>}
             </Notice>
           )}
           {family === 'cosmos' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">ATOM de Cosmos Hub seulement :</strong> les tokens IBC (USDC, OSMO…) envoyés ici ne s’affichent pas encore dans Kyro, et une adresse d’une autre chaîne Cosmos (osmo1…, celestia1…) n’est pas celle-ci. Kyro n’envoie que des ATOM.
+              {rt('receive.cosmosNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
             </Notice>
           )}
           {family === 'apt' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">APT du réseau Aptos seulement :</strong> l’adresse ressemble à une adresse Ethereum plus longue, mais ce n’est pas la même chaîne. Pas de montant minimum : le premier APT reçu crée ton compte sur la chaîne.
+              {rt('receive.aptNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
             </Notice>
           )}
           {family === 'btc' && cbfMode && (

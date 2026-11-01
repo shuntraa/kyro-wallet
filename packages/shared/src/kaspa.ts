@@ -7,6 +7,7 @@
 // to validate input early and by the demo backend; Rust re-checks everything.
 
 import type { Network } from './ipc';
+import { l10n } from './i18n';
 
 const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 
@@ -53,7 +54,7 @@ function conv(data: number[], from: number, to: number, pad: boolean): number[] 
 
 /** Encodes `payload` (32 or 33 bytes) as an address of `kind` on `network`. */
 export function kaspaAddressEncode(network: Network, kind: KaspaAddressKind, payload: Uint8Array): string {
-  if (payload.length !== LENGTH[kind]) throw new Error('longueur de clé Kaspa invalide');
+  if (payload.length !== LENGTH[kind]) throw new Error(l10n('longueur de clé Kaspa invalide', 'invalid Kaspa key length'));
   const prefix = kaspaPrefix(network);
   const five = conv([VERSION[kind], ...payload], 8, 5, true);
   const sum = checksum(prefix, five);
@@ -98,7 +99,7 @@ export function kaspaAddressProblem(address: string, network: Network): string |
   const a = address.trim();
   if (isKaspaAddress(a, network)) return null;
   const other: Network = network === 'mainnet' ? 'testnet' : 'mainnet';
-  if (isKaspaAddress(a, other)) return network === 'mainnet' ? 'adresse Kaspa de testnet (kaspatest:), pas du réseau principal' : 'adresse Kaspa du réseau principal (kaspa:), pas de testnet';
-  if (a !== a.toLowerCase() && isKaspaAddress(a.toLowerCase(), network)) return 'adresse Kaspa en majuscules : saisis-la en minuscules';
-  return `adresse Kaspa invalide (elle commence par ${kaspaPrefix(network)}:)`;
+  if (isKaspaAddress(a, other)) return network === 'mainnet' ? l10n('adresse Kaspa de testnet (kaspatest:), pas du réseau principal', 'Kaspa testnet address (kaspatest:), not mainnet') : l10n('adresse Kaspa du réseau principal (kaspa:), pas de testnet', 'Kaspa mainnet address (kaspa:), not testnet');
+  if (a !== a.toLowerCase() && isKaspaAddress(a.toLowerCase(), network)) return l10n('adresse Kaspa en majuscules : saisis-la en minuscules', 'Kaspa address in uppercase: type it in lowercase');
+  return l10n(`adresse Kaspa invalide (elle commence par ${kaspaPrefix(network)}:)`, `invalid Kaspa address (it starts with ${kaspaPrefix(network)}:)`);
 }

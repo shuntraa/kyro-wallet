@@ -17,7 +17,7 @@
 // 50/50 with itself (live quotes, 01/11/2026), so Kyro requests twice its rate and accepts the
 // quote only if 1Click echoes EXACTLY `bps` to that account and at most `bps` to itself.
 
-import { fetchJson, netFetch, type NetFetch } from '@kyro/shared';
+import { fetchJson, l10n, netFetch, type NetFetch } from '@kyro/shared';
 import type { DepositPlan, Quote, QuoteParams, SwapChain, SwapProvider } from '../types';
 import { ONE_CLICK_MAX_TOTAL_BPS, type ProviderFee } from '../fees';
 import { providerError } from './common';
@@ -47,7 +47,7 @@ const lifiSource = (c: SwapChain) => typeof c === 'number' || c === 'solana';
 const lifiDestination = (c: SwapChain) => lifiSource(c) || c === 'bitcoin';
 
 const fail = (why: string): never => {
-  throw new SwapCheckError(`NEAR Intents : ${why} — devis refusé, rien n’a été signé.`);
+  throw new SwapCheckError(l10n(`NEAR Intents : ${why} — devis refusé, rien n’a été signé.`, `NEAR Intents: ${why} — quote refused, nothing was signed.`));
 };
 const sameAddr = (chain: SwapChain, a: string | undefined, b: string) => !!a && (typeof chain === 'number' ? a.toLowerCase() === b.toLowerCase() : a === b);
 const big = (v: string | undefined): bigint | null => (v !== undefined && /^\d{1,78}$/.test(v) ? BigInt(v) : null);
@@ -81,21 +81,21 @@ export interface OneClickQuoteExpect {
 export function checkOneClickQuote(r: OneClickQuoteAnswer, e: OneClickQuoteExpect): { amountOut: bigint; minAmountOut: bigint; depositAddress: string | null; kyroFeeBps: number; oneClickFeeBps: number; timeEstimateSecs: number | null } {
   const req = r.quoteRequest;
   const q = r.quote;
-  if (!req || !q) return fail(r.message ? `pas de devis (${r.message})` : 'réponse illisible');
-  if (req.originAsset !== e.originAsset || req.destinationAsset !== e.destinationAsset) fail('tokens du devis différents de ceux demandés');
-  if (req.swapType !== 'EXACT_INPUT') fail('type d’échange inattendu');
-  if ((req.depositMode ?? 'SIMPLE') !== 'SIMPLE' || q.depositMemo) fail('dépôt avec mémo demandé (Kyro n’envoie qu’un transfert simple)');
-  if (req.recipientType !== 'DESTINATION_CHAIN' || !sameAddr(e.toChain, req.recipient, e.recipient)) fail(`destinataire ${req.recipient ?? '?'} au lieu de ton adresse`);
-  if (req.refundType !== 'ORIGIN_CHAIN' || !sameAddr(e.fromChain, req.refundTo, e.refundTo)) fail('remboursement prévu vers une autre adresse que la tienne');
-  if (big(req.amount) !== e.amount || big(q.amountIn) !== e.amount) fail('montant différent de ta saisie');
+  if (!req || !q) return fail(r.message ? l10n(`pas de devis (${r.message})`, `no quote (${r.message})`) : l10n('réponse illisible', 'unreadable response'));
+  if (req.originAsset !== e.originAsset || req.destinationAsset !== e.destinationAsset) fail(l10n('tokens du devis différents de ceux demandés', 'quote tokens differ from the requested ones'));
+  if (req.swapType !== 'EXACT_INPUT') fail(l10n('type d’échange inattendu', 'unexpected swap type'));
+  if ((req.depositMode ?? 'SIMPLE') !== 'SIMPLE' || q.depositMemo) fail(l10n('dépôt avec mémo demandé (Kyro n’envoie qu’un transfert simple)', 'deposit with memo requested (Kyro only sends a plain transfer)'));
+  if (req.recipientType !== 'DESTINATION_CHAIN' || !sameAddr(e.toChain, req.recipient, e.recipient)) fail(l10n(`destinataire ${req.recipient ?? '?'} au lieu de ton adresse`, `recipient ${req.recipient ?? '?'} instead of your address`));
+  if (req.refundType !== 'ORIGIN_CHAIN' || !sameAddr(e.fromChain, req.refundTo, e.refundTo)) fail(l10n('remboursement prévu vers une autre adresse que la tienne', 'refund planned to an address other than yours'));
+  if (big(req.amount) !== e.amount || big(q.amountIn) !== e.amount) fail(l10n('montant différent de ta saisie', 'amount differs from what you entered'));
   const fees = checkAppFees(req.appFees, e.fee ? { recipient: e.fee.recipient, bps: e.fee.bps, oneClickMaxBps: e.fee.bps } : { recipient: '', bps: 0, oneClickMaxBps: 25 });
   const out = big(q.amountOut);
   const min = big(q.minAmountOut);
-  if (out === null || min === null || out <= 0n || min <= 0n || min > out) return fail('montant reçu ou minimum garanti absent');
-  if (min < applySlippage(out, Math.min(10_000, e.slippageBps + 1))) fail('minimum garanti plus bas que le slippage choisi');
+  if (out === null || min === null || out <= 0n || min <= 0n || min > out) return fail(l10n('montant reçu ou minimum garanti absent', 'received amount or guaranteed minimum missing'));
+  if (min < applySlippage(out, Math.min(10_000, e.slippageBps + 1))) fail(l10n('minimum garanti plus bas que le slippage choisi', 'guaranteed minimum lower than the chosen slippage'));
   const depositAddress = q.depositAddress ?? null;
-  if (!e.dry && !depositAddress) fail('adresse de dépôt absente');
-  if (!e.dry && sameAddr(e.fromChain, depositAddress ?? '', e.refundTo)) fail('adresse de dépôt = ta propre adresse');
+  if (!e.dry && !depositAddress) fail(l10n('adresse de dépôt absente', 'deposit address missing'));
+  if (!e.dry && sameAddr(e.fromChain, depositAddress ?? '', e.refundTo)) fail(l10n('adresse de dépôt = ta propre adresse', 'deposit address = your own address'));
   return { amountOut: out, minAmountOut: min, depositAddress, kyroFeeBps: fees.kyro, oneClickFeeBps: fees.other, timeEstimateSecs: typeof q.timeEstimate === 'number' ? q.timeEstimate : null };
 }
 
@@ -143,7 +143,7 @@ export class NearIntentsProvider implements SwapProvider {
   private async ask(p: QuoteParams, dry: boolean, retried = false): Promise<{ answer: OneClickQuoteAnswer; expect: OneClickQuoteExpect }> {
     const toChain = p.toChain ?? p.chain;
     const recipient = p.recipient ?? (toChain === p.chain ? p.taker : '');
-    if (!recipient) throw new Error('NEAR Intents : pas de compte à toi sur la chaîne de destination');
+    if (!recipient) throw new Error(l10n('NEAR Intents : pas de compte à toi sur la chaîne de destination', 'NEAR Intents: no account of yours on the destination chain'));
     const fee = this.nearFee();
     let tokens: OneClickToken[];
     try {
@@ -153,7 +153,7 @@ export class NearIntentsProvider implements SwapProvider {
     }
     const origin = oneClickAsset(tokens, p.chain, p.sell.address, p.sell.decimals);
     const dest = oneClickAsset(tokens, toChain, p.buy.address, p.buy.decimals);
-    if (!origin || !dest) throw new Error(`NEAR Intents : ${!origin ? p.sell.symbol : p.buy.symbol} non pris en charge sur cette chaîne`);
+    if (!origin || !dest) throw new Error(l10n(`NEAR Intents : ${!origin ? p.sell.symbol : p.buy.symbol} non pris en charge sur cette chaîne`, `NEAR Intents: ${!origin ? p.sell.symbol : p.buy.symbol} not supported on this chain`));
     const body = {
       dry,
       swapType: 'EXACT_INPUT',
@@ -191,7 +191,7 @@ export class NearIntentsProvider implements SwapProvider {
 
   /** Dry quote (no deposit address): the price shown; the real one is taken by `prepare`. */
   async quote(p: QuoteParams): Promise<Quote> {
-    if (!this.supports(p)) throw new Error('NEAR Intents : route non prise en charge');
+    if (!this.supports(p)) throw new Error(l10n('NEAR Intents : route non prise en charge', 'NEAR Intents: route not supported'));
     const toChain = p.toChain ?? p.chain;
     const { answer, expect } = await this.ask(p, true);
     const c = checkOneClickQuote(answer, expect);

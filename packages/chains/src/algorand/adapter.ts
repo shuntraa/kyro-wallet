@@ -7,6 +7,7 @@
 
 import {
   call,
+  l10n,
   isAlgoAddress,
   type AlgoAccountInfo,
   type AlgoBuilt,
@@ -96,7 +97,7 @@ export class AlgorandAdapter implements ChainAdapter<'algo'> {
   private readonly backend: AlgoBackend;
 
   constructor(opts: AlgorandAdapterOptions) {
-    if (!isAlgoAddress(opts.address)) throw new Error('Adresse Algorand invalide');
+    if (!isAlgoAddress(opts.address)) throw new Error(l10n('Adresse Algorand invalide', 'Invalid Algorand address'));
     this.chain = opts.chain;
     this.address = opts.address;
     this.backend = opts.backend ?? rustAlgoBackend(opts.account ?? 0);
@@ -132,38 +133,38 @@ export class AlgorandAdapter implements ChainAdapter<'algo'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais fixés par le protocole (0,001 ALGO)',
+      hint: l10n('frais fixés par le protocole (0,001 ALGO)', 'fee set by the protocol (0.001 ALGO)'),
       fetchedAt: Date.now(),
     });
   }
 
   /** `ChainAdapter` entry point. `max`: spendable (balance − minimum balance) minus the fee Rust sets. */
   async buildTx(params: BuildParams): Promise<AlgoUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif Algorand inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif Algorand inattendu', 'Unexpected Algorand asset'));
     const note = params.memo?.trim() ? { note: params.memo } : {};
     if (!params.max) return this.buildPayment({ to: params.to, amount: params.amount.toString(), ...note });
     const spendable = BigInt((await this.backend.account(this.address)).spendable);
     const first = await this.buildPayment({ to: params.to, amount: (spendable - 10_000n).toString(), ...note }).catch(() => null);
     const fee = first ? BigInt(first.summary.fee) : 1_000n;
     const amount = spendable - fee;
-    if (amount <= 0n) throw new Error('Rien à envoyer : tout ton solde est bloqué par le solde minimum');
+    if (amount <= 0n) throw new Error(l10n('Rien à envoyer : tout ton solde est bloqué par le solde minimum', 'Nothing to send: your whole balance is locked by the minimum balance'));
     return this.buildPayment({ to: params.to, amount: amount.toString(), ...note });
   }
 
   /** `amount`: µALGO. Rust re-checks both minimum balances and the spendable amount. */
   async buildPayment(params: { to: string; amount: string; note?: string }): Promise<AlgoUnsigned> {
     const to = params.to.trim();
-    if (!isAlgoAddress(to)) throw new Error('Adresse Algorand invalide (58 caractères A–Z, 2–7)');
-    if (to === this.address) throw new Error('Paiement à soi-même impossible');
-    if (!/^\d+$/.test(params.amount) || BigInt(params.amount) <= 0n) throw new Error('Montant en µALGO invalide');
+    if (!isAlgoAddress(to)) throw new Error(l10n('Adresse Algorand invalide (58 caractères A–Z, 2–7)', 'Invalid Algorand address (58 characters A–Z, 2–7)'));
+    if (to === this.address) throw new Error(l10n('Paiement à soi-même impossible', 'Payment to yourself not possible'));
+    if (!/^\d+$/.test(params.amount) || BigInt(params.amount) <= 0n) throw new Error(l10n('Montant en µALGO invalide', 'Invalid µALGO amount'));
     const note = params.note ?? '';
-    if (algoNoteBytes(note) > ALGO_MAX_NOTE) throw new Error('Note trop longue (1024 octets au plus)');
+    if (algoNoteBytes(note) > ALGO_MAX_NOTE) throw new Error(l10n('Note trop longue (1024 octets au plus)', 'Note too long (1024 bytes at most)'));
     const built = await this.backend.build(to, params.amount, note || undefined);
     const s = built.summary;
     const noteOk = note ? s.noteLen === algoNoteBytes(note) && s.noteText === note : s.noteLen === 0;
     const extraOk = s.warnings.every((w) => w.kind === 'note' && note !== '');
     if (s.receiver !== to || s.sender !== this.address || s.amount !== params.amount || !noteOk || !extraOk) {
-      throw new Error('Le paiement construit par Rust ne correspond pas à la demande');
+      throw new Error(l10n('Le paiement construit par Rust ne correspond pas à la demande', 'The payment built by Rust does not match the request'));
     }
     return {
       family: 'algo',
@@ -181,14 +182,14 @@ export class AlgorandAdapter implements ChainAdapter<'algo'> {
   /** Rust: live checks, native dialog (amount, receiver, note, fee, genesis), signature. */
   async signTx(unsigned: AlgoUnsigned, password: string): Promise<AlgoSigned> {
     const res = await this.backend.sign(unsigned.blob, password);
-    if (!/^[A-Z2-7]{52}$/.test(res.txid) || res.txid !== unsigned.summary.txid) throw new Error('Identifiant de transaction Algorand inattendu');
+    if (!/^[A-Z2-7]{52}$/.test(res.txid) || res.txid !== unsigned.summary.txid) throw new Error(l10n('Identifiant de transaction Algorand inattendu', 'Unexpected Algorand transaction ID'));
     return { family: 'algo', blob: res.blob, txid: res.txid, summary: res.summary };
   }
 
   /** Rust verifies the signature and that algod's id is ours. */
   async broadcast(signed: AlgoSigned): Promise<string> {
     const txid = await this.backend.broadcast(signed.blob);
-    if (txid !== signed.txid) throw new Error('Identifiant diffusé inattendu');
+    if (txid !== signed.txid) throw new Error(l10n('Identifiant diffusé inattendu', 'Unexpected broadcast ID'));
     return txid;
   }
 
@@ -215,7 +216,7 @@ export class AlgorandAdapter implements ChainAdapter<'algo'> {
       if (counterparty) item.counterparty = counterparty;
       if (t.time) item.time = t.time;
       if (t.note) item.note = t.note;
-      else if (t.type !== 'pay') item.note = `Transaction ${t.type} (non gérée par Kyro)`;
+      else if (t.type !== 'pay') item.note = l10n(`Transaction ${t.type} (non gérée par Kyro)`, `${t.type} transaction (not handled by Kyro)`);
       return item;
     });
   }

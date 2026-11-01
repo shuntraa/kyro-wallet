@@ -24,6 +24,7 @@ import {
   type Settings,
 } from './ipc';
 import { kaspaAddressDecode, kaspaAddressEncode, kaspaAddressProblem, type KaspaAddressKind } from './kaspa';
+import { l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const C = 1_000_000_000_000n;
@@ -37,11 +38,11 @@ const ACCEPT_MS = 2_000;
 /** x-only key → `kaspa:` / `kaspatest:` P2PK address at `m/44'/111111'/account'/change/index`. */
 export function demoKaspaAddress(seed: Uint8Array, network: Network, account: number, change = false, index = 0): string {
   const pk = HDKey.fromMasterSeed(seed).derive(`m/44'/111111'/${account}'/${change ? 1 : 0}/${index}`).publicKey;
-  if (!pk) throw new IpcError('INTERNAL', 'dérivation Kaspa');
+  if (!pk) throw new IpcError('INTERNAL', l10n('dérivation Kaspa', 'Kaspa derivation'));
   return kaspaAddressEncode(network, 'pubKey', pk.slice(1));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 const kas = (sompi: bigint | string) => {
   const v = BigInt(sompi);
   const frac = (v % 100_000_000n).toString().padStart(8, '0').replace(/0+$/, '');
@@ -50,7 +51,7 @@ const kas = (sompi: bigint | string) => {
 
 function scriptOf(network: Network, address: string): string {
   const d = kaspaAddressDecode(network, address);
-  if (!d) throw invalidInput(kaspaAddressProblem(address, network) ?? 'adresse Kaspa invalide');
+  if (!d) throw invalidInput(kaspaAddressProblem(address, network) ?? l10n('adresse Kaspa invalide', 'invalid Kaspa address'));
   const p = bytesToHex(d.payload);
   const forms: Record<KaspaAddressKind, string> = { pubKey: `20${p}ac`, pubKeyEcdsa: `21${p}ab`, scriptHash: `aa20${p}87` };
   return forms[d.kind];
@@ -165,14 +166,14 @@ export function createDemoKaspa(d: DemoKaspaDeps) {
   };
   const account0 = (a: Record<string, unknown>) => {
     const n = a.account === undefined || a.account === null ? 0 : Number(a.account);
-    if (n !== 0) throw invalidInput('mode démo : seul le premier compte Kaspa est simulé');
+    if (n !== 0) throw invalidInput(l10n('mode démo : seul le premier compte Kaspa est simulé', 'demo mode: only the first Kaspa account is simulated'));
   };
   const scriptLen = (s: string) => s.length / 2;
 
   const summarize = (tx: DemoTx): KaspaTxSummary => {
     const entries = tx.inputs.map((i) => {
       const c = state.coins.find((x) => x.txid === i.previousOutpoint.transactionId && x.index === i.previousOutpoint.index);
-      if (!c) throw invalidInput('pièce déjà dépensée ou inconnue de ce compte, reconstruis la transaction');
+      if (!c) throw invalidInput(l10n('pièce déjà dépensée ou inconnue de ce compte, reconstruis la transaction', 'coin already spent or unknown to this account, rebuild the transaction'));
       return c;
     });
     const ownScripts = new Set(ours.map((a) => scriptOf(d.network, a)));
@@ -263,16 +264,16 @@ export function createDemoKaspa(d: DemoKaspaDeps) {
   };
 
   const describe = (s: KaspaTxSummary) => {
-    let out = `Envoi Kaspa${d.network === 'testnet' ? ' (testnet-10)' : ''}\n\n`;
+    let out = l10n(`Envoi Kaspa${d.network === 'testnet' ? ' (testnet-10)' : ''}\n\n`, `Kaspa send${d.network === 'testnet' ? ' (testnet-10)' : ''}\n\n`);
     for (const o of s.outputs) {
-      if (o.address && o.isChange) out += `Monnaie (revient chez toi) : ${kas(o.amount)}\n  ${o.address}\n`;
-      else if (o.address) out += `À : ${o.address}\nMontant : ${kas(o.amount)}\n`;
-      else out += `Sortie INCONNUE (script non reconnu) : ${kas(o.amount)}\n  script : ${o.script}\n`;
+      if (o.address && o.isChange) out += l10n(`Monnaie (revient chez toi) : ${kas(o.amount)}\n  ${o.address}\n`, `Change (comes back to you): ${kas(o.amount)}\n  ${o.address}\n`);
+      else if (o.address) out += l10n(`À : ${o.address}\nMontant : ${kas(o.amount)}\n`, `To: ${o.address}\nAmount: ${kas(o.amount)}\n`);
+      else out += l10n(`Sortie INCONNUE (script non reconnu) : ${kas(o.amount)}\n  script : ${o.script}\n`, `UNKNOWN output (unrecognized script): ${kas(o.amount)}\n  script: ${o.script}\n`);
     }
-    out += `\nFrais : ${kas(s.fee)} (${s.fee} sompi)\nMasse : ${s.mass.total} g (calcul ${s.mass.compute} · stockage KIP-9 ${s.mass.storage} · transitoire ${Math.ceil(s.mass.transient / 2)}) · frais minimum de relais : ${kas(s.minimumFee)}`;
-    out += `\nEntrées : ${s.inputs} pièce(s) de ce compte, ${kas(s.inputTotal)} au total`;
-    if (!s.hasChange) out += "\n\nPas de monnaie : tout ce qui n'est pas envoyé part en frais (un reste trop petit pour une sortie de monnaie — masse de stockage KIP-9 — y est ajouté).";
-    return `${out}\n\nIdentifiant : ${s.txId}`;
+    out += l10n(`\nFrais : ${kas(s.fee)} (${s.fee} sompi)\nMasse : ${s.mass.total} g (calcul ${s.mass.compute} · stockage KIP-9 ${s.mass.storage} · transitoire ${Math.ceil(s.mass.transient / 2)}) · frais minimum de relais : ${kas(s.minimumFee)}`, `\nFee: ${kas(s.fee)} (${s.fee} sompi)\nMass: ${s.mass.total} g (compute ${s.mass.compute} · KIP-9 storage ${s.mass.storage} · transient ${Math.ceil(s.mass.transient / 2)}) · minimum relay fee: ${kas(s.minimumFee)}`);
+    out += l10n(`\nEntrées : ${s.inputs} pièce(s) de ce compte, ${kas(s.inputTotal)} au total`, `\nInputs: ${s.inputs} coin(s) from this account, ${kas(s.inputTotal)} in total`);
+    if (!s.hasChange) out += l10n("\n\nPas de monnaie : tout ce qui n'est pas envoyé part en frais (un reste trop petit pour une sortie de monnaie — masse de stockage KIP-9 — y est ajouté).", '\n\nNo change: everything not sent goes to the fee (a remainder too small for a change output — KIP-9 storage mass — is added to it).');
+    return `${out}\n\n${l10n('Identifiant : ', 'ID: ')}${s.txId}`;
   };
 
   const handlers: Record<Extract<keyof Commands, `kas_${string}`>, (a: Record<string, unknown>) => unknown> = {
@@ -298,7 +299,7 @@ export function createDemoKaspa(d: DemoKaspaDeps) {
     },
     kas_tx_status: async (a) => {
       const id = String(a.txid ?? '').trim();
-      if (!/^[0-9a-f]{64}$/.test(id)) throw invalidInput('identifiant : 64 caractères hexadécimaux minuscules');
+      if (!/^[0-9a-f]{64}$/.test(id)) throw invalidInput(l10n('identifiant : 64 caractères hexadécimaux minuscules', 'ID: 64 lowercase hexadecimal characters'));
       await backend();
       const at = state.submitted.get(id);
       return at === undefined ? { found: false, accepted: false } : { found: true, accepted: d.now() - at >= ACCEPT_MS };
@@ -309,7 +310,7 @@ export function createDemoKaspa(d: DemoKaspaDeps) {
       await backend();
       const max = a.max === true;
       const amount = max ? null : /^\d+$/.test(String(a.amount ?? '')) && BigInt(String(a.amount)) > 0n ? BigInt(String(a.amount)) : null;
-      if (!max && amount === null) throw invalidInput('montant en sompi invalide');
+      if (!max && amount === null) throw invalidInput(l10n('montant en sompi invalide', 'invalid sompi amount'));
       const tx = build(String(a.to ?? '').trim(), amount);
       const spendable = String(state.coins.reduce((s, c) => s + c.amount, 0n));
       return { tx: JSON.stringify(tx), summary: summarize(tx), context: { feerateEstimate: 100, priorityFeerate: 0, spendable } };
@@ -318,12 +319,12 @@ export function createDemoKaspa(d: DemoKaspaDeps) {
       d.requireUnlocked();
       account0(a);
       const tx = decode(a.tx);
-      if (tx.inputs.some((i) => i.signatureScript !== '')) throw invalidInput('transaction Kaspa déjà signée');
+      if (tx.inputs.some((i) => i.signatureScript !== '')) throw invalidInput(l10n('transaction Kaspa déjà signée', 'Kaspa transaction already signed'));
       await backend();
       const summary = summarize(tx);
       d.checkPassword(a.password);
-      if (!d.confirm(`Confirmer la transaction Kaspa\n${describe(summary)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !d.confirm('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer la transaction Kaspa\n${describe(summary)}`, `Confirm the Kaspa transaction\n${describe(summary)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (summary.requiresExtraConfirmation && !d.confirm(l10n('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: transaction to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const signed: DemoTx = { ...tx, inputs: tx.inputs.map((i, n) => ({ ...i, signatureScript: `41${hash(`sig:${summary.txId}:${n}`)}${hash(`sig2:${n}`)}01` })) };
       return { tx: JSON.stringify(signed), txId: summary.txId, summary };
     },

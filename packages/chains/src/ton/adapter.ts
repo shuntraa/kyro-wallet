@@ -9,6 +9,7 @@
 import { accountArg } from '../types';
 import {
   call,
+  l10n,
   parseTonAddress,
   sameTonAccount,
   tonAddressProblem,
@@ -60,9 +61,9 @@ export function tonRecipientProblem(address: string, network: 'mainnet' | 'testn
   const problem = tonAddressProblem(address);
   if (problem) return problem;
   const p = parseTonAddress(address);
-  if (!p) return 'adresse TON invalide';
-  if (p.workchain !== 0) return 'adresse de la masterchain (-1) : seuls les comptes de la basechain (0) sont pris en charge';
-  if (p.testnet && network === 'mainnet') return 'adresse TON de testnet (kQ… / 0Q…) : refusée sur mainnet';
+  if (!p) return l10n('adresse TON invalide', 'invalid TON address');
+  if (p.workchain !== 0) return l10n('adresse de la masterchain (-1) : seuls les comptes de la basechain (0) sont pris en charge', 'masterchain address (-1): only basechain (0) accounts are supported');
+  if (p.testnet && network === 'mainnet') return l10n('adresse TON de testnet (kQ… / 0Q…) : refusée sur mainnet', 'testnet TON address (kQ… / 0Q…): refused on mainnet');
   return null;
 }
 
@@ -73,10 +74,10 @@ export function isTonAddress(address: string): boolean {
 /** Why a comment is refused, or null. Empty = no comment. */
 export function tonCommentProblem(comment: string): string | null {
   const bytes = new TextEncoder().encode(comment).length;
-  if (bytes > TON_MAX_COMMENT_BYTES) return `Commentaire trop long (${bytes} octets, ${TON_MAX_COMMENT_BYTES} au plus)`;
+  if (bytes > TON_MAX_COMMENT_BYTES) return l10n(`Commentaire trop long (${bytes} octets, ${TON_MAX_COMMENT_BYTES} au plus)`, `Comment too long (${bytes} bytes, ${TON_MAX_COMMENT_BYTES} at most)`);
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f-\u009f­؜᠎​-‏‪-‮⁠-⁯﻿]/.test(comment)) {
-    return 'Commentaire : caractères de contrôle ou invisibles refusés';
+    return l10n('Commentaire : caractères de contrôle ou invisibles refusés', 'Comment: control or invisible characters refused');
   }
   return null;
 }
@@ -124,7 +125,7 @@ export class TonAdapter implements ChainAdapter<'ton'> {
   private readonly backend: TonBackend;
 
   constructor(opts: TonAdapterOptions) {
-    if (!isTonAddress(opts.address)) throw new Error('Adresse TON invalide');
+    if (!isTonAddress(opts.address)) throw new Error(l10n('Adresse TON invalide', 'Invalid TON address'));
     this.chain = opts.chain;
     this.address = opts.address;
     this.backend = opts.backend ?? rustTonBackend(opts.account ?? 0);
@@ -159,29 +160,29 @@ export class TonAdapter implements ChainAdapter<'ton'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais fixés par le réseau (≈ 0,003 à 0,01 TON, estimés à la préparation)',
+      hint: l10n('frais fixés par le réseau (≈ 0,003 à 0,01 TON, estimés à la préparation)', 'fees set by the network (≈ 0.003 to 0.01 TON, estimated when preparing)'),
       fetchedAt: Date.now(),
     });
   }
 
   /** `max`: the whole balance (mode 130: Rust's message carries everything, minus fees). */
   async buildTx(params: BuildParams): Promise<TonUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif TON inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif TON inattendu', 'Unexpected TON asset'));
     const to = params.to.trim();
     const problem = tonRecipientProblem(to, this.chain.network);
     if (problem) throw new Error(problem.charAt(0).toUpperCase() + problem.slice(1));
-    if (sameTonAccount(to, this.address)) throw new Error('Envoi à soi-même impossible');
+    if (sameTonAccount(to, this.address)) throw new Error(l10n('Envoi à soi-même impossible', 'Cannot send to yourself'));
     const comment = params.memo ?? '';
     const cp = tonCommentProblem(comment);
     if (cp) throw new Error(cp);
     const sendAll = params.max === true;
-    if (!sendAll && params.amount <= 0n) throw new Error('Montant invalide');
+    if (!sendAll && params.amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const built = await this.backend.build(to, sendAll ? '0' : params.amount.toString(), comment || undefined, sendAll);
     const s = built.summary;
     const amountOk = sendAll ? s.sendAll && s.amount === '0' : !s.sendAll && s.amount === params.amount.toString();
     const commentOk = (s.comment ?? '') === comment;
     if (!amountOk || !commentOk || !sameTonAccount(s.destination, to) || !sameTonAccount(s.wallet, this.address) || s.requiresExtraConfirmation) {
-      throw new Error('Le transfert construit par Rust ne correspond pas à la demande');
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
     }
     return {
       family: 'ton',
@@ -202,14 +203,14 @@ export class TonAdapter implements ChainAdapter<'ton'> {
   /** Rust: live checks, native dialog (comment framed, both address forms), signature. */
   async signTx(unsigned: TonUnsigned, password: string): Promise<TonSigned> {
     const res = await this.backend.sign(unsigned.boc, password);
-    if (!/^[0-9a-f]{64}$/.test(res.hash) || !/^[0-9a-f]{64}$/.test(res.normalizedHash)) throw new Error('Hash TON inattendu');
+    if (!/^[0-9a-f]{64}$/.test(res.hash) || !/^[0-9a-f]{64}$/.test(res.normalizedHash)) throw new Error(l10n('Hash TON inattendu', 'Unexpected TON hash'));
     return { family: 'ton', boc: res.boc, hash: res.hash, normalizedHash: res.normalizedHash, summary: res.summary };
   }
 
   /** Rust verifies the signature and that TON Center's hashes are ours. Returns the normalized hash. */
   async broadcast(signed: TonSigned): Promise<string> {
     const id = await this.backend.broadcast(signed.boc);
-    if (id !== signed.normalizedHash) throw new Error('Hash diffusé inattendu');
+    if (id !== signed.normalizedHash) throw new Error(l10n('Hash diffusé inattendu', 'Unexpected broadcast hash'));
     return id;
   }
 
@@ -233,7 +234,7 @@ export class TonAdapter implements ChainAdapter<'ton'> {
       if (t.fee) item.fee = BigInt(t.fee);
       if (t.counterparty) item.counterparty = t.counterparty;
       if (t.time) item.time = t.time;
-      const notes = [t.bounced ? 'retour d’un envoi qui a échoué (rebond)' : null, t.comment ? `Commentaire : ${t.comment}` : null].filter((x): x is string => !!x);
+      const notes = [t.bounced ? l10n('retour d’un envoi qui a échoué (rebond)', 'return of a failed send (bounce)') : null, t.comment ? l10n(`Commentaire : ${t.comment}`, `Comment: ${t.comment}`) : null].filter((x): x is string => !!x);
       if (notes.length) item.note = notes.join(' · ');
       return item;
     });

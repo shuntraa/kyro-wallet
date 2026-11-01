@@ -4,6 +4,7 @@
 // rules again on every command (wallet-core `cosmos_address_bytes`): this is for messages only.
 
 import { bech32 } from '@scure/base';
+import { l10n } from './i18n';
 
 /**
  * Why `address` is not a Cosmos Hub account address (null = it is): bech32 (not bech32m)
@@ -12,23 +13,23 @@ import { bech32 } from '@scure/base';
  */
 export function cosmosAddressProblem(address: string): string | null {
   const a = address.trim();
-  if (a === '') return 'Adresse vide';
-  if (a !== a.toLowerCase() && a !== a.toUpperCase()) return 'Adresse Cosmos invalide (majuscules et minuscules mélangées)';
+  if (a === '') return l10n('Adresse vide', 'Empty address');
+  if (a !== a.toLowerCase() && a !== a.toUpperCase()) return l10n('Adresse Cosmos invalide (majuscules et minuscules mélangées)', 'Invalid Cosmos address (mixed upper and lower case)');
   let dec: { prefix: string; words: number[] };
   try {
     dec = bech32.decode(a.toLowerCase() as `${string}1${string}`, 120);
   } catch {
-    return 'Adresse Cosmos invalide (somme de contrôle)';
+    return l10n('Adresse Cosmos invalide (somme de contrôle)', 'Invalid Cosmos address (checksum)');
   }
-  if (dec.prefix === 'cosmosvaloper' || dec.prefix === 'cosmosvalcons') return 'C’est l’adresse d’un validateur, pas d’un compte : envoie à une adresse cosmos1…';
-  if (dec.prefix !== 'cosmos') return `Adresse d’une autre chaîne (« ${dec.prefix}1… ») : Kyro n’envoie des ATOM que sur Cosmos Hub (cosmos1…)`;
+  if (dec.prefix === 'cosmosvaloper' || dec.prefix === 'cosmosvalcons') return l10n('C’est l’adresse d’un validateur, pas d’un compte : envoie à une adresse cosmos1…', 'This is a validator address, not an account: send to a cosmos1… address');
+  if (dec.prefix !== 'cosmos') return l10n(`Adresse d’une autre chaîne (« ${dec.prefix}1… ») : Kyro n’envoie des ATOM que sur Cosmos Hub (cosmos1…)`, `Address of another chain (“${dec.prefix}1…”): Kyro only sends ATOM on Cosmos Hub (cosmos1…)`);
   let len: number;
   try {
     len = bech32.fromWords(dec.words).length;
   } catch {
-    return 'Adresse Cosmos invalide (longueur)';
+    return l10n('Adresse Cosmos invalide (longueur)', 'Invalid Cosmos address (length)');
   }
-  if (len !== 20 && len !== 32) return 'Adresse Cosmos invalide (longueur)';
+  if (len !== 20 && len !== 32) return l10n('Adresse Cosmos invalide (longueur)', 'Invalid Cosmos address (length)');
   return null;
 }
 

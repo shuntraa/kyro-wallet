@@ -68,4 +68,10 @@ export const history: Record<keyof typeof fr, string> = {
   'history.rowInProgress': 'in progress',
   'history.rowFee': 'fee {fee}',
   'history.rowPending': 'pending',
+  // Cross-chain status (lib/crossSwap.ts)
+  'history.crossArrived': 'arrived on {chain}',
+  'history.crossFailed': 'bridge failed, refund planned to your departure address',
+  'history.crossRefunded': 'refunded to your departure address',
+  'history.crossIncompleteDeposit': 'incomplete deposit, refund planned to your departure address',
+  'history.crossOnTheWay': 'on the way to {chain}',
 };

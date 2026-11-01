@@ -741,7 +741,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'zec' ? (network === 'testnet' ? 'tm… (adresse transparente)' : 't1… (adresse transparente)') : asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'cosmos' ? 'cosmos1…' : asset.family === 'ton' ? 'UQ… / EQ… (forme lisible)' : asset.family === 'xmr' ? (network === 'testnet' ? '5… ou 7… (stagenet)' : '4… ou 8…') : asset.family === 'algo' ? 'Adresse Algorand (58 caractères)' : asset.family === 'dot' ? (network === 'testnet' ? '5… (Westend)' : '1… (Polkadot)') : asset.family === 'kas' ? (network === 'testnet' ? 'kaspatest:q…' : 'kaspa:q…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : asset.family === 'sui' ? t('send.suiPlaceholder') : asset.family === 'hbar' ? t('send.hbarPlaceholder') : asset.family === 'apt' ? t('send.suiPlaceholder') : '0x…'}
+                  placeholder={asset.family === 'zec' ? (network === 'testnet' ? t('send.zecPlaceholderTestnet') : t('send.zecPlaceholder')) : asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'cosmos' ? 'cosmos1…' : asset.family === 'ton' ? t('send.tonPlaceholder') : asset.family === 'xmr' ? (network === 'testnet' ? t('send.xmrPlaceholderTestnet') : t('send.xmrPlaceholder')) : asset.family === 'algo' ? t('send.algoPlaceholder') : asset.family === 'dot' ? (network === 'testnet' ? '5… (Westend)' : '1… (Polkadot)') : asset.family === 'kas' ? (network === 'testnet' ? 'kaspatest:q…' : 'kaspa:q…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : asset.family === 'sui' ? t('send.suiPlaceholder') : asset.family === 'hbar' ? t('send.hbarPlaceholder') : asset.family === 'apt' ? t('send.suiPlaceholder') : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -822,8 +822,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {toTrim && !addrValid && !xAddress && !adaProblem && !zecProblem && !aptProblem && !kasProblem && !xlmProblem && !dotProblem && !tonProblem && <span className="text-[12px] text-down">{nearProblem ? `${nearProblem}.` : t('send.invalidAddressFor', { chain: chain.name })}</span>}
             {tonProblem && <span className="text-[12px] text-down">{tonProblem.charAt(0).toUpperCase() + tonProblem.slice(1)}.</span>}
             {aptProblem && <span className="text-[12px] text-down">{aptProblem}</span>}
-            {isApt && addrValid && <span className="text-[12px] leading-[1.45] text-mute">Les adresses Aptos n’ont pas de somme de contrôle : une seule lettre fausse envoie ailleurs, sans retour possible. Compare-la en entier.{aptDestNew ? ' Ce compte n’a encore rien reçu : le transfert le crée (un peu plus de gaz).' : ''}</span>}
-            {isApt && aptDest.error && addrValid && <span className="text-[12px] text-down">Compte destinataire illisible : {aptDest.error.message}</span>}
+            {isApt && addrValid && <span className="text-[12px] leading-[1.45] text-mute">{t('send.aptNoChecksum')}{aptDestNew ? t('send.aptDestNew') : ''}</span>}
+            {isApt && aptDest.error && addrValid && <span className="text-[12px] text-down">{t('send.destUnreadable', { message: aptDest.error.message })}</span>}
             {adaProblem && <span className="text-[12px] text-down">{adaProblem.charAt(0).toUpperCase() + adaProblem.slice(1)}.</span>}
             {kasProblem && <span className="text-[12px] text-down">{kasProblem.charAt(0).toUpperCase() + kasProblem.slice(1)}.</span>}
             {zecProblem && <span className="text-[12px] text-down">{zecProblem}</span>}
@@ -835,7 +835,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               </Notice>
             )}
             {suiProblem && <span className="text-[12px] text-down">{suiProblem}</span>}
-            {isSui && addrValid && <span className="text-[12px] leading-[1.45] text-mute">Les adresses Sui n’ont pas de somme de contrôle : une faute de frappe donne une autre adresse valide. Compare-la en entier ; la fenêtre système la répète au complet.</span>}
+            {isSui && addrValid && <span className="text-[12px] leading-[1.45] text-mute">{t('send.suiNoChecksum')}</span>}
             {isXrp && <XrpTagField value={tagStr} onChange={setTagStr} error={tagParsed.error} dest={xrpDestInfo} destLoading={addrValid && xrpDest.loading && !xrpDestInfo} />}
             {isAlgo && <AlgoNoteField value={memo} onChange={setMemo} dest={addrValid ? algoDestInfo : undefined} destLoading={addrValid && algoDest.loading && !algoDestInfo} />}
             {isAlgo && algoDest.error && addrValid && <span className="text-[12px] text-down">{t('send.destUnreadable', { message: algoDest.error.message })}</span>}
@@ -851,7 +851,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {isHbar && hbarDest.error && addrValid && <span className="text-[12px] text-down">{t('send.destUnreadable', { message: hbarDest.error.message })}</span>}
             {isXmr && addrValid && <XmrDestinationLine dest={xmrDestInfo} error={xmrDest.error ? xmrDest.error.message : null} loading={xmrDest.loading} />}
             {isTon && <TonCommentField value={memo} onChange={setMemo} to={toTrim} dest={tonDestInfo} destLoading={addrValid && tonDest.loading && !tonDestInfo} />}
-            {isTon && tonDest.error && addrValid && <span className="text-[12px] text-down">Compte destinataire illisible : {tonDest.error.message}</span>}
+            {isTon && tonDest.error && addrValid && <span className="text-[12px] text-down">{t('send.destUnreadable', { message: tonDest.error.message })}</span>}
             {isCosmos && <CosmosMemoField value={memo} onChange={setMemo} />}
             {guard.tampered && settings.clipboardGuard && (
               <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
@@ -923,11 +923,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {isSui && <SuiSpendable balance={suiMe.data} hidden={hideBalances} />}
             {isHbar && <HbarAccountState account={hbarMe.data} hidden={hideBalances} />}
             {isKas && <KaspaSpendable account={kasMe.data} hidden={hideBalances} />}
-            {kasBelowMin && <span className="text-[12px] text-down">Minimum 0,2 KAS par envoi : en dessous, la masse de stockage de Kaspa (KIP-9) rend la sortie non standard et Kyro la refuse.</span>}
+            {kasBelowMin && <span className="text-[12px] text-down">{t('send.kasBelowMin')}</span>}
             {isDot && <DotSpendable account={dotMe.data} decimals={asset.decimals} symbol={asset.symbol} hidden={hideBalances} />}
-            {dotBelowEd && dotDestInfo && <span className="text-[12px] text-down">Ce compte n’existe pas encore : il faut lui envoyer au moins {fmtCrypto(BigInt(dotDestInfo.existentialDeposit), asset.decimals, asset.symbol)} (dépôt existentiel).</span>}
+            {dotBelowEd && dotDestInfo && <span className="text-[12px] text-down">{t('send.dotBelowEd', { amount: fmtCrypto(BigInt(dotDestInfo.existentialDeposit), asset.decimals, asset.symbol) })}</span>}
             {isAlgo && <AlgoSpendable account={algoMe.data} hidden={hideBalances} />}
-            {algoBelowMinimum && <span className="text-[12px] text-down">{algoDestInfo?.exists ? `Ce destinataire resterait sous son solde minimum : envoie au moins ${fmtCrypto(algoDestMin, 6, 'ALGO', 6)}.` : 'Ce compte n’existe pas encore : il faut lui envoyer au moins 0,1 ALGO.'}</span>}
+            {algoBelowMinimum && <span className="text-[12px] text-down">{algoDestInfo?.exists ? t('send.algoBelowDestMin', { amount: fmtCrypto(algoDestMin, 6, 'ALGO', 6) }) : t('send.algoBelowActivation')}</span>}
             {isXmr && <XmrLockedNote status={xmr.status} hidden={hideBalances} />}
             {isXmr && <XmrSyncLine status={xmr.status} error={xmr.error} onRetry={xmr.sync} />}
             {isCosmos && <CosmosSpendable account={cosmosMe.data} hidden={hideBalances} />}
@@ -948,17 +948,17 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             )}
             {asset.family === 'bch' && (
               <span className="text-[12px] leading-[1.5] text-mute">
-                Bitcoin Cash : adresses CashAddr seulement (bitcoincash:q…) ; une adresse 1… ou 3… est refusée, on ne peut pas la distinguer d’une adresse Bitcoin. Destinataire minimum {bchDashDust('p2pkh').toString()} satoshis ; une monnaie plus petite est ajoutée aux frais. Les pièces portant des CashTokens ne sont jamais dépensées.
+                {t('send.bchNote', { dust: bchDashDust('p2pkh').toString() })}
               </span>
             )}
             {asset.family === 'dash' && (
               <span className="text-[12px] leading-[1.5] text-mute">
-                Dash : destinataire minimum {bchDashDust('p2pkh').toString()} duffs ; une monnaie plus petite est ajoutée aux frais. Envoi classique (pas de PrivateSend ni d’InstantSend demandé).
+                {t('send.dashNote', { dust: bchDashDust('p2pkh').toString() })}
               </span>
             )}
             {isZec && (
               <span className="text-[12px] leading-[1.5] text-mute">
-                Zcash transparent : comme Bitcoin, le montant, ton adresse et le destinataire sont publics. Les adresses protégées (zs…) et unifiées (u1…) ne sont pas encore prises en charge. Une monnaie sous 0,00005 ZEC n’est pas créée, elle est ajoutée aux frais.
+                {t('send.zecNote')}
               </span>
             )}
             {asset.family === 'ltc' && (
@@ -973,17 +973,17 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {/* Fees */}
           {isKas ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur Kaspa.</strong> Les frais dépendent de la masse de la transaction : 100 sompi par gramme (d’habitude ≈ 0,002 KAS), davantage si le réseau est chargé. Le coffre les calcule ; le montant exact et la masse sont dans la vérification.
+                {rt('send.kasFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isXmr ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="flex flex-col gap-1 rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
                 <span>
-                  <strong className="font-semibold text-text">Rien à choisir sur Monero.</strong> Le coffre prend le tarif « normal » du nœud (plafonné) et le poids exact de la transaction : d’habitude ≈ 0,0001 XMR.
+                  {rt('send.xmrFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
                 </span>
                 <XmrSendNotes />
               </div>
@@ -994,15 +994,15 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 onClick={() => setXmrGo((n) => n + 1)}
                 className="self-start"
               >
-                {building && <Spinner />} Préparer le transfert
+                {building && <Spinner />} {t('send.xmrPrepare')}
               </Button>
-              {!xmrSynced && xmr.status && <span className="text-[12px] text-mute">Attends la fin du scan Monero pour préparer un transfert.</span>}
+              {!xmrSynced && xmr.status && <span className="text-[12px] text-mute">{t('send.xmrWaitScan')}</span>}
             </div>
           ) : isZec ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur Zcash.</strong> Les frais suivent la règle ZIP 317 : 0,00005 ZEC par action logique, 0,0001 ZEC au minimum (un envoi simple). Le coffre les calcule et les montre dans la vérification.
+                {rt('send.zecFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isAda ? (
@@ -1021,51 +1021,51 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             </div>
           ) : isSui ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur Sui.</strong> Le coffre prend le prix du gaz de référence de l’époque et fixe le budget d’après une simulation de la transaction exacte (d’habitude ≈ 0,002 SUI). Le budget est un plafond : seul le gaz consommé est prélevé.
+                {rt('send.suiFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isHbar ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur Hedera.</strong> Un transfert coûte ≈ 0,0001 $ en HBAR. Le coffre fixe un plafond (frais maximum) au taux de change du réseau ; seuls les frais réels sont prélevés. Vers une adresse EVM sans compte, le réseau crée le compte (≈ 0,05 $).
+                {rt('send.hbarFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isDot ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur Polkadot.</strong> Les frais dépendent du poids et de la taille de la transaction (d’habitude ≈ 0,015 {asset.symbol}), sans pourboire ; le nœud les estime et le montant s’affiche dans la vérification.
+                {rt('send.dotFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> }, { symbol: asset.symbol })}
               </div>
             </div>
           ) : isAlgo ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur Algorand.</strong> Le coffre fixe les frais minimum du protocole (0,001 ALGO), un peu plus seulement si le réseau est saturé ; le montant exact est dans la vérification.
+                {rt('send.algoFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isTon ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur TON.</strong> Les frais suivent le prix du réseau (d’habitude 0,003 à 0,01 TON, un peu plus pour ton tout premier envoi, qui déploie ton portefeuille). Le coffre les estime par émulation ; ils sont prélevés en plus du montant. MAX envoie tout le solde, frais déduits.
+                {rt('send.tonFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isCosmos ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur Cosmos Hub.</strong> Le coffre fait simuler la transaction exacte par le réseau, garde une marge sur le gas et paie le prix du marché des frais (d’habitude moins de 0,001 ATOM) ; le montant exact est dans la vérification.
+                {rt('send.cosmosFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isApt ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur Aptos.</strong> Le coffre prend le prix du gaz annoncé par le réseau et simule le transfert : d’habitude ≈ 0,0001 APT. Le réseau exige d’avance le maximum (gaz simulé × 1,5) en plus du montant ; seule la part utilisée est prélevée.
+                {rt('send.aptFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isXrp ? (
@@ -1077,9 +1077,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             </div>
           ) : isNear ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur NEAR.</strong> Les frais sont prélevés au prix du gas du bloc (d’habitude ≈ 0,00005 NEAR pour un transfert, un peu plus s’il crée le compte destinataire). Ils ne figurent pas dans la transaction : le coffre vérifie que ton solde couvre le montant plus une borne de frais, affichée dans la vérification.
+                {rt('send.nearFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isTron ? (
@@ -1210,21 +1210,21 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {built?.unsigned.family === 'xlm' && <StellarSummaryView u={built.unsigned} xlmPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'dot' && <DotSummaryView u={built.unsigned} price={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'algo' && <AlgoSummaryView u={built.unsigned} algoPrice={nativePrice} currency={cur} />}
-          {built?.unsigned.family === 'algo' && built.unsigned.summary.requiresExtraConfirmation && <SecondConfirmNotice lines={built.unsigned.summary.warnings.map((w) => (w.kind === 'note' ? 'La transaction porte une note, lisible par tous et pour toujours.' : w.kind === 'highFee' ? 'Frais supérieurs à 0,01 ALGO.' : w.kind === 'binaryNote' ? 'La note n’est pas du texte.' : 'La note contient des caractères invisibles ou de contrôle.'))} />}
+          {built?.unsigned.family === 'algo' && built.unsigned.summary.requiresExtraConfirmation && <SecondConfirmNotice lines={built.unsigned.summary.warnings.map((w) => (w.kind === 'note' ? t('send.algoWarnNote') : w.kind === 'highFee' ? t('send.algoWarnHighFee') : w.kind === 'binaryNote' ? t('send.algoWarnBinaryNote') : t('send.algoWarnControlChars')))} />}
           {built?.unsigned.family === 'ada' && <CardanoSummaryView u={built.unsigned} adaPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'near' && <NearSummaryView u={built.unsigned} nearPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'sui' && <SuiSummaryView u={built.unsigned} suiPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'hbar' && <HbarSummaryView u={built.unsigned} hbarPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'kas' && <KaspaSummaryView u={built.unsigned} kasPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'kas' && built.unsigned.summary.requiresExtraConfirmation && (
-            <SecondConfirmNotice lines={built.unsigned.summary.warnings.map((w) => (w.kind === 'highFee' ? 'Frais élevés (réseau chargé, ou plus de 10 fois le minimum de relais)' : `Sortie ${w.index} : script inconnu`))} />
+            <SecondConfirmNotice lines={built.unsigned.summary.warnings.map((w) => (w.kind === 'highFee' ? t('send.kasWarnHighFee') : t('send.kasWarnUnknownScript', { n: w.index })))} />
           )}
           {built?.unsigned.family === 'xmr' && <XmrSummaryView u={built.unsigned} xmrPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'ton' && <TonSummaryView u={built.unsigned} tonPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'cosmos' && <CosmosSummaryView u={built.unsigned} atomPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'apt' && <AptosSummaryView u={built.unsigned} aptPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'zec' && built.unsigned.summary.requiresExtraConfirmation && (
-            <SecondConfirmNotice lines={built.unsigned.summary.warnings.filter((w) => w.kind === 'highFee').map(() => 'Frais très élevés : plus de 10 fois les frais ZIP 317, ou plus que le montant envoyé.')} />
+            <SecondConfirmNotice lines={built.unsigned.summary.warnings.filter((w) => w.kind === 'highFee').map(() => t('send.zecWarnHighFee'))} />
           )}
 
           {building && (
@@ -1272,16 +1272,26 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           )}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'near' && (
             <EnClair tone={built.unsigned.summary.requiresExtraConfirmation || built.unsigned.context.createsAccount ? 'warn' : 'ice'}>
-              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>. Frais : environ {fmtCrypto(BigInt(built.unsigned.context.feeEstimate), 24, 'NEAR', 6)}, au plus {fmtCrypto(built.unsigned.maxFee, 24, 'NEAR', 6)}
-              {feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : ''}.
-              {built.unsigned.context.createsAccount ? ' Ce compte implicite n’existe pas encore : ce transfert le crée.' : ''}
-              {built.unsigned.summary.requiresExtraConfirmation ? ' Compte de style Ethereum : une 2ᵉ confirmation te sera demandée.' : ''}
+              {rt('send.clearNear', { b: (c) => <strong>{c}</strong> }, {
+                amount: fmtCrypto(sendAmount, decimals, asset.symbol),
+                recipient: recipientName,
+                fee: fmtCrypto(BigInt(built.unsigned.context.feeEstimate), 24, 'NEAR', 6),
+                max: fmtCrypto(built.unsigned.maxFee, 24, 'NEAR', 6),
+                fiat: feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : '',
+              })}
+              {built.unsigned.context.createsAccount ? t('send.clearNearCreates') : ''}
+              {built.unsigned.summary.requiresExtraConfirmation ? t('send.clearNearEthStyle') : ''}
             </EnClair>
           )}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'dot' && (
             <EnClair>
-              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong> avec Balances.transfer_keep_alive : ton compte garde au moins son dépôt existentiel. Frais estimés : {fmtCrypto(built.unsigned.maxFee, decimals, asset.symbol)}{feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : ''}.
-              {!built.unsigned.context.destination.exists ? ' Ce transfert crée le compte du destinataire.' : ''}
+              {rt('send.clearDot', { b: (c) => <strong>{c}</strong> }, {
+                amount: fmtCrypto(sendAmount, decimals, asset.symbol),
+                recipient: recipientName,
+                fee: fmtCrypto(built.unsigned.maxFee, decimals, asset.symbol),
+                fiat: feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : '',
+              })}
+              {!built.unsigned.context.destination.exists ? t('send.clearDotCreates') : ''}
             </EnClair>
           )}
           {built && addrValid && built.unsigned.family === 'ada' && (
@@ -1298,9 +1308,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           )}
           {built && addrValid && built.unsigned.family === 'sui' && (
             <EnClair tone={built.unsigned.all ? 'warn' : 'ice'}>
-              Tu envoies{' '}
-              <strong>{built.unsigned.all ? `tout ton solde SUI${built.unsigned.context.receives ? ` (≈ ${fmtCrypto(BigInt(built.unsigned.context.receives), 9, 'SUI')} reçus)` : ''}` : fmtCrypto(built.unsigned.amount, 9, 'SUI')}</strong> à <strong>{recipientName}</strong>. Gaz : ≈ {fmtCrypto(BigInt(built.unsigned.context.fee) > 0n ? BigInt(built.unsigned.context.fee) : 0n, 9, 'SUI')} selon la simulation, au plus {fmtCrypto(built.unsigned.maxFee, 9, 'SUI')}.
-              {built.unsigned.all ? ' Il ne restera aucun SUI sur ce compte : une 2ᵉ confirmation te sera demandée.' : ''}
+              {rt('send.clearSui', { b: (c) => <strong>{c}</strong> }, {
+                amount: built.unsigned.all ? t('send.clearSuiAll', { receives: built.unsigned.context.receives ? t('send.clearSuiReceives', { amount: fmtCrypto(BigInt(built.unsigned.context.receives), 9, 'SUI') }) : '' }) : fmtCrypto(built.unsigned.amount, 9, 'SUI'),
+                recipient: recipientName,
+                gas: fmtCrypto(BigInt(built.unsigned.context.fee) > 0n ? BigInt(built.unsigned.context.fee) : 0n, 9, 'SUI'),
+                max: fmtCrypto(built.unsigned.maxFee, 9, 'SUI'),
+              })}
+              {built.unsigned.all ? t('send.clearSuiAllWarn') : ''}
             </EnClair>
           )}
           {built && addrValid && built.unsigned.family === 'zec' && (
@@ -1359,17 +1373,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           )}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'hbar' && (
             <EnClair tone={built.unsigned.summary.memo === null ? 'warn' : 'ice'}>
-              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>
-              {built.unsigned.summary.memo !== null ? (
-                <>
-                  {' '}avec le mémo <strong className="font-mono">« {built.unsigned.summary.memo} »</strong>
-                </>
-              ) : (
-                ', sans mémo'
-              )}
-              . Frais maximum : {fmtCrypto(built.unsigned.maxFee, 8, 'HBAR', 8)} (≈ 0,0001 $ réellement prélevés).
-              {built.unsigned.context.createsAccount ? ' Ce transfert crée le compte du destinataire (≈ 0,05 $ de frais).' : ''}
-              {built.unsigned.summary.memo === null ? ' Si c’est une plateforme d’échange, vérifie qu’elle ne t’a pas donné de mémo.' : ''}
+              {rt(built.unsigned.summary.memo !== null ? 'send.clearHbarMemo' : 'send.clearHbarNoMemo', { b: (c) => <strong>{c}</strong>, memo: (c) => <strong className="font-mono">{c}</strong> }, {
+                amount: fmtCrypto(sendAmount, decimals, asset.symbol),
+                recipient: recipientName,
+                memo: built.unsigned.summary.memo ?? '',
+                fee: fmtCrypto(built.unsigned.maxFee, 8, 'HBAR', 8),
+              })}
+              {built.unsigned.context.createsAccount ? t('send.clearHbarCreates') : ''}
+              {built.unsigned.summary.memo === null ? t('send.clearXlmCheckMemo') : ''}
             </EnClair>
           )}
           {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'xlm' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'near' && built.unsigned.family !== 'sui' && built.unsigned.family !== 'hbar' && built.unsigned.family !== 'kas' && built.unsigned.family !== 'dot' && built.unsigned.family !== 'algo' && built.unsigned.family !== 'xmr' && built.unsigned.family !== 'ton' && built.unsigned.family !== 'cosmos' && built.unsigned.family !== 'apt' && built.unsigned.family !== 'zec' && (

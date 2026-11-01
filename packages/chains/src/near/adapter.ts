@@ -8,6 +8,7 @@
 import { accountArg } from '../types';
 import {
   call,
+  l10n,
   nearAccountIdProblem,
   nearAccountKind,
   type NearAccountInfo,
@@ -91,7 +92,7 @@ export class NearAdapter implements ChainAdapter<'near'> {
   private readonly backend: NearBackend;
 
   constructor(opts: NearAdapterOptions) {
-    if (!isNearImplicit(opts.address)) throw new Error('Compte NEAR implicite invalide');
+    if (!isNearImplicit(opts.address)) throw new Error(l10n('Compte NEAR implicite invalide', 'Invalid NEAR implicit account'));
     this.chain = opts.chain;
     this.address = opts.address;
     this.backend = opts.backend ?? rustNearBackend(opts.account ?? 0);
@@ -128,21 +129,21 @@ export class NearAdapter implements ChainAdapter<'near'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais au prix du gas du bloc (≈ 0,00005 NEAR, borne vérifiée par Kyro)',
+      hint: l10n('frais au prix du gas du bloc (≈ 0,00005 NEAR, borne vérifiée par Kyro)', 'fee at the block gas price (≈ 0.00005 NEAR, bound checked by Kyro)'),
       fetchedAt: Date.now(),
     });
   }
 
   /** `max`: spendable minus Kyro's fee bound (first build to learn it, then exactly). */
   async buildTx(params: BuildParams): Promise<NearUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif NEAR inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif NEAR inattendu', 'Unexpected NEAR asset'));
     if (!params.max) return this.buildTransfer(params.to, params.amount);
     const spendable = BigInt((await this.backend.account(this.address)).spendable);
     // A first pass with a generous bound (0.02 NEAR), then spendable − Rust's bound.
     const first = await this.buildTransfer(params.to, spendable - 20_000_000_000_000_000_000_000n).catch(() => null);
-    if (!first) throw new Error('Rien à envoyer : solde insuffisant une fois la réserve de stockage et les frais déduits');
+    if (!first) throw new Error(l10n('Rien à envoyer : solde insuffisant une fois la réserve de stockage et les frais déduits', 'Nothing to send: balance too low once the storage reserve and fees are deducted'));
     const amount = spendable - BigInt(first.context.feeBound);
-    if (amount <= 0n) throw new Error('Rien à envoyer : solde insuffisant une fois la réserve de stockage et les frais déduits');
+    if (amount <= 0n) throw new Error(l10n('Rien à envoyer : solde insuffisant une fois la réserve de stockage et les frais déduits', 'Nothing to send: balance too low once the storage reserve and fees are deducted'));
     return this.buildTransfer(params.to, amount);
   }
 
@@ -150,12 +151,12 @@ export class NearAdapter implements ChainAdapter<'near'> {
     const to = toInput.trim();
     const problem = nearAccountIdProblem(to);
     if (problem) throw new Error(problem);
-    if (to === this.address) throw new Error('Envoi à soi-même impossible');
-    if (amount <= 0n) throw new Error('Montant invalide');
+    if (to === this.address) throw new Error(l10n('Envoi à soi-même impossible', 'Cannot send to yourself'));
+    if (amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const built = await this.backend.build(to, amount.toString());
     const s = built.summary;
     if (s.receiverId !== to || s.signerId !== this.address || s.deposit !== amount.toString() || s.receiverKind !== nearAccountKind(to)) {
-      throw new Error('Le transfert construit par Rust ne correspond pas à la demande');
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
     }
     return {
       family: 'near',
@@ -172,15 +173,15 @@ export class NearAdapter implements ChainAdapter<'near'> {
   /** Rust: live checks, native dialog (receiver, amount, fee bound, signing account), signature. */
   async signTx(unsigned: NearUnsigned, password: string): Promise<NearSigned> {
     const res = await this.backend.sign(unsigned.tx, password);
-    if (res.hash !== unsigned.summary.hash) throw new Error('Hash NEAR inattendu');
+    if (res.hash !== unsigned.summary.hash) throw new Error(l10n('Hash NEAR inattendu', 'Unexpected NEAR hash'));
     return { family: 'near', signed: res.signed, hash: res.hash, summary: res.summary };
   }
 
   /** Rust verifies the signature and that the node's hash is ours. A failed execution throws. */
   async broadcast(signed: NearSigned): Promise<string> {
     const out = await this.backend.broadcast(signed.signed);
-    if (out.hash !== signed.hash) throw new Error('Hash diffusé inattendu');
-    if (out.status === 'failure') throw new Error(`Transfert NEAR échoué sur la chaîne${out.message ? ` : ${out.message}` : ''}`);
+    if (out.hash !== signed.hash) throw new Error(l10n('Hash diffusé inattendu', 'Unexpected broadcast hash'));
+    if (out.status === 'failure') throw new Error(l10n(`Transfert NEAR échoué sur la chaîne${out.message ? ` : ${out.message}` : ''}`, `NEAR transfer failed on chain${out.message ? `: ${out.message}` : ''}`));
     return out.hash;
   }
 

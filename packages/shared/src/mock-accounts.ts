@@ -294,7 +294,7 @@ export function createDemoAccounts(d: {
       const c = chainArg(chain);
       const a = arg(account);
       const n = cleanName(name);
-      if (nameOf(c, a) === null) throw invalid("ce compte n'est pas dans ta liste");
+      if (nameOf(c, a) === null) throw invalid(l10n("ce compte n'est pas dans ta liste", 'this account is not in your list'));
       const e = stored[c].find((x) => x.index === a);
       if (e) e.name = n;
       else stored[c] = [...stored[c], { index: a, name: n }].sort((x, y) => x.index - y.index);
@@ -305,7 +305,7 @@ export function createDemoAccounts(d: {
       const c = chainArg(chain);
       const a = arg(account);
       if (a === 0) throw invalid(l10n('le premier compte ne peut pas être retiré (tu peux le renommer)', 'the first account cannot be removed (you can rename it)'));
-      if (!stored[c].some((e) => e.index === a)) throw invalid("ce compte n'est pas dans ta liste");
+      if (!stored[c].some((e) => e.index === a)) throw invalid(l10n("ce compte n'est pas dans ta liste", 'this account is not in your list'));
       stored[c] = stored[c].filter((e) => e.index !== a);
       return lists();
     },

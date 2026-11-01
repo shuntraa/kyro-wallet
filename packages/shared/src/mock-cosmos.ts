@@ -26,6 +26,7 @@ import {
   type Network,
   type Settings,
 } from './ipc';
+import { l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 import { cosmosAddressOfBytes, cosmosAddressProblem } from './cosmos';
 
@@ -38,11 +39,11 @@ const INCLUSION_MS = 6_000;
 /** Demo address of Cosmos account `account` (`m/44'/118'/account'/0/0`, like Rust). */
 export function demoCosmosAddress(seed: Uint8Array, account: number): string {
   const pk = HDKey.fromMasterSeed(seed).derive(`m/44'/118'/${account}'/0/0`).publicKey;
-  if (!pk) throw new IpcError('INTERNAL', 'dérivation Cosmos');
+  if (!pk) throw new IpcError('INTERNAL', l10n('dérivation Cosmos', 'Cosmos derivation'));
   return cosmosAddressOfBytes(bitcoin.crypto.hash160(pk));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 
 /** wallet-core `cosmos_normalize_address`: bech32 checksum, prefix `cosmos`, 20 or 32 bytes. */
 export function checkCosmosAddress(a: unknown): string {
@@ -161,10 +162,10 @@ export function createDemoCosmos(d: DemoCosmosDeps) {
 
   /** cosmos_backend::check_send, same messages. */
   const checkSend = (ours: CosmosAccountInfo, amount: bigint, fee: bigint) => {
-    if (!ours.exists) throw invalidInput('ton compte Cosmos n’est pas encore connu du réseau (aucun ATOM reçu)');
+    if (!ours.exists) throw invalidInput(l10n('ton compte Cosmos n’est pas encore connu du réseau (aucun ATOM reçu)', 'your Cosmos account is not known to the network yet (no ATOM received)'));
     const spendable = BigInt(ours.spendable);
     if (amount + fee > spendable) {
-      throw invalidInput(`solde disponible insuffisant : ${atomText(spendable).replace(' ATOM', '')} ATOM disponibles, il en faut ${atomText(amount + fee).replace(' ATOM', '')} (montant + frais)`);
+      throw invalidInput(l10n(`solde disponible insuffisant : ${atomText(spendable).replace(' ATOM', '')} ATOM disponibles, il en faut ${atomText(amount + fee).replace(' ATOM', '')} (montant + frais)`, `insufficient available balance: ${atomText(spendable).replace(' ATOM', '')} ATOM available, ${atomText(amount + fee).replace(' ATOM', '')} needed (amount + fee)`));
     }
   };
 
@@ -176,13 +177,13 @@ export function createDemoCosmos(d: DemoCosmosDeps) {
     try {
       p = JSON.parse(new TextDecoder().decode(hexToBytes(String(hex ?? '').trim().toLowerCase()))) as DemoSignDoc;
     } catch {
-      throw invalidInput('SignDoc : hexadécimal attendu');
+      throw invalidInput(l10n('SignDoc : hexadécimal attendu', 'SignDoc: hexadecimal expected'));
     }
-    if (p.chainId !== chainId) throw invalidInput(`transaction Cosmos : chain-id « ${p.chainId} » au lieu de « ${chainId} »`);
-    if (p.from !== me) throw invalidInput("transaction Cosmos : l'expéditeur n'est pas l'adresse de ce compte");
-    if (checkCosmosAddress(p.to) === me) throw invalidInput('transaction Cosmos : envoi à soi-même');
-    if (!p.timeoutHeight) throw invalidInput('transaction Cosmos : timeout_height absent : la transaction resterait valable indéfiniment');
-    if ([...p.memo].length > MAX_MEMO) throw invalidInput(`transaction Cosmos : mémo de plus de ${MAX_MEMO} caractères`);
+    if (p.chainId !== chainId) throw invalidInput(l10n(`transaction Cosmos : chain-id « ${p.chainId} » au lieu de « ${chainId} »`, `Cosmos transaction: chain-id “${p.chainId}” instead of “${chainId}”`));
+    if (p.from !== me) throw invalidInput(l10n("transaction Cosmos : l'expéditeur n'est pas l'adresse de ce compte", 'Cosmos transaction: the sender is not the address of this account'));
+    if (checkCosmosAddress(p.to) === me) throw invalidInput(l10n('transaction Cosmos : envoi à soi-même', 'Cosmos transaction: send to yourself'));
+    if (!p.timeoutHeight) throw invalidInput(l10n('transaction Cosmos : timeout_height absent : la transaction resterait valable indéfiniment', 'Cosmos transaction: timeout_height missing: the transaction would stay valid forever'));
+    if ([...p.memo].length > MAX_MEMO) throw invalidInput(l10n(`transaction Cosmos : mémo de plus de ${MAX_MEMO} caractères`, `Cosmos transaction: memo longer than ${MAX_MEMO} characters`));
     const warnings: CosmosWarning[] = [];
     if (BigInt(p.fee) > 100_000n) warnings.push({ kind: 'highFee' });
     const clean = cleanText(p.memo);
@@ -211,17 +212,17 @@ export function createDemoCosmos(d: DemoCosmosDeps) {
   const describe = (s: CosmosTxSummary, c: CosmosContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     const left = BigInt(c.account.spendable) - BigInt(s.amount) - BigInt(s.fee);
-    let out = `Envoi Cosmos Hub${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.to}\n\nMontant : ${atomText(s.amount)} (${s.amount} uatom)\n`;
-    out += `Frais : ${atomText(s.fee)} (${s.fee} uatom, gas maximum ${s.gasLimit})\nDisponible : ${atomText(c.account.spendable)} · après l'envoi : ${atomText(left > 0n ? left : 0n)}\n`;
-    out += `Réseau : chain-id « ${s.chainId} » · compte n° ${s.accountNumber} · séquence ${s.sequence}\nValable jusqu'au bloc n° ${s.timeoutHeight} (≈ ${Math.ceil(((s.timeoutHeight - c.height) * 6) / 60)} min)\n`;
+    let out = l10n(`Envoi Cosmos Hub${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.to}\n\nMontant : ${atomText(s.amount)} (${s.amount} uatom)\n`, `Cosmos Hub send${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.to}\n\nAmount: ${atomText(s.amount)} (${s.amount} uatom)\n`);
+    out += l10n(`Frais : ${atomText(s.fee)} (${s.fee} uatom, gas maximum ${s.gasLimit})\nDisponible : ${atomText(c.account.spendable)} · après l'envoi : ${atomText(left > 0n ? left : 0n)}\n`, `Fee: ${atomText(s.fee)} (${s.fee} uatom, maximum gas ${s.gasLimit})\nAvailable: ${atomText(c.account.spendable)} · after the send: ${atomText(left > 0n ? left : 0n)}\n`);
+    out += l10n(`Réseau : chain-id « ${s.chainId} » · compte n° ${s.accountNumber} · séquence ${s.sequence}\nValable jusqu'au bloc n° ${s.timeoutHeight} (≈ ${Math.ceil(((s.timeoutHeight - c.height) * 6) / 60)} min)\n`, `Network: chain-id “${s.chainId}” · account no. ${s.accountNumber} · sequence ${s.sequence}\nValid until block no. ${s.timeoutHeight} (≈ ${Math.ceil(((s.timeoutHeight - c.height) * 6) / 60)} min)\n`);
     out += `\n${line}\n`;
-    out += s.memo !== null ? `MÉMO (public à jamais) : « ${s.memo} »\n` : "AUCUN MÉMO\n(une plateforme d'échange en exige souvent un : sans lui, les fonds peuvent être perdus)\n";
+    out += s.memo !== null ? l10n(`MÉMO (public à jamais) : « ${s.memo} »\n`, `MEMO (public forever): “${s.memo}”\n`) : l10n("AUCUN MÉMO\n(une plateforme d'échange en exige souvent un : sans lui, les fonds peuvent être perdus)\n", 'NO MEMO\n(an exchange often requires one: without it, the funds may be lost)\n');
     return out + line;
   };
 
   const accountArg = (a: Record<string, unknown>) => {
     const account = a.account === undefined ? 0 : Number(a.account);
-    if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput('numéro de compte : au plus 100');
+    if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput(l10n('numéro de compte : au plus 100', 'account number: at most 100'));
     return account;
   };
 
@@ -244,11 +245,11 @@ export function createDemoCosmos(d: DemoCosmosDeps) {
     cosmos_build_tx: async (a) => {
       d.requireUnlocked();
       const to = checkCosmosAddress(a.to);
-      if (to === me) throw invalidInput('envoi à soi-même');
+      if (to === me) throw invalidInput(l10n('envoi à soi-même', 'send to yourself'));
       const amountStr = String(a.amount ?? '').trim();
-      if (!/^\d{1,30}$/.test(amountStr) || BigInt(amountStr) <= 0n) throw invalidInput('montant en uatom invalide');
+      if (!/^\d{1,30}$/.test(amountStr) || BigInt(amountStr) <= 0n) throw invalidInput(l10n('montant en uatom invalide', 'invalid amount in uatom'));
       const memo = a.memo === undefined || a.memo === null ? '' : String(a.memo);
-      if ([...memo].length > MAX_MEMO) throw invalidInput(`mémo : au plus ${MAX_MEMO} caractères`);
+      if ([...memo].length > MAX_MEMO) throw invalidInput(l10n(`mémo : au plus ${MAX_MEMO} caractères`, `memo: at most ${MAX_MEMO} characters`));
       await backend();
       const context = contextNow();
       const amount = BigInt(amountStr);
@@ -265,13 +266,13 @@ export function createDemoCosmos(d: DemoCosmosDeps) {
       const { p, summary } = decode(a.signDoc);
       await backend();
       const context = contextNow();
-      if (summary.timeoutHeight <= state.height) throw invalidInput('transaction Cosmos expirée (timeout_height dépassé) : reconstruis-la');
-      if (summary.accountNumber !== context.account.accountNumber) throw invalidInput('numéro de compte Cosmos différent de celui du réseau : reconstruis la transaction');
-      if (summary.sequence !== context.account.sequence) throw invalidInput('numéro de séquence périmé : reconstruis la transaction');
+      if (summary.timeoutHeight <= state.height) throw invalidInput(l10n('transaction Cosmos expirée (timeout_height dépassé) : reconstruis-la', 'Cosmos transaction expired (timeout_height passed): rebuild it'));
+      if (summary.accountNumber !== context.account.accountNumber) throw invalidInput(l10n('numéro de compte Cosmos différent de celui du réseau : reconstruis la transaction', 'Cosmos account number differs from the network’s: rebuild the transaction'));
+      if (summary.sequence !== context.account.sequence) throw invalidInput(l10n('numéro de séquence périmé : reconstruis la transaction', 'stale sequence number: rebuild the transaction'));
       checkSend(context.account, BigInt(summary.amount), BigInt(summary.fee));
       d.checkPassword(a.password);
-      if (!d.confirm(`Confirmer l'envoi d'ATOM\n${describe(summary, context)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !d.confirm('Attention : envoi à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer l'envoi d'ATOM\n${describe(summary, context)}`, `Confirm the ATOM send\n${describe(summary, context)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (summary.requiresExtraConfirmation && !d.confirm(l10n('Attention : envoi à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: send to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const signed = { ...p, signature: bytesToHex(sha256(new TextEncoder().encode(`sig:${String(a.signDoc)}`))) };
       const tx = btoa(JSON.stringify(signed));
       return { tx, hash: bytesToHex(sha256(new TextEncoder().encode(tx))).toUpperCase(), summary, context };
@@ -282,18 +283,18 @@ export function createDemoCosmos(d: DemoCosmosDeps) {
       try {
         p = JSON.parse(atob(tx)) as DemoSignDoc;
       } catch {
-        throw invalidInput('transaction : base64 attendu');
+        throw invalidInput(l10n('transaction : base64 attendu', 'transaction: base64 expected'));
       }
-      if (!p.signature) throw invalidInput('transaction Cosmos : une signature de 64 octets attendue');
+      if (!p.signature) throw invalidInput(l10n('transaction Cosmos : une signature de 64 octets attendue', 'Cosmos transaction: a 64-byte signature expected'));
       const { signature: _signature, ...unsigned } = p;
       const { summary } = decode(encode(unsigned));
       await backend();
       const ours = state.accounts.get(me);
-      if (!ours || summary.sequence !== ours.sequence) throw invalidInput('transaction Cosmos refusée (code 32) : account sequence mismatch');
+      if (!ours || summary.sequence !== ours.sequence) throw invalidInput(l10n('transaction Cosmos refusée (code 32) : account sequence mismatch', 'Cosmos transaction rejected (code 32): account sequence mismatch'));
       try {
         checkSend(account(me), BigInt(summary.amount), BigInt(summary.fee));
       } catch {
-        throw invalidInput('transaction Cosmos refusée (code 5) : insufficient funds');
+        throw invalidInput(l10n('transaction Cosmos refusée (code 5) : insufficient funds', 'Cosmos transaction rejected (code 5): insufficient funds'));
       }
       const hash = bytesToHex(sha256(new TextEncoder().encode(tx))).toUpperCase();
       const code = state.failNext ?? 0;
@@ -314,7 +315,7 @@ export function createDemoCosmos(d: DemoCosmosDeps) {
     },
     cosmos_tx_status: async (a) => {
       const h = String(a.hash ?? '').trim();
-      if (!/^[0-9a-fA-F]{64}$/.test(h)) throw invalidInput('hash : 64 caractères hexadécimaux');
+      if (!/^[0-9a-fA-F]{64}$/.test(h)) throw invalidInput(l10n('hash : 64 caractères hexadécimaux', 'hash: 64 hexadecimal characters'));
       await backend();
       const s = state.submitted.get(h.toUpperCase());
       if (!s || d.now() - s.at < INCLUSION_MS) return { included: false, success: false, code: null, height: null, log: '' };

@@ -945,7 +945,12 @@ mod live {
         assert_eq!(summary, built.summary);
         eprintln!(
             "--- dialog ---\n{}---",
-            crate::commands_near::describe_near(&summary, &context, Network::Testnet)
+            crate::commands_near::describe_near(
+                crate::i18n::Lang::Fr,
+                &summary,
+                &context,
+                Network::Testnet
+            )
         );
         let (signed, hash, again) = wallet_core::near_sign(seed, 0, &built.tx).unwrap();
         assert_eq!(again, summary, "identical summary");

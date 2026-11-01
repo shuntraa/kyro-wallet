@@ -45,7 +45,7 @@ export function providerError(name: string, e: unknown): Error {
     }
     if (e.status === 401 || e.status === 403) return new Error(l10n(`${name} : clé API refusée ou absente`, `${name}: API key refused or missing`));
     if (e.status === 429) return new Error(l10n(`${name} : trop de requêtes, réessaie dans un instant`, `${name}: too many requests, try again in a moment`));
-    return new Error(`${name} : ${detail || `erreur HTTP ${e.status}`}`);
+    return new Error(l10n(`${name} : ${detail || `erreur HTTP ${e.status}`}`, `${name}: ${detail || `HTTP error ${e.status}`}`));
   }
   return e instanceof Error ? new Error(l10n(`${name} : ${e.message}`, `${name}: ${e.message}`)) : new Error(l10n(`${name} : erreur inconnue`, `${name}: unknown error`));
 }

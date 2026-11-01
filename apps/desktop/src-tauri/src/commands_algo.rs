@@ -12,8 +12,9 @@ use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::algo_backend::{self, AlgoAccountInfo, AlgoCtx, AlgoTxStatus, PaymentCheck, LV_OFFSET};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::servers::utxo_network_key;
 use crate::state::AppState;
 
@@ -30,8 +31,8 @@ fn ours(state: &AppState, account: u32) -> AppResult<String> {
     state.with_seed(|seed| Ok(wallet_core::algo_address(seed, account)?))
 }
 
-fn algo(micro: &str) -> String {
-    format!("{} ALGO", format_units(micro, 6))
+fn algo(lang: Lang, micro: &str) -> String {
+    format!("{} ALGO", format_units_in(lang, micro, 6))
 }
 
 /// Live context shown in the dialog.
@@ -46,80 +47,135 @@ pub struct AlgoContext {
 
 /// Body of the native dialog: everything comes from wallet-core's decoding, except the live
 /// balances of the context.
-pub(crate) fn describe_algo(s: &AlgoTxSummary, c: &AlgoContext, net: Network) -> String {
-    let mut out = format!(
-        "Envoi Algorand{}\n\nÀ : {}\nMontant : {} ({} µALGO)\n",
-        if net == Network::Testnet {
-            " (testnet)"
-        } else {
-            ""
-        },
-        s.receiver,
-        algo(&s.amount),
-        s.amount
-    );
+pub(crate) fn describe_algo(
+    lang: Lang,
+    s: &AlgoTxSummary,
+    c: &AlgoContext,
+    net: Network,
+) -> String {
+    let al = |v: &str| algo(lang, v);
+    let testnet = if net == Network::Testnet {
+        " (testnet)"
+    } else {
+        ""
+    };
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Envoi Algorand{testnet}\n\nÀ : {}\nMontant : {} ({} µALGO)\n",
+            s.receiver,
+            al(&s.amount),
+            s.amount
+        ),
+        Lang::En => format!(
+            "Algorand send{testnet}\n\nTo: {}\nAmount: {} ({} µALGO)\n",
+            s.receiver,
+            al(&s.amount),
+            s.amount
+        ),
+    };
     if !c.destination.exists {
-        out += &format!(
-            "\nCe compte n'existe pas encore : ce paiement le crée (au moins {} doivent y rester, solde minimum).\n",
-            algo(&c.destination.min_balance)
-        );
+        out += &match lang {
+            Lang::Fr => format!(
+                "\nCe compte n'existe pas encore : ce paiement le crée (au moins {} doivent y rester, solde minimum).\n",
+                al(&c.destination.min_balance)
+            ),
+            Lang::En => format!(
+                "\nThis account does not exist yet: this payment creates it (at least {} must stay on it, minimum balance).\n",
+                al(&c.destination.min_balance)
+            ),
+        };
     }
-    out += &format!(
-        "\nFrais : {} ({} µALGO)\nSolde : {} · solde minimum bloqué : {} · disponible : {}\n",
-        algo(&s.fee),
-        s.fee,
-        algo(&c.account.balance),
-        algo(&c.account.min_balance),
-        algo(&c.account.spendable)
-    );
-    out += &format!(
-        "Réseau : {} (genesis {})\nValable des rounds {} à {} (≈ {} min)\n",
-        s.genesis_id,
-        s.genesis_hash,
-        s.first_valid,
-        s.last_valid,
-        (s.last_valid.saturating_sub(c.round.max(s.first_valid)) * 28).div_ceil(600)
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais : {} ({} µALGO)\nSolde : {} · solde minimum bloqué : {} · disponible : {}\n",
+            al(&s.fee),
+            s.fee,
+            al(&c.account.balance),
+            al(&c.account.min_balance),
+            al(&c.account.spendable)
+        ),
+        Lang::En => format!(
+            "\nFee: {} ({} µALGO)\nBalance: {} · locked minimum balance: {} · available: {}\n",
+            al(&s.fee),
+            s.fee,
+            al(&c.account.balance),
+            al(&c.account.min_balance),
+            al(&c.account.spendable)
+        ),
+    };
+    let minutes = (s.last_valid.saturating_sub(c.round.max(s.first_valid)) * 28).div_ceil(600);
+    out += &match lang {
+        Lang::Fr => format!(
+            "Réseau : {} (genesis {})\nValable des rounds {} à {} (≈ {minutes} min)\n",
+            s.genesis_id, s.genesis_hash, s.first_valid, s.last_valid
+        ),
+        Lang::En => format!(
+            "Network: {} (genesis {})\nValid from round {} to {} (≈ {minutes} min)\n",
+            s.genesis_id, s.genesis_hash, s.first_valid, s.last_valid
+        ),
+    };
     // Untrusted text, after the amounts and fees, on one quoted line.
     if s.note_len > 0 {
         match &s.note_text {
             Some(t) => {
                 out += &format!(
-                    "Note (texte libre, publique à jamais) : {}\n",
+                    "{}{}\n",
+                    lang.pick(
+                        "Note (texte libre, publique à jamais) : ",
+                        "Note (free text, public forever): "
+                    ),
                     crate::dialog_text::field(t, crate::dialog_text::MAX_FIELD)
                 )
             }
             None => {
-                out += &format!(
-                    "Note binaire ({} octets, publique à jamais) : {}\n",
-                    s.note_len,
-                    crate::dialog_text::sanitize(
-                        s.note_hex.as_deref().unwrap_or_default(),
-                        crate::dialog_text::MAX_FIELD
-                    )
-                )
+                let hex = crate::dialog_text::sanitize(
+                    s.note_hex.as_deref().unwrap_or_default(),
+                    crate::dialog_text::MAX_FIELD,
+                );
+                out += &match lang {
+                    Lang::Fr => format!(
+                        "Note binaire ({} octets, publique à jamais) : {hex}\n",
+                        s.note_len
+                    ),
+                    Lang::En => format!(
+                        "Binary note ({} bytes, public forever): {hex}\n",
+                        s.note_len
+                    ),
+                }
             }
         }
     }
-    out += &format!("Identifiant : {}\n", s.txid);
+    out += &format!("{}{}\n", lang.pick("Identifiant : ", "ID: "), s.txid);
     out
 }
 
-pub(crate) fn describe_algo_extra(s: &AlgoTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments à vérifier dans ce paiement :\n");
+pub(crate) fn describe_algo_extra(lang: Lang, s: &AlgoTxSummary) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des éléments à vérifier dans ce paiement :\n",
+        "Kyro found elements to check in this payment:\n",
+    ));
     for w in &s.warnings {
         out += match w {
-            AlgoWarning::Note => {
-                "• la transaction porte une note, lisible par tous et pour toujours sur la chaîne\n"
-            }
-            AlgoWarning::BinaryNote => "• la note n'est pas du texte (octets bruts affichés en hexadécimal)\n",
-            AlgoWarning::UnusualText => {
-                "• note contenant des caractères invisibles / de contrôle, ou trop longue (affichée nettoyée)\n"
-            }
-            AlgoWarning::HighFee => "• frais supérieurs à 0,01 ALGO (d'habitude 0,001 ALGO)\n",
+            AlgoWarning::Note => lang.pick(
+                "• la transaction porte une note, lisible par tous et pour toujours sur la chaîne\n",
+                "• the transaction carries a note, readable by anyone and forever on the chain\n",
+            ),
+            AlgoWarning::BinaryNote => lang.pick(
+                "• la note n'est pas du texte (octets bruts affichés en hexadécimal)\n",
+                "• the note is not text (raw bytes shown in hexadecimal)\n",
+            ),
+            AlgoWarning::UnusualText => lang.pick(
+                "• note contenant des caractères invisibles / de contrôle, ou trop longue (affichée nettoyée)\n",
+                "• note containing invisible / control characters, or too long (shown cleaned)\n",
+            ),
+            AlgoWarning::HighFee => lang.pick(
+                "• frais supérieurs à 0,01 ALGO (d'habitude 0,001 ALGO)\n",
+                "• fee above 0.01 ALGO (usually 0.001 ALGO)\n",
+            ),
         };
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -318,21 +374,25 @@ pub async fn algo_sign_tx(
     let net = state.network;
     let (summary, context) = prepare_sign(&c, &me, &blob).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer le paiement Algorand",
-        signer.body(
-            crate::i18n::current(),
-            &describe_algo(&summary, &context, net),
+        lang.pick(
+            "Confirmer le paiement Algorand",
+            "Confirm the Algorand payment",
         ),
+        signer.body(lang, &describe_algo(lang, &summary, &context, net)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : paiement à vérifier",
-            describe_algo_extra(&summary),
+            lang.pick(
+                "Attention : paiement à vérifier",
+                "Warning: payment to check",
+            ),
+            describe_algo_extra(lang, &summary),
         )
         .await?;
     }
@@ -436,6 +496,7 @@ mod tests {
     #[test]
     fn dialog_shows_what_rust_decoded() {
         let d = describe_algo(
+            Lang::Fr,
             &summary(Some("Loyer\noctobre")),
             &context(true),
             Network::Testnet,
@@ -454,12 +515,22 @@ mod tests {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
         assert!(!d.contains("n'existe pas encore"));
-        let d = describe_algo(&summary(None), &context(false), Network::Mainnet);
+        let d = describe_algo(Lang::Fr, &summary(None), &context(false), Network::Mainnet);
         assert!(d.starts_with("Envoi Algorand\n"));
         assert!(d.contains("ce paiement le crée (au moins 0,1 ALGO"));
         assert!(!d.contains("Note"));
-        let x = describe_algo_extra(&summary(Some("x")));
+        let x = describe_algo_extra(Lang::Fr, &summary(Some("x")));
         assert!(x.contains("note, lisible par tous"));
+        let en = describe_algo(
+            Lang::En,
+            &summary(Some("x")),
+            &context(true),
+            Network::Testnet,
+        );
+        assert!(
+            en.contains("Amount: 1.5 ALGO (1500000 µALGO)")
+                && en.contains("Note (free text, public forever): ")
+        );
     }
 
     #[test]
@@ -569,8 +640,8 @@ mod live {
             assert_eq!(summary, built.summary);
             eprintln!(
                 "--- dialog ---\n{}---\n{}---",
-                describe_algo(&summary, &context, Network::Testnet),
-                describe_algo_extra(&summary)
+                describe_algo(Lang::Fr, &summary, &context, Network::Testnet),
+                describe_algo_extra(Lang::Fr, &summary)
             );
             let (signed, txid, again) =
                 wallet_core::algo_sign(&seed, 0, Network::Testnet, &built.blob).unwrap();

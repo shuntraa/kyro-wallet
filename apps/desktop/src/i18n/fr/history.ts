@@ -68,4 +68,10 @@ export const history = {
   'history.rowInProgress': 'en cours',
   'history.rowFee': 'frais {fee}',
   'history.rowPending': 'en attente',
+  // Cross-chain status (lib/crossSwap.ts)
+  'history.crossArrived': 'arrivé sur {chain}',
+  'history.crossFailed': 'échec du pont, remboursement prévu sur ton adresse de départ',
+  'history.crossRefunded': 'remboursé sur ton adresse de départ',
+  'history.crossIncompleteDeposit': 'dépôt incomplet, remboursement prévu sur ton adresse de départ',
+  'history.crossOnTheWay': 'en route vers {chain}',
 } as const;

@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// TON pieces of the Send screen (components/TonSend.tsx).
+
+import type { ton as fr } from '../fr/ton';
+
+export const ton: Record<keyof typeof fr, string> = {
+  'ton.comment': 'Comment',
+  'ton.commentHint': '· optional, public forever',
+  'ton.readingAccount': 'reading the account…',
+  'ton.commentBytes': '{bytes}/{max} bytes',
+  'ton.commentPlaceholder': 'e.g. 7239104 (memo required by an exchange)',
+  'ton.noComment': 'No comment. If you are sending to an exchange or a service, it most likely gave you a comment (“memo”, “tag”): without it, the funds can be lost.',
+  'ton.commentClear': 'Sent in clear with the transfer; the system window shows it framed.',
+  'ton.inactive': 'This account is not active yet (never used{funded}): Kyro sends <b>without bounce</b>, the funds arrive there and stay there. Check the address: a mistake cannot be undone.',
+  'ton.inactiveFunded': ', but it has already received funds',
+  'ton.frozen': 'This account is frozen (unpaid storage fees): Kyro refuses to send to it.',
+  'ton.nonBounceable': 'Non-bounceable address (UQ…): if the recipient fails, the funds do not come back. This is the normal form for a wallet.',
+  'ton.decodedLabel': 'Decoded TON transfer',
+  'ton.title': 'TON transfer (v4R2 wallet)',
+  'ton.decodedByVault': 'decoded by the vault',
+  'ton.commentNone': 'NONE',
+  'ton.lDest': 'Recipient',
+  'ton.lDestOther': 'Same account, other form',
+  'ton.lAmount': 'Amount',
+  'ton.sendAll': 'the whole balance, minus the fee',
+  'ton.lBounce': 'Bounce',
+  'ton.bounceYes': 'yes (the funds come back if the recipient fails)',
+  'ton.bounceNoForm': 'no (non-bounceable address)',
+  'ton.bounceNoInactive': 'no (account not active yet)',
+  'ton.lFee': 'Estimated fee',
+  'ton.lFeeValue': '≈ {fee} (on top of the amount)',
+  'ton.lFirstSend': 'First send',
+  'ton.deploys': 'also deploys your wallet (v4R2)',
+  'ton.lBalance': 'Your balance',
+  'ton.lValid': 'Valid',
+  'ton.lValidValue': '≈ {minutes} min · seqno {seqno}',
+  'ton.pending': 'Waiting for the TON network to process it (a few seconds)…',
+  'ton.done': '<b>Sent:</b> your wallet processed the transfer and the message to {recipient} went out.',
+  'ton.failed': '<b>Failed:</b> your wallet processed the message but sent nothing (insufficient balance at processing time?). The fee is still charged.',
+  'ton.expired': 'Still not processed after 12 minutes: the message expired and will no longer be accepted. Check the history before sending again.',
+  'ton.trackError': 'Tracking unavailable for now: {message}',
+};

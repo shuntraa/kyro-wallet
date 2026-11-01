@@ -10,9 +10,10 @@ use wallet_core::{HbarRecipient, HbarTransfer, HbarTxSummary, HbarWarning, Netwo
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
 use crate::hbar_backend::{self, HbarAccountInfo, HbarCtx, START_SKEW, VALID_DURATION};
+use crate::i18n::Lang;
 use crate::state::AppState;
 
 pub(crate) fn ctx(state: &AppState) -> HbarCtx<'_> {
@@ -33,8 +34,8 @@ fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     })
 }
 
-fn hbar(tinybars: &str) -> String {
-    format!("{} HBAR", format_units(tinybars, 8))
+fn hbar(lang: Lang, tinybars: &str) -> String {
+    format!("{} HBAR", format_units_in(lang, tinybars, 8))
 }
 
 fn now_secs() -> i64 {
@@ -58,68 +59,121 @@ pub struct HbarContext {
     pub creates_account: bool,
 }
 
-pub(crate) fn describe_hbar(s: &HbarTxSummary, c: &HbarContext, net: Network) -> String {
+pub(crate) fn describe_hbar(
+    lang: Lang,
+    s: &HbarTxSummary,
+    c: &HbarContext,
+    net: Network,
+) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+    let h = |v: &str| hbar(lang, v);
     let mut out = format!(
-        "Envoi Hedera{}\n\nÀ : {}{}\n",
+        "{}{}\n\n{}{}{}\n",
+        lang.pick("Envoi Hedera", "Hedera send"),
         if net == Network::Testnet {
             " (testnet)"
         } else {
             ""
         },
+        lang.pick("À : ", "To: "),
         s.to,
         if s.to_is_evm {
-            " (adresse EVM : l'alias du compte)"
+            lang.pick(
+                " (adresse EVM : l'alias du compte)",
+                " (EVM address: the account's alias)",
+            )
         } else {
             ""
         }
     );
     if s.to_is_evm {
         if let Some(id) = &c.recipient.account_id {
-            out += &format!("Compte de cette adresse selon le nœud miroir : {id}\n");
+            out += &match lang {
+                Lang::Fr => format!("Compte de cette adresse selon le nœud miroir : {id}\n"),
+                Lang::En => format!("Account of this address according to the mirror node: {id}\n"),
+            };
         }
     }
-    out += &format!("Montant : {} ({} tinybars)\n", hbar(&s.amount), s.amount);
+    out += &format!(
+        "{}{} ({} tinybars)\n",
+        lang.pick("Montant : ", "Amount: "),
+        h(&s.amount),
+        s.amount
+    );
     if c.creates_account {
-        out += "\nCette adresse n'a pas encore de compte Hedera : ce transfert le crée (frais de création ≈ 0,05 $, payés par toi).\n";
+        out += lang.pick(
+            "\nCette adresse n'a pas encore de compte Hedera : ce transfert le crée (frais de création ≈ 0,05 $, payés par toi).\n",
+            "\nThis address has no Hedera account yet: this transfer creates it (creation fee ≈ $0.05, paid by you).\n",
+        );
     }
-    out += &format!(
-        "\nFrais maximum : {} (seuls les frais réels sont prélevés : ≈ 0,0001 $ pour un transfert)\nDepuis : {} · solde : {}\n",
-        hbar(&s.max_fee),
-        s.from,
-        hbar(&c.account.balance)
-    );
-    out += &format!(
-        "Valable {} s, identifiant {}\nSignée pour {} nœud(s) ({}) : même identifiant, exécutée une seule fois au plus.\n",
-        s.valid_duration,
-        s.transaction_id,
-        s.nodes.len(),
-        s.nodes.join(", ")
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais maximum : {} (seuls les frais réels sont prélevés : ≈ 0,0001 $ pour un transfert)\nDepuis : {} · solde : {}\n",
+            h(&s.max_fee),
+            s.from,
+            h(&c.account.balance)
+        ),
+        Lang::En => format!(
+            "\nMaximum fee: {} (only the actual fee is charged: ≈ $0.0001 for a transfer)\nFrom: {} · balance: {}\n",
+            h(&s.max_fee),
+            s.from,
+            h(&c.account.balance)
+        ),
+    };
+    out += &match lang {
+        Lang::Fr => format!(
+            "Valable {} s, identifiant {}\nSignée pour {} nœud(s) ({}) : même identifiant, exécutée une seule fois au plus.\n",
+            s.valid_duration,
+            s.transaction_id,
+            s.nodes.len(),
+            s.nodes.join(", ")
+        ),
+        Lang::En => format!(
+            "Valid for {} s, ID {}\nSigned for {} node(s) ({}): same ID, executed at most once.\n",
+            s.valid_duration,
+            s.transaction_id,
+            s.nodes.len(),
+            s.nodes.join(", ")
+        ),
+    };
     // Free text: after the amounts and fees, framed, one quoted line.
     out += &format!("{line}\n");
     match &s.memo {
         Some(m) => {
             out += &format!(
-                "MÉMO (public à jamais) : {}\n",
+                "{}{}\n",
+                lang.pick("MÉMO (public à jamais) : ", "MEMO (public forever): "),
                 crate::dialog_text::field(m, crate::dialog_text::MAX_FIELD)
             )
         }
-        None => out += "AUCUN MÉMO\n(une plateforme d'échange en exige souvent un : sans lui, les fonds peuvent être perdus)\n",
+        None => out += lang.pick(
+            "AUCUN MÉMO\n(une plateforme d'échange en exige souvent un : sans lui, les fonds peuvent être perdus)\n",
+            "NO MEMO\n(an exchange often requires one: without it, the funds can be lost)\n",
+        ),
     }
     out += &format!("{line}\n");
     out
 }
 
-pub(crate) fn describe_hbar_extra(s: &HbarTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans ce transfert :\n");
+pub(crate) fn describe_hbar_extra(lang: Lang, s: &HbarTxSummary) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des éléments inhabituels dans ce transfert :\n",
+        "Kyro found unusual elements in this transfer:\n",
+    ));
     for w in &s.warnings {
         out += match w {
-            HbarWarning::HighFee => "• frais maximum supérieurs à 2 HBAR (un transfert coûte d'habitude ≈ 0,0001 $)\n",
-            HbarWarning::UnusualText => "• mémo contenant des caractères invisibles / de contrôle, ou trop long (affiché nettoyé)\n",
+            HbarWarning::HighFee => lang.pick(
+                "• frais maximum supérieurs à 2 HBAR (un transfert coûte d'habitude ≈ 0,0001 $)\n",
+                "• maximum fee above 2 HBAR (a transfer usually costs ≈ $0.0001)\n",
+            ),
+            HbarWarning::UnusualText => lang.pick(
+                "• mémo contenant des caractères invisibles / de contrôle, ou trop long (affiché nettoyé)\n",
+                "• memo containing invisible / control characters, or too long (shown cleaned)\n",
+            ),
         };
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -294,8 +348,8 @@ fn check_balance(amount: u64, max_fee: u64, balance: &str) -> AppResult<()> {
     if need > bal {
         return Err(AppError::InvalidInput(format!(
             "solde insuffisant : {} disponibles, il en faut {} (montant + frais maximum)",
-            hbar(&bal.to_string()),
-            hbar(&need.to_string())
+            hbar(Lang::Fr, &bal.to_string()),
+            hbar(Lang::Fr, &need.to_string())
         )));
     }
     Ok(())
@@ -424,12 +478,16 @@ pub async fn hbar_sign_tx(
     let c = ctx(&state);
     let (num, summary, context) = prepare_sign(&c, &evm, &pk, &bodies).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer le transfert Hedera",
+        lang.pick(
+            "Confirmer le transfert Hedera",
+            "Confirm the Hedera transfer",
+        ),
         signer.body(
-            crate::i18n::current(),
-            &describe_hbar(&summary, &context, state.network),
+            lang,
+            &describe_hbar(lang, &summary, &context, state.network),
         ),
     )
     .await?;
@@ -437,8 +495,11 @@ pub async fn hbar_sign_tx(
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : transfert à vérifier",
-            describe_hbar_extra(&summary),
+            lang.pick(
+                "Attention : transfert à vérifier",
+                "Warning: transfer to check",
+            ),
+            describe_hbar_extra(lang, &summary),
         )
         .await?;
     }
@@ -611,6 +672,7 @@ mod tests {
     #[test]
     fn dialog_frames_the_memo_after_the_amounts() {
         let d = describe_hbar(
+            Lang::Fr,
             &summary(Some("12345"), false),
             &context(false),
             Network::Testnet,
@@ -629,15 +691,30 @@ mod tests {
         }
         assert!(d.find("Montant").unwrap() < d.find("MÉMO").unwrap());
         assert!(!d.contains("crée"));
-        let d = describe_hbar(&summary(None, true), &context(true), Network::Mainnet);
+        let d = describe_hbar(
+            Lang::Fr,
+            &summary(None, true),
+            &context(true),
+            Network::Mainnet,
+        );
         assert!(d.starts_with("Envoi Hedera\n"));
         assert!(d.contains("AUCUN MÉMO"));
         assert!(d.contains("(adresse EVM : l'alias du compte)"));
         assert!(d.contains("ce transfert le crée"));
         let mut s = summary(None, false);
         s.warnings = vec![HbarWarning::HighFee, HbarWarning::UnusualText];
-        let x = describe_hbar_extra(&s);
+        let x = describe_hbar_extra(Lang::Fr, &s);
         assert!(x.contains("2 HBAR") && x.contains("mémo"));
+        let en = describe_hbar(
+            Lang::En,
+            &summary(Some("12345"), false),
+            &context(false),
+            Network::Testnet,
+        );
+        assert!(
+            en.contains("Amount: 1.5 HBAR (150000000 tinybars)")
+                && en.contains("MEMO (public forever): ")
+        );
     }
 
     #[test]

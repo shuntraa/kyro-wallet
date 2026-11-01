@@ -16,6 +16,7 @@ import { blake2b } from '@noble/hashes/blake2b';
 import { base58 } from '@scure/base';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { IpcError, type Commands, type DotAccountInfo, type DotBackendInfo, type DotContext, type DotTxSummary, type Network, type Settings } from './ipc';
+import { l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 /** Westend Asset Hub: 12 decimals, ED 0.001 WND; Polkadot Asset Hub: 10 decimals, ED 0.01 DOT. */
@@ -59,7 +60,7 @@ export function demoDotAddress(seed: Uint8Array, account: number, network: Netwo
   return dotSs58Encode(pk, DOT_CHAINS[network === 'mainnet' ? 'mainnet' : 'testnet'].ss58);
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 
 interface DemoDotAccount {
   free: bigint;
@@ -129,9 +130,9 @@ export function createDemoDot(d: DemoDotDeps) {
   const checkAddress = (a: unknown): string => {
     const s = String(a ?? '').trim();
     const dec = dotSs58Decode(s);
-    if (!dec) throw invalidInput('adresse Polkadot invalide');
+    if (!dec) throw invalidInput(l10n('adresse Polkadot invalide', 'invalid Polkadot address'));
     if (dec.prefix !== c.ss58) {
-      throw invalidInput(`adresse d'un autre réseau (préfixe SS58 ${dec.prefix}) : une adresse ${c.chain} commence par le préfixe ${c.ss58} (${c.ss58 === 0 ? '« 1… »' : '« 5… »'})`);
+      throw invalidInput(l10n(`adresse d'un autre réseau (préfixe SS58 ${dec.prefix}) : une adresse ${c.chain} commence par le préfixe ${c.ss58} (${c.ss58 === 0 ? '« 1… »' : '« 5… »'})`, `address from another network (SS58 prefix ${dec.prefix}): a ${c.chain} address starts with prefix ${c.ss58} (${c.ss58 === 0 ? '“1…”' : '“5…”'})`));
     }
     return s;
   };
@@ -152,10 +153,10 @@ export function createDemoDot(d: DemoDotDeps) {
   };
   /** dot_backend::check_transfer, same order and messages. */
   const check = (ours: DotAccountInfo, dest: DotAccountInfo, value: bigint) => {
-    if (!ours.exists) throw invalidInput(`ton compte n'existe pas encore sur la chaîne (aucun ${c.symbol} reçu)`);
-    if (!dest.exists && value < c.ed) throw invalidInput(`ce compte n'existe pas encore : il faut lui envoyer au moins le dépôt existentiel (${fmt(c.ed)}), sinon le transfert échoue`);
+    if (!ours.exists) throw invalidInput(l10n(`ton compte n'existe pas encore sur la chaîne (aucun ${c.symbol} reçu)`, `your account does not exist on chain yet (no ${c.symbol} received)`));
+    if (!dest.exists && value < c.ed) throw invalidInput(l10n(`ce compte n'existe pas encore : il faut lui envoyer au moins le dépôt existentiel (${fmt(c.ed)}), sinon le transfert échoue`, `this account does not exist yet: you must send it at least the existential deposit (${fmt(c.ed)}), otherwise the transfer fails`));
     const spendable = BigInt(ours.spendable);
-    if (value + fee > spendable) throw invalidInput(`solde disponible insuffisant : ${fmt(spendable)} disponibles (solde − dépôt existentiel − part bloquée), il en faut ${fmt(value + fee)} avec les frais`);
+    if (value + fee > spendable) throw invalidInput(l10n(`solde disponible insuffisant : ${fmt(spendable)} disponibles (solde − dépôt existentiel − part bloquée), il en faut ${fmt(value + fee)} avec les frais`, `insufficient available balance: ${fmt(spendable)} available (balance − existential deposit − locked part), ${fmt(value + fee)} needed with the fee`));
   };
   const view = (a: DotAccountInfo) => {
     const { existentialDeposit: _ed, ...rest } = a;
@@ -176,13 +177,13 @@ export function createDemoDot(d: DemoDotDeps) {
     try {
       p = JSON.parse(new TextDecoder().decode(hexToBytes(String(hex ?? '').trim().toLowerCase()))) as DemoDotPayload;
     } catch {
-      throw invalidInput('transaction Polkadot refusée : hexadécimal attendu');
+      throw invalidInput(l10n('transaction Polkadot refusée : hexadécimal attendu', 'Polkadot transaction refused: hexadecimal expected'));
     }
-    if (p.from !== me) throw invalidInput("transaction Polkadot refusée : ce n'est pas ton compte");
+    if (p.from !== me) throw invalidInput(l10n("transaction Polkadot refusée : ce n'est pas ton compte", 'Polkadot transaction refused: this is not your account'));
     checkAddress(p.to);
-    if (p.to === me) throw invalidInput('transaction Polkadot refusée : transfert à soi-même');
-    if (!/^\d+$/.test(p.amount) || BigInt(p.amount) === 0n) throw invalidInput('transaction Polkadot refusée : montant nul');
-    if (p.spec !== c.spec) throw invalidInput('transaction Polkadot refusée : spec_version différent du runtime actuel : reconstruis');
+    if (p.to === me) throw invalidInput(l10n('transaction Polkadot refusée : transfert à soi-même', 'Polkadot transaction refused: transfer to yourself'));
+    if (!/^\d+$/.test(p.amount) || BigInt(p.amount) === 0n) throw invalidInput(l10n('transaction Polkadot refusée : montant nul', 'Polkadot transaction refused: zero amount'));
+    if (p.spec !== c.spec) throw invalidInput(l10n('transaction Polkadot refusée : spec_version différent du runtime actuel : reconstruis', 'Polkadot transaction refused: spec_version differs from the current runtime: rebuild'));
     const summary: DotTxSummary = {
       chain: c.chain,
       from: me,
@@ -202,15 +203,15 @@ export function createDemoDot(d: DemoDotDeps) {
     return { p, summary };
   };
   const describe = (s: DotTxSummary, ctx: DotContext) => {
-    let out = `Envoi Polkadot — ${s.chain}${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.to}\n\nMontant : ${fmt(BigInt(s.amount))} (${s.amount} planck)\n`;
-    if (!ctx.destination.exists) out += `Ce compte n'existe pas encore : ce transfert le crée (dépôt existentiel : ${fmt(c.ed)}).\n`;
-    out += `\nFrais estimés par le nœud : ≈ ${fmt(BigInt(ctx.fee))} (prélevés en plus)\nSolde : ${fmt(BigInt(ctx.account.free))} · bloqué : ${fmt(BigInt(ctx.account.frozen))} · dépôt existentiel (reste toujours sur le compte) : ${fmt(c.ed)} · disponible : ${fmt(BigInt(ctx.account.spendable))}\n`;
-    out += `\nAppel : ${s.call} (ton compte reste actif) · pourboire : ${fmt(0n)}\nValable jusqu'au bloc n° ${ctx.validUntil} (${s.eraPeriod} blocs) · nonce ${s.nonce} · runtime ${s.specVersion} / ${s.txVersion}\n`;
+    let out = l10n(`Envoi Polkadot — ${s.chain}${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.to}\n\nMontant : ${fmt(BigInt(s.amount))} (${s.amount} planck)\n`, `Polkadot send — ${s.chain}${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.to}\n\nAmount: ${fmt(BigInt(s.amount))} (${s.amount} planck)\n`);
+    if (!ctx.destination.exists) out += l10n(`Ce compte n'existe pas encore : ce transfert le crée (dépôt existentiel : ${fmt(c.ed)}).\n`, `This account does not exist yet: this transfer creates it (existential deposit: ${fmt(c.ed)}).\n`);
+    out += l10n(`\nFrais estimés par le nœud : ≈ ${fmt(BigInt(ctx.fee))} (prélevés en plus)\nSolde : ${fmt(BigInt(ctx.account.free))} · bloqué : ${fmt(BigInt(ctx.account.frozen))} · dépôt existentiel (reste toujours sur le compte) : ${fmt(c.ed)} · disponible : ${fmt(BigInt(ctx.account.spendable))}\n`, `\nFee estimated by the node: ≈ ${fmt(BigInt(ctx.fee))} (charged on top)\nBalance: ${fmt(BigInt(ctx.account.free))} · locked: ${fmt(BigInt(ctx.account.frozen))} · existential deposit (always stays on the account): ${fmt(c.ed)} · available: ${fmt(BigInt(ctx.account.spendable))}\n`);
+    out += l10n(`\nAppel : ${s.call} (ton compte reste actif) · pourboire : ${fmt(0n)}\nValable jusqu'au bloc n° ${ctx.validUntil} (${s.eraPeriod} blocs) · nonce ${s.nonce} · runtime ${s.specVersion} / ${s.txVersion}\n`, `\nCall: ${s.call} (your account stays alive) · tip: ${fmt(0n)}\nValid until block #${ctx.validUntil} (${s.eraPeriod} blocks) · nonce ${s.nonce} · runtime ${s.specVersion} / ${s.txVersion}\n`);
     return out;
   };
   const accountArg = (a: Record<string, unknown>) => {
     const n = a.account === undefined ? 0 : Number(a.account);
-    if (!Number.isInteger(n) || n < 0 || n > 100) throw invalidInput('numéro de compte : au plus 100');
+    if (!Number.isInteger(n) || n < 0 || n > 100) throw invalidInput(l10n('numéro de compte : au plus 100', 'account number: at most 100'));
     return n;
   };
 
@@ -229,8 +230,8 @@ export function createDemoDot(d: DemoDotDeps) {
       d.requireUnlocked();
       const to = checkAddress(a.to);
       const amount = String(a.amount ?? '').trim();
-      if (!/^\d+$/.test(amount) || BigInt(amount) === 0n) throw invalidInput('montant en planck invalide');
-      if (to === me) throw invalidInput('transfert à soi-même');
+      if (!/^\d+$/.test(amount) || BigInt(amount) === 0n) throw invalidInput(l10n('montant en planck invalide', 'invalid planck amount'));
+      if (to === me) throw invalidInput(l10n('transfert à soi-même', 'transfer to yourself'));
       await backend();
       const birth = block();
       const ctx = contextFor(to, birth);
@@ -242,22 +243,22 @@ export function createDemoDot(d: DemoDotDeps) {
       d.requireUnlocked();
       const { p, summary } = decode(a.payload);
       await backend();
-      if (block() + ERA_MARGIN >= p.birth + ERA_PERIOD) throw invalidInput('transaction Polkadot expirée (ou sur le point de l’être) : reconstruis-la');
+      if (block() + ERA_MARGIN >= p.birth + ERA_PERIOD) throw invalidInput(l10n('transaction Polkadot expirée (ou sur le point de l’être) : reconstruis-la', 'Polkadot transaction expired (or about to): rebuild it'));
       const ctx = contextFor(p.to, p.birth);
-      if (ctx.account.nonce !== p.nonce) throw invalidInput('nonce périmé (une autre transaction est passée) : reconstruis la transaction');
+      if (ctx.account.nonce !== p.nonce) throw invalidInput(l10n('nonce périmé (une autre transaction est passée) : reconstruis la transaction', 'stale nonce (another transaction went through): rebuild the transaction'));
       check({ ...ctx.account, existentialDeposit: c.ed.toString() }, { ...ctx.destination, existentialDeposit: c.ed.toString() }, BigInt(p.amount));
       d.checkPassword(a.password);
-      if (!d.confirm(`Confirmer l'envoi Polkadot\n${describe(summary, ctx)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer l'envoi Polkadot\n${describe(summary, ctx)}`, `Confirm the Polkadot send\n${describe(summary, ctx)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const extrinsic = encode({ ...p, signature: bytesToHex(blake2b(new TextEncoder().encode(`sig:${String(a.payload)}`), { dkLen: 32 })) });
       return { extrinsic, hash: bytesToHex(blake2b(hexToBytes(extrinsic), { dkLen: 32 })), blockHash: summary.blockHash, summary, context: ctx };
     },
     dot_broadcast: async (a) => {
       const { p, summary } = decode(a.extrinsic);
-      if (!p.signature) throw invalidInput('transaction Polkadot refusée : non signée');
-      if (String(a.blockHash ?? '') !== summary.blockHash) throw invalidInput('transaction Polkadot refusée : signature invalide pour ce runtime, ce bloc et ce compte (rien n’est diffusé)');
+      if (!p.signature) throw invalidInput(l10n('transaction Polkadot refusée : non signée', 'Polkadot transaction refused: not signed'));
+      if (String(a.blockHash ?? '') !== summary.blockHash) throw invalidInput(l10n('transaction Polkadot refusée : signature invalide pour ce runtime, ce bloc et ce compte (rien n’est diffusé)', 'Polkadot transaction refused: invalid signature for this runtime, block and account (nothing is broadcast)'));
       await backend();
       const ours = state.accounts.get(me);
-      if (!ours || ours.nonce !== p.nonce) throw invalidInput('transaction Polkadot refusée par le nœud (1010) : Invalid Transaction Transaction is outdated');
+      if (!ours || ours.nonce !== p.nonce) throw invalidInput(l10n('transaction Polkadot refusée par le nœud (1010) : Invalid Transaction Transaction is outdated', 'Polkadot transaction refused by the node (1010): Invalid Transaction Transaction is outdated'));
       const value = BigInt(p.amount);
       ours.free -= value + fee;
       ours.nonce += 1;

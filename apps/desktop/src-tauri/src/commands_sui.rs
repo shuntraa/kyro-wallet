@@ -11,8 +11,9 @@ use wallet_core::{Network, SuiTransfer, SuiTransferAmount, SuiTxSummary, SuiWarn
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::servers::{host_of, utxo_network_key};
 use crate::state::AppState;
 use crate::sui_backend::{self, SuiCtx, DRAFT_BUDGET};
@@ -28,15 +29,15 @@ fn ours(state: &AppState, account: u32) -> AppResult<String> {
     state.with_seed(|seed| Ok(wallet_core::sui_address(seed, account)?))
 }
 
-fn sui(mist: &str) -> String {
-    format!("{} SUI", format_units(mist, 9))
+fn sui(lang: Lang, mist: &str) -> String {
+    format!("{} SUI", format_units_in(lang, mist, 9))
 }
 
-fn signed_sui(v: i128) -> String {
+fn signed_sui(lang: Lang, v: i128) -> String {
     if v < 0 {
-        format!("−{}", sui(&v.unsigned_abs().to_string()))
+        format!("−{}", sui(lang, &v.unsigned_abs().to_string()))
     } else {
-        sui(&v.to_string())
+        sui(lang, &v.to_string())
     }
 }
 
@@ -70,61 +71,119 @@ pub struct SuiContext {
 }
 
 /// Body of the native dialog.
-pub(crate) fn describe_sui(s: &SuiTxSummary, c: &SuiContext, net: Network) -> String {
+pub(crate) fn describe_sui(lang: Lang, s: &SuiTxSummary, c: &SuiContext, net: Network) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
-    let mut out = format!(
-        "Envoi Sui{}\n\nÀ : {}\n(adresse Sui complète : 0x + 64 caractères, sans somme de contrôle — compare-la en entier)\n{line}\n",
-        if net == Network::Testnet {
-            " (testnet)"
-        } else {
-            ""
-        },
-        s.recipient
-    );
+    let su = |v: &str| sui(lang, v);
+    let testnet = if net == Network::Testnet {
+        " (testnet)"
+    } else {
+        ""
+    };
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Envoi Sui{testnet}\n\nÀ : {}\n(adresse Sui complète : 0x + 64 caractères, sans somme de contrôle — compare-la en entier)\n{line}\n",
+            s.recipient
+        ),
+        Lang::En => format!(
+            "Sui send{testnet}\n\nTo: {}\n(full Sui address: 0x + 64 characters, no checksum — compare all of it)\n{line}\n",
+            s.recipient
+        ),
+    };
     match &s.amount {
-        Some(m) => out += &format!("Montant : {} ({m} MIST)\n", sui(m)),
+        Some(m) => {
+            out += &format!(
+                "{}{} ({m} MIST)\n",
+                lang.pick("Montant : ", "Amount: "),
+                su(m)
+            )
+        }
         None => {
-            out += "Montant : TOUT LE SOLDE des pièces de gaz ci-dessous, moins les frais\n";
+            out += lang.pick(
+                "Montant : TOUT LE SOLDE des pièces de gaz ci-dessous, moins les frais\n",
+                "Amount: THE WHOLE BALANCE of the gas coins below, minus the fee\n",
+            );
             if let Some(r) = &c.receives {
-                out += &format!(
-                    "(le destinataire recevrait {} selon la simulation)\n",
-                    sui(r)
-                );
+                out += &match lang {
+                    Lang::Fr => format!(
+                        "(le destinataire recevrait {} selon la simulation)\n",
+                        su(r)
+                    ),
+                    Lang::En => format!(
+                        "(the recipient would receive {} according to the simulation)\n",
+                        su(r)
+                    ),
+                };
             }
         }
     }
-    out += &format!("Jeton : SUI ({})\n{line}\n", s.coin_type);
     out += &format!(
-        "Frais estimés (simulation) : {} — calcul {} + stockage {} − remboursement {}\n",
-        signed_sui(c.fee),
-        sui(&c.computation_cost),
-        sui(&c.storage_cost),
-        sui(&c.storage_rebate)
+        "{}SUI ({})\n{line}\n",
+        lang.pick("Jeton : ", "Token: "),
+        s.coin_type
     );
-    out += &format!(
-        "Budget de gaz maximal : {} ({} MIST) · prix du gaz : {} MIST/unité (référence {})\n",
-        sui(&s.gas_budget),
-        s.gas_budget,
-        s.gas_price,
-        c.reference_gas_price
-    );
-    out += &format!(
-        "Pièces de gaz : {} (total {}) · solde dépensable : {}\n",
-        s.gas_coins.len(),
-        sui(&c.gas_coins_total),
-        sui(&c.balance)
-    );
-    out += &gas_coin_lines(s, c);
+    out += &match lang {
+        Lang::Fr => format!(
+            "Frais estimés (simulation) : {} — calcul {} + stockage {} − remboursement {}\n",
+            signed_sui(lang, c.fee),
+            su(&c.computation_cost),
+            su(&c.storage_cost),
+            su(&c.storage_rebate)
+        ),
+        Lang::En => format!(
+            "Estimated fee (simulation): {} — computation {} + storage {} − rebate {}\n",
+            signed_sui(lang, c.fee),
+            su(&c.computation_cost),
+            su(&c.storage_cost),
+            su(&c.storage_rebate)
+        ),
+    };
+    out += &match lang {
+        Lang::Fr => format!(
+            "Budget de gaz maximal : {} ({} MIST) · prix du gaz : {} MIST/unité (référence {})\n",
+            su(&s.gas_budget),
+            s.gas_budget,
+            s.gas_price,
+            c.reference_gas_price
+        ),
+        Lang::En => format!(
+            "Maximum gas budget: {} ({} MIST) · gas price: {} MIST/unit (reference {})\n",
+            su(&s.gas_budget),
+            s.gas_budget,
+            s.gas_price,
+            c.reference_gas_price
+        ),
+    };
+    out += &match lang {
+        Lang::Fr => format!(
+            "Pièces de gaz : {} (total {}) · solde dépensable : {}\n",
+            s.gas_coins.len(),
+            su(&c.gas_coins_total),
+            su(&c.balance)
+        ),
+        Lang::En => format!(
+            "Gas coins: {} (total {}) · spendable balance: {}\n",
+            s.gas_coins.len(),
+            su(&c.gas_coins_total),
+            su(&c.balance)
+        ),
+    };
+    out += &gas_coin_lines(lang, s, c);
     match s.expiration_epoch {
         Some(e) => {
-            out += &format!(
-                "Valable jusqu'à la fin de l'époque n° {e} (époque actuelle {})\n",
-                c.epoch
-            )
+            out += &match lang {
+                Lang::Fr => format!(
+                    "Valable jusqu'à la fin de l'époque n° {e} (époque actuelle {})\n",
+                    c.epoch
+                ),
+                Lang::En => format!(
+                    "Valid until the end of epoch {e} (current epoch {})\n",
+                    c.epoch
+                ),
+            }
         }
-        None => out += "AUCUNE EXPIRATION\n",
+        None => out += lang.pick("AUCUNE EXPIRATION\n", "NO EXPIRATION\n"),
     }
-    out += &format!("Empreinte : {}\n", s.digest);
+    out += &format!("{}{}\n", lang.pick("Empreinte : ", "Digest: "), s.digest);
     out
 }
 
@@ -133,14 +192,19 @@ const SHOWN_GAS_COINS: usize = 5;
 
 /// One line per gas coin (full object id and version decoded from the bytes, balance read live),
 /// the first [`SHOWN_GAS_COINS`], then the count and total of the others.
-fn gas_coin_lines(s: &SuiTxSummary, c: &SuiContext) -> String {
+fn gas_coin_lines(lang: Lang, s: &SuiTxSummary, c: &SuiContext) -> String {
     let mut out = String::new();
     for (i, g) in s.gas_coins.iter().take(SHOWN_GAS_COINS).enumerate() {
         let b = c
             .gas_coin_balances
             .get(i)
-            .map_or("?".to_owned(), |b| sui(b));
-        out += &format!("  • {} (version {}) : {b}\n", g.object_id, g.version);
+            .map_or("?".to_owned(), |b| sui(lang, b));
+        out += &format!(
+            "  • {} (version {}){}{b}\n",
+            g.object_id,
+            g.version,
+            lang.colon()
+        );
     }
     if s.gas_coins.len() > SHOWN_GAS_COINS {
         let rest: u128 = c
@@ -150,25 +214,43 @@ fn gas_coin_lines(s: &SuiTxSummary, c: &SuiContext) -> String {
             .map(|b| b.parse::<u128>().unwrap_or(0))
             .sum();
         out += &format!(
-            "  • … et {} autres pièces ({})\n",
+            "  • … {} {} {} ({})\n",
+            lang.pick("et", "and"),
             s.gas_coins.len() - SHOWN_GAS_COINS,
-            sui(&rest.to_string())
+            lang.pick("autres pièces", "other coins"),
+            sui(lang, &rest.to_string())
         );
     }
     out
 }
 
-pub(crate) fn describe_sui_extra(s: &SuiTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans ce transfert :\n");
+pub(crate) fn describe_sui_extra(lang: Lang, s: &SuiTxSummary) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des éléments inhabituels dans ce transfert :\n",
+        "Kyro found unusual elements in this transfer:\n",
+    ));
     for w in &s.warnings {
         out += match w {
-            SuiWarning::SendAll => "• tout le solde des pièces de gaz part (il ne restera que ce que les frais n'ont pas utilisé : rien)\n",
-            SuiWarning::SelfTransfer => "• le destinataire est ton propre compte\n",
-            SuiWarning::HighGasBudget => "• budget de gaz supérieur à 0,1 SUI (un transfert coûte d'habitude quelques millièmes)\n",
-            SuiWarning::NoExpiration => "• aucune époque d'expiration : la transaction signée resterait valable\n",
+            SuiWarning::SendAll => lang.pick(
+                "• tout le solde des pièces de gaz part (il ne restera que ce que les frais n'ont pas utilisé : rien)\n",
+                "• the whole balance of the gas coins goes (only what the fee did not use will remain: nothing)\n",
+            ),
+            SuiWarning::SelfTransfer => lang.pick(
+                "• le destinataire est ton propre compte\n",
+                "• the recipient is your own account\n",
+            ),
+            SuiWarning::HighGasBudget => lang.pick(
+                "• budget de gaz supérieur à 0,1 SUI (un transfert coûte d'habitude quelques millièmes)\n",
+                "• gas budget above 0.1 SUI (a transfer usually costs a few thousandths)\n",
+            ),
+            SuiWarning::NoExpiration => lang.pick(
+                "• aucune époque d'expiration : la transaction signée resterait valable\n",
+                "• no expiration epoch: the signed transaction would stay valid\n",
+            ),
         };
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -227,8 +309,8 @@ pub struct SuiBuilt {
 fn insufficient(have: u64, need: u64) -> AppError {
     AppError::InvalidInput(format!(
         "solde insuffisant : {} dans les pièces SUI, il en faut {} (montant + budget de gaz)",
-        sui(&have.to_string()),
-        sui(&need.to_string())
+        sui(Lang::Fr, &have.to_string()),
+        sui(Lang::Fr, &need.to_string())
     ))
 }
 
@@ -256,7 +338,7 @@ pub(crate) async fn build(
         return Err(AppError::InvalidInput(if b.address_balance != "0" {
             format!(
                 "aucune pièce SUI à dépenser : tes {} sont dans le « solde d'adresse » de Sui, que Kyro ne sait pas encore dépenser",
-                sui(&b.address_balance)
+                sui(Lang::Fr, &b.address_balance)
             )
         } else {
             "aucun SUI sur ce compte".into()
@@ -468,21 +550,22 @@ pub async fn sui_sign_tx(
     let c = ctx(&state);
     let (summary, context) = prepare_sign(&c, &me, &bcs).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer le transfert Sui",
-        signer.body(
-            crate::i18n::current(),
-            &describe_sui(&summary, &context, state.network),
-        ),
+        lang.pick("Confirmer le transfert Sui", "Confirm the Sui transfer"),
+        signer.body(lang, &describe_sui(lang, &summary, &context, state.network)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : transfert à vérifier",
-            describe_sui_extra(&summary),
+            lang.pick(
+                "Attention : transfert à vérifier",
+                "Warning: transfer to check",
+            ),
+            describe_sui_extra(lang, &summary),
         )
         .await?;
     }
@@ -582,6 +665,7 @@ mod tests {
     #[test]
     fn dialog_shows_recipient_amount_coin_and_gas() {
         let d = describe_sui(
+            Lang::Fr,
             &summary(Some("1500000000"), vec![]),
             &context(None),
             Network::Testnet,
@@ -600,6 +684,7 @@ mod tests {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
         let all = describe_sui(
+            Lang::Fr,
             &summary(None, vec![SuiWarning::SendAll]),
             &context(Some("9998000000")),
             Network::Mainnet,
@@ -607,10 +692,10 @@ mod tests {
         assert!(all.starts_with("Envoi Sui\n"));
         assert!(all.contains("TOUT LE SOLDE"));
         assert!(all.contains("recevrait 9,998 SUI"));
-        let x = describe_sui_extra(&summary(
-            None,
-            vec![SuiWarning::SendAll, SuiWarning::HighGasBudget],
-        ));
+        let x = describe_sui_extra(
+            Lang::Fr,
+            &summary(None, vec![SuiWarning::SendAll, SuiWarning::HighGasBudget]),
+        );
         assert!(x.contains("tout le solde") && x.contains("0,1 SUI"));
         // Gas coins: decoded id and version, live balance; beyond 5, a count and a total.
         let coin = |i: u8| wallet_core::SuiGasCoinView {
@@ -632,7 +717,7 @@ mod tests {
         ]
         .map(String::from)
         .to_vec();
-        let d7 = describe_sui(&many, &ctx7, Network::Mainnet);
+        let d7 = describe_sui(Lang::Fr, &many, &ctx7, Network::Mainnet);
         assert!(d7.contains(&format!(
             "  • 0x{} (version 101) : 4 SUI\n",
             "01".repeat(32)
@@ -645,9 +730,19 @@ mod tests {
         assert!(d7.contains("  • … et 2 autres pièces (0,5 SUI)\n"));
         let mut neg = context(None);
         neg.fee = -5_000;
-        assert!(
-            describe_sui(&summary(Some("1"), vec![]), &neg, Network::Mainnet)
-                .contains("Frais estimés (simulation) : −0,000005 SUI")
+        assert!(describe_sui(
+            Lang::Fr,
+            &summary(Some("1"), vec![]),
+            &neg,
+            Network::Mainnet
+        )
+        .contains("Frais estimés (simulation) : −0,000005 SUI"));
+        let en = describe_sui(
+            Lang::En,
+            &summary(Some("1500000000"), vec![]),
+            &context(None),
+            Network::Testnet,
         );
+        assert!(en.contains("Amount: 1.5 SUI (1500000000 MIST)") && en.contains("Digest: "));
     }
 }

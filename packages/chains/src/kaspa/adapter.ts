@@ -8,6 +8,7 @@
 import { accountArg } from '../types';
 import {
   call,
+  l10n,
   isKaspaAddress,
   kaspaAddressProblem,
   type KaspaAccountInfo,
@@ -49,7 +50,7 @@ export function rustKaspaBackend(account = 0): KaspaBackend {
 /** `"12,5"` / `"12.5"` KAS → sompi (8 decimals, no rounding). */
 export function kasToSompi(input: string): bigint {
   const s = input.trim().replace(',', '.');
-  if (!/^\d+(\.\d{1,8})?$/.test(s)) throw new Error('Montant KAS invalide (8 décimales au plus)');
+  if (!/^\d+(\.\d{1,8})?$/.test(s)) throw new Error(l10n('Montant KAS invalide (8 décimales au plus)', 'Invalid KAS amount (8 decimals at most)'));
   const [int = '0', frac = ''] = s.split('.');
   return BigInt(int) * 100_000_000n + BigInt(frac.padEnd(8, '0'));
 }
@@ -90,7 +91,7 @@ export class KaspaAdapter implements ChainAdapter<'kas'> {
   private readonly backend: KaspaBackend;
 
   constructor(opts: KaspaAdapterOptions) {
-    if (!isKaspaAddress(opts.address, opts.chain.network)) throw new Error('Adresse Kaspa invalide');
+    if (!isKaspaAddress(opts.address, opts.chain.network)) throw new Error(l10n('Adresse Kaspa invalide', 'Invalid Kaspa address'));
     this.chain = opts.chain;
     this.address = opts.address;
     this.backend = opts.backend ?? rustKaspaBackend(opts.account ?? 0);
@@ -126,18 +127,18 @@ export class KaspaAdapter implements ChainAdapter<'kas'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais calculés par Rust sur la masse (≈ 0,002 KAS)',
+      hint: l10n('frais calculés par Rust sur la masse (≈ 0,002 KAS)', 'fee computed by Rust from the mass (≈ 0.002 KAS)'),
       fetchedAt: Date.now(),
     });
   }
 
   /** `max`: everything spendable minus the fee (one output, no change), computed by Rust. */
   async buildTx(params: BuildParams): Promise<KaspaUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif Kaspa inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif Kaspa inattendu', 'Unexpected Kaspa asset'));
     const to = params.to.trim();
     const problem = kaspaAddressProblem(to, this.chain.network);
     if (problem) throw new Error(problem.charAt(0).toUpperCase() + problem.slice(1));
-    if (!params.max && params.amount < KASPA_MIN_SEND) throw new Error('Montant trop petit : au moins 0,2 KAS (masse de stockage de Kaspa, KIP-9)');
+    if (!params.max && params.amount < KASPA_MIN_SEND) throw new Error(l10n('Montant trop petit : au moins 0,2 KAS (masse de stockage de Kaspa, KIP-9)', 'Amount too small: at least 0.2 KAS (Kaspa storage mass, KIP-9)'));
     const built = await this.backend.build(to, params.max ? 'max' : params.amount);
     const s = built.summary;
     const payee = s.outputs.filter((o) => !o.isChange);
@@ -148,7 +149,7 @@ export class KaspaAdapter implements ChainAdapter<'kas'> {
     const amountOk = params.max || self || amount === params.amount;
     // A high fee (busy network) is allowed: Rust's reinforced dialog shows it before signing.
     if (!recipientOk || !amountOk || s.outputs.some((o) => o.kind !== 'address') || s.warnings.some((w) => w.kind !== 'highFee')) {
-      throw new Error('La transaction construite par Rust ne correspond pas à la demande');
+      throw new Error(l10n('La transaction construite par Rust ne correspond pas à la demande', 'The transaction built by Rust does not match the request'));
     }
     return {
       family: 'kas',
@@ -165,14 +166,14 @@ export class KaspaAdapter implements ChainAdapter<'kas'> {
   /** Rust: live re-read of every coin, native dialog, signature. */
   async signTx(unsigned: KaspaUnsigned, password: string): Promise<KaspaSigned> {
     const res = await this.backend.sign(unsigned.tx, password);
-    if (!/^[0-9a-f]{64}$/.test(res.txId) || res.txId !== unsigned.summary.txId) throw new Error('Identifiant Kaspa inattendu');
+    if (!/^[0-9a-f]{64}$/.test(res.txId) || res.txId !== unsigned.summary.txId) throw new Error(l10n('Identifiant Kaspa inattendu', 'Unexpected Kaspa ID'));
     return { family: 'kas', tx: res.tx, txId: res.txId, summary: res.summary };
   }
 
   /** Rust verifies every signature against the live coins and that the server's id is ours. */
   async broadcast(signed: KaspaSigned): Promise<string> {
     const id = await this.backend.broadcast(signed.tx);
-    if (id !== signed.txId) throw new Error('Identifiant diffusé inattendu');
+    if (id !== signed.txId) throw new Error(l10n('Identifiant diffusé inattendu', 'Unexpected broadcast ID'));
     return id;
   }
 

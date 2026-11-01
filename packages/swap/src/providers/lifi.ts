@@ -195,13 +195,13 @@ export class LifiProvider implements SwapProvider {
 
   private crossInfo(p: QuoteParams, toChain: SwapChain, r: LifiQuote): CrossChainInfo {
     const bridge = r.tool ?? r.toolDetails?.key ?? '';
-    if (!(LIFI_CROSS_BRIDGES as readonly string[]).includes(bridge)) throw new SwapCheckError(`LI.FI : pont « ${bridge || '?'} » non vérifiable par Kyro — devis refusé.`);
+    if (!(LIFI_CROSS_BRIDGES as readonly string[]).includes(bridge)) throw new SwapCheckError(l10n(`LI.FI : pont « ${bridge || '?'} » non vérifiable par Kyro — devis refusé.`, `LI.FI: bridge “${bridge || '?'}” cannot be checked by Kyro — quote refused.`));
     return { fromChain: p.chain, toChain, recipient: p.recipient ?? p.taker, bridge, bridgeName: BRIDGE_NAMES[bridge] ?? bridge };
   }
 
   private async evmCross(p: QuoteParams, chain: number, toChain: SwapChain): Promise<Quote> {
     const recipient = p.recipient ?? (typeof toChain === 'number' ? p.taker : '');
-    if (!recipient) throw new Error('LI.FI : pas de compte à toi sur la chaîne de destination');
+    if (!recipient) throw new Error(l10n('LI.FI : pas de compte à toi sur la chaîne de destination', 'LI.FI: no account of yours on the destination chain'));
     // LI.FI applies the slippage to EACH leg (source DEX swap, then the bridge): live quotes give a
     // minimum ≈ 1 − 2 × slippage. Half per leg keeps the whole route within the user's choice,
     // which is what verify.ts then enforces on the bridge minimum.
@@ -229,7 +229,7 @@ export class LifiProvider implements SwapProvider {
       cross: { toChain, recipient },
     });
     const bridge = check.bridge;
-    if (!bridge) throw new SwapCheckError('LI.FI : dépôt du pont absent — devis refusé.');
+    if (!bridge) throw new SwapCheckError(l10n('LI.FI : dépôt du pont absent — devis refusé.', 'LI.FI: bridge deposit missing — quote refused.'));
     // The bridge itself must confirm where this deposit goes (recipient, token, minimum, refund).
     const near = await this.near.confirm({ depositAddress: bridge.depositAddress, amountIn: bridge.amountIn, fromChain: chain, toChain, buyToken: p.buy.address, recipient, refundTo: p.taker, minAmountOut: check.minBuyAmount });
     const out: Quote = {
@@ -250,14 +250,14 @@ export class LifiProvider implements SwapProvider {
     if (this.solFee.kind === 'unavailable') throw new Error(this.solFee.reason);
     const fee = this.solFee;
     const recipient = p.recipient ?? '';
-    if (!recipient) throw new Error('LI.FI : pas de compte à toi sur la chaîne de destination');
+    if (!recipient) throw new Error(l10n('LI.FI : pas de compte à toi sur la chaîne de destination', 'LI.FI: no account of yours on the destination chain'));
     const params = { toAddress: recipient, allowBridges: LIFI_CROSS_BRIDGES.join(',') };
     const r = await this.get(p, params, fee);
     const cross = this.crossInfo({ ...p, recipient }, toChain, r);
-    if (!r.transactionRequest.data || r.transactionRequest.to) throw new Error('LI.FI : transaction Solana attendue');
+    if (!r.transactionRequest.data || r.transactionRequest.to) throw new Error(l10n('LI.FI : transaction Solana attendue', 'LI.FI: Solana transaction expected'));
     const buyAmount = toBig(r.estimate.toAmount);
     const minBuyAmount = toBig(r.estimate.toAmountMin);
-    if (minBuyAmount <= 0n || minBuyAmount < applySlippage(buyAmount, Math.min(10_000, p.slippageBps + 1))) throw new SwapCheckError('LI.FI : minimum garanti plus bas que le slippage choisi — devis refusé.');
+    if (minBuyAmount <= 0n || minBuyAmount < applySlippage(buyAmount, Math.min(10_000, p.slippageBps + 1))) throw new SwapCheckError(l10n('LI.FI : minimum garanti plus bas que le slippage choisi — devis refusé.', 'LI.FI: guaranteed minimum lower than the chosen slippage — quote refused.'));
     const lamports = solWireCostLamports(r.transactionRequest.data);
     const near = this.near;
     const get = () => this.get(p, params, fee);
@@ -278,7 +278,7 @@ export class LifiProvider implements SwapProvider {
         kind: 'solana',
         build: async () => {
           const fresh = await get();
-          if (fresh.transactionRequest.to || !fresh.transactionRequest.data) throw new Error('LI.FI : transaction Solana attendue');
+          if (fresh.transactionRequest.to || !fresh.transactionRequest.data) throw new Error(l10n('LI.FI : transaction Solana attendue', 'LI.FI: Solana transaction expected'));
           return fresh.transactionRequest.data;
         },
         verify,

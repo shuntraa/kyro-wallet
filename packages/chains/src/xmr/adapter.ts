@@ -7,7 +7,7 @@
 // amount). The transfer itself never leaves Rust: the UI only holds a handle (`id`).
 
 import { accountArg } from '../types';
-import { call, type XmrDestination, type XmrHistoryEntry, type XmrStatus, type XmrSubaddress, type XmrTxSummary, type XmrWarning } from '@kyro/shared';
+import { call, l10n, type XmrDestination, type XmrHistoryEntry, type XmrStatus, type XmrSubaddress, type XmrTxSummary, type XmrWarning } from '@kyro/shared';
 import type { XmrChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
@@ -72,11 +72,11 @@ export function isXmrAddress(address: string, network: 'mainnet' | 'testnet' = '
 export function xmrDestinationLabel(d: XmrDestination): string {
   switch (d.kind) {
     case 'standard':
-      return 'Adresse standard';
+      return l10n('Adresse standard', 'Standard address');
     case 'subaddress':
-      return 'Sous-adresse';
+      return l10n('Sous-adresse', 'Subaddress');
     case 'integrated':
-      return `Adresse intégrée (ID de paiement ${d.paymentId})`;
+      return l10n(`Adresse intégrée (ID de paiement ${d.paymentId})`, `Integrated address (payment ID ${d.paymentId})`);
   }
 }
 
@@ -124,7 +124,7 @@ export class XmrAdapter implements ChainAdapter<'xmr'> {
   readonly backend: XmrBackend;
 
   constructor(opts: XmrAdapterOptions) {
-    if (!isXmrAddress(opts.address, opts.chain.network)) throw new Error('Adresse Monero invalide');
+    if (!isXmrAddress(opts.address, opts.chain.network)) throw new Error(l10n('Adresse Monero invalide', 'Invalid Monero address'));
     this.chain = opts.chain;
     this.address = opts.address;
     this.backend = opts.backend ?? rustXmrBackend(opts.account ?? 0);
@@ -165,22 +165,22 @@ export class XmrAdapter implements ChainAdapter<'xmr'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais calculés par Rust (≈ 0,0001 XMR)',
+      hint: l10n('frais calculés par Rust (≈ 0,0001 XMR)', 'fee computed by Rust (≈ 0.0001 XMR)'),
       fetchedAt: Date.now(),
     });
   }
 
   /** Rust picks the inputs, decoys, fee and change. `max`: everything unlocked, minus the fee. */
   async buildTx(params: BuildParams): Promise<XmrUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif Monero inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif Monero inattendu', 'Unexpected Monero asset'));
     const to = params.to.trim();
-    if (!isXmrAddress(to, this.chain.network)) throw new Error('Adresse Monero invalide');
-    if (!params.max && params.amount <= 0n) throw new Error('Montant invalide');
+    if (!isXmrAddress(to, this.chain.network)) throw new Error(l10n('Adresse Monero invalide', 'Invalid Monero address'));
+    if (!params.max && params.amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const built = await this.backend.prepare(to, params.max ? undefined : params.amount.toString());
     const s = built.summary;
     const network = this.chain.network === 'mainnet' ? 'mainnet' : 'stagenet';
     if (s.destination.address !== to || s.network !== network || (!params.max && s.amount !== params.amount.toString())) {
-      throw new Error('Le transfert construit par Rust ne correspond pas à la demande');
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
     }
     return { family: 'xmr', id: built.id, summary: s, recipient: to, amount: BigInt(s.amount), maxFee: BigInt(s.fee), size: { family: 'xmr' } };
   }
@@ -188,7 +188,7 @@ export class XmrAdapter implements ChainAdapter<'xmr'> {
   /** Rust: native dialog, signature, checks, publication. */
   async signTx(unsigned: XmrUnsigned, password: string): Promise<XmrSigned> {
     const res = await this.backend.send(unsigned.id, password);
-    if (!/^[0-9a-f]{64}$/i.test(res.txid)) throw new Error('Identifiant de transaction Monero inattendu');
+    if (!/^[0-9a-f]{64}$/i.test(res.txid)) throw new Error(l10n('Identifiant de transaction Monero inattendu', 'Unexpected Monero transaction ID'));
     return { family: 'xmr', txid: res.txid, summary: res.summary };
   }
 
@@ -212,7 +212,7 @@ export class XmrAdapter implements ChainAdapter<'xmr'> {
       };
       if (t.fee !== null && t.direction !== 'in') item.fee = BigInt(t.fee);
       if (t.to) item.counterparty = t.to;
-      if (t.height > 0 && t.confirmations < XMR_LOCK_BLOCKS && t.direction === 'in') item.note = `${t.confirmations}/${XMR_LOCK_BLOCKS} confirmations : encore bloqué`;
+      if (t.height > 0 && t.confirmations < XMR_LOCK_BLOCKS && t.direction === 'in') item.note = l10n(`${t.confirmations}/${XMR_LOCK_BLOCKS} confirmations : encore bloqué`, `${t.confirmations}/${XMR_LOCK_BLOCKS} confirmations: still locked`);
       return item;
     });
   }

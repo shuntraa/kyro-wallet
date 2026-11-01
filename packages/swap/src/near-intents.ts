@@ -18,7 +18,7 @@
 // This is a second, independent party (the bridge, not the aggregator) confirming the route.
 // What it cannot prove: that the 1Click solver network will actually deliver (refund otherwise).
 
-import { fetchJson, netFetch, type NetFetch } from '@kyro/shared';
+import { fetchJson, l10n, netFetch, type NetFetch } from '@kyro/shared';
 import { SwapCheckError } from './verify';
 import { isNative } from './providers/common';
 import type { SwapChain } from './types';
@@ -114,7 +114,7 @@ export interface NearDepositCheck {
 
 const WSOL = 'So11111111111111111111111111111111111111112';
 const fail = (why: string): never => {
-  throw new SwapCheckError(`NEAR Intents : ${why} — devis refusé, rien n’a été signé.`);
+  throw new SwapCheckError(l10n(`NEAR Intents : ${why} — devis refusé, rien n’a été signé.`, `NEAR Intents: ${why} — quote refused, nothing was signed.`));
 };
 const sameAddr = (chain: SwapChain, a: string | undefined, b: string) => {
   if (!a) return false;
@@ -143,31 +143,31 @@ export function oneClickAssetIs(asset: OneClickToken | undefined, chain: SwapCha
 export function checkNearDeposit(s: OneClickStatus, tokens: readonly OneClickToken[], e: NearDepositExpect): NearDepositCheck {
   const req = s.quoteResponse?.quoteRequest;
   const q = s.quoteResponse?.quote;
-  if (!req || !q) return fail('adresse de dépôt inconnue du pont');
-  if (s.status !== 'PENDING_DEPOSIT') fail(`adresse de dépôt déjà utilisée ou expirée (${s.status})`);
-  if (!sameAddr(e.fromChain, q.depositAddress, e.depositAddress)) fail('adresse de dépôt différente de celle de la transaction');
+  if (!req || !q) return fail(l10n('adresse de dépôt inconnue du pont', 'deposit address unknown to the bridge'));
+  if (s.status !== 'PENDING_DEPOSIT') fail(l10n(`adresse de dépôt déjà utilisée ou expirée (${s.status})`, `deposit address already used or expired (${s.status})`));
+  if (!sameAddr(e.fromChain, q.depositAddress, e.depositAddress)) fail(l10n('adresse de dépôt différente de celle de la transaction', 'deposit address differs from the one in the transaction'));
   // EXACT_INPUT (Solana source) or FLEX_INPUT (LI.FI's EVM facet): the output is converted from what
   // is deposited, never a fixed output paid by a larger deposit. Either way the deposit must be
   // exactly the quoted `amountIn` (checked below) and `minAmountOut` is enforced by the solver.
-  if (req.swapType !== 'EXACT_INPUT' && req.swapType !== 'FLEX_INPUT') fail('type d’échange inattendu');
-  if (req.recipientType !== 'DESTINATION_CHAIN' || !sameAddr(e.toChain, req.recipient, e.recipient)) fail(`destinataire ${req.recipient ?? '?'} au lieu de ton adresse`);
-  if (req.refundType !== 'ORIGIN_CHAIN' || !sameAddr(e.fromChain, req.refundTo, e.refundTo)) fail('remboursement prévu vers une autre adresse que la tienne');
+  if (req.swapType !== 'EXACT_INPUT' && req.swapType !== 'FLEX_INPUT') fail(l10n('type d’échange inattendu', 'unexpected swap type'));
+  if (req.recipientType !== 'DESTINATION_CHAIN' || !sameAddr(e.toChain, req.recipient, e.recipient)) fail(l10n(`destinataire ${req.recipient ?? '?'} au lieu de ton adresse`, `recipient ${req.recipient ?? '?'} instead of your address`));
+  if (req.refundType !== 'ORIGIN_CHAIN' || !sameAddr(e.fromChain, req.refundTo, e.refundTo)) fail(l10n('remboursement prévu vers une autre adresse que la tienne', 'refund planned to an address other than yours'));
   const amountIn = big(q.amountIn);
-  if (amountIn === null || amountIn !== e.amountIn || big(req.amount) !== e.amountIn) fail('montant déposé différent de celui attendu par le pont');
+  if (amountIn === null || amountIn !== e.amountIn || big(req.amount) !== e.amountIn) fail(l10n('montant déposé différent de celui attendu par le pont', 'deposited amount differs from the one the bridge expects'));
   const min = big(q.minAmountOut);
   const out = big(q.amountOut);
-  if (min === null || out === null || min <= 0n) return fail('minimum garanti absent');
-  if (min < e.minAmountOut) fail('minimum garanti par le pont plus bas que celui affiché');
+  if (min === null || out === null || min <= 0n) return fail(l10n('minimum garanti absent', 'guaranteed minimum missing'));
+  if (min < e.minAmountOut) fail(l10n('minimum garanti par le pont plus bas que celui affiché', 'minimum guaranteed by the bridge lower than the one shown'));
   // Direct route: the EARLIER of 1Click's deposit deadline and the one Kyro asked for (after it,
   // 1Click refunds), so a slow confirmation cannot land after either.
   const deadline = e.appFee ? Math.min(Date.parse(q.deadline ?? ''), Date.parse(req.deadline ?? '')) : Date.parse(q.deadline ?? req.deadline ?? '');
-  if (!Number.isFinite(deadline) || deadline <= (e.now ?? Date.now()) + (e.minTimeLeftMs ?? 0)) fail('devis du pont expiré ou trop proche de son échéance');
+  if (!Number.isFinite(deadline) || deadline <= (e.now ?? Date.now()) + (e.minTimeLeftMs ?? 0)) fail(l10n('devis du pont expiré ou trop proche de son échéance', 'bridge quote expired or too close to its deadline'));
   const asset = tokens.find((t) => t.assetId === req.destinationAsset);
-  if (!oneClickAssetIs(asset, e.toChain, e.buyToken)) fail(`token reçu (${req.destinationAsset ?? '?'}) différent de celui demandé`);
+  if (!oneClickAssetIs(asset, e.toChain, e.buyToken)) fail(l10n(`token reçu (${req.destinationAsset ?? '?'}) différent de celui demandé`, `received token (${req.destinationAsset ?? '?'}) differs from the requested one`));
   let fees = { kyro: 0, other: 0 };
   if (e.appFee) {
-    if ((req.depositMode ?? 'SIMPLE') !== 'SIMPLE' || q.depositMemo) fail('dépôt avec mémo demandé (Kyro n’envoie qu’un transfert simple)');
-    if (req.swapType !== 'EXACT_INPUT') fail('type d’échange inattendu');
+    if ((req.depositMode ?? 'SIMPLE') !== 'SIMPLE' || q.depositMemo) fail(l10n('dépôt avec mémo demandé (Kyro n’envoie qu’un transfert simple)', 'deposit with memo requested (Kyro only sends a plain transfer)'));
+    if (req.swapType !== 'EXACT_INPUT') fail(l10n('type d’échange inattendu', 'unexpected swap type'));
     fees = checkAppFees(req.appFees, e.appFee);
   }
   return { minAmountOut: min, amountOut: out, destinationAsset: req.destinationAsset ?? '', timeEstimateSecs: typeof q.timeEstimate === 'number' ? q.timeEstimate : null, deadline, kyroFeeBps: fees.kyro, otherFeeBps: fees.other };
@@ -183,16 +183,16 @@ export function checkAppFees(fees: ReadonlyArray<{ recipient?: string; fee?: num
   const r = want.recipient.toLowerCase();
   const ours = list.filter((f) => (f.recipient ?? '').toLowerCase() === r);
   if (want.bps > 0) {
-    if (ours.length !== 1) fail(ours.length === 0 ? 'frais Kyro absents du devis' : 'frais Kyro en double');
-    if (ours[0]?.fee !== want.bps) fail(`frais Kyro de ${ours[0]?.fee ?? '?'} bps au lieu de ${want.bps}`);
-  } else if (ours.length > 0) fail('frais inattendus');
+    if (ours.length !== 1) fail(ours.length === 0 ? l10n('frais Kyro absents du devis', 'Kyro fees missing from the quote') : l10n('frais Kyro en double', 'duplicate Kyro fees'));
+    if (ours[0]?.fee !== want.bps) fail(l10n(`frais Kyro de ${ours[0]?.fee ?? '?'} bps au lieu de ${want.bps}`, `Kyro fees of ${ours[0]?.fee ?? '?'} bps instead of ${want.bps}`));
+  } else if (ours.length > 0) fail(l10n('frais inattendus', 'unexpected fees'));
   let other = 0;
   for (const f of list) {
     if ((f.recipient ?? '').toLowerCase() === r) continue;
-    if (!Number.isInteger(f.fee) || (f.fee as number) < 0) fail('frais du pont illisibles');
+    if (!Number.isInteger(f.fee) || (f.fee as number) < 0) fail(l10n('frais du pont illisibles', 'unreadable bridge fees'));
     other += f.fee as number;
   }
-  if (other > want.oneClickMaxBps) fail(`part de NEAR Intents (${other} bps) plus élevée que prévu`);
+  if (other > want.oneClickMaxBps) fail(l10n(`part de NEAR Intents (${other} bps) plus élevée que prévu`, `NEAR Intents share (${other} bps) higher than expected`));
   return { kyro: want.bps, other };
 }
 
@@ -204,7 +204,7 @@ export class NearIntentsClient {
   async tokenList(force = false): Promise<OneClickToken[]> {
     if (!force && this.tokens && Date.now() - this.tokens.at < 600_000) return this.tokens.list;
     const list = await fetchJson<OneClickToken[]>(this.fetcher, `https://${NEAR_INTENTS_HOST}/v0/tokens`);
-    if (!Array.isArray(list)) throw new Error('NEAR Intents : liste de tokens illisible');
+    if (!Array.isArray(list)) throw new Error(l10n('NEAR Intents : liste de tokens illisible', 'NEAR Intents: unreadable token list'));
     this.tokens = { at: Date.now(), list };
     return list;
   }
@@ -223,7 +223,7 @@ export class NearIntentsClient {
       const id = s.quoteResponse?.quoteRequest?.destinationAsset;
       if (id && !tokens.some((t) => t.assetId === id)) tokens = await this.tokenList(true);
     } catch (err) {
-      return fail(`confirmation du pont impossible (${err instanceof Error ? err.message : String(err)})`);
+      return fail(l10n(`confirmation du pont impossible (${err instanceof Error ? err.message : String(err)})`, `bridge confirmation impossible (${err instanceof Error ? err.message : String(err)})`));
     }
     return checkNearDeposit(s, tokens, e);
   }

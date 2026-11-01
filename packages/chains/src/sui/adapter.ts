@@ -5,7 +5,7 @@
 // commands (`sui_*`, docs/IPC.md §2.11). This adapter only validates input and checks that what
 // Rust built is what was asked (recipient, amount or « tout le solde », sender, coin type).
 
-import { call, type SuiBalance, type SuiBuilt, type SuiContext, type SuiHistoryEntry, type SuiTxStatus, type SuiTxSummary, type SuiWarning } from '@kyro/shared';
+import { call, l10n, type SuiBalance, type SuiBuilt, type SuiContext, type SuiHistoryEntry, type SuiTxStatus, type SuiTxSummary, type SuiWarning } from '@kyro/shared';
 import type { SuiChain } from '../registry';
 import { accountArg, type Balance, type BuildParams, type ChainAdapter, type FeeEstimates, type HistoryItem } from '../types';
 
@@ -45,10 +45,10 @@ export function isSuiAddress(address: string): boolean {
 export function suiAddressProblem(address: string): string | null {
   const a = address.trim();
   if (a === '') return null;
-  if (a.endsWith('.sui') || a.startsWith('@')) return 'Les noms SuiNS ne sont pas pris en charge : colle l’adresse 0x… complète.';
-  if (!a.startsWith('0x')) return 'Adresse Sui : 0x suivi de 64 caractères hexadécimaux.';
-  if (/^0x[0-9a-fA-F]{1,63}$/.test(a)) return 'Forme courte refusée : il faut les 64 caractères après 0x.';
-  if (!isSuiAddress(a)) return 'Adresse Sui invalide (0x + 64 caractères hexadécimaux).';
+  if (a.endsWith('.sui') || a.startsWith('@')) return l10n('Les noms SuiNS ne sont pas pris en charge : colle l’adresse 0x… complète.', 'SuiNS names are not supported: paste the full 0x… address.');
+  if (!a.startsWith('0x')) return l10n('Adresse Sui : 0x suivi de 64 caractères hexadécimaux.', 'Sui address: 0x followed by 64 hexadecimal characters.');
+  if (/^0x[0-9a-fA-F]{1,63}$/.test(a)) return l10n('Forme courte refusée : il faut les 64 caractères après 0x.', 'Short form refused: all 64 characters after 0x are needed.');
+  if (!isSuiAddress(a)) return l10n('Adresse Sui invalide (0x + 64 caractères hexadécimaux).', 'Invalid Sui address (0x + 64 hexadecimal characters).');
   return null;
 }
 
@@ -95,7 +95,7 @@ export class SuiAdapter implements ChainAdapter<'sui'> {
   private readonly backend: SuiBackend;
 
   constructor(opts: SuiAdapterOptions) {
-    if (!isSuiAddress(opts.address)) throw new Error('Adresse Sui invalide');
+    if (!isSuiAddress(opts.address)) throw new Error(l10n('Adresse Sui invalide', 'Invalid Sui address'));
     this.chain = opts.chain;
     this.address = normalizeSuiAddress(opts.address);
     this.backend = opts.backend ?? rustSuiBackend(opts.account ?? 0);
@@ -126,25 +126,25 @@ export class SuiAdapter implements ChainAdapter<'sui'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais fixés par le réseau (prix du gaz de référence, ≈ 0,002 SUI)',
+      hint: l10n('frais fixés par le réseau (prix du gaz de référence, ≈ 0,002 SUI)', 'fee set by the network (reference gas price, ≈ 0.002 SUI)'),
       fetchedAt: Date.now(),
     });
   }
 
   async buildTx(params: BuildParams): Promise<SuiUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif Sui inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif Sui inattendu', 'Unexpected Sui asset'));
     const problem = suiAddressProblem(params.to);
     if (problem) throw new Error(problem);
     const to = normalizeSuiAddress(params.to);
-    if (!isSuiAddress(to)) throw new Error('Adresse Sui invalide');
+    if (!isSuiAddress(to)) throw new Error(l10n('Adresse Sui invalide', 'Invalid Sui address'));
     const all = !!params.max;
-    if (!all && params.amount <= 0n) throw new Error('Montant invalide');
+    if (!all && params.amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const built = await this.backend.build(to, all ? null : params.amount);
     const s = built.summary;
     const amountOk = all ? s.amount === null : s.amount === params.amount.toString();
     const warningsOk = s.warnings.every((w) => (all && w.kind === 'sendAll') || (to === this.address && w.kind === 'selfTransfer'));
     if (!amountOk || !warningsOk || s.recipient !== to || s.sender !== this.address || s.coinType !== SUI_COIN_TYPE) {
-      throw new Error('Le transfert construit par Rust ne correspond pas à la demande');
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
     }
     return {
       family: 'sui',
@@ -162,14 +162,14 @@ export class SuiAdapter implements ChainAdapter<'sui'> {
   /** Rust: live checks, simulation, native dialog, signature. */
   async signTx(unsigned: SuiUnsigned, password: string): Promise<SuiSigned> {
     const res = await this.backend.sign(unsigned.bcs, password);
-    if (res.digest !== unsigned.summary.digest || res.bcs !== unsigned.bcs) throw new Error('Transaction Sui signée inattendue');
+    if (res.digest !== unsigned.summary.digest || res.bcs !== unsigned.bcs) throw new Error(l10n('Transaction Sui signée inattendue', 'Unexpected signed Sui transaction'));
     return { family: 'sui', bcs: res.bcs, signature: res.signature, digest: res.digest, summary: res.summary };
   }
 
   /** Rust verifies the signature and that the executed digest is ours. */
   async broadcast(signed: SuiSigned): Promise<string> {
     const digest = await this.backend.broadcast(signed.bcs, signed.signature);
-    if (digest !== signed.digest) throw new Error('Empreinte diffusée inattendue');
+    if (digest !== signed.digest) throw new Error(l10n('Empreinte diffusée inattendue', 'Unexpected broadcast digest'));
     return digest;
   }
 
@@ -207,7 +207,7 @@ export function suiHistoryItem(t: SuiHistoryEntry, me: string, chainKey = 'sui')
     const ms = Date.parse(t.timestamp);
     if (Number.isFinite(ms)) item.time = ms;
   }
-  if (t.otherCoins) item.note = 'D’autres jetons ont bougé dans cette transaction (non détaillés)';
+  if (t.otherCoins) item.note = l10n('D’autres jetons ont bougé dans cette transaction (non détaillés)', 'Other tokens moved in this transaction (not detailed)');
   if (!sent && amount <= 0n) item.suspect = 'zero';
   return item;
 }

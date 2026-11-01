@@ -12,6 +12,8 @@ import { fmtCrypto, fmtFiat, shortAddress } from '../lib/format';
 import { Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconInfo, IconWarn } from './icons';
 import { cn } from '../lib/cn';
+import { t, useT } from '../i18n';
+import { rt } from '../i18n/rich';
 
 /** 0.1 ALGO: what a new account must receive at least. */
 export const ALGO_ACTIVATION = 100_000n;
@@ -19,16 +21,17 @@ const ALGO = (micro: bigint | string) => fmtCrypto(BigInt(micro), 6, 'ALGO', 6);
 
 /** Note field + receiver facts (does it exist? its minimum balance). */
 export function AlgoNoteField({ value, onChange, dest, destLoading }: { value: string; onChange: (v: string) => void; dest: AlgoAccountInfo | undefined; destLoading: boolean }) {
+  useT();
   const bytes = algoNoteBytes(value);
   const tooLong = bytes > ALGO_MAX_NOTE;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
         <label htmlFor="algo-note" className="eyebrow">
-          Note <span className="font-normal normal-case tracking-normal text-mute">· facultative, publique pour toujours</span>
+          {t('algo.note')} <span className="font-normal normal-case tracking-normal text-mute">{t('algo.noteHint')}</span>
         </label>
         <span className={cn('text-[11px]', tooLong ? 'text-down' : 'text-faint')}>
-          {bytes} / {ALGO_MAX_NOTE} octets
+          {t('algo.noteBytes', { bytes, max: ALGO_MAX_NOTE })}
         </span>
       </div>
       <input
@@ -37,22 +40,22 @@ export function AlgoNoteField({ value, onChange, dest, destLoading }: { value: s
         autoComplete="off"
         spellCheck={false}
         value={value}
-        placeholder="ex. référence de facture"
+        placeholder={t('algo.notePlaceholder')}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={tooLong}
         className="h-11 rounded-ctl border border-line-2 bg-bg px-3 text-[13px] text-text focus:border-ice-line"
       />
-      {tooLong && <span className="text-[12px] text-down">Note trop longue : 1024 octets au plus.</span>}
-      {value.trim() !== '' && !tooLong && <span className="text-[12px] text-mute">Lisible par tous sur la chaîne, pour toujours : une 2ᵉ confirmation te sera demandée.</span>}
+      {tooLong && <span className="text-[12px] text-down">{t('algo.noteTooLong')}</span>}
+      {value.trim() !== '' && !tooLong && <span className="text-[12px] text-mute">{t('algo.notePublic')}</span>}
       {destLoading && (
         <span className="flex items-center gap-1.5 text-[11px] text-mute">
-          <Spinner /> lecture du compte destinataire…
+          <Spinner /> {t('algo.readingDest')}
         </span>
       )}
       {dest && !dest.exists && (
         <span className="flex items-start gap-1.5 text-[12px] leading-[1.45] text-warn">
           <IconInfo size={13} className="mt-0.5 shrink-0" />
-          <span>Ce compte n’existe pas encore sur Algorand : envoie au moins {ALGO(dest.minBalance)} (solde minimum, qui reste bloqué chez lui), sinon le paiement est rejeté.</span>
+          <span>{t('algo.destMissing', { min: ALGO(dest.minBalance) })}</span>
         </span>
       )}
     </div>
@@ -61,22 +64,28 @@ export function AlgoNoteField({ value, onChange, dest, destLoading }: { value: s
 
 /** Spendable = balance − minimum balance, with the minimum explained. */
 export function AlgoSpendable({ account, hidden }: { account: AlgoAccountInfo | undefined; hidden: boolean }) {
+  useT();
   if (!account) return null;
   if (account.authAddr) {
-    return <span className="text-[12px] text-down">Ce compte a été « rekeyé » vers {shortAddress(account.authAddr)} : sa clé n’est plus celle de ton coffre, Kyro ne peut pas signer pour lui.</span>;
+    return <span className="text-[12px] text-down">{t('algo.rekeyed', { addr: shortAddress(account.authAddr) })}</span>;
   }
   if (!account.exists) {
-    return <span className="text-[12px] text-warn">Ton compte Algorand n’existe pas encore : il doit d’abord recevoir au moins 0,1 ALGO.</span>;
+    return <span className="text-[12px] text-warn">{t('algo.ownMissing')}</span>;
   }
   return (
     <span className="text-[12px] leading-[1.45] text-mute">
-      <strong className="font-semibold text-text2">Solde dépensable : {hidden ? '•••••' : ALGO(account.spendable)}</strong> (solde {hidden ? '•••••' : ALGO(account.balance)} − solde minimum {ALGO(account.minBalance)}). Le solde minimum (0,1 ALGO + 0,1 ALGO par token ASA activé, ici {account.assets}) reste toujours sur ton compte.
+      {rt(
+        'algo.spendable',
+        { b: (c) => <strong className="font-semibold text-text2">{c}</strong> },
+        { spendable: hidden ? '•••••' : ALGO(account.spendable), balance: hidden ? '•••••' : ALGO(account.balance), min: ALGO(account.minBalance), assets: account.assets },
+      )}
     </span>
   );
 }
 
 /** Rust's decoding, before the password: receiver, note, fee, network, validity window. */
 export function AlgoSummaryView({ u, algoPrice, currency }: { u: AlgoUnsigned; algoPrice: number | null; currency: Currency }) {
+  useT();
   const s = u.summary;
   const c = u.context;
   const fiat = (d: string) => {
@@ -84,20 +93,20 @@ export function AlgoSummaryView({ u, algoPrice, currency }: { u: AlgoUnsigned; a
     return v >= 0.01 ? ` · ${fmtFiat(v, currency)}` : '';
   };
   return (
-    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label="Paiement Algorand décodé">
+    <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('algo.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
-        <span className="font-semibold text-text">Paiement Algorand</span>
-        <span className="text-[11px] text-mute">décodé par le coffre</span>
+        <span className="font-semibold text-text">{t('algo.title')}</span>
+        <span className="text-[11px] text-mute">{t('algo.decodedByVault')}</span>
       </div>
-      {!c.destination.exists && <Line k="Compte destinataire" v={`créé par ce paiement (${ALGO(c.destination.minBalance)} restent bloqués chez lui)`} warn />}
-      {s.noteLen > 0 && <Line k="Note (publique)" v={s.noteText !== null ? `« ${s.noteText} »` : `${s.noteLen} octets binaires`} warn />}
-      <Line k="Frais" v={`${ALGO(s.fee)}${fiat(s.fee)}`} />
-      <Line k="Ton solde" v={ALGO(c.account.balance)} />
-      <Line k="Solde minimum bloqué" v={ALGO(c.account.minBalance)} />
-      <Line k="Dépensable" v={ALGO(c.account.spendable)} />
-      <Line k="Réseau" v={s.genesisId} />
-      <Line k="Valable" v={`rounds ${s.firstValid} à ${s.lastValid}`} />
-      <Line k="Identifiant" v={shortAddress(s.txid)} last />
+      {!c.destination.exists && <Line k={t('algo.lDest')} v={t('algo.lDestCreated', { min: ALGO(c.destination.minBalance) })} warn />}
+      {s.noteLen > 0 && <Line k={t('algo.lNote')} v={s.noteText !== null ? `« ${s.noteText} »` : t('algo.noteBinary', { len: s.noteLen })} warn />}
+      <Line k={t('algo.lFee')} v={`${ALGO(s.fee)}${fiat(s.fee)}`} />
+      <Line k={t('algo.lBalance')} v={ALGO(c.account.balance)} />
+      <Line k={t('algo.lMinBalance')} v={ALGO(c.account.minBalance)} />
+      <Line k={t('algo.lSpendable')} v={ALGO(c.account.spendable)} />
+      <Line k={t('algo.lNetwork')} v={s.genesisId} />
+      <Line k={t('algo.lValid')} v={t('algo.lValidValue', { first: s.firstValid, last: s.lastValid })} />
+      <Line k={t('algo.lTxid')} v={shortAddress(s.txid)} last />
     </div>
   );
 }
@@ -119,6 +128,7 @@ type Status = { state: 'pending' } | { state: 'confirmed'; round: number | null 
  * validity window (≈ 9 min) it can no longer be included.
  */
 export function AlgoTxStatusLine({ adapter, txid, recipient, onConfirmed }: { adapter: AlgorandAdapter; txid: string; recipient: string; onConfirmed?: () => void }) {
+  useT();
   const [status, setStatus] = useState<Status>({ state: 'pending' });
   useEffect(() => {
     let alive = true;
@@ -157,34 +167,36 @@ export function AlgoTxStatusLine({ adapter, txid, recipient, onConfirmed }: { ad
   if (status.state === 'pending') {
     return (
       <div role="status" className="flex w-full items-center gap-2 rounded-ctl border border-line bg-raised px-3.5 py-2.5 text-[13px] text-text2">
-        <Spinner /> En attente d’un bloc Algorand (quelques secondes)…
+        <Spinner /> {t('algo.pending')}
       </div>
     );
   }
   if (status.state === 'confirmed') {
     return (
       <Notice tone="success" icon={<IconCheck size={16} className="mt-0.5 shrink-0 text-up" />} className="w-full text-left">
-        <strong className="font-semibold">Confirmée{status.round !== null ? ` au round ${status.round}` : ''} :</strong> sur Algorand, un bloc est définitif. {shortAddress(recipient)} a reçu les fonds.
+        {status.round !== null
+          ? rt('algo.confirmedRound', { b: (c) => <strong className="font-semibold">{c}</strong> }, { round: status.round, recipient: shortAddress(recipient) })
+          : rt('algo.confirmed', { b: (c) => <strong className="font-semibold">{c}</strong> }, { recipient: shortAddress(recipient) })}
       </Notice>
     );
   }
   if (status.state === 'dropped') {
     return (
       <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />} className="w-full text-left">
-        <strong className="font-semibold">Rejetée par le réseau :</strong> {status.error}. Rien n’a été prélevé.
+        {rt('algo.dropped', { b: (c) => <strong className="font-semibold">{c}</strong> }, { error: status.error })}
       </Notice>
     );
   }
   if (status.state === 'expired') {
     return (
       <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
-        Toujours pas confirmée après 10 minutes : sa fenêtre de validité est dépassée, elle ne sera plus incluse. Vérifie l’historique avant de renvoyer.
+        {t('algo.expired')}
       </Notice>
     );
   }
   return (
     <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
-      Suivi de la confirmation impossible pour l’instant : {status.message}
+      {t('algo.trackError', { message: status.message })}
     </Notice>
   );
 }

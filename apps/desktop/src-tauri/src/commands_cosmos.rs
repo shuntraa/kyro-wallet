@@ -12,9 +12,10 @@ use wallet_core::{CosmosSendRequest, CosmosTxSummary, CosmosWarning, Network};
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::cosmos_backend::{self, CosmosAccountInfo, CosmosCtx, CosmosTxStatus, TIMEOUT_BLOCKS};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::servers::host_of;
 use crate::state::AppState;
 
@@ -36,8 +37,8 @@ fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     })
 }
 
-fn atom(uatom: &str) -> String {
-    format!("{} ATOM", format_units(uatom, 6))
+fn atom(lang: Lang, uatom: &str) -> String {
+    format!("{} ATOM", format_units_in(lang, uatom, 6))
 }
 
 /// Live context shown in the dialog.
@@ -50,19 +51,33 @@ pub struct CosmosContext {
 }
 
 /// Body of the native dialog: everything comes from the decoded SignDoc, except the balance.
-pub(crate) fn describe_cosmos(s: &CosmosTxSummary, c: &CosmosContext, net: Network) -> String {
+pub(crate) fn describe_cosmos(
+    lang: Lang,
+    s: &CosmosTxSummary,
+    c: &CosmosContext,
+    net: Network,
+) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
-    let mut out = format!(
-        "Envoi Cosmos Hub{}\n\nÀ : {}\n\nMontant : {} ({} uatom)\n",
-        if net == Network::Testnet {
-            " (testnet)"
-        } else {
-            ""
-        },
-        s.to,
-        atom(&s.amount),
-        s.amount
-    );
+    let at = |v: &str| atom(lang, v);
+    let testnet = if net == Network::Testnet {
+        " (testnet)"
+    } else {
+        ""
+    };
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Envoi Cosmos Hub{testnet}\n\nÀ : {}\n\nMontant : {} ({} uatom)\n",
+            s.to,
+            at(&s.amount),
+            s.amount
+        ),
+        Lang::En => format!(
+            "Cosmos Hub send{testnet}\n\nTo: {}\n\nAmount: {} ({} uatom)\n",
+            s.to,
+            at(&s.amount),
+            s.amount
+        ),
+    };
     let total = s
         .amount
         .parse::<u128>()
@@ -74,58 +89,83 @@ pub(crate) fn describe_cosmos(s: &CosmosTxSummary, c: &CosmosContext, net: Netwo
         .parse::<u128>()
         .unwrap_or(0)
         .saturating_sub(total);
-    out += &format!(
-        "Frais : {} ({} uatom, gas maximum {})\nDisponible : {} · après l'envoi : {}\n",
-        atom(&s.fee),
-        s.fee,
-        s.gas_limit,
-        atom(&c.account.spendable),
-        atom(&left.to_string())
-    );
-    out += &format!(
-        "Réseau : chain-id {} · compte n° {} · séquence {}\nValable jusqu'au bloc n° {} (≈ {} min)\n",
-        crate::dialog_text::field(&s.chain_id, 64),
-        s.account_number,
-        s.sequence,
-        s.timeout_height,
-        (s.timeout_height.saturating_sub(c.height) * 6).div_ceil(60)
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "Frais : {} ({} uatom, gas maximum {})\nDisponible : {} · après l'envoi : {}\n",
+            at(&s.fee),
+            s.fee,
+            s.gas_limit,
+            at(&c.account.spendable),
+            at(&left.to_string())
+        ),
+        Lang::En => format!(
+            "Fee: {} ({} uatom, maximum gas {})\nAvailable: {} · after the send: {}\n",
+            at(&s.fee),
+            s.fee,
+            s.gas_limit,
+            at(&c.account.spendable),
+            at(&left.to_string())
+        ),
+    };
+    let chain_id = crate::dialog_text::field(&s.chain_id, 64);
+    let minutes = (s.timeout_height.saturating_sub(c.height) * 6).div_ceil(60);
+    out += &match lang {
+        Lang::Fr => format!(
+            "Réseau : chain-id {chain_id} · compte n° {} · séquence {}\nValable jusqu'au bloc n° {} (≈ {minutes} min)\n",
+            s.account_number, s.sequence, s.timeout_height
+        ),
+        Lang::En => format!(
+            "Network: chain-id {chain_id} · account number {} · sequence {}\nValid until block {} (≈ {minutes} min)\n",
+            s.account_number, s.sequence, s.timeout_height
+        ),
+    };
     // Untrusted text last, framed on its own line.
     out += &format!("\n{line}\n");
     match &s.memo {
         Some(m) => {
             out += &format!(
-                "MÉMO (public à jamais) : {}\n",
+                "{}{}\n",
+                lang.pick("MÉMO (public à jamais) : ", "MEMO (public forever): "),
                 crate::dialog_text::field(m, crate::dialog_text::MAX_FIELD * 2)
             );
         }
-        None => out += "AUCUN MÉMO\n(une plateforme d'échange en exige souvent un : sans lui, les fonds peuvent être perdus)\n",
+        None => out += lang.pick(
+            "AUCUN MÉMO\n(une plateforme d'échange en exige souvent un : sans lui, les fonds peuvent être perdus)\n",
+            "NO MEMO\n(an exchange often requires one: without it, the funds can be lost)\n",
+        ),
     }
     out += line;
     out
 }
 
-pub(crate) fn describe_cosmos_extra(s: &CosmosTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans cet envoi :\n");
+pub(crate) fn describe_cosmos_extra(lang: Lang, s: &CosmosTxSummary) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des éléments inhabituels dans cet envoi :\n",
+        "Kyro found unusual elements in this send:\n",
+    ));
     for w in &s.warnings {
         out += match w {
-            CosmosWarning::HighFee => {
-                "• frais supérieurs à 0,1 ATOM (d'habitude moins de 0,001 ATOM)\n"
-            }
-            CosmosWarning::UnusualText => {
-                "• mémo contenant des caractères invisibles / de contrôle, ou trop long (affiché nettoyé)\n"
-            }
+            CosmosWarning::HighFee => lang.pick(
+                "• frais supérieurs à 0,1 ATOM (d'habitude moins de 0,001 ATOM)\n",
+                "• fee above 0.1 ATOM (usually less than 0.001 ATOM)\n",
+            ),
+            CosmosWarning::UnusualText => lang.pick(
+                "• mémo contenant des caractères invisibles / de contrôle, ou trop long (affiché nettoyé)\n",
+                "• memo containing invisible / control characters, or too long (shown cleaned)\n",
+            ),
         };
     }
     if let Some(h) = &s.memo_hex {
         if s.warnings.contains(&CosmosWarning::UnusualText) {
             out += &format!(
-                "Mémo exact (hexadécimal) : {}\n",
+                "{}{}\n",
+                lang.pick("Mémo exact (hexadécimal) : ", "Exact memo (hexadecimal): "),
                 crate::dialog_text::sanitize(h, 1100)
             );
         }
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -358,21 +398,19 @@ pub async fn cosmos_sign_tx(
     let net = state.network;
     let (summary, context) = prepare_sign(&c, &me, &pk, &sign_doc).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer l'envoi d'ATOM",
-        signer.body(
-            crate::i18n::current(),
-            &describe_cosmos(&summary, &context, net),
-        ),
+        lang.pick("Confirmer l'envoi d'ATOM", "Confirm the ATOM send"),
+        signer.body(lang, &describe_cosmos(lang, &summary, &context, net)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : envoi à vérifier",
-            describe_cosmos_extra(&summary),
+            lang.pick("Attention : envoi à vérifier", "Warning: send to check"),
+            describe_cosmos_extra(lang, &summary),
         )
         .await?;
     }
@@ -471,7 +509,12 @@ mod tests {
 
     #[test]
     fn dialog_shows_what_rust_decoded() {
-        let d = describe_cosmos(&summary(Some("4242\n")), &context(), Network::Testnet);
+        let d = describe_cosmos(
+            Lang::Fr,
+            &summary(Some("4242\n")),
+            &context(),
+            Network::Testnet,
+        );
         for needle in [
             "Envoi Cosmos Hub (testnet)",
             "À : cosmos1tehv5km5e9y706rc2gzk9yyun9dljjjnvyt3u0",
@@ -486,13 +529,24 @@ mod tests {
         }
         // The memo comes after the amount and the fee.
         assert!(d.find("MÉMO").unwrap() > d.find("Frais").unwrap());
-        let d = describe_cosmos(&summary(None), &context(), Network::Mainnet);
+        let d = describe_cosmos(Lang::Fr, &summary(None), &context(), Network::Mainnet);
         assert!(d.starts_with("Envoi Cosmos Hub\n"));
         assert!(d.contains("AUCUN MÉMO"));
         let mut s = summary(Some("x"));
         s.warnings = vec![CosmosWarning::HighFee, CosmosWarning::UnusualText];
-        let x = describe_cosmos_extra(&s);
+        let x = describe_cosmos_extra(Lang::Fr, &s);
         assert!(x.contains("0,1 ATOM") && x.contains("Mémo exact (hexadécimal) : 78"));
+        let en = describe_cosmos(
+            Lang::En,
+            &summary(Some("4242\n")),
+            &context(),
+            Network::Testnet,
+        );
+        assert!(
+            en.contains("Amount: 1.5 ATOM (1500000 uatom)")
+                && en.contains("MEMO (public forever): « 4242 »")
+        );
+        assert!(describe_cosmos_extra(Lang::En, &s).contains("0.1 ATOM"));
     }
 
     #[test]
@@ -577,7 +631,7 @@ mod live {
             assert_eq!(summary, built.summary);
             eprintln!(
                 "--- dialog ---\n{}\n---",
-                describe_cosmos(&summary, &context, Network::Testnet)
+                describe_cosmos(Lang::Fr, &summary, &context, Network::Testnet)
             );
             assert!(!summary.requires_extra_confirmation);
             if std::env::var("KYRO_COSMOS_SEND").as_deref() != Ok("yes") {

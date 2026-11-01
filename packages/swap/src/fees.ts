@@ -196,7 +196,7 @@ export function providerFee(id: ProviderId, cfg: SwapFeeConfig = KYRO_SWAP_FEE):
       return validSolanaAddress(cfg.recipients.solana) ? fee(cfg.recipients.solana) : { kind: 'unavailable', reason: l10n('Adresse Solana des frais Kyro non configurée', 'Solana address for Kyro fees not configured') };
     case 'near':
       // NEAR Intents account of the EVM fee address (lower case, as NEAR account ids are).
-      return validEvm(cfg.recipients.evm) ? fee(cfg.recipients.evm.toLowerCase()) : { kind: 'unavailable', reason: 'Adresse EVM des frais Kyro non configurée' };
+      return validEvm(cfg.recipients.evm) ? fee(cfg.recipients.evm.toLowerCase()) : { kind: 'unavailable', reason: l10n('Adresse EVM des frais Kyro non configurée', 'EVM address for Kyro fees not configured') };
   }
 }
 
@@ -219,7 +219,7 @@ export function nearIntentsAppFee(cfg: SwapFeeConfig = KYRO_SWAP_FEE): ProviderF
   const f = providerFee('near', cfg);
   if (f.kind !== 'fee') return f;
   const requestBps = f.bps * ONE_CLICK_FEE_REQUEST_FACTOR;
-  if (requestBps > ONE_CLICK_MAX_TOTAL_BPS) return { kind: 'unavailable', reason: 'Frais Kyro trop élevés pour NEAR Intents' };
+  if (requestBps > ONE_CLICK_MAX_TOTAL_BPS) return { kind: 'unavailable', reason: l10n('Frais Kyro trop élevés pour NEAR Intents', 'Kyro fees too high for NEAR Intents') };
   return { ...f, requestBps };
 }
 
@@ -231,13 +231,13 @@ export function nearIntentsAppFee(cfg: SwapFeeConfig = KYRO_SWAP_FEE): ProviderF
  */
 export function lifiFeeFor(source: 'evm' | 'solana' | 'bitcoin', cfg: SwapFeeConfig = KYRO_SWAP_FEE): ProviderFee {
   if (source === 'evm') return providerFee('lifi', cfg);
-  if (!Number.isInteger(cfg.bps) || cfg.bps < 0 || cfg.bps > MAX_FEE_BPS) return { kind: 'unavailable', reason: 'Frais Kyro mal configurés' };
+  if (!Number.isInteger(cfg.bps) || cfg.bps < 0 || cfg.bps > MAX_FEE_BPS) return { kind: 'unavailable', reason: l10n('Frais Kyro mal configurés', 'Kyro fees misconfigured') };
   if (cfg.bps === 0) return { kind: 'none' };
   if (source === 'solana') {
     const r = feeRecipientFor('solana', cfg);
-    return r ? { kind: 'fee', bps: cfg.bps, recipient: r } : { kind: 'unavailable', reason: 'Adresse Solana des frais Kyro non configurée' };
+    return r ? { kind: 'fee', bps: cfg.bps, recipient: r } : { kind: 'unavailable', reason: l10n('Adresse Solana des frais Kyro non configurée', 'Solana address for Kyro fees not configured') };
   }
-  return { kind: 'unavailable', reason: 'Frais Kyro impossibles depuis Bitcoin avec LI.FI (bénéficiaire bc1… refusé)' };
+  return { kind: 'unavailable', reason: l10n('Frais Kyro impossibles depuis Bitcoin avec LI.FI (bénéficiaire bc1… refusé)', 'Kyro fees impossible from Bitcoin with LI.FI (bc1… recipient refused)') };
 }
 
 /** "0,7 %" */

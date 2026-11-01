@@ -610,12 +610,12 @@ mod live {
         assert_eq!(summary, built.summary);
         eprintln!(
             "--- dialog ---\n{}---",
-            crate::commands_sui::describe_sui(&summary, &context, c.network)
+            crate::commands_sui::describe_sui(crate::i18n::Lang::Fr, &summary, &context, c.network)
         );
         if summary.requires_extra_confirmation {
             eprintln!(
                 "--- extra ---\n{}---",
-                crate::commands_sui::describe_sui_extra(&summary)
+                crate::commands_sui::describe_sui_extra(crate::i18n::Lang::Fr, &summary)
             );
         }
         let (sig, again) = wallet_core::sui_sign(seed, account, &built.bcs).unwrap();

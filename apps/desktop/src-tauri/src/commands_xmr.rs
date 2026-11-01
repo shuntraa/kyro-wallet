@@ -11,18 +11,19 @@ use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::commands::{
-    blocking, confirm_native, confirm_native_with, format_units, mnemonic_from_password,
+    blocking, confirm_native, confirm_native_with, format_units_in, mnemonic_from_password,
     seed_from_password,
 };
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::servers::host_of;
 use crate::state::AppState;
 use crate::xmr_backend::{self, XmrCtx, XmrHistoryEntry, XmrPrepared};
 
-fn xmr(piconero: &str) -> String {
+fn xmr(lang: Lang, piconero: &str) -> String {
     format!(
         "{} XMR",
-        format_units(piconero, wallet_core::XMR_DECIMALS as usize)
+        format_units_in(lang, piconero, wallet_core::XMR_DECIMALS as usize)
     )
 }
 
@@ -43,57 +44,88 @@ fn node_label(state: &AppState) -> String {
 }
 
 /// Body of the native dialog: what Rust built, nothing from the interface.
-pub(crate) fn describe_xmr(s: &XmrTxSummary, node: &str) -> String {
+pub(crate) fn describe_xmr(lang: Lang, s: &XmrTxSummary, node: &str) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+    let x = |v: &str| xmr(lang, v);
     let kind = match &s.destination.kind {
-        XmrAddressKind::Standard => "adresse standard".to_owned(),
-        XmrAddressKind::Subaddress => "sous-adresse".to_owned(),
-        XmrAddressKind::Integrated { payment_id } => {
-            format!("adresse intégrée — ID de paiement {payment_id}")
-        }
-    };
-    let mut out = format!(
-        "Envoi Monero{}\n\nÀ : {}\nType : {kind}\n{line}\n",
-        if s.network == "stagenet" {
-            " (stagenet)"
-        } else {
-            ""
+        XmrAddressKind::Standard => lang.pick("adresse standard", "standard address").to_owned(),
+        XmrAddressKind::Subaddress => lang.pick("sous-adresse", "subaddress").to_owned(),
+        XmrAddressKind::Integrated { payment_id } => match lang {
+            Lang::Fr => format!("adresse intégrée — ID de paiement {payment_id}"),
+            Lang::En => format!("integrated address — payment ID {payment_id}"),
         },
-        s.destination.address
-    );
-    out += &format!("Montant : {} ({} piconero)\n", xmr(&s.amount), s.amount);
-    out += &format!("Frais réseau : {}\n", xmr(&s.fee));
-    out += &format!(
-        "Monnaie rendue à ton adresse principale : {}\n",
-        xmr(&s.change)
-    );
-    out += &format!("{line}\n");
-    out += &format!(
-        "Dépensé : {} ({} de tes sorties, anneaux de {} membres)\n",
-        xmr(&s.inputs_total),
-        s.input_count,
-        s.ring_size
-    );
-    out += &format!(
-        "Nœud : {} (il verra la transaction publiée, jamais tes clés)\n",
-        crate::dialog_text::field(node, crate::dialog_text::MAX_FIELD)
-    );
-    out
+    };
+    let stagenet = if s.network == "stagenet" {
+        " (stagenet)"
+    } else {
+        ""
+    };
+    let node = crate::dialog_text::field(node, crate::dialog_text::MAX_FIELD);
+    match lang {
+        Lang::Fr => format!(
+            "Envoi Monero{stagenet}\n\nÀ : {}\nType : {kind}\n{line}\n\
+             Montant : {} ({} piconero)\n\
+             Frais réseau : {}\n\
+             Monnaie rendue à ton adresse principale : {}\n\
+             {line}\n\
+             Dépensé : {} ({} de tes sorties, anneaux de {} membres)\n\
+             Nœud : {node} (il verra la transaction publiée, jamais tes clés)\n",
+            s.destination.address,
+            x(&s.amount),
+            s.amount,
+            x(&s.fee),
+            x(&s.change),
+            x(&s.inputs_total),
+            s.input_count,
+            s.ring_size
+        ),
+        Lang::En => format!(
+            "Monero send{stagenet}\n\nTo: {}\nType: {kind}\n{line}\n\
+             Amount: {} ({} piconero)\n\
+             Network fee: {}\n\
+             Change returned to your primary address: {}\n\
+             {line}\n\
+             Spent: {} ({} of your outputs, rings of {} members)\n\
+             Node: {node} (it will see the published transaction, never your keys)\n",
+            s.destination.address,
+            x(&s.amount),
+            s.amount,
+            x(&s.fee),
+            x(&s.change),
+            x(&s.inputs_total),
+            s.input_count,
+            s.ring_size
+        ),
+    }
 }
 
-pub(crate) fn describe_xmr_extra(s: &XmrTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans cet envoi :\n");
+pub(crate) fn describe_xmr_extra(lang: Lang, s: &XmrTxSummary) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des éléments inhabituels dans cet envoi :\n",
+        "Kyro found unusual elements in this send:\n",
+    ));
     for w in &s.warnings {
         out += match w {
-            XmrWarning::IntegratedAddress => {
-                "• adresse intégrée : l'ID de paiement est envoyé (chiffré) avec la transaction ; vérifie qu'il est bien celui que la plateforme t'a donné\n"
-            }
-            XmrWarning::HighFee => "• frais supérieurs à 0,01 XMR (d'habitude moins de 0,001 XMR)\n",
-            XmrWarning::FeeAboveAmount => "• les frais sont plus élevés que le montant envoyé\n",
-            XmrWarning::OwnAddress => "• le destinataire est une de tes propres adresses Monero\n",
+            XmrWarning::IntegratedAddress => lang.pick(
+                "• adresse intégrée : l'ID de paiement est envoyé (chiffré) avec la transaction ; vérifie qu'il est bien celui que la plateforme t'a donné\n",
+                "• integrated address: the payment ID is sent (encrypted) with the transaction; check that it is the one the exchange gave you\n",
+            ),
+            XmrWarning::HighFee => lang.pick(
+                "• frais supérieurs à 0,01 XMR (d'habitude moins de 0,001 XMR)\n",
+                "• fee above 0.01 XMR (usually less than 0.001 XMR)\n",
+            ),
+            XmrWarning::FeeAboveAmount => lang.pick(
+                "• les frais sont plus élevés que le montant envoyé\n",
+                "• the fee is higher than the amount sent\n",
+            ),
+            XmrWarning::OwnAddress => lang.pick(
+                "• le destinataire est une de tes propres adresses Monero\n",
+                "• the recipient is one of your own Monero addresses\n",
+            ),
         };
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -407,21 +439,22 @@ pub async fn xmr_send_tx(
     let summary = pending.unsigned.summary.clone();
     let signer = SignerInfo::new(&state, Chain::Xmr, a, wallet_core::xmr_path(a));
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer l'envoi Monero",
-        signer.body(
-            crate::i18n::current(),
-            &describe_xmr(&summary, &node_label(&state)),
-        ),
+        lang.pick("Confirmer l'envoi Monero", "Confirm the Monero send"),
+        signer.body(lang, &describe_xmr(lang, &summary, &node_label(&state))),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : envoi Monero à vérifier",
-            describe_xmr_extra(&summary),
+            lang.pick(
+                "Attention : envoi Monero à vérifier",
+                "Warning: Monero send to check",
+            ),
+            describe_xmr_extra(lang, &summary),
         )
         .await?;
     }
@@ -451,27 +484,48 @@ pub async fn xmr_send_tx(
 
 // ---------------------------------------------------------------- 25-word seed
 
-pub(crate) fn seed_text(words: &[String], path: &str, restore: Option<u64>) -> Zeroizing<String> {
-    let mut out = Zeroizing::new(format!(
-        "Phrase Monero de 25 mots — clé {path}\n\n\
-         Elle restaure ce portefeuille Monero dans Monero GUI, Feather ou Cake Wallet \
-         (« restaurer depuis une phrase »). Elle est calculée depuis ta phrase de récupération \
-         Kyro, qui reste ta sauvegarde principale. Quiconque lit ces mots peut prendre tes XMR.\n\n"
-    ));
+pub(crate) fn seed_text(
+    lang: Lang,
+    words: &[String],
+    path: &str,
+    restore: Option<u64>,
+) -> Zeroizing<String> {
+    let mut out = Zeroizing::new(match lang {
+        Lang::Fr => format!(
+            "Phrase Monero de 25 mots — clé {path}\n\n\
+             Elle restaure ce portefeuille Monero dans Monero GUI, Feather ou Cake Wallet \
+             (« restaurer depuis une phrase »). Elle est calculée depuis ta phrase de récupération \
+             Kyro, qui reste ta sauvegarde principale. Quiconque lit ces mots peut prendre tes XMR.\n\n"
+        ),
+        Lang::En => format!(
+            "25-word Monero phrase — key {path}\n\n\
+             It restores this Monero wallet in Monero GUI, Feather or Cake Wallet \
+             (\"restore from seed\"). It is derived from your Kyro recovery phrase, \
+             which stays your main backup. Anyone who reads these words can take your XMR.\n\n"
+        ),
+    });
     for (i, w) in words.iter().enumerate() {
         out.push_str(&format!("{:>2}. {w}", i + 1));
         out.push_str(if i % 5 == 4 { "\n" } else { "    " });
     }
-    match restore {
-        Some(h) => out.push_str(&format!(
+    match (restore, lang) {
+        (Some(h), Lang::Fr) => out.push_str(&format!(
             "\nHauteur de restauration : {h} (Kyro scanne à partir de ce bloc ; indique-la, ou une plus ancienne, dans l'autre portefeuille).\n"
         )),
-        None => out.push_str("\nHauteur de restauration : pas encore choisie (aucun scan).\n"),
+        (Some(h), Lang::En) => out.push_str(&format!(
+            "\nRestore height: {h} (Kyro scans from this block; enter it, or an older one, in the other wallet).\n"
+        )),
+        (None, _) => out.push_str(lang.pick(
+            "\nHauteur de restauration : pas encore choisie (aucun scan).\n",
+            "\nRestore height: not chosen yet (no scan).\n",
+        )),
     }
-    out.push_str(
+    out.push_str(lang.pick(
         "\nCette fenêtre appartient au système, pas à l'interface de Kyro : vérifie quand même \
          que personne ne regarde ton écran et qu'aucun partage d'écran n'est actif.",
-    );
+        "\nThis window belongs to the system, not to Kyro's interface: still check \
+         that nobody is watching your screen and that no screen sharing is active.",
+    ));
     out
 }
 
@@ -490,16 +544,23 @@ pub async fn xmr_seed_show(
     let a = account_arg(account)?;
     state.check_reveal_cooldown()?;
     let mnemonic = mnemonic_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native_with(
         &app,
-        "Afficher la phrase Monero ?",
-        "Kyro va afficher la phrase Monero de 25 mots de ce compte dans une fenêtre du système.\n\n\
-         Quiconque la voit peut prendre tes XMR. Vérifie que personne ne regarde ton écran et \
-         qu'aucun partage d'écran ni logiciel de capture n'est actif.\n\nSi tu n'as pas toi-même \
-         demandé à l'afficher, refuse."
-            .into(),
-        "Afficher",
-        "Annuler",
+        lang.pick("Afficher la phrase Monero ?", "Show the Monero phrase?"),
+        lang.pick(
+            "Kyro va afficher la phrase Monero de 25 mots de ce compte dans une fenêtre du système.\n\n\
+             Quiconque la voit peut prendre tes XMR. Vérifie que personne ne regarde ton écran et \
+             qu'aucun partage d'écran ni logiciel de capture n'est actif.\n\nSi tu n'as pas toi-même \
+             demandé à l'afficher, refuse.",
+            "Kyro will show this account's 25-word Monero phrase in a system window.\n\n\
+             Anyone who sees it can take your XMR. Check that nobody is watching your screen and \
+             that no screen sharing or capture software is active.\n\nIf you did not ask to \
+             show it yourself, refuse.",
+        )
+        .into(),
+        lang.pick("Afficher", "Show"),
+        lang.cancel(),
     )
     .await?;
     let restore = xmr_backend::load(&state, a)
@@ -507,16 +568,19 @@ pub async fn xmr_seed_show(
         .and_then(|c| c.restore_height);
     let words =
         blocking(move || Ok(wallet_core::xmr_seed_words(&mnemonic.to_seed(""), a)?)).await?;
-    let body = seed_text(&words, &wallet_core::xmr_path(a), restore);
+    let body = seed_text(lang, &words, &wallet_core::xmr_path(a), restore);
     let _open = app.state::<AppState>().dialogs.enter();
     let handle = app.clone();
     blocking(move || {
         handle
             .dialog()
             .message(body.as_str())
-            .title("Phrase Monero (25 mots)")
+            .title(lang.pick("Phrase Monero (25 mots)", "Monero phrase (25 words)"))
             .kind(MessageDialogKind::Info)
-            .buttons(MessageDialogButtons::OkCustom("J'ai fini de noter".into()))
+            .buttons(MessageDialogButtons::OkCustom(
+                lang.pick("J'ai fini de noter", "I have written it down")
+                    .into(),
+            ))
             .blocking_show();
         Ok(())
     })
@@ -563,6 +627,7 @@ mod tests {
     #[test]
     fn dialog_shows_what_rust_built() {
         let d = describe_xmr(
+            Lang::Fr,
             &summary(XmrAddressKind::Subaddress, vec![]),
             "monero-stagenet.stackwallet.com",
         );
@@ -579,6 +644,7 @@ mod tests {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
         let d = describe_xmr(
+            Lang::Fr,
             &summary(
                 XmrAddressKind::Integrated {
                     payment_id: "0102030405060708".into(),
@@ -588,19 +654,28 @@ mod tests {
             "x",
         );
         assert!(d.contains("adresse intégrée — ID de paiement 0102030405060708"));
-        let x = describe_xmr_extra(&summary(
-            XmrAddressKind::Standard,
-            vec![XmrWarning::IntegratedAddress, XmrWarning::OwnAddress],
-        ));
+        let x = describe_xmr_extra(
+            Lang::Fr,
+            &summary(
+                XmrAddressKind::Standard,
+                vec![XmrWarning::IntegratedAddress, XmrWarning::OwnAddress],
+            ),
+        );
         assert!(x.contains("ID de paiement") && x.contains("tes propres adresses"));
+        let en = describe_xmr(Lang::En, &summary(XmrAddressKind::Subaddress, vec![]), "n");
+        assert!(
+            en.contains("Type: subaddress")
+                && en.contains("Amount: 1.5 XMR (1500000000000 piconero)")
+        );
     }
 
     #[test]
     fn seed_window_text() {
         let words: Vec<String> = (0..25).map(|i| format!("w{i}")).collect();
-        let t = seed_text(&words, "m/44'/128'/0'/0/0", Some(3_500_000));
+        let t = seed_text(Lang::Fr, &words, "m/44'/128'/0'/0/0", Some(3_500_000));
         assert!(t.contains(" 1. w0") && t.contains("25. w24"));
         assert!(t.contains("Hauteur de restauration : 3500000"));
-        assert!(seed_text(&words, "m", None).contains("pas encore choisie"));
+        assert!(seed_text(Lang::Fr, &words, "m", None).contains("pas encore choisie"));
+        assert!(seed_text(Lang::En, &words, "m", Some(7)).contains("Restore height: 7"));
     }
 }

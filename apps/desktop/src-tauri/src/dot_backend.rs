@@ -579,7 +579,12 @@ mod live {
                 let built = built.unwrap();
                 eprintln!(
                     "--- dialog ---\n{}---",
-                    crate::commands_dot::describe_dot(&built.summary, &built.context, network)
+                    crate::commands_dot::describe_dot(
+                        crate::i18n::Lang::Fr,
+                        &built.summary,
+                        &built.context,
+                        network
+                    )
                 );
                 let block = hash32(&json!(format!("0x{}", built.summary.block_hash)), "h").unwrap();
                 let (s2, ctx2) =

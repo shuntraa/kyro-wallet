@@ -11,9 +11,10 @@ use wallet_core::{DotAccountInfo, DotEra, DotRuntime, DotTransfer, DotTxSummary,
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, polkadot_root_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, polkadot_root_from_password};
 use crate::dot_backend::{self, DotCtx, DotTxState, TransferCheck, ERA_MARGIN, ERA_PERIOD};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::servers::host_of;
 use crate::state::AppState;
 
@@ -35,11 +36,11 @@ fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
     })
 }
 
-fn amount(planck: u128, net: Network) -> String {
+fn amount(lang: Lang, planck: u128, net: Network) -> String {
     let c = wallet_core::dot_chain(net);
     format!(
         "{} {}",
-        format_units(&planck.to_string(), usize::from(c.decimals)),
+        format_units_in(lang, &planck.to_string(), usize::from(c.decimals)),
         c.symbol
     )
 }
@@ -95,44 +96,82 @@ pub struct DotContext {
 }
 
 /// Body of the native dialog.
-pub(crate) fn describe_dot(s: &DotTxSummary, c: &DotContext, net: Network) -> String {
+pub(crate) fn describe_dot(lang: Lang, s: &DotTxSummary, c: &DotContext, net: Network) -> String {
     let ed = planck_of(&c.existential_deposit);
-    let mut out = format!(
-        "Envoi Polkadot — {}{}\n\nÀ : {}\n\nMontant : {} ({} planck)\n",
-        s.chain,
-        if net == Network::Testnet {
-            " (testnet)"
-        } else {
-            ""
-        },
-        s.to,
-        amount(planck_of(&s.amount), net),
-        s.amount
-    );
+    let am = |p: u128| amount(lang, p, net);
+    let testnet = if net == Network::Testnet {
+        " (testnet)"
+    } else {
+        ""
+    };
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Envoi Polkadot — {}{testnet}\n\nÀ : {}\n\nMontant : {} ({} planck)\n",
+            s.chain,
+            s.to,
+            am(planck_of(&s.amount)),
+            s.amount
+        ),
+        Lang::En => format!(
+            "Polkadot send — {}{testnet}\n\nTo: {}\n\nAmount: {} ({} planck)\n",
+            s.chain,
+            s.to,
+            am(planck_of(&s.amount)),
+            s.amount
+        ),
+    };
     if !c.destination.exists {
-        out += &format!(
-            "Ce compte n'existe pas encore : ce transfert le crée (dépôt existentiel : {}).\n",
-            amount(ed, net)
-        );
+        out += &match lang {
+            Lang::Fr => format!(
+                "Ce compte n'existe pas encore : ce transfert le crée (dépôt existentiel : {}).\n",
+                am(ed)
+            ),
+            Lang::En => format!(
+                "This account does not exist yet: this transfer creates it (existential deposit: {}).\n",
+                am(ed)
+            ),
+        };
     }
-    out += &format!(
-        "\nFrais estimés par le nœud : ≈ {} (prélevés en plus)\nSolde : {} · bloqué : {} · dépôt existentiel (reste toujours sur le compte) : {} · disponible : {}\n",
-        amount(planck_of(&c.fee), net),
-        amount(planck_of(&c.account.free), net),
-        amount(planck_of(&c.account.frozen), net),
-        amount(ed, net),
-        amount(planck_of(&c.account.spendable), net)
-    );
-    out += &format!(
-        "\nAppel : {} (ton compte reste actif) · pourboire : {}\nValable jusqu'au bloc n° {} ({} blocs) · nonce {} · runtime {} / {}\n",
-        s.call,
-        amount(planck_of(&s.tip), net),
-        c.valid_until,
-        s.era_period,
-        s.nonce,
-        s.spec_version,
-        s.tx_version
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais estimés par le nœud : ≈ {} (prélevés en plus)\nSolde : {} · bloqué : {} · dépôt existentiel (reste toujours sur le compte) : {} · disponible : {}\n",
+            am(planck_of(&c.fee)),
+            am(planck_of(&c.account.free)),
+            am(planck_of(&c.account.frozen)),
+            am(ed),
+            am(planck_of(&c.account.spendable))
+        ),
+        Lang::En => format!(
+            "\nFee estimated by the node: ≈ {} (charged on top)\nBalance: {} · locked: {} · existential deposit (always stays on the account): {} · available: {}\n",
+            am(planck_of(&c.fee)),
+            am(planck_of(&c.account.free)),
+            am(planck_of(&c.account.frozen)),
+            am(ed),
+            am(planck_of(&c.account.spendable))
+        ),
+    };
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nAppel : {} (ton compte reste actif) · pourboire : {}\nValable jusqu'au bloc n° {} ({} blocs) · nonce {} · runtime {} / {}\n",
+            s.call,
+            am(planck_of(&s.tip)),
+            c.valid_until,
+            s.era_period,
+            s.nonce,
+            s.spec_version,
+            s.tx_version
+        ),
+        Lang::En => format!(
+            "\nCall: {} (your account stays active) · tip: {}\nValid until block {} ({} blocks) · nonce {} · runtime {} / {}\n",
+            s.call,
+            am(planck_of(&s.tip)),
+            c.valid_until,
+            s.era_period,
+            s.nonce,
+            s.spec_version,
+            s.tx_version
+        ),
+    };
     out
 }
 
@@ -372,13 +411,11 @@ pub async fn dot_sign_tx(
     let rt = dot_backend::runtime(&c).await?;
     let (summary, context) = prepare_sign(&c, &rt, &me, &pk, &payload).await?;
     let root = polkadot_root_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer l'envoi Polkadot",
-        signer.body(
-            crate::i18n::current(),
-            &describe_dot(&summary, &context, state.network),
-        ),
+        lang.pick("Confirmer l'envoi Polkadot", "Confirm the Polkadot send"),
+        signer.body(lang, &describe_dot(lang, &summary, &context, state.network)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
@@ -510,7 +547,7 @@ mod tests {
 
     #[test]
     fn dialog_shows_amount_fee_and_existential_deposit() {
-        let d = describe_dot(&summary(), &context(true), Network::Mainnet);
+        let d = describe_dot(Lang::Fr, &summary(), &context(true), Network::Mainnet);
         for needle in [
             "Envoi Polkadot — Polkadot Asset Hub\n",
             "À : 12ES7PTE9a3DKbs9mCsRA6Wge2DS1XK1xFgbTkp47nPV53yG",
@@ -524,12 +561,16 @@ mod tests {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
         assert!(!d.contains("n'existe pas encore"));
-        let d = describe_dot(&summary(), &context(false), Network::Testnet);
+        let d = describe_dot(Lang::Fr, &summary(), &context(false), Network::Testnet);
         assert!(d.contains("(testnet)"));
         // Westend: WND, 12 decimals.
         assert!(
             d.contains("ce transfert le crée (dépôt existentiel : 0,0001 WND)"),
             "{d}"
+        );
+        let en = describe_dot(Lang::En, &summary(), &context(true), Network::Mainnet);
+        assert!(
+            en.contains("Amount: 1.23456789 DOT (12345678900 planck)") && en.contains("tip: 0 DOT")
         );
     }
 

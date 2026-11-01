@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn hostile_host_text_stays_on_one_line() {
         let e = host_port_endpoint("Electrum (certificat)", "a.example\n• tout va bien", 1);
-        let t = approval_text(Lang::Fr, &[e.clone()]);
+        let t = approval_text(Lang::Fr, std::slice::from_ref(&e));
         assert!(!approval_text(Lang::En, &[e]).contains("\n• tout va bien"));
         assert!(!t.contains("\n• tout va bien"), "{t}");
         let v6 = host_port_endpoint("x", "[::1]", 8332);

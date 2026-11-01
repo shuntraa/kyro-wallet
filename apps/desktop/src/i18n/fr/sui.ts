@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Sui pieces of the Send screen (components/SuiSend.tsx).
+
+export const sui = {
+  'sui.spendable': '<b>Solde dépensable : {spendable}</b>',
+  'sui.addressBalance': ' · {amount} sont dans le « solde d’adresse » de Sui, que Kyro ne sait pas encore dépenser.',
+  'sui.gasOnTop': 'Les frais de gaz sont prélevés en plus du montant.',
+  'sui.decodedLabel': 'Transfert Sui décodé',
+  'sui.title': 'Transfert Sui',
+  'sui.decodedByVault': 'décodé par le coffre',
+  'sui.lToken': 'Jeton',
+  'sui.lAmount': 'Montant',
+  'sui.allCoins': 'tout le solde des pièces{receives}',
+  'sui.receives': ' (≈ {amount} reçus)',
+  'sui.lFeeSim': 'Frais estimés (simulation)',
+  'sui.lGasBudget': 'Budget de gaz max.',
+  'sui.lGasPrice': 'Prix du gaz',
+  'sui.lGasPriceValue': '{price} MIST/unité (référence {reference})',
+  'sui.lGasCoins': 'Pièces de gaz',
+  'sui.otherCoins': '· {count} autres pièces',
+  'sui.lValidEpoch': 'Valable jusqu’à l’époque',
+  'sui.lValidEpochValue': 'n° {epoch} (actuelle {current})',
+  'sui.noLimit': 'aucune limite',
+  'sui.lDigest': 'Empreinte',
+  'sui.unknown': 'inconnue',
+  'sui.pending': 'Transaction finale sur Sui, en attente de l’indexeur (quelques secondes)…',
+  'sui.done': '<b>Exécutée :</b> le transfert est inclus dans un checkpoint Sui. {recipient} a reçu les fonds.',
+  'sui.failed': '<b>Échouée :</b> {error}. Rien n’a été transféré ; les frais de gaz sont tout de même prélevés.',
+  'sui.slow': 'L’indexeur ne la montre pas encore après 1 minute. La transaction était finale à l’envoi : vérifie l’historique avant de renvoyer.',
+  'sui.trackError': 'Suivi impossible pour l’instant : {message}',
+} as const;

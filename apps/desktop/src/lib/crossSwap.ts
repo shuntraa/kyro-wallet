@@ -7,6 +7,7 @@
 import { checkSolSummary, NATIVE_EVM_TOKEN, NATIVE_SOL_MINT, tronCoverage, type AdapterSet, type AnyAdapter, type AnyUnsigned, type AssetDef, type Chain } from '@kyro/chains';
 import type { EvmTxSummary, Network, SolTxSummary } from '@kyro/shared';
 import type { DepositPlan, SwapChain } from '@kyro/swap';
+import { t } from '../i18n';
 
 /** Swap id of the chains only NEAR Intents 1Click reaches (docs/SWAP_FEES.md). */
 const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = { btc: 'bitcoin', ltc: 'litecoin', doge: 'dogecoin', tron: 'tron', xrp: 'xrp', ada: 'cardano' };
@@ -119,15 +120,15 @@ export function crossStatusLabel(status: string | undefined, toChainLabel: strin
   switch (status) {
     case 'DONE':
     case 'SUCCESS':
-      return `arrivé sur ${toChainLabel}`;
+      return t('history.crossArrived', { chain: toChainLabel });
     case 'FAILED':
-      return 'échec du pont, remboursement prévu sur ton adresse de départ';
+      return t('history.crossFailed');
     case 'REFUNDED':
-      return 'remboursé sur ton adresse de départ';
+      return t('history.crossRefunded');
     case 'INCOMPLETE_DEPOSIT':
-      return 'dépôt incomplet, remboursement prévu sur ton adresse de départ';
+      return t('history.crossIncompleteDeposit');
     default:
-      return `en route vers ${toChainLabel}`;
+      return t('history.crossOnTheWay', { chain: toChainLabel });
   }
 }
 
@@ -147,54 +148,54 @@ export interface DepositDecoded {
  */
 export function depositTxProblem(u: AnyUnsigned, sell: AssetDef, plan: Pick<DepositPlan, 'depositAddress' | 'amountIn'>, decoded: DepositDecoded = {}): string | null {
   const to = plan.depositAddress;
-  if (u.recipient !== to && !(u.family === 'evm' && u.recipient.toLowerCase() === to.toLowerCase())) return 'destinataire différent de l’adresse de dépôt confirmée';
-  if (u.amount !== plan.amountIn) return 'montant différent de celui confirmé par le pont';
+  if (u.recipient !== to && !(u.family === 'evm' && u.recipient.toLowerCase() === to.toLowerCase())) return t('swap.depRecipientMismatch');
+  if (u.amount !== plan.amountIn) return t('swap.depAmountMismatch');
   switch (u.family) {
     case 'btc': {
       const outs = u.summary.outputs;
-      if (u.summary.warnings.length > 0 || outs.some(([a]) => a.startsWith('op_return:') || a.startsWith('script:'))) return 'sortie inattendue (OP_RETURN ou script inconnu) : refusée';
+      if (u.summary.warnings.length > 0 || outs.some(([a]) => a.startsWith('op_return:') || a.startsWith('script:'))) return t('swap.depUnexpectedOutput');
       const pay = outs.filter(([, , change]) => !change);
-      if (pay.length !== 1 || pay[0]?.[0] !== to || BigInt(pay[0][1]) !== plan.amountIn) return 'la transaction ne paie pas exactement l’adresse de dépôt';
+      if (pay.length !== 1 || pay[0]?.[0] !== to || BigInt(pay[0][1]) !== plan.amountIn) return t('swap.depNotExactPayment');
       return null;
     }
     case 'evm': {
       const s = decoded.evm;
-      if (!s) return 'décodage du coffre absent';
+      if (!s) return t('swap.depNoDecode');
       const token = sell.kind === 'erc20' ? sell.contract ?? '' : null;
       const kindOk = token ? s.kind === 'Erc20Transfer' && (s.tokenContract ?? '').toLowerCase() === token.toLowerCase() && u.tx.to.toLowerCase() === token.toLowerCase() : s.kind === 'NativeTransfer' && u.tx.to.toLowerCase() === to.toLowerCase();
-      if (!kindOk || s.to.toLowerCase() !== to.toLowerCase() || s.amount !== plan.amountIn.toString()) return 'le décodage du coffre ne correspond pas au dépôt confirmé';
+      if (!kindOk || s.to.toLowerCase() !== to.toLowerCase() || s.amount !== plan.amountIn.toString()) return t('swap.depDecodeMismatch');
       return null;
     }
     case 'sol': {
       const s = decoded.sol;
-      if (!s) return 'décodage du coffre absent';
+      if (!s) return t('swap.depNoDecode');
       const moves = s.instructions.filter((i) => i.type === 'systemTransfer' || i.type === 'tokenTransfer');
       const m = moves[0];
-      if (moves.length !== 1 || !m) return 'la transaction contient plusieurs transferts';
-      if (m.type === 'systemTransfer') return sell.kind === 'native' && m.to === to && m.lamports === plan.amountIn.toString() ? null : 'transfert de SOL différent du dépôt confirmé';
-      if (m.type === 'tokenTransfer') return sell.kind === 'spl' && m.checked && m.mint === sell.contract && m.destination === u.destinationTokenAccount && m.amount === plan.amountIn.toString() ? null : 'transfert de token différent du dépôt confirmé';
-      return 'transfert inattendu';
+      if (moves.length !== 1 || !m) return t('swap.depSeveralTransfers');
+      if (m.type === 'systemTransfer') return sell.kind === 'native' && m.to === to && m.lamports === plan.amountIn.toString() ? null : t('swap.depSolMismatch');
+      if (m.type === 'tokenTransfer') return sell.kind === 'spl' && m.checked && m.mint === sell.contract && m.destination === u.destinationTokenAccount && m.amount === plan.amountIn.toString() ? null : t('swap.depTokenMismatch');
+      return t('swap.depUnexpectedTransfer');
     }
     case 'tron': {
       const a = u.summary.action;
-      if (u.summary.memo || u.summary.warnings.length > 0) return 'mémo ou avertissement inattendu';
-      if (sell.kind === 'trc20') return a.type === 'trc20Transfer' && a.contract === sell.contract && a.to === to && a.amount === plan.amountIn.toString() && a.callValue === '0' ? null : 'transfert TRC-20 différent du dépôt confirmé';
-      return a.type === 'trxTransfer' && a.to === to && a.amount === plan.amountIn.toString() ? null : 'transfert TRX différent du dépôt confirmé';
+      if (u.summary.memo || u.summary.warnings.length > 0) return t('swap.depUnexpectedMemo');
+      if (sell.kind === 'trc20') return a.type === 'trc20Transfer' && a.contract === sell.contract && a.to === to && a.amount === plan.amountIn.toString() && a.callValue === '0' ? null : t('swap.depTrc20Mismatch');
+      return a.type === 'trxTransfer' && a.to === to && a.amount === plan.amountIn.toString() ? null : t('swap.depTrxMismatch');
     }
     case 'xrp': {
       const s = u.summary;
-      if (s.destination !== to || s.destinationTag !== null || s.memos.length > 0 || s.sendMax || s.warnings.length > 0) return 'paiement XRP différent du dépôt confirmé (tag, mémo ou chemin inattendu)';
-      return s.amount.kind === 'xrp' && s.amount.drops === plan.amountIn.toString() ? null : 'montant XRP différent du dépôt confirmé';
+      if (s.destination !== to || s.destinationTag !== null || s.memos.length > 0 || s.sendMax || s.warnings.length > 0) return t('swap.depXrpMismatch');
+      return s.amount.kind === 'xrp' && s.amount.drops === plan.amountIn.toString() ? null : t('swap.depXrpAmountMismatch');
     }
     case 'ada': {
       const s = u.summary;
-      if (u.token || u.memo || s.memo || s.warnings.length > 0) return 'token, message ou avertissement inattendu';
+      if (u.token || u.memo || s.memo || s.warnings.length > 0) return t('swap.depAdaUnexpected');
       const pay = s.outputs.filter((o) => !o.isChange);
-      if (pay.length !== 1 || pay[0]?.address !== to || pay[0].lovelace !== plan.amountIn.toString() || pay[0].tokens.length > 0) return 'la transaction ne paie pas exactement l’adresse de dépôt';
+      if (pay.length !== 1 || pay[0]?.address !== to || pay[0].lovelace !== plan.amountIn.toString() || pay[0].tokens.length > 0) return t('swap.depNotExactPayment');
       return null;
     }
     default:
-      return 'chaîne non prise en charge pour un dépôt NEAR Intents';
+      return t('swap.depUnsupportedChain');
   }
 }
 
@@ -227,7 +228,7 @@ export interface PreparedDeposit {
   decoded: DepositDecoded;
 }
 
-const stop = (why: string) => new Error(`${why} Arrêt, rien n’a été signé.`);
+const stop = (why: string) => new Error(t('swap.depStop', { why }));
 
 /**
  * NEAR Intents: the ordinary transfer of `plan.amountIn` to the deposit address 1Click confirmed,
@@ -237,11 +238,11 @@ const stop = (why: string) => new Error(`${why} Arrêt, rien n’a été signé.
  */
 export async function buildDepositTx(sell: AssetDef, adapters: Pick<AdapterSet, 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'cardano'>, plan: DepositPlan): Promise<PreparedDeposit> {
   const ad = depositAdapterFor(sell, adapters);
-  if (!ad) throw new Error('Pas de compte sur cette chaîne dans ce portefeuille.');
-  if (!ad.isValidAddress(plan.depositAddress)) throw stop('NEAR Intents : adresse de dépôt invalide pour cette chaîne.');
+  if (!ad) throw new Error(t('swap.depNoAccount'));
+  if (!ad.isValidAddress(plan.depositAddress)) throw stop(t('swap.depInvalidAddress'));
   if (ad.family === 'xrp' && adapters.xrp) {
     const dest = await adapters.xrp.destinationInfo(plan.depositAddress);
-    if (dest.requireDestTag) throw stop('NEAR Intents : l’adresse de dépôt XRP exige un tag.');
+    if (dest.requireDestTag) throw stop(t('swap.depXrpTagRequired'));
   }
   const fee = (await ad.estimateFees()).options.normal.params;
   const unsigned = (await (ad as { buildTx: (p: unknown) => Promise<AnyUnsigned> }).buildTx({ asset: sell, to: plan.depositAddress, amount: plan.amountIn, fee })) as AnyUnsigned;
@@ -256,7 +257,7 @@ export async function buildDepositTx(sell: AssetDef, adapters: Pick<AdapterSet, 
     if (problem) throw stop(problem);
   }
   const problem = depositTxProblem(unsigned, sell, plan, decoded);
-  if (problem) throw stop(`Dépôt NEAR Intents : ${problem}.`);
-  if (unsigned.family === 'tron' && !tronCoverage(unsigned.estimate, unsigned.token ? 0n : unsigned.amount).expected) throw new Error('TRX insuffisant pour les frais réseau de ce transfert.');
+  if (problem) throw stop(t('swap.depProblem', { problem }));
+  if (unsigned.family === 'tron' && !tronCoverage(unsigned.estimate, unsigned.token ? 0n : unsigned.amount).expected) throw new Error(t('swap.depTrxFees'));
   return { plan, unsigned, decoded };
 }

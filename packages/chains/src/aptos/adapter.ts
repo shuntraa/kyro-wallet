@@ -6,7 +6,7 @@
 // and checks that what Rust built is what was asked (recipient, amount, function).
 
 import { accountArg } from '../types';
-import { call, type AptosAccountInfo, type AptosContext, type AptosHistoryEntry, type AptosTxSummary, type AptosWarning } from '@kyro/shared';
+import { call, l10n, type AptosAccountInfo, type AptosContext, type AptosHistoryEntry, type AptosTxSummary, type AptosWarning } from '@kyro/shared';
 import type { AptosChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
@@ -52,12 +52,12 @@ export function isAptosAddress(address: string): boolean {
 export function aptosAddressProblem(address: string): string | null {
   const a = address.trim();
   if (a === '') return null;
-  if (a.endsWith('.apt')) return 'Les noms ANS (.apt) ne sont pas pris en charge : colle l’adresse 0x… complète.';
-  if (!a.startsWith('0x')) return 'Une adresse Aptos commence par 0x.';
+  if (a.endsWith('.apt')) return l10n('Les noms ANS (.apt) ne sont pas pris en charge : colle l’adresse 0x… complète.', 'ANS names (.apt) are not supported: paste the full 0x… address.');
+  if (!a.startsWith('0x')) return l10n('Une adresse Aptos commence par 0x.', 'An Aptos address starts with 0x.');
   const h = a.slice(2);
-  if (!/^[0-9a-fA-F]*$/.test(h)) return 'Caractère non hexadécimal dans l’adresse.';
-  if (h.length < 64) return `Forme courte (${h.length} caractères après 0x) : demande l’adresse complète de 64 caractères. Kyro ne complète pas les zéros lui-même.`;
-  if (h.length > 64) return 'Adresse trop longue : 64 caractères hexadécimaux après 0x.';
+  if (!/^[0-9a-fA-F]*$/.test(h)) return l10n('Caractère non hexadécimal dans l’adresse.', 'Non-hexadecimal character in the address.');
+  if (h.length < 64) return l10n(`Forme courte (${h.length} caractères après 0x) : demande l’adresse complète de 64 caractères. Kyro ne complète pas les zéros lui-même.`, `Short form (${h.length} characters after 0x): ask for the full 64-character address. Kyro does not pad the zeros itself.`);
+  if (h.length > 64) return l10n('Adresse trop longue : 64 caractères hexadécimaux après 0x.', 'Address too long: 64 hexadecimal characters after 0x.');
   return null;
 }
 
@@ -103,7 +103,7 @@ export class AptosAdapter implements ChainAdapter<'apt'> {
   private readonly backend: AptosBackend;
 
   constructor(opts: AptosAdapterOptions) {
-    if (!isAptosAddress(opts.address)) throw new Error('Adresse Aptos invalide');
+    if (!isAptosAddress(opts.address)) throw new Error(l10n('Adresse Aptos invalide', 'Invalid Aptos address'));
     this.chain = opts.chain;
     this.address = norm(opts.address);
     this.backend = opts.backend ?? rustAptosBackend(opts.account ?? 0);
@@ -138,7 +138,7 @@ export class AptosAdapter implements ChainAdapter<'apt'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais fixés par le réseau (≈ 0,0001 APT)',
+      hint: l10n('frais fixés par le réseau (≈ 0,0001 APT)', 'fees set by the network (≈ 0.0001 APT)'),
       fetchedAt: Date.now(),
     });
   }
@@ -148,23 +148,23 @@ export class AptosAdapter implements ChainAdapter<'apt'> {
    * whole balance can never be sent), built twice like XRP.
    */
   async buildTx(params: BuildParams): Promise<AptosUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif Aptos inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif Aptos inattendu', 'Unexpected Aptos asset'));
     if (!params.max) return this.buildTransfer(params.to, params.amount);
     const balance = BigInt((await this.backend.account(this.address)).balance);
     // First pass with room for a large fee (0.01 APT), then exactly balance − max fee.
     const first = await this.buildTransfer(params.to, balance - 1_000_000n).catch(() => null);
     const fee = first ? first.maxFee : 1_000_000n;
     const amount = balance - fee;
-    if (amount <= 0n) throw new Error('Rien à envoyer : ton solde ne couvre pas les frais maximum');
+    if (amount <= 0n) throw new Error(l10n('Rien à envoyer : ton solde ne couvre pas les frais maximum', 'Nothing to send: your balance does not cover the maximum fee'));
     return this.buildTransfer(params.to, amount);
   }
 
   async buildTransfer(toInput: string, amount: bigint): Promise<AptosUnsigned> {
     const to = norm(toInput);
     const problem = aptosAddressProblem(to);
-    if (problem || !isAptosAddress(to)) throw new Error(problem ?? 'Adresse Aptos invalide');
-    if (to === this.address) throw new Error('Envoi à soi-même impossible');
-    if (amount <= 0n) throw new Error('Montant invalide');
+    if (problem || !isAptosAddress(to)) throw new Error(problem ?? l10n('Adresse Aptos invalide', 'Invalid Aptos address'));
+    if (to === this.address) throw new Error(l10n('Envoi à soi-même impossible', 'Cannot send to yourself'));
+    if (amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const built = await this.backend.build(to, amount.toString());
     const s = built.summary;
     if (
@@ -175,7 +175,7 @@ export class AptosAdapter implements ChainAdapter<'apt'> {
       s.chainId !== this.chain.chainId ||
       s.requiresExtraConfirmation
     ) {
-      throw new Error('Le transfert construit par Rust ne correspond pas à la demande');
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
     }
     return {
       family: 'apt',
@@ -193,14 +193,14 @@ export class AptosAdapter implements ChainAdapter<'apt'> {
   /** Rust: live checks (sequence, balance, re-simulation), native dialog, signature. */
   async signTx(unsigned: AptosUnsigned, password: string): Promise<AptosSigned> {
     const res = await this.backend.sign(unsigned.raw, password);
-    if (!/^0x[0-9a-f]{64}$/i.test(res.hash)) throw new Error('Hash Aptos inattendu');
+    if (!/^0x[0-9a-f]{64}$/i.test(res.hash)) throw new Error(l10n('Hash Aptos inattendu', 'Unexpected Aptos hash'));
     return { family: 'apt', signed: res.signed, hash: res.hash, summary: res.summary };
   }
 
   /** Rust verifies the signature and that the node's hash is ours. */
   async broadcast(signed: AptosSigned): Promise<string> {
     const hash = await this.backend.broadcast(signed.signed);
-    if (hash.toLowerCase() !== signed.hash.toLowerCase()) throw new Error('Hash diffusé inattendu');
+    if (hash.toLowerCase() !== signed.hash.toLowerCase()) throw new Error(l10n('Hash diffusé inattendu', 'Unexpected broadcast hash'));
     return hash;
   }
 

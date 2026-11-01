@@ -12,8 +12,9 @@ use wallet_core::{Network, TonAddress, TonTransfer, TonTxSummary, TonWarning};
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::servers::utxo_network_key;
 use crate::state::AppState;
 use crate::ton_backend::{
@@ -50,8 +51,8 @@ fn now() -> u32 {
         .unwrap_or(0)
 }
 
-fn ton(nano: &str) -> String {
-    format!("{} TON", format_units(nano, 9))
+fn ton(lang: Lang, nano: &str) -> String {
+    format!("{} TON", format_units_in(lang, nano, 9))
 }
 
 /// A user-friendly address the user typed, for this network.
@@ -81,53 +82,110 @@ pub struct TonContext {
 }
 
 /// Body of the native dialog. The comment gets its own framed block, whatever it is.
-pub(crate) fn describe_ton(s: &TonTxSummary, c: &TonContext, net: Network, now: u32) -> String {
+pub(crate) fn describe_ton(
+    lang: Lang,
+    s: &TonTxSummary,
+    c: &TonContext,
+    net: Network,
+    now: u32,
+) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
-    let mut out = format!(
-        "Envoi TON{}\n\nÀ : {}\n(même compte que {} : seul l'indicateur de rebond diffère)\n",
-        if net == Network::Testnet {
-            " (testnet)"
-        } else {
-            ""
-        },
-        s.destination,
-        s.destination_other
-    );
+    let tn = |v: &str| ton(lang, v);
+    let testnet = if net == Network::Testnet {
+        " (testnet)"
+    } else {
+        ""
+    };
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Envoi TON{testnet}\n\nÀ : {}\n(même compte que {} : seul l'indicateur de rebond diffère)\n",
+            s.destination, s.destination_other
+        ),
+        Lang::En => format!(
+            "TON send{testnet}\n\nTo: {}\n(same account as {}: only the bounce flag differs)\n",
+            s.destination, s.destination_other
+        ),
+    };
     out += &format!("{line}\n");
     match &s.comment {
-        Some(t) => out += &format!("COMMENTAIRE : « {t} »\n"),
-        None => out += "AUCUN COMMENTAIRE\n(une plateforme d'échange en exige souvent un, appelé aussi mémo ou tag : sans lui, les fonds peuvent être perdus)\n",
+        Some(t) => {
+            out += &format!(
+                "{}« {t} »\n",
+                lang.pick("COMMENTAIRE : ", "COMMENT: ")
+            )
+        }
+        None => out += lang.pick(
+            "AUCUN COMMENTAIRE\n(une plateforme d'échange en exige souvent un, appelé aussi mémo ou tag : sans lui, les fonds peuvent être perdus)\n",
+            "NO COMMENT\n(an exchange often requires one, also called memo or tag: without it, the funds can be lost)\n",
+        ),
     }
     out += &format!("{line}\n");
     if s.send_all {
-        out += &format!(
-            "Montant : TOUT LE SOLDE, ≈ {} (solde moins les frais) — ton portefeuille restera à 0\n",
-            ton(&c.account.balance)
-        );
+        out += &match lang {
+            Lang::Fr => format!(
+                "Montant : TOUT LE SOLDE, ≈ {} (solde moins les frais) — ton portefeuille restera à 0\n",
+                tn(&c.account.balance)
+            ),
+            Lang::En => format!(
+                "Amount: THE WHOLE BALANCE, ≈ {} (balance minus the fee) — your wallet will be left at 0\n",
+                tn(&c.account.balance)
+            ),
+        };
     } else {
-        out += &format!("Montant : {} ({} nanotons)\n", ton(&s.amount), s.amount);
+        out += &format!(
+            "{}{} ({} nanotons)\n",
+            lang.pick("Montant : ", "Amount: "),
+            tn(&s.amount),
+            s.amount
+        );
     }
     out += if s.bounce {
-        "Rebond : oui (si le destinataire échoue, les fonds reviennent, moins les frais)\n"
+        lang.pick(
+            "Rebond : oui (si le destinataire échoue, les fonds reviennent, moins les frais)\n",
+            "Bounce: yes (if the recipient fails, the funds come back, minus the fee)\n",
+        )
     } else if c.destination.status == TonStatus::Active {
-        "Rebond : non (adresse non rebondissante UQ… : les fonds restent chez le destinataire quoi qu'il arrive)\n"
+        lang.pick(
+            "Rebond : non (adresse non rebondissante UQ… : les fonds restent chez le destinataire quoi qu'il arrive)\n",
+            "Bounce: no (non-bounceable UQ… address: the funds stay with the recipient whatever happens)\n",
+        )
     } else {
-        "Rebond : non — ce compte n'est pas encore actif (jamais utilisé) : les fonds y arrivent quand même et y restent\n"
+        lang.pick(
+            "Rebond : non — ce compte n'est pas encore actif (jamais utilisé) : les fonds y arrivent quand même et y restent\n",
+            "Bounce: no — this account is not active yet (never used): the funds still arrive there and stay there\n",
+        )
     };
-    out += &format!(
-        "\nFrais estimés : ≈ {} (en plus du montant, prélevés sur ton solde)\nSolde : {}\n",
-        ton(&c.fee),
-        ton(&c.account.balance)
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais estimés : ≈ {} (en plus du montant, prélevés sur ton solde)\nSolde : {}\n",
+            tn(&c.fee),
+            tn(&c.account.balance)
+        ),
+        Lang::En => format!(
+            "\nEstimated fee: ≈ {} (on top of the amount, taken from your balance)\nBalance: {}\n",
+            tn(&c.fee),
+            tn(&c.account.balance)
+        ),
+    };
     if s.deploys_wallet {
-        out += "Premier envoi : il déploie aussi ton portefeuille (contrat standard v4R2).\n";
+        out += lang.pick(
+            "Premier envoi : il déploie aussi ton portefeuille (contrat standard v4R2).\n",
+            "First send: it also deploys your wallet (standard v4R2 contract).\n",
+        );
     }
     let mins = s.valid_until.saturating_sub(now).div_ceil(60);
-    out += &format!(
-        "Valable encore ≈ {mins} min (jusqu'à {} UTC), seqno {}\n",
-        utc_hms(s.valid_until),
-        s.seqno
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "Valable encore ≈ {mins} min (jusqu'à {} UTC), seqno {}\n",
+            utc_hms(s.valid_until),
+            s.seqno
+        ),
+        Lang::En => format!(
+            "Still valid for ≈ {mins} min (until {} UTC), seqno {}\n",
+            utc_hms(s.valid_until),
+            s.seqno
+        ),
+    };
     out
 }
 
@@ -137,16 +195,21 @@ fn utc_hms(t: u32) -> String {
     format!("{:02}:{:02}:{:02}", d / 3600, d % 3600 / 60, d % 60)
 }
 
-pub(crate) fn describe_ton_extra(s: &TonTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans ce transfert :\n");
+pub(crate) fn describe_ton_extra(lang: Lang, s: &TonTxSummary) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des éléments inhabituels dans ce transfert :\n",
+        "Kyro found unusual elements in this transfer:\n",
+    ));
     for w in &s.warnings {
         out += match w {
-            TonWarning::UnusualText => {
-                "• commentaire contenant des caractères invisibles / de contrôle (affiché nettoyé)\n"
-            }
+            TonWarning::UnusualText => lang.pick(
+                "• commentaire contenant des caractères invisibles / de contrôle (affiché nettoyé)\n",
+                "• comment containing invisible / control characters (shown cleaned)\n",
+            ),
         };
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -394,21 +457,22 @@ pub async fn ton_sign_tx(
     let net = state.network;
     let (summary, context) = prepare_sign(&c, &pk, &me, &boc, now()).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer l'envoi TON",
-        signer.body(
-            crate::i18n::current(),
-            &describe_ton(&summary, &context, net, now()),
-        ),
+        lang.pick("Confirmer l'envoi TON", "Confirm the TON send"),
+        signer.body(lang, &describe_ton(lang, &summary, &context, net, now())),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : transfert à vérifier",
-            describe_ton_extra(&summary),
+            lang.pick(
+                "Attention : transfert à vérifier",
+                "Warning: transfer to check",
+            ),
+            describe_ton_extra(lang, &summary),
         )
         .await?;
     }
@@ -527,6 +591,7 @@ mod tests {
     #[test]
     fn dialog_highlights_the_comment_and_both_address_forms() {
         let d = describe_ton(
+            Lang::Fr,
             &summary(Some("123456"), true, false, false),
             &context(TonStatus::Active),
             Network::Testnet,
@@ -547,6 +612,7 @@ mod tests {
         }
         assert!(!d.contains("déploie"));
         let d = describe_ton(
+            Lang::Fr,
             &summary(None, false, true, true),
             &context(TonStatus::Uninit),
             Network::Mainnet,
@@ -559,8 +625,16 @@ mod tests {
         assert!(d.contains("déploie aussi ton portefeuille"));
         let mut s = summary(Some("x"), true, false, false);
         s.warnings = vec![TonWarning::UnusualText];
-        assert!(describe_ton_extra(&s).contains("caractères invisibles"));
+        assert!(describe_ton_extra(Lang::Fr, &s).contains("caractères invisibles"));
         assert_eq!(utc_hms(1_800_000_600), "08:10:00");
+        let en = describe_ton(
+            Lang::En,
+            &summary(Some("123456"), true, false, false),
+            &context(TonStatus::Active),
+            Network::Testnet,
+            1_800_000_000,
+        );
+        assert!(en.contains("Amount: 1.5 TON (1500000000 nanotons)") && en.contains("Bounce: yes"));
     }
 
     #[test]
@@ -727,7 +801,7 @@ mod live {
             assert_eq!(summary, built.summary);
             eprintln!(
                 "--- dialog ---\n{}---",
-                describe_ton(&summary, &context, Network::Testnet, now())
+                describe_ton(Lang::Fr, &summary, &context, Network::Testnet, now())
             );
             let signed = wallet_core::ton_sign(&seed, 0, &built.boc, true).unwrap();
             assert_eq!(signed.summary, summary);

@@ -104,4 +104,9 @@ export const portfolio = {
   'portfolio.change7d': 'Variation 7 j',
   'portfolio.change30d': 'Variation 30 j',
   'portfolio.testnetPricesNote': 'Cours du mainnet : les jetons de test n’ont pas de valeur réelle.',
+  'portfolio.hbarAccount': 'Compte Hedera',
+  'portfolio.hbarNoAccount': 'Pas encore de compte : le premier HBAR reçu sur ton adresse EVM le crée.',
+  'portfolio.hbarHollow': 'Compte créé par un transfert reçu : ton premier envoi fixe sa clé.',
+  'portfolio.dotNoHistoryTitle': 'Historique non disponible',
+  'portfolio.dotNoHistory': 'Polkadot n’a pas d’indexeur public sans clé : Kyro affiche ton solde, et seulement les envois faits depuis cet appareil.',
 } as const;
