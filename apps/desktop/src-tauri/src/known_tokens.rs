@@ -30,6 +30,8 @@ pub enum TokenChain {
     Tron,
     /// Sui (coin type `0x…::module::NAME`, held by wallet-core `sui_known_coins`).
     Sui,
+    /// Aptos (fungible-asset metadata object `0x` + 64 hex, wallet-core `aptos_known_assets`).
+    Aptos,
 }
 
 /// What Kyro knows about a curated token. Symbol and decimals were checked on chain against
@@ -132,6 +134,7 @@ mod tests {
             "solana" => TokenChain::Solana,
             "tron" => TokenChain::Tron,
             "sui" => TokenChain::Sui,
+            "aptos" => TokenChain::Aptos,
             evm => TokenChain::Evm(evm.strip_prefix("evm:").unwrap().parse().unwrap()),
         }
     }
@@ -251,6 +254,10 @@ mod tests {
                     wallet_core::sui_parse_address(pkg).unwrap();
                     assert_eq!(rest.split("::").count(), 2, "{e:?}");
                 }
+                TokenChain::Aptos => {
+                    assert_eq!(e.contract.len(), 66, "{e:?}");
+                    wallet_core::aptos_parse_address(e.contract).unwrap();
+                }
             }
         }
     }
@@ -276,6 +283,13 @@ mod tests {
                 .collect();
             sui.sort();
             assert_eq!(table(TokenChain::Sui), sui);
+            let chain_id = if tn { 2 } else { 1 };
+            let mut apt: Vec<_> = wallet_core::aptos_known_assets(chain_id)
+                .iter()
+                .map(|a| (a.metadata.to_string(), a.symbol, a.decimals))
+                .collect();
+            apt.sort();
+            assert_eq!(table(TokenChain::Aptos), apt);
         }
     }
 

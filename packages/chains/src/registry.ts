@@ -71,7 +71,7 @@ export interface WatchOnlyChain {
   phase: 4;
 }
 
-export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'suicoin';
+export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'suicoin' | 'fa';
 
 export interface AssetDef {
   /** Unique id, e.g. `btc`, `eth:1`, `erc20:11155111:0x1c7d…`. */
@@ -846,6 +846,18 @@ export const SUI_COINS: Record<Network, TokenSpec[]> = {
   mainnet: [USDC('0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC')],
 };
 
+/**
+ * Aptos fungible assets (`contract` = metadata object `0x` + 64 hex). USDC: Circle's native USDC
+ * (developers.circle.com, mainnet and testnet), USDt: Tether's « Object Asset ID »
+ * (tether.to › supported protocols, mainnet only); both cross-checked with CoinGecko
+ * (`usd-coin` / `tether`, platform `aptos`), `fungible_asset::Metadata` read on chain
+ * (decimals 6, 2026-11-01). wallet-core (`aptos.rs`, `aptos_known_assets`) holds the same list.
+ */
+export const APTOS_ASSETS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832')],
+  mainnet: [USDC('0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b'), USDT('0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b')],
+};
+
 export const SPL_TOKENS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')],
   mainnet: [
@@ -957,6 +969,11 @@ export function assetsFor(network: Network): AssetDef[] {
     if (chain.family === 'sui') {
       for (const t of SUI_COINS[network]) {
         out.push({ id: `suicoin:${t.contract}`, chainKey: chain.key, family: 'sui', kind: 'suicoin', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'apt') {
+      for (const t of APTOS_ASSETS[network]) {
+        out.push({ id: `fa:${t.contract}`, chainKey: chain.key, family: 'apt', kind: 'fa', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
       }
     }
   }

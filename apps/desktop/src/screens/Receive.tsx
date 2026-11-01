@@ -610,6 +610,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           {family === 'apt' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               {rt('receive.aptNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.aptTokenNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</span>}
             </Notice>
           )}
           {family === 'btc' && cbfMode && (

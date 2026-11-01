@@ -21,6 +21,17 @@
 //! }
 //! ```
 //!
+//! and, for the fungible assets Kyro knows ([`aptos_known_assets`]: Circle's USDC, Tether's
+//! USDt), the call Petra and the SDKs make:
+//!
+//! ```text
+//!   payload: EntryFunction(0x1::primary_fungible_store::transfer,
+//!            ty_args: [0x1::fungible_asset::Metadata],
+//!            args: [bcs(metadata object address), bcs(address), bcs(u64)]),
+//! ```
+//!
+//! The metadata address is in the bytes and must be a known one for the transaction's chain id.
+//!
 //! Decoding is strict (canonical ULEB128, known variants only, no trailing byte) **and** the
 //! decoded value is re-encoded and compared byte for byte with the input: any other layout
 //! (another function or module, type arguments, a script, a multisig or "inner payload" (V1
@@ -51,8 +62,80 @@ pub const APTOS_TESTNET_CHAIN_ID: u8 = 2;
 /// Maximum fee (`max_gas_amount × gas_unit_price`) above this (0.02 APT) is flagged: a plain
 /// transfer costs about 0.0001 APT, creating the recipient's account a few thousandths.
 pub const APTOS_HIGH_FEE_OCTAS: u64 = 2_000_000;
-/// The only function Kyro calls.
+/// The function Kyro calls for APT.
 pub const APTOS_TRANSFER_FUNCTION: &str = "0x1::aptos_account::transfer";
+/// The function Kyro calls for a known fungible asset.
+pub const APTOS_FA_TRANSFER_FUNCTION: &str = "0x1::primary_fungible_store::transfer";
+const FA_MODULE: &[u8] = b"primary_fungible_store";
+
+/// A fungible asset Kyro knows, from the issuer's official list (cross-checked with CoinGecko,
+/// `Metadata` read on chain).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AptosKnownAsset {
+    /// Metadata object address, `0x` + 64 hex.
+    pub metadata: &'static str,
+    /// Ticker.
+    pub symbol: &'static str,
+    /// Display name.
+    pub name: &'static str,
+    /// Decimals (`Metadata.decimals`).
+    pub decimals: u8,
+}
+
+/// Mainnet: USDC (developers.circle.com › USDC contract addresses; CoinGecko `usd-coin`
+/// platform `aptos`) and USDt (tether.to › supported protocols, « Object Asset ID »; CoinGecko
+/// `tether` platform `aptos`); `Metadata` on chain: decimals 6, symbols USDC / USDt (2026-11-01).
+const APTOS_MAINNET_ASSETS: &[AptosKnownAsset] = &[
+    AptosKnownAsset {
+        metadata: "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b",
+        symbol: "USDC",
+        name: "USD Coin",
+        decimals: 6,
+    },
+    AptosKnownAsset {
+        metadata: "0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b",
+        symbol: "USDT",
+        name: "Tether",
+        decimals: 6,
+    },
+];
+/// Testnet: Circle's testnet USDC (same page). Tether lists no testnet deployment.
+const APTOS_TESTNET_ASSETS: &[AptosKnownAsset] = &[AptosKnownAsset {
+    metadata: "0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832",
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+}];
+
+/// The fungible assets Kyro sends and shows on the chain `chain_id` (1 mainnet, 2 testnet).
+pub fn aptos_known_assets(chain_id: u8) -> &'static [AptosKnownAsset] {
+    match chain_id {
+        APTOS_MAINNET_CHAIN_ID => APTOS_MAINNET_ASSETS,
+        APTOS_TESTNET_CHAIN_ID => APTOS_TESTNET_ASSETS,
+        _ => &[],
+    }
+}
+
+/// The known asset whose metadata object is `metadata` on `chain_id`.
+pub fn aptos_known_asset(metadata: &[u8; 32], chain_id: u8) -> Option<&'static AptosKnownAsset> {
+    let m = aptos_address_string(metadata);
+    aptos_known_assets(chain_id)
+        .iter()
+        .find(|a| a.metadata == m)
+}
+
+/// `TypeTag::Struct(0x1::fungible_asset::Metadata)`, the one type argument of the FA transfer.
+fn metadata_type_tag() -> Vec<u8> {
+    let mut o = vec![7u8]; // TypeTag::Struct
+    let mut one = [0u8; 32];
+    one[31] = 1;
+    o.extend_from_slice(&one);
+    put_bytes(&mut o, b"fungible_asset");
+    put_bytes(&mut o, b"Metadata");
+    put_uleb(&mut o, 0); // no type parameter
+    o
+}
 
 const RAW_TX_SALT: &[u8] = b"APTOS::RawTransaction";
 const TX_SALT: &[u8] = b"APTOS::Transaction";
@@ -252,12 +335,20 @@ pub struct AptosTransfer {
     pub expiration_timestamp_secs: u64,
     /// 1 mainnet, 2 testnet.
     pub chain_id: u8,
+    /// Known fungible asset (metadata object address) sent with
+    /// `primary_fungible_store::transfer`; `None` = APT.
+    pub token: Option<[u8; 32]>,
 }
 
 impl AptosTransfer {
     fn check(&self) -> Result<()> {
         if self.amount == 0 {
             return Err(bad("montant nul"));
+        }
+        if let Some(m) = &self.token {
+            if aptos_known_asset(m, self.chain_id).is_none() {
+                return Err(bad("jeton inconnu de Kyro sur ce réseau"));
+            }
         }
         if self.max_gas_amount == 0 {
             return Err(bad("gaz maximum nul"));
@@ -294,10 +385,22 @@ impl AptosTransfer {
         let mut module_address = [0u8; 32];
         module_address[31] = 1;
         o.extend_from_slice(&module_address);
-        put_bytes(&mut o, MODULE_NAME);
-        put_bytes(&mut o, FUNCTION_NAME);
-        put_uleb(&mut o, 0); // no type argument
-        put_uleb(&mut o, 2); // two arguments, each BCS-encoded then length-prefixed
+        match &self.token {
+            None => {
+                put_bytes(&mut o, MODULE_NAME);
+                put_bytes(&mut o, FUNCTION_NAME);
+                put_uleb(&mut o, 0); // no type argument
+                put_uleb(&mut o, 2); // two arguments, each BCS-encoded then length-prefixed
+            }
+            Some(m) => {
+                put_bytes(&mut o, FA_MODULE);
+                put_bytes(&mut o, FUNCTION_NAME);
+                put_uleb(&mut o, 1);
+                o.extend_from_slice(&metadata_type_tag());
+                put_uleb(&mut o, 3); // metadata object, recipient, amount
+                put_bytes(&mut o, m);
+            }
+        }
         put_bytes(&mut o, &self.recipient);
         put_bytes(&mut o, &self.amount.to_le_bytes());
         o.extend_from_slice(&self.max_gas_amount.to_le_bytes());
@@ -331,17 +434,39 @@ impl AptosTransfer {
         let function = r.bytes(128)?;
         let mut expected_module = [0u8; 32];
         expected_module[31] = 1;
-        if module_address != expected_module || module != MODULE_NAME || function != FUNCTION_NAME {
+        let fa = module == FA_MODULE;
+        if module_address != expected_module
+            || (module != MODULE_NAME && !fa)
+            || function != FUNCTION_NAME
+        {
             return Err(bad(format!(
-                "appel de fonction autre que {APTOS_TRANSFER_FUNCTION} : non pris en charge"
+                "appel de fonction autre que {APTOS_TRANSFER_FUNCTION} ou {APTOS_FA_TRANSFER_FUNCTION} : non pris en charge"
             )));
         }
-        if r.uleb()? != 0 {
-            return Err(bad("arguments de type : non pris en charge"));
-        }
-        if r.uleb()? != 2 {
-            return Err(bad("nombre d'arguments inattendu"));
-        }
+        let token = if fa {
+            let tag = metadata_type_tag();
+            if r.uleb()? != 1 || r.take(tag.len())? != tag.as_slice() {
+                return Err(bad(
+                    "argument de type autre que 0x1::fungible_asset::Metadata : non pris en charge",
+                ));
+            }
+            if r.uleb()? != 3 {
+                return Err(bad("nombre d'arguments inattendu"));
+            }
+            let m: [u8; 32] = r
+                .bytes(64)?
+                .try_into()
+                .map_err(|_| bad("objet de métadonnées : 32 octets attendus"))?;
+            Some(m)
+        } else {
+            if r.uleb()? != 0 {
+                return Err(bad("arguments de type : non pris en charge"));
+            }
+            if r.uleb()? != 2 {
+                return Err(bad("nombre d'arguments inattendu"));
+            }
+            None
+        };
         let to = r.bytes(64)?;
         let recipient: [u8; 32] = to
             .try_into()
@@ -364,6 +489,7 @@ impl AptosTransfer {
             gas_unit_price,
             expiration_timestamp_secs,
             chain_id,
+            token,
         };
         if t.encode()? != bcs {
             return Err(bad("ré-encodage différent"));
@@ -444,9 +570,9 @@ pub struct AptosTxSummary {
     pub sender: String,
     /// Recipient, full `0x` + 64 hex.
     pub recipient: String,
-    /// Always [`APTOS_TRANSFER_FUNCTION`].
+    /// [`APTOS_TRANSFER_FUNCTION`], or [`APTOS_FA_TRANSFER_FUNCTION`] for a known token.
     pub function: String,
-    /// Octas, decimal.
+    /// Octas, decimal (token transfer: token units).
     pub amount: String,
     /// Sender's sequence number.
     pub sequence_number: String,
@@ -464,6 +590,22 @@ pub struct AptosTxSummary {
     pub warnings: Vec<AptosWarning>,
     /// The confirmation must be followed by a reinforced one.
     pub requires_extra_confirmation: bool,
+    /// Known fungible asset sent, `None` for APT.
+    pub token: Option<AptosTokenSummary>,
+}
+
+/// The token of a fungible-asset transfer (known metadata object of this chain id).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AptosTokenSummary {
+    /// Metadata object address (verified id), `0x` + 64 hex.
+    pub metadata: String,
+    /// Ticker.
+    pub symbol: String,
+    /// Display name.
+    pub name: String,
+    /// Decimals.
+    pub decimals: u8,
 }
 
 fn summarize(t: &AptosTransfer, ours: &[u8; 32]) -> Result<AptosTxSummary> {
@@ -477,10 +619,28 @@ fn summarize(t: &AptosTransfer, ours: &[u8; 32]) -> Result<AptosTxSummary> {
     if t.max_fee() > APTOS_HIGH_FEE_OCTAS {
         warnings.push(AptosWarning::HighFee);
     }
+    let token = match &t.token {
+        None => None,
+        Some(m) => {
+            let k = aptos_known_asset(m, t.chain_id)
+                .ok_or_else(|| bad("jeton inconnu de Kyro sur ce réseau"))?;
+            Some(AptosTokenSummary {
+                metadata: k.metadata.into(),
+                symbol: k.symbol.into(),
+                name: k.name.into(),
+                decimals: k.decimals,
+            })
+        }
+    };
     Ok(AptosTxSummary {
         sender: aptos_address_string(&t.sender),
         recipient: aptos_address_string(&t.recipient),
-        function: APTOS_TRANSFER_FUNCTION.into(),
+        function: if token.is_some() {
+            APTOS_FA_TRANSFER_FUNCTION
+        } else {
+            APTOS_TRANSFER_FUNCTION
+        }
+        .into(),
         amount: t.amount.to_string(),
         sequence_number: t.sequence_number.to_string(),
         max_gas_amount: t.max_gas_amount.to_string(),
@@ -490,6 +650,7 @@ fn summarize(t: &AptosTransfer, ours: &[u8; 32]) -> Result<AptosTxSummary> {
         chain_id: t.chain_id,
         requires_extra_confirmation: !warnings.is_empty(),
         warnings,
+        token,
     })
 }
 

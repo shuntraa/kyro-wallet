@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aptos-token-balances"
+description = "Enables the aptos_token_balances command without any pre-configured scope."
+commands.allow = ["aptos_token_balances"]
+
+[[permission]]
+identifier = "deny-aptos-token-balances"
+description = "Denies the aptos_token_balances command without any pre-configured scope."
+commands.deny = ["aptos_token_balances"]

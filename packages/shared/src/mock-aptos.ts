@@ -199,6 +199,9 @@ export function createDemoAptos(d: DemoAptosDeps) {
       await backend();
       return account(addr);
     },
+    aptos_token_balances: () => Promise.resolve([]),
+    aptos_token_txs: () => Promise.resolve([]),
+    aptos_build_token_tx: () => Promise.reject(new Error(l10n('Démo : envoi de jetons Aptos non simulé', 'Demo: Aptos token sends are not simulated'))),
     aptos_txs: async (a) => {
       const addr = checkAptosAddress(a.address);
       await backend();

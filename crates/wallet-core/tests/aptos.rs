@@ -125,7 +125,76 @@ fn transfer(v: &Mainnet) -> AptosTransfer {
         gas_unit_price: v.price,
         expiration_timestamp_secs: v.expiration,
         chain_id: APTOS_MAINNET_CHAIN_ID,
+        token: None,
     }
+}
+
+/// Mainnet USDC transfer made with `0x1::primary_fungible_store::transfer<Metadata>` (version
+/// 7857447462, fetched 2026-11-01 from api.mainnet.aptoslabs.com): rebuilt from its fields,
+/// the chain's own signature verifies over Kyro's bytes and the hash is the network's.
+#[test]
+fn mainnet_usdc_transfer_rebuilt_byte_for_byte() {
+    use wallet_core::{aptos_known_assets, APTOS_FA_TRANSFER_FUNCTION};
+    let usdc = b32("0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b");
+    let t = AptosTransfer {
+        sender: b32("0xd5a7f1beac3d8f95f9593c401897f62be2eb01c35b5a353a2522f1fd97f716ee"),
+        sequence_number: 19,
+        recipient: b32("0xa044357a441c87a85c5887ddfeb0428a8a25ab2a789b23a2b472b6c6c385d228"),
+        amount: 109_548_000,
+        max_gas_amount: 11_000,
+        gas_unit_price: 100,
+        expiration_timestamp_secs: 1_793_558_821,
+        chain_id: APTOS_MAINNET_CHAIN_ID,
+        token: Some(usdc),
+    };
+    let raw = t.encode().unwrap();
+    assert_eq!(AptosTransfer::decode(&raw).unwrap(), t);
+    let pk: [u8; 32] =
+        hex::decode("cf85b55932b0aefd39bf6dc2b7d268e250108e63a8f7a5b924de0236f62eaa1f")
+            .unwrap()
+            .try_into()
+            .unwrap();
+    let sig: [u8; 64] = hex::decode("bcd075442ddbe4ef4f91fabe4223a0649fbaa46dc6fc3691db6747f8dee033a3852bf1ce93c4bb9596bd17eb0fb5b65ad33c62ff6eac629c5356c0a87fc7360e").unwrap().try_into().unwrap();
+    let signed = t.signed_bytes(&pk, &sig).unwrap();
+    assert_eq!(
+        aptos_tx_hash(&signed),
+        "0xe12c3bd68aec8267431c87059f4eb516a880bb22689e451f7efdd20d0ca75663"
+    );
+    let (hash, back) = aptos_verify_signed(&hex::encode(&signed)).unwrap();
+    assert_eq!(
+        (hash.as_str(), back),
+        (
+            "0xe12c3bd68aec8267431c87059f4eb516a880bb22689e451f7efdd20d0ca75663",
+            t
+        )
+    );
+    let s = aptos_decode_tx(
+        &hex::encode(&raw),
+        "0xd5a7f1beac3d8f95f9593c401897f62be2eb01c35b5a353a2522f1fd97f716ee",
+    )
+    .unwrap();
+    assert_eq!(s.function, APTOS_FA_TRANSFER_FUNCTION);
+    assert_eq!(s.amount, "109548000");
+    let k = s.token.unwrap();
+    assert_eq!(
+        (k.symbol.as_str(), k.decimals, k.metadata.as_str()),
+        ("USDC", 6, aptos_known_assets(1)[0].metadata)
+    );
+    // The same metadata on testnet (chain id 2) is not a known token there; an unknown
+    // metadata object is refused on both sides.
+    let mut x = t;
+    x.chain_id = 2;
+    assert!(x.encode().is_err());
+    let mut y = t;
+    y.token = Some([0x42; 32]);
+    assert!(y.encode().is_err());
+    let mut forged = raw.clone();
+    let at = hex::encode(&raw).find(&hex::encode(usdc)).unwrap() / 2;
+    forged[at] ^= 1;
+    assert!(AptosTransfer::decode(&forged).is_err());
+    // USDt is known on mainnet.
+    assert_eq!(aptos_known_assets(1)[1].symbol, "USDT");
+    assert_eq!(aptos_known_assets(2).len(), 1);
 }
 
 #[test]
@@ -207,6 +276,7 @@ fn sign_round_trip_and_warnings() {
         gas_unit_price: 100,
         expiration_timestamp_secs: 1_900_000_000,
         chain_id: 2,
+        token: None,
     };
     let raw = hex::encode(t.encode().unwrap());
     let preview = aptos_decode_tx(&raw, &me).unwrap();

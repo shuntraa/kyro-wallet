@@ -1930,9 +1930,33 @@
       "decimals": 6
     },
     {
+      "network": "mainnet",
+      "chain": "aptos",
+      "contract": "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "aptos",
+      "contract": "0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
       "network": "testnet",
       "chain": "sui",
       "contract": "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "testnet",
+      "chain": "aptos",
+      "contract": "0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832",
       "symbol": "USDC",
       "name": "USD Coin",
       "decimals": 6

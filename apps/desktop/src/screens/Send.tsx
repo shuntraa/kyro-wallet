@@ -1327,7 +1327,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'apt' && (
             <EnClair>
               {rt('send.clearApt', { b: (c) => <strong>{c}</strong> }, { amount: fmtCrypto(sendAmount, decimals, asset.symbol), recipient: recipientName, fee: fmtCrypto(built.unsigned.estimatedFee, 8, 'APT', 8), max: fmtCrypto(built.unsigned.maxFee, 8, 'APT', 8) })}
-              {built.unsigned.context.recipientNew ? t('send.clearAptCreates') : ''}
+              {built.unsigned.context.recipientNew && !built.unsigned.summary.token ? t('send.clearAptCreates') : ''}
             </EnClair>
           )}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'cosmos' && (

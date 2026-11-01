@@ -1678,16 +1678,48 @@ export interface AptosTxSummary {
   chainId: number;
   warnings: AptosWarning[];
   requiresExtraConfirmation: boolean;
+  /** Known fungible asset (`0x1::primary_fungible_store::transfer`); null for APT. `amount` is then in token units. */
+  token?: AptosTokenSummary | null;
+}
+
+/** wallet-core `AptosTokenSummary` (metadata object checked against Kyro's list for the chain id). */
+export interface AptosTokenSummary {
+  metadata: string;
+  symbol: string;
+  name: string;
+  decimals: number;
 }
 
 /** Live context Rust read for the dialog. */
 export interface AptosContext {
   account: AptosAccountInfo;
-  /** The recipient has nothing yet: the transfer creates its account. */
+  /** The recipient has nothing yet: the transfer creates its account (token: its store for that token). */
   recipientNew: boolean;
   /** Simulated gas units (fee ≈ gasUsed × gasUnitPrice). */
   gasUsed: string;
   ledgerTime: number;
+  /** Token transfer: our live balance of the token (units). */
+  tokenBalance?: string | null;
+}
+
+/** `aptos_token_balances` line (one per known fungible asset). */
+export interface AptosTokenBalance {
+  metadata: string;
+  symbol: string;
+  decimals: number;
+  balance: string;
+}
+
+/** `aptos_token_txs` entry (indexer, known metadata objects only). */
+export interface AptosTokenHistoryEntry {
+  version: string;
+  hash: string | null;
+  time: number | null;
+  metadata: string;
+  direction: 'in' | 'out' | 'self';
+  amount: string;
+  counterparty: string | null;
+  success: boolean;
 }
 
 /** `aptos_txs` entry (indexer, newest first). Amounts: octas. */
@@ -2638,6 +2670,11 @@ export interface Commands {
   /** `amount`: octas. Refused: rotated key, amount + max fee > balance, failing simulation. */
   aptos_build_tx: { args: { to: string; amount: string } & WithAccount; ret: { raw: string; summary: AptosTxSummary; context: AptosContext } };
   aptos_sign_tx: { args: { raw: string; password: string } & WithAccount; ret: { signed: string; hash: string; summary: AptosTxSummary; context: AptosContext } };
+  /** Known fungible assets only (USDC, USDt). */
+  aptos_token_balances: { args: { address: string }; ret: AptosTokenBalance[] };
+  aptos_token_txs: { args: { address: string }; ret: AptosTokenHistoryEntry[] };
+  /** `metadata`: known metadata object; `amount` in token units; gas in APT. Signed by `aptos_sign_tx` (metadata in the bytes). */
+  aptos_build_token_tx: { args: { metadata: string; to: string; amount: string } & WithAccount; ret: { raw: string; summary: AptosTxSummary; context: AptosContext } };
   /** Signature checked (single ed25519 key = sender); the node's hash must be ours. */
   aptos_broadcast: { args: { signed: string } & WithAccount; ret: string };
   aptos_tx_status: { args: { hash: string }; ret: { committed: boolean; success: boolean; vmStatus: string } };

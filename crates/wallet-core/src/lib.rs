@@ -66,9 +66,10 @@ pub use algorand::{
 };
 pub use aptos::{
     aptos_address, aptos_address_bytes_of_pubkey, aptos_address_of_pubkey, aptos_address_string,
-    aptos_decode_tx, aptos_parse_address, aptos_path, aptos_public_key, aptos_sign,
-    aptos_signing_message, aptos_simulation_bytes, aptos_tx_hash, aptos_verify_signed,
-    AptosTransfer, AptosTxSummary, AptosWarning, APTOS_ED25519_SCHEME, APTOS_HIGH_FEE_OCTAS,
+    aptos_decode_tx, aptos_known_asset, aptos_known_assets, aptos_parse_address, aptos_path,
+    aptos_public_key, aptos_sign, aptos_signing_message, aptos_simulation_bytes, aptos_tx_hash,
+    aptos_verify_signed, AptosKnownAsset, AptosTokenSummary, AptosTransfer, AptosTxSummary,
+    AptosWarning, APTOS_ED25519_SCHEME, APTOS_FA_TRANSFER_FUNCTION, APTOS_HIGH_FEE_OCTAS,
     APTOS_MAINNET_CHAIN_ID, APTOS_TESTNET_CHAIN_ID, APTOS_TRANSFER_FUNCTION, OCTAS_PER_APT,
 };
 pub use btc::{
