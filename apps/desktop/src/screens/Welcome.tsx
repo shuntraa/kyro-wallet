@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
-import { call, toIpcError } from '@kyro/shared';
+import { call, toIpcError, type XmrRestoreFrom } from '@kyro/shared';
 import { outgoingHosts } from '@kyro/chains';
 import { useApp } from '../state/app';
 import { setBackupState } from '../lib/storage';
@@ -13,7 +13,7 @@ import { cn } from '../lib/cn';
 import { TitleBar } from '../shell/TitleBar';
 import { StatusFrame } from '../shell/StatusBar';
 import { KyroMark, PasswordField } from '../components/kit';
-import { Button, Notice, Segmented, Spinner } from '../components/ui/primitives';
+import { Button, Input, Notice, Segmented, Spinner } from '../components/ui/primitives';
 import { Dialog } from '../components/ui/dialog';
 import { HwSetup } from '../components/hw';
 import { IconBack, IconChevronRight, IconImport, IconPlus, IconUsbKey, IconWarn } from '../components/icons';
@@ -471,7 +471,17 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
   const [step, setStep] = useState<'phrase' | 'password'>('phrase');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Monero: from Kyro's first release unless the phrase was used with Monero on a Ledger before.
+  const [xmrLedger, setXmrLedger] = useState(false);
+  const [xmrMode, setXmrMode] = useState<'date' | 'genesis'>('date');
+  const [xmrDate, setXmrDate] = useState('');
   const { t } = useT();
+  const xmrRestore = ((): XmrRestoreFrom | null => {
+    if (!xmrLedger) return { kind: 'kyro' };
+    if (xmrMode === 'genesis') return { kind: 'genesis' };
+    const ms = Date.parse(xmrDate);
+    return Number.isFinite(ms) ? { kind: 'date', date: Math.floor(ms / 1000) } : null;
+  })();
 
   useCaptureProtection(true);
   // No unmount cleanup clearing `words`: StrictMode's mount/unmount/remount ran it right away and
@@ -499,7 +509,7 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await call('vault_import', { password: pw, phrase });
+      await call('vault_import', { password: pw, phrase, xmrRestore: xmrRestore ?? { kind: 'kyro' } });
       setWords([]);
       setBackupState('imported');
       await enterVault();
@@ -545,7 +555,27 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
             <span className="text-mute">{t('welcome.wordsStayHere')}</span>
           )}
         </div>
-        <Button variant="primary" size="xl" className="self-start" disabled={!valid} onClick={() => setStep('password')}>
+        <div className="flex max-w-[680px] flex-col gap-2.5 rounded-box border border-line bg-raised px-4 py-3 text-[13px]">
+          <span className="text-mute">{t('welcome.xmrDefault')}</span>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={xmrLedger} onChange={(e) => setXmrLedger(e.target.checked)} className="size-4" />
+            {t('welcome.xmrLedger')}
+          </label>
+          {xmrLedger && (
+            <>
+              <Segmented className="self-start" label={t('welcome.xmrLedger')} value={xmrMode} onChange={setXmrMode} options={[{ value: 'date', label: t('welcome.xmrFromDate') }, { value: 'genesis', label: t('welcome.xmrFromGenesis') }]} />
+              {xmrMode === 'date' ? (
+                <label className="flex flex-col gap-1">
+                  <span className="text-mute">{t('welcome.xmrDateLabel')}</span>
+                  <Input type="date" value={xmrDate} onChange={(e) => setXmrDate(e.target.value)} min="2014-04-18" max={new Date().toISOString().slice(0, 10)} className="w-[200px]" />
+                </label>
+              ) : (
+                <Notice tone="warn">{t('welcome.xmrGenesisWarn')}</Notice>
+              )}
+            </>
+          )}
+        </div>
+        <Button variant="primary" size="xl" className="self-start" disabled={!valid || xmrRestore === null} onClick={() => setStep('password')}>
           {t('common.continue')}
         </Button>
       </div>

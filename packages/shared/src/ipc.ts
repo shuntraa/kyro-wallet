@@ -1424,6 +1424,11 @@ export interface XmrSubaddress {
   index: number;
   address: string;
   /** Piconero received on it. */
+/** Restore flow: first Monero block scanned for a restored phrase. `kyro` (default) = Kyro's
+ * first release (a Kyro-derived Monero wallet cannot be older); `date` (Unix seconds) or
+ * `genesis` only if the phrase was used with Monero before (Ledger). */
+export type XmrRestoreFrom = { kind: 'kyro' } | { kind: 'date'; date: number } | { kind: 'genesis' };
+
   received: string;
 }
 
@@ -2469,7 +2474,8 @@ export interface Commands {
   /** Checks the 3 words (positions from `vault_backup_show`). After 5 wrong tries the pending
    * phrase is dropped (`attemptsLeft: 0`): show it again from Réglages › Sécurité. */
   vault_backup_verify: { args: { answers: string[] }; ret: { ok: boolean; attemptsLeft: number } };
-  vault_import: { args: { password: string; phrase: string }; ret: void };
+  /** `xmrRestore`: where Monero's first scan starts (default `kyro`: Kyro's first release). */
+  vault_import: { args: { password: string; phrase: string; xmrRestore?: XmrRestoreFrom }; ret: void };
   vault_unlock: { args: { password: string }; ret: void };
   vault_lock: { args: undefined; ret: void };
   /** Password, then a native confirmation, then the words in a native dialog. Returns nothing. */
