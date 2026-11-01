@@ -775,9 +775,16 @@ fn estimated_size(coin: UtxoCoin, psbt: &Psbt) -> u64 {
     }
 }
 
+/// Where the keys of the analysed account come from: the seed (software signing) or only the
+/// account xpub stored for a hardware wallet (public derivation, the device signs).
+enum Keys {
+    Seed(XprivGuard),
+    Watch(Xpub),
+}
+
 struct Signer {
     secp: Secp256k1<All>,
-    master: XprivGuard,
+    keys: Keys,
     fingerprint: Fingerprint,
     coin: UtxoCoin,
     purpose: u32,
@@ -794,7 +801,41 @@ impl Signer {
         let p = params(coin, net);
         Ok(Signer {
             secp,
-            master,
+            keys: Keys::Seed(master),
+            fingerprint,
+            coin,
+            purpose: p.purpose,
+            coin_type: p.coin_type,
+            account,
+        })
+    }
+
+    /// Hardware-wallet account: only the stored account xpub and master fingerprint, checked
+    /// against the chain's standard path (`m/purpose'/coin'/account'`) and network.
+    fn watch(net: Network, coin: UtxoCoin, acc: &UtxoAccount) -> Result<Signer> {
+        if acc.coin != coin {
+            return Err(Error::input("account is for another chain"));
+        }
+        let xpub =
+            Xpub::from_str(acc.xpub.trim()).map_err(|_| Error::input("invalid account xpub"))?;
+        if xpub.network != net.btc_kind() {
+            return Err(Error::input("xpub is for another network"));
+        }
+        let account = match xpub.child_number {
+            ChildNumber::Hardened { index } if xpub.depth == 3 => index,
+            _ => return Err(Error::input("xpub is not an account-level key")),
+        };
+        let p = params(coin, net);
+        if path_string(&account_path(&p, account)?) != acc.path {
+            return Err(Error::input(
+                "account path is not the chain's standard path",
+            ));
+        }
+        let fingerprint = Fingerprint::from_str(&acc.fingerprint)
+            .map_err(|_| Error::input("invalid master fingerprint"))?;
+        Ok(Signer {
+            secp: secp()?,
+            keys: Keys::Watch(xpub),
             fingerprint,
             coin,
             purpose: p.purpose,
@@ -809,14 +850,39 @@ impl Signer {
     }
 
     fn derive(&self, path: &DerivationPath) -> Result<XprivGuard> {
-        self.master.derive(&self.secp, path.as_ref())
+        match &self.keys {
+            Keys::Seed(master) => master.derive(&self.secp, path.as_ref()),
+            Keys::Watch(_) => Err(Error::crypto(
+                "no private key for a hardware-wallet account",
+            )),
+        }
+    }
+
+    /// Public key at `path` (a path of this account, see [`Signer::ours`]).
+    fn pubkey(&self, path: &DerivationPath) -> Result<PublicKey> {
+        match &self.keys {
+            Keys::Seed(_) => Ok(self
+                .derive(path)?
+                .xpriv()
+                .private_key
+                .public_key(&self.secp)),
+            Keys::Watch(xpub) => {
+                let tail = path
+                    .as_ref()
+                    .get(3..)
+                    .ok_or_else(|| Error::psbt("derivation path too short"))?;
+                Ok(xpub
+                    .derive_pub(&self.secp, &tail)
+                    .map_err(|_| Error::crypto("public derivation failed"))?
+                    .public_key)
+            }
+        }
     }
 
     fn output_is_ours(&self, spk: &Script, meta: &PsbtOutput) -> Result<Ownership> {
         for (pk, (fp, path)) in &meta.bip32_derivation {
             if self.ours(fp, path) {
-                let k = self.derive(path)?;
-                let derived = k.xpriv().private_key.public_key(&self.secp);
+                let derived = self.pubkey(path)?;
                 if derived == *pk && own_script(self.coin, derived) == *spk {
                     return Ok(ownership(path));
                 }
@@ -843,8 +909,7 @@ impl Signer {
             if !self.ours(fp, path) {
                 continue;
             }
-            let k = self.derive(path)?;
-            let derived = k.xpriv().private_key.public_key(&self.secp);
+            let derived = self.pubkey(path)?;
             if derived != *pk {
                 return Err(Error::psbt(format!(
                     "input {i}: key origin does not match key"
@@ -1116,66 +1181,285 @@ pub fn utxo_sign_psbt(
             )));
         }
         for (pk, path) in input_keys {
-            let msg = match coin {
-                UtxoCoin::Litecoin => Message::from(
-                    cache
-                        .p2wpkh_signature_hash(
-                            i,
-                            &prevout.script_pubkey,
-                            prevout.value,
-                            EcdsaSighashType::All,
-                        )
-                        .map_err(|_| Error::psbt(format!("input {i}: sighash failed")))?,
-                ),
-                UtxoCoin::Dogecoin | UtxoCoin::Dash => Message::from(
-                    cache
-                        .legacy_signature_hash(
-                            i,
-                            &prevout.script_pubkey,
-                            EcdsaSighashType::All.to_u32(),
-                        )
-                        .map_err(|_| Error::psbt(format!("input {i}: sighash failed")))?,
-                ),
-                UtxoCoin::BitcoinCash => Message::from_digest(bch_forkid_sighash(
-                    &tx,
-                    i,
-                    &prevout.script_pubkey,
-                    prevout.value.to_sat(),
-                    BCH_SIGHASH_ALL_FORKID,
-                )?),
-            };
+            let msg = input_sighash(coin, &mut cache, &tx, i, prevout)?;
             let key = signer.derive(&path)?;
             let sk = &key.xpriv().private_key;
             let signature = secp.sign_ecdsa(&msg, sk);
             secp.verify_ecdsa(&msg, &signature, &pk)
                 .map_err(|_| Error::crypto("signature self-check failed"))?;
-            if coin == UtxoCoin::BitcoinCash {
-                let mut sig = signature.serialize_der().to_vec();
-                sig.push(BCH_SIGHASH_ALL_FORKID as u8);
-                let push = bitcoin::script::PushBytesBuf::try_from(sig)
-                    .map_err(|_| Error::crypto("signature push failed"))?;
-                let script_sig = bitcoin::script::Builder::new()
-                    .push_slice(push)
-                    .push_key(&bitcoin::PublicKey::new(pk))
-                    .into_script();
-                let input = &mut psbt.inputs[i];
-                input.final_script_sig = Some(script_sig);
-                input.partial_sigs.clear();
-                input.bip32_derivation.clear();
-                input.sighash_type = None;
-                input.redeem_script = None;
-            } else {
-                psbt.inputs[i].partial_sigs.insert(
-                    bitcoin::PublicKey::new(pk),
-                    bitcoin::ecdsa::Signature {
-                        signature,
-                        sighash_type: EcdsaSighashType::All,
-                    },
-                );
-            }
+            put_signature(coin, &mut psbt, i, pk, signature)?;
         }
     }
     Ok((psbt.to_string(), summary))
+}
+
+/// What input `i` of ours signs (see [`utxo_sign_psbt`]).
+fn input_sighash(
+    coin: UtxoCoin,
+    cache: &mut SighashCache<&Transaction>,
+    tx: &Transaction,
+    i: usize,
+    prevout: &TxOut,
+) -> Result<Message> {
+    let failed = |_| Error::psbt(format!("input {i}: sighash failed"));
+    Ok(match coin {
+        UtxoCoin::Litecoin => Message::from(
+            cache
+                .p2wpkh_signature_hash(
+                    i,
+                    &prevout.script_pubkey,
+                    prevout.value,
+                    EcdsaSighashType::All,
+                )
+                .map_err(failed)?,
+        ),
+        UtxoCoin::Dogecoin | UtxoCoin::Dash => Message::from(
+            cache
+                .legacy_signature_hash(i, &prevout.script_pubkey, EcdsaSighashType::All.to_u32())
+                .map_err(|_| Error::psbt(format!("input {i}: sighash failed")))?,
+        ),
+        UtxoCoin::BitcoinCash => Message::from_digest(bch_forkid_sighash(
+            tx,
+            i,
+            &prevout.script_pubkey,
+            prevout.value.to_sat(),
+            BCH_SIGHASH_ALL_FORKID,
+        )?),
+    })
+}
+
+/// Stores a verified signature of input `i`: a partial signature, or (Bitcoin Cash, FORKID,
+/// which a PSBT partial signature cannot carry) the finalized `scriptSig`.
+fn put_signature(
+    coin: UtxoCoin,
+    psbt: &mut Psbt,
+    i: usize,
+    pk: PublicKey,
+    signature: bitcoin::secp256k1::ecdsa::Signature,
+) -> Result<()> {
+    if coin == UtxoCoin::BitcoinCash {
+        let mut sig = signature.serialize_der().to_vec();
+        sig.push(BCH_SIGHASH_ALL_FORKID as u8);
+        let push = bitcoin::script::PushBytesBuf::try_from(sig)
+            .map_err(|_| Error::crypto("signature push failed"))?;
+        let script_sig = bitcoin::script::Builder::new()
+            .push_slice(push)
+            .push_key(&bitcoin::PublicKey::new(pk))
+            .into_script();
+        let input = &mut psbt.inputs[i];
+        input.final_script_sig = Some(script_sig);
+        input.partial_sigs.clear();
+        input.bip32_derivation.clear();
+        input.sighash_type = None;
+        input.redeem_script = None;
+    } else {
+        psbt.inputs[i].partial_sigs.insert(
+            bitcoin::PublicKey::new(pk),
+            bitcoin::ecdsa::Signature {
+                signature,
+                sighash_type: EcdsaSighashType::All,
+            },
+        );
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------- hardware wallets
+
+/// A stored hardware-wallet account: xpub for this network, at the chain's standard path for
+/// account number `account`, valid master fingerprint.
+pub(crate) fn check_watch_account(net: Network, acc: &UtxoAccount, account: u32) -> Result<()> {
+    if Signer::watch(net, acc.coin, acc)?.account != account {
+        return Err(Error::input("UTXO xpub is not for this account number"));
+    }
+    Ok(())
+}
+
+/// An input of ours, as a hardware wallet needs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UtxoHwInput {
+    /// Input index.
+    pub index: usize,
+    /// Full derivation path (raw BIP32 indices, hardened bit set).
+    pub path: Vec<u32>,
+    /// Compressed public key, derived from the stored xpub.
+    pub pubkey: [u8; 33],
+    /// Spent amount (verified previous transaction / `witness_utxo`).
+    pub amount: u64,
+    /// Spent script.
+    pub script: Vec<u8>,
+}
+
+/// A change output of ours (chain 1 of this account, key and script checked against the xpub).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UtxoHwChange {
+    /// Output index.
+    pub index: usize,
+    /// Full derivation path.
+    pub path: Vec<u32>,
+}
+
+/// What a hardware wallet signs, decoded and checked against the stored account.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UtxoHwPlan {
+    /// Same summary as [`utxo_psbt_summary`].
+    pub summary: UtxoTxSummary,
+    /// Every input (all are ours: a device signs only its own inputs).
+    pub inputs: Vec<UtxoHwInput>,
+    /// Change outputs.
+    pub change: Vec<UtxoHwChange>,
+}
+
+fn raw_path(path: &DerivationPath) -> Vec<u32> {
+    path.as_ref().iter().map(|c| u32::from(*c)).collect()
+}
+
+/// [`utxo_psbt_summary`] for a hardware-wallet account (account xpub + master fingerprint,
+/// no seed), plus what a device needs per input. Refused on top of what the summary refuses:
+/// an input that is not ours (or with several keys of ours), and — Litecoin — an input without
+/// its full previous transaction (`non_witness_utxo`, consistent with `witness_utxo`): both
+/// device families require it to check the spent amount.
+pub fn utxo_hw_plan(
+    net: Network,
+    coin: UtxoCoin,
+    account: &UtxoAccount,
+    psbt_b64: &str,
+) -> Result<UtxoHwPlan> {
+    let signer = Signer::watch(net, coin, account)?;
+    let a = analyse(&signer, net, psbt_b64)?;
+    let mut inputs = Vec::with_capacity(a.keys.len());
+    for (i, (keys, prevout)) in a.keys.iter().zip(&a.prevouts).enumerate() {
+        let [(pk, path)] = keys.as_slice() else {
+            return Err(Error::psbt(format!(
+                "input {i}: a hardware wallet signs only inputs of this account (one key each)"
+            )));
+        };
+        if coin == UtxoCoin::Litecoin {
+            let txin = &a.psbt.unsigned_tx.input[i];
+            let consistent = a.psbt.inputs[i]
+                .non_witness_utxo
+                .as_ref()
+                .is_some_and(|prev| {
+                    prev.compute_txid() == txin.previous_output.txid
+                        && prev.output.get(txin.previous_output.vout as usize) == Some(prevout)
+                });
+            if !consistent {
+                return Err(Error::psbt(format!(
+                    "input {i}: the previous transaction (non_witness_utxo) is required and must match witness_utxo"
+                )));
+            }
+        }
+        inputs.push(UtxoHwInput {
+            index: i,
+            path: raw_path(path),
+            pubkey: pk.serialize(),
+            amount: prevout.value.to_sat(),
+            script: prevout.script_pubkey.to_bytes(),
+        });
+    }
+    let mut change = Vec::new();
+    for (j, (out, meta)) in a
+        .psbt
+        .unsigned_tx
+        .output
+        .iter()
+        .zip(&a.psbt.outputs)
+        .enumerate()
+    {
+        if !a.summary.outputs[j].is_change {
+            continue;
+        }
+        let path = meta
+            .bip32_derivation
+            .iter()
+            .find(|(pk, (fp, path))| {
+                signer.ours(fp, path)
+                    && signer.pubkey(path).ok().as_ref() == Some(*pk)
+                    && own_script(coin, **pk) == out.script_pubkey
+            })
+            .map(|(_, (_, path))| raw_path(path))
+            .ok_or_else(|| Error::psbt("change output without its key"))?;
+        change.push(UtxoHwChange { index: j, path });
+    }
+    Ok(UtxoHwPlan {
+        summary: a.summary,
+        inputs,
+        change,
+    })
+}
+
+/// Checks the signatures a hardware wallet returned — each input exactly once, DER (optionally
+/// followed by the sighash byte, which must be `ALL`, Bitcoin Cash `ALL|FORKID`), valid for the
+/// key derived from the stored xpub over the sighash computed here — and stores them like
+/// [`utxo_sign_psbt`] does. Returns the PSBT (base64) and the summary.
+pub fn utxo_hw_finalize(
+    net: Network,
+    coin: UtxoCoin,
+    account: &UtxoAccount,
+    psbt_b64: &str,
+    sigs: &[crate::btc_hw::HwBtcSignature],
+) -> Result<(String, UtxoTxSummary)> {
+    let plan = utxo_hw_plan(net, coin, account, psbt_b64)?;
+    let Analysis {
+        mut psbt, prevouts, ..
+    } = analyse(&Signer::watch(net, coin, account)?, net, psbt_b64)?;
+    let tx = psbt.unsigned_tx.clone();
+    let mut cache = SighashCache::new(&tx);
+    let verifier = Secp256k1::verification_only();
+    let mut done = vec![false; plan.inputs.len()];
+    let want_type = if coin == UtxoCoin::BitcoinCash {
+        BCH_SIGHASH_ALL_FORKID as u8
+    } else {
+        EcdsaSighashType::All.to_u32() as u8
+    };
+    for s in sigs {
+        let input = plan
+            .inputs
+            .get(s.input)
+            .ok_or_else(|| Error::psbt(format!("signature for unknown input {}", s.input)))?;
+        if done[s.input] {
+            return Err(Error::psbt(format!("input {}: two signatures", s.input)));
+        }
+        if s.pubkey.as_ref().is_some_and(|k| k[..] != input.pubkey[..]) {
+            return Err(Error::psbt(format!(
+                "input {}: signed by another key",
+                s.input
+            )));
+        }
+        let der = if bitcoin::secp256k1::ecdsa::Signature::from_der(&s.signature).is_ok() {
+            &s.signature[..]
+        } else {
+            match s.signature.split_last() {
+                Some((t, der)) if *t == want_type => der,
+                _ => {
+                    return Err(Error::psbt(format!(
+                        "input {}: not a DER signature with the expected sighash type",
+                        s.input
+                    )))
+                }
+            }
+        };
+        let mut signature = bitcoin::secp256k1::ecdsa::Signature::from_der(der)
+            .map_err(|_| Error::psbt(format!("input {}: invalid DER signature", s.input)))?;
+        signature.normalize_s();
+        let pk = PublicKey::from_slice(&input.pubkey)
+            .map_err(|_| Error::crypto("invalid public key"))?;
+        let msg = input_sighash(coin, &mut cache, &tx, s.input, &prevouts[s.input])?;
+        verifier.verify_ecdsa(&msg, &signature, &pk).map_err(|_| {
+            Error::crypto(format!(
+                "input {}: the device's signature does not verify",
+                s.input
+            ))
+        })?;
+        put_signature(coin, &mut psbt, s.input, pk, signature)?;
+        done[s.input] = true;
+    }
+    if let Some(i) = done.iter().position(|d| !d) {
+        return Err(Error::psbt(format!(
+            "input {i}: no signature from the device"
+        )));
+    }
+    Ok((psbt.to_string(), plan.summary))
 }
 
 #[cfg(test)]

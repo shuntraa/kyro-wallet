@@ -21,8 +21,8 @@ use wallet_core::{
     btc_account, btc_address, btc_hw_finalize, btc_hw_own_addresses, btc_hw_plan, btc_sign_psbt,
     evm_address, evm_address_from_xpub, evm_hw_finalize, evm_signing_payload, evm_xpub_from_node,
     open, sol_address, sol_path, sol_sign_message, sol_verify_signature, BtcKind, Error,
-    EvmTxRequest, HwBtcSignature, HwDeviceKind, Network, VaultFile, WatchEvm, WatchOnlyAccount,
-    WatchOnlyStore, WatchSol, EVM_NODE_PATH,
+    EvmTxRequest, HwBtcSignature, HwDeviceKind, Network, UtxoCoin, VaultFile, WatchEvm, WatchKey,
+    WatchOnlyAccount, WatchOnlyStore, WatchSol, EVM_NODE_PATH,
 };
 
 // ------------------------------------------------------------------------------------------
@@ -499,7 +499,77 @@ fn watch_account() -> WatchOnlyAccount {
             address: sol_address(&seed(ABANDON), 0).unwrap(),
             path: sol_path(0),
         }),
+        utxo: vec![
+            wallet_core::utxo_account(&seed(ABANDON), Network::Testnet, UtxoCoin::Litecoin, 0)
+                .unwrap(),
+            wallet_core::utxo_account(&seed(ABANDON), Network::Testnet, UtxoCoin::Dogecoin, 0)
+                .unwrap(),
+        ],
+        xrp: Some(WatchKey {
+            address: wallet_core::xrp_address(&seed(ABANDON), 0).unwrap(),
+            pubkey: hex::encode(wallet_core::xrp_public_key(&seed(ABANDON), 0).unwrap()),
+            path: wallet_core::xrp_path(0),
+        }),
+        tron: Some({
+            let k = master
+                .derive_priv(&secp, &path("m/44'/195'/0'/0/0"))
+                .unwrap();
+            let pk = k.private_key.public_key(&secp).serialize_uncompressed();
+            WatchKey {
+                address: wallet_core::tron_address_of_pubkey(&pk).unwrap(),
+                pubkey: hex::encode(pk),
+                path: wallet_core::tron_path(0),
+            }
+        }),
+        stellar: Some(WatchKey {
+            address: wallet_core::stellar_address(&seed(ABANDON), 0).unwrap(),
+            pubkey: hex::encode(wallet_core::stellar_public_key(&seed(ABANDON), 0).unwrap()),
+            path: wallet_core::stellar_path(0),
+        }),
     }
+}
+
+#[test]
+fn watch_only_other_chains_are_validated() {
+    let acc = watch_account();
+    acc.validate().unwrap();
+    assert_eq!(
+        acc.tron.as_ref().unwrap().address,
+        wallet_core::tron_address(&seed(ABANDON), 0).unwrap()
+    );
+    let bad = |f: &dyn Fn(&mut WatchOnlyAccount)| {
+        let mut a = watch_account();
+        f(&mut a);
+        a.validate().is_err()
+    };
+    assert!(bad(&|a| a.utxo[1].coin = UtxoCoin::Litecoin)); // duplicate coin
+    assert!(bad(&|a| a.utxo[0].path = "m/84'/1'/1'".into()));
+    assert!(bad(&|a| a.utxo[0].fingerprint = "00000000".into()));
+    assert!(bad(&|a| a.utxo[0] = wallet_core::utxo_account(
+        &seed(LEGAL),
+        Network::Testnet,
+        UtxoCoin::Litecoin,
+        0
+    )
+    .unwrap()));
+    assert!(bad(
+        &|a| a.xrp.as_mut().unwrap().path = wallet_core::xrp_path(1)
+    ));
+    assert!(bad(
+        &|a| a.xrp.as_mut().unwrap().address = wallet_core::xrp_address(&seed(LEGAL), 0).unwrap()
+    ));
+    assert!(bad(&|a| a.tron.as_mut().unwrap().pubkey = "04".into()));
+    assert!(bad(&|a| a.stellar.as_mut().unwrap().address =
+        wallet_core::stellar_address(&seed(LEGAL), 0).unwrap()));
+    // A record with only an XRP key is a valid account.
+    let mut only = watch_account();
+    only.btc.clear();
+    only.evm = None;
+    only.sol = None;
+    only.utxo.clear();
+    only.tron = None;
+    only.stellar = None;
+    only.validate().unwrap();
 }
 
 #[test]
@@ -562,6 +632,10 @@ fn watch_only_store_roundtrip_and_validation() {
         a.btc.clear();
         a.evm = None;
         a.sol = None;
+        a.utxo.clear();
+        a.xrp = None;
+        a.tron = None;
+        a.stellar = None;
     }));
 }
 
