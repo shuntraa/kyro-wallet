@@ -16,11 +16,13 @@ import {
   type TonAccountInfo,
   type TonContext,
   type TonHistoryEntry,
+  type TonJettonBalance,
+  type TonJettonHistoryEntry,
   type TonTxStatus,
   type TonTxSummary,
   type TonWarning,
 } from '@kyro/shared';
-import type { TonChain } from '../registry';
+import { TON_JETTONS, type TonChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 export type { TonAccountInfo, TonContext, TonHistoryEntry, TonTxStatus, TonTxSummary, TonWarning };
@@ -35,7 +37,14 @@ export interface TonBackend {
   sign(boc: string, password: string): Promise<{ boc: string; hash: string; normalizedHash: string; summary: TonTxSummary; context: TonContext }>;
   broadcast(boc: string): Promise<string>;
   txStatus(hash: string): Promise<TonTxStatus>;
+  /** Jettons (TEP-74) Kyro knows; optional so that test backends can leave them out. */
+  jettonBalances?(address: string): Promise<TonJettonBalance[]>;
+  jettonTxs?(address: string): Promise<TonJettonHistoryEntry[]>;
+  buildJetton?(master: string, to: string, amount: string, comment?: string): Promise<{ boc: string; summary: TonTxSummary; context: TonContext }>;
 }
+
+/** TON attached by Rust to a jetton transfer (wallet-core `TON_JETTON_ATTACHED_NANOTON`); the excess comes back. */
+export const TON_JETTON_ATTACHED_NANOTON = 50_000_000n;
 
 /** The typed `ton_*` commands of `@kyro/shared` (docs/IPC.md §2.11), for vault account `account`. */
 export function rustTonBackend(account = 0): TonBackend {
@@ -47,6 +56,9 @@ export function rustTonBackend(account = 0): TonBackend {
     sign: (boc, password) => call('ton_sign_tx', { boc, password, ...acct }),
     broadcast: (boc) => call('ton_broadcast', { boc, ...acct }),
     txStatus: (hash) => call('ton_tx_status', { hash }),
+    jettonBalances: (address) => call('ton_jetton_balances', { address }),
+    jettonTxs: (address) => call('ton_jetton_txs', { address }),
+    buildJetton: (master, to, amount, comment) => call('ton_build_jetton_tx', { master, to, amount, ...(comment ? { comment } : {}), ...acct }),
   };
 }
 
@@ -93,11 +105,11 @@ export interface TonUnsigned {
   summary: TonTxSummary;
   context: TonContext;
   recipient: string;
-  /** Nanotons. With `sendAll`: balance − estimated fee (display only, Rust sends everything). */
+  /** Nanotons (jetton: jetton units). With `sendAll`: balance − estimated fee (display only, Rust sends everything). */
   amount: bigint;
   comment?: string;
   sendAll: boolean;
-  /** Fee estimated by emulation (nanotons): paid on top of the amount. */
+  /** Fee estimated by emulation (nanotons): paid on top of the amount (jetton: plus the TON attached, mostly refunded). */
   maxFee: bigint;
   size: { family: 'ton' };
 }
@@ -150,7 +162,45 @@ export class TonAdapter implements ChainAdapter<'ton'> {
 
   async getBalance(): Promise<Balance[]> {
     const acc = await this.backend.account(this.address);
-    return [{ assetId: 'ton', amount: BigInt(acc.balance) }];
+    const out: Balance[] = [{ assetId: 'ton', amount: BigInt(acc.balance) }];
+    const known = TON_JETTONS[this.chain.network];
+    if (known.length && this.backend.jettonBalances) {
+      for (const b of await this.backend.jettonBalances(this.address)) {
+        const t = known.find((k) => sameTonAccount(k.contract, b.master));
+        if (t && /^\d+$/.test(b.balance)) out.push({ assetId: `jetton:${t.contract}`, amount: BigInt(b.balance) });
+      }
+    }
+    return out;
+  }
+
+  /** Jetton transfer: Rust computes our jetton wallet, writes the TEP-74 body, attaches 0.05 TON. */
+  private async buildJetton(params: BuildParams, to: string, comment: string): Promise<TonUnsigned> {
+    const known = TON_JETTONS[this.chain.network].find((k) => k.contract === params.asset.contract);
+    if (!known || known.decimals !== params.asset.decimals || !this.backend.buildJetton) throw new Error(l10n('Jeton TON inconnu', 'Unknown TON token'));
+    let amount = params.amount;
+    if (params.max === true && this.backend.jettonBalances) {
+      const b = (await this.backend.jettonBalances(this.address)).find((x) => sameTonAccount(x.master, known.contract));
+      amount = b && /^\d+$/.test(b.balance) ? BigInt(b.balance) : 0n;
+    }
+    if (amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
+    const built = await this.backend.buildJetton(known.contract, to, amount.toString(), comment || undefined);
+    const s = built.summary;
+    const j = s.jetton;
+    if (!j || !sameTonAccount(j.master, known.contract) || j.decimals !== known.decimals || j.amount !== amount.toString() || !sameTonAccount(j.recipient, to) || (s.comment ?? '') !== comment || !sameTonAccount(s.wallet, this.address) || s.sendAll || s.requiresExtraConfirmation) {
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
+    }
+    return {
+      family: 'ton',
+      boc: built.boc,
+      summary: s,
+      context: built.context,
+      recipient: to,
+      amount,
+      ...(comment ? { comment } : {}),
+      sendAll: false,
+      maxFee: BigInt(built.context.fee) + BigInt(s.amount),
+      size: { family: 'ton' },
+    };
   }
 
   /** No fee to choose: the network's price, estimated by emulation when building. */
@@ -167,7 +217,7 @@ export class TonAdapter implements ChainAdapter<'ton'> {
 
   /** `max`: the whole balance (mode 130: Rust's message carries everything, minus fees). */
   async buildTx(params: BuildParams): Promise<TonUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error(l10n('Actif TON inattendu', 'Unexpected TON asset'));
+    if (params.asset.kind !== 'native' && params.asset.kind !== 'jetton') throw new Error(l10n('Actif TON inattendu', 'Unexpected TON asset'));
     const to = params.to.trim();
     const problem = tonRecipientProblem(to, this.chain.network);
     if (problem) throw new Error(problem.charAt(0).toUpperCase() + problem.slice(1));
@@ -175,6 +225,7 @@ export class TonAdapter implements ChainAdapter<'ton'> {
     const comment = params.memo ?? '';
     const cp = tonCommentProblem(comment);
     if (cp) throw new Error(cp);
+    if (params.asset.kind === 'jetton') return this.buildJetton(params, to, comment);
     const sendAll = params.max === true;
     if (!sendAll && params.amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const built = await this.backend.build(to, sendAll ? '0' : params.amount.toString(), comment || undefined, sendAll);
@@ -220,7 +271,18 @@ export class TonAdapter implements ChainAdapter<'ton'> {
 
   async getHistory(): Promise<HistoryItem[]> {
     const list = await this.backend.txs(this.address);
-    return list.map((t, i) => {
+    const known = TON_JETTONS[this.chain.network];
+    const jettons = known.length && this.backend.jettonTxs ? await this.backend.jettonTxs(this.address) : [];
+    const tokenItems = jettons.flatMap((t, i): HistoryItem[] => {
+      const k = known.find((x) => sameTonAccount(x.contract, t.master));
+      if (!k || !/^\d+$/.test(t.amount)) return [];
+      const item: HistoryItem = { id: `${t.hash}:jetton:${i}`, chainKey: this.chain.key, assetId: `jetton:${k.contract}`, direction: t.direction, amount: BigInt(t.amount), status: t.success ? 'confirmed' : 'failed', kind: 'transfer' };
+      if (t.counterparty) item.counterparty = t.counterparty;
+      if (t.time) item.time = t.time;
+      if (t.comment) item.note = l10n(`Commentaire : ${t.comment}`, `Comment: ${t.comment}`);
+      return [item];
+    });
+    const native = list.map((t, i) => {
       const item: HistoryItem = {
         // One transaction can carry several outgoing messages: keep ids unique.
         id: list.findIndex((o) => o.hash === t.hash) === i ? t.hash : `${t.hash}:${i}`,
@@ -238,5 +300,6 @@ export class TonAdapter implements ChainAdapter<'ton'> {
       if (notes.length) item.note = notes.join(' · ');
       return item;
     });
+    return tokenItems.length ? [...tokenItems, ...native].sort((a, b) => (b.time ?? 0) - (a.time ?? 0)) : native;
   }
 }

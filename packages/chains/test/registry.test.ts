@@ -51,15 +51,16 @@ describe('registre des chaînes et tokens', () => {
     }
   });
 
-  it('identifiants d’actifs uniques ; jamais A7A5 ni les tokens exclus', () => {
+  it('identifiants d’actifs uniques ; jamais les tokens exclus ; A7A5 sur Ethereum et TRON', () => {
     for (const n of NETWORKS) {
       const ids = assetsFor(n).map((a) => a.id);
       expect(new Set(ids).size).toBe(ids.length);
     }
     const all = assetsFor('mainnet').map((a) => a.coingeckoId);
-    for (const banned of ['a7a5', 'pi-network', 'canton-network', 'blackrock-usd-institutional-digital-liquidity-fund', 'hashnote-usyc', 'ondo-us-dollar-yield', 'ousg', 'microstrategy-xstock']) {
+    for (const banned of ['pi-network', 'canton-network', 'blackrock-usd-institutional-digital-liquidity-fund', 'hashnote-usyc', 'ondo-us-dollar-yield', 'ousg', 'microstrategy-xstock']) {
       expect(all).not.toContain(banned);
     }
+    expect(assetsFor('mainnet').filter((a) => a.coingeckoId === 'a7a5').map((a) => a.contract)).toEqual(['0x6fA0BE17e4beA2fCfA22ef89BF8ac9aab0AB0fc9', 'TLeVfrdym8RoJreJ23dAGyfJDygRtiWKBZ']);
   });
 
   it('plus de 100 tokens sur Ethereum, dont QNT et les tokens historiques', () => {

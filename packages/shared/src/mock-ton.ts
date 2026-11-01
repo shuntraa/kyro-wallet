@@ -317,6 +317,9 @@ export function createDemoTon(d: DemoTonDeps) {
       state.history.unshift({ hash: txHash, time: d.now(), direction: 'out', counterparty: tonFriendly(0, t.destHash, t.bounce, testnet), amount: success ? amount.toString() : '0', fee: fee.toString(), comment: t.comment, bounced: false, success });
       return norm;
     },
+    ton_build_jetton_tx: () => Promise.reject(new Error(l10n('Démo : envoi de jetons TON non simulé', 'Demo: TON token sends are not simulated'))),
+    ton_jetton_balances: () => Promise.resolve([]),
+    ton_jetton_txs: () => Promise.resolve([]),
     ton_tx_status: async (a): Promise<TonTxStatus> => {
       const h = String(a.hash ?? '').trim().toLowerCase();
       if (!/^[0-9a-f]{64}$/.test(h)) throw invalidInput(l10n('hash : 64 caractères hexadécimaux', 'hash: 64 hexadecimal characters'));

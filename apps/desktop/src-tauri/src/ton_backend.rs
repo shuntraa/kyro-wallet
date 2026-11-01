@@ -538,9 +538,240 @@ pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     Ok(())
 }
 
+// ---------------------------------------------------------------- jettons
+
+/// Our balance of a known jetton. `wallet` is our jetton wallet **as Kyro computes it**: a
+/// TON Center line for another contract is ignored.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TonJettonBalance {
+    /// Master, bounceable form (`EQ…`).
+    pub master: String,
+    /// Our jetton wallet, bounceable form.
+    pub wallet: String,
+    /// Jetton units (decimal string); `"0"` when the jetton wallet is not deployed.
+    pub balance: String,
+}
+
+fn digits(s: &str) -> Option<String> {
+    if s.is_empty() || !s.bytes().all(|c| c.is_ascii_digit()) || s.len() > 40 {
+        return None;
+    }
+    let t = s.trim_start_matches('0');
+    Some(if t.is_empty() {
+        "0".into()
+    } else {
+        t.to_owned()
+    })
+}
+
+/// Balances of every jetton Kyro knows, from `/jetton/wallets` lines whose address is the jetton
+/// wallet Kyro computes for `me` (lines for other contracts — fake jettons — are dropped).
+pub fn parse_jetton_balances(v: &Value, me: &TonAddress, net: Network) -> Vec<TonJettonBalance> {
+    let tn = testnet(net);
+    let raw = |x: &Value| {
+        x.as_str()
+            .and_then(|a| wallet_core::ton_parse_raw_address(a).ok())
+    };
+    wallet_core::ton_known_jettons(tn)
+        .into_iter()
+        .filter_map(|j| {
+            let ours = wallet_core::ton_jetton_wallet_address(&j.master, me, tn).ok()?;
+            let balance = v["jetton_wallets"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|w| raw(&w["address"]) == Some(ours) && raw(&w["jetton"]) == Some(j.master))
+                .and_then(|w| w["balance"].as_str())
+                .and_then(digits)
+                .unwrap_or_else(|| "0".into());
+            Some(TonJettonBalance {
+                master: j.master.to_friendly(true, tn),
+                wallet: ours.to_friendly(true, tn),
+                balance,
+            })
+        })
+        .collect()
+}
+
+pub async fn jetton_balances(
+    ctx: &TonCtx<'_>,
+    me: &TonAddress,
+) -> AppResult<Vec<TonJettonBalance>> {
+    if wallet_core::ton_known_jettons(testnet(ctx.network)).is_empty() {
+        return Ok(Vec::new());
+    }
+    let raw = me.to_raw();
+    let v = get(
+        ctx,
+        "jetton/wallets",
+        &[
+            ("owner_address", raw.as_str()),
+            ("limit", "50"),
+            ("offset", "0"),
+        ],
+    )
+    .await?;
+    Ok(parse_jetton_balances(&v, me, ctx.network))
+}
+
+/// One jetton transfer in or out of our wallet.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TonJettonHistoryEntry {
+    /// Transaction hash (hex).
+    pub hash: String,
+    /// ms epoch.
+    pub time: Option<i64>,
+    pub direction: &'static str,
+    /// Master, bounceable form.
+    pub master: String,
+    /// Other party (non-bounceable form).
+    pub counterparty: Option<String>,
+    /// Jetton units.
+    pub amount: String,
+    pub comment: Option<String>,
+    pub success: bool,
+}
+
+/// `/jetton/transfers` lines of known jettons, kept only when the sending jetton wallet is the
+/// one Kyro computes for the sender (a fake jetton contract cannot pass for a known one).
+pub fn parse_jetton_history(
+    v: &Value,
+    me: &TonAddress,
+    net: Network,
+) -> Vec<TonJettonHistoryEntry> {
+    let tn = testnet(net);
+    let raw = |x: &Value| {
+        x.as_str()
+            .and_then(|a| wallet_core::ton_parse_raw_address(a).ok())
+    };
+    let mut out = Vec::new();
+    for t in v["jetton_transfers"].as_array().into_iter().flatten() {
+        let (Some(master), Some(source), Some(dest), Some(source_wallet)) = (
+            raw(&t["jetton_master"]),
+            raw(&t["source"]),
+            raw(&t["destination"]),
+            raw(&t["source_wallet"]),
+        ) else {
+            continue;
+        };
+        if wallet_core::ton_known_jetton(&master, tn).is_none()
+            || wallet_core::ton_jetton_wallet_address(&master, &source, tn).ok()
+                != Some(source_wallet)
+        {
+            continue;
+        }
+        let (direction, other) = if source == *me {
+            ("out", dest)
+        } else if dest == *me {
+            ("in", source)
+        } else {
+            continue;
+        };
+        let Some(amount) = t["amount"].as_str().and_then(digits) else {
+            continue;
+        };
+        let Some(hash) = t["transaction_hash"].as_str().and_then(b64_to_hex) else {
+            continue;
+        };
+        let d = &t["decoded_forward_payload"];
+        let comment = (d["type"] == "text_comment")
+            .then(|| d["comment"].as_str())
+            .flatten()
+            .map(|c| wallet_core::sanitize_text(c, 120).text);
+        out.push(TonJettonHistoryEntry {
+            hash,
+            time: t["transaction_now"].as_i64().map(|s| s * 1000),
+            direction,
+            master: master.to_friendly(true, tn),
+            counterparty: Some(other.to_friendly(false, tn)),
+            amount,
+            comment,
+            success: t["transaction_aborted"] != true,
+        });
+    }
+    out
+}
+
+pub async fn jetton_txs(
+    ctx: &TonCtx<'_>,
+    me: &TonAddress,
+) -> AppResult<Vec<TonJettonHistoryEntry>> {
+    let tn = testnet(ctx.network);
+    let raw = me.to_raw();
+    let mut out = Vec::new();
+    for j in wallet_core::ton_known_jettons(tn) {
+        let m = j.master.to_raw();
+        let v = get(
+            ctx,
+            "jetton/transfers",
+            &[
+                ("owner_address", raw.as_str()),
+                ("jetton_master_address", m.as_str()),
+                ("limit", "50"),
+                ("offset", "0"),
+                ("sort", "desc"),
+            ],
+        )
+        .await?;
+        out.extend(parse_jetton_history(&v, me, ctx.network));
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jetton_lines_are_checked_against_computed_wallets() {
+        let owner = wallet_core::ton_parse_raw_address(
+            "0:23FA979918F1FE702DB9100BF843E87C7015ECCD39A4721E9B6BAC170BC04CE3",
+        )
+        .unwrap();
+        let usdt = "0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE";
+        let real = "0:2626CF30B702BDDED845EFC883EFA45029FF59DEFDACC4CE7B8B0A5966D75002";
+        let other = "0:049E810FE8D7FBF42CC80814C5F493B97A6AA55AA99CEC5FE71BD308603DA904";
+        let other_wallet = "0:5D654A2DB3DAFFC121DA712AB70499C34668A12BD4EF9007E5D9BBC8FE707D8F";
+        let v = json!({"jetton_wallets": [
+            {"address": other_wallet, "balance": "999999999", "owner": owner.to_raw(), "jetton": usdt},
+            {"address": real, "balance": "0012500000", "owner": owner.to_raw(), "jetton": usdt},
+        ]});
+        let b = parse_jetton_balances(&v, &owner, Network::Mainnet);
+        assert_eq!(b.len(), 1);
+        assert_eq!(b[0].balance, "12500000");
+        assert_eq!(
+            b[0].master,
+            "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
+        );
+        let none = parse_jetton_balances(&json!({"jetton_wallets": []}), &owner, Network::Mainnet);
+        assert_eq!(none[0].balance, "0");
+        assert!(parse_jetton_balances(&v, &owner, Network::Testnet).is_empty());
+
+        let h = json!({"jetton_transfers": [
+            {"source": other, "destination": owner.to_raw(), "source_wallet": other_wallet, "jetton_master": usdt,
+             "amount": "100", "transaction_hash": "suQ/Xhq/A6a9TGFWQgzOIIWejqMzSdI1psB7IE+Sd7Q=", "transaction_now": 1793164287,
+             "transaction_aborted": false, "decoded_forward_payload": {"type": "text_comment", "comment": "123"}},
+            {"source": owner.to_raw(), "destination": other, "source_wallet": real, "jetton_master": usdt,
+             "amount": "5", "transaction_hash": "KGkajBG/ld9GKDwF0Q/5UWLbmSEdzd54akiNagB43Zk=", "transaction_now": 1793164222,
+             "transaction_aborted": false},
+            // Fake: the sending contract is not the USDT wallet of the sender.
+            {"source": other, "destination": owner.to_raw(), "source_wallet": real, "jetton_master": usdt,
+             "amount": "1000000000", "transaction_hash": "KGkajBG/ld9GKDwF0Q/5UWLbmSEdzd54akiNagB43Zk=", "transaction_now": 1793164222}
+        ]});
+        let l = parse_jetton_history(&h, &owner, Network::Mainnet);
+        assert_eq!(l.len(), 2);
+        assert_eq!(
+            (
+                l[0].direction,
+                l[0].amount.as_str(),
+                l[0].comment.as_deref()
+            ),
+            ("in", "100", Some("123"))
+        );
+        assert_eq!((l[1].direction, l[1].amount.as_str()), ("out", "5"));
+    }
 
     fn me() -> TonAddress {
         wallet_core::ton_parse_raw_address(

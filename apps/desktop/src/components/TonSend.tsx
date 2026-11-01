@@ -106,10 +106,24 @@ export function TonSummaryView({ u, tonPrice, currency }: { u: TonUnsigned; tonP
         <span className="block text-[12px] font-medium text-mute">{t('ton.comment')}</span>
         <span className={cn('block font-mono text-[16px] font-semibold break-all', s.comment !== null ? 'text-text' : 'text-warn')}>{s.comment !== null ? s.comment : t('ton.commentNone')}</span>
       </div>
-      <Line k={t('ton.lDest')} v={s.destination} mono />
-      <Line k={t('ton.lDestOther')} v={s.destinationOther} mono />
-      <Line k={t('ton.lAmount')} v={s.sendAll ? t('ton.sendAll') : `${TON(s.amount)}${fiat(s.amount)}`} {...(s.sendAll ? { warn: true } : {})} />
-      <Line k={t('ton.lBounce')} v={s.bounce ? t('ton.bounceYes') : c.destination.status === 'active' ? t('ton.bounceNoForm') : t('ton.bounceNoInactive')} />
+      {s.jetton ? (
+        <>
+          <Line k={t('ton.lJetton')} v={t('ton.lJettonValue', { symbol: s.jetton.symbol, decimals: s.jetton.decimals })} />
+          <Line k={t('ton.lJettonMaster')} v={s.jetton.master} mono />
+          <Line k={t('ton.lDest')} v={s.jetton.recipient} mono />
+          <Line k={t('ton.lDestOther')} v={s.jetton.recipientOther} mono />
+          <Line k={t('ton.lAmount')} v={fmtCrypto(BigInt(s.jetton.amount), s.jetton.decimals, s.jetton.symbol, s.jetton.decimals)} />
+          <Line k={t('ton.lJettonWallet')} v={s.jetton.jettonWallet} mono />
+          <Line k={t('ton.lAttached')} v={`${TON(s.amount)}${fiat(s.amount)}`} />
+        </>
+      ) : (
+        <>
+          <Line k={t('ton.lDest')} v={s.destination} mono />
+          <Line k={t('ton.lDestOther')} v={s.destinationOther} mono />
+          <Line k={t('ton.lAmount')} v={s.sendAll ? t('ton.sendAll') : `${TON(s.amount)}${fiat(s.amount)}`} {...(s.sendAll ? { warn: true } : {})} />
+          <Line k={t('ton.lBounce')} v={s.bounce ? t('ton.bounceYes') : c.destination.status === 'active' ? t('ton.bounceNoForm') : t('ton.bounceNoInactive')} />
+        </>
+      )}
       <Line k={t('ton.lFee')} v={t('ton.lFeeValue', { fee: `${TON(c.fee)}${fiat(c.fee)}` })} />
       {s.deploysWallet && <Line k={t('ton.lFirstSend')} v={t('ton.deploys')} warn />}
       <Line k={t('ton.lBalance')} v={TON(c.account.balance)} />

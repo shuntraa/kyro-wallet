@@ -28,6 +28,8 @@ pub enum TokenChain {
     Solana,
     /// TRON network (TRC-20, base58 `T…` contract).
     Tron,
+    /// TON (jetton, master in bounceable user-friendly form `EQ…`).
+    Ton,
 }
 
 /// What Kyro knows about a curated token. Symbol and decimals were checked on chain against
@@ -76,7 +78,9 @@ pub fn lookup(network: Network, chain: TokenChain, contract: &str) -> Option<&'s
                 && e.chain == chain
                 && match chain {
                     TokenChain::Evm(_) => e.contract.eq_ignore_ascii_case(contract),
-                    TokenChain::Solana | TokenChain::Tron => e.contract == contract,
+                    TokenChain::Solana | TokenChain::Tron | TokenChain::Ton => {
+                        e.contract == contract
+                    }
                 }
         })
         .map(|e| &e.token)
@@ -128,6 +132,7 @@ mod tests {
         match s {
             "solana" => TokenChain::Solana,
             "tron" => TokenChain::Tron,
+            "ton" => TokenChain::Ton,
             evm => TokenChain::Evm(evm.strip_prefix("evm:").unwrap().parse().unwrap()),
         }
     }
@@ -241,7 +246,35 @@ mod tests {
                 TokenChain::Tron => {
                     wallet_core::tron_address_bytes(e.contract).unwrap();
                 }
+                TokenChain::Ton => {
+                    let f = wallet_core::ton_parse_address(e.contract).unwrap();
+                    assert!(
+                        f.bounceable && f.testnet == (e.network == Network::Testnet),
+                        "{e:?}"
+                    );
+                }
             }
+        }
+    }
+
+    /// The jettons of registry.ts are exactly those wallet-core knows (it computes their jetton
+    /// wallets), with the same symbol and decimals.
+    #[test]
+    fn ton_jettons_are_wallet_core_jettons() {
+        for net in [Network::Mainnet, Network::Testnet] {
+            let tn = net == Network::Testnet;
+            let mut table: Vec<_> = data::TOKENS
+                .iter()
+                .filter(|e| e.network == net && e.chain == TokenChain::Ton)
+                .map(|e| (e.contract.to_string(), e.token.symbol, e.token.decimals))
+                .collect();
+            let mut core: Vec<_> = wallet_core::ton_known_jettons(tn)
+                .into_iter()
+                .map(|j| (j.master.to_friendly(true, tn), j.symbol, j.decimals))
+                .collect();
+            table.sort();
+            core.sort();
+            assert_eq!(table, core);
         }
     }
 

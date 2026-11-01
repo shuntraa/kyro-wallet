@@ -565,6 +565,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               {rt('receive.tonNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               {network === 'testnet' ? t('receive.tonTestnetId') : ''}
+              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.tonJettonNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</span>}
             </Notice>
           )}
           {family === 'xrp' && (

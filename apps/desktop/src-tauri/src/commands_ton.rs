@@ -96,6 +96,9 @@ pub(crate) fn describe_ton(
     } else {
         ""
     };
+    if let Some(j) = &s.jetton {
+        return describe_jetton(lang, s, j, c, testnet, now);
+    }
     let mut out = match lang {
         Lang::Fr => format!(
             "Envoi TON{testnet}\n\nÀ : {}\n(même compte que {} : seul l'indicateur de rebond diffère)\n",
@@ -189,6 +192,67 @@ pub(crate) fn describe_ton(
     out
 }
 
+/// Dialog body of a jetton transfer: token, verified master, decimals, recipient (both forms),
+/// comment framed, TON attached for the jetton wallets' fees.
+fn describe_jetton(
+    lang: Lang,
+    s: &TonTxSummary,
+    j: &wallet_core::TonJettonSummary,
+    c: &TonContext,
+    testnet: &str,
+    now: u32,
+) -> String {
+    let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+    let amount = format!(
+        "{} {}",
+        format_units_in(lang, &j.amount, usize::from(j.decimals)),
+        j.symbol
+    );
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Envoi de jeton TON (jetton){testnet}\n\nJeton : {} — contrat vérifié par Kyro {}\n{} décimales\nMontant : {amount} ({} unités)\n\nÀ : {}\n(même compte que {})\n",
+            j.symbol, j.master, j.decimals, j.amount, j.recipient, j.recipient_other
+        ),
+        Lang::En => format!(
+            "TON token (jetton) send{testnet}\n\nToken: {} — contract verified by Kyro {}\n{} decimals\nAmount: {amount} ({} units)\n\nTo: {}\n(same account as {})\n",
+            j.symbol, j.master, j.decimals, j.amount, j.recipient, j.recipient_other
+        ),
+    };
+    out += &format!("{line}\n");
+    match &s.comment {
+        Some(t) => out += &format!("{}« {t} »\n", lang.pick("COMMENTAIRE : ", "COMMENT: ")),
+        None => out += lang.pick(
+            "AUCUN COMMENTAIRE\n(une plateforme d'échange en exige souvent un, appelé aussi mémo ou tag : sans lui, les fonds peuvent être perdus)\n",
+            "NO COMMENT\n(an exchange often requires one, also called memo or tag: without it, the funds can be lost)\n",
+        ),
+    }
+    out += &format!("{line}\n");
+    out += &match lang {
+        Lang::Fr => format!(
+            "Message envoyé à ton portefeuille de jetons {} (adresse calculée par Kyro), avec {} pour ses frais : le surplus revient à ton portefeuille.\nFrais estimés : ≈ {} en plus\nSolde TON : {}\n",
+            j.jetton_wallet, ton(lang, &s.amount), ton(lang, &c.fee), ton(lang, &c.account.balance)
+        ),
+        Lang::En => format!(
+            "Message sent to your token wallet {} (address computed by Kyro), with {} for its fees: the excess comes back to your wallet.\nEstimated fee: ≈ {} on top\nTON balance: {}\n",
+            j.jetton_wallet, ton(lang, &s.amount), ton(lang, &c.fee), ton(lang, &c.account.balance)
+        ),
+    };
+    let mins = s.valid_until.saturating_sub(now).div_ceil(60);
+    out += &match lang {
+        Lang::Fr => format!(
+            "Valable encore ≈ {mins} min (jusqu'à {} UTC), seqno {}\n",
+            utc_hms(s.valid_until),
+            s.seqno
+        ),
+        Lang::En => format!(
+            "Still valid for ≈ {mins} min (until {} UTC), seqno {}\n",
+            utc_hms(s.valid_until),
+            s.seqno
+        ),
+    };
+    out
+}
+
 /// `HH:MM:SS` (UTC) of a UNIX time.
 fn utc_hms(t: u32) -> String {
     let d = t % 86_400;
@@ -253,6 +317,26 @@ pub async fn ton_txs(
 ) -> AppResult<Vec<TonHistoryEntry>> {
     let a = parse_user_address(&address, state.network)?;
     ton_backend::txs(&ctx(&state), &a.address).await
+}
+
+/// Balances of the jettons Kyro knows (our jetton wallets computed by Kyro).
+#[tauri::command]
+pub async fn ton_jetton_balances(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<Vec<ton_backend::TonJettonBalance>> {
+    let a = parse_user_address(&address, state.network)?;
+    ton_backend::jetton_balances(&ctx(&state), &a.address).await
+}
+
+/// Transfers of the jettons Kyro knows (lines from fake jetton contracts dropped).
+#[tauri::command]
+pub async fn ton_jetton_txs(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<Vec<ton_backend::TonJettonHistoryEntry>> {
+    let a = parse_user_address(&address, state.network)?;
+    ton_backend::jetton_txs(&ctx(&state), &a.address).await
 }
 
 // ---------------------------------------------------------------- build, sign, broadcast
@@ -327,6 +411,7 @@ pub(crate) async fn build(
         amount,
         comment,
         with_state_init: deploy,
+        jetton: None,
     };
     // Cell layout and limits are checked by wallet-core before any request.
     let boc = wallet_core::ton_unsigned_transfer(&t)?;
@@ -346,6 +431,131 @@ pub(crate) async fn build(
             fee: fee.to_string(),
         },
     })
+}
+
+/// Our live balance of the jetton whose wallet is `jetton_wallet`; refuses `amount` above it.
+async fn check_jetton_balance(
+    c: &TonCtx<'_>,
+    me: &TonAddress,
+    j: &wallet_core::TonJettonSummary,
+    amount: u128,
+) -> AppResult<()> {
+    let balances = ton_backend::jetton_balances(c, me).await?;
+    let have: u128 = balances
+        .iter()
+        .find(|b| b.master == j.master && b.wallet == j.jetton_wallet)
+        .and_then(|b| b.balance.parse().ok())
+        .unwrap_or(0);
+    if amount > have {
+        return Err(AppError::InvalidInput(format!(
+            "solde {} insuffisant : {} {}",
+            j.symbol,
+            crate::commands::format_units(&have.to_string(), usize::from(j.decimals)),
+            j.symbol
+        )));
+    }
+    Ok(())
+}
+
+/// Builds an unsigned jetton transfer: `amount` jetton units of the known jetton `master` to the
+/// wallet `to`, through our jetton wallet (computed by Kyro).
+pub(crate) async fn build_jetton(
+    c: &TonCtx<'_>,
+    public_key: &[u8; 32],
+    me: &TonAddress,
+    master: &str,
+    req: &TransferRequest<'_>,
+    now: u32,
+) -> AppResult<TonBuilt> {
+    let tn = testnet(c.network);
+    let master = wallet_core::ton_parse_address(master)?.address;
+    if wallet_core::ton_known_jetton(&master, tn).is_none() {
+        return Err(AppError::InvalidInput("jeton TON inconnu de Kyro".into()));
+    }
+    let dest = parse_user_address(req.to, c.network)?;
+    let units: u128 = req
+        .amount
+        .trim()
+        .parse()
+        .ok()
+        .filter(|n| *n > 0)
+        .ok_or_else(|| AppError::InvalidInput("montant de jeton invalide".into()))?;
+    let jetton_wallet = wallet_core::ton_jetton_wallet_address(&master, me, tn)?;
+    let account = ton_backend::account(c, me).await?;
+    let jw = ton_backend::account(c, &jetton_wallet).await?;
+    if jw.status != TonStatus::Active {
+        return Err(AppError::InvalidInput(
+            "tu n'as encore reçu aucun jeton de ce type : ton portefeuille de jetons n'existe pas"
+                .into(),
+        ));
+    }
+    let valid_until = now.saturating_add(VALID_FOR_SECS);
+    let t = TonTransfer {
+        public_key: *public_key,
+        wallet_id: wallet_core::ton_wallet_id(tn),
+        valid_until,
+        seqno: account.seqno.unwrap_or(0),
+        mode: wallet_core::TON_MODE_PAY_FEES,
+        destination: jetton_wallet,
+        bounce: true,
+        amount: wallet_core::TON_JETTON_ATTACHED_NANOTON,
+        comment: None,
+        with_state_init: account.status == TonStatus::Uninit,
+        jetton: Some(wallet_core::TonJettonBody {
+            query_id: u64::from(valid_until),
+            amount: units,
+            destination: dest.address,
+            response_destination: *me,
+            forward_ton_amount: wallet_core::TON_JETTON_FORWARD_NANOTON,
+            comment: req.comment.filter(|t| !t.is_empty()).map(str::to_owned),
+        }),
+    };
+    if t.with_state_init && t.seqno != 0 {
+        return Err(AppError::InvalidInput(
+            "état du portefeuille TON incohérent".into(),
+        ));
+    }
+    let boc = wallet_core::ton_unsigned_transfer(&t)?;
+    let fee = ton_backend::estimate_fee(c, me, &t.estimate_parts()?).await?;
+    ton_backend::check_transfer(&TransferCheck {
+        ours: &account,
+        amount: Some(t.amount),
+        fee,
+    })?;
+    let summary = wallet_core::ton_decode_tx(&boc, public_key, tn)?;
+    let Some(j) = &summary.jetton else {
+        return Err(AppError::Internal("transfert de jeton non reconnu".into()));
+    };
+    check_jetton_balance(c, me, j, units).await?;
+    Ok(TonBuilt {
+        boc,
+        summary,
+        context: TonContext {
+            account,
+            destination: jw,
+            fee: fee.to_string(),
+        },
+    })
+}
+
+/// Jetton transfer: `amount` in jetton units, `master` = the jetton's master (`EQ…`).
+#[tauri::command]
+pub async fn ton_build_jetton_tx(
+    state: State<'_, AppState>,
+    master: String,
+    to: String,
+    amount: String,
+    comment: Option<String>,
+    account: Option<u32>,
+) -> AppResult<TonBuilt> {
+    let (pk, me) = ours(&state, account_arg(account)?)?;
+    let req = TransferRequest {
+        to: &to,
+        amount: &amount,
+        comment: comment.as_deref(),
+        send_all: false,
+    };
+    build_jetton(&ctx(&state), &pk, &me, &master, &req, now()).await
 }
 
 #[tauri::command]
@@ -429,6 +639,9 @@ pub(crate) async fn prepare_sign(
         amount: (!summary.send_all).then_some(t.amount),
         fee,
     })?;
+    if let (Some(j), Some(body)) = (&summary.jetton, &t.jetton) {
+        check_jetton_balance(c, me, j, body.amount).await?;
+    }
     Ok((
         summary,
         TonContext {
@@ -566,6 +779,7 @@ mod tests {
             wallet_id: wallet_core::TON_WALLET_ID_MAINNET,
             warnings: vec![],
             requires_extra_confirmation: false,
+            jetton: None,
         }
     }
 

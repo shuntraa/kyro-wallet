@@ -202,9 +202,11 @@ pub use sui_tx::{
     MIST_PER_SUI, SUI_COIN_TYPE, SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS,
 };
 pub use ton::{
-    ton_address, ton_decode_tx, ton_parse_address, ton_parse_raw_address, ton_path, ton_public_key,
-    ton_sign, ton_unsigned_transfer, ton_verify_signed, ton_wallet_address, ton_wallet_id,
-    TonAddress, TonEstimateParts, TonFriendly, TonSigned, TonTransfer, TonTxSummary, TonWarning,
+    ton_address, ton_decode_tx, ton_jetton_wallet_address, ton_known_jetton, ton_known_jettons,
+    ton_parse_address, ton_parse_raw_address, ton_path, ton_public_key, ton_sign,
+    ton_unsigned_transfer, ton_verify_signed, ton_wallet_address, ton_wallet_id, TonAddress,
+    TonEstimateParts, TonFriendly, TonJettonBody, TonJettonInfo, TonJettonSummary, TonSigned,
+    TonTransfer, TonTxSummary, TonWarning, TON_JETTON_ATTACHED_NANOTON, TON_JETTON_FORWARD_NANOTON,
     TON_MAX_COMMENT_BYTES, TON_MODE_ALL_BALANCE, TON_MODE_PAY_FEES, TON_V4R2_CODE_HASH,
     TON_WALLET_ID_MAINNET, TON_WALLET_ID_TESTNET,
 };
