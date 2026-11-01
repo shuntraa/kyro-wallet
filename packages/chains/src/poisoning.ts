@@ -43,7 +43,9 @@ const TAIL = 4;
  * format is case-insensitive (hex, bech32).
  * - Bitcoin / Litecoin bech32: hrp + `1` + witness-version char (`bc1q`, `tb1p`, `ltc1q`, `tltc1q`);
  *   legacy base58: the version char (`1`, `3`, `m`, `n`, `2`, `L`, `M`).
- * - Dogecoin (base58): the version char (`D`, `A`, `9`, `n`, `m`, `2`).
+ * - Dogecoin, Dash (base58): the version char (`D`, `A`, `9`, `n`, `m`, `2`; `X`, `7`, `y`, `8`, `9`).
+ * - Bitcoin Cash (CashAddr): `bitcoincash:` / `bchtest:` (optional) + the type char (`q`, `p`),
+ *   compared lowercase.
  * - EVM: `0x`, hex compared lowercase.
  * - Solana (base58): none.
  * - TRON: `T`. XRP: `r`. Stellar: `G` (base32, upper case).
@@ -65,7 +67,13 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       }
       return { prefix: a.slice(0, 1), body: a.slice(1), caseInsensitive: false };
     case 'doge':
+    case 'dash':
       return { prefix: a.slice(0, 1), body: a.slice(1), caseInsensitive: false };
+    case 'bch': {
+      const lower = a.toLowerCase();
+      const bare = lower.includes(':') ? lower.slice(lower.indexOf(':') + 1) : lower;
+      return { prefix: bare.slice(0, 1), body: bare.slice(1), caseInsensitive: true };
+    }
     case 'tron':
       return a.startsWith('T') ? { prefix: 'T', body: a.slice(1), caseInsensitive: false } : { prefix: '', body: a, caseInsensitive: false };
     case 'xrp':
@@ -84,7 +92,8 @@ export function addressParts(address: string, family: Family): AddressParts & { 
 export function sameAddress(a: string, b: string, family: Family): boolean {
   const x = addressParts(a, family);
   const y = addressParts(b, family);
-  return x.prefix.toLowerCase() === y.prefix.toLowerCase() && x.body === y.body;
+  // Base58 prefixes are case-sensitive (Dash `X…` ≠ `x…`); case-insensitive formats are already lowercased.
+  return x.prefix === y.prefix && x.body === y.body;
 }
 
 /** Not identical, but same prefix and same first 4 and last 4 characters of the body. */
@@ -189,10 +198,10 @@ export function isSuspectAddress(recipient: string, suspects: string[], family: 
 
 /**
  * Base-unit amounts at or under which a transfer counts as dust, per chain: 10 × the network's
- * dust limit (Bitcoin 546 sat, Litecoin 294 litoshis for ltc1, Dogecoin 0,01 DOGE). Planting an
- * address in someone's history costs at least that much on these chains.
+ * dust limit (Bitcoin 546 sat, Litecoin 294 litoshis for ltc1, Dogecoin 0,01 DOGE, Bitcoin Cash
+ * and Dash 546). Planting an address in someone's history costs at least that much on these chains.
  */
-const DUST_UNITS: Partial<Record<Family, bigint>> = { btc: 5_460n, ltc: 2_940n, doge: 10_000_000n };
+const DUST_UNITS: Partial<Record<Family, bigint>> = { btc: 5_460n, ltc: 2_940n, doge: 10_000_000n, bch: 5_460n, dash: 5_460n };
 
 /** Fiat value under which any transfer is dust (planting a look-alike costs less than that). */
 export const DUST_FIAT = 1;

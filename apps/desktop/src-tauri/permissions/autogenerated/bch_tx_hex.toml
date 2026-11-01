@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-bch-tx-hex"
+description = "Enables the bch_tx_hex command without any pre-configured scope."
+commands.allow = ["bch_tx_hex"]
+
+[[permission]]
+identifier = "deny-bch-tx-hex"
+description = "Denies the bch_tx_hex command without any pre-configured scope."
+commands.deny = ["bch_tx_hex"]

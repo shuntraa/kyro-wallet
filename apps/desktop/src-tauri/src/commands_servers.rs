@@ -30,7 +30,7 @@ fn network_of(key: &str) -> AppResult<Network> {
     }
 }
 
-/// Litecoin / Dogecoin network key of `servers.{litecoin,dogecoin}`.
+/// Network key of `servers.{litecoin,dogecoin,bitcoincash,dash}` (and TRON / XRP / Cardano).
 fn utxo_network_of(key: &str) -> AppResult<Network> {
     match key {
         "mainnet" => Ok(Network::Mainnet),
@@ -159,7 +159,7 @@ async fn probe_changes(net: &NetClient, new: &Servers, old: &Servers, tor: bool)
             probe_btc(net, network_of(key)?, s, tor).await?;
         }
     }
-    for coin in [UtxoCoin::Litecoin, UtxoCoin::Dogecoin] {
+    for coin in UtxoCoin::ALL {
         for ((key, n), (_, o)) in new
             .utxo(coin)
             .entries()
@@ -346,6 +346,16 @@ pub enum ServerTestTarget {
         network: String,
         server: UtxoServer,
     },
+    /// `network`: `mainnet` | `testnet` (chipnet).
+    Bitcoincash {
+        network: String,
+        server: UtxoServer,
+    },
+    /// `network`: `mainnet` | `testnet`.
+    Dash {
+        network: String,
+        server: UtxoServer,
+    },
     /// `network`: `mainnet` | `testnet` (Nile).
     Tron {
         network: String,
@@ -389,11 +399,14 @@ fn probe_servers(target: &ServerTestTarget) -> AppResult<Servers> {
             } = Some(server.clone());
         }
         ServerTestTarget::Litecoin { network, server }
-        | ServerTestTarget::Dogecoin { network, server } => {
-            let coin = if matches!(target, ServerTestTarget::Litecoin { .. }) {
-                UtxoCoin::Litecoin
-            } else {
-                UtxoCoin::Dogecoin
+        | ServerTestTarget::Dogecoin { network, server }
+        | ServerTestTarget::Bitcoincash { network, server }
+        | ServerTestTarget::Dash { network, server } => {
+            let coin = match target {
+                ServerTestTarget::Litecoin { .. } => UtxoCoin::Litecoin,
+                ServerTestTarget::Dogecoin { .. } => UtxoCoin::Dogecoin,
+                ServerTestTarget::Bitcoincash { .. } => UtxoCoin::BitcoinCash,
+                _ => UtxoCoin::Dash,
             };
             *match utxo_network_of(network)? {
                 Network::Mainnet => &mut probe.utxo_mut(coin).mainnet,
@@ -465,6 +478,12 @@ pub async fn server_test(
         }
         ServerTestTarget::Dogecoin { network, server } => {
             probe_utxo(&state, UtxoCoin::Dogecoin, &network, server, tor).await?
+        }
+        ServerTestTarget::Bitcoincash { network, server } => {
+            probe_utxo(&state, UtxoCoin::BitcoinCash, &network, server, tor).await?
+        }
+        ServerTestTarget::Dash { network, server } => {
+            probe_utxo(&state, UtxoCoin::Dash, &network, server, tor).await?
         }
         ServerTestTarget::Xrp { network, server } => {
             let net = utxo_network_of(&network)?;

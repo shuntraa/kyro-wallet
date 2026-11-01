@@ -35,7 +35,7 @@ import {
   type Settings,
   type SolanaCluster,
 } from './ipc';
-import { bitcoinServerFor, btcNetworkKey, checkBtcServer, checkServerUrl, coreIsLocal, isOnion, mergeServerSecrets, solanaCluster } from './servers';
+import { EMPTY_SERVERS, bitcoinServerFor, btcNetworkKey, checkBtcServer, checkServerUrl, coreIsLocal, isOnion, mergeServerSecrets, solanaCluster } from './servers';
 import { DEMO_FEE_RATES, EVM_HOSTS, demoEsploraAddress, demoEsploraTxs, demoEsploraUtxos, handleDemoNet, type DemoChainState, type DemoRoute } from './mock-net';
 import type { DemoTor } from './mock-tor';
 import { cbfDisabled, type DemoCbf } from './mock-cbf';
@@ -216,7 +216,7 @@ export function createDemoServers(d: DemoServersDeps) {
       const s = merged.solana[cluster];
       if (s && !same(s, stored.solana[cluster])) await probeSol(cluster, s);
     }
-    for (const [coin, key] of [['ltc', 'litecoin'], ['doge', 'dogecoin']] as const) {
+    for (const [coin, key] of [['ltc', 'litecoin'], ['doge', 'dogecoin'], ['bch', 'bitcoincash'], ['dash', 'dash']] as const) {
       for (const nk of ['mainnet', 'testnet'] as const) {
         const s = merged[key]?.[nk];
         if (s && s.kind !== 'default' && !same(s, stored[key]?.[nk])) await d.utxo.probe(coin, nk, s);
@@ -239,16 +239,17 @@ export function createDemoServers(d: DemoServersDeps) {
     let detected: ServerTestResult['detected'];
     if (target.family === 'bitcoin') {
       if (target.network !== 'mainnet' && target.network !== 'testnet4') throw invalid(l10n(`réseau Bitcoin inconnu « ${String(target.network)} » (mainnet ou testnet4)`, `unknown Bitcoin network “${String(target.network)}” (mainnet or testnet4)`));
-      const probe: Servers = { bitcoin: { [target.network]: target.server }, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, tron: {}, xrp: {}, cardano: {} };
+      const probe: Servers = { ...EMPTY_SERVERS, bitcoin: { [target.network]: target.server } };
       const merged = mergeServerSecrets(probe, d.settings().servers);
       validate(merged, tor);
       detected = await probeBtc(target.network, merged.bitcoin[target.network] ?? { kind: 'default' });
-    } else if (target.family === 'litecoin' || target.family === 'dogecoin') {
+    } else if (target.family === 'litecoin' || target.family === 'dogecoin' || target.family === 'bitcoincash' || target.family === 'dash') {
       if (target.server.kind === 'esplora') {
         const bad = checkServerUrl(target.server.url, tor);
         if (bad) throw invalid(l10n(`${target.family} ${target.network} : ${bad}`, `${target.family} ${target.network}: ${bad}`));
       }
-      detected = await d.utxo.probe(target.family === 'litecoin' ? 'ltc' : 'doge', target.network, target.server);
+      const coin = ({ litecoin: 'ltc', dogecoin: 'doge', bitcoincash: 'bch', dash: 'dash' } as const)[target.family];
+      detected = await d.utxo.probe(coin, target.network, target.server);
     } else if (target.family === 'tron') {
       detected = await d.tron.probe(target.network, target.server);
     } else if (target.family === 'xrp') {
@@ -256,10 +257,10 @@ export function createDemoServers(d: DemoServersDeps) {
     } else if (target.family === 'cardano') {
       detected = await d.cardano.probe(target.network, target.server);
     } else if (target.family === 'evm') {
-      validate({ bitcoin: {}, evm: { [String(target.chainId)]: target.server }, solana: {}, litecoin: {}, dogecoin: {}, tron: {}, xrp: {}, cardano: {} }, tor);
+      validate({ ...EMPTY_SERVERS, evm: { [String(target.chainId)]: target.server } }, tor);
       detected = await probeEvm(target.chainId, target.server);
     } else {
-      validate({ bitcoin: {}, evm: {}, solana: { [target.cluster]: target.server }, litecoin: {}, dogecoin: {}, tron: {}, xrp: {}, cardano: {} }, tor);
+      validate({ ...EMPTY_SERVERS, solana: { [target.cluster]: target.server } }, tor);
       detected = await probeSol(target.cluster, target.server);
     }
     return { latencyMs: Math.max(1, Date.now() - t0), detected };

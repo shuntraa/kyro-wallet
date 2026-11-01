@@ -198,7 +198,7 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
       </Card>
       <Card className="flex flex-col px-5 py-2">
         {[
-          ['Bitcoin, Litecoin, Dogecoin', t('staking.otherUtxoNo')],
+          ['Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash', t('staking.otherUtxoNo')],
           ['XRP Ledger', t('staking.otherXrp')],
           ['NEAR', t('staking.otherNear')],
           ['Stellar', t('staking.otherXlm')],

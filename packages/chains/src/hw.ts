@@ -28,6 +28,9 @@ export interface WalletAccounts {
   /** Vault only: hardware wallets cannot sign Litecoin / Dogecoin yet (HW_UNSUPPORTED). */
   ltc?: { address: string; xpub: string; fingerprint: string; path: string };
   doge?: { address: string; xpub: string; fingerprint: string; path: string };
+  /** Vault only, like Litecoin / Dogecoin. */
+  bch?: { address: string; xpub: string; fingerprint: string; path: string };
+  dash?: { address: string; xpub: string; fingerprint: string; path: string };
   /** Vault only, like Litecoin / Dogecoin: TRON on a hardware wallet is HW_UNSUPPORTED. */
   tron?: { address: string; path?: string };
   /** Vault only: XRP on a hardware wallet is HW_UNSUPPORTED. */

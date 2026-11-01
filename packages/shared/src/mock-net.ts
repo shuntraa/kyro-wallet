@@ -29,6 +29,11 @@ export interface DemoChainState {
   dogeUtxos: Map<string, DemoUtxo[]>;
   ltcTip: number;
   dogeTip: number;
+  /** Bitcoin Cash (CashAddr keys) / Dash UTXOs by address, and their tips. */
+  bchUtxos: Map<string, DemoUtxo[]>;
+  dashUtxos: Map<string, DemoUtxo[]>;
+  bchTip: number;
+  dashTip: number;
   /** `${chainId}:${owner}` → wei */
   evmNative: Map<string, bigint>;
   /** `${chainId}:${token}:${owner}` → base units */

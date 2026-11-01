@@ -1,21 +1,36 @@
-//! Litecoin (BIP84 native SegWit, P2WPKH) and Dogecoin (BIP44 legacy, P2PKH).
+//! Litecoin (BIP84 native SegWit, P2WPKH), Dogecoin, Bitcoin Cash and Dash (BIP44 legacy,
+//! P2PKH).
 //!
-//! Both chains are Bitcoin derivatives: same transaction serialization, same secp256k1 keys and
-//! BIP32 derivation, same script interpreter and signature hashes (Litecoin: BIP143 for SegWit
-//! v0; Dogecoin: the original "legacy" algorithm, no SegWit, no fork id). So the audited
-//! `bitcoin` 0.32 crate is reused for keys, PSBTs, transactions and sighashes; only the
-//! address encodings differ, and they are built here from the crate's own `bech32` and
-//! `base58` (checked) re-exports with each chain's parameters. No cryptography is written here.
+//! All four chains are Bitcoin derivatives: same transaction serialization (Dash: plus the
+//! DIP2 special-transaction payload, decoded here, never signed), same secp256k1 keys and BIP32
+//! derivation, same script interpreter. Signature hashes: Litecoin BIP143 (SegWit v0);
+//! Dogecoin and Dash the original "legacy" algorithm (no amounts committed: the full previous
+//! transaction is mandatory); Bitcoin Cash the BIP143-style digest with `SIGHASH_FORKID`
+//! (type `0x41`, amounts committed), whose preimage is the crate's BIP143 encoder output with
+//! the sighash-type field set to `0x41` — checked against Bitcoin Cash Node's `sighash.json`.
+//! So the audited `bitcoin` 0.32 crate is reused for keys, PSBTs, transactions and sighashes;
+//! only the address encodings differ, and they are built here from the crate's own `bech32`
+//! (also CashAddr's checksum, see `cashaddr.rs`) and `base58` (checked) re-exports with each
+//! chain's parameters. No cryptography is written here.
 //!
-//! Parameters (source: `src/chainparams.cpp` of Litecoin Core 0.21 and Dogecoin Core 1.14,
-//! read 2026-10-30):
+//! Parameters (source: `src/chainparams.cpp` of Litecoin Core 0.21, Dogecoin Core 1.14,
+//! Bitcoin Cash Node 28 and Dash Core 22, read 2026-10-30 / 2026-11-01):
 //!
-//! | | P2PKH | P2SH | bech32 | genesis |
+//! | | P2PKH | P2SH | bech32 / CashAddr | genesis |
 //! |---|---|---|---|---|
 //! | Litecoin mainnet | 48 (`L…`) | 50 (`M…`) | `ltc` | `12a765e3…7e04bfe2` |
 //! | Litecoin testnet4 | 111 (`m…`/`n…`) | 58 (`Q…`) | `tltc` | `4966625a…4e3e29a0` |
 //! | Dogecoin mainnet | 30 (`D…`) | 22 (`9…`/`A…`) | — | `1a91e3da…2c355691` |
 //! | Dogecoin testnet | 113 (`n…`) | 196 (`2…`) | — | `bb0a7826…7350559e` |
+//! | Bitcoin Cash mainnet | CashAddr type 0 | type 1 | `bitcoincash` | `00000000…0a8ce26f` (Bitcoin's) |
+//! | Bitcoin Cash chipnet | CashAddr type 0 | type 1 | `bchtest` | `00000000…44fd9f7b` (testnet4's) |
+//! | Dash mainnet | 76 (`X…`) | 16 (`7…`) | — | `00000ffd…f3407ab6` |
+//! | Dash testnet | 140 (`y…`) | 19 (`8…`/`9…`) | — | `00000bad…3bf8bc2c` |
+//!
+//! Bitcoin Cash shares Bitcoin's genesis (and chipnet testnet4's): servers are also checked
+//! against a block after the split ([`utxo_checkpoint`]). Bitcoin Cash destinations are CashAddr
+//! only: the legacy `1…`/`3…` form is refused, since it is indistinguishable from a Bitcoin
+//! address.
 //!
 //! Litecoin's legacy P2SH version bytes (5 = `3…` mainnet, 196 = `2…` testnet, the same as
 //! Bitcoin's) are **refused** as destinations: a Bitcoin `3…` address pasted into a Litecoin
@@ -30,18 +45,23 @@ use core::str::FromStr;
 
 use bitcoin::bech32::{self, Hrp};
 use bitcoin::bip32::{ChildNumber, DerivationPath, Fingerprint, Xpub};
-use bitcoin::hashes::Hash;
+use bitcoin::consensus::Decodable;
+use bitcoin::hashes::{sha256d, Hash};
 use bitcoin::key::CompressedPublicKey;
 use bitcoin::psbt::{Output as PsbtOutput, Psbt};
 use bitcoin::secp256k1::{All, Message, PublicKey, Secp256k1};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
-use bitcoin::{PubkeyHash, Script, ScriptBuf, ScriptHash, TxOut, WitnessProgram, WitnessVersion};
+use bitcoin::{
+    Amount, PubkeyHash, Script, ScriptBuf, ScriptHash, Transaction, TxIn, TxOut, Txid,
+    WitnessProgram, WitnessVersion,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::btc::{
     is_our_path, is_unknown_witness, ownership, parse_psbt, prevouts as witness_prevouts, Ownership,
 };
 use crate::btc_watch::BtcRawTx;
+use crate::cashaddr::{self, CashKind};
 use crate::error::{Error, Result};
 use crate::keys::{hardened, normal, path_string, secp, XprivGuard};
 use crate::mnemonic::Seed;
@@ -55,14 +75,22 @@ pub enum UtxoCoin {
     Litecoin,
     /// Dogecoin: BIP44 legacy (P2PKH), `m/44'/3'/account'` (testnet `m/44'/1'/…`).
     Dogecoin,
+    /// Bitcoin Cash: BIP44 (P2PKH, CashAddr), `m/44'/145'/account'` (chipnet `m/44'/1'/…`),
+    /// `SIGHASH_ALL|FORKID`.
+    #[serde(rename = "bitcoincash")]
+    BitcoinCash,
+    /// Dash: BIP44 legacy (P2PKH), `m/44'/5'/account'` (testnet `m/44'/1'/…`).
+    Dash,
 }
 
 impl UtxoCoin {
-    /// Ticker (`LTC`, `DOGE`).
+    /// Ticker (`LTC`, `DOGE`, `BCH`, `DASH`).
     pub fn symbol(self) -> &'static str {
         match self {
             UtxoCoin::Litecoin => "LTC",
             UtxoCoin::Dogecoin => "DOGE",
+            UtxoCoin::BitcoinCash => "BCH",
+            UtxoCoin::Dash => "DASH",
         }
     }
 
@@ -71,7 +99,23 @@ impl UtxoCoin {
         match self {
             UtxoCoin::Litecoin => "Litecoin",
             UtxoCoin::Dogecoin => "Dogecoin",
+            UtxoCoin::BitcoinCash => "Bitcoin Cash",
+            UtxoCoin::Dash => "Dash",
         }
+    }
+
+    /// Every chain of this module.
+    pub const ALL: [UtxoCoin; 4] = [
+        UtxoCoin::Litecoin,
+        UtxoCoin::Dogecoin,
+        UtxoCoin::BitcoinCash,
+        UtxoCoin::Dash,
+    ];
+
+    /// Legacy P2PKH chain whose inputs are signed from the full previous transaction
+    /// (`non_witness_utxo`): Dogecoin, Bitcoin Cash, Dash.
+    fn is_legacy(self) -> bool {
+        !matches!(self, UtxoCoin::Litecoin)
     }
 }
 
@@ -92,36 +136,47 @@ pub const DOGE_MIN_RELAY_FEE_PER_KB: u64 = 100_000;
 pub const DOGE_SOFT_DUST: u64 = 1_000_000;
 /// Dogecoin hard dust limit: 0.001 DOGE. Outputs below it are non-standard (not relayed).
 pub const DOGE_HARD_DUST: u64 = 100_000;
+/// Bitcoin Cash Node and Dash Core minimum relay fee: 1 000 satoshis (duffs) per kB.
+pub const BCH_DASH_MIN_RELAY_FEE_PER_KB: u64 = 1_000;
+/// Bitcoin Cash Node and Dash Core `DUST_RELAY_TX_FEE`: 3 000 per kB (Bitcoin's), so 546 for a
+/// P2PKH output, 540 for P2SH.
+pub const BCH_DASH_DUST_RELAY_FEE_PER_KB: u64 = 3_000;
 
 /// Above this fee rate (smallest unit per 1 000 vB / B) the summary asks for a reinforced
-/// confirmation: 100 litoshis/vB (≈ 100× today's rate), 1 DOGE/kB (100× the recommended fee).
+/// confirmation: 100 litoshis/vB (≈ 100× today's rate), 1 DOGE/kB (100× the recommended fee),
+/// 100 sat/B on Bitcoin Cash and 100 duffs/B on Dash (100× the relay minimum both use).
 fn high_fee_per_kb(coin: UtxoCoin) -> u64 {
     match coin {
-        UtxoCoin::Litecoin => 100_000,
+        UtxoCoin::Litecoin | UtxoCoin::BitcoinCash | UtxoCoin::Dash => 100_000,
         UtxoCoin::Dogecoin => 100_000_000,
     }
 }
 
 /// Smallest standard (non-dust) value for an output with `script`, as the node computes it.
 /// Litecoin: `GetDustThreshold` with `DUST_RELAY_TX_FEE` (2 940 litoshis for P2WPKH, 5 460
-/// for P2PKH). Dogecoin: the hard dust limit. `OP_RETURN` outputs: 0.
+/// for P2PKH). Bitcoin Cash, Dash: the same formula at 3 000/kB (546 for P2PKH). Dogecoin: the
+/// hard dust limit. `OP_RETURN` outputs: 0.
 pub fn utxo_dust_threshold(coin: UtxoCoin, script: &Script) -> u64 {
     if script.is_op_return() {
         return 0;
     }
+    let len = script.len() as u64;
+    let varint = match len {
+        0..=0xfc => 1,
+        0xfd..=0xffff => 3,
+        _ => 5,
+    };
+    let out_size = 8 + varint + len;
     match coin {
         UtxoCoin::Dogecoin => DOGE_HARD_DUST,
         UtxoCoin::Litecoin => {
-            let len = script.len() as u64;
-            let varint = match len {
-                0..=0xfc => 1,
-                0xfd..=0xffff => 3,
-                _ => 5,
-            };
-            let out_size = 8 + varint + len;
             // Spending input size: 32+4+1+(107/4)+4 for a witness program, else 148.
             let spend = if script.is_witness_program() { 67 } else { 148 };
             (out_size + spend) * LTC_DUST_RELAY_FEE_PER_KVB / 1_000
+        }
+        // No SegWit: every input is counted at 148 bytes.
+        UtxoCoin::BitcoinCash | UtxoCoin::Dash => {
+            (out_size + 148) * BCH_DASH_DUST_RELAY_FEE_PER_KB / 1_000
         }
     }
 }
@@ -131,9 +186,12 @@ pub fn utxo_dust_threshold(coin: UtxoCoin, script: &Script) -> u64 {
 // ---------------------------------------------------------------------------------------------
 
 struct Params {
+    /// Base58 versions (unused for Bitcoin Cash, which only speaks CashAddr).
     p2pkh: u8,
     p2sh: u8,
     hrp: Option<&'static str>,
+    /// CashAddr prefix (Bitcoin Cash only).
+    cashaddr: Option<&'static str>,
     purpose: u32,
     coin_type: u32,
     genesis: &'static str,
@@ -145,6 +203,7 @@ fn params(coin: UtxoCoin, net: Network) -> Params {
             p2pkh: 48,
             p2sh: 50,
             hrp: Some("ltc"),
+            cashaddr: None,
             purpose: 84,
             coin_type: 2,
             genesis: "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2",
@@ -153,6 +212,7 @@ fn params(coin: UtxoCoin, net: Network) -> Params {
             p2pkh: 111,
             p2sh: 58,
             hrp: Some("tltc"),
+            cashaddr: None,
             purpose: 84,
             coin_type: 1,
             genesis: "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0",
@@ -161,6 +221,7 @@ fn params(coin: UtxoCoin, net: Network) -> Params {
             p2pkh: 30,
             p2sh: 22,
             hrp: None,
+            cashaddr: None,
             purpose: 44,
             coin_type: 3,
             genesis: "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691",
@@ -169,16 +230,82 @@ fn params(coin: UtxoCoin, net: Network) -> Params {
             p2pkh: 113,
             p2sh: 196,
             hrp: None,
+            cashaddr: None,
             purpose: 44,
             coin_type: 1,
             genesis: "bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e",
         },
+        (UtxoCoin::BitcoinCash, Network::Mainnet) => Params {
+            p2pkh: 0,
+            p2sh: 5,
+            hrp: None,
+            cashaddr: Some("bitcoincash"),
+            purpose: 44,
+            coin_type: 145,
+            genesis: "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
+        },
+        (UtxoCoin::BitcoinCash, Network::Testnet) => Params {
+            p2pkh: 111,
+            p2sh: 196,
+            hrp: None,
+            cashaddr: Some("bchtest"),
+            purpose: 44,
+            coin_type: 1,
+            genesis: "000000001dd410c49a788668ce26751718cc797474d3152a5fc073dd44fd9f7b",
+        },
+        (UtxoCoin::Dash, Network::Mainnet) => Params {
+            p2pkh: 76,
+            p2sh: 16,
+            hrp: None,
+            cashaddr: None,
+            purpose: 44,
+            coin_type: 5,
+            genesis: "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6",
+        },
+        (UtxoCoin::Dash, Network::Testnet) => Params {
+            p2pkh: 140,
+            p2sh: 19,
+            hrp: None,
+            cashaddr: None,
+            purpose: 44,
+            coin_type: 1,
+            genesis: "00000bafbc94add76cb75e2ec92894837288a481e5c005f6563d91623bf8bc2c",
+        },
     }
 }
 
-/// Genesis block hash (display order) of `coin` on `net` (Litecoin testnet = testnet4).
+/// Genesis block hash (display order) of `coin` on `net` (Litecoin testnet = testnet4;
+/// Bitcoin Cash testnet = chipnet, which shares testnet4's genesis).
 pub fn utxo_genesis_hash(net: Network, coin: UtxoCoin) -> &'static str {
     params(coin, net).genesis
+}
+
+/// A block `(height, hash)` a server must agree with, for chains whose genesis does not
+/// identify them: Bitcoin Cash mainnet shares Bitcoin's genesis (block 478 559, the first
+/// after the August 2017 split), chipnet shares testnet4's (block 200 000, after the two
+/// diverged). Hashes read from several public servers and recomputed from the headers
+/// (2026-11-01). `None` for the other chains.
+pub fn utxo_checkpoint(net: Network, coin: UtxoCoin) -> Option<(u64, &'static str)> {
+    match (coin, net) {
+        (UtxoCoin::BitcoinCash, Network::Mainnet) => Some((
+            478_559,
+            "000000000000000000651ef99cb9fcbe0dadde1d424bd9f15ff20136191a5eec",
+        )),
+        (UtxoCoin::BitcoinCash, Network::Testnet) => Some((
+            200_000,
+            "000000005d7d99462a40e3fc6219070ad619bdc7f4c27b5474ac269fc9357c05",
+        )),
+        _ => None,
+    }
+}
+
+/// Block hash (display order) of an 80-byte header given in hex: double SHA-256, Bitcoin's and
+/// Bitcoin Cash's block id (used for [`utxo_checkpoint`]; Dash block ids are X11, not checked).
+pub fn utxo_header_hash(header_hex: &str) -> Result<String> {
+    let bytes = hex::decode(header_hex.trim()).map_err(|_| Error::input("header is not hex"))?;
+    let header: bitcoin::block::Header = bitcoin::consensus::deserialize(&bytes)
+        .map_err(|_| Error::input("malformed block header"))?;
+    Ok(header.block_hash().to_string())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -201,6 +328,18 @@ fn hrp(p: &Params) -> Option<Hrp> {
 pub fn utxo_address_of_script(script: &[u8], net: Network, coin: UtxoCoin) -> Option<String> {
     let p = params(coin, net);
     let spk = Script::from_bytes(script);
+    if let Some(prefix) = p.cashaddr {
+        let (kind, hash) = if spk.is_p2pkh() {
+            (CashKind::P2pkh, &script[3..23])
+        } else if spk.is_p2sh() {
+            (CashKind::P2sh, &script[2..22])
+        } else {
+            // P2SH32, CashTokens-prefixed and every other script: not an ordinary address.
+            return None;
+        };
+        let hash: &[u8; 20] = hash.try_into().ok()?;
+        return cashaddr::encode(prefix, kind, hash).ok();
+    }
     if spk.is_p2pkh() {
         return Some(base58(p.p2pkh, &script[3..23]));
     }
@@ -220,11 +359,29 @@ pub fn utxo_address_of_script(script: &[u8], net: Network, coin: UtxoCoin) -> Op
 /// scriptPubKey of a destination address valid for `coin` on `net`. Litecoin: `ltc1…`/`tltc1…`
 /// (any witness version, BIP173/BIP350 checksums), `L…`/`M…` (`m…`/`n…`/`Q…` on testnet);
 /// legacy `3…`/`2…` P2SH and MWEB addresses are refused. Dogecoin: `D…`/`9…`/`A…`
-/// (`n…`/`2…` on testnet).
+/// (`n…`/`2…` on testnet). Dash: `X…`/`7…` (`y…`/`8…`/`9…` on testnet). Bitcoin Cash:
+/// CashAddr only, `bitcoincash:q…`/`p…` (prefix optional, token-aware `z…`/`r…` accepted:
+/// same scripts; `bchtest:` on chipnet); the legacy base58 form is refused.
 pub fn utxo_script_pubkey(address: &str, net: Network, coin: UtxoCoin) -> Result<ScriptBuf> {
     let p = params(coin, net);
     let a = address.trim();
     let other = || Error::input(format!("{} address is for another network", coin.name()));
+    if let Some(prefix) = p.cashaddr {
+        return match cashaddr::decode(a, prefix) {
+            Ok((CashKind::P2pkh, h)) => Ok(ScriptBuf::new_p2pkh(&PubkeyHash::from_byte_array(h))),
+            Ok((CashKind::P2sh, h)) => Ok(ScriptBuf::new_p2sh(&ScriptHash::from_byte_array(h))),
+            Err(cashaddr::DecodeError::OtherPrefix(_)) => Err(other()),
+            Err(cashaddr::DecodeError::Invalid) if bitcoin::base58::decode_check(a).is_ok() => {
+                Err(Error::input(
+                    "legacy Bitcoin Cash addresses (1…/3…) are refused: use the CashAddr form \
+                 (bitcoincash:…), a legacy address cannot be told apart from a Bitcoin one",
+                ))
+            }
+            Err(cashaddr::DecodeError::Invalid) => Err(Error::input(
+                "invalid Bitcoin Cash address (CashAddr expected)",
+            )),
+        };
+    }
     if let Some(want) = hrp(&p) {
         if let Ok((found, version, program)) = bech32::segwit::decode(a) {
             if found != want {
@@ -319,7 +476,9 @@ pub fn utxo_account(
 fn own_script(coin: UtxoCoin, pk: PublicKey) -> ScriptBuf {
     match coin {
         UtxoCoin::Litecoin => ScriptBuf::new_p2wpkh(&CompressedPublicKey(pk).wpubkey_hash()),
-        UtxoCoin::Dogecoin => ScriptBuf::new_p2pkh(&bitcoin::PublicKey::new(pk).pubkey_hash()),
+        UtxoCoin::Dogecoin | UtxoCoin::BitcoinCash | UtxoCoin::Dash => {
+            ScriptBuf::new_p2pkh(&bitcoin::PublicKey::new(pk).pubkey_hash())
+        }
     }
 }
 
@@ -365,15 +524,67 @@ pub fn utxo_address_from_xpub(
     own_address(coin, net, child.public_key)
 }
 
-/// Decodes a consensus-serialized Litecoin/Dogecoin transaction (hex). Dogecoin has no SegWit:
-/// a transaction carrying witness data is refused. Litecoin MWEB-flagged transactions are not
-/// supported (refused as malformed).
+/// A Dash transaction: the Bitcoin layout, where the 32-bit version is `type << 16 | version`,
+/// and, when `version >= 3` and `type != 0` (DIP2 special transaction: coinbase payload,
+/// ProTx…), a length-prefixed extra payload after the lock time, covered by the txid. Decoded
+/// field by field with the crate's consensus decoders (no SegWit detection: Dash has none).
+/// Returns the transaction without its payload, the txid of the full serialization, and whether
+/// it is special (such a transaction cannot be a PSBT `non_witness_utxo`).
+fn dash_decode(bytes: &[u8]) -> Result<(Transaction, Txid, bool)> {
+    let err = || Error::input("malformed Dash transaction");
+    let mut r: &[u8] = bytes;
+    let version = i32::consensus_decode(&mut r).map_err(|_| err())?;
+    let input = Vec::<TxIn>::consensus_decode(&mut r).map_err(|_| err())?;
+    let output = Vec::<TxOut>::consensus_decode(&mut r).map_err(|_| err())?;
+    let lock_time = bitcoin::absolute::LockTime::consensus_decode(&mut r).map_err(|_| err())?;
+    let v = version as u32;
+    let special = (v & 0xffff) >= 3 && (v >> 16) != 0;
+    if special {
+        Vec::<u8>::consensus_decode(&mut r).map_err(|_| err())?;
+    }
+    if !r.is_empty() {
+        return Err(err());
+    }
+    let tx = Transaction {
+        version: bitcoin::transaction::Version(version),
+        lock_time,
+        input,
+        output,
+    };
+    Ok((tx, Txid::from_raw_hash(sha256d::Hash::hash(bytes)), special))
+}
+
+/// Whether `raw_hex` is a Dash special transaction (DIP2, with an extra payload): it can be
+/// shown in a history, but its outputs cannot be spent by Kyro (a PSBT cannot carry it as
+/// `non_witness_utxo`). `false` for any other chain or a plain transaction.
+pub fn utxo_is_special_tx(raw_hex: &str, coin: UtxoCoin) -> bool {
+    coin == UtxoCoin::Dash
+        && hex::decode(raw_hex.trim())
+            .ok()
+            .and_then(|b| dash_decode(&b).ok())
+            .is_some_and(|(_, _, special)| special)
+}
+
+/// Decodes a consensus-serialized Litecoin / Dogecoin / Bitcoin Cash / Dash transaction (hex).
+/// Dogecoin, Bitcoin Cash and Dash have no SegWit: a transaction carrying witness data is
+/// refused. Dash special transactions are decoded (their payload is skipped, the txid covers
+/// it). Litecoin MWEB-flagged transactions are not supported (refused as malformed).
 pub fn utxo_decode_raw_tx(raw_hex: &str, net: Network, coin: UtxoCoin) -> Result<BtcRawTx> {
     let bytes = hex::decode(raw_hex.trim()).map_err(|_| Error::input("transaction is not hex"))?;
-    let tx: bitcoin::Transaction = bitcoin::consensus::deserialize(&bytes)
-        .map_err(|_| Error::input(format!("malformed {} transaction", coin.name())))?;
-    if coin == UtxoCoin::Dogecoin && tx.input.iter().any(|i| !i.witness.is_empty()) {
-        return Err(Error::input("Dogecoin transactions have no witness data"));
+    let (tx, txid) = if coin == UtxoCoin::Dash {
+        let (tx, txid, _) = dash_decode(&bytes)?;
+        (tx, txid)
+    } else {
+        let tx: Transaction = bitcoin::consensus::deserialize(&bytes)
+            .map_err(|_| Error::input(format!("malformed {} transaction", coin.name())))?;
+        let txid = tx.compute_txid();
+        (tx, txid)
+    };
+    if coin.is_legacy() && tx.input.iter().any(|i| !i.witness.is_empty()) {
+        return Err(Error::input(format!(
+            "{} transactions have no witness data",
+            coin.name()
+        )));
     }
     let inputs = if tx.is_coinbase() {
         Vec::new()
@@ -395,7 +606,7 @@ pub fn utxo_decode_raw_tx(raw_hex: &str, net: Network, coin: UtxoCoin) -> Result
         })
         .collect();
     Ok(BtcRawTx {
-        txid: tx.compute_txid().to_string(),
+        txid: txid.to_string(),
         inputs,
         outputs,
     })
@@ -507,10 +718,13 @@ pub struct UtxoTxSummary {
     pub requires_extra_confirmation: bool,
 }
 
-/// Dogecoin: spent outputs from `non_witness_utxo` (mandatory, the legacy sighash does not
-/// commit to amounts: the full previous transaction, whose txid must equal the outpoint, is
-/// what proves them). `witness_utxo` is refused (no SegWit on Dogecoin).
-fn legacy_prevouts(psbt: &Psbt) -> Result<Vec<TxOut>> {
+/// Dogecoin, Dash, Bitcoin Cash: spent outputs from `non_witness_utxo` (mandatory: the legacy
+/// sighash of Dogecoin and Dash does not commit to amounts, the full previous transaction,
+/// whose txid must equal the outpoint, is what proves them; Bitcoin Cash's FORKID digest does
+/// commit to them, but Kyro still takes amount and script only from the verified previous
+/// transaction, never from a server's claim). `witness_utxo` is refused (no SegWit on these
+/// chains).
+fn legacy_prevouts(coin: UtxoCoin, psbt: &Psbt) -> Result<Vec<TxOut>> {
     if psbt.inputs.len() != psbt.unsigned_tx.input.len() {
         return Err(Error::psbt("input count mismatch"));
     }
@@ -518,7 +732,8 @@ fn legacy_prevouts(psbt: &Psbt) -> Result<Vec<TxOut>> {
     for (i, (input, txin)) in psbt.inputs.iter().zip(&psbt.unsigned_tx.input).enumerate() {
         if input.witness_utxo.is_some() || input.final_script_witness.is_some() {
             return Err(Error::psbt(format!(
-                "input {i}: Dogecoin has no SegWit (witness data refused)"
+                "input {i}: {} has no SegWit (witness data refused)",
+                coin.name()
             )));
         }
         let prev = input
@@ -542,7 +757,7 @@ fn legacy_prevouts(psbt: &Psbt) -> Result<Vec<TxOut>> {
 fn spent_outputs(coin: UtxoCoin, psbt: &Psbt) -> Result<Vec<TxOut>> {
     match coin {
         UtxoCoin::Litecoin => witness_prevouts(psbt),
-        UtxoCoin::Dogecoin => legacy_prevouts(psbt),
+        UtxoCoin::Dogecoin | UtxoCoin::BitcoinCash | UtxoCoin::Dash => legacy_prevouts(coin, psbt),
     }
 }
 
@@ -556,7 +771,7 @@ fn estimated_size(coin: UtxoCoin, psbt: &Psbt) -> u64 {
             let weight = base * 4 + 2 + 108 * n;
             weight.div_ceil(4)
         }
-        UtxoCoin::Dogecoin => base + 107 * n,
+        UtxoCoin::Dogecoin | UtxoCoin::BitcoinCash | UtxoCoin::Dash => base + 107 * n,
     }
 }
 
@@ -652,6 +867,21 @@ impl Signer {
     }
 }
 
+/// Transaction versions Kyro signs. Bitcoin Cash: 1 or 2 only (consensus since the May 2023
+/// upgrade). Dash: type 0 only (`version >> 16 == 0`): a special transaction's payload is part
+/// of its sighash and is never signed blindly.
+fn check_version(coin: UtxoCoin, version: i32) -> Result<()> {
+    match coin {
+        UtxoCoin::BitcoinCash if !matches!(version, 1 | 2) => Err(Error::psbt(format!(
+            "Bitcoin Cash transaction version {version} is invalid (1 or 2)"
+        ))),
+        UtxoCoin::Dash if (version as u32) >> 16 != 0 => Err(Error::psbt(
+            "Dash special transactions (DIP2 type ≠ 0) are not signed",
+        )),
+        _ => Ok(()),
+    }
+}
+
 struct Analysis {
     psbt: Psbt,
     prevouts: Vec<TxOut>,
@@ -669,6 +899,7 @@ fn analyse(signer: &Signer, net: Network, psbt_b64: &str) -> Result<Analysis> {
     if psbt.unsigned_tx.output.is_empty() {
         return Err(Error::psbt("no output"));
     }
+    check_version(coin, psbt.unsigned_tx.version.0)?;
 
     let mut keys = Vec::with_capacity(prevouts.len());
     let mut warnings = Vec::new();
@@ -749,6 +980,9 @@ fn analyse(signer: &Signer, net: Network, psbt_b64: &str) -> Result<Analysis> {
         UtxoCoin::Dogecoin => {
             (size * DOGE_MIN_RELAY_FEE_PER_KB).div_ceil(1_000) + soft_dust * DOGE_SOFT_DUST
         }
+        UtxoCoin::BitcoinCash | UtxoCoin::Dash => {
+            (size * BCH_DASH_MIN_RELAY_FEE_PER_KB).div_ceil(1_000)
+        }
     };
     if fee < minimum {
         warnings.push(UtxoWarning::FeeBelowMinimum {
@@ -779,15 +1013,17 @@ fn analyse(signer: &Signer, net: Network, psbt_b64: &str) -> Result<Analysis> {
     })
 }
 
-/// Decodes a Litecoin/Dogecoin PSBT for the confirmation dialog, without signing. Needs the
-/// seed only to prove which inputs and outputs are ours (key origin + derived key + script),
-/// where "ours" means **account `account`** (`m/84'/2'/account'/…`, `m/44'/3'/account'/…`): the
-/// wallet's other accounts count as foreign.
+/// Decodes a Litecoin / Dogecoin / Bitcoin Cash / Dash PSBT for the confirmation dialog,
+/// without signing. Needs the seed only to prove which inputs and outputs are ours (key
+/// origin, derived key and script), where "ours" means **account `account`** (`m/84'/2'/account'/…`,
+/// `m/44'/3'/account'/…`, `m/44'/145'/account'/…`, `m/44'/5'/account'/…`): the wallet's other
+/// accounts count as foreign.
 ///
-/// Refused: malformed PSBT; Litecoin input without `witness_utxo`; Dogecoin input without a
-/// `non_witness_utxo` matching its outpoint, or with witness data; a key origin of ours that
-/// does not match the key or the spent script; a sighash other than `ALL`; an output below the
-/// dust limit; negative fee; no input of ours.
+/// Refused: malformed PSBT; Litecoin input without `witness_utxo`; Dogecoin / Bitcoin Cash /
+/// Dash input without a `non_witness_utxo` matching its outpoint, or with witness data; a key
+/// origin of ours that does not match the key or the spent script; a sighash other than `ALL`
+/// (Bitcoin Cash: signed as `ALL|FORKID`); a Bitcoin Cash version other than 1/2, a Dash
+/// special transaction; an output below the dust limit; negative fee; no input of ours.
 pub fn utxo_psbt_summary(
     seed: &Seed,
     net: Network,
@@ -799,11 +1035,62 @@ pub fn utxo_psbt_summary(
     Ok(analyse(&signer, net, psbt_b64)?.summary)
 }
 
-/// Signs every input of ours (see [`utxo_psbt_summary`] for what is refused): Litecoin with
-/// the BIP143 sighash of a P2WPKH input, Dogecoin with the legacy sighash of a P2PKH input,
-/// both `SIGHASH_ALL`, each signature verified against the derived key before it is kept.
-/// Returns the signed, **not finalized** PSBT (base64) and the same summary as
-/// [`utxo_psbt_summary`].
+/// `SIGHASH_ALL | SIGHASH_FORKID`, Bitcoin Cash's only accepted way to sign since the 2017
+/// split (fork id 0).
+pub const BCH_SIGHASH_ALL_FORKID: u32 = 0x41;
+
+/// Bitcoin Cash signature hash (spec `replay-protected-sighash.md`): the BIP143 digest — which
+/// commits to the spent amount — with the full 32-bit sighash type in its last field.
+///
+/// `sighash_type` must carry the FORKID bit (`0x40`) and not `SIGHASH_UTXOS` (`0x20`, not
+/// supported). Its base type and `ANYONECANPAY` select the digest's components exactly as
+/// BIP143 does (a base type other than `NONE`/`SINGLE` behaves as `ALL`, as in Bitcoin Cash
+/// Node); the upper 24 bits (fork value, 0 on Bitcoin Cash) are serialized as given. Kyro only
+/// ever signs with [`BCH_SIGHASH_ALL_FORKID`]; the other types exist so the function can be
+/// checked against every FORKID vector of Bitcoin Cash Node's `sighash.json`.
+///
+/// The preimage is produced by the `bitcoin` crate's BIP143 encoder, whose 4-byte sighash
+/// field is then replaced; the digest is the crate's double SHA-256. `script_code` is used as
+/// is (the spent P2PKH script).
+pub fn bch_forkid_sighash(
+    tx: &Transaction,
+    input: usize,
+    script_code: &Script,
+    value: u64,
+    sighash_type: u32,
+) -> Result<[u8; 32]> {
+    if sighash_type & 0x40 == 0 || sighash_type & 0x20 != 0 {
+        return Err(Error::psbt("only FORKID sighash types are supported"));
+    }
+    let base = EcdsaSighashType::from_consensus(sighash_type & 0x9f);
+    let mut pre: Vec<u8> = Vec::new();
+    SighashCache::new(tx)
+        .segwit_v0_encode_signing_data_to(
+            &mut pre,
+            input,
+            script_code,
+            Amount::from_sat(value),
+            base,
+        )
+        .map_err(|_| Error::psbt(format!("input {input}: sighash failed")))?;
+    let n = pre.len();
+    if n < 4 || pre[n - 4..] != base.to_u32().to_le_bytes() {
+        return Err(Error::crypto("unexpected BIP143 preimage"));
+    }
+    pre[n - 4..].copy_from_slice(&sighash_type.to_le_bytes());
+    Ok(sha256d::Hash::hash(&pre).to_byte_array())
+}
+
+/// Signs every input of ours (see [`utxo_psbt_summary`] for what is refused), each signature
+/// verified against the derived key before it is kept:
+/// - Litecoin: BIP143 sighash of a P2WPKH input, `SIGHASH_ALL`; Dogecoin, Dash: legacy sighash
+///   of a P2PKH input, `SIGHASH_ALL` — returned as partial signatures, **not finalized**;
+/// - Bitcoin Cash: [`bch_forkid_sighash`] with `ALL|FORKID` (0x41), which a PSBT partial
+///   signature cannot carry — so the input is **finalized** here (`final_script_sig` =
+///   `<DER‖0x41> <pubkey>`, key origins and partial signatures removed, as a BIP174 finalizer
+///   does).
+///
+/// Returns the PSBT (base64) and the same summary as [`utxo_psbt_summary`].
 pub fn utxo_sign_psbt(
     seed: &Seed,
     net: Network,
@@ -822,6 +1109,12 @@ pub fn utxo_sign_psbt(
     let tx = psbt.unsigned_tx.clone();
     let mut cache = SighashCache::new(&tx);
     for (i, (prevout, input_keys)) in prevouts.iter().zip(keys).enumerate() {
+        if coin == UtxoCoin::BitcoinCash && input_keys.len() > 1 {
+            // A P2PKH input has exactly one key; two origins of ours cannot both be it.
+            return Err(Error::psbt(format!(
+                "input {i}: several keys for one P2PKH input"
+            )));
+        }
         for (pk, path) in input_keys {
             let msg = match coin {
                 UtxoCoin::Litecoin => Message::from(
@@ -834,7 +1127,7 @@ pub fn utxo_sign_psbt(
                         )
                         .map_err(|_| Error::psbt(format!("input {i}: sighash failed")))?,
                 ),
-                UtxoCoin::Dogecoin => Message::from(
+                UtxoCoin::Dogecoin | UtxoCoin::Dash => Message::from(
                     cache
                         .legacy_signature_hash(
                             i,
@@ -843,19 +1136,43 @@ pub fn utxo_sign_psbt(
                         )
                         .map_err(|_| Error::psbt(format!("input {i}: sighash failed")))?,
                 ),
+                UtxoCoin::BitcoinCash => Message::from_digest(bch_forkid_sighash(
+                    &tx,
+                    i,
+                    &prevout.script_pubkey,
+                    prevout.value.to_sat(),
+                    BCH_SIGHASH_ALL_FORKID,
+                )?),
             };
             let key = signer.derive(&path)?;
             let sk = &key.xpriv().private_key;
             let signature = secp.sign_ecdsa(&msg, sk);
             secp.verify_ecdsa(&msg, &signature, &pk)
                 .map_err(|_| Error::crypto("signature self-check failed"))?;
-            psbt.inputs[i].partial_sigs.insert(
-                bitcoin::PublicKey::new(pk),
-                bitcoin::ecdsa::Signature {
-                    signature,
-                    sighash_type: EcdsaSighashType::All,
-                },
-            );
+            if coin == UtxoCoin::BitcoinCash {
+                let mut sig = signature.serialize_der().to_vec();
+                sig.push(BCH_SIGHASH_ALL_FORKID as u8);
+                let push = bitcoin::script::PushBytesBuf::try_from(sig)
+                    .map_err(|_| Error::crypto("signature push failed"))?;
+                let script_sig = bitcoin::script::Builder::new()
+                    .push_slice(push)
+                    .push_key(&bitcoin::PublicKey::new(pk))
+                    .into_script();
+                let input = &mut psbt.inputs[i];
+                input.final_script_sig = Some(script_sig);
+                input.partial_sigs.clear();
+                input.bip32_derivation.clear();
+                input.sighash_type = None;
+                input.redeem_script = None;
+            } else {
+                psbt.inputs[i].partial_sigs.insert(
+                    bitcoin::PublicKey::new(pk),
+                    bitcoin::ecdsa::Signature {
+                        signature,
+                        sighash_type: EcdsaSighashType::All,
+                    },
+                );
+            }
         }
     }
     Ok((psbt.to_string(), summary))
@@ -877,16 +1194,22 @@ mod tests {
         assert_eq!(utxo_dust_threshold(UtxoCoin::Litecoin, &op_return), 0);
         assert_eq!(utxo_dust_threshold(UtxoCoin::Dogecoin, &p2pkh), 100_000);
         assert_eq!(utxo_dust_threshold(UtxoCoin::Dogecoin, &op_return), 0);
+        // Bitcoin Cash Node / Dash Core: (34 + 148) × 3 = 546, (32 + 148) × 3 = 540.
+        let p2sh = ScriptBuf::from_hex("a914751e76e8199196d454941c45d1b3a323f1433bd687").unwrap();
+        for coin in [UtxoCoin::BitcoinCash, UtxoCoin::Dash] {
+            assert_eq!(utxo_dust_threshold(coin, &p2pkh), 546);
+            assert_eq!(utxo_dust_threshold(coin, &p2sh), 540);
+            assert_eq!(utxo_dust_threshold(coin, &op_return), 0);
+        }
     }
 
     #[test]
     fn genesis_hashes_are_distinct() {
-        let all = [
-            utxo_genesis_hash(Network::Mainnet, UtxoCoin::Litecoin),
-            utxo_genesis_hash(Network::Testnet, UtxoCoin::Litecoin),
-            utxo_genesis_hash(Network::Mainnet, UtxoCoin::Dogecoin),
-            utxo_genesis_hash(Network::Testnet, UtxoCoin::Dogecoin),
-        ];
+        let all: Vec<&str> = UtxoCoin::ALL
+            .iter()
+            .flat_map(|c| [Network::Mainnet, Network::Testnet].map(|n| utxo_genesis_hash(n, *c)))
+            .collect();
+        assert_eq!(all.len(), 8);
         for (i, a) in all.iter().enumerate() {
             assert_eq!(a.len(), 64);
             for b in &all[i + 1..] {

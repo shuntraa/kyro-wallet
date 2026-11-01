@@ -21,6 +21,7 @@ import {
   isSuspectAddress,
   type KnownAddress,
   DOGE_SOFT_DUST,
+  bchDashDust,
   evmHwDisplay,
   litecoinDust,
   signAndBroadcast,
@@ -85,6 +86,8 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   if (asset.family === 'sol') return adapters.sol ?? undefined;
   if (asset.family === 'ltc') return adapters.ltc ?? undefined;
   if (asset.family === 'doge') return adapters.doge ?? undefined;
+  if (asset.family === 'bch') return adapters.bch ?? undefined;
+  if (asset.family === 'dash') return adapters.dash ?? undefined;
   if (asset.family === 'tron') return adapters.tron ?? undefined;
   if (asset.family === 'xrp') return adapters.xrp ?? undefined;
   if (asset.family === 'ada') return adapters.cardano ?? undefined;
@@ -184,6 +187,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       sol: [accounts.sol?.address],
       ltc: [accounts.ltc?.address],
       doge: [accounts.doge?.address],
+      bch: [accounts.bch?.address],
+      dash: [accounts.dash?.address],
       tron: [accounts.tron?.address],
       xrp: [accounts.xrp?.address],
       ada: [accounts.cardano?.address],
@@ -223,9 +228,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [fiatMode, setFiatMode] = useState(false);
   const [max, setMax] = useState(false);
   const decimals = asset?.decimals ?? 18;
-  /** Litecoin / Dogecoin: Bitcoin-style UTXO chains (same fee field, PSBT, change). */
-  const utxoLike = asset?.family === 'btc' || asset?.family === 'ltc' || asset?.family === 'doge';
-  const rateUnit = asset?.family === 'ltc' ? 'litoshi/vB' : asset?.family === 'doge' ? 'koinus/octet' : 'sat/vB';
+  /** Litecoin / Dogecoin / Bitcoin Cash / Dash: Bitcoin-style UTXO chains (same fee field, PSBT, change). */
+  const utxoLike = asset?.family === 'btc' || asset?.family === 'ltc' || asset?.family === 'doge' || asset?.family === 'bch' || asset?.family === 'dash';
+  const rateUnit = asset?.family === 'ltc' ? 'litoshi/vB' : asset?.family === 'doge' ? 'koinus/octet' : asset?.family === 'bch' ? 'sat/octet' : asset?.family === 'dash' ? 'duff/octet' : 'sat/vB';
   /** TRON: no fee to choose; Rust's resource estimate is shown with the summary. */
   const isTron = asset?.family === 'tron';
   /** XRP Ledger: no fee to choose; destination tag, reserve and activation rules (§2.6). */
@@ -334,8 +339,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     if (asset.family === 'btc') return validateBtcFeeRate(customBtc, fees.data);
     if (asset.family === 'ltc') return validateBtcFeeRate(customBtc, fees.data, { unit: 'litoshi/vB' });
     if (asset.family === 'doge') return validateBtcFeeRate(customBtc, fees.data, { unit: 'koinus/octet', floor: 1_000, ceiling: 100_000, high: 10_000 });
+    // Bitcoin Cash / Dash: relay minimum 1 per byte, Rust's ceiling 100 (high-fee threshold).
+    if (asset.family === 'bch' || asset.family === 'dash') return validateBtcFeeRate(customBtc, fees.data, { unit: rateUnit, floor: 1, ceiling: 100, high: 10 });
     return validateSolPriorityFee(customSol);
-  }, [choice, asset, customEvm, customBtc, customSol, fees.data]);
+  }, [choice, asset, customEvm, customBtc, customSol, fees.data, rateUnit]);
   const feeParams: FeeParams | null = choice === 'custom' ? custom?.params ?? null : fees.data?.options[choice].params ?? null;
 
   // Build (debounced) → unsigned tx + Rust decoding for EVM.
@@ -579,7 +586,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : '0x…'}
+                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -751,6 +758,16 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {asset.family === 'doge' && (
               <span className="text-[12px] leading-[1.5] text-mute">
                 {t('send.dogeNote')}
+              </span>
+            )}
+            {asset.family === 'bch' && (
+              <span className="text-[12px] leading-[1.5] text-mute">
+                Bitcoin Cash : adresses CashAddr seulement (bitcoincash:q…) ; une adresse 1… ou 3… est refusée, on ne peut pas la distinguer d’une adresse Bitcoin. Destinataire minimum {bchDashDust('p2pkh').toString()} satoshis ; une monnaie plus petite est ajoutée aux frais. Les pièces portant des CashTokens ne sont jamais dépensées.
+              </span>
+            )}
+            {asset.family === 'dash' && (
+              <span className="text-[12px] leading-[1.5] text-mute">
+                Dash : destinataire minimum {bchDashDust('p2pkh').toString()} duffs ; une monnaie plus petite est ajoutée aux frais. Envoi classique (pas de PrivateSend ni d’InstantSend demandé).
               </span>
             )}
             {asset.family === 'ltc' && (
@@ -1056,8 +1073,8 @@ function dataLabel(b: Built | null, family?: string): string {
   const u = b.unsigned;
   if (u.family === 'btc') {
     const outs = u.summary.outputs.length;
-    // Dogecoin has no SegWit: bytes, not vbytes.
-    return `${tp('send.dataOutputs', outs)} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' ? t('send.dataBytes') : 'vB'}`;
+    // Dogecoin, Bitcoin Cash and Dash have no SegWit: bytes, not vbytes.
+    return `${tp('send.dataOutputs', outs)} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' || family === 'bch' || family === 'dash' ? t('send.dataBytes') : 'vB'}`;
   }
   if (u.family === 'ada') return `${tp('send.dataInputs', u.summary.inputs.length)} · ${t('send.dataAdaOutputs', { n: u.summary.outputs.length })}${u.token ? ' · token' : ''}${u.summary.memo ? ` · ${t('send.dataMessage')}` : ''}`;
   if (u.family === 'near') return `Transfer · nonce ${u.summary.nonce}${u.context.createsAccount ? ` · ${t('send.dataNearCreates')}` : ''}`;

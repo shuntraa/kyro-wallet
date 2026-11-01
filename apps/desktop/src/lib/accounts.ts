@@ -19,6 +19,8 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   ada: 'Cardano',
   xlm: 'Stellar',
   near: 'NEAR',
+  bch: 'Bitcoin Cash',
+  dash: 'Dash',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -33,6 +35,10 @@ export function accountChainHint(chain: AccountChain): string {
     case 'ltc':
       return 'SegWit';
     case 'doge':
+      return 'P2PKH';
+    case 'bch':
+      return 'CashAddr (P2PKH)';
+    case 'dash':
       return 'P2PKH';
     case 'tron':
       return t('settings.hintTron');
@@ -85,7 +91,9 @@ export function accountAddress(acc: Accounts, family: AccountChain): { address: 
     case 'ltc':
       return { address: acc.ltc.address, path: acc.ltc.path };
     case 'doge':
-      return { address: acc.doge.address, path: acc.doge.path };
+    case 'bch':
+    case 'dash':
+      return { address: acc[family].address, path: acc[family].path };
     case 'ada':
       return acc.cardano;
     case 'xlm':

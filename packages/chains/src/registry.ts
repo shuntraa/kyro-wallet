@@ -6,12 +6,17 @@
 import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } from '@kyro/shared';
 
 /**
- * `ltc` / `doge`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*`, docs/IPC.md §2.4).
+ * `ltc` / `doge` / `bch` / `dash`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*` / `bch_*` /
+ * `dash_*`, docs/IPC.md §2.4).
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `xlm`: Stellar (XLM, `stellar_*`, §2.11). */
 /** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near';
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near';
+/** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
+export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
+export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
+export const isUtxoFamily = (f: Family): f is UtxoFamily => (UTXO_FAMILIES as readonly Family[]).includes(f);
 
 interface ChainBase {
   key: string;
@@ -170,12 +175,13 @@ export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
 ];
 
 /**
- * Phase 4 UTXO chains with a full send path: Rust `ltc_*` / `doge_*` commands and the
- * `LitecoinAdapter` / `DogecoinAdapter`. Part of `allChains()` / `assetsFor()` like Bitcoin.
+ * Phase 4 UTXO chains with a full send path: Rust `ltc_*` / `doge_*` / `bch_*` / `dash_*`
+ * commands and the `LitecoinAdapter` / `DogecoinAdapter` / `BitcoinCashAdapter` /
+ * `DashAdapter`. Part of `allChains()` / `assetsFor()` like Bitcoin.
  * Hardware wallets: not supported yet (HW_UNSUPPORTED), the UI hides them for such accounts.
  */
 export interface UtxoChain extends Omit<ChainBase, 'phase'> {
-  family: 'ltc' | 'doge';
+  family: UtxoFamily;
   phase: 4;
 }
 
@@ -200,6 +206,33 @@ export function ltcChain(network: Network): UtxoChain {
 }
 export function dogeChain(network: Network): UtxoChain {
   return DOGE_CHAINS[network];
+}
+
+/** Bitcoin Cash (BIP44 coin 145, CashAddr, `SIGHASH_FORKID`); testnet = chipnet. */
+const BCH_CHAINS: Record<Network, UtxoChain> = {
+  testnet: utxoChain({ family: 'bch', key: 'bitcoincash', name: 'Bitcoin Cash chipnet', label: 'BCH chipnet', network: 'testnet', color: '#0AC18E', glyph: 'Ƀ',
+    nativeSymbol: 'BCH', nativeName: 'Bitcoin Cash', coingeckoId: 'bitcoin-cash', blockTimeSecs: 600 }),
+  mainnet: utxoChain({ family: 'bch', key: 'bitcoincash', name: 'Bitcoin Cash', label: 'BCH', network: 'mainnet', color: '#0AC18E', glyph: 'Ƀ',
+    nativeSymbol: 'BCH', nativeName: 'Bitcoin Cash', coingeckoId: 'bitcoin-cash', blockTimeSecs: 600 }),
+};
+
+/** Dash (BIP44 coin 5, P2PKH `X…`, legacy sighash). */
+const DASH_CHAINS: Record<Network, UtxoChain> = {
+  testnet: utxoChain({ family: 'dash', key: 'dash', name: 'Dash testnet', label: 'DASH testnet', network: 'testnet', color: '#008DE4', glyph: 'Đ',
+    nativeSymbol: 'DASH', nativeName: 'Dash', coingeckoId: 'dash', blockTimeSecs: 150 }),
+  mainnet: utxoChain({ family: 'dash', key: 'dash', name: 'Dash', label: 'DASH', network: 'mainnet', color: '#008DE4', glyph: 'Đ',
+    nativeSymbol: 'DASH', nativeName: 'Dash', coingeckoId: 'dash', blockTimeSecs: 150 }),
+};
+
+export function bchChain(network: Network): UtxoChain {
+  return BCH_CHAINS[network];
+}
+export function dashChain(network: Network): UtxoChain {
+  return DASH_CHAINS[network];
+}
+/** The UTXO chain of a family on `network`. */
+export function utxoChainOf(family: UtxoFamily, network: Network): UtxoChain {
+  return { ltc: LTC_CHAINS, doge: DOGE_CHAINS, bch: BCH_CHAINS, dash: DASH_CHAINS }[family][network];
 }
 
 /**
@@ -622,7 +655,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -727,6 +760,25 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     list.push({ host: 'doge.electrum1.cipig.net:20060', purpose: l10n('Dogecoin : soldes, historique, frais, diffusion (ElectrumX public de Komodo)', 'Dogecoin: balances, history, fees, broadcast (Komodo public ElectrumX)') });
     list.push({ host: 'doge.electrum2.cipig.net:20060', purpose: l10n('Dogecoin : serveur de secours (ElectrumX public de Komodo)', 'Dogecoin: backup server (Komodo public ElectrumX)') });
   } else list.push({ host: l10n('aucun serveur', 'no server'), purpose: l10n('Dogecoin testnet : aucun serveur public gratuit, configure le tien (rien n’est contacté)', 'Dogecoin testnet: no free public server, set up your own (nothing is contacted)') });
+  // Bitcoin Cash: public Fulcrum servers (Rust only, raw TLS sockets, tried in order). Genesis
+  // and a block after the 2017 split checked on every session; CashTokens coins left out.
+  const bch = servers.bitcoincash?.[nk];
+  if (bch?.kind === 'esplora') list.push({ host: host(bch.url), purpose: 'Bitcoin Cash : ton serveur Esplora', custom: true });
+  else if (network === 'mainnet') {
+    list.push({ host: 'bch.imaginary.cash:50002', purpose: 'Bitcoin Cash : soldes, historique, frais, diffusion (Fulcrum public)' });
+    list.push({ host: 'bch.loping.net:50002', purpose: 'Bitcoin Cash : serveur de secours (Fulcrum public)' });
+    list.push({ host: 'cashnode.bch.ninja:50002', purpose: 'Bitcoin Cash : serveur de secours (Fulcrum public)' });
+  } else {
+    list.push({ host: 'chipnet.imaginary.cash:50002', purpose: 'Bitcoin Cash chipnet : soldes, historique, frais, diffusion (Fulcrum public)' });
+    list.push({ host: 'chipnet.bch.ninja:50002', purpose: 'Bitcoin Cash chipnet : serveur de secours (Fulcrum public)' });
+  }
+  // Dash: Komodo's public ElectrumX servers on mainnet (Rust only); none on testnet.
+  const dash = servers.dash?.[nk];
+  if (dash?.kind === 'esplora') list.push({ host: host(dash.url), purpose: 'Dash : ton serveur Esplora', custom: true });
+  else if (network === 'mainnet') {
+    list.push({ host: 'dash.electrum1.cipig.net:20061', purpose: 'Dash : soldes, historique, frais, diffusion (ElectrumX public de Komodo)' });
+    list.push({ host: 'dash.electrum2.cipig.net:20061', purpose: 'Dash : serveur de secours (ElectrumX public de Komodo)' });
+  } else list.push({ host: 'aucun serveur', purpose: 'Dash testnet : aucun serveur public gratuit, configure le tien (rien n’est contacté)' });
   // TRON: reached by Rust only (tron_*), Tor circuits of the `tron` family.
   // Cardano: reached by Rust only (ada_*), Tor circuits of the `cardano` family.
   const ada = servers.cardano?.[nk];

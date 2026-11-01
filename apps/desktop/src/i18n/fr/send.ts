@@ -19,7 +19,7 @@ export const send = {
   'send.doneWhatToken': '{qty} {token} (+ {ada} de min-ADA)',
   'send.from': 'Depuis',
   'send.availableAmount': '{amount} disponibles',
-  'send.hwUnsupportedChains': 'Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar et NEAR : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).',
+  'send.hwUnsupportedChains': 'Litecoin, Dogecoin, Bitcoin Cash, Dash, TRON, XRP, Cardano, Stellar et NEAR : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).',
   'send.to': 'À',
   'send.xrpPlaceholder': 'r… (adresse classique)',
   'send.xlmPlaceholder': 'G… (56 caractères)',

@@ -29,9 +29,13 @@ export function demoFundingTx(seed: string, script: Uint8Array, value: number): 
   return { txid: tx.getId(), hex: tx.toHex() };
 }
 
-/** Adds a funded UTXO for `address` (`net` = its network) to `utxos`, and its raw tx to `raw`. */
-export function demoFund(utxos: Map<string, DemoUtxo[]>, raw: Map<string, string>, address: string, net: bitcoin.Network, seed: string, value: number, height: number): DemoUtxo {
-  const { txid, hex } = demoFundingTx(`${seed}:${address}`, bitcoin.address.toOutputScript(address, net), value);
+/**
+ * Adds a funded UTXO for `address` to `utxos`, and its raw tx to `raw`. `net` = its network, or
+ * directly its scriptPubKey (Bitcoin Cash: CashAddr, which bitcoinjs does not parse).
+ */
+export function demoFund(utxos: Map<string, DemoUtxo[]>, raw: Map<string, string>, address: string, net: bitcoin.Network | Uint8Array, seed: string, value: number, height: number): DemoUtxo {
+  const script = net instanceof Uint8Array ? net : bitcoin.address.toOutputScript(address, net);
+  const { txid, hex } = demoFundingTx(`${seed}:${address}`, script, value);
   raw.set(txid, hex);
   const u: DemoUtxo = { txid, vout: 0, value, height };
   utxos.set(address, [...(utxos.get(address) ?? []), u]);

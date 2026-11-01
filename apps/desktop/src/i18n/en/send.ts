@@ -19,7 +19,7 @@ export const send: Record<keyof typeof fr, string> = {
   'send.doneWhatToken': '{qty} {token} (+ {ada} of min-ADA)',
   'send.from': 'From',
   'send.availableAmount': '{amount} available',
-  'send.hwUnsupportedChains': 'Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar and NEAR: not on hardware wallets yet (they remain available in the Kyro vault).',
+  'send.hwUnsupportedChains': 'Litecoin, Dogecoin, Bitcoin Cash, Dash, TRON, XRP, Cardano, Stellar and NEAR: not on hardware wallets yet (they remain available in the Kyro vault).',
   'send.to': 'To',
   'send.xrpPlaceholder': 'r… (classic address)',
   'send.xlmPlaceholder': 'G… (56 characters)',

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dash-fee-rates"
+description = "Enables the dash_fee_rates command without any pre-configured scope."
+commands.allow = ["dash_fee_rates"]
+
+[[permission]]
+identifier = "deny-dash-fee-rates"
+description = "Denies the dash_fee_rates command without any pre-configured scope."
+commands.deny = ["dash_fee_rates"]

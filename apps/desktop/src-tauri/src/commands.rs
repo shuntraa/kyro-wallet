@@ -452,7 +452,8 @@ pub struct BtcAccounts {
     taproot: BtcAccountOut,
 }
 
-/// Litecoin (BIP84) / Dogecoin (BIP44) account: first receive address and public data.
+/// Litecoin (BIP84) / Dogecoin, Bitcoin Cash, Dash (BIP44) account: first receive address and
+/// public data.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UtxoAccountOut {
@@ -472,6 +473,10 @@ pub struct Accounts {
     sol: AddressOut,
     ltc: UtxoAccountOut,
     doge: UtxoAccountOut,
+    /// `m/44'/145'/a'` (chipnet `m/44'/1'/a'`), CashAddr.
+    bch: UtxoAccountOut,
+    /// `m/44'/5'/a'` (testnet `m/44'/1'/a'`).
+    dash: UtxoAccountOut,
     /// `m/44'/195'/a'/0/0`.
     tron: AddressOut,
     /// `m/44'/144'/a'/0/0`.
@@ -547,6 +552,8 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             },
             ltc: utxo_account_out(seed, net, UtxoCoin::Litecoin, a)?,
             doge: utxo_account_out(seed, net, UtxoCoin::Dogecoin, a)?,
+            bch: utxo_account_out(seed, net, UtxoCoin::BitcoinCash, a)?,
+            dash: utxo_account_out(seed, net, UtxoCoin::Dash, a)?,
             tron: AddressOut {
                 address: wallet_core::tron_address(seed, a)?,
                 path: wallet_core::tron_path(a),

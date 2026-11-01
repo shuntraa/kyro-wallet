@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dash-broadcast"
+description = "Enables the dash_broadcast command without any pre-configured scope."
+commands.allow = ["dash_broadcast"]
+
+[[permission]]
+identifier = "deny-dash-broadcast"
+description = "Denies the dash_broadcast command without any pre-configured scope."
+commands.deny = ["dash_broadcast"]

@@ -95,7 +95,12 @@ pub fn endpoints(s: &Servers) -> Vec<Endpoint> {
             Some(BtcServer::Default) | None => {}
         }
     }
-    for (coin, servers) in [("Litecoin", &s.litecoin), ("Dogecoin", &s.dogecoin)] {
+    for (coin, servers) in [
+        ("Litecoin", &s.litecoin),
+        ("Dogecoin", &s.dogecoin),
+        ("Bitcoin Cash", &s.bitcoincash),
+        ("Dash", &s.dash),
+    ] {
         for (net, u) in servers.entries() {
             if let Some(UtxoServer::Esplora { url }) = u {
                 out.extend(url_endpoint(&format!("{coin} {net} (Esplora)"), url));

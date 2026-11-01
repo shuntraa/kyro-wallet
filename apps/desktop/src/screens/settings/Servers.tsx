@@ -34,6 +34,7 @@ import {
   type Servers,
   type Network,
   type SolanaCluster,
+  type UtxoCoinKey,
 } from '@kyro/shared';
 import { evmChains, solChain } from '@kyro/chains';
 import { useApp } from '../../state/app';
@@ -211,6 +212,8 @@ export function ServersSection() {
       <BitcoinCard />
       <UtxoServerCard coin="litecoin" />
       <UtxoServerCard coin="dogecoin" />
+      <UtxoServerCard coin="bitcoincash" />
+      <UtxoServerCard coin="dash" />
       <TronServerCard />
       <XrpServerCard />
       <CardanoServerCard />
@@ -1209,24 +1212,67 @@ function RpcRow({
   );
 }
 
+/** What each UTXO chain's card says (Rust: `servers::utxo_default_*`, docs/NETWORK.md). */
+function utxoMeta(): Record<UtxoCoinKey, { name: string; testnet: string; noDefaultTestnet: boolean; hosts: Record<'mainnet' | 'testnet', string>; first: Record<'mainnet' | 'testnet', string>; electrs: string; sees: (hosts: string, tor: boolean) => string }> {
+  return {
+    litecoin: {
+      name: 'Litecoin',
+      testnet: 'testnet4',
+      noDefaultTestnet: false,
+      hosts: { mainnet: 'litecoinspace.org', testnet: 'litecoinspace.org' },
+      first: { mainnet: 'litecoinspace.org', testnet: 'litecoinspace.org' },
+      electrs: 'electrs-litecoin',
+      sees: (_h, tor) => t('servers.utxo.sees.ltc', { ip: ipPart(tor) }),
+    },
+    dogecoin: {
+      name: 'Dogecoin',
+      testnet: 'testnet',
+      noDefaultTestnet: true,
+      hosts: { mainnet: t('servers.utxo.dogeHosts'), testnet: '' },
+      first: { mainnet: 'doge.electrum1.cipig.net', testnet: '' },
+      electrs: 'electrs-dogecoin',
+      sees: (h, tor) => t('servers.utxo.sees.doge', { hosts: h, ip: ipPart(tor) }),
+    },
+    bitcoincash: {
+      name: 'Bitcoin Cash',
+      testnet: 'chipnet',
+      noDefaultTestnet: false,
+      hosts: { mainnet: t('servers.utxo.bchHosts'), testnet: t('servers.utxo.bchHostsTestnet') },
+      first: { mainnet: 'bch.imaginary.cash', testnet: 'chipnet.imaginary.cash' },
+      electrs: t('servers.utxo.esploraFor', { name: 'Bitcoin Cash' }),
+      sees: (h, tor) => t('servers.utxo.sees.bch', { hosts: h, ip: ipPart(tor) }),
+    },
+    dash: {
+      name: 'Dash',
+      testnet: 'testnet',
+      noDefaultTestnet: true,
+      hosts: { mainnet: t('servers.utxo.dashHosts'), testnet: '' },
+      first: { mainnet: 'dash.electrum1.cipig.net', testnet: '' },
+      electrs: t('servers.utxo.esploraFor', { name: 'Dash' }),
+      sees: (h, tor) => t('servers.utxo.sees.dash', { hosts: h, ip: ipPart(tor) }),
+    },
+  };
+}
+
 /**
- * Litecoin / Dogecoin: Rust accepts the default or an Esplora server (docs/IPC.md §2.4).
- * Dogecoin mainnet defaults to Komodo's public ElectrumX servers; Dogecoin testnet has NO public
- * default: an unconfigured Dogecoin testnet says so, it never pretends to load.
+ * Litecoin / Dogecoin / Bitcoin Cash / Dash: Rust accepts the default or an Esplora server
+ * (docs/IPC.md §2.4). Dogecoin and Dash mainnet default to Komodo's public ElectrumX servers,
+ * Bitcoin Cash to public Fulcrum servers (mainnet and chipnet); Dogecoin and Dash testnets have NO
+ * public default: an unconfigured one says so, it never pretends to load.
  */
-function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
+function UtxoServerCard({ coin }: { coin: UtxoCoinKey }) {
   const { settings, network } = useApp();
   const tor = settings.tor.enabled;
   const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
   const saved = settings.servers[coin]?.[nk];
   const savedUrl = saved?.kind === 'esplora' ? saved.url : '';
-  const doge = coin === 'dogecoin';
-  const name = doge ? 'Dogecoin' : 'Litecoin';
-  /** Dogecoin testnet only: no public server found, the user must set one. */
-  const noDefault = doge && nk === 'testnet';
+  const meta = utxoMeta()[coin];
+  const name = meta.name;
+  /** Dogecoin / Dash testnet: no public server found, the user must set one. */
+  const noDefault = meta.noDefaultTestnet && nk === 'testnet';
   /** Host(s) of the default, as the user sees them (Rust: `servers::utxo_default_*`). */
   const { t } = useT();
-  const defaultHosts = doge ? t('servers.utxo.dogeHosts') : 'litecoinspace.org';
+  const defaultHosts = meta.hosts[nk];
   const [kind, setKind] = useState<'default' | 'esplora'>(savedUrl ? 'esplora' : 'default');
   const [url, setUrl] = useState(savedUrl);
   useEffect(() => {
@@ -1270,7 +1316,7 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
       setConfirmDefault(false);
       setNotice(
         toDefault
-          ? { text: noDefault ? t('servers.utxo.removedDoge') : t('servers.utxo.restored', { hosts: defaultHosts, name }), warn: true }
+          ? { text: noDefault ? t('servers.utxo.removedDoge', { name }) : t('servers.utxo.restored', { hosts: defaultHosts, name }), warn: true }
           : { text: t('servers.utxo.saved', { name }) },
       );
     } catch (e) {
@@ -1282,7 +1328,7 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
 
   return (
     <Card
-      title={network === 'testnet' ? `${name} ${doge ? 'testnet' : 'testnet4'}` : name}
+      title={network === 'testnet' ? `${name} ${meta.testnet}` : name}
       badge={savedUrl ? <Badge tone="ice">{t('servers.utxo.customEsplora')}</Badge> : noDefault ? <Badge tone="warn">{t('servers.utxo.noServer')}</Badge> : <Badge>{t('servers.default')}</Badge>}
     >
       <Segmented
@@ -1300,20 +1346,18 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
       />
       {kind === 'default' && noDefault ? (
         <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-          {rt('servers.utxo.noPublic', boldPlain)}
+          {rt('servers.utxo.noPublic', boldPlain, { name, electrs: meta.electrs })}
         </Notice>
       ) : (
         <Sees>
           {kind === 'default'
-            ? doge
-              ? t('servers.utxo.sees.doge', { hosts: defaultHosts, ip: ipPart(tor) })
-              : t('servers.utxo.sees.ltc', { ip: ipPart(tor) })
+            ? meta.sees(defaultHosts, tor)
             : t('servers.utxo.sees.esplora', { name, ip: ipPart(tor, true) })}
         </Sees>
       )}
       {kind === 'esplora' && (
-        <Field label={t('servers.utxo.esploraUrl', { name })} hint={doge ? t('servers.utxo.dogeHint') : t('servers.urlHint')}>
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={doge ? t('servers.utxo.dogePlaceholder') : t('servers.utxo.ltcPlaceholder')} aria-label={t('servers.utxo.urlAria', { name })} className="font-mono text-[13px]" />
+        <Field label={t('servers.utxo.esploraUrl', { name })} hint={coin === 'litecoin' ? t('servers.urlHint') : t('servers.utxo.esploraHint', { electrs: meta.electrs })}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t('servers.utxo.placeholder', { coin })} aria-label={t('servers.utxo.urlAria', { name })} className="font-mono text-[13px]" />
         </Field>
       )}
       {hint && (
@@ -1336,9 +1380,9 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
       </div>
       <BackToDefaultDialog
         open={confirmDefault}
-        host={noDefault ? 'Dogecoin' : doge ? 'doge.electrum1.cipig.net' : 'litecoinspace.org'}
-        {...(noDefault ? { title: t('servers.utxo.removeTitle'), body: t('servers.utxo.removeBody') } : {})}
-        sees={noDefault ? t('servers.utxo.removeSees') : t('servers.utxo.backSees', { name })}
+        host={noDefault ? name : meta.first[nk]}
+        {...(noDefault ? { title: t('servers.utxo.removeTitle', { name }), body: t('servers.utxo.removeBody', { name }) } : {})}
+        sees={noDefault ? t('servers.utxo.removeSees', { name }) : t('servers.utxo.backSees', { name })}
         busy={busy === 'save'}
         failure={confirmDefault ? failure : null}
         onConfirm={() => void save(true)}
