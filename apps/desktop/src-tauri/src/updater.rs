@@ -143,7 +143,11 @@ pub struct Candidate {
 }
 
 /// Parses `latest.json`: `Ok(None)` when it is not newer than `current`.
-pub fn select(bytes: &[u8], current: &Version, keys: &[String]) -> Result<Option<Candidate>, String> {
+pub fn select(
+    bytes: &[u8],
+    current: &Version,
+    keys: &[String],
+) -> Result<Option<Candidate>, String> {
     if bytes.len() > MANIFEST_MAX {
         return Err("latest.json trop volumineux".into());
     }
@@ -289,7 +293,10 @@ pub enum Step {
     /// This start runs the staged version: show the notice (once).
     Updated(String),
     /// Apply this (re-verified) package now; `attempts` already counted on disk.
-    Apply { staged: Staged, package: Vec<u8> },
+    Apply {
+        staged: Staged,
+        package: Vec<u8>,
+    },
 }
 
 /// The state machine. A stage whose version is already running (or older) is done; one that
@@ -438,7 +445,10 @@ fn detect_install() -> Option<Install> {
     }
     let exe = std::env::current_exe().ok()?;
     if cfg!(windows) {
-        exe.parent()?.join("uninstall.exe").is_file().then_some(Install::Nsis)
+        exe.parent()?
+            .join("uninstall.exe")
+            .is_file()
+            .then_some(Install::Nsis)
     } else if cfg!(target_os = "macos") {
         exe.ancestors()
             .find(|p| p.extension().is_some_and(|e| e == "app"))
@@ -659,7 +669,10 @@ async fn check(app: &tauri::AppHandle) -> Result<(), String> {
     if !how.accepts(&c.file_name) {
         return Err(format!("paquet d'un autre type : {}", c.file_name));
     }
-    if store.load().is_some_and(|s| s.version == c.version.to_string()) {
+    if store
+        .load()
+        .is_some_and(|s| s.version == c.version.to_string())
+    {
         return Ok(());
     }
     let bytes = get(app, c.url.clone()).await?;
@@ -691,7 +704,10 @@ mod tests {
         assert!(is_newer(&v("1.0.0"), &v("1.0.0-beta.2")));
         assert!(!is_newer(&v("0.1.0"), &v("0.1.0")), "no reinstall");
         assert!(!is_newer(&v("0.0.9"), &v("0.1.0")), "no downgrade");
-        assert!(!is_newer(&v("0.2.0-rc.1"), &v("0.1.0")), "no pre-release on stable");
+        assert!(
+            !is_newer(&v("0.2.0-rc.1"), &v("0.1.0")),
+            "no pre-release on stable"
+        );
         assert!(is_newer(&v("0.2.0-rc.2"), &v("0.2.0-rc.1")));
         assert!(parse_version("latest").is_none());
     }
@@ -728,15 +744,24 @@ mod tests {
             ["darwin-aarch64-app", "darwin-aarch64"]
         );
         // Not newer: nothing to do.
-        assert_eq!(select(&manifest("0.1.0", &url), &v("0.1.0"), &keys()), Ok(None));
-        assert_eq!(select(&manifest("0.0.5", &url), &v("0.1.0"), &keys()), Ok(None));
+        assert_eq!(
+            select(&manifest("0.1.0", &url), &v("0.1.0"), &keys()),
+            Ok(None)
+        );
+        assert_eq!(
+            select(&manifest("0.0.5", &url), &v("0.1.0"), &keys()),
+            Ok(None)
+        );
         // Refused: another host or repository, bad names, no entry, bad JSON, bad version.
         for bad in [
             "https://example.com/Kyro.exe",
             "https://github.com/someone/else/releases/download/v1/Kyro.exe",
             "http://github.com/shuntraa/kyro-wallet/releases/download/v1/Kyro.exe",
         ] {
-            assert!(select(&manifest("0.2.0", bad), &v("0.1.0"), &keys()).is_err(), "{bad}");
+            assert!(
+                select(&manifest("0.2.0", bad), &v("0.1.0"), &keys()).is_err(),
+                "{bad}"
+            );
         }
         let traversal = format!("{ASSET_PREFIX}v0.2.0/..%2F..%2Fevil.exe");
         assert!(select(&manifest("0.2.0", &traversal), &v("0.1.0"), &keys()).is_err());
@@ -782,7 +807,10 @@ mod tests {
             let mut bin = b"Ed".to_vec();
             bin.extend_from_slice(&self.id);
             bin.extend_from_slice(self.sk.verifying_key().as_bytes());
-            let text = format!("untrusted comment: minisign public key\n{}\n", Self::b64(&bin));
+            let text = format!(
+                "untrusted comment: minisign public key\n{}\n",
+                Self::b64(&bin)
+            );
             Self::b64(text.as_bytes())
         }
 
@@ -909,7 +937,8 @@ mod tests {
     fn candidate(key: &TestKey, data: &[u8]) -> Candidate {
         Candidate {
             version: v("0.2.0"),
-            url: url::Url::parse(&format!("{ASSET_PREFIX}v0.2.0/Kyro_0.2.0_x64-setup.exe")).unwrap(),
+            url: url::Url::parse(&format!("{ASSET_PREFIX}v0.2.0/Kyro_0.2.0_x64-setup.exe"))
+                .unwrap(),
             signature: key.sign(data, TRUSTED),
             file_name: "Kyro_0.2.0_x64-setup.exe".into(),
         }
@@ -969,7 +998,10 @@ mod tests {
         // Tried too often: discarded, never retried.
         stage(&store, &candidate(&key, data), data, &pk).unwrap();
         for _ in 0..MAX_ATTEMPTS {
-            assert!(matches!(pending(&store, &v("0.1.0"), true, &pk), Step::Apply { .. }));
+            assert!(matches!(
+                pending(&store, &v("0.1.0"), true, &pk),
+                Step::Apply { .. }
+            ));
         }
         assert_eq!(pending(&store, &v("0.1.0"), true, &pk), Step::Idle);
         assert!(store.load().is_none());
@@ -1031,15 +1063,28 @@ mod tests {
         use crate::net::{prepare, EnvKeys, FetchRequest, NetContext, ALLOWED_HOSTS, UPDATE_HOSTS};
         for h in UPDATE_HOSTS {
             assert!(ALLOWED_HOSTS.contains(h), "{h}: redirects must be followed");
-            assert_eq!(crate::net::family_for(h, &NetContext::default()), Family::Update);
+            assert_eq!(
+                crate::net::family_for(h, &NetContext::default()),
+                Family::Update
+            );
             let req = FetchRequest {
-                url: format!("https://{h}/shuntraa/kyro-wallet/releases/latest/download/latest.json"),
+                url: format!(
+                    "https://{h}/shuntraa/kyro-wallet/releases/latest/download/latest.json"
+                ),
                 method: "GET".into(),
                 headers: Default::default(),
                 body: None,
             };
-            let r = prepare(req, &NetContext::default(), &EnvKeys::default(), &Default::default());
-            assert!(matches!(r, Err(crate::error::AppError::HostNotAllowed(_))), "{h}");
+            let r = prepare(
+                req,
+                &NetContext::default(),
+                &EnvKeys::default(),
+                &Default::default(),
+            );
+            assert!(
+                matches!(r, Err(crate::error::AppError::HostNotAllowed(_))),
+                "{h}"
+            );
         }
         assert!(MANIFEST_URL.starts_with("https://github.com/"));
         assert!(ASSET_PREFIX.starts_with("https://github.com/shuntraa/kyro-wallet/"));

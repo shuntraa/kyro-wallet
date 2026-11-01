@@ -6,7 +6,7 @@
 //! Status of a sent transfer: the generic `ton_tx_status`.
 
 use tauri::{AppHandle, State};
-use wallet_core::{HwKeyChain, TonAddress, HwWatchKey};
+use wallet_core::{HwKeyChain, HwWatchKey, TonAddress};
 
 use crate::commands::confirm_native;
 use crate::commands_hw::device_line;

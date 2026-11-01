@@ -40,7 +40,9 @@ pub fn app_for(chain: Chain, net: Network) -> Option<(&'static str, &'static str
         )),
         Chain::Evm => Some(("Ethereum", "1.9.0")),
         Chain::Sol => Some(("Solana", "1.3.1")),
-        other => super::ledger_apps::app_for(other).or_else(|| super::chains::ledger_app(other, net)),
+        other => {
+            super::ledger_apps::app_for(other).or_else(|| super::chains::ledger_app(other, net))
+        }
     }
 }
 

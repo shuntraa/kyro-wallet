@@ -1637,7 +1637,10 @@ mod fees_page_tests {
     fn opens_only_the_fixed_fees_page() {
         assert_eq!(FEES_PAGE_URL, "https://kyrowallet.com/frais");
         let c = fees_page_command();
-        let args: Vec<String> = c.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        let args: Vec<String> = c
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
         assert_eq!(args.last().map(String::as_str), Some(FEES_PAGE_URL));
     }
 }
