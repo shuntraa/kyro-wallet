@@ -33,6 +33,8 @@ export interface WalletAccounts {
   xrp?: { address: string; path?: string };
   /** Vault only: Cardano on a hardware wallet is HW_UNSUPPORTED. */
   cardano?: { address: string; path?: string };
+  /** Vault only: Algorand is not offered on hardware wallets. */
+  algo?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {

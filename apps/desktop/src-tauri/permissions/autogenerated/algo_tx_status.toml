@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-algo-tx-status"
+description = "Enables the algo_tx_status command without any pre-configured scope."
+commands.allow = ["algo_tx_status"]
+
+[[permission]]
+identifier = "deny-algo-tx-status"
+description = "Denies the algo_tx_status command without any pre-configured scope."
+commands.deny = ["algo_tx_status"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-algo-broadcast"
+description = "Enables the algo_broadcast command without any pre-configured scope."
+commands.allow = ["algo_broadcast"]
+
+[[permission]]
+identifier = "deny-algo-broadcast"
+description = "Denies the algo_broadcast command without any pre-configured scope."
+commands.deny = ["algo_broadcast"]

@@ -1,0 +1,330 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// DEMO ONLY — Algorand (`algo_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
+// commands_algo.rs and algo_backend.rs. Addresses are real Algorand addresses (base32 of a key ‖
+// SHA-512/256 checksum) but the keys are NOT derived from the demo phrase (Kyro derives them in
+// Rust like the Ledger Algorand app); the transaction blob is a demo encoding (hex JSON, NOT the
+// canonical msgpack wallet-core writes) and the signature is fake. The rules are Rust's:
+// - minimum balance 0.1 ALGO (+ 0.1 per asset opted in); spendable = balance − minimum balance;
+// - a receiver must end at or above its minimum balance (an empty account needs ≥ 0.1 ALGO);
+// - amount + fee > spendable → refused; empty or rekeyed sender → refused;
+// - decoding refuses close-remainder-to, rekey, group and lease, another network, a note > 1024 B;
+// - sign re-reads both accounts live and refuses an expired validity window;
+// - a submitted payment is confirmed a few seconds later (`algo_tx_status`).
+
+import { base32nopad } from '@scure/base';
+import { sha256, sha512_256 } from '@noble/hashes/sha2';
+import { algoAddressOf } from './algo';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
+import {
+  IpcError,
+  type AlgoAccountInfo,
+  type AlgoBackendInfo,
+  type AlgoContext,
+  type AlgoHistoryEntry,
+  type AlgoTxSummary,
+  type AlgoWarning,
+  type Commands,
+  type Network,
+  type Settings,
+} from './ipc';
+import type { DemoTor } from './mock-tor';
+
+export const ALGO_MIN_BALANCE = 100_000n;
+const FEE = 1_000n;
+/** Rust: lv = fv + 200 rounds (≈ 9 min). */
+const LV_OFFSET = 200;
+const MAX_NOTE = 1024;
+/** Demo: a submitted payment is confirmed after this long. */
+const CONFIRM_MS = 4_000;
+const GENESIS: Record<Network, { id: string; hash: string }> = {
+  mainnet: { id: 'mainnet-v1.0', hash: 'wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=' },
+  testnet: { id: 'testnet-v1.0', hash: 'SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=' },
+};
+
+export { algoAddressOf };
+
+/** Demo address of Algorand account `account` (a label hash, not a derived key: see above). */
+export function demoAlgoAddress(account: number): string {
+  return algoAddressOf(sha256(new TextEncoder().encode(`kyro-demo-algorand-account-${account}`)));
+}
+
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+
+/** wallet-core `algo_address_bytes`: 58 upper-case base32 characters, checksum verified. */
+export function checkAlgoAddress(a: unknown): string {
+  const s = String(a ?? '').trim();
+  let raw: Uint8Array;
+  try {
+    if (s.length !== 58) throw new Error('length');
+    raw = base32nopad.decode(s);
+  } catch {
+    throw invalidInput('adresse Algorand invalide');
+  }
+  if (raw.length !== 36) throw invalidInput('adresse Algorand invalide');
+  const sum = sha512_256(raw.slice(0, 32)).slice(28);
+  if (!raw.slice(32).every((b, i) => b === sum[i])) throw invalidInput('adresse Algorand invalide (somme de contrôle)');
+  return s;
+}
+
+const algoText = (micro: bigint | string) => {
+  const v = BigInt(micro);
+  const frac = (v % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+  return `${v / 1_000_000n}${frac ? `,${frac}` : ''} ALGO`;
+};
+
+interface DemoAlgoAccount {
+  balance: bigint;
+  assets: number;
+  authAddr: string | null;
+}
+
+/** Demo payment (hex JSON). `close` / `rekey` exist so the refusals can be tested. */
+interface DemoPayment {
+  sender: string;
+  receiver: string;
+  amount: string;
+  fee: string;
+  firstValid: number;
+  lastValid: number;
+  genesisId: string;
+  genesisHash: string;
+  note: string | null;
+  close?: string;
+  rekey?: string;
+  sig?: string;
+}
+
+export interface DemoAlgoDeps {
+  network: Network;
+  tor: DemoTor;
+  settings: () => Settings;
+  requireUnlocked: () => void;
+  checkPassword: (password: unknown) => void;
+  confirm: (text: string) => boolean;
+  now: () => number;
+}
+
+export interface DemoAlgoState {
+  me: string;
+  /** A funded account. */
+  friend: string;
+  /** An account that never received ALGO (needs ≥ 0.1 ALGO). */
+  empty: string;
+  accounts: Map<string, DemoAlgoAccount>;
+  history: AlgoHistoryEntry[];
+  submitted: Map<string, number>;
+  round: number;
+}
+
+export function createDemoAlgo(d: DemoAlgoDeps) {
+  const netKey = d.network === 'mainnet' ? 'mainnet' : 'testnet';
+  const me = demoAlgoAddress(0);
+  const label = (l: string) => algoAddressOf(sha256(new TextEncoder().encode(l)));
+  const friend = label('kyro-demo-algo-friend');
+  const empty = label('kyro-demo-algo-empty');
+  const t0 = d.now();
+  const round0 = d.network === 'mainnet' ? 66_529_512 : 68_824_675;
+  const state: DemoAlgoState = {
+    me,
+    friend,
+    empty,
+    accounts: new Map([
+      // One asset opted in: minimum balance 0.2 ALGO.
+      [me, { balance: 42_500_000n, assets: 1, authAddr: null }],
+      [friend, { balance: 120_000_000n, assets: 0, authAddr: null }],
+    ]),
+    history: [
+      { id: base32nopad.encode(sha512_256(new TextEncoder().encode('algo-in-1'))), type: 'pay', from: friend, to: me, amount: '42500000', fee: '1000', closeTo: null, closeAmount: null, round: round0 - 30_000, time: t0 - 2 * 86_400_000, note: 'Merci pour le dîner' },
+    ],
+    submitted: new Map(),
+    round: round0,
+  };
+
+  const torOn = () => d.settings().tor.enabled;
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const backend = async () => {
+    if (torOn()) await d.tor.waitReady();
+    await wait(50 + Math.random() * 120);
+    state.round = round0 + Math.floor((d.now() - t0) / 2800);
+  };
+
+  const account = (address: string): AlgoAccountInfo => {
+    const a = state.accounts.get(address);
+    const balance = a?.balance ?? 0n;
+    const min = ALGO_MIN_BALANCE * BigInt(1 + (a?.assets ?? 0));
+    return {
+      address,
+      exists: balance > 0n,
+      balance: balance.toString(),
+      minBalance: min.toString(),
+      spendable: (balance > min ? balance - min : 0n).toString(),
+      assets: a?.assets ?? 0,
+      authAddr: a?.authAddr ?? null,
+      round: state.round,
+    };
+  };
+
+  /** algo_backend::check_payment, same order and messages. */
+  const checkPayment = (ours: AlgoAccountInfo, dest: AlgoAccountInfo, amount: bigint, fee: bigint) => {
+    if (ours.authAddr) throw invalidInput(`ce compte Algorand a été « rekeyé » vers ${ours.authAddr} : sa clé de signature n'est plus celle de ce portefeuille, Kyro ne peut pas signer pour lui`);
+    if (!ours.exists) throw invalidInput("ton compte Algorand n'est pas encore activé (aucun ALGO reçu)");
+    const spendable = BigInt(ours.spendable);
+    if (amount + fee > spendable) {
+      throw invalidInput(`solde disponible insuffisant : ${algoText(spendable)} disponibles (solde − solde minimum de ${algoText(ours.minBalance)}), il en faut ${algoText(amount + fee)}`);
+    }
+    const db = BigInt(dest.balance);
+    const dm = BigInt(dest.minBalance);
+    if (db + amount < dm) {
+      throw invalidInput(
+        dest.exists
+          ? `ce destinataire resterait sous son solde minimum (${algoText(dm)}) : envoie au moins ${algoText(dm - db)}`
+          : `ce compte n'existe pas encore : il faut lui envoyer au moins ${algoText(dm)} (solde minimum), sinon le paiement est rejeté`,
+      );
+    }
+  };
+
+  const encode = (p: DemoPayment) => bytesToHex(new TextEncoder().encode(JSON.stringify(p)));
+  const txidOf = (p: DemoPayment) => base32nopad.encode(sha512_256(new TextEncoder().encode(`TX${JSON.stringify({ ...p, sig: undefined })}`)));
+
+  /** wallet-core algo_decode_tx: sender = us, this network, no close / rekey. */
+  const decode = (blob: unknown): { p: DemoPayment; summary: AlgoTxSummary } => {
+    let p: DemoPayment;
+    try {
+      p = JSON.parse(new TextDecoder().decode(hexToBytes(String(blob ?? '').trim().toLowerCase()))) as DemoPayment;
+    } catch {
+      throw invalidInput('le blob n’est pas en hexadécimal');
+    }
+    const bad = (m: string) => invalidInput(`transaction Algorand : ${m}`);
+    if (p.close !== undefined) throw bad('close-remainder-to refusé : il enverrait TOUT le solde restant à une autre adresse et fermerait le compte');
+    if (p.rekey !== undefined) throw bad('rekey refusé : il donnerait le contrôle de ce compte à une autre clé');
+    if (p.sender !== me) throw bad("l'expéditeur n'est pas l'adresse de ce portefeuille");
+    const g = GENESIS[d.network];
+    if (p.genesisId !== g.id || p.genesisHash !== g.hash) throw bad(`réseau inattendu (« ${p.genesisId} ») : ce portefeuille est sur ${g.id}`);
+    checkAlgoAddress(p.receiver);
+    if (p.receiver === me) throw bad('paiement à soi-même');
+    if (BigInt(p.amount) <= 0n) throw bad('montant nul');
+    const noteBytes = p.note === null ? 0 : new TextEncoder().encode(p.note).length;
+    if (noteBytes > MAX_NOTE) throw bad('note de plus de 1024 octets');
+    const warnings: AlgoWarning[] = [];
+    if (noteBytes > 0) warnings.push({ kind: 'note' });
+    if (BigInt(p.fee) > 10_000n) warnings.push({ kind: 'highFee' });
+    const summary: AlgoTxSummary = {
+      sender: p.sender,
+      receiver: p.receiver,
+      amount: p.amount,
+      fee: p.fee,
+      firstValid: p.firstValid,
+      lastValid: p.lastValid,
+      genesisId: p.genesisId,
+      genesisHash: p.genesisHash,
+      noteLen: noteBytes,
+      noteHex: p.note === null ? null : bytesToHex(new TextEncoder().encode(p.note)),
+      noteText: p.note,
+      txid: txidOf(p),
+      warnings,
+      requiresExtraConfirmation: warnings.length > 0,
+    };
+    return { p, summary };
+  };
+
+  const contextFor = (to: string): AlgoContext => ({ account: account(me), destination: account(to), round: state.round });
+
+  /** commands_algo.rs describe_algo. */
+  const describe = (s: AlgoTxSummary, c: AlgoContext): string => {
+    let out = `Envoi Algorand${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.receiver}\nMontant : ${algoText(s.amount)} (${s.amount} µALGO)\n`;
+    if (!c.destination.exists) out += `\nCe compte n'existe pas encore : ce paiement le crée (au moins ${algoText(c.destination.minBalance)} doivent y rester, solde minimum).\n`;
+    out += `\nFrais : ${algoText(s.fee)} (${s.fee} µALGO)\nSolde : ${algoText(c.account.balance)} · solde minimum bloqué : ${algoText(c.account.minBalance)} · disponible : ${algoText(c.account.spendable)}\n`;
+    out += `Réseau : ${s.genesisId} (genesis ${s.genesisHash})\nValable des rounds ${s.firstValid} à ${s.lastValid}\n`;
+    if (s.noteText !== null) out += `Note (texte libre, publique à jamais) : « ${s.noteText} »\n`;
+    else if (s.noteLen > 0) out += `Note binaire (${s.noteLen} octets, publique à jamais) : ${s.noteHex ?? ''}\n`;
+    out += `Identifiant : ${s.txid}\n`;
+    return out;
+  };
+
+  const handlers: Record<Extract<keyof Commands, `algo_${string}`>, (a: Record<string, unknown>) => unknown> = {
+    algo_backend_info: (): AlgoBackendInfo => ({
+      kind: 'default',
+      network: netKey,
+      label: `${netKey}-api.algonode.cloud`,
+      indexer: `${netKey}-idx.algonode.cloud`,
+      tor: torOn(),
+    }),
+    algo_address: (a) => {
+      d.requireUnlocked();
+      const account = a.account === undefined ? 0 : Number(a.account);
+      if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput('numéro de compte : au plus 100');
+      return demoAlgoAddress(account);
+    },
+    algo_account: async (a) => {
+      const addr = checkAlgoAddress(a.address);
+      await backend();
+      return account(addr);
+    },
+    algo_txs: async (a) => {
+      const addr = checkAlgoAddress(a.address);
+      await backend();
+      return state.history.filter((t) => t.from === addr || t.to === addr).slice(0, 50);
+    },
+    algo_build_tx: async (a) => {
+      d.requireUnlocked();
+      const to = checkAlgoAddress(a.to);
+      const amount = String(a.amount ?? '').trim();
+      if (!/^\d+$/.test(amount) || BigInt(amount) <= 0n) throw invalidInput('montant en µALGO invalide');
+      const note = a.note === undefined || a.note === null || a.note === '' ? null : String(a.note);
+      if (note !== null && new TextEncoder().encode(note).length > MAX_NOTE) throw invalidInput('note : au plus 1024 octets');
+      await backend();
+      const context = contextFor(to);
+      checkPayment(context.account, context.destination, BigInt(amount), FEE);
+      const g = GENESIS[d.network];
+      const p: DemoPayment = { sender: me, receiver: to, amount, fee: FEE.toString(), firstValid: state.round, lastValid: state.round + LV_OFFSET, genesisId: g.id, genesisHash: g.hash, note };
+      const blob = encode(p);
+      return { blob, summary: decode(blob).summary, context };
+    },
+    algo_sign_tx: async (a) => {
+      d.requireUnlocked();
+      const { p, summary } = decode(a.blob);
+      await backend();
+      const context = contextFor(summary.receiver);
+      if (summary.lastValid <= state.round) throw invalidInput('paiement Algorand expiré (dernier round de validité dépassé) : reconstruis-le');
+      checkPayment(context.account, context.destination, BigInt(summary.amount), BigInt(summary.fee));
+      d.checkPassword(a.password);
+      if (!d.confirm(`Confirmer le paiement Algorand\n${describe(summary, context)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (summary.requiresExtraConfirmation && !d.confirm('Attention : paiement à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      const signed = encode({ ...p, sig: bytesToHex(sha256(new TextEncoder().encode(`sig:${String(a.blob)}`))) });
+      return { blob: signed, txid: summary.txid, summary, context };
+    },
+    algo_broadcast: async (a) => {
+      const { p, summary } = decode(a.blob);
+      if (!p.sig) throw invalidInput('transaction Algorand : non signée');
+      await backend();
+      if (summary.lastValid <= state.round) throw invalidInput('paiement Algorand refusé : txn dead (round de validité dépassé)');
+      if (state.submitted.has(summary.txid)) throw invalidInput('paiement Algorand refusé : transaction already in ledger');
+      const ctx = contextFor(summary.receiver);
+      try {
+        checkPayment(ctx.account, ctx.destination, BigInt(summary.amount), BigInt(summary.fee));
+      } catch {
+        throw invalidInput('paiement Algorand refusé : overspend (solde insuffisant)');
+      }
+      const ours = state.accounts.get(me);
+      if (!ours) throw invalidInput('paiement Algorand refusé : overspend (solde insuffisant)');
+      ours.balance -= BigInt(summary.fee) + BigInt(summary.amount);
+      const dest = state.accounts.get(summary.receiver);
+      if (dest) dest.balance += BigInt(summary.amount);
+      else state.accounts.set(summary.receiver, { balance: BigInt(summary.amount), assets: 0, authAddr: null });
+      state.submitted.set(summary.txid, d.now());
+      state.history.unshift({ id: summary.txid, type: 'pay', from: me, to: summary.receiver, amount: summary.amount, fee: summary.fee, closeTo: null, closeAmount: null, round: state.round + 1, time: d.now(), note: summary.noteText });
+      return summary.txid;
+    },
+    algo_tx_status: async (a) => {
+      const t = String(a.txid ?? '').trim();
+      if (!/^[A-Z2-7]{52}$/.test(t)) throw invalidInput('identifiant de transaction Algorand : 52 caractères base32');
+      await backend();
+      const at = state.submitted.get(t);
+      if (at === undefined) return { confirmed: false, round: null, error: null };
+      return d.now() - at >= CONFIRM_MS ? { confirmed: true, round: state.round, error: null } : { confirmed: false, round: null, error: null };
+    },
+  };
+
+  return { state, handlers };
+}

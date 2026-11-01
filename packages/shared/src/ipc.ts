@@ -60,11 +60,16 @@ export interface Accounts {
    * and change both use it; Rust signs with index 0 of the account only (§2.7).
    */
   cardano: AddressInfo;
+  /**
+   * Algorand `m/44'/283'/a'/0/0`, derived like the Ledger Algorand app (same path on testnet),
+   * 58-character base32 address (§2.11). Not Pera's 25-word format.
+   */
+  algo: AddressInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'algo';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'algo'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -562,6 +567,103 @@ export interface XrpTrustLine {
   issuer: string;
   balance: string;
   limit: string;
+}
+
+// ---------------------------------------------------------------- Algorand (§2.11)
+
+export interface AlgoBackendInfo {
+  /** Always the default (AlgoNode / Nodely): no custom Algorand server yet. */
+  kind: 'default';
+  network: UtxoNetworkKey;
+  /** algod host. */
+  label: string;
+  /** Indexer host (history). */
+  indexer: string;
+  tor: boolean;
+}
+
+/** `algo_account`: algod `/v2/accounts/{address}`. Amounts: µALGO (1 ALGO = 1 000 000). */
+export interface AlgoAccountInfo {
+  address: string;
+  /** Holds ALGO. `false`: an empty account (it does not exist on chain until it receives ≥ 0.1 ALGO). */
+  exists: boolean;
+  balance: string;
+  /** What must stay on the account: 0.1 ALGO + 0.1 per asset / application opted in (algod). */
+  minBalance: string;
+  /** Balance − minimum balance (0 if negative): what can be sent. */
+  spendable: string;
+  /** Assets opted in. */
+  assets: number;
+  /** Rekeyed to this address: Kyro's key no longer signs for the account (sending refused). */
+  authAddr: string | null;
+  round: number;
+}
+
+/** Every warning → reinforced confirmation. */
+export type AlgoWarning = { kind: 'note' } | { kind: 'binaryNote' } | { kind: 'unusualText' } | { kind: 'highFee' };
+
+/** wallet-core `AlgoTxSummary`: Rust's strict decoding of the payment (`pay`). */
+export interface AlgoTxSummary {
+  sender: string;
+  receiver: string;
+  /** µALGO. */
+  amount: string;
+  /** µALGO (flat). */
+  fee: string;
+  firstValid: number;
+  lastValid: number;
+  /** `mainnet-v1.0` / `testnet-v1.0`, checked against the app's network. */
+  genesisId: string;
+  /** Base64, checked. */
+  genesisHash: string;
+  noteLen: number;
+  noteHex: string | null;
+  /** UTF-8 note, cleaned for display. */
+  noteText: string | null;
+  txid: string;
+  warnings: AlgoWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+/** Live context Rust read for the dialog. */
+export interface AlgoContext {
+  account: AlgoAccountInfo;
+  destination: AlgoAccountInfo;
+  round: number;
+}
+
+/** `algo_txs` entry (indexer, last 50). Non-payment types keep `type` and `from`, amount 0. */
+export interface AlgoHistoryEntry {
+  id: string;
+  /** `pay`, `axfer`, `appl`, `keyreg`… */
+  type: string;
+  from: string;
+  to: string | null;
+  /** µALGO. */
+  amount: string;
+  fee: string;
+  /** Payment that closed its account (`close-remainder-to`). */
+  closeTo: string | null;
+  closeAmount: string | null;
+  round: number | null;
+  /** ms epoch. */
+  time: number | null;
+  /** UTF-8 note, cleaned (null if none or binary). */
+  note: string | null;
+}
+
+export interface AlgoTxStatus {
+  confirmed: boolean;
+  round: number | null;
+  /** `pool-error`: dropped from the pool, never confirmed. */
+  error: string | null;
+}
+
+export interface AlgoBuilt {
+  /** Unsigned transaction (canonical msgpack), hex. */
+  blob: string;
+  summary: AlgoTxSummary;
+  context: AlgoContext;
 }
 
 // ---------------------------------------------------------------- Cardano (§2.7)
@@ -1320,6 +1422,24 @@ export interface Commands {
   xrp_broadcast: { args: { blob: string } & WithAccount; ret: string };
   /** `validated: true` + `result: 'tesSUCCESS'` once in a validated ledger; not found yet: `{ false, '' }`. */
   xrp_tx_status: { args: { hash: string }; ret: { validated: boolean; result: string } };
+  // Algorand (§2.11): Rust builds the payment (fee, validity window, genesis from algod), decodes
+  // it strictly (close-remainder-to, rekey, group, lease refused), re-reads both accounts live,
+  // signs behind the password and the native dialog. Hardware wallets: not offered.
+  algo_backend_info: { args: undefined; ret: AlgoBackendInfo };
+  /** `m/44'/283'/{account}'/0/0`. */
+  algo_address: { args: WithAccount | undefined; ret: string };
+  algo_account: { args: { address: string }; ret: AlgoAccountInfo };
+  algo_txs: { args: { address: string }; ret: AlgoHistoryEntry[] };
+  /**
+   * `amount`: µALGO; `note`: UTF-8 text, ≤ 1024 bytes, public. Refused before building: rekeyed or
+   * empty sender, amount + fee > spendable (balance − minimum balance), receiver left under its
+   * minimum balance (an empty account needs ≥ 0.1 ALGO).
+   */
+  algo_build_tx: { args: { to: string; amount: string; note?: string } & WithAccount; ret: AlgoBuilt };
+  algo_sign_tx: { args: { blob: string; password: string } & WithAccount; ret: { blob: string; txid: string; summary: AlgoTxSummary; context: AlgoContext } };
+  /** Signature verified by Rust; algod's `txId` must be ours. Node refusal → INVALID_INPUT with its message. */
+  algo_broadcast: { args: { blob: string } & WithAccount; ret: string };
+  algo_tx_status: { args: { txid: string }; ret: AlgoTxStatus };
   // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
   // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
   // Hardware wallets: HW_UNSUPPORTED.

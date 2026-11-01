@@ -35,6 +35,12 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
+    // Algorand (AlgoNode / Nodely free tier, no token): algod + indexer, mainnet and testnet;
+    // only Rust's `algo_*` commands.
+    "mainnet-api.algonode.cloud",
+    "testnet-api.algonode.cloud",
+    "mainnet-idx.algonode.cloud",
+    "testnet-idx.algonode.cloud",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -48,6 +54,14 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "api.0x.org",
     "li.quest",
     "lite-api.jup.ag",
+];
+
+/// Algorand default servers (algod + indexer), the `algorand` Tor family.
+pub const ALGORAND_HOSTS: &[&str] = &[
+    "mainnet-api.algonode.cloud",
+    "testnet-api.algonode.cloud",
+    "mainnet-idx.algonode.cloud",
+    "testnet-idx.algonode.cloud",
 ];
 
 /// Electrum servers (raw TLS sockets, not HTTP) that Rust itself may open **as defaults**,
@@ -294,6 +308,7 @@ pub enum Family {
     Tron,
     Xrp,
     Cardano,
+    Algorand,
     Evm,
     Solana,
     Market,
@@ -317,6 +332,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
+    } else if ALGORAND_HOSTS.contains(&host) {
+        Family::Algorand
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1065,6 +1082,11 @@ mod tests {
         assert_eq!(family_for("api.trongrid.io", &c), Family::Tron);
         assert_eq!(family_for("s.altnet.rippletest.net", &c), Family::Xrp);
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
+        for h in ALGORAND_HOSTS {
+            assert!(ALLOWED_HOSTS.contains(h), "{h}");
+            assert_eq!(family_for(h, &c), Family::Algorand);
+        }
+        assert_eq!(family_for("algonode.cloud", &c), Family::Other);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
         let doge = NetContext {

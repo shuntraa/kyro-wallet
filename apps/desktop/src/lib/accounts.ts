@@ -16,6 +16,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   tron: 'TRON',
   xrp: 'XRP',
   ada: 'Cardano',
+  algo: 'Algorand',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -28,6 +29,7 @@ export const ACCOUNT_CHAIN_HINT: Record<AccountChain, string> = {
   tron: 'TRX et TRC-20',
   xrp: 'XRP et monnaies émises',
   ada: 'ADA et tokens',
+  algo: 'ALGO (pas d’ASA)',
 };
 
 /** « Bitcoin 1 » for index 0, « Bitcoin 2 » for index 1… */

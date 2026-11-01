@@ -41,6 +41,8 @@ import { createDemoTron, demoTronAddress, type DemoTronState } from './mock-tron
 export { demoTronAddress } from './mock-tron';
 import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
 export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
+import { createDemoAlgo, demoAlgoAddress, type DemoAlgoState } from './mock-algo';
+export { algoAddressOf, demoAlgoAddress } from './mock-algo';
 import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
 export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
 import { demoFund } from './mock-tx';
@@ -161,6 +163,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       tron: { address: demoTronAddress(demoSeed(), 0), path: "m/44'/195'/0'/0/0" },
       xrp: { address: demoXrpAddress(demoSeed(), 0), path: "m/44'/144'/0'/0/0" },
       cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
+      algo: { address: demoAlgoAddress(0), path: "m/44'/283'/0'/0/0" },
     },
     ownBtc,
     receive,
@@ -284,6 +287,8 @@ export interface MockBackend {
   xrp: DemoXrpState;
   /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
+  /** Algorand demo chain (tests). */
+  algo: DemoAlgoState;
   /** Staking demo (tests). */
   stake: ReturnType<typeof createDemoStake>;
 }
@@ -374,6 +379,16 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const xrpChain = createDemoXrp({
     network,
     seed: demoSeed(),
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // Algorand (§2.11): `algo_*`, minimum balance and refusals like Rust.
+  const algoChain = createDemoAlgo({
+    network,
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -829,6 +844,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     ...tronChain.handlers,
     ...xrpChain.handlers,
     ...cardanoChain.handlers,
+    ...algoChain.handlers,
     ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
@@ -860,6 +876,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     tron: tronChain.state,
     xrp: xrpChain.state,
     cardano: cardanoChain.state,
+    algo: algoChain.state,
     stake,
     advance(ms: number) {
       clockOffset += ms;
@@ -867,14 +884,14 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     invoke: async (cmd, args = {}) => {
       const h = (handlers as Record<string, ((a: Record<string, unknown>) => unknown) | undefined>)[cmd] ?? utxoChains.handlers[cmd];
       if (!h) throw new IpcError('INVALID_INPUT', `Commande inconnue : ${cmd}`);
-      // §2.9: the TRON, XRP, Cardano and staking demo modules simulate account 0 only.
+      // §2.9: the TRON, XRP, Cardano, Algorand and staking demo modules simulate account 0 only.
       if (cmd === 'ada_address' && accts.arg(args.account) !== 0) {
         requireUnlocked();
         if (Number(args.index ?? 0) !== 0) throw new IpcError('INVALID_INPUT', 'Entrée invalide : démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)');
         return accts.adaAddress(accts.arg(args.account));
       }
       if (DEMO_ACCOUNT0_ONLY.test(cmd) && accts.arg(args.account) !== 0) {
-        throw new IpcError('INVALID_INPUT', 'Mode démo : les comptes supplémentaires TRON, XRP et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).');
+        throw new IpcError('INVALID_INPUT', 'Mode démo : les comptes supplémentaires TRON, XRP, Cardano et Algorand et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).');
       }
       void captureProtected;
       return await h(args);
@@ -883,7 +900,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
 }
 
 /** Demo commands simulated for account 0 only (§2.9). */
-const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|ada_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
+const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|ada_(build_tx|sign_tx|broadcast)|algo_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
 
 function decodeSolMessageArg(m: unknown): Uint8Array {
   try {

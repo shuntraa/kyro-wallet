@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-algo-txs"
+description = "Enables the algo_txs command without any pre-configured scope."
+commands.allow = ["algo_txs"]
+
+[[permission]]
+identifier = "deny-algo-txs"
+description = "Denies the algo_txs command without any pre-configured scope."
+commands.deny = ["algo_txs"]

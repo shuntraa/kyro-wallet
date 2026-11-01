@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-algo-backend-info"
+description = "Enables the algo_backend_info command without any pre-configured scope."
+commands.allow = ["algo_backend_info"]
+
+[[permission]]
+identifier = "deny-algo-backend-info"
+description = "Denies the algo_backend_info command without any pre-configured scope."
+commands.deny = ["algo_backend_info"]

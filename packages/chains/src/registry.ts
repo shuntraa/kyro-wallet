@@ -10,7 +10,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+/** `algo`: Algorand (ALGO payments, `algo_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'algo';
 
 interface ChainBase {
   key: string;
@@ -47,7 +48,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | AlgorandChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -240,6 +241,27 @@ export function cardanoChain(network: Network): CardanoChain {
   return CARDANO_CHAINS[network];
 }
 
+/**
+ * Algorand (phase 4): Rust `algo_*` commands and `AlgorandAdapter` (`packages/chains/src/algorand/`).
+ * Testnet = Algorand TestNet. Keys: `m/44'/283'/a'/0/0` like the Ledger Algorand app (not Pera's
+ * 25 words). ALGO only (no ASA). Hardware wallets: not offered.
+ */
+export interface AlgorandChain extends Omit<ChainBase, 'phase'> {
+  family: 'algo';
+  phase: 4;
+}
+
+const ALGORAND_CHAINS: Record<Network, AlgorandChain> = {
+  testnet: { family: 'algo', key: 'algorand', name: 'Algorand TestNet', label: 'ALGO testnet', network: 'testnet', color: '#2B2B2F', glyph: 'A',
+    nativeSymbol: 'ALGO', nativeName: 'Algorand', nativeDecimals: 6, coingeckoId: 'algorand', phase: 4, blockTimeSecs: 3 },
+  mainnet: { family: 'algo', key: 'algorand', name: 'Algorand', label: 'ALGO', network: 'mainnet', color: '#2B2B2F', glyph: 'A',
+    nativeSymbol: 'ALGO', nativeName: 'Algorand', nativeDecimals: 6, coingeckoId: 'algorand', phase: 4, blockTimeSecs: 3 },
+};
+
+export function algorandChain(network: Network): AlgorandChain {
+  return ALGORAND_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -301,7 +323,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), algorandChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -412,6 +434,9 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       ? { host: host(xrp.url), purpose: 'XRP Ledger : ton serveur rippled', custom: true }
       : { host: network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net', purpose: `XRP Ledger${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (rippled)` },
   );
+  // Algorand: reached by Rust only (algo_*), Tor circuits of the `algorand` family. No custom server yet.
+  list.push({ host: `${nk}-api.algonode.cloud`, purpose: `Algorand${network === 'mainnet' ? '' : ' TestNet'} : soldes, paramètres, diffusion (algod AlgoNode / Nodely)` });
+  list.push({ host: `${nk}-idx.algonode.cloud`, purpose: `Algorand${network === 'mainnet' ? '' : ' TestNet'} : historique (indexer AlgoNode / Nodely)` });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'

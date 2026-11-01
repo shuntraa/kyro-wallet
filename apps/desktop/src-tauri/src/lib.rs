@@ -1,9 +1,11 @@
 mod accounts;
+mod algo_backend;
 mod btc_backend;
 mod cardano_backend;
 #[cfg(feature = "cbf")]
 mod cbf;
 mod commands;
+mod commands_algo;
 mod commands_cardano;
 mod commands_hw;
 mod commands_servers;
@@ -164,6 +166,14 @@ pub fn run() {
             commands_xrp::xrp_sign_tx,
             commands_xrp::xrp_broadcast,
             commands_xrp::xrp_tx_status,
+            commands_algo::algo_backend_info,
+            commands_algo::algo_address,
+            commands_algo::algo_account,
+            commands_algo::algo_txs,
+            commands_algo::algo_build_tx,
+            commands_algo::algo_sign_tx,
+            commands_algo::algo_broadcast,
+            commands_algo::algo_tx_status,
             commands_cardano::ada_backend_info,
             commands_cardano::ada_address,
             commands_cardano::ada_account,

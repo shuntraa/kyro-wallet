@@ -47,6 +47,7 @@ const TAIL = 4;
  * - EVM: `0x`, hex compared lowercase.
  * - Solana (base58): none.
  * - TRON: `T`. XRP: `r`.
+ * - Algorand (base32, upper case): none.
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
@@ -70,6 +71,7 @@ export function addressParts(address: string, family: Family): AddressParts & { 
     case 'xrp':
       return a.startsWith('r') ? { prefix: 'r', body: a.slice(1), caseInsensitive: false } : { prefix: '', body: a, caseInsensitive: false };
     case 'sol':
+    case 'algo':
       return { prefix: '', body: a, caseInsensitive: false };
   }
 }
