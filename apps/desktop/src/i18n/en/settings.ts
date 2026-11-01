@@ -101,7 +101,7 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.hintKas': 'KAS (20 receive + 20 change addresses)',
   'settings.hintAlgo': 'ALGO (no ASA)',
   'settings.hintXmr': 'XMR, primary address and subaddresses',
-  'settings.hintTon': 'Toncoin (v4R2 wallet)',
+  'settings.hintTon': 'Gram, formerly Toncoin (v4R2 wallet)',
   'settings.hintZec': 'transparent addresses (t1…)',
   'settings.nameEmpty': 'Give the account a name.',
   'settings.nameTooLong': '32 characters at most.',

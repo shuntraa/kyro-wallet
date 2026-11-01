@@ -3,7 +3,7 @@
 
 import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { WATCH_ONLY_CHAINS } from '@kyro/chains';
+import { matchesCoinQuery, WATCH_ONLY_CHAINS } from '@kyro/chains';
 import type { MarketCoin } from '@kyro/market';
 import { getLang, type Currency } from '@kyro/shared';
 import { cn } from '../lib/cn';
@@ -240,7 +240,7 @@ function MarketList({ sort, query, favs, toggle, onlyFavs }: { sort: Sort; query
     let r: MarketCoin[] = pf.markets ?? [];
     if (onlyFavs) r = r.filter((c) => favs.includes(c.id));
     const q = query.trim().toLowerCase();
-    if (q) r = r.filter((c) => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q));
+    if (q) r = r.filter((c) => matchesCoinQuery(q, { name: c.name, symbol: c.symbol, coingeckoId: c.id }));
     r = [...r];
     if (sort === 'name') r.sort((a, b) => a.name.localeCompare(b.name, getLanguage()));
     else if (sort === 'change') r.sort((a, b) => (b.change24h ?? -999) - (a.change24h ?? -999));

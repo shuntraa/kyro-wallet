@@ -220,11 +220,17 @@ function num(v: number | null | undefined): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
+/** Coins renamed after a cached list could have been made: Toncoin → Gram (GRAM, June 2026). */
+const RENAMED: Record<string, { name: string; symbol: string }> = {
+  'the-open-network': { name: 'Gram', symbol: 'GRAM' },
+};
+
 export function normaliseMarket(r: RawMarket): MarketCoin {
+  const renamed = RENAMED[r.id];
   return {
     id: r.id,
-    symbol: r.symbol.toUpperCase(),
-    name: r.name,
+    symbol: renamed?.symbol ?? r.symbol.toUpperCase(),
+    name: renamed?.name ?? r.name,
     rank: r.market_cap_rank ?? null,
     price: r.current_price ?? 0,
     marketCap: num(r.market_cap),

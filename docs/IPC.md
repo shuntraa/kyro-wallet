@@ -1470,7 +1470,7 @@ Refusé avant toute signature (wallet-core `algo_decode_tx`) : tout autre type q
 
 Serveur : `Servers.monero.{mainnet,testnet}` = `{ kind: 'default' } | { kind: 'node', url }` (`https://` ou `.onion` via Tor), vérifié à l'enregistrement (`get_info.nettype` et hash du bloc 0), jamais de repli sur le nœud par défaut. Famille Tor `monero`, **échec fermé** (`TOR_UNAVAILABLE` reste `TOR_UNAVAILABLE` à travers monero-daemon-rpc).
 
-### 2.11 TON (Toncoin, portefeuille v4R2)
+### 2.11 TON (Gram, ex-Toncoin — ticker GRAM depuis juin 2026 ; portefeuille v4R2)
 
 Serveur : **TON Center** (API v3), `toncenter.com` sur mainnet, `testnet.toncenter.com` sur testnet, famille Tor `ton`, jamais de repli ; pas de serveur personnalisé TON pour l'instant. Offre sans clé ≈ 1 requête/s par IP : toutes les requêtes TON de l'app sont espacées d'au moins 1,1 s, une à la fois, et un `429` est réessayé trois fois (voir [NETWORK.md](NETWORK.md)). **Rust construit le transfert** : seqno et états lus à TON Center (`walletInformation`), `valid_until` = maintenant + 10 min, wallet id du réseau, cellules écrites par wallet-core ; un message construit par le serveur n'est jamais signé. Frais : **estimés** par émulation (`estimateFee`, signature non vérifiée), affichés « ≈ ».
 

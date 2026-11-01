@@ -1358,7 +1358,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 amount: built.unsigned.sendAll ? t('send.clearTonAll', { amount: fmtCrypto(built.unsigned.amount, decimals, asset.symbol) }) : fmtCrypto(built.unsigned.amount, decimals, asset.symbol),
                 recipient: recipientName,
                 comment: built.unsigned.summary.comment ?? '',
-                fee: `${fmtCrypto(built.unsigned.maxFee, 9, 'TON', 6)}${feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : ''}`,
+                fee: `${fmtCrypto(built.unsigned.maxFee, 9, 'GRAM', 6)}${feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : ''}`,
               })}
               {built.unsigned.summary.deploysWallet ? t('send.clearTonDeploys') : ''}
               {built.unsigned.summary.comment === null ? t('send.clearTonCheckComment') : ''}

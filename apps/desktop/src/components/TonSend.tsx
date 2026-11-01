@@ -16,7 +16,7 @@ import { cn } from '../lib/cn';
 import { t, useT } from '../i18n';
 import { rt } from '../i18n/rich';
 
-const TON = (nano: bigint | string) => fmtCrypto(BigInt(nano), 9, 'TON', 9);
+const TON = (nano: bigint | string) => fmtCrypto(BigInt(nano), 9, 'GRAM', 9);
 
 export function TonCommentField({
   value,
