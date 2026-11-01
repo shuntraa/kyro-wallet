@@ -293,7 +293,7 @@ Détails techniques : [docs/IPC.md §2.8](docs/IPC.md). Comme pour les paiements
 
 ## Hardware wallets (Ledger, Trezor)
 
-Détails techniques : [docs/IPC.md §2.3](docs/IPC.md). **État : jamais exécuté contre un vrai appareil ni un émulateur** ; testé sur des échanges APDU enregistrés par Ledger et un firmware Trezor simulé (Trezor Safe 7 : contre l'implémentation THP côté appareil de Trezor, voir plus bas). Chaînes : Bitcoin, EVM, Solana (Ledger et Trezor) ; Sui, Aptos, Algorand, NEAR, Cosmos Hub et TON (**Ledger seulement**, aucune app Trezor n'existe). Litecoin, Dogecoin, Zcash, TRON, XRP, Cardano, Stellar et Hedera : `HW_UNSUPPORTED` ; Polkadot, Kaspa : non proposés (raisons plus bas).
+Détails techniques : [docs/IPC.md §2.3](docs/IPC.md). **État : jamais exécuté contre un vrai appareil ni un émulateur** ; testé sur des échanges APDU enregistrés par Ledger et un firmware Trezor simulé (Trezor Safe 7 : contre l'implémentation THP côté appareil de Trezor, voir plus bas). Chaînes : Bitcoin, EVM, Solana (Ledger et Trezor) ; Sui, Aptos, Algorand, NEAR, Cosmos Hub, TON et Hedera (**Ledger seulement**, aucune app Trezor n'existe ; Hedera : compte ED25519 distinct). Litecoin, Dogecoin, Zcash, TRON, XRP, Cardano et Stellar : `HW_UNSUPPORTED` ; Polkadot, Kaspa : non proposés (raisons plus bas).
 
 ### Ce que l'appareil protège
 
@@ -336,7 +336,14 @@ Le Safe 7 parle le **Trezor Host Protocol** (THP) : un canal chiffré et authent
 
 ### Chaînes non prises en charge sur hardware wallet
 
-Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar et Monero : `HW_UNSUPPORTED`. Non proposés, pour des raisons de protocole ([docs/IPC.md](docs/IPC.md) §2.3) : **Polkadot** (l'app Ledger exige la preuve des métadonnées RFC-0078 et des clés ed25519, Kyro signe en sr25519 sans cette preuve), **Hedera** (l'app Ledger signe en ed25519, les comptes Kyro sont ECDSA), **Kaspa** (protocole de l'app non vérifié contre les règles actuelles). Les mêmes règles s'appliqueraient (dialogue natif, vérification de chaque signature par Rust).
+Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar et Monero : `HW_UNSUPPORTED`. Non proposés, pour des raisons de protocole ([docs/IPC.md](docs/IPC.md) §2.3) : **Polkadot** (l'app Ledger exige la preuve des métadonnées RFC-0078 et des clés ed25519, Kyro signe en sr25519 sans cette preuve), **Kaspa** (protocole de l'app non vérifié contre les règles actuelles). Les mêmes règles s'appliqueraient (dialogue natif, vérification de chaque signature par Rust).
+
+### Hedera sur Ledger
+
+- **Un compte ED25519, autre que celui du coffre.** L'app Ledger « Hedera » (≥ 1.9.0) ne signe qu'avec des clés ED25519 `m/44'/3030'/0'/0'/n'` ; le compte Hedera du coffre est ECDSA (`m/44'/3030'/0'/0/n`). Une clé ED25519 n'a pas d'adresse EVM : Kyro **ne crée pas** ce compte, il doit l'avoir été avec ce Ledger (Ledger Live, HashPack…). Kyro le retrouve sur le nœud miroir **par sa clé publique** (la clé renvoyée doit être exactement la nôtre, de type ED25519) et n'affiche que son identifiant `0.0.x` pour recevoir ; tant qu'il n'existe pas, la clé publique (forme DER) est montrée avec l'avertissement que ce n'est pas une adresse.
+- **Même chaîne de contrôle** : clé relue sur l'appareil avant chaque signature ; corps `TransactionBody` construit et décodé par Kyro (même sous-ensemble que le coffre : un transfert HBAR, payeur = notre compte) ; fenêtre native ; l'app décode elle-même le corps, affiche comptes, montant, frais et mémo, puis signe les octets du corps ; Kyro vérifie la signature ED25519 (`verify_strict`) et la paire de signature (clé complète de 32 octets) avant et après diffusion.
+- **Une seule copie** (un seul nœud de consensus) : chaque copie demanderait une confirmation sur l'appareil. Si ce nœud refuse temporairement, reconstruire l'envoi. Corps limité à 251 octets (un APDU : mémo court).
+- **Risques résiduels.** Écrit d'après le code de l'app (LedgerHQ/app-hedera 1.9) ; **jamais exécuté contre un vrai appareil ni Speculos**. Le nœud miroir peut cacher le compte (rien n'est envoyé) ou mentir sur son solde, comme pour le coffre.
 
 ### TON sur Ledger
 

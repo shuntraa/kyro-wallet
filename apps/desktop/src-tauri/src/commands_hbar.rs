@@ -34,6 +34,57 @@ fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     })
 }
 
+/// The key of the account that sends: the vault's ECDSA key (and its EVM address), or a
+/// hardware account's ED25519 key (Ledger, `commands_hw_hbar.rs`).
+#[derive(Clone, Copy)]
+pub(crate) enum OurKey<'a> {
+    Ecdsa { evm: &'a str, pk: &'a [u8; 33] },
+    Ed25519(&'a [u8; 32]),
+}
+
+impl OurKey<'_> {
+    async fn account(self, c: &HbarCtx<'_>) -> AppResult<HbarAccountInfo> {
+        match self {
+            OurKey::Ecdsa { evm, pk } => hbar_backend::our_account(c, evm, pk).await,
+            OurKey::Ed25519(pk) => hbar_backend::our_account_ed25519(c, pk).await,
+        }
+    }
+
+    fn decode(self, bodies: &[String], num: u64, nodes: &[u64]) -> AppResult<HbarTxSummary> {
+        Ok(match self {
+            OurKey::Ecdsa { pk, .. } => wallet_core::hbar_decode_tx(bodies, num, pk, nodes)?,
+            OurKey::Ed25519(_) => wallet_core::hbar_decode_tx_ed25519(bodies, num, nodes)?,
+        })
+    }
+
+    /// Strict check of a signed copy: body, and signed by this key.
+    fn verify(self, signed: &str) -> AppResult<HbarTransfer> {
+        let (t, ours) = match self {
+            OurKey::Ecdsa { pk, .. } => {
+                let v = wallet_core::hbar_verify_signed(signed)?;
+                (v.transfer, v.public_key == *pk)
+            }
+            OurKey::Ed25519(pk) => {
+                let (t, k) = wallet_core::hbar_verify_signed_ed25519(signed)?;
+                (t, k == *pk)
+            }
+        };
+        if !ours {
+            return Err(AppError::InvalidInput(
+                "ce transfert n'est pas signé par ton compte".into(),
+            ));
+        }
+        Ok(t)
+    }
+
+    fn no_account(self) -> &'static str {
+        match self {
+            OurKey::Ecdsa { .. } => "ton compte Hedera n'existe pas encore : il est créé par le premier HBAR reçu sur ton adresse EVM",
+            OurKey::Ed25519(_) => "aucun compte Hedera n'a cette clé ED25519 : crée d'abord le compte (Ledger Live, HashPack…) avec ce Ledger",
+        }
+    }
+}
+
 fn hbar(lang: Lang, tinybars: &str) -> String {
     format!("{} HBAR", format_units_in(lang, tinybars, 8))
 }
@@ -223,15 +274,28 @@ pub async fn hbar_account(
     account: Option<u32>,
 ) -> AppResult<HbarOwnAccount> {
     let (evm, pk) = ours(&state, account_arg(account)?)?;
-    let c = ctx(&state);
-    let info = hbar_backend::our_account(&c, &evm, &pk).await?;
+    own_account(
+        &ctx(&state),
+        OurKey::Ecdsa { evm: &evm, pk: &pk },
+        evm.clone(),
+    )
+    .await
+}
+
+/// Our account on the mirror node, with `address` (EVM address, or the hardware account's key).
+pub(crate) async fn own_account(
+    c: &HbarCtx<'_>,
+    key: OurKey<'_>,
+    address: String,
+) -> AppResult<HbarOwnAccount> {
+    let info = key.account(c).await?;
     Ok(HbarOwnAccount {
         account_id_checksum: info
             .account_id
             .as_deref()
             .and_then(num_of)
-            .map(|n| format!("0.0.{n}-{}", wallet_core::hbar_checksum(state.network, n))),
-        address: evm,
+            .map(|n| format!("0.0.{n}-{}", wallet_core::hbar_checksum(c.network, n))),
+        address,
         info,
     })
 }
@@ -312,18 +376,14 @@ fn check_recipient(r: &HbarRecipient, info: &HbarAccountInfo) -> AppResult<bool>
 
 async fn live_context(
     c: &HbarCtx<'_>,
-    evm: &str,
-    pk: &[u8; 33],
+    key: OurKey<'_>,
     to: &HbarRecipient,
 ) -> AppResult<(u64, HbarContext)> {
-    let account = hbar_backend::our_account(c, evm, pk).await?;
+    let account = key.account(c).await?;
     let num = match (&account.account_id, account.exists && !account.deleted) {
-        (Some(id), true) => num_of(id).ok_or_else(|| AppError::ServerUnreachable("identifiant de compte inattendu".into()))?,
-        _ => {
-            return Err(AppError::InvalidInput(
-                "ton compte Hedera n'existe pas encore : il est créé par le premier HBAR reçu sur ton adresse EVM".into(),
-            ))
-        }
+        (Some(id), true) => num_of(id)
+            .ok_or_else(|| AppError::ServerUnreachable("identifiant de compte inattendu".into()))?,
+        _ => return Err(AppError::InvalidInput(key.no_account().into())),
     };
     let recipient = hbar_backend::account(c, &mirror_key(to)).await?;
     let creates_account = check_recipient(to, &recipient)?;
@@ -355,13 +415,14 @@ fn check_balance(amount: u64, max_fee: u64, balance: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// Builds one copy per node of `nodes` (Kyro's list or a part of it).
 pub(crate) async fn build(
     c: &HbarCtx<'_>,
-    evm: &str,
-    pk: &[u8; 33],
+    key: OurKey<'_>,
     to: &str,
     amount: &str,
     memo: Option<&str>,
+    nodes: &[u64],
 ) -> AppResult<HbarBuilt> {
     let recipient = wallet_core::hbar_parse_recipient(to, c.network)?;
     let amount: u64 = amount
@@ -372,7 +433,7 @@ pub(crate) async fn build(
         .ok_or_else(|| AppError::InvalidInput("montant en tinybars invalide".into()))?;
     let memo = memo.unwrap_or("").to_owned();
     wallet_core::hbar_check_memo(&memo)?;
-    let (num, context) = live_context(c, evm, pk, &recipient).await?;
+    let (num, context) = live_context(c, key, &recipient).await?;
     if recipient == HbarRecipient::Id(num) {
         return Err(AppError::InvalidInput("transfert à soi-même".into()));
     }
@@ -382,7 +443,6 @@ pub(crate) async fn build(
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|_| AppError::Internal("horloge".into()))?;
-    let nodes = hbar_backend::node_ids(c.network);
     let bodies: Vec<String> = nodes
         .iter()
         .map(|node| {
@@ -402,7 +462,7 @@ pub(crate) async fn build(
             )
         })
         .collect();
-    let summary = wallet_core::hbar_decode_tx(&bodies, num, pk, &nodes)?;
+    let summary = key.decode(&bodies, num, nodes)?;
     Ok(HbarBuilt {
         bodies,
         summary,
@@ -419,7 +479,16 @@ pub async fn hbar_build_tx(
     account: Option<u32>,
 ) -> AppResult<HbarBuilt> {
     let (evm, pk) = ours(&state, account_arg(account)?)?;
-    build(&ctx(&state), &evm, &pk, &to, &amount, memo.as_deref()).await
+    let nodes = hbar_backend::node_ids(state.network);
+    build(
+        &ctx(&state),
+        OurKey::Ecdsa { evm: &evm, pk: &pk },
+        &to,
+        &amount,
+        memo.as_deref(),
+        &nodes,
+    )
+    .await
 }
 
 #[derive(Serialize)]
@@ -437,9 +506,9 @@ const MIN_REMAINING: i64 = 45;
 /// Decoding + live re-checks, i.e. everything `hbar_sign_tx` does before the dialog.
 pub(crate) async fn prepare_sign(
     c: &HbarCtx<'_>,
-    evm: &str,
-    pk: &[u8; 33],
+    key: OurKey<'_>,
     bodies: &[String],
+    nodes: &[u64],
 ) -> AppResult<(u64, HbarTxSummary, HbarContext)> {
     let first = bodies
         .first()
@@ -448,8 +517,8 @@ pub(crate) async fn prepare_sign(
         &hex::decode(first.trim())
             .map_err(|_| AppError::InvalidInput("corps : hexadécimal attendu".into()))?,
     )?;
-    let (num, context) = live_context(c, evm, pk, &t.to).await?;
-    let summary = wallet_core::hbar_decode_tx(bodies, num, pk, &hbar_backend::node_ids(c.network))?;
+    let (num, context) = live_context(c, key, &t.to).await?;
+    let summary = key.decode(bodies, num, nodes)?;
     if now_secs() > summary.valid_start + summary.valid_duration - MIN_REMAINING {
         return Err(AppError::InvalidInput(
             "transfert Hedera expiré ou presque (fenêtre de 180 s) : reconstruis-le".into(),
@@ -476,7 +545,9 @@ pub async fn hbar_sign_tx(
     let (evm, pk) = ours(&state, a)?;
     let signer = SignerInfo::new(&state, Chain::Hbar, a, wallet_core::hbar_path(a));
     let c = ctx(&state);
-    let (num, summary, context) = prepare_sign(&c, &evm, &pk, &bodies).await?;
+    let nodes = hbar_backend::node_ids(state.network);
+    let (num, summary, context) =
+        prepare_sign(&c, OurKey::Ecdsa { evm: &evm, pk: &pk }, &bodies, &nodes).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     let lang = crate::i18n::current();
     confirm_native(
@@ -503,7 +574,6 @@ pub async fn hbar_sign_tx(
         )
         .await?;
     }
-    let nodes = hbar_backend::node_ids(state.network);
     let b = bodies.clone();
     let (signed, again) =
         blocking(move || Ok(wallet_core::hbar_sign(&seed, a, num, &b, &nodes)?)).await?;
@@ -525,7 +595,7 @@ pub async fn hbar_sign_tx(
 /// Returns the transaction ID (`0.0.x@secs.nanos`).
 pub(crate) async fn broadcast_checked(
     c: &HbarCtx<'_>,
-    pk: &[u8; 33],
+    key: OurKey<'_>,
     signed: &[String],
 ) -> AppResult<String> {
     if signed.is_empty() || signed.len() > wallet_core::HBAR_MAX_NODES {
@@ -534,13 +604,7 @@ pub(crate) async fn broadcast_checked(
     let known = hbar_backend::node_ids(c.network);
     let mut copies: Vec<(u64, Vec<u8>, HbarTransfer)> = Vec::new();
     for s in signed {
-        let v = wallet_core::hbar_verify_signed(s)?;
-        if v.public_key != *pk {
-            return Err(AppError::InvalidInput(
-                "ce transfert n'est pas signé par ton compte".into(),
-            ));
-        }
-        let t = v.transfer;
+        let t = key.verify(s)?;
         if !known.contains(&t.node) || copies.iter().any(|(n, _, _)| *n == t.node) {
             return Err(AppError::InvalidInput("nœud inconnu ou en double".into()));
         }
@@ -586,8 +650,8 @@ pub async fn hbar_broadcast(
     signed: Vec<String>,
     account: Option<u32>,
 ) -> AppResult<String> {
-    let (_, pk) = ours(&state, account_arg(account)?)?;
-    broadcast_checked(&ctx(&state), &pk, &signed).await
+    let (evm, pk) = ours(&state, account_arg(account)?)?;
+    broadcast_checked(&ctx(&state), OurKey::Ecdsa { evm: &evm, pk: &pk }, &signed).await
 }
 
 #[derive(Serialize)]

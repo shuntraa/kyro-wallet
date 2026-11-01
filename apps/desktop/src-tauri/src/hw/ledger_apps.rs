@@ -1,7 +1,7 @@
 //! Ledger apps of the single-key chains (Sui, Aptos, Algorand, NEAR, Cosmos Hub, TON): what
 //! they have in common, and the dispatch to their own modules (`ledger_sui`, `ledger_aptos`,
-//! `ledger_algo`, `ledger_near`, `ledger_cosmos`, `ledger_ton`, one per official app
-//! protocol).
+//! `ledger_algo`, `ledger_near`, `ledger_cosmos`, `ledger_ton`, `ledger_hbar`, one per official
+//! app protocol).
 //!
 //! Every operation first checks with GET APP AND VERSION that the right app is open and recent
 //! enough, then reads a public key (optionally shown on the device screen) or has the device
@@ -29,6 +29,7 @@ pub fn key_chain(chain: Chain) -> Option<HwKeyChain> {
         Chain::Near => HwKeyChain::Near,
         Chain::Cosmos => HwKeyChain::Cosmos,
         Chain::Ton => HwKeyChain::Ton,
+        Chain::Hbar => HwKeyChain::Hbar,
         _ => return None,
     })
 }
@@ -41,6 +42,7 @@ pub fn hw_chain(k: HwKeyChain) -> Chain {
         HwKeyChain::Near => Chain::Near,
         HwKeyChain::Cosmos => Chain::Cosmos,
         HwKeyChain::Ton => Chain::Ton,
+        HwKeyChain::Hbar => Chain::Hbar,
     }
 }
 
@@ -50,7 +52,8 @@ pub fn hw_chain(k: HwKeyChain) -> Chain {
 /// (CLA 5B, SIGN_TX of the full signing message), Algorand 2.0.0 (Zondax app: GET_ADDRESS 04,
 /// SIGN_MSGPACK 08), NEAR 2.0.0 (Rust app, five-level paths), Cosmos 2.34.0 (amino JSON with
 /// `timeout_height`), TON 2.1.0 (transfer request tag 1: wallet id given, needed for Kyro's
-/// testnet wallet id).
+/// testnet wallet id), Hedera 1.9.0 (the app version whose sources Kyro was checked against:
+/// CryptoTransfer with an EVM-alias recipient, memo, one APDU per body).
 pub fn app_for(chain: Chain) -> Option<(&'static str, &'static str)> {
     Some(match key_chain(chain)? {
         HwKeyChain::Sui => ("Sui", "1.0.0"),
@@ -59,6 +62,7 @@ pub fn app_for(chain: Chain) -> Option<(&'static str, &'static str)> {
         HwKeyChain::Near => ("NEAR", "2.0.0"),
         HwKeyChain::Cosmos => ("Cosmos", "2.34.0"),
         HwKeyChain::Ton => ("TON", "2.1.0"),
+        HwKeyChain::Hbar => ("Hedera", "1.9.0"),
     })
 }
 
@@ -69,11 +73,6 @@ pub fn unavailable(chain: Chain) -> Option<&'static str> {
             "Polkadot : l'app Ledger « Polkadot » exige la preuve des métadonnées du runtime \
              (RFC-0078, CheckMetadataHash) et des clés ed25519 m/44'/354'/… ; Kyro signe en \
              sr25519 sans cette preuve, pas encore pris en charge sur hardware wallet"
-        }
-        Chain::Hbar => {
-            "Hedera : l'app Ledger signe avec des clés ed25519 (m/44'/3030'/0'/0'/i') ; les \
-             comptes Hedera de Kyro sont des comptes ECDSA secp256k1, pas pris en charge sur \
-             hardware wallet"
         }
         Chain::Kas => {
             "Kaspa : le protocole de signature de l'app Ledger n'a pas pu être vérifié contre \
@@ -197,6 +196,7 @@ pub fn pubkey(
             let shown = display.then(|| (testnet, wallet_core::ton_wallet_id(testnet)));
             super::ledger_ton::pubkey(&app, &path, shown)?
         }
+        HwKeyChain::Hbar => super::ledger_hbar::pubkey(&app, &path, display)?,
     };
     // Length and point validity.
     chain
@@ -227,6 +227,7 @@ pub fn sign(
         HwKeyChain::Near => super::ledger_near::sign(&app, &path, message),
         HwKeyChain::Cosmos => super::ledger_cosmos::sign(&app, &path, message),
         HwKeyChain::Ton => super::ledger_ton::sign(&app, &path, message),
+        HwKeyChain::Hbar => super::ledger_hbar::sign(&app, &path, message),
     }
 }
 
@@ -328,7 +329,7 @@ mod tests {
 
     #[test]
     fn statuses() {
-        for c in [Chain::Dot, Chain::Hbar, Chain::Kas] {
+        for c in [Chain::Dot, Chain::Kas] {
             assert!(!c.implemented());
             assert_eq!(
                 unavailable_status(c).unwrap().state,

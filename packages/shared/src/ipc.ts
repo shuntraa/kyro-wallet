@@ -2258,7 +2258,7 @@ export interface SolTxSummary {
 
 export type HwDeviceKind = 'ledger' | 'trezor';
 /** Phase 4 chains (`ltc`…`xrp`) answer HW_UNSUPPORTED. */
-export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp' | 'xmr' | HwKeyChain | 'dot' | 'hbar' | 'kas';
+export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp' | 'xmr' | HwKeyChain | 'dot' | 'kas';
 /**
  * Single-key chains (Ledger only): one public key per account, read with `hw_key_add`, shown
  * with `hw_key_verify`, signed with `hw_sign_<chain>_tx`. NEAR uses `m/44'/397'/0'/0'/(account+1)'`
@@ -2266,7 +2266,7 @@ export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano
  * Ledger TON app `m/44'/607'/0'/0'/account'/0'` (another key and wallet than the vault's), the
  * others the vault's path.
  */
-export type HwKeyChain = 'sui' | 'apt' | 'algo' | 'near' | 'cosmos' | 'ton';
+export type HwKeyChain = 'sui' | 'apt' | 'algo' | 'near' | 'cosmos' | 'ton' | 'hbar';
 
 /** Public key of a single-key chain stored in a watch-only account. */
 export interface HwWatchKey {
@@ -2775,6 +2775,11 @@ export interface Commands {
   hw_ton_build_tx: { args: { accountId: string; to: string; amount: string; comment?: string; sendAll?: boolean }; ret: TonBuilt };
   hw_sign_ton_tx: { args: { id: string; accountId: string; boc: string }; ret: { boc: string; hash: string; normalizedHash: string; summary: TonTxSummary; context: TonContext } };
   hw_ton_broadcast: { args: { accountId: string; boc: string }; ret: string };
+  /** Hedera on a Ledger: ED25519 account found by its key (`address` = DER key); status: `hbar_tx_status`. */
+  hw_hbar_account: { args: { accountId: string }; ret: HbarOwnAccount };
+  hw_hbar_build_tx: { args: { accountId: string; to: string; amount: string; memo?: string }; ret: HbarBuilt };
+  hw_sign_hbar_tx: { args: { id: string; accountId: string; bodies: string[] }; ret: { signed: string[]; summary: HbarTxSummary; context: HbarContext } };
+  hw_hbar_broadcast: { args: { accountId: string; signed: string[] }; ret: string };
   hw_cosmos_build_tx: { args: { accountId: string; to: string; amount: string; memo?: string }; ret: { signDoc: string; summary: CosmosTxSummary; context: CosmosContext } };
   hw_sign_cosmos_tx: { args: { id: string; accountId: string; signDoc: string }; ret: { tx: string; hash: string; summary: CosmosTxSummary; context: CosmosContext } };
   hw_cosmos_broadcast: { args: { accountId: string; tx: string }; ret: string };

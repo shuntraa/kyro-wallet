@@ -19,6 +19,7 @@ mod commands_hw;
 mod commands_hw_algo;
 mod commands_hw_aptos;
 mod commands_hw_cosmos;
+mod commands_hw_hbar;
 mod commands_hw_keys;
 mod commands_hw_near;
 mod commands_hw_sui;
@@ -384,6 +385,10 @@ pub fn run() {
             commands_hw_ton::hw_ton_build_tx,
             commands_hw_ton::hw_sign_ton_tx,
             commands_hw_ton::hw_ton_broadcast,
+            commands_hw_hbar::hw_hbar_account,
+            commands_hw_hbar::hw_hbar_build_tx,
+            commands_hw_hbar::hw_sign_hbar_tx,
+            commands_hw_hbar::hw_hbar_broadcast,
             commands_hw_cosmos::hw_cosmos_build_tx,
             commands_hw_cosmos::hw_sign_cosmos_tx,
             commands_hw_cosmos::hw_cosmos_broadcast,

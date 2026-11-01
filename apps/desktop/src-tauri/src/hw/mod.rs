@@ -21,6 +21,7 @@ pub mod ledger_apdu;
 pub mod ledger_apps;
 pub mod ledger_aptos;
 pub mod ledger_cosmos;
+pub mod ledger_hbar;
 pub mod ledger_near;
 pub mod ledger_sui;
 pub mod ledger_ton;

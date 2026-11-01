@@ -111,13 +111,14 @@ export function hwToAccounts(acc: WatchOnlyAccount): WalletAccounts {
     else if (k.chain === 'algo') out.algo = view;
     else if (k.chain === 'near') out.near = view;
     else if (k.chain === 'cosmos') out.cosmos = view;
-    else out.ton = view;
+    else if (k.chain === 'ton') out.ton = view;
+    else out.hbar = view;
   }
   return out;
 }
 
 /** Single-key chains a Ledger can add to a hardware-wallet account (`hw_key_add`). */
-export const HW_KEY_CHAINS: readonly HwKeyChain[] = ['sui', 'apt', 'algo', 'near', 'cosmos', 'ton'];
+export const HW_KEY_CHAINS: readonly HwKeyChain[] = ['sui', 'apt', 'algo', 'near', 'cosmos', 'ton', 'hbar'];
 
 /** Master fingerprint of the account (Bitcoin keys), for display. */
 export function hwFingerprint(acc: WatchOnlyAccount): string | null {

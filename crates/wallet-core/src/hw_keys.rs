@@ -1,5 +1,6 @@
 //! Single-key chains of a watch-only hardware-wallet account (Ledger apps Sui, Aptos,
-//! Algorand, NEAR, Cosmos, TON): one public key per chain and account, read from the device.
+//! Algorand, NEAR, Cosmos, TON, Hedera): one public key per chain and account, read from the
+//! device.
 //!
 //! Each [`WatchKey`] stores the public key, the address Kyro derives from it and the path the
 //! device used. [`WatchKey::validate`] recomputes the address from the key and the path from
@@ -15,7 +16,11 @@
 //! `m/44'/607'/0'/0'/account'/0'` (the vault uses `m/44'/607'/account'`), so a hardware TON
 //! account is another key and another wallet address than the vault's. Its address also
 //! depends on the network (v4R2 wallet id, see `ton.rs`): it is recomputed for the account's
-//! network.
+//! network. **Hedera** too: the Ledger Hedera app signs with ED25519 keys at
+//! `m/44'/3030'/0'/0'/account'`, the vault uses ECDSA secp256k1 (`m/44'/3030'/0'/0/account`);
+//! a hardware Hedera account is an ED25519 account, its account ID (`0.0.x`) is not derived
+//! from the key but looked up on the mirror node: the stored « address » is the key's DER
+//! form (`302a300506032b6570032100…`, what Hedera wallets show).
 
 use serde::{Deserialize, Serialize};
 
@@ -39,17 +44,20 @@ pub enum HwKeyChain {
     Cosmos,
     /// TON (ed25519, Ledger app « TON », wallet v4R2).
     Ton,
+    /// Hedera (ed25519 account, Ledger app « Hedera »).
+    Hbar,
 }
 
 impl HwKeyChain {
     /// Every chain, in display order.
-    pub const ALL: [HwKeyChain; 6] = [
+    pub const ALL: [HwKeyChain; 7] = [
         HwKeyChain::Sui,
         HwKeyChain::Aptos,
         HwKeyChain::Algo,
         HwKeyChain::Near,
         HwKeyChain::Cosmos,
         HwKeyChain::Ton,
+        HwKeyChain::Hbar,
     ];
 
     /// BIP32 path (raw indices) used on the device for `account`.
@@ -63,6 +71,7 @@ impl HwKeyChain {
             HwKeyChain::Near => vec![44 | H, 397 | H, H, H, (account + 1) | H],
             HwKeyChain::Cosmos => vec![44 | H, 118 | H, a, 0, 0],
             HwKeyChain::Ton => vec![44 | H, 607 | H, H, H, a, H],
+            HwKeyChain::Hbar => vec![44 | H, 3030 | H, H, H, a],
         }
     }
 
@@ -119,6 +128,10 @@ impl HwKeyChain {
                 let testnet = network == Network::Testnet;
                 crate::ton::ton_wallet_address(&k, crate::ton::ton_wallet_id(testnet))?
                     .to_friendly(false, testnet)
+            }
+            HwKeyChain::Hbar => {
+                let k: [u8; 32] = pubkey.try_into().map_err(|_| Error::input("public key"))?;
+                crate::hedera::hbar_ed25519_key_string(&k)
             }
         })
     }
@@ -203,6 +216,8 @@ mod tests {
         assert_eq!(HwKeyChain::Near.path_string(0), "m/44'/397'/0'/0'/1'");
         // `@ton-community/ton-ledger` pathForAccount({ testOnly: false, chain: 0, account: 3 }).
         assert_eq!(HwKeyChain::Ton.path_string(3), "m/44'/607'/0'/0'/3'/0'");
+        // Ledger Hedera app: m/44'/3030'/0'/0'/index'.
+        assert_eq!(HwKeyChain::Hbar.path_string(2), "m/44'/3030'/0'/0'/2'");
     }
 
     #[test]

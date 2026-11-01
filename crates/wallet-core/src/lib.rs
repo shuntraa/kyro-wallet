@@ -119,11 +119,12 @@ pub use evm::{
     EvmTxRequest, EvmTxSummary, EvmWarning, EVM_KNOWN_CHAINS,
 };
 pub use hedera::{
-    hbar_check_memo, hbar_checksum, hbar_decode_precheck, hbar_decode_tx, hbar_evm_address,
-    hbar_evm_address_of_pubkey, hbar_parse_account_id, hbar_parse_recipient, hbar_path,
-    hbar_public_key, hbar_response_name, hbar_sign, hbar_verify_signed, HbarRecipient,
+    hbar_check_memo, hbar_checksum, hbar_decode_precheck, hbar_decode_tx, hbar_decode_tx_ed25519,
+    hbar_ed25519_key_string, hbar_evm_address, hbar_evm_address_of_pubkey, hbar_hw_message,
+    hbar_hw_signed, hbar_parse_account_id, hbar_parse_recipient, hbar_path, hbar_public_key,
+    hbar_response_name, hbar_sign, hbar_verify_signed, hbar_verify_signed_ed25519, HbarRecipient,
     HbarSignedTransfer, HbarTransfer, HbarTxSummary, HbarWarning, HBAR_HIGH_FEE_TINYBARS,
-    HBAR_MAX_MEMO_BYTES, HBAR_MAX_NODES, HBAR_MAX_VALID_DURATION, HBAR_TINYBARS,
+    HBAR_HW_MAX_BODY, HBAR_MAX_MEMO_BYTES, HBAR_MAX_NODES, HBAR_MAX_VALID_DURATION, HBAR_TINYBARS,
 };
 pub use hw_keys::{HwKeyChain, WatchKey};
 pub use kaspa::{

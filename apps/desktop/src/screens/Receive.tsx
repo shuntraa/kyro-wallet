@@ -242,7 +242,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
 
   const verifyOnDevice = async () => {
     // Ledger single-key chains: the app shows the address (NEAR: the ed25519 key), Rust compares.
-    if (activeHw && (family === 'sui' || family === 'apt' || family === 'algo' || family === 'near' || family === 'cosmos' || family === 'ton')) {
+    if (activeHw && (family === 'sui' || family === 'apt' || family === 'algo' || family === 'near' || family === 'cosmos' || family === 'ton' || family === 'hbar')) {
       const keyChain = family;
       const shown = address;
       let deviceId = '';
@@ -312,7 +312,9 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                   : family === 'hbar'
                     ? hbarShowId
                       ? t('receive.descHbarId')
-                      : t('receive.descHbarEvm')
+                      : activeHw
+                        ? t('receive.descHbarKey')
+                        : t('receive.descHbarEvm')
                   : family === 'kas'
                     ? t('receive.descKas', { prefix: network === 'testnet' ? 'kaspatest:' : 'kaspa:' })
                   : family === 'dot'
@@ -405,7 +407,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
 
         <div key={family} className="rise relative flex w-[460px] flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', zec: t('receive.chainZec'), bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', apt: 'Aptos', cosmos: 'Cosmos Hub', ton: 'TON', xmr: 'Monero', algo: 'Algorand', dot: 'Polkadot', kas: 'Kaspa', hbar: hbarShowId ? t('receive.chainHbarId') : t('receive.chainHbarEvm'), sui: 'Sui', xlm: 'Stellar', near: 'NEAR' }[family] })}</span>
+            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', zec: t('receive.chainZec'), bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', apt: 'Aptos', cosmos: 'Cosmos Hub', ton: 'TON', xmr: 'Monero', algo: 'Algorand', dot: 'Polkadot', kas: 'Kaspa', hbar: hbarShowId ? t('receive.chainHbarId') : activeHw ? t('receive.chainHbarKey') : t('receive.chainHbarEvm'), sui: 'Sui', xlm: 'Stellar', near: 'NEAR' }[family] })}</span>
             <span className="text-[15px] leading-[1.45] text-text2">{desc}</span>
           </div>
           {isUtxoReceive(family) && (
@@ -590,7 +592,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           )}
           {family === 'hbar' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              {hbarAccount.data && !hbarAccount.data.exists ? (
+              {activeHw && hbarAccount.data && !hbarAccount.data.exists ? (
+                <>{rt('receive.hbarHwNotCreated', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</>
+              ) : activeHw ? (
+                <>{rt('receive.hbarHwNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> }, { id: hbarAccount.data?.accountIdChecksum ?? hbarId ?? '…' })}</>
+              ) : hbarAccount.data && !hbarAccount.data.exists ? (
                 <>
                   {rt('receive.hbarNotCreated', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
                 </>

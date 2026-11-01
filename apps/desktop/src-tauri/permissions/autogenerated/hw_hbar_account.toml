@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-hbar-account"
+description = "Enables the hw_hbar_account command without any pre-configured scope."
+commands.allow = ["hw_hbar_account"]
+
+[[permission]]
+identifier = "deny-hw-hbar-account"
+description = "Denies the hw_hbar_account command without any pre-configured scope."
+commands.deny = ["hw_hbar_account"]
