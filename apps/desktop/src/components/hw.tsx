@@ -299,7 +299,7 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
 
 // ---------------------------------------------------------------- add a device
 
-const CHAIN_LABEL: Record<HwChain, string> = { btc: 'Bitcoin', evm: 'Ethereum et EVM', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP' };
+const CHAIN_LABEL: Record<HwChain, string> = { btc: 'Bitcoin', evm: 'Ethereum et EVM', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', xmr: 'Monero' };
 const IMPLEMENTED: HwImplementedChain[] = ['btc', 'evm', 'sol'];
 
 type Step = 'detect' | 'device' | 'reading' | 'done';

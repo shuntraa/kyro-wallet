@@ -204,6 +204,7 @@ export function ServersSection() {
       <TronServerCard />
       <XrpServerCard />
       <CardanoServerCard />
+      <MoneroServerCard />
       <EvmCard />
       <SolanaCard />
     </>
@@ -1569,6 +1570,126 @@ function XrpServerCard() {
         onCancel={() => {
           setConfirmDefault(false);
           setKind('jsonRpc');
+        }}
+      />
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------- Monero
+
+/**
+ * Monero: a public monerod by default (Cake Wallet's on mainnet, Stack Wallet's on stagenet) or the
+ * user's own node. Kyro checks `nettype` and block 0 before saving. Rust downloads the blocks and
+ * scans them on this machine: the node never receives a key, not even the view key.
+ */
+function MoneroServerCard() {
+  const { settings, network } = useApp();
+  const tor = settings.tor.enabled;
+  const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
+  const defaultHost = network === 'mainnet' ? 'xmr-node.cakewallet.com' : 'monero-stagenet.stackwallet.com';
+  const saved = settings.servers.monero?.[nk];
+  const savedUrl = saved?.kind === 'node' ? saved.url : '';
+  const [kind, setKind] = useState<'default' | 'node'>(savedUrl ? 'node' : 'default');
+  const [url, setUrl] = useState(savedUrl);
+  useEffect(() => {
+    setKind(savedUrl ? 'node' : 'default');
+    setUrl(savedUrl);
+  }, [savedUrl]);
+  const saveServers = useSaveServers();
+  const [busy, setBusy] = useState<'test' | 'save' | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [result, setResult] = useState<ServerTestResult | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDefault, setConfirmDefault] = useState(false);
+  const clean = url.trim();
+  const hint = kind === 'node' && clean ? checkServerUrl(clean, tor) : null;
+  const dirty = kind === 'node' ? clean !== savedUrl : !!savedUrl;
+  const reset = () => {
+    setFailure(null);
+    setResult(null);
+    setNotice(null);
+  };
+  const test = async () => {
+    reset();
+    setBusy('test');
+    try {
+      setResult(await call('server_test', { target: { family: 'monero', network: nk, server: kind === 'node' ? { kind: 'node', url: clean } : { kind: 'default' } } }));
+    } catch (e) {
+      setFailure(toFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const save = async (toDefault: boolean) => {
+    reset();
+    setBusy('save');
+    try {
+      await saveServers((s) => {
+        s.monero = { ...(s.monero ?? {}) };
+        if (toDefault) delete s.monero[nk];
+        else s.monero[nk] = { kind: 'node', url: clean };
+      });
+      setConfirmDefault(false);
+      setNotice(toDefault ? `Nœud par défaut rétabli : ${defaultHost} reçoit de nouveau tes demandes de blocs et tes transactions.` : 'Nœud Monero enregistré. Kyro n’utilise plus que lui pour Monero.');
+    } catch (e) {
+      setFailure(toFailure(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card title={network === 'testnet' ? 'Monero stagenet' : 'Monero'} badge={savedUrl ? <Badge tone="ice">Nœud perso · monerod</Badge> : <Badge>Par défaut</Badge>}>
+      <Segmented
+        label="Nœud Monero"
+        value={kind}
+        onChange={(k) => {
+          reset();
+          setKind(k);
+        }}
+        options={[
+          { value: 'default', label: 'Par défaut' },
+          { value: 'node', label: 'Mon nœud monerod' },
+        ]}
+        className="self-start"
+      />
+      <Sees>
+        {kind === 'default'
+          ? `${defaultHost} ne reçoit aucune clé (Kyro télécharge les blocs et les scanne sur ta machine) ; il voit les transactions que tu publies, les leurres demandés et ${tor ? 'l’IP d’un relais de sortie Tor' : 'ton adresse IP'}.`
+          : `Ton nœud ne reçoit aucune clé ; il voit les transactions que tu publies, les leurres demandés et ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'ton adresse IP'}.`}
+      </Sees>
+      {kind === 'node' && (
+        <Field label="URL RPC de ton nœud" hint={`Kyro vérifie le réseau (${network === 'mainnet' ? 'mainnet' : 'stagenet'}, bloc 0) avant d’enregistrer. Le RPC restreint suffit (port 18089 en général). https://, ou http:// pour une adresse .onion (Tor). Pas d’identifiants RPC.`}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={network === 'mainnet' ? 'https://mon-noeud.example:18089' : 'https://mon-noeud.example:38089'} aria-label="URL du nœud Monero" className="font-mono text-[13px]" />
+        </Field>
+      )}
+      {hint && (
+        <span className="flex items-center gap-1.5 text-[12px] text-warn">
+          <IconWarn size={13} /> {hint}
+        </span>
+      )}
+      {failure && <FailureNotice failure={failure} />}
+      {result && !failure && <TestOk result={result} ledgerLabel="hauteur" />}
+      {notice && !failure && <Notice tone={notice.startsWith('Nœud par défaut') ? 'warn' : 'success'}>{notice}</Notice>}
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => void test()} disabled={busy !== null || (kind === 'node' && !clean)}>
+          {busy === 'test' && <Spinner />} Tester la connexion
+        </Button>
+        <Button variant="primary" onClick={() => (kind === 'node' ? void save(false) : setConfirmDefault(true))} disabled={busy !== null || !dirty || (kind === 'node' && !clean)}>
+          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? 'Revenir au nœud par défaut' : 'Enregistrer'}
+        </Button>
+      </div>
+      <BackToDefaultDialog
+        open={confirmDefault}
+        host={defaultHost}
+        sees="tes demandes de blocs, les leurres et les transactions que tu publies"
+        busy={busy === 'save'}
+        failure={confirmDefault ? failure : null}
+        onConfirm={() => void save(true)}
+        onCancel={() => {
+          setConfirmDefault(false);
+          setKind('node');
         }}
       />
     </Card>

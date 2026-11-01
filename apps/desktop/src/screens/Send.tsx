@@ -41,6 +41,7 @@ import {
   type SolanaAdapter,
   type XrpAdapter,
   type CardanoAdapter,
+  type XmrAdapter,
 } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -61,6 +62,7 @@ import { TronEstimateView } from '../components/TronEstimateView';
 import { XRP_ACTIVATION, XrpSpendable, XrpSummaryView, XrpTagField, XrpTxStatusLine } from '../components/XrpSend';
 import { CardanoSendFields, CardanoSummaryView, CardanoTxStatusLine, tokenKey } from '../components/Cardano';
 import { DustOnlyNote, PoisoningWarning } from '../components/Poisoning';
+import { XmrDestinationLine, XmrLockedNote, XmrSendNotes, XmrSummaryView, XmrSyncLine, useXmrStatus } from '../components/Monero';
 import { SecondConfirmNotice, btcWarningText, evmWarningText } from '../components/SecondConfirm';
 import { useHistory } from '../state/history';
 import { AccountPicker, useCreateAccounts } from '../components/AccountPicker';
@@ -79,6 +81,7 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   if (asset.family === 'tron') return adapters.tron ?? undefined;
   if (asset.family === 'xrp') return adapters.xrp ?? undefined;
   if (asset.family === 'ada') return adapters.cardano ?? undefined;
+  if (asset.family === 'xmr') return adapters.xmr ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -126,7 +129,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
   // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
-  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.xmr?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
   const isOwn = ownAddresses.includes(asset?.family === 'evm' ? toTrim.toLowerCase() : toTrim);
   // « Mes comptes »: the user's OTHER accounts of this chain. A transfer between two of them is an
   // ordinary send (same Rust decoding, native dialog, poisoning check: own addresses are known).
@@ -175,6 +178,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       tron: [accounts.tron?.address],
       xrp: [accounts.xrp?.address],
       ada: [accounts.cardano?.address],
+      xmr: [accounts.xmr?.address],
     };
     // The other accounts of the vault are trusted too.
     for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
@@ -247,6 +251,19 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   /** Refused Cardano address types, in Rust's words (Byron, script, pointer, stake, other network). */
   const adaProblem = isAda && toTrim ? cardanoAddressProblem(toTrim, network) : null;
   const adaBlocked = isAda && (adaMemoTooLong || (adaTokenMode && (adaTokenQty === null || adaTokenQty <= 0n || adaTokenOver)));
+  /**
+   * Monero (§2.11): Rust decodes the destination (standard / subaddress / integrated), the scan
+   * must be complete, and the transfer is prepared on demand only (decoys and the output
+   * distribution are downloaded for it: never on every keystroke).
+   */
+  const isXmr = asset?.family === 'xmr';
+  const xmrAdapter = isXmr ? (adapter as XmrAdapter | undefined) : undefined;
+  const xmr = useXmrStatus(xmrAdapter);
+  const xmrDest = useAsync(xmrAdapter && addrValid ? () => xmrAdapter.backend.validate(toTrim) : null, [xmrAdapter, addrValid, toTrim]);
+  const xmrDestInfo = xmrDest.data?.address === toTrim ? xmrDest.data : undefined;
+  const xmrSynced = !!xmr.status && !xmr.status.running && xmr.status.restoreHeight !== null && xmr.status.progress >= 1;
+  const [xmrGo, setXmrGo] = useState(0);
+  const xmrBlocked = isXmr && (!xmrDestInfo || !xmrSynced || xmrGo === 0);
   const amountBase = useMemo(() => {
     if (!amountStr) return null;
     if (fiatMode) {
@@ -295,13 +312,18 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const feeParams: FeeParams | null = choice === 'custom' ? custom?.params ?? null : fees.data?.options[choice].params ?? null;
 
   // Build (debounced) → unsigned tx + Rust decoding for EVM.
-  const buildKey = useDebounced(JSON.stringify([asset?.id, toTrim, amountBase?.toString(), max, feeParams, addrValid, isXrp ? tagStr : null, xrpBlocked, isAda ? [tokenSel, tokenQty, memo.trim(), adaBlocked] : null], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), 450);
+  const buildKey = useDebounced(JSON.stringify([asset?.id, toTrim, isXmr && max ? 'max' : amountBase?.toString(), max, feeParams, addrValid, isXrp ? tagStr : null, xrpBlocked, isAda ? [tokenSel, tokenQty, memo.trim(), adaBlocked] : null, isXmr ? [xmrGo, xmrBlocked] : null], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), 450);
   const [built, setBuilt] = useState<Built | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
   // XRP: what can be sent is the spendable part (balance − reserve), not the balance.
   const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : null;
-  const overBalance = !max && amountBase !== null && amountBase > (xrpSpendable ?? balance);
+  // Monero: only unlocked outputs (10 confirmations) can be spent.
+  const xmrSpendable = isXmr && xmr.status ? BigInt(xmr.status.unlocked) : null;
+  const overBalance = !max && amountBase !== null && amountBase > (xrpSpendable ?? xmrSpendable ?? balance);
+  // Monero: a new preparation is needed whenever the request changes.
+  // (MAX writes the prepared amount back into the field: that is not a new request.)
+  useEffect(() => setXmrGo(0), [toTrim, max ? 'max' : amountBase?.toString(), max, asset?.id]);
 
   const doBuild = async (): Promise<Built> => {
     if (!asset || !adapter || !feeParams) throw new Error('Paramètres incomplets');
@@ -329,7 +351,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   useEffect(() => {
     setBuilt(null);
     setBuildError(null);
-    if (!addrValid || !feeParams || dogeBelowDust || xrpBlocked || adaBlocked) return;
+    if (!addrValid || !feeParams || dogeBelowDust || xrpBlocked || adaBlocked || xmrBlocked) return;
     // A Cardano token payment carries only its min-ADA: no ADA amount to type.
     if (!adaTokenMode && (overBalance || (!max && (amountBase === null || amountBase <= 0n)))) return;
     let alive = true;
@@ -382,8 +404,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     setSignError(null);
     setHwError(null);
     try {
-      // Fresh build (nonce, blockhash) with the same inputs, re-decoded by Rust.
-      const fresh = await doBuild();
+      // Fresh build (nonce, blockhash) with the same inputs, re-decoded by Rust. Monero: the
+      // transfer Rust prepared (kept in Rust, single use) is signed as is.
+      const fresh = isXmr ? built : await doBuild();
       let id: string;
       if (activeHw) {
         const device = await pickDevice(activeHw.device);
@@ -413,6 +436,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       const err = toIpcError(e);
       if (activeHw && (err.code.startsWith('HW_') || err.code === 'USER_REJECTED')) setHwError(e);
       else setSignError(err.code === 'USER_REJECTED' ? 'Signature annulée dans la fenêtre système. Rien n’a été envoyé.' : err.message);
+      // Monero: a prepared transfer is used once by Rust, even on failure: prepare it again.
+      if (isXmr) {
+        setBuilt(null);
+        setXmrGo(0);
+      }
     } finally {
       setSigning(false);
       setHwDevice(null);
@@ -529,7 +557,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? 'r… (adresse classique)' : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
+                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? 'r… (adresse classique)' : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'xmr' ? (network === 'testnet' ? '5… ou 7… (stagenet)' : '4… ou 8…') : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -616,6 +644,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             )}
             {isXrp && <XrpTagField value={tagStr} onChange={setTagStr} error={tagParsed.error} dest={xrpDestInfo} destLoading={addrValid && xrpDest.loading && !xrpDestInfo} />}
             {isXrp && xrpDest.error && addrValid && <span className="text-[12px] text-down">Compte destinataire illisible : {xrpDest.error.message}</span>}
+            {isXmr && addrValid && <XmrDestinationLine dest={xmrDestInfo} error={xmrDest.error ? xmrDest.error.message : null} loading={xmrDest.loading} />}
             {guard.tampered && settings.clipboardGuard && (
               <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
                 L’adresse a changé après ton collage sans que tu tapes : envoi bloqué. Efface le champ et recolle l’adresse depuis une source sûre.
@@ -680,6 +709,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               </Notice>
             )}
             {isXrp && <XrpSpendable account={xrpMe.data} hidden={hideBalances} />}
+            {isXmr && <XmrLockedNote status={xmr.status} hidden={hideBalances} />}
+            {isXmr && <XmrSyncLine status={xmr.status} error={xmr.error} onRetry={xmr.sync} />}
             {isAda && adaMe.data && (
               <span className="text-[12px] leading-[1.45] text-mute">
                 Solde : {hideBalances ? '•••••' : fmtCrypto(BigInt(adaMe.data.balance), 6, 'ADA')}
@@ -703,7 +734,27 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           </>
           )}
           {/* Fees */}
-          {isAda ? (
+          {isXmr ? (
+            <div className="flex flex-col gap-2">
+              <span className="eyebrow">Frais réseau</span>
+              <div className="flex flex-col gap-1 rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
+                <span>
+                  <strong className="font-semibold text-text">Rien à choisir sur Monero.</strong> Le coffre prend le tarif « normal » du nœud (plafonné) et le poids exact de la transaction : d’habitude ≈ 0,0001 XMR.
+                </span>
+                <XmrSendNotes />
+              </div>
+              <Button
+                variant="primary"
+                size="lg"
+                disabled={!addrValid || !xmrDestInfo || !xmrSynced || building || overBalance || (!max && (amountBase === null || amountBase <= 0n))}
+                onClick={() => setXmrGo((n) => n + 1)}
+                className="self-start"
+              >
+                {building && <Spinner />} Préparer le transfert
+              </Button>
+              {!xmrSynced && xmr.status && <span className="text-[12px] text-mute">Attends la fin du scan Monero pour préparer un transfert.</span>}
+            </div>
+          ) : isAda ? (
             <div className="flex flex-col gap-2">
               <span className="eyebrow">Frais réseau</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
@@ -786,7 +837,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-medium tracking-[-0.01em]">Vérification</span>
             <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[10.5px] font-medium tracking-[0.02em] text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'ada' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
+              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'xmr' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
@@ -843,6 +894,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           )}
           {built?.unsigned.family === 'xrp' && <XrpSummaryView u={built.unsigned} xrpPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'ada' && <CardanoSummaryView u={built.unsigned} adaPrice={nativePrice} currency={cur} />}
+          {built?.unsigned.family === 'xmr' && <XmrSummaryView u={built.unsigned} xmrPrice={nativePrice} currency={cur} />}
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
@@ -885,7 +937,12 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {built.unsigned.summary.warnings.some((w) => w.kind === 'unknownToken') ? ' Token non vérifié : une 2ᵉ confirmation te sera demandée.' : ''}
             </EnClair>
           )}
-          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'ada' && (
+          {built && addrValid && built.unsigned.family === 'xmr' && (
+            <EnClair tone={built.unsigned.summary.requiresExtraConfirmation ? 'warn' : 'ice'}>
+              Tu envoies <strong>{fmtCrypto(built.unsigned.amount, 12, 'XMR')}</strong> à <strong>{recipientName}</strong>. Frais : {fmtCrypto(built.unsigned.maxFee, 12, 'XMR')} ; la monnaie ({fmtCrypto(BigInt(built.unsigned.summary.change), 12, 'XMR')}) revient sur ton adresse principale. Une fois publié, le transfert ne peut pas être annulé.
+            </EnClair>
+          )}
+          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'xmr' && (
             <EnClair>
               Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>
               {utxoLike && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? ', la monnaie revient sur ton adresse de change' : ''}. Personne d’autre ne reçoit rien, et tu paies au maximum{' '}
@@ -896,7 +953,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 : ''}
             </EnClair>
           )}
-          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? (xAddress ? 'Adresse X : saisis l’adresse classique r… et le tag séparément.' : 'Saisis ou colle l’adresse du destinataire.') : dogeBelowDust ? 'Montant sous 0,01 DOGE : aucune transaction construite.' : xrpTagMissing ? 'Tag de destination obligatoire pour ce destinataire : aucun paiement construit sans lui.' : xrpBelowActivation ? 'Moins de 1 XRP vers un compte inexistant : aucun paiement construit.' : isXrp && !xrpDestInfo ? 'Lecture du compte destinataire…' : 'Indique un montant pour voir le récapitulatif décodé.'}</p>}
+          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? (xAddress ? 'Adresse X : saisis l’adresse classique r… et le tag séparément.' : 'Saisis ou colle l’adresse du destinataire.') : dogeBelowDust ? 'Montant sous 0,01 DOGE : aucune transaction construite.' : xrpTagMissing ? 'Tag de destination obligatoire pour ce destinataire : aucun paiement construit sans lui.' : xrpBelowActivation ? 'Moins de 1 XRP vers un compte inexistant : aucun paiement construit.' : isXrp && !xrpDestInfo ? 'Lecture du compte destinataire…' : isXmr ? (!xmrSynced ? 'Scan Monero en cours : le transfert pourra être préparé à la fin.' : 'Indique un montant, puis « Préparer le transfert » : le coffre choisit les sorties, les leurres et les frais.') : 'Indique un montant pour voir le récapitulatif décodé.'}</p>}
 
           {blindSigning && activeHw && (
             <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
@@ -958,6 +1015,7 @@ function dataLabel(b: Built | null, family?: string): string {
     return `${outs} sortie${outs > 1 ? 's' : ''} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' ? 'octets' : 'vB'}`;
   }
   if (u.family === 'ada') return `${u.summary.inputs.length} entrée${u.summary.inputs.length > 1 ? 's' : ''} · ${u.summary.outputs.length} sorties${u.token ? ' · token' : ''}${u.summary.memo ? ' · message' : ''}`;
+  if (u.family === 'xmr') return `${u.summary.inputCount} entrée${u.summary.inputCount > 1 ? 's' : ''} · anneaux de ${u.summary.ringSize} · 2 sorties`;
   if (u.family === 'xrp') return `Payment${u.summary.destinationTag !== null ? ` · tag ${u.summary.destinationTag}` : ' · sans tag'}`;
   if (u.family === 'tron') return u.token ? `transfer() TRC-20 · ${u.size.bandwidth} octets` : `TransferContract · ${u.size.bandwidth} octets`;
   if (u.family === 'sol') return u.mint ? `TransferChecked ${u.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL'}${u.createsAta ? ' + création du compte' : ''}` : 'Aucune · transfert système';
