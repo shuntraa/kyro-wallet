@@ -235,6 +235,8 @@ pub fn run() {
             commands_near::near_address,
             commands_near::near_account,
             commands_near::near_txs,
+            commands_near::near_token_balances,
+            commands_near::near_build_token_tx,
             commands_near::near_build_tx,
             commands_near::near_sign_tx,
             commands_near::near_broadcast,

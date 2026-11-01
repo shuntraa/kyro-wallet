@@ -403,6 +403,118 @@ pub async fn block_height(ctx: &NearCtx<'_>, hash: &str) -> AppResult<u64> {
         .ok_or_else(|| bad("NEAR : hauteur du bloc absente"))
 }
 
+// ---------------------------------------------------------------- NEP-141 tokens
+
+/// `call_function` view of `contract.method(args)`, its JSON result.
+pub async fn view_call(
+    ctx: &NearCtx<'_>,
+    contract: &str,
+    method: &str,
+    args: &Value,
+) -> AppResult<Value> {
+    let r = rpc(
+        ctx,
+        "query",
+        json!({
+            "request_type": "call_function", "finality": "final", "account_id": contract,
+            "method_name": method,
+            "args_base64": base64::engine::general_purpose::STANDARD.encode(args.to_string()),
+        }),
+    )
+    .await?;
+    let bytes: Vec<u8> = r["result"]
+        .as_array()
+        .ok_or_else(|| bad(format!("NEAR : résultat de {method} absent")))?
+        .iter()
+        .map(|b| b.as_u64().and_then(|v| u8::try_from(v).ok()))
+        .collect::<Option<_>>()
+        .ok_or_else(|| bad(format!("NEAR : résultat de {method} illisible")))?;
+    serde_json::from_slice(&bytes).map_err(|_| bad(format!("NEAR : résultat de {method} non JSON")))
+}
+
+/// `ft_balance_of(account_id)`, token units.
+pub async fn ft_balance(ctx: &NearCtx<'_>, contract: &str, account_id: &str) -> AppResult<u128> {
+    let v = view_call(
+        ctx,
+        contract,
+        "ft_balance_of",
+        &json!({ "account_id": account_id }),
+    )
+    .await?;
+    u128_at(&v).ok_or_else(|| bad("NEAR : solde de jeton illisible"))
+}
+
+/// `storage_balance_of(account_id)` is not null: the account is registered with the token
+/// (it can receive it).
+pub async fn ft_registered(ctx: &NearCtx<'_>, contract: &str, account_id: &str) -> AppResult<bool> {
+    let v = view_call(
+        ctx,
+        contract,
+        "storage_balance_of",
+        &json!({ "account_id": account_id }),
+    )
+    .await?;
+    Ok(!v.is_null())
+}
+
+/// `storage_balance_bounds().min`, yoctoNEAR: what registering an account costs.
+pub async fn ft_storage_min(ctx: &NearCtx<'_>, contract: &str) -> AppResult<u128> {
+    let v = view_call(ctx, contract, "storage_balance_bounds", &json!({})).await?;
+    u128_at(&v["min"]).ok_or_else(|| bad("NEAR : storage_balance_bounds illisible"))
+}
+
+/// NEP-141 `ft_transfer` events (NEP-297 `EVENT_JSON` logs) involving `me` in an explorer
+/// transaction, from receipts **executed by a known token contract** only (a fake contract can
+/// log anything): `[{ contract, direction, amount, counterparty }]`.
+pub fn token_events(t: &Value, me: &str, testnet: bool) -> Vec<Value> {
+    let known = wallet_core::near_known_tokens(testnet);
+    let mut out = Vec::new();
+    for r in t["receipts"].as_array().into_iter().flatten() {
+        let o = &r["execution_outcome"]["outcome"];
+        let Some(k) = o["executor_id"]
+            .as_str()
+            .and_then(|e| known.iter().find(|k| k.contract == e))
+        else {
+            continue;
+        };
+        if o["status"].get("Failure").is_some() {
+            continue;
+        }
+        for log in o["logs"].as_array().into_iter().flatten() {
+            let Some(j) = log.as_str().and_then(|l| l.strip_prefix("EVENT_JSON:")) else {
+                continue;
+            };
+            let Ok(ev) = serde_json::from_str::<Value>(j) else {
+                continue;
+            };
+            if ev["standard"] != "nep141" || ev["event"] != "ft_transfer" {
+                continue;
+            }
+            for d in ev["data"].as_array().into_iter().flatten() {
+                let (Some(from), Some(to), Some(amount)) = (
+                    d["old_owner_id"].as_str(),
+                    d["new_owner_id"].as_str(),
+                    u128_at(&d["amount"]),
+                ) else {
+                    continue;
+                };
+                let (direction, cp) = match (from == me, to == me) {
+                    (true, false) => ("out", to),
+                    (false, true) => ("in", from),
+                    _ => continue,
+                };
+                out.push(json!({
+                    "contract": k.contract,
+                    "direction": direction,
+                    "amount": amount.to_string(),
+                    "counterparty": crate::dialog_text::sanitize(cp, 64),
+                }));
+            }
+        }
+    }
+    out
+}
+
 // ---------------------------------------------------------------- checks
 
 /// Checks before building / signing a transfer, against live data. Errors are user-facing.
@@ -492,12 +604,17 @@ pub async fn txs(ctx: &NearCtx<'_>, account_id: &str) -> AppResult<Value> {
     .await?;
     let details: Value =
         serde_json::from_slice(&details).map_err(|_| bad("NEAR : historique illisible"))?;
+    let testnet = ctx.network == Network::Testnet;
     Ok(Value::Array(
         details["transactions"]
             .as_array()
             .into_iter()
             .flatten()
-            .filter_map(history_entry)
+            .filter_map(|t| {
+                let mut e = history_entry(t)?;
+                e["tokens"] = Value::Array(token_events(t, id, testnet));
+                Some(e)
+            })
             .collect(),
     ))
 }
@@ -918,6 +1035,7 @@ mod live {
             receiver_id: to.to_owned(),
             block_hash,
             deposit,
+            ft: None,
         };
         let hash = tx.hash();
         let signed = tx.encode_signed(&k.funder.sign(&hash).to_bytes());

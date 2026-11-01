@@ -56,6 +56,96 @@ pub struct NearContext {
     pub fee_estimate: String,
     /// yoctoNEAR: what the balance must cover on top of the amount (see near_backend).
     pub fee_bound: String,
+    /// Token transfer: live token facts.
+    pub token: Option<NearTokenContext>,
+}
+
+/// Live facts of a NEP-141 transfer.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NearTokenContext {
+    /// Our balance of the token (units).
+    pub balance: String,
+    /// The recipient is registered with the token (`storage_balance_of` not null).
+    pub recipient_registered: bool,
+}
+
+/// Gas a token call usually burns (5 Tgas): for the estimate only; the bound uses the 30 Tgas
+/// attached to each call, prepaid then refunded.
+const FT_GAS_ESTIMATE: u128 = 5_000_000_000_000;
+
+/// Dialog head of a NEP-141 transfer: token, verified contract, decimals, recipient, amount,
+/// storage deposit explained.
+fn describe_token_head(
+    lang: Lang,
+    s: &NearTxSummary,
+    k: &wallet_core::NearTokenSummary,
+    c: &NearContext,
+    testnet: &str,
+) -> String {
+    let n = |v: &str| near(lang, v);
+    let units = |v: &str| {
+        format!(
+            "{} {}",
+            format_units_in(lang, v, usize::from(k.decimals)),
+            k.symbol
+        )
+    };
+    let bal = c
+        .token
+        .as_ref()
+        .map_or("?".to_owned(), |t| units(&t.balance));
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Envoi de jeton NEAR (NEP-141){testnet}\n\nJeton : {} — contrat vérifié par Kyro {}\n{} décimales\n\nÀ : {}\n({})\n\nMontant : {} ({} unités)\nSolde {} : {bal}\n",
+            k.symbol,
+            k.contract,
+            k.decimals,
+            k.recipient,
+            kind_text(lang, k.recipient_kind),
+            units(&k.amount),
+            k.amount,
+            k.symbol
+        ),
+        Lang::En => format!(
+            "NEAR token send (NEP-141){testnet}\n\nToken: {} — contract verified by Kyro {}\n{} decimals\n\nTo: {}\n({})\n\nAmount: {} ({} units)\n{} balance: {bal}\n",
+            k.symbol,
+            k.contract,
+            k.decimals,
+            k.recipient,
+            kind_text(lang, k.recipient_kind),
+            units(&k.amount),
+            k.amount,
+            k.symbol
+        ),
+    };
+    out += &match (&k.storage_deposit, lang) {
+        (Some(d), Lang::Fr) => format!(
+            "\nLe destinataire n'est pas encore inscrit auprès de ce jeton : Kyro ajoute storage_deposit pour lui, {} payés par toi (le stockage de son solde sur le contrat).\n",
+            n(d)
+        ),
+        (Some(d), Lang::En) => format!(
+            "\nThe recipient is not registered with this token yet: Kyro adds storage_deposit for it, {} paid by you (the storage of its balance on the contract).\n",
+            n(d)
+        ),
+        (None, _) => lang
+            .pick(
+                "\nLe destinataire est déjà inscrit auprès de ce jeton.\n",
+                "\nThe recipient is already registered with this token.\n",
+            )
+            .to_owned(),
+    };
+    out += &match lang {
+        Lang::Fr => format!(
+            "NEAR joints en tout : {} (1 yoctoNEAR exigé par ft_transfer + le dépôt éventuel)\n",
+            n(&s.deposit)
+        ),
+        Lang::En => format!(
+            "NEAR attached in total: {} (1 yoctoNEAR required by ft_transfer + the deposit, if any)\n",
+            n(&s.deposit)
+        ),
+    };
+    out
 }
 
 fn kind_text(lang: Lang, k: NearAccountKind) -> &'static str {
@@ -85,15 +175,16 @@ pub(crate) fn describe_near(
     } else {
         ""
     };
-    let mut out = match lang {
-        Lang::Fr => format!(
+    let mut out = match (&s.token, lang) {
+        (Some(k), _) => describe_token_head(lang, s, k, c, testnet),
+        (None, Lang::Fr) => format!(
             "Envoi NEAR{testnet}\n\nÀ : {}\n({})\n\nMontant : {} ({} yoctoNEAR)\n",
             s.receiver_id,
             kind_text(lang, s.receiver_kind),
             n(&s.deposit),
             s.deposit
         ),
-        Lang::En => format!(
+        (None, Lang::En) => format!(
             "NEAR send{testnet}\n\nTo: {}\n({})\n\nAmount: {} ({} yoctoNEAR)\n",
             s.receiver_id,
             kind_text(lang, s.receiver_kind),
@@ -101,7 +192,7 @@ pub(crate) fn describe_near(
             s.deposit
         ),
     };
-    if c.creates_account {
+    if c.creates_account && s.token.is_none() {
         out += lang.pick(
             "\nCe compte implicite n'existe pas encore : ce transfert le crée (frais de création inclus ci-dessous).\n",
             "\nThis implicit account does not exist yet: this transfer creates it (creation fee included below).\n",
@@ -211,6 +302,42 @@ pub async fn near_txs(state: State<'_, AppState>, account_id: String) -> AppResu
     near_backend::txs(&ctx(&state), &account_id).await
 }
 
+/// One line per NEP-141 token Kyro knows on this network.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NearTokenBalance {
+    pub contract: String,
+    pub symbol: String,
+    pub decimals: u8,
+    /// Token units.
+    pub balance: String,
+    /// Registered with the token (`storage_balance_of` not null).
+    pub registered: bool,
+}
+
+#[tauri::command]
+pub async fn near_token_balances(
+    state: State<'_, AppState>,
+    account_id: String,
+) -> AppResult<Vec<NearTokenBalance>> {
+    let c = ctx(&state);
+    let id = account_id.trim();
+    wallet_core::near_account_kind(id)?;
+    let mut out = Vec::new();
+    for k in wallet_core::near_known_tokens(c.network == Network::Testnet) {
+        out.push(NearTokenBalance {
+            contract: k.contract.into(),
+            symbol: k.symbol.into(),
+            decimals: k.decimals,
+            balance: near_backend::ft_balance(&c, k.contract, id)
+                .await?
+                .to_string(),
+            registered: near_backend::ft_registered(&c, k.contract, id).await?,
+        });
+    }
+    Ok(out)
+}
+
 // ---------------------------------------------------------------- build, sign, broadcast
 
 #[derive(Serialize)]
@@ -243,8 +370,179 @@ async fn live_context(
             gas_price: fees.gas_price.to_string(),
             fee_estimate: fees.estimate(creates).to_string(),
             fee_bound: fees.bound(creates).to_string(),
+            token: None,
         },
     ))
+}
+
+fn known_token(c: &NearCtx<'_>, contract: &str) -> AppResult<&'static wallet_core::NearKnownToken> {
+    match wallet_core::near_known_token(contract.trim()) {
+        Some((k, tn)) if tn == (c.network == Network::Testnet) => Ok(k),
+        _ => Err(AppError::InvalidInput(
+            "jeton NEAR inconnu de Kyro sur ce réseau".into(),
+        )),
+    }
+}
+
+/// Live context of a token transfer of `k` to `to`: our NEAR account (fees, deposit), the
+/// recipient (must exist if named), our token balance, the recipient's registration. The fee
+/// figures are for `calls` function calls of 30 Tgas each.
+async fn token_context(
+    c: &NearCtx<'_>,
+    me: &str,
+    k: &wallet_core::NearKnownToken,
+    to: &str,
+    calls: u128,
+) -> AppResult<(NearFeeParams, NearContext)> {
+    let kind = wallet_core::near_account_kind(to)?;
+    near_backend::probe(c).await?;
+    let fees = near_backend::fees(c).await?;
+    let account = near_backend::account(c, me, fees.storage_per_byte).await?;
+    let receiver = near_backend::account(c, to, fees.storage_per_byte).await?;
+    if !receiver.exists && kind != NearAccountKind::Implicit {
+        return Err(AppError::InvalidInput(format!(
+            "le compte « {to} » n'existe pas : les jetons seraient bloqués"
+        )));
+    }
+    let balance = near_backend::ft_balance(c, k.contract, me).await?;
+    let registered = near_backend::ft_registered(c, k.contract, to).await?;
+    let price = fees.gas_price.max(fees.min_gas_price);
+    let prepaid = calls * u128::from(wallet_core::NEAR_FT_GAS) * price;
+    Ok((
+        fees,
+        NearContext {
+            account,
+            receiver,
+            creates_account: false,
+            gas_price: fees.gas_price.to_string(),
+            fee_estimate: (fees.estimate(false) + calls * FT_GAS_ESTIMATE * fees.gas_price)
+                .to_string(),
+            fee_bound: (fees.bound(false) + prepaid).to_string(),
+            token: Some(NearTokenContext {
+                balance: balance.to_string(),
+                recipient_registered: registered,
+            }),
+        },
+    ))
+}
+
+/// Token amount ≤ our balance; NEAR attached + fee bound ≤ our spendable NEAR.
+fn check_token(
+    s: &NearTxSummary,
+    k: &wallet_core::NearTokenSummary,
+    c: &NearContext,
+) -> AppResult<()> {
+    let have: u128 = c
+        .token
+        .as_ref()
+        .and_then(|t| t.balance.parse().ok())
+        .unwrap_or(0);
+    let amount: u128 = k.amount.parse().unwrap_or(u128::MAX);
+    if amount > have {
+        return Err(AppError::InvalidInput(format!(
+            "solde {} insuffisant : {} {}",
+            k.symbol,
+            crate::commands::format_units(&have.to_string(), usize::from(k.decimals)),
+            k.symbol
+        )));
+    }
+    if !c.account.exists {
+        return Err(AppError::InvalidInput(
+            "ton compte NEAR n'existe pas encore : il est créé par le premier NEAR reçu".into(),
+        ));
+    }
+    let spendable: u128 = c.account.spendable.parse().unwrap_or(0);
+    let need = s
+        .deposit
+        .parse::<u128>()
+        .unwrap_or(u128::MAX)
+        .saturating_add(c.fee_bound.parse().unwrap_or(u128::MAX));
+    if need > spendable {
+        return Err(AppError::InvalidInput(format!(
+            "pas assez de NEAR pour les frais : {} NEAR disponibles, il en faut {} (gas des appels au contrat, remboursé en grande partie, + dépôt de stockage éventuel)",
+            crate::commands::format_units(&spendable.to_string(), 24),
+            crate::commands::format_units(&need.to_string(), 24)
+        )));
+    }
+    Ok(())
+}
+
+/// Builds an unsigned NEP-141 transfer of `amount` units of the known token `contract` to `to`,
+/// with `storage_deposit` for `to` first when it is not registered with the token.
+pub(crate) async fn build_token(
+    c: &NearCtx<'_>,
+    me: &str,
+    pubkey: &[u8; 32],
+    contract: &str,
+    to: &str,
+    amount: &str,
+) -> AppResult<NearBuilt> {
+    let k = known_token(c, contract)?;
+    let to = to.trim();
+    wallet_core::near_account_kind(to)?;
+    if to == me {
+        return Err(AppError::InvalidInput("transfert à soi-même".into()));
+    }
+    let a = amount.trim();
+    let units: u128 = (!a.is_empty() && a.len() <= 39 && a.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| a.parse().ok())
+        .flatten()
+        .filter(|v: &u128| *v > 0)
+        .ok_or_else(|| AppError::InvalidInput("montant de jeton invalide".into()))?;
+    let registered = near_backend::ft_registered(c, k.contract, to).await?;
+    let storage_deposit = if registered {
+        None
+    } else {
+        let min = near_backend::ft_storage_min(c, k.contract).await?;
+        if min == 0 || min > wallet_core::NEAR_MAX_STORAGE_DEPOSIT {
+            return Err(AppError::ServerUnreachable(
+                "NEAR : dépôt de stockage du jeton invraisemblable".into(),
+            ));
+        }
+        Some(min)
+    };
+    let calls = if storage_deposit.is_some() { 2 } else { 1 };
+    let (_, context) = token_context(c, me, k, to, calls).await?;
+    let (key_nonce, block_hash, _) = near_backend::access_key(c, me, pubkey).await?;
+    let tx = NearTransfer {
+        signer_id: me.to_owned(),
+        public_key: *pubkey,
+        nonce: key_nonce
+            .checked_add(1)
+            .ok_or_else(|| AppError::Internal("nonce NEAR au maximum".into()))?,
+        receiver_id: k.contract.to_owned(),
+        block_hash,
+        deposit: 0,
+        ft: Some(wallet_core::NearFtTransfer {
+            recipient: to.to_owned(),
+            amount: units,
+            storage_deposit,
+        }),
+    };
+    let hex_tx = hex::encode(tx.encode());
+    let summary = wallet_core::near_decode_tx(&hex_tx, me, pubkey)?;
+    let Some(ts) = &summary.token else {
+        return Err(AppError::Internal("transfert de jeton non reconnu".into()));
+    };
+    check_token(&summary, ts, &context)?;
+    Ok(NearBuilt {
+        tx: hex_tx,
+        summary,
+        context,
+    })
+}
+
+/// NEP-141 transfer of a known token: `contract`, `to`, `amount` in token units.
+#[tauri::command]
+pub async fn near_build_token_tx(
+    state: State<'_, AppState>,
+    contract: String,
+    to: String,
+    amount: String,
+    account: Option<u32>,
+) -> AppResult<NearBuilt> {
+    let (me, pk) = ours(&state, account_arg(account)?)?;
+    build_token(&ctx(&state), &me, &pk, &contract, &to, &amount).await
 }
 
 fn check(s: &NearTxSummary, fees: &NearFeeParams, c: &NearContext) -> AppResult<()> {
@@ -296,6 +594,7 @@ pub(crate) async fn build(
         receiver_id: to.to_owned(),
         block_hash,
         deposit,
+        ft: None,
     };
     let hex_tx = hex::encode(tx.encode());
     let summary = wallet_core::near_decode_tx(&hex_tx, me, pubkey)?;
@@ -336,7 +635,30 @@ pub(crate) async fn prepare_sign(
     tx_hex: &str,
 ) -> AppResult<(NearTxSummary, NearContext)> {
     let summary = wallet_core::near_decode_tx(tx_hex, me, pubkey)?;
-    let (fees, context) = live_context(c, me, &summary.receiver_id).await?;
+    let (fees, context) = match &summary.token {
+        None => live_context(c, me, &summary.receiver_id).await?,
+        Some(t) => {
+            let k = known_token(c, &t.contract)?;
+            if t.testnet != (c.network == Network::Testnet) {
+                return Err(AppError::InvalidInput(
+                    "contrat de jeton d'un autre réseau".into(),
+                ));
+            }
+            let calls = if t.storage_deposit.is_some() { 2 } else { 1 };
+            let (fees, context) = token_context(c, me, k, &t.recipient, calls).await?;
+            let registered = context
+                .token
+                .as_ref()
+                .is_some_and(|x| x.recipient_registered);
+            if t.storage_deposit.is_none() && !registered {
+                return Err(AppError::InvalidInput(
+                    "le destinataire n'est plus inscrit auprès du jeton : reconstruis le transfert"
+                        .into(),
+                ));
+            }
+            (fees, context)
+        }
+    };
     let (key_nonce, _, height) = near_backend::access_key(c, me, pubkey).await?;
     let nonce: u64 = summary.nonce.parse().unwrap_or(0);
     if nonce <= key_nonce {
@@ -352,7 +674,10 @@ pub(crate) async fn prepare_sign(
                 .into(),
         ));
     }
-    check(&summary, &fees, &context)?;
+    match &summary.token {
+        None => check(&summary, &fees, &context)?,
+        Some(t) => check_token(&summary, t, &context)?,
+    }
     Ok((summary, context))
 }
 
@@ -376,7 +701,14 @@ pub async fn near_sign_tx(
     let lang = crate::i18n::current();
     confirm_native(
         &app,
-        lang.pick("Confirmer l'envoi NEAR", "Confirm the NEAR send"),
+        if summary.token.is_some() {
+            lang.pick(
+                "Confirmer l'envoi de jeton NEAR",
+                "Confirm the NEAR token send",
+            )
+        } else {
+            lang.pick("Confirmer l'envoi NEAR", "Confirm the NEAR send")
+        },
         signer.body(
             lang,
             &describe_near(lang, &summary, &context, state.network),
@@ -468,6 +800,7 @@ mod tests {
             hash: "4XTVLd3z94Rjfp5rpNcKNqqfXbKNhf1bwtonhj77uvPs".into(),
             requires_extra_confirmation: !warnings.is_empty(),
             warnings,
+            token: None,
         }
     }
 
@@ -488,7 +821,51 @@ mod tests {
             gas_price: "100000000".into(),
             fee_estimate: "44636512500000000000".into(),
             fee_bound: "892730250000000000000".into(),
+            token: None,
         }
+    }
+
+    #[test]
+    fn token_dialog_shows_contract_decimals_and_storage_deposit() {
+        let mut s = summary(NearAccountKind::Implicit, vec![]);
+        s.receiver_id = "usdt.tether-token.near".into();
+        s.deposit = "1250000000000000000001".into();
+        s.token = Some(wallet_core::NearTokenSummary {
+            contract: "usdt.tether-token.near".into(),
+            symbol: "USDT".into(),
+            name: "Tether".into(),
+            decimals: 6,
+            testnet: false,
+            recipient: "bob.near".into(),
+            recipient_kind: NearAccountKind::Named,
+            amount: "2500000".into(),
+            storage_deposit: Some("1250000000000000000000".into()),
+        });
+        let mut c = context(false);
+        c.token = Some(NearTokenContext {
+            balance: "9000000".into(),
+            recipient_registered: false,
+        });
+        let d = describe_near(Lang::Fr, &s, &c, Network::Mainnet);
+        for needle in [
+            "Envoi de jeton NEAR (NEP-141)\n",
+            "Jeton : USDT — contrat vérifié par Kyro usdt.tether-token.near\n6 décimales",
+            "À : bob.near\n(compte nommé)",
+            "Montant : 2,5 USDT (2500000 unités)",
+            "Solde USDT : 9 USDT",
+            "storage_deposit pour lui, 0,00125 NEAR payés par toi",
+            "NEAR joints en tout : 0,001250000000000000000001 NEAR",
+            "Frais : ≈",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        if let Some(t) = s.token.as_mut() {
+            t.storage_deposit = None;
+        }
+        let en = describe_near(Lang::En, &s, &c, Network::Testnet);
+        assert!(
+            en.contains("NEAR token send (NEP-141) (testnet)") && en.contains("already registered")
+        );
     }
 
     #[test]
@@ -554,5 +931,73 @@ mod tests {
             assert!(parse_yocto(bad).is_err(), "{bad:?}");
         }
         assert_eq!(near(Lang::Fr, "1"), "0,000000000000000000000001 NEAR");
+    }
+
+    /// NEP-141 transfers built by Kyro for real mainnet implicit holders (the account id is the
+    /// public key: no secret needed to build and run the live checks; nothing is signed or sent),
+    /// to a registered recipient and to a fresh implicit account (storage_deposit added).
+    /// `cargo test -p kyro-desktop --lib near_token_live_mainnet -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn near_token_live_mainnet() {
+        let net = crate::net::NetClient::new(std::env::temp_dir().join("kyro-near-live")).unwrap();
+        tauri::async_runtime::block_on(async {
+            let c = NearCtx {
+                net_client: &net,
+                network: Network::Mainnet,
+                tor: false,
+            };
+            let holders = [
+                "e589457354361489a89039b8be6737cbc2db4d13919b6ccf23889a60f3b0d8f3",
+                "fe58c8fb2458f59e9e081ac92ee2306cfd5f0067087fd36ef031a42cf4ba8d3a",
+                "3501fb232e87e0ed795953b79e65c33b26a652d095f54ca10b0251e636f060a3",
+            ];
+            let fresh = "11".repeat(32);
+            let mut done = 0;
+            for k in wallet_core::near_known_tokens(false) {
+                for me in holders {
+                    let pk: [u8; 32] = hex::decode(me).unwrap().try_into().unwrap();
+                    let bal = near_backend::ft_balance(&c, k.contract, me).await.unwrap();
+                    eprintln!("{} {me}: {bal}", k.symbol);
+                    if bal == 0 {
+                        continue;
+                    }
+                    let other = holders.iter().find(|h| **h != me).unwrap();
+                    for to in [*other, fresh.as_str()] {
+                        match build_token(&c, me, &pk, k.contract, to, "1").await {
+                            Ok(b) => {
+                                let (s, ctx) = prepare_sign(&c, me, &pk, &b.tx).await.unwrap();
+                                assert_eq!(s, b.summary);
+                                let registered = near_backend::ft_registered(&c, k.contract, to)
+                                    .await
+                                    .unwrap();
+                                assert_eq!(
+                                    s.token.as_ref().unwrap().storage_deposit.is_some(),
+                                    !registered
+                                );
+                                assert!(to != fresh || !registered);
+                                eprintln!(
+                                    "--- {} → {to} ---\n{}",
+                                    k.symbol,
+                                    describe_near(Lang::Fr, &s, &ctx, Network::Mainnet)
+                                );
+                                done += 1;
+                            }
+                            Err(e) => eprintln!("{} {me} → {to}: {e}", k.symbol),
+                        }
+                    }
+                    break;
+                }
+            }
+            assert!(done >= 2);
+            let h = near_backend::txs(&c, holders[0]).await.unwrap();
+            let tokens: Vec<_> = h
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|t| t["tokens"].as_array().cloned().unwrap_or_default())
+                .collect();
+            eprintln!("token history of {}: {tokens:?}", holders[0]);
+        });
     }
 }

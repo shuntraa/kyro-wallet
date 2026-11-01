@@ -34,6 +34,8 @@ pub enum TokenChain {
     Aptos,
     /// Stellar issued asset (`CODE-ISSUER`, wallet-core `stellar_known_assets`).
     Stellar,
+    /// NEAR NEP-141 token contract (wallet-core `near_known_tokens`).
+    Near,
 }
 
 /// What Kyro knows about a curated token. Symbol and decimals were checked on chain against
@@ -138,6 +140,7 @@ mod tests {
             "sui" => TokenChain::Sui,
             "aptos" => TokenChain::Aptos,
             "stellar" => TokenChain::Stellar,
+            "near" => TokenChain::Near,
             evm => TokenChain::Evm(evm.strip_prefix("evm:").unwrap().parse().unwrap()),
         }
     }
@@ -266,6 +269,9 @@ mod tests {
                     wallet_core::stellar_asset(code, issuer).unwrap();
                     assert_eq!(e.token.decimals, 7, "{e:?}");
                 }
+                TokenChain::Near => {
+                    wallet_core::near_account_kind(e.contract).unwrap();
+                }
             }
         }
     }
@@ -304,6 +310,12 @@ mod tests {
                 .collect();
             xlm.sort();
             assert_eq!(table(TokenChain::Stellar), xlm);
+            let mut near: Vec<_> = wallet_core::near_known_tokens(tn)
+                .iter()
+                .map(|t| (t.contract.to_string(), t.symbol, t.decimals))
+                .collect();
+            near.sort();
+            assert_eq!(table(TokenChain::Near), near);
         }
     }
 

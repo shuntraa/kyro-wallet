@@ -129,6 +129,8 @@
     "allow-near-address",
     "allow-near-account",
     "allow-near-txs",
+    "allow-near-token-balances",
+    "allow-near-build-token-tx",
     "allow-near-build-tx",
     "allow-near-sign-tx",
     "allow-near-broadcast",

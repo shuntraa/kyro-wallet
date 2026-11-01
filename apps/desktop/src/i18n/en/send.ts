@@ -133,6 +133,7 @@ export const send: Record<keyof typeof fr, string> = {
   'send.clearCosmosMemo': 'You are sending <b>{amount}</b> to <b>{recipient}</b> with the memo <memo>{memo}</memo>. Fee: {fee}.',
   'send.clearCosmosNoMemo': 'You are sending <b>{amount}</b> to <b>{recipient}</b>, without a memo. Fee: {fee}.',
   'send.clearCosmosMemoPublic': ' The memo is public forever.',
+  'send.clearNearStorage': ' As the recipient is not registered with this token yet, Kyro also pays its registration (storage_deposit, {amount}).',
   'send.clearApt': 'You are sending <b>{amount}</b> to <b>{recipient}</b>. Estimated fee: {fee}; the network reserves at most {max} during execution.',
   'send.clearAptCreates': ' This account has not received anything yet: the transfer creates it.',
   'send.clearZec': 'You are sending <b>{amount}</b> to <b>{recipient}</b>{tex}{change}. ZIP 317 fee: {fee}{fiat}.',

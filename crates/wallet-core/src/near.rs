@@ -30,6 +30,138 @@ const MAX_DEPOSIT: u128 = 10_000_000_000 * 1_000_000_000_000_000_000_000_000;
 const ED25519: u8 = 0;
 /// Borsh tag of `Action::Transfer`.
 const ACTION_TRANSFER: u8 = 3;
+/// Borsh tag of `Action::FunctionCall`.
+const ACTION_FUNCTION_CALL: u8 = 2;
+/// Gas attached to each call to a token contract (30 Tgas, what NEAR wallets attach).
+pub const NEAR_FT_GAS: u64 = 30_000_000_000_000;
+/// Most storage deposit Kyro attaches to register a recipient with a token (0.0125 NEAR; the
+/// usual `storage_balance_bounds.min` is 0.00125 NEAR).
+pub const NEAR_MAX_STORAGE_DEPOSIT: u128 = 12_500_000_000_000_000_000_000;
+
+/// A NEP-141 token Kyro knows, from the issuer's official list (cross-checked with CoinGecko,
+/// `ft_metadata` read on chain).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NearKnownToken {
+    /// Token contract account.
+    pub contract: &'static str,
+    /// Ticker.
+    pub symbol: &'static str,
+    /// Display name.
+    pub name: &'static str,
+    /// Decimals (`ft_metadata.decimals`).
+    pub decimals: u8,
+}
+
+/// Mainnet: USDC (developers.circle.com › USDC contract addresses; CoinGecko `usd-coin`
+/// platform `near-protocol`) and USDt (tether.to › supported protocols; CoinGecko `tether`).
+const NEAR_MAINNET_TOKENS: &[NearKnownToken] = &[
+    NearKnownToken {
+        contract: "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+        symbol: "USDC",
+        name: "USD Coin",
+        decimals: 6,
+    },
+    NearKnownToken {
+        contract: "usdt.tether-token.near",
+        symbol: "USDT",
+        name: "Tether",
+        decimals: 6,
+    },
+];
+/// Testnet: Circle's testnet USDC (same page). Tether lists no testnet contract.
+const NEAR_TESTNET_TOKENS: &[NearKnownToken] = &[NearKnownToken {
+    contract: "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af",
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+}];
+
+/// The tokens Kyro knows on mainnet (`testnet = false`) or testnet.
+pub fn near_known_tokens(testnet: bool) -> &'static [NearKnownToken] {
+    if testnet {
+        NEAR_TESTNET_TOKENS
+    } else {
+        NEAR_MAINNET_TOKENS
+    }
+}
+
+/// The known token of contract `contract` and the network it belongs to (`true` = testnet).
+/// The two lists never share a contract id.
+pub fn near_known_token(contract: &str) -> Option<(&'static NearKnownToken, bool)> {
+    [false, true].into_iter().find_map(|tn| {
+        near_known_tokens(tn)
+            .iter()
+            .find(|t| t.contract == contract)
+            .map(|t| (t, tn))
+    })
+}
+
+/// The token side of a token transfer: `ft_transfer` to `recipient`, preceded, when the recipient
+/// is not registered with the token yet, by `storage_deposit` for it (paid by us, in NEAR).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NearFtTransfer {
+    /// Who receives the tokens.
+    pub recipient: String,
+    /// Token units.
+    pub amount: u128,
+    /// yoctoNEAR attached to `storage_deposit({ account_id: recipient, registration_only: true })`.
+    pub storage_deposit: Option<u128>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FtTransferArgs {
+    receiver_id: String,
+    amount: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StorageDepositArgs {
+    account_id: String,
+    registration_only: bool,
+}
+
+fn ft_transfer_args(recipient: &str, amount: u128) -> String {
+    format!("{{\"receiver_id\":\"{recipient}\",\"amount\":\"{amount}\"}}")
+}
+
+fn storage_deposit_args(recipient: &str) -> String {
+    format!("{{\"account_id\":\"{recipient}\",\"registration_only\":true}}")
+}
+
+fn put_call(o: &mut Vec<u8>, method: &str, args: &str, deposit: u128) {
+    o.push(ACTION_FUNCTION_CALL);
+    put_string(o, method);
+    put_string(o, args); // Vec<u8>: u32 length + bytes, like a string
+    o.extend_from_slice(&NEAR_FT_GAS.to_le_bytes());
+    o.extend_from_slice(&deposit.to_le_bytes());
+}
+
+/// One `FunctionCall`: `(method, args, gas, deposit)`.
+fn read_call(b: &mut &[u8]) -> Result<(String, Vec<u8>, u64, u128)> {
+    let tag = read_u8(b)?;
+    if tag != ACTION_FUNCTION_CALL {
+        return Err(bad(format!(
+            "action {} ({tag}) refusée dans un transfert de jeton",
+            action_name(tag)
+        )));
+    }
+    let n = read_u32(b)? as usize;
+    if n > 32 {
+        return Err(bad("nom de méthode trop long"));
+    }
+    let method = core::str::from_utf8(take(b, n)?)
+        .map_err(|_| bad("nom de méthode : UTF-8 invalide"))?
+        .to_owned();
+    let n = read_u32(b)? as usize;
+    if n > 512 {
+        return Err(bad("arguments trop longs"));
+    }
+    let args = take(b, n)?.to_vec();
+    Ok((method, args, read_u64(b)?, read_u128(b)?))
+}
 const MAX_TX: usize = 1024;
 
 // ---------------------------------------------------------------------------------------------
@@ -249,8 +381,11 @@ pub struct NearTransfer {
     pub receiver_id: String,
     /// `block_hash`: a recent block; the transaction expires ≈ 24 h after it.
     pub block_hash: [u8; 32],
-    /// `Transfer.deposit`, yoctoNEAR.
+    /// `Transfer.deposit`, yoctoNEAR (0 for a token transfer).
     pub deposit: u128,
+    /// Token transfer: `receiver_id` is then the (known) token contract, the actions are
+    /// `[storage_deposit?, ft_transfer]` instead of one `Transfer`.
+    pub ft: Option<NearFtTransfer>,
 }
 
 impl NearTransfer {
@@ -263,10 +398,83 @@ impl NearTransfer {
         o.extend_from_slice(&self.nonce.to_le_bytes());
         put_string(&mut o, &self.receiver_id);
         o.extend_from_slice(&self.block_hash);
-        o.extend_from_slice(&1u32.to_le_bytes());
-        o.push(ACTION_TRANSFER);
-        o.extend_from_slice(&self.deposit.to_le_bytes());
+        match &self.ft {
+            None => {
+                o.extend_from_slice(&1u32.to_le_bytes());
+                o.push(ACTION_TRANSFER);
+                o.extend_from_slice(&self.deposit.to_le_bytes());
+            }
+            Some(f) => {
+                let n: u32 = if f.storage_deposit.is_some() { 2 } else { 1 };
+                o.extend_from_slice(&n.to_le_bytes());
+                if let Some(d) = f.storage_deposit {
+                    put_call(
+                        &mut o,
+                        "storage_deposit",
+                        &storage_deposit_args(&f.recipient),
+                        d,
+                    );
+                }
+                put_call(
+                    &mut o,
+                    "ft_transfer",
+                    &ft_transfer_args(&f.recipient, f.amount),
+                    1,
+                );
+            }
+        }
         o
+    }
+
+    /// yoctoNEAR attached in total (Transfer deposit, or 1 yocto + the storage deposit).
+    pub fn attached(&self) -> u128 {
+        match &self.ft {
+            None => self.deposit,
+            Some(f) => 1 + f.storage_deposit.unwrap_or(0),
+        }
+    }
+
+    /// `[storage_deposit?, ft_transfer]` after the action count `n`.
+    fn read_ft(b: &mut &[u8], n: u32) -> Result<NearFtTransfer> {
+        if n != 1 && n != 2 {
+            return Err(bad(format!("{n} actions dans un transfert de jeton")));
+        }
+        let mut storage = None;
+        if n == 2 {
+            let (m, args, gas, deposit) = read_call(b)?;
+            let a: StorageDepositArgs = serde_json::from_slice(&args)
+                .map_err(|_| bad("arguments de storage_deposit inattendus"))?;
+            if m != "storage_deposit" || gas != NEAR_FT_GAS || !a.registration_only {
+                return Err(bad("première action : storage_deposit attendu"));
+            }
+            if deposit == 0 || deposit > NEAR_MAX_STORAGE_DEPOSIT {
+                return Err(bad("dépôt de stockage hors limites"));
+            }
+            storage = Some((a.account_id, deposit));
+        }
+        let (m, args, gas, deposit) = read_call(b)?;
+        let a: FtTransferArgs = serde_json::from_slice(&args)
+            .map_err(|_| bad("arguments de ft_transfer inattendus (mémo refusé)"))?;
+        if m != "ft_transfer" || gas != NEAR_FT_GAS || deposit != 1 {
+            return Err(bad("ft_transfer attendu (30 Tgas, 1 yoctoNEAR)"));
+        }
+        near_account_kind(&a.receiver_id).map_err(|e| bad(format!("destinataire : {e}")))?;
+        if let Some((acc, _)) = &storage {
+            if acc != &a.receiver_id {
+                return Err(bad(
+                    "storage_deposit pour un autre compte que le destinataire",
+                ));
+            }
+        }
+        let amount: u128 = a
+            .amount
+            .parse()
+            .map_err(|_| bad("montant de jeton invalide"))?;
+        Ok(NearFtTransfer {
+            recipient: a.receiver_id,
+            amount,
+            storage_deposit: storage.map(|(_, d)| d),
+        })
     }
 
     fn read(b: &mut &[u8]) -> Result<NearTransfer> {
@@ -289,6 +497,23 @@ impl NearTransfer {
         let receiver_id = read_account_id(b, "receiver_id")?;
         let block_hash = take_array(b)?;
         let n = read_u32(b)?;
+        if b.first() == Some(&ACTION_FUNCTION_CALL) {
+            if near_known_token(&receiver_id).is_none() {
+                return Err(bad(
+                    "appel de contrat refusé : Kyro n'appelle que les contrats de jetons qu'il connaît",
+                ));
+            }
+            let ft = NearTransfer::read_ft(b, n)?;
+            return Ok(NearTransfer {
+                signer_id,
+                public_key,
+                nonce,
+                receiver_id,
+                block_hash,
+                deposit: 0,
+                ft: Some(ft),
+            });
+        }
         if n != 1 {
             return Err(bad(format!(
                 "{n} actions : Kyro ne signe qu'un seul Transfer"
@@ -309,6 +534,7 @@ impl NearTransfer {
             receiver_id,
             block_hash,
             deposit,
+            ft: None,
         })
     }
 
@@ -400,6 +626,33 @@ pub struct NearTxSummary {
     pub warnings: Vec<NearWarning>,
     /// The confirmation must be followed by a reinforced one.
     pub requires_extra_confirmation: bool,
+    /// Token transfer (known NEP-141 contract = `receiver_id`); `deposit` is then the NEAR
+    /// attached in total (1 yoctoNEAR + the storage deposit, if any).
+    pub token: Option<NearTokenSummary>,
+}
+
+/// The token side of a NEP-141 transfer, decoded by Rust.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NearTokenSummary {
+    /// Token contract (verified id).
+    pub contract: String,
+    /// Ticker.
+    pub symbol: String,
+    /// Display name.
+    pub name: String,
+    /// Decimals.
+    pub decimals: u8,
+    /// The contract is Kyro's testnet one (the app checks it against its network).
+    pub testnet: bool,
+    /// Who receives the tokens.
+    pub recipient: String,
+    /// Kind of recipient id.
+    pub recipient_kind: NearAccountKind,
+    /// Token units, decimal string.
+    pub amount: String,
+    /// yoctoNEAR paid to register the recipient with the token, when it was not yet.
+    pub storage_deposit: Option<String>,
 }
 
 fn summarize(tx: &NearTransfer, our_account: &str, our_pubkey: &[u8; 32]) -> Result<NearTxSummary> {
@@ -414,31 +667,62 @@ fn summarize(tx: &NearTransfer, our_account: &str, our_pubkey: &[u8; 32]) -> Res
     if tx.receiver_id == tx.signer_id {
         return Err(bad("transfert à soi-même"));
     }
-    if tx.deposit == 0 {
-        return Err(bad("montant nul"));
-    }
-    if tx.deposit > MAX_DEPOSIT {
-        return Err(bad("montant invraisemblable"));
-    }
     if tx.nonce == 0 {
         return Err(bad("nonce nul"));
     }
     let receiver_kind = near_account_kind(&tx.receiver_id)?;
     let mut warnings = Vec::new();
-    if receiver_kind == NearAccountKind::EthImplicit {
-        warnings.push(NearWarning::EthImplicitReceiver);
-    }
+    let token = match &tx.ft {
+        None => {
+            if tx.deposit == 0 {
+                return Err(bad("montant nul"));
+            }
+            if tx.deposit > MAX_DEPOSIT {
+                return Err(bad("montant invraisemblable"));
+            }
+            if receiver_kind == NearAccountKind::EthImplicit {
+                warnings.push(NearWarning::EthImplicitReceiver);
+            }
+            None
+        }
+        Some(f) => {
+            let (k, testnet) = near_known_token(&tx.receiver_id)
+                .ok_or_else(|| bad("contrat de jeton inconnu de Kyro"))?;
+            if f.amount == 0 {
+                return Err(bad("montant nul"));
+            }
+            if f.recipient == tx.signer_id {
+                return Err(bad("transfert à soi-même"));
+            }
+            let recipient_kind = near_account_kind(&f.recipient)?;
+            if recipient_kind == NearAccountKind::EthImplicit {
+                warnings.push(NearWarning::EthImplicitReceiver);
+            }
+            Some(NearTokenSummary {
+                contract: k.contract.into(),
+                symbol: k.symbol.into(),
+                name: k.name.into(),
+                decimals: k.decimals,
+                testnet,
+                recipient: f.recipient.clone(),
+                recipient_kind,
+                amount: f.amount.to_string(),
+                storage_deposit: f.storage_deposit.map(|d| d.to_string()),
+            })
+        }
+    };
     Ok(NearTxSummary {
         signer_id: tx.signer_id.clone(),
         public_key: near_public_key_string(&tx.public_key),
         nonce: tx.nonce.to_string(),
         receiver_id: tx.receiver_id.clone(),
         receiver_kind,
-        deposit: tx.deposit.to_string(),
+        deposit: tx.attached().to_string(),
         block_hash: near_hash_string(&tx.block_hash),
         hash: near_hash_string(&tx.hash()),
         requires_extra_confirmation: !warnings.is_empty(),
         warnings,
+        token,
     })
 }
 
@@ -553,6 +837,7 @@ mod tests {
             receiver_id: "whatever.near".into(),
             block_hash: [9; 32],
             deposit: 1,
+            ft: None,
         };
         let raw = tx.encode();
         assert_eq!(NearTransfer::decode(&raw).unwrap(), tx);

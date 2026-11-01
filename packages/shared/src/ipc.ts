@@ -883,6 +883,24 @@ export interface NearTxSummary {
   hash: string;
   warnings: NearWarning[];
   requiresExtraConfirmation: boolean;
+  /** NEP-141 transfer (`receiverId` = the known token contract; `deposit` = NEAR attached: 1 yocto + storage deposit). */
+  token?: NearTokenSummary | null;
+}
+
+/** wallet-core `NearTokenSummary`. */
+export interface NearTokenSummary {
+  contract: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  /** The contract is Kyro's testnet one. */
+  testnet: boolean;
+  recipient: string;
+  recipientKind: NearAccountKind;
+  /** Token units. */
+  amount: string;
+  /** yoctoNEAR paid to register the recipient (`storage_deposit`), null if already registered. */
+  storageDeposit: string | null;
 }
 
 /** Live context Rust read for the dialog. Fees are not in a NEAR transaction: `feeBound` is Kyro's bound. */
@@ -894,6 +912,8 @@ export interface NearContext {
   gasPrice: string;
   feeEstimate: string;
   feeBound: string;
+  /** Token transfer: our token balance (units), recipient registered with the token. */
+  token?: { balance: string; recipientRegistered: boolean } | null;
 }
 
 /** `near_txs` entry (last 20, newest first). `deposit`: the transaction's own Transfer actions. */
@@ -908,6 +928,8 @@ export interface NearHistoryEntry {
   /** ms epoch. */
   time: number | null;
   success: boolean;
+  /** NEP-141 `ft_transfer` events of known token contracts involving the account (receipts executed by those contracts only). */
+  tokens?: Array<{ contract: string; direction: 'in' | 'out'; amount: string; counterparty: string }>;
 }
 
 export interface NearTxOutcome {
@@ -2535,6 +2557,10 @@ export interface Commands {
    * `amount`: yoctoNEAR. Refused before building: our account not on chain; a named or `0x…`
    * receiver that does not exist; amount + fee bound > spendable; a key without full access.
    */
+  /** Known NEP-141 tokens only (USDC, USDt): balance and registration of `accountId`. */
+  near_token_balances: { args: { accountId: string }; ret: Array<{ contract: string; symbol: string; decimals: number; balance: string; registered: boolean }> };
+  /** NEP-141 transfer of a known `contract`: `amount` in token units; `storage_deposit` added for an unregistered recipient (paid in NEAR). Signed by `near_sign_tx`. */
+  near_build_token_tx: { args: { contract: string; to: string; amount: string } & WithAccount; ret: { tx: string; summary: NearTxSummary; context: NearContext } };
   near_build_tx: { args: { to: string; amount: string } & WithAccount; ret: { tx: string; summary: NearTxSummary; context: NearContext } };
   /** Stale nonce or a block older than ≈ 1 h → INVALID_INPUT « reconstruis ». */
   near_sign_tx: { args: { tx: string; password: string } & WithAccount; ret: { signed: string; hash: string; summary: NearTxSummary; context: NearContext } };

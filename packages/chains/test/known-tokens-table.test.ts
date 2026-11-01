@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { ERC20_TOKENS, SPL_TOKENS, TRC20_TOKENS, evmChains } from '../src';
-import { APTOS_ASSETS, STELLAR_ASSETS, SUI_COINS } from '../src/registry';
+import { APTOS_ASSETS, NEAR_TOKENS, STELLAR_ASSETS, SUI_COINS } from '../src/registry';
 
 const NETWORKS = ['mainnet', 'testnet'] as const;
 type Net = (typeof NETWORKS)[number];
@@ -51,12 +51,13 @@ export function knownTokensFixture(): Fixture {
     for (const t of SUI_COINS[network]) tok(network, 'sui', t);
     for (const t of APTOS_ASSETS[network]) tok(network, 'aptos', t);
     for (const t of STELLAR_ASSETS[network]) tok(network, 'stellar', t);
+    for (const t of NEAR_TOKENS[network]) tok(network, 'near', t);
   }
   return { evmChains: chains, tokens };
 }
 
 /** Non-EVM token chains and their `TokenChain` variant. */
-const OTHER_CHAINS: Record<string, string> = { sui: 'Sui', aptos: 'Aptos', stellar: 'Stellar' };
+const OTHER_CHAINS: Record<string, string> = { sui: 'Sui', aptos: 'Aptos', stellar: 'Stellar', near: 'Near' };
 const otherUse = () => {
   const v = Object.values(OTHER_CHAINS).sort();
   return v.length === 1 ? (v[0] ?? '') : `{${v.join(', ')}}`;

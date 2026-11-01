@@ -152,9 +152,11 @@ pub use monero::{
     XMR_SPENDABLE_AGE, XMR_SUBADDRESS_LOOKAHEAD,
 };
 pub use near::{
-    near_account_kind, near_address, near_decode_tx, near_hash_string, near_parse_hash,
-    near_parse_public_key, near_path, near_public_key, near_public_key_string, near_sign,
-    near_verify_signed, NearAccountKind, NearTransfer, NearTxSummary, NearWarning, NEAR_DECIMALS,
+    near_account_kind, near_address, near_decode_tx, near_hash_string, near_known_token,
+    near_known_tokens, near_parse_hash, near_parse_public_key, near_path, near_public_key,
+    near_public_key_string, near_sign, near_verify_signed, NearAccountKind, NearFtTransfer,
+    NearKnownToken, NearTokenSummary, NearTransfer, NearTxSummary, NearWarning, NEAR_DECIMALS,
+    NEAR_FT_GAS, NEAR_MAX_STORAGE_DEPOSIT,
 };
 pub use network::{BtcKind, Network};
 pub use polkadot::{

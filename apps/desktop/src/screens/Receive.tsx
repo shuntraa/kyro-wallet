@@ -198,6 +198,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const xrpAccount = useAsync(family === 'xrp' && adapters.xrp ? () => adapters.xrp!.account() : null, [family, adapters.xrp]);
   // NEAR: does our implicit account exist yet (created by the first NEAR received)?
   const nearAccount = useAsync(family === 'near' && adapters.near ? () => adapters.near!.account() : null, [family, adapters.near]);
+  const nearTokens = useAsync(family === 'near' && adapters.near ? () => adapters.near!.tokenStatus() : null, [family, adapters.near]);
   // Bitcoin Cash: the CashAddr already starts with its scheme (`bitcoincash:` / `bchtest:`).
   // Polkadot: does our account exist yet (≥ existential deposit received)?
   const dotAccount = useAsync(family === 'dot' && adapters.polkadot ? () => adapters.polkadot!.account() : null, [family, adapters.polkadot]);
@@ -565,6 +566,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               {rt('receive.nearNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               {nearAccount.data && !nearAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.nearNotCreated')}</span>}
+              {nearTokens.data && nearTokens.data.length > 0 && <span className="mt-1 block">{rt('receive.nearTokenNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> }, { status: nearTokens.data.map((x) => `${x.symbol} ${x.registered ? t('receive.nearRegistered') : t('receive.nearNotRegistered')}`).join(' · ') })}</span>}
             </Notice>
           )}
           {family === 'sui' && (

@@ -480,7 +480,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : isCosmos && cosmosMe.data ? BigInt(cosmosMe.data.spendable) : null;
   const kasSpendable = isKas && kasMe.data ? BigInt(kasMe.data.spendable) : isXlm && asset?.kind === 'native' && xlmMe.data ? BigInt(xlmMe.data.spendable) : null;
   // NEAR: likewise, balance − storage reserve.
-  const nearSpendable = isNear && nearMe.data ? BigInt(nearMe.data.spendable) : null;
+  const nearSpendable = isNear && asset?.kind === 'native' && nearMe.data ? BigInt(nearMe.data.spendable) : null;
   // Sui: the address balance is not spent by Kyro, only SUI coin objects.
   const suiSpendable = isSui && asset?.kind === 'native' && suiMe.data ? BigInt(suiMe.data.coin) : null;
   // Polkadot: the existential deposit and the frozen part cannot be sent.
@@ -1280,6 +1280,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 fiat: feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : '',
               })}
               {built.unsigned.context.createsAccount ? t('send.clearNearCreates') : ''}
+              {built.unsigned.summary.token?.storageDeposit ? t('send.clearNearStorage', { amount: fmtCrypto(BigInt(built.unsigned.summary.token.storageDeposit), 24, 'NEAR', 6) }) : ''}
               {built.unsigned.summary.requiresExtraConfirmation ? t('send.clearNearEthStyle') : ''}
             </EnClair>
           )}

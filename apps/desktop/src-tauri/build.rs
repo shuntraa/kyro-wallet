@@ -121,6 +121,8 @@ const COMMANDS: &[&str] = &[
     "near_address",
     "near_account",
     "near_txs",
+    "near_token_balances",
+    "near_build_token_tx",
     "near_build_tx",
     "near_sign_tx",
     "near_broadcast",

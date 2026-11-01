@@ -71,7 +71,7 @@ export interface WatchOnlyChain {
   phase: 4;
 }
 
-export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'suicoin' | 'fa' | 'xlmasset';
+export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'suicoin' | 'fa' | 'xlmasset' | 'nep141';
 
 export interface AssetDef {
   /** Unique id, e.g. `btc`, `eth:1`, `erc20:11155111:0x1c7d…`. */
@@ -871,6 +871,19 @@ export const STELLAR_ASSETS: Record<Network, TokenSpec[]> = {
   mainnet: [USDC('USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN', 7)],
 };
 
+/**
+ * NEAR NEP-141 tokens (`contract` = token account). USDC: Circle's native USDC
+ * (developers.circle.com, mainnet and testnet), USDt: `usdt.tether-token.near`
+ * (tether.to › supported protocols, mainnet only); cross-checked with CoinGecko (`usd-coin` /
+ * `tether`, platform `near-protocol`), `ft_metadata` read on chain (decimals 6, 2026-11-01).
+ * Sending to an unregistered recipient adds `storage_deposit` (≈ 0.00125 NEAR, paid by the
+ * sender). wallet-core (`near.rs`, `near_known_tokens`) holds the same list.
+ */
+export const NEAR_TOKENS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af')],
+  mainnet: [USDC('17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1'), USDT('usdt.tether-token.near')],
+};
+
 export const SPL_TOKENS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')],
   mainnet: [
@@ -992,6 +1005,11 @@ export function assetsFor(network: Network): AssetDef[] {
     if (chain.family === 'xlm') {
       for (const t of STELLAR_ASSETS[network]) {
         out.push({ id: `xlm:${t.contract.replace('-', ':')}`, chainKey: chain.key, family: 'xlm', kind: 'xlmasset', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'near') {
+      for (const t of NEAR_TOKENS[network]) {
+        out.push({ id: `nep141:${t.contract}`, chainKey: chain.key, family: 'near', kind: 'nep141', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
       }
     }
   }
