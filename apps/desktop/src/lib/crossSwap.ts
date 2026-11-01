@@ -4,7 +4,7 @@
 // « Tu reçois » list grouped by chain, and the label of a cross-chain transfer's status.
 
 import { NATIVE_EVM_TOKEN, NATIVE_SOL_MINT, type AssetDef, type Chain } from '@kyro/chains';
-import type { Accounts, Network } from '@kyro/shared';
+import type { Network } from '@kyro/shared';
 import type { SwapChain } from '@kyro/swap';
 
 /** The swap id of a chain: EVM chain id, 'solana', 'bitcoin' (arrival only); null when swaps don't serve it. */
@@ -33,11 +33,11 @@ export function canSwapTo(network: Network, from: Chain | undefined, to: Chain |
  * Our own receiving address on `chain` (the selected account). Bitcoin: the native SegWit
  * (`bc1q…`) receive address, the only form a cross-chain bridge call can carry unambiguously.
  */
-export function ownAddressOn(accounts: Pick<Accounts, 'evm' | 'sol' | 'btc'>, chain: Chain | undefined): string | null {
+export function ownAddressOn(accounts: { evm?: { address: string }; sol?: { address: string }; btc?: { segwit: { address: string } } }, chain: Chain | undefined): string | null {
   if (!chain) return null;
-  if (chain.family === 'evm') return accounts.evm.address || null;
-  if (chain.family === 'sol') return accounts.sol.address || null;
-  if (chain.family === 'btc') return accounts.btc.segwit.address || null;
+  if (chain.family === 'evm') return accounts.evm?.address || null;
+  if (chain.family === 'sol') return accounts.sol?.address || null;
+  if (chain.family === 'btc') return accounts.btc?.segwit.address || null;
   return null;
 }
 

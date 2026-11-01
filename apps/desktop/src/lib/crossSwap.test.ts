@@ -43,7 +43,7 @@ describe('cross-chain swap helpers', () => {
     const groups = buyGroups('mainnet', chains, assets, sell);
     expect(groups[0]?.chain.key).toBe('ethereum');
     expect(groups.map((g) => g.chain.key)).toEqual(expect.arrayContaining(['solana', 'bitcoin', 'arbitrum']));
-    expect(groups.some((g) => g.chain.family === 'tron' || g.chain.family === 'xrp' || g.chain.family === 'cardano')).toBe(false);
+    expect(groups.some((g) => ['tron', 'xrp', 'ada', 'ltc', 'doge'].includes(g.chain.family))).toBe(false);
     expect(groups.flatMap((g) => g.assets).some((a) => a.id === 'eth:1')).toBe(false);
     // Testnet: same chain only.
     const sepEth = assetsFor('testnet').find((a) => a.chainKey === 'sepolia' && a.kind === 'native');
