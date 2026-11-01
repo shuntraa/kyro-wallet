@@ -41,7 +41,7 @@ import {
 } from './ipc';
 import { checkServerUrl } from './servers';
 import type { DemoTor } from './mock-tor';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 
 /** Preprod protocol parameters (Koios `epoch_params`). */
 export const ADA_PARAMS = { minFeeA: 44, minFeeB: 155_381, coinsPerByte: 4_310, maxTxSize: 16_384 };
@@ -71,11 +71,11 @@ const hostOf = (u: string) => {
   }
 };
 
-/** Rust `format_units(raw, 6)`: comma decimal, trailing zeros trimmed. */
+/** Rust `format_units_in(lang, raw, 6)`: decimal mark of the language, trailing zeros trimmed. */
 export function adaUnits(lovelace: bigint | string | number): string {
   const v = BigInt(lovelace);
   const frac = (v % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
-  return `${v / 1_000_000n}${frac ? `,${frac}` : ''}`;
+  return `${v / 1_000_000n}${frac ? `${decimalMark()}${frac}` : ''}`;
 }
 
 /** bech32 encode of address bytes. */

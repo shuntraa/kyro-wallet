@@ -25,7 +25,7 @@ import {
   type Settings,
 } from './ipc';
 import type { DemoTor } from './mock-tor';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 
 export const APTOS_TRANSFER_FUNCTION = '0x1::aptos_account::transfer';
 const GAS_PRICE = 100n;
@@ -47,7 +47,7 @@ const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée 
 const aptText = (octas: bigint | string) => {
   const v = BigInt(octas);
   const frac = (v % 100_000_000n).toString().padStart(8, '0').replace(/0+$/, '');
-  return `${v / 100_000_000n}${frac ? `,${frac}` : ''} APT`;
+  return `${v / 100_000_000n}${frac ? `${decimalMark()}${frac}` : ''} APT`;
 };
 
 /** wallet-core `aptos_parse_address`: `0x` + exactly 64 hex, same messages as Rust. */

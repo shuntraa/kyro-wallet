@@ -27,7 +27,7 @@ import {
   type SuiTxSummary,
   type SuiWarning,
 } from './ipc';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const MIST = 1_000_000_000n;
@@ -65,13 +65,13 @@ export function checkSuiAddress(a: unknown): string {
   return `0x${h.toLowerCase()}`;
 }
 
-/** `format_units(mist, 9)` + « SUI », French decimal comma. */
+/** `format_units_in(lang, mist, 9)` + « SUI », decimal mark of the language. */
 export function suiText(mist: bigint | string): string {
   const v = BigInt(mist);
   const neg = v < 0n;
   const a = neg ? -v : v;
   const frac = (a % MIST).toString().padStart(9, '0').replace(/0+$/, '');
-  return `${neg ? '−' : ''}${a / MIST}${frac ? `,${frac}` : ''} SUI`;
+  return `${neg ? '−' : ''}${a / MIST}${frac ? `${decimalMark()}${frac}` : ''} SUI`;
 }
 
 interface DemoCoin {

@@ -50,7 +50,8 @@ fn amount_text(lang: Lang, a: &XrpAmountView) -> String {
             currency,
             issuer,
         } => format!(
-            "{value} {} ({} {issuer})",
+            "{} {} ({} {issuer})",
+            lang.decimal(value),
             crate::dialog_text::sanitize(currency, 40),
             lang.pick("émis par", "issued by")
         ),

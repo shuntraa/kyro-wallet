@@ -76,12 +76,12 @@ impl Lang {
         self.pick(" : ", ": ")
     }
 
-    /// `"1,5"` → `"1.5"` in English. Only for plain decimal amounts (one mark, no grouping), as
-    /// produced by `commands::format_units`.
-    pub fn decimal(self, fr_decimal: &str) -> String {
+    /// `"1.5"` → `"1,5"` in French. Only for plain decimal amounts (one mark, no grouping), as
+    /// produced by `commands::format_units` (English, dot decimal mark).
+    pub fn decimal(self, en_decimal: &str) -> String {
         match self {
-            Lang::Fr => fr_decimal.to_owned(),
-            Lang::En => fr_decimal.replace(',', "."),
+            Lang::Fr => en_decimal.replace('.', ","),
+            Lang::En => en_decimal.to_owned(),
         }
     }
 }
@@ -280,5 +280,12 @@ mod tests {
         );
         assert!(serde_json::from_value::<LanguagePref>("de".into()).is_err());
         assert_eq!(Lang::En.pick("Signer", "Sign"), "Sign");
+    }
+
+    #[test]
+    fn decimal_mark_per_language() {
+        assert_eq!(Lang::En.decimal("0.1"), "0.1");
+        assert_eq!(Lang::Fr.decimal("0.1"), "0,1");
+        assert_eq!(Lang::Fr.decimal("12"), "12");
     }
 }

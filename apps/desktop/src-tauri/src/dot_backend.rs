@@ -560,9 +560,9 @@ mod tests {
         assert!(check(&me, &h(1), 4_990_000, &ours, &det).is_ok());
         err(
             check(&me, &h(1), 4_990_001, &ours, &det),
-            "at most 4,99 USDT",
+            "at most 4.99 USDT",
         );
-        err(check(&me, &h(0), 9_999, &ours, &det), "at least 0,01 USDT");
+        err(check(&me, &h(0), 9_999, &ours, &det), "at least 0.01 USDT");
         assert!(check(&me, &h(0), 10_000, &ours, &det).is_ok());
         let frozen = wallet_core::DotAssetAccount { frozen: true, ..me };
         err(check(&frozen, &h(1), 1, &ours, &det), "frozen");
@@ -612,7 +612,7 @@ mod tests {
         assert!(ok(&me, &exists, 1).is_ok());
         // New account: at least the existential deposit (0.01 DOT).
         assert!(
-            matches!(ok(&me, &new, 99_999_999), Err(AppError::InvalidInput(m)) if m.contains("existential deposit (0,01 DOT)"))
+            matches!(ok(&me, &new, 99_999_999), Err(AppError::InvalidInput(m)) if m.contains("existential deposit (0.01 DOT)"))
         );
         assert!(ok(&me, &new, 100_000_000).is_ok());
         // Keep-alive: balance − ED − fee at most.

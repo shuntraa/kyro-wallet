@@ -16,7 +16,7 @@ import { blake2b } from '@noble/hashes/blake2b';
 import { base58 } from '@scure/base';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { IpcError, type Commands, type DotAccountInfo, type DotBackendInfo, type DotContext, type DotHistoryEntry, type DotTxSummary, type Network, type Settings } from './ipc';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 /** Westend Asset Hub: 12 decimals, ED 0.001 WND; Polkadot Asset Hub: 10 decimals, ED 0.01 DOT. */
@@ -128,7 +128,7 @@ export function createDemoDot(d: DemoDotDeps) {
   };
   const fmt = (v: bigint) => {
     const frac = (v % unit).toString().padStart(c.decimals, '0').replace(/0+$/, '');
-    return `${v / unit}${frac ? `,${frac}` : ''} ${c.symbol}`;
+    return `${v / unit}${frac ? `${decimalMark()}${frac}` : ''} ${c.symbol}`;
   };
   const checkAddress = (a: unknown): string => {
     const s = String(a ?? '').trim();

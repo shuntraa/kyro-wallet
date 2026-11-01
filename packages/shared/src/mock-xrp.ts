@@ -38,7 +38,7 @@ import {
 } from './ipc';
 import { checkServerUrl } from './servers';
 import type { DemoTor } from './mock-tor';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 
 export const XRP_RESERVE_BASE = 1_000_000n;
 export const XRP_RESERVE_INC = 200_000n;
@@ -77,7 +77,7 @@ const hostOf = (u: string) => {
 const xrpText = (drops: bigint | string) => {
   const v = BigInt(drops);
   const frac = (v % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
-  return `${v / 1_000_000n}${frac ? `,${frac}` : ''} XRP`;
+  return `${v / 1_000_000n}${frac ? `${decimalMark()}${frac}` : ''} XRP`;
 };
 
 /** wallet-core `xrp_account_id`: X-addresses refused, checksum verified (same messages as Rust). */

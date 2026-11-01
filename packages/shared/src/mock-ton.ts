@@ -31,7 +31,7 @@ import {
   type TonWarning,
 } from './ipc';
 import { parseTonAddress, tonAddressProblem, tonFriendly } from './ton-address';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 /** Demo fee of a transfer (nanotons), and of a first transfer that deploys the wallet. */
@@ -53,7 +53,7 @@ const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée 
 const tonText = (nano: bigint | string) => {
   const v = BigInt(nano);
   const frac = (v % 1_000_000_000n).toString().padStart(9, '0').replace(/0+$/, '');
-  return `${v / 1_000_000_000n}${frac ? `,${frac}` : ''} GRAM`;
+  return `${v / 1_000_000_000n}${frac ? `${decimalMark()}${frac}` : ''} GRAM`;
 };
 
 interface DemoTonAccount {

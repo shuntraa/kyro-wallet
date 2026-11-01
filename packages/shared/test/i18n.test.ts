@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { call, checkServerUrl, getLang, isCustomServerDown, isTorUnavailable, l10n, langFromLocales, resolveLang, setBackend, setLang } from '../src';
+import { call, checkServerUrl, decimalMark, getLang, isCustomServerDown, isTorUnavailable, l10n, langFromLocales, resolveLang, setBackend, setLang } from '../src';
 import { createMockBackend } from '../src/mock';
+import { demoXlmText } from '../src/mock-stellar';
 
 afterEach(() => setLang('fr'));
 
@@ -10,6 +11,15 @@ describe('display language for the packages', () => {
     expect(l10n('Annuler', 'Cancel')).toBe('Annuler');
     setLang('en');
     expect(l10n('Annuler', 'Cancel')).toBe('Cancel');
+  });
+
+  it('demo amounts use the decimal mark of the language', () => {
+    expect(decimalMark()).toBe(',');
+    expect(demoXlmText(125_000_000n)).toBe('12,5 XLM');
+    setLang('en');
+    expect(decimalMark()).toBe('.');
+    expect(demoXlmText(125_000_000n)).toBe('12.5 XLM');
+    expect(demoXlmText(10_000_000n)).toBe('1 XLM');
   });
 
   it('maps locales and preferences', () => {

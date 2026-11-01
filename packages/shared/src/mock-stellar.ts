@@ -30,7 +30,7 @@ import {
   type StellarTxSummary,
 } from './ipc';
 import { stellarAddressKind, stellarAddressOfKey } from './stellar';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 export const STELLAR_BASE_RESERVE = 5_000_000n;
@@ -48,11 +48,11 @@ export function demoStellarAddress(seed: Uint8Array, account: number): string {
 
 const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 
-/** `12,5 XLM`: stroops with French decimals, trailing zeros removed. */
+/** `12.5 XLM` / `12,5 XLM`: stroops with the decimal mark of the language, trailing zeros removed. */
 export function demoXlmText(stroops: bigint | string): string {
   const v = BigInt(stroops);
   const frac = (v % 10_000_000n).toString().padStart(7, '0').replace(/0+$/, '');
-  return `${v / 10_000_000n}${frac ? `,${frac}` : ''} XLM`;
+  return `${v / 10_000_000n}${frac ? `${decimalMark()}${frac}` : ''} XLM`;
 }
 
 /** wallet-core `stellar_account_id`: same messages. */

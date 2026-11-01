@@ -28,7 +28,7 @@ import {
   type Network,
   type Settings,
 } from './ipc';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 export const ALGO_MIN_BALANCE = 100_000n;
@@ -71,7 +71,7 @@ export function checkAlgoAddress(a: unknown): string {
 const algoText = (micro: bigint | string) => {
   const v = BigInt(micro);
   const frac = (v % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
-  return `${v / 1_000_000n}${frac ? `,${frac}` : ''} ALGO`;
+  return `${v / 1_000_000n}${frac ? `${decimalMark()}${frac}` : ''} ALGO`;
 };
 
 interface DemoAlgoAccount {

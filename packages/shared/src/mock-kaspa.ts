@@ -24,7 +24,7 @@ import {
   type Settings,
 } from './ipc';
 import { kaspaAddressDecode, kaspaAddressEncode, kaspaAddressProblem, type KaspaAddressKind } from './kaspa';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const C = 1_000_000_000_000n;
@@ -46,7 +46,7 @@ const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée 
 const kas = (sompi: bigint | string) => {
   const v = BigInt(sompi);
   const frac = (v % 100_000_000n).toString().padStart(8, '0').replace(/0+$/, '');
-  return `${v / 100_000_000n}${frac ? `,${frac}` : ''} KAS`;
+  return `${v / 100_000_000n}${frac ? `${decimalMark()}${frac}` : ''} KAS`;
 };
 
 function scriptOf(network: Network, address: string): string {

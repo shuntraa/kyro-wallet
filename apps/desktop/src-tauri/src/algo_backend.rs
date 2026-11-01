@@ -579,10 +579,10 @@ mod tests {
         };
         assert!(ok(100_000, &dest).is_ok());
         assert!(
-            matches!(ok(99_999, &dest), Err(AppError::InvalidInput(m)) if m.contains("at least 0,1 ALGO"))
+            matches!(ok(99_999, &dest), Err(AppError::InvalidInput(m)) if m.contains("at least 0.1 ALGO"))
         );
         assert!(
-            matches!(ok(4_799_001, &dest), Err(AppError::InvalidInput(m)) if m.contains("insufficient") && m.contains("0,2 ALGO"))
+            matches!(ok(4_799_001, &dest), Err(AppError::InvalidInput(m)) if m.contains("insufficient") && m.contains("0.2 ALGO"))
         );
         assert!(ok(4_799_000, &dest).is_ok());
         let funded = AlgoAccountInfo {
