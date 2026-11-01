@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Algorand (pay) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -22,6 +22,7 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+mod algorand;
 mod btc;
 mod btc_hw;
 mod btc_watch;
@@ -42,6 +43,12 @@ mod vault;
 mod watch;
 mod xrp;
 
+pub use algorand::{
+    algo_address, algo_address_bytes, algo_address_of_pubkey, algo_decode_signed, algo_decode_tx,
+    algo_encode_signed, algo_genesis, algo_path, algo_public_key, algo_sign, algo_verify_signed,
+    AlgoPayment, AlgoTxSummary, AlgoWarning, ALGO_MAINNET_GENESIS, ALGO_MAX_NOTE,
+    ALGO_MAX_VALIDITY, ALGO_MIN_BALANCE, ALGO_MIN_FEE, ALGO_TESTNET_GENESIS,
+};
 pub use btc::{
     btc_account, btc_address, btc_decode_psbt, btc_psbt_summary, btc_sign_psbt, BtcAccount,
     BtcTxSummary, BtcWarning, BTC_HIGH_FEE_SAT_PER_VB, MAX_CHANGE_INDEX,
