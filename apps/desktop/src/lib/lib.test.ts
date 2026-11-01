@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { setLanguage } from '../i18n';
 import {
   MINUS,
   NNBSP,
   addressChunks,
   chunkAddress,
+  fmtAgo,
   fmtCountdown,
   fmtCrypto,
   fmtEta,
@@ -34,6 +36,27 @@ describe('format: fiat & numbers (fr-FR)', () => {
     expect(fmtPct(-0.64)).toBe(`${MINUS}0,64${NNBSP}%`);
     expect(fmtPct(0.001)).toBe(`0,00${NNBSP}%`);
     expect(fmtPct(null)).toBe('—');
+  });
+});
+
+describe('format: English (en-US)', () => {
+  beforeAll(() => setLanguage('en'));
+  afterAll(() => setLanguage('fr'));
+  it('formats fiat, percentages and crypto the English way', () => {
+    expect(fmtFiat(1234.56, 'EUR')).toBe('€1,234.56');
+    expect(fmtFiat(1234.5, 'USD')).toBe('$1,234.50');
+    expect(fmtFiat(-3.5, 'EUR')).toBe(`${MINUS}€3.50`);
+    expect(splitFiat(12480.32, 'EUR')).toEqual({ int: '€12,480', rest: '.32' });
+    expect(fmtPct(1.823)).toBe('+1.82%');
+    expect(fmtPct(-0.64)).toBe(`${MINUS}0.64%`);
+    expect(fmtCrypto(1_234_567_890_000n, 6)).toBe('1,234,567.89');
+    expect(fmtCrypto(9_780_000n, 8, 'BTC')).toBe(`0.0978${NNBSP}BTC`);
+  });
+  it('edits decimals with a dot, accepting a comma while typing', () => {
+    expect(sanitizeDecimalInput('0,5', 8)).toBe('0.5');
+    expect(sanitizeDecimalInput('1,234.56', 8)).toBe('1234.56');
+    expect(toInputDecimal(25_000_000n, 8)).toBe('0.25');
+    expect(fmtAgo(Date.now() - 180_000)).toBe('3 min ago');
   });
 });
 
