@@ -35,6 +35,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
+    // Monero `monerod` RPC (mainnet: Cake Wallet's node; stagenet: Stack Wallet's node); only
+    // Rust's `xmr_*` commands. Blocks are scanned locally: no key, not even the view key, is sent.
+    "xmr-node.cakewallet.com",
+    "monero-stagenet.stackwallet.com",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -89,6 +93,10 @@ const ALLOWED_HEADERS: &[&str] = &["accept", "content-type", "0x-version"];
 
 pub const MAX_BODY: usize = 5 * 1024 * 1024;
 pub const TIMEOUT: Duration = Duration::from_secs(20);
+/// Bulk downloads Rust asks for itself (Monero blocks, output distribution): body cap and
+/// exchange timeout. Never available to `net_fetch` (the webview).
+pub const BULK_MAX_BODY: usize = 64 * 1024 * 1024;
+pub const BULK_TIMEOUT: Duration = Duration::from_secs(180);
 pub const MAX_REDIRECTS: usize = 3;
 const CACHE_TTL: Duration = Duration::from_secs(60);
 /// CoinGecko cache bounds: entries and total body bytes (oldest evicted first).
@@ -294,6 +302,7 @@ pub enum Family {
     Tron,
     Xrp,
     Cardano,
+    Monero,
     Evm,
     Solana,
     Market,
@@ -317,6 +326,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
+    } else if host == "xmr-node.cakewallet.com" || host == "monero-stagenet.stackwallet.com" {
+        Family::Monero
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -363,6 +374,26 @@ pub struct Prepared {
     pub custom: bool,
     /// Plain HTTP allowed for this (onion) host, over Tor only.
     pub allow_plain: bool,
+    /// Bulk download issued by Rust ([`BULK_MAX_BODY`], [`BULK_TIMEOUT`]); never for `net_fetch`.
+    pub bulk: bool,
+}
+
+impl Prepared {
+    pub fn max_body(&self) -> usize {
+        if self.bulk {
+            BULK_MAX_BODY
+        } else {
+            MAX_BODY
+        }
+    }
+
+    pub fn timeout(&self) -> Duration {
+        if self.bulk {
+            BULK_TIMEOUT
+        } else {
+            TIMEOUT
+        }
+    }
 }
 
 pub fn prepare(
@@ -416,6 +447,7 @@ pub fn prepare(
         secret_headers,
         body: req.body.map(String::into_bytes),
         custom,
+        bulk: false,
     })
 }
 
@@ -432,6 +464,9 @@ pub struct ServerRequest {
     pub direct_private: bool,
     /// Longer timeout (Bitcoin Core `importdescriptors` with rescan; direct connections only).
     pub long: bool,
+    /// Bulk download (Monero blocks): [`BULK_MAX_BODY`] and [`BULK_TIMEOUT`] instead of the
+    /// usual 5 MiB / 20 s.
+    pub bulk: bool,
 }
 
 impl ServerRequest {
@@ -444,6 +479,7 @@ impl ServerRequest {
             family,
             direct_private: false,
             long: false,
+            bulk: false,
         }
     }
 
@@ -456,6 +492,7 @@ impl ServerRequest {
             family,
             direct_private: false,
             long: false,
+            bulk: false,
         }
     }
 
@@ -469,6 +506,7 @@ impl ServerRequest {
             family,
             direct_private: false,
             long: false,
+            bulk: false,
         }
     }
 }
@@ -494,15 +532,28 @@ pub fn api_key_headers(host: &str, env: &EnvKeys, saved: &ApiKeys) -> Vec<(Strin
         .unwrap_or_default()
 }
 
-/// Accumulates a response body, refusing anything over [`MAX_BODY`].
-#[derive(Default)]
+/// Accumulates a response body, refusing anything over [`MAX_BODY`] (or a given limit).
 pub struct BodyCap {
     buf: Vec<u8>,
+    limit: usize,
+}
+
+impl Default for BodyCap {
+    fn default() -> Self {
+        Self::with_limit(MAX_BODY)
+    }
 }
 
 impl BodyCap {
+    pub fn with_limit(limit: usize) -> Self {
+        Self {
+            buf: Vec::new(),
+            limit,
+        }
+    }
+
     pub fn push(&mut self, chunk: &[u8]) -> AppResult<()> {
-        if self.buf.len() + chunk.len() > MAX_BODY {
+        if self.buf.len() + chunk.len() > self.limit {
             return Err(AppError::Internal("réponse trop volumineuse".into()));
         }
         self.buf.extend_from_slice(chunk);
@@ -642,6 +693,7 @@ impl NetClient {
             body: r.body,
             family: r.family,
             custom: true,
+            bulk: r.bulk,
         };
         let result = if r.direct_private && private {
             let timeout = r.long.then_some(LONG_TIMEOUT);
@@ -663,7 +715,8 @@ impl NetClient {
             if tor {
                 self.tor.send(&p).await
             } else {
-                self.send_clear(&self.clear, &p, None, true).await
+                let timeout = p.bulk.then_some(BULK_TIMEOUT);
+                self.send_clear(&self.clear, &p, timeout, true).await
             }
         };
         result.map_err(|e| match e {
@@ -689,7 +742,8 @@ impl NetClient {
         };
         let mut hops = 0;
         loop {
-            let (status, location, bytes) = Self::one_clear(client, &hop, timeout).await?;
+            let (status, location, bytes) =
+                Self::one_clear(client, &hop, timeout, p.max_body()).await?;
             let next = if follow {
                 redirect_hop(
                     status,
@@ -716,6 +770,7 @@ impl NetClient {
         client: &reqwest::Client,
         hop: &Hop,
         timeout: Option<Duration>,
+        max_body: usize,
     ) -> AppResult<(u16, Option<String>, Vec<u8>)> {
         let method = match hop.method {
             Method::Get => reqwest::Method::GET,
@@ -740,7 +795,7 @@ impl NetClient {
             .get(reqwest::header::LOCATION)
             .and_then(|v| v.to_str().ok())
             .map(str::to_owned);
-        let mut cap = BodyCap::default();
+        let mut cap = BodyCap::with_limit(max_body);
         while let Some(chunk) = resp.chunk().await.map_err(net_err)? {
             cap.push(&chunk)?;
         }

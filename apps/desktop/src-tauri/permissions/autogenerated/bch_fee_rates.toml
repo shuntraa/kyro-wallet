@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-bch-fee-rates"
+description = "Enables the bch_fee_rates command without any pre-configured scope."
+commands.allow = ["bch_fee_rates"]
+
+[[permission]]
+identifier = "deny-bch-fee-rates"
+description = "Denies the bch_fee_rates command without any pre-configured scope."
+commands.deny = ["bch_fee_rates"]

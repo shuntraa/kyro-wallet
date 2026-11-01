@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-bch-address"
+description = "Enables the bch_address command without any pre-configured scope."
+commands.allow = ["bch_address"]
+
+[[permission]]
+identifier = "deny-bch-address"
+description = "Denies the bch_address command without any pre-configured scope."
+commands.deny = ["bch_address"]

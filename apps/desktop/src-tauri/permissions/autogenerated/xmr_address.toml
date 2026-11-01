@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xmr-address"
+description = "Enables the xmr_address command without any pre-configured scope."
+commands.allow = ["xmr_address"]
+
+[[permission]]
+identifier = "deny-xmr-address"
+description = "Denies the xmr_address command without any pre-configured scope."
+commands.deny = ["xmr_address"]

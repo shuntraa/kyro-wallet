@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dash-tip-height"
+description = "Enables the dash_tip_height command without any pre-configured scope."
+commands.allow = ["dash_tip_height"]
+
+[[permission]]
+identifier = "deny-dash-tip-height"
+description = "Denies the dash_tip_height command without any pre-configured scope."
+commands.deny = ["dash_tip_height"]

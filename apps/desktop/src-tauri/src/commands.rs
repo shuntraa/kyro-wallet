@@ -447,6 +447,8 @@ pub struct Accounts {
     xrp: AddressOut,
     /// Base address `m/1852'/1815'/a'/0/0` + stake key `…/2/0` (CIP-1852, Icarus).
     cardano: AddressOut,
+    /// Monero primary address (stagenet on testnet), spend key from `m/44'/128'/a'/0/0`.
+    xmr: AddressOut,
 }
 
 fn utxo_account_out(
@@ -523,6 +525,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             cardano: AddressOut {
                 address: cardano,
                 path: format!("{}/0/0", wallet_core::cardano_account_path(a)),
+            },
+            xmr: AddressOut {
+                address: wallet_core::xmr_address(seed, net, a, 0)?,
+                path: wallet_core::xmr_path(a),
             },
         })
     })

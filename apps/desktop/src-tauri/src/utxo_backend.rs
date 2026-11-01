@@ -761,6 +761,7 @@ pub async fn broadcast(ctx: &UtxoCtx<'_>, hex_tx: &str) -> AppResult<String> {
                 family: utxo_family(ctx.coin),
                 direct_private: false,
                 long: false,
+                bulk: false,
             };
             let (status, body) = ctx.net_client.server_request(req, ctx.tor).await?;
             let text = String::from_utf8_lossy(&body).trim().to_owned();

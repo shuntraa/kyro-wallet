@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dash-backend-info"
+description = "Enables the dash_backend_info command without any pre-configured scope."
+commands.allow = ["dash_backend_info"]
+
+[[permission]]
+identifier = "deny-dash-backend-info"
+description = "Denies the dash_backend_info command without any pre-configured scope."
+commands.deny = ["dash_backend_info"]
