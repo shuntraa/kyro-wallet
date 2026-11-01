@@ -228,7 +228,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               className={cn('relative flex h-8 shrink-0 items-center gap-2 rounded-[5px] pr-3 pl-1.5 text-[12.5px] transition-colors duration-150 disabled:opacity-35', family === f ? 'font-medium text-text' : 'text-mute hover:text-text2')}
             >
               {family === f && <motion.span layoutId="receive-family" aria-hidden="true" className="absolute inset-0 rounded-[5px] border border-line-3 bg-control-2" transition={{ type: 'spring', stiffness: 520, damping: 40 }} />}
-              <CoinIcon glyph={glyph} color={color} size={20} className="relative z-10" />
+              <CoinIcon glyph={glyph} color={color} id={f === 'evm' ? 'ethereum' : f} size={20} className="relative z-10" />
               <span className="relative z-10">{label}</span>
             </button>
           ))}

@@ -355,7 +355,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const tokenItems = (exclude?: string) =>
     tokens
       .filter((t) => t.id !== exclude)
-      .map((t) => ({ value: t.id, label: t.symbol, hint: `${t.name} · ${fmtCrypto(pf.balances.get(t.id) ?? 0n, t.decimals)}`, icon: <CoinIcon glyph={t.glyph} color={t.color} size={24} /> }));
+      .map((t) => ({ value: t.id, label: t.symbol, hint: `${t.name} · ${fmtCrypto(pf.balances.get(t.id) ?? 0n, t.decimals)}`, icon: <CoinIcon asset={t} size={24} /> }));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
@@ -692,7 +692,7 @@ function TokenButton({ asset, items, onSelect }: { asset: AssetDef; items: Array
       items={items}
       trigger={
         <button type="button" className="press flex h-11 shrink-0 items-center gap-2 rounded-ctl border border-line-2 bg-card pr-3 pl-1.5 text-[15px] font-medium tracking-[-0.01em] hover:border-line-3 hover:bg-raised">
-          <CoinIcon glyph={asset.glyph} color={asset.color} size={30} />
+          <CoinIcon asset={asset} size={30} />
           {asset.symbol}
           <IconChevronDown size={13} className="text-mute" />
         </button>

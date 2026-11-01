@@ -161,7 +161,7 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
         {cards.map((c, i) => (
           <div key={c.chain} className="rise group flex flex-col gap-3 px-5 pt-4 pb-5" style={idx(i)}>
             <div className="flex items-center gap-2.5">
-              <CoinIcon glyph={c.glyph} color={c.color} size={26} />
+              <CoinIcon glyph={c.glyph} color={c.color} id={c.chain} size={26} />
               <span className="text-[20px] font-semibold tracking-[-0.02em]">{c.name}</span>
               <span className="text-[12px] text-mute">{networkLabel(c.chain, network)}</span>
             </div>

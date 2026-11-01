@@ -44,7 +44,7 @@ export function AssetDetail({ id }: { id: string }) {
 
   const name = supported?.name ?? coin?.name ?? watch?.name ?? coinId;
   const symbol = supported?.symbol ?? coin?.symbol ?? watch?.symbol ?? '';
-  const color = supported?.color ?? watch?.color ?? '#22252B';
+  const color = supported?.color ?? watch?.color;
   const glyph = supported?.glyph ?? watch?.glyph ?? symbol.slice(0, 1);
   const price = pf.price(coinId);
   const points = chart.data ?? [];
@@ -79,7 +79,7 @@ export function AssetDetail({ id }: { id: string }) {
           <IconButton label="Retour" onClick={back} className="size-9">
             <IconBack size={16} />
           </IconButton>
-          <CoinIcon glyph={glyph} color={color} size={36} />
+          <CoinIcon glyph={glyph} color={color} symbol={symbol} id={supported?.id ?? `cg:${coinId}`} chain={supported?.chainKey} size={36} />
           <h1 className="screen-title truncate">{name}</h1>
           <span className="rounded-[4px] border border-line-3 px-1.5 py-0.5 font-mono text-[11px] font-medium text-text2">{symbol}</span>
           {coin?.rank && <span className="font-mono text-[11px] text-faint">Rang #{coin.rank}</span>}

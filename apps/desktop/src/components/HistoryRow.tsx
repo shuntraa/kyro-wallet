@@ -6,7 +6,7 @@ import type { HistoryEntry } from '../state/history';
 import { findContact, type ContactFamily } from '../lib/storage';
 import { Badge } from './ui/primitives';
 import { IconCheck, IconDown, IconSwap, IconUp } from './icons';
-import { HIDDEN } from './kit';
+import { CoinIcon, HIDDEN } from './kit';
 import { idx } from './motion';
 
 export function entryTitle(e: HistoryEntry): string {
@@ -44,8 +44,8 @@ export function HistoryRow({ e, price, currency, hidden, compact, i = 0 }: { e: 
       <span className={cn('relative flex size-9 shrink-0 items-center justify-center rounded-full border', e.direction === 'in' && e.kind === 'transfer' ? 'border-up/30 text-up' : 'border-line-2 text-text2')}>
         {icon}
         {e.asset && (
-          <span className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full border-2 border-card text-[8px] font-bold text-white" style={{ background: e.asset.color }}>
-            {e.asset.glyph}
+          <span className="absolute -right-1 -bottom-1 inline-flex rounded-full border-2 border-card bg-card">
+            <CoinIcon asset={{ ...e.asset, chainKey: undefined }} size={14} />
           </span>
         )}
       </span>
