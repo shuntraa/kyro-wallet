@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-near-backend-info"
+description = "Enables the near_backend_info command without any pre-configured scope."
+commands.allow = ["near_backend_info"]
+
+[[permission]]
+identifier = "deny-near-backend-info"
+description = "Denies the near_backend_info command without any pre-configured scope."
+commands.deny = ["near_backend_info"]

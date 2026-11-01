@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-near-txs"
+description = "Enables the near_txs command without any pre-configured scope."
+commands.allow = ["near_txs"]
+
+[[permission]]
+identifier = "deny-near-txs"
+description = "Denies the near_txs command without any pre-configured scope."
+commands.deny = ["near_txs"]

@@ -35,6 +35,11 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
+    // NEAR (FastNEAR: JSON-RPC and explorer API), mainnet + testnet; only Rust's `near_*`.
+    "free.rpc.fastnear.com",
+    "test.rpc.fastnear.com",
+    "tx.main.fastnear.com",
+    "tx.test.fastnear.com",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -294,6 +299,7 @@ pub enum Family {
     Tron,
     Xrp,
     Cardano,
+    Near,
     Evm,
     Solana,
     Market,
@@ -317,6 +323,14 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
+    } else if matches!(
+        host,
+        "free.rpc.fastnear.com"
+            | "test.rpc.fastnear.com"
+            | "tx.main.fastnear.com"
+            | "tx.test.fastnear.com"
+    ) {
+        Family::Near
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1067,6 +1081,15 @@ mod tests {
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
+        for h in [
+            "free.rpc.fastnear.com",
+            "test.rpc.fastnear.com",
+            "tx.main.fastnear.com",
+            "tx.test.fastnear.com",
+        ] {
+            assert_eq!(family_for(h, &c), Family::Near);
+        }
+        assert_eq!(family_for("evil.fastnear.com", &c), Family::Other);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

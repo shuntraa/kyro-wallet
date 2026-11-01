@@ -391,6 +391,34 @@ pub fn xrp_network_id(net: Network) -> u64 {
     }
 }
 
+/// NEAR JSON-RPC (FastNEAR's free public tier, listed by docs.near.org › RPC providers;
+/// `rpc.mainnet.near.org` / `rpc.testnet.near.org` are no longer listed there). No custom NEAR
+/// server yet: these defaults only.
+pub fn near_default_rpc(net: Network) -> &'static str {
+    match net {
+        Network::Mainnet => "https://free.rpc.fastnear.com/",
+        Network::Testnet => "https://test.rpc.fastnear.com/",
+    }
+}
+
+/// NEAR transaction history (FastNEAR explorer API: `/v0/account`, `/v0/transactions`),
+/// same operator as the default RPC.
+pub fn near_default_history(net: Network) -> &'static str {
+    match net {
+        Network::Mainnet => "https://tx.main.fastnear.com",
+        Network::Testnet => "https://tx.test.fastnear.com",
+    }
+}
+
+/// `status.chain_id` and `status.genesis_hash`, read on 2026-11-01 from free.rpc.fastnear.com
+/// and test.rpc.fastnear.com (also rpc.mainnet.near.org / rpc.testnet.near.org).
+pub fn near_genesis(net: Network) -> (&'static str, &'static str) {
+    match net {
+        Network::Mainnet => ("mainnet", "EPnLgE7iEq9s7yTkos96M3cWymH5avBAPm3qx3NXqR8H"),
+        Network::Testnet => ("testnet", "FWJ9kR6KFWoyMoNjpLXXGHeuiy7tEY6GmoFeCA5yuc6b"),
+    }
+}
+
 /// Cardano server: a Koios REST instance (`…/api/v1`), the same API as the defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(

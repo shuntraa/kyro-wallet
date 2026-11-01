@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-near-address"
+description = "Enables the near_address command without any pre-configured scope."
+commands.allow = ["near_address"]
+
+[[permission]]
+identifier = "deny-near-address"
+description = "Denies the near_address command without any pre-configured scope."
+commands.deny = ["near_address"]

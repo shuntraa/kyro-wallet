@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-near-account"
+description = "Enables the near_account command without any pre-configured scope."
+commands.allow = ["near_account"]
+
+[[permission]]
+identifier = "deny-near-account"
+description = "Denies the near_account command without any pre-configured scope."
+commands.deny = ["near_account"]

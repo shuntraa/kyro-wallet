@@ -926,6 +926,36 @@ type NetworkInfo = {
 
 **Fait côté UI** : Réglages › Réseaux et serveurs › « Réseau » (Réseau principal — fonds réels / Réseau de test — jetons sans valeur), fenêtre de confirmation qui rappelle que chaque réseau a son propre coffre (l'autre est gardé, pas supprimé), puis redémarrage ; écran d'accueil : une ligne « Le coffre sera créé sur le réseau … » avec un lien pour changer ; badge TESTNET de la barre d'état inchangé. **Mode démo** : `network_set` mémorise le choix (`localStorage`, comme l'environnement) et recharge la page sur `?network=…` ; `?network=` dans l'URL joue le rôle de `KYRO_NETWORK`.
 
+### 2.11 NEAR Protocol (transferts de NEAR)
+
+Serveurs **par défaut uniquement** (pas encore de serveur NEAR personnalisé) : RPC JSON `free.rpc.fastnear.com` (mainnet) / `test.rpc.fastnear.com` (testnet), historique par l'API explorateur de FastNEAR `tx.main.fastnear.com` / `tx.test.fastnear.com` ; famille Tor `near`, jamais de repli. `near_build_tx` et `near_sign_tx` vérifient d'abord le réseau par `status` (`chain_id` **et** `genesis_hash` attendus, nœud en synchronisation refusé : `near_backend::probe`) ; une transaction NEAR ne nomme pas son réseau, mais son bloc de référence n'existe que sur une chaîne.
+
+**Clés.** SLIP-10 ed25519, chemin `m/44'/397'/{account}'` (trois niveaux durcis) : celui de `near-seed-phrase` (near-cli, MyNearWallet, Meteor ; le compte 0 est l'historique `m/44'/397'/0'`). Vecteur officiel vérifié : la phrase de test de `near-seed-phrase` donne `ed25519:r4yuiZE45mzeZAENDEF2pWeFBJkW8mQYGx3rU46zCqh` (`crates/wallet-core/tests/near.rs`). **Adresse = compte implicite** : les 64 caractères hexadécimaux minuscules de la clé publique ; il existe sur la chaîne après son premier NEAR reçu. Les comptes nommés (`alice.near`, `bob.testnet`) ne sont que des **destinataires** (règles de nearcore : 2–64 caractères, `a-z 0-9 - _ .`, pas de séparateur en tête, en fin ni doublé, majuscules refusées).
+
+**Rust construit la transaction** : `TransactionV0 { signer_id = notre compte implicite, public_key = notre clé, nonce = nonce de la clé d'accès + 1, receiver_id, block_hash = bloc final lu avec la clé d'accès, actions: [Transfer { deposit }] }`, encodée en Borsh par wallet-core, signée en ed25519 sur `SHA-256(borsh)` (ce SHA-256 est aussi le hash de la transaction, connu avant la diffusion). **Décodage strict** : une seule action `Transfer`, clé ed25519, aucun octet en trop, ré-encodage identique ; `TransactionV1`, toute autre action (FunctionCall, AddKey, DeleteAccount, Delegate…), plusieurs actions, une autre clé ou un autre signataire : refusés avant toute signature. Pas de jetons NEP-141 (il faudrait signer des `FunctionCall`).
+
+**Frais.** Ils ne figurent **pas** dans une transaction NEAR : ils sont prélevés au prix du gas du bloc qui l'inclut. Rust lit `EXPERIMENTAL_protocol_config` (coûts `action_receipt_creation` + `transfer`, et `create_account` + `add_key` quand le transfert crée un compte implicite ; prix du stockage) et `gas_price` : estimation = gas × prix actuel ; **borne** = 2 × gas × max(prix actuel, prix minimum du protocole). Montant + borne doivent tenir dans le disponible (solde − réserve de stockage), sinon refus.
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `near_backend_info` | — | `{ kind: 'default', network, label /*hôte RPC*/, history /*hôte historique*/, tor }` | |
+| `near_address` | `{ account? }` | `string` | compte implicite de `m/44'/397'/{account}'`, coffre déverrouillé ; `near_build_tx`, `near_sign_tx`, `near_broadcast`, `near_tx_status` prennent le même `account?` |
+| `near_account` | `{ accountId }` | `{ accountId, exists, balance, locked, storageUsage, storageReserve, spendable, hasContract }` (yoctoNEAR, chaînes décimales) | `view_account` (finalité `final`) ; `storageReserve` = `storage_usage` × prix par octet (10¹⁹ yocto, lu en direct) − `locked` ; `spendable` = solde − réserve ; compte inexistant : `exists: false` |
+| `near_txs` | `{ accountId }` | `[{ hash, from, to, kind: 'transfer' \| 'other', deposit, fee, height, time, success }]` | 20 dernières transactions (`/v0/account` puis `/v0/transactions` de FastNEAR) ; `deposit` = somme des actions `Transfer` **de la transaction elle-même** (un transfert interne d'un contrat n'y figure pas) ; `fee` = NEAR brûlés (transaction + reçus) |
+| `near_build_tx` | `{ to, amount /*yoctoNEAR*/, account? }` | `{ tx /*Borsh hex, non signé*/, summary: NearTxSummary, context: NearContext }` | refusé avant toute construction : notre compte inexistant ; clé sans accès complet (`FunctionCall`) ou retirée ; destinataire **nommé** ou `0x…` inexistant (un compte nommé doit exister, sinon les frais sont perdus) ; montant + borne de frais > disponible ; transfert à soi-même |
+| `near_sign_tx` | `{ tx, password, account? }` | `{ signed /*Borsh hex*/, hash, summary, context }` | décode (strict, signataire et clé = nous), **relit en direct** les deux comptes, la clé d'accès (nonce périmé → « reconstruis ») et les frais, refuse un bloc de référence de plus d'≈ 1 h ; mot de passe → dialogue natif : **compte signataire**, destinataire et sa nature (nommé / implicite / style Ethereum), création éventuelle du compte, montant (NEAR et yoctoNEAR), **frais estimés et borne**, solde, réserve de stockage, disponible, clé, nonce, bloc de référence, hash ; compte absent de la liste : « inconnu » + dialogue renforcé ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` ; résumé de la signature = résumé affiché |
+| `near_broadcast` | `{ signed, account? }` | `{ hash, status: 'success' \| 'failure' \| 'pending', message }` | `near_verify_signed` (décodage strict, signature ed25519 vérifiée strictement, signataire = nous) puis `send_tx` (`wait_until: EXECUTED_OPTIMISTIC`) ; hash du nœud ≠ le nôtre → `SERVER_UNREACHABLE` ; `INVALID_TRANSACTION` → `INVALID_INPUT` avec la cause ; délai du nœud → `pending` |
+| `near_tx_status` | `{ hash, account? }` | même forme | `tx` (`wait_until: NONE`) : `pending` tant qu'inconnue ou non exécutée |
+
+```ts
+type NearTxSummary = { signerId; publicKey /*ed25519:…*/; nonce; receiverId; receiverKind: 'implicit' | 'ethImplicit' | 'named'; deposit /*yocto*/; blockHash; hash; warnings: Array<{ kind: 'ethImplicitReceiver' }>; requiresExtraConfirmation };
+type NearContext = { account: NearAccountInfo; receiver: NearAccountInfo; createsAccount; gasPrice; feeEstimate; feeBound };
+```
+
+Destinataire `0x…` (compte NEAR de style Ethereum, NEP-518, contrôlé par une clé Ethereum) : avertissement `ethImplicitReceiver` → dialogue renforcé (une adresse de dépôt EVM d'une plateforme n'est pas un compte NEAR). Hardware wallets : non pris en charge (l'UI désactive NEAR pour ces comptes). Comptes multiples : chaîne `near` des listes du coffre (§2.9).
+
+**Fait côté UI** : `Family` `'near'`, `nearChain(network)` (24 décimales, CoinGecko `near`), `NearAdapter` (`packages/chains/src/near/`), règles d'identifiant partagées (`nearAccountKind`, `nearAccountIdProblem` dans `@kyro/shared`), backend démo (`mock-near.ts` : adresse de démonstration **non dérivée**, encodage de démonstration), écrans Envoyer (nature et existence du destinataire, disponible, récapitulatif décodé, suivi d'exécution), Recevoir (QR de l'adresse nue, pas de lien de paiement), lignes du portefeuille, Comptes, carnet d'adresses, « Connexions sortantes ».
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -934,6 +964,7 @@ type NetworkInfo = {
 | `mempool.space` | Bitcoin : UTXO, frais, diffusion (Esplora) |
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`) : utilisé par les commandes Rust `ltc_*`, famille Tor `litecoin` |
 | `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet et mainnet (JSON-RPC rippled) : utilisés par les commandes Rust `xrp_*`, famille Tor `xrp` |
+| `free.rpc.fastnear.com`, `test.rpc.fastnear.com`, `tx.main.fastnear.com`, `tx.test.fastnear.com` | NEAR mainnet et testnet (FastNEAR : RPC JSON et API d'historique) : utilisés par les commandes Rust `near_*`, famille Tor `near` |
 | `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |
