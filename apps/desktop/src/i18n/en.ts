@@ -25,6 +25,7 @@ import { cosmos } from './en/cosmos';
 import { aptos } from './en/aptos';
 import { sui } from './en/sui';
 import { kas } from './en/kas';
+import { multinet } from './en/multinet';
 
 export const en: Record<keyof typeof fr, string> = {
   ...common,
@@ -50,6 +51,7 @@ export const en: Record<keyof typeof fr, string> = {
   ...aptos,
   ...sui,
   ...kas,
+  ...multinet,
 };
 
-export const enAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, settings, servers, hw, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas } as const;
+export const enAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, settings, servers, hw, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas, multinet } as const;
