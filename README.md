@@ -137,6 +137,8 @@ Kyro is published **only** on [GitHub Releases](https://github.com/shuntraa/kyro
 | macOS (Apple Silicon & Intel) | [Kyro-macos.dmg](https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg) |
 | Linux | [AppImage](https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage) · [.deb](https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-amd64.deb) |
 
+### 1. Verify the download
+
 Download [SHA256SUMS](https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS) next to the installer and compare:
 
 ```bash
@@ -145,12 +147,35 @@ shasum -a 256 Kyro-macos.dmg                                  # macOS
 sha256sum -c SHA256SUMS --ignore-missing                      # Linux
 ```
 
-If the hashes differ, delete the file and download it again.
+If the hashes differ, delete the file and download it again. The installers are not code-signed yet, so your OS warns you on first launch: always verify the checksum before you click through that warning.
 
-**First launch.** The installers are not code-signed yet, so your OS warns you the first time. Verify the checksum first, then:
+### 2. Install
 
-- **Windows (SmartScreen):** click **More info → Run anyway**.
-- **macOS (Gatekeeper):** right-click Kyro in Applications → **Open**, or go to *System Settings → Privacy & Security → Open Anyway*.
+**Windows**
+
+1. Download `Kyro-windows-x64-setup.exe` (recommended: it is the only Windows package that updates itself; the `.msi` does not).
+2. Run it. SmartScreen shows "Windows protected your PC": click **More info → Run anyway**.
+3. Kyro appears in the Start menu.
+
+**macOS** (one universal `.dmg` for Apple Silicon and Intel)
+
+1. Open `Kyro-macos.dmg` and drag **Kyro** to **Applications**.
+2. First launch: Gatekeeper blocks the app. Right-click Kyro in Applications → **Open**, or go to *System Settings → Privacy & Security → Open Anyway*.
+3. The installed app updates itself.
+
+**Linux**
+
+- **AppImage** (recommended, updates itself):
+
+  ```bash
+  chmod +x Kyro-linux-x86_64.AppImage && ./Kyro-linux-x86_64.AppImage
+  ```
+
+  AppImages need FUSE 2, which recent Ubuntu releases no longer install by default: `sudo apt install libfuse2` (Ubuntu 22.04) or `sudo apt install libfuse2t64` (Ubuntu 24.04 and later).
+- **Debian / Ubuntu `.deb`**: `sudo apt install ./Kyro-linux-amd64.deb`. It does not update itself: install the new `.deb` to update.
+- **Hardware wallets on Linux** need udev rules so that Kyro can open the device:
+  - Ledger: [LedgerHQ/udev-rules](https://github.com/LedgerHQ/udev-rules) (official rules and `add_udev_rules.sh`).
+  - Trezor: [official udev rules](https://trezor.io/learn/a/udev-rules) (`trezor-udev` rules file and instructions).
 
 ## Build from source
 

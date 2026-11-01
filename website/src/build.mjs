@@ -312,6 +312,9 @@ for (const css of ['style.css', 'chains.css']) {
 for (const m of readFileSync(join(OUT, 'sitemap.xml'), 'utf8').matchAll(/<loc>https:\/\/kyrowallet\.com([^<]*)<\/loc>/g)) if (!existsSync(join(OUT, target(m[1]).file))) errors.push(`sitemap.xml: ${m[1]} does not exist`);
 for (const m of readFileSync(join(OUT, 'llms.txt'), 'utf8').matchAll(/\]\(https:\/\/kyrowallet\.com([^)]*)\)/g)) if (!existsSync(join(OUT, target(m[1]).file))) errors.push(`llms.txt: ${m[1]} does not exist`);
 
+// public/ is served as is: the site's README lives in website/README.md, never in public/.
+for (const f of readdirSync(OUT)) if (/^readme(\.|$)/i.test(f)) errors.push(`public/${f}: documentation must not be published (keep it in website/README.md)`);
+
 if (errors.length) fail(errors);
 console.log(`built ${pages.length} pages + 404 (${chains.length} live blockchains, ${all.length - chains.length} hidden); ${linkCount} internal links checked, all OK; ${iconCount} coin icons copied`);
 
