@@ -159,6 +159,11 @@ function Security({ save }: { save: Save }) {
           <Switch label={t('settings.hideBalances')} checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />
         </SettingRow>
       </Panel>
+      <Panel>
+        <SettingRow title={t('update.auto')} desc={t('update.autoDesc', { version: __APP_VERSION__ })} last>
+          <Switch label={t('update.auto')} checked={settings.autoUpdate} onCheckedChange={(v) => void save({ autoUpdate: v })} />
+        </SettingRow>
+      </Panel>
       <RevealPhrase />
       <MoneroWallet />
     </>

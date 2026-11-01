@@ -22,6 +22,7 @@ import {
   type Accounts,
   type ApiKeyName,
   type AppConfig,
+  type UpdateStatus,
   type BtcKind,
   type BtcTxSummary,
   type Commands,
@@ -109,6 +110,7 @@ export const DEFAULT_SETTINGS: Settings = {
   apiKeysSet: {},
   tor: { enabled: true },
   language: 'auto',
+  autoUpdate: true,
 };
 
 const TESTNET_VERSIONS = { private: 0x04358394, public: 0x043587cf };
@@ -1074,6 +1076,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     hw_sign_btc_psbt: (a) => hw.signBtc(a),
     hw_sign_evm_tx: (a) => hw.signEvm(a),
     hw_sign_sol_tx: (a) => hw.signSol(a),
+    update_status: (): UpdateStatus => ({ version: '0.1.0', updatedTo: null }),
     config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid), systemLanguage: demoSystemLanguage() }),
     ...networkChoice.handlers,
   };

@@ -24,6 +24,7 @@ import { cosmos } from './fr/cosmos';
 import { aptos } from './fr/aptos';
 import { sui } from './fr/sui';
 import { kas } from './fr/kas';
+import { update } from './fr/update';
 
 export const fr = {
   ...common,
@@ -49,7 +50,8 @@ export const fr = {
   ...aptos,
   ...sui,
   ...kas,
+  ...update,
 } as const;
 
 /** Area modules, for the catalog tests (keys must start with `<area>.`). */
-export const frAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, settings, servers, hw, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas } as const;
+export const frAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, settings, servers, hw, stellar, near, algo, hbar, dot, xmr, ton, cosmos, aptos, sui, kas, update } as const;
