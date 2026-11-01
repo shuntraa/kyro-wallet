@@ -60,11 +60,16 @@ export interface Accounts {
    * and change both use it; Rust signs with index 0 of the account only (§2.7).
    */
   cardano: AddressInfo;
+  /**
+   * Monero primary address (stagenet on testnet), spend key `sc_reduce32(keccak256(k))` of the
+   * BIP32 key `m/44'/128'/a'/0/0` (§2.11). Subaddresses: `xmr_new_subaddress`.
+   */
+  xmr: AddressInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xmr';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xmr'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -179,7 +184,12 @@ export interface Servers {
   xrp: { mainnet?: XrpServer; testnet?: XrpServer };
   /** Cardano (`testnet` = preprod). Default: Koios (preprod.koios.rest / api.koios.rest). */
   cardano: { mainnet?: CardanoServer; testnet?: CardanoServer };
+  /** Monero (`testnet` = stagenet). Default: xmr-node.cakewallet.com:18081 / monero-stagenet.stackwallet.com:38081. */
+  monero?: { mainnet?: MoneroServer; testnet?: MoneroServer };
 }
+
+/** Monero server: the default public node, or the user's `monerod` RPC (restricted RPC is enough). */
+export type MoneroServer = { kind: 'default' } | { kind: 'node'; url: string };
 
 /** Cardano server: Koios by default, or a Koios-compatible REST API (`…/api/v1`). */
 export type CardanoServer = { kind: 'default' } | { kind: 'koios'; url: string };
@@ -210,7 +220,9 @@ export type ServerTestTarget =
   /** `testnet` = XRPL Testnet (network_id 1). */
   | { family: 'xrp'; network: UtxoNetworkKey; server: XrpServer }
   /** `testnet` = preprod (network magic 1). */
-  | { family: 'cardano'; network: UtxoNetworkKey; server: CardanoServer };
+  | { family: 'cardano'; network: UtxoNetworkKey; server: CardanoServer }
+  /** `testnet` = Monero stagenet (block 0 and `nettype` checked). */
+  | { family: 'monero'; network: UtxoNetworkKey; server: MoneroServer };
 
 export interface ServerTestResult {
   latencyMs: number;
@@ -562,6 +574,88 @@ export interface XrpTrustLine {
   issuer: string;
   balance: string;
   limit: string;
+}
+
+// ---------------------------------------------------------------- Monero (§2.11)
+
+export interface XmrBackendInfo {
+  kind: 'default' | 'node';
+  network: 'mainnet' | 'stagenet';
+  label: string;
+  tor: boolean;
+}
+
+/** `xmr_status`: background scan and balance. Amounts: piconero (1 XMR = 10^12). */
+export interface XmrStatus {
+  running: boolean;
+  /** First block scanned; null before the first sync. */
+  restoreHeight: number | null;
+  /** Next block to scan. */
+  scanned: number;
+  /** Node's chain height, when known. */
+  tip: number | null;
+  /** UNIX seconds of the latest block seen. */
+  tipTime: number | null;
+  /** 0 … 1. */
+  progress: number;
+  /** Everything not spent (locked included). */
+  balance: string;
+  /** Spendable now (10 confirmations, 60 for a coinbase). */
+  unlocked: string;
+  /** UNIX seconds of the last completed sync. */
+  syncedAt: number | null;
+  error: string | null;
+  /** Highest subaddress index handed out. */
+  subaddresses: number;
+  /** Outputs ignored (duplicated key / additional timelock). */
+  ignoredOutputs: number;
+  node: string;
+}
+
+export interface XmrSubaddress {
+  index: number;
+  address: string;
+  /** Piconero received on it. */
+  received: string;
+}
+
+/** `xmr_txs` entry. `height` 0 = sent by this Kyro, not yet in a block. */
+export interface XmrHistoryEntry {
+  txid: string;
+  direction: 'in' | 'out' | 'self';
+  amount: string;
+  fee: string | null;
+  /** Destination of a transfer signed by this Kyro (the chain does not reveal it). */
+  to: string | null;
+  height: number;
+  /** UNIX seconds. */
+  time: number;
+  confirmations: number;
+}
+
+/** Rust's decoding of a destination (serde tag `kind`). */
+export type XmrDestination =
+  | { address: string; kind: 'standard' }
+  | { address: string; kind: 'subaddress' }
+  | { address: string; kind: 'integrated'; paymentId: string };
+
+export type XmrWarning = 'integratedAddress' | 'highFee' | 'feeAboveAmount' | 'ownAddress';
+
+/** wallet-core `XmrTxSummary`: what Rust built (amounts in piconero). */
+export interface XmrTxSummary {
+  network: 'mainnet' | 'stagenet';
+  account: number;
+  destination: XmrDestination;
+  amount: string;
+  fee: string;
+  /** Back to the account's primary address. */
+  change: string;
+  inputsTotal: string;
+  inputCount: number;
+  ringSize: number;
+  feePerWeight: string;
+  warnings: XmrWarning[];
+  requiresExtraConfirmation: boolean;
 }
 
 // ---------------------------------------------------------------- Cardano (§2.7)
@@ -1132,7 +1226,7 @@ export interface SolTxSummary {
 
 export type HwDeviceKind = 'ledger' | 'trezor';
 /** Phase 4 chains (`ltc`…`xrp`) answer HW_UNSUPPORTED. */
-export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp';
+export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp' | 'xmr';
 /** The chains Kyro implements today. */
 export type HwImplementedChain = 'btc' | 'evm' | 'sol';
 
@@ -1320,6 +1414,29 @@ export interface Commands {
   xrp_broadcast: { args: { blob: string } & WithAccount; ret: string };
   /** `validated: true` + `result: 'tesSUCCESS'` once in a validated ledger; not found yet: `{ false, '' }`. */
   xrp_tx_status: { args: { hash: string }; ret: { validated: boolean; result: string } };
+  // Monero (§2.11): Rust scans the blocks itself (no key sent to the node), builds the transfer
+  // (inputs, decoys, fee, change), signs and publishes it behind the password and the native
+  // dialog. Hardware wallets: HW_UNSUPPORTED.
+  xmr_backend_info: { args: undefined; ret: XmrBackendInfo };
+  /** `index` 0 = primary address; n ≥ 1 only once handed out by `xmr_new_subaddress`. */
+  xmr_address: { args: { index?: number } & WithAccount; ret: string };
+  xmr_new_subaddress: { args: WithAccount | undefined; ret: XmrSubaddress };
+  /** Primary address (index 0) and every subaddress handed out. */
+  xmr_subaddresses: { args: WithAccount | undefined; ret: XmrSubaddress[] };
+  xmr_status: { args: WithAccount | undefined; ret: XmrStatus };
+  /** Starts the background scan (no-op if one runs); poll `xmr_status`. */
+  xmr_sync: { args: WithAccount | undefined; ret: XmrStatus };
+  xmr_txs: { args: WithAccount | undefined; ret: XmrHistoryEntry[] };
+  /** Standard, subaddress or integrated only; other network / « featured » refused (INVALID_INPUT). */
+  xmr_validate_address: { args: { address: string }; ret: XmrDestination };
+  /** Forgets the scan state and scans again from `height`. Refused while a scan runs. */
+  xmr_set_restore_height: { args: { height: number } & WithAccount; ret: XmrStatus };
+  /** `amount`: piconero; absent = everything unlocked. The transfer stays in Rust (10 min). */
+  xmr_prepare_tx: { args: { to: string; amount?: string } & WithAccount; ret: { id: string; summary: XmrTxSummary } };
+  /** Password, native dialog, signature, checks, publication. */
+  xmr_send_tx: { args: { id: string; password: string } & WithAccount; ret: { txid: string; summary: XmrTxSummary } };
+  /** 25-word Monero seed, shown in a native window only. Returns nothing. */
+  xmr_seed_show: { args: { password: string } & WithAccount; ret: void };
   // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
   // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
   // Hardware wallets: HW_UNSUPPORTED.

@@ -15,7 +15,8 @@ import { TronAdapter } from './tron/adapter';
 import { XrpAdapter } from './xrp/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
-import { xrpChain } from './registry';
+import { xrpChain, xmrChain } from './registry';
+import { XmrAdapter } from './xmr/adapter';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -34,6 +35,8 @@ export interface AdapterSet {
   xrp: XrpAdapter | null;
   /** Cardano: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   cardano: CardanoAdapter | null;
+  /** Monero: vault only (hardware wallets: HW_UNSUPPORTED). */
+  xmr: XmrAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -74,8 +77,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...a }) : null;
   // Cardano: Rust picks the server (servers.cardano, default Koios).
   const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...a }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : [])];
-  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, all, hw: hw ?? null };
+  // Monero: Rust picks the node (servers.monero) and scans locally.
+  const xmr = accounts.xmr && !hw ? new XmrAdapter({ chain: xmrChain(network), address: accounts.xmr.address, ...a }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(xmr ? [xmr] : [])];
+  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, xmr, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin
@@ -169,6 +174,25 @@ export {
   type XrpSigned,
   isXAddress,
 } from './xrp/adapter';
+export {
+  XmrAdapter,
+  rustXmrBackend,
+  isXmrAddress,
+  xmrDestinationLabel,
+  xmrHeightAt,
+  XMR_DECIMALS,
+  XMR_LOCK_BLOCKS,
+  type XmrAdapterOptions,
+  type XmrBackend,
+  type XmrDestination,
+  type XmrHistoryEntry,
+  type XmrStatus,
+  type XmrSubaddress,
+  type XmrTxSummary,
+  type XmrWarning,
+  type XmrUnsigned,
+  type XmrSigned,
+} from './xmr/adapter';
 export {
   CardanoAdapter,
   rustCardanoBackend,

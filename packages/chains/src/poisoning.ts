@@ -46,7 +46,7 @@ const TAIL = 4;
  * - Dogecoin (base58): the version char (`D`, `A`, `9`, `n`, `m`, `2`).
  * - EVM: `0x`, hex compared lowercase.
  * - Solana (base58): none.
- * - TRON: `T`. XRP: `r`.
+ * - TRON: `T`. XRP: `r`. Monero (base58): the network / kind char (`4`, `8`, `5`, `7`).
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
@@ -64,6 +64,7 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       }
       return { prefix: a.slice(0, 1), body: a.slice(1), caseInsensitive: false };
     case 'doge':
+    case 'xmr':
       return { prefix: a.slice(0, 1), body: a.slice(1), caseInsensitive: false };
     case 'tron':
       return a.startsWith('T') ? { prefix: 'T', body: a.slice(1), caseInsensitive: false } : { prefix: '', body: a, caseInsensitive: false };

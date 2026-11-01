@@ -10,7 +10,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+/** `xmr`: Monero (scanned, built, signed and published by Rust, `xmr_*`, §2.10). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xmr';
 
 interface ChainBase {
   key: string;
@@ -47,7 +48,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | XmrChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -240,6 +241,27 @@ export function cardanoChain(network: Network): CardanoChain {
   return CARDANO_CHAINS[network];
 }
 
+/**
+ * Monero (phase 4): Rust `xmr_*` commands and `XmrAdapter` (`packages/chains/src/xmr/`).
+ * Testnet = Monero **stagenet**. Rust scans the blocks locally (no key sent to the node).
+ * Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface XmrChain extends Omit<ChainBase, 'phase'> {
+  family: 'xmr';
+  phase: 4;
+}
+
+const XMR_CHAINS: Record<Network, XmrChain> = {
+  testnet: { family: 'xmr', key: 'monero', name: 'Monero stagenet', label: 'XMR stagenet', network: 'testnet', color: '#FF6600', glyph: 'ɱ',
+    nativeSymbol: 'XMR', nativeName: 'Monero', nativeDecimals: 12, coingeckoId: 'monero', phase: 4, blockTimeSecs: 120 },
+  mainnet: { family: 'xmr', key: 'monero', name: 'Monero', label: 'XMR', network: 'mainnet', color: '#FF6600', glyph: 'ɱ',
+    nativeSymbol: 'XMR', nativeName: 'Monero', nativeDecimals: 12, coingeckoId: 'monero', phase: 4, blockTimeSecs: 120 },
+};
+
+export function xmrChain(network: Network): XmrChain {
+  return XMR_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -301,7 +323,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), xmrChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -417,6 +439,16 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     tron?.kind === 'http'
       ? { host: host(tron.url), purpose: 'TRON : ton nœud java-tron (l’historique exige l’API /v1 de TronGrid)', custom: true }
       : { host: network === 'mainnet' ? 'api.trongrid.io' : 'nile.trongrid.io', purpose: `TRON${network === 'mainnet' ? '' : ' Nile'} : soldes, ressources, historique, diffusion (TronGrid)` },
+  );
+  // Monero: reached by Rust only (xmr_*), Tor circuits of the `monero` family. Blocks are
+  // scanned locally: the node never receives a key.
+  const xmr = servers.monero?.[nk];
+  list.push(
+    xmr?.kind === 'node'
+      ? { host: host(xmr.url), purpose: 'Monero : ton nœud monerod (aucune clé envoyée)', custom: true }
+      : network === 'mainnet'
+        ? { host: 'xmr-node.cakewallet.com:18081', purpose: 'Monero : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Cake Wallet)' }
+        : { host: 'monero-stagenet.stackwallet.com:38081', purpose: 'Monero stagenet : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Stack Wallet)' },
   );
   list.push({ host: 'api.0x.org', purpose: 'Devis de swap EVM (clé requise)' });
   list.push({ host: 'li.quest', purpose: 'Devis de swap cross-chain' });

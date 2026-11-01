@@ -158,8 +158,8 @@ const LEDGER_CLEAR: Array<[number, string]> = [
   [11155111, '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238'],
 ];
 
-const PHASE4: HwChain[] = ['ltc', 'doge', 'tron', 'cardano', 'xrp'];
-const LABEL: Record<HwChain, string> = { btc: 'Bitcoin', evm: 'EVM', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP' };
+const PHASE4: HwChain[] = ['ltc', 'doge', 'tron', 'cardano', 'xrp', 'xmr'];
+const LABEL: Record<HwChain, string> = { btc: 'Bitcoin', evm: 'EVM', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', xmr: 'Monero' };
 
 export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   const seed = hwSeed();
