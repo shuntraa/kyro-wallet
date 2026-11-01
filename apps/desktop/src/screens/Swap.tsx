@@ -40,18 +40,15 @@ import {
 } from '@kyro/swap';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
-import { useCoinChart } from '../state/charts';
 import { cn } from '../lib/cn';
-import { fmtAgo, fmtCrypto, fmtEta, fmtFiat, fmtNumber, fmtPct, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
+import { fmtAgo, fmtCrypto, fmtEta, fmtFiat, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { addApproval, addLocalTx } from '../lib/storage';
 import { buildDepositTx, buyGroups, canSwapFrom, depositAdapterFor, ownAddressOn, swapChainOf, swapTokenAddress, type PreparedDeposit } from '../lib/crossSwap';
-import { priceAt } from '../lib/portfolioSeries';
 import { useAsync, useDebounced, useNow } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
 import { SecondConfirmNotice } from '../components/SecondConfirm';
 import { TorWait, useTorBlocked } from '../components/Tor';
 import { useOnTorReady } from '../state/tor';
-import { SmoothChart } from '../components/charts';
 import { Menu } from '../components/ui/menu';
 import { AccountPicker } from '../components/AccountPicker';
 import { Dialog } from '../components/ui/dialog';
@@ -213,27 +210,23 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
     [simKey],
   );
 
-  // Rate chart (buy priced in sell units, 24 h).
-  const sellChart = useCoinChart(sell?.coingeckoId ?? null, '1J');
-  const buyChart = useCoinChart(buy?.coingeckoId ?? null, '1J');
-  const rate = useMemo(() => {
-    const b = buyChart.data ?? [];
-    const s = sellChart.data ?? [];
-    if (b.length < 2 || s.length < 2) return [];
-    return b.map(([t, p]) => p / (priceAt(s, t) || 1));
-  }, [buyChart.data, sellChart.data]);
-  const rateChange = rate.length > 1 ? (((rate[rate.length - 1] ?? 0) - (rate[0] ?? 0)) / (rate[0] || 1)) * 100 : null;
 
   const buyAmount = chosen?.buyAmount ?? null;
-  const execRate = chosen && sell && buy && sellAmount ? unitsToNumber(sellAmount, sell.decimals) / unitsToNumber(chosen.buyAmount, buy.decimals) : null;
-  // NEAR Intents deposit: the network fee is known once the transfer is built (confirmation).
-  const networkFees = chosen && chosen.tx.kind !== 'deposit' ? (chosen.gasFeeFiat ?? 0) + (chosen.providerFeeIncluded ? 0 : chosen.providerFeeFiat ?? 0) : null;
-  const kyroFeeFiat = chosen && chosen.kyroFeeBps > 0 && sellAmount && sellPrice !== undefined && sell ? (unitsToNumber(sellAmount, sell.decimals) * sellPrice * chosen.kyroFeeBps) / 10_000 : null;
   // Reasons that are about the Kyro fee configuration (no provider name in them) are worth showing.
   const feeReasons = [...new Set(failures.map((f) => f.error ?? '').filter((e) => e.includes('Kyro')))];
   const busy = phase !== 'idle' && phase !== 'done';
   /** What the confirmation shows and what gets signed. */
   const shown = confirmOpen ? reviewed ?? chosen : chosen;
+  /**
+   * Confirmation only: ONE total of the fees already taken from what you receive (Kyro + the
+   * provider's own), no split, no provider name. Null when a price is missing ('inclus' alone).
+   */
+  const includedFeesFiat = (() => {
+    if (!shown || !sell || !sellAmount) return null;
+    const kyro = shown.kyroFeeBps > 0 ? (sellPrice !== undefined ? (unitsToNumber(sellAmount, sell.decimals) * sellPrice * shown.kyroFeeBps) / 10_000 : null) : 0;
+    const provider = shown.providerFeeIncluded ? shown.providerFeeFiat : 0;
+    return kyro === null || provider === null ? null : kyro + provider;
+  })();
   const canSwap = !!shown && !!password && !over && !busy && (shown.tx.kind !== 'evm' || (!!evmAdapter && !!shown.evmCheck)) && (shown.tx.kind !== 'deposit' || (!!deposit && !!sourceAdapter));
 
   // Most the swap may cost in network fees (gas limit × max fee per gas), shown before signing.
@@ -565,31 +558,11 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               label={cross ? `Tu reçois sur ${buyChain?.label ?? buy.chainKey} (estimé)` : 'Tu reçois (estimé)'}
               right={<>Solde {fmtCrypto(pf.balances.get(buy.id) ?? 0n, buy.decimals)}</>}
               amount={<span key={buyAmount ? String(buyAmount) : 'none'} className={cn('figure fade-in block truncate text-[42px]', !buyAmount && 'text-faint')}>{buyAmount ? fmtCrypto(buyAmount, buy.decimals, undefined, 6) : quotes.loading ? '…' : '0'}</span>}
-              sub={buyAmount && buyPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(buyAmount, buy.decimals) * buyPrice, cur)}${chosen?.priceImpact !== null && chosen?.priceImpact !== undefined ? ` · impact ${fmtPct(chosen.priceImpact * 100, { sign: false })}` : ''}` : ' '}
+              sub={buyAmount && buyPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(buyAmount, buy.decimals) * buyPrice, cur)}` : ' '}
               token={<TokenButton asset={buy} items={buyItems} onSelect={setBuyId} />}
             />
           </div>
 
-          {chosen && buyAmount !== null && (
-            <div className="fade-in flex flex-col rounded-box border border-line bg-bg px-4 text-[14px]">
-              <div className="flex h-11 items-center justify-between">
-                <span className="text-mute">Tu reçois{cross ? ` sur ${buyChain?.label ?? ''}` : ''}</span>
-                <span className="font-medium">≈ {fmtCrypto(buyAmount, buy.decimals, buy.symbol, 6)}</span>
-              </div>
-              {cross && chosen.etaSecs !== undefined && (
-                <div className="flex h-11 items-center justify-between border-t border-line">
-                  <span className="text-mute">Arrivée</span>
-                  <span className="text-text2">{fmtEta(chosen.etaSecs)} après la confirmation du départ</span>
-                </div>
-              )}
-              {chosen.kyroFeeBps > 0 && (
-                <div className="flex h-11 items-center justify-between border-t border-line">
-                  <span className="text-mute">Frais Kyro {feeLabel(chosen.kyroFeeBps)}</span>
-                  <span className="text-text2">{kyroFeeFiat !== null ? `≈ ${fmtFiat(kyroFeeFiat, cur)}` : 'inclus'}</span>
-                </div>
-              )}
-            </div>
-          )}
 
           {chosen && needsAllowanceCheck && (
             <div className="fade-in flex flex-col gap-2.5 rounded-box border border-line border-l-2 border-l-ice/60 bg-bg px-4 py-3.5">
@@ -610,11 +583,6 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-2.5">
-            <Stat label="Frais réseau" value={networkFees !== null ? `≈ ${fmtFiat(networkFees, cur)}` : '—'} />
-            <Stat label="Durée estimée" value={chosen?.etaSecs !== undefined ? (chosen.etaSecs < 60 ? `≈ ${chosen.etaSecs} s` : fmtEta(chosen.etaSecs)) : '—'} />
-            <Stat label="Impact sur le prix" value={chosen?.priceImpact !== null && chosen?.priceImpact !== undefined ? fmtPct(chosen.priceImpact * 100, { sign: false }) : '—'} tone={chosen?.priceImpact && chosen.priceImpact > 0.01 ? 'text-down' : chosen?.priceImpact !== null && chosen?.priceImpact !== undefined ? 'text-up' : ''} />
-          </div>
 
           <div className="flex-1" />
           {chosen && chosen.tx.kind === 'evm' && (
@@ -634,8 +602,6 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               ) : null}
             </div>
           )}
-          {chosen?.tx.kind === 'deposit' && <span className="text-[13px] text-mute">Un simple envoi vers une adresse de dépôt que le pont lie à ton compte {buyChain?.label ?? ''}. Kyro la fait confirmer par le pont avant ton mot de passe.</span>}
-          {chosen?.tx.kind === 'solana' && <span className="text-[13px] text-mute">{chosen.cross ? 'Transaction construite par l’agrégateur, vérifiée par le coffre et confirmée par le pont avant ton mot de passe.' : 'Transaction construite par Jupiter, signée dans le coffre après la fenêtre système.'}</span>}
           {phase !== 'idle' && phase !== 'done' && (
             <span className="flex items-center gap-2 text-[13px] text-ice-text2">
               <Spinner /> {phaseLabel[phase]}
@@ -661,9 +627,8 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               <span className="text-[15px] font-medium tracking-[-0.01em]">Meilleur prix</span>
               <span className="text-[12px] text-faint">{quotes.loading ? 'actualisation…' : quotes.updatedAt ? `actualisé ${fmtAgo(quotes.updatedAt, now)}` : ''}</span>
             </div>
-            {!params && <p className="m-0 px-1 py-2 text-[13px] text-mute">Saisis un montant : Kyro cherche le meilleur prix, frais Kyro compris.</p>}
+            {!params && <p className="m-0 px-1 py-2 text-[13px] text-mute">Saisis un montant : Kyro cherche le meilleur prix.</p>}
             {params && quotes.loading && !quotes.data && <div className="skeleton h-[62px] rounded-box" />}
-            {params && chosen && <p className="m-0 px-1 text-[13px] text-text2">Meilleur prix trouvé après frais{chosen.kyroFeeBps > 0 ? ` (frais Kyro ${feeLabel(chosen.kyroFeeBps)} inclus)` : ''}.</p>}
             {params && quotes.data && list.length === 0 && !quotesTorBlocked && (
               <p className="m-0 px-1 text-[13px] text-mute">Aucun prix disponible pour cette paire{network === 'testnet' ? ' : les échanges fonctionnent surtout en mainnet' : ''}.</p>
             )}
@@ -671,27 +636,6 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             {list.length === 0 && feeReasons.map((r) => <Notice key={r} tone="warn">{r}</Notice>)}
             {quotesTorBlocked && (failures.length > 0 || quotes.error) && <TorWait className="px-1" />}
             {quotes.error && !quotesTorBlocked && <Notice tone="error">{quotes.error.message}</Notice>}
-          </section>
-
-          <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-panel border border-line bg-card px-[22px] py-[18px] scroll-thin">
-            <div className="flex flex-col text-[13px]">
-              <div className="flex h-9 items-center justify-between border-b border-line">
-                <span className="text-mute">Taux</span>
-                <span className="font-medium">{execRate ? `1 ${buy.symbol} = ${fmtNumber(execRate, execRate >= 100 ? 2 : 6)} ${sell.symbol}` : '—'}</span>
-              </div>
-              <div className="flex h-9 items-center justify-between">
-                <span className="text-mute">Minimum reçu</span>
-                <span className="font-medium">{chosen ? fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6) : '—'}</span>
-              </div>
-            </div>
-            <div className="flex-1" />
-            <div className="flex items-center justify-between text-[12px]">
-              <span className="text-mute">
-                Taux {buy.symbol} / {sell.symbol} · 24 h
-              </span>
-              <span className={cn((rateChange ?? 0) >= 0 ? 'text-up' : 'text-down')}>{fmtPct(rateChange, { decimals: 1 })}</span>
-            </div>
-            {rate.length > 1 ? <SmoothChart values={rate} height={70} defaultPoint="none" padTop={8} padBottom={8} ariaLabel="Taux sur 24 heures" /> : <div className="h-[70px]" />}
           </section>
         </div>
       </div>
@@ -713,18 +657,11 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
                 <span className="text-mute">Minimum garanti</span>
                 <span className="font-medium">{fmtCrypto(shown.minBuyAmount, buy.decimals, buy.symbol, 6)}</span>
               </div>
-              {shown.kyroFeeBps > 0 && (
-                <div className="flex h-10 items-center justify-between border-b border-line">
-                  <span className="text-mute">Frais Kyro {feeLabel(shown.kyroFeeBps)}</span>
-                  <span className="text-text2">{kyroFeeFiat !== null ? `≈ ${fmtFiat(kyroFeeFiat, cur)}, inclus` : 'inclus'}</span>
-                </div>
-              )}
-              {shown.tx.kind === 'deposit' && deposit && deposit.plan.oneClickFeeBps > 0 && (
-                <div className="flex h-10 items-center justify-between border-b border-line">
-                  <span className="text-mute">Frais NEAR Intents {feeLabel(deposit.plan.oneClickFeeBps)}</span>
-                  <span className="text-text2">{shown.providerFeeFiat !== null ? `≈ ${fmtFiat(shown.providerFeeFiat, cur)}, inclus` : 'inclus'}</span>
-                </div>
-              )}
+              {/* One total (Kyro + provider), taken from what you receive: no split, no provider name. */}
+              <div className="flex h-10 items-center justify-between border-b border-line">
+                <span className="text-mute">Frais inclus</span>
+                <span className="text-text2">{includedFeesFiat !== null ? `≈ ${fmtFiat(includedFeesFiat, cur)}` : 'déjà déduits'}</span>
+              </div>
               {shown.tx.kind === 'deposit' && (
                 <div className="flex h-10 items-center justify-between border-b border-line">
                   <span className="text-mute">Frais réseau max.</span>
@@ -852,7 +789,7 @@ function DepositChecks({ sell, buy, chainLabel, buyChainLabel, sellAmount, quote
   const lines = [
     `Pas de contrat ni de transaction écrite par un tiers : Kyro construit lui-même un envoi ordinaire de ${fmtCrypto(sellAmount, sell.decimals, sell.symbol)} vers l’adresse de dépôt${deposit ? ` ${shortAddress(deposit.plan.depositAddress, 8, 6)}` : ''}. Le coffre le décode et la fenêtre système l’affiche comme un envoi.`,
     `NEAR Intents a confirmé que cette adresse de dépôt livre à ton compte ${buyChainLabel} (${shortAddress(quote.cross?.recipient ?? '')}), en ${buy.symbol}, au moins ${fmtCrypto(quote.minBuyAmount, buy.decimals, buy.symbol, 6)}, et que tout remboursement revient à ton adresse ${chainLabel}. Kyro le redemande juste avant de signer.`,
-    `Frais Kyro ${feeLabel(quote.kyroFeeBps)}${deposit && deposit.plan.oneClickFeeBps > 0 ? ` et frais NEAR Intents ${feeLabel(deposit.plan.oneClickFeeBps)}` : ''} : pris par NEAR Intents sur le montant déposé, déjà déduits de ce que tu reçois. Kyro a vérifié ces taux dans la réponse du pont.`,
+    'Frais inclus : pris sur le montant déposé, déjà déduits de ce que tu reçois. Kyro a vérifié leurs taux dans la réponse du pont.',
     ...(utxo
       ? [`Aucun OP_RETURN. Un OP_RETURN est une petite note publique gravée dans une transaction ${sell.symbol}, sans argent dedans ; certains ponts en demandent une pour savoir à qui livrer. Ici ce n’est pas nécessaire : l’adresse de dépôt sert d’identifiant. Une transaction qui en contiendrait une serait refusée par Kyro (et le coffre la signalerait dans une 2ᵉ fenêtre).`]
       : []),
@@ -902,14 +839,5 @@ function TokenButton({ asset, items, onSelect }: { asset: AssetDef; items: Array
         </button>
       }
     />
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  return (
-    <div className="flex flex-col gap-1 border-t border-line pt-2.5">
-      <span className="text-[12px] text-mute">{label}</span>
-      <span className={cn('figure text-[18px] tracking-[-0.03em]', tone)}>{value}</span>
-    </div>
   );
 }

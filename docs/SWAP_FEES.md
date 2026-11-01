@@ -3,7 +3,7 @@
 Kyro prend **0,7 % (70 bps)** sur chaque swap. Ces frais servent à financer le projet. Kyro étant open source, ils sont publics : n'importe qui peut lire le code, les modifier, les passer à 0 ou les retirer dans sa propre version.
 
 - **Configuration** : un seul fichier, [`packages/swap/src/fees.ts`](../packages/swap/src/fees.ts) (`KYRO_SWAP_FEE`).
-- **Affichage** : le montant est montré avant chaque swap (« Frais Kyro 0,7 % »), puis rappelé dans la confirmation avant signature.
+- **Affichage** : l'écran Swap ne montre que ce que tu donnes et ce que tu reçois, déjà net de tous les frais. La confirmation, avant ton mot de passe, montre une seule ligne « Frais inclus ≈ … » : le total des frais Kyro et du fournisseur, sans détail par fournisseur.
 - **Collecte** : les frais sont prélevés sur la blockchain par le **mécanisme officiel « intégrateur »** de chaque fournisseur. Kyro n'ajoute jamais de transfert supplémentaire.
 - **Plafond** : 1 % (`MAX_FEE_BPS`). Au-delà, la configuration est refusée.
 
@@ -94,7 +94,7 @@ Limites des routes NEAR Intents :
 - **Cardano** : ADA seulement (1Click ne liste pas les jetons natifs Cardano).
 - **XRP** : XRP seulement (pas de jetons émis) ; refus si l'adresse de dépôt exige un tag.
 - **Minimums** de 1Click (par exemple 100 $ au départ de TRON au 01/11/2026) : en dessous, pas de devis.
-- **Coût pour l'utilisateur** : 0,7 % Kyro **plus** 0,7 % pour 1Click (sa moitié du partage), soit 1,4 % retenus sur le dépôt, affichés séparément dans la confirmation.
+- **Coût pour l'utilisateur** : 0,7 % Kyro **plus** 0,7 % pour 1Click (sa moitié du partage), soit 1,4 % retenus sur le dépôt, comptés ensemble dans « Frais inclus » de la confirmation.
 
 ## 1inch : retiré
 
@@ -107,7 +107,7 @@ Ce sont les frais propres à chaque fournisseur, en plus de ceux de Kyro et sans
 - **0x** : 0,15 % sur certaines paires (offre Standard), renvoyés dans `fees.zeroExFee`. Le gain de slippage positif revient à 0x, sauf sur offre personnalisée.
 - **LI.FI** : 0,25 % de frais de service, prélevés en plus de la commission Kyro.
 - **Jupiter (Metis)** : aucune part des frais de plateforme annoncée.
-- **NEAR Intents 1Click** : sa moitié des `appFees` (0,7 % aujourd'hui, renvoyée dans le devis et affichée « Frais NEAR Intents »), plus le protocole (0,0001 %) ; si le swap est exécuté à un meilleur prix que le devis, l'écart est partagé avec 1Click. En cas de remboursement, 1Click retient `refundFee` (frais réseau du renvoi).
+- **NEAR Intents 1Click** : sa moitié des `appFees` (0,7 % aujourd'hui, renvoyée dans le devis et comptée dans « Frais inclus »), plus le protocole (0,0001 %) ; si le swap est exécuté à un meilleur prix que le devis, l'écart est partagé avec 1Click. En cas de remboursement, 1Click retient `refundFee` (frais réseau du renvoi).
 
 ## Non vérifié à ce jour
 

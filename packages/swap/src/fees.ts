@@ -3,8 +3,8 @@
 // Kyro swap fee: the ONE place where it is configured.
 //
 // Kyro is open source: this fee is public, and anyone building Kyro from source can change it,
-// set it to 0 or remove it. It is shown to the user before every swap (« Frais Kyro 0,7 % ») and
-// is collected on-chain by each provider's OFFICIAL integrator-fee mechanism, never by an extra
+// set it to 0 or remove it. It is already deducted from the amount shown, counted in the
+// confirmation's « Frais inclus » total before signing, and is collected on-chain by each provider's OFFICIAL integrator-fee mechanism, never by an extra
 // transfer added by Kyro. Details, parameters and doc links: docs/SWAP_FEES.md.
 //
 // Rule: every swap carries the fee. A provider that cannot collect it with the current settings

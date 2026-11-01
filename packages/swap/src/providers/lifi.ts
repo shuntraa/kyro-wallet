@@ -143,7 +143,8 @@ export class LifiProvider implements SwapProvider {
       provider: this.id,
       providerName: this.name,
       buyAmount: toBig(r.estimate.toAmount),
-      providerFeeFiat: sum(fees) * fx,
+      // LI.FI's own fees only: « Distributions » is the Kyro fee (counted with `kyroFeeBps`).
+      providerFeeFiat: sum(fees.filter((f) => f.name !== 'Distributions')) * fx,
       providerFeeIncluded: fees.every((f) => f.included !== false),
       kyroFeeBps: fee.kind === 'fee' ? fee.bps : 0,
       priceImpact: null,
