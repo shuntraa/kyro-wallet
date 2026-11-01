@@ -43,6 +43,8 @@ import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
 export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
 import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
 export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
+import { createDemoDot, demoDotAddress, type DemoDotState } from './mock-dot';
+export { demoDotAddress, dotSs58Decode, dotSs58Encode } from './mock-dot';
 import { demoFund } from './mock-tx';
 import { createDemoHw, detectDemoHwScenario, type DemoHw, type DemoHwScenario } from './mock-hw';
 import { EMPTY_SERVERS, redactServers } from './servers';
@@ -161,6 +163,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       tron: { address: demoTronAddress(demoSeed(), 0), path: "m/44'/195'/0'/0/0" },
       xrp: { address: demoXrpAddress(demoSeed(), 0), path: "m/44'/144'/0'/0/0" },
       cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
+      polkadot: { address: demoDotAddress(demoSeed(), 0, network), path: 'sr25519 · phrase (compte racine, comme Polkadot.js)' },
     },
     ownBtc,
     receive,
@@ -284,6 +287,8 @@ export interface MockBackend {
   xrp: DemoXrpState;
   /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
+  /** Polkadot Asset Hub demo chain (tests). */
+  dot: DemoDotState;
   /** Staking demo (tests). */
   stake: ReturnType<typeof createDemoStake>;
 }
@@ -384,6 +389,17 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   // Cardano (§2.7): `ada_*`, min-UTxO / fee / coin selection like Rust.
   const cardanoChain = createDemoCardano({
     network,
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // Polkadot (§2.11): `dot_*`, existential deposit / keep-alive rules like Rust.
+  const dotChain = createDemoDot({
+    network,
+    seed: demoSeed(),
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -829,6 +845,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     ...tronChain.handlers,
     ...xrpChain.handlers,
     ...cardanoChain.handlers,
+    ...dotChain.handlers,
     ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
@@ -860,6 +877,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     tron: tronChain.state,
     xrp: xrpChain.state,
     cardano: cardanoChain.state,
+    dot: dotChain.state,
     stake,
     advance(ms: number) {
       clockOffset += ms;
@@ -874,7 +892,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
         return accts.adaAddress(accts.arg(args.account));
       }
       if (DEMO_ACCOUNT0_ONLY.test(cmd) && accts.arg(args.account) !== 0) {
-        throw new IpcError('INVALID_INPUT', 'Mode démo : les comptes supplémentaires TRON, XRP et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).');
+        throw new IpcError('INVALID_INPUT', 'Mode démo : les comptes supplémentaires TRON, XRP, Cardano et Polkadot et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).');
       }
       void captureProtected;
       return await h(args);
@@ -883,7 +901,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
 }
 
 /** Demo commands simulated for account 0 only (§2.9). */
-const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|ada_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
+const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|ada_(build_tx|sign_tx|broadcast)|dot_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
 
 function decodeSolMessageArg(m: unknown): Uint8Array {
   try {

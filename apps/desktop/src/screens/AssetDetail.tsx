@@ -66,7 +66,7 @@ export function AssetDetail({ id }: { id: string }) {
   }, [supported, network, pf.balances]);
 
   const activity = (history.data?.entries ?? []).filter((e) => supported && e.assetId === supported.id).slice(0, 6);
-  const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address }[supported.family] ?? null) : null;
+  const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address, dot: accounts.polkadot?.address }[supported.family] ?? null) : null;
   const fav = favs.includes(coinId);
   const stakeChain = supported ? ({ sol: 'sol', ada: 'ada', tron: 'tron' } as const)[supported.family as 'sol' | 'ada' | 'tron'] : undefined;
   // Cardano: ADA tied to tokens and the native tokens themselves (not separate assets).
@@ -225,6 +225,8 @@ export function AssetDetail({ id }: { id: string }) {
           <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
             {history.loading && !history.data ? (
               <div className="flex flex-col gap-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
+            ) : activity.length === 0 && supported?.family === 'dot' ? (
+              <EmptyState title="Historique non disponible">Polkadot n’a pas d’indexeur public sans clé : Kyro affiche ton solde, et seulement les envois faits depuis cet appareil.</EmptyState>
             ) : activity.length === 0 ? (
               <EmptyState title="Aucune activité">{supported ? 'Les transactions de cet actif apparaîtront ici.' : 'Aucun compte Kyro sur ce réseau.'}</EmptyState>
             ) : (

@@ -30,6 +30,7 @@ export const DEMO_COINS: DemoCoin[] = [
   { id: 'avalanche-2', symbol: 'avax', name: 'Avalanche', price: 23.4, change24h: 1.5, change7d: 0.4, marketCapEur: 9.5e9 },
   { id: 'wrapped-bitcoin', symbol: 'wbtc', name: 'Wrapped Bitcoin', price: 58_850, change24h: 1.2, change7d: 3.3, marketCapEur: 8.9e9 },
   { id: 'chainlink', symbol: 'link', name: 'Chainlink', price: 11.2, change24h: -2.4, change7d: 5.2, marketCapEur: 6.8e9 },
+  { id: 'polkadot', symbol: 'dot', name: 'Polkadot', price: 3.9, change24h: 0.5, change7d: -1.8, marketCapEur: 6.1e9 },
   { id: 'litecoin', symbol: 'ltc', name: 'Litecoin', price: 64.1, change24h: 0.2, change7d: -0.9, marketCapEur: 4.8e9 },
   { id: 'dai', symbol: 'dai', name: 'Dai', price: 0.925, change24h: 0, change7d: 0, marketCapEur: 4.6e9 },
   { id: 'polygon-ecosystem-token', symbol: 'pol', name: 'POL (ex-MATIC)', price: 0.37, change24h: -1.1, change7d: -4.4, marketCapEur: 3.1e9 },

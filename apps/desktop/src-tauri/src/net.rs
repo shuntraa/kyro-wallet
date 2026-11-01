@@ -35,6 +35,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
+    // Polkadot: Parity's public JSON-RPC nodes of Asset Hub (Westend testnet, Polkadot
+    // mainnet), where DOT balances live since the Asset Hub migration; only Rust's `dot_*`.
+    "westend-asset-hub-rpc.polkadot.io",
+    "polkadot-asset-hub-rpc.polkadot.io",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -294,6 +298,7 @@ pub enum Family {
     Tron,
     Xrp,
     Cardano,
+    Polkadot,
     Evm,
     Solana,
     Market,
@@ -317,6 +322,10 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
+    } else if host == "westend-asset-hub-rpc.polkadot.io"
+        || host == "polkadot-asset-hub-rpc.polkadot.io"
+    {
+        Family::Polkadot
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1067,6 +1076,14 @@ mod tests {
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
+        assert_eq!(
+            family_for("westend-asset-hub-rpc.polkadot.io", &c),
+            Family::Polkadot
+        );
+        assert_eq!(
+            family_for("polkadot-asset-hub-rpc.polkadot.io", &c),
+            Family::Polkadot
+        );
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

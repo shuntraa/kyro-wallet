@@ -48,6 +48,7 @@ const TAIL = 4;
  * - Solana (base58): none.
  * - TRON: `T`. XRP: `r`.
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
+ * - Polkadot (SS58): the first char (`1` for prefix 0, `5` for prefix 42).
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -71,6 +72,9 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       return a.startsWith('r') ? { prefix: 'r', body: a.slice(1), caseInsensitive: false } : { prefix: '', body: a, caseInsensitive: false };
     case 'sol':
       return { prefix: '', body: a, caseInsensitive: false };
+    case 'dot':
+      // SS58: the first character only depends on the network prefix (`1` Polkadot, `5` generic).
+      return { prefix: a.slice(0, 1), body: a.slice(1), caseInsensitive: false };
   }
 }
 

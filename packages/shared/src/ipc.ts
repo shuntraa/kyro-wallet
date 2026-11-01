@@ -60,11 +60,16 @@ export interface Accounts {
    * and change both use it; Rust signs with index 0 of the account only (§2.7).
    */
   cardano: AddressInfo;
+  /**
+   * Polkadot Asset Hub, sr25519 from the phrase's entropy (substrate-bip39, like Polkadot.js,
+   * Nova, Talisman): account 0 = root key, account a = `//a`; SS58 prefix 0 (testnet: 42) (§2.11).
+   */
+  polkadot: AddressInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'dot';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'dot'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -562,6 +567,70 @@ export interface XrpTrustLine {
   issuer: string;
   balance: string;
   limit: string;
+}
+
+// ---------------------------------------------------------------- Polkadot (§2.11)
+
+export interface DotBackendInfo {
+  network: 'mainnet' | 'testnet';
+  /** "Polkadot Asset Hub" / "Westend Asset Hub". */
+  chain: string;
+  symbol: string;
+  decimals: number;
+  ss58: number;
+  label: string;
+  tor: boolean;
+}
+
+/** `dot_account`: `System.Account` of the address. Amounts: planck, decimal strings. */
+export interface DotAccountInfo {
+  address: string;
+  /** Exists on chain (≥ existential deposit). `false`: never funded or reaped. */
+  exists: boolean;
+  free: string;
+  reserved: string;
+  /** Part of `free` locked (staking, vesting, governance). */
+  frozen: string;
+  /** What can be sent, fee included: free − max(frozen − reserved, existential deposit). */
+  spendable: string;
+  nonce: number;
+  existentialDeposit: string;
+}
+
+/** wallet-core `DotTxSummary`: Rust's strict decoding of the signing payload. */
+export interface DotTxSummary {
+  chain: string;
+  from: string;
+  to: string;
+  /** Planck. */
+  amount: string;
+  symbol: string;
+  decimals: number;
+  /** Always `Balances.transfer_keep_alive`. */
+  call: string;
+  nonce: number;
+  /** Always "0". */
+  tip: string;
+  eraPeriod: number;
+  eraPhase: number;
+  blockHash: string;
+  specVersion: number;
+  txVersion: number;
+}
+
+type DotAccountView = Omit<DotAccountInfo, 'existentialDeposit'>;
+
+/** Live context Rust read for the dialog. */
+export interface DotContext {
+  account: DotAccountView;
+  destination: DotAccountView;
+  existentialDeposit: string;
+  /** Fee estimate of the node (planck). */
+  fee: string;
+  eraBirth: number;
+  /** First block where the transaction is no longer valid. */
+  validUntil: number;
+  finalized: number;
 }
 
 // ---------------------------------------------------------------- Cardano (§2.7)
@@ -1340,6 +1409,25 @@ export interface Commands {
   ada_sign_tx: { args: { tx: string; password: string } & WithAccount; ret: { tx: string; txId: string; summary: CardanoTxSummary; context: CardanoContext } };
   /** Koios `submittx`; id must be blake2b-256(body). Node refusal → INVALID_INPUT with its message. */
   ada_broadcast: { args: { tx: string } & WithAccount; ret: string };
+  // Polkadot (§2.11): DOT on Polkadot Asset Hub (WND on Westend Asset Hub). Rust builds the
+  // `Balances.transfer_keep_alive` (nonce, era, runtime checked against the metadata), decodes
+  // it, re-reads balances and fee live, signs behind the password and the native dialog.
+  // No history (no keyless public indexer). Hardware wallets: HW_UNSUPPORTED.
+  dot_backend_info: { args: undefined; ret: DotBackendInfo };
+  /** sr25519 (substrate-bip39): account 0 = the phrase's root key, account a = `//a`. */
+  dot_address: { args: WithAccount | undefined; ret: string };
+  dot_account: { args: { address: string }; ret: DotAccountInfo };
+  /**
+   * `amount`: planck. Refused before building: address of another network (SS58 prefix),
+   * transfer to oneself, new recipient with < existential deposit, amount + fee > spendable,
+   * our account not existing, unknown runtime (metadata that does not confirm the pinned call).
+   */
+  dot_build_tx: { args: { to: string; amount: string } & WithAccount; ret: { payload: string; summary: DotTxSummary; context: DotContext } };
+  dot_sign_tx: { args: { payload: string; password: string } & WithAccount; ret: { extrinsic: string; hash: string; blockHash: string; summary: DotTxSummary; context: DotContext } };
+  /** Signature re-verified by Rust (current runtime, `blockHash`); the node's hash must be ours. */
+  dot_broadcast: { args: { extrinsic: string; blockHash: string } & WithAccount; ret: string };
+  /** `finalized`: the nonce is used in the finalized state (events are not decoded). */
+  dot_tx_status: { args: { address: string; nonce: number; validUntil: number }; ret: { state: 'pending' | 'finalized' | 'expired'; finalized: number } };
   // Staking (§2.8): not available on hardware-wallet accounts (no hw_* command offers it).
   sol_stake_overview: { args: WithAccount | undefined; ret: SolStakeOverview };
   sol_stake_validators: { args: { withNames?: boolean }; ret: { validators: SolValidator[]; namesAvailable: boolean } };

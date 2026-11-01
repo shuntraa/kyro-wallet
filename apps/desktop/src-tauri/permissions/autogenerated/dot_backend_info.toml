@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dot-backend-info"
+description = "Enables the dot_backend_info command without any pre-configured scope."
+commands.allow = ["dot_backend_info"]
+
+[[permission]]
+identifier = "deny-dot-backend-info"
+description = "Denies the dot_backend_info command without any pre-configured scope."
+commands.deny = ["dot_backend_info"]

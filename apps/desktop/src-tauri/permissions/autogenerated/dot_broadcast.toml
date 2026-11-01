@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dot-broadcast"
+description = "Enables the dot_broadcast command without any pre-configured scope."
+commands.allow = ["dot_broadcast"]
+
+[[permission]]
+identifier = "deny-dot-broadcast"
+description = "Denies the dot_broadcast command without any pre-configured scope."
+commands.deny = ["dot_broadcast"]
