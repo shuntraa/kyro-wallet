@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stellar-txs"
+description = "Enables the stellar_txs command without any pre-configured scope."
+commands.allow = ["stellar_txs"]
+
+[[permission]]
+identifier = "deny-stellar-txs"
+description = "Denies the stellar_txs command without any pre-configured scope."
+commands.deny = ["stellar_txs"]

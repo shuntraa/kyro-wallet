@@ -15,7 +15,8 @@ import { TronAdapter } from './tron/adapter';
 import { XrpAdapter } from './xrp/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
-import { xrpChain } from './registry';
+import { stellarChain, xrpChain } from './registry';
+import { StellarAdapter } from './stellar/adapter';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -34,6 +35,8 @@ export interface AdapterSet {
   xrp: XrpAdapter | null;
   /** Cardano: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   cardano: CardanoAdapter | null;
+  /** Stellar: vault only (hardware wallets: HW_UNSUPPORTED for now). */
+  stellar: StellarAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -75,8 +78,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...a }) : null;
   // Cardano: Rust picks the server (servers.cardano, default Koios).
   const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...a }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : [])];
-  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, all, hw: hw ?? null };
+  // Stellar: SDF's Horizon, reached by Rust only.
+  const stellar = accounts.stellar ? new StellarAdapter({ chain: stellarChain(network), address: accounts.stellar.address, ...a }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : [])];
+  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, stellar, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin
@@ -170,6 +175,29 @@ export {
   type XrpSigned,
   isXAddress,
 } from './xrp/adapter';
+export {
+  StellarAdapter,
+  rustStellarBackend,
+  isStellarAddress,
+  stellarAddressKind,
+  stellarAddressProblem,
+  xlmToStroops,
+  parseStellarMemo,
+  sameMemo,
+  stellarMemoText,
+  type StellarAdapterOptions,
+  type StellarBackend,
+  type StellarAccountInfo,
+  type StellarContext,
+  type StellarHistoryEntry,
+  type StellarMemoSpec,
+  type StellarMemoView,
+  type StellarOpView,
+  type StellarTxSummary,
+  type StellarWarning,
+  type StellarUnsigned,
+  type StellarSigned,
+} from './stellar/adapter';
 export {
   CardanoAdapter,
   rustCardanoBackend,

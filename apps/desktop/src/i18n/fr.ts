@@ -13,6 +13,7 @@ import { staking } from './fr/staking';
 import { settings } from './fr/settings';
 import { servers } from './fr/servers';
 import { hw } from './fr/hw';
+import { stellar } from './fr/stellar';
 
 export const fr = {
   ...common,
@@ -27,7 +28,8 @@ export const fr = {
   ...settings,
   ...servers,
   ...hw,
+  ...stellar,
 } as const;
 
 /** Area modules, for the catalog tests (keys must start with `<area>.`). */
-export const frAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, settings, servers, hw } as const;
+export const frAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, settings, servers, hw, stellar } as const;

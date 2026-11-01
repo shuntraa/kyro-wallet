@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stellar-backend-info"
+description = "Enables the stellar_backend_info command without any pre-configured scope."
+commands.allow = ["stellar_backend_info"]
+
+[[permission]]
+identifier = "deny-stellar-backend-info"
+description = "Denies the stellar_backend_info command without any pre-configured scope."
+commands.deny = ["stellar_backend_info"]

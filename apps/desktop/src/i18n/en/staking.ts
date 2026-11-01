@@ -59,6 +59,7 @@ export const staking: Record<keyof typeof fr, string> = {
   'staking.risksBody': 'On Solana, Cardano and TRON there is <b>no slashing</b>: a validator, pool or SR that misbehaves cannot take your funds. However, <b>your rewards depend on it</b> (its commission, margin and reliability) and they are never guaranteed. The names shown are declared by their operators, not verified.',
   'staking.otherUtxoNo': 'No native staking: these protocols do not have any.',
   'staking.otherXrp': 'No native staking.',
+  'staking.otherXlm': 'No native staking (inflation was removed in 2019).',
   'staking.otherEvmName': 'Ethereum and EVM chains',
   'staking.otherEvm': 'Not offered: native staking requires 32 ETH and a validator running at all times, and Kyro does not go through a third party’s contract.',
 

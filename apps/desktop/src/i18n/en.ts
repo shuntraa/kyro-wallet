@@ -14,6 +14,7 @@ import { staking } from './en/staking';
 import { settings } from './en/settings';
 import { servers } from './en/servers';
 import { hw } from './en/hw';
+import { stellar } from './en/stellar';
 
 export const en: Record<keyof typeof fr, string> = {
   ...common,
@@ -28,6 +29,7 @@ export const en: Record<keyof typeof fr, string> = {
   ...settings,
   ...servers,
   ...hw,
+  ...stellar,
 };
 
-export const enAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, settings, servers, hw } as const;
+export const enAreas = { common, shell, welcome, portfolio, history, send, receive, swap, staking, settings, servers, hw, stellar } as const;

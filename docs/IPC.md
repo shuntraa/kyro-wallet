@@ -47,7 +47,7 @@ pub fn btc_account(seed: &Seed, net: Network, kind: BtcKind, account: u32) -> Re
 pub fn btc_address(seed: &Seed, net: Network, kind: BtcKind, account: u32, change: bool, index: u32) -> Result<String>;
 pub fn evm_address(seed: &Seed, index: u32) -> Result<String>;          // m/44'/60'/0'/0/i, EIP-55 — compte EVM n° i = index d'adresse (voir « Comptes » ci-dessous)
 pub fn evm_path(index) -> String;  pub fn sol_path(account) -> String;  pub fn tron_path(account) -> String;
-pub fn xrp_path(account) -> String;  pub fn cardano_account_path(account) -> String;   // chemins affichés (dialogue natif, UI)
+pub fn xrp_path(account) -> String;  pub fn cardano_account_path(account) -> String;  pub fn stellar_path(account) -> String;   // chemins affichés (dialogue natif, UI)
 pub fn sol_address(seed: &Seed, account: u32) -> Result<String>;        // m/44'/501'/i'/0' (SLIP-10 ed25519), base58
 
 // --- signing (clés dérivées à la demande, zeroizées aussitôt) ---
@@ -187,6 +187,31 @@ pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, M
                       UnusualText /*MemoData nettoyé : memos[].text est la version nettoyée (256 car.), memo_data l'hexadécimal exact*/ }   // → renforcée
 pub fn xrp_sign(seed, account, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
 pub fn xrp_verify_signed(blob_hex) -> Result<String /*hash*/>;   // signature DER low-S de SigningPubKey, clé = Account
+
+// --- Stellar : SEP-0005 m/44'/148'/a' (SLIP-10 ed25519, comme Solana : ed25519-dalek-bip32 ; Lobstr, Freighter, Ledger,
+//     Trezor), compte 0 = m/44'/148'/0' ; adresse G… = strkey SEP-0023 (octet de version 6 << 3 ‖ clé ‖ CRC16-XModem,
+//     base32 sans remplissage, aller-retour canonique exigé) ; codec XDR écrit à la main, strict (ré-encodage identique exigé)
+pub fn stellar_address(seed, account) -> Result<String>; pub fn stellar_public_key(seed, account) -> Result<[u8; 32]>;
+pub fn stellar_path(account) -> String;                     // m/44'/148'/account'
+pub fn stellar_account_id(address) -> Result<[u8; 32]>;     // G… seulement ; M… (multiplexé) et S… (CLÉ SECRÈTE collée par erreur) refusés avec leur message
+pub fn stellar_address_from_key(&[u8; 32]) -> String; pub fn stellar_muxed_parts(m) -> Result<(String, u64)>;
+pub fn stellar_asset(code /*1–12 alphanumériques, « XLM » refusé*/, issuer) -> Result<StellarAsset>;
+pub fn stellar_network_passphrase(Network) -> &'static str;  // « Public Global Stellar Network ; September 2015 » / « Test SDF Network ; September 2015 »
+pub struct StellarTransaction { source: [u8; 32], fee: u32 /*stroops*/, sequence: i64, time_bounds: Option<(u64, u64)>, memo: StellarMemo,
+                                operations: Vec<StellarOp> }   // Transaction v1 ; hash(net) = SHA-256(SHA-256(phrase réseau) ‖ ENVELOPE_TYPE_TX ‖ XDR)
+pub struct StellarEnvelope { tx, signatures }   // TransactionEnvelope ENVELOPE_TYPE_TX ; encode / decode / to_base64 / from_base64
+pub enum StellarOperation { CreateAccount { destination, starting_balance }, Payment { destination, asset, amount }, ChangeTrust { asset, limit } }
+// decode refuse : enveloppes v0 et fee bump, comptes multiplexés (M…), PRECOND_V2, Soroban (ext ≠ 0), toute autre opération
+// (SetOptions, AccountMerge, ManageData, offres, path payments, claimable balances, InvokeHostFunction…), parts de pool,
+// codes d'actif non canoniques, remplissage non nul, octets en trop, encodage non canonique.
+pub fn stellar_decode_tx(envelope_b64, our_address, net) -> Result<StellarTxSummary>;   // + refuse : déjà signée, source ≠ nous,
+// pas de limites de temps (ou maxTime 0), frais 0, séquence ≤ 0, autre chose qu'UNE opération, opération avec sa propre source,
+// paiement / création vers soi-même, montant ≤ 0, limite de confiance < 0, ligne de confiance vers son propre actif
+pub struct StellarTxSummary { network, source, fee, sequence, min_time, max_time, memo: StellarMemoView, operation: StellarOpView,
+                              warnings: Vec<StellarWarning>, requires_extra_confirmation }   // serde camelCase, montants en stroops (chaînes)
+pub enum StellarWarning { HighFee /*> 0,01 XLM*/, UnusualText /*mémo nettoyé ou non UTF-8*/, MemoReturn, RemoveTrustline }   // → renforcée
+pub fn stellar_sign(seed, account, envelope_b64, net) -> Result<(String /*enveloppe signée*/, String /*hash*/, StellarTxSummary)>;   // ed25519, vérifiée (verify_strict)
+pub fn stellar_verify_signed(envelope_b64, net) -> Result<String /*hash*/>;   // une signature, de la source, indice = 4 derniers octets de la clé, valide SUR CE RÉSEAU
 
 // --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
 //     sel = ENTROPIE BIP39, puis clamping), dérivation BIP32-Ed25519 V2 par le crate ed25519-bip32 (aucune crypto écrite
@@ -395,6 +420,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_broadcast` | `{ hex }` | `string` (txid) | le txid renvoyé par le serveur doit correspondre à la transaction, sinon erreur |
 | `ltc_*`, `doge_*` | voir §2.4 | | Litecoin, Dogecoin : mêmes formes Esplora que `btc_*`, signature avec dialogue natif |
 | `ada_*` | voir §2.7 | | Cardano : transaction construite **par Rust** depuis les UTxO et les paramètres de protocole, chaque sortie détaillée (ADA, tokens, min-ADA) |
+| `stellar_*` | voir §2.11 | | Stellar : transaction construite **par Rust** (séquence, frais bornés, limites de temps ; Payment ou CreateAccount), mémo mis en évidence, réserve, phrase réseau vérifiée |
 | `xrp_*` | voir §2.6 | | XRP Ledger : paiement construit **par Rust** (Sequence, Fee, LastLedgerSequence), tag de destination mis en évidence, réserve |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `sol_stake_*`, `ada_stake_*`, `tron_stake_*` | voir §2.8 | | Staking : Solana natif, délégation Cardano, TRON Stake 2.0 ; opérations construites **par Rust**, décodées et vérifiées en direct avant le dialogue natif |
@@ -425,7 +451,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 type Accounts = {                 // accounts_get({ account? }) : tout est celui du compte `account` (0 = l'historique)
   network: 'mainnet' | 'testnet';
   account: number;
-  // evm, sol, tron, xrp, cardano : { address, path } (path = chemin de la clé, ex. m/44'/60'/0'/0/1)
+  // evm, sol, tron, xrp, cardano, stellar : { address, path } (path = chemin de la clé, ex. m/44'/60'/0'/0/1)
   btc: { segwit: { address: string; xpub: string; fingerprint: string; path: string };
          taproot: { address: string; xpub: string; fingerprint: string; path: string } };
   evm: { address: string };
@@ -434,6 +460,7 @@ type Accounts = {                 // accounts_get({ account? }) : tout est celui
   doge: { address: string; xpub: string; fingerprint: string; path: string };  // m/44'/3'/0' (testnet m/44'/1'/0')
   tron: { address: string };                                                    // m/44'/195'/0'/0/0 (même chemin sur Nile)
   xrp: { address: string };                                                     // m/44'/144'/0'/0/0
+  stellar: { address: string };                                                 // m/44'/148'/0' (SEP-0005, même clé sur testnet), G…
   cardano: { address: string };   // adresse de base m/1852'/1815'/0'/0/0 + staking …/2/0 (CIP-1852, Icarus) ; addr_test1… sur preprod
 };
 type ApiKeyName = 'coingecko' | 'zerox' | 'trongrid';   // toutes les clés que Settings connaît (1inch retiré : une ancienne clé est ignorée puis effacée)
@@ -883,6 +910,7 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `tron` | `m/44'/195'/a'/0/0` (Ledger Live) | `m/44'/195'/0'/0/0` |
 | `xrp` | `m/44'/144'/a'/0/0` (Ledger Live, Trezor Suite) | `m/44'/144'/0'/0/0` |
 | `ada` | CIP-1852 `m/1852'/1815'/a'/0/0` + staking `…/a'/2/0` | `m/1852'/1815'/0'/…` |
+| `xlm` | SEP-0005 `m/44'/148'/a'` (Lobstr, Freighter, Ledger, Trezor ; vecteurs SEP-0005) | `m/44'/148'/0'` |
 
 | Commande | Arguments | Retour | Notes |
 |---|---|---|---|
@@ -892,15 +920,15 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `vault_account_remove` | `{ chain, account }` | `VaultAccountLists` | coffre déverrouillé ; compte 0 → `INVALID_INPUT` |
 
 ```ts
-type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm';
 type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[] };   // triées par index ; nom par défaut « Bitcoin 2 » pour l'index 1
 ```
 
-**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`. Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
+**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `stellar_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`. Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
 
 **Dialogue natif.** La première ligne de chaque fenêtre de signature du coffre dit **quel compte signe** : « Compte signataire : Bitcoin 2 — m/84'/1'/1' (SegWit), m/86'/1'/1' (Taproot) » (EVM : plus l'adresse « De »). Un compte qui n'est **pas** dans la liste de l'utilisateur est affiché « inconnu » (« n° N, absent de ta liste ») avec son chemin, et la signature exige une **2ᵉ fenêtre renforcée** (« Attention : compte inconnu »). Bitcoin, Litecoin, Dogecoin : seules les entrées du compte choisi sont signées ; une entrée d'un autre compte du coffre est étrangère (2ᵉ fenêtre déjà existante) et la monnaie n'est reconnue que dans le compte choisi.
 
-**Fait côté UI** (commit de l'UI des comptes) : Réglages › Comptes (liste par chaîne, « Ajouter un compte » qui prévisualise `accounts_get({ account })` et son solde, renommer, retirer), un jeu d'adaptateurs par compte (`createAdapters(…, account)`, chaque adaptateur passe `account` à ses commandes de signature), le compte choisi par chaîne (mémorisé par réseau dans `localStorage`, donnée publique) utilisé par Envoyer / Recevoir / Swap / Staking / Actif, sélecteur « Compte » toujours affiché pour le coffre (même avec un seul compte ; pas pour un hardware wallet), une ligne par compte dans Actifs (totaux additionnés), historique de tous les comptes. **Mode démo** : listes, adresses, soldes et signatures BTC / EVM / Solana / LTC / DOGE par compte ; TRON, XRP, Cardano et staking simulés pour le premier compte seulement (erreur explicite sinon).
+**Fait côté UI** (commit de l'UI des comptes) : Réglages › Comptes (liste par chaîne, « Ajouter un compte » qui prévisualise `accounts_get({ account })` et son solde, renommer, retirer), un jeu d'adaptateurs par compte (`createAdapters(…, account)`, chaque adaptateur passe `account` à ses commandes de signature), le compte choisi par chaîne (mémorisé par réseau dans `localStorage`, donnée publique) utilisé par Envoyer / Recevoir / Swap / Staking / Actif, sélecteur « Compte » toujours affiché pour le coffre (même avec un seul compte ; pas pour un hardware wallet), une ligne par compte dans Actifs (totaux additionnés), historique de tous les comptes. **Mode démo** : listes, adresses, soldes et signatures BTC / EVM / Solana / LTC / DOGE par compte ; TRON, XRP, Stellar, Cardano et staking simulés pour le premier compte seulement (erreur explicite sinon).
 
 **Beaucoup d'adresses, facilement** (aucune nouvelle commande : `vault_account_add` appelé une fois par compte, Rust vérifie chaque règle). Le sélecteur « Compte » (Envoyer, Recevoir, Swap, Staking, Actif) a une entrée **« Nouveau compte »** : elle crée le prochain numéro libre avec son nom par défaut (« Bitcoin 2 »), le sélectionne et affiche son adresse (lue avec `accounts_get({ account })` avant la sélection). Recevoir a aussi un bouton « Nouveau compte » visible (la « Nouvelle adresse » BTC/LTC reste) et affiche le chemin de dérivation du compte choisi (champ `path` d'`accounts_get`, par ex. `m/44'/60'/0'/0/1` pour « Ethereum 2 »). Réglages › Comptes : **« Créer plusieurs… »** (1 à 10 d'un coup, dans la limite de 20 par chaîne ; un échec en route garde les comptes déjà créés). Envoyer : **« Mes comptes »** à côté de « Carnet » liste les **autres** comptes de la même chaîne (nom, adresse courte, solde) et peut en créer un nouveau comme destinataire ; choisir un compte remplit l'adresse, puis c'est un envoi ordinaire (décodage Rust, dialogue natif, mêmes contrôles). Le récapitulatif nomme le destinataire « Ton compte « X » » quand l'adresse est à l'un de tes comptes. Fonctions pures testées : `planNewAccounts`, `otherOwnAccounts`, `ownAccountOf` (`apps/desktop/src/lib/accounts.ts`). Les adresses du compte 0 ne changent pas.
 
@@ -935,6 +963,25 @@ type NetworkInfo = {
 
 **Fait côté UI** : Réglages › Réseaux et serveurs › « Réseau » (Réseau principal — fonds réels / Réseau de test — jetons sans valeur), fenêtre de confirmation qui rappelle que chaque réseau a son propre coffre (l'autre est gardé, pas supprimé), puis redémarrage ; écran d'accueil : une ligne « Le coffre sera créé sur le réseau … » avec un lien pour changer ; badge TESTNET de la barre d'état inchangé. **Mode démo** : `network_set` mémorise le choix (`localStorage`, comme l'environnement) et recharge la page sur `?network=…` ; `?network=` dans l'URL joue le rôle de `KYRO_NETWORK`.
 
+### 2.11 Stellar (XLM)
+
+Serveur : **Horizon de la SDF** (`horizon.stellar.org` / `horizon-testnet.stellar.org`, version 30 le 01/11/2026), famille Tor `stellar`, jamais de repli, pas encore de serveur personnalisé. Stellar RPC n'est pas utilisé : il n'a pas d'historique par compte, et la SDF ne publie de point d'accès RPC public que pour le testnet. Chaque construction, signature et diffusion vérifie d'abord la `network_passphrase` d'Horizon (autre réseau → `SERVER_WRONG_NETWORK`) ; la phrase du réseau est de toute façon dans ce qui est signé. **Rust construit la transaction** : numéro de séquence (`/accounts` + 1), frais (90ᵉ centile des frais prélevés de `/fee_stats`, au moins le frais de base, au plus **0,01 XLM**), **limites de temps obligatoires** `[0, heure du dernier registre + 300 s]`, une seule opération : **Payment** XLM si le destinataire existe, **CreateAccount** sinon ; encodée en XDR par wallet-core. Une enveloppe construite par le serveur n'est jamais signée.
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `stellar_backend_info` | — | `{ kind: 'default', network: 'mainnet' \| 'testnet', label, tor }` | |
+| `stellar_address` | `{ account? }` | `string` | `m/44'/148'/{account}'` (SEP-0005), coffre déverrouillé ; `stellar_build_tx`, `stellar_sign_tx`, `stellar_broadcast` prennent le même `account?` |
+| `stellar_account` | `{ address }` | `{ address, exists, balance /*stroops*/, sequence /*chaîne*/, subentryCount, numSponsoring, numSponsored, sellingLiabilities, reserve, spendable, memoRequired, trustlines: [{ code, issuer, balance, limit }], baseReserve }` | `/accounts/{id}` + `base_reserve_in_stroops` du dernier registre (**0,5 XLM**, frais de base **100 stroops**, lus en direct le 01/11/2026 sur testnet et mainnet) ; `reserve` = (2 + entrées + parrainées − parrainantes) × réserve de base + XLM engagés dans des offres ; `spendable` = solde − réserve ; `memoRequired` = entrée de données SEP-0029 `config.memo_required` ; compte inexistant (404) : `exists: false` |
+| `stellar_txs` | `{ address }` | `[{ id, hash, type, from, to, amount: { kind: 'native', stroops } \| { kind: 'credit', code, issuer, stroops }, fee, time, successful, memo, txSource }]` | 50 derniers paiements (`/accounts/{id}/payments?join=transactions`) : Payment, CreateAccount, path payments (montant **reçu**) ; fusions de comptes ignorées ; mémo texte nettoyé |
+| `stellar_build_tx` | `{ to, amount /*stroops*/, memo?: { kind: 'text' \| 'id' \| 'hash', value }, account? }` | `{ envelope /*non signée, base64*/, summary: StellarTxSummary, context: { account, destination, baseReserve, baseFee, ledgerTime } }` | refusé avant toute construction : destinataire avec `config.memo_required` **sans mémo** ; compte destinataire inexistant et montant < 2 × réserve de base (1 XLM) ; montant + frais > disponible ; notre compte non créé ; adresse M… ou S… ; mémo texte > 28 octets ou avec caractère de contrôle / invisible, identifiant > 2⁶⁴ − 1, hash ≠ 64 hex |
+| `stellar_sign_tx` | `{ envelope, password, account? }` | `{ envelope /*signée*/, hash, summary, context }` | décode (strict, source = nous), **XLM seulement** (Payment natif ou CreateAccount), vérifie la phrase réseau d'Horizon, refuse une limite de temps à moins de 30 s ou à plus de 5 min, une séquence périmée, un Payment vers un compte qui n'existe pas (ou un CreateAccount vers un compte qui existe), **relit en direct** les deux comptes et la réserve et refait les vérifications ci-dessus ; mot de passe → dialogue natif : compte signataire, destinataire, **MÉMO encadré sur sa propre ligne** (texte entre « … », identifiant, hash ; ou « AUCUN MÉMO » avec l'avertissement), montant, création du compte destinataire (réserve bloquée chez lui), frais maximum (et frais habituels), solde, réserve bloquée ((2 + entrées) × 0,5 XLM), disponible, heure limite et séquence, **phrase du réseau signée** ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` ; résumé de la signature = résumé affiché |
+| `stellar_broadcast` | `{ envelope, account? }` | `string` (hash) | `stellar_verify_signed` (une signature ed25519 de la source = nous, valide **sur ce réseau**) puis `POST /transactions` (formulaire `tx=`) ; Horizon répond une fois la transaction dans un registre : 200 + hash identique → succès ; 400 → `INVALID_INPUT` avec les codes (`tx_bad_seq`, `tx_too_late`, `op_underfunded`, `op_low_reserve`…) expliqués en français ; 504 ou réponse perdue → `SERVER_UNREACHABLE` qui dit que la transaction a peut-être été transmise (jamais renvoyée en douce ; la renvoyer telle quelle est sans risque : même hash, séquence utilisable une seule fois) |
+| `stellar_tx_status` | `{ hash }` | `{ found, successful }` | `/transactions/{hash}` |
+
+Refusé avant toute signature : toute autre opération (SetOptions — prise de contrôle du compte —, AccountMerge, ManageData, offres, path payments, claimable balances, sponsoring, clawback, Soroban…), plus d'une opération, enveloppes fee bump et v0, comptes multiplexés, préconditions V2, mémo de type « remboursement » ou frais > 0,01 XLM sans 2ᵉ fenêtre. ChangeTrust (lignes de confiance, pour USDC) est décodé et testé dans wallet-core, mais **pas encore proposé** : `stellar_sign_tx` le refuse. Hardware wallets : `HW_UNSUPPORTED` (Ledger app « Stellar » et Trezor `StellarSignTx` : non faits ; Kyro reconstruirait l'enveloppe et vérifierait la signature comme pour Solana).
+
+**Pour l'UI** : le champ **Mémo** (identifiant / texte / hash) est visible en permanence sur l'écran Envoyer XLM, obligatoire si `stellar_account(destination).memoRequired` (Rust refuse de toute façon) ; « au moins 1 XLM » pour un destinataire inexistant ; afficher `spendable` et la réserve expliquée ; adresse M… / S… : message dédié. **Fait** : `Family` `'xlm'` (chaîne `stellar`, actif `xlm`, 7 décimales, CoinGecko `stellar`), types `Commands` (`stellar_*`, `Accounts.stellar`, `AccountChain` `'xlm'`), backend démo (`mock-stellar.ts`), écrans Envoyer / Recevoir (adresse + QR, réserve) / Actifs / Historique (mémo, création de compte), « Connexions sortantes », comptes multiples. Adaptateur : `StellarAdapter` (`packages/chains/src/stellar/`), `stellarChain(network)`, strkeys TS dans `@kyro/shared` (`stellar.ts`).
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -943,6 +990,7 @@ type NetworkInfo = {
 | `mempool.space` | Bitcoin : UTXO, frais, diffusion (Esplora) |
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`) : utilisé par les commandes Rust `ltc_*`, famille Tor `litecoin` |
 | `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet et mainnet (JSON-RPC rippled) : utilisés par les commandes Rust `xrp_*`, famille Tor `xrp` |
+| `horizon-testnet.stellar.org`, `horizon.stellar.org` | Stellar testnet et mainnet (Horizon de la SDF) : utilisés par les commandes Rust `stellar_*`, famille Tor `stellar` |
 | `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |

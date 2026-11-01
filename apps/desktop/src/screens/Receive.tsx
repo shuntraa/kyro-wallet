@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Receive: real QR (qrcode), BTC SegWit/Taproot, Litecoin, Dogecoin, TRON, XRP, Cardano, optional
-// requested amount (BIP21-style / EIP-681 / Solana Pay URI; none for TRON, XRP, Cardano), network warning.
+// Receive: real QR (qrcode), BTC SegWit/Taproot, Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar, optional
+// requested amount (BIP21-style / EIP-681 / Solana Pay URI; none for TRON, XRP, Cardano, Stellar), network warning.
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
-import { btcChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain } from '@kyro/chains';
+import { btcChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, stellarChain } from '@kyro/chains';
 import { useAsync } from '../lib/useAsync';
 import { useApp, useVault } from '../state/app';
 import { cn } from '../lib/cn';
-import { sanitizeDecimalInput } from '../lib/format';
+import { fmtCrypto, sanitizeDecimalInput } from '../lib/format';
 import { useT } from '../i18n';
 import { rt } from '../i18n/rich';
 import { AddressBlocks, CoinIcon, CopyButton } from '../components/kit';
@@ -20,10 +20,10 @@ import { AddressMismatchStop, DeviceBadge, HwErrorNotice, HwWaiting } from '../c
 import { AccountPicker, NewAccountButton } from '../components/AccountPicker';
 import { BRAND, isAddressMismatch, pickDevice, withDevice } from '../state/hw';
 
-type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
-const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm';
+const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm'];
 /** Vault-only chains (hardware wallets: HW_UNSUPPORTED for now). */
-const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'tron', 'xrp', 'ada'];
+const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm'];
 
 export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const { t } = useT();
@@ -31,7 +31,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts, adapters, activeHw } = useVault();
   // Hardware-wallet accounts have no Litecoin / Dogecoin / TRON (HW_UNSUPPORTED for now).
-  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, tron: !!accounts.tron, xrp: !!accounts.xrp, ada: !!accounts.cardano };
+  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, tron: !!accounts.tron, xrp: !!accounts.xrp, ada: !!accounts.cardano, xlm: !!accounts.stellar };
   const [family, setFamilyRaw] = useState<Family>(has[initial] ? initial : FAMILIES.find((f) => has[f]) ?? initial);
   // Dogecoin has no public server: say so instead of showing an address as if payments would appear.
   const dogeInfo = useAsync(family === 'doge' ? () => call('doge_backend_info') : null, [family, JSON.stringify(settings.servers.dogecoin)]);
@@ -66,6 +66,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const tron = tronChain(network);
   const xrp = xrpChain(network);
   const ada = cardanoChain(network);
+  const xlm = stellarChain(network);
 
   const btcAcc = accounts.btc?.[kind];
   const utxoAcc = family === 'ltc' ? accounts.ltc : family === 'doge' ? accounts.doge : undefined;
@@ -85,6 +86,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             ? accounts.xrp?.address
             : family === 'ada'
               ? accounts.cardano?.address
+              : family === 'xlm'
+                ? accounts.stellar?.address
               : family === 'evm'
             ? accounts.evm?.address
             : accounts.sol?.address) ?? '';
@@ -101,6 +104,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             ? (accounts.xrp?.path ?? "m/44'/144'/0'/0/0")
             : family === 'ada'
               ? (accounts.cardano?.path ?? "m/1852'/1815'/0'/0/0")
+              : family === 'xlm'
+                ? (accounts.stellar?.path ?? "m/44'/148'/0'")
               : family === 'evm'
           ? activeHw
             ? hwPaths.evm(activeHw)
@@ -110,12 +115,14 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             : (accounts.sol?.path ?? "m/44'/501'/0'/0'");
   const verifiedHere = verify.state === 'ok' && verify.address === address;
   const blocked = mismatch !== null || (verify.state === 'error' && isAddressMismatch(verify.error) && verify.address === address);
-  const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name, tron: tron.name, xrp: xrp.name, ada: ada.name }[family];
-  const decimals = { btc: 8, evm: 18, sol: 9, ltc: 8, doge: 8, tron: 6, xrp: 6, ada: 6 }[family];
-  const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', tron: 'TRX', xrp: 'XRP', ada: 'ADA' }[family];
-  // TRON, XRP and Cardano have no payment-link format Kyro relies on: the QR is the bare address.
-  const amountLink = family !== 'tron' && family !== 'xrp' && family !== 'ada';
+  const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name, tron: tron.name, xrp: xrp.name, ada: ada.name, xlm: xlm.name }[family];
+  const decimals = { btc: 8, evm: 18, sol: 9, ltc: 8, doge: 8, tron: 6, xrp: 6, ada: 6, xlm: 7 }[family];
+  const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', tron: 'TRX', xrp: 'XRP', ada: 'ADA', xlm: 'XLM' }[family];
+  // TRON, XRP, Cardano and Stellar have no payment-link format Kyro relies on: the QR is the bare address.
+  const amountLink = family !== 'tron' && family !== 'xrp' && family !== 'ada' && family !== 'xlm';
   // XRP: is our account activated yet (≥ 1 XRP base reserve received)?
+  // Stellar: is our account created yet (≥ 1 XLM received)? Its reserve, explained.
+  const xlmAccount = useAsync(family === 'xlm' && adapters.stellar ? () => adapters.stellar!.account() : null, [family, adapters.stellar]);
   const xrpAccount = useAsync(family === 'xrp' && adapters.xrp ? () => adapters.xrp!.account() : null, [family, adapters.xrp]);
   const uriScheme = { btc: 'bitcoin', ltc: 'litecoin', doge: 'dogecoin' } as const;
   const amountBase = amount ? tryParseUnits(amount, decimals) : null;
@@ -125,7 +132,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
     const scheme = family === 'btc' || family === 'ltc' || family === 'doge' ? uriScheme[family] : null;
     if (!askAmount || !amountBase || amountBase <= 0n) return scheme ? `${scheme}:${address}` : address;
     if (scheme) return `${scheme}:${address}?amount=${dec}`;
-    if (family === 'tron' || family === 'xrp' || family === 'ada') return address;
+    if (family === 'tron' || family === 'xrp' || family === 'ada' || family === 'xlm') return address;
     if (family === 'evm') return `ethereum:${address}@${evm.chainId}?value=${amountBase.toString()}`;
     return `solana:${address}?amount=${dec}`;
   }, [askAmount, amountBase, amount, family, address, evm.chainId]);
@@ -153,7 +160,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   };
 
   const verifyOnDevice = async () => {
-    if (!activeHw || family === 'ltc' || family === 'doge' || family === 'tron' || family === 'xrp' || family === 'ada') return;
+    if (!activeHw || family === 'ltc' || family === 'doge' || family === 'tron' || family === 'xrp' || family === 'ada' || family === 'xlm') return;
     const chain: HwImplementedChain = family;
     const shown = address;
     let deviceId = '';
@@ -191,6 +198,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                 ? t('receive.descXrp')
                 : family === 'ada'
                   ? t('receive.descAda')
+                  : family === 'xlm'
+                    ? t('receive.descXlm')
                   : t('receive.descSol');
 
   return (
@@ -215,6 +224,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               ['tron', 'TRON', 'T', '#EB0029'],
               ['xrp', 'XRP', 'X', '#3A3F48'],
               ['ada', 'Cardano', 'A', '#3468D1'],
+              ['xlm', 'Stellar', '✦', '#7D00FF'],
             ] as const
           ).map(([f, label, glyph, color]) => (
             <button
@@ -251,7 +261,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
 
         <div key={family} className="rise relative flex w-[460px] flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', xrp: 'XRP', ada: 'Cardano' }[family] })}</span>
+            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', xlm: 'Stellar' }[family] })}</span>
             <span className="text-[15px] leading-[1.45] text-text2">{desc}</span>
           </div>
           {(family === 'ltc' || family === 'doge') && (
@@ -343,7 +353,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               <dt className="text-mute">{t('receive.requestedAmount')}</dt>
               <dd className="m-0">
                 {!amountLink ? (
-                  <span className="text-[12px] text-faint">{t('receive.noPaymentLink', { chain: family === 'xrp' ? 'XRP Ledger' : family === 'ada' ? 'Cardano' : 'TRON' })}</span>
+                  <span className="text-[12px] text-faint">{t('receive.noPaymentLink', { chain: family === 'xrp' ? 'XRP Ledger' : family === 'ada' ? 'Cardano' : family === 'xlm' ? 'Stellar' : 'TRON' })}</span>
                 ) : askAmount ? (
                   <span className="flex items-center gap-2">
                     <input autoFocus value={amount} inputMode="decimal" placeholder="0" onChange={(e) => setAmount(sanitizeDecimalInput(e.target.value, decimals))} className="h-8 w-[120px] rounded-ctl border border-line-2 bg-bg px-2 text-right text-[13px] focus:border-ice-line" />
@@ -380,6 +390,13 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               {rt('receive.xrpNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               {xrpAccount.data && !xrpAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.xrpNotActivated')}</span>}
+            </Notice>
+          )}
+          {family === 'xlm' && (
+            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
+              {rt('receive.xlmReserve', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+              {xlmAccount.data && !xlmAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.xlmNotCreated')}</span>}
+              {xlmAccount.data?.exists && <span className="mt-1 block text-text2">{t('receive.xlmExists', { reserve: fmtCrypto(BigInt(xlmAccount.data.reserve), 7, 'XLM', 7) })}</span>}
             </Notice>
           )}
           {family === 'btc' && cbfMode && (

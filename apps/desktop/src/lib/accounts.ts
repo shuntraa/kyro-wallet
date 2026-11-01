@@ -17,6 +17,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   tron: 'TRON',
   xrp: 'XRP',
   ada: 'Cardano',
+  xlm: 'Stellar',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -38,6 +39,8 @@ export function accountChainHint(chain: AccountChain): string {
       return t('settings.hintXrp');
     case 'ada':
       return t('settings.hintAda');
+    case 'xlm':
+      return 'XLM';
   }
 }
 
@@ -56,6 +59,8 @@ export function familyAdapters(set: AdapterSet, family: AccountChain): AnyAdapte
       return [...set.evm.values()];
     case 'ada':
       return set.cardano ? [set.cardano] : [];
+    case 'xlm':
+      return set.stellar ? [set.stellar] : [];
     default: {
       const a = set[family];
       return a ? [a] : [];
@@ -80,6 +85,8 @@ export function accountAddress(acc: Accounts, family: AccountChain): { address: 
       return { address: acc.doge.address, path: acc.doge.path };
     case 'ada':
       return acc.cardano;
+    case 'xlm':
+      return acc.stellar;
     default:
       return acc[family];
   }

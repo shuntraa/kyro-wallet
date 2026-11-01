@@ -39,10 +39,11 @@ pub enum Chain {
     Tron,
     Xrp,
     Ada,
+    Xlm,
 }
 
 impl Chain {
-    pub const ALL: [Chain; 8] = [
+    pub const ALL: [Chain; 9] = [
         Chain::Btc,
         Chain::Evm,
         Chain::Sol,
@@ -51,6 +52,7 @@ impl Chain {
         Chain::Tron,
         Chain::Xrp,
         Chain::Ada,
+        Chain::Xlm,
     ];
 
     /// Name used for default account names ("Bitcoin 2").
@@ -64,6 +66,7 @@ impl Chain {
             Chain::Tron => "TRON",
             Chain::Xrp => "XRP",
             Chain::Ada => "Cardano",
+            Chain::Xlm => "Stellar",
         }
     }
 
@@ -84,6 +87,7 @@ impl Chain {
             Chain::Tron => "tron",
             Chain::Xrp => "xrp",
             Chain::Ada => "ada",
+            Chain::Xlm => "xlm",
         }
     }
 }

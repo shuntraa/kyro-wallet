@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stellar-sign-tx"
+description = "Enables the stellar_sign_tx command without any pre-configured scope."
+commands.allow = ["stellar_sign_tx"]
+
+[[permission]]
+identifier = "deny-stellar-sign-tx"
+description = "Denies the stellar_sign_tx command without any pre-configured scope."
+commands.deny = ["stellar_sign_tx"]

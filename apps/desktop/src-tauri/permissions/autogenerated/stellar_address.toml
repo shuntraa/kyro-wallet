@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stellar-address"
+description = "Enables the stellar_address command without any pre-configured scope."
+commands.allow = ["stellar_address"]
+
+[[permission]]
+identifier = "deny-stellar-address"
+description = "Denies the stellar_address command without any pre-configured scope."
+commands.deny = ["stellar_address"]

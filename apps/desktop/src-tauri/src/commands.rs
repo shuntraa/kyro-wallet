@@ -476,6 +476,8 @@ pub struct Accounts {
     tron: AddressOut,
     /// `m/44'/144'/a'/0/0`.
     xrp: AddressOut,
+    /// `m/44'/148'/a'` (SEP-0005).
+    stellar: AddressOut,
     /// Base address `m/1852'/1815'/a'/0/0` + stake key `…/2/0` (CIP-1852, Icarus).
     cardano: AddressOut,
 }
@@ -551,6 +553,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
                 address: wallet_core::xrp_address(seed, a)?,
                 path: wallet_core::xrp_path(a),
             },
+            stellar: AddressOut {
+                address: wallet_core::stellar_address(seed, a)?,
+                path: wallet_core::stellar_path(a),
+            },
             cardano: AddressOut {
                 address: cardano,
                 path: format!("{}/0/0", wallet_core::cardano_account_path(a)),
@@ -616,8 +622,9 @@ fn chain_name(lang: Lang, id: u64) -> String {
 
 /// Native coin ticker of an EVM chain (ETH, POL, BNB, CRO, …); « unités natives » if unknown.
 pub(crate) fn native_symbol(lang: Lang, id: u64) -> &'static str {
-    crate::known_tokens::evm_chain(id)
-        .map_or(lang.pick("unités natives", "native units"), |c| c.native_symbol)
+    crate::known_tokens::evm_chain(id).map_or(lang.pick("unités natives", "native units"), |c| {
+        c.native_symbol
+    })
 }
 
 /// Symbol and decimals of a token, from a source Rust trusts: the `known_tokens` table, or a
@@ -1228,7 +1235,8 @@ mod tests {
         }
         // 424242: unknown as well, on either network.
         let s = wallet_core::evm_decode(&tx("0xdeadbeef", 424_242, "0"), Network::Mainnet).unwrap();
-        assert!(describe_evm_extra(Lang::Fr, &s, None).contains("réseau INCONNU de Kyro (chainId 424242)"));
+        assert!(describe_evm_extra(Lang::Fr, &s, None)
+            .contains("réseau INCONNU de Kyro (chainId 424242)"));
         let s = wallet_core::evm_decode(
             &tx("0xdeadbeef", 1, "1000000000000000000"),
             Network::Mainnet,
