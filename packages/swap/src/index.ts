@@ -11,4 +11,5 @@ export * from './providers/common';
 export { ZeroExProvider } from './providers/zerox';
 export { LifiProvider, LIFI_CROSS_BRIDGES, lifiFeeEchoed, lifiTransferStatus, type LifiStatus } from './providers/lifi';
 export { JupiterProvider } from './providers/jupiter';
+export { NearIntentsProvider, NEAR_MIN_TIME_LEFT_MS, checkOneClickQuote, nearDepositStatus, oneClickAsset, type OneClickQuoteAnswer, type NearFee } from './providers/near';
 export { createProviders, fetchQuotes } from './aggregate';

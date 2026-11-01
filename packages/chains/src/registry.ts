@@ -420,7 +420,7 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   );
   list.push({ host: 'api.0x.org', purpose: 'Devis de swap EVM (clé requise)' });
   list.push({ host: 'li.quest', purpose: 'Devis de swap (même chaîne et entre chaînes), suivi des swaps entre chaînes' });
-  list.push({ host: '1click.chaindefuser.com', purpose: 'Swap entre chaînes : confirmation du dépôt par NEAR Intents (destinataire, montant, minimum)' });
+  list.push({ host: '1click.chaindefuser.com', purpose: 'Swap entre chaînes (NEAR Intents) : devis des routes directes (BTC, LTC, DOGE, TRON, XRP, Cardano), confirmation du dépôt (destinataire, montant, minimum, frais), suivi' });
   list.push({ host: 'lite-api.jup.ag', purpose: 'Devis de swap Solana' });
   return list;
 }

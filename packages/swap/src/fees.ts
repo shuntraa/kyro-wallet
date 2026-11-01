@@ -27,8 +27,10 @@ export interface SwapFeeConfig {
      * Addresses on the other chains Kyro holds. Each is used ONLY where a provider's official fee
      * mechanism pays the fee to an address on that (source) chain; none does today (docs/SWAP_FEES.md,
      * « Autres chaînes »): LI.FI refuses a non-EVM/non-Solana `distributionFees` receiver, and
-     * THORChain / NEAR Intents pay their affiliate / app fees to a THORName / NEAR account. They
-     * are validated anyway (`feeRecipientFor`), so a route added later can never pay a malformed one.
+     * THORChain / NEAR Intents pay their affiliate / app fees to a THORName / NEAR Intents account
+     * (swaps from these chains go through NEAR Intents, fee to the NEAR Intents account of `evm`:
+     * `nearIntentsAppFee`). They are validated anyway (`feeRecipientFor`), so a route added later
+     * can never pay a malformed one.
      */
     bitcoin?: string;
     litecoin?: string;
@@ -191,7 +193,33 @@ export function providerFee(id: ProviderId, cfg: SwapFeeConfig = KYRO_SWAP_FEE):
       return validEvm(cfg.recipients.evm) ? fee(cfg.recipients.evm) : { kind: 'unavailable', reason: 'Adresse EVM des frais Kyro non configurée' };
     case 'jupiter':
       return validSolanaAddress(cfg.recipients.solana) ? fee(cfg.recipients.solana) : { kind: 'unavailable', reason: 'Adresse Solana des frais Kyro non configurée' };
+    case 'near':
+      // NEAR Intents account of the EVM fee address (lower case, as NEAR account ids are).
+      return validEvm(cfg.recipients.evm) ? fee(cfg.recipients.evm.toLowerCase()) : { kind: 'unavailable', reason: 'Adresse EVM des frais Kyro non configurée' };
   }
+}
+
+/**
+ * NEAR Intents 1Click `appFees` (docs.near-intents.org « Fee configuration », checked against live
+ * quotes 01/11/2026): the fee is taken from the DEPOSITED token and credited to a NEAR Intents
+ * account (`recipient`: « a named account, an implicit account, or an EVM-style address ») —
+ * Kyro uses `recipients.evm` in lower case, the NEAR Intents account its EVM key controls. 1Click
+ * then SPLITS the requested fee 50/50 with itself (live answer: `fee: 70` → 35 to us + 35 to
+ * 1Click's account `5880ad…47dd`; `fee: 140` → 70 + 70). So Kyro requests twice its rate to be
+ * paid exactly `bps`, and checks the echo: 1Click's share at most `bps` (else refused). The docs
+ * (« Fees », 01/11/2026) describe the 50/50 split for API-key holders and « your fee + 25 bps »
+ * without a key; if 1Click's echo shows another split, the provider asks once more with the
+ * request that pays exactly `bps` (providers/near.ts), and refuses anything else.
+ */
+export const ONE_CLICK_FEE_REQUEST_FACTOR = 2;
+/** 1Click: Kyro's fee + 1Click's share may not exceed 500 bps. */
+export const ONE_CLICK_MAX_TOTAL_BPS = 500;
+export function nearIntentsAppFee(cfg: SwapFeeConfig = KYRO_SWAP_FEE): ProviderFee & { requestBps?: number } {
+  const f = providerFee('near', cfg);
+  if (f.kind !== 'fee') return f;
+  const requestBps = f.bps * ONE_CLICK_FEE_REQUEST_FACTOR;
+  if (requestBps > ONE_CLICK_MAX_TOTAL_BPS) return { kind: 'unavailable', reason: 'Frais Kyro trop élevés pour NEAR Intents' };
+  return { ...f, requestBps };
 }
 
 /**

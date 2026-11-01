@@ -36,6 +36,12 @@ export const ONE_CLICK_CHAINS: Readonly<Record<string, string>> = {
   '43114': 'avax',
   solana: 'sol',
   bitcoin: 'btc',
+  // Reached by NEAR Intents 1Click directly (providers/near.ts), not by LI.FI.
+  litecoin: 'ltc',
+  dogecoin: 'doge',
+  tron: 'tron',
+  xrp: 'xrp',
+  cardano: 'cardano',
 };
 
 export interface OneClickToken {
@@ -59,8 +65,11 @@ export interface OneClickStatus {
       refundTo?: string;
       refundType?: string;
       deadline?: string;
+      depositMode?: string;
+      /** `fee` in bps, `recipient` a NEAR Intents account (an EVM address in lower case for Kyro). */
+      appFees?: Array<{ recipient?: string; fee?: number }>;
     };
-    quote?: { depositAddress?: string; amountIn?: string; minAmountIn?: string; amountOut?: string; minAmountOut?: string; deadline?: string; timeEstimate?: number };
+    quote?: { depositAddress?: string; depositMemo?: string; amountIn?: string; minAmountIn?: string; amountOut?: string; minAmountOut?: string; deadline?: string; timeEstimate?: number };
   };
 }
 
@@ -80,6 +89,15 @@ export interface NearDepositExpect {
   minAmountOut: bigint;
   /** Now, ms (tests). */
   now?: number;
+  /**
+   * Direct 1Click route (providers/near.ts): Kyro's app fee that must be echoed (`appFees`: exactly
+   * `bps` to `recipient`, 1Click's own share at most `oneClickMaxBps`), and a SIMPLE deposit (no
+   * memo / tag needed: Kyro sends an ordinary transfer). Absent for LI.FI routes (LI.FI's own
+   * 1Click request, the Kyro fee is checked in the source transaction instead).
+   */
+  appFee?: { recipient: string; bps: number; oneClickMaxBps: number };
+  /** Least time left before the deposit deadline (ms; default: any time in the future). */
+  minTimeLeftMs?: number;
 }
 
 export interface NearDepositCheck {
@@ -87,6 +105,11 @@ export interface NearDepositCheck {
   amountOut: bigint;
   destinationAsset: string;
   timeEstimateSecs: number | null;
+  /** ms epoch. */
+  deadline: number;
+  /** Echoed app fees (direct route): Kyro's share and the rest (1Click's). */
+  kyroFeeBps: number;
+  otherFeeBps: number;
 }
 
 const WSOL = 'So11111111111111111111111111111111111111112';
@@ -98,7 +121,8 @@ const sameAddr = (chain: SwapChain, a: string | undefined, b: string) => {
   return typeof chain === 'number' ? a.toLowerCase() === b.toLowerCase() : a === b;
 };
 const chainKey = (c: SwapChain) => ONE_CLICK_CHAINS[String(c)];
-const nativeToken = (chain: SwapChain, t: string) => (chain === 'solana' ? t === WSOL || t === '11111111111111111111111111111111' : chain === 'bitcoin' ? t === 'bitcoin' : isNative(t));
+/** Native coin: wSOL / System id on Solana, `0xEeee…` / `0x0…` on EVM, the chain's name elsewhere (`bitcoin`, `tron`…). */
+const nativeToken = (chain: SwapChain, t: string) => (chain === 'solana' ? t === WSOL || t === '11111111111111111111111111111111' : typeof chain === 'string' ? t === chain : isNative(t));
 const big = (v: string | undefined): bigint | null => {
   try {
     return v !== undefined && /^\d+$/.test(v) ? BigInt(v) : null;
@@ -134,11 +158,42 @@ export function checkNearDeposit(s: OneClickStatus, tokens: readonly OneClickTok
   const out = big(q.amountOut);
   if (min === null || out === null || min <= 0n) return fail('minimum garanti absent');
   if (min < e.minAmountOut) fail('minimum garanti par le pont plus bas que celui affiché');
-  const deadline = Date.parse(q.deadline ?? req.deadline ?? '');
-  if (!Number.isFinite(deadline) || deadline <= (e.now ?? Date.now())) fail('devis du pont expiré');
+  // Direct route: the EARLIER of 1Click's deposit deadline and the one Kyro asked for (after it,
+  // 1Click refunds), so a slow confirmation cannot land after either.
+  const deadline = e.appFee ? Math.min(Date.parse(q.deadline ?? ''), Date.parse(req.deadline ?? '')) : Date.parse(q.deadline ?? req.deadline ?? '');
+  if (!Number.isFinite(deadline) || deadline <= (e.now ?? Date.now()) + (e.minTimeLeftMs ?? 0)) fail('devis du pont expiré ou trop proche de son échéance');
   const asset = tokens.find((t) => t.assetId === req.destinationAsset);
   if (!oneClickAssetIs(asset, e.toChain, e.buyToken)) fail(`token reçu (${req.destinationAsset ?? '?'}) différent de celui demandé`);
-  return { minAmountOut: min, amountOut: out, destinationAsset: req.destinationAsset ?? '', timeEstimateSecs: typeof q.timeEstimate === 'number' ? q.timeEstimate : null };
+  let fees = { kyro: 0, other: 0 };
+  if (e.appFee) {
+    if ((req.depositMode ?? 'SIMPLE') !== 'SIMPLE' || q.depositMemo) fail('dépôt avec mémo demandé (Kyro n’envoie qu’un transfert simple)');
+    if (req.swapType !== 'EXACT_INPUT') fail('type d’échange inattendu');
+    fees = checkAppFees(req.appFees, e.appFee);
+  }
+  return { minAmountOut: min, amountOut: out, destinationAsset: req.destinationAsset ?? '', timeEstimateSecs: typeof q.timeEstimate === 'number' ? q.timeEstimate : null, deadline, kyroFeeBps: fees.kyro, otherFeeBps: fees.other };
+}
+
+/**
+ * `appFees` as 1Click echoes them (quote and `/v0/status`): exactly ONE entry for Kyro, `bps` to
+ * `recipient` (compared in lower case: NEAR account ids are lower case), and every other entry
+ * (1Click's own share) together at most `oneClickMaxBps`. Anything else: refused, never signed.
+ */
+export function checkAppFees(fees: ReadonlyArray<{ recipient?: string; fee?: number }> | undefined, want: { recipient: string; bps: number; oneClickMaxBps: number }): { kyro: number; other: number } {
+  const list = fees ?? [];
+  const r = want.recipient.toLowerCase();
+  const ours = list.filter((f) => (f.recipient ?? '').toLowerCase() === r);
+  if (want.bps > 0) {
+    if (ours.length !== 1) fail(ours.length === 0 ? 'frais Kyro absents du devis' : 'frais Kyro en double');
+    if (ours[0]?.fee !== want.bps) fail(`frais Kyro de ${ours[0]?.fee ?? '?'} bps au lieu de ${want.bps}`);
+  } else if (ours.length > 0) fail('frais inattendus');
+  let other = 0;
+  for (const f of list) {
+    if ((f.recipient ?? '').toLowerCase() === r) continue;
+    if (!Number.isInteger(f.fee) || (f.fee as number) < 0) fail('frais du pont illisibles');
+    other += f.fee as number;
+  }
+  if (other > want.oneClickMaxBps) fail(`part de NEAR Intents (${other} bps) plus élevée que prévu`);
+  return { kyro: want.bps, other };
 }
 
 /** Reads NEAR Intents' public status + token list (cached 10 min). */

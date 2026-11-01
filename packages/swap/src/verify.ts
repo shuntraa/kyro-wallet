@@ -94,7 +94,10 @@ export const LIFI_NON_EVM_ADDRESS = '0x11f111f111f111F111f111f111F111f111f111F1'
 
 /** LI.FI chain id of a Kyro swap chain. */
 export function lifiChainId(c: SwapChain): number {
-  return c === 'solana' ? LIFI_CHAIN_SOLANA : c === 'bitcoin' ? LIFI_CHAIN_BITCOIN : c;
+  if (typeof c === 'number') return c;
+  if (c === 'solana') return LIFI_CHAIN_SOLANA;
+  if (c === 'bitcoin') return LIFI_CHAIN_BITCOIN;
+  throw new SwapCheckError(`LI.FI : chaîne ${c} non prise en charge`);
 }
 
 /**
@@ -349,7 +352,7 @@ function checkLifiBridge(i: EvmSwapCheckInput, cross: { toChain: SwapChain; reci
   if (typeof cross.toChain === 'number') {
     if (!same(bd.receiver, cross.recipient)) fail(name, `destinataire ${bd.receiver} au lieu de ton adresse`);
   } else {
-    const want = nonEvmReceiverWord(cross.toChain, cross.recipient);
+    const want = cross.toChain === 'solana' || cross.toChain === 'bitcoin' ? nonEvmReceiverWord(cross.toChain, cross.recipient) : null;
     if (!same(bd.receiver, LIFI_NON_EVM_ADDRESS)) fail(name, 'destinataire hors EVM mal indiqué');
     if (!want || nd.nonEVMReceiver.toLowerCase() !== want.toLowerCase()) fail(name, 'destinataire à l’arrivée différent de ton adresse');
   }

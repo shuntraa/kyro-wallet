@@ -97,7 +97,9 @@ export class LifiProvider implements SwapProvider {
     const to = p.toChain ?? p.chain;
     if (to === p.chain) return typeof p.chain === 'number';
     // Cross-chain: from EVM or Solana, to EVM, Solana or Bitcoin, on chains NEAR Intents serves.
-    return p.chain !== 'bitcoin' && ONE_CLICK_CHAINS[String(p.chain)] !== undefined && ONE_CLICK_CHAINS[String(to)] !== undefined;
+    // (Litecoin, Dogecoin, TRON, XRP, Cardano: NEAR Intents 1Click directly, providers/near.ts.)
+    const lifiSide = (c: typeof to) => typeof c === 'number' || c === 'solana';
+    return lifiSide(p.chain) && (lifiSide(to) || to === 'bitcoin') && ONE_CLICK_CHAINS[String(p.chain)] !== undefined && ONE_CLICK_CHAINS[String(to)] !== undefined;
   }
 
   async quote(p: QuoteParams): Promise<Quote> {

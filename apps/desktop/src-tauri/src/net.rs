@@ -48,7 +48,8 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "api.0x.org",
     "li.quest",
     "lite-api.jup.ag",
-    // NEAR Intents 1Click (public status + token list): confirms where a cross-chain deposit goes.
+    // NEAR Intents 1Click (public, no key): quotes for the direct routes (POST /v0/quote), token
+    // list, and the status that confirms where a cross-chain deposit goes.
     "1click.chaindefuser.com",
 ];
 
