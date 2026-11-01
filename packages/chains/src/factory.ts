@@ -10,7 +10,7 @@ import type { AnyAdapter } from './types';
 import { LitecoinAdapter } from './litecoin/adapter';
 import { DogecoinAdapter } from './dogecoin/adapter';
 import type { UtxoAccountView, UtxoBackend } from './utxo/utxo';
-import { dogeChain, ltcChain, tronChain } from './registry';
+import { dogeChain, ltcChain, TRC20_TOKENS, tronChain } from './registry';
 import { TronAdapter } from './tron/adapter';
 import { XrpAdapter } from './xrp/adapter';
 import { CardanoAdapter } from './cardano/adapter';
@@ -69,7 +69,8 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   // Litecoin / Dogecoin: Rust picks their servers (servers.litecoin / servers.dogecoin).
   const { ltc, doge } = createUtxoAdapters(accounts, {}, hw ? 0 : account);
   // TRON: Rust picks the server (servers.tron, default TronGrid).
-  const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address, ...a }) : null;
+  const tronTokens = TRC20_TOKENS[network].map((t) => ({ contract: t.contract, symbol: t.symbol, name: t.name, decimals: t.decimals }));
+  const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address, tokens: tronTokens, ...a }) : null;
   // XRP Ledger: Rust picks the server (servers.xrp, default rippled).
   const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...a }) : null;
   // Cardano: Rust picks the server (servers.cardano, default Koios).
