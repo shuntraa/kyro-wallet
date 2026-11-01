@@ -4,3 +4,4 @@ export * from './net';
 export * from './events';
 export * from './servers';
 export * from './warnings';
+export * from './near';
