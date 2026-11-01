@@ -311,7 +311,7 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
 const CHAIN_NAME: Record<Exclude<HwChain, 'evm'>, string> = { btc: 'Bitcoin', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', stellar: 'Stellar', zec: 'Zcash', xmr: 'Monero' };
 /** Chain name shown in the add-device flow (« Ethereum et EVM » is translated). */
 const chainLabel = (c: HwChain): string => (c === 'evm' ? t('hw.chain.evm') : CHAIN_NAME[c]);
-const IMPLEMENTED: HwImplementedChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar'];
+const IMPLEMENTED: HwImplementedChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar', 'cardano', 'zec'];
 /** Pre-selected when the device supports them (the others are one click away: each needs its own Ledger app). */
 const DEFAULT_CHAINS: readonly HwImplementedChain[] = ['btc', 'evm', 'sol'];
 
@@ -552,7 +552,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
 function ChainRow({ st, chain, checked, onToggle }: { st: HwChainStatus | undefined; chain: HwImplementedChain; checked: boolean; onToggle: (on: boolean) => void }) {
   const { t } = useT();
   const unsupported = st?.state === 'unsupported';
-  const reason = (st?.reason ?? t('hw.chainRow.unsupported')).replace(/^(Bitcoin Cash|Bitcoin|EVM|Ethereum|Solana|Litecoin|Dogecoin|Dash|XRP|TRON|Tron|Stellar)\s*:\s*/, '');
+  const reason = (st?.reason ?? t('hw.chainRow.unsupported')).replace(/^(Bitcoin Cash|Bitcoin|EVM|Ethereum|Solana|Litecoin|Dogecoin|Dash|XRP|TRON|Tron|Stellar|Cardano|Zcash)\s*:\s*/, '');
   const hint =
     !st
       ? null
@@ -623,7 +623,7 @@ export function HwAccountSummary({ acc, action }: { acc: WatchOnlyAccount; actio
           </>
         )}
         {view &&
-          (['ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar'] as const).map((c) => {
+          (['ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar', 'cardano', 'zec'] as const).map((c) => {
             const a = view[c];
             return a ? (
               <Fragment key={c}>

@@ -26,7 +26,7 @@ import { XmrReceivePanel } from '../components/Monero';
 type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'zec' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt';
 const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'zec', 'tron', 'xrp', 'ada', 'xlm', 'near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
 /** Vault-only chains (hardware wallets: HW_UNSUPPORTED for now). */
-const VAULT_ONLY: readonly Family[] = ['zec', 'ada', 'near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
+const VAULT_ONLY: readonly Family[] = ['near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
 /** UTXO chains with « Nouvelle adresse » (Rust `{prefix}_address`). */
 const UTXO_RECEIVE = ['ltc', 'doge', 'zec', 'bch', 'dash'] as const;
 type UtxoReceive = (typeof UTXO_RECEIVE)[number];
@@ -228,7 +228,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
       // Vault: Rust derives from the seed. Hardware wallet: public derivation from the stored xpub
       // (then verify it on the device).
       const a = isUtxoReceive(family)
-        ? activeHw && family !== 'zec'
+        ? activeHw
           ? (adapters[family]?.addressAt(0, next).address ?? '')
           : await call(`${family}_address`, { change: false, index: next, ...(account ? { account } : {}) })
         : activeHw
@@ -244,7 +244,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
 
   const verifyOnDevice = async () => {
     if (!activeHw) return;
-    const chain: HwImplementedChain | null = family === 'xlm' ? 'stellar' : family === 'btc' || family === 'evm' || family === 'sol' || family === 'tron' || family === 'xrp' || family === 'ltc' || family === 'doge' || family === 'bch' || family === 'dash' ? family : null;
+    const chain: HwImplementedChain | null = family === 'xlm' ? 'stellar' : family === 'ada' ? 'cardano' : family === 'zec' || family === 'btc' || family === 'evm' || family === 'sol' || family === 'tron' || family === 'xrp' || family === 'ltc' || family === 'doge' || family === 'bch' || family === 'dash' ? family : null;
     if (!chain) return;
     const shown = address;
     let deviceId = '';

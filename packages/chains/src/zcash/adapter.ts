@@ -31,6 +31,7 @@ import {
 import type { ZcashChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 import { derivePubkey, parseXpub } from '../bitcoin/xpub';
+import type { HwSigner } from '../hw';
 
 export type { ZecTxSummary } from '@kyro/shared';
 
@@ -56,6 +57,18 @@ export function rustZecBackend(account = 0): ZecBackend {
     broadcast: (hex) => call('zec_broadcast', { hex }),
     preview: (request) => call('zec_send_preview', { request, ...acct }),
     sign: (request, password) => call('zec_sign', { request, password, ...acct }),
+  };
+}
+
+/**
+ * Hardware-wallet account `accountId` (docs/IPC.md §2.3, Trezor): Rust builds from the stored
+ * xpub (`hw_zec_send_preview`); signing is `hw_sign_zec_tx`; reads and broadcast as the vault.
+ */
+export function hwZecBackend(accountId: string): ZecBackend {
+  return {
+    ...rustZecBackend(0),
+    preview: (request) => call('hw_zec_send_preview', { accountId, request }),
+    sign: () => Promise.reject(new Error(l10n('Compte hardware wallet : signature sur l’appareil', 'Hardware-wallet account: sign on the device'))),
   };
 }
 
@@ -94,6 +107,8 @@ export interface ZcashAdapterOptions {
   gapLimit?: number;
   /** Vault account index (docs/IPC.md §2.9); absent = 0. */
   vaultAccount?: number;
+  /** Hardware-wallet account (signing through `hw_sign_zec_tx`, Trezor). */
+  hw?: HwSigner;
 }
 
 const SCAN_TTL_MS = 30_000;
@@ -119,6 +134,7 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
   private readonly key: HDKey;
   private readonly account: UtxoAccountInfo;
   private readonly gap: number;
+  readonly hw: HwSigner | null;
   private scanCache: { at: number; addrs: DerivedZecAddress[] } | null = null;
   private scanning: Promise<DerivedZecAddress[]> | null = null;
   /** True when one address hit the 50-transaction cap: older ones are not shown. */
@@ -127,7 +143,8 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
   constructor(opts: ZcashAdapterOptions) {
     this.chain = opts.chain;
     this.account = opts.account;
-    this.backend = opts.backend ?? rustZecBackend(opts.vaultAccount ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? hwZecBackend(opts.hw.accountId) : rustZecBackend(opts.vaultAccount ?? 0));
     this.gap = opts.gapLimit ?? 5;
     this.key = parseXpub(opts.account.xpub);
     const first = this.addressAt(0, 0);
@@ -246,6 +263,17 @@ export class ZcashAdapter implements ChainAdapter<'zec'> {
     const s = res.summary;
     if (s.toAddress !== unsigned.summary.toAddress || (!unsigned.request.max && s.amount !== unsigned.summary.amount)) {
       throw new Error(l10n('La transaction signée par Rust diffère de l’aperçu', 'The transaction signed by Rust differs from the preview'));
+    }
+    return { family: 'zec', hex: res.hex, txid: res.txid, summary: s };
+  }
+
+  /** Hardware wallet (Trezor): Rust's construction and dialog, the device, then every signature verified in Rust. */
+  async signTxHw(unsigned: ZecUnsigned, deviceId: string): Promise<ZecSigned> {
+    if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
+    const res = await call('hw_sign_zec_tx', { id: deviceId, accountId: this.hw.accountId, request: unsigned.request });
+    const s = res.summary;
+    if (s.toAddress !== unsigned.summary.toAddress || (!unsigned.request.max && s.amount !== unsigned.summary.amount)) {
+      throw new Error(l10n('La transaction signée diffère de l’aperçu', 'The signed transaction differs from the preview'));
     }
     return { family: 'zec', hex: res.hex, txid: res.txid, summary: s };
   }

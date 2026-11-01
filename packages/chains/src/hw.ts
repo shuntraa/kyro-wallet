@@ -17,7 +17,7 @@ import { DOGECOIN_SPEC } from './dogecoin/adapter';
 import { BITCOINCASH_SPEC } from './bitcoincash/adapter';
 import { DASH_SPEC } from './dash/adapter';
 
-import { l10n } from '@kyro/shared';
+import { l10n, zecP2pkhAddress } from '@kyro/shared';
 bitcoin.initEccLib(ecc);
 
 /**
@@ -42,7 +42,7 @@ export interface WalletAccounts {
   xrp?: { address: string; path?: string };
   /** Vault only: Hedera on a hardware wallet is HW_UNSUPPORTED. EVM address of the ECDSA key. */
   hbar?: { address: string; path?: string };
-  /** Vault only: Cardano on a hardware wallet is HW_UNSUPPORTED. */
+  /** Vault, or a Ledger / Trezor T-Safe (`hw_sign_ada_tx`). */
   cardano?: { address: string; path?: string };
   /** Vault, or a Ledger / Trezor (`hw_sign_stellar_tx`). */
   stellar?: { address: string; path?: string };
@@ -64,7 +64,7 @@ export interface WalletAccounts {
   cosmos?: { address: string; path?: string };
   /** Vault only: Aptos has no hardware-wallet path. */
   aptos?: { address: string; path?: string };
-  /** Vault only: Zcash (transparent) on a hardware wallet is HW_UNSUPPORTED. */
+  /** Vault, or a Trezor (`hw_sign_zec_tx`; not offered on Ledger). */
   zec?: { address: string; xpub: string; fingerprint: string; path: string };
 }
 
@@ -117,6 +117,12 @@ export function hwToAccounts(acc: WatchOnlyAccount): WalletAccounts {
   if (acc.xrp) out.xrp = { address: acc.xrp.address, path: acc.xrp.path };
   if (acc.tron) out.tron = { address: acc.tron.address, path: acc.tron.path };
   if (acc.stellar) out.stellar = { address: acc.stellar.address, path: acc.stellar.path };
+  // Cardano: Rust checked that the address is the one of the stored account key (base `…/0/0` + `…/2/0`).
+  if (acc.cardano) out.cardano = { address: acc.cardano.address, path: `${acc.cardano.path}/0/0` };
+  if (acc.zec) {
+    const address = zecP2pkhAddress(derivePubkey(parseXpub(acc.zec.xpub), 0, 0), acc.network);
+    out.zec = { address, xpub: acc.zec.xpub, fingerprint: acc.zec.fingerprint, path: acc.zec.path };
+  }
   return out;
 }
 
@@ -128,8 +134,8 @@ const UTXO_SPECS: Record<'ltc' | 'doge' | 'bch' | 'dash', UtxoCoinSpec> = { ltc:
  * its firmware / apps decide in the end, see `hw_open` → `chains`).
  */
 export const HW_CHAINS: Record<HwDeviceKind, readonly HwChain[]> = {
-  ledger: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar'],
-  trezor: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'stellar'],
+  ledger: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar', 'cardano'],
+  trezor: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'stellar', 'cardano', 'zec'],
 };
 
 /** Master fingerprint of the account (Bitcoin keys), for display. */
@@ -152,6 +158,10 @@ export const hwPaths = {
   },
   /** XRP / TRON / Stellar key path. */
   key: (acc: WatchOnlyAccount, chain: 'xrp' | 'tron' | 'stellar'): string | null => acc[chain]?.path ?? null,
+  /** Cardano: Kyro's single address, payment key `…/0/0` (+ stake key `…/2/0`). */
+  cardano: (acc: WatchOnlyAccount): string | null => (acc.cardano ? `${acc.cardano.path}/0/0` : null),
+  /** Zcash transparent address `change/index` of the stored account. */
+  zec: (acc: WatchOnlyAccount, change: 0 | 1, index: number): string | null => (acc.zec ? `${acc.zec.path}/${change}/${index}` : null),
 };
 
 /** ERC-20 tokens for which Kyro ships a Ledger-signed descriptor (wallet-core `ledger_cal.rs`). */
