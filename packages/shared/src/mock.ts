@@ -53,6 +53,7 @@ export { DEMO_HW_DELAYS, DEMO_TREZOR_LAYOUT, DEMO_TREZOR_PIN, TREZOR_KEYPAD, dem
 export { DEMO_CBF_CONNECT_MS, DEMO_CBF_FILTERS_MS, DEMO_CBF_HEADERS_MS } from './mock-cbf';
 import { demoHash, handleDemoNet, type DemoChainState } from './mock-net';
 import { btcWarnings, evmWarnings } from './warnings';
+import { l10n, navigatorLang, type Lang } from './i18n';
 import { demoRenderScript, demoVsize } from './mock-tx';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 import { createDemoStake } from './mock-stake';
@@ -69,6 +70,12 @@ export const DEMO_PASSWORD_HINT = 'Mode démo : n’importe quel mot de passe de
 export const DEMO_EVM_COLLEAGUE = '0x5e1f9b3c8a2d47e6b0c19f4a7d23e8c6b5a2d4c7';
 export const DEMO_EVM_LOOKALIKE = '0x5e1f00aa77ee11bb33cc99dd22ff44889a13d4c7';
 
+/** Demo « system language »: `?lang=fr|en` in the URL (to try both), else the browser's. */
+export function demoSystemLanguage(): Lang {
+  const param = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('lang');
+  return param === 'fr' || param === 'en' ? param : navigatorLang();
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   currency: 'EUR',
   autoLockSecs: 900,
@@ -78,6 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
   servers: EMPTY_SERVERS,
   apiKeysSet: {},
   tor: { enabled: true },
+  language: 'auto',
 };
 
 const TESTNET_VERSIONS = { private: 0x04358394, public: 0x043587cf };
@@ -759,6 +767,8 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       if (!Number.isInteger(next.autoLockSecs) || next.autoLockSecs < 60 || next.autoLockSecs > 4 * 3600) {
         throw new IpcError('INVALID_INPUT', 'Délai de verrouillage invalide (1 min à 4 h).');
       }
+      const langIn: unknown = (next as { language?: unknown }).language;
+      if (langIn !== undefined && langIn !== 'auto' && langIn !== 'fr' && langIn !== 'en') throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : langue : auto, fr ou en', 'Invalid input: language: auto, fr or en'));
       const torIn: unknown = (next as { tor?: unknown }).tor;
       if (torIn !== undefined && (typeof torIn !== 'object' || torIn === null || typeof (torIn as { enabled?: unknown }).enabled !== 'boolean')) {
         throw new IpcError('INVALID_INPUT', 'Réglages invalides (tor).');
@@ -794,7 +804,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       approveHosts(incoming, settings.servers);
       const storedServers = await servers.prepareSave({ ...EMPTY_SERVERS, ...structuredClone(incoming) }, settings.servers, torEnabled);
       apiKeys = nextKeys;
-      settings = { ...structuredClone(rest), servers: storedServers, tor: { enabled: torEnabled }, apiKeysSet: {} };
+      settings = { ...structuredClone(rest), servers: storedServers, tor: { enabled: torEnabled }, language: (langIn as Settings['language'] | undefined) ?? 'auto', apiKeysSet: {} };
       if (!wasEnabled && settings.tor.enabled) tor.start();
       if (wasEnabled && !settings.tor.enabled) tor.stop();
       return publicSettings();
@@ -849,7 +859,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     hw_sign_btc_psbt: (a) => hw.signBtc(a),
     hw_sign_evm_tx: (a) => hw.signEvm(a),
     hw_sign_sol_tx: (a) => hw.signSol(a),
-    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid) }),
+    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid), systemLanguage: demoSystemLanguage() }),
     ...networkChoice.handlers,
   };
 

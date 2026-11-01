@@ -18,6 +18,7 @@ import { IconCheck, IconEye, IconTor, IconTrash, IconWarn, IconX } from '../comp
 import { TorIndicator } from '../components/Tor';
 import { torStore, useTor } from '../state/tor';
 import { useMedia } from '../components/motion';
+import { useT } from '../i18n';
 
 const SECTIONS: Array<{ key: SettingsSection; label: string }> = [
   { key: 'security', label: 'Sécurité' },
@@ -300,8 +301,22 @@ function RevealPhrase() {
 
 function Display({ save }: { save: Save }) {
   const { settings } = useApp();
+  const { t } = useT();
   return (
     <Panel>
+      <SettingRow title={t('settings.language')} desc={t('settings.languageDesc')}>
+        <Segmented
+          label={t('settings.language')}
+          value={settings.language}
+          onChange={(v) => void save({ language: v })}
+          options={[
+            { value: 'auto', label: t('settings.languageAuto') },
+            // Each language named in itself, so it can be found whatever the current one is.
+            { value: 'fr', label: t('settings.languageFr') },
+            { value: 'en', label: t('settings.languageEn') },
+          ]}
+        />
+      </SettingRow>
       <SettingRow title="Devise" desc="Pour les prix, les soldes et les frais.">
         <Segmented label="Devise" value={settings.currency} onChange={(v) => void save({ currency: v })} options={[{ value: 'EUR', label: 'EUR €' }, { value: 'USD', label: 'USD $' }]} />
       </SettingRow>

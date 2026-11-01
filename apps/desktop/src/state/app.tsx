@@ -21,6 +21,7 @@ const DEMO_SWAP_FEES: SwapFeeConfig = {
 };
 import { torStore } from './tor';
 import { settingsPayload } from '../lib/settingsPayload';
+import { setLanguagePreference, setSystemLanguage, t } from '../i18n';
 
 export type SettingsSection = 'security' | 'privacy' | 'accounts' | 'hardware' | 'networks' | 'display' | 'apikeys' | 'connections' | 'contacts';
 
@@ -63,6 +64,7 @@ const DEFAULT_SETTINGS: Settings = {
   servers: EMPTY_SERVERS,
   apiKeysSet: {},
   tor: { enabled: true },
+  language: 'auto',
 };
 
 interface AppContextValue {
@@ -224,6 +226,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const [cfg, st] = await Promise.all([call('config_get'), call('settings_get')]);
         if (!alive) return;
         setConfig(cfg);
+        // Language first, so the first screen already speaks it (auto = Rust's system language).
+        if (cfg.systemLanguage) setSystemLanguage(cfg.systemLanguage);
+        setLanguagePreference(st.language);
         setSettings(st);
         settingsRef.current = st;
         torStore.setEnabled(st.tor.enabled);
@@ -287,6 +292,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const saveSettings = useCallback(
     async (next: Settings, apiKeys?: ApiKeysUpdate) => {
       const saved = await call('settings_set', { settings: settingsPayload(next, apiKeys) });
+      setLanguagePreference(saved.language);
       setSettings(saved);
       settingsRef.current = saved;
       torStore.setEnabled(saved.tor.enabled);
@@ -402,7 +408,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const isMultiAccount = useCallback((c: AccountChain) => !activeHw && (vaultLists?.[c]?.length ?? 1) > 1, [activeHw, vaultLists]);
   const accountName = useCallback(
-    (c: AccountChain) => (activeHw ? activeHw.label : (vaultLists?.[c]?.find((e) => e.index === selectedAccounts[c])?.name ?? 'Compte principal')),
+    (c: AccountChain) => (activeHw ? activeHw.label : (vaultLists?.[c]?.find((e) => e.index === selectedAccounts[c])?.name ?? t('settings.mainAccount'))),
     [activeHw, vaultLists, selectedAccounts],
   );
   const networkRef = useRef<Network | null>(null);

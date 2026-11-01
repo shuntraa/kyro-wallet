@@ -401,7 +401,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_cbf_status` | — | `CbfStatus` | mode filtres compacts (fonction `cbf`) ; build sans la fonction : `FEATURE_DISABLED` |
 | `btc_cbf_sync` | — | `CbfStatus` | lance (ou rejoint) une synchronisation en arrière-plan ; progression par l'événement `cbf-status` ; exige le coffre déverrouillé (lit les xpubs) — une lecture coffre verrouillé ne lance pas de synchro ; build sans la fonction : `FEATURE_DISABLED` |
 | `set_capture_protection` | `{ enabled }` | `void` | `set_content_protected` |
-| `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasTrongridKey }` | jamais les clés elles-mêmes ; chaque `hasXKey` = variable d'environnement **ou** clé enregistrée dans les réglages (ex. TronGrid : `KYRO_TRONGRID_API_KEY` ou `apiKeys.trongrid`) |
+| `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasTrongridKey, systemLanguage }` | `systemLanguage` : `'fr' \| 'en'`, la langue de l'ordinateur (ce que `settings.language = 'auto'` utilise) ; jamais les clés elles-mêmes ; chaque `hasXKey` = variable d'environnement **ou** clé enregistrée dans les réglages (ex. TronGrid : `KYRO_TRONGRID_API_KEY` ou `apiKeys.trongrid`) |
 | `network_get` / `network_set` | — / `{ network: 'mainnet' \| 'testnet' }` | `NetworkInfo` / `boolean` | choix du réseau depuis l'application, appliqué en **redémarrant** l'app : voir §2.10 |
 | `hw_list` | — | `DeviceInfo[]` | détecte les Ledger (HID) et Trezor (WebUSB) branchés ; ids stables pour la session (`ledger-1`, `trezor-1`…) tant que l'appareil reste sur le même port ; 10 s max. Voir §2.3 |
 | `hw_open` | `{ id }` | `DeviceStatus` | ouvre l'appareil et lit son état : verrouillé, app Ledger ouverte, firmware Trezor, état par chaîne. **Seule commande qui peut appairer un Trezor Safe 7** (THP, §2.3) : `hw-prompt` `thp-confirm-pairing` puis `thp-pairing-code` → `hw_thp_pairing_code` ; délai 180 s |
@@ -442,7 +442,14 @@ type Settings = { currency: 'EUR' | 'USD'; autoLockSecs: number; hideBalancesOnS
                   captureProtection: boolean; clipboardGuard: boolean;
                   servers: Servers;               // remplace l'ancien `rpc` (encore accepté en entrée, migré, jamais renvoyé)
                   apiKeysSet: { [K in ApiKeyName]: boolean };   // clé enregistrée ou non ; JAMAIS la valeur (pas de champ `apiKeys`)
-                  tor: { enabled: boolean } };   // défaut : { enabled: true }
+                  tor: { enabled: boolean };     // défaut : { enabled: true }
+                  language: 'auto' | 'fr' | 'en' };   // défaut : 'auto' (voir ci-dessous)
+// `language` : langue de l'interface ET des fenêtres natives (signature, avertissements, phrase,
+// serveurs, sélecteur de .cookie). `auto` = langue de l'ordinateur (français si elle est française,
+// anglais sinon), lue par Rust (crate `sys-locale`) et renvoyée par `config_get.systemLanguage`.
+// Toute autre valeur dans settings_set → INVALID_INPUT ; dans un settings.json existant, une valeur
+// inconnue est lue comme `auto` (les autres réglages sont gardés). Appliquée dès l'enregistrement :
+// l'interface se ré-affiche, la prochaine fenêtre native utilise la nouvelle langue.
 type SettingsInput = Omit<Settings, 'apiKeysSet'> & {   // ce qu'ACCEPTE settings_set (`apiKeysSet` envoyé en retour est ignoré)
                   apiKeys?: { [K in ApiKeyName]?: string | null } };
 // Règle de fusion de `apiKeys.<nom>` dans settings_set : absent (ou null) = inchangé ; "" = supprimé ;

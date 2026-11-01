@@ -1027,6 +1027,8 @@ pub struct ConfigOut {
     has_zerox_key: bool,
     has_coingecko_key: bool,
     has_trongrid_key: bool,
+    /// The computer's language (`fr` | `en`): what `settings.language = auto` means.
+    system_language: crate::i18n::Lang,
 }
 
 #[tauri::command]
@@ -1038,6 +1040,7 @@ pub fn config_get(state: State<'_, AppState>) -> ConfigOut {
         has_zerox_key: env.zerox.is_some() || s.api_keys.zerox.is_some(),
         has_coingecko_key: env.coingecko.is_some() || s.api_keys.coingecko.is_some(),
         has_trongrid_key: env.trongrid.is_some() || s.api_keys.trongrid.is_some(),
+        system_language: crate::i18n::system(),
     }
 }
 

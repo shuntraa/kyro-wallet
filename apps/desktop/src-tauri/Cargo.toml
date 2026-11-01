@@ -48,6 +48,9 @@ futures-util = { version = "=0.3.34", default-features = false, features = ["std
 # B2b: Electrum certificate pinning (SHA-256 of the DER certificate), hex fingerprints.
 sha2 = { version = "=0.10.9" }
 hex = { version = "=0.4.3" }
+# System language for `settings.language = auto` (native dialogs + UI). 1Password, MIT/Apache,
+# no dependency on desktop targets.
+sys-locale = { version = "=0.3.2", default-features = false }
 # B2c: BIP157/158 compact block filters. OPTIONAL, behind the `cbf` feature (off by default)
 # until bip157 0.8.1 is >= 2 weeks old and re-reviewed (see docs/ROADMAP.md).
 bip157 = { version = "=0.8.1", default-features = false, optional = true }
