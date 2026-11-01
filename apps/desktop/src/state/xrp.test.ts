@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { call, setBackend } from '@kyro/shared';
 import { createMockBackend } from '@kyro/shared/mock';
 import { createAdapters, isXAddress, nativeAssetId, WATCH_ONLY_CHAINS, xrpChain } from '@kyro/chains';
-import { EXCHANGE_TAG_HINT, XRP_ACTIVATION } from '../components/XrpSend';
+import { exchangeTagHint, XRP_ACTIVATION } from '../components/XrpSend';
 
 describe('XRP Ledger in the UI', () => {
   it('is a regular chain: not « Bientôt », native asset `xrp`, 1 XRP activation, exchange hint', () => {
     expect(WATCH_ONLY_CHAINS.some((w) => w.key === 'xrp')).toBe(false);
     expect(nativeAssetId(xrpChain('testnet'))).toBe('xrp');
     expect(XRP_ACTIVATION).toBe(1_000_000n);
-    expect(EXCHANGE_TAG_HINT).toBe('Les plateformes d’échange exigent presque toujours un tag : sans lui, les fonds peuvent être perdus.');
+    expect(exchangeTagHint()).toBe('Les plateformes d’échange exigent presque toujours un tag : sans lui, les fonds peuvent être perdus.');
   });
 
   it('X-addresses are detected before Rust (the Send screen explains them)', () => {

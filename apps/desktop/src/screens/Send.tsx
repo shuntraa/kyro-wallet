@@ -45,7 +45,9 @@ import {
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { cn } from '../lib/cn';
-import { fmtCrypto, fmtEta, fmtFiat, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
+import { decimalSep, fmtCrypto, fmtEta, fmtFiat, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
+import { getLanguage, t, tp, useT } from '../i18n';
+import { rt } from '../i18n/rich';
 import { guardAllowsSend, guardOnInput, guardVerify, handedOverGuard, initialGuard, pickedGuard, type GuardState } from '../lib/clipboardGuard';
 import { addLocalTx, bumpContactSends, findContact, getContacts, getLastPrice, getLocalTxs, saveContacts, setLastPrice, type ContactFamily } from '../lib/storage';
 import { checkPricePlausible } from '@kyro/market';
@@ -82,13 +84,14 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   return adapters.evm.get(asset.chainKey);
 }
 
-const LEVELS: Array<{ level: FeeLevel; label: string }> = [
-  { level: 'slow', label: 'Lent' },
-  { level: 'normal', label: 'Normal' },
-  { level: 'fast', label: 'Rapide' },
+const LEVELS: Array<{ level: FeeLevel; label: 'send.feeSlow' | 'send.feeNormal' | 'send.feeFast' }> = [
+  { level: 'slow', label: 'send.feeSlow' },
+  { level: 'normal', label: 'send.feeNormal' },
+  { level: 'fast', label: 'send.feeFast' },
 ];
 
 export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string }) {
+  const { t } = useT();
   const { back, settings, navigate, hideBalances, accountSources, accountName, selectedAccounts, vaultLists } = useApp();
   const { adapters, accounts, activeHw } = useVault();
   const pf = usePortfolio();
@@ -194,7 +197,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       ...getContacts()
         .filter((c) => c.family === family)
         .map((c) => ({ address: c.address, source: 'contact' as const, label: c.name })),
-      ...(own[family] ?? []).filter((a): a is string => !!a).map((address) => ({ address, source: 'own' as const, label: 'ton adresse' })),
+      ...(own[family] ?? []).filter((a): a is string => !!a).map((address) => ({ address, source: 'own' as const, label: t('send.yourAddress') })),
       ...trusted.map((address) => ({ address, source: 'sent' as const })),
       ...references.map((address) => ({ address, source: 'history' as const })),
     ];
@@ -304,7 +307,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const overBalance = !max && amountBase !== null && amountBase > (xrpSpendable ?? balance);
 
   const doBuild = async (): Promise<Built> => {
-    if (!asset || !adapter || !feeParams) throw new Error('Paramètres incomplets');
+    if (!asset || !adapter || !feeParams) throw new Error(t('send.incompleteParams'));
     const tag = isXrp && tagParsed.tag !== undefined ? { destinationTag: tagParsed.tag } : {};
     const ada = isAda ? { ...(adaToken && adaTokenQty !== null ? { cardanoToken: { policy: adaToken.policy, name: adaToken.name, quantity: adaTokenQty.toString() } } : {}), ...(memo.trim() ? { memo: memo.trim() } : {}) } : {};
     const unsigned = (await (adapter as { buildTx: (p: unknown) => Promise<AnyUnsigned> }).buildTx({ asset, to: toTrim, amount: amountBase ?? 0n, fee: feeParams, max: max && !adaTokenMode, ...tag, ...ada })) as AnyUnsigned;
@@ -313,7 +316,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       summary = await (adapter as EvmAdapter).decode(unsigned);
       const expectedTo = unsigned.recipient.toLowerCase();
       if (summary.to.toLowerCase() !== expectedTo || summary.amount !== unsigned.amount.toString()) {
-        throw new Error('Le résumé décodé par le coffre ne correspond pas à ta saisie : envoi bloqué.');
+        throw new Error(t('send.decodedMismatch'));
       }
     }
     let sol: SolTxSummary | null = null;
@@ -321,7 +324,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       // Solana: the recap comes from the Rust decoder only (sol_decode_tx).
       sol = await (adapter as SolanaAdapter).decode(unsigned);
       const problem = checkSolSummary(unsigned, sol, adapter.getAddress());
-      if (problem) throw new Error(`${problem} Envoi bloqué.`);
+      if (problem) throw new Error(t('send.solProblemBlocked', { problem }));
     }
     return { unsigned, summary, sol, key: buildKey };
   };
@@ -412,7 +415,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     } catch (e) {
       const err = toIpcError(e);
       if (activeHw && (err.code.startsWith('HW_') || err.code === 'USER_REJECTED')) setHwError(e);
-      else setSignError(err.code === 'USER_REJECTED' ? 'Signature annulée dans la fenêtre système. Rien n’a été envoyé.' : err.message);
+      else setSignError(err.code === 'USER_REJECTED' ? t('send.signCancelled') : err.message);
     } finally {
       setSigning(false);
       setHwDevice(null);
@@ -422,7 +425,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   if (!asset || !adapter || !chain) {
     return (
       <div className="flex flex-1 items-center justify-center text-[14px] text-mute">
-        <Spinner /> &nbsp;Chargement des comptes…
+        <Spinner /> &nbsp;{t('send.loadingAccounts')}
       </div>
     );
   }
@@ -438,7 +441,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
         id={done.id}
         asset={asset}
         amount={built?.unsigned.amount ?? 0n}
-        {...(adaTokenMode && adaToken ? { what: `${tokenQty} ${cardanoTokenLabel(adaToken)} (+ ${fmtCrypto(built?.unsigned.amount ?? 0n, 6, 'ADA')} de min-ADA)` } : {})}
+        {...(adaTokenMode && adaToken ? { what: t('send.doneWhatToken', { qty: tokenQty, token: cardanoTokenLabel(adaToken), ada: fmtCrypto(built?.unsigned.amount ?? 0n, 6, 'ADA') }) } : {})}
         to={toTrim}
         contactKnown={!!contact || !!ownAccount}
         onBack={back}
@@ -454,17 +457,17 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
       <header className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <IconButton label="Retour au portefeuille" onClick={back} className="size-9">
+          <IconButton label={t('send.backToWallet')} onClick={back} className="size-9">
             <IconBack size={16} />
           </IconButton>
-          <h1 className="screen-title">Envoyer</h1>
+          <h1 className="screen-title">{t('send.title')}</h1>
         </div>
-        <ol aria-label="Étapes" className="m-0 flex list-none items-center gap-2.5 p-0 text-[13px]">
-          <Step n={1} done={step1} current={!step1} label="Destinataire" />
+        <ol aria-label={t('send.steps')} className="m-0 flex list-none items-center gap-2.5 p-0 text-[13px]">
+          <Step n={1} done={step1} current={!step1} label={t('send.recipient')} />
           <li aria-hidden="true" className={cn('h-px w-6 transition-colors duration-300', step1 ? 'bg-ice/60' : 'bg-line-3')} />
-          <Step n={2} done={step2} current={step1 && !step2} label="Montant" />
+          <Step n={2} done={step2} current={step1 && !step2} label={t('send.stepAmount')} />
           <li aria-hidden="true" className={cn('h-px w-6 transition-colors duration-300', step2 ? 'bg-ice/60' : 'bg-line-3')} />
-          <Step n={3} done={false} current={step2} label="Vérifier et signer" />
+          <Step n={3} done={false} current={step2} label={t('send.stepReview')} />
         </ol>
       </header>
 
@@ -472,7 +475,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
         <form onSubmit={(e) => e.preventDefault()} className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto rounded-panel border border-line bg-card px-[26px] py-6 scroll-thin">
           {/* From */}
           <div className="flex flex-col gap-2">
-            <span className="eyebrow">Depuis</span>
+            <span className="eyebrow">{t('send.from')}</span>
             <Menu
               value={asset.id}
               onSelect={(id) => {
@@ -492,7 +495,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               items={sendable.map((a) => ({
                 value: a.id,
                 label: `${a.name} · ${findChain(network, a.chainKey)?.label ?? ''}`,
-                hint: `${fmtCrypto(pf.balances.get(a.id) ?? 0n, a.decimals, a.symbol)} disponibles`,
+                hint: t('send.availableAmount', { amount: fmtCrypto(pf.balances.get(a.id) ?? 0n, a.decimals, a.symbol) }),
                 icon: <CoinIcon glyph={a.glyph} color={a.color} size={26} />,
               }))}
               trigger={
@@ -503,22 +506,22 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                       {asset.name} · {accountName(asset.family)}
                     </span>
                     <span className="text-[12px] text-mute">
-                      {hideBalances ? '•••••' : fmtCrypto(balance, decimals, asset.symbol)} disponibles · {chain.name}
+                      {t('send.availableAmount', { amount: hideBalances ? '•••••' : fmtCrypto(balance, decimals, asset.symbol) })} · {chain.name}
                     </span>
                   </span>
                   <IconChevronDown size={16} className="text-mute" />
                 </button>
               }
             />
-            <AccountPicker family={asset.family} label="Compte" />
-            {activeHw && <span className="text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).</span>}
+            <AccountPicker family={asset.family} label={t('common.account')} />
+            {activeHw && <span className="text-[12px] text-faint">{t('send.hwUnsupportedChains')}</span>}
             {fees.error && serverMissing(fees.error) && <ServerMissingLine coin={asset.name} />}
           </div>
 
           {/* To */}
           <div className="flex flex-col gap-2">
             <label htmlFor="dest" className="eyebrow">
-              À
+              {t('send.to')}
             </label>
             <div className={cn('overflow-hidden rounded-box border bg-bg transition-[border-color,box-shadow] duration-200 focus-within:shadow-[0_0_0_1px_rgba(124,196,255,.35)]', guard.tampered && settings.clipboardGuard ? 'border-down/70' : addrValid ? 'border-ice-line' : 'border-line-2')}>
               <div className={cn('flex h-12 items-center gap-2.5 pr-2 pl-4', addrValid && 'border-b border-control-2')}>
@@ -529,7 +532,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? 'r… (adresse classique)' : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
+                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'sol' ? t('send.solPlaceholder') : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -537,13 +540,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   }}
                   className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-text2"
                 />
-                {guard.source === 'paste' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Collé</span>}
-                {guard.source === 'typed' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Saisi</span>}
-                {guard.source === 'picked' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">Choisi</span>}
+                {guard.source === 'paste' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">{t('send.badgePasted')}</span>}
+                {guard.source === 'typed' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">{t('send.badgeTyped')}</span>}
+                {guard.source === 'picked' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">{t('send.badgePicked')}</span>}
                 {!activeHw && (
                   <Menu
                     align="end"
-                    label={`Mes comptes ${ACCOUNT_CHAIN_LABEL[asset.family as AccountChain]}`}
+                    label={t('send.myAccountsOf', { chain: ACCOUNT_CHAIN_LABEL[asset.family as AccountChain] })}
                     className="w-[340px]"
                     onSelect={(v) => (v === '__new__' ? void createOwnRecipient() : pickRecipient(v))}
                     items={[
@@ -557,28 +560,28 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                       }),
                       {
                         value: '__new__',
-                        label: myOtherAccounts.length === 0 ? 'Créer un autre compte' : 'Nouveau compte',
-                        hint: nextOwn === null ? 'Limite de comptes atteinte' : `${defaultAccountName(asset.family as AccountChain, nextOwn)}, son adresse sera le destinataire`,
+                        label: myOtherAccounts.length === 0 ? t('send.createAnotherAccount') : t('send.newAccount'),
+                        hint: nextOwn === null ? t('send.accountLimit') : t('send.newAccountHint', { name: defaultAccountName(asset.family as AccountChain, nextOwn) }),
                         disabled: nextOwn === null || ownBusy,
                       },
                     ]}
                     trigger={
                       <button type="button" className="press h-7 rounded-[5px] px-2.5 text-[12px] font-medium whitespace-nowrap text-ice hover:bg-control">
-                        {ownBusy ? <Spinner /> : 'Mes comptes'}
+                        {ownBusy ? <Spinner /> : t('send.myAccounts')}
                       </button>
                     }
                   />
                 )}
                 <Menu
                   align="end"
-                  label="Carnet d’adresses"
+                  label={t('send.addressBook')}
                   onSelect={pickRecipient}
                   items={getContacts()
                     .filter((c) => c.family === asset.family)
                     .map((c) => ({ value: c.address, label: c.name, hint: shortAddress(c.address) }))}
                   trigger={
                     <button type="button" className="press h-7 rounded-[5px] px-2.5 text-[12px] font-medium text-ice hover:bg-control">
-                      Carnet
+                      {t('send.addressBookShort')}
                     </button>
                   }
                 />
@@ -588,54 +591,54 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   <div className="flex items-center gap-2.5">
                     <span className="flex size-8 items-center justify-center rounded-full bg-ice-deep text-[13px] font-semibold text-ice-text">{(ownAccount?.name ?? contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
                     <span className="flex flex-col">
-                      <span className="text-[14px] font-medium">{ownAccount ? ownAccountLabel(ownAccount.name) : contact ? contact.name : isOwn ? 'Ton propre compte' : 'Adresse inconnue'}</span>
-                      <span className="text-[12px] text-mute">{ownAccount ? `Un de tes comptes ${ACCOUNT_CHAIN_LABEL[ownAccount.family]} (n° ${ownAccount.index + 1}) : même vérification qu’un envoi normal` : contact ? `Carnet d’adresses · ${contact.sends ?? 0} envoi${(contact.sends ?? 0) > 1 ? 's' : ''}` : isOwn ? 'Cette adresse appartient à ce coffre' : 'Ni dans ton carnet ni à toi : un logiciel espion peut remplacer une adresse copiée'}</span>
+                      <span className="text-[14px] font-medium">{ownAccount ? ownAccountLabel(ownAccount.name) : contact ? contact.name : isOwn ? t('send.yourOwnAccount') : t('send.unknownAddress')}</span>
+                      <span className="text-[12px] text-mute">{ownAccount ? t('send.ownAccountSub', { chain: ACCOUNT_CHAIN_LABEL[ownAccount.family], n: ownAccount.index + 1 }) : contact ? tp('send.contactSub', contact.sends ?? 0) : isOwn ? t('send.ownVaultSub') : t('send.unknownSub')}</span>
                     </span>
                   </div>
                   <AddressBlocks address={toTrim} />
                   <div className="flex flex-wrap gap-[18px] text-[12px] font-medium">
                     {/* No « identical to what you pasted »: a clipper swaps the clipboard BEFORE the paste. */}
-                    {!contact && !isOwn && !ownAccount && <span className="text-warn">Adresse inconnue : compare-la avec ta source</span>}
-                    {guard.source === 'typed' && <span className="text-warn">Saisie manuelle : vérifie chaque bloc</span>}
-                    {contact && <span className="text-up">✓ Adresse connue</span>}
-                    {noChecksum && <span className="text-warn">Sans somme de contrôle EIP-55 (minuscules)</span>}
-                    <span className="font-normal text-mute">Compare les blocs bleus {contact ? `avec ${contact.name}` : 'avec la source'}</span>
+                    {!contact && !isOwn && !ownAccount && <span className="text-warn">{t('send.unknownCompare')}</span>}
+                    {guard.source === 'typed' && <span className="text-warn">{t('send.typedCheck')}</span>}
+                    {contact && <span className="text-up">{t('send.knownAddress')}</span>}
+                    {noChecksum && <span className="text-warn">{t('send.noChecksum')}</span>}
+                    <span className="font-normal text-mute">{contact ? t('send.compareWith', { name: contact.name }) : t('send.compareWithSource')}</span>
                   </div>
                 </div>
               )}
             </div>
             {ownError && <span className="text-[12px] text-down">{ownError}</span>}
-            {toTrim && !addrValid && !xAddress && !adaProblem && <span className="text-[12px] text-down">Adresse invalide pour {chain.name}.</span>}
+            {toTrim && !addrValid && !xAddress && !adaProblem && <span className="text-[12px] text-down">{t('send.invalidAddressFor', { chain: chain.name })}</span>}
             {adaProblem && <span className="text-[12px] text-down">{adaProblem.charAt(0).toUpperCase() + adaProblem.slice(1)}.</span>}
             {poisoning.lookalike && <PoisoningWarning recipient={toTrim} lookalike={poisoning.lookalike} family={asset.family} acknowledged={poisonAck} onAcknowledge={setPoisonAck} />}
             {!poisoning.lookalike && poisoning.suspect && !contact && !isOwn && <DustOnlyNote />}
             {xAddress && (
               <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-                <strong className="font-semibold">Adresse X (X… / T…) :</strong> elle contient l’adresse et le tag mélangés. Kyro veut l’adresse classique (r…) et le tag de destination séparément, pour que tu les voies tous les deux : demande-les à ton destinataire ou à ta plateforme (rubrique « dépôt XRP »).
+                {rt('send.xAddress', { b: (c) => <strong className="font-semibold">{c}</strong> })}
               </Notice>
             )}
             {isXrp && <XrpTagField value={tagStr} onChange={setTagStr} error={tagParsed.error} dest={xrpDestInfo} destLoading={addrValid && xrpDest.loading && !xrpDestInfo} />}
-            {isXrp && xrpDest.error && addrValid && <span className="text-[12px] text-down">Compte destinataire illisible : {xrpDest.error.message}</span>}
+            {isXrp && xrpDest.error && addrValid && <span className="text-[12px] text-down">{t('send.destUnreadable', { message: xrpDest.error.message })}</span>}
             {guard.tampered && settings.clipboardGuard && (
               <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
-                L’adresse a changé après ton collage sans que tu tapes : envoi bloqué. Efface le champ et recolle l’adresse depuis une source sûre.
+                {t('send.tampered')}
               </Notice>
             )}
           </div>
 
           {isAda && <CardanoSendFields account={adaMe.data} tokenSel={tokenSel} onTokenSel={(k) => { setTokenSel(k); setTokenQty(''); setMax(false); }} quantity={tokenQty} onQuantity={setTokenQty} memo={memo} onMemo={setMemo} />}
-          {adaTokenOver && <span className="-mt-3 text-[12px] text-down">Quantité supérieure à ce que tu détiens.</span>}
+          {adaTokenOver && <span className="-mt-3 text-[12px] text-down">{t('send.tokenOver')}</span>}
           {adaTokenMode ? (
-            <span className="-mt-2 text-[12px] leading-[1.45] text-mute">ADA envoyés avec le token : exactement le minimum obligatoire de sa sortie (min-ADA), calculé par le coffre et affiché dans la vérification.</span>
+            <span className="-mt-2 text-[12px] leading-[1.45] text-mute">{t('send.adaWithToken')}</span>
           ) : (
           <>
           {/* Amount */}
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
               <label htmlFor="amount" className="eyebrow">
-                Montant
+                {t('common.amount')}
               </label>
-              <span className="text-[12px] text-mute">{after !== null && after >= 0n && !hideBalances ? `Solde après envoi : ${fmtCrypto(after, decimals, asset.symbol)}` : ''}</span>
+              <span className="text-[12px] text-mute">{after !== null && after >= 0n && !hideBalances ? t('send.balanceAfter', { amount: fmtCrypto(after, decimals, asset.symbol) }) : ''}</span>
             </div>
             <div className={cn('flex h-[72px] items-center gap-3 rounded-box border bg-bg pr-2.5 pl-[18px] transition-colors duration-150 focus-within:border-ice-line', overBalance ? 'border-down/60' : 'border-line-2 hover:border-line-3')}>
               <input
@@ -656,9 +659,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               </span>
               <button
                 type="button"
-                aria-label={fiatMode ? `Saisir en ${asset.symbol}` : `Saisir en ${cur}`}
+                aria-label={t('send.enterIn', { unit: fiatMode ? asset.symbol : cur })}
                 disabled={fiatPrice === null && !fiatMode}
-                title={!priceCheck.ok && priceCheck.reason ? `${priceCheck.reason} Saisie en ${cur} désactivée.` : undefined}
+                title={!priceCheck.ok && priceCheck.reason ? t('send.fiatDisabled', { reason: priceCheck.reason, cur }) : undefined}
                 onClick={() => {
                   setFiatMode((f) => !f);
                   setAmountStr('');
@@ -672,30 +675,32 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 MAX
               </button>
             </div>
-            {overBalance && <span className="text-[12px] text-down">{isXrp ? 'Montant supérieur à ton solde dépensable (la réserve reste bloquée).' : 'Montant supérieur à ton solde.'}</span>}
-            {fiatMode && !priceCheck.ok && <span className="text-[12px] text-down">{priceCheck.reason ?? 'Prix indisponible.'} Saisis le montant en {asset.symbol}.</span>}
+            {overBalance && <span className="text-[12px] text-down">{isXrp ? t('send.overSpendable') : t('send.overBalance')}</span>}
+            {fiatMode && !priceCheck.ok && <span className="text-[12px] text-down">{priceCheck.reason ?? t('send.priceUnavailable')} {t('send.enterAmountIn', { symbol: asset.symbol })}</span>}
             {fiatMode && !overBalance && amountBase !== null && balanceShare !== null && balanceShare >= 50 && (
               <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-                <strong className="font-semibold">{fmtCrypto(amountBase, decimals, asset.symbol)}, soit {Math.round(balanceShare)} % de ton solde.</strong> En saisie {cur}, c’est le prix du marché qui fixe la quantité envoyée : vérifie ce montant en {asset.symbol}, c’est lui que tu signes.
+                {rt('send.fiatShare', { b: (c) => <strong className="font-semibold">{c}</strong> }, { amount: fmtCrypto(amountBase, decimals, asset.symbol), pct: Math.round(balanceShare), cur, symbol: asset.symbol })}
               </Notice>
             )}
             {isXrp && <XrpSpendable account={xrpMe.data} hidden={hideBalances} />}
             {isAda && adaMe.data && (
               <span className="text-[12px] leading-[1.45] text-mute">
-                Solde : {hideBalances ? '•••••' : fmtCrypto(BigInt(adaMe.data.balance), 6, 'ADA')}
-                {BigInt(adaMe.data.lockedWithTokens) > 0n ? ` (dont ${fmtCrypto(BigInt(adaMe.data.lockedWithTokens), 6, 'ADA')} liés à tes tokens par le min-ADA)` : ''}. Kyro garde toujours une sortie de monnaie à ton adresse : au moins ≈ 1 ADA (et tous tes tokens) restent.
+                {t('send.adaBalance', {
+                  balance: hideBalances ? '•••••' : fmtCrypto(BigInt(adaMe.data.balance), 6, 'ADA'),
+                  locked: BigInt(adaMe.data.lockedWithTokens) > 0n ? t('send.adaLocked', { amount: fmtCrypto(BigInt(adaMe.data.lockedWithTokens), 6, 'ADA') }) : '',
+                })}
               </span>
             )}
-            {xrpBelowActivation && <span className="text-[12px] text-down">Ce compte n’existe pas encore : il faut lui envoyer au moins 1 XRP pour activer ce compte.</span>}
-            {dogeBelowDust && <span className="text-[12px] text-down">Minimum 0,01 DOGE par destinataire : en dessous, Dogecoin considère la sortie comme de la poussière et Kyro la refuse.</span>}
+            {xrpBelowActivation && <span className="text-[12px] text-down">{t('send.xrpBelowActivation')}</span>}
+            {dogeBelowDust && <span className="text-[12px] text-down">{t('send.dogeBelowDust')}</span>}
             {asset.family === 'doge' && (
               <span className="text-[12px] leading-[1.5] text-mute">
-                Dogecoin : un destinataire sous 0,01 DOGE est refusé ; une monnaie sous 0,01 DOGE n’est pas créée, elle est ajoutée aux frais (« Pas de monnaie… » dans la fenêtre de confirmation).
+                {t('send.dogeNote')}
               </span>
             )}
             {asset.family === 'ltc' && (
               <span className="text-[12px] leading-[1.5] text-mute">
-                Litecoin : un destinataire sous le seuil de poussière ({litecoinDust('p2wpkh').toString()} litoshis pour une adresse ltc1…) est refusé ; une monnaie plus petite est ajoutée aux frais.
+                {t('send.ltcNote', { dust: litecoinDust('p2wpkh').toString() })}
               </span>
             )}
           </div>
@@ -705,50 +710,50 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {/* Fees */}
           {isAda ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur Cardano.</strong> Les frais dépendent de la taille de la transaction (44 lovelace par octet + 0,155381 ADA) : d’habitude ≈ 0,17 ADA, un peu plus avec un token ou un message. Le coffre les calcule ; le montant exact est dans la vérification.
+                {rt('send.adaFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isXrp ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
-                <strong className="font-semibold text-text">Rien à choisir sur le XRP Ledger.</strong> Le coffre fixe les frais du registre ouvert (d’habitude 10 à 12 drops, soit 0,000012 XRP) ; ils sont détruits, personne ne les reçoit.
+                {rt('send.xrpFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
               </div>
             </div>
           ) : isTron ? (
             <div className="flex flex-col gap-2">
-              <span className="eyebrow">Frais réseau</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="flex flex-col gap-1 rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
                 <span>
-                  <strong className="font-semibold text-text">Rien à choisir sur TRON.</strong> Chaque transaction consomme de la bande passante (octets) et, pour un token TRC-20, de l’énergie. Ce que ta bande passante gratuite ou tes TRX gelés ne couvrent pas est payé en TRX brûlés.
+                  {rt('send.tronFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
                 </span>
-                <span className="text-[12px] text-mute">Le coffre construit la transaction depuis le dernier bloc et simule l’énergie : le détail s’affiche dans la vérification, avant le mot de passe.</span>
+                <span className="text-[12px] text-mute">{t('send.tronFeesSub')}</span>
               </div>
             </div>
           ) : (
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
-              <span className="eyebrow">Frais réseau</span>
-              <span className="text-[12px] text-faint">{fees.data ? `Réseau actuel : ${fees.data.hint.replace('.', ',')}` : fees.error ? (feesTorBlocked ? 'En attente de Tor…' : serverMissing(fees.error) ? <span className="text-warn">Aucun serveur configuré</span> : serverDown(fees.error) ? <span className="text-warn">Ton serveur ne répond pas</span> : <span className="text-down">Frais indisponibles</span>) : 'Estimation…'}</span>
+              <span className="eyebrow">{t('send.networkFees')}</span>
+              <span className="text-[12px] text-faint">{fees.data ? t('send.currentNetwork', { hint: getLanguage() === 'fr' ? fees.data.hint.replace('.', ',') : fees.data.hint }) : fees.error ? (feesTorBlocked ? t('send.waitingTor') : serverMissing(fees.error) ? <span className="text-warn">{t('send.noServer')}</span> : serverDown(fees.error) ? <span className="text-warn">{t('send.serverDown')}</span> : <span className="text-down">{t('send.feesUnavailable')}</span>) : t('send.estimating')}</span>
             </div>
-            <div role="radiogroup" aria-label="Frais réseau" className="flex gap-2">
+            <div role="radiogroup" aria-label={t('send.networkFees')} className="flex gap-2">
               {LEVELS.map(({ level, label }) => {
                 const opt = fees.data?.options[level];
                 const c = optionCost(opt?.params);
                 const fiat = c !== null && nativeAsset && nativePrice !== null ? fmtFiat(unitsToNumber(c, nativeAsset.decimals) * nativePrice, cur) : c !== null && nativeAsset ? fmtCrypto(c, nativeAsset.decimals, nativeAsset.symbol) : null;
                 return (
-                  <FeeOption key={level} active={choice === level} onClick={() => setChoice(level)} title={`${label}${fiat ? ` · ${fiat}` : ''}`} sub={opt ? fmtEta(opt.etaSecs) : '…'} disabled={!opt} />
+                  <FeeOption key={level} active={choice === level} onClick={() => setChoice(level)} title={`${t(label)}${fiat ? ` · ${fiat}` : ''}`} sub={opt ? fmtEta(opt.etaSecs) : '…'} disabled={!opt} />
                 );
               })}
-              <FeeOption active={choice === 'custom'} onClick={() => setChoice('custom')} title="Personnalisé" sub={blockAverage ? 'suggéré' : 'tu choisis'} ice disabled={!fees.data} />
+              <FeeOption active={choice === 'custom'} onClick={() => setChoice('custom')} title={t('send.feeCustom')} sub={blockAverage ? t('send.feeSuggested') : t('send.feeYouChoose')} ice disabled={!fees.data} />
             </div>
             {blockAverage && (
               <span className="flex items-start gap-1.5 text-[12px] leading-[1.45] text-mute">
                 <IconWarn size={13} className="mt-0.5 shrink-0 text-warn" />
                 <span>
-                  Mode filtres compacts : ces tarifs sont la moyenne des frais payés dans les derniers blocs, pas une estimation du mempool. Si c’est urgent ou que le réseau est chargé, choisis « Personnalisé » et fixe ton tarif.
+                  {t('send.blockAverage')}
                 </span>
               </span>
             )}
@@ -756,15 +761,15 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               <div className="fade-in flex items-end gap-3 rounded-box border border-ice-line bg-bg px-4 py-3.5">
                 {asset.family === 'evm' && (
                   <>
-                    <UnitField label="Frais max. par gas" unit="gwei" value={customEvm.maxFeeGwei} onChange={(v) => setCustomEvm((c) => ({ ...c, maxFeeGwei: v }))} />
-                    <UnitField label="Pourboire prioritaire" unit="gwei" value={customEvm.priorityGwei} onChange={(v) => setCustomEvm((c) => ({ ...c, priorityGwei: v }))} />
+                    <UnitField label={t('send.maxFeePerGas')} unit="gwei" value={customEvm.maxFeeGwei} onChange={(v) => setCustomEvm((c) => ({ ...c, maxFeeGwei: v }))} />
+                    <UnitField label={t('send.priorityTip')} unit="gwei" value={customEvm.priorityGwei} onChange={(v) => setCustomEvm((c) => ({ ...c, priorityGwei: v }))} />
                   </>
                 )}
-                {utxoLike && <UnitField label="Taux" unit={rateUnit} value={customBtc} onChange={setCustomBtc} decimals={asset.family === 'doge' ? 0 : 2} />}
+                {utxoLike && <UnitField label={t('send.rate')} unit={rateUnit} value={customBtc} onChange={setCustomBtc} decimals={asset.family === 'doge' ? 0 : 2} />}
                 {asset.family === 'sol' && <UnitField label="Priority fee" unit="µL/CU" value={customSol} onChange={(v) => setCustomSol(v.replace(/\D/g, ''))} decimals={0} wide />}
                 <span className="flex flex-1 flex-col items-end gap-0.5 pb-0.5">
                   <span className="text-[18px] font-medium">{feeFiat !== null && choice === 'custom' && built ? fmtFiat(feeFiat, cur) : '—'}</span>
-                  <span className="text-[12px] text-mute">{maxFee !== null && nativeAsset && built ? `${fmtCrypto(maxFee, nativeAsset.decimals, nativeAsset.symbol)} max.` : 'Coût recalculé en direct'}</span>
+                  <span className="text-[12px] text-mute">{maxFee !== null && nativeAsset && built ? t('send.maxSuffix', { amount: fmtCrypto(maxFee, nativeAsset.decimals, nativeAsset.symbol) }) : t('send.liveCost')}</span>
                 </span>
               </div>
             )}
@@ -775,60 +780,60 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
           <div className="mt-auto flex items-center gap-3 border-t border-line pt-4 text-[13px] text-text2">
             <IconLock size={18} className="shrink-0 text-mute" />
-            <span>{settings.clipboardGuard ? 'Si l’adresse change après ton collage, l’envoi est bloqué. Un logiciel qui remplace l’adresse avant le collage ne se voit pas : compare-la avec ta source.' : 'Alerte presse-papier désactivée dans les réglages.'}</span>
+            <span>{settings.clipboardGuard ? t('send.guardOn') : t('send.guardOff')}</span>
           </div>
         </form>
 
         {/* Verification */}
         {/* Verification: a receipt. Ice top rule, dashed tear lines between parts. */}
-        <aside aria-label="Vérification" className="relative flex w-[400px] shrink-0 flex-col gap-4 overflow-y-auto rounded-panel border border-line bg-panel px-6 py-[22px] scroll-thin before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-ice/70">
+        <aside aria-label={t('send.review')} className="relative flex w-[400px] shrink-0 flex-col gap-4 overflow-y-auto rounded-panel border border-line bg-panel px-6 py-[22px] scroll-thin before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-ice/70">
           <div className="flex items-center justify-between">
-            <span className="text-[15px] font-medium tracking-[-0.01em]">Vérification</span>
+            <span className="text-[15px] font-medium tracking-[-0.01em]">{t('send.review')}</span>
             <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[10.5px] font-medium tracking-[0.02em] text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'ada' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
+              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'ada' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
             <span key={asset.id} className="figure fade-in text-[40px] leading-[1.05]">{sendAmount !== null && sendAmount > 0n ? fmtCrypto(sendAmount, decimals, asset.symbol) : `0 ${asset.symbol}`}</span>
             <span className="text-[13px] text-mute">{amountFiat !== null ? fmtFiat(amountFiat, cur) : '—'}</span>
             {fiatMode && fiatPrice !== null && sendAmount !== null && sendAmount > 0n && (
-              <span className="text-center text-[12px] text-warn">Saisi en {cur} au prix de {fmtFiat(fiatPrice, cur)} le {asset.symbol} : tu signes le montant en {asset.symbol} ci-dessus.</span>
+              <span className="text-center text-[12px] text-warn">{t('send.fiatEntered', { cur, price: fmtFiat(fiatPrice, cur), symbol: asset.symbol })}</span>
             )}
           </div>
           <div className="flex items-center gap-2.5 rounded-box border border-line bg-bg px-3.5 py-3">
             <CoinIcon glyph={asset.glyph} color={asset.color} size={30} />
             <span className="flex flex-col text-[12px]">
-              <span className="font-medium">{ownAccount && !activeHw ? accountName(asset.family) : 'Toi'}</span>
+              <span className="font-medium">{ownAccount && !activeHw ? accountName(asset.family) : t('send.you')}</span>
               <span className="font-mono text-[11px] text-mute">{shortAddress(adapter.getAddress())}</span>
             </span>
             <span aria-hidden="true" className="relative h-0 flex-1 border-t-[1.5px] border-dashed border-ice-line">
               <span className="absolute -top-[7px] -right-0.5 text-[10px] text-ice">▶</span>
             </span>
             <span className="flex flex-col items-end text-[12px]">
-              <span className="font-medium">{addrValid ? (ownAccount ? ownAccountLabel(ownAccount.name) : (contact?.name ?? 'Destinataire')) : '—'}</span>
+              <span className="font-medium">{addrValid ? (ownAccount ? ownAccountLabel(ownAccount.name) : (contact?.name ?? t('send.recipient'))) : '—'}</span>
               <span className="font-mono text-[11px] text-mute">{addrValid ? shortAddress(toTrim) : ''}</span>
             </span>
             <span className="flex size-[30px] items-center justify-center rounded-full bg-ice-deep text-[12px] font-semibold text-ice-text">{(ownAccount?.name ?? contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
           </div>
           <dl className="m-0 flex flex-col text-[13px]">
-            <Row k="Réseau" v={chain.name} />
+            <Row k={t('common.network')} v={chain.name} />
             <Row
-              k={isTron ? 'Brûlé max.' : 'Frais max.'}
+              k={isTron ? t('send.burnMax') : t('send.feeMax')}
               v={
                 maxFee !== null && nativeAsset ? (
                   <>
                     {fmtCrypto(maxFee, nativeAsset.decimals, nativeAsset.symbol)}
-                    {feeFiat !== null ? ` · ${fmtFiat(feeFiat, cur)}` : ''} {choice === 'custom' && <span className="text-ice-text2">· perso</span>}
+                    {feeFiat !== null ? ` · ${fmtFiat(feeFiat, cur)}` : ''} {choice === 'custom' && <span className="text-ice-text2">{t('send.customTag')}</span>}
                   </>
                 ) : (
                   '—'
                 )
               }
             />
-            <Row k="Données" v={dataLabel(built, asset.family)} />
+            <Row k={t('send.data')} v={dataLabel(built, asset.family)} />
             <div className="flex h-[42px] items-center justify-between">
-              <dt className="font-medium">Total</dt>
+              <dt className="font-medium">{t('common.total')}</dt>
               <dd className="figure m-0 text-[19px] tracking-[-0.03em]">{amountFiat !== null ? fmtFiat(amountFiat + (feeFiat ?? 0) + rentFiat, cur) : '—'}</dd>
             </div>
           </dl>
@@ -846,62 +851,68 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
-              <Spinner /> Préparation et décodage…
+              <Spinner /> {t('send.preparing')}
             </span>
           )}
           {buildError && (serverMissing(buildError) ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'tron' && (
             <EnClair tone={tronShort ? 'warn' : 'ice'}>
-              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>. TRON ne prend pas de frais fixes : cette transaction brûle environ{' '}
-              <strong>{fmtCrypto(BigInt(built.unsigned.estimate.totalBurn), 6, 'TRX', 6)}</strong>, au plus {fmtCrypto(BigInt(built.unsigned.estimate.totalBurnMax), 6, 'TRX', 6)}
-              {feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : ''}.
-              {!built.unsigned.estimate.recipientExists ? ' Son compte n’existe pas encore : l’activer fait partie de ce brûlé.' : ''}
-              {tronShort ? ' Ton solde TRX ne suffit pas : envoi bloqué.' : ''}
+              {rt('send.clearTron', { b: (c) => <strong>{c}</strong> }, {
+                amount: fmtCrypto(sendAmount, decimals, asset.symbol),
+                recipient: recipientName,
+                burn: fmtCrypto(BigInt(built.unsigned.estimate.totalBurn), 6, 'TRX', 6),
+                burnMax: fmtCrypto(BigInt(built.unsigned.estimate.totalBurnMax), 6, 'TRX', 6),
+                fiat: feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : '',
+              })}
+              {!built.unsigned.estimate.recipientExists ? t('send.clearTronActivation') : ''}
+              {tronShort ? t('send.clearTronShort') : ''}
             </EnClair>
           )}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'xrp' && (
             <EnClair tone={built.unsigned.summary.destinationTag === null ? 'warn' : 'ice'}>
-              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>
-              {built.unsigned.summary.destinationTag !== null ? (
-                <>
-                  {' '}avec le tag de destination <strong className="font-mono">{built.unsigned.summary.destinationTag}</strong>
-                </>
-              ) : (
-                ', sans tag de destination'
-              )}
-              . Frais : {fmtCrypto(built.unsigned.maxFee, 6, 'XRP', 6)}.
-              {!built.unsigned.context.destination.exists ? ' Ce paiement crée son compte : 1 XRP de réserve y reste bloqué.' : ''}
-              {built.unsigned.summary.destinationTag === null ? ' Si c’est une plateforme d’échange, vérifie qu’elle ne t’a pas donné de tag.' : ''}
+              {rt(built.unsigned.summary.destinationTag !== null ? 'send.clearXrpTag' : 'send.clearXrpNoTag', { b: (c) => <strong>{c}</strong>, tag: (c) => <strong className="font-mono">{c}</strong> }, {
+                amount: fmtCrypto(sendAmount, decimals, asset.symbol),
+                recipient: recipientName,
+                tag: String(built.unsigned.summary.destinationTag ?? ''),
+                fee: fmtCrypto(built.unsigned.maxFee, 6, 'XRP', 6),
+              })}
+              {!built.unsigned.context.destination.exists ? t('send.clearXrpCreates') : ''}
+              {built.unsigned.summary.destinationTag === null ? t('send.clearXrpCheckTag') : ''}
             </EnClair>
           )}
           {built && addrValid && built.unsigned.family === 'ada' && (
             <EnClair tone={built.unsigned.summary.requiresExtraConfirmation ? 'warn' : 'ice'}>
-              Tu envoies{' '}
-              <strong>
-                {built.unsigned.token && adaToken ? `${built.unsigned.token.quantity} ${cardanoTokenLabel(adaToken)} + ${fmtCrypto(built.unsigned.amount, 6, 'ADA')} (min-ADA)` : fmtCrypto(built.unsigned.amount, 6, 'ADA')}
-              </strong>{' '}
-              à <strong>{recipientName}</strong>. Frais : {fmtCrypto(built.unsigned.maxFee, 6, 'ADA')} ; au total {fmtCrypto(BigInt(built.unsigned.context.leaving), 6, 'ADA')} quittent ton portefeuille, le reste revient sur ton adresse.
-              {built.unsigned.summary.memo ? ' Le message sera public pour toujours.' : ''}
-              {built.unsigned.summary.warnings.some((w) => w.kind === 'unknownToken') ? ' Token non vérifié : une 2ᵉ confirmation te sera demandée.' : ''}
+              {rt('send.clearAda', { b: (c) => <strong>{c}</strong> }, {
+                what: built.unsigned.token && adaToken ? `${built.unsigned.token.quantity} ${cardanoTokenLabel(adaToken)} + ${fmtCrypto(built.unsigned.amount, 6, 'ADA')} (min-ADA)` : fmtCrypto(built.unsigned.amount, 6, 'ADA'),
+                recipient: recipientName,
+                fee: fmtCrypto(built.unsigned.maxFee, 6, 'ADA'),
+                leaving: fmtCrypto(BigInt(built.unsigned.context.leaving), 6, 'ADA'),
+              })}
+              {built.unsigned.summary.memo ? t('send.clearAdaMemo') : ''}
+              {built.unsigned.summary.warnings.some((w) => w.kind === 'unknownToken') ? t('send.clearAdaUnverified') : ''}
             </EnClair>
           )}
           {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'ada' && (
             <EnClair>
-              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>
-              {utxoLike && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? ', la monnaie revient sur ton adresse de change' : ''}. Personne d’autre ne reçoit rien, et tu paies au maximum{' '}
-              {feeFiat !== null ? fmtFiat(feeFiat, cur) : maxFee !== null && nativeAsset ? fmtCrypto(maxFee, nativeAsset.decimals, nativeAsset.symbol) : '—'} de frais{choice === 'custom' ? ' (ton réglage)' : ''}.
-              {rent > 0n && nativeAsset ? ` Son compte de token n’existe pas encore : tu déposes ${fmtCrypto(rent, nativeAsset.decimals, nativeAsset.symbol)} de loyer pour le créer.` : ''}
+              {rt('send.clearGeneric', { b: (c) => <strong>{c}</strong> }, {
+                amount: fmtCrypto(sendAmount, decimals, asset.symbol),
+                recipient: recipientName,
+                change: utxoLike && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? t('send.clearChange') : '',
+                fee: feeFiat !== null ? fmtFiat(feeFiat, cur) : maxFee !== null && nativeAsset ? fmtCrypto(maxFee, nativeAsset.decimals, nativeAsset.symbol) : '—',
+                custom: choice === 'custom' ? t('send.clearCustom') : '',
+              })}
+              {rent > 0n && nativeAsset ? t('send.clearRent', { rent: fmtCrypto(rent, nativeAsset.decimals, nativeAsset.symbol) }) : ''}
               {'dustFolded' in built.unsigned && typeof built.unsigned.dustFolded === 'bigint' && built.unsigned.dustFolded > 0n
-                ? ` Pas de monnaie : le reste (${fmtCrypto(built.unsigned.dustFolded, decimals, asset.symbol)}, sous le seuil de poussière) est ajouté aux frais.`
+                ? t('send.clearDust', { amount: fmtCrypto(built.unsigned.dustFolded, decimals, asset.symbol) })
                 : ''}
             </EnClair>
           )}
-          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? (xAddress ? 'Adresse X : saisis l’adresse classique r… et le tag séparément.' : 'Saisis ou colle l’adresse du destinataire.') : dogeBelowDust ? 'Montant sous 0,01 DOGE : aucune transaction construite.' : xrpTagMissing ? 'Tag de destination obligatoire pour ce destinataire : aucun paiement construit sans lui.' : xrpBelowActivation ? 'Moins de 1 XRP vers un compte inexistant : aucun paiement construit.' : isXrp && !xrpDestInfo ? 'Lecture du compte destinataire…' : 'Indique un montant pour voir le récapitulatif décodé.'}</p>}
+          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? (xAddress ? t('send.hintXAddress') : t('send.hintRecipient')) : dogeBelowDust ? t('send.hintDogeDust') : xrpTagMissing ? t('send.hintXrpTag') : xrpBelowActivation ? t('send.hintXrpActivation') : isXrp && !xrpDestInfo ? t('send.hintXrpReading') : t('send.hintAmount')}</p>}
 
           {blindSigning && activeHw && (
             <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-              <strong className="font-semibold">Signature à l’aveugle :</strong> ton {BRAND[activeHw.device]} ne pourra pas afficher le détail de cette transaction (seulement des données brutes ou une empreinte). Seul le résumé de Kyro la décrit ; une 2ᵉ confirmation te sera demandée.
-              {activeHw.device === 'ledger' ? ' Sur Ledger, le réglage « Blind signing » de l’app Ethereum doit être activé, sinon l’appareil refusera.' : ''}
+              {rt('send.blind', { b: (c) => <strong className="font-semibold">{c}</strong> }, { device: BRAND[activeHw.device] })}
+              {activeHw.device === 'ledger' ? t('send.blindLedger') : ''}
             </Notice>
           )}
 
@@ -909,7 +920,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {activeHw ? (
             <div className="flex items-center gap-2 rounded-ctl border border-line bg-bg px-3.5 py-2.5 text-[12px] text-mute">
               <DeviceBadge device={activeHw.device} model={activeHw.model} />
-              <span>Pas de mot de passe : fenêtre système de Kyro, puis confirmation sur l’écran de l’appareil.</span>
+              <span>{t('send.hwNoPassword')}</span>
             </div>
           ) : (
             <PasswordField id="send-pw" value={password} onChange={setPassword} onEnter={() => canSign && void sign()} />
@@ -917,17 +928,17 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {signing && activeHw && hwDevice && (
             <HwWaiting
               deviceId={hwDevice}
-              idle="Kyro vérifie que c’est le bon appareil…"
-              confirm={{ title: 'Confirme sur ton appareil', detail: 'Vérifie le destinataire, le montant et les frais sur l’écran de l’appareil : ils doivent être identiques au récapitulatif. Sinon, refuse sur l’appareil.' }}
+              idle={t('send.hwChecking')}
+              confirm={{ title: t('send.hwConfirmTitle'), detail: t('send.hwConfirmDetail') }}
             />
           )}
           {hwError !== null && <HwErrorNotice error={hwError} onRetry={() => void sign()} />}
           {signError && (serverDown(signError) ? <ServerDownLine /> : <Notice tone="error">{signError}</Notice>)}
           <Button variant="primary" size="xl" disabled={!canSign} onClick={() => void sign()}>
-            {signing && <Spinner />} {activeHw ? 'Signer sur l’appareil et envoyer' : 'Signer et envoyer'}
+            {signing && <Spinner />} {activeHw ? t('send.signHw') : t('send.sign')}
           </Button>
           <span className="text-center text-[11px] leading-[1.5] text-faint">
-            {activeHw ? 'Une fenêtre système te montrera ce récapitulatif, puis ton appareil te demandera de confirmer.' : 'Une fenêtre système te montrera ce récapitulatif une dernière fois.'}
+            {activeHw ? t('send.footHw') : t('send.foot')}
           </span>
         </aside>
       </div>
@@ -946,7 +957,7 @@ function safeCost(p: FeeParams, size: NonNullable<AnyUnsigned['size']>): bigint 
 function trimNum(s: string): string {
   const n = Number(s);
   if (!Number.isFinite(n)) return s;
-  return String(n >= 10 ? Math.ceil(n) : Math.ceil(n * 100) / 100).replace('.', ',');
+  return String(n >= 10 ? Math.ceil(n) : Math.ceil(n * 100) / 100).replace('.', decimalSep());
 }
 
 function dataLabel(b: Built | null, family?: string): string {
@@ -955,15 +966,15 @@ function dataLabel(b: Built | null, family?: string): string {
   if (u.family === 'btc') {
     const outs = u.summary.outputs.length;
     // Dogecoin has no SegWit: bytes, not vbytes.
-    return `${outs} sortie${outs > 1 ? 's' : ''} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' ? 'octets' : 'vB'}`;
+    return `${tp('send.dataOutputs', outs)} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' ? t('send.dataBytes') : 'vB'}`;
   }
-  if (u.family === 'ada') return `${u.summary.inputs.length} entrée${u.summary.inputs.length > 1 ? 's' : ''} · ${u.summary.outputs.length} sorties${u.token ? ' · token' : ''}${u.summary.memo ? ' · message' : ''}`;
-  if (u.family === 'xrp') return `Payment${u.summary.destinationTag !== null ? ` · tag ${u.summary.destinationTag}` : ' · sans tag'}`;
-  if (u.family === 'tron') return u.token ? `transfer() TRC-20 · ${u.size.bandwidth} octets` : `TransferContract · ${u.size.bandwidth} octets`;
-  if (u.family === 'sol') return u.mint ? `TransferChecked ${u.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL'}${u.createsAta ? ' + création du compte' : ''}` : 'Aucune · transfert système';
-  if (b.summary?.kind === 'NativeTransfer') return 'Aucune · transfert simple';
+  if (u.family === 'ada') return `${tp('send.dataInputs', u.summary.inputs.length)} · ${t('send.dataAdaOutputs', { n: u.summary.outputs.length })}${u.token ? ' · token' : ''}${u.summary.memo ? ` · ${t('send.dataMessage')}` : ''}`;
+  if (u.family === 'xrp') return `Payment${u.summary.destinationTag !== null ? ` · tag ${u.summary.destinationTag}` : ` · ${t('send.dataNoTag')}`}`;
+  if (u.family === 'tron') return u.token ? t('send.dataTronToken', { n: u.size.bandwidth }) : t('send.dataTronNative', { n: u.size.bandwidth });
+  if (u.family === 'sol') return u.mint ? `TransferChecked ${u.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL'}${u.createsAta ? t('send.dataAtaCreate') : ''}` : t('send.dataSystemTransfer');
+  if (b.summary?.kind === 'NativeTransfer') return t('send.dataSimpleTransfer');
   if (b.summary?.kind === 'Erc20Transfer') return 'transfer() ERC-20';
-  return b.summary?.kind ?? 'Appel de contrat';
+  return b.summary?.kind ?? t('send.dataContractCall');
 }
 
 function Step({ n, done, current, label }: { n: number; done: boolean; current: boolean; label: string }) {
@@ -1015,6 +1026,7 @@ function Row({ k, v }: { k: string; v: ReactNode }) {
 }
 
 function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory, children }: { id: string; asset: AssetDef; amount: bigint; what?: string; to: string; contactKnown: boolean; onBack: () => void; onHistory: () => void; children?: ReactNode }) {
+  const { t } = useT();
   const [name, setName] = useState('');
   const [saved, setSaved] = useState(false);
   return (
@@ -1023,9 +1035,9 @@ function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory
         <span className="dialog flex size-14 items-center justify-center rounded-full border border-up/40 text-up" data-state="open">
           <IconCheck size={26} />
         </span>
-        <h1 className="m-0 text-[28px] font-[560] tracking-[-0.035em]">Transaction diffusée</h1>
+        <h1 className="m-0 text-[28px] font-[560] tracking-[-0.035em]">{t('send.doneTitle')}</h1>
         <p className="m-0 text-[14px] leading-[1.6] text-mute">
-          {what ?? fmtCrypto(amount, asset.decimals, asset.symbol)} vers {shortAddress(to)}. Elle apparaîtra comme confirmée dans l’historique dès son inclusion dans un bloc.
+          {t('send.doneBody', { what: what ?? fmtCrypto(amount, asset.decimals, asset.symbol), to: shortAddress(to) })}
         </p>
         <div className="flex w-full items-center justify-between gap-2 rounded-ctl border border-line bg-bg py-2 pr-2 pl-3.5">
           <span className="truncate font-mono text-[12px] text-text2">{id}</span>
@@ -1034,7 +1046,7 @@ function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory
         {children}
         {!contactKnown && !saved && (
           <div className="flex w-full items-center gap-2">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom pour le carnet d’adresses" className="h-10 min-w-0 flex-1 rounded-ctl border border-line-2 bg-bg px-3 text-[13px] focus:border-ice-line" />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('send.doneContactName')} className="h-10 min-w-0 flex-1 rounded-ctl border border-line-2 bg-bg px-3 text-[13px] focus:border-ice-line" />
             <Button
               size="md"
               disabled={!name.trim()}
@@ -1043,16 +1055,16 @@ function SendDone({ id, asset, amount, what, to, contactKnown, onBack, onHistory
                 setSaved(true);
               }}
             >
-              Enregistrer
+              {t('common.save')}
             </Button>
           </div>
         )}
         <div className="flex gap-2">
           <Button variant="primary" size="lg" onClick={onHistory}>
-            Voir l’historique
+            {t('send.doneViewHistory')}
           </Button>
           <Button size="lg" onClick={onBack}>
-            Retour
+            {t('common.back')}
           </Button>
         </div>
       </div>

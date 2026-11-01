@@ -7,7 +7,9 @@
 
 import type { Currency } from '@kyro/shared';
 import { isKnownTronToken, tronCoverage, type TronUnsigned } from '@kyro/chains';
-import { fmtCrypto, fmtFiat, shortAddress } from '../lib/format';
+import { fmtCrypto, fmtFiat, fmtIntl, shortAddress } from '../lib/format';
+import { useT } from '../i18n';
+import { rt } from '../i18n/rich';
 import { Notice } from './ui/primitives';
 import { IconWarn } from './icons';
 
@@ -16,62 +18,63 @@ const TRX = (sun: bigint | string) => fmtCrypto(BigInt(sun), 6, 'TRX', 6);
 const STANDARD_ACTIVATION = 1_100_000n;
 
 export function TronEstimateView({ u, network, trxPrice, currency }: { u: TronUnsigned; network: 'mainnet' | 'testnet'; trxPrice: number | null; currency: Currency }) {
+  const { t } = useT();
   const e = u.estimate;
   const isToken = !!u.token;
   const sent = isToken ? 0n : u.amount;
   const cov = tronCoverage(e, sent);
   const fiat = (sun: string | bigint) => (trxPrice !== null ? ` · ${fmtFiat((Number(BigInt(sun)) / 1e6) * trxPrice, currency)}` : '');
-  const bwSource = e.stakedBandwidth >= e.bandwidthNeeded ? 'bande passante gelée' : e.freeBandwidth >= e.bandwidthNeeded ? 'bande passante gratuite' : 'TRX brûlés';
+  const bwSource = e.stakedBandwidth >= e.bandwidthNeeded ? t('send.tronBwFrozen') : e.freeBandwidth >= e.bandwidthNeeded ? t('send.tronBwFree') : t('send.tronBwBurned');
   const activation = BigInt(e.activationFee);
   const unverified = isToken && u.token && !isKnownTronToken(network, u.token.contract);
 
   return (
-    <div className="flex flex-col gap-3" aria-label="Ressources TRON">
+    <div className="flex flex-col gap-3" aria-label={t('send.tronTitle')}>
       <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]">
         <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
-          <span className="text-[12px] font-semibold text-text">Ressources TRON</span>
-          <span className="text-[11px] text-mute">estimées par le coffre</span>
+          <span className="text-[12px] font-semibold text-text">{t('send.tronTitle')}</span>
+          <span className="text-[11px] text-mute">{t('send.tronEstimatedByVault')}</span>
         </div>
         <Line
-          k="Bande passante"
-          sub={`${e.bandwidthNeeded} octets nécessaires · disponible ${e.freeBandwidth} gratuite + ${e.stakedBandwidth} gelée`}
-          v={BigInt(e.bandwidthBurn) > 0n ? `${TRX(e.bandwidthBurn)} brûlés` : activation > 0n ? 'compris dans l’activation' : `0 TRX (${bwSource})`}
+          k={t('send.tronBandwidth')}
+          sub={t('send.tronBandwidthSub', { needed: e.bandwidthNeeded, free: e.freeBandwidth, staked: e.stakedBandwidth })}
+          v={BigInt(e.bandwidthBurn) > 0n ? t('send.tronBurned', { amount: TRX(e.bandwidthBurn) }) : activation > 0n ? t('send.tronInActivation') : t('send.tronZeroVia', { source: bwSource })}
         />
         {isToken && (
           <>
-            <Line k="Énergie (simulée)" sub={`${e.energyNeeded.toLocaleString('fr-FR')} nécessaire · ${e.energyAvailable.toLocaleString('fr-FR')} disponible · ${e.energyFee} sun par unité`} v={`≈ ${TRX(e.energyBurn)} brûlés`} />
-            <Line k="Plafond d’énergie (fee_limit)" sub="le maximum que l’énergie peut brûler si la simulation se trompe" v={`${TRX(e.feeLimit)} max.`} />
+            <Line k={t('send.tronEnergy')} sub={t('send.tronEnergySub', { needed: fmtIntl(e.energyNeeded), available: fmtIntl(e.energyAvailable), fee: e.energyFee })} v={t('send.tronEnergyBurn', { amount: TRX(e.energyBurn) })} />
+            <Line k={t('send.tronFeeLimit')} sub={t('send.tronFeeLimitSub')} v={t('send.maxSuffix', { amount: TRX(e.feeLimit) })} />
           </>
         )}
         {!e.recipientExists && (
           <Line
-            k="Activation du compte"
-            sub={activation === STANDARD_ACTIVATION ? 'le destinataire n’existe pas encore sur TRON : création 1 TRX + 0,1 TRX de bande passante' : 'le destinataire n’existe pas encore sur TRON : création du compte'}
-            v={`${TRX(activation)} brûlés`}
+            k={t('send.tronActivation')}
+            sub={activation === STANDARD_ACTIVATION ? t('send.tronActivationStd') : t('send.tronActivationOther')}
+            v={t('send.tronBurned', { amount: TRX(activation) })}
             warn
           />
         )}
-        <Line k="Total brûlé" sub="estimé · au maximum" v={`${TRX(e.totalBurn)} · ${TRX(e.totalBurnMax)}`} strong />
-        <Line k="Ton solde TRX" v={`${TRX(e.balance)}${fiat(e.balance)}`} last />
+        <Line k={t('send.tronTotalBurned')} sub={t('send.tronTotalBurnedSub')} v={`${TRX(e.totalBurn)} · ${TRX(e.totalBurnMax)}`} strong />
+        <Line k={t('send.tronYourBalance')} v={`${TRX(e.balance)}${fiat(e.balance)}`} last />
       </div>
 
       {unverified && u.token && (
         <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-          <strong className="font-semibold">Token non vérifié :</strong> Kyro ne connaît que l’USDT sur TRON. Montant réel : <span className="font-mono">{u.amount.toString()}</span> unités brutes du contrat {shortAddress(u.token.contract)} ; « {u.token.symbol} » et ses {u.token.decimals} décimales viennent de l’interface, pas du coffre. La fenêtre système l’affiche ainsi.
+          {rt('send.tronUnverified', { b: (c) => <strong className="font-semibold">{c}</strong> }, { raw: <span className="font-mono">{u.amount.toString()}</span>, contract: shortAddress(u.token.contract), symbol: u.token.symbol, decimals: u.token.decimals })}
         </Notice>
       )}
 
       {!cov.expected ? (
         <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
-          <strong className="font-semibold">Solde TRX insuffisant pour les frais brûlés :</strong>{' '}
+          <strong className="font-semibold">{t('send.tronInsufficientTitle')}</strong>{' '}
           {isToken
-            ? `envoyer un token sur TRON brûle des TRX (énergie, bande passante). Il faut environ ${TRX(e.totalBurn)}, tu as ${TRX(e.balance)} : il manque ${TRX(cov.missing)}.`
-            : `il faut ${TRX(sent + BigInt(e.totalBurn))} (montant + brûlé estimé), tu as ${TRX(e.balance)} : il manque ${TRX(cov.missing)}.`}{' '}
-          Envoi bloqué : le réseau le refuserait{isToken ? ', ou l’appel échouerait faute d’énergie en brûlant quand même des TRX' : ''}.
+            ? t('send.tronInsufficientToken', { need: TRX(e.totalBurn), have: TRX(e.balance), missing: TRX(cov.missing) })
+            : t('send.tronInsufficientTrx', { need: TRX(sent + BigInt(e.totalBurn)), have: TRX(e.balance), missing: TRX(cov.missing) })}{' '}
+          {isToken ? t('send.tronBlockedToken') : t('send.tronBlocked')}
         </Notice>
       ) : !cov.worst ? (
         <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-          Ton solde couvre le brûlé estimé, mais pas le maximum ({TRX(e.totalBurnMax)}) : si l’énergie coûte plus que la simulation, la transaction peut échouer et les TRX brûlés ne sont pas rendus. Il manquerait {TRX(cov.missingWorst)} dans ce cas.
+          {t('send.tronWorstNotCovered', { max: TRX(e.totalBurnMax), missing: TRX(cov.missingWorst) })}
         </Notice>
       ) : null}
     </div>
