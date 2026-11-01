@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NetRequest, NetResponse } from '@kyro/shared';
-import { createProviders, feeLabel, fetchQuotes, JupiterProvider, KYRO_SWAP_FEE, LifiProvider, NATIVE_EVM, providerFee, ZeroExProvider, type SwapFeeConfig } from '../src';
+import { createProviders, feeLabel, feeRecipientFor, fetchQuotes, JupiterProvider, KYRO_SWAP_FEE, LifiProvider, lifiFeeFor, NATIVE_EVM, providerFee, thornameFor, validFeeAddress, ZeroExProvider, type SwapFeeConfig } from '../src';
 import { associatedTokenAccount } from '../src/providers/jupiter';
 import { LIFI_DIAMOND } from '../src';
 import { lifiData, zeroExData } from './calldata';
@@ -173,5 +173,44 @@ describe('Kyro fee parameters per provider', () => {
       expect(sentBody(r.seen[1]).feeAccount).toBe(await associatedTokenAccount(FEE_SOL, USDC_SOL));
       await expect(provider(jup(null).fetch).quote(solParams(WSOL, USDC_SOL))).rejects.toThrow(/frais Kyro non appliqués/);
     });
+  });
+});
+
+describe('Kyro fee recipients on the other chains', () => {
+  it('ships the owner addresses, each valid for its chain (format + checksum)', () => {
+    for (const chain of ['evm', 'solana', 'bitcoin', 'litecoin', 'dogecoin', 'tron', 'xrp', 'cardano'] as const) {
+      expect(feeRecipientFor(chain), chain).toBe(KYRO_SWAP_FEE.recipients[chain]);
+    }
+    expect(thornameFor()).toBeNull();
+  });
+
+  it('refuses malformed, wrong-network or wrong-chain addresses', () => {
+    const r = KYRO_SWAP_FEE.recipients;
+    const flip = (a: string) => a.slice(0, -1) + (a.endsWith('a') ? 'b' : 'a');
+    for (const chain of ['bitcoin', 'litecoin', 'dogecoin', 'tron', 'xrp', 'cardano'] as const) {
+      const a = r[chain] ?? '';
+      expect(validFeeAddress(chain, flip(a)), `${chain} checksum`).toBe(false);
+      expect(validFeeAddress(chain, ''), `${chain} empty`).toBe(false);
+    }
+    expect(validFeeAddress('bitcoin', 'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx')).toBe(false); // testnet
+    expect(validFeeAddress('bitcoin', (r.bitcoin ?? '').toUpperCase())).toBe(false);
+    expect(validFeeAddress('dogecoin', r.litecoin ?? '')).toBe(false);
+    expect(validFeeAddress('litecoin', r.dogecoin ?? '')).toBe(false);
+    expect(validFeeAddress('tron', r.dogecoin ?? '')).toBe(false);
+    expect(validFeeAddress('xrp', r.tron ?? '')).toBe(false);
+    expect(validFeeAddress('cardano', 'addr_test1qz2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3jcu5d8ps7zex2k2xt3uqxgjqnnj83ws8lhrn648jjxtwq2ytjqp')).toBe(false);
+    expect(validFeeAddress('litecoin', 'ltc1qg82tdhlwmudlcnmqkd5qm5y2qy3s6tnh2gpaqp')).toBe(false); // bad checksum
+  });
+
+  it('missing recipient ⇒ the route is left out, never fee-free', () => {
+    const c = cfg({ recipients: { evm: FEE_EVM, solana: '' } });
+    expect(lifiFeeFor('solana', c)).toMatchObject({ kind: 'unavailable' });
+    expect(lifiFeeFor('solana', cfg())).toEqual({ kind: 'fee', bps: 70, recipient: FEE_SOL });
+    expect(lifiFeeFor('evm', cfg())).toEqual({ kind: 'fee', bps: 70, recipient: FEE_EVM });
+    // LI.FI accepts only 0x… / base58 fee receivers: a Bitcoin source cannot carry the fee.
+    expect(lifiFeeFor('bitcoin', cfg())).toMatchObject({ kind: 'unavailable' });
+    expect(feeRecipientFor('tron', cfg())).toBeNull();
+    expect(thornameFor({ ...cfg(), thorname: 'Kyro!' })).toBeNull();
+    expect(thornameFor({ ...cfg(), thorname: 'kyro' })).toBe('kyro');
   });
 });
