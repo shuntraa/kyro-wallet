@@ -38,7 +38,7 @@ describe('XRP Ledger in the app', () => {
     expect(assetsFor('mainnet').some((a) => a.id === 'xrp')).toBe(true);
     expect(outgoingHosts('testnet').map((h) => h.host)).toContain('s.altnet.rippletest.net');
     expect(outgoingHosts('mainnet').map((h) => h.host)).toContain('xrplcluster.com');
-    const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, tron: {}, cardano: {}, xrp: { testnet: { kind: 'jsonRpc', url: 'https://my-rippled.example:51234/' } } });
+    const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, bitcoincash: {}, dash: {}, dogecoin: {}, tron: {}, cardano: {}, xrp: { testnet: { kind: 'jsonRpc', url: 'https://my-rippled.example:51234/' } } });
     expect(custom.find((h) => h.host === 'my-rippled.example:51234')).toMatchObject({ custom: true });
     expect(custom.map((h) => h.host)).not.toContain('s.altnet.rippletest.net');
   });

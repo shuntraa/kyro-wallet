@@ -38,7 +38,7 @@ describe('Cardano in the app', () => {
     expect(ADA).toMatchObject({ family: 'ada', kind: 'native', symbol: 'ADA', decimals: 6, chainKey: 'cardano' });
     expect(outgoingHosts('testnet').map((h) => h.host)).toContain('preprod.koios.rest');
     expect(outgoingHosts('mainnet').map((h) => h.host)).toContain('api.koios.rest');
-    const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, tron: {}, xrp: {}, cardano: { testnet: { kind: 'koios', url: 'https://my-koios.example/api/v1' } } });
+    const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, bitcoincash: {}, dash: {}, dogecoin: {}, tron: {}, xrp: {}, cardano: { testnet: { kind: 'koios', url: 'https://my-koios.example/api/v1' } } });
     expect(custom.find((h) => h.host === 'my-koios.example')).toMatchObject({ custom: true });
   });
 

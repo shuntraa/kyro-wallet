@@ -36,7 +36,7 @@ import {
 import { emitDemoEvent } from './events';
 import { createDemoServers } from './mock-servers';
 import { createDemoCbf, detectDemoCbf } from './mock-cbf';
-import { createDemoUtxo, demoUtxoAccount, DEMO_DOGE_NETWORKS, DEMO_LTC_NETWORKS } from './mock-utxo';
+import { createDemoUtxo, demoUtxoAccount, demoUtxoScript, DEMO_DASH_NETWORKS, DEMO_DOGE_NETWORKS, DEMO_LTC_NETWORKS } from './mock-utxo';
 import { createDemoTron, demoTronAddress, type DemoTronState } from './mock-tron';
 export { demoTronAddress } from './mock-tron';
 import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
@@ -88,8 +88,8 @@ interface DemoKeys {
   /** Every address we own (receive + change, both kinds), for change detection. */
   ownBtc: Set<string>;
   receive: Record<BtcKind, HDKey>;
-  /** Litecoin / Dogecoin account nodes. */
-  utxo: { ltc: HDKey; doge: HDKey };
+  /** Litecoin / Dogecoin / Bitcoin Cash / Dash account nodes. */
+  utxo: { ltc: HDKey; doge: HDKey; bch: HDKey; dash: HDKey };
 }
 
 function demoSeed(): Uint8Array {
@@ -148,8 +148,10 @@ export function deriveDemoKeys(network: Network): DemoKeys {
   const solAddr = base58.encode(sha256(new TextEncoder().encode('kyro-demo-solana-account')));
   const ltc = demoUtxoAccount(demoSeed(), network, 'ltc');
   const doge = demoUtxoAccount(demoSeed(), network, 'doge');
+  const bch = demoUtxoAccount(demoSeed(), network, 'bch');
+  const dash = demoUtxoAccount(demoSeed(), network, 'dash');
   return {
-    utxo: { ltc: ltc.node, doge: doge.node },
+    utxo: { ltc: ltc.node, doge: doge.node, bch: bch.node, dash: dash.node },
     accounts: {
       network,
       account: 0,
@@ -158,6 +160,8 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       sol: { address: solAddr, path: "m/44'/501'/0'/0'" },
       ltc: ltc.info,
       doge: doge.info,
+      bch: bch.info,
+      dash: dash.info,
       tron: { address: demoTronAddress(demoSeed(), 0), path: "m/44'/195'/0'/0/0" },
       xrp: { address: demoXrpAddress(demoSeed(), 0), path: "m/44'/144'/0'/0/0" },
       cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
@@ -192,6 +196,14 @@ function seedChainState(keys: DemoKeys, network: Network): DemoChainState {
   demoFund(ltcUtxos, rawTx, a.ltc.address, DEMO_LTC_NETWORKS[network], 'l2', 30_500_000, ltcTip - 120);
   demoFund(dogeUtxos, rawTx, a.doge.address, DEMO_DOGE_NETWORKS[network], 'd1', 420_000_000_000, dogeTip - 4_000);
   demoFund(dogeUtxos, rawTx, a.doge.address, DEMO_DOGE_NETWORKS[network], 'd2', 150_000_000, dogeTip - 60);
+  const bchTip = testnet ? 330_200 : 975_400;
+  const dashTip = testnet ? 1_250_300 : 2_564_800;
+  const bchUtxos = new Map<string, Array<{ txid: string; vout: number; value: number; height: number }>>();
+  const dashUtxos = new Map<string, Array<{ txid: string; vout: number; value: number; height: number }>>();
+  demoFund(bchUtxos, rawTx, a.bch.address, demoUtxoScript('bch', network, a.bch.address), 'b1', 84_000_000, bchTip - 700);
+  demoFund(bchUtxos, rawTx, a.bch.address, demoUtxoScript('bch', network, a.bch.address), 'b2', 6_250_000, bchTip - 30);
+  demoFund(dashUtxos, rawTx, a.dash.address, DEMO_DASH_NETWORKS[network], 'x1', 312_000_000, dashTip - 2_000);
+  demoFund(dashUtxos, rawTx, a.dash.address, DEMO_DASH_NETWORKS[network], 'x2', 45_000_000, dashTip - 90);
   const evmNative = new Map<string, bigint>();
   const evmTokens = new Map<string, bigint>();
   if (testnet) {
@@ -214,6 +226,10 @@ function seedChainState(keys: DemoKeys, network: Network): DemoChainState {
     dogeUtxos,
     ltcTip,
     dogeTip,
+    bchUtxos,
+    dashUtxos,
+    bchTip,
+    dashTip,
     evmNative,
     evmTokens,
     allowances: new Map(),
@@ -346,7 +362,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   });
   // Several accounts per chain (§2.9): lists, accounts_get({ account }), signer line.
   const accts = createDemoAccounts({ network, seed: demoSeed(), base: keys.accounts, baseOwnBtc: keys.ownBtc, chain, requireUnlocked: () => requireUnlocked() });
-  // Litecoin / Dogecoin (§2.4): `ltc_*` / `doge_*`.
+  // Litecoin / Dogecoin / Bitcoin Cash / Dash (§2.4): `ltc_*` / `doge_*` / `bch_*` / `dash_*`.
   const utxoChains = createDemoUtxo({
     chain,
     network,

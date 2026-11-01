@@ -1,23 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Generic single-account UTXO adapter for Bitcoin-derived chains other than Bitcoin (phase 4:
-// Litecoin BIP84 P2WPKH, Dogecoin BIP44 P2PKH). Same design as `../bitcoin/adapter.ts`:
+// Litecoin BIP84 P2WPKH; Dogecoin, Bitcoin Cash and Dash BIP44 P2PKH). Same design as
+// `../bitcoin/adapter.ts`:
 //
-// - every read and the broadcast go through the Rust `{ltc,doge}_*` commands (docs/IPC.md
+// - every read and the broadcast go through the Rust `{ltc,doge,bch,dash}_*` commands (docs/IPC.md
 //   §2.4), which return Esplora shapes and pick the server (no fallback);
 // - addresses come from the account xpub (public derivation only, checked against Rust's);
 // - the unsigned PSBT carries the key origins (and, for legacy P2PKH, the full previous
 //   transactions); Rust decodes it, shows the native dialog and signs.
 //
-// Fee unit: the chain's smallest unit per virtual byte (litoshis/vB; koinus/byte for Dogecoin,
-// which has no SegWit, so vbytes = bytes). It travels in `FeeParams { family: 'btc', satPerVb }`
+// Fee unit: the chain's smallest unit per virtual byte (litoshis/vB; koinus, satoshis, duffs per
+// byte for Dogecoin, Bitcoin Cash, Dash, which have no SegWit, so vbytes = bytes). Addresses go
+// through the spec's codec: bitcoinjs for base58 / bech32, CashAddr for Bitcoin Cash (which
+// bitcoinjs does not know), so outputs are added by script. It travels in `FeeParams { family: 'btc', satPerVb }`
 // so the shared fee types can be reused as they are.
 
 import { accountArg } from '../types';
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { HDKey } from '@scure/bip32';
-import { BTC_TXS_CAP, call, type EsploraAddressInfo, type EsploraTx, type EsploraUtxo, type Network, type UtxoAccountInfo, type UtxoFeeRates, type UtxoTxSummary } from '@kyro/shared';
+import { BTC_TXS_CAP, call, type EsploraAddressInfo, type EsploraTx, type EsploraUtxo, type Network, type UtxoAccountInfo, type UtxoFeeRates, type UtxoPrefix, type UtxoTxSummary } from '@kyro/shared';
 import type { UtxoChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, FeeEstimates, HistoryItem } from '../types';
 import { derivePubkey, fingerprintBytes, parseXpub } from '../bitcoin/xpub';
@@ -26,7 +29,7 @@ bitcoin.initEccLib(ecc);
 
 // ---------------------------------------------------------------- Rust contract (§2.4)
 
-/** One chain's account, as returned by `accounts_get` (`ltc`, `doge`). */
+/** One chain's account, as returned by `accounts_get` (`ltc`, `doge`, `bch`, `dash`). */
 export type UtxoAccountView = UtxoAccountInfo;
 export type { UtxoFeeRates, UtxoTxSummary, UtxoWarning } from '@kyro/shared';
 
@@ -42,30 +45,18 @@ export interface UtxoBackend {
   signPsbt(psbt: string, password: string): Promise<{ psbt: string; summary: UtxoTxSummary }>;
 }
 
-/** The typed `{ltc,doge}_*` commands of `@kyro/shared` (docs/IPC.md §2.4), signing with vault account `account`. */
-export function rustUtxoBackend(prefix: 'ltc' | 'doge', account = 0): UtxoBackend {
+/** The typed `{ltc,doge,bch,dash}_*` commands of `@kyro/shared` (docs/IPC.md §2.4), signing with vault account `account`. */
+export function rustUtxoBackend(prefix: UtxoPrefix, account = 0): UtxoBackend {
   const acct = accountArg(account);
-  if (prefix === 'ltc') {
-    return {
-      addressInfo: (address) => call('ltc_address_info', { address }),
-      addressUtxos: (address) => call('ltc_address_utxos', { address }),
-      addressTxs: (address) => call('ltc_address_txs', { address }),
-      txHex: (txid) => call('ltc_tx_hex', { txid }),
-      feeRates: () => call('ltc_fee_rates'),
-      tipHeight: async () => Number(await call('ltc_tip_height')),
-      broadcast: (hex) => call('ltc_broadcast', { hex }),
-      signPsbt: (psbt, password) => call('ltc_sign_psbt', { psbt, password, ...acct }),
-    };
-  }
   return {
-    addressInfo: (address) => call('doge_address_info', { address }),
-    addressUtxos: (address) => call('doge_address_utxos', { address }),
-    addressTxs: (address) => call('doge_address_txs', { address }),
-    txHex: (txid) => call('doge_tx_hex', { txid }),
-    feeRates: () => call('doge_fee_rates'),
-    tipHeight: async () => Number(await call('doge_tip_height')),
-    broadcast: (hex) => call('doge_broadcast', { hex }),
-    signPsbt: (psbt, password) => call('doge_sign_psbt', { psbt, password, ...acct }),
+    addressInfo: (address) => call(`${prefix}_address_info`, { address }),
+    addressUtxos: (address) => call(`${prefix}_address_utxos`, { address }),
+    addressTxs: (address) => call(`${prefix}_address_txs`, { address }),
+    txHex: (txid) => call(`${prefix}_tx_hex`, { txid }),
+    feeRates: () => call(`${prefix}_fee_rates`),
+    tipHeight: async () => Number(await call(`${prefix}_tip_height`)),
+    broadcast: (hex) => call(`${prefix}_broadcast`, { hex }),
+    signPsbt: (psbt, password) => call(`${prefix}_sign_psbt`, { psbt, password, ...acct }),
   };
 }
 
@@ -181,7 +172,7 @@ export function selectAllUtxoCoins(coins: SelectableCoin[], rate: number, recipi
 
 export interface UtxoCoinSpec {
   /** Command prefix and asset id. */
-  prefix: 'ltc' | 'doge';
+  prefix: UtxoPrefix;
   /** Our receive/change script type. */
   own: 'p2wpkh' | 'p2pkh';
   network: (n: Network) => bitcoin.Network;
@@ -196,6 +187,14 @@ export interface UtxoCoinSpec {
   rateHint: (rate: number) => string;
   /** Extra address check (e.g. Dogecoin: base58 only). */
   acceptAddress?: (address: string, net: bitcoin.Network) => boolean;
+  /**
+   * Address codec when bitcoinjs's is not the chain's (Bitcoin Cash: CashAddr). `toScript`
+   * throws on an invalid address; `toAddress` returns null for a non-address script.
+   */
+  codec?: {
+    toScript: (address: string, network: Network) => Uint8Array;
+    toAddress: (script: Uint8Array, network: Network) => string | null;
+  };
 }
 
 export interface DerivedUtxoAddress {
@@ -232,7 +231,7 @@ const SCAN_TTL_MS = 30_000;
 const MAX_SCAN = 40;
 
 export class UtxoAdapter {
-  readonly family: 'ltc' | 'doge';
+  readonly family: UtxoPrefix;
   readonly chain: UtxoChain;
   readonly assetId: string;
   readonly spec: UtxoCoinSpec;
@@ -266,10 +265,16 @@ export class UtxoAdapter {
     return this.account.address;
   }
 
+  /** scriptPubKey of an address of this chain (throws if invalid for this chain and network). */
+  scriptOf(address: string): Uint8Array {
+    const a = address.trim();
+    return this.spec.codec ? this.spec.codec.toScript(a, this.chain.network) : bitcoin.address.toOutputScript(a, this.net);
+  }
+
   isValidAddress(address: string): boolean {
     const a = address.trim();
     try {
-      const script = bitcoin.address.toOutputScript(a, this.net);
+      const script = this.scriptOf(a);
       if (!scriptTypeOf(script)) return false;
       return this.spec.acceptAddress ? this.spec.acceptAddress(a, this.net) : true;
     } catch {
@@ -280,8 +285,9 @@ export class UtxoAdapter {
   addressAt(change: 0 | 1, index: number): DerivedUtxoAddress {
     const pubkey = derivePubkey(this.key, change, index);
     const payment = this.spec.own === 'p2wpkh' ? bitcoin.payments.p2wpkh({ pubkey, network: this.net }) : bitcoin.payments.p2pkh({ pubkey, network: this.net });
-    if (!payment.address) throw new Error('Adresse introuvable');
-    return { change, index, address: payment.address, pubkey, path: `${this.account.path}/${change}/${index}`, used: false, balance: 0n };
+    const address = this.spec.codec && payment.output ? this.spec.codec.toAddress(payment.output, this.chain.network) : payment.address;
+    if (!address) throw new Error('Adresse introuvable');
+    return { change, index, address, pubkey, path: `${this.account.path}/${change}/${index}`, used: false, balance: 0n };
   }
 
   /** Gap-limit scan of the receive and change branches. Cached 30 s. */
@@ -372,7 +378,8 @@ export class UtxoAdapter {
     if (!(rate >= this.spec.minRate)) throw new Error(`Taux minimum : ${this.spec.rateHint(this.spec.minRate)}`);
     const to = params.to.trim();
     if (!this.isValidAddress(to)) throw new Error(`Adresse ${this.chain.nativeName} invalide pour ce réseau`);
-    const recipientType = scriptTypeOf(bitcoin.address.toOutputScript(to, this.net));
+    const recipientScript = this.scriptOf(to);
+    const recipientType = scriptTypeOf(recipientScript);
     if (!recipientType) throw new Error('Type d’adresse non pris en charge');
     const coins = await this.coins();
     const { model, minOutput } = this.spec;
@@ -397,15 +404,15 @@ export class UtxoAdapter {
         if (!raw) throw new Error('Transaction précédente manquante');
         psbt.addInput({ hash: c.txid, index: c.vout, nonWitnessUtxo: raw, bip32Derivation: derivation });
       } else {
-        const script = bitcoin.address.toOutputScript(owner.address, this.net);
+        const script = this.scriptOf(owner.address);
         psbt.addInput({ hash: c.txid, index: c.vout, witnessUtxo: { script, value: c.value }, bip32Derivation: derivation });
       }
     }
-    psbt.addOutput({ address: to, value: sel.amount });
+    psbt.addOutput({ script: recipientScript, value: sel.amount });
     const outputs: BtcUnsigned['summary']['outputs'] = [[to, Number(sel.amount), false]];
     if (sel.change > 0n) {
       const change = await this.changeAddress();
-      psbt.addOutput({ address: change.address, value: sel.change, bip32Derivation: [{ masterFingerprint: fp, pubkey: change.pubkey, path: change.path }] });
+      psbt.addOutput({ script: this.scriptOf(change.address), value: sel.change, bip32Derivation: [{ masterFingerprint: fp, pubkey: change.pubkey, path: change.path }] });
       outputs.push([change.address, Number(sel.change), true]);
     }
     return {
@@ -428,6 +435,8 @@ export class UtxoAdapter {
     const res = await this.backend.signPsbt(unsigned.psbt, password);
     if (BigInt(res.summary.fee) !== unsigned.fee) throw new Error('Les frais décodés par Rust diffèrent de ceux de la transaction construite');
     const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
+    // Bitcoin Cash: Rust returns the inputs finalized (FORKID signatures); the others are
+    // finalized here from Rust's partial signatures.
     const finalized = psbt.data.inputs.every((i) => i.finalScriptWitness || i.finalScriptSig);
     if (!finalized) psbt.finalizeAllInputs();
     // The fee was shown and approved in Rust's dialog: no extra bitcoinjs fee-rate limit here

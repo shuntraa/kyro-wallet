@@ -27,7 +27,7 @@ import {
   type VaultAccountEntry,
   type VaultAccountLists,
 } from './ipc';
-import { demoUtxoAccount } from './mock-utxo';
+import { demoUtxoAccount, type DemoUtxoCoin } from './mock-utxo';
 import { demoTronAddress } from './mock-tron';
 import { demoXrpAddress } from './mock-xrp';
 import { demoFund } from './mock-tx';
@@ -47,6 +47,8 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   tron: 'TRON',
   xrp: 'XRP',
   ada: 'Cardano',
+  bch: 'Bitcoin Cash',
+  dash: 'Dash',
 };
 
 export const defaultAccountName = (chain: AccountChain, index: number): string => `${ACCOUNT_CHAIN_LABEL[chain]} ${index + 1}`;
@@ -61,8 +63,8 @@ export interface DemoSigner {
 export interface DemoAccountHooks {
   /** Validated `account` argument (absent = 0), like `account_arg`. */
   arg(a: unknown): number;
-  /** Litecoin / Dogecoin account node of `account` (> 0). */
-  utxoNode(coin: 'ltc' | 'doge', account: number): HDKey;
+  /** Litecoin / Dogecoin / Bitcoin Cash / Dash account node of `account` (> 0). */
+  utxoNode(coin: DemoUtxoCoin, account: number): HDKey;
   signer(chain: AccountChain, account: number, path: string): DemoSigner;
 }
 
@@ -143,6 +145,8 @@ export function createDemoAccounts(d: {
       sol: { address: base58.encode(sha256(new TextEncoder().encode(`kyro-demo-solana-account-${a}`))), path: `m/44'/501'/${a}'/0'` },
       ltc: demoUtxoAccount(d.seed, d.network, 'ltc', a).info,
       doge: demoUtxoAccount(d.seed, d.network, 'doge', a).info,
+      bch: demoUtxoAccount(d.seed, d.network, 'bch', a).info,
+      dash: demoUtxoAccount(d.seed, d.network, 'dash', a).info,
       tron: { address: demoTronAddress(d.seed, a), path: `m/44'/195'/${a}'/0/0` },
       xrp: { address: demoXrpAddress(d.seed, a), path: `m/44'/144'/${a}'/0/0` },
       cardano: { address: cardanoOf(a), path: `m/1852'/1815'/${a}'/0/0` },

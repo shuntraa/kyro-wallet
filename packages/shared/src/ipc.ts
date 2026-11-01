@@ -51,6 +51,10 @@ export interface Accounts {
   ltc: UtxoAccountInfo;
   /** Dogecoin BIP44 P2PKH `m/44'/3'/a'` (testnet `m/44'/1'/a'`). */
   doge: UtxoAccountInfo;
+  /** Bitcoin Cash BIP44 P2PKH `m/44'/145'/a'` (chipnet `m/44'/1'/a'`), CashAddr `bitcoincash:q…` / `bchtest:q…`. */
+  bch: UtxoAccountInfo;
+  /** Dash BIP44 P2PKH `m/44'/5'/a'` (testnet `m/44'/1'/a'`), `X…` / `y…`. */
+  dash: UtxoAccountInfo;
   /** TRON `m/44'/195'/a'/0/0` (same path on Nile), `T…` (§2.5). */
   tron: AddressInfo;
   /** XRP Ledger `m/44'/144'/a'/0/0` (same path on testnet), classic `r…` (§2.6). */
@@ -63,8 +67,8 @@ export interface Accounts {
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'bch' | 'dash';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'bch', 'dash'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -86,7 +90,7 @@ export interface WithAccount {
   account?: number;
 }
 
-/** One Litecoin / Dogecoin account (standard `xpub` / `tpub` encoding, also for Dogecoin). */
+/** One Litecoin / Dogecoin / Bitcoin Cash / Dash account (standard `xpub` / `tpub` encoding for all). */
 export interface UtxoAccountInfo {
   address: string;
   xpub: string;
@@ -171,8 +175,12 @@ export interface Servers {
   solana: Partial<Record<SolanaCluster, RpcServer>>;
   /** Litecoin (`testnet` = Litecoin testnet4). Default: litecoinspace.org. */
   litecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };
-  /** Dogecoin. NO default public server: reads fail with SERVER_INVALID until one is set. */
+  /** Dogecoin. Default: public ElectrumX servers on mainnet; none on testnet (SERVER_INVALID until one is set). */
   dogecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };
+  /** Bitcoin Cash (`testnet` = chipnet). Default: public Fulcrum servers on both. */
+  bitcoincash: { mainnet?: UtxoServer; testnet?: UtxoServer };
+  /** Dash. Default: public ElectrumX servers on mainnet; none on testnet. */
+  dash: { mainnet?: UtxoServer; testnet?: UtxoServer };
   /** TRON (`testnet` = Nile). Default: TronGrid (api.trongrid.io / nile.trongrid.io). */
   tron: { mainnet?: TronServer; testnet?: TronServer };
   /** XRP Ledger (`testnet` = XRPL Testnet). Default: s.altnet.rippletest.net / xrplcluster.com. */
@@ -193,10 +201,10 @@ export type XrpServer = { kind: 'default' } | { kind: 'jsonRpc'; url: string };
  */
 export type TronServer = { kind: 'default' } | { kind: 'http'; url: string };
 
-/** Litecoin / Dogecoin server: the default (Litecoin: litecoinspace.org; Dogecoin: none) or an Esplora. */
+/** Litecoin / Dogecoin / Bitcoin Cash / Dash server: Kyro's default (see `Servers`) or an Esplora-compatible API. */
 export type UtxoServer = { kind: 'default' } | { kind: 'esplora'; url: string };
-export type UtxoCoinKey = 'litecoin' | 'dogecoin';
-/** Network key of `servers.litecoin` / `servers.dogecoin`. */
+export type UtxoCoinKey = 'litecoin' | 'dogecoin' | 'bitcoincash' | 'dash';
+/** Network key of `servers.{litecoin,dogecoin,bitcoincash,dash}`. */
 export type UtxoNetworkKey = 'mainnet' | 'testnet';
 
 export type ServerTestTarget =
@@ -205,6 +213,9 @@ export type ServerTestTarget =
   | { family: 'solana'; cluster: SolanaCluster; server: RpcServer }
   | { family: 'litecoin'; network: UtxoNetworkKey; server: UtxoServer }
   | { family: 'dogecoin'; network: UtxoNetworkKey; server: UtxoServer }
+  /** `testnet` = chipnet. */
+  | { family: 'bitcoincash'; network: UtxoNetworkKey; server: UtxoServer }
+  | { family: 'dash'; network: UtxoNetworkKey; server: UtxoServer }
   /** `testnet` = Nile. */
   | { family: 'tron'; network: UtxoNetworkKey; server: TronServer }
   /** `testnet` = XRPL Testnet (network_id 1). */
@@ -313,7 +324,7 @@ export interface CbfStatus {
   message?: string;
 }
 
-// ---------------------------------------------------------------- Litecoin, Dogecoin (§2.4)
+// ---------------------------------------------------------------- Litecoin, Dogecoin, Bitcoin Cash, Dash (§2.4)
 
 export interface UtxoBackendInfo {
   kind: 'default' | 'esplora';
@@ -326,13 +337,13 @@ export interface UtxoBackendInfo {
 }
 
 export interface UtxoFeeRates {
-  /** Smallest unit per vbyte: litoshis/vB, koinus/byte. */
+  /** Smallest unit per vbyte: litoshis/vB, koinus/byte, sat/byte (Bitcoin Cash), duffs/byte (Dash). */
   fastestFee: number;
   halfHourFee: number;
   hourFee: number;
   economyFee: number;
   minimumFee: number;
-  /** Dogecoin server without estimates: Dogecoin Core's recommended 0.01 DOGE/kB. */
+  /** Server without estimates: the chain's floor (0.01 DOGE/kB; 1 sat/B for Bitcoin Cash and Dash). */
   source?: 'policy';
 }
 
@@ -353,7 +364,7 @@ export interface UtxoTxSummary {
   inputs: number;
   ourInputs: number;
   fee: string;
-  /** vbytes (Litecoin) or bytes (Dogecoin), worst-case signature. */
+  /** vbytes (Litecoin) or bytes (Dogecoin, Bitcoin Cash, Dash), worst-case signature. */
   size: number;
   feePerKb: number;
   /** `false`: what is not sent is fee (a remainder below the dust limit cannot be change). */
@@ -362,8 +373,13 @@ export interface UtxoTxSummary {
   requiresExtraConfirmation: boolean;
 }
 
-/** The `{ltc,doge}_*` commands, same shapes (§2.4). */
-export interface UtxoCommands<P extends 'ltc' | 'doge'> {
+/** Command prefix of each UTXO chain and the `coin` of its Rust summary. */
+export type UtxoPrefix = 'ltc' | 'doge' | 'bch' | 'dash';
+export const UTXO_COIN_KEY: Record<UtxoPrefix, UtxoCoinKey> = { ltc: 'litecoin', doge: 'dogecoin', bch: 'bitcoincash', dash: 'dash' };
+type CoinOf<P extends UtxoPrefix> = P extends 'ltc' ? 'litecoin' : P extends 'doge' ? 'dogecoin' : P extends 'bch' ? 'bitcoincash' : 'dash';
+
+/** The `{ltc,doge,bch,dash}_*` commands, same shapes (§2.4). */
+export interface UtxoCommands<P extends UtxoPrefix> {
   backend_info: { args: undefined; ret: UtxoBackendInfo };
   /** Vault unlocked. */
   address: { args: { change: boolean; index: number } & WithAccount; ret: string };
@@ -371,16 +387,19 @@ export interface UtxoCommands<P extends 'ltc' | 'doge'> {
   address_utxos: { args: { address: string }; ret: EsploraUtxo[] };
   /** At most `BTC_TXS_CAP`, unconfirmed first. */
   address_txs: { args: { address: string }; ret: EsploraTx[] };
-  /** Raw transaction, txid recomputed by Rust (and no witness for Dogecoin). */
+  /** Raw transaction, txid recomputed by Rust (no witness for Dogecoin / Bitcoin Cash / Dash; a Dash special transaction is refused). */
   tx_hex: { args: { txid: string }; ret: string };
   fee_rates: { args: undefined; ret: UtxoFeeRates };
   tip_height: { args: undefined; ret: number };
   broadcast: { args: { hex: string }; ret: string };
-  /** Password → Rust summary → native dialog (+ reinforced) → signed, NOT finalized. */
-  sign_psbt: { args: { psbt: string; password: string } & WithAccount; ret: { psbt: string; summary: UtxoTxSummary & { coin: P extends 'ltc' ? 'litecoin' : 'dogecoin' } } };
+  /**
+   * Password → Rust summary → native dialog (+ reinforced) → signed. NOT finalized, except
+   * Bitcoin Cash: a FORKID signature cannot be a PSBT partial signature, Rust finalizes it.
+   */
+  sign_psbt: { args: { psbt: string; password: string } & WithAccount; ret: { psbt: string; summary: UtxoTxSummary & { coin: CoinOf<P> } } };
 }
 
-type Prefixed<P extends 'ltc' | 'doge'> = { [K in keyof UtxoCommands<P> as `${P}_${K & string}`]: UtxoCommands<P>[K] };
+type Prefixed<P extends UtxoPrefix> = { [K in keyof UtxoCommands<P> as `${P}_${K & string}`]: UtxoCommands<P>[K] };
 
 // ---------------------------------------------------------------- TRON (§2.5)
 
@@ -1421,8 +1440,8 @@ export interface Commands {
   network_set: { args: { network: Network }; ret: boolean };
 }
 
-/** Every command, including the generated `ltc_*` / `doge_*` ones. */
-export interface AllCommands extends Commands, Prefixed<'ltc'>, Prefixed<'doge'> {}
+/** Every command, including the generated `ltc_*` / `doge_*` / `bch_*` / `dash_*` ones. */
+export interface AllCommands extends Commands, Prefixed<'ltc'>, Prefixed<'doge'>, Prefixed<'bch'>, Prefixed<'dash'> {}
 
 export type CommandName = keyof AllCommands;
 export type ArgsOf<K extends CommandName> = AllCommands[K]['args'];

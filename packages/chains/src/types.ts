@@ -145,6 +145,9 @@ export interface FamilyTypes {
   /** Litecoin / Dogecoin: Bitcoin shapes (PSBT, hex), the unsigned tx tagged `family: 'btc'`. */
   ltc: { unsigned: UtxoUnsigned; signed: UtxoSigned };
   doge: { unsigned: UtxoUnsigned; signed: UtxoSigned };
+  /** Bitcoin Cash / Dash: same shapes (Bitcoin Cash comes back finalized from Rust). */
+  bch: { unsigned: UtxoUnsigned; signed: UtxoSigned };
+  dash: { unsigned: UtxoUnsigned; signed: UtxoSigned };
   /** TRON: `raw_data` built and decoded by Rust, its resource estimate. */
   tron: { unsigned: TronUnsigned; signed: TronSigned };
   /** XRP Ledger: Payment built and strictly decoded by Rust, with the live context. */
@@ -197,11 +200,11 @@ export interface ChainAdapter<F extends Family = Family> {
   getHistory(): Promise<HistoryItem[]>;
 }
 
-export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'tron'> | ChainAdapter<'xrp'> | ChainAdapter<'ada'>;
+export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'bch'> | ChainAdapter<'dash'> | ChainAdapter<'tron'> | ChainAdapter<'xrp'> | ChainAdapter<'ada'>;
 
-/** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin: Bitcoin's PSBT shape). */
+/** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin / Bitcoin Cash / Dash: Bitcoin's PSBT shape). */
 export function unsignedFamilyOf(family: Family): AnyUnsigned['family'] {
-  return family === 'ltc' || family === 'doge' ? 'btc' : family;
+  return family === 'ltc' || family === 'doge' || family === 'bch' || family === 'dash' ? 'btc' : family;
 }
 
 /** Sign + broadcast with a union-typed adapter. */
