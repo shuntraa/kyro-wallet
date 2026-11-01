@@ -1,190 +1,190 @@
-# Frais Kyro sur les swaps
+# Kyro fees on swaps
 
-Kyro prend des frais de service sur chaque swap, à un **taux dégressif** selon la valeur du swap en dollars : de 5 % pour un swap de 5 $ ou moins à 0,7 % à partir de 10 000 $. Ces frais servent à financer le projet. Kyro étant open source, ils sont publics : n'importe qui peut lire le code, les modifier, les passer à 0 ou les retirer dans sa propre version. Barème public : <https://kyrowallet.com/frais>.
+Kyro charges a service fee on every swap, at a **sliding rate** depending on the swap's dollar value: from 5% for a swap of $5 or less down to 0.7% from $10,000. This fee funds the project. Since Kyro is open source, the fees are public: anyone can read the code, change it, set the fee to 0 or remove it in their own build. Public schedule: <https://kyrowallet.com/frais>.
 
-- **Configuration** : un seul fichier, [`packages/swap/src/fees.ts`](../packages/swap/src/fees.ts) (`KYRO_FEE_CURVE`, `UNKNOWN_PRICE_FEE_BPS`, `KYRO_SWAP_FEE`).
-- **Affichage** : l'écran Swap montre « Tu envoies X » et « Tu reçois ≈ Y », **Y déjà net** des frais de service, puis le minimum garanti et les frais réseau. Aucune ligne (écran ni confirmation) ne montre le montant ou le taux de la commission ; sous le montant reçu, la mention discrète « Frais de service inclus » ouvre <https://kyrowallet.com/frais> dans le navigateur du système (commande Rust `open_fees_page`, URL fixe en Rust ; la page s'ouvre dans ton navigateur, hors du Tor de Kyro).
-- **Collecte** : les frais sont prélevés sur la blockchain par le **mécanisme officiel « intégrateur »** de chaque fournisseur. Kyro n'ajoute jamais de transfert supplémentaire.
-- **Plafond** : 5 % (`MAX_FEE_BPS` = 500). Une configuration au-delà (ou une courbe mal formée) est refusée ; chaque fournisseur est en plus limité à son propre maximum (ci-dessous).
+- **Configuration**: a single file, [`packages/swap/src/fees.ts`](../packages/swap/src/fees.ts) (`KYRO_FEE_CURVE`, `UNKNOWN_PRICE_FEE_BPS`, `KYRO_SWAP_FEE`).
+- **Display**: the Swap screen shows "You send X" and "You receive ≈ Y", **Y already net** of the service fee, then the guaranteed minimum and the network fees. No line (screen or confirmation) shows the commission amount or rate; under the received amount, the discreet "Service fee included" note opens <https://kyrowallet.com/frais> in the system browser (Rust command `open_fees_page`, URL fixed in Rust; the page opens in your browser, outside Kyro's Tor).
+- **Collection**: the fee is taken on the blockchain through each provider's **official "integrator" mechanism**. Kyro never adds an extra transfer.
+- **Cap**: 5% (`MAX_FEE_BPS` = 500). A configuration beyond that (or a malformed curve) is rejected; each provider is additionally limited to its own maximum (below).
 
-## Barème
+## Schedule
 
-Valeur du swap = montant vendu × prix du jeton vendu (source de prix de l'application, dans ta devise) ÷ taux USD → ta devise (`sellValueUsd`).
+Swap value = amount sold × price of the token sold (the app's price source, in your currency) ÷ USD rate → your currency (`sellValueUsd`).
 
-| Valeur du swap | Taux |
+| Swap value | Rate |
 |---|---|
-| ≤ 5 $ | 500 bps (5 %) |
-| 10 $ | 200 bps (2 %) |
-| 25 $ | 180 bps (1,8 %) |
-| 50 $ | 160 bps (1,6 %) |
-| 80 $ | 140 bps (1,4 %) |
-| 100 $ | 120 bps (1,2 %) |
-| 1 000 $ | 90 bps (0,9 %) |
-| ≥ 10 000 $ | 70 bps (0,7 %), fixe au-delà |
-| prix inconnu | 90 bps (0,9 %) |
+| ≤ $5 | 500 bps (5%) |
+| $10 | 200 bps (2%) |
+| $25 | 180 bps (1.8%) |
+| $50 | 160 bps (1.6%) |
+| $80 | 140 bps (1.4%) |
+| $100 | 120 bps (1.2%) |
+| $1,000 | 90 bps (0.9%) |
+| ≥ $10,000 | 70 bps (0.7%), flat beyond |
+| unknown price | 90 bps (0.9%) |
 
-Entre deux points (u₁, b₁) et (u₂, b₂), interpolation **linéaire sur le logarithme** du montant, arrondie au bps **entier le plus proche** (`Math.round`, ,5 vers le haut) :
+Between two points (u₁, b₁) and (u₂, b₂), **linear interpolation on the logarithm** of the amount, rounded to the **nearest whole** bps (`Math.round`, .5 rounds up):
 
 ```
 bps(u) = round( b₁ + (b₂ − b₁) × (ln u − ln u₁) / (ln u₂ − ln u₁) )
 ```
 
-Exemples : 7 $ → 354 bps ; 300 $ → 106 bps ; 3 000 $ → 80 bps.
+Examples: $7 → 354 bps; $300 → 106 bps; $3,000 → 80 bps.
 
-**Un seul taux par devis.** Le fournisseur calcule le taux (`feeForQuote`) une fois, à partir des paramètres du devis : c'est ce taux qui part dans la requête, que Kyro exige en retour (écho, calldata, transaction) et qui est gardé dans `Quote.kyroFeeBps` pour la vérification faite à la signature (Jupiter). Tout devis dont les frais diffèrent de ce qui a été demandé (taux, montant au jeton près, bénéficiaire) est refusé.
+**A single rate per quote.** The provider computes the rate (`feeForQuote`) once, from the quote's parameters: this is the rate that goes into the request, that Kyro requires back (echo, calldata, transaction), and that is kept in `Quote.kyroFeeBps` for the check done at signing time (Jupiter). Any quote whose fees differ from what was requested (rate, amount down to the token unit, recipient) is rejected.
 
-**Maximum par fournisseur** (`PROVIDER_MAX_FEE_BPS`, lu le 01/11/2026) :
+**Maximum per provider** (`PROVIDER_MAX_FEE_BPS`, read on 2026-11-01):
 
-| Fournisseur | Maximum documenté | Taux Kyro appliqué |
+| Provider | Documented maximum | Kyro rate applied |
 |---|---|---|
-| 0x | `swapFeeBps` : « default limit of 1000 Bps » | la courbe (≤ 500), sans écrêtage |
-| LI.FI | `distributionFees` : « greater than 0 and less than 0.5 per entry » | la courbe, sans écrêtage |
-| Jupiter | `platform_fee_bps` est un `u8` dans l'instruction de route (≤ 255) | **écrêté à 255 bps** (swaps de moins de ≈ 9 $) |
-| NEAR Intents 1Click | total des `appFees` ≤ 500 bps, et Kyro demande le double de son taux (1Click en garde la moitié) | **écrêté à 250 bps** (swaps de moins de ≈ 9 $) |
+| 0x | `swapFeeBps`: "default limit of 1000 Bps" | the curve (≤ 500), no clamping |
+| LI.FI | `distributionFees`: "greater than 0 and less than 0.5 per entry" | the curve, no clamping |
+| Jupiter | `platform_fee_bps` is a `u8` in the route instruction (≤ 255) | **clamped to 255 bps** (swaps under ≈ $9) |
+| NEAR Intents 1Click | total of `appFees` ≤ 500 bps, and Kyro requests double its rate (1Click keeps half) | **clamped to 250 bps** (swaps under ≈ $9) |
 
-## Règle : chaque swap porte les frais
+## Rule: every swap carries the fee
 
-Si un fournisseur ne peut pas encaisser les frais avec la configuration actuelle, il est **écarté des devis**. La raison est donnée, et Kyro ne l'utilise jamais sans frais en douce. Kyro n'envoie pas non plus de frais à une adresse qu'il ne peut pas valider. Le choix du meilleur prix se fait **après frais** : chaque fournisseur déduit les frais du montant qu'il annonce, et les devis sont comparés sur ce montant net.
+If a provider cannot collect the fee with the current configuration, it is **dropped from the quotes**. The reason is given, and Kyro never quietly uses it without fees. Kyro also never sends fees to an address it cannot validate. The best price is chosen **after fees**: each provider deducts the fees from the amount it advertises, and quotes are compared on that net amount.
 
-## Par fournisseur
+## Per provider
 
-Les paramètres ci-dessous ont été vérifiés dans la documentation officielle le 31/10/2026.
+The parameters below were checked against the official documentation on 2026-10-31.
 
-| Fournisseur | Paramètres envoyés | Qui reçoit | Prélevé sur | Contrôle par Kyro |
+| Provider | Parameters sent | Who receives | Taken from | Checked by Kyro |
 |---|---|---|---|---|
-| **0x** (Swap API v2) | `swapFeeRecipient`, `swapFeeBps=<taux du devis>`, `swapFeeToken=<jeton vendu>` | `recipients.evm`, payé dans la transaction | le jeton vendu | le devis doit renvoyer `fees.integratorFee` égal au taux demandé (au jeton près), sinon il est refusé |
-| **LI.FI** | `distributionFees[0][receiver]`, `distributionFees[0][percentage]=<taux>/10000` (**en fraction**, ex. 0.0106) | ton adresse **sur la chaîne de départ** : `recipients.evm` (départ EVM) ou `recipients.solana` (départ Solana), versé directement (aucune inscription) | le jeton envoyé, sur la chaîne de départ (`included` → déjà déduit de `toAmount`) | le devis doit renvoyer une ligne « Distributions » au taux demandé vers cette adresse, sinon il est refusé |
-| **Jupiter** (Metis `swap/v1`) | `platformFeeBps=<taux, ≤ 255>` sur `/quote`, `feeAccount` sur `/swap` | le compte de jetons associé (ATA) de `recipients.solana` | **USDC** pour l'instant (`solanaFeeMints`) : le jeton de sortie s'il est en USDC, sinon le jeton d'entrée | le devis doit renvoyer `platformFee.feeBps` = ce taux, sinon il est refusé |
-| **NEAR Intents 1Click** (en direct, `POST /v0/quote`) | `appFees: [{ recipient: "0x86cd…8b44", fee: 2 × taux }]` (taux ≤ 250) | le **compte NEAR Intents** `0x86cd9af8067ff5e0001c709a550cd62b5e968b44` (= `recipients.evm` en minuscules ; compte du registre `intents.near` contrôlé par la clé de cette adresse EVM) | le jeton **déposé** (vendu), retenu par 1Click sur le dépôt et crédité à ce compte | 1Click partage la commission demandée **50/50** avec lui-même (vrais devis du 01/11/2026 : `fee: 140` → 70 pour Kyro + 70 pour le compte 1Click `5880ad…47dd`). Kyro demande donc le double du taux du devis et exige dans la réponse du devis **et** dans `/v0/status` de l'adresse de dépôt : **exactement ce taux** vers ce compte, une seule fois, et **au plus ce taux** pour 1Click ; sinon refus. Si 1Click partage autrement (sa doc décrit aussi « ta commission + 25 bps » sans clé API), Kyro redemande une fois le montant qui donne exactement ce taux (≤ 500 au total), puis revérifie |
+| **0x** (Swap API v2) | `swapFeeRecipient`, `swapFeeBps=<quote rate>`, `swapFeeToken=<token sold>` | `recipients.evm`, paid within the transaction | the token sold | the quote must return `fees.integratorFee` equal to the requested rate (down to the token unit), otherwise it is rejected |
+| **LI.FI** | `distributionFees[0][receiver]`, `distributionFees[0][percentage]=<rate>/10000` (**as a fraction**, e.g. 0.0106) | your address **on the departure chain**: `recipients.evm` (EVM departure) or `recipients.solana` (Solana departure), paid directly (no registration) | the token sent, on the departure chain (`included` → already deducted from `toAmount`) | the quote must return a "Distributions" line at the requested rate to this address, otherwise it is rejected |
+| **Jupiter** (Metis `swap/v1`) | `platformFeeBps=<rate, ≤ 255>` on `/quote`, `feeAccount` on `/swap` | the associated token account (ATA) of `recipients.solana` | **USDC** for now (`solanaFeeMints`): the output token if it is USDC, otherwise the input token | the quote must return `platformFee.feeBps` = this rate, otherwise it is rejected |
+| **NEAR Intents 1Click** (direct, `POST /v0/quote`) | `appFees: [{ recipient: "0x86cd…8b44", fee: 2 × rate }]` (rate ≤ 250) | the **NEAR Intents account** `0x86cd9af8067ff5e0001c709a550cd62b5e968b44` (= `recipients.evm` in lowercase; an account in the `intents.near` registry controlled by the key of that EVM address) | the **deposited** (sold) token, withheld by 1Click on the deposit and credited to this account | 1Click splits the requested commission **50/50** with itself (real quotes of 2026-11-01: `fee: 140` → 70 for Kyro + 70 for the 1Click account `5880ad…47dd`). Kyro therefore requests double the quote's rate and requires, in the quote response **and** in `/v0/status` of the deposit address: **exactly this rate** to this account, only once, and **at most this rate** for 1Click; otherwise it refuses. If 1Click splits differently (its docs also describe "your commission + 25 bps" without an API key), Kyro re-requests once the amount that yields exactly this rate (≤ 500 in total), then re-verifies |
 
-### Par route (où et dans quel jeton)
+### Per route (where and in which token)
 
-| Route | Fournisseur | Frais Kyro prélevés | Versés à |
+| Route | Provider | Kyro fees taken | Paid to |
 |---|---|---|---|
-| Même chaîne EVM (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche, Sonic, HyperEVM : 0x ou LI.FI ; Cronos, Mantle, Gnosis, Sei, Flare, Kaia : LI.FI) | 0x ou LI.FI | dans le jeton **vendu**, sur cette chaîne | `recipients.evm` (`0x86cD…8B44`) |
-| Même chaîne Solana | Jupiter | en **USDC** (jeton de sortie s'il est en USDC, sinon d'entrée) | compte USDC de `recipients.solana` (`CFPW…Qx7C`) |
-| EVM → autre chaîne EVM, EVM → Solana, EVM → Bitcoin | LI.FI (pont NEAR Intents) | dans le jeton **envoyé**, sur la chaîne EVM de départ (étape FeeForwarder) | `recipients.evm` |
-| Solana → EVM, Solana → Bitcoin | LI.FI (pont NEAR Intents) | dans le jeton **envoyé**, sur Solana : SOL par un transfert System, un jeton SPL par un `TransferChecked` vers le compte de ce jeton de `recipients.solana` | `recipients.solana` (`ptsb…BZcM`) ou son compte du jeton |
-| Bitcoin → EVM / Solana / Litecoin / Dogecoin / TRON / XRP / Cardano | NEAR Intents 1Click (direct) | en **BTC**, retenus par 1Click sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
-| Litecoin → toute chaîne servie | NEAR Intents 1Click (direct) | en **LTC**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
-| Dogecoin → toute chaîne servie | NEAR Intents 1Click (direct) | en **DOGE**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
-| TRON → toute chaîne servie (TRX ⇄ USDT sur TRON compris) | NEAR Intents 1Click (direct) | en **TRX** ou en **USDT TRC-20**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
-| XRP → toute chaîne servie | NEAR Intents 1Click (direct) | en **XRP**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
-| Cardano (ADA seul) → toute chaîne servie | NEAR Intents 1Click (direct) | en **ADA**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
-| Bitcoin Cash, Dash, Zcash (transparent), Sui, TON, Aptos (monnaie native seule) → toute chaîne servie | NEAR Intents 1Click (direct) | en **BCH / DASH / ZEC / SUI / TON (Gram) / APT**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
-| Gnosis (xDAI, jetons) → chaîne non EVM servie par 1Click seul (Litecoin, Bitcoin Cash…) | NEAR Intents 1Click (direct) | dans le jeton **envoyé**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
-| EVM servie par 1Click / Solana → Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, TRON, XRP, Cardano, Sui, TON, Aptos, Stellar | NEAR Intents 1Click (direct) | dans le jeton **envoyé** (ETH, USDC, SOL…), sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
+| Same EVM chain (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche, Sonic, HyperEVM: 0x or LI.FI; Cronos, Mantle, Gnosis, Sei, Flare, Kaia: LI.FI) | 0x or LI.FI | in the **sold** token, on that chain | `recipients.evm` (`0x86cD…8B44`) |
+| Same Solana chain | Jupiter | in **USDC** (output token if it is USDC, otherwise input) | USDC account of `recipients.solana` (`CFPW…Qx7C`) |
+| EVM → other EVM chain, EVM → Solana, EVM → Bitcoin | LI.FI (NEAR Intents bridge) | in the **sent** token, on the departure EVM chain (FeeForwarder step) | `recipients.evm` |
+| Solana → EVM, Solana → Bitcoin | LI.FI (NEAR Intents bridge) | in the **sent** token, on Solana: SOL by a System transfer, an SPL token by a `TransferChecked` to the account for that token of `recipients.solana` | `recipients.solana` (`ptsb…BZcM`) or its token account |
+| Bitcoin → EVM / Solana / Litecoin / Dogecoin / TRON / XRP / Cardano | NEAR Intents 1Click (direct) | in **BTC**, withheld by 1Click on the deposit | NEAR Intents account `0x86cd…8b44` |
+| Litecoin → any served chain | NEAR Intents 1Click (direct) | in **LTC**, on the deposit | NEAR Intents account `0x86cd…8b44` |
+| Dogecoin → any served chain | NEAR Intents 1Click (direct) | in **DOGE**, on the deposit | NEAR Intents account `0x86cd…8b44` |
+| TRON → any served chain (TRX ⇄ USDT on TRON included) | NEAR Intents 1Click (direct) | in **TRX** or in **USDT TRC-20**, on the deposit | NEAR Intents account `0x86cd…8b44` |
+| XRP → any served chain | NEAR Intents 1Click (direct) | in **XRP**, on the deposit | NEAR Intents account `0x86cd…8b44` |
+| Cardano (ADA only) → any served chain | NEAR Intents 1Click (direct) | in **ADA**, on the deposit | NEAR Intents account `0x86cd…8b44` |
+| Bitcoin Cash, Dash, Zcash (transparent), Sui, TON, Aptos (native currency only) → any served chain | NEAR Intents 1Click (direct) | in **BCH / DASH / ZEC / SUI / TON (Gram) / APT**, on the deposit | NEAR Intents account `0x86cd…8b44` |
+| Gnosis (xDAI, tokens) → non-EVM chain served by 1Click only (Litecoin, Bitcoin Cash…) | NEAR Intents 1Click (direct) | in the **sent** token, on the deposit | NEAR Intents account `0x86cd…8b44` |
+| EVM served by 1Click / Solana → Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, TRON, XRP, Cardano, Sui, TON, Aptos, Stellar | NEAR Intents 1Click (direct) | in the **sent** token (ETH, USDC, SOL…), on the deposit | NEAR Intents account `0x86cd…8b44` |
 
-« Toute chaîne servie » : les chaînes EVM servies par 1Click (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche, Gnosis), Solana, Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, TRON, XRP, Cardano, Sui, TON, Aptos et Stellar (arrivée seulement) ; l'arrivée est toujours **ton propre compte** Kyro sur cette chaîne. Les frais NEAR Intents ne vont **pas** à `recipients.bitcoin`, `recipients.tron`… : 1Click ne paie les commissions d'intégrateur qu'à un compte NEAR Intents. Le propriétaire les retire depuis ce compte avec la clé de `0x86cD…8B44` (par exemple sur near-intents.org, en se connectant avec ce portefeuille EVM), dans le jeton où elles ont été prélevées.
+"Any served chain": the EVM chains served by 1Click (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche, Gnosis), Solana, Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, TRON, XRP, Cardano, Sui, TON, Aptos and Stellar (destination only); the destination is always **your own** Kyro account on that chain. NEAR Intents fees do **not** go to `recipients.bitcoin`, `recipients.tron`…: 1Click only pays integrator commissions to a NEAR Intents account. The owner withdraws them from that account with the key of `0x86cD…8B44` (for example on near-intents.org, by signing in with that EVM wallet), in the token in which they were taken.
 
-Vérifié par de vrais devis 1Click (lecture seule, aucun dépôt) le 01/11/2026 : BTC → ETH, LTC → SOL, DOGE → BTC, TRX → ETH, USDT TRC-20 → USDC Solana, XRP → SOL, ADA → ETH, ETH Arbitrum → LTC ; à chaque fois `appFees` renvoie 70 vers `0x86cd…8b44` et 70 vers 1Click, dépôt `SIMPLE` sans mémo, et `/v0/status` de l'adresse de dépôt répète les mêmes conditions. 1Click impose temporairement un minimum de **100 $** au départ de TRON.
+Verified with real 1Click quotes (read-only, no deposit) on 2026-11-01: BTC → ETH, LTC → SOL, DOGE → BTC, TRX → ETH, USDT TRC-20 → USDC Solana, XRP → SOL, ADA → ETH, ETH Arbitrum → LTC; each time `appFees` returns 70 to `0x86cd…8b44` and 70 to 1Click, `SIMPLE` deposit without memo, and `/v0/status` of the deposit address repeats the same conditions. 1Click temporarily imposes a minimum of **$100** when departing from TRON.
 
-Même vérification le 01/11/2026 (14 h UTC) pour les nouvelles chaînes (`packages/swap/test/fixtures/cross/1click-direct-more.json`) : BCH → ETH, DASH → ETH, ZEC → ETH, TON → ETH, SUI → ETH, APT → ETH, ETH Arbitrum → XLM, xDAI Gnosis → BCH ; à chaque fois 70 bps vers `0x86cd…8b44`, 70 vers 1Click (relevés à l'époque du taux fixe de 70 bps ; les tests rejouent ces réponses avec une configuration fixe à 70), dépôt `SIMPLE` sans mémo (BCH `bitcoincash:q…`, DASH `X…`, ZEC `t1…`, TON `UQ…`, Sui / Aptos `0x…` de 64 caractères), confirmé par `/v0/status`. Au départ de **Stellar**, 1Click refuse un dépôt `SIMPLE` (« Incorrect depositMode for originAsset from stellar chain ») : il lui faut un mémo, que Kyro n'envoie jamais. Stellar n'est donc qu'une chaîne d'**arrivée**.
+Same verification on 2026-11-01 (14:00 UTC) for the new chains (`packages/swap/test/fixtures/cross/1click-direct-more.json`): BCH → ETH, DASH → ETH, ZEC → ETH, TON → ETH, SUI → ETH, APT → ETH, ETH Arbitrum → XLM, xDAI Gnosis → BCH; each time 70 bps to `0x86cd…8b44`, 70 to 1Click (recorded back when the rate was a flat 70 bps; the tests replay these responses with a flat configuration at 70), `SIMPLE` deposit without memo (BCH `bitcoincash:q…`, DASH `X…`, ZEC `t1…`, TON `UQ…`, Sui / Aptos `0x…` of 64 characters), confirmed by `/v0/status`. When departing from **Stellar**, 1Click refuses a `SIMPLE` deposit ("Incorrect depositMode for originAsset from stellar chain"): it needs a memo, which Kyro never sends. Stellar is therefore only a **destination** chain.
 
-Vérifié par de vrais devis li.quest (lecture seule) le 01/11/2026 : Arbitrum USDC → SOL, Base ETH → USDC Solana, Arbitrum USDC → BTC (frais en USDC ou ETH vers `0x86cD…`) ; SOL → ETH Arbitrum et USDC Solana → USDC Base (frais en SOL / USDC vers `ptsb…` ou `CFPW…`). li.quest refuse un bénéficiaire EVM pour un départ Solana (« not a valid Solana address for chain 1151111081099710 ») : le bénéficiaire suit la chaîne de départ.
+Verified with real li.quest quotes (read-only) on 2026-11-01: Arbitrum USDC → SOL, Base ETH → USDC Solana, Arbitrum USDC → BTC (fees in USDC or ETH to `0x86cD…`); SOL → ETH Arbitrum and USDC Solana → USDC Base (fees in SOL / USDC to `ptsb…` or `CFPW…`). li.quest refuses an EVM recipient for a Solana departure ("not a valid Solana address for chain 1151111081099710"): the recipient follows the departure chain.
 
-Pour un départ Solana avec un jeton SPL autre que l'USDC, le portefeuille de frais doit posséder le compte de ce jeton ; sinon la transaction de LI.FI le crée (loyer ≈ 0,002 SOL payé par l'utilisateur) ou échoue. Kyro accepte la création d'un compte du jeton vendu, payée par toi, et l'affiche dans les frais réseau.
+For a Solana departure with an SPL token other than USDC, the fee wallet must own the account for that token; otherwise LI.FI's transaction creates it (rent ≈ 0.002 SOL paid by the user) or fails. Kyro accepts the creation of an account for the sold token, paid by you, and shows it in the network fees.
 
-Sources :
-- 0x : [Monetize your app using Swap](https://docs.0x.org/evm/0x-swap-api/guides/monetize-your-app-using-swap.md)
-- LI.FI : [Monetizing the integration](https://docs.li.fi/introduction/integrating-lifi/monetizing-integration)
-- Jupiter : [Add fees to swap](https://developers.jup.ag/docs/swap-api/add-fees-to-swap)
-- NEAR Intents : [Fee Configuration](https://docs.near-intents.org/integration/distribution-channels/1click-api/fee-config) et [Fees](https://docs.near-intents.org/resources/fees) (`appFees`, `recipient` = « Any NEAR-supported address (… or EVM-like address) », prélevé sur le jeton d'entrée, total ≤ 500 bps)
+Sources:
+- 0x: [Monetize your app using Swap](https://docs.0x.org/evm/0x-swap-api/guides/monetize-your-app-using-swap.md)
+- LI.FI: [Monetizing the integration](https://docs.li.fi/introduction/integrating-lifi/monetizing-integration)
+- Jupiter: [Add fees to swap](https://developers.jup.ag/docs/swap-api/add-fees-to-swap)
+- NEAR Intents: [Fee Configuration](https://docs.near-intents.org/integration/distribution-channels/1click-api/fee-config) and [Fees](https://docs.near-intents.org/resources/fees) (`appFees`, `recipient` = "Any NEAR-supported address (… or EVM-like address)", taken from the input token, total ≤ 500 bps)
 
-## Ce que Kyro vérifie dans chaque devis
+## What Kyro checks in each quote
 
-Les paramètres envoyés ne suffisent pas : un fournisseur pourrait renvoyer une transaction qui ne les respecte pas. Kyro décode donc la transaction **avant** de l'afficher, et de nouveau juste avant de signer (code : [`packages/swap/src/verify.ts`](../packages/swap/src/verify.ts), [`jupiter-verify.ts`](../packages/swap/src/jupiter-verify.ts)).
+The parameters sent are not enough: a provider could return a transaction that does not respect them. Kyro therefore decodes the transaction **before** displaying it, and again right before signing (code: [`packages/swap/src/verify.ts`](../packages/swap/src/verify.ts), [`jupiter-verify.ts`](../packages/swap/src/jupiter-verify.ts)).
 
-| Fournisseur | Frais Kyro contrôlés | Autres contrôles |
+| Provider | Kyro fees checked | Other checks |
 |---|---|---|
-| **0x** | `fees.integratorFee` présent, pris dans le jeton vendu, **montant ≤ montant vendu × 70 / 10 000** ; l'adresse de frais doit figurer dans la transaction. Le détail de l'action Settler qui paie les frais n'est pas décodé. | `to` et autorisation = AllowanceHolder `0x0000000000001fF3684f28c67538d4D072C22734` ; Settler appelé = celui du registre `0x00000000000004533Fe15556B1E086BB1A72cEae` (`ownerOf(2)` ou `prev(2)`) ; destinataire = toi, minimum ≥ annoncé − slippage. |
-| **LI.FI** (même chaîne) | Étape `FeeForwarder` (`0xCE40449B773a3E6E5e769ADb4e567179d4828cbd`, `0x79C3F5B651Ee5782Ba15d968B088458cd5f1f4EF` sur Mantle) décodée : un versement à `recipients.evm`, **= montant vendu × taux / 10 000** (à une unité près) ; total des frais de cette étape ≤ taux + 0,5 % (part de LI.FI comprise). | `to` et autorisation = Diamond `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` ; `_receiver` = toi, `_minAmountOut` ≥ annoncé − slippage ; première et dernière étapes = jetons et montant de la paire. |
-| **LI.FI entre chaînes, départ EVM** | Même étape `FeeForwarder`, dans le jeton envoyé. | Pont **NEAR Intents seul** (`allowBridges=near`) ; appel `swapAndStartBridgeTokensViaNEARIntents` (facette `NEARIntentsFacet`) décodé : chaîne d'arrivée, `BridgeData.receiver` = toi (EVM) ou `0x11f1…11F1` avec `nonEVMReceiver` = ta clé Solana / les 32 mots de ton adresse `bc1q`, pas d'appel à l'arrivée, remboursement vers toi, `minAmountOut` ≥ annoncé − slippage, token d'arrivée, étapes de départ cohérentes. Puis **NEAR Intents confirme l'adresse de dépôt** (`1click.chaindefuser.com/v0/status`) : destinataire = ton compte, remboursement vers toi, montant déposé, token et minimum. |
-| **LI.FI entre chaînes, départ Solana** | Transfert vers `recipients.solana` (SOL) ou son compte du jeton (SPL), **> 0 et ≤ montant vendu × 70 / 10 000**. | Transaction décodée par Rust, puis seuls sont acceptés : budget de calcul (priorité ≤ 0,01 SOL), une instruction de suivi LI.FI (`3i5JeuZuUxeKtVysUnwQNGerJP2bSMX9fTFfS4Nxe3Br`, qui ne déplace rien), des transferts **depuis ton compte du jeton vendu** vers les frais Kyro, les frais LI.FI (`34FKjAdVcTax2DHqV2XnbXa9J3zmyKcFuFKWbcmgxjgm`, ≤ 0,5 %) et **une** adresse de dépôt ; total = montant vendu exactement. Puis même confirmation par NEAR Intents. |
-| **NEAR Intents 1Click (direct)** | `appFees` renvoyé par 1Click, dans le devis puis dans `/v0/status` de l'adresse de dépôt : **exactement** le taux du devis vers `0x86cd…8b44`, une seule entrée, part de 1Click ≤ ce taux. | Aucune transaction tierce : 1Click donne une **adresse de dépôt à usage unique** liée (devis signé) à ton compte d'arrivée et à ton adresse de remboursement. Kyro exige `EXACT_INPUT`, dépôt `SIMPLE` (**pas de mémo, pas d'OP_RETURN, pas de tag**), destinataire = ton compte (`DESTINATION_CHAIN`), remboursement = ton adresse de départ (`ORIGIN_CHAIN`), montant = ta saisie, jetons demandés, minimum ≥ annoncé − slippage, adresse de dépôt ≠ la tienne, statut `PENDING_DEPOSIT` et au moins 2 h avant l'échéance (la plus proche entre celle de 1Click et les 3 h demandées par Kyro). Puis Kyro construit **lui-même** un envoi ordinaire de ce montant vers cette adresse avec l'adaptateur de la chaîne, et le contrôle (`depositTxProblem`) : un seul paiement vers l'adresse de dépôt (BTC/LTC/DOGE : le reste en monnaie, aucune sortie OP_RETURN ou script inconnu ; TRON : simple transfert TRX ou TRC-20 du bon contrat, sans mémo ; XRP : sans tag, mémo ni chemin, et refus si l'adresse exige un tag ; Cardano : ADA seul, sans message ; EVM / Solana : décodage Rust identique). 1Click est relu **juste avant de signer**. |
-| **Jupiter** | `platform_fee_bps` = le taux du devis et compte de frais = le compte attendu de `recipients.solana` (lus dans l'instruction de route). | Payeur et seul signataire = toi ; programmes autorisés seulement (budget de calcul, ATA, emballage SOL, une route Jupiter v6) ; comptes débité et crédité à toi ; montant et slippage ; frais de priorité ≤ 0,01 SOL. |
+| **0x** | `fees.integratorFee` present, taken in the sold token, **amount ≤ amount sold × 70 / 10,000**; the fee address must appear in the transaction. The detail of the Settler action that pays the fees is not decoded. | `to` and approval = AllowanceHolder `0x0000000000001fF3684f28c67538d4D072C22734`; Settler called = the one in the registry `0x00000000000004533Fe15556B1E086BB1A72cEae` (`ownerOf(2)` or `prev(2)`); recipient = you, minimum ≥ advertised − slippage. |
+| **LI.FI** (same chain) | `FeeForwarder` step (`0xCE40449B773a3E6E5e769ADb4e567179d4828cbd`, `0x79C3F5B651Ee5782Ba15d968B088458cd5f1f4EF` on Mantle) decoded: one payment to `recipients.evm`, **= amount sold × rate / 10,000** (to within one unit); total fees of this step ≤ rate + 0.5% (LI.FI's share included). | `to` and approval = Diamond `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`; `_receiver` = you, `_minAmountOut` ≥ advertised − slippage; first and last steps = the tokens and amount of the pair. |
+| **LI.FI cross-chain, EVM departure** | Same `FeeForwarder` step, in the token sent. | **NEAR Intents-only** bridge (`allowBridges=near`); call `swapAndStartBridgeTokensViaNEARIntents` (facet `NEARIntentsFacet`) decoded: destination chain, `BridgeData.receiver` = you (EVM) or `0x11f1…11F1` with `nonEVMReceiver` = your Solana key / the 32 words of your `bc1q` address, no call on arrival, refund to you, `minAmountOut` ≥ advertised − slippage, destination token, consistent departure steps. Then **NEAR Intents confirms the deposit address** (`1click.chaindefuser.com/v0/status`): recipient = your account, refund to you, deposited amount, token and minimum. |
+| **LI.FI cross-chain, Solana departure** | Transfer to `recipients.solana` (SOL) or its token account (SPL), **> 0 and ≤ amount sold × 70 / 10,000**. | Transaction decoded by Rust, then only these are accepted: compute budget (priority ≤ 0.01 SOL), one LI.FI tracking instruction (`3i5JeuZuUxeKtVysUnwQNGerJP2bSMX9fTFfS4Nxe3Br`, which moves nothing), transfers **from your account for the sold token** to the Kyro fees, the LI.FI fees (`34FKjAdVcTax2DHqV2XnbXa9J3zmyKcFuFKWbcmgxjgm`, ≤ 0.5%) and **one** deposit address; total = exactly the amount sold. Then the same NEAR Intents confirmation. |
+| **NEAR Intents 1Click (direct)** | `appFees` returned by 1Click, in the quote then in `/v0/status` of the deposit address: **exactly** the quote's rate to `0x86cd…8b44`, a single entry, 1Click's share ≤ this rate. | No third-party transaction: 1Click gives a **single-use deposit address** bound (signed quote) to your destination account and your refund address. Kyro requires `EXACT_INPUT`, `SIMPLE` deposit (**no memo, no OP_RETURN, no tag**), recipient = your account (`DESTINATION_CHAIN`), refund = your departure address (`ORIGIN_CHAIN`), amount = your input, requested tokens, minimum ≥ advertised − slippage, deposit address ≠ yours, status `PENDING_DEPOSIT` and at least 2 h before the deadline (the nearer of 1Click's and the 3 h requested by Kyro). Then Kyro builds **itself** an ordinary send of that amount to that address with the chain's adapter, and checks it (`depositTxProblem`): a single payment to the deposit address (BTC/LTC/DOGE: the rest as change, no OP_RETURN output or unknown script; TRON: simple TRX or TRC-20 transfer of the right contract, without memo; XRP: no tag, memo or path, and refusal if the address requires a tag; Cardano: ADA only, no message; EVM / Solana: identical Rust decoding). 1Click is re-read **right before signing**. |
+| **Jupiter** | `platform_fee_bps` = the quote's rate and fee account = the expected account of `recipients.solana` (read from the route instruction). | Payer and sole signer = you; authorized programs only (compute budget, ATA, SOL wrapping, one Jupiter v6 route); debited and credited accounts are yours; amount and slippage; priority fees ≤ 0.01 SOL. |
 
-Adresses relevées dans les dépôts officiels (0x : docs.0x.org et 0x-settler ; LI.FI : `lifinance/contracts`, `deployments/<chaîne>.json`) le 01/11/2026, identiques sur Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain et Avalanche, et présents on-chain (`eth_getCode` non vide) sur les nouvelles chaînes retenues :
+Addresses taken from the official repositories (0x: docs.0x.org and 0x-settler; LI.FI: `lifinance/contracts`, `deployments/<chain>.json`) on 2026-11-01, identical on Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain and Avalanche, and present on-chain (`eth_getCode` non-empty) on the newly added chains:
 
-- **0x** aussi sur Sonic (liste « Cancun » de docs.0x.org) et HyperEVM (liste « Cancun » du README de 0x-settler). **Pas Mantle** : docs.0x.org le donne avec l'AllowanceHolder « Shanghai » (`0x0000000000005E88410CcDFaDe4a5EfaE4b49562`, présent on-chain), mais 0x y désigne le MNT natif par `0xdeaddeaddeaddeaddeaddeaddeaddeaddead0000` au lieu de `0xEeee…`, et aucune vraie réponse 0x n'a pu être vérifiée (clé API) : non proposé plutôt que validé sans test. 0x ne sert ni Cronos, ni Gnosis, ni Sei, ni Flare, ni Kaia, ni Conflux eSpace (« Supported Chains » de docs.0x.org).
-- **LI.FI** aussi sur Cronos, Mantle, Sonic, Gnosis et Sei (même Diamond ; FeeForwarder propre à Mantle), et sur **Flare, HyperEVM et Kaia** avec leur propre Diamond et FeeForwarder (`LIFI_OTHER_DEPLOYMENTS`), relevés dans `deployments/<chaîne>.json` **et** identiques au `diamondAddress` de li.quest `/v1/chains` :
+- **0x** also on Sonic ("Cancun" list of docs.0x.org) and HyperEVM ("Cancun" list of the 0x-settler README). **Not Mantle**: docs.0x.org lists it with the "Shanghai" AllowanceHolder (`0x0000000000005E88410CcDFaDe4a5EfaE4b49562`, present on-chain), but 0x designates native MNT there by `0xdeaddeaddeaddeaddeaddeaddeaddeaddead0000` instead of `0xEeee…`, and no real 0x response could be verified (API key): not offered rather than validated without a test. 0x serves neither Cronos, nor Gnosis, nor Sei, nor Flare, nor Kaia, nor Conflux eSpace ("Supported Chains" of docs.0x.org).
+- **LI.FI** also on Cronos, Mantle, Sonic, Gnosis and Sei (same Diamond; FeeForwarder specific to Mantle), and on **Flare, HyperEVM and Kaia** with their own Diamond and FeeForwarder (`LIFI_OTHER_DEPLOYMENTS`), taken from `deployments/<chain>.json` **and** identical to the `diamondAddress` of li.quest `/v1/chains`:
 
-  | Chaîne | Diamond (`to` et autorisation) | FeeForwarder |
+  | Chain | Diamond (`to` and approval) | FeeForwarder |
   |---|---|---|
   | Flare (14) | `0x198FC70Dfe05E755C81e54bd67Bff3F729344B9b` | `0xA5971Bd73Dbb879aAaA6fEcB95Dc3fD50c2e3C25` |
   | HyperEVM (999) | `0x0a0758d937d1059c356D4714e57F5df0239bce1A` | `0xba072Bf218314E51d5c3d254800d799840ae6a25` |
   | Kaia (8217) | `0x1255d17c1BC2f764d087536410879F2d0D8772fD` | `0x5161370f81b3054f43361644Ad332625f5E0804F` |
 
-  `eth_getCode` (01/11/2026) : chaque Diamond a le code de 5 176 octets des autres Diamond, chaque FeeForwarder **exactement** le code du FeeForwarder par défaut. De vraies réponses li.quest sur Flare (FLR ⇄ USDT0) et HyperEVM (HYPE ⇄ USD₮0) sont acceptées telles quelles par le décodeur (`packages/swap/test/fixtures/lifi-flare-*.json`, `lifi-hyperevm-*.json`) ; Kaia n'avait aucune route à coter ce jour-là (« No available quotes »), ses adresses sont vérifiées mais son calldata ne l'a pas été en direct. **Pas Conflux eSpace** : ce n'est pas une chaîne LI.FI.
+  `eth_getCode` (2026-11-01): each Diamond has the same 5,176-byte code as the other Diamonds, each FeeForwarder **exactly** the code of the default FeeForwarder. Real li.quest responses on Flare (FLR ⇄ USDT0) and HyperEVM (HYPE ⇄ USD₮0) are accepted as-is by the decoder (`packages/swap/test/fixtures/lifi-flare-*.json`, `lifi-hyperevm-*.json`); Kaia had no route to quote that day ("No available quotes"), its addresses are verified but its calldata was not verified live. **Not Conflux eSpace**: it is not a LI.FI chain.
 
-Le sélecteur de chaîne du Swap ne montre que les chaînes EVM où au moins un de ces contrats est connu (`evmSwapSupported`) : toutes les chaînes EVM de Kyro sauf Conflux eSpace. Sur un autre réseau (testnet compris), aucun contrat n'est connu : les devis 0x et LI.FI sont refusés. Entre chaînes, une chaîne EVM n'est proposée que si NEAR Intents la sert (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche, Gnosis).
+The Swap chain selector only shows the EVM chains where at least one of these contracts is known (`evmSwapSupported`): all of Kyro's EVM chains except Conflux eSpace. On any other network (testnets included), no contract is known: 0x and LI.FI quotes are refused. Cross-chain, an EVM chain is only offered if NEAR Intents serves it (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche, Gnosis).
 
-## Ce qu'il faut configurer avant d'encaisser
+## What to configure before collecting
 
-Tant que ces réglages manquent, les fournisseurs concernés sont écartés, et aucun swap ne part sans frais.
+As long as these settings are missing, the providers concerned are dropped, and no swap goes out without fees.
 
-1. **`recipients.evm`** : ton adresse EVM. Elle reçoit les frais de 0x et de LI.FI sur toutes les chaînes EVM.
-2. **`recipients.solana`** : ton adresse Solana, **le portefeuille lui-même, pas un compte de jetons**. Il doit posséder un **compte de jetons initialisé** pour chaque mint de `solanaFeeMints`, sinon la transaction Jupiter échoue.
-   - Pour l'instant, c'est **USDC seul**. Le compte USDC de l'adresse configurée a été vérifié sur le réseau principal le 31/10/2026 : `CFPWYSxLRh79CobY4gLWzh15zgRgEgo2Cqb4e7gBQx7C`.
-   - Jupiter ne peut prendre les frais que dans un des deux jetons du swap. Une paire Solana **sans USDC** (par exemple SOL → BONK) ne peut donc pas porter les frais, et Jupiter ne fait pas de devis pour elle.
-   - Pour accepter aussi le SOL : crée le compte wSOL du portefeuille de frais (enveloppe un peu de SOL), puis ajoute le mint wSOL à `solanaFeeMints`.
-3. **LI.FI** : rien à faire. Kyro utilise `distributionFees`, qui verse les frais directement à `recipients.evm`, sans inscription sur portal.li.fi. Vérifié par un vrai devis le 31/10/2026 (Arbitrum, USDC → ETH) : LI.FI renvoie « Distributions 0,7 % » vers l'adresse configurée. À l'inverse, un nom d'intégrateur non enregistré est refusé par LI.FI (`code 1011`). Au départ de Solana, les frais vont à `recipients.solana` (SOL) ou à son compte du jeton vendu (vérifié le 01/11/2026 : SOL → ETH Arbitrum et USDC → USDC Base).
-4. **NEAR Intents** : rien à faire pour encaisser. Les frais s'accumulent sur le compte NEAR Intents `0x86cd9af8067ff5e0001c709a550cd62b5e968b44` (pas d'inscription, pas de clé API). Pour les récupérer, il faut **retirer** depuis ce compte avec la clé de `recipients.evm` (le compte n'existe que dans le registre `intents.near`, chaque jeton y reste tant qu'il n'est pas retiré). Changer `recipients.evm` change aussi ce compte.
-5. **THORName** (`thorname`) : vide. THORChain n'est **pas** utilisé (décision du propriétaire) ; ce serait un dernier recours.
+1. **`recipients.evm`**: your EVM address. It receives the 0x and LI.FI fees on all EVM chains.
+2. **`recipients.solana`**: your Solana address, **the wallet itself, not a token account**. It must own an **initialized token account** for each mint in `solanaFeeMints`, otherwise the Jupiter transaction fails.
+   - For now, this is **USDC only**. The USDC account of the configured address was verified on mainnet on 2026-10-31: `CFPWYSxLRh79CobY4gLWzh15zgRgEgo2Cqb4e7gBQx7C`.
+   - Jupiter can only take the fees in one of the swap's two tokens. A Solana pair **without USDC** (for example SOL → BONK) therefore cannot carry the fees, and Jupiter does not quote it.
+   - To also accept SOL: create the fee wallet's wSOL account (wrap a little SOL), then add the wSOL mint to `solanaFeeMints`.
+3. **LI.FI**: nothing to do. Kyro uses `distributionFees`, which pays the fees directly to `recipients.evm`, with no registration on portal.li.fi. Verified with a real quote on 2026-10-31 (Arbitrum, USDC → ETH): LI.FI returns "Distributions 0.7%" to the configured address. Conversely, an unregistered integrator name is refused by LI.FI (`code 1011`). When departing from Solana, the fees go to `recipients.solana` (SOL) or to its account for the sold token (verified on 2026-11-01: SOL → ETH Arbitrum and USDC → USDC Base).
+4. **NEAR Intents**: nothing to do to collect. The fees accumulate in the NEAR Intents account `0x86cd9af8067ff5e0001c709a550cd62b5e968b44` (no registration, no API key). To recover them, you must **withdraw** from that account with the key of `recipients.evm` (the account only exists in the `intents.near` registry, each token stays there until withdrawn). Changing `recipients.evm` also changes this account.
+5. **THORName** (`thorname`): empty. THORChain is **not** used (owner's decision); it would be a last resort.
 
-## Autres chaînes : ce qui passe par NEAR Intents, ce qui reste fermé
+## Other chains: what goes through NEAR Intents, what stays closed
 
-`fees.ts` contient aussi tes adresses Bitcoin (`bc1qta8e…aard`), Litecoin (`LWeP…vNyw`), Dogecoin (`DKCS…AU14`), TRON (`TT9j…51pES`), XRP (`rBxj…mSZf`, sans tag) et Cardano (`addr1qy9d…dj3`), chacune vérifiée au chargement (format et somme de contrôle ; une adresse fausse écarte la route, jamais de swap sans frais). **Elles ne reçoivent aucun frais aujourd'hui** : aucun mécanisme officiel ne verse une commission d'intégrateur à une adresse de ces chaînes. Les départs de ces chaînes passent par **NEAR Intents 1Click**, qui paie la commission (dans le jeton déposé) au compte NEAR Intents de `recipients.evm` (voir « Par route »).
+`fees.ts` also contains your Bitcoin (`bc1qta8e…aard`), Litecoin (`LWeP…vNyw`), Dogecoin (`DKCS…AU14`), TRON (`TT9j…51pES`), XRP (`rBxj…mSZf`, no tag) and Cardano (`addr1qy9d…dj3`) addresses, each verified at load time (format and checksum; a wrong address drops the route, never a swap without fees). **They receive no fees today**: no official mechanism pays an integrator commission to an address on these chains. Departures from these chains go through **NEAR Intents 1Click**, which pays the commission (in the deposited token) to the NEAR Intents account of `recipients.evm` (see "Per route").
 
-Pourquoi pas un autre fournisseur :
+Why not another provider:
 
-- **LI.FI** : `distributionFees` n'est pas pris en charge au départ de Bitcoin (« distributionFees not supported on chain 20000000000001 », vrai devis du 01/11/2026). Litecoin, Dogecoin, XRP et Cardano ne sont pas des chaînes LI.FI. Au départ de TRON, LI.FI accepte les frais mais **exige un bénéficiaire au format EVM** (« not a valid EVM address for chain 728126428 ») : les frais (en USDT) iraient à l'adresse TRON de la clé de `0x86cD…`, pas à `TT9j…`. Non activé (NEAR Intents couvre TRON).
-- **THORChain** : écarté par le propriétaire. Ses frais d'affilié vont à un **THORName** ; ce serait un dernier recours si NEAR Intents cessait de servir une chaîne.
+- **LI.FI**: `distributionFees` is not supported when departing from Bitcoin ("distributionFees not supported on chain 20000000000001", real quote of 2026-11-01). Litecoin, Dogecoin, XRP and Cardano are not LI.FI chains. When departing from TRON, LI.FI accepts the fees but **requires a recipient in EVM format** ("not a valid EVM address for chain 728126428"): the fees (in USDT) would go to the TRON address of the key of `0x86cD…`, not to `TT9j…`. Not enabled (NEAR Intents covers TRON).
+- **THORChain**: ruled out by the owner. Its affiliate fees go to a **THORName**; it would be a last resort if NEAR Intents stopped serving a chain.
 
-Limites des routes NEAR Intents :
+Limits of the NEAR Intents routes:
 
-- **Cardano** : ADA seulement (1Click ne liste pas les jetons natifs Cardano).
-- **Bitcoin Cash, Dash, Zcash, Sui, TON, Aptos** : la monnaie native seulement (Kyro n'y gère pas de jetons). Zcash : adresses transparentes (`t1…`), jamais une adresse TEX ni blindée. TON : la monnaie s'appelle maintenant **Gram** chez 1Click (`GRAM`, actif `nep245:v2_1.omni.hot.tg:1117_`).
-- **Stellar** : arrivée seulement (1Click exige un mémo au départ de Stellar).
-- **Pas de route** pour NEAR (1Click ne connaît que le wNEAR, un jeton NEP-141 que Kyro ne gère pas), Hedera, Kaspa, Polkadot, Algorand, Monero, Cosmos Hub, ni pour Cronos, Mantle, Sonic, Sei, Flare, Kaia, HyperEVM et Conflux eSpace entre chaînes (absents de `/v0/tokens` au 01/11/2026 ; « hypercore » n'est pas HyperEVM).
-- **XRP** : XRP seulement (pas de jetons émis) ; refus si l'adresse de dépôt exige un tag.
-- **Minimums** de 1Click (par exemple 100 $ au départ de TRON au 01/11/2026) : en dessous, pas de devis.
-- **Coût pour l'utilisateur** : le taux Kyro **plus** autant pour 1Click (sa moitié du partage), soit le double retenu sur le dépôt (ex. 0,9 % + 0,9 % à 1 000 $), déjà déduit du montant reçu affiché.
+- **Cardano**: ADA only (1Click does not list native Cardano tokens).
+- **Bitcoin Cash, Dash, Zcash, Sui, TON, Aptos**: native currency only (Kyro does not handle tokens there). Zcash: transparent addresses (`t1…`), never a TEX or shielded address. TON: the currency is now called **Gram** at 1Click (`GRAM`, asset `nep245:v2_1.omni.hot.tg:1117_`).
+- **Stellar**: destination only (1Click requires a memo when departing from Stellar).
+- **No route** for NEAR (1Click only knows wNEAR, a NEP-141 token that Kyro does not handle), Hedera, Kaspa, Polkadot, Algorand, Monero, Cosmos Hub, nor for Cronos, Mantle, Sonic, Sei, Flare, Kaia, HyperEVM and Conflux eSpace cross-chain (absent from `/v0/tokens` as of 2026-11-01; "hypercore" is not HyperEVM).
+- **XRP**: XRP only (no issued tokens); refused if the deposit address requires a tag.
+- 1Click **minimums** (for example $100 when departing from TRON as of 2026-11-01): below that, no quote.
+- **Cost to the user**: the Kyro rate **plus** the same for 1Click (its half of the split), i.e. double withheld on the deposit (e.g. 0.9% + 0.9% at $1,000), already deducted from the displayed received amount.
 
-## Chaînes × fournisseurs (01/11/2026)
+## Chains × providers (2026-11-01)
 
-| Chaîne | Même chaîne | Entre chaînes (départ et arrivée) |
+| Chain | Same chain | Cross-chain (departure and destination) |
 |---|---|---|
-| Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche | 0x, LI.FI | LI.FI (pont NEAR Intents) vers EVM servies / Solana / Bitcoin ; 1Click vers les autres chaînes ci-dessous |
+| Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche | 0x, LI.FI | LI.FI (NEAR Intents bridge) to served EVM chains / Solana / Bitcoin; 1Click to the other chains below |
 | Sonic, HyperEVM | 0x, LI.FI | — |
 | Cronos, Mantle, Sei, Flare, Kaia | LI.FI | — |
-| Gnosis | LI.FI | LI.FI (pont NEAR Intents) vers EVM servies / Solana / Bitcoin ; 1Click vers les autres |
+| Gnosis | LI.FI | LI.FI (NEAR Intents bridge) to served EVM chains / Solana / Bitcoin; 1Click to the others |
 | Conflux eSpace | — | — |
-| Solana | Jupiter | LI.FI vers EVM servies / Bitcoin ; 1Click vers les autres |
-| Bitcoin | — | 1Click (départ) ; LI.FI ou 1Click (arrivée) |
+| Solana | Jupiter | LI.FI to served EVM chains / Bitcoin; 1Click to the others |
+| Bitcoin | — | 1Click (departure); LI.FI or 1Click (destination) |
 | Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, XRP, Cardano, Sui, TON, Aptos | — | 1Click |
 | TRON | 1Click (TRX ⇄ USDT) | 1Click |
-| Stellar | — | 1Click, **arrivée seulement** |
+| Stellar | — | 1Click, **destination only** |
 | NEAR, Hedera, Kaspa, Polkadot, Algorand, Monero, Cosmos Hub | — | — |
 
-## 1inch : retiré
+## 1inch: removed
 
-1inch ne verse les frais partenaires que sur une **offre payante** : sur l'offre gratuite, il reçoit `fee` et `referrer` mais les ignore sans erreur, si bien que le swap passerait sans commission. Comme il n'existe pas d'autre mécanisme officiel, et que Kyro n'ajoute jamais de transfert lui-même, 1inch a été retiré (fournisseur, clé API, hôte `api.1inch.dev` de l'allowlist). 0x et LI.FI couvrent l'EVM.
+1inch only pays partner fees on a **paid plan**: on the free plan, it receives `fee` and `referrer` but ignores them without error, so the swap would go through with no commission. Since there is no other official mechanism, and Kyro never adds a transfer itself, 1inch was removed (provider, API key, host `api.1inch.dev` from the allowlist). 0x and LI.FI cover EVM.
 
-## Ce que les fournisseurs prennent eux-mêmes
+## What the providers take themselves
 
-Ce sont les frais propres à chaque fournisseur, en plus de ceux de Kyro et sans aucun lien avec eux. Ils sont déjà compris dans le prix annoncé ou dans les frais réseau affichés.
+These are each provider's own fees, on top of Kyro's and entirely unrelated to them. They are already included in the advertised price or in the network fees shown.
 
-- **0x** : 0,15 % sur certaines paires (offre Standard), renvoyés dans `fees.zeroExFee`. Le gain de slippage positif revient à 0x, sauf sur offre personnalisée.
-- **LI.FI** : 0,25 % de frais de service, prélevés en plus de la commission Kyro.
-- **Jupiter (Metis)** : aucune part des frais de plateforme annoncée.
-- **NEAR Intents 1Click** : sa moitié des `appFees` (autant que le taux Kyro, renvoyée dans le devis et déjà déduite du montant reçu), plus le protocole (0,0001 %) ; si le swap est exécuté à un meilleur prix que le devis, l'écart est partagé avec 1Click. En cas de remboursement, 1Click retient `refundFee` (frais réseau du renvoi).
+- **0x**: 0.15% on some pairs (Standard plan), returned in `fees.zeroExFee`. Positive slippage gains go to 0x, except on a custom plan.
+- **LI.FI**: 0.25% service fee, taken in addition to the Kyro commission.
+- **Jupiter (Metis)**: no share of the platform fees advertised.
+- **NEAR Intents 1Click**: its half of the `appFees` (as much as the Kyro rate, returned in the quote and already deducted from the received amount), plus the protocol (0.0001%); if the swap is executed at a better price than the quote, the difference is shared with 1Click. In case of a refund, 1Click withholds `refundFee` (network fees of the return).
 
-## Non vérifié à ce jour
+## Not verified to date
 
-- **Aucun swap réel n'a été envoyé** : tout est testé contre des réponses simulées, plus de vraies réponses li.quest (six sur une même chaîne dont quatre sur Flare et HyperEVM, cinq entre chaînes avec le statut 1Click de leur dépôt), seize vrais devis 1Click en direct avec le statut de leur adresse de dépôt, et deux vraies transactions Jupiter (01/11/2026, non signés) que le décodeur accepte tels quels. Les agrégateurs et les ponts ne fonctionnent pas sur testnet.
-- **NEAR Intents en direct** : le versement effectif de la commission au compte `0x86cd…8b44` n'a pas été observé (il faudrait un vrai dépôt) ; Kyro vérifie seulement ce que 1Click s'engage à faire dans son devis signé et son statut. Le partage 50/50 sans clé API est observé en direct, alors que la doc décrit « commission + 25 bps » sans clé : Kyro s'adapte (une seule nouvelle demande) mais n'accepte jamais une part différente du taux demandé. La signature ed25519 des devis 1Click n'est pas vérifiée par Kyro (la réponse arrive en HTTPS de l'hôte allowlisté et est relue par `/v0/status`).
-- **Entre chaînes** : la livraison à l'arrivée dépend du réseau de solveurs de NEAR Intents (remboursement sur l'adresse de départ s'il échoue). Kyro vérifie ce qui est signé et ce que le pont s'engage à faire, pas la livraison. LI.FI applique le slippage à **chaque** étape (swap de départ puis pont) : Kyro demande la moitié du slippage choisi par étape, puis exige que le minimum du pont respecte le slippage choisi. L'adresse du portefeuille de frais LI.FI sur Solana (`34FK…xjgm`) n'est pas documentée par LI.FI : relevée dans les vraies transactions ; si elle change, les départs Solana sont refusés jusqu'à mise à jour.
-- **0x** : le décodage n'a pas été confronté à une vraie réponse (clé API nécessaire) ; il suit les interfaces publiées (`IAllowanceHolder.exec`, `ISettlerTakerSubmitted.execute`). Une vente de jeton natif dont `transaction.to` ne serait pas AllowanceHolder est refusée (comportement non documenté par 0x), tout comme un échange ETH ⇄ WETH (adressé directement au contrat WETH).
-- **0x** : la documentation ne dit pas noir sur blanc si `buyAmount` est déjà net des frais intégrateur. Kyro prélève les frais sur le jeton vendu : le montant annoncé correspond à ce qui est réellement échangé.
-- **Jupiter** : la doc de Metis le déclare désormais « plus maintenu », remplacé par Swap V2 (`api.jup.ag/swap/v2`), et `lite-api.jup.ag` est retiré petit à petit. Migrer change d'hôte, donc il faudra mettre à jour en même temps l'allowlist, `NETWORK.md` et `IPC.md`.
+- **No real swap has been sent**: everything is tested against simulated responses, plus real li.quest responses (six on the same chain, four of them on Flare and HyperEVM, five cross-chain with the 1Click status of their deposit), sixteen real direct 1Click quotes with the status of their deposit address, and two real Jupiter transactions (2026-11-01, unsigned) that the decoder accepts as-is. Aggregators and bridges do not work on testnet.
+- **NEAR Intents live**: the actual payment of the commission to the account `0x86cd…8b44` has not been observed (it would take a real deposit); Kyro only verifies what 1Click commits to in its signed quote and its status. The 50/50 split without an API key is observed live, whereas the docs describe "commission + 25 bps" without a key: Kyro adapts (a single new request) but never accepts a share different from the requested rate. The ed25519 signature of the 1Click quotes is not verified by Kyro (the response arrives over HTTPS from the allowlisted host and is re-read through `/v0/status`).
+- **Cross-chain**: delivery on arrival depends on NEAR Intents' solver network (refund to the departure address if it fails). Kyro verifies what is signed and what the bridge commits to, not the delivery. LI.FI applies slippage at **each** step (departure swap then bridge): Kyro requests half of the chosen slippage per step, then requires the bridge minimum to respect the chosen slippage. The address of the LI.FI fee wallet on Solana (`34FK…xjgm`) is not documented by LI.FI: taken from real transactions; if it changes, Solana departures are refused until updated.
+- **0x**: the decoding has not been confronted with a real response (API key required); it follows the published interfaces (`IAllowanceHolder.exec`, `ISettlerTakerSubmitted.execute`). A native-token sale whose `transaction.to` is not AllowanceHolder is refused (behavior not documented by 0x), as is an ETH ⇄ WETH exchange (addressed directly to the WETH contract).
+- **0x**: the documentation does not say in so many words whether `buyAmount` is already net of the integrator fees. Kyro takes the fees from the sold token: the advertised amount corresponds to what is actually exchanged.
+- **Jupiter**: Metis's docs now declare it "no longer maintained", replaced by Swap V2 (`api.jup.ag/swap/v2`), and `lite-api.jup.ag` is being phased out. Migrating changes the host, so the allowlist, `NETWORK.md` and `IPC.md` will have to be updated at the same time.

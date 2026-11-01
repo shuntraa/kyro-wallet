@@ -1,71 +1,71 @@
-# Publier une version de Kyro
+# Releasing a Kyro version
 
-Les wallets installés se mettent à jour seuls depuis les releases GitHub de
-`shuntraa/kyro-wallet` (voir SECURITY.md « Mises à jour automatiques »). Ils n'installent
-qu'un paquet **signé par la clé de mise à jour de Kyro** et plus récent que la version en cours.
+Installed wallets update themselves from the GitHub releases of
+`shuntraa/kyro-wallet` (see SECURITY.md "Automatic updates"). They only install
+a package **signed by Kyro's update key** and newer than the running version.
 
-## 1. La clé de signature (une seule fois)
+## 1. The signing key (one time only)
 
-Générée avec la CLI Tauri, sans mot de passe :
+Generated with the Tauri CLI, without a password:
 
 ```sh
 cd apps/desktop
-pnpm tauri signer generate --ci -w "C:\Users\<toi>\.tauri\kyro-updater.key"
+pnpm tauri signer generate --ci -w "C:\Users\<you>\.tauri\kyro-updater.key"
 ```
 
-- `kyro-updater.key` : clé **privée**. Jamais dans le dépôt, jamais affichée, gardée hors ligne
-  (copie de sauvegarde). La perdre = les wallets installés ne peuvent plus recevoir de mise à
-  jour (il faudrait réinstaller à la main une version portant une nouvelle clé publique).
-- `kyro-updater.key.pub` : clé **publique**, recopiée telle quelle (le texte base64 du fichier)
-  dans `apps/desktop/src-tauri/tauri.conf.json` → `plugins.updater.pubkey`. Elle est compilée
-  dans le binaire : changer de clé exige une version signée par l'**ancienne** clé qui embarque
-  la nouvelle.
+- `kyro-updater.key`: **private** key. Never in the repository, never displayed, kept offline
+  (backup copy). Losing it = installed wallets can no longer receive updates
+  (a version carrying a new public key would have to be reinstalled by hand).
+- `kyro-updater.key.pub`: **public** key, copied as-is (the base64 text of the file)
+  into `apps/desktop/src-tauri/tauri.conf.json` → `plugins.updater.pubkey`. It is compiled
+  into the binary: changing the key requires a version signed by the **old** key that embeds
+  the new one.
 
-Clé actuelle : générée le 01/11/2026, privée dans `C:\Users\<you>\.tauri\kyro-updater.key`.
+Current key: generated on 2026-11-01, private key in `C:\Users\<you>\.tauri\kyro-updater.key`.
 
-## 2. Secrets GitHub
+## 2. GitHub secrets
 
-Dépôt → *Settings* → *Secrets and variables* → *Actions* → *New repository secret* :
+Repository → *Settings* → *Secrets and variables* → *Actions* → *New repository secret*:
 
-| Secret | Valeur |
+| Secret | Value |
 |---|---|
-| `TAURI_SIGNING_PRIVATE_KEY` | le **contenu** du fichier `kyro-updater.key` (une ligne base64) |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | la clé actuelle n'a **pas** de mot de passe : ne pas créer ce secret (GitHub refuse une valeur vide ; un secret absent vaut `''` dans le job). À créer seulement si la clé est un jour régénérée avec un mot de passe |
+| `TAURI_SIGNING_PRIVATE_KEY` | the **contents** of the `kyro-updater.key` file (a single base64 line) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | the current key has **no** password: do not create this secret (GitHub refuses an empty value; a missing secret equals `''` in the job). Create it only if the key is ever regenerated with a password |
 
-`GITHUB_TOKEN` est fourni par Actions (le job a besoin de `permissions: contents: write`).
+`GITHUB_TOKEN` is provided by Actions (the job needs `permissions: contents: write`).
 
-## 3. Ce que le build produit
+## 3. What the build produces
 
-`tauri.conf.json` → `bundle.createUpdaterArtifacts: true` : chaque build signe, à côté des
-installeurs, le paquet de mise à jour de sa plateforme :
+`tauri.conf.json` → `bundle.createUpdaterArtifacts: true`: each build signs, alongside the
+installers, the update package for its platform:
 
-| Plateforme | Paquet | Clé de `latest.json` lue par Kyro |
+| Platform | Package | `latest.json` key read by Kyro |
 |---|---|---|
-| Windows | `Kyro_X.Y.Z_x64-setup.exe` + `.sig` (NSIS, installé en mode passif / silencieux) | `windows-x86_64-nsis`, sinon `windows-x86_64` |
-| macOS | `Kyro_<arch>.app.tar.gz` + `.sig` | `darwin-aarch64-app` / `darwin-x86_64-app`, sinon `darwin-<arch>` |
-| Linux | `Kyro_X.Y.Z_amd64.AppImage` + `.sig` | `linux-x86_64-appimage`, sinon `linux-x86_64` |
+| Windows | `Kyro_X.Y.Z_x64-setup.exe` + `.sig` (NSIS, installed in passive / silent mode) | `windows-x86_64-nsis`, otherwise `windows-x86_64` |
+| macOS | `Kyro_<arch>.app.tar.gz` + `.sig` | `darwin-aarch64-app` / `darwin-x86_64-app`, otherwise `darwin-<arch>` |
+| Linux | `Kyro_X.Y.Z_amd64.AppImage` + `.sig` | `linux-x86_64-appimage`, otherwise `linux-x86_64` |
 
-Kyro refuse un paquet d'un autre type que son installation (`.msi`, `.deb`, `.dmg`…), une URL
-hors de `https://github.com/shuntraa/kyro-wallet/releases/download/`, et une version qui n'est
-pas strictement plus récente.
+Kyro refuses a package of a type other than its installation (`.msi`, `.deb`, `.dmg`…), a URL
+outside `https://github.com/shuntraa/kyro-wallet/releases/download/`, and a version that is
+not strictly newer.
 
-Build local **sans** la clé (développement) : la CLI refuse de signer ; désactiver les artefacts
-de mise à jour pour ce build :
+Local build **without** the key (development): the CLI refuses to sign; disable the update
+artifacts for this build:
 
 ```sh
 pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
 ```
 
-## 4. Publier
+## 4. Publishing
 
-1. Monter la version partout (même numéro) : `apps/desktop/src-tauri/tauri.conf.json`
+1. Bump the version everywhere (same number): `apps/desktop/src-tauri/tauri.conf.json`
    (`version`), `Cargo.toml` (`workspace.package.version`), `apps/desktop/package.json`.
-2. Tag `vX.Y.Z` poussé → le job ci-dessous construit les 3 plateformes, signe, crée la release
-   en **brouillon** avec les paquets, les `.sig` et `latest.json`.
-3. Vérifier le brouillon (fichiers, `latest.json`), puis **publier** la release : c'est ce qui la
-   rend « latest » et la fait installer par les wallets (une pré-release n'est jamais prise).
+2. Push tag `vX.Y.Z` → the job below builds the 3 platforms, signs, and creates the release
+   as a **draft** with the packages, the `.sig` files and `latest.json`.
+3. Check the draft (files, `latest.json`), then **publish** the release: this is what
+   makes it "latest" and gets it installed by wallets (a pre-release is never picked up).
 
-## 5. Job GitHub Actions (à fusionner dans `.github/workflows/release.yml`)
+## 5. GitHub Actions job (to merge into `.github/workflows/release.yml`)
 
 ```yaml
 on:
@@ -127,15 +127,15 @@ jobs:
           args: ${{ matrix.args }}
 ```
 
-`tauri-action` fusionne le `latest.json` des 4 jobs dans la même release. Épingler l'action sur
-un SHA de commit vérifié avant de fusionner (règle du projet pour les dépendances).
+`tauri-action` merges the `latest.json` of the 4 jobs into the same release. Pin the action to
+a verified commit SHA before merging (project rule for dependencies).
 
-## 6. Vérifier après publication
+## 6. Verifying after publication
 
 ```sh
 curl -sL https://github.com/shuntraa/kyro-wallet/releases/latest/download/latest.json
 ```
 
-doit montrer la nouvelle version et une entrée par plateforme. Un wallet installé l'applique à
-sa prochaine fermeture (vérification ≈ 45 s après son lancement), et affiche « Kyro a été mis à
-jour en version X.Y.Z » au démarrage suivant.
+must show the new version and one entry per platform. An installed wallet applies it on its
+next close (check ≈ 45 s after launch), and shows "Kyro updated to X.Y.Z." at the
+following startup.

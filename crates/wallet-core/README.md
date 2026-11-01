@@ -1,41 +1,41 @@
 # wallet-core
 
-Cœur cryptographique de Kyro, en Rust pur. Licence GPL-3.0-or-later. Le contrat public est dans `docs/IPC.md` §1.
+Kyro's cryptographic core, in pure Rust. License GPL-3.0-or-later. The public contract is in `docs/IPC.md` §1.
 
-## Ce qu'il fait
+## What it does
 
-- **Phrase de récupération BIP39** (anglais, 12 ou 24 mots, OsRng) : génération, validation du checksum, calcul de la seed.
-- **Coffre chiffré** : Argon2id (256 Mio, t=3, p=4) → XChaCha20-Poly1305. Le sel et le nonce sont aléatoires ; l'en-tête (version, paramètres KDF, sel) est authentifié via l'AAD. Sérialisé en JSON avec des champs base64.
-- **Bitcoin** : comptes BIP84 (P2WPKH) et BIP86 (P2TR), xpub, adresses, signature PSBT et résumé (sorties, monnaie rendue, frais).
-- **EVM** : adresse `m/44'/60'/0'/0/i` (EIP-55), signature EIP-1559 (type 2), décodage des transferts natifs, des appels ERC-20 `transfer`/`approve` (avec détection des approbations illimitées) et des autres appels de contrat.
-- **Solana** : dérivation SLIP-10 ed25519 `m/44'/501'/i'/0'` (même convention que Phantom et Solflare), signature ed25519 d'un message de transaction.
-- **Décodage Solana** (legacy et v0, tables d'adresses) : transferts SOL et SPL/Token-2022, délégations, comptes token associés, frais prioritaires, mémos. Ce qui n'est pas reconnu est signalé et exige une confirmation de plus. Vérifié sur de vraies transactions devnet et comparé à la crate de référence `solana-message` (en dev-dependency seulement).
+- **BIP39 recovery phrase** (English, 12 or 24 words, OsRng): generation, checksum validation, seed computation.
+- **Encrypted vault**: Argon2id (256 MiB, t=3, p=4) → XChaCha20-Poly1305. The salt and nonce are random; the header (version, KDF parameters, salt) is authenticated via the AAD. Serialized as JSON with base64 fields.
+- **Bitcoin**: BIP84 (P2WPKH) and BIP86 (P2TR) accounts, xpub, addresses, PSBT signing and summary (outputs, change, fees).
+- **EVM**: address `m/44'/60'/0'/0/i` (EIP-55), EIP-1559 (type 2) signing, decoding of native transfers, of ERC-20 `transfer`/`approve` calls (with detection of unlimited approvals) and of other contract calls.
+- **Solana**: SLIP-10 ed25519 derivation `m/44'/501'/i'/0'` (same convention as Phantom and Solflare), ed25519 signature of a transaction message.
+- **Solana decoding** (legacy and v0, address tables): SOL and SPL/Token-2022 transfers, delegations, associated token accounts, priority fees, memos. Anything not recognized is flagged and requires one more confirmation. Verified on real devnet transactions and compared with the reference crate `solana-message` (as a dev-dependency only).
 
-## Ce qu'il ne fait jamais
+## What it never does
 
-- Aucun accès réseau ni fichier, pas d'async, pas de Tauri. La crate est purement synchrone.
-- Aucune crypto maison : on utilise uniquement `bip39`, `bitcoin`/`secp256k1` (libsecp256k1, aussi pour l'EVM), `sha3` (Keccak), `alloy-rlp`, `uint`, `ed25519-dalek`, `ed25519-dalek-bip32`, `argon2` et `chacha20poly1305`.
-- Aucun secret dans les logs : les `Debug` sont masqués, et les clés sont dérivées à chaque appel puis effacées (`zeroize`).
-- Aucune panique sur une entrée utilisateur : chaque erreur remonte comme `wallet_core::Error`.
-- Ne signe pas les PSBT trop permissives : un input n'est signé que si les conditions suivantes sont toutes remplies :
-  - son empreinte et son chemin correspondent à ce portefeuille et au réseau ;
-  - la clé dérivée correspond au script ;
-  - le sighash vaut ALL ou DEFAULT.
+- No network or file access, no async, no Tauri. The crate is purely synchronous.
+- No home-made crypto: only `bip39`, `bitcoin`/`secp256k1` (libsecp256k1, also for EVM), `sha3` (Keccak), `alloy-rlp`, `uint`, `ed25519-dalek`, `ed25519-dalek-bip32`, `argon2` and `chacha20poly1305` are used.
+- No secrets in logs: `Debug` output is masked, and keys are derived on each call then erased (`zeroize`).
+- No panic on user input: every error is surfaced as `wallet_core::Error`.
+- Does not sign overly permissive PSBTs: an input is signed only if all of the following conditions are met:
+  - its fingerprint and path match this wallet and the network;
+  - the derived key matches the script;
+  - the sighash is ALL or DEFAULT.
 
-  Les arbres de scripts Taproot sont refusés.
+  Taproot script trees are rejected.
 
 ## Tests
 
 ```sh
 cargo test   --manifest-path crates/wallet-core/Cargo.toml
 cargo clippy --manifest-path crates/wallet-core/Cargo.toml --all-targets -- -D warnings
-cargo test   --manifest-path crates/wallet-core/Cargo.toml --release -- --ignored  # Argon2 en paramètres de production
+cargo test   --manifest-path crates/wallet-core/Cargo.toml --release -- --ignored  # Argon2 with production parameters
 ```
 
-Les tests utilisent les vecteurs officiels suivants :
-- BIP39 (Trezor) ;
-- BIP32 (vecteurs 1 et 2) ;
-- BIP84 et BIP86 ;
+The tests use the following official vectors:
+- BIP39 (Trezor);
+- BIP32 (vectors 1 and 2);
+- BIP84 and BIP86;
 - SLIP-10 ed25519.
 
-S'y ajoutent l'adresse EVM et l'adresse Solana de la phrase « abandon … about », ainsi que des allers-retours de signature EIP-1559 et PSBT (vérifiés par récupération de clé ou par vérification secp256k1) et des tests de falsification du coffre.
+Added to these are the EVM address and Solana address of the "abandon … about" phrase, as well as EIP-1559 and PSBT signing round trips (verified by key recovery or by secp256k1 verification) and vault tampering tests.

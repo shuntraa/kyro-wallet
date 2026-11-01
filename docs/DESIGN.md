@@ -1,125 +1,125 @@
-# Kyro Wallet — identité visuelle
+# Kyro Wallet — visual identity
 
-## Le nom
+## The name
 
-**Kyro**, du grec *kruos*, « le froid ». Clin d'œil au *cold storage* : tes clés restent au froid, hors ligne, chez toi. Le produit s'appelle **Kyro Wallet** ; dans le logo, « kyro » est en gras et « wallet » en plus léger.
+**Kyro**, from the Greek *kruos*, "the cold". A nod to *cold storage*: your keys stay cold, offline, at your place. The product is called **Kyro Wallet**; in the logo, "kyro" is bold and "wallet" is lighter.
 
-Signature : **« Tes clés restent au froid. »**
+Tagline: **"Your keys stay cold."**
 
 ## Direction
 
-- **Sombre en permanence.** Pas de thème clair : un coffre, c'est noir. Toute l'interface est pensée pour un fond quasi noir.
-- **Un instrument de froid, pas un tableau de bord.** Encre bleu-noir, filets fins plutôt qu'une carte autour de tout, chiffres tabulaires, libellés en texte normal. Le solde et les courbes reposent sur la page, sur une ligne de base.
-- **Un seul accent.** Le **bleu givre** (`#7CC4FF`) est réservé à la sélection, aux courbes et à ce qu'il faut vérifier (blocs d'adresse, reçu de vérification). L'action principale est en **blanc givré** (`#E4ECF3`, texte encre) ; tout le reste est un contour discret.
-- **Courbes arrondies** : tous les graphiques passent par une interpolation Catmull-Rom → Bézier (aucun angle), avec un voile givre très léger sous la ligne.
-- **Une vraie application desktop**, pas une page web : barre de titre intégrée, rail de navigation, barre d'état en bas (synchronisation, blocs, latence RPC, testnet, version).
-- **« En clair ».** Chaque action sensible (envoi, swap, autorisation) est résumée en une phrase avant la signature.
+- **Dark, always.** No light theme: a vault is black. The whole interface is designed for a near-black background.
+- **An instrument of cold, not a dashboard.** Blue-black ink, fine rules rather than a card around everything, tabular figures, labels in normal text. The balance and the curves rest on the page, on a baseline.
+- **A single accent.** **Frost blue** (`#7CC4FF`) is reserved for selection, curves and whatever needs checking (address blocks, verification receipt). The primary action is **frosted white** (`#E4ECF3`, ink text); everything else is a discreet outline.
+- **Rounded curves**: all charts go through a Catmull-Rom → Bézier interpolation (no angles), with a very light frost veil under the line.
+- **A real desktop application**, not a web page: integrated title bar, navigation rail, status bar at the bottom (sync, blocks, RPC latency, testnet, version).
+- **"In plain words".** Every sensitive action (send, swap, approval) is summarized in one sentence before signing.
 
-## Mise en page
+## Layout
 
-| Zone | Contenu |
+| Zone | Content |
 |---|---|
-| Barre de titre (40 px) | logo, compte actif, recherche `Ctrl K`, boutons de fenêtre |
-| Rail (84 px) | Portefeuille, Actifs, Swap, Historique · en bas : Réglages, verrouiller |
-| Contenu | écran courant ; Envoyer et Recevoir s'ouvrent depuis le Portefeuille avec un bouton retour |
-| Barre d'état (28 px) | état réseau en `Geist Mono`, badge TESTNET, version |
+| Title bar (40 px) | logo, active account, `Ctrl K` search, window buttons |
+| Rail (84 px) | Wallet, Assets, Swap, History · at the bottom: Settings, lock |
+| Content | current screen; Send and Receive open from the Wallet with a back button |
+| Status bar (28 px) | network status in `Geist Mono`, TESTNET badge, version |
 
-Fenêtre de référence : **1440 × 900**. Taille minimale prévue : 1100 × 720.
+Reference window: **1440 × 900**. Planned minimum size: 1100 × 720.
 
-## Comportement « app » (obligatoire)
+## "App" behavior (mandatory)
 
-- **Aucun texte sélectionnable** : `user-select: none` sur toute l'interface, sauf dans les champs de saisie.
-- **Aucun surlignage bleu** : `::selection` transparent, `-webkit-tap-highlight-color: transparent`, pas de menu « copier » à l'appui long (`-webkit-touch-callout: none`).
-- **Pas de glisser-déposer** des images et icônes (`-webkit-user-drag: none`).
-- **Clic droit désactivé** hors des champs (côté Tauri : `contextmenu` bloqué).
-- **Copie uniquement via les boutons « Copier »**, qui passent par le noyau Rust (et l'alerte presse-papier).
-- Focus clavier visible uniquement à la navigation au clavier (`:focus-visible`, contour bleu givre 2 px).
+- **No selectable text**: `user-select: none` on the whole interface, except in input fields.
+- **No blue highlight**: transparent `::selection`, `-webkit-tap-highlight-color: transparent`, no "copy" menu on long press (`-webkit-touch-callout: none`).
+- **No drag and drop** of images and icons (`-webkit-user-drag: none`).
+- **Right click disabled** outside fields (Tauri side: `contextmenu` blocked).
+- **Copy only via the "Copy" buttons**, which go through the Rust core (and the clipboard alert).
+- Keyboard focus visible only during keyboard navigation (`:focus-visible`, 2 px frost blue outline).
 
 ## Logo
 
-- **Anneau ouvert** : le code est ouvert.
-- **Carré bleu givre au centre** : ta clé, qui ne sort jamais de l'anneau.
+- **Open ring**: the code is open.
+- **Frost blue square at the center**: your key, which never leaves the ring.
 
-| Fichier ([`brand/`](../brand/)) | Usage |
+| File ([`brand/`](../brand/)) | Usage |
 |---|---|
-| `kyro-mark-dark.svg` | symbole sur fond sombre — **usage principal** |
-| `kyro-mark.svg` | symbole sur fond clair (README GitHub, documentation) |
-| `kyro-icon.svg` | icône d'application 1024 px (fond sombre) — **par défaut** |
-| `kyro-icon-blue.svg` | icône d'application, variante bleu foncé |
-| `kyro-logo-dark.svg` | symbole + « kyro wallet », fond sombre |
-| `kyro-logo.svg` | symbole + « kyro wallet », fond clair |
+| `kyro-mark-dark.svg` | symbol on a dark background — **main usage** |
+| `kyro-mark.svg` | symbol on a light background (GitHub README, documentation) |
+| `kyro-icon.svg` | 1024 px application icon (dark background) — **default** |
+| `kyro-icon-blue.svg` | application icon, dark blue variant |
+| `kyro-logo-dark.svg` | symbol + "kyro wallet", dark background |
+| `kyro-logo.svg` | symbol + "kyro wallet", light background |
 
-Les logos complets utilisent la police Geist pour le texte : à vectoriser avant un usage hors de l'application.
+The full logos use the Geist font for the text: to be vectorized before any use outside the application.
 
-## Couleurs (tokens)
+## Colors (tokens)
 
-| Token | Valeur | Rôle |
+| Token | Value | Role |
 |---|---|---|
-| `bg` | `#0A0B0D` | fond de fenêtre |
-| `bgDeep` | `#08090B` | barre d'état |
-| `card` | `#121418` | cartes |
-| `cardHero` | `#101215` | grande carte du solde, graphiques |
-| `raised` | `#16181C` | champs, lignes en relief |
-| `control` | `#1D1F24` / `#22252B` | boutons secondaires, sélection d'onglet |
-| `line` | `#1E2228` / `#292E35` / `#353B44` | filets et bordures (trois intensités) |
-| `text` | `#F5F7FA` | texte principal |
-| `text2` | `#C8CDD6` | texte de liste |
-| `mute` | `#8C929D` | texte secondaire |
-| `faint` | `#5E6470` | décimales, libellés discrets |
-| `primary` | `#E4ECF3` | blanc givré : action principale (texte `onPrimary` `#08090B`) |
-| `ice` | `#7CC4FF` | bleu givre : sélection, courbes, à vérifier |
-| `iceSoft` | `rgba(124,196,255,.08–.16)` | fonds bleu givre |
-| `iceText` | `#CDE9FF` / `#A9D8FF` | texte sur fond bleu givre |
-| `up` | `#3DDC97` | hausse, succès |
-| `down` | `#FF6B6B` | baisse, danger |
-| `warn` | `#F5B74F` | avertissement, testnet |
+| `bg` | `#0A0B0D` | window background |
+| `bgDeep` | `#08090B` | status bar |
+| `card` | `#121418` | cards |
+| `cardHero` | `#101215` | large balance card, charts |
+| `raised` | `#16181C` | fields, raised rows |
+| `control` | `#1D1F24` / `#22252B` | secondary buttons, selected tab |
+| `line` | `#1E2228` / `#292E35` / `#353B44` | rules and borders (three intensities) |
+| `text` | `#F5F7FA` | main text |
+| `text2` | `#C8CDD6` | list text |
+| `mute` | `#8C929D` | secondary text |
+| `faint` | `#5E6470` | decimals, discreet labels |
+| `primary` | `#E4ECF3` | frosted white: primary action (`onPrimary` text `#08090B`) |
+| `ice` | `#7CC4FF` | frost blue: selection, curves, to be checked |
+| `iceSoft` | `rgba(124,196,255,.08–.16)` | frost blue backgrounds |
+| `iceText` | `#CDE9FF` / `#A9D8FF` | text on a frost blue background |
+| `up` | `#3DDC97` | rise, success |
+| `down` | `#FF6B6B` | fall, danger |
+| `warn` | `#F5B74F` | warning, testnet |
 
-Couleurs des réseaux (pastilles, répartition) : Bitcoin `#F7931A`, Ethereum `#627EEA`, Solana `#35D0BA`, USD Coin `#2F8BE6`, Arbitrum `#9FD8FF`.
+Network colors (dots, breakdown): Bitcoin `#F7931A`, Ethereum `#627EEA`, Solana `#35D0BA`, USD Coin `#2F8BE6`, Arbitrum `#9FD8FF`.
 
-## Frais personnalisables
+## Customizable fees
 
-Chaque envoi propose **Lent / Normal / Rapide / Personnalisé**. En mode personnalisé, l'utilisateur saisit lui-même :
-- EVM : *frais max. par gas* et *pourboire prioritaire* (gwei) ;
-- Bitcoin : *sat/vB* (et RBF pour accélérer plus tard) ;
-- Solana : *priority fee* (micro-lamports).
+Every send offers **Slow / Normal / Fast / Custom**. In custom mode, the user enters the following themselves:
+- EVM: *max fee per gas* and *priority tip* (gwei);
+- Bitcoin: *sat/vB* (and RBF to speed up later);
+- Solana: *priority fee* (micro-lamports).
 
-Le coût en crypto et en euros, et le délai estimé se recalculent en direct ; un avertissement s'affiche si les frais sont sous le minimum du réseau.
+The cost in crypto and in euros, and the estimated delay, are recomputed live; a warning is shown if the fees are below the network minimum.
 
-## Typographie
+## Typography
 
-- **Geist** (400, 500, 560) : interface. Titres d'écran à 30 px (−0,038 em), grands montants à 56–76 px en graisse 480, chiffres tabulaires, décimales en `faint`.
-- **Libellés** (`.eyebrow`, Geist 12 px, 500, `mute`) : libellés de section et de champ, en-têtes de tableau, en minuscules comme une phrase. Pas de capitales espacées, pas de mono décoratif.
-- **Geist Mono** (400, 500) : adresses, barre d'état, heures.
-- Les deux polices (licence OFL) seront **embarquées dans l'app** : aucun appel à Google Fonts en production (CSP).
+- **Geist** (400, 500, 560): interface. Screen titles at 30 px (−0.038 em), large amounts at 56–76 px in weight 480, tabular figures, decimals in `faint`.
+- **Labels** (`.eyebrow`, Geist 12 px, 500, `mute`): section and field labels, table headers, in lowercase like a sentence. No spaced capitals, no decorative mono.
+- **Geist Mono** (400, 500): addresses, status bar, times.
+- Both fonts (OFL license) will be **embedded in the app**: no call to Google Fonts in production (CSP).
 
-## Formes
+## Shapes
 
-- Trois rayons seulement : surfaces 10 px (`rounded-panel`), boîtes 7 px (`rounded-box`), contrôles 6 px (`rounded-ctl`). Pas de pilules, sauf pastilles et interrupteurs.
-- Badges en **étiquettes** (cadre fin, texte normal) ; seuls les états qui demandent l'attention ont une couleur.
-- Avertissements : filet gauche de la couleur du ton (ambre, rouge), jamais atténués.
-- Pas de halo ni de dégradé décoratif ; une ombre seulement sous les dialogues et menus.
-- **Rien de décoratif « façon IA »** : pas de slogans, pas de numérotation 01/02/03 sur des choix, pas de faux instruments (cadrans, graduations), pas de mentions techniques en accroche (algorithmes, licence, « zéro télémétrie ») hors des écrans qui les expliquent. Accueil : le logo, le nom, trois choix.
-- Graphiques : courbe lissée bleu givre 1,75 px, voile givre de 16 % à 0 %, point de survol cerclé avec infobulle.
+- Only three radii: surfaces 10 px (`rounded-panel`), boxes 7 px (`rounded-box`), controls 6 px (`rounded-ctl`). No pills, except dots and switches.
+- Badges as **tags** (thin frame, normal text); only states that call for attention have a color.
+- Warnings: left rule in the tone's color (amber, red), never toned down.
+- No halo or decorative gradient; a shadow only under dialogs and menus.
+- **Nothing decorative "AI-style"**: no slogans, no 01/02/03 numbering on choices, no fake instruments (dials, graduations), no technical mentions as a hook (algorithms, license, "zero telemetry") outside the screens that explain them. Welcome: the logo, the name, three choices.
+- Charts: smoothed frost blue curve 1.75 px, frost veil from 16% to 0%, hover dot with ring and tooltip.
 
-## Mouvement
+## Motion
 
-- Rapide (150–350 ms), **en entrée seulement** : rien ne retarde un clic ni une navigation.
-- Écrans : fondu + glissé de 8 px. Listes : entrée échelonnée (`.stagger`, `--i`). Courbes : tracées de gauche à droite. Soldes : compteur (`useTicker`).
-- Indicateurs glissants (`layoutId`) : rail, onglets, `Segmented`, sections des Réglages, réseau de Recevoir.
-- Dialogues et menus : entrée ressort, sortie courte. Boutons : légère pression.
-- `prefers-reduced-motion` : tout est coupé (`MotionConfig reducedMotion="user"` + règle CSS), seules les roues de chargement tournent, lentement.
+- Fast (150–350 ms), **on entry only**: nothing delays a click or a navigation.
+- Screens: fade + 8 px slide. Lists: staggered entry (`.stagger`, `--i`). Curves: drawn from left to right. Balances: counter (`useTicker`).
+- Sliding indicators (`layoutId`): rail, tabs, `Segmented`, Settings sections, Receive network.
+- Dialogs and menus: spring entry, short exit. Buttons: slight press.
+- `prefers-reduced-motion`: everything is turned off (`MotionConfig reducedMotion="user"` + CSS rule), only the loading wheels spin, slowly.
 
-## Composants signature
+## Signature components
 
-- **Solde + graphique pleine largeur** sur le Portefeuille, hors carte, avec actions Envoyer / Recevoir / Swap.
-- **Panneau de marque** (logo et nom, rien d'autre) sur l'écran de bienvenue.
-- **Adresse en blocs** : `0x4F2a 9C83 … 6c19 D7b2`, deux premiers et deux derniers blocs sur fond bleu givre.
-- **Encadré « En clair »** : étiquette bleu givre + une phrase.
-- **Carte Coffre** : état du verrou, compte à rebours, hardware wallet, autorisations illimitées.
-- **Autorisations actives** dans l'Historique, avec bouton Révoquer.
+- **Balance + full-width chart** on the Wallet, outside any card, with Send / Receive / Swap actions.
+- **Brand panel** (logo and name, nothing else) on the welcome screen.
+- **Address in blocks**: `0x4F2a 9C83 … 6c19 D7b2`, first two and last two blocks on a frost blue background.
+- **"In plain words" box**: frost blue label + one sentence.
+- **Vault card**: lock state, countdown, hardware wallet, unlimited approvals.
+- **Active approvals** in History, with a Revoke button.
 
-## Accessibilité
+## Accessibility
 
-- Cibles cliquables ≥ 40 px dans le contenu, 44–60 px dans le rail.
-- Contrastes texte ≥ 4,5:1 (`mute` sur `card` ≈ 6:1).
-- Hausse et baisse toujours accompagnées d'une flèche ou d'un signe.
+- Clickable targets ≥ 40 px in the content, 44–60 px in the rail.
+- Text contrast ≥ 4.5:1 (`mute` on `card` ≈ 6:1).
+- Rises and falls always accompanied by an arrow or a sign.
