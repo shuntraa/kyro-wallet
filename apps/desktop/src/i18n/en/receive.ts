@@ -7,7 +7,7 @@ export const receive: Record<keyof typeof fr, string> = {
   'receive.network': 'Network',
   'receive.vaultOnlyTitle': 'Not on hardware wallets yet (only Bitcoin, EVM and Solana): available in the Kyro vault',
   'receive.noKeysTitle': 'This hardware-wallet account has no keys for this chain',
-  'receive.hwUnsupported': 'On hardware wallets: Bitcoin, EVM chains and Solana only. The other chains remain available in the Kyro vault (Main account).',
+  'receive.hwUnsupported': 'On hardware wallets: Bitcoin, EVM chains and Solana (Ledger and Trezor), Sui, Aptos, Algorand, NEAR and Cosmos Hub (Ledger only). The other chains remain available in the Kyro vault (Main account).',
   'receive.qrWithAmount': 'QR with amount',
   'receive.qrAddress': 'Address QR',
   'receive.yourAddress': 'Your {chain} address',

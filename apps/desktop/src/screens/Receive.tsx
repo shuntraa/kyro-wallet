@@ -241,6 +241,24 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   };
 
   const verifyOnDevice = async () => {
+    // Ledger single-key chains: the app shows the address (NEAR: the ed25519 key), Rust compares.
+    if (activeHw && (family === 'sui' || family === 'apt' || family === 'algo' || family === 'near' || family === 'cosmos')) {
+      const keyChain = family;
+      const shown = address;
+      let deviceId = '';
+      try {
+        const d = await pickDevice(activeHw.device);
+        deviceId = d.id;
+        setVerify({ state: 'running', deviceId });
+        const res = await withDevice(deviceId, () => call('hw_key_verify', { id: deviceId, accountId: activeHw.id, chain: keyChain }));
+        if (res.address !== shown) throw new Error(t('receive.verifyMismatch'));
+        setVerify({ state: 'ok', address: shown });
+      } catch (e) {
+        setVerify({ state: 'error', error: e, address: shown });
+        if (isAddressMismatch(e)) setMismatch(e);
+      }
+      return;
+    }
     if (!activeHw || isUtxoReceive(family) || family === 'tron' || family === 'xrp' || family === 'ada' || family === 'apt' || family === 'cosmos' || family === 'ton' || family === 'xmr' || family === 'algo' || family === 'dot' || family === 'kas' || family === 'hbar' || family === 'sui' || family === 'xlm' || family === 'near') return;
     const chain: HwImplementedChain = family;
     const shown = address;

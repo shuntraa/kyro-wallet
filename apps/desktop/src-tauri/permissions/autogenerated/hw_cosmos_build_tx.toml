@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-cosmos-build-tx"
+description = "Enables the hw_cosmos_build_tx command without any pre-configured scope."
+commands.allow = ["hw_cosmos_build_tx"]
+
+[[permission]]
+identifier = "deny-hw-cosmos-build-tx"
+description = "Denies the hw_cosmos_build_tx command without any pre-configured scope."
+commands.deny = ["hw_cosmos_build_tx"]

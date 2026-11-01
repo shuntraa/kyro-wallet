@@ -713,6 +713,13 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `hw_sign_btc_psbt` | `{ id, accountId, psbt }` | `{ psbt, summary }` | décodage Rust → dialogue natif Kyro (+ 2ᵉ dialogue si sortie inconnue) → confirmation sur l'appareil → vérification de chaque signature. PSBT signée, **non finalisée** |
 | `hw_sign_evm_tx` | `{ id, accountId, tx: EvmTxRequest }` | `{ rawTx, hash }` | idem ; token nommé par un descripteur Ledger vérifié hors ligne, sinon par `known_tokens.rs`, jamais par l'interface ; 2ᵉ dialogue si appel de contrat, jeton inconnu ou si l'appareil ne peut pas afficher le détail (blind signing) ; signe pour l'adresse `m/44'/60'/0'/0/{account}` |
 | `hw_sign_sol_tx` | `{ id, accountId, message /*b64*/ }` | `{ signature /*b64*/, summary: SolTxSummary }` | même décodage que `sol_sign_tx` ; signature vérifiée (ed25519 strict) contre l'adresse enregistrée |
+| `hw_key_add` | `{ id, chain: 'sui' \| 'apt' \| 'algo' \| 'near' \| 'cosmos', account, accountId?, label? }` | `WatchOnlyAccount` | **Ledger seulement** (§2.3, « Chaînes à clé unique ») : lit la clé publique de `chain` dans l'app Ledger correspondante et l'enregistre (`keys[]` du compte ; nouveau compte ou ajout à `accountId` : même marque, même numéro ; une autre clé déjà enregistrée pour cette chaîne : `HW_WRONG_DEVICE`) |
+| `hw_key_verify` | `{ id, accountId, chain }` | `{ address, path }` | relit la clé (`HW_WRONG_DEVICE` si ce n'est pas la même), puis **l'affiche sur l'appareil** (adresse ; NEAR : clé `ed25519:…`) ; clé affichée ≠ clé enregistrée : `HW_ADDRESS_MISMATCH` |
+| `hw_sui_build_tx` / `hw_sign_sui_tx` / `hw_sui_broadcast` | comme `sui_*` avec `accountId` au lieu de `account` ; signature : `{ id, accountId, bcs }` | comme `sui_*` | construction et diffusion pour l'adresse du compte hardware wallet ; signature : mêmes contrôles que `sui_sign_tx`, dialogue natif, app « Sui » (message d'intention `00 00 00 ‖ BCS`), signature sérialisée vérifiée (`sui_verify_signed`) |
+| `hw_aptos_build_tx` / `hw_sign_aptos_tx` / `hw_aptos_broadcast` | idem (`{ id, accountId, raw }`) | comme `aptos_*` | app « Aptos » : message de signature `SHA3-256("APTOS::RawTransaction") ‖ BCS` ; transaction signée vérifiée (`aptos_verify_signed`) |
+| `hw_algo_build_tx` / `hw_sign_algo_tx` / `hw_algo_broadcast` | idem (`{ id, accountId, blob }`) | comme `algo_*` | app « Algorand » : msgpack canonique (l'app préfixe `TX`) ; vérifiée (`algo_verify_signed`) |
+| `hw_near_build_tx` / `hw_sign_near_tx` / `hw_near_broadcast` / `hw_near_tx_status` | idem (`{ id, accountId, tx }`) | comme `near_*` | app « NEAR » : Borsh de la transaction (l'app signe son SHA-256) ; vérifiée (`near_verify_signed`). Compte implicite de la clé `m/44'/397'/0'/0'/(account+1)'` |
+| `hw_cosmos_build_tx` / `hw_sign_cosmos_tx` / `hw_cosmos_broadcast` | idem (`{ id, accountId, signDoc }`) | comme `cosmos_*` | app « Cosmos » : SignDoc en mode **LEGACY_AMINO_JSON** (l'app ne signe pas DIRECT) ; l'appareil signe le JSON amino canonique (clés triées, entiers en chaînes) ; signature DER normalisée low-S et vérifiée, TxRaw revérifié avant diffusion |
 
 ```ts
 type Accounts = {                 // accounts_get({ account? }) : tout est celui du compte `account` (0 = l'historique)
@@ -877,7 +884,9 @@ Avec un coffre sur cet ordinateur, toutes les commandes `hw_*` qui lisent des cl
 
 ```ts
 type DeviceInfo = { id: string; kind: 'ledger' | 'trezor'; model: string; transport: 'hid' | 'webusb' };
-type Chain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp';   // phase 4 : HW_UNSUPPORTED
+type Chain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp'   // phase 4 : HW_UNSUPPORTED
+  | 'sui' | 'apt' | 'algo' | 'near' | 'cosmos'      // Ledger seulement, commandes hw_key_* (voir plus bas)
+  | 'dot' | 'hbar' | 'kas' | 'ton';                 // pas de hardware wallet (raison dans `reason`)
 type DeviceStatus = { id: string; kind: 'ledger' | 'trezor'; model: string; locked: boolean;
   app?: { name: string; version: string };        // Ledger : app ouverte ("Tableau de bord" = dashboard)
   firmware?: string; passphrase?: boolean;        // Trezor
@@ -890,7 +899,8 @@ type HwXpub = { chain: Chain; account: number;
   sol?: { address: string; path: string /*m/44'/501'/{account}'/0'*/ } };
 type WatchOnlyAccount = { id: string; label: string; device: 'ledger' | 'trezor'; model: string;
   network: 'mainnet' | 'testnet'; account: number; btc?: HwXpub['btc']; evm?: { xpub: string; path: string };
-  sol?: { address: string; path: string } };
+  sol?: { address: string; path: string };
+  keys?: { chain: 'sui' | 'apt' | 'algo' | 'near' | 'cosmos'; pubkey: string /*hex*/; address: string; path: string }[] };
 ```
 
 **Déroulé d'une signature** : (1) Rust décode (`btc_hw_plan` / `evm_decode` / `sol_decode_message`) ; (2) Rust relit les clés de l'appareil et les compare au compte enregistré (`HW_WRONG_DEVICE`) ; (3) dialogue natif Kyro avec le résumé décodé + « vérifie les mêmes informations sur l'appareil », puis 2ᵉ dialogue renforcé si quelque chose est « inconnu » (sortie BTC non décodée, appel de contrat EVM, instruction Solana inconnue) ou si l'appareil ne pourra pas afficher le détail (blind signing) ; (4) confirmation finale sur l'écran de l'appareil (`hw-prompt: confirm-on-device`) ; (5) Rust vérifie chaque signature (sighash recalculé, clé dérivée de l'xpub enregistrée ; EVM : adresse récupérée = adresse attendue, low-S ; Solana : ed25519 strict) avant de répondre. Une réponse de l'appareil qui ne passe pas : `HW_BAD_RESPONSE`, rien n'est renvoyé.
@@ -905,6 +915,12 @@ type WatchOnlyAccount = { id: string; label: string; device: 'ledger' | 'trezor'
 | EVM (EIP-1559) | « Ethereum » ≥ 1.9.0 (toutes les chaînes EVM) | One ≥ 1.10.4 ; T/Safe ≥ 2.4.2 |
 | ERC-20 en clair | descripteur signé par Ledger requis : embarqué pour USDC et USDT (mainnet) et tUSDC (Sepolia) ; sinon blind signing (réglage de l'app) + dialogue renforcé | transfert : destinataire, montant brut et contrat affichés (« Unknown token » hors liste) ; `approve` et autres appels : dialogue renforcé |
 | Solana | « Solana » ≥ 1.3.1 (blind signing requis pour les instructions qu'il ne décode pas : `HW_UNSUPPORTED`) | T/Safe ≥ 2.6.4 ; pas sur la One |
+| Sui | « Sui » ≥ 1.0.0, `m/44'/784'/a'/0'/0'` (= coffre) | pas d'app Trezor |
+| Aptos | « Aptos » ≥ 0.6.0, `m/44'/637'/a'/0'/0'` (= coffre) | pas d'app Trezor |
+| Algorand | « Algorand » ≥ 2.0.0 (Zondax), `m/44'/283'/a'/0/0` (= coffre) | pas d'app Trezor |
+| NEAR | « NEAR » ≥ 2.0.0, **`m/44'/397'/0'/0'/(a+1)'`** (chemin de Ledger Live : l'app n'accepte que 5 niveaux ; le coffre utilise `m/44'/397'/a'` → autre compte implicite) | pas d'app Trezor |
+| Cosmos Hub | « Cosmos » ≥ 2.34.0, `m/44'/118'/a'/0/0` (= coffre), amino JSON | pas d'app Trezor |
+| Polkadot, Hedera, Kaspa, TON | non proposés (raisons ci-dessous) | pas d'app Trezor |
 | Non pris en charge | — | mode bootloader, One < 1.7 (HID) ; Safe 7 : appairage autre que par code (QR, NFC : pas proposés par le firmware de production) |
 
 PIN et passphrase : Ledger se déverrouille sur l'appareil (`HW_LOCKED` → l'UI demande de le déverrouiller puis de réessayer). Trezor T/Safe : PIN et passphrase saisis **sur l'appareil** (`hw-prompt`). Trezor One : PIN par la grille aveugle (`pin-matrix` → `hw_pin_matrix`) ; passphrase à saisir sur l'ordinateur → refusée (`HW_UNSUPPORTED`) : aucun secret ne transite par l'UI.
@@ -943,6 +959,10 @@ PIN et passphrase : Ledger se déverrouille sur l'appareil (`HW_LOCKED` → l'UI
 | `HW_PAIRING_FAILED` | appairage THP échoué : code incorrect (refusé par l'appareil), ou l'appareil n'a pas prouvé le code (engagement/secret incohérents) ; rien n'est enregistré | |
 | `INTERNAL` | (hardware wallet) fichier `trezor-thp.json` illisible ou non inscriptible, aléa du système indisponible ; `hw_thp_forget {}` remet le fichier à zéro | |
 | `USER_REJECTED` | refus dans le dialogue natif de Kyro, ou `hw_cancel` | |
+
+**Chaînes à clé unique (Ledger seulement)** — `hw/ledger_apps.rs` (commun), un module par app officielle : `hw/ledger_sui.rs` (protocole par blocs de l'app Sui : paramètres découpés en blocs de 180 octets chaînés par SHA-256, `GET_CHUNK` / `PUT_CHUNK` / `RESULT_*`), `hw/ledger_aptos.rs` (CLA 5B), `hw/ledger_algo.rs` (CLA 80, numéro de compte), `hw/ledger_near.rs` (CLA 80, chemin à 5 niveaux sans longueur), `hw/ledger_cosmos.rs` (CLA 55, chemin little-endian). Le compte enregistre une clé publique par chaîne (`WatchOnlyAccount.keys`, `wallet_core::WatchKey` : l'adresse est recalculée depuis la clé, le chemin depuis le numéro de compte). Déroulé d'un envoi : `hw_<chaîne>_build_tx` (construction pour l'adresse enregistrée, comme le coffre) → `hw_sign_<chaîne>_tx` : (1) relecture de la clé sur l'appareil = clé enregistrée (`HW_WRONG_DEVICE`) ; (2) mêmes contrôles en direct que la commande du coffre ; (3) dialogue natif (résumé décodé par Rust + « vérifie sur l'appareil »), 2ᵉ dialogue renforcé selon les mêmes déclencheurs ; (4) l'appareil affiche et signe les octets construits par `wallet-core` ; (5) Rust vérifie la signature (ed25519 strict / ECDSA low-S) et assemble la transaction → `hw_<chaîne>_broadcast` (revérifiée). Aucune clé privée côté hôte, aucune crypto écrite à la main.
+
+**Non proposés sur hardware wallet** : **Polkadot** — l'app générique « Polkadot » exige l'extension `CheckMetadataHash` avec une preuve des métadonnées (RFC-0078) jointe à chaque transaction, et des clés ed25519 `m/44'/354'/…` (Kyro : sr25519 Polkadot.js, sans preuve) ; **Hedera** — l'app Ledger signe en ed25519 `m/44'/3030'/0'/0'/i'`, Kyro ne gère que les comptes ECDSA secp256k1 (création automatique par l'alias EVM) ; **Kaspa** — protocole de signature de l'app non vérifié contre les règles en vigueur depuis Toccata (rusty-kaspa 2.1) ; **TON** — l'app reconstruit elle-même le message (requête structurée, chemin à 6 niveaux, identifiant de portefeuille standard : incompatible avec l'identifiant testnet de Kyro), pas encore écrit. `hw_open` les rapporte `unsupported` avec cette raison ; Trezor n'a d'app pour aucune de ces neuf chaînes.
 
 **Phase 4 (pas encore implémentée ; l'abstraction `HardwareWallet` a déjà les chaînes)** : Ledger — apps « Litecoin », « Dogecoin » (protocole Bitcoin historique, pas l'app v2), « Tron », « Cardano ADA », « XRP » ; Trezor — Litecoin et Dogecoin (même flux `SignTx` que Bitcoin, firmware universel), XRP (`RippleSignTx`), Cardano (T/Safe), Tron (firmware récent, `Capability_Tron`).
 

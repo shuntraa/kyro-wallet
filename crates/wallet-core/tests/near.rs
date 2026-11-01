@@ -221,3 +221,32 @@ fn parsing_helpers() {
     assert!(near_parse_hash("244ZQ9cgj3CQ6bWBdytfrJMuMQ1jdXLFGnr4HhvtCTn").is_err());
     assert!(near_parse_hash("0OIl").is_err());
 }
+
+#[test]
+fn hardware_wallet_message_and_signature() {
+    let s = seed(ABANDON);
+    let me = near_address(&s, 0).unwrap();
+    let pk = near_public_key(&s, 0).unwrap();
+    let tx = NearTransfer {
+        signer_id: me,
+        public_key: pk,
+        nonce: 5,
+        receiver_id: "kyro-test.testnet".into(),
+        block_hash: [3; 32],
+        deposit: 1,
+    };
+    let raw = hex::encode(tx.encode());
+    // Ledger NEAR app: the Borsh transaction itself (the app hashes it).
+    assert_eq!(wallet_core::near_hw_message(&raw).unwrap(), tx.encode());
+    let (signed, hash, _) = near_sign(&s, 0, &raw).unwrap();
+    let sb = hex::decode(&signed).unwrap();
+    let sig = &sb[sb.len() - 64..];
+    assert_eq!(
+        wallet_core::near_hw_signed(&raw, sig).unwrap(),
+        (signed, hash)
+    );
+    let mut bad = sig.to_vec();
+    bad[5] ^= 1;
+    assert!(wallet_core::near_hw_signed(&raw, &bad).is_err());
+    assert!(wallet_core::near_hw_message("zz").is_err());
+}

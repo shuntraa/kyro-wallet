@@ -35,6 +35,7 @@ mod display;
 mod error;
 mod evm;
 mod hedera;
+mod hw_keys;
 mod kaspa;
 mod keys;
 mod ledger_cal;
@@ -60,16 +61,17 @@ mod zcash;
 
 pub use algorand::{
     algo_address, algo_address_bytes, algo_address_of_pubkey, algo_decode_signed, algo_decode_tx,
-    algo_encode_signed, algo_genesis, algo_path, algo_public_key, algo_sign, algo_verify_signed,
-    AlgoPayment, AlgoTxSummary, AlgoWarning, ALGO_MAINNET_GENESIS, ALGO_MAX_NOTE,
-    ALGO_MAX_VALIDITY, ALGO_MIN_BALANCE, ALGO_MIN_FEE, ALGO_TESTNET_GENESIS,
+    algo_encode_signed, algo_genesis, algo_hw_message, algo_hw_signed, algo_path, algo_public_key,
+    algo_sign, algo_verify_signed, AlgoPayment, AlgoTxSummary, AlgoWarning, ALGO_MAINNET_GENESIS,
+    ALGO_MAX_NOTE, ALGO_MAX_VALIDITY, ALGO_MIN_BALANCE, ALGO_MIN_FEE, ALGO_TESTNET_GENESIS,
 };
 pub use aptos::{
     aptos_address, aptos_address_bytes_of_pubkey, aptos_address_of_pubkey, aptos_address_string,
-    aptos_decode_tx, aptos_parse_address, aptos_path, aptos_public_key, aptos_sign,
-    aptos_signing_message, aptos_simulation_bytes, aptos_tx_hash, aptos_verify_signed,
-    AptosTransfer, AptosTxSummary, AptosWarning, APTOS_ED25519_SCHEME, APTOS_HIGH_FEE_OCTAS,
-    APTOS_MAINNET_CHAIN_ID, APTOS_TESTNET_CHAIN_ID, APTOS_TRANSFER_FUNCTION, OCTAS_PER_APT,
+    aptos_decode_tx, aptos_hw_message, aptos_hw_signed, aptos_parse_address, aptos_path,
+    aptos_public_key, aptos_sign, aptos_signing_message, aptos_simulation_bytes, aptos_tx_hash,
+    aptos_verify_signed, AptosTransfer, AptosTxSummary, AptosWarning, APTOS_ED25519_SCHEME,
+    APTOS_HIGH_FEE_OCTAS, APTOS_MAINNET_CHAIN_ID, APTOS_TESTNET_CHAIN_ID, APTOS_TRANSFER_FUNCTION,
+    OCTAS_PER_APT,
 };
 pub use btc::{
     btc_account, btc_address, btc_decode_psbt, btc_psbt_summary, btc_sign_psbt, BtcAccount,
@@ -101,11 +103,12 @@ pub use cardano::{
 };
 pub use cosmos::{
     cosmos_address, cosmos_address_bytes, cosmos_address_from_bytes, cosmos_address_of_pubkey,
-    cosmos_chain_id, cosmos_decode_sign_doc, cosmos_normalize_address, cosmos_path,
-    cosmos_public_key, cosmos_send_sign_doc, cosmos_sign, cosmos_simulation_tx,
-    cosmos_verify_signed, proto as cosmos_proto, CosmosSendRequest, CosmosTxSummary, CosmosWarning,
+    cosmos_amino_json, cosmos_amino_sign_doc, cosmos_amino_signed, cosmos_chain_id,
+    cosmos_decode_sign_doc, cosmos_normalize_address, cosmos_path, cosmos_public_key,
+    cosmos_send_sign_doc, cosmos_sign, cosmos_simulation_tx, cosmos_verify_signed,
+    proto as cosmos_proto, CosmosSendRequest, CosmosTxSummary, CosmosWarning,
     COSMOS_CHAIN_ID_MAINNET, COSMOS_CHAIN_ID_TESTNET, COSMOS_DENOM, COSMOS_HRP, COSMOS_MAX_MEMO,
-    COSMOS_MSG_SEND, COSMOS_SECP256K1_PUBKEY, COSMOS_SIGN_MODE_DIRECT,
+    COSMOS_MSG_SEND, COSMOS_SECP256K1_PUBKEY, COSMOS_SIGN_MODE_AMINO_JSON, COSMOS_SIGN_MODE_DIRECT,
 };
 pub use display::{sanitize_text, SanitizedText, CONTROL_MARKER};
 pub use error::{Error, Result};
@@ -122,6 +125,7 @@ pub use hedera::{
     HbarSignedTransfer, HbarTransfer, HbarTxSummary, HbarWarning, HBAR_HIGH_FEE_TINYBARS,
     HBAR_MAX_MEMO_BYTES, HBAR_MAX_NODES, HBAR_MAX_VALID_DURATION, HBAR_TINYBARS,
 };
+pub use hw_keys::{HwKeyChain, WatchKey};
 pub use kaspa::{
     kaspa_account_path, kaspa_address, kaspa_address_decode, kaspa_address_encode,
     kaspa_address_of_script, kaspa_address_of_xonly, kaspa_build_send, kaspa_compute_mass,
@@ -151,9 +155,10 @@ pub use monero::{
     XMR_SPENDABLE_AGE, XMR_SUBADDRESS_LOOKAHEAD,
 };
 pub use near::{
-    near_account_kind, near_address, near_decode_tx, near_hash_string, near_parse_hash,
-    near_parse_public_key, near_path, near_public_key, near_public_key_string, near_sign,
-    near_verify_signed, NearAccountKind, NearTransfer, NearTxSummary, NearWarning, NEAR_DECIMALS,
+    near_account_kind, near_address, near_decode_tx, near_hash_string, near_hw_message,
+    near_hw_signed, near_parse_hash, near_parse_public_key, near_path, near_public_key,
+    near_public_key_string, near_sign, near_verify_signed, NearAccountKind, NearTransfer,
+    NearTxSummary, NearWarning, NEAR_DECIMALS,
 };
 pub use network::{BtcKind, Network};
 pub use polkadot::{
@@ -190,9 +195,9 @@ pub use sui::{
     sui_parse_address, sui_path, sui_public_key, SUI_ED25519_FLAG,
 };
 pub use sui_tx::{
-    sui_decode_tx, sui_sign, sui_tx_digest, sui_verify_signed, SuiGasCoinView, SuiObjectRef,
-    SuiTransfer, SuiTransferAmount, SuiTxSummary, SuiWarning, MIST_PER_SUI, SUI_COIN_TYPE,
-    SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS,
+    sui_decode_tx, sui_hw_message, sui_hw_signature, sui_sign, sui_tx_digest, sui_verify_signed,
+    SuiGasCoinView, SuiObjectRef, SuiTransfer, SuiTransferAmount, SuiTxSummary, SuiWarning,
+    MIST_PER_SUI, SUI_COIN_TYPE, SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS,
 };
 pub use ton::{
     ton_address, ton_decode_tx, ton_parse_address, ton_parse_raw_address, ton_path, ton_public_key,

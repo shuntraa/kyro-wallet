@@ -7,7 +7,7 @@ export const receive = {
   'receive.network': 'Réseau',
   'receive.vaultOnlyTitle': 'Pas encore sur hardware wallet (seulement Bitcoin, EVM et Solana) : disponible dans le coffre Kyro',
   'receive.noKeysTitle': 'Ce compte hardware wallet n’a pas de clés pour cette chaîne',
-  'receive.hwUnsupported': 'Sur hardware wallet : Bitcoin, les chaînes EVM et Solana seulement. Les autres chaînes restent disponibles dans le coffre Kyro (Compte principal).',
+  'receive.hwUnsupported': 'Sur hardware wallet : Bitcoin, les chaînes EVM et Solana (Ledger et Trezor), Sui, Aptos, Algorand, NEAR et Cosmos Hub (Ledger seulement). Les autres chaînes restent disponibles dans le coffre Kyro (Compte principal).',
   'receive.qrWithAmount': 'QR avec montant',
   'receive.qrAddress': 'QR de l’adresse',
   'receive.yourAddress': 'Ton adresse {chain}',

@@ -634,6 +634,31 @@ pub fn sui_verify_signed(bcs_b64: &str, signature_b64: &str) -> Result<String> {
     Ok(sui_tx_digest(&bcs))
 }
 
+/// Hardware wallet (Ledger Sui app): the intent message the device hashes and signs,
+/// `[0, 0, 0] || bcs`, after strict decoding of the transfer.
+pub fn sui_hw_message(bcs_b64: &str) -> Result<Vec<u8>> {
+    let bcs = b64(bcs_b64, "transaction")?;
+    SuiTransfer::decode(&bcs)?;
+    let mut m = INTENT.to_vec();
+    m.extend_from_slice(&bcs);
+    Ok(m)
+}
+
+/// Hardware wallet: serialized signature (`flag || sig || pubkey`, base64) of a signature
+/// returned by the device, checked like [`sui_verify_signed`] before it is returned.
+pub fn sui_hw_signature(bcs_b64: &str, pubkey: &[u8; 32], sig: &[u8]) -> Result<String> {
+    if sig.len() != 64 {
+        return Err(bad("signature de l'appareil : 64 octets attendus"));
+    }
+    let mut out = Vec::with_capacity(97);
+    out.push(SUI_ED25519_FLAG);
+    out.extend_from_slice(sig);
+    out.extend_from_slice(pubkey);
+    let s = base64::engine::general_purpose::STANDARD.encode(out);
+    sui_verify_signed(bcs_b64, &s)?;
+    Ok(s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

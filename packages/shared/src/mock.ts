@@ -798,6 +798,9 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     },
   });
 
+  const hwKeyDemo = (): never => {
+    throw new IpcError('HW_UNSUPPORTED', l10n('Mode démo : Sui, Aptos, Algorand, NEAR et Cosmos sur Ledger ne sont pas simulés.', 'Demo mode: Sui, Aptos, Algorand, NEAR and Cosmos on Ledger are not simulated.'));
+  };
   const handlers: { [K in keyof Commands]: (args: Record<string, unknown>) => unknown } = {
     vault_status: () => status(),
     vault_create: (a) => {
@@ -1079,6 +1082,25 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     hw_sign_evm_tx: (a) => hw.signEvm(a),
     hw_sign_sol_tx: (a) => hw.signSol(a),
     update_status: (): UpdateStatus => ({ version: '0.1.0', updatedTo: null }),
+    // Single-key chains on a Ledger (Sui, Aptos, Algorand, NEAR, Cosmos): not simulated.
+    hw_key_add: hwKeyDemo,
+    hw_key_verify: hwKeyDemo,
+    hw_sui_build_tx: hwKeyDemo,
+    hw_sign_sui_tx: hwKeyDemo,
+    hw_sui_broadcast: hwKeyDemo,
+    hw_aptos_build_tx: hwKeyDemo,
+    hw_sign_aptos_tx: hwKeyDemo,
+    hw_aptos_broadcast: hwKeyDemo,
+    hw_algo_build_tx: hwKeyDemo,
+    hw_sign_algo_tx: hwKeyDemo,
+    hw_algo_broadcast: hwKeyDemo,
+    hw_near_build_tx: hwKeyDemo,
+    hw_sign_near_tx: hwKeyDemo,
+    hw_near_broadcast: hwKeyDemo,
+    hw_near_tx_status: hwKeyDemo,
+    hw_cosmos_build_tx: hwKeyDemo,
+    hw_sign_cosmos_tx: hwKeyDemo,
+    hw_cosmos_broadcast: hwKeyDemo,
     config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid), systemLanguage: demoSystemLanguage() }),
     ...networkChoice.handlers,
   };

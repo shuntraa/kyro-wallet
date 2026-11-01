@@ -80,6 +80,9 @@ pub struct WatchOnlyAccount {
     /// Solana address.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sol: Option<WatchSol>,
+    /// Single-key chains (Sui, Aptos, Algorand, NEAR, Cosmos), see [`crate::WatchKey`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keys: Vec<crate::hw_keys::WatchKey>,
 }
 
 /// EVM node path stored in [`WatchEvm::path`].
@@ -118,7 +121,7 @@ impl WatchOnlyAccount {
                 "account number must be at most {MAX_HW_ACCOUNT}"
             )));
         }
-        if self.btc.is_empty() && self.evm.is_none() && self.sol.is_none() {
+        if self.btc.is_empty() && self.evm.is_none() && self.sol.is_none() && self.keys.is_empty() {
             return Err(Error::input("watch-only account without any chain"));
         }
         if self.btc.len() > 2 || (self.btc.len() == 2 && self.btc[0].kind == self.btc[1].kind) {
@@ -160,12 +163,18 @@ impl WatchOnlyAccount {
                 .map_err(|_| Error::input("invalid Solana address"))?;
             crate::sol::sol_address_of_pubkey(&bytes)?;
         }
+        crate::hw_keys::validate_keys(&self.keys, self.account)?;
         Ok(())
     }
 
     /// Master fingerprint (from the Bitcoin accounts), if any.
     pub fn fingerprint(&self) -> Option<&str> {
         self.btc.first().map(|b| b.fingerprint.as_str())
+    }
+
+    /// The stored key of a single-key chain, if any.
+    pub fn key(&self, chain: crate::hw_keys::HwKeyChain) -> Option<&crate::hw_keys::WatchKey> {
+        self.keys.iter().find(|k| k.chain == chain)
     }
 
     /// The Bitcoin account of `kind`, if stored.

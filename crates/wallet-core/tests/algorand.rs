@@ -417,3 +417,30 @@ fn non_canonical_or_foreign_encodings_are_refused() {
     assert!(algo_verify_signed(&hex::encode(&raw), Network::Testnet, &me).is_err());
     assert!(algo_decode_tx("zz", Network::Testnet, &me).is_err());
 }
+
+#[test]
+fn hardware_wallet_message_and_signature() {
+    let s = seed(ABANDON);
+    let me = algo_address(&s, 0).unwrap();
+    let pk = algo_public_key(&s, 0).unwrap();
+    let p = kyro_payment(Network::Testnet, pk);
+    let blob = hex::encode(p.encode());
+    // Ledger Algorand app: the msgpack without the `TX` prefix (the app adds it).
+    let msg = wallet_core::algo_hw_message(&blob).unwrap();
+    assert_eq!(msg, p.encode());
+    assert_eq!(&p.signing_bytes()[2..], msg.as_slice());
+    // The Zondax fixture is sent as is.
+    assert_eq!(
+        wallet_core::algo_hw_message(&hex::encode(ZONDAX_TX_PAYMENT)).unwrap(),
+        ZONDAX_TX_PAYMENT.to_vec()
+    );
+    let (signed, txid, _) = algo_sign(&s, 0, Network::Testnet, &blob).unwrap();
+    let (_, sig) = algo_decode_signed(&hex::decode(&signed).unwrap()).unwrap();
+    assert_eq!(
+        wallet_core::algo_hw_signed(&blob, Network::Testnet, &me, &sig).unwrap(),
+        (signed, txid)
+    );
+    let other = algo_address(&s, 1).unwrap();
+    assert!(wallet_core::algo_hw_signed(&blob, Network::Testnet, &other, &sig).is_err());
+    assert!(wallet_core::algo_hw_signed(&blob, Network::Mainnet, &me, &sig).is_err());
+}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-sign-sui-tx"
+description = "Enables the hw_sign_sui_tx command without any pre-configured scope."
+commands.allow = ["hw_sign_sui_tx"]
+
+[[permission]]
+identifier = "deny-hw-sign-sui-tx"
+description = "Denies the hw_sign_sui_tx command without any pre-configured scope."
+commands.deny = ["hw_sign_sui_tx"]

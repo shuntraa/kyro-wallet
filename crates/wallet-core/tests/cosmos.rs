@@ -385,7 +385,7 @@ fn refusals() {
     refused(
         tampered(&s, |_, _, a, _| {
             a.signer_infos[0].mode_info = Some(p::ModeInfo {
-                single: Some(p::ModeInfoSingle { mode: 127 }),
+                single: Some(p::ModeInfoSingle { mode: 2 }),
             });
         }),
         "SIGN_MODE_DIRECT",
@@ -485,4 +485,69 @@ fn warnings_and_builder_limits() {
     let mut r = request(&s);
     r.timeout_height = 0;
     assert!(cosmos_send_sign_doc(&r).is_err());
+}
+
+/// Hardware wallet (Ledger Cosmos app, amino JSON): the same transaction in
+/// LEGACY_AMINO_JSON mode, the canonical StdSignDoc (sorted keys, integers as strings, like
+/// CosmJS `serializeSignDoc` and the SDK's `aminojson` handler), a DER signature as the app
+/// returns it, and the TxRaw that `cosmos_verify_signed` accepts.
+#[test]
+fn hardware_wallet_amino_json() {
+    use bitcoin::bip32::{DerivationPath, Xpriv};
+    use std::str::FromStr;
+    let s = seed(ABANDON);
+    let pk = cosmos_public_key(&s, 0).unwrap();
+    let mut req = request(&s);
+    req.memo = "depot 4242".into();
+    let direct = hex::encode(cosmos_send_sign_doc(&req).unwrap());
+    let amino = wallet_core::cosmos_amino_sign_doc(&direct, &pk, Network::Testnet).unwrap();
+    assert_ne!(amino, direct);
+    // Same summary in both modes.
+    assert_eq!(
+        cosmos_decode_sign_doc(&amino, &pk, Network::Testnet).unwrap(),
+        cosmos_decode_sign_doc(&direct, &pk, Network::Testnet).unwrap()
+    );
+    // The software signer refuses an amino SignDoc, the amino JSON refuses a DIRECT one.
+    assert!(cosmos_sign(&s, 0, &amino, Network::Testnet).is_err());
+    assert!(wallet_core::cosmos_amino_json(&direct, &pk, Network::Testnet).is_err());
+    let json = wallet_core::cosmos_amino_json(&amino, &pk, Network::Testnet).unwrap();
+    assert_eq!(
+        String::from_utf8(json.clone()).unwrap(),
+        concat!(
+            r#"{"account_number":"12","chain_id":"provider","fee":{"amount":[{"amount":"600","denom":"uatom"}],"gas":"120000"},"#,
+            r#""memo":"depot 4242","msgs":[{"type":"cosmos-sdk/MsgSend","value":{"amount":[{"amount":"1500000","denom":"uatom"}],"#,
+            r#""from_address":"cosmos19rl4cm2hmr8afy4kldpxz3fka4jguq0auqdal4","to_address":"cosmos1jhg0e7s6gn44tfc5k37kr04sznyhedtc9rzys5"}}],"#,
+            r#""sequence":"3","timeout_height":"1000100"}"#
+        )
+    );
+    // What the device does: ECDSA over SHA-256 of the JSON, DER-encoded.
+    let secp = Secp256k1::new();
+    let master = Xpriv::new_master(bitcoin::NetworkKind::Main, &s[..]).unwrap();
+    let key = master
+        .derive_priv(
+            &secp,
+            &DerivationPath::from_str("m/44'/118'/0'/0/0").unwrap(),
+        )
+        .unwrap();
+    let digest = sha256::Hash::hash(&json).to_byte_array();
+    let sig = secp.sign_ecdsa(&SecpMessage::from_digest(digest), &key.private_key);
+    let der = sig.serialize_der().to_vec();
+    let (tx, hash, summary) =
+        wallet_core::cosmos_amino_signed(&amino, &pk, Network::Testnet, &der).unwrap();
+    let (h2, s2) = cosmos_verify_signed(&tx, Network::Testnet, 12).unwrap();
+    assert_eq!((h2, s2), (hash, summary));
+    // Another account number: the amino JSON differs, the signature does not verify.
+    assert!(cosmos_verify_signed(&tx, Network::Testnet, 13).is_err());
+    let mut bad = der.clone();
+    let n = bad.len();
+    bad[n - 1] ^= 1;
+    assert!(wallet_core::cosmos_amino_signed(&amino, &pk, Network::Testnet, &bad).is_err());
+    // Memos that would need JSON escaping are refused in amino mode.
+    req.memo = "a\"b".into();
+    let direct = hex::encode(cosmos_send_sign_doc(&req).unwrap());
+    assert!(wallet_core::cosmos_amino_sign_doc(&direct, &pk, Network::Testnet).is_err());
+    let _ = (
+        PublicKey::from_slice(&pk).unwrap(),
+        Signature::from_der(&der).unwrap(),
+    );
 }

@@ -8,7 +8,7 @@ import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { publicKeyToAddress } from 'viem/accounts';
 import { bytesToHex } from 'viem';
-import type { BtcKind, EvmTxSummary, HwDeviceKind, Network, WatchOnlyAccount } from '@kyro/shared';
+import type { BtcKind, EvmTxSummary, HwDeviceKind, HwKeyChain, Network, WatchOnlyAccount } from '@kyro/shared';
 import { derivePubkey, parseXpub } from './bitcoin/xpub';
 import type { AnyAdapter, AnyUnsigned } from './types';
 
@@ -41,23 +41,23 @@ export interface WalletAccounts {
   cardano?: { address: string; path?: string };
   /** Vault only: Stellar on a hardware wallet is HW_UNSUPPORTED. */
   stellar?: { address: string; path?: string };
-  /** Vault only: NEAR implicit account (hardware wallets: not supported). */
+  /** NEAR implicit account (Ledger: key at `m/44'/397'/0'/0'/(account+1)'`, not the vault's path). */
   near?: { address: string; path?: string };
-  /** Vault only: Sui on a hardware wallet is not supported. */
+  /** Sui (vault, or Ledger « Sui » app). */
   sui?: { address: string; path?: string };
   /** Vault only: Kaspa is not offered on hardware wallets. */
   kas?: { address: string; path?: string };
   /** Vault only: Polkadot on a hardware wallet is HW_UNSUPPORTED. */
   polkadot?: { address: string; path?: string };
-  /** Vault only: Algorand is not offered on hardware wallets. */
+  /** Algorand (vault, or Ledger « Algorand » app). */
   algo?: { address: string; path?: string };
   /** Vault only: Monero on a hardware wallet is HW_UNSUPPORTED. */
   xmr?: { address: string; path?: string };
   /** Vault only: no hardware wallet signs TON in Kyro. */
   ton?: { address: string; path?: string };
-  /** Vault only: Cosmos Hub on a hardware wallet is HW_UNSUPPORTED. */
+  /** Cosmos Hub (vault, or Ledger « Cosmos » app, amino JSON signing). */
   cosmos?: { address: string; path?: string };
-  /** Vault only: Aptos has no hardware-wallet path. */
+  /** Aptos (vault, or Ledger « Aptos » app). */
   aptos?: { address: string; path?: string };
   /** Vault only: Zcash (transparent) on a hardware wallet is HW_UNSUPPORTED. */
   zec?: { address: string; xpub: string; fingerprint: string; path: string };
@@ -104,8 +104,19 @@ export function hwToAccounts(acc: WatchOnlyAccount): WalletAccounts {
   }
   if (acc.evm) out.evm = { address: evmAddressFromNode(acc.evm.xpub, acc.account) };
   if (acc.sol) out.sol = { address: acc.sol.address };
+  for (const k of acc.keys ?? []) {
+    const view = { address: k.address, path: k.path };
+    if (k.chain === 'sui') out.sui = view;
+    else if (k.chain === 'apt') out.aptos = view;
+    else if (k.chain === 'algo') out.algo = view;
+    else if (k.chain === 'near') out.near = view;
+    else out.cosmos = view;
+  }
   return out;
 }
+
+/** Single-key chains a Ledger can add to a hardware-wallet account (`hw_key_add`). */
+export const HW_KEY_CHAINS: readonly HwKeyChain[] = ['sui', 'apt', 'algo', 'near', 'cosmos'];
 
 /** Master fingerprint of the account (Bitcoin keys), for display. */
 export function hwFingerprint(acc: WatchOnlyAccount): string | null {
@@ -120,6 +131,7 @@ export const hwPaths = {
   },
   evm: (acc: WatchOnlyAccount): string => `m/44'/60'/0'/0/${acc.account}`,
   sol: (acc: WatchOnlyAccount): string | null => acc.sol?.path ?? null,
+  key: (acc: WatchOnlyAccount, chain: HwKeyChain): string | null => acc.keys?.find((k) => k.chain === chain)?.path ?? null,
 };
 
 /** ERC-20 tokens for which Kyro ships a Ledger-signed descriptor (wallet-core `ledger_cal.rs`). */

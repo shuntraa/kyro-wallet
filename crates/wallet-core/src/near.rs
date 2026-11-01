@@ -503,6 +503,26 @@ pub fn near_verify_signed(signed_hex: &str) -> Result<(NearTransfer, String)> {
     Ok((tx, near_hash_string(&hash)))
 }
 
+/// Hardware wallet (Ledger NEAR app): the Borsh transaction sent to the device (the app
+/// hashes it with SHA-256 and signs the hash), after strict decoding.
+pub fn near_hw_message(tx_hex: &str) -> Result<Vec<u8>> {
+    let raw = unhex(tx_hex)?;
+    NearTransfer::decode(&raw)?;
+    Ok(raw)
+}
+
+/// Hardware wallet: signed transaction (hex) and hash (base58) from the device's signature,
+/// checked like [`near_verify_signed`] before it is returned.
+pub fn near_hw_signed(tx_hex: &str, sig: &[u8]) -> Result<(String, String)> {
+    let sig: [u8; 64] = sig
+        .try_into()
+        .map_err(|_| bad("signature de l'appareil : 64 octets attendus"))?;
+    let tx = NearTransfer::decode(&unhex(tx_hex)?)?;
+    let signed = hex::encode(tx.encode_signed(&sig));
+    let (_, hash) = near_verify_signed(&signed)?;
+    Ok((signed, hash))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -35,13 +35,13 @@ use crate::state::AppState;
 
 const T_LIST: Duration = Duration::from_secs(10);
 /// Reading keys may include the Trezor PIN typed on the device.
-const T_READ: Duration = Duration::from_secs(90);
+pub(crate) const T_READ: Duration = Duration::from_secs(90);
 /// Anything the user must confirm on the device.
-const T_CONFIRM: Duration = Duration::from_secs(180);
+pub(crate) const T_CONFIRM: Duration = Duration::from_secs(180);
 /// Receive + change addresses scanned to flag change in the native summary.
 const OWN_ADDRESS_GAP: u32 = 20;
 
-fn prompt_fn(app: &AppHandle, id: &str) -> PromptFn {
+pub(crate) fn prompt_fn(app: &AppHandle, id: &str) -> PromptFn {
     let app = app.clone();
     let id = id.to_string();
     Arc::new(move |kind| {
@@ -51,14 +51,14 @@ fn prompt_fn(app: &AppHandle, id: &str) -> PromptFn {
 
 /// With a vault on this computer, hardware-wallet operations need the unlocked session
 /// (same lock screen as the rest of the app). Hardware-only users have no vault.
-fn guard(state: &AppState) -> AppResult<()> {
+pub(crate) fn guard(state: &AppState) -> AppResult<()> {
     if state.vault_exists() && !state.is_unlocked() {
         return Err(AppError::Locked);
     }
     Ok(())
 }
 
-fn check_account_number(account: u32) -> AppResult<()> {
+pub(crate) fn check_account_number(account: u32) -> AppResult<()> {
     if account > MAX_HW_ACCOUNT {
         return Err(AppError::InvalidInput(format!(
             "numéro de compte : 0 à {MAX_HW_ACCOUNT}"
@@ -77,20 +77,20 @@ fn not_yet(chain: Chain) -> AppError {
     }
 }
 
-fn load_account(state: &AppState, account_id: &str) -> AppResult<WatchOnlyAccount> {
+pub(crate) fn load_account(state: &AppState, account_id: &str) -> AppResult<WatchOnlyAccount> {
     let s = store::load(&state.hw_accounts_path, state.network)?;
     store::find(&s, account_id)
 }
 
 /// The stored account must be for the brand of device `id`.
-fn check_brand(info: &DeviceInfo, acc: &WatchOnlyAccount) -> AppResult<()> {
+pub(crate) fn check_brand(info: &DeviceInfo, acc: &WatchOnlyAccount) -> AppResult<()> {
     if info.kind != acc.device {
         return Err(AppError::HwWrongDevice);
     }
     Ok(())
 }
 
-fn device_line(lang: Lang, info: &DeviceInfo) -> String {
+pub(crate) fn device_line(lang: Lang, info: &DeviceInfo) -> String {
     let brand = match info.kind {
         HwDeviceKind::Ledger => "Ledger",
         HwDeviceKind::Trezor => "Trezor",
@@ -376,6 +376,7 @@ pub async fn hw_account_add(
             btc: Vec::new(),
             evm: None,
             sol: None,
+            keys: Vec::new(),
         },
     };
     if let Some(l) = label {
@@ -942,6 +943,7 @@ mod tests {
                 address: wallet_core::sol_address(&seed, 0).unwrap(),
                 path: wallet_core::sol_path(0),
             }),
+            keys: Vec::new(),
         }
     }
 
