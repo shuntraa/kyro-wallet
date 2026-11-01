@@ -1,6 +1,6 @@
 [package]
 name = "wallet-core"
-description = "Kyro wallet core: BIP39/BIP32 derivation, encrypted vault, BTC/LTC/DOGE/EVM/Solana/TRON/XRP signing. Pure, no I/O."
+description = "Kyro wallet core: BIP39/BIP32 derivation, encrypted vault, BTC/LTC/DOGE/EVM/Solana/TRON/XRP/NEAR signing. Pure, no I/O."
 version.workspace = true
 edition.workspace = true
 license = "GPL-3.0-or-later"
@@ -23,7 +23,7 @@ bitcoin = { version = "=0.32.11", default-features = false, features = ["std", "
 alloy-rlp = { version = "=0.3.16", default-features = false, features = ["std"] }
 sha3 = { version = "=0.10.9", default-features = false, features = ["std"] }
 uint = { version = "=0.10.0", default-features = false, features = ["std"] }
-# Solana: ed25519 + SLIP-10 derivation (the crate used by solana-sdk).
+# Solana and NEAR: ed25519 + SLIP-10 derivation (the crate used by solana-sdk).
 ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std", "zeroize", "hazmat"] }
 ed25519-dalek-bip32 = { version = "=0.3.0" }
 bs58 = { version = "=0.5.1" }
