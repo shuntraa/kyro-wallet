@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -29,6 +29,7 @@ mod cardano;
 mod display;
 mod error;
 mod evm;
+mod kaspa;
 mod keys;
 mod ledger_cal;
 mod mnemonic;
@@ -77,6 +78,21 @@ pub use evm::{
     evm_checksum_address, evm_decode, evm_high_fee_threshold_wei, evm_hw_finalize, evm_path,
     evm_sign_tx, evm_signing_payload, evm_tx_fields, evm_xpub_from_node, EvmTxFields, EvmTxKind,
     EvmTxRequest, EvmTxSummary, EvmWarning, EVM_KNOWN_CHAINS,
+};
+pub use kaspa::{
+    kaspa_account_path, kaspa_address, kaspa_address_decode, kaspa_address_encode,
+    kaspa_address_of_script, kaspa_address_of_xonly, kaspa_build_send, kaspa_compute_mass,
+    kaspa_hash, kaspa_keys_from_master, kaspa_mass, kaspa_own_keys, kaspa_path, kaspa_prefix,
+    kaspa_priority_feerate, kaspa_public_key, kaspa_script_pubkey, kaspa_serialized_size,
+    kaspa_sighash, kaspa_sign, kaspa_storage_mass, kaspa_tx_from_json, kaspa_tx_hash, kaspa_tx_id,
+    kaspa_tx_summary, kaspa_tx_to_json, kaspa_verify_signed, kaspa_with_dummy_signatures,
+    KaspaAddressKind, KaspaAmount, KaspaBuilt, KaspaHashDomain, KaspaInput, KaspaMass,
+    KaspaOutpoint, KaspaOutput, KaspaOutputKind, KaspaOutputView, KaspaOwnKey, KaspaSpendable,
+    KaspaTx, KaspaTxSummary, KaspaUtxoEntry, KaspaWarning, KASPA_COINBASE_MATURITY,
+    KASPA_COIN_TYPE, KASPA_HIGH_FEE, KASPA_HIGH_FEE_FACTOR, KASPA_MAX_FEERATE,
+    KASPA_MAX_FOLDED_CHANGE, KASPA_MAX_INPUTS, KASPA_MAX_SOMPI, KASPA_MAX_STANDARD_MASS,
+    KASPA_MIN_FEERATE, KASPA_MIN_SEND, KASPA_SCAN_WINDOW, KASPA_STORAGE_MASS_PARAMETER,
+    SOMPI_PER_KAS,
 };
 pub use ledger_cal::{
     ledger_erc20_lookup, ledger_erc20_payload, ledger_erc20_verify, LedgerErc20Descriptor,
