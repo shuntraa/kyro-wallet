@@ -10,6 +10,8 @@
 //!    - Cardano: CIP-0019 test vectors, whose stake key is `m/1852'/1815'/1'/2/0` of the
 //!      published test mnemonic (also in `tests/cardano.rs`);
 //!    - EVM: `m/44'/60'/0'/0/1` of "abandon … about" (MetaMask's second account);
+//!    - Stellar: SEP-0005 test 5 ("abandon … about"), `m/44'/148'/1'` (the ten accounts of the five
+//!      SEP-0005 mnemonics are all in `tests/stellar.rs`);
 //!
 //!    otherwise values cross-checked on 2026-10-30 with independent implementations:
 //!    `@scure/bip32` 1.7.0 + `bitcoinjs-lib` 7.0.5 (BTC BIP84/BIP86, LTC, DOGE), `@noble/curves`
@@ -20,8 +22,9 @@ mod common;
 use common::{seed, ABANDON};
 use wallet_core::{
     btc_account, btc_address, cardano_account_path, cardano_account_stake_address, cardano_address,
-    evm_address, evm_path, sol_address, sol_path, tron_address, tron_path, utxo_account,
-    utxo_address, xrp_address, xrp_path, BtcKind, CardanoRoot, Mnemonic, Network, UtxoCoin,
+    evm_address, evm_path, sol_address, sol_path, stellar_address, stellar_path, tron_address,
+    tron_path, utxo_account, utxo_address, xrp_address, xrp_path, BtcKind, CardanoRoot, Mnemonic,
+    Network, UtxoCoin,
 };
 
 fn btc(net: Network, kind: BtcKind, account: u32) -> (String, String, String) {
@@ -129,6 +132,12 @@ fn account_0_is_unchanged_single_address_chains() {
         xrp_address(&s, 0).unwrap(),
         "rHsMGQEkVNJmpGWs8XUBoTBiAAbwxZN5v3"
     );
+    // SEP-0005 test 5, account 0 (same on testnet: Stellar keys do not depend on the network).
+    assert_eq!(stellar_path(0), "m/44'/148'/0'");
+    assert_eq!(
+        stellar_address(&s, 0).unwrap(),
+        "GB3JDWCQJCWMJ3IILWIGDTQJJC5567PGVEVXSCVPEQOTDN64VJBDQBYX"
+    );
 }
 
 #[test]
@@ -204,6 +213,12 @@ fn account_1_single_address_chains() {
     assert_eq!(
         xrp_address(&all, 1).unwrap(),
         "rJX2KwzaLJDyFhhtXKi3htaLfaUH2tptEX"
+    );
+    // SEP-0005 test 5, `m/44'/148'/1'`.
+    assert_eq!(stellar_path(1), "m/44'/148'/1'");
+    assert_eq!(
+        stellar_address(&s, 1).unwrap(),
+        "GDVSYYTUAJ3ACHTPQNSTQBDQ4LDHQCMNY4FCEQH5TJUMSSLWQSTG42MV"
     );
 }
 
