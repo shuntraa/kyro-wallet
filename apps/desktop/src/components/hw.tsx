@@ -470,7 +470,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
                   <ChainRow key={c} st={status.chains.find((x) => x.chain === c)} chain={c} checked={chains.has(c)} onToggle={(on) => setChains((s) => { const n = new Set(s); if (on) n.add(c); else n.delete(c); return n; })} />
                 ))}
               </ul>
-              <span className="text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet (disponibles dans le coffre Kyro).</span>
+              <span className="text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP, Cardano et Stellar : pas encore sur hardware wallet (disponibles dans le coffre Kyro).</span>
               <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-2.5">
                 <label className="flex flex-col gap-1.5">
                   <span className="eyebrow">N° de compte</span>
