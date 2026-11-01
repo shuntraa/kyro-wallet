@@ -255,8 +255,8 @@ pub async fn token_txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
         }
     }
     // (version, metadata) → (time, deposit, withdraw, success)
-    let mut agg: std::collections::BTreeMap<(u64, String), (Option<String>, u128, u128, bool)> =
-        Default::default();
+    type Movement = (Option<String>, u128, u128, bool);
+    let mut agg: std::collections::BTreeMap<(u64, String), Movement> = Default::default();
     for e in v["data"]["fungible_asset_activities"]
         .as_array()
         .into_iter()
