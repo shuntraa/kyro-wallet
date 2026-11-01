@@ -33,6 +33,8 @@ export interface WalletAccounts {
   xrp?: { address: string; path?: string };
   /** Vault only: Cardano on a hardware wallet is HW_UNSUPPORTED. */
   cardano?: { address: string; path?: string };
+  /** Vault only: Aptos has no hardware-wallet path. */
+  aptos?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {

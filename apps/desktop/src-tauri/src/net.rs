@@ -35,6 +35,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
+    // Aptos (Aptos Labs fullnode REST + indexer `/v1/graphql`, keyless public tier): mainnet and
+    // testnet; only Rust's `aptos_*` commands.
+    "api.mainnet.aptoslabs.com",
+    "api.testnet.aptoslabs.com",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -294,6 +298,7 @@ pub enum Family {
     Tron,
     Xrp,
     Cardano,
+    Aptos,
     Evm,
     Solana,
     Market,
@@ -317,6 +322,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
+    } else if host == "api.mainnet.aptoslabs.com" || host == "api.testnet.aptoslabs.com" {
+        Family::Aptos
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1067,6 +1074,9 @@ mod tests {
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
+        assert_eq!(family_for("api.mainnet.aptoslabs.com", &c), Family::Aptos);
+        assert_eq!(family_for("api.testnet.aptoslabs.com", &c), Family::Aptos);
+        assert_eq!(family_for("api.devnet.aptoslabs.com", &c), Family::Other);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

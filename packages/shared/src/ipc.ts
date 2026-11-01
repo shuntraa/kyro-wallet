@@ -60,11 +60,13 @@ export interface Accounts {
    * and change both use it; Rust signs with index 0 of the account only (§2.7).
    */
   cardano: AddressInfo;
+  /** Aptos `m/44'/637'/a'/0'/0'` (Petra, SLIP-10 ed25519), `0x` + 64 hex (§2.11). */
+  aptos: AddressInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'apt';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'apt'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -562,6 +564,76 @@ export interface XrpTrustLine {
   issuer: string;
   balance: string;
   limit: string;
+}
+
+// ---------------------------------------------------------------- Aptos (§2.11)
+
+export interface AptosBackendInfo {
+  network: UtxoNetworkKey;
+  label: string;
+  tor: boolean;
+}
+
+/** `aptos_account`. Amounts: octas (1 APT = 10^8). */
+export interface AptosAccountInfo {
+  address: string;
+  /** Coin store + primary fungible store. */
+  balance: string;
+  sequenceNumber: string;
+  authenticationKey: string;
+  /** `false`: the key was rotated, Kyro cannot sign for this address any more. */
+  keyMatches: boolean;
+}
+
+/** Every warning → reinforced confirmation. */
+export type AptosWarning = { kind: 'selfTransfer' } | { kind: 'highFee' };
+
+/** wallet-core `AptosTxSummary`: Rust's strict decoding of the `RawTransaction`. */
+export interface AptosTxSummary {
+  sender: string;
+  recipient: string;
+  /** Always `0x1::aptos_account::transfer`. */
+  function: string;
+  /** Octas. */
+  amount: string;
+  sequenceNumber: string;
+  maxGasAmount: string;
+  /** Octas per gas unit. */
+  gasUnitPrice: string;
+  /** maxGasAmount × gasUnitPrice, octas: what the network reserves up front. */
+  maxFee: string;
+  expirationTimestampSecs: number;
+  chainId: number;
+  warnings: AptosWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+/** Live context Rust read for the dialog. */
+export interface AptosContext {
+  account: AptosAccountInfo;
+  /** The recipient has nothing yet: the transfer creates its account. */
+  recipientNew: boolean;
+  /** Simulated gas units (fee ≈ gasUsed × gasUnitPrice). */
+  gasUsed: string;
+  ledgerTime: number;
+}
+
+/** `aptos_txs` entry (indexer, newest first). Amounts: octas. */
+export interface AptosHistoryEntry {
+  version: string;
+  /** Known for the transactions this account sent. */
+  hash: string | null;
+  /** ms epoch. */
+  time: number | null;
+  direction: 'in' | 'out' | 'self';
+  amount: string;
+  fee: string;
+  /** Recipient of a transfer we sent; null otherwise. */
+  counterparty: string | null;
+  success: boolean;
+  function: string | null;
+  /** This account signed it. */
+  sentByUs: boolean;
 }
 
 // ---------------------------------------------------------------- Cardano (§2.7)
@@ -1320,6 +1392,20 @@ export interface Commands {
   xrp_broadcast: { args: { blob: string } & WithAccount; ret: string };
   /** `validated: true` + `result: 'tesSUCCESS'` once in a validated ledger; not found yet: `{ false, '' }`. */
   xrp_tx_status: { args: { hash: string }; ret: { validated: boolean; result: string } };
+  // Aptos (§2.11): Rust builds the transfer (0x1::aptos_account::transfer: sequence number, gas
+  // price, simulated max gas, expiration), decodes it strictly, re-reads the account and
+  // re-simulates live, signs behind the password and the native dialog. Hardware wallets: none.
+  aptos_backend_info: { args: undefined; ret: AptosBackendInfo };
+  /** `m/44'/637'/{account}'/0'/0'`. */
+  aptos_address: { args: WithAccount | undefined; ret: string };
+  aptos_account: { args: { address: string }; ret: AptosAccountInfo };
+  aptos_txs: { args: { address: string }; ret: AptosHistoryEntry[] };
+  /** `amount`: octas. Refused: rotated key, amount + max fee > balance, failing simulation. */
+  aptos_build_tx: { args: { to: string; amount: string } & WithAccount; ret: { raw: string; summary: AptosTxSummary; context: AptosContext } };
+  aptos_sign_tx: { args: { raw: string; password: string } & WithAccount; ret: { signed: string; hash: string; summary: AptosTxSummary; context: AptosContext } };
+  /** Signature checked (single ed25519 key = sender); the node's hash must be ours. */
+  aptos_broadcast: { args: { signed: string } & WithAccount; ret: string };
+  aptos_tx_status: { args: { hash: string }; ret: { committed: boolean; success: boolean; vmStatus: string } };
   // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
   // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
   // Hardware wallets: HW_UNSUPPORTED.

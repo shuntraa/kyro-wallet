@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aptos-sign-tx"
+description = "Enables the aptos_sign_tx command without any pre-configured scope."
+commands.allow = ["aptos_sign_tx"]
+
+[[permission]]
+identifier = "deny-aptos-sign-tx"
+description = "Denies the aptos_sign_tx command without any pre-configured scope."
+commands.deny = ["aptos_sign_tx"]

@@ -37,7 +37,7 @@ export function setFavorites(ids: string[]): void {
 // ---------------------------------------------------------------- address book
 
 /** XRP contacts: the classic address only (the destination tag is per payment). */
-export type ContactFamily = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+export type ContactFamily = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'apt';
 export interface Contact {
   id: string;
   name: string;
@@ -55,8 +55,10 @@ export function saveContacts(list: Contact[]): void {
   writeJson('contacts', list);
 }
 export function findContact(address: string, family: ContactFamily): Contact | undefined {
-  const a = family === 'evm' ? address.trim().toLowerCase() : address.trim();
-  return getContacts().find((c) => c.family === family && (family === 'evm' ? c.address.toLowerCase() : c.address) === a);
+  // EVM and Aptos addresses are hex: compared lowercase.
+  const hex = family === 'evm' || family === 'apt';
+  const a = hex ? address.trim().toLowerCase() : address.trim();
+  return getContacts().find((c) => c.family === family && (hex ? c.address.toLowerCase() : c.address) === a);
 }
 export function bumpContactSends(id: string): void {
   saveContacts(getContacts().map((c) => (c.id === id ? { ...c, sends: (c.sends ?? 0) + 1 } : c)));

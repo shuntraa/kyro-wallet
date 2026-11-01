@@ -186,6 +186,28 @@ pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, M
 pub fn xrp_sign(seed, account, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
 pub fn xrp_verify_signed(blob_hex) -> Result<String /*hash*/>;   // signature DER low-S de SigningPubKey, clé = Account
 
+// --- Aptos : m/44'/637'/a'/0'/0' (SLIP-10 ed25519, tous niveaux durcis : Petra, CLI et SDK Aptos, Ledger ; compte 0 = m/44'/637'/0'/0'/0'),
+//     adresse = clé d'authentification = SHA3-256(clé publique 32 o || 0x00), écrite 0x + 64 hex (forme longue AIP-40, sans somme de contrôle) ;
+//     BCS écrit à la main, strict (ULEB128 canonique, variantes connues seulement, aucun octet en trop, ré-encodage identique exigé)
+pub fn aptos_path(account) -> String; pub fn aptos_address(seed, account) -> Result<String>; pub fn aptos_public_key(seed, account) -> Result<[u8; 32]>;
+pub fn aptos_address_of_pubkey(&[u8]) -> Result<String>; pub fn aptos_parse_address(&str) -> Result<[u8; 32]>;   // 0x + 64 hex exactement : forme courte (0x1, zéros de tête omis) et noms ANS (.apt) refusés
+pub struct AptosTransfer { sender, sequence_number, recipient, amount /*octas*/, max_gas_amount, gas_unit_price, expiration_timestamp_secs, chain_id }
+impl AptosTransfer { pub fn encode(&self) -> Result<Vec<u8>> /*RawTransaction BCS*/; pub fn decode(bcs) -> Result<Self>; pub fn max_fee(&self) -> u64;
+                     pub fn signed_bytes(&self, pubkey, sig) -> Result<Vec<u8>> /*raw || 0x00 Ed25519 || uleb 32 || pk || uleb 64 || sig*/ }
+// decode n'accepte QUE RawTransaction { payload: EntryFunction(0x1::aptos_account::transfer, aucun argument de type, [bcs(address), bcs(u64)]) } ;
+// refusés : script, multisig, charge « Payload » (transactions sans séquence), autre module / fonction, arguments de type, montant / gaz / prix / chain_id nuls.
+pub fn aptos_signing_message(raw) -> Vec<u8>;     // SHA3-256("APTOS::RawTransaction") || raw
+pub fn aptos_tx_hash(signed) -> String;           // 0x + hex(SHA3-256(SHA3-256("APTOS::Transaction") || 0x00 || signed))
+pub fn aptos_decode_tx(raw_hex, our_address) -> Result<AptosTxSummary>;   // + refuse : expéditeur ≠ nous
+pub struct AptosTxSummary { sender, recipient, function, amount, sequence_number, max_gas_amount, gas_unit_price, max_fee,
+                            expiration_timestamp_secs, chain_id, warnings: Vec<AptosWarning>, requires_extra_confirmation }   // serde camelCase
+pub enum AptosWarning { SelfTransfer, HighFee /*frais maximum > 0,02 APT*/ }   // → renforcée
+pub fn aptos_sign(seed, account, raw_hex) -> Result<(String /*signée, hex*/, String /*hash*/, AptosTxSummary)>;   // décode d'abord ; verify_strict
+pub fn aptos_verify_signed(signed_hex) -> Result<(String /*hash*/, AptosTransfer)>;   // une seule clé ed25519, adresse(clé) = expéditeur, verify_strict
+pub fn aptos_simulation_bytes(raw_hex, pubkey) -> Result<Vec<u8>>;   // signature nulle, pour /transactions/simulate (qui refuse une vraie signature)
+// Vecteurs : wallet « shoot island … » du SDK TypeScript officiel (clé publique, adresse), deux vrais transferts mainnet
+// (versions 7851560271 et 7851558238) reconstruits octet pour octet : la signature de la chaîne se vérifie et le hash est identique.
+
 // --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
 //     sel = ENTROPIE BIP39, puis clamping), dérivation BIP32-Ed25519 V2 par le crate ed25519-bip32 (aucune crypto écrite
 //     ici), signature ed25519-dalek (hazmat::raw_sign avec le scalaire étendu kL ‖ kR) vérifiée (verify_strict) ;
@@ -394,6 +416,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `ltc_*`, `doge_*` | voir §2.4 | | Litecoin, Dogecoin : mêmes formes Esplora que `btc_*`, signature avec dialogue natif |
 | `ada_*` | voir §2.7 | | Cardano : transaction construite **par Rust** depuis les UTxO et les paramètres de protocole, chaque sortie détaillée (ADA, tokens, min-ADA) |
 | `xrp_*` | voir §2.6 | | XRP Ledger : paiement construit **par Rust** (Sequence, Fee, LastLedgerSequence), tag de destination mis en évidence, réserve |
+| `aptos_*` | voir §2.11 | | Aptos : transfert d'APT (`0x1::aptos_account::transfer`) construit **par Rust** (séquence, prix du gaz, gaz simulé, expiration), décodé strictement, re-simulé avant le dialogue natif |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `sol_stake_*`, `ada_stake_*`, `tron_stake_*` | voir §2.8 | | Staking : Solana natif, délégation Cardano, TRON Stake 2.0 ; opérations construites **par Rust**, décodées et vérifiées en direct avant le dialogue natif |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
@@ -926,6 +949,27 @@ type NetworkInfo = {
 
 **Fait côté UI** : Réglages › Réseaux et serveurs › « Réseau » (Réseau principal — fonds réels / Réseau de test — jetons sans valeur), fenêtre de confirmation qui rappelle que chaque réseau a son propre coffre (l'autre est gardé, pas supprimé), puis redémarrage ; écran d'accueil : une ligne « Le coffre sera créé sur le réseau … » avec un lien pour changer ; badge TESTNET de la barre d'état inchangé. **Mode démo** : `network_set` mémorise le choix (`localStorage`, comme l'environnement) et recharge la page sur `?network=…` ; `?network=` dans l'URL joue le rôle de `KYRO_NETWORK`.
 
+### 2.11 Aptos (APT)
+
+Serveur : fullnode REST d'Aptos Labs, `https://api.mainnet.aptoslabs.com/v1` / `https://api.testnet.aptoslabs.com/v1` (offre publique **sans clé**), et son indexeur `/v1/graphql` (même hôte) pour l'historique ; famille Tor `aptos`, jamais de repli. **Pas de serveur personnalisé pour l'instant.** Avant toute construction, Rust lit `/v1` et refuse un `chain_id` autre que celui du réseau de l'app (1 mainnet, 2 testnet : `SERVER_WRONG_NETWORK`). **Rust construit le transfert** : numéro de séquence (`/accounts/{a}`), prix du gaz (`/estimate_gas_price`, borné à 10 000 octas par unité), gaz maximum = gaz de la simulation (`/transactions/simulate`, signature nulle) × 1,5, entre 200 et 20 000 unités, expiration = heure du registre + 10 min ; BCS écrit par wallet-core. Une transaction construite par le serveur n'est jamais signée. Le réseau exige que le solde couvre **montant + gaz maximum × prix** d'avance : « tout envoyer » envoie donc solde − frais maximum (la part non utilisée reste).
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `aptos_backend_info` | — | `{ network: 'mainnet' \| 'testnet', label, tor }` | |
+| `aptos_address` | `{ account? }` | `string` | `m/44'/637'/{account}'/0'/0'`, coffre déverrouillé ; `aptos_build_tx`, `aptos_sign_tx`, `aptos_broadcast` prennent le même `account?` |
+| `aptos_account` | `{ address }` | `{ address, balance /*octas*/, sequenceNumber, authenticationKey, keyMatches }` | solde `/accounts/{a}/balance/0x1::aptos_coin::AptosCoin` (pièce + magasin primaire d'actif fongible) ; compte jamais vu : séquence 0, solde 0 ; `keyMatches: false` = la clé du compte a été changée (rotation) : Kyro refuse alors de construire et de signer |
+| `aptos_txs` | `{ address }` | `[{ version, hash, time, direction, amount, fee, counterparty, success, function, sentByUs }]` | 50 dernières, indexeur (`fungible_asset_activities`, APT en pièce et en actif fongible `0xa`, regroupées par transaction : dépôts − retraits, gaz à part) + `/accounts/{a}/transactions` (nos envois : hash et destinataire) ; `counterparty` connu seulement pour nos envois |
+| `aptos_build_tx` | `{ to, amount /*octas*/, account? }` | `{ raw /*RawTransaction BCS hex*/, summary: AptosTxSummary, context: { account, recipientNew, gasUsed, ledgerTime } }` | refusé avant toute construction : adresse refusée (voir §1), clé changée, montant > solde, simulation qui échoue (son `vm_status` est donné), gaz simulé > 13 333 unités, montant + frais maximum > solde |
+| `aptos_sign_tx` | `{ raw, password, account? }` | `{ signed /*hex*/, hash, summary, context }` | décode (strict, expéditeur = nous, `chain_id` de l'app), refuse une expiration à moins de 30 s ou à plus de 11 min, **relit en direct** le compte (séquence identique, clé, solde ≥ montant + frais maximum) et **re-simule** ; mot de passe → dialogue natif : destinataire complet (« sans somme de contrôle »), montant (APT et octas), création du compte destinataire, frais estimés (gaz simulé × prix) et maximum, solde, fonction, séquence, chaîne, expiration ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` ; résumé de la signature = résumé affiché |
+| `aptos_broadcast` | `{ signed, account? }` | `string` (hash `0x…`) | `aptos_verify_signed` (une seule clé ed25519 = expéditeur = nous, bonne chaîne) puis `POST /transactions` (BCS, `application/x.aptos.signed_transaction+bcs`) ; refus du nœud → `INVALID_INPUT` avec son message ; hash du nœud ≠ hash calculé → `SERVER_UNREACHABLE` |
+| `aptos_tx_status` | `{ hash }` | `{ committed, success, vmStatus }` | `/transactions/by_hash` : en attente ou introuvable = `committed: false` |
+
+**Limite de débit** : Aptos Labs limite les requêtes anonymes par IP (50 000 unités de calcul par 5 minutes, documentation Geomi lue le 01/11/2026). En mode Tor, l'IP du relais de sortie est partagée : une réponse 429 donne `SERVER_UNREACHABLE` avec un message clair, jamais de nouvel essai en clair. Clé API : non prise en charge pour l'instant.
+
+Hardware wallets : non proposé (aucune commande `hw_*`). Ce qu'il faudrait : Ledger app « Aptos » (signature d'un `RawTransaction` BCS que l'app affiche) ; Kyro vérifierait la signature contre son propre message de signature, comme ailleurs.
+
+**Fait côté UI** : `Family` `'apt'`, `AccountChain` `'apt'`, types `Commands` (`aptos_*`, `Accounts.aptos`), backend démo (`mock-aptos.ts`), écrans Portefeuille / Actif / Recevoir (adresse seule, sans lien de paiement) / Envoyer (adresse complète obligatoire, avertissement « sans somme de contrôle », création du compte destinataire, frais estimés et maximum, résumé Rust avant le mot de passe, suivi `aptos_tx_status`) / Historique (leurres de poisoning : montant nul, retrait non signé par nous), carnet d'adresses, « Connexions sortantes ». Adaptateur : `AptosAdapter` (`packages/chains/src/aptos/`), `aptosChain(network)`. Prix : CoinGecko `aptos`.
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -935,6 +979,7 @@ type NetworkInfo = {
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`) : utilisé par les commandes Rust `ltc_*`, famille Tor `litecoin` |
 | `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet et mainnet (JSON-RPC rippled) : utilisés par les commandes Rust `xrp_*`, famille Tor `xrp` |
 | `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
+| `api.mainnet.aptoslabs.com`, `api.testnet.aptoslabs.com` | Aptos mainnet et testnet (fullnode REST d'Aptos Labs + indexeur `/v1/graphql`, offre publique sans clé) : utilisés par les commandes Rust `aptos_*`, famille Tor `aptos` |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |
 | `arbitrum-one-rpc.publicnode.com`, `optimism-rpc.publicnode.com`, `base-rpc.publicnode.com`, `polygon-bor-rpc.publicnode.com`, `bsc-rpc.publicnode.com`, `avalanche-c-chain-rpc.publicnode.com` | RPC EVM (phase 2) |

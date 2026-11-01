@@ -9,8 +9,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `ltc` / `doge`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*`, docs/IPC.md §2.4).
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
-/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `apt`: Aptos (APT, `aptos_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'apt';
 
 interface ChainBase {
   key: string;
@@ -47,7 +47,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | AptosChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -240,6 +240,29 @@ export function cardanoChain(network: Network): CardanoChain {
   return CARDANO_CHAINS[network];
 }
 
+/**
+ * Aptos (phase 4): Rust `aptos_*` commands and `AptosAdapter` (`packages/chains/src/aptos/`).
+ * Testnet = Aptos testnet (chain id 2). Part of `allChains()` / `assetsFor()` (APT only).
+ * Hardware wallets: not offered (no `hw_*` path), the UI disables Aptos for such accounts.
+ */
+export interface AptosChain extends Omit<ChainBase, 'phase'> {
+  family: 'apt';
+  phase: 4;
+  /** 1 mainnet, 2 testnet (checked by Rust against the node before anything is built). */
+  chainId: number;
+}
+
+const APTOS_CHAINS: Record<Network, AptosChain> = {
+  testnet: { family: 'apt', key: 'aptos', name: 'Aptos testnet', label: 'APT testnet', network: 'testnet', color: '#1C1C1C', glyph: 'A',
+    nativeSymbol: 'APT', nativeName: 'Aptos', nativeDecimals: 8, coingeckoId: 'aptos', phase: 4, blockTimeSecs: 1, chainId: 2 },
+  mainnet: { family: 'apt', key: 'aptos', name: 'Aptos', label: 'APT', network: 'mainnet', color: '#1C1C1C', glyph: 'A',
+    nativeSymbol: 'APT', nativeName: 'Aptos', nativeDecimals: 8, coingeckoId: 'aptos', phase: 4, blockTimeSecs: 1, chainId: 1 },
+};
+
+export function aptosChain(network: Network): AptosChain {
+  return APTOS_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -301,7 +324,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), aptosChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -418,6 +441,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       ? { host: host(tron.url), purpose: 'TRON : ton nœud java-tron (l’historique exige l’API /v1 de TronGrid)', custom: true }
       : { host: network === 'mainnet' ? 'api.trongrid.io' : 'nile.trongrid.io', purpose: `TRON${network === 'mainnet' ? '' : ' Nile'} : soldes, ressources, historique, diffusion (TronGrid)` },
   );
+  // Aptos: reached by Rust only (aptos_*), Tor circuits of the `aptos` family. No custom server yet.
+  list.push({
+    host: network === 'mainnet' ? 'api.mainnet.aptoslabs.com' : 'api.testnet.aptoslabs.com',
+    purpose: `Aptos${network === 'mainnet' ? '' : ' testnet'} : solde, simulation, historique (indexeur), diffusion (Aptos Labs, sans clé)`,
+  });
   list.push({ host: 'api.0x.org', purpose: 'Devis de swap EVM (clé requise)' });
   list.push({ host: 'li.quest', purpose: 'Devis de swap cross-chain' });
   list.push({ host: 'lite-api.jup.ag', purpose: 'Devis de swap Solana' });

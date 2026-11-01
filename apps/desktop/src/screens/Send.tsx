@@ -41,6 +41,8 @@ import {
   type SolanaAdapter,
   type XrpAdapter,
   type CardanoAdapter,
+  type AptosAdapter,
+  aptosAddressProblem,
 } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -60,6 +62,7 @@ import { SolSummaryView } from '../components/SolSummaryView';
 import { TronEstimateView } from '../components/TronEstimateView';
 import { XRP_ACTIVATION, XrpSpendable, XrpSummaryView, XrpTagField, XrpTxStatusLine } from '../components/XrpSend';
 import { CardanoSendFields, CardanoSummaryView, CardanoTxStatusLine, tokenKey } from '../components/Cardano';
+import { AptosSummaryView, AptosTxStatusLine } from '../components/AptosSend';
 import { DustOnlyNote, PoisoningWarning } from '../components/Poisoning';
 import { SecondConfirmNotice, btcWarningText, evmWarningText } from '../components/SecondConfirm';
 import { useHistory } from '../state/history';
@@ -79,6 +82,7 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   if (asset.family === 'tron') return adapters.tron ?? undefined;
   if (asset.family === 'xrp') return adapters.xrp ?? undefined;
   if (asset.family === 'ada') return adapters.cardano ?? undefined;
+  if (asset.family === 'apt') return adapters.aptos ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -126,8 +130,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
   // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
-  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
-  const isOwn = ownAddresses.includes(asset?.family === 'evm' ? toTrim.toLowerCase() : toTrim);
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.aptos?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' || x.family === 'apt' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
+  const isOwn = ownAddresses.includes(asset?.family === 'evm' || asset?.family === 'apt' ? toTrim.toLowerCase() : toTrim);
   // « Mes comptes »: the user's OTHER accounts of this chain. A transfer between two of them is an
   // ordinary send (same Rust decoding, native dialog, poisoning check: own addresses are known).
   const family = asset?.family as AccountChain | undefined;
@@ -175,6 +179,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       tron: [accounts.tron?.address],
       xrp: [accounts.xrp?.address],
       ada: [accounts.cardano?.address],
+      apt: [accounts.aptos?.address],
     };
     // The other accounts of the vault are trusted too.
     for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
@@ -246,6 +251,12 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const adaMemoTooLong = isAda && new TextEncoder().encode(memo).length > 1024;
   /** Refused Cardano address types, in Rust's words (Byron, script, pointer, stake, other network). */
   const adaProblem = isAda && toTrim ? cardanoAddressProblem(toTrim, network) : null;
+  /** Aptos: APT only, full 0x + 64 hex addresses, the max fee is reserved up front (§2.11). */
+  const isApt = asset?.family === 'apt';
+  const aptAdapter = isApt ? (adapter as AptosAdapter | undefined) : undefined;
+  const aptProblem = isApt && toTrim ? aptosAddressProblem(toTrim) : null;
+  const aptDest = useAsync(aptAdapter && addrValid ? () => aptAdapter.recipientInfo(toTrim) : null, [aptAdapter, addrValid, toTrim]);
+  const aptDestNew = !!aptDest.data && aptDest.data.address === toTrim.toLowerCase() && aptDest.data.sequenceNumber === '0' && aptDest.data.balance === '0';
   const adaBlocked = isAda && (adaMemoTooLong || (adaTokenMode && (adaTokenQty === null || adaTokenQty <= 0n || adaTokenOver)));
   const amountBase = useMemo(() => {
     if (!amountStr) return null;
@@ -446,6 +457,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       >
         {xrpAdapter && <XrpTxStatusLine adapter={xrpAdapter} hash={done.id} recipient={toTrim} onValidated={pf.refresh} />}
         {adaAdapter && <CardanoTxStatusLine adapter={adaAdapter} hash={done.id} onConfirmed={pf.refresh} />}
+        {aptAdapter && <AptosTxStatusLine adapter={aptAdapter} hash={done.id} onCommitted={pf.refresh} />}
       </SendDone>
     );
   }
@@ -511,7 +523,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               }
             />
             <AccountPicker family={asset.family} label="Compte" />
-            {activeHw && <span className="text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).</span>}
+            {activeHw && <span className="text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP, Cardano et Aptos : pas encore sur hardware wallet (ils restent disponibles dans le coffre Kyro).</span>}
             {fees.error && serverMissing(fees.error) && <ServerMissingLine coin={asset.name} />}
           </div>
 
@@ -529,7 +541,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? 'r… (adresse classique)' : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
+                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? 'r… (adresse classique)' : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'sol' ? 'Adresse Solana' : asset.family === 'apt' ? '0x… (64 caractères)' : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -605,7 +617,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               )}
             </div>
             {ownError && <span className="text-[12px] text-down">{ownError}</span>}
-            {toTrim && !addrValid && !xAddress && !adaProblem && <span className="text-[12px] text-down">Adresse invalide pour {chain.name}.</span>}
+            {toTrim && !addrValid && !xAddress && !adaProblem && !aptProblem && <span className="text-[12px] text-down">Adresse invalide pour {chain.name}.</span>}
+            {aptProblem && <span className="text-[12px] text-down">{aptProblem}</span>}
+            {isApt && addrValid && <span className="text-[12px] leading-[1.45] text-mute">Les adresses Aptos n’ont pas de somme de contrôle : une seule lettre fausse envoie ailleurs, sans retour possible. Compare-la en entier.{aptDestNew ? ' Ce compte n’a encore rien reçu : le transfert le crée (un peu plus de gaz).' : ''}</span>}
+            {isApt && aptDest.error && addrValid && <span className="text-[12px] text-down">Compte destinataire illisible : {aptDest.error.message}</span>}
             {adaProblem && <span className="text-[12px] text-down">{adaProblem.charAt(0).toUpperCase() + adaProblem.slice(1)}.</span>}
             {poisoning.lookalike && <PoisoningWarning recipient={toTrim} lookalike={poisoning.lookalike} family={asset.family} acknowledged={poisonAck} onAcknowledge={setPoisonAck} />}
             {!poisoning.lookalike && poisoning.suspect && !contact && !isOwn && <DustOnlyNote />}
@@ -710,6 +725,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 <strong className="font-semibold text-text">Rien à choisir sur Cardano.</strong> Les frais dépendent de la taille de la transaction (44 lovelace par octet + 0,155381 ADA) : d’habitude ≈ 0,17 ADA, un peu plus avec un token ou un message. Le coffre les calcule ; le montant exact est dans la vérification.
               </div>
             </div>
+          ) : isApt ? (
+            <div className="flex flex-col gap-2">
+              <span className="eyebrow">Frais réseau</span>
+              <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
+                <strong className="font-semibold text-text">Rien à choisir sur Aptos.</strong> Le coffre prend le prix du gaz annoncé par le réseau et simule le transfert : d’habitude ≈ 0,0001 APT. Le réseau exige d’avance le maximum (gaz simulé × 1,5) en plus du montant ; seule la part utilisée est prélevée.
+              </div>
+            </div>
           ) : isXrp ? (
             <div className="flex flex-col gap-2">
               <span className="eyebrow">Frais réseau</span>
@@ -786,7 +808,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-medium tracking-[-0.01em]">Vérification</span>
             <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[10.5px] font-medium tracking-[0.02em] text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'ada' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
+              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'apt' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
@@ -843,6 +865,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           )}
           {built?.unsigned.family === 'xrp' && <XrpSummaryView u={built.unsigned} xrpPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'ada' && <CardanoSummaryView u={built.unsigned} adaPrice={nativePrice} currency={cur} />}
+          {built?.unsigned.family === 'apt' && <AptosSummaryView u={built.unsigned} aptPrice={nativePrice} currency={cur} />}
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
@@ -885,7 +908,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {built.unsigned.summary.warnings.some((w) => w.kind === 'unknownToken') ? ' Token non vérifié : une 2ᵉ confirmation te sera demandée.' : ''}
             </EnClair>
           )}
-          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'ada' && (
+          {built && addrValid && sendAmount !== null && built.unsigned.family === 'apt' && (
+            <EnClair>
+              Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>. Frais estimés : {fmtCrypto(built.unsigned.estimatedFee, 8, 'APT', 8)} ; le réseau en réserve au plus {fmtCrypto(built.unsigned.maxFee, 8, 'APT', 8)} pendant l’exécution.
+              {built.unsigned.context.recipientNew ? ' Ce compte n’a encore rien reçu : le transfert le crée.' : ''}
+            </EnClair>
+          )}
+          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'apt' && (
             <EnClair>
               Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>
               {utxoLike && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? ', la monnaie revient sur ton adresse de change' : ''}. Personne d’autre ne reçoit rien, et tu paies au maximum{' '}
@@ -958,6 +987,7 @@ function dataLabel(b: Built | null, family?: string): string {
     return `${outs} sortie${outs > 1 ? 's' : ''} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' ? 'octets' : 'vB'}`;
   }
   if (u.family === 'ada') return `${u.summary.inputs.length} entrée${u.summary.inputs.length > 1 ? 's' : ''} · ${u.summary.outputs.length} sorties${u.token ? ' · token' : ''}${u.summary.memo ? ' · message' : ''}`;
+  if (u.family === 'apt') return `0x1::aptos_account::transfer · séquence ${u.summary.sequenceNumber}`;
   if (u.family === 'xrp') return `Payment${u.summary.destinationTag !== null ? ` · tag ${u.summary.destinationTag}` : ' · sans tag'}`;
   if (u.family === 'tron') return u.token ? `transfer() TRC-20 · ${u.size.bandwidth} octets` : `TransferContract · ${u.size.bandwidth} octets`;
   if (u.family === 'sol') return u.mint ? `TransferChecked ${u.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL'}${u.createsAta ? ' + création du compte' : ''}` : 'Aucune · transfert système';

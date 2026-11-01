@@ -40,7 +40,9 @@ import { createDemoUtxo, demoUtxoAccount, DEMO_DOGE_NETWORKS, DEMO_LTC_NETWORKS 
 import { createDemoTron, demoTronAddress, type DemoTronState } from './mock-tron';
 export { demoTronAddress } from './mock-tron';
 import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
+import { createDemoAptos, demoAptosAddress, type DemoAptosState } from './mock-aptos';
 export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
+export { demoAptosAddress } from './mock-aptos';
 import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
 export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
 import { demoFund } from './mock-tx';
@@ -161,6 +163,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       tron: { address: demoTronAddress(demoSeed(), 0), path: "m/44'/195'/0'/0/0" },
       xrp: { address: demoXrpAddress(demoSeed(), 0), path: "m/44'/144'/0'/0/0" },
       cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
+      aptos: { address: demoAptosAddress(0), path: "m/44'/637'/0'/0'/0'" },
     },
     ownBtc,
     receive,
@@ -284,6 +287,8 @@ export interface MockBackend {
   xrp: DemoXrpState;
   /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
+  /** Aptos demo chain (tests). */
+  aptos: DemoAptosState;
   /** Staking demo (tests). */
   stake: ReturnType<typeof createDemoStake>;
 }
@@ -374,6 +379,16 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const xrpChain = createDemoXrp({
     network,
     seed: demoSeed(),
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // Aptos (§2.11): `aptos_*`, max fee reserved up front like Rust.
+  const aptosChain = createDemoAptos({
+    network,
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -828,6 +843,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     btc_tx_hex: (a) => servers.btc.txHex(a.txid),
     ...tronChain.handlers,
     ...xrpChain.handlers,
+    ...aptosChain.handlers,
     ...cardanoChain.handlers,
     ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
@@ -860,6 +876,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     tron: tronChain.state,
     xrp: xrpChain.state,
     cardano: cardanoChain.state,
+    aptos: aptosChain.state,
     stake,
     advance(ms: number) {
       clockOffset += ms;
@@ -874,7 +891,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
         return accts.adaAddress(accts.arg(args.account));
       }
       if (DEMO_ACCOUNT0_ONLY.test(cmd) && accts.arg(args.account) !== 0) {
-        throw new IpcError('INVALID_INPUT', 'Mode démo : les comptes supplémentaires TRON, XRP et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).');
+        throw new IpcError('INVALID_INPUT', 'Mode démo : les comptes supplémentaires TRON, XRP, Cardano et Aptos et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).');
       }
       void captureProtected;
       return await h(args);
@@ -883,7 +900,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
 }
 
 /** Demo commands simulated for account 0 only (§2.9). */
-const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|ada_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
+const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|ada_(build_tx|sign_tx|broadcast)|aptos_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
 
 function decodeSolMessageArg(m: unknown): Uint8Array {
   try {

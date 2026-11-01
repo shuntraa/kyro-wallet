@@ -447,6 +447,8 @@ pub struct Accounts {
     xrp: AddressOut,
     /// Base address `m/1852'/1815'/a'/0/0` + stake key `…/2/0` (CIP-1852, Icarus).
     cardano: AddressOut,
+    /// `m/44'/637'/a'/0'/0'` (Petra, SLIP-10 ed25519), `0x` + 64 hex.
+    aptos: AddressOut,
 }
 
 fn utxo_account_out(
@@ -523,6 +525,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             cardano: AddressOut {
                 address: cardano,
                 path: format!("{}/0/0", wallet_core::cardano_account_path(a)),
+            },
+            aptos: AddressOut {
+                address: wallet_core::aptos_address(seed, a)?,
+                path: wallet_core::aptos_path(a),
             },
         })
     })
