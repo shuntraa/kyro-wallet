@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { isTauri } from '@kyro/shared';
 import { KyroMark } from '../components/kit';
 import { IconSearch } from '../components/icons';
+import { useT } from '../i18n';
 
 async function win(action: 'minimize' | 'toggleMaximize' | 'close') {
   if (!isTauri()) return;
@@ -14,20 +15,21 @@ async function win(action: 'minimize' | 'toggleMaximize' | 'close') {
 }
 
 export function WindowControls() {
+  const { t } = useT();
   const btn = 'flex h-10 w-[46px] items-center justify-center text-mute transition-colors duration-150 hover:bg-raised hover:text-text';
   return (
     <div className="flex h-10">
-      <button type="button" aria-label="Réduire" className={btn} onClick={() => void win('minimize')}>
+      <button type="button" aria-label={t('shell.minimize')} className={btn} onClick={() => void win('minimize')}>
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
           <path d="M1 6h10" stroke="currentColor" strokeWidth="1.2" />
         </svg>
       </button>
-      <button type="button" aria-label="Agrandir" className={btn} onClick={() => void win('toggleMaximize')}>
+      <button type="button" aria-label={t('shell.maximize')} className={btn} onClick={() => void win('toggleMaximize')}>
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
           <rect x="1.5" y="1.5" width="9" height="9" fill="none" stroke="currentColor" strokeWidth="1.2" />
         </svg>
       </button>
-      <button type="button" aria-label="Fermer" className={`${btn} hover:!bg-[#c42b1c] hover:!text-white`} onClick={() => void win('close')}>
+      <button type="button" aria-label={t('common.close')} className={`${btn} hover:!bg-[#c42b1c] hover:!text-white`} onClick={() => void win('close')}>
         <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
           <path d="M1.5 1.5l9 9M10.5 1.5l-9 9" stroke="currentColor" strokeWidth="1.2" />
         </svg>
@@ -83,6 +85,7 @@ function Slash() {
 }
 
 function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
+  const { t } = useT();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState(0);
@@ -113,12 +116,12 @@ function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
     <div className="relative w-[clamp(260px,28vw,380px)]">
       <label className="flex h-7 items-center gap-2 rounded-ctl border border-line bg-bg-deep px-2.5 text-[12px] text-mute transition-colors hover:border-line-2 focus-within:border-ice-line focus-within:bg-bg">
         <IconSearch size={14} />
-        <span className="sr-only">Rechercher</span>
+        <span className="sr-only">{t('shell.search')}</span>
         <input
           ref={ref}
           type="search"
           value={q}
-          placeholder="Rechercher un actif, une adresse…"
+          placeholder={t('shell.searchPlaceholder')}
           spellCheck={false}
           autoComplete="off"
           onChange={(e) => {
@@ -148,7 +151,7 @@ function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
       {open && q.trim() && (
         <div className="pop-in absolute top-9 right-0 left-0 z-50 overflow-hidden rounded-box border border-line-2 bg-[#121418] p-1 shadow-[0_16px_40px_-16px_rgba(0,0,0,.8)]">
           {results.length === 0 ? (
-            <div className="px-3 py-2.5 text-[12px] text-mute">Aucun résultat.</div>
+            <div className="px-3 py-2.5 text-[12px] text-mute">{t('shell.noResults')}</div>
           ) : (
             results.map((r, i) => (
               <button

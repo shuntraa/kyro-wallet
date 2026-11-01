@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { KyroMark } from './kit';
+import { t } from '../i18n';
 
 export function QrCode({ value, size = 300 }: { value: string; size?: number }) {
   const [svg, setSvg] = useState<string | null>(null);
@@ -28,10 +29,10 @@ export function QrCode({ value, size = 300 }: { value: string; size?: number }) 
     <div className="relative rounded-panel bg-white p-[22px] shadow-[0_0_0_1px_#2f343c,0_0_0_7px_#0d0f12,0_0_0_8px_#20242a]" style={{ width: size + 44, height: size + 44 }}>
       {svg ? (
         // The SVG is generated locally by `qrcode` from our own address string.
-        <div role="img" aria-label="QR code de l’adresse" style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: svg }} className="[&>svg]:h-full [&>svg]:w-full" />
+        <div role="img" aria-label={t('shell.qrAria')} style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: svg }} className="[&>svg]:h-full [&>svg]:w-full" />
       ) : (
         <div style={{ width: size, height: size }} className="flex items-center justify-center text-[13px] text-faint">
-          {error ? 'QR indisponible' : '…'}
+          {error ? t('shell.qrUnavailable') : '…'}
         </div>
       )}
       {svg && (

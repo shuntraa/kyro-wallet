@@ -6,33 +6,35 @@ import { useApp } from '../state/app';
 import { Menu } from './ui/menu';
 import { IconChevronDown, IconPlus, IconShield, IconUsbKey } from './icons';
 import { BRAND } from '../state/hw';
+import { useT } from '../i18n';
 
 const ADD = '__add__';
 const ACCOUNTS = '__accounts__';
 
 export function AccountSwitcher() {
   const { hwAccounts, activeAccountId, activeHw, selectAccount, navigate, hwOnly } = useApp();
+  const { t } = useT();
   const items = [
-    ...(hwOnly ? [] : [{ value: 'vault', label: 'Compte principal', hint: 'Coffre chiffré sur cet ordinateur', icon: <IconShield size={15} className="text-mute" /> }]),
+    ...(hwOnly ? [] : [{ value: 'vault', label: t('settings.mainAccount'), hint: t('shell.vaultHint'), icon: <IconShield size={15} className="text-mute" /> }]),
     ...hwAccounts.map((a) => ({
       value: a.id,
       label: a.label,
       hint: `${BRAND[a.device]} · ${a.model}${hwFingerprint(a) ? ` · ${hwFingerprint(a)}` : ''}`,
       icon: <IconUsbKey size={15} className="text-ice" />,
     })),
-    ...(hwOnly ? [] : [{ value: ACCOUNTS, label: 'Comptes par chaîne', hint: 'Ajouter, renommer (coffre)', icon: <IconPlus size={15} className="text-mute" /> }]),
-    { value: ADD, label: 'Ajouter un appareil', hint: 'Ledger ou Trezor', icon: <IconPlus size={15} className="text-mute" /> },
+    ...(hwOnly ? [] : [{ value: ACCOUNTS, label: t('shell.accountsPerChain'), hint: t('shell.accountsPerChainHint'), icon: <IconPlus size={15} className="text-mute" /> }]),
+    { value: ADD, label: t('shell.addDevice'), hint: t('shell.addDeviceHint'), icon: <IconPlus size={15} className="text-mute" /> },
   ];
   return (
     <Menu
-      label="Compte actif"
+      label={t('shell.activeAccount')}
       value={activeAccountId}
       items={items}
       onSelect={(v) => (v === ADD ? navigate({ name: 'settings', section: 'hardware' }) : v === ACCOUNTS ? navigate({ name: 'settings', section: 'accounts' }) : selectAccount(v))}
       trigger={
-        <button type="button" aria-label="Changer de compte" className="flex min-w-0 items-center gap-1.5 rounded-[8px] px-1.5 py-0.5 text-[13px] text-mute hover:bg-raised hover:text-text">
+        <button type="button" aria-label={t('shell.switchAccount')} className="flex min-w-0 items-center gap-1.5 rounded-[8px] px-1.5 py-0.5 text-[13px] text-mute hover:bg-raised hover:text-text">
           {activeHw && <IconUsbKey size={13} className="shrink-0 text-ice" />}
-          <span className="truncate">{activeHw ? activeHw.label : 'Compte principal'}</span>
+          <span className="truncate">{activeHw ? activeHw.label : t('settings.mainAccount')}</span>
           <IconChevronDown size={13} className="shrink-0" />
         </button>
       }

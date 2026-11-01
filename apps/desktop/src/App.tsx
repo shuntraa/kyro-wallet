@@ -24,6 +24,7 @@ import { HwPromptLayer } from './components/hw';
 import { AccountSwitcher } from './components/AccountSwitcher';
 import { serverDown, serverMissing } from './components/ServerDown';
 import { screenEnter } from './components/motion';
+import { t, useT } from './i18n';
 
 // Staking screens: loaded on first visit (keeps the main chunk smaller).
 const Staking = lazy(() => import('./screens/Staking').then((m) => ({ default: m.Staking })));
@@ -45,11 +46,12 @@ export function App() {
 
 function Root() {
   const { phase, fatal } = useApp();
+  const { t } = useT();
   if (phase === 'boot') {
     return (
       <Frame>
         <div className="flex flex-1 items-center justify-center gap-3 text-[13px] text-mute">
-          <Spinner /> Ouverture du coffre…
+          <Spinner /> {t('shell.openingVault')}
         </div>
       </Frame>
     );
@@ -59,7 +61,7 @@ function Root() {
       <Frame>
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-10 text-center">
           <KyroMark size={48} />
-          <h1 className="m-0 text-[24px] font-[560] tracking-[-0.03em]">Kyro n’a pas pu démarrer</h1>
+          <h1 className="m-0 text-[24px] font-[560] tracking-[-0.03em]">{t('shell.startFailed')}</h1>
           <p className="m-0 max-w-[480px] text-[14px] text-mute">{fatal}</p>
         </div>
       </Frame>
@@ -89,27 +91,28 @@ function crumbsOf(r: Route, assetName: (id: string) => string): string[] {
     case 'portfolio':
       return [];
     case 'assets':
-      return ['Actifs'];
+      return [t('shell.assets')];
     case 'asset':
-      return ['Actifs', assetName(r.id)];
+      return [t('shell.assets'), assetName(r.id)];
     case 'send':
-      return ['Envoyer'];
+      return [t('common.send')];
     case 'receive':
-      return ['Recevoir'];
+      return [t('common.receive')];
     case 'swap':
       return ['Swap'];
     case 'history':
-      return ['Historique'];
+      return [t('common.history')];
     case 'staking':
       return r.chain ? ['Staking', { sol: 'Solana', ada: 'Cardano', tron: 'TRON' }[r.chain]] : ['Staking'];
     case 'settings':
-      return ['Réglages'];
+      return [t('common.settings')];
   }
 }
 
 function Unlocked() {
   const { route, navigate } = useApp();
   const pf = usePortfolio();
+  const { lang } = useT();
 
   const assetName = useCallback(
     (id: string) => {
@@ -125,27 +128,27 @@ function Unlocked() {
       const out: SearchResult[] = [];
       for (const h of pf.holdings) {
         if (h.asset.name.toLowerCase().includes(s) || h.asset.symbol.toLowerCase().includes(s)) {
-          out.push({ id: h.asset.id, label: h.asset.name, hint: `${h.asset.symbol} · mes actifs`, onSelect: () => navigate({ name: 'asset', id: h.asset.id }) });
+          out.push({ id: h.asset.id, label: h.asset.name, hint: t('shell.searchMine', { symbol: h.asset.symbol }), onSelect: () => navigate({ name: 'asset', id: h.asset.id }) });
         }
       }
       for (const c of pf.markets ?? []) {
         if (out.length >= 8) break;
         if (c.name.toLowerCase().includes(s) || c.symbol.toLowerCase().includes(s)) {
-          out.push({ id: `cg:${c.id}`, label: c.name, hint: `${c.symbol} · rang ${c.rank ?? '—'}`, onSelect: () => navigate({ name: 'asset', id: `cg:${c.id}` }) });
+          out.push({ id: `cg:${c.id}`, label: c.name, hint: t('shell.searchRank', { symbol: c.symbol, rank: c.rank ?? '—' }), onSelect: () => navigate({ name: 'asset', id: `cg:${c.id}` }) });
         }
       }
       for (const w of WATCH_ONLY_CHAINS) {
         if (w.name.toLowerCase().includes(s) && !out.some((o) => o.id === `cg:${w.coingeckoId}`)) {
-          out.push({ id: `cg:${w.coingeckoId}`, label: w.name, hint: 'Bientôt', onSelect: () => navigate({ name: 'asset', id: `cg:${w.coingeckoId}` }) });
+          out.push({ id: `cg:${w.coingeckoId}`, label: w.name, hint: t('shell.searchSoon'), onSelect: () => navigate({ name: 'asset', id: `cg:${w.coingeckoId}` }) });
         }
       }
       // A pasted address → offer to send to it.
       if (/^(0x[0-9a-fA-F]{40}|(bc|tb)1[0-9a-z]{20,}|[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(q)) {
-        out.unshift({ id: `send:${q}`, label: `Envoyer à ${q.slice(0, 10)}…`, hint: 'adresse', onSelect: () => navigate({ name: 'send', to: q }) });
+        out.unshift({ id: `send:${q}`, label: t('shell.searchSendTo', { address: q.slice(0, 10) }), hint: t('shell.searchAddressHint'), onSelect: () => navigate({ name: 'send', to: q }) });
       }
       return out;
     },
-    [pf.holdings, pf.markets, navigate],
+    [pf.holdings, pf.markets, navigate, lang],
   );
 
   const screen = useMemo(() => {
@@ -169,7 +172,7 @@ function Unlocked() {
           <Suspense
             fallback={
               <div className="flex flex-1 items-center justify-center gap-3 text-[13px] text-mute">
-                <Spinner /> Chargement…
+                <Spinner /> {t('common.loading')}
               </div>
             }
           >
@@ -179,7 +182,7 @@ function Unlocked() {
       case 'settings':
         return <SettingsScreen {...(route.section ? { section: route.section } : {})} {...(route.family ? { family: route.family } : {})} />;
     }
-  }, [route]);
+  }, [route, lang]);
 
   // A chain without any server (Dogecoin by default) is a missing setting, not a failure.
   const failed = Object.entries(pf.chainErrors).filter(([, m]) => !serverMissing(m)).map(([k]) => k);
