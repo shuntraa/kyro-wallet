@@ -24,6 +24,7 @@ import { BTC_TXS_CAP, call, type EsploraAddressInfo, type EsploraTx, type Esplor
 import type { UtxoChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, FeeEstimates, HistoryItem } from '../types';
 import { derivePubkey, fingerprintBytes, parseXpub } from '../bitcoin/xpub';
+import type { HwSigner } from '../hw';
 
 bitcoin.initEccLib(ecc);
 
@@ -214,6 +215,18 @@ export interface UtxoAdapterOptions {
   gapLimit?: number;
   /** Vault account index (docs/IPC.md §2.9) passed to `*_sign_psbt`; absent = 0. (`account` is the xpub view.) */
   vaultAccount?: number;
+  /** Hardware-wallet account: signing through `hw_sign_utxo_psbt` (every input carries its previous transaction). */
+  hw?: HwSigner;
+}
+
+/** Address `xpub/change/index` of a chain (same derivation as [`UtxoAdapter.addressAt`]). */
+export function utxoAddressFromXpub(spec: UtxoCoinSpec, network: Network, xpub: string, change: 0 | 1 = 0, index = 0): string {
+  const net = spec.network(network);
+  const pubkey = derivePubkey(parseXpub(xpub), change, index);
+  const payment = spec.own === 'p2wpkh' ? bitcoin.payments.p2wpkh({ pubkey, network: net }) : bitcoin.payments.p2pkh({ pubkey, network: net });
+  const address = spec.codec && payment.output ? spec.codec.toAddress(payment.output, network) : payment.address;
+  if (!address) throw new Error(l10n('Adresse introuvable', 'Address not found'));
+  return address;
 }
 
 /** Local build result: the Bitcoin shapes plus what was folded into the fee. */
@@ -240,6 +253,7 @@ export class UtxoAdapter {
   private readonly key: HDKey;
   private readonly account: UtxoAccountView;
   private readonly gap: number;
+  readonly hw: HwSigner | null;
   private scanCache: { at: number; addrs: DerivedUtxoAddress[] } | null = null;
   private scanning: Promise<DerivedUtxoAddress[]> | null = null;
   /** True when one address hit the 50-transaction cap: older ones are not shown. */
@@ -254,6 +268,7 @@ export class UtxoAdapter {
     this.net = spec.network(opts.chain.network);
     this.backend = opts.backend ?? rustUtxoBackend(spec.prefix, opts.vaultAccount ?? 0);
     this.gap = opts.gapLimit ?? 5;
+    this.hw = opts.hw ?? null;
     this.key = parseXpub(opts.account.xpub);
     const first = this.addressAt(0, 0);
     if (first.address !== opts.account.address) {
@@ -389,7 +404,9 @@ export class UtxoAdapter {
     const fp = fingerprintBytes(this.account.fingerprint);
     const psbt = new bitcoin.Psbt({ network: this.net });
     const prevTx = new Map<string, Uint8Array>();
-    if (this.spec.needsPrevTx) {
+    // Hardware wallets check every spent amount against the full previous transaction.
+    const withPrev = this.spec.needsPrevTx || this.hw !== null;
+    if (withPrev) {
       for (const txid of new Set(sel.inputs.map((c) => c.txid))) {
         const tx = bitcoin.Transaction.fromHex(await this.backend.txHex(txid));
         if (tx.getId() !== txid) throw new Error(l10n('Transaction précédente incohérente', 'Inconsistent previous transaction'));
@@ -403,6 +420,11 @@ export class UtxoAdapter {
         const raw = prevTx.get(c.txid);
         if (!raw) throw new Error(l10n('Transaction précédente manquante', 'Previous transaction missing'));
         psbt.addInput({ hash: c.txid, index: c.vout, nonWitnessUtxo: raw, bip32Derivation: derivation });
+      } else if (withPrev) {
+        const raw = prevTx.get(c.txid);
+        if (!raw) throw new Error(l10n('Transaction précédente manquante', 'Previous transaction missing'));
+        const script = this.scriptOf(owner.address);
+        psbt.addInput({ hash: c.txid, index: c.vout, witnessUtxo: { script, value: c.value }, nonWitnessUtxo: raw, bip32Derivation: derivation });
       } else {
         const script = this.scriptOf(owner.address);
         psbt.addInput({ hash: c.txid, index: c.vout, witnessUtxo: { script, value: c.value }, bip32Derivation: derivation });
@@ -432,7 +454,17 @@ export class UtxoAdapter {
 
   /** Rust: password, decoding, native dialog (+ reinforced one if needed), signature. */
   async signTx(unsigned: UtxoUnsigned, password: string): Promise<UtxoSigned> {
-    const res = await this.backend.signPsbt(unsigned.psbt, password);
+    return this.finish(unsigned, await this.backend.signPsbt(unsigned.psbt, password));
+  }
+
+  /** Hardware wallet: Rust's decoding and dialog, the device, then every signature verified in Rust. */
+  async signTxHw(unsigned: UtxoUnsigned, deviceId: string): Promise<UtxoSigned> {
+    if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
+    const res = await call('hw_sign_utxo_psbt', { id: deviceId, accountId: this.hw.accountId, chain: this.spec.prefix, psbt: unsigned.psbt });
+    return this.finish(unsigned, res);
+  }
+
+  private finish(unsigned: UtxoUnsigned, res: { psbt: string; summary: UtxoTxSummary }): UtxoSigned {
     if (BigInt(res.summary.fee) !== unsigned.fee) throw new Error(l10n('Les frais décodés par Rust diffèrent de ceux de la transaction construite', 'The fees decoded by Rust differ from those of the built transaction'));
     const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
     // Bitcoin Cash: Rust returns the inputs finalized (FORKID signatures); the others are

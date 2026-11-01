@@ -2249,10 +2249,23 @@ export interface SolTxSummary {
 // ---------------------------------------------------------------- hardware wallets (docs/IPC.md §2.3)
 
 export type HwDeviceKind = 'ledger' | 'trezor';
-/** Phase 4 chains (`ltc`…`xrp`) answer HW_UNSUPPORTED. */
-export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp' | 'xmr';
-/** The chains Kyro implements today. */
-export type HwImplementedChain = 'btc' | 'evm' | 'sol';
+/** `cardano`, `zec` (and `xmr`) answer HW_UNSUPPORTED. */
+export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp' | 'bch' | 'dash' | 'stellar' | 'zec' | 'xmr';
+/** The chains Kyro implements on hardware wallets (device support: `hw_open` → `chains`). */
+export type HwImplementedChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'xrp' | 'tron' | 'stellar';
+/** Litecoin / Dogecoin / Bitcoin Cash / Dash account of a hardware wallet (`m/84'/2'/a'`, `m/44'/3'/a'`…). */
+export interface HwUtxoKey {
+  coin: UtxoCoinKey;
+  xpub: string;
+  fingerprint: string;
+  path: string;
+}
+/** XRP / TRON / Stellar key of a hardware wallet (public key hex: 33, 65 or 32 bytes). */
+export interface HwChainKey {
+  address: string;
+  pubkey: string;
+  path: string;
+}
 
 export interface HwDeviceInfo {
   /** Stable for the session while the device stays on the same port (`ledger-1`, `trezor-1`…). */
@@ -2307,6 +2320,8 @@ export interface HwXpub {
   /** Node `m/44'/60'/0'/0`; `address` = `…/0/{account}`. */
   evm?: { xpub: string; path: string; address: string };
   sol?: { address: string; path: string };
+  utxo?: HwUtxoKey;
+  key?: HwChainKey;
 }
 
 /** Watch-only account backed by a hardware wallet (public keys only). */
@@ -2322,6 +2337,12 @@ export interface WatchOnlyAccount {
   btc?: HwBtcKey[];
   evm?: { xpub: string; path: string };
   sol?: { address: string; path: string };
+  /** At most one per coin, same master fingerprint. */
+  utxo?: HwUtxoKey[];
+  xrp?: HwChainKey;
+  /** Ledger only. */
+  tron?: HwChainKey;
+  stellar?: HwChainKey;
 }
 
 /** Event `hw-prompt`: what to tell the user while a device call is pending. */
@@ -2729,6 +2750,18 @@ export interface Commands {
   /** 2nd dialog for a contract call or blind signing. Signs for `m/44'/60'/0'/0/{account}`. */
   hw_sign_evm_tx: { args: { id: string; accountId: string; tx: EvmTxRequest }; ret: { rawTx: string; hash: string } };
   hw_sign_sol_tx: { args: { id: string; accountId: string; message: string }; ret: { signature: string; summary: SolTxSummary } };
+  /** LTC / DOGE / BCH / DASH: every input of this account with `nonWitnessUtxo`. Partial signatures (BCH: finalized). */
+  hw_sign_utxo_psbt: { args: { id: string; accountId: string; chain: 'ltc' | 'doge' | 'bch' | 'dash'; psbt: string }; ret: { psbt: string; summary: UtxoTxSummary } };
+  /** Builds with the hardware account's address and key (no vault needed). */
+  hw_xrp_build_tx: { args: { accountId: string; to: string; amount: string; destinationTag?: number; issued?: { currency: string; issuer: string } }; ret: { blob: string; summary: XrpTxSummary; context: XrpContext } };
+  hw_sign_xrp_tx: { args: { id: string; accountId: string; blob: string }; ret: { blob: string; hash: string; summary: XrpTxSummary; context: XrpContext } };
+  hw_xrp_broadcast: { args: { accountId: string; blob: string }; ret: string };
+  hw_tron_build_tx: { args: { accountId: string; to: string; amount: string; token?: string }; ret: TronBuilt };
+  hw_sign_tron_tx: { args: { id: string; accountId: string; raw: string }; ret: { signature: string; txid: string; summary: TronTxSummary; estimate: TronEstimate } };
+  hw_tron_broadcast: { args: { accountId: string; raw: string; signature: string }; ret: string };
+  hw_stellar_build_tx: { args: { accountId: string; to: string; amount: string; memo?: StellarMemoSpec }; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
+  hw_sign_stellar_tx: { args: { id: string; accountId: string; envelope: string }; ret: { envelope: string; hash: string; summary: StellarTxSummary; context: StellarContext } };
+  hw_stellar_broadcast: { args: { accountId: string; envelope: string }; ret: string };
   /** Restarts the bootstrap (after `error`). `INVALID_INPUT` when Tor is disabled. */
   tor_retry: { args: undefined; ret: TorStatus };
   settings_get: { args: undefined; ret: Settings };

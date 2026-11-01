@@ -16,6 +16,7 @@ import {
   type XrpTxSummary,
   type XrpWarning, l10n } from '@kyro/shared';
 import type { XrpChain } from '../registry';
+import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 // ---------------------------------------------------------------- Rust contract (§2.6)
@@ -48,6 +49,20 @@ export function rustXrpBackend(account = 0): XrpBackend {
     sign: (blob, password) => call('xrp_sign_tx', { blob, password, ...acct }),
     broadcast: (blob) => call('xrp_broadcast', { blob, ...acct }),
     txStatus: (hash) => call('xrp_tx_status', { hash }),
+  };
+}
+
+/**
+ * Hardware-wallet account `accountId` (docs/IPC.md §2.3): Rust builds and broadcasts with the
+ * account's stored key (`hw_xrp_build_tx`, `hw_xrp_broadcast`); signing is `hw_sign_xrp_tx`.
+ */
+export function hwXrpBackend(accountId: string): XrpBackend {
+  const reads = rustXrpBackend(0);
+  return {
+    ...reads,
+    build: (to, amount, destinationTag, issued) => call('hw_xrp_build_tx', { accountId, to, amount, ...(destinationTag !== undefined ? { destinationTag } : {}), ...(issued ? { issued } : {}) }),
+    sign: () => Promise.reject(new Error(l10n('Compte hardware wallet : signature sur l’appareil', 'Hardware-wallet account: sign on the device'))),
+    broadcast: (blob) => call('hw_xrp_broadcast', { accountId, blob }),
   };
 }
 
@@ -114,6 +129,8 @@ export interface XrpAdapterOptions {
   backend?: XrpBackend;
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (signing through `hw_sign_xrp_tx`, Ledger only). */
+  hw?: HwSigner;
 }
 
 export class XrpAdapter implements ChainAdapter<'xrp'> {
@@ -121,12 +138,14 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
   readonly chain: XrpChain;
   private readonly address: string;
   private readonly backend: XrpBackend;
+  readonly hw: HwSigner | null;
 
   constructor(opts: XrpAdapterOptions) {
     if (!isXrpAddress(opts.address)) throw new Error(l10n('Adresse XRP invalide', 'Invalid XRP address'));
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustXrpBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? hwXrpBackend(opts.hw.accountId) : rustXrpBackend(opts.account ?? 0));
   }
 
   getAddress(): string {
@@ -218,6 +237,14 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
   /** Rust: live checks, native dialog (tag highlighted, reserve), signature. */
   async signTx(unsigned: XrpUnsigned, password: string): Promise<XrpSigned> {
     const res = await this.backend.sign(unsigned.blob, password);
+    if (!/^[0-9A-F]{64}$/i.test(res.hash)) throw new Error('Hash XRP inattendu');
+    return { family: 'xrp', blob: res.blob, hash: res.hash, summary: res.summary };
+  }
+
+  /** Hardware wallet: Rust's checks and dialog, then the device; the signature is verified in Rust. */
+  async signTxHw(unsigned: XrpUnsigned, deviceId: string): Promise<XrpSigned> {
+    if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
+    const res = await call('hw_sign_xrp_tx', { id: deviceId, accountId: this.hw.accountId, blob: unsigned.blob });
     if (!/^[0-9A-F]{64}$/i.test(res.hash)) throw new Error('Hash XRP inattendu');
     return { family: 'xrp', blob: res.blob, hash: res.hash, summary: res.summary };
   }
