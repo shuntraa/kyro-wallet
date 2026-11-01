@@ -514,6 +514,8 @@ pub struct Accounts {
     ton: AddressOut,
     /// `m/44'/118'/a'/0/0`, `cosmos1…`.
     cosmos: AddressOut,
+    /// `m/44'/637'/a'/0'/0'` (Petra, SLIP-10 ed25519), `0x` + 64 hex.
+    aptos: AddressOut,
 }
 
 fn utxo_account_out(
@@ -633,6 +635,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             cosmos: AddressOut {
                 address: wallet_core::cosmos_address(seed, a)?,
                 path: wallet_core::cosmos_path(a),
+            },
+            aptos: AddressOut {
+                address: wallet_core::aptos_address(seed, a)?,
+                path: wallet_core::aptos_path(a),
             },
         })
     })

@@ -16,6 +16,7 @@ import type { AlgoSigned, AlgoUnsigned } from './algorand/adapter';
 import type { XmrSigned, XmrUnsigned } from './xmr/adapter';
 import type { TonSigned, TonUnsigned } from './ton/adapter';
 import type { CosmosSigned, CosmosUnsigned } from './cosmos/adapter';
+import type { AptosSigned, AptosUnsigned } from './aptos/adapter';
 import type { CardanoTokenSpec, StellarMemoSpec } from '@kyro/shared';
 
 import { l10n } from '@kyro/shared';
@@ -52,7 +53,9 @@ export type FeeParams =
   /** TON: no fee to choose. The network's price, estimated by emulation (TON Center). */
   | { family: 'ton' }
   /** Cosmos Hub: no fee to choose. Rust simulates the gas and prices it at the fee market. */
-  | { family: 'cosmos' };
+  | { family: 'cosmos' }
+  /** Aptos: no fee to choose. Rust uses the node's gas price and a simulated max gas. */
+  | { family: 'apt' };
 
 export interface FeeOption {
   level: FeeLevel;
@@ -93,7 +96,8 @@ export type SizeHint =
   | { family: 'algo' }
   | { family: 'xmr' }
   | { family: 'ton' }
-  | { family: 'cosmos'; gasLimit: number };
+  | { family: 'cosmos'; gasLimit: number }
+  | { family: 'apt' };
 
 export interface Balance {
   assetId: string;
@@ -217,9 +221,11 @@ export interface FamilyTypes {
   ton: { unsigned: TonUnsigned; signed: TonSigned };
   /** Cosmos Hub: MsgSend built (gas simulated, fee) and its SignDoc strictly decoded by Rust. */
   cosmos: { unsigned: CosmosUnsigned; signed: CosmosSigned };
+  /** Aptos: `0x1::aptos_account::transfer` built (simulated) and strictly decoded by Rust. */
+  apt: { unsigned: AptosUnsigned; signed: AptosSigned };
 }
-export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned | KaspaUnsigned | DotUnsigned | AlgoUnsigned | XmrUnsigned | TonUnsigned | CosmosUnsigned;
-export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned | KaspaSigned | DotSigned | AlgoSigned | XmrSigned | TonSigned | CosmosSigned;
+export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned | KaspaUnsigned | DotUnsigned | AlgoUnsigned | XmrUnsigned | TonUnsigned | CosmosUnsigned | AptosUnsigned;
+export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned | KaspaSigned | DotSigned | AlgoSigned | XmrSigned | TonSigned | CosmosSigned | AptosSigned;
 
 export type HistoryDirection = 'in' | 'out' | 'self';
 export type HistoryStatus = 'pending' | 'confirmed' | 'failed';
@@ -271,7 +277,7 @@ export type AnyAdapter =
   | ChainAdapter<'doge'>
   | ChainAdapter<'bch'> | ChainAdapter<'dash'> | ChainAdapter<'tron'>
   | ChainAdapter<'xrp'>
-  | ChainAdapter<'ada'> | ChainAdapter<'cosmos'> | ChainAdapter<'ton'> | ChainAdapter<'xmr'> | ChainAdapter<'algo'> | ChainAdapter<'dot'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>
+  | ChainAdapter<'ada'> | ChainAdapter<'apt'> | ChainAdapter<'cosmos'> | ChainAdapter<'ton'> | ChainAdapter<'xmr'> | ChainAdapter<'algo'> | ChainAdapter<'dot'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>
   | ChainAdapter<'kas'>;
 
 /** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin / Bitcoin Cash / Dash: Bitcoin's PSBT shape). */

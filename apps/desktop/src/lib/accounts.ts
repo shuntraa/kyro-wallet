@@ -29,6 +29,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   xmr: 'Monero',
   ton: 'TON',
   cosmos: 'Cosmos',
+  apt: 'Aptos',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -74,6 +75,8 @@ export function accountChainHint(chain: AccountChain): string {
       return t('settings.hintTon');
     case 'cosmos':
       return 'ATOM (Cosmos Hub)';
+    case 'apt':
+      return 'APT';
   }
 }
 
@@ -98,6 +101,8 @@ export function familyAdapters(set: AdapterSet, family: AccountChain): AnyAdapte
       return set.kaspa ? [set.kaspa] : [];
     case 'dot':
       return set.polkadot ? [set.polkadot] : [];
+    case 'apt':
+      return set.aptos ? [set.aptos] : [];
     default: {
       const a = set[family];
       return a ? [a] : [];
@@ -130,6 +135,8 @@ export function accountAddress(acc: Accounts, family: AccountChain): { address: 
       return acc.kas ?? { address: '', path: '' };
     case 'dot':
       return acc.polkadot;
+    case 'apt':
+      return acc.aptos;
     default:
       return acc[family];
   }

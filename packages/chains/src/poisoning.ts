@@ -60,6 +60,7 @@ const TAIL = 4;
  * - Kaspa: `kaspa:` / `kaspatest:` + version char (`kaspa:q`, `kaspa:p`), bech32 lowercase.
  * - Polkadot (SS58): the first char (`1` for prefix 0, `5` for prefix 42).
  * - Cosmos Hub: `cosmos1` + first data char, bech32 lowercase.
+ * - Aptos: `0x`, hex compared lowercase (no checksum at all).
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -67,6 +68,7 @@ export function addressParts(address: string, family: Family): AddressParts & { 
   switch (family) {
     case 'evm':
     case 'sui':
+    case 'apt':
       return a.toLowerCase().startsWith('0x') ? { prefix: '0x', body: a.slice(2).toLowerCase(), caseInsensitive: true } : { prefix: '', body: a.toLowerCase(), caseInsensitive: true };
     case 'btc':
     case 'ltc':

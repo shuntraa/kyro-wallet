@@ -3,12 +3,14 @@
 
 mod accounts;
 mod algo_backend;
+mod aptos_backend;
 mod btc_backend;
 mod cardano_backend;
 #[cfg(feature = "cbf")]
 mod cbf;
 mod commands;
 mod commands_algo;
+mod commands_aptos;
 mod commands_cardano;
 mod commands_cosmos;
 mod commands_dot;
@@ -277,6 +279,14 @@ pub fn run() {
             commands_cosmos::cosmos_sign_tx,
             commands_cosmos::cosmos_broadcast,
             commands_cosmos::cosmos_tx_status,
+            commands_aptos::aptos_backend_info,
+            commands_aptos::aptos_address,
+            commands_aptos::aptos_account,
+            commands_aptos::aptos_txs,
+            commands_aptos::aptos_build_tx,
+            commands_aptos::aptos_sign_tx,
+            commands_aptos::aptos_broadcast,
+            commands_aptos::aptos_tx_status,
             commands_cardano::ada_backend_info,
             commands_cardano::ada_address,
             commands_cardano::ada_account,

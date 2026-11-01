@@ -83,8 +83,8 @@ export function computeHoldings({ network, sources: allSources, accountBalances,
     for (const x of allSources) if (x.family === family && x.chainKeys.includes(asset.chainKey) && !sources.some((s) => s.index === x.index)) sources.push(x);
     if (sources.length === 0) continue;
     const chain = findChain(network, asset.chainKey);
-    // Phase 1 natives, Litecoin / Dogecoin / Bitcoin Cash / Dash (« configure ton serveur »), TRX, XRP, ADA, XLM, NEAR, SUI, KAS, DOT, ALGO, TON and ATOM always show.
-    const always = asset.kind === 'native' && (chain?.phase === 1 || asset.family === 'ltc' || asset.family === 'doge' || asset.family === 'bch' || asset.family === 'dash' || asset.family === 'tron' || asset.family === 'xrp' || asset.family === 'ada' || asset.family === 'xmr' || asset.family === 'hbar' || asset.family === 'xlm' || asset.family === 'near' || asset.family === 'sui' || asset.family === 'kas' || asset.family === 'dot' || asset.family === 'algo' || asset.family === 'ton' || asset.family === 'cosmos');
+    // Phase 1 natives, Litecoin / Dogecoin / Bitcoin Cash / Dash (« configure ton serveur »), TRX, XRP, ADA, XLM, NEAR, SUI, KAS, DOT, ALGO, TON, ATOM and APT always show.
+    const always = asset.kind === 'native' && (chain?.phase === 1 || asset.family === 'ltc' || asset.family === 'doge' || asset.family === 'bch' || asset.family === 'dash' || asset.family === 'tron' || asset.family === 'xrp' || asset.family === 'ada' || asset.family === 'xmr' || asset.family === 'hbar' || asset.family === 'xlm' || asset.family === 'near' || asset.family === 'sui' || asset.family === 'kas' || asset.family === 'dot' || asset.family === 'algo' || asset.family === 'ton' || asset.family === 'cosmos' || asset.family === 'apt');
     const errored = chainErrors[asset.chainKey] !== undefined;
     let sum = 0n;
     let known = false;

@@ -45,6 +45,7 @@ export { demoSuiAddress, suiAddressOf } from './mock-sui';
 import { createDemoHbar, demoHbarAddress, type DemoHbarState } from './mock-hbar';
 import { createDemoTon, demoTonAddress, type DemoTonState } from './mock-ton';
 export { demoTonAddress } from './mock-ton';
+import { createDemoAptos, demoAptosAddress, type DemoAptosState } from './mock-aptos';
 export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
 import { createDemoStellar, demoStellarAddress, type DemoStellarState } from './mock-stellar';
 export { demoStellarAddress } from './mock-stellar';
@@ -55,6 +56,7 @@ import { createDemoAlgo, demoAlgoAddress, type DemoAlgoState } from './mock-algo
 export { algoAddressOf, demoAlgoAddress } from './mock-algo';
 import { createDemoCosmos, demoCosmosAddress, type DemoCosmosState } from './mock-cosmos';
 export { checkCosmosAddress, demoCosmosAddress } from './mock-cosmos';
+export { demoAptosAddress } from './mock-aptos';
 import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
 export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
 import { createDemoKaspa, demoKaspaAddress, type DemoKaspaState } from './mock-kaspa';
@@ -203,6 +205,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       xmr: { address: demoXmrAddress(network, 0), path: "m/44'/128'/0'/0/0" },
       ton: { address: demoTonAddress(0, network), path: "m/44'/607'/0'" },
       cosmos: { address: demoCosmosAddress(demoSeed(), 0), path: "m/44'/118'/0'/0/0" },
+      aptos: { address: demoAptosAddress(0), path: "m/44'/637'/0'/0'/0'" },
     },
     ownBtc,
     receive,
@@ -358,6 +361,8 @@ export interface MockBackend {
   xmr: DemoXmrState;
   /** Cosmos Hub demo chain (tests). */
   cosmos: DemoCosmosState;
+  /** Aptos demo chain (tests). */
+  aptos: DemoAptosState;
   /** Staking demo (tests). */
   stake: ReturnType<typeof createDemoStake>;
 }
@@ -521,6 +526,16 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const cosmosChain = createDemoCosmos({
     network,
     seed: demoSeed(),
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // Aptos (§2.11): `aptos_*`, max fee reserved up front like Rust.
+  const aptosChain = createDemoAptos({
+    network,
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -1020,6 +1035,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     ...hbarChain.handlers,
     ...tonChain.handlers,
     ...cosmosChain.handlers,
+    ...aptosChain.handlers,
     ...cardanoChain.handlers,
     ...kaspaChain.handlers,
     ...dotChain.handlers,
@@ -1066,6 +1082,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     algo: algoChain.state,
     xmr: xmrChain.state,
     cosmos: cosmosChain.state,
+    aptos: aptosChain.state,
     stake,
     advance(ms: number) {
       clockOffset += ms;
@@ -1080,7 +1097,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
         return accts.adaAddress(accts.arg(args.account));
       }
       if (DEMO_ACCOUNT0_ONLY.test(cmd) && accts.arg(args.account) !== 0) {
-        throw new IpcError('INVALID_INPUT', l10n('Mode démo : les comptes supplémentaires TRON, XRP, Stellar, NEAR, Hedera, Polkadot, Algorand, Monero, TON, Cosmos et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).', 'Demo mode: extra TRON, XRP, Stellar, NEAR, Hedera, Polkadot, Algorand, Monero and Cardano accounts and staking are only simulated for the first account (the real app handles all of them).'));
+        throw new IpcError('INVALID_INPUT', l10n('Mode démo : les comptes supplémentaires TRON, XRP, Stellar, NEAR, Hedera, Polkadot, Algorand, Monero, TON, Cosmos, Aptos et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).', 'Demo mode: extra TRON, XRP, Stellar, NEAR, Hedera, Polkadot, Algorand, Monero, TON, Cosmos, Aptos and Cardano accounts and staking are only simulated for the first account (the real app handles all of them).'));
       }
       void captureProtected;
       return await h(args);
@@ -1089,7 +1106,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
 }
 
 /** Demo commands simulated for account 0 only (§2.9). */
-const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|cosmos_(build_tx|sign_tx|broadcast)|ton_(build_tx|sign_tx|broadcast)|hbar_(build_tx|sign_tx|broadcast)|stellar_(build_tx|sign_tx|broadcast)|near_(build_tx|sign_tx|broadcast|tx_status)|ada_(build_tx|sign_tx|broadcast)|dot_(build_tx|sign_tx|broadcast)|algo_(build_tx|sign_tx|broadcast)|xmr_(prepare_tx|send_tx|txs|new_subaddress|set_restore_height)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
+const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|cosmos_(build_tx|sign_tx|broadcast)|ton_(build_tx|sign_tx|broadcast)|hbar_(build_tx|sign_tx|broadcast)|stellar_(build_tx|sign_tx|broadcast)|near_(build_tx|sign_tx|broadcast|tx_status)|ada_(build_tx|sign_tx|broadcast)|dot_(build_tx|sign_tx|broadcast)|algo_(build_tx|sign_tx|broadcast)|xmr_(prepare_tx|send_tx|txs|new_subaddress|set_restore_height)|aptos_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
 
 function decodeSolMessageArg(m: unknown): Uint8Array {
   try {

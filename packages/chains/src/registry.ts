@@ -14,8 +14,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
 /** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). `kas`: Kaspa (KAS, `kas_*`, §2.11). `dot`: Polkadot Asset Hub (`dot_*`, §2.11). */
 /** `algo`: Algorand (ALGO payments, `algo_*`, §2.11). */
 /** `xmr`: Monero (scanned, built, signed and published by Rust, `xmr_*`, §2.10). */
-/** `ton`: TON (Toncoin, wallet v4R2, `ton_*`, §2.11). `cosmos`: Cosmos Hub (ATOM, `cosmos_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos';
+/** `ton`: TON (Toncoin, wallet v4R2, `ton_*`, §2.11). `cosmos`: Cosmos Hub (ATOM, `cosmos_*`, §2.11). `apt`: Aptos (APT, `aptos_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
@@ -56,7 +56,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain | XmrChain | TonChain | CosmosChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain | XmrChain | TonChain | CosmosChain | AptosChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -518,6 +518,29 @@ export function cosmosChain(network: Network): CosmosChain {
   return COSMOS_CHAINS[network];
 }
 
+/**
+ * Aptos (phase 4): Rust `aptos_*` commands and `AptosAdapter` (`packages/chains/src/aptos/`).
+ * Testnet = Aptos testnet (chain id 2). Part of `allChains()` / `assetsFor()` (APT only).
+ * Hardware wallets: not offered (no `hw_*` path), the UI disables Aptos for such accounts.
+ */
+export interface AptosChain extends Omit<ChainBase, 'phase'> {
+  family: 'apt';
+  phase: 4;
+  /** 1 mainnet, 2 testnet (checked by Rust against the node before anything is built). */
+  chainId: number;
+}
+
+const APTOS_CHAINS: Record<Network, AptosChain> = {
+  testnet: { family: 'apt', key: 'aptos', name: 'Aptos testnet', label: 'APT testnet', network: 'testnet', color: '#1C1C1C', glyph: 'A',
+    nativeSymbol: 'APT', nativeName: 'Aptos', nativeDecimals: 8, coingeckoId: 'aptos', phase: 4, blockTimeSecs: 1, chainId: 2 },
+  mainnet: { family: 'apt', key: 'aptos', name: 'Aptos', label: 'APT', network: 'mainnet', color: '#1C1C1C', glyph: 'A',
+    nativeSymbol: 'APT', nativeName: 'Aptos', nativeDecimals: 8, coingeckoId: 'aptos', phase: 4, blockTimeSecs: 1, chainId: 1 },
+};
+
+export function aptosChain(network: Network): AptosChain {
+  return APTOS_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -832,7 +855,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network), tonChain(network), cosmosChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network), tonChain(network), cosmosChain(network), aptosChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -1020,6 +1043,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
         ? { host: 'xmr-node.cakewallet.com:18081', purpose: 'Monero : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Cake Wallet)' }
         : { host: 'monero-stagenet.stackwallet.com:38081', purpose: 'Monero stagenet : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Stack Wallet)' },
   );
+  // Aptos: reached by Rust only (aptos_*), Tor circuits of the `aptos` family. No custom server yet.
+  list.push({
+    host: network === 'mainnet' ? 'api.mainnet.aptoslabs.com' : 'api.testnet.aptoslabs.com',
+    purpose: `Aptos${network === 'mainnet' ? '' : ' testnet'} : solde, simulation, historique (indexeur), diffusion (Aptos Labs, sans clé)`,
+  });
   list.push({ host: 'api.0x.org', purpose: l10n('Devis de swap EVM (clé requise)', 'EVM swap quotes (key required)') });
   list.push({ host: 'li.quest', purpose: l10n('Devis de swap (même chaîne et entre chaînes), suivi des swaps entre chaînes', 'Swap quotes (same chain and cross-chain), cross-chain swap tracking') });
   list.push({ host: '1click.chaindefuser.com', purpose: l10n('Swap entre chaînes (NEAR Intents) : devis des routes directes (BTC, LTC, DOGE, TRON, XRP, Cardano), confirmation du dépôt (destinataire, montant, minimum, frais), suivi', 'Cross-chain swaps (NEAR Intents): quotes for direct routes (BTC, LTC, DOGE, TRON, XRP, Cardano), deposit confirmation (recipient, amount, minimum, fees), tracking') });

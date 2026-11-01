@@ -57,6 +57,8 @@ export interface WalletAccounts {
   ton?: { address: string; path?: string };
   /** Vault only: Cosmos Hub on a hardware wallet is HW_UNSUPPORTED. */
   cosmos?: { address: string; path?: string };
+  /** Vault only: Aptos has no hardware-wallet path. */
+  aptos?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {

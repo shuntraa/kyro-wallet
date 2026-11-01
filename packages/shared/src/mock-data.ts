@@ -44,6 +44,7 @@ export const DEMO_COINS: DemoCoin[] = [
   { id: 'monero', symbol: 'xmr', name: 'Monero', price: 148, change24h: 0.9, change7d: 2.6, marketCapEur: 4.7e9 },
   { id: 'dai', symbol: 'dai', name: 'Dai', price: 0.925, change24h: 0, change7d: 0, marketCapEur: 4.6e9 },
   { id: 'polygon-ecosystem-token', symbol: 'pol', name: 'POL (ex-MATIC)', price: 0.37, change24h: -1.1, change7d: -4.4, marketCapEur: 3.1e9 },
+  { id: 'aptos', symbol: 'apt', name: 'Aptos', price: 4.2, change24h: 1.8, change7d: -2.9, marketCapEur: 2.6e9 },
   { id: 'arbitrum', symbol: 'arb', name: 'Arbitrum', price: 0.52, change24h: -2.1, change7d: -5.6, marketCapEur: 2.1e9 },
   { id: 'optimism', symbol: 'op', name: 'Optimism', price: 1.38, change24h: 0.9, change7d: 2.7, marketCapEur: 1.8e9 },
 ];

@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84), Dogecoin, Bitcoin Cash (CashAddr,
-//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Cosmos Hub (MsgSend, SIGN_MODE_DIRECT)
+//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Aptos (APT transfers, BCS), Cosmos Hub (MsgSend, SIGN_MODE_DIRECT)
 //!, TON (wallet v4R2 transfers), Algorand (pay), Polkadot Asset Hub (sr25519, `transfer_keep_alive`), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer), Cardano (CIP-1852 payments) and Monero (CLSAG, via monero-oxide) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
@@ -24,6 +24,7 @@
 )]
 
 mod algorand;
+mod aptos;
 mod btc;
 mod btc_hw;
 mod btc_watch;
@@ -61,6 +62,13 @@ pub use algorand::{
     algo_encode_signed, algo_genesis, algo_path, algo_public_key, algo_sign, algo_verify_signed,
     AlgoPayment, AlgoTxSummary, AlgoWarning, ALGO_MAINNET_GENESIS, ALGO_MAX_NOTE,
     ALGO_MAX_VALIDITY, ALGO_MIN_BALANCE, ALGO_MIN_FEE, ALGO_TESTNET_GENESIS,
+};
+pub use aptos::{
+    aptos_address, aptos_address_bytes_of_pubkey, aptos_address_of_pubkey, aptos_address_string,
+    aptos_decode_tx, aptos_parse_address, aptos_path, aptos_public_key, aptos_sign,
+    aptos_signing_message, aptos_simulation_bytes, aptos_tx_hash, aptos_verify_signed,
+    AptosTransfer, AptosTxSummary, AptosWarning, APTOS_ED25519_SCHEME, APTOS_HIGH_FEE_OCTAS,
+    APTOS_MAINNET_CHAIN_ID, APTOS_TESTNET_CHAIN_ID, APTOS_TRANSFER_FUNCTION, OCTAS_PER_APT,
 };
 pub use btc::{
     btc_account, btc_address, btc_decode_psbt, btc_psbt_summary, btc_sign_psbt, BtcAccount,
