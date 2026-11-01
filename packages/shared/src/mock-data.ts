@@ -26,6 +26,7 @@ export const DEMO_COINS: DemoCoin[] = [
   { id: 'ripple', symbol: 'xrp', name: 'XRP', price: 0.48, change24h: 0.7, change7d: -2.2, marketCapEur: 2.7e10 },
   { id: 'dogecoin', symbol: 'doge', name: 'Dogecoin', price: 0.112, change24h: -1.9, change7d: 4.8, marketCapEur: 1.6e10 },
   { id: 'tron', symbol: 'trx', name: 'TRON', price: 0.141, change24h: 0.3, change7d: 1.1, marketCapEur: 1.2e10 },
+  { id: 'the-open-network', symbol: 'ton', name: 'Toncoin', price: 2.9, change24h: 1.1, change7d: -1.8, marketCapEur: 7.3e9 },
   { id: 'cardano', symbol: 'ada', name: 'Cardano', price: 0.33, change24h: -0.4, change7d: -3.1, marketCapEur: 1.17e10 },
   { id: 'avalanche-2', symbol: 'avax', name: 'Avalanche', price: 23.4, change24h: 1.5, change7d: 0.4, marketCapEur: 9.5e9 },
   { id: 'wrapped-bitcoin', symbol: 'wbtc', name: 'Wrapped Bitcoin', price: 58_850, change24h: 1.2, change7d: 3.3, marketCapEur: 8.9e9 },

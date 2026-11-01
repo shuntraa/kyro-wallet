@@ -10,7 +10,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+/** `ton`: TON (Toncoin, wallet v4R2, `ton_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'ton';
 
 interface ChainBase {
   key: string;
@@ -47,7 +48,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | TonChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -140,7 +141,7 @@ const SOL: Record<Network, SolChain> = {
   },
 };
 
-/** Phase 4: listed with their price, shown as "Bientôt". Empty now: Litecoin, Dogecoin, TRON, XRP and Cardano all have a full send path. */
+/** Phase 4: listed with their price, shown as "Bientôt". Empty now: Litecoin, Dogecoin, TRON, XRP, Cardano and TON all have a full send path. */
 export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
 ];
 
@@ -240,6 +241,28 @@ export function cardanoChain(network: Network): CardanoChain {
   return CARDANO_CHAINS[network];
 }
 
+/**
+ * TON (phase 4): Rust `ton_*` commands and `TonAdapter` (`packages/chains/src/ton/`). Wallet
+ * v4R2 of `m/44'/607'/a'` (Trust Wallet's route). Testnet = TON testnet (another wallet id, so
+ * another address: a testnet signature can never be replayed on mainnet). Toncoin only (no
+ * jettons). Hardware wallets: not supported (the UI disables TON for such accounts).
+ */
+export interface TonChain extends Omit<ChainBase, 'phase'> {
+  family: 'ton';
+  phase: 4;
+}
+
+const TON_CHAINS: Record<Network, TonChain> = {
+  testnet: { family: 'ton', key: 'ton', name: 'TON testnet', label: 'TON testnet', network: 'testnet', color: '#0098EA', glyph: '◇',
+    nativeSymbol: 'TON', nativeName: 'Toncoin', nativeDecimals: 9, coingeckoId: 'the-open-network', phase: 4, blockTimeSecs: 5 },
+  mainnet: { family: 'ton', key: 'ton', name: 'TON', label: 'TON', network: 'mainnet', color: '#0098EA', glyph: '◇',
+    nativeSymbol: 'TON', nativeName: 'Toncoin', nativeDecimals: 9, coingeckoId: 'the-open-network', phase: 4, blockTimeSecs: 5 },
+};
+
+export function tonChain(network: Network): TonChain {
+  return TON_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -301,7 +324,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), tonChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -412,6 +435,8 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       ? { host: host(xrp.url), purpose: 'XRP Ledger : ton serveur rippled', custom: true }
       : { host: network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net', purpose: `XRP Ledger${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (rippled)` },
   );
+  // TON: reached by Rust only (ton_*), Tor circuits of the `ton` family; no custom server yet.
+  list.push({ host: network === 'mainnet' ? 'toncenter.com' : 'testnet.toncenter.com', purpose: `TON${network === 'mainnet' ? '' : ' testnet'} : solde, seqno, historique, frais estimés, diffusion (TON Center, ≈ 1 requête/s sans clé)` });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'

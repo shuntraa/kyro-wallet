@@ -15,6 +15,7 @@
 // only trigger a note when the recipient is one of them.
 
 import type { Family } from './registry';
+import { sameTonAccount } from '@kyro/shared';
 
 /**
  * Where a reference comes from. `sent`: a recipient of a send signed by this device (Kyro's own
@@ -47,6 +48,8 @@ const TAIL = 4;
  * - EVM: `0x`, hex compared lowercase.
  * - Solana (base58): none.
  * - TRON: `T`. XRP: `r`.
+ * - TON (user-friendly): the first 2 characters (`EQ`, `UQ`, `kQ`, `0Q`: flags + workchain). The
+ *   `EQ…` and `UQ…` forms of one account are the same address (`sameAddress`).
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
@@ -71,11 +74,14 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       return a.startsWith('r') ? { prefix: 'r', body: a.slice(1), caseInsensitive: false } : { prefix: '', body: a, caseInsensitive: false };
     case 'sol':
       return { prefix: '', body: a, caseInsensitive: false };
+    case 'ton':
+      return { prefix: a.slice(0, 2), body: a.slice(2), caseInsensitive: false };
   }
 }
 
 /** Same address once normalized (case-insensitive formats compared lowercase). */
 export function sameAddress(a: string, b: string, family: Family): boolean {
+  if (family === 'ton' && sameTonAccount(a, b)) return true;
   const x = addressParts(a, family);
   const y = addressParts(b, family);
   return x.prefix.toLowerCase() === y.prefix.toLowerCase() && x.body === y.body;
@@ -83,6 +89,7 @@ export function sameAddress(a: string, b: string, family: Family): boolean {
 
 /** Not identical, but same prefix and same first 4 and last 4 characters of the body. */
 export function isLookalike(a: string, b: string, family: Family): boolean {
+  if (family === 'ton' && sameTonAccount(a, b)) return false;
   const x = addressParts(a, family);
   const y = addressParts(b, family);
   if (x.body.length < HEAD + TAIL + 1 || y.body.length < HEAD + TAIL + 1) return false;

@@ -3,7 +3,7 @@
 // Several vault accounts per chain (docs/IPC.md §2.9): pure helpers shared by the app state,
 // the portfolio and the account screens. Public data only (indices, names, addresses).
 
-import type { AccountChain, Accounts, VaultAccountEntry } from '@kyro/shared';
+import { sameTonAccount, type AccountChain, type Accounts, type VaultAccountEntry } from '@kyro/shared';
 import type { AdapterSet, AnyAdapter } from '@kyro/chains';
 
 /** Chain names used in default account names (same as Rust's `Chain::label`). */
@@ -16,6 +16,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   tron: 'TRON',
   xrp: 'XRP',
   ada: 'Cardano',
+  ton: 'TON',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -28,6 +29,7 @@ export const ACCOUNT_CHAIN_HINT: Record<AccountChain, string> = {
   tron: 'TRX et TRC-20',
   xrp: 'XRP et monnaies émises',
   ada: 'ADA et tokens',
+  ton: 'Toncoin (portefeuille v4R2)',
 };
 
 /** « Bitcoin 1 » for index 0, « Bitcoin 2 » for index 1… */
@@ -100,7 +102,7 @@ export interface OwnAccountRef {
   addresses: string[];
 }
 
-const sameAddress = (family: AccountChain, a: string, b: string) => (family === 'evm' ? a.toLowerCase() === b.toLowerCase() : a === b);
+const sameAddress = (family: AccountChain, a: string, b: string) => (family === 'evm' ? a.toLowerCase() === b.toLowerCase() : family === 'ton' ? sameTonAccount(a, b) : a === b);
 
 /** The user's OTHER accounts of `family` (not `current`), for « Mes comptes » in Envoyer. */
 export function otherOwnAccounts<T extends OwnAccountRef>(sources: T[], family: AccountChain, current: number): T[] {
