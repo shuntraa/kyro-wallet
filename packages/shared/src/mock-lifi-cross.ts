@@ -9,7 +9,7 @@
 //   and `POST /v0/quote` for the DIRECT 1Click routes (from / to Bitcoin, Litecoin, Dogecoin, TRON,
 //   XRP, Cardano: packages/swap providers/near.ts), app fees split 50/50 like the live service.
 
-import { base58, base64, bech32 } from '@scure/base';
+import { base58, base64, bech32, createBase58check } from '@scure/base';
 import * as bitcoin from 'bitcoinjs-lib';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex } from '@noble/hashes/utils';
@@ -19,6 +19,8 @@ import { demoAta } from './mock-jupiter';
 import { DEMO_TOKENS, demoPrice } from './mock-data';
 import { xrpAddressOfId } from './mock-xrp';
 import { cardanoAddressOf } from './mock-cardano';
+import { cashaddrEncode } from './cashaddr';
+import { tonFriendly } from './ton-address';
 
 const LIFI_SOLANA = 1151111081099710;
 const LIFI_BITCOIN = 20000000000001;
@@ -35,7 +37,7 @@ const COMPUTE_BUDGET = 'ComputeBudget111111111111111111111111111111';
 const CLOCK = 'SysvarC1ock11111111111111111111111111111111';
 const TOKEN = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 const ATA = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
-const ONE_CLICK: Record<string, string> = { '1': 'eth', '10': 'op', '56': 'bsc', '137': 'pol', '8453': 'base', '42161': 'arb', '43114': 'avax', [String(LIFI_SOLANA)]: 'sol', [String(LIFI_BITCOIN)]: 'btc' };
+const ONE_CLICK: Record<string, string> = { '1': 'eth', '10': 'op', '56': 'bsc', '137': 'pol', '8453': 'base', '42161': 'arb', '43114': 'avax', '100': 'gnosis', [String(LIFI_SOLANA)]: 'sol', [String(LIFI_BITCOIN)]: 'btc' };
 
 const json = (status: number, body: unknown): NetResponse => ({ status, body: JSON.stringify(body) });
 const hash = (s: string) => sha256(new TextEncoder().encode(s));
@@ -219,6 +221,14 @@ const DIRECT_ASSETS: ReadonlyArray<[blockchain: string, contract: string | null,
   ['tron', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', 6, 'tether', 'USDT'],
   ['xrp', null, 6, 'ripple', 'XRP'],
   ['cardano', null, 6, 'cardano', 'ADA'],
+  ['gnosis', null, 18, 'xdai', 'xDAI'],
+  ['bch', null, 8, 'bitcoin-cash', 'BCH'],
+  ['dash', null, 8, 'dash', 'DASH'],
+  ['zec', null, 8, 'zcash', 'ZEC'],
+  ['sui', null, 9, 'sui', 'SUI'],
+  ['ton', null, 9, 'the-open-network', 'GRAM'],
+  ['aptos', null, 8, 'aptos', 'APT'],
+  ['stellar', null, 7, 'stellar', 'XLM'],
 ];
 const directCoin = new Map<string, { coin: string; decimals: number; blockchain: string }>();
 function seedDirectAssets() {
@@ -248,6 +258,18 @@ function depositAddressOn(blockchain: string, id: string): string {
     case 'cardano':
       // Enterprise address (header 0x61), as 1Click hands out.
       return cardanoAddressOf(new Uint8Array([0x61, ...h.slice(0, 28)]), 'addr');
+    case 'bch':
+      return cashaddrEncode('bitcoincash', 0, h20);
+    case 'dash':
+      return bitcoin.address.toBase58Check(h20, 0x4c);
+    case 'zec':
+      // Transparent P2PKH `t1…` (version 0x1cb8).
+      return createBase58check(sha256).encode(Uint8Array.from([0x1c, 0xb8, ...h20]));
+    case 'ton':
+      return tonFriendly(0, bytesToHex(h), false, false);
+    case 'sui':
+    case 'aptos':
+      return `0x${bytesToHex(h)}`;
     case 'sol':
       return base58.encode(h);
     default:

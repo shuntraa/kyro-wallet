@@ -11,7 +11,7 @@
 //   Clock sysvar + its epoch PDA, both read-only: it moves nothing);
 // - transfers FROM US ONLY, of the sold token only (System transfers for SOL, SPL TransferChecked
 //   from our token account for a token), to exactly three kinds of destination:
-//     · the Kyro fee wallet (`recipients.solana`, or its token account) — > 0 and ≤ 0,7 %;
+//     · the Kyro fee wallet (`recipients.solana`, or its token account) — exactly the quote's rate;
 //     · LI.FI's fee wallet (34FKjA…, or its token account) — ≤ 0,5 %;
 //     · ONE bridge deposit address (for a token: the token account of an owner created in the same
 //       transaction), which NEAR Intents must then confirm (near-intents.ts): recipient = us…;
@@ -26,7 +26,7 @@ import { getBase64Encoder, getCompiledTransactionMessageDecoder, getTransactionD
 import { associatedTokenAccount } from './providers/jupiter';
 import { WSOL_MINT } from './providers/common';
 import { JUPITER_MAX_PRIORITY_LAMPORTS } from './jupiter-verify';
-import { SwapCheckError, maxKyroFee } from './verify';
+import { SwapCheckError, kyroFeeAtRate, maxKyroFee } from './verify';
 
 /** LI.FI's Solana tracking program (`lifi-solana-program-1`, npm `@lifi/solana-programs` 0.1.12). */
 export const LIFI_SOLANA_TRACKER = '3i5JeuZuUxeKtVysUnwQNGerJP2bSMX9fTFfS4Nxe3Br';
@@ -183,6 +183,7 @@ export async function verifyLifiSolanaSource(i: LifiSolanaCheckInput): Promise<L
   if (i.fee) {
     if (kyro <= 0n) fail(l10n('frais Kyro absents de la transaction', 'Kyro fees missing from the transaction'));
     if (kyro > maxKyroFee(i.sellAmount, i.fee.bps)) fail(l10n('frais Kyro supérieurs au taux configuré', 'Kyro fees above the configured rate'));
+    if (!kyroFeeAtRate(kyro, i.sellAmount, i.fee.bps)) fail(l10n('frais Kyro différents du taux demandé', 'Kyro fees differ from the rate asked for'));
   } else if (kyro !== 0n) fail(l10n('frais inattendus', 'unexpected fees'));
   if (lifi > (i.sellAmount * LIFI_OWN_FEE_CAP_BPS + 9_999n) / 10_000n) fail(l10n('frais LI.FI plus élevés que prévu', 'LI.FI fees higher than expected'));
   if (kyro + lifi + amountIn !== i.sellAmount) fail(l10n('montants envoyés différents du montant vendu', 'amounts sent differ from the sold amount'));

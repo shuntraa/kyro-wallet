@@ -228,6 +228,8 @@ const COMMANDS: &[&str] = &[
     "tron_stake_build",
     "tron_stake_sign",
     "set_capture_protection",
+    // Opens https://kyrowallet.com/frais (fixed in Rust) in the system browser: Swap screen.
+    "open_fees_page",
     "config_get",
     // Network choice (docs/IPC.md §2.10): saved, applied by restarting the app.
     "network_get",

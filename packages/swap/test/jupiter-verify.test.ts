@@ -93,8 +93,11 @@ describe('Jupiter: demo mode transaction (mock-jupiter.ts) passes the same check
       const wire = await q.tx.build();
       const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wire));
       const summary = (await backend.invoke('sol_decode_tx', { message: getBase64Decoder().decode(tx.messageBytes) })) as SolTxSummary;
-      const r = await verifyJupiterSwap({ wire, summary, taker, sellMint, buyMint, sellAmount: amount, slippageBps: 50, quotedOut: q.buyAmount, fee: { bps: 70, account: q.solFeeAccount! } });
-      expect(r.platformFeeBps).toBe(70);
+      const r = await verifyJupiterSwap({ wire, summary, taker, sellMint, buyMint, sellAmount: amount, slippageBps: 50, quotedOut: q.buyAmount, fee: { bps: q.kyroFeeBps, account: q.solFeeAccount! } });
+      // Real curve, no price given → 90 bps in the quote AND in the route instruction.
+      expect(q.kyroFeeBps).toBe(90);
+      expect(r.platformFeeBps).toBe(90);
+      await expect(verifyJupiterSwap({ wire, summary, taker, sellMint, buyMint, sellAmount: amount, slippageBps: 50, quotedOut: q.buyAmount, fee: { bps: 70, account: q.solFeeAccount! } })).rejects.toThrow(/autre taux/);
     }
   });
 });

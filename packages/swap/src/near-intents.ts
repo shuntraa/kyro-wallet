@@ -34,6 +34,8 @@ export const ONE_CLICK_CHAINS: Readonly<Record<string, string>> = {
   '8453': 'base',
   '42161': 'arb',
   '43114': 'avax',
+  // Gnosis: LI.FI's NEAR Intents facet is deployed there too (deployments/gnosis.json).
+  '100': 'gnosis',
   solana: 'sol',
   bitcoin: 'btc',
   // Reached by NEAR Intents 1Click directly (providers/near.ts), not by LI.FI.
@@ -42,7 +44,28 @@ export const ONE_CLICK_CHAINS: Readonly<Record<string, string>> = {
   tron: 'tron',
   xrp: 'xrp',
   cardano: 'cardano',
+  bitcoincash: 'bch',
+  dash: 'dash',
+  zcash: 'zec',
+  sui: 'sui',
+  ton: 'ton',
+  aptos: 'aptos',
+  // Arrival only: 1Click refuses a SIMPLE deposit from Stellar (« Incorrect depositMode for
+  // originAsset from stellar chain », 01/11/2026), it wants a memo Kyro never sends.
+  stellar: 'stellar',
 };
+
+/** Chains 1Click delivers to but Kyro never leaves from (the deposit would need a memo). */
+export const ONE_CLICK_ARRIVAL_ONLY: ReadonlySet<SwapChain> = new Set<SwapChain>(['stellar']);
+
+/**
+ * Same account on `chain`? EVM, Sui and Aptos addresses are hex (any case); every other form
+ * (base58, bech32, cashaddr, TON user-friendly…) is compared exactly.
+ */
+export function sameChainAddress(chain: SwapChain, a: string | undefined, b: string): boolean {
+  if (!a) return false;
+  return typeof chain === 'number' || chain === 'sui' || chain === 'aptos' ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
 
 export interface OneClickToken {
   assetId: string;
@@ -116,10 +139,7 @@ const WSOL = 'So11111111111111111111111111111111111111112';
 const fail = (why: string): never => {
   throw new SwapCheckError(l10n(`NEAR Intents : ${why} — devis refusé, rien n’a été signé.`, `NEAR Intents: ${why} — quote refused, nothing was signed.`));
 };
-const sameAddr = (chain: SwapChain, a: string | undefined, b: string) => {
-  if (!a) return false;
-  return typeof chain === 'number' ? a.toLowerCase() === b.toLowerCase() : a === b;
-};
+const sameAddr = sameChainAddress;
 const chainKey = (c: SwapChain) => ONE_CLICK_CHAINS[String(c)];
 /** Native coin: wSOL / System id on Solana, `0xEeee…` / `0x0…` on EVM, the chain's name elsewhere (`bitcoin`, `tron`…). */
 const nativeToken = (chain: SwapChain, t: string) => (chain === 'solana' ? t === WSOL || t === '11111111111111111111111111111111' : typeof chain === 'string' ? t === chain : isNative(t));

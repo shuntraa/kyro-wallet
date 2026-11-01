@@ -5,12 +5,29 @@
 // check of the ordinary transfer Kyro builds for a NEAR Intents deposit (before the password).
 
 import { checkSolSummary, NATIVE_EVM_TOKEN, NATIVE_SOL_MINT, tronCoverage, type AdapterSet, type AnyAdapter, type AnyUnsigned, type AssetDef, type Chain } from '@kyro/chains';
-import type { EvmTxSummary, Network, SolTxSummary } from '@kyro/shared';
-import type { DepositPlan, SwapChain } from '@kyro/swap';
+import { sameTonAccount, type EvmTxSummary, type Network, type SolTxSummary } from '@kyro/shared';
+import { evmSwapSupported, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
 import { t } from '../i18n';
 
 /** Swap id of the chains only NEAR Intents 1Click reaches (docs/SWAP_FEES.md). */
-const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = { btc: 'bitcoin', ltc: 'litecoin', doge: 'dogecoin', tron: 'tron', xrp: 'xrp', ada: 'cardano' };
+const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = {
+  btc: 'bitcoin',
+  ltc: 'litecoin',
+  doge: 'dogecoin',
+  bch: 'bitcoincash',
+  dash: 'dash',
+  zec: 'zcash',
+  tron: 'tron',
+  xrp: 'xrp',
+  ada: 'cardano',
+  sui: 'sui',
+  ton: 'ton',
+  apt: 'aptos',
+  xlm: 'stellar',
+};
+
+/** Does NEAR Intents 1Click serve this chain (`ONE_CLICK_CHAINS`)? */
+const oneClickServes = (c: SwapChain | null) => c !== null && ONE_CLICK_CHAINS[String(c)] !== undefined;
 
 /** The swap id of a chain: EVM chain id, 'solana', 'bitcoin', 'litecoin'…; null when swaps don't serve it. */
 export function swapChainOf(chain: Chain | undefined): SwapChain | null {
@@ -20,26 +37,33 @@ export function swapChainOf(chain: Chain | undefined): SwapChain | null {
   return NEAR_ONLY[chain.family] ?? null;
 }
 
-/** EVM / Solana: same-chain swaps (0x, LI.FI, Jupiter) on every network. */
-const sameChainSwaps = (chain: Chain | undefined) => chain?.family === 'evm' || chain?.family === 'sol';
+/**
+ * Same-chain swaps: Solana (Jupiter) and the EVM chains where 0x or LI.FI has a contract Kyro
+ * checks (`evmSwapSupported`; on testnet every EVM chain is listed, its quotes are refused).
+ */
+const sameChainSwaps = (chain: Chain | undefined, network: Network) => chain?.family === 'sol' || (chain?.family === 'evm' && (network === 'testnet' || evmSwapSupported(chain.chainId)));
 
 /**
- * Can a swap START on this chain? EVM / Solana: always (testnet: same chain only). Bitcoin,
- * Litecoin, Dogecoin, TRON, XRP, Cardano: mainnet only, through NEAR Intents (no testnet routes).
+ * Can a swap START on this chain? EVM / Solana: when a provider serves it (testnet: same chain
+ * only). Chains reached through NEAR Intents (Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash,
+ * Zcash, TRON, XRP, Cardano, Sui, TON, Aptos): mainnet only. Stellar: arrival only (1Click wants a
+ * memo on a Stellar deposit, Kyro never sends one).
  */
 export function canSwapFrom(chain: Chain | undefined, network: Network = 'mainnet'): boolean {
-  if (sameChainSwaps(chain)) return true;
-  return network === 'mainnet' && swapChainOf(chain) !== null;
+  if (sameChainSwaps(chain, network)) return true;
+  const c = swapChainOf(chain);
+  return network === 'mainnet' && c !== null && !ONE_CLICK_ARRIVAL_ONLY.has(c) && (chain?.family !== 'evm' || oneClickServes(c));
 }
 
 /**
- * Can a swap from `from` ARRIVE on `to`? Same chain: EVM / Solana always, TRON (TRX ⇄ USDT) on
- * mainnet. Another chain: mainnet only (LI.FI and NEAR Intents have no testnet routes).
+ * Can a swap from `from` ARRIVE on `to`? Same chain: EVM / Solana when served, TRON (TRX ⇄ USDT)
+ * on mainnet. Another chain: mainnet only (LI.FI and NEAR Intents have no testnet routes), and
+ * only between chains the NEAR Intents routes reach.
  */
 export function canSwapTo(network: Network, from: Chain | undefined, to: Chain | undefined): boolean {
   if (!from || !to || !canSwapFrom(from, network)) return false;
-  if (from.key === to.key) return sameChainSwaps(from) || network === 'mainnet';
-  return network === 'mainnet' && swapChainOf(to) !== null;
+  if (from.key === to.key) return sameChainSwaps(from, network) || (network === 'mainnet' && from.family === 'tron');
+  return network === 'mainnet' && oneClickServes(swapChainOf(from)) && oneClickServes(swapChainOf(to));
 }
 
 export interface OwnAccounts {
@@ -51,13 +75,21 @@ export interface OwnAccounts {
   tron?: { address: string };
   xrp?: { address: string };
   cardano?: { address: string };
+  bch?: { address: string };
+  dash?: { address: string };
+  zec?: { address: string };
+  sui?: { address: string };
+  ton?: { address: string };
+  aptos?: { address: string };
+  stellar?: { address: string };
 }
 
 /**
  * Our own receiving address on `chain` (the selected account). Bitcoin: the native SegWit
  * (`bc1q…`) receive address, the only form a cross-chain bridge call can carry unambiguously.
  * Litecoin: `ltc1…`; Dogecoin: `D…`; TRON: `T…`; XRP: the classic `r…` address (no tag: your own
- * account); Cardano: the base address `addr1…`.
+ * account); Cardano: the base address `addr1…`; Bitcoin Cash: `bitcoincash:q…`; Dash: `X…`;
+ * Zcash: the transparent `t1…`; Sui / Aptos: `0x…`; TON: `UQ…`; Stellar: `G…` (no memo).
  */
 export function ownAddressOn(accounts: OwnAccounts, chain: Chain | undefined): string | null {
   if (!chain) return null;
@@ -78,6 +110,20 @@ export function ownAddressOn(accounts: OwnAccounts, chain: Chain | undefined): s
       return accounts.xrp?.address || null;
     case 'ada':
       return accounts.cardano?.address || null;
+    case 'bch':
+      return accounts.bch?.address || null;
+    case 'dash':
+      return accounts.dash?.address || null;
+    case 'zec':
+      return accounts.zec?.address || null;
+    case 'sui':
+      return accounts.sui?.address || null;
+    case 'ton':
+      return accounts.ton?.address || null;
+    case 'apt':
+      return accounts.aptos?.address || null;
+    case 'xlm':
+      return accounts.stellar?.address || null;
     default:
       // Chains NEAR Intents / LI.FI routes do not cover in Kyro yet.
       return null;
@@ -143,12 +189,15 @@ export interface DepositDecoded {
  * confirmed: send `plan.amountIn` of the sold token to `plan.depositAddress`, and nothing else
  * (Bitcoin / Litecoin / Dogecoin: one payment, the rest back to our change, no OP_RETURN, no
  * unknown script; TRON: a plain TRX / TRC-20 transfer of that token, no memo; XRP: no tag, no
- * memo, no path / SendMax; Cardano: ADA only, no token, no message). Returns the problem in
+ * memo, no path / SendMax; Cardano: ADA only, no token, no message; Bitcoin Cash / Dash: like
+ * Bitcoin; Zcash: one transparent payment, the rest back to our change; Sui / Aptos: one plain
+ * transfer of the native coin; TON: no comment, not « whole balance »). Returns the problem in
  * French, or null when it matches.
  */
 export function depositTxProblem(u: AnyUnsigned, sell: AssetDef, plan: Pick<DepositPlan, 'depositAddress' | 'amountIn'>, decoded: DepositDecoded = {}): string | null {
   const to = plan.depositAddress;
-  if (u.recipient !== to && !(u.family === 'evm' && u.recipient.toLowerCase() === to.toLowerCase())) return t('swap.depRecipientMismatch');
+  const hex = u.family === 'evm' || u.family === 'sui' || u.family === 'apt';
+  if (u.recipient !== to && !(hex && u.recipient.toLowerCase() === to.toLowerCase())) return t('swap.depRecipientMismatch');
   if (u.amount !== plan.amountIn) return t('swap.depAmountMismatch');
   switch (u.family) {
     case 'btc': {
@@ -194,13 +243,38 @@ export function depositTxProblem(u: AnyUnsigned, sell: AssetDef, plan: Pick<Depo
       if (pay.length !== 1 || pay[0]?.address !== to || pay[0].lovelace !== plan.amountIn.toString() || pay[0].tokens.length > 0) return t('swap.depNotExactPayment');
       return null;
     }
+    case 'zec': {
+      const s = u.summary;
+      // ExpiryCapped (near a network upgrade) is informational; anything needing the 2nd window is refused.
+      if (s.requiresExtraConfirmation || s.toKind === 'tex') return t('swap.depUnexpectedOutput');
+      return s.to === to && s.toAddress === to && s.amount === plan.amountIn.toString() ? null : t('swap.depNotExactPayment');
+    }
+    case 'sui': {
+      const s = u.summary;
+      if (u.all || s.amount === null || s.warnings.length > 0) return t('swap.depUnexpectedTransfer');
+      return s.recipient.toLowerCase() === to.toLowerCase() && s.coinType === '0x2::sui::SUI' && s.amount === plan.amountIn.toString() ? null : t('swap.depDecodeMismatch');
+    }
+    case 'apt': {
+      const s = u.summary;
+      if (s.warnings.length > 0) return t('swap.depUnexpectedTransfer');
+      return s.recipient.toLowerCase() === to.toLowerCase() && s.function === '0x1::aptos_account::transfer' && s.amount === plan.amountIn.toString() ? null : t('swap.depDecodeMismatch');
+    }
+    case 'ton': {
+      const s = u.summary;
+      if (u.comment || s.comment !== null || s.warnings.length > 0) return t('swap.depUnexpectedMemo');
+      if (u.sendAll || s.sendAll) return t('swap.depUnexpectedTransfer');
+      return sameTonAccount(s.destination, to) && s.amount === plan.amountIn.toString() ? null : t('swap.depDecodeMismatch');
+    }
     default:
       return t('swap.depUnsupportedChain');
   }
 }
 
+/** The adapters a NEAR Intents deposit may go through. */
+export type DepositAdapters = Pick<AdapterSet, 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'zec' | 'tron' | 'xrp' | 'cardano' | 'sui' | 'ton' | 'aptos'>;
+
 /** The vault adapter that sends `asset` (a NEAR Intents deposit is an ordinary transfer). */
-export function depositAdapterFor(asset: AssetDef, adapters: Pick<AdapterSet, 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'cardano'>): AnyAdapter | undefined {
+export function depositAdapterFor(asset: AssetDef, adapters: DepositAdapters): AnyAdapter | undefined {
   switch (asset.family) {
     case 'btc':
       return adapters.btc ?? undefined;
@@ -216,8 +290,23 @@ export function depositAdapterFor(asset: AssetDef, adapters: Pick<AdapterSet, 'b
       return adapters.xrp ?? undefined;
     case 'ada':
       return adapters.cardano ?? undefined;
-    default:
+    case 'bch':
+      return adapters.bch ?? undefined;
+    case 'dash':
+      return adapters.dash ?? undefined;
+    case 'zec':
+      return adapters.zec ?? undefined;
+    case 'sui':
+      return adapters.sui ?? undefined;
+    case 'ton':
+      return adapters.ton ?? undefined;
+    case 'apt':
+      return adapters.aptos ?? undefined;
+    case 'evm':
       return adapters.evm.get(asset.chainKey);
+    default:
+      // Stellar (arrival only) and the chains no swap leaves from.
+      return undefined;
   }
 }
 
@@ -236,7 +325,7 @@ const stop = (why: string) => new Error(t('swap.depStop', { why }));
  * `sol_decode_tx`; the other chains are decoded again by Rust in the native dialog) and checked
  * against the plan (`depositTxProblem`). Throws in French; nothing is signed here.
  */
-export async function buildDepositTx(sell: AssetDef, adapters: Pick<AdapterSet, 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'cardano'>, plan: DepositPlan): Promise<PreparedDeposit> {
+export async function buildDepositTx(sell: AssetDef, adapters: DepositAdapters, plan: DepositPlan): Promise<PreparedDeposit> {
   const ad = depositAdapterFor(sell, adapters);
   if (!ad) throw new Error(t('swap.depNoAccount'));
   if (!ad.isValidAddress(plan.depositAddress)) throw stop(t('swap.depInvalidAddress'));

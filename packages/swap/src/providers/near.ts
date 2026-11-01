@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // NEAR Intents 1Click, used DIRECTLY (no aggregator) for the routes LI.FI cannot serve: from
-// Bitcoin, Litecoin, Dogecoin, TRON (TRX, USDT TRC-20), XRP and Cardano to any chain Kyro holds,
-// and from EVM / Solana to Litecoin, Dogecoin, TRON, XRP and Cardano (docs.near-intents.org
-// « 1Click API »: `POST /v0/quote`, public, no key).
+// Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, TRON (TRX, USDT TRC-20), XRP, Cardano,
+// Sui, TON and Aptos to any chain 1Click serves in Kyro, and from EVM / Solana to all of those plus
+// Stellar (arrival only) (docs.near-intents.org « 1Click API »: `POST /v0/quote`, public, no key).
 //
 // There is no third-party transaction to sign: 1Click hands out a one-time DEPOSIT ADDRESS bound
 // (off-chain, signed quote) to our recipient, our refund address, the amount and the minimum.
@@ -19,11 +19,11 @@
 
 import { fetchJson, l10n, netFetch, type NetFetch } from '@kyro/shared';
 import type { DepositPlan, Quote, QuoteParams, SwapChain, SwapProvider } from '../types';
-import { ONE_CLICK_MAX_TOTAL_BPS, type ProviderFee } from '../fees';
+import { ONE_CLICK_FEE_REQUEST_FACTOR, ONE_CLICK_MAX_TOTAL_BPS, feeForQuote, type ProviderFee } from '../fees';
 import { providerError } from './common';
 import { applySlippage } from '../compare';
 import { SwapCheckError } from '../verify';
-import { NEAR_INTENTS_HOST, NearIntentsClient, ONE_CLICK_CHAINS, checkAppFees, oneClickAssetIs, type OneClickStatus, type OneClickToken } from '../near-intents';
+import { NEAR_INTENTS_HOST, NearIntentsClient, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, checkAppFees, oneClickAssetIs, sameChainAddress, type OneClickStatus, type OneClickToken } from '../near-intents';
 
 /** 1Click quote answer (`POST /v0/quote`). */
 export interface OneClickQuoteAnswer {
@@ -49,7 +49,7 @@ const lifiDestination = (c: SwapChain) => lifiSource(c) || c === 'bitcoin';
 const fail = (why: string): never => {
   throw new SwapCheckError(l10n(`NEAR Intents : ${why} — devis refusé, rien n’a été signé.`, `NEAR Intents: ${why} — quote refused, nothing was signed.`));
 };
-const sameAddr = (chain: SwapChain, a: string | undefined, b: string) => !!a && (typeof chain === 'number' ? a.toLowerCase() === b.toLowerCase() : a === b);
+const sameAddr = sameChainAddress;
 const big = (v: string | undefined): bigint | null => (v !== undefined && /^\d{1,78}$/.test(v) ? BigInt(v) : null);
 
 /** The 1Click asset for `token` on `chain` (native: the `nep141:` entry first), or null. */
@@ -110,8 +110,9 @@ export class NearIntentsProvider implements SwapProvider {
    * `appFees[0].fee` actually sent: twice Kyro's rate (1Click's live 50/50 split), re-derived once
    * from 1Click's echo if its split differs (its docs also describe « your fee + 25 bps » without a
    * key). Whatever is sent, a quote is only accepted if Kyro's echoed share is EXACTLY `bps`.
+   * Kept per Kyro rate (the rate follows the curve, so it changes with the swap value).
    */
-  private requestBps: number | null = null;
+  private readonly requestBps = new Map<number, number>();
 
   constructor(opts: { fetch?: NetFetch; fee?: ProviderFee & { requestBps?: number } } = {}) {
     this.fetcher = opts.fetch ?? netFetch;
@@ -131,20 +132,25 @@ export class NearIntentsProvider implements SwapProvider {
   supports(p: QuoteParams): boolean {
     const to = p.toChain ?? p.chain;
     if (ONE_CLICK_CHAINS[String(p.chain)] === undefined || ONE_CLICK_CHAINS[String(to)] === undefined) return false;
+    if (ONE_CLICK_ARRIVAL_ONLY.has(p.chain)) return false;
     if (lifiSource(p.chain) && (to === p.chain || lifiDestination(to))) return false;
     return true;
   }
 
-  private nearFee(): NearFee | null {
+  /** The fee of THIS quote: the curve's rate for its USD value (≤ 250 bps), asked for then demanded back. */
+  private nearFee(p: QuoteParams): NearFee | null {
     if (this.fee.kind === 'unavailable') throw new Error(this.fee.reason);
-    return this.fee.kind === 'fee' ? { bps: this.fee.bps, recipient: this.fee.recipient.toLowerCase(), requestBps: this.requestBps ?? this.fee.requestBps ?? this.fee.bps * 2 } : null;
+    const f = feeForQuote(this.fee, p);
+    if (f.kind !== 'fee') return null;
+    const fixed = this.fee.kind === 'fee' ? this.fee.requestBps : undefined;
+    return { bps: f.bps, recipient: f.recipient.toLowerCase(), requestBps: this.requestBps.get(f.bps) ?? fixed ?? f.bps * ONE_CLICK_FEE_REQUEST_FACTOR };
   }
 
   private async ask(p: QuoteParams, dry: boolean, retried = false): Promise<{ answer: OneClickQuoteAnswer; expect: OneClickQuoteExpect }> {
     const toChain = p.toChain ?? p.chain;
     const recipient = p.recipient ?? (toChain === p.chain ? p.taker : '');
     if (!recipient) throw new Error(l10n('NEAR Intents : pas de compte à toi sur la chaîne de destination', 'NEAR Intents: no account of yours on the destination chain'));
-    const fee = this.nearFee();
+    const fee = this.nearFee(p);
     let tokens: OneClickToken[];
     try {
       tokens = await this.client.tokenList();
@@ -182,7 +188,7 @@ export class NearIntentsProvider implements SwapProvider {
     if (fee && !retried && typeof ours === 'number' && Number.isInteger(ours) && ours > 0 && ours !== fee.bps) {
       const next = Math.round((fee.requestBps * fee.bps) / ours);
       if (next >= fee.bps && next <= ONE_CLICK_MAX_TOTAL_BPS && next !== fee.requestBps) {
-        this.requestBps = next;
+        this.requestBps.set(fee.bps, next);
         return this.ask(p, dry, true);
       }
     }

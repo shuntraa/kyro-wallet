@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Seules permissions de la fenêtre principale : nos commandes et le contrôle de la fenêtre (barre de titre personnalisée). Pas de fs, pas de shell, pas d'http côté webview.",
+  "description": "Seules permissions de la fenêtre principale : nos commandes et le contrôle de la fenêtre (barre de titre personnalisée). Pas de fs, pas de shell, pas d'http côté webview. Seul lien externe : open_fees_page (URL fixe kyrowallet.com/frais, ouverte par Rust).",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
@@ -231,6 +231,7 @@
     "allow-tron-stake-build",
     "allow-tron-stake-sign",
     "allow-set-capture-protection",
+    "allow-open-fees-page",
     "allow-config-get",
     "allow-network-get",
     "allow-network-set",

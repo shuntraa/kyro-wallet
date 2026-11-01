@@ -12,7 +12,7 @@
 import { fetchJson, netFetch, type NetFetch, l10n } from '@kyro/shared';
 import { gasFiat } from '../compare';
 import type { Quote, QuoteParams, SwapProvider } from '../types';
-import type { ProviderFee } from '../fees';
+import { feeForQuote, type ProviderFee } from '../fees';
 import { isNative, providerError, qs, toBig, unavailableReason, type ProviderOptions } from './common';
 import { verifyEvmSwap } from '../verify';
 
@@ -64,6 +64,8 @@ export class ZeroExProvider implements SwapProvider {
   }
 
   async quote(p: QuoteParams): Promise<Quote> {
+    // The rate of THIS quote (curve of its USD value): asked for, then demanded back by verify.ts.
+    const fee = feeForQuote(this.fee, p);
     if (typeof p.chain !== 'number') throw new Error(l10n('0x : réseau non pris en charge', '0x: network not supported'));
     const url = `https://api.0x.org/swap/allowance-holder/quote?${qs({
       chainId: p.chain,
@@ -72,7 +74,7 @@ export class ZeroExProvider implements SwapProvider {
       sellAmount: p.sellAmount.toString(),
       taker: p.taker,
       slippageBps: p.slippageBps,
-      ...(this.fee.kind === 'fee' ? { swapFeeRecipient: this.fee.recipient, swapFeeBps: this.fee.bps, swapFeeToken: p.sell.address } : {}),
+      ...(fee.kind === 'fee' ? { swapFeeRecipient: fee.recipient, swapFeeBps: fee.bps, swapFeeToken: p.sell.address } : {}),
     })}`;
     let r: ZeroExQuote;
     try {
@@ -81,16 +83,16 @@ export class ZeroExProvider implements SwapProvider {
       throw providerError(this.name, e);
     }
     if (r.liquidityAvailable === false) throw new Error(l10n('0x : pas de liquidité pour cette paire', '0x: no liquidity for this pair'));
-    if (this.fee.kind === 'fee' && !(r.fees?.integratorFee && toBig(r.fees.integratorFee.amount) > 0n)) throw new Error(l10n('0x : frais Kyro non appliqués par le devis', '0x: Kyro fees not applied by the quote'));
+    if (fee.kind === 'fee' && !(r.fees?.integratorFee && toBig(r.fees.integratorFee.amount) > 0n)) throw new Error(l10n('0x : frais Kyro non appliqués par le devis', '0x: Kyro fees not applied by the quote'));
     const gas = toBig(r.transaction.gas);
     const gasPrice = toBig(r.transaction.gasPrice);
     const networkWei = r.totalNetworkFee ? toBig(r.totalNetworkFee) : gas * gasPrice;
-    const fee = r.fees?.zeroExFee;
+    const zx = r.fees?.zeroExFee;
     let providerFeeFiat: number | null = 0;
-    if (fee) {
-      const ft = fee.token.toLowerCase();
+    if (zx) {
+      const ft = zx.token.toLowerCase();
       const t = ft === p.buy.address.toLowerCase() ? p.buy : ft === p.sell.address.toLowerCase() ? p.sell : null;
-      providerFeeFiat = t?.priceFiat !== undefined ? (Number(fee.amount) / 10 ** t.decimals) * t.priceFiat : null;
+      providerFeeFiat = t?.priceFiat !== undefined ? (Number(zx.amount) / 10 ** t.decimals) * t.priceFiat : null;
     }
     const sources = [...new Set((r.route?.fills ?? []).map((f) => f.source.replace(/_/g, ' ')))];
     const allowanceTarget = isNative(p.sell.address) ? null : r.issues?.allowance?.spender ?? r.allowanceTarget ?? r.transaction.to;
@@ -107,7 +109,7 @@ export class ZeroExProvider implements SwapProvider {
       buyAmount: toBig(r.buyAmount),
       tx: { to: r.transaction.to, data: r.transaction.data, value },
       allowanceTarget,
-      fee: this.fee,
+      fee: fee,
       integratorFee: integrator ? { amount: toBig(integrator.amount), token: integrator.token } : null,
     });
     const out: Quote = {
@@ -119,7 +121,7 @@ export class ZeroExProvider implements SwapProvider {
       gasFeeFiat: gasFiat(networkWei, 1n, p.nativePriceFiat),
       providerFeeFiat,
       providerFeeIncluded: true,
-      kyroFeeBps: this.fee.kind === 'fee' ? this.fee.bps : 0,
+      kyroFeeBps: fee.kind === 'fee' ? fee.bps : 0,
       priceImpact: null,
       allowanceTarget: allowanceTarget === null ? null : check.contract,
       tx: { kind: 'evm', chainId: p.chain, to: check.contract, data: r.transaction.data, value, ...(gas > 0n ? { gas } : {}) },

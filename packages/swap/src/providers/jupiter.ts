@@ -11,7 +11,7 @@
 
 import { fetchJson, netFetch, type NetFetch, l10n } from '@kyro/shared';
 import { address, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
-import type { ProviderFee } from '../fees';
+import { feeForQuote, type ProviderFee } from '../fees';
 import type { Quote, QuoteParams, SwapProvider } from '../types';
 import { providerError, qs, toBig, unavailableReason, type ProviderOptions } from './common';
 
@@ -69,7 +69,9 @@ export class JupiterProvider implements SwapProvider {
   }
 
   async quote(p: QuoteParams): Promise<Quote> {
-    const fee = this.fee.kind === 'fee' ? this.fee : null;
+    // The rate of THIS quote (curve of its USD value, at most 255: `platform_fee_bps` is a u8).
+    const quoteFee = feeForQuote(this.fee, p);
+    const fee = quoteFee.kind === 'fee' ? quoteFee : null;
     const feeMint = fee ? [p.buy.address, p.sell.address].find((m) => this.feeMints.includes(m)) : undefined;
     if (fee && !feeMint) throw new Error(l10n(`Jupiter : frais Kyro possibles seulement si ${this.feeMints.map(mintLabel).join(' ou ')} est dans la paire`, `Jupiter: Kyro fees only possible if ${this.feeMints.map(mintLabel).join(' or ')} is in the pair`));
     const url = `https://lite-api.jup.ag/swap/v1/quote?${qs({

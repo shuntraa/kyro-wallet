@@ -46,6 +46,41 @@ describe('cross-chain swap helpers', () => {
     expect(canSwapTo('testnet', sep, sep)).toBe(true);
   });
 
+  it('NEAR Intents chains added on 01/11/2026: BCH, Dash, Zcash, Sui, TON, Aptos both ways, Stellar on arrival only, Gnosis', () => {
+    const by = (f: string) => chains.find((c) => c.family === f);
+    expect(['bch', 'dash', 'zec', 'sui', 'ton', 'apt', 'xlm'].map((f) => swapChainOf(by(f)))).toEqual(['bitcoincash', 'dash', 'zcash', 'sui', 'ton', 'aptos', 'stellar']);
+    for (const f of ['bch', 'dash', 'zec', 'sui', 'ton', 'apt']) {
+      expect(canSwapFrom(by(f)), f).toBe(true);
+      expect(canSwapTo('mainnet', by(f), eth), f).toBe(true);
+      expect(canSwapTo('mainnet', sol, by(f)), f).toBe(true);
+      expect(canSwapFrom(allChains('testnet').find((c) => c.family === f), 'testnet'), f).toBe(false);
+    }
+    // Stellar: 1Click wants a memo on a Stellar deposit (Kyro never sends one) → arrival only.
+    expect(canSwapFrom(by('xlm'))).toBe(false);
+    expect(canSwapTo('mainnet', eth, by('xlm'))).toBe(true);
+    expect(canSwapTo('mainnet', by('bch'), by('xlm'))).toBe(true);
+    // No 1Click route: NEAR (only wNEAR), Hedera, Kaspa, Polkadot, Algorand, Monero, Cosmos.
+    for (const f of ['near', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'cosmos']) {
+      expect(canSwapFrom(by(f)), f).toBe(false);
+      expect(canSwapTo('mainnet', eth, by(f)), f).toBe(false);
+    }
+    // EVM: same-chain where 0x / LI.FI has a checked contract (Flare, Kaia, HyperEVM now too), not Conflux.
+    for (const k of ['flare', 'kaia', 'hyperevm', 'cronos', 'gnosis']) expect(canSwapTo('mainnet', findChain('mainnet', k), findChain('mainnet', k)), k).toBe(true);
+    expect(canSwapFrom(findChain('mainnet', 'conflux'))).toBe(false);
+    // Between chains: only those NEAR Intents reaches (Gnosis yes, Cronos / Flare no).
+    expect(canSwapTo('mainnet', findChain('mainnet', 'gnosis'), by('bch'))).toBe(true);
+    expect(canSwapTo('mainnet', eth, findChain('mainnet', 'gnosis'))).toBe(true);
+    expect(canSwapTo('mainnet', eth, findChain('mainnet', 'cronos'))).toBe(false);
+    expect(canSwapTo('mainnet', findChain('mainnet', 'flare'), sol)).toBe(false);
+    const own = { ...accounts, bch: { address: 'bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a' }, stellar: { address: 'GDRXE2BQUC3AZNPVFSCEZ76NJ3WWL25FYFK6RGZGIEKWE4SOOHSUJUJ6' }, ton: { address: 'UQCKhieGGl3ZbJ2zzggHsSLaXtRzk0znVopbSxw2HLsorhqg' } };
+    expect(ownAddressOn(own, by('bch'))).toBe(own.bch.address);
+    expect(ownAddressOn(own, by('xlm'))).toBe(own.stellar.address);
+    expect(ownAddressOn(own, by('ton'))).toBe(own.ton.address);
+    expect(ownAddressOn(own, by('sui'))).toBeNull();
+    expect(swapTokenAddress(assets.find((a) => a.id === 'zec') ?? assets[0]!)).toBe('zcash');
+    expect(swapTokenAddress(assets.find((a) => a.id === 'apt') ?? assets[0]!)).toBe('aptos');
+  });
+
   it('« Tu reçois » groups: the sell chain first, then the others, without the sold asset', () => {
     const sell = assets.find((a) => a.id === 'eth:1');
     const groups = buyGroups('mainnet', chains, assets, sell);
@@ -78,6 +113,10 @@ describe('cross-chain swap helpers', () => {
     expect(isLocalTx({ ...tx, cross: { fromChain: '42161', toChain: 'ethereum', toChainKey: 'solana', bridge: 'near' } }, 'mainnet')).toBe(false);
     expect(isLocalTx({ ...tx, cross: { fromChain: 'bitcoin', toChain: '1', toChainKey: 'ethereum', bridge: '1click', depositAddress: 'bc1qfm26lzq7yaqap99dp689wfn4pkfpd6r2m7n55d' } }, 'mainnet')).toBe(true);
     expect(isLocalTx({ ...tx, cross: { fromChain: 'bitcoin', toChain: '1', toChainKey: 'ethereum', bridge: '1click', depositAddress: 'bc1q/../x' } }, 'mainnet')).toBe(false);
+    // New 1Click chains: cashaddr and TON deposit addresses kept.
+    expect(isLocalTx({ ...tx, cross: { fromChain: 'bitcoincash', toChain: '1', toChainKey: 'ethereum', bridge: '1click', depositAddress: 'bitcoincash:qz7xm6aahynmu0ud5y255jlxe22cdjgxpv9ra4uqyf' } }, 'mainnet')).toBe(true);
+    expect(isLocalTx({ ...tx, cross: { fromChain: 'ton', toChain: 'stellar', toChainKey: 'stellar', bridge: '1click', depositAddress: 'UQD-x0XHFHtf6KcZGG7ZWrqF1oZ5NGE-guyHR4yjKL1Ivz_P' } }, 'mainnet')).toBe(true);
+    expect(isLocalTx({ ...tx, cross: { fromChain: 'near', toChain: '1', toChainKey: 'ethereum', bridge: '1click' } }, 'mainnet')).toBe(false);
     expect(isLocalTx({ ...tx, cross: { fromChain: '42161', toChain: 'solana', toChainKey: 'solana', bridge: 'near', status: '<script>' } }, 'mainnet')).toBe(false);
   });
 });
@@ -92,8 +131,32 @@ const DEPOSIT: Record<string, string> = {
   xrp: 'rN7zSHBPiuaGmTe79Gb7Dv6JkJyQNkKHS6',
   ada: 'addr1vxvpl2gfjp3y78dac4dpkf9pmn7v38lnj6qmz2hwe3en5gcqcawcf',
   'eth:42161': '0x22259b2F4e5fe827d3bB8d528f8d3C771A219523',
+  // packages/swap/test/fixtures/cross/1click-direct-more.json (01/11/2026).
+  bch: 'bitcoincash:qz7xm6aahynmu0ud5y255jlxe22cdjgxpv9ra4uqyf',
+  dash: 'Xwe1utk12ydvkRAw9TVfNdijg6xLrDaabW',
+  zec: 't1djDRoNmb8ea5eNFeP5QmuNm2pGCpyxbf2',
+  ton: 'UQD-x0XHFHtf6KcZGG7ZWrqF1oZ5NGE-guyHR4yjKL1Ivz_P',
+  sui: '0x9b485b25b3800b2d9685a19661572247c3b2583dd14db14cc9ab7e1625fada2a',
+  apt: '0x27fad4cd8ce74d1c39faab4f2d36a4513b38dcdf049899b53a09357bb2170b2f',
+  'eth:100': '0xd474520085f54B0F7DD7743BB36Fa112b2AE7b0a',
 };
-const AMOUNT: Record<string, bigint> = { btc: 100_000n, ltc: 50_000_000n, doge: 100_000_000_000n, trx: 10_000_000n, 'trc20:TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t': 5_000_000n, xrp: 20_000_000n, ada: 5_000_000n, 'eth:42161': 10n ** 15n };
+const AMOUNT: Record<string, bigint> = {
+  btc: 100_000n,
+  ltc: 50_000_000n,
+  doge: 100_000_000_000n,
+  trx: 10_000_000n,
+  'trc20:TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t': 5_000_000n,
+  xrp: 20_000_000n,
+  ada: 5_000_000n,
+  'eth:42161': 10n ** 15n,
+  bch: 1_000_000n,
+  dash: 10_000_000n,
+  zec: 1_000_000n,
+  ton: 1_000_000_000n,
+  sui: 1_000_000_000n,
+  apt: 10_000_000n,
+  'eth:100': 10n ** 16n,
+};
 const plan = (id: string) => ({ depositAddress: DEPOSIT[id] ?? '', amountIn: AMOUNT[id] ?? 0n, amountOut: 1n, minAmountOut: 1n, deadline: Date.now() + 3 * 3_600_000, kyroFeeBps: 70, oneClickFeeBps: 70, timeEstimateSecs: 60 });
 type Of<F extends AnyUnsigned['family']> = Extract<AnyUnsigned, { family: F }>;
 
@@ -109,7 +172,7 @@ describe('NEAR Intents deposit: the ordinary transfer Kyro builds (demo adapters
     return a;
   };
 
-  it('BTC, LTC, DOGE, TRX, USDT TRC-20, XRP, ADA and ETH (Arbitrum): exactly the confirmed amount to the real 1Click deposit address, nothing else', async () => {
+  it('BTC, LTC, DOGE, BCH, DASH, ZEC, TRX, USDT TRC-20, XRP, ADA, SUI, TON, APT, ETH (Arbitrum) and xDAI: exactly the confirmed amount to the real 1Click deposit address, nothing else', async () => {
     const ad = await setup();
     for (const id of Object.keys(DEPOSIT)) {
       const sell = asset(id);
@@ -135,6 +198,21 @@ describe('NEAR Intents deposit: the ordinary transfer Kyro builds (demo adapters
     expect(depositTxProblem({ ...trxTx, summary: { ...trxTx.summary, memo: 'x' } }, asset('trx'), plan('trx'))).toMatch(/mémo/);
     const adaTx = (await build('ada')) as Of<'ada'>;
     expect(depositTxProblem({ ...adaTx, memo: 'x' }, asset('ada'), plan('ada'))).toMatch(/message/);
+    const zecTx = (await build('zec')) as Of<'zec'>;
+    expect(depositTxProblem(zecTx, asset('zec'), { ...plan('zec'), amountIn: 1_000_001n })).toMatch(/montant/);
+    expect(depositTxProblem({ ...zecTx, summary: { ...zecTx.summary, toKind: 'tex' } }, asset('zec'), plan('zec'))).toBeTruthy();
+    const suiTx = (await build('sui')) as Of<'sui'>;
+    expect(depositTxProblem({ ...suiTx, all: true }, asset('sui'), plan('sui'))).toBeTruthy();
+    expect(depositTxProblem({ ...suiTx, summary: { ...suiTx.summary, recipient: '0x' + '1'.repeat(64) } }, asset('sui'), plan('sui'))).toBeTruthy();
+    const aptTx = (await build('apt')) as Of<'apt'>;
+    expect(depositTxProblem({ ...aptTx, summary: { ...aptTx.summary, function: '0x1::coin::transfer' } }, asset('apt'), plan('apt'))).toBeTruthy();
+    const tonTx = (await build('ton')) as Of<'ton'>;
+    expect(depositTxProblem({ ...tonTx, summary: { ...tonTx.summary, comment: 'x' } }, asset('ton'), plan('ton'))).toMatch(/mémo/);
+    expect(depositTxProblem({ ...tonTx, sendAll: true }, asset('ton'), plan('ton'))).toBeTruthy();
+    const bchTx = (await build('bch')) as Of<'btc'>;
+    expect(depositTxProblem({ ...bchTx, summary: { ...bchTx.summary, outputs: [...bchTx.summary.outputs, ['op_return:6b79726f', 0, false]] } }, asset('bch'), plan('bch'))).toMatch(/OP_RETURN/);
+    // Stellar is arrival only: no deposit is ever built from it.
+    await expect(buildDepositTx(asset('xlm'), ad, { ...plan('btc'), depositAddress: 'GDRXE2BQUC3AZNPVFSCEZ76NJ3WWL25FYFK6RGZGIEKWE4SOOHSUJUJ6' })).rejects.toThrow();
     // A deposit address of another chain is refused before anything is built.
     await expect(buildDepositTx(asset('ltc'), ad, { ...plan('ltc'), depositAddress: DEPOSIT.doge ?? '' })).rejects.toThrow(/adresse de dépôt invalide/);
   }, 60_000);

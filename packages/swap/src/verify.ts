@@ -11,7 +11,7 @@
 // - the native value sent is 0 for an ERC-20 sale and exactly the amount for a native sale;
 // - the recipient written in the calldata is the taker (us), the minimum written in the calldata
 //   is at least `buyAmount` minus the chosen slippage;
-// - the Kyro fee goes to the configured recipient, at most at the configured rate.
+// - the Kyro fee goes to the configured recipient, at exactly the rate asked for this quote.
 //
 // Sources (checked 01/11/2026):
 // - 0x: docs.0x.org « Contracts » (AllowanceHolder on Cancun chains), 0x-settler README and
@@ -23,7 +23,7 @@
 
 import { decodeFunctionData, getAddress, isAddress, pad, parseAbi, toHex, type Hex } from 'viem';
 import { base58, bech32 } from '@scure/base';
-import type { ProviderFee } from './fees';
+import type { QuoteFee } from './fees';
 import { applySlippage } from './compare';
 import { NATIVE_EVM, WSOL_MINT, ZERO_ADDRESS, isNative } from './providers/common';
 import type { ProviderId, SwapChain, SwapToken } from './types';
@@ -35,25 +35,41 @@ export const ZEROX_ALLOWANCE_HOLDER = '0x0000000000001fF3684f28c67538d4D072C2273
 export const ZEROX_SETTLER_REGISTRY = '0x00000000000004533Fe15556B1E086BB1A72cEae';
 /** Feature id of the taker-submitted Settler (the one AllowanceHolder.exec targets). */
 export const ZEROX_TAKER_SETTLER_FEATURE = 2n;
-/** LI.FI Diamond (`LiFiDiamond` in deployments/<chain>.json) on every chain listed in {@link LIFI_CHECKED_CHAINS}. */
+/** LI.FI Diamond (`LiFiDiamond` in deployments/<chain>.json) on the chains of {@link LIFI_CHECKED_CHAINS}, except {@link LIFI_OTHER_DEPLOYMENTS}. */
 export const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE';
 /** LI.FI FeeForwarder (`FeeForwarder` in deployments/<chain>.json): pays `distributionFees`. Mantle has its own. */
 export const LIFI_FEE_FORWARDER = '0xCE40449B773a3E6E5e769ADb4e567179d4828cbd';
 /** LI.FI FeeForwarder on Mantle (deployments/mantle.json; the default address has no code there). */
 export const LIFI_FEE_FORWARDER_MANTLE = '0x79C3F5B651Ee5782Ba15d968B088458cd5f1f4EF';
+/**
+ * LI.FI on the chains where its Diamond is ANOTHER address (`LiFiDiamond` / `FeeForwarder` in
+ * deployments/<chain>.json, same Diamond as `diamondAddress` in li.quest `/v1/chains`, 01/11/2026).
+ * Each Diamond has the 5 176-byte code of the other Diamonds, each FeeForwarder the exact same
+ * code as the default one (`eth_getCode`, 01/11/2026).
+ */
+export const LIFI_OTHER_DEPLOYMENTS: Readonly<Record<number, { diamond: string; feeForwarder: string }>> = {
+  14: { diamond: '0x198FC70Dfe05E755C81e54bd67Bff3F729344B9b', feeForwarder: '0xA5971Bd73Dbb879aAaA6fEcB95Dc3fD50c2e3C25' },
+  999: { diamond: '0x0a0758d937d1059c356D4714e57F5df0239bce1A', feeForwarder: '0xba072Bf218314E51d5c3d254800d799840ae6a25' },
+  8_217: { diamond: '0x1255d17c1BC2f764d087536410879F2d0D8772fD', feeForwarder: '0x5161370f81b3054f43361644Ad332625f5E0804F' },
+};
 
 /*
  * Mainnet chains where those addresses were checked (01/11/2026: deployment records above, plus
  * `eth_getCode` non-empty at each address on the chain's registry RPC). Anything else (testnets,
  * chains not listed) has no known contract and its quotes are refused.
  * - 0x: also Sonic (docs.0x.org « Contracts », Cancun list) and HyperEVM (0x-settler README,
- *   Cancun list). Not Mantle: it is a Shanghai chain with another AllowanceHolder
- *   (0x0000000000005E88410CcDFaDe4a5EfaE4b49562), not offered rather than trusted on one reading.
- * - LI.FI: also Cronos, Mantle, Sonic, Gnosis, Sei (same Diamond; Mantle's FeeForwarder differs).
- *   Not Flare, Kaia nor HyperEVM: their Diamond is another address (0x198F…, 0x1255…, 0x0a07…).
+ *   Cancun list). Not Mantle: docs.0x.org lists it with the Shanghai AllowanceHolder
+ *   (0x0000000000005E88410CcDFaDe4a5EfaE4b49562, code on-chain), but 0x gives native MNT its own
+ *   token address (0xdeaddead…0000) instead of 0xEeee…, and no live 0x answer could be checked
+ *   (API key) — not offered rather than trusted untested. 0x serves none of Cronos, Gnosis, Sei,
+ *   Flare, Kaia, Conflux eSpace (docs.0x.org « Supported Chains »).
+ * - LI.FI: also Cronos, Mantle, Sonic, Gnosis, Sei (same Diamond; Mantle's FeeForwarder differs),
+ *   and Flare, HyperEVM, Kaia with their own Diamond and FeeForwarder ({@link LIFI_OTHER_DEPLOYMENTS};
+ *   live li.quest answers on Flare and HyperEVM accepted unmodified by `verifyEvmSwap`, Kaia had no
+ *   route to quote). Not Conflux eSpace: not a LI.FI chain (li.quest `/v1/chains`).
  */
 const ZEROX_CHECKED_CHAINS = [1, 10, 56, 137, 8_453, 42_161, 43_114, 146, 999] as const;
-const LIFI_CHECKED_CHAINS = [1, 10, 56, 137, 8_453, 42_161, 43_114, 25, 5_000, 146, 100, 1_329] as const;
+const LIFI_CHECKED_CHAINS = [1, 10, 56, 137, 8_453, 42_161, 43_114, 25, 5_000, 146, 100, 1_329, 14, 999, 8_217] as const;
 
 export interface SwapContracts {
   zerox?: { allowanceHolder: string };
@@ -63,7 +79,7 @@ export interface SwapContracts {
 export const SWAP_CONTRACTS: Readonly<Record<number, SwapContracts>> = (() => {
   const t: Record<number, SwapContracts> = {};
   for (const id of ZEROX_CHECKED_CHAINS) t[id] = { ...t[id], zerox: { allowanceHolder: ZEROX_ALLOWANCE_HOLDER } };
-  for (const id of LIFI_CHECKED_CHAINS) t[id] = { ...t[id], lifi: { diamond: LIFI_DIAMOND, feeForwarder: id === 5_000 ? LIFI_FEE_FORWARDER_MANTLE : LIFI_FEE_FORWARDER } };
+  for (const id of LIFI_CHECKED_CHAINS) t[id] = { ...t[id], lifi: LIFI_OTHER_DEPLOYMENTS[id] ?? { diamond: LIFI_DIAMOND, feeForwarder: id === 5_000 ? LIFI_FEE_FORWARDER_MANTLE : LIFI_FEE_FORWARDER } };
   return t;
 })();
 
@@ -179,7 +195,8 @@ export interface EvmSwapCheckInput {
   tx: { to: string; data: Hex; value: bigint };
   /** ERC-20 spender the answer asks to approve (null for a native sale). */
   allowanceTarget: string | null;
-  fee: ProviderFee;
+  /** The fee of THIS quote (fees.ts `feeForQuote`): the exact rate asked for in the request. */
+  fee: QuoteFee;
   /** 0x only: `fees.integratorFee` of the answer. */
   integratorFee?: { amount: bigint; token: string } | null;
   /**
@@ -210,6 +227,10 @@ const fail = (provider: string, why: string): never => {
 };
 /** Most the Kyro fee may be: ceil(sellAmount × bps / 10 000). */
 export const maxKyroFee = (sellAmount: bigint, bps: number) => (sellAmount * BigInt(bps) + 9_999n) / 10_000n;
+/** Least the Kyro fee may be: floor(sellAmount × bps / 10 000) − 1 (one base unit of rounding). */
+export const minKyroFee = (sellAmount: bigint, bps: number) => (sellAmount * BigInt(bps)) / 10_000n - 1n;
+/** Is `amount` the Kyro fee at exactly `bps` of `sellAmount` (to the base unit)? */
+export const kyroFeeAtRate = (amount: bigint, sellAmount: bigint, bps: number) => amount > 0n && amount >= minKyroFee(sellAmount, bps) && amount <= maxKyroFee(sellAmount, bps);
 /** min ≥ buyAmount − slippage, with 1 bp of rounding tolerance. */
 const minOk = (min: bigint, buyAmount: bigint, slippageBps: number) => min > 0n && min >= applySlippage(buyAmount, Math.min(10_000, slippageBps + 1));
 
@@ -263,6 +284,7 @@ function checkZeroEx(i: EvmSwapCheckInput, name: string, entry: string): EvmSwap
     const fee = f as { amount: bigint; token: string };
     if (!same(fee.token, i.sell.address) && !(isNative(i.sell.address) && isNative(fee.token))) fail(name, l10n('frais Kyro pris dans un autre token que le token vendu', 'Kyro fees taken in another token than the sold token'));
     if (fee.amount > maxKyroFee(i.sellAmount, i.fee.bps)) fail(name, l10n('frais Kyro supérieurs au taux configuré', 'Kyro fees above the configured rate'));
+    if (!kyroFeeAtRate(fee.amount, i.sellAmount, i.fee.bps)) fail(name, l10n('frais Kyro différents du taux demandé', 'Kyro fees differ from the rate asked for'));
     // The fee recipient must be written somewhere in the Settler actions (the fee transfer).
     const needle = i.fee.recipient.toLowerCase().replace(/^0x/, '');
     if (!actions.some((a) => a.toLowerCase().includes(needle))) fail(name, l10n('bénéficiaire des frais Kyro absent de la transaction', 'Kyro fee recipient missing from the transaction'));
@@ -320,6 +342,7 @@ function lifiFees(i: EvmSwapCheckInput, steps: readonly SwapData[], name: string
   if (i.fee.kind === 'fee') {
     if (kyro <= 0n) fail(name, l10n('frais Kyro absents de la transaction', 'Kyro fees missing from the transaction'));
     if (kyro > maxKyroFee(i.sellAmount, i.fee.bps)) fail(name, l10n('frais Kyro supérieurs au taux configuré', 'Kyro fees above the configured rate'));
+    if (!kyroFeeAtRate(kyro, i.sellAmount, i.fee.bps)) fail(name, l10n('frais Kyro différents du taux demandé', 'Kyro fees differ from the rate asked for'));
   }
   const kyroBps = i.fee.kind === 'fee' ? BigInt(i.fee.bps) : 0n;
   if (total > (i.sellAmount * (kyroBps + LIFI_OWN_FEE_CAP_BPS) + 9_999n) / 10_000n) fail(name, l10n('frais prélevés au total plus élevés que prévu', 'total fees taken higher than expected'));
