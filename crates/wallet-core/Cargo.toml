@@ -40,6 +40,21 @@ sha2 = { version = "=0.10.9", default-features = false }
 # Cardano hashes: blake2b-224 (key hashes) and blake2b-256 (transaction id). Already in the tree.
 blake2 = { version = "=0.10.6", default-features = false }
 curve25519-dalek = { version = "=4.1.3", default-features = false }
+# Zcash (transparent t-addresses only): the official librustzcash crates (Electric Coin Co. /
+# Zcash Foundation) for the v5 transaction format and parser, ZIP-244 transaction ids and
+# signature digests, ZIP-317 fees and the consensus branch ids / activation heights.
+# 0.31.0-pre.2 / 0.11.0-pre.* (2026-10-14): the 0.30 line pins `crypto-common =0.2.0-rc.1`,
+# which cannot coexist with arti's `cipher 0.5`, and 0.31.0 final (2026-10-21) is < 2 weeks old.
+# Circuits/provers are off and `transparent-inputs` is off: no shielded part is ever built, and
+# ECDSA stays on libsecp256k1 0.29 (`bitcoin` above), keys wiped by `XprivGuard`. orchard /
+# sapling-crypto are compiled in because zcash_primitives parses every transaction version;
+# Kyro names them only for the "no shielded bundle" marker types. zcash_script: script bytes.
+zcash_primitives = { version = "=0.31.0-pre.2", default-features = false, features = ["std"] }
+zcash_transparent = { version = "=0.11.0-pre.2", default-features = false, features = ["std"] }
+zcash_protocol = { version = "=0.11.0-pre.1", default-features = false, features = ["std"] }
+zcash_script = { version = "=0.6.0", default-features = false, features = ["std"] }
+orchard = { version = "=0.16.0", default-features = false }
+sapling-crypto = { version = "=0.9.0", default-features = false }
 # Vault.
 argon2 = { version = "=0.5.3", default-features = false, features = ["alloc", "zeroize"] }
 chacha20poly1305 = { version = "=0.10.1", default-features = false, features = ["alloc"] }
