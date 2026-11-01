@@ -40,6 +40,11 @@ sha2 = { version = "=0.10.9", default-features = false }
 # Cardano hashes: blake2b-224 (key hashes) and blake2b-256 (transaction id). Already in the tree.
 blake2 = { version = "=0.10.6", default-features = false }
 curve25519-dalek = { version = "=4.1.3", default-features = false }
+# Monero (monero-oxide family, MIT): scanning, CLSAG, Bulletproofs+, key images, addresses.
+monero-wallet = { version = "=0.2.0" }
+# RNG for monero-wallet's signing API (rand_core 0.6 traits), seeded from the OS (getrandom).
+rand_core = { version = "=0.6.4", default-features = false }
+rand_chacha = { version = "=0.3.1", default-features = false }
 # Vault.
 argon2 = { version = "=0.5.3", default-features = false, features = ["alloc", "zeroize"] }
 chacha20poly1305 = { version = "=0.10.1", default-features = false, features = ["alloc"] }
