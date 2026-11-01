@@ -149,26 +149,26 @@ pub fn select(
     keys: &[String],
 ) -> Result<Option<Candidate>, String> {
     if bytes.len() > MANIFEST_MAX {
-        return Err("latest.json trop volumineux".into());
+        return Err("latest.json too large".into());
     }
-    let m: Manifest = serde_json::from_slice(bytes).map_err(|e| format!("latest.json : {e}"))?;
-    let version = parse_version(&m.version).ok_or("latest.json : version invalide")?;
+    let m: Manifest = serde_json::from_slice(bytes).map_err(|e| format!("latest.json: {e}"))?;
+    let version = parse_version(&m.version).ok_or("latest.json: invalid version")?;
     if !is_newer(&version, current) {
         return Ok(None);
     }
     let entry = keys
         .iter()
         .find_map(|k| m.platforms.get(k))
-        .ok_or_else(|| format!("latest.json : aucune entrée pour {}", keys.join(" / ")))?;
+        .ok_or_else(|| format!("latest.json: no entry for {}", keys.join(" / ")))?;
     if !entry.url.starts_with(ASSET_PREFIX) {
-        return Err(format!("URL de paquet refusée : {}", entry.url));
+        return Err(format!("package URL refused: {}", entry.url));
     }
-    let url = url::Url::parse(&entry.url).map_err(|_| "URL de paquet invalide")?;
+    let url = url::Url::parse(&entry.url).map_err(|_| "invalid package URL")?;
     let file_name = url
         .path_segments()
         .and_then(|mut s| s.next_back())
         .filter(|n| safe_file_name(n))
-        .ok_or("nom de paquet invalide")?
+        .ok_or("invalid package name")?
         .to_owned();
     Ok(Some(Candidate {
         version,
@@ -212,19 +212,19 @@ fn parse_trusted(comment: &str) -> Trusted {
 fn b64_text(s: &str) -> Result<String, String> {
     let raw = base64::engine::general_purpose::STANDARD
         .decode(s.trim())
-        .map_err(|_| "base64 invalide")?;
-    String::from_utf8(raw).map_err(|_| "texte invalide".into())
+        .map_err(|_| "invalid base64")?;
+    String::from_utf8(raw).map_err(|_| "invalid text".into())
 }
 
 /// Checks the minisign signature of `bytes` (Tauri encoding: base64 of the `.sig` file and of
 /// the public key file). Prehashed signatures only (what Tauri's signer produces).
 pub fn verify(bytes: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<Trusted, String> {
     let pk = minisign_verify::PublicKey::decode(&b64_text(pubkey_b64)?)
-        .map_err(|e| format!("clé publique : {e}"))?;
+        .map_err(|e| format!("public key: {e}"))?;
     let sig = minisign_verify::Signature::decode(&b64_text(signature_b64)?)
-        .map_err(|e| format!("signature : {e}"))?;
+        .map_err(|e| format!("signature: {e}"))?;
     pk.verify(bytes, &sig, false)
-        .map_err(|e| format!("signature refusée : {e}"))?;
+        .map_err(|e| format!("signature refused: {e}"))?;
     Ok(parse_trusted(sig.trusted_comment()))
 }
 
@@ -234,13 +234,13 @@ pub fn verify(bytes: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<Tru
 /// replayed under a newer version number.
 pub fn check_binding(t: &Trusted, version: &Version, floor: u64) -> Result<(), String> {
     if t.timestamp == 0 || t.timestamp <= floor {
-        return Err("signature plus ancienne que la version installée".into());
+        return Err("signature older than the installed version".into());
     }
     if let Some(file) = &t.file {
         for token in file.split(['_', '-']) {
             if let Some(v) = parse_version(token) {
                 if &v != version {
-                    return Err(format!("paquet signé pour {v}, annoncé {version}"));
+                    return Err(format!("package signed for {v}, announced {version}"));
                 }
             }
         }
@@ -319,7 +319,7 @@ pub fn pending(store: &dyn Store, current: &Version, enabled: bool, pubkey: &str
     }
     if !enabled || s.attempts >= MAX_ATTEMPTS {
         if enabled {
-            log(format!("{v} : abandon après {} essais", s.attempts));
+            log(format!("{v}: giving up after {} attempts", s.attempts));
         }
         store.clear();
         return Step::Idle;
@@ -327,13 +327,13 @@ pub fn pending(store: &dyn Store, current: &Version, enabled: bool, pubkey: &str
     let package = match store.read_package(&s.file) {
         Ok(p) => p,
         Err(e) => {
-            log(format!("paquet {v} illisible : {e}"));
+            log(format!("package {v} unreadable: {e}"));
             store.clear();
             return Step::Idle;
         }
     };
     if let Err(e) = verify_all(&package, &s.signature, pubkey, &v, store.floor()) {
-        log(format!("paquet {v} refusé : {e}"));
+        log(format!("package {v} refused: {e}"));
         store.clear();
         return Step::Idle;
     }
@@ -352,7 +352,7 @@ pub fn stage(store: &dyn Store, c: &Candidate, bytes: &[u8], pubkey: &str) -> Re
     store.clear();
     store
         .write_package(&c.file_name, bytes)
-        .map_err(|e| format!("écriture du paquet : {e}"))?;
+        .map_err(|e| format!("writing the package: {e}"))?;
     let s = Staged {
         version: c.version.to_string(),
         file: c.file_name.clone(),
@@ -362,7 +362,7 @@ pub fn stage(store: &dyn Store, c: &Candidate, bytes: &[u8], pubkey: &str) -> Re
     };
     store.save(&s).map_err(|e| {
         store.clear();
-        format!("écriture de staged.json : {e}")
+        format!("writing staged.json: {e}")
     })
 }
 
@@ -476,7 +476,7 @@ fn install(how: &Install, package: &Path, at_quit: bool) -> Result<(), String> {
                 .args(args)
                 .spawn()
                 .map(|_| ())
-                .map_err(|e| format!("lancement de l'installeur : {e}"))
+                .map_err(|e| format!("launching the installer: {e}"))
         }
         Install::MacApp(bundle) => replace_bundle(bundle, package),
         Install::AppImage(target) => replace_appimage(target, package),
@@ -484,7 +484,7 @@ fn install(how: &Install, package: &Path, at_quit: bool) -> Result<(), String> {
 }
 
 fn replace_bundle(bundle: &Path, archive: &Path) -> Result<(), String> {
-    let parent = bundle.parent().ok_or("bundle sans dossier parent")?;
+    let parent = bundle.parent().ok_or("bundle without a parent folder")?;
     let tmp = parent.join(".kyro-update");
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
@@ -498,14 +498,14 @@ fn replace_bundle(bundle: &Path, archive: &Path) -> Result<(), String> {
             .map_err(|e| e.to_string())?
             .success();
         if !ok {
-            return Err("extraction de l'archive impossible".to_owned());
+            return Err("cannot extract the archive".to_owned());
         }
         let new = std::fs::read_dir(&tmp)
             .map_err(|e| e.to_string())?
             .flatten()
             .map(|e| e.path())
             .find(|p| p.extension().is_some_and(|e| e == "app"))
-            .ok_or("aucun .app dans l'archive")?;
+            .ok_or("no .app in the archive")?;
         let backup = parent.join(".kyro-previous.app");
         let _ = std::fs::remove_dir_all(&backup);
         std::fs::rename(bundle, &backup).map_err(|e| e.to_string())?;
@@ -521,7 +521,7 @@ fn replace_bundle(bundle: &Path, archive: &Path) -> Result<(), String> {
 }
 
 fn replace_appimage(target: &Path, package: &Path) -> Result<(), String> {
-    let name = target.file_name().ok_or("AppImage sans nom")?;
+    let name = target.file_name().ok_or("AppImage without a name")?;
     let tmp = target.with_file_name(format!(".{}.new", name.to_string_lossy()));
     std::fs::copy(package, &tmp).map_err(|e| e.to_string())?;
     #[cfg(unix)]
@@ -593,7 +593,7 @@ pub fn on_start(app: &tauri::AppHandle) {
     match pending(&store, &current, enabled, &key) {
         Step::Idle => {}
         Step::Updated(v) => {
-            log(format!("mise à jour {v} appliquée"));
+            log(format!("update {v} applied"));
             *crate::net::lock(&app.state::<UpdaterState>().updated_to) = Some(v);
         }
         Step::Apply { staged, .. } => {
@@ -601,7 +601,7 @@ pub fn on_start(app: &tauri::AppHandle) {
                 match install(&how, &store.package_path(&staged.file), false) {
                     Ok(()) if how == Install::Nsis => std::process::exit(0),
                     Ok(()) => app.restart(),
-                    Err(e) => log(format!("installation de {} : {e}", staged.version)),
+                    Err(e) => log(format!("installing {}: {e}", staged.version)),
                 }
             }
         }
@@ -621,7 +621,7 @@ pub fn on_exit(app: &tauri::AppHandle) {
     };
     if let Step::Apply { staged, .. } = pending(&store, &current, enabled, &key) {
         if let Err(e) = install(&how, &store.package_path(&staged.file), true) {
-            log(format!("installation de {} : {e}", staged.version));
+            log(format!("installing {}: {e}", staged.version));
         }
     }
 }
@@ -632,7 +632,7 @@ fn spawn_checks(app: tauri::AppHandle) {
         for i in 0..CHECKS {
             match check(&app).await {
                 Ok(()) => return,
-                Err(e) => log(format!("vérification {} : {e}", i + 1)),
+                Err(e) => log(format!("check {}: {e}", i + 1)),
             }
             tokio::time::sleep(RETRY).await;
         }
@@ -655,8 +655,8 @@ async fn get(app: &tauri::AppHandle, url: url::Url) -> Result<Vec<u8>, String> {
 
 /// One check: manifest, then (if newer and not staged yet) download, verify, stage.
 async fn check(app: &tauri::AppHandle) -> Result<(), String> {
-    let (store, current, enabled, key) = context(app).ok_or("mises à jour indisponibles")?;
-    let how = detect_install().ok_or("installation non prise en charge")?;
+    let (store, current, enabled, key) = context(app).ok_or("updates unavailable")?;
+    let how = detect_install().ok_or("unsupported installation")?;
     if !enabled {
         return Ok(());
     }
@@ -667,7 +667,7 @@ async fn check(app: &tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     };
     if !how.accepts(&c.file_name) {
-        return Err(format!("paquet d'un autre type : {}", c.file_name));
+        return Err(format!("package of another type: {}", c.file_name));
     }
     if store
         .load()
@@ -681,7 +681,7 @@ async fn check(app: &tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
     stage(&store, &c, &bytes, &key)?;
-    log(format!("{} prête, appliquée à la fermeture", c.version));
+    log(format!("{} ready, applied on exit", c.version));
     Ok(())
 }
 
