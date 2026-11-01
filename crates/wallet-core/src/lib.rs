@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment), TON (wallet v4R2 transfers) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -36,6 +36,7 @@ mod network;
 mod sol;
 mod sol_decode;
 mod sol_stake;
+mod ton;
 mod tron;
 mod utxo;
 mod vault;
@@ -95,6 +96,13 @@ pub use sol_stake::{
     sol_stake_message, sol_stake_withdrawable, SolDelegation, SolStakeAccount, SolStakeActivation,
     SolStakeHistoryEntry, SolStakeOp, SOL_STAKE_ACCOUNT_SIZE, SOL_STAKE_HISTORY_SYSVAR,
     SOL_STAKE_PROGRAM,
+};
+pub use ton::{
+    ton_address, ton_decode_tx, ton_parse_address, ton_parse_raw_address, ton_path, ton_public_key,
+    ton_sign, ton_unsigned_transfer, ton_verify_signed, ton_wallet_address, ton_wallet_id,
+    TonAddress, TonEstimateParts, TonFriendly, TonSigned, TonTransfer, TonTxSummary, TonWarning,
+    TON_MAX_COMMENT_BYTES, TON_MODE_ALL_BALANCE, TON_MODE_PAY_FEES, TON_V4R2_CODE_HASH,
+    TON_WALLET_ID_MAINNET, TON_WALLET_ID_TESTNET,
 };
 pub use tron::{
     tron_address, tron_address_at, tron_address_bytes, tron_address_from_bytes,
