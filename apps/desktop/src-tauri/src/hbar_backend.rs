@@ -207,6 +207,37 @@ pub async fn our_account(
     })
 }
 
+/// A hardware (Ledger) account: an ED25519 account found by its public key (the mirror's key
+/// must be exactly ours). Not found: it has not been created yet.
+pub async fn our_account_ed25519(
+    ctx: &HbarCtx<'_>,
+    pubkey: &[u8; 32],
+) -> AppResult<HbarAccountInfo> {
+    let pk_hex = hex::encode(pubkey);
+    let list = mirror(
+        ctx,
+        &format!("/api/v1/accounts?account.publickey={pk_hex}&balance=true&limit=5&order=asc"),
+    )
+    .await?;
+    let found = list
+        .as_ref()
+        .and_then(|l| l["accounts"].as_array())
+        .and_then(|a| {
+            a.iter().find(|v| {
+                v["key"]["_type"] == "ED25519"
+                    && v["key"]["key"].as_str() == Some(pk_hex.as_str())
+                    && v["deleted"] != true
+            })
+        });
+    Ok(match found {
+        Some(v) => HbarAccountInfo {
+            found_by: Some("publicKey"),
+            ..parse_account(v)
+        },
+        None => not_found(),
+    })
+}
+
 /// A recipient (`0.0.x` or `0x…`).
 pub async fn account(ctx: &HbarCtx<'_>, id: &str) -> AppResult<HbarAccountInfo> {
     Ok(

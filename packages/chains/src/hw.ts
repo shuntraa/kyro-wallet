@@ -58,7 +58,7 @@ export interface WalletAccounts {
   algo?: { address: string; path?: string };
   /** Vault only: Monero on a hardware wallet is HW_UNSUPPORTED. */
   xmr?: { address: string; path?: string };
-  /** Vault only: no hardware wallet signs TON in Kyro. */
+  /** TON v4R2 wallet (vault, or Ledger « TON » app: key at `m/44'/607'/0'/0'/account'/0'`, another wallet than the vault's). */
   ton?: { address: string; path?: string };
   /** Cosmos Hub (vault, or Ledger « Cosmos » app, amino JSON signing). */
   cosmos?: { address: string; path?: string };
@@ -123,7 +123,9 @@ export function hwToAccounts(acc: WatchOnlyAccount): WalletAccounts {
     else if (k.chain === 'apt') out.aptos = view;
     else if (k.chain === 'algo') out.algo = view;
     else if (k.chain === 'near') out.near = view;
-    else out.cosmos = view;
+    else if (k.chain === 'cosmos') out.cosmos = view;
+    else if (k.chain === 'ton') out.ton = view;
+    else out.hbar = view;
   }
   return out;
 }
@@ -132,7 +134,7 @@ const UTXO_PREFIX = { litecoin: 'ltc', dogecoin: 'doge', bitcoincash: 'bch', das
 const UTXO_SPECS: Record<'ltc' | 'doge' | 'bch' | 'dash', UtxoCoinSpec> = { ltc: LITECOIN_SPEC, doge: DOGECOIN_SPEC, bch: BITCOINCASH_SPEC, dash: DASH_SPEC };
 
 /** Single-key chains a Ledger can add to a hardware-wallet account (`hw_key_add`). */
-export const HW_KEY_CHAINS: readonly HwKeyChain[] = ['sui', 'apt', 'algo', 'near', 'cosmos'];
+export const HW_KEY_CHAINS: readonly HwKeyChain[] = ['sui', 'apt', 'algo', 'near', 'cosmos', 'ton', 'hbar'];
 
 /**
  * Chains a hardware-wallet brand can hold in Kyro (mirror of `hw/chains.rs`; the device and

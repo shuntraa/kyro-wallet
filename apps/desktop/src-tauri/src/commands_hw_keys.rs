@@ -46,11 +46,11 @@ pub(crate) async fn check_device(
 ) -> AppResult<DeviceInfo> {
     let info = state.hw.info(id)?;
     check_brand(&info, acc)?;
-    let (chain, account) = (key.chain, acc.account);
+    let (chain, account, net) = (key.chain, acc.account, acc.network);
     let live = state
         .hw
         .run(id, T_READ, prompt_fn(app, id), move |dev, ctl| {
-            ledger_apps::pubkey(dev, ctl, chain, account, false)
+            ledger_apps::pubkey(dev, ctl, chain, account, false, net)
         })
         .await?;
     if live != key.pubkey_bytes()? {
@@ -93,13 +93,14 @@ pub async fn hw_key_add(
     guard(&state)?;
     check_account_number(account)?;
     let info = state.hw.info(&id)?;
+    let net = state.network;
     let pk = state
         .hw
         .run(&id, T_READ, prompt_fn(&app, &id), move |dev, ctl| {
-            ledger_apps::pubkey(dev, ctl, chain, account, false)
+            ledger_apps::pubkey(dev, ctl, chain, account, false, net)
         })
         .await?;
-    let key = HwWatchKey::new(chain, account, &pk)?;
+    let key = HwWatchKey::new(chain, account, net, &pk)?;
     let _write = hw::lock(&state.hw_store_lock);
     let mut s = store::load(&state.hw_accounts_path, state.network)?;
     let mut acc = match &account_id {
@@ -167,16 +168,16 @@ pub async fn hw_key_verify(
 ) -> AppResult<VerifiedKey> {
     let (acc, key) = stored_key(&state, &account_id, chain)?;
     check_device(&app, &state, &id, &acc, &key).await?;
-    let account = acc.account;
+    let (account, net) = (acc.account, acc.network);
     let shown = state
         .hw
         .run(&id, T_CONFIRM, prompt_fn(&app, &id), move |dev, ctl| {
-            ledger_apps::pubkey(dev, ctl, chain, account, true)
+            ledger_apps::pubkey(dev, ctl, chain, account, true, net)
         })
         .await?;
     if shown != key.pubkey_bytes()? {
         return Err(AppError::HwAddressMismatch {
-            device: chain.address_of(&shown)?,
+            device: chain.address_of(&shown, net)?,
             expected: key.address,
         });
     }

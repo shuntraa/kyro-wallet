@@ -1,6 +1,7 @@
-//! Ledger apps of the single-key chains (Sui, Aptos, Algorand, NEAR, Cosmos Hub): what they
-//! have in common, and the dispatch to their own modules (`ledger_sui`, `ledger_aptos`,
-//! `ledger_algo`, `ledger_near`, `ledger_cosmos`, one per official app protocol).
+//! Ledger apps of the single-key chains (Sui, Aptos, Algorand, NEAR, Cosmos Hub, TON): what
+//! they have in common, and the dispatch to their own modules (`ledger_sui`, `ledger_aptos`,
+//! `ledger_algo`, `ledger_near`, `ledger_cosmos`, `ledger_ton`, `ledger_hbar`, one per official
+//! app protocol).
 //!
 //! Every operation first checks with GET APP AND VERSION that the right app is open and recent
 //! enough, then reads a public key (optionally shown on the device screen) or has the device
@@ -10,7 +11,7 @@
 //! Trezor firmware has no app for any of these chains (nor for Polkadot, Hedera, Kaspa, TON):
 //! they are reported `unsupported` for Trezor.
 
-use wallet_core::HwKeyChain;
+use wallet_core::{HwKeyChain, Network};
 
 use super::ledger::ApduLink;
 use super::ledger_apdu::{self as apdu, SwContext, SW_OK};
@@ -27,6 +28,8 @@ pub fn key_chain(chain: Chain) -> Option<HwKeyChain> {
         Chain::Algo => HwKeyChain::Algo,
         Chain::Near => HwKeyChain::Near,
         Chain::Cosmos => HwKeyChain::Cosmos,
+        Chain::Ton => HwKeyChain::Ton,
+        Chain::Hbar => HwKeyChain::Hbar,
         _ => return None,
     })
 }
@@ -38,6 +41,8 @@ pub fn hw_chain(k: HwKeyChain) -> Chain {
         HwKeyChain::Algo => Chain::Algo,
         HwKeyChain::Near => Chain::Near,
         HwKeyChain::Cosmos => Chain::Cosmos,
+        HwKeyChain::Ton => Chain::Ton,
+        HwKeyChain::Hbar => Chain::Hbar,
     }
 }
 
@@ -46,7 +51,9 @@ pub fn hw_chain(k: HwKeyChain) -> Chain {
 /// Minimums: Sui 1.0.0 (block protocol, signing of `TransactionData` intents), Aptos 0.6.0
 /// (CLA 5B, SIGN_TX of the full signing message), Algorand 2.0.0 (Zondax app: GET_ADDRESS 04,
 /// SIGN_MSGPACK 08), NEAR 2.0.0 (Rust app, five-level paths), Cosmos 2.34.0 (amino JSON with
-/// `timeout_height`).
+/// `timeout_height`), TON 2.1.0 (transfer request tag 1: wallet id given, needed for Kyro's
+/// testnet wallet id), Hedera 1.9.0 (the app version whose sources Kyro was checked against:
+/// CryptoTransfer with an EVM-alias recipient, memo, one APDU per body).
 pub fn app_for(chain: Chain) -> Option<(&'static str, &'static str)> {
     Some(match key_chain(chain)? {
         HwKeyChain::Sui => ("Sui", "1.0.0"),
@@ -54,6 +61,8 @@ pub fn app_for(chain: Chain) -> Option<(&'static str, &'static str)> {
         HwKeyChain::Algo => ("Algorand", "2.0.0"),
         HwKeyChain::Near => ("NEAR", "2.0.0"),
         HwKeyChain::Cosmos => ("Cosmos", "2.34.0"),
+        HwKeyChain::Ton => ("TON", "2.1.0"),
+        HwKeyChain::Hbar => ("Hedera", "1.9.0"),
     })
 }
 
@@ -61,24 +70,18 @@ pub fn app_for(chain: Chain) -> Option<(&'static str, &'static str)> {
 pub fn unavailable(chain: Chain) -> Option<&'static str> {
     Some(match chain {
         Chain::Dot => {
-            "Polkadot : l'app Ledger « Polkadot » exige la preuve des métadonnées du runtime \
-             (RFC-0078, CheckMetadataHash) et des clés ed25519 m/44'/354'/… ; Kyro signe en \
-             sr25519 sans cette preuve, pas encore pris en charge sur hardware wallet"
-        }
-        Chain::Hbar => {
-            "Hedera : l'app Ledger signe avec des clés ed25519 (m/44'/3030'/0'/0'/i') ; les \
-             comptes Hedera de Kyro sont des comptes ECDSA secp256k1, pas pris en charge sur \
-             hardware wallet"
+            "Polkadot : l'app Ledger « Polkadot » exige l'extension CheckMetadataHash et une \
+             preuve des métadonnées du runtime (RFC-0078) avec chaque transaction, et des clés \
+             ed25519 m/44'/354'/… ; Kyro signe en sr25519 sans cette extension, et la \
+             bibliothèque de Parity qui construit la preuve (merkleized-metadata) n'est pas \
+             encore intégrée : pas pris en charge sur hardware wallet"
         }
         Chain::Kas => {
-            "Kaspa : le protocole de signature de l'app Ledger n'a pas pu être vérifié contre \
-             les règles de transaction actuelles (rusty-kaspa 2.1, Toccata) : pas pris en \
-             charge sur hardware wallet"
-        }
-        Chain::Ton => {
-            "TON : l'app Ledger reconstruit elle-même le message (requête de transfert \
-             structurée, chemin à six niveaux, identifiant de portefeuille standard) : pas \
-             encore pris en charge sur hardware wallet"
+            "Kaspa : l'app Ledger signe des transactions version 0 avec le même hash de \
+             signature que Kyro (et le renvoie, donc vérifiable), mais dépense depuis plusieurs \
+             adresses m/44'/111111'/a'/0|1/i : il faudrait un compte hardware wallet à clé \
+             étendue et un parcours d'adresses, pas encore écrits ; pas pris en charge sur \
+             hardware wallet"
         }
         _ => return None,
     })
@@ -171,13 +174,15 @@ fn link(dev: &dyn HardwareWallet, chain: HwKeyChain) -> HwResult<&dyn ApduLink> 
 
 /// Public key of `chain` at the account's path ([`HwKeyChain::path`]), shown on the device
 /// screen when `display` (the user compares it with Kyro's). The app's own address, when it
-/// returns one, must be the one of the key.
+/// returns one, must be the one of the key. `network` only matters for TON (the address the
+/// app shows depends on the wallet id and the testnet flag).
 pub fn pubkey(
     dev: &mut dyn HardwareWallet,
     ctl: &Ctl,
     chain: HwKeyChain,
     account: u32,
     display: bool,
+    network: Network,
 ) -> HwResult<Vec<u8>> {
     let app = App::open(link(dev, chain)?, ctl, chain)?;
     if display {
@@ -190,17 +195,25 @@ pub fn pubkey(
         HwKeyChain::Algo => super::ledger_algo::pubkey(&app, account, display)?,
         HwKeyChain::Near => super::ledger_near::pubkey(&app, &path, display)?,
         HwKeyChain::Cosmos => super::ledger_cosmos::pubkey(&app, &path, display)?,
+        HwKeyChain::Ton => {
+            let testnet = network == Network::Testnet;
+            let shown = display.then(|| (testnet, wallet_core::ton_wallet_id(testnet)));
+            super::ledger_ton::pubkey(&app, &path, shown)?
+        }
+        HwKeyChain::Hbar => super::ledger_hbar::pubkey(&app, &path, display)?,
     };
     // Length and point validity.
     chain
-        .address_of(&pk)
+        .address_of(&pk, network)
         .map_err(|e| HwError::bad(e.to_string()))?;
     Ok(pk)
 }
 
 /// Has the device sign `message` (the chain-specific bytes built by `wallet-core`: Sui intent
-/// message, Aptos signing message, Algorand msgpack, NEAR Borsh, Cosmos amino JSON) with the
-/// account's key. Returns the raw signature (DER for Cosmos), verified by the caller.
+/// message, Aptos signing message, Algorand msgpack, NEAR Borsh, Cosmos amino JSON, TON
+/// structured transfer request) with the account's key. Returns the raw signature (DER for
+/// Cosmos; for TON `hash ‖ signature`, the hash the app says it signed), verified by the
+/// caller.
 pub fn sign(
     dev: &mut dyn HardwareWallet,
     ctl: &Ctl,
@@ -217,6 +230,8 @@ pub fn sign(
         HwKeyChain::Algo => super::ledger_algo::sign(&app, account, message),
         HwKeyChain::Near => super::ledger_near::sign(&app, &path, message),
         HwKeyChain::Cosmos => super::ledger_cosmos::sign(&app, &path, message),
+        HwKeyChain::Ton => super::ledger_ton::sign(&app, &path, message),
+        HwKeyChain::Hbar => super::ledger_hbar::sign(&app, &path, message),
     }
 }
 
@@ -318,7 +333,7 @@ mod tests {
 
     #[test]
     fn statuses() {
-        for c in [Chain::Dot, Chain::Hbar, Chain::Kas, Chain::Ton] {
+        for c in [Chain::Dot, Chain::Kas] {
             assert!(!c.implemented());
             assert_eq!(
                 unavailable_status(c).unwrap().state,

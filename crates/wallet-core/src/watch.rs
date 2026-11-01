@@ -254,7 +254,7 @@ impl WatchOnlyAccount {
                 ));
             }
         }
-        crate::hw_keys::validate_keys(&self.keys, self.account)?;
+        crate::hw_keys::validate_keys(&self.keys, self.account, self.network)?;
         Ok(())
     }
 

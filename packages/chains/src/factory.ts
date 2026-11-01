@@ -45,7 +45,7 @@ import { StellarAdapter } from './stellar/adapter';
 import { NearAdapter } from './near/adapter';
 import { SuiAdapter } from './sui/adapter';
 import { suiChain } from './registry';
-import { HbarAdapter } from './hedera/adapter';
+import { HbarAdapter, isHbarEd25519Key } from './hedera/adapter';
 import { KaspaAdapter } from './kaspa/adapter';
 import { kaspaChain } from './registry';
 import { PolkadotAdapter } from './polkadot/adapter';
@@ -96,7 +96,7 @@ export interface AdapterSet {
   algo: AlgorandAdapter | null;
   /** Monero: vault only (hardware wallets: HW_UNSUPPORTED). */
   xmr: XmrAdapter | null;
-  /** TON: vault only (no hardware wallet support). */
+  /** TON: vault or Ledger (structured transfer request). */
   ton: TonAdapter | null;
   /** Cosmos Hub: vault or Ledger (amino JSON). */
   cosmos: CosmosAdapter | null;
@@ -152,7 +152,8 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   // Sui: Rust picks the server (Sui Foundation GraphQL RPC).
   const sui = accounts.sui ? new SuiAdapter({ chain: suiChain(network), address: accounts.sui.address, ...h, ...a }) : null;
   // Hedera: Rust reads the mirror node and submits to the nodes (no custom server).
-  const hbar = accounts.hbar ? new HbarAdapter({ chain: hbarChain(network), address: accounts.hbar.address, ...a }) : null;
+  // Hedera on a Ledger: only the ED25519 key read with `hw_key_add` (never a vault EVM address).
+  const hbar = accounts.hbar && (!hw || isHbarEd25519Key(accounts.hbar.address)) ? new HbarAdapter({ chain: hbarChain(network), address: accounts.hbar.address, ...h, ...a }) : null;
   // Kaspa: Rust reads the account's 20 receive + 20 change addresses (api.kaspa.org).
   const kaspa = accounts.kas && !hw ? new KaspaAdapter({ chain: kaspaChain(network), address: accounts.kas.address, ...a }) : null;
   // Polkadot: Rust picks the node (Parity's public Asset Hub RPC; no custom server yet).
@@ -162,7 +163,7 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   // Monero: Rust picks the node (servers.monero) and scans locally.
   const xmr = accounts.xmr && !hw ? new XmrAdapter({ chain: xmrChain(network), address: accounts.xmr.address, ...a }) : null;
   // TON: Rust picks the server (TON Center).
-  const ton = accounts.ton ? new TonAdapter({ chain: tonChain(network), address: accounts.ton.address, ...a }) : null;
+  const ton = accounts.ton ? new TonAdapter({ chain: tonChain(network), address: accounts.ton.address, ...h, ...a }) : null;
   // Cosmos Hub: Rust picks the server (default LCD, no custom server yet).
   const cosmos = accounts.cosmos ? new CosmosAdapter({ chain: cosmosChain(network), address: accounts.cosmos.address, ...h, ...a }) : null;
   // Aptos: Rust picks the server (Aptos Labs fullnode, no custom server yet).

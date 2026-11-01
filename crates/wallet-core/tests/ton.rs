@@ -252,6 +252,7 @@ fn transfer(seed_words: &str, testnet: bool) -> TonTransfer {
         comment: Some("123456".into()),
         with_state_init: false,
         jetton: None,
+        inline_empty_body: false,
     }
 }
 

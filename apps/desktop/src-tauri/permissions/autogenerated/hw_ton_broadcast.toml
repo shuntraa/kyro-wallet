@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-ton-broadcast"
+description = "Enables the hw_ton_broadcast command without any pre-configured scope."
+commands.allow = ["hw_ton_broadcast"]
+
+[[permission]]
+identifier = "deny-hw-ton-broadcast"
+description = "Denies the hw_ton_broadcast command without any pre-configured scope."
+commands.deny = ["hw_ton_broadcast"]

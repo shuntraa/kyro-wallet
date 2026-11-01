@@ -22,6 +22,7 @@ import {
   type HbarWarning,
 } from '@kyro/shared';
 import type { HbarChain } from '../registry';
+import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 export type { HbarAccountInfo, HbarContext, HbarHistoryEntry, HbarOwnAccount, HbarRecipientInfo, HbarTxSummary, HbarWarning };
@@ -48,6 +49,26 @@ export function rustHbarBackend(account = 0): HbarBackend {
     broadcast: (signed) => call('hbar_broadcast', { signed, ...acct }),
     txStatus: (id) => call('hbar_tx_status', { id }),
   };
+}
+
+/**
+ * Ledger account `accountId` (docs/IPC.md §2.3): an ED25519 account found by its public key,
+ * one copy (one node) signed on the device (`hw_*` commands). `sign`'s second argument is the
+ * device id, not a password.
+ */
+export function rustHbarHwBackend(accountId: string): HbarBackend {
+  return {
+    ...rustHbarBackend(),
+    account: () => call('hw_hbar_account', { accountId }),
+    build: (to, amount, memo) => call('hw_hbar_build_tx', { accountId, to, amount, ...(memo ? { memo } : {}) }),
+    sign: (bodies, id) => call('hw_sign_hbar_tx', { id, accountId, bodies }),
+    broadcast: (signed) => call('hw_hbar_broadcast', { accountId, signed }),
+  };
+}
+
+/** DER form of an ED25519 public key: what a Ledger Hedera account stores instead of an address. */
+export function isHbarEd25519Key(input: string): boolean {
+  return /^302a300506032b6570032100[0-9a-f]{64}$/.test(input);
 }
 
 // ---------------------------------------------------------------- recipients and memos
@@ -122,6 +143,8 @@ export interface HbarAdapterOptions {
   backend?: HbarBackend;
   /** Vault account (docs/IPC.md §2.9) passed to every command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (Ledger, ED25519): `address` is then the key's DER form. */
+  hw?: HwSigner;
 }
 
 export class HbarAdapter implements ChainAdapter<'hbar'> {
@@ -129,12 +152,14 @@ export class HbarAdapter implements ChainAdapter<'hbar'> {
   readonly chain: HbarChain;
   private readonly address: string;
   private readonly backend: HbarBackend;
+  readonly hw: HwSigner | null;
 
   constructor(opts: HbarAdapterOptions) {
-    if (!isHbarEvmAddress(opts.address)) throw new Error(l10n('Adresse EVM Hedera invalide', 'Invalid Hedera EVM address'));
+    if (opts.hw ? !isHbarEd25519Key(opts.address) : !isHbarEvmAddress(opts.address)) throw new Error(l10n('Adresse EVM Hedera invalide', 'Invalid Hedera EVM address'));
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustHbarBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? rustHbarHwBackend(opts.hw.accountId) : rustHbarBackend(opts.account ?? 0));
   }
 
   /** The EVM address of our key (receiving there auto-creates the account). */
@@ -218,6 +243,12 @@ export class HbarAdapter implements ChainAdapter<'hbar'> {
       maxFee: BigInt(s.maxFee),
       size: { family: 'hbar' },
     };
+  }
+
+  /** Ledger: same checks as `signTx`; Rust re-reads the key, shows its dialog, then the device signs. */
+  signTxHw(unsigned: HbarUnsigned, deviceId: string): Promise<HbarSigned> {
+    if (!this.hw) return Promise.reject(new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet')));
+    return this.signTx(unsigned, deviceId);
   }
 
   /** Rust: live checks, native dialog (memo framed), signature of every copy. */

@@ -776,7 +776,7 @@ mod tests {
                 Chain::Ltc | Chain::Doge | Chain::Bch | Chain::Dash => ChainState::Unsupported,
                 Chain::Cardano | Chain::Zec => ChainState::Unsupported,
                 // No hardware support at all (reasons in `ledger_apps::unavailable`).
-                Chain::Dot | Chain::Hbar | Chain::Kas | Chain::Ton => ChainState::Unsupported,
+                Chain::Dot | Chain::Kas => ChainState::Unsupported,
                 _ => ChainState::Unlock,
             };
             assert_eq!(c.state, want, "{:?}", c.chain);

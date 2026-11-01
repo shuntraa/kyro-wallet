@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-hbar-build-tx"
+description = "Enables the hw_hbar_build_tx command without any pre-configured scope."
+commands.allow = ["hw_hbar_build_tx"]
+
+[[permission]]
+identifier = "deny-hw-hbar-build-tx"
+description = "Denies the hw_hbar_build_tx command without any pre-configured scope."
+commands.deny = ["hw_hbar_build_tx"]

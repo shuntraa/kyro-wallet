@@ -417,6 +417,10 @@ pub struct TonTransfer {
     /// Jetton transfer: `destination` is then our jetton wallet, `amount` the TON attached for
     /// its fees, `comment` empty (the comment goes in the jetton's forward payload).
     pub jetton: Option<TonJettonBody>,
+    /// Without a comment, the (empty) body is stored inline instead of in an empty referenced
+    /// cell: the layout the Ledger TON app rebuilds and signs for a transfer without payload
+    /// (`hash.c` of LedgerHQ/app-ton). Only for hardware accounts; never with a comment.
+    pub inline_empty_body: bool,
 }
 
 impl TonTransfer {
@@ -436,6 +440,11 @@ impl TonTransfer {
         if self.destination.workchain != 0 {
             return Err(Error::input(
                 "destinataire sur la masterchain (-1) refusé : seuls les comptes de la basechain (0) sont pris en charge",
+            ));
+        }
+        if self.inline_empty_body && (self.comment.is_some() || self.jetton.is_some()) {
+            return Err(Error::input(
+                "transfert TON : corps en ligne seulement sans commentaire ni jeton",
             ));
         }
         if self.with_state_init && self.seqno != 0 {
@@ -476,6 +485,10 @@ impl TonTransfer {
         b.store_u64(0).map_err(cell_err)?; // created_lt
         b.store_u32(0).map_err(cell_err)?; // created_at
         b.store_bit_zero().map_err(cell_err)?; // init: nothing
+        if self.inline_empty_body && self.comment.is_none() && self.jetton.is_none() {
+            b.store_bit_zero().map_err(cell_err)?; // body: inline, empty
+            return b.build().map_err(cell_err);
+        }
         b.store_bit_one().map_err(cell_err)?; // body: in a reference (empty when no comment)
         b.store_reference(match (&self.jetton, &self.comment) {
             (Some(j), _) => j.cell()?,
@@ -682,10 +695,13 @@ impl TonTransfer {
                 "le message déploie un contrat (StateInit) : refusé",
             ));
         }
-        if !m.load_bit().map_err(cell_err)? {
-            return Err(Error::input("corps du message attendu en référence"));
-        }
-        let payload = m.load_reference_cloned().map_err(cell_err)?;
+        let inline_empty_body = !m.load_bit().map_err(cell_err)?;
+        let payload = if inline_empty_body {
+            // Inline body: must be empty (what the Ledger TON app signs without payload).
+            Cell::empty_cell()
+        } else {
+            m.load_reference_cloned().map_err(cell_err)?
+        };
         ensure_empty(&m)?;
 
         let mut p = slice(&payload)?;
@@ -731,6 +747,7 @@ impl TonTransfer {
             comment,
             with_state_init,
             jetton,
+            inline_empty_body,
         };
         t.check()?;
         if wallet != t.wallet_address()? {
@@ -923,6 +940,132 @@ pub fn ton_unsigned_transfer(t: &TonTransfer) -> Result<String> {
     t.encode_unsigned()
 }
 
+// ---------------------------------------------------------------------------------------------
+// Ledger « TON » app (hardware accounts)
+// ---------------------------------------------------------------------------------------------
+
+/// Longest comment the Ledger TON app displays (`MAX_MEMO_LEN`, printable ASCII only).
+pub const TON_HW_MAX_COMMENT: usize = 120;
+/// Hint id « message with comment » of the Ledger TON app (doc/MESSAGES.md).
+const HW_HINT_COMMENT: u32 = 0x00;
+
+/// A comment the Ledger TON app can show: printable ASCII (0x20–0x7E), at most
+/// [`TON_HW_MAX_COMMENT`] bytes (the app refuses anything else).
+pub fn ton_hw_check_comment(text: &str) -> Result<()> {
+    if text.len() > TON_HW_MAX_COMMENT || !text.bytes().all(|b| (0x20..0x7f).contains(&b)) {
+        return Err(Error::input(
+            "commentaire TON sur Ledger : 120 caractères ASCII imprimables au plus (pas d'accents ni d'emoji)",
+        ));
+    }
+    check_comment(text)
+}
+
+/// Minimal big-endian bytes of an amount (the app's `varuint`: length byte, then the bytes;
+/// the cell stores the same bytes as `VarUInteger 16`, so they must be minimal like ours).
+fn varuint(v: u64) -> Vec<u8> {
+    let b = v.to_be_bytes();
+    let skip = b.iter().take_while(|x| **x == 0).count();
+    let mut out = vec![(8 - skip) as u8];
+    out.extend_from_slice(&b[skip..]);
+    out
+}
+
+/// What the Ledger TON app signs for an **unsigned** transfer BOC of hardware account
+/// `public_key`: the structured request of LedgerHQ/app-ton `doc/TRANSACTION.md`, tag `0x01`
+/// (app ≥ 2.1.0: wallet id given, wallet op included), and the hash the app must sign (the
+/// hash of the order cell, computed by Kyro).
+///
+/// The app rebuilds the order cell from this request; it can only rebuild what Kyro builds
+/// for hardware accounts: no `StateInit` in the internal message (ours goes in the external
+/// message, which is not signed), body inline when empty, otherwise a text comment sent with
+/// its « comment » hint so the device shows it (never blind signing).
+pub fn ton_hw_request(
+    boc_b64: &str,
+    public_key: &[u8; 32],
+    testnet: bool,
+) -> Result<(Vec<u8>, [u8; 32])> {
+    let (t, sig) = TonTransfer::decode(boc_b64, public_key, ton_wallet_id(testnet))?;
+    if sig != [0u8; 64] {
+        return Err(Error::input("ce transfert TON est déjà signé"));
+    }
+    if t.jetton.is_some() {
+        return Err(Error::input(
+            "transfert de jeton TON : pas encore pris en charge sur Ledger",
+        ));
+    }
+    if t.comment.is_none() && !t.inline_empty_body {
+        return Err(Error::input(
+            "transfert TON non construit pour le Ledger (corps vide en référence)",
+        ));
+    }
+    let mut r = vec![0x01];
+    r.extend_from_slice(&t.wallet_id.to_be_bytes());
+    r.push(0x01); // include_wallet_op
+    r.extend_from_slice(&t.seqno.to_be_bytes());
+    r.extend_from_slice(&t.valid_until.to_be_bytes());
+    r.extend_from_slice(&varuint(t.amount));
+    r.push(t.destination.workchain as u8);
+    r.extend_from_slice(&t.destination.hash);
+    r.push(u8::from(t.bounce));
+    r.push(t.mode);
+    r.push(0x00); // no StateInit in the internal message
+    match &t.comment {
+        None => r.extend_from_slice(&[0x00, 0x00]), // no payload, no hints
+        Some(c) => {
+            ton_hw_check_comment(c)?;
+            let cell = comment_cell(c)?;
+            r.push(0x01);
+            r.extend_from_slice(&cell.repr_depth().to_be_bytes());
+            r.extend_from_slice(&cell.repr_hash().0);
+            r.push(0x01);
+            r.extend_from_slice(&HW_HINT_COMMENT.to_be_bytes());
+            r.extend_from_slice(&(c.len() as u16).to_be_bytes());
+            r.extend_from_slice(c.as_bytes());
+        }
+    }
+    Ok((r, t.signing_hash()?))
+}
+
+/// Signed transfer from the Ledger's answer (`signature`, and the `hash` it says it signed):
+/// the hash must be Kyro's own, the signature valid for `public_key` (`verify_strict`), and
+/// the result goes through [`ton_verify_signed`] before being returned.
+pub fn ton_hw_signed(
+    boc_b64: &str,
+    public_key: &[u8; 32],
+    testnet: bool,
+    signature: &[u8],
+    hash: &[u8],
+) -> Result<TonSigned> {
+    let (t, sig) = TonTransfer::decode(boc_b64, public_key, ton_wallet_id(testnet))?;
+    if sig != [0u8; 64] {
+        return Err(Error::input("ce transfert TON est déjà signé"));
+    }
+    let expected = t.signing_hash()?;
+    if hash != expected {
+        return Err(Error::crypto(
+            "le Ledger a signé un autre message que celui préparé par Kyro",
+        ));
+    }
+    let sig: [u8; 64] = signature
+        .try_into()
+        .map_err(|_| Error::crypto("signature de l'appareil : 64 octets attendus"))?;
+    let key = ed25519_dalek::VerifyingKey::from_bytes(public_key)
+        .map_err(|_| Error::input("clé publique TON invalide"))?;
+    key.verify_strict(&expected, &ed25519_dalek::Signature::from_bytes(&sig))
+        .map_err(|_| Error::crypto("signature de l'appareil invalide"))?;
+    let (boc, h) = t.encode_signed(&sig)?;
+    let (_, hash_hex, normalized) = ton_verify_signed(&boc, public_key, testnet)?;
+    if hash_hex != hex::encode(h) {
+        return Err(Error::crypto("hash du message signé incohérent"));
+    }
+    Ok(TonSigned {
+        boc,
+        hash: hash_hex,
+        normalized_hash: normalized,
+        summary: summarize(&t, testnet)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     //! Trust Wallet Core vectors signed with raw private keys (Kyro only derives keys from a
@@ -959,6 +1102,7 @@ mod tests {
             comment: None,
             with_state_init: seqno == 0,
             jetton: None,
+            inline_empty_body: false,
         }
     }
 
@@ -1038,6 +1182,66 @@ mod tests {
             let (v, h, _) = ton_verify_signed(&s.boc, &t.public_key, false).unwrap();
             assert_eq!((v, h), (t.clone(), hash.to_owned()));
         }
+    }
+
+    #[test]
+    fn ledger_request_and_signature() {
+        let k = key("c38f49de2fb13223a9e7d37d5d0ffbdd89a5eb7c8b0ee4d1c299f2cefe7dc4a0");
+        let pk = k.verifying_key().to_bytes();
+        let mut t = transfer(
+            &k,
+            "EQBm--PFwDv1yCeS-QTJ-L8oiUpqo9IT1BwgVptlSq3ts90Q",
+            6,
+            1671132440,
+        );
+        // Software layout (empty body in a reference): not what the app rebuilds.
+        assert!(ton_hw_request(&t.encode_unsigned().unwrap(), &pk, false).is_err());
+        t.inline_empty_body = true;
+        let boc = t.encode_unsigned().unwrap();
+        let (req, hash) = ton_hw_request(&boc, &pk, false).unwrap();
+        // tag 1, wallet id, op, seqno, timeout, varuint(10), address, bounce, mode 3, no
+        // StateInit, no payload, no hints (doc/TRANSACTION.md).
+        assert_eq!(
+            hex::encode(&req),
+            format!(
+                "01{:08x}01{:08x}{:08x}010a00{}0103000000",
+                TON_WALLET_ID_MAINNET,
+                6,
+                1671132440,
+                hex::encode(t.destination.hash)
+            )
+        );
+        assert_eq!(hash, t.signing_hash().unwrap());
+        let sig = k.sign(&hash).to_bytes();
+        let s = ton_hw_signed(&boc, &pk, false, &sig, &hash).unwrap();
+        ton_verify_signed(&s.boc, &pk, false).unwrap();
+        assert!(ton_hw_signed(&boc, &pk, false, &sig, &[0; 32]).is_err());
+        let mut bad = sig;
+        bad[0] ^= 1;
+        assert!(ton_hw_signed(&boc, &pk, false, &bad, &hash).is_err());
+        // Testnet: other wallet id, refused on mainnet.
+        assert!(ton_hw_request(&boc, &pk, true).is_err());
+
+        // With a comment: payload cell ref + comment hint.
+        t.inline_empty_body = false;
+        t.comment = Some("test comment".into());
+        let boc = t.encode_unsigned().unwrap();
+        let (req, hash) = ton_hw_request(&boc, &pk, false).unwrap();
+        let cell = comment_cell("test comment").unwrap();
+        let tail = format!(
+            "0300010000{}0100000000000c{}",
+            hex::encode(cell.repr_hash().0),
+            hex::encode("test comment")
+        );
+        assert!(hex::encode(&req).ends_with(&tail), "{}", hex::encode(&req));
+        let s = ton_hw_signed(&boc, &pk, false, &k.sign(&hash).to_bytes(), &hash).unwrap();
+        assert_eq!(s.summary.comment.as_deref(), Some("test comment"));
+        // The app only shows printable ASCII.
+        t.comment = Some("тест".into());
+        assert!(ton_hw_request(&t.encode_unsigned().unwrap(), &pk, false).is_err());
+        assert!(ton_hw_check_comment(&"a".repeat(121)).is_err());
+        assert_eq!(varuint(0), vec![0]);
+        assert_eq!(varuint(0x0100), vec![2, 1, 0]);
     }
 
     #[test]

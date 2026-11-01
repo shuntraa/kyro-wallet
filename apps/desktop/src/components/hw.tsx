@@ -562,7 +562,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
 function ChainRow({ st, chain, checked, onToggle }: { st: HwChainStatus | undefined; chain: SetupChain; checked: boolean; onToggle: (on: boolean) => void }) {
   const { t } = useT();
   const unsupported = st?.state === 'unsupported';
-  const reason = (st?.reason ?? t('hw.chainRow.unsupported')).replace(/^(Bitcoin Cash|Bitcoin|EVM|Ethereum|Solana|Litecoin|Dogecoin|Dash|XRP|TRON|Tron|Stellar|Sui|Aptos|Algorand|NEAR|Cosmos Hub)\s*:\s*/, '');
+  const reason = (st?.reason ?? t('hw.chainRow.unsupported')).replace(/^(Bitcoin Cash|Bitcoin|EVM|Ethereum|Solana|Litecoin|Dogecoin|Dash|XRP|TRON|Tron|Stellar|Sui|Aptos|Algorand|NEAR|Cosmos Hub|TON|Hedera)\s*:\s*/, '');
   const hint =
     !st
       ? null

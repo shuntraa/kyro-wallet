@@ -23,6 +23,7 @@ import {
   type TonWarning,
 } from '@kyro/shared';
 import { TON_JETTONS, type TonChain } from '../registry';
+import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 export type { TonAccountInfo, TonContext, TonHistoryEntry, TonTxStatus, TonTxSummary, TonWarning };
@@ -60,6 +61,33 @@ export function rustTonBackend(account = 0): TonBackend {
     jettonTxs: (address) => call('ton_jetton_txs', { address }),
     buildJetton: (master, to, amount, comment) => call('ton_build_jetton_tx', { master, to, amount, ...(comment ? { comment } : {}), ...acct }),
   };
+}
+
+/**
+ * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its own v4R2 wallet,
+ * signature on the device (`hw_*` commands). `sign`'s second argument is the device id, not a
+ * password. Status: the generic `ton_tx_status`.
+ */
+export function rustTonHwBackend(accountId: string): TonBackend {
+  // Jetton sends are vault-only for now (the Ledger request has no jetton payload).
+  const { buildJetton: _vaultOnly, ...base } = rustTonBackend();
+  return {
+    ...base,
+    build: (to, amount, comment, sendAll) => call('hw_ton_build_tx', { accountId, to, amount, ...(comment ? { comment } : {}), ...(sendAll ? { sendAll } : {}) }),
+    sign: (boc, id) => call('hw_sign_ton_tx', { id, accountId, boc }),
+    broadcast: (boc) => call('hw_ton_broadcast', { accountId, boc }),
+  };
+}
+
+/** Longest comment the Ledger TON app shows (printable ASCII only). */
+export const TON_HW_MAX_COMMENT = 120;
+
+/** Why the Ledger TON app cannot show `comment`, or null (Rust checks the same). */
+export function tonHwCommentProblem(comment: string): string | null {
+  if (comment.length > TON_HW_MAX_COMMENT || !/^[ -~]*$/.test(comment)) {
+    return l10n('Commentaire sur Ledger : 120 caractères ASCII imprimables au plus (pas d’accents ni d’emoji)', 'Comment on a Ledger: at most 120 printable ASCII characters (no accents or emoji)');
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- addresses and comments
@@ -128,6 +156,8 @@ export interface TonAdapterOptions {
   backend?: TonBackend;
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (Ledger): signing through `hw_sign_*` (`signTxHw`). */
+  hw?: HwSigner;
 }
 
 export class TonAdapter implements ChainAdapter<'ton'> {
@@ -135,12 +165,14 @@ export class TonAdapter implements ChainAdapter<'ton'> {
   readonly chain: TonChain;
   private readonly address: string;
   private readonly backend: TonBackend;
+  readonly hw: HwSigner | null;
 
   constructor(opts: TonAdapterOptions) {
     if (!isTonAddress(opts.address)) throw new Error(l10n('Adresse TON invalide', 'Invalid TON address'));
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustTonBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? rustTonHwBackend(opts.hw.accountId) : rustTonBackend(opts.account ?? 0));
   }
 
   getAddress(): string {
@@ -175,6 +207,7 @@ export class TonAdapter implements ChainAdapter<'ton'> {
 
   /** Jetton transfer: Rust computes our jetton wallet, writes the TEP-74 body, attaches 0.05 TON. */
   private async buildJetton(params: BuildParams, to: string, comment: string): Promise<TonUnsigned> {
+    if (this.hw) throw new Error(l10n('Envoi de jetons TON : pas encore pris en charge sur hardware wallet', 'TON token sends: not yet supported on hardware wallets'));
     const known = TON_JETTONS[this.chain.network].find((k) => k.contract === params.asset.contract);
     if (!known || known.decimals !== params.asset.decimals || !this.backend.buildJetton) throw new Error(l10n('Jeton TON inconnu', 'Unknown TON token'));
     let amount = params.amount;
@@ -223,7 +256,7 @@ export class TonAdapter implements ChainAdapter<'ton'> {
     if (problem) throw new Error(problem.charAt(0).toUpperCase() + problem.slice(1));
     if (sameTonAccount(to, this.address)) throw new Error(l10n('Envoi à soi-même impossible', 'Cannot send to yourself'));
     const comment = params.memo ?? '';
-    const cp = tonCommentProblem(comment);
+    const cp = tonCommentProblem(comment) ?? (this.hw ? tonHwCommentProblem(comment) : null);
     if (cp) throw new Error(cp);
     if (params.asset.kind === 'jetton') return this.buildJetton(params, to, comment);
     const sendAll = params.max === true;
@@ -249,6 +282,12 @@ export class TonAdapter implements ChainAdapter<'ton'> {
       maxFee: BigInt(built.context.fee),
       size: { family: 'ton' },
     };
+  }
+
+  /** Ledger: same checks as `signTx`; Rust re-reads the key, shows its dialog, then the device signs. */
+  signTxHw(unsigned: TonUnsigned, deviceId: string): Promise<TonSigned> {
+    if (!this.hw) return Promise.reject(new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet')));
+    return this.signTx(unsigned, deviceId);
   }
 
   /** Rust: live checks, native dialog (comment framed, both address forms), signature. */

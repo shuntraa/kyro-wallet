@@ -828,16 +828,17 @@ pub struct HbarSignedTransfer {
     pub public_key: [u8; 33],
 }
 
-/// Decodes a signed `Transaction` (hex) strictly — only `signedTransactionBytes`, a body that
-/// [`HbarTransfer::decode`] accepts, exactly one `ECDSA_secp256k1` signature pair with a full
-/// 33-byte key — and checks the low-S signature over `keccak256(bodyBytes)`.
-pub fn hbar_verify_signed(tx_hex: &str) -> Result<HbarSignedTransfer> {
-    let raw = hex::decode(tx_hex.trim()).map_err(|_| Error::input("hexadécimal attendu"))?;
+/// `(bodyBytes, pubKeyPrefix, signature field number, signature)` of a signed `Transaction`
+/// with only `signedTransactionBytes` and exactly one signature pair (ECDSA field 6 or ED25519
+/// field 3).
+type SignedParts<'a> = (&'a [u8], &'a [u8], u32, &'a [u8]);
+
+fn parse_signed(raw: &[u8]) -> Result<SignedParts<'_>> {
     if raw.len() > MAX_BODY * 2 {
         return Err(bad("trop grande"));
     }
     let mut st = None;
-    for (f, v) in fields(&raw)? {
+    for (f, v) in fields(raw)? {
         match f {
             5 => st = Some(bytes_of(&v, "signedTransactionBytes")?),
             f => {
@@ -867,17 +868,29 @@ pub fn hbar_verify_signed(tx_hex: &str) -> Result<HbarSignedTransfer> {
     let (mut prefix, mut sig) = (None, None);
     for (f, v) in fields(pair)? {
         match f {
-            1 => prefix = Some(bytes_of(&v, "pubKeyPrefix")?),
-            6 => sig = Some(bytes_of(&v, "ECDSA_secp256k1")?),
+            1 if prefix.is_none() => prefix = Some(bytes_of(&v, "pubKeyPrefix")?),
+            3 | 6 if sig.is_none() => sig = Some((f, bytes_of(&v, "signature")?)),
             f => return Err(bad(format!("SignaturePair : champ {f} refusé"))),
         }
     }
+    let prefix = prefix.ok_or_else(|| bad("clé manquante"))?;
+    let (field, sig) = sig.ok_or_else(|| bad("signature manquante"))?;
+    Ok((body, prefix, field, sig))
+}
+
+/// Decodes a signed `Transaction` (hex) strictly — only `signedTransactionBytes`, a body that
+/// [`HbarTransfer::decode`] accepts, exactly one `ECDSA_secp256k1` signature pair with a full
+/// 33-byte key — and checks the low-S signature over `keccak256(bodyBytes)`.
+pub fn hbar_verify_signed(tx_hex: &str) -> Result<HbarSignedTransfer> {
+    let raw = hex::decode(tx_hex.trim()).map_err(|_| Error::input("hexadécimal attendu"))?;
+    let (body, prefix, field, sig) = parse_signed(&raw)?;
+    if field != 6 {
+        return Err(bad("signature ECDSA_secp256k1 attendue"));
+    }
     let pk33: [u8; 33] = prefix
-        .ok_or_else(|| bad("clé manquante"))?
         .try_into()
         .map_err(|_| bad("clé complète de 33 octets attendue"))?;
     let sig64: [u8; 64] = sig
-        .ok_or_else(|| bad("signature manquante"))?
         .try_into()
         .map_err(|_| bad("signature de 64 octets attendue"))?;
     let transfer = HbarTransfer::decode(body)?;
@@ -898,6 +911,110 @@ pub fn hbar_verify_signed(tx_hex: &str) -> Result<HbarSignedTransfer> {
         transfer,
         public_key: pk33,
     })
+}
+
+// ---------------------------------------------------------------------------------------------
+// ED25519 hardware accounts (Ledger « Hedera » app)
+// ---------------------------------------------------------------------------------------------
+
+/// DER (`SubjectPublicKeyInfo`) prefix of an ED25519 key, the form Hedera wallets and the
+/// mirror node show (`302a300506032b6570032100` ‖ key).
+const ED25519_DER_PREFIX: &str = "302a300506032b6570032100";
+/// Longest body the Ledger Hedera app takes (one APDU: 255 bytes minus the 4-byte key index).
+pub const HBAR_HW_MAX_BODY: usize = 251;
+
+/// DER hex of an ED25519 public key (what a hardware Hedera account stores as « address »: the
+/// account ID is not derived from the key, it is looked up on the mirror node).
+pub fn hbar_ed25519_key_string(pk: &[u8; 32]) -> String {
+    format!("{ED25519_DER_PREFIX}{}", hex::encode(pk))
+}
+
+/// Long-zero EVM form of an account number (to refuse a transfer to ourselves by that form).
+fn long_zero_of(num: u64) -> [u8; 20] {
+    let mut a = [0u8; 20];
+    a[12..].copy_from_slice(&num.to_be_bytes());
+    a
+}
+
+/// [`hbar_decode_tx`] for an ED25519 account `our_account` (no EVM alias: the long-zero form
+/// of the account is the one that names it).
+pub fn hbar_decode_tx_ed25519(
+    bodies: &[String],
+    our_account: u64,
+    allowed_nodes: &[u64],
+) -> Result<HbarTxSummary> {
+    let ts: Vec<HbarTransfer> = decode_bodies(bodies)?.into_iter().map(|(_, t)| t).collect();
+    summarize(&ts, our_account, &long_zero_of(our_account), allowed_nodes)
+}
+
+/// The bytes the Ledger signs for one body (hex): the body itself (the app signs `bodyBytes`
+/// with ED25519, as the network checks them), after strict decoding; at most
+/// [`HBAR_HW_MAX_BODY`] bytes.
+pub fn hbar_hw_message(body_hex: &str) -> Result<Vec<u8>> {
+    let raw =
+        hex::decode(body_hex.trim()).map_err(|_| Error::input("corps : hexadécimal attendu"))?;
+    HbarTransfer::decode(&raw)?;
+    if raw.len() > HBAR_HW_MAX_BODY {
+        return Err(bad(
+            "trop long pour l'app Ledger Hedera (mémo plus court ?)",
+        ));
+    }
+    Ok(raw)
+}
+
+fn signed_transaction_ed25519(body: &[u8], pk: &[u8; 32], sig: &[u8; 64]) -> Vec<u8> {
+    let mut pair = Vec::new();
+    put_bytes(&mut pair, 1, pk);
+    put_bytes(&mut pair, 3, sig);
+    let mut map = Vec::new();
+    put_bytes(&mut map, 1, &pair);
+    let mut st = Vec::new();
+    put_bytes(&mut st, 1, body);
+    put_bytes(&mut st, 2, &map);
+    let mut tx = Vec::new();
+    put_bytes(&mut tx, 5, &st);
+    tx
+}
+
+/// Signed `Transaction` (hex) from the device's ED25519 signature of `body_hex`, checked with
+/// [`hbar_verify_signed_ed25519`] before it is returned.
+pub fn hbar_hw_signed(body_hex: &str, pk: &[u8; 32], sig: &[u8]) -> Result<String> {
+    let body = hbar_hw_message(body_hex)?;
+    let sig: [u8; 64] = sig
+        .try_into()
+        .map_err(|_| Error::crypto("signature de l'appareil : 64 octets attendus"))?;
+    let out = hex::encode(signed_transaction_ed25519(&body, pk, &sig));
+    let (_, signer) = hbar_verify_signed_ed25519(&out)?;
+    if signer != *pk {
+        return Err(Error::crypto("signature d'une autre clé"));
+    }
+    Ok(out)
+}
+
+/// Strict decoding of a signed `Transaction` (hex) with exactly one **ED25519** signature
+/// pair (full 32-byte key) and its strict verification over `bodyBytes`. Returns the body and
+/// the key.
+pub fn hbar_verify_signed_ed25519(tx_hex: &str) -> Result<(HbarTransfer, [u8; 32])> {
+    let raw = hex::decode(tx_hex.trim()).map_err(|_| Error::input("hexadécimal attendu"))?;
+    let (body, prefix, field, sig) = parse_signed(&raw)?;
+    if field != 3 {
+        return Err(bad("signature ED25519 attendue"));
+    }
+    let pk: [u8; 32] = prefix
+        .try_into()
+        .map_err(|_| bad("clé complète de 32 octets attendue"))?;
+    let sig64: [u8; 64] = sig
+        .try_into()
+        .map_err(|_| bad("signature de 64 octets attendue"))?;
+    let transfer = HbarTransfer::decode(body)?;
+    let key =
+        ed25519_dalek::VerifyingKey::from_bytes(&pk).map_err(|_| bad("clé publique invalide"))?;
+    key.verify_strict(body, &ed25519_dalek::Signature::from_bytes(&sig64))
+        .map_err(|_| bad("la signature ne se vérifie pas"))?;
+    if signed_transaction_ed25519(body, &pk, &sig64) != raw {
+        return Err(bad("encodage non canonique"));
+    }
+    Ok((transfer, pk))
 }
 
 /// `TransactionResponse` of a consensus node: `(nodeTransactionPrecheckCode, cost)`.
@@ -991,5 +1108,57 @@ mod tests {
         let too_long = [0xFFu8; 11];
         assert!(read_varint(&mut too_long.as_slice()).is_err());
         assert!(read_varint(&mut [0x80u8].as_slice()).is_err());
+    }
+}
+
+#[cfg(test)]
+mod hw_tests {
+    use super::*;
+    use ed25519_dalek::Signer;
+
+    fn body(memo: &str) -> String {
+        hex::encode(
+            HbarTransfer {
+                payer: 1234,
+                valid_start_secs: 1_760_000_000,
+                valid_start_nanos: 5,
+                node: 3,
+                max_fee: 100_000_000,
+                valid_duration: 120,
+                memo: memo.into(),
+                to: HbarRecipient::Id(98),
+                amount: 42,
+            }
+            .encode(),
+        )
+    }
+
+    #[test]
+    fn ed25519_signed_transfer() {
+        let k = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
+        let pk = k.verifying_key().to_bytes();
+        let b = body("kyro");
+        let msg = hbar_hw_message(&b).unwrap();
+        let sig = k.sign(&msg).to_bytes();
+        let signed = hbar_hw_signed(&b, &pk, &sig).unwrap();
+        let (t, signer) = hbar_verify_signed_ed25519(&signed).unwrap();
+        assert_eq!((t.payer, t.amount, signer), (1234, 42, pk));
+        // Not accepted as an ECDSA transaction; a bad signature or another key is refused.
+        assert!(hbar_verify_signed(&signed).is_err());
+        let mut bad_sig = sig;
+        bad_sig[0] ^= 1;
+        assert!(hbar_hw_signed(&b, &pk, &bad_sig).is_err());
+        let other = ed25519_dalek::SigningKey::from_bytes(&[8u8; 32]);
+        assert!(hbar_hw_signed(&b, &other.verifying_key().to_bytes(), &sig).is_err());
+        // The longest memo still fits one APDU of the Ledger app.
+        assert!(hbar_hw_message(&body(&"m".repeat(100))).unwrap().len() <= HBAR_HW_MAX_BODY);
+        assert_eq!(
+            hbar_ed25519_key_string(&pk),
+            format!("302a300506032b6570032100{}", hex::encode(pk))
+        );
+        let s = hbar_decode_tx_ed25519(std::slice::from_ref(&b), 1234, &[3]).unwrap();
+        assert_eq!(s.amount, "42");
+        // Payer must be our account.
+        assert!(hbar_decode_tx_ed25519(&[b], 99, &[3]).is_err());
     }
 }

@@ -2321,8 +2321,8 @@ export interface SolTxSummary {
 // ---------------------------------------------------------------- hardware wallets (docs/IPC.md §2.3)
 
 export type HwDeviceKind = 'ledger' | 'trezor';
-/** `cardano`, `zec`, `xmr`, `dot`, `hbar`, `kas` and `ton` answer HW_UNSUPPORTED. */
-export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp' | 'bch' | 'dash' | 'stellar' | 'zec' | 'xmr' | HwKeyChain | 'dot' | 'hbar' | 'kas' | 'ton';
+/** `cardano`, `zec`, `xmr`, `dot` and `kas` answer HW_UNSUPPORTED. */
+export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp' | 'bch' | 'dash' | 'stellar' | 'zec' | 'xmr' | HwKeyChain | 'dot' | 'kas';
 /** The chains Kyro implements on hardware wallets (device support: `hw_open` → `chains`). */
 export type HwImplementedChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'xrp' | 'tron' | 'stellar';
 /** Litecoin / Dogecoin / Bitcoin Cash / Dash account of a hardware wallet (`m/84'/2'/a'`, `m/44'/3'/a'`…). */
@@ -2341,9 +2341,11 @@ export interface HwChainKey {
 /**
  * Single-key chains (Ledger only): one public key per account, read with `hw_key_add`, shown
  * with `hw_key_verify`, signed with `hw_sign_<chain>_tx`. NEAR uses `m/44'/397'/0'/0'/(account+1)'`
- * on the device (the Ledger app only accepts five-level paths), the others the vault's path.
+ * on the device (the Ledger app only accepts five-level paths), TON the six-level path of the
+ * Ledger TON app `m/44'/607'/0'/0'/account'/0'` (another key and wallet than the vault's), the
+ * others the vault's path.
  */
-export type HwKeyChain = 'sui' | 'apt' | 'algo' | 'near' | 'cosmos';
+export type HwKeyChain = 'sui' | 'apt' | 'algo' | 'near' | 'cosmos' | 'ton' | 'hbar';
 
 /** Public key of a single-key chain stored in a watch-only account. */
 export interface HwWatchKey {
@@ -2872,6 +2874,15 @@ export interface Commands {
   hw_sign_near_tx: { args: { id: string; accountId: string; tx: string }; ret: { signed: string; hash: string; summary: NearTxSummary; context: NearContext } };
   hw_near_broadcast: { args: { accountId: string; signed: string }; ret: NearTxOutcome };
   hw_near_tx_status: { args: { accountId: string; hash: string }; ret: NearTxOutcome };
+  /** TON on a Ledger: the account's own v4R2 wallet (`m/44'/607'/0'/0'/account'/0'`); status: `ton_tx_status`. */
+  hw_ton_build_tx: { args: { accountId: string; to: string; amount: string; comment?: string; sendAll?: boolean }; ret: TonBuilt };
+  hw_sign_ton_tx: { args: { id: string; accountId: string; boc: string }; ret: { boc: string; hash: string; normalizedHash: string; summary: TonTxSummary; context: TonContext } };
+  hw_ton_broadcast: { args: { accountId: string; boc: string }; ret: string };
+  /** Hedera on a Ledger: ED25519 account found by its key (`address` = DER key); status: `hbar_tx_status`. */
+  hw_hbar_account: { args: { accountId: string }; ret: HbarOwnAccount };
+  hw_hbar_build_tx: { args: { accountId: string; to: string; amount: string; memo?: string }; ret: HbarBuilt };
+  hw_sign_hbar_tx: { args: { id: string; accountId: string; bodies: string[] }; ret: { signed: string[]; summary: HbarTxSummary; context: HbarContext } };
+  hw_hbar_broadcast: { args: { accountId: string; signed: string[] }; ret: string };
   hw_cosmos_build_tx: { args: { accountId: string; to: string; amount: string; memo?: string }; ret: { signDoc: string; summary: CosmosTxSummary; context: CosmosContext } };
   hw_sign_cosmos_tx: { args: { id: string; accountId: string; signDoc: string }; ret: { tx: string; hash: string; summary: CosmosTxSummary; context: CosmosContext } };
   hw_cosmos_broadcast: { args: { accountId: string; tx: string }; ret: string };
