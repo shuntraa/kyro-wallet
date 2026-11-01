@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Réglages › Réseaux et serveurs (B2b): the user's own server per chain.
+// Settings › Networks and servers (B2b): the user's own server per chain.
 // Contract: docs/IPC.md §2–2.2; what each server sees: docs/NETWORK.md.
 //
 // Rules shown and enforced here (Rust stays the judge, see settings_set / server_test):
@@ -42,10 +42,21 @@ import { NETWORK_HINT, NETWORK_LABEL } from '../../lib/network';
 import { cbfPhaseLabel, cbfStore, useCbf } from '../../state/cbf';
 import { usePortfolio } from '../../state/portfolio';
 import { cn } from '../../lib/cn';
-import { fmtNumber } from '../../lib/format';
+import { fmtIntl, fmtNumber, fmtTime } from '../../lib/format';
 import { Dialog } from '../../components/ui/dialog';
 import { Badge, Button, Input, Notice, Segmented, Spinner, Switch } from '../../components/ui/primitives';
 import { IconCheck, IconInfo, IconWarn } from '../../components/icons';
+import { t, useT, type Key } from '../../i18n';
+import { rt } from '../../i18n/rich';
+
+const bold = { b: (c: ReactNode) => <strong className="font-semibold text-text">{c}</strong> };
+const boldPlain = { b: (c: ReactNode) => <strong className="font-semibold">{c}</strong> };
+
+/** A notice under a card: success, or a warning (default server back, server removed). */
+interface Note {
+  text: string;
+  warn?: boolean;
+}
 
 // ---------------------------------------------------------------- shared bits
 
@@ -54,14 +65,14 @@ interface Failure {
   message: string;
 }
 
-const CODE_TITLE: Record<string, string> = {
-  SERVER_INVALID: 'Configuration refusée',
-  SERVER_WRONG_NETWORK: 'Mauvais réseau',
-  SERVER_UNREACHABLE: 'Serveur injoignable',
-  DEFAULT_SERVER_DISABLED: 'Serveur par défaut désactivé',
-  TOR_UNAVAILABLE: 'Tor indisponible',
-  INVALID_INPUT: 'Entrée invalide',
-  LOCKED: 'Coffre verrouillé',
+const CODE_TITLE: Record<string, Key> = {
+  SERVER_INVALID: 'servers.code.serverInvalid',
+  SERVER_WRONG_NETWORK: 'servers.code.wrongNetwork',
+  SERVER_UNREACHABLE: 'servers.code.unreachable',
+  DEFAULT_SERVER_DISABLED: 'servers.code.defaultDisabled',
+  TOR_UNAVAILABLE: 'servers.code.torUnavailable',
+  INVALID_INPUT: 'servers.code.invalidInput',
+  LOCKED: 'servers.code.locked',
 };
 
 const toFailure = (e: unknown): Failure => {
@@ -69,35 +80,38 @@ const toFailure = (e: unknown): Failure => {
   return { code: err.code, message: err.message };
 };
 
-/** Shell message without its « Serveur invalide : » style prefix (the title says it). */
+/** Shell message without its « Serveur invalide : » style prefix, French or English (the title says it). */
 function detail(message: string): string {
-  return message.replace(/^(Serveur invalide|Mauvais réseau|Serveur injoignable|Tor indisponible|Entrée invalide|Erreur interne)\s*:\s*/, '');
+  return message.replace(/^(Serveur invalide|Mauvais réseau|Serveur injoignable|Tor indisponible|Entrée invalide|Erreur interne|Invalid server|Wrong network|Server unreachable|Tor unavailable|Invalid input|Internal error)\s*:\s*/i, '');
 }
 
 function FailureNotice({ failure }: { failure: Failure }) {
+  const { t } = useT();
+  const title = t((CODE_TITLE[failure.code] ?? 'servers.code.error') as 'servers.code.error');
   return (
     <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
-      <span className="font-semibold">{CODE_TITLE[failure.code] ?? 'Erreur'} :</span> {detail(failure.message)}
-      {failure.code === 'SERVER_UNREACHABLE' && <span className="block text-[12px] opacity-80">Rien n’a été enregistré. Kyro ne se rabat jamais sur le serveur par défaut.</span>}
+      <span className="font-semibold">{t('servers.failureTitle', { title })}</span> {detail(failure.message)}
+      {failure.code === 'SERVER_UNREACHABLE' && <span className="block text-[12px] opacity-80">{t('servers.nothingSaved')}</span>}
     </Notice>
   );
 }
 
 /** `chainLabel`: what `detected.chainId` is for that family (XRP Ledger: `network_id`). */
-function TestOk({ result, chainLabel = 'chainId', ledgerLabel = 'bloc' }: { result: ServerTestResult; chainLabel?: string; ledgerLabel?: string }) {
+function TestOk({ result, chainLabel = 'chainId', ledgerLabel }: { result: ServerTestResult; chainLabel?: string; ledgerLabel?: string }) {
+  const { t } = useT();
   const d = result.detected;
   const parts = [`${result.latencyMs} ms`];
-  if (d.network) parts.push(`réseau ${d.network}`);
+  if (d.network) parts.push(t('servers.test.network', { network: d.network }));
   if (d.chainId !== undefined) parts.push(`${chainLabel} ${d.chainId}`);
-  if (d.blockHeight !== undefined) parts.push(`${ledgerLabel} ${fmtNumber(d.blockHeight, 0)}`);
+  if (d.blockHeight !== undefined) parts.push(`${ledgerLabel ?? t('servers.test.block')} ${fmtNumber(d.blockHeight, 0)}`);
   if (d.serverVersion) parts.push(d.serverVersion);
   if (d.genesisHash) parts.push(`genesis ${d.genesisHash.slice(0, 8)}…${d.genesisHash.slice(-6)}`);
   return (
     <div role="status" className="flex items-start gap-2 rounded-ctl border border-up/30 bg-up/[.06] px-3.5 py-2.5 text-[12px] text-[#b8f3d8]">
       <IconCheck size={14} className="mt-0.5 shrink-0 text-up" />
       <span>
-        <span className="font-semibold">Connexion réussie</span> · {parts.join(' · ')}
-        <span className="block text-mute">Test seulement : rien n’est enregistré tant que tu ne cliques pas sur « Enregistrer ».</span>
+        <span className="font-semibold">{t('servers.test.ok')}</span> · {parts.join(' · ')}
+        <span className="block text-mute">{t('servers.test.only')}</span>
       </span>
     </div>
   );
@@ -158,22 +172,19 @@ function useSaveServers() {
 }
 
 function BackToDefaultDialog({ open, host, sees, busy, failure, onConfirm, onCancel, title, body }: { open: boolean; host: string; sees: string; busy: boolean; failure: Failure | null; onConfirm: () => void; onCancel: () => void; title?: string; body?: ReactNode }) {
+  const { t } = useT();
   return (
-    <Dialog open={open} onOpenChange={(v) => (v ? undefined : onCancel())} title={title ?? `Revenir à ${host} ?`} className="w-[520px]">
+    <Dialog open={open} onOpenChange={(v) => (v ? undefined : onCancel())} title={title ?? t('servers.back.title', { host })} className="w-[520px]">
       <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-        {body ?? (
-          <>
-            Ton serveur ne sera plus utilisé. <strong className="font-semibold text-text">{host}</strong> verra de nouveau {sees}.
-          </>
-        )}
+        {body ?? rt('servers.back.body', bold, { host, sees })}
       </Notice>
       {failure && <FailureNotice failure={failure} />}
       <div className="flex justify-end gap-2">
         <Button variant="primary" onClick={onCancel} disabled={busy}>
-          Garder mon serveur
+          {t('servers.back.keep')}
         </Button>
         <Button variant="dangerOutline" onClick={onConfirm} disabled={busy}>
-          {busy && <Spinner />} Revenir au serveur par défaut
+          {busy && <Spinner />} {t('servers.back.confirm')}
         </Button>
       </div>
     </Dialog>
@@ -184,18 +195,17 @@ function BackToDefaultDialog({ open, host, sees, busy, failure, onConfirm, onCan
 
 export function ServersSection() {
   const { network, settings } = useApp();
+  const { t } = useT();
   const tor = settings.tor.enabled;
   return (
     <>
       <NetworkChoiceCard />
-      <Card title="Réseaux et serveurs" badge={<Badge tone={network === 'testnet' ? 'warn' : 'up'}>{network === 'testnet' ? 'Testnet' : 'Mainnet'}</Badge>}>
+      <Card title={t('servers.title')} badge={<Badge tone={network === 'testnet' ? 'warn' : 'up'}>{network === 'testnet' ? 'Testnet' : 'Mainnet'}</Badge>}>
         <p className="m-0 text-[13px] leading-[1.55] text-mute">
-          {network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia, Solana devnet, Litecoin testnet4, Dogecoin testnet, TRON Nile, XRP Ledger testnet et Cardano preprod. ' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana, Litecoin, Dogecoin, TRON, XRP Ledger, Cardano. '}
-          Pour chaque chaîne, tu peux remplacer le serveur par défaut par le tien : Kyro vérifie qu’il est sur le bon réseau avant de l’enregistrer.
+          {network === 'testnet' ? t('servers.introTestnet') : t('servers.introMainnet')} {t('servers.introReplace')}
         </p>
         <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-          Un serveur personnalisé remplace celui par défaut <strong className="font-semibold text-text">sans repli</strong> : s’il ne répond plus, Kyro affiche une erreur et n’interroge jamais le serveur par défaut à sa place.{' '}
-          {tor ? 'Tes serveurs sont joints via Tor (sauf un nœud Bitcoin Core local).' : 'Tor est désactivé : tes serveurs voient ton adresse IP.'}
+          {rt('servers.noFallback', bold)} {tor ? t('servers.viaTor') : t('servers.torOff')}
         </Notice>
       </Card>
       <BitcoinCard />
@@ -217,9 +227,10 @@ function NetworkChoiceCard() {
   const [target, setTarget] = useState<Network | null>(null);
   const current = info.data?.network ?? network;
   const locked = info.data ? !info.data.canSwitch : true;
+  const { t } = useT();
   return (
-    <Card title="Réseau" badge={<Badge tone={current === 'testnet' ? 'warn' : 'up'}>{NETWORK_LABEL[current]}</Badge>}>
-      <div role="radiogroup" aria-label="Réseau" className="flex gap-2.5">
+    <Card title={t('servers.network')} badge={<Badge tone={current === 'testnet' ? 'warn' : 'up'}>{NETWORK_LABEL[current]}</Badge>}>
+      <div role="radiogroup" aria-label={t('servers.network')} className="flex gap-2.5">
         {(['mainnet', 'testnet'] as const).map((n) => {
           const active = current === n;
           return (
@@ -236,20 +247,20 @@ function NetworkChoiceCard() {
               )}
             >
               <span className="text-[13px] font-medium">
-                {NETWORK_LABEL[n]} {active && <span className="font-normal text-ice-text2">· utilisé</span>}
+                {NETWORK_LABEL[n]} {active && <span className="font-normal text-ice-text2">{t('servers.network.used')}</span>}
               </span>
-              <span className="text-[12px] text-mute">{n === 'mainnet' ? 'Fonds réels' : 'Jetons sans valeur'}</span>
+              <span className="text-[12px] text-mute">{n === 'mainnet' ? t('servers.network.realFunds') : t('servers.network.worthless')}</span>
             </button>
           );
         })}
       </div>
       <p className="m-0 text-[13px] leading-[1.55] text-mute">
-        Chaque réseau a son propre coffre et ses propres comptes : changer de réseau garde l’autre coffre sur cet ordinateur (rien n’est supprimé), verrouille Kyro et le redémarre. Tu es sur le {NETWORK_LABEL[current].toLowerCase()} ({NETWORK_HINT[current]}).
+        {t('servers.network.explain', { network: NETWORK_LABEL[current].toLowerCase(), hint: NETWORK_HINT[current] })}
       </p>
       {info.data && !info.data.canSwitch && (
-        <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>{demo ? 'Mode démo : le réseau est imposé par l’adresse de la page (?network=). Retire-la pour choisir ici.' : 'Le réseau est imposé par la variable d’environnement KYRO_NETWORK (développement). Retire-la pour choisir ici.'}</Notice>
+        <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>{demo ? t('servers.network.demoForced') : t('servers.network.envForced')}</Notice>
       )}
-      {info.error && <Notice tone="error">Réseau illisible : {info.error.message}</Notice>}
+      {info.error && <Notice tone="error">{t('servers.network.unreadable', { message: info.error.message })}</Notice>}
       {info.data && <NetworkSwitchDialog info={info.data} target={target} hasVault={status?.exists ?? true} onClose={() => setTarget(null)} />}
     </Card>
   );
@@ -376,30 +387,34 @@ function comparable(s: BtcServer): string {
   return JSON.stringify(s);
 }
 
-const BTC_KINDS: Array<{ value: BtcServerKind; label: string }> = [
-  { value: 'default', label: 'Par défaut' },
-  { value: 'esplora', label: 'Esplora perso' },
-  { value: 'electrum', label: 'Electrum' },
-  { value: 'core', label: 'Bitcoin Core' },
-  { value: 'cbf', label: 'Filtres compacts (BIP157/158)' },
-];
+/** Server kinds (labels in the current language). */
+function btcKinds(): Array<{ value: BtcServerKind; label: string }> {
+  return [
+    { value: 'default', label: t('servers.default') },
+    { value: 'esplora', label: t('servers.btc.kind.esplora') },
+    { value: 'electrum', label: 'Electrum' },
+    { value: 'core', label: 'Bitcoin Core' },
+    { value: 'cbf', label: t('servers.btc.kind.cbf') },
+  ];
+}
+
+/** « …; the IP of a Tor exit relay » / « …; and your IP address »: what the server sees of you. */
+function ipPart(tor: boolean, onion = false): string {
+  return tor ? (onion ? t('servers.ipTorOnion') : t('servers.ipTor')) : t('servers.ipDirect');
+}
 
 function btcSees(d: BtcDraft, tor: boolean): string {
   switch (d.kind) {
     case 'default':
-      return tor
-        ? 'mempool.space voit tes adresses Bitcoin et tes transactions, via son service .onion : ni ton IP, ni celle d’un relais.'
-        : 'mempool.space voit tes adresses Bitcoin, tes transactions et ton adresse IP (Tor est désactivé).';
+      return tor ? t('servers.btc.sees.defaultTor') : t('servers.btc.sees.defaultDirect');
     case 'esplora':
-      return `Ton serveur Esplora voit tes adresses et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`;
+      return t('servers.btc.sees.esplora', { ip: ipPart(tor, true) });
     case 'electrum':
-      return `Le serveur Electrum voit tes script hashes (l’équivalent de tes adresses) et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`;
+      return t('servers.btc.sees.electrum', { ip: ipPart(tor, true) });
     case 'cbf':
-      return `Aucun serveur n’apprend tes adresses : Kyro télécharge les filtres de blocs et vérifie sur ta machine lesquels te concernent. Les pairs voient quels blocs tu télécharges en entier${tor ? ' ; avec Tor, ton IP leur est cachée' : ', et ton adresse IP (Tor désactivé)'}.`;
+      return tor ? t('servers.btc.sees.cbfTor') : t('servers.btc.sees.cbfDirect');
     case 'core':
-      return coreIsLocal(d.coreUrl)
-        ? 'Ton propre nœud voit tes descripteurs publics (xpub) et tes transactions. Rien ne sort de ta machine ou de ton réseau local. Jamais ta phrase ni tes clés privées.'
-        : 'Ce nœud connaît ton xpub : tout l’historique de ton compte, présent et futur. N’utilise un nœud distant que s’il t’appartient.';
+      return coreIsLocal(d.coreUrl) ? t('servers.btc.sees.coreLocal') : t('servers.btc.sees.coreRemote');
   }
 }
 
@@ -413,11 +428,13 @@ function BitcoinCard() {
   useEffect(() => setD(draftOf(saved, network)), [savedKey, network]);
   const set = (patch: Partial<BtcDraft>) => setD((x) => ({ ...x, ...patch }));
   const saveServers = useSaveServers();
+  const { t } = useT();
+  const kinds = btcKinds();
 
   const [busy, setBusy] = useState<'test' | 'save' | 'cert' | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [result, setResult] = useState<ServerTestResult | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Note | null>(null);
   const [cert, setCert] = useState<{ info: ElectrumCertInfo; host: string; port: number; changed: boolean } | null>(null);
   const [confirmDefault, setConfirmDefault] = useState(false);
 
@@ -431,7 +448,7 @@ function BitcoinCard() {
   // URL or user changed: Rust does not keep the stored password (merge rule) → must be re-entered.
   const passwordLost = saved.kind === 'core' && saved.auth.kind === 'userpass' && d.kind === 'core' && d.authKind === 'userpass' && d.password === '' && (saved.url !== d.coreUrl.trim() || saved.auth.user !== d.user.trim());
   const needsPassword = d.kind === 'core' && d.authKind === 'userpass' && d.password === '' && (!d.hasPassword || passwordLost);
-  const hint = d.kind === 'default' ? null : (checkBtcServer(server, tor) ?? (needsPassword ? 'mot de passe RPC requis' : null));
+  const hint = d.kind === 'default' ? null : (checkBtcServer(server, tor) ?? (needsPassword ? t('servers.btc.passwordRequired') : null));
   const onionHost = d.kind === 'electrum' && isOnion(d.host.trim());
 
   const reset = () => {
@@ -497,7 +514,7 @@ function BitcoinCard() {
       await saveServers((s) => {
         s.bitcoin[netKey] = server;
       });
-      setNotice(d.kind === 'cbf' ? 'Mode filtres compacts enregistré : première synchronisation lancée.' : 'Serveur Bitcoin enregistré. Kyro n’utilise plus que lui pour Bitcoin.');
+      setNotice({ text: d.kind === 'cbf' ? t('servers.btc.savedCbf') : t('servers.btc.saved') });
       if (d.kind === 'core') set({ password: '' });
       if (d.kind === 'cbf') void cbfStore.sync();
     } catch (e) {
@@ -515,7 +532,7 @@ function BitcoinCard() {
         delete s.bitcoin[netKey];
       });
       setConfirmDefault(false);
-      setNotice('Serveur par défaut rétabli : mempool.space voit maintenant tes adresses Bitcoin et tes transactions.');
+      setNotice({ text: t('servers.btc.restored'), warn: true });
     } catch (e) {
       setFailure(toFailure(e));
     } finally {
@@ -526,35 +543,35 @@ function BitcoinCard() {
   return (
     <Card
       title={network === 'testnet' ? 'Bitcoin testnet4' : 'Bitcoin'}
-      badge={saved.kind === 'default' ? <Badge>Par défaut</Badge> : <Badge tone="ice">Serveur perso · {BTC_KINDS.find((k) => k.value === saved.kind)?.label}</Badge>}
+      badge={saved.kind === 'default' ? <Badge>{t('servers.default')}</Badge> : <Badge tone="ice">{t('servers.customKind', { kind: kinds.find((k) => k.value === saved.kind)?.label ?? '' })}</Badge>}
     >
       <Segmented
-        label="Type de serveur Bitcoin"
+        label={t('servers.btc.kindLabel')}
         value={d.kind}
         onChange={(kind) => {
           reset();
           set({ kind });
         }}
-        options={BTC_KINDS.map((k) => (k.value === 'cbf' && cbfOff && saved.kind !== 'cbf' ? { ...k, disabled: true } : k))}
+        options={kinds.map((k) => (k.value === 'cbf' && cbfOff && saved.kind !== 'cbf' ? { ...k, disabled: true } : k))}
         className="max-w-full flex-wrap gap-y-[3px] self-start"
       />
       {cbfOff && (
         <span className="flex items-center gap-1.5 text-[12px] text-faint">
-          <IconInfo size={13} /> Filtres compacts (BIP157/158) : disponible après revue de sécurité (à partir du 11/11/2026).
+          <IconInfo size={13} /> {t('servers.btc.cbfLater')}
         </span>
       )}
       <Sees>{btcSees(d, tor)}</Sees>
 
       {d.kind === 'esplora' && (
-        <Field label="URL de l’API Esplora" hint="https://, ou http:// pour une adresse .onion (Tor). Jamais d’identifiants dans l’URL.">
-          <Input value={d.esploraUrl} onChange={(e) => set({ esploraUrl: e.target.value })} placeholder={network === 'testnet' ? 'https://mon-noeud.example/testnet4/api' : 'https://mon-noeud.example/api'} className="font-mono text-[13px]" />
+        <Field label={t('servers.btc.esploraUrl')} hint={t('servers.urlHint')}>
+          <Input value={d.esploraUrl} onChange={(e) => set({ esploraUrl: e.target.value })} placeholder={network === 'testnet' ? t('servers.btc.esploraPlaceholderTestnet') : t('servers.btc.esploraPlaceholder')} className="font-mono text-[13px]" />
         </Field>
       )}
 
       {d.kind === 'electrum' && (
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-2.5">
-            <Field label="Hôte">
+            <Field label={t('servers.btc.host')}>
               <Input
                 value={d.host}
                 onChange={(e) => {
@@ -562,43 +579,41 @@ function BitcoinCard() {
                   // TLS off is only allowed for a .onion over Tor: switch it back on otherwise.
                   set({ host, ...(!(isOnion(host.trim()) && tor) ? { tls: true } : {}) });
                 }}
-                placeholder="electrum.mon-noeud.example"
+                placeholder={t('servers.btc.hostPlaceholder')}
                 className="font-mono text-[13px]"
               />
             </Field>
-            <Field label="Port">
+            <Field label={t('servers.btc.port')}>
               <Input value={d.port} inputMode="numeric" onChange={(e) => set({ port: e.target.value.replace(/\D/g, '').slice(0, 5) })} placeholder="50002" className="font-mono text-[13px]" />
             </Field>
           </div>
           <div className="flex items-center justify-between gap-4 rounded-box border border-line bg-raised px-4 py-3">
             <span className="flex flex-col gap-0.5">
-              <span className="text-[13px] font-semibold">TLS (chiffrement)</span>
-              <span className="text-[12px] text-mute">{onionHost && tor ? 'Sans TLS possible : l’adresse .onion authentifie et chiffre déjà la connexion.' : 'Obligatoire sauf pour une adresse .onion via Tor.'}</span>
+              <span className="text-[13px] font-semibold">{t('servers.btc.tls')}</span>
+              <span className="text-[12px] text-mute">{onionHost && tor ? t('servers.btc.tlsOnion') : t('servers.btc.tlsRequired')}</span>
             </span>
             <Switch label="TLS" checked={d.tls} disabled={!(onionHost && tor)} onCheckedChange={(tls) => set({ tls })} />
           </div>
           {d.tls && (
             <div className="flex flex-col gap-2">
               <Segmented
-                label="Validation du certificat"
+                label={t('servers.btc.certValidation')}
                 value={d.tlsMode}
                 onChange={(tlsMode) => set({ tlsMode })}
                 options={[
-                  { value: 'webpki', label: 'Validation normale' },
-                  { value: 'pinned', label: 'Certificat épinglé' },
+                  { value: 'webpki', label: t('servers.btc.webpki') },
+                  { value: 'pinned', label: t('servers.btc.pinned') },
                 ]}
                 className="self-start"
               />
               <span className="text-[12px] leading-[1.45] text-faint">
-                {d.tlsMode === 'webpki'
-                  ? 'Certificat vérifié par les autorités de certification, comme un site web.'
-                  : 'Pour un serveur auto-signé : Kyro n’accepte que ce certificat précis. « Tester » récupère l’empreinte et te demande de la confirmer.'}
+                {d.tlsMode === 'webpki' ? t('servers.btc.webpkiHint') : t('servers.btc.pinnedHint')}
               </span>
               {d.tlsMode === 'pinned' &&
                 (normalizeFingerprint(d.cert) ? (
                   <Fingerprint hex={d.cert} compact />
                 ) : (
-                  <span className="text-[12px] text-warn">Aucune empreinte épinglée : clique sur « Tester la connexion ».</span>
+                  <span className="text-[12px] text-warn">{t('servers.btc.noPin')}</span>
                 ))}
             </div>
           )}
@@ -618,20 +633,20 @@ function BitcoinCard() {
       )}
       {failure && <FailureNotice failure={failure} />}
       {result && !failure && <TestOk result={result} />}
-      {notice && !failure && <Notice tone={notice.startsWith('Serveur par défaut') ? 'warn' : 'success'}>{notice}</Notice>}
+      {notice && !failure && <Notice tone={notice.warn ? 'warn' : 'success'}>{notice.text}</Notice>}
 
       <div className="flex flex-wrap gap-2">
         {d.kind !== 'default' && (
           <Button onClick={() => void test()} disabled={busy !== null}>
-            {(busy === 'test' || busy === 'cert') && <Spinner />} Tester la connexion
+            {(busy === 'test' || busy === 'cert') && <Spinner />} {t('servers.test')}
           </Button>
         )}
         <Button variant="primary" onClick={() => void save()} disabled={busy !== null || !dirty}>
-          {busy === 'save' && <Spinner />} {d.kind === 'default' && saved.kind !== 'default' ? 'Revenir au serveur par défaut' : 'Enregistrer'}
+          {busy === 'save' && <Spinner />} {d.kind === 'default' && saved.kind !== 'default' ? t('servers.back.confirm') : t('servers.save')}
         </Button>
         {dirty && (
           <Button variant="ghost" onClick={() => (reset(), setD(draftOf(saved, network)))} disabled={busy !== null}>
-            Annuler les modifications
+            {t('servers.discard')}
           </Button>
         )}
       </div>
@@ -642,7 +657,7 @@ function BitcoinCard() {
       <BackToDefaultDialog
         open={confirmDefault}
         host="mempool.space"
-        sees="tes adresses Bitcoin et tes transactions (via son service .onion avec Tor, sinon avec ton adresse IP)"
+        sees={t('servers.btc.backSees')}
         busy={busy === 'save'}
         failure={confirmDefault ? failure : null}
         onConfirm={() => void backToDefault()}
@@ -655,8 +670,9 @@ function BitcoinCard() {
 
 function Fingerprint({ hex, compact }: { hex: string; compact?: boolean }) {
   const groups = fingerprintGroups(hex);
+  const { t } = useT();
   return (
-    <div aria-label={`Empreinte SHA-256 ${groups.join(' ')}`} className={cn('grid grid-cols-8 gap-x-2 gap-y-1 rounded-ctl border border-ice-line bg-ice/[.06] font-mono text-ice-text', compact ? 'px-3 py-2 text-[11px]' : 'px-4 py-3 text-[13px]')}>
+    <div aria-label={t('servers.cert.fingerprintLabel', { groups: groups.join(' ') })} className={cn('grid grid-cols-8 gap-x-2 gap-y-1 rounded-ctl border border-ice-line bg-ice/[.06] font-mono text-ice-text', compact ? 'px-3 py-2 text-[11px]' : 'px-4 py-3 text-[13px]')}>
       {groups.map((g, i) => (
         <span key={i}>{g}</span>
       ))}
@@ -665,35 +681,36 @@ function Fingerprint({ hex, compact }: { hex: string; compact?: boolean }) {
 }
 
 function CertDialog({ cert, onCancel, onChoose }: { cert: { info: ElectrumCertInfo; host: string; port: number; changed: boolean } | null; onCancel: () => void; onChoose: (mode: 'pinned' | 'webpki') => void }) {
+  const { t } = useT();
   return (
-    <Dialog open={cert !== null} onOpenChange={(v) => (v ? undefined : onCancel())} title="Faire confiance à ce certificat ?" className="w-[600px]">
+    <Dialog open={cert !== null} onOpenChange={(v) => (v ? undefined : onCancel())} title={t('servers.cert.title')} className="w-[600px]">
       {cert && (
         <>
           <p className="m-0 text-[13px] leading-[1.55] text-text2">
-            Certificat présenté par <span className="font-mono text-text">{cert.host}:{cert.port}</span>. Rien n’a été envoyé au serveur : la connexion a été coupée dès réception du certificat.
+            {rt('servers.cert.presented', {}, { host: <span className="font-mono text-text">{`${cert.host}:${cert.port}`}</span> })}
           </p>
           {cert.changed && (
             <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
-              <strong className="font-semibold">L’empreinte a changé</strong> depuis celle que tu avais épinglée. Si tu n’as pas renouvelé le certificat de ton serveur, n’accepte pas : quelqu’un pourrait se faire passer pour lui.
+              {rt('servers.cert.changed', boldPlain)}
             </Notice>
           )}
           <div className="flex flex-col gap-1.5">
             <span className="flex items-center justify-between text-[12px] font-medium text-mute">
-              Empreinte SHA-256
-              {cert.info.webpkiValid ? <Badge tone="up">Reconnu par les autorités</Badge> : <Badge tone="warn">Auto-signé ou non reconnu</Badge>}
+              {t('servers.cert.fingerprint')}
+              {cert.info.webpkiValid ? <Badge tone="up">{t('servers.cert.recognized')}</Badge> : <Badge tone="warn">{t('servers.cert.selfSigned')}</Badge>}
             </span>
             <Fingerprint hex={cert.info.sha256} />
           </div>
           <p className="m-0 text-[12px] leading-[1.55] text-mute">
-            Compare-la avec celle de ton serveur (par exemple <span className="font-mono">openssl x509 -noout -fingerprint -sha256 -in cert.pem</span>). En l’épinglant, Kyro refusera tout autre certificat pour ce serveur.
+            {rt('servers.cert.compare', {}, { cmd: <span className="font-mono">openssl x509 -noout -fingerprint -sha256 -in cert.pem</span> })}
           </p>
           <div className="flex flex-wrap justify-end gap-2">
-            <Button onClick={onCancel}>Annuler</Button>
-            <Button variant="outline" disabled={!cert.info.webpkiValid} title={cert.info.webpkiValid ? undefined : 'Ce certificat n’est pas reconnu par les autorités : seule l’épinglage est possible.'} onClick={() => onChoose('webpki')}>
-              Utiliser la validation normale
+            <Button onClick={onCancel}>{t('common.cancel')}</Button>
+            <Button variant="outline" disabled={!cert.info.webpkiValid} title={cert.info.webpkiValid ? undefined : t('servers.cert.onlyPin')} onClick={() => onChoose('webpki')}>
+              {t('servers.cert.useWebpki')}
             </Button>
             <Button variant="primary" onClick={() => onChoose('pinned')}>
-              Faire confiance à ce certificat
+              {t('servers.cert.trust')}
             </Button>
           </div>
         </>
@@ -704,67 +721,65 @@ function CertDialog({ cert, onCancel, onChoose }: { cert: { info: ElectrumCertIn
 
 function CbfForm({ d, set, network, tor }: { d: BtcDraft; set: (p: Partial<BtcDraft>) => void; network: 'mainnet' | 'testnet'; tor: boolean }) {
   const estimate = d.birthMode === 'date' ? estimateBirthHeight(d.birthDate, network) : null;
+  const { t } = useT();
   return (
     <div className="flex flex-col gap-3">
       <Field
-        label="Pairs supplémentaires (facultatif)"
-        hint={`Un par ligne : « ip:port » ou « adresse.onion:port » (v3), jamais un nom d’hôte (aucune requête DNS). Kyro a déjà sa liste de pairs servant les filtres${tor ? ', .onion d’abord' : ''}.`}
+        label={t('servers.cbf.peers')}
+        hint={tor ? t('servers.cbf.peersHintTor') : t('servers.cbf.peersHint')}
       >
         <textarea
           value={d.cbfPeers}
           onChange={(e) => set({ cbfPeers: e.target.value })}
           rows={3}
           spellCheck={false}
-          placeholder={network === 'testnet' ? 'exemple.onion:48333\n203.0.113.5:48333' : 'exemple.onion:8333\n203.0.113.5:8333'}
+          placeholder={network === 'testnet' ? t('servers.cbf.peersPlaceholderTestnet') : t('servers.cbf.peersPlaceholder')}
           className="w-full resize-y rounded-ctl border border-line-2 bg-bg px-3.5 py-2.5 font-mono text-[13px] text-text placeholder:text-faint focus:border-ice-line"
         />
       </Field>
       <div className="flex flex-col gap-2">
-        <span className="eyebrow">Point de départ (date de naissance du coffre)</span>
+        <span className="eyebrow">{t('servers.cbf.birth')}</span>
         <Segmented
-          label="Point de départ des filtres"
+          label={t('servers.cbf.birthLabel')}
           value={d.birthMode}
           onChange={(birthMode) => set({ birthMode })}
           options={[
-            { value: 'genesis', label: 'Depuis le début' },
-            { value: 'date', label: 'Depuis une date' },
-            { value: 'height', label: 'Depuis un bloc' },
+            { value: 'genesis', label: t('servers.cbf.fromGenesis') },
+            { value: 'date', label: t('servers.cbf.fromDate') },
+            { value: 'height', label: t('servers.cbf.fromHeight') },
           ]}
           className="self-start"
         />
         {d.birthMode === 'date' && (
           <div className="flex items-center gap-3">
             <Input type="date" value={d.birthDate} onChange={(e) => set({ birthDate: e.target.value })} max={new Date().toISOString().slice(0, 10)} className="w-[200px]" />
-            {estimate !== null && <span className="text-[12px] text-mute">≈ bloc {fmtNumber(estimate, 0)} (marge d’une semaine incluse)</span>}
+            {estimate !== null && <span className="text-[12px] text-mute">{t('servers.cbf.estimate', { height: fmtNumber(estimate, 0) })}</span>}
           </div>
         )}
-        {d.birthMode === 'height' && <Input value={d.birthHeight} inputMode="numeric" onChange={(e) => set({ birthHeight: e.target.value.replace(/\D/g, '') })} placeholder="ex. 90000" className="w-[200px] font-mono text-[13px]" />}
+        {d.birthMode === 'height' && <Input value={d.birthHeight} inputMode="numeric" onChange={(e) => set({ birthHeight: e.target.value.replace(/\D/g, '') })} placeholder={t('servers.cbf.heightPlaceholder')} className="w-[200px] font-mono text-[13px]" />}
         <span className="text-[12px] leading-[1.45] text-faint">
-          Accélère la première synchronisation : les filtres des blocs plus anciens ne sont pas lus. Choisis une date antérieure à ta première transaction, sinon elle n’apparaîtra pas.
+          {t('servers.cbf.birthHint')}
         </span>
       </div>
       <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-        <span className="block">
-          <strong className="font-semibold">Pas de mempool :</strong> un paiement reçu n’apparaît qu’une fois inclus dans un bloc ; tes propres envois s’affichent « en attente ».
-        </span>
-        <span className="block">
-          <strong className="font-semibold">Frais :</strong> moyenne des frais payés dans les derniers blocs, pas une estimation du mempool. Le tarif personnalisé reste disponible.
-        </span>
+        <span className="block">{rt('servers.cbf.noMempool', boldPlain)}</span>
+        <span className="block">{rt('servers.cbf.fees', boldPlain)}</span>
       </Notice>
     </div>
   );
 }
 
-const CBF_STEPS: Array<{ key: 'headers' | 'filters' | 'blocks'; label: string }> = [
-  { key: 'headers', label: 'En-têtes' },
-  { key: 'filters', label: 'Filtres' },
-  { key: 'blocks', label: 'Blocs' },
+const CBF_STEPS: Array<{ key: 'headers' | 'filters' | 'blocks'; label: Key }> = [
+  { key: 'headers', label: 'servers.cbf.step.headers' },
+  { key: 'filters', label: 'servers.cbf.step.filters' },
+  { key: 'blocks', label: 'servers.cbf.step.blocks' },
 ];
 
 /** Compact-filter sync: phases, progress, peers. Driven by the `cbf-status` event. */
 function CbfPanel() {
   const { status, error } = useCbf();
   const [busy, setBusy] = useState(false);
+  const { t, tp } = useT();
   const st = status;
   const running = st !== null && (st.state === 'connecting' || st.state === 'headers' || st.state === 'filters');
   const phaseIndex = !st ? -1 : st.state === 'headers' || st.state === 'connecting' ? 0 : st.state === 'filters' ? 1 : st.state === 'synced' ? 3 : -1;
@@ -778,14 +793,14 @@ function CbfPanel() {
     <div className="flex flex-col gap-3 rounded-box border border-line bg-raised px-4 py-3.5">
       <div className="flex items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
-          <span className="text-[13px] font-semibold">Synchronisation par filtres compacts</span>
+          <span className="text-[13px] font-semibold">{t('servers.cbf.syncTitle')}</span>
           <span className="text-[12px] text-mute">
-            {st ? `${cbfPhaseLabel(st)} · ${st.peers.length} pair${st.peers.length > 1 ? 's' : ''}${st.tor ? ' via Tor' : ' en direct'}` : 'État inconnu'}
+            {st ? t(st.tor ? 'servers.cbf.statusTor' : 'servers.cbf.statusDirect', { phase: cbfPhaseLabel(st), peers: tp('servers.cbf.peerCount', st.peers.length) }) : t('servers.cbf.unknown')}
           </span>
         </span>
-        {st && <Badge tone={st.state === 'synced' ? 'up' : st.state === 'error' ? 'down' : running ? 'ice' : 'mute'}>{st.state === 'synced' ? 'À jour' : st.state === 'error' ? 'Erreur' : running ? 'En cours' : 'En attente'}</Badge>}
+        {st && <Badge tone={st.state === 'synced' ? 'up' : st.state === 'error' ? 'down' : running ? 'ice' : 'mute'}>{st.state === 'synced' ? t('servers.cbf.upToDate') : st.state === 'error' ? t('servers.cbf.error') : running ? t('servers.cbf.running') : t('servers.cbf.waiting')}</Badge>}
       </div>
-      <ol className="m-0 grid list-none grid-cols-3 gap-2 p-0" aria-label="Étapes de la synchronisation">
+      <ol className="m-0 grid list-none grid-cols-3 gap-2 p-0" aria-label={t('servers.cbf.stepsLabel')}>
         {CBF_STEPS.map((step, i) => {
           // Blocks matching our scripts are downloaded during the filter scan.
           const done = phaseIndex > i || (step.key === 'blocks' && phaseIndex >= 3);
@@ -793,18 +808,18 @@ function CbfPanel() {
           const detail =
             step.key === 'headers'
               ? st?.tipHeight != null
-                ? `bloc ${fmtNumber(st.tipHeight, 0)}`
+                ? t('servers.cbf.block', { height: fmtNumber(st.tipHeight, 0) })
                 : '—'
               : step.key === 'filters'
                 ? st?.scannedHeight != null
-                  ? `jusqu’au bloc ${fmtNumber(st.scannedHeight, 0)}`
-                  : `depuis le bloc ${fmtNumber(st?.birthHeight ?? 0, 0)}`
-                : `${st?.matchedBlocks ?? 0} téléchargé${(st?.matchedBlocks ?? 0) > 1 ? 's' : ''}`;
+                  ? t('servers.cbf.upToBlock', { height: fmtNumber(st.scannedHeight, 0) })
+                  : t('servers.cbf.fromBlock', { height: fmtNumber(st?.birthHeight ?? 0, 0) })
+                : tp('servers.cbf.downloaded', st?.matchedBlocks ?? 0);
           return (
             <li key={step.key} aria-current={active ? 'step' : undefined} className={cn('flex flex-col gap-0.5 rounded-ctl border px-3 py-2', done ? 'border-up/30 bg-up/[.05]' : active ? 'border-ice-line bg-ice/[.06]' : 'border-line bg-card')}>
               <span className="flex items-center gap-1.5 text-[12px] font-semibold">
                 {done ? <IconCheck size={12} className="text-up" /> : active ? <Spinner className="size-3 border-[1.5px] text-ice" /> : <span className="size-1.5 rounded-full bg-faint" />}
-                {step.label}
+                {t(step.label as 'servers.cbf.step.headers')}
               </span>
               <span className="font-mono text-[11px] text-mute">{detail}</span>
             </li>
@@ -817,13 +832,13 @@ function CbfPanel() {
             <div className="h-full rounded-full bg-ice transition-[width]" style={{ width: `${pct}%` }} />
           </div>
           <span className="text-[12px] text-mute">
-            {st?.state === 'synced' ? `À jour${st.lastSyncUnix ? ` · dernière synchronisation à ${new Date(st.lastSyncUnix * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : ''}` : `Filtres : ${pct}\u202f%`} · {st?.watchedScripts ?? 0} scripts surveillés
+            {st?.state === 'synced' ? (st.lastSyncUnix ? t('servers.cbf.lastSync', { time: fmtTime(st.lastSyncUnix * 1000) }) : t('servers.cbf.upToDate')) : t('servers.cbf.filtersPct', { pct: fmtIntl(pct / 100, { style: 'percent' }) })} · {t('servers.cbf.watched', { count: st?.watchedScripts ?? 0 })}
           </span>
         </div>
       )}
       {st && st.peers.length > 0 && (
         <details className="text-[12px] text-mute">
-          <summary className="cursor-pointer select-none">Pairs connectés ({st.peers.length})</summary>
+          <summary className="cursor-pointer select-none">{t('servers.cbf.peersConnected', { count: st.peers.length })}</summary>
           <ul className="m-0 mt-1.5 flex list-none flex-col gap-0.5 p-0 font-mono text-[11px]">
             {st.peers.map((p) => (
               <li key={p} className="truncate">
@@ -837,7 +852,7 @@ function CbfPanel() {
       {error && <Notice tone="error">{error}</Notice>}
       <div>
         <Button variant="outline" size="sm" onClick={() => void sync()} disabled={busy || running}>
-          {(busy || running) && <Spinner />} {running ? 'Synchronisation en cours' : 'Synchroniser maintenant'}
+          {(busy || running) && <Spinner />} {running ? t('servers.cbf.syncing') : t('servers.cbf.syncNow')}
         </Button>
       </div>
     </div>
@@ -846,28 +861,29 @@ function CbfPanel() {
 
 function CoreForm({ d, set, savedIsCore, passwordLost, tor }: { d: BtcDraft; set: (p: Partial<BtcDraft>) => void; savedIsCore: boolean; passwordLost: boolean; tor: boolean }) {
   const local = coreIsLocal(d.coreUrl);
+  const { t } = useT();
   return (
     <div className="flex flex-col gap-3">
-      <Field label="URL RPC du nœud" hint="http:// seulement pour une adresse locale ou du réseau local ; sinon https:// ou .onion (Tor).">
+      <Field label={t('servers.core.url')} hint={t('servers.core.urlHint')}>
         <Input value={d.coreUrl} onChange={(e) => set({ coreUrl: e.target.value })} placeholder="http://127.0.0.1:48332" className="font-mono text-[13px]" />
       </Field>
       {d.coreUrl.trim() &&
         (local ? (
           <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-            <strong className="font-semibold text-text">Nœud local : connexion directe, sans Tor.</strong> Tor ne peut pas joindre ton réseau local, et ce n’est pas utile : la requête ne quitte pas ta machine ou ton réseau.
+            {rt('servers.core.local', bold)}
           </Notice>
         ) : (
-          <span className="text-[12px] text-mute">Nœud distant : {tor ? 'joint via Tor.' : 'joint directement (Tor désactivé) : il voit ton adresse IP.'}</span>
+          <span className="text-[12px] text-mute">{tor ? t('servers.core.remoteTor') : t('servers.core.remoteDirect')}</span>
         ))}
       <div className="flex flex-col gap-2">
-        <span className="eyebrow">Authentification</span>
+        <span className="eyebrow">{t('servers.core.auth')}</span>
         <Segmented
-          label="Authentification Bitcoin Core"
+          label={t('servers.core.authLabel')}
           value={d.authKind}
           onChange={(authKind) => set({ authKind })}
           options={[
-            { value: 'cookie', label: 'Fichier .cookie (recommandé)' },
-            { value: 'userpass', label: 'Utilisateur et mot de passe' },
+            { value: 'cookie', label: t('servers.core.cookie') },
+            { value: 'userpass', label: t('servers.core.userpass') },
           ]}
           className="self-start"
         />
@@ -877,16 +893,16 @@ function CoreForm({ d, set, savedIsCore, passwordLost, tor }: { d: BtcDraft; set
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2.5">
-            <Field label="Utilisateur (rpcuser)">
+            <Field label={t('servers.core.user')}>
               <Input value={d.user} onChange={(e) => set({ user: e.target.value })} placeholder="kyro" className="font-mono text-[13px]" />
             </Field>
-            <Field label="Mot de passe (rpcpassword)" hint={d.hasPassword && !passwordLost ? 'Enregistré. Laisse vide pour le garder.' : undefined}>
-              <Input type="password" autoComplete="off" value={d.password} onChange={(e) => set({ password: e.target.value })} placeholder={d.hasPassword && !passwordLost ? '•••••••• (inchangé)' : ''} className="font-mono text-[13px]" />
+            <Field label={t('servers.core.password')} hint={d.hasPassword && !passwordLost ? t('servers.core.passwordKept') : undefined}>
+              <Input type="password" autoComplete="off" value={d.password} onChange={(e) => set({ password: e.target.value })} placeholder={d.hasPassword && !passwordLost ? t('servers.core.passwordUnchanged') : ''} className="font-mono text-[13px]" />
             </Field>
           </div>
-          {passwordLost && savedIsCore && <span className="text-[12px] text-warn">URL ou utilisateur modifié : ressaisis le mot de passe (l’ancien n’est réutilisé que pour le même nœud et le même utilisateur).</span>}
+          {passwordLost && savedIsCore && <span className="text-[12px] text-warn">{t('servers.core.passwordLost')}</span>}
           <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-            Le mot de passe est stocké <strong className="font-semibold">en clair</strong> dans le dossier de l’app (jamais renvoyé à l’interface). Préfère le fichier .cookie.
+            {rt('servers.core.plaintext', boldPlain)}
           </Notice>
         </>
       )}
@@ -901,6 +917,7 @@ function CoreForm({ d, set, savedIsCore, passwordLost, tor }: { d: BtcDraft; set
 function CookiePicker({ d, set, local }: { d: BtcDraft; set: (p: Partial<BtcDraft>) => void; local: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useT();
   const pick = async () => {
     setBusy(true);
     setError(null);
@@ -914,17 +931,17 @@ function CookiePicker({ d, set, local }: { d: BtcDraft; set: (p: Partial<BtcDraf
     }
   };
   return (
-    <Field label="Fichier .cookie" hint="Recommandé : Bitcoin Core le régénère à chaque démarrage et Kyro le relit à chaque requête, aucun mot de passe n’est stocké. Il se trouve dans le dossier de données du nœud (sous macOS et Linux, affiche les fichiers cachés pour le voir).">
+    <Field label={t('servers.core.cookieFile')} hint={t('servers.core.cookieHint')}>
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2.5">
           <Button variant="outline" size="md" disabled={busy || !local} onClick={() => void pick()}>
-            {busy && <Spinner />} Choisir le fichier .cookie
+            {busy && <Spinner />} {t('servers.core.pickCookie')}
           </Button>
           <span className={cn('min-w-0 truncate font-mono text-[12.5px]', d.cookiePath ? 'text-text2' : 'text-faint')} title={d.cookiePath || undefined}>
-            {d.cookiePath || 'aucun fichier choisi'}
+            {d.cookiePath || t('servers.core.noCookie')}
           </span>
         </div>
-        {!local && d.coreUrl.trim() && <span className="text-[12px] text-warn">Le fichier .cookie n’est envoyé qu’à un nœud local ou de ton réseau local. Pour un nœud distant, utilise l’utilisateur et le mot de passe RPC.</span>}
+        {!local && d.coreUrl.trim() && <span className="text-[12px] text-warn">{t('servers.core.cookieLocalOnly')}</span>}
         {error && <Notice tone="error">{error}</Notice>}
       </div>
     </Field>
@@ -941,6 +958,7 @@ function CoreWallet() {
   const [date, setDate] = useState('');
   const [busy, setBusy] = useState(false);
   const wasImporting = useRef(false);
+  const { t } = useT();
 
   const refresh = async () => {
     try {
@@ -975,8 +993,8 @@ function CoreWallet() {
 
   const rescanFrom = useMemo(() => {
     if (mode === 'now') return 'now' as const;
-    const t = Date.parse(`${date}T00:00:00Z`);
-    return Number.isFinite(t) ? Math.floor(t / 1000) : null;
+    const ms = Date.parse(`${date}T00:00:00Z`);
+    return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
   }, [mode, date]);
 
   const setup = async () => {
@@ -1000,17 +1018,17 @@ function CoreWallet() {
     <div className="flex flex-col gap-3 rounded-box border border-line bg-raised px-4 py-3.5">
       <div className="flex items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
-          <span className="text-[13px] font-semibold">Portefeuille de surveillance</span>
+          <span className="text-[13px] font-semibold">{t('servers.watch.title')}</span>
           <span className="font-mono text-[12px] text-mute">{status?.wallet ?? 'kyro-watch-…'}</span>
         </span>
         {status && (
           <Badge tone={status.state === 'ready' ? 'up' : status.state === 'error' ? 'down' : status.state === 'importing' ? 'ice' : 'warn'}>
-            {status.state === 'ready' ? 'Prêt' : status.state === 'importing' ? 'Import en cours' : status.state === 'error' ? 'Erreur' : status.state === 'not-configured' ? 'Nœud non enregistré' : 'À configurer'}
+            {status.state === 'ready' ? t('servers.watch.ready') : status.state === 'importing' ? t('servers.watch.importing') : status.state === 'error' ? t('servers.watch.error') : status.state === 'not-configured' ? t('servers.watch.notConfigured') : t('servers.watch.toSetup')}
           </Badge>
         )}
       </div>
       <p className="m-0 text-[12px] leading-[1.5] text-mute">
-        Kyro crée sur ton nœud un portefeuille <strong className="font-semibold text-text2">sans clé privée</strong> et y importe tes 4 descripteurs publics (SegWit et Taproot, réception et monnaie). Ton nœud ne peut rien signer.
+        {rt('servers.watch.explain', { b: (c) => <strong className="font-semibold text-text2">{c}</strong> })}
       </p>
       {importing && (
         <div role="status" className="flex flex-col gap-1.5">
@@ -1018,7 +1036,12 @@ function CoreWallet() {
             <div className={cn('h-full rounded-full bg-ice transition-[width]', pct === null && 'animate-pulse')} style={{ width: `${pct ?? 15}%` }} />
           </div>
           <span className="text-[12px] text-mute">
-            {pct === null ? 'Import des descripteurs…' : `Rescan de la blockchain : ${pct} %${status?.scanDurationSecs !== undefined ? ` · ${status.scanDurationSecs} s` : ''}.`} Tu peux quitter cet écran, le nœud continue.
+            {pct === null
+              ? t('servers.watch.importDescriptors')
+              : status?.scanDurationSecs !== undefined
+                ? t('servers.watch.rescanSecs', { pct: fmtIntl(pct / 100, { style: 'percent' }), secs: status.scanDurationSecs })
+                : t('servers.watch.rescan', { pct: fmtIntl(pct / 100, { style: 'percent' }) })}{' '}
+            {t('servers.watch.canLeave')}
           </span>
         </div>
       )}
@@ -1027,18 +1050,18 @@ function CoreWallet() {
       {status?.state !== 'importing' && (
         <div>
           <Button variant={status?.state === 'ready' ? 'outline' : 'primary'} onClick={() => setOpen(true)}>
-            {status?.state === 'ready' ? 'Reconfigurer le portefeuille de surveillance' : 'Configurer le portefeuille de surveillance'}
+            {status?.state === 'ready' ? t('servers.watch.reconfigure') : t('servers.watch.configure')}
           </Button>
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen} title="Configurer le portefeuille de surveillance" className="w-[560px]">
-        <p className="m-0 text-[13px] leading-[1.55] text-text2">Pour retrouver tes transactions passées, ton nœud doit relire la blockchain (rescan) depuis leur date.</p>
-        <div role="radiogroup" aria-label="Point de départ du rescan" className="flex flex-col gap-2">
+      <Dialog open={open} onOpenChange={setOpen} title={t('servers.watch.configure')} className="w-[560px]">
+        <p className="m-0 text-[13px] leading-[1.55] text-text2">{t('servers.watch.dialogIntro')}</p>
+        <div role="radiogroup" aria-label={t('servers.watch.rescanFrom')} className="flex flex-col gap-2">
           {(
             [
-              ['now', 'Maintenant (recommandé)', 'Pour un coffre neuf : aucune transaction passée à chercher, prêt en quelques secondes.'],
-              ['date', 'Depuis une date', 'Retrouve les transactions depuis cette date. Le rescan peut prendre de longues minutes, voire des heures sur mainnet ; le nœud reste utilisable.'],
+              ['now', t('servers.watch.now'), t('servers.watch.nowDesc')],
+              ['date', t('servers.watch.fromDate'), t('servers.watch.fromDateDesc')],
             ] as const
           ).map(([value, label, desc]) => (
             <button
@@ -1055,17 +1078,17 @@ function CoreWallet() {
           ))}
         </div>
         {mode === 'date' && (
-          <Field label="Date de ta première transaction (ou avant)">
+          <Field label={t('servers.watch.firstTxDate')}>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} max={new Date().toISOString().slice(0, 10)} className="w-[200px]" />
           </Field>
         )}
         {failure && <FailureNotice failure={failure} />}
         <div className="flex justify-end gap-2">
           <Button onClick={() => setOpen(false)} disabled={busy}>
-            Annuler
+            {t('common.cancel')}
           </Button>
           <Button variant="primary" onClick={() => void setup()} disabled={busy || rescanFrom === null}>
-            {busy && <Spinner />} Lancer la configuration
+            {busy && <Spinner />} {t('servers.watch.start')}
           </Button>
         </div>
       </Dialog>
@@ -1096,12 +1119,13 @@ function RpcRow({
   last?: boolean;
 }) {
   const { settings } = useApp();
+  const { t } = useT();
   const [url, setUrl] = useState(saved ?? '');
   useEffect(() => setUrl(saved ?? ''), [saved]);
   const [busy, setBusy] = useState<'test' | 'save' | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [result, setResult] = useState<ServerTestResult | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Note | null>(null);
   const [confirmDefault, setConfirmDefault] = useState(false);
   const clean = url.trim();
   const dirty = clean !== (saved ?? '');
@@ -1130,7 +1154,7 @@ function RpcRow({
     try {
       await onSave(value);
       setConfirmDefault(false);
-      setNotice(value ? 'Enregistré : Kyro n’utilise plus que ce serveur pour cette chaîne.' : `Serveur par défaut rétabli : ${defaultHost} voit maintenant ${defaultSees}.`);
+      setNotice(value ? { text: t('servers.rpc.saved') } : { text: t('servers.rpc.restored', { host: defaultHost, sees: defaultSees }), warn: true });
     } catch (e) {
       setFailure(toFailure(e));
     } finally {
@@ -1145,9 +1169,9 @@ function RpcRow({
           <span className="text-[14px] font-semibold">{title}</span>
           <span className="text-[12px] text-mute">{subtitle}</span>
         </span>
-        {saved ? <Badge tone="ice">Serveur perso</Badge> : <Badge>Par défaut</Badge>}
+        {saved ? <Badge tone="ice">{t('servers.custom')}</Badge> : <Badge>{t('servers.default')}</Badge>}
       </div>
-      <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={`${defaultUrl} (par défaut)`} aria-label={`RPC ${title}`} className="font-mono text-[13px]" />
+      <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t('servers.defaultSuffix', { url: defaultUrl })} aria-label={`RPC ${title}`} className="font-mono text-[13px]" />
       {hint && (
         <span className="flex items-center gap-1.5 text-[12px] text-warn">
           <IconWarn size={13} /> {hint}
@@ -1155,17 +1179,17 @@ function RpcRow({
       )}
       {failure && <FailureNotice failure={failure} />}
       {result && !failure && <TestOk result={result} />}
-      {notice && !failure && <Notice tone={notice.startsWith('Serveur par défaut') ? 'warn' : 'success'}>{notice}</Notice>}
+      {notice && !failure && <Notice tone={notice.warn ? 'warn' : 'success'}>{notice.text}</Notice>}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={() => void test()} disabled={!clean || busy !== null}>
-          {busy === 'test' && <Spinner />} Tester la connexion
+          {busy === 'test' && <Spinner />} {t('servers.test')}
         </Button>
         <Button size="sm" variant="primary" onClick={() => (clean ? void save(clean) : setConfirmDefault(true))} disabled={!dirty || busy !== null}>
-          {busy === 'save' && <Spinner />} {clean || !saved ? 'Enregistrer' : 'Revenir au serveur par défaut'}
+          {busy === 'save' && <Spinner />} {clean || !saved ? t('servers.save') : t('servers.back.confirm')}
         </Button>
         {saved && !dirty && (
           <Button size="sm" variant="ghost" onClick={() => setConfirmDefault(true)} disabled={busy !== null}>
-            Revenir au serveur par défaut
+            {t('servers.back.confirm')}
           </Button>
         )}
       </div>
@@ -1201,7 +1225,8 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
   /** Dogecoin testnet only: no public server found, the user must set one. */
   const noDefault = doge && nk === 'testnet';
   /** Host(s) of the default, as the user sees them (Rust: `servers::utxo_default_*`). */
-  const defaultHosts = doge ? 'doge.electrum1.cipig.net (et doge.electrum2.cipig.net en secours)' : 'litecoinspace.org';
+  const { t } = useT();
+  const defaultHosts = doge ? t('servers.utxo.dogeHosts') : 'litecoinspace.org';
   const [kind, setKind] = useState<'default' | 'esplora'>(savedUrl ? 'esplora' : 'default');
   const [url, setUrl] = useState(savedUrl);
   useEffect(() => {
@@ -1212,7 +1237,7 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
   const [busy, setBusy] = useState<'test' | 'save' | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [result, setResult] = useState<ServerTestResult | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Note | null>(null);
   const [confirmDefault, setConfirmDefault] = useState(false);
   const clean = url.trim();
   const hint = kind === 'esplora' && clean ? checkServerUrl(clean, tor) : null;
@@ -1245,10 +1270,8 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
       setConfirmDefault(false);
       setNotice(
         toDefault
-          ? noDefault
-            ? 'Serveur retiré : Dogecoin testnet n’a plus de serveur, soldes et envois indisponibles jusqu’à ce que tu en configures un.'
-            : `Serveur par défaut rétabli : ${defaultHosts} voit maintenant tes adresses ${name} et tes transactions.`
-          : `Serveur ${name} enregistré. Kyro n’utilise plus que lui pour ${name}.`,
+          ? { text: noDefault ? t('servers.utxo.removedDoge') : t('servers.utxo.restored', { hosts: defaultHosts, name }), warn: true }
+          : { text: t('servers.utxo.saved', { name }) },
       );
     } catch (e) {
       setFailure(toFailure(e));
@@ -1260,37 +1283,37 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
   return (
     <Card
       title={network === 'testnet' ? `${name} ${doge ? 'testnet' : 'testnet4'}` : name}
-      badge={savedUrl ? <Badge tone="ice">Serveur perso · Esplora</Badge> : noDefault ? <Badge tone="warn">Aucun serveur</Badge> : <Badge>Par défaut</Badge>}
+      badge={savedUrl ? <Badge tone="ice">{t('servers.utxo.customEsplora')}</Badge> : noDefault ? <Badge tone="warn">{t('servers.utxo.noServer')}</Badge> : <Badge>{t('servers.default')}</Badge>}
     >
       <Segmented
-        label={`Serveur ${name}`}
+        label={t('servers.utxo.serverLabel', { name })}
         value={kind}
         onChange={(k) => {
           reset();
           setKind(k);
         }}
         options={[
-          { value: 'default', label: noDefault ? 'Aucun (pas de serveur public)' : 'Par défaut' },
-          { value: 'esplora', label: 'Esplora perso' },
+          { value: 'default', label: noDefault ? t('servers.utxo.noneOption') : t('servers.default') },
+          { value: 'esplora', label: t('servers.btc.kind.esplora') },
         ]}
         className="self-start"
       />
       {kind === 'default' && noDefault ? (
         <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-          <strong className="font-semibold">Aucun serveur public gratuit : configure ton serveur.</strong> Aucun serveur public gratuit n’a été trouvé pour Dogecoin testnet (le mainnet, lui, a un serveur par défaut). Tant que tu n’as pas indiqué ton serveur Esplora (electrs-dogecoin), Kyro n’affiche ni solde ni historique Dogecoin et ne peut pas envoyer.
+          {rt('servers.utxo.noPublic', boldPlain)}
         </Notice>
       ) : (
         <Sees>
           {kind === 'default'
             ? doge
-              ? `Les serveurs ElectrumX publics de Komodo (${defaultHosts}) voient tes adresses Dogecoin et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}. Ils ne peuvent pas te faire signer un faux montant : avant chaque signature, Kyro vérifie chaque pièce dans sa transaction d’origine.`
-              : `litecoinspace.org voit tes adresses Litecoin et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.`
-            : `Ton serveur Esplora voit tes adresses ${name} et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`}
+              ? t('servers.utxo.sees.doge', { hosts: defaultHosts, ip: ipPart(tor) })
+              : t('servers.utxo.sees.ltc', { ip: ipPart(tor) })
+            : t('servers.utxo.sees.esplora', { name, ip: ipPart(tor, true) })}
         </Sees>
       )}
       {kind === 'esplora' && (
-        <Field label={`URL de l’API Esplora ${name}`} hint={doge ? 'Par exemple un electrs-dogecoin (API Esplora). https://, ou http:// pour une adresse .onion (Tor).' : 'https://, ou http:// pour une adresse .onion (Tor). Jamais d’identifiants dans l’URL.'}>
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={doge ? 'https://mon-electrs-dogecoin.example/api' : 'https://mon-noeud-litecoin.example/api'} aria-label={`URL Esplora ${name}`} className="font-mono text-[13px]" />
+        <Field label={t('servers.utxo.esploraUrl', { name })} hint={doge ? t('servers.utxo.dogeHint') : t('servers.urlHint')}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={doge ? t('servers.utxo.dogePlaceholder') : t('servers.utxo.ltcPlaceholder')} aria-label={t('servers.utxo.urlAria', { name })} className="font-mono text-[13px]" />
         </Field>
       )}
       {hint && (
@@ -1300,22 +1323,22 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
       )}
       {failure && <FailureNotice failure={failure} />}
       {result && !failure && <TestOk result={result} />}
-      {notice && !failure && <Notice tone={notice.startsWith('Serveur par défaut') || notice.startsWith('Serveur retiré') ? 'warn' : 'success'}>{notice}</Notice>}
+      {notice && !failure && <Notice tone={notice.warn ? 'warn' : 'success'}>{notice.text}</Notice>}
       <div className="flex flex-wrap gap-2">
         {(kind === 'esplora' || !noDefault) && (
           <Button onClick={() => void test()} disabled={busy !== null || (kind === 'esplora' && !clean)}>
-            {busy === 'test' && <Spinner />} Tester la connexion
+            {busy === 'test' && <Spinner />} {t('servers.test')}
           </Button>
         )}
         <Button variant="primary" onClick={() => (kind === 'esplora' ? void save(false) : setConfirmDefault(true))} disabled={busy !== null || !dirty || (kind === 'esplora' && !clean)}>
-          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? (noDefault ? 'Retirer le serveur' : 'Revenir au serveur par défaut') : 'Enregistrer'}
+          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? (noDefault ? t('servers.utxo.remove') : t('servers.back.confirm')) : t('servers.save')}
         </Button>
       </div>
       <BackToDefaultDialog
         open={confirmDefault}
         host={noDefault ? 'Dogecoin' : doge ? 'doge.electrum1.cipig.net' : 'litecoinspace.org'}
-        {...(noDefault ? { title: 'Retirer ton serveur Dogecoin ?', body: 'Dogecoin testnet n’a pas de serveur public : sans le tien, Kyro n’affiche plus ni solde ni historique Dogecoin et ne peut plus envoyer.' } : {})}
-        sees={noDefault ? 'rien : Dogecoin testnet n’aura plus de serveur (soldes et envois indisponibles)' : `tes adresses ${name} et tes transactions`}
+        {...(noDefault ? { title: t('servers.utxo.removeTitle'), body: t('servers.utxo.removeBody') } : {})}
+        sees={noDefault ? t('servers.utxo.removeSees') : t('servers.utxo.backSees', { name })}
         busy={busy === 'save'}
         failure={confirmDefault ? failure : null}
         onConfirm={() => void save(true)}
@@ -1340,6 +1363,7 @@ function TronServerCard() {
   const tor = settings.tor.enabled;
   const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
   const defaultHost = network === 'mainnet' ? 'api.trongrid.io' : 'nile.trongrid.io';
+  const { t } = useT();
   const saved = settings.servers.tron?.[nk];
   const savedUrl = saved?.kind === 'http' ? saved.url : '';
   const [kind, setKind] = useState<'default' | 'http'>(savedUrl ? 'http' : 'default');
@@ -1352,7 +1376,7 @@ function TronServerCard() {
   const [busy, setBusy] = useState<'test' | 'save' | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [result, setResult] = useState<ServerTestResult | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Note | null>(null);
   const [confirmDefault, setConfirmDefault] = useState(false);
   const clean = url.trim();
   const hint = kind === 'http' && clean ? checkServerUrl(clean, tor) : null;
@@ -1383,7 +1407,7 @@ function TronServerCard() {
         else s.tron[nk] = { kind: 'http', url: clean };
       });
       setConfirmDefault(false);
-      setNotice(toDefault ? `Serveur par défaut rétabli : ${defaultHost} voit maintenant ton adresse TRON et tes transactions.` : 'Serveur TRON enregistré. Kyro n’utilise plus que lui pour TRON.');
+      setNotice(toDefault ? { text: t('servers.tron.restored', { host: defaultHost }), warn: true } : { text: t('servers.tron.saved') });
     } catch (e) {
       setFailure(toFailure(e));
     } finally {
@@ -1394,10 +1418,10 @@ function TronServerCard() {
   return (
     <Card
       title={network === 'testnet' ? 'TRON Nile (testnet)' : 'TRON'}
-      badge={savedUrl ? <Badge tone="ice">Nœud perso · java-tron</Badge> : <Badge>Par défaut · TronGrid</Badge>}
+      badge={savedUrl ? <Badge tone="ice">{t('servers.tron.customBadge')}</Badge> : <Badge>{t('servers.tron.defaultBadge')}</Badge>}
     >
       <Segmented
-        label="Serveur TRON"
+        label={t('servers.tron.serverLabel')}
         value={kind}
         onChange={(k) => {
           reset();
@@ -1405,24 +1429,24 @@ function TronServerCard() {
         }}
         options={[
           { value: 'default', label: 'TronGrid' },
-          { value: 'http', label: 'Nœud java-tron perso' },
+          { value: 'http', label: t('servers.tron.customOption') },
         ]}
         className="self-start"
       />
       <Sees>
         {kind === 'default'
-          ? `${defaultHost} voit ton adresse TRON et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.`
-          : `Ton nœud voit ton adresse TRON et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`}
+          ? t('servers.tron.sees.default', { host: defaultHost, ip: ipPart(tor) })
+          : t('servers.tron.sees.custom', { ip: ipPart(tor, true) })}
       </Sees>
       <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-        <strong className="font-semibold text-text">Historique : API /v1 de TronGrid requise.</strong> Soldes, ressources, construction et diffusion marchent avec n’importe quel nœud java-tron (API HTTP <span className="font-mono">/wallet</span>). L’historique, lui, vient de l’API <span className="font-mono">/v1</span> de TronGrid : un nœud java-tron seul ne la fournit pas, l’historique TRON restera alors indisponible.
+        {rt('servers.tron.history', bold, { wallet: <span className="font-mono">/wallet</span>, v1: <span className="font-mono">/v1</span> })}
       </Notice>
       {kind === 'http' && (
-        <Field label="URL de l’API HTTP java-tron (FullNode)" hint="https://, ou http:// pour une adresse .onion (Tor). Jamais d’identifiants dans l’URL.">
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mon-noeud-tron.example" aria-label="URL du nœud TRON" className="font-mono text-[13px]" />
+        <Field label={t('servers.tron.url')} hint={t('servers.urlHint')}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t('servers.tron.placeholder')} aria-label={t('servers.tron.urlAria')} className="font-mono text-[13px]" />
         </Field>
       )}
-      {config?.hasTrongridKey && kind === 'default' && <span className="text-[12px] text-mute">Clé API TronGrid configurée (Réglages › Clés API ou environnement) : limites de débit plus hautes.</span>}
+      {config?.hasTrongridKey && kind === 'default' && <span className="text-[12px] text-mute">{t('servers.tron.keySet')}</span>}
       {hint && (
         <span className="flex items-center gap-1.5 text-[12px] text-warn">
           <IconWarn size={13} /> {hint}
@@ -1430,19 +1454,19 @@ function TronServerCard() {
       )}
       {failure && <FailureNotice failure={failure} />}
       {result && !failure && <TestOk result={result} />}
-      {notice && !failure && <Notice tone={notice.startsWith('Serveur par défaut') ? 'warn' : 'success'}>{notice}</Notice>}
+      {notice && !failure && <Notice tone={notice.warn ? 'warn' : 'success'}>{notice.text}</Notice>}
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void test()} disabled={busy !== null || (kind === 'http' && !clean)}>
-          {busy === 'test' && <Spinner />} Tester la connexion
+          {busy === 'test' && <Spinner />} {t('servers.test')}
         </Button>
         <Button variant="primary" onClick={() => (kind === 'http' ? void save(false) : setConfirmDefault(true))} disabled={busy !== null || !dirty || (kind === 'http' && !clean)}>
-          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? 'Revenir à TronGrid' : 'Enregistrer'}
+          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? t('servers.tron.back') : t('servers.save')}
         </Button>
       </div>
       <BackToDefaultDialog
         open={confirmDefault}
         host={defaultHost}
-        sees="ton adresse TRON et tes transactions"
+        sees={t('servers.tron.backSees')}
         busy={busy === 'save'}
         failure={confirmDefault ? failure : null}
         onConfirm={() => void save(true)}
@@ -1467,6 +1491,7 @@ function XrpServerCard() {
   const tor = settings.tor.enabled;
   const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
   const defaultHost = network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net';
+  const { t } = useT();
   const saved = settings.servers.xrp?.[nk];
   const savedUrl = saved?.kind === 'jsonRpc' ? saved.url : '';
   const [kind, setKind] = useState<'default' | 'jsonRpc'>(savedUrl ? 'jsonRpc' : 'default');
@@ -1479,7 +1504,7 @@ function XrpServerCard() {
   const [busy, setBusy] = useState<'test' | 'save' | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [result, setResult] = useState<ServerTestResult | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Note | null>(null);
   const [confirmDefault, setConfirmDefault] = useState(false);
   const clean = url.trim();
   const hint = kind === 'jsonRpc' && clean ? checkServerUrl(clean, tor) : null;
@@ -1510,7 +1535,7 @@ function XrpServerCard() {
         else s.xrp[nk] = { kind: 'jsonRpc', url: clean };
       });
       setConfirmDefault(false);
-      setNotice(toDefault ? `Serveur par défaut rétabli : ${defaultHost} voit maintenant ton adresse XRP et tes paiements.` : 'Serveur XRP Ledger enregistré. Kyro n’utilise plus que lui pour XRP.');
+      setNotice(toDefault ? { text: t('servers.xrp.restored', { host: defaultHost }), warn: true } : { text: t('servers.xrp.saved') });
     } catch (e) {
       setFailure(toFailure(e));
     } finally {
@@ -1519,28 +1544,28 @@ function XrpServerCard() {
   };
 
   return (
-    <Card title={network === 'testnet' ? 'XRP Ledger testnet' : 'XRP Ledger'} badge={savedUrl ? <Badge tone="ice">Serveur perso · rippled</Badge> : <Badge>Par défaut</Badge>}>
+    <Card title={network === 'testnet' ? 'XRP Ledger testnet' : 'XRP Ledger'} badge={savedUrl ? <Badge tone="ice">{t('servers.xrp.customBadge')}</Badge> : <Badge>{t('servers.default')}</Badge>}>
       <Segmented
-        label="Serveur XRP Ledger"
+        label={t('servers.xrp.serverLabel')}
         value={kind}
         onChange={(k) => {
           reset();
           setKind(k);
         }}
         options={[
-          { value: 'default', label: 'Par défaut' },
-          { value: 'jsonRpc', label: 'Mon serveur rippled' },
+          { value: 'default', label: t('servers.default') },
+          { value: 'jsonRpc', label: t('servers.xrp.customOption') },
         ]}
         className="self-start"
       />
       <Sees>
         {kind === 'default'
-          ? `${defaultHost} voit ton adresse XRP et tes paiements ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.`
-          : `Ton serveur rippled voit ton adresse XRP et tes paiements ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`}
+          ? t('servers.xrp.sees.default', { host: defaultHost, ip: ipPart(tor) })
+          : t('servers.xrp.sees.custom', { ip: ipPart(tor, true) })}
       </Sees>
       {kind === 'jsonRpc' && (
-        <Field label="URL JSON-RPC de ton rippled" hint={`Kyro vérifie le réseau (network_id ${network === 'mainnet' ? '0, mainnet' : '1, testnet'}) avant d’enregistrer. https://, ou http:// pour une adresse .onion (Tor).`}>
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mon-rippled.example:51234/" aria-label="URL du serveur XRP" className="font-mono text-[13px]" />
+        <Field label={t('servers.xrp.url')} hint={network === 'mainnet' ? t('servers.xrp.hintMainnet') : t('servers.xrp.hintTestnet')}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t('servers.xrp.placeholder')} aria-label={t('servers.xrp.urlAria')} className="font-mono text-[13px]" />
         </Field>
       )}
       {hint && (
@@ -1549,20 +1574,20 @@ function XrpServerCard() {
         </span>
       )}
       {failure && <FailureNotice failure={failure} />}
-      {result && !failure && <TestOk result={result} chainLabel="network_id" ledgerLabel="registre validé" />}
-      {notice && !failure && <Notice tone={notice.startsWith('Serveur par défaut') ? 'warn' : 'success'}>{notice}</Notice>}
+      {result && !failure && <TestOk result={result} chainLabel="network_id" ledgerLabel={t('servers.test.validatedLedger')} />}
+      {notice && !failure && <Notice tone={notice.warn ? 'warn' : 'success'}>{notice.text}</Notice>}
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void test()} disabled={busy !== null || (kind === 'jsonRpc' && !clean)}>
-          {busy === 'test' && <Spinner />} Tester la connexion
+          {busy === 'test' && <Spinner />} {t('servers.test')}
         </Button>
         <Button variant="primary" onClick={() => (kind === 'jsonRpc' ? void save(false) : setConfirmDefault(true))} disabled={busy !== null || !dirty || (kind === 'jsonRpc' && !clean)}>
-          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? 'Revenir au serveur par défaut' : 'Enregistrer'}
+          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? t('servers.back.confirm') : t('servers.save')}
         </Button>
       </div>
       <BackToDefaultDialog
         open={confirmDefault}
         host={defaultHost}
-        sees="ton adresse XRP et tes paiements"
+        sees={t('servers.xrp.backSees')}
         busy={busy === 'save'}
         failure={confirmDefault ? failure : null}
         onConfirm={() => void save(true)}
@@ -1587,6 +1612,7 @@ function CardanoServerCard() {
   const tor = settings.tor.enabled;
   const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
   const defaultHost = network === 'mainnet' ? 'api.koios.rest' : 'preprod.koios.rest';
+  const { t } = useT();
   const saved = settings.servers.cardano?.[nk];
   const savedUrl = saved?.kind === 'koios' ? saved.url : '';
   const [kind, setKind] = useState<'default' | 'koios'>(savedUrl ? 'koios' : 'default');
@@ -1599,7 +1625,7 @@ function CardanoServerCard() {
   const [busy, setBusy] = useState<'test' | 'save' | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [result, setResult] = useState<ServerTestResult | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Note | null>(null);
   const [confirmDefault, setConfirmDefault] = useState(false);
   const clean = url.trim();
   const hint = kind === 'koios' && clean ? checkServerUrl(clean, tor) : null;
@@ -1630,7 +1656,7 @@ function CardanoServerCard() {
         else s.cardano[nk] = { kind: 'koios', url: clean };
       });
       setConfirmDefault(false);
-      setNotice(toDefault ? `Serveur par défaut rétabli : ${defaultHost} voit maintenant ton adresse Cardano et tes transactions.` : 'Serveur Cardano enregistré. Kyro n’utilise plus que lui pour Cardano.');
+      setNotice(toDefault ? { text: t('servers.ada.restored', { host: defaultHost }), warn: true } : { text: t('servers.ada.saved') });
     } catch (e) {
       setFailure(toFailure(e));
     } finally {
@@ -1639,28 +1665,28 @@ function CardanoServerCard() {
   };
 
   return (
-    <Card title={network === 'testnet' ? 'Cardano preprod' : 'Cardano'} badge={savedUrl ? <Badge tone="ice">Serveur perso · Koios</Badge> : <Badge>Par défaut · Koios</Badge>}>
+    <Card title={network === 'testnet' ? 'Cardano preprod' : 'Cardano'} badge={savedUrl ? <Badge tone="ice">{t('servers.ada.customBadge')}</Badge> : <Badge>{t('servers.ada.defaultBadge')}</Badge>}>
       <Segmented
-        label="Serveur Cardano"
+        label={t('servers.ada.serverLabel')}
         value={kind}
         onChange={(k) => {
           reset();
           setKind(k);
         }}
         options={[
-          { value: 'default', label: 'Par défaut' },
-          { value: 'koios', label: 'Mon serveur Koios' },
+          { value: 'default', label: t('servers.default') },
+          { value: 'koios', label: t('servers.ada.customOption') },
         ]}
         className="self-start"
       />
       <Sees>
         {kind === 'default'
-          ? `${defaultHost} voit ton adresse Cardano (et donc tout ton historique : une seule adresse) ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.`
-          : `Ton serveur Koios voit ton adresse Cardano (et donc tout ton historique : une seule adresse) ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`}
+          ? t('servers.ada.sees.default', { host: defaultHost, ip: ipPart(tor) })
+          : t('servers.ada.sees.custom', { ip: ipPart(tor, true) })}
       </Sees>
       {kind === 'koios' && (
-        <Field label="URL de l’API Koios (…/api/v1)" hint={`Kyro vérifie le réseau (magic ${network === 'mainnet' ? '764824073, mainnet' : '1, preprod'}) avant d’enregistrer. https://, ou http:// pour une adresse .onion (Tor). Blockfrost n’est pas pris en charge.`}>
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mon-koios.example/api/v1" aria-label="URL du serveur Cardano" className="font-mono text-[13px]" />
+        <Field label={t('servers.ada.url')} hint={network === 'mainnet' ? t('servers.ada.hintMainnet') : t('servers.ada.hintTestnet')}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t('servers.ada.placeholder')} aria-label={t('servers.ada.urlAria')} className="font-mono text-[13px]" />
         </Field>
       )}
       {hint && (
@@ -1670,19 +1696,19 @@ function CardanoServerCard() {
       )}
       {failure && <FailureNotice failure={failure} />}
       {result && !failure && <TestOk result={result} chainLabel="magic" />}
-      {notice && !failure && <Notice tone={notice.startsWith('Serveur par défaut') ? 'warn' : 'success'}>{notice}</Notice>}
+      {notice && !failure && <Notice tone={notice.warn ? 'warn' : 'success'}>{notice.text}</Notice>}
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => void test()} disabled={busy !== null || (kind === 'koios' && !clean)}>
-          {busy === 'test' && <Spinner />} Tester la connexion
+          {busy === 'test' && <Spinner />} {t('servers.test')}
         </Button>
         <Button variant="primary" onClick={() => (kind === 'koios' ? void save(false) : setConfirmDefault(true))} disabled={busy !== null || !dirty || (kind === 'koios' && !clean)}>
-          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? 'Revenir au serveur par défaut' : 'Enregistrer'}
+          {busy === 'save' && <Spinner />} {kind === 'default' && savedUrl ? t('servers.back.confirm') : t('servers.save')}
         </Button>
       </div>
       <BackToDefaultDialog
         open={confirmDefault}
         host={defaultHost}
-        sees="ton adresse Cardano et tes transactions"
+        sees={t('servers.ada.backSees')}
         busy={busy === 'save'}
         failure={confirmDefault ? failure : null}
         onConfirm={() => void save(true)}
@@ -1700,9 +1726,10 @@ function EvmCard() {
   const saveServers = useSaveServers();
   const chains = evmChains(network);
   const tor = settings.tor.enabled;
+  const { t, tp } = useT();
   return (
-    <Card title="Réseaux EVM" badge={<Badge>{chains.length === 1 ? '1 chaîne' : `${chains.length} chaînes`}</Badge>}>
-      <Sees>Ton RPC voit ton adresse EVM et tes transactions signées ; {tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}. Laisse vide pour le nœud public par défaut (publicnode.com, qui voit la même chose).</Sees>
+    <Card title={t('servers.evm.title')} badge={<Badge>{tp('servers.evm.chains', chains.length)}</Badge>}>
+      <Sees>{t('servers.evm.sees', { ip: ipPart(tor) })}</Sees>
       <div className="flex flex-col">
         {chains.map((c, i) => (
           <RpcRow
@@ -1718,7 +1745,7 @@ function EvmCard() {
                 else delete s.evm[String(c.chainId)];
               })
             }
-            defaultSees="ton adresse EVM et tes transactions"
+            defaultSees={t('servers.evm.backSees')}
             last={i === chains.length - 1}
           />
         ))}
@@ -1731,20 +1758,21 @@ function SolanaCard() {
   const { network, settings } = useApp();
   const saveServers = useSaveServers();
   const tor = settings.tor.enabled;
+  const { t } = useT();
   const active = solChain(network).cluster;
   const clusters: Array<{ cluster: SolanaCluster; url: string }> = [
     { cluster: active, url: solChain(network).rpcUrl },
     { cluster: active === 'devnet' ? 'mainnet-beta' : 'devnet', url: solChain(network === 'testnet' ? 'mainnet' : 'testnet').rpcUrl },
   ];
   return (
-    <Card title="Solana" badge={<Badge>un RPC par cluster</Badge>}>
-      <Sees>Ton RPC voit ton adresse Solana, tes transactions signées et les tables d’adresses lues avant une signature ; {tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.</Sees>
+    <Card title="Solana" badge={<Badge>{t('servers.sol.perCluster')}</Badge>}>
+      <Sees>{t('servers.sol.sees', { ip: ipPart(tor) })}</Sees>
       <div className="flex flex-col">
         {clusters.map(({ cluster, url }, i) => (
           <RpcRow
             key={cluster}
             title={`Solana ${cluster}`}
-            subtitle={cluster === active ? 'utilisé sur ce réseau' : 'inactif tant que l’app tourne sur l’autre réseau'}
+            subtitle={cluster === active ? t('servers.sol.used') : t('servers.sol.inactive')}
             defaultUrl={url}
             saved={settings.servers.solana[cluster]?.url}
             target={(u) => ({ family: 'solana', cluster, server: { url: u } })}
@@ -1754,7 +1782,7 @@ function SolanaCard() {
                 else delete s.solana[cluster];
               })
             }
-            defaultSees="ton adresse Solana et tes transactions"
+            defaultSees={t('servers.sol.backSees')}
             last={i === clusters.length - 1}
           />
         ))}
