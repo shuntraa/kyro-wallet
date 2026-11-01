@@ -95,6 +95,10 @@ pub use cardano::{
     CardanoTokenView, CardanoTxSummary, CardanoWarning,
 };
 pub use cardano::{
+    cardano_address_from_xpub, cardano_hw_assemble, cardano_hw_plan, cardano_xpub_child,
+    CardanoHwDestination, CardanoHwOutput, CardanoHwPlan,
+};
+pub use cardano::{
     cardano_blake2b224, cardano_decode_stake_tx, cardano_drep_id, cardano_drep_parse,
     cardano_pool_bech32, cardano_pool_id, cardano_reward_address_bytes, cardano_sign_stake,
     cardano_stake_public_key, cardano_stake_tx_body, CardanoCert, CardanoCertView, CardanoDrep,
@@ -240,9 +244,10 @@ pub use xrp::{
 };
 pub use zcash::{
     zec_account, zec_address, zec_address_from_xpub, zec_address_of_script, zec_consensus,
-    zec_decode_raw_tx, zec_genesis_hash, zec_header_branch_id, zec_input_sighash, zec_next_upgrade,
-    zec_parse_address, zec_script_pubkey, zec_sign, zec_tx_summary, ZecAccount, ZecAddressKind,
-    ZecChange, ZecCoin, ZecConsensus, ZecRawTx, ZecSendRequest, ZecTxSummary, ZecWarning, ZEC_DUST,
-    ZEC_EXPIRY_DELTA, ZEC_MAX_INPUTS, ZEC_MIN_CHANGE,
+    zec_decode_raw_tx, zec_genesis_hash, zec_header_branch_id, zec_hw_finalize, zec_hw_plan,
+    zec_input_sighash, zec_next_upgrade, zec_parse_address, zec_script_pubkey, zec_sign,
+    zec_tx_summary, ZecAccount, ZecAddressKind, ZecChange, ZecCoin, ZecConsensus, ZecHwInput,
+    ZecHwOutput, ZecHwPlan, ZecRawTx, ZecSendRequest, ZecTxSummary, ZecWarning, ZEC_DUST,
+    ZEC_EXPIRY_DELTA, ZEC_MAX_INPUTS, ZEC_MIN_CHANGE, ZEC_V5_VERSION_GROUP_ID,
 };
 pub use zeroize::{Zeroize, Zeroizing};

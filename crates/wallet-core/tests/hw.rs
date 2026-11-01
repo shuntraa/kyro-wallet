@@ -526,6 +526,8 @@ fn watch_account() -> WatchOnlyAccount {
             pubkey: hex::encode(wallet_core::stellar_public_key(&seed(ABANDON), 0).unwrap()),
             path: wallet_core::stellar_path(0),
         }),
+        cardano: None,
+        zec: None,
     }
 }
 

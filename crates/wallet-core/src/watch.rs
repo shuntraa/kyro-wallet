@@ -94,6 +94,14 @@ pub struct WatchOnlyAccount {
     /// Stellar key `m/44'/148'/account'` (ed25519).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stellar: Option<WatchKey>,
+    /// Cardano account public key `m/1852'/1815'/account'` (`pubkey`: public key ‖ chain
+    /// code, 64 bytes; `address`: base address `…/0/0` + stake key `…/2/0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cardano: Option<WatchKey>,
+    /// Zcash transparent account `m/44'/133'/account'` (Trezor only; its own master
+    /// fingerprint field, checked like the UTXO accounts).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zec: Option<crate::zcash::ZecAccount>,
 }
 
 /// An account-based chain key of a watch-only account (XRP, TRON, Stellar).
@@ -158,6 +166,8 @@ impl WatchOnlyAccount {
             && self.xrp.is_none()
             && self.tron.is_none()
             && self.stellar.is_none()
+            && self.cardano.is_none()
+            && self.zec.is_none()
         {
             return Err(Error::input("watch-only account without any chain"));
         }
@@ -250,6 +260,25 @@ impl WatchOnlyAccount {
                 ));
             }
         }
+        if let Some(k) = &self.cardano {
+            key(k, 64)?;
+            if k.path != crate::cardano::cardano_account_path(self.account)
+                || crate::cardano::cardano_address_from_xpub(&k.pubkey, self.network, 0)?
+                    != k.address
+            {
+                return Err(Error::input(
+                    "Cardano key does not match its address or path",
+                ));
+            }
+        }
+        if let Some(z) = &self.zec {
+            crate::zcash::check_watch_account(self.network, z, self.account)?;
+            if self.fingerprint() != Some(z.fingerprint.as_str()) {
+                return Err(Error::input(
+                    "Zcash account of another device (fingerprint)",
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -258,12 +287,13 @@ impl WatchOnlyAccount {
         self.utxo.iter().find(|u| u.coin == coin)
     }
 
-    /// Master fingerprint (from the Bitcoin accounts, else the UTXO ones), if any.
+    /// Master fingerprint (from the Bitcoin accounts, else the UTXO ones, else Zcash), if any.
     pub fn fingerprint(&self) -> Option<&str> {
         self.btc
             .first()
             .map(|b| b.fingerprint.as_str())
             .or_else(|| self.utxo.first().map(|u| u.fingerprint.as_str()))
+            .or_else(|| self.zec.as_ref().map(|z| z.fingerprint.as_str()))
     }
 
     /// The Bitcoin account of `kind`, if stored.

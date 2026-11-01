@@ -1965,6 +1965,171 @@ pub fn cardano_signed_witnesses(raw_hex: &str) -> Result<(String, Vec<[u8; 32]>)
     Ok((hex::encode(tx_id), keys))
 }
 
+// ---------------------------------------------------------------------------------------------
+// Hardware wallets (Ledger "Cardano ADA" app, Trezor): watch-only keys and device witnesses
+// ---------------------------------------------------------------------------------------------
+
+/// Parses an account public key `m/1852'/1815'/account'` (public key ‖ chain code, 128 hex).
+fn account_xpub_of_hex(xpub_hex: &str) -> Result<ed25519_bip32::XPub> {
+    let b =
+        hex::decode(xpub_hex.trim()).map_err(|_| Error::input("clé de compte Cardano : hex"))?;
+    ed25519_bip32::XPub::from_slice(&b)
+        .map_err(|_| Error::input("clé de compte Cardano : 64 octets attendus"))
+}
+
+/// Public key `<account xpub>/role/index` (soft BIP32-Ed25519 derivation, `ed25519-bip32` V2:
+/// the same as the private derivation of [`CardanoRoot`], public side only).
+pub fn cardano_xpub_child(xpub_hex: &str, role: u32, index: u32) -> Result<[u8; 32]> {
+    if role >= HARDENED || index >= HARDENED {
+        return Err(Error::input(
+            "dérivation durcie impossible depuis une clé publique",
+        ));
+    }
+    let x = account_xpub_of_hex(xpub_hex)?
+        .derive(DerivationScheme::V2, role)
+        .and_then(|k| k.derive(DerivationScheme::V2, index))
+        .map_err(|_| Error::crypto("dérivation publique Cardano impossible"))?;
+    Ok(x.public_key())
+}
+
+/// Base address `…/0/index` + stake key `…/2/0` of an account public key (Kyro's address of a
+/// hardware-wallet Cardano account, `index` = 0).
+pub fn cardano_address_from_xpub(xpub_hex: &str, net: Network, index: u32) -> Result<String> {
+    cardano_base_address(
+        net,
+        &cardano_xpub_child(xpub_hex, ROLE_EXTERNAL, index)?,
+        &cardano_xpub_child(xpub_hex, ROLE_STAKE, 0)?,
+    )
+}
+
+/// Where an output of a hardware-wallet transaction goes, as the device is told.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CardanoHwDestination {
+    /// Our own base address `…/0/0` + `…/2/0` (the device derives it from the two paths and
+    /// shows it as change).
+    Own,
+    /// Any other address, as raw bytes.
+    Address(Vec<u8>),
+}
+
+/// One output for the device.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardanoHwOutput {
+    /// Destination.
+    pub destination: CardanoHwDestination,
+    /// Lovelace.
+    pub coin: u64,
+    /// Native tokens (canonical order, as in the body).
+    pub assets: CardanoAssets,
+    /// Map (Babbage) form rather than the legacy array.
+    pub map_form: bool,
+}
+
+/// What a hardware wallet needs to rebuild, hash and sign the body of a Kyro payment: every
+/// field of the body, in body order. The device serializes the body itself from these fields;
+/// the transaction id it returns must be ours ([`cardano_hw_assemble`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardanoHwPlan {
+    /// Inputs, in body order.
+    pub inputs: Vec<CardanoInput>,
+    /// Outputs, in body order.
+    pub outputs: Vec<CardanoHwOutput>,
+    /// Lovelace.
+    pub fee: u64,
+    /// Validity limit (slot).
+    pub ttl: Option<u64>,
+    /// blake2b-256 of the auxiliary data (CIP-20 memo), signed as an "arbitrary hash".
+    pub aux_hash: Option<[u8; 32]>,
+    /// Validity start (slot).
+    pub validity_start: Option<u64>,
+    /// Sets encoded with CBOR tag 258 (Conway).
+    pub tagged_sets: bool,
+    /// Transaction id Kyro computed (blake2b-256 of its body encoding).
+    pub tx_id: [u8; 32],
+    /// The summary shown in the native dialog.
+    pub summary: CardanoTxSummary,
+}
+
+/// Decodes an unsigned **payment** like [`cardano_decode_tx`] and lists its fields for a
+/// hardware wallet. Outputs paying `own_address` (raw bytes of our base address) go to the
+/// device as its own address (path-based), the others as raw addresses.
+pub fn cardano_hw_plan(
+    raw_hex: &str,
+    ctx: &CardanoContext<'_>,
+    own_address: &[u8],
+) -> Result<CardanoHwPlan> {
+    let d = decode_full(raw_hex, ctx, None)?;
+    let tx_id = cardano_blake2b256(&d.body_cbor.to_vec());
+    let outputs = d
+        .body
+        .outputs
+        .iter()
+        .map(|o| CardanoHwOutput {
+            destination: if o.address == own_address {
+                CardanoHwDestination::Own
+            } else {
+                CardanoHwDestination::Address(o.address.clone())
+            },
+            coin: o.coin,
+            assets: o.assets.clone(),
+            map_form: o.map_form,
+        })
+        .collect();
+    Ok(CardanoHwPlan {
+        inputs: d.body.inputs.clone(),
+        outputs,
+        fee: d.body.fee,
+        ttl: d.body.ttl,
+        aux_hash: d.body.aux_hash,
+        validity_start: d.body.validity_start,
+        tagged_sets: d.body.tagged_sets,
+        tx_id,
+        summary: d.summary,
+    })
+}
+
+/// Attaches a hardware wallet's witness to an unsigned payment, after checking that the body
+/// hash the device computed is Kyro's transaction id and that the signature verifies
+/// (`verify_strict`) over that id with `payment_pk` (our key `…/0/0`, derived from the stored
+/// account public key). Returns `(signed transaction hex, tx id hex, summary)`.
+pub fn cardano_hw_assemble(
+    raw_hex: &str,
+    ctx: &CardanoContext<'_>,
+    payment_pk: &[u8; 32],
+    device_tx_hash: &[u8],
+    signature: &[u8],
+) -> Result<(String, String, CardanoTxSummary)> {
+    let d = decode_full(raw_hex, ctx, None)?;
+    let tx_id = cardano_blake2b256(&d.body_cbor.to_vec());
+    if device_tx_hash != tx_id {
+        return Err(Error::crypto(
+            "l'appareil a signé un autre corps de transaction que celui de Kyro",
+        ));
+    }
+    let pk =
+        VerifyingKey::from_bytes(payment_pk).map_err(|_| Error::input("clé publique invalide"))?;
+    let sig =
+        Signature::from_slice(signature).map_err(|_| Error::input("signature : 64 octets"))?;
+    pk.verify_strict(&tx_id, &sig).map_err(|_| {
+        Error::crypto("la signature de l'appareil ne se vérifie pas avec la clé du compte")
+    })?;
+    let wit = Cbor::Array(vec![
+        Cbor::Bytes(payment_pk.to_vec()),
+        Cbor::Bytes(signature.to_vec()),
+    ]);
+    let set = if d.body.tagged_sets {
+        Cbor::Tag(258, Box::new(Cbor::Array(vec![wit])))
+    } else {
+        Cbor::Array(vec![wit])
+    };
+    let signed = tx_cbor(
+        &d.body_cbor,
+        Cbor::Map(vec![(Cbor::Uint(0), set)]),
+        d.aux.as_ref(),
+    );
+    Ok((hex::encode(signed), hex::encode(tx_id), d.summary))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
