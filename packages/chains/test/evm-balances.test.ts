@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { describe, expect, it } from 'vitest';
 import type { NetRequest, NetResponse } from '@kyro/shared';
-import { BALANCE_BATCH, EvmAdapter, ERC20_TOKENS, evmChains } from '../src';
+import { BALANCE_BATCH, EvmAdapter, ERC20_TOKENS, evmChains, LOG_ADDRESSES } from '../src';
 
 const ME = '0x9858EfFD232B4033E47d90003D41EC34EcaEda94';
 const eth = evmChains('mainnet').find((c) => c.key === 'ethereum')!;
@@ -69,5 +69,34 @@ describe('soldes EVM par lots JSON-RPC', () => {
     const bal = await a.getBalance();
     expect(bal[0]?.amount).toBe(10n ** 18n);
     expect(bal.length).toBeGreaterThan(1);
+  });
+
+  it('historique : eth_getLogs par paquets de 10 contrats au plus, envoyés en lots', async () => {
+    const seen: Rpc[][] = [];
+    const fetch = async (req: NetRequest): Promise<NetResponse> => {
+      const body = JSON.parse(req.body ?? 'null') as Rpc | Rpc[];
+      const list = Array.isArray(body) ? body : [body];
+      seen.push(list);
+      const answer = (r: Rpc) => {
+        if (r.method === 'eth_blockNumber') return { jsonrpc: '2.0', id: r.id, result: '0x100000' };
+        if (r.method === 'eth_getLogs') {
+          const f = r.params[0] as { address: string[]; topics: Array<string | null> };
+          if (f.address.length > LOG_ADDRESSES) return { jsonrpc: '2.0', id: r.id, error: { code: -32602, message: 'A maximum of 10 addresses is allowed' } };
+          const inbound = f.topics[2] !== undefined && f.topics[2] !== null;
+          if (!inbound || f.address[0]!.toLowerCase() !== (ERC20_TOKENS.ethereum ?? [])[0]!.contract.toLowerCase()) return { jsonrpc: '2.0', id: r.id, result: [] };
+          return { jsonrpc: '2.0', id: r.id, result: [{ address: f.address[0], topics: [f.topics[0], pad(0xabcn), f.topics[2]], data: pad(5n), blockNumber: '0xfff00', transactionHash: '0x' + '11'.repeat(32), logIndex: '0x2' }] };
+        }
+        if (r.method === 'eth_getBlockByNumber') return { jsonrpc: '2.0', id: r.id, result: null };
+        return { jsonrpc: '2.0', id: r.id, error: { code: -32601, message: 'method not found' } };
+      };
+      return { status: 200, body: JSON.stringify(Array.isArray(body) ? list.map(answer) : answer(list[0]!)) };
+    };
+    const a = new EvmAdapter({ chain: eth, address: ME, fetch });
+    const h = await a.getHistory();
+    const logCalls = seen.flat().filter((r) => r.method === 'eth_getLogs');
+    expect(logCalls).toHaveLength(2 * Math.ceil(a.tokens().length / LOG_ADDRESSES));
+    expect(seen.filter((b) => b.some((r) => r.method === 'eth_getLogs')).length).toBeLessThanOrEqual(Math.ceil(logCalls.length / BALANCE_BATCH));
+    expect(h).toHaveLength(1);
+    expect(h[0]).toMatchObject({ direction: 'in', amount: 5n, assetId: a.tokens()[0]!.id, counterparty: '0x0000000000000000000000000000000000000aBc' });
   });
 });

@@ -11,7 +11,6 @@ import {
   erc20Abi,
   getAddress,
   isAddress,
-  parseAbiItem,
   type Hex,
   type PublicClient,
 } from 'viem';
@@ -55,7 +54,25 @@ const hexToBigInt = (v: unknown): bigint => {
   return BigInt(v);
 };
 
-const TRANSFER_EVENT = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
+/** keccak256('Transfer(address,address,uint256)'). */
+const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+/** Contracts per `eth_getLogs` (publicnode: « A maximum of 10 addresses is allowed »). */
+export const LOG_ADDRESSES = 10;
+
+interface RawLog {
+  address: string;
+  topics: string[];
+  data: string;
+  blockNumber?: string | null;
+  transactionHash?: string | null;
+  logIndex?: string | null;
+}
+const isRawLog = (x: unknown): x is RawLog => {
+  const l = x as RawLog;
+  return !!l && typeof l.address === 'string' && Array.isArray(l.topics) && l.topics.length >= 3 && l.topics[0] === TRANSFER_TOPIC && typeof l.data === 'string';
+};
+const topicAddress = (t: string | undefined): `0x${string}` | undefined => (t && /^0x[0-9a-fA-F]{64}$/.test(t) ? getAddress('0x' + t.slice(26)) : undefined);
 
 /** Create a viem transport that sends JSON-RPC through `net_fetch`. */
 export function netTransport(url: string, fetcher: NetFetch = netFetch, onLatency?: (ms: number) => void) {
@@ -163,19 +180,26 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     return out;
   }
 
+  /** Fallback without batches: one `eth_call` per token, at most 8 in flight. */
   private async getBalanceOneByOne(tokens: AssetDef[]): Promise<Balance[]> {
-    const native = await this.client.getBalance({ address: this.address });
-    const balances = await Promise.all(
-      tokens.map(async (t) => {
+    const native = await jsonRpc<string>(this.fetcher, this.rpcUrl, 'eth_getBalance', [this.address, 'latest']);
+    const data = encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [this.address] });
+    const out: (Balance | null)[] = new Array<Balance | null>(tokens.length).fill(null);
+    let next = 0;
+    const worker = async () => {
+      while (next < tokens.length) {
+        const i = next++;
+        const t = tokens[i]!;
         try {
-          const amount = await this.client.readContract({ address: getAddress(t.contract ?? ''), abi: erc20Abi, functionName: 'balanceOf', args: [this.address] });
-          return { assetId: t.id, amount };
+          const r = await jsonRpc<string>(this.fetcher, this.rpcUrl, 'eth_call', [{ to: getAddress(t.contract ?? ''), data }, 'latest']);
+          if (typeof r === 'string' && /^0x[0-9a-fA-F]{1,64}$/.test(r)) out[i] = { assetId: t.id, amount: BigInt(r) };
         } catch {
-          return null;
+          /* unknown */
         }
-      }),
-    );
-    return [{ assetId: nativeAssetId(this.chain), amount: native }, ...balances.filter((t): t is Balance => t !== null)];
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(8, tokens.length) }, worker));
+    return [{ assetId: nativeAssetId(this.chain), amount: hexToBigInt(native) }, ...out.filter((b): b is Balance => b !== null)];
   }
 
   async estimateFees(): Promise<FeeEstimates> {
@@ -330,8 +354,39 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
   }
 
   /**
+   * `Transfer` logs to or from us of the given tokens: one `eth_getLogs` per
+   * {@link LOG_ADDRESSES} contracts and direction (publicnode refuses more addresses per query),
+   * sent as JSON-RPC batches; one call at a time if the node refuses batches.
+   */
+  private async transferLogs(addresses: string[], fromBlock: bigint, toBlock: bigint): Promise<Array<{ log: RawLog; dir: 'in' | 'out' }>> {
+    const me = '0x' + this.address.slice(2).toLowerCase().padStart(64, '0');
+    const range = { fromBlock: '0x' + fromBlock.toString(16), toBlock: '0x' + toBlock.toString(16) };
+    const queries: Array<{ dir: 'in' | 'out'; params: unknown[] }> = [];
+    for (let i = 0; i < addresses.length; i += LOG_ADDRESSES) {
+      const address = addresses.slice(i, i + LOG_ADDRESSES);
+      queries.push({ dir: 'in', params: [{ ...range, address, topics: [TRANSFER_TOPIC, null, me] }] });
+      queries.push({ dir: 'out', params: [{ ...range, address, topics: [TRANSFER_TOPIC, me] }] });
+    }
+    const results: unknown[][] = [];
+    try {
+      for (let i = 0; i < queries.length; i += BALANCE_BATCH) {
+        const outcomes = await jsonRpcBatch(this.fetcher, this.rpcUrl, queries.slice(i, i + BALANCE_BATCH).map((q) => ({ method: 'eth_getLogs', params: q.params })));
+        for (const o of outcomes) {
+          if (!o.ok) throw o.error;
+          results.push(Array.isArray(o.result) ? o.result : []);
+        }
+      }
+    } catch (e) {
+      if (!(e instanceof JsonRpcError) && !(e instanceof HttpError && e.status >= 400 && e.status < 500)) throw e;
+      results.length = 0;
+      for (const q of queries) results.push(await jsonRpc<unknown[]>(this.fetcher, this.rpcUrl, 'eth_getLogs', q.params));
+    }
+    return queries.flatMap((q, i) => (results[i] ?? []).filter(isRawLog).map((log) => ({ log, dir: q.dir })));
+  }
+
+  /**
    * ERC-20 transfers of the curated tokens over the last `logRange` blocks.
-   * Native ETH transfers can't be listed without an indexer: the UI merges
+   * Native transfers can't be listed without an indexer: the UI merges
    * them from its local record of transactions sent from Kyro.
    */
   async getHistory(): Promise<HistoryItem[]> {
@@ -339,12 +394,18 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     if (tokens.length === 0) return [];
     const latest = await this.client.getBlockNumber();
     const fromBlock = latest > this.logRange ? latest - this.logRange : 0n;
-    const addresses = tokens.map((t) => getAddress(t.contract ?? ''));
-    const [incoming, outgoing] = await Promise.all([
-      this.client.getLogs({ address: addresses, event: TRANSFER_EVENT, args: { to: this.address }, fromBlock, toBlock: latest }),
-      this.client.getLogs({ address: addresses, event: TRANSFER_EVENT, args: { from: this.address }, fromBlock, toBlock: latest }),
-    ]);
-    const all = [...incoming.map((l) => ({ l, dir: 'in' as const })), ...outgoing.map((l) => ({ l, dir: 'out' as const }))]
+    const logs = await this.transferLogs(tokens.map((t) => getAddress(t.contract ?? '')), fromBlock, latest);
+    const all = logs
+      .map(({ log, dir }) => ({
+        dir,
+        l: {
+          address: log.address,
+          blockNumber: log.blockNumber ? BigInt(log.blockNumber) : null,
+          transactionHash: log.transactionHash ?? null,
+          logIndex: log.logIndex ? Number(BigInt(log.logIndex)) : 0,
+          args: { from: topicAddress(log.topics[1]), to: topicAddress(log.topics[2]), value: /^0x[0-9a-fA-F]+$/.test(log.data) ? BigInt(log.data) : 0n },
+        },
+      }))
       .sort((a, b) => Number((b.l.blockNumber ?? 0n) - (a.l.blockNumber ?? 0n)))
       .slice(0, 30);
     const blockTimes = new Map<bigint, number>();
