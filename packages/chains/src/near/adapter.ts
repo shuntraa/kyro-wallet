@@ -20,6 +20,7 @@ import {
   type NearWarning,
 } from '@kyro/shared';
 import type { NearChain } from '../registry';
+import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 export type { NearAccountInfo, NearAccountKind, NearContext, NearHistoryEntry, NearTxOutcome, NearTxSummary, NearWarning };
@@ -46,6 +47,20 @@ export function rustNearBackend(account = 0): NearBackend {
     sign: (tx, password) => call('near_sign_tx', { tx, password, ...acct }),
     broadcast: (signed) => call('near_broadcast', { signed, ...acct }),
     txStatus: (hash) => call('near_tx_status', { hash, ...acct }),
+  };
+}
+
+/**
+ * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature
+ * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
+ */
+export function rustNearHwBackend(accountId: string): NearBackend {
+  return {
+    ...rustNearBackend(),
+    build: (to, amount) => call('hw_near_build_tx', { accountId, to, amount }),
+    sign: (tx, id) => call('hw_sign_near_tx', { id, accountId, tx }),
+    broadcast: (signed) => call('hw_near_broadcast', { accountId, signed }),
+    txStatus: (hash) => call('hw_near_tx_status', { accountId, hash }),
   };
 }
 
@@ -83,19 +98,23 @@ export interface NearAdapterOptions {
   backend?: NearBackend;
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (Ledger): signing through `hw_sign_*` (`signTxHw`). */
+  hw?: HwSigner;
 }
 
 export class NearAdapter implements ChainAdapter<'near'> {
   readonly family = 'near' as const;
   readonly chain: NearChain;
   private readonly address: string;
+  readonly hw: HwSigner | null;
   private readonly backend: NearBackend;
 
   constructor(opts: NearAdapterOptions) {
     if (!isNearImplicit(opts.address)) throw new Error(l10n('Compte NEAR implicite invalide', 'Invalid NEAR implicit account'));
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustNearBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? rustNearHwBackend(opts.hw.accountId) : rustNearBackend(opts.account ?? 0));
   }
 
   getAddress(): string {
@@ -168,6 +187,12 @@ export class NearAdapter implements ChainAdapter<'near'> {
       maxFee: BigInt(built.context.feeBound),
       size: { family: 'near' },
     };
+  }
+
+  /** Ledger: same checks as `signTx`; Rust re-reads the key, shows its dialog, then the device signs. */
+  signTxHw(unsigned: NearUnsigned, deviceId: string): Promise<NearSigned> {
+    if (!this.hw) return Promise.reject(new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet')));
+    return this.signTx(unsigned, deviceId);
   }
 
   /** Rust: live checks, native dialog (receiver, amount, fee bound, signing account), signature. */

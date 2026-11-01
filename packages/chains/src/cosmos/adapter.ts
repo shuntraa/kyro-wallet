@@ -18,6 +18,7 @@ import {
   type CosmosWarning,
 } from '@kyro/shared';
 import type { CosmosChain } from '../registry';
+import type { HwSigner } from '../hw';
 import { accountArg, type Balance, type BuildParams, type ChainAdapter, type FeeEstimates, type HistoryItem } from '../types';
 
 // ---------------------------------------------------------------- Rust contract (§2.11)
@@ -46,6 +47,19 @@ export function rustCosmosBackend(account = 0): CosmosBackend {
     sign: (signDoc, password) => call('cosmos_sign_tx', { signDoc, password, ...acct }),
     broadcast: (tx) => call('cosmos_broadcast', { tx, ...acct }),
     txStatus: (hash) => call('cosmos_tx_status', { hash }),
+  };
+}
+
+/**
+ * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature
+ * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
+ */
+export function rustCosmosHwBackend(accountId: string): CosmosBackend {
+  return {
+    ...rustCosmosBackend(),
+    build: (to, amount, memo) => call('hw_cosmos_build_tx', { accountId, to, amount, ...(memo ? { memo } : {}) }),
+    sign: (signDoc, id) => call('hw_sign_cosmos_tx', { id, accountId, signDoc }),
+    broadcast: (tx) => call('hw_cosmos_broadcast', { accountId, tx }),
   };
 }
 
@@ -109,19 +123,23 @@ export interface CosmosAdapterOptions {
   backend?: CosmosBackend;
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (Ledger): signing through `hw_sign_*` (`signTxHw`). */
+  hw?: HwSigner;
 }
 
 export class CosmosAdapter implements ChainAdapter<'cosmos'> {
   readonly family = 'cosmos' as const;
   readonly chain: CosmosChain;
   private readonly address: string;
+  readonly hw: HwSigner | null;
   private readonly backend: CosmosBackend;
 
   constructor(opts: CosmosAdapterOptions) {
     if (!isCosmosAddress(opts.address)) throw new Error(l10n('Adresse Cosmos invalide', 'Invalid Cosmos address'));
     this.chain = opts.chain;
     this.address = opts.address.trim().toLowerCase();
-    this.backend = opts.backend ?? rustCosmosBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? rustCosmosHwBackend(opts.hw.accountId) : rustCosmosBackend(opts.account ?? 0));
   }
 
   getAddress(): string {
@@ -194,6 +212,12 @@ export class CosmosAdapter implements ChainAdapter<'cosmos'> {
       maxFee: BigInt(s.fee),
       size: { family: 'cosmos', gasLimit: s.gasLimit },
     };
+  }
+
+  /** Ledger: same checks as `signTx`; Rust re-reads the key, shows its dialog, then the device signs. */
+  signTxHw(unsigned: CosmosUnsigned, deviceId: string): Promise<CosmosSigned> {
+    if (!this.hw) return Promise.reject(new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet')));
+    return this.signTx(unsigned, deviceId);
   }
 
   /** Rust: live checks, native dialog, signature. */
