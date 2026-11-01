@@ -4,10 +4,11 @@
 // - one prompt store, fed by the `hw-prompt` event (confirm / PIN / passphrase on the device,
 //   Trezor One blind PIN matrix), started once in main.tsx;
 // - device picking for a stored account (`hw_list`, same brand; Rust then checks the keys);
-// - precise French messages for every HW_* error, using the error `data`.
+// - precise messages (current language, ../i18n) for every HW_* error, using the error `data`.
 
 import { useSyncExternalStore } from 'react';
 import { call, errorData, ipcErrorIn, onHwPrompt, toIpcError, type HwDeviceInfo, type HwDeviceKind, type HwPrompt, type IpcError, type Unlisten } from '@kyro/shared';
+import { t } from '../i18n';
 
 // ---------------------------------------------------------------- prompts
 
@@ -84,7 +85,7 @@ export const BRAND: Record<HwDeviceKind, string> = { ledger: 'Ledger', trezor: '
 export async function pickDevice(kind: HwDeviceKind): Promise<HwDeviceInfo> {
   const list = await call('hw_list');
   const d = list.find((x) => x.kind === kind);
-  if (!d) throw new Error(`Aucun ${BRAND[kind]} détecté : branche-le, déverrouille-le, puis réessaie.`);
+  if (!d) throw new Error(t('hw.noneDetected', { brand: BRAND[kind] }));
   return d;
 }
 
@@ -93,61 +94,63 @@ export async function pickDevice(kind: HwDeviceKind): Promise<HwDeviceInfo> {
 export interface HwErrorView {
   /** Short title. */
   title: string;
-  /** What happened and what to do, in plain French. */
+  /** What happened and what to do, in plain words (current language). */
   detail: string;
   /** Nothing was sent / signed (the user can retry safely). */
   safe: boolean;
 }
 
-/** Precise French message for a hardware-wallet error (any error: falls back to its message). */
+/** Precise message for a hardware-wallet error (any error: falls back to its message). */
 export function hwErrorView(e: unknown): HwErrorView {
   const err: IpcError = ipcErrorIn(e) ?? toIpcError(e);
   switch (err.code) {
     case 'HW_NOT_FOUND':
-      return { title: 'Appareil introuvable', detail: 'Branche-le, déverrouille-le, puis relance la détection.', safe: true };
+      return { title: t('hw.err.notFoundTitle'), detail: t('hw.err.notFoundDetail'), safe: true };
     case 'HW_LOCKED':
-      return { title: 'Appareil verrouillé', detail: 'Déverrouille-le avec ton code PIN (sur l’appareil, ou la grille pour une Trezor One), puis réessaie.', safe: true };
+      return { title: t('hw.err.lockedTitle'), detail: t('hw.err.lockedDetail'), safe: true };
     case 'HW_WRONG_APP': {
       const d = errorData(e, 'HW_WRONG_APP');
       return {
-        title: 'Mauvaise application ouverte',
-        detail: d ? `Ouvre l’app « ${d.expected} » sur ton Ledger (ouverte : « ${d.open} »), puis réessaie.` : err.message,
+        title: t('hw.err.wrongAppTitle'),
+        detail: d ? t('hw.err.wrongAppDetail', { expected: d.expected, open: d.open }) : err.message,
         safe: true,
       };
     }
     case 'HW_REJECTED':
-      return { title: 'Refusé sur l’appareil', detail: 'Tu as refusé sur l’écran de l’appareil : rien n’a été signé ni envoyé.', safe: true };
+      return { title: t('hw.err.rejectedTitle'), detail: t('hw.err.rejectedDetail'), safe: true };
     case 'HW_DISCONNECTED':
-      return { title: 'Appareil débranché', detail: 'L’appareil a été débranché ou ne répond plus pendant l’opération : elle est abandonnée, rien n’a été signé ni envoyé. Rebranche-le et recommence.', safe: true };
+      return { title: t('hw.err.disconnectedTitle'), detail: t('hw.err.disconnectedDetail'), safe: true };
     case 'HW_TIMEOUT':
-      return { title: 'Pas de réponse de l’appareil', detail: 'Délai dépassé sans confirmation sur l’appareil : opération abandonnée, rien n’a été envoyé.', safe: true };
+      return { title: t('hw.err.timeoutTitle'), detail: t('hw.err.timeoutDetail'), safe: true };
     case 'HW_UNSUPPORTED': {
       const d = errorData(e, 'HW_UNSUPPORTED');
-      const reason = err.message.replace(/^Non pris en charge\s*:\s*/, '');
+      // Rust's message starts with its own prefix (French or English): the title says it already.
+      const reason = err.message.replace(/^(Non pris en charge|Not supported|Unsupported)\s*:\s*/i, '');
       return {
-        title: d?.min ? 'Firmware ou application trop ancien' : 'Non pris en charge',
-        detail: d?.min ? `${reason}. Mets à jour ton appareil (version ${d.min} minimum), puis réessaie.` : `${reason}.`,
+        title: d?.min ? t('hw.err.tooOldTitle') : t('hw.err.unsupportedTitle'),
+        detail: d?.min ? t('hw.err.tooOldDetail', { reason, min: d.min }) : `${reason}.`,
         safe: true,
       };
     }
     case 'HW_BUSY':
-      return { title: 'Appareil occupé', detail: 'Une autre opération est en cours, ou une autre application (Ledger Live, Trezor Suite) utilise l’appareil : ferme-la puis réessaie.', safe: true };
+      return { title: t('hw.err.busyTitle'), detail: t('hw.err.busyDetail'), safe: true };
     case 'HW_BAD_RESPONSE':
-      return { title: 'Réponse de l’appareil refusée', detail: `Kyro a vérifié la réponse de l’appareil et la refuse : rien n’a été envoyé. ${err.message.replace(/^Réponse de l’appareil refusée par Kyro\s*:\s*/, '').replace(/^Réponse de l'appareil refusée par Kyro\s*:\s*/, '')}`, safe: true };
+      // Rust's prefix (« Réponse de l’appareil refusée par Kyro : » or its English version) is the title.
+      return { title: t('hw.err.badResponseTitle'), detail: t('hw.err.badResponseDetail', { reason: err.message.replace(/^Réponse de l[’']appareil refusée par Kyro\s*:\s*/, '').replace(/^[^:]*\bby Kyro\s*:\s*/i, '') }), safe: true };
     case 'HW_ADDRESS_MISMATCH':
-      return { title: 'Adresses différentes', detail: 'L’appareil affiche une autre adresse que celle calculée par Kyro. Ne reçois pas de fonds sur cette adresse.', safe: false };
+      return { title: t('hw.err.mismatchTitle'), detail: t('hw.err.mismatchDetail'), safe: false };
     case 'HW_PAIRING_FAILED':
-      return { title: 'Code incorrect', detail: 'Le code saisi ne correspond pas à celui affiché par ton Trezor (ou l’appareil ne l’a pas confirmé) : rien n’a été enregistré. Recommence : l’appareil affichera un nouveau code.', safe: true };
+      return { title: t('hw.err.pairingFailedTitle'), detail: t('hw.err.pairingFailedDetail'), safe: true };
     case 'HW_PAIRING_REQUIRED':
-      return { title: 'Trezor à appairer', detail: 'Ce Trezor Safe 7 n’est pas (ou plus) appairé avec Kyro. Connecte-le d’abord : Réglages › Appareils › Ajouter un appareil (un code s’affichera sur l’appareil).', safe: true };
+      return { title: t('hw.err.pairingRequiredTitle'), detail: t('hw.err.pairingRequiredDetail'), safe: true };
     case 'HW_WRONG_DEVICE':
-      return { title: 'Pas le bon appareil', detail: 'Les clés de cet appareil ne sont pas celles du compte (autre appareil, autre passphrase, ou compte modifié). Branche l’appareil de ce compte.', safe: true };
+      return { title: t('hw.err.wrongDeviceTitle'), detail: t('hw.err.wrongDeviceDetail'), safe: true };
     case 'USER_REJECTED':
-      return { title: 'Annulé', detail: 'Opération annulée : rien n’a été signé ni envoyé.', safe: true };
+      return { title: t('hw.err.cancelledTitle'), detail: t('hw.err.cancelledDetail'), safe: true };
     case 'LOCKED':
-      return { title: 'Coffre verrouillé', detail: 'Déverrouille Kyro pour utiliser ton hardware wallet.', safe: true };
+      return { title: t('hw.err.vaultLockedTitle'), detail: t('hw.err.vaultLockedDetail'), safe: true };
     default:
-      return { title: 'Erreur', detail: err.message, safe: true };
+      return { title: t('hw.err.genericTitle'), detail: err.message, safe: true };
   }
 }
 
@@ -173,6 +176,6 @@ export const PIN_MATRIX_KEYPAD: readonly (readonly string[])[] = [
 
 export function pinPosition(row: number, col: number): string {
   const p = PIN_MATRIX_KEYPAD[row]?.[col];
-  if (!p) throw new Error('Case de la grille invalide');
+  if (!p) throw new Error(t('hw.invalidCell'));
   return p;
 }

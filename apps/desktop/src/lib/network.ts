@@ -1,17 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Network choice (docs/IPC.md §2.10): labels and the confirmation text. Public data only.
+// Labels are read in the current language each time (getters), so they follow a language change.
 
 import type { Network, NetworkInfo } from '@kyro/shared';
+import { t } from '../i18n';
 
-export const NETWORK_LABEL: Record<Network, string> = {
-  mainnet: 'Réseau principal',
-  testnet: 'Réseau de test',
+export const NETWORK_LABEL: Readonly<Record<Network, string>> = {
+  get mainnet() {
+    return t('shell.networkMainnet');
+  },
+  get testnet() {
+    return t('shell.networkTestnet');
+  },
 };
 
-export const NETWORK_HINT: Record<Network, string> = {
-  mainnet: 'fonds réels',
-  testnet: 'jetons sans valeur',
+export const NETWORK_HINT: Readonly<Record<Network, string>> = {
+  get mainnet() {
+    return t('shell.networkMainnetHint');
+  },
+  get testnet() {
+    return t('shell.networkTestnetHint');
+  },
 };
 
 /** Text of the confirmation dialog (pure, tested). */
@@ -19,11 +29,9 @@ export function networkSwitchText(info: Pick<NetworkInfo, 'network' | 'otherVaul
   const from = NETWORK_LABEL[info.network].toLowerCase();
   const to = NETWORK_LABEL[target].toLowerCase();
   return [
-    hasVault
-      ? `Chaque réseau a son propre coffre. Ton coffre du ${from} est gardé sur cet ordinateur, rien n’est supprimé : tu le retrouves en revenant sur ce réseau.`
-      : 'Chaque réseau a son propre coffre : changer de réseau ne supprime rien.',
-    info.otherVaultExists ? `Un coffre existe déjà sur le ${to} : Kyro le rouvrira (avec son propre mot de passe).` : `Aucun coffre sur le ${to} pour l’instant : tu pourras en créer un ou importer une phrase de récupération.`,
-    target === 'mainnet' ? 'Sur le réseau principal, les montants sont de vrais fonds : chaque envoi est définitif.' : 'Sur le réseau de test, les jetons n’ont aucune valeur : ne t’en sers pas pour recevoir de vrais fonds.',
-    'Kyro se verrouille puis redémarre.',
+    hasVault ? t('shell.switchKeepsVault', { from }) : t('shell.switchNoVault'),
+    info.otherVaultExists ? t('shell.switchOtherExists', { to }) : t('shell.switchOtherNone', { to }),
+    target === 'mainnet' ? t('shell.switchToMainnetNote') : t('shell.switchToTestnetNote'),
+    t('shell.switchRestarts'),
   ];
 }

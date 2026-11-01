@@ -11,8 +11,9 @@ use wallet_core::{Network, XrpAmount, XrpAmountView, XrpPayment, XrpTxSummary, X
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::servers::{host_of, utxo_network_key, XrpServer};
 use crate::state::AppState;
 use crate::xrp_backend::{self, PaymentCheck, XrpAccountInfo, XrpCtx, XrpServerInfo, LLS_OFFSET};
@@ -37,20 +38,21 @@ fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     })
 }
 
-fn xrp(drops: &str) -> String {
-    format!("{} XRP", format_units(drops, 6))
+fn xrp(lang: Lang, drops: &str) -> String {
+    format!("{} XRP", format_units_in(lang, drops, 6))
 }
 
-fn amount_text(a: &XrpAmountView) -> String {
+fn amount_text(lang: Lang, a: &XrpAmountView) -> String {
     match a {
-        XrpAmountView::Xrp { drops } => format!("{} ({drops} drops)", xrp(drops)),
+        XrpAmountView::Xrp { drops } => format!("{} ({drops} drops)", xrp(lang, drops)),
         XrpAmountView::Issued {
             value,
             currency,
             issuer,
         } => format!(
-            "{value} {} (émis par {issuer})",
-            crate::dialog_text::sanitize(currency, 40)
+            "{value} {} ({} {issuer})",
+            crate::dialog_text::sanitize(currency, 40),
+            lang.pick("émis par", "issued by")
         ),
     }
 }
@@ -67,54 +69,94 @@ pub struct XrpContext {
 }
 
 /// Body of the native dialog. The destination tag gets its own framed block, whatever it is.
-pub(crate) fn describe_xrp(s: &XrpTxSummary, c: &XrpContext, net: Network) -> String {
+pub(crate) fn describe_xrp(lang: Lang, s: &XrpTxSummary, c: &XrpContext, net: Network) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
-    let mut out = format!(
-        "Envoi XRP Ledger{}\n\nÀ : {}\n",
-        if net == Network::Testnet {
-            " (testnet)"
-        } else {
-            ""
-        },
-        s.destination
-    );
+    let x = |d: &str| xrp(lang, d);
+    let testnet = if net == Network::Testnet {
+        " (testnet)"
+    } else {
+        ""
+    };
+    let mut out = match lang {
+        Lang::Fr => format!("Envoi XRP Ledger{testnet}\n\nÀ : {}\n", s.destination),
+        Lang::En => format!("XRP Ledger send{testnet}\n\nTo: {}\n", s.destination),
+    };
     out += &format!("{line}\n");
-    match s.destination_tag {
-        Some(t) => out += &format!("TAG DE DESTINATION : {t}\n"),
-        None => out += "AUCUN TAG DE DESTINATION\n(une plateforme d'échange ou un service en exige souvent un : sans lui, les fonds peuvent être perdus)\n",
+    match (s.destination_tag, lang) {
+        (Some(t), Lang::Fr) => out += &format!("TAG DE DESTINATION : {t}\n"),
+        (Some(t), Lang::En) => out += &format!("DESTINATION TAG: {t}\n"),
+        (None, Lang::Fr) => out += "AUCUN TAG DE DESTINATION\n(une plateforme d'échange ou un service en exige souvent un : sans lui, les fonds peuvent être perdus)\n",
+        (None, Lang::En) => out += "NO DESTINATION TAG\n(an exchange or a service often requires one: without it, the funds can be lost)\n",
     }
     out += &format!("{line}\n");
-    out += &format!("Montant : {}\n", amount_text(&s.amount));
+    out += &format!(
+        "{}{}\n",
+        lang.pick("Montant : ", "Amount: "),
+        amount_text(lang, &s.amount)
+    );
     if let Some(m) = &s.send_max {
-        out += &format!("Dépense au plus (SendMax) : {}\n", amount_text(m));
+        out += &format!(
+            "{}{}\n",
+            lang.pick("Dépense au plus (SendMax) : ", "Spends at most (SendMax): "),
+            amount_text(lang, m)
+        );
     }
     if !c.destination.exists {
-        out += &format!(
-            "\nCe compte n'existe pas encore : ce paiement le crée (réserve de {} bloquée chez lui).\n",
-            xrp(&c.reserve_base)
-        );
+        out += &match lang {
+            Lang::Fr => format!(
+                "\nCe compte n'existe pas encore : ce paiement le crée (réserve de {} bloquée chez lui).\n",
+                x(&c.reserve_base)
+            ),
+            Lang::En => format!(
+                "\nThis account does not exist yet: this payment creates it ({} reserve locked on it).\n",
+                x(&c.reserve_base)
+            ),
+        };
     }
-    out += &format!(
-        "\nFrais : {} ({} drops)\nSolde : {} · réserve bloquée : {} ({} + {} × {} objet(s)) · disponible : {}\n",
-        xrp(&s.fee),
-        s.fee,
-        xrp(&c.account.balance),
-        xrp(&c.account.reserve),
-        xrp(&c.reserve_base),
-        xrp(&c.reserve_inc),
-        c.account.owner_count,
-        xrp(&c.account.spendable)
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais : {} ({} drops)\nSolde : {} · réserve bloquée : {} ({} + {} × {} objet(s)) · disponible : {}\n",
+            x(&s.fee),
+            s.fee,
+            x(&c.account.balance),
+            x(&c.account.reserve),
+            x(&c.reserve_base),
+            x(&c.reserve_inc),
+            c.account.owner_count,
+            x(&c.account.spendable)
+        ),
+        Lang::En => format!(
+            "\nFee: {} ({} drops)\nBalance: {} · locked reserve: {} ({} + {} × {} object(s)) · available: {}\n",
+            x(&s.fee),
+            s.fee,
+            x(&c.account.balance),
+            x(&c.account.reserve),
+            x(&c.reserve_base),
+            x(&c.reserve_inc),
+            c.account.owner_count,
+            x(&c.account.spendable)
+        ),
+    };
     if let Some(l) = s.last_ledger_sequence {
-        out += &format!(
-            "Valable jusqu'au registre n° {l} (≈ 1 min), séquence {}\n",
-            s.sequence
-        );
+        out += &match lang {
+            Lang::Fr => format!(
+                "Valable jusqu'au registre n° {l} (≈ 1 min), séquence {}\n",
+                s.sequence
+            ),
+            Lang::En => format!(
+                "Valid until ledger no. {l} (≈ 1 min), sequence {}\n",
+                s.sequence
+            ),
+        };
     }
     // Untrusted text, after the amounts and fees, one quoted line each.
     for m in &s.memos {
         out += &format!(
-            "Mémo (texte libre, non vérifié) : {}\n",
+            "{}{}\n",
+            lang.pick(
+                "Mémo (texte libre, non vérifié) : ",
+                "Memo (free text, not verified): "
+            ),
             crate::dialog_text::field(
                 m.text
                     .as_deref()
@@ -127,25 +169,41 @@ pub(crate) fn describe_xrp(s: &XrpTxSummary, c: &XrpContext, net: Network) -> St
     out
 }
 
-pub(crate) fn describe_xrp_extra(s: &XrpTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans ce paiement :\n");
+pub(crate) fn describe_xrp_extra(lang: Lang, s: &XrpTxSummary) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des éléments inhabituels dans ce paiement :\n",
+        "Kyro found unusual elements in this payment:\n",
+    ));
     for w in &s.warnings {
         out += match w {
-            XrpWarning::SendMax => {
-                "• SendMax : paiement converti, qui peut dépenser jusqu'au montant SendMax\n"
-            }
-            XrpWarning::PathFlags => "• options de chemin (tfNoRippleDirect / tfLimitQuality)\n",
-            XrpWarning::Memo => "• la transaction porte un mémo, public à jamais sur le registre\n",
-            XrpWarning::HighFee => {
-                "• frais supérieurs à 1 XRP (d'habitude quelques dizaines de drops)\n"
-            }
-            XrpWarning::InvoiceId => "• identifiant de facture (InvoiceID)\n",
-            XrpWarning::UnusualText => {
-                "• mémo contenant des caractères invisibles / de contrôle, ou trop long (affiché nettoyé)\n"
-            }
+            XrpWarning::SendMax => lang.pick(
+                "• SendMax : paiement converti, qui peut dépenser jusqu'au montant SendMax\n",
+                "• SendMax: converted payment, which can spend up to the SendMax amount\n",
+            ),
+            XrpWarning::PathFlags => lang.pick(
+                "• options de chemin (tfNoRippleDirect / tfLimitQuality)\n",
+                "• path options (tfNoRippleDirect / tfLimitQuality)\n",
+            ),
+            XrpWarning::Memo => lang.pick(
+                "• la transaction porte un mémo, public à jamais sur le registre\n",
+                "• the transaction carries a memo, public forever on the ledger\n",
+            ),
+            XrpWarning::HighFee => lang.pick(
+                "• frais supérieurs à 1 XRP (d'habitude quelques dizaines de drops)\n",
+                "• fee above 1 XRP (usually a few dozen drops)\n",
+            ),
+            XrpWarning::InvoiceId => lang.pick(
+                "• identifiant de facture (InvoiceID)\n",
+                "• invoice identifier (InvoiceID)\n",
+            ),
+            XrpWarning::UnusualText => lang.pick(
+                "• mémo contenant des caractères invisibles / de contrôle, ou trop long (affiché nettoyé)\n",
+                "• memo with invisible / control characters, or too long (shown cleaned)\n",
+            ),
         };
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -397,18 +455,22 @@ pub async fn xrp_sign_tx(
     let c = ctx(&state);
     let (summary, context) = prepare_sign(&c, &me, &pk, &blob).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer le paiement XRP",
-        signer.body(&describe_xrp(&summary, &context, state.network)),
+        lang.pick("Confirmer le paiement XRP", "Confirm the XRP payment"),
+        signer.body(lang, &describe_xrp(lang, &summary, &context, state.network)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : paiement à vérifier",
-            describe_xrp_extra(&summary),
+            lang.pick(
+                "Attention : paiement à vérifier",
+                "Warning: payment to check",
+            ),
+            describe_xrp_extra(lang, &summary),
         )
         .await?;
     }
@@ -535,7 +597,12 @@ mod tests {
 
     #[test]
     fn dialog_highlights_the_destination_tag_and_shows_the_reserve() {
-        let d = describe_xrp(&summary(Some(12_345)), &context(true), Network::Testnet);
+        let d = describe_xrp(
+            Lang::Fr,
+            &summary(Some(12_345)),
+            &context(true),
+            Network::Testnet,
+        );
         for needle in [
             "Envoi XRP Ledger (testnet)",
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nTAG DE DESTINATION : 12345\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
@@ -547,12 +614,44 @@ mod tests {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
         assert!(!d.contains("n'existe pas encore"));
-        let d = describe_xrp(&summary(None), &context(false), Network::Mainnet);
+        let d = describe_xrp(Lang::Fr, &summary(None), &context(false), Network::Mainnet);
         assert!(d.contains("AUCUN TAG DE DESTINATION"));
         assert!(d.contains("ce paiement le crée (réserve de 1 XRP"));
         let mut s = summary(None);
         s.warnings = vec![XrpWarning::SendMax, XrpWarning::Memo];
-        let x = describe_xrp_extra(&s);
+        let x = describe_xrp_extra(Lang::Fr, &s);
         assert!(x.contains("SendMax") && x.contains("mémo"));
+    }
+
+    #[test]
+    fn dialog_in_english() {
+        let d = describe_xrp(
+            Lang::En,
+            &summary(Some(12_345)),
+            &context(true),
+            Network::Testnet,
+        );
+        for needle in [
+            "XRP Ledger send (testnet)",
+            "To: rBKz5MC2iXdoS3XgnNSYmF69K1Yo4NS3Ws",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nDESTINATION TAG: 12345\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "Amount: 20 XRP (20000000 drops)",
+            "Fee: 0.000012 XRP (12 drops)",
+            "locked reserve: 1.2 XRP (1 XRP + 0.2 XRP × 1 object(s)) · available: 98.8 XRP",
+            "Valid until ledger no. 1234",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        let d = describe_xrp(Lang::En, &summary(None), &context(false), Network::Mainnet);
+        assert!(d.contains("NO DESTINATION TAG"));
+        assert!(d.contains("the funds can be lost"));
+        assert!(d.contains("this payment creates it (1 XRP reserve"));
+        let mut s = summary(None);
+        s.warnings = vec![XrpWarning::SendMax, XrpWarning::Memo];
+        let x = describe_xrp_extra(Lang::En, &s);
+        assert!(x.contains("public forever on the ledger"));
+        for fr in ["Montant", "Frais", "Solde", "mémo", "Signer"] {
+            assert!(!d.contains(fr) && !x.contains(fr), "{fr}");
+        }
     }
 }

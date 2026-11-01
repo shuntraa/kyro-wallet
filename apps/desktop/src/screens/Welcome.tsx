@@ -17,10 +17,12 @@ import { Button, Notice, Segmented, Spinner } from '../components/ui/primitives'
 import { Dialog } from '../components/ui/dialog';
 import { HwSetup } from '../components/hw';
 import { IconBack, IconChevronRight, IconImport, IconPlus, IconUsbKey, IconWarn } from '../components/icons';
-import { DEMO_PASSWORD_HINT } from './demoHint';
+import { demoPasswordHint } from './demoHint';
 import { NetworkSwitchDialog, useNetworkInfo } from '../components/NetworkSwitch';
-import { NETWORK_HINT, NETWORK_LABEL } from '../lib/network';
+import { NETWORK_HINT } from '../lib/network';
 import { idx } from '../components/motion';
+import { t, useT } from '../i18n';
+import { rt } from '../i18n/rich';
 
 /** Onboarding side panel: the logo and the name, nothing decorative. */
 function BrandPanel() {
@@ -33,6 +35,7 @@ function BrandPanel() {
 }
 
 export function OnboardingFrame({ children, status }: { children: ReactNode; status?: ReactNode }) {
+  const { t } = useT();
   return (
     <div className="flex h-full flex-col bg-bg text-text">
       <TitleBar bordered={false} />
@@ -40,7 +43,7 @@ export function OnboardingFrame({ children, status }: { children: ReactNode; sta
         <BrandPanel />
         <main className="flex min-w-0 flex-1 flex-col justify-center overflow-y-auto px-[min(88px,6.5vw)] py-8 scroll-thin">{children}</main>
       </div>
-      <StatusFrame left={status ?? <span className="text-mute">Aucun coffre sur cet appareil</span>} />
+      <StatusFrame left={status ?? <span className="text-mute">{t('welcome.noVaultHere')}</span>} />
     </div>
   );
 }
@@ -53,15 +56,16 @@ export function Welcome() {
   const { network, enterVault } = useApp();
   const netInfo = useNetworkInfo();
   const [switchTo, setSwitchTo] = useState<'mainnet' | 'testnet' | null>(null);
+  const { t } = useT();
 
   if (mode === 'create') return <CreateFlow onCancel={() => setMode('home')} />;
   if (mode === 'import') return <ImportFlow onCancel={() => setMode('home')} />;
   if (mode === 'hw') {
     return (
-      <OnboardingFrame status={<span className="text-mute">Hardware wallet seul : pas de coffre ni de mot de passe Kyro</span>}>
+      <OnboardingFrame status={<span className="text-mute">{t('welcome.hwOnlyStatus')}</span>}>
         <div className="flex max-w-[600px] flex-col gap-6">
-          <StepHeader step={1} total={1} title="Utiliser un Ledger ou une Trezor" onBack={() => setMode('home')}>
-            Tes clés restent dans l’appareil. Kyro n’enregistre que des clés publiques ; chaque transaction se confirme sur l’écran de l’appareil. Pas de coffre ni de mot de passe Kyro dans ce mode.
+          <StepHeader step={1} total={1} title={t('welcome.hwTitle')} onBack={() => setMode('home')}>
+            {t('welcome.hwIntro')}
           </StepHeader>
           <HwSetup onCancel={() => setMode('home')} onDone={() => void enterVault()} />
         </div>
@@ -74,28 +78,28 @@ export function Welcome() {
       <div className="flex max-w-[560px] flex-col gap-10">
         <div className="flex flex-col gap-3">
           <h1 className="rise m-0 text-[32px] leading-[1.15] font-semibold tracking-[-0.02em]" style={idx(0)}>
-            Bienvenue sur Kyro
+            {t('welcome.title')}
           </h1>
-          <p className="rise m-0 max-w-[440px] text-[15px] leading-[1.6] text-mute" style={idx(1)}>Choisis comment tu veux commencer. Tes clés restent sur cet ordinateur ou dans ton hardware wallet.</p>
+          <p className="rise m-0 max-w-[440px] text-[15px] leading-[1.6] text-mute" style={idx(1)}>{t('welcome.subtitle')}</p>
         </div>
 
         <div className="rise flex max-w-[540px] flex-col border-t border-line" style={idx(2)}>
           <ChoiceCard
             icon={<IconUsbKey size={20} />}
             iconClass="text-ice"
-            title="Utiliser un Ledger / Trezor"
-            subtitle="Recommandé. Tes clés ne quittent jamais l’appareil ; chaque transaction se vérifie sur son écran."
+            title={t('welcome.choiceHw')}
+            subtitle={t('welcome.choiceHwSub')}
             onClick={() => setMode('hw')}
           />
-          <ChoiceCard icon={<IconPlus size={20} />} title="Créer un nouveau coffre" subtitle="24 mots à écrire sur papier, jamais copiés." onClick={() => setMode('create')} />
-          <ChoiceCard icon={<IconImport size={20} />} title="Importer une phrase de récupération" subtitle="12 ou 24 mots BIP39, depuis un autre wallet." onClick={() => setMode('import')} />
+          <ChoiceCard icon={<IconPlus size={20} />} title={t('welcome.choiceCreate')} subtitle={t('welcome.choiceCreateSub')} onClick={() => setMode('create')} />
+          <ChoiceCard icon={<IconImport size={20} />} title={t('welcome.choiceImport')} subtitle={t('welcome.choiceImportSub')} onClick={() => setMode('import')} />
         </div>
 
         <p className="rise -mt-6 m-0 text-[13px] text-mute" style={idx(3)}>
-          Le coffre sera créé sur le <span className="text-text2">{NETWORK_LABEL[network].toLowerCase()}</span> ({NETWORK_HINT[network]}).{' '}
+          {rt(network === 'mainnet' ? 'welcome.vaultOnMainnet' : 'welcome.vaultOnTestnet', { b: (c) => <span className="text-text2">{c}</span> }, { hint: NETWORK_HINT[network] })}{' '}
           {netInfo.data?.canSwitch && (
             <button type="button" className="text-ice underline decoration-ice/40 underline-offset-[4px] hover:decoration-ice" onClick={() => setSwitchTo(network === 'mainnet' ? 'testnet' : 'mainnet')}>
-              Passer sur le {NETWORK_LABEL[network === 'mainnet' ? 'testnet' : 'mainnet'].toLowerCase()}
+              {t(network === 'mainnet' ? 'welcome.switchToTestnet' : 'welcome.switchToMainnet')}
             </button>
           )}
         </p>
@@ -103,9 +107,9 @@ export function Welcome() {
         <div className="rise flex gap-6 text-[13px]" style={idx(4)}>
           {(
             [
-              ['threat', 'Modèle de menace'],
-              ['code', 'Code source'],
-              ['network', 'Requêtes réseau'],
+              ['threat', t('welcome.threatModel')],
+              ['code', t('welcome.sourceCode')],
+              ['network', t('welcome.networkRequests')],
             ] as const
           ).map(([k, label]) => (
             <button key={k} type="button" className="text-mute underline decoration-line-3 underline-offset-[5px] transition-colors hover:text-text hover:decoration-ice" onClick={() => setInfo(k)}>
@@ -116,18 +120,18 @@ export function Welcome() {
       </div>
 
       {netInfo.data && <NetworkSwitchDialog info={netInfo.data} target={switchTo} hasVault={false} onClose={() => setSwitchTo(null)} />}
-      <Dialog open={info === 'threat'} onOpenChange={() => setInfo(null)} title="Modèle de menace">
+      <Dialog open={info === 'threat'} onOpenChange={() => setInfo(null)} title={t('welcome.threatModel')}>
         <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-[13px] leading-[1.55] text-text2">
-          <li>Ta phrase est chiffrée sur cet appareil (Argon2id + XChaCha20-Poly1305). Sans ton mot de passe, le fichier du coffre est inutilisable.</li>
-          <li>L’interface ne voit jamais tes clés : la dérivation et les signatures se font dans le noyau Rust.</li>
-          <li>Chaque signature redemande ton mot de passe et affiche une fenêtre système avec le résumé décodé par le noyau.</li>
-          <li>Kyro ne protège pas contre un appareil déjà compromis (enregistreur de frappe, accès root). Pour cela : un hardware wallet.</li>
+          <li>{t('welcome.threat1')}</li>
+          <li>{t('welcome.threat2')}</li>
+          <li>{t('welcome.threat3')}</li>
+          <li>{t('welcome.threat4')}</li>
         </ul>
       </Dialog>
-      <Dialog open={info === 'code'} onOpenChange={() => setInfo(null)} title="Code source">
-        <p className="m-0 text-[13px] leading-[1.55] text-text2">Kyro est un logiciel libre sous licence GPL-3.0-or-later. Tout le code (interface, noyau, coquille Tauri) est publié et le build est vérifiable : ce que tu installes correspond au code publié.</p>
+      <Dialog open={info === 'code'} onOpenChange={() => setInfo(null)} title={t('welcome.sourceCode')}>
+        <p className="m-0 text-[13px] leading-[1.55] text-text2">{t('welcome.sourceText')}</p>
       </Dialog>
-      <Dialog open={info === 'network'} onOpenChange={() => setInfo(null)} title="Requêtes réseau" description="La liste complète des serveurs que Kyro peut contacter. Tout le reste est bloqué par le noyau.">
+      <Dialog open={info === 'network'} onOpenChange={() => setInfo(null)} title={t('welcome.networkRequests')} description={t('welcome.networkDesc')}>
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
           {outgoingHosts(network).map((h) => (
             <li key={h.host + h.purpose} className="flex flex-col border-t border-line py-2 first:border-t-0">
@@ -161,16 +165,17 @@ function ChoiceCard({ icon, title, subtitle, onClick, disabled, iconClass }: { i
 }
 
 function StepHeader({ step, total, title, onBack, children }: { step: number; total: number; title: string; onBack?: () => void; children?: ReactNode }) {
+  const { t } = useT();
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
         {onBack && (
-          <button type="button" aria-label="Retour" onClick={onBack} className="press flex size-9 items-center justify-center rounded-ctl border border-line-2 text-mute hover:border-line-3 hover:bg-raised hover:text-text">
+          <button type="button" aria-label={t('common.back')} onClick={onBack} className="press flex size-9 items-center justify-center rounded-ctl border border-line-2 text-mute hover:border-line-3 hover:bg-raised hover:text-text">
             <IconBack size={16} />
           </button>
         )}
         <span className="eyebrow">
-          Étape {step} sur {total}
+          {t('welcome.stepOf', { step, total })}
         </span>
         <span aria-hidden="true" className="flex gap-1">
           {Array.from({ length: total }, (_, i) => (
@@ -185,8 +190,8 @@ function StepHeader({ step, total, title, onBack, children }: { step: number; to
 }
 
 function passwordIssues(pw: string, confirm: string): string | null {
-  if (pw.length < 8) return 'Au moins 8 caractères (une phrase de 4 mots, c’est mieux).';
-  if (confirm && pw !== confirm) return 'Les deux mots de passe ne correspondent pas.';
+  if (pw.length < 8) return t('welcome.pwTooShort');
+  if (confirm && pw !== confirm) return t('welcome.pwMismatch');
   return null;
 }
 
@@ -195,14 +200,15 @@ function PasswordStep({ busy, error, onSubmit, cta, extra }: { busy: boolean; er
   const [confirm, setConfirm] = useState('');
   const issue = passwordIssues(pw, confirm);
   const { demo } = useApp();
+  const { t } = useT();
   const ok = !issue && confirm === pw && pw.length > 0;
   return (
     <div className="flex max-w-[460px] flex-col gap-4">
       {extra}
-      <PasswordField id="pw-new" label="Mot de passe du coffre" value={pw} onChange={setPw} autoFocus autoComplete="new-password" />
-      <PasswordField id="pw-confirm" label="Confirme le mot de passe" value={confirm} onChange={setConfirm} autoComplete="new-password" invalid={!!confirm && confirm !== pw} onEnter={() => ok && onSubmit(pw)} />
-      <p className="m-0 text-[12px] leading-[1.5] text-mute">{issue ?? 'Il chiffre le coffre sur cet appareil et sera demandé à chaque signature. Kyro ne peut pas le récupérer.'}</p>
-      {demo && <p className="m-0 text-[12px] text-ice-text2">{DEMO_PASSWORD_HINT}</p>}
+      <PasswordField id="pw-new" label={t('shell.vaultPassword')} value={pw} onChange={setPw} autoFocus autoComplete="new-password" />
+      <PasswordField id="pw-confirm" label={t('welcome.confirmPassword')} value={confirm} onChange={setConfirm} autoComplete="new-password" invalid={!!confirm && confirm !== pw} onEnter={() => ok && onSubmit(pw)} />
+      <p className="m-0 text-[12px] leading-[1.5] text-mute">{issue ?? t('welcome.pwHelp')}</p>
+      {demo && <p className="m-0 text-[12px] text-ice-text2">{demoPasswordHint()}</p>}
       {error && <Notice tone="error">{error}</Notice>}
       <Button variant="primary" size="xl" disabled={!ok || busy} onClick={() => onSubmit(pw)} className="mt-1 self-start">
         {busy && <Spinner />} {cta}
@@ -238,6 +244,7 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
   const [answers, setAnswers] = useState<string[]>(['', '', '']);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [giveUp, setGiveUp] = useState(false);
+  const { t, tp } = useT();
 
   const create = async (pw: string) => {
     setBusy(true);
@@ -286,9 +293,9 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
       }
       if (res.attemptsLeft === 0) {
         setGiveUp(true);
-        setVerifyError('Trop d’essais. Ta sauvegarde n’est pas vérifiée : réaffiche ta phrase depuis Réglages › Sécurité (mot de passe demandé) et recopie-la.');
+        setVerifyError(t('welcome.tooManyTries'));
       } else {
-        setVerifyError(`Un ou plusieurs mots ne correspondent pas (encore ${res.attemptsLeft} essai${res.attemptsLeft > 1 ? 's' : ''}). Vérifie ta feuille, ou réaffiche la phrase.`);
+        setVerifyError(tp('welcome.wordsMismatch', res.attemptsLeft));
       }
     } catch (e) {
       setVerifyError(toIpcError(e).message);
@@ -306,18 +313,18 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
     return (
       <OnboardingFrame>
         <div className="flex flex-col gap-7">
-          <StepHeader step={1} total={3} title="Choisis ton mot de passe" onBack={onCancel}>
-            Ensuite, Kyro génère ta phrase de récupération et l’affiche dans une fenêtre du système.
+          <StepHeader step={1} total={3} title={t('welcome.choosePassword')} onBack={onCancel}>
+            {t('welcome.choosePasswordIntro')}
           </StepHeader>
           <PasswordStep
             busy={busy}
             error={error}
             onSubmit={create}
-            cta="Créer le coffre"
+            cta={t('welcome.createVault')}
             extra={
               <div className="flex items-center justify-between gap-4">
-                <span className="text-[13px] text-text2">Longueur de la phrase</span>
-                <Segmented label="Nombre de mots" value={count} onChange={(v) => setCount(v)} options={[{ value: 24, label: '24 mots' }, { value: 12, label: '12 mots' }]} />
+                <span className="text-[13px] text-text2">{t('welcome.phraseLength')}</span>
+                <Segmented label={t('welcome.wordCount')} value={count} onChange={(v) => setCount(v)} options={[{ value: 24, label: t('welcome.words24') }, { value: 12, label: t('welcome.words12') }]} />
               </div>
             }
           />
@@ -330,24 +337,24 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
     return (
       <OnboardingFrame>
         <div className="flex flex-col gap-6">
-          <StepHeader step={2} total={3} title="Écris ta phrase sur papier">
-            Kyro affiche tes {wordCount} mots dans une fenêtre du système, hors de cette interface : même un module compromis de l’interface ne peut pas les lire. Écris-les dans l’ordre, au stylo. Pas de photo, pas de copie, pas de cloud.
+          <StepHeader step={2} total={3} title={t('welcome.writeTitle')}>
+            {t('welcome.writeIntro', { count: wordCount })}
           </StepHeader>
           <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-            Vérifie que personne ne regarde ton écran et qu’aucun partage d’écran n’est actif : le blocage des captures ne s’applique pas aux fenêtres du système.
+            {t('welcome.writeWarn')}
           </Notice>
           <div className="flex flex-wrap items-center gap-3">
             <Button variant={seen ? 'secondary' : 'primary'} size="xl" disabled={busy} onClick={() => void show()}>
-              {busy && <Spinner />} {busy ? 'Fenêtre système ouverte…' : seen ? 'Réafficher la phrase' : 'Afficher ma phrase'}
+              {busy && <Spinner />} {busy ? t('common.systemWindowOpen') : seen ? t('welcome.showAgain') : t('welcome.showPhrase')}
             </Button>
           </div>
           {error && <Notice tone="error">{error}</Notice>}
           <label className="flex items-center gap-3 text-[14px]">
             <input type="checkbox" checked={written} disabled={!seen} onChange={(e) => setWritten(e.target.checked)} className="size-4" />
-            J’ai écrit les {wordCount} mots, dans l’ordre.
+            {t('welcome.wroteWords', { count: wordCount })}
           </label>
           <Button variant="primary" size="xl" className="self-start" disabled={!seen || !written || busy} onClick={goVerify}>
-            Vérifier ma sauvegarde
+            {t('welcome.verifyBackup')}
           </Button>
         </div>
       </OnboardingFrame>
@@ -357,8 +364,8 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
   return (
     <OnboardingFrame>
       <div className="flex flex-col gap-6">
-        <StepHeader step={3} total={3} title="Vérifie trois mots" onBack={() => setStep('phrase')}>
-          Pour être sûr que ta feuille est juste, saisis les mots demandés (Kyro les vérifie sans te les montrer ici).
+        <StepHeader step={3} total={3} title={t('welcome.verifyTitle')} onBack={() => setStep('phrase')}>
+          {t('welcome.verifyIntro')}
         </StepHeader>
         <div className="flex max-w-[520px] flex-col gap-3">
           {checks.map((index, i) => (
@@ -376,12 +383,12 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
         <div className="flex gap-2">
           {giveUp ? (
             <Button variant="primary" size="xl" onClick={() => void continueUnverified()}>
-              Continuer sans vérification
+              {t('welcome.continueUnverified')}
             </Button>
           ) : (
             <>
               <Button variant="primary" size="xl" disabled={busy || answers.some((a) => !a.trim())} onClick={() => void verify()}>
-                {busy && <Spinner />} Terminer
+                {busy && <Spinner />} {t('welcome.finish')}
               </Button>
               <Button
                 variant="secondary"
@@ -392,7 +399,7 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
                   setStep('phrase');
                 }}
               >
-                Revoir la phrase
+                {t('welcome.reviewPhrase')}
               </Button>
             </>
           )}
@@ -405,6 +412,7 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
 /** Word field with BIP39 autocomplete (English wordlist). */
 function WordInput({ index, value, onChange, autoFocus, onEnter, onPasteMany, compact }: { index: number; value: string; onChange: (v: string) => void; autoFocus?: boolean; onEnter?: () => void; onPasteMany?: (words: string[]) => void; compact?: boolean }) {
   const [focused, setFocused] = useState(false);
+  const { t } = useT();
   const v = value.trim().toLowerCase();
   const suggestions = useMemo(() => (v.length >= 1 ? wordlist.filter((w) => w.startsWith(v)).slice(0, 4) : []), [v]);
   const known = v.length > 0 && wordlist.includes(v);
@@ -414,10 +422,10 @@ function WordInput({ index, value, onChange, autoFocus, onEnter, onPasteMany, co
     <div className="relative">
       <label className={cn('flex items-center gap-2.5 rounded-ctl border bg-card px-3 transition-colors focus-within:border-ice-line', compact ? 'h-10' : 'h-12', invalid ? 'border-down/60' : 'border-line hover:border-line-2')}>
         <span className="w-6 font-mono text-[11px] text-faint">{index + 1}</span>
-        <span className="sr-only">Mot {index + 1}</span>
+        <span className="sr-only">{t('welcome.wordN', { n: index + 1 })}</span>
         <input
           value={value}
-          aria-label={`Mot ${index + 1}`}
+          aria-label={t('welcome.wordN', { n: index + 1 })}
           autoFocus={autoFocus}
           spellCheck={false}
           autoComplete="off"
@@ -463,6 +471,7 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
   const [step, setStep] = useState<'phrase' | 'password'>('phrase');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useT();
 
   useCaptureProtection(true);
   // No unmount cleanup clearing `words`: StrictMode's mount/unmount/remount ran it right away and
@@ -504,22 +513,22 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
     return (
       <OnboardingFrame>
         <div className="flex flex-col gap-7">
-          <StepHeader step={2} total={2} title="Protège ce coffre" onBack={() => setStep('phrase')}>
-            Choisis un mot de passe pour chiffrer la phrase importée sur cet appareil.
+          <StepHeader step={2} total={2} title={t('welcome.protectTitle')} onBack={() => setStep('phrase')}>
+            {t('welcome.protectIntro')}
           </StepHeader>
-          <PasswordStep busy={busy} error={error} onSubmit={(pw) => void submit(pw)} cta="Importer" />
+          <PasswordStep busy={busy} error={error} onSubmit={(pw) => void submit(pw)} cta={t('welcome.import')} />
         </div>
       </OnboardingFrame>
     );
   }
 
   return (
-    <OnboardingFrame status={<span className="text-warn">Captures d’écran bloquées pendant la saisie</span>}>
+    <OnboardingFrame status={<span className="text-warn">{t('welcome.captureBlocked')}</span>}>
       <div className="flex flex-col gap-6">
-        <StepHeader step={1} total={2} title="Importer une phrase" onBack={onCancel}>
-          Saisis tes mots BIP39 (anglais) dans l’ordre. Tu peux coller la phrase entière dans la première case.
+        <StepHeader step={1} total={2} title={t('welcome.importTitle')} onBack={onCancel}>
+          {t('welcome.importIntro')}
         </StepHeader>
-        <Segmented className="self-start" label="Nombre de mots" value={count} onChange={resize} options={[{ value: 12, label: '12 mots' }, { value: 24, label: '24 mots' }]} />
+        <Segmented className="self-start" label={t('welcome.wordCount')} value={count} onChange={resize} options={[{ value: 12, label: t('welcome.words12') }, { value: 24, label: t('welcome.words24') }]} />
         <div className={cn('grid max-w-[680px] gap-2', count === 24 ? 'grid-cols-4' : 'grid-cols-3')}>
           {words.map((w, i) => (
             <WordInput key={`${count}-${i}`} compact index={i} value={w} autoFocus={i === 0} onChange={(v) => setWords((ws) => ws.map((x, j) => (j === i ? v : x)))} onPasteMany={(parts) => pasteMany(i, parts)} />
@@ -527,17 +536,17 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
         </div>
         <div className="text-[13px]">
           {unknown > 0 ? (
-            <span className="text-down">{unknown} mot(s) hors de la liste BIP39.</span>
+            <span className="text-down">{t('welcome.unknownWords', { count: unknown })}</span>
           ) : filled && !valid ? (
-            <span className="text-down">Somme de contrôle invalide : un mot est faux ou mal placé.</span>
+            <span className="text-down">{t('welcome.badChecksum')}</span>
           ) : valid ? (
-            <span className="text-up">✓ Phrase valide.</span>
+            <span className="text-up">{t('welcome.validPhrase')}</span>
           ) : (
-            <span className="text-mute">Les mots restent sur cet appareil et sont effacés de l’écran après l’import.</span>
+            <span className="text-mute">{t('welcome.wordsStayHere')}</span>
           )}
         </div>
         <Button variant="primary" size="xl" className="self-start" disabled={!valid} onClick={() => setStep('password')}>
-          Continuer
+          {t('common.continue')}
         </Button>
       </div>
     </OnboardingFrame>

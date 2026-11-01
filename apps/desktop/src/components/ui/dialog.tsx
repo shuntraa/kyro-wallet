@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import * as D from '@radix-ui/react-dialog';
 import { cn } from '../../lib/cn';
 import { IconX } from '../icons';
+import { t } from '../../i18n';
 
 export function Dialog({
   open,
@@ -34,7 +35,7 @@ export function Dialog({
           <div className="flex items-start justify-between gap-4">
             <D.Title className="m-0 text-[19px] leading-[1.25] font-[560] tracking-[-0.025em]">{title}</D.Title>
             {dismissable && (
-              <D.Close aria-label="Fermer" className="press -mt-1 -mr-1 flex size-8 items-center justify-center rounded-ctl text-mute hover:bg-raised hover:text-text">
+              <D.Close aria-label={t('common.close')} className="press -mt-1 -mr-1 flex size-8 items-center justify-center rounded-ctl text-mute hover:bg-raised hover:text-text">
                 <IconX size={16} />
               </D.Close>
             )}

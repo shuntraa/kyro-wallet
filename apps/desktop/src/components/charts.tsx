@@ -6,6 +6,7 @@ import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { areaPath, downsample, fitSeries, smoothPath } from '../lib/smooth';
 import { EASE_OUT } from './motion';
+import { t } from '../i18n';
 
 const VB_W = 1000;
 
@@ -119,7 +120,7 @@ export function AllocationBar({ slices, className }: { slices: RingSlice[]; clas
   const total = slices.reduce((s, x) => s + x.value, 0);
   const label = slices.map((s) => `${s.label} ${total ? Math.round((s.value / total) * 100) : 0} %`).join(', ');
   return (
-    <div role="img" aria-label={label || 'Aucune répartition'} className={`flex h-2 w-full gap-[2px] overflow-hidden rounded-[2px] bg-control ${className ?? ''}`}>
+    <div role="img" aria-label={label || t('shell.noAllocation')} className={`flex h-2 w-full gap-[2px] overflow-hidden rounded-[2px] bg-control ${className ?? ''}`}>
       {total > 0 &&
         slices.map((s, i) => (
           <motion.span
@@ -145,7 +146,7 @@ export function AllocationRing({ slices, center, size = 120 }: { slices: RingSli
   const label = slices.map((s) => `${s.label} ${total ? Math.round((s.value / total) * 100) : 0} %`).join(', ');
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox="0 0 120 120" role="img" aria-label={label || 'Aucune répartition'}>
+      <svg width={size} height={size} viewBox="0 0 120 120" role="img" aria-label={label || t('shell.noAllocation')}>
         <g transform="rotate(-90 60 60)" fill="none" strokeWidth="10">
           <circle cx="60" cy="60" r={r} stroke="#1D1F24" />
           {total > 0 &&

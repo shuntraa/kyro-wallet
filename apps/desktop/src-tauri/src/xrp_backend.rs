@@ -546,7 +546,12 @@ mod live {
         assert_eq!(summary, built.summary);
         eprintln!(
             "--- dialog ---\n{}---",
-            crate::commands_xrp::describe_xrp(&summary, &context, Network::Testnet)
+            crate::commands_xrp::describe_xrp(
+                crate::i18n::Lang::Fr,
+                &summary,
+                &context,
+                Network::Testnet
+            )
         );
         assert!(!summary.requires_extra_confirmation);
         let (signed, hash, again) = wallet_core::xrp_sign(seed, 0, &built.blob).unwrap();

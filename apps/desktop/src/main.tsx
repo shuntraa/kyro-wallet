@@ -9,6 +9,8 @@ import { App } from './App';
 import { torStore } from './state/tor';
 import { cbfStore } from './state/cbf';
 import { hwPromptStore } from './state/hw';
+import { navigatorLang } from '@kyro/shared';
+import { setSystemLanguage } from './i18n';
 
 const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.closest('input, textarea, [contenteditable="true"]') !== null);
 
@@ -19,6 +21,9 @@ document.addEventListener('contextmenu', (e) => {
 document.addEventListener('dragstart', (e) => {
   if (!isField(e.target)) e.preventDefault();
 });
+
+// Language until Rust answers (config_get.systemLanguage, settings.language): the WebView's.
+setSystemLanguage(navigatorLang());
 
 // Tor state: subscribed once for the whole app lifetime (status bar, dialogs, screens).
 void torStore.start();

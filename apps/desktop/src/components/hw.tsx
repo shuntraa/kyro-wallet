@@ -2,7 +2,7 @@
 //
 // Hardware wallets (Ledger, Trezor): device badge, waiting state with Cancel, error notice,
 // the full-screen stop for HW_ADDRESS_MISMATCH, the Trezor One blind PIN matrix (global), and
-// the add-device flow (Welcome and Réglages › Appareils). Contract: docs/IPC.md §2.3.
+// the add-device flow (Welcome and Settings › Devices). Contract: docs/IPC.md §2.3.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { call, errorData, ipcErrorIn, isDemoMode, MAX_HW_ACCOUNT, type HwChain, type HwChainStatus, type HwDeviceInfo, type HwDeviceKind, type HwDeviceStatus, type HwImplementedChain, type WatchOnlyAccount } from '@kyro/shared';
@@ -14,6 +14,8 @@ import { useApp } from '../state/app';
 import { Dialog } from './ui/dialog';
 import { Badge, Button, Input, Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconInfo, IconPhoneKey, IconRefresh, IconUsbKey, IconWarn, IconX } from './icons';
+import { t, useT, type Key } from '../i18n';
+import { rt } from '../i18n/rich';
 
 // ---------------------------------------------------------------- small pieces
 
@@ -26,29 +28,36 @@ export function DeviceBadge({ device, model, className }: { device: HwDeviceKind
   );
 }
 
-const PROMPT_TEXT: Record<string, { title: string; detail: string }> = {
-  'confirm-on-device': { title: 'Confirme sur ton appareil', detail: 'Vérifie les informations sur l’écran de l’appareil, puis confirme-les là-bas. S’il affiche autre chose, refuse sur l’appareil.' },
-  'pin-on-device': { title: 'Saisis ton PIN sur l’appareil', detail: 'Le PIN se tape sur l’appareil lui-même : il ne passe jamais par l’ordinateur.' },
-  'passphrase-on-device': { title: 'Saisis ta passphrase sur l’appareil', detail: 'La passphrase se tape sur l’appareil : Kyro ne la voit jamais.' },
-  'pin-matrix': { title: 'Saisis ton PIN dans la grille', detail: 'Regarde l’écran de ta Trezor et clique les cases aux mêmes positions.' },
-  'thp-confirm-pairing': { title: 'Autorise Kyro Wallet sur ton Trezor', detail: 'Ton Trezor Safe 7 demande s’il peut s’appairer avec « Kyro Wallet » : accepte sur son écran. Kyro ne donne jamais le nom de ton ordinateur.' },
-  'thp-pairing-code': { title: 'Recopie le code affiché sur ton Trezor', detail: 'Ton Trezor affiche un code à 6 chiffres : saisis-le dans la fenêtre de Kyro.' },
-  'thp-confirm-connection': { title: 'Confirme la connexion sur ton Trezor', detail: 'Ton Trezor Safe 7 demande de confirmer la connexion de « Kyro Wallet » : accepte sur son écran.' },
+const PROMPT_KEYS: Record<string, { title: Key; detail: Key }> = {
+  'confirm-on-device': { title: 'hw.prompt.confirmTitle', detail: 'hw.prompt.confirmDetail' },
+  'pin-on-device': { title: 'hw.prompt.pinTitle', detail: 'hw.prompt.pinDetail' },
+  'passphrase-on-device': { title: 'hw.prompt.passphraseTitle', detail: 'hw.prompt.passphraseDetail' },
+  'pin-matrix': { title: 'hw.prompt.matrixTitle', detail: 'hw.prompt.matrixDetail' },
+  'thp-confirm-pairing': { title: 'hw.prompt.thpPairingTitle', detail: 'hw.prompt.thpPairingDetail' },
+  'thp-pairing-code': { title: 'hw.prompt.thpCodeTitle', detail: 'hw.prompt.thpCodeDetail' },
+  'thp-confirm-connection': { title: 'hw.prompt.thpConnectionTitle', detail: 'hw.prompt.thpConnectionDetail' },
 };
+
+/** Title and detail of a device prompt, in the current language. */
+function promptText(kind: string): { title: string; detail: string } | null {
+  const k = PROMPT_KEYS[kind];
+  return k ? { title: t(k.title as 'hw.prompt.confirmTitle'), detail: t(k.detail as 'hw.prompt.confirmDetail') } : null;
+}
 
 /** "Waiting for the device" panel with Cancel (`hw_cancel`). */
 export function HwWaiting({ deviceId, idle, className, confirm }: { deviceId: string; idle?: string; className?: string; confirm?: { title: string; detail: string } }) {
   const prompt = useHwPrompts().byDevice[deviceId];
   const [cancelling, setCancelling] = useState(false);
-  const t = prompt === 'confirm-on-device' && confirm ? confirm : prompt ? PROMPT_TEXT[prompt] : null;
+  const { t } = useT();
+  const text = prompt === 'confirm-on-device' && confirm ? confirm : prompt ? promptText(prompt) : null;
   return (
     <div role="status" aria-live="polite" className={cn('fade-in flex items-start gap-3.5 rounded-box border border-l-2 border-ice-line border-l-ice bg-ice/[.05] px-4 py-3.5', className)}>
       <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-ctl bg-ice/12 text-ice">
         <Spinner className="size-4" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-[14px] font-semibold text-text">{t?.title ?? idle ?? 'Communication avec l’appareil…'}</span>
-        <span className="text-[12px] leading-[1.5] text-mute">{t?.detail ?? 'Garde l’appareil branché et déverrouillé.'}</span>
+        <span className="text-[14px] font-semibold text-text">{text?.title ?? idle ?? t('hw.waiting.title')}</span>
+        <span className="text-[12px] leading-[1.5] text-mute">{text?.detail ?? t('hw.waiting.detail')}</span>
       </span>
       <Button
         size="sm"
@@ -60,13 +69,14 @@ export function HwWaiting({ deviceId, idle, className, confirm }: { deviceId: st
         }}
         disabled={cancelling}
       >
-        {cancelling && <Spinner />} Annuler
+        {cancelling && <Spinner />} {t('common.cancel')}
       </Button>
     </div>
   );
 }
 
 export function HwErrorNotice({ error, onRetry, className }: { error: unknown; onRetry?: () => void; className?: string }) {
+  const { t } = useT();
   const v = hwErrorView(error);
   const { navigate } = useApp();
   // Safe 7 not paired (any command but hw_open): the way out is « Connecter ».
@@ -77,12 +87,12 @@ export function HwErrorNotice({ error, onRetry, className }: { error: unknown; o
       <span className="block">{v.detail}</span>
       {pairing ? (
         <button type="button" onClick={() => navigate({ name: 'settings', section: 'hardware' })} className="mt-1.5 font-semibold text-ice hover:underline">
-          Connecter
+          {t('hw.connect')}
         </button>
       ) : (
         onRetry && (
           <button type="button" onClick={onRetry} className="mt-1.5 font-semibold text-ice hover:underline">
-            Réessayer
+            {t('common.retry')}
           </button>
         )
       )}
@@ -93,6 +103,7 @@ export function HwErrorNotice({ error, onRetry, className }: { error: unknown; o
 /** HW_ADDRESS_MISMATCH: a full-screen red stop. The address must not be used. */
 export function AddressMismatchStop({ error, onClose }: { error: unknown; onClose: () => void }) {
   const d = errorData(error, 'HW_ADDRESS_MISMATCH');
+  const { t } = useT();
   return (
     <div role="alertdialog" aria-modal="true" aria-labelledby="mismatch-title" className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2a0707]/95 p-8 backdrop-blur-[2px]">
       <div className="dialog flex max-w-[640px] flex-col gap-5 rounded-panel border-2 border-down bg-[#1a0a0a] p-8" data-state="open">
@@ -100,27 +111,27 @@ export function AddressMismatchStop({ error, onClose }: { error: unknown; onClos
           <IconWarn size={28} />
         </span>
         <h1 id="mismatch-title" className="m-0 text-[30px] leading-[1.15] font-semibold tracking-[-0.03em] text-[#ffd6d6]">
-          Ne reçois pas de fonds sur cette adresse
+          {t('hw.mismatch.title')}
         </h1>
         <p className="m-0 text-[15px] leading-[1.6] text-[#ffc2c2]">
-          L’adresse affichée par ton appareil n’est pas celle que Kyro a calculée. Quelqu’un a peut-être modifié les comptes enregistrés sur cet ordinateur, ou ce n’est pas le bon appareil. N’envoie et ne communique aucune de ces deux adresses.
+          {t('hw.mismatch.body')}
         </p>
         {d && (
           <dl className="m-0 flex flex-col gap-2 rounded-box border border-down/40 bg-black/30 p-4 font-mono text-[12px]">
             <div className="flex flex-col gap-0.5">
-              <dt className="font-sans text-[12px] text-[#ff9a9a]">Affichée par l’appareil</dt>
+              <dt className="font-sans text-[12px] text-[#ff9a9a]">{t('hw.mismatch.device')}</dt>
               <dd className="m-0 break-all text-[#ffd6d6]">{d.device}</dd>
             </div>
             <div className="flex flex-col gap-0.5">
-              <dt className="font-sans text-[12px] text-[#ff9a9a]">Calculée par Kyro</dt>
+              <dt className="font-sans text-[12px] text-[#ff9a9a]">{t('hw.mismatch.expected')}</dt>
               <dd className="m-0 break-all text-[#ffd6d6]">{d.expected}</dd>
             </div>
           </dl>
         )}
-        <p className="m-0 text-[13px] leading-[1.55] text-[#ff9a9a]">Supprime ce compte dans Réglages › Appareils puis ajoute-le de nouveau depuis l’appareil. Si le problème persiste, n’utilise pas cet appareil.</p>
+        <p className="m-0 text-[13px] leading-[1.55] text-[#ff9a9a]">{t('hw.mismatch.advice')}</p>
         <div>
           <Button variant="danger" onClick={onClose}>
-            J’ai compris
+            {t('hw.mismatch.ack')}
           </Button>
         </div>
       </div>
@@ -153,6 +164,7 @@ export function ThpCodeDialog({ deviceId }: { deviceId: string | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [demoCode, setDemoCode] = useState<string | null>(null);
+  const { t } = useT();
   useEffect(() => {
     setCode('');
     setError(null);
@@ -176,15 +188,13 @@ export function ThpCodeDialog({ deviceId }: { deviceId: string | null }) {
     }
   };
   return (
-    <Dialog open onOpenChange={(v) => (v ? undefined : void call('hw_cancel', { id: deviceId }).catch(() => undefined))} title="Code d’appairage du Trezor" className="w-[440px]">
-      <p className="m-0 text-[13px] leading-[1.55] text-text2">
-        Ton <strong className="font-semibold text-text">Trezor Safe 7</strong> affiche un code à 6 chiffres. Recopie-le ici : il prouve que Kyro parle bien à l’appareil que tu as sous les yeux. Le code ne sert qu’une fois.
-      </p>
+    <Dialog open onOpenChange={(v) => (v ? undefined : void call('hw_cancel', { id: deviceId }).catch(() => undefined))} title={t('hw.thp.title')} className="w-[440px]">
+      <p className="m-0 text-[13px] leading-[1.55] text-text2">{rt('hw.thp.body', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</p>
       <input
         autoFocus
         inputMode="numeric"
         autoComplete="one-time-code"
-        aria-label="Code à 6 chiffres affiché sur le Trezor"
+        aria-label={t('hw.thp.inputLabel')}
         value={code}
         onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
         onKeyDown={(e) => {
@@ -193,14 +203,14 @@ export function ThpCodeDialog({ deviceId }: { deviceId: string | null }) {
         placeholder="••••••"
         className="h-14 rounded-ctl border border-line-3 bg-bg text-center font-mono text-[28px] font-semibold tracking-[0.5em] text-text focus:border-ice-line"
       />
-      {demoCode && <span className="text-[12px] text-ice-text2">Mode démo : l’écran du Trezor simulé affiche {demoCode}.</span>}
+      {demoCode && <span className="text-[12px] text-ice-text2">{t('hw.thp.demo', { code: demoCode })}</span>}
       {error !== null && <HwErrorNotice error={error} />}
       <div className="flex justify-end gap-2">
         <Button onClick={() => void call('hw_cancel', { id: deviceId }).catch(() => undefined)} disabled={busy}>
-          Annuler
+          {t('common.cancel')}
         </Button>
         <Button variant="primary" onClick={() => void submit()} disabled={!valid || busy}>
-          {busy && <Spinner />} Valider
+          {busy && <Spinner />} {t('hw.validate')}
         </Button>
       </div>
     </Dialog>
@@ -212,6 +222,7 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [demoLayout, setDemoLayout] = useState<number[][] | null>(null);
+  const { t, tp } = useT();
   useEffect(() => {
     setPositions('');
     setError(null);
@@ -237,18 +248,16 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
   };
 
   return (
-    <Dialog open onOpenChange={(v) => (v ? undefined : void call('hw_cancel', { id: deviceId }).catch(() => undefined))} title="PIN de la Trezor One" className="w-[440px]">
-      <p className="m-0 text-[13px] leading-[1.55] text-text2">
-        Ta Trezor affiche ses chiffres dans un ordre mélangé. Clique ici les cases <strong className="font-semibold text-text">aux mêmes positions</strong> que les chiffres de ton PIN sur l’écran de l’appareil. Kyro ne reçoit que des positions, inutiles sans l’appareil : jamais ton PIN.
-      </p>
+    <Dialog open onOpenChange={(v) => (v ? undefined : void call('hw_cancel', { id: deviceId }).catch(() => undefined))} title={t('hw.pin.title')} className="w-[440px]">
+      <p className="m-0 text-[13px] leading-[1.55] text-text2">{rt('hw.pin.body', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</p>
       <div className="flex items-start justify-center gap-6">
-        <div role="group" aria-label="Grille du PIN (cases vierges)" className="grid grid-cols-3 gap-2">
+        <div role="group" aria-label={t('hw.pin.gridLabel')} className="grid grid-cols-3 gap-2">
           {PIN_MATRIX_KEYPAD.map((row, r) =>
             row.map((_, c) => (
               <button
                 key={`${r}-${c}`}
                 type="button"
-                aria-label={`Case ligne ${r + 1}, colonne ${c + 1}`}
+                aria-label={t('hw.pin.cellLabel', { row: r + 1, col: c + 1 })}
                 disabled={busy || positions.length >= 9}
                 onClick={() => setPositions((p) => p + pinPosition(r, c))}
                 className="flex size-16 items-center justify-center rounded-box border border-line-2 bg-bg text-[22px] text-faint hover:border-ice-line hover:bg-control"
@@ -259,8 +268,8 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
           )}
         </div>
         {demoLayout && (
-          <div className="flex flex-col items-center gap-1.5" aria-label="Écran simulé de l’appareil">
-            <span className="text-[11px] font-semibold tracking-[0.04em] text-ice uppercase">Mode démo</span>
+          <div className="flex flex-col items-center gap-1.5" aria-label={t('hw.pin.simulatedScreen')}>
+            <span className="text-[11px] font-semibold tracking-[0.04em] text-ice uppercase">{t('hw.pin.demoMode')}</span>
             <div className="grid grid-cols-3 gap-1 rounded-ctl border border-line bg-black p-2 font-mono text-[14px] text-text">
               {demoLayout.flat().map((n, i) => (
                 <span key={i} className="flex size-7 items-center justify-center">
@@ -268,29 +277,29 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
                 </span>
               ))}
             </div>
-            <span className="max-w-[120px] text-center text-[11px] text-faint">écran simulé · PIN démo 1234</span>
+            <span className="max-w-[120px] text-center text-[11px] text-faint">{t('hw.pin.demoHint')}</span>
           </div>
         )}
       </div>
       <div className="flex items-center justify-between">
-        <span aria-label={`${positions.length} positions saisies`} className="font-mono text-[18px] tracking-[0.3em] text-text">
-          {positions.length ? '•'.repeat(positions.length) : <span className="text-[12px] tracking-normal text-faint">aucune case saisie</span>}
+        <span aria-label={tp('hw.pin.entered', positions.length)} className="font-mono text-[18px] tracking-[0.3em] text-text">
+          {positions.length ? '•'.repeat(positions.length) : <span className="text-[12px] tracking-normal text-faint">{t('hw.pin.none')}</span>}
         </span>
         <Button size="sm" variant="ghost" onClick={() => setPositions((p) => p.slice(0, -1))} disabled={!positions || busy}>
-          Effacer
+          {t('hw.pin.erase')}
         </Button>
       </div>
       {error !== null && <HwErrorNotice error={error} />}
       <p className="m-0 flex items-start gap-2 text-[12px] leading-[1.5] text-mute">
         <IconInfo size={14} className="mt-0.5 shrink-0 text-faint" />
-        Passphrase : sur la Trezor One, elle se taperait sur l’ordinateur. Kyro refuse pour qu’aucun secret ne transite par l’interface ; désactive-la ou utilise une Trezor T / Safe (saisie sur l’appareil).
+        {t('hw.pin.passphraseNote')}
       </p>
       <div className="flex justify-end gap-2">
         <Button onClick={() => void call('hw_cancel', { id: deviceId }).catch(() => undefined)} disabled={busy}>
-          Annuler
+          {t('common.cancel')}
         </Button>
         <Button variant="primary" onClick={() => void submit()} disabled={positions.length < 1 || busy}>
-          {busy && <Spinner />} Valider
+          {busy && <Spinner />} {t('hw.validate')}
         </Button>
       </div>
     </Dialog>
@@ -299,7 +308,9 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
 
 // ---------------------------------------------------------------- add a device
 
-const CHAIN_LABEL: Record<HwChain, string> = { btc: 'Bitcoin', evm: 'Ethereum et EVM', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP' };
+const CHAIN_NAME: Record<Exclude<HwChain, 'evm'>, string> = { btc: 'Bitcoin', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP' };
+/** Chain name shown in the add-device flow (« Ethereum et EVM » is translated). */
+const chainLabel = (c: HwChain): string => (c === 'evm' ? t('hw.chain.evm') : CHAIN_NAME[c]);
 const IMPLEMENTED: HwImplementedChain[] = ['btc', 'evm', 'sol'];
 
 type Step = 'detect' | 'device' | 'reading' | 'done';
@@ -317,6 +328,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
   const [label, setLabel] = useState('');
   const [progress, setProgress] = useState<Partial<Record<HwImplementedChain, 'todo' | 'reading' | 'ok' | 'error'>>>({});
   const [saved, setSaved] = useState<WatchOnlyAccount | null>(null);
+  const { t } = useT();
 
   const detect = async () => {
     setBusy('detect');
@@ -399,8 +411,8 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
 
   return (
     <div className="flex flex-col gap-4">
-      <ol className="m-0 flex list-none gap-2 p-0 text-[12px]" aria-label="Étapes">
-        {(['Détecter', 'Déverrouiller et ouvrir l’app', 'Lire les clés', 'Terminé'] as const).map((s, i) => {
+      <ol className="m-0 flex list-none gap-2 p-0 text-[12px]" aria-label={t('hw.steps')}>
+        {[t('hw.step.detect'), t('hw.step.open'), t('hw.step.read'), t('hw.step.done')].map((s, i) => {
           const idx = ['detect', 'device', 'reading', 'done'].indexOf(step);
           return (
             <li key={s} aria-current={idx === i ? 'step' : undefined} className={cn('flex items-center gap-1.5 rounded-full px-3 py-1', idx === i ? 'bg-ice/12 font-semibold text-ice-text' : idx > i ? 'text-up' : 'text-faint')}>
@@ -412,16 +424,16 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
 
       {step === 'detect' && (
         <div className="flex flex-col gap-3">
-          <p className="m-0 text-[14px] leading-[1.55] text-text2">Branche ton Ledger ou ta Trezor en USB et déverrouille-le. Kyro ne lit que des clés publiques : tes clés privées ne quittent jamais l’appareil.</p>
+          <p className="m-0 text-[14px] leading-[1.55] text-text2">{t('hw.setup.intro')}</p>
           {busy === 'detect' && (
             <span className="flex items-center gap-2 text-[13px] text-mute">
-              <Spinner /> Recherche des appareils…
+              <Spinner /> {t('hw.setup.searching')}
             </span>
           )}
           {devices && devices.length === 0 && busy !== 'detect' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <span className="block font-semibold text-text">Aucun appareil détecté</span>
-              <span className="block">Branche-le (câble de données, pas seulement de charge), déverrouille-le, et ferme Ledger Live ou Trezor Suite qui peuvent garder l’USB. Sous Linux, les règles udev du fabricant sont nécessaires.</span>
+              <span className="block font-semibold text-text">{t('hw.setup.noneTitle')}</span>
+              <span className="block">{t('hw.setup.noneDetail')}</span>
             </Notice>
           )}
           {devices && devices.length > 1 && (
@@ -437,9 +449,9 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
           {error !== null && <HwErrorNotice error={error} />}
           <div className="flex gap-2">
             <Button variant="primary" onClick={() => void detect()} disabled={busy !== null}>
-              <IconRefresh size={14} /> {devices ? 'Relancer la détection' : 'Détecter'}
+              <IconRefresh size={14} /> {devices ? t('hw.setup.redetect') : t('hw.setup.detect')}
             </Button>
-            {onCancel && <Button onClick={onCancel}>Annuler</Button>}
+            {onCancel && <Button onClick={onCancel}>{t('common.cancel')}</Button>}
           </div>
         </div>
       )}
@@ -448,53 +460,53 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
         <div className="flex flex-col gap-3.5">
           <div className="flex items-center gap-3">
             <DeviceBadge device={device.kind} model={status?.model ?? device.model} />
-            {status?.app && <span className="text-[12px] text-mute">App ouverte : {status.app.name}{status.app.version ? ` ${status.app.version}` : ''}</span>}
-            {status?.firmware && <span className="text-[12px] text-mute">Firmware {status.firmware}</span>}
-            {status?.protocol === 'thp' && <Badge tone="up">canal chiffré et appairé</Badge>}
+            {status?.app && <span className="text-[12px] text-mute">{t('hw.setup.appOpen', { app: `${status.app.name}${status.app.version ? ` ${status.app.version}` : ''}` })}</span>}
+            {status?.firmware && <span className="text-[12px] text-mute">{t('hw.setup.firmware', { version: status.firmware })}</span>}
+            {status?.protocol === 'thp' && <Badge tone="up">{t('hw.setup.thpChannel')}</Badge>}
           </div>
-          {busy === 'open' && <HwWaiting deviceId={device.id} idle="Lecture de l’état de l’appareil…" />}
+          {busy === 'open' && <HwWaiting deviceId={device.id} idle={t('hw.setup.readingState')} />}
           {status && (
             <>
               {status.locked && (
                 <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-                  <strong className="font-semibold">Déverrouille ton appareil</strong> avec ton code PIN{device.kind === 'trezor' ? ' (sur l’appareil, ou dans la grille pour une Trezor One)' : ''}, puis clique sur « Actualiser ».
+                  {rt(device.kind === 'trezor' ? 'hw.setup.unlockTrezor' : 'hw.setup.unlock', { b: (c) => <strong className="font-semibold">{c}</strong> })}
                 </Notice>
               )}
               {status.passphrase && device.model === 'Trezor One' && (
                 <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-                  Passphrase activée : sur la Trezor One elle se taperait sur l’ordinateur, ce que Kyro refuse (aucun secret ne doit passer par l’interface). Désactive-la sur l’appareil pour l’utiliser avec Kyro.
+                  {t('hw.setup.passphraseOne')}
                 </Notice>
               )}
-              <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label="Chaînes">
+              <ul className="m-0 flex list-none flex-col gap-2 p-0" aria-label={t('hw.setup.chains')}>
                 {IMPLEMENTED.map((c) => (
                   <ChainRow key={c} st={status.chains.find((x) => x.chain === c)} chain={c} checked={chains.has(c)} onToggle={(on) => setChains((s) => { const n = new Set(s); if (on) n.add(c); else n.delete(c); return n; })} />
                 ))}
               </ul>
-              <span className="text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet (disponibles dans le coffre Kyro).</span>
+              <span className="text-[12px] text-faint">{t('hw.setup.notYet')}</span>
               <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-2.5">
                 <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow">N° de compte</span>
+                  <span className="eyebrow">{t('hw.setup.accountNumber')}</span>
                   <Input value={account} inputMode="numeric" onChange={(e) => setAccount(e.target.value.replace(/\D/g, '').slice(0, 3))} className="font-mono" />
                 </label>
                 <label className="flex flex-col gap-1.5">
-                  <span className="eyebrow">Nom (facultatif)</span>
+                  <span className="eyebrow">{t('hw.setup.nameOptional')}</span>
                   <Input value={label} maxLength={64} onChange={(e) => setLabel(e.target.value)} placeholder={`${device.model} ${(accountValid ? accountNumber : 0) + 1}`} />
                 </label>
               </div>
-              {!accountValid && <span className="text-[12px] text-down">Numéro de compte : 0 à {MAX_HW_ACCOUNT}.</span>}
-              <span className="text-[12px] leading-[1.5] text-faint">Compte 0 = le premier compte de ton appareil (le même que dans Ledger Live ou Trezor Suite).</span>
+              {!accountValid && <span className="text-[12px] text-down">{t('hw.setup.accountRange', { max: MAX_HW_ACCOUNT })}</span>}
+              <span className="text-[12px] leading-[1.5] text-faint">{t('hw.setup.accountHint')}</span>
             </>
           )}
           {error !== null && <HwErrorNotice error={error} onRetry={() => void open(device)} />}
           <div className="flex gap-2">
             <Button variant="primary" disabled={!status || busy !== null || chains.size === 0 || !accountValid} onClick={() => void read()}>
-              Lire les clés publiques
+              {t('hw.setup.readKeys')}
             </Button>
             <Button onClick={() => void open(device)} disabled={busy !== null}>
-              <IconRefresh size={14} /> Actualiser
+              <IconRefresh size={14} /> {t('hw.setup.refresh')}
             </Button>
             <Button variant="ghost" onClick={() => { setStep('detect'); setStatus(null); setError(null); }} disabled={busy !== null}>
-              Autre appareil
+              {t('hw.setup.otherDevice')}
             </Button>
           </div>
         </div>
@@ -509,50 +521,56 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
               return (
                 <li key={c} className="flex items-center gap-3 rounded-ctl border border-line bg-raised px-4 py-2.5">
                   {st === 'ok' ? <IconCheck size={15} className="text-up" /> : st === 'reading' ? <Spinner className="size-3.5 text-ice" /> : st === 'error' ? <IconX size={15} className="text-down" /> : <span className="size-1.5 rounded-full bg-faint" />}
-                  <span className="flex-1 text-[13px] font-semibold">{CHAIN_LABEL[c]}</span>
-                  {device.kind === 'ledger' && app && <span className="text-[12px] text-mute">app « {app} »</span>}
+                  <span className="flex-1 text-[13px] font-semibold">{chainLabel(c)}</span>
+                  {device.kind === 'ledger' && app && <span className="text-[12px] text-mute">{t('hw.setup.ledgerApp', { app })}</span>}
                 </li>
               );
             })}
           </ul>
-          {busy && busy !== 'open' && <HwWaiting deviceId={device.id} idle={device.kind === 'ledger' ? `Lecture des clés ${CHAIN_LABEL[busy as HwImplementedChain] ?? ''} : garde l’app ouverte sur le Ledger…` : 'Lecture des clés publiques…'} />}
+          {busy && busy !== 'open' && <HwWaiting deviceId={device.id} idle={device.kind === 'ledger' ? t('hw.setup.readingLedger', { chain: IMPLEMENTED.includes(busy as HwImplementedChain) ? chainLabel(busy as HwImplementedChain) : '' }) : t('hw.setup.readingKeys')} />}
           {failed && (
             <>
               <HwErrorNotice error={failed.error} />
               <div className="flex gap-2">
                 <Button variant="primary" onClick={() => void read(failed.chain)}>
-                  <IconRefresh size={14} /> Réessayer {CHAIN_LABEL[failed.chain]}
+                  <IconRefresh size={14} /> {t('hw.setup.retryChain', { chain: chainLabel(failed.chain) })}
                 </Button>
-                <Button onClick={() => { setStep('device'); setError(null); }}>Retour</Button>
+                <Button onClick={() => { setStep('device'); setError(null); }}>{t('common.back')}</Button>
               </div>
             </>
           )}
         </div>
       )}
 
-      {step === 'done' && saved && <HwAccountSummary acc={saved} action={<Button variant="primary" onClick={() => onDone(saved)}>Utiliser ce compte</Button>} />}
+      {step === 'done' && saved && <HwAccountSummary acc={saved} action={<Button variant="primary" onClick={() => onDone(saved)}>{t('hw.setup.useAccount')}</Button>} />}
     </div>
   );
 }
 
 function ChainRow({ st, chain, checked, onToggle }: { st: HwChainStatus | undefined; chain: HwImplementedChain; checked: boolean; onToggle: (on: boolean) => void }) {
+  const { t } = useT();
   const unsupported = st?.state === 'unsupported';
+  const reason = (st?.reason ?? t('hw.chainRow.unsupported')).replace(/^(Bitcoin|EVM|Ethereum|Solana)\s*:\s*/, '');
   const hint =
     !st
       ? null
       : st.state === 'ready'
-        ? 'Prêt'
+        ? t('hw.chainRow.ready')
         : st.state === 'open-app'
-          ? `Ouvre l’app « ${st.app ?? ''} »${st.min ? ` (version ${st.min} minimum)` : ''} sur l’appareil`
+          ? st.min
+            ? t('hw.chainRow.openAppMin', { app: st.app ?? '', min: st.min })
+            : t('hw.chainRow.openApp', { app: st.app ?? '' })
           : st.state === 'unlock'
-            ? 'Déverrouille ton appareil'
+            ? t('hw.chainRow.unlock')
             : // Rust reasons start with the chain name, already shown on the row.
-              `${(st.reason ?? 'Non pris en charge').replace(/^(Bitcoin|EVM|Ethereum|Solana)\s*:\s*/, '')}${st.min ? ` (minimum ${st.min})` : ''}`;
+              st.min
+              ? t('hw.chainRow.min', { reason, min: st.min })
+              : reason;
   return (
     <li>
       <label className={cn('flex items-center gap-3 rounded-ctl border px-4 py-2.5', unsupported ? 'border-line bg-card opacity-60' : 'cursor-pointer border-line bg-raised hover:border-line-3')}>
         <input type="checkbox" checked={checked && !unsupported} disabled={unsupported} onChange={(e) => onToggle(e.target.checked)} className="size-4 accent-[#7cc4ff]" />
-        <span className="flex-1 text-[13px] font-semibold">{CHAIN_LABEL[chain]}</span>
+        <span className="flex-1 text-[13px] font-semibold">{chainLabel(chain)}</span>
         <span className={cn('text-[12px]', st?.state === 'ready' ? 'text-up' : st?.state === 'unsupported' ? 'text-faint' : 'text-warn')}>{hint}</span>
       </label>
     </li>
@@ -569,20 +587,21 @@ export function HwAccountSummary({ acc, action }: { acc: WatchOnlyAccount; actio
     }
   })();
   const fp = hwFingerprint(acc);
+  const { t } = useT();
   return (
     <div className="flex flex-col gap-3 rounded-box border border-line bg-raised px-4 py-3.5">
       <div className="flex items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
           <span className="text-[15px] font-medium tracking-[-0.01em]">{acc.label}</span>
           <span className="text-[12px] text-mute">
-            Compte n° {acc.account} · {acc.network === 'testnet' ? 'testnet' : 'mainnet'}
+            {t('hw.summary.account', { n: acc.account, network: acc.network === 'testnet' ? 'testnet' : 'mainnet' })}
           </span>
         </span>
         <DeviceBadge device={acc.device} model={acc.model} />
       </div>
       <dl className="m-0 grid grid-cols-[150px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[12px]">
-        <dt className="text-mute">Empreinte du compte</dt>
-        <dd className="m-0 font-mono text-text">{fp ?? '— (pas de clés Bitcoin)'}</dd>
+        <dt className="text-mute">{t('hw.summary.fingerprint')}</dt>
+        <dd className="m-0 font-mono text-text">{fp ?? t('hw.summary.noBtc')}</dd>
         {view?.btc && (
           <>
             <dt className="text-mute">Bitcoin</dt>
@@ -602,7 +621,7 @@ export function HwAccountSummary({ acc, action }: { acc: WatchOnlyAccount; actio
           </>
         )}
       </dl>
-      <span className="text-[12px] leading-[1.5] text-faint">Clés publiques seulement. Vérifie toujours une adresse de réception sur l’écran de l’appareil avant de la communiquer.</span>
+      <span className="text-[12px] leading-[1.5] text-faint">{t('hw.summary.note')}</span>
       {action && <div>{action}</div>}
     </div>
   );

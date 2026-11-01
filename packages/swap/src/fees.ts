@@ -14,6 +14,7 @@
 import { isAddress } from 'viem';
 import { base58 } from '@scure/base';
 import type { ProviderId } from './types';
+import { intlLocale, l10n } from '@kyro/shared';
 
 export interface SwapFeeConfig {
   /** Fee in basis points: 70 = 0,7 %. 0 turns the Kyro fee off everywhere. Hard cap: 100 (1 %). */
@@ -68,20 +69,20 @@ const validEvm = (a: string) => isAddress(a, { strict: false });
 
 /** Fee instructions for one provider under a config (default: KYRO_SWAP_FEE). */
 export function providerFee(id: ProviderId, cfg: SwapFeeConfig = KYRO_SWAP_FEE): ProviderFee {
-  if (!Number.isInteger(cfg.bps) || cfg.bps < 0 || cfg.bps > MAX_FEE_BPS) return { kind: 'unavailable', reason: 'Frais Kyro mal configurés' };
+  if (!Number.isInteger(cfg.bps) || cfg.bps < 0 || cfg.bps > MAX_FEE_BPS) return { kind: 'unavailable', reason: l10n('Frais Kyro mal configurés', 'Kyro fees misconfigured') };
   if (cfg.bps === 0) return { kind: 'none' };
   const fee = (recipient: string): ProviderFee => ({ kind: 'fee', bps: cfg.bps, recipient });
   switch (id) {
     case 'zerox':
-      return validEvm(cfg.recipients.evm) ? fee(cfg.recipients.evm) : { kind: 'unavailable', reason: 'Adresse EVM des frais Kyro non configurée' };
+      return validEvm(cfg.recipients.evm) ? fee(cfg.recipients.evm) : { kind: 'unavailable', reason: l10n('Adresse EVM des frais Kyro non configurée', 'EVM address for Kyro fees not configured') };
     case 'lifi':
-      return validEvm(cfg.recipients.evm) ? fee(cfg.recipients.evm) : { kind: 'unavailable', reason: 'Adresse EVM des frais Kyro non configurée' };
+      return validEvm(cfg.recipients.evm) ? fee(cfg.recipients.evm) : { kind: 'unavailable', reason: l10n('Adresse EVM des frais Kyro non configurée', 'EVM address for Kyro fees not configured') };
     case 'jupiter':
-      return validSolanaAddress(cfg.recipients.solana) ? fee(cfg.recipients.solana) : { kind: 'unavailable', reason: 'Adresse Solana des frais Kyro non configurée' };
+      return validSolanaAddress(cfg.recipients.solana) ? fee(cfg.recipients.solana) : { kind: 'unavailable', reason: l10n('Adresse Solana des frais Kyro non configurée', 'Solana address for Kyro fees not configured') };
   }
 }
 
 /** "0,7 %" */
 export function feeLabel(bps: number): string {
-  return `${(bps / 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} %`;
+  return `${(bps / 100).toLocaleString(intlLocale(), { maximumFractionDigits: 2 })}${l10n(' %', '%')}`;
 }

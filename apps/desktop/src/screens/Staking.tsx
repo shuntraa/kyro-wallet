@@ -34,7 +34,7 @@ import {
   fmtDuration,
   fmtStake,
   networkLabel,
-  SOL_STATE_LABEL,
+  solStateLabel,
   solStateTone,
   solValidatorBadges,
   solWarningText,
@@ -58,6 +58,8 @@ import { Badge, Button, Card, Input, Notice, Segmented, Skeleton, Spinner } from
 import { IconCheck, IconChevronRight, IconInfo, IconShield, IconWarn } from '../components/icons';
 import { idx } from '../components/motion';
 import { AccountPicker } from '../components/AccountPicker';
+import { getLanguage, t as tNow, useT } from '../i18n';
+import { rt } from '../i18n/rich';
 
 /** `{ account }` of the selected vault account of a staking chain (§2.9; nothing for account 0). */
 function useStakeAccount(): (chain: StakeChain) => { account?: number } {
@@ -73,29 +75,33 @@ const TRX = { decimals: 6, symbol: 'TRX' };
 /** Exact amount (every significant decimal: staking numbers are shown as Rust computes them). */
 const amt = (v: string | bigint | null | undefined, u: { decimals: number; symbol: string }) => (v === null || v === undefined ? '—' : fmtCrypto(BigInt(v), u.decimals, u.symbol, u.decimals));
 
-const NO_SLASHING = 'Pas de slashing sur cette chaîne : tes fonds ne peuvent pas être confisqués. Mais les récompenses dépendent du validateur, du pool ou du SR que tu choisis.';
+/** "5 %" (French) / "5%" (English), French spacing kept as it was. */
+const pc = (n: number, maxFrac = 0) => (getLanguage() === 'fr' ? `${fmtNumber(n, maxFrac)} %` : `${fmtNumber(n, maxFrac)}%`);
+const bold = { b: (c: ReactNode) => <strong className="font-semibold text-text">{c}</strong> };
+const bold2 = { b: (c: ReactNode) => <strong className="font-semibold text-text2">{c}</strong> };
 
 // ================================================================= screen
 
 export function Staking({ chain }: { chain?: StakeChain }) {
   const { activeHw, navigate, hwOnly } = useApp();
   const { accounts } = useVault();
+  const { t } = useT();
   const tab: 'home' | StakeChain = chain ?? 'home';
   const has: Record<StakeChain, boolean> = { sol: !!accounts.sol, ada: !!accounts.cardano, tron: !!accounts.tron };
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-7 pt-6 pb-5 scroll-thin">
       <header className="flex items-end justify-between gap-4 border-b border-line pb-4">
         <div className="flex flex-col gap-2">
-          <h1 className="screen-title">Staking</h1>
-          <span className="text-[13px] text-mute">Délègue tes SOL, ADA ou TRX depuis tes propres comptes. Tes fonds restent à toi.</span>
+          <h1 className="screen-title">{t('staking.title')}</h1>
+          <span className="text-[13px] text-mute">{t('staking.subtitle')}</span>
         </div>
         {tab !== 'home' && !activeHw && <AccountPicker family={tab} />}
         <Segmented
-          label="Chaîne"
+          label={t('staking.chain')}
           value={tab}
           onChange={(v) => navigate(v === 'home' ? { name: 'staking' } : { name: 'staking', chain: v })}
           options={[
-            { value: 'home', label: 'Vue d’ensemble' },
+            { value: 'home', label: t('staking.overview') },
             { value: 'sol', label: 'Solana', disabled: !!activeHw || !has.sol },
             { value: 'ada', label: 'Cardano', disabled: !!activeHw || !has.ada },
             { value: 'tron', label: 'TRON', disabled: !!activeHw || !has.tron },
@@ -104,7 +110,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
       </header>
       {activeHw && (
         <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-          <strong className="font-semibold text-text">Staking indisponible avec un hardware wallet.</strong> Le compte actif est « {activeHw.label} » : Kyro ne propose pas encore le staking sur Ledger ou Trezor. {hwOnly ? 'Le staking passe par un coffre Kyro (phrase de récupération) : il n’y en a pas sur cet ordinateur.' : 'Passe sur le coffre Kyro (sélecteur de compte, en haut) pour staker.'}
+          <strong className="font-semibold text-text">{t('staking.hwTitle')}</strong> {t('staking.hwBody', { label: activeHw.label })} {hwOnly ? t('staking.hwOnly') : t('staking.hwSwitch')}
         </Notice>
       )}
       {tab === 'home' || activeHw ? <StakingHome disabled={!!activeHw} has={has} /> : tab === 'sol' ? <SolStaking /> : tab === 'ada' ? <AdaStaking /> : <TronStaking />}
@@ -115,6 +121,7 @@ export function Staking({ chain }: { chain?: StakeChain }) {
 function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeChain, boolean> }) {
   const { navigate, network, hideBalances } = useApp();
   const acct = useStakeAccount();
+  const { t, tp } = useT();
   const sol = useAsync(!disabled && has.sol ? () => call('sol_stake_overview', acct('sol')) : null, [disabled, has.sol, acct('sol').account]);
   const ada = useAsync(!disabled && has.ada ? () => call('ada_stake_overview', acct('ada')) : null, [disabled, has.ada, acct('ada').account]);
   const tron = useAsync(!disabled && has.tron ? () => call('tron_stake_overview', acct('tron')) : null, [disabled, has.tron, acct('tron').account]);
@@ -132,8 +139,8 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
       name: 'Solana',
       glyph: 'S',
       color: CHAIN_COLORS.solana,
-      what: 'Délègue à un validateur depuis un compte de staking à ton nom. Activation et refroidissement : ≈ 1 époque (≈ 2 jours) chacun.',
-      line: sol.data ? `${sol.data.accounts.length} compte${sol.data.accounts.length > 1 ? 's' : ''} de staking · ${hide(amt(solStaked, SOL))}` : null,
+      what: t('staking.homeSolWhat'),
+      line: sol.data ? tp('staking.homeSolLine', sol.data.accounts.length, { amount: hide(amt(solStaked, SOL)) }) : null,
       error: sol.error,
     },
     {
@@ -141,8 +148,8 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
       name: 'Cardano',
       glyph: 'A',
       color: '#3468D1',
-      what: 'Délègue à un pool : tes ADA restent sur ton adresse et restent dépensables. Dépôt de 2 ADA, rendu à l’arrêt.',
-      line: ada.data ? (ada.data.stake.registered ? `Pool ${ada.data.pool?.ticker ?? shortAddress(ada.data.stake.delegatedPool ?? '—')} · récompenses ${hide(amt(ada.data.stake.rewardsAvailable, ADA))}` : 'Pas encore de délégation') : null,
+      what: t('staking.homeAdaWhat'),
+      line: ada.data ? (ada.data.stake.registered ? t('staking.homeAdaLine', { pool: ada.data.pool?.ticker ?? shortAddress(ada.data.stake.delegatedPool ?? '—'), amount: hide(amt(ada.data.stake.rewardsAvailable, ADA)) }) : t('staking.homeAdaNone')) : null,
       error: ada.error,
     },
     {
@@ -150,8 +157,8 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
       name: 'TRON',
       glyph: 'T',
       color: '#EB0029',
-      what: `Stake pour de l’énergie ou de la bande passante, puis vote pour des SR. Dégel : ${network === 'mainnet' ? '14 jours' : '1 jour sur Nile (14 sur mainnet)'}.`,
-      line: tron.data ? `${hide(amt(tronStaked, TRX))} stakés · ${tron.data.tronPowerUsed} / ${tron.data.tronPowerLimit} TRON Power votés` : null,
+      what: t('staking.homeTronWhat', { delay: network === 'mainnet' ? t('staking.homeTronDelayMainnet') : t('staking.homeTronDelayTestnet') }),
+      line: tron.data ? t('staking.homeTronLine', { amount: hide(amt(tronStaked, TRX)), used: tron.data.tronPowerUsed, limit: tron.data.tronPowerLimit }) : null,
       error: tron.error,
     },
   ];
@@ -168,7 +175,7 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
             <p className="m-0 text-[13px] leading-[1.55] text-text2">{c.what}</p>
             <div className="min-h-5 border-t border-line pt-3 text-[13px] font-medium">
               {disabled || !has[c.chain] ? (
-                <span className="font-normal text-mute">{disabled ? 'Indisponible sur un hardware wallet' : 'Aucun compte sur cette chaîne'}</span>
+                <span className="font-normal text-mute">{disabled ? t('staking.homeHwUnavailable') : t('staking.homeNoAccount')}</span>
               ) : c.error ? (
                 <ErrorLine error={c.error}>{c.error.message}</ErrorLine>
               ) : (
@@ -177,7 +184,7 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
             </div>
             <div className="flex-1" />
             <Button variant="outline" className="justify-between" disabled={disabled || !has[c.chain]} onClick={() => navigate({ name: 'staking', chain: c.chain })}>
-              Ouvrir le staking {c.name}
+              {t('staking.homeOpen', { chain: c.name })}
               <IconChevronRight size={15} className="nudge text-mute" />
             </Button>
           </div>
@@ -185,17 +192,15 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
       </div>
       <Card className="flex flex-col gap-2 border-l-2 border-l-ice/70 px-5 py-4">
         <span className="flex items-center gap-2 text-[14px] font-medium">
-          <IconShield size={16} className="text-ice" /> Risques
+          <IconShield size={16} className="text-ice" /> {t('staking.risks')}
         </span>
-        <p className="m-0 text-[13px] leading-[1.6] text-text2">
-          Sur Solana, Cardano et TRON, il n’y a <strong className="font-semibold text-text">pas de slashing</strong> : un validateur, un pool ou un SR qui se comporte mal ne peut pas te prendre tes fonds. En revanche, <strong className="font-semibold text-text">tes récompenses dépendent de lui</strong> (sa commission, sa marge, sa fiabilité) et elles ne sont jamais garanties. Les noms affichés sont déclarés par leurs opérateurs, pas vérifiés.
-        </p>
+        <p className="m-0 text-[13px] leading-[1.6] text-text2">{rt('staking.risksBody', bold)}</p>
       </Card>
       <Card className="flex flex-col px-5 py-2">
         {[
-          ['Bitcoin, Litecoin, Dogecoin', 'Pas de staking natif : ces protocoles n’en ont pas.'],
-          ['XRP Ledger', 'Pas de staking natif.'],
-          ['Ethereum et chaînes EVM', 'Non proposé : le staking natif exige 32 ETH et un validateur qui tourne en permanence, et Kyro ne passe pas par le contrat d’un tiers.'],
+          ['Bitcoin, Litecoin, Dogecoin', t('staking.otherUtxoNo')],
+          ['XRP Ledger', t('staking.otherXrp')],
+          [t('staking.otherEvmName'), t('staking.otherEvm')],
         ].map(([k, v]) => (
           <div key={k} className="flex min-h-11 items-center justify-between gap-4 border-b border-line py-2 text-[13px] last:border-b-0">
             <span className="font-medium text-text2">{k}</span>
@@ -227,7 +232,7 @@ interface FlowSpec<B, S> {
 
 function errText(e: unknown): string {
   const err = toIpcError(e);
-  return err.code === 'USER_REJECTED' ? 'Signature annulée dans la fenêtre système. Rien n’a été envoyé.' : err.message;
+  return err.code === 'USER_REJECTED' ? tNow('staking.signCancelled') : err.message;
 }
 
 function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>; onClose: () => void; onDone: () => void }) {
@@ -237,6 +242,7 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
   const [error, setError] = useState<unknown>(null);
   const [password, setPassword] = useState('');
   const [txid, setTxid] = useState<string | null>(null);
+  const { t } = useT();
 
   const build = async () => {
     setBusy('build');
@@ -280,9 +286,9 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
           {spec.form}
           {error !== null && <ErrorLine error={error}>{errText(error)}</ErrorLine>}
           <div className="flex justify-end gap-2">
-            <Button onClick={onClose}>Annuler</Button>
+            <Button onClick={onClose}>{t('common.cancel')}</Button>
             <Button variant="primary" disabled={spec.canBuild === false || busy !== null} onClick={() => void build()}>
-              {busy === 'build' && <Spinner />} Vérifier
+              {busy === 'build' && <Spinner />} {t('staking.check')}
             </Button>
           </div>
         </>
@@ -296,7 +302,7 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
               </ErrorLine>
             ) : (
               <div className="flex items-center gap-2 text-[13px] text-mute">
-                <Spinner /> Construction par Kyro (lecture en direct du réseau)…
+                <Spinner /> {t('staking.building')}
               </div>
             )
           ) : (
@@ -304,21 +310,21 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
               <EnClair>{spec.enClair(built)}</EnClair>
               <dl className="m-0 flex flex-col text-[13px]">{spec.review(built)}</dl>
               <SecondConfirmNotice lines={warnings} />
-              <p className="m-0 text-[12px] leading-[1.5] text-mute">Décodé et vérifié par Kyro. Au moment de signer, tout est relu en direct : si quelque chose a changé, la signature est refusée. La fenêtre système affichera ce même résumé.</p>
+              <p className="m-0 text-[12px] leading-[1.5] text-mute">{t('staking.reviewNote')}</p>
               <PasswordField id="stake-password" value={password} onChange={setPassword} autoFocus onEnter={() => password && busy === null && void sign()} invalid={toIpcError(error).code === 'WRONG_PASSWORD'} />
               {error !== null && <ErrorLine error={error}>{errText(error)}</ErrorLine>}
               <div className="flex justify-end gap-2">
                 {spec.form ? (
                   <Button disabled={busy !== null} onClick={() => (setStep('form'), setBuilt(null), setError(null))}>
-                    Modifier
+                    {t('common.edit')}
                   </Button>
                 ) : (
                   <Button disabled={busy !== null} onClick={onClose}>
-                    Annuler
+                    {t('common.cancel')}
                   </Button>
                 )}
                 <Button variant="primary" disabled={!password || busy !== null} onClick={() => void sign()}>
-                  {busy === 'sign' && <Spinner />} Signer et diffuser
+                  {busy === 'sign' && <Spinner />} {t('staking.signAndBroadcast')}
                 </Button>
               </div>
             </>
@@ -336,7 +342,7 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
             <CopyButton text={txid} />
           </div>
           <Button variant="primary" onClick={onClose}>
-            Fermer
+            {t('common.close')}
           </Button>
         </div>
       )}
@@ -373,6 +379,7 @@ function Hint({ children }: { children: ReactNode }) {
 }
 
 function AmountField({ id, label, value, onChange, unit, onMax, hint }: { id: string; label: string; value: string; onChange: (v: string) => void; unit: { decimals: number; symbol: string }; onMax?: () => void; hint?: ReactNode }) {
+  const { t } = useT();
   return (
     <div className="flex flex-col gap-2">
       <label htmlFor={id} className="eyebrow">
@@ -385,7 +392,7 @@ function AmountField({ id, label, value, onChange, unit, onMax, hint }: { id: st
         </div>
         {onMax && (
           <Button size="md" onClick={onMax}>
-            Max
+            {t('common.max')}
           </Button>
         )}
       </div>
@@ -397,6 +404,7 @@ function AmountField({ id, label, value, onChange, unit, onMax, hint }: { id: st
 /** Epoch progress; `slotSecs`: 0.4 on Solana, 1 on Cardano. Counts down locally between reloads. */
 function EpochBar({ epoch, slotsInEpoch, slotSecs, secondsLeft, loadedAt, label }: { epoch: number; slotsInEpoch: number; slotSecs: number; secondsLeft: number; loadedAt: number | null; label: string }) {
   const now = useNow(1000);
+  const { t } = useT();
   const left = Math.max(0, secondsLeft - (loadedAt ? (now - loadedAt) / 1000 : 0));
   const pct = Math.max(0, Math.min(100, (1 - left / (slotsInEpoch * slotSecs)) * 100));
   return (
@@ -405,9 +413,9 @@ function EpochBar({ epoch, slotsInEpoch, slotSecs, secondsLeft, loadedAt, label 
         <span className="font-medium">
           {label} <span className="font-mono">{epoch}</span>
         </span>
-        <span className="text-mute">fin dans {fmtDuration(left)}</span>
+        <span className="text-mute">{t('staking.endsIn', { duration: fmtDuration(left) })}</span>
       </div>
-      <div className="h-[3px] overflow-hidden rounded-full bg-control-2" role="progressbar" aria-label={`Avancement de l’${label.toLowerCase()} ${epoch}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+      <div className="h-[3px] overflow-hidden rounded-full bg-control-2" role="progressbar" aria-label={t('staking.epochProgress', { label: label.toLowerCase(), epoch })} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
         <div className="h-full rounded-full bg-ice transition-[width] duration-1000 ease-linear" style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -415,10 +423,11 @@ function EpochBar({ epoch, slotsInEpoch, slotSecs, secondsLeft, loadedAt, label 
 }
 
 function SortBar<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; label: string }) {
+  const { t } = useT();
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="eyebrow">{label}</span>
-      <Segmented size="sm" label="Trier par" value={value} onChange={onChange} options={options} />
+      <Segmented size="sm" label={t('staking.sortBy')} value={value} onChange={onChange} options={options} />
     </div>
   );
 }
@@ -428,10 +437,11 @@ function SortBar<T extends string>({ value, onChange, options, label }: { value:
 function ValidatorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const list = useAsync(() => call('sol_stake_validators', {}), []);
   const [sort, setSort] = useState<SolSort>('commission');
+  const { t } = useT();
   const sorted = useMemo(() => sortValidators(list.data?.validators ?? [], sort), [list.data, sort]);
   return (
     <div className="flex flex-col gap-2">
-      <SortBar label="Validateur" value={sort} onChange={setSort} options={[{ value: 'commission', label: 'Commission' }, { value: 'stake', label: 'Stake actif' }]} />
+      <SortBar label={t('staking.validator')} value={sort} onChange={setSort} options={[{ value: 'commission', label: t('staking.sortCommission') }, { value: 'stake', label: t('staking.sortActiveStake') }]} />
       {list.error ? (
         <ErrorLine error={list.error} onRetry={list.reload}>
           {list.error.message}
@@ -439,25 +449,26 @@ function ValidatorPicker({ value, onChange }: { value: string; onChange: (v: str
       ) : !list.data ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <div role="radiogroup" aria-label="Validateurs" className="flex max-h-[240px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
+        <div role="radiogroup" aria-label={t('staking.validators')} className="flex max-h-[240px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
           {sorted.map((v) => (
             <ValidatorRow key={v.voteAccount} v={v} selected={v.voteAccount === value} onSelect={() => onChange(v.voteAccount)} />
           ))}
         </div>
       )}
-      {list.data && !list.data.namesAvailable && <Hint>Noms indisponibles : seuls les comptes de vote sont affichés.</Hint>}
-      <Hint>Les noms sont déclarés par les validateurs eux-mêmes, pas vérifiés. Au-delà de 10 % de commission ou si le validateur est en retard, la fenêtre système te demandera une 2ᵉ confirmation.</Hint>
+      {list.data && !list.data.namesAvailable && <Hint>{t('staking.namesUnavailable')}</Hint>}
+      <Hint>{t('staking.validatorHint')}</Hint>
     </div>
   );
 }
 
 function ValidatorRow({ v, selected, onSelect }: { v: SolValidator; selected: boolean; onSelect: () => void }) {
+  const { t } = useT();
   return (
     <button type="button" role="radio" aria-checked={selected} onClick={onSelect} className={cn('flex items-center gap-3 border-b border-line px-3 py-2 text-left text-[13px] last:border-b-0', selected ? 'bg-ice/[.07]' : 'hover:bg-raised')}>
       <span className={cn('size-3.5 shrink-0 rounded-full border-2 transition-colors duration-150', selected ? 'border-ice bg-ice shadow-[inset_0_0_0_2px_var(--color-bg)]' : 'border-line-3')} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-medium">
-          {v.name ?? 'Sans nom'} {v.name && <span className="font-normal text-faint">(déclaré)</span>}
+          {v.name ?? t('staking.noName')} {v.name && <span className="font-normal text-faint">{t('staking.declared')}</span>}
         </span>
         <span className="truncate font-mono text-[11px] text-faint">{shortAddress(v.voteAccount, 8, 6)}</span>
       </span>
@@ -468,7 +479,7 @@ function ValidatorRow({ v, selected, onSelect }: { v: SolValidator; selected: bo
           </Badge>
         ))}
       </span>
-      <span className="w-16 shrink-0 text-right">{v.commission} %</span>
+      <span className="w-16 shrink-0 text-right">{pc(v.commission)}</span>
       <span className="w-28 shrink-0 text-right text-mute">{fmtStake(v.activatedStake, 9, 'SOL')}</span>
     </button>
   );
@@ -485,6 +496,7 @@ function SolStaking() {
   const vals = useAsync(() => call('sol_stake_validators', {}), []);
   useOnTorReady(ov.reload);
   const [op, setOp] = useState<SolOp | null>(null);
+  const { t, tp } = useT();
   const byVote = useMemo(() => new Map((vals.data?.validators ?? []).map((v) => [v.voteAccount, v])), [vals.data]);
   const o = ov.data;
   const h = (s: string) => (hideBalances ? HIDDEN : s);
@@ -496,22 +508,22 @@ function SolStaking() {
       <Card className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="grid flex-1 grid-cols-3 gap-6">
-            <Stat k="Disponible" v={h(amt(o.balance, SOL))} sub="sur ton adresse" />
-            <Stat k="Dans tes comptes de staking" v={h(amt(total, SOL))} sub={`${o.accounts.length} compte${o.accounts.length > 1 ? 's' : ''}`} />
-            <Stat k="Minimum de délégation" v={amt(o.minimumDelegation, SOL)} sub={`+ réserve de rent ${amt(o.rentExemptReserve, SOL)} (${networkLabel('sol', network)})`} />
+            <Stat k={t('staking.available')} v={h(amt(o.balance, SOL))} sub={t('staking.onYourAddress')} />
+            <Stat k={t('staking.inStakeAccounts')} v={h(amt(total, SOL))} sub={tp('staking.accounts', o.accounts.length)} />
+            <Stat k={t('staking.minDelegation')} v={amt(o.minimumDelegation, SOL)} sub={t('staking.rentReserve', { amount: amt(o.rentExemptReserve, SOL), network: networkLabel('sol', network) })} />
           </div>
           <Button variant="primary" size="lg" onClick={() => setOp({ kind: 'create' })}>
-            Staker des SOL
+            {t('staking.stakeSol')}
           </Button>
         </div>
-        <EpochBar label="Époque" epoch={o.epoch.epoch} slotsInEpoch={o.epoch.slotsInEpoch} slotSecs={0.4} secondsLeft={o.epoch.secondsLeft} loadedAt={ov.updatedAt} />
-        <Hint>Une délégation s’active au début de l’époque suivante (≈ 2 jours par époque). Après « Désactiver », il faut attendre le refroidissement, environ une époque (≈ 2 jours, sans récompense), avant de pouvoir retirer. {NO_SLASHING}</Hint>
+        <EpochBar label={t('staking.epoch')} epoch={o.epoch.epoch} slotsInEpoch={o.epoch.slotsInEpoch} slotSecs={0.4} secondsLeft={o.epoch.secondsLeft} loadedAt={ov.updatedAt} />
+        <Hint>{t('staking.solHint', { noSlashing: t('staking.noSlashing') })}</Hint>
       </Card>
 
       <Card className="flex flex-col">
-        <div className="flex h-[50px] items-center border-b border-line px-5 text-[15px] font-medium tracking-[-0.01em]">Tes comptes de staking</div>
+        <div className="flex h-[50px] items-center border-b border-line px-5 text-[15px] font-medium tracking-[-0.01em]">{t('staking.yourStakeAccounts')}</div>
         {o.accounts.length === 0 ? (
-          <EmptyState title="Aucun compte de staking">« Staker des SOL » crée un compte de staking à ton nom (toi seul peux le gérer et le retirer) et le délègue au validateur choisi.</EmptyState>
+          <EmptyState title={t('staking.noStakeAccount')}>{t('staking.noStakeAccountBody')}</EmptyState>
         ) : (
           o.accounts.map((a) => {
             const v = a.voteAccount ? byVote.get(a.voteAccount) : undefined;
@@ -522,47 +534,47 @@ function SolStaking() {
               <div key={a.address} className="flex items-center gap-4 border-b border-line px-5 py-3.5 text-[13px] last:border-b-0">
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="flex items-center gap-2">
-                    <Badge tone={solStateTone(a.state)}>{SOL_STATE_LABEL[a.state]}</Badge>
+                    <Badge tone={solStateTone(a.state)}>{solStateLabel(a.state)}</Badge>
                     <span className="truncate font-mono text-[12px] text-text2">{shortAddress(a.address, 8, 6)}</span>
-                    {!a.ours && <Badge>Lecture seule</Badge>}
+                    {!a.ours && <Badge>{t('staking.readOnly')}</Badge>}
                   </span>
                   <span className="text-mute">
                     {a.voteAccount ? (
                       <>
                         {v?.name ?? shortAddress(a.voteAccount, 8, 6)}
-                        {v?.name && ' (déclaré)'}
-                        {v && ` · commission ${v.commission} %`}
-                        {v?.delinquent && <span className="text-down"> · en retard</span>}
+                        {v?.name && t('staking.declaredSuffix')}
+                        {v && t('staking.commissionSuffix', { pct: pc(v.commission) })}
+                        {v?.delinquent && <span className="text-down">{t('staking.delinquentSuffix')}</span>}
                       </>
                     ) : (
-                      'Non délégué'
+                      t('staking.notDelegated')
                     )}
-                    {a.state === 'activating' && a.activationEpoch !== null && ` · actif à l’époque ${a.activationEpoch + 1}`}
-                    {a.state === 'deactivating' && a.deactivationEpoch !== null && ` · retirable à l’époque ${a.deactivationEpoch + 1}`}
+                    {a.state === 'activating' && a.activationEpoch !== null && t('staking.activeAtEpoch', { epoch: a.activationEpoch + 1 })}
+                    {a.state === 'deactivating' && a.deactivationEpoch !== null && t('staking.withdrawableAtEpoch', { epoch: a.deactivationEpoch + 1 })}
                   </span>
-                  {!a.ours && <span className="text-faint">{a.lockupInForce ? 'Blocage (lockup) en cours' : 'Autorités différentes de ton adresse'} : Kyro ne le gère pas.</span>}
+                  {!a.ours && <span className="text-faint">{a.lockupInForce ? t('staking.lockupInForce') : t('staking.otherAuthorities')}</span>}
                 </div>
                 <div className="flex w-44 shrink-0 flex-col items-end">
                   <span className="font-semibold">{h(amt(a.lamports, SOL))}</span>
                   <span className="text-[12px] text-mute">
-                    {a.state === 'activating' ? `${h(amt(a.activating, SOL))} en activation` : a.state === 'deactivating' ? `${h(amt(a.deactivating, SOL))} en refroidissement` : `effectif ${h(amt(a.effective, SOL))}`}
+                    {a.state === 'activating' ? t('staking.activatingAmount', { amount: h(amt(a.activating, SOL)) }) : a.state === 'deactivating' ? t('staking.deactivatingAmount', { amount: h(amt(a.deactivating, SOL)) }) : t('staking.effectiveAmount', { amount: h(amt(a.effective, SOL)) })}
                   </span>
-                  {BigInt(a.withdrawable) > 0n && <span className="text-[12px] text-faint">retirable {h(amt(a.withdrawable, SOL))}</span>}
+                  {BigInt(a.withdrawable) > 0n && <span className="text-[12px] text-faint">{t('staking.withdrawableAmount', { amount: h(amt(a.withdrawable, SOL)) })}</span>}
                 </div>
                 <div className="flex w-[240px] shrink-0 justify-end gap-2">
                   {a.ours && canDeactivate && (
                     <Button size="sm" onClick={() => setOp({ kind: 'deactivate', acc: a })}>
-                      Désactiver
+                      {t('staking.deactivate')}
                     </Button>
                   )}
                   {a.ours && canDelegate && (
                     <Button size="sm" onClick={() => setOp({ kind: 'delegate', acc: a })}>
-                      Déléguer
+                      {t('staking.delegate')}
                     </Button>
                   )}
                   {a.ours && canWithdraw && (
                     <Button size="sm" variant="ice" onClick={() => setOp({ kind: 'withdraw', acc: a })}>
-                      Retirer
+                      {t('staking.withdraw')}
                     </Button>
                   )}
                 </div>
@@ -586,28 +598,29 @@ function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOvervie
   const rent = BigInt(o.rentExemptReserve);
   const fee = 5000n;
   const maxCreate = BigInt(o.balance) - rent - fee;
+  const { t } = useT();
 
   let title: string;
   let form: ReactNode | undefined;
   let canBuild = true;
   let action: Commands['sol_stake_build']['args']['action'];
   if (op.kind === 'create') {
-    title = 'Staker des SOL';
+    title = t('staking.stakeSol');
     canBuild = !!lamports && lamports >= min && !!vote;
     action = { kind: 'createAndDelegate', lamports: (lamports ?? 0n).toString(), voteAccount: vote };
     form = (
       <>
         <AmountField
           id="sol-stake-amount"
-          label="Montant à déléguer"
+          label={t('staking.amountToDelegate')}
           value={amount}
           onChange={setAmount}
           unit={SOL}
           onMax={() => setAmount(toInputDecimal(maxCreate > 0n ? maxCreate : 0n, 9))}
           hint={
             <>
-              Minimum {amt(min, SOL)}{network === 'testnet' ? ' sur devnet' : ''}. Kyro ajoute la réserve de rent du compte de staking ({amt(rent, SOL)}), rendue quand tu fermes le compte. Disponible : {amt(o.balance, SOL)}.
-              {lamports !== null && lamports > 0n && lamports < min && <span className="text-warn"> Sous le minimum de délégation.</span>}
+              {t(network === 'testnet' ? 'staking.solCreateHintDevnet' : 'staking.solCreateHint', { min: amt(min, SOL), rent: amt(rent, SOL), available: amt(o.balance, SOL) })}
+              {lamports !== null && lamports > 0n && lamports < min && <span className="text-warn">{t('staking.belowMinimum')}</span>}
             </>
           }
         />
@@ -615,27 +628,27 @@ function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOvervie
       </>
     );
   } else if (op.kind === 'delegate') {
-    title = 'Déléguer ce compte';
+    title = t('staking.delegateTitle');
     canBuild = !!vote;
     action = { kind: 'delegate', stakeAccount: op.acc.address, voteAccount: vote };
     form = <ValidatorPicker value={vote} onChange={setVote} />;
   } else if (op.kind === 'deactivate') {
-    title = 'Désactiver le stake';
+    title = t('staking.deactivateTitle');
     action = { kind: 'deactivate', stakeAccount: op.acc.address };
   } else {
-    title = 'Retirer du compte de staking';
+    title = t('staking.withdrawSolTitle');
     const max = BigInt(op.acc.canClose ? op.acc.lamports : op.acc.withdrawable);
     canBuild = !!lamports && lamports > 0n && lamports <= max;
     action = { kind: 'withdraw', stakeAccount: op.acc.address, lamports: (lamports ?? 0n).toString() };
     form = (
       <AmountField
         id="sol-withdraw-amount"
-        label="Montant à retirer vers ton adresse"
+        label={t('staking.amountToWithdraw')}
         value={amount}
         onChange={setAmount}
         unit={SOL}
         onMax={() => setAmount(toInputDecimal(max, 9))}
-        hint={op.acc.canClose ? 'Tout retirer ferme le compte de staking (la réserve de rent revient avec).' : `Retirable sans fermer le compte : ${amt(max, SOL)} (récompenses et excédent). Le reste est délégué : désactive-le d’abord.`}
+        hint={op.acc.canClose ? t('staking.withdrawAllCloses') : t('staking.withdrawPartial', { amount: amt(max, SOL) })}
       />
     );
   }
@@ -647,48 +660,48 @@ function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOvervie
     build: () => call('sol_stake_build', { action, ...acct('sol') }),
     enClair: (b) => {
       const s = b.stake;
-      const v = s.validator ? `${s.validator.name ?? shortAddress(s.validator.voteAccount)} (commission ${s.validator.commission} %)` : '';
-      if (s.kind === 'createAndDelegate') return `Tu crées un compte de staking à ton nom avec ${amt(s.lamports, SOL)} (dont ${amt(s.rentExemptReserve, SOL)} de réserve de rent) et tu délègues ${amt(s.delegated, SOL)} à ${v}. Actif à l’époque ${s.epoch.epoch + 1}.`;
-      if (s.kind === 'delegate') return `Tu délègues ce compte à ${v}. Actif à l’époque ${s.epoch.epoch + 1}.`;
-      if (s.kind === 'deactivate') return `Tu arrêtes de staker ce compte. Refroidissement jusqu’à la fin de l’époque ${s.epoch.epoch} (${fmtDuration(s.epoch.secondsLeft)}, sans récompense), puis tu pourras retirer.`;
-      return `Tu retires ${amt(s.lamports, SOL)} vers ton adresse${s.closesAccount ? ' et tu fermes le compte de staking' : ''}.`;
+      const v = s.validator ? t('staking.validatorWithCommission', { name: s.validator.name ?? shortAddress(s.validator.voteAccount), pct: pc(s.validator.commission) }) : '';
+      if (s.kind === 'createAndDelegate') return t('staking.plainSolCreate', { amount: amt(s.lamports, SOL), rent: amt(s.rentExemptReserve, SOL), delegated: amt(s.delegated, SOL), validator: v, epoch: s.epoch.epoch + 1 });
+      if (s.kind === 'delegate') return t('staking.plainSolDelegate', { validator: v, epoch: s.epoch.epoch + 1 });
+      if (s.kind === 'deactivate') return t('staking.plainSolDeactivate', { epoch: s.epoch.epoch, duration: fmtDuration(s.epoch.secondsLeft) });
+      return t(s.closesAccount ? 'staking.plainSolWithdrawClose' : 'staking.plainSolWithdraw', { amount: amt(s.lamports, SOL) });
     },
     review: (b) => {
       const s = b.stake;
       return (
         <>
-          <Row k="Compte de staking" v={<span className="font-mono text-[12px]">{shortAddress(s.stakeAccount, 10, 8)}</span>} />
-          {s.kind === 'createAndDelegate' && <Row k="Versé au compte" v={`${amt(s.lamports, SOL)} = ${amt(s.delegated, SOL)} délégués + ${amt(s.rentExemptReserve, SOL)} de rent`} />}
-          {s.kind === 'delegate' && <Row k="Délégué" v={amt(s.delegated, SOL)} />}
-          {s.kind === 'deactivate' && <Row k="Délégué actuellement" v={amt(s.delegated, SOL)} />}
-          {s.kind === 'withdraw' && <Row k="Retiré vers ton adresse" v={`${amt(s.lamports, SOL)}${s.closesAccount ? ' · ferme le compte' : ''}`} />}
+          <Row k={t('staking.rowStakeAccount')} v={<span className="font-mono text-[12px]">{shortAddress(s.stakeAccount, 10, 8)}</span>} />
+          {s.kind === 'createAndDelegate' && <Row k={t('staking.rowPaidIn')} v={t('staking.rowPaidInValue', { amount: amt(s.lamports, SOL), delegated: amt(s.delegated, SOL), rent: amt(s.rentExemptReserve, SOL) })} />}
+          {s.kind === 'delegate' && <Row k={t('staking.rowDelegated')} v={amt(s.delegated, SOL)} />}
+          {s.kind === 'deactivate' && <Row k={t('staking.rowDelegatedNow')} v={amt(s.delegated, SOL)} />}
+          {s.kind === 'withdraw' && <Row k={t('staking.rowWithdrawn')} v={`${amt(s.lamports, SOL)}${s.closesAccount ? t('staking.closesAccountSuffix') : ''}`} />}
           {s.validator && (
             <Row
-              k="Validateur"
+              k={t('staking.validator')}
               v={
                 <span className="flex flex-col items-end">
                   <span>
-                    {s.validator.name ?? 'Sans nom'} {s.validator.name && <span className="text-faint">(déclaré)</span>} · commission {s.validator.commission} %
-                    {s.validator.delinquent && <span className="text-down"> · en retard</span>}
+                    {s.validator.name ?? t('staking.noName')} {s.validator.name && <span className="text-faint">{t('staking.declared')}</span>}{t('staking.validatorCommission', { pct: pc(s.validator.commission) })}
+                    {s.validator.delinquent && <span className="text-down">{t('staking.delinquentSuffix')}</span>}
                   </span>
-                  <span className="font-mono text-[11px] text-faint">vote {shortAddress(s.validator.voteAccount, 8, 6)} · stake actif {fmtStake(s.validator.activatedStake, 9, 'SOL')}</span>
+                  <span className="font-mono text-[11px] text-faint">{t('staking.validatorVote', { vote: shortAddress(s.validator.voteAccount, 8, 6), stake: fmtStake(s.validator.activatedStake, 9, 'SOL') })}</span>
                 </span>
               }
               {...(s.warnings.length ? { tone: 'warn' as const } : {})}
             />
           )}
-          <Row k="Époque" v={`${s.epoch.epoch} · fin dans ${fmtDuration(s.epoch.secondsLeft)}`} />
-          <Row k="Instructions" v={b.summary.instructions.map(instructionLabel).join(' · ')} />
-          <Row k="Autorités" v="ton adresse (staker et withdrawer), aucun blocage" />
-          <Row k="Frais réseau" v={amt(s.fee, SOL)} />
-          <Row k="Risque" v="pas de slashing ; récompenses selon le validateur" />
+          <Row k={t('staking.epoch')} v={t('staking.epochEndsIn', { epoch: s.epoch.epoch, duration: fmtDuration(s.epoch.secondsLeft) })} />
+          <Row k={t('staking.rowInstructions')} v={b.summary.instructions.map(instructionLabel).join(' · ')} />
+          <Row k={t('staking.rowAuthorities')} v={t('staking.rowAuthoritiesValue')} />
+          <Row k={t('staking.rowNetworkFee')} v={amt(s.fee, SOL)} />
+          <Row k={t('staking.rowRisk')} v={t('staking.riskSol')} />
         </>
       );
     },
     warnings: (b) => b.stake.warnings.map(solWarningText),
     sign: async (b, password) => ({ ...(await call('sol_stake_sign', { message: b.message, password, ...acct('sol') })), message: b.message }),
     broadcast: (s) => call('sol_stake_broadcast', { message: s.message, signature: s.signature, ...acct('sol') }),
-    doneText: 'Opération de staking diffusée. L’état du compte se met à jour au prochain rafraîchissement (l’activation ou le refroidissement suit le calendrier des époques).',
+    doneText: t('staking.doneSol'),
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
 }
@@ -696,18 +709,17 @@ function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOvervie
 // ================================================================= Cardano
 
 function DrepChoice({ mode, onMode, custom, onCustom, keepCurrent }: { mode: DrepMode | 'keep'; onMode: (m: DrepMode | 'keep') => void; custom: string; onCustom: (v: string) => void; keepCurrent: string | null }) {
+  const { t } = useT();
   const opts: { value: DrepMode | 'keep'; title: string; text: string }[] = [
-    ...(keepCurrent ? [{ value: 'keep' as const, title: `Garder mon vote actuel (${drepLabel(keepCurrent)})`, text: 'Ta délégation de vote ne change pas.' }] : []),
-    { value: 'alwaysAbstain', title: 'Toujours s’abstenir (suggéré)', text: 'Personne ne vote en ton nom : ton stake est compté comme abstention. Le choix neutre, et il débloque le retrait des récompenses.' },
-    { value: 'alwaysNoConfidence', title: 'Toujours défiance', text: 'Ton stake compte comme un vote de défiance envers le comité constitutionnel, et comme « non » sur les autres propositions.' },
-    { value: 'custom', title: 'Un représentant (DRep)', text: 'Une personne ou une organisation vote pour toi selon ses positions. Saisis son identifiant drep1… (vérifie-le à la source).' },
+    ...(keepCurrent ? [{ value: 'keep' as const, title: t('staking.drepKeep', { label: drepLabel(keepCurrent) }), text: t('staking.drepKeepText') }] : []),
+    { value: 'alwaysAbstain', title: t('staking.drepAbstainSuggested'), text: t('staking.drepAbstainText') },
+    { value: 'alwaysNoConfidence', title: t('staking.drepNoConfidence'), text: t('staking.drepNoConfidenceText') },
+    { value: 'custom', title: t('staking.drepCustom'), text: t('staking.drepCustomText') },
   ];
   return (
     <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-      <legend className="pb-1 text-[12px] font-medium text-mute">Délégation de vote (gouvernance)</legend>
-      <p className="m-0 text-[12px] leading-[1.55] text-mute">
-        Depuis la mise à jour Conway, chaque compte qui stake délègue aussi son <strong className="font-semibold text-text2">vote de gouvernance</strong> à un « DRep ». Sans délégation de vote, le réseau refuse le retrait de tes récompenses. Ça ne touche ni à tes ADA, ni au pool.
-      </p>
+      <legend className="pb-1 text-[12px] font-medium text-mute">{t('staking.drepLegend')}</legend>
+      <p className="m-0 text-[12px] leading-[1.55] text-mute">{rt('staking.drepExplain', bold2)}</p>
       {opts.map((o) => (
         <label key={o.value} className={cn('flex cursor-pointer items-start gap-3 rounded-ctl border px-3 py-2.5 text-[13px]', mode === o.value ? 'border-ice/50 bg-ice/[.06]' : 'border-line hover:bg-raised')}>
           <input type="radio" name="drep" className="mt-1 accent-[#7CC4FF]" checked={mode === o.value} onChange={() => onMode(o.value)} />
@@ -717,8 +729,8 @@ function DrepChoice({ mode, onMode, custom, onCustom, keepCurrent }: { mode: Dre
           </span>
         </label>
       ))}
-      {mode === 'custom' && <Input aria-label="Identifiant du DRep" placeholder="drep1…" value={custom} onChange={(e) => onCustom(e.target.value)} className="font-mono text-[13px]" />}
-      {mode === 'custom' && custom.trim() !== '' && drepArg('custom', custom) === null && <span className="text-[12px] text-warn">Identifiant attendu : drep1… ou drep_script1…</span>}
+      {mode === 'custom' && <Input aria-label={t('staking.drepIdLabel')} placeholder="drep1…" value={custom} onChange={(e) => onCustom(e.target.value)} className="font-mono text-[13px]" />}
+      {mode === 'custom' && custom.trim() !== '' && drepArg('custom', custom) === null && <span className="text-[12px] text-warn">{t('staking.drepIdExpected')}</span>}
     </fieldset>
   );
 }
@@ -727,6 +739,7 @@ function PoolPicker({ value, onChange }: { value: string; onChange: (id: string,
   const list = useAsync(() => call('ada_stake_pools', { limit: 50 }), []);
   const [sort, setSort] = useState<AdaSort>('margin');
   const [typed, setTyped] = useState('');
+  const { t } = useT();
   const [lookup, setLookup] = useState<{ pool: AdaPool | null; error: unknown; busy: boolean }>({ pool: null, error: null, busy: false });
   const sorted = useMemo(() => sortPools(list.data ?? [], sort), [list.data, sort]);
   const find = async () => {
@@ -743,13 +756,13 @@ function PoolPicker({ value, onChange }: { value: string; onChange: (id: string,
   return (
     <div className="flex flex-col gap-2">
       <SortBar
-        label="Pool"
+        label={t('staking.pool')}
         value={sort}
         onChange={setSort}
         options={[
-          { value: 'margin', label: 'Marge' },
-          { value: 'saturation', label: 'Saturation' },
-          { value: 'stake', label: 'Stake' },
+          { value: 'margin', label: t('staking.sortMargin') },
+          { value: 'saturation', label: t('staking.sortSaturation') },
+          { value: 'stake', label: t('staking.sortStake') },
         ]}
       />
       {list.error ? (
@@ -759,7 +772,7 @@ function PoolPicker({ value, onChange }: { value: string; onChange: (id: string,
       ) : !list.data ? (
         <Skeleton className="h-40 w-full" />
       ) : (
-        <div role="radiogroup" aria-label="Pools" className="flex max-h-[220px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
+        <div role="radiogroup" aria-label={t('staking.pools')} className="flex max-h-[220px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
           {rows.map((p) => {
             const selected = p.poolId === value;
             return (
@@ -767,11 +780,9 @@ function PoolPicker({ value, onChange }: { value: string; onChange: (id: string,
                 <span className={cn('size-3.5 shrink-0 rounded-full border-2 transition-colors duration-150', selected ? 'border-ice bg-ice shadow-[inset_0_0_0_2px_var(--color-bg)]' : 'border-line-3')} />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-semibold">
-                    {p.ticker ?? '—'} <span className="font-normal text-text2">{p.name ?? ''}</span> <span className="font-normal text-faint">(déclaré)</span>
+                    {p.ticker ?? '—'} <span className="font-normal text-text2">{p.name ?? ''}</span> <span className="font-normal text-faint">{t('staking.declared')}</span>
                   </span>
-                  <span className="truncate text-[11px] text-faint">
-                    coût fixe {amt(p.fixedCost, ADA)} · {p.liveDelegators ?? '—'} délégants
-                  </span>
+                  <span className="truncate text-[11px] text-faint">{t('staking.poolCost', { cost: amt(p.fixedCost, ADA), delegators: p.liveDelegators ?? '—' })}</span>
                 </span>
                 <span className="flex shrink-0 flex-wrap justify-end gap-1">
                   {adaPoolBadges(p).map((b) => (
@@ -780,21 +791,21 @@ function PoolPicker({ value, onChange }: { value: string; onChange: (id: string,
                     </Badge>
                   ))}
                 </span>
-                <span className="w-14 shrink-0 text-right">{fmtNumber(p.margin * 100, 1)} %</span>
-                <span className="w-16 shrink-0 text-right text-mute">{p.liveSaturation !== null ? `${fmtNumber(p.liveSaturation, 1)} %` : '—'}</span>
+                <span className="w-14 shrink-0 text-right">{pc(p.margin * 100, 1)}</span>
+                <span className="w-16 shrink-0 text-right text-mute">{p.liveSaturation !== null ? pc(p.liveSaturation, 1) : '—'}</span>
               </button>
             );
           })}
         </div>
       )}
       <div className="flex gap-2">
-        <Input aria-label="Identifiant de pool" placeholder="Ou un identifiant pool1… / 56 hex" value={typed} onChange={(e) => setTyped(e.target.value)} className="h-10 font-mono text-[12px]" />
+        <Input aria-label={t('staking.poolIdLabel')} placeholder={t('staking.poolIdPlaceholder')} value={typed} onChange={(e) => setTyped(e.target.value)} className="h-10 font-mono text-[12px]" />
         <Button disabled={!typed.trim() || lookup.busy} onClick={() => void find()}>
-          {lookup.busy && <Spinner />} Chercher
+          {lookup.busy && <Spinner />} {t('staking.search')}
         </Button>
       </div>
       {lookup.error !== null && <ErrorLine error={lookup.error}>{toIpcError(lookup.error).message}</ErrorLine>}
-      <Hint>Colonnes : marge (part des récompenses gardée par le pool) et saturation. Marge au-delà de 10 %, pool saturé (&gt; 100 %) ou qui part à la retraite : 2ᵉ confirmation dans la fenêtre système.</Hint>
+      <Hint>{t('staking.poolHint')}</Hint>
     </div>
   );
 }
@@ -809,6 +820,7 @@ function AdaStaking() {
   const ov = useAsync(() => call('ada_stake_overview', acct('ada')), [acct('ada').account], { intervalMs: 60_000 });
   useOnTorReady(ov.reload);
   const [op, setOp] = useState<AdaOp | null>(null);
+  const { t } = useT();
   const o = ov.data;
   const h = (s: string) => (hideBalances ? HIDDEN : s);
   if (ov.error && !o) return <ErrorLine error={ov.error} onRetry={ov.reload}>{ov.error.message}</ErrorLine>;
@@ -820,32 +832,32 @@ function AdaStaking() {
       <Card className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="grid flex-1 grid-cols-3 gap-6">
-            <Stat k="Délégué (tout ce que contrôle ta clé)" v={h(amt(s.totalBalance, ADA))} sub="tes ADA restent sur ton adresse, dépensables" />
-            <Stat k="Récompenses disponibles" v={h(amt(s.rewardsAvailable, ADA))} sub="dépensables après « Retirer »" />
-            <Stat k="Dépôt de la clé de staking" v={s.registered ? amt(s.deposit, ADA) : 'aucun'} sub={s.registered ? 'rendu quand tu arrêtes le staking' : `${amt(o.keyDeposit, ADA)} à la 1ʳᵉ délégation, rendus à l’arrêt`} />
+            <Stat k={t('staking.adaDelegated')} v={h(amt(s.totalBalance, ADA))} sub={t('staking.adaDelegatedSub')} />
+            <Stat k={t('staking.adaRewards')} v={h(amt(s.rewardsAvailable, ADA))} sub={t('staking.adaRewardsSub')} />
+            <Stat k={t('staking.adaDeposit')} v={s.registered ? amt(s.deposit, ADA) : t('staking.none')} sub={s.registered ? t('staking.adaDepositBack') : t('staking.adaDepositFirst', { amount: amt(o.keyDeposit, ADA) })} />
           </div>
           <Button variant="primary" size="lg" onClick={() => setOp('delegate')}>
-            {s.registered && s.delegatedPool ? 'Changer de pool' : 'Déléguer'}
+            {s.registered && s.delegatedPool ? t('staking.changePool') : t('staking.delegate')}
           </Button>
         </div>
-        <EpochBar label="Époque" epoch={o.epoch.epoch} slotsInEpoch={o.epoch.epochLength} slotSecs={1} secondsLeft={o.epoch.secondsLeft} loadedAt={ov.updatedAt} />
-        <Hint>Une délégation compte à partir de la 2ᵉ époque qui suit (5 à 10 jours), premières récompenses au début de la 4ᵉ (15 à 20 jours), puis à chaque époque de 5 jours. Pas de blocage : tu peux dépenser tes ADA à tout moment. {NO_SLASHING}</Hint>
+        <EpochBar label={t('staking.epoch')} epoch={o.epoch.epoch} slotsInEpoch={o.epoch.epochLength} slotSecs={1} secondsLeft={o.epoch.secondsLeft} loadedAt={ov.updatedAt} />
+        <Hint>{t('staking.adaHint', { noSlashing: t('staking.noSlashing') })}</Hint>
       </Card>
 
       <Card className="flex flex-col">
         <div className="flex h-[50px] items-center justify-between border-b border-line px-5">
-          <span className="text-[15px] font-medium tracking-[-0.01em]">Ta délégation ({networkLabel('ada', network)})</span>
+          <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.yourDelegation', { network: networkLabel('ada', network) })}</span>
           <span className="font-mono text-[11px] text-faint">{shortAddress(s.stakeAddress, 12, 6)}</span>
         </div>
         <dl className="m-0 flex flex-col px-5 py-1 text-[13px]">
-          <Row k="Clé de staking" v={s.registered ? <Badge tone="up">Enregistrée</Badge> : <Badge>Non enregistrée</Badge>} />
+          <Row k={t('staking.stakeKey')} v={s.registered ? <Badge tone="up">{t('staking.registered')}</Badge> : <Badge>{t('staking.notRegistered')}</Badge>} />
           <Row
-            k="Pool"
+            k={t('staking.pool')}
             v={
               o.pool ? (
                 <span className="flex flex-wrap items-center justify-end gap-1.5">
                   <span>
-                    {o.pool.ticker} · {o.pool.name} <span className="text-faint">(déclaré)</span> · marge {fmtNumber(o.pool.margin * 100, 1)} % · saturation {o.pool.liveSaturation !== null ? `${fmtNumber(o.pool.liveSaturation, 1)} %` : '—'}
+                    {rt('staking.poolLine', {}, { ticker: o.pool.ticker, name: o.pool.name, declared: <span className="text-faint">{t('staking.declared')}</span>, margin: pc(o.pool.margin * 100, 1), saturation: o.pool.liveSaturation !== null ? pc(o.pool.liveSaturation, 1) : '—' })}
                   </span>
                   {adaPoolBadges(o.pool).map((b) => (
                     <Badge key={b.text} tone={b.tone}>
@@ -856,29 +868,29 @@ function AdaStaking() {
               ) : s.delegatedPool ? (
                 shortAddress(s.delegatedPool, 10, 6)
               ) : (
-                'aucun'
+                t('staking.none')
               )
             }
           />
-          <Row k="Vote (DRep)" v={drepLabel(s.delegatedDrep)} {...(s.registered && !s.delegatedDrep ? { tone: 'warn' as const } : {})} />
+          <Row k={t('staking.voteDrep')} v={drepLabel(s.delegatedDrep)} {...(s.registered && !s.delegatedDrep ? { tone: 'warn' as const } : {})} />
         </dl>
         {s.registered && rewards > 0n && !o.canWithdraw && (
           <Notice tone="warn" className="mx-5 mb-3" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-            Pour retirer tes récompenses, le réseau exige une <strong className="font-semibold text-text">délégation de vote</strong> (règle Cardano depuis Plomin). « Toujours s’abstenir » suffit et ne vote rien en ton nom.{' '}
+            {rt('staking.adaNeedVote', bold)}{' '}
             <button type="button" className="font-semibold text-ice hover:underline" onClick={() => setOp('vote')}>
-              Déléguer mon vote
+              {t('staking.delegateMyVote')}
             </button>
           </Notice>
         )}
         <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3">
           <Button size="sm" onClick={() => setOp('vote')}>
-            {s.delegatedDrep ? 'Changer mon vote' : 'Déléguer mon vote'}
+            {s.delegatedDrep ? t('staking.changeMyVote') : t('staking.delegateMyVote')}
           </Button>
-          <Button size="sm" variant="ice" disabled={!o.canWithdraw} title={o.canWithdraw ? undefined : rewards === 0n ? 'Aucune récompense à retirer' : 'Délègue d’abord ton vote'} onClick={() => setOp('withdraw')}>
-            Retirer les récompenses
+          <Button size="sm" variant="ice" disabled={!o.canWithdraw} title={o.canWithdraw ? undefined : rewards === 0n ? t('staking.noRewardToWithdraw') : t('staking.delegateVoteFirst')} onClick={() => setOp('withdraw')}>
+            {t('staking.withdrawRewards')}
           </Button>
           <Button size="sm" variant="dangerOutline" disabled={!s.registered} onClick={() => setOp('deregister')}>
-            Arrêter le staking
+            {t('staking.stopStaking')}
           </Button>
         </div>
       </Card>
@@ -895,20 +907,21 @@ function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOvervie
   const [custom, setCustom] = useState('');
   const drep = mode === 'keep' ? null : drepArg(mode, custom);
   const drepOk = mode === 'keep' || drep !== null;
+  const { t } = useT();
 
   let title: string;
   let form: ReactNode | undefined;
   let canBuild = true;
   let action: Commands['ada_stake_build']['args']['action'];
   if (op === 'delegate') {
-    title = o.stake.delegatedPool ? 'Changer de pool' : 'Déléguer à un pool';
+    title = o.stake.delegatedPool ? t('staking.changePool') : t('staking.delegateToPool');
     canBuild = !!poolId && drepOk;
     action = { kind: 'delegate', poolId, ...(drep ? { drep } : {}) };
     form = (
       <>
         {!o.stake.registered && (
           <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-            1ʳᵉ délégation : Kyro enregistre ta clé de staking, avec un <strong className="font-semibold text-text">dépôt de {amt(o.keyDeposit, ADA)}</strong> exigé par le réseau. Il t’est rendu quand tu arrêtes le staking.
+            {rt('staking.adaFirstDelegation', bold, { amount: amt(o.keyDeposit, ADA) })}
           </Notice>
         )}
         <PoolPicker value={poolId} onChange={(id) => setPoolId(id)} />
@@ -916,20 +929,20 @@ function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOvervie
       </>
     );
   } else if (op === 'vote') {
-    title = 'Délégation de vote';
+    title = t('staking.voteDelegationTitle');
     canBuild = drep !== null;
     action = { kind: 'voteDelegate', drep: drep ?? 'alwaysAbstain' };
     form = (
       <>
-        {!o.stake.registered && <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>Ta clé de staking n’est pas encore enregistrée : dépôt de {amt(o.keyDeposit, ADA)}, rendu à l’arrêt.</Notice>}
+        {!o.stake.registered && <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>{t('staking.adaKeyNotRegistered', { amount: amt(o.keyDeposit, ADA) })}</Notice>}
         <DrepChoice mode={mode === 'keep' ? 'alwaysAbstain' : mode} onMode={setMode} custom={custom} onCustom={setCustom} keepCurrent={null} />
       </>
     );
   } else if (op === 'withdraw') {
-    title = 'Retirer les récompenses';
+    title = t('staking.withdrawRewards');
     action = { kind: 'withdraw' };
   } else {
-    title = 'Arrêter le staking';
+    title = t('staking.stopStaking');
     action = { kind: 'deregister' };
   }
 
@@ -942,15 +955,15 @@ function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOvervie
       const s = b.summary;
       const parts: string[] = [];
       for (const c of s.certificates) {
-        if (c.type === 'stakeRegistration') parts.push(`tu enregistres ta clé de staking (dépôt ${amt(c.deposit, ADA)}, rendu à l’arrêt)`);
-        if (c.type === 'stakeDelegation') parts.push(`tu délègues au pool ${b.context.pool?.ticker ?? shortAddress(c.poolId)}`);
-        if (c.type === 'voteDelegation') parts.push(`ton vote va à « ${c.drep.kind === 'alwaysAbstain' ? 'toujours s’abstenir' : c.drep.kind === 'alwaysNoConfidence' ? 'toujours défiance' : shortAddress(c.drep.id, 10, 6)} »`);
-        if (c.type === 'stakeDeregistration') parts.push(`tu arrêtes le staking et récupères le dépôt de ${amt(c.refund, ADA)}`);
+        if (c.type === 'stakeRegistration') parts.push(t('staking.plainAdaRegister', { amount: amt(c.deposit, ADA) }));
+        if (c.type === 'stakeDelegation') parts.push(t('staking.plainAdaDelegate', { pool: b.context.pool?.ticker ?? shortAddress(c.poolId) }));
+        if (c.type === 'voteDelegation') parts.push(t('staking.plainAdaVote', { drep: c.drep.kind === 'alwaysAbstain' ? t('staking.plainAdaAbstain') : c.drep.kind === 'alwaysNoConfidence' ? t('staking.plainAdaNoConfidence') : shortAddress(c.drep.id, 10, 6) }));
+        if (c.type === 'stakeDeregistration') parts.push(t('staking.plainAdaDeregister', { amount: amt(c.refund, ADA) }));
       }
-      if (BigInt(s.withdrawn) > 0n) parts.push(`tu retires ${amt(s.withdrawn, ADA)} de récompenses`);
+      if (BigInt(s.withdrawn) > 0n) parts.push(t('staking.plainAdaWithdraw', { amount: amt(s.withdrawn, ADA) }));
       const net = BigInt(b.context.netCost);
       const txt = parts.join(', ');
-      return `${txt.charAt(0).toUpperCase()}${txt.slice(1)}. ${net >= 0n ? `Coût net : ${amt(net, ADA)}` : `Gain net : ${amt(-net, ADA)}`} ; tes ADA restent sur ton adresse.`;
+      return t('staking.plainAdaSentence', { parts: `${txt.charAt(0).toUpperCase()}${txt.slice(1)}`, net: net >= 0n ? t('staking.netCostValue', { amount: amt(net, ADA) }) : t('staking.netGainValue', { amount: amt(-net, ADA) }) });
     },
     review: (b) => {
       const s = b.summary;
@@ -959,27 +972,27 @@ function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOvervie
         <>
           {c.pool && (
             <Row
-              k="Pool"
-              v={`${c.pool.ticker ?? '—'} · ${c.pool.name ?? ''} (déclaré) · marge ${fmtNumber(c.pool.margin * 100, 1)} % · coût fixe ${amt(c.pool.fixedCost, ADA)} · pledge ${amt(c.pool.pledge, ADA)} · saturation ${c.pool.liveSaturation !== null ? `${fmtNumber(c.pool.liveSaturation, 1)} %` : '—'}`}
+              k={t('staking.pool')}
+              v={t('staking.poolReview', { ticker: c.pool.ticker ?? '—', name: c.pool.name ?? '', margin: pc(c.pool.margin * 100, 1), cost: amt(c.pool.fixedCost, ADA), pledge: amt(c.pool.pledge, ADA), saturation: c.pool.liveSaturation !== null ? pc(c.pool.liveSaturation, 1) : '—' })}
               {...(c.warnings.some((w) => w.kind !== 'drepInactive') ? { tone: 'warn' as const } : {})}
             />
           )}
-          {c.drep && <Row k="Vote (DRep)" v={`${c.drep.drep.kind === 'alwaysAbstain' ? 'Toujours s’abstenir' : c.drep.drep.kind === 'alwaysNoConfidence' ? 'Toujours défiance' : shortAddress(c.drep.drep.id, 10, 6)}${c.drep.active ? '' : ' · inactif'}`} {...(c.drep.active ? {} : { tone: 'warn' as const })} />}
-          {BigInt(s.deposit) > 0n && <Row k="Dépôt" v={`${amt(s.deposit, ADA)} (rendu à l’arrêt)`} />}
-          {BigInt(s.refund) > 0n && <Row k="Remboursement du dépôt" v={amt(s.refund, ADA)} tone="up" />}
-          {BigInt(s.withdrawn) > 0n && <Row k="Récompenses retirées" v={amt(s.withdrawn, ADA)} tone="up" />}
-          <Row k="Frais réseau" v={amt(s.tx.fee, ADA)} />
-          <Row k={BigInt(c.netCost) >= 0n ? 'Coût net' : 'Gain net'} v={amt(BigInt(c.netCost) >= 0n ? c.netCost : -BigInt(c.netCost), ADA)} />
-          <Row k="Sortie" v="une seule : la monnaie, vers ton adresse" />
-          <Row k="Calendrier" v={`époque ${c.epoch.epoch} : compte à l’époque ${c.epoch.epoch + 2}, récompenses dès le début de l’époque ${c.epoch.epoch + 4}`} />
-          <Row k="Risque" v="pas de blocage, pas de slashing ; récompenses selon le pool" />
+          {c.drep && <Row k={t('staking.voteDrep')} v={`${c.drep.drep.kind === 'alwaysAbstain' ? t('staking.drepAbstain') : c.drep.drep.kind === 'alwaysNoConfidence' ? t('staking.drepNoConfidence') : shortAddress(c.drep.drep.id, 10, 6)}${c.drep.active ? '' : t('staking.inactiveSuffix')}`} {...(c.drep.active ? {} : { tone: 'warn' as const })} />}
+          {BigInt(s.deposit) > 0n && <Row k={t('staking.rowDeposit')} v={t('staking.depositBack', { amount: amt(s.deposit, ADA) })} />}
+          {BigInt(s.refund) > 0n && <Row k={t('staking.rowRefund')} v={amt(s.refund, ADA)} tone="up" />}
+          {BigInt(s.withdrawn) > 0n && <Row k={t('staking.rowRewardsWithdrawn')} v={amt(s.withdrawn, ADA)} tone="up" />}
+          <Row k={t('staking.rowNetworkFee')} v={amt(s.tx.fee, ADA)} />
+          <Row k={BigInt(c.netCost) >= 0n ? t('staking.netCost') : t('staking.netGain')} v={amt(BigInt(c.netCost) >= 0n ? c.netCost : -BigInt(c.netCost), ADA)} />
+          <Row k={t('staking.rowOutput')} v={t('staking.rowOutputValue')} />
+          <Row k={t('staking.rowSchedule')} v={t('staking.scheduleValue', { epoch: c.epoch.epoch, counts: c.epoch.epoch + 2, rewards: c.epoch.epoch + 4 })} />
+          <Row k={t('staking.rowRisk')} v={t('staking.riskAda')} />
         </>
       );
     },
     warnings: (b) => b.context.warnings.map(adaWarningText),
     sign: (b, password) => call('ada_stake_sign', { tx: b.tx, password, ...acct('ada') }),
     broadcast: (s) => call('ada_stake_broadcast', { tx: s.tx, ...acct('ada') }),
-    doneText: 'Transaction de staking Cardano diffusée. Les changements apparaissent dans l’aperçu après son inclusion dans un bloc.',
+    doneText: t('staking.doneAda'),
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
 }
@@ -997,6 +1010,7 @@ function TronStaking() {
   const ws = useAsync(() => call('tron_stake_witnesses'), []);
   useOnTorReady(ov.reload);
   const now = useNow(1000);
+  const { t, tp } = useT();
   const [op, setOp] = useState<TronOp | null>(null);
   const a = ov.data;
   const h = (s: string) => (hideBalances ? HIDDEN : s);
@@ -1009,36 +1023,33 @@ function TronStaking() {
       <Card className="flex flex-col gap-4 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="grid flex-1 grid-cols-4 gap-6">
-            <Stat k="Disponible" v={h(amt(a.balance, TRX))} />
-            <Stat k="Staké pour l’énergie" v={h(amt(a.stakedEnergy, TRX))} sub={`${a.energyLimit - a.energyUsed} / ${a.energyLimit} énergie`} />
-            <Stat k="Staké pour la bande passante" v={h(amt(a.stakedBandwidth, TRX))} sub={`${a.bandwidthLimit - a.bandwidthUsed} / ${a.bandwidthLimit} octets`} />
-            <Stat k="TRON Power voté" v={`${a.tronPowerUsed} / ${a.tronPowerLimit}`} sub="1 TRX staké = 1 voix" />
+            <Stat k={t('staking.available')} v={h(amt(a.balance, TRX))} />
+            <Stat k={t('staking.stakedEnergy')} v={h(amt(a.stakedEnergy, TRX))} sub={t('staking.energyLeft', { left: a.energyLimit - a.energyUsed, limit: a.energyLimit })} />
+            <Stat k={t('staking.stakedBandwidth')} v={h(amt(a.stakedBandwidth, TRX))} sub={t('staking.bandwidthLeft', { left: a.bandwidthLimit - a.bandwidthUsed, limit: a.bandwidthLimit })} />
+            <Stat k={t('staking.tronPowerVoted')} v={`${a.tronPowerUsed} / ${a.tronPowerLimit}`} sub={t('staking.oneTrxOneVote')} />
           </div>
           <div className="flex shrink-0 flex-col gap-2">
             <Button variant="primary" size="lg" onClick={() => setOp('freeze')}>
-              Staker des TRX
+              {t('staking.stakeTrx')}
             </Button>
             <Button size="md" disabled={BigInt(a.stakedEnergy) + BigInt(a.stakedBandwidth) === 0n} onClick={() => setOp('unfreeze')}>
-              Dégeler
+              {t('staking.unfreeze')}
             </Button>
           </div>
         </div>
-        <Hint>
-          Dégel : les TRX reviennent après {a.unfreezeDelayDays} jour{a.unfreezeDelayDays > 1 ? 's' : ''}
-          {network === 'testnet' ? ' sur Nile (14 jours sur mainnet)' : ''}, puis il faut les « Retirer ». Les votes ne rapportent que pour les SR classés dans les 127 premiers, selon la part qu’ils gardent. {NO_SLASHING}
-        </Hint>
+        <Hint>{t(network === 'testnet' ? 'staking.tronHintTestnet' : 'staking.tronHint', { days: tp('time.days', a.unfreezeDelayDays), noSlashing: t('staking.noSlashing') })}</Hint>
       </Card>
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="flex flex-col">
           <div className="flex h-[50px] items-center justify-between border-b border-line px-5">
-            <span className="text-[15px] font-medium tracking-[-0.01em]">Tes votes</span>
+            <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.yourVotes')}</span>
             <Button size="sm" disabled={a.tronPowerLimit === 0} onClick={() => setOp('vote')}>
-              Voter
+              {t('staking.vote')}
             </Button>
           </div>
           {a.votes.length === 0 ? (
-            <EmptyState title="Aucun vote">{a.tronPowerLimit > 0 ? 'Vote pour un ou plusieurs SR pour recevoir des récompenses.' : 'Stake des TRX pour obtenir du TRON Power.'}</EmptyState>
+            <EmptyState title={t('staking.noVote')}>{a.tronPowerLimit > 0 ? t('staking.noVoteHasPower') : t('staking.noVoteNoPower')}</EmptyState>
           ) : (
             a.votes.map((v) => {
               const w = byAddr.get(v.address);
@@ -1046,13 +1057,13 @@ function TronStaking() {
                 <div key={v.address} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate font-semibold">
-                      {w?.url ?? shortAddress(v.address)} <span className="font-normal text-faint">(déclaré)</span>
+                      {w?.url ?? shortAddress(v.address)} <span className="font-normal text-faint">{t('staking.declared')}</span>
                     </span>
-                    <span className="text-[11px] text-faint">{w ? `rang ${w.rank}` : shortAddress(v.address)}</span>
+                    <span className="text-[11px] text-faint">{w ? t('staking.rank', { rank: w.rank }) : shortAddress(v.address)}</span>
                   </span>
                   <span className="flex items-center gap-2">
                     {w && tronWitnessBadges(w).filter((b) => b.tone === 'down').map((b) => <Badge key={b.text} tone={b.tone}>{b.text}</Badge>)}
-                    <span className="font-semibold">{v.count} voix</span>
+                    <span className="font-semibold">{t('staking.votesCount', { count: v.count })}</span>
                   </span>
                 </div>
               );
@@ -1060,38 +1071,38 @@ function TronStaking() {
           )}
           <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3 text-[13px]">
             <span className="flex flex-col">
-              <span className="text-mute">Récompenses de vote</span>
+              <span className="text-mute">{t('staking.voteRewards')}</span>
               <span className="font-semibold">{h(amt(a.reward, TRX))}</span>
-              {a.nextClaimTime > now && <span className="text-[11px] text-faint">réclamables dans {fmtDuration((a.nextClaimTime - now) / 1000)} (une fois par 24 h)</span>}
+              {a.nextClaimTime > now && <span className="text-[11px] text-faint">{t('staking.claimableIn', { duration: fmtDuration((a.nextClaimTime - now) / 1000) })}</span>}
             </span>
-            <Button size="sm" variant="ice" disabled={!claimable} title={claimable ? undefined : BigInt(a.reward) === 0n ? 'Aucune récompense' : 'Une réclamation par 24 h'} onClick={() => setOp('claim')}>
-              Réclamer
+            <Button size="sm" variant="ice" disabled={!claimable} title={claimable ? undefined : BigInt(a.reward) === 0n ? t('staking.noReward') : t('staking.oneClaimPer24h')} onClick={() => setOp('claim')}>
+              {t('staking.claim')}
             </Button>
           </div>
         </Card>
 
         <Card className="flex flex-col">
           <div className="flex h-[50px] items-center justify-between border-b border-line px-5">
-            <span className="text-[15px] font-medium tracking-[-0.01em]">Dégels en cours</span>
+            <span className="text-[15px] font-medium tracking-[-0.01em]">{t('staking.pendingUnfreezes')}</span>
             <div className="flex gap-2">
               <Button size="sm" disabled={a.unfreezing.length === 0} onClick={() => setOp('cancel')}>
-                Annuler les dégels
+                {t('staking.cancelUnfreezes')}
               </Button>
               <Button size="sm" variant="ice" disabled={BigInt(a.withdrawableNow) === 0n} onClick={() => setOp('withdraw')}>
-                Retirer {BigInt(a.withdrawableNow) > 0n ? h(amt(a.withdrawableNow, TRX)) : ''}
+                {BigInt(a.withdrawableNow) > 0n ? t('staking.withdrawAmount', { amount: h(amt(a.withdrawableNow, TRX)) }) : t('staking.withdraw')}
               </Button>
             </div>
           </div>
           {a.unfreezing.length === 0 ? (
-            <EmptyState title="Aucun dégel">Les TRX dégelés apparaissent ici avec leur date de disponibilité.</EmptyState>
+            <EmptyState title={t('staking.noUnfreeze')}>{t('staking.noUnfreezeBody')}</EmptyState>
           ) : (
             a.unfreezing.map((u, i) => (
               <div key={`${u.expireTime}-${i}`} className="flex items-center justify-between gap-3 border-b border-line px-5 py-2.5 text-[13px] last:border-b-0">
                 <span className="flex flex-col">
                   <span className="font-semibold">{h(amt(u.amount, TRX))}</span>
-                  <span className="text-[11px] text-faint">{u.resource === 'ENERGY' ? 'énergie' : 'bande passante'}</span>
+                  <span className="text-[11px] text-faint">{u.resource === 'ENERGY' ? t('staking.energy') : t('staking.bandwidth')}</span>
                 </span>
-                {u.expireTime <= now ? <Badge tone="up">Retirable</Badge> : <span className="text-mute">disponible le {fmtWhen(u.expireTime, now).toLowerCase()} ({fmtDuration((u.expireTime - now) / 1000)})</span>}
+                {u.expireTime <= now ? <Badge tone="up">{t('staking.withdrawable')}</Badge> : <span className="text-mute">{t('staking.availableOn', { when: getLanguage() === 'fr' ? fmtWhen(u.expireTime, now).toLowerCase() : fmtWhen(u.expireTime, now), duration: fmtDuration((u.expireTime - now) / 1000) })}</span>}
               </div>
             ))
           )}
@@ -1107,21 +1118,22 @@ function VoteEditor({ witnesses, counts, onCounts, power }: { witnesses: TronWit
   const sorted = useMemo(() => sortWitnesses(witnesses, sort), [witnesses, sort]);
   const parsed = tronVotes(counts);
   const total = parsed?.total ?? 0;
+  const { t } = useT();
   return (
     <div className="flex flex-col gap-2">
       <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-        <strong className="font-semibold text-text">Un vote remplace tous tes votes actuels.</strong> Les SR que tu ne remets pas ici perdent tes voix.
+        <strong className="font-semibold text-text">{t('staking.replaceVotesTitle')}</strong> {t('staking.replaceVotesBody')}
       </Notice>
-      <SortBar label="Super Representatives" value={sort} onChange={setSort} options={[{ value: 'rank', label: 'Rang' }, { value: 'votes', label: 'Votes' }]} />
+      <SortBar label="Super Representatives" value={sort} onChange={setSort} options={[{ value: 'rank', label: t('staking.sortRank') }, { value: 'votes', label: t('staking.sortVotes') }]} />
       <div className="flex max-h-[260px] flex-col overflow-y-auto rounded-ctl border border-line scroll-thin">
         {sorted.map((w) => (
           <div key={w.address} className="flex items-center gap-3 border-b border-line px-3 py-1.5 text-[13px] last:border-b-0">
             <span className="w-9 shrink-0 text-right text-mute">#{w.rank}</span>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate font-semibold">
-                {w.url} <span className="font-normal text-faint">(déclaré)</span>
+                {w.url} <span className="font-normal text-faint">{t('staking.declared')}</span>
               </span>
-              <span className="truncate text-[11px] text-faint">{fmtNumber(w.voteCount, 0)} votes</span>
+              <span className="truncate text-[11px] text-faint">{t('staking.witnessVotes', { votes: fmtNumber(w.voteCount, 0) })}</span>
             </span>
             <span className="flex shrink-0 gap-1">
               {tronWitnessBadges(w).map((b) => (
@@ -1131,7 +1143,7 @@ function VoteEditor({ witnesses, counts, onCounts, power }: { witnesses: TronWit
               ))}
             </span>
             <input
-              aria-label={`Voix pour ${w.url}`}
+              aria-label={t('staking.votesFor', { sr: w.url })}
               inputMode="numeric"
               value={counts[w.address] ?? ''}
               onChange={(e) => onCounts({ ...counts, [w.address]: e.target.value.replace(/\D/g, '') })}
@@ -1142,12 +1154,12 @@ function VoteEditor({ witnesses, counts, onCounts, power }: { witnesses: TronWit
         ))}
       </div>
       <div className="flex items-center justify-between text-[13px]">
-        <span className="text-mute">{parsed?.votes.length ?? 0} SR (1 à 30)</span>
+        <span className="text-mute">{t('staking.srCount', { count: parsed?.votes.length ?? 0 })}</span>
         <span className={cn('font-semibold', total > power && 'text-down')}>
           {total} / {power} TRON Power
         </span>
       </div>
-      <Hint>La part gardée par chaque SR est lue au moment de vérifier. Un SR hors des 127 premiers ou qui garde 100 % : 2ᵉ confirmation dans la fenêtre système.</Hint>
+      <Hint>{t('staking.voteHint')}</Hint>
     </div>
   );
 }
@@ -1159,46 +1171,47 @@ function TronOpDialog({ op, a, witnesses, onClose, onDone }: { op: TronOp; a: Tr
   const [counts, setCounts] = useState<Record<string, string>>(() => Object.fromEntries(a.votes.map((v) => [v.address, v.count])));
   const sun = tryParseUnits(amount, 6);
   const staked = BigInt(resource === 'ENERGY' ? a.stakedEnergy : a.stakedBandwidth);
+  const { t, tp } = useT();
 
   let title: string;
   let form: ReactNode | undefined;
   let canBuild = true;
   let action: Commands['tron_stake_build']['args']['action'];
-  const resPicker = <Segmented label="Ressource" value={resource} onChange={setResource} options={[{ value: 'ENERGY', label: 'Énergie' }, { value: 'BANDWIDTH', label: 'Bande passante' }]} />;
+  const resPicker = <Segmented label={t('staking.resource')} value={resource} onChange={setResource} options={[{ value: 'ENERGY', label: t('staking.energyCap') }, { value: 'BANDWIDTH', label: t('staking.bandwidthCap') }]} />;
   if (op === 'freeze') {
-    title = 'Staker des TRX';
+    title = t('staking.stakeTrx');
     canBuild = !!sun && sun >= 1_000_000n && sun <= BigInt(a.balance);
     action = { kind: 'freeze', resource, amount: (sun ?? 0n).toString() };
     form = (
       <>
         {resPicker}
-        <AmountField id="tron-freeze" label="Montant à staker" value={amount} onChange={setAmount} unit={TRX} onMax={() => setAmount(toInputDecimal(BigInt(a.balance), 6))} hint={`Minimum 1 TRX. Disponible : ${amt(a.balance, TRX)}. Chaque TRX staké donne 1 voix de TRON Power. Le dégel prendra ${a.unfreezeDelayDays} jour${a.unfreezeDelayDays > 1 ? 's' : ''}.`} />
+        <AmountField id="tron-freeze" label={t('staking.amountToStake')} value={amount} onChange={setAmount} unit={TRX} onMax={() => setAmount(toInputDecimal(BigInt(a.balance), 6))} hint={t('staking.freezeHint', { available: amt(a.balance, TRX), days: tp('time.days', a.unfreezeDelayDays) })} />
       </>
     );
   } else if (op === 'unfreeze') {
-    title = 'Dégeler des TRX';
+    title = t('staking.unfreezeTitle');
     canBuild = !!sun && sun > 0n && sun <= staked;
     action = { kind: 'unfreeze', resource, amount: (sun ?? 0n).toString() };
     form = (
       <>
         {resPicker}
-        <AmountField id="tron-unfreeze" label="Montant à dégeler" value={amount} onChange={setAmount} unit={TRX} onMax={() => setAmount(toInputDecimal(staked, 6))} hint={`Staké pour cette ressource : ${amt(staked, TRX)}. Disponible dans ${a.unfreezeDelayDays} jour${a.unfreezeDelayDays > 1 ? 's' : ''}, puis à retirer. Si ton TRON Power passe sous tes votes, le réseau en retire une partie.`} />
+        <AmountField id="tron-unfreeze" label={t('staking.amountToUnfreeze')} value={amount} onChange={setAmount} unit={TRX} onMax={() => setAmount(toInputDecimal(staked, 6))} hint={t('staking.unfreezeHint', { staked: amt(staked, TRX), days: tp('time.days', a.unfreezeDelayDays) })} />
       </>
     );
   } else if (op === 'vote') {
-    title = 'Voter pour des SR';
+    title = t('staking.voteTitle');
     const parsed = tronVotes(counts);
     canBuild = !!parsed && parsed.votes.length >= 1 && parsed.votes.length <= 30 && parsed.total <= a.tronPowerLimit;
     action = { kind: 'vote', votes: parsed?.votes ?? [] };
     form = <VoteEditor witnesses={witnesses} counts={counts} onCounts={setCounts} power={a.tronPowerLimit} />;
   } else if (op === 'withdraw') {
-    title = 'Retirer les TRX dégelés';
+    title = t('staking.withdrawTrxTitle');
     action = { kind: 'withdrawUnfrozen' };
   } else if (op === 'cancel') {
-    title = 'Annuler les dégels';
+    title = t('staking.cancelUnfreezes');
     action = { kind: 'cancelAllUnfreeze' };
   } else {
-    title = 'Réclamer les récompenses de vote';
+    title = t('staking.claimTitle');
     action = { kind: 'claimRewards' };
   }
 
@@ -1212,17 +1225,17 @@ function TronOpDialog({ op, a, witnesses, onClose, onDone }: { op: TronOp; a: Tr
       const c = b.context.account;
       switch (x.type) {
         case 'freeze':
-          return `Tu stakes ${amt(x.amount, TRX)} pour ${x.resource === 'ENERGY' ? 'de l’énergie' : 'de la bande passante'} (+${Number(BigInt(x.amount) / 1_000_000n)} TRON Power). Pour les récupérer : dégel de ${c.unfreezeDelayDays} jour${c.unfreezeDelayDays > 1 ? 's' : ''}.`;
+          return t(x.resource === 'ENERGY' ? 'staking.plainTronFreezeEnergy' : 'staking.plainTronFreezeBandwidth', { amount: amt(x.amount, TRX), power: Number(BigInt(x.amount) / 1_000_000n), days: tp('time.days', c.unfreezeDelayDays) });
         case 'unfreeze':
-          return `Tu dégèles ${amt(x.amount, TRX)} (${x.resource === 'ENERGY' ? 'énergie' : 'bande passante'}) : disponibles dans ${c.unfreezeDelayDays} jour${c.unfreezeDelayDays > 1 ? 's' : ''}, puis à retirer.`;
+          return t('staking.plainTronUnfreeze', { amount: amt(x.amount, TRX), resource: x.resource === 'ENERGY' ? t('staking.energy') : t('staking.bandwidth'), days: tp('time.days', c.unfreezeDelayDays) });
         case 'withdrawUnfrozen':
-          return `Tu récupères ${amt(c.withdrawableNow, TRX)} dégelés sur ton solde.`;
+          return t('staking.plainTronWithdraw', { amount: amt(c.withdrawableNow, TRX) });
         case 'cancelAllUnfreeze':
-          return 'Tu annules tous tes dégels en cours : les TRX sont re-stakés (ceux arrivés à terme sont retirés).';
+          return t('staking.plainTronCancel');
         case 'claimRewards':
-          return `Tu réclames ${amt(c.reward, TRX)} de récompenses de vote (une fois par 24 h).`;
+          return t('staking.plainTronClaim', { amount: amt(c.reward, TRX) });
         case 'vote':
-          return `Tu votes ${x.total} voix pour ${x.votes.length} SR. Ces votes remplacent tous tes votes actuels.`;
+          return t('staking.plainTronVote', { total: x.total, count: x.votes.length });
       }
     },
     review: (b) => {
@@ -1234,22 +1247,22 @@ function TronOpDialog({ op, a, witnesses, onClose, onDone }: { op: TronOp; a: Tr
             x.votes.map((v) => {
               const w = c.witnesses.find((y) => y.address === v.address);
               const warn = c.warnings.some((k) => k.kind !== 'votesReduced' && k.address === v.address);
-              return <Row key={v.address} k={`${v.count} voix`} v={`${w?.url ?? shortAddress(v.address)} (déclaré) · rang ${w?.rank ?? '?'} · garde ${w?.brokerage ?? '?'} %`} {...(warn ? { tone: 'warn' as const } : {})} />;
+              return <Row key={v.address} k={t('staking.votesCount', { count: v.count })} v={t('staking.voteReview', { sr: w?.url ?? shortAddress(v.address), rank: w?.rank ?? '?', brokerage: w?.brokerage ?? '?' })} {...(warn ? { tone: 'warn' as const } : {})} />;
             })}
-          {(x.type === 'freeze' || x.type === 'unfreeze') && <Row k="Ressource" v={x.resource === 'ENERGY' ? 'énergie' : 'bande passante'} />}
-          {(x.type === 'freeze' || x.type === 'unfreeze') && <Row k="Délai de dégel du réseau" v={`${c.account.unfreezeDelayDays} jour${c.account.unfreezeDelayDays > 1 ? 's' : ''}`} />}
-          <Row k="TRON Power" v={`${c.account.tronPowerUsed} / ${c.account.tronPowerLimit} voté avant l’opération`} {...(c.warnings.some((k) => k.kind === 'votesReduced') ? { tone: 'warn' as const } : {})} />
-          <Row k="Bande passante" v={`${c.estimate.bandwidthNeeded} octets · ${BigInt(c.estimate.bandwidthBurn) > 0n ? `${amt(c.estimate.bandwidthBurn, TRX)} brûlés` : 'couverte, rien de brûlé'}`} />
-          <Row k="Expire" v={fmtWhen(b.summary.expiration)} />
+          {(x.type === 'freeze' || x.type === 'unfreeze') && <Row k={t('staking.rowResource')} v={x.resource === 'ENERGY' ? t('staking.energy') : t('staking.bandwidth')} />}
+          {(x.type === 'freeze' || x.type === 'unfreeze') && <Row k={t('staking.rowUnfreezeDelay')} v={tp('time.days', c.account.unfreezeDelayDays)} />}
+          <Row k="TRON Power" v={t('staking.tronPowerBefore', { used: c.account.tronPowerUsed, limit: c.account.tronPowerLimit })} {...(c.warnings.some((k) => k.kind === 'votesReduced') ? { tone: 'warn' as const } : {})} />
+          <Row k={t('staking.rowBandwidth')} v={BigInt(c.estimate.bandwidthBurn) > 0n ? t('staking.bandwidthBurned', { bytes: c.estimate.bandwidthNeeded, amount: amt(c.estimate.bandwidthBurn, TRX) }) : t('staking.bandwidthCovered', { bytes: c.estimate.bandwidthNeeded })} />
+          <Row k={t('staking.rowExpires')} v={fmtWhen(b.summary.expiration)} />
           <Row k="ID" v={<span className="font-mono text-[11px]">{shortAddress(b.txid, 10, 8)}</span>} />
-          <Row k="Risque" v="pas de slashing ; récompenses selon le SR" />
+          <Row k={t('staking.rowRisk')} v={t('staking.riskTron')} />
         </>
       );
     },
     warnings: (b) => b.context.warnings.map((w) => tronWarningText(w, b.context.witnesses)),
     sign: async (b, password) => ({ ...(await call('tron_stake_sign', { raw: b.raw, password, ...acct('tron') })), raw: b.raw }),
     broadcast: (s) => call('tron_broadcast', { raw: s.raw, signature: s.signature, ...acct('tron') }),
-    doneText: 'Transaction TRON diffusée. L’aperçu est relu aussitôt ; s’il n’a pas encore changé, le bloc arrive dans quelques secondes.',
+    doneText: t('staking.doneTron'),
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
 }

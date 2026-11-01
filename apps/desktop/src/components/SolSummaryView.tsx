@@ -4,63 +4,67 @@
 import type { Currency, SolInstruction, SolTxSummary, SolWarning } from '@kyro/shared';
 import type { AssetDef, SolUnsigned } from '@kyro/chains';
 import { fmtCrypto, fmtFiat, shortAddress } from '../lib/format';
+import { t, tp, useT } from '../i18n';
 import { Notice } from './ui/primitives';
 import { IconWarn } from './icons';
 
 export function solWarningText(w: SolWarning, s: SolTxSummary): string {
-  const ix = (i: number) => `instruction ${i + 1}${s.instructions[i] ? ` (${instructionLabel(s.instructions[i])})` : ''}`;
+  const ix = (i: number) => {
+    const ins = s.instructions[i];
+    return ins ? t('send.solIxLabeled', { n: i + 1, label: instructionLabel(ins) }) : t('send.solIx', { n: i + 1 });
+  };
   switch (w.kind) {
     case 'feePayerNotUs':
-      return `Les frais sont payés par une autre adresse (${shortAddress(w.feePayer)}).`;
+      return t('send.solFeePayerNotUs', { addr: shortAddress(w.feePayer) });
     case 'extraWritableSigner':
-      return `Une autre adresse doit aussi signer : ${shortAddress(w.address)}.`;
+      return t('send.solExtraSigner', { addr: shortAddress(w.address) });
     case 'authorityNotUs':
-      return `L’autorité de l’${ix(w.instruction)} n’est pas ton adresse (${shortAddress(w.authority)}).`;
+      return t('send.solAuthorityNotUs', { ix: ix(w.instruction), addr: shortAddress(w.authority) });
     case 'delegation':
-      return `L’${ix(w.instruction)} délègue un droit de dépense sur tes tokens.`;
+      return t('send.solDelegation', { ix: ix(w.instruction) });
     case 'unknownInstruction':
-      return `Instruction non reconnue : programme ${shortAddress(w.programId)} (${ix(w.instruction)}).`;
+      return t('send.solUnknownInstruction', { program: shortAddress(w.programId), ix: ix(w.instruction) });
     case 'token2022ExtensionsUnverified':
-      return `Token-2022 : les extensions du mint (frais de transfert, hook…) ne sont pas vérifiées (${ix(w.instruction)}).`;
+      return t('send.solToken2022', { ix: ix(w.instruction) });
     case 'priorityFeeEstimated':
-      return 'Pas de limite de calcul explicite : la priority fee affichée est un maximum estimé.';
+      return t('send.solPriorityEstimated');
     case 'unknownOwnerProgram':
-      return `Le compte créé appartient à un programme inconnu (${shortAddress(w.owner)}) : il pourra dépenser ces SOL (${ix(w.instruction)}).`;
+      return t('send.solUnknownOwner', { owner: shortAddress(w.owner), ix: ix(w.instruction) });
     case 'uncheckedTokenTransfer':
-      return `Transfert de token sans mint ni décimales (Transfer, ${ix(w.instruction)}) : le token envoyé n’est pas vérifié.`;
+      return t('send.solUncheckedTransfer', { ix: ix(w.instruction) });
     case 'unusualText':
-      return `Texte inhabituel (mémo ou seed nettoyé, ou très long) dans l’${ix(w.instruction)}.`;
+      return t('send.solUnusualText', { ix: ix(w.instruction) });
   }
 }
 
 export function instructionLabel(i: SolInstruction): string {
   switch (i.type) {
     case 'systemTransfer':
-      return 'transfert SOL';
+      return t('send.solLabelTransfer');
     case 'tokenTransfer':
       return i.checked ? 'TransferChecked' : 'Transfer';
     case 'tokenApprove':
       return 'Approve';
     case 'ataCreate':
-      return 'création de compte de token';
+      return t('send.solLabelAtaCreate');
     case 'computeUnitLimit':
-      return 'limite de calcul';
+      return t('send.solLabelComputeLimit');
     case 'computeUnitPrice':
       return 'priority fee';
     case 'memo':
-      return 'mémo';
+      return t('send.solLabelMemo');
     case 'systemCreateAccountWithSeed':
-      return 'création du compte de staking (adresse dérivée de la tienne)';
+      return t('send.solLabelCreateWithSeed');
     case 'stakeInitialize':
-      return 'initialisation du compte de staking';
+      return t('send.solLabelStakeInit');
     case 'stakeDelegate':
-      return 'délégation à un validateur';
+      return t('send.solLabelStakeDelegate');
     case 'stakeDeactivate':
-      return 'désactivation du stake';
+      return t('send.solLabelStakeDeactivate');
     case 'stakeWithdraw':
-      return 'retrait du compte de staking';
+      return t('send.solLabelStakeWithdraw');
     case 'unknown':
-      return 'inconnue';
+      return t('send.solLabelUnknown');
     default:
       return i.type;
   }
@@ -77,6 +81,7 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 
 /** Decoded rows: recipient, amount + mint, ATA creation cost, fees, memo, warnings. */
 export function SolSummaryView({ s, unsigned, asset, sol, solPrice, currency }: { s: SolTxSummary; unsigned: SolUnsigned; asset: AssetDef; sol: AssetDef; solPrice: number | null; currency: Currency }) {
+  const { t } = useT();
   const fiat = (lamports: bigint) => (solPrice !== null ? ` · ${fmtFiat((Number(lamports) / 1e9) * solPrice, currency)}` : '');
   const transfer = s.instructions.find((i) => i.type === 'tokenTransfer');
   const sysTransfer = s.instructions.find((i) => i.type === 'systemTransfer');
@@ -90,7 +95,7 @@ export function SolSummaryView({ s, unsigned, asset, sol, solPrice, currency }: 
     <div className="flex flex-col gap-3">
       {s.requiresExtraConfirmation && (
         <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
-          <span className="font-semibold">Confirmation supplémentaire requise.</span>
+          <span className="font-semibold">{t('send.solExtraConfirm')}</span>
           <ul className="m-0 mt-1 list-disc pl-4">
             {s.warnings.map((w, i) => (
               <li key={i}>{solWarningText(w, s)}</li>
@@ -100,14 +105,14 @@ export function SolSummaryView({ s, unsigned, asset, sol, solPrice, currency }: 
       )}
       <dl className="m-0 flex flex-col text-[13px]">
         <Row
-          k="Destinataire"
+          k={t('send.recipient')}
           v={<span className="font-mono text-[12px]">{shortAddress(transfer?.type === 'tokenTransfer' ? (create?.type === 'ataCreate' ? create.owner : unsigned.recipient) : sysTransfer?.type === 'systemTransfer' ? sysTransfer.to : unsigned.recipient)}</span>}
         />
         {transfer?.type === 'tokenTransfer' && (
           <>
-            <Row k="Compte de token" v={<span className="font-mono text-[12px]">{shortAddress(transfer.destination)}</span>} />
+            <Row k={t('send.solTokenAccount')} v={<span className="font-mono text-[12px]">{shortAddress(transfer.destination)}</span>} />
             <Row
-              k="Montant"
+              k={t('common.amount')}
               v={
                 <>
                   {fmtCrypto(BigInt(transfer.amount), transfer.decimals ?? asset.decimals, asset.symbol)}{' '}
@@ -115,27 +120,27 @@ export function SolSummaryView({ s, unsigned, asset, sol, solPrice, currency }: 
                 </>
               }
             />
-            <Row k="Programme" v={transfer.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL Token'} />
+            <Row k={t('send.solProgram')} v={transfer.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL Token'} />
           </>
         )}
-        {sysTransfer?.type === 'systemTransfer' && <Row k="Montant" v={fmtCrypto(BigInt(sysTransfer.lamports), 9, 'SOL')} />}
+        {sysTransfer?.type === 'systemTransfer' && <Row k={t('common.amount')} v={fmtCrypto(BigInt(sysTransfer.lamports), 9, 'SOL')} />}
         {create?.type === 'ataCreate' && (
           <Row
-            k="Création du compte"
+            k={t('send.solAccountCreation')}
             v={
               <span className="text-warn">
                 {fmtCrypto(unsigned.ataRent, 9, sol.symbol, 9)}
-                {fiat(unsigned.ataRent)} · dépôt de loyer
+                {fiat(unsigned.ataRent)} · {t('send.solRentDeposit')}
               </span>
             }
           />
         )}
-        <Row k="Frais de base" v={`${fmtCrypto(base, 9, 'SOL', 9)}${fiat(base)}`} />
-        <Row k="Priority fee" v={priority > 0n ? `${fmtCrypto(priority, 9, 'SOL', 9)}${fiat(priority)} · ${s.computeUnitPriceMicroLamports ?? '0'} µL × ${s.computeUnitLimit ?? '?'} CU` : 'aucune'} />
+        <Row k={t('send.solBaseFee')} v={`${fmtCrypto(base, 9, 'SOL', 9)}${fiat(base)}`} />
+        <Row k="Priority fee" v={priority > 0n ? `${fmtCrypto(priority, 9, 'SOL', 9)}${fiat(priority)} · ${s.computeUnitPriceMicroLamports ?? '0'} µL × ${s.computeUnitLimit ?? '?'} CU` : t('send.solNone')} />
         {memos.map((m, i) => (
-          <Row key={i} k="Mémo" v={<span className="text-text2">« {m.text} »</span>} />
+          <Row key={i} k={t('send.solMemo')} v={<span className="text-text2">« {m.text} »</span>} />
         ))}
-        <Row k="Version" v={`${s.version}${s.lookupTables.length ? ` · ${s.lookupTables.length} table(s)` : ''} · signature n° ${(s.ourSignerIndex ?? -1) + 1}/${s.signers.length}`} />
+        <Row k={t('send.solVersion')} v={`${s.version}${s.lookupTables.length ? ` · ${tp('send.solTables', s.lookupTables.length)}` : ''} · ${t('send.solSignature', { n: (s.ourSignerIndex ?? -1) + 1, total: s.signers.length })}`} />
       </dl>
       {otherWarnings.length > 0 && (
         <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[12px] text-warn">

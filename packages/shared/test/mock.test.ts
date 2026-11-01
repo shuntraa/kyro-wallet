@@ -113,7 +113,7 @@ describe('mock IPC backend', () => {
     expect(next.currency).toBe('USD');
     expect(await rejectCode(call('settings_set', { settings: { ...s, servers: { ...s.servers, evm: { '11155111': { url: 'http://insecure.example' } } } } }))).toBe('SERVER_INVALID');
     const cfg = await call('config_get');
-    expect(Object.keys(cfg).sort()).toEqual(['hasCoingeckoKey', 'hasTrongridKey', 'hasZeroxKey', 'network']);
+    expect(Object.keys(cfg).sort()).toEqual(['hasCoingeckoKey', 'hasTrongridKey', 'hasZeroxKey', 'network', 'systemLanguage']);
   });
 
   it('reveal is password-gated, native only and rate-limited', async () => {

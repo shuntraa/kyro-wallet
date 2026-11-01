@@ -33,6 +33,7 @@ import { checkServerUrl } from './servers';
 import { demoEsploraAddress, demoEsploraTxs, demoEsploraUtxos, type DemoChainState } from './mock-net';
 import type { DemoTor } from './mock-tor';
 import type { DemoAccountHooks } from './mock-accounts';
+import { l10n } from './i18n';
 
 bitcoin.initEccLib(ecc);
 
@@ -77,10 +78,10 @@ export function demoUtxoAccount(seed: Uint8Array, network: Network, coin: Coin, 
 
 export function demoUtxoAddress(node: HDKey, network: Network, coin: Coin, change: number, index: number): string {
   const pubkey = node.deriveChild(change).deriveChild(index).publicKey;
-  if (!pubkey) throw new IpcError('INTERNAL', 'dérivation');
+  if (!pubkey) throw new IpcError('INTERNAL', l10n('dérivation', 'derivation'));
   const net = netsOf(coin)[network];
   const p = coin === 'ltc' ? bitcoin.payments.p2wpkh({ pubkey, network: net }) : bitcoin.payments.p2pkh({ pubkey, network: net });
-  if (!p.address) throw new IpcError('INTERNAL', 'adresse');
+  if (!p.address) throw new IpcError('INTERNAL', l10n('adresse', 'address'));
   return p.address;
 }
 
@@ -97,8 +98,8 @@ export interface DemoUtxoDeps {
   confirm: (text: string) => boolean;
 }
 
-const invalid = (m: string) => new IpcError('SERVER_INVALID', `Serveur invalide : ${m}`);
-const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', `Serveur injoignable : ${m}`);
+const invalid = (m: string) => new IpcError('SERVER_INVALID', l10n(`Serveur invalide : ${m}`, `Invalid server: ${m}`));
+const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', l10n(`Serveur injoignable : ${m}`, `Server unreachable: ${m}`));
 const has = (s: string, w: string) => s.toLowerCase().includes(w);
 const hostOf = (u: string) => {
   try {
@@ -124,11 +125,11 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
   const backend = async (coin: Coin) => {
     const s = serverOf(coin);
     if (s.kind === 'default' && !hasDefault(coin)) {
-      throw invalid('dogecoin : aucun serveur public gratuit — configure ton serveur Esplora (electrs-dogecoin) dans Réglages › Réseaux et serveurs');
+      throw invalid(l10n('dogecoin : aucun serveur public gratuit — configure ton serveur Esplora (electrs-dogecoin) dans Réglages › Réseaux et serveurs', 'dogecoin: no free public server — set up your Esplora server (electrs-dogecoin) in Settings › Networks and servers'));
     }
     if (torOn()) await d.tor.waitReady();
     await wait(70 + Math.random() * 160);
-    if (s.kind === 'esplora' && (has(s.url, 'down') || has(s.url, 'flaky'))) throw unreachable(`${hostOf(s.url)} : délai de connexion dépassé`);
+    if (s.kind === 'esplora' && (has(s.url, 'down') || has(s.url, 'flaky'))) throw unreachable(l10n(`${hostOf(s.url)} : délai de connexion dépassé`, `${hostOf(s.url)}: connection timed out`));
     return s;
   };
 
@@ -137,7 +138,7 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
     try {
       bitcoin.address.toOutputScript(addr, net(coin));
     } catch {
-      throw new IpcError('INVALID_INPUT', `Entrée invalide : adresse ${NAME[coin]} invalide pour ce réseau « ${addr} »`);
+      throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : adresse ${NAME[coin]} invalide pour ce réseau « ${addr} »`, `Invalid input: invalid ${NAME[coin]} address for this network “${addr}”`));
     }
     return addr;
   };
@@ -150,17 +151,17 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
   };
 
   const probe = async (coin: Coin, network: string, s: UtxoServer): Promise<ServerTestResult['detected']> => {
-    if (network !== 'mainnet' && network !== 'testnet') throw invalid(`${KEY[coin]} : réseau inconnu « ${network} » (mainnet ou testnet)`);
+    if (network !== 'mainnet' && network !== 'testnet') throw invalid(l10n(`${KEY[coin]} : réseau inconnu « ${network} » (mainnet ou testnet)`, `${KEY[coin]}: unknown network “${network}” (mainnet or testnet)`));
     if (s.kind === 'default') {
-      if (!hasDefault(coin)) throw invalid('dogecoin : aucun serveur public gratuit sur testnet, configure ton serveur Esplora');
+      if (!hasDefault(coin)) throw invalid(l10n('dogecoin : aucun serveur public gratuit sur testnet, configure ton serveur Esplora', 'dogecoin: no free public server on testnet, set up your Esplora server'));
       return { network, blockHeight: coin === 'ltc' ? d.chain.ltcTip : d.chain.dogeTip };
     }
     const bad = checkServerUrl(s.url, torOn());
-    if (bad) throw invalid(`${KEY[coin]} ${network} : ${bad}`);
+    if (bad) throw invalid(l10n(`${KEY[coin]} ${network} : ${bad}`, `${KEY[coin]} ${network}: ${bad}`));
     if (torOn()) await d.tor.waitReady();
     await wait(100 + Math.random() * 200);
-    if (has(s.url, 'down')) throw unreachable(`${hostOf(s.url)} : délai de connexion dépassé`);
-    if (has(s.url, 'wrong')) throw new IpcError('SERVER_WRONG_NETWORK', `Mauvais réseau : ce serveur n’est pas sur ${NAME[coin]} ${network}`);
+    if (has(s.url, 'down')) throw unreachable(l10n(`${hostOf(s.url)} : délai de connexion dépassé`, `${hostOf(s.url)}: connection timed out`));
+    if (has(s.url, 'wrong')) throw new IpcError('SERVER_WRONG_NETWORK', l10n(`Mauvais réseau : ce serveur n’est pas sur ${NAME[coin]} ${network}`, `Wrong network: this server is not on ${NAME[coin]} ${network}`));
     return { network, blockHeight: coin === 'ltc' ? d.chain.ltcTip : d.chain.dogeTip };
   };
 
@@ -180,19 +181,19 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
     try {
       psbt = bitcoin.Psbt.fromBase64(String(a.psbt ?? ''), { network: net(coin) });
     } catch {
-      throw new IpcError('INVALID_INPUT', 'Entrée invalide : PSBT invalide');
+      throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : PSBT invalide', 'Invalid input: invalid PSBT'));
     }
     let inSum = 0n;
     psbt.data.inputs.forEach((input, i) => {
-      if (!input.bip32Derivation?.length) throw new IpcError('INVALID_INPUT', `Entrée invalide : entrée ${i} sans dérivation`);
+      if (!input.bip32Derivation?.length) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : entrée ${i} sans dérivation`, `Invalid input: input ${i} without derivation`));
       if (coin === 'doge') {
-        if (!input.nonWitnessUtxo || input.witnessUtxo) throw new IpcError('INVALID_INPUT', `Entrée invalide : Dogecoin, l’entrée ${i} doit porter la transaction précédente (non_witness_utxo) et pas de witness_utxo`);
+        if (!input.nonWitnessUtxo || input.witnessUtxo) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : Dogecoin, l’entrée ${i} doit porter la transaction précédente (non_witness_utxo) et pas de witness_utxo`, `Invalid input: Dogecoin, input ${i} must carry the previous transaction (non_witness_utxo) and no witness_utxo`));
         // Amount and script ONLY from the previous transaction, checked against the outpoint.
         const prev = bitcoin.Transaction.fromBuffer(input.nonWitnessUtxo);
         const txIn = psbt.txInputs[i]!;
-        if (prev.getId() !== bytesToHex(Uint8Array.from(txIn.hash).reverse())) throw new IpcError('INVALID_INPUT', `Entrée invalide : entrée ${i}, la transaction précédente ne correspond pas à l’outpoint`);
+        if (prev.getId() !== bytesToHex(Uint8Array.from(txIn.hash).reverse())) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : entrée ${i}, la transaction précédente ne correspond pas à l’outpoint`, `Invalid input: input ${i}, the previous transaction does not match the outpoint`));
         const spent = prev.outs[txIn.index];
-        if (!spent) throw new IpcError('INVALID_INPUT', `Entrée invalide : entrée ${i}, sortie précédente absente`);
+        if (!spent) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : entrée ${i}, sortie précédente absente`, `Invalid input: input ${i}, previous output missing`));
         const payee = ((): string | null => {
           try {
             return bitcoin.address.fromOutputScript(spent.script, net(coin));
@@ -200,10 +201,10 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
             return null;
           }
         })();
-        if (!payee || !own(coin, d.accounts.arg(a.account)).has(payee)) throw new IpcError('INVALID_INPUT', `Entrée invalide : entrée ${i}, la pièce dépensée ne paie pas ce portefeuille`);
+        if (!payee || !own(coin, d.accounts.arg(a.account)).has(payee)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : entrée ${i}, la pièce dépensée ne paie pas ce portefeuille`, `Invalid input: input ${i}, the spent coin does not pay this wallet`));
         inSum += spent.value;
       } else {
-        if (!input.witnessUtxo) throw new IpcError('INVALID_INPUT', `Entrée invalide : Litecoin, l’entrée ${i} doit porter witness_utxo`);
+        if (!input.witnessUtxo) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : Litecoin, l’entrée ${i} doit porter witness_utxo`, `Invalid input: Litecoin, input ${i} must carry witness_utxo`));
         inSum += input.witnessUtxo.value;
       }
     });
@@ -218,7 +219,7 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
         }
       })();
       if (!address) warnings.push({ kind: 'unknownOutput', index });
-      if (coin === 'doge' && o.value < BigInt(DOGE_HARD_DUST)) throw new IpcError('INVALID_INPUT', `Entrée invalide : sortie ${index} sous 0,001 DOGE (non standard)`);
+      if (coin === 'doge' && o.value < BigInt(DOGE_HARD_DUST)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : sortie ${index} sous 0,001 DOGE (non standard)`, `Invalid input: output ${index} below 0.001 DOGE (non-standard)`));
       if (coin === 'doge' && o.value < BigInt(DOGE_SOFT_DUST)) warnings.push({ kind: 'softDust', index });
       // Rust: change = key origin on the output + derived key + script match (not just « one of our addresses »).
       const isChange = !!address && mine.has(address) && (psbt.data.outputs[index]?.bip32Derivation?.length ?? 0) > 0;
@@ -241,14 +242,14 @@ export function createDemoUtxo(d: DemoUtxoDeps) {
       requiresExtraConfirmation: warnings.length > 0,
     };
     const unit = coin === 'ltc' ? 'litoshis' : 'koinus';
-    const lines = outputs.map((o) => `${o.isChange ? '(monnaie) ' : ''}${o.address ?? 'INCONNUE'} : ${o.amount} ${unit}`).join('\n');
-    const text = `Confirmer la transaction ${NAME[coin]}\n${lines}\nFrais : ${summary.fee} ${unit} (${summary.size} ${coin === 'ltc' ? 'vB' : 'octets'})${summary.hasChange ? '' : '\nPas de monnaie : le reste (sous le seuil de poussière) va aux frais.'}`;
+    const lines = outputs.map((o) => l10n(`${o.isChange ? '(monnaie) ' : ''}${o.address ?? 'INCONNUE'} : ${o.amount} ${unit}`, `${o.isChange ? '(change) ' : ''}${o.address ?? 'UNKNOWN'}: ${o.amount} ${unit}`)).join('\n');
+    const text = l10n(`Confirmer la transaction ${NAME[coin]}\n${lines}\nFrais : ${summary.fee} ${unit} (${summary.size} ${coin === 'ltc' ? 'vB' : 'octets'})${summary.hasChange ? '' : '\nPas de monnaie : le reste (sous le seuil de poussière) va aux frais.'}`, `Confirm the ${NAME[coin]} transaction\n${lines}\nFees: ${summary.fee} ${unit} (${summary.size} ${coin === 'ltc' ? 'vB' : 'bytes'})${summary.hasChange ? '' : '\nNo change: the rest (below the dust threshold) goes to the fees.'}`);
     const signer = d.accounts.signer(coin, account, demoUtxoPath(d.network, coin, account));
     if (!d.confirm(`${signer.line}
 
-${text}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-    if (signer.unknown && !d.confirm(signer.unknownText)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-    if (summary.requiresExtraConfirmation && !d.confirm('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+${text}`)) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+    if (signer.unknown && !d.confirm(signer.unknownText)) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+    if (summary.requiresExtraConfirmation && !d.confirm(l10n('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: transaction to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
     psbt.data.inputs.forEach((input, i) => {
       const pubkey = input.bip32Derivation![0]!.pubkey;
       psbt.updateInput(i, { partialSig: [{ pubkey, signature: fakeSig(`${coin}:${i}:${a.psbt}`) }] });
@@ -266,7 +267,7 @@ ${text}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
     address: (a: Record<string, unknown>) => {
       d.requireUnlocked();
       const index = Number(a.index);
-      if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw new IpcError('INVALID_INPUT', 'Index invalide.');
+      if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw new IpcError('INVALID_INPUT', l10n('Index invalide.', 'Invalid index.'));
       return demoUtxoAddress(nodeOf(coin, d.accounts.arg(a.account)), d.network, coin, a.change ? 1 : 0, index);
     },
     address_info: async (a: Record<string, unknown>) => {
@@ -291,10 +292,10 @@ ${text}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
     },
     tx_hex: async (a: Record<string, unknown>) => {
       const txid = String(a.txid ?? '');
-      if (!/^[0-9a-f]{64}$/.test(txid)) throw new IpcError('INVALID_INPUT', 'Entrée invalide : txid : 64 caractères hexadécimaux attendus');
+      if (!/^[0-9a-f]{64}$/.test(txid)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : txid : 64 caractères hexadécimaux attendus', 'Invalid input: txid: 64 hexadecimal characters expected'));
       await backend(coin);
       const hex = d.chain.rawTx.get(txid);
-      if (!hex) throw new IpcError('INVALID_INPUT', `Entrée invalide : transaction ${txid.slice(0, 10)}… inconnue du serveur`);
+      if (!hex) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : transaction ${txid.slice(0, 10)}… inconnue du serveur`, `Invalid input: transaction ${txid.slice(0, 10)}… unknown to the server`));
       return hex;
     },
     fee_rates: async (): Promise<UtxoFeeRates> => {
@@ -310,7 +311,7 @@ ${text}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
       try {
         txid = bitcoin.Transaction.fromHex(String(a.hex ?? '').trim()).getId();
       } catch {
-        throw new IpcError('INVALID_INPUT', 'Entrée invalide : transaction hexadécimale invalide');
+        throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : transaction hexadécimale invalide', 'Invalid input: invalid hexadecimal transaction'));
       }
       await backend(coin);
       return txid;
@@ -330,7 +331,7 @@ ${text}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
           const s = servers[KEY[coin]]?.[nk];
           if (s?.kind === 'esplora') {
             const bad = checkServerUrl(s.url, tor);
-            if (bad) throw invalid(`${KEY[coin]} ${nk} : ${bad}`);
+            if (bad) throw invalid(l10n(`${KEY[coin]} ${nk} : ${bad}`, `${KEY[coin]} ${nk}: ${bad}`));
           }
         }
       }

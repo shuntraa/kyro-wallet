@@ -11,6 +11,8 @@ import { cn } from '../lib/cn';
 import { Dialog } from './ui/dialog';
 import { Button, Notice, Spinner } from './ui/primitives';
 import { IconGlobe, IconRefresh, IconShield, IconTor, IconWarn } from './icons';
+import { useT } from '../i18n';
+import { rt } from '../i18n/rich';
 
 const NNBSP = ' ';
 
@@ -19,19 +21,20 @@ export function TorIndicator() {
   const tor = useTor();
   const { phase, navigate } = useApp();
   const kind = torIndicator(tor);
+  const { t } = useT();
   const base = 'flex items-center gap-1.5 whitespace-nowrap';
 
   switch (kind) {
     case 'unknown':
       return (
-        <span className={cn(base, 'text-mute')} title="État de Tor en cours de lecture">
+        <span className={cn(base, 'text-mute')} title={t('shell.torReading')}>
           <IconTor size={12} className="text-faint" /> Tor · …
         </span>
       );
     case 'bootstrapping': {
       const p = Math.max(0, Math.min(99, Math.round(tor.status?.progress ?? 0)));
       return (
-        <span role="status" aria-label={`Tor : connexion en cours, ${p} pour cent`} className={cn(base, 'text-mute')} title="Connexion au réseau Tor. Les requêtes attendent Tor, rien ne part en clair.">
+        <span role="status" aria-label={t('shell.torBootAria', { p })} className={cn(base, 'text-mute')} title={t('shell.torBootTitle')}>
           <IconTor size={12} className="animate-pulse text-faint" />
           <span className="tabular-nums">
             Tor · {p}
@@ -42,8 +45,8 @@ export function TorIndicator() {
     }
     case 'ready':
       return (
-        <span role="status" className={cn(base, 'text-ice')} title="Toutes les connexions passent par Tor : les serveurs ne voient pas ton adresse IP.">
-          <IconTor size={12} /> Tor actif
+        <span role="status" className={cn(base, 'text-ice')} title={t('shell.torReadyTitle')}>
+          <IconTor size={12} /> {t('shell.torActive')}
         </span>
       );
     case 'failed':
@@ -52,21 +55,21 @@ export function TorIndicator() {
           type="button"
           onClick={() => torStore.openFailure()}
           className={cn(base, 'h-5 rounded-full bg-down/12 px-2 font-semibold text-down hover:bg-down/20')}
-          title="Tor ne se connecte pas. Rien n’est envoyé en clair. Cliquer pour choisir quoi faire."
+          title={t('shell.torFailedTitle')}
         >
-          <IconWarn size={12} /> Tor indisponible
+          <IconWarn size={12} /> {t('shell.torUnavailable')}
         </button>
       );
     case 'direct': {
       const label = (
         <>
-          <IconGlobe size={12} /> Connexion directe (sans Tor)
+          <IconGlobe size={12} /> {t('shell.directNoTor')}
         </>
       );
-      const title = 'Tor est désactivé : les serveurs contactés voient ton adresse IP.';
+      const title = t('shell.directTitle');
       const cls = cn(base, 'h-5 rounded-full bg-warn/14 px-2 font-semibold text-warn');
       return phase === 'ready' ? (
-        <button type="button" onClick={() => navigate({ name: 'settings', section: 'privacy' })} className={cn(cls, 'hover:bg-warn/20')} title={`${title} Cliquer pour ouvrir les réglages de confidentialité.`}>
+        <button type="button" onClick={() => navigate({ name: 'settings', section: 'privacy' })} className={cn(cls, 'hover:bg-warn/20')} title={`${title} ${t('shell.directTitleClick')}`}>
           {label}
         </button>
       ) : (
@@ -89,16 +92,17 @@ export function useTorBlocked(error?: unknown): boolean {
 export function TorWait({ className }: { className?: string }) {
   const tor = useTor();
   const failed = torIndicator(tor) === 'failed';
+  const { t } = useT();
   return (
     <div role="status" className={cn('flex items-center gap-2 text-[12px] text-mute', className)}>
       {failed ? <IconTor size={14} className="shrink-0 text-faint" /> : <Spinner className="size-3 shrink-0 border-[1.5px] text-faint" />}
       <span className="min-w-0 flex-1">
-        En attente de Tor…
-        <span className="text-faint"> {failed ? 'Tor ne se connecte pas, rien n’est envoyé en clair.' : 'Les données arrivent dès que Tor est connecté.'}</span>
+        {t('shell.waitingTor')}
+        <span className="text-faint"> {failed ? t('shell.torFailedInline') : t('shell.torDataSoon')}</span>
       </span>
       {failed && (
         <button type="button" onClick={() => torStore.openFailure()} className="shrink-0 font-semibold text-ice hover:underline">
-          Que faire ?
+          {t('shell.whatToDo')}
         </button>
       )}
     </div>
@@ -107,15 +111,16 @@ export function TorWait({ className }: { className?: string }) {
 
 /** What servers see without Tor: shared by the failure flow and the settings switch. */
 export function DirectConnectionWarning() {
+  useT();
   return (
     <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
       <p className="m-0">
-        Sans Tor, chaque serveur contacté par Kyro verra <strong className="font-semibold text-text">ton adresse IP</strong> et pourra la relier aux adresses et aux transactions que tu consultes :
+        {rt('shell.directWarnIntro', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
       </p>
       <ul className="m-0 mt-1.5 flex list-disc flex-col gap-0.5 pl-5">
-        <li>les nœuds Bitcoin, Ethereum et Solana (soldes, historique, envois) ;</li>
-        <li>CoinGecko (prix) et les agrégateurs de swap (devis) ;</li>
-        <li>ton fournisseur d’accès, qui verra quels serveurs tu contactes.</li>
+        <li>{rt('shell.directWarnNodes')}</li>
+        <li>{rt('shell.directWarnApis')}</li>
+        <li>{rt('shell.directWarnIsp')}</li>
       </ul>
     </Notice>
   );
@@ -126,26 +131,27 @@ export function TorDialogs() {
   const tor = useTor();
   const { settings, saveSettings } = useApp();
   const detail = torDetail(tor.episode?.reason ?? tor.status?.message);
+  const { t } = useT();
 
   return (
     <>
-      <Dialog open={tor.dialog === 'failure'} onOpenChange={(v) => (v ? undefined : torStore.cancel())} title="Tor ne se connecte pas" className="w-[560px]">
-        <p className="m-0 text-[14px] leading-[1.55] text-text2">Kyro fait passer toutes ses connexions par Tor pour cacher ton adresse IP. Tor n’arrive pas à se connecter pour l’instant.</p>
+      <Dialog open={tor.dialog === 'failure'} onOpenChange={(v) => (v ? undefined : torStore.cancel())} title={t('shell.torFailTitle')} className="w-[560px]">
+        <p className="m-0 text-[14px] leading-[1.55] text-text2">{t('shell.torFailBody')}</p>
         <Notice icon={<IconShield size={16} className="mt-0.5 shrink-0 text-ice" />}>
-          <strong className="font-semibold text-text">Kyro refuse d’envoyer quoi que ce soit en clair.</strong> Aucune requête n’est partie sans Tor : soldes, prix et historique restent en attente tant que tu n’as pas choisi.
+          {rt('shell.torRefusesClear', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
         </Notice>
-        {detail && <p className="m-0 font-mono text-[11px] leading-[1.5] break-words text-faint">Détail : {detail}</p>}
+        {detail && <p className="m-0 font-mono text-[11px] leading-[1.5] break-words text-faint">{t('shell.detail', { detail })}</p>}
         {tor.actionError && <Notice tone="error">{tor.actionError}</Notice>}
         <div className="flex items-center justify-between gap-2 pt-1">
           <Button variant="ghost" onClick={() => torStore.requestDisable('failure')} disabled={tor.busy}>
-            Continuer sans Tor
+            {t('shell.continueWithoutTor')}
           </Button>
           <div className="flex gap-2">
             <Button onClick={() => torStore.cancel()} disabled={tor.busy}>
-              Annuler
+              {t('common.cancel')}
             </Button>
             <Button variant="primary" onClick={() => void torStore.retry()} disabled={tor.busy}>
-              {tor.busy ? <Spinner /> : <IconRefresh size={15} />} Réessayer
+              {tor.busy ? <Spinner /> : <IconRefresh size={15} />} {t('common.retry')}
             </Button>
           </div>
         </div>
@@ -154,19 +160,19 @@ export function TorDialogs() {
       <Dialog
         open={tor.dialog === 'confirm-direct'}
         onOpenChange={(v) => (v ? undefined : torStore.cancelDisable())}
-        title="Se connecter sans Tor ?"
-        description="Kyro ne le fera jamais tout seul : confirme que tu acceptes une connexion directe."
+        title={t('shell.confirmDirectTitle')}
+        description={t('shell.confirmDirectDesc')}
         className="w-[560px]"
       >
         <DirectConnectionWarning />
-        <p className="m-0 text-[13px] leading-[1.55] text-mute">Tor restera désactivé jusqu’à ce que tu le réactives dans Réglages › Confidentialité.</p>
+        <p className="m-0 text-[13px] leading-[1.55] text-mute">{t('shell.torStaysOff')}</p>
         {tor.actionError && <Notice tone="error">{tor.actionError}</Notice>}
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="primary" onClick={() => torStore.cancelDisable()} disabled={tor.busy}>
-            Garder Tor
+            {t('shell.keepTor')}
           </Button>
           <Button variant="dangerOutline" disabled={tor.busy} onClick={() => void torStore.confirmDisable(() => saveSettings({ ...settings, tor: { enabled: false } }))}>
-            {tor.busy && <Spinner />} Oui, continuer sans Tor
+            {tor.busy && <Spinner />} {t('shell.yesWithoutTor')}
           </Button>
         </div>
       </Dialog>

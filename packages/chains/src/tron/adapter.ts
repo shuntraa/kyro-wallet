@@ -18,8 +18,7 @@ import {
   type TronEstimate,
   type TronHistoryEntry,
   type TronTxSummary,
-  type TronWarning,
-} from '@kyro/shared';
+  type TronWarning, l10n } from '@kyro/shared';
 import type { AssetDef, TronChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
@@ -158,7 +157,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
   private readonly backend: TronBackend;
 
   constructor(opts: TronAdapterOptions) {
-    if (!isTronAddress(opts.address)) throw new Error('Adresse TRON invalide');
+    if (!isTronAddress(opts.address)) throw new Error(l10n('Adresse TRON invalide', 'Invalid TRON address'));
     this.chain = opts.chain;
     this.address = opts.address;
     this.backend = opts.backend ?? rustTronBackend(opts.account ?? 0);
@@ -189,7 +188,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'bande passante et énergie, estimées par Rust',
+      hint: l10n('bande passante et énergie, estimées par Rust', 'bandwidth and energy, estimated by Rust'),
       fetchedAt: Date.now(),
     });
   }
@@ -197,7 +196,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
   /** The TRC-20 token of an asset: the curated one, or (unknown contract) the asset's own metadata. */
   tokenOf(asset: AssetDef): Trc20Token | undefined {
     if (asset.kind === 'native') return undefined;
-    if (asset.kind !== 'trc20' || !asset.contract || !isTronAddress(asset.contract)) throw new Error('Actif TRON inattendu');
+    if (asset.kind !== 'trc20' || !asset.contract || !isTronAddress(asset.contract)) throw new Error(l10n('Actif TRON inattendu', 'Unexpected TRON asset'));
     return this.tokens.find((t) => t.contract === asset.contract) ?? { contract: asset.contract, symbol: asset.symbol, name: asset.name, decimals: asset.decimals };
   }
 
@@ -211,18 +210,18 @@ export class TronAdapter implements ChainAdapter<'tron'> {
     const balances = await this.getBalance();
     const held = balances.find((b) => b.assetId === tronAssetId(token))?.amount ?? 0n;
     if (token) {
-      if (held <= 0n) throw new Error(`Aucun ${token.symbol} à envoyer`);
+      if (held <= 0n) throw new Error(l10n(`Aucun ${token.symbol} à envoyer`, `No ${token.symbol} to send`));
       return this.buildTransfer({ to: params.to, amount: held, token });
     }
     // First pass with a placeholder amount gives the burn (activation, bandwidth) for this recipient.
     const probe = await this.buildTransfer({ to: params.to, amount: held > 1n ? held / 2n : 1n });
     let amount = held - BigInt(probe.estimate.totalBurnMax);
-    if (amount <= 0n) throw new Error('Solde TRX trop faible pour couvrir les frais brûlés');
+    if (amount <= 0n) throw new Error(l10n('Solde TRX trop faible pour couvrir les frais brûlés', 'TRX balance too low to cover the burned fees'));
     let built = await this.buildTransfer({ to: params.to, amount });
     const over = amount + BigInt(built.estimate.totalBurnMax) - held;
     if (over > 0n) {
       amount -= over;
-      if (amount <= 0n) throw new Error('Solde TRX trop faible pour couvrir les frais brûlés');
+      if (amount <= 0n) throw new Error(l10n('Solde TRX trop faible pour couvrir les frais brûlés', 'TRX balance too low to cover the burned fees'));
       built = await this.buildTransfer({ to: params.to, amount });
     }
     return built;
@@ -234,9 +233,9 @@ export class TronAdapter implements ChainAdapter<'tron'> {
    */
   async buildTransfer(params: { to: string; amount: bigint; token?: Trc20Token }): Promise<TronUnsigned> {
     const to = params.to.trim();
-    if (!isTronAddress(to)) throw new Error('Adresse TRON invalide');
-    if (params.amount <= 0n) throw new Error('Montant invalide');
-    if (!params.token && to === this.address) throw new Error('TRON refuse un envoi de TRX à soi-même');
+    if (!isTronAddress(to)) throw new Error(l10n('Adresse TRON invalide', 'Invalid TRON address'));
+    if (params.amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
+    if (!params.token && to === this.address) throw new Error(l10n('TRON refuse un envoi de TRX à soi-même', 'TRON refuses sending TRX to yourself'));
     const built = await this.backend.build(to, params.amount.toString(), params.token?.contract);
     const a = built.summary.action;
     const ok = params.token
@@ -246,7 +245,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
     // fee_limit (huge energy) may be flagged.
     const unexpected = built.summary.warnings.some((w) => w.kind !== 'highFeeLimit');
     if (!ok || built.summary.owner !== this.address || built.summary.txid !== built.txid || unexpected) {
-      throw new Error('La transaction construite par Rust ne correspond pas à la demande');
+      throw new Error(l10n('La transaction construite par Rust ne correspond pas à la demande', 'The transaction built by Rust does not match the request'));
     }
     return {
       family: 'tron',
@@ -273,7 +272,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
   /** Rust checks the signature recovers to our address and that the server's txid matches. */
   async broadcast(signed: TronSigned): Promise<string> {
     const txid = await this.backend.broadcast(signed.raw, signed.signature);
-    if (txid !== signed.txid) throw new Error('txid diffusé inattendu');
+    if (txid !== signed.txid) throw new Error(l10n('txid diffusé inattendu', 'Unexpected broadcast txid'));
     return txid;
   }
 

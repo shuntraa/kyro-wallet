@@ -41,6 +41,7 @@ import {
 } from './ipc';
 import { checkServerUrl } from './servers';
 import type { DemoTor } from './mock-tor';
+import { l10n } from './i18n';
 
 /** Preprod protocol parameters (Koios `epoch_params`). */
 export const ADA_PARAMS = { minFeeA: 44, minFeeB: 155_381, coinsPerByte: 4_310, maxTxSize: 16_384 };
@@ -59,8 +60,8 @@ const VERIFIED_MAINNET: Array<{ policy: string; name: string; ticker: string; de
 const hrpOf = (net: Network) => (net === 'mainnet' ? 'addr' : 'addr_test');
 const stakeHrpOf = (net: Network) => (net === 'mainnet' ? 'stake' : 'stake_test');
 const netId = (net: Network) => (net === 'mainnet' ? 1 : 0);
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
-const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', `Serveur injoignable : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', l10n(`Serveur injoignable : ${m}`, `Server unreachable: ${m}`));
 const has = (s: string, w: string) => s.toLowerCase().includes(w);
 const hostOf = (u: string) => {
   try {
@@ -86,7 +87,7 @@ export function cardanoAddressOf(bytes: Uint8Array, hrp: string): string {
 export function cardanoAddressBytes(address: unknown, net: Network): Uint8Array {
   const a = String(address ?? '').trim();
   if (a.startsWith('Ae2') || a.startsWith('DdzFF') || a.startsWith('37btjrVyb4K')) {
-    throw invalidInput('les adresses Byron ne sont pas prises en charge : demande au destinataire une adresse Shelley (addr1…)');
+    throw invalidInput(l10n('les adresses Byron ne sont pas prises en charge : demande au destinataire une adresse Shelley (addr1…)', 'Byron addresses are not supported: ask the recipient for a Shelley address (addr1…)'));
   }
   let prefix: string;
   let data: Uint8Array;
@@ -95,23 +96,23 @@ export function cardanoAddressBytes(address: unknown, net: Network): Uint8Array 
     prefix = d.prefix;
     data = bech32.fromWords(d.words);
   } catch {
-    throw invalidInput('adresse Cardano invalide');
+    throw invalidInput(l10n('adresse Cardano invalide', 'invalid Cardano address'));
   }
   if (prefix !== hrpOf(net)) {
     // A stake address of the right network gets its own message (header check below).
-    if (prefix !== stakeHrpOf(net)) throw invalidInput("adresse Cardano d'un autre réseau, ou pas une adresse de paiement");
+    if (prefix !== stakeHrpOf(net)) throw invalidInput(l10n("adresse Cardano d'un autre réseau, ou pas une adresse de paiement", 'Cardano address from another network, or not a payment address'));
   }
   const header = data[0];
-  if (header === undefined) throw invalidInput('adresse vide');
+  if (header === undefined) throw invalidInput(l10n('adresse vide', 'empty address'));
   const kind = header >> 4;
-  if ((header & 0x0f) !== netId(net)) throw invalidInput("adresse Cardano d'un autre réseau");
+  if ((header & 0x0f) !== netId(net)) throw invalidInput(l10n("adresse Cardano d'un autre réseau", 'Cardano address from another network'));
   if ((kind === 0 || kind === 2) && data.length === 57 && prefix === hrpOf(net)) return data;
   if (kind === 6 && data.length === 29 && prefix === hrpOf(net)) return data;
-  if (kind === 1 || kind === 3 || kind === 7) throw invalidInput('adresses de script refusées : un paiement sans datum pourrait bloquer les fonds');
-  if (kind === 4 || kind === 5) throw invalidInput('adresses pointeur obsolètes (Conway) : refusées');
-  if (kind === 14 || kind === 15) throw invalidInput('une adresse de staking (stake…) ne peut pas recevoir de paiement');
-  if (kind === 8) throw invalidInput('les adresses Byron ne sont pas prises en charge');
-  throw invalidInput('adresse Cardano mal formée');
+  if (kind === 1 || kind === 3 || kind === 7) throw invalidInput(l10n('adresses de script refusées : un paiement sans datum pourrait bloquer les fonds', 'script addresses refused: a payment without a datum could lock the funds'));
+  if (kind === 4 || kind === 5) throw invalidInput(l10n('adresses pointeur obsolètes (Conway) : refusées', 'pointer addresses are obsolete (Conway): refused'));
+  if (kind === 14 || kind === 15) throw invalidInput(l10n('une adresse de staking (stake…) ne peut pas recevoir de paiement', 'a staking address (stake…) cannot receive payments'));
+  if (kind === 8) throw invalidInput(l10n('les adresses Byron ne sont pas prises en charge', 'Byron addresses are not supported'));
+  throw invalidInput(l10n('adresse Cardano mal formée', 'malformed Cardano address'));
 }
 
 /** Demo account address on `net` (the preprod fixture, re-encoded for mainnet). */
@@ -178,8 +179,8 @@ function memoLines(message: string): string[] {
     cur += ch;
   }
   if (cur) lines.push(cur);
-  if (lines.length === 0) throw invalidInput('message vide');
-  if (enc.encode(message).length > 1024) throw invalidInput('message trop long (1 024 octets max.)');
+  if (lines.length === 0) throw invalidInput(l10n('message vide', 'empty message'));
+  if (enc.encode(message).length > 1024) throw invalidInput(l10n('message trop long (1 024 octets max.)', 'message too long (1,024 bytes max.)'));
   return lines;
 }
 
@@ -294,11 +295,11 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     const s = serverOf();
     if (s.kind === 'koios') {
       const bad = checkServerUrl(s.url, torOn());
-      if (bad) throw new IpcError('SERVER_INVALID', `Serveur invalide : ${bad}`);
+      if (bad) throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : ${bad}`, `Invalid server: ${bad}`));
     }
     if (torOn()) await d.tor.waitReady();
     await wait(60 + Math.random() * 140);
-    if (s.kind === 'koios' && has(s.url, 'down')) throw unreachable(`${hostOf(s.url)} : délai de connexion dépassé`);
+    if (s.kind === 'koios' && has(s.url, 'down')) throw unreachable(l10n(`${hostOf(s.url)} : délai de connexion dépassé`, `${hostOf(s.url)}: connection timed out`));
   };
 
   const verifiedEntry = (p: string, n: string) => (d.network === 'mainnet' ? VERIFIED_MAINNET.find((v) => v.policy === p && v.name === n) : undefined);
@@ -332,10 +333,10 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     const minTo = minUtxo(toBytes.length, send);
     let coin: bigint;
     if (lovelace !== null) {
-      if (lovelace < minTo) throw invalidInput(`montant trop faible : cette sortie doit porter au moins ${adaUnits(minTo)} ADA (min-UTxO${send.size ? ', avec le token' : ''})`);
+      if (lovelace < minTo) throw invalidInput(l10n(`montant trop faible : cette sortie doit porter au moins ${adaUnits(minTo)} ADA (min-UTxO${send.size ? ', avec le token' : ''})`, `amount too low: this output must carry at least ${adaUnits(minTo)} ADA (min-UTxO${send.size ? ', with the token' : ''})`));
       coin = lovelace;
     } else if (send.size) coin = minTo;
-    else throw invalidInput('montant ADA manquant');
+    else throw invalidInput(l10n('montant ADA manquant', 'ADA amount missing'));
     const utxos = [...(state.utxos.get(me) ?? [])];
     utxos.sort((a, b) => {
       const ka = [token && a.assets.has(token.key) ? 0 : 1, a.assets.size ? 1 : 0];
@@ -354,7 +355,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
         lastErr = e;
       }
     }
-    throw lastErr ?? invalidInput('aucun UTxO : adresse vide');
+    throw lastErr ?? invalidInput(l10n('aucun UTxO : adresse vide', 'no UTxO: empty address'));
   };
 
   const finish = (chosen: DemoUtxo[], toBytes: Uint8Array, to: string, send: Assets, coin: bigint, lines: string[] | null): DemoAdaTx => {
@@ -366,7 +367,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     }
     for (const [k, q] of send) {
       const have = left.get(k) ?? 0n;
-      if (have < q) throw invalidInput(`token insuffisant : ${have} disponible(s), ${q} demandé(s)`);
+      if (have < q) throw invalidInput(l10n(`token insuffisant : ${have} disponible(s), ${q} demandé(s)`, `insufficient token: ${have} available, ${q} requested`));
       if (have === q) left.delete(k);
       else left.set(k, have - q);
     }
@@ -375,15 +376,15 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     let fee = BigInt(ADA_PARAMS.minFeeB);
     for (let i = 0; i < 6; i++) {
       const need = coin + fee;
-      if (inCoin < need) throw invalidInput(`solde insuffisant : ${adaUnits(inCoin)} ADA en entrée, il faut ${adaUnits(need)} ADA (montant + frais)`);
+      if (inCoin < need) throw invalidInput(l10n(`solde insuffisant : ${adaUnits(inCoin)} ADA en entrée, il faut ${adaUnits(need)} ADA (montant + frais)`, `insufficient balance: ${adaUnits(inCoin)} ADA in inputs, ${adaUnits(need)} ADA needed (amount + fees)`));
       const rest = inCoin - need;
-      if (rest < minChange) throw invalidInput(`la monnaie rendue (${adaUnits(rest)} ADA) serait sous son minimum de ${adaUnits(minChange)} ADA (min-UTxO) : envoie un peu moins`);
+      if (rest < minChange) throw invalidInput(l10n(`la monnaie rendue (${adaUnits(rest)} ADA) serait sous son minimum de ${adaUnits(minChange)} ADA (min-UTxO) : envoie un peu moins`, `the change (${adaUnits(rest)} ADA) would be below its minimum of ${adaUnits(minChange)} ADA (min-UTxO): send a little less`));
       const outs = [
         { addressLen: toBytes.length, coin, assets: send },
         { addressLen: meBytes.length, coin: rest, assets: left },
       ];
       const size = signedSize(chosen.length, outs, fee, ttl, lines);
-      if (size > ADA_PARAMS.maxTxSize) throw invalidInput(`transaction trop grande (${size} octets, maximum ${ADA_PARAMS.maxTxSize})`);
+      if (size > ADA_PARAMS.maxTxSize) throw invalidInput(l10n(`transaction trop grande (${size} octets, maximum ${ADA_PARAMS.maxTxSize})`, `transaction too large (${size} bytes, maximum ${ADA_PARAMS.maxTxSize})`));
       const req = BigInt(ADA_PARAMS.minFeeA * size + ADA_PARAMS.minFeeB);
       if (fee >= req) {
         const tokens = (a: Assets) => [...a.entries()].sort().map(([k, q]) => ({ policy: k.split('.')[0] ?? '', name: k.split('.')[1] ?? '', quantity: q.toString() }));
@@ -401,7 +402,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
       }
       fee = req;
     }
-    throw new IpcError('INTERNAL', 'Erreur interne : calcul des frais Cardano instable');
+    throw new IpcError('INTERNAL', l10n('Erreur interne : calcul des frais Cardano instable', 'Internal error: unstable Cardano fee computation'));
   };
 
   const encode = (t: DemoAdaTx) => bytesToHex(new TextEncoder().encode(JSON.stringify(t)));
@@ -413,7 +414,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     try {
       t = JSON.parse(new TextDecoder().decode(hexToBytes(String(txHex ?? '').trim()))) as DemoAdaTx;
     } catch {
-      throw invalidInput('transaction : hexadécimal attendu');
+      throw invalidInput(l10n('transaction : hexadécimal attendu', 'transaction: hexadecimal expected'));
     }
     const warnings: CardanoWarning[] = [];
     if (t.memo) warnings.push({ kind: 'memo' });
@@ -438,7 +439,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     for (const i of t.inputs) {
       const [h, idx] = i.split('#');
       const u = ours.find((x) => x.txHash === h && String(x.index) === idx);
-      if (!u) throw invalidInput(`entrée ${h}#${idx} inconnue ou déjà dépensée : reconstruis la transaction`);
+      if (!u) throw invalidInput(l10n(`entrée ${h}#${idx} inconnue ou déjà dépensée : reconstruis la transaction`, `input ${h}#${idx} unknown or already spent: rebuild the transaction`));
       inCoin += u.lovelace;
       for (const [k, q] of u.assets) inAssets.set(k, (inAssets.get(k) ?? 0n) + q);
     }
@@ -451,7 +452,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
       for (const k of o.tokens) outAssets.set(`${k.policy}.${k.name}`, (outAssets.get(`${k.policy}.${k.name}`) ?? 0n) + BigInt(k.quantity));
     }
     const same = inAssets.size === outAssets.size && [...inAssets].every(([k, q]) => outAssets.get(k) === q);
-    if (inCoin !== outCoin || !same) throw invalidInput('transaction déséquilibrée (entrées ≠ sorties + frais) : refusée');
+    if (inCoin !== outCoin || !same) throw invalidInput(l10n('transaction déséquilibrée (entrées ≠ sorties + frais) : refusée', 'unbalanced transaction (inputs ≠ outputs + fees): refused'));
     return leaving;
   };
 
@@ -459,33 +460,33 @@ export function createDemoCardano(d: DemoCardanoDeps) {
 
   /** commands_cardano.rs describe_ada: every output, tokens, min-ADA, fee, total, ttl, memo. */
   const describe = (s: CardanoTxSummary, c: CardanoContext): string => {
-    let out = `Envoi Cardano${d.network === 'testnet' ? ' (preprod)' : ''}\n`;
+    let out = l10n(`Envoi Cardano${d.network === 'testnet' ? ' (preprod)' : ''}\n`, `Cardano transfer${d.network === 'testnet' ? ' (preprod)' : ''}\n`);
     s.outputs.forEach((o, i) => {
-      out += `\nSortie ${i + 1} — ${o.isChange ? 'monnaie rendue (ton adresse)' : 'DESTINATAIRE'}\n  ${o.address}\n  ${adaUnits(o.lovelace)} ADA${o.tokens.length ? ` (dont ${adaUnits(o.minLovelace)} ADA minimum obligatoire avec les tokens)` : ''}\n`;
+      out += l10n(`\nSortie ${i + 1} — ${o.isChange ? 'monnaie rendue (ton adresse)' : 'DESTINATAIRE'}\n  ${o.address}\n  ${adaUnits(o.lovelace)} ADA${o.tokens.length ? ` (dont ${adaUnits(o.minLovelace)} ADA minimum obligatoire avec les tokens)` : ''}\n`, `\nOutput ${i + 1} — ${o.isChange ? 'change (your address)' : 'RECIPIENT'}\n  ${o.address}\n  ${adaUnits(o.lovelace)} ADA${o.tokens.length ? ` (including ${adaUnits(o.minLovelace)} ADA mandatory minimum with the tokens)` : ''}\n`);
       for (const t of o.tokens) {
-        const name = t.nameText ? `« ${t.nameText} » (hex ${t.name || 'vide'})` : t.name ? `hex ${t.name}` : '(nom vide)';
-        out += `    + ${t.quantity} × ${name}${t.verified ? '  ✓ vérifié' : '  ⚠ NON VÉRIFIÉ'}\n      policy ${t.policy}\n`;
+        const name = t.nameText ? l10n(`« ${t.nameText} » (hex ${t.name || 'vide'})`, `“${t.nameText}” (hex ${t.name || 'empty'})`) : t.name ? `hex ${t.name}` : l10n('(nom vide)', '(empty name)');
+        out += l10n(`    + ${t.quantity} × ${name}${t.verified ? '  ✓ vérifié' : '  ⚠ NON VÉRIFIÉ'}\n      policy ${t.policy}\n`, `    + ${t.quantity} × ${name}${t.verified ? '  ✓ verified' : '  ⚠ NOT VERIFIED'}\n      policy ${t.policy}\n`);
       }
-      if (o.kind === 'enterprise') out += '  (adresse « enterprise » : sans partie staking)\n';
+      if (o.kind === 'enterprise') out += l10n('  (adresse « enterprise » : sans partie staking)\n', '  (“enterprise” address: no staking part)\n');
     });
-    out += `\nFrais : ${adaUnits(s.fee)} ADA (${s.fee} lovelace)\nTotal qui quitte le portefeuille : ${adaUnits(c.leaving)} ADA\n`;
-    out += s.ttl !== null ? `Valable jusqu'au slot ${s.ttl} (≈ ${Math.floor(Math.max(0, s.ttl - c.tip.slot) / 60)} min)\n` : 'AUCUNE LIMITE DE VALIDITÉ (ttl absent)\n';
-    if (s.memo) out += `Message (CIP-20, public à jamais) : ${s.memo.join('')}\n`;
-    out += `\nSolde : ${adaUnits(c.account.balance)} ADA · ${s.inputs.length} entrée(s) · id ${s.txId}\n`;
+    out += l10n(`\nFrais : ${adaUnits(s.fee)} ADA (${s.fee} lovelace)\nTotal qui quitte le portefeuille : ${adaUnits(c.leaving)} ADA\n`, `\nFees: ${adaUnits(s.fee)} ADA (${s.fee} lovelace)\nTotal leaving the wallet: ${adaUnits(c.leaving)} ADA\n`);
+    out += s.ttl !== null ? l10n(`Valable jusqu'au slot ${s.ttl} (≈ ${Math.floor(Math.max(0, s.ttl - c.tip.slot) / 60)} min)\n`, `Valid until slot ${s.ttl} (≈ ${Math.floor(Math.max(0, s.ttl - c.tip.slot) / 60)} min)\n`) : l10n('AUCUNE LIMITE DE VALIDITÉ (ttl absent)\n', 'NO VALIDITY LIMIT (no ttl)\n');
+    if (s.memo) out += l10n(`Message (CIP-20, public à jamais) : ${s.memo.join('')}\n`, `Message (CIP-20, public forever): ${s.memo.join('')}\n`);
+    out += l10n(`\nSolde : ${adaUnits(c.account.balance)} ADA · ${s.inputs.length} entrée(s) · id ${s.txId}\n`, `\nBalance: ${adaUnits(c.account.balance)} ADA · ${s.inputs.length} input(s) · id ${s.txId}\n`);
     return out;
   };
 
   const probe = async (network: string, s: CardanoServer): Promise<ServerTestResult['detected']> => {
-    if (network !== 'mainnet' && network !== 'testnet') throw new IpcError('SERVER_INVALID', `Serveur invalide : cardano : réseau inconnu « ${network} » (mainnet ou testnet)`);
+    if (network !== 'mainnet' && network !== 'testnet') throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : cardano : réseau inconnu « ${network} » (mainnet ou testnet)`, `Invalid server: cardano: unknown network “${network}” (mainnet or testnet)`));
     if (s.kind === 'koios') {
       const bad = checkServerUrl(s.url, torOn());
-      if (bad) throw new IpcError('SERVER_INVALID', `Serveur invalide : cardano ${network} : ${bad}`);
+      if (bad) throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : cardano ${network} : ${bad}`, `Invalid server: cardano ${network}: ${bad}`));
     }
     if (torOn()) await d.tor.waitReady();
     await wait(100 + Math.random() * 200);
-    if (s.kind === 'koios' && has(s.url, 'down')) throw unreachable(`${hostOf(s.url)} : délai de connexion dépassé`);
+    if (s.kind === 'koios' && has(s.url, 'down')) throw unreachable(l10n(`${hostOf(s.url)} : délai de connexion dépassé`, `${hostOf(s.url)}: connection timed out`));
     const want = network === 'mainnet' ? 'mainnet' : 'preprod';
-    if (s.kind === 'koios' && has(s.url, 'wrong')) throw new IpcError('SERVER_WRONG_NETWORK', `Mauvais réseau : ce serveur Cardano est sur ${want === 'mainnet' ? 'preprod' : 'mainnet'}, pas sur ${want}`);
+    if (s.kind === 'koios' && has(s.url, 'wrong')) throw new IpcError('SERVER_WRONG_NETWORK', l10n(`Mauvais réseau : ce serveur Cardano est sur ${want === 'mainnet' ? 'preprod' : 'mainnet'}, pas sur ${want}`, `Wrong network: this Cardano server is on ${want === 'mainnet' ? 'preprod' : 'mainnet'}, not on ${want}`));
     return { network: want, chainId: network === 'mainnet' ? 764_824_073 : 1, blockHeight: tip().blockHeight };
   };
 
@@ -498,7 +499,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
       d.requireUnlocked();
       const index = Number(a.index);
       if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw invalidInput("index d'adresse trop grand");
-      if (index !== 0) throw invalidInput('démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)');
+      if (index !== 0) throw invalidInput(l10n('démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)', 'demo: only the address at index 0 exists (Kyro only signs that one)'));
       const stake = new Uint8Array([0xe0 | netId(d.network), ...meBytes.slice(29)]);
       return { address: me, path: "m/1852'/1815'/0'/0/0", stakeAddress: cardanoAddressOf(stake, stakeHrpOf(d.network)), accountXpub: bytesToHex(sha256(new TextEncoder().encode('demo-ada-xpub'))).repeat(2) };
     },
@@ -515,7 +516,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     },
     ada_tx_status: async (a) => {
       const h = String(a.hash ?? '').trim().toLowerCase();
-      if (!/^[0-9a-f]{64}$/.test(h)) throw invalidInput('hash : 64 caractères hexadécimaux');
+      if (!/^[0-9a-f]{64}$/.test(h)) throw invalidInput(l10n('hash : 64 caractères hexadécimaux', 'hash: 64 hexadecimal characters'));
       await backend();
       const at = state.submitted.get(h);
       if (at === undefined) return { confirmations: state.history.some((t) => t.hash === h) ? 12 : null };
@@ -527,16 +528,16 @@ export function createDemoCardano(d: DemoCardanoDeps) {
       const to = String(a.to ?? '').trim();
       const toBytes = cardanoAddressBytes(to, d.network);
       const lovelaceIn = a.lovelace === undefined || a.lovelace === null || String(a.lovelace).trim() === '' ? null : String(a.lovelace).trim();
-      if (lovelaceIn !== null && (!/^\d+$/.test(lovelaceIn) || BigInt(lovelaceIn) <= 0n)) throw invalidInput('montant en lovelace invalide');
+      if (lovelaceIn !== null && (!/^\d+$/.test(lovelaceIn) || BigInt(lovelaceIn) <= 0n)) throw invalidInput(l10n('montant en lovelace invalide', 'invalid amount in lovelace'));
       const tk = a.token as { policy?: unknown; name?: unknown; quantity?: unknown } | undefined;
       let token: { key: string; q: bigint } | null = null;
       if (tk) {
         const policyHex = String(tk.policy ?? '').trim().toLowerCase();
         const nameHex = String(tk.name ?? '').trim().toLowerCase();
-        if (!/^[0-9a-f]{56}$/.test(policyHex) || nameHex.length > 64 || !/^([0-9a-f]{2})*$/.test(nameHex)) throw invalidInput('token : policy (56 hex) et nom (hex, 32 octets max.)');
+        if (!/^[0-9a-f]{56}$/.test(policyHex) || nameHex.length > 64 || !/^([0-9a-f]{2})*$/.test(nameHex)) throw invalidInput(l10n('token : policy (56 hex) et nom (hex, 32 octets max.)', 'token: policy (56 hex) and name (hex, 32 bytes max.)'));
         const q = String(tk.quantity ?? '').trim();
-        if (!/^\d+$/.test(q)) throw invalidInput('quantité de token invalide');
-        if (BigInt(q) === 0n) throw invalidInput('quantité de token nulle');
+        if (!/^\d+$/.test(q)) throw invalidInput(l10n('quantité de token invalide', 'invalid token quantity'));
+        if (BigInt(q) === 0n) throw invalidInput(l10n('quantité de token nulle', 'zero token quantity'));
         token = { key: `${policyHex}.${nameHex}`, q: BigInt(q) };
       }
       const memo = typeof a.memo === 'string' && a.memo.trim() ? memoLines(a.memo.trim()) : null;
@@ -550,20 +551,20 @@ export function createDemoCardano(d: DemoCardanoDeps) {
       d.requireUnlocked();
       const { t, summary } = decode(a.tx);
       await backend();
-      if (summary.ttl !== null && summary.ttl <= slotNow()) throw invalidInput('transaction Cardano expirée (ttl dépassé) : reconstruis-la');
+      if (summary.ttl !== null && summary.ttl <= slotNow()) throw invalidInput(l10n('transaction Cardano expirée (ttl dépassé) : reconstruis-la', 'Cardano transaction expired (ttl passed): rebuild it'));
       const leaving = checkBalance(t);
       const minFee = BigInt(ADA_PARAMS.minFeeA * signedSize(t.inputs.length, t.outputs.map((o) => ({ addressLen: cardanoAddressBytes(o.address, d.network).length, coin: BigInt(o.lovelace), assets: new Map(o.tokens.map((k) => [`${k.policy}.${k.name}`, BigInt(k.quantity)])) })), BigInt(t.fee), t.ttl, t.memo) + ADA_PARAMS.minFeeB);
-      if (BigInt(t.fee) < minFee) throw invalidInput(`frais trop bas : ${adaUnits(t.fee)} ADA, minimum ${adaUnits(minFee)} ADA`);
+      if (BigInt(t.fee) < minFee) throw invalidInput(l10n(`frais trop bas : ${adaUnits(t.fee)} ADA, minimum ${adaUnits(minFee)} ADA`, `fees too low: ${adaUnits(t.fee)} ADA, minimum ${adaUnits(minFee)} ADA`));
       d.checkPassword(a.password);
       const c = context(leaving);
-      if (!d.confirm(`Confirmer la transaction Cardano\n${describe(summary, c)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !d.confirm('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer la transaction Cardano\n${describe(summary, c)}`, `Confirm the Cardano transaction\n${describe(summary, c)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (summary.requiresExtraConfirmation && !d.confirm(l10n('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: transaction to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const signed = encode({ ...t, witness: bytesToHex(sha256(new TextEncoder().encode(`witness:${summary.txId}`))) });
       return { tx: signed, txId: summary.txId, summary, context: c };
     },
     ada_broadcast: async (a) => {
       const { t, summary } = decode(a.tx);
-      if (!t.witness) throw invalidInput('transaction Cardano non signée (aucun témoin)');
+      if (!t.witness) throw invalidInput(l10n('transaction Cardano non signée (aucun témoin)', 'unsigned Cardano transaction (no witness)'));
       await backend();
       checkBalance(t);
       // Spend the inputs, add the change (ours) as a new UTxO.
@@ -604,7 +605,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
         const s = servers.cardano?.[nk];
         if (s?.kind === 'koios') {
           const bad = checkServerUrl(s.url, tor);
-          if (bad) throw new IpcError('SERVER_INVALID', `Serveur invalide : cardano ${nk} : ${bad}`);
+          if (bad) throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : cardano ${nk} : ${bad}`, `Invalid server: cardano ${nk}: ${bad}`));
         }
       }
     },

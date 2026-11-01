@@ -13,12 +13,13 @@ import { assetsFor, createAdapters, type Balance } from '@kyro/chains';
 import { useApp } from '../../state/app';
 import { useAsync } from '../../lib/useAsync';
 import { fmtCrypto, shortAddress } from '../../lib/format';
-import { ACCOUNT_CHAIN_HINT, ACCOUNT_CHAIN_LABEL, accountAddress, accountNameProblem, defaultAccountName, familyAdapters, nextAccountIndex, planNewAccounts } from '../../lib/accounts';
+import { ACCOUNT_CHAIN_LABEL, accountAddress, accountChainHint, accountNameProblem, defaultAccountName, familyAdapters, nextAccountIndex, planNewAccounts } from '../../lib/accounts';
 import { useAccountBalanceText, useCreateAccounts } from '../../components/AccountPicker';
 import { CopyButton } from '../../components/kit';
 import { Dialog } from '../../components/ui/dialog';
 import { Badge, Button, Input, Label, Notice, Spinner } from '../../components/ui/primitives';
 import { IconPlus, IconTrash } from '../../components/icons';
+import { useT } from '../../i18n';
 
 export function AccountsSection({ family }: { family?: AccountChain }) {
   const { vaultLists, hwOnly, activeHw, refreshVaultAccounts } = useApp();
@@ -27,14 +28,15 @@ export function AccountsSection({ family }: { family?: AccountChain }) {
   const [renaming, setRenaming] = useState<{ family: AccountChain; entry: VaultAccountEntry } | null>(null);
   const [removing, setRemoving] = useState<{ family: AccountChain; entry: VaultAccountEntry } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useT();
 
   if (hwOnly) {
-    return <Notice tone="info">Les comptes multiples concernent le coffre Kyro. Pour un hardware wallet, ajoute un compte par numéro dans Réglages › Appareils.</Notice>;
+    return <Notice tone="info">{t('settings.accountsHwOnly')}</Notice>;
   }
   if (!vaultLists) {
     return (
       <span className="flex items-center gap-2 text-[13px] text-mute">
-        <Spinner /> Chargement des comptes…
+        <Spinner /> {t('settings.accountsLoading')}
       </span>
     );
   }
@@ -42,13 +44,11 @@ export function AccountsSection({ family }: { family?: AccountChain }) {
     <>
       <section className="flex flex-col gap-3 rounded-[22px] border border-line bg-card px-[22px] py-[18px]">
         <div className="flex items-center justify-between">
-          <span className="text-[15px] font-semibold">Comptes du coffre</span>
-          <Badge tone="ice">Phrase de récupération</Badge>
+          <span className="text-[15px] font-semibold">{t('settings.vaultAccounts')}</span>
+          <Badge tone="ice">{t('settings.recoveryPhrase')}</Badge>
         </div>
-        <p className="m-0 text-[13px] leading-[1.55] text-text2">
-          Chaque chaîne peut avoir plusieurs comptes, tous issus de ta phrase de récupération : retirer un compte ne le retire que de cette liste, tu peux le rajouter plus tard et retrouver ses fonds. Le premier compte de chaque chaîne est celui que tu as toujours eu.
-        </p>
-        {activeHw && <Notice tone="info">Le compte actif est un hardware wallet : ces comptes s’appliquent au « Compte principal » (le coffre).</Notice>}
+        <p className="m-0 text-[13px] leading-[1.55] text-text2">{t('settings.vaultAccountsIntro')}</p>
+        {activeHw && <Notice tone="info">{t('settings.accountsActiveHw')}</Notice>}
         {error && <Notice tone="error">{error}</Notice>}
       </section>
       {ACCOUNT_CHAINS.map((c) => (
@@ -58,12 +58,10 @@ export function AccountsSection({ family }: { family?: AccountChain }) {
       {bulk && <BulkCreateDialog family={bulk} list={vaultLists[bulk]} onClose={() => setBulk(null)} />}
       {renaming && <RenameDialog {...renaming} onClose={() => setRenaming(null)} />}
       {removing && (
-        <Dialog open onOpenChange={(v) => !v && setRemoving(null)} title={`Retirer « ${removing.entry.name} » ?`}>
-          <p className="m-0 text-[13px] leading-[1.55] text-text2">
-            Le compte disparaît de tes listes (Portefeuille, Envoyer, Recevoir…). Ses clés viennent de ta phrase : ses fonds restent à lui, et tu peux le rajouter à tout moment (compte n° {removing.entry.index + 1}).
-          </p>
+        <Dialog open onOpenChange={(v) => !v && setRemoving(null)} title={t('settings.removeAccountTitle', { name: removing.entry.name })}>
+          <p className="m-0 text-[13px] leading-[1.55] text-text2">{t('settings.removeAccountBody', { n: removing.entry.index + 1 })}</p>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setRemoving(null)}>Annuler</Button>
+            <Button onClick={() => setRemoving(null)}>{t('common.cancel')}</Button>
             <Button
               variant="dangerOutline"
               onClick={() => {
@@ -75,7 +73,7 @@ export function AccountsSection({ family }: { family?: AccountChain }) {
                   .catch((e: unknown) => setError(toIpcError(e).message));
               }}
             >
-              <IconTrash size={14} /> Retirer
+              <IconTrash size={14} /> {t('common.remove')}
             </Button>
           </div>
         </Dialog>
@@ -87,20 +85,21 @@ export function AccountsSection({ family }: { family?: AccountChain }) {
 function ChainAccounts({ family, list, onAdd, onBulk, onRename, onRemove }: { family: AccountChain; list: VaultAccountEntry[]; onAdd: () => void; onBulk: () => void; onRename: (e: VaultAccountEntry) => void; onRemove: (e: VaultAccountEntry) => void }) {
   const { accountSources, selectedAccounts, selectChainAccount } = useApp();
   const balance = useAccountBalanceText();
+  const { t } = useT();
   const full = list.length >= MAX_ACCOUNTS_PER_CHAIN || nextAccountIndex(list, MAX_VAULT_ACCOUNT) === null;
   return (
-    <section aria-label={`Comptes ${ACCOUNT_CHAIN_LABEL[family]}`} className="flex flex-col gap-2.5 rounded-[22px] border border-line bg-card px-[22px] py-[16px]">
+    <section aria-label={t('settings.chainAccounts', { chain: ACCOUNT_CHAIN_LABEL[family] })} className="flex flex-col gap-2.5 rounded-[22px] border border-line bg-card px-[22px] py-[16px]">
       <div className="flex items-center justify-between gap-3">
         <span className="flex flex-col">
           <span className="text-[14px] font-semibold">{ACCOUNT_CHAIN_LABEL[family]}</span>
-          <span className="text-[12px] text-mute">{ACCOUNT_CHAIN_HINT[family]}</span>
+          <span className="text-[12px] text-mute">{accountChainHint(family)}</span>
         </span>
         <span className="flex shrink-0 gap-1.5">
-          <Button size="sm" variant="ghost" onClick={onBulk} disabled={full} aria-label={`Créer plusieurs comptes ${ACCOUNT_CHAIN_LABEL[family]}`}>
-            Créer plusieurs…
+          <Button size="sm" variant="ghost" onClick={onBulk} disabled={full} aria-label={t('settings.bulkTitle', { chain: ACCOUNT_CHAIN_LABEL[family] })}>
+            {t('settings.bulkButton')}
           </Button>
           <Button size="sm" variant="outline" onClick={onAdd} disabled={full}>
-            <IconPlus size={14} /> Ajouter un compte
+            <IconPlus size={14} /> {t('settings.addAccount')}
           </Button>
         </span>
       </div>
@@ -113,23 +112,23 @@ function ChainAccounts({ family, list, onAdd, onBulk, onRename, onRemove }: { fa
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="flex items-center gap-2 text-[13px] font-semibold">
                 {e.name}
-                <span className="text-[11px] font-normal text-faint">n° {e.index + 1}</span>
-                {active && <Badge tone="up">Utilisé</Badge>}
+                <span className="text-[11px] font-normal text-faint">{t('settings.accountNumber', { n: e.index + 1 })}</span>
+                {active && <Badge tone="up">{t('settings.accountUsed')}</Badge>}
               </span>
-              <span className="truncate font-mono text-[11px] text-mute">{src ? `${shortAddress(src.addresses[0] ?? '', 10, 6)} · ${src.path}` : 'chargement…'}</span>
+              <span className="truncate font-mono text-[11px] text-mute">{src ? `${shortAddress(src.addresses[0] ?? '', 10, 6)} · ${src.path}` : t('settings.loadingLower')}</span>
               {bal && <span className="text-[12px] text-text2">{bal}</span>}
             </span>
             <span className="flex shrink-0 gap-1.5">
               {list.length > 1 && !active && (
                 <Button size="sm" variant="ghost" onClick={() => selectChainAccount(family, e.index)}>
-                  Utiliser
+                  {t('settings.useAccount')}
                 </Button>
               )}
               <Button size="sm" variant="ghost" onClick={() => onRename(e)}>
-                Renommer
+                {t('common.rename')}
               </Button>
               {e.index !== 0 && (
-                <Button size="sm" variant="ghost" aria-label={`Retirer ${e.name}`} onClick={() => onRemove(e)}>
+                <Button size="sm" variant="ghost" aria-label={t('settings.removeNamed', { name: e.name })} onClick={() => onRemove(e)}>
                   <IconTrash size={14} />
                 </Button>
               )}
@@ -146,6 +145,7 @@ function RenameDialog({ family, entry, onClose }: { family: AccountChain; entry:
   const [name, setName] = useState(entry.name);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { t } = useT();
   const problem = accountNameProblem(name);
   const save = async () => {
     setBusy(true);
@@ -161,15 +161,15 @@ function RenameDialog({ family, entry, onClose }: { family: AccountChain; entry:
     }
   };
   return (
-    <Dialog open onOpenChange={(v) => !v && onClose()} title={`Renommer « ${entry.name} »`}>
-      <Label htmlFor="account-name">Nom du compte</Label>
+    <Dialog open onOpenChange={(v) => !v && onClose()} title={t('settings.renameTitle', { name: entry.name })}>
+      <Label htmlFor="account-name">{t('settings.accountName')}</Label>
       <Input id="account-name" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !problem && void save()} />
       {problem && name.length > 0 && <span className="text-[12px] text-warn">{problem}</span>}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex justify-end gap-2">
-        <Button onClick={onClose}>Annuler</Button>
+        <Button onClick={onClose}>{t('common.cancel')}</Button>
         <Button variant="primary" disabled={!!problem || busy} onClick={() => void save()}>
-          {busy ? <Spinner /> : 'Enregistrer'}
+          {busy ? <Spinner /> : t('common.save')}
         </Button>
       </div>
     </Dialog>
@@ -197,6 +197,7 @@ function useAccountPreview(family: AccountChain, index: number | null) {
 
 function AddAccountDialog({ family, list, onClose }: { family: AccountChain; list: VaultAccountEntry[]; onClose: () => void }) {
   const { refreshVaultAccounts, network } = useApp();
+  const { t } = useT();
   const suggested = nextAccountIndex(list, MAX_VAULT_ACCOUNT);
   const [numberStr, setNumberStr] = useState(suggested === null ? '' : String(suggested + 1));
   const parsed = /^\d{1,3}$/.test(numberStr.trim()) ? Number(numberStr.trim()) - 1 : NaN;
@@ -229,14 +230,14 @@ function AddAccountDialog({ family, list, onClose }: { family: AccountChain; lis
   };
 
   return (
-    <Dialog open onOpenChange={(v) => !v && onClose()} title={`Ajouter un compte ${ACCOUNT_CHAIN_LABEL[family]}`} description="Kyro dérive le compte depuis ta phrase de récupération et lit son solde. Rien n’est signé.">
+    <Dialog open onOpenChange={(v) => !v && onClose()} title={t('settings.addTitle', { chain: ACCOUNT_CHAIN_LABEL[family] })} description={t('settings.addDesc')}>
       <div className="flex gap-3">
         <div className="flex w-[120px] flex-col gap-1.5">
-          <Label htmlFor="account-number">Compte n°</Label>
+          <Label htmlFor="account-number">{t('settings.accountNumberLabel')}</Label>
           <Input id="account-number" inputMode="numeric" value={numberStr} onChange={(e) => setNumberStr(e.target.value)} />
         </div>
         <div className="flex flex-1 flex-col gap-1.5">
-          <Label htmlFor="account-new-name">Nom</Label>
+          <Label htmlFor="account-new-name">{t('settings.name')}</Label>
           <Input
             id="account-new-name"
             value={name}
@@ -248,13 +249,13 @@ function AddAccountDialog({ family, list, onClose }: { family: AccountChain; lis
           />
         </div>
       </div>
-      {index === null && <span className="text-[12px] text-warn">{numberStr.trim() === '1' ? 'Le compte n° 1 est toujours dans ta liste.' : list.some((e) => e.index === parsed) ? 'Ce compte est déjà dans ta liste.' : `Numéro entre 2 et ${MAX_VAULT_ACCOUNT + 1}.`}</span>}
+      {index === null && <span className="text-[12px] text-warn">{numberStr.trim() === '1' ? t('settings.firstAccountAlways') : list.some((e) => e.index === parsed) ? t('settings.accountAlreadyListed') : t('settings.numberRange', { max: MAX_VAULT_ACCOUNT + 1 })}</span>}
       {problem && name.length > 0 && <span className="text-[12px] text-warn">{problem}</span>}
       {index !== null && (
         <div className="flex flex-col gap-1.5 rounded-[14px] border border-line-2 bg-raised px-4 py-3">
           {preview.loading && !preview.data ? (
             <span className="flex items-center gap-2 text-[13px] text-mute">
-              <Spinner /> Recherche du compte…
+              <Spinner /> {t('settings.searchingAccount')}
             </span>
           ) : preview.error ? (
             <span className="text-[13px] text-warn">{preview.error.message}</span>
@@ -275,8 +276,8 @@ function AddAccountDialog({ family, list, onClose }: { family: AccountChain; lis
                       .filter(Boolean)
                       .join(' · ')
                   : preview.data.failed
-                    ? 'Solde indisponible pour l’instant (serveur ou Tor).'
-                    : 'Aucun fonds sur ce compte pour l’instant.'}
+                    ? t('settings.balanceUnavailable')
+                    : t('settings.noFundsYet')}
               </span>
             </>
           ) : null}
@@ -284,9 +285,9 @@ function AddAccountDialog({ family, list, onClose }: { family: AccountChain; lis
       )}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex justify-end gap-2">
-        <Button onClick={onClose}>Annuler</Button>
+        <Button onClick={onClose}>{t('common.cancel')}</Button>
         <Button variant="primary" disabled={index === null || !!problem || busy} onClick={() => void add()}>
-          {busy ? <Spinner /> : 'Ajouter le compte'}
+          {busy ? <Spinner /> : t('settings.addAccountConfirm')}
         </Button>
       </div>
     </Dialog>
@@ -298,6 +299,7 @@ const BULK_MAX = 10;
 
 function BulkCreateDialog({ family, list, onClose }: { family: AccountChain; list: VaultAccountEntry[]; onClose: () => void }) {
   const create = useCreateAccounts();
+  const { t, tp } = useT();
   const room = Math.min(BULK_MAX, planNewAccounts(list, BULK_MAX, MAX_ACCOUNTS_PER_CHAIN, MAX_VAULT_ACCOUNT).length);
   const [countStr, setCountStr] = useState(String(Math.min(5, room)));
   const n = /^\d{1,2}$/.test(countStr.trim()) ? Number(countStr.trim()) : NaN;
@@ -313,31 +315,31 @@ function BulkCreateDialog({ family, list, onClose }: { family: AccountChain; lis
       await create(family, count);
       onClose();
     } catch (e) {
-      setError(`${toIpcError(e).message} Les comptes déjà créés restent dans ta liste.`);
+      setError(`${toIpcError(e).message} ${t('settings.bulkPartial')}`);
     } finally {
       setBusy(false);
     }
   };
   const names = planned.map((i) => defaultAccountName(family, i));
   return (
-    <Dialog open onOpenChange={(v) => !v && !busy && onClose()} title={`Créer plusieurs comptes ${ACCOUNT_CHAIN_LABEL[family]}`} description={`Chaque compte vient de ta phrase de récupération, avec ses propres adresses. Au plus ${MAX_ACCOUNTS_PER_CHAIN} comptes par chaîne (tu en as ${list.length}). Rien n’est signé.`}>
+    <Dialog open onOpenChange={(v) => !v && !busy && onClose()} title={t('settings.bulkTitle', { chain: ACCOUNT_CHAIN_LABEL[family] })} description={t('settings.bulkDesc', { max: MAX_ACCOUNTS_PER_CHAIN, have: list.length })}>
       <div className="flex w-[160px] flex-col gap-1.5">
-        <Label htmlFor="bulk-count">Nombre de comptes</Label>
+        <Label htmlFor="bulk-count">{t('settings.bulkCount')}</Label>
         <Input id="bulk-count" inputMode="numeric" value={countStr} onChange={(e) => setCountStr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && count !== null && !busy && void run()} />
       </div>
-      {count === null && <span className="text-[12px] text-warn">{room === 0 ? `Limite de ${MAX_ACCOUNTS_PER_CHAIN} comptes atteinte.` : `Entre 1 et ${room}.`}</span>}
+      {count === null && <span className="text-[12px] text-warn">{room === 0 ? t('settings.bulkLimit', { max: MAX_ACCOUNTS_PER_CHAIN }) : t('settings.bulkRange', { max: room })}</span>}
       {names.length > 0 && (
         <p className="m-0 text-[13px] leading-[1.55] text-text2">
-          {names.length === 1 ? `Nouveau compte : ${names[0]}.` : `Nouveaux comptes : ${names.length <= 4 ? names.join(', ') : `${names.slice(0, 3).join(', ')}… ${names[names.length - 1]}`}.`} Tu pourras les renommer ici.
+          {names.length === 1 ? t('settings.bulkNewOne', { name: names[0] ?? '' }) : t('settings.bulkNewMany', { names: names.length <= 4 ? names.join(', ') : `${names.slice(0, 3).join(', ')}… ${names[names.length - 1]}` })} {t('settings.bulkRenameLater')}
         </p>
       )}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex justify-end gap-2">
         <Button onClick={onClose} disabled={busy}>
-          Annuler
+          {t('common.cancel')}
         </Button>
         <Button variant="primary" disabled={count === null || busy} onClick={() => void run()}>
-          {busy ? <Spinner /> : count !== null && count > 1 ? `Créer ${count} comptes` : 'Créer le compte'}
+          {busy ? <Spinner /> : tp('settings.bulkCreate', count ?? 1)}
         </Button>
       </div>
     </Dialog>

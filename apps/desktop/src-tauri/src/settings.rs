@@ -127,9 +127,21 @@ pub struct Settings {
     pub servers: Servers,
     pub api_keys: ApiKeys,
     pub tor: TorSettings,
+    /// Display language of the UI and the native dialogs: `auto` (system), `fr` or `en`.
+    /// Read leniently from the file (an unknown value = `auto`, the other settings are kept);
+    /// `settings_set` refuses anything else ([`Settings::from_ui`]).
+    #[serde(deserialize_with = "lenient_language")]
+    pub language: crate::i18n::LanguagePref,
     /// The vault's account lists (see `accounts.rs`). Managed only by the `vault_account_*`
     /// commands: never sent by `settings_get`, never taken from `settings_set`.
     pub accounts: VaultAccounts,
+}
+
+fn lenient_language<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<crate::i18n::LanguagePref, D::Error> {
+    let v = serde_json::Value::deserialize(d)?;
+    Ok(serde_json::from_value(v).unwrap_or_default())
 }
 
 impl Default for Settings {
@@ -144,6 +156,7 @@ impl Default for Settings {
             servers: Servers::default(),
             api_keys: ApiKeys::default(),
             tor: TorSettings::default(),
+            language: crate::i18n::LanguagePref::Auto,
             accounts: VaultAccounts::default(),
         }
     }
@@ -215,6 +228,11 @@ impl Settings {
             o.remove("accounts");
             o.remove("apiKeys")
         });
+        if let Some(lang) = v.get("language") {
+            serde_json::from_value::<crate::i18n::LanguagePref>(lang.clone()).map_err(|_| {
+                AppError::InvalidInput("langue : « auto », « fr » ou « en »".into())
+            })?;
+        }
         let mut s: Settings = serde_json::from_value(v)
             .map_err(|e| AppError::InvalidInput(format!("réglages invalides : {e}")))?;
         s.api_keys = current.clone();
@@ -437,6 +455,37 @@ mod tests {
         ] {
             ui["apiKeys"] = bad.clone();
             assert!(Settings::from_ui(ui.clone(), &s.api_keys).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn language_defaults_to_auto_and_is_validated() {
+        use crate::i18n::LanguagePref;
+        // Older file without the field, or an unknown value: auto, other settings kept.
+        let s: Settings = serde_json::from_str(r#"{"currency":"USD"}"#).unwrap();
+        assert_eq!(s.language, LanguagePref::Auto);
+        let s: Settings = serde_json::from_str(r#"{"currency":"USD","language":"de"}"#).unwrap();
+        assert_eq!(
+            (s.language, s.currency.as_str()),
+            (LanguagePref::Auto, "USD")
+        );
+        // settings_get sends it, settings_set takes auto / fr / en and refuses anything else.
+        let ui = Settings::default().for_ui();
+        assert_eq!(ui["language"], "auto");
+        let mut next = ui.clone();
+        next["language"] = "en".into();
+        let back = Settings::from_ui(next.clone(), &ApiKeys::default()).unwrap();
+        assert_eq!(back.language, LanguagePref::En);
+        for bad in [
+            serde_json::json!("de"),
+            serde_json::json!(1),
+            serde_json::json!(null),
+        ] {
+            next["language"] = bad.clone();
+            assert!(
+                Settings::from_ui(next.clone(), &ApiKeys::default()).is_err(),
+                "{bad}"
+            );
         }
     }
 

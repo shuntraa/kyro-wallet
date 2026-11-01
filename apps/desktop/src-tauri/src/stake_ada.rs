@@ -23,8 +23,11 @@ use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::cardano_backend::{
     self, call, first, num, AssetMap, CardanoAccount, CardanoCtx, Params, Utxo, TTL_OFFSET,
 };
-use crate::commands::{blocking, cardano_root_from_password, confirm_native, format_units};
+use crate::commands::{
+    blocking, cardano_root_from_password, confirm_native, format_units, format_units_in,
+};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::state::AppState;
 
 /// Above this pool margin the dialog is followed by the reinforced confirmation.
@@ -838,140 +841,253 @@ pub async fn ada_stake_build(
 
 // ---------------------------------------------------------------- dialog
 
-fn drep_text(d: &CardanoDrepView) -> String {
+fn ada_in(lang: Lang, lovelace: &str) -> String {
+    format!("{} ADA", format_units_in(lang, lovelace, 6))
+}
+
+fn drep_text(lang: Lang, d: &CardanoDrepView) -> String {
     match d {
-        CardanoDrepView::AlwaysAbstain => {
-            "« toujours s'abstenir » (DRep prédéfini : ton stake ne vote pas)".into()
-        }
-        CardanoDrepView::AlwaysNoConfidence => {
-            "« toujours défiance » (DRep prédéfini : vote de défiance envers le comité)".into()
-        }
-        CardanoDrepView::Key { id, .. } => format!("DRep {id} (clé)"),
+        CardanoDrepView::AlwaysAbstain => lang
+            .pick(
+                "« toujours s'abstenir » (DRep prédéfini : ton stake ne vote pas)",
+                "« always abstain » (predefined DRep: your stake does not vote)",
+            )
+            .into(),
+        CardanoDrepView::AlwaysNoConfidence => lang
+            .pick(
+                "« toujours défiance » (DRep prédéfini : vote de défiance envers le comité)",
+                "« always no confidence » (predefined DRep: no-confidence vote against the committee)",
+            )
+            .into(),
+        CardanoDrepView::Key { id, .. } => format!("DRep {id} ({})", lang.pick("clé", "key")),
         CardanoDrepView::Script { id, .. } => format!("DRep {id} (script)"),
     }
 }
 
-fn pool_text(p: &AdaPool) -> String {
-    format!(
-        "{}{} ({})\n      marge {} % · coût fixe {} par époque · pledge {} · saturation {} · {} délégants\n      nom et ticker déclarés par le pool, non vérifiés par Kyro",
-        p.ticker
-            .as_deref()
-            .map(|t| format!("[{}] ", crate::dialog_text::sanitize(t, 12)))
-            .unwrap_or_default(),
-        p.name
-            .as_deref()
-            .map(|n| crate::dialog_text::field(n, 60))
-            .unwrap_or_else(|| "pool sans métadonnées".into()),
-        p.pool_id,
-        (p.margin * 1000.0).round() / 10.0,
-        ada(&p.fixed_cost),
-        ada(&p.pledge),
-        p.live_saturation
-            .map(|s| format!("{s} %"))
-            .unwrap_or_else(|| "inconnue".into()),
-        p.live_delegators
-            .map(|d| d.to_string())
-            .unwrap_or_else(|| "?".into()),
-    )
+fn pool_text(lang: Lang, p: &AdaPool) -> String {
+    let ticker = p
+        .ticker
+        .as_deref()
+        .map(|t| format!("[{}] ", crate::dialog_text::sanitize(t, 12)))
+        .unwrap_or_default();
+    let name = p
+        .name
+        .as_deref()
+        .map(|n| crate::dialog_text::field(n, 60))
+        .unwrap_or_else(|| {
+            lang.pick("pool sans métadonnées", "pool without metadata")
+                .into()
+        });
+    let margin = (p.margin * 1000.0).round() / 10.0;
+    let saturation = p
+        .live_saturation
+        .map(|s| lang.pick(format!("{s} %"), format!("{s}%")))
+        .unwrap_or_else(|| lang.pick("inconnue", "unknown").into());
+    let delegators = p
+        .live_delegators
+        .map(|d| d.to_string())
+        .unwrap_or_else(|| "?".into());
+    match lang {
+        Lang::Fr => format!(
+            "{ticker}{name} ({})\n      marge {margin} % · coût fixe {} par époque · pledge {} · saturation {saturation} · {delegators} délégants\n      nom et ticker déclarés par le pool, non vérifiés par Kyro",
+            p.pool_id,
+            ada_in(lang, &p.fixed_cost),
+            ada_in(lang, &p.pledge),
+        ),
+        Lang::En => format!(
+            "{ticker}{name} ({})\n      margin {margin}% · fixed cost {} per epoch · pledge {} · saturation {saturation} · {delegators} delegators\n      name and ticker declared by the pool, not verified by Kyro",
+            p.pool_id,
+            ada_in(lang, &p.fixed_cost),
+            ada_in(lang, &p.pledge),
+        ),
+    }
 }
 
 /// Body of the native dialog, from the decoded transaction and the live context only.
-pub(crate) fn describe(s: &CardanoStakeSummary, c: &AdaStakeContext, net: Network) -> String {
-    let mut out = format!(
-        "Staking Cardano{}\nClé de staking : {}\n\nOpérations :\n",
-        if net == Network::Testnet {
-            " (preprod)"
-        } else {
-            ""
-        },
-        s.stake_address
-    );
+pub(crate) fn describe(
+    lang: Lang,
+    s: &CardanoStakeSummary,
+    c: &AdaStakeContext,
+    net: Network,
+) -> String {
+    let ada = |l: &str| ada_in(lang, l);
+    let fr = lang == Lang::Fr;
+    let preprod = if net == Network::Testnet {
+        " (preprod)"
+    } else {
+        ""
+    };
+    let mut out = if fr {
+        format!(
+            "Staking Cardano{preprod}\nClé de staking : {}\n\nOpérations :\n",
+            s.stake_address
+        )
+    } else {
+        format!(
+            "Cardano staking{preprod}\nStake key: {}\n\nOperations:\n",
+            s.stake_address
+        )
+    };
     let mut n = 0;
     for cert in &s.certificates {
         n += 1;
         out += &match cert {
-            CardanoCertView::StakeRegistration { deposit } => format!(
-                " {n}. Enregistrement de ta clé de staking — DÉPÔT {} (rendu à la désinscription)\n",
-                ada(deposit)
-            ),
-            CardanoCertView::StakeDeregistration { refund } => format!(
-                " {n}. DÉSINSCRIPTION de ta clé de staking — dépôt remboursé {} ; la délégation s'arrête\n",
-                ada(refund)
-            ),
+            CardanoCertView::StakeRegistration { deposit } => {
+                if fr {
+                    format!(
+                    " {n}. Enregistrement de ta clé de staking — DÉPÔT {} (rendu à la désinscription)\n",
+                    ada(deposit)
+                )
+                } else {
+                    format!(
+                    " {n}. Registration of your stake key — DEPOSIT {} (returned on deregistration)\n",
+                    ada(deposit)
+                )
+                }
+            }
+            CardanoCertView::StakeDeregistration { refund } => {
+                if fr {
+                    format!(
+                    " {n}. DÉSINSCRIPTION de ta clé de staking — dépôt remboursé {} ; la délégation s'arrête\n",
+                    ada(refund)
+                )
+                } else {
+                    format!(
+                    " {n}. DEREGISTRATION of your stake key — deposit refunded {}; the delegation stops\n",
+                    ada(refund)
+                )
+                }
+            }
             CardanoCertView::StakeDelegation { pool_id, .. } => format!(
-                " {n}. Délégation au pool {}\n",
+                " {n}. {}{}\n",
+                lang.pick("Délégation au pool ", "Delegation to pool "),
                 c.pool
                     .as_ref()
                     .filter(|p| p.pool_id == *pool_id)
-                    .map(pool_text)
+                    .map(|p| pool_text(lang, p))
                     .unwrap_or_else(|| pool_id.clone())
             ),
-            CardanoCertView::VoteDelegation { drep } => {
-                format!(" {n}. Délégation de vote : {}\n", drep_text(drep))
-            }
+            CardanoCertView::VoteDelegation { drep } => format!(
+                " {n}. {}{}\n",
+                lang.pick("Délégation de vote : ", "Vote delegation: "),
+                drep_text(lang, drep)
+            ),
         };
     }
     for w in &s.withdrawals {
         n += 1;
-        out += &format!(
-            " {n}. Retrait des récompenses : {} depuis {} (ton compte de récompenses)\n",
-            ada(&w.lovelace),
-            w.reward_address
-        );
+        out += &if fr {
+            format!(
+                " {n}. Retrait des récompenses : {} depuis {} (ton compte de récompenses)\n",
+                ada(&w.lovelace),
+                w.reward_address
+            )
+        } else {
+            format!(
+                " {n}. Rewards withdrawal: {} from {} (your rewards account)\n",
+                ada(&w.lovelace),
+                w.reward_address
+            )
+        };
     }
     for o in &s.tx.outputs {
         out += &format!(
-            "\nMonnaie rendue à ton adresse : {}\n  {}\n",
+            "\n{}{}\n  {}\n",
+            lang.pick(
+                "Monnaie rendue à ton adresse : ",
+                "Change returned to your address: "
+            ),
             ada(&o.lovelace),
             o.address
         );
     }
     let cost: i128 = c.net_cost.parse().unwrap_or(0);
     out += &format!(
-        "Frais : {}\n{} : {}\n",
+        "{}{}\n{}{}{}\n",
+        lang.pick("Frais : ", "Fee: "),
         ada(&s.tx.fee),
         if cost >= 0 {
-            "Coût total (frais + dépôt − remboursement − retrait)"
+            lang.pick(
+                "Coût total (frais + dépôt − remboursement − retrait)",
+                "Total cost (fee + deposit − refund − withdrawal)",
+            )
         } else {
-            "Gain net (remboursement + retrait − frais)"
+            lang.pick(
+                "Gain net (remboursement + retrait − frais)",
+                "Net gain (refund + withdrawal − fee)",
+            )
         },
+        lang.colon(),
         ada(&cost.unsigned_abs().to_string())
     );
     let e = &c.epoch;
-    out += &format!(
-        "\nÉpoque actuelle : {} (fin dans ≈ {} h)\n",
-        e.epoch,
-        e.seconds_left / 3600
-    );
+    out += &if fr {
+        format!(
+            "\nÉpoque actuelle : {} (fin dans ≈ {} h)\n",
+            e.epoch,
+            e.seconds_left / 3600
+        )
+    } else {
+        format!(
+            "\nCurrent epoch: {} (ends in ≈ {} h)\n",
+            e.epoch,
+            e.seconds_left / 3600
+        )
+    };
     if s.certificates
         .iter()
         .any(|x| matches!(x, CardanoCertView::StakeDelegation { .. }))
     {
-        out += &format!(
-            "Calendrier : la délégation compte à partir de l'époque {} ; premières récompenses versées au début de l'époque {} (≈ 15 à 20 jours)\n",
-            e.epoch + 2,
-            e.epoch + 4
-        );
+        out += &if fr {
+            format!(
+                "Calendrier : la délégation compte à partir de l'époque {} ; premières récompenses versées au début de l'époque {} (≈ 15 à 20 jours)\n",
+                e.epoch + 2,
+                e.epoch + 4
+            )
+        } else {
+            format!(
+                "Schedule: the delegation counts from epoch {}; first rewards paid at the start of epoch {} (≈ 15 to 20 days)\n",
+                e.epoch + 2,
+                e.epoch + 4
+            )
+        };
     }
-    out += "Tes ADA restent sur ton adresse et restent dépensables : pas de blocage. Pas de slashing sur Cardano : un mauvais pool fait perdre des récompenses, jamais le stake.\n";
+    out += lang.pick(
+        "Tes ADA restent sur ton adresse et restent dépensables : pas de blocage. Pas de slashing sur Cardano : un mauvais pool fait perdre des récompenses, jamais le stake.\n",
+        "Your ADA stay on your address and stay spendable: no lockup. No slashing on Cardano: a bad pool loses you rewards, never the stake.\n",
+    );
     if let Some(t) = s.tx.ttl {
-        out += &format!(
-            "Valable jusqu'au slot {t} (≈ {} min) · id {}\n",
-            t.saturating_sub(e.slot) / 60,
-            s.tx.tx_id
-        );
+        out += &if fr {
+            format!(
+                "Valable jusqu'au slot {t} (≈ {} min) · id {}\n",
+                t.saturating_sub(e.slot) / 60,
+                s.tx.tx_id
+            )
+        } else {
+            format!(
+                "Valid until slot {t} (≈ {} min) · id {}\n",
+                t.saturating_sub(e.slot) / 60,
+                s.tx.tx_id
+            )
+        };
     }
     out
 }
 
-pub(crate) fn describe_extra(c: &AdaStakeContext) -> String {
-    let mut out = String::from("Kyro a trouvé des points à vérifier :\n");
+pub(crate) fn describe_extra(lang: Lang, c: &AdaStakeContext) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des points à vérifier :\n",
+        "Kyro found points to check:\n",
+    ));
     for w in &c.warnings {
-        out += &match w {
-            AdaStakeWarning::PoolRetiring { epoch } => format!(
+        out += &match (w, lang) {
+            (AdaStakeWarning::PoolRetiring { epoch }, Lang::Fr) => format!(
                 "• ce pool a annoncé son arrêt à l'époque {epoch} : ta délégation ne rapportera plus rien ensuite\n"
             ),
-            AdaStakeWarning::HighMargin { margin } => format!(
+            (AdaStakeWarning::PoolRetiring { epoch }, Lang::En) => format!(
+                "• this pool announced it retires at epoch {epoch}: your delegation will earn nothing after that\n"
+            ),
+            (AdaStakeWarning::HighMargin { margin }, Lang::Fr) => format!(
                 "• ce pool garde {margin} % des récompenses (marge élevée{})\n",
                 if *margin >= 100.0 {
                     " : tu ne recevrais RIEN"
@@ -979,15 +1095,29 @@ pub(crate) fn describe_extra(c: &AdaStakeContext) -> String {
                     ""
                 }
             ),
-            AdaStakeWarning::PoolSaturated { saturation } => format!(
+            (AdaStakeWarning::HighMargin { margin }, Lang::En) => format!(
+                "• this pool keeps {margin}% of the rewards (high margin{})\n",
+                if *margin >= 100.0 {
+                    ": you would receive NOTHING"
+                } else {
+                    ""
+                }
+            ),
+            (AdaStakeWarning::PoolSaturated { saturation }, Lang::Fr) => format!(
                 "• ce pool est saturé ({saturation} %) : les récompenses de chacun diminuent\n"
             ),
-            AdaStakeWarning::DrepInactive => {
-                "• ce DRep est inactif : ses votes ne comptent pas pour l'instant\n".to_owned()
-            }
+            (AdaStakeWarning::PoolSaturated { saturation }, Lang::En) => format!(
+                "• this pool is saturated ({saturation}%): everyone's rewards decrease\n"
+            ),
+            (AdaStakeWarning::DrepInactive, _) => lang
+                .pick(
+                    "• ce DRep est inactif : ses votes ne comptent pas pour l'instant\n",
+                    "• this DRep is inactive: its votes do not count for now\n",
+                )
+                .to_owned(),
         };
     }
-    out += "\nContinuer quand même ?";
+    out += lang.pick("\nContinuer quand même ?", "\nContinue anyway?");
     out
 }
 
@@ -1015,13 +1145,15 @@ pub async fn ada_stake_sign(
         return Err(AppError::Locked);
     }
     let keys = our_keys(&state, account)?;
+    let lang = crate::i18n::current();
     let signer = SignerInfo::new(
         &state,
         Chain::Ada,
         keys.account,
         format!(
-            "{} (paiement), …/2/0 (staking)",
-            crate::commands_cardano::payment_path(keys.account)
+            "{} ({}), …/2/0 (staking)",
+            crate::commands_cardano::payment_path(keys.account),
+            lang.pick("paiement", "payment")
         ),
     );
     let c = crate::commands_cardano::ctx(&state);
@@ -1029,16 +1161,22 @@ pub async fn ada_stake_sign(
     let root = cardano_root_from_password(&state, Zeroizing::new(password)).await?;
     confirm_native(
         &app,
-        "Confirmer l'opération de staking Cardano",
-        signer.body(&describe(&summary, &context, state.network)),
+        lang.pick(
+            "Confirmer l'opération de staking Cardano",
+            "Confirm the Cardano staking operation",
+        ),
+        signer.body(lang, &describe(lang, &summary, &context, state.network)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if context.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : pool ou DRep à vérifier",
-            describe_extra(&context),
+            lang.pick(
+                "Attention : pool ou DRep à vérifier",
+                "Warning: pool or DRep to check",
+            ),
+            describe_extra(lang, &context),
         )
         .await?;
     }
@@ -1320,7 +1458,7 @@ mod tests {
             warnings: vec![AdaStakeWarning::HighMargin { margin: 100.0 }],
             requires_extra_confirmation: true,
         };
-        let d = describe(&s, &ctx, Network::Testnet);
+        let d = describe(Lang::Fr, &s, &ctx, Network::Testnet);
         for needle in [
             "Staking Cardano (preprod)",
             "Clé de staking : stake_test1",
@@ -1338,7 +1476,30 @@ mod tests {
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
-        assert!(describe_extra(&ctx).contains("tu ne recevrais RIEN"));
+        assert!(describe_extra(Lang::Fr, &ctx).contains("tu ne recevrais RIEN"));
+        let d = describe(Lang::En, &s, &ctx, Network::Testnet);
+        for needle in [
+            "Cardano staking (preprod)",
+            "Stake key: stake_test1",
+            "1. Registration of your stake key — DEPOSIT 2 ADA",
+            "2. Delegation to pool [ECS] « Easy Car Stake » (pool187jm",
+            "margin 100% · fixed cost 340 ADA per epoch",
+            "not verified by Kyro",
+            "3. Vote delegation: « always abstain »",
+            "Change returned to your address",
+            "Total cost (fee + deposit − refund − withdrawal): ",
+            "Current epoch: 322 (ends in ≈ 59 h)",
+            "counts from epoch 324",
+            "start of epoch 326",
+            "No slashing on Cardano",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        let x = describe_extra(Lang::En, &ctx);
+        assert!(x.contains("you would receive NOTHING") && x.ends_with("Continue anyway?"));
+        for fr in ["Frais", "Époque", "Délégation", "marge", "RIEN"] {
+            assert!(!d.contains(fr) && !x.contains(fr), "{fr}");
+        }
     }
 }
 
@@ -1370,10 +1531,13 @@ mod live {
         assert_eq!(summary, built.summary, "{label}: same decode at signing");
         eprintln!(
             "--- {label}: dialog ---\n{}---",
-            describe(&summary, &ctx, Network::Testnet)
+            describe(Lang::Fr, &summary, &ctx, Network::Testnet)
         );
         if ctx.requires_extra_confirmation {
-            eprintln!("--- {label}: reinforced ---\n{}---", describe_extra(&ctx));
+            eprintln!(
+                "--- {label}: reinforced ---\n{}---",
+                describe_extra(Lang::Fr, &ctx)
+            );
         }
         let own = [keys.address.clone()];
         let dctx = decode_ctx(Network::Testnet, &own, &ctx.params);

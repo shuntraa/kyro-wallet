@@ -237,10 +237,10 @@ export function torWaiting(s: TorSnapshot): boolean {
   return s.enabled !== false && s.status?.state !== 'ready';
 }
 
-/** Shell detail without the redundant « Tor indisponible : » prefix(es). */
+/** Shell detail without the redundant « Tor indisponible : » / "Tor unavailable:" prefix(es). */
 export function torDetail(message: string | null | undefined): string | null {
   if (!message) return null;
-  const m = message.replace(/^(\s*Tor indisponible\s*:\s*)+/i, '').trim();
+  const m = message.replace(/^(\s*Tor (?:indisponible|unavailable)\s*:\s*)+/i, '').trim();
   return m || null;
 }
 

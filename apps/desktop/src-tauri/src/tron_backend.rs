@@ -835,7 +835,13 @@ mod live {
             check_expiration(&s, now()).unwrap();
             eprintln!(
                 "--- dialog (TRX) ---\n{}\n---",
-                crate::commands_tron::describe_tron(&s, &trx.estimate, Network::Testnet, now())
+                crate::commands_tron::describe_tron(
+                    crate::i18n::Lang::Fr,
+                    &s,
+                    &trx.estimate,
+                    Network::Testnet,
+                    now()
+                )
             );
 
             // Kyro-built TRC-20 transfer of a token the test wallet holds, signed and checked.
@@ -859,7 +865,13 @@ mod live {
             ));
             eprintln!(
                 "--- dialog (TRC-20) ---\n{}\n---",
-                crate::commands_tron::describe_tron(&s20, &t20.estimate, Network::Testnet, now())
+                crate::commands_tron::describe_tron(
+                    crate::i18n::Lang::Fr,
+                    &s20,
+                    &t20.estimate,
+                    Network::Testnet,
+                    now()
+                )
             );
             // Nile USDT: the test wallet holds none, the simulation must refuse to build.
             let usdt = crate::commands_tron::build(
@@ -963,7 +975,13 @@ mod live {
                 "--- dialog ---
 {}
 ---",
-                crate::commands_tron::describe_tron(&summary, &est, Network::Testnet, now())
+                crate::commands_tron::describe_tron(
+                    crate::i18n::Lang::Fr,
+                    &summary,
+                    &est,
+                    Network::Testnet,
+                    now()
+                )
             );
             assert!(!summary.requires_extra_confirmation);
             let (sig, again) = wallet_core::tron_sign(&seed, 0, &built.raw).unwrap();

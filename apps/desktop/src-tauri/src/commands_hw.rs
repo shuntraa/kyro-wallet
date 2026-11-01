@@ -29,6 +29,7 @@ use crate::hw::{
     self, path_string, store, BtcSignRequest, Chain, DeviceInfo, DeviceStatus, EvmSignRequest,
     HwError, PromptFn, H,
 };
+use crate::i18n::Lang;
 use crate::solana;
 use crate::state::AppState;
 
@@ -89,16 +90,46 @@ fn check_brand(info: &DeviceInfo, acc: &WatchOnlyAccount) -> AppResult<()> {
     Ok(())
 }
 
-fn device_line(info: &DeviceInfo) -> String {
+fn device_line(lang: Lang, info: &DeviceInfo) -> String {
     let brand = match info.kind {
         HwDeviceKind::Ledger => "Ledger",
         HwDeviceKind::Trezor => "Trezor",
     };
-    format!(
-        "\n\n— Appareil : {brand} {} —\nAprès « Signer », vérifie les MÊMES informations sur l'écran de \
-         l'appareil et confirme-les là-bas. S'il affiche autre chose, refuse sur l'appareil.",
-        crate::dialog_text::sanitize(&info.model, 40)
-    )
+    let model = crate::dialog_text::sanitize(&info.model, 40);
+    match lang {
+        Lang::Fr => format!(
+            "\n\n— Appareil : {brand} {model} —\nAprès « Signer », vérifie les MÊMES informations sur l'écran de \
+             l'appareil et confirme-les là-bas. S'il affiche autre chose, refuse sur l'appareil."
+        ),
+        Lang::En => format!(
+            "\n\n— Device: {brand} {model} —\nAfter « Sign », check the SAME information on the device's \
+             screen and confirm it there. If it shows anything else, refuse on the device."
+        ),
+    }
+}
+
+/// Reinforced dialog of an EVM hardware-wallet signature: Kyro's warnings, and/or blind signing.
+fn evm_hw_limited_text(lang: Lang, warnings: Option<String>, clear: bool) -> String {
+    let mut body = String::new();
+    if let Some(w) = warnings {
+        body += &w;
+        body += "\n";
+    }
+    if !clear {
+        body += lang.pick(
+            "Ton appareil ne pourra PAS afficher le détail de cette transaction \
+             (blind signing : il ne montrera que des données brutes ou une empreinte). \
+             Seul le résumé de Kyro ci-dessus décrit ce que tu signes.\n\n",
+            "Your device will NOT be able to show the details of this transaction \
+             (blind signing: it will only show raw data or a hash). \
+             Only Kyro's summary above describes what you are signing.\n\n",
+        );
+    }
+    body += lang.pick(
+        "Ne continue que si tu fais confiance au destinataire et au contrat.",
+        "Only continue if you trust the recipient and the contract.",
+    );
+    body
 }
 
 // ---------------------------------------------------------------- discovery
@@ -666,17 +697,21 @@ pub async fn hw_sign_btc_psbt(
     }
     // 2. Kyro's own decoded summary, in a native dialog.
     let summary = plan.summary.clone();
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer la transaction (hardware wallet)",
-        describe_btc(&summary) + &device_line(&info),
+        lang.pick(
+            "Confirmer la transaction (hardware wallet)",
+            "Confirm the transaction (hardware wallet)",
+        ),
+        describe_btc(lang, &summary) + &device_line(lang, &info),
     )
     .await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : transaction à vérifier",
-            describe_btc_extra(&summary),
+            lang.check_tx_title(),
+            describe_btc_extra(lang, &summary),
         )
         .await?;
     }
@@ -760,25 +795,27 @@ pub async fn hw_sign_evm_tx(
     if !same {
         return Err(AppError::HwWrongDevice);
     }
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer la transaction (hardware wallet)",
-        describe_evm(&summary, hint.as_ref()) + &device_line(&info),
+        lang.pick(
+            "Confirmer la transaction (hardware wallet)",
+            "Confirm the transaction (hardware wallet)",
+        ),
+        describe_evm(lang, &summary, hint.as_ref()) + &device_line(lang, &info),
     )
     .await?;
     if !clear || extra {
-        let mut body = String::new();
-        if extra {
-            body += &evm_warning_lines(&summary, hint.as_ref());
-            body += "\n";
-        }
-        if !clear {
-            body += "Ton appareil ne pourra PAS afficher le détail de cette transaction \
-                     (blind signing : il ne montrera que des données brutes ou une empreinte). \
-                     Seul le résumé de Kyro ci-dessus décrit ce que tu signes.\n\n";
-        }
-        body += "Ne continue que si tu fais confiance au destinataire et au contrat.";
-        confirm_native(&app, "Attention : vérification limitée", body).await?;
+        let warnings = extra.then(|| evm_warning_lines(lang, &summary, hint.as_ref()));
+        confirm_native(
+            &app,
+            lang.pick(
+                "Attention : vérification limitée",
+                "Warning: limited verification",
+            ),
+            evm_hw_limited_text(lang, warnings, clear),
+        )
+        .await?;
     }
     let index = acc.account;
     let tx2 = tx.clone();
@@ -841,17 +878,24 @@ pub async fn hw_sign_sol_tx(
     if !same {
         return Err(AppError::HwWrongDevice);
     }
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer la transaction Solana (hardware wallet)",
-        solana::describe(&decoded, &me, state.network) + &device_line(&info),
+        lang.pick(
+            "Confirmer la transaction Solana (hardware wallet)",
+            "Confirm the Solana transaction (hardware wallet)",
+        ),
+        solana::describe(lang, &decoded, &me, state.network) + &device_line(lang, &info),
     )
     .await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : transaction non vérifiée",
-            solana::describe_extra(&decoded),
+            lang.pick(
+                "Attention : transaction non vérifiée",
+                "Warning: unverified transaction",
+            ),
+            solana::describe_extra(lang, &decoded),
         )
         .await?;
     }
@@ -899,6 +943,25 @@ mod tests {
                 path: wallet_core::sol_path(0),
             }),
         }
+    }
+
+    #[test]
+    fn hw_dialog_texts_in_both_languages() {
+        let info = DeviceInfo {
+            id: "x".into(),
+            kind: HwDeviceKind::Ledger,
+            model: "Nano X".into(),
+            transport: "hid",
+        };
+        let fr = device_line(Lang::Fr, &info);
+        assert!(fr.contains("— Appareil : Ledger Nano X —") && fr.contains("MÊMES informations"));
+        let en = device_line(Lang::En, &info);
+        assert!(
+            en.contains("— Device: Ledger Nano X —") && en.contains("check the SAME information")
+        );
+        let blind = evm_hw_limited_text(Lang::En, None, false);
+        assert!(blind.contains("will NOT be able to show") && blind.ends_with("the contract."));
+        assert!(evm_hw_limited_text(Lang::Fr, None, false).contains("ne pourra PAS afficher"));
     }
 
     #[test]
@@ -983,6 +1046,7 @@ mod tests {
             warnings: vec![wallet_core::BtcWarning::OpReturn { output: 1 }],
             requires_extra_confirmation: true,
         };
-        assert!(describe_btc_extra(&s).contains("sortie 2 : OP_RETURN"));
+        assert!(describe_btc_extra(Lang::Fr, &s).contains("sortie 2 : OP_RETURN"));
+        assert!(describe_btc_extra(Lang::En, &s).contains("output 2: OP_RETURN"));
     }
 }

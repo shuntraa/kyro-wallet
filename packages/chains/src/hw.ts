@@ -12,6 +12,7 @@ import type { BtcKind, EvmTxSummary, HwDeviceKind, Network, WatchOnlyAccount } f
 import { derivePubkey, parseXpub } from './bitcoin/xpub';
 import type { AnyAdapter, AnyUnsigned } from './types';
 
+import { l10n } from '@kyro/shared';
 bitcoin.initEccLib(ecc);
 
 /**
@@ -53,14 +54,14 @@ export function btcAddressFromXpub(xpub: string, network: Network, kind: BtcKind
   const net = network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
   const pubkey = derivePubkey(parseXpub(xpub), change, index);
   const p = kind === 'segwit' ? bitcoin.payments.p2wpkh({ pubkey, network: net }) : bitcoin.payments.p2tr({ internalPubkey: pubkey.slice(1, 33), network: net });
-  if (!p.address) throw new Error('Adresse Bitcoin introuvable');
+  if (!p.address) throw new Error(l10n('Adresse Bitcoin introuvable', 'Bitcoin address not found'));
   return p.address;
 }
 
 /** EVM address `m/44'/60'/0'/0/{index}` from the stored node xpub (EIP-55). */
 export function evmAddressFromNode(nodeXpub: string, index: number): string {
   const pk = parseXpub(nodeXpub).deriveChild(index).publicKey;
-  if (!pk) throw new Error('Dérivation EVM impossible');
+  if (!pk) throw new Error(l10n('Dérivation EVM impossible', 'EVM derivation failed'));
   const uncompressed = ecc.pointCompress(pk, false);
   return publicKeyToAddress(bytesToHex(uncompressed));
 }
@@ -124,8 +125,8 @@ export function evmHwDisplay(device: HwDeviceKind, chainId: number, summary: Pic
 
 /** Sign on the hardware wallet `deviceId` (Rust `hw_sign_*`), then broadcast. */
 export async function signAndBroadcastHw(adapter: AnyAdapter, unsigned: AnyUnsigned, deviceId: string): Promise<string> {
-  if (adapter.family !== unsigned.family) throw new Error('Famille de transaction incohérente');
+  if (adapter.family !== unsigned.family) throw new Error(l10n('Famille de transaction incohérente', 'Inconsistent transaction family'));
   const a = adapter as unknown as { hw: HwSigner | null; signTxHw(u: never, id: string): Promise<never>; broadcast(s: never): Promise<string> };
-  if (!a.hw) throw new Error('Ce compte n’est pas un hardware wallet');
+  if (!a.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
   return a.broadcast(await a.signTxHw(unsigned as never, deviceId));
 }

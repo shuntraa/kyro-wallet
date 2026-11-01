@@ -13,6 +13,7 @@ use std::collections::BTreeSet;
 use tauri::{AppHandle, Manager};
 
 use crate::error::AppResult;
+use crate::i18n::Lang;
 use crate::servers::{
     BtcServer, CardanoServer, CoreAuth, Servers, TronServer, UtxoServer, XrpServer,
 };
@@ -143,20 +144,73 @@ pub fn unapproved(
     out
 }
 
+/// The description part of an endpoint label (written in French by [`endpoints`]) in `lang`.
+/// Only Kyro's own words before « — » change; the host part is left as it is.
+fn label_in(lang: Lang, label: &str) -> String {
+    if lang == Lang::Fr {
+        return label.to_owned();
+    }
+    let (what, rest) = label.split_once(" — ").unwrap_or((label, ""));
+    let mut what = what.to_owned();
+    for (fr, en) in [
+        ("EVM chaîne ", "EVM chain "),
+        ("(pair P2P)", "(P2P peer)"),
+        (
+            "Bitcoin Core, fichier .cookie",
+            "Bitcoin Core, .cookie file",
+        ),
+        ("Bitcoin Core, utilisateur RPC", "Bitcoin Core, RPC user"),
+        ("lecture du certificat", "reading the certificate"),
+        ("(certificat)", "(certificate)"),
+    ] {
+        what = what.replacen(fr, en, 1);
+    }
+    if rest.is_empty() && !label.contains(" — ") {
+        what
+    } else {
+        format!("{what} — {rest}")
+    }
+}
+
 /// Text of the approval dialog.
-pub fn approval_text(list: &[Endpoint]) -> String {
-    let mut out =
-        String::from("Kyro va contacter ce(s) serveur(s), choisi(s) dans les réglages :\n\n");
+pub fn approval_text(lang: Lang, list: &[Endpoint]) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro va contacter ce(s) serveur(s), choisi(s) dans les réglages :\n\n",
+        "Kyro is about to contact this server (these servers), chosen in the settings:\n\n",
+    ));
     for e in list.iter().take(12) {
-        out += &format!("• {}\n", crate::dialog_text::sanitize(&e.label, 160));
+        out += &format!(
+            "• {}\n",
+            crate::dialog_text::sanitize(&label_in(lang, &e.label), 160)
+        );
     }
     if list.len() > 12 {
-        out += &format!("• … et {} autre(s)\n", list.len() - 12);
+        out += &match lang {
+            Lang::Fr => format!("• … et {} autre(s)\n", list.len() - 12),
+            Lang::En => format!("• … and {} more\n", list.len() - 12),
+        };
     }
-    out += "\nIl verra tes adresses publiques et tes transactions (et, sans Tor, ton adresse IP). \
-            Si tu n'as pas saisi toi-même cette adresse, REFUSE : une interface compromise \
-            pourrait s'en servir pour faire sortir des données.\n\nAutoriser ce serveur ?";
+    out += lang.pick(
+        "\nIl verra tes adresses publiques et tes transactions (et, sans Tor, ton adresse IP). \
+         Si tu n'as pas saisi toi-même cette adresse, REFUSE : une interface compromise \
+         pourrait s'en servir pour faire sortir des données.\n\nAutoriser ce serveur ?",
+        "\nIt will see your public addresses and your transactions (and, without Tor, your IP \
+         address). If you did not type this address yourself, REFUSE: a compromised interface \
+         could use it to get data out.\n\nAllow this server?",
+    );
     out
+}
+
+/// Text of the confirmation before Tor is turned off.
+pub fn tor_off_text(lang: Lang) -> &'static str {
+    lang.pick(
+        "Sans Tor, chaque serveur contacté par Kyro verra ton adresse IP, et ton fournisseur \
+         d'accès verra quels serveurs tu contactes.\n\nSi tu n'as pas toi-même demandé à \
+         désactiver Tor, REFUSE.\n\nDésactiver Tor ?",
+        "Without Tor, every server Kyro contacts will see your IP address, and your internet \
+         provider will see which servers you contact.\n\nIf you did not ask to turn Tor off \
+         yourself, REFUSE.\n\nTurn Tor off?",
+    )
 }
 
 /// Asks natively for every endpoint of `new` that the user has not approved yet (not in the
@@ -171,12 +225,13 @@ pub async fn confirm_endpoints(
     if pending.is_empty() {
         return Ok(());
     }
+    let lang = crate::i18n::current();
     crate::commands::confirm_native_with(
         app,
-        "Nouveau serveur",
-        approval_text(&pending),
-        "Autoriser",
-        "Refuser",
+        lang.pick("Nouveau serveur", "New server"),
+        approval_text(lang, &pending),
+        lang.pick("Autoriser", "Allow"),
+        lang.pick("Refuser", "Refuse"),
     )
     .await?;
     state.approve_hosts(pending.into_iter().map(|e| e.key));
@@ -185,15 +240,13 @@ pub async fn confirm_endpoints(
 
 /// Native confirmation before Tor goes from enabled to disabled.
 pub async fn confirm_tor_off(app: &AppHandle) -> AppResult<()> {
+    let lang = crate::i18n::current();
     crate::commands::confirm_native_with(
         app,
-        "Désactiver Tor ?",
-        "Sans Tor, chaque serveur contacté par Kyro verra ton adresse IP, et ton fournisseur \
-         d'accès verra quels serveurs tu contactes.\n\nSi tu n'as pas toi-même demandé à \
-         désactiver Tor, REFUSE.\n\nDésactiver Tor ?"
-            .into(),
-        "Désactiver Tor",
-        "Garder Tor",
+        lang.pick("Désactiver Tor ?", "Turn Tor off?"),
+        tor_off_text(lang).into(),
+        lang.pick("Désactiver Tor", "Turn Tor off"),
+        lang.pick("Garder Tor", "Keep Tor"),
     )
     .await
 }
@@ -251,15 +304,45 @@ mod tests {
         });
         let p = unapproved(&endpoints(&lan), &[], &BTreeSet::new());
         assert_eq!(p[0].key, "192.168.1.10:22");
-        let t = approval_text(&p);
+        let t = approval_text(Lang::Fr, &p);
         assert!(t.contains("XRP Ledger testnet (rippled) — https://192.168.1.10:22"));
         assert!(t.contains("REFUSE"));
     }
 
     #[test]
+    fn approval_and_tor_texts_in_english() {
+        let mut s = Servers::default();
+        s.evm.insert(
+            "1".into(),
+            RpcServer {
+                url: "https://rpc.example/eth".into(),
+            },
+        );
+        let t = approval_text(Lang::En, &endpoints(&s));
+        assert!(
+            t.contains("• EVM chain 1 (RPC) — https://rpc.example:443"),
+            "{t}"
+        );
+        assert!(t.contains("REFUSE: a compromised interface"));
+        assert!(t.contains("Allow this server?"));
+        for fr in ["chaîne", "Autoriser", "serveur"] {
+            assert!(!t.contains(fr), "{fr} in {t}");
+        }
+        let e = host_port_endpoint("Bitcoin (Electrum, lecture du certificat)", "a.example", 1);
+        assert!(approval_text(Lang::En, &[e]).contains("(Electrum, reading the certificate)"));
+        assert!(tor_off_text(Lang::En).contains("REFUSE"));
+        assert!(tor_off_text(Lang::Fr).contains("REFUSE"));
+        let many: Vec<Endpoint> = (0..14)
+            .map(|i| host_port_endpoint("x", &format!("h{i}.example"), 1))
+            .collect();
+        assert!(approval_text(Lang::En, &many).contains("… and 2 more"));
+    }
+
+    #[test]
     fn hostile_host_text_stays_on_one_line() {
         let e = host_port_endpoint("Electrum (certificat)", "a.example\n• tout va bien", 1);
-        let t = approval_text(&[e]);
+        let t = approval_text(Lang::Fr, &[e.clone()]);
+        assert!(!approval_text(Lang::En, &[e]).contains("\n• tout va bien"));
         assert!(!t.contains("\n• tout va bien"), "{t}");
         let v6 = host_port_endpoint("x", "[::1]", 8332);
         assert_eq!(v6.key, "[::1]:8332");

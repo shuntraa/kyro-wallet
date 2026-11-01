@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { setLang } from '@kyro/shared';
 import {
   evmFeeOptionsFromHistory,
   feeCost,
@@ -142,5 +143,16 @@ describe('evmFeeOptionsFromHistory', () => {
   it('median helper', () => {
     expect(medianBig([3n, 1n, 2n])).toBe(2n);
     expect(medianBig([])).toBe(0n);
+  });
+});
+
+describe('fee messages follow the display language', () => {
+  afterEach(() => setLang('fr'));
+  it('French by default, English after setLang("en")', () => {
+    expect(validateBtcFeeRate('5000').errors[0]).toBe('Taux absurde (> 2 000 sat/vB).');
+    setLang('en');
+    expect(validateBtcFeeRate('5000').errors[0]).toBe('Absurd rate (> 2,000 sat/vB).');
+    expect(validateBtcFeeRate('0.5').errors[0]).toBe('Minimum 1 sat/vB (node relay rule).');
+    expect(() => parseUnits('abc', 8)).toThrow('Invalid amount');
   });
 });

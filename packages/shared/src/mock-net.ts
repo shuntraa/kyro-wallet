@@ -13,6 +13,8 @@ import { encodeCall, type AbiValue } from './mock-abi';
 import { demoJupiterWireTx } from './mock-jupiter';
 
 import type { DemoUtxo } from './mock-tx';
+import { l10n } from './i18n';
+
 export type { DemoUtxo } from './mock-tx';
 
 export interface DemoChainState {
@@ -107,11 +109,11 @@ export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: 
   try {
     url = new URL(req.url);
   } catch {
-    throw new IpcError('INVALID_INPUT', 'URL invalide.');
+    throw new IpcError('INVALID_INPUT', l10n('URL invalide.', 'Invalid URL.'));
   }
   // http:// only for a custom .onion server (over Tor, checked by the caller), like net.rs.
   const onionCustom = route !== undefined && url.protocol === 'http:' && url.hostname.endsWith('.onion');
-  if (url.protocol !== 'https:' && !onionCustom) throw new IpcError('HOST_NOT_ALLOWED', 'Seules les connexions HTTPS sont autorisées.');
+  if (url.protocol !== 'https:' && !onionCustom) throw new IpcError('HOST_NOT_ALLOWED', l10n('Seules les connexions HTTPS sont autorisées.', 'Only HTTPS connections are allowed.'));
   // Small artificial latency so loading states are visible in the demo.
   await new Promise((r) => setTimeout(r, 60 + Math.random() * 120));
   const host = url.host;
@@ -125,7 +127,7 @@ export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: 
   if (host === 'api.0x.org') return zerox(url);
   if (host === 'li.quest') return lifi(url);
   if (host === 'lite-api.jup.ag') return jupiter(url, req, s);
-  throw new IpcError('HOST_NOT_ALLOWED', `Hôte non autorisé : ${host}`);
+  throw new IpcError('HOST_NOT_ALLOWED', l10n(`Hôte non autorisé : ${host}`, `Host not allowed: ${host}`));
 }
 
 // ---------------------------------------------------------------- CoinGecko

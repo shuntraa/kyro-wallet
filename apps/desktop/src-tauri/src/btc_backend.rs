@@ -1844,12 +1844,12 @@ mod live_send {
         let summary = wallet_core::btc_psbt_summary(&seed, net, 0, b64).unwrap();
         eprintln!(
             "--- native dialog text ---\n{}\n--------------------------",
-            crate::commands::describe_btc(&summary)
+            crate::commands::describe_btc(crate::i18n::Lang::Fr, &summary)
         );
         if summary.requires_extra_confirmation {
             eprintln!(
                 "--- reinforced dialog ---\n{}",
-                crate::commands::describe_btc_extra(&summary)
+                crate::commands::describe_btc_extra(crate::i18n::Lang::Fr, &summary)
             );
         }
         let ours = addresses(&seed);

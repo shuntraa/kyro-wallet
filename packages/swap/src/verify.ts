@@ -27,6 +27,7 @@ import { applySlippage } from './compare';
 import { NATIVE_EVM, ZERO_ADDRESS, isNative } from './providers/common';
 import type { ProviderId, SwapToken } from './types';
 
+import { l10n } from '@kyro/shared';
 /** 0x AllowanceHolder on Cancun chains (Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Sonic, HyperEVM). */
 export const ZEROX_ALLOWANCE_HOLDER = '0x0000000000001fF3684f28c67538d4D072C22734';
 /** 0x deployer / Settler registry (ERC-721-like: `ownerOf(featureId)` is the current Settler), same address on all chains. */
@@ -137,7 +138,7 @@ export interface EvmSwapCheck {
 
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && isAddress(a, { strict: false }) && isAddress(b, { strict: false }) && getAddress(a) === getAddress(b);
 const fail = (provider: string, why: string): never => {
-  throw new SwapCheckError(`${provider} : ${why} — devis refusé.`);
+  throw new SwapCheckError(l10n(`${provider} : ${why} — devis refusé.`, `${provider}: ${why} — quote refused.`));
 };
 /** Most the Kyro fee may be: ceil(sellAmount × bps / 10 000). */
 export const maxKyroFee = (sellAmount: bigint, bps: number) => (sellAmount * BigInt(bps) + 9_999n) / 10_000n;
@@ -156,46 +157,46 @@ function decode<A extends Parameters<typeof decodeFunctionData>[0]['abi']>(abi: 
 export function verifyEvmSwap(i: EvmSwapCheckInput): EvmSwapCheck {
   const name = i.provider === 'zerox' ? '0x' : 'LI.FI';
   const contract = knownSwapContract(i.provider, i.chainId);
-  if (!contract) fail(name, `aucun contrat ${name} connu de Kyro sur ce réseau (chaîne ${i.chainId})`);
+  if (!contract) fail(name, l10n(`aucun contrat ${name} connu de Kyro sur ce réseau (chaîne ${i.chainId})`, `no ${name} contract known to Kyro on this network (chain ${i.chainId})`));
   const entry = contract as string;
-  if (!same(i.tx.to, entry)) fail(name, `contrat inattendu (${i.tx.to}) au lieu de ${entry}`);
+  if (!same(i.tx.to, entry)) fail(name, l10n(`contrat inattendu (${i.tx.to}) au lieu de ${entry}`, `unexpected contract (${i.tx.to}) instead of ${entry}`));
   const nativeSell = isNative(i.sell.address);
   if (nativeSell) {
-    if (i.allowanceTarget !== null) fail(name, 'autorisation demandée pour une vente native');
-    if (i.tx.value !== i.sellAmount) fail(name, `valeur envoyée (${i.tx.value}) différente du montant vendu`);
+    if (i.allowanceTarget !== null) fail(name, l10n('autorisation demandée pour une vente native', 'approval requested for a native sale'));
+    if (i.tx.value !== i.sellAmount) fail(name, l10n(`valeur envoyée (${i.tx.value}) différente du montant vendu`, `value sent (${i.tx.value}) differs from the sold amount`));
   } else {
-    if (!same(i.allowanceTarget, entry)) fail(name, `autorisation demandée pour ${i.allowanceTarget ?? '?'} au lieu de ${entry}`);
-    if (i.tx.value !== 0n) fail(name, 'valeur native envoyée avec une vente de token');
+    if (!same(i.allowanceTarget, entry)) fail(name, l10n(`autorisation demandée pour ${i.allowanceTarget ?? '?'} au lieu de ${entry}`, `approval requested for ${i.allowanceTarget ?? '?'} instead of ${entry}`));
+    if (i.tx.value !== 0n) fail(name, l10n('valeur native envoyée avec une vente de token', 'native value sent with a token sale'));
   }
   return i.provider === 'zerox' ? checkZeroEx(i, name, entry) : checkLifi(i, name, entry);
 }
 
 function checkZeroEx(i: EvmSwapCheckInput, name: string, entry: string): EvmSwapCheck {
   const exec = decode(ZEROX_ABI, i.tx.data);
-  if (!exec || exec.functionName !== 'exec') return fail(name, 'calldata illisible (exec AllowanceHolder attendu)');
+  if (!exec || exec.functionName !== 'exec') return fail(name, l10n('calldata illisible (exec AllowanceHolder attendu)', 'unreadable calldata (AllowanceHolder exec expected)'));
   const [operator, token, amount, target, inner] = exec.args as readonly [string, string, bigint, string, Hex];
-  if (!same(operator, target)) fail(name, 'opérateur différent du contrat appelé');
+  if (!same(operator, target)) fail(name, l10n('opérateur différent du contrat appelé', 'operator differs from the called contract'));
   if (!isNative(i.sell.address)) {
-    if (!same(token, i.sell.address)) fail(name, 'token autorisé différent du token vendu');
-    if (amount !== i.sellAmount) fail(name, 'montant autorisé différent du montant vendu');
+    if (!same(token, i.sell.address)) fail(name, l10n('token autorisé différent du token vendu', 'approved token differs from the sold token'));
+    if (amount !== i.sellAmount) fail(name, l10n('montant autorisé différent du montant vendu', 'approved amount differs from the sold amount'));
   }
   const ex = decode(ZEROX_ABI, inner);
-  if (!ex || ex.functionName !== 'execute') return fail(name, 'calldata Settler illisible (execute attendu)');
+  if (!ex || ex.functionName !== 'execute') return fail(name, l10n('calldata Settler illisible (execute attendu)', 'unreadable Settler calldata (execute expected)'));
   const [slippage, actions] = ex.args as readonly [{ recipient: string; buyToken: string; minAmountOut: bigint }, readonly Hex[], Hex];
-  if (!same(slippage.recipient, i.taker)) fail(name, `destinataire ${slippage.recipient} au lieu de ton adresse`);
+  if (!same(slippage.recipient, i.taker)) fail(name, l10n(`destinataire ${slippage.recipient} au lieu de ton adresse`, `recipient ${slippage.recipient} instead of your address`));
   const buyOk = isNative(i.buy.address) ? same(slippage.buyToken, NATIVE_EVM) || same(slippage.buyToken, ZERO_ADDRESS) : same(slippage.buyToken, i.buy.address);
-  if (!buyOk) fail(name, 'token reçu différent de celui demandé');
-  if (!minOk(slippage.minAmountOut, i.buyAmount, i.slippageBps)) fail(name, 'minimum garanti plus bas que le slippage choisi');
+  if (!buyOk) fail(name, l10n('token reçu différent de celui demandé', 'received token differs from the requested one'));
+  if (!minOk(slippage.minAmountOut, i.buyAmount, i.slippageBps)) fail(name, l10n('minimum garanti plus bas que le slippage choisi', 'guaranteed minimum lower than the chosen slippage'));
   const out: EvmSwapCheck = { contract: getAddress(entry), recipient: getAddress(slippage.recipient), minBuyAmount: slippage.minAmountOut, settler: getAddress(target) };
   if (i.fee.kind === 'fee') {
     const f = i.integratorFee;
-    if (!f || f.amount <= 0n) fail(name, 'frais Kyro non appliqués par le devis');
+    if (!f || f.amount <= 0n) fail(name, l10n('frais Kyro non appliqués par le devis', 'Kyro fees not applied by the quote'));
     const fee = f as { amount: bigint; token: string };
-    if (!same(fee.token, i.sell.address) && !(isNative(i.sell.address) && isNative(fee.token))) fail(name, 'frais Kyro pris dans un autre token que le token vendu');
-    if (fee.amount > maxKyroFee(i.sellAmount, i.fee.bps)) fail(name, 'frais Kyro supérieurs au taux configuré');
+    if (!same(fee.token, i.sell.address) && !(isNative(i.sell.address) && isNative(fee.token))) fail(name, l10n('frais Kyro pris dans un autre token que le token vendu', 'Kyro fees taken in another token than the sold token'));
+    if (fee.amount > maxKyroFee(i.sellAmount, i.fee.bps)) fail(name, l10n('frais Kyro supérieurs au taux configuré', 'Kyro fees above the configured rate'));
     // The fee recipient must be written somewhere in the Settler actions (the fee transfer).
     const needle = i.fee.recipient.toLowerCase().replace(/^0x/, '');
-    if (!actions.some((a) => a.toLowerCase().includes(needle))) fail(name, 'bénéficiaire des frais Kyro absent de la transaction');
+    if (!actions.some((a) => a.toLowerCase().includes(needle))) fail(name, l10n('bénéficiaire des frais Kyro absent de la transaction', 'Kyro fee recipient missing from the transaction'));
     out.kyroFee = fee.amount;
   }
   return out;
@@ -213,17 +214,17 @@ interface SwapData {
 
 function checkLifi(i: EvmSwapCheckInput, name: string, entry: string): EvmSwapCheck {
   const d = decode(LIFI_ABI, i.tx.data);
-  if (!d) return fail(name, 'fonction du Diamond inconnue de Kyro (swap sur une seule chaîne attendu)');
+  if (!d) return fail(name, l10n('fonction du Diamond inconnue de Kyro (swap sur une seule chaîne attendu)', 'Diamond function unknown to Kyro (single-chain swap expected)'));
   const [, , , receiver, minAmountOut, sd] = d.args as readonly [Hex, string, string, string, bigint, SwapData | readonly SwapData[]];
   const steps: readonly SwapData[] = Array.isArray(sd) ? (sd as readonly SwapData[]) : [sd as SwapData];
-  if (steps.length === 0) fail(name, 'aucune étape de swap');
-  if (!same(receiver, i.taker)) fail(name, `destinataire ${receiver} au lieu de ton adresse`);
-  if (!minOk(minAmountOut, i.buyAmount, i.slippageBps)) fail(name, 'minimum garanti plus bas que le slippage choisi');
+  if (steps.length === 0) fail(name, l10n('aucune étape de swap', 'no swap step'));
+  if (!same(receiver, i.taker)) fail(name, l10n(`destinataire ${receiver} au lieu de ton adresse`, `recipient ${receiver} instead of your address`));
+  if (!minOk(minAmountOut, i.buyAmount, i.slippageBps)) fail(name, l10n('minimum garanti plus bas que le slippage choisi', 'guaranteed minimum lower than the chosen slippage'));
   const asset = (t: SwapToken) => (isNative(t.address) ? ZERO_ADDRESS : t.address);
   const first = steps[0] as SwapData;
   const last = steps[steps.length - 1] as SwapData;
-  if (!same(first.sendingAssetId, asset(i.sell)) || first.fromAmount !== i.sellAmount) fail(name, 'première étape différente du token ou du montant vendus');
-  if (!same(last.receivingAssetId, asset(i.buy))) fail(name, 'dernière étape différente du token demandé');
+  if (!same(first.sendingAssetId, asset(i.sell)) || first.fromAmount !== i.sellAmount) fail(name, l10n('première étape différente du token ou du montant vendus', 'first step differs from the sold token or amount'));
+  if (!same(last.receivingAssetId, asset(i.buy))) fail(name, l10n('dernière étape différente du token demandé', 'last step differs from the requested token'));
   const out: EvmSwapCheck = { contract: getAddress(entry), recipient: getAddress(receiver), minBuyAmount: minAmountOut };
   const forwarder = SWAP_CONTRACTS[i.chainId]?.lifi?.feeForwarder ?? '';
   const feeSteps = steps.filter((s) => same(s.callTo, forwarder));
@@ -231,22 +232,22 @@ function checkLifi(i: EvmSwapCheckInput, name: string, entry: string): EvmSwapCh
   let total = 0n;
   for (const s of feeSteps) {
     const f = decode(LIFI_FEE_FORWARDER_ABI, s.callData);
-    if (!f) return fail(name, 'étape de frais illisible');
+    if (!f) return fail(name, l10n('étape de frais illisible', 'unreadable fee step'));
     const dist = (f.functionName === 'forwardERC20Fees' ? f.args[1] : f.args[0]) as readonly { recipient: string; amount: bigint }[];
-    if (f.functionName === 'forwardERC20Fees' && !same(f.args[0] as string, i.sell.address)) fail(name, 'frais pris dans un autre token que le token vendu');
-    if (f.functionName === 'forwardNativeFees' && !isNative(i.sell.address)) fail(name, 'frais natifs sur une vente de token');
+    if (f.functionName === 'forwardERC20Fees' && !same(f.args[0] as string, i.sell.address)) fail(name, l10n('frais pris dans un autre token que le token vendu', 'fees taken in another token than the sold token'));
+    if (f.functionName === 'forwardNativeFees' && !isNative(i.sell.address)) fail(name, l10n('frais natifs sur une vente de token', 'native fees on a token sale'));
     for (const x of dist) {
       total += x.amount;
       if (i.fee.kind === 'fee' && same(x.recipient, i.fee.recipient)) kyro += x.amount;
     }
   }
   if (i.fee.kind === 'fee') {
-    if (kyro <= 0n) fail(name, 'frais Kyro absents de la transaction');
-    if (kyro > maxKyroFee(i.sellAmount, i.fee.bps)) fail(name, 'frais Kyro supérieurs au taux configuré');
+    if (kyro <= 0n) fail(name, l10n('frais Kyro absents de la transaction', 'Kyro fees missing from the transaction'));
+    if (kyro > maxKyroFee(i.sellAmount, i.fee.bps)) fail(name, l10n('frais Kyro supérieurs au taux configuré', 'Kyro fees above the configured rate'));
     out.kyroFee = kyro;
   }
   const kyroBps = i.fee.kind === 'fee' ? BigInt(i.fee.bps) : 0n;
-  if (total > (i.sellAmount * (kyroBps + LIFI_OWN_FEE_CAP_BPS) + 9_999n) / 10_000n) fail(name, 'frais prélevés au total plus élevés que prévu');
+  if (total > (i.sellAmount * (kyroBps + LIFI_OWN_FEE_CAP_BPS) + 9_999n) / 10_000n) fail(name, l10n('frais prélevés au total plus élevés que prévu', 'total fees taken higher than expected'));
   return out;
 }
 
@@ -259,9 +260,9 @@ export function compareFreshQuote(
   reviewed: { allowanceTarget: string | null; minBuyAmount: bigint; tx: { kind: 'evm'; to: string } },
   fresh: { allowanceTarget: string | null; minBuyAmount: bigint; tx: { kind: 'evm'; to: string } },
 ): { ok: true; degraded: boolean } | { ok: false; reason: string } {
-  if (!same(reviewed.tx.to, fresh.tx.to)) return { ok: false, reason: `Le nouveau devis appelle un autre contrat (${fresh.tx.to}) : arrêt.` };
+  if (!same(reviewed.tx.to, fresh.tx.to)) return { ok: false, reason: l10n(`Le nouveau devis appelle un autre contrat (${fresh.tx.to}) : arrêt.`, `The new quote calls another contract (${fresh.tx.to}): stopped.`) };
   if ((reviewed.allowanceTarget ?? null) !== (fresh.allowanceTarget ?? null) && !same(reviewed.allowanceTarget, fresh.allowanceTarget)) {
-    return { ok: false, reason: 'Le nouveau devis demande une autorisation pour un autre contrat : arrêt.' };
+    return { ok: false, reason: l10n('Le nouveau devis demande une autorisation pour un autre contrat : arrêt.', 'The new quote requests an approval for another contract: stopped.') };
   }
   return { ok: true, degraded: fresh.minBuyAmount < reviewed.minBuyAmount };
 }

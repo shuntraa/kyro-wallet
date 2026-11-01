@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import { cn } from '../lib/cn';
 import { useApp, type Route } from '../state/app';
 import { IconClock, IconLayers, IconLock, IconSliders, IconStake, IconSwap, IconWallet } from '../components/icons';
+import { useT } from '../i18n';
 
 type RailKey = 'portfolio' | 'assets' | 'swap' | 'staking' | 'history' | 'settings';
 
@@ -46,20 +47,21 @@ function RailItem({ active, label, icon, onClick }: { active: boolean; label: st
 export function NavRail() {
   const { route, navigate, lock, hwOnly } = useApp();
   const k = railKeyOf(route);
+  const { t } = useT();
   return (
-    <nav aria-label="Navigation" className="flex w-[84px] shrink-0 flex-col items-center gap-0.5 border-r border-rail bg-bg-deep py-3">
-      <RailItem active={k === 'portfolio'} label="Portefeuille" icon={<IconWallet size={20} />} onClick={() => navigate({ name: 'portfolio' })} />
-      <RailItem active={k === 'assets'} label="Actifs" icon={<IconLayers size={20} />} onClick={() => navigate({ name: 'assets' })} />
+    <nav aria-label={t('shell.navigation')} className="flex w-[84px] shrink-0 flex-col items-center gap-0.5 border-r border-rail bg-bg-deep py-3">
+      <RailItem active={k === 'portfolio'} label={t('shell.portfolio')} icon={<IconWallet size={20} />} onClick={() => navigate({ name: 'portfolio' })} />
+      <RailItem active={k === 'assets'} label={t('shell.assets')} icon={<IconLayers size={20} />} onClick={() => navigate({ name: 'assets' })} />
       <RailItem active={k === 'swap'} label="Swap" icon={<IconSwap size={20} />} onClick={() => navigate({ name: 'swap' })} />
       <RailItem active={k === 'staking'} label="Staking" icon={<IconStake size={20} />} onClick={() => navigate({ name: 'staking' })} />
-      <RailItem active={k === 'history'} label="Historique" icon={<IconClock size={20} />} onClick={() => navigate({ name: 'history' })} />
+      <RailItem active={k === 'history'} label={t('common.history')} icon={<IconClock size={20} />} onClick={() => navigate({ name: 'history' })} />
       <div className="flex-1" />
-      <RailItem active={k === 'settings'} label="Réglages" icon={<IconSliders size={20} />} onClick={() => navigate({ name: 'settings' })} />
+      <RailItem active={k === 'settings'} label={t('common.settings')} icon={<IconSliders size={20} />} onClick={() => navigate({ name: 'settings' })} />
       {!hwOnly && (
       <button
         type="button"
-        aria-label="Verrouiller le coffre"
-        title="Verrouiller le coffre"
+        aria-label={t('shell.lockVault')}
+        title={t('shell.lockVault')}
         onClick={() => void lock()}
         className="press group mt-2 flex size-11 items-center justify-center rounded-ctl border border-line-2 text-mute hover:border-line-3 hover:bg-raised hover:text-text"
       >

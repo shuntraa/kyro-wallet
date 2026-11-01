@@ -38,6 +38,7 @@ import {
 } from './ipc';
 import { checkServerUrl } from './servers';
 import type { DemoTor } from './mock-tor';
+import { l10n } from './i18n';
 
 export const XRP_RESERVE_BASE = 1_000_000n;
 export const XRP_RESERVE_INC = 200_000n;
@@ -59,12 +60,12 @@ export function xrpAddressOfId(id: Uint8Array): string {
 /** Demo address of XRP account `account` (`m/44'/144'/account'/0/0`, like Rust). */
 export function demoXrpAddress(seed: Uint8Array, account: number): string {
   const pk = HDKey.fromMasterSeed(seed).derive(`m/44'/144'/${account}'/0/0`).publicKey;
-  if (!pk) throw new IpcError('INTERNAL', 'dérivation XRP');
+  if (!pk) throw new IpcError('INTERNAL', l10n('dérivation XRP', 'XRP derivation'));
   return xrpAddressOfId(bitcoin.crypto.hash160(pk));
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
-const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', `Serveur injoignable : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', l10n(`Serveur injoignable : ${m}`, `Server unreachable: ${m}`));
 const has = (s: string, w: string) => s.toLowerCase().includes(w);
 const hostOf = (u: string) => {
   try {
@@ -83,17 +84,17 @@ const xrpText = (drops: bigint | string) => {
 export function checkXrpAddress(a: unknown): string {
   const s = String(a ?? '').trim();
   if ((s.startsWith('X') || s.startsWith('T')) && s.length >= 46) {
-    throw invalidInput("les X-addresses ne sont pas prises en charge : demande l'adresse classique r… et le tag de destination");
+    throw invalidInput(l10n("les X-addresses ne sont pas prises en charge : demande l'adresse classique r… et le tag de destination", 'X-addresses are not supported: ask for the classic r… address and the destination tag'));
   }
   let raw: Uint8Array;
   try {
     raw = base58xrp.decode(s);
   } catch {
-    throw invalidInput('adresse XRP invalide');
+    throw invalidInput(l10n('adresse XRP invalide', 'invalid XRP address'));
   }
-  if (raw.length !== 25 || raw[0] !== 0) throw invalidInput('adresse XRP invalide');
+  if (raw.length !== 25 || raw[0] !== 0) throw invalidInput(l10n('adresse XRP invalide', 'invalid XRP address'));
   const sum = sha256(sha256(raw.slice(0, 21)));
-  if (!raw.slice(21).every((b, i) => b === sum[i])) throw invalidInput('adresse XRP invalide (somme de contrôle)');
+  if (!raw.slice(21).every((b, i) => b === sum[i])) throw invalidInput(l10n('adresse XRP invalide (somme de contrôle)', 'invalid XRP address (checksum)'));
   return s;
 }
 
@@ -186,11 +187,11 @@ export function createDemoXrp(d: DemoXrpDeps) {
     const s = serverOf();
     if (s.kind === 'jsonRpc') {
       const bad = checkServerUrl(s.url, torOn());
-      if (bad) throw new IpcError('SERVER_INVALID', `Serveur invalide : ${bad}`);
+      if (bad) throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : ${bad}`, `Invalid server: ${bad}`));
     }
     if (torOn()) await d.tor.waitReady();
     await wait(50 + Math.random() * 120);
-    if (s.kind === 'jsonRpc' && has(s.url, 'down')) throw unreachable(`${hostOf(s.url)} : délai de connexion dépassé`);
+    if (s.kind === 'jsonRpc' && has(s.url, 'down')) throw unreachable(l10n(`${hostOf(s.url)} : délai de connexion dépassé`, `${hostOf(s.url)}: connection timed out`));
     state.ledger = (d.network === 'mainnet' ? 93_404_120 : 6_120_120) + Math.floor((d.now() - t0) / 4000);
     return s;
   };
@@ -216,20 +217,20 @@ export function createDemoXrp(d: DemoXrpDeps) {
 
   /** xrp_backend::check_payment, same order and messages. */
   const checkPayment = (ours: XrpAccountInfo, dest: XrpAccountInfo, drops: bigint | null, fee: bigint, tag: number | null) => {
-    if (!ours.exists) throw invalidInput('ton compte XRP n’est pas encore activé (aucun XRP reçu)');
+    if (!ours.exists) throw invalidInput(l10n('ton compte XRP n’est pas encore activé (aucun XRP reçu)', 'your XRP account is not activated yet (no XRP received)'));
     if (dest.requireDestTag && tag === null) {
-      throw invalidInput('ce destinataire exige un tag de destination (lsfRequireDestTag) : ajoute-le, sinon le paiement serait refusé ou perdu');
+      throw invalidInput(l10n('ce destinataire exige un tag de destination (lsfRequireDestTag) : ajoute-le, sinon le paiement serait refusé ou perdu', 'this recipient requires a destination tag (lsfRequireDestTag): add it, otherwise the payment would be refused or lost'));
     }
     if (drops !== null) {
       if (!dest.exists && drops < XRP_RESERVE_BASE) {
-        throw invalidInput(`ce compte n’existe pas encore : il faut lui envoyer au moins la réserve de base (${xrpText(XRP_RESERVE_BASE).replace(' XRP', '')} XRP), sinon le paiement échoue (tecNO_DST_INSUF_XRP)`);
+        throw invalidInput(l10n(`ce compte n’existe pas encore : il faut lui envoyer au moins la réserve de base (${xrpText(XRP_RESERVE_BASE).replace(' XRP', '')} XRP), sinon le paiement échoue (tecNO_DST_INSUF_XRP)`, `this account does not exist yet: you must send it at least the base reserve (${xrpText(XRP_RESERVE_BASE).replace(' XRP', '')} XRP), otherwise the payment fails (tecNO_DST_INSUF_XRP)`));
       }
       const spendable = BigInt(ours.spendable);
       if (drops + fee > spendable) {
-        throw invalidInput(`solde disponible insuffisant : ${xrpText(spendable).replace(' XRP', '')} XRP disponibles (solde − réserve), il en faut ${xrpText(drops + fee).replace(' XRP', '')}`);
+        throw invalidInput(l10n(`solde disponible insuffisant : ${xrpText(spendable).replace(' XRP', '')} XRP disponibles (solde − réserve), il en faut ${xrpText(drops + fee).replace(' XRP', '')}`, `insufficient available balance: ${xrpText(spendable).replace(' XRP', '')} XRP available (balance − reserve), ${xrpText(drops + fee).replace(' XRP', '')} needed`));
       }
     } else if (!dest.exists) {
-      throw invalidInput('un token ne peut pas être envoyé à un compte XRP qui n’existe pas (tecNO_DST)');
+      throw invalidInput(l10n('un token ne peut pas être envoyé à un compte XRP qui n’existe pas (tecNO_DST)', 'a token cannot be sent to an XRP account that does not exist (tecNO_DST)'));
     }
   };
 
@@ -242,14 +243,14 @@ export function createDemoXrp(d: DemoXrpDeps) {
     try {
       p = JSON.parse(new TextDecoder().decode(hexToBytes(String(blob ?? '').trim().toLowerCase()))) as DemoPayment;
     } catch {
-      throw invalidInput('blob XRP illisible');
+      throw invalidInput(l10n('blob XRP illisible', 'unreadable XRP blob'));
     }
-    if (p.account !== me) throw invalidInput("transaction XRP : l'Account n'est pas l'adresse de ce portefeuille");
+    if (p.account !== me) throw invalidInput(l10n("transaction XRP : l'Account n'est pas l'adresse de ce portefeuille", 'XRP transaction: the Account is not this wallet’s address'));
     checkXrpAddress(p.destination);
-    if (p.paths !== undefined) throw invalidInput('transaction XRP : les chemins (Paths) ne sont pas pris en charge');
+    if (p.paths !== undefined) throw invalidInput(l10n('transaction XRP : les chemins (Paths) ne sont pas pris en charge', 'XRP transaction: paths (Paths) are not supported'));
     if (p.deliverMin !== undefined) throw invalidInput("transaction XRP : DeliverMin (paiements partiels) n'est pas pris en charge");
-    if ((p.flags & TF_PARTIAL_PAYMENT) !== 0) throw invalidInput('transaction XRP : les paiements partiels (tfPartialPayment) sont refusés : le montant livré pourrait être presque nul');
-    if ((p.flags & ~TF_FULLY_CANONICAL_SIG) >>> 0 !== 0) throw invalidInput(`transaction XRP : flags inconnus 0x${((p.flags & ~TF_FULLY_CANONICAL_SIG) >>> 0).toString(16).padStart(8, '0')}`);
+    if ((p.flags & TF_PARTIAL_PAYMENT) !== 0) throw invalidInput(l10n('transaction XRP : les paiements partiels (tfPartialPayment) sont refusés : le montant livré pourrait être presque nul', 'XRP transaction: partial payments (tfPartialPayment) are refused: the delivered amount could be almost zero'));
+    if ((p.flags & ~TF_FULLY_CANONICAL_SIG) >>> 0 !== 0) throw invalidInput(l10n(`transaction XRP : flags inconnus 0x${((p.flags & ~TF_FULLY_CANONICAL_SIG) >>> 0).toString(16).padStart(8, '0')}`, `XRP transaction: unknown flags 0x${((p.flags & ~TF_FULLY_CANONICAL_SIG) >>> 0).toString(16).padStart(8, '0')}`));
     const warnings: XrpWarning[] = [];
     if (BigInt(p.fee) > 1_000_000n) warnings.push({ kind: 'highFee' });
     const summary: XrpTxSummary = {
@@ -278,27 +279,27 @@ export function createDemoXrp(d: DemoXrpDeps) {
   /** commands_xrp.rs describe_xrp: the destination tag gets its own framed block. */
   const describe = (s: XrpTxSummary, c: XrpContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-    let out = `Envoi XRP Ledger${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.destination}\n${line}\n`;
-    out += s.destinationTag !== null ? `TAG DE DESTINATION : ${s.destinationTag}\n` : "AUCUN TAG DE DESTINATION\n(une plateforme d'échange ou un service en exige souvent un : sans lui, les fonds peuvent être perdus)\n";
+    let out = l10n(`Envoi XRP Ledger${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.destination}\n${line}\n`, `XRP Ledger transfer${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.destination}\n${line}\n`);
+    out += s.destinationTag !== null ? l10n(`TAG DE DESTINATION : ${s.destinationTag}\n`, `DESTINATION TAG: ${s.destinationTag}\n`) : l10n("AUCUN TAG DE DESTINATION\n(une plateforme d'échange ou un service en exige souvent un : sans lui, les fonds peuvent être perdus)\n", 'NO DESTINATION TAG\n(an exchange or a service often requires one: without it, the funds can be lost)\n');
     out += `${line}\n`;
-    out += `Montant : ${s.amount.kind === 'xrp' ? `${xrpText(s.amount.drops)} (${s.amount.drops} drops)` : `${s.amount.value} ${s.amount.currency} (émis par ${s.amount.issuer})`}\n`;
-    if (!c.destination.exists) out += `\nCe compte n'existe pas encore : ce paiement le crée (réserve de ${xrpText(c.reserveBase)} bloquée chez lui).\n`;
-    out += `\nFrais : ${xrpText(s.fee)} (${s.fee} drops)\nSolde : ${xrpText(c.account.balance)} · réserve bloquée : ${xrpText(c.account.reserve)} (${xrpText(c.reserveBase)} + ${xrpText(c.reserveInc)} × ${c.account.ownerCount} objet(s)) · disponible : ${xrpText(c.account.spendable)}\n`;
-    if (s.lastLedgerSequence !== null) out += `Valable jusqu'au registre n° ${s.lastLedgerSequence} (≈ 1 min), séquence ${s.sequence}\n`;
+    out += l10n(`Montant : ${s.amount.kind === 'xrp' ? `${xrpText(s.amount.drops)} (${s.amount.drops} drops)` : `${s.amount.value} ${s.amount.currency} (émis par ${s.amount.issuer})`}\n`, `Amount: ${s.amount.kind === 'xrp' ? `${xrpText(s.amount.drops)} (${s.amount.drops} drops)` : `${s.amount.value} ${s.amount.currency} (issued by ${s.amount.issuer})`}\n`);
+    if (!c.destination.exists) out += l10n(`\nCe compte n'existe pas encore : ce paiement le crée (réserve de ${xrpText(c.reserveBase)} bloquée chez lui).\n`, `\nThis account does not exist yet: this payment creates it (reserve of ${xrpText(c.reserveBase)} locked on it).\n`);
+    out += l10n(`\nFrais : ${xrpText(s.fee)} (${s.fee} drops)\nSolde : ${xrpText(c.account.balance)} · réserve bloquée : ${xrpText(c.account.reserve)} (${xrpText(c.reserveBase)} + ${xrpText(c.reserveInc)} × ${c.account.ownerCount} objet(s)) · disponible : ${xrpText(c.account.spendable)}\n`, `\nFees: ${xrpText(s.fee)} (${s.fee} drops)\nBalance: ${xrpText(c.account.balance)} · locked reserve: ${xrpText(c.account.reserve)} (${xrpText(c.reserveBase)} + ${xrpText(c.reserveInc)} × ${c.account.ownerCount} object(s)) · available: ${xrpText(c.account.spendable)}\n`);
+    if (s.lastLedgerSequence !== null) out += l10n(`Valable jusqu'au registre n° ${s.lastLedgerSequence} (≈ 1 min), séquence ${s.sequence}\n`, `Valid until ledger no. ${s.lastLedgerSequence} (≈ 1 min), sequence ${s.sequence}\n`);
     return out;
   };
 
   const probe = async (network: string, s: XrpServer): Promise<ServerTestResult['detected']> => {
-    if (network !== 'mainnet' && network !== 'testnet') throw new IpcError('SERVER_INVALID', `Serveur invalide : xrp : réseau inconnu « ${network} » (mainnet ou testnet)`);
+    if (network !== 'mainnet' && network !== 'testnet') throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : xrp : réseau inconnu « ${network} » (mainnet ou testnet)`, `Invalid server: xrp: unknown network “${network}” (mainnet or testnet)`));
     if (s.kind === 'jsonRpc') {
       const bad = checkServerUrl(s.url, torOn());
-      if (bad) throw new IpcError('SERVER_INVALID', `Serveur invalide : xrp ${network} : ${bad}`);
+      if (bad) throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : xrp ${network} : ${bad}`, `Invalid server: xrp ${network}: ${bad}`));
     }
     if (torOn()) await d.tor.waitReady();
     await wait(100 + Math.random() * 200);
-    if (s.kind === 'jsonRpc' && has(s.url, 'down')) throw unreachable(`${hostOf(s.url)} : délai de connexion dépassé`);
+    if (s.kind === 'jsonRpc' && has(s.url, 'down')) throw unreachable(l10n(`${hostOf(s.url)} : délai de connexion dépassé`, `${hostOf(s.url)}: connection timed out`));
     if (s.kind === 'jsonRpc' && has(s.url, 'wrong')) {
-      throw new IpcError('SERVER_WRONG_NETWORK', `Mauvais réseau : ce serveur XRPL est sur ${network === 'mainnet' ? 'testnet' : 'mainnet'}, pas sur ${network}`);
+      throw new IpcError('SERVER_WRONG_NETWORK', l10n(`Mauvais réseau : ce serveur XRPL est sur ${network === 'mainnet' ? 'testnet' : 'mainnet'}, pas sur ${network}`, `Wrong network: this XRPL server is on ${network === 'mainnet' ? 'testnet' : 'mainnet'}, not on ${network}`));
     }
     return { network, chainId: network === 'mainnet' ? 0 : 1, blockHeight: state.ledger };
   };
@@ -310,9 +311,9 @@ export function createDemoXrp(d: DemoXrpDeps) {
     },
     xrp_address: (a) => {
       d.requireUnlocked();
-      if ((a.index ?? 0) !== 0) throw invalidInput('XRP : une seule adresse par compte (index 0)');
+      if ((a.index ?? 0) !== 0) throw invalidInput(l10n('XRP : une seule adresse par compte (index 0)', 'XRP: a single address per account (index 0)'));
       const account = a.account === undefined ? 0 : Number(a.account);
-      if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput('numéro de compte : au plus 100');
+      if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput(l10n('numéro de compte : au plus 100', 'account number: at most 100'));
       return demoXrpAddress(d.seed, account);
     },
     xrp_account: async (a) => {
@@ -337,15 +338,15 @@ export function createDemoXrp(d: DemoXrpDeps) {
       const amountStr = String(a.amount ?? '').trim();
       let amount: XrpAmountView;
       if (!issued) {
-        if (!/^\d+$/.test(amountStr) || BigInt(amountStr) <= 0n) throw invalidInput('montant en drops invalide');
+        if (!/^\d+$/.test(amountStr) || BigInt(amountStr) <= 0n) throw invalidInput(l10n('montant en drops invalide', 'invalid amount in drops'));
         amount = { kind: 'xrp', drops: amountStr };
       } else {
         checkXrpAddress(issued.issuer);
-        if (!/^\d+(\.\d+)?$/.test(amountStr) || Number(amountStr) <= 0) throw invalidInput('montant de la monnaie émise invalide');
+        if (!/^\d+(\.\d+)?$/.test(amountStr) || Number(amountStr) <= 0) throw invalidInput(l10n('montant de la monnaie émise invalide', 'invalid issued currency amount'));
         amount = { kind: 'issued', value: amountStr, currency: issued.currency, issuer: issued.issuer };
       }
       const tag = a.destinationTag === undefined || a.destinationTag === null ? null : Number(a.destinationTag);
-      if (tag !== null && (!Number.isInteger(tag) || tag < 0 || tag > 0xffffffff)) throw invalidInput('tag de destination invalide');
+      if (tag !== null && (!Number.isInteger(tag) || tag < 0 || tag > 0xffffffff)) throw invalidInput(l10n('tag de destination invalide', 'invalid destination tag'));
       await backend();
       const context = contextFor(to);
       checkPayment(context.account, context.destination, amount.kind === 'xrp' ? BigInt(amount.drops) : null, FEE, tag);
@@ -358,27 +359,27 @@ export function createDemoXrp(d: DemoXrpDeps) {
       const { p, summary } = decode(a.blob);
       await backend();
       const context = contextFor(summary.destination);
-      if (summary.lastLedgerSequence !== null && summary.lastLedgerSequence <= state.ledger) throw invalidInput('paiement XRP expiré (LastLedgerSequence dépassé) : reconstruis-le');
-      if (summary.sequence !== context.account.sequence) throw invalidInput('numéro de séquence périmé : reconstruis le paiement');
+      if (summary.lastLedgerSequence !== null && summary.lastLedgerSequence <= state.ledger) throw invalidInput(l10n('paiement XRP expiré (LastLedgerSequence dépassé) : reconstruis-le', 'XRP payment expired (LastLedgerSequence passed): rebuild it'));
+      if (summary.sequence !== context.account.sequence) throw invalidInput(l10n('numéro de séquence périmé : reconstruis le paiement', 'stale sequence number: rebuild the payment'));
       checkPayment(context.account, context.destination, dropsOf(summary), BigInt(summary.fee), summary.destinationTag);
       d.checkPassword(a.password);
-      if (!d.confirm(`Confirmer le paiement XRP\n${describe(summary, context)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !d.confirm('Attention : paiement à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer le paiement XRP\n${describe(summary, context)}`, `Confirm the XRP payment\n${describe(summary, context)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (summary.requiresExtraConfirmation && !d.confirm(l10n('Attention : paiement à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: payment to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const signed = encode({ ...p, signature: bytesToHex(sha256(new TextEncoder().encode(`sig:${String(a.blob)}`))) });
       return { blob: signed, hash: hashOf(signed), summary, context };
     },
     xrp_broadcast: async (a) => {
       const { p, summary } = decode(a.blob);
-      if (!p.signature) throw invalidInput('transaction XRP non signée');
+      if (!p.signature) throw invalidInput(l10n('transaction XRP non signée', 'unsigned XRP transaction'));
       await backend();
       const hash = hashOf(String(a.blob).trim().toUpperCase());
       const ours = state.accounts.get(me);
       const ctx = contextFor(summary.destination);
-      if (!ours || summary.sequence !== ours.sequence) throw invalidInput('paiement XRP refusé : tefPAST_SEQ (This sequence number has already passed.)');
+      if (!ours || summary.sequence !== ours.sequence) throw invalidInput(l10n('paiement XRP refusé : tefPAST_SEQ (This sequence number has already passed.)', 'XRP payment refused: tefPAST_SEQ (This sequence number has already passed.)'));
       try {
         checkPayment(ctx.account, ctx.destination, dropsOf(summary), BigInt(summary.fee), summary.destinationTag);
       } catch {
-        throw invalidInput('paiement XRP refusé : tecUNFUNDED_PAYMENT (Insufficient XRP balance to send.)');
+        throw invalidInput(l10n('paiement XRP refusé : tecUNFUNDED_PAYMENT (Insufficient XRP balance to send.)', 'XRP payment refused: tecUNFUNDED_PAYMENT (Insufficient XRP balance to send.)'));
       }
       const result = state.failNext ?? 'tesSUCCESS';
       state.failNext = null;
@@ -398,7 +399,7 @@ export function createDemoXrp(d: DemoXrpDeps) {
     },
     xrp_tx_status: async (a) => {
       const h = String(a.hash ?? '').trim();
-      if (!/^[0-9a-fA-F]{64}$/.test(h)) throw invalidInput('hash : 64 caractères hexadécimaux');
+      if (!/^[0-9a-fA-F]{64}$/.test(h)) throw invalidInput(l10n('hash : 64 caractères hexadécimaux', 'hash: 64 hexadecimal characters'));
       await backend();
       const s = state.submitted.get(h.toUpperCase());
       if (!s) return { validated: false, result: '' };
@@ -415,7 +416,7 @@ export function createDemoXrp(d: DemoXrpDeps) {
         const s = servers.xrp?.[nk];
         if (s?.kind === 'jsonRpc') {
           const bad = checkServerUrl(s.url, tor);
-          if (bad) throw new IpcError('SERVER_INVALID', `Serveur invalide : xrp ${nk} : ${bad}`);
+          if (bad) throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : xrp ${nk} : ${bad}`, `Invalid server: xrp ${nk}: ${bad}`));
         }
       }
     },

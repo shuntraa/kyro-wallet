@@ -18,17 +18,18 @@ import { IconCheck, IconEye, IconTor, IconTrash, IconWarn, IconX } from '../comp
 import { TorIndicator } from '../components/Tor';
 import { torStore, useTor } from '../state/tor';
 import { useMedia } from '../components/motion';
+import { useT, type Key } from '../i18n';
 
-const SECTIONS: Array<{ key: SettingsSection; label: string }> = [
-  { key: 'security', label: 'Sécurité' },
-  { key: 'privacy', label: 'Confidentialité' },
-  { key: 'accounts', label: 'Comptes' },
-  { key: 'hardware', label: 'Appareils' },
-  { key: 'networks', label: 'Réseaux et serveurs' },
-  { key: 'display', label: 'Affichage et devise' },
-  { key: 'apikeys', label: 'Clés API' },
-  { key: 'connections', label: 'Connexions sortantes' },
-  { key: 'contacts', label: 'Carnet d’adresses' },
+const SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
+  { key: 'security', label: 'settings.sectionSecurity' },
+  { key: 'privacy', label: 'settings.sectionPrivacy' },
+  { key: 'accounts', label: 'settings.sectionAccounts' },
+  { key: 'hardware', label: 'settings.sectionHardware' },
+  { key: 'networks', label: 'settings.sectionNetworks' },
+  { key: 'display', label: 'settings.sectionDisplay' },
+  { key: 'apikeys', label: 'settings.sectionApiKeys' },
+  { key: 'connections', label: 'settings.sectionConnections' },
+  { key: 'contacts', label: 'settings.sectionContacts' },
 ];
 
 export function SettingsScreen({ section: initial = 'security', family }: { section?: SettingsSection; family?: AccountChain }) {
@@ -36,6 +37,7 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
   const { settings, saveSettings } = useApp();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const { t } = useT();
   // Below 1280 px the outgoing-connections summary moves under the section instead of
   // squeezing it into a 300 px column.
   const wide = useMedia('(min-width: 1280px)');
@@ -53,8 +55,8 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
 
   return (
     <div className="flex min-h-0 flex-1">
-      <nav aria-label="Sections des réglages" className="flex w-[240px] shrink-0 flex-col gap-0.5 border-r border-rail px-3.5 pt-6 pb-5">
-        <h1 className="screen-title px-2.5 pb-5">Réglages</h1>
+      <nav aria-label={t('settings.sectionsNav')} className="flex w-[240px] shrink-0 flex-col gap-0.5 border-r border-rail px-3.5 pt-6 pb-5">
+        <h1 className="screen-title px-2.5 pb-5">{t('common.settings')}</h1>
         {SECTIONS.map((s) => (
           <button
             key={s.key}
@@ -68,7 +70,7 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
                 <span className="absolute top-1/2 left-0 h-4 w-[2px] -translate-y-1/2 rounded-full bg-ice" />
               </motion.span>
             )}
-            <span className="relative z-10 truncate">{s.label}</span>
+            <span className="relative z-10 truncate">{(t as (k: Key) => string)(s.label)}</span>
           </button>
         ))}
         <div className="flex-1" />
@@ -87,7 +89,7 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
           {section === 'apikeys' && <ApiKeys />}
           {section === 'connections' && <Connections />}
           {section === 'contacts' && <Contacts />}
-          {saved && <span className="fade-in text-[12px] text-up">✓ Réglage enregistré sur cet appareil</span>}
+          {saved && <span className="fade-in text-[12px] text-up">✓ {t('settings.saved')}</span>}
           {section !== 'connections' && section !== 'accounts' && !wide && (
             <div className="shrink-0">
               <Connections compact />
@@ -124,23 +126,24 @@ function SettingRow({ title, desc, children, last }: { title: string; desc: stri
 
 function Security({ save }: { save: Save }) {
   const { settings } = useApp();
+  const { t } = useT();
   return (
     <>
       <Panel>
-        <SettingRow title="Verrouillage automatique" desc="Après une période d’inactivité, et à la mise en veille.">
+        <SettingRow title={t('settings.autoLock')} desc={t('settings.autoLockDesc')}>
           <Segmented
-            label="Délai de verrouillage"
+            label={t('settings.autoLockDelay')}
             value={settings.autoLockSecs}
             onChange={(v) => void save({ autoLockSecs: v })}
             options={[300, 900, 1800, 3600].map((s) => ({ value: s, label: s === 3600 ? '1 h' : `${s / 60} min` }))}
           />
         </SettingRow>
-        <SettingRow title="Mot de passe à chaque transaction" desc="Toujours actif. Ne peut pas être désactivé.">
-          <Switch label="Mot de passe à chaque transaction" checked disabled />
+        <SettingRow title={t('settings.passwordEachTx')} desc={t('settings.passwordEachTxDesc')}>
+          <Switch label={t('settings.passwordEachTx')} checked disabled />
         </SettingRow>
-        <SettingRow title="Bloquer les captures d’écran" desc="Complet sous Windows, partiel sous macOS.">
+        <SettingRow title={t('settings.captureProtection')} desc={t('settings.captureProtectionDesc')}>
           <Switch
-            label="Bloquer les captures d’écran"
+            label={t('settings.captureProtection')}
             checked={settings.captureProtection}
             onCheckedChange={(v) => {
               void save({ captureProtection: v });
@@ -148,11 +151,11 @@ function Security({ save }: { save: Save }) {
             }}
           />
         </SettingRow>
-        <SettingRow title="Alerte presse-papier" desc="Bloque l’envoi si l’adresse collée change.">
-          <Switch label="Alerte presse-papier" checked={settings.clipboardGuard} onCheckedChange={(v) => void save({ clipboardGuard: v })} />
+        <SettingRow title={t('settings.clipboardGuard')} desc={t('settings.clipboardGuardDesc')}>
+          <Switch label={t('settings.clipboardGuard')} checked={settings.clipboardGuard} onCheckedChange={(v) => void save({ clipboardGuard: v })} />
         </SettingRow>
-        <SettingRow title="Masquer les soldes au démarrage" desc="Utile en public ou en partage d’écran." last>
-          <Switch label="Masquer les soldes au démarrage" checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />
+        <SettingRow title={t('settings.hideBalances')} desc={t('settings.hideBalancesSecurityDesc')} last>
+          <Switch label={t('settings.hideBalances')} checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />
         </SettingRow>
       </Panel>
       <RevealPhrase />
@@ -163,13 +166,14 @@ function Security({ save }: { save: Save }) {
 function Privacy() {
   const { settings, saveSettings } = useApp();
   const tor = useTor();
+  const { t } = useT();
   const enabled = settings.tor.enabled;
   return (
     <>
       <Panel>
-        <SettingRow title="Passer par Tor" desc="Activé par défaut. Toutes les requêtes réseau de Kyro passent par Tor, intégré à l’app." last>
+        <SettingRow title={t('settings.useTor')} desc={t('settings.useTorDesc')} last>
           <Switch
-            label="Passer par Tor"
+            label={t('settings.useTor')}
             checked={enabled}
             disabled={tor.busy}
             onCheckedChange={(v) => {
@@ -183,7 +187,7 @@ function Privacy() {
       <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
         <div className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-2 text-[15px] font-medium tracking-[-0.01em]">
-            <IconTor size={16} className="text-mute" /> État de la connexion
+            <IconTor size={16} className="text-mute" /> {t('settings.connectionState')}
           </span>
           <span className="font-mono text-[11px]">
             <TorIndicator />
@@ -192,23 +196,21 @@ function Privacy() {
         <div className="grid grid-cols-2 gap-2.5">
           <div className="flex flex-col gap-1.5 rounded-box border border-line bg-raised px-4 py-3.5">
             <span className="flex items-center gap-2 text-[13px] font-semibold">
-              <IconCheck size={14} className="text-up" /> Ce que Tor cache
+              <IconCheck size={14} className="text-up" /> {t('settings.torHides')}
             </span>
-            <span className="text-[12px] leading-[1.5] text-mute">Ton adresse IP. Les serveurs voient celle d’un relais Tor, et deux familles de requêtes (Bitcoin, EVM, Solana, prix, swap) ne partagent jamais un circuit.</span>
+            <span className="text-[12px] leading-[1.5] text-mute">{t('settings.torHidesDesc')}</span>
           </div>
           <div className="flex flex-col gap-1.5 rounded-box border border-line bg-raised px-4 py-3.5">
             <span className="flex items-center gap-2 text-[13px] font-semibold">
-              <IconX size={14} className="text-warn" /> Ce qu’il ne cache pas
+              <IconX size={14} className="text-warn" /> {t('settings.torDoesNotHide')}
             </span>
-            <span className="text-[12px] leading-[1.5] text-mute">Ce que tu demandes : les serveurs voient toujours les adresses et les transactions que tu consultes. Pour l’éviter, utilise tes propres nœuds.</span>
+            <span className="text-[12px] leading-[1.5] text-mute">{t('settings.torDoesNotHideDesc')}</span>
           </div>
         </div>
-        <p className="m-0 text-[12px] leading-[1.55] text-mute">
-          Si Tor ne se connecte pas, Kyro bloque les requêtes et te demande quoi faire : jamais de repli en clair sans ton accord. Les détails sont dans la documentation de Kyro (page « Réseau »).
-        </p>
+        <p className="m-0 text-[12px] leading-[1.55] text-mute">{t('settings.torFailure')}</p>
         {!enabled && (
           <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-            Connexion directe : les serveurs contactés voient ton adresse IP. Réactive Tor ci-dessus pour la cacher.
+            {t('settings.directConnection')}
           </Notice>
         )}
         {tor.actionError && tor.dialog === 'none' && <Notice tone="error">{tor.actionError}</Notice>}
@@ -223,6 +225,7 @@ function RevealPhrase() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shown, setShown] = useState(false);
+  const { t } = useT();
   const backup = getBackupState();
 
   const close = () => {
@@ -242,7 +245,7 @@ function RevealPhrase() {
       setShown(true);
     } catch (e) {
       const err = toIpcError(e);
-      setError(err.code === 'USER_REJECTED' ? 'Affichage annulé dans la fenêtre système.' : err.message);
+      setError(err.code === 'USER_REJECTED' ? t('settings.revealCancelled') : err.message);
     } finally {
       setBusy(false);
     }
@@ -255,40 +258,38 @@ function RevealPhrase() {
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-center gap-2 text-[14px] font-semibold">
-          Phrase de récupération {backup === 'unknown' && <Badge tone="warn">Sauvegarde non vérifiée</Badge>}
+          {t('settings.recoveryPhrase')} {backup === 'unknown' && <Badge tone="warn">{t('settings.backupUnverified')}</Badge>}
         </span>
-        <span className="text-[12px] leading-[1.5] text-mute">Mot de passe requis. Affichée dans une fenêtre du système, jamais dans l’interface. Jamais copiée.</span>
+        <span className="text-[12px] leading-[1.5] text-mute">{t('settings.revealDesc')}</span>
       </div>
       <Button variant="dangerOutline" size="md" onClick={() => setOpen(true)}>
-        Afficher
+        {t('common.show')}
       </Button>
-      <Button variant="outline" size="md" disabled title="Changement de mot de passe : bientôt">
-        Mot de passe
+      <Button variant="outline" size="md" disabled title={t('settings.changePasswordSoon')}>
+        {t('common.password')}
       </Button>
-      <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : close())} title="Phrase de récupération" className="w-[620px]">
+      <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : close())} title={t('settings.recoveryPhrase')} className="w-[620px]">
         {!shown ? (
           <>
             <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-              Vérifie que personne ne regarde ton écran et qu’aucun partage d’écran n’est actif. Quiconque voit ces mots contrôle tes fonds.
+              {t('settings.revealWarn')}
             </Notice>
-            <p className="m-0 text-[13px] leading-[1.55] text-text2">
-              Après ton mot de passe, Kyro te demande une confirmation dans une fenêtre du système, puis y affiche les mots. Si une fenêtre te demande ta phrase au lieu de l’afficher, c’est une arnaque.
-            </p>
+            <p className="m-0 text-[13px] leading-[1.55] text-text2">{t('settings.revealHow')}</p>
             <PasswordField id="reveal-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && void reveal()} />
             {error && <Notice tone="error">{error}</Notice>}
             <div className="flex justify-end gap-2">
-              <Button onClick={close}>Annuler</Button>
+              <Button onClick={close}>{t('common.cancel')}</Button>
               <Button variant="danger" disabled={!pw || busy} onClick={() => void reveal()}>
-                {busy && <Spinner />} {busy ? 'Fenêtre système ouverte…' : 'Afficher la phrase'}
+                {busy && <Spinner />} {busy ? t('common.systemWindowOpen') : t('settings.revealButton')}
               </Button>
             </div>
           </>
         ) : (
           <>
-            <Notice tone="info">La fenêtre système est fermée : la phrase n’est plus affichée.</Notice>
+            <Notice tone="info">{t('settings.revealClosed')}</Notice>
             <div className="flex justify-end">
               <Button variant="primary" onClick={close}>
-                Fermer
+                {t('common.close')}
               </Button>
             </div>
           </>
@@ -300,13 +301,27 @@ function RevealPhrase() {
 
 function Display({ save }: { save: Save }) {
   const { settings } = useApp();
+  const { t } = useT();
   return (
     <Panel>
-      <SettingRow title="Devise" desc="Pour les prix, les soldes et les frais.">
-        <Segmented label="Devise" value={settings.currency} onChange={(v) => void save({ currency: v })} options={[{ value: 'EUR', label: 'EUR €' }, { value: 'USD', label: 'USD $' }]} />
+      <SettingRow title={t('settings.language')} desc={t('settings.languageDesc')}>
+        <Segmented
+          label={t('settings.language')}
+          value={settings.language}
+          onChange={(v) => void save({ language: v })}
+          options={[
+            { value: 'auto', label: t('settings.languageAuto') },
+            // Each language named in itself, so it can be found whatever the current one is.
+            { value: 'fr', label: t('settings.languageFr') },
+            { value: 'en', label: t('settings.languageEn') },
+          ]}
+        />
       </SettingRow>
-      <SettingRow title="Masquer les soldes au démarrage" desc="Les montants s’affichent en •••••, l’œil les révèle." last>
-        <Switch label="Masquer les soldes au démarrage" checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />
+      <SettingRow title={t('settings.currency')} desc={t('settings.currencyDesc')}>
+        <Segmented label={t('settings.currency')} value={settings.currency} onChange={(v) => void save({ currency: v })} options={[{ value: 'EUR', label: 'EUR €' }, { value: 'USD', label: 'USD $' }]} />
+      </SettingRow>
+      <SettingRow title={t('settings.hideBalances')} desc={t('settings.hideBalancesDisplayDesc')} last>
+        <Switch label={t('settings.hideBalances')} checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />
       </SettingRow>
     </Panel>
   );
@@ -319,18 +334,17 @@ function Display({ save }: { save: Save }) {
  */
 function ApiKeys() {
   const { settings, config } = useApp();
+  const { t } = useT();
   // config flags are « environment OR saved key »: environment only when nothing is saved.
   const rows: Array<{ key: ApiKeyName; label: string; desc: string; env: boolean }> = [
-    { key: 'coingecko', label: 'CoinGecko', desc: 'Optionnelle : quota plus large pour les prix.', env: !!config?.hasCoingeckoKey && !settings.apiKeysSet.coingecko },
-    { key: 'zerox', label: '0x', desc: 'Requise pour les devis 0x.', env: !!config?.hasZeroxKey && !settings.apiKeysSet.zerox },
-    { key: 'trongrid', label: 'TronGrid', desc: 'Optionnelle : limites de débit plus hautes pour TRON (TRON-PRO-API-KEY).', env: !!config?.hasTrongridKey && !settings.apiKeysSet.trongrid },
+    { key: 'coingecko', label: 'CoinGecko', desc: t('settings.apiCoingeckoDesc'), env: !!config?.hasCoingeckoKey && !settings.apiKeysSet.coingecko },
+    { key: 'zerox', label: '0x', desc: t('settings.apiZeroxDesc'), env: !!config?.hasZeroxKey && !settings.apiKeysSet.zerox },
+    { key: 'trongrid', label: 'TronGrid', desc: t('settings.apiTrongridDesc'), env: !!config?.hasTrongridKey && !settings.apiKeysSet.trongrid },
   ];
   return (
     <Panel className="gap-4 py-5">
-      <span className="text-[15px] font-medium tracking-[-0.01em]">Clés API</span>
-      <p className="m-0 -mt-2 text-[13px] leading-[1.5] text-mute">
-        Stockées dans le dossier de l’app et ajoutées aux requêtes par le noyau. Kyro ne réaffiche jamais une clé enregistrée : tu peux la remplacer ou la supprimer. Une clé intégrée à un binaire distribué est publique : utilise tes propres clés.
-      </p>
+      <span className="text-[15px] font-medium tracking-[-0.01em]">{t('settings.sectionApiKeys')}</span>
+      <p className="m-0 -mt-2 text-[13px] leading-[1.5] text-mute">{t('settings.apiKeysIntro')}</p>
       {rows.map((r) => (
         <ApiKeyRow key={r.key} name={r.key} label={r.label} desc={r.desc} env={r.env} saved={!!settings.apiKeysSet[r.key]} />
       ))}
@@ -345,6 +359,7 @@ function ApiKeyRow({ name, label, desc, env, saved }: { name: ApiKeyName; label:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const { t } = useT();
   useEffect(() => setEditing(!saved), [saved]);
   const write = async (v: string) => {
     setBusy(true);
@@ -353,7 +368,7 @@ function ApiKeyRow({ name, label, desc, env, saved }: { name: ApiKeyName; label:
     try {
       await saveSettings(settings, { [name]: v });
       setValue('');
-      setDone(v ? 'Clé enregistrée.' : 'Clé supprimée.');
+      setDone(v ? t('settings.keySavedDone') : t('settings.keyDeletedDone'));
     } catch (e) {
       setError(toIpcError(e).message);
     } finally {
@@ -363,24 +378,24 @@ function ApiKeyRow({ name, label, desc, env, saved }: { name: ApiKeyName; label:
   return (
     <div className="flex flex-col gap-1.5" data-api-key={name}>
       <span className="flex items-center gap-2 text-[12px] font-medium text-mute">
-        {label} {env && <Badge tone="up">fournie par l’environnement</Badge>}
+        {label} {env && <Badge tone="up">{t('settings.keyFromEnv')}</Badge>}
       </span>
       {saved && !editing ? (
         <div className="flex items-center gap-2 rounded-ctl border border-line-2 bg-raised px-3 py-2">
           <IconCheck size={14} className="text-up" />
-          <span className="flex-1 text-[13px] text-text2">Clé enregistrée</span>
+          <span className="flex-1 text-[13px] text-text2">{t('settings.keySaved')}</span>
           <Button size="sm" onClick={() => setEditing(true)} disabled={busy}>
-            Remplacer
+            {t('settings.replace')}
           </Button>
           <Button size="sm" variant="dangerOutline" onClick={() => void write('')} disabled={busy}>
-            {busy && <Spinner />} Supprimer
+            {busy && <Spinner />} {t('common.delete')}
           </Button>
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <Input type="password" autoComplete="off" value={value} placeholder={saved ? 'Nouvelle clé (remplace l’actuelle)' : desc} onChange={(e) => setValue(e.target.value)} aria-label={`Clé API ${label}`} className="flex-1 font-mono text-[13px]" />
+          <Input type="password" autoComplete="off" value={value} placeholder={saved ? t('settings.newKeyPlaceholder') : desc} onChange={(e) => setValue(e.target.value)} aria-label={t('settings.apiKeyAria', { label })} className="flex-1 font-mono text-[13px]" />
           <Button variant="primary" size="sm" disabled={busy || value.trim() === ''} onClick={() => void write(value.trim())}>
-            {busy && <Spinner />} Enregistrer
+            {busy && <Spinner />} {t('common.save')}
           </Button>
           {saved && (
             <Button
@@ -391,7 +406,7 @@ function ApiKeyRow({ name, label, desc, env, saved }: { name: ApiKeyName; label:
               }}
               disabled={busy}
             >
-              Annuler
+              {t('common.cancel')}
             </Button>
           )}
         </div>
@@ -405,10 +420,11 @@ function ApiKeyRow({ name, label, desc, env, saved }: { name: ApiKeyName; label:
 function Connections({ compact }: { compact?: boolean }) {
   const { settings, network, navigate } = useApp();
   const hosts = outgoingHosts(network, settings.servers);
+  const { t } = useT();
   return (
     <section className="flex h-full flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-5">
-      <span className="text-[15px] font-medium tracking-[-0.01em]">Connexions sortantes</span>
-      <p className="m-0 text-[13px] leading-[1.55] text-mute">La liste complète des serveurs que Kyro contacte. Tout le reste est bloqué par le coffre.</p>
+      <span className="text-[15px] font-medium tracking-[-0.01em]">{t('settings.sectionConnections')}</span>
+      <p className="m-0 text-[13px] leading-[1.55] text-mute">{t('settings.connectionsIntro')}</p>
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto scroll-thin">
         {hosts.map((h) => (
           <div key={h.host + h.purpose} className="flex items-center gap-3 rounded-ctl bg-raised px-4 py-2.5">
@@ -417,13 +433,13 @@ function Connections({ compact }: { compact?: boolean }) {
               <span className="truncate font-mono text-[12px]">{h.host}</span>
               <span className="text-[12px] text-mute">{h.purpose}</span>
             </span>
-            {h.custom && <Badge tone="ice">perso</Badge>}
+            {h.custom && <Badge tone="ice">{t('settings.customBadge')}</Badge>}
           </div>
         ))}
       </div>
       {compact && (
         <Button variant="outline" size="lg" onClick={() => navigate({ name: 'settings', section: 'networks' })}>
-          Utiliser mes propres serveurs
+          {t('settings.useOwnServers')}
         </Button>
       )}
     </section>
@@ -437,6 +453,7 @@ function Contacts() {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [family, setFamily] = useState<ContactFamily>('evm');
+  const { t } = useT();
   const adapter = family === 'evm' ? [...adapters.evm.values()][0] : family === 'ada' ? adapters.cardano : adapters[family];
   const valid = !!adapter && adapter.isValidAddress(address.trim());
   const persist = (l: Contact[]) => {
@@ -451,7 +468,7 @@ function Contacts() {
     const ownOfFamily = own.filter((a): a is string => !!a && (adapter?.isValidAddress(a) ?? false));
     const known: KnownAddress[] = [
       ...list.filter((c) => c.family === family).map((c) => ({ address: c.address, source: 'contact' as const, label: c.name })),
-      ...ownOfFamily.map((a) => ({ address: a, source: 'own' as const, label: 'ton adresse' })),
+      ...ownOfFamily.map((a) => ({ address: a, source: 'own' as const, label: t('settings.yourAddress') })),
     ];
     return findLookalike(address.trim(), known, family);
   })();
@@ -459,10 +476,10 @@ function Contacts() {
   useEffect(() => setAck(false), [address, family]);
   return (
     <Panel className="gap-4 py-5">
-      <span className="text-[15px] font-medium tracking-[-0.01em]">Carnet d’adresses</span>
-      <p className="m-0 -mt-2 text-[13px] text-mute">Stocké sur cet appareil uniquement. Kyro reconnaît ces adresses à l’envoi.</p>
+      <span className="text-[15px] font-medium tracking-[-0.01em]">{t('settings.sectionContacts')}</span>
+      <p className="m-0 -mt-2 text-[13px] text-mute">{t('settings.contactsIntro')}</p>
       <div className="flex flex-col gap-2">
-        {list.length === 0 && <span className="text-[13px] text-faint">Aucun contact.</span>}
+        {list.length === 0 && <span className="text-[13px] text-faint">{t('settings.noContact')}</span>}
         {list.map((c) => (
           <div key={c.id} className="flex items-center gap-3 rounded-ctl bg-raised px-4 py-2.5">
             <span className="flex size-8 items-center justify-center rounded-full bg-ice-deep text-[13px] font-semibold text-ice-text">{c.name.slice(0, 1).toUpperCase()}</span>
@@ -472,20 +489,20 @@ function Contacts() {
                 {c.family.toUpperCase()} · {shortAddress(c.address)}
               </span>
             </span>
-            <button type="button" aria-label={`Supprimer ${c.name}`} onClick={() => persist(list.filter((x) => x.id !== c.id))} className="flex size-8 items-center justify-center rounded-full text-mute hover:bg-control hover:text-down">
+            <button type="button" aria-label={t('settings.deleteNamed', { name: c.name })} onClick={() => persist(list.filter((x) => x.id !== c.id))} className="flex size-8 items-center justify-center rounded-full text-mute hover:bg-control hover:text-down">
               <IconTrash size={15} />
             </button>
           </div>
         ))}
       </div>
       <div className="flex flex-col gap-2 border-t border-line pt-4">
-        <span className="text-[13px] font-semibold">Ajouter</span>
+        <span className="text-[13px] font-semibold">{t('common.add')}</span>
         <div className="flex gap-2">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom" className="w-[160px]" />
-          <Segmented label="Réseau" value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'tron', label: 'TRON' }, { value: 'xrp', label: 'XRP' }, { value: 'ada', label: 'ADA' }]} />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('settings.name')} className="w-[160px]" />
+          <Segmented label={t('common.network')} value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'tron', label: 'TRON' }, { value: 'xrp', label: 'XRP' }, { value: 'ada', label: 'ADA' }]} />
         </div>
-        <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Adresse" className="font-mono text-[13px]" />
-        {address && !valid && <span className="text-[12px] text-down">Adresse invalide pour ce réseau.</span>}
+        <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t('common.address')} className="font-mono text-[13px]" />
+        {address && !valid && <span className="text-[12px] text-down">{t('settings.invalidAddress')}</span>}
         {lookalike && <PoisoningWarning recipient={address.trim()} lookalike={lookalike} family={family} acknowledged={ack} onAcknowledge={setAck} />}
         <div>
           <Button
@@ -497,7 +514,7 @@ function Contacts() {
               setAddress('');
             }}
           >
-            Ajouter au carnet
+            {t('settings.addToBook')}
           </Button>
         </div>
       </div>

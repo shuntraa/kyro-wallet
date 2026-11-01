@@ -15,7 +15,7 @@
 // `SERVER_INVALID`.
 
 import * as bitcoin from 'bitcoinjs-lib';
-import type { Network } from '@kyro/shared';
+import { intlLocale, type Network } from '@kyro/shared';
 import { UtxoAdapter, type UtxoAdapterOptions, type UtxoCoinSpec } from '../utxo/utxo';
 
 export const DOGECOIN_NETWORKS: Record<Network, bitcoin.Network> = {
@@ -52,7 +52,7 @@ export const DOGECOIN_SPEC: UtxoCoinSpec = {
   needsPrevTx: true,
   unit: 'koinus',
   minRate: DOGE_RECOMMENDED_RATE,
-  rateHint: (r) => `${(r / 100_000).toLocaleString('fr-FR', { maximumFractionDigits: 5 })} DOGE/kB`,
+  rateHint: (r) => `${(r / 100_000).toLocaleString(intlLocale(), { maximumFractionDigits: 5 })} DOGE/kB`,
   acceptAddress: (address, net) => {
     try {
       const { version } = bitcoin.address.fromBase58Check(address);

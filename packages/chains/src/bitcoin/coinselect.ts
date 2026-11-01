@@ -3,6 +3,8 @@
 // Simple, predictable coin selection: largest-first, change back to our own
 // change address, dust folded into the fee. Pure (no I/O), unit-tested.
 
+import { l10n } from '@kyro/shared';
+
 export type ScriptType = 'p2wpkh' | 'p2tr' | 'p2pkh' | 'p2sh' | 'p2wsh';
 
 export interface SelectableUtxo {
@@ -50,7 +52,7 @@ export class InsufficientFundsError extends Error {
   readonly needed: bigint;
   readonly available: bigint;
   constructor(needed: bigint, available: bigint) {
-    super('Solde insuffisant pour couvrir le montant et les frais.');
+    super(l10n('Solde insuffisant pour couvrir le montant et les frais.', 'Insufficient balance to cover the amount and the fees.'));
     this.name = 'InsufficientFundsError';
     this.needed = needed;
     this.available = available;
@@ -65,8 +67,8 @@ const feeFor = (vsize: number, feeRate: number) => BigInt(Math.ceil(vsize * feeR
  * @param feeRate  sat/vB
  */
 export function selectCoins(utxos: SelectableUtxo[], target: bigint, feeRate: number, recipient: ScriptType, changeType: ScriptType = 'p2wpkh'): Selection {
-  if (target <= 0n) throw new Error('Montant invalide');
-  if (target < DUST_SATS) throw new Error(`Montant sous le seuil de poussière (${DUST_SATS} sats)`);
+  if (target <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
+  if (target < DUST_SATS) throw new Error(l10n(`Montant sous le seuil de poussière (${DUST_SATS} sats)`, `Amount below the dust threshold (${DUST_SATS} sats)`));
   const sorted = [...utxos].sort((a, b) => (a.value > b.value ? -1 : a.value < b.value ? 1 : 0));
   const chosen: SelectableUtxo[] = [];
   let sum = 0n;

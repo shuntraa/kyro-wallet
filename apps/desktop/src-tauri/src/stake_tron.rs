@@ -19,9 +19,12 @@ use wallet_core::{
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{
+    blocking, confirm_native, format_units, format_units_in, seed_from_password,
+};
 use crate::commands_tron::ctx;
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::state::AppState;
 use crate::tron_backend::{self, request, TronCtx, TronEstimate, EXPIRATION_MS};
 
@@ -61,10 +64,10 @@ fn resource_of(v: &Value) -> Option<TronResource> {
     }
 }
 
-fn resource_name(r: TronResource) -> &'static str {
+fn resource_name(lang: Lang, r: TronResource) -> &'static str {
     match r {
-        TronResource::Bandwidth => "la BANDE PASSANTE",
-        TronResource::Energy => "l'ÉNERGIE",
+        TronResource::Bandwidth => lang.pick("la BANDE PASSANTE", "BANDWIDTH"),
+        TronResource::Energy => lang.pick("l'ÉNERGIE", "ENERGY"),
     }
 }
 
@@ -597,136 +600,242 @@ fn net_label(net: Network) -> &'static str {
     }
 }
 
-fn days(d: u64) -> String {
-    if d == 1 {
-        "1 jour".into()
-    } else {
-        format!("{d} jours")
+fn days(lang: Lang, d: u64) -> String {
+    match (d, lang) {
+        (1, Lang::Fr) => "1 jour".into(),
+        (1, Lang::En) => "1 day".into(),
+        (d, Lang::Fr) => format!("{d} jours"),
+        (d, Lang::En) => format!("{d} days"),
     }
+}
+
+fn trx_in(lang: Lang, sun: &str) -> String {
+    format!("{} TRX", format_units_in(lang, sun, 6))
 }
 
 /// Body of the native dialog, from Rust's decoding and live data only.
 pub(crate) fn describe(
+    lang: Lang,
     s: &TronStakeSummary,
     c: &TronStakeContext,
     net: Network,
     now: i64,
 ) -> String {
+    let trx = |sun: &str| trx_in(lang, sun);
+    let fr = lang == Lang::Fr;
     let a = &c.account;
     let mut out = format!("Staking {} (Stake 2.0)\n\n", net_label(net));
     match &s.action {
         TronStakeAction::Freeze { resource, amount } => {
-            out += &format!(
-                "Opération : STAKER {} pour {}\n→ +{} TRON Power (droit de vote)\nPour récupérer ces TRX : un dégel, puis {} d'attente (paramètre du réseau), puis un retrait.\n",
-                trx(amount),
-                resource_name(*resource),
-                amount.parse::<u64>().unwrap_or(0) / 1_000_000,
-                days(a.unfreeze_delay_days)
-            );
+            let power = amount.parse::<u64>().unwrap_or(0) / 1_000_000;
+            out += &if fr {
+                format!(
+                    "Opération : STAKER {} pour {}\n→ +{power} TRON Power (droit de vote)\nPour récupérer ces TRX : un dégel, puis {} d'attente (paramètre du réseau), puis un retrait.\n",
+                    trx(amount),
+                    resource_name(lang, *resource),
+                    days(lang, a.unfreeze_delay_days)
+                )
+            } else {
+                format!(
+                    "Operation: STAKE {} for {}\n→ +{power} TRON Power (voting right)\nTo get these TRX back: an unfreeze, then {} of waiting (network parameter), then a withdrawal.\n",
+                    trx(amount),
+                    resource_name(lang, *resource),
+                    days(lang, a.unfreeze_delay_days)
+                )
+            };
         }
         TronStakeAction::Unfreeze { resource, amount } => {
-            out += &format!(
-                "Opération : DÉGELER {} de {}\nCes TRX seront retirables dans {} (paramètre du réseau), puis il faudra « Retirer ». Pendant ce délai ils ne donnent ni ressource ni vote.\n",
-                trx(amount),
-                resource_name(*resource),
-                days(a.unfreeze_delay_days)
-            );
+            out += &if fr {
+                format!(
+                    "Opération : DÉGELER {} de {}\nCes TRX seront retirables dans {} (paramètre du réseau), puis il faudra « Retirer ». Pendant ce délai ils ne donnent ni ressource ni vote.\n",
+                    trx(amount),
+                    resource_name(lang, *resource),
+                    days(lang, a.unfreeze_delay_days)
+                )
+            } else {
+                format!(
+                    "Operation: UNFREEZE {} of {}\nThese TRX can be withdrawn in {} (network parameter), then you will have to « Withdraw ». Meanwhile they give neither resources nor votes.\n",
+                    trx(amount),
+                    resource_name(lang, *resource),
+                    days(lang, a.unfreeze_delay_days)
+                )
+            };
             if c.warnings.contains(&TronStakeWarning::VotesReduced) {
-                out += "⚠ Ton TRON Power ne couvrira plus tes votes : le réseau les réduira.\n";
+                out += lang.pick(
+                    "⚠ Ton TRON Power ne couvrira plus tes votes : le réseau les réduira.\n",
+                    "⚠ Your TRON Power will no longer cover your votes: the network will reduce them.\n",
+                );
             }
         }
         TronStakeAction::WithdrawUnfrozen => {
             out += &format!(
-                "Opération : RETIRER les TRX dégelés dont le délai est fini : {}\n",
+                "{}{}\n",
+                lang.pick(
+                    "Opération : RETIRER les TRX dégelés dont le délai est fini : ",
+                    "Operation: WITHDRAW the unfrozen TRX whose delay is over: "
+                ),
                 trx(&a.withdrawable_now)
             );
         }
         TronStakeAction::CancelAllUnfreeze => {
-            out += &format!(
-                "Opération : ANNULER tous les dégels en cours ({}) : ces TRX sont re-stakés ; ceux dont le délai est fini ({}) sont retirés vers ton solde.\n",
-                a.unfreezing.len(),
-                trx(&a.withdrawable_now)
-            );
+            out += &if fr {
+                format!(
+                    "Opération : ANNULER tous les dégels en cours ({}) : ces TRX sont re-stakés ; ceux dont le délai est fini ({}) sont retirés vers ton solde.\n",
+                    a.unfreezing.len(),
+                    trx(&a.withdrawable_now)
+                )
+            } else {
+                format!(
+                    "Operation: CANCEL all pending unfreezes ({}): these TRX are staked again; those whose delay is over ({}) are withdrawn to your balance.\n",
+                    a.unfreezing.len(),
+                    trx(&a.withdrawable_now)
+                )
+            };
         }
         TronStakeAction::Vote { votes, total } => {
-            out += &format!(
-                "Opération : VOTER (remplace TOUS tes votes actuels) — {total} votes sur {} de TRON Power\n",
-                a.tron_power_limit
-            );
+            out += &if fr {
+                format!(
+                    "Opération : VOTER (remplace TOUS tes votes actuels) — {total} votes sur {} de TRON Power\n",
+                    a.tron_power_limit
+                )
+            } else {
+                format!(
+                    "Operation: VOTE (replaces ALL your current votes) — {total} votes out of {} TRON Power\n",
+                    a.tron_power_limit
+                )
+            };
             for v in votes {
                 let w = c.witnesses.iter().find(|w| w.address == v.address);
-                out += &format!(
-                    "  • {} votes pour {}\n    {}\n",
-                    v.count,
-                    v.address,
-                    w.map(|w| format!(
-                        "url déclarée : {} · rang {}{} · garde {} % des récompenses",
-                        if w.url.is_empty() {
-                            "aucune".to_owned()
+                let info = w
+                    .map(|w| {
+                        let url = if w.url.is_empty() {
+                            lang.pick("aucune", "none").to_owned()
                         } else {
                             crate::dialog_text::field(&w.url, 80)
-                        },
-                        w.rank,
-                        if w.is_sr {
+                        };
+                        let kind = if w.is_sr {
                             " (SR)"
                         } else if w.is_paid {
-                            " (partenaire)"
+                            lang.pick(" (partenaire)", " (partner)")
                         } else {
-                            " (hors des 127 : aucune récompense)"
-                        },
-                        w.brokerage
+                            lang.pick(
+                                " (hors des 127 : aucune récompense)",
+                                " (outside the top 127: no rewards)",
+                            )
+                        };
+                        let brokerage = w
+                            .brokerage
                             .map(|b| b.to_string())
-                            .unwrap_or_else(|| "?".into())
-                    ))
-                    .unwrap_or_default()
+                            .unwrap_or_else(|| "?".into());
+                        match lang {
+                            Lang::Fr => format!(
+                                "url déclarée : {url} · rang {}{kind} · garde {brokerage} % des récompenses",
+                                w.rank
+                            ),
+                            Lang::En => format!(
+                                "declared url: {url} · rank {}{kind} · keeps {brokerage}% of the rewards",
+                                w.rank
+                            ),
+                        }
+                    })
+                    .unwrap_or_default();
+                out += &format!(
+                    "  • {} {} {}\n    {info}\n",
+                    v.count,
+                    lang.pick("votes pour", "votes for"),
+                    v.address
                 );
             }
             if !a.votes.is_empty() {
-                out += &format!("Votes actuels remplacés : {}\n", a.votes.len());
+                out += &format!(
+                    "{}{}\n",
+                    lang.pick("Votes actuels remplacés : ", "Current votes replaced: "),
+                    a.votes.len()
+                );
             }
-            out += "Les votes comptent à partir du prochain décompte (toutes les 6 h).\n";
+            out += lang.pick(
+                "Les votes comptent à partir du prochain décompte (toutes les 6 h).\n",
+                "Votes count from the next tally (every 6 h).\n",
+            );
         }
         TronStakeAction::ClaimRewards => {
             out += &format!(
-                "Opération : RÉCLAMER les récompenses de vote : {}\n",
+                "{}{}\n",
+                lang.pick(
+                    "Opération : RÉCLAMER les récompenses de vote : ",
+                    "Operation: CLAIM the voting rewards: "
+                ),
                 trx(&a.reward)
             );
         }
     }
     let e = &c.estimate;
-    out += &format!(
-        "\nBande passante : {} octets nécessaires · disponible {} gratuite + {} stakée → {} brûlés\nAucune énergie consommée. Solde : {}\n",
-        e.bandwidth_needed,
-        e.free_bandwidth,
-        e.staked_bandwidth,
-        trx(&e.bandwidth_burn),
-        trx(&a.balance)
+    out += &if fr {
+        format!(
+            "\nBande passante : {} octets nécessaires · disponible {} gratuite + {} stakée → {} brûlés\nAucune énergie consommée. Solde : {}\n",
+            e.bandwidth_needed,
+            e.free_bandwidth,
+            e.staked_bandwidth,
+            trx(&e.bandwidth_burn),
+            trx(&a.balance)
+        )
+    } else {
+        format!(
+            "\nBandwidth: {} bytes needed · available {} free + {} staked → {} burned\nNo energy consumed. Balance: {}\n",
+            e.bandwidth_needed,
+            e.free_bandwidth,
+            e.staked_bandwidth,
+            trx(&e.bandwidth_burn),
+            trx(&a.balance)
+        )
+    };
+    out += lang.pick(
+        "Pas de slashing sur TRON : un SR défaillant fait perdre des récompenses, pas les TRX stakés.\n",
+        "No slashing on TRON: a failing SR loses you rewards, not the staked TRX.\n",
     );
-    out += "Pas de slashing sur TRON : un SR défaillant fait perdre des récompenses, pas les TRX stakés.\n";
     let mins = (s.expiration - now).max(0) / 60_000;
-    out += &format!(
-        "\nExpire dans {mins} min · bloc de référence {}/{}\nID : {}",
-        s.ref_block_bytes, s.ref_block_hash, s.txid
-    );
+    out += &if fr {
+        format!(
+            "\nExpire dans {mins} min · bloc de référence {}/{}\nID : {}",
+            s.ref_block_bytes, s.ref_block_hash, s.txid
+        )
+    } else {
+        format!(
+            "\nExpires in {mins} min · reference block {}/{}\nID: {}",
+            s.ref_block_bytes, s.ref_block_hash, s.txid
+        )
+    };
     out
 }
 
-pub(crate) fn describe_extra(c: &TronStakeContext) -> String {
-    let mut out = String::from("Kyro a trouvé des points à vérifier :\n");
+pub(crate) fn describe_extra(lang: Lang, c: &TronStakeContext) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des points à vérifier :\n",
+        "Kyro found points to check:\n",
+    ));
     for w in &c.warnings {
-        out += &match w {
-            TronStakeWarning::SrNotPaid { address, rank } => format!(
+        out += &match (w, lang) {
+            (TronStakeWarning::SrNotPaid { address, rank }, Lang::Fr) => format!(
                 "• {address} est classé {rank}e : hors des 127 premiers, ses électeurs ne reçoivent aucune récompense\n"
             ),
-            TronStakeWarning::BrokerageAll { address } => format!(
+            (TronStakeWarning::SrNotPaid { address, rank }, Lang::En) => format!(
+                "• {address} is ranked no. {rank}: outside the top 127, its voters receive no rewards\n"
+            ),
+            (TronStakeWarning::BrokerageAll { address }, Lang::Fr) => format!(
                 "• {address} garde 100 % des récompenses : tu ne recevrais RIEN\n"
             ),
-            TronStakeWarning::VotesReduced => {
-                "• après ce dégel, ton TRON Power ne couvre plus tes votes : ils seront réduits\n".to_owned()
-            }
+            (TronStakeWarning::BrokerageAll { address }, Lang::En) => format!(
+                "• {address} keeps 100% of the rewards: you would receive NOTHING\n"
+            ),
+            (TronStakeWarning::VotesReduced, _) => lang
+                .pick(
+                    "• après ce dégel, ton TRON Power ne couvre plus tes votes : ils seront réduits\n",
+                    "• after this unfreeze, your TRON Power no longer covers your votes: they will be reduced\n",
+                )
+                .to_owned(),
         };
     }
-    out += "\nContinuer quand même ?";
+    out += lang.pick("\nContinuer quand même ?", "\nContinue anyway?");
     out
 }
 
@@ -761,18 +870,28 @@ pub async fn tron_stake_sign(
     let c = ctx(&state);
     let context = context_for(&c, &summary).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer l'opération de staking TRON",
-        signer.body(&describe(&summary, &context, state.network, now_ms())),
+        lang.pick(
+            "Confirmer l'opération de staking TRON",
+            "Confirm the TRON staking operation",
+        ),
+        signer.body(
+            lang,
+            &describe(lang, &summary, &context, state.network, now_ms()),
+        ),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if context.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : vote ou dégel à vérifier",
-            describe_extra(&context),
+            lang.pick(
+                "Attention : vote ou dégel à vérifier",
+                "Warning: vote or unfreeze to check",
+            ),
+            describe_extra(lang, &context),
         )
         .await?;
     }
@@ -863,6 +982,7 @@ mod tests {
             requires_extra_confirmation: true,
         };
         let d = describe(
+            Lang::Fr,
             &summary(TronStakeAction::Unfreeze {
                 resource: TronResource::Energy,
                 amount: "5000000".into(),
@@ -882,7 +1002,31 @@ mod tests {
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
-        assert!(describe_extra(&c).contains("ils seront réduits"));
+        assert!(describe_extra(Lang::Fr, &c).contains("ils seront réduits"));
+        let en = describe(
+            Lang::En,
+            &summary(TronStakeAction::Unfreeze {
+                resource: TronResource::Energy,
+                amount: "5000000".into(),
+            }),
+            &c,
+            Network::Mainnet,
+            0,
+        );
+        for needle in [
+            "Operation: UNFREEZE 5 TRX of ENERGY",
+            "can be withdrawn in 14 days",
+            "the network will reduce them",
+            "270 bytes needed",
+            "No slashing",
+            "Expires in 10 min",
+        ] {
+            assert!(en.contains(needle), "{needle} missing in:\n{en}");
+        }
+        assert!(describe_extra(Lang::En, &c).contains("they will be reduced"));
+        for fr in ["Opération", "Solde", "DÉGELER", "jours"] {
+            assert!(!en.contains(fr), "{fr}");
+        }
         let mut c = c;
         c.witnesses = vec![TronWitness {
             address: "TJmka325yjJKeFpQDwKSQAoNwEyNGhsaEV".into(),
@@ -904,6 +1048,7 @@ mod tests {
             },
         ];
         let d = describe(
+            Lang::Fr,
             &summary(TronStakeAction::Vote {
                 votes: vec![TronVote {
                     address: "TJmka325yjJKeFpQDwKSQAoNwEyNGhsaEV".into(),
@@ -924,8 +1069,10 @@ mod tests {
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
-        let x = describe_extra(&c);
+        let x = describe_extra(Lang::Fr, &c);
         assert!(x.contains("200e") && x.contains("tu ne recevrais RIEN"));
+        let x = describe_extra(Lang::En, &c);
+        assert!(x.contains("ranked no. 200") && x.contains("you would receive NOTHING"));
     }
 
     #[test]
@@ -1046,12 +1193,12 @@ mod live {
         let ctx2 = context_for(c, &summary).await.unwrap();
         eprintln!(
             "--- {label}: dialog ---\n{}\n---",
-            describe(&summary, &ctx2, Network::Testnet, now_ms())
+            describe(Lang::Fr, &summary, &ctx2, Network::Testnet, now_ms())
         );
         if ctx2.requires_extra_confirmation {
             eprintln!(
                 "--- {label}: reinforced ---\n{}\n---",
-                describe_extra(&ctx2)
+                describe_extra(Lang::Fr, &ctx2)
             );
         }
         let (sig, again) = wallet_core::tron_stake_sign(seed, 0, &built.raw).unwrap();

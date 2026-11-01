@@ -121,6 +121,8 @@ impl AppState {
         let settings_path = data_dir.join("settings.json");
         let vault_path = crate::network::vault_file(&data_dir, network);
         let attempts_path = vault_path.with_extension("attempts");
+        let settings = Settings::load(&settings_path, network);
+        crate::i18n::apply(settings.language);
         Ok(Self {
             network,
             network_source,
@@ -128,7 +130,7 @@ impl AppState {
             guard: Mutex::new(Guard::load(&attempts_path)),
             attempts_path,
             vault_path,
-            settings: Mutex::new(Settings::load(&settings_path, network)),
+            settings: Mutex::new(settings),
             settings_path,
             net: NetClient::new(data_dir.join("tor"))?,
             env_keys: EnvKeys::from_env(),
@@ -327,6 +329,8 @@ impl AppState {
         let mut current = lock(&self.settings);
         new.accounts = current.accounts.clone();
         new.save(&self.settings_path)?;
+        // The next native dialog speaks the newly chosen language.
+        crate::i18n::apply(new.language);
         *current = new.clone();
         Ok(new)
     }

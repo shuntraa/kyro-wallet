@@ -10,6 +10,8 @@ import { useAsync } from '../lib/useAsync';
 import { useApp, useVault } from '../state/app';
 import { cn } from '../lib/cn';
 import { sanitizeDecimalInput } from '../lib/format';
+import { useT } from '../i18n';
+import { rt } from '../i18n/rich';
 import { AddressBlocks, CoinIcon, CopyButton } from '../components/kit';
 import { QrCode } from '../components/QrCode';
 import { Button, IconButton, Notice, Segmented } from '../components/ui/primitives';
@@ -24,6 +26,7 @@ const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', '
 const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'tron', 'xrp', 'ada'];
 
 export function Receive({ family: initial = 'evm' }: { family?: Family }) {
+  const { t } = useT();
   const { back, network, settings, navigate, selectedAccounts } = useApp();
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts, adapters, activeHw } = useVault();
@@ -159,7 +162,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
       deviceId = d.id;
       setVerify({ state: 'running', deviceId });
       const res = await withDevice(deviceId, () => call('hw_verify_address', { id: deviceId, accountId: activeHw.id, chain, path }));
-      if (res.address.toLowerCase() !== shown.toLowerCase()) throw new Error('Adresse vérifiée différente de celle affichée : ne l’utilise pas.');
+      if (res.address.toLowerCase() !== shown.toLowerCase()) throw new Error(t('receive.verifyMismatch'));
       setVerify({ state: 'ok', address: shown });
     } catch (e) {
       setVerify({ state: 'error', error: e, address: shown });
@@ -170,38 +173,38 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const desc =
     family === 'btc'
       ? kind === 'segwit'
-        ? 'Adresse SegWit native (BIP84) : la plus compatible, frais réduits.'
-        : 'Adresse Taproot (BIP86) : plus privée, frais encore plus bas. Certains services ne l’acceptent pas encore.'
+        ? t('receive.descBtcSegwit')
+        : t('receive.descBtcTaproot')
       : family === 'evm'
         ? network === 'testnet'
-          ? 'Sert aussi pour les tokens ERC-20 (USDC de test).'
-          : 'Sert aussi pour les tokens ERC-20 et pour Arbitrum, Base, Optimism, Polygon, BNB Chain et Avalanche.'
+          ? t('receive.descEvmTestnet')
+          : t('receive.descEvm')
         : family === 'ltc'
-          ? 'Adresse SegWit native (BIP84) Litecoin : même principe que Bitcoin, frais réduits.'
+          ? t('receive.descLtc')
           : family === 'doge'
-            ? 'Adresse Dogecoin classique (P2PKH). Un paiement sous 0,01 DOGE n’est pas standard : demande au moins 0,01 DOGE.'
+            ? t('receive.descDoge')
             : family === 'tron'
               ? network === 'testnet'
-                ? 'Adresse TRON (T…) : pour les TRX et l’USDT TRC-20 de Nile.'
-                : 'Adresse TRON (T…) : pour les TRX et l’USDT TRC-20.'
+                ? t('receive.descTronTestnet')
+                : t('receive.descTron')
               : family === 'xrp'
-                ? 'Adresse classique XRP Ledger (r…). Pas de tag de destination à donner : ce compte est à toi seul.'
+                ? t('receive.descXrp')
                 : family === 'ada'
-                  ? 'Adresse de base Cardano (addr…) : pour les ADA et les tokens natifs.'
-                  : 'Pour SOL et les tokens SPL.';
+                  ? t('receive.descAda')
+                  : t('receive.descSol');
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
       <header className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <IconButton label="Retour au portefeuille" onClick={back} className="size-9">
+          <IconButton label={t('receive.backToWallet')} onClick={back} className="size-9">
             <IconBack size={16} />
           </IconButton>
-          <h1 className="screen-title">Recevoir</h1>
+          <h1 className="screen-title">{t('receive.title')}</h1>
           <AccountPicker family={family} />
           <NewAccountButton family={family} />
         </div>
-        <div role="group" aria-label="Réseau" className="flex min-w-0 gap-0.5 overflow-x-auto rounded-[8px] border border-line bg-bg p-[3px] scroll-thin">
+        <div role="group" aria-label={t('receive.network')} className="flex min-w-0 gap-0.5 overflow-x-auto rounded-[8px] border border-line bg-bg p-[3px] scroll-thin">
           {(
             [
               ['btc', 'Bitcoin', '₿', '#F7931A'],
@@ -219,7 +222,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               type="button"
               aria-pressed={family === f}
               disabled={!has[f]}
-              title={has[f] ? undefined : VAULT_ONLY.includes(f) ? 'Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet (dans le coffre Kyro, oui)' : 'Ce compte hardware wallet n’a pas de clés pour cette chaîne'}
+              title={has[f] ? undefined : VAULT_ONLY.includes(f) ? t('receive.vaultOnlyTitle') : t('receive.noKeysTitle')}
               onClick={() => {
                 setFamily(f);
                 setAmount('');
@@ -235,7 +238,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
         </div>
       </header>
       {activeHw && (
-        <span className="-mt-2 self-end text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet. Ils restent disponibles dans le coffre Kyro (Compte principal).</span>
+        <span className="-mt-2 self-end text-[12px] text-faint">{t('receive.hwUnsupported')}</span>
       )}
 
       <section className="relative flex min-h-0 flex-1 items-center-safe justify-center gap-14 overflow-y-auto rounded-panel border border-line bg-card p-8 scroll-thin">
@@ -243,33 +246,33 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           <div key={uri} className={cn('pop-in transition-[opacity,filter] duration-300', blocked && 'pointer-events-none opacity-20 blur-md')} aria-hidden={blocked || undefined}>
             <QrCode value={uri} size={300} />
           </div>
-          <span className="eyebrow">{askAmount && amountBase ? 'QR avec montant' : 'QR de l’adresse'}</span>
+          <span className="eyebrow">{askAmount && amountBase ? t('receive.qrWithAmount') : t('receive.qrAddress')}</span>
         </div>
 
         <div key={family} className="rise relative flex w-[460px] flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="eyebrow">Ton adresse {{ btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', xrp: 'XRP', ada: 'Cardano' }[family]}</span>
+            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', xrp: 'XRP', ada: 'Cardano' }[family] })}</span>
             <span className="text-[15px] leading-[1.45] text-text2">{desc}</span>
           </div>
           {(family === 'ltc' || family === 'doge') && (
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="ghost" onClick={() => void newAddress()} title="Nouvelle adresse de réception (meilleure confidentialité)">
-                <IconRefresh size={14} /> Nouvelle adresse
+              <Button size="sm" variant="ghost" onClick={() => void newAddress()} title={t('receive.newAddressTitle')}>
+                <IconRefresh size={14} /> {t('receive.newAddress')}
               </Button>
             </div>
           )}
           {family === 'doge' && dogeInfo.data && !dogeInfo.data.available && (
             <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-              <strong className="font-semibold">Aucun serveur public gratuit pour Dogecoin :</strong> configure ton serveur (Esplora) pour voir les paiements reçus et envoyer. L’adresse est valable, mais Kyro ne peut pas encore la suivre.
+              {rt('receive.dogeNoServer', { b: (c) => <strong className="font-semibold">{c}</strong> })}
               <button type="button" onClick={() => navigate({ name: 'settings', section: 'networks' })} className="mt-1 block font-semibold text-ice hover:underline">
-                Configurer un serveur Dogecoin
+                {t('receive.dogeConfigure')}
               </button>
             </Notice>
           )}
           {family === 'btc' && (
             <div className="flex items-center gap-2">
               <Segmented
-                label="Type d’adresse"
+                label={t('receive.addressType')}
                 value={kind}
                 onChange={(k) => {
                   setKind(k);
@@ -281,8 +284,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                   { value: 'taproot', label: 'Taproot' },
                 ]}
               />
-              <Button size="sm" variant="ghost" onClick={() => void newAddress()} title="Nouvelle adresse de réception (meilleure confidentialité)">
-                <IconRefresh size={14} /> Nouvelle adresse
+              <Button size="sm" variant="ghost" onClick={() => void newAddress()} title={t('receive.newAddressTitle')}>
+                <IconRefresh size={14} /> {t('receive.newAddress')}
               </Button>
             </div>
           )}
@@ -293,27 +296,27 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center gap-2 text-[12px] text-mute">
                 <DeviceBadge device={activeHw.device} model={activeHw.model} />
-                <span>Compte hardware wallet : vérifie l’adresse sur l’écran de l’appareil avant de la communiquer.</span>
+                <span>{t('receive.hwCheckFirst')}</span>
               </div>
               <Button variant="primary" size="xl" disabled={blocked || verify.state === 'running' || !address} onClick={() => void verifyOnDevice()}>
-                <IconUsbKey size={16} /> Vérifier sur l’appareil
+                <IconUsbKey size={16} /> {t('receive.verifyOnDevice')}
               </Button>
               {verify.state === 'running' && (
                 <HwWaiting
                   deviceId={verify.deviceId}
-                  idle={`Connexion au ${BRAND[activeHw.device]}…`}
-                  confirm={{ title: 'Compare l’adresse affichée sur ton appareil', detail: 'Elle doit être identique, caractère par caractère, à celle affichée ici. Confirme sur l’appareil seulement si c’est le cas.' }}
+                  idle={t('receive.connecting', { device: BRAND[activeHw.device] })}
+                  confirm={{ title: t('receive.compareTitle'), detail: t('receive.compareDetail') }}
                 />
               )}
               {verifiedHere && (
                 <Notice tone="success" icon={<IconCheck size={16} className="mt-0.5 shrink-0 text-up" />}>
-                  Vérifiée : ton appareil affiche la même adresse que Kyro. Tu peux la communiquer.
+                  {t('receive.verified')}
                 </Notice>
               )}
               {verify.state === 'error' && !isAddressMismatch(verify.error) && verify.address === address && <HwErrorNotice error={verify.error} onRetry={() => void verifyOnDevice()} />}
               {blocked && (
                 <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
-                  <strong className="font-semibold">Adresse bloquée :</strong> l’appareil a affiché une autre adresse. Ne reçois pas de fonds sur cette adresse.
+                  {rt('receive.blocked', { b: (c) => <strong className="font-semibold">{c}</strong> })}
                 </Notice>
               )}
               <CopyButton text={address} size="xl" className={cn(blocked && 'pointer-events-none opacity-40')} />
@@ -326,32 +329,32 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           {deriveError && <Notice tone="error">{deriveError}</Notice>}
           <dl className="m-0 flex flex-col overflow-hidden rounded-box border border-line text-[13px]">
             <div className="flex h-11 items-center justify-between border-b border-line px-4">
-              <dt className="text-mute">Réseau</dt>
+              <dt className="text-mute">{t('receive.network')}</dt>
               <dd className="m-0">
                 {chainName}
                 {network === 'testnet' && !/testnet/i.test(chainName) ? ' (testnet)' : ''}
               </dd>
             </div>
             <div className="flex h-11 items-center justify-between border-b border-line px-4">
-              <dt className="text-mute">Chemin de dérivation</dt>
+              <dt className="text-mute">{t('receive.derivationPath')}</dt>
               <dd className="m-0 font-mono text-[12px]">{path}</dd>
             </div>
             <div className="flex min-h-11 items-center justify-between gap-3 px-4 py-1.5">
-              <dt className="text-mute">Montant demandé</dt>
+              <dt className="text-mute">{t('receive.requestedAmount')}</dt>
               <dd className="m-0">
                 {!amountLink ? (
-                  <span className="text-[12px] text-faint">pas de lien de paiement standard sur {family === 'xrp' ? 'XRP Ledger' : family === 'ada' ? 'Cardano' : 'TRON'}</span>
+                  <span className="text-[12px] text-faint">{t('receive.noPaymentLink', { chain: family === 'xrp' ? 'XRP Ledger' : family === 'ada' ? 'Cardano' : 'TRON' })}</span>
                 ) : askAmount ? (
                   <span className="flex items-center gap-2">
                     <input autoFocus value={amount} inputMode="decimal" placeholder="0" onChange={(e) => setAmount(sanitizeDecimalInput(e.target.value, decimals))} className="h-8 w-[120px] rounded-ctl border border-line-2 bg-bg px-2 text-right text-[13px] focus:border-ice-line" />
                     <span className="text-mute">{symbol}</span>
                     <button type="button" onClick={() => { setAskAmount(false); setAmount(''); }} className="text-[12px] text-mute hover:text-text">
-                      Retirer
+                      {t('common.remove')}
                     </button>
                   </span>
                 ) : (
                   <button type="button" onClick={() => setAskAmount(true)} className="font-semibold text-ice hover:underline">
-                    Ajouter un montant
+                    {t('receive.addAmount')}
                   </button>
                 )}
               </dd>
@@ -360,33 +363,33 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           {askAmount && amountBase !== null && amountBase > 0n && (
             <div className="flex items-center justify-between gap-2 rounded-ctl bg-raised py-1.5 pr-1.5 pl-3">
               <span className="truncate font-mono text-[11px] text-mute">{uri}</span>
-              <CopyButton text={uri} label="Copier le lien" />
+              <CopyButton text={uri} label={t('receive.copyLink')} />
             </div>
           )}
           {family === 'tron' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">USDT TRC-20 seulement :</strong> l’USDT d’Ethereum (ERC-20) ou d’une autre chaîne envoyé ici est perdu. Un compte TRON n’existe qu’après avoir reçu des TRX : c’est l’expéditeur qui paie son activation (≈ 1,1 TRX).
+              {rt('receive.tronNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
             </Notice>
           )}
           {family === 'ada' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">Une seule adresse :</strong> Kyro reçoit et rend la monnaie toujours sur cette même adresse. C’est plus simple à vérifier, mais tous tes paiements Cardano sont liés publiquement à elle (et à sa clé de staking) : n’importe qui la connaissant voit ton solde et ton historique. Un paiement doit aussi porter au moins ≈ 1 ADA (min-UTxO).
+              {rt('receive.adaNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
             </Notice>
           )}
           {family === 'xrp' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">Réserve de 1 XRP :</strong> un compte XRP Ledger n’existe qu’après avoir reçu au moins 1 XRP, qui reste bloqué (réserve de base, plus 0,2 XRP par objet possédé : ligne de confiance, offre…). Le premier envoi vers cette adresse doit donc être d’au moins 1 XRP.
-              {xrpAccount.data && !xrpAccount.data.exists && <span className="mt-1 block font-semibold text-warn">Ton compte n’est pas encore activé : demande au moins 1 XRP pour commencer.</span>}
+              {rt('receive.xrpNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+              {xrpAccount.data && !xrpAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.xrpNotActivated')}</span>}
             </Notice>
           )}
           {family === 'btc' && cbfMode && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
-              <strong className="font-semibold text-text">Mode filtres compacts :</strong> un paiement reçu n’apparaît qu’une fois inclus dans un bloc (environ 10 minutes), pas dès son envoi. Kyro ne voit pas le mempool dans ce mode.
+              {rt('receive.cbfNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
             </Notice>
           )}
           <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-            N’envoie ici que des actifs du réseau {chainName}. Un autre réseau = fonds perdus.
-            {network === 'testnet' ? ' Les jetons de test n’ont aucune valeur.' : ''}
+            {t('receive.networkWarning', { chain: chainName })}
+            {network === 'testnet' ? t('receive.testTokens') : ''}
           </Notice>
         </div>
       </section>

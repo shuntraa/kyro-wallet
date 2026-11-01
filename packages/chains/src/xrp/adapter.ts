@@ -14,8 +14,7 @@ import {
   type XrpHistoryEntry,
   type XrpTrustLine,
   type XrpTxSummary,
-  type XrpWarning,
-} from '@kyro/shared';
+  type XrpWarning, l10n } from '@kyro/shared';
 import type { XrpChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
@@ -78,9 +77,9 @@ export function isXAddress(address: string): boolean {
 export function parseDestinationTag(input: string): number | undefined {
   const s = input.trim();
   if (s === '') return undefined;
-  if (!/^\d{1,10}$/.test(s)) throw new Error('Tag de destination invalide (nombre entier)');
+  if (!/^\d{1,10}$/.test(s)) throw new Error(l10n('Tag de destination invalide (nombre entier)', 'Invalid destination tag (whole number)'));
   const n = Number(s);
-  if (n > 0xffffffff) throw new Error('Tag de destination trop grand (max. 4 294 967 295)');
+  if (n > 0xffffffff) throw new Error(l10n('Tag de destination trop grand (max. 4 294 967 295)', 'Destination tag too large (max. 4,294,967,295)'));
   return n;
 }
 
@@ -124,7 +123,7 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
   private readonly backend: XrpBackend;
 
   constructor(opts: XrpAdapterOptions) {
-    if (!isXrpAddress(opts.address)) throw new Error('Adresse XRP invalide');
+    if (!isXrpAddress(opts.address)) throw new Error(l10n('Adresse XRP invalide', 'Invalid XRP address'));
     this.chain = opts.chain;
     this.address = opts.address;
     this.backend = opts.backend ?? rustXrpBackend(opts.account ?? 0);
@@ -165,7 +164,7 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais fixés par le registre (≈ 0,000012 XRP)',
+      hint: l10n('frais fixés par le registre (≈ 0,000012 XRP)', 'fees set by the ledger (≈ 0.000012 XRP)'),
       fetchedAt: Date.now(),
     });
   }
@@ -175,7 +174,7 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
    * spendable (balance − reserve) minus the fee Rust sets, built twice.
    */
   async buildTx(params: BuildParams): Promise<XrpUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif XRP Ledger inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif XRP Ledger inattendu', 'Unexpected XRP Ledger asset'));
     const tag = params.destinationTag !== undefined ? { destinationTag: params.destinationTag } : {};
     if (!params.max) return this.buildPayment({ to: params.to, amount: params.amount.toString(), ...tag });
     const spendable = BigInt((await this.backend.account(this.address)).spendable);
@@ -183,16 +182,16 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
     const first = await this.buildPayment({ to: params.to, amount: (spendable - 1_000n).toString(), ...tag }).catch(() => null);
     const fee = first ? BigInt(first.summary.fee) : 12n;
     const amount = spendable - fee;
-    if (amount <= 0n) throw new Error('Rien à envoyer : tout ton solde est bloqué par la réserve');
+    if (amount <= 0n) throw new Error(l10n('Rien à envoyer : tout ton solde est bloqué par la réserve', 'Nothing to send: your whole balance is locked by the reserve'));
     return this.buildPayment({ to: params.to, amount: amount.toString(), ...tag });
   }
 
   /** `amount`: drops (XRP) or decimal value (issued). Rust re-checks reserve, tag and balance. */
   async buildPayment(params: { to: string; amount: string; destinationTag?: number; issued?: XrpIssued }): Promise<XrpUnsigned> {
     const to = params.to.trim();
-    if (!isXrpAddress(to)) throw new Error('Adresse XRP invalide (adresse classique r… attendue)');
-    if (to === this.address) throw new Error('Paiement à soi-même impossible');
-    if (!params.issued && !/^\d+$/.test(params.amount)) throw new Error('Montant en drops invalide');
+    if (!isXrpAddress(to)) throw new Error(l10n('Adresse XRP invalide (adresse classique r… attendue)', 'Invalid XRP address (classic r… address expected)'));
+    if (to === this.address) throw new Error(l10n('Paiement à soi-même impossible', 'Cannot pay yourself'));
+    if (!params.issued && !/^\d+$/.test(params.amount)) throw new Error(l10n('Montant en drops invalide', 'Invalid amount in drops'));
     const built = await this.backend.build(to, params.amount, params.destinationTag, params.issued);
     const s = built.summary;
     const amountOk = params.issued
@@ -200,7 +199,7 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
       : s.amount.kind === 'xrp' && s.amount.drops === params.amount;
     const tagOk = (s.destinationTag ?? undefined) === params.destinationTag;
     if (!amountOk || !tagOk || s.destination !== to || s.account !== this.address || s.requiresExtraConfirmation) {
-      throw new Error('Le paiement construit par Rust ne correspond pas à la demande');
+      throw new Error(l10n('Le paiement construit par Rust ne correspond pas à la demande', 'The payment built by Rust does not match the request'));
     }
     return {
       family: 'xrp',
@@ -226,7 +225,7 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
   /** Rust verifies the signature and that the server's hash is ours. */
   async broadcast(signed: XrpSigned): Promise<string> {
     const hash = await this.backend.broadcast(signed.blob);
-    if (hash.toUpperCase() !== signed.hash.toUpperCase()) throw new Error('Hash diffusé inattendu');
+    if (hash.toUpperCase() !== signed.hash.toUpperCase()) throw new Error(l10n('Hash diffusé inattendu', 'Unexpected broadcast hash'));
     return hash;
   }
 

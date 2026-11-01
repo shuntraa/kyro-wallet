@@ -53,6 +53,7 @@ export { DEMO_HW_DELAYS, DEMO_TREZOR_LAYOUT, DEMO_TREZOR_PIN, TREZOR_KEYPAD, dem
 export { DEMO_CBF_CONNECT_MS, DEMO_CBF_FILTERS_MS, DEMO_CBF_HEADERS_MS } from './mock-cbf';
 import { demoHash, handleDemoNet, type DemoChainState } from './mock-net';
 import { btcWarnings, evmWarnings } from './warnings';
+import { l10n, navigatorLang, type Lang } from './i18n';
 import { demoRenderScript, demoVsize } from './mock-tx';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
 import { createDemoStake } from './mock-stake';
@@ -63,11 +64,17 @@ export { ACCOUNT_CHAIN_LABEL, defaultAccountName } from './mock-accounts';
 
 bitcoin.initEccLib(ecc);
 
-export const DEMO_PASSWORD_HINT = 'Mode démo : n’importe quel mot de passe de 8 caractères ou plus.';
+export const demoPasswordHint = (): string => l10n('Mode démo : n’importe quel mot de passe de 8 caractères ou plus.', 'Demo mode: any password of 8 characters or more.');
 
 /** Demo address-poisoning scenario (Sepolia): the colleague paid before, and its look-alike. */
 export const DEMO_EVM_COLLEAGUE = '0x5e1f9b3c8a2d47e6b0c19f4a7d23e8c6b5a2d4c7';
 export const DEMO_EVM_LOOKALIKE = '0x5e1f00aa77ee11bb33cc99dd22ff44889a13d4c7';
+
+/** Demo « system language »: `?lang=fr|en` in the URL (to try both), else the browser's. */
+export function demoSystemLanguage(): Lang {
+  const param = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('lang');
+  return param === 'fr' || param === 'en' ? param : navigatorLang();
+}
 
 export const DEFAULT_SETTINGS: Settings = {
   currency: 'EUR',
@@ -78,6 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
   servers: EMPTY_SERVERS,
   apiKeysSet: {},
   tor: { enabled: true },
+  language: 'auto',
 };
 
 const TESTNET_VERSIONS = { private: 0x04358394, public: 0x043587cf };
@@ -113,7 +121,7 @@ function toChecksumAddress(addrHexNo0x: string): string {
 
 function btcAddressFor(kind: BtcKind, pubkey: Uint8Array, net: bitcoin.Network): string {
   const p = kind === 'segwit' ? bitcoin.payments.p2wpkh({ pubkey, network: net }) : bitcoin.payments.p2tr({ internalPubkey: pubkey.slice(1, 33), network: net });
-  if (!p.address) throw new IpcError('INTERNAL', 'Adresse démo introuvable');
+  if (!p.address) throw new IpcError('INTERNAL', l10n('Adresse démo introuvable', 'Demo address not found'));
   return p.address;
 }
 
@@ -138,11 +146,11 @@ export function deriveDemoKeys(network: Network): DemoKeys {
     }
     receive[kind] = acct.deriveChild(0);
     const first = acct.deriveChild(0).deriveChild(0).publicKey;
-    if (!first) throw new IpcError('INTERNAL', 'Clé démo introuvable');
+    if (!first) throw new IpcError('INTERNAL', l10n('Clé démo introuvable', 'Demo key not found'));
     return { address: btcAddressFor(kind, first, net), xpub: acct.publicExtendedKey, fingerprint, path };
   };
   const evmKey = master.derive("m/44'/60'/0'/0/0").publicKey;
-  if (!evmKey) throw new IpcError('INTERNAL', 'Clé démo introuvable');
+  if (!evmKey) throw new IpcError('INTERNAL', l10n('Clé démo introuvable', 'Demo key not found'));
   const uncompressed = ecc.pointCompress(evmKey, false);
   const evmAddr = toChecksumAddress(bytesToHex(keccak_256(uncompressed.slice(1))).slice(-40));
   const solAddr = base58.encode(sha256(new TextEncoder().encode('kyro-demo-solana-account')));
@@ -430,7 +438,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
 
   const confirmFn =
     opts.confirm ??
-    ((summary: string) => (typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm(`[MODE DÉMO — fenêtre système simulée]\n\n${summary}`) : true));
+    ((summary: string) => (typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm(l10n(`[MODE DÉMO — fenêtre système simulée]\n\n${summary}`, `[DEMO MODE — simulated system window]\n\n${summary}`)) : true));
 
   /** Every `host:port` of the servers in `v` (URLs, Electrum host/port), lower-cased. */
   const hostsOf = (v: unknown): string[] => {
@@ -457,7 +465,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     const known = new Set(hostsOf(saved));
     const pending = hostsOf(incoming).filter((h) => !known.has(h) && !approvedHosts.has(h));
     if (pending.length === 0) return;
-    if (!confirmFn(`Nouveau serveur\nKyro va contacter :\n${pending.map((h) => `• ${h}`).join('\n')}\nSi tu n’as pas saisi toi-même cette adresse, refuse.`)) throw new IpcError('USER_REJECTED', 'Action annulée.');
+    if (!confirmFn(l10n(`Nouveau serveur\nKyro va contacter :\n${pending.map((h) => `• ${h}`).join('\n')}\nSi tu n’as pas saisi toi-même cette adresse, refuse.`, `New server\nKyro will contact:\n${pending.map((h) => `• ${h}`).join('\n')}\nIf you did not type this address yourself, refuse.`))) throw new IpcError('USER_REJECTED', l10n('Action annulée.', 'Action cancelled.'));
     for (const h of pending) approvedHosts.add(h);
   };
   /** commands_servers.rs check_cookie_paths: a new `.cookie` path must come from the picker. */
@@ -475,7 +483,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     };
     const known = new Set(paths(saved));
     for (const p of paths(incoming)) {
-      if (!known.has(p) && p !== pickedCookie) throw new IpcError('SERVER_INVALID', 'Serveur invalide : fichier .cookie : choisis-le avec le bouton « Choisir le fichier .cookie »');
+      if (!known.has(p) && p !== pickedCookie) throw new IpcError('SERVER_INVALID', l10n('Serveur invalide : fichier .cookie : choisis-le avec le bouton « Choisir le fichier .cookie »', 'Invalid server: .cookie file: choose it with the “Choose the .cookie file” button'));
     }
   };
 
@@ -489,25 +497,25 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
 
   const requireUnlocked = () => {
     lockIfExpired();
-    if (!vault) throw new IpcError('LOCKED', 'Aucun coffre sur cet appareil.');
-    if (!unlocked) throw new IpcError('LOCKED', 'Le coffre est verrouillé.');
+    if (!vault) throw new IpcError('LOCKED', l10n('Aucun coffre sur cet appareil.', 'No vault on this device.'));
+    if (!unlocked) throw new IpcError('LOCKED', l10n('Le coffre est verrouillé.', 'The vault is locked.'));
   };
 
   const checkPassword = (password: unknown) => {
-    if (!vault) throw new IpcError('LOCKED', 'Aucun coffre sur cet appareil.');
+    if (!vault) throw new IpcError('LOCKED', l10n('Aucun coffre sur cet appareil.', 'No vault on this device.'));
     if (now() < blockedUntil) {
-      throw new IpcError('RATE_LIMITED', `Trop d’essais. Réessaie dans ${Math.ceil((blockedUntil - now()) / 1000)} s.`);
+      throw new IpcError('RATE_LIMITED', l10n(`Trop d’essais. Réessaie dans ${Math.ceil((blockedUntil - now()) / 1000)} s.`, `Too many attempts. Try again in ${Math.ceil((blockedUntil - now()) / 1000)} s.`));
     }
     if (password !== vault.password) {
       failed += 1;
       if (failed >= 5) blockedUntil = now() + 5000 * 2 ** (failed - 5);
-      throw new IpcError('WRONG_PASSWORD', 'Mot de passe incorrect.');
+      throw new IpcError('WRONG_PASSWORD', l10n('Mot de passe incorrect.', 'Wrong password.'));
     }
     failed = 0;
   };
 
   const validPassword = (p: unknown): string => {
-    if (typeof p !== 'string' || p.length < 8) throw new IpcError('INVALID_INPUT', 'Le mot de passe doit faire au moins 8 caractères.');
+    if (typeof p !== 'string' || p.length < 8) throw new IpcError('INVALID_INPUT', l10n('Le mot de passe doit faire au moins 8 caractères.', 'The password must be at least 8 characters long.'));
     return p;
   };
 
@@ -552,7 +560,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
         psbt.updateInput(i, { tapKeySig });
       } else {
         const pubkey = input.bip32Derivation?.[0]?.pubkey;
-        if (!pubkey) throw new IpcError('INVALID_INPUT', `Entrée ${i} sans dérivation BIP32.`);
+        if (!pubkey) throw new IpcError('INVALID_INPUT', l10n(`Entrée ${i} sans dérivation BIP32.`, `Input ${i} without a BIP32 derivation.`));
         psbt.updateInput(i, { partialSig: [{ pubkey, signature: fakeDerSignature(`${i}:${psbtB64}`) }] });
       }
     });
@@ -571,7 +579,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     network,
     guard: () => {
       lockIfExpired();
-      if (vault && !unlocked) throw new IpcError('LOCKED', 'Le coffre est verrouillé.');
+      if (vault && !unlocked) throw new IpcError('LOCKED', l10n('Le coffre est verrouillé.', 'The vault is locked.'));
     },
     confirm: (text) => confirmFn(text),
     decodeEvm: (tx) => decodeEvm(tx),
@@ -591,7 +599,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const handlers: { [K in keyof Commands]: (args: Record<string, unknown>) => unknown } = {
     vault_status: () => status(),
     vault_create: (a) => {
-      if (vault) throw new IpcError('INVALID_INPUT', 'Un coffre existe déjà sur cet appareil.');
+      if (vault) throw new IpcError('INVALID_INPUT', l10n('Un coffre existe déjà sur cet appareil.', 'A vault already exists on this device.'));
       const password = validPassword(a.password);
       const count = a.words === 12 ? 12 : 24;
       const words = generateMnemonic(wordlist, count === 12 ? 128 : 256).split(' ');
@@ -603,14 +611,14 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       return { wordCount: words.length };
     },
     vault_backup_show: () => {
-      if (!pendingBackup) throw new IpcError('INVALID_INPUT', 'Entrée invalide : aucune phrase de récupération en attente de sauvegarde');
+      if (!pendingBackup) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : aucune phrase de récupération en attente de sauvegarde', 'Invalid input: no recovery phrase waiting to be backed up'));
       const w = pendingBackup.words;
-      confirmFn(`Ta phrase de récupération\n\n${w.map((x, i) => `${String(i + 1).padStart(2, ' ')}. ${x}`).join('   ')}`);
+      confirmFn(l10n(`Ta phrase de récupération\n\n${w.map((x, i) => `${String(i + 1).padStart(2, ' ')}. ${x}`).join('   ')}`, `Your recovery phrase\n\n${w.map((x, i) => `${String(i + 1).padStart(2, ' ')}. ${x}`).join('   ')}`));
       pendingBackup.checks = randomChecks(w.length);
       return { checks: pendingBackup.checks };
     },
     vault_backup_verify: (a) => {
-      if (!pendingBackup) throw new IpcError('INVALID_INPUT', 'Entrée invalide : aucune phrase de récupération en attente de sauvegarde');
+      if (!pendingBackup) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : aucune phrase de récupération en attente de sauvegarde', 'Invalid input: no recovery phrase waiting to be backed up'));
       const answers = Array.isArray(a.answers) ? (a.answers as unknown[]).map((x) => String(x).trim().toLowerCase()) : [];
       const p = pendingBackup;
       const ok = answers.length === 3 && p.checks.every((idx, i) => p.words[idx] === answers[i]);
@@ -624,10 +632,10 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       return { ok: false, attemptsLeft: left };
     },
     vault_import: (a) => {
-      if (vault) throw new IpcError('INVALID_INPUT', 'Un coffre existe déjà sur cet appareil.');
+      if (vault) throw new IpcError('INVALID_INPUT', l10n('Un coffre existe déjà sur cet appareil.', 'A vault already exists on this device.'));
       const password = validPassword(a.password);
       const phrase = String(a.phrase ?? '').trim().toLowerCase().split(/\s+/).join(' ');
-      if (!validateMnemonic(phrase, wordlist)) throw new IpcError('INVALID_INPUT', 'Phrase de récupération invalide (mot inconnu ou somme de contrôle fausse).');
+      if (!validateMnemonic(phrase, wordlist)) throw new IpcError('INVALID_INPUT', l10n('Phrase de récupération invalide (mot inconnu ou somme de contrôle fausse).', 'Invalid recovery phrase (unknown word or wrong checksum).'));
       vault = { password, words: phrase.split(' ') };
       unlocked = true;
       lastTouch = now();
@@ -644,12 +652,12 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     vault_reveal_mnemonic: (a) => {
       requireUnlocked();
       reveals = reveals.filter((t) => now() - t < 60_000);
-      if (reveals.length >= 3) throw new IpcError('RATE_LIMITED', 'Trop de demandes. Réessaie dans une minute.');
+      if (reveals.length >= 3) throw new IpcError('RATE_LIMITED', l10n('Trop de demandes. Réessaie dans une minute.', 'Too many requests. Try again in a minute.'));
       checkPassword(a.password);
       reveals.push(now());
       // Like Rust: native confirmation, then the words in a native dialog; nothing returned.
-      if (!confirmFn('Afficher la phrase de récupération ?\nVérifie que personne ne regarde ton écran.')) throw new IpcError('USER_REJECTED', 'Action annulée.');
-      confirmFn(`Ta phrase de récupération\n\n${(vault?.words ?? []).map((x, i) => `${i + 1}. ${x}`).join('   ')}`);
+      if (!confirmFn(l10n('Afficher la phrase de récupération ?\nVérifie que personne ne regarde ton écran.', 'Show the recovery phrase?\nMake sure nobody is watching your screen.'))) throw new IpcError('USER_REJECTED', l10n('Action annulée.', 'Action cancelled.'));
+      confirmFn(l10n(`Ta phrase de récupération\n\n${(vault?.words ?? []).map((x, i) => `${i + 1}. ${x}`).join('   ')}`, `Your recovery phrase\n\n${(vault?.words ?? []).map((x, i) => `${i + 1}. ${x}`).join('   ')}`));
     },
     session_touch: () => {
       lockIfExpired();
@@ -667,12 +675,12 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       requireUnlocked();
       const kind: BtcKind = a.kind === 'taproot' ? 'taproot' : 'segwit';
       const index = Number(a.index);
-      if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw new IpcError('INVALID_INPUT', 'Index invalide.');
+      if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw new IpcError('INVALID_INPUT', l10n('Index invalide.', 'Invalid index.'));
       const testnet = network === 'testnet';
       const master = HDKey.fromMasterSeed(demoSeed(), testnet ? TESTNET_VERSIONS : undefined);
       const path = `m/${kind === 'segwit' ? 84 : 86}'/${testnet ? 1 : 0}'/${accts.arg(a.account)}'/${a.change ? 1 : 0}/${index}`;
       const pk = master.derive(path).publicKey;
-      if (!pk) throw new IpcError('INTERNAL', 'Dérivation impossible.');
+      if (!pk) throw new IpcError('INTERNAL', l10n('Dérivation impossible.', 'Derivation failed.'));
       return btcAddressFor(kind, pk, testnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin);
     },
     evm_decode_tx: (a) => decodeEvm(a.tx as EvmTxRequest),
@@ -685,13 +693,13 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       // No token hint from the interface (Rust names tokens from its own table only).
       const from = accts.get(account).evm;
       const signer = accts.signer('evm', account, from.path);
-      if (!confirmFn(`${signer.line}\n\nDe : ${from.address}\nSigner une transaction ${s.kind} sur la chaîne ${tx.chainId}\nVers : ${s.to}\nMontant : ${s.amount} (unités brutes)\nFrais max. : ${s.maxFeeWei} wei`)) {
-        throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!confirmFn(l10n(`${signer.line}\n\nDe : ${from.address}\nSigner une transaction ${s.kind} sur la chaîne ${tx.chainId}\nVers : ${s.to}\nMontant : ${s.amount} (unités brutes)\nFrais max. : ${s.maxFeeWei} wei`, `${signer.line}\n\nFrom: ${from.address}\nSign a ${s.kind} transaction on chain ${tx.chainId}\nTo: ${s.to}\nAmount: ${s.amount} (raw units)\nMax fee: ${s.maxFeeWei} wei`))) {
+        throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       }
-      if (signer.unknown && !confirmFn(signer.unknownText)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (signer.unknown && !confirmFn(signer.unknownText)) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       // Rust: reinforced 2nd dialog when the summary says so (contract call, approval…).
-      if (s.requiresExtraConfirmation && !confirmFn(`Attention : transaction à vérifier\n${s.warnings.map((w) => `• ${w.kind}`).join('\n')}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`)) {
-        throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (s.requiresExtraConfirmation && !confirmFn(l10n(`Attention : transaction à vérifier\n${s.warnings.map((w) => `• ${w.kind}`).join('\n')}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`, `Warning: transaction to check\n${s.warnings.map((w) => `• ${w.kind}`).join('\n')}\nOnly sign if you know exactly why. Sign anyway?`))) {
+        throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       }
       const raw = '0x02' + bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(tx) + Math.random()))) + '00'.repeat(40);
       const hash = '0x' + demoHash(raw);
@@ -703,13 +711,13 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       const account = accts.arg(a.account);
       checkPassword(a.password);
       const out = signPsbt(String(a.psbt ?? ''), account);
-      const lines = out.summary.outputs.map(([ad, v, ch]) => `${ch ? '(monnaie) ' : ''}${ad} : ${v} sats`).join('\n');
+      const lines = out.summary.outputs.map(([ad, v, ch]) => l10n(`${ch ? '(monnaie) ' : ''}${ad} : ${v} sats`, `${ch ? '(change) ' : ''}${ad}: ${v} sats`)).join('\n');
       const c = network === 'testnet' ? 1 : 0;
       const signer = accts.signer('btc', account, `m/84'/${c}'/${account}' (SegWit), m/86'/${c}'/${account}' (Taproot)`);
-      if (!confirmFn(`${signer.line}\n\nSigner cette transaction Bitcoin ?\n${lines}\nFrais : ${out.summary.feeSats} sats`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (signer.unknown && !confirmFn(signer.unknownText)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (out.summary.requiresExtraConfirmation && !confirmFn(`Attention : transaction à vérifier\n${out.summary.warnings.map((w) => `• ${w.kind}`).join('\n')}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`)) {
-        throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!confirmFn(l10n(`${signer.line}\n\nSigner cette transaction Bitcoin ?\n${lines}\nFrais : ${out.summary.feeSats} sats`, `${signer.line}\n\nSign this Bitcoin transaction?\n${lines}\nFees: ${out.summary.feeSats} sats`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (signer.unknown && !confirmFn(signer.unknownText)) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (out.summary.requiresExtraConfirmation && !confirmFn(l10n(`Attention : transaction à vérifier\n${out.summary.warnings.map((w) => `• ${w.kind}`).join('\n')}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`, `Warning: transaction to check\n${out.summary.warnings.map((w) => `• ${w.kind}`).join('\n')}\nOnly sign if you know exactly why. Sign anyway?`))) {
+        throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       }
       return out;
     },
@@ -723,17 +731,21 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       const me = accts.get(account).sol;
       const message = decodeSolMessageArg(a.message);
       const summary = demoDecodeSolMessage(message, me.address);
-      if (summary.ourSignerIndex === null) throw new IpcError('INVALID_INPUT', 'Ce compte ne signe pas cette transaction.');
+      if (summary.ourSignerIndex === null) throw new IpcError('INVALID_INPUT', l10n('Ce compte ne signe pas cette transaction.', 'This account does not sign this transaction.'));
       checkPassword(a.password);
       const signer = accts.signer('sol', account, me.path);
-      if (!confirmFn(`${signer.line}
+      if (!confirmFn(l10n(`${signer.line}
 
 Signer cette transaction Solana ?
-${demoSolSummaryText(summary)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (signer.unknown && !confirmFn(signer.unknownText)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !confirmFn(`Instruction non reconnue ou inhabituelle : signer quand même ?
-${summary.warnings.map((w) => w.kind).join(', ')}`)) {
-        throw new IpcError('USER_REJECTED', 'Signature refusée.');
+${demoSolSummaryText(summary)}`, `${signer.line}
+
+Sign this Solana transaction?
+${demoSolSummaryText(summary)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (signer.unknown && !confirmFn(signer.unknownText)) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+      if (summary.requiresExtraConfirmation && !confirmFn(l10n(`Instruction non reconnue ou inhabituelle : signer quand même ?
+${summary.warnings.map((w) => w.kind).join(', ')}`, `Unrecognized or unusual instruction: sign anyway?
+${summary.warnings.map((w) => w.kind).join(', ')}`))) {
+        throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       }
       const sig = new Uint8Array(64);
       sig.set(sha256(message), 0);
@@ -747,7 +759,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     },
     tor_status: () => tor.status(),
     tor_retry: () => {
-      if (!settings.tor.enabled) throw new IpcError('INVALID_INPUT', 'Tor est désactivé dans les réglages.');
+      if (!settings.tor.enabled) throw new IpcError('INVALID_INPUT', l10n('Tor est désactivé dans les réglages.', 'Tor is disabled in the settings.'));
       tor.restart();
       return tor.status();
     },
@@ -755,13 +767,15 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     settings_get: () => publicSettings(),
     settings_set: async (a) => {
       const next = a.settings as (SettingsInput & { apiKeysSet?: unknown }) | undefined;
-      if (!next || (next.currency !== 'EUR' && next.currency !== 'USD')) throw new IpcError('INVALID_INPUT', 'Réglages invalides.');
+      if (!next || (next.currency !== 'EUR' && next.currency !== 'USD')) throw new IpcError('INVALID_INPUT', l10n('Réglages invalides.', 'Invalid settings.'));
       if (!Number.isInteger(next.autoLockSecs) || next.autoLockSecs < 60 || next.autoLockSecs > 4 * 3600) {
-        throw new IpcError('INVALID_INPUT', 'Délai de verrouillage invalide (1 min à 4 h).');
+        throw new IpcError('INVALID_INPUT', l10n('Délai de verrouillage invalide (1 min à 4 h).', 'Invalid lock delay (1 min to 4 h).'));
       }
+      const langIn: unknown = (next as { language?: unknown }).language;
+      if (langIn !== undefined && langIn !== 'auto' && langIn !== 'fr' && langIn !== 'en') throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : langue : auto, fr ou en', 'Invalid input: language: auto, fr or en'));
       const torIn: unknown = (next as { tor?: unknown }).tor;
       if (torIn !== undefined && (typeof torIn !== 'object' || torIn === null || typeof (torIn as { enabled?: unknown }).enabled !== 'boolean')) {
-        throw new IpcError('INVALID_INPUT', 'Réglages invalides (tor).');
+        throw new IpcError('INVALID_INPUT', l10n('Réglages invalides (tor).', 'Invalid settings (tor).'));
       }
       const wasEnabled = settings.tor.enabled;
       // Missing `tor` → default (enabled), like serde's `#[serde(default)]`.
@@ -774,27 +788,27 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       // non-empty = set after trim; blank after trim or a control character → INVALID_INPUT.
       const nextKeys = { ...apiKeys };
       if (keyUpdate !== undefined) {
-        if (typeof keyUpdate !== 'object' || keyUpdate === null) throw new IpcError('INVALID_INPUT', 'Entrée invalide : apiKeys : objet attendu');
+        if (typeof keyUpdate !== 'object' || keyUpdate === null) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : apiKeys : objet attendu', 'Invalid input: apiKeys: object expected'));
         for (const [name, v] of Object.entries(keyUpdate as Record<string, unknown>)) {
-          if (!(API_KEY_NAMES as readonly string[]).includes(name)) throw new IpcError('INVALID_INPUT', `Entrée invalide : clé API inconnue « ${name} »`);
+          if (!(API_KEY_NAMES as readonly string[]).includes(name)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : clé API inconnue « ${name} »`, `Invalid input: unknown API key “${name}”`));
           if (v === null) continue;
-          if (typeof v !== 'string') throw new IpcError('INVALID_INPUT', `Entrée invalide : clé API « ${name} » : texte attendu`);
+          if (typeof v !== 'string') throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : clé API « ${name} » : texte attendu`, `Invalid input: API key “${name}”: text expected`));
           if (v === '') {
             delete nextKeys[name as ApiKeyName];
             continue;
           }
           const t = v.trim();
-          if (!t || /\p{Cc}/u.test(t)) throw new IpcError('INVALID_INPUT', `Entrée invalide : clé API « ${name} » invalide (vide ou caractères de contrôle)`);
+          if (!t || /\p{Cc}/u.test(t)) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : clé API « ${name} » invalide (vide ou caractères de contrôle)`, `Invalid input: API key “${name}” invalid (empty or control characters)`));
           nextKeys[name as ApiKeyName] = t;
         }
       }
       // Like server_approval.rs: native confirmations before any request.
-      if (wasEnabled && !torEnabled && !confirmFn('Désactiver Tor ?\nSans Tor, chaque serveur contacté verra ton adresse IP.')) throw new IpcError('USER_REJECTED', 'Action annulée.');
+      if (wasEnabled && !torEnabled && !confirmFn(l10n('Désactiver Tor ?\nSans Tor, chaque serveur contacté verra ton adresse IP.', 'Turn off Tor?\nWithout Tor, every server contacted will see your IP address.'))) throw new IpcError('USER_REJECTED', l10n('Action annulée.', 'Action cancelled.'));
       checkPickedCookie(incoming, settings.servers);
       approveHosts(incoming, settings.servers);
       const storedServers = await servers.prepareSave({ ...EMPTY_SERVERS, ...structuredClone(incoming) }, settings.servers, torEnabled);
       apiKeys = nextKeys;
-      settings = { ...structuredClone(rest), servers: storedServers, tor: { enabled: torEnabled }, apiKeysSet: {} };
+      settings = { ...structuredClone(rest), servers: storedServers, tor: { enabled: torEnabled }, language: (langIn as Settings['language'] | undefined) ?? 'auto', apiKeysSet: {} };
       if (!wasEnabled && settings.tor.enabled) tor.start();
       if (wasEnabled && !settings.tor.enabled) tor.stop();
       return publicSettings();
@@ -849,7 +863,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     hw_sign_btc_psbt: (a) => hw.signBtc(a),
     hw_sign_evm_tx: (a) => hw.signEvm(a),
     hw_sign_sol_tx: (a) => hw.signSol(a),
-    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid) }),
+    config_get: (): AppConfig => ({ network, hasZeroxKey: true, hasCoingeckoKey: false, hasTrongridKey: Boolean(apiKeys.trongrid), systemLanguage: demoSystemLanguage() }),
     ...networkChoice.handlers,
   };
 
@@ -866,15 +880,15 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     },
     invoke: async (cmd, args = {}) => {
       const h = (handlers as Record<string, ((a: Record<string, unknown>) => unknown) | undefined>)[cmd] ?? utxoChains.handlers[cmd];
-      if (!h) throw new IpcError('INVALID_INPUT', `Commande inconnue : ${cmd}`);
+      if (!h) throw new IpcError('INVALID_INPUT', l10n(`Commande inconnue : ${cmd}`, `Unknown command: ${cmd}`));
       // §2.9: the TRON, XRP, Cardano and staking demo modules simulate account 0 only.
       if (cmd === 'ada_address' && accts.arg(args.account) !== 0) {
         requireUnlocked();
-        if (Number(args.index ?? 0) !== 0) throw new IpcError('INVALID_INPUT', 'Entrée invalide : démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)');
+        if (Number(args.index ?? 0) !== 0) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)', 'Invalid input: demo: only the address at index 0 exists (Kyro only signs that one)'));
         return accts.adaAddress(accts.arg(args.account));
       }
       if (DEMO_ACCOUNT0_ONLY.test(cmd) && accts.arg(args.account) !== 0) {
-        throw new IpcError('INVALID_INPUT', 'Mode démo : les comptes supplémentaires TRON, XRP et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).');
+        throw new IpcError('INVALID_INPUT', l10n('Mode démo : les comptes supplémentaires TRON, XRP et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).', 'Demo mode: extra TRON, XRP and Cardano accounts and staking are only simulated for the first account (the real app handles all of them).'));
       }
       void captureProtected;
       return await h(args);
@@ -891,7 +905,7 @@ function decodeSolMessageArg(m: unknown): Uint8Array {
     if (bytes.length === 0) throw new Error('vide');
     return bytes;
   } catch {
-    throw new IpcError('INVALID_INPUT', 'Message Solana invalide (base64 attendu).');
+    throw new IpcError('INVALID_INPUT', l10n('Message Solana invalide (base64 attendu).', 'Invalid Solana message (base64 expected).'));
   }
 }
 

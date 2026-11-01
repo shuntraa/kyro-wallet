@@ -3,7 +3,7 @@
 // Chain & asset registry. Same seed / same EVM address on every EVM chain.
 // RPC hosts must match the net_fetch allowlist (docs/IPC.md §3).
 
-import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@kyro/shared';
+import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } from '@kyro/shared';
 
 /**
  * `ltc` / `doge`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*`, docs/IPC.md §2.4).
@@ -658,54 +658,54 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   };
   const btc = bitcoinServerFor(servers, network);
   const btcHost =
-    btc.kind === 'default' ? { host: 'mempool.space', purpose: 'Bitcoin : soldes, frais, diffusion (service .onion avec Tor)' }
-    : btc.kind === 'electrum' ? { host: `${btc.host}:${btc.port}`, purpose: 'Bitcoin : ton serveur Electrum', custom: true }
-    : btc.kind === 'core' ? { host: host(btc.url), purpose: 'Bitcoin : ton nœud Bitcoin Core', custom: true }
-    : btc.kind === 'cbf' ? { host: 'pairs Bitcoin (P2P)', purpose: 'Bitcoin : filtres compacts, aucun serveur ne voit tes adresses', custom: true }
-    : { host: host(btc.url), purpose: 'Bitcoin : ton serveur Esplora', custom: true };
-  const list: { host: string; purpose: string; custom?: boolean }[] = [{ host: 'api.coingecko.com', purpose: 'Prix du top 250' }, btcHost];
+    btc.kind === 'default' ? { host: 'mempool.space', purpose: l10n('Bitcoin : soldes, frais, diffusion (service .onion avec Tor)', 'Bitcoin: balances, fees, broadcast (.onion service with Tor)') }
+    : btc.kind === 'electrum' ? { host: `${btc.host}:${btc.port}`, purpose: l10n('Bitcoin : ton serveur Electrum', 'Bitcoin: your Electrum server'), custom: true }
+    : btc.kind === 'core' ? { host: host(btc.url), purpose: l10n('Bitcoin : ton nœud Bitcoin Core', 'Bitcoin: your Bitcoin Core node'), custom: true }
+    : btc.kind === 'cbf' ? { host: l10n('pairs Bitcoin (P2P)', 'Bitcoin peers (P2P)'), purpose: l10n('Bitcoin : filtres compacts, aucun serveur ne voit tes adresses', 'Bitcoin: compact filters, no server sees your addresses'), custom: true }
+    : { host: host(btc.url), purpose: l10n('Bitcoin : ton serveur Esplora', 'Bitcoin: your Esplora server'), custom: true };
+  const list: { host: string; purpose: string; custom?: boolean }[] = [{ host: 'api.coingecko.com', purpose: l10n('Prix du top 250', 'Top 250 prices') }, btcHost];
   for (const c of evmChains(network)) {
     const custom = servers.evm[String(c.chainId)]?.url;
-    list.push(custom ? { host: host(custom), purpose: `${c.name} : ton nœud RPC`, custom: true } : { host: host(c.rpcUrl), purpose: `${c.name} : nœud RPC` });
+    list.push(custom ? { host: host(custom), purpose: l10n(`${c.name} : ton nœud RPC`, `${c.name}: your RPC node`), custom: true } : { host: host(c.rpcUrl), purpose: l10n(`${c.name} : nœud RPC`, `${c.name}: RPC node`) });
   }
   const sol = solChain(network);
   const solCustom = servers.solana[sol.cluster]?.url;
-  list.push(solCustom ? { host: host(solCustom), purpose: 'Solana : ton nœud RPC', custom: true } : { host: host(sol.rpcUrl), purpose: 'Solana : nœud RPC' });
+  list.push(solCustom ? { host: host(solCustom), purpose: l10n('Solana : ton nœud RPC', 'Solana: your RPC node'), custom: true } : { host: host(sol.rpcUrl), purpose: l10n('Solana : nœud RPC', 'Solana: RPC node') });
   // Litecoin / Dogecoin: reached by Rust only (ltc_* / doge_*), Tor circuits of their family.
   const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
   const ltc = servers.litecoin?.[nk];
-  list.push(ltc?.kind === 'esplora' ? { host: host(ltc.url), purpose: 'Litecoin : ton serveur Esplora', custom: true } : { host: 'litecoinspace.org', purpose: 'Litecoin : soldes, frais, diffusion' });
+  list.push(ltc?.kind === 'esplora' ? { host: host(ltc.url), purpose: l10n('Litecoin : ton serveur Esplora', 'Litecoin: your Esplora server'), custom: true } : { host: 'litecoinspace.org', purpose: l10n('Litecoin : soldes, frais, diffusion', 'Litecoin: balances, fees, broadcast') });
   const doge = servers.dogecoin?.[nk];
-  if (doge?.kind === 'esplora') list.push({ host: host(doge.url), purpose: 'Dogecoin : ton serveur Esplora', custom: true });
+  if (doge?.kind === 'esplora') list.push({ host: host(doge.url), purpose: l10n('Dogecoin : ton serveur Esplora', 'Dogecoin: your Esplora server'), custom: true });
   else if (network === 'mainnet') {
     // Komodo's public ElectrumX servers (Rust only, raw TLS sockets; the second one is a
     // fallback). Every UTXO is checked against its previous transaction before signing.
-    list.push({ host: 'doge.electrum1.cipig.net:20060', purpose: 'Dogecoin : soldes, historique, frais, diffusion (ElectrumX public de Komodo)' });
-    list.push({ host: 'doge.electrum2.cipig.net:20060', purpose: 'Dogecoin : serveur de secours (ElectrumX public de Komodo)' });
-  } else list.push({ host: 'aucun serveur', purpose: 'Dogecoin testnet : aucun serveur public gratuit, configure le tien (rien n’est contacté)' });
+    list.push({ host: 'doge.electrum1.cipig.net:20060', purpose: l10n('Dogecoin : soldes, historique, frais, diffusion (ElectrumX public de Komodo)', 'Dogecoin: balances, history, fees, broadcast (Komodo public ElectrumX)') });
+    list.push({ host: 'doge.electrum2.cipig.net:20060', purpose: l10n('Dogecoin : serveur de secours (ElectrumX public de Komodo)', 'Dogecoin: backup server (Komodo public ElectrumX)') });
+  } else list.push({ host: l10n('aucun serveur', 'no server'), purpose: l10n('Dogecoin testnet : aucun serveur public gratuit, configure le tien (rien n’est contacté)', 'Dogecoin testnet: no free public server, set up your own (nothing is contacted)') });
   // TRON: reached by Rust only (tron_*), Tor circuits of the `tron` family.
   // Cardano: reached by Rust only (ada_*), Tor circuits of the `cardano` family.
   const ada = servers.cardano?.[nk];
   list.push(
     ada?.kind === 'koios'
-      ? { host: host(ada.url), purpose: 'Cardano : ton serveur Koios', custom: true }
-      : { host: network === 'mainnet' ? 'api.koios.rest' : 'preprod.koios.rest', purpose: `Cardano${network === 'mainnet' ? '' : ' preprod'} : UTxO, paramètres, historique, diffusion (Koios)` },
+      ? { host: host(ada.url), purpose: l10n('Cardano : ton serveur Koios', 'Cardano: your Koios server'), custom: true }
+      : { host: network === 'mainnet' ? 'api.koios.rest' : 'preprod.koios.rest', purpose: l10n(`Cardano${network === 'mainnet' ? '' : ' preprod'} : UTxO, paramètres, historique, diffusion (Koios)`, `Cardano${network === 'mainnet' ? '' : ' preprod'}: UTxOs, parameters, history, broadcast (Koios)`) },
   );
   // XRP Ledger: reached by Rust only (xrp_*), Tor circuits of the `xrp` family.
   const xrp = servers.xrp?.[nk];
   list.push(
     xrp?.kind === 'jsonRpc'
-      ? { host: host(xrp.url), purpose: 'XRP Ledger : ton serveur rippled', custom: true }
-      : { host: network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net', purpose: `XRP Ledger${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (rippled)` },
+      ? { host: host(xrp.url), purpose: l10n('XRP Ledger : ton serveur rippled', 'XRP Ledger: your rippled server'), custom: true }
+      : { host: network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net', purpose: l10n(`XRP Ledger${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (rippled)`, `XRP Ledger${network === 'mainnet' ? '' : ' testnet'}: balances, reserve, history, broadcast (rippled)`) },
   );
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'
-      ? { host: host(tron.url), purpose: 'TRON : ton nœud java-tron (l’historique exige l’API /v1 de TronGrid)', custom: true }
-      : { host: network === 'mainnet' ? 'api.trongrid.io' : 'nile.trongrid.io', purpose: `TRON${network === 'mainnet' ? '' : ' Nile'} : soldes, ressources, historique, diffusion (TronGrid)` },
+      ? { host: host(tron.url), purpose: l10n('TRON : ton nœud java-tron (l’historique exige l’API /v1 de TronGrid)', 'TRON: your java-tron node (history requires the TronGrid /v1 API)'), custom: true }
+      : { host: network === 'mainnet' ? 'api.trongrid.io' : 'nile.trongrid.io', purpose: l10n(`TRON${network === 'mainnet' ? '' : ' Nile'} : soldes, ressources, historique, diffusion (TronGrid)`, `TRON${network === 'mainnet' ? '' : ' Nile'}: balances, resources, history, broadcast (TronGrid)`) },
   );
-  list.push({ host: 'api.0x.org', purpose: 'Devis de swap EVM (clé requise)' });
-  list.push({ host: 'li.quest', purpose: 'Devis de swap cross-chain' });
-  list.push({ host: 'lite-api.jup.ag', purpose: 'Devis de swap Solana' });
+  list.push({ host: 'api.0x.org', purpose: l10n('Devis de swap EVM (clé requise)', 'EVM swap quotes (key required)') });
+  list.push({ host: 'li.quest', purpose: l10n('Devis de swap cross-chain', 'Cross-chain swap quotes') });
+  list.push({ host: 'lite-api.jup.ag', purpose: l10n('Devis de swap Solana', 'Solana swap quotes') });
   return list;
 }

@@ -13,6 +13,7 @@
 
 import { IpcError, type TorStatus } from './ipc';
 import { emitDemoEvent } from './events';
+import { l10n } from './i18n';
 
 export type DemoTorScenario = 'bootstrap' | 'ready' | 'fail' | 'fail-once';
 
@@ -22,7 +23,7 @@ export const DEMO_TOR_BOOTSTRAP_MS = 2000;
 export const DEMO_TOR_READY_WAIT_MS = 60_000;
 const STEP_MS = 100;
 const FAIL_AT = 35;
-export const DEMO_TOR_FAILURE = 'aucun relais Tor joignable (simulation du mode démo)';
+export const demoTorFailure = (): string => l10n('aucun relais Tor joignable (simulation du mode démo)', 'no Tor relay reachable (demo mode simulation)');
 
 export interface DemoTor {
   status(): TorStatus;
@@ -36,7 +37,7 @@ export interface DemoTor {
   waitReady(): Promise<void>;
 }
 
-const unavailable = (why: string) => new IpcError('TOR_UNAVAILABLE', `Tor indisponible : ${why}`);
+const unavailable = (why: string) => new IpcError('TOR_UNAVAILABLE', l10n(`Tor indisponible : ${why}`, `Tor unavailable: ${why}`));
 
 export function createDemoTor(scenario: DemoTorScenario): DemoTor {
   let status: TorStatus = { state: 'off', progress: 0 };
@@ -74,14 +75,14 @@ export function createDemoTor(scenario: DemoTorScenario): DemoTor {
       i += 1;
       const progress = Math.round((i / steps) * 100);
       if (fails && progress >= FAIL_AT) {
-        publish({ state: 'error', progress: 0, message: DEMO_TOR_FAILURE });
+        publish({ state: 'error', progress: 0, message: demoTorFailure() });
         return;
       }
       if (progress >= 100) {
         publish({ state: 'ready', progress: 100 });
         return;
       }
-      publish({ state: 'bootstrapping', progress: Math.min(progress, 99), message: progress < 50 ? 'connexion au réseau Tor' : 'construction des circuits' });
+      publish({ state: 'bootstrapping', progress: Math.min(progress, 99), message: progress < 50 ? l10n('connexion au réseau Tor', 'connecting to the Tor network') : l10n('construction des circuits', 'building circuits') });
       timer = setTimeout(tick, STEP_MS);
     };
     timer = setTimeout(tick, STEP_MS);
@@ -110,10 +111,10 @@ export function createDemoTor(scenario: DemoTorScenario): DemoTor {
               resolve();
               break;
             case 'off':
-              reject(unavailable('Tor n’est pas démarré'));
+              reject(unavailable(l10n('Tor n’est pas démarré', 'Tor is not started')));
               break;
             case 'error':
-              reject(unavailable(status.message ?? 'échec du démarrage'));
+              reject(unavailable(status.message ?? l10n('échec du démarrage', 'startup failed')));
               break;
           }
           return true;
@@ -127,7 +128,7 @@ export function createDemoTor(scenario: DemoTorScenario): DemoTor {
         waiters.add(waiter);
         deadline = setTimeout(() => {
           waiters.delete(waiter);
-          reject(unavailable('délai de démarrage dépassé'));
+          reject(unavailable(l10n('délai de démarrage dépassé', 'startup timed out')));
         }, DEMO_TOR_READY_WAIT_MS);
       }),
   };

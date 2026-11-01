@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-import { HttpError, type NetFetch } from '@kyro/shared';
+import { HttpError, type NetFetch, l10n } from '@kyro/shared';
 import type { ProviderFee } from '../fees';
 
 export const NATIVE_EVM = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
@@ -21,7 +21,7 @@ export interface ProviderOptions {
 /** Shared `unavailableReason()`: Kyro fee first (it decides whether the provider may be used), then the API key. */
 export function unavailableReason(fee: ProviderFee, hasKey: boolean): string | null {
   if (fee.kind === 'unavailable') return fee.reason;
-  return hasKey ? null : 'Clé API non configurée';
+  return hasKey ? null : l10n('Clé API non configurée', 'API key not configured');
 }
 
 export const isNative = (address: string) => address.toLowerCase() === NATIVE_EVM.toLowerCase() || address === ZERO_ADDRESS;
@@ -43,11 +43,11 @@ export function providerError(name: string, e: unknown): Error {
     } catch {
       detail = e.body.slice(0, 120);
     }
-    if (e.status === 401 || e.status === 403) return new Error(`${name} : clé API refusée ou absente`);
-    if (e.status === 429) return new Error(`${name} : trop de requêtes, réessaie dans un instant`);
+    if (e.status === 401 || e.status === 403) return new Error(l10n(`${name} : clé API refusée ou absente`, `${name}: API key refused or missing`));
+    if (e.status === 429) return new Error(l10n(`${name} : trop de requêtes, réessaie dans un instant`, `${name}: too many requests, try again in a moment`));
     return new Error(`${name} : ${detail || `erreur HTTP ${e.status}`}`);
   }
-  return e instanceof Error ? new Error(`${name} : ${e.message}`) : new Error(`${name} : erreur inconnue`);
+  return e instanceof Error ? new Error(l10n(`${name} : ${e.message}`, `${name}: ${e.message}`)) : new Error(l10n(`${name} : erreur inconnue`, `${name}: unknown error`));
 }
 
 export const toBig = (v: string | number | null | undefined): bigint => {

@@ -1,35 +1,66 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// fr-FR formatting: amounts, fiat, percentages, addresses in 4-char chunks,
-// durations. Crypto amounts are bigint base units: never floats for values.
+// Locale-aware formatting (current interface language, see ../i18n): amounts, fiat, percentages,
+// addresses in 4-char chunks, durations. FR « 1 234,56 € », EN « €1,234.56 ». Crypto amounts are
+// bigint base units: never floats for values.
 
-import type { Currency } from '@kyro/shared';
+import { getLang, intlLocale, type Currency } from '@kyro/shared';
+import { t } from '../i18n';
 
 /** U+202F narrow no-break space (fr-FR group separator) and U+2212 minus sign. */
 export const NNBSP = ' ';
 export const MINUS = '−';
 
+/** Decimal mark of the current language (`,` in French, `.` in English). */
+export function decimalSep(): string {
+  return getLang() === 'fr' ? ',' : '.';
+}
+
+/** Thousands separator of the current language (narrow NBSP in French, `,` in English). */
+function groupSep(): string {
+  return getLang() === 'fr' ? NNBSP : ',';
+}
+
 const nfCache = new Map<string, Intl.NumberFormat>();
 function nf(opts: Intl.NumberFormatOptions): Intl.NumberFormat {
-  const key = JSON.stringify(opts);
+  const loc = intlLocale();
+  const key = loc + JSON.stringify(opts);
   let f = nfCache.get(key);
   if (!f) {
-    f = new Intl.NumberFormat('fr-FR', opts);
+    f = new Intl.NumberFormat(loc, opts);
     nfCache.set(key, f);
   }
   return f;
 }
 
-/** Normalise Intl output: regular spaces → narrow NBSP, hyphen-minus → U+2212. */
+const dfCache = new Map<string, Intl.DateTimeFormat>();
+function df(opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const loc = intlLocale();
+  const key = loc + JSON.stringify(opts);
+  let f = dfCache.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(loc, opts);
+    dfCache.set(key, f);
+  }
+  return f;
+}
+
+/** Normalise Intl output: (French) regular spaces → narrow NBSP; hyphen-minus → U+2212. */
 function clean(s: string): string {
-  return s.replace(/[  ]/g, NNBSP).replace(/^-/, MINUS).replace(/(\s)-/, `$1${MINUS}`);
+  const spaced = getLang() === 'fr' ? s.replace(/[  ]/g, NNBSP) : s;
+  return spaced.replace(/^-/, MINUS).replace(/(\s)-/, `$1${MINUS}`);
 }
 
 export function fmtNumber(n: number, maxFrac = 2, minFrac = 0): string {
   return clean(nf({ minimumFractionDigits: minFrac, maximumFractionDigits: maxFrac }).format(n));
 }
 
-/** "12 480,32 €", "1 234,50 $". */
+/** A plain number in the current language with any Intl options ("1 234,5" / "1,234.5"). */
+export function fmtIntl(n: number, opts: Intl.NumberFormatOptions = {}): string {
+  return clean(nf(opts).format(n));
+}
+
+/** "12 480,32 €", "1 234,50 $" (FR) — "€12,480.32", "$1,234.50" (EN). */
 export function fmtFiat(value: number, currency: Currency, opts: { decimals?: number; sign?: boolean } = {}): string {
   const abs = Math.abs(value);
   const decimals = opts.decimals ?? (abs > 0 && abs < 0.01 ? 4 : 2);
@@ -37,16 +68,16 @@ export function fmtFiat(value: number, currency: Currency, opts: { decimals?: nu
   return opts.sign && value > 0 ? `+${s}` : s;
 }
 
-/** Split a fiat amount for the big display (integer bright, decimals faint): {int:"12 480", rest:",32 €"}. */
+/** Split a fiat amount for the big display (integer bright, decimals faint): {int:"12 480", rest:",32 €"} / {int:"€12,480", rest:".32"}. */
 export function splitFiat(value: number, currency: Currency): { int: string; rest: string } {
   const s = fmtFiat(value, currency, { decimals: 2 });
-  const i = s.lastIndexOf(',');
+  const i = s.lastIndexOf(decimalSep());
   return i < 0 ? { int: s, rest: '' } : { int: s.slice(0, i), rest: s.slice(i) };
 }
 
-/** Group an integer string by 3 with narrow NBSP. */
+/** Group an integer string by 3 (narrow NBSP in French, comma in English). */
 function groupInt(int: string): string {
-  return int.replace(/\B(?=(\d{3})+(?!\d))/g, NNBSP);
+  return int.replace(/\B(?=(\d{3})+(?!\d))/g, groupSep());
 }
 
 /**
@@ -66,18 +97,18 @@ export function fmtCrypto(amount: bigint, decimals: number, symbol?: string, max
     const firstSig = fracFull.search(/[1-9]/);
     frac = fracFull.slice(0, Math.min(decimals, firstSig + 2)).replace(/0+$/, '');
   }
-  const out = `${neg ? MINUS : ''}${groupInt(int.toString())}${frac ? ',' + frac : ''}`;
+  const out = `${neg ? MINUS : ''}${groupInt(int.toString())}${frac ? decimalSep() + frac : ''}`;
   return symbol ? `${out}${NNBSP}${symbol}` : out;
 }
 
-/** "+1,82 %", "−0,64 %", "0,00 %". */
+/** "+1,82 %", "−0,64 %", "0,00 %" (FR) — "+1.82%", "−0.64%" (EN). */
 export function fmtPct(p: number | null | undefined, opts: { sign?: boolean; decimals?: number } = {}): string {
   if (p === null || p === undefined || !Number.isFinite(p)) return '—';
   const d = opts.decimals ?? 2;
   const abs = nf({ minimumFractionDigits: d, maximumFractionDigits: d }).format(Math.abs(p));
   const zero = Number(Math.abs(p).toFixed(d)) === 0;
   const sign = zero ? '' : p < 0 ? MINUS : opts.sign === false ? '' : '+';
-  return clean(`${sign}${abs}`) + `${NNBSP}%`;
+  return clean(`${sign}${abs}`) + (getLang() === 'fr' ? `${NNBSP}%` : '%');
 }
 
 /**
@@ -129,39 +160,44 @@ export function fmtEta(secs: number): string {
   return `≈ ${fmtNumber(secs / 3600, 1)} h`;
 }
 
-/** "il y a 42 s", "il y a 3 min". */
+/** "il y a 42 s", "il y a 3 min" — "42 s ago", "3 min ago". */
 export function fmtAgo(ms: number, now = Date.now()): string {
   const s = Math.max(0, Math.round((now - ms) / 1000));
-  if (s < 60) return `il y a ${s} s`;
-  if (s < 3600) return `il y a ${Math.floor(s / 60)} min`;
-  if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`;
-  return `il y a ${Math.floor(s / 86400)} j`;
+  if (s < 60) return t('time.agoSeconds', { n: s });
+  if (s < 3600) return t('time.agoMinutes', { n: Math.floor(s / 60) });
+  if (s < 86400) return t('time.agoHours', { n: Math.floor(s / 3600) });
+  return t('time.agoDays', { n: Math.floor(s / 86400) });
 }
 
-const timeFmt = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
-const dayFmt = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
-const dayLongFmt = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' });
-const monthFmt = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
+const timeFmt = { format: (d: Date) => df({ hour: '2-digit', minute: '2-digit' }).format(d) };
+const dayFmt = { format: (d: Date) => df({ day: 'numeric', month: 'short' }).format(d) };
+const dayLongFmt = { format: (d: Date) => df({ day: 'numeric', month: 'long' }).format(d) };
+const monthFmt = { format: (d: Date) => df({ month: 'long', year: 'numeric' }).format(d) };
+
+/** A date in the current language with any Intl options (default "27 oct. 2026" / "Oct 27, 2026"). */
+export function fmtDate(ms: number, opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }): string {
+  return df(opts).format(new Date(ms));
+}
 
 function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-/** Group label: "Aujourd'hui", "Hier", "27 octobre". */
+/** Group label: "Aujourd'hui", "Hier", "27 octobre" — "Today", "Yesterday", "October 27". */
 export function fmtDayGroup(ms: number, now = Date.now()): string {
   const d = new Date(ms);
   const today = new Date(now);
   const yesterday = new Date(now - 86_400_000);
-  if (sameDay(d, today)) return 'Aujourd’hui';
-  if (sameDay(d, yesterday)) return 'Hier';
+  if (sameDay(d, today)) return t('time.today');
+  if (sameDay(d, yesterday)) return t('time.yesterday');
   return dayLongFmt.format(d);
 }
 
-/** "Hier · 18:42", "27 oct. · 09:10", "14:08" (today). */
+/** "Hier · 18:42", "27 oct. · 09:10", "14:08" (today) — "Yesterday · 6:42 PM". */
 export function fmtWhen(ms: number, now = Date.now()): string {
   const d = new Date(ms);
   if (sameDay(d, new Date(now))) return timeFmt.format(d);
-  if (sameDay(d, new Date(now - 86_400_000))) return `Hier · ${timeFmt.format(d)}`;
+  if (sameDay(d, new Date(now - 86_400_000))) return `${t('time.yesterday')} · ${timeFmt.format(d)}`;
   return `${dayFmt.format(d)} · ${timeFmt.format(d)}`;
 }
 
@@ -174,14 +210,17 @@ export function fmtMonth(ms: number): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Chart tooltip label: "AUJ. 14:00", "27 OCT. 09:10". */
+/** Chart tooltip label: "AUJ. 14:00", "27 OCT. 09:10" — "TODAY 02:00 PM", "OCT 27 09:10 AM". */
 export function fmtChartTime(ms: number, now = Date.now()): string {
   const d = new Date(ms);
-  if (sameDay(d, new Date(now))) return `AUJ. ${timeFmt.format(d)}`;
+  if (sameDay(d, new Date(now))) return `${t('time.todayShort')} ${timeFmt.format(d)}`;
   return `${dayFmt.format(d)} ${timeFmt.format(d)}`.toUpperCase();
 }
 
-/** Normalise a decimal typed by the user (keeps digits and one comma). */
+/**
+ * Normalise a decimal typed by the user: digits and one decimal mark, returned with the current
+ * language's mark (« 0,5 » / « 0.5 »). `,` and `.` are both accepted as the mark while typing.
+ */
 export function sanitizeDecimalInput(raw: string, maxDecimals: number): string {
   let s = raw.replace(/[^\d.,]/g, '');
   // A pasted « 1,234.56 » or « 1.234,56 »: both separators → the LAST one is the decimal mark,
@@ -200,13 +239,13 @@ export function sanitizeDecimalInput(raw: string, maxDecimals: number): string {
   if (i >= 0) s = s.slice(0, i + 1) + s.slice(i + 1).replace(/,/g, '');
   const [int = '', frac] = s.split(',');
   const intClean = int.replace(/^0+(?=\d)/, '');
-  return frac === undefined ? intClean : `${intClean || '0'},${frac.slice(0, maxDecimals)}`;
+  return frac === undefined ? intClean : `${intClean || '0'}${decimalSep()}${frac.slice(0, maxDecimals)}`;
 }
 
-/** Base units → editable French decimal string ("0,25"), no grouping. */
+/** Base units → editable decimal string in the current language ("0,25" / "0.25"), no grouping. */
 export function toInputDecimal(amount: bigint, decimals: number): string {
   const base = 10n ** BigInt(decimals);
   const int = amount / base;
   const frac = decimals > 0 ? (amount % base).toString().padStart(decimals, '0').replace(/0+$/, '') : '';
-  return frac ? `${int},${frac}` : int.toString();
+  return frac ? `${int}${decimalSep()}${frac}` : int.toString();
 }

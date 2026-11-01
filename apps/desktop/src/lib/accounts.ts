@@ -5,6 +5,7 @@
 
 import type { AccountChain, Accounts, VaultAccountEntry } from '@kyro/shared';
 import type { AdapterSet, AnyAdapter } from '@kyro/chains';
+import { t } from '../i18n';
 
 /** Chain names used in default account names (same as Rust's `Chain::label`). */
 export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
@@ -19,18 +20,31 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
-export const ACCOUNT_CHAIN_HINT: Record<AccountChain, string> = {
-  btc: 'SegWit et Taproot',
-  evm: 'Ethereum et toutes les chaînes EVM (même adresse)',
-  sol: 'SOL et tokens SPL',
-  ltc: 'SegWit',
-  doge: 'P2PKH',
-  tron: 'TRX et TRC-20',
-  xrp: 'XRP et monnaies émises',
-  ada: 'ADA et tokens',
-};
+export function accountChainHint(chain: AccountChain): string {
+  switch (chain) {
+    case 'btc':
+      return t('settings.hintBtc');
+    case 'evm':
+      return t('settings.hintEvm');
+    case 'sol':
+      return t('settings.hintSol');
+    case 'ltc':
+      return 'SegWit';
+    case 'doge':
+      return 'P2PKH';
+    case 'tron':
+      return t('settings.hintTron');
+    case 'xrp':
+      return t('settings.hintXrp');
+    case 'ada':
+      return t('settings.hintAda');
+  }
+}
 
-/** « Bitcoin 1 » for index 0, « Bitcoin 2 » for index 1… */
+/**
+ * « Bitcoin 1 » for index 0, « Bitcoin 2 » for index 1… The same in every language (chain name +
+ * number): it is saved as the account's name by Rust.
+ */
 export function defaultAccountName(chain: AccountChain, index: number): string {
   return `${ACCOUNT_CHAIN_LABEL[chain]} ${index + 1}`;
 }
@@ -74,9 +88,9 @@ export function accountAddress(acc: Accounts, family: AccountChain): { address: 
 /** Account name check, same rule as Rust (1–32 characters after trim, no control character). */
 export function accountNameProblem(name: string): string | null {
   const n = name.trim();
-  if (!n) return 'Donne un nom au compte.';
-  if ([...n].length > 32) return '32 caractères au plus.';
-  if (/\p{Cc}/u.test(n)) return 'Caractère non autorisé.';
+  if (!n) return t('settings.nameEmpty');
+  if ([...n].length > 32) return t('settings.nameTooLong');
+  if (/\p{Cc}/u.test(n)) return t('settings.nameBadChar');
   return null;
 }
 
@@ -116,5 +130,5 @@ export function ownAccountOf<T extends OwnAccountRef>(sources: T[], family: Acco
 
 /** Review label of a recipient that is one of the user's accounts. */
 export function ownAccountLabel(name: string): string {
-  return `Ton compte « ${name} »`;
+  return t('settings.ownAccountLabel', { name });
 }

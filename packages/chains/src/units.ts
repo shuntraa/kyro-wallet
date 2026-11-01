@@ -2,12 +2,14 @@
 //
 // Exact decimal ↔ smallest-unit conversion (no floats).
 
+import { l10n } from '@kyro/shared';
+
 /** Parse a user decimal ("0,25", "1.5", " 12 ") into base units. Throws on invalid input or too many decimals. */
 export function parseUnits(input: string, decimals: number): bigint {
   const s = input.trim().replace(/\s| | /g, '').replace(',', '.');
-  if (!/^\d*\.?\d*$/.test(s) || s === '' || s === '.') throw new Error('Montant invalide');
+  if (!/^\d*\.?\d*$/.test(s) || s === '' || s === '.') throw new Error(l10n('Montant invalide', 'Invalid amount'));
   const [int = '0', frac = ''] = s.split('.');
-  if (frac.length > decimals) throw new Error(`Maximum ${decimals} décimales`);
+  if (frac.length > decimals) throw new Error(l10n(`Maximum ${decimals} décimales`, `Maximum ${decimals} decimals`));
   const base = 10n ** BigInt(decimals);
   return BigInt(int || '0') * base + BigInt((frac + '0'.repeat(decimals)).slice(0, decimals) || '0');
 }

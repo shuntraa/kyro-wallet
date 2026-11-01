@@ -9,9 +9,11 @@ import { useApp } from '../state/app';
 import { cbfPhaseLabel, useCbf } from '../state/cbf';
 import { torWaiting, useTor } from '../state/tor';
 import { TorIndicator } from '../components/Tor';
+import { useT } from '../i18n';
 
 export function StatusFrame({ left, right }: { left: ReactNode; right?: ReactNode }) {
   const { network, demo } = useApp();
+  const { t } = useT();
   return (
     <footer className="flex h-7 shrink-0 items-center justify-between gap-2 border-t border-rail bg-bg-deep px-3.5 font-mono text-[11px] text-faint">
       {/* Fades out instead of being cut mid-word when the window is narrow. */}
@@ -19,7 +21,7 @@ export function StatusFrame({ left, right }: { left: ReactNode; right?: ReactNod
       <div className="flex shrink-0 items-center gap-[18px]">
         <TorIndicator />
         {right}
-        {demo && <span className="rounded-[3px] border border-ice/30 px-1.5 py-px leading-none font-medium tracking-[0.06em] text-ice">MODE DÉMO</span>}
+        {demo && <span className="rounded-[3px] border border-ice/30 px-1.5 py-px leading-none font-medium tracking-[0.06em] text-ice">{t('shell.demoMode')}</span>}
         {network === 'testnet' && <span className="rounded-[3px] border border-warn/40 bg-warn/[.08] px-1.5 py-px leading-none font-medium tracking-[0.06em] text-warn">TESTNET</span>}
         <span>v{__APP_VERSION__}</span>
       </div>
@@ -46,13 +48,14 @@ interface NetStat {
 /** Live status bar of the unlocked app. */
 export function StatusBar({ syncing, failedChains, serverDownChains = [], extra }: { syncing: boolean; failedChains: string[]; serverDownChains?: string[]; extra?: ReactNode }) {
   const { adapters, accounts, settings, network } = useApp();
+  const { t, tp } = useT();
   // Small "perso" hint next to a chain served by the user's own server.
   const custom = {
     btc: bitcoinServerFor(settings.servers, network).kind !== 'default',
     evm: adapters ? settings.servers.evm[String([...adapters.evm.values()][0]?.chain.chainId)] !== undefined : false,
     sol: adapters?.sol ? settings.servers.solana[adapters.sol.chain.cluster] !== undefined : false,
   };
-  const perso = (on: boolean) => (on ? <span className="text-mute" title="Serveur personnalisé (Réglages › Réseaux et serveurs)"> · perso</span> : null);
+  const perso = (on: boolean) => (on ? <span className="text-mute" title={t('shell.customServerTitle')}> · {t('shell.customShort')}</span> : null);
   const tor = useTor();
   const torBlocked = torWaiting(tor);
   // Re-probe as soon as Tor comes up instead of waiting for the next 30 s tick.
@@ -105,13 +108,15 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const cbf = useCbf().status;
   const cbfText = !cbf
-    ? 'filtres compacts'
+    ? t('shell.cbfCompact')
     : cbf.state === 'filters'
-      ? `filtres ${Math.round(cbf.progress * 100)}\u202f%`
+      ? t('shell.cbfFiltersPct', { n: Math.round(cbf.progress * 100) })
       : cbf.state === 'headers'
-        ? `en-têtes${cbf.tipHeight != null ? ` ${fmtNumber(cbf.tipHeight, 0)}` : ''}`
+        ? cbf.tipHeight != null
+          ? t('shell.cbfHeadersAt', { height: fmtNumber(cbf.tipHeight, 0) })
+          : t('shell.cbfHeaders')
         : cbf.state === 'synced'
-          ? `${cbf.peers.length} pair${cbf.peers.length > 1 ? 's' : ''}${stat.btcHeight !== null ? ` · bloc ${fmtNumber(stat.btcHeight, 0)}` : ''}`
+          ? `${tp('shell.peers', cbf.peers.length)}${stat.btcHeight !== null ? ` · ${t('shell.block', { height: fmtNumber(stat.btcHeight, 0) })}` : ''}`
           : cbfPhaseLabel(cbf);
   const degraded = failedChains.length > 0 || stat.errors > 0;
 
@@ -122,25 +127,27 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
           <span className="flex items-center gap-1.5 text-mute">
             <Dot color={torBlocked ? '#8C929D' : syncing ? '#7CC4FF' : degraded ? '#F5B74F' : '#3DDC97'} live={syncing && !torBlocked} />
             {torBlocked
-              ? 'En attente de Tor…'
+              ? t('shell.waitingTor')
               : cbfMode && cbf && cbf.state !== 'synced' && cbf.state !== 'error' && cbf.state !== 'idle'
-                ? 'Synchronisation des filtres…'
+                ? t('shell.syncingFilters')
                 : syncing
-                ? 'Synchronisation…'
+                ? t('shell.syncing')
                 : serverDownChains.length > 0
-                  ? `Ton serveur ne répond pas · ${serverDownChains.map((k) => adapters?.all.find((x) => x.chain.key === k)?.chain.label ?? k).join(', ')}`
+                  ? t('shell.serverDownChains', { chains: serverDownChains.map((k) => adapters?.all.find((x) => x.chain.key === k)?.chain.label ?? k).join(', ') })
                   : degraded
-                    ? `Partiel${failedChains.length ? ` · ${failedChains.join(', ')} injoignable` : ''}`
-                    : 'Synchronisé'}
+                    ? failedChains.length
+                      ? t('shell.partialUnreachable', { chains: failedChains.join(', ') })
+                      : t('shell.partial')
+                    : t('shell.synced')}
           </span>
           {adapters?.btc !== null && (
           <span>
             {btcLabel}
             {cbfMode ? (
-              <span title="Bitcoin par filtres compacts (BIP157/158) : aucun serveur ne voit tes adresses"> · CBF · {cbfText}</span>
+              <span title={t('shell.cbfTitle')}> · CBF · {cbfText}</span>
             ) : (
               <>
-                {perso(custom.btc)} · {stat.btcHeight !== null ? `bloc ${fmtNumber(stat.btcHeight, 0)}` : 'hors ligne'}
+                {perso(custom.btc)} · {stat.btcHeight !== null ? t('shell.block', { height: fmtNumber(stat.btcHeight, 0) }) : t('shell.offline')}
               </>
             )}
           </span>
@@ -149,13 +156,13 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
           {(!adapters || adapters.evm.size > 0) && (
             <span>
               {evmLabel}
-              {perso(custom.evm)} · {stat.evmMs !== null ? `${stat.evmMs} ms` : 'hors ligne'}
+              {perso(custom.evm)} · {stat.evmMs !== null ? `${stat.evmMs} ms` : t('shell.offline')}
             </span>
           )}
           {adapters?.sol !== null && (
             <span>
               {solLabel}
-              {perso(custom.sol)} · {stat.solMs !== null ? `${stat.solMs} ms` : 'hors ligne'}
+              {perso(custom.sol)} · {stat.solMs !== null ? `${stat.solMs} ms` : t('shell.offline')}
             </span>
           )}
           {extra}

@@ -5,6 +5,7 @@
 
 import { HDKey } from '@scure/bip32';
 
+import { l10n } from '@kyro/shared';
 const VERSIONS = [
   { public: 0x0488b21e, private: 0x0488ade4 }, // xpub
   { public: 0x043587cf, private: 0x04358394 }, // tpub
@@ -14,27 +15,30 @@ const VERSIONS = [
   { public: 0x044a5262, private: 0x044a4e28 }, // upub
 ];
 
+/** Thrown when an xprv is given: never swallowed by the version loop. */
+class PrivateKeyRefused extends Error {}
+
 export function parseXpub(xpub: string): HDKey {
   for (const v of VERSIONS) {
     try {
       const key = HDKey.fromExtendedKey(xpub, v);
-      if (key.privateKey) throw new Error('Clé privée étendue refusée');
+      if (key.privateKey) throw new PrivateKeyRefused(l10n('Clé privée étendue refusée', 'Extended private key refused'));
       return key;
     } catch (e) {
-      if (e instanceof Error && e.message.startsWith('Clé privée')) throw e;
+      if (e instanceof PrivateKeyRefused) throw e;
     }
   }
-  throw new Error('xpub invalide ou version inconnue');
+  throw new Error(l10n('xpub invalide ou version inconnue', 'Invalid xpub or unknown version'));
 }
 
 /** Compressed 33-byte pubkey at `change/index`. */
 export function derivePubkey(account: HDKey, change: 0 | 1, index: number): Uint8Array {
   const pk = account.deriveChild(change).deriveChild(index).publicKey;
-  if (!pk) throw new Error('Dérivation impossible');
+  if (!pk) throw new Error(l10n('Dérivation impossible', 'Derivation failed'));
   return pk;
 }
 
 export function fingerprintBytes(hex: string): Uint8Array {
-  if (!/^[0-9a-fA-F]{8}$/.test(hex)) throw new Error('Empreinte invalide');
+  if (!/^[0-9a-fA-F]{8}$/.test(hex)) throw new Error(l10n('Empreinte invalide', 'Invalid fingerprint'));
   return Uint8Array.from(hex.match(/../g)!.map((b) => parseInt(b, 16)));
 }

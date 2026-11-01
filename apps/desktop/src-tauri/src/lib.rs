@@ -15,6 +15,7 @@ mod dialog_text;
 mod electrum;
 mod error;
 mod hw;
+mod i18n;
 mod known_tokens;
 mod nav_guard;
 mod net;

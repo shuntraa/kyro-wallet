@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { call, ipcErrorIn, onCbfStatus, toIpcError, type CbfStatus, type Unlisten } from '@kyro/shared';
+import { t } from '../i18n';
 
 export type CbfAvailability = 'unknown' | 'available' | 'disabled';
 
@@ -98,21 +99,21 @@ export function createCbfStore(deps: CbfStoreDeps): CbfStore {
   return store;
 }
 
-/** Short French label of a sync phase. */
+/** Short label of a sync phase (current language). */
 export function cbfPhaseLabel(s: CbfStatus): string {
   switch (s.state) {
     case 'idle':
-      return 'en attente';
+      return t('shell.cbfIdle');
     case 'connecting':
-      return 'connexion aux pairs';
+      return t('shell.cbfConnecting');
     case 'headers':
-      return 'en-têtes';
+      return t('shell.cbfHeaders');
     case 'filters':
-      return 'filtres';
+      return t('shell.cbfFilters');
     case 'synced':
-      return 'synchronisé';
+      return t('shell.cbfSynced');
     case 'error':
-      return 'erreur';
+      return t('shell.cbfError');
   }
 }
 
