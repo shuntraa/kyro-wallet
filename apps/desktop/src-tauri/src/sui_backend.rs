@@ -215,22 +215,53 @@ pub struct SuiCoin {
 
 /// SUI coin objects owned by `address` (at most 300), largest first.
 pub async fn coins(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Vec<SuiCoin>> {
+    coins_of(
+        ctx,
+        address,
+        "0x2::coin::Coin<0x2::sui::SUI>",
+        SUI_COIN_REPR,
+    )
+    .await
+}
+
+/// Coin objects of the known token `coin_type` owned by `address` (at most 300), largest first.
+pub async fn token_coins(
+    ctx: &SuiCtx<'_>,
+    address: &str,
+    coin: &wallet_core::SuiKnownCoin,
+) -> AppResult<Vec<SuiCoin>> {
+    let t = format!("0x2::coin::Coin<{}>", coin.coin_type);
+    let repr = format!(
+        "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<{}>",
+        coin.coin_type
+    );
+    coins_of(ctx, address, &t, &repr).await
+}
+
+/// Coin objects whose Move type is `filter` (printed by the server as `repr`, checked on every
+/// object), owned by `address` at the version and digest returned.
+async fn coins_of(
+    ctx: &SuiCtx<'_>,
+    address: &str,
+    filter: &str,
+    repr: &str,
+) -> AppResult<Vec<SuiCoin>> {
     let a = check_address(address)?;
     let mut out: Vec<SuiCoin> = Vec::new();
     let mut after: Option<String> = None;
     for _ in 0..MAX_COIN_PAGES {
         let d = gql(
             ctx,
-            "query($a: SuiAddress!, $n: Int!, $after: String) { chainIdentifier address(address: $a) { objects(first: $n, after: $after, filter: { type: \"0x2::coin::Coin<0x2::sui::SUI>\" }) { pageInfo { hasNextPage endCursor } nodes { address version digest owner { __typename ... on AddressOwner { address { address } } } contents { type { repr } json } } } } }",
-            json!({ "a": a, "n": COIN_PAGE, "after": after }),
+            "query($a: SuiAddress!, $n: Int!, $after: String, $t: String!) { chainIdentifier address(address: $a) { objects(first: $n, after: $after, filter: { type: $t }) { pageInfo { hasNextPage endCursor } nodes { address version digest owner { __typename ... on AddressOwner { address { address } } } contents { type { repr } json } } } } }",
+            json!({ "a": a, "n": COIN_PAGE, "after": after, "t": filter }),
         )
         .await?;
         check_chain(ctx, &d["chainIdentifier"])?;
         let objs = &d["address"]["objects"];
         for n in objs["nodes"].as_array().into_iter().flatten() {
             let c = &n["contents"];
-            if c["type"]["repr"] != SUI_COIN_REPR {
-                return Err(bad("Sui : objet qui n'est pas une pièce SUI dans la liste"));
+            if c["type"]["repr"] != repr {
+                return Err(bad("Sui : objet d'un autre type dans la liste des pièces"));
             }
             if n["owner"]["address"]["address"].as_str() != Some(a.as_str()) {
                 return Err(bad("Sui : pièce qui n'appartient pas à ce compte"));
@@ -262,12 +293,56 @@ pub async fn coins(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Vec<SuiCoin>> {
     Ok(out)
 }
 
+/// Balance of each known token (coin objects + address balance), one line per known coin type.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiTokenBalance {
+    pub coin_type: String,
+    pub symbol: String,
+    pub decimals: u8,
+    /// Token units, decimal: `coin + addressBalance`.
+    pub total: String,
+    /// Units held in coin objects: what Kyro can send.
+    pub coin: String,
+    pub address_balance: String,
+}
+
+pub async fn token_balances(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Vec<SuiTokenBalance>> {
+    let a = check_address(address)?;
+    let mut out = Vec::new();
+    for k in wallet_core::sui_known_coins(ctx.network == Network::Testnet) {
+        let d = gql(
+            ctx,
+            "query($a: SuiAddress!, $t: String!) { chainIdentifier address(address: $a) { balance(coinType: $t) { totalBalance coinBalance addressBalance } } }",
+            json!({ "a": a, "t": k.coin_type }),
+        )
+        .await?;
+        check_chain(ctx, &d["chainIdentifier"])?;
+        let b = &d["address"]["balance"];
+        let get = |f: &str| num(&b[f]).unwrap_or(0).to_string();
+        out.push(SuiTokenBalance {
+            coin_type: k.coin_type.into(),
+            symbol: k.symbol.into(),
+            decimals: k.decimals,
+            total: get("totalBalance"),
+            coin: get("coinBalance"),
+            address_balance: get("addressBalance"),
+        });
+    }
+    Ok(out)
+}
+
 /// Gas coins for a transfer: largest first until `need` MIST is covered (at most 256 coins).
 /// Returns every coin (up to 256) when even that does not cover `need`.
 pub fn select_coins(coins: &[SuiCoin], need: u64) -> Vec<SuiCoin> {
+    select_up_to(coins, need, wallet_core::SUI_MAX_GAS_OBJECTS)
+}
+
+/// Same, with at most `max` coins.
+pub fn select_up_to(coins: &[SuiCoin], need: u64, max: usize) -> Vec<SuiCoin> {
     let mut out = Vec::new();
     let mut sum: u64 = 0;
-    for c in coins.iter().take(wallet_core::SUI_MAX_GAS_OBJECTS) {
+    for c in coins.iter().take(max) {
         out.push(*c);
         sum = sum.saturating_add(c.balance);
         if sum >= need {
@@ -364,11 +439,24 @@ pub async fn simulate(ctx: &SuiCtx<'_>, bcs_b64: &str, digest: &str) -> AppResul
 
 /// Net SUI change of `owner` in a simulation.
 pub fn sui_change(sim: &SuiSimulation, owner: &str) -> i128 {
+    coin_change(sim, owner, SUI_REPR)
+}
+
+/// Net change of `owner` for the coin type printed `repr`.
+pub fn coin_change(sim: &SuiSimulation, owner: &str, repr: &str) -> i128 {
     sim.balance_changes
         .iter()
-        .filter(|c| c.owner == owner && c.coin_type == SUI_REPR)
+        .filter(|c| c.owner == owner && c.coin_type == repr)
         .map(|c| c.amount)
         .sum()
+}
+
+/// Only SUI and the token `repr` moved, only between `a` and `b`; the SUI of `b` did not move.
+pub fn only_token_between(sim: &SuiSimulation, a: &str, b: &str, repr: &str) -> bool {
+    sim.balance_changes.iter().all(|c| {
+        (c.coin_type == repr && (c.owner == a || c.owner == b))
+            || (c.coin_type == SUI_REPR && c.owner == a)
+    })
 }
 
 /// Only SUI moved, only between `a` and `b`.
@@ -467,10 +555,29 @@ pub async fn txs(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Value> {
             .iter()
             .find(|c| c.owner != a && c.coin_type == SUI_REPR && (c.amount > 0) == (change < 0))
             .map(|c| c.owner.clone());
-        let other_coins = e
-            .balance_changes
+        let known = wallet_core::sui_known_coins(ctx.network == Network::Testnet);
+        let other_coins = e.balance_changes.iter().any(|c| {
+            c.owner == a
+                && c.coin_type != SUI_REPR
+                && !known.iter().any(|k| k.coin_type == c.coin_type)
+        });
+        // Known tokens only: their net change for us and who was on the other side.
+        let tokens: Vec<Value> = known
             .iter()
-            .any(|c| c.owner == a && c.coin_type != SUI_REPR);
+            .filter_map(|k| {
+                let ch = coin_change(&e, &a, k.coin_type);
+                (ch != 0).then(|| {
+                    let cp = e
+                        .balance_changes
+                        .iter()
+                        .find(|c| {
+                            c.owner != a && c.coin_type == k.coin_type && (c.amount > 0) == (ch < 0)
+                        })
+                        .map(|c| c.owner.clone());
+                    json!({ "coinType": k.coin_type, "change": ch.to_string(), "counterparty": cp })
+                })
+            })
+            .collect();
         out.push(json!({
             "digest": e.digest,
             "timestamp": t["effects"]["timestamp"],
@@ -481,6 +588,7 @@ pub async fn txs(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Value> {
             "fee": if sender == a { Some(e.estimate.net_fee.to_string()) } else { None },
             "counterparty": counterparty,
             "otherCoins": other_coins,
+            "tokens": tokens,
         }));
     }
     out.reverse();
@@ -604,7 +712,7 @@ mod live {
         let built = crate::commands_sui::build(c, &me, to, amount)
             .await
             .unwrap();
-        let (summary, context) = crate::commands_sui::prepare_sign(c, &me, &built.bcs)
+        let (summary, context) = crate::commands_sui::prepare_sign(c, &me, &built.bcs, None)
             .await
             .unwrap();
         assert_eq!(summary, built.summary);
@@ -752,6 +860,68 @@ mod live {
             let d2 = send(c, &seed, 1, &a0, None).await;
             eprintln!("TRANSFER ALL BACK: {d2}");
             eprintln!("history of account 1: {}", txs(c, &a1).await.unwrap());
+        });
+    }
+
+    /// USDC transfers built by Kyro for real mainnet holders (no key: simulation only, which
+    /// needs no signature): the server accepts the BCS layout, the live checks and the dialog
+    /// pass, the simulation moves exactly the amount. `cargo test -p kyro-desktop --lib
+    /// sui_token_simulation_mainnet -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn sui_token_simulation_mainnet() {
+        let net = NetClient::new(std::env::temp_dir().join("kyro-sui-live")).unwrap();
+        let usdc = wallet_core::sui_known_coins(false)[0];
+        tauri::async_runtime::block_on(async {
+            let c = SuiCtx::new(&net, Network::Mainnet, false);
+            let d = gql(
+                &c,
+                "query($t: String!) { objects(first: 40, filter: { type: $t }) { nodes { owner { ... on AddressOwner { address { address } } } } } }",
+                json!({ "t": format!("0x2::coin::Coin<{}>", usdc.coin_type) }),
+            )
+            .await
+            .unwrap();
+            let to = "0x1ada6e6f3f3e4055096f606c746690f1108fcc2ca479055cc434a3e1d3f758aa";
+            let mut done = 0;
+            for n in d["objects"]["nodes"].as_array().unwrap() {
+                let Some(holder) = n["owner"]["address"]["address"].as_str() else {
+                    continue;
+                };
+                let b = token_balances(&c, holder).await.unwrap();
+                let coin: u64 = b[0].coin.parse().unwrap();
+                let gas: u64 = balance(&c, holder).await.unwrap().coin.parse().unwrap();
+                if coin < 2 || gas < 10_000_000 {
+                    continue;
+                }
+                let tc = token_coins(&c, holder, &usdc).await.unwrap();
+                let merge = (tc.len() > 1).then(|| tc[0].balance + 1);
+                for amount in [Some(Some(1)), merge.map(Some), Some(None)]
+                    .into_iter()
+                    .flatten()
+                {
+                    match crate::commands_sui::build_token(&c, holder, to, usdc.coin_type, amount)
+                        .await
+                    {
+                        Ok(built) => {
+                            eprintln!(
+                                "--- {holder} {amount:?} ---\n{}",
+                                crate::commands_sui::describe_sui(
+                                    crate::i18n::Lang::Fr,
+                                    &built.summary,
+                                    &built.context,
+                                    Network::Mainnet
+                                )
+                            );
+                            done += 1;
+                        }
+                        Err(e) => eprintln!("{holder} {amount:?}: {e}"),
+                    }
+                }
+                if done >= 4 {
+                    break;
+                }
+            }
+            assert!(done >= 3);
         });
     }
 }

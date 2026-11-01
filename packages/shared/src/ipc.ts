@@ -943,9 +943,9 @@ export type SuiWarning = { kind: 'sendAll' } | { kind: 'selfTransfer' } | { kind
 export interface SuiTxSummary {
   sender: string;
   recipient: string;
-  /** Always `0x2::sui::SUI`. */
+  /** `0x2::sui::SUI`, or the known token's coin type (token transfer). */
   coinType: string;
-  /** MIST; null = the whole balance of the gas coins minus the gas used. */
+  /** MIST; null = the whole balance of the gas coins minus the gas used (token: token units; null = the whole balance of the token coins). */
   amount: string | null;
   /** MIST. */
   gasBudget: string;
@@ -957,6 +957,30 @@ export interface SuiTxSummary {
   digest: string;
   warnings: SuiWarning[];
   requiresExtraConfirmation: boolean;
+  /** Token transfer (known coin type, objects checked live by Rust); null for SUI. */
+  token?: SuiTokenSummary | null;
+}
+
+/** wallet-core `SuiTokenSummary`. */
+export interface SuiTokenSummary {
+  /** Verified coin type, e.g. Circle's `0xdba3…::usdc::USDC`. */
+  coinType: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  /** Token coin objects sent (merged into the first). */
+  coins: Array<{ objectId: string; version: string; digest: string }>;
+}
+
+/** `sui_token_balances` line (one per known token), token units. */
+export interface SuiTokenBalance {
+  coinType: string;
+  symbol: string;
+  decimals: number;
+  total: string;
+  /** Held in coin objects: what Kyro can send. */
+  coin: string;
+  addressBalance: string;
 }
 
 /** Live context Rust read for the dialog (MIST): balance, gas coins, simulation. */
@@ -974,6 +998,8 @@ export interface SuiContext {
   fee: string;
   /** Whole-balance transfer: what the recipient receives according to the simulation. */
   receives: string | null;
+  /** Token transfer: token coins read live (token units). */
+  token?: { balance: string; coinsTotal: string; coinBalances: string[] } | null;
 }
 
 /** `sui_txs` entry: last 20 transactions touching the address, newest first. */
@@ -989,8 +1015,10 @@ export interface SuiHistoryEntry {
   /** Net gas paid (MIST) when the address sent it. */
   fee: string | null;
   counterparty: string | null;
-  /** Other coin types moved for the address (not detailed). */
+  /** Other coin types moved for the address (not detailed; known tokens excluded). */
   otherCoins: boolean;
+  /** Known tokens moved for the address: net change (token units, signed) and the other side. */
+  tokens?: Array<{ coinType: string; change: string; counterparty: string | null }>;
 }
 
 export interface SuiTxStatus {
@@ -2489,7 +2517,12 @@ export interface Commands {
    * simulation.
    */
   sui_build_tx: { args: { to: string; amount?: string; all?: boolean } & WithAccount; ret: SuiBuilt };
-  sui_sign_tx: { args: { bcs: string; password: string } & WithAccount; ret: SuiBuilt & { signature: string; digest: string } };
+  /** Known tokens only (Circle's USDC). */
+  sui_token_balances: { args: { address: string }; ret: SuiTokenBalance[] };
+  /** Token transfer of a known `coinType`: `amount` in token units or `all`; gas paid in SUI. */
+  sui_build_token_tx: { args: { coinType: string; to: string; amount?: string; all?: boolean } & WithAccount; ret: SuiBuilt };
+  /** `coinType`: required for a token transfer (Rust re-checks every token coin live). */
+  sui_sign_tx: { args: { bcs: string; password: string; coinType?: string } & WithAccount; ret: SuiBuilt & { signature: string; digest: string } };
   /** Signature checked (ed25519 by our key over these bytes), executed, effects digest = ours. */
   sui_broadcast: { args: { bcs: string; signature: string } & WithAccount; ret: string };
   /** Not indexed yet: `found: false`. */

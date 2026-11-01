@@ -28,6 +28,8 @@ pub enum TokenChain {
     Solana,
     /// TRON network (TRC-20, base58 `T…` contract).
     Tron,
+    /// Sui (coin type `0x…::module::NAME`, held by wallet-core `sui_known_coins`).
+    Sui,
 }
 
 /// What Kyro knows about a curated token. Symbol and decimals were checked on chain against
@@ -77,6 +79,7 @@ pub fn lookup(network: Network, chain: TokenChain, contract: &str) -> Option<&'s
                 && match chain {
                     TokenChain::Evm(_) => e.contract.eq_ignore_ascii_case(contract),
                     TokenChain::Solana | TokenChain::Tron => e.contract == contract,
+                    _ => e.contract == contract,
                 }
         })
         .map(|e| &e.token)
@@ -128,6 +131,7 @@ mod tests {
         match s {
             "solana" => TokenChain::Solana,
             "tron" => TokenChain::Tron,
+            "sui" => TokenChain::Sui,
             evm => TokenChain::Evm(evm.strip_prefix("evm:").unwrap().parse().unwrap()),
         }
     }
@@ -241,7 +245,37 @@ mod tests {
                 TokenChain::Tron => {
                     wallet_core::tron_address_bytes(e.contract).unwrap();
                 }
+                TokenChain::Sui => {
+                    let (pkg, rest) = e.contract.split_once("::").unwrap();
+                    assert_eq!(pkg.len(), 66, "{e:?}");
+                    wallet_core::sui_parse_address(pkg).unwrap();
+                    assert_eq!(rest.split("::").count(), 2, "{e:?}");
+                }
             }
+        }
+    }
+
+    /// The non-EVM token tables of registry.ts are exactly those wallet-core knows (it builds and
+    /// decodes their transfers), with the same symbol and decimals.
+    #[test]
+    fn non_evm_tokens_are_wallet_core_tokens() {
+        for net in [Network::Mainnet, Network::Testnet] {
+            let tn = net == Network::Testnet;
+            let table = |chain: TokenChain| {
+                let mut v: Vec<_> = data::TOKENS
+                    .iter()
+                    .filter(|e| e.network == net && e.chain == chain)
+                    .map(|e| (e.contract.to_string(), e.token.symbol, e.token.decimals))
+                    .collect();
+                v.sort();
+                v
+            };
+            let mut sui: Vec<_> = wallet_core::sui_known_coins(tn)
+                .iter()
+                .map(|c| (c.coin_type.to_string(), c.symbol, c.decimals))
+                .collect();
+            sui.sort();
+            assert_eq!(table(TokenChain::Sui), sui);
         }
     }
 

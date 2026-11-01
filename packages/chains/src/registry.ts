@@ -71,7 +71,7 @@ export interface WatchOnlyChain {
   phase: 4;
 }
 
-export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20';
+export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'suicoin';
 
 export interface AssetDef {
   /** Unique id, e.g. `btc`, `eth:1`, `erc20:11155111:0x1c7d…`. */
@@ -833,6 +833,19 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
 };
 
 /** SPL tokens (Token or Token-2022: the program is read from the mint account). Same selection. */
+/**
+ * Sui coin types (`contract` = full coin type `0x…::module::NAME`). USDC: Circle's native USDC
+ * (developers.circle.com › USDC contract addresses, mainnet and testnet), cross-checked with
+ * CoinGecko `usd-coin` (platform `sui`); `CoinMetadata.decimals` = 6 read on chain (2026-11-01).
+ * No USDT: Tether lists no Sui deployment (tether.to › supported protocols), bridged copies are
+ * left out. wallet-core (`sui_tx.rs`, `sui_known_coins`) holds the same list (checked by
+ * known_tokens.rs tests against the generated fixture).
+ */
+export const SUI_COINS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC')],
+  mainnet: [USDC('0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC')],
+};
+
 export const SPL_TOKENS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')],
   mainnet: [
@@ -939,6 +952,11 @@ export function assetsFor(network: Network): AssetDef[] {
     if (chain.family === 'sol') {
       for (const t of SPL_TOKENS[network]) {
         out.push({ id: `spl:${t.contract}`, chainKey: chain.key, family: 'sol', kind: 'spl', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'sui') {
+      for (const t of SUI_COINS[network]) {
+        out.push({ id: `suicoin:${t.contract}`, chainKey: chain.key, family: 'sui', kind: 'suicoin', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
       }
     }
   }

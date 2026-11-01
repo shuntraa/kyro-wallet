@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { ERC20_TOKENS, SPL_TOKENS, TRC20_TOKENS, evmChains } from '../src';
+import { SUI_COINS } from '../src/registry';
 
 const NETWORKS = ['mainnet', 'testnet'] as const;
 type Net = (typeof NETWORKS)[number];
@@ -22,7 +23,7 @@ interface FixtureChain {
 }
 interface FixtureToken {
   network: Net;
-  /** `evm:<chainId>`, `solana` or `tron`. */
+  /** `evm:<chainId>`, `solana`, `tron`, or a non-EVM token chain of `OTHER_CHAINS`. */
   chain: string;
   contract: string;
   symbol: string;
@@ -46,13 +47,23 @@ export function knownTokensFixture(): Fixture {
     for (const t of SPL_TOKENS[network]) tok(network, 'solana', t);
     for (const t of TRC20_TOKENS[network]) tok(network, 'tron', t);
   }
+  for (const network of NETWORKS) {
+    for (const t of SUI_COINS[network]) tok(network, 'sui', t);
+  }
   return { evmChains: chains, tokens };
 }
+
+/** Non-EVM token chains and their `TokenChain` variant. */
+const OTHER_CHAINS: Record<string, string> = { sui: 'Sui' };
+const otherUse = () => {
+  const v = Object.values(OTHER_CHAINS).sort();
+  return v.length === 1 ? (v[0] ?? '') : `{${v.join(', ')}}`;
+};
 
 /** Rust string literal: UTF-8 is kept as is, only `\` and `"` need escaping. */
 const lit = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 const net = (n: Net) => (n === 'mainnet' ? 'M' : 'N');
-const chain = (c: string) => (c === 'solana' ? 'Solana' : c === 'tron' ? 'Tron' : `Evm(${c.slice('evm:'.length)})`);
+const chain = (c: string) => OTHER_CHAINS[c] ?? (c === 'solana' ? 'Solana' : c === 'tron' ? 'Tron' : `Evm(${c.slice('evm:'.length)})`);
 
 export function renderRust(f: Fixture): string {
   return [
@@ -60,6 +71,7 @@ export function renderRust(f: Fixture): string {
     '// Do not edit: pnpm --filter @kyro/chains exec vitest run -u test/known-tokens-table.test.ts',
     '',
     'use super::TokenChain::{Evm, Solana, Tron};',
+    `use super::TokenChain::${otherUse()};`,
     'use super::{Entry as E, KnownEvmChain as C, KnownToken as K};',
     'use wallet_core::Network::{Mainnet as M, Testnet as N};',
     '',

@@ -135,6 +135,8 @@
     "allow-sui-address",
     "allow-sui-balance",
     "allow-sui-txs",
+    "allow-sui-token-balances",
+    "allow-sui-build-token-tx",
     "allow-sui-build-tx",
     "allow-sui-sign-tx",
     "allow-sui-broadcast",

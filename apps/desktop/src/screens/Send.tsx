@@ -482,7 +482,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   // NEAR: likewise, balance − storage reserve.
   const nearSpendable = isNear && nearMe.data ? BigInt(nearMe.data.spendable) : null;
   // Sui: the address balance is not spent by Kyro, only SUI coin objects.
-  const suiSpendable = isSui && suiMe.data ? BigInt(suiMe.data.coin) : null;
+  const suiSpendable = isSui && asset?.kind === 'native' && suiMe.data ? BigInt(suiMe.data.coin) : null;
   // Polkadot: the existential deposit and the frozen part cannot be sent.
   const dotSpendable = isDot && dotMe.data ? BigInt(dotMe.data.spendable) : null;
   // Algorand: likewise, balance − minimum balance.
@@ -920,7 +920,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {isXlm && <StellarSpendable account={xlmMe.data} hidden={hideBalances} />}
             {xlmBelowActivation && <span className="text-[12px] text-down">{t('send.xlmBelowActivation')}</span>}
             {isNear && <NearSpendable account={nearMe.data} hidden={hideBalances} />}
-            {isSui && <SuiSpendable balance={suiMe.data} hidden={hideBalances} />}
+            {isSui && <SuiSpendable balance={suiMe.data} hidden={hideBalances} token={asset?.kind !== 'native'} />}
             {isHbar && <HbarAccountState account={hbarMe.data} hidden={hideBalances} />}
             {isKas && <KaspaSpendable account={kasMe.data} hidden={hideBalances} />}
             {kasBelowMin && <span className="text-[12px] text-down">{t('send.kasBelowMin')}</span>}
@@ -1309,7 +1309,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {built && addrValid && built.unsigned.family === 'sui' && (
             <EnClair tone={built.unsigned.all ? 'warn' : 'ice'}>
               {rt('send.clearSui', { b: (c) => <strong>{c}</strong> }, {
-                amount: built.unsigned.all ? t('send.clearSuiAll', { receives: built.unsigned.context.receives ? t('send.clearSuiReceives', { amount: fmtCrypto(BigInt(built.unsigned.context.receives), 9, 'SUI') }) : '' }) : fmtCrypto(built.unsigned.amount, 9, 'SUI'),
+                amount: built.unsigned.summary.token ? fmtCrypto(built.unsigned.amount, built.unsigned.summary.token.decimals, built.unsigned.summary.token.symbol) : built.unsigned.all ? t('send.clearSuiAll', { receives: built.unsigned.context.receives ? t('send.clearSuiReceives', { amount: fmtCrypto(BigInt(built.unsigned.context.receives), 9, 'SUI') }) : '' }) : fmtCrypto(built.unsigned.amount, 9, 'SUI'),
                 recipient: recipientName,
                 gas: fmtCrypto(BigInt(built.unsigned.context.fee) > 0n ? BigInt(built.unsigned.context.fee) : 0n, 9, 'SUI'),
                 max: fmtCrypto(built.unsigned.maxFee, 9, 'SUI'),
@@ -1469,7 +1469,7 @@ function dataLabel(b: Built | null, family?: string): string {
   if (u.family === 'dot') return `transfer_keep_alive · nonce ${u.summary.nonce}`;
   if (u.family === 'kas') return `${tp('send.dataInputs', u.summary.inputs)} · ${tp('send.dataOutputs', u.summary.outputs.length)} · ${u.summary.mass.total} g`;
   if (u.family === 'hbar') return `CryptoTransfer · ${u.summary.memo !== null ? t('send.dataMemo') : t('send.dataNoMemo')} · ${t('send.dataHbarNodes', { n: u.summary.nodes.length })}`;
-  if (u.family === 'sui') return u.all ? t('send.dataSuiAll') : 'SplitCoins + TransferObjects';
+  if (u.family === 'sui') return u.summary.token ? `${(u.summary.token.coins.length > 1 ? 'MergeCoins + ' : '')}${u.all ? '' : 'SplitCoins + '}TransferObjects · ${u.summary.token.symbol}` : u.all ? t('send.dataSuiAll') : 'SplitCoins + TransferObjects';
   if (u.family === 'near') return `Transfer · nonce ${u.summary.nonce}${u.context.createsAccount ? ` · ${t('send.dataNearCreates')}` : ''}`;
   if (u.family === 'xlm') return `${u.createsAccount ? 'CreateAccount' : 'Payment'}${u.memo ? ` · ${t('send.dataXlmMemo', { kind: u.memo.kind === 'id' ? t('send.dataXlmMemoId') : u.memo.kind })}` : ` · ${t('send.dataNoMemo')}`}`;
   if (u.family === 'xrp') return `Payment${u.summary.destinationTag !== null ? ` · tag ${u.summary.destinationTag}` : ` · ${t('send.dataNoTag')}`}`;

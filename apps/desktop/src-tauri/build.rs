@@ -127,6 +127,8 @@ const COMMANDS: &[&str] = &[
     "sui_address",
     "sui_balance",
     "sui_txs",
+    "sui_token_balances",
+    "sui_build_token_tx",
     "sui_build_tx",
     "sui_sign_tx",
     "sui_broadcast",

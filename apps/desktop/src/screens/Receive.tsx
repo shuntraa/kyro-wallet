@@ -568,6 +568,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           {family === 'sui' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               {rt('receive.suiNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.suiTokenNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</span>}
             </Notice>
           )}
           {family === 'hbar' && (

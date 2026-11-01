@@ -301,6 +301,8 @@ export function createDemoSui(d: DemoSuiDeps) {
       const { summary, context } = prepare(bcs, sender);
       return { bcs, summary, context };
     },
+    sui_token_balances: () => Promise.resolve([]),
+    sui_build_token_tx: () => Promise.reject(new Error(l10n('Démo : envoi de jetons Sui non simulé', 'Demo: Sui token sends are not simulated'))),
     sui_sign_tx: async (a) => {
       d.requireUnlocked();
       const sender = demoSuiAddress(accountArg(a.account));

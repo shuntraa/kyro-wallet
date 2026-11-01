@@ -190,9 +190,10 @@ pub use sui::{
     sui_parse_address, sui_path, sui_public_key, SUI_ED25519_FLAG,
 };
 pub use sui_tx::{
-    sui_decode_tx, sui_sign, sui_tx_digest, sui_verify_signed, SuiGasCoinView, SuiObjectRef,
+    sui_decode_coin_tx, sui_decode_tx, sui_known_coin, sui_known_coins, sui_sign, sui_sign_coin,
+    sui_tx_digest, sui_verify_signed, SuiGasCoinView, SuiKnownCoin, SuiObjectRef, SuiTokenSummary,
     SuiTransfer, SuiTransferAmount, SuiTxSummary, SuiWarning, MIST_PER_SUI, SUI_COIN_TYPE,
-    SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS,
+    SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS, SUI_MAX_TOKEN_COINS,
 };
 pub use ton::{
     ton_address, ton_decode_tx, ton_parse_address, ton_parse_raw_address, ton_path, ton_public_key,

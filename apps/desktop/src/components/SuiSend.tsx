@@ -17,9 +17,10 @@ import { rt } from '../i18n/rich';
 
 const SUI = (mist: bigint | string) => fmtCrypto(BigInt(mist), 9, 'SUI', 9);
 
-/** Coins vs address balance, with the reason Kyro spends only the former. */
-export function SuiSpendable({ balance, hidden }: { balance: SuiBalance | undefined; hidden: boolean }) {
+/** Coins vs address balance, with the reason Kyro spends only the former. Token: gas is paid in SUI. */
+export function SuiSpendable({ balance, hidden, token }: { balance: SuiBalance | undefined; hidden: boolean; token?: boolean }) {
   useT();
+  if (token) return <span className="text-[12px] leading-[1.45] text-mute">{t('sui.gasInSui')}</span>;
   if (!balance) return null;
   const ab = BigInt(balance.addressBalance);
   return (
@@ -46,8 +47,19 @@ export function SuiSummaryView({ u, suiPrice, currency }: { u: SuiUnsigned; suiP
         <span className="font-semibold text-text">{t('sui.title')}</span>
         <span className="text-[11px] text-mute">{t('sui.decodedByVault')}</span>
       </div>
-      <Line k={t('sui.lToken')} v={`SUI (${s.coinType})`} />
-      <Line k={t('sui.lAmount')} v={s.amount !== null ? SUI(s.amount) : t('sui.allCoins', { receives: c.receives ? t('sui.receives', { amount: SUI(c.receives) }) : '' })} warn={s.amount === null} />
+      {s.token ? (
+        <>
+          <Line k={t('sui.lToken')} v={t('sui.lTokenValue', { symbol: s.token.symbol, decimals: s.token.decimals })} />
+          <Line k={t('sui.lCoinType')} v={s.token.coinType} mono />
+          <Line k={t('sui.lAmount')} v={s.amount !== null ? fmtCrypto(BigInt(s.amount), s.token.decimals, s.token.symbol, s.token.decimals) : t('sui.allToken', { symbol: s.token.symbol, amount: fmtCrypto(BigInt(c.token?.coinsTotal ?? '0'), s.token.decimals, s.token.symbol, s.token.decimals) })} warn={s.amount === null} />
+          <Line k={t('sui.lTokenCoins', { symbol: s.token.symbol })} v={`${s.token.coins.length}`} />
+        </>
+      ) : (
+        <>
+          <Line k={t('sui.lToken')} v={`SUI (${s.coinType})`} />
+          <Line k={t('sui.lAmount')} v={s.amount !== null ? SUI(s.amount) : t('sui.allCoins', { receives: c.receives ? t('sui.receives', { amount: SUI(c.receives) }) : '' })} warn={s.amount === null} />
+        </>
+      )}
       <Line k={t('sui.lFeeSim')} v={`${fee < 0n ? '−' : ''}${SUI(fee < 0n ? -fee : fee)}${fiat(c.fee)}`} />
       <Line k={t('sui.lGasBudget')} v={`${SUI(s.gasBudget)}${fiat(s.gasBudget)}`} />
       <Line k={t('sui.lGasPrice')} v={t('sui.lGasPriceValue', { price: s.gasPrice, reference: c.referenceGasPrice })} />

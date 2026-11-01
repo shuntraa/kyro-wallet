@@ -241,6 +241,8 @@ pub fn run() {
             commands_sui::sui_address,
             commands_sui::sui_balance,
             commands_sui::sui_txs,
+            commands_sui::sui_token_balances,
+            commands_sui::sui_build_token_tx,
             commands_sui::sui_build_tx,
             commands_sui::sui_sign_tx,
             commands_sui::sui_broadcast,
