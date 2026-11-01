@@ -11,6 +11,7 @@
     "core:window:allow-close",
     "core:window:allow-start-dragging",
     "core:window:allow-is-maximized",
+    "allow-update-status",
     "allow-vault-status",
     "allow-vault-create",
     "allow-vault-import",

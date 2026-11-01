@@ -114,7 +114,16 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // NEAR Intents 1Click (public, no key): quotes for the direct routes (POST /v0/quote), token
     // list, and the status that confirms where a cross-chain deposit goes.
     "1click.chaindefuser.com",
+    // Automatic updates (`updater.rs`): Kyro's GitHub releases (`latest.json`, signed packages)
+    // and the release-asset CDN GitHub redirects downloads to. Rust only: refused to `net_fetch`
+    // ([`UPDATE_HOSTS`]), Tor family `update`.
+    "github.com",
+    "release-assets.githubusercontent.com",
 ];
+
+/// Update hosts, all in [`ALLOWED_HOSTS`] (so GitHub's redirects are followed), but reachable
+/// only by Rust's updater: `net_fetch` (the webview) refuses them.
+pub const UPDATE_HOSTS: &[&str] = &["github.com", "release-assets.githubusercontent.com"];
 
 /// Hedera hosts (mirror nodes and node proxies), all in [`ALLOWED_HOSTS`], family `hedera`.
 pub const HEDERA_HOSTS: &[&str] = &[
@@ -205,6 +214,10 @@ pub const TIMEOUT: Duration = Duration::from_secs(20);
 pub const BULK_MAX_BODY: usize = 64 * 1024 * 1024;
 pub const BULK_TIMEOUT: Duration = Duration::from_secs(180);
 pub const MAX_REDIRECTS: usize = 3;
+/// Update packages (family `update`, Rust only): an AppImage or an installer can be large, and
+/// Tor is slow. Never available to `net_fetch`.
+pub const UPDATE_MAX_BODY: usize = 256 * 1024 * 1024;
+pub const UPDATE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const CACHE_TTL: Duration = Duration::from_secs(60);
 /// CoinGecko cache bounds: entries and total body bytes (oldest evicted first).
 const MAX_CACHE_ENTRIES: usize = 128;
@@ -427,6 +440,8 @@ pub enum Family {
     Monero,
     Cosmos,
     Aptos,
+    /// Kyro's own automatic updates (GitHub releases), on their own circuits.
+    Update,
     Evm,
     Solana,
     Market,
@@ -489,6 +504,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Cosmos
     } else if host == "api.mainnet.aptoslabs.com" || host == "api.testnet.aptoslabs.com" {
         Family::Aptos
+    } else if UPDATE_HOSTS.contains(&host) {
+        Family::Update
     } else if host.ends_with("-rpc.publicnode.com") || EVM_OWN_RPC_HOSTS.contains(&host) {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -544,7 +561,9 @@ pub struct Prepared {
 
 impl Prepared {
     pub fn max_body(&self) -> usize {
-        if self.bulk {
+        if self.family == Family::Update {
+            UPDATE_MAX_BODY
+        } else if self.bulk {
             BULK_MAX_BODY
         } else {
             MAX_BODY
@@ -552,7 +571,9 @@ impl Prepared {
     }
 
     pub fn timeout(&self) -> Duration {
-        if self.bulk {
+        if self.family == Family::Update {
+            UPDATE_TIMEOUT
+        } else if self.bulk {
             BULK_TIMEOUT
         } else {
             TIMEOUT
@@ -582,7 +603,9 @@ pub fn prepare(
     }
     let custom = ctx.custom_family(&host).is_some();
     let is_onion = host.ends_with(".onion");
-    if !is_onion && !custom && !ALLOWED_HOSTS.contains(&host.as_str()) {
+    if UPDATE_HOSTS.contains(&host.as_str())
+        || (!is_onion && !custom && !ALLOWED_HOSTS.contains(&host.as_str()))
+    {
         return Err(AppError::HostNotAllowed(host));
     }
     scheme_ok(&url, &host, ctx.tor, custom).map_err(AppError::HostNotAllowed)?;
@@ -879,7 +902,7 @@ impl NetClient {
             if tor {
                 self.tor.send(&p).await
             } else {
-                let timeout = p.bulk.then_some(BULK_TIMEOUT);
+                let timeout = (p.bulk || p.family == Family::Update).then(|| p.timeout());
                 self.send_clear(&self.clear, &p, timeout, true).await
             }
         };

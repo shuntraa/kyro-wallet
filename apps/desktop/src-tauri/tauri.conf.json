@@ -36,6 +36,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "category": "Finance",
     "shortDescription": "Wallet crypto non-custodial, open source",
     "longDescription": "Kyro Wallet : wallet non-custodial open source (GPLv3). Clés chiffrées sur l'appareil, signature dans un noyau Rust, aucune télémétrie.",
@@ -65,5 +66,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU2MDE2QUQ5RDIxOTA3RDYKUldUV0J4blMyV29CNWcvRFlFZXdyU3hKazNFZjVMTVFQVkpFTlpSZWM1SkdaVUExNkkvK2VBNWcK",
+      "windows": { "installMode": "passive" }
+    }
   }
 }

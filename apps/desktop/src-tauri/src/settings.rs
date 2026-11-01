@@ -132,6 +132,9 @@ pub struct Settings {
     /// `settings_set` refuses anything else ([`Settings::from_ui`]).
     #[serde(deserialize_with = "lenient_language")]
     pub language: crate::i18n::LanguagePref,
+    /// Automatic updates (`updater.rs`): ON by default; off = no check, a staged update is
+    /// discarded.
+    pub auto_update: bool,
     /// The vault's account lists (see `accounts.rs`). Managed only by the `vault_account_*`
     /// commands: never sent by `settings_get`, never taken from `settings_set`.
     pub accounts: VaultAccounts,
@@ -157,6 +160,7 @@ impl Default for Settings {
             api_keys: ApiKeys::default(),
             tor: TorSettings::default(),
             language: crate::i18n::LanguagePref::Auto,
+            auto_update: true,
             accounts: VaultAccounts::default(),
         }
     }
@@ -456,6 +460,15 @@ mod tests {
             ui["apiKeys"] = bad.clone();
             assert!(Settings::from_ui(ui.clone(), &s.api_keys).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn auto_update_defaults_to_on() {
+        let s: Settings = serde_json::from_str(r#"{"currency":"USD"}"#).unwrap();
+        assert!(s.auto_update, "older file: on");
+        assert_eq!(Settings::default().for_ui()["autoUpdate"], true);
+        let s: Settings = serde_json::from_str(r#"{"autoUpdate":false}"#).unwrap();
+        assert!(!s.auto_update);
     }
 
     #[test]

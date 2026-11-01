@@ -2,6 +2,8 @@
 // capabilities/default.json. Anything else is rejected by Tauri (least privilege).
 const COMMANDS: &[&str] = &[
     "vault_status",
+    // Automatic updates: current version and the « updated to X » notice (docs/IPC.md).
+    "update_status",
     "vault_create",
     "vault_import",
     "vault_unlock",

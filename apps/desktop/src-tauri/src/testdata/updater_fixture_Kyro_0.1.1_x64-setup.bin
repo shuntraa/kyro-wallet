@@ -1,0 +1,1 @@
+Fixture signed by the real Kyro updater key with `pnpm tauri signer sign` (updater.rs test).
