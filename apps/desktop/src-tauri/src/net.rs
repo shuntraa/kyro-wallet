@@ -50,9 +50,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "gnosis-rpc.publicnode.com",
     "hyperliquid-rpc.publicnode.com",
     "sei-evm-rpc.publicnode.com",
-    // No publicnode endpoint for these three: the chain's own public RPC.
-    "flare-api.flare.network",
-    "public-en.node.kaia.io",
+    // No publicnode endpoint for these three. Flare's and Kaia's own public RPCs answer 403 to
+    // Tor exits (checked 2026-11-01): Ankr's public RPC (Flare) and Pocket Network (Kaia) instead.
+    "rpc.ankr.com",
+    "kaia.api.pocket.network",
     "evm.confluxrpc.com",
     "api.devnet.solana.com",
     "api.mainnet-beta.solana.com",
@@ -220,10 +221,10 @@ pub enum Family {
     Other,
 }
 
-/// Default EVM RPC hosts that are not on publicnode (the chain's own public RPC).
+/// Default EVM RPC hosts that are not on publicnode (Flare: Ankr, Kaia: Pocket Network, Conflux).
 const EVM_OWN_RPC_HOSTS: &[&str] = &[
-    "flare-api.flare.network",
-    "public-en.node.kaia.io",
+    "rpc.ankr.com",
+    "kaia.api.pocket.network",
     "evm.confluxrpc.com",
 ];
 
@@ -942,8 +943,8 @@ mod tests {
         assert_eq!(family_for("eth.my-node.example", &c), Family::Evm);
         for h in [
             "sei-evm-rpc.publicnode.com",
-            "flare-api.flare.network",
-            "public-en.node.kaia.io",
+            "rpc.ankr.com",
+            "kaia.api.pocket.network",
             "evm.confluxrpc.com",
         ] {
             assert_eq!(family_for(h, &c), Family::Evm, "{h}");

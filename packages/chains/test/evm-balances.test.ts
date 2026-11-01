@@ -10,7 +10,7 @@ const pad = (n: bigint) => '0x' + n.toString(16).padStart(64, '0');
 type Rpc = { id: number; method: string; params: unknown[] };
 
 /** Fake node: native 1 ETH, token #i holds i units, token #1 has no code, token #2 reverts. */
-function node(opts: { batches: boolean }) {
+function node(opts: { batches: boolean; perItemErrors?: boolean }) {
   const seen: NetRequest[] = [];
   const contracts = (ERC20_TOKENS.ethereum ?? []).map((t) => t.contract.toLowerCase());
   const answer = (r: Rpc) => {
@@ -28,6 +28,7 @@ function node(opts: { batches: boolean }) {
     const body = JSON.parse(req.body ?? 'null') as Rpc | Rpc[];
     if (Array.isArray(body)) {
       if (!opts.batches) return { status: 200, body: JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'batch not supported' } }) };
+      if (opts.perItemErrors) return { status: 200, body: JSON.stringify(body.map((r) => ({ jsonrpc: '2.0', id: r.id, error: { code: -32062, message: 'Batch size too large' } }))) };
       // Answers in reverse order: matched by id, not by position.
       return { status: 200, body: JSON.stringify(body.map(answer).reverse()) };
     }
@@ -60,5 +61,13 @@ describe('soldes EVM par lots JSON-RPC', () => {
     expect(bal[0]?.amount).toBe(10n ** 18n);
     expect(bal.length).toBeGreaterThan(1);
     expect(n.seen.length).toBeGreaterThan(a.tokens().length);
+  });
+
+  it('repli aussi quand le lot revient avec une erreur par appel (offres gratuites)', async () => {
+    const n = node({ batches: true, perItemErrors: true });
+    const a = new EvmAdapter({ chain: eth, address: ME, fetch: n.fetch });
+    const bal = await a.getBalance();
+    expect(bal[0]?.amount).toBe(10n ** 18n);
+    expect(bal.length).toBeGreaterThan(1);
   });
 });

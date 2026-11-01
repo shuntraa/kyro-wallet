@@ -128,7 +128,8 @@ const EVM_MAINNET: EvmChain[] = [
   // Other EVM-compatible chains (same address and key). Each RPC was checked on 2026-10-31:
   // `eth_chainId` matches, EIP-1559 (type 2) transactions accepted by the pool (an unfunded
   // type-2 transfer is refused for « insufficient funds », not for its type), JSON-RPC batches
-  // answered. Not added: Ethereum Classic (61, type 2 refused: « pool not yet in London », Kyro
+  // answered; reachable over Tor (Flare's and Kaia's own public RPCs answer 403 to Tor exits, hence
+  // Ankr for Flare and Pocket Network for Kaia). Not added: Ethereum Classic (61, type 2 refused: « pool not yet in London », Kyro
   // only signs EIP-1559), XDC (50, `xdc…` address format; public RPCs answering 502/520).
   evm({ key: 'cronos', name: 'Cronos', label: 'Cronos', network: 'mainnet', color: '#1D2D5C', glyph: 'C', nativeSymbol: 'CRO', nativeName: 'Cronos',
     coingeckoId: 'crypto-com-chain', phase: 2, blockTimeSecs: 1, chainId: 25, rpcUrl: 'https://cronos-evm-rpc.publicnode.com' }),
@@ -137,9 +138,9 @@ const EVM_MAINNET: EvmChain[] = [
   evm({ key: 'sonic', name: 'Sonic', label: 'Sonic', network: 'mainnet', color: '#24477A', glyph: 'S', nativeSymbol: 'S', nativeName: 'Sonic',
     coingeckoId: 'sonic-3', phase: 2, blockTimeSecs: 1, chainId: 146, rpcUrl: 'https://sonic-rpc.publicnode.com' }),
   evm({ key: 'flare', name: 'Flare', label: 'Flare', network: 'mainnet', color: '#C4234F', glyph: 'F', nativeSymbol: 'FLR', nativeName: 'Flare',
-    coingeckoId: 'flare-networks', phase: 2, blockTimeSecs: 1.8, chainId: 14, rpcUrl: 'https://flare-api.flare.network/ext/C/rpc' }),
+    coingeckoId: 'flare-networks', phase: 2, blockTimeSecs: 1.8, chainId: 14, rpcUrl: 'https://rpc.ankr.com/flare' }),
   evm({ key: 'kaia', name: 'Kaia', label: 'Kaia', network: 'mainnet', color: '#5E7A1F', glyph: 'K', nativeSymbol: 'KAIA', nativeName: 'Kaia',
-    coingeckoId: 'kaia', phase: 2, blockTimeSecs: 1, chainId: 8217, rpcUrl: 'https://public-en.node.kaia.io' }),
+    coingeckoId: 'kaia', phase: 2, blockTimeSecs: 1, chainId: 8217, rpcUrl: 'https://kaia.api.pocket.network' }),
   evm({ key: 'gnosis', name: 'Gnosis', label: 'Gnosis', network: 'mainnet', color: '#3E6957', glyph: 'G', nativeSymbol: 'XDAI', nativeName: 'xDAI',
     coingeckoId: 'xdai', phase: 2, blockTimeSecs: 5, chainId: 100, rpcUrl: 'https://gnosis-rpc.publicnode.com' }),
   evm({ key: 'hyperevm', name: 'HyperEVM', label: 'HyperEVM', network: 'mainnet', color: '#2E8F7C', glyph: 'H', nativeSymbol: 'HYPE', nativeName: 'Hyperliquid',

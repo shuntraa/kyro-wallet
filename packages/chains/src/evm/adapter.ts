@@ -151,7 +151,9 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
       return this.getBalanceOneByOne(tokens);
     }
     const [native, ...rest] = outcomes;
-    if (!native?.ok) throw native?.error ?? new Error('solde natif indisponible');
+    // Some public RPCs answer a too-large batch with one error per call (« batch size too
+    // large », free plans): read one by one, the native balance call reports any real outage.
+    if (!native?.ok) return this.getBalanceOneByOne(tokens);
     const out: Balance[] = [{ assetId: nativeAssetId(this.chain), amount: hexToBigInt(native.result) }];
     tokens.forEach((t, i) => {
       const r = rest[i];

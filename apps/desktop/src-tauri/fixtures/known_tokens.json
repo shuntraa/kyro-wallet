@@ -75,14 +75,14 @@
       "chainId": 14,
       "name": "Flare",
       "nativeSymbol": "FLR",
-      "rpcHost": "flare-api.flare.network"
+      "rpcHost": "rpc.ankr.com"
     },
     {
       "network": "mainnet",
       "chainId": 8217,
       "name": "Kaia",
       "nativeSymbol": "KAIA",
-      "rpcHost": "public-en.node.kaia.io"
+      "rpcHost": "kaia.api.pocket.network"
     },
     {
       "network": "mainnet",
