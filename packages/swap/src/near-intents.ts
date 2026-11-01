@@ -146,8 +146,8 @@ export class NearIntentsClient {
   private tokens: { at: number; list: OneClickToken[] } | null = null;
   constructor(private readonly fetcher: NetFetch = netFetch) {}
 
-  async tokenList(): Promise<OneClickToken[]> {
-    if (this.tokens && Date.now() - this.tokens.at < 600_000) return this.tokens.list;
+  async tokenList(force = false): Promise<OneClickToken[]> {
+    if (!force && this.tokens && Date.now() - this.tokens.at < 600_000) return this.tokens.list;
     const list = await fetchJson<OneClickToken[]>(this.fetcher, `https://${NEAR_INTENTS_HOST}/v0/tokens`);
     if (!Array.isArray(list)) throw new Error('NEAR Intents : liste de tokens illisible');
     this.tokens = { at: Date.now(), list };
@@ -164,6 +164,9 @@ export class NearIntentsClient {
     let tokens: OneClickToken[];
     try {
       [s, tokens] = await Promise.all([this.status(e.depositAddress), this.tokenList()]);
+      // An asset listed since the cached list: read the list again once.
+      const id = s.quoteResponse?.quoteRequest?.destinationAsset;
+      if (id && !tokens.some((t) => t.assetId === id)) tokens = await this.tokenList(true);
     } catch (err) {
       return fail(`confirmation du pont impossible (${err instanceof Error ? err.message : String(err)})`);
     }

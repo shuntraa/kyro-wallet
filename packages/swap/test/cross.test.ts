@@ -3,7 +3,9 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decodeFunctionData, encodeFunctionData, getAddress, type Hex } from 'viem';
-import type { NetRequest, NetResponse, SolInstruction, SolTxSummary } from '@kyro/shared';
+import { getBase64Decoder, getBase64Encoder, getTransactionDecoder } from '@solana/kit';
+import { setBackend, type NetRequest, type NetResponse, type SolInstruction, type SolTxSummary } from '@kyro/shared';
+import { createMockBackend } from '@kyro/shared/mock';
 import {
   checkNearDeposit,
   createProviders,
@@ -300,5 +302,39 @@ describe('cross-chain status', () => {
     const st = await lifiTransferStatus(async (r) => ((url = r.url), { status: 200, body: JSON.stringify({ status: 'DONE', substatus: 'COMPLETED', receiving: { txHash: '0xabc' } }) }), { txHash: '5sig', fromChain: 'solana', toChain: 42161, bridge: 'near' });
     expect(st).toEqual({ status: 'DONE', substatus: 'COMPLETED', receivingTxHash: '0xabc' });
     expect(url).toBe('https://li.quest/v1/status?txHash=5sig&fromChain=1151111081099710&toChain=42161&bridge=near');
+  });
+});
+
+describe('demo mode: cross-chain answers (mock-lifi-cross.ts) pass the same checks', () => {
+  it('EVM → Solana / Bitcoin and Solana → EVM, SOL and USDC, end to end with the demo decoder and 1Click', async () => {
+    const backend = createMockBackend({ network: 'mainnet', torEnabled: false, preset: { password: 'correct horse', unlocked: true } });
+    setBackend(backend.invoke);
+    const a = backend.chain.accounts;
+    const evm = getAddress(a.evm.address);
+    const providers = createProviders({ hasZeroxKey: () => true });
+    const usdcArb = { address: ARB_USDC, symbol: 'USDC', decimals: 6 };
+    const eth = { address: NATIVE_EVM, symbol: 'ETH', decimals: 18 };
+    for (const [sell, buy, toChain, recipient, amount] of [
+      [usdcArb, { address: WSOL_MINT, symbol: 'SOL', decimals: 9 }, 'solana', a.sol.address, 50_000_000n],
+      [eth, { address: SOL_USDC, symbol: 'USDC', decimals: 6 }, 'solana', a.sol.address, 10n ** 16n],
+      [usdcArb, { address: 'bitcoin', symbol: 'BTC', decimals: 8 }, 'bitcoin', a.btc.segwit.address, 50_000_000n],
+      [usdcArb, eth, 8453, evm, 50_000_000n],
+    ] as const) {
+      const out = await fetchQuotes(providers, { chain: 42161, toChain, recipient, sell, buy, sellAmount: amount, taker: evm, slippageBps: 50 });
+      expect(out.results.filter((r) => r.error)).toEqual([]);
+      expect(out.quotes[0]?.cross).toMatchObject({ toChain, recipient, bridge: 'near' });
+      expect(out.quotes[0]?.evmCheck?.kyroFee).toBe((amount * 70n) / 10_000n);
+    }
+    for (const [sell, amount] of [[{ address: WSOL_MINT, symbol: 'SOL', decimals: 9 }, 500_000_000n], [{ address: SOL_USDC, symbol: 'USDC', decimals: 6 }, 50_000_000n]] as const) {
+      const out = await fetchQuotes(providers, { chain: 'solana', toChain: 42161, recipient: evm, sell, buy: eth, sellAmount: amount, taker: a.sol.address, slippageBps: 50 });
+      expect(out.results.filter((r) => r.error)).toEqual([]);
+      const q = out.quotes[0];
+      if (q?.tx.kind !== 'solana' || !q.tx.verify) throw new Error('expected a verified Solana route');
+      const wire = await q.tx.build();
+      const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wire));
+      const summary = (await backend.invoke('sol_decode_tx', { message: getBase64Decoder().decode(tx.messageBytes) })) as SolTxSummary;
+      const c = await q.tx.verify(wire, summary);
+      expect(c.kyroFee).toBe((amount * 70n) / 10_000n);
+    }
   });
 });
