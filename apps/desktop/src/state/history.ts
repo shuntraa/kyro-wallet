@@ -4,7 +4,10 @@
 
 import { useEffect } from 'react';
 import { findAsset, findChain, nativeAssetId, type AssetDef, type HistoryItem } from '@kyro/chains';
+import { netFetch } from '@kyro/shared';
+import { lifiTransferStatus, nearDepositStatus, type SwapChain } from '@kyro/swap';
 import { getLocalTxs, updateLocalTx, type LocalTx } from '../lib/storage';
+import { crossStatusLabel } from '../lib/crossSwap';
 import { useAsync } from '../lib/useAsync';
 import { useVault } from './app';
 
@@ -16,7 +19,11 @@ export interface HistoryEntry extends HistoryItem {
   local: boolean;
 }
 
-function fromLocal(t: LocalTx): HistoryItem & { label?: string } {
+const swapChain = (c: string): SwapChain => (/^\d+$/.test(c) ? Number(c) : (c as SwapChain));
+/** Final statuses: li.quest (DONE, FAILED) and 1Click (SUCCESS, REFUNDED, FAILED). */
+const FINAL = new Set(['DONE', 'FAILED', 'SUCCESS', 'REFUNDED']);
+
+function fromLocal(t: LocalTx, network: LocalTx['network']): HistoryItem & { label?: string } {
   const item: HistoryItem & { label?: string } = {
     id: t.id,
     chainKey: t.chainKey,
@@ -30,6 +37,8 @@ function fromLocal(t: LocalTx): HistoryItem & { label?: string } {
   if (t.fee) item.fee = BigInt(t.fee);
   if (t.counterparty) item.counterparty = t.counterparty;
   if (t.label) item.label = t.label;
+  // Cross-chain: the source transaction may be confirmed while the bridge is still delivering.
+  if (t.cross && t.label) item.label = `${t.label} · ${crossStatusLabel(t.cross.status, findChain(network, t.cross.toChainKey)?.label ?? t.cross.toChainKey)}`;
   return item;
 }
 
@@ -57,7 +66,7 @@ export function useHistory() {
       const remoteIds = new Set(remote.map((x) => x.id.split(/[:@]/)[0]));
       const local = getLocalTxs(network)
         .filter((t) => !remoteIds.has(t.id) || t.kind !== 'transfer')
-        .map(fromLocal);
+        .map((t) => fromLocal(t, network));
       // Local swap/approval records replace the raw ERC-20 log of the same tx.
       const localIds = new Set(local.map((l) => l.id));
       const merged: Array<HistoryItem & { label?: string; account?: string }> = [...remote.filter((x) => !localIds.has(x.id.split(/[:@]/)[0] ?? '')), ...local];
@@ -95,6 +104,30 @@ export function useHistory() {
       }),
     ).then(() => changed && state.reload());
   }, [state.data, adapters, network]);
+
+  // Follow cross-chain swaps until they arrive (li.quest `/v1/status`, read-only, same Tor family as the quotes).
+  useEffect(() => {
+    const open = getLocalTxs(network).filter((t) => t.cross && t.status !== 'failed' && !FINAL.has(t.cross.status ?? '') && Date.now() - t.time < 7 * 86_400_000);
+    if (open.length === 0) return;
+    let changed = false;
+    void Promise.all(
+      open.map(async (t) => {
+        const c = t.cross;
+        if (!c) return;
+        try {
+          // Direct NEAR Intents swap: 1Click's own status of the deposit address; LI.FI route: li.quest.
+          const st = c.bridge === '1click' && c.depositAddress
+            ? await nearDepositStatus(netFetch, c.depositAddress).then((r) => ({ status: r.status, ...(r.destinationTxHash ? { receivingTxHash: r.destinationTxHash } : {}) }))
+            : await lifiTransferStatus(netFetch, { txHash: t.id, fromChain: swapChain(c.fromChain), toChain: swapChain(c.toChain), bridge: c.bridge });
+          if (st.status === c.status && st.receivingTxHash === c.receivingTxHash) return;
+          updateLocalTx(network, t.id, { cross: { ...c, status: st.status, ...(st.receivingTxHash ? { receivingTxHash: st.receivingTxHash } : {}) } });
+          changed = true;
+        } catch {
+          /* not indexed yet, or offline: next refresh */
+        }
+      }),
+    ).then(() => changed && state.reload());
+  }, [state.data, network]);
 
   return state;
 }

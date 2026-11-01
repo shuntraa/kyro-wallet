@@ -5,7 +5,8 @@ import { compareQuotes, type QuoteResult } from './compare';
 import { JupiterProvider } from './providers/jupiter';
 import { LIFI_CHAINS, LifiProvider } from './providers/lifi';
 import { ZEROX_CHAINS, ZeroExProvider } from './providers/zerox';
-import { KYRO_SWAP_FEE, providerFee, type SwapFeeConfig } from './fees';
+import { NearIntentsProvider } from './providers/near';
+import { KYRO_SWAP_FEE, lifiFeeFor, nearIntentsAppFee, providerFee, type SwapFeeConfig } from './fees';
 import type { Quote, QuoteParams, SwapProvider } from './types';
 
 export function createProviders(opts: { fetch?: NetFetch; hasZeroxKey: () => boolean; fees?: SwapFeeConfig }): SwapProvider[] {
@@ -13,8 +14,10 @@ export function createProviders(opts: { fetch?: NetFetch; hasZeroxKey: () => boo
   const cfg = opts.fees ?? KYRO_SWAP_FEE;
   return [
     new ZeroExProvider({ ...f, hasKey: opts.hasZeroxKey, fee: providerFee('zerox', cfg) }),
-    new LifiProvider({ ...f, fee: providerFee('lifi', cfg) }),
+    new LifiProvider({ ...f, fee: providerFee('lifi', cfg), solFee: lifiFeeFor('solana', cfg) }),
     new JupiterProvider({ ...f, fee: providerFee('jupiter', cfg), feeMints: cfg.solanaFeeMints }),
+    // Routes LI.FI cannot serve (from BTC / LTC / DOGE / TRON / XRP / Cardano, or to LTC / DOGE / TRON / XRP / Cardano).
+    new NearIntentsProvider({ ...f, fee: nearIntentsAppFee(cfg) }),
   ];
 }
 

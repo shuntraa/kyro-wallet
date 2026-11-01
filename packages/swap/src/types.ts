@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import type { SolTxSummary } from '@kyro/shared';
 import type { EvmSwapCheck } from './verify';
 
-export type ProviderId = 'zerox' | 'jupiter' | 'lifi';
+export type ProviderId = 'zerox' | 'jupiter' | 'lifi' | 'near';
 
-/** EVM chain id, or 'solana'. */
-export type SwapChain = number | 'solana';
+/**
+ * EVM chain id, 'solana', or one of the chains reached only through NEAR Intents 1Click
+ * (providers/near.ts): Bitcoin (also a LI.FI destination), Litecoin, Dogecoin, TRON, XRP Ledger, Cardano.
+ */
+export type SwapChain = number | 'solana' | UtxoOrOtherChain;
+export type UtxoOrOtherChain = 'bitcoin' | 'litecoin' | 'dogecoin' | 'tron' | 'xrp' | 'cardano';
 
 export interface SwapToken {
-  /** ERC-20 address, `0xEeee…` for the native coin, or a Solana mint. */
+  /**
+   * ERC-20 address, `0xEeee…` for the native coin, a Solana mint, a TRC-20 contract (`T…`), or the
+   * chain's name for the native coin of Bitcoin / Litecoin / Dogecoin / TRON / XRP / Cardano.
+   */
   address: string;
   symbol: string;
   decimals: number;
@@ -20,6 +28,11 @@ export interface QuoteParams {
   chain: SwapChain;
   /** Cross-chain destination (LI.FI only). Defaults to `chain`. */
   toChain?: SwapChain;
+  /**
+   * Cross-chain only: OUR OWN address on `toChain` (the account the UI selected for that chain,
+   * never typed by the user). Defaults to `taker` (same EVM address on another EVM chain).
+   */
+  recipient?: string;
   sell: SwapToken;
   buy: SwapToken;
   /** Base units of `sell`. */
@@ -36,8 +49,43 @@ export interface QuoteParams {
 
 export type SwapTx =
   | { kind: 'evm'; chainId: number; to: string; data: `0x${string}`; value: bigint; gas?: bigint }
-  /** Built on demand (the transaction embeds a recent blockhash). Returns a base64 wire transaction. */
-  | { kind: 'solana'; build: () => Promise<string> };
+  /**
+   * Built on demand (the transaction embeds a recent blockhash). Returns a base64 wire transaction.
+   * `verify` (LI.FI cross-chain): checks the built transaction against Rust's decoding and confirms
+   * the bridge deposit with NEAR Intents; throws on any mismatch. Without it: Jupiter (jupiter-verify.ts).
+   */
+  | { kind: 'solana'; build: () => Promise<string>; verify?: (wire: string, summary: SolTxSummary) => Promise<SolanaRouteCheck> }
+  /**
+   * NEAR Intents 1Click (providers/near.ts): no third-party transaction at all. `prepare` asks 1Click
+   * for a real quote (a one-time deposit address), checks it and has 1Click confirm it
+   * (`/v0/status`); Kyro then builds an ORDINARY transfer of `amountIn` to that address with the
+   * chain's own adapter (Rust decodes and signs it like any send). `reconfirm` reads the status
+   * again just before signing.
+   */
+  | { kind: 'deposit'; chain: SwapChain; prepare: () => Promise<DepositPlan>; reconfirm: (plan: DepositPlan) => Promise<DepositPlan> };
+
+/** A checked 1Click deposit: send exactly `amountIn` of the sold token to `depositAddress`, nothing else. */
+export interface DepositPlan {
+  depositAddress: string;
+  amountIn: bigint;
+  amountOut: bigint;
+  /** Minimum 1Click guarantees on the destination chain (else refund to our source address). */
+  minAmountOut: bigint;
+  /** ms epoch: 1Click must see the deposit before this. */
+  deadline: number;
+  /** Kyro's app fee echoed by 1Click (bps) and 1Click's own share (bps), both taken from the deposit. */
+  kyroFeeBps: number;
+  oneClickFeeBps: number;
+  timeEstimateSecs: number | null;
+}
+
+export interface SolanaRouteCheck {
+  depositAddress: string;
+  amountIn: bigint;
+  kyroFee: bigint;
+  /** Minimum the bridge guarantees on the destination chain. */
+  minAmountOut: bigint;
+}
 
 export interface Quote {
   provider: ProviderId;
@@ -67,6 +115,23 @@ export interface Quote {
   /** Human route ("Uniswap V3 + Curve"). */
   route?: string;
   etaSecs?: number;
+  /** Cross-chain route: what was checked and what the history tracks (lifi-cross.ts). */
+  cross?: CrossChainInfo;
+}
+
+export interface CrossChainInfo {
+  fromChain: SwapChain;
+  toChain: SwapChain;
+  /** Our address on `toChain` (checked in the transaction and with the bridge). */
+  recipient: string;
+  /** LI.FI bridge key (`near` = NEAR Intents) and its name. */
+  bridge: string;
+  bridgeName: string;
+  /**
+   * NEAR Intents deposit address bound to this quote (EVM source: read in the calldata; Solana
+   * source: read in the transaction built at signing time, so absent here).
+   */
+  depositAddress?: string;
 }
 
 export interface SwapProvider {

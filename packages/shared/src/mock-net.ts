@@ -11,6 +11,7 @@ import { IpcError, type Accounts, type EvmTxRequest, type Network, type NetReque
 import { DEMO_COINS, DEMO_EUR_USD, DEMO_TOKENS, demoPrice, demoSeries } from './mock-data';
 import { encodeCall, type AbiValue } from './mock-abi';
 import { demoJupiterWireTx } from './mock-jupiter';
+import { demoLifiCross, demoLifiStatus, demoOneClick } from './mock-lifi-cross';
 
 import type { DemoUtxo } from './mock-tx';
 import { l10n } from './i18n';
@@ -131,6 +132,7 @@ export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: 
   if (SOL_HOSTS.has(host)) return solRpc(req, s);
   if (host === 'api.0x.org') return zerox(url);
   if (host === 'li.quest') return lifi(url);
+  if (host === '1click.chaindefuser.com') return demoOneClick(url, req);
   if (host === 'lite-api.jup.ag') return jupiter(url, req, s);
   throw new IpcError('HOST_NOT_ALLOWED', l10n(`Hôte non autorisé : ${host}`, `Host not allowed: ${host}`));
 }
@@ -661,6 +663,9 @@ function lifiCalldata(o: { receiver: string; from: string; to: string; amount: b
 
 function lifi(url: URL): NetResponse {
   const q = url.searchParams;
+  if (url.pathname === '/v1/status') return demoLifiStatus();
+  // Across two chains: the NEAR Intents route (mock-lifi-cross.ts).
+  if (q.get('toChain') && q.get('toChain') !== q.get('fromChain')) return demoLifiCross(q);
   const from = q.get('fromToken') ?? '';
   const to = q.get('toToken') ?? '';
   const amount = BigInt(q.get('fromAmount') ?? '0');

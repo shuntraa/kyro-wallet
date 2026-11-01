@@ -78,6 +78,34 @@ export interface LocalTx {
   label?: string;
   time: number;
   status: 'pending' | 'confirmed' | 'failed';
+  /** Cross-chain swap: what the history follows with li.quest `/v1/status` until it arrives. */
+  cross?: LocalCross;
+}
+
+export interface LocalCross {
+  /** Swap chain ids as strings: EVM chain id, `solana`, `bitcoin`. */
+  fromChain: string;
+  toChain: string;
+  /** Registry key of the arrival chain (label). */
+  toChainKey: string;
+  bridge: string;
+  /**
+   * Last status: li.quest (PENDING, DONE, FAILED) or, for a direct NEAR Intents swap (`bridge`
+   * `1click`), 1Click's (PENDING_DEPOSIT, PROCESSING, SUCCESS, REFUNDED…). Absent until first read.
+   */
+  status?: string;
+  receivingTxHash?: string;
+  /** Direct NEAR Intents swap: the deposit address, followed with `1click…/v0/status`. */
+  depositAddress?: string;
+}
+
+const CHAIN_ID = /^(\d{1,20}|solana|bitcoin|litecoin|dogecoin|tron|xrp|cardano)$/;
+function isLocalCross(x: unknown): x is LocalCross {
+  if (!x || typeof x !== 'object') return false;
+  const c = x as Record<string, unknown>;
+  const s = (k: string, re: RegExp) => typeof c[k] === 'string' && re.test(c[k] as string);
+  const opt = (k: string, re: RegExp) => c[k] === undefined || s(k, re);
+  return s('fromChain', CHAIN_ID) && s('toChain', CHAIN_ID) && s('toChainKey', /^[a-z0-9-]{1,64}$/) && s('bridge', /^[a-zA-Z0-9]{1,32}$/) && opt('status', /^[A-Z_]{1,32}$/) && opt('receivingTxHash', /^[0-9a-zA-Z]{1,130}$/) && opt('depositAddress', /^[0-9a-zA-Z]{20,130}$/);
 }
 
 const DECIMAL = /^\d{1,78}$/;
@@ -106,7 +134,8 @@ export function isLocalTx(x: unknown, network: Network): x is LocalTx {
     optStr('label') &&
     typeof t.time === 'number' &&
     Number.isFinite(t.time) &&
-    (t.status === 'pending' || t.status === 'confirmed' || t.status === 'failed')
+    (t.status === 'pending' || t.status === 'confirmed' || t.status === 'failed') &&
+    (t.cross === undefined || isLocalCross(t.cross))
   );
 }
 
