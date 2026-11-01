@@ -7,10 +7,13 @@
 // - the Rust-decoded transfer before the password, and the consensus follow-up (hbar_tx_status).
 
 import { useEffect, useState } from 'react';
-import type { Currency, HbarOwnAccount, HbarRecipientInfo } from '@kyro/shared';
+import { toIpcError, type Currency, type HbarOwnAccount, type HbarRecipientInfo } from '@kyro/shared';
 import { hbarMemoError, type HbarAdapter, type HbarUnsigned } from '@kyro/chains';
 import { fmtCrypto, fmtFiat, shortAddress } from '../lib/format';
-import { Notice, Spinner } from './ui/primitives';
+import { Button, Notice, Spinner } from './ui/primitives';
+import { Dialog } from './ui/dialog';
+import { PasswordField } from './kit';
+import { useAsync } from '../lib/useAsync';
 import { IconCheck, IconInfo, IconWarn } from './icons';
 import { cn } from '../lib/cn';
 import { t, useT } from '../i18n';
@@ -110,6 +113,9 @@ export function HbarSummaryView({ u, hbarPrice, currency }: { u: HbarUnsigned; h
         <span className="block text-[12px] font-medium text-mute">{t('hbar.memo')}</span>
         <span className={cn('block break-all font-mono text-[16px] font-semibold', s.memo !== null ? 'text-text' : 'text-warn')}>{s.memo !== null ? `« ${s.memo} »` : t('hbar.memoNone')}</span>
       </div>
+      {s.token && <Line k={t('hbar.lToken')} v={t('hbar.lTokenValue', { symbol: s.token.symbol, id: s.token.tokenId, decimals: s.token.decimals })} />}
+      {s.token?.associate && <Line k={t('hbar.lAssociate')} v={t('hbar.lAssociateValue', { symbol: s.token.symbol })} warn />}
+      {s.token && !s.token.associate && <Line k={t('hbar.lTokenAmount')} v={fmtCrypto(BigInt(s.amount), s.token.decimals, s.token.symbol, s.token.decimals)} />}
       <Line k={t('hbar.lFrom')} v={s.from} />
       <Line k={t('hbar.lTo')} v={s.toIsEvm ? t('hbar.lToEvm', { to: s.to }) : s.to} />
       {c.createsAccount && <Line k={t('hbar.lDest')} v={t('hbar.lDestCreated')} warn />}
@@ -200,5 +206,88 @@ export function HbarTxStatusLine({ adapter, id, recipient, onDone }: { adapter: 
     <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />} className="w-full text-left">
       {t('hbar.trackError', { message: status.message })}
     </Notice>
+  );
+}
+
+/**
+ * Known Hedera tokens (USDC): associated or not, and the "Associate" flow (TokenAssociate built
+ * and signed by Rust behind the password and the native dialog, about $0.05). Accounts with
+ * automatic association (those auto-created by a transfer to their EVM address) receive the token
+ * without it.
+ */
+export function HbarTokens({ adapter, account, onChanged }: { adapter: HbarAdapter; account: HbarOwnAccount; onChanged?: () => void }) {
+  useT();
+  const [tick, setTick] = useState(0);
+  const id = account.accountId;
+  const holdings = useAsync(id ? () => adapter.tokenHoldings(id) : null, [adapter, id, tick]);
+  const [target, setTarget] = useState<{ id: string; symbol: string } | null>(null);
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
+  const known = adapter.knownTokens();
+  if (!known.length || !account.exists || !id) return null;
+  const auto = account.maxAutoAssociations ?? 0;
+  const associate = async () => {
+    if (!target) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const u = await adapter.buildAssociate(target.id);
+      const signed = await adapter.signTx(u, pw);
+      setPw('');
+      setSent(await adapter.broadcast(signed));
+      setTarget(null);
+    } catch (e) {
+      const err = toIpcError(e);
+      setError(err.code === 'USER_REJECTED' ? t('hbar.associateCancelled') : err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-2 flex flex-col gap-2 rounded-box border border-line px-3.5 py-3 text-[12px]">
+      <span className="font-semibold text-text">{t('hbar.tokensTitle')}</span>
+      <span className="leading-[1.5] text-mute">{auto !== 0 ? t('hbar.tokensAuto') : t('hbar.tokensIntro')}</span>
+      {known.map((k) => {
+        const h = holdings.data?.find((x) => x.tokenId === k.contract);
+        return (
+          <div key={k.contract} className="flex items-center justify-between gap-3">
+            <span className="text-text2">{t('hbar.tokenRow', { symbol: k.symbol, id: k.contract })}</span>
+            {holdings.loading && !holdings.data ? (
+              <Spinner />
+            ) : h?.associated ? (
+              <span className="flex items-center gap-1 text-up">
+                <IconCheck size={13} /> {h.frozen ? t('hbar.tokenFrozen') : t('hbar.tokenAssociated')}
+              </span>
+            ) : (
+              <Button size="sm" onClick={() => { setError(null); setTarget({ id: k.contract, symbol: k.symbol }); }}>
+                {t('hbar.associateToken', { symbol: k.symbol })}
+              </Button>
+            )}
+          </div>
+        );
+      })}
+      {holdings.error && <span className="text-down">{holdings.error.message}</span>}
+      {sent && <HbarTxStatusLine adapter={adapter} id={sent} recipient={id} onDone={() => { setTick((x) => x + 1); onChanged?.(); }} />}
+      <Dialog open={target !== null} onOpenChange={(v) => !v && !busy && setTarget(null)} title={target ? t('hbar.associateTitle', { symbol: target.symbol }) : ''}>
+        {target && (
+          <div className="flex flex-col gap-3 text-[13px] leading-[1.5]">
+            <p className="m-0 text-text2">{t('hbar.associateExplain')}</p>
+            <Notice tone="info">{t('hbar.associateFee', { balance: HBAR(account.balance) })}</Notice>
+            <PasswordField id="hbar-assoc-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && !busy && void associate()} />
+            {error && <Notice tone="error">{error}</Notice>}
+            <div className="flex justify-end gap-2">
+              <Button onClick={() => setTarget(null)} disabled={busy}>
+                {t('common.cancel')}
+              </Button>
+              <Button variant="primary" disabled={!pw || busy} onClick={() => void associate()}>
+                {busy && <Spinner />} {t('hbar.associateConfirm', { symbol: target.symbol })}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
+    </div>
   );
 }

@@ -6,13 +6,15 @@
 
 use serde::Serialize;
 use tauri::{AppHandle, State};
-use wallet_core::{HbarRecipient, HbarTransfer, HbarTxSummary, HbarWarning, Network};
+use wallet_core::{HbarKind, HbarRecipient, HbarTransfer, HbarTxSummary, HbarWarning, Network};
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
-use crate::hbar_backend::{self, HbarAccountInfo, HbarCtx, START_SKEW, VALID_DURATION};
+use crate::hbar_backend::{
+    self, HbarAccountInfo, HbarCtx, HbarTokenHolding, START_SKEW, VALID_DURATION,
+};
 use crate::i18n::Lang;
 use crate::state::AppState;
 
@@ -57,6 +59,49 @@ pub struct HbarContext {
     pub recipient: HbarAccountInfo,
     /// The transfer auto-creates the recipient's account (EVM address without account).
     pub creates_account: bool,
+    /// Token transfer / association: our holding and the recipient's, read live.
+    pub token: Option<HbarTokenContext>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HbarTokenContext {
+    pub ours: HbarTokenHolding,
+    /// `None` for an association (or a recipient without an account yet).
+    pub recipient: Option<HbarTokenHolding>,
+}
+
+fn token_units(lang: Lang, units: &str, t: &wallet_core::HbarTokenSummary) -> String {
+    format!(
+        "{} {}",
+        format_units_in(lang, units, t.decimals as usize),
+        t.symbol
+    )
+}
+
+/// Dialog of a token association (TokenAssociate).
+fn describe_associate(
+    lang: Lang,
+    s: &HbarTxSummary,
+    c: &HbarContext,
+    t: &wallet_core::HbarTokenSummary,
+    testnet: &str,
+) -> String {
+    let h = |v: &str| hbar(lang, v);
+    match lang {
+        Lang::Fr => format!(
+            "Associer {sym} à ton compte Hedera{testnet}\n\nJeton : {sym} ({}) · {} (vérifié, table de Kyro) · {} décimales\nCompte : {}\nEffet : ton compte pourra recevoir et détenir des {sym}. Rien n'est envoyé à personne.\n\nFrais maximum : {} (association ≈ 0,05 $, seuls les frais réels sont prélevés)\nSolde : {}\nValable {} s, identifiant {}\nSignée pour {} nœud(s) ({}) : même identifiant, exécutée une seule fois au plus.\n",
+            t.name, t.token_id, t.decimals, s.from, h(&s.max_fee), h(&c.account.balance),
+            s.valid_duration, s.transaction_id, s.nodes.len(), s.nodes.join(", "),
+            sym = t.symbol
+        ),
+        Lang::En => format!(
+            "Associate {sym} with your Hedera account{testnet}\n\nToken: {sym} ({}) · {} (verified, Kyro's table) · {} decimals\nAccount: {}\nEffect: your account can then receive and hold {sym}. Nothing is sent to anyone.\n\nMaximum fee: {} (association ≈ $0.05, only the actual fee is charged)\nBalance: {}\nValid for {} s, ID {}\nSigned for {} node(s) ({}): same ID, executed at most once.\n",
+            t.name, t.token_id, t.decimals, s.from, h(&s.max_fee), h(&c.account.balance),
+            s.valid_duration, s.transaction_id, s.nodes.len(), s.nodes.join(", "),
+            sym = t.symbol
+        ),
+    }
 }
 
 pub(crate) fn describe_hbar(
@@ -67,14 +112,30 @@ pub(crate) fn describe_hbar(
 ) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     let h = |v: &str| hbar(lang, v);
-    let mut out = format!(
-        "{}{}\n\n{}{}{}\n",
-        lang.pick("Envoi Hedera", "Hedera send"),
-        if net == Network::Testnet {
-            " (testnet)"
-        } else {
-            ""
+    let testnet = if net == Network::Testnet {
+        " (testnet)"
+    } else {
+        ""
+    };
+    if let Some(t) = s.token.as_ref().filter(|t| t.associate) {
+        return describe_associate(lang, s, c, t, testnet);
+    }
+    let title = match &s.token {
+        Some(t) => match lang {
+            Lang::Fr => format!(
+                "Envoi {} sur Hedera{testnet}\n\nJeton : {} ({}) · {} (vérifié, table de Kyro) · {} décimales",
+                t.symbol, t.symbol, t.name, t.token_id, t.decimals
+            ),
+            Lang::En => format!(
+                "{} send on Hedera{testnet}\n\nToken: {} ({}) · {} (verified, Kyro's table) · {} decimals",
+                t.symbol, t.symbol, t.name, t.token_id, t.decimals
+            ),
         },
+        None => format!("{}{testnet}", lang.pick("Envoi Hedera", "Hedera send")),
+    };
+    let mut out = format!(
+        "{}\n\n{}{}{}\n",
+        title,
         lang.pick("À : ", "To: "),
         s.to,
         if s.to_is_evm {
@@ -94,12 +155,33 @@ pub(crate) fn describe_hbar(
             };
         }
     }
-    out += &format!(
-        "{}{} ({} tinybars)\n",
-        lang.pick("Montant : ", "Amount: "),
-        h(&s.amount),
-        s.amount
-    );
+    match (&s.token, &c.token) {
+        (Some(t), Some(tc)) => {
+            out += &format!(
+                "{}{} ({} {})\n{}{}\n",
+                lang.pick("Montant : ", "Amount: "),
+                token_units(lang, &s.amount, t),
+                s.amount,
+                lang.pick("unités", "units"),
+                lang.pick("Ton solde : ", "Your balance: "),
+                token_units(lang, &tc.ours.balance, t)
+            );
+            if tc.recipient.as_ref().is_some_and(|r| !r.associated) {
+                out += lang.pick(
+                    "Le destinataire n'a pas encore associé ce jeton : il le sera automatiquement (association automatique de son compte).\n",
+                    "The recipient has not associated this token yet: it will be associated automatically (their account's automatic association).\n",
+                );
+            }
+        }
+        _ => {
+            out += &format!(
+                "{}{} ({} tinybars)\n",
+                lang.pick("Montant : ", "Amount: "),
+                h(&s.amount),
+                s.amount
+            );
+        }
+    }
     if c.creates_account {
         out += lang.pick(
             "\nCette adresse n'a pas encore de compte Hedera : ce transfert le crée (frais de création ≈ 0,05 $, payés par toi).\n",
@@ -338,8 +420,68 @@ async fn live_context(
             account,
             recipient,
             creates_account,
+            token: None,
         },
     ))
+}
+
+/// Live token facts for a transfer of `amount` units of known token `num` from `0.0.me` to
+/// `to`, or (`to` = None) for its association. User-facing refusals.
+async fn token_context(
+    c: &HbarCtx<'_>,
+    me: u64,
+    num: u64,
+    to: Option<(&HbarRecipient, &HbarAccountInfo)>,
+    amount: u64,
+) -> AppResult<HbarTokenContext> {
+    let k = wallet_core::hbar_known_token(c.network, num)
+        .ok_or_else(|| AppError::InvalidInput(format!("jeton 0.0.{num} inconnu de Kyro")))?;
+    let s = k.symbol;
+    let ours = hbar_backend::token_holding(c, &format!("0.0.{me}"), num).await?;
+    let Some((_, info)) = to else {
+        if ours.associated {
+            return Err(AppError::InvalidInput(format!("{s} est déjà associé à ce compte")));
+        }
+        return Ok(HbarTokenContext {
+            ours,
+            recipient: None,
+        });
+    };
+    if !ours.associated {
+        return Err(AppError::InvalidInput(format!(
+            "{s} n'est pas associé à ton compte : associe-le d'abord"
+        )));
+    }
+    if ours.frozen {
+        return Err(AppError::InvalidInput(format!(
+            "ton solde {s} est gelé par l'émetteur : envoi impossible"
+        )));
+    }
+    let have: u64 = ours.balance.parse().unwrap_or(0);
+    if amount > have {
+        return Err(AppError::InvalidInput(format!(
+            "solde {s} insuffisant : {} disponibles",
+            crate::commands::format_units(&have.to_string(), k.decimals as usize)
+        )));
+    }
+    let recipient = match info.account_id.as_deref() {
+        Some(id) if info.exists => {
+            let h = hbar_backend::token_holding(c, id, num).await?;
+            if h.frozen {
+                return Err(AppError::InvalidInput(format!(
+                    "le solde {s} de ce destinataire est gelé par l'émetteur : il ne peut rien recevoir"
+                )));
+            }
+            if !h.associated && info.max_auto_associations == 0 {
+                return Err(AppError::InvalidInput(format!(
+                    "ce destinataire n'a pas associé {s} et son compte n'a pas d'association automatique : il doit d'abord associer {s}, sinon le transfert échoue"
+                )));
+            }
+            Some(h)
+        }
+        _ => None,
+    };
+    Ok(HbarTokenContext { ours, recipient })
 }
 
 fn check_balance(amount: u64, max_fee: u64, balance: &str) -> AppResult<()> {
@@ -363,22 +505,87 @@ pub(crate) async fn build(
     amount: &str,
     memo: Option<&str>,
 ) -> AppResult<HbarBuilt> {
-    let recipient = wallet_core::hbar_parse_recipient(to, c.network)?;
-    let amount: u64 = amount
-        .trim()
-        .parse()
-        .ok()
-        .filter(|a| *a > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant en tinybars invalide".into()))?;
+    build_kind(c, evm, pk, Some(to), amount, memo, None).await
+}
+
+/// HBAR transfer (`token` None), transfer of known token `token` (`to` set), or its
+/// association (`to` None, `amount` "0").
+pub(crate) async fn build_kind(
+    c: &HbarCtx<'_>,
+    evm: &str,
+    pk: &[u8; 33],
+    to: Option<&str>,
+    amount: &str,
+    memo: Option<&str>,
+    token: Option<u64>,
+) -> AppResult<HbarBuilt> {
     let memo = memo.unwrap_or("").to_owned();
     wallet_core::hbar_check_memo(&memo)?;
-    let (num, context) = live_context(c, evm, pk, &recipient).await?;
-    if recipient == HbarRecipient::Id(num) {
-        return Err(AppError::InvalidInput("transfert à soi-même".into()));
+    let (num, recipient, amount, mut context, kind) = match (to, token) {
+        (None, Some(t)) => {
+            let account = hbar_backend::our_account(c, evm, pk).await?;
+            let num = match (&account.account_id, account.exists && !account.deleted) {
+                (Some(id), true) => num_of(id).ok_or_else(|| {
+                    AppError::ServerUnreachable("identifiant de compte inattendu".into())
+                })?,
+                _ => {
+                    return Err(AppError::InvalidInput(
+                        "ton compte Hedera n'existe pas encore : reçois d'abord des HBAR sur ton adresse EVM".into(),
+                    ))
+                }
+            };
+            let context = HbarContext {
+                recipient: account.clone(),
+                account,
+                creates_account: false,
+                token: None,
+            };
+            (num, HbarRecipient::Id(num), 0, context, HbarKind::Associate(t))
+        }
+        (Some(to), _) => {
+            let recipient = wallet_core::hbar_parse_recipient(to, c.network)?;
+            let amount: u64 = amount
+                .trim()
+                .parse()
+                .ok()
+                .filter(|a| *a > 0)
+                .ok_or_else(|| AppError::InvalidInput("montant invalide".into()))?;
+            let (num, context) = live_context(c, evm, pk, &recipient).await?;
+            if recipient == HbarRecipient::Id(num) {
+                return Err(AppError::InvalidInput("transfert à soi-même".into()));
+            }
+            let kind = match token {
+                None => HbarKind::Hbar,
+                Some(t) => HbarKind::Token {
+                    token: t,
+                    decimals: wallet_core::hbar_known_token(c.network, t)
+                        .ok_or_else(|| AppError::InvalidInput(format!("jeton 0.0.{t} inconnu de Kyro")))?
+                        .decimals,
+                },
+            };
+            (num, recipient, amount, context, kind)
+        }
+        (None, None) => return Err(AppError::InvalidInput("destinataire manquant".into())),
+    };
+    match kind {
+        HbarKind::Token { token, .. } => {
+            context.token = Some(
+                token_context(c, num, token, Some((&recipient, &context.recipient)), amount).await?,
+            );
+        }
+        HbarKind::Associate(token) => {
+            context.token = Some(token_context(c, num, token, None, 0).await?);
+        }
+        HbarKind::Hbar => {}
     }
     let rate = hbar_backend::exchange_rate(c).await?;
-    let max_fee = hbar_backend::max_fee(rate, context.creates_account);
-    check_balance(amount, max_fee, &context.account.balance)?;
+    // An association costs ≈ $0.05: the same budget as an account creation.
+    let max_fee = hbar_backend::max_fee(
+        rate,
+        context.creates_account || matches!(kind, HbarKind::Associate(_)),
+    );
+    let hbar_amount = if kind == HbarKind::Hbar { amount } else { 0 };
+    check_balance(hbar_amount, max_fee, &context.account.balance)?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|_| AppError::Internal("horloge".into()))?;
@@ -397,12 +604,13 @@ pub(crate) async fn build(
                     memo: memo.clone(),
                     to: recipient,
                     amount,
+                    kind,
                 }
                 .encode(),
             )
         })
         .collect();
-    let summary = wallet_core::hbar_decode_tx(&bodies, num, pk, &nodes)?;
+    let summary = wallet_core::hbar_decode_tx_on(c.network, &bodies, num, pk, &nodes)?;
     Ok(HbarBuilt {
         bodies,
         summary,
@@ -420,6 +628,50 @@ pub async fn hbar_build_tx(
 ) -> AppResult<HbarBuilt> {
     let (evm, pk) = ours(&state, account_arg(account)?)?;
     build(&ctx(&state), &evm, &pk, &to, &amount, memo.as_deref()).await
+}
+
+/// Our holdings of the known tokens of the network (USDC), `0.0.x` = our account ID.
+#[tauri::command]
+pub async fn hbar_token_holdings(
+    state: State<'_, AppState>,
+    account_id: String,
+) -> AppResult<Vec<HbarTokenHolding>> {
+    let n = wallet_core::hbar_parse_account_id(&account_id, state.network)?;
+    let c = ctx(&state);
+    let mut out = Vec::new();
+    for t in wallet_core::hbar_known_tokens(c.network) {
+        out.push(hbar_backend::token_holding(&c, &format!("0.0.{n}"), t.num).await?);
+    }
+    Ok(out)
+}
+
+/// `TokenAssociate` of known token `0.0.token` for our account (signed with `hbar_sign_tx`).
+#[tauri::command]
+pub async fn hbar_build_associate_tx(
+    state: State<'_, AppState>,
+    token_id: String,
+    account: Option<u32>,
+) -> AppResult<HbarBuilt> {
+    let (evm, pk) = ours(&state, account_arg(account)?)?;
+    let t = num_of(token_id.trim())
+        .ok_or_else(|| AppError::InvalidInput("identifiant de jeton 0.0.x attendu".into()))?;
+    build_kind(&ctx(&state), &evm, &pk, None, "0", None, Some(t)).await
+}
+
+/// Transfer of `amount` units of known token `0.0.token` to `to` (signed with `hbar_sign_tx`).
+#[tauri::command]
+pub async fn hbar_build_token_tx(
+    state: State<'_, AppState>,
+    token_id: String,
+    to: String,
+    amount: String,
+    memo: Option<String>,
+    account: Option<u32>,
+) -> AppResult<HbarBuilt> {
+    let (evm, pk) = ours(&state, account_arg(account)?)?;
+    let t = num_of(token_id.trim())
+        .ok_or_else(|| AppError::InvalidInput("identifiant de jeton 0.0.x attendu".into()))?;
+    build_kind(&ctx(&state), &evm, &pk, Some(&to), &amount, memo.as_deref(), Some(t)).await
 }
 
 #[derive(Serialize)]
@@ -448,8 +700,31 @@ pub(crate) async fn prepare_sign(
         &hex::decode(first.trim())
             .map_err(|_| AppError::InvalidInput("corps : hexadécimal attendu".into()))?,
     )?;
-    let (num, context) = live_context(c, evm, pk, &t.to).await?;
-    let summary = wallet_core::hbar_decode_tx(bodies, num, pk, &hbar_backend::node_ids(c.network))?;
+    let (num, mut context) = match t.kind {
+        HbarKind::Associate(_) => {
+            let account = hbar_backend::our_account(c, evm, pk).await?;
+            let num = account.account_id.as_deref().and_then(num_of).ok_or_else(|| {
+                AppError::InvalidInput("ton compte Hedera n'existe pas encore".into())
+            })?;
+            (
+                num,
+                HbarContext {
+                    recipient: account.clone(),
+                    account,
+                    creates_account: false,
+                    token: None,
+                },
+            )
+        }
+        _ => live_context(c, evm, pk, &t.to).await?,
+    };
+    let summary = wallet_core::hbar_decode_tx_on(
+        c.network,
+        bodies,
+        num,
+        pk,
+        &hbar_backend::node_ids(c.network),
+    )?;
     if now_secs() > summary.valid_start + summary.valid_duration - MIN_REMAINING {
         return Err(AppError::InvalidInput(
             "transfert Hedera expiré ou presque (fenêtre de 180 s) : reconstruis-le".into(),
@@ -457,7 +732,19 @@ pub(crate) async fn prepare_sign(
     }
     let max_fee: u64 = summary.max_fee.parse().unwrap_or(u64::MAX);
     let amount: u64 = summary.amount.parse().unwrap_or(u64::MAX);
-    check_balance(amount, max_fee, &context.account.balance)?;
+    match t.kind {
+        HbarKind::Hbar => check_balance(amount, max_fee, &context.account.balance)?,
+        HbarKind::Token { token, .. } => {
+            context.token = Some(
+                token_context(c, num, token, Some((&t.to, &context.recipient)), amount).await?,
+            );
+            check_balance(0, max_fee, &context.account.balance)?;
+        }
+        HbarKind::Associate(token) => {
+            context.token = Some(token_context(c, num, token, None, 0).await?);
+            check_balance(0, max_fee, &context.account.balance)?;
+        }
+    }
     Ok((num, summary, context))
 }
 
@@ -481,10 +768,20 @@ pub async fn hbar_sign_tx(
     let lang = crate::i18n::current();
     confirm_native(
         &app,
-        lang.pick(
-            "Confirmer le transfert Hedera",
-            "Confirm the Hedera transfer",
-        ),
+        match &summary.token {
+            Some(t) if t.associate => lang.pick(
+                "Associer un jeton Hedera",
+                "Associate a Hedera token",
+            ),
+            Some(_) => lang.pick(
+                "Confirmer l'envoi de jetons Hedera",
+                "Confirm the Hedera token send",
+            ),
+            None => lang.pick(
+                "Confirmer le transfert Hedera",
+                "Confirm the Hedera transfer",
+            ),
+        },
         signer.body(
             lang,
             &describe_hbar(lang, &summary, &context, state.network),
@@ -504,9 +801,10 @@ pub async fn hbar_sign_tx(
         .await?;
     }
     let nodes = hbar_backend::node_ids(state.network);
+    let net = state.network;
     let b = bodies.clone();
     let (signed, again) =
-        blocking(move || Ok(wallet_core::hbar_sign(&seed, a, num, &b, &nodes)?)).await?;
+        blocking(move || Ok(wallet_core::hbar_sign_on(net, &seed, a, num, &b, &nodes)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
             "résumé différent entre l'aperçu et la signature".into(),
@@ -541,6 +839,13 @@ pub(crate) async fn broadcast_checked(
             ));
         }
         let t = v.transfer;
+        if let HbarKind::Token { token, .. } | HbarKind::Associate(token) = t.kind {
+            if wallet_core::hbar_known_token(c.network, token).is_none() {
+                return Err(AppError::InvalidInput(format!(
+                    "jeton 0.0.{token} inconnu sur ce réseau"
+                )));
+            }
+        }
         if !known.contains(&t.node) || copies.iter().any(|(n, _, _)| *n == t.node) {
             return Err(AppError::InvalidInput("nœud inconnu ou en double".into()));
         }
@@ -650,7 +955,72 @@ mod tests {
             nodes: vec!["0.0.3".into(), "0.0.4".into(), "0.0.7".into()],
             warnings: vec![],
             requires_extra_confirmation: false,
+            token: None,
         }
+    }
+
+    fn usdc(associate: bool) -> wallet_core::HbarTokenSummary {
+        wallet_core::HbarTokenSummary {
+            token_id: "0.0.456858".into(),
+            symbol: "USDC".into(),
+            name: "USD Coin".into(),
+            decimals: 6,
+            associate,
+        }
+    }
+
+    #[test]
+    fn dialog_shows_the_token_its_verified_id_and_decimals() {
+        let mut s = summary(None, false);
+        s.amount = "12500000".into();
+        s.token = Some(usdc(false));
+        let mut c = context(false);
+        let h = HbarTokenHolding {
+            token_id: "0.0.456858".into(),
+            associated: true,
+            balance: "20000000".into(),
+            frozen: false,
+        };
+        c.token = Some(HbarTokenContext {
+            ours: h.clone(),
+            recipient: Some(HbarTokenHolding {
+                associated: false,
+                ..h
+            }),
+        });
+        let d = describe_hbar(Lang::Fr, &s, &c, Network::Mainnet);
+        for needle in [
+            "Envoi USDC sur Hedera
+",
+            "Jeton : USDC (USD Coin) · 0.0.456858 (vérifié, table de Kyro) · 6 décimales",
+            "À : 0.0.7007
+",
+            "Montant : 12,5 USDC (12500000 unités)",
+            "Ton solde : 20 USDC",
+            "association automatique",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:
+{d}");
+        }
+        assert!(!d.contains("tinybars)"));
+        s.token = Some(usdc(true));
+        s.amount = "0".into();
+        let d = describe_hbar(Lang::En, &s, &c, Network::Testnet);
+        assert!(d.starts_with("Associate USDC with your Hedera account (testnet)
+"), "{d}");
+        assert!(d.contains("0.0.456858 (verified, Kyro's table) · 6 decimals"));
+        assert!(d.contains("Nothing is sent to anyone"));
+    }
+
+    #[test]
+    fn token_holdings_from_the_mirror() {
+        let v = serde_json::json!({"tokens":[{"token_id":"0.0.456858","balance":2500000,"freeze_status":"UNFROZEN","kyc_status":"NOT_APPLICABLE","automatic_association":true}]});
+        let h = hbar_backend::parse_holding(Some(&v), 456_858);
+        assert_eq!((h.associated, h.balance.as_str(), h.frozen), (true, "2500000", false));
+        assert!(!hbar_backend::parse_holding(Some(&v), 429_274).associated);
+        assert!(!hbar_backend::parse_holding(None, 456_858).associated);
+        let f = serde_json::json!({"tokens":[{"token_id":"0.0.456858","balance":1,"freeze_status":"FROZEN"}]});
+        assert!(hbar_backend::parse_holding(Some(&f), 456_858).frozen);
     }
 
     fn context(creates: bool) -> HbarContext {
@@ -666,6 +1036,7 @@ mod tests {
                 ..Default::default()
             },
             creates_account: creates,
+            token: None,
         }
     }
 

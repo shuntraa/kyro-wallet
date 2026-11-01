@@ -142,6 +142,9 @@ const COMMANDS: &[&str] = &[
     "hbar_sign_tx",
     "hbar_broadcast",
     "hbar_tx_status",
+    "hbar_token_holdings",
+    "hbar_build_associate_tx",
+    "hbar_build_token_tx",
     // Algorand (docs/IPC.md §2.11).
     "algo_backend_info",
     "algo_address",

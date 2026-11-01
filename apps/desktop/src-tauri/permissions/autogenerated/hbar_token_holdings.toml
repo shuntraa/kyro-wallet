@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hbar-token-holdings"
+description = "Enables the hbar_token_holdings command without any pre-configured scope."
+commands.allow = ["hbar_token_holdings"]
+
+[[permission]]
+identifier = "deny-hbar-token-holdings"
+description = "Denies the hbar_token_holdings command without any pre-configured scope."
+commands.deny = ["hbar_token_holdings"]

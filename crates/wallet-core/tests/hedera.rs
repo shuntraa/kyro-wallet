@@ -19,6 +19,7 @@ use wallet_core::{
     hbar_public_key, hbar_sign, hbar_verify_signed, HbarRecipient, HbarTransfer, HbarWarning,
     Mnemonic, Network,
 };
+use wallet_core::{hbar_decode_tx_on, hbar_known_token, hbar_sign_on, HbarKind};
 
 const W24: &str = "inmate flip alley wear offer often piece magnet surge toddler submit right radio absent pear floor belt raven price stove replace reduce plate home";
 const W12: &str = "finish furnace tomorrow wine mass goose festival air palm easy region guilt";
@@ -157,6 +158,7 @@ fn case1() -> HbarTransfer {
         memo: "facture 42".into(),
         to: HbarRecipient::Id(98_765),
         amount: 150_000_000,
+        kind: HbarKind::Hbar,
     }
 }
 
@@ -237,7 +239,8 @@ fn decoder_refuses_everything_else() {
         b.extend_from_slice(&inner);
         b
     };
-    refused(&ct_tokens, "tokens HTS");
+    refused(&ct_tokens, "HBAR et jetons");
+    refused(&with(CASE1, &[0xc2, 0x02, 0x00]), "deux opérations");
     // scheduled flag in the transaction ID.
     let scheduled = hex::decode(CASE1.replacen("0a130a0b", "0a150a0b", 1).replacen(
         "12041887ad4b1202",
@@ -398,4 +401,110 @@ fn precheck_response() {
         hbar_decode_precheck(&[0x08, 0x0a, 0x10, 0x05]).unwrap(),
         (10, 5)
     );
+}
+
+// ---------------------------------------------------------------- HTS tokens (USDC)
+
+const USDC_MAIN: u64 = 456_858;
+const USDC_TEST: u64 = 429_274;
+
+fn put_varint(o: &mut Vec<u8>, mut v: u64) {
+    while v >= 0x80 {
+        o.push((v as u8) | 0x80);
+        v >>= 7;
+    }
+    o.push(v as u8);
+}
+
+#[test]
+fn known_tokens_are_circle_usdc() {
+    let m = hbar_known_token(Network::Mainnet, USDC_MAIN).unwrap();
+    assert_eq!((m.symbol, m.decimals), ("USDC", 6));
+    assert!(hbar_known_token(Network::Mainnet, USDC_TEST).is_none());
+    assert_eq!(hbar_known_token(Network::Testnet, USDC_TEST).unwrap().symbol, "USDC");
+}
+
+#[test]
+fn token_transfer_and_association_encoding() {
+    let token = HbarTransfer {
+        amount: 12_500_000,
+        kind: HbarKind::Token { token: USDC_MAIN, decimals: 6 },
+        ..case1()
+    };
+    let raw = token.encode();
+    // cryptoTransfer (field 14) holds only tokenTransfers (field 2): TokenID {tokenNum},
+    // two AccountAmounts, expected_decimals { value: 6 }.
+    let mut tid = vec![0x0a, 0x00, 0x18];
+    put_varint(&mut tid, USDC_MAIN);
+    tid[1] = (tid.len() - 2) as u8;
+    let at = raw.windows(tid.len()).position(|w| w == tid.as_slice()).unwrap();
+    assert_eq!(raw[at - 2], 0x12, "tokenTransfers is field 2");
+    assert!(raw.ends_with(&[0x22, 0x02, 0x08, 0x06]), "expected_decimals = 6");
+    assert_eq!(HbarTransfer::decode(&raw).unwrap(), token);
+    let assoc = HbarTransfer {
+        amount: 0,
+        to: HbarRecipient::Id(1_234_567),
+        kind: HbarKind::Associate(USDC_MAIN),
+        ..case1()
+    };
+    let raw = assoc.encode();
+    // tokenAssociate = field 40 (key 0xC2 0x02): { account: 0.0.payer, tokens: [0.0.456858] }.
+    let at = raw.windows(2).position(|w| w == [0xc2, 0x02]).unwrap();
+    let msg = |field: u8, num: u64| {
+        let mut inner = vec![0x18];
+        put_varint(&mut inner, num);
+        let mut o = vec![field, inner.len() as u8];
+        o.extend(inner);
+        o
+    };
+    let body = [msg(0x0a, 1_234_567), msg(0x12, USDC_MAIN)].concat();
+    assert_eq!(&raw[at + 3..], body.as_slice());
+    assert_eq!(raw[at + 2] as usize, body.len());
+    assert_eq!(HbarTransfer::decode(&raw).unwrap(), assoc);
+    // Without decimals, with an NFT list, two token lists: refused.
+    let mut no_dec = token.clone().encode();
+    no_dec.truncate(no_dec.len() - 4);
+    assert!(HbarTransfer::decode(&no_dec).is_err());
+}
+
+#[test]
+fn tokens_are_signed_only_on_their_network() {
+    let s = Mnemonic::parse(W12).unwrap().to_seed("");
+    let pk = hbar_public_key(&s, 0).unwrap();
+    let nodes = [3u64, 4];
+    let body = |kind, to, amount| {
+        hex::encode(
+            HbarTransfer {
+                payer: 4_242,
+                node: 3,
+                to,
+                amount,
+                kind,
+                ..case1()
+            }
+            .encode(),
+        )
+    };
+    let usdc = body(HbarKind::Token { token: USDC_MAIN, decimals: 6 }, HbarRecipient::Id(98_765), 2_000_000);
+    // The network-less API refuses every token.
+    assert!(hbar_decode_tx(std::slice::from_ref(&usdc), 4_242, &pk, &nodes).unwrap_err().to_string().contains("réseau"));
+    let sm = hbar_decode_tx_on(Network::Mainnet, std::slice::from_ref(&usdc), 4_242, &pk, &nodes).unwrap();
+    let t = sm.token.clone().unwrap();
+    assert_eq!((t.token_id.as_str(), t.symbol.as_str(), t.decimals, t.associate), ("0.0.456858", "USDC", 6, false));
+    assert_eq!(sm.amount, "2000000");
+    // Mainnet USDC on testnet, wrong decimals, unknown token: refused.
+    assert!(hbar_decode_tx_on(Network::Testnet, std::slice::from_ref(&usdc), 4_242, &pk, &nodes).is_err());
+    let bad_dec = body(HbarKind::Token { token: USDC_MAIN, decimals: 2 }, HbarRecipient::Id(98_765), 1);
+    assert!(hbar_decode_tx_on(Network::Mainnet, &[bad_dec], 4_242, &pk, &nodes).unwrap_err().to_string().contains("expected_decimals"));
+    let other = body(HbarKind::Token { token: 731_861, decimals: 6 }, HbarRecipient::Id(98_765), 1);
+    assert!(hbar_decode_tx_on(Network::Mainnet, &[other], 4_242, &pk, &nodes).unwrap_err().to_string().contains("inconnu"));
+    // Association: for ourselves only.
+    let assoc = body(HbarKind::Associate(USDC_MAIN), HbarRecipient::Id(4_242), 0);
+    let sa = hbar_decode_tx_on(Network::Mainnet, std::slice::from_ref(&assoc), 4_242, &pk, &nodes).unwrap();
+    assert!(sa.token.as_ref().unwrap().associate);
+    let (signed, again) = hbar_sign_on(Network::Mainnet, &s, 0, 4_242, &[assoc], &nodes).unwrap();
+    assert_eq!(again, sa);
+    assert_eq!(hbar_verify_signed(&signed[0]).unwrap().transfer.kind, HbarKind::Associate(USDC_MAIN));
+    let (signed, _) = hbar_sign_on(Network::Mainnet, &s, 0, 4_242, &[usdc], &nodes).unwrap();
+    assert!(hbar_verify_signed(&signed[0]).is_ok());
 }

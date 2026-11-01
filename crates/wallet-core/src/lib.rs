@@ -127,6 +127,10 @@ pub use hedera::{
     HbarSignedTransfer, HbarTransfer, HbarTxSummary, HbarWarning, HBAR_HIGH_FEE_TINYBARS,
     HBAR_MAX_MEMO_BYTES, HBAR_MAX_NODES, HBAR_MAX_VALID_DURATION, HBAR_TINYBARS,
 };
+pub use hedera::{
+    hbar_decode_tx_on, hbar_known_token, hbar_known_tokens, hbar_sign_on, HbarKind,
+    HbarKnownToken, HbarTokenSummary,
+};
 pub use hw_chains::{stellar_hw_assemble, stellar_signature_base, xrp_hw_assemble};
 pub use hw_keys::{HwKeyChain, HwWatchKey};
 pub use kaspa::{

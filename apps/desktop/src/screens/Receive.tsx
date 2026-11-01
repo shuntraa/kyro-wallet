@@ -9,6 +9,7 @@ import { motion } from 'motion/react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
 import { aptosChain, bchChain, btcChain, dashChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, stellarChain, nearChain, suiChain, hbarChain, kaspaChain, polkadotChain, algorandChain, xmrChain, tonChain, cosmosChain, zecChain } from '@kyro/chains';
 import { AlgoTokens } from '../components/AlgoSend';
+import { HbarTokens } from '../components/HbarSend';
 import { useAsync } from '../lib/useAsync';
 import { useApp, useVault } from '../state/app';
 import { cn } from '../lib/cn';
@@ -608,6 +609,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               )}
             </Notice>
           )}
+          {family === 'hbar' && adapters.hbar && hbarAccount.data && <HbarTokens adapter={adapters.hbar} account={hbarAccount.data} />}
           {family === 'dot' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               {rt('receive.dotNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> }, {

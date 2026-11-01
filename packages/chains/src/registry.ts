@@ -71,7 +71,7 @@ export interface WatchOnlyChain {
   phase: 4;
 }
 
-export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'jetton' | 'asa' | 'dotasset';
+export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'jetton' | 'asa' | 'dotasset' | 'hts';
 
 export interface AssetDef {
   /** Unique id, e.g. `btc`, `eth:1`, `erc20:11155111:0x1c7d…`. */
@@ -942,6 +942,18 @@ export const DOT_ASSETS: Record<Network, TokenSpec[]> = {
 };
 
 /**
+ * Hedera Token Service tokens, by token ID (`contract` = `0.0.num`). USDC: Circle's list (mainnet
+ * 0.0.456858, testnet 0.0.429274); mirror node read on 2026-11-01: « USD Coin », USDC, 6
+ * decimals, fungible, no custom fee, no KYC key. A token must be associated with the account
+ * (TokenAssociate, ≈ $0.05) unless the account has automatic association. wallet-core
+ * (`hedera.rs` `hbar_known_tokens`) holds the same IDs.
+ */
+export const HBAR_TOKENS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('0.0.429274')],
+  mainnet: [USDC('0.0.456858')],
+};
+
+/**
  * TON jettons (TEP-74), by master (bounceable `EQ…`). USD₮: master listed by Tether (tether.to)
  * and CoinGecko `tether` (`the-open-network`), `decimals` 6 in its metadata. No official USDC on
  * TON (Circle lists none). wallet-core (`ton/jetton.rs`) holds the same masters with their
@@ -977,6 +989,11 @@ export function assetsFor(network: Network): AssetDef[] {
     if (chain.family === 'tron') {
       for (const t of TRC20_TOKENS[network]) {
         out.push({ id: `trc20:${t.contract}`, chainKey: chain.key, family: 'tron', kind: 'trc20', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'hbar') {
+      for (const t of HBAR_TOKENS[network]) {
+        out.push({ id: `hts:${t.contract}`, chainKey: chain.key, family: 'hbar', kind: 'hts', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
       }
     }
     if (chain.family === 'dot') {

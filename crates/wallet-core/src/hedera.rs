@@ -2,7 +2,9 @@
 //! of the Hedera SDKs (`Mnemonic.toStandardECDSAsecp256k1PrivateKey(passphrase, index)`, used by
 //! HashPack and the other SDK-based wallets for ECDSA accounts; account 0 = `m/44'/3030'/0'/0/0`)
 //! — the key's EVM address (`keccak256(uncompressed pubkey)[12..]`, the account's *alias*), and
-//! the protobuf of a **HBAR CryptoTransfer** only.
+//! the protobuf of a **HBAR CryptoTransfer**, and for the verified HTS tokens of
+//! [`hbar_known_tokens`] (USDC) a **token CryptoTransfer** (one token list, `expected_decimals`
+//! set) and a **TokenAssociate** of the payer.
 //!
 //! Why ECDSA and not ED25519 (`m/44'/3030'/0'/0'/a'`, Ledger and legacy HashPack accounts): an
 //! ECDSA key has an EVM address, so the account can be **created by the first incoming
@@ -393,7 +395,69 @@ fn dec_num(b: &[u8], what: &str) -> Result<u64> {
     }
 }
 
-/// A HBAR transfer: the only `TransactionBody` Kyro builds and signs.
+/// An HTS token Kyro knows (verified id, shard 0 realm 0).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HbarKnownToken {
+    /// Token number (`0.0.num`).
+    pub num: u64,
+    /// Symbol shown by Kyro.
+    pub symbol: &'static str,
+    /// Name shown by Kyro.
+    pub name: &'static str,
+    /// Decimals (signed as `expected_decimals`).
+    pub decimals: u32,
+}
+
+/// Mainnet USDC: `0.0.456858` (Circle's list; mirror node 2026-11-01: « USD Coin », USDC, 6
+/// decimals, no custom fee, no KYC key, `freeze_default` false).
+const MAINNET_TOKENS: &[HbarKnownToken] = &[HbarKnownToken {
+    num: 456_858,
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+}];
+/// Testnet USDC: `0.0.429274` (Circle's list; mirror node: « USD Coin », USDC, 6 decimals).
+const TESTNET_TOKENS: &[HbarKnownToken] = &[HbarKnownToken {
+    num: 429_274,
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+}];
+
+/// The HTS tokens Kyro can associate, hold and send on `network`.
+pub fn hbar_known_tokens(network: Network) -> &'static [HbarKnownToken] {
+    match network {
+        Network::Mainnet => MAINNET_TOKENS,
+        Network::Testnet => TESTNET_TOKENS,
+    }
+}
+
+/// The known token `0.0.num` on `network`.
+pub fn hbar_known_token(network: Network, num: u64) -> Option<HbarKnownToken> {
+    hbar_known_tokens(network)
+        .iter()
+        .copied()
+        .find(|t| t.num == num)
+}
+
+/// What a body does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HbarKind {
+    /// HBAR transfer (`amount` in tinybars).
+    Hbar,
+    /// Transfer of HTS token `token` (`amount` in its units, `expected_decimals` = `decimals`).
+    Token {
+        /// Token number.
+        token: u64,
+        /// `expected_decimals`.
+        decimals: u32,
+    },
+    /// `TokenAssociate` of token `0.0.n` for the payer (`to` = payer, `amount` = 0).
+    Associate(u64),
+}
+
+/// A HBAR or known-token transfer, or a token association: the only `TransactionBody` Kyro builds
+/// and signs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HbarTransfer {
     /// Payer and sender (`transactionID.accountID`, debited in the transfer list).
@@ -412,8 +476,59 @@ pub struct HbarTransfer {
     pub memo: String,
     /// Credited account.
     pub to: HbarRecipient,
-    /// Tinybars moved from `payer` to `to`.
+    /// Tinybars (token: its units) moved from `payer` to `to`.
     pub amount: u64,
+    /// HBAR transfer, token transfer or association.
+    pub kind: HbarKind,
+}
+
+fn enc_token_id(num: u64) -> Vec<u8> {
+    let mut o = Vec::new();
+    put_key(&mut o, 3, 0);
+    put_varint(&mut o, num);
+    o
+}
+
+/// `TokenID` of shard 0, realm 0.
+fn dec_token_id(b: &[u8]) -> Result<u64> {
+    let mut out = None;
+    for (f, v) in fields(b)? {
+        match f {
+            1 | 2 if varint_of(&v, "TokenID")? != 0 => {
+                return Err(bad("jeton : seuls les jetons 0.0.x sont pris en charge"))
+            }
+            1 | 2 => {}
+            3 => out = Some(varint_of(&v, "TokenID")?).filter(|n| *n > 0),
+            f => return Err(bad(format!("TokenID : champ inconnu {f}"))),
+        }
+    }
+    out.ok_or_else(|| bad("identifiant de jeton manquant"))
+}
+
+/// `AccountAmount` entries (repeated field `field` of `list`).
+fn dec_amounts(list: &[u8], field: u32, what: &str) -> Result<Vec<(HbarRecipient, i64)>> {
+    let mut entries = Vec::new();
+    for (f, v) in fields(list)? {
+        if f != field {
+            return Err(bad(format!("{what} : champ inconnu {f}")));
+        }
+        let (mut acc, mut amount) = (None, 0i64);
+        for (g, w) in fields(bytes_of(&v, "accountAmounts")?)? {
+            match g {
+                1 => acc = Some(dec_account(bytes_of(&w, "compte")?, true, "compte")?),
+                2 => amount = unzigzag(varint_of(&w, "montant")?),
+                3 => {
+                    return Err(bad(
+                        "is_approval refusé : dépense par autorisation (allowance)",
+                    ))
+                }
+                4 | 5 => return Err(bad("crochet (hook) refusé")),
+                g => return Err(bad(format!("AccountAmount : champ inconnu {g}"))),
+            }
+        }
+        entries.push((acc.ok_or_else(|| bad("compte manquant"))?, amount));
+    }
+    Ok(entries)
 }
 
 impl HbarTransfer {
@@ -435,11 +550,31 @@ impl HbarTransfer {
         let mut credit = Vec::new();
         put_bytes(&mut credit, 1, &enc_recipient(&self.to));
         put_uint(&mut credit, 2, zigzag(amount));
-        let mut list = Vec::new();
-        put_bytes(&mut list, 1, &debit);
-        put_bytes(&mut list, 1, &credit);
         let mut ct = Vec::new();
-        put_bytes(&mut ct, 1, &list);
+        let mut assoc = Vec::new();
+        match self.kind {
+            HbarKind::Hbar => {
+                let mut list = Vec::new();
+                put_bytes(&mut list, 1, &debit);
+                put_bytes(&mut list, 1, &credit);
+                put_bytes(&mut ct, 1, &list);
+            }
+            HbarKind::Token { token, decimals } => {
+                // TokenTransferList { token, transfers, transfers, expected_decimals }.
+                let mut list = Vec::new();
+                put_bytes(&mut list, 1, &enc_token_id(token));
+                put_bytes(&mut list, 2, &debit);
+                put_bytes(&mut list, 2, &credit);
+                let mut dec = Vec::new();
+                put_uint(&mut dec, 1, u64::from(decimals));
+                put_bytes(&mut list, 4, &dec);
+                put_bytes(&mut ct, 2, &list);
+            }
+            HbarKind::Associate(token) => {
+                put_bytes(&mut assoc, 1, &enc_account_num(self.payer));
+                put_bytes(&mut assoc, 2, &enc_token_id(token));
+            }
+        }
 
         let mut o = Vec::new();
         put_bytes(&mut o, 1, &txid);
@@ -449,7 +584,10 @@ impl HbarTransfer {
         if !self.memo.is_empty() {
             put_bytes(&mut o, 6, self.memo.as_bytes());
         }
-        put_bytes(&mut o, 14, &ct);
+        match self.kind {
+            HbarKind::Associate(_) => put_bytes(&mut o, 40, &assoc),
+            _ => put_bytes(&mut o, 14, &ct),
+        }
         o
     }
 
@@ -464,6 +602,7 @@ impl HbarTransfer {
         }
         let (mut txid, mut node, mut fee, mut dur, mut memo, mut ct) =
             (None, None, 0u64, None, String::new(), None);
+        let mut assoc = None;
         for (f, v) in fields(raw)? {
             match f {
                 1 => txid = Some(bytes_of(&v, "transactionID")?),
@@ -476,9 +615,10 @@ impl HbarTransfer {
                         .map_err(|_| bad("mémo : UTF-8 invalide"))?
                 }
                 14 => ct = Some(bytes_of(&v, "cryptoTransfer")?),
+                40 => assoc = Some(bytes_of(&v, "tokenAssociate")?),
                 f => {
                     return Err(bad(format!(
-                        "champ {f} : seul un transfert de HBAR (CryptoTransfer) est signé par Kyro"
+                        "champ {f} : seuls un transfert (CryptoTransfer) et l'association d'un jeton connu (TokenAssociate) sont signés par Kyro"
                     )))
                 }
             }
@@ -513,46 +653,87 @@ impl HbarTransfer {
                 f => return Err(bad(format!("Duration : champ inconnu {f}"))),
             }
         }
-        // cryptoTransfer
-        let ct = ct.ok_or_else(|| bad("cryptoTransfer manquant"))?;
-        let mut list = None;
-        for (f, v) in fields(ct)? {
-            match f {
-                1 => list = Some(bytes_of(&v, "transfers")?),
-                2 => return Err(bad("transferts de tokens HTS refusés (HBAR seulement)")),
-                f => return Err(bad(format!("cryptoTransfer : champ inconnu {f}"))),
-            }
-        }
-        let mut entries = Vec::new();
-        for (f, v) in fields(list.ok_or_else(|| bad("liste de transferts manquante"))?)? {
-            if f != 1 {
-                return Err(bad(format!("TransferList : champ inconnu {f}")));
-            }
-            let (mut acc, mut amount) = (None, 0i64);
-            for (g, w) in fields(bytes_of(&v, "accountAmounts")?)? {
-                match g {
-                    1 => acc = Some(dec_account(bytes_of(&w, "compte")?, true, "compte")?),
-                    2 => amount = unzigzag(varint_of(&w, "montant")?),
-                    3 => {
-                        return Err(bad(
-                            "is_approval refusé : dépense par autorisation (allowance)",
-                        ))
-                    }
-                    4 | 5 => return Err(bad("crochet (hook) refusé")),
-                    g => return Err(bad(format!("AccountAmount : champ inconnu {g}"))),
-                }
-            }
-            entries.push((acc.ok_or_else(|| bad("compte manquant"))?, amount));
-        }
         let payer = payer.ok_or_else(|| bad("payeur manquant"))?;
-        let [(from, debit), (to, credit)] = <[(HbarRecipient, i64); 2]>::try_from(entries)
-            .map_err(|_| bad("exactement un débit et un crédit attendus"))?;
-        if from != HbarRecipient::Id(payer) {
-            return Err(bad("le compte débité n'est pas le payeur"));
-        }
-        if credit <= 0 || debit != -credit {
-            return Err(bad("montants incohérents (un débit, puis un crédit égal)"));
-        }
+        let (to, credit, kind) = match (ct, assoc) {
+            (Some(ct), None) => {
+                let (mut list, mut tokens) = (None, Vec::new());
+                for (f, v) in fields(ct)? {
+                    match f {
+                        1 => list = Some(bytes_of(&v, "transfers")?),
+                        2 => tokens.push(bytes_of(&v, "tokenTransfers")?),
+                        f => return Err(bad(format!("cryptoTransfer : champ inconnu {f}"))),
+                    }
+                }
+                let (entries, kind) = match (list, tokens.as_slice()) {
+                    (Some(list), []) => (dec_amounts(list, 1, "TransferList")?, HbarKind::Hbar),
+                    (None, [one]) => {
+                        let (mut token, mut entries, mut decimals) = (None, Vec::new(), None);
+                        for (f, v) in fields(one)? {
+                            match f {
+                                1 => token = Some(dec_token_id(bytes_of(&v, "token")?)?),
+                                2 => entries.extend(dec_amounts(
+                                    &{
+                                        let mut wrap = Vec::new();
+                                        put_bytes(&mut wrap, 1, bytes_of(&v, "transfers")?);
+                                        wrap
+                                    },
+                                    1,
+                                    "TokenTransferList",
+                                )?),
+                                3 => return Err(bad("transfert de NFT refusé")),
+                                4 => {
+                                    let mut d = 0u64;
+                                    for (g, w) in fields(bytes_of(&v, "expected_decimals")?)? {
+                                        match g {
+                                            1 => d = varint_of(&w, "expected_decimals")?,
+                                            g => return Err(bad(format!("UInt32Value : champ inconnu {g}"))),
+                                        }
+                                    }
+                                    decimals = Some(u32::try_from(d).map_err(|_| bad("décimales"))?);
+                                }
+                                f => return Err(bad(format!("TokenTransferList : champ inconnu {f}"))),
+                            }
+                        }
+                        let token = token.ok_or_else(|| bad("jeton manquant"))?;
+                        let decimals = decimals.ok_or_else(|| {
+                            bad("expected_decimals manquant : Kyro fixe toujours les décimales du jeton")
+                        })?;
+                        (entries, HbarKind::Token { token, decimals })
+                    }
+                    (Some(_), [_, ..]) => {
+                        return Err(bad("HBAR et jetons dans la même transaction : refusé"))
+                    }
+                    _ => return Err(bad("un seul transfert (HBAR ou un jeton) attendu")),
+                };
+                let [(from, debit), (to, credit)] = <[(HbarRecipient, i64); 2]>::try_from(entries)
+                    .map_err(|_| bad("exactement un débit et un crédit attendus"))?;
+                if from != HbarRecipient::Id(payer) {
+                    return Err(bad("le compte débité n'est pas le payeur"));
+                }
+                if credit <= 0 || debit != -credit {
+                    return Err(bad("montants incohérents (un débit, puis un crédit égal)"));
+                }
+                (to, credit as u64, kind)
+            }
+            (None, Some(a)) => {
+                let (mut account, mut tokens) = (None, Vec::new());
+                for (f, v) in fields(a)? {
+                    match f {
+                        1 => account = Some(dec_num(bytes_of(&v, "account")?, "account")?),
+                        2 => tokens.push(dec_token_id(bytes_of(&v, "tokens")?)?),
+                        f => return Err(bad(format!("TokenAssociate : champ inconnu {f}"))),
+                    }
+                }
+                if account != Some(payer) {
+                    return Err(bad("association pour un autre compte que le payeur"));
+                }
+                let [token] = <[u64; 1]>::try_from(tokens)
+                    .map_err(|_| bad("association d'exactement un jeton attendue"))?;
+                (HbarRecipient::Id(payer), 0, HbarKind::Associate(token))
+            }
+            (None, None) => return Err(bad("cryptoTransfer manquant")),
+            (Some(_), Some(_)) => return Err(bad("deux opérations dans un corps")),
+        };
         let t = HbarTransfer {
             payer,
             valid_start_secs: secs as i64,
@@ -562,7 +743,8 @@ impl HbarTransfer {
             valid_duration: i64::try_from(duration).map_err(|_| bad("durée"))?,
             memo,
             to,
-            amount: credit as u64,
+            amount: credit,
+            kind,
         };
         if t.encode() != raw {
             return Err(bad(
@@ -660,6 +842,26 @@ pub struct HbarTxSummary {
     pub warnings: Vec<HbarWarning>,
     /// The confirmation must be followed by a reinforced one.
     pub requires_extra_confirmation: bool,
+    /// Token transfer or association of a known token (`amount` = token units, `"0"` for an
+    /// association, whose `to` is our own account).
+    #[serde(default)]
+    pub token: Option<HbarTokenSummary>,
+}
+
+/// The token of a body, as Kyro's table knows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HbarTokenSummary {
+    /// `0.0.num`, verified.
+    pub token_id: String,
+    /// Symbol (Kyro's table).
+    pub symbol: String,
+    /// Name (Kyro's table).
+    pub name: String,
+    /// Decimals (Kyro's table, signed as `expected_decimals`).
+    pub decimals: u32,
+    /// `TokenAssociate` (enables receiving the token) rather than a transfer.
+    pub associate: bool,
 }
 
 fn decode_bodies(bodies: &[String]) -> Result<Vec<(Vec<u8>, HbarTransfer)>> {
@@ -682,8 +884,32 @@ fn summarize(
     our_account: u64,
     our_evm: &[u8; 20],
     allowed_nodes: &[u64],
+    network: Option<Network>,
 ) -> Result<HbarTxSummary> {
     let t = ts.first().ok_or_else(|| bad("aucune copie"))?;
+    let token = match t.kind {
+        HbarKind::Hbar => None,
+        HbarKind::Token { token, .. } | HbarKind::Associate(token) => {
+            let net = network.ok_or_else(|| bad("jeton : réseau non précisé"))?;
+            let k = hbar_known_token(net, token).ok_or_else(|| {
+                bad(format!(
+                    "jeton 0.0.{token} inconnu : Kyro ne signe que les jetons vérifiés de sa table"
+                ))
+            })?;
+            if let HbarKind::Token { decimals, .. } = t.kind {
+                if decimals != k.decimals {
+                    return Err(bad("expected_decimals différent de la table de Kyro"));
+                }
+            }
+            Some(HbarTokenSummary {
+                token_id: format!("0.0.{}", k.num),
+                symbol: k.symbol.into(),
+                name: k.name.into(),
+                decimals: k.decimals,
+                associate: matches!(t.kind, HbarKind::Associate(_)),
+            })
+        }
+    };
     for (i, x) in ts.iter().enumerate() {
         if !t.same_except_node(x) {
             return Err(bad("les copies pour plusieurs nœuds diffèrent"));
@@ -698,13 +924,24 @@ fn summarize(
     if t.payer != our_account {
         return Err(bad("le payeur n'est pas le compte de ce portefeuille"));
     }
-    match t.to {
-        HbarRecipient::Id(n) if n == our_account => return Err(bad("transfert à soi-même")),
-        HbarRecipient::Evm(a) if a == *our_evm => return Err(bad("transfert à soi-même")),
-        _ => {}
-    }
-    if t.amount == 0 || t.amount > MAX_TINYBARS {
-        return Err(bad("montant invalide"));
+    if let HbarKind::Associate(_) = t.kind {
+        if t.to != HbarRecipient::Id(our_account) || t.amount != 0 {
+            return Err(bad("association incohérente"));
+        }
+    } else {
+        match t.to {
+            HbarRecipient::Id(n) if n == our_account => return Err(bad("transfert à soi-même")),
+            HbarRecipient::Evm(a) if a == *our_evm => return Err(bad("transfert à soi-même")),
+            _ => {}
+        }
+        let max = if t.kind == HbarKind::Hbar {
+            MAX_TINYBARS
+        } else {
+            i64::MAX as u64
+        };
+        if t.amount == 0 || t.amount > max {
+            return Err(bad("montant invalide"));
+        }
     }
     if t.max_fee == 0 {
         return Err(bad("frais maximum nuls"));
@@ -741,6 +978,7 @@ fn summarize(
         nodes: ts.iter().map(|x| format!("0.0.{}", x.node)).collect(),
         requires_extra_confirmation: !warnings.is_empty(),
         warnings,
+        token,
     })
 }
 
@@ -765,6 +1003,26 @@ pub fn hbar_decode_tx(
         our_account,
         &evm_of_pubkey33(our_pubkey)?,
         allowed_nodes,
+        None,
+    )
+}
+
+/// [`hbar_decode_tx`] on `network`, which also accepts transfers and associations of the known
+/// tokens of that network ([`hbar_known_tokens`]; `hbar_decode_tx` refuses every token).
+pub fn hbar_decode_tx_on(
+    network: Network,
+    bodies: &[String],
+    our_account: u64,
+    our_pubkey: &[u8],
+    allowed_nodes: &[u64],
+) -> Result<HbarTxSummary> {
+    let ts: Vec<HbarTransfer> = decode_bodies(bodies)?.into_iter().map(|(_, t)| t).collect();
+    summarize(
+        &ts,
+        our_account,
+        &evm_of_pubkey33(our_pubkey)?,
+        allowed_nodes,
+        Some(network),
     )
 }
 
@@ -793,6 +1051,30 @@ pub fn hbar_sign(
     bodies: &[String],
     allowed_nodes: &[u64],
 ) -> Result<(Vec<String>, HbarTxSummary)> {
+    sign_inner(seed, account, our_account, bodies, allowed_nodes, None)
+}
+
+/// [`hbar_sign`] on `network`: also signs the known tokens of that network (like
+/// [`hbar_decode_tx_on`]).
+pub fn hbar_sign_on(
+    network: Network,
+    seed: &Seed,
+    account: u32,
+    our_account: u64,
+    bodies: &[String],
+    allowed_nodes: &[u64],
+) -> Result<(Vec<String>, HbarTxSummary)> {
+    sign_inner(seed, account, our_account, bodies, allowed_nodes, Some(network))
+}
+
+fn sign_inner(
+    seed: &Seed,
+    account: u32,
+    our_account: u64,
+    bodies: &[String],
+    allowed_nodes: &[u64],
+    network: Option<Network>,
+) -> Result<(Vec<String>, HbarTxSummary)> {
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
     let key = master.derive(&secp, &path(account)?)?;
@@ -802,7 +1084,13 @@ pub fn hbar_sign(
     let pk33 = pk.serialize();
     let decoded = decode_bodies(bodies)?;
     let ts: Vec<HbarTransfer> = decoded.iter().map(|(_, t)| t.clone()).collect();
-    let summary = summarize(&ts, our_account, &evm_bytes_of_pubkey(&pk), allowed_nodes)?;
+    let summary = summarize(
+        &ts,
+        our_account,
+        &evm_bytes_of_pubkey(&pk),
+        allowed_nodes,
+        network,
+    )?;
     let mut out = Vec::with_capacity(decoded.len());
     for (raw, _) in &decoded {
         let msg = Message::from_digest(keccak256(raw));

@@ -1043,6 +1043,31 @@ export interface HbarAccountInfo {
    * but another EVM address — then **only** `0.0.x` may be used to receive).
    */
   foundBy: 'alias' | 'publicKey' | null;
+  /** `max_automatic_token_associations`: -1 = unlimited, 0 = tokens must be associated first. */
+  maxAutoAssociations?: number;
+}
+
+/** `hbar_token_holdings` line / token part of the context: one account and one known HTS token. */
+export interface HbarTokenHolding {
+  /** `0.0.num` of the token. */
+  tokenId: string;
+  /** The account can hold / receive the token. */
+  associated: boolean;
+  /** Token units. */
+  balance: string;
+  /** Frozen by the token's freeze key. */
+  frozen: boolean;
+}
+
+/** wallet-core `HbarTokenSummary`: the token as Kyro's table knows it. */
+export interface HbarTokenSummary {
+  /** `0.0.num`, verified. */
+  tokenId: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  /** `TokenAssociate` (enable receiving) rather than a transfer. */
+  associate: boolean;
 }
 
 /** `hbar_account`: our account, plus our EVM address from the key (EIP-55) and `0.0.x-checksum`. */
@@ -1078,6 +1103,8 @@ export interface HbarTxSummary {
   nodes: string[];
   warnings: HbarWarning[];
   requiresExtraConfirmation: boolean;
+  /** Token transfer (`amount` in token units) or association (`amount` "0", `to` = us). */
+  token?: HbarTokenSummary | null;
 }
 
 export interface HbarContext {
@@ -1085,6 +1112,8 @@ export interface HbarContext {
   recipient: HbarAccountInfo;
   /** Transfer to an EVM address without account: the network creates it (≈ $0.05, paid by us). */
   createsAccount: boolean;
+  /** Token transfer / association: holdings read live (`recipient` null for an association). */
+  token?: { ours: HbarTokenHolding; recipient: HbarTokenHolding | null } | null;
 }
 
 /** `hbar_txs` entry (mirror node, last 50, newest first). Amounts: tinybars. */
@@ -1106,6 +1135,8 @@ export interface HbarHistoryEntry {
   amount: string;
   counterparty: string | null;
   outgoing: boolean;
+  /** Our net change per token (all tokens; the adapter keeps the known ones). */
+  tokenTransfers?: { tokenId: string; delta: string }[];
 }
 
 export interface HbarBuilt {
@@ -2688,6 +2719,12 @@ export interface Commands {
   hbar_broadcast: { args: { signed: string[] } & WithAccount; ret: string };
   /** `found: true` once on the mirror node (reached consensus); `result: 'SUCCESS'`… */
   hbar_tx_status: { args: { id: string }; ret: { found: boolean; result: string } };
+  /** Holdings of the known HTS tokens (USDC 0.0.456858 on mainnet, 0.0.429274 on testnet) for `0.0.x`. */
+  hbar_token_holdings: { args: { accountId: string }; ret: HbarTokenHolding[] };
+  /** `TokenAssociate` of a known token for our account (≈ $0.05). Signed with `hbar_sign_tx`. */
+  hbar_build_associate_tx: { args: { tokenId: string } & WithAccount; ret: HbarBuilt };
+  /** Transfer of `amount` units of a known token (`expected_decimals` set). Signed with `hbar_sign_tx`. */
+  hbar_build_token_tx: { args: { tokenId: string; to: string; amount: string; memo?: string } & WithAccount; ret: HbarBuilt };
   // Algorand (§2.11): Rust builds the payment (fee, validity window, genesis from algod), decodes
   // it strictly (close-remainder-to, rekey, group, lease refused), re-reads both accounts live,
   // signs behind the password and the native dialog. Hardware wallets: not offered.

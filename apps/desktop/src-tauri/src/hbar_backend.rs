@@ -134,6 +134,9 @@ pub struct HbarAccountInfo {
     /// account with our key but another EVM address: the EVM address must NOT be used to
     /// receive, it would create a different account).
     pub found_by: Option<&'static str>,
+    /// `max_automatic_token_associations`: -1 = unlimited (accounts auto-created by a transfer
+    /// to their EVM address), 0 = every token must be associated first.
+    pub max_auto_associations: i64,
 }
 
 fn parse_account(v: &Value) -> HbarAccountInfo {
@@ -146,6 +149,7 @@ fn parse_account(v: &Value) -> HbarAccountInfo {
         deleted: v["deleted"] == true,
         receiver_sig_required: v["receiver_sig_required"] == true,
         found_by: None,
+        max_auto_associations: v["max_automatic_token_associations"].as_i64().unwrap_or(0),
     }
 }
 
@@ -215,6 +219,51 @@ pub async fn account(ctx: &HbarCtx<'_>, id: &str) -> AppResult<HbarAccountInfo> 
             None => not_found(),
         },
     )
+}
+
+/// One account's relation to a known HTS token (mirror `/accounts/{id}/tokens?token.id=…`).
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HbarTokenHolding {
+    /// `0.0.num` of the token.
+    pub token_id: String,
+    /// Associated: the account can hold and receive the token.
+    pub associated: bool,
+    /// Token units, decimal string.
+    pub balance: String,
+    /// Frozen by the token's freeze key: can neither send nor receive it.
+    pub frozen: bool,
+}
+
+/// Parses the mirror's `tokens` list for token `0.0.num` (other rows are ignored).
+pub fn parse_holding(v: Option<&Value>, num: u64) -> HbarTokenHolding {
+    let id = format!("0.0.{num}");
+    let row = v
+        .and_then(|v| v["tokens"].as_array())
+        .and_then(|a| a.iter().find(|t| t["token_id"].as_str() == Some(id.as_str())));
+    match row {
+        Some(t) => HbarTokenHolding {
+            token_id: id,
+            associated: true,
+            balance: tinybars(&t["balance"]).unwrap_or(0).to_string(),
+            frozen: t["freeze_status"] == "FROZEN",
+        },
+        None => HbarTokenHolding {
+            token_id: id,
+            balance: "0".into(),
+            ..Default::default()
+        },
+    }
+}
+
+/// `account` (`0.0.x`) and known token `0.0.num`.
+pub async fn token_holding(ctx: &HbarCtx<'_>, account: &str, num: u64) -> AppResult<HbarTokenHolding> {
+    let v = mirror(
+        ctx,
+        &format!("/api/v1/accounts/{account}/tokens?token.id=0.0.{num}&limit=1"),
+    )
+    .await?;
+    Ok(parse_holding(v.as_ref(), num))
 }
 
 /// `(cent_equivalent, hbar_equivalent)` of the current exchange rate: `hbar_equivalent` HBAR
@@ -323,8 +372,27 @@ fn normalize_tx(t: &Value, me: &str) -> Value {
         .and_then(|s| s.split('.').next())
         .and_then(|s| s.parse::<i64>().ok())
         .map(|s| s * 1000);
+    // Known tokens only (USDC): our net change per token, as a decimal string.
+    let mut tokens = Vec::new();
+    for row in t["token_transfers"].as_array().into_iter().flatten() {
+        let (Some(tid), Some(acc), Some(n)) = (
+            row["token_id"].as_str(),
+            row["account"].as_str(),
+            row["amount"].as_i64(),
+        ) else {
+            continue;
+        };
+        if acc != me {
+            continue;
+        }
+        match tokens.iter_mut().find(|(id, _): &&mut (String, i64)| id == tid) {
+            Some((_, d)) => *d += n,
+            None => tokens.push((tid.to_owned(), n)),
+        }
+    }
     json!({
         "id": t["transaction_id"],
+        "tokenTransfers": tokens.iter().map(|(id, d)| json!({ "tokenId": id, "delta": d.to_string() })).collect::<Vec<_>>(),
         "name": t["name"],
         "result": t["result"],
         "time": time,
@@ -595,6 +663,7 @@ mod live {
                         memo: "kyro precheck test".into(),
                         to: wallet_core::HbarRecipient::Id(800),
                         amount: 1,
+                        kind: wallet_core::HbarKind::Hbar,
                     };
                     let body = hex::encode(t.encode());
                     let (signed, _) =
