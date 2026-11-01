@@ -336,7 +336,7 @@ Le Safe 7 parle le **Trezor Host Protocol** (THP) : un canal chiffré et authent
 
 ### Chaînes non prises en charge sur hardware wallet
 
-Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar et Monero : `HW_UNSUPPORTED`. Non proposés, pour des raisons de protocole ([docs/IPC.md](docs/IPC.md) §2.3) : **Polkadot** (l'app Ledger exige la preuve des métadonnées RFC-0078 et des clés ed25519, Kyro signe en sr25519 sans cette preuve), **Kaspa** (protocole de l'app non vérifié contre les règles actuelles). Les mêmes règles s'appliqueraient (dialogue natif, vérification de chaque signature par Rust).
+Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar et Monero : `HW_UNSUPPORTED`. Non proposés, pour des raisons de protocole ([docs/IPC.md](docs/IPC.md) §2.3) : **Polkadot** (l'app Ledger exige l'extension `CheckMetadataHash` et une preuve des métadonnées RFC-0078 avec chaque transaction, et des clés ed25519 ; Kyro signe en sr25519 sans cette extension, et la bibliothèque de Parity qui construit la preuve, `merkleized-metadata`, n'est pas intégrée : il faudrait aussi lire les métadonnées V15 du runtime à chaque envoi), **Kaspa** (l'app signe des transactions version 0 avec le même hash de signature que Kyro et le renvoie, donc le protocole est vérifiable ; mais elle dépense depuis plusieurs adresses `m/44'/111111'/a'/0|1/i` : il faut un compte hardware wallet à clé étendue et le parcours de ses adresses, pas encore écrits). Les mêmes règles s'appliqueraient (dialogue natif, vérification de chaque signature par Rust).
 
 ### Hedera sur Ledger
 

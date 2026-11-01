@@ -70,14 +70,18 @@ pub fn app_for(chain: Chain) -> Option<(&'static str, &'static str)> {
 pub fn unavailable(chain: Chain) -> Option<&'static str> {
     Some(match chain {
         Chain::Dot => {
-            "Polkadot : l'app Ledger « Polkadot » exige la preuve des métadonnées du runtime \
-             (RFC-0078, CheckMetadataHash) et des clés ed25519 m/44'/354'/… ; Kyro signe en \
-             sr25519 sans cette preuve, pas encore pris en charge sur hardware wallet"
+            "Polkadot : l'app Ledger « Polkadot » exige l'extension CheckMetadataHash et une \
+             preuve des métadonnées du runtime (RFC-0078) avec chaque transaction, et des clés \
+             ed25519 m/44'/354'/… ; Kyro signe en sr25519 sans cette extension, et la \
+             bibliothèque de Parity qui construit la preuve (merkleized-metadata) n'est pas \
+             encore intégrée : pas pris en charge sur hardware wallet"
         }
         Chain::Kas => {
-            "Kaspa : le protocole de signature de l'app Ledger n'a pas pu être vérifié contre \
-             les règles de transaction actuelles (rusty-kaspa 2.1, Toccata) : pas pris en \
-             charge sur hardware wallet"
+            "Kaspa : l'app Ledger signe des transactions version 0 avec le même hash de \
+             signature que Kyro (et le renvoie, donc vérifiable), mais dépense depuis plusieurs \
+             adresses m/44'/111111'/a'/0|1/i : il faudrait un compte hardware wallet à clé \
+             étendue et un parcours d'adresses, pas encore écrits ; pas pris en charge sur \
+             hardware wallet"
         }
         _ => return None,
     })
