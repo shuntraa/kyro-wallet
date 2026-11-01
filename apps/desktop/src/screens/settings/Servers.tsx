@@ -34,6 +34,7 @@ import {
   type Servers,
   type Network,
   type SolanaCluster,
+  type UtxoCoinKey,
 } from '@kyro/shared';
 import { evmChains, solChain } from '@kyro/chains';
 import { useApp } from '../../state/app';
@@ -190,7 +191,7 @@ export function ServersSection() {
       <NetworkChoiceCard />
       <Card title="Réseaux et serveurs" badge={<Badge tone={network === 'testnet' ? 'warn' : 'up'}>{network === 'testnet' ? 'Testnet' : 'Mainnet'}</Badge>}>
         <p className="m-0 text-[13px] leading-[1.55] text-mute">
-          {network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia, Solana devnet, Litecoin testnet4, Dogecoin testnet, TRON Nile, XRP Ledger testnet et Cardano preprod. ' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana, Litecoin, Dogecoin, TRON, XRP Ledger, Cardano. '}
+          {network === 'testnet' ? 'Bitcoin testnet4, Ethereum Sepolia, Solana devnet, Litecoin testnet4, Dogecoin testnet, Bitcoin Cash chipnet, Dash testnet, TRON Nile, XRP Ledger testnet et Cardano preprod. ' : 'Bitcoin, Ethereum + 6 réseaux EVM (même adresse), Solana, Litecoin, Dogecoin, Bitcoin Cash, Dash, TRON, XRP Ledger, Cardano. '}
           Pour chaque chaîne, tu peux remplacer le serveur par défaut par le tien : Kyro vérifie qu’il est sur le bon réseau avant de l’enregistrer.
         </p>
         <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
@@ -201,6 +202,8 @@ export function ServersSection() {
       <BitcoinCard />
       <UtxoServerCard coin="litecoin" />
       <UtxoServerCard coin="dogecoin" />
+      <UtxoServerCard coin="bitcoincash" />
+      <UtxoServerCard coin="dash" />
       <TronServerCard />
       <XrpServerCard />
       <CardanoServerCard />
@@ -1185,23 +1188,64 @@ function RpcRow({
   );
 }
 
+/** What each UTXO chain's card says (Rust: `servers::utxo_default_*`, docs/NETWORK.md). */
+const UTXO_META: Record<UtxoCoinKey, { name: string; testnet: string; noDefaultTestnet: boolean; hosts: Record<'mainnet' | 'testnet', string>; first: Record<'mainnet' | 'testnet', string>; electrs: string; sees: (hosts: string, tor: boolean) => string }> = {
+  litecoin: {
+    name: 'Litecoin',
+    testnet: 'testnet4',
+    noDefaultTestnet: false,
+    hosts: { mainnet: 'litecoinspace.org', testnet: 'litecoinspace.org' },
+    first: { mainnet: 'litecoinspace.org', testnet: 'litecoinspace.org' },
+    electrs: 'electrs-litecoin',
+    sees: (_h, tor) => `litecoinspace.org voit tes adresses Litecoin et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.`,
+  },
+  dogecoin: {
+    name: 'Dogecoin',
+    testnet: 'testnet',
+    noDefaultTestnet: true,
+    hosts: { mainnet: 'doge.electrum1.cipig.net (et doge.electrum2.cipig.net en secours)', testnet: '' },
+    first: { mainnet: 'doge.electrum1.cipig.net', testnet: '' },
+    electrs: 'electrs-dogecoin',
+    sees: (h, tor) => `Les serveurs ElectrumX publics de Komodo (${h}) voient tes adresses Dogecoin et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}. Ils ne peuvent pas te faire signer un faux montant : avant chaque signature, Kyro vérifie chaque pièce dans sa transaction d’origine.`,
+  },
+  bitcoincash: {
+    name: 'Bitcoin Cash',
+    testnet: 'chipnet',
+    noDefaultTestnet: false,
+    hosts: { mainnet: 'bch.imaginary.cash (puis bch.loping.net et cashnode.bch.ninja en secours)', testnet: 'chipnet.imaginary.cash (et chipnet.bch.ninja en secours)' },
+    first: { mainnet: 'bch.imaginary.cash', testnet: 'chipnet.imaginary.cash' },
+    electrs: 'API Esplora pour Bitcoin Cash',
+    sees: (h, tor) => `Les serveurs Fulcrum publics (${h}) voient tes adresses Bitcoin Cash et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}. Kyro vérifie à chaque connexion qu’ils sont bien sur Bitcoin Cash (et pas sur Bitcoin, qui partage le même bloc d’origine), et chaque pièce dans sa transaction d’origine avant de signer.`,
+  },
+  dash: {
+    name: 'Dash',
+    testnet: 'testnet',
+    noDefaultTestnet: true,
+    hosts: { mainnet: 'dash.electrum1.cipig.net (et dash.electrum2.cipig.net en secours)', testnet: '' },
+    first: { mainnet: 'dash.electrum1.cipig.net', testnet: '' },
+    electrs: 'API Esplora pour Dash',
+    sees: (h, tor) => `Les serveurs ElectrumX publics de Komodo (${h}) voient tes adresses Dash et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}. Ils ne peuvent pas te faire signer un faux montant : avant chaque signature, Kyro vérifie chaque pièce dans sa transaction d’origine.`,
+  },
+};
+
 /**
- * Litecoin / Dogecoin: Rust accepts the default or an Esplora server (docs/IPC.md §2.4).
- * Dogecoin mainnet defaults to Komodo's public ElectrumX servers; Dogecoin testnet has NO public
- * default: an unconfigured Dogecoin testnet says so, it never pretends to load.
+ * Litecoin / Dogecoin / Bitcoin Cash / Dash: Rust accepts the default or an Esplora server
+ * (docs/IPC.md §2.4). Dogecoin and Dash mainnet default to Komodo's public ElectrumX servers,
+ * Bitcoin Cash to public Fulcrum servers (mainnet and chipnet); Dogecoin and Dash testnets have NO
+ * public default: an unconfigured one says so, it never pretends to load.
  */
-function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
+function UtxoServerCard({ coin }: { coin: UtxoCoinKey }) {
   const { settings, network } = useApp();
   const tor = settings.tor.enabled;
   const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
   const saved = settings.servers[coin]?.[nk];
   const savedUrl = saved?.kind === 'esplora' ? saved.url : '';
-  const doge = coin === 'dogecoin';
-  const name = doge ? 'Dogecoin' : 'Litecoin';
-  /** Dogecoin testnet only: no public server found, the user must set one. */
-  const noDefault = doge && nk === 'testnet';
+  const meta = UTXO_META[coin];
+  const name = meta.name;
+  /** Dogecoin / Dash testnet: no public server found, the user must set one. */
+  const noDefault = meta.noDefaultTestnet && nk === 'testnet';
   /** Host(s) of the default, as the user sees them (Rust: `servers::utxo_default_*`). */
-  const defaultHosts = doge ? 'doge.electrum1.cipig.net (et doge.electrum2.cipig.net en secours)' : 'litecoinspace.org';
+  const defaultHosts = meta.hosts[nk];
   const [kind, setKind] = useState<'default' | 'esplora'>(savedUrl ? 'esplora' : 'default');
   const [url, setUrl] = useState(savedUrl);
   useEffect(() => {
@@ -1246,7 +1290,7 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
       setNotice(
         toDefault
           ? noDefault
-            ? 'Serveur retiré : Dogecoin testnet n’a plus de serveur, soldes et envois indisponibles jusqu’à ce que tu en configures un.'
+            ? `Serveur retiré : ${name} testnet n’a plus de serveur, soldes et envois indisponibles jusqu’à ce que tu en configures un.`
             : `Serveur par défaut rétabli : ${defaultHosts} voit maintenant tes adresses ${name} et tes transactions.`
           : `Serveur ${name} enregistré. Kyro n’utilise plus que lui pour ${name}.`,
       );
@@ -1259,7 +1303,7 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
 
   return (
     <Card
-      title={network === 'testnet' ? `${name} ${doge ? 'testnet' : 'testnet4'}` : name}
+      title={network === 'testnet' ? `${name} ${meta.testnet}` : name}
       badge={savedUrl ? <Badge tone="ice">Serveur perso · Esplora</Badge> : noDefault ? <Badge tone="warn">Aucun serveur</Badge> : <Badge>Par défaut</Badge>}
     >
       <Segmented
@@ -1277,20 +1321,18 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
       />
       {kind === 'default' && noDefault ? (
         <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-          <strong className="font-semibold">Aucun serveur public gratuit : configure ton serveur.</strong> Aucun serveur public gratuit n’a été trouvé pour Dogecoin testnet (le mainnet, lui, a un serveur par défaut). Tant que tu n’as pas indiqué ton serveur Esplora (electrs-dogecoin), Kyro n’affiche ni solde ni historique Dogecoin et ne peut pas envoyer.
+          <strong className="font-semibold">Aucun serveur public gratuit : configure ton serveur.</strong> Aucun serveur public gratuit n’a été trouvé pour {name} testnet (le mainnet, lui, a un serveur par défaut). Tant que tu n’as pas indiqué ton serveur Esplora ({meta.electrs}), Kyro n’affiche ni solde ni historique {name} et ne peut pas envoyer.
         </Notice>
       ) : (
         <Sees>
           {kind === 'default'
-            ? doge
-              ? `Les serveurs ElectrumX publics de Komodo (${defaultHosts}) voient tes adresses Dogecoin et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}. Ils ne peuvent pas te faire signer un faux montant : avant chaque signature, Kyro vérifie chaque pièce dans sa transaction d’origine.`
-              : `litecoinspace.org voit tes adresses Litecoin et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor' : 'et ton adresse IP'}.`
+            ? meta.sees(defaultHosts, tor)
             : `Ton serveur Esplora voit tes adresses ${name} et tes transactions ; ${tor ? 'l’IP d’un relais de sortie Tor (aucune si .onion)' : 'et ton adresse IP'}.`}
         </Sees>
       )}
       {kind === 'esplora' && (
-        <Field label={`URL de l’API Esplora ${name}`} hint={doge ? 'Par exemple un electrs-dogecoin (API Esplora). https://, ou http:// pour une adresse .onion (Tor).' : 'https://, ou http:// pour une adresse .onion (Tor). Jamais d’identifiants dans l’URL.'}>
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={doge ? 'https://mon-electrs-dogecoin.example/api' : 'https://mon-noeud-litecoin.example/api'} aria-label={`URL Esplora ${name}`} className="font-mono text-[13px]" />
+        <Field label={`URL de l’API Esplora ${name}`} hint={coin === 'litecoin' ? 'https://, ou http:// pour une adresse .onion (Tor). Jamais d’identifiants dans l’URL.' : `Par exemple un ${meta.electrs}. https://, ou http:// pour une adresse .onion (Tor).`}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={`https://mon-noeud-${coin}.example/api`} aria-label={`URL Esplora ${name}`} className="font-mono text-[13px]" />
         </Field>
       )}
       {hint && (
@@ -1313,9 +1355,9 @@ function UtxoServerCard({ coin }: { coin: 'litecoin' | 'dogecoin' }) {
       </div>
       <BackToDefaultDialog
         open={confirmDefault}
-        host={noDefault ? 'Dogecoin' : doge ? 'doge.electrum1.cipig.net' : 'litecoinspace.org'}
-        {...(noDefault ? { title: 'Retirer ton serveur Dogecoin ?', body: 'Dogecoin testnet n’a pas de serveur public : sans le tien, Kyro n’affiche plus ni solde ni historique Dogecoin et ne peut plus envoyer.' } : {})}
-        sees={noDefault ? 'rien : Dogecoin testnet n’aura plus de serveur (soldes et envois indisponibles)' : `tes adresses ${name} et tes transactions`}
+        host={noDefault ? name : meta.first[nk]}
+        {...(noDefault ? { title: `Retirer ton serveur ${name} ?`, body: `${name} testnet n’a pas de serveur public : sans le tien, Kyro n’affiche plus ni solde ni historique ${name} et ne peut plus envoyer.` } : {})}
+        sees={noDefault ? `rien : ${name} testnet n’aura plus de serveur (soldes et envois indisponibles)` : `tes adresses ${name} et tes transactions`}
         busy={busy === 'save'}
         failure={confirmDefault ? failure : null}
         onConfirm={() => void save(true)}

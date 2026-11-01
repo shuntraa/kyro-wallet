@@ -193,7 +193,7 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
       </Card>
       <Card className="flex flex-col px-5 py-2">
         {[
-          ['Bitcoin, Litecoin, Dogecoin', 'Pas de staking natif : ces protocoles n’en ont pas.'],
+          ['Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash', 'Pas de staking natif : ces protocoles n’en ont pas.'],
           ['XRP Ledger', 'Pas de staking natif.'],
           ['Ethereum et chaînes EVM', 'Non proposé : le staking natif exige 32 ETH et un validateur qui tourne en permanence, et Kyro ne passe pas par le contrat d’un tiers.'],
         ].map(([k, v]) => (

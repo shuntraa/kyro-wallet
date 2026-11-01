@@ -19,7 +19,7 @@ export function cbfPending(error: unknown): boolean {
 }
 
 /**
- * Dogecoin has no free public server: until the user sets one, Rust answers SERVER_INVALID
+ * Dogecoin / Dash testnets have no free public server: until the user sets one, Rust answers SERVER_INVALID
  * « aucun serveur public gratuit… configure ton serveur ». Not a failure: a missing setting.
  */
 export function serverMissing(error: unknown): boolean {
