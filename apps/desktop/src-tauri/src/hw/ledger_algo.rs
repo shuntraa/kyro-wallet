@@ -22,7 +22,13 @@ const P2_LAST: u8 = 0x00;
 const CHUNK: usize = 250;
 
 pub fn get_address(account: u32, display: bool) -> HwResult<Vec<u8>> {
-    apdu::apdu(CLA, INS_GET_ADDRESS, u8::from(display), 0, &account.to_be_bytes())
+    apdu::apdu(
+        CLA,
+        INS_GET_ADDRESS,
+        u8::from(display),
+        0,
+        &account.to_be_bytes(),
+    )
 }
 
 pub fn parse_address(data: &[u8]) -> HwResult<Vec<u8>> {
@@ -31,7 +37,9 @@ pub fn parse_address(data: &[u8]) -> HwResult<Vec<u8>> {
     }
     let pk: [u8; 32] = data[..32].try_into().map_err(|_| HwError::bad("clé"))?;
     if data[32..] != *wallet_core::algo_address_of_pubkey(&pk).as_bytes() {
-        return Err(HwError::bad("adresse Algorand de l'appareil incohérente avec sa clé"));
+        return Err(HwError::bad(
+            "adresse Algorand de l'appareil incohérente avec sa clé",
+        ));
     }
     Ok(pk.to_vec())
 }
@@ -50,7 +58,11 @@ pub fn sign_apdus(account: u32, msgpack: &[u8]) -> HwResult<Vec<Vec<u8>>> {
             (0, _) => P1_FIRST_ACCOUNT_ID,
             _ => P1_MORE,
         };
-        let p2 = if i + 1 == chunks.len() { P2_LAST } else { P2_MORE };
+        let p2 = if i + 1 == chunks.len() {
+            P2_LAST
+        } else {
+            P2_MORE
+        };
         out.push(apdu::apdu(CLA, INS_SIGN_MSGPACK, p1, p2, c)?);
     }
     Ok(out)
@@ -87,7 +99,7 @@ mod tests {
         // Account 123 of the Zondax emulator tests (also used by wallet-core's derivation
         // tests): key and address as the app returns them.
         let cmd = get_address(123, true).unwrap();
-        assert_eq!(hex::encode(&cmd), "800401000400007b");
+        assert_eq!(hex::encode(&cmd), "80040100040000007b");
         let pk = [0x42u8; 32];
         let addr = wallet_core::algo_address_of_pubkey(&pk);
         let resp = [&pk[..], addr.as_bytes()].concat();
@@ -113,7 +125,7 @@ mod tests {
         assert_eq!(&a0[1][..5], &[0x80, 0x08, 0x80, 0x00, 10]);
         // Account 7: 4-byte prefix in the first chunk, P1 01.
         let a7 = sign_apdus(7, &msg[..10]).unwrap();
-        assert_eq!(hex::encode(&a7[0][..9]), "8008010000e0000000");
+        assert_eq!(hex::encode(&a7[0][..9]), "800801000e00000007");
         assert_eq!(a7[0][4], 14);
         let sig = [1u8; 64];
         let mut lines = app("Algorand", "2.1.15").to_vec();

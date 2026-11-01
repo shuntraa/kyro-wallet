@@ -40,13 +40,23 @@ pub fn parse_pubkey(data: &[u8]) -> HwResult<Vec<u8>> {
 }
 
 pub fn sign_apdus(path: &[u32], message: &[u8]) -> HwResult<Vec<Vec<u8>>> {
-    let mut out = vec![apdu::apdu(CLA, INS_SIGN_TX, 0, P2_MORE, &apdu::encode_path(path))?];
+    let mut out = vec![apdu::apdu(
+        CLA,
+        INS_SIGN_TX,
+        0,
+        P2_MORE,
+        &apdu::encode_path(path),
+    )?];
     let chunks: Vec<&[u8]> = message.chunks(CHUNK).collect();
     if chunks.len() > 254 {
         return Err(HwError::bad("transaction Aptos trop grande"));
     }
     for (i, c) in chunks.iter().enumerate() {
-        let p2 = if i + 1 == chunks.len() { P2_LAST } else { P2_MORE };
+        let p2 = if i + 1 == chunks.len() {
+            P2_LAST
+        } else {
+            P2_MORE
+        };
         out.push(apdu::apdu(CLA, INS_SIGN_TX, (i + 1) as u8, p2, c)?);
     }
     Ok(out)

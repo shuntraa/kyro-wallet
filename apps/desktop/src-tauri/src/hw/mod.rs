@@ -93,7 +93,8 @@ impl Chain {
     ];
 
     pub fn implemented(self) -> bool {
-        matches!(self, Chain::Btc | Chain::Evm | Chain::Sol) || ledger_apps::key_chain(self).is_some()
+        matches!(self, Chain::Btc | Chain::Evm | Chain::Sol)
+            || ledger_apps::key_chain(self).is_some()
     }
 
     pub fn label(self) -> &'static str {

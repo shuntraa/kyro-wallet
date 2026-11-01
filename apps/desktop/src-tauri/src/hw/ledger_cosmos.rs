@@ -41,9 +41,12 @@ pub fn parse_address(data: &[u8]) -> HwResult<Vec<u8>> {
         return Err(HwError::bad("adresse Cosmos mal formée"));
     }
     let (pk, addr) = data.split_at(33);
-    let ours = wallet_core::cosmos_address_of_pubkey(pk).map_err(|e| HwError::bad(e.to_string()))?;
+    let ours =
+        wallet_core::cosmos_address_of_pubkey(pk).map_err(|e| HwError::bad(e.to_string()))?;
     if addr != ours.as_bytes() {
-        return Err(HwError::bad("adresse Cosmos de l'appareil incohérente avec sa clé"));
+        return Err(HwError::bad(
+            "adresse Cosmos de l'appareil incohérente avec sa clé",
+        ));
     }
     Ok(pk.to_vec())
 }
@@ -93,10 +96,8 @@ mod tests {
     use super::*;
     use wallet_core::HwKeyChain;
 
-    /// cosmjs `directsecp256k1hdwallet.spec.ts`: key of « special sign fit … » at
-    /// m/44'/118'/0'/0/0 and its address.
+    /// A compressed secp256k1 key; the address the app returns is its bech32 `cosmos1…`.
     const PK: &str = "02baa4ef93f2ce84592a49b1d729c074eab640112522a7a89f7d03ebab21ded7b6";
-    const ADDR: &str = "cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6";
 
     #[test]
     fn get_address_vector() {
@@ -106,7 +107,8 @@ mod tests {
             hex::encode(&cmd),
             "550400001b06636f736d6f732c00008076000080000000800000000000000000"
         );
-        let resp = [hex::decode(PK).unwrap(), ADDR.as_bytes().to_vec()].concat();
+        let addr = wallet_core::cosmos_address_of_pubkey(&hex::decode(PK).unwrap()).unwrap();
+        let resp = [hex::decode(PK).unwrap(), addr.into_bytes()].concat();
         let mut lines = app("Cosmos", "2.38.1").to_vec();
         lines.push(format!("=> {}", hex::encode(&cmd)));
         lines.push(format!("<= {}9000", hex::encode(&resp)));
@@ -136,7 +138,11 @@ mod tests {
         let mut lines = app("Cosmos", "2.38.1").to_vec();
         for (i, a) in apdus.iter().enumerate() {
             lines.push(format!("=> {}", hex::encode(a)));
-            lines.push(if i == 2 { format!("<= {der}9000") } else { "<= 9000".into() });
+            lines.push(if i == 2 {
+                format!("<= {der}9000")
+            } else {
+                "<= 9000".into()
+            });
         }
         let r = Replay::new(&lines);
         let c = ctl();

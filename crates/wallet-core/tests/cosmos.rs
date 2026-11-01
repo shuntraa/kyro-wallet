@@ -524,7 +524,10 @@ fn hardware_wallet_amino_json() {
     let secp = Secp256k1::new();
     let master = Xpriv::new_master(bitcoin::NetworkKind::Main, &s[..]).unwrap();
     let key = master
-        .derive_priv(&secp, &DerivationPath::from_str("m/44'/118'/0'/0/0").unwrap())
+        .derive_priv(
+            &secp,
+            &DerivationPath::from_str("m/44'/118'/0'/0/0").unwrap(),
+        )
         .unwrap();
     let digest = sha256::Hash::hash(&json).to_byte_array();
     let sig = secp.sign_ecdsa(&SecpMessage::from_digest(digest), &key.private_key);
@@ -543,5 +546,8 @@ fn hardware_wallet_amino_json() {
     req.memo = "a\"b".into();
     let direct = hex::encode(cosmos_send_sign_doc(&req).unwrap());
     assert!(wallet_core::cosmos_amino_sign_doc(&direct, &pk, Network::Testnet).is_err());
-    let _ = (PublicKey::from_slice(&pk).unwrap(), Signature::from_der(&der).unwrap());
+    let _ = (
+        PublicKey::from_slice(&pk).unwrap(),
+        Signature::from_der(&der).unwrap(),
+    );
 }

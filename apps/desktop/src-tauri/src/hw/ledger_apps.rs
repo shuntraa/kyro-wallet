@@ -320,7 +320,10 @@ mod tests {
     fn statuses() {
         for c in [Chain::Dot, Chain::Hbar, Chain::Kas, Chain::Ton] {
             assert!(!c.implemented());
-            assert_eq!(unavailable_status(c).unwrap().state, ChainState::Unsupported);
+            assert_eq!(
+                unavailable_status(c).unwrap().state,
+                ChainState::Unsupported
+            );
             assert!(trezor_status(c).is_some());
         }
         for k in HwKeyChain::ALL {

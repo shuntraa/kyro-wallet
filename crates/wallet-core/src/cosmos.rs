@@ -640,7 +640,11 @@ fn sign_doc_bytes(sign_doc_hex: &str) -> Result<Vec<u8>> {
 /// Hardware wallet: the same transaction as a DIRECT SignDoc (hex) built by
 /// [`cosmos_send_sign_doc`], with the sign mode set to LEGACY_AMINO_JSON (the only one the
 /// Ledger Cosmos app signs). The result is decoded back under the usual rules.
-pub fn cosmos_amino_sign_doc(sign_doc_hex: &str, our_pubkey: &[u8; 33], net: Network) -> Result<String> {
+pub fn cosmos_amino_sign_doc(
+    sign_doc_hex: &str,
+    our_pubkey: &[u8; 33],
+    net: Network,
+) -> Result<String> {
     let raw = sign_doc_bytes(sign_doc_hex)?;
     let parsed = parse_sign_doc(&raw, our_pubkey, cosmos_chain_id(net))?;
     let mut auth: proto::AuthInfo = strict(&parsed.doc.auth_info_bytes, "AuthInfo")?;
@@ -660,8 +664,16 @@ pub fn cosmos_amino_sign_doc(sign_doc_hex: &str, our_pubkey: &[u8; 33], net: Net
 
 /// Hardware wallet: the amino JSON the Ledger Cosmos app displays and signs (SHA-256 of these
 /// bytes, ECDSA), for a SignDoc in LEGACY_AMINO_JSON mode decoded under the usual rules.
-pub fn cosmos_amino_json(sign_doc_hex: &str, our_pubkey: &[u8; 33], net: Network) -> Result<Vec<u8>> {
-    let parsed = parse_sign_doc(&sign_doc_bytes(sign_doc_hex)?, our_pubkey, cosmos_chain_id(net))?;
+pub fn cosmos_amino_json(
+    sign_doc_hex: &str,
+    our_pubkey: &[u8; 33],
+    net: Network,
+) -> Result<Vec<u8>> {
+    let parsed = parse_sign_doc(
+        &sign_doc_bytes(sign_doc_hex)?,
+        our_pubkey,
+        cosmos_chain_id(net),
+    )?;
     if parsed.mode != COSMOS_SIGN_MODE_AMINO_JSON {
         return Err(bad("mode de signature : LEGACY_AMINO_JSON attendu"));
     }
@@ -678,11 +690,16 @@ pub fn cosmos_amino_signed(
     der_sig: &[u8],
 ) -> Result<(String, String, CosmosTxSummary)> {
     use base64::Engine as _;
-    let parsed = parse_sign_doc(&sign_doc_bytes(sign_doc_hex)?, our_pubkey, cosmos_chain_id(net))?;
+    let parsed = parse_sign_doc(
+        &sign_doc_bytes(sign_doc_hex)?,
+        our_pubkey,
+        cosmos_chain_id(net),
+    )?;
     if parsed.mode != COSMOS_SIGN_MODE_AMINO_JSON {
         return Err(bad("mode de signature : LEGACY_AMINO_JSON attendu"));
     }
-    let mut sig = Signature::from_der(der_sig).map_err(|_| bad("signature DER de l'appareil invalide"))?;
+    let mut sig =
+        Signature::from_der(der_sig).map_err(|_| bad("signature DER de l'appareil invalide"))?;
     sig.normalize_s();
     let pk = PublicKey::from_slice(our_pubkey).map_err(|_| bad("clé publique invalide"))?;
     let digest = sha256::Hash::hash(amino_json(&parsed).as_bytes()).to_byte_array();

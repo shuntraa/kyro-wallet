@@ -6,8 +6,8 @@ use wallet_core::HwKeyChain;
 
 use crate::commands::confirm_native;
 use crate::commands_aptos::{
-    broadcast_checked, build, ctx, describe_aptos, describe_aptos_extra, prepare_sign,
-    AptosBuilt, AptosSigned,
+    broadcast_checked, build, ctx, describe_aptos, describe_aptos_extra, prepare_sign, AptosBuilt,
+    AptosSigned,
 };
 use crate::commands_hw::device_line;
 use crate::commands_hw_keys::{check_device, device_sign, key_array, stored_key};

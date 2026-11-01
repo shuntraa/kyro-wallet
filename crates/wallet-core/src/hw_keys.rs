@@ -81,7 +81,9 @@ impl HwKeyChain {
     /// valid compressed secp256k1 point; ed25519 keys are checked by `ed25519-dalek`).
     pub fn address_of(self, pubkey: &[u8]) -> Result<String> {
         if pubkey.len() != self.key_len() {
-            return Err(Error::input("hardware-wallet public key of the wrong length"));
+            return Err(Error::input(
+                "hardware-wallet public key of the wrong length",
+            ));
         }
         if self != HwKeyChain::Cosmos {
             let k: [u8; 32] = pubkey.try_into().map_err(|_| Error::input("public key"))?;
@@ -168,9 +170,18 @@ mod tests {
     #[test]
     fn paths_match_the_software_wallet_except_near() {
         assert_eq!(HwKeyChain::Sui.path_string(2), crate::sui::sui_path(2));
-        assert_eq!(HwKeyChain::Aptos.path_string(2), crate::aptos::aptos_path(2));
-        assert_eq!(HwKeyChain::Algo.path_string(2), crate::algorand::algo_path(2));
-        assert_eq!(HwKeyChain::Cosmos.path_string(2), crate::cosmos::cosmos_path(2));
+        assert_eq!(
+            HwKeyChain::Aptos.path_string(2),
+            crate::aptos::aptos_path(2)
+        );
+        assert_eq!(
+            HwKeyChain::Algo.path_string(2),
+            crate::algorand::algo_path(2)
+        );
+        assert_eq!(
+            HwKeyChain::Cosmos.path_string(2),
+            crate::cosmos::cosmos_path(2)
+        );
         // Ledger Live's default NEAR path for account 0.
         assert_eq!(HwKeyChain::Near.path_string(0), "m/44'/397'/0'/0'/1'");
     }

@@ -113,7 +113,9 @@ pub fn parse_pubkey(data: &[u8]) -> HwResult<Vec<u8>> {
     if !tail.is_empty() {
         let (&m, addr) = tail.split_first().ok_or_else(bad)?;
         if m != 32 || addr.len() != 32 || addr != wallet_core::sui_address_bytes_of_pubkey(&pk) {
-            return Err(HwError::bad("adresse Sui de l'appareil incohérente avec sa clé"));
+            return Err(HwError::bad(
+                "adresse Sui de l'appareil incohérente avec sa clé",
+            ));
         }
     }
     Ok(pk.to_vec())
@@ -200,10 +202,17 @@ mod tests {
         let (start, store) = blocks(&[path_payload(&path)]);
         let first: [u8; 32] = start[1..].try_into().unwrap();
         let mut lines = app("Sui", "1.6.0").to_vec();
-        exchange(&mut lines, &cmd(INS_GET_PUBKEY, &start), &[&[GET_CHUNK][..], &first].concat());
         exchange(
             &mut lines,
-            &cmd(INS_GET_PUBKEY, &[&[GET_CHUNK_OK][..], &store[&first]].concat()),
+            &cmd(INS_GET_PUBKEY, &start),
+            &[&[GET_CHUNK][..], &first].concat(),
+        );
+        exchange(
+            &mut lines,
+            &cmd(
+                INS_GET_PUBKEY,
+                &[&[GET_CHUNK_OK][..], &store[&first]].concat(),
+            ),
             &[&[RESULT_FINAL, 32][..], &pk, &[32], &addr].concat(),
         );
         let r = Replay::new(&lines);
@@ -228,15 +237,31 @@ mod tests {
         let first: [u8; 32] = start[1..33].try_into().unwrap();
         let sig = [5u8; 64];
         let mut lines = app("Sui", "1.6.0").to_vec();
-        exchange(&mut lines, &cmd(INS_SIGN_TX, &start), &[&[GET_CHUNK][..], &first].concat());
+        exchange(
+            &mut lines,
+            &cmd(INS_SIGN_TX, &start),
+            &[&[GET_CHUNK][..], &first].concat(),
+        );
         exchange(
             &mut lines,
             &cmd(INS_SIGN_TX, &[&[GET_CHUNK_OK][..], &store[&first]].concat()),
             &[&[GET_CHUNK][..], &[0xAB; 32]].concat(),
         );
-        exchange(&mut lines, &cmd(INS_SIGN_TX, &[GET_CHUNK_FAIL]), &[PUT_CHUNK, 1, 2, 3]);
-        exchange(&mut lines, &cmd(INS_SIGN_TX, &[PUT_CHUNK_OK]), &[&[RESULT_ACCUMULATING][..], &sig[..40]].concat());
-        exchange(&mut lines, &cmd(INS_SIGN_TX, &[RESULT_ACK]), &[&[RESULT_FINAL][..], &sig[40..]].concat());
+        exchange(
+            &mut lines,
+            &cmd(INS_SIGN_TX, &[GET_CHUNK_FAIL]),
+            &[PUT_CHUNK, 1, 2, 3],
+        );
+        exchange(
+            &mut lines,
+            &cmd(INS_SIGN_TX, &[PUT_CHUNK_OK]),
+            &[&[RESULT_ACCUMULATING][..], &sig[..40]].concat(),
+        );
+        exchange(
+            &mut lines,
+            &cmd(INS_SIGN_TX, &[RESULT_ACK]),
+            &[&[RESULT_FINAL][..], &sig[40..]].concat(),
+        );
         let r = Replay::new(&lines);
         let c = ctl();
         let a = App::open(&r, &c, HwKeyChain::Sui).unwrap();

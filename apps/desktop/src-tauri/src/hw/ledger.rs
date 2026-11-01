@@ -765,9 +765,14 @@ mod tests {
         let st = ledger.status(&ctl(), Network::Testnet).unwrap();
         assert!(st.locked);
         assert!(st.chains[..3].iter().all(|c| c.state == ChainState::Unlock));
-        assert!(st.chains[3..]
-            .iter()
-            .all(|c| c.state == ChainState::Unsupported));
+        for c in &st.chains[3..] {
+            let want = if super::super::ledger_apps::key_chain(c.chain).is_some() {
+                ChainState::Unlock
+            } else {
+                ChainState::Unsupported
+            };
+            assert_eq!(c.state, want, "{:?}", c.chain);
+        }
     }
 
     #[test]
