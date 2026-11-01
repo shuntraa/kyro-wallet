@@ -29,7 +29,7 @@ export const receive: Record<keyof typeof fr, string> = {
   'receive.descKas': 'Kaspa address ({prefix}…), Schnorr key. Same addresses as Kaspa NG and Kaspium with the same phrase.',
   'receive.descDot': 'Polkadot address (1…) on Polkadot Asset Hub, where DOT lives since the migration: the same as in Polkadot.js, Nova or Talisman for the same phrase.',
   'receive.descDotTestnet': 'Westend Asset Hub address (5…, generic format): for test WND.',
-  'receive.descAlgo': 'Algorand address (58 characters): for ALGO. Algorand tokens (ASA) are not handled by Kyro yet.',
+  'receive.descAlgo': 'Algorand address (58 characters): for ALGO, USDC and USDT (enable a token before receiving it).',
   'receive.descXmr': 'Monero primary address. For each person or service paying you, prefer a subaddress (below): they cannot be linked to one another.',
   'receive.descTon': 'TON address (UQ…, non-bounceable form, a wallet’s): for Gram (GRAM, formerly Toncoin). No comment to give: this wallet is yours alone.',
   'receive.descTonTestnet': 'TON testnet address (0Q…, non-bounceable form): for test Gram only.',

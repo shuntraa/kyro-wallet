@@ -83,7 +83,7 @@ export { ACCOUNT_CHAIN_LABEL, defaultAccountName } from './mock-accounts';
 
 bitcoin.initEccLib(ecc);
 
-export const demoPasswordHint = (): string => l10n('Mode démo : n’importe quel mot de passe de 8 caractères ou plus.', 'Demo mode: any password of 8 characters or more.');
+export const demoPasswordHint = (): string => l10n('Mode démo : n’importe quel mot de passe de 10 caractères ou plus.', 'Demo mode: any password of 10 characters or more.');
 
 /** Demo address-poisoning scenario (Sepolia): the colleague paid before, and its look-alike. */
 export const DEMO_EVM_COLLEAGUE = '0x5e1f9b3c8a2d47e6b0c19f4a7d23e8c6b5a2d4c7';
@@ -669,7 +669,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   };
 
   const validPassword = (p: unknown): string => {
-    if (typeof p !== 'string' || p.length < 8) throw new IpcError('INVALID_INPUT', l10n('Le mot de passe doit faire au moins 8 caractères.', 'The password must be at least 8 characters long.'));
+    if (typeof p !== 'string' || p.length < 10) throw new IpcError('INVALID_INPUT', l10n('Le mot de passe doit faire au moins 10 caractères.', 'The password must be at least 10 characters long.'));
     return p;
   };
 

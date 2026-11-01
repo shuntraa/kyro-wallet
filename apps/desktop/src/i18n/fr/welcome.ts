@@ -2,7 +2,7 @@
 // Welcome (create / import / hardware wallet onboarding) and Unlock screens. Keys start with 'welcome.'.
 
 export const welcome = {
-  'welcome.demoPasswordHint': 'Mode démo : aucun vrai coffre, n’importe quel mot de passe de 8 caractères ou plus.',
+  'welcome.demoPasswordHint': 'Mode démo : aucun vrai coffre, n’importe quel mot de passe de 10 caractères ou plus.',
   'welcome.noVaultHere': 'Aucun coffre sur cet appareil',
   'welcome.hwOnlyStatus': 'Hardware wallet seul : pas de coffre ni de mot de passe Kyro',
   'welcome.hwTitle': 'Utiliser un Ledger ou une Trezor',
@@ -29,7 +29,7 @@ export const welcome = {
   'welcome.sourceText': 'Kyro est un logiciel libre sous licence GPL-3.0-or-later. Tout le code (interface, noyau, coquille Tauri) est publié et le build est vérifiable : ce que tu installes correspond au code publié.',
   'welcome.networkDesc': 'La liste complète des serveurs que Kyro peut contacter. Tout le reste est bloqué par le noyau.',
   'welcome.stepOf': 'Étape {step} sur {total}',
-  'welcome.pwTooShort': 'Au moins 8 caractères (une phrase de 4 mots, c’est mieux).',
+  'welcome.pwTooShort': 'Au moins 10 caractères (une phrase de 4 mots, c’est mieux).',
   'welcome.pwMismatch': 'Les deux mots de passe ne correspondent pas.',
   'welcome.confirmPassword': 'Confirme le mot de passe',
   'welcome.pwHelp': 'Il chiffre le coffre sur cet appareil et sera demandé à chaque signature. Kyro ne peut pas le récupérer.',

@@ -188,7 +188,7 @@ function StepHeader({ step, total, title, onBack, children }: { step: number; to
 }
 
 function passwordIssues(pw: string, confirm: string): string | null {
-  if (pw.length < 8) return t('welcome.pwTooShort');
+  if (pw.length < 10) return t('welcome.pwTooShort');
   if (confirm && pw !== confirm) return t('welcome.pwMismatch');
   return null;
 }

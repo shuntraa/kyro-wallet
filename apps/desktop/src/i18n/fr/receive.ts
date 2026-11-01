@@ -29,7 +29,7 @@ export const receive = {
   'receive.descKas': 'Adresse Kaspa ({prefix}…), clé Schnorr. Mêmes adresses que Kaspa NG et Kaspium avec la même phrase.',
   'receive.descDot': 'Adresse Polkadot (1…) sur Polkadot Asset Hub, là où vivent les DOT depuis la migration : la même que dans Polkadot.js, Nova ou Talisman pour la même phrase.',
   'receive.descDotTestnet': 'Adresse Westend Asset Hub (5…, format générique) : pour les WND de test.',
-  'receive.descAlgo': 'Adresse Algorand (58 caractères) : pour les ALGO. Les tokens Algorand (ASA) ne sont pas encore gérés par Kyro.',
+  'receive.descAlgo': 'Adresse Algorand (58 caractères) : pour les ALGO, USDC et USDT (active un jeton avant de le recevoir).',
   'receive.descXmr': 'Adresse principale Monero. Pour chaque personne ou service qui te paie, préfère une sous-adresse (ci-dessous) : elles ne peuvent pas être reliées entre elles.',
   'receive.descTon': 'Adresse TON (UQ…, forme non rebondissante, celle d’un portefeuille) : pour les Gram (GRAM, ex-Toncoin). Pas de commentaire à donner : ce portefeuille est à toi seul.',
   'receive.descTonTestnet': 'Adresse TON de testnet (0Q…, forme non rebondissante) : pour les Gram de test seulement.',

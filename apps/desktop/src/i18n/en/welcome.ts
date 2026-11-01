@@ -2,7 +2,7 @@
 import type { welcome as fr } from '../fr/welcome';
 
 export const welcome: Record<keyof typeof fr, string> = {
-  'welcome.demoPasswordHint': 'Demo mode: no real vault, any password of 8 characters or more.',
+  'welcome.demoPasswordHint': 'Demo mode: no real vault, any password of 10 characters or more.',
   'welcome.noVaultHere': 'No vault on this device',
   'welcome.hwOnlyStatus': 'Hardware wallet only: no Kyro vault or password',
   'welcome.hwTitle': 'Use a Ledger or a Trezor',
@@ -29,7 +29,7 @@ export const welcome: Record<keyof typeof fr, string> = {
   'welcome.sourceText': 'Kyro is free software under the GPL-3.0-or-later license. All the code (interface, core, Tauri shell) is published and the build is verifiable: what you install matches the published code.',
   'welcome.networkDesc': 'The full list of servers Kyro may contact. Everything else is blocked by the core.',
   'welcome.stepOf': 'Step {step} of {total}',
-  'welcome.pwTooShort': 'At least 8 characters (a 4-word phrase is better).',
+  'welcome.pwTooShort': 'At least 10 characters (a 4-word phrase is better).',
   'welcome.pwMismatch': 'The two passwords do not match.',
   'welcome.confirmPassword': 'Confirm the password',
   'welcome.pwHelp': 'It encrypts the vault on this device and will be asked for every signature. Kyro cannot recover it.',
