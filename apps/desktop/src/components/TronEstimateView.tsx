@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // TRON: Rust's resource estimate (tron_build_tx → TronEstimate), shown before the password.
-// TRON has no fee to choose: a transaction burns TRX for the bandwidth (bytes) that the free /
-// staked bandwidth does not cover, for the energy of a TRC-20 call (simulated by Rust, capped by
-// fee_limit) and for activating an account that does not exist yet. Rust re-reads all of it live
-// in the native dialog; this view is the same numbers, earlier.
 
 import type { Currency } from '@kyro/shared';
 import { isKnownTronToken, tronCoverage, type TronUnsigned } from '@kyro/chains';
@@ -14,7 +10,6 @@ import { Notice } from './ui/primitives';
 import { IconWarn } from './icons';
 
 const TRX = (sun: bigint | string) => fmtCrypto(BigInt(sun), 6, 'TRX', 6);
-/** Rust's default activation: creation fee 1 TRX + 0.1 TRX of bandwidth (no staked bandwidth). */
 const STANDARD_ACTIVATION = 1_100_000n;
 
 export function TronEstimateView({ u, network, trxPrice, currency }: { u: TronUnsigned; network: 'mainnet' | 'testnet'; trxPrice: number | null; currency: Currency }) {

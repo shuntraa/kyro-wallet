@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Embedded Tor, visible side: status-bar indicator, failure dialog, "continue
-// without Tor" confirmation, and the inline "waiting for Tor" state of data screens.
-// State and rules: ../state/tor.ts (never a silent switch to clear).
+// Embedded Tor, visible side: status-bar indicator, failure dialog, "continue without Tor"
+// confirmation, and the inline "waiting for Tor" state of data screens.
 
 import { isTorUnavailable } from '@kyro/shared';
 import { useApp } from '../state/app';

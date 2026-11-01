@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Staking (docs/IPC.md §2.8): pure helpers for the screens — labels, warning texts that match
-// Rust's reinforced-dialog triggers, picker sorting and badges. Nothing here builds or edits a
-// transaction: Rust does that (`*_stake_build`), the UI only chooses an operation.
+// Rust's reinforced-dialog triggers, picker sorting and badges.
 
 import type { AdaPool, AdaStakeWarning, Network, SolStakeState, SolStakeWarning, SolValidator, TronStakeWarning, TronWitness } from '@kyro/shared';
 import { fmtCrypto, fmtNumber, shortAddress } from './format';
@@ -49,8 +47,6 @@ export function fmtDuration(secs: number): string {
   if (h > 0) return `≈ ${h} h${m ? ` ${m} min` : ''}`;
   return s < 60 ? '< 1 min' : `≈ ${m} min`;
 }
-
-// ------------------------------------------------------------------ warnings (same triggers as Rust)
 
 export function solValidatorBadges(v: SolValidator): { tone: 'down' | 'warn'; text: string }[] {
   const out: { tone: 'down' | 'warn'; text: string }[] = [];
@@ -104,12 +100,9 @@ export function tronWarningText(w: TronStakeWarning, witnesses: TronWitness[] = 
   }
 }
 
-// ------------------------------------------------------------------ pickers
-
 export type SolSort = 'commission' | 'stake';
 export function sortValidators(list: SolValidator[], by: SolSort): SolValidator[] {
   const out = [...list];
-  // Delinquent ones always last: they earn nothing.
   out.sort((a, b) => Number(a.delinquent) - Number(b.delinquent) || (by === 'commission' ? a.commission - b.commission || cmpBig(b.activatedStake, a.activatedStake) : cmpBig(b.activatedStake, a.activatedStake)));
   return out;
 }
@@ -147,8 +140,6 @@ export function fmtStake(amount: string | null, decimals: number, symbol: string
   return fmtCrypto(BigInt(amount), decimals, symbol, 0);
 }
 
-// ------------------------------------------------------------------ Cardano DRep
-
 export type DrepMode = 'alwaysAbstain' | 'alwaysNoConfidence' | 'custom';
 /** The `drep` argument of `ada_stake_*` for a choice (null: invalid custom id). */
 export function drepArg(mode: DrepMode, custom: string): string | null {
@@ -162,8 +153,6 @@ export function drepLabel(drep: string | null): string {
   if (drep === 'alwaysNoConfidence') return t('staking.drepNoConfidence');
   return shortAddress(drep, 10, 6);
 }
-
-// ------------------------------------------------------------------ TRON votes
 
 /** Votes typed per SR → the request list (counts > 0) and the total; null when a count is not an integer. */
 export function tronVotes(counts: Record<string, string>): { votes: { address: string; count: string }[]; total: number } | null {

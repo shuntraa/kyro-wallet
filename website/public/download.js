@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Kyro Wallet site: download button for the visitor's system.
-// Only navigator.* is read, locally. Without JavaScript the buttons point to the download page.
 (function () {
   'use strict';
 
@@ -19,7 +18,6 @@
     var touch = Number(nav.maxTouchPoints || 0);
 
     if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (nav.userAgentData && nav.userAgentData.mobile)) return 'mobile';
-    // iPadOS reports itself as a Mac, but with a touch screen.
     if (/Mac/i.test(platform) && touch > 1) return 'mobile';
     if (/Win/i.test(platform) || /Windows/i.test(ua)) return 'windows';
     if (/Mac/i.test(platform) || /Mac OS X|Macintosh/i.test(ua)) return 'macos';
@@ -44,7 +42,6 @@
     var info = OS[os];
     if (!info) return;
 
-    // Each primary download button: <a data-dl-hero> with [data-dl-label] and [data-dl-icon] inside.
     each('[data-dl-hero]', function (a) {
       a.href = BASE + info.file;
       var label = a.querySelector('[data-dl-label]');
@@ -58,7 +55,6 @@
     each('.os-row[data-os="' + os + '"]', function (row) {
       row.setAttribute('data-current', 'true');
     });
-    // One-line install commands: the visitor's system first, marked as theirs.
     each('[data-install-os~="' + os + '"]', function (row) {
       row.setAttribute('data-current', 'true');
       var list = row.parentNode;

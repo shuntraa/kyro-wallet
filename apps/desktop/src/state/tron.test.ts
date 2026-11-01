@@ -18,7 +18,6 @@ describe('TRON in the UI', () => {
     const e = await createAdapters(accounts).tron!.getHistory().catch((x: unknown) => x);
     expect(tronNoHistory(e)).toBe(true);
     expect(serverDown(e)).toBe(false);
-    // A node that really is down stays a server failure.
     const down = 'Serveur injoignable : tron-down.example : délai de connexion dépassé';
     expect(tronNoHistory(down)).toBe(false);
   });

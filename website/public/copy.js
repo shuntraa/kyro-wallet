@@ -5,7 +5,6 @@
 
   var timer = null;
 
-  // The status line of the button's block ([data-copy-scope]), or the page's #copy-status.
   function announce(button, text) {
     var scope = button.closest('[data-copy-scope]');
     var status = (scope && scope.querySelector('[role="status"]')) || document.getElementById('copy-status');
@@ -40,7 +39,6 @@
     if (!target) return;
     var text = target.textContent.trim();
     var row = button.closest('tr');
-    // data-copy-label names what is copied (install commands); donation rows use their network name.
     var label = button.getAttribute('data-copy-label');
     var what = label || (row ? row.querySelector('th').textContent.trim() : 'Address') + ' address';
 

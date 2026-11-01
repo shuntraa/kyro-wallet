@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Cardano pieces (docs/IPC.md §2.7): the ADA asset's native tokens, the Send fields (token from
-// the balance, raw quantity, CIP-20 memo, refused address types), the Rust-decoded transaction
-// (every output, min-ADA riding with tokens, fee, total leaving, validity) and the confirmation
-// follow-up after broadcast.
+// Cardano pieces (docs/IPC.md §2.7): the ADA asset's native tokens, the Send fields (token from the
+// balance, raw quantity, CIP-20 memo, refused address types), the Rust-decoded transaction (every
+// output, min-ADA riding with tokens, fee, total leaving, validity) and the confirmation follow-up
+// after broadcast.
 
 import { useEffect, useState } from 'react';
 import type { CardanoAccount, CardanoTokenBalance, Currency } from '@kyro/shared';

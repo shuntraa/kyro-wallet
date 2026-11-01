@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Coin icon: Kyro's own drawn mark when the asset has one, otherwise a lit monogram disc.
-// Inline SVG only (CSP `img-src 'self' data:`, no remote images, privacy).
 
 import { createElement, useId, useMemo, type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 import { MARKS, iconTree, monogram, resolveMark, tickerColor, type El, type IconSpec, type MarkKey } from './marks';
 
-/** SVG attribute → React prop (`stop-color` → `stopColor`). */
 const camel = (k: string) => k.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 
 function toReact(el: El, key?: number): ReactNode {
@@ -48,12 +46,9 @@ export interface CoinIconAsset {
 }
 
 export interface CoinIconProps {
-  /** Legacy single-character glyph (registry): used for the monogram when nothing better is known. */
   glyph?: string | undefined;
-  /** Registry colour: drives the monogram disc (drawn marks use their own brand colours). */
   color?: string | undefined;
   size?: number;
-  /** Monogram text colour override. */
   fg?: string | undefined;
   className?: string | undefined;
   /** Corner badge: a chain key (`arbitrum`, `tron`…) or the legacy glyph + colour pair. */
@@ -62,9 +57,7 @@ export interface CoinIconProps {
   symbol?: string | undefined;
   /** Asset id (`btc`, `eth:42161`, `cg:bitcoin`), CoinGecko id or chain key. */
   id?: string | undefined;
-  /** Chain the asset lives on: shows that chain's badge when it differs from the asset itself (tokens, ETH on L2s). */
   chain?: string | undefined;
-  /** Registry asset: shorthand for id + symbol + chain + glyph + colour. */
   asset?: CoinIconAsset | undefined;
 }
 

@@ -1,24 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Clipboard guard for the recipient field. We remember exactly what was
-// pasted; if the field later holds something else *without the user typing*
-// (malware rewriting the field, a script, an extension), sending is blocked.
-// Typing by hand disarms the guard (the user then checks the blocks).
-//
-// LIMIT: this does NOT catch a « clipper » (malware that replaces the address in the clipboard
-// BEFORE the paste): the field then holds exactly what was pasted, the attacker's address. Only
-// comparing with the source (or the address book) does. So a paste is never shown as « verified ».
+// Clipboard guard for the recipient field.
 
 export interface GuardState {
-  /** Last pasted (or picked) value, null when the field was typed by hand. */
   pasted: string | null;
   /** The value differs from the paste without any keystroke. */
   tampered: boolean;
-  /**
-   * Origin of the current value. `picked`: chosen in Kyro's own lists (address book, « Mes
-   * comptes »), watched like a paste. `typed` also covers an address handed over by another
-   * screen (search palette), whose real origin is unknown.
-   */
   source: 'empty' | 'paste' | 'typed' | 'picked';
 }
 
@@ -39,7 +25,6 @@ export function guardOnInput(state: GuardState, value: string, inputType: string
     return { pasted: value, tampered: false, source: 'paste' };
   }
   if (inputType && TYPED.test(inputType)) return { pasted: null, tampered: false, source: 'typed' };
-  // Unknown origin: compare with what was pasted.
   if (state.pasted !== null && value !== state.pasted) return { ...state, tampered: true };
   return state;
 }

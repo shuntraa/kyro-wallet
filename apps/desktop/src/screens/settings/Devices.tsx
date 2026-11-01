@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Réglages › Appareils: hardware-wallet accounts (Ledger, Trezor). Public keys only;
-// adding goes through the device (HwSetup), removal needs a confirmation.
+// Réglages › Appareils: hardware-wallet accounts (Ledger, Trezor).
 
 import { useState } from 'react';
 import { call, toIpcError, type HwThpPairing, type WatchOnlyAccount } from '@kyro/shared';
@@ -116,11 +114,6 @@ export function Devices() {
   );
 }
 
-/**
- * Trezor Safe 7 (THP) pairings of this installation. Forgetting one removes Kyro's identifier
- * (the next connection asks for a new code); « Tout oublier » also drops Kyro's THP key. The
- * device keeps « Kyro Wallet » in its own list until it is reset.
- */
 function ThpPairings() {
   const list = useAsync(() => call('hw_thp_pairings'), []);
   const [busy, setBusy] = useState<string | null>(null);

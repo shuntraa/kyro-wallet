@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Copy only through explicit "Copier" buttons. Public data only (addresses,
-// tx hashes): the recovery phrase is never copyable.
+// Copy only through explicit "Copier" buttons.
 
 export async function copyText(text: string): Promise<boolean> {
   try {

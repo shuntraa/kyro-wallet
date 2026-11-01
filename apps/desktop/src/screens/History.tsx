@@ -23,7 +23,6 @@ import { idx } from '../components/motion';
 import { getLanguage, useT } from '../i18n';
 import { rt } from '../i18n/rich';
 
-/** Plain amount for the CSV: no thousands separator (narrow NBSP in French, comma in English). */
 function csvAmount(s: string): string {
   return getLanguage() === 'fr' ? s.replace(/\u202f/g, '') : s.replace(/,/g, '');
 }
@@ -61,7 +60,6 @@ export function History() {
     return out;
   }, [entries, lang]);
 
-  // Current month summary at today's prices.
   const month = useMemo(() => {
     const start = new Date();
     start.setDate(1);
@@ -134,7 +132,6 @@ export function History() {
             ) : (
               groups.map((g, gi) => (
                 <div key={g.label} className="stagger">
-                  {/* Day header stays on top while its rows scroll under it. */}
                   <div className="eyebrow sticky top-0 z-10 flex items-center gap-3 bg-card/95 px-5 pt-4 pb-2 backdrop-blur-[2px]" style={idx(gi * 3)}>
                     {g.label}
                     <span className="h-px flex-1 bg-line" />

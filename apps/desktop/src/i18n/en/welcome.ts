@@ -72,7 +72,6 @@ export const welcome: Record<keyof typeof fr, string> = {
   'welcome.xmrFromGenesis': 'From the very beginning',
   'welcome.xmrDateLabel': 'Approximate date of your first XMR received (pick it a bit earlier)',
   'welcome.xmrGenesisWarn': 'Scanning the whole Monero chain can take hours. You can keep using Kyro meanwhile.',
-  // Unlock
   'welcome.lockedStatus': 'Vault locked · session cleared',
   'welcome.lockedTitle': 'Vault locked',
   'welcome.lockedIntro': 'Enter your password to decrypt the vault on this device.',

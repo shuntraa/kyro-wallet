@@ -2,7 +2,6 @@
 import type { portfolio as fr } from '../fr/portfolio';
 
 export const portfolio: Record<keyof typeof fr, string> = {
-  // Periods (codes 1J / 1S / 1M / 1A / Tout)
   'portfolio.period1J': '1D',
   'portfolio.period1S': '1W',
   'portfolio.period1M': '1M',
@@ -14,7 +13,6 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.periodLabel1A': 'over a year',
   'portfolio.periodLabelTout': 'since the start',
   'portfolio.period': 'Period',
-  // Portfolio
   'portfolio.others': 'Others',
   'portfolio.valueAria': 'Portfolio value',
   'portfolio.totalValue': 'Total value',
@@ -31,7 +29,6 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.assetCount_one': '{count} asset',
   'portfolio.assetCount_other': '{count} assets',
   'portfolio.allocationLater': 'The allocation will show up with your first funds.',
-  // Asset lists
   'portfolio.lists': 'Lists',
   'portfolio.tabMine': 'My assets',
   'portfolio.tabMarket': 'Market · top 250',
@@ -71,7 +68,6 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.trillions': '{sym}{n}T',
   'portfolio.billions': '{sym}{n}B',
   'portfolio.millions': '{sym}{n}M',
-  // Asset detail
   'portfolio.rank': 'Rank #{rank}',
   'portfolio.swapSoon': 'Swap {name}: coming soon',
   'portfolio.stakingNoHw': 'Staking unavailable on a hardware wallet',

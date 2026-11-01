@@ -1,13 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Embedded Tor, UI side. One store for the whole app, started once in main.tsx.
-//
-// Rule (non negotiable): Kyro never switches to a clear connection by itself.
-// When Tor fails (`error` state, or any command rejected with TOR_UNAVAILABLE)
-// the store opens the failure dialog — once per failure episode — and waits for
-// the user: Retry (`tor_retry`), Cancel (stay blocked), or "Continue without
-// Tor", which needs a second, explicit confirmation before `tor.enabled=false`
-// is saved. Nothing here ever writes the settings on its own.
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { call, onIpcError, onTorStatus, toIpcError, torRetry, type CommandName, type IpcError, type TorStatus, type Unlisten } from '@kyro/shared';
@@ -17,14 +9,11 @@ export type TorDialog = 'none' | 'failure' | 'confirm-direct';
 export type TorIndicator = 'unknown' | 'bootstrapping' | 'ready' | 'failed' | 'direct';
 
 export interface TorEpisode {
-  /** Technical detail (shell message), shown under the explanation. */
   reason: string | null;
 }
 
 export interface TorSnapshot {
-  /** Last known status; null until the first `tor_status` answer or `tor-status` event. */
   status: TorStatus | null;
-  /** `settings.tor.enabled`; null until the settings are loaded. */
   enabled: boolean | null;
   dialog: TorDialog;
   /** Where the "continue without Tor" confirmation was opened from (its Cancel goes back there). */
@@ -32,7 +21,6 @@ export interface TorSnapshot {
   /** Failure in progress. Opened by `error` / TOR_UNAVAILABLE; closed by `ready`, a new bootstrap, or disabling Tor. */
   episode: TorEpisode | null;
   busy: boolean;
-  /** Error of the last dialog action (retry, save). */
   actionError: string | null;
 }
 
@@ -46,27 +34,18 @@ export interface TorStoreDeps {
 export interface TorStore {
   getSnapshot(): TorSnapshot;
   subscribe(listener: () => void): () => void;
-  /** Subscribes to `tor-status` and to rejected commands, then fetches `tor_status`. Idempotent. */
   start(): Promise<void>;
-  /** Unsubscribes (tests). */
   stop(): void;
-  /** Mirror of `settings.tor.enabled`, pushed by the app state on load and on every save. */
   setEnabled(enabled: boolean): void;
-  /** A command was rejected with TOR_UNAVAILABLE (also wired automatically through `onIpcError`). */
   reportUnavailable(message: string | null): void;
   /** Status bar click on "Tor indisponible". */
   openFailure(): void;
-  /** "Annuler": close the dialog, stay blocked. The same episode will not reopen it. */
   cancel(): void;
-  /** "Réessayer": `tor_retry`. */
   retry(): Promise<void>;
   /** "Continuer sans Tor" / settings switch turned off: ask the explicit confirmation. Saves nothing. */
   requestDisable(from: 'failure' | 'settings'): void;
-  /** Cancel of the confirmation. */
   cancelDisable(): void;
-  /** Confirmed: run `save` (writes `tor.enabled=false`). The only path to a clear connection. */
   confirmDisable(save: () => Promise<void>): Promise<void>;
-  /** Re-enabling needs no confirmation: run `save` (writes `tor.enabled=true`, the shell bootstraps). */
   enable(save: () => Promise<void>): Promise<void>;
 }
 
@@ -99,13 +78,11 @@ export function createTorStore(deps: TorStoreDeps): TorStore {
   const applyStatus = (next: TorStatus) => {
     const prev = snap.status;
     if (next.state === 'ready') {
-      // Solved: close what was about the failure.
       const closeDialog = snap.dialog === 'failure' || (snap.dialog === 'confirm-direct' && snap.confirmFrom === 'failure');
       set({ status: next, episode: null, ...(closeDialog ? { dialog: 'none', confirmFrom: null, actionError: null } : {}) });
       return;
     }
     if (next.state === 'bootstrapping' && prev?.state !== 'bootstrapping') {
-      // A new attempt (retry, re-enable): the previous episode is over. Progress ticks are not.
       set({ status: next, episode: null });
       return;
     }
@@ -127,8 +104,8 @@ export function createTorStore(deps: TorStoreDeps): TorStore {
         unError = deps.onIpcError((_cmd, e) => {
           if (e.code === 'TOR_UNAVAILABLE') store.reportUnavailable(e.message);
         });
-        // Listen first, then read the current state: a `ready` emitted before the UI
-        // subscribed is in the snapshot, and nothing emitted after is lost.
+        // Listen first, then read the current state: a `ready` emitted before the UI subscribed is
+        // in the snapshot, and nothing emitted after is lost.
         const un = await deps.listen((s) => {
           eventSeq += 1;
           applyStatus(s);
@@ -224,7 +201,6 @@ export function torIndicator(s: TorSnapshot): TorIndicator {
     case 'error':
       return 'failed';
     case 'bootstrapping':
-      // Requests already failed (60 s wait exceeded): say so, and let the user open the dialog.
       return s.episode ? 'failed' : 'bootstrapping';
     case 'off':
       // Transitional (just re-enabled, the bootstrap event is on its way) unless requests already failed.

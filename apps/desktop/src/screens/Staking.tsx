@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Staking (docs/IPC.md §2.8): Solana (native Stake program), Cardano (pool + vote delegation),
-// TRON (Stake 2.0 + SR votes). The UI only CHOOSES an operation: Rust builds it
-// (`*_stake_build`), the decoded result and its live context are shown BEFORE the password,
-// `*_stake_sign` opens the native windows (the reinforced one included), then the broadcast.
-// Never a message, a CBOR or a raw_data built or edited here. Not offered on hardware wallets.
+// Staking (docs/IPC.md §2.8): Solana (native Stake program), Cardano (pool + vote delegation), TRON
+// (Stake 2.0 + SR votes).
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CHAIN_COLORS, tryParseUnits } from '@kyro/chains';
@@ -61,7 +57,6 @@ import { AccountPicker } from '../components/AccountPicker';
 import { getLanguage, t as tNow, useT } from '../i18n';
 import { rt } from '../i18n/rich';
 
-/** `{ account }` of the selected vault account of a staking chain (§2.9; nothing for account 0). */
 function useStakeAccount(): (chain: StakeChain) => { account?: number } {
   const { selectedAccounts } = useApp();
   return (chain) => (selectedAccounts[chain] ? { account: selectedAccounts[chain] } : {});
@@ -72,15 +67,11 @@ type Ret<K extends keyof Commands> = Commands[K]['ret'];
 const SOL = { decimals: 9, symbol: 'SOL' };
 const ADA = { decimals: 6, symbol: 'ADA' };
 const TRX = { decimals: 6, symbol: 'TRX' };
-/** Exact amount (every significant decimal: staking numbers are shown as Rust computes them). */
 const amt = (v: string | bigint | null | undefined, u: { decimals: number; symbol: string }) => (v === null || v === undefined ? '—' : fmtCrypto(BigInt(v), u.decimals, u.symbol, u.decimals));
 
-/** "5 %" (French) / "5%" (English), French spacing kept as it was. */
 const pc = (n: number, maxFrac = 0) => (getLanguage() === 'fr' ? `${fmtNumber(n, maxFrac)} %` : `${fmtNumber(n, maxFrac)}%`);
 const bold = { b: (c: ReactNode) => <strong className="font-semibold text-text">{c}</strong> };
 const bold2 = { b: (c: ReactNode) => <strong className="font-semibold text-text2">{c}</strong> };
-
-// ================================================================= screen
 
 export function Staking({ chain }: { chain?: StakeChain }) {
   const { activeHw, navigate, hwOnly } = useApp();
@@ -216,18 +207,13 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
   );
 }
 
-// ================================================================= shared flow
-
 interface FlowSpec<B, S> {
   title: string;
-  /** Inputs (validator, amount…); absent: the operation is built at once. */
   form?: ReactNode;
   canBuild?: boolean;
   build: () => Promise<B>;
-  /** One plain-language sentence. */
   enClair: (b: B) => ReactNode;
   review: (b: B) => ReactNode;
-  /** Same triggers as Rust's reinforced window. */
   warnings: (b: B) => string[];
   sign: (b: B, password: string) => Promise<S>;
   broadcast: (s: S) => Promise<string>;
@@ -260,7 +246,6 @@ function StakeFlowDialog<B, S>({ spec, onClose, onDone }: { spec: FlowSpec<B, S>
       setBusy(null);
     }
   };
-  // No form: the operation is built as soon as the window opens.
   useEffect(() => {
     if (!spec.form) void build();
   }, []);
@@ -405,7 +390,6 @@ function AmountField({ id, label, value, onChange, unit, onMax, hint }: { id: st
   );
 }
 
-/** Epoch progress; `slotSecs`: 0.4 on Solana, 1 on Cardano. Counts down locally between reloads. */
 function EpochBar({ epoch, slotsInEpoch, slotSecs, secondsLeft, loadedAt, label }: { epoch: number; slotsInEpoch: number; slotSecs: number; secondsLeft: number; loadedAt: number | null; label: string }) {
   const now = useNow(1000);
   const { t } = useT();
@@ -435,8 +419,6 @@ function SortBar<T extends string>({ value, onChange, options, label }: { value:
     </div>
   );
 }
-
-// ================================================================= Solana
 
 function ValidatorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const list = useAsync(() => call('sol_stake_validators', {}), []);
@@ -709,8 +691,6 @@ function SolOpDialog({ op, o, onClose, onDone }: { op: SolOp; o: SolStakeOvervie
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
 }
-
-// ================================================================= Cardano
 
 function DrepChoice({ mode, onMode, custom, onCustom, keepCurrent }: { mode: DrepMode | 'keep'; onMode: (m: DrepMode | 'keep') => void; custom: string; onCustom: (v: string) => void; keepCurrent: string | null }) {
   const { t } = useT();
@@ -1000,8 +980,6 @@ function AdaOpDialog({ op, o, onClose, onDone }: { op: AdaOp; o: AdaStakeOvervie
   };
   return <StakeFlowDialog spec={spec} onClose={onClose} onDone={onDone} />;
 }
-
-// ================================================================= TRON
 
 type TronBuilt = Ret<'tron_stake_build'>;
 type TronSigned = Ret<'tron_stake_sign'> & { raw: string };

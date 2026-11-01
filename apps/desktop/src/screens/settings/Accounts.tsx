@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Réglages › Comptes: several accounts per chain in the vault (docs/IPC.md §2.9), like Ledger
-// Live. Keys come from the recovery phrase: an account is a public bookmark (number + name).
-// « Ajouter un compte » scans the next account number (address, path, balance), then adds it
-// with an editable name; renaming and removing only touch the bookmark (re-adding a removed
-// account gives back the same addresses and funds). « Créer plusieurs… » adds up to 10 accounts
-// at once with their default names (same command, one call per account, Rust checks each).
+// Réglages › Comptes: several accounts per chain in the vault (docs/IPC.md §2.9), like Ledger Live.
 
 import { useEffect, useState } from 'react';
 import { ACCOUNT_CHAINS, MAX_ACCOUNTS_PER_CHAIN, MAX_VAULT_ACCOUNT, call, toIpcError, type AccountChain, type VaultAccountEntry } from '@kyro/shared';
@@ -176,7 +170,6 @@ function RenameDialog({ family, entry, onClose }: { family: AccountChain; entry:
   );
 }
 
-/** Scans account `index` of `family`: address, path and balances (read through the usual servers). */
 function useAccountPreview(family: AccountChain, index: number | null) {
   const { settings } = useApp();
   return useAsync(
@@ -294,7 +287,6 @@ function AddAccountDialog({ family, list, onClose }: { family: AccountChain; lis
   );
 }
 
-/** Highest number of accounts « Créer plusieurs… » adds in one go. */
 const BULK_MAX = 10;
 
 function BulkCreateDialog({ family, list, onClose }: { family: AccountChain; list: VaultAccountEntry[]; onClose: () => void }) {

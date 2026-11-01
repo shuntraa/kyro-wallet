@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Polkadot pieces of the Send screen (docs/IPC.md §2.11):
-// - what Rust will check: a new account needs at least the existential deposit, spendable =
-//   free − max(frozen − reserved, existential deposit) (transfer_keep_alive keeps ours alive);
-// - the Rust-decoded transfer before the password, and the follow-up by nonce (dot_tx_status).
+// Polkadot pieces of the Send screen (docs/IPC.md §2.11): - what Rust will check: a new account
+// needs at least the existential deposit, spendable = free − max(frozen − reserved, existential
+// deposit) (transfer_keep_alive keeps ours alive); - the Rust-decoded transfer before the password,
+// and the follow-up by nonce (dot_tx_status).
 
 import { useEffect, useState } from 'react';
 import type { Currency, DotAccountInfo } from '@kyro/shared';
@@ -48,7 +48,6 @@ export function DotSummaryView({ u, price, currency }: { u: DotUnsigned; price: 
   const s = u.summary;
   const c = u.context;
   const f = (v: string) => fmtCrypto(BigInt(v), s.decimals, s.symbol);
-  // Fees are always in DOT (10 decimals), even for a token transfer.
   const feeDecimals = s.asset ? 10 : s.decimals;
   const fd = (v: string) => fmtCrypto(BigInt(v), feeDecimals, s.asset ? 'DOT' : s.symbol);
   const fee = BigInt(c.fee);

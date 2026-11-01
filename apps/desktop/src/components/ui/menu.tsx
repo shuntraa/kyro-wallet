@@ -10,7 +10,6 @@ export interface MenuItem<T extends string> {
   hint?: ReactNode;
   icon?: ReactNode;
   disabled?: boolean;
-  /** Section title shown above the first item of each run of the same group (e.g. a chain). */
   group?: string;
 }
 

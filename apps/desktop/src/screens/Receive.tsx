@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Receive: real QR (qrcode), BTC SegWit/Taproot, Litecoin, Dogecoin, Zcash (transparent), Bitcoin Cash (CashAddr), Dash,
-// TRON, XRP, Cardano, Polkadot, Hedera, Sui, Stellar, Algorand, Monero (primary address + subaddresses), Cosmos Hub, TON, optional requested amount (BIP21-style / EIP-681 / Solana Pay / monero: / ton://transfer URI; none for
-// TRON, XRP,
-// Cardano, Stellar, NEAR, Sui, Hedera, Polkadot, Algorand, Cosmos), network warning.
+// Receive: real QR (qrcode), BTC SegWit/Taproot, Litecoin, Dogecoin, Zcash (transparent), Bitcoin
+// Cash (CashAddr), Dash, TRON, XRP, Cardano, Polkadot, Hedera, Sui, Stellar, Algorand, Monero
+// (primary address + subaddresses), Cosmos Hub, TON, optional requested amount (BIP21-style /
+// EIP-681 / Solana Pay / monero: / ton://transfer URI; none for TRON, XRP, Cardano, Stellar, NEAR,
+// Sui, Hedera, Polkadot, Algorand, Cosmos), network warning.
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
@@ -28,9 +29,7 @@ import { StellarTrustPanel } from '../components/StellarSend';
 
 type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'zec' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt';
 const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'zec', 'tron', 'xrp', 'ada', 'xlm', 'near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
-/** Vault-only chains (hardware wallets: HW_UNSUPPORTED for now). */
 const VAULT_ONLY: readonly Family[] = ['near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
-/** UTXO chains with « Nouvelle adresse » (Rust `{prefix}_address`). */
 const UTXO_RECEIVE = ['ltc', 'doge', 'zec', 'bch', 'dash'] as const;
 type UtxoReceive = (typeof UTXO_RECEIVE)[number];
 const isUtxoReceive = (f: Family): f is UtxoReceive => (UTXO_RECEIVE as readonly Family[]).includes(f);
@@ -40,14 +39,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const { back, network, settings, navigate, selectedAccounts, hideBalances } = useApp();
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts, adapters, activeHw } = useVault();
-  // Hardware-wallet accounts have no Litecoin / Dogecoin / TRON (HW_UNSUPPORTED for now).
   const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, bch: !!accounts.bch, dash: !!accounts.dash, zec: !!accounts.zec, tron: !!accounts.tron, xrp: !!accounts.xrp, ada: !!accounts.cardano, xlm: !!accounts.stellar, near: !!accounts.near, sui: !!accounts.sui, hbar: !!accounts.hbar, kas: !!accounts.kas, dot: !!accounts.polkadot, algo: !!accounts.algo, xmr: !!accounts.xmr && !activeHw, ton: !!accounts.ton, cosmos: !!accounts.cosmos, apt: !!accounts.aptos };
   const [family, setFamilyRaw] = useState<Family>(has[initial] ? initial : FAMILIES.find((f) => has[f]) ?? initial);
   // Dogecoin / Dash testnets have no public server: say so instead of showing an address as if payments would appear.
   const dogeInfo = useAsync(family === 'doge' ? () => call('doge_backend_info') : family === 'dash' ? () => call('dash_backend_info') : null, [family, JSON.stringify(settings.servers.dogecoin), JSON.stringify(settings.servers.dash)]);
-  // Zcash testnet has no public server either.
   const zecInfo = useAsync(family === 'zec' ? () => call('zec_backend_info') : null, [family]);
-  // Hardware wallet: on-device verification of the shown address (hw_verify_address).
   type Verify = { state: 'idle' } | { state: 'running'; deviceId: string } | { state: 'ok'; address: string } | { state: 'error'; error: unknown; address: string };
   const [verify, setVerify] = useState<Verify>({ state: 'idle' });
   const [mismatch, setMismatch] = useState<unknown>(null);
@@ -62,7 +58,6 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const [deriveError, setDeriveError] = useState<string | null>(null);
   const [askAmount, setAskAmount] = useState(false);
   const [amount, setAmount] = useState('');
-  // Vault account of this chain (§2.9): another account → back to its first address.
   const account = activeHw ? 0 : selectedAccounts[family];
   useEffect(() => {
     setIndex(0);
@@ -84,7 +79,6 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const nearC = nearChain(network);
   const sui = suiChain(network);
   const hbar = hbarChain(network);
-  // Hedera: the account `0.0.x` (created by the first HBAR received on the EVM address).
   const hbarAccount = useAsync(family === 'hbar' && adapters.hbar ? () => adapters.hbar!.account() : null, [family, adapters.hbar], { intervalMs: 30_000 });
   const [hbarView, setHbarView] = useState<'id' | 'evm'>('id');
   const hbarId = hbarAccount.data?.exists ? hbarAccount.data.accountId : null;
@@ -151,7 +145,6 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
       : utxoAcc
         ? `${utxoAcc.path}/0/${index}`
         : // One address per account (no « Nouvelle adresse »): the path comes from Rust (`accounts_get`)
-          // and follows the chosen account, e.g. m/44'/60'/0'/0/1 for « Ethereum 2 ».
           family === 'tron'
           ? (accounts.tron?.path ?? "m/44'/195'/0'/0/0")
           : family === 'xrp'
@@ -194,21 +187,15 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', zec: 'ZEC', bch: 'BCH', dash: 'DASH', tron: 'TRX', xrp: 'XRP', ada: 'ADA', ton: 'GRAM', xmr: 'XMR', dot: dot.nativeSymbol, hbar: 'HBAR', xlm: 'XLM', near: 'NEAR', sui: 'SUI', kas: 'KAS', algo: 'ALGO', cosmos: 'ATOM', apt: 'APT' }[family];
   // TRON, XRP, Cardano, Stellar, NEAR, Sui, Kaspa, Algorand, Cosmos and Aptos have no payment-link format Kyro relies on: the QR is the bare address.
   const amountLink = family !== 'tron' && family !== 'xrp' && family !== 'ada' && family !== 'dot' && family !== 'hbar' && family !== 'xlm' && family !== 'near' && family !== 'sui' && family !== 'kas' && family !== 'algo' && family !== 'cosmos' && family !== 'apt';
-  // XRP: is our account activated yet (≥ 1 XRP base reserve received)?
-  // Stellar: is our account created yet (≥ 1 XLM received)? Its reserve, explained.
   const xlmAccount = useAsync(family === 'xlm' && adapters.stellar ? () => adapters.stellar!.account() : null, [family, adapters.stellar]);
   const xrpAccount = useAsync(family === 'xrp' && adapters.xrp ? () => adapters.xrp!.account() : null, [family, adapters.xrp]);
-  // NEAR: does our implicit account exist yet (created by the first NEAR received)?
   const nearAccount = useAsync(family === 'near' && adapters.near ? () => adapters.near!.account() : null, [family, adapters.near]);
   const nearTokens = useAsync(family === 'near' && adapters.near ? () => adapters.near!.tokenStatus() : null, [family, adapters.near]);
-  // Bitcoin Cash: the CashAddr already starts with its scheme (`bitcoincash:` / `bchtest:`).
-  // Polkadot: does our account exist yet (≥ existential deposit received)?
   const dotAccount = useAsync(family === 'dot' && adapters.polkadot ? () => adapters.polkadot!.account() : null, [family, adapters.polkadot]);
   // Algorand: does our account exist yet (≥ 0.1 ALGO received)? Rekeyed?
   const algoAccount = useAsync(family === 'algo' && adapters.algo ? () => adapters.algo!.account() : null, [family, adapters.algo]);
   // ZIP 321 payment URIs (`zcash:t1…?amount=`), same shape as BIP 21.
   const uriScheme = { btc: 'bitcoin', ltc: 'litecoin', doge: 'dogecoin', dash: 'dash', zec: 'zcash' } as const;
-  // Monero URI (monero-project/monero docs: `monero:<address>?tx_amount=<XMR>`).
   const amountBase = amount ? tryParseUnits(amount, decimals) : null;
 
   const uri = useMemo(() => {
@@ -220,7 +207,6 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
     if (family === 'tron' || family === 'xrp' || family === 'ada' || family === 'xlm' || family === 'near' || family === 'sui' || family === 'hbar' || family === 'kas' || family === 'dot' || family === 'algo' || family === 'cosmos' || family === 'apt') return address;
     if (family === 'xmr') return `monero:${address}?tx_amount=${dec}`;
     if (family === 'evm') return `ethereum:${address}@${evm.chainId}?value=${amountBase.toString()}`;
-    // TON deep link (Tonkeeper, MyTonWallet…): amount in nanotons.
     if (family === 'ton') return `ton://transfer/${address}?amount=${amountBase.toString()}`;
     return `solana:${address}?amount=${dec}`;
   }, [askAmount, amountBase, amount, family, address, evm.chainId]);
@@ -229,8 +215,6 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
     setDeriveError(null);
     const next = index + 1;
     try {
-      // Vault: Rust derives from the seed. Hardware wallet: public derivation from the stored xpub
-      // (then verify it on the device).
       const a = isUtxoReceive(family)
         ? activeHw
           ? (adapters[family]?.addressAt(0, next).address ?? '')

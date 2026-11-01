@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Address-poisoning alert (SECURITY.md): the recipient shares the first and last characters of
-// an address the user knows, without being it. Blocking until explicitly acknowledged.
+// Address-poisoning alert (SECURITY.md): the recipient shares the first and last characters of an
+// address the user knows, without being it.
 
 import { lookalikeSegments, type Family, type KnownAddress, type Lookalike } from '@kyro/chains';
 import { IconInfo, IconWarn } from './icons';

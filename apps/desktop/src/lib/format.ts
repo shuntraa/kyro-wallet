@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Locale-aware formatting (current interface language, see ../i18n): amounts, fiat, percentages,
-// addresses in 4-char chunks, durations. FR « 1 234,56 € », EN « €1,234.56 ». Crypto amounts are
-// bigint base units: never floats for values.
+// addresses in 4-char chunks, durations.
 
 import { getLang, intlLocale, type Currency } from '@kyro/shared';
 import { t } from '../i18n';
@@ -16,7 +14,6 @@ export function decimalSep(): string {
   return getLang() === 'fr' ? ',' : '.';
 }
 
-/** Thousands separator of the current language (narrow NBSP in French, `,` in English). */
 function groupSep(): string {
   return getLang() === 'fr' ? NNBSP : ',';
 }
@@ -45,7 +42,6 @@ function df(opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   return f;
 }
 
-/** Normalise Intl output: (French) regular spaces → narrow NBSP; hyphen-minus → U+2212. */
 function clean(s: string): string {
   const spaced = getLang() === 'fr' ? s.replace(/[  ]/g, NNBSP) : s;
   return spaced.replace(/^-/, MINUS).replace(/(\s)-/, `$1${MINUS}`);
@@ -78,11 +74,7 @@ export function fiatSymbol(currency: Currency): string {
   }
 }
 
-/**
- * "12 480,32 €", "1 234,50 $" (FR) — "€12,480.32", "$1,234.50", "¥12,480" (EN). Default decimals:
- * the currency's own (0 for JPY/KRW), two more for tiny values (a token at 0,004 €, at ¥0.37).
- * An explicit `decimals` is capped to the currency's (never "¥12,480.00").
- */
+/** "12 480,32 €", "1 234,50 $" (FR) — "€12,480.32", "$1,234.50", "¥12,480" (EN). */
 export function fmtFiat(value: number, currency: Currency, opts: { decimals?: number; sign?: boolean } = {}): string {
   const abs = Math.abs(value);
   const minor = fiatDigits(currency);
@@ -100,15 +92,11 @@ export function splitFiat(value: number, currency: Currency): { int: string; res
   return i < 0 ? { int: s, rest: '' } : { int: s.slice(0, i), rest: s.slice(i) };
 }
 
-/** Group an integer string by 3 (narrow NBSP in French, comma in English). */
 function groupInt(int: string): string {
   return int.replace(/\B(?=(\d{3})+(?!\d))/g, groupSep());
 }
 
-/**
- * Crypto amount from base units, truncated (never rounded up).
- * Default precision: ≥ 1000 → 2 dec., ≥ 1 → 4 dec., < 1 → all decimals up to 8 (BTC), else 6.
- */
+/** Crypto amount from base units, truncated (never rounded up). */
 export function fmtCrypto(amount: bigint, decimals: number, symbol?: string, maxFrac?: number): string {
   const neg = amount < 0n;
   const v = neg ? -amount : amount;
@@ -118,7 +106,6 @@ export function fmtCrypto(amount: bigint, decimals: number, symbol?: string, max
   const digits = maxFrac ?? (int >= 1000n ? 2 : int >= 1n ? 4 : decimals <= 8 ? decimals : 6);
   let frac = fracFull.slice(0, digits).replace(/0+$/, '');
   if (int === 0n && frac === '' && v > 0n) {
-    // Tiny amount: show the first significant digits instead of "0".
     const firstSig = fracFull.search(/[1-9]/);
     frac = fracFull.slice(0, Math.min(decimals, firstSig + 2)).replace(/0+$/, '');
   }
@@ -136,10 +123,7 @@ export function fmtPct(p: number | null | undefined, opts: { sign?: boolean; dec
   return clean(`${sign}${abs}`) + (getLang() === 'fr' ? `${NNBSP}%` : '%');
 }
 
-/**
- * Split an address in 4-character blocks. EVM addresses keep "0x" glued to
- * the first block ("0x4F2a 9C83 …"), like on hardware wallet screens.
- */
+/** Split an address in 4-character blocks. */
 export function chunkAddress(address: string, size = 4): string[] {
   const a = address.trim();
   const prefix = /^0x/i.test(a) ? a.slice(0, 2) : '';
@@ -152,7 +136,6 @@ export function chunkAddress(address: string, size = 4): string[] {
 
 export interface AddressChunk {
   text: string;
-  /** First two and last two blocks: the ones to compare. */
   highlight: boolean;
 }
 
@@ -244,15 +227,12 @@ export function fmtChartTime(ms: number, now = Date.now()): string {
 
 /**
  * Normalise a decimal typed by the user: digits and one decimal mark, returned with the current
- * language's mark (« 0,5 » / « 0.5 »). `,` and `.` are both accepted as the mark while typing.
+ * language's mark (« 0,5 » / « 0.5 »).
  */
 export function sanitizeDecimalInput(raw: string, maxDecimals: number): string {
   let s = raw.replace(/[^\d.,]/g, '');
-  // A pasted « 1,234.56 » or « 1.234,56 »: both separators → the LAST one is the decimal mark,
-  // the other one groups thousands (dropped). Before, « 1,234.56 » became 1,23456 (1 000 × less).
-  // Only when the grouping is a clean thousands pattern and digits follow the decimal mark, so that
-  // a stray key while typing (« 0,5. ») never turns 0,5 into 5. Otherwise, as before, the first
-  // separator is the decimal mark and any later one is dropped.
+  // A pasted « 1,234.56 » or « 1.234,56 »: both separators → the LAST one is the decimal mark, the
+  // other one groups thousands (dropped).
   const cut = Math.max(s.lastIndexOf(','), s.lastIndexOf('.'));
   if (s.includes(',') && s.includes('.') && cut < s.length - 1) {
     const group = s[cut] === ',' ? '.' : ',';

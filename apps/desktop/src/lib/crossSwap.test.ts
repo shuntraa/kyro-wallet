@@ -59,7 +59,6 @@ describe('cross-chain swap helpers', () => {
     expect(canSwapFrom(by('xlm'))).toBe(false);
     expect(canSwapTo('mainnet', eth, by('xlm'))).toBe(true);
     expect(canSwapTo('mainnet', by('bch'), by('xlm'))).toBe(true);
-    // No 1Click route: NEAR (only wNEAR), Hedera, Kaspa, Polkadot, Algorand, Monero, Cosmos.
     for (const f of ['near', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'cosmos']) {
       expect(canSwapFrom(by(f)), f).toBe(false);
       expect(canSwapTo('mainnet', eth, by(f)), f).toBe(false);
@@ -67,7 +66,6 @@ describe('cross-chain swap helpers', () => {
     // EVM: same-chain where 0x / LI.FI has a checked contract (Flare, Kaia, HyperEVM now too), not Conflux.
     for (const k of ['flare', 'kaia', 'hyperevm', 'cronos', 'gnosis']) expect(canSwapTo('mainnet', findChain('mainnet', k), findChain('mainnet', k)), k).toBe(true);
     expect(canSwapFrom(findChain('mainnet', 'conflux'))).toBe(false);
-    // Between chains: only those NEAR Intents reaches (Gnosis yes, Cronos / Flare no).
     expect(canSwapTo('mainnet', findChain('mainnet', 'gnosis'), by('bch'))).toBe(true);
     expect(canSwapTo('mainnet', eth, findChain('mainnet', 'gnosis'))).toBe(true);
     expect(canSwapTo('mainnet', eth, findChain('mainnet', 'cronos'))).toBe(false);
@@ -87,10 +85,8 @@ describe('cross-chain swap helpers', () => {
     expect(groups[0]?.chain.key).toBe('ethereum');
     expect(groups.map((g) => g.chain.key)).toEqual(expect.arrayContaining(['solana', 'bitcoin', 'arbitrum']));
     expect(['tron', 'xrp', 'ada', 'ltc', 'doge'].every((f) => groups.some((g) => g.chain.family === f))).toBe(true);
-    // Cardano: ADA only (native tokens are not offered by 1Click).
     expect(groups.find((g) => g.chain.family === 'ada')?.assets.every((a) => a.kind === 'native')).toBe(true);
     expect(groups.flatMap((g) => g.assets).some((a) => a.id === 'eth:1')).toBe(false);
-    // Testnet: same chain only.
     const sepEth = assetsFor('testnet').find((a) => a.chainKey === 'sepolia' && a.kind === 'native');
     expect(buyGroups('testnet', allChains('testnet'), assetsFor('testnet'), sepEth).map((g) => g.chain.key)).toEqual(['sepolia']);
   });
@@ -113,7 +109,6 @@ describe('cross-chain swap helpers', () => {
     expect(isLocalTx({ ...tx, cross: { fromChain: '42161', toChain: 'ethereum', toChainKey: 'solana', bridge: 'near' } }, 'mainnet')).toBe(false);
     expect(isLocalTx({ ...tx, cross: { fromChain: 'bitcoin', toChain: '1', toChainKey: 'ethereum', bridge: '1click', depositAddress: 'bc1qfm26lzq7yaqap99dp689wfn4pkfpd6r2m7n55d' } }, 'mainnet')).toBe(true);
     expect(isLocalTx({ ...tx, cross: { fromChain: 'bitcoin', toChain: '1', toChainKey: 'ethereum', bridge: '1click', depositAddress: 'bc1q/../x' } }, 'mainnet')).toBe(false);
-    // New 1Click chains: cashaddr and TON deposit addresses kept.
     expect(isLocalTx({ ...tx, cross: { fromChain: 'bitcoincash', toChain: '1', toChainKey: 'ethereum', bridge: '1click', depositAddress: 'bitcoincash:qz7xm6aahynmu0ud5y255jlxe22cdjgxpv9ra4uqyf' } }, 'mainnet')).toBe(true);
     expect(isLocalTx({ ...tx, cross: { fromChain: 'ton', toChain: 'stellar', toChainKey: 'stellar', bridge: '1click', depositAddress: 'UQD-x0XHFHtf6KcZGG7ZWrqF1oZ5NGE-guyHR4yjKL1Ivz_P' } }, 'mainnet')).toBe(true);
     expect(isLocalTx({ ...tx, cross: { fromChain: 'near', toChain: '1', toChainKey: 'ethereum', bridge: '1click' } }, 'mainnet')).toBe(false);
@@ -131,7 +126,6 @@ const DEPOSIT: Record<string, string> = {
   xrp: 'rN7zSHBPiuaGmTe79Gb7Dv6JkJyQNkKHS6',
   ada: 'addr1vxvpl2gfjp3y78dac4dpkf9pmn7v38lnj6qmz2hwe3en5gcqcawcf',
   'eth:42161': '0x22259b2F4e5fe827d3bB8d528f8d3C771A219523',
-  // packages/swap/test/fixtures/cross/1click-direct-more.json (01/11/2026).
   bch: 'bitcoincash:qz7xm6aahynmu0ud5y255jlxe22cdjgxpv9ra4uqyf',
   dash: 'Xwe1utk12ydvkRAw9TVfNdijg6xLrDaabW',
   zec: 't1djDRoNmb8ea5eNFeP5QmuNm2pGCpyxbf2',
@@ -211,9 +205,7 @@ describe('NEAR Intents deposit: the ordinary transfer Kyro builds (demo adapters
     expect(depositTxProblem({ ...tonTx, sendAll: true }, asset('ton'), plan('ton'))).toBeTruthy();
     const bchTx = (await build('bch')) as Of<'btc'>;
     expect(depositTxProblem({ ...bchTx, summary: { ...bchTx.summary, outputs: [...bchTx.summary.outputs, ['op_return:6b79726f', 0, false]] } }, asset('bch'), plan('bch'))).toMatch(/OP_RETURN/);
-    // Stellar is arrival only: no deposit is ever built from it.
     await expect(buildDepositTx(asset('xlm'), ad, { ...plan('btc'), depositAddress: 'GDRXE2BQUC3AZNPVFSCEZ76NJ3WWL25FYFK6RGZGIEKWE4SOOHSUJUJ6' })).rejects.toThrow();
-    // A deposit address of another chain is refused before anything is built.
     await expect(buildDepositTx(asset('ltc'), ad, { ...plan('ltc'), depositAddress: DEPOSIT.doge ?? '' })).rejects.toThrow(/adresse de dépôt invalide/);
   }, 60_000);
 });

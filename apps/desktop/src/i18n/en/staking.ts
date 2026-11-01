@@ -2,7 +2,6 @@
 import type { staking as fr } from '../fr/staking';
 
 export const staking: Record<keyof typeof fr, string> = {
-  // lib/staking.ts
   'staking.solStateInitialized': 'Not delegated',
   'staking.solStateActivating': 'Activating',
   'staking.solStateActive': 'Active',
@@ -32,7 +31,6 @@ export const staking: Record<keyof typeof fr, string> = {
   'staking.drepAbstain': 'Always abstain',
   'staking.drepNoConfidence': 'Always no confidence',
 
-  // screen
   'staking.noSlashing': 'No slashing on this chain: your funds cannot be confiscated. But the rewards depend on the validator, pool or SR you choose.',
   'staking.title': 'Staking',
   'staking.subtitle': 'Delegate your SOL, ADA or TRX from your own accounts. Your funds stay yours.',
@@ -66,7 +64,6 @@ export const staking: Record<keyof typeof fr, string> = {
   'staking.otherEvmName': 'Ethereum and EVM chains',
   'staking.otherEvm': 'Not offered: native staking requires 32 ETH and a validator running at all times, and Kyro does not go through a third party’s contract.',
 
-  // flow dialog
   'staking.signCancelled': 'Signing cancelled in the system window. Nothing was sent.',
   'staking.check': 'Review',
   'staking.building': 'Being built by Kyro (live read from the network)…',
@@ -76,7 +73,6 @@ export const staking: Record<keyof typeof fr, string> = {
   'staking.epochProgress': 'Progress of {label} {epoch}',
   'staking.sortBy': 'Sort by',
 
-  // Solana
   'staking.validator': 'Validator',
   'staking.sortCommission': 'Commission',
   'staking.sortActiveStake': 'Active stake',
@@ -148,7 +144,6 @@ export const staking: Record<keyof typeof fr, string> = {
   'staking.riskSol': 'no slashing; rewards depend on the validator',
   'staking.doneSol': 'Staking operation broadcast. The account state updates on the next refresh (activation or cooldown follows the epoch schedule).',
 
-  // Cardano
   'staking.drepKeep': 'Keep my current vote ({label})',
   'staking.drepKeepText': 'Your vote delegation does not change.',
   'staking.drepAbstainSuggested': 'Always abstain (suggested)',
@@ -222,7 +217,6 @@ export const staking: Record<keyof typeof fr, string> = {
   'staking.riskAda': 'no lockup, no slashing; rewards depend on the pool',
   'staking.doneAda': 'Cardano staking transaction broadcast. The changes appear in the overview once it is included in a block.',
 
-  // TRON
   'staking.stakedEnergy': 'Staked for energy',
   'staking.energyLeft': '{left} / {limit} energy',
   'staking.stakedBandwidth': 'Staked for bandwidth',

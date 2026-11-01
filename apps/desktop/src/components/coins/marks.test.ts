@@ -22,7 +22,6 @@ describe('coin marks', () => {
   it('draws every registry chain and every native asset', () => {
     for (const net of ['mainnet', 'testnet'] as const) {
       for (const c of allChains(net)) expect(resolveMark({ id: c.key }), c.key).toBeDefined();
-      // Natives are all drawn; the long tail of tokens may fall back to the monogram.
       for (const a of assetsFor(net).filter((x) => x.kind === 'native')) expect(resolveMark({ id: a.id, symbol: a.symbol }), a.id).toBeDefined();
     }
   });

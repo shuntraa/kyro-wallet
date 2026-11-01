@@ -17,8 +17,6 @@ export default tseslint.config(
       globals: { ...globals.browser, ...globals.node },
     },
     rules: {
-      // Security-relevant: no dynamic code, no implicit any escaping the type system.
-      // French formatting uses narrow no-break spaces (U+202F) in strings and regexes.
       "no-irregular-whitespace": ["error", { skipStrings: true, skipTemplates: true, skipRegExps: true, skipJSXText: true, skipComments: true }],
       "no-eval": "error",
       "no-implied-eval": "error",
@@ -27,7 +25,6 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
-  // kyrowallet.com: Node build scripts, and the hand-written browser scripts it serves.
   {
     files: ["website/src/**/*.mjs"],
     languageOptions: { ecmaVersion: 2023, sourceType: "module", globals: { ...globals.node } },

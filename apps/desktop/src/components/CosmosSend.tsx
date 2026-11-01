@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Cosmos Hub pieces of the Send screen (docs/IPC.md §2.11):
-// - the memo field, ALWAYS visible right under the recipient (exchanges identify deposits by it);
-// - the Rust-decoded transaction before the password (chain id, gas, fee, memo, validity);
-// - the inclusion follow-up (cosmos_tx_status).
+// Cosmos Hub pieces of the Send screen (docs/IPC.md §2.11): - the memo field, ALWAYS visible right
+// under the recipient (exchanges identify deposits by it); - the Rust-decoded transaction before
+// the password (chain id, gas, fee, memo, validity); - the inclusion follow-up (cosmos_tx_status).
 
 import { useEffect, useState } from 'react';
 import type { CosmosAccountInfo, Currency } from '@kyro/shared';
@@ -105,11 +104,7 @@ function Line({ k, v, last }: { k: string; v: string; last?: boolean }) {
 
 type Status = { state: 'pending' } | { state: 'included' } | { state: 'failed'; code: number | null; log: string } | { state: 'expired' } | { state: 'error'; message: string };
 
-/**
- * After `cosmos_broadcast`: follows `cosmos_tx_status` until the transaction is in a block.
- * Code 0 → « incluse »; any other code → « échouée » (the fee is still taken). Not found after its
- * timeout height (≈ 10 min) + margin → it can no longer be included.
- */
+/** After `cosmos_broadcast`: follows `cosmos_tx_status` until the transaction is in a block. */
 export function CosmosTxStatusLine({ adapter, hash, recipient, onIncluded }: { adapter: CosmosAdapter; hash: string; recipient: string; onIncluded?: () => void }) {
   useT();
   const [status, setStatus] = useState<Status>({ state: 'pending' });

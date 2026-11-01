@@ -3,23 +3,7 @@ name: Release
 # On every tag v* (e.g. v1.0.0): build Kyro for Windows (NSIS .exe + .msi), macOS (universal .dmg)
 # and Linux (.AppImage + .deb), sign the auto-update packages with the updater key, rename every
 # file to a FIXED name and create a DRAFT GitHub Release (the maintainer reviews and publishes it,
-# see docs/RELEASING.md). Fixed names keep the website links valid for every version:
-#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe
-#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64.msi
-#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg
-#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage
-#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-amd64.deb
-#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS
-#
-# Auto-update (apps/desktop/src-tauri/src/updater.rs): the app reads
-# .../releases/latest/download/latest.json, which points (per-version URLs) to
-# Kyro-windows-x64-setup.exe, Kyro-macos.app.tar.gz and Kyro-linux-x86_64.AppImage, each with the
-# content of its .sig (minisign, key pinned in tauri.conf.json `plugins.updater.pubkey`).
-#
-# The installers are NOT code-signed yet (Windows SmartScreen / macOS Gatekeeper warnings): see the
-# commented block in the build step for what OS code signing needs.
-#
-# Third-party actions are pinned to commit SHAs (version in the comment).
+# see docs/RELEASING.md).
 
 on:
   push:
@@ -98,17 +82,7 @@ jobs:
           # unsigned update packages.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # OS code signing (not set up yet). When the certificates exist, add them as repository
-          # secrets and uncomment:
-          # # macOS (Apple Developer Program): Developer ID Application certificate + notarization.
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}                   # .p12, base64
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}         # "Developer ID Application: ..."
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}                         # app-specific password
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # # Windows: an OV/EV code-signing certificate, or Azure Trusted Signing, configured through
-          # # bundle.windows.signCommand / certificateThumbprint in tauri.conf.json.
+          # OS code signing (not set up yet).
         with:
           projectPath: apps/desktop
           tauriScript: pnpm tauri
@@ -230,8 +204,7 @@ jobs:
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           name: Kyro ${{ github.ref_name }}
-          # Draft: the maintainer checks the files, then publishes. Only a published, non-pre
-          # release is "latest", i.e. what the installed wallets update to.
+          # Draft: the maintainer checks the files, then publishes.
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           fail_on_unmatched_files: true

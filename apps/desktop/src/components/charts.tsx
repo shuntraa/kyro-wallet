@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Charts: smooth Catmull-Rom curves (no angles), ice-blue line drawn from the left on mount,
-// a faint ice wash under it, hover crosshair + tooltip. Sparklines, allocation bar and ring.
+// Charts: smooth Catmull-Rom curves (no angles), ice-blue line drawn from the left on mount, a
+// faint ice wash under it, hover crosshair + tooltip.
 
 import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
@@ -14,9 +14,7 @@ export interface SmoothChartProps {
   values: number[];
   times?: number[];
   height: number;
-  /** Tooltip label for a point. */
   renderTooltip?: (i: number) => { label: string; value: string };
-  /** Which point to show when not hovering. */
   defaultPoint?: 'last' | 'max' | 'none';
   defaultLabel?: string;
   padTop?: number;

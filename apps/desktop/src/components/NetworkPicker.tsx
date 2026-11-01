@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Envoyer: network choice for an asset held on several chains (USDT, USDC, ETH…), with the
-// balance on each network, and the reminder that the recipient must receive on that network.
+// Envoyer: network choice for an asset held on several chains (USDT, USDC, ETH…), with the balance
+// on each network, and the reminder that the recipient must receive on that network.
 
 import type { AssetDef } from '@kyro/chains';
 import { findChain } from '@kyro/chains';

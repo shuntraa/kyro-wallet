@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Captures the Kyro desktop app (demo mode, in a plain browser) for the website.
-//
-//   1. In E:\wallet\apps\desktop:  pnpm dev            (Vite prints http://127.0.0.1:<port>/)
-//   2. From site-prep:             node website/src/capture.mjs http://127.0.0.1:<port>
-//
-// Window 1440x900 at device scale 2. Writes website/src/screenshots/app-<name>.png, then, if ffmpeg is
-// on PATH, the WebP files the site uses (website/public/img/win-*.webp). Rebuild the site afterwards.
-// Demo password: read from the hint under the unlock field, or set KYRO_DEMO_PASSWORD.
-// Screens are reached by clicking the navigation rail by its visible label (English UI).
+// Captures the Kyro desktop app (demo mode, in a plain browser) for the website. 1. In
+// E:\wallet\apps\desktop: pnpm dev (Vite prints http://127.0.0.1:<port>/) 2. From site-prep: node
+// website/src/capture.mjs http://127.0.0.1:<port> Window 1440x900 at device scale 2. Writes
+// website/src/screenshots/app-<name>.png, then, if ffmpeg is on PATH, the WebP files the site uses
+// (website/public/img/win-*.webp).
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -25,7 +21,6 @@ if (!/^https?:\/\//.test(base)) {
 }
 mkdirSync(SHOTS, { recursive: true });
 
-// Click the first visible button or link whose text (or aria-label) matches.
 const click = (b, label) =>
   b.evaluate(`(() => {
     const re = new RegExp(${JSON.stringify(label)}, 'i');
@@ -72,7 +67,6 @@ async function unlock(b) {
   await sleep(2500);
 }
 
-// name, how to get there (labels clicked in order), settle time
 const SCREENS = [
   ['portfolio', ['^Portfolio$'], 2500],
   ['assets', ['^Assets$'], 2000],
@@ -88,7 +82,6 @@ try {
   await viewport(b, 1440, 900, 2);
   await goto(b, `${base}/?network=mainnet&lang=en`, 3000);
   await unlock(b);
-  // No animation mid-capture.
   await b.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   for (const [name, path, settle] of SCREENS) {
     for (const label of path) {

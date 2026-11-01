@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Network choice (docs/IPC.md §2.10): labels and the confirmation text. Public data only.
-// Labels are read in the current language each time (getters), so they follow a language change.
+// Network choice (docs/IPC.md §2.10): labels and the confirmation text.
 
 import type { Network, NetworkInfo } from '@kyro/shared';
 import { t } from '../i18n';

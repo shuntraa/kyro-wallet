@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Shared page shell for kyrowallet.com: <head>, header, footer and small HTML helpers.
-// No dependencies. Everything here produces plain strings.
 
 export const SITE = 'https://kyrowallet.com';
 export const VERSION = '1.0.0';
@@ -43,7 +42,6 @@ export const NAV = [
 ];
 
 export function breadcrumbs(trail) {
-  // trail: [[href, name], ...]; the last one is the current page.
   const items = trail
     .map(([href, name], i) =>
       i === trail.length - 1 ? `<li><span aria-current="page">${esc(name)}</span></li>` : `<li><a href="${href}">${esc(name)}</a></li>`
@@ -150,9 +148,8 @@ function footer(chains) {
 }
 
 /**
- * Full HTML document.
- * opts: path, title, description, body, chains (live list, for the footer), ld (array of JSON-LD nodes),
- *       scripts (extra deferred scripts), noindex, preload (image path), ogType
+ * Full HTML document. opts: path, title, description, body, chains (live list, for the footer), ld
+ * (array of JSON-LD nodes), scripts (extra deferred scripts), noindex, preload (image path), ogType
  */
 export function page(opts) {
   const { path, title, description, body, chains, ld = [], scripts = [], noindex = false, preload } = opts;
@@ -293,11 +290,10 @@ export const ctaPanel = (title = 'Get Kyro', text = `Version ${VERSION} · Free 
     </section>`;
 
 /**
- * A desktop app window around a real screenshot.
- * src: /img/… (WebP); alt describes the screenshot ('' when decorative).
- * opts: w, h (intrinsic size, required), chrome: 'mac' | 'win' | 'none' (full app screenshots
- * already carry Kyro's own title bar), title (window title), cls (extra classes), eager (above the
- * fold), small: { src, w } a lighter file for narrow screens, sizes.
+ * A desktop app window around a real screenshot. src: /img/… (WebP); alt describes the screenshot
+ * ('' when decorative). opts: w, h (intrinsic size, required), chrome: 'mac' | 'win' | 'none' (full
+ * app screenshots already carry Kyro's own title bar), title (window title), cls (extra classes),
+ * eager (above the fold), small: { src, w } a lighter file for narrow screens, sizes.
  */
 export function window(src, alt, opts = {}) {
   const { w, h, chrome = 'mac', title = 'Kyro', cls = '', eager = false, small, sizes = '(max-width: 760px) 100vw, 1100px' } = opts;

@@ -21,7 +21,6 @@ describe('Litecoin / Dogecoin in the UI', () => {
     expect(hosts.find((h) => h.host === 'litecoinspace.org')?.purpose).toMatch(/Litecoin/);
     expect(hosts.find((h) => h.purpose.startsWith('Dogecoin'))?.purpose).toMatch(/aucun serveur public/);
     const main = outgoingHosts('mainnet').filter((h) => h.purpose.startsWith('Dogecoin'));
-    // Same list as Rust's `net::ELECTRUM_HOSTS` (Dogecoin family).
     expect(main.map((h) => h.host)).toEqual(['doge.electrum1.cipig.net:20060', 'doge.electrum2.cipig.net:20060']);
     expect(main.some((h) => /aucun serveur/.test(h.purpose))).toBe(false);
     const custom = outgoingHosts('testnet', { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, bitcoincash: {}, dash: {}, tron: {}, xrp: {}, cardano: {}, dogecoin: { testnet: { kind: 'esplora', url: 'https://my-doge.example/api' } } });

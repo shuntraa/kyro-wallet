@@ -1,10 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 @import 'tailwindcss';
 
-/* Design tokens — docs/DESIGN.md. Dark only.
-   Direction « instrument de froid » : encre bleu-noir, filets fins plutôt que cartes,
-   un seul accent (bleu givre) réservé à ce qu'il faut vérifier et à la sélection,
-   actions principales en blanc givré. Pas de halo, pas de dégradé décoratif. */
+/* Design tokens — docs/DESIGN.md. */
 @theme {
   --color-bg: #090a0c;
   --color-bg-deep: #070809;
@@ -50,7 +47,6 @@
   --ease-spring: cubic-bezier(0.2, 1.25, 0.35, 1);
 }
 
-/* ---------------------------------------------------------------- "app" behaviour (mandatory) */
 * {
   box-sizing: border-box;
   -webkit-user-select: none;
@@ -107,8 +103,10 @@ body {
   cursor: default;
   -webkit-font-smoothing: antialiased;
 }
-/* In the base layer so that text-colour utilities on buttons (text-down, text-white…) win:
-   unlayered, this reset overrode every utility colour on <button>. */
+/*
+ * In the base layer so that text-colour utilities on buttons (text-down, text-white…) win:
+ * unlayered, this reset overrode every utility colour on <button>.
+ */
 @layer base {
   button,
   input,
@@ -144,7 +142,6 @@ input[type='radio'] {
   accent-color: var(--color-ice);
 }
 
-/* ---------------------------------------------------------------- typography */
 @layer components {
   /* Screen title: one size for every screen, tight, slightly lighter than bold. */
   .screen-title {
@@ -205,7 +202,6 @@ input[type='radio'] {
   background: transparent;
 }
 
-/* ---------------------------------------------------------------- motion
    Every animation here is decorative and enter-only: content is interactive from frame 0.
    All of it is switched off under prefers-reduced-motion (bottom of this file). */
 

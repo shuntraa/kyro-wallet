@@ -17,7 +17,6 @@ describe('Trezor One PIN matrix: positions only, numeric-keypad convention', () 
     expect(pinPosition(0, 0)).toBe('7'); // top-left is NOT '1' (phone layout)
     expect(pinPosition(2, 2)).toBe('3');
     expect(() => pinPosition(3, 0)).toThrow();
-    // Same table as the simulated device.
     expect(PIN_MATRIX_KEYPAD.map((r) => r.join(''))).toEqual(TREZOR_KEYPAD.map((r) => r.join('')));
   });
 

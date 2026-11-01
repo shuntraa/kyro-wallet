@@ -2,7 +2,6 @@
 import type { shell as fr } from '../fr/shell';
 
 export const shell: Record<keyof typeof fr, string> = {
-  // App
   'shell.openingVault': 'Opening the vault…',
   'shell.startFailed': 'Kyro could not start',
   'shell.assets': 'Assets',
@@ -12,7 +11,6 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.searchSoon': 'Coming soon',
   'shell.searchSendTo': 'Send to {address}…',
   'shell.searchAddressHint': 'address',
-  // Nav rail / title bar
   'shell.navigation': 'Navigation',
   'shell.lockVault': 'Lock the vault',
   'shell.minimize': 'Minimize',
@@ -20,7 +18,6 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.search': 'Search',
   'shell.searchPlaceholder': 'Search for an asset, an address…',
   'shell.noResults': 'No results.',
-  // Status bar
   'shell.demoMode': 'DEMO MODE',
   'shell.customServerTitle': 'Custom server (Settings › Networks and servers)',
   'shell.customShort': 'custom',
@@ -45,7 +42,6 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.cbfFilters': 'filters',
   'shell.cbfSynced': 'synced',
   'shell.cbfError': 'error',
-  // Account switcher
   'shell.vaultHint': 'Encrypted vault on this computer',
   'shell.accountsPerChain': 'Accounts per chain',
   'shell.accountsPerChainHint': 'Add, rename (vault)',
@@ -53,7 +49,6 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.addDeviceHint': 'Ledger or Trezor',
   'shell.activeAccount': 'Active account',
   'shell.switchAccount': 'Switch account',
-  // Network switch
   'shell.networkMainnet': 'Main network',
   'shell.networkTestnet': 'Test network',
   'shell.networkMainnetHint': 'real funds',
@@ -71,7 +66,6 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.switchToMainnetNote': 'On the main network, amounts are real funds: every transfer is final.',
   'shell.switchToTestnetNote': 'On the test network, tokens have no value: do not use it to receive real funds.',
   'shell.switchRestarts': 'Kyro locks, then restarts.',
-  // Server down / missing
   'shell.noPublicServer': 'No free public server: set up your own server.',
   'shell.noPublicServerDetail': '{coin} has no free public API; Kyro loads nothing until you enter your Esplora server.',
   'shell.configure': 'Set up',
@@ -81,7 +75,6 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.serverNotRespondingWhat': 'Your server is not responding ({what}).',
   'shell.serverNoFallback': 'Kyro never queries the default server in its place.',
   'shell.openSettings': 'Open settings',
-  // Tor
   'shell.torReading': 'Reading Tor status',
   'shell.torBootAria': 'Tor: connecting, {p} percent',
   'shell.torBootTitle': 'Connecting to the Tor network. Requests wait for Tor, nothing goes out in the clear.',
@@ -109,7 +102,6 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.torStaysOff': 'Tor will stay off until you turn it back on in Settings › Privacy.',
   'shell.keepTor': 'Keep Tor',
   'shell.yesWithoutTor': 'Yes, continue without Tor',
-  // Vault card
   'shell.hwKeysInDevice': 'Keys in the device, never in Kyro',
   'shell.fingerprint': 'Fingerprint',
   'shell.accountNo': '#{n}',
@@ -130,7 +122,6 @@ export const shell: Record<keyof typeof fr, string> = {
   'shell.backedUp': 'Backed up',
   'shell.imported': 'Imported',
   'shell.notVerified': 'Not verified',
-  // Kit
   'shell.addressAria': 'Address {address}',
   'shell.inPlainWords': 'In plain words',
   'shell.copyFailed': 'Copy failed',

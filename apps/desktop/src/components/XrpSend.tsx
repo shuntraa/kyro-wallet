@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// XRP Ledger pieces of the Send screen (docs/IPC.md §2.6):
-// - the destination tag field, ALWAYS visible right under the recipient, mandatory when the
-//   destination has lsfRequireDestTag (Rust refuses without it anyway);
-// - what Rust will check: activation of a new account (≥ 1 XRP), spendable = balance − reserve;
-// - the Rust-decoded payment before the password, and the validation follow-up (xrp_tx_status).
+// XRP Ledger pieces of the Send screen (docs/IPC.md §2.6): - the destination tag field, ALWAYS
+// visible right under the recipient, mandatory when the destination has lsfRequireDestTag (Rust
+// refuses without it anyway); - what Rust will check: activation of a new account (≥ 1 XRP),
+// spendable = balance − reserve; - the Rust-decoded payment before the password, and the validation
+// follow-up (xrp_tx_status).
 
 import { useEffect, useState } from 'react';
 import type { Currency, XrpAccountInfo } from '@kyro/shared';
@@ -31,7 +31,6 @@ export function XrpTagField({
   value: string;
   onChange: (v: string) => void;
   error: string | null;
-  /** Destination account as Rust reads it; undefined while unknown. */
   dest: XrpAccountInfo | undefined;
   destLoading: boolean;
 }) {
@@ -104,7 +103,6 @@ export function XrpSummaryView({ u, xrpPrice, currency }: { u: XrpUnsigned; xrpP
   const { t } = useT();
   const s = u.summary;
   const c = u.context;
-  // No « 0,0000 € » for a 12-drop fee: fiat only from one cent.
   const fiat = (d: string) => {
     const v = xrpPrice !== null ? (Number(BigInt(d)) / 1e6) * xrpPrice : 0;
     return v >= 0.01 ? ` · ${fmtFiat(v, currency)}` : '';
@@ -140,11 +138,7 @@ function Line({ k, v, warn, last }: { k: string; v: string; warn?: boolean; last
 
 type Status = { state: 'pending' } | { state: 'validated' } | { state: 'failed'; result: string } | { state: 'expired' } | { state: 'error'; message: string };
 
-/**
- * After `xrp_broadcast`: follows `xrp_tx_status` until the payment is in a validated ledger.
- * `tesSUCCESS` → « validée »; any other result → « échouée » (the fee is still taken). Not found
- * after LastLedgerSequence (≈ 1 min) + margin → it can no longer be included.
- */
+/** After `xrp_broadcast`: follows `xrp_tx_status` until the payment is in a validated ledger. */
 export function XrpTxStatusLine({ adapter, hash, recipient, onValidated }: { adapter: XrpAdapter; hash: string; recipient: string; onValidated?: () => void }) {
   const { t } = useT();
   const [status, setStatus] = useState<Status>({ state: 'pending' });

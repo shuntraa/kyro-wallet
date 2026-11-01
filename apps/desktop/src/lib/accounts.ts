@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Several vault accounts per chain (docs/IPC.md §2.9): pure helpers shared by the app state,
-// the portfolio and the account screens. Public data only (indices, names, addresses).
+// Several vault accounts per chain (docs/IPC.md §2.9): pure helpers shared by the app state, the
+// portfolio and the account screens.
 
 import { sameTonAccount, type AccountChain, type Accounts, type VaultAccountEntry } from '@kyro/shared';
 import type { AdapterSet, AnyAdapter } from '@kyro/chains';
@@ -157,8 +156,8 @@ export function accountNameProblem(name: string): string | null {
 }
 
 /**
- * The next `count` account indices to create on a chain (smallest free indices ≥ 1), capped by
- * the per-chain limit (Rust: 20 accounts, account 0 included) and the highest index (100).
+ * The next `count` account indices to create on a chain (smallest free indices ≥ 1), capped by the
+ * per-chain limit (Rust: 20 accounts, account 0 included) and the highest index (100).
  */
 export function planNewAccounts(list: VaultAccountEntry[], count: number, maxPerChain = 20, maxIndex = 100): number[] {
   const room = Math.max(0, Math.min(Math.floor(count), maxPerChain - list.length));

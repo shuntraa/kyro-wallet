@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Network choice (docs/IPC.md §2.10): réseau principal (real funds) or réseau de test
-// (worthless coins). Each network has its own vault; switching keeps the other one and
-// restarts the app (`network_set`). Used by Réglages › Réseaux et serveurs and the Welcome screen.
+// Network choice (docs/IPC.md §2.10): réseau principal (real funds) or réseau de test (worthless
+// coins).
 
 import { useState } from 'react';
 import { call, toIpcError, type Network, type NetworkInfo } from '@kyro/shared';
@@ -29,7 +27,6 @@ export function NetworkSwitchDialog({ info, target, onClose, hasVault = true }: 
     try {
       const restarting = await call('network_set', { network: target });
       if (!restarting) onClose();
-      // Restarting: the app goes away; keep the dialog busy until then.
     } catch (e) {
       setError(toIpcError(e).message);
       setBusy(false);

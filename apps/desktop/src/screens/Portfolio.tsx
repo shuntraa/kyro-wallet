@@ -30,7 +30,6 @@ export function Portfolio() {
   const periodDelta = first !== undefined && values.length > 1 ? pf.total - first : null;
   const delta = period === '1J' ? pf.change24hFiat : periodDelta;
   const deltaPct = period === '1J' ? pf.change24hPct : first ? ((pf.total - first) / first) * 100 : null;
-  // At the 720 px minimum height the hero gives room back to the asset list.
   const tall = useMedia('(min-height: 820px)');
   const chartH = tall ? 170 : 120;
   const periodLabel = t(`portfolio.periodLabel${period}`);
@@ -42,7 +41,6 @@ export function Portfolio() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 px-7 pt-6 pb-5">
-      {/* The balance sits on the page, not in a box: figure, then the curve on a ruled baseline. */}
       <section aria-label={t('portfolio.valueAria')} className={`relative flex shrink-0 flex-col border-b border-line ${tall ? 'h-[300px]' : 'h-[250px]'}`}>
         <div className="relative z-10 flex items-start justify-between gap-6">
           <div className="flex min-w-0 flex-col gap-3">
@@ -108,7 +106,6 @@ export function Portfolio() {
 
       <div className="flex min-h-0 flex-1 gap-5">
         <AssetListsCard className="rise flex-1" />
-        {/* One column, two ruled sections: allocation, then the vault. */}
         <div className="rise flex w-[340px] shrink-0 flex-col overflow-y-auto rounded-panel border border-line bg-card scroll-thin" style={idx(1)}>
           <section aria-label={t('portfolio.allocation')} className="flex flex-col gap-3.5 border-b border-line px-5 pt-4 pb-[18px]">
             <div className="flex items-baseline justify-between">

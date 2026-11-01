@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Minimal Chrome DevTools Protocol client for headless Microsoft Edge. Node 22+, no dependencies.
-// Used by capture.mjs (app screenshots) and preview.mjs (site previews).
+// Minimal Chrome DevTools Protocol client for headless Microsoft Edge.
 
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';

@@ -28,7 +28,6 @@ export function QrCode({ value, size = 300 }: { value: string; size?: number }) 
   return (
     <div className="relative rounded-panel bg-white p-[22px] shadow-[0_0_0_1px_#2f343c,0_0_0_7px_#0d0f12,0_0_0_8px_#20242a]" style={{ width: size + 44, height: size + 44 }}>
       {svg ? (
-        // The SVG is generated locally by `qrcode` from our own address string.
         <div role="img" aria-label={t('shell.qrAria')} style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: svg }} className="[&>svg]:h-full [&>svg]:w-full" />
       ) : (
         <div style={{ width: size, height: size }} className="flex items-center justify-center text-[13px] text-faint">

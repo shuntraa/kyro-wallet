@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Algorand pieces of the Send screen (docs/IPC.md §2.11):
-// - the optional note (public for ever, ≤ 1024 bytes, reinforced confirmation in the vault);
-// - what Rust will check: minimum balance (0.1 ALGO) of a new receiver, spendable = balance −
-//   minimum balance, rekeyed sender refused;
-// - the Rust-decoded payment before the password, and the confirmation follow-up (algo_tx_status).
+// Algorand pieces of the Send screen (docs/IPC.md §2.11): - the optional note (public for ever, ≤
+// 1024 bytes, reinforced confirmation in the vault); - what Rust will check: minimum balance (0.1
+// ALGO) of a new receiver, spendable = balance − minimum balance, rekeyed sender refused; - the
+// Rust-decoded payment before the password, and the confirmation follow-up (algo_tx_status).
 
 import { useEffect, useState } from 'react';
 import { toIpcError, type AlgoAccountInfo, type Currency } from '@kyro/shared';
@@ -129,9 +128,8 @@ function Line({ k, v, warn, last }: { k: string; v: string; warn?: boolean; last
 type Status = { state: 'pending' } | { state: 'confirmed'; round: number | null } | { state: 'dropped'; error: string } | { state: 'expired' } | { state: 'error'; message: string };
 
 /**
- * After `algo_broadcast`: follows `algo_tx_status` until the payment is in a block (≈ 3 s,
- * final immediately on Algorand). A pool error means it was dropped (never confirmed); after the
- * validity window (≈ 9 min) it can no longer be included.
+ * After `algo_broadcast`: follows `algo_tx_status` until the payment is in a block (≈ 3 s, final
+ * immediately on Algorand).
  */
 export function AlgoTxStatusLine({ adapter, txid, recipient, onConfirmed }: { adapter: AlgorandAdapter; txid: string; recipient: string; onConfirmed?: () => void }) {
   useT();
@@ -207,12 +205,7 @@ export function AlgoTxStatusLine({ adapter, txid, recipient, onConfirmed }: { ad
   );
 }
 
-/**
- * Known Algorand tokens (USDC, USD₮): enabled or not, and the "Enable" flow. Enabling (opt-in) is
- * a 0-unit transfer of the token to yourself, built and signed by Rust behind the password and
- * the native dialog; it locks 0.1 ALGO more of minimum balance. Until then the token cannot be
- * received.
- */
+/** Known Algorand tokens (USDC, USD₮): enabled or not, and the "Enable" flow. */
 export function AlgoTokens({ adapter, onChanged }: { adapter: AlgorandAdapter; onChanged?: () => void }) {
   useT();
   const [tick, setTick] = useState(0);

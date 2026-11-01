@@ -1,5 +1,5 @@
-// The UI never round-trips an API key: what it sends to settings_set carries a key value only
-// when the user just typed it, and never anything read back from the shell.
+// The UI never round-trips an API key: what it sends to settings_set carries a key value only when
+// the user just typed it, and never anything read back from the shell.
 import { describe, expect, it } from 'vitest';
 import { call, setBackend, type Settings } from '@kyro/shared';
 import { createMockBackend } from '@kyro/shared/mock';
@@ -27,7 +27,6 @@ describe('settings_set payload', () => {
       if (cmd === 'settings_set') sent.push(structuredClone(args));
       return mock.invoke(cmd, args);
     });
-    // What app.tsx saveSettings does: settings from the shell + the user's typed change.
     let settings = await call('settings_get');
     settings = await call('settings_set', { settings: settingsPayload(settings, { zerox: SECRET }) });
     expect(settings.apiKeysSet.zerox).toBe(true);

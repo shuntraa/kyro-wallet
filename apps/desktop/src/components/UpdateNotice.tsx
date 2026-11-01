@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// « Kyro updated to X »: shown once, after a start that applied an automatic update. Never
-// blocks anything: a small dismissable notice that goes away by itself.
+// « Kyro updated to X »: shown once, after a start that applied an automatic update.
 import { useEffect, useState } from 'react';
 import { call } from '@kyro/shared';
 import { useT } from '../i18n';

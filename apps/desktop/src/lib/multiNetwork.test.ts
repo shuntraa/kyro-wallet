@@ -17,7 +17,6 @@ describe('multi-network assets', () => {
     const chains = sib.map((a) => a.chainKey);
     for (const k of ['ethereum', 'tron', 'solana', 'bsc', 'polygon', 'arbitrum', 'avalanche']) expect(chains).toContain(k);
     expect(sib.every((a) => assetGroupKey(a) === assetGroupKey(eth))).toBe(true);
-    // USDC is a different group.
     expect(sib.some((a) => a.symbol === 'USDC')).toBe(false);
   });
 
