@@ -10,8 +10,9 @@ use wallet_core::{Network, UtxoCoin, UtxoOutputKind, UtxoTxSummary, UtxoWarning}
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::servers::{utxo_network_key, UtxoServer};
 use crate::state::AppState;
 use crate::utxo_backend::{self, UtxoCtx};
@@ -81,8 +82,8 @@ fn chain_of(coin: UtxoCoin) -> Chain {
     }
 }
 
-fn coin_amount(coin: UtxoCoin, raw: &str) -> String {
-    format!("{} {}", format_units(raw, 8), coin.symbol())
+fn coin_amount(lang: Lang, coin: UtxoCoin, raw: &str) -> String {
+    format!("{} {}", format_units_in(lang, raw, 8), coin.symbol())
 }
 
 fn net_suffix(coin: UtxoCoin, net: Network) -> &'static str {
@@ -94,98 +95,148 @@ fn net_suffix(coin: UtxoCoin, net: Network) -> &'static str {
 }
 
 /// Body of the native dialog, built from Rust's decoding only.
-pub(crate) fn describe_utxo(s: &UtxoTxSummary, net: Network) -> String {
+pub(crate) fn describe_utxo(lang: Lang, s: &UtxoTxSummary, net: Network) -> String {
     let coin = s.coin;
-    let mut out = format!("Envoi {}{}\n\n", coin.name(), net_suffix(coin, net));
+    let mut out = match lang {
+        Lang::Fr => format!("Envoi {}{}\n\n", coin.name(), net_suffix(coin, net)),
+        Lang::En => format!("{} send{}\n\n", coin.name(), net_suffix(coin, net)),
+    };
     for o in &s.outputs {
-        let amount = coin_amount(coin, &o.amount);
-        match (o.kind, &o.address) {
-            (UtxoOutputKind::Address, Some(a)) if o.is_change => {
-                out += &format!("Monnaie (revient chez toi) : {amount}\n  {a}\n");
+        let amount = coin_amount(lang, coin, &o.amount);
+        out += &match (o.kind, &o.address, lang) {
+            (UtxoOutputKind::Address, Some(a), Lang::Fr) if o.is_change => {
+                format!("Monnaie (revient chez toi) : {amount}\n  {a}\n")
             }
-            (UtxoOutputKind::Address, Some(a)) => {
-                out += &format!("À : {a}\nMontant : {amount}\n");
+            (UtxoOutputKind::Address, Some(a), Lang::En) if o.is_change => {
+                format!("Change (comes back to you): {amount}\n  {a}\n")
             }
-            (UtxoOutputKind::OpReturn, _) => {
-                out += &format!("Données (OP_RETURN) : {amount}\n  {}\n", o.script);
+            (UtxoOutputKind::Address, Some(a), Lang::Fr) => {
+                format!("À : {a}\nMontant : {amount}\n")
             }
-            _ => {
-                out += &format!(
-                    "Sortie INCONNUE (script non reconnu) : {amount}\n  script : {}\n",
-                    o.script
-                );
+            (UtxoOutputKind::Address, Some(a), Lang::En) => format!("To: {a}\nAmount: {amount}\n"),
+            (UtxoOutputKind::OpReturn, _, Lang::Fr) => {
+                format!("Données (OP_RETURN) : {amount}\n  {}\n", o.script)
             }
-        }
+            (UtxoOutputKind::OpReturn, _, Lang::En) => {
+                format!("Data (OP_RETURN): {amount}\n  {}\n", o.script)
+            }
+            (_, _, Lang::Fr) => format!(
+                "Sortie INCONNUE (script non reconnu) : {amount}\n  script : {}\n",
+                o.script
+            ),
+            (_, _, Lang::En) => format!(
+                "UNKNOWN output (script not recognised): {amount}\n  script: {}\n",
+                o.script
+            ),
+        };
     }
-    let rate = match coin {
-        UtxoCoin::Litecoin => format!(
-            "{} litoshi/vB · taille estimée {} vB",
-            format_units(&s.fee_per_kb.to_string(), 3),
+    let rate = match (coin, lang) {
+        (UtxoCoin::Litecoin, _) => format!(
+            "{} litoshi/vB · {} {} vB",
+            format_units_in(lang, &s.fee_per_kb.to_string(), 3),
+            lang.pick("taille estimée", "estimated size"),
             s.size
         ),
-        UtxoCoin::Dogecoin => format!(
-            "{} DOGE/kB · taille estimée {} octets",
-            format_units(&s.fee_per_kb.to_string(), 8),
-            s.size
+        (UtxoCoin::Dogecoin, _) => format!(
+            "{} DOGE/kB · {} {} {}",
+            format_units_in(lang, &s.fee_per_kb.to_string(), 8),
+            lang.pick("taille estimée", "estimated size"),
+            s.size,
+            lang.pick("octets", "bytes")
         ),
     };
     let unit = match coin {
         UtxoCoin::Litecoin => "litoshis",
         UtxoCoin::Dogecoin => "koinus",
     };
-    out += &format!(
-        "\nFrais : {} ({} {unit})\nTaux : {rate}",
-        coin_amount(coin, &s.fee),
-        s.fee
-    );
+    let fee = coin_amount(lang, coin, &s.fee);
+    out += &match lang {
+        Lang::Fr => format!("\nFrais : {fee} ({} {unit})\nTaux : {rate}", s.fee),
+        Lang::En => format!("\nFee: {fee} ({} {unit})\nRate: {rate}", s.fee),
+    };
     if !s.has_change {
-        out += "\n\nPas de monnaie : tout ce qui n'est pas envoyé part en frais (un reste trop petit pour une sortie de monnaie — poussière — y est ajouté).";
+        out += lang.pick(
+            "\n\nPas de monnaie : tout ce qui n'est pas envoyé part en frais (un reste trop petit pour une sortie de monnaie — poussière — y est ajouté).",
+            "\n\nNo change: everything that is not sent goes to fees (a remainder too small for a change output — dust — is added to them).",
+        );
     }
     if s.our_inputs < s.inputs {
-        out += &format!(
-            "\n\nEntrées : {} dont {} d'un autre portefeuille.",
-            s.inputs,
-            s.inputs - s.our_inputs
-        );
+        let foreign = s.inputs - s.our_inputs;
+        out += &match lang {
+            Lang::Fr => format!(
+                "\n\nEntrées : {} dont {foreign} d'un autre portefeuille.",
+                s.inputs
+            ),
+            Lang::En => format!(
+                "\n\nInputs: {}, of which {foreign} from another wallet.",
+                s.inputs
+            ),
+        };
     }
     for w in &s.warnings {
         if let UtxoWarning::FeeBelowMinimum { minimum } = w {
-            out += &format!(
-                "\n\nFrais sous le minimum de relais ({}) : la transaction risque de ne pas être diffusée.",
-                coin_amount(coin, minimum)
-            );
+            let min = coin_amount(lang, coin, minimum);
+            out += &match lang {
+                Lang::Fr => format!(
+                    "\n\nFrais sous le minimum de relais ({min}) : la transaction risque de ne pas être diffusée."
+                ),
+                Lang::En => format!(
+                    "\n\nFee below the relay minimum ({min}): the transaction may not be broadcast."
+                ),
+            };
         }
     }
     out
 }
 
 /// Body of the reinforced (second) dialog.
-pub(crate) fn describe_utxo_extra(s: &UtxoTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments inhabituels dans cette transaction :\n");
+pub(crate) fn describe_utxo_extra(lang: Lang, s: &UtxoTxSummary) -> String {
+    let mut out = String::from(lang.unusual_intro());
     for w in &s.warnings {
-        let line = match w {
-            UtxoWarning::UnknownOutput { index } => format!(
+        let line = match (w, lang) {
+            (UtxoWarning::UnknownOutput { index }, Lang::Fr) => format!(
                 "• sortie {index} : script inconnu — Kyro ne sait pas à qui elle paie"
             ),
-            UtxoWarning::OpReturn { index } => {
+            (UtxoWarning::UnknownOutput { index }, Lang::En) => format!(
+                "• output {index}: unknown script — Kyro does not know whom it pays"
+            ),
+            (UtxoWarning::OpReturn { index }, Lang::Fr) => {
                 format!("• sortie {index} : données OP_RETURN (montant brûlé s'il n'est pas nul)")
             }
-            UtxoWarning::ForeignInput { index } => format!(
+            (UtxoWarning::OpReturn { index }, Lang::En) => {
+                format!("• output {index}: OP_RETURN data (amount burned if it is not zero)")
+            }
+            (UtxoWarning::ForeignInput { index }, Lang::Fr) => format!(
                 "• entrée {index} : n'appartient pas à ce portefeuille, son montant n'est pas vérifiable"
             ),
-            UtxoWarning::SoftDust { index } => format!(
+            (UtxoWarning::ForeignInput { index }, Lang::En) => format!(
+                "• input {index}: does not belong to this wallet, its amount cannot be verified"
+            ),
+            (UtxoWarning::SoftDust { index }, Lang::Fr) => format!(
                 "• sortie {index} : sous 0,01 DOGE, le réseau exige 0,01 DOGE de frais en plus par sortie de ce type"
             ),
-            UtxoWarning::HighFee => "• frais très élevés (plus de 100 fois le taux habituel, ou plus que le montant envoyé)".into(),
-            UtxoWarning::ChangeIndexOutOfRange { index } => format!(
+            (UtxoWarning::SoftDust { index }, Lang::En) => format!(
+                "• output {index}: below 0.01 DOGE, the network requires 0.01 DOGE of extra fee per output of this kind"
+            ),
+            (UtxoWarning::HighFee, _) => lang
+                .pick(
+                    "• frais très élevés (plus de 100 fois le taux habituel, ou plus que le montant envoyé)",
+                    "• very high fee (more than 100 times the usual rate, or more than the amount sent)",
+                )
+                .into(),
+            (UtxoWarning::ChangeIndexOutOfRange { index }, Lang::Fr) => format!(
                 "• sortie {index} : une de tes clés, mais à un index d'adresse anormalement élevé (affichée comme un paiement, pas comme ta monnaie)"
             ),
-            UtxoWarning::FeeBelowMinimum { .. } => continue,
+            (UtxoWarning::ChangeIndexOutOfRange { index }, Lang::En) => format!(
+                "• output {index}: one of your keys, but at an abnormally high address index (shown as a payment, not as your change)"
+            ),
+            (UtxoWarning::FeeBelowMinimum { .. }, _) => continue,
         };
         out += &line;
         out.push('\n');
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -216,17 +267,25 @@ async fn sign(
         Ok((seed, psbt, s))
     })
     .await?;
-    let title = match coin {
-        UtxoCoin::Litecoin => "Confirmer la transaction Litecoin",
-        UtxoCoin::Dogecoin => "Confirmer la transaction Dogecoin",
+    let lang = crate::i18n::current();
+    let title = match (coin, lang) {
+        (UtxoCoin::Litecoin, Lang::Fr) => "Confirmer la transaction Litecoin",
+        (UtxoCoin::Litecoin, Lang::En) => "Confirm the Litecoin transaction",
+        (UtxoCoin::Dogecoin, Lang::Fr) => "Confirmer la transaction Dogecoin",
+        (UtxoCoin::Dogecoin, Lang::En) => "Confirm the Dogecoin transaction",
     };
-    confirm_native(app, title, signer.body(&describe_utxo(&summary, net))).await?;
+    confirm_native(
+        app,
+        title,
+        signer.body(lang, &describe_utxo(lang, &summary, net)),
+    )
+    .await?;
     confirm_signer(app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             app,
-            "Attention : transaction à vérifier",
-            describe_utxo_extra(&summary),
+            lang.check_tx_title(),
+            describe_utxo_extra(lang, &summary),
         )
         .await?;
     }
@@ -433,7 +492,7 @@ mod tests {
     #[test]
     fn dialog_shows_everything_rust_decoded() {
         let s = summary();
-        let d = describe_utxo(&s, Network::Testnet);
+        let d = describe_utxo(Lang::Fr, &s, Network::Testnet);
         for needle in [
             "Envoi Dogecoin (testnet)",
             "À : nDest",
@@ -448,7 +507,7 @@ mod tests {
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
-        let x = describe_utxo_extra(&s);
+        let x = describe_utxo_extra(Lang::Fr, &s);
         assert!(x.contains("sortie 1 : script inconnu"));
         assert!(x.contains("entrée 1 : n'appartient pas"));
         assert!(x.contains("0,01 DOGE de frais en plus"));
@@ -462,10 +521,36 @@ mod tests {
         ltc.outputs[0].is_change = true;
         ltc.outputs[0].address = Some("tltc1qme".into());
         ltc.has_change = true;
-        let d = describe_utxo(&ltc, Network::Mainnet);
+        let d = describe_utxo(Lang::Fr, &ltc, Network::Mainnet);
         assert!(d.starts_with("Envoi Litecoin\n"));
         assert!(d.contains("Monnaie (revient chez toi) : 10 LTC\n  tltc1qme"));
         assert!(d.contains("Taux : 1 litoshi/vB · taille estimée 141 vB"));
         assert!(!d.contains("Pas de monnaie"));
+    }
+
+    #[test]
+    fn dialog_in_english() {
+        let s = summary();
+        let d = describe_utxo(Lang::En, &s, Network::Testnet);
+        for needle in [
+            "Dogecoin send (testnet)",
+            "To: nDest",
+            "Amount: 10 DOGE",
+            "UNKNOWN output",
+            "Fee: 0.00226 DOGE (226000 koinus)",
+            "Rate: 0.01 DOGE/kB · estimated size 226 bytes",
+            "No change",
+            "of which 1 from another wallet",
+            "relay minimum (0.003 DOGE)",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        let x = describe_utxo_extra(Lang::En, &s);
+        assert!(x.contains("output 1: unknown script"));
+        assert!(x.contains("input 1: does not belong"));
+        assert!(x.ends_with("Only sign if you know exactly why. Sign anyway?"));
+        for fr in ["Montant", "Frais", "Taux", "sortie", "Signer"] {
+            assert!(!d.contains(fr) && !x.contains(fr), "{fr}");
+        }
     }
 }

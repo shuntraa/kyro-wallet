@@ -15,8 +15,9 @@ use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
 use crate::cardano_backend::{
     self, CardanoAccount, CardanoCtx, Params, PaymentSpec, Tip, Utxo, TTL_OFFSET,
 };
-use crate::commands::{blocking, cardano_root_from_password, confirm_native, format_units};
+use crate::commands::{blocking, cardano_root_from_password, confirm_native, format_units_in};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::servers::{host_of, utxo_network_key, CardanoServer};
 use crate::state::AppState;
 
@@ -49,8 +50,8 @@ pub(crate) fn payment_path(account: u32) -> String {
     format!("{}/0/{INDEX}", wallet_core::cardano_account_path(account))
 }
 
-fn ada(lovelace: &str) -> String {
-    format!("{} ADA", format_units(lovelace, 6))
+fn ada(lang: Lang, lovelace: &str) -> String {
+    format!("{} ADA", format_units_in(lang, lovelace, 6))
 }
 
 /// Live context shown in the dialog.
@@ -64,122 +65,196 @@ pub struct CardanoContextOut {
     pub leaving: String,
 }
 
-fn token_line(t: &wallet_core::CardanoTokenView) -> String {
+fn token_line(lang: Lang, t: &wallet_core::CardanoTokenView) -> String {
     let name = match &t.name_text {
         Some(text) => format!(
             "{} (hex {})",
             crate::dialog_text::field(text, 40),
-            if t.name.is_empty() { "vide" } else { &t.name }
+            if t.name.is_empty() {
+                lang.pick("vide", "empty")
+            } else {
+                &t.name
+            }
         ),
-        None if t.name.is_empty() => "(nom vide)".to_owned(),
+        None if t.name.is_empty() => lang.pick("(nom vide)", "(empty name)").to_owned(),
         None => format!("hex {}", t.name),
     };
     format!(
         "    + {} × {name}{}\n      policy {}\n",
         t.quantity,
         if t.verified {
-            "  ✓ vérifié"
+            lang.pick("  ✓ vérifié", "  ✓ verified")
         } else {
-            "  ⚠ NON VÉRIFIÉ"
+            lang.pick("  ⚠ NON VÉRIFIÉ", "  ⚠ NOT VERIFIED")
         },
         t.policy
     )
 }
 
 /// Body of the native dialog: every output (address, ADA, tokens, min-ADA), fee, validity.
-pub(crate) fn describe_ada(s: &CardanoTxSummary, c: &CardanoContextOut, net: Network) -> String {
-    let mut out = format!(
-        "Envoi Cardano{}\n",
-        if net == Network::Testnet {
-            " (preprod)"
-        } else {
-            ""
-        }
-    );
+pub(crate) fn describe_ada(
+    lang: Lang,
+    s: &CardanoTxSummary,
+    c: &CardanoContextOut,
+    net: Network,
+) -> String {
+    let ada = |l: &str| ada(lang, l);
+    let preprod = if net == Network::Testnet {
+        " (preprod)"
+    } else {
+        ""
+    };
+    let mut out = match lang {
+        Lang::Fr => format!("Envoi Cardano{preprod}\n"),
+        Lang::En => format!("Cardano send{preprod}\n"),
+    };
     for (i, o) in s.outputs.iter().enumerate() {
         out += &format!(
-            "\nSortie {} — {}\n  {}\n  {}{}\n",
+            "\n{} {} — {}\n  {}\n  {}{}\n",
+            lang.pick("Sortie", "Output"),
             i + 1,
             if o.is_change {
-                "monnaie rendue (ton adresse)"
+                lang.pick(
+                    "monnaie rendue (ton adresse)",
+                    "change returned (your address)",
+                )
             } else {
-                "DESTINATAIRE"
+                lang.pick("DESTINATAIRE", "RECIPIENT")
             },
             o.address,
             ada(&o.lovelace),
             if o.tokens.is_empty() {
                 String::new()
             } else {
-                format!(
-                    " (dont {} minimum obligatoire avec les tokens)",
-                    ada(&o.min_lovelace)
-                )
+                match lang {
+                    Lang::Fr => format!(
+                        " (dont {} minimum obligatoire avec les tokens)",
+                        ada(&o.min_lovelace)
+                    ),
+                    Lang::En => format!(
+                        " (of which {} required minimum with the tokens)",
+                        ada(&o.min_lovelace)
+                    ),
+                }
             }
         );
         for t in &o.tokens {
-            out += &token_line(t);
+            out += &token_line(lang, t);
         }
         if o.kind == "enterprise" {
-            out += "  (adresse « enterprise » : sans partie staking)\n";
+            out += lang.pick(
+                "  (adresse « enterprise » : sans partie staking)\n",
+                "  (« enterprise » address: no staking part)\n",
+            );
         }
     }
-    out += &format!(
-        "\nFrais : {} ({} lovelace)\nTotal qui quitte le portefeuille : {}\n",
-        ada(&s.fee),
-        s.fee,
-        ada(&c.leaving)
-    );
-    match s.ttl {
-        Some(t) => {
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais : {} ({} lovelace)\nTotal qui quitte le portefeuille : {}\n",
+            ada(&s.fee),
+            s.fee,
+            ada(&c.leaving)
+        ),
+        Lang::En => format!(
+            "\nFee: {} ({} lovelace)\nTotal leaving the wallet: {}\n",
+            ada(&s.fee),
+            s.fee,
+            ada(&c.leaving)
+        ),
+    };
+    match (s.ttl, lang) {
+        (Some(t), Lang::Fr) => {
             out += &format!(
                 "Valable jusqu'au slot {t} (≈ {} min)\n",
                 t.saturating_sub(c.tip.slot) / 60
             )
         }
-        None => out += "AUCUNE LIMITE DE VALIDITÉ (ttl absent)\n",
+        (Some(t), Lang::En) => {
+            out += &format!(
+                "Valid until slot {t} (≈ {} min)\n",
+                t.saturating_sub(c.tip.slot) / 60
+            )
+        }
+        (None, Lang::Fr) => out += "AUCUNE LIMITE DE VALIDITÉ (ttl absent)\n",
+        (None, Lang::En) => out += "NO VALIDITY LIMIT (no ttl)\n",
     }
     if let Some(v) = s.valid_from {
-        out += &format!("Pas valable avant le slot {v}\n");
+        out += &match lang {
+            Lang::Fr => format!("Pas valable avant le slot {v}\n"),
+            Lang::En => format!("Not valid before slot {v}\n"),
+        };
     }
-    out += &format!(
-        "\nSolde : {} · {} entrée(s) · id {}\n",
-        ada(&c.account.balance),
-        s.inputs.len(),
-        s.tx_id
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nSolde : {} · {} entrée(s) · id {}\n",
+            ada(&c.account.balance),
+            s.inputs.len(),
+            s.tx_id
+        ),
+        Lang::En => format!(
+            "\nBalance: {} · {} input(s) · id {}\n",
+            ada(&c.account.balance),
+            s.inputs.len(),
+            s.tx_id
+        ),
+    };
     // Untrusted text: one quoted line, after the amounts, fees and validity.
     if let Some(m) = &s.memo {
         out += &format!(
-            "\nMessage (CIP-20, public à jamais, texte libre non vérifié) : {}\n",
+            "\n{}{}\n",
+            lang.pick(
+                "Message (CIP-20, public à jamais, texte libre non vérifié) : ",
+                "Message (CIP-20, public forever, free text not verified): "
+            ),
             crate::dialog_text::field(&m.concat(), crate::dialog_text::MAX_FIELD)
         );
     }
     out
 }
 
-pub(crate) fn describe_ada_extra(s: &CardanoTxSummary) -> String {
-    let mut out = String::from("Kyro a trouvé des éléments à vérifier dans cette transaction :\n");
+pub(crate) fn describe_ada_extra(lang: Lang, s: &CardanoTxSummary) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des éléments à vérifier dans cette transaction :\n",
+        "Kyro found elements to check in this transaction:\n",
+    ));
     for w in &s.warnings {
-        out += &match w {
-            CardanoWarning::Memo => {
-                "• un message (métadonnée CIP-20), lisible par tous et pour toujours\n".to_owned()
-            }
-            CardanoWarning::UnknownToken { policy, name } => format!(
+        out += &match (w, lang) {
+            (CardanoWarning::Memo, _) => lang
+                .pick(
+                    "• un message (métadonnée CIP-20), lisible par tous et pour toujours\n",
+                    "• a message (CIP-20 metadata), readable by everyone, forever\n",
+                )
+                .to_owned(),
+            (CardanoWarning::UnknownToken { policy, name }, Lang::Fr) => format!(
                 "• token NON VÉRIFIÉ : n'importe qui peut créer un token avec le même nom affiché ; seule la policy compte\n  policy {policy}\n  nom hex {}\n",
                 if name.is_empty() { "(vide)" } else { name }
             ),
-            CardanoWarning::HighFee => "• frais supérieurs à 5 ADA (d'habitude ~0,2 ADA)\n".to_owned(),
-            CardanoWarning::NoTtl => {
-                "• aucune limite de validité : la transaction resterait valable indéfiniment\n"
-                    .to_owned()
-            }
-            CardanoWarning::UnusualText => {
-                "• message ou nom de token contenant des caractères invisibles / de contrôle (affiché nettoyé)\n"
-                    .to_owned()
-            }
+            (CardanoWarning::UnknownToken { policy, name }, Lang::En) => format!(
+                "• token NOT VERIFIED: anyone can create a token with the same displayed name; only the policy counts\n  policy {policy}\n  hex name {}\n",
+                if name.is_empty() { "(empty)" } else { name }
+            ),
+            (CardanoWarning::HighFee, _) => lang
+                .pick(
+                    "• frais supérieurs à 5 ADA (d'habitude ~0,2 ADA)\n",
+                    "• fee above 5 ADA (usually ~0.2 ADA)\n",
+                )
+                .to_owned(),
+            (CardanoWarning::NoTtl, _) => lang
+                .pick(
+                    "• aucune limite de validité : la transaction resterait valable indéfiniment\n",
+                    "• no validity limit: the transaction would stay valid forever\n",
+                )
+                .to_owned(),
+            (CardanoWarning::UnusualText, _) => lang
+                .pick(
+                    "• message ou nom de token contenant des caractères invisibles / de contrôle (affiché nettoyé)\n",
+                    "• message or token name with invisible / control characters (shown cleaned)\n",
+                )
+                .to_owned(),
         };
     }
-    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out += "\n";
+    out += lang.sign_anyway();
     out
 }
 
@@ -490,18 +565,22 @@ pub async fn ada_sign_tx(
     let c = ctx(&state);
     let (summary, context) = prepare_sign(&c, &me, &tx).await?;
     let root = cardano_root_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer la transaction Cardano",
-        signer.body(&describe_ada(&summary, &context, state.network)),
+        lang.pick(
+            "Confirmer la transaction Cardano",
+            "Confirm the Cardano transaction",
+        ),
+        signer.body(lang, &describe_ada(lang, &summary, &context, state.network)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if summary.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : transaction à vérifier",
-            describe_ada_extra(&summary),
+            lang.check_tx_title(),
+            describe_ada_extra(lang, &summary),
         )
         .await?;
     }
@@ -652,7 +731,7 @@ mod tests {
 
     #[test]
     fn dialog_lists_every_output_with_tokens_and_min_ada() {
-        let d = describe_ada(&summary(), &context(), Network::Testnet);
+        let d = describe_ada(Lang::Fr, &summary(), &context(), Network::Testnet);
         for needle in [
             "Envoi Cardano (preprod)",
             "Sortie 1 — DESTINATAIRE\n  addr_test1qz2f…\n  1,18956 ADA (dont 1,18956 ADA minimum obligatoire avec les tokens)",
@@ -665,7 +744,29 @@ mod tests {
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
-        let x = describe_ada_extra(&summary());
+        let x = describe_ada_extra(Lang::Fr, &summary());
         assert!(x.contains("NON VÉRIFIÉ") && x.contains("policy 95a292ff") && x.contains("CIP-20"));
+    }
+
+    #[test]
+    fn dialog_in_english() {
+        let d = describe_ada(Lang::En, &summary(), &context(), Network::Testnet);
+        for needle in [
+            "Cardano send (preprod)",
+            "Output 1 — RECIPIENT\n  addr_test1qz2f…\n  1.18956 ADA (of which 1.18956 ADA required minimum with the tokens)",
+            "  ⚠ NOT VERIFIED",
+            "Output 2 — change returned (your address)",
+            "Fee: 0.175513 ADA (175513 lovelace)",
+            "Total leaving the wallet: 1.365073 ADA",
+            "Valid until slot 1003600 (≈ 60 min)",
+            "Message (CIP-20, public forever, free text not verified): « merci »",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        let x = describe_ada_extra(Lang::En, &summary());
+        assert!(x.contains("NOT VERIFIED") && x.contains("only the policy counts"));
+        for fr in ["Sortie", "Frais", "Solde", "VÉRIFIÉ", "Signer"] {
+            assert!(!d.contains(fr) && !x.contains(fr), "{fr}");
+        }
     }
 }

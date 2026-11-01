@@ -992,12 +992,17 @@ mod live {
         assert_eq!(summary, built.summary);
         eprintln!(
             "--- dialog ---\n{}---",
-            crate::commands_cardano::describe_ada(&summary, &context, Network::Testnet)
+            crate::commands_cardano::describe_ada(
+                crate::i18n::Lang::Fr,
+                &summary,
+                &context,
+                Network::Testnet
+            )
         );
         if summary.requires_extra_confirmation {
             eprintln!(
                 "--- reinforced ---\n{}---",
-                crate::commands_cardano::describe_ada_extra(&summary)
+                crate::commands_cardano::describe_ada_extra(crate::i18n::Lang::Fr, &summary)
             );
         }
         let own = [me.to_owned()];

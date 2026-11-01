@@ -18,6 +18,7 @@ use tauri::AppHandle;
 use wallet_core::Network;
 
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::state::AppState;
 
 /// Highest account index accepted (same bound as hardware-wallet accounts).
@@ -278,16 +279,26 @@ impl SignerInfo {
     }
 
     /// First line of every native signing dialog of the vault.
-    pub fn line(&self) -> String {
-        match &self.name {
-            Some(n) => format!(
+    pub fn line(&self, lang: Lang) -> String {
+        let n = u64::from(self.account) + 1;
+        match (&self.name, lang) {
+            (Some(name), Lang::Fr) => format!(
                 "Compte signataire : {} — {}",
-                crate::dialog_text::field(n, MAX_NAME),
+                crate::dialog_text::field(name, MAX_NAME),
                 self.path
             ),
-            None => format!(
-                "Compte signataire : « inconnu » (n° {} {}, absent de ta liste) — {}",
-                u64::from(self.account) + 1,
+            (Some(name), Lang::En) => format!(
+                "Signing account: {} — {}",
+                crate::dialog_text::field(name, MAX_NAME),
+                self.path
+            ),
+            (None, Lang::Fr) => format!(
+                "Compte signataire : « inconnu » (n° {n} {}, absent de ta liste) — {}",
+                self.chain.label(),
+                self.path
+            ),
+            (None, Lang::En) => format!(
+                "Signing account: « unknown » (no. {n} {}, not in your list) — {}",
                 self.chain.label(),
                 self.path
             ),
@@ -295,21 +306,31 @@ impl SignerInfo {
     }
 
     /// Dialog body with the signer line first.
-    pub fn body(&self, rest: &str) -> String {
-        format!("{}\n\n{rest}", self.line())
+    pub fn body(&self, lang: Lang, rest: &str) -> String {
+        format!("{}\n\n{rest}", self.line(lang))
     }
 
     /// Text of the reinforced dialog for an account that is not in the user's list.
-    pub fn unknown_text(&self) -> String {
-        format!(
-            "Cette signature utilise un compte {} qui n'est PAS dans ta liste de comptes :\n\
-             • n° {} — {}\n\n\
-             Kyro ne l'a pas ajouté pour toi : si tu ne viens pas de choisir ce compte, refuse.\n\
-             Signer quand même ?",
-            self.chain.label(),
-            u64::from(self.account) + 1,
-            self.path
-        )
+    pub fn unknown_text(&self, lang: Lang) -> String {
+        let n = u64::from(self.account) + 1;
+        match lang {
+            Lang::Fr => format!(
+                "Cette signature utilise un compte {} qui n'est PAS dans ta liste de comptes :\n\
+                 • n° {n} — {}\n\n\
+                 Kyro ne l'a pas ajouté pour toi : si tu ne viens pas de choisir ce compte, refuse.\n\
+                 Signer quand même ?",
+                self.chain.label(),
+                self.path
+            ),
+            Lang::En => format!(
+                "This signature uses a {} account that is NOT in your account list:\n\
+                 • no. {n} — {}\n\n\
+                 Kyro did not add it for you: if you did not just choose this account, refuse.\n\
+                 Sign anyway?",
+                self.chain.label(),
+                self.path
+            ),
+        }
     }
 }
 
@@ -317,8 +338,13 @@ impl SignerInfo {
 /// dialog (which already shows [`SignerInfo::line`]).
 pub async fn confirm_signer(app: &AppHandle, signer: &SignerInfo) -> AppResult<()> {
     if signer.unknown() {
-        crate::commands::confirm_native(app, "Attention : compte inconnu", signer.unknown_text())
-            .await?;
+        let lang = crate::i18n::current();
+        crate::commands::confirm_native(
+            app,
+            lang.pick("Attention : compte inconnu", "Warning: unknown account"),
+            signer.unknown_text(lang),
+        )
+        .await?;
     }
     Ok(())
 }
@@ -485,7 +511,7 @@ mod tests {
             name: Some("Ethereum 2".into()),
         };
         assert_eq!(
-            known.line(),
+            known.line(Lang::Fr),
             "Compte signataire : « Ethereum 2 » — m/44'/60'/0'/0/1"
         );
         // A name stored before the bidi rule (or edited on disk) cannot reorder the line.
@@ -494,7 +520,7 @@ mod tests {
             ..known.clone()
         };
         assert_eq!(
-            spoof.line(),
+            spoof.line(Lang::Fr),
             "Compte signataire : « Pro À : 0xEvil » — m/44'/60'/0'/0/1"
         );
         assert!(!known.unknown());
@@ -505,9 +531,22 @@ mod tests {
         };
         assert!(unknown.unknown());
         assert!(unknown
-            .line()
+            .line(Lang::Fr)
             .starts_with("Compte signataire : « inconnu » (n° 8 Ethereum"));
-        assert!(unknown.unknown_text().contains("PAS dans ta liste"));
+        assert!(unknown.unknown_text(Lang::Fr).contains("PAS dans ta liste"));
+        assert!(unknown
+            .line(Lang::En)
+            .starts_with("Signing account: « unknown » (no. 8 Ethereum, not in your list)"));
+        let en = unknown.unknown_text(Lang::En);
+        assert!(en.contains("NOT in your account list") && en.ends_with("Sign anyway?"));
+        assert_eq!(
+            SignerInfo {
+                name: Some("Ethereum 2".into()),
+                ..unknown.clone()
+            }
+            .line(Lang::En),
+            "Signing account: « Ethereum 2 » — m/44'/60'/0'/0/1"
+        );
         assert_eq!(
             btc_paths(T, 2),
             "m/84'/1'/2' (SegWit), m/86'/1'/2' (Taproot)"

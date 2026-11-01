@@ -2,7 +2,8 @@ use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 
 /// Errors crossing the IPC boundary. Serialized as `{ code, message }` (see docs/IPC.md);
-/// messages are user-facing French and never contain secrets.
+/// messages are user-facing, in the current language ([`AppError::message`]: the `#[error]`
+/// texts below are the French ones), and never contain secrets.
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error("Mot de passe incorrect.")]
@@ -96,6 +97,62 @@ impl AppError {
         }
     }
 
+    /// The user-facing message in `lang`. French is the `Display` text. Free-form details
+    /// (`InvalidInput(…)` and the like) are kept as they were written: most are French.
+    pub fn message(&self, lang: crate::i18n::Lang) -> String {
+        use crate::i18n::Lang;
+        if lang == Lang::Fr {
+            return self.to_string();
+        }
+        let detail = |d: &str| crate::i18n::detail_en(d);
+        match self {
+            AppError::WrongPassword => "Wrong password.".into(),
+            AppError::Locked => "The vault is locked.".into(),
+            AppError::RateLimited(s) => format!("Too many attempts. Try again in {s} s."),
+            AppError::UserRejected => "Action cancelled.".into(),
+            AppError::HostNotAllowed(h) => format!("Server not allowed: {h}"),
+            AppError::InvalidInput(d) => format!("Invalid input: {}", detail(d)),
+            AppError::Internal(d) => format!("Internal error: {}", detail(d)),
+            AppError::TorUnavailable(d) => format!("Tor unavailable: {}", detail(d)),
+            AppError::ServerInvalid(d) => format!("Invalid server: {}", detail(d)),
+            AppError::ServerWrongNetwork(d) => format!("Wrong network: {}", detail(d)),
+            AppError::ServerUnreachable(d) => format!("Server unreachable: {}", detail(d)),
+            AppError::FeatureDisabled(d) => format!("Feature disabled: {}", detail(d)),
+            AppError::DefaultServerDisabled(d) => format!(
+                "Default server disabled: {} (a custom server is configured for this chain)",
+                detail(d)
+            ),
+            AppError::HwNotFound => {
+                "Device not found: plug it in, unlock it, then run the detection again.".into()
+            }
+            AppError::HwLocked => "Device locked: unlock it with your PIN, then try again.".into(),
+            AppError::HwWrongApp { expected, open } => format!(
+                "Wrong app open on the device: open « {expected} » (open: « {open} »)."
+            ),
+            AppError::HwRejected => "Refused on the device.".into(),
+            AppError::HwDisconnected => {
+                "Device unplugged or unreachable: operation aborted, nothing was signed.".into()
+            }
+            AppError::HwUnsupported { what, .. } => format!("Not supported: {}", detail(what)),
+            AppError::HwBusy(d) => format!("Device busy: {}", detail(d)),
+            AppError::HwTimeout => {
+                "Timed out: no answer from the device in time. Operation aborted.".into()
+            }
+            AppError::HwBadResponse(d) => {
+                format!("Device answer refused by Kyro: {}", detail(d))
+            }
+            AppError::HwAddressMismatch { device, expected } => format!(
+                "DIFFERENT ADDRESSES: the device gives {device}, Kyro expected {expected}. Do not use this address."
+            ),
+            AppError::HwWrongDevice => "This is not this account's device (different keys).".into(),
+            AppError::HwPairingRequired => "Device not paired with Kyro yet: connect it from the devices screen to pair it (6-digit code shown on the device).".into(),
+            AppError::HwPairingFailed(d) => format!(
+                "Pairing failed: {}. Start the connection again: the device will show a new code.",
+                detail(d)
+            ),
+        }
+    }
+
     /// Structured details for the UI (`data` field), only for errors that carry some.
     fn data(&self) -> Option<serde_json::Value> {
         match self {
@@ -116,7 +173,7 @@ impl Serialize for AppError {
         let data = self.data();
         let mut s = serializer.serialize_struct("AppError", 2 + usize::from(data.is_some()))?;
         s.serialize_field("code", self.code())?;
-        s.serialize_field("message", &self.to_string())?;
+        s.serialize_field("message", &self.message(crate::i18n::current()))?;
         if let Some(data) = data {
             s.serialize_field("data", &data)?;
         }
@@ -159,5 +216,56 @@ impl From<serde_json::Error> for AppError {
 impl From<tauri::Error> for AppError {
     fn from(e: tauri::Error) -> Self {
         AppError::Internal(e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::i18n::Lang;
+
+    #[test]
+    fn messages_in_both_languages() {
+        assert_eq!(
+            AppError::WrongPassword.message(Lang::Fr),
+            "Mot de passe incorrect."
+        );
+        assert_eq!(AppError::WrongPassword.message(Lang::En), "Wrong password.");
+        assert_eq!(
+            AppError::RateLimited(30).message(Lang::En),
+            "Too many attempts. Try again in 30 s."
+        );
+        assert_eq!(
+            AppError::UserRejected.message(Lang::En),
+            "Action cancelled."
+        );
+        assert_eq!(
+            AppError::HwWrongApp {
+                expected: "Bitcoin".into(),
+                open: "Ethereum".into()
+            }
+            .message(Lang::En),
+            "Wrong app open on the device: open « Bitcoin » (open: « Ethereum »)."
+        );
+        assert!(AppError::HwAddressMismatch {
+            device: "a".into(),
+            expected: "b".into()
+        }
+        .message(Lang::En)
+        .starts_with("DIFFERENT ADDRESSES"));
+        // Known details are translated, unknown ones are kept as written.
+        assert_eq!(
+            AppError::InvalidInput("un coffre existe déjà sur cet appareil".into())
+                .message(Lang::En),
+            "Invalid input: a vault already exists on this device"
+        );
+        assert_eq!(
+            AppError::InvalidInput("xyz".into()).message(Lang::En),
+            "Invalid input: xyz"
+        );
+        assert_eq!(
+            AppError::InvalidInput("xyz".into()).message(Lang::Fr),
+            "Entrée invalide : xyz"
+        );
     }
 }

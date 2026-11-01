@@ -257,12 +257,12 @@ pub async fn btc_core_pick_cookie(
 ) -> AppResult<PickedCookie> {
     use tauri_plugin_dialog::DialogExt as _;
     let handle = app.clone();
+    let title = crate::i18n::current().pick(
+        "Fichier .cookie de ton nœud Bitcoin Core",
+        "The .cookie file of your Bitcoin Core node",
+    );
     let picked = crate::commands::blocking(move || {
-        Ok(handle
-            .dialog()
-            .file()
-            .set_title("Fichier .cookie de ton nœud Bitcoin Core")
-            .blocking_pick_file())
+        Ok(handle.dialog().file().set_title(title).blocking_pick_file())
     })
     .await?;
     let Some(file) = picked else {

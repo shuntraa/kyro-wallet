@@ -11,6 +11,7 @@ use wallet_core::{
 };
 
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::net::FetchRequest;
 use crate::state::AppState;
 
@@ -235,8 +236,11 @@ pub fn mark_tables(mut summary: SolTxSummary, has_lookups: bool, statics: &[Stri
 
 // ---------------------------------------------------------------- dialog text
 
-fn sol(lamports: &str) -> String {
-    format!("{} SOL", crate::commands::format_units(lamports, 9))
+fn sol(lang: Lang, lamports: &str) -> String {
+    format!(
+        "{} SOL",
+        crate::commands::format_units_in(lang, lamports, 9)
+    )
 }
 
 fn token_program_label(p: SolTokenProgram) -> &'static str {
@@ -246,18 +250,24 @@ fn token_program_label(p: SolTokenProgram) -> &'static str {
     }
 }
 
-fn token_amount(amount: &str, decimals: Option<u8>) -> String {
-    match decimals {
-        Some(d) => format!(
+fn token_amount(lang: Lang, amount: &str, decimals: Option<u8>) -> String {
+    match (decimals, lang) {
+        (Some(d), Lang::Fr) => format!(
             "{} (unités brutes : {amount}, {d} décimales)",
-            crate::commands::format_units(amount, usize::from(d))
+            crate::commands::format_units_in(lang, amount, usize::from(d))
         ),
-        None => format!("{amount} unités brutes (décimales non indiquées)"),
+        (Some(d), Lang::En) => format!(
+            "{} (raw units: {amount}, {d} decimals)",
+            crate::commands::format_units_in(lang, amount, usize::from(d))
+        ),
+        (None, Lang::Fr) => format!("{amount} unités brutes (décimales non indiquées)"),
+        (None, Lang::En) => format!("{amount} raw units (decimals not given)"),
     }
 }
 
 /// How the dialog names an address: « toi », or the address, marked when a lookup table gave it.
 struct Names<'a> {
+    lang: Lang,
     me: &'a str,
     from_tables: &'a BTreeSet<String>,
     net: Network,
@@ -266,7 +276,7 @@ struct Names<'a> {
 impl Names<'_> {
     fn who(&self, a: &str) -> String {
         if a == self.me {
-            "toi".to_owned()
+            self.lang.pick("toi", "you").to_owned()
         } else {
             self.addr(a)
         }
@@ -274,7 +284,7 @@ impl Names<'_> {
 
     fn addr(&self, a: &str) -> String {
         if self.from_tables.contains(a) {
-            format!("{a} [lu dans une table d'adresses]")
+            format!("{a} {}", table_mark(self.lang))
         } else {
             a.to_owned()
         }
@@ -282,7 +292,7 @@ impl Names<'_> {
 
     fn mint(&self, mint: Option<&str>) -> String {
         match mint {
-            None => "non indiqué".into(),
+            None => self.lang.pick("non indiqué", "not given").into(),
             Some(m) => {
                 let known = crate::known_tokens::lookup(
                     self.net,
@@ -290,7 +300,11 @@ impl Names<'_> {
                     m,
                 )
                 .map_or_else(
-                    || " (jeton inconnu)".to_owned(),
+                    || {
+                        self.lang
+                            .pick(" (jeton inconnu)", " (unknown token)")
+                            .to_owned()
+                    },
                     |t| format!(" ({})", t.symbol),
                 );
                 format!("{}{known}", self.addr(m))
@@ -299,48 +313,88 @@ impl Names<'_> {
     }
 }
 
-fn describe_instruction(ins: &SolInstruction, n: &Names<'_>) -> String {
+fn table_mark(lang: Lang) -> &'static str {
+    lang.pick(
+        "[lu dans une table d'adresses]",
+        "[read from an address table]",
+    )
+}
+
+fn describe_instruction(lang: Lang, ins: &SolInstruction, n: &Names<'_>) -> String {
+    let sol = |l: &str| sol(lang, l);
+    let fr = lang == Lang::Fr;
     match ins {
         SolInstruction::SystemTransfer { from, to, lamports } => {
-            format!(
-                "Envoi de {}\n   De : {}\n   À : {}",
-                sol(lamports),
-                n.who(from),
-                n.who(to)
-            )
+            if fr {
+                format!(
+                    "Envoi de {}\n   De : {}\n   À : {}",
+                    sol(lamports),
+                    n.who(from),
+                    n.who(to)
+                )
+            } else {
+                format!(
+                    "Sending {}\n   From: {}\n   To: {}",
+                    sol(lamports),
+                    n.who(from),
+                    n.who(to)
+                )
+            }
         }
         SolInstruction::SystemTransferWithSeed {
             from, to, lamports, ..
-        } => format!(
-            "Envoi de {} (compte dérivé)\n   De : {}\n   À : {}",
-            sol(lamports),
-            n.who(from),
-            n.who(to)
-        ),
+        } => {
+            if fr {
+                format!(
+                    "Envoi de {} (compte dérivé)\n   De : {}\n   À : {}",
+                    sol(lamports),
+                    n.who(from),
+                    n.who(to)
+                )
+            } else {
+                format!(
+                    "Sending {} (derived account)\n   From: {}\n   To: {}",
+                    sol(lamports),
+                    n.who(from),
+                    n.who(to)
+                )
+            }
+        }
         SolInstruction::SystemCreateAccount {
             from,
             new_account,
             lamports,
             owner,
             ..
-        } => format!(
-            "Création de compte {}\n   Financé par : {} ({})\n   Propriétaire (programme) : {owner}",
-            n.addr(new_account),
-            n.who(from),
-            sol(lamports)
-        ),
-        SolInstruction::SystemCreateAccountWithSeed {
+        }
+        | SolInstruction::SystemCreateAccountWithSeed {
             from,
             new_account,
             lamports,
             owner,
             ..
-        } => format!(
-            "Création de compte {} (dérivé)\n   Financé par : {} ({})\n   Propriétaire (programme) : {owner}",
-            n.addr(new_account),
-            n.who(from),
-            sol(lamports)
-        ),
+        } => {
+            let derived = if matches!(ins, SolInstruction::SystemCreateAccountWithSeed { .. }) {
+                lang.pick(" (dérivé)", " (derived)")
+            } else {
+                ""
+            };
+            if fr {
+                format!(
+                    "Création de compte {}{derived}\n   Financé par : {} ({})\n   Propriétaire (programme) : {owner}",
+                    n.addr(new_account),
+                    n.who(from),
+                    sol(lamports)
+                )
+            } else {
+                format!(
+                    "Account creation {}{derived}\n   Funded by: {} ({})\n   Owner (program): {owner}",
+                    n.addr(new_account),
+                    n.who(from),
+                    sol(lamports)
+                )
+            }
+        }
         SolInstruction::TokenTransfer {
             token_program,
             source,
@@ -350,15 +404,29 @@ fn describe_instruction(ins: &SolInstruction, n: &Names<'_>) -> String {
             amount,
             decimals,
             ..
-        } => format!(
-            "Envoi de token ({}) : {}\n   Mint : {}\n   Depuis le compte token : {}\n   Vers le compte token : {}\n   Autorité : {}",
-            token_program_label(*token_program),
-            token_amount(amount, *decimals),
-            n.mint(mint.as_deref()),
-            n.addr(source),
-            n.addr(destination),
-            n.who(authority)
-        ),
+        } => {
+            if fr {
+                format!(
+                    "Envoi de token ({}) : {}\n   Mint : {}\n   Depuis le compte token : {}\n   Vers le compte token : {}\n   Autorité : {}",
+                    token_program_label(*token_program),
+                    token_amount(lang, amount, *decimals),
+                    n.mint(mint.as_deref()),
+                    n.addr(source),
+                    n.addr(destination),
+                    n.who(authority)
+                )
+            } else {
+                format!(
+                    "Token transfer ({}): {}\n   Mint: {}\n   From token account: {}\n   To token account: {}\n   Authority: {}",
+                    token_program_label(*token_program),
+                    token_amount(lang, amount, *decimals),
+                    n.mint(mint.as_deref()),
+                    n.addr(source),
+                    n.addr(destination),
+                    n.who(authority)
+                )
+            }
+        }
         SolInstruction::TokenApprove {
             token_program,
             source,
@@ -368,15 +436,29 @@ fn describe_instruction(ins: &SolInstruction, n: &Names<'_>) -> String {
             amount,
             decimals,
             ..
-        } => format!(
-            "⚠ DÉLÉGATION ({}) : {} pourra dépenser jusqu'à {}\n   Depuis le compte token : {}\n   Mint : {}\n   Propriétaire : {}",
-            token_program_label(*token_program),
-            n.who(delegate),
-            token_amount(amount, *decimals),
-            n.addr(source),
-            n.mint(mint.as_deref()),
-            n.who(owner)
-        ),
+        } => {
+            if fr {
+                format!(
+                    "⚠ DÉLÉGATION ({}) : {} pourra dépenser jusqu'à {}\n   Depuis le compte token : {}\n   Mint : {}\n   Propriétaire : {}",
+                    token_program_label(*token_program),
+                    n.who(delegate),
+                    token_amount(lang, amount, *decimals),
+                    n.addr(source),
+                    n.mint(mint.as_deref()),
+                    n.who(owner)
+                )
+            } else {
+                format!(
+                    "⚠ DELEGATION ({}): {} will be able to spend up to {}\n   From token account: {}\n   Mint: {}\n   Owner: {}",
+                    token_program_label(*token_program),
+                    n.who(delegate),
+                    token_amount(lang, amount, *decimals),
+                    n.addr(source),
+                    n.mint(mint.as_deref()),
+                    n.who(owner)
+                )
+            }
+        }
         SolInstruction::AtaCreate {
             idempotent,
             payer,
@@ -384,157 +466,326 @@ fn describe_instruction(ins: &SolInstruction, n: &Names<'_>) -> String {
             owner,
             mint,
             ..
-        } => format!(
-            "Création du compte token associé{}\n   Compte : {}\n   Titulaire : {}\n   Mint : {}\n   Payé par : {}",
-            if *idempotent { " (si absent)" } else { "" },
-            n.addr(account),
-            n.who(owner),
-            n.mint(Some(mint)),
-            n.who(payer)
-        ),
-        SolInstruction::ComputeUnitLimit { units } => {
-            format!("Limite de calcul : {units} unités")
+        } => {
+            let if_missing = if *idempotent {
+                lang.pick(" (si absent)", " (if missing)")
+            } else {
+                ""
+            };
+            if fr {
+                format!(
+                    "Création du compte token associé{if_missing}\n   Compte : {}\n   Titulaire : {}\n   Mint : {}\n   Payé par : {}",
+                    n.addr(account),
+                    n.who(owner),
+                    n.mint(Some(mint)),
+                    n.who(payer)
+                )
+            } else {
+                format!(
+                    "Associated token account creation{if_missing}\n   Account: {}\n   Holder: {}\n   Mint: {}\n   Paid by: {}",
+                    n.addr(account),
+                    n.who(owner),
+                    n.mint(Some(mint)),
+                    n.who(payer)
+                )
+            }
         }
-        SolInstruction::ComputeUnitPrice { micro_lamports } => {
-            format!("Prix du calcul : {micro_lamports} micro-lamports / unité")
-        }
+        SolInstruction::ComputeUnitLimit { units } => match lang {
+            Lang::Fr => format!("Limite de calcul : {units} unités"),
+            Lang::En => format!("Compute limit: {units} units"),
+        },
+        SolInstruction::ComputeUnitPrice { micro_lamports } => match lang {
+            Lang::Fr => format!("Prix du calcul : {micro_lamports} micro-lamports / unité"),
+            Lang::En => format!("Compute price: {micro_lamports} micro-lamports / unit"),
+        },
         // The text itself is shown at the end of the dialog, after the amounts and fees.
-        SolInstruction::Memo { .. } => "Mémo (texte affiché en bas de cette fenêtre)".into(),
+        SolInstruction::Memo { .. } => lang
+            .pick(
+                "Mémo (texte affiché en bas de cette fenêtre)",
+                "Memo (text shown at the bottom of this window)",
+            )
+            .into(),
         SolInstruction::StakeInitialize {
             stake_account,
             staker,
             withdrawer,
-        } => format!(
-            "Staking : initialisation du compte {}\n   Autorités : {} (staker), {} (withdrawer), aucun blocage",
-            n.addr(stake_account),
-            n.who(staker),
-            n.who(withdrawer)
-        ),
+        } => {
+            if fr {
+                format!(
+                    "Staking : initialisation du compte {}\n   Autorités : {} (staker), {} (withdrawer), aucun blocage",
+                    n.addr(stake_account),
+                    n.who(staker),
+                    n.who(withdrawer)
+                )
+            } else {
+                format!(
+                    "Staking: initialising account {}\n   Authorities: {} (staker), {} (withdrawer), no lockup",
+                    n.addr(stake_account),
+                    n.who(staker),
+                    n.who(withdrawer)
+                )
+            }
+        }
         SolInstruction::StakeDelegate {
             stake_account,
             vote_account,
             authority,
-        } => format!(
-            "Staking : délégation du compte {}\n   Au validateur (compte de vote) : {}\n   Autorité : {}",
-            n.addr(stake_account),
-            n.addr(vote_account),
-            n.who(authority)
-        ),
+        } => {
+            if fr {
+                format!(
+                    "Staking : délégation du compte {}\n   Au validateur (compte de vote) : {}\n   Autorité : {}",
+                    n.addr(stake_account),
+                    n.addr(vote_account),
+                    n.who(authority)
+                )
+            } else {
+                format!(
+                    "Staking: delegating account {}\n   To the validator (vote account): {}\n   Authority: {}",
+                    n.addr(stake_account),
+                    n.addr(vote_account),
+                    n.who(authority)
+                )
+            }
+        }
         SolInstruction::StakeDeactivate {
             stake_account,
             authority,
-        } => format!(
-            "Staking : désactivation du compte {}\n   Autorité : {}",
-            n.addr(stake_account),
-            n.who(authority)
-        ),
+        } => {
+            if fr {
+                format!(
+                    "Staking : désactivation du compte {}\n   Autorité : {}",
+                    n.addr(stake_account),
+                    n.who(authority)
+                )
+            } else {
+                format!(
+                    "Staking: deactivating account {}\n   Authority: {}",
+                    n.addr(stake_account),
+                    n.who(authority)
+                )
+            }
+        }
         SolInstruction::StakeWithdraw {
             stake_account,
             to,
             lamports,
             ..
-        } => format!(
-            "Staking : retrait de {} du compte {}\n   Vers : {}",
-            sol(lamports),
-            n.addr(stake_account),
-            n.who(to)
-        ),
+        } => {
+            if fr {
+                format!(
+                    "Staking : retrait de {} du compte {}\n   Vers : {}",
+                    sol(lamports),
+                    n.addr(stake_account),
+                    n.who(to)
+                )
+            } else {
+                format!(
+                    "Staking: withdrawing {} from account {}\n   To: {}",
+                    sol(lamports),
+                    n.addr(stake_account),
+                    n.who(to)
+                )
+            }
+        }
         SolInstruction::Unknown {
             program_id,
             accounts,
             data_len,
             ..
-        } => format!(
-            "⚠ Programme NON RECONNU : {program_id}\n   ({accounts} comptes, {data_len} octets de données)"
-        ),
+        } => match lang {
+            Lang::Fr => format!(
+                "⚠ Programme NON RECONNU : {program_id}\n   ({accounts} comptes, {data_len} octets de données)"
+            ),
+            Lang::En => format!(
+                "⚠ UNRECOGNISED program: {program_id}\n   ({accounts} accounts, {data_len} bytes of data)"
+            ),
+        },
     }
 }
 
-fn describe_warning(w: &SolWarning) -> String {
+fn describe_warning(lang: Lang, w: &SolWarning) -> String {
+    let fr = lang == Lang::Fr;
     match w {
         SolWarning::FeePayerNotUs { fee_payer } => {
-            format!("Les frais sont payés par un autre compte : {fee_payer}")
+            if fr {
+                format!("Les frais sont payés par un autre compte : {fee_payer}")
+            } else {
+                format!("The fees are paid by another account: {fee_payer}")
+            }
         }
         SolWarning::ExtraWritableSigner { address } => {
-            format!("Un autre signataire est requis : {address}")
+            if fr {
+                format!("Un autre signataire est requis : {address}")
+            } else {
+                format!("Another signer is required: {address}")
+            }
         }
         SolWarning::AuthorityNotUs {
             instruction,
             authority,
-        } => format!(
-            "Instruction {} : l'autorité n'est pas ton adresse ({authority})",
-            instruction + 1
-        ),
-        SolWarning::Delegation { instruction } => format!(
-            "Instruction {} : délégation de dépense à un tiers",
-            instruction + 1
-        ),
+        } => {
+            if fr {
+                format!(
+                    "Instruction {} : l'autorité n'est pas ton adresse ({authority})",
+                    instruction + 1
+                )
+            } else {
+                format!(
+                    "Instruction {}: the authority is not your address ({authority})",
+                    instruction + 1
+                )
+            }
+        }
+        SolWarning::Delegation { instruction } => {
+            if fr {
+                format!(
+                    "Instruction {} : délégation de dépense à un tiers",
+                    instruction + 1
+                )
+            } else {
+                format!(
+                    "Instruction {}: spending delegated to a third party",
+                    instruction + 1
+                )
+            }
+        }
         SolWarning::UnknownInstruction {
             instruction,
             program_id,
-        } => format!(
-            "Instruction {} : programme non reconnu {program_id}",
-            instruction + 1
-        ),
-        SolWarning::Token2022ExtensionsUnverified { instruction } => format!(
-            "Instruction {} : token Token-2022 — extensions du mint (frais de transfert, hook) non vérifiées",
-            instruction + 1
-        ),
-        SolWarning::PriorityFeeEstimated => {
-            "Frais prioritaires estimés au maximum (pas de limite de calcul explicite)".into()
+        } => {
+            if fr {
+                format!(
+                    "Instruction {} : programme non reconnu {program_id}",
+                    instruction + 1
+                )
+            } else {
+                format!(
+                    "Instruction {}: unrecognised program {program_id}",
+                    instruction + 1
+                )
+            }
         }
+        SolWarning::Token2022ExtensionsUnverified { instruction } => {
+            if fr {
+                format!(
+                    "Instruction {} : token Token-2022 — extensions du mint (frais de transfert, hook) non vérifiées",
+                    instruction + 1
+                )
+            } else {
+                format!(
+                    "Instruction {}: Token-2022 token — mint extensions (transfer fee, hook) not verified",
+                    instruction + 1
+                )
+            }
+        }
+        SolWarning::PriorityFeeEstimated => lang
+            .pick(
+                "Frais prioritaires estimés au maximum (pas de limite de calcul explicite)",
+                "Priority fee estimated at its maximum (no explicit compute limit)",
+            )
+            .into(),
         SolWarning::UnknownOwnerProgram {
             instruction, owner, ..
-        } => format!(
-            "Instruction {} : le compte créé appartient à un programme inconnu ({owner}) : il pourra dépenser ces SOL",
-            instruction + 1
+        } => {
+            if fr {
+                format!(
+                    "Instruction {} : le compte créé appartient à un programme inconnu ({owner}) : il pourra dépenser ces SOL",
+                    instruction + 1
+                )
+            } else {
+                format!(
+                    "Instruction {}: the created account belongs to an unknown program ({owner}): it will be able to spend these SOL",
+                    instruction + 1
+                )
+            }
+        }
+        SolWarning::UncheckedTokenTransfer { instruction } => {
+            if fr {
+                format!(
+                    "Instruction {} : envoi de token sans mint ni décimales (Transfer non vérifié)",
+                    instruction + 1
+                )
+            } else {
+                format!(
+                    "Instruction {}: token transfer without mint or decimals (unchecked Transfer)",
+                    instruction + 1
+                )
+            }
+        }
+        SolWarning::UnusualText { instruction } => {
+            if fr {
+                format!(
+                    "Instruction {} : texte long ou contenant des caractères invisibles / de contrôle (affiché nettoyé)",
+                    instruction + 1
+                )
+            } else {
+                format!(
+                    "Instruction {}: long text or text with invisible / control characters (shown cleaned)",
+                    instruction + 1
+                )
+            }
+        }
+    }
+}
+
+fn tables_line(lang: Lang, d: &SolDecoded) -> String {
+    match lang {
+        Lang::Fr => format!(
+            "{} adresse(s) de cette transaction ne sont pas écrites dans le message : elles ont été lues dans une table d'adresses fournie par le serveur Solana (marquées « [lu dans une table d'adresses] »). Un serveur menteur pourrait y mettre d'autres comptes.",
+            d.from_tables.len()
         ),
-        SolWarning::UncheckedTokenTransfer { instruction } => format!(
-            "Instruction {} : envoi de token sans mint ni décimales (Transfer non vérifié)",
-            instruction + 1
-        ),
-        SolWarning::UnusualText { instruction } => format!(
-            "Instruction {} : texte long ou contenant des caractères invisibles / de contrôle (affiché nettoyé)",
-            instruction + 1
+        Lang::En => format!(
+            "{} address(es) of this transaction are not written in the message: they were read from an address table provided by the Solana server (marked « [read from an address table] »). A lying server could put other accounts there.",
+            d.from_tables.len()
         ),
     }
 }
 
-fn tables_line(d: &SolDecoded) -> String {
-    format!(
-        "{} adresse(s) de cette transaction ne sont pas écrites dans le message : elles ont été lues dans une table d'adresses fournie par le serveur Solana (marquées « [lu dans une table d'adresses] »). Un serveur menteur pourrait y mettre d'autres comptes.",
-        d.from_tables.len()
-    )
-}
-
 /// Main confirmation text, built only from the Rust-side decode.
-pub fn describe(d: &SolDecoded, me: &str, net: Network) -> String {
+pub fn describe(lang: Lang, d: &SolDecoded, me: &str, net: Network) -> String {
     let s = &d.summary;
     let names = Names {
+        lang,
         me,
         from_tables: &d.from_tables,
         net,
     };
-    let mut out = format!(
-        "Réseau : {}\nTransaction {} — {} instruction(s)\n\n",
-        network_label(net),
-        s.version,
-        s.instructions.len()
-    );
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Réseau : {}\nTransaction {} — {} instruction(s)\n\n",
+            network_label(net),
+            s.version,
+            s.instructions.len()
+        ),
+        Lang::En => format!(
+            "Network: {}\nTransaction {} — {} instruction(s)\n\n",
+            network_label(net),
+            s.version,
+            s.instructions.len()
+        ),
+    };
     for (i, ins) in s.instructions.iter().enumerate() {
-        out += &format!("{}. {}\n", i + 1, describe_instruction(ins, &names));
+        out += &format!("{}. {}\n", i + 1, describe_instruction(lang, ins, &names));
     }
-    out += &format!("\nFrais de base : {}", sol(&s.base_fee_lamports));
+    out += &format!(
+        "\n{}{}",
+        lang.pick("Frais de base : ", "Base fee: "),
+        sol(lang, &s.base_fee_lamports)
+    );
     if let Some(p) = &s.priority_fee_lamports {
-        out += &format!("\nFrais prioritaires : {}", sol(p));
+        out += &format!(
+            "\n{}{}",
+            lang.pick("Frais prioritaires : ", "Priority fee: "),
+            sol(lang, p)
+        );
     }
     if !s.warnings.is_empty() || !d.from_tables.is_empty() {
-        out += "\n\nPoints d'attention :";
+        out += lang.pick("\n\nPoints d'attention :", "\n\nPoints to watch:");
         for w in &s.warnings {
-            out += &format!("\n• {}", describe_warning(w));
+            out += &format!("\n• {}", describe_warning(lang, w));
         }
         if !d.from_tables.is_empty() {
-            out += &format!("\n• {}", tables_line(d));
+            out += &format!("\n• {}", tables_line(lang, d));
         }
     }
     let memos: Vec<&String> = s
@@ -547,7 +798,11 @@ pub fn describe(d: &SolDecoded, me: &str, net: Network) -> String {
         .collect();
     for m in memos {
         out += &format!(
-            "\n\nMémo (texte libre, non vérifié) : {}",
+            "\n\n{}{}",
+            lang.pick(
+                "Mémo (texte libre, non vérifié) : ",
+                "Memo (free text, not verified): "
+            ),
             crate::dialog_text::field(m, crate::dialog_text::MAX_FIELD)
         );
     }
@@ -555,25 +810,29 @@ pub fn describe(d: &SolDecoded, me: &str, net: Network) -> String {
 }
 
 /// Second, explicit warning shown when `requires_extra_confirmation` is set.
-pub fn describe_extra(d: &SolDecoded) -> String {
-    let mut out = String::from(
+pub fn describe_extra(lang: Lang, d: &SolDecoded) -> String {
+    let mut out = String::from(lang.pick(
         "Instruction non reconnue ou inhabituelle — signer quand même ?\n\nKyro n'a pas pu tout vérifier :",
-    );
+        "Unrecognised or unusual instruction — sign anyway?\n\nKyro could not verify everything:",
+    ));
     for w in &d.summary.warnings {
         if !matches!(
             w,
             SolWarning::PriorityFeeEstimated | SolWarning::Token2022ExtensionsUnverified { .. }
         ) {
-            out += &format!("\n• {}", describe_warning(w));
+            out += &format!("\n• {}", describe_warning(lang, w));
         }
     }
     if !d.from_tables.is_empty() {
-        out += &format!("\n• {}", tables_line(d));
+        out += &format!("\n• {}", tables_line(lang, d));
         for a in &d.from_tables {
             out += &format!("\n   – {a}");
         }
     }
-    out += "\n\nNe signe que si tu sais exactement ce que fait cette transaction.";
+    out += lang.pick(
+        "\n\nNe signe que si tu sais exactement ce que fait cette transaction.",
+        "\n\nOnly sign if you know exactly what this transaction does.",
+    );
     out
 }
 
@@ -621,7 +880,7 @@ mod tests {
             }],
         );
         let d = mark_tables(s, false, &[]);
-        let text = describe(&d, "ME", Network::Testnet);
+        let text = describe(Lang::Fr, &d, "ME", Network::Testnet);
         assert!(text.contains("Envoi de 1,5 SOL"));
         assert!(text.contains("À : BOB"));
         assert!(text.contains("De : toi"));
@@ -629,7 +888,7 @@ mod tests {
         assert!(text.contains("Frais de base : 0,000005 SOL"));
         assert!(text.contains("Frais prioritaires : 0,0000002 SOL"));
         assert!(!text.contains("table d'adresses"));
-        let extra = describe_extra(&d);
+        let extra = describe_extra(Lang::Fr, &d);
         assert!(extra.starts_with("Instruction non reconnue"));
         assert!(extra.contains("PROG"));
     }
@@ -655,13 +914,13 @@ mod tests {
         let d = mark_tables(s, true, &statics[..1]);
         assert!(d.summary.requires_extra_confirmation);
         assert_eq!(d.from_tables.iter().collect::<Vec<_>>(), ["FROM_TABLE"]);
-        let text = describe(&d, "ME", Network::Testnet);
+        let text = describe(Lang::Fr, &d, "ME", Network::Testnet);
         assert!(
             text.contains("À : FROM_TABLE [lu dans une table d'adresses]"),
             "{text}"
         );
         assert!(text.contains("1 adresse(s) de cette transaction ne sont pas écrites"));
-        let extra = describe_extra(&d);
+        let extra = describe_extra(Lang::Fr, &d);
         assert!(extra.contains("– FROM_TABLE"), "{extra}");
     }
 
@@ -681,7 +940,12 @@ mod tests {
             ],
             vec![],
         );
-        let text = describe(&mark_tables(s, false, &[]), "ME", Network::Testnet);
+        let text = describe(
+            Lang::Fr,
+            &mark_tables(s, false, &[]),
+            "ME",
+            Network::Testnet,
+        );
         assert!(text.contains("1. Mémo (texte affiché en bas de cette fenêtre)"));
         assert!(
             text.ends_with(
@@ -690,6 +954,45 @@ mod tests {
             "{text}"
         );
         assert!(!text.contains("\n2. Envoi de 0 SOL"));
+    }
+
+    #[test]
+    fn dialog_text_in_english() {
+        let s = summary(
+            vec![
+                SolInstruction::SystemTransfer {
+                    from: "ME".into(),
+                    to: "FROM_TABLE".into(),
+                    lamports: "1500000000".into(),
+                },
+                SolInstruction::Memo {
+                    text: "thanks".into(),
+                },
+            ],
+            vec![SolWarning::FeePayerNotUs {
+                fee_payer: "OTHER".into(),
+            }],
+        );
+        let d = mark_tables(s, true, &["ME".to_owned()]);
+        let text = describe(Lang::En, &d, "ME", Network::Testnet);
+        for needle in [
+            "Network: Solana devnet (test)",
+            "Sending 1.5 SOL\n   From: you\n   To: FROM_TABLE [read from an address table]",
+            "Base fee: 0.000005 SOL",
+            "Priority fee: 0.0000002 SOL",
+            "Points to watch:",
+            "The fees are paid by another account: OTHER",
+            "A lying server could put other accounts there.",
+            "Memo (free text, not verified): « thanks »",
+        ] {
+            assert!(text.contains(needle), "{needle} missing in:\n{text}");
+        }
+        let extra = describe_extra(Lang::En, &d);
+        assert!(extra.starts_with("Unrecognised or unusual instruction — sign anyway?"));
+        assert!(extra.ends_with("Only sign if you know exactly what this transaction does."));
+        for fr in ["Frais", "toi", "Réseau", "Mémo", "signer"] {
+            assert!(!text.contains(fr) && !extra.contains(fr), "{fr}");
+        }
     }
 
     #[test]
@@ -917,11 +1220,14 @@ mod live {
             let decoded = decode(&self.state, &message, &self.me).await.unwrap();
             eprintln!(
                 "--- {label}: dialog ---\n{}",
-                describe(&decoded, &self.me, Network::Testnet)
+                describe(Lang::Fr, &decoded, &self.me, Network::Testnet)
             );
             let summary = &decoded.summary;
             if summary.requires_extra_confirmation {
-                eprintln!("--- {label}: reinforced ---\n{}", describe_extra(&decoded));
+                eprintln!(
+                    "--- {label}: reinforced ---\n{}",
+                    describe_extra(Lang::Fr, &decoded)
+                );
             }
             assert_eq!(
                 summary.requires_extra_confirmation, expect_extra,

@@ -465,7 +465,10 @@ mod tests {
         let s: Settings = serde_json::from_str(r#"{"currency":"USD"}"#).unwrap();
         assert_eq!(s.language, LanguagePref::Auto);
         let s: Settings = serde_json::from_str(r#"{"currency":"USD","language":"de"}"#).unwrap();
-        assert_eq!((s.language, s.currency.as_str()), (LanguagePref::Auto, "USD"));
+        assert_eq!(
+            (s.language, s.currency.as_str()),
+            (LanguagePref::Auto, "USD")
+        );
         // settings_get sends it, settings_set takes auto / fr / en and refuses anything else.
         let ui = Settings::default().for_ui();
         assert_eq!(ui["language"], "auto");
@@ -473,9 +476,16 @@ mod tests {
         next["language"] = "en".into();
         let back = Settings::from_ui(next.clone(), &ApiKeys::default()).unwrap();
         assert_eq!(back.language, LanguagePref::En);
-        for bad in [serde_json::json!("de"), serde_json::json!(1), serde_json::json!(null)] {
+        for bad in [
+            serde_json::json!("de"),
+            serde_json::json!(1),
+            serde_json::json!(null),
+        ] {
             next["language"] = bad.clone();
-            assert!(Settings::from_ui(next.clone(), &ApiKeys::default()).is_err(), "{bad}");
+            assert!(
+                Settings::from_ui(next.clone(), &ApiKeys::default()).is_err(),
+                "{bad}"
+            );
         }
     }
 

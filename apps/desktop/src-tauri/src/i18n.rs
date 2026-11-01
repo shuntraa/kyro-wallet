@@ -31,8 +31,58 @@ impl Lang {
         }
     }
 
-    pub fn code(self) -> &'static str {
-        self.pick("fr", "en")
+    // ---- labels shared by the native dialogs ----
+
+    /// OK button of a signing dialog.
+    pub fn sign(self) -> &'static str {
+        self.pick("Signer", "Sign")
+    }
+
+    pub fn cancel(self) -> &'static str {
+        self.pick("Annuler", "Cancel")
+    }
+
+    /// Title of the main signing dialog.
+    pub fn confirm_tx_title(self) -> &'static str {
+        self.pick("Confirmer la transaction", "Confirm the transaction")
+    }
+
+    /// Title of the reinforced (second) dialog.
+    pub fn check_tx_title(self) -> &'static str {
+        self.pick(
+            "Attention : transaction à vérifier",
+            "Warning: transaction to check",
+        )
+    }
+
+    /// First line of a reinforced dialog.
+    pub fn unusual_intro(self) -> &'static str {
+        self.pick(
+            "Kyro a trouvé des éléments inhabituels dans cette transaction :\n",
+            "Kyro found unusual elements in this transaction:\n",
+        )
+    }
+
+    /// Last line of a reinforced dialog.
+    pub fn sign_anyway(self) -> &'static str {
+        self.pick(
+            "Ne signe que si tu sais exactement pourquoi. Signer quand même ?",
+            "Only sign if you know exactly why. Sign anyway?",
+        )
+    }
+
+    /// `"Label : "` (French typography) / `"Label: "`.
+    pub fn colon(self) -> &'static str {
+        self.pick(" : ", ": ")
+    }
+
+    /// `"1,5"` → `"1.5"` in English. Only for plain decimal amounts (one mark, no grouping), as
+    /// produced by `commands::format_units`.
+    pub fn decimal(self, fr_decimal: &str) -> String {
+        match self {
+            Lang::Fr => fr_decimal.to_owned(),
+            Lang::En => fr_decimal.replace(',', "."),
+        }
     }
 }
 
@@ -76,6 +126,80 @@ pub fn lang_from_locales<'a>(locales: impl IntoIterator<Item = &'a str>) -> Lang
         }
         None => Lang::En,
     }
+}
+
+/// English version of the most common fixed error details (written in French where they are
+/// raised); any other detail is returned unchanged.
+pub fn detail_en(fr: &str) -> String {
+    const EXACT: &[(&str, &str)] = &[
+        (
+            "un coffre existe déjà sur cet appareil",
+            "a vault already exists on this device",
+        ),
+        ("aucun coffre sur cet appareil", "no vault on this device"),
+        (
+            "le mot de passe doit faire au moins 10 caractères",
+            "the password must be at least 10 characters long",
+        ),
+        ("phrase de récupération invalide", "invalid recovery phrase"),
+        ("12 ou 24 mots", "12 or 24 words"),
+        (
+            "Tor est désactivé dans les réglages",
+            "Tor is turned off in the settings",
+        ),
+        ("Tor n'est pas prêt", "Tor is not ready"),
+        ("Tor n'est pas démarré", "Tor is not started"),
+        ("Tor arrêté", "Tor stopped"),
+        ("délai de démarrage dépassé", "start-up timed out"),
+        ("devise : EUR ou USD", "currency: EUR or USD"),
+        (
+            "verrouillage automatique : entre 1 et 60 minutes",
+            "auto-lock: between 1 and 60 minutes",
+        ),
+        (
+            "langue : « auto », « fr » ou « en »",
+            "language: « auto », « fr » or « en »",
+        ),
+        (
+            "résumé différent entre l'aperçu et la signature",
+            "summary differs between the preview and the signature",
+        ),
+        ("URL invalide", "invalid URL"),
+        ("URL sans hôte", "URL without a host"),
+        ("nom d'hôte invalide", "invalid host name"),
+        ("aucun pair joignable", "no reachable peer"),
+        (
+            "ce compte n'a pas de clé EVM",
+            "this account has no EVM key",
+        ),
+        (
+            "ce compte n'a pas de clé Solana",
+            "this account has no Solana key",
+        ),
+        (
+            "compte hardware wallet inconnu",
+            "unknown hardware-wallet account",
+        ),
+        (
+            "cette transaction ne demande pas la signature de ton adresse Solana",
+            "this transaction does not ask for your Solana address's signature",
+        ),
+        (
+            "ce compte n'est pas dans ta liste",
+            "this account is not in your list",
+        ),
+        (
+            "fichier .cookie : chemin local attendu",
+            ".cookie file: local path expected",
+        ),
+    ];
+    if let Some((_, en)) = EXACT.iter().find(|(f, _)| *f == fr) {
+        return (*en).to_owned();
+    }
+    if let Some(rest) = fr.strip_prefix("réglages invalides : ") {
+        return format!("invalid settings: {rest}");
+    }
+    fr.to_owned()
 }
 
 /// The computer's language, read once from the OS.
@@ -140,6 +264,5 @@ mod tests {
         );
         assert!(serde_json::from_value::<LanguagePref>("de".into()).is_err());
         assert_eq!(Lang::En.pick("Signer", "Sign"), "Sign");
-        assert_eq!(Lang::Fr.code(), "fr");
     }
 }

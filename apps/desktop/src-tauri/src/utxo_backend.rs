@@ -1386,12 +1386,12 @@ mod live {
         let summary = wallet_core::utxo_psbt_summary(&seed, net, coin, 0, b64).unwrap();
         eprintln!(
             "--- native dialog text ---\n{}\n--------------------------",
-            crate::commands_utxo::describe_utxo(&summary, net)
+            crate::commands_utxo::describe_utxo(crate::i18n::Lang::Fr, &summary, net)
         );
         if summary.requires_extra_confirmation {
             eprintln!(
                 "--- reinforced dialog ---\n{}",
-                crate::commands_utxo::describe_utxo_extra(&summary)
+                crate::commands_utxo::describe_utxo_extra(crate::i18n::Lang::Fr, &summary)
             );
         }
         // Self-send only: every output must be an address of this public wallet.

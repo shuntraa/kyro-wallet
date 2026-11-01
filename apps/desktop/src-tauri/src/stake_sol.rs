@@ -20,8 +20,11 @@ use wallet_core::{
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::commands::{
+    blocking, confirm_native, format_units, format_units_in, seed_from_password,
+};
 use crate::error::{AppError, AppResult};
+use crate::i18n::Lang;
 use crate::net::FetchRequest;
 use crate::solana;
 use crate::state::AppState;
@@ -959,9 +962,9 @@ fn net_label(net: Network) -> &'static str {
     }
 }
 
-fn duration(secs: u64) -> String {
+fn duration(lang: Lang, secs: u64) -> String {
     if secs >= 2 * 86_400 {
-        format!("≈ {} jours", secs / 86_400)
+        format!("≈ {} {}", secs / 86_400, lang.pick("jours", "days"))
     } else if secs >= 3600 {
         format!("≈ {} h", secs / 3600)
     } else {
@@ -969,114 +972,201 @@ fn duration(secs: u64) -> String {
     }
 }
 
-fn validator_lines(v: &SolValidator) -> String {
-    format!(
-        "Validateur (compte de vote) : {}\n   Identité : {}\n   Nom déclaré : {}\n   Commission : {} % · stake actif : {} · {}\n",
-        v.vote_account,
-        v.identity,
-        v.name
-            .as_deref()
-            .map(|n| format!(
-                "{} (déclaré par le validateur, non vérifié)",
-                crate::dialog_text::field(n, 60)
-            ))
-            .unwrap_or_else(|| "aucun".into()),
-        v.commission,
-        sol(&v.activated_stake),
-        if v.delinquent {
-            "⚠ EN RETARD (delinquent) : il ne vote plus, pas de récompenses"
-        } else {
-            "vote normalement"
-        }
-    )
+/// SOL amount for dialog text, with the decimal mark of `lang`.
+fn sol_in(lang: Lang, lamports: &str) -> String {
+    format!("{} SOL", format_units_in(lang, lamports, 9))
+}
+
+fn validator_lines(lang: Lang, v: &SolValidator) -> String {
+    let name = v
+        .name
+        .as_deref()
+        .map(|n| {
+            format!(
+                "{} {}",
+                crate::dialog_text::field(n, 60),
+                lang.pick(
+                    "(déclaré par le validateur, non vérifié)",
+                    "(declared by the validator, not verified)"
+                )
+            )
+        })
+        .unwrap_or_else(|| lang.pick("aucun", "none").into());
+    let status = if v.delinquent {
+        lang.pick(
+            "⚠ EN RETARD (delinquent) : il ne vote plus, pas de récompenses",
+            "⚠ DELINQUENT: it no longer votes, no rewards",
+        )
+    } else {
+        lang.pick("vote normalement", "votes normally")
+    };
+    match lang {
+        Lang::Fr => format!(
+            "Validateur (compte de vote) : {}\n   Identité : {}\n   Nom déclaré : {name}\n   Commission : {} % · stake actif : {} · {status}\n",
+            v.vote_account,
+            v.identity,
+            v.commission,
+            sol_in(lang, &v.activated_stake),
+        ),
+        Lang::En => format!(
+            "Validator (vote account): {}\n   Identity: {}\n   Declared name: {name}\n   Commission: {}% · active stake: {} · {status}\n",
+            v.vote_account,
+            v.identity,
+            v.commission,
+            sol_in(lang, &v.activated_stake),
+        ),
+    }
 }
 
 /// Body of the native dialog, from the decoded message and the live context only.
-pub(crate) fn describe(p: &SolStakePreview, net: Network) -> String {
+pub(crate) fn describe(lang: Lang, p: &SolStakePreview, net: Network) -> String {
+    let sol = |l: &str| sol_in(lang, l);
+    let fr = lang == Lang::Fr;
     let e = &p.epoch;
     let mut out = format!("Staking {}\n\n", net_label(net));
     match p.kind {
         "createAndDelegate" => {
-            out += &format!(
-                "Opération : créer un compte de staking et le déléguer\nCompte de staking (nouveau) : {}\n   dérivé de ton adresse et du seed « {} »\n",
-                p.stake_account,
-                crate::dialog_text::sanitize(p.seed.as_deref().unwrap_or(""), 40)
-            );
-            out += &format!(
-                "Montant délégué : {}\nRéserve de rent (récupérée au retrait) : {}\nTotal prélevé : {} + frais\n",
-                sol(p.delegated.as_deref().unwrap_or("0")),
-                sol(&p.rent_exempt_reserve),
-                sol(p.lamports.as_deref().unwrap_or("0"))
-            );
+            let seed = crate::dialog_text::sanitize(p.seed.as_deref().unwrap_or(""), 40);
+            let delegated = sol(p.delegated.as_deref().unwrap_or("0"));
+            let rent = sol(&p.rent_exempt_reserve);
+            let total = sol(p.lamports.as_deref().unwrap_or("0"));
+            out += &if fr {
+                format!(
+                    "Opération : créer un compte de staking et le déléguer\nCompte de staking (nouveau) : {}\n   dérivé de ton adresse et du seed « {seed} »\nMontant délégué : {delegated}\nRéserve de rent (récupérée au retrait) : {rent}\nTotal prélevé : {total} + frais\n",
+                    p.stake_account
+                )
+            } else {
+                format!(
+                    "Operation: create a stake account and delegate it\nStake account (new): {}\n   derived from your address and the seed « {seed} »\nAmount delegated: {delegated}\nRent reserve (recovered on withdrawal): {rent}\nTotal taken: {total} + fees\n",
+                    p.stake_account
+                )
+            };
         }
         "delegate" => {
-            out += &format!(
-                "Opération : déléguer un compte de staking existant\nCompte de staking : {}\nMontant délégué : {}\n",
-                p.stake_account,
-                sol(p.delegated.as_deref().unwrap_or("0"))
-            );
+            let delegated = sol(p.delegated.as_deref().unwrap_or("0"));
+            out += &if fr {
+                format!(
+                    "Opération : déléguer un compte de staking existant\nCompte de staking : {}\nMontant délégué : {delegated}\n",
+                    p.stake_account
+                )
+            } else {
+                format!(
+                    "Operation: delegate an existing stake account\nStake account: {}\nAmount delegated: {delegated}\n",
+                    p.stake_account
+                )
+            };
         }
         "deactivate" => {
-            out += &format!(
-                "Opération : DÉSACTIVER le stake (début du refroidissement)\nCompte de staking : {}\nMontant concerné : {}\n",
-                p.stake_account,
-                sol(p.delegated.as_deref().unwrap_or("0"))
-            );
+            let delegated = sol(p.delegated.as_deref().unwrap_or("0"));
+            out += &if fr {
+                format!(
+                    "Opération : DÉSACTIVER le stake (début du refroidissement)\nCompte de staking : {}\nMontant concerné : {delegated}\n",
+                    p.stake_account
+                )
+            } else {
+                format!(
+                    "Operation: DEACTIVATE the stake (start of the cooldown)\nStake account: {}\nAmount concerned: {delegated}\n",
+                    p.stake_account
+                )
+            };
         }
         _ => {
-            out += &format!(
-                "Opération : RETIRER vers ton adresse\nCompte de staking : {}\nMontant : {}{}\n",
-                p.stake_account,
-                sol(p.lamports.as_deref().unwrap_or("0")),
-                if p.closes_account {
-                    " (tout le solde : le compte est fermé)"
-                } else {
-                    ""
-                }
-            );
+            let amount = sol(p.lamports.as_deref().unwrap_or("0"));
+            let closes = if p.closes_account {
+                lang.pick(
+                    " (tout le solde : le compte est fermé)",
+                    " (the whole balance: the account is closed)",
+                )
+            } else {
+                ""
+            };
+            out += &if fr {
+                format!(
+                    "Opération : RETIRER vers ton adresse\nCompte de staking : {}\nMontant : {amount}{closes}\n",
+                    p.stake_account
+                )
+            } else {
+                format!(
+                    "Operation: WITHDRAW to your address\nStake account: {}\nAmount: {amount}{closes}\n",
+                    p.stake_account
+                )
+            };
         }
     }
     if let Some(v) = &p.validator {
         out += "\n";
-        out += &validator_lines(v);
+        out += &validator_lines(lang, v);
     }
-    out += "\nAutorités : toi (staker et withdrawer), aucun blocage (lockup)\n";
-    out += &format!(
-        "\nÉpoque actuelle : {} (fin dans {})\n",
-        e.epoch,
-        duration(e.seconds_left)
+    out += lang.pick(
+        "\nAutorités : toi (staker et withdrawer), aucun blocage (lockup)\n",
+        "\nAuthorities: you (staker and withdrawer), no lockup\n",
     );
-    match p.kind {
-        "createAndDelegate" | "delegate" => {
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nÉpoque actuelle : {} (fin dans {})\n",
+            e.epoch,
+            duration(lang, e.seconds_left)
+        ),
+        Lang::En => format!(
+            "\nCurrent epoch: {} (ends in {})\n",
+            e.epoch,
+            duration(lang, e.seconds_left)
+        ),
+    };
+    match (p.kind, lang) {
+        ("createAndDelegate" | "delegate", Lang::Fr) => {
             out += &format!(
                 "Activation : au début de l'époque {} si le réseau l'absorbe (au plus 9 % du stake total s'active par époque : elle peut prendre plusieurs époques)\n",
                 e.epoch + 1
             )
         }
-        "deactivate" => {
+        ("createAndDelegate" | "delegate", Lang::En) => {
+            out += &format!(
+                "Activation: at the start of epoch {} if the network absorbs it (at most 9% of the total stake activates per epoch: it can take several epochs)\n",
+                e.epoch + 1
+            )
+        }
+        ("deactivate", Lang::Fr) => {
             out += &format!(
                 "Refroidissement : retrait possible à partir de l'époque {} (peut prendre plusieurs époques, même limite de 9 %) ; pas de récompenses pendant ce temps. Désactivé dans l'époque même de sa délégation, il est retirable tout de suite.\n",
                 e.epoch + 1
             )
         }
+        ("deactivate", Lang::En) => {
+            out += &format!(
+                "Cooldown: withdrawal possible from epoch {} (can take several epochs, same 9% limit); no rewards in the meantime. Deactivated in the same epoch as its delegation, it can be withdrawn right away.\n",
+                e.epoch + 1
+            )
+        }
         _ => {}
     }
-    out += &format!(
-        "\nFrais de base : {} · Solde : {}\nPas de slashing sur Solana aujourd'hui : un mauvais validateur fait perdre des récompenses, pas le stake.",
-        sol(&p.fee),
-        sol(&p.balance)
-    );
+    out += &match lang {
+        Lang::Fr => format!(
+            "\nFrais de base : {} · Solde : {}\nPas de slashing sur Solana aujourd'hui : un mauvais validateur fait perdre des récompenses, pas le stake.",
+            sol(&p.fee),
+            sol(&p.balance)
+        ),
+        Lang::En => format!(
+            "\nBase fee: {} · Balance: {}\nNo slashing on Solana today: a bad validator loses you rewards, not the stake.",
+            sol(&p.fee),
+            sol(&p.balance)
+        ),
+    };
     out
 }
 
-pub(crate) fn describe_extra(p: &SolStakePreview) -> String {
-    let mut out = String::from("Kyro a trouvé des points à vérifier sur ce validateur :\n");
+pub(crate) fn describe_extra(lang: Lang, p: &SolStakePreview) -> String {
+    let mut out = String::from(lang.pick(
+        "Kyro a trouvé des points à vérifier sur ce validateur :\n",
+        "Kyro found points to check about this validator:\n",
+    ));
     for w in &p.warnings {
-        out += &match w {
-            SolStakeWarning::Delinquent => {
-                "• il est EN RETARD (delinquent) : il ne vote plus, ton stake ne rapporterait rien tant qu'il le reste\n".to_owned()
-            }
-            SolStakeWarning::HighCommission { commission } => format!(
+        out += &match (w, lang) {
+            (SolStakeWarning::Delinquent, _) => lang.pick(
+                "• il est EN RETARD (delinquent) : il ne vote plus, ton stake ne rapporterait rien tant qu'il le reste\n",
+                "• it is DELINQUENT: it no longer votes, your stake would earn nothing as long as it stays so\n",
+            ).to_owned(),
+            (SolStakeWarning::HighCommission { commission }, Lang::Fr) => format!(
                 "• il garde {commission} % des récompenses (commission élevée{})\n",
                 if *commission >= 100 {
                     " : tu ne recevrais RIEN"
@@ -1084,9 +1174,17 @@ pub(crate) fn describe_extra(p: &SolStakePreview) -> String {
                     ""
                 }
             ),
+            (SolStakeWarning::HighCommission { commission }, Lang::En) => format!(
+                "• it keeps {commission}% of the rewards (high commission{})\n",
+                if *commission >= 100 {
+                    ": you would receive NOTHING"
+                } else {
+                    ""
+                }
+            ),
         };
     }
-    out += "\nDéléguer quand même ?";
+    out += lang.pick("\nDéléguer quand même ?", "\nDelegate anyway?");
     out
 }
 
@@ -1139,18 +1237,25 @@ pub async fn sol_stake_sign(
     let signer = SignerInfo::new(&state, Chain::Sol, a, wallet_core::sol_path(a));
     let (summary, stake) = prepare_sign(&state, &me, &bytes).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    let lang = crate::i18n::current();
     confirm_native(
         &app,
-        "Confirmer l'opération de staking Solana",
-        signer.body(&describe(&stake, state.network)),
+        lang.pick(
+            "Confirmer l'opération de staking Solana",
+            "Confirm the Solana staking operation",
+        ),
+        signer.body(lang, &describe(lang, &stake, state.network)),
     )
     .await?;
     confirm_signer(&app, &signer).await?;
     if stake.requires_extra_confirmation {
         confirm_native(
             &app,
-            "Attention : validateur à vérifier",
-            describe_extra(&stake),
+            lang.pick(
+                "Attention : validateur à vérifier",
+                "Warning: validator to check",
+            ),
+            describe_extra(lang, &stake),
         )
         .await?;
     }
@@ -1330,7 +1435,7 @@ mod tests {
                 SolStakeWarning::HighCommission { commission: 100 },
             ],
         );
-        let d = describe(&p, Network::Testnet);
+        let d = describe(Lang::Fr, &p, Network::Testnet);
         for needle in [
             "Staking Solana devnet (test)",
             "créer un compte de staking et le déléguer",
@@ -1347,15 +1452,55 @@ mod tests {
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
-        let x = describe_extra(&p);
+        let x = describe_extra(Lang::Fr, &p);
         assert!(x.contains("delinquent") && x.contains("tu ne recevrais RIEN"));
         let mut w = preview_of("withdraw", vec![]);
         w.closes_account = true;
-        assert!(describe(&w, Network::Mainnet).contains("le compte est fermé"));
-        assert!(
-            describe(&preview_of("deactivate", vec![]), Network::Testnet)
-                .contains("retrait possible à partir de l'époque 1197")
+        assert!(describe(Lang::Fr, &w, Network::Mainnet).contains("le compte est fermé"));
+        assert!(describe(
+            Lang::Fr,
+            &preview_of("deactivate", vec![]),
+            Network::Testnet
+        )
+        .contains("retrait possible à partir de l'époque 1197"));
+    }
+
+    #[test]
+    fn dialog_text_in_english() {
+        let p = preview_of(
+            "createAndDelegate",
+            vec![
+                SolStakeWarning::Delinquent,
+                SolStakeWarning::HighCommission { commission: 100 },
+            ],
         );
+        let d = describe(Lang::En, &p, Network::Testnet);
+        for needle in [
+            "Operation: create a stake account and delegate it",
+            "the seed « kyro-stake-0 »",
+            "Amount delegated: 1 SOL",
+            "Rent reserve (recovered on withdrawal): 0.00166624 SOL",
+            "Validator (vote account): ETxHeBBcuw9Yu4dGuP3oXrD12V5RECvmi8ogQ9PkjyVF",
+            "« Test » (declared by the validator, not verified)",
+            "Commission: 100%",
+            "DELINQUENT",
+            "Current epoch: 1196 (ends in ≈ 36 h)",
+            "at the start of epoch 1197",
+            "No slashing",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        let x = describe_extra(Lang::En, &p);
+        assert!(x.contains("you would receive NOTHING") && x.ends_with("Delegate anyway?"));
+        for fr in ["Montant", "Époque", "Validateur", "Frais", "RIEN"] {
+            assert!(!d.contains(fr) && !x.contains(fr), "{fr}");
+        }
+        assert!(describe(
+            Lang::En,
+            &preview_of("deactivate", vec![]),
+            Network::Testnet
+        )
+        .contains("withdrawal possible from epoch 1197"));
     }
 }
 
@@ -1385,10 +1530,13 @@ mod live {
         assert_eq!(summary, built.summary, "{label}: same decode at signing");
         eprintln!(
             "--- {label}: dialog ---\n{}\n---",
-            describe(&p, Network::Testnet)
+            describe(Lang::Fr, &p, Network::Testnet)
         );
         if p.requires_extra_confirmation {
-            eprintln!("--- {label}: reinforced ---\n{}\n---", describe_extra(&p));
+            eprintln!(
+                "--- {label}: reinforced ---\n{}\n---",
+                describe_extra(Lang::Fr, &p)
+            );
         }
         let sig = wallet_core::sol_sign_message(seed, 0, &bytes).unwrap();
         wallet_core::sol_verify_signature(me, &bytes, &sig).unwrap();
