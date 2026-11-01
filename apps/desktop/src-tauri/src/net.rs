@@ -35,6 +35,16 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
+    // Hedera: mirror node REST (testnet, mainnet) and the gRPC-web proxies of consensus nodes
+    // (`hbar_backend::TESTNET_NODES` / `MAINNET_NODES`); only Rust's `hbar_*` commands.
+    "testnet.mirrornode.hedera.com",
+    "mainnet-public.mirrornode.hedera.com",
+    "testnet-node00-00-grpc.hedera.com",
+    "testnet-node01-00-grpc.hedera.com",
+    "testnet-node02-00-grpc.hedera.com",
+    "node00.swirldslabs.com",
+    "node01-00-grpc.swirlds.com",
+    "node04.swirldslabs.com",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -48,6 +58,18 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "api.0x.org",
     "li.quest",
     "lite-api.jup.ag",
+];
+
+/// Hedera hosts (mirror nodes and node proxies), all in [`ALLOWED_HOSTS`], family `hedera`.
+pub const HEDERA_HOSTS: &[&str] = &[
+    "testnet.mirrornode.hedera.com",
+    "mainnet-public.mirrornode.hedera.com",
+    "testnet-node00-00-grpc.hedera.com",
+    "testnet-node01-00-grpc.hedera.com",
+    "testnet-node02-00-grpc.hedera.com",
+    "node00.swirldslabs.com",
+    "node01-00-grpc.swirlds.com",
+    "node04.swirldslabs.com",
 ];
 
 /// Electrum servers (raw TLS sockets, not HTTP) that Rust itself may open **as defaults**,
@@ -294,6 +316,7 @@ pub enum Family {
     Tron,
     Xrp,
     Cardano,
+    Hedera,
     Evm,
     Solana,
     Market,
@@ -317,6 +340,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
+    } else if HEDERA_HOSTS.contains(&host) {
+        Family::Hedera
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1067,6 +1092,17 @@ mod tests {
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
+        for h in HEDERA_HOSTS {
+            assert_eq!(family_for(h, &c), Family::Hedera, "{h}");
+            assert!(ALLOWED_HOSTS.contains(h), "{h}");
+        }
+        for (_, h) in crate::hbar_backend::MAINNET_NODES
+            .iter()
+            .chain(crate::hbar_backend::TESTNET_NODES)
+        {
+            assert!(HEDERA_HOSTS.contains(h), "{h}");
+        }
+        assert_eq!(family_for("mainnet.hashio.io", &c), Family::Other);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

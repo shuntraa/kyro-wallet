@@ -30,6 +30,7 @@ import {
 import { demoUtxoAccount } from './mock-utxo';
 import { demoTronAddress } from './mock-tron';
 import { demoXrpAddress } from './mock-xrp';
+import { demoHbarAddress } from './mock-hbar';
 import { demoFund } from './mock-tx';
 import type { DemoChainState } from './mock-net';
 
@@ -47,6 +48,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   tron: 'TRON',
   xrp: 'XRP',
   ada: 'Cardano',
+  hbar: 'Hedera',
 };
 
 export const defaultAccountName = (chain: AccountChain, index: number): string => `${ACCOUNT_CHAIN_LABEL[chain]} ${index + 1}`;
@@ -146,6 +148,7 @@ export function createDemoAccounts(d: {
       tron: { address: demoTronAddress(d.seed, a), path: `m/44'/195'/${a}'/0/0` },
       xrp: { address: demoXrpAddress(d.seed, a), path: `m/44'/144'/${a}'/0/0` },
       cardano: { address: cardanoOf(a), path: `m/1852'/1815'/${a}'/0/0` },
+      hbar: { address: demoHbarAddress(d.seed, a), path: `m/44'/3030'/0'/0/${a}` },
     };
   };
 

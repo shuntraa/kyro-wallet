@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hbar-address"
+description = "Enables the hbar_address command without any pre-configured scope."
+commands.allow = ["hbar_address"]
+
+[[permission]]
+identifier = "deny-hbar-address"
+description = "Denies the hbar_address command without any pre-configured scope."
+commands.deny = ["hbar_address"]

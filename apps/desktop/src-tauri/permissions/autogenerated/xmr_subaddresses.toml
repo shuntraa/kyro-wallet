@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xmr-subaddresses"
+description = "Enables the xmr_subaddresses command without any pre-configured scope."
+commands.allow = ["xmr_subaddresses"]
+
+[[permission]]
+identifier = "deny-xmr-subaddresses"
+description = "Denies the xmr_subaddresses command without any pre-configured scope."
+commands.deny = ["xmr_subaddresses"]

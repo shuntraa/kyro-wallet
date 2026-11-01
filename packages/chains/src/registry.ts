@@ -9,8 +9,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `ltc` / `doge`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*`, docs/IPC.md §2.4).
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
-/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'hbar';
 
 interface ChainBase {
   key: string;
@@ -47,7 +47,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | HbarChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -220,6 +220,28 @@ export function xrpChain(network: Network): XrpChain {
 }
 
 /**
+ * Hedera (phase 4): Rust `hbar_*` commands and `HbarAdapter` (`packages/chains/src/hedera/`).
+ * The "address" is the EVM address of the ECDSA key (`m/44'/3030'/0'/0/a`): the first HBAR sent
+ * to it creates the account `0.0.x` (read with `hbar_account`). Testnet = Hedera testnet. HBAR
+ * only (HTS tokens: not supported). Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface HbarChain extends Omit<ChainBase, 'phase'> {
+  family: 'hbar';
+  phase: 4;
+}
+
+const HBAR_CHAINS: Record<Network, HbarChain> = {
+  testnet: { family: 'hbar', key: 'hedera', name: 'Hedera testnet', label: 'HBAR testnet', network: 'testnet', color: '#2D2D2D', glyph: 'ħ',
+    nativeSymbol: 'HBAR', nativeName: 'Hedera', nativeDecimals: 8, coingeckoId: 'hedera-hashgraph', phase: 4, blockTimeSecs: 4 },
+  mainnet: { family: 'hbar', key: 'hedera', name: 'Hedera', label: 'HBAR', network: 'mainnet', color: '#2D2D2D', glyph: 'ħ',
+    nativeSymbol: 'HBAR', nativeName: 'Hedera', nativeDecimals: 8, coingeckoId: 'hedera-hashgraph', phase: 4, blockTimeSecs: 4 },
+};
+
+export function hbarChain(network: Network): HbarChain {
+  return HBAR_CHAINS[network];
+}
+
+/**
  * Cardano (phase 4): Rust `ada_*` commands and `CardanoAdapter` (`packages/chains/src/cardano/`).
  * Testnet = preprod. Part of `allChains()` / `assetsFor()` (ADA; native tokens are read from the
  * balance, not listed). Single-address mode. Hardware wallets: HW_UNSUPPORTED.
@@ -301,7 +323,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), hbarChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -412,6 +434,12 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       ? { host: host(xrp.url), purpose: 'XRP Ledger : ton serveur rippled', custom: true }
       : { host: network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net', purpose: `XRP Ledger${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (rippled)` },
   );
+  // Hedera: reached by Rust only (hbar_*), Tor circuits of the `hedera` family; no custom server.
+  list.push({ host: network === 'mainnet' ? 'mainnet-public.mirrornode.hedera.com' : 'testnet.mirrornode.hedera.com', purpose: `Hedera${network === 'mainnet' ? '' : ' testnet'} : compte, solde, historique, taux de change (nœud miroir)` });
+  list.push({
+    host: network === 'mainnet' ? 'node00.swirldslabs.com, node01-00-grpc.swirlds.com, node04.swirldslabs.com' : 'testnet-node00/01/02-00-grpc.hedera.com',
+    purpose: `Hedera${network === 'mainnet' ? '' : ' testnet'} : diffusion des transferts signés (proxys gRPC-web des nœuds de consensus)`,
+  });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'

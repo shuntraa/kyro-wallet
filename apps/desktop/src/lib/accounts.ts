@@ -16,6 +16,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   tron: 'TRON',
   xrp: 'XRP',
   ada: 'Cardano',
+  hbar: 'Hedera',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -28,6 +29,7 @@ export const ACCOUNT_CHAIN_HINT: Record<AccountChain, string> = {
   tron: 'TRX et TRC-20',
   xrp: 'XRP et monnaies émises',
   ada: 'ADA et tokens',
+  hbar: 'HBAR (adresse EVM, compte 0.0.x créé au premier dépôt)',
 };
 
 /** « Bitcoin 1 » for index 0, « Bitcoin 2 » for index 1… */
@@ -100,7 +102,7 @@ export interface OwnAccountRef {
   addresses: string[];
 }
 
-const sameAddress = (family: AccountChain, a: string, b: string) => (family === 'evm' ? a.toLowerCase() === b.toLowerCase() : a === b);
+const sameAddress = (family: AccountChain, a: string, b: string) => (family === 'evm' || family === 'hbar' ? a.toLowerCase() === b.toLowerCase() : a === b);
 
 /** The user's OTHER accounts of `family` (not `current`), for « Mes comptes » in Envoyer. */
 export function otherOwnAccounts<T extends OwnAccountRef>(sources: T[], family: AccountChain, current: number): T[] {

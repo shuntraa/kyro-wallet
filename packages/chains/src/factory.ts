@@ -13,9 +13,33 @@ import type { UtxoAccountView, UtxoBackend } from './utxo/utxo';
 import { dogeChain, ltcChain, tronChain } from './registry';
 import { TronAdapter } from './tron/adapter';
 import { XrpAdapter } from './xrp/adapter';
+
+// ---------------------------------------------------------------- phase 4: Hedera
+
+export {
+  HbarAdapter,
+  rustHbarBackend,
+  isHbarRecipient,
+  isHbarAccountId,
+  isHbarEvmAddress,
+  normalizeHbarRecipient,
+  hbarMemoError,
+  type HbarAdapterOptions,
+  type HbarBackend,
+  type HbarAccountInfo,
+  type HbarOwnAccount,
+  type HbarRecipientInfo,
+  type HbarTxSummary,
+  type HbarWarning,
+  type HbarContext,
+  type HbarHistoryEntry,
+  type HbarUnsigned,
+  type HbarSigned,
+} from './hedera/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
-import { xrpChain } from './registry';
+import { xrpChain, hbarChain } from './registry';
+import { HbarAdapter } from './hedera/adapter';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -34,6 +58,8 @@ export interface AdapterSet {
   xrp: XrpAdapter | null;
   /** Cardano: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   cardano: CardanoAdapter | null;
+  /** Hedera: vault only (hardware wallets: HW_UNSUPPORTED for now). */
+  hbar: HbarAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -74,8 +100,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...a }) : null;
   // Cardano: Rust picks the server (servers.cardano, default Koios).
   const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...a }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : [])];
-  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, all, hw: hw ?? null };
+  // Hedera: Rust reads the mirror node and submits to the nodes (no custom server).
+  const hbar = accounts.hbar ? new HbarAdapter({ chain: hbarChain(network), address: accounts.hbar.address, ...a }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(hbar ? [hbar] : [])];
+  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, hbar, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin

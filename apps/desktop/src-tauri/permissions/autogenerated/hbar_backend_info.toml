@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hbar-backend-info"
+description = "Enables the hbar_backend_info command without any pre-configured scope."
+commands.allow = ["hbar_backend_info"]
+
+[[permission]]
+identifier = "deny-hbar-backend-info"
+description = "Denies the hbar_backend_info command without any pre-configured scope."
+commands.deny = ["hbar_backend_info"]
