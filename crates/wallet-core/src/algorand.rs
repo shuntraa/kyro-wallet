@@ -770,6 +770,29 @@ pub fn algo_verify_signed(
     Ok((p.txid(), raw))
 }
 
+/// Hardware wallet (Ledger Algorand app): the canonical msgpack sent to the device (the app
+/// prefixes `TX` itself), after strict decoding.
+pub fn algo_hw_message(blob_hex: &str) -> Result<Vec<u8>> {
+    Ok(AlgoPayment::decode(&unhex(blob_hex)?)?.encode())
+}
+
+/// Hardware wallet: signed transaction (hex) and transaction id from the device's signature,
+/// checked like [`algo_verify_signed`] (policy for `our_address` on `net`, strict signature).
+pub fn algo_hw_signed(
+    blob_hex: &str,
+    net: Network,
+    our_address: &str,
+    sig: &[u8],
+) -> Result<(String, String)> {
+    let sig: [u8; 64] = sig
+        .try_into()
+        .map_err(|_| bad("signature de l'appareil : 64 octets attendus"))?;
+    let p = AlgoPayment::decode(&unhex(blob_hex)?)?;
+    let signed = hex::encode(algo_encode_signed(&p, &sig));
+    let (txid, _) = algo_verify_signed(&signed, net, our_address)?;
+    Ok((signed, txid))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

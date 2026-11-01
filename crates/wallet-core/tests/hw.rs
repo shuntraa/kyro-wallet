@@ -495,6 +495,7 @@ fn watch_account() -> WatchOnlyAccount {
             .unwrap(),
             path: EVM_NODE_PATH.into(),
         }),
+        keys: Vec::new(),
         sol: Some(WatchSol {
             address: sol_address(&seed(ABANDON), 0).unwrap(),
             path: sol_path(0),

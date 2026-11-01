@@ -58,7 +58,7 @@ pub(crate) fn guard(state: &AppState) -> AppResult<()> {
     Ok(())
 }
 
-fn check_account_number(account: u32) -> AppResult<()> {
+pub(crate) fn check_account_number(account: u32) -> AppResult<()> {
     if account > MAX_HW_ACCOUNT {
         return Err(AppError::InvalidInput(format!(
             "numéro de compte : 0 à {MAX_HW_ACCOUNT}"
@@ -393,6 +393,7 @@ pub async fn hw_account_add(
             xrp: None,
             tron: None,
             stellar: None,
+            keys: Vec::new(),
         },
     };
     if let Some(l) = label {
@@ -994,6 +995,7 @@ mod tests {
             xrp: None,
             tron: None,
             stellar: None,
+            keys: Vec::new(),
         }
     }
 

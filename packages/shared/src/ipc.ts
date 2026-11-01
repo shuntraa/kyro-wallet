@@ -2257,8 +2257,8 @@ export interface SolTxSummary {
 // ---------------------------------------------------------------- hardware wallets (docs/IPC.md §2.3)
 
 export type HwDeviceKind = 'ledger' | 'trezor';
-/** `cardano`, `zec` (and `xmr`) answer HW_UNSUPPORTED. */
-export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp' | 'bch' | 'dash' | 'stellar' | 'zec' | 'xmr';
+/** `cardano`, `zec`, `xmr`, `dot`, `hbar`, `kas` and `ton` answer HW_UNSUPPORTED. */
+export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp' | 'bch' | 'dash' | 'stellar' | 'zec' | 'xmr' | HwKeyChain | 'dot' | 'hbar' | 'kas' | 'ton';
 /** The chains Kyro implements on hardware wallets (device support: `hw_open` → `chains`). */
 export type HwImplementedChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'xrp' | 'tron' | 'stellar';
 /** Litecoin / Dogecoin / Bitcoin Cash / Dash account of a hardware wallet (`m/84'/2'/a'`, `m/44'/3'/a'`…). */
@@ -2272,6 +2272,21 @@ export interface HwUtxoKey {
 export interface HwChainKey {
   address: string;
   pubkey: string;
+  path: string;
+}
+/**
+ * Single-key chains (Ledger only): one public key per account, read with `hw_key_add`, shown
+ * with `hw_key_verify`, signed with `hw_sign_<chain>_tx`. NEAR uses `m/44'/397'/0'/0'/(account+1)'`
+ * on the device (the Ledger app only accepts five-level paths), the others the vault's path.
+ */
+export type HwKeyChain = 'sui' | 'apt' | 'algo' | 'near' | 'cosmos';
+
+/** Public key of a single-key chain stored in a watch-only account. */
+export interface HwWatchKey {
+  chain: HwKeyChain;
+  /** Lowercase hex (32 bytes ed25519, 33 bytes compressed secp256k1 for Cosmos). */
+  pubkey: string;
+  address: string;
   path: string;
 }
 
@@ -2351,6 +2366,8 @@ export interface WatchOnlyAccount {
   /** Ledger only. */
   tron?: HwChainKey;
   stellar?: HwChainKey;
+  /** Single-key chains (Sui, Aptos, Algorand, NEAR, Cosmos Hub). */
+  keys?: HwWatchKey[];
 }
 
 /** Event `hw-prompt`: what to tell the user while a device call is pending. */
@@ -2770,6 +2787,24 @@ export interface Commands {
   hw_stellar_build_tx: { args: { accountId: string; to: string; amount: string; memo?: StellarMemoSpec }; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
   hw_sign_stellar_tx: { args: { id: string; accountId: string; envelope: string }; ret: { envelope: string; hash: string; summary: StellarTxSummary; context: StellarContext } };
   hw_stellar_broadcast: { args: { accountId: string; envelope: string }; ret: string };
+  hw_key_add: { args: { id: string; chain: HwKeyChain; account: number; accountId?: string; label?: string }; ret: WatchOnlyAccount };
+  hw_key_verify: { args: { id: string; accountId: string; chain: HwKeyChain }; ret: { address: string; path: string } };
+  hw_sui_build_tx: { args: { accountId: string; to: string; amount?: string; all?: boolean }; ret: SuiBuilt };
+  hw_sign_sui_tx: { args: { id: string; accountId: string; bcs: string }; ret: SuiBuilt & { signature: string; digest: string } };
+  hw_sui_broadcast: { args: { accountId: string; bcs: string; signature: string }; ret: string };
+  hw_aptos_build_tx: { args: { accountId: string; to: string; amount: string }; ret: { raw: string; summary: AptosTxSummary; context: AptosContext } };
+  hw_sign_aptos_tx: { args: { id: string; accountId: string; raw: string }; ret: { signed: string; hash: string; summary: AptosTxSummary; context: AptosContext } };
+  hw_aptos_broadcast: { args: { accountId: string; signed: string }; ret: string };
+  hw_algo_build_tx: { args: { accountId: string; to: string; amount: string; note?: string }; ret: AlgoBuilt };
+  hw_sign_algo_tx: { args: { id: string; accountId: string; blob: string }; ret: { blob: string; txid: string; summary: AlgoTxSummary; context: AlgoContext } };
+  hw_algo_broadcast: { args: { accountId: string; blob: string }; ret: string };
+  hw_near_build_tx: { args: { accountId: string; to: string; amount: string }; ret: { tx: string; summary: NearTxSummary; context: NearContext } };
+  hw_sign_near_tx: { args: { id: string; accountId: string; tx: string }; ret: { signed: string; hash: string; summary: NearTxSummary; context: NearContext } };
+  hw_near_broadcast: { args: { accountId: string; signed: string }; ret: NearTxOutcome };
+  hw_near_tx_status: { args: { accountId: string; hash: string }; ret: NearTxOutcome };
+  hw_cosmos_build_tx: { args: { accountId: string; to: string; amount: string; memo?: string }; ret: { signDoc: string; summary: CosmosTxSummary; context: CosmosContext } };
+  hw_sign_cosmos_tx: { args: { id: string; accountId: string; signDoc: string }; ret: { tx: string; hash: string; summary: CosmosTxSummary; context: CosmosContext } };
+  hw_cosmos_broadcast: { args: { accountId: string; tx: string }; ret: string };
   /** Restarts the bootstrap (after `error`). `INVALID_INPUT` when Tor is disabled. */
   tor_retry: { args: undefined; ret: TorStatus };
   settings_get: { args: undefined; ret: Settings };

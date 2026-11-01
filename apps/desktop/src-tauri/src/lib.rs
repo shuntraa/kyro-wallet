@@ -17,6 +17,12 @@ mod commands_dot;
 mod commands_hbar;
 mod commands_hw;
 mod commands_hw_coins;
+mod commands_hw_algo;
+mod commands_hw_aptos;
+mod commands_hw_cosmos;
+mod commands_hw_keys;
+mod commands_hw_near;
+mod commands_hw_sui;
 mod commands_kaspa;
 mod commands_near;
 mod commands_servers;
@@ -360,6 +366,24 @@ pub fn run() {
             commands_hw::hw_sign_btc_psbt,
             commands_hw::hw_sign_evm_tx,
             commands_hw::hw_sign_sol_tx,
+            commands_hw_keys::hw_key_add,
+            commands_hw_keys::hw_key_verify,
+            commands_hw_sui::hw_sui_build_tx,
+            commands_hw_sui::hw_sign_sui_tx,
+            commands_hw_sui::hw_sui_broadcast,
+            commands_hw_aptos::hw_aptos_build_tx,
+            commands_hw_aptos::hw_sign_aptos_tx,
+            commands_hw_aptos::hw_aptos_broadcast,
+            commands_hw_algo::hw_algo_build_tx,
+            commands_hw_algo::hw_sign_algo_tx,
+            commands_hw_algo::hw_algo_broadcast,
+            commands_hw_near::hw_near_build_tx,
+            commands_hw_near::hw_sign_near_tx,
+            commands_hw_near::hw_near_broadcast,
+            commands_hw_near::hw_near_tx_status,
+            commands_hw_cosmos::hw_cosmos_build_tx,
+            commands_hw_cosmos::hw_sign_cosmos_tx,
+            commands_hw_cosmos::hw_cosmos_broadcast,
             commands_hw::hw_thp_pairing_code,
             commands_hw::hw_thp_pairings,
             commands_hw::hw_thp_forget,

@@ -532,6 +532,9 @@ impl<W: Wire> Trezor<W> {
                 return Ok(refuse(st, "Solana n'existe pas sur la Trezor One", None))
             }
             Chain::Sol => (C::Capability_Solana, "2.6.4"),
+            other if super::ledger_apps::trezor_status(other).is_some() => {
+                return Ok(super::ledger_apps::trezor_status(other).unwrap_or(st));
+            }
             other => match super::chains::trezor_support(other, one) {
                 Ok(support) => support,
                 Err(None) => return Ok(ChainStatus::not_yet(other, None)),

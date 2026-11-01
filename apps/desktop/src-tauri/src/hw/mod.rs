@@ -17,9 +17,15 @@
 
 pub mod chains;
 pub mod ledger;
+pub mod ledger_algo;
 pub mod ledger_apdu;
 pub mod ledger_coins;
 pub mod ledger_utxo;
+pub mod ledger_apps;
+pub mod ledger_aptos;
+pub mod ledger_cosmos;
+pub mod ledger_near;
+pub mod ledger_sui;
 pub mod store;
 pub mod thp;
 #[cfg(test)]
@@ -61,10 +67,21 @@ pub enum Chain {
     Stellar,
     /// Zcash (transparent): not offered on hardware wallets (HW_UNSUPPORTED), see IPC.md §2.3.
     Zec,
+    // Single-key chains, Ledger only (see `ledger_apps`).
+    Sui,
+    Apt,
+    Algo,
+    Near,
+    Cosmos,
+    // No hardware support (reasons in `ledger_apps::unavailable`).
+    Dot,
+    Hbar,
+    Kas,
+    Ton,
 }
 
 impl Chain {
-    pub const ALL: [Chain; 12] = [
+    pub const ALL: [Chain; 21] = [
         Chain::Btc,
         Chain::Evm,
         Chain::Sol,
@@ -77,10 +94,31 @@ impl Chain {
         Chain::Dash,
         Chain::Stellar,
         Chain::Zec,
+        Chain::Sui,
+        Chain::Apt,
+        Chain::Algo,
+        Chain::Near,
+        Chain::Cosmos,
+        Chain::Dot,
+        Chain::Hbar,
+        Chain::Kas,
+        Chain::Ton,
     ];
 
     pub fn implemented(self) -> bool {
-        !matches!(self, Chain::Cardano | Chain::Zec)
+        matches!(
+            self,
+            Chain::Btc
+                | Chain::Evm
+                | Chain::Sol
+                | Chain::Ltc
+                | Chain::Doge
+                | Chain::Bch
+                | Chain::Dash
+                | Chain::Xrp
+                | Chain::Tron
+                | Chain::Stellar
+        ) || ledger_apps::key_chain(self).is_some()
     }
 
     pub fn label(self) -> &'static str {
@@ -97,6 +135,15 @@ impl Chain {
             Chain::Dash => "Dash",
             Chain::Stellar => "Stellar",
             Chain::Zec => "Zcash",
+            Chain::Sui => "Sui",
+            Chain::Apt => "Aptos",
+            Chain::Algo => "Algorand",
+            Chain::Near => "NEAR",
+            Chain::Cosmos => "Cosmos Hub",
+            Chain::Dot => "Polkadot",
+            Chain::Hbar => "Hedera",
+            Chain::Kas => "Kaspa",
+            Chain::Ton => "TON",
         }
     }
 }
@@ -473,6 +520,11 @@ pub trait HardwareWallet: Send {
     /// TRON, Stellar), which talks to the device itself.
     fn raw(&mut self) -> RawDevice<'_> {
         RawDevice::None
+    }
+
+    /// Ledger only: the raw APDU link, for the per-chain apps of [`ledger_apps`].
+    fn apdu_link(&self) -> Option<&dyn ledger::ApduLink> {
+        None
     }
 }
 

@@ -8,7 +8,7 @@ import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { publicKeyToAddress } from 'viem/accounts';
 import { bytesToHex } from 'viem';
-import type { BtcKind, EvmTxSummary, HwChain, HwDeviceKind, Network, WatchOnlyAccount } from '@kyro/shared';
+import type { BtcKind, EvmTxSummary, HwChain, HwDeviceKind, HwKeyChain, Network, WatchOnlyAccount } from '@kyro/shared';
 import { derivePubkey, parseXpub } from './bitcoin/xpub';
 import { unsignedFamilyOf, type AnyAdapter, type AnyUnsigned } from './types';
 import { utxoAddressFromXpub, type UtxoCoinSpec } from './utxo/utxo';
@@ -46,23 +46,23 @@ export interface WalletAccounts {
   cardano?: { address: string; path?: string };
   /** Vault, or a Ledger / Trezor (`hw_sign_stellar_tx`). */
   stellar?: { address: string; path?: string };
-  /** Vault only: NEAR implicit account (hardware wallets: not supported). */
+  /** NEAR implicit account (Ledger: key at `m/44'/397'/0'/0'/(account+1)'`, not the vault's path). */
   near?: { address: string; path?: string };
-  /** Vault only: Sui on a hardware wallet is not supported. */
+  /** Sui (vault, or Ledger « Sui » app). */
   sui?: { address: string; path?: string };
   /** Vault only: Kaspa is not offered on hardware wallets. */
   kas?: { address: string; path?: string };
   /** Vault only: Polkadot on a hardware wallet is HW_UNSUPPORTED. */
   polkadot?: { address: string; path?: string };
-  /** Vault only: Algorand is not offered on hardware wallets. */
+  /** Algorand (vault, or Ledger « Algorand » app). */
   algo?: { address: string; path?: string };
   /** Vault only: Monero on a hardware wallet is HW_UNSUPPORTED. */
   xmr?: { address: string; path?: string };
   /** Vault only: no hardware wallet signs TON in Kyro. */
   ton?: { address: string; path?: string };
-  /** Vault only: Cosmos Hub on a hardware wallet is HW_UNSUPPORTED. */
+  /** Cosmos Hub (vault, or Ledger « Cosmos » app, amino JSON signing). */
   cosmos?: { address: string; path?: string };
-  /** Vault only: Aptos has no hardware-wallet path. */
+  /** Aptos (vault, or Ledger « Aptos » app). */
   aptos?: { address: string; path?: string };
   /** Vault only: Zcash (transparent) on a hardware wallet is HW_UNSUPPORTED. */
   zec?: { address: string; xpub: string; fingerprint: string; path: string };
@@ -117,18 +117,29 @@ export function hwToAccounts(acc: WatchOnlyAccount): WalletAccounts {
   if (acc.xrp) out.xrp = { address: acc.xrp.address, path: acc.xrp.path };
   if (acc.tron) out.tron = { address: acc.tron.address, path: acc.tron.path };
   if (acc.stellar) out.stellar = { address: acc.stellar.address, path: acc.stellar.path };
+  for (const k of acc.keys ?? []) {
+    const view = { address: k.address, path: k.path };
+    if (k.chain === 'sui') out.sui = view;
+    else if (k.chain === 'apt') out.aptos = view;
+    else if (k.chain === 'algo') out.algo = view;
+    else if (k.chain === 'near') out.near = view;
+    else out.cosmos = view;
+  }
   return out;
 }
 
 const UTXO_PREFIX = { litecoin: 'ltc', dogecoin: 'doge', bitcoincash: 'bch', dash: 'dash' } as const;
 const UTXO_SPECS: Record<'ltc' | 'doge' | 'bch' | 'dash', UtxoCoinSpec> = { ltc: LITECOIN_SPEC, doge: DOGECOIN_SPEC, bch: BITCOINCASH_SPEC, dash: DASH_SPEC };
 
+/** Single-key chains a Ledger can add to a hardware-wallet account (`hw_key_add`). */
+export const HW_KEY_CHAINS: readonly HwKeyChain[] = ['sui', 'apt', 'algo', 'near', 'cosmos'];
+
 /**
  * Chains a hardware-wallet brand can hold in Kyro (mirror of `hw/chains.rs`; the device and
  * its firmware / apps decide in the end, see `hw_open` → `chains`).
  */
 export const HW_CHAINS: Record<HwDeviceKind, readonly HwChain[]> = {
-  ledger: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar'],
+  ledger: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar', ...HW_KEY_CHAINS],
   trezor: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'stellar'],
 };
 
@@ -150,8 +161,9 @@ export const hwPaths = {
     const u = acc.utxo?.find((x) => x.coin === coin);
     return u ? `${u.path}/${change}/${index}` : null;
   },
-  /** XRP / TRON / Stellar key path. */
-  key: (acc: WatchOnlyAccount, chain: 'xrp' | 'tron' | 'stellar'): string | null => acc[chain]?.path ?? null,
+  /** XRP / TRON / Stellar key path, or the stored key of a single-key chain (Sui, Aptos, Algorand, NEAR, Cosmos). */
+  key: (acc: WatchOnlyAccount, chain: 'xrp' | 'tron' | 'stellar' | HwKeyChain): string | null =>
+    chain === 'xrp' || chain === 'tron' || chain === 'stellar' ? (acc[chain]?.path ?? null) : (acc.keys?.find((k) => k.chain === chain)?.path ?? null),
 };
 
 /** ERC-20 tokens for which Kyro ships a Ledger-signed descriptor (wallet-core `ledger_cal.rs`). */

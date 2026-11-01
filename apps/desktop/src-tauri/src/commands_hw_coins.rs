@@ -526,6 +526,7 @@ mod tests {
                 pubkey: hex::encode(pk),
                 path: wallet_core::stellar_path(0),
             }),
+            keys: Vec::new(),
         };
         acc.validate().unwrap();
         let (t, expected) =

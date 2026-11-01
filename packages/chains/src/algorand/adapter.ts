@@ -19,6 +19,7 @@ import {
 } from '@kyro/shared';
 import { accountArg } from '../types';
 import type { AlgorandChain } from '../registry';
+import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 export type { AlgoAccountInfo, AlgoContext, AlgoHistoryEntry, AlgoTxStatus, AlgoTxSummary, AlgoWarning };
@@ -47,6 +48,19 @@ export function rustAlgoBackend(account = 0): AlgoBackend {
     sign: (blob, password) => call('algo_sign_tx', { blob, password, ...acct }),
     broadcast: (blob) => call('algo_broadcast', { blob, ...acct }),
     txStatus: (txid) => call('algo_tx_status', { txid }),
+  };
+}
+
+/**
+ * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature
+ * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
+ */
+export function rustAlgoHwBackend(accountId: string): AlgoBackend {
+  return {
+    ...rustAlgoBackend(),
+    build: (to, amount, note) => call('hw_algo_build_tx', { accountId, to, amount, ...(note ? { note } : {}) }),
+    sign: (blob, id) => call('hw_sign_algo_tx', { id, accountId, blob }),
+    broadcast: (blob) => call('hw_algo_broadcast', { accountId, blob }),
   };
 }
 
@@ -88,19 +102,23 @@ export interface AlgorandAdapterOptions {
   backend?: AlgoBackend;
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (Ledger): signing through `hw_sign_*` (`signTxHw`). */
+  hw?: HwSigner;
 }
 
 export class AlgorandAdapter implements ChainAdapter<'algo'> {
   readonly family = 'algo' as const;
   readonly chain: AlgorandChain;
   private readonly address: string;
+  readonly hw: HwSigner | null;
   private readonly backend: AlgoBackend;
 
   constructor(opts: AlgorandAdapterOptions) {
     if (!isAlgoAddress(opts.address)) throw new Error(l10n('Adresse Algorand invalide', 'Invalid Algorand address'));
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustAlgoBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? rustAlgoHwBackend(opts.hw.accountId) : rustAlgoBackend(opts.account ?? 0));
   }
 
   getAddress(): string {
@@ -177,6 +195,12 @@ export class AlgorandAdapter implements ChainAdapter<'algo'> {
       maxFee: BigInt(s.fee),
       size: { family: 'algo' },
     };
+  }
+
+  /** Ledger: same checks as `signTx`; Rust re-reads the key, shows its dialog, then the device signs. */
+  signTxHw(unsigned: AlgoUnsigned, deviceId: string): Promise<AlgoSigned> {
+    if (!this.hw) return Promise.reject(new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet')));
+    return this.signTx(unsigned, deviceId);
   }
 
   /** Rust: live checks, native dialog (amount, receiver, note, fee, genesis), signature. */

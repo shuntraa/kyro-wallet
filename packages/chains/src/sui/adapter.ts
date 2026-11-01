@@ -7,6 +7,7 @@
 
 import { call, l10n, type SuiBalance, type SuiBuilt, type SuiContext, type SuiHistoryEntry, type SuiTxStatus, type SuiTxSummary, type SuiWarning } from '@kyro/shared';
 import type { SuiChain } from '../registry';
+import type { HwSigner } from '../hw';
 import { accountArg, type Balance, type BuildParams, type ChainAdapter, type FeeEstimates, type HistoryItem } from '../types';
 
 export type { SuiBalance, SuiContext, SuiHistoryEntry, SuiTxStatus, SuiTxSummary, SuiWarning };
@@ -31,6 +32,19 @@ export function rustSuiBackend(account = 0): SuiBackend {
     sign: (bcs, password) => call('sui_sign_tx', { bcs, password, ...acct }),
     broadcast: (bcs, signature) => call('sui_broadcast', { bcs, signature, ...acct }),
     txStatus: (digest) => call('sui_tx_status', { digest }),
+  };
+}
+
+/**
+ * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature
+ * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
+ */
+export function rustSuiHwBackend(accountId: string): SuiBackend {
+  return {
+    ...rustSuiBackend(),
+    build: (to, amount) => call('hw_sui_build_tx', amount === null ? { accountId, to, all: true } : { accountId, to, amount: amount.toString() }),
+    sign: (bcs, id) => call('hw_sign_sui_tx', { id, accountId, bcs }),
+    broadcast: (bcs, signature) => call('hw_sui_broadcast', { accountId, bcs, signature }),
   };
 }
 
@@ -86,19 +100,23 @@ export interface SuiAdapterOptions {
   backend?: SuiBackend;
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (Ledger): signing through `hw_sign_*` (`signTxHw`). */
+  hw?: HwSigner;
 }
 
 export class SuiAdapter implements ChainAdapter<'sui'> {
   readonly family = 'sui' as const;
   readonly chain: SuiChain;
   private readonly address: string;
+  readonly hw: HwSigner | null;
   private readonly backend: SuiBackend;
 
   constructor(opts: SuiAdapterOptions) {
     if (!isSuiAddress(opts.address)) throw new Error(l10n('Adresse Sui invalide', 'Invalid Sui address'));
     this.chain = opts.chain;
     this.address = normalizeSuiAddress(opts.address);
-    this.backend = opts.backend ?? rustSuiBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? rustSuiHwBackend(opts.hw.accountId) : rustSuiBackend(opts.account ?? 0));
   }
 
   getAddress(): string {
@@ -157,6 +175,12 @@ export class SuiAdapter implements ChainAdapter<'sui'> {
       maxFee: BigInt(s.gasBudget),
       size: { family: 'sui' },
     };
+  }
+
+  /** Ledger: same checks as `signTx`; Rust re-reads the key, shows its dialog, then the device signs. */
+  signTxHw(unsigned: SuiUnsigned, deviceId: string): Promise<SuiSigned> {
+    if (!this.hw) return Promise.reject(new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet')));
+    return this.signTx(unsigned, deviceId);
   }
 
   /** Rust: live checks, simulation, native dialog, signature. */

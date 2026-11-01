@@ -8,6 +8,7 @@
 import { accountArg } from '../types';
 import { call, l10n, type AptosAccountInfo, type AptosContext, type AptosHistoryEntry, type AptosTxSummary, type AptosWarning } from '@kyro/shared';
 import type { AptosChain } from '../registry';
+import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 export type { AptosAccountInfo, AptosContext, AptosHistoryEntry, AptosTxSummary, AptosWarning };
@@ -35,6 +36,19 @@ export function rustAptosBackend(account = 0): AptosBackend {
     sign: (raw, password) => call('aptos_sign_tx', { raw, password, ...acct }),
     broadcast: (signed) => call('aptos_broadcast', { signed, ...acct }),
     txStatus: (hash) => call('aptos_tx_status', { hash }),
+  };
+}
+
+/**
+ * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature
+ * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
+ */
+export function rustAptosHwBackend(accountId: string): AptosBackend {
+  return {
+    ...rustAptosBackend(),
+    build: (to, amount) => call('hw_aptos_build_tx', { accountId, to, amount }),
+    sign: (raw, id) => call('hw_sign_aptos_tx', { id, accountId, raw }),
+    broadcast: (signed) => call('hw_aptos_broadcast', { accountId, signed }),
   };
 }
 
@@ -94,19 +108,23 @@ export interface AptosAdapterOptions {
   backend?: AptosBackend;
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (Ledger): signing through `hw_sign_*` (`signTxHw`). */
+  hw?: HwSigner;
 }
 
 export class AptosAdapter implements ChainAdapter<'apt'> {
   readonly family = 'apt' as const;
   readonly chain: AptosChain;
   private readonly address: string;
+  readonly hw: HwSigner | null;
   private readonly backend: AptosBackend;
 
   constructor(opts: AptosAdapterOptions) {
     if (!isAptosAddress(opts.address)) throw new Error(l10n('Adresse Aptos invalide', 'Invalid Aptos address'));
     this.chain = opts.chain;
     this.address = norm(opts.address);
-    this.backend = opts.backend ?? rustAptosBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? rustAptosHwBackend(opts.hw.accountId) : rustAptosBackend(opts.account ?? 0));
   }
 
   getAddress(): string {
@@ -188,6 +206,12 @@ export class AptosAdapter implements ChainAdapter<'apt'> {
       estimatedFee: BigInt(built.context.gasUsed) * BigInt(s.gasUnitPrice),
       size: { family: 'apt' },
     };
+  }
+
+  /** Ledger: same checks as `signTx`; Rust re-reads the key, shows its dialog, then the device signs. */
+  signTxHw(unsigned: AptosUnsigned, deviceId: string): Promise<AptosSigned> {
+    if (!this.hw) return Promise.reject(new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet')));
+    return this.signTx(unsigned, deviceId);
   }
 
   /** Rust: live checks (sequence, balance, re-simulation), native dialog, signature. */

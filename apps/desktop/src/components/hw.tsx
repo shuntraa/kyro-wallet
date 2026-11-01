@@ -5,8 +5,8 @@
 // the add-device flow (Welcome and Settings › Devices). Contract: docs/IPC.md §2.3.
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
-import { call, errorData, ipcErrorIn, isDemoMode, MAX_HW_ACCOUNT, type HwChain, type HwChainStatus, type HwDeviceInfo, type HwDeviceKind, type HwDeviceStatus, type HwImplementedChain, type WatchOnlyAccount } from '@kyro/shared';
-import { hwFingerprint, hwToAccounts } from '@kyro/chains';
+import { call, errorData, ipcErrorIn, isDemoMode, MAX_HW_ACCOUNT, type HwChain, type HwChainStatus, type HwDeviceInfo, type HwDeviceKind, type HwDeviceStatus, type HwImplementedChain, type HwKeyChain, type WatchOnlyAccount } from '@kyro/shared';
+import { HW_KEY_CHAINS, hwFingerprint, hwToAccounts } from '@kyro/chains';
 import { BRAND, hwErrorView, hwPromptStore, pinPosition, useHwPrompts, withDevice, PIN_MATRIX_KEYPAD } from '../state/hw';
 import { cn } from '../lib/cn';
 import { shortAddress } from '../lib/format';
@@ -308,10 +308,16 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
 
 // ---------------------------------------------------------------- add a device
 
-const CHAIN_NAME: Record<Exclude<HwChain, 'evm'>, string> = { btc: 'Bitcoin', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', stellar: 'Stellar', zec: 'Zcash', xmr: 'Monero' };
+const CHAIN_NAME: Record<Exclude<HwChain, 'evm'>, string> = {
+  btc: 'Bitcoin', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', stellar: 'Stellar', zec: 'Zcash', xmr: 'Monero',
+  sui: 'Sui', apt: 'Aptos', algo: 'Algorand', near: 'NEAR', cosmos: 'Cosmos Hub', dot: 'Polkadot', hbar: 'Hedera', kas: 'Kaspa', ton: 'TON',
+};
 /** Chain name shown in the add-device flow (« Ethereum et EVM » is translated). */
 const chainLabel = (c: HwChain): string => (c === 'evm' ? t('hw.chain.evm') : CHAIN_NAME[c]);
-const IMPLEMENTED: HwImplementedChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar'];
+/** Chains of the add-device flow: xpub / address chains, then the Ledger single-key chains (`hw_key_add`). */
+type SetupChain = HwImplementedChain | HwKeyChain;
+const IMPLEMENTED: SetupChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar', ...HW_KEY_CHAINS];
+const isKeyChain = (c: SetupChain): c is HwKeyChain => (HW_KEY_CHAINS as readonly string[]).includes(c);
 /** Pre-selected when the device supports them (the others are one click away: each needs its own Ledger app). */
 const DEFAULT_CHAINS: readonly HwImplementedChain[] = ['btc', 'evm', 'sol'];
 
@@ -325,10 +331,10 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
   const [status, setStatus] = useState<HwDeviceStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [chains, setChains] = useState<Set<HwImplementedChain>>(new Set(['btc', 'evm']));
+  const [chains, setChains] = useState<Set<SetupChain>>(new Set(['btc', 'evm']));
   const [account, setAccount] = useState('0');
   const [label, setLabel] = useState('');
-  const [progress, setProgress] = useState<Partial<Record<HwImplementedChain, 'todo' | 'reading' | 'ok' | 'error'>>>({});
+  const [progress, setProgress] = useState<Partial<Record<SetupChain, 'todo' | 'reading' | 'ok' | 'error'>>>({});
   const [saved, setSaved] = useState<WatchOnlyAccount | null>(null);
   const { t } = useT();
 
@@ -377,7 +383,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
   const accountValid = Number.isInteger(accountNumber) && accountNumber >= 0 && accountNumber <= MAX_HW_ACCOUNT;
 
   /** Per chain: read the public keys (hw_get_xpub), then save them (hw_account_add), while the right app is open. */
-  const read = async (from?: HwImplementedChain) => {
+  const read = async (from?: SetupChain) => {
     if (!device || !accountValid) return;
     setStep('reading');
     setError(null);
@@ -389,10 +395,13 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
       setProgress((p) => ({ ...p, [chain]: 'reading' }));
       setBusy(chain);
       try {
-        await withDevice(device.id, () => call('hw_get_xpub', { id: device.id, chain, account: accountNumber }));
-        acc = await withDevice(device.id, () =>
-          call('hw_account_add', { id: device.id, chain, account: accountNumber, ...(acc ? { accountId: acc.id } : {}), ...(label.trim() ? { label: label.trim() } : {}) }),
-        );
+        const more = { ...(acc ? { accountId: acc.id } : {}), ...(label.trim() ? { label: label.trim() } : {}) };
+        if (isKeyChain(chain)) {
+          acc = await withDevice(device.id, () => call('hw_key_add', { id: device.id, chain, account: accountNumber, ...more }));
+        } else {
+          await withDevice(device.id, () => call('hw_get_xpub', { id: device.id, chain, account: accountNumber }));
+          acc = await withDevice(device.id, () => call('hw_account_add', { id: device.id, chain, account: accountNumber, ...more }));
+        }
         setSaved(acc);
         setProgress((p) => ({ ...p, [chain]: 'ok' }));
       } catch (e) {
@@ -409,7 +418,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
     }
   };
 
-  const failed = error && typeof error === 'object' && 'chain' in error ? (error as { error: unknown; chain: HwImplementedChain }) : null;
+  const failed = error && typeof error === 'object' && 'chain' in error ? (error as { error: unknown; chain: SetupChain }) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -485,6 +494,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
                 ))}
               </ul>
               <span className="text-[12px] text-faint">{t('hw.setup.notYet')}</span>
+              {device.kind === 'ledger' && <span className="text-[12px] text-faint">{t('hw.setup.keyChainsHint')}</span>}
               <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-2.5">
                 <label className="flex flex-col gap-1.5">
                   <span className="eyebrow">{t('hw.setup.accountNumber')}</span>
@@ -529,7 +539,7 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
               );
             })}
           </ul>
-          {busy && busy !== 'open' && <HwWaiting deviceId={device.id} idle={device.kind === 'ledger' ? t('hw.setup.readingLedger', { chain: IMPLEMENTED.includes(busy as HwImplementedChain) ? chainLabel(busy as HwImplementedChain) : '' }) : t('hw.setup.readingKeys')} />}
+          {busy && busy !== 'open' && <HwWaiting deviceId={device.id} idle={device.kind === 'ledger' ? t('hw.setup.readingLedger', { chain: IMPLEMENTED.includes(busy as SetupChain) ? chainLabel(busy as SetupChain) : '' }) : t('hw.setup.readingKeys')} />}
           {failed && (
             <>
               <HwErrorNotice error={failed.error} />
@@ -549,10 +559,10 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
   );
 }
 
-function ChainRow({ st, chain, checked, onToggle }: { st: HwChainStatus | undefined; chain: HwImplementedChain; checked: boolean; onToggle: (on: boolean) => void }) {
+function ChainRow({ st, chain, checked, onToggle }: { st: HwChainStatus | undefined; chain: SetupChain; checked: boolean; onToggle: (on: boolean) => void }) {
   const { t } = useT();
   const unsupported = st?.state === 'unsupported';
-  const reason = (st?.reason ?? t('hw.chainRow.unsupported')).replace(/^(Bitcoin Cash|Bitcoin|EVM|Ethereum|Solana|Litecoin|Dogecoin|Dash|XRP|TRON|Tron|Stellar)\s*:\s*/, '');
+  const reason = (st?.reason ?? t('hw.chainRow.unsupported')).replace(/^(Bitcoin Cash|Bitcoin|EVM|Ethereum|Solana|Litecoin|Dogecoin|Dash|XRP|TRON|Tron|Stellar|Sui|Aptos|Algorand|NEAR|Cosmos Hub)\s*:\s*/, '');
   const hint =
     !st
       ? null
@@ -632,6 +642,12 @@ export function HwAccountSummary({ acc, action }: { acc: WatchOnlyAccount; actio
               </Fragment>
             ) : null;
           })}
+        {(acc.keys ?? []).map((k) => (
+          <Fragment key={k.chain}>
+            <dt className="text-mute">{CHAIN_NAME[k.chain]}</dt>
+            <dd className="m-0 font-mono text-text2">{shortAddress(k.address)}</dd>
+          </Fragment>
+        ))}
       </dl>
       <span className="text-[12px] leading-[1.5] text-faint">{t('hw.summary.note')}</span>
       {action && <div>{action}</div>}

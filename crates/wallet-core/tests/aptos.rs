@@ -296,3 +296,36 @@ fn anything_else_is_refused() {
     assert!(aptos_verify_signed(&hex::encode(&signed)).is_err());
     assert!(aptos_decode_tx("zz", MAINNET[0].sender).is_err());
 }
+
+#[test]
+fn hardware_wallet_message_and_signature() {
+    let s = seed(ABANDON);
+    let me = aptos_address(&s, 0).unwrap();
+    let to = aptos_address(&s, 1).unwrap();
+    let t = AptosTransfer {
+        sender: aptos_parse_address(&me).unwrap(),
+        sequence_number: 4,
+        recipient: aptos_parse_address(&to).unwrap(),
+        amount: 1,
+        max_gas_amount: 2000,
+        gas_unit_price: 100,
+        expiration_timestamp_secs: 1_900_000_000,
+        chain_id: 2,
+    };
+    let bytes = t.encode().unwrap();
+    let raw = hex::encode(&bytes);
+    // Ledger Aptos app: the full signing message (salt hash || BCS), like the SDKs.
+    let msg = wallet_core::aptos_hw_message(&raw).unwrap();
+    assert_eq!(msg, wallet_core::aptos_signing_message(&bytes));
+    let (signed, hash, _) = aptos_sign(&s, 0, &raw).unwrap();
+    let sb = hex::decode(&signed).unwrap();
+    let sig = &sb[sb.len() - 64..];
+    let pk = wallet_core::aptos_public_key(&s, 0).unwrap();
+    assert_eq!(
+        wallet_core::aptos_hw_signed(&raw, &pk, sig).unwrap(),
+        (signed, hash)
+    );
+    let other = wallet_core::aptos_public_key(&s, 1).unwrap();
+    assert!(wallet_core::aptos_hw_signed(&raw, &other, sig).is_err());
+    assert!(wallet_core::aptos_hw_signed(&raw, &pk, &sig[1..]).is_err());
+}

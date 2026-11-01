@@ -40,7 +40,7 @@ pub fn app_for(chain: Chain, net: Network) -> Option<(&'static str, &'static str
         )),
         Chain::Evm => Some(("Ethereum", "1.9.0")),
         Chain::Sol => Some(("Solana", "1.3.1")),
-        other => super::chains::ledger_app(other, net),
+        other => super::ledger_apps::app_for(other).or_else(|| super::chains::ledger_app(other, net)),
     }
 }
 
@@ -315,6 +315,10 @@ fn default_policy(acc: &BtcAccount) -> HwResult<WalletPolicy> {
 }
 
 impl<L: ApduLink> HardwareWallet for Ledger<L> {
+    fn apdu_link(&self) -> Option<&dyn ApduLink> {
+        Some(&self.link)
+    }
+
     fn status(&mut self, ctl: &Ctl, net: Network) -> HwResult<DeviceStatus> {
         let (locked, app) = match self.open_app(ctl) {
             Ok((name, version)) => (false, Some(AppInfo { name, version })),
@@ -325,7 +329,8 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
         for chain in Chain::ALL {
             let Some((expected, min)) = app_for(chain, net) else {
                 chains.push(
-                    super::chains::ledger_unavailable(chain, net)
+                    super::ledger_apps::unavailable_status(chain)
+                        .or_else(|| super::chains::ledger_unavailable(chain, net))
                         .unwrap_or_else(|| ChainStatus::not_yet(chain, phase4_app(chain))),
                 );
                 continue;
@@ -770,6 +775,8 @@ mod tests {
                 // No Ledger testnet app for these coins; Cardano / Zcash: not offered.
                 Chain::Ltc | Chain::Doge | Chain::Bch | Chain::Dash => ChainState::Unsupported,
                 Chain::Cardano | Chain::Zec => ChainState::Unsupported,
+                // No hardware support at all (reasons in `ledger_apps::unavailable`).
+                Chain::Dot | Chain::Hbar | Chain::Kas | Chain::Ton => ChainState::Unsupported,
                 _ => ChainState::Unlock,
             };
             assert_eq!(c.state, want, "{:?}", c.chain);

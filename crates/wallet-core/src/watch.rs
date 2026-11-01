@@ -94,6 +94,9 @@ pub struct WatchOnlyAccount {
     /// Stellar key `m/44'/148'/account'` (ed25519).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stellar: Option<WatchKey>,
+    /// Single-key chains (Sui, Aptos, Algorand, NEAR, Cosmos), see [`crate::HwWatchKey`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keys: Vec<crate::hw_keys::HwWatchKey>,
 }
 
 /// An account-based chain key of a watch-only account (XRP, TRON, Stellar).
@@ -158,6 +161,7 @@ impl WatchOnlyAccount {
             && self.xrp.is_none()
             && self.tron.is_none()
             && self.stellar.is_none()
+            && self.keys.is_empty()
         {
             return Err(Error::input("watch-only account without any chain"));
         }
@@ -250,6 +254,7 @@ impl WatchOnlyAccount {
                 ));
             }
         }
+        crate::hw_keys::validate_keys(&self.keys, self.account)?;
         Ok(())
     }
 
@@ -264,6 +269,11 @@ impl WatchOnlyAccount {
             .first()
             .map(|b| b.fingerprint.as_str())
             .or_else(|| self.utxo.first().map(|u| u.fingerprint.as_str()))
+    }
+
+    /// The stored key of a single-key chain, if any.
+    pub fn key(&self, chain: crate::hw_keys::HwKeyChain) -> Option<&crate::hw_keys::HwWatchKey> {
+        self.keys.iter().find(|k| k.chain == chain)
     }
 
     /// The Bitcoin account of `kind`, if stored.
