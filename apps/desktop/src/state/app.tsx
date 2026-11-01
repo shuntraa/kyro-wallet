@@ -30,7 +30,7 @@ export type Route =
   | { name: 'assets'; tab?: 'mine' | 'market' | 'favorites' }
   | { name: 'asset'; id: string }
   | { name: 'send'; assetId?: string; to?: string }
-  | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' }
+  | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' }
   | { name: 'swap'; sellAssetId?: string }
   | { name: 'history' }
   | { name: 'staking'; chain?: 'sol' | 'ada' | 'tron' }
@@ -364,7 +364,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (!vaultAccounts) return null;
     const of = (c: AccountChain) => vaultSets.get(selectedAccounts[c])?.accounts ?? vaultAccounts;
-    return { network: vaultAccounts.network, btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, bch: of('bch').bch, dash: of('dash').dash, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, stellar: of('xlm').stellar, near: of('near').near, sui: of('sui').sui, hbar: of('hbar').hbar, ...(of('kas').kas ? { kas: of('kas').kas } : {}) };
+    return { network: vaultAccounts.network, btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, bch: of('bch').bch, dash: of('dash').dash, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, stellar: of('xlm').stellar, near: of('near').near, sui: of('sui').sui, hbar: of('hbar').hbar, ...(of('kas').kas ? { kas: of('kas').kas } : {}), polkadot: of('dot').polkadot };
   }, [activeHw, vaultAccounts, vaultSets, selectedAccounts]);
   const hwAdapters = useMemo<AdapterSet | null>(
     () => (activeHw && accounts ? createAdapters(accounts, settingsRef.current.servers, undefined, { accountId: activeHw.id, device: activeHw.device }) : null),
@@ -375,7 +375,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const base = vaultSets.get(0)?.adapters;
     if (!base) return null;
     const of = (c: AccountChain) => vaultSets.get(selectedAccounts[c])?.adapters ?? base;
-    const set: AdapterSet = { btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, bch: of('bch').bch, dash: of('dash').dash, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, stellar: of('xlm').stellar, near: of('near').near, sui: of('sui').sui, hbar: of('hbar').hbar, kaspa: of('kas').kaspa, all: [], hw: null };
+    const set: AdapterSet = { btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, bch: of('bch').bch, dash: of('dash').dash, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, stellar: of('xlm').stellar, near: of('near').near, sui: of('sui').sui, hbar: of('hbar').hbar, kaspa: of('kas').kaspa, polkadot: of('dot').polkadot, all: [], hw: null };
     set.all = ACCOUNT_CHAINS.flatMap((c) => familyAdapters(set, c));
     return set;
   }, [activeHw, hwAdapters, vaultSets, selectedAccounts]);
@@ -398,6 +398,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sui: [a.sui?.address],
         hbar: [a.hbar?.address],
         kas: [a.kas?.address],
+        dot: [a.polkadot?.address],
       })[c].filter((x): x is string => !!x);
     if (activeHw) {
       if (!hwAdapters || !accounts) return [];

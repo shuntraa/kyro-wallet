@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84), Dogecoin, Bitcoin Cash (CashAddr,
-//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer) and Cardano (CIP-1852 payments) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Polkadot Asset Hub (sr25519, `transfer_keep_alive`), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer) and Cardano (CIP-1852 payments) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -37,6 +37,7 @@ mod ledger_cal;
 mod mnemonic;
 mod near;
 mod network;
+mod polkadot;
 mod sol;
 mod sol_decode;
 mod sol_stake;
@@ -118,6 +119,14 @@ pub use near::{
     near_verify_signed, NearAccountKind, NearTransfer, NearTxSummary, NearWarning, NEAR_DECIMALS,
 };
 pub use network::{BtcKind, Network};
+pub use polkadot::{
+    dot_account_id, dot_account_storage_key, dot_address, dot_blake2_256, dot_chain,
+    dot_decode_account_info, dot_decode_fee_info, dot_decode_payload, dot_fee_probe_extrinsic,
+    dot_fee_query_arg, dot_parse_payload, dot_path, dot_public_key, dot_runtime, dot_sign,
+    dot_ss58_decode, dot_ss58_encode, dot_transfer_payload, dot_verify_extrinsic, DotAccountInfo,
+    DotChain, DotEra, DotExtension, DotRuntime, DotTransfer, DotTxSummary, PolkadotRoot,
+    DOT_POLKADOT_ASSET_HUB, DOT_WESTEND_ASSET_HUB,
+};
 pub use sol::{sol_address, sol_address_of_pubkey, sol_sign_message, sol_verify_signature};
 pub use sol_decode::{
     sol_decode_message, sol_message_lookup_tables, sol_message_static_keys, sol_parse_lookup_table,

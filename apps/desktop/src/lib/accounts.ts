@@ -24,6 +24,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   sui: 'Sui',
   hbar: 'Hedera',
   kas: 'Kaspa',
+  dot: 'Polkadot',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -59,6 +60,8 @@ export function accountChainHint(chain: AccountChain): string {
       return t('settings.hintHbar');
     case 'kas':
       return t('settings.hintKas');
+    case 'dot':
+      return 'DOT (Polkadot Asset Hub)';
   }
 }
 
@@ -81,6 +84,8 @@ export function familyAdapters(set: AdapterSet, family: AccountChain): AnyAdapte
       return set.stellar ? [set.stellar] : [];
     case 'kas':
       return set.kaspa ? [set.kaspa] : [];
+    case 'dot':
+      return set.polkadot ? [set.polkadot] : [];
     default: {
       const a = set[family];
       return a ? [a] : [];
@@ -111,6 +116,8 @@ export function accountAddress(acc: Accounts, family: AccountChain): { address: 
       return acc.stellar;
     case 'kas':
       return acc.kas ?? { address: '', path: '' };
+    case 'dot':
+      return acc.polkadot;
     default:
       return acc[family];
   }

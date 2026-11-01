@@ -47,6 +47,8 @@ export interface WalletAccounts {
   sui?: { address: string; path?: string };
   /** Vault only: Kaspa is not offered on hardware wallets. */
   kas?: { address: string; path?: string };
+  /** Vault only: Polkadot on a hardware wallet is HW_UNSUPPORTED. */
+  polkadot?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {

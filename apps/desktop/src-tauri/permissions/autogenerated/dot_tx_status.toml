@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dot-tx-status"
+description = "Enables the dot_tx_status command without any pre-configured scope."
+commands.allow = ["dot_tx_status"]
+
+[[permission]]
+identifier = "deny-dot-tx-status"
+description = "Denies the dot_tx_status command without any pre-configured scope."
+commands.deny = ["dot_tx_status"]

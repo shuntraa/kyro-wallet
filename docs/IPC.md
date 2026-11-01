@@ -275,6 +275,30 @@ pub fn hbar_sign(seed, account, our_account, bodies_hex, allowed_nodes) -> Resul
 pub fn hbar_verify_signed(tx_hex) -> Result<HbarSignedTransfer { transfer, public_key }>;   // Transaction { signedTransactionBytes } seul, une signature
 pub fn hbar_decode_precheck(raw) -> Result<(u32 /*code*/, u64 /*cost*/)>; pub fn hbar_response_name(code) -> String;
 
+// --- Polkadot (Asset Hub) : sr25519 depuis l'ENTROPIE BIP39 (substrate-bip39, comme Polkadot.js / Nova / Talisman /
+//     SubWallet), schnorrkel (ExpansionMode::Ed25519, contexte « substrate ») ; compte 0 = clé racine de la phrase,
+//     compte a ≥ 1 = dérivation dure `//a` ; SS58 (préfixe 0 Polkadot, 42 Westend), blake2b-512 « SS58PRE » ;
+//     SCALE (parity-scale-codec) ; métadonnées V15 décodées par frame-metadata + scale-info (crates de Parity)
+pub struct PolkadotRoot(/* mini-secret sr25519, effacé */);  impl PolkadotRoot { pub fn from_mnemonic(&Mnemonic, passphrase) -> Result<PolkadotRoot>; }
+pub fn dot_chain(Network) -> &'static DotChain;   // ÉPINGLÉ : genesis, spec_name, SS58, décimales, Balances = 10, transfer_keep_alive = 3
+pub fn dot_public_key(root, account) -> Result<[u8; 32]>;  pub fn dot_address(root, account, Network) -> Result<String>;  pub fn dot_path(account) -> String;
+pub fn dot_ss58_encode(&[u8; 32], prefix) -> String;  pub fn dot_ss58_decode(address) -> Result<(u8, [u8; 32])>;
+pub fn dot_account_id(address, Network) -> Result<[u8; 32]>;   // préfixe SS58 du réseau exigé (Kusama, « 5… » sur mainnet : refusés)
+pub fn dot_runtime(Network, state_call_result) -> Result<DotRuntime>;   // Option<métadonnées V15> du nœud, vérifiées contre DotChain :
+//   spec_name, SS58Prefix, index de Balances et de transfer_keep_alive (+ arguments dest: MultiAddress, value: Compact<u128>),
+//   extrinsèque v4, MultiAddress / MultiSignature::Sr25519, disposition de System.Account, extensions de transaction
+//   TOUTES connues avec les types attendus (sinon refus : « Kyro doit être mis à jour »), ExistentialDeposit
+pub struct DotTransfer { dest, value /*planck*/, era: DotEra /*mortelle*/, block_hash, nonce, tip /*toujours 0*/ }
+pub fn dot_transfer_payload(&DotRuntime, &DotTransfer, from) -> Result<String /*hex : call ‖ extra ‖ additional*/>;
+pub fn dot_decode_payload(&DotRuntime, payload_hex, from) -> Result<DotTxSummary>;   // refuse : autre appel, MultiAddress autre
+//   que Id, montant nul, envoi à soi-même, pourboire, frais dans un autre actif, CheckMetadataHash activé, ère immortelle
+//   ou > 4096 blocs, autre genesis / spec / transaction_version, octets en trop, ré-encodage différent
+pub fn dot_sign(root, account, &DotRuntime, payload_hex) -> Result<(String /*extrinsèque signé*/, String /*blake2-256*/, DotTxSummary)>;
+pub fn dot_verify_extrinsic(&DotRuntime, extrinsic_hex, block_hash) -> Result<([u8; 32] /*signataire*/, String /*hash*/, DotTxSummary)>;
+pub fn dot_fee_probe_extrinsic(&DotRuntime, payload_hex, from) -> Result<Vec<u8>>;   // signature nulle, pour query_info seulement
+pub fn dot_account_storage_key(&[u8; 32]) -> Vec<u8>;  pub fn dot_decode_account_info(&[u8]) -> Result<DotAccountInfo>;   // System.Account, 80 octets
+pub fn dot_decode_fee_info(&[u8]) -> Result<u128>;   // TransactionPaymentApi_query_info → partial_fee
+
 // --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
 //     sel = ENTROPIE BIP39, puis clamping), dérivation BIP32-Ed25519 V2 par le crate ed25519-bip32 (aucune crypto écrite
 //     ici), signature ed25519-dalek (hazmat::raw_sign avec le scalaire étendu kL ‖ kR) vérifiée (verify_strict) ;
@@ -518,6 +542,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `sui_*` | voir §2.11 | | Sui : transfert de SUI construit **par Rust** (pièces de gaz, prix de référence, budget simulé, BCS), adresse complète dans le dialogue natif |
 | `hbar_*` | voir §2.11 | | Hedera : CryptoTransfer construit **par Rust** (une copie par nœud, même identifiant), mémo mis en évidence, diffusion gRPC-web |
 | `kas_*` | voir §2.11 | | Kaspa : transaction construite **par Rust** depuis les pièces du compte (20 adresses de réception + 20 de monnaie), masse KIP-9 et frais calculés, pièces relues avant signature |
+| `dot_*` | voir §2.11 | | Polkadot Asset Hub : transfert `transfer_keep_alive` construit **par Rust** (métadonnées vérifiées, nonce, ère), dépôt existentiel, signature sr25519 |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `sol_stake_*`, `ada_stake_*`, `tron_stake_*` | voir §2.8 | | Staking : Solana natif, délégation Cardano, TRON Stake 2.0 ; opérations construites **par Rust**, décodées et vérifiées en direct avant le dialogue natif |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
@@ -1183,6 +1208,28 @@ Transaction signée : **version 0** seulement (ce que construit encore le portef
 
 **Fait côté UI** : `Family` `'kas'`, `kaspaChain(network)` (testnet = testnet-10), actif `kas` (CoinGecko `kaspa`), types `Commands` (`kas_*`, `Accounts.kas`, `AccountChain` `'kas'`), adresse TS (`isKaspaAddress`, `kaspaAddressProblem`, mêmes vecteurs que Rust), backend démo (`mock-kaspa.ts`), `KaspaAdapter` (`packages/chains/src/kaspa/`), écrans Envoyer (aucun frais à choisir, minimum 0,2 KAS, dépensable, transaction décodée avec masse avant le mot de passe, suivi d'acceptation), Recevoir (adresse `…/0/0`, pas de lien de paiement), Actif, Historique, carnet d'adresses, alerte d'empoisonnement (après `kaspa:q`), « Connexions sortantes ».
 
+### 2.11 Polkadot (DOT sur Polkadot Asset Hub)
+
+Depuis la migration vers Asset Hub (Polkadot, novembre 2025), les soldes DOT et les transferts vivent sur **Polkadot Asset Hub** (parachain 1000, `statemint`), pas sur la relay chain (vérifié le 01/11/2026 : `Balances.TotalIssuance` ≈ 1,71 milliard de DOT sur Asset Hub, ≈ 245 000 sur la relay chain). Testnet : **Westend Asset Hub** (`westmint`, WND, 12 décimales, préfixe SS58 42). Nœud : celui de Parity (`polkadot-asset-hub-rpc.polkadot.io`, `westend-asset-hub-rpc.polkadot.io`), JSON-RPC Substrate sur HTTPS, famille Tor `polkadot`, jamais de repli ; pas de serveur personnalisé pour l'instant.
+
+**Clés** : sr25519 dérivées de l'**entropie** BIP39 par `substrate-bip39` (mini-secret = PBKDF2-HMAC-SHA512(entropie, « mnemonic » ‖ passphrase, 2048)[..32]), comme **Polkadot.js, Nova, Talisman et SubWallet** : le compte 0 de Kyro est le compte racine qu'ils affichent pour la même phrase. Compte `a ≥ 1` = dérivation dure `phrase//a` (notation Polkadot.js) : un autre portefeuille qui numérote ses comptes autrement (par exemple `//0` pour le 2ᵉ) donnera d'autres adresses pour ces comptes-là. **Pas compatible Ledger** : l'app Polkadot de Ledger dérive en ed25519 (`m/44'/354'/a'/0'/0'`, BIP32-Ed25519) ; une phrase Ledger importée dans Kyro donne une autre adresse. Vérifié contre Polkadot.js (racine, `//1`, `//2` de trois phrases).
+
+**Rust construit le transfert** : genesis lu et comparé à l'épingle ; métadonnées V15 (`state_call Metadata_metadata_at_version(15)`, ≈ 0,7 Mo, mises en cache par version du runtime) **vérifiées par wallet-core** : l'index d'appel de `Balances.transfer_keep_alive` (`0x0a03`) est **épinglé** et doit être confirmé par les métadonnées, comme ses arguments et chaque extension de transaction (inconnue → refus) ; `spec_version` / `transaction_version` des métadonnées = celles de `state_getRuntimeVersion` ; nonce `system_accountNextIndex` ; ère mortelle de 256 blocs depuis le dernier bloc finalisé (`chain_getFinalizedHead`) ; pourboire 0 ; frais payés en DOT (`asset_id = None`) ; `CheckMetadataHash` désactivé (mode 0, `None`) ; frais estimés par `TransactionPaymentApi_query_info` sur une copie à signature nulle. Un nœud qui ment sur les métadonnées ne peut que rendre la transaction invalide : l'appel et son encodage sont ceux de Kyro, et genesis, versions et bloc de l'ère sont signés.
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `dot_backend_info` | — | `{ network, chain, symbol, decimals, ss58, label, tor }` | |
+| `dot_address` | `{ account? }` | `string` | coffre déverrouillé (racine sr25519 gardée en session, comme la racine Cardano) ; `dot_build_tx`, `dot_sign_tx`, `dot_broadcast` prennent le même `account?` |
+| `dot_account` | `{ address }` | `{ address, exists, free, reserved, frozen, spendable, nonce, existentialDeposit }` (planck) | `System.Account` (`state_getStorage`) ; `spendable` = free − max(frozen − reserved, dépôt existentiel) : ce que `transfer_keep_alive` et les frais peuvent prendre ; dépôt existentiel lu dans les métadonnées (0,01 DOT ; Westend 0,001 WND) |
+| `dot_build_tx` | `{ to, amount /*planck*/, account? }` | `{ payload /*hex*/, summary: DotTxSummary, context: { account, destination, existentialDeposit, fee, eraBirth, validUntil, finalized } }` | refusé avant toute construction : adresse d'un autre réseau (préfixe SS58), envoi à soi-même, destinataire inexistant et montant < dépôt existentiel, montant + frais > disponible, notre compte inexistant, runtime non reconnu |
+| `dot_sign_tx` | `{ payload, password, account? }` | `{ extrinsic, hash, blockHash, summary, context }` | décode (strict, voir §1) avec le runtime **actuel**, vérifie le bloc de l'ère (connu, finalisé, phase cohérente, au moins 16 blocs de validité restants), le nonce, **relit en direct** les deux comptes et les frais, refait les vérifications ; mot de passe → racine sr25519 re-dérivée du coffre → dialogue natif : chaîne, destinataire, montant (DOT et planck), création du compte, frais estimés, solde, bloqué, dépôt existentiel, disponible, appel, pourboire, bloc limite, nonce, runtime ; résumé de la signature = résumé affiché. Pas de 2ᵉ dialogue : rien d'inhabituel n'est accepté, tout est refusé |
+| `dot_broadcast` | `{ extrinsic, blockHash, account? }` | `string` (hash) | `dot_verify_extrinsic` (signature sr25519 de notre clé sur la charge reconstruite avec le runtime actuel et `blockHash`) puis `author_submitExtrinsic` ; refus du nœud (1010…) → `INVALID_INPUT` ; hash du nœud ≠ blake2-256(extrinsèque) → `SERVER_UNREACHABLE` |
+| `dot_tx_status` | `{ address, nonce, validUntil }` | `{ state: 'pending' \| 'finalized' \| 'expired', finalized }` | par le nonce dans l'état **finalisé** : `finalized` = la transaction de ce nonce est incluse (Kyro ne décode pas les événements : un transfert inclus mais échoué consommerait aussi le nonce) ; `expired` = ère passée et nonce inutilisé |
+
+**Historique : aucun.** Un nœud Substrate n'indexe pas les transferts par compte, et Subscan exige une clé API (« Unauthenticated access is disabled », vérifié le 01/11/2026). L'UI le dit au lieu d'afficher « aucune transaction ». Hardware wallets : `HW_UNSUPPORTED`.
+
+**Fait côté UI** : `Family` `'dot'`, `AccountChain` `'dot'`, `Accounts.polkadot`, types `Commands` (`dot_*`), backend démo (`mock-dot.ts`, clé démo : pas la vraie dérivation sr25519), Envoyer (disponible, dépôt existentiel, frais, aperçu Rust, suivi par nonce), Recevoir (adresse, chemin, dépôt existentiel), Actif, « Connexions sortantes ». Adaptateur : `PolkadotAdapter` (`packages/chains/src/polkadot/`), `polkadotChain(network)`.
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -1194,6 +1241,7 @@ Transaction signée : **version 0** seulement (ce que construit encore le portef
 | `horizon-testnet.stellar.org`, `horizon.stellar.org` | Stellar testnet et mainnet (Horizon de la SDF) : utilisés par les commandes Rust `stellar_*`, famille Tor `stellar` |
 | `free.rpc.fastnear.com`, `test.rpc.fastnear.com`, `tx.main.fastnear.com`, `tx.test.fastnear.com` | NEAR mainnet et testnet (FastNEAR : RPC JSON et API d'historique) : utilisés par les commandes Rust `near_*`, famille Tor `near` |
 | `graphql.testnet.sui.io`, `graphql.mainnet.sui.io` | Sui testnet et mainnet (GraphQL de la Sui Foundation, POST JSON) : utilisés par les commandes Rust `sui_*` (solde, pièces de gaz, époque et prix de référence, simulation, exécution, historique), famille Tor `sui` |
+| `westend-asset-hub-rpc.polkadot.io`, `polkadot-asset-hub-rpc.polkadot.io` | Polkadot : nœuds JSON-RPC publics de Parity pour Westend Asset Hub et Polkadot Asset Hub, utilisés par les commandes Rust `dot_*`, famille Tor `polkadot` |
 | `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
 | `api.kaspa.org`, `api-tn10.kaspa.org` | Kaspa mainnet et testnet-10 (`kaspa-rest-server`, API publique sans clé) : utilisés par les commandes Rust `kas_*`, famille Tor `kaspa` |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |

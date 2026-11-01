@@ -5,19 +5,21 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use wallet_core::{CardanoRoot, Network, Seed, VaultFile, Zeroizing};
+use wallet_core::{CardanoRoot, Network, PolkadotRoot, Seed, VaultFile, Zeroizing};
 
 use crate::error::{AppError, AppResult};
 use crate::hw::HwManager;
 use crate::net::{EnvKeys, NetClient};
 use crate::settings::Settings;
 
-/// Unlocked session. The seed and the Cardano root key are zeroized when the session is dropped
+/// Unlocked session. The seed, the Cardano root key and the Polkadot mini-secret are zeroized when the session is dropped
 /// (lock, auto-lock, exit).
 pub struct Session {
     pub seed: Seed,
     /// CIP-0003 Icarus root (Cardano derives from the BIP39 *entropy*, not from the seed).
     pub cardano: CardanoRoot,
+    /// sr25519 mini-secret (Polkadot also derives from the *entropy*: substrate-bip39).
+    pub polkadot: PolkadotRoot,
     pub last_activity: Instant,
 }
 
@@ -175,10 +177,11 @@ impl AppState {
 
     // ---- session ----
 
-    pub fn start_session(&self, seed: Seed, cardano: CardanoRoot) {
+    pub fn start_session(&self, seed: Seed, cardano: CardanoRoot, polkadot: PolkadotRoot) {
         *lock(&self.session) = Some(Session {
             seed,
             cardano,
+            polkadot,
             last_activity: Instant::now(),
         });
     }
@@ -210,6 +213,13 @@ impl AppState {
         let guard = lock(&self.session);
         let session = guard.as_ref().ok_or(AppError::Locked)?;
         f(&session.cardano)
+    }
+
+    /// Runs `f` with the session's Polkadot root (sr25519 mini-secret), or fails with `Locked`.
+    pub fn with_polkadot<T>(&self, f: impl FnOnce(&PolkadotRoot) -> AppResult<T>) -> AppResult<T> {
+        let guard = lock(&self.session);
+        let session = guard.as_ref().ok_or(AppError::Locked)?;
+        f(&session.polkadot)
     }
 
     pub fn lock_in_secs(&self) -> Option<u64> {

@@ -54,6 +54,7 @@ const TAIL = 4;
  * - Sui: `0x`, hex compared lowercase (no checksum at all).
  * - Hedera: `0x` (EVM address, hex lowercase) or `0.0.` (account number; HIP-15 checksum dropped).
  * - Kaspa: `kaspa:` / `kaspatest:` + version char (`kaspa:q`, `kaspa:p`), bech32 lowercase.
+ * - Polkadot (SS58): the first char (`1` for prefix 0, `5` for prefix 42).
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -102,6 +103,9 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       }
       return { prefix: '', body: a.toLowerCase(), caseInsensitive: true };
     }
+    case 'dot':
+      // SS58: the first character only depends on the network prefix (`1` Polkadot, `5` generic).
+      return { prefix: a.slice(0, 1), body: a.slice(1), caseInsensitive: false };
   }
 }
 

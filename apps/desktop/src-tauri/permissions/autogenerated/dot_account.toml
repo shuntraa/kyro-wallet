@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dot-account"
+description = "Enables the dot_account command without any pre-configured scope."
+commands.allow = ["dot_account"]
+
+[[permission]]
+identifier = "deny-dot-account"
+description = "Denies the dot_account command without any pre-configured scope."
+commands.deny = ["dot_account"]

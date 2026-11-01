@@ -11,8 +11,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `xlm`: Stellar (XLM, `stellar_*`, §2.11). */
-/** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). `kas`: Kaspa (KAS, `kas_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas';
+/** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). `kas`: Kaspa (KAS, `kas_*`, §2.11). `dot`: Polkadot Asset Hub (`dot_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
@@ -53,7 +53,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -170,7 +170,7 @@ const SOL: Record<Network, SolChain> = {
   },
 };
 
-/** Phase 4: listed with their price, shown as "Bientôt". Empty now: Litecoin, Dogecoin, TRON, XRP, Cardano and Stellar all have a full send path. */
+/** Phase 4: listed with their price, shown as "Bientôt". Empty now: Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar and Polkadot all have a full send path. */
 export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
 ];
 
@@ -404,6 +404,28 @@ const KASPA_CHAINS: Record<Network, KaspaChain> = {
 
 export function kaspaChain(network: Network): KaspaChain {
   return KASPA_CHAINS[network];
+}
+
+/**
+ * Polkadot (phase 4): DOT on **Polkadot Asset Hub** (where balances live since the Asset Hub
+ * migration), Rust `dot_*` commands and `PolkadotAdapter` (`packages/chains/src/polkadot/`).
+ * Testnet = Westend Asset Hub (WND, 12 decimals, SS58 prefix 42). No history (no keyless
+ * indexer). Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface PolkadotChain extends Omit<ChainBase, 'phase'> {
+  family: 'dot';
+  phase: 4;
+}
+
+const POLKADOT_CHAINS: Record<Network, PolkadotChain> = {
+  testnet: { family: 'dot', key: 'polkadot', name: 'Westend Asset Hub', label: 'WND testnet', network: 'testnet', color: '#E6007A', glyph: 'P',
+    nativeSymbol: 'WND', nativeName: 'Westend', nativeDecimals: 12, coingeckoId: 'polkadot', phase: 4, blockTimeSecs: 6 },
+  mainnet: { family: 'dot', key: 'polkadot', name: 'Polkadot', label: 'DOT', network: 'mainnet', color: '#E6007A', glyph: 'P',
+    nativeSymbol: 'DOT', nativeName: 'Polkadot', nativeDecimals: 10, coingeckoId: 'polkadot', phase: 4, blockTimeSecs: 6 },
+};
+
+export function polkadotChain(network: Network): PolkadotChain {
+  return POLKADOT_CHAINS[network];
 }
 
 interface TokenSpec {
@@ -720,7 +742,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -852,6 +874,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       ? { host: host(ada.url), purpose: l10n('Cardano : ton serveur Koios', 'Cardano: your Koios server'), custom: true }
       : { host: network === 'mainnet' ? 'api.koios.rest' : 'preprod.koios.rest', purpose: l10n(`Cardano${network === 'mainnet' ? '' : ' preprod'} : UTxO, paramètres, historique, diffusion (Koios)`, `Cardano${network === 'mainnet' ? '' : ' preprod'}: UTxOs, parameters, history, broadcast (Koios)`) },
   );
+  // Polkadot Asset Hub: reached by Rust only (dot_*), Tor circuits of the `polkadot` family.
+  list.push({
+    host: network === 'mainnet' ? 'polkadot-asset-hub-rpc.polkadot.io' : 'westend-asset-hub-rpc.polkadot.io',
+    purpose: `Polkadot${network === 'mainnet' ? '' : ' (Westend)'} : soldes, métadonnées du runtime, nonce, frais, diffusion (nœud public de Parity)`,
+  });
   // XRP Ledger: reached by Rust only (xrp_*), Tor circuits of the `xrp` family.
   const xrp = servers.xrp?.[nk];
   list.push(

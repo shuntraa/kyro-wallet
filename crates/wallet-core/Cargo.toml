@@ -1,6 +1,6 @@
 [package]
 name = "wallet-core"
-description = "Kyro wallet core: BIP39/BIP32 derivation, encrypted vault, BTC/LTC/DOGE/EVM/Solana/TRON/XRP/Stellar/NEAR/Cardano/Sui/Hedera/Cardano/Kaspa signing. Pure, no I/O."
+description = "Kyro wallet core: BIP39/BIP32 derivation, encrypted vault, BTC/LTC/DOGE/EVM/Solana/TRON/XRP/Stellar/NEAR/Cardano/Sui/Hedera/Cardano/Kaspa/Polkadot signing. Pure, no I/O."
 version.workspace = true
 edition.workspace = true
 license = "GPL-3.0-or-later"
@@ -40,6 +40,15 @@ sha2 = { version = "=0.10.9", default-features = false }
 # Cardano hashes: blake2b-224 (key hashes) and blake2b-256 (transaction id). Already in the tree.
 blake2 = { version = "=0.10.6", default-features = false }
 curve25519-dalek = { version = "=4.1.3", default-features = false }
+# Polkadot (Asset Hub): sr25519 (schnorrkel, the crate Substrate uses; `getrandom` for the
+# signature nonce), mini-secret from the BIP39 entropy (substrate-bip39, Polkadot.js / Nova /
+# Talisman scheme), SCALE compact integers (parity-scale-codec) and runtime metadata V15
+# decoding (frame-metadata + scale-info, Parity's crates) to confirm the pinned call index.
+schnorrkel = { version = "=0.11.5", default-features = false, features = ["std", "getrandom"] }
+substrate-bip39 = { version = "=0.6.1", default-features = false, features = ["std"] }
+parity-scale-codec = { version = "=3.7.5", default-features = false, features = ["std"] }
+frame-metadata = { version = "=23.0.1", default-features = false, features = ["current", "decode"] }
+scale-info = { version = "=2.11.6", default-features = false, features = ["decode"] }
 # Vault.
 argon2 = { version = "=0.5.3", default-features = false, features = ["alloc", "zeroize"] }
 chacha20poly1305 = { version = "=0.10.1", default-features = false, features = ["alloc"] }

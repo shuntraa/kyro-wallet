@@ -60,6 +60,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // only Rust's `kas_*` commands.
     "api.kaspa.org",
     "api-tn10.kaspa.org",
+    // Polkadot: Parity's public JSON-RPC nodes of Asset Hub (Westend testnet, Polkadot
+    // mainnet), where DOT balances live since the Asset Hub migration; only Rust's `dot_*`.
+    "westend-asset-hub-rpc.polkadot.io",
+    "polkadot-asset-hub-rpc.polkadot.io",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -371,6 +375,7 @@ pub enum Family {
     Sui,
     Hedera,
     Kaspa,
+    Polkadot,
     Evm,
     Solana,
     Market,
@@ -417,6 +422,10 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Hedera
     } else if host == "api.kaspa.org" || host == "api-tn10.kaspa.org" {
         Family::Kaspa
+    } else if host == "westend-asset-hub-rpc.polkadot.io"
+        || host == "polkadot-asset-hub-rpc.polkadot.io"
+    {
+        Family::Polkadot
     } else if host.ends_with("-rpc.publicnode.com") || EVM_OWN_RPC_HOSTS.contains(&host) {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1209,6 +1218,14 @@ mod tests {
         assert_eq!(family_for("api.kaspa.org", &c), Family::Kaspa);
         assert_eq!(family_for("api-tn10.kaspa.org", &c), Family::Kaspa);
         assert_eq!(family_for("evil.kaspa.org", &c), Family::Other);
+        assert_eq!(
+            family_for("westend-asset-hub-rpc.polkadot.io", &c),
+            Family::Polkadot
+        );
+        assert_eq!(
+            family_for("polkadot-asset-hub-rpc.polkadot.io", &c),
+            Family::Polkadot
+        );
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

@@ -62,6 +62,15 @@ pub(crate) async fn cardano_root_from_password(
     blocking(move || Ok(wallet_core::CardanoRoot::from_mnemonic(&m, ""))).await
 }
 
+/// Polkadot sr25519 root re-derived from the vault (signing asks for the password again).
+pub(crate) async fn polkadot_root_from_password(
+    state: &AppState,
+    password: Zeroizing<String>,
+) -> AppResult<wallet_core::PolkadotRoot> {
+    let m = mnemonic_from_password(state, password).await?;
+    blocking(move || Ok(wallet_core::PolkadotRoot::from_mnemonic(&m, "")?)).await
+}
+
 /// Native OS dialog — rendered outside the webview, so a compromised UI cannot fake or skip it.
 /// Buttons « Signer » / « Annuler » (Sign / Cancel) in the current language.
 pub(crate) async fn confirm_native(
@@ -204,6 +213,7 @@ async fn seal_and_start(
     }
     let seed = mnemonic.to_seed("");
     let cardano = wallet_core::CardanoRoot::from_mnemonic(&mnemonic, "");
+    let polkadot = wallet_core::PolkadotRoot::from_mnemonic(&mnemonic, "")?;
     let file = blocking(move || {
         Ok(wallet_core::seal(
             &mnemonic,
@@ -213,7 +223,7 @@ async fn seal_and_start(
     })
     .await?;
     state.write_new_vault(&file)?;
-    state.start_session(seed, cardano);
+    state.start_session(seed, cardano, polkadot);
     Ok(())
 }
 
@@ -362,14 +372,15 @@ pub async fn vault_import(
 #[tauri::command]
 pub async fn vault_unlock(state: State<'_, AppState>, password: String) -> AppResult<()> {
     let m = mnemonic_from_password(&state, Zeroizing::new(password)).await?;
-    let (seed, cardano) = blocking(move || {
+    let (seed, cardano, polkadot) = blocking(move || {
         Ok((
             m.to_seed(""),
             wallet_core::CardanoRoot::from_mnemonic(&m, ""),
+            wallet_core::PolkadotRoot::from_mnemonic(&m, "")?,
         ))
     })
     .await?;
-    state.start_session(seed, cardano);
+    state.start_session(seed, cardano, polkadot);
     Ok(())
 }
 
@@ -493,6 +504,8 @@ pub struct Accounts {
     hbar: AddressOut,
     /// Receive address `m/44'/111111'/a'/0/0` (change: `…/1/0`).
     kas: AddressOut,
+    /// sr25519 (substrate-bip39): the phrase's root key for account 0, `//a` otherwise.
+    polkadot: AddressOut,
 }
 
 fn utxo_account_out(
@@ -540,6 +553,7 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
     let net = state.network;
     // Separate lock scope: `with_seed` and `with_cardano` take the same (non-reentrant) mutex.
     let cardano = state.with_cardano(|r| Ok(wallet_core::cardano_address(r, net, a, 0)?))?;
+    let polkadot = state.with_polkadot(|r| Ok(wallet_core::dot_address(r, a, net)?))?;
     state.with_seed(|seed| {
         Ok(Accounts {
             network: network_name(net),
@@ -591,6 +605,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             kas: AddressOut {
                 address: wallet_core::kaspa_address(seed, net, a, false, 0)?,
                 path: wallet_core::kaspa_path(a, false, 0),
+            },
+            polkadot: AddressOut {
+                address: polkadot,
+                path: wallet_core::dot_path(a),
             },
         })
     })

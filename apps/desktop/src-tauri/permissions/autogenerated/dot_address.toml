@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dot-address"
+description = "Enables the dot_address command without any pre-configured scope."
+commands.allow = ["dot_address"]
+
+[[permission]]
+identifier = "deny-dot-address"
+description = "Denies the dot_address command without any pre-configured scope."
+commands.deny = ["dot_address"]

@@ -11,6 +11,7 @@ import type { NearSigned, NearUnsigned } from './near/adapter';
 import type { SuiSigned, SuiUnsigned } from './sui/adapter';
 import type { HbarSigned, HbarUnsigned } from './hedera/adapter';
 import type { KaspaSigned, KaspaUnsigned } from './kaspa/adapter';
+import type { DotSigned, DotUnsigned } from './polkadot/adapter';
 import type { CardanoTokenSpec, StellarMemoSpec } from '@kyro/shared';
 
 import { l10n } from '@kyro/shared';
@@ -37,7 +38,9 @@ export type FeeParams =
   /** Hedera: no fee to choose. Rust sets the max fee from the exchange rate (≈ $0.0001 charged). */
   | { family: 'hbar' }
   /** Kaspa: no fee to choose. Rust: 100 sompi per gram of relay mass (more when the network is busy). */
-  | { family: 'kas' };
+  | { family: 'kas' }
+  /** Polkadot: no fee to choose (runtime weight + length fee, no tip), estimated by the node. */
+  | { family: 'dot' };
 
 export interface FeeOption {
   level: FeeLevel;
@@ -73,7 +76,8 @@ export type SizeHint =
   | { family: 'near' }
   | { family: 'sui' }
   | { family: 'hbar' }
-  | { family: 'kas' };
+  | { family: 'kas' }
+  | { family: 'dot' };
 
 export interface Balance {
   assetId: string;
@@ -187,9 +191,11 @@ export interface FamilyTypes {
   hbar: { unsigned: HbarUnsigned; signed: HbarSigned };
   /** Kaspa: payment built (coin selection, KIP-9 mass, fee) and decoded by Rust. */
   kas: { unsigned: KaspaUnsigned; signed: KaspaSigned };
+  /** Polkadot: `transfer_keep_alive` payload built and strictly decoded by Rust. */
+  dot: { unsigned: DotUnsigned; signed: DotSigned };
 }
-export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned | KaspaUnsigned;
-export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned | KaspaSigned;
+export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned | KaspaUnsigned | DotUnsigned;
+export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned | KaspaSigned | DotSigned;
 
 export type HistoryDirection = 'in' | 'out' | 'self';
 export type HistoryStatus = 'pending' | 'confirmed' | 'failed';
@@ -241,7 +247,7 @@ export type AnyAdapter =
   | ChainAdapter<'doge'>
   | ChainAdapter<'bch'> | ChainAdapter<'dash'> | ChainAdapter<'tron'>
   | ChainAdapter<'xrp'>
-  | ChainAdapter<'ada'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>
+  | ChainAdapter<'ada'> | ChainAdapter<'dot'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>
   | ChainAdapter<'kas'>;
 
 /** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin / Bitcoin Cash / Dash: Bitcoin's PSBT shape). */

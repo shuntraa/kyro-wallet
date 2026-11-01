@@ -148,6 +148,14 @@ const COMMANDS: &[&str] = &[
     "kas_build_tx",
     "kas_sign_tx",
     "kas_broadcast",
+    // Polkadot Asset Hub (docs/IPC.md §2.11).
+    "dot_backend_info",
+    "dot_address",
+    "dot_account",
+    "dot_build_tx",
+    "dot_sign_tx",
+    "dot_broadcast",
+    "dot_tx_status",
     // Staking (docs/IPC.md §2.8).
     "sol_stake_overview",
     "sol_stake_validators",

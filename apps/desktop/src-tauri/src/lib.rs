@@ -5,6 +5,7 @@ mod cardano_backend;
 mod cbf;
 mod commands;
 mod commands_cardano;
+mod commands_dot;
 mod commands_hbar;
 mod commands_hw;
 mod commands_kaspa;
@@ -17,6 +18,7 @@ mod commands_utxo;
 mod commands_xrp;
 mod core_rpc;
 mod dialog_text;
+mod dot_backend;
 mod electrum;
 mod error;
 mod hbar_backend;
@@ -244,6 +246,13 @@ pub fn run() {
             commands_kaspa::kas_build_tx,
             commands_kaspa::kas_sign_tx,
             commands_kaspa::kas_broadcast,
+            commands_dot::dot_backend_info,
+            commands_dot::dot_address,
+            commands_dot::dot_account,
+            commands_dot::dot_build_tx,
+            commands_dot::dot_sign_tx,
+            commands_dot::dot_broadcast,
+            commands_dot::dot_tx_status,
             stake_sol::sol_stake_overview,
             stake_sol::sol_stake_validators,
             stake_sol::sol_stake_build,
