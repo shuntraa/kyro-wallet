@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-stellar-build-tx"
+description = "Enables the hw_stellar_build_tx command without any pre-configured scope."
+commands.allow = ["hw_stellar_build_tx"]
+
+[[permission]]
+identifier = "deny-hw-stellar-build-tx"
+description = "Denies the hw_stellar_build_tx command without any pre-configured scope."
+commands.deny = ["hw_stellar_build_tx"]

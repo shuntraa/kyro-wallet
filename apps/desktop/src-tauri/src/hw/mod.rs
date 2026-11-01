@@ -15,8 +15,11 @@
 //! answers `HW_UNSUPPORTED` for them until they are implemented (see docs/IPC.md §2.3 for the
 //! device apps that support them).
 
+pub mod chains;
 pub mod ledger;
 pub mod ledger_apdu;
+pub mod ledger_coins;
+pub mod ledger_utxo;
 pub mod store;
 pub mod thp;
 #[cfg(test)]
@@ -24,6 +27,7 @@ mod thp_sim;
 pub mod thp_store;
 pub mod trezor;
 pub mod trezor_btc;
+pub mod trezor_coins;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -46,16 +50,21 @@ pub enum Chain {
     Btc,
     Evm,
     Sol,
-    // Phase 4: not implemented yet (HW_UNSUPPORTED). Device support is listed in IPC.md.
+    // Device code of these chains: `hw/chains.rs` and the `ledger_*` / `trezor_*` modules.
     Ltc,
     Doge,
     Tron,
     Cardano,
     Xrp,
+    Bch,
+    Dash,
+    Stellar,
+    /// Zcash (transparent): not offered on hardware wallets (HW_UNSUPPORTED), see IPC.md §2.3.
+    Zec,
 }
 
 impl Chain {
-    pub const ALL: [Chain; 8] = [
+    pub const ALL: [Chain; 12] = [
         Chain::Btc,
         Chain::Evm,
         Chain::Sol,
@@ -64,10 +73,14 @@ impl Chain {
         Chain::Tron,
         Chain::Cardano,
         Chain::Xrp,
+        Chain::Bch,
+        Chain::Dash,
+        Chain::Stellar,
+        Chain::Zec,
     ];
 
     pub fn implemented(self) -> bool {
-        matches!(self, Chain::Btc | Chain::Evm | Chain::Sol)
+        !matches!(self, Chain::Cardano | Chain::Zec)
     }
 
     pub fn label(self) -> &'static str {
@@ -80,6 +93,10 @@ impl Chain {
             Chain::Tron => "Tron",
             Chain::Cardano => "Cardano",
             Chain::Xrp => "XRP",
+            Chain::Bch => "Bitcoin Cash",
+            Chain::Dash => "Dash",
+            Chain::Stellar => "Stellar",
+            Chain::Zec => "Zcash",
         }
     }
 }
@@ -451,6 +468,19 @@ pub trait HardwareWallet: Send {
 
     /// Ed25519 signature over the serialized message.
     fn sol_sign(&mut self, ctl: &Ctl, account: u32, message: &[u8]) -> HwResult<Vec<u8>>;
+
+    /// Raw access for the per-chain device code of [`chains`] (LTC, DOGE, BCH, DASH, XRP,
+    /// TRON, Stellar), which talks to the device itself.
+    fn raw(&mut self) -> RawDevice<'_> {
+        RawDevice::None
+    }
+}
+
+/// See [`HardwareWallet::raw`].
+pub enum RawDevice<'a> {
+    Ledger(&'a dyn ledger::ApduLink),
+    Trezor(&'a mut dyn trezor::TrezorDevice),
+    None,
 }
 
 /// Where a device was found (backend specific), plus a key stable for the session.

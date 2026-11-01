@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-xrp-broadcast"
+description = "Enables the hw_xrp_broadcast command without any pre-configured scope."
+commands.allow = ["hw_xrp_broadcast"]
+
+[[permission]]
+identifier = "deny-hw-xrp-broadcast"
+description = "Denies the hw_xrp_broadcast command without any pre-configured scope."
+commands.deny = ["hw_xrp_broadcast"]

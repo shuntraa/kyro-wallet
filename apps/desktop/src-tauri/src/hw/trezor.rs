@@ -292,6 +292,18 @@ pub trait TrezorIo {
     fn call(&mut self, ctl: &Ctl, mt: MessageType, payload: Vec<u8>) -> HwResult<ProtoMessage>;
 }
 
+/// A connected Trezor as the per-chain device code (`hw/chains.rs`) sees it.
+pub trait TrezorDevice: TrezorIo + Send {
+    /// Fails unless `chain` is usable on this model / firmware (see `chain_status`).
+    fn ensure_chain(&self, chain: Chain) -> HwResult<()>;
+}
+
+impl<W: Wire> TrezorDevice for Trezor<W> {
+    fn ensure_chain(&self, chain: Chain) -> HwResult<()> {
+        self.ensure(chain)
+    }
+}
+
 /// How protobuf messages reach the device: protocol v1 framing or a THP channel.
 pub trait Wire: Send {
     fn send_msg(&mut self, limit: &Mutex<Limit>, msg: ProtoMessage) -> HwResult<()>;
@@ -520,11 +532,11 @@ impl<W: Wire> Trezor<W> {
                 return Ok(refuse(st, "Solana n'existe pas sur la Trezor One", None))
             }
             Chain::Sol => (C::Capability_Solana, "2.6.4"),
-            other => {
-                // Trezor apps exist for LTC, DOGE (Bitcoin-like coins), XRP, Cardano (T/Safe),
-                // Tron (recent firmware): not implemented in Kyro yet.
-                return Ok(ChainStatus::not_yet(other, None));
-            }
+            other => match super::chains::trezor_support(other, one) {
+                Ok(support) => support,
+                Err(None) => return Ok(ChainStatus::not_yet(other, None)),
+                Err(Some(reason)) => return Ok(refuse(st, reason, None)),
+            },
         };
         st.min = Some(min.into());
         if !version_at_least(&fw, min) {
@@ -796,6 +808,10 @@ impl<W: Wire> HardwareWallet for Trezor<W> {
         req.set_show_display(false);
         let pk: protos::SolanaPublicKey = self.send(ctl, &req)?;
         wallet_core::sol_address_of_pubkey(pk.public_key()).map_err(|e| HwError::bad(e.to_string()))
+    }
+
+    fn raw(&mut self) -> super::RawDevice<'_> {
+        super::RawDevice::Trezor(self)
     }
 
     fn sol_sign(&mut self, ctl: &Ctl, account: u32, message: &[u8]) -> HwResult<Vec<u8>> {

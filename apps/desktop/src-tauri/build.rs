@@ -249,6 +249,16 @@ const COMMANDS: &[&str] = &[
     "hw_thp_pairing_code",
     "hw_thp_pairings",
     "hw_thp_forget",
+    "hw_sign_utxo_psbt",
+    "hw_xrp_build_tx",
+    "hw_sign_xrp_tx",
+    "hw_xrp_broadcast",
+    "hw_tron_build_tx",
+    "hw_sign_tron_tx",
+    "hw_tron_broadcast",
+    "hw_stellar_build_tx",
+    "hw_sign_stellar_tx",
+    "hw_stellar_broadcast",
 ];
 
 fn main() {
