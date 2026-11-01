@@ -6,10 +6,13 @@
 // @kyro/swap (verify.ts: contract, spender, value, recipient, minimum, fee), Jupiter decoded by
 // Rust then checked by jupiter-verify.ts. The confirmation shows a frozen quote; a fresh quote
 // that guarantees less asks again instead of being accepted silently.
+// « Tu reçois » can be a token on ANOTHER chain (mainnet): LI.FI through NEAR Intents, delivered
+// to YOUR account on that chain (never a typed address); the bridge deposit is confirmed with
+// NEAR Intents before the password (lifi-cross.ts, near-intents.ts).
 
 import { useEffect, useMemo, useState } from 'react';
 import { toIpcError } from '@kyro/shared';
-import { assetsFor, evmChains, findChain, solChain, tryParseUnits, unitsToNumber, type AssetDef, type EvmAdapter } from '@kyro/chains';
+import { allChains, assetsFor, evmChains, findChain, solChain, tryParseUnits, unitsToNumber, type AssetDef, type EvmAdapter } from '@kyro/chains';
 import {
   buildApproval,
   buildRevoke,
@@ -20,10 +23,8 @@ import {
   isNative,
   isUnlimitedAllowance,
   knownSwapContract,
-  NATIVE_EVM,
   requiresZeroAllowanceFirst,
   verifyJupiterSwap,
-  WSOL_MINT,
   ZEROX_REGISTRY_ABI,
   ZEROX_SETTLER_REGISTRY,
   ZEROX_TAKER_SETTLER_FEATURE,
@@ -38,6 +39,7 @@ import { useCoinChart } from '../state/charts';
 import { cn } from '../lib/cn';
 import { fmtAgo, fmtCrypto, fmtEta, fmtFiat, fmtNumber, fmtPct, sanitizeDecimalInput, shortAddress, toInputDecimal } from '../lib/format';
 import { addApproval, addLocalTx } from '../lib/storage';
+import { buyGroups, canSwapFrom, ownAddressOn, swapChainOf, swapTokenAddress } from '../lib/crossSwap';
 import { priceAt } from '../lib/portfolioSeries';
 import { useAsync, useDebounced, useNow } from '../lib/useAsync';
 import { CoinIcon, EmptyState, EnClair, PasswordField } from '../components/kit';
@@ -58,10 +60,23 @@ type Phase = 'idle' | 'approving' | 'waiting' | 'simulating' | 'checking' | 'swa
 const MAX_SLIPPAGE_BPS = 1_500;
 
 function tokenOf(a: AssetDef, price?: number): SwapToken {
-  const address = a.kind === 'native' ? (a.family === 'sol' ? WSOL_MINT : NATIVE_EVM) : a.contract ?? '';
-  const t: SwapToken = { address, symbol: a.symbol, decimals: a.decimals };
+  const t: SwapToken = { address: swapTokenAddress(a), symbol: a.symbol, decimals: a.decimals };
   if (price !== undefined) t.priceFiat = price;
   return t;
+}
+
+/**
+ * Dry-run of the swap call. Same chain: also measures what we receive. Cross-chain: only that the
+ * departure transaction passes (what arrives is guaranteed by the bridge minimum, checked apart).
+ */
+async function simulateSwap(ad: EvmAdapter, tx: { to: string; data: `0x${string}`; value: bigint } | null, buy: AssetDef | null): Promise<{ ok: true; received: bigint | null } | { ok: false; reason: string }> {
+  if (!tx) return { ok: false, reason: 'transaction absente' };
+  const call = { to: tx.to, data: tx.data, value: tx.value };
+  if (!buy) {
+    const s = await ad.simulate(call);
+    return s.ok ? { ok: true, received: null } : s;
+  }
+  return ad.simulateReceived(call, buy.kind === 'native' || isNative(swapTokenAddress(buy)) ? 'native' : swapTokenAddress(buy));
 }
 
 /** Swaps sign through the vault only for now: a hardware-wallet account gets a clear note. */
@@ -100,7 +115,15 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const [sellId, setSellId] = useState(initialSell?.id ?? tokens.find((t) => t.kind !== 'native')?.id ?? tokens[0]?.id ?? '');
   const [buyId, setBuyId] = useState(tokens.find((t) => t.id !== (initialSell?.id ?? sellId))?.id ?? '');
   const sell = tokens.find((t) => t.id === sellId) ?? tokens[0];
-  const buy = tokens.find((t) => t.id === buyId && t.id !== sell?.id) ?? tokens.find((t) => t.id !== sell?.id);
+  // « Tu reçois »: this chain first, then the other chains a swap can arrive on (mainnet).
+  const groups = useMemo(() => buyGroups(network, allChains(network), assetsFor(network), sell), [network, sell]);
+  const buyOptions = useMemo(() => groups.flatMap((g) => g.assets), [groups]);
+  const buy = buyOptions.find((t) => t.id === buyId) ?? buyOptions.find((t) => t.chainKey === chainKey) ?? buyOptions[0];
+  const buyChain = buy ? findChain(network, buy.chainKey) : undefined;
+  const cross = !!buy && buy.chainKey !== chainKey;
+  const toChain = swapChainOf(buyChain);
+  /** Where a cross-chain swap delivers: YOUR selected account on the arrival chain. */
+  const recipient = cross ? ownAddressOn(accounts, buyChain) : null;
   const [amountStr, setAmountStr] = useState('');
   const [slip, setSlip] = useState<Slip>(50);
   const [slipCustom, setSlipCustom] = useState('2');
@@ -119,8 +142,8 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   useEffect(() => {
     // Keep the pair valid when the chain changes.
     if (!tokens.some((t) => t.id === sellId)) setSellId(tokens.find((t) => t.kind !== 'native')?.id ?? tokens[0]?.id ?? '');
-    if (!tokens.some((t) => t.id === buyId) || buyId === sellId) setBuyId(tokens.find((t) => t.id !== sellId)?.id ?? '');
-  }, [tokens, sellId, buyId]);
+    if (!buyOptions.some((t) => t.id === buyId)) setBuyId(buyOptions.find((t) => t.chainKey === chainKey)?.id ?? buyOptions[0]?.id ?? '');
+  }, [tokens, sellId, buyId, buyOptions, chainKey]);
 
   const sellPrice = sell ? pf.price(sell.coingeckoId)?.price : undefined;
   const buyPrice = buy ? pf.price(buy.coingeckoId)?.price : undefined;
@@ -135,8 +158,10 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
 
   const params: QuoteParams | null = useMemo(() => {
     if (!sell || !buy || !chain || !sellAmount || sellAmount <= 0n || !slipValid) return null;
+    if (cross && (toChain === null || !recipient)) return null;
     const p: QuoteParams = {
       chain: chain.family === 'sol' ? 'solana' : chain.family === 'evm' ? chain.chainId : 0,
+      ...(cross && toChain !== null && recipient ? { toChain, recipient } : {}),
       sell: tokenOf(sell, sellPrice),
       buy: tokenOf(buy, buyPrice),
       sellAmount,
@@ -146,7 +171,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
     };
     if (nativePrice !== undefined) p.nativePriceFiat = nativePrice;
     return p;
-  }, [sell, buy, chain, sellAmount, slipValid, sellPrice, buyPrice, taker, slippageBps, cur, pf, nativePrice]);
+  }, [sell, buy, chain, sellAmount, slipValid, sellPrice, buyPrice, taker, slippageBps, cur, pf, nativePrice, cross, toChain, recipient]);
   const debouncedKey = useDebounced(params ? JSON.stringify({ ...params, sellAmount: params.sellAmount.toString() }) : null, 600);
 
   const quotes = useAsync<{ quotes: Quote[]; results: QuoteResult[] }>(params && debouncedKey ? () => fetchQuotes(swapProviders, params) : null, [debouncedKey], { intervalMs: 30_000 });
@@ -167,7 +192,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   // Simulation (only possible once the allowance is in place).
   const simKey = chosen && chosen.tx.kind === 'evm' && !needsApproval && allowance.data !== undefined ? `${chosen.provider}:${chosen.tx.data.slice(0, 66)}:${chosen.buyAmount}` : chosen && chosen.tx.kind === 'evm' && !needsAllowanceCheck ? `${chosen.provider}:${chosen.buyAmount}` : null;
   const sim = useAsync(
-    simKey && evmAdapter && chosen?.tx.kind === 'evm' && buy ? () => evmAdapter.simulateReceived({ to: chosen.tx.kind === 'evm' ? chosen.tx.to : '', data: chosen.tx.kind === 'evm' ? chosen.tx.data : '0x', value: chosen.tx.kind === 'evm' ? chosen.tx.value : 0n }, buy.kind === 'native' ? 'native' : buy.contract ?? '') : null,
+    simKey && evmAdapter && chosen?.tx.kind === 'evm' && buy ? () => simulateSwap(evmAdapter, chosen.tx.kind === 'evm' ? chosen.tx : null, chosen.cross ? null : buy) : null,
     [simKey],
   );
 
@@ -224,6 +249,23 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
         if (!adapters.sol) throw new Error('Pas de compte Solana sur ce portefeuille.');
         setPhase('checking');
         const wire = await quote.tx.build();
+        if (quote.tx.verify) {
+          // LI.FI cross-chain: Rust decodes, Kyro checks the transfers, NEAR Intents confirms the deposit — BEFORE the password.
+          const routeCheck = await quote.tx.verify(wire, await adapters.sol.decodeWire(wire));
+          setPhase('swapping');
+          const signed = await adapters.sol.signWireTransaction(wire, password);
+          // Same check on what Rust actually signed, before broadcasting.
+          const signedCheck = await quote.tx.verify(wire, signed.summary);
+          if (signedCheck.depositAddress !== routeCheck.depositAddress) throw new Error('La transaction signée ne correspond pas à celle vérifiée : arrêt.');
+          const id = await adapters.sol.broadcast(signed);
+          recordSwap(id, quote);
+          setDoneId(id);
+          setPhase('done');
+          setPassword('');
+          setConfirmOpen(false);
+          pf.refresh();
+          return;
+        }
         // Third-party transaction: decoded by Rust, then checked against what you reviewed, BEFORE the password is used.
         const check = {
           wire,
@@ -241,7 +283,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
         // Same check on what Rust actually signed, before broadcasting.
         await verifyJupiterSwap({ ...check, summary: signed.summary });
         const id = await adapters.sol.broadcast(signed);
-        addLocalTx({ id, network, chainKey, assetId: sell.id, kind: 'swap', direction: 'out', amount: sellAmount.toString(), label: `Swap ${sell.symbol} → ${buy.symbol}`, time: Date.now(), status: 'pending' });
+        recordSwap(id, quote);
         setDoneId(id);
         setPhase('done');
         setPassword('');
@@ -303,7 +345,8 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
         return;
       }
       if (fresh.evmCheck.settler && fresh.evmCheck.settler !== check0.settler) await assertSettler(fresh.evmCheck.settler);
-      const s = await evmAdapter.simulateReceived({ to: fresh.tx.to, data: fresh.tx.data, value: fresh.tx.value }, buy.kind === 'native' || isNative(tokenOf(buy).address) ? 'native' : tokenOf(buy).address);
+      if (!!quote.cross !== !!fresh.cross || (fresh.cross && fresh.cross.recipient !== quote.cross?.recipient)) throw new Error('Le nouveau devis change de destination : arrêt.');
+      const s = await simulateSwap(evmAdapter, fresh.tx, fresh.cross ? null : buy);
       if (!s.ok) throw new Error(`La simulation échoue : ${s.reason}`);
       if (s.received !== null && s.received < fresh.minBuyAmount) throw new Error(`La simulation ne reçoit que ${fmtCrypto(s.received, buy.decimals, buy.symbol, 6)}, moins que le minimum garanti : arrêt.`);
 
@@ -320,20 +363,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       if (decoded.to.toLowerCase() !== known.toLowerCase() || unsigned.tx.data !== fresh.tx.data || unsigned.tx.valueWei !== fresh.tx.value.toString()) throw new Error('La transaction à signer ne correspond pas au devis vérifié : arrêt.');
       const signed = await evmAdapter.signTx(unsigned, password);
       const hash = await evmAdapter.broadcast(signed);
-      addLocalTx({
-        id: hash,
-        network,
-        chainKey,
-        assetId: sell.id,
-        kind: 'swap',
-        direction: 'out',
-        amount: sellAmount.toString(),
-        fee: unsigned.maxFee.toString(),
-        counterparty: fresh.tx.to,
-        label: `Swap ${fmtCrypto(sellAmount, sell.decimals)} ${sell.symbol} → ${buy.symbol}`,
-        time: Date.now(),
-        status: 'pending',
-      });
+      recordSwap(hash, fresh, { fee: unsigned.maxFee.toString(), counterparty: fresh.tx.to });
       setDoneId(hash);
       setPhase('done');
       setPassword('');
@@ -347,6 +377,26 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
     }
   };
 
+  /** History entry; a cross-chain swap is then followed until it arrives (state/history.ts). */
+  function recordSwap(id: string, q: Quote, extra: { fee?: string; counterparty?: string } = {}) {
+    if (!sell || !buy || !sellAmount) return;
+    const arrival = q.cross && buyChain ? ` (vers ${buyChain.label})` : '';
+    addLocalTx({
+      id,
+      network,
+      chainKey,
+      assetId: sell.id,
+      kind: 'swap',
+      direction: 'out',
+      amount: sellAmount.toString(),
+      ...extra,
+      label: `Swap ${fmtCrypto(sellAmount, sell.decimals)} ${sell.symbol} → ${buy.symbol}${arrival}`,
+      time: Date.now(),
+      status: 'pending',
+      ...(q.cross && buyChain ? { cross: { fromChain: String(q.cross.fromChain), toChain: String(q.cross.toChain), toChainKey: buyChain.key, bridge: q.cross.bridge } } : {}),
+    });
+  }
+
   const ctaLabel = needsApproval ? 'Autoriser puis échanger' : 'Échanger';
   const phaseLabel: Record<Phase, string> = { idle: '', approving: 'Signature de l’autorisation…', waiting: 'Attente de la confirmation de l’autorisation…', simulating: 'Nouveau devis et simulation…', checking: 'Vérification de la transaction…', swapping: 'Signature du swap…', done: '' };
 
@@ -356,6 +406,11 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
     tokens
       .filter((t) => t.id !== exclude)
       .map((t) => ({ value: t.id, label: t.symbol, hint: `${t.name} · ${fmtCrypto(pf.balances.get(t.id) ?? 0n, t.decimals)}`, icon: <CoinIcon glyph={t.glyph} color={t.color} size={24} /> }));
+  // Grouped by chain: with another chain, the swap arrives on YOUR account there.
+  const buyItems = groups.flatMap((g) =>
+    g.assets.map((t) => ({ value: t.id, group: g.chain.key === chainKey ? `${g.chain.label} · même réseau` : `${g.chain.label} · vers ton compte`, label: t.symbol, hint: `${t.name} · ${fmtCrypto(pf.balances.get(t.id) ?? 0n, t.decimals)}`, icon: <CoinIcon glyph={t.glyph} color={t.color} size={24} /> })),
+  );
+  const canInvert = !cross || canSwapFrom(buyChain);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
@@ -431,7 +486,10 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             <button
               type="button"
               aria-label="Inverser"
+              disabled={!canInvert}
+              title={canInvert ? undefined : `Pas de swap au départ de ${buyChain?.label ?? 'ce réseau'} pour l’instant`}
               onClick={() => {
+                if (cross) setChainKey(buy.chainKey);
                 setSellId(buy.id);
                 setBuyId(sell.id);
                 setAmountStr('');
@@ -441,20 +499,26 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               <IconDown size={15} />
             </button>
             <TokenPanel
-              label="Tu reçois (estimé)"
+              label={cross ? `Tu reçois sur ${buyChain?.label ?? buy.chainKey} (estimé)` : 'Tu reçois (estimé)'}
               right={<>Solde {fmtCrypto(pf.balances.get(buy.id) ?? 0n, buy.decimals)}</>}
               amount={<span key={buyAmount ? String(buyAmount) : 'none'} className={cn('figure fade-in block truncate text-[42px]', !buyAmount && 'text-faint')}>{buyAmount ? fmtCrypto(buyAmount, buy.decimals, undefined, 6) : quotes.loading ? '…' : '0'}</span>}
               sub={buyAmount && buyPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(buyAmount, buy.decimals) * buyPrice, cur)}${chosen?.priceImpact !== null && chosen?.priceImpact !== undefined ? ` · impact ${fmtPct(chosen.priceImpact * 100, { sign: false })}` : ''}` : ' '}
-              token={<TokenButton asset={buy} items={tokenItems(sell.id)} onSelect={setBuyId} />}
+              token={<TokenButton asset={buy} items={buyItems} onSelect={setBuyId} />}
             />
           </div>
 
           {chosen && buyAmount !== null && (
             <div className="fade-in flex flex-col rounded-box border border-line bg-bg px-4 text-[14px]">
               <div className="flex h-11 items-center justify-between">
-                <span className="text-mute">Tu reçois</span>
+                <span className="text-mute">Tu reçois{cross ? ` sur ${buyChain?.label ?? ''}` : ''}</span>
                 <span className="font-medium">≈ {fmtCrypto(buyAmount, buy.decimals, buy.symbol, 6)}</span>
               </div>
+              {cross && chosen.etaSecs !== undefined && (
+                <div className="flex h-11 items-center justify-between border-t border-line">
+                  <span className="text-mute">Arrivée</span>
+                  <span className="text-text2">{fmtEta(chosen.etaSecs)} après la confirmation du départ</span>
+                </div>
+              )}
               {chosen.kyroFeeBps > 0 && (
                 <div className="flex h-11 items-center justify-between border-t border-line">
                   <span className="text-mute">Frais Kyro {feeLabel(chosen.kyroFeeBps)}</span>
@@ -507,7 +571,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               ) : null}
             </div>
           )}
-          {chosen?.tx.kind === 'solana' && <span className="text-[13px] text-mute">Transaction construite par Jupiter, signée dans le coffre après la fenêtre système.</span>}
+          {chosen?.tx.kind === 'solana' && <span className="text-[13px] text-mute">{chosen.cross ? 'Transaction construite par l’agrégateur, vérifiée par le coffre et confirmée par le pont avant ton mot de passe.' : 'Transaction construite par Jupiter, signée dans le coffre après la fenêtre système.'}</span>}
           {phase !== 'idle' && phase !== 'done' && (
             <span className="flex items-center gap-2 text-[13px] text-ice-text2">
               <Spinner /> {phaseLabel[phase]}
@@ -539,6 +603,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             {params && quotes.data && list.length === 0 && !quotesTorBlocked && (
               <p className="m-0 px-1 text-[13px] text-mute">Aucun prix disponible pour cette paire{network === 'testnet' ? ' : les échanges fonctionnent surtout en mainnet' : ''}.</p>
             )}
+            {cross && !recipient && <Notice tone="warn">Pas de compte {buyChain?.label ?? ''} dans ce portefeuille pour recevoir.</Notice>}
             {list.length === 0 && feeReasons.map((r) => <Notice key={r} tone="warn">{r}</Notice>)}
             {quotesTorBlocked && (failures.length > 0 || quotes.error) && <TorWait className="px-1" />}
             {quotes.error && !quotesTorBlocked && <Notice tone="error">{quotes.error.message}</Notice>}
@@ -600,8 +665,25 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               )}
               <div className="flex h-10 items-center justify-between border-b border-line">
                 <span className="text-mute">Destinataire</span>
-                <span className="text-text2">{shown.tx.kind === 'evm' ? (shown.evmCheck ? 'toi (lu dans la transaction)' : '—') : 'toi (vérifié avant signature)'}</span>
+                <span className="text-text2">
+                  {shown.cross
+                    ? `ton compte ${buyChain?.label ?? ''} · ${shortAddress(shown.cross.recipient)}`
+                    : shown.tx.kind === 'evm'
+                      ? shown.evmCheck
+                        ? 'toi (lu dans la transaction)'
+                        : '—'
+                      : 'toi (vérifié avant signature)'}
+                </span>
               </div>
+              {shown.cross && (
+                <div className="flex h-10 items-center justify-between border-b border-line">
+                  <span className="text-mute">Pont</span>
+                  <span className="text-text2">
+                    {shown.cross.bridgeName}
+                    {shown.etaSecs !== undefined ? ` · arrivée ${fmtEta(shown.etaSecs)}` : ''}
+                  </span>
+                </div>
+              )}
               <div className="flex h-10 items-center justify-between">
                 <span className="text-mute">Contrat</span>
                 <span className="font-mono text-[12px] font-medium">
@@ -610,7 +692,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               </div>
             </div>
             <EnClair tone={needsApproval && unlimited ? 'warn' : 'ice'}>
-              Tu donnes {fmtCrypto(sellAmount, sell.decimals, sell.symbol)} et reçois au moins {fmtCrypto(shown.minBuyAmount, buy.decimals, buy.symbol, 6)}, sur ton adresse.
+              Tu donnes {fmtCrypto(sellAmount, sell.decimals, sell.symbol)} et reçois au moins {fmtCrypto(shown.minBuyAmount, buy.decimals, buy.symbol, 6)}, {shown.cross ? `sur ton compte ${buyChain?.label ?? ''}, après le passage du pont ${shown.cross.bridgeName} (sinon remboursement sur ton adresse de départ)` : 'sur ton adresse'}.
               {needsApproval
                 ? unlimited
                   ? ` Le contrat ${shown.providerName} pourra dépenser TOUS tes ${sell.symbol}, sans limite, jusqu’à révocation.`
@@ -622,12 +704,24 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               <SecondConfirmNotice
                 lines={[
                   ...(needsApproval ? [`Autorisation : ${shown.providerName} (${shortAddress(shown.allowanceTarget ?? '')}) pourra dépenser ${unlimited ? `un montant ILLIMITÉ de ${sell.symbol}` : fmtCrypto(sellAmount, sell.decimals, sell.symbol)} sans nouvelle signature.`] : []),
-                  `Swap : appel du contrat officiel de ${shown.providerName}. Kyro a lu dans la transaction le destinataire (toi), le minimum garanti et les frais ; le reste du trajet (les échanges eux-mêmes) n’est vérifié que par la simulation.`,
+                  shown.cross
+                    ? `Swap entre chaînes : appel du contrat officiel de ${shown.providerName}, qui envoie les fonds à l’adresse de dépôt ${shortAddress(shown.cross.depositAddress ?? '')} du pont ${shown.cross.bridgeName}. Kyro a lu dans la transaction ton adresse d’arrivée, le remboursement vers toi, le minimum et les frais, puis ${shown.cross.bridgeName} a confirmé que ce dépôt va à ton compte ${buyChain?.label ?? ''}. La livraison elle-même dépend du pont.`
+                    : `Swap : appel du contrat officiel de ${shown.providerName}. Kyro a lu dans la transaction le destinataire (toi), le minimum garanti et les frais ; le reste du trajet (les échanges eux-mêmes) n’est vérifié que par la simulation.`,
                   ...(sell.kind === 'native' ? [`${fmtCrypto(sellAmount, sell.decimals, sell.symbol)} envoyés au contrat avec l’appel.`] : []),
                 ]}
               />
             )}
-            {shown.tx.kind === 'solana' && <span className="text-[13px] text-mute">Transaction construite par {shown.providerName} : décodée par le coffre et comparée à ce récapitulatif avant d’utiliser ton mot de passe, puis fenêtre système.</span>}
+            {shown.tx.kind === 'solana' && !shown.cross && <span className="text-[13px] text-mute">Transaction construite par {shown.providerName} : décodée par le coffre et comparée à ce récapitulatif avant d’utiliser ton mot de passe, puis fenêtre système.</span>}
+            {/* LI.FI from Solana: Rust shows LI.FI's tracking instruction as unknown, hence the reinforced 2nd window. */}
+            {shown.tx.kind === 'solana' && shown.cross && (
+              <SecondConfirmNotice
+                lines={[
+                  `Transaction construite par ${shown.providerName} : le coffre la décode, puis Kyro n’accepte que des transferts depuis ton compte de ${sell.symbol} vers trois destinations : les frais Kyro (${feeLabel(shown.kyroFeeBps)}), les frais ${shown.providerName}, et UNE adresse de dépôt du pont ${shown.cross.bridgeName}. Le total doit faire exactement ${fmtCrypto(sellAmount, sell.decimals, sell.symbol)}.`,
+                  `${shown.cross.bridgeName} doit confirmer que ce dépôt va à ton compte ${buyChain?.label ?? ''} (${shortAddress(shown.cross.recipient)}), en ${buy.symbol}, pour au moins ${fmtCrypto(shown.minBuyAmount, buy.decimals, buy.symbol, 6)}, remboursement vers toi.`,
+                  'Instruction de suivi LI.FI (programme 3i5Jeu…) : elle ne déplace rien, la fenêtre système la signale comme inconnue.',
+                ]}
+              />
+            )}
             {phase !== 'idle' && phase !== 'done' && (
               <span className="flex items-center gap-2 text-[13px] text-ice-text2">
                 <Spinner /> {phaseLabel[phase]}
