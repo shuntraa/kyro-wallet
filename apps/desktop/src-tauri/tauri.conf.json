@@ -39,7 +39,7 @@
     "createUpdaterArtifacts": true,
     "category": "Finance",
     "shortDescription": "Wallet crypto non-custodial, open source",
-    "longDescription": "Kyro Wallet : wallet non-custodial open source (GPLv3). Clés chiffrées sur l'appareil, signature dans un noyau Rust, aucune télémétrie.",
+    "longDescription": "Kyro Wallet : open-source non-custodial wallet (GPLv3). Keys encrypted on the device, signing in a Rust core, no telemetry.",
     "copyright": "GPL-3.0-or-later",
     "license": "GPL-3.0-or-later",
     "licenseFile": "../../../LICENSE",

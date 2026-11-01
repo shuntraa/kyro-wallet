@@ -1,6 +1,6 @@
 [package]
 name = "kyro-desktop"
-description = "Kyro Wallet — coque Tauri (session, réseau filtré, confirmations natives)"
+description = "Kyro Wallet — Tauri shell (session, filtered network, native confirmations)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

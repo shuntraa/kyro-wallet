@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Seules permissions de la fenêtre principale : nos commandes et le contrôle de la fenêtre (barre de titre personnalisée). Pas de fs, pas de shell, pas d'http côté webview. Seul lien externe : open_fees_page (URL fixe kyrowallet.com/frais, ouverte par Rust).",
+  "description": "The main window's only permissions: our commands and window control (custom title bar). No fs, no shell, no http on the webview side. Only external link: open_fees_page (fixed URL kyrowallet.com/frais, opened by Rust).",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",

@@ -118,7 +118,7 @@ pub fn run() {
                 .iter()
                 .find(|w| w.label == "main")
                 .cloned()
-                .ok_or("fenêtre principale absente de la configuration")?;
+                .ok_or("main window missing from the configuration")?;
             tauri::WebviewWindowBuilder::from_config(app.handle(), &main)?
                 .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Deny)
                 .build()?;

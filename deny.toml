@@ -1,4 +1,4 @@
-# cargo-deny : licences compatibles GPL, pas de crates yankées, sources connues uniquement.
+# cargo-deny: GPL-compatible licenses, no yanked crates, known sources only.
 [graph]
 all-features = false
 

@@ -26,4 +26,4 @@ for (const key of Object.keys(MARKS) as MarkKey[]) {
   index[file] = { name: mark.name, color: mark.color };
 }
 writeFileSync(join(out, 'index.json'), `${JSON.stringify(index, null, 2)}\n`);
-console.log(`${Object.keys(index).length} icônes écrites dans ${out}`);
+console.log(`${Object.keys(index).length} icons written to ${out}`);
