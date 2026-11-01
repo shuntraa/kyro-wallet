@@ -500,7 +500,7 @@ impl NearTransfer {
         if b.first() == Some(&ACTION_FUNCTION_CALL) {
             if near_known_token(&receiver_id).is_none() {
                 return Err(bad(
-                    "appel de contrat refusé : Kyro n'appelle que les contrats de jetons qu'il connaît",
+                    "appel de contrat (FunctionCall) refusé : Kyro n'appelle que les contrats de jetons qu'il connaît",
                 ));
             }
             let ft = NearTransfer::read_ft(b, n)?;
