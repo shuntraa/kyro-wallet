@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-xrp-build-tx"
+description = "Enables the hw_xrp_build_tx command without any pre-configured scope."
+commands.allow = ["hw_xrp_build_tx"]
+
+[[permission]]
+identifier = "deny-hw-xrp-build-tx"
+description = "Denies the hw_xrp_build_tx command without any pre-configured scope."
+commands.deny = ["hw_xrp_build_tx"]

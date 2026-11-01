@@ -40,7 +40,7 @@ pub fn app_for(chain: Chain, net: Network) -> Option<(&'static str, &'static str
         )),
         Chain::Evm => Some(("Ethereum", "1.9.0")),
         Chain::Sol => Some(("Solana", "1.3.1")),
-        _ => None,
+        _ => super::ledger_apps::app_for(chain),
     }
 }
 
@@ -314,6 +314,10 @@ fn default_policy(acc: &BtcAccount) -> HwResult<WalletPolicy> {
 }
 
 impl<L: ApduLink> HardwareWallet for Ledger<L> {
+    fn apdu_link(&self) -> Option<&dyn ApduLink> {
+        Some(&self.link)
+    }
+
     fn status(&mut self, ctl: &Ctl, net: Network) -> HwResult<DeviceStatus> {
         let (locked, app) = match self.open_app(ctl) {
             Ok((name, version)) => (false, Some(AppInfo { name, version })),
@@ -323,7 +327,10 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
         let mut chains = Vec::new();
         for chain in Chain::ALL {
             let Some((expected, min)) = app_for(chain, net) else {
-                chains.push(ChainStatus::not_yet(chain, phase4_app(chain)));
+                chains.push(
+                    super::ledger_apps::unavailable_status(chain)
+                        .unwrap_or_else(|| ChainStatus::not_yet(chain, phase4_app(chain))),
+                );
                 continue;
             };
             let mut st = ChainStatus::new(chain, ChainState::OpenApp);

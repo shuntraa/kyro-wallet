@@ -16,7 +16,13 @@
 //! device apps that support them).
 
 pub mod ledger;
+pub mod ledger_algo;
 pub mod ledger_apdu;
+pub mod ledger_apps;
+pub mod ledger_aptos;
+pub mod ledger_cosmos;
+pub mod ledger_near;
+pub mod ledger_sui;
 pub mod store;
 pub mod thp;
 #[cfg(test)]
@@ -52,10 +58,21 @@ pub enum Chain {
     Tron,
     Cardano,
     Xrp,
+    // Single-key chains, Ledger only (see `ledger_apps`).
+    Sui,
+    Apt,
+    Algo,
+    Near,
+    Cosmos,
+    // No hardware support (reasons in `ledger_apps::unavailable`).
+    Dot,
+    Hbar,
+    Kas,
+    Ton,
 }
 
 impl Chain {
-    pub const ALL: [Chain; 8] = [
+    pub const ALL: [Chain; 17] = [
         Chain::Btc,
         Chain::Evm,
         Chain::Sol,
@@ -64,10 +81,19 @@ impl Chain {
         Chain::Tron,
         Chain::Cardano,
         Chain::Xrp,
+        Chain::Sui,
+        Chain::Apt,
+        Chain::Algo,
+        Chain::Near,
+        Chain::Cosmos,
+        Chain::Dot,
+        Chain::Hbar,
+        Chain::Kas,
+        Chain::Ton,
     ];
 
     pub fn implemented(self) -> bool {
-        matches!(self, Chain::Btc | Chain::Evm | Chain::Sol)
+        matches!(self, Chain::Btc | Chain::Evm | Chain::Sol) || ledger_apps::key_chain(self).is_some()
     }
 
     pub fn label(self) -> &'static str {
@@ -80,6 +106,15 @@ impl Chain {
             Chain::Tron => "Tron",
             Chain::Cardano => "Cardano",
             Chain::Xrp => "XRP",
+            Chain::Sui => "Sui",
+            Chain::Apt => "Aptos",
+            Chain::Algo => "Algorand",
+            Chain::Near => "NEAR",
+            Chain::Cosmos => "Cosmos Hub",
+            Chain::Dot => "Polkadot",
+            Chain::Hbar => "Hedera",
+            Chain::Kas => "Kaspa",
+            Chain::Ton => "TON",
         }
     }
 }
@@ -451,6 +486,11 @@ pub trait HardwareWallet: Send {
 
     /// Ed25519 signature over the serialized message.
     fn sol_sign(&mut self, ctl: &Ctl, account: u32, message: &[u8]) -> HwResult<Vec<u8>>;
+
+    /// Ledger only: the raw APDU link, for the per-chain apps of [`ledger_apps`].
+    fn apdu_link(&self) -> Option<&dyn ledger::ApduLink> {
+        None
+    }
 }
 
 /// Where a device was found (backend specific), plus a key stable for the session.
