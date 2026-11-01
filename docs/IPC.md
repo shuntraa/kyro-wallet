@@ -738,7 +738,7 @@ type ApiKeyName = 'coingecko' | 'zerox' | 'trongrid';   // toutes les clés que 
 // coingecko : en-tête x-cg-demo-api-key / x-cg-pro-api-key (api / pro-api.coingecko.com) ; zerox : 0x-api-key (api.0x.org) ;
 // trongrid : TRON-PRO-API-KEY (api.trongrid.io, nile.trongrid.io, §2.5).
 // (LI.FI et Jupiter : variables d'environnement seulement, pas de clé dans Settings.)
-type Settings = { currency: 'EUR' | 'USD'; autoLockSecs: number; hideBalancesOnStart: boolean;   // ce que RENVOIENT settings_get / settings_set
+type Settings = { currency: Currency /* FIAT_CURRENCIES (26 devises CoinGecko), défaut au 1er lancement = région de la locale du système (fiat.rs), jamais l'IP */; autoLockSecs: number; hideBalancesOnStart: boolean;   // ce que RENVOIENT settings_get / settings_set
                   captureProtection: boolean; clipboardGuard: boolean;
                   servers: Servers;               // remplace l'ancien `rpc` (encore accepté en entrée, migré, jamais renvoyé)
                   apiKeysSet: { [K in ApiKeyName]: boolean };   // clé enregistrée ou non ; JAMAIS la valeur (pas de champ `apiKeys`)

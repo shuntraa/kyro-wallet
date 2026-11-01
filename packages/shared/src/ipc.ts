@@ -11,7 +11,8 @@ import { l10n } from './i18n';
 
 export type Network = 'mainnet' | 'testnet';
 export type BtcKind = 'segwit' | 'taproot';
-export type Currency = 'EUR' | 'USD';
+export type { Currency } from './fiat';
+import type { Currency } from './fiat';
 
 export interface VaultStatus {
   exists: boolean;

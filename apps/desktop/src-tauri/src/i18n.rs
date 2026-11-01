@@ -151,7 +151,7 @@ pub fn detail_en(fr: &str) -> String {
         ("Tor n'est pas démarré", "Tor is not started"),
         ("Tor arrêté", "Tor stopped"),
         ("délai de démarrage dépassé", "start-up timed out"),
-        ("devise : EUR ou USD", "currency: EUR or USD"),
+        ("devise non proposée", "currency not offered"),
         (
             "verrouillage automatique : entre 1 et 60 minutes",
             "auto-lock: between 1 and 60 minutes",

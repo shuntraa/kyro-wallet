@@ -34,6 +34,7 @@ import {
   type VaultStatus,
 } from './ipc';
 import { emitDemoEvent } from './events';
+import { isCurrency, navigatorCurrency } from './fiat';
 import { createDemoServers } from './mock-servers';
 import { createDemoCbf, detectDemoCbf } from './mock-cbf';
 import { createDemoUtxo, demoUtxoAccount, demoUtxoScript, DEMO_DASH_NETWORKS, DEMO_DOGE_NETWORKS, DEMO_LTC_NETWORKS } from './mock-utxo';
@@ -403,7 +404,8 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const approvedHosts = new Set<string>();
   /** `.cookie` chosen with the (simulated) native picker. */
   let pickedCookie: string | null = null;
-  let settings: Settings = structuredClone(DEFAULT_SETTINGS);
+  // First run: the currency of the browser's region (Rust: the OS locale, fiat.rs).
+  let settings: Settings = { ...structuredClone(DEFAULT_SETTINGS), currency: navigatorCurrency() };
   /** API key values: write-only, never returned (settings_get / settings_set give `apiKeysSet`). */
   let apiKeys: Partial<Record<ApiKeyName, string>> = {};
   const publicSettings = (): Settings => ({
@@ -967,7 +969,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     settings_get: () => publicSettings(),
     settings_set: async (a) => {
       const next = a.settings as (SettingsInput & { apiKeysSet?: unknown }) | undefined;
-      if (!next || (next.currency !== 'EUR' && next.currency !== 'USD')) throw new IpcError('INVALID_INPUT', l10n('Réglages invalides.', 'Invalid settings.'));
+      if (!next || !isCurrency(next.currency)) throw new IpcError('INVALID_INPUT', l10n('Réglages invalides.', 'Invalid settings.'));
       if (!Number.isInteger(next.autoLockSecs) || next.autoLockSecs < 60 || next.autoLockSecs > 4 * 3600) {
         throw new IpcError('INVALID_INPUT', l10n('Délai de verrouillage invalide (1 min à 4 h).', 'Invalid lock delay (1 min to 4 h).'));
       }

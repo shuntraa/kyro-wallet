@@ -15,6 +15,8 @@ export interface DemoCoin {
 }
 
 export const DEMO_EUR_USD = 1.08;
+/** Demo only: rough EUR → other currency rates (2026), so every Settings currency shows plausible numbers. */
+export const DEMO_EUR_FX: Record<string, number> = { gbp: 0.85, chf: 0.94, cad: 1.5, aud: 1.65, nzd: 1.8, jpy: 165, cny: 7.8, hkd: 8.4, sgd: 1.45, krw: 1480, inr: 92, brl: 6, mxn: 20, ars: 1250, try: 40, pln: 4.25, czk: 25, sek: 11.3, nok: 11.6, dkk: 7.46, zar: 19.5, aed: 3.97, ils: 4, rub: 95 };
 
 export const DEMO_COINS: DemoCoin[] = [
   { id: 'bitcoin', symbol: 'btc', name: 'Bitcoin', price: 58_900, change24h: 1.2, change7d: 3.4, marketCapEur: 1.16e12 },

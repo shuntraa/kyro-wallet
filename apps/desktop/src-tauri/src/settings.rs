@@ -164,11 +164,31 @@ impl Default for Settings {
 
 impl Settings {
     pub fn load(path: &Path, net: wallet_core::Network) -> Settings {
-        let mut s: Settings = fs::read_to_string(path)
+        let raw: Option<serde_json::Value> = fs::read_to_string(path)
             .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
+            .and_then(|s| serde_json::from_str(&s).ok());
+        let mut s = Self::from_saved(raw, crate::fiat::system_currency);
         s.migrate_legacy_rpc(net);
+        s
+    }
+
+    /// Saved settings (None = first run, or unreadable). The currency comes from the OS region
+    /// on first run, when the file has none, or when it holds one Kyro does not offer.
+    fn from_saved(
+        raw: Option<serde_json::Value>,
+        system_currency: fn() -> &'static str,
+    ) -> Settings {
+        let has_currency = raw
+            .as_ref()
+            .and_then(|v| v.get("currency"))
+            .and_then(|c| c.as_str())
+            .is_some_and(crate::fiat::is_supported);
+        let mut s: Settings = raw
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default();
+        if !has_currency {
+            s.currency = system_currency().into();
+        }
         s
     }
 
@@ -248,8 +268,8 @@ impl Settings {
 
     /// Rejects values the rest of the app relies on being sane.
     pub fn validate(&self) -> AppResult<()> {
-        if self.currency != "EUR" && self.currency != "USD" {
-            return Err(AppError::InvalidInput("devise : EUR ou USD".into()));
+        if !crate::fiat::is_supported(&self.currency) {
+            return Err(AppError::InvalidInput("devise non proposée".into()));
         }
         if !(60..=3600).contains(&self.auto_lock_secs) {
             return Err(AppError::InvalidInput(
@@ -455,6 +475,40 @@ mod tests {
         ] {
             ui["apiKeys"] = bad.clone();
             assert!(Settings::from_ui(ui.clone(), &s.api_keys).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn currency_defaults_from_the_os_region_and_is_validated() {
+        let chf = || "CHF";
+        // First run, unreadable file, file without a currency, or one no longer offered.
+        assert_eq!(Settings::from_saved(None, chf).currency, "CHF");
+        let v = |s: &str| Some(serde_json::from_str::<serde_json::Value>(s).unwrap());
+        assert_eq!(
+            Settings::from_saved(v(r#"{"autoLockSecs":300}"#), chf).currency,
+            "CHF"
+        );
+        let s = Settings::from_saved(v(r#"{"currency":"XYZ","autoLockSecs":300}"#), chf);
+        assert_eq!((s.currency.as_str(), s.auto_lock_secs), ("CHF", 300));
+        // A saved choice is kept.
+        assert_eq!(
+            Settings::from_saved(v(r#"{"currency":"JPY"}"#), chf).currency,
+            "JPY"
+        );
+        // settings_set: every offered currency, nothing else.
+        for c in crate::fiat::FIAT_CURRENCIES {
+            let s = Settings {
+                currency: (*c).into(),
+                ..Settings::default()
+            };
+            assert!(s.validate().is_ok(), "{c}");
+        }
+        for bad in ["XYZ", "eur", ""] {
+            let s = Settings {
+                currency: bad.into(),
+                ..Settings::default()
+            };
+            assert!(s.validate().is_err(), "{bad}");
         }
     }
 

@@ -59,7 +59,7 @@ export const settings = {
 
   // Display
   'settings.currency': 'Devise',
-  'settings.currencyDesc': 'Pour les prix, les soldes et les frais.',
+  'settings.currencyDesc': 'Pour les prix, les soldes et les frais. Par défaut : celle de la région de ton ordinateur (jamais déduite de ton adresse IP).',
   'settings.hideBalancesDisplayDesc': 'Les montants s’affichent en •••••, l’œil les révèle.',
 
   // API keys

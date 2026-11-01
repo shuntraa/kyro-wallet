@@ -59,7 +59,7 @@ export const settings: Record<keyof typeof fr, string> = {
 
   // Display
   'settings.currency': 'Currency',
-  'settings.currencyDesc': 'For prices, balances and fees.',
+  'settings.currencyDesc': 'For prices, balances and fees. Default: the currency of your computer’s region (never guessed from your IP address).',
   'settings.hideBalancesDisplayDesc': 'Amounts are shown as •••••; the eye reveals them.',
 
   // API keys

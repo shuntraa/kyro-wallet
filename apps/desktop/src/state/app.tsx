@@ -5,7 +5,7 @@
 // them; the recovery phrase lives only in the onboarding/reveal components).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WatchOnlyAccount } from '@kyro/shared';
+import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, navigatorCurrency, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WatchOnlyAccount } from '@kyro/shared';
 import { createAdapters, hwToAccounts, type AdapterSet, type AnyAdapter, type WalletAccounts } from '@kyro/chains';
 import { readJson, writeJson } from '../lib/storage';
 import { accountAddress, defaultAccountName, familyAdapters } from '../lib/accounts';
@@ -56,7 +56,7 @@ export interface AccountSource {
 export type Phase = 'boot' | 'welcome' | 'locked' | 'ready' | 'fatal';
 
 const DEFAULT_SETTINGS: Settings = {
-  currency: 'EUR',
+  currency: navigatorCurrency(), // until Rust answers (it reads the OS locale, fiat.rs)
   autoLockSecs: 900,
   hideBalancesOnStart: false,
   captureProtection: true,

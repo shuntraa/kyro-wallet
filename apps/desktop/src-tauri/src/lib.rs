@@ -33,6 +33,7 @@ mod dialog_text;
 mod dot_backend;
 mod electrum;
 mod error;
+mod fiat;
 mod hbar_backend;
 mod hw;
 mod i18n;

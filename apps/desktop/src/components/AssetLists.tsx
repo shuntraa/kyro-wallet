@@ -5,8 +5,9 @@ import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { WATCH_ONLY_CHAINS } from '@kyro/chains';
 import type { MarketCoin } from '@kyro/market';
+import { getLang, type Currency } from '@kyro/shared';
 import { cn } from '../lib/cn';
-import { fmtCrypto, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
+import { fiatSymbol, fmtCrypto, fmtFiat, fmtNumber, fmtPct, NNBSP } from '../lib/format';
 import { getFavorites, setFavorites } from '../lib/storage';
 import { useApp } from '../state/app';
 import { usePortfolio, type Holding } from '../state/portfolio';
@@ -302,8 +303,10 @@ function MarketList({ sort, query, favs, toggle, onlyFavs }: { sort: Sort; query
   );
 }
 
-export function compactFiat(v: number, cur: 'EUR' | 'USD'): string {
-  const sym = cur === 'EUR' ? '€' : '$';
+export function compactFiat(v: number, cur: Currency): string {
+  const raw = fiatSymbol(cur);
+  // Letter symbols (CHF, kr…) keep a space from the number: « 1,2 Md CHF », « CHF 1.2B ».
+  const sym = /^\p{L}/u.test(raw) ? (getLang() === 'fr' ? `${NNBSP}${raw}` : `${raw}${NNBSP}`) : raw;
   if (v >= 1e12) return t('portfolio.trillions', { n: fmtNumber(v / 1e12, 2), sym });
   if (v >= 1e9) return t('portfolio.billions', { n: fmtNumber(v / 1e9, 1), sym });
   if (v >= 1e6) return t('portfolio.millions', { n: fmtNumber(v / 1e6, 1), sym });
