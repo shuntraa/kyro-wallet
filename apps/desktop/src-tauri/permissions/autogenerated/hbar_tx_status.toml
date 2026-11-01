@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hbar-tx-status"
+description = "Enables the hbar_tx_status command without any pre-configured scope."
+commands.allow = ["hbar_tx_status"]
+
+[[permission]]
+identifier = "deny-hbar-tx-status"
+description = "Denies the hbar_tx_status command without any pre-configured scope."
+commands.deny = ["hbar_tx_status"]

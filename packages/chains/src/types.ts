@@ -9,6 +9,7 @@ import type { CardanoSigned, CardanoUnsigned } from './cardano/adapter';
 import type { StellarSigned, StellarUnsigned } from './stellar/adapter';
 import type { NearSigned, NearUnsigned } from './near/adapter';
 import type { SuiSigned, SuiUnsigned } from './sui/adapter';
+import type { HbarSigned, HbarUnsigned } from './hedera/adapter';
 import type { CardanoTokenSpec, StellarMemoSpec } from '@kyro/shared';
 
 import { l10n } from '@kyro/shared';
@@ -31,7 +32,9 @@ export type FeeParams =
   /** NEAR: no fee to choose. Charged at the block's gas price; Rust checks a bound. */
   | { family: 'near' }
   /** Sui: no fee to choose. Rust uses the reference gas price and a budget from a simulation. */
-  | { family: 'sui' };
+  | { family: 'sui' }
+  /** Hedera: no fee to choose. Rust sets the max fee from the exchange rate (≈ $0.0001 charged). */
+  | { family: 'hbar' };
 
 export interface FeeOption {
   level: FeeLevel;
@@ -65,7 +68,8 @@ export type SizeHint =
   | { family: 'ada' }
   | { family: 'xlm' }
   | { family: 'near' }
-  | { family: 'sui' };
+  | { family: 'sui' }
+  | { family: 'hbar' };
 
 export interface Balance {
   assetId: string;
@@ -84,7 +88,7 @@ export interface BuildParams {
   destinationTag?: number;
   /** Cardano only: native token to send (its output carries the min-ADA; `amount` is then ignored). */
   cardanoToken?: CardanoTokenSpec;
-  /** Cardano only: CIP-20 message, public and permanent. */
+  /** Cardano: CIP-20 message; Hedera: transaction memo (≤ 100 bytes). Public and permanent. */
   memo?: string;
   /** Stellar only: memo (text / id / hash), public and permanent; exchanges often require one. */
   stellarMemo?: StellarMemoSpec;
@@ -175,9 +179,11 @@ export interface FamilyTypes {
   near: { unsigned: NearUnsigned; signed: NearSigned };
   /** Sui: SUI transfer built (gas coins, budget) and decoded (BCS) by Rust. */
   sui: { unsigned: SuiUnsigned; signed: SuiSigned };
+  /** Hedera: CryptoTransfer built (one copy per node) and decoded by Rust. */
+  hbar: { unsigned: HbarUnsigned; signed: HbarSigned };
 }
-export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned;
-export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned;
+export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned;
+export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned;
 
 export type HistoryDirection = 'in' | 'out' | 'self';
 export type HistoryStatus = 'pending' | 'confirmed' | 'failed';
@@ -221,7 +227,7 @@ export interface ChainAdapter<F extends Family = Family> {
   getHistory(): Promise<HistoryItem[]>;
 }
 
-export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'bch'> | ChainAdapter<'dash'> | ChainAdapter<'tron'> | ChainAdapter<'xrp'> | ChainAdapter<'ada'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'>;
+export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'bch'> | ChainAdapter<'dash'> | ChainAdapter<'tron'> | ChainAdapter<'xrp'> | ChainAdapter<'ada'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>;
 
 /** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin / Bitcoin Cash / Dash: Bitcoin's PSBT shape). */
 export function unsignedFamilyOf(family: Family): AnyUnsigned['family'] {

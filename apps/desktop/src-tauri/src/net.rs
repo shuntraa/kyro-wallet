@@ -46,6 +46,16 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Sui GraphQL RPC (Sui Foundation, testnet and mainnet): only Rust's `sui_*` commands.
     "graphql.testnet.sui.io",
     "graphql.mainnet.sui.io",
+    // Hedera: mirror node REST (testnet, mainnet) and the gRPC-web proxies of consensus nodes
+    // (`hbar_backend::TESTNET_NODES` / `MAINNET_NODES`); only Rust's `hbar_*` commands.
+    "testnet.mirrornode.hedera.com",
+    "mainnet-public.mirrornode.hedera.com",
+    "testnet-node00-00-grpc.hedera.com",
+    "testnet-node01-00-grpc.hedera.com",
+    "testnet-node02-00-grpc.hedera.com",
+    "node00.swirldslabs.com",
+    "node01-00-grpc.swirlds.com",
+    "node04.swirldslabs.com",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -74,6 +84,18 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // NEAR Intents 1Click (public, no key): quotes for the direct routes (POST /v0/quote), token
     // list, and the status that confirms where a cross-chain deposit goes.
     "1click.chaindefuser.com",
+];
+
+/// Hedera hosts (mirror nodes and node proxies), all in [`ALLOWED_HOSTS`], family `hedera`.
+pub const HEDERA_HOSTS: &[&str] = &[
+    "testnet.mirrornode.hedera.com",
+    "mainnet-public.mirrornode.hedera.com",
+    "testnet-node00-00-grpc.hedera.com",
+    "testnet-node01-00-grpc.hedera.com",
+    "testnet-node02-00-grpc.hedera.com",
+    "node00.swirldslabs.com",
+    "node01-00-grpc.swirlds.com",
+    "node04.swirldslabs.com",
 ];
 
 /// Electrum servers (raw TLS sockets, not HTTP) that Rust itself may open **as defaults**,
@@ -343,6 +365,7 @@ pub enum Family {
     Cardano,
     Near,
     Sui,
+    Hedera,
     Evm,
     Solana,
     Market,
@@ -385,6 +408,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Near
     } else if host == "graphql.testnet.sui.io" || host == "graphql.mainnet.sui.io" {
         Family::Sui
+    } else if HEDERA_HOSTS.contains(&host) {
+        Family::Hedera
     } else if host.ends_with("-rpc.publicnode.com") || EVM_OWN_RPC_HOSTS.contains(&host) {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1163,6 +1188,17 @@ mod tests {
         assert_eq!(family_for("evil.fastnear.com", &c), Family::Other);
         assert_eq!(family_for("graphql.testnet.sui.io", &c), Family::Sui);
         assert_eq!(family_for("graphql.mainnet.sui.io", &c), Family::Sui);
+        for h in HEDERA_HOSTS {
+            assert_eq!(family_for(h, &c), Family::Hedera, "{h}");
+            assert!(ALLOWED_HOSTS.contains(h), "{h}");
+        }
+        for (_, h) in crate::hbar_backend::MAINNET_NODES
+            .iter()
+            .chain(crate::hbar_backend::TESTNET_NODES)
+        {
+            assert!(HEDERA_HOSTS.contains(h), "{h}");
+        }
+        assert_eq!(family_for("mainnet.hashio.io", &c), Family::Other);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

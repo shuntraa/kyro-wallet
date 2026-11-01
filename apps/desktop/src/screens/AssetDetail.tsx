@@ -68,10 +68,12 @@ export function AssetDetail({ id }: { id: string }) {
   }, [supported, network, pf.balances]);
 
   const activity = (history.data?.entries ?? []).filter((e) => supported && e.assetId === supported.id).slice(0, 6);
-  const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, bch: accounts.bch?.address, dash: accounts.dash?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address, xlm: accounts.stellar?.address, near: accounts.near?.address, sui: accounts.sui?.address }[supported.family] ?? null) : null;
+  const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, bch: accounts.bch?.address, dash: accounts.dash?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address, xlm: accounts.stellar?.address, near: accounts.near?.address, sui: accounts.sui?.address, hbar: accounts.hbar?.address }[supported.family] ?? null) : null;
   const fav = favs.includes(coinId);
   const stakeChain = supported ? ({ sol: 'sol', ada: 'ada', tron: 'tron' } as const)[supported.family as 'sol' | 'ada' | 'tron'] : undefined;
   // Cardano: ADA tied to tokens and the native tokens themselves (not separate assets).
+  // Hedera: the account ID 0.0.x (created by the first HBAR received on the EVM address).
+  const hbarAccount = useAsync(supported?.family === 'hbar' && adapters.hbar ? () => adapters.hbar!.account() : null, [supported?.id, adapters.hbar], { intervalMs: 30_000 });
   const adaAccount = useAsync(supported?.family === 'ada' && adapters.cardano ? () => adapters.cardano!.account() : null, [supported?.id, adapters.cardano], { intervalMs: 30_000 });
 
   return (
@@ -197,6 +199,17 @@ export function AssetDetail({ id }: { id: string }) {
                 </div>
               )}
               {supported.family === 'ada' && <CardanoTokensPanel account={adaAccount.data} hidden={hideBalances} />}
+              {supported.family === 'hbar' && hbarAccount.data && (
+                <div className="mt-2 flex flex-col gap-1 border-t border-line pt-3 text-[13px]">
+                  <span className="eyebrow">Compte Hedera</span>
+                  {hbarAccount.data.exists ? (
+                    <span className="font-mono text-text2">{hbarAccount.data.accountIdChecksum ?? hbarAccount.data.accountId}</span>
+                  ) : (
+                    <span className="text-[12px] text-warn">Pas encore de compte : le premier HBAR reçu sur ton adresse EVM le crée.</span>
+                  )}
+                  {hbarAccount.data.hollow && <span className="text-[12px] text-mute">Compte créé par un transfert reçu : ton premier envoi fixe sa clé.</span>}
+                </div>
+              )}
               <div className="flex-1" />
               {/* Cardano: the tokens panel takes this room; « Recevoir » shows the same single address. */}
               {address && supported.family !== 'ada' && (

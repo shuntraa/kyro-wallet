@@ -52,6 +52,7 @@ const TAIL = 4;
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
  * - NEAR: none (implicit 64 hex or named id, lowercase).
  * - Sui: `0x`, hex compared lowercase (no checksum at all).
+ * - Hedera: `0x` (EVM address, hex lowercase) or `0.0.` (account number; HIP-15 checksum dropped).
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -86,6 +87,10 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       return { prefix: '', body: a, caseInsensitive: false };
     case 'near':
       // Implicit (64 hex) or named account ids: always lowercase.
+      return { prefix: '', body: a.toLowerCase(), caseInsensitive: true };
+    case 'hbar':
+      if (a.toLowerCase().startsWith('0x')) return { prefix: '0x', body: a.slice(2).toLowerCase(), caseInsensitive: true };
+      if (a.startsWith('0.0.')) return { prefix: '0.0.', body: (a.slice(4).split('-')[0] ?? ''), caseInsensitive: true };
       return { prefix: '', body: a.toLowerCase(), caseInsensitive: true };
   }
 }

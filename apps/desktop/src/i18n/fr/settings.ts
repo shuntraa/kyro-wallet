@@ -97,6 +97,7 @@ export const settings = {
   'settings.hintXrp': 'XRP et monnaies émises',
   'settings.hintAda': 'ADA et tokens',
   'settings.hintNear': 'NEAR (compte implicite)',
+  'settings.hintHbar': 'HBAR (adresse EVM, compte 0.0.x créé au premier dépôt)',
   'settings.nameEmpty': 'Donne un nom au compte.',
   'settings.nameTooLong': '32 caractères au plus.',
   'settings.nameBadChar': 'Caractère non autorisé.',

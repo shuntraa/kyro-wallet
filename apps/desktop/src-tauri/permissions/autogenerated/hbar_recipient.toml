@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hbar-recipient"
+description = "Enables the hbar_recipient command without any pre-configured scope."
+commands.allow = ["hbar_recipient"]
+
+[[permission]]
+identifier = "deny-hbar-recipient"
+description = "Denies the hbar_recipient command without any pre-configured scope."
+commands.deny = ["hbar_recipient"]

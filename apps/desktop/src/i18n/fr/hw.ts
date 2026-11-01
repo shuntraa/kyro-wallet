@@ -108,7 +108,7 @@ export const hw = {
   'hw.setup.unlock': '<b>Déverrouille ton appareil</b> avec ton code PIN, puis clique sur « Actualiser ».',
   'hw.setup.passphraseOne': 'Passphrase activée : sur la Trezor One elle se taperait sur l’ordinateur, ce que Kyro refuse (aucun secret ne doit passer par l’interface). Désactive-la sur l’appareil pour l’utiliser avec Kyro.',
   'hw.setup.chains': 'Chaînes',
-  'hw.setup.notYet': 'Litecoin, Dogecoin, Bitcoin Cash, Dash, TRON, XRP, Cardano, Stellar, NEAR et Sui : pas encore sur hardware wallet (disponibles dans le coffre Kyro).',
+  'hw.setup.notYet': 'Sur hardware wallet : Bitcoin, les chaînes EVM et Solana. Les autres chaînes restent disponibles dans le coffre Kyro.',
   'hw.setup.accountNumber': 'N° de compte',
   'hw.setup.nameOptional': 'Nom (facultatif)',
   'hw.setup.accountRange': 'Numéro de compte : 0 à {max}.',

@@ -97,6 +97,7 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.hintXrp': 'XRP and issued currencies',
   'settings.hintAda': 'ADA and tokens',
   'settings.hintNear': 'NEAR (implicit account)',
+  'settings.hintHbar': 'HBAR (EVM address, 0.0.x account created on the first deposit)',
   'settings.nameEmpty': 'Give the account a name.',
   'settings.nameTooLong': '32 characters at most.',
   'settings.nameBadChar': 'Character not allowed.',

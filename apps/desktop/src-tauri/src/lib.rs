@@ -5,6 +5,7 @@ mod cardano_backend;
 mod cbf;
 mod commands;
 mod commands_cardano;
+mod commands_hbar;
 mod commands_hw;
 mod commands_near;
 mod commands_servers;
@@ -17,6 +18,7 @@ mod core_rpc;
 mod dialog_text;
 mod electrum;
 mod error;
+mod hbar_backend;
 mod hw;
 mod i18n;
 mod known_tokens;
@@ -215,6 +217,15 @@ pub fn run() {
             commands_sui::sui_sign_tx,
             commands_sui::sui_broadcast,
             commands_sui::sui_tx_status,
+            commands_hbar::hbar_backend_info,
+            commands_hbar::hbar_address,
+            commands_hbar::hbar_account,
+            commands_hbar::hbar_recipient,
+            commands_hbar::hbar_txs,
+            commands_hbar::hbar_build_tx,
+            commands_hbar::hbar_sign_tx,
+            commands_hbar::hbar_broadcast,
+            commands_hbar::hbar_tx_status,
             commands_cardano::ada_backend_info,
             commands_cardano::ada_address,
             commands_cardano::ada_account,

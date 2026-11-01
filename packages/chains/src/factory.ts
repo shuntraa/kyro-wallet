@@ -15,13 +15,37 @@ import type { UtxoAccountView, UtxoBackend } from './utxo/utxo';
 import { bchChain, dashChain, dogeChain, ltcChain, TRC20_TOKENS, tronChain } from './registry';
 import { TronAdapter } from './tron/adapter';
 import { XrpAdapter } from './xrp/adapter';
+
+// ---------------------------------------------------------------- phase 4: Hedera
+
+export {
+  HbarAdapter,
+  rustHbarBackend,
+  isHbarRecipient,
+  isHbarAccountId,
+  isHbarEvmAddress,
+  normalizeHbarRecipient,
+  hbarMemoError,
+  type HbarAdapterOptions,
+  type HbarBackend,
+  type HbarAccountInfo,
+  type HbarOwnAccount,
+  type HbarRecipientInfo,
+  type HbarTxSummary,
+  type HbarWarning,
+  type HbarContext,
+  type HbarHistoryEntry,
+  type HbarUnsigned,
+  type HbarSigned,
+} from './hedera/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
-import { stellarChain, xrpChain, nearChain } from './registry';
+import { stellarChain, xrpChain, nearChain, hbarChain } from './registry';
 import { StellarAdapter } from './stellar/adapter';
 import { NearAdapter } from './near/adapter';
 import { SuiAdapter } from './sui/adapter';
 import { suiChain } from './registry';
+import { HbarAdapter } from './hedera/adapter';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -49,6 +73,8 @@ export interface AdapterSet {
   near: NearAdapter | null;
   /** Sui: vault only (hardware wallets: not supported). */
   sui: SuiAdapter | null;
+  /** Hedera: vault only (hardware wallets: HW_UNSUPPORTED for now). */
+  hbar: HbarAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -96,8 +122,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const near = accounts.near ? new NearAdapter({ chain: nearChain(network), address: accounts.near.address, ...a }) : null;
   // Sui: Rust picks the server (Sui Foundation GraphQL RPC).
   const sui = accounts.sui ? new SuiAdapter({ chain: suiChain(network), address: accounts.sui.address, ...a }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(bch ? [bch] : []), ...(dash ? [dash] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : []), ...(near ? [near] : []), ...(sui ? [sui] : [])];
-  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, all, hw: hw ?? null };
+  // Hedera: Rust reads the mirror node and submits to the nodes (no custom server).
+  const hbar = accounts.hbar ? new HbarAdapter({ chain: hbarChain(network), address: accounts.hbar.address, ...a }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(bch ? [bch] : []), ...(dash ? [dash] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : []), ...(near ? [near] : []), ...(sui ? [sui] : []), ...(hbar ? [hbar] : [])];
+  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin, Bitcoin Cash, Dash

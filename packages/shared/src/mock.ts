@@ -42,11 +42,13 @@ export { demoTronAddress } from './mock-tron';
 import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
 import { createDemoSui, demoSuiAddress, type DemoSuiState } from './mock-sui';
 export { demoSuiAddress, suiAddressOf } from './mock-sui';
+import { createDemoHbar, demoHbarAddress, type DemoHbarState } from './mock-hbar';
 export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
 import { createDemoStellar, demoStellarAddress, type DemoStellarState } from './mock-stellar';
 export { demoStellarAddress } from './mock-stellar';
 import { createDemoNear, demoNearAddress, type DemoNearState } from './mock-near';
 export { demoNearAddress } from './mock-near';
+export { demoHbarAddress, hbarChecksum, parseHbarRecipient } from './mock-hbar';
 import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
 export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
 import { demoFund } from './mock-tx';
@@ -182,6 +184,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
       near: { address: demoNearAddress(0), path: "m/44'/397'/0'" },
       sui: { address: demoSuiAddress(0), path: "m/44'/784'/0'/0'/0'" },
+      hbar: { address: demoHbarAddress(demoSeed(), 0), path: "m/44'/3030'/0'/0/0" },
     },
     ownBtc,
     receive,
@@ -321,6 +324,8 @@ export interface MockBackend {
   near: DemoNearState;
   /** Sui demo chain (tests). */
   sui: DemoSuiState;
+  /** Hedera demo chain (tests). */
+  hbar: DemoHbarState;
   /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
   /** Staking demo (tests). */
@@ -444,6 +449,17 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   // Sui (§2.11): `sui_*`, gas budget / coin rules like Rust.
   const suiChain = createDemoSui({
     network,
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // Hedera (§2.11): `hbar_*`, mirror-node facts and max-fee rules like Rust.
+  const hbarChain = createDemoHbar({
+    network,
+    seed: demoSeed(),
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -907,6 +923,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     ...stellarChain.handlers,
     ...nearChain.handlers,
     ...suiChain.handlers,
+    ...hbarChain.handlers,
     ...cardanoChain.handlers,
     ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
@@ -941,6 +958,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     stellar: stellarChain.state,
     near: nearChain.state,
     sui: suiChain.state,
+    hbar: hbarChain.state,
     cardano: cardanoChain.state,
     stake,
     advance(ms: number) {
@@ -956,7 +974,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
         return accts.adaAddress(accts.arg(args.account));
       }
       if (DEMO_ACCOUNT0_ONLY.test(cmd) && accts.arg(args.account) !== 0) {
-        throw new IpcError('INVALID_INPUT', l10n('Mode démo : les comptes supplémentaires TRON, XRP, Stellar, NEAR et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).', 'Demo mode: extra TRON, XRP, Stellar and Cardano accounts and staking are only simulated for the first account (the real app handles all of them).'));
+        throw new IpcError('INVALID_INPUT', l10n('Mode démo : les comptes supplémentaires TRON, XRP, Stellar, NEAR, Hedera et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).', 'Demo mode: extra TRON, XRP, Stellar and Cardano accounts and staking are only simulated for the first account (the real app handles all of them).'));
       }
       void captureProtected;
       return await h(args);
@@ -965,7 +983,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
 }
 
 /** Demo commands simulated for account 0 only (§2.9). */
-const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|stellar_(build_tx|sign_tx|broadcast)|near_(build_tx|sign_tx|broadcast|tx_status)|ada_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
+const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|hbar_(build_tx|sign_tx|broadcast)|stellar_(build_tx|sign_tx|broadcast)|near_(build_tx|sign_tx|broadcast|tx_status)|ada_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
 
 function decodeSolMessageArg(m: unknown): Uint8Array {
   try {

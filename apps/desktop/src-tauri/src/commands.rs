@@ -489,6 +489,8 @@ pub struct Accounts {
     near: AddressOut,
     /// `m/44'/784'/a'/0'/0'` (SLIP-10 ed25519).
     sui: AddressOut,
+    /// Hedera: EVM address (alias) of the ECDSA key `m/44'/3030'/0'/0/a`.
+    hbar: AddressOut,
 }
 
 fn utxo_account_out(
@@ -579,6 +581,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             sui: AddressOut {
                 address: wallet_core::sui_address(seed, a)?,
                 path: wallet_core::sui_path(a),
+            },
+            hbar: AddressOut {
+                address: wallet_core::hbar_evm_address(seed, a)?,
+                path: wallet_core::hbar_path(a),
             },
         })
     })

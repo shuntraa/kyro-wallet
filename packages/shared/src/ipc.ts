@@ -73,11 +73,16 @@ export interface Accounts {
   near: AddressInfo;
   /** Sui `m/44'/784'/a'/0'/0'` (SLIP-10 ed25519, same path on testnet), `0x` + 64 hex (§2.11). */
   sui: AddressInfo;
+  /**
+   * Hedera: EVM address (EIP-55) of the ECDSA key `m/44'/3030'/0'/0/a` (SDK standard path); the
+   * account `0.0.x` is created by the first transfer to it and read with `hbar_account` (§2.11).
+   */
+  hbar: AddressInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'bch' | 'dash' | 'sui';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm', 'near', 'bch', 'dash', 'sui'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'bch' | 'dash' | 'sui' | 'hbar';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm', 'near', 'bch', 'dash', 'sui', 'hbar'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -883,6 +888,105 @@ export interface SuiBuilt {
   bcs: string;
   summary: SuiTxSummary;
   context: SuiContext;
+}
+
+// ---------------------------------------------------------------- Hedera (§2.11)
+
+export interface HbarBackendInfo {
+  network: UtxoNetworkKey;
+  /** Mirror node host. */
+  label: string;
+  tor: boolean;
+}
+
+/** What the mirror node says about an account. Amounts: tinybars (10⁻⁸ HBAR). */
+export interface HbarAccountInfo {
+  exists: boolean;
+  /** `0.0.x`. */
+  accountId: string | null;
+  /** Lower case, as the mirror node says (alias, or long-zero form). */
+  evmAddress: string | null;
+  balance: string;
+  /** Created by a transfer to an EVM address, no key yet: our first transfer sets it. */
+  hollow: boolean;
+  deleted: boolean;
+  /** The account must sign incoming transfers: a plain transfer fails (Rust refuses). */
+  receiverSigRequired: boolean;
+  /**
+   * Our own account only: `alias` (EVM address = our key's) or `publicKey` (account with our key
+   * but another EVM address — then **only** `0.0.x` may be used to receive).
+   */
+  foundBy: 'alias' | 'publicKey' | null;
+}
+
+/** `hbar_account`: our account, plus our EVM address from the key (EIP-55) and `0.0.x-checksum`. */
+export interface HbarOwnAccount extends HbarAccountInfo {
+  address: string;
+  accountIdChecksum: string | null;
+}
+
+/** `hbar_recipient`: `to` as it will be signed (`0.0.x` or EIP-55). */
+export interface HbarRecipientInfo extends HbarAccountInfo {
+  to: string;
+  isEvm: boolean;
+}
+
+/** Every warning → reinforced confirmation. */
+export type HbarWarning = { kind: 'highFee' } | { kind: 'unusualText' };
+
+/** wallet-core `HbarTxSummary`: Rust's strict decoding of the CryptoTransfer. */
+export interface HbarTxSummary {
+  from: string;
+  to: string;
+  toIsEvm: boolean;
+  /** Tinybars. */
+  amount: string;
+  /** Tinybars: maximum (only the actual fee is charged). */
+  maxFee: string;
+  memo: string | null;
+  memoHex: string | null;
+  transactionId: string;
+  mirrorTransactionId: string;
+  validStart: number;
+  validDuration: number;
+  nodes: string[];
+  warnings: HbarWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+export interface HbarContext {
+  account: HbarAccountInfo;
+  recipient: HbarAccountInfo;
+  /** Transfer to an EVM address without account: the network creates it (≈ $0.05, paid by us). */
+  createsAccount: boolean;
+}
+
+/** `hbar_txs` entry (mirror node, last 50, newest first). Amounts: tinybars. */
+export interface HbarHistoryEntry {
+  /** `0.0.payer-secs-nanos`. */
+  id: string;
+  /** `CRYPTOTRANSFER`, `CRYPTOCREATEACCOUNT`… */
+  name: string;
+  /** `SUCCESS`… */
+  result: string;
+  /** ms epoch. */
+  time: number | null;
+  /** Fee we paid (0 if another account paid). */
+  fee: string;
+  memo: string | null;
+  /** Signed change of our balance, fees included. */
+  delta: string;
+  /** HBAR moved to / from the counterparty (fees excluded for outgoing transfers). */
+  amount: string;
+  counterparty: string | null;
+  outgoing: boolean;
+}
+
+export interface HbarBuilt {
+  /** Unsigned `TransactionBody` per consensus node (hex): what `hbar_sign_tx` signs. */
+  bodies: string[];
+  summary: HbarTxSummary;
+  context: HbarContext;
 }
 
 // ---------------------------------------------------------------- Cardano (§2.7)
@@ -1699,6 +1803,29 @@ export interface Commands {
   sui_broadcast: { args: { bcs: string; signature: string } & WithAccount; ret: string };
   /** Not indexed yet: `found: false`. */
   sui_tx_status: { args: { digest: string }; ret: SuiTxStatus };
+  // Hedera (§2.11): Rust builds the CryptoTransfer (one copy per consensus node, same transaction
+  // ID), decodes it strictly, re-reads our account and the recipient live (mirror node), signs
+  // behind the password and the native dialog (memo framed), submits through the nodes' gRPC-web
+  // proxies. Hardware wallets: HW_UNSUPPORTED.
+  hbar_backend_info: { args: undefined; ret: HbarBackendInfo };
+  /** EVM address (EIP-55) of `m/44'/3030'/0'/0/{account}`. */
+  hbar_address: { args: WithAccount; ret: string };
+  /** Our account on the mirror node (by alias, else by public key); `exists: false` before the first HBAR received. */
+  hbar_account: { args: WithAccount; ret: HbarOwnAccount };
+  /** `to`: `0.0.x` (HIP-15 checksum optional, verified) or `0x…` (EIP-55; long-zero → `0.0.x`). */
+  hbar_recipient: { args: { to: string }; ret: HbarRecipientInfo };
+  hbar_txs: { args: { accountId: string }; ret: HbarHistoryEntry[] };
+  /**
+   * `amount`: tinybars. `memo`: ≤ 100 bytes, no control / invisible character. Refused before
+   * building: our account not created yet, recipient `0.0.x` unknown / deleted / requiring its
+   * signature, to ourselves, amount + max fee > balance.
+   */
+  hbar_build_tx: { args: { to: string; amount: string; memo?: string } & WithAccount; ret: HbarBuilt };
+  hbar_sign_tx: { args: { bodies: string[]; password: string } & WithAccount; ret: { signed: string[]; summary: HbarTxSummary; context: HbarContext } };
+  /** Signatures re-verified (our key), then node after node until one accepts. Returns `0.0.x@secs.nanos`. */
+  hbar_broadcast: { args: { signed: string[] } & WithAccount; ret: string };
+  /** `found: true` once on the mirror node (reached consensus); `result: 'SUCCESS'`… */
+  hbar_tx_status: { args: { id: string }; ret: { found: boolean; result: string } };
   // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
   // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
   // Hardware wallets: HW_UNSUPPORTED.

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xmr-set-restore-height"
+description = "Enables the xmr_set_restore_height command without any pre-configured scope."
+commands.allow = ["xmr_set_restore_height"]
+
+[[permission]]
+identifier = "deny-xmr-set-restore-height"
+description = "Denies the xmr_set_restore_height command without any pre-configured scope."
+commands.deny = ["xmr_set_restore_height"]

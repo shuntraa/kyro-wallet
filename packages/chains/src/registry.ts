@@ -11,8 +11,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `xlm`: Stellar (XLM, `stellar_*`, §2.11). */
-/** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui';
+/** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
@@ -53,7 +53,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -275,6 +275,28 @@ const XRP_CHAINS: Record<Network, XrpChain> = {
 
 export function xrpChain(network: Network): XrpChain {
   return XRP_CHAINS[network];
+}
+
+/**
+ * Hedera (phase 4): Rust `hbar_*` commands and `HbarAdapter` (`packages/chains/src/hedera/`).
+ * The "address" is the EVM address of the ECDSA key (`m/44'/3030'/0'/0/a`): the first HBAR sent
+ * to it creates the account `0.0.x` (read with `hbar_account`). Testnet = Hedera testnet. HBAR
+ * only (HTS tokens: not supported). Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface HbarChain extends Omit<ChainBase, 'phase'> {
+  family: 'hbar';
+  phase: 4;
+}
+
+const HBAR_CHAINS: Record<Network, HbarChain> = {
+  testnet: { family: 'hbar', key: 'hedera', name: 'Hedera testnet', label: 'HBAR testnet', network: 'testnet', color: '#2D2D2D', glyph: 'ħ',
+    nativeSymbol: 'HBAR', nativeName: 'Hedera', nativeDecimals: 8, coingeckoId: 'hedera-hashgraph', phase: 4, blockTimeSecs: 4 },
+  mainnet: { family: 'hbar', key: 'hedera', name: 'Hedera', label: 'HBAR', network: 'mainnet', color: '#2D2D2D', glyph: 'ħ',
+    nativeSymbol: 'HBAR', nativeName: 'Hedera', nativeDecimals: 8, coingeckoId: 'hedera-hashgraph', phase: 4, blockTimeSecs: 4 },
+};
+
+export function hbarChain(network: Network): HbarChain {
+  return HBAR_CHAINS[network];
 }
 
 /**
@@ -676,7 +698,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -820,6 +842,12 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   // NEAR: reached by Rust only (near_*), Tor circuits of the `near` family. Defaults only.
   list.push({ host: network === 'mainnet' ? 'free.rpc.fastnear.com' : 'test.rpc.fastnear.com', purpose: `NEAR${network === 'mainnet' ? '' : ' testnet'} : solde, clé d’accès, frais, diffusion (RPC FastNEAR)` });
   list.push({ host: network === 'mainnet' ? 'tx.main.fastnear.com' : 'tx.test.fastnear.com', purpose: `NEAR${network === 'mainnet' ? '' : ' testnet'} : historique des transactions (API FastNEAR)` });
+  // Hedera: reached by Rust only (hbar_*), Tor circuits of the `hedera` family; no custom server.
+  list.push({ host: network === 'mainnet' ? 'mainnet-public.mirrornode.hedera.com' : 'testnet.mirrornode.hedera.com', purpose: `Hedera${network === 'mainnet' ? '' : ' testnet'} : compte, solde, historique, taux de change (nœud miroir)` });
+  list.push({
+    host: network === 'mainnet' ? 'node00.swirldslabs.com, node01-00-grpc.swirlds.com, node04.swirldslabs.com' : 'testnet-node00/01/02-00-grpc.hedera.com',
+    purpose: `Hedera${network === 'mainnet' ? '' : ' testnet'} : diffusion des transferts signés (proxys gRPC-web des nœuds de consensus)`,
+  });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'

@@ -248,6 +248,33 @@ pub fn sui_sign(seed, account, bcs_b64) -> Result<(String /*flag 0x00 || sig 64 
 pub fn sui_verify_signed(bcs_b64, signature_b64) -> Result<String /*digest*/>;   // flag ed25519, clé = sender, verify_strict
 pub fn sui_tx_digest(bcs) -> String;   // base58(BLAKE2b-256("TransactionData::" || bcs))
 
+// --- Hedera : ECDSA secp256k1 m/44'/3030'/0'/0/a (chemin « standard » ECDSA des SDK Hedera, toStandardECDSAsecp256k1PrivateKey(pass, a),
+//     celui de HashPack pour un compte ECDSA ; compte 0 = m/44'/3030'/0'/0/0) ; « adresse » = adresse EVM de la clé (alias : le premier
+//     HBAR reçu crée le compte 0.0.x, HIP-583) ; ED25519 (m/44'/3030'/0'/0'/a', Ledger, anciens comptes HashPack) non pris en charge ;
+//     protobuf du seul CryptoTransfer HBAR écrit à la main, strict (ré-encodage identique exigé), recoupé avec le runtime protobuf de Google
+pub fn hbar_path(account) -> String; pub fn hbar_public_key(seed, account) -> Result<[u8; 33]>; pub fn hbar_evm_address(seed, account) -> Result<String>;
+pub fn hbar_checksum(net, num) -> String;                 // HIP-15 (0.0.123-vfmkw mainnet, -esxsf testnet)
+pub fn hbar_parse_account_id(s, net) -> Result<u64>;      // 0.0.n, somme HIP-15 facultative mais vérifiée ; autre shard / realm refusé
+pub fn hbar_parse_recipient(s, net) -> Result<HbarRecipient>;   // 0.0.n ou 0x… (EIP-55 si casse mixte ; « long-zero » → 0.0.n ; nulle refusée)
+pub enum HbarRecipient { Id(u64), Evm([u8; 20]) }
+pub struct HbarTransfer { payer, valid_start_secs, valid_start_nanos, node, max_fee /*tinybars*/, valid_duration, memo, to: HbarRecipient, amount }
+impl HbarTransfer { pub fn encode(&self) -> Vec<u8> /*TransactionBody*/; pub fn decode(raw) -> Result<Self>; pub fn transaction_id(&self) /*0.0.p@s.n*/; pub fn mirror_transaction_id(&self) /*0.0.p-s-n*/ }
+// decode refuse : tout champ de TransactionBody autre que transactionID (1), nodeAccountID (2), transactionFee (3), transactionValidDuration (4),
+// memo (6), cryptoTransfer (14) — donc tout autre type de transaction, batch_key, max_custom_fees… ; scheduled, nonce, generateRecord ;
+// transferts de tokens HTS ; is_approval (dépense par allowance) ; hooks ; autre chose qu'un débit du payeur suivi d'un crédit égal ;
+// alias long-zero ; shard / realm ≠ 0 ; encodage non canonique.
+pub fn hbar_check_memo(memo) -> Result<()>;               // ≤ 100 octets, sans caractère de contrôle / invisible / bidi
+pub fn hbar_decode_tx(bodies_hex: &[String], our_account: u64, our_pubkey, allowed_nodes: &[u64]) -> Result<HbarTxSummary>;
+// + refuse : copies différentes (hors nœud), nœud hors liste ou en double, payeur ≠ nous, transfert à soi-même (0.0.x ou notre adresse EVM),
+// montant 0, frais max 0, validité hors 1–180 s
+pub struct HbarTxSummary { from, to, to_is_evm, amount, max_fee, memo /*nettoyé*/, memo_hex, transaction_id, mirror_transaction_id,
+                           valid_start, valid_duration, nodes, warnings: Vec<HbarWarning>, requires_extra_confirmation }   // serde camelCase
+pub enum HbarWarning { HighFee /*frais max > 2 HBAR*/, UnusualText /*mémo nettoyé*/ }   // → renforcée
+pub fn hbar_sign(seed, account, our_account, bodies_hex, allowed_nodes) -> Result<(Vec<String> /*Transaction signée par nœud*/, HbarTxSummary)>;
+// ECDSA libsecp256k1 sur keccak256(bodyBytes), compacte r‖s low-S, vérifiée ; SignaturePair { pubKeyPrefix = clé complète 33 o, ECDSA_secp256k1 }
+pub fn hbar_verify_signed(tx_hex) -> Result<HbarSignedTransfer { transfer, public_key }>;   // Transaction { signedTransactionBytes } seul, une signature
+pub fn hbar_decode_precheck(raw) -> Result<(u32 /*code*/, u64 /*cost*/)>; pub fn hbar_response_name(code) -> String;
+
 // --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
 //     sel = ENTROPIE BIP39, puis clamping), dérivation BIP32-Ed25519 V2 par le crate ed25519-bip32 (aucune crypto écrite
 //     ici), signature ed25519-dalek (hazmat::raw_sign avec le scalaire étendu kL ‖ kR) vérifiée (verify_strict) ;
@@ -458,6 +485,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `stellar_*` | voir §2.11 | | Stellar : transaction construite **par Rust** (séquence, frais bornés, limites de temps ; Payment ou CreateAccount), mémo mis en évidence, réserve, phrase réseau vérifiée |
 | `xrp_*` | voir §2.6 | | XRP Ledger : paiement construit **par Rust** (Sequence, Fee, LastLedgerSequence), tag de destination mis en évidence, réserve |
 | `sui_*` | voir §2.11 | | Sui : transfert de SUI construit **par Rust** (pièces de gaz, prix de référence, budget simulé, BCS), adresse complète dans le dialogue natif |
+| `hbar_*` | voir §2.11 | | Hedera : CryptoTransfer construit **par Rust** (une copie par nœud, même identifiant), mémo mis en évidence, diffusion gRPC-web |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `sol_stake_*`, `ada_stake_*`, `tron_stake_*` | voir §2.8 | | Staking : Solana natif, délégation Cardano, TRON Stake 2.0 ; opérations construites **par Rust**, décodées et vérifiées en direct avant le dialogue natif |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
@@ -487,7 +515,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 type Accounts = {                 // accounts_get({ account? }) : tout est celui du compte `account` (0 = l'historique)
   network: 'mainnet' | 'testnet';
   account: number;
-  // evm, sol, tron, xrp, cardano, stellar, sui : { address, path } (path = chemin de la clé, ex. m/44'/60'/0'/0/1)
+  // evm, sol, tron, xrp, cardano, stellar, sui, hbar : { address, path } (hbar : adresse EVM de m/44'/3030'/0'/0/a) (path = chemin de la clé, ex. m/44'/60'/0'/0/1)
   btc: { segwit: { address: string; xpub: string; fingerprint: string; path: string };
          taproot: { address: string; xpub: string; fingerprint: string; path: string } };
   evm: { address: string };
@@ -1078,6 +1106,30 @@ Refusé avant toute signature (voir §1) : tout ce qui n'est pas ce transfert-l�
 
 **Côté UI** : `Family` `'sui'`, `suiChain(network)`, actif `sui` (9 décimales, CoinGecko `sui`), `SuiAdapter` (`packages/chains/src/sui/`), écrans Envoyer (pas de frais à choisir, adresse complète exigée, solde dépensable, récapitulatif décodé, suivi `sui_tx_status`), Recevoir (QR de l'adresse nue : pas de lien de paiement standard), Actif, Historique, comptes multiples, « Connexions sortantes », mode démo (`mock-sui.ts` : adresses de démo au bon format mais pas dérivées de la graine, BCS remplacé par du JSON base64).
 
+### 2.11 Hedera (HBAR)
+
+Pas de serveur personnalisé : Rust joint le **nœud miroir** officiel (REST, lectures) et les **proxys gRPC-web** des nœuds de consensus (diffusion), famille Tor `hedera`, jamais de repli. **Rust construit le CryptoTransfer** : payeur = notre compte `0.0.x` (lu au nœud miroir), un débit du payeur et un crédit du destinataire, `transactionValidStart` = maintenant − 10 s, durée 180 s (maximum du réseau), frais **maximum** = 0,5 ¢ (10 ¢ si le transfert crée le compte destinataire) au taux de change du nœud miroir, borné à 0,01 … 5 HBAR (seuls les frais réels, ≈ 0,0001 $, sont prélevés) ; **une copie par nœud** (`nodeAccountID` est dans le corps signé), même identifiant de transaction : le réseau en exécute au plus une. Encodé par wallet-core.
+
+**Clé et compte.** Clé ECDSA secp256k1 `m/44'/3030'/0'/0/{account}` (chemin standard des SDK Hedera et de HashPack pour un compte ECDSA ; vecteurs officiels des SDK). L'« adresse » du coffre est l'**adresse EVM** de cette clé : le premier HBAR envoyé à cette adresse **crée** le compte (HIP-583, compte « creux » sans clé tant que nous n'avons rien signé ; notre premier envoi fixe la clé : la `SignaturePair` porte la clé complète de 33 octets). Kyro cherche le compte par l'adresse EVM (`/api/v1/accounts/{0x…}`), puis par la clé publique (`account.publickey`) : un compte trouvé par la clé mais avec une autre adresse EVM ne doit recevoir **que** par son `0.0.x` (`foundBy: 'publicKey'`). ED25519 (Ledger, anciens comptes HashPack) : non pris en charge.
+
+**Diffusion.** `POST https://{proxy}/proto.CryptoService/cryptoTransfer`, `content-type: application/grpc-web+proto`, corps = trame gRPC-web (`0x00`, longueur sur 4 octets, `Transaction`) ; la réponse contient une trame de données (`TransactionResponse.nodeTransactionPrecheckCode`) et une trame de fin (`grpc-status`). Un HTTP/1.1 ordinaire suffit : pas de HTTP/2, pas de relais JSON-RPC. Proxys (ceux du SDK JS Hedera, `MAINNET` / `WEB_TESTNET`, vérifiés le 01/11/2026) : mainnet `node00.swirldslabs.com` (0.0.3), `node01-00-grpc.swirlds.com` (0.0.4), `node04.swirldslabs.com` (0.0.7) ; testnet `testnet-node00-00-grpc.hedera.com` (0.0.3), `testnet-node01-00-grpc.hedera.com` (0.0.4), `testnet-node02-00-grpc.hedera.com` (0.0.5). Copie après copie : `OK` ou `DUPLICATE_TRANSACTION` → envoyé ; `BUSY`, `PLATFORM_NOT_ACTIVE`, `PLATFORM_TRANSACTION_NOT_CREATED`, `THROTTLED_AT_CONSENSUS` ou nœud injoignable → copie suivante ; tout autre code → `INVALID_INPUT` avec le nom du code (rien n'est exécuté, un refus en précontrôle n'est pas facturé).
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `hbar_backend_info` | — | `{ network: 'mainnet' \| 'testnet', label /*hôte du nœud miroir*/, tor }` | |
+| `hbar_address` | `{ account? }` | `string` | adresse EVM (EIP-55) de `m/44'/3030'/0'/0/{account}`, coffre déverrouillé ; `hbar_account`, `hbar_build_tx`, `hbar_sign_tx`, `hbar_broadcast` prennent le même `account?` |
+| `hbar_account` | `{ account? }` | `{ address /*notre adresse EVM*/, accountIdChecksum, exists, accountId, evmAddress, balance /*tinybars*/, hollow, deleted, receiverSigRequired, foundBy }` | notre compte au nœud miroir (par alias, sinon par clé publique) ; la réponse doit porter notre adresse EVM ou notre clé, sinon `SERVER_UNREACHABLE` ; `exists: false` avant le premier HBAR reçu |
+| `hbar_recipient` | `{ to }` | `{ to, isEvm, exists, accountId, evmAddress, balance, hollow, deleted, receiverSigRequired }` | `to` : `0.0.x` (somme HIP-15 facultative, vérifiée pour ce réseau) ou `0x…` (EIP-55 ; long-zero → `0.0.x`) |
+| `hbar_txs` | `{ accountId }` | `[{ id, name, result, time, fee, memo, delta, amount, counterparty, outgoing }]` | 50 dernières transactions (`/api/v1/transactions?account.id=…`) ; montants en tinybars (chaînes) ; `amount` = HBAR échangés avec la contrepartie (frais exclus pour un envoi) ; mémo nettoyé |
+| `hbar_build_tx` | `{ to, amount /*tinybars*/, memo?, account? }` | `{ bodies /*TransactionBody non signé par nœud, hex*/, summary: HbarTxSummary, context: { account, recipient, createsAccount } }` | refusé avant toute construction : notre compte inexistant ; destinataire `0.0.x` inconnu, supprimé ou exigeant sa signature (`receiverSigRequired`) ; transfert à soi-même ; mémo > 100 octets ou avec caractère de contrôle / invisible ; montant + frais max > solde |
+| `hbar_sign_tx` | `{ bodies, password, account? }` | `{ signed /*Transaction signée par nœud, hex*/, summary, context }` | décode (strict, payeur = nous, nœuds de la liste), refuse un corps à moins de 45 s de sa fin de validité, **relit en direct** notre compte et le destinataire et refait les vérifications ci-dessus, mot de passe → dialogue natif : destinataire (adresse EVM signalée, et son compte selon le nœud miroir), montant, création du compte destinataire, frais maximum, payeur et solde, validité, identifiant, nœuds, puis le **MÉMO encadré sur sa propre ligne** (ou « AUCUN MÉMO » avec l'avertissement) ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` ; résumé de la signature = résumé affiché |
+| `hbar_broadcast` | `{ signed, account? }` | `string` (`0.0.x@s.n`) | `hbar_verify_signed` de chaque copie (low-S, clé = la nôtre, copies identiques hors nœud, nœuds connus et distincts) puis soumission gRPC-web (voir ci-dessus) |
+| `hbar_tx_status` | `{ id /*0.0.x@s.n ou 0.0.x-s-n*/ }` | `{ found, result }` | `/api/v1/transactions/{id}` : `found: true` et `result: 'SUCCESS'` une fois au consensus |
+
+Refusé avant toute signature : tout ce que `HbarTransfer::decode` refuse (§1) — autre type de transaction (CryptoUpdate, CryptoApproveAllowance, CryptoDelete, ContractCall, EthereumTransaction…), tokens HTS, `is_approval`, hooks, transactions programmées. Le nœud miroir peut mentir sur **notre** identifiant de compte (la transaction échouerait alors en `INVALID_SIGNATURE`, sans frais), le solde, l'existence du destinataire et son drapeau « signature exigée », le taux de change (frais max. affichés) ; pas sur ce qui est signé. Une adresse EVM est signée **telle quelle** (alias) : le réseau, pas le nœud miroir, décide du compte crédité. Hardware wallets : `HW_UNSUPPORTED`.
+
+**Fait côté UI** : `Family` `'hbar'` (`hbarChain(network)`, clé `hedera`, CoinGecko `hedera-hashgraph`), `AccountChain` `'hbar'`, types `Commands` (`hbar_*`, `Accounts.hbar`), backend démo (`mock-hbar.ts`), écrans Envoyer (champ **Mémo** toujours visible sous le destinataire, état de notre compte, refus du destinataire avant construction, suivi `hbar_tx_status`), Recevoir (identifiant `0.0.x` avec somme HIP-15 quand le compte existe, sinon l'adresse EVM et l'explication de la création automatique), Actif (identifiant du compte), carnet d'adresses, « Connexions sortantes ». Adaptateur : `HbarAdapter` (`packages/chains/src/hedera/`).
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -1091,6 +1143,8 @@ Refusé avant toute signature (voir §1) : tout ce qui n'est pas ce transfert-l�
 | `graphql.testnet.sui.io`, `graphql.mainnet.sui.io` | Sui testnet et mainnet (GraphQL de la Sui Foundation, POST JSON) : utilisés par les commandes Rust `sui_*` (solde, pièces de gaz, époque et prix de référence, simulation, exécution, historique), famille Tor `sui` |
 | `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |
+| `testnet.mirrornode.hedera.com`, `mainnet-public.mirrornode.hedera.com` | Hedera testnet et mainnet, nœud miroir REST officiel (compte, solde, historique, taux de change, statut) : utilisés par les commandes Rust `hbar_*`, famille Tor `hedera` |
+| `testnet-node00-00-grpc.hedera.com`, `testnet-node01-00-grpc.hedera.com`, `testnet-node02-00-grpc.hedera.com`, `node00.swirldslabs.com`, `node01-00-grpc.swirlds.com`, `node04.swirldslabs.com` | Hedera : proxys gRPC-web des nœuds de consensus (diffusion de `CryptoService/cryptoTransfer`, HTTPS port 443) : utilisés par `hbar_broadcast` (Rust) seulement, famille Tor `hedera` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |
 | `arbitrum-one-rpc.publicnode.com`, `optimism-rpc.publicnode.com`, `base-rpc.publicnode.com`, `polygon-bor-rpc.publicnode.com`, `bsc-rpc.publicnode.com`, `avalanche-c-chain-rpc.publicnode.com` | RPC EVM (phase 2) |
 | `cronos-evm-rpc.publicnode.com`, `mantle-rpc.publicnode.com`, `sonic-rpc.publicnode.com`, `gnosis-rpc.publicnode.com`, `hyperliquid-rpc.publicnode.com`, `sei-evm-rpc.publicnode.com` ; `rpc.ankr.com` (Flare, `/flare`), `kaia.api.pocket.network` (Kaia), `evm.confluxrpc.com` (Conflux eSpace) | RPC EVM (phase 2) : Cronos 25, Mantle 5000, Sonic 146, Gnosis 100, HyperEVM 999, Sei 1329, Flare 14, Kaia 8217, Conflux 1030 ; famille Tor `evm`. Les RPC publics de Flare et de Kaia répondent 403 aux sorties Tor : Ankr et Pocket Network à la place |

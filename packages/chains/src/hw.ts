@@ -35,6 +35,8 @@ export interface WalletAccounts {
   tron?: { address: string; path?: string };
   /** Vault only: XRP on a hardware wallet is HW_UNSUPPORTED. */
   xrp?: { address: string; path?: string };
+  /** Vault only: Hedera on a hardware wallet is HW_UNSUPPORTED. EVM address of the ECDSA key. */
+  hbar?: { address: string; path?: string };
   /** Vault only: Cardano on a hardware wallet is HW_UNSUPPORTED. */
   cardano?: { address: string; path?: string };
   /** Vault only: Stellar on a hardware wallet is HW_UNSUPPORTED. */

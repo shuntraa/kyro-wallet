@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xmr-sync"
+description = "Enables the xmr_sync command without any pre-configured scope."
+commands.allow = ["xmr_sync"]
+
+[[permission]]
+identifier = "deny-xmr-sync"
+description = "Denies the xmr_sync command without any pre-configured scope."
+commands.deny = ["xmr_sync"]

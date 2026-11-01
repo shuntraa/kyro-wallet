@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xmr-seed-show"
+description = "Enables the xmr_seed_show command without any pre-configured scope."
+commands.allow = ["xmr_seed_show"]
+
+[[permission]]
+identifier = "deny-xmr-seed-show"
+description = "Denies the xmr_seed_show command without any pre-configured scope."
+commands.deny = ["xmr_seed_show"]

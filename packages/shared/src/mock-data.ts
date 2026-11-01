@@ -29,6 +29,7 @@ export const DEMO_COINS: DemoCoin[] = [
   { id: 'cardano', symbol: 'ada', name: 'Cardano', price: 0.33, change24h: -0.4, change7d: -3.1, marketCapEur: 1.17e10 },
   { id: 'stellar', symbol: 'xlm', name: 'Stellar', price: 0.087, change24h: 1.1, change7d: -1.6, marketCapEur: 2.6e9 },
   { id: 'sui', symbol: 'sui', name: 'Sui', price: 3.1, change24h: 1.8, change7d: 4.2, marketCapEur: 1.0e10 },
+  { id: 'hedera-hashgraph', symbol: 'hbar', name: 'Hedera', price: 0.066, change24h: 1.1, change7d: -1.8, marketCapEur: 2.8e9 },
   { id: 'avalanche-2', symbol: 'avax', name: 'Avalanche', price: 23.4, change24h: 1.5, change7d: 0.4, marketCapEur: 9.5e9 },
   { id: 'wrapped-bitcoin', symbol: 'wbtc', name: 'Wrapped Bitcoin', price: 58_850, change24h: 1.2, change7d: 3.3, marketCapEur: 8.9e9 },
   { id: 'chainlink', symbol: 'link', name: 'Chainlink', price: 11.2, change24h: -2.4, change7d: 5.2, marketCapEur: 6.8e9 },
