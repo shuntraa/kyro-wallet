@@ -11,11 +11,9 @@
 //! | `zec_broadcast`       | `transaction.broadcast` (the returned txid must be ours) |
 //! | sending (`zec_send_*`)| `headers.subscribe`, `transaction.id_from_pos` + `transaction.get` of a recent block (**consensus branch id read from the chain**), `transaction.get` of every coin |
 //!
-//! Servers: mainnet = Komodo Platform's public ElectrumX servers (`net::ELECTRUM_HOSTS`,
-//! family `zcash`, TLS validated normally, genesis checked on every session; the second is
-//! tried only if the first cannot be reached — same Tor family, never clear when Tor is on).
-//! Testnet: no default (no public Zcash testnet Electrum server was found, see
-//! docs/NETWORK.md): `zec_*` reads fail with `SERVER_INVALID`.
+//! Servers: mainnet = Komodo Platform's public ElectrumX servers (`net::ELECTRUM_HOSTS`, family
+//! `zcash`, TLS validated normally, genesis checked on every session; the second is tried only if
+//! the first cannot be reached — same Tor family, never clear when Tor is on).
 
 use std::collections::{HashMap, HashSet};
 
@@ -27,15 +25,10 @@ use crate::electrum::{self, BoxStream, Conn, TlsMode};
 use crate::error::{AppError, AppResult};
 use crate::net::{electrum_default_allowed, Family, NetClient, ELECTRUM_HOSTS};
 
-/// Most recent transactions returned per address (same cap as the other UTXO chains).
 const MAX_TXS: usize = 50;
-/// Most UTXOs of one address listed (each one is checked against its previous transaction).
 const MAX_UTXOS: usize = 1_000;
-/// Electrum requests pipelined per batch.
 const CHUNK: usize = 25;
-/// Blocks searched below the tip for a transaction that carries the consensus branch id.
 const BRANCH_SEARCH_BLOCKS: u32 = 3;
-/// Transactions tried per block for it (the coinbase first).
 const BRANCH_SEARCH_POSITIONS: u32 = 4;
 
 pub struct ZecCtx<'a> {
@@ -80,8 +73,8 @@ pub fn label(net: Network) -> String {
         .unwrap_or_default()
 }
 
-/// Opens a session on the first reachable default server (Zcash Tor family) and checks its
-/// genesis hash. Only a transport failure moves on to the next server.
+/// Opens a session on the first reachable default server (Zcash Tor family) and checks its genesis
+/// hash.
 pub async fn session(ctx: &ZecCtx<'_>) -> AppResult<Conn<BoxStream>> {
     let targets = default_targets(ctx.network);
     if targets.is_empty() {
@@ -149,7 +142,6 @@ fn is_txid(t: &str) -> bool {
     t.len() == 64 && t.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-/// `get_history` entries, strictly typed: `(txid, height)`; height ≤ 0 = unconfirmed.
 fn parse_history(v: &Value) -> AppResult<Vec<(String, i64)>> {
     let list = v
         .as_array()
@@ -174,7 +166,6 @@ fn parse_history(v: &Value) -> AppResult<Vec<(String, i64)>> {
     Ok(out)
 }
 
-/// A UTXO as the server claims it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ClaimedUtxo {
     txid: String,
@@ -232,7 +223,6 @@ fn verified_raw(net: Network, txid: &str, raw: &Value) -> AppResult<(ZecRawTx, S
 
 type Raws = HashMap<String, (ZecRawTx, String)>;
 
-/// Fetches and verifies `txids` (chunked batches), skipping those already in `raws`.
 async fn fetch_raws(
     net: Network,
     conn: &mut Conn<BoxStream>,
@@ -296,7 +286,6 @@ fn verified_utxos(claimed: &[ClaimedUtxo], raws: &Raws, our_spk: &str) -> AppRes
     Ok(Value::Array(out))
 }
 
-/// Keeps the history entries that really involve `our_spk`.
 fn involving(order: Vec<(String, i64)>, raws: &Raws, our_spk: &str) -> Vec<(String, i64)> {
     order
         .into_iter()
@@ -313,8 +302,6 @@ fn involving(order: Vec<(String, i64)>, raws: &Raws, our_spk: &str) -> Vec<(Stri
         .collect()
 }
 
-/// Block time of a Zcash block header (hex): version 4, previous hash 32, merkle root 32,
-/// block commitments 32, then `nTime` (bytes 100..104, little-endian).
 fn zec_header_time(header_hex: &str) -> Option<u64> {
     let raw = hex::decode(header_hex).ok()?;
     let t: [u8; 4] = raw.get(100..104)?.try_into().ok()?;
@@ -329,8 +316,6 @@ fn as_btc(tx: &ZecRawTx) -> BtcRawTx {
     }
 }
 
-/// Esplora-shaped history. A transaction with shielded parts has no transparent "fee" (value
-/// also moved to or from the shielded pools): it is marked `shielded: true`, without `fee`.
 fn history_json(order: &[(String, i64)], raws: &Raws, times: &HashMap<i64, u64>) -> Vec<Value> {
     let btc: HashMap<String, BtcRawTx> = raws
         .iter()
@@ -351,8 +336,6 @@ fn history_json(order: &[(String, i64)], raws: &Raws, times: &HashMap<i64, u64>)
     }
     out
 }
-
-// ---------------------------------------------------------------- public API
 
 /// `GET /address/{a}` shape (net balance in `funded_txo_sum`/`spent_txo_sum`).
 pub async fn address_info(ctx: &ZecCtx<'_>, address: &str) -> AppResult<Value> {
@@ -488,7 +471,6 @@ pub async fn chain_state(conn: &mut Conn<BoxStream>) -> AppResult<ChainState> {
     let tip = tip(conn).await?;
     for height in (tip.saturating_sub(BRANCH_SEARCH_BLOCKS - 1)..=tip).rev() {
         for pos in 0..BRANCH_SEARCH_POSITIONS {
-            // An error is "no transaction at this position": next block.
             let Ok(txid) = conn
                 .call("blockchain.transaction.id_from_pos", json!([height, pos]))
                 .await
@@ -596,10 +578,6 @@ pub async fn probe(ctx: &ZecCtx<'_>) -> AppResult<Detected> {
 mod tests {
     use super::*;
 
-    /// Real, read-only answers of `zec.electrum1.cipig.net:20058` (ElectrumX 2.0.0), recorded
-    /// 2026-11-01 (`server.features`, `headers.subscribe`, a v5 transparent transaction and its
-    /// previous transaction, the tip coinbase, `get_balance` / `get_history` / `listunspent` /
-    /// `transaction.get` / `block.header` for the address it pays). Nothing was broadcast.
     const RECORDED: &str = include_str!("testdata/zec_electrum_mainnet.json");
 
     fn recorded() -> (Value, Raws) {
@@ -634,7 +612,6 @@ mod tests {
         );
         assert!(t.iter().all(|t| t.tls == TlsMode::Webpki
             && electrum_default_allowed(&t.host, t.port, Family::Zcash)));
-        // Not reachable as another family, nor on another port.
         assert!(!electrum_default_allowed(
             "zec.electrum1.cipig.net",
             20058,
@@ -646,7 +623,6 @@ mod tests {
             Family::Zcash
         ));
         assert_eq!(label(Network::Mainnet), "zec.electrum1.cipig.net");
-        // Testnet: no default, a typed error.
         assert!(default_targets(Network::Testnet).is_empty());
         assert!(matches!(no_default_server(), AppError::ServerInvalid(_)));
         let n = NetClient::new(std::env::temp_dir().join("kyro-zec-test")).unwrap();
@@ -674,7 +650,6 @@ mod tests {
         };
         tauri::async_runtime::block_on(async {
             for a in [
-                // Sapling, unified, testnet, Bitcoin, a path injection, a TEX form.
                 "zs1z7rejlpsa98s2rrrfkwmaxu53e4ue0ulcrw0h4x5g8jl04tak0d3mm47vdtahatqrlkngh9sly",
                 "u1l8xunezsvhq8fgzfl7404m450nwnd76zshscn6nfys7vyz2ywyh4cc5daaq0c7q2su5lqfh23sp7fkf3kt27ve5948mzpfdvckzaect2jtte308mkwlycj2u0eac077wu70vqcetkxf",
                 "tmBsTi2xWTjUdEXnuTceL7fecEQKeWaPDJd",
@@ -727,7 +702,6 @@ mod tests {
         assert_eq!(ok.as_array().unwrap().len(), claimed.len());
         assert_eq!(ok[0]["value"].as_u64().unwrap(), claimed[0].value);
         assert_eq!(ok[0]["coinbase"], false);
-        // A server lying about the amount, the output or the script: refused.
         let mut lie = claimed.clone();
         lie[0].value += 1;
         assert!(verified_utxos(&lie, &raws, spk).is_err());
@@ -735,7 +709,6 @@ mod tests {
         lie[0].vout = 7;
         assert!(verified_utxos(&lie, &raws, spk).is_err());
         assert!(verified_utxos(&claimed, &raws, "76a914").is_err());
-        // A transaction returned under another txid: refused before it can feed anything.
         let other = v["prev_txs"].as_object().unwrap().values().next().unwrap();
         assert!(verified_raw(Network::Mainnet, &claimed[0].txid, other).is_err());
         assert!(parse_listunspent(
@@ -778,7 +751,6 @@ mod tests {
                 )
             })
             .collect();
-        // Zcash headers: nTime at bytes 100..104 (2026-11-01 ≈ 1.79e9).
         assert!(
             times
                 .values()
@@ -803,7 +775,6 @@ mod tests {
     fn recorded_branch_id_and_broadcast_check() {
         let (v, _) = recorded();
         let cb = hex::decode(v["tip_coinbase"]["hex"].as_str().unwrap()).unwrap();
-        // NU6.3 (0x37a5165b) on mainnet at the recorded tip.
         assert_eq!(wallet_core::zec_header_branch_id(&cb), Some(0x37a5_165b));
         let tip = u32::try_from(v["tip"]["height"].as_u64().unwrap()).unwrap();
         let c = wallet_core::zec_consensus(Network::Mainnet, tip, tip, 0x37a5_165b).unwrap();

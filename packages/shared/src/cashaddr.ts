@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // CashAddr, the Bitcoin Cash address format (spec: bitcoincash.org `spec/cashaddr.md`, read
-// 2026-11-01), mirror of wallet-core `cashaddr.rs`. `prefix:payload`, payload = base32
-// (bech32's alphabet) of `version byte ‖ hash`, then an 8-symbol BCH-code checksum over the
-// prefix's low 5 bits, a zero separator and the payload. Not cryptography: a checksum. The
-// 8↔5-bit regrouping and the alphabet are `@scure/base`'s (audited); only the spec's `PolyMod`
-// is written here. Checked against every spec vector (`test/cashaddr.test.ts`) and against
-// Rust's addresses (same "abandon … about" / "all ×12" vectors).
-//
-// The TypeScript side only uses it to derive and compare addresses (the adapter's scan and
-// its consistency check with Rust); Rust re-validates every address it is given.
 
 import { utils } from '@scure/base';
 import { l10n } from './i18n';
@@ -49,10 +39,7 @@ export function cashaddrEncode(prefix: string, type: number, hash: Uint8Array): 
   return `${prefix}:${ALPHABET.encode([...words, ...check]).join('')}`;
 }
 
-/**
- * Decodes a CashAddr of `prefix` (the prefix may be omitted; mixed case refused). Throws on a
- * bad checksum, non-zero padding, a reserved version bit or a hash/size mismatch.
- */
+/** Decodes a CashAddr of `prefix` (the prefix may be omitted; */
 export function cashaddrDecode(address: string, prefix: string): { type: number; hash: Uint8Array } {
   const a = address.trim();
   if (a !== a.toLowerCase() && a !== a.toUpperCase()) throw new Error(l10n('CashAddr : casse mélangée', 'CashAddr: mixed case'));

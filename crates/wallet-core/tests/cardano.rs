@@ -1,12 +1,4 @@
 //! Cardano vectors.
-//!
-//! - CIP-0003 "Icarus" master keys: https://github.com/cardano-foundation/CIPs/blob/master/CIP-0003/Icarus.md
-//! - CIP-0019 address test vectors (keys `addr_vk1w0l2…`, `stake_vk1px4j…`):
-//!   https://github.com/cardano-foundation/CIPs/blob/master/CIP-0019/README.md#test-vectors
-//! - Trezor firmware fixtures (`tests/fixtures/cardano/get_base_address*.json`,
-//!   `get_public_key.derivations.json`, `sign_tx.json`, ICARUS derivation): addresses, account
-//!   keys, transaction hashes and **signatures**, which are deterministic (Ed25519) and must be
-//!   byte-identical.
 
 use bitcoin::bech32::{primitives::decode::CheckedHrpstring, Bech32};
 use wallet_core::{
@@ -102,10 +94,8 @@ fn cip0019_address_vectors() {
         let b = cardano_address_bytes(a, net).unwrap();
         assert_eq!(cardano_address_string(&b, net).unwrap(), a);
     }
-    // Wrong network.
     assert!(cardano_address_bytes(m0, Network::Testnet).is_err());
     assert!(cardano_address_bytes(t0, Network::Mainnet).is_err());
-    // Script payment (1, 3, 7), pointer (4, 5), reward (14), Byron: refused.
     for a in [
         "addr1z8phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gten0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgs9yc0hh",
         "addr1x8phkx6acpnf78fuvxn0mkew3l0fd058hzquvz7w36x4gt7r0vd4msrxnuwnccdxlhdjar77j6lg0wypcc9uar5d2shskhj42g",
@@ -146,10 +136,6 @@ fn trezor_addresses_and_account_key() {
         .starts_with("stake1u"));
     assert!(cardano_account_xpub(&very, 0x8000_0000).is_err());
 }
-
-// ---------------------------------------------------------------------------------------------
-// Trezor sign_tx.json (all × 12, input m/1852'/1815'/0'/0/0, fee 42, ttl 10, untagged sets)
-// ---------------------------------------------------------------------------------------------
 
 const TZ_PREV: &str = "3b40265111d8bb3c3c608d95b3a0bf83461ace32d79336579a1939b3aad1c0b7";
 const TZ_DEST: &str = "addr1q84sh2j72ux0l03fxndjnhctdg7hcppsaejafsa84vh7lwgmcs5wgus8qt4atk45lvt4xfxpjtwfhdmvchdf2m3u3hlsd5tq5r";
@@ -226,7 +212,6 @@ fn check_vector(
         cardano_signed_size(&body, None, 1).unwrap(),
         signed.len() / 2
     );
-    // A signed transaction is not accepted for signing again.
     assert!(cardano_decode_tx(&signed, &ctx(own, verified, 0)).is_err());
     summary
 }
@@ -282,7 +267,6 @@ fn trezor_multiasset() {
         Some(10),
     );
     body.validity_start = Some(47);
-    // Unknown token → reinforced.
     let s = check_vector(
         body.clone(),
         "b7269ddc59e4094a6581c653e0d5dc1e553e3a5fb6ffae47d3d094dff1cfe87b",
@@ -303,7 +287,6 @@ fn trezor_multiasset() {
             name: "74652474436f696e".into()
         }]
     );
-    // The same token in the verified table: no reinforced confirmation.
     let unsigned = hex::encode(cardano_unsigned_tx(&body, None).unwrap());
     let s2 = cardano_decode_tx(
         &unsigned,
@@ -347,7 +330,6 @@ fn trezor_different_policies() {
         .iter()
         .map(|t| t.name_text.clone())
         .collect();
-    // 0x11 is a control character: hex only.
     assert_eq!(
         names,
         vec![
@@ -362,9 +344,7 @@ fn trezor_different_policies() {
 
 #[test]
 fn trezor_multiple_correctly_ordered_tokens() {
-    // Outputs of Trezor's "multiple correctly ordered tokens" fixture. Its body also mints, so
-    // Kyro refuses it and its hash is not reproduced; only the canonical order (asset names:
-    // shorter first, then bytewise; policies bytewise) is checked here.
+    // Outputs of Trezor's "multiple correctly ordered tokens" fixture.
     let tok = |n: &str, q| (hex::decode(n).unwrap(), q);
     let a1 = vec![
         (
@@ -403,7 +383,6 @@ fn trezor_multiple_correctly_ordered_tokens() {
     assert_eq!(s.outputs[0].tokens[0].name, "f565");
     assert_eq!(s.valid_from, Some(47));
     assert_eq!(s.warnings.len(), 7, "seven unknown tokens");
-    // Same tokens in a non-canonical order: refused (names, then policies).
     let mut wrong = a1.clone();
     wrong[0].1.swap(0, 2);
     let u = hex::encode(
@@ -428,8 +407,6 @@ fn trezor_multiple_correctly_ordered_tokens() {
 
 #[test]
 fn trezor_auxiliary_data_hash() {
-    // Trezor signs with only the hash; Kyro needs the data (it must show it), so only the body
-    // hash and Trezor's signature are checked here.
     let mut body = tz_body(vec![out(TZ_DEST, 1, vec![])], Some(10));
     body.aux_hash = Some(h32(
         "ea4c91860dd5ec5449f8f985d227946ff39086b17f10b5afb93d12ee87050b6a",
@@ -448,10 +425,6 @@ fn trezor_auxiliary_data_hash() {
     );
 }
 
-// ---------------------------------------------------------------------------------------------
-// Kyro-built transactions: CIP-20 memo, tagged sets, min-UTxO, refusals
-// ---------------------------------------------------------------------------------------------
-
 #[test]
 fn memo_tagged_sets_and_min_utxo() {
     let r = root(ALL, "");
@@ -459,7 +432,6 @@ fn memo_tagged_sets_and_min_utxo() {
     let own_b = cardano_address_bytes(&own, Network::Testnet).unwrap();
     let aux = cardano_cip20_aux("Kyro preprod test").unwrap();
     let min_plain = cardano_min_utxo(&own_b, &vec![], 4310);
-    // (160 + 65) × 4310: a base-address ADA-only output is 65 bytes with a 5-byte coin.
     assert_eq!(min_plain, 969_750);
     let body = CardanoBody {
         inputs: vec![
@@ -499,7 +471,6 @@ fn memo_tagged_sets_and_min_utxo() {
     assert_eq!(s.warnings, vec![CardanoWarning::Memo]);
     assert_eq!(s.outputs[0].min_lovelace, min_plain.to_string());
     assert_eq!(s.inputs[1], format!("{TZ_PREV}#3"));
-    // Witness set {0: 258([[vkey, sig]])}, auxiliary data kept.
     assert!(signed.contains("a100d9010281825820"));
     assert!(signed.ends_with(&format!("f5{}", hex::encode(&aux))));
     cardano_signed_witnesses(&signed).unwrap();
@@ -508,12 +479,10 @@ fn memo_tagged_sets_and_min_utxo() {
         signed.len() / 2
     );
 
-    // Below min-UTxO: refused.
     let mut low = body.clone();
     low.outputs[0].coin = min_plain - 1;
     let u = hex::encode(cardano_unsigned_tx(&low, Some(&aux)).unwrap());
     assert!(cardano_decode_tx(&u, &c).is_err());
-    // Aux data that does not match its hash: refused.
     let other = cardano_cip20_aux("something else").unwrap();
     let u = hex::encode(cardano_unsigned_tx(&body, Some(&other)).unwrap());
     assert!(cardano_decode_tx(&u, &c).is_err());
@@ -523,19 +492,16 @@ fn memo_tagged_sets_and_min_utxo() {
     b.aux_hash = Some(cardano_blake2b256(&nft));
     let u = hex::encode(cardano_unsigned_tx(&b, Some(&nft)).unwrap());
     assert!(cardano_decode_tx(&u, &c).is_err());
-    // Duplicate input.
     let mut b = body.clone();
     b.inputs[1].index = 0;
     let u = hex::encode(cardano_unsigned_tx(&b, Some(&aux)).unwrap());
     assert!(cardano_decode_tx(&u, &c).is_err());
-    // Mainnet output in a testnet transaction.
     let mut b = body;
     b.outputs[0].address[0] = 0x01;
     let u = hex::encode(cardano_unsigned_tx(&b, Some(&aux)).unwrap());
     assert!(cardano_decode_tx(&u, &c).is_err());
 }
 
-/// Body `{0: [[TZ_PREV, 0]], 1: [[addr, 1]], 2: 42, 3: 10, <extra>}` as an unsigned transaction.
 fn with_extra(extra_key: u8, extra_value: &str, outputs_hex: Option<&str>) -> String {
     let addr = hex::encode(cardano_address_bytes(TZ_DEST, Network::Mainnet).unwrap());
     let outputs = outputs_hex
@@ -552,7 +518,6 @@ fn with_extra(extra_key: u8, extra_value: &str, outputs_hex: Option<&str>) -> St
 #[test]
 fn refuses_everything_but_payments() {
     let c = ctx(&[], &[], 0);
-    // Baseline is accepted.
     cardano_decode_tx(&with_extra(0xff, "", None), &c).unwrap();
     let cases: &[(u8, &str, &str)] = &[
         (0x04, "80", "certificates"),
@@ -578,7 +543,6 @@ fn refuses_everything_but_payments() {
         );
     }
     let addr = hex::encode(cardano_address_bytes(TZ_DEST, Network::Mainnet).unwrap());
-    // Outputs with a datum hash (legacy), datum or reference script (map form): refused.
     for o in [
         format!("81835839{addr}015820{TZ_PREV}"),
         format!("81a3005839{addr}0101028200 5820{TZ_PREV}").replace(' ', ""),
@@ -589,14 +553,12 @@ fn refuses_everything_but_payments() {
             "{o}"
         );
     }
-    // Map-form output without datum: accepted.
     let s = cardano_decode_tx(
         &with_extra(0xff, "", Some(&format!("81a2005839{addr}0101"))),
         &c,
     )
     .unwrap();
     assert_eq!(s.outputs[0].address, TZ_DEST);
-    // Non-canonical encodings: fee 42 as 3 bytes, keys out of order, indefinite map.
     let tx = with_extra(0xff, "", None);
     let inner = tx
         .strip_prefix("84a4")
@@ -608,13 +570,11 @@ fn refuses_everything_but_payments() {
     assert!(cardano_decode_tx(&mk("a4", "0219002a030a"), &c).is_err());
     assert!(cardano_decode_tx(&mk("a4", "030a02182a"), &c).is_err());
     assert!(cardano_decode_tx(&mk("bf", "02182a030aff"), &c).is_err());
-    // Duplicate key (fee twice), trailing byte, is_valid = false, not hex.
     assert!(cardano_decode_tx(&mk("a5", "02182a02182a030a"), &c).is_err());
     assert!(cardano_decode_tx(&mk("a5", "02182a030a030a"), &c).is_err());
     assert!(cardano_decode_tx(&format!("{tx}00"), &c).is_err());
     assert!(cardano_decode_tx(&tx.replace("a0f5f6", "a0f4f6"), &c).is_err());
     assert!(cardano_decode_tx("zz", &c).is_err());
-    // Zero token quantity.
     let zero = format!("818258 39{addr}8201a1581c{POL95}a14174 00").replace(' ', "");
     assert!(cardano_decode_tx(&with_extra(0xff, "", Some(&zero)), &c).is_err());
     let one = zero.replacen("417400", "417401", 1);
@@ -628,12 +588,10 @@ fn signature_is_strict_and_bound_to_the_key() {
     let body = tz_body(vec![out(&change, 7_120_787, vec![])], Some(10));
     let unsigned = hex::encode(cardano_unsigned_tx(&body, None).unwrap());
     let (signed, id, _) = cardano_sign(&all, 0, 0, &unsigned, &ctx(&[], &[], 0)).unwrap();
-    // Flip one signature bit: rejected.
     let pos = signed.len() - 6;
     let mut bad = signed.clone().into_bytes();
     bad[pos] = if bad[pos] == b'0' { b'1' } else { b'0' };
     assert!(cardano_signed_witnesses(std::str::from_utf8(&bad).unwrap()).is_err());
-    // Another key index signs with another key.
     let (signed1, id1, _) = cardano_sign(&all, 0, 1, &unsigned, &ctx(&[], &[], 0)).unwrap();
     assert_eq!(id, id1);
     assert_ne!(
@@ -642,14 +600,8 @@ fn signature_is_strict_and_bound_to_the_key() {
     );
 }
 
-// ---------------------------------------------------------------------------------------------
-// Real preprod transactions (Koios `tx_cbor`, fetched 2026-10-30): decoding of third-party
-// encodings, transaction id and witness verification.
-// ---------------------------------------------------------------------------------------------
-
 /// 2 ADA to the CIP-19 test address, no ttl (cardano-cli style, legacy outputs).
 const PREPROD_331A: &str = "84a3008182582003e58bed78e8746cc08224576b001b254128b7e9d0c0d4f9f3b9858a404d0b7c010182825839009493315cd92eb5d8c4304e67b7e16ae36d61d34502694657811a2c8e337b62cfff6403a06a3acbc34f8c46003c69fe79a3628cefa9c472511a001e8480825839009493315cd92eb5d8c4304e67b7e16ae36d61d34502694657811a2c8e32c728d3861e164cab28cb8f006448139c8f1740ffb8e7aa9e5232dc1b000000022ef5e6b0021a00029075a1008182582073fea80d424276ad0978d4fe5310e8bc2d485f5f6bb3bf87612989f112ad5a7d584095f3c7e2a355e1c76e09360d80fa3ead32f94c91778263555cb39acbb0b1fb9e52b751600cbcc2becc6d9626f4b252a58478a26afbbf65b27f52c75bebcbb709f5f6";
-/// Map-form outputs with five native tokens, and a `network_id` field (15).
 const PREPROD_C7B6: &str = "84a40082825820b6188fe189c9a5d78bee648979ce0060a9049bedfe7b2696e0add4f8d6e5f326018258203c214a48924cf3faafec9e05e9fea5dcc02b34d5846389e99011b59d6c9ec333010182a2005839001f1899a0cbc2c9b8340cec6d619ed3fa523fa8875ea5d66bc74d0fb1693926d839c9ad2ce369668ee7018a8656a8ea13c95ff6fb11578efd011a0013d620a20058390071229fcde7f08fdcd3d22ba4fc00d0da339290fc84337b4a57c4a310089c02f3e2b2de387098cb510763b44ede16d581ffac1b6ddee0f3b201821a0180023ba5581c54f9290a88a407b2a1b9ce2c9a96142d02a8d0b686a634346a00d1efa1485349524955532d421b000000066720b300581c59e35b701247154f645388c5e17a098fced0e5098543dd58a797c04aa145524947454c1b000000051f4d5c00581c644825fe5f46cdedbbb14f26ef696bbd5a65b9875f8a17ce4ba445a7a1536772764c50284144412c5349524955532d41291a006ea6bc581c73dead11ca9e387fef50a8a68726a68273d607eea0f1d2bde205140fa1485349524955532d411b000000066720b300581cc0e65618da9d3d39d20d0f7cdefc6481aebe616fe063a447d8647c90a144564547411b000000028fa6ae00021a0002c2210f00a10081825820b800b5f9b6fa3f51c668f5eaa00bdd3a56c0199648817923ae6be5c9ec4fce9e5840b9ced20438e707b103707d4714e0011d03be9f1d23cc9ca98351d5cd59b287c5494d35a904b56b4a4eeb75037fcb9bcda6cc28333bbdaa2b5596dcaaae46f308f5f6";
 
 fn unsign(tx: &str, witness_start: &str) -> String {
@@ -689,10 +641,8 @@ fn real_preprod_transactions() {
     assert_eq!(s.outputs[0].lovelace, "2000000");
     assert_eq!(s.fee, "168053");
     assert_eq!(s.warnings, vec![CardanoWarning::NoTtl]);
-    // The network-id field (15) is refused.
     let e = cardano_decode_tx(&unsign(PREPROD_C7B6, "a10081825820"), &c).unwrap_err();
     assert!(e.to_string().contains("network id"), "{e}");
-    // Without it (and so with another tx id), the map-form outputs and tokens decode.
     let body_only = unsign(PREPROD_C7B6, "a10081825820")
         .replacen("84a4", "84a3", 1)
         .replace("0f00a0f5f6", "a0f5f6");
@@ -703,7 +653,6 @@ fn real_preprod_transactions() {
 
 /// The CIP-0019 test keys come from the published test mnemonic (cardano-addresses test
 /// suite): payment key = m/1852'/1815'/0'/0/0, stake key = m/1852'/1815'/1'/2/0 (account 1).
-/// Its preprod address is therefore spendable by anyone, like the "abandon" wallets.
 #[test]
 fn cip19_keys_come_from_the_published_test_mnemonic() {
     let r = root(
@@ -728,7 +677,6 @@ fn cip19_keys_come_from_the_published_test_mnemonic() {
         cardano_base_address(Network::Testnet, &pay, &stake_pk).unwrap(),
         cip19
     );
-    // The stake key is account 1's (m/1852'/1815'/1'/2/0).
     assert!(stake_of_account_1.starts_with("addr_test1"));
     assert_eq!(
         cardano_account_stake_address(&r, Network::Testnet, 1).unwrap(),
@@ -777,8 +725,6 @@ fn cip20_lines_are_sanitized() {
     assert!(s.requires_extra_confirmation);
 }
 
-/// Audit finding: `(160 + size) × coinsPerUTxOByte` could overflow (a wrapped, tiny minimum in
-/// release builds) with an absurd protocol parameter.
 #[test]
 fn min_utxo_overflow_fails_closed() {
     let r = root(ALL, "");

@@ -1,36 +1,5 @@
-//! Algorand: ed25519 keys at `m/44'/283'/account'/0/0` derived like the **Ledger Algorand
-//! app** (Ledger Live), 58-character base32 addresses, and the canonical msgpack encoding of
-//! **payment** (`pay`) transactions and **asset transfers** (`axfer`) of the few verified assets
-//! of [`algo_known_assets`] (USDC, USD₮): opt-in (0 to ourselves) and plain transfers only.
-//!
-//! Derivation — the BIP39 seed (64 bytes, PBKDF2 of the phrase) goes through Ledger's
-//! BIP32-Ed25519 ("HDW_NORMAL" mode of the Ledger OS for the Ed25519 curve, reference:
-//! LedgerHQ/orakolo `HDEd25519.py`):
-//! - root: `I = HMAC-SHA512("ed25519 seed", seed)`, re-hashed (`I = HMAC-SHA512("ed25519 seed",
-//!   I)`) while the third highest bit of `kL` is set, then clamped; chain code
-//!   `HMAC-SHA256("ed25519 seed", 0x01 ‖ seed)`;
-//! - children: Khovratovich–Law "V2" hardened derivation (`ed25519-bip32`, the same crate and
-//!   scheme as Cardano), hardened `44'/283'/account'` then non-hardened `0/0` (the Ledger app's path);
-//! - the 32-byte `kL` of the last node is then used by the Ledger app as a **standard RFC 8032
-//!   ed25519 secret key** (it is hashed again with SHA-512 by `cx_eddsa_sign`): Kyro does the
-//!   same with `ed25519-dalek`'s `SigningKey`.
-//!
-//! Checked against the Ledger app's own emulator tests (Zondax `ledger-algorand`,
-//! `tests_zemu`: 24-word seed, account 123). **This is not Pera's 25-word format**: a Pera /
-//! "Algorand Wallet" 25-word mnemonic encodes one raw ed25519 secret key (11-bit words, its own
-//! checksum, no BIP39, no derivation) and cannot be imported into Kyro; a Kyro phrase restored in
-//! Ledger Live (Algorand app) gives the same addresses, a 25-word phrase never does.
-//!
-//! Cryptography (none written here): HMAC-SHA512 / HMAC-SHA256 (RustCrypto `hmac`, `sha2`),
-//! `ed25519-bip32` (child derivation), `ed25519-dalek` (signatures, `verify_strict`),
-//! SHA-512/256 (RustCrypto `sha2`, address checksum and transaction id), base32 (`data-encoding`).
-//!
-//! Encoding: hand-written for the `pay` subset, as Algorand's canonical msgpack ("canonical
-//! encoding": map keys sorted, empty / zero fields omitted, smallest integer and length forms).
-//! A blob is accepted **only if re-encoding the decoded transaction gives back the same bytes**
-//! (no unknown field, no duplicate, no other order or form). Signing message: `"TX" ‖ msgpack`;
-//! transaction id: `base32(SHA-512/256("TX" ‖ msgpack))`. Tested byte for byte against the
-//! official py-algorand-sdk fixtures (signed payment and transaction id).
+//! Algorand: ed25519 at `m/44'/283'/account'/0/0` (Ledger app derivation), base32 addresses, and
+//! canonical msgpack of `pay` and `axfer` of [`algo_known_assets`] (opt-in and plain transfers).
 
 use base64::Engine as _;
 use data_encoding::BASE32_NOPAD;
@@ -57,13 +26,9 @@ pub const ALGO_MIN_BALANCE: u64 = 100_000;
 pub const ALGO_MAX_NOTE: usize = 1_024;
 /// Largest validity window (`lv − fv`) the protocol accepts, rounds.
 pub const ALGO_MAX_VALIDITY: u64 = 1_000;
-/// Fees above 0.01 ALGO (ten times the usual) need a reinforced confirmation.
 const HIGH_FEE: u64 = 10_000;
-/// Longest note text shown in the dialog (characters).
 const MAX_NOTE_TEXT: usize = 256;
-/// Largest unsigned / signed blob accepted (a payment with a full note is ≈ 1.3 kB).
 const MAX_BLOB: usize = 2_048;
-/// Bounded re-hashing of the root key (each round succeeds with probability 1/2).
 const MAX_ROOT_ROUNDS: usize = 256;
 
 /// Mainnet genesis id and hash (base64), as returned by algod `/v2/transactions/params`.
@@ -94,10 +59,6 @@ pub fn algo_genesis(net: Network) -> Result<(&'static str, [u8; 32])> {
         .ok_or_else(|| Error::crypto("genesis hash constant"))?;
     Ok((id, hash))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Keys and addresses
-// ---------------------------------------------------------------------------------------------
 
 /// Path of the key of Algorand account `account`: `m/44'/283'/account'/0/0` (Ledger).
 pub fn algo_path(account: u32) -> String {
@@ -165,8 +126,7 @@ fn checksum(pk: &[u8; 32]) -> [u8; 4] {
     out
 }
 
-/// Address of a 32-byte public key: `base32(pk ‖ last 4 bytes of SHA-512/256(pk))`, 58
-/// characters without padding.
+/// Address of a public key: `base32(pk ‖ last 4 bytes of SHA-512/256(pk))`, 58 chars, unpadded.
 pub fn algo_address_of_pubkey(pk: &[u8; 32]) -> String {
     let mut data = [0u8; 36];
     data[..32].copy_from_slice(pk);
@@ -174,9 +134,7 @@ pub fn algo_address_of_pubkey(pk: &[u8; 32]) -> String {
     BASE32_NOPAD.encode(&data)
 }
 
-/// The 32 bytes of an address (a public key, or the hash of a program / an application
-/// account: not necessarily a curve point). Refused: anything but 58 upper-case base32
-/// characters with a valid checksum.
+/// The 32 bytes of an address (key or program/app hash: not necessarily a curve point).
 pub fn algo_address_bytes(address: &str) -> Result<[u8; 32]> {
     let a = address.trim();
     let invalid = || Error::input("invalid Algorand address");
@@ -205,10 +163,6 @@ pub fn algo_public_key(seed: &Seed, account: u32) -> Result<[u8; 32]> {
 pub fn algo_address(seed: &Seed, account: u32) -> Result<String> {
     Ok(algo_address_of_pubkey(&algo_public_key(seed, account)?))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Canonical msgpack (payment subset)
-// ---------------------------------------------------------------------------------------------
 
 fn put_uint(o: &mut Vec<u8>, v: u64) {
     if v < 0x80 {
@@ -261,7 +215,6 @@ fn put_map(o: &mut Vec<u8>, n: usize) {
     }
 }
 
-/// One `key → encoded value` entry of a transaction map (sorted by key before writing).
 type Entry = (&'static str, Vec<u8>);
 
 fn e_uint(f: &mut Vec<Entry>, k: &'static str, v: u64) {
@@ -288,7 +241,6 @@ fn e_str(f: &mut Vec<Entry>, k: &'static str, v: &str) {
     }
 }
 
-/// Canonical map: keys sorted bytewise, empty fields already left out.
 fn write_map(mut f: Vec<Entry>) -> Vec<u8> {
     f.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
     let mut o = Vec::with_capacity(64 + f.iter().map(|(_, v)| v.len() + 8).sum::<usize>());
@@ -374,9 +326,6 @@ pub struct AlgoKnownAsset {
     pub decimals: u8,
 }
 
-/// Mainnet: USDC (Circle's list: ASA 31566704; algod: unit `USDC`, 6 decimals, url centre.io)
-/// and USD₮ (Tether's list: ASA 312769; algod: unit `USDt`, 6 decimals, url tether.to), read
-/// on 2026-11-01.
 const MAINNET_ASSETS: &[AlgoKnownAsset] = &[
     AlgoKnownAsset {
         id: 31_566_704,
@@ -391,7 +340,6 @@ const MAINNET_ASSETS: &[AlgoKnownAsset] = &[
         decimals: 6,
     },
 ];
-/// Testnet: Circle's test USDC (ASA 10458941, Circle's list).
 const TESTNET_ASSETS: &[AlgoKnownAsset] = &[AlgoKnownAsset {
     id: 10_458_941,
     symbol: "USDC",
@@ -412,8 +360,7 @@ pub fn algo_known_asset(net: Network, id: u64) -> Option<AlgoKnownAsset> {
     algo_known_assets(net).iter().copied().find(|a| a.id == id)
 }
 
-/// Fields of an asset transfer (`type = "axfer"`). `close_to` and `asset_sender` (clawback) are
-/// decoded only so that they can be refused.
+/// Fields of an asset transfer (`type = "axfer"`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AlgoAssetTransfer {
     /// `xaid`: asset id.
@@ -428,8 +375,7 @@ pub struct AlgoAssetTransfer {
     pub asset_sender: Option<[u8; 32]>,
 }
 
-/// A payment (`type = "pay"`) transaction. `close_remainder_to`, `rekey_to`, `group` and
-/// `lease` are decoded only so that they can be **refused** with a clear message.
+/// A payment (`type = "pay"`) transaction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlgoPayment {
     /// `amt`, µALGO.
@@ -458,8 +404,7 @@ pub struct AlgoPayment {
     pub rekey_to: Option<[u8; 32]>,
     /// `snd`: sender.
     pub sender: [u8; 32],
-    /// `Some`: an asset transfer (`axfer`) instead of a payment; `amount`, `receiver` and
-    /// `close_remainder_to` (ALGO fields) are then zero / absent.
+    /// `Some`: an `axfer` instead of a payment; the ALGO fields are then zero / absent.
     pub asset: Option<AlgoAssetTransfer>,
 }
 
@@ -468,8 +413,7 @@ fn nonzero(x: &Option<[u8; 32]>) -> Option<&[u8; 32]> {
 }
 
 impl AlgoPayment {
-    /// Canonical msgpack of the transaction (the `txn` object), keys sorted, empty fields
-    /// omitted.
+    /// Canonical msgpack of the `txn` object: keys sorted, empty fields omitted.
     pub fn encode(&self) -> Vec<u8> {
         fn z(v: &[u8; 32]) -> Option<&[u8]> {
             (*v != [0u8; 32]).then_some(&v[..])
@@ -581,8 +525,7 @@ impl AlgoPayment {
         }
     }
 
-    /// Strict decoding of an unsigned transaction (`txn` object). Refused: any other type, any
-    /// unknown field, trailing bytes, and any encoding that does not re-encode identically.
+    /// Strict decoding of an unsigned transaction (`txn` object).
     pub fn decode(raw: &[u8]) -> Result<AlgoPayment> {
         if raw.len() > MAX_BLOB {
             return Err(bad("too large"));
@@ -613,8 +556,7 @@ impl AlgoPayment {
     }
 }
 
-/// Canonical msgpack of a signed transaction `{ "sig": …, "txn": … }` (what algod's
-/// `POST /v2/transactions` takes).
+/// Canonical msgpack `{ "sig": …, "txn": … }` for algod's `POST /v2/transactions`.
 pub fn algo_encode_signed(p: &AlgoPayment, sig: &[u8; 64]) -> Vec<u8> {
     let mut o = Vec::new();
     put_map(&mut o, 2);
@@ -625,8 +567,7 @@ pub fn algo_encode_signed(p: &AlgoPayment, sig: &[u8; 64]) -> Vec<u8> {
     o
 }
 
-/// Strict decoding of a signed transaction: exactly `sig` (64 bytes) and `txn`, nothing else
-/// (no `sgnr`, `msig`, `lsig`), identical re-encoding.
+/// Strict decode of a signed tx: only `sig` and `txn` (no `sgnr`/`msig`/`lsig`), same re-encoding.
 pub fn algo_decode_signed(raw: &[u8]) -> Result<(AlgoPayment, [u8; 64])> {
     if raw.len() > MAX_BLOB {
         return Err(bad("too large"));
@@ -652,10 +593,6 @@ pub fn algo_decode_signed(raw: &[u8]) -> Result<(AlgoPayment, [u8; 64])> {
     }
     Ok((p, sig))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Summary and signing
-// ---------------------------------------------------------------------------------------------
 
 /// Reasons for caution (all of them require the reinforced confirmation).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -703,8 +640,7 @@ pub struct AlgoTxSummary {
     pub warnings: Vec<AlgoWarning>,
     /// The confirmation must be followed by a reinforced one.
     pub requires_extra_confirmation: bool,
-    /// Asset transfer (`axfer`) of a known asset; `amount` (µALGO) is then `"0"` and
-    /// `receiver` the asset receiver (our own address for an opt-in).
+    /// Known-asset `axfer`; `amount` is then `"0"`, `receiver` the asset receiver (us if opt-in).
     #[serde(default)]
     pub asset: Option<AlgoAssetSummary>,
 }
@@ -727,7 +663,6 @@ pub struct AlgoAssetSummary {
     pub opt_in: bool,
 }
 
-/// Checks of an asset transfer: known asset, no close-to / clawback, opt-in or real transfer.
 fn summarize_asset(
     a: &AlgoAssetTransfer,
     sender: &[u8; 32],
@@ -876,19 +811,13 @@ fn unhex(blob_hex: &str) -> Result<Vec<u8>> {
     hex::decode(s).map_err(|_| Error::input("the blob is not hexadecimal"))
 }
 
-/// Decodes an **unsigned** payment (msgpack, hex) for the dialog, on network `net`. Refused:
-/// anything [`AlgoPayment::decode`] refuses, `close-remainder-to`, `rekey`, `grp`, `lx`, a
-/// sender other than `our_address`, another network (genesis id or hash), a zero / own
-/// receiver, a zero amount, a fee under the protocol minimum, an invalid or > 1000-round
-/// validity window, a note over 1024 bytes.
+/// Decodes an **unsigned** payment (msgpack, hex) for the dialog, on network `net`.
 pub fn algo_decode_tx(blob_hex: &str, net: Network, our_address: &str) -> Result<AlgoTxSummary> {
     let p = AlgoPayment::decode(&unhex(blob_hex)?)?;
     summarize(&p, net, our_address)
 }
 
-/// Signs an unsigned payment (hex) with the key of account `account` after decoding it like
-/// [`algo_decode_tx`]. Returns `(signed transaction hex, transaction id, summary)`; the
-/// signature is verified (`verify_strict`) before it is returned.
+/// Signs an unsigned payment (hex) with `account`'s key after [`algo_decode_tx`].
 pub fn algo_sign(
     seed: &Seed,
     account: u32,
@@ -908,9 +837,7 @@ pub fn algo_sign(
     Ok((hex::encode(signed), p.txid(), summary))
 }
 
-/// Checks a signed transaction (hex) before it is broadcast: strict decoding, policy of
-/// [`algo_decode_tx`] for the sender `our_address` on `net`, and a valid (`verify_strict`)
-/// signature by the sender's key. Returns the transaction id and the raw bytes to submit.
+/// Pre-broadcast check: strict decode, [`algo_decode_tx`] policy for `our_address`, strict sig.
 pub fn algo_verify_signed(
     signed_hex: &str,
     net: Network,
@@ -925,8 +852,7 @@ pub fn algo_verify_signed(
     Ok((p.txid(), raw))
 }
 
-/// Hardware wallet (Ledger Algorand app): the canonical msgpack sent to the device (the app
-/// prefixes `TX` itself), after strict decoding.
+/// Ledger Algorand app: the strictly decoded msgpack (the app prefixes `TX` itself).
 pub fn algo_hw_message(blob_hex: &str) -> Result<Vec<u8>> {
     let p = AlgoPayment::decode(&unhex(blob_hex)?)?;
     if p.asset.is_some() {
@@ -937,8 +863,7 @@ pub fn algo_hw_message(blob_hex: &str) -> Result<Vec<u8>> {
     Ok(p.encode())
 }
 
-/// Hardware wallet: signed transaction (hex) and transaction id from the device's signature,
-/// checked like [`algo_verify_signed`] (policy for `our_address` on `net`, strict signature).
+/// HW: signed tx (hex) and tx id from the device sig, checked like [`algo_verify_signed`].
 pub fn algo_hw_signed(
     blob_hex: &str,
     net: Network,

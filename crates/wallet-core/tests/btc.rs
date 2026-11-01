@@ -19,10 +19,6 @@ use wallet_core::{
     btc_sign_psbt, BtcKind, Error, Network,
 };
 
-// ------------------------------------------------------------------------------------------
-// BIP84 — https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki
-// ------------------------------------------------------------------------------------------
-
 /// BIP84 publishes SLIP-132 `zpub`s; re-encode with the standard xpub version bytes.
 fn zpub_to_xpub(zpub: &str) -> String {
     let mut data = bitcoin::base58::decode_check(zpub).unwrap();
@@ -56,16 +52,11 @@ fn bip84_testnet() {
     let acct = btc_account(&s, Network::Testnet, BtcKind::Segwit, 0).unwrap();
     assert!(acct.xpub.starts_with("tpub"));
     assert_eq!(acct.path, "m/84'/1'/0'");
-    // m/84'/1'/0'/0/0 of the "abandon … about" wallet (as in BDK / Electrum test suites).
     assert_eq!(
         btc_address(&s, Network::Testnet, BtcKind::Segwit, 0, false, 0).unwrap(),
         "tb1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqcpvkl"
     );
 }
-
-// ------------------------------------------------------------------------------------------
-// BIP86 — https://github.com/bitcoin/bips/blob/master/bip-0086.mediawiki
-// ------------------------------------------------------------------------------------------
 
 #[test]
 fn bip86_vector() {
@@ -113,10 +104,6 @@ fn rejects_out_of_range_indices() {
         Err(Error::InvalidInput(_))
     ));
 }
-
-// ------------------------------------------------------------------------------------------
-// PSBT
-// ------------------------------------------------------------------------------------------
 
 struct Wallet {
     master: Xpriv,
@@ -168,8 +155,6 @@ fn path(s: &str) -> DerivationPath {
     DerivationPath::from_str(s).unwrap()
 }
 
-/// One P2WPKH input of 100 000 sats from our m/84'/1'/0'/0/0, paying 60 000 to a foreign
-/// address and 39 000 back to our change m/84'/1'/0'/1/0. Fee: 1 000 sats.
 fn segwit_psbt() -> (Psbt, String, String, String) {
     let us = Wallet::new(ABANDON);
     let s = seed(ABANDON);
@@ -245,7 +230,6 @@ fn psbt_segwit_sign_and_verify() {
         .unwrap();
     assert_eq!(*pk.inner.serialize().first().unwrap() & 0xfe, 0x02);
 
-    // Decoding without secrets gives the same summary.
     let decoded = btc_decode_psbt(Network::Testnet, &signed_b64, &[change, _ours]).unwrap();
     assert_eq!(decoded, summary);
 }
@@ -335,7 +319,6 @@ fn psbt_errors() {
     let s = seed(ABANDON);
     let (psbt, ..) = segwit_psbt();
 
-    // Missing witness_utxo.
     let mut no_utxo = psbt.clone();
     no_utxo.inputs[0].witness_utxo = None;
     let b64 = no_utxo.to_string();
@@ -348,7 +331,6 @@ fn psbt_errors() {
         Err(Error::Psbt(_))
     ));
 
-    // Not our wallet / wrong network: nothing to sign.
     assert!(matches!(
         btc_sign_psbt(&seed(LEGAL), Network::Testnet, 0, &psbt.to_string()),
         Err(Error::Psbt(_))
@@ -358,7 +340,6 @@ fn psbt_errors() {
         Err(Error::Psbt(_))
     ));
 
-    // Non-default sighash refused.
     let mut sighash_none = psbt.clone();
     sighash_none.inputs[0].sighash_type = Some(PsbtSighashType::from(EcdsaSighashType::None));
     assert!(matches!(
@@ -366,7 +347,6 @@ fn psbt_errors() {
         Err(Error::Psbt(_))
     ));
 
-    // Negative fee.
     let mut negative = psbt.clone();
     negative.inputs[0].witness_utxo.as_mut().unwrap().value = Amount::from_sat(1_000);
     assert!(matches!(
@@ -374,7 +354,6 @@ fn psbt_errors() {
         Err(Error::Psbt(_))
     ));
 
-    // Garbage.
     assert!(matches!(
         btc_decode_psbt(Network::Testnet, "not a psbt", &[]),
         Err(Error::Psbt(_))
@@ -384,7 +363,6 @@ fn psbt_errors() {
         Err(Error::Psbt(_))
     ));
 
-    // Own address for the wrong network.
     assert!(matches!(
         btc_decode_psbt(
             Network::Testnet,
@@ -475,10 +453,6 @@ fn address_from_xpub_matches_seed_derivation() {
     );
 }
 
-// ---------------------------------------------------------------------------------------------
-// Reinforced-confirmation triggers (vault and hardware wallet share BtcTxSummary.warnings)
-// ---------------------------------------------------------------------------------------------
-
 fn warnings_of(psbt: &Psbt) -> (Vec<wallet_core::BtcWarning>, bool) {
     let s = seed(ABANDON);
     let preview =
@@ -503,7 +477,6 @@ fn btc_op_return_and_unknown_script_are_reinforced() {
         script_pubkey: ScriptBuf::new_op_return([0x6b, 0x79, 0x72, 0x6f]),
     });
     psbt.outputs.push(Default::default());
-    // Bare OP_TRUE: anyone can spend it.
     psbt.unsigned_tx.output.push(TxOut {
         value: Amount::from_sat(500),
         script_pubkey: ScriptBuf::from_bytes(vec![0x51]),
@@ -539,14 +512,12 @@ fn btc_foreign_input_is_reinforced() {
 #[test]
 fn btc_high_fee_is_reinforced() {
     let (mut psbt, ..) = segwit_psbt();
-    // 100 000 in, 60 000 + 10 000 out: 30 000 sats for ~141 vB ≈ 212 sat/vB (> 100).
     psbt.unsigned_tx.output[1].value = Amount::from_sat(10_000);
     let (w, extra) = warnings_of(&psbt);
     assert!(extra);
     assert!(
         matches!(w.as_slice(), [wallet_core::BtcWarning::HighFee { sat_per_vb }] if *sat_per_vb > 100)
     );
-    // Just under the threshold: ~13 000 sats ≈ 92 sat/vB, no warning.
     psbt.unsigned_tx.output[1].value = Amount::from_sat(27_000);
     assert_eq!(warnings_of(&psbt), (vec![], false));
 }
@@ -561,9 +532,7 @@ fn btc_sighash_other_than_all_is_refused_not_just_warned() {
 }
 
 /// Accounts are separate wallets: a PSBT spending one input of account 0 and one of account 1,
-/// with change to account 1. Signed "as account 1", only account 1's input is signed, account
-/// 0's is foreign (reinforced dialog) and the change is recognised; "as account 0" it is the
-/// reverse (account 1's change is then an ordinary output); another account signs nothing.
+/// with change to account 1.
 #[test]
 fn psbt_signs_only_the_requested_account() {
     let us = Wallet::new(ABANDON);
@@ -643,7 +612,6 @@ fn psbt_signs_only_the_requested_account() {
     assert!(btc_sign_psbt(&s, Network::Testnet, 1 << 31, &b64).is_err());
 }
 
-/// `segwit_psbt` with its change output moved to `m/84'/1'/0'/1/index`.
 fn psbt_with_change_at(index: u32) -> (Psbt, String) {
     let us = Wallet::new(ABANDON);
     let s = seed(ABANDON);
@@ -678,8 +646,6 @@ fn btc_change_beyond_max_index_is_a_reinforced_payment() {
     }
 }
 
-/// Audit finding: a witness v2+ output was rendered as an ordinary `tb1z…` address, without
-/// any warning (nobody can say who spends it once a soft fork gives it a meaning).
 #[test]
 fn btc_witness_v2_output_is_an_unknown_script() {
     use wallet_core::BtcWarning;
@@ -694,7 +660,6 @@ fn btc_witness_v2_output_is_an_unknown_script() {
         warnings_of(&psbt),
         (vec![BtcWarning::UnknownScript { output: 0 }], true)
     );
-    // Witness v1 that is not a 32-byte taproot output: same.
     psbt.unsigned_tx.output[0].script_pubkey = ScriptBuf::from_bytes(vec![0x51, 0x02, 0xab, 0xcd]);
     let (w, _) = warnings_of(&psbt);
     assert_eq!(w, vec![BtcWarning::UnknownScript { output: 0 }]);

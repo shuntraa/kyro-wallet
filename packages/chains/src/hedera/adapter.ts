@@ -1,12 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Hedera adapter (HBAR). Thin on purpose: reads (mirror node), CryptoTransfer building (one copy
-// per consensus node, max fee from the exchange rate), signature and submission are Rust commands
-// (`hbar_*`, docs/IPC.md §2.11). This adapter only validates input and checks that what Rust built
-// is what was asked (recipient, amount, **memo**).
-//
-// The adapter's address is the EVM address of the ECDSA key: the first HBAR sent to it creates the
-// account `0.0.x` (HIP-583 auto-creation); `account()` reads that ID from the mirror node.
+// Hedera adapter (HBAR).
 
 import { accountArg } from '../types';
 import {
@@ -59,11 +52,7 @@ export function rustHbarBackend(account = 0): HbarBackend {
   };
 }
 
-/**
- * Ledger account `accountId` (docs/IPC.md §2.3): an ED25519 account found by its public key,
- * one copy (one node) signed on the device (`hw_*` commands). `sign`'s second argument is the
- * device id, not a password.
- */
+/** Ledger account `accountId` (docs/IPC.md §2.3): an ED25519 account found by its public key, one copy (one node) signed on the device (`hw_*` commands). */
 export function rustHbarHwBackend(accountId: string): HbarBackend {
   return {
     ...rustHbarBackend(),
@@ -79,7 +68,6 @@ export function isHbarEd25519Key(input: string): boolean {
   return /^302a300506032b6570032100[0-9a-f]{64}$/.test(input);
 }
 
-// ---------------------------------------------------------------- recipients and memos
 
 /** `0.0.x` (HIP-15 checksum `-abcde` optional; verified by Rust for the network). */
 export function isHbarAccountId(input: string): boolean {
@@ -96,10 +84,7 @@ export function isHbarRecipient(input: string): boolean {
   return isHbarAccountId(input) || isHbarEvmAddress(input);
 }
 
-/**
- * The recipient as Rust will sign it, for comparison: `0.0.x` without checksum, long-zero EVM
- * addresses turned into `0.0.x`, other EVM addresses lowercase.
- */
+/** The recipient as Rust will sign it, for comparison: `0.0.x` without checksum, long-zero EVM addresses turned into `0.0.x`, other EVM addresses lowercase. */
 export function normalizeHbarRecipient(input: string): string {
   const t = input.trim();
   if (isHbarEvmAddress(t)) {
@@ -121,7 +106,6 @@ export function hbarMemoError(memo: string): string | null {
   return null;
 }
 
-// ---------------------------------------------------------------- adapter
 
 export interface HbarUnsigned {
   family: 'hbar';

@@ -2,14 +2,6 @@
 //! they have in common, and the dispatch to their own modules (`ledger_sui`, `ledger_aptos`,
 //! `ledger_algo`, `ledger_near`, `ledger_cosmos`, `ledger_ton`, `ledger_hbar`, one per official
 //! app protocol).
-//!
-//! Every operation first checks with GET APP AND VERSION that the right app is open and recent
-//! enough, then reads a public key (optionally shown on the device screen) or has the device
-//! sign the exact bytes Kyro built. Nothing returned is trusted: callers re-derive addresses
-//! with `wallet-core` and verify every signature before using it (`commands_hw_keys.rs`).
-//!
-//! Trezor firmware has no app for any of these chains (nor for Polkadot, Hedera, Kaspa, TON):
-//! they are reported `unsupported` for Trezor.
 
 use wallet_core::{HwKeyChain, Network};
 
@@ -47,13 +39,6 @@ pub fn hw_chain(k: HwKeyChain) -> Chain {
 }
 
 /// App name (as GET APP AND VERSION reports it) and minimum version.
-///
-/// Minimums: Sui 1.0.0 (block protocol, signing of `TransactionData` intents), Aptos 0.6.0
-/// (CLA 5B, SIGN_TX of the full signing message), Algorand 2.0.0 (Zondax app: GET_ADDRESS 04,
-/// SIGN_MSGPACK 08), NEAR 2.0.0 (Rust app, five-level paths), Cosmos 2.34.0 (amino JSON with
-/// `timeout_height`), TON 2.1.0 (transfer request tag 1: wallet id given, needed for Kyro's
-/// testnet wallet id), Hedera 1.9.0 (the app version whose sources Kyro was checked against:
-/// CryptoTransfer with an EVM-alias recipient, memo, one APDU per body).
 pub fn app_for(chain: Chain) -> Option<(&'static str, &'static str)> {
     Some(match key_chain(chain)? {
         HwKeyChain::Sui => ("Sui", "1.0.0"),
@@ -172,10 +157,9 @@ fn link(dev: &dyn HardwareWallet, chain: HwKeyChain) -> HwResult<&dyn ApduLink> 
     })
 }
 
-/// Public key of `chain` at the account's path ([`HwKeyChain::path`]), shown on the device
-/// screen when `display` (the user compares it with Kyro's). The app's own address, when it
-/// returns one, must be the one of the key. `network` only matters for TON (the address the
-/// app shows depends on the wallet id and the testnet flag).
+/// Public key of `chain` at the account's path ([`HwKeyChain::path`]), shown on the device screen
+/// when `display` (the user compares it with Kyro's). The app's own address, when it returns one,
+/// must be the one of the key.
 pub fn pubkey(
     dev: &mut dyn HardwareWallet,
     ctl: &Ctl,
@@ -202,7 +186,6 @@ pub fn pubkey(
         }
         HwKeyChain::Hbar => super::ledger_hbar::pubkey(&app, &path, display)?,
     };
-    // Length and point validity.
     chain
         .address_of(&pk, network)
         .map_err(|e| HwError::bad(e.to_string()))?;
@@ -210,10 +193,8 @@ pub fn pubkey(
 }
 
 /// Has the device sign `message` (the chain-specific bytes built by `wallet-core`: Sui intent
-/// message, Aptos signing message, Algorand msgpack, NEAR Borsh, Cosmos amino JSON, TON
-/// structured transfer request) with the account's key. Returns the raw signature (DER for
-/// Cosmos; for TON `hash ‖ signature`, the hash the app says it signed), verified by the
-/// caller.
+/// message, Aptos signing message, Algorand msgpack, NEAR Borsh, Cosmos amino JSON, TON structured
+/// transfer request) with the account's key.
 pub fn sign(
     dev: &mut dyn HardwareWallet,
     ctl: &Ctl,
@@ -282,7 +263,6 @@ pub mod replay {
         Ctl::for_tests(Duration::from_secs(5))
     }
 
-    /// GET APP AND VERSION exchange answering `name` `version`.
     pub fn app(name: &str, version: &str) -> [String; 2] {
         let mut r = vec![1u8, name.len() as u8];
         r.extend_from_slice(name.as_bytes());
@@ -314,7 +294,6 @@ mod tests {
             App::open(&r, &ctl, HwKeyChain::Near),
             Err(HwError::Unsupported { .. })
         ));
-        // Wrong-app status inside a call is completed with the open app's name.
         let mut lines = app("Cosmos", "2.35.0").to_vec();
         lines.push("=> 5504000000".into());
         lines.push("<= 6e00".into());

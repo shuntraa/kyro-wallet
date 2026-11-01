@@ -9,7 +9,6 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.languageEn': 'English',
   'settings.mainAccount': 'Main account',
 
-  // Sections
   'settings.sectionsNav': 'Settings sections',
   'settings.sectionSecurity': 'Security',
   'settings.sectionPrivacy': 'Privacy',
@@ -22,7 +21,6 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.sectionContacts': 'Address book',
   'settings.saved': 'Setting saved on this device',
 
-  // Security
   'settings.autoLock': 'Auto-lock',
   'settings.autoLockDesc': 'After a period of inactivity, and when the computer sleeps.',
   'settings.autoLockDelay': 'Lock delay',
@@ -35,7 +33,6 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.hideBalances': 'Hide balances at startup',
   'settings.hideBalancesSecurityDesc': 'Useful in public or when sharing your screen.',
 
-  // Recovery phrase
   'settings.recoveryPhrase': 'Recovery phrase',
   'settings.backupUnverified': 'Backup not verified',
   'settings.revealDesc': 'Password required. Shown in a system window, never in the interface. Never copied.',
@@ -46,7 +43,6 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.revealCancelled': 'Display cancelled in the system window.',
   'settings.revealClosed': 'The system window is closed: the phrase is no longer displayed.',
 
-  // Privacy
   'settings.useTor': 'Use Tor',
   'settings.useTorDesc': 'On by default. Every network request Kyro makes goes through Tor, built into the app.',
   'settings.connectionState': 'Connection status',
@@ -57,12 +53,10 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.torFailure': 'If Tor cannot connect, Kyro blocks requests and asks you what to do: never a fallback to a direct connection without your consent. Details are in Kyro’s documentation (“Network” page).',
   'settings.directConnection': 'Direct connection: the servers contacted see your IP address. Turn Tor back on above to hide it.',
 
-  // Display
   'settings.currency': 'Currency',
   'settings.currencyDesc': 'For prices, balances and fees. Default: the currency of your computer’s region (never guessed from your IP address).',
   'settings.hideBalancesDisplayDesc': 'Amounts are shown as •••••; the eye reveals them.',
 
-  // API keys
   'settings.apiKeysIntro': 'Stored in the app’s folder and added to requests by the core. Kyro never shows a saved key again: you can replace or delete it. A key built into a distributed binary is public: use your own keys.',
   'settings.apiCoingeckoDesc': 'Optional: higher quota for prices.',
   'settings.apiZeroxDesc': 'Required for 0x quotes.',
@@ -75,12 +69,10 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.newKeyPlaceholder': 'New key (replaces the current one)',
   'settings.apiKeyAria': '{label} API key',
 
-  // Outgoing connections
   'settings.connectionsIntro': 'The complete list of servers Kyro contacts. Everything else is blocked by the core.',
   'settings.customBadge': 'custom',
   'settings.useOwnServers': 'Use my own servers',
 
-  // Contacts
   'settings.contactsIntro': 'Stored on this device only. Kyro recognizes these addresses when you send.',
   'settings.noContact': 'No contacts.',
   'settings.deleteNamed': 'Delete {name}',
@@ -89,7 +81,6 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.addToBook': 'Add to address book',
   'settings.yourAddress': 'your address',
 
-  // Vault accounts
   'settings.hintBtc': 'SegWit and Taproot',
   'settings.hintEvm': 'Ethereum and every EVM chain (same address)',
   'settings.hintSol': 'SOL and SPL tokens',
@@ -147,7 +138,6 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.bulkCreate_one': 'Create the account',
   'settings.bulkCreate_other': 'Create {count} accounts',
 
-  // Account picker
   'settings.accountsMaxChain': 'At most {max} {chain} accounts.',
   'settings.newAccount': 'New account',
   'settings.accountsLimitReached': 'Limit of {max} accounts reached',
@@ -158,7 +148,6 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.switchAccount': 'Switch {chain} account',
   'settings.newAccountButtonTitle': 'Creates “{name}” (from your recovery phrase) and shows its address',
 
-  // Devices
   'settings.devices': 'Devices',
   'settings.devicesIntro': 'With a hardware wallet, the private keys never leave the device and every transaction is confirmed on its screen, even if this computer is infected. Kyro only stores public keys.',
   'settings.noDevice': 'No device saved.',

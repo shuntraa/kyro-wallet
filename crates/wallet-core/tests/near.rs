@@ -1,17 +1,4 @@
 //! NEAR Protocol vectors.
-//!
-//! Sources (fetched 2026-11-01):
-//! - `near/near-seed-phrase` `test/index.test.js` (« parse seed phrase »): the mnemonic
-//!   `Shoot island … Above` gives `ed25519:r4yuiZE45mzeZAENDEF2pWeFBJkW8mQYGx3rU46zCqh` at
-//!   `m/44'/397'/0'` (the library lower-cases the phrase first);
-//! - `near/near-api-js` `test/unit/transactions/serialize.test.ts` (master): « serialize transfer
-//!   tx » (Borsh bytes) and « serialize multi-action tx » (8 actions, must be refused);
-//! - `near/near-api-js` tag `v0.44.2`, `test/serialize.test.js`: « serialize and sign transfer
-//!   tx » (key pair, ed25519 signature, signed transaction bytes).
-//!
-//! Account 1 and 2 of "abandon … about" were cross-checked on 2026-11-01 with an independent
-//! SLIP-10 implementation (`@noble/hashes` 1.8.0 HMAC-SHA512 + `@noble/curves` 1.9.7 ed25519 +
-//! `@scure/bip39` 1.6.0).
 
 mod common;
 
@@ -50,7 +37,6 @@ fn transfer_vector() -> NearTransfer {
 
 #[test]
 fn near_seed_phrase_vector() {
-    // near-seed-phrase lower-cases « Shoot … Above » before deriving.
     let s = seed(SHOOT);
     assert_eq!(
         near_public_key_string(&near_public_key(&s, 0).unwrap()),
@@ -106,23 +92,19 @@ fn near_api_js_transfer_encoding() {
 #[test]
 fn near_api_js_signed_transfer() {
     let tx = transfer_vector();
-    // The key pair of the fixture: 64 bytes = ed25519 seed ‖ public key.
     let secret = bs58::decode(SECRET).into_vec().unwrap();
     let key = ed25519_dalek::SigningKey::from_bytes(&secret[..32].try_into().unwrap());
     assert_eq!(key.verifying_key().to_bytes(), tx.public_key);
     assert_eq!(&secret[32..], &tx.public_key);
-    // Kyro's rule: ed25519 over SHA-256(borsh(tx)).
     let sig = key.sign(&tx.hash()).to_bytes();
     assert_eq!(
         base64::engine::general_purpose::STANDARD.encode(sig),
         SIGNATURE_B64
     );
     assert_eq!(hex::encode(tx.encode_signed(&sig)), SIGNED_HEX);
-    // Strict check of the signed bytes.
     let (back, hash) = near_verify_signed(SIGNED_HEX).unwrap();
     assert_eq!(back, tx);
     assert_eq!(hash, near_hash_string(&tx.hash()));
-    // One bit changed in the signature, or in the amount: refused.
     let mut forged = hex::decode(SIGNED_HEX).unwrap();
     let last = forged.len() - 1;
     forged[last] ^= 1;
@@ -170,13 +152,10 @@ fn decode_and_sign_our_transfer() {
     let (back, h) = near_verify_signed(&signed).unwrap();
     assert_eq!((back, h), (tx.clone(), hash));
 
-    // Account 1 cannot sign account 0's transaction.
     assert!(near_sign(&s, 1, &raw).is_err());
-    // Not our account, not our key.
     let other = near_address(&s, 1).unwrap();
     assert!(near_decode_tx(&raw, &other, &pk).is_err());
     assert!(near_decode_tx(&raw, &me, &near_public_key(&s, 1).unwrap()).is_err());
-    // Self transfer, zero amount.
     for bad in [
         NearTransfer {
             receiver_id: me.clone(),
@@ -193,7 +172,6 @@ fn decode_and_sign_our_transfer() {
     ] {
         assert!(near_decode_tx(&hex::encode(bad.encode()), &me, &pk).is_err());
     }
-    // An Ethereum-style receiver needs the reinforced confirmation.
     let eth = NearTransfer {
         receiver_id: "0x2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
         ..tx.clone()
@@ -201,7 +179,6 @@ fn decode_and_sign_our_transfer() {
     let s2 = near_decode_tx(&hex::encode(eth.encode()), &me, &pk).unwrap();
     assert_eq!(s2.warnings, vec![NearWarning::EthImplicitReceiver]);
     assert!(s2.requires_extra_confirmation);
-    // An implicit signer whose key is not the signing key: refused at broadcast.
     let wrong = NearTransfer {
         signer_id: other,
         ..tx
@@ -239,7 +216,6 @@ fn hardware_wallet_message_and_signature() {
         ft: None,
     };
     let raw = hex::encode(tx.encode());
-    // Ledger NEAR app: the Borsh transaction itself (the app hashes it).
     assert_eq!(wallet_core::near_hw_message(&raw).unwrap(), tx.encode());
     let (signed, hash, _) = near_sign(&s, 0, &raw).unwrap();
     let sb = hex::decode(&signed).unwrap();
@@ -253,8 +229,6 @@ fn hardware_wallet_message_and_signature() {
     assert!(wallet_core::near_hw_signed(&raw, &bad).is_err());
     assert!(wallet_core::near_hw_message("zz").is_err());
 }
-
-// ---------------------------------------------------------------- NEP-141 (USDC, USDt)
 
 /// Borsh of a transaction with the given function calls, written independently of wallet-core.
 fn raw_calls(tx: &NearTransfer, calls: &[(&str, &str, u64, u128)]) -> Vec<u8> {
@@ -347,8 +321,6 @@ fn nep141_transfers_layout_sign_and_refusals() {
     let s1 = near_decode_tx(&hex::encode(one.encode()), &me, &pk).unwrap();
     assert_eq!(s1.deposit, "1");
     assert_eq!(s1.token.unwrap().storage_deposit, None);
-    // Refused: unknown contract, a memo, other gas or deposit, a non-canonical JSON, storage for
-    // someone else, a third action, another method, a zero amount, a transfer to ourselves.
     let refused = |raw: Vec<u8>, why: &str| {
         assert!(
             near_decode_tx(&hex::encode(raw), &me, &pk).is_err(),

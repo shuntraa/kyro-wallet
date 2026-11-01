@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Stellar pieces of the Send screen (docs/IPC.md §2.11):
-// - the memo field, ALWAYS visible right under the recipient (text / identifiant / hash),
-//   mandatory when the destination requires one (SEP-0029; Rust refuses without it anyway);
-// - what Rust will check: creation of a new account (≥ 1 XLM, CreateAccount), spendable =
-//   balance − reserve (the reserve explained);
-// - the Rust-decoded transaction before the password, and the inclusion follow-up.
+// Stellar pieces of the Send screen (docs/IPC.md §2.11): - the memo field, ALWAYS visible right
+// under the recipient (text / identifiant / hash), mandatory when the destination requires one
+// (SEP-0029; Rust refuses without it anyway); - what Rust will check: creation of a new account (≥
+// 1 XLM, CreateAccount), spendable = balance − reserve (the reserve explained); - the Rust-decoded
+// transaction before the password, and the inclusion follow-up.
 
 import { useEffect, useState } from 'react';
 import { toIpcError, type Currency, type StellarAccountInfo, type StellarMemoSpec } from '@kyro/shared';
@@ -26,10 +25,8 @@ const XLM = (stroops: bigint | string) => fmtCrypto(BigInt(stroops), 7, 'XLM', 7
 export type StellarMemoKind = StellarMemoSpec['kind'];
 
 /**
- * Receive side of Stellar's issued assets (Circle's USDC): a trustline is needed before the
- * asset can be received. « Activer USDC » builds the ChangeTrust in Rust, which signs it behind
- * the native dialog (asset, verified issuer, 0.5 XLM reserve); « Retirer » removes it at a zero
- * balance (the reserve comes back).
+ * Receive side of Stellar's issued assets (Circle's USDC): a trustline is needed before the asset
+ * can be received.
  */
 export function StellarTrustPanel({ adapter, hidden }: { adapter: StellarAdapter; hidden: boolean }) {
   useT();
@@ -131,7 +128,6 @@ export function StellarMemoField({
   value: string;
   onChange: (v: string) => void;
   error: string | null;
-  /** Destination account as Rust reads it; undefined while unknown. */
   dest: StellarAccountInfo | undefined;
   destLoading: boolean;
 }) {
@@ -287,8 +283,8 @@ function Line({ k, v, warn, last }: { k: string; v: string; warn?: boolean; last
 type Status = { state: 'pending' } | { state: 'included' } | { state: 'failed' } | { state: 'error'; message: string };
 
 /**
- * After `stellar_broadcast` (Horizon answers once the transaction is in a ledger): confirms it
- * with `stellar_tx_status`.
+ * After `stellar_broadcast` (Horizon answers once the transaction is in a ledger): confirms it with
+ * `stellar_tx_status`.
  */
 export function StellarTxStatusLine({ adapter, hash, recipient, onIncluded }: { adapter: StellarAdapter; hash: string; recipient: string; onIncluded?: () => void }) {
   useT();

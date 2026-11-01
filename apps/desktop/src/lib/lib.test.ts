@@ -113,7 +113,6 @@ describe('format: misc', () => {
     expect(sanitizeDecimalInput('00012', 8)).toBe('12');
     expect(sanitizeDecimalInput('1,123456789', 6)).toBe('1,123456');
     expect(sanitizeDecimalInput('abc', 6)).toBe('');
-    // Pasted amounts with thousands grouping: the last separator is the decimal mark.
     expect(sanitizeDecimalInput('1,234.56', 6)).toBe('1234,56');
     expect(sanitizeDecimalInput('1.234,56', 6)).toBe('1234,56');
     expect(sanitizeDecimalInput('12,345,678.9', 6)).toBe('12345678,9');

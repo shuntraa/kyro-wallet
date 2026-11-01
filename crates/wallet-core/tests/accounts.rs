@@ -1,21 +1,4 @@
 //! Multiple accounts per chain.
-//!
-//! 1. **Account 0 never changes.** Every chain's account 0 is pinned to the exact path, address
-//!    (and xpub where there is one) that Kyro derived before multi-account support, on mainnet
-//!    and testnet, for the public "abandon … about" mnemonic. If one of these breaks, existing
-//!    users would see their addresses change: do not "fix" the expected value.
-//! 2. **Account 1.** Official vectors where they exist:
-//!    - XRP: Trezor firmware `tests/device_tests/ripple/test_get_address.py`, `m/44'/144'/1'/0/0`
-//!      for `all × 12`;
-//!    - Cardano: CIP-0019 test vectors, whose stake key is `m/1852'/1815'/1'/2/0` of the
-//!      published test mnemonic (also in `tests/cardano.rs`);
-//!    - EVM: `m/44'/60'/0'/0/1` of "abandon … about" (MetaMask's second account);
-//!    - Stellar: SEP-0005 test 5 ("abandon … about"), `m/44'/148'/1'` (the ten accounts of the five
-//!      SEP-0005 mnemonics are all in `tests/stellar.rs`);
-//!
-//!    otherwise values cross-checked on 2026-10-30 with independent implementations:
-//!    `@scure/bip32` 1.7.0 + `bitcoinjs-lib` 7.0.5 (BTC BIP84/BIP86, LTC, DOGE), `@noble/curves`
-//!    1.9.7 + `@noble/hashes` 1.8.0 (TRON keccak address, SLIP-10 ed25519 for Solana).
 
 mod common;
 
@@ -208,7 +191,6 @@ fn account_1_single_address_chains() {
         "TLrpNTBuCpGMrB9TyVwgEhNVRhtWEQPHh4"
     );
     assert_eq!(xrp_path(1), "m/44'/144'/1'/0/0");
-    // Trezor `test_get_address.py`: m/44'/144'/1'/0/0 of `all × 12`.
     let all = seed("all all all all all all all all all all all all");
     assert_eq!(
         xrp_address(&all, 1).unwrap(),

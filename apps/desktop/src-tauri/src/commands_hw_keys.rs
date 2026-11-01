@@ -19,7 +19,6 @@ use crate::error::{AppError, AppResult};
 use crate::hw::{self, ledger_apps, store, DeviceInfo};
 use crate::state::AppState;
 
-/// The watch-only account `account_id` and its key for `chain` (no device involved).
 pub(crate) fn stored_key(
     state: &AppState,
     account_id: &str,
@@ -36,7 +35,6 @@ pub(crate) fn stored_key(
     Ok((acc, key))
 }
 
-/// Same brand as the stored account, and the device's key for `chain` is the stored one.
 pub(crate) async fn check_device(
     app: &AppHandle,
     state: &AppState,
@@ -59,7 +57,6 @@ pub(crate) async fn check_device(
     Ok(info)
 }
 
-/// Has the device sign `message` with the account's key (the caller verifies the result).
 pub(crate) async fn device_sign(
     app: &AppHandle,
     state: &AppState,
@@ -189,7 +186,6 @@ pub async fn hw_key_verify(
     })
 }
 
-/// The stored key as a fixed-size array.
 pub(crate) fn key_array<const N: usize>(key: &HwWatchKey) -> AppResult<[u8; N]> {
     key.pubkey_bytes()?
         .try_into()

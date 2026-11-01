@@ -1,55 +1,38 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Kyro's own coin icon set: a lit disc derived from the asset's colour plus a simplified,
-// hand-drawn geometric mark (24-unit grid). No remote images, no third-party artwork.
-// Pure data + a tiny element tree: rendered by `CoinIcon` (React) and by
-// `scripts/export-coin-icons.ts` (standalone .svg files), so both stay identical.
-// Dependency-free on purpose (the export script runs it with Node's type stripping).
+// hand-drawn geometric mark (24-unit grid).
 
 /** One drawn shape of a mark, in the 24 × 24 grid. */
 export interface Shape {
   d: string;
-  /** `stroke`: drawn as a line of width `w` (round caps / joins). Default: filled. */
   w?: number;
-  /** ink (default), soft = ink at opacity `o`, accent = the mark's accent colour, cut = dark disc colour. */
   tone?: 'ink' | 'soft' | 'accent' | 'cut';
   o?: number;
   evenodd?: boolean;
-  /** Extra transform for this shape only (grid units). */
   tf?: string;
-  /** Square line caps (default round). */
   butt?: boolean;
 }
 
 export interface MarkDef {
   name: string;
-  /** Brand colour: drives the disc gradient. */
   color: string;
-  /** Explicit disc gradient [top-left, bottom-right] when the brand is not a single colour. */
   base?: readonly [string, string];
-  /** Mark colour (default white). */
   ink?: string;
   accent?: string;
-  /** Mark scale from the 24 grid to the 64 disc (default 1.6). */
   scale?: number;
-  /** Transform applied to the whole mark, in grid units. */
   transform?: string;
   shapes: Shape[];
 }
-
-// ---------- geometry helpers (24 grid) ----------
 
 const n = (v: number) => String(Math.round(v * 100) / 100);
 const P = (pts: readonly (readonly [number, number])[]) => 'M' + pts.map(([x, y]) => `${n(x)} ${n(y)}`).join('L') + 'Z';
 const R = (x: number, y: number, w: number, h: number) => P([[x, y], [x + w, y], [x + w, y + h], [x, y + h]]);
 const E = (cx: number, cy: number, rx: number, ry = rx) =>
   `M${n(cx - rx)} ${n(cy)}a${n(rx)} ${n(ry)} 0 1 0 ${n(2 * rx)} 0a${n(rx)} ${n(ry)} 0 1 0 ${n(-2 * rx)} 0Z`;
-/** Point at `deg` clockwise from 12 o'clock. */
 const at = (cx: number, cy: number, r: number, deg: number): [number, number] => {
   const a = (deg * Math.PI) / 180;
   return [cx + r * Math.sin(a), cy - r * Math.cos(a)];
 };
-/** Open arc (for strokes), clockwise from `a0` to `a1` degrees. */
 const arc = (cx: number, cy: number, r: number, a0: number, a1: number) => {
   const [x0, y0] = at(cx, cy, r, a0);
   const [x1, y1] = at(cx, cy, r, a1);
@@ -61,9 +44,6 @@ const line = (pts: readonly (readonly [number, number])[]) => 'M' + pts.map(([x,
 const fill = (d: string, o: Omit<Shape, 'd'> = {}): Shape => ({ d, ...o });
 const stroke = (d: string, w: number, o: Omit<Shape, 'd' | 'w'> = {}): Shape => ({ d, w, ...o });
 
-// ---------- shared drawings ----------
-
-/** The Bitcoin-style "B" with ticks and serifs, upright and centred on the grid. */
 function bShapes(tone: Shape['tone'] = 'ink'): Shape[] {
   const body =
     'M7.2 5.6H13.9C16.1 5.6 17.3 6.9 17.3 8.7C17.3 10 16.6 11 15.5 11.4C17 11.8 18 13.1 18 14.7C18 16.9 16.5 18.4 14.1 18.4H7.2Z' +
@@ -73,11 +53,9 @@ function bShapes(tone: Shape['tone'] = 'ink'): Shape[] {
   return [fill(body, { evenodd: true, tone }), fill(ticks, { tone })];
 }
 
-/** Rounded "D" bowl (Dogecoin, Dai). */
 const D_OUTER = 'M7.4 5.2H12.2C16.6 5.2 19.2 8.1 19.2 12C19.2 15.9 16.6 18.8 12.2 18.8H7.4Z';
 const D_HOLE = 'M10.1 7.8H12.1C14.8 7.8 16.4 9.5 16.4 12C16.4 14.5 14.8 16.2 12.1 16.2H10.1Z';
 
-/** The Ethereum-style octahedron, faceted (Ethereum, Wrapped Ether). */
 const ETH_SHAPES: Shape[] = [
   fill(P([[12, 2.6], [5.6, 12.3], [12, 9.5]])),
   fill(P([[12, 2.6], [18.4, 12.3], [12, 9.5]]), { tone: 'soft', o: 0.72 }),
@@ -87,7 +65,6 @@ const ETH_SHAPES: Shape[] = [
   fill(P([[18.4, 13.8], [12, 17.6], [12, 21.4]]), { tone: 'soft', o: 0.72 }),
 ];
 
-/** Disc split by horizontal gaps into bands (Aptos). */
 function bands(cx: number, cy: number, r: number, cuts: number[], gap: number): string {
   const edges: number[] = [cy - r];
   for (const c of cuts) edges.push(cy + c - gap / 2, cy + c + gap / 2);
@@ -111,8 +88,6 @@ function dotRing(cx: number, cy: number, R0: number, r: number, count: number, o
   }
   return d;
 }
-
-// ---------- the marks ----------
 
 const DARK = (a: string, b: string) => [a, b] as const;
 
@@ -543,7 +518,6 @@ const ALIASES: Record<string, MarkKey> = {
   hedera: 'hbar', 'hedera-hashgraph': 'hbar',
 };
 
-/** Unambiguous registry glyphs (for call sites that only pass `glyph`). */
 const GLYPHS: Record<string, MarkKey> = { 'Ξ': 'eth', 'Ł': 'ltc', 'Ð': 'doge', '₮': 'usdt' };
 
 function lookup(k: string | undefined): MarkKey | undefined {
@@ -554,8 +528,8 @@ function lookup(k: string | undefined): MarkKey | undefined {
 }
 
 /**
- * Mark for an asset: by id (`btc`, `eth:42161`, `cg:bitcoin`, a CoinGecko id, a chain key),
- * then by ticker, then by glyph. Token ids (`erc20:…`, `spl:…`) resolve through the ticker.
+ * Mark for an asset: by id (`btc`, `eth:42161`, `cg:bitcoin`, a CoinGecko id, a chain key), then by
+ * ticker, then by glyph.
  */
 export function resolveMark(q: { id?: string | undefined; symbol?: string | undefined; glyph?: string | undefined }): MarkKey | undefined {
   const id = q.id?.trim().toLowerCase();
@@ -570,9 +544,6 @@ export function resolveMark(q: { id?: string | undefined; symbol?: string | unde
   return lookup(q.symbol) ?? (q.glyph ? GLYPHS[q.glyph] : undefined);
 }
 
-// ---------- colours ----------
-
-/** Brand colours for common tickers that have no drawn mark (fallback monogram). */
 const TICKER_COLORS: Record<string, string> = {
   ICP: '#29ABE2', FIL: '#0090FF', VET: '#15BDFF', INJ: '#0082FA', MKR: '#1AAB9B', GRT: '#6747ED', SAND: '#00ADEF',
   MANA: '#FF2D55', XTZ: '#2C7DF7', LDO: '#F69988', TAO: '#3A3A3A', OKB: '#3A3A3A', LEO: '#F6A21E', BGB: '#00B8D9', ENA: '#3A3A3A',
@@ -619,8 +590,6 @@ export function monogram(symbol: string, size = 34): string {
   return s.slice(0, s.length <= 3 && size >= 26 ? 3 : 2).join('') || '?';
 }
 
-// ---------- element tree ----------
-
 export interface El {
   t: string;
   a: Record<string, string | number>;
@@ -632,10 +601,8 @@ const FONT = "'Geist Variable', Geist, Inter, system-ui, sans-serif";
 
 export interface IconSpec {
   mark?: MarkDef | undefined;
-  /** Monogram text when there is no mark. */
   label?: string | undefined;
   color: string;
-  /** Overrides the mark / monogram colour. */
   ink?: string | undefined;
 }
 
@@ -664,11 +631,7 @@ function shapeEl(s: Shape, ink: string, accent: string, cut: string, shadow?: st
   return { t: 'path', a };
 }
 
-/**
- * The icon as an element tree in a 64 × 64 viewBox. `uid` must be unique per rendered icon
- * (gradient ids). Disc: brand gradient + soft top-left light + rim; mark: ink with a tinted
- * drop shadow for a slightly dimensional feel.
- */
+/** The icon as an element tree in a 64 × 64 viewBox. */
 export function iconTree(spec: IconSpec, uid: string): El {
   const [top, bottom] = discColors(spec);
   const mark = spec.mark;
@@ -696,7 +659,6 @@ export function iconTree(spec: IconSpec, uid: string): El {
           { t: 'stop', a: { offset: 1, 'stop-color': '#000000', 'stop-opacity': 0.28 } },
         ],
       },
-      // userSpaceOnUse: a bounding-box gradient would hide zero-height strokes (Flare's bars).
       { t: 'linearGradient', a: { id: id('i'), gradientUnits: 'userSpaceOnUse', x1: 0, y1: mark ? 3 : 16, x2: 0, y2: mark ? 21 : 48 }, c: [{ t: 'stop', a: { offset: 0, 'stop-color': ink } }, { t: 'stop', a: { offset: 1, 'stop-color': inkLow } }] },
     ],
   };

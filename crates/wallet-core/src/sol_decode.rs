@@ -1,21 +1,4 @@
 //! Solana message decoder (legacy and v0) and plain-language summary.
-//!
-//! Hand-written parser for the documented wire format
-//! (<https://solana.com/docs/core/transactions>): compact-u16 ("short-vec") lengths, message
-//! header, static account keys, recent blockhash, compiled instructions and, for v0, address
-//! lookup tables. No signing happens here.
-//!
-//! Fail-closed rules:
-//! - any structural error (truncation, non-canonical short-vec, out-of-range index, trailing
-//!   bytes, duplicate keys, unsupported version) is an [`Error`];
-//! - every address-lookup-table referenced by a v0 message must be supplied, and every index
-//!   must resolve, otherwise the whole decode fails (no "unknown" placeholder);
-//! - a recognised program with malformed instruction data is an error, not "unknown";
-//! - anything not recognised is reported as [`SolInstruction::Unknown`] and sets
-//!   `requires_extra_confirmation`;
-//! - so does every recognised instruction whose effect Kyro cannot fully show: an account
-//!   created for a program outside a closed list, an SPL `Transfer` without mint / decimals, a
-//!   memo or seed that is long or had to be cleaned for display ([`crate::sanitize_text`]).
 
 use serde::{Deserialize, Serialize};
 
@@ -35,31 +18,18 @@ pub(crate) const STAKE_CONFIG: &str = "StakeConfig111111111111111111111111111111
 pub(crate) const SYSVAR_CLOCK: &str = "SysvarC1ock11111111111111111111111111111111";
 pub(crate) const SYSVAR_RENT: &str = "SysvarRent111111111111111111111111111111111";
 pub(crate) const SYSVAR_STAKE_HISTORY: &str = "SysvarStakeHistory1111111111111111111111111";
-/// `StakeStateV2` serialized size: every stake account Kyro accepts to create has this space.
 pub(crate) const STAKE_STATE_SIZE: u64 = 200;
-/// `MAX_SEED_LEN` of `create_with_seed`.
 pub(crate) const MAX_SEED_LEN: usize = 32;
 
-/// Lamports charged per required signature (base fee).
 const LAMPORTS_PER_SIGNATURE: u64 = 5_000;
-/// Legacy runtime default when no `SetComputeUnitLimit` is present: 200k CU per
-/// non-compute-budget instruction, capped at 1.4M. Newer runtimes may allot less to builtin
-/// programs, so a priority fee computed from this default is an upper bound.
 const DEFAULT_CU_PER_INSTRUCTION: u64 = 200_000;
 const MAX_COMPUTE_UNITS: u64 = 1_400_000;
-/// AddressLookupTable account: 56-byte metadata header, then 32-byte addresses.
 const LOOKUP_TABLE_META_SIZE: usize = 56;
 const MAX_MEMO_DISPLAY: usize = 566;
-/// A memo longer than this (in characters) needs the reinforced confirmation: a short memo is
-/// read at a glance, a long one can hide something in the middle of the dialog.
 const MEMO_PLAIN_MAX_CHARS: usize = 80;
-/// Seeds are at most 32 bytes for `CreateAccountWithSeed`; `TransferWithSeed` is not checked.
 const MAX_SEED_DISPLAY: usize = 64;
-/// SPL Token account (`Account::LEN`) and mint (`Mint::LEN`) sizes.
 const TOKEN_ACCOUNT_SIZE: u64 = 165;
 const TOKEN_MINT_SIZE: u64 = 82;
-/// Largest Token-2022 account Kyro accepts without a warning (token account or mint with
-/// extensions).
 const MAX_TOKEN_2022_SIZE: u64 = 1_024;
 
 /// Resolved contents of an address lookup table, as fetched from the chain by the caller.
@@ -163,8 +133,7 @@ pub enum SolInstruction {
         /// Extra signer accounts when `authority` is a multisig.
         multisig_signers: Vec<String>,
     },
-    /// SPL Token / Token-2022 `Approve` (4) or `ApproveChecked` (13): a DELEGATION allowing
-    /// `delegate` to move up to `amount` from `source`.
+    /// SPL `Approve`/`ApproveChecked`: a DELEGATION letting `delegate` move `amount` from `source`.
     TokenApprove {
         /// Token program.
         token_program: SolTokenProgram,
@@ -215,8 +184,7 @@ pub enum SolInstruction {
         /// Memo text (UTF-8, truncated for display).
         text: String,
     },
-    /// Stake program `Initialize`, accepted only with staker = withdrawer = our address and a
-    /// zero lockup (no custodian): anything else is refused by the decoder.
+    /// Stake `Initialize`, only with staker = withdrawer = us and zero lockup (else refused).
     StakeInitialize {
         /// Stake account being initialised.
         stake_account: String,
@@ -226,7 +194,6 @@ pub enum SolInstruction {
         withdrawer: String,
     },
     /// Stake program `DelegateStake`: delegates the stake account to a validator's vote account.
-    /// The stake authority must be our address.
     StakeDelegate {
         /// Stake account.
         stake_account: String,
@@ -310,9 +277,7 @@ pub enum SolWarning {
     },
     /// No explicit compute-unit limit: the priority fee is an upper-bound estimate.
     PriorityFeeEstimated,
-    /// `CreateAccount` / `CreateAccountWithSeed` for an owner program outside Kyro's closed list
-    /// (System, SPL Token / Token-2022 with a token account or mint size, Stake): that program
-    /// will control — and can spend — the lamports moved into the new account.
+    /// Account created for an owner program outside Kyro's list: it can spend the moved lamports.
     UnknownOwnerProgram {
         /// Instruction index.
         instruction: usize,
@@ -321,14 +286,12 @@ pub enum SolWarning {
         /// Allocated space in bytes.
         space: String,
     },
-    /// SPL `Transfer` (tag 3): unlike `TransferChecked`, neither the mint nor the decimals are
-    /// stated, so the token and the amount in token units are not verified.
+    /// SPL `Transfer` (tag 3): mint and decimals unstated, so token and amount are unverified.
     UncheckedTokenTransfer {
         /// Instruction index.
         instruction: usize,
     },
-    /// Memo or seed text that had control / invisible / bidi characters removed, was cut, or is
-    /// long: the dialog shows a cleaned version.
+    /// Memo or seed text had control/invisible/bidi characters removed, was cut, or is long.
     UnusualText {
         /// Instruction index.
         instruction: usize,
@@ -359,18 +322,13 @@ pub struct SolTxSummary {
     pub compute_unit_limit: Option<u32>,
     /// Explicit `SetComputeUnitPrice` (micro-lamports per CU), if any.
     pub compute_unit_price_micro_lamports: Option<String>,
-    /// `ceil(price * limit / 1e6)` lamports; `None` without a price. Uses the runtime default
-    /// limit (upper bound) when no explicit limit is set.
+    /// `ceil(price * limit / 1e6)` lamports; `None` without a price.
     pub priority_fee_lamports: Option<String>,
     /// Reasons for caution.
     pub warnings: Vec<SolWarning>,
     /// `true` if the UI must show an explicit second confirmation before signing.
     pub requires_extra_confirmation: bool,
 }
-
-// ---------------------------------------------------------------------------------------------
-// Byte reader
-// ---------------------------------------------------------------------------------------------
 
 struct Reader<'a> {
     buf: &'a [u8],
@@ -405,7 +363,6 @@ impl<'a> Reader<'a> {
         Ok(k)
     }
 
-    /// compact-u16: 1–3 bytes, 7 bits each, little-endian; canonical encodings only.
     fn short_vec_len(&mut self) -> Result<usize> {
         let mut value: u32 = 0;
         for i in 0..3 {
@@ -436,7 +393,6 @@ impl<'a> Reader<'a> {
         Ok(u32::from_le_bytes(b))
     }
 
-    /// bincode `String`: u64 LE length + UTF-8 bytes.
     fn bincode_string(&mut self) -> Result<String> {
         let len = usize::try_from(self.u64_le()?).map_err(|_| truncated())?;
         if len > self.buf.len() {
@@ -468,15 +424,7 @@ fn decode_pubkey(s: &str) -> Result<[u8; 32]> {
         .map_err(|_| Error::input("address must be 32 bytes"))
 }
 
-// ---------------------------------------------------------------------------------------------
-// Lookup tables
-// ---------------------------------------------------------------------------------------------
-
-/// Parses the raw data of an AddressLookupTable account (owner
-/// `AddressLookupTab1e1111111111111111111111111`): a 56-byte metadata header
-/// (`u32` state = 1, `u64` deactivation slot, `u64` last extended slot, `u8` start index,
-/// `Option<Pubkey>` authority, 2 bytes padding) followed by 32-byte addresses.
-/// Rejects uninitialised and deactivated tables.
+/// Parses AddressLookupTable account data: a 56-byte metadata header, then 32-byte addresses.
 pub fn sol_parse_lookup_table(account_data: &[u8]) -> Result<Vec<String>> {
     if account_data.len() < LOOKUP_TABLE_META_SIZE {
         return Err(Error::input("lookup table account too short"));
@@ -499,10 +447,6 @@ pub fn sol_parse_lookup_table(account_data: &[u8]) -> Result<Vec<String>> {
 
 /// Owner program expected for lookup-table accounts (for callers validating RPC responses).
 pub const SOL_LOOKUP_TABLE_PROGRAM: &str = LOOKUP_TABLE_PROGRAM;
-
-// ---------------------------------------------------------------------------------------------
-// Message
-// ---------------------------------------------------------------------------------------------
 
 struct CompiledIx<'a> {
     program_index: usize,
@@ -612,8 +556,7 @@ fn parse_message(message: &[u8]) -> Result<RawMessage<'_>> {
     })
 }
 
-/// Lookup-table accounts referenced by a v0 message (empty for legacy messages), so the caller
-/// knows which tables to fetch before calling [`sol_decode_message`].
+/// Lookup tables referenced by a v0 message (empty for legacy), to fetch before decoding.
 pub fn sol_message_lookup_tables(message: &[u8]) -> Result<Vec<String>> {
     Ok(parse_message(message)?
         .lookups
@@ -622,9 +565,7 @@ pub fn sol_message_lookup_tables(message: &[u8]) -> Result<Vec<String>> {
         .collect())
 }
 
-/// Account keys written in the message itself (base58). In a v0 message, every other account
-/// an instruction uses was loaded from a lookup table, i.e. comes from the RPC that served the
-/// table: the shell marks those in the confirmation dialog.
+/// Account keys written in the message itself (base58).
 pub fn sol_message_static_keys(message: &[u8]) -> Result<Vec<String>> {
     Ok(parse_message(message)?
         .static_keys
@@ -637,7 +578,6 @@ struct Account {
     key: String,
 }
 
-/// Builds the full account list: static keys, then all writable lookups, then all readonly ones.
 fn resolve_accounts(raw: &RawMessage<'_>, tables: &[SolLookupTable]) -> Result<Vec<Account>> {
     let mut writable = Vec::new();
     let mut readonly = Vec::new();
@@ -684,10 +624,6 @@ fn resolve_accounts(raw: &RawMessage<'_>, tables: &[SolLookupTable]) -> Result<V
     }
     Ok(out)
 }
-
-// ---------------------------------------------------------------------------------------------
-// Instruction decoding
-// ---------------------------------------------------------------------------------------------
 
 struct Ctx<'a> {
     accounts: &'a [Account],
@@ -859,8 +795,6 @@ fn decode_compute_budget(ix: &CompiledIx<'_>) -> Result<Option<SolInstruction>> 
     Ok(Some(decoded))
 }
 
-/// Memo text, cleaned for display. The flag is set when the memo had to be cleaned or cut, or
-/// is longer than [`MEMO_PLAIN_MAX_CHARS`].
 fn decode_memo(ix: &CompiledIx<'_>) -> Option<(SolInstruction, bool)> {
     let text = core::str::from_utf8(ix.data).ok()?;
     let clean = sanitize_text(text, MAX_MEMO_DISPLAY);
@@ -872,7 +806,6 @@ fn stake_refused(msg: impl Into<String>) -> Error {
     Error::input(format!("Solana staking: {}", msg.into()))
 }
 
-/// Name of a Stake program instruction Kyro refuses (for the error message).
 fn stake_instruction_name(tag: u32) -> &'static str {
     match tag {
         1 => "Authorize (authority change)",
@@ -893,10 +826,6 @@ fn stake_instruction_name(tag: u32) -> &'static str {
     }
 }
 
-/// Stake program: only `Initialize` (zero lockup, staker = withdrawer = us), `DelegateStake`,
-/// `Deactivate` and `Withdraw` (to us), each with its exact account list and our authority.
-/// Every other instruction of the program — authority changes, lockups, split, merge… — and any
-/// authority that is not us is an error, not an "unknown instruction".
 fn decode_stake(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
     let mut r = Reader::new(ix.data);
     let tag = r.u32_le().map_err(|_| bad_data("Stake"))?;
@@ -996,7 +925,6 @@ fn decode_stake(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
     Ok(decoded)
 }
 
-/// `Pubkey::create_with_seed`: sha256(base ‖ seed ‖ owner).
 pub(crate) fn create_with_seed(base: &[u8; 32], seed: &str, owner: &[u8; 32]) -> Result<[u8; 32]> {
     use sha2::{Digest, Sha256};
     if seed.len() > MAX_SEED_LEN {
@@ -1012,9 +940,6 @@ pub(crate) fn create_with_seed(base: &[u8; 32], seed: &str, owner: &[u8; 32]) ->
     Ok(h.finalize().into())
 }
 
-/// Whether an account created for `owner` with `space` bytes is one Kyro understands: a plain
-/// System account, or an SPL Token / Token-2022 token account or mint (Token-2022 accounts with
-/// extensions are larger than a plain token account). Stake accounts are checked separately.
 fn known_owner(owner: &str, space: &str) -> bool {
     let space = space.parse::<u64>().unwrap_or(u64::MAX);
     match owner {
@@ -1027,12 +952,8 @@ fn known_owner(owner: &str, space: &str) -> bool {
     }
 }
 
-/// Checks every account creation: a `CreateAccountWithSeed` must create the address derived
-/// from its base, seed and owner; an account created for the Stake program must have the stake
-/// account size and be initialised by a later instruction of the same message (an
-/// uninitialised stake account can be initialised by anyone, with any authority). Returns the
-/// creations whose owner program is outside the closed list of [`known_owner`] as
-/// `(instruction, owner, space)`: the caller warns and requires the reinforced confirmation.
+/// Checks account creations: `WithSeed` address must match; a Stake account must have stake size
+/// and be initialised later in the message (else anyone can initialise it).
 fn check_creations(instructions: &[SolInstruction]) -> Result<Vec<(usize, String, String)>> {
     let mut unknown = Vec::new();
     for (i, ins) in instructions.iter().enumerate() {
@@ -1085,7 +1006,6 @@ fn check_creations(instructions: &[SolInstruction]) -> Result<Vec<(usize, String
     Ok(unknown)
 }
 
-/// Decodes one instruction; the flag marks memo text that needs the reinforced confirmation.
 fn decode_instruction(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<(SolInstruction, bool)> {
     let program = ctx.accounts[ix.program_index].key.as_str();
     if matches!(program, MEMO_PROGRAM_V2 | MEMO_PROGRAM_V1) {
@@ -1111,22 +1031,13 @@ fn decode_instruction(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<(SolInstruct
     Ok((decoded, false))
 }
 
-/// Replaces a seed by its display form; `true` if it had to be cleaned or cut.
 fn sanitize_seed(seed: &mut String) -> bool {
     let clean = sanitize_text(seed, MAX_SEED_DISPLAY);
     *seed = clean.text;
     clean.altered
 }
 
-// ---------------------------------------------------------------------------------------------
-// Summary
-// ---------------------------------------------------------------------------------------------
-
 /// Decodes a serialized Solana message (legacy or v0) into a plain-language summary.
-///
-/// `tables` must contain every lookup table referenced by a v0 message (fetched from the chain
-/// by the caller, see [`sol_message_lookup_tables`] and [`sol_parse_lookup_table`]); a missing
-/// table or index is an error. `our_address` is the wallet's base58 address, used for warnings.
 pub fn sol_decode_message(
     message: &[u8],
     tables: &[SolLookupTable],
@@ -1353,7 +1264,6 @@ mod tests {
         decode_pubkey(s).unwrap()
     }
 
-    /// Legacy message: payer (writable signer), `to` (writable), program (readonly).
     fn legacy(program: &str, data: &[u8], accounts: &[u8]) -> Vec<u8> {
         let mut m = vec![1, 0, 1];
         m.extend(sv(3));
@@ -1486,9 +1396,7 @@ mod tests {
     fn approve_is_delegation() {
         let mut data = vec![4u8];
         data.extend_from_slice(&u64::MAX.to_le_bytes());
-        // source = OTHER, delegate = program slot is not allowed (index 2 is the program) so
-        // use the payer as owner and OTHER as both source and delegate is invalid; build a
-        // 3-account instruction [1, 1, 0] -> duplicate indices are legal in instructions.
+        // Duplicate indices are legal: [1, 1, 0] uses OTHER as source and delegate.
         let s = sol_decode_message(&legacy(TOKEN_PROGRAM, &data, &[1, 1, 0]), &[], &me()).unwrap();
         assert!(matches!(
             &s.instructions[0],
@@ -1648,8 +1556,6 @@ mod tests {
         legacy(SYSTEM_PROGRAM, &data, &[0, 1])
     }
 
-    /// Audit finding: an account created for an arbitrary program used to need no second
-    /// dialog, although that program then controls (and can spend) the lamports moved into it.
     #[test]
     fn create_account_for_unknown_owner_needs_extra_confirmation() {
         let foreign = [42u8; 32];
@@ -1715,8 +1621,6 @@ mod tests {
         ));
     }
 
-    /// Audit finding: SPL `Transfer` (no mint, no decimals) used to be signed without the second
-    /// dialog; only `TransferChecked` may skip it.
     #[test]
     fn unchecked_spl_transfer_needs_extra_confirmation() {
         let mut data = vec![3u8];
@@ -1740,8 +1644,7 @@ mod tests {
         assert!(!s.requires_extra_confirmation);
     }
 
-    /// Audit finding: memo text was shown with its control / bidi characters, and a memo never
-    /// triggered the second dialog.
+    /// Audit finding: memo shown with control/bidi chars and never triggered the second dialog.
     #[test]
     fn memo_is_sanitized_and_unusual_memos_need_extra_confirmation() {
         let s = sol_decode_message(&legacy(MEMO_PROGRAM_V2, b"order 42", &[]), &[], &me()).unwrap();

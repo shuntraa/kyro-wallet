@@ -1,14 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Interface language: two catalogs (fr.ts = the original French wording, en.ts = English) with
-// typed keys, `{param}` interpolation and `_one` / `_other` plurals (Intl.PluralRules). No
-// dependency. The language comes from `settings.language` (auto / fr / en, saved by Rust) and,
-// for `auto`, from the computer's language (Rust's `config_get.systemLanguage`, the WebView's
-// `navigator.languages` before that). Changing it re-renders every component that calls `useT()`
-// (or `useLang()`); code outside React calls `t()` / `tp()` directly when it builds a message.
-//
-// The packages (chains, swap, demo mocks) read the same language through `@kyro/shared`
-// (`l10n(fr, en)`): `applyLanguage` keeps both in sync.
+// typed keys, `{param}` interpolation and `_one` / `_other` plurals (Intl.PluralRules).
 
 import { useSyncExternalStore } from 'react';
 import { getLang, intlLocale, resolveLang, setLang, type Lang, type LanguagePref } from '@kyro/shared';
@@ -22,7 +14,6 @@ export type Key = keyof Catalog;
 
 const CATALOGS: Record<Lang, Record<Key, string>> = { fr, en };
 
-/** `{name}` placeholders of a catalog string, as a union of names. */
 type Placeholders<S> = S extends `${string}{${infer P}}${infer R}` ? P | Placeholders<R> : never;
 type ParamValue = string | number;
 /** `t(key)` when the French string has no `{…}`, `t(key, { … })` with exactly its names otherwise. */
@@ -32,8 +23,6 @@ export type ParamsOf<K extends Key> = [Placeholders<Catalog[K]>] extends [never]
 export type PluralBase = { [K in Key]: K extends `${infer B}_one` ? (`${B}_other` extends Key ? B : never) : never }[Key];
 type PluralParams<B extends PluralBase> = Exclude<Placeholders<Catalog[`${B}_one` & Key]> | Placeholders<Catalog[`${B}_other` & Key]>, 'count'>;
 export type PluralParamsOf<B extends PluralBase> = [PluralParams<B>] extends [never] ? [] : [params: Record<PluralParams<B>, ParamValue>];
-
-// ---------------------------------------------------------------- state
 
 let pref: LanguagePref = 'auto';
 let system: Lang = getLang();
@@ -80,8 +69,6 @@ function subscribe(cb: () => void): () => void {
   return () => listeners.delete(cb);
 }
 
-// ---------------------------------------------------------------- lookup
-
 function lookup(key: string): string {
   const lang = getLang();
   return (CATALOGS[lang] as Record<string, string>)[key] ?? (CATALOGS.fr as Record<string, string>)[key] ?? key;
@@ -113,8 +100,6 @@ export function tKey(key: string, params?: Record<string, ParamValue>): string |
   const s = (CATALOGS[getLang()] as Record<string, string>)[key];
   return s === undefined ? null : interpolate(s, params);
 }
-
-// ---------------------------------------------------------------- React
 
 /** The current language; re-renders the component when it changes. */
 export function useLang(): Lang {

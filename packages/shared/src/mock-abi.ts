@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — a minimal Solidity ABI encoder, so the fake swap answers (mock-net.ts) carry real
-// calldata that Kyro's verifier (packages/swap/src/verify.ts) decodes like a live one. Covers the
-// shapes the providers use: address, uint256, bytes32, bool, bytes, string, tuples and arrays.
 
 import { keccak_256 } from '@noble/hashes/sha3';
 import { bytesToHex } from '@noble/hashes/utils';

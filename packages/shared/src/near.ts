@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // NEAR account ids: the same rules as wallet-core `near_account_kind` (nearcore's
-// `near-account-id`), so the UI can explain a mistake before asking Rust. Rust re-checks
-// everything on every command.
 
 import type { NearAccountKind } from './ipc';
 import { l10n } from './i18n';
@@ -14,8 +11,7 @@ const isLowerHex = (s: string) => /^[0-9a-f]*$/.test(s);
 
 /**
  * Kind of a valid NEAR account id, or `null`: 2–64 characters, lowercase letters, digits and the
- * separators `-` `_` `.`, never at either end nor two in a row. Uppercase is refused (NEAR ids
- * are case-sensitive: an uppercase id is another account, or none).
+ * separators `-` `_` `.`, never at either end nor two in a row.
  */
 export function nearAccountKind(id: string): NearAccountKind | null {
   if (id.length < 2 || id.length > 64) return null;

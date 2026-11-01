@@ -1,15 +1,5 @@
 //! Sui data from the public **GraphQL RPC** of the Sui Foundation (`graphql.testnet.sui.io` /
 //! `graphql.mainnet.sui.io`, HTTPS POST of JSON), on the `sui` Tor family, never with a fallback.
-//!
-//! Why GraphQL: the JSON-RPC API of the public full nodes was switched off in July 2026
-//! (`fullnode.*.sui.io` now answers « Method not found. JSON-RPC on public fullnodes has been
-//! deprecated »); its successors are gRPC (HTTP/2 + protobuf, which `net.rs` does not speak) and
-//! GraphQL (plain HTTPS JSON, same transport as every other Kyro backend).
-//!
-//! Every response is checked against the expected network (`chainIdentifier` = base58 digest of
-//! the genesis checkpoint). Kyro picks the gas coins, reads the reference gas price and the epoch,
-//! and wallet-core encodes the transaction; the server is only asked to simulate the exact bytes
-//! Kyro built (estimate shown in the dialog) and to execute them once signed.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -22,18 +12,14 @@ use crate::net::{Family, NetClient, ServerRequest};
 pub const MAINNET_CHAIN_ID: &str = "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S";
 /// Same for testnet (changes only if testnet is ever wiped).
 pub const TESTNET_CHAIN_ID: &str = "69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD";
-/// Full Move type of a SUI coin object, as GraphQL prints it.
 const SUI_COIN_REPR: &str = "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>";
 const SUI_REPR: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI";
-/// Coins read per page (server limit 50) and at most this many pages.
 const COIN_PAGE: u32 = 50;
 const MAX_COIN_PAGES: usize = 6;
-/// Transactions shown in the history.
 const MAX_TXS: u32 = 20;
 /// Budget of the draft transaction that is simulated to estimate the real one (0.05 SUI).
 pub const DRAFT_BUDGET: u64 = 50_000_000;
-/// `GAS_SAFE_OVERHEAD` of the official SDK (gas units added to the computation cost).
 const GAS_SAFE_OVERHEAD: u64 = 1000;
 
 pub fn default_url(net: Network) -> &'static str {
@@ -78,8 +64,6 @@ fn short(s: &str) -> String {
     crate::dialog_text::sanitize(s, 200)
 }
 
-/// One GraphQL request. `errors` → `SERVER_UNREACHABLE` (or `INVALID_INPUT` for a request the
-/// server rejected as bad user input, e.g. a refused transaction), with the server's message.
 async fn gql(ctx: &SuiCtx<'_>, query: &str, variables: Value) -> AppResult<Value> {
     let u = url::Url::parse(&ctx.url)
         .map_err(|_| AppError::ServerInvalid("invalid Sui GraphQL URL".into()))?;
@@ -108,7 +92,6 @@ async fn gql(ctx: &SuiCtx<'_>, query: &str, variables: Value) -> AppResult<Value
     Ok(v["data"].clone())
 }
 
-/// A `BigInt` / `UInt53` field (JSON string or number) as u64.
 fn num(v: &Value) -> Option<u64> {
     match v {
         Value::String(s) => s.parse().ok(),
@@ -117,7 +100,6 @@ fn num(v: &Value) -> Option<u64> {
     }
 }
 
-/// A signed `BigInt` (balance change).
 fn signed(v: &Value) -> Option<i128> {
     match v {
         Value::String(s) => s.parse().ok(),
@@ -131,8 +113,6 @@ fn check_address(a: &str) -> AppResult<String> {
         &wallet_core::sui_parse_address(a)?,
     ))
 }
-
-// ---------------------------------------------------------------- epoch, balance, coins
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -238,8 +218,6 @@ pub async fn token_coins(
     coins_of(ctx, address, &t, &repr).await
 }
 
-/// Coin objects whose Move type is `filter` (printed by the server as `repr`, checked on every
-/// object), owned by `address` at the version and digest returned.
 async fn coins_of(
     ctx: &SuiCtx<'_>,
     address: &str,
@@ -333,7 +311,6 @@ pub async fn token_balances(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Vec<Su
 }
 
 /// Gas coins for a transfer: largest first until `need` MIST is covered (at most 256 coins).
-/// Returns every coin (up to 256) when even that does not cover `need`.
 pub fn select_coins(coins: &[SuiCoin], need: u64) -> Vec<SuiCoin> {
     select_up_to(coins, need, wallet_core::SUI_MAX_GAS_OBJECTS)
 }
@@ -360,8 +337,6 @@ pub fn gas_budget(e: &SuiEstimate, price: u64) -> u64 {
         .saturating_add(GAS_SAFE_OVERHEAD.saturating_mul(price));
     base.saturating_add(e.storage_cost.saturating_sub(e.storage_rebate))
 }
-
-// ---------------------------------------------------------------- simulate, execute
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -523,11 +498,9 @@ pub async fn tx_status(ctx: &SuiCtx<'_>, digest: &str) -> AppResult<SuiTxStatus>
     })
 }
 
-/// Last 20 transactions touching `address`, most recent first, normalized:
-/// `[{ digest, timestamp, checkpoint, success, sender, change, fee, counterparty, otherCoins }]`
-/// — `change`: net SUI change of `address` in MIST (signed decimal, fees included);
-/// `fee`: net gas paid when `address` sent it; `counterparty`: the other address whose SUI
-/// balance moved; `otherCoins`: other coin types moved for `address` (not shown in detail).
+/// Last 20 transactions touching `address`, most recent first, normalized: `[{ digest, timestamp,
+/// checkpoint, success, sender, change, fee, counterparty, otherCoins }]` — `change`: net SUI
+/// change of `address` in MIST (signed decimal, fees included).
 pub async fn txs(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Value> {
     let a = check_address(address)?;
     let d = gql(
@@ -561,7 +534,6 @@ pub async fn txs(ctx: &SuiCtx<'_>, address: &str) -> AppResult<Value> {
                 && c.coin_type != SUI_REPR
                 && !known.iter().any(|k| k.coin_type == c.coin_type)
         });
-        // Known tokens only: their net change for us and who was on the other side.
         let tokens: Vec<Value> = known
             .iter()
             .filter_map(|k| {
@@ -619,7 +591,6 @@ mod tests {
         assert_eq!(select_coins(&cs, 1000).len(), 3);
         let many: Vec<SuiCoin> = (0..300).map(|i| coin(1, i as u8)).collect();
         assert_eq!(select_coins(&many, 10_000).len(), 256);
-        // SDK formula: computation + 1000 × price + max(0, storage − rebate).
         let e = SuiEstimate {
             computation_cost: 1_000_000,
             storage_cost: 1_976_000,
@@ -655,19 +626,7 @@ mod tests {
     }
 }
 
-/// Real-network test over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture sui_live`.
-/// - keys: a NEW random test mnemonic, generated once and kept in the gitignored
-///   `.env.sui-testnet` at the repository root (test networks only);
-/// - reads run on testnet and mainnet (network checks, reference gas price, balance, history);
-/// - `KYRO_SUI_FAUCET=yes`: asks the **devnet** faucet for coins (the testnet faucet's HTTP API
-///   answers « CI compatibility is disabled » since 2026: testnet coins only come from the web
-///   faucet, which has a captcha). The transfer then runs on devnet, through exactly the same
-///   code as testnet / mainnet (only the GraphQL URL and chain identifier differ). If the
-///   testnet address holds coins (sent by hand from faucet.sui.io), the transfer runs on testnet;
-/// - `KYRO_SUI_SEND=yes`: one transfer of an amount, then one « tout le solde » transfer back
-///   from account 1 to account 0, through the real path (build, live checks, simulation, dialog
-///   text, signature with identical summary, signed-transaction check, execute, digest check).
+/// Real-network test over Tor.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -768,7 +727,6 @@ mod live {
                 t.elapsed()
             );
             eprintln!("mainnet epoch {:?}", epoch(&mainnet).await);
-            // Wrong network: the mainnet server answered for a testnet wallet.
             let wrong = SuiCtx {
                 url: default_url(Network::Mainnet).into(),
                 ..SuiCtx::new(&net, Network::Testnet, true)
@@ -776,7 +734,6 @@ mod live {
             let e = epoch(&wrong).await;
             eprintln!("wrong network: {e:?}");
             assert!(matches!(e, Err(AppError::ServerWrongNetwork(_))));
-            // History of a busy mainnet address (format check).
             let h = txs(
                 &mainnet,
                 "0x177a0f6b96e2c76703d97b39990a62106aee3bb048b5fbfa4fcfdfc671c54869",
@@ -844,13 +801,11 @@ mod live {
                 eprintln!("KYRO_SUI_SEND != yes or no coins: no transfer");
                 return;
             }
-            // More than the balance: refused before anything is signed.
             let too_much = crate::commands_sui::build(c, &a0, &a1, Some(u64::MAX / 2)).await;
             eprintln!("too much: {:?}", too_much.as_ref().err());
             assert!(matches!(too_much, Err(AppError::InvalidInput(_))));
             let d1 = send(c, &seed, 0, &a1, Some(100_000_000)).await;
             eprintln!("TRANSFER 0.1 SUI: {d1}");
-            // The indexer may lag behind finality: wait until account 1's coin is listed.
             for _ in 0..30 {
                 if !coins(c, &a1).await.unwrap().is_empty() {
                     break;
@@ -863,10 +818,6 @@ mod live {
         });
     }
 
-    /// USDC transfers built by Kyro for real mainnet holders (no key: simulation only, which
-    /// needs no signature): the server accepts the BCS layout, the live checks and the dialog
-    /// pass, the simulation moves exactly the amount. `cargo test -p kyro-desktop --lib
-    /// sui_token_simulation_mainnet -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn sui_token_simulation_mainnet() {

@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// NEAR Protocol adapter (NEAR only, no NEP-141 token yet). Thin on purpose: reads, transfer
-// building (nonce and block hash filled by Rust, Borsh encoded by wallet-core), signature and
-// `send_tx` are Rust commands (`near_*`, docs/IPC.md §2.11). This adapter only validates input
-// and checks that what Rust built is what was asked (receiver, amount, signer).
+// NEAR Protocol adapter (NEAR only, no NEP-141 token yet).
 
 import { accountArg } from '../types';
 import {
@@ -26,7 +22,6 @@ import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } fr
 export type { NearAccountInfo, NearAccountKind, NearContext, NearHistoryEntry, NearTxOutcome, NearTxSummary, NearWarning };
 export { nearAccountKind, nearAccountIdProblem };
 
-// ---------------------------------------------------------------- Rust contract (§2.11)
 
 export interface NearBackend {
   account(accountId: string): Promise<NearAccountInfo>;
@@ -55,10 +50,7 @@ export function rustNearBackend(account = 0): NearBackend {
   };
 }
 
-/**
- * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature
- * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
- */
+/** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature on the device (`hw_*` commands). */
 export function rustNearHwBackend(accountId: string): NearBackend {
   // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
   const { buildToken: _buildTokenVaultOnly, ...base } = rustNearBackend();
@@ -76,7 +68,6 @@ export function isNearImplicit(id: string): boolean {
   return nearAccountKind(id) === 'implicit';
 }
 
-// ---------------------------------------------------------------- adapter
 
 export interface NearUnsigned {
   family: 'near';

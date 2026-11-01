@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Zcash, TRANSPARENT ADDRESSES ONLY (t1… / t3…, testnet tm… / t2…; ZIP-320 tex1… as a
-// destination). Shielded (zs…, zc…) and unified (u1…) addresses are refused with a clear message:
-// Kyro neither builds nor reads shielded parts. Transparent Zcash is as public as Bitcoin.
-//
-// BIP44 P2PKH `m/44'/133'/0'` (testnet `m/44'/1'/0'`). Reads and broadcast go through the Rust
-// `zec_*` commands (docs/IPC.md §2.4b, Esplora shapes like Litecoin / Dogecoin). Sending: this
-// adapter only proposes the candidate coins (outpoint + which of our addresses) and our next
-// change index; Rust reads every previous transaction itself, selects the coins, computes the
-// ZIP-317 fee, reads the consensus branch from the chain, builds the v5 transaction, shows it in
-// the native dialog and signs it. There is no fee rate to choose (ZIP 317).
+// Zcash, TRANSPARENT ADDRESSES ONLY (t1… / t3…, testnet tm… / t2…; ZIP-320 tex1… as a destination).
 
 import { accountArg } from '../types';
 import type { HDKey } from '@scure/bip32';
@@ -60,10 +50,7 @@ export function rustZecBackend(account = 0): ZecBackend {
   };
 }
 
-/**
- * Hardware-wallet account `accountId` (docs/IPC.md §2.3, Trezor): Rust builds from the stored
- * xpub (`hw_zec_send_preview`); signing is `hw_sign_zec_tx`; reads and broadcast as the vault.
- */
+/** Hardware-wallet account `accountId` (docs/IPC.md §2.3, Trezor): Rust builds from the stored xpub (`hw_zec_send_preview`); signing is `hw_sign_zec_tx`; reads and broadcast as the vault. */
 export function hwZecBackend(accountId: string): ZecBackend {
   return {
     ...rustZecBackend(0),

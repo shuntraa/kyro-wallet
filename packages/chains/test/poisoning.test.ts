@@ -33,7 +33,7 @@ const CASES: Array<[Family, string, string]> = [
 
 describe('address poisoning: one look-alike per format', () => {
   for (const [family, real, prefix] of CASES) {
-    it(`${family} ${prefix || '(sans préfixe)'}…`, () => {
+    it(`${family} ${prefix || '(no prefix)'}…`, () => {
       expect(addressParts(real, family).prefix.toLowerCase()).toBe(prefix.toLowerCase());
       const fake = forge(real, family);
       expect(fake).not.toBe(real);

@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Compact block filters (BIP157/158), UI side. One store, subscribed once in main.tsx.
-// - availability: `btc_cbf_status` answers FEATURE_DISABLED in a build without the `cbf`
-//   cargo feature (today's default): the option stays visible but disabled;
-// - status: the `cbf-status` event (at most 2/s), with `btc_cbf_status` for the current state.
+// Compact block filters (BIP157/158), UI side.
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { call, ipcErrorIn, onCbfStatus, toIpcError, type CbfStatus, type Unlisten } from '@kyro/shared';
@@ -14,7 +10,6 @@ export type CbfAvailability = 'unknown' | 'available' | 'disabled';
 export interface CbfSnapshot {
   availability: CbfAvailability;
   status: CbfStatus | null;
-  /** Last command error (other than FEATURE_DISABLED). */
   error: string | null;
 }
 
@@ -27,12 +22,9 @@ export interface CbfStoreDeps {
 export interface CbfStore {
   getSnapshot(): CbfSnapshot;
   subscribe(listener: () => void): () => void;
-  /** Listens to `cbf-status` and reads the current state. Idempotent. */
   start(): Promise<void>;
   stop(): void;
-  /** Re-reads `btc_cbf_status` (availability + status). */
   refresh(): Promise<void>;
-  /** `btc_cbf_sync`: starts (or joins) a background sync. */
   sync(): Promise<void>;
 }
 
@@ -80,7 +72,6 @@ export function createCbfStore(deps: CbfStoreDeps): CbfStore {
       const seq = eventSeq;
       try {
         const s = await deps.fetchStatus();
-        // An event received meanwhile is newer than this answer.
         set({ availability: 'available', error: null, ...(eventSeq === seq ? { status: s } : {}) });
       } catch (e) {
         fail(e);

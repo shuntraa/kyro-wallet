@@ -1,16 +1,4 @@
 //! Encrypted vault holding the recovery phrase.
-//!
-//! `key = Argon2id(password, salt[16], m, t, p) -> 32 bytes`, then
-//! `ciphertext = XChaCha20-Poly1305(key, nonce[24], plaintext = phrase, aad)` with
-//! `aad = "kyro-vault" || version || m_cost_kib (LE u32) || t_cost (LE u32) || p_cost (LE u32) || salt`.
-//! Any change to the header (version, KDF parameters, salt) or to the ciphertext makes
-//! decryption fail.
-//!
-//! The KDF cost has a floor ([`KdfParams::minimum`]: 64 MiB, 2 passes) and a ceiling, checked
-//! by both [`seal`] and [`open`]. A vault below the floor is **refused** at open, not re-sealed:
-//! Kyro has only ever written vaults with [`KdfParams::production`], so a weaker header can
-//! only come from another tool or from tampering, and opening it would mean running the
-//! password through a cheap KDF chosen by whoever wrote the file.
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::engine::general_purpose::STANDARD as B64;
@@ -33,8 +21,7 @@ const TAG_LEN: usize = 16;
 const AAD_DOMAIN: &[u8] = b"kyro-vault";
 
 // Floor: below this, a stolen vault file is cheap to brute-force (OWASP's Argon2id minimum is
-// 19 MiB / 2 passes; Kyro asks for more). Ceiling: a tampered header cannot make us allocate
-// unbounded memory or spin for minutes before the tag check fails.
+// 19 MiB / 2 passes; Kyro asks for more).
 const MIN_M_COST_KIB: u32 = 64 * 1024; // 64 MiB
 const MIN_T_COST: u32 = 2;
 const MAX_M_COST_KIB: u32 = 1024 * 1024; // 1 GiB = 4x production
@@ -63,8 +50,7 @@ impl KdfParams {
         }
     }
 
-    /// The weakest parameters [`seal`] and [`open`] accept: 64 MiB, 2 passes, 1 lane. For tests
-    /// that need a real (if cheap) KDF; the app uses [`KdfParams::production`].
+    /// The weakest parameters [`seal`] and [`open`] accept: 64 MiB, 2 passes, 1 lane.
     pub fn minimum() -> Self {
         KdfParams {
             m_cost_kib: MIN_M_COST_KIB,
@@ -84,7 +70,6 @@ impl KdfParams {
         }
     }
 
-    /// Floor and ceiling, for sealing and opening alike.
     fn check(&self) -> Result<()> {
         if self.m_cost_kib < MIN_M_COST_KIB
             || self.t_cost < MIN_T_COST
@@ -191,8 +176,7 @@ fn b64_fixed<const N: usize>(field: &str, s: &str) -> Result<[u8; N]> {
         .map_err(|_| Error::InvalidVault(format!("{field} must be {N} bytes")))
 }
 
-/// Encrypts the recovery phrase under `password`. The password must not be empty; `kdf` must
-/// be at least [`KdfParams::minimum`].
+/// Encrypts the recovery phrase under `password`.
 pub fn seal(mnemonic: &Mnemonic, password: &str, kdf: KdfParams) -> Result<VaultFile> {
     seal_with(mnemonic, password, kdf, kdf.argon2()?)
 }
@@ -231,9 +215,7 @@ fn seal_with(
     })
 }
 
-/// Decrypts a vault. Returns [`Error::WrongPassword`] if authentication fails (wrong password
-/// or any tampering with header or ciphertext), [`Error::InvalidVault`] if its KDF parameters
-/// are below [`KdfParams::minimum`] or absurdly high (checked before any key derivation).
+/// Decrypts a vault.
 pub fn open(file: &VaultFile, password: &str) -> Result<Mnemonic> {
     if file.version != VAULT_VERSION {
         return Err(Error::UnsupportedVaultVersion(file.version));
@@ -274,14 +256,11 @@ mod tests {
     const ABANDON: &str = "abandon abandon abandon abandon abandon abandon abandon abandon \
                            abandon abandon abandon about";
 
-    /// A vault sealed with weak parameters (as another tool, or an attacker rewriting the
-    /// header, could produce), bypassing `seal`'s check.
     fn weak_vault(kdf: KdfParams) -> VaultFile {
         let m = Mnemonic::parse(ABANDON).unwrap();
         seal_with(&m, "pw", kdf, kdf.argon2_unchecked().unwrap()).unwrap()
     }
 
-    /// Audit finding: any KDF cost was accepted, down to 8 KiB / 1 pass.
     #[test]
     fn weak_kdf_is_refused_at_seal_and_open() {
         let m = Mnemonic::parse(ABANDON).unwrap();

@@ -1,15 +1,4 @@
 //! Litecoin (BIP84) and Dogecoin (BIP44) vectors, real-chain signature checks, PSBT signing.
-//!
-//! Sources of the expected values (fetched 2026-10-30):
-//! - Trust Wallet Core `tests/chains/Litecoin/TWLitecoinTests.cpp` (BIP84 Litecoin account
-//!   `m/84'/2'/0'` zpub and its `/0/4`, `/0/11` addresses; lock scripts) and
-//!   `tests/common/HDWallet/HDWalletTests.cpp` (`privateKeyFromDGRV`), `TWDogeTests.cpp`;
-//! - Trezor firmware `tests/device_tests/bitcoin/test_getaddress.py` (`test_ltc`, `test_tbtc`)
-//!   and `test_getaddress_segwit_native.py`, mnemonic `all all … all`;
-//! - Electrum-LTC `electrum_ltc/tests/test_wallet_vertical.py`
-//!   (`test_bip39_seed_bip84_native_segwit`);
-//! - real transactions: Litecoin testnet4 and mainnet (litecoinspace.org), Dogecoin mainnet
-//!   (raw hex from api.blockcypher.com, decoded fields cross-checked on sochain.com).
 
 mod common;
 
@@ -47,10 +36,6 @@ fn spk(hex: &str) -> ScriptBuf {
     ScriptBuf::from_hex(hex).unwrap()
 }
 
-// ------------------------------------------------------------------------------------------
-// Derivation and addresses
-// ------------------------------------------------------------------------------------------
-
 /// Trust Wallet Core `Litecoin.ExtendedKeys` / `Litecoin.DeriveFromZpub`.
 #[test]
 fn litecoin_bip84_account_trust_wallet_vector() {
@@ -70,7 +55,6 @@ fn litecoin_bip84_account_trust_wallet_vector() {
     let a = |i| utxo_address(&s, Network::Mainnet, LTC, 0, false, i).unwrap();
     assert_eq!(a(4), "ltc1qcgnevr9rp7aazy62m4gen0tfzlssa52axwytt6");
     assert_eq!(a(11), "ltc1qy072y8968nzp6mz3j292h8lp72d678fcmms6vl");
-    // Public derivation from the account xpub gives the same addresses.
     for i in [0, 4, 11] {
         assert_eq!(
             utxo_address_from_xpub(&acct.xpub, Network::Mainnet, LTC, false, i).unwrap(),
@@ -79,8 +63,7 @@ fn litecoin_bip84_account_trust_wallet_vector() {
     }
 }
 
-/// Electrum-LTC `test_bip39_seed_bip84_native_segwit` uses the BIP84 test path `m/84'/0'/0'`:
-/// same witness programs as the BIP84 Bitcoin vector, Litecoin `ltc` HRP.
+/// Electrum-LTC `test_bip39_seed_bip84_native_segwit` (`m/84'/0'/0'`): BIP84 programs, `ltc` HRP.
 #[test]
 fn litecoin_hrp_electrum_ltc_vector() {
     let program = |bc: &str| {
@@ -101,8 +84,7 @@ fn litecoin_hrp_electrum_ltc_vector() {
     );
 }
 
-/// Trezor `test_ltc` (mnemonic `all ×12`), BIP44 Litecoin P2PKH: checks the `L…` encoding and
-/// coin type 2 (Kyro receives on BIP84 only, but must decode `L…` destinations).
+/// Trezor `test_ltc` (`all ×12`): BIP44 Litecoin P2PKH `L…` encoding, coin type 2.
 #[test]
 fn litecoin_p2pkh_trezor_vector() {
     let s = seed(ALL);
@@ -175,7 +157,6 @@ fn lock_scripts_trust_wallet_vectors() {
 #[test]
 fn dogecoin_p2pkh_trust_wallet_vector() {
     let dgpv = "dgpv595jAJYGBLanByCJXRzrWBZFVXdNisfuPmKRDquCQcwBbwKbeR21AtkETf4EpjBsfsK3kDZgMqhcuky1B9PrT5nxiEcjghxpUVYviHXuCmc";
-    // Dogecoin Core EXT_SECRET_KEY 02fac398 → standard xprv version to parse it.
     let xprv = reversion(dgpv, [0x02, 0xfa, 0xc3, 0x98], [0x04, 0x88, 0xad, 0xe4]);
     let secp = Secp256k1::new();
     let k = Xpriv::from_str(&xprv)
@@ -192,7 +173,6 @@ fn dogecoin_p2pkh_trust_wallet_vector() {
         utxo_address_of_script(script.as_bytes(), Network::Mainnet, DOGE).unwrap(),
         "D5taDndQJ1fDF3AM1yWavmJY2BgSi17CUv"
     );
-    // The same account read as an xpub gives the same address through Kyro's own function.
     let xpub = bitcoin::bip32::Xpub::from_priv(&secp, &Xpriv::from_str(&xprv).unwrap());
     assert_eq!(
         utxo_address_from_xpub(&xpub.to_string(), Network::Mainnet, DOGE, false, 1).unwrap(),
@@ -200,10 +180,8 @@ fn dogecoin_p2pkh_trust_wallet_vector() {
     );
 }
 
-/// Testnets use SLIP-44 coin type 1: Litecoin testnet `m/84'/1'/0'` has the same keys as the
-/// Bitcoin testnet BIP84 account (Trezor vector `tb1qkvwu9…`), Dogecoin testnet `m/44'/1'/0'`
-/// the same as Bitcoin testnet BIP44 (Trezor `test_tbtc` `mvbu1Gd…`), with each chain's own
-/// encoding (Dogecoin testnet P2PKH version 113 → `n…`).
+/// Testnets use SLIP-44 coin 1: LTC `m/84'/1'/0'` = BTC testnet BIP84 (Trezor `tb1qkvwu9…`),
+/// DOGE `m/44'/1'/0'` = BTC testnet BIP44 (`mvbu1Gd…`), DOGE testnet P2PKH version 113 `n…`.
 #[test]
 fn testnet_paths_and_encodings() {
     let s = seed(ALL);
@@ -231,7 +209,6 @@ fn testnet_paths_and_encodings() {
     let btc = bitcoin::base58::decode_check("mvbu1Gdy8SUjTenqerxUaZyYjmveZvt33q").unwrap();
     assert_eq!(raw[1..], btc[1..]);
 
-    // Mainnet paths.
     assert_eq!(
         utxo_account(&s, Network::Mainnet, DOGE, 0).unwrap().path,
         "m/44'/3'/0'"
@@ -250,23 +227,18 @@ fn addresses_of_other_chains_are_refused() {
     let m = Network::Mainnet;
     let t = Network::Testnet;
     let refused = [
-        // Bitcoin addresses on Litecoin, including the legacy P2SH `3…` form.
         (LTC, m, "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu"),
         (LTC, m, "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"),
         (LTC, m, "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy"),
-        // Testnet on mainnet and vice versa.
         (LTC, m, "tltc1qv99w6gxa67tgy89xgrmtcf9nydnsws7sflulmg"),
         (LTC, t, "ltc1qcgnevr9rp7aazy62m4gen0tfzlssa52axwytt6"),
         (DOGE, t, "D5taDndQJ1fDF3AM1yWavmJY2BgSi17CUv"),
-        // Cross-chain.
         (DOGE, m, "LcubERmHD31PWup1fbozpKuiqjHZ4anxcL"),
         (DOGE, m, "ltc1qcgnevr9rp7aazy62m4gen0tfzlssa52axwytt6"),
         (LTC, m, "D5taDndQJ1fDF3AM1yWavmJY2BgSi17CUv"),
-        // Broken checksums.
         (LTC, m, "ltc1qcgnevr9rp7aazy62m4gen0tfzlssa52axwytt7"),
         (DOGE, m, "D5taDndQJ1fDF3AM1yWavmJY2BgSi17CUw"),
         (DOGE, m, ""),
-        // MWEB prefix (made-up payload: refused before any decoding).
         (LTC, m, "ltcmweb1qq0yq03ewm830ugmkkvrvjmyyeslcpwk8ayd7k27qx63sryy6kx3ksqm3k6jd24ld3r5dp5lzx7rm7uyxfujf8sn7v4nlxeqwrcq6k6xxwqdc6tl3"),
     ];
     for (coin, net, a) in refused {
@@ -284,7 +256,6 @@ fn addresses_of_other_chains_are_refused() {
 
 #[test]
 fn genesis_hashes_match_the_nodes() {
-    // Litecoin Core / Dogecoin Core chainparams.cpp, and litecoinspace.org /block-height/0.
     assert_eq!(
         utxo_genesis_hash(Network::Mainnet, LTC),
         "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2"
@@ -303,10 +274,6 @@ fn genesis_hashes_match_the_nodes() {
     );
 }
 
-// ------------------------------------------------------------------------------------------
-// Real transactions: the sighash Kyro computes must be the one the chain's signers used.
-// ------------------------------------------------------------------------------------------
-
 fn parse_tx(hex_tx: &str) -> Transaction {
     bitcoin::consensus::deserialize(&hex::decode(hex_tx).unwrap()).unwrap()
 }
@@ -321,8 +288,7 @@ fn verify(msg: Message, der_with_type: &[u8], pk: &[u8]) {
         .expect("the chain's signature verifies against Kyro's sighash");
 }
 
-/// Litecoin testnet4 tx 09062ef6…b300 (block 4 945 833), one P2WPKH input of 22 358 455
-/// litoshis spending `00142b5f…c847` (prevout value and script from litecoinspace.org).
+/// LTC testnet4 tx 09062ef6…b300 (block 4 945 833), P2WPKH input data from litecoinspace.org.
 #[test]
 fn litecoin_testnet_real_p2wpkh_signature_verifies() {
     let raw = "02000000000101e3153a7d96ae4fbe56623634a34d2321136263346d4b1ea768e27449a0b1df380100000000feffffff02f5e1450100000000160014614aed20ddd796821ca640f6bc24b323670743d040420f000000000016001416c4dec6d0a02a481646f1e5d86ddfd1a595cb59024730440220188f64c30231f3c59b2471a88b33a88a3636542c7478492041e55cd41c59f1bd022065ebc284272ee9fb9395a3e26b0792174a621a568cd8fefdc9e05a2c49beb1ed0121026d429ac367d942cf9a050e131eee2167ab104a31d3b71e5a08e633753e31ee91a8774b00";
@@ -345,7 +311,6 @@ fn litecoin_testnet_real_p2wpkh_signature_verifies() {
         .unwrap();
     verify(Message::from(h), w.nth(0).unwrap(), pk);
 
-    // Kyro's decoder: txid and `tltc1…` rendering identical to the explorer's.
     let d = utxo_decode_raw_tx(raw, Network::Testnet, LTC).unwrap();
     assert_eq!(
         d.txid,
@@ -360,7 +325,6 @@ fn litecoin_testnet_real_p2wpkh_signature_verifies() {
         d.outputs[1].0.as_deref(),
         Some("tltc1qzmzda3ks5q4ys9jx78jasmwl6xjetj6eqjvw2u")
     );
-    // Fee shown by the explorer: 22 358 455 − 21 357 045 − 1 000 000 = 1 410.
     assert_eq!(22_358_455 - d.outputs[0].1 - d.outputs[1].1, 1_410);
 }
 
@@ -392,8 +356,7 @@ fn litecoin_mainnet_real_p2wpkh_signature_verifies() {
     );
 }
 
-/// Dogecoin mainnet tx 386f6e9c…11c5 (block 6 436 571), one P2PKH input from
-/// `DK4Ur92aP34VSk6PRM8KXRHXogjfFKbaXY`: legacy sighash, signature in the scriptSig.
+/// Dogecoin mainnet tx 386f6e9c…11c5 (block 6 436 571): P2PKH, legacy sighash.
 #[test]
 fn dogecoin_mainnet_real_p2pkh_signature_verifies() {
     let raw = "01000000019d53382244ce54a4129e041d0b29cedd293d1cfcd2cff7930d6e800332441876010000006a473044022020cdcc4c5072aca5e52f18d78d811308f8d79fd92e0198b998f06ac8dcacd6d2022053f6ca9c4e1f80dc8714c77914fad862e78064adbd4710dceb507b43fef3b6b7012103648adbede7ed318fc35e2b7d310046111f626e975d87e103a11e8cd84e5a1b76ffffffff02a23694fa010000001976a914e6c7989b8836301af965531c39865a73d745e46788acb0cc81d86c2b00001976a91498b24d9d9928caab02f40a57b9e7fdcc9dd8e34e88ac00000000";
@@ -434,14 +397,9 @@ fn dogecoin_mainnet_real_p2pkh_signature_verifies() {
         )
     );
     assert_eq!(d.outputs[1].1, 47_746_488_847_536);
-    // A witness-serialized transaction is not a Dogecoin transaction.
     let ltc = "02000000000101e3153a7d96ae4fbe56623634a34d2321136263346d4b1ea768e27449a0b1df380100000000feffffff02f5e1450100000000160014614aed20ddd796821ca640f6bc24b323670743d040420f000000000016001416c4dec6d0a02a481646f1e5d86ddfd1a595cb59024730440220188f64c30231f3c59b2471a88b33a88a3636542c7478492041e55cd41c59f1bd022065ebc284272ee9fb9395a3e26b0792174a621a568cd8fefdc9e05a2c49beb1ed0121026d429ac367d942cf9a050e131eee2167ab104a31d3b71e5a08e633753e31ee91a8774b00";
     assert!(utxo_decode_raw_tx(ltc, Network::Mainnet, DOGE).is_err());
 }
-
-// ------------------------------------------------------------------------------------------
-// Kyro's own PSBTs: sign, verify, finalize, decode.
-// ------------------------------------------------------------------------------------------
 
 struct Key {
     pk: PublicKey,
@@ -572,7 +530,6 @@ fn litecoin_sign_verify_finalize() {
     assert!(summary.warnings.is_empty(), "{:?}", summary.warnings);
     assert!(!summary.requires_extra_confirmation);
 
-    // Independent check of the signature, then finalize by hand and decode.
     let mut p = Psbt::from_str(&signed).unwrap();
     let (pk, sig) = p.inputs[0].partial_sigs.iter().next().unwrap();
     assert_eq!(pk.inner, me.pk);
@@ -639,7 +596,6 @@ fn doge_psbt(fee: u64) -> (Psbt, Transaction, Key) {
 #[test]
 fn dogecoin_sign_verify_finalize() {
     let s = seed(ABANDON);
-    // 226 B × 0.01 DOGE/kB = 226 000 koinus.
     let (psbt, _, me) = doge_psbt(226_000);
     let b64 = psbt.to_string();
     let (signed, summary) = utxo_sign_psbt(&s, Network::Testnet, DOGE, 0, &b64).unwrap();
@@ -689,10 +645,6 @@ fn dogecoin_sign_verify_finalize() {
     assert_eq!(d.txid, tx.compute_txid().to_string());
 }
 
-// ------------------------------------------------------------------------------------------
-// Refusals and warnings
-// ------------------------------------------------------------------------------------------
-
 fn psbt_err(r: Result<(String, wallet_core::UtxoTxSummary), Error>) -> String {
     match r {
         Err(Error::Psbt(m)) => m,
@@ -709,32 +661,22 @@ fn dogecoin_requires_a_matching_previous_transaction() {
     p.inputs[0].non_witness_utxo = None;
     assert!(psbt_err(sign(&p)).contains("non_witness_utxo"));
 
-    // A previous transaction that is not the one spent (amount inflated): txid mismatch.
     let (mut p, mut prev2, _) = doge_psbt(226_000);
     prev2.output[1].value = Amount::from_sat(20_000_000_000);
     p.inputs[0].non_witness_utxo = Some(prev2);
     assert!(psbt_err(sign(&p)).contains("does not match"));
 
-    // SegWit data on Dogecoin.
     let (mut p, _, _) = doge_psbt(226_000);
     p.inputs[0].witness_utxo = Some(prev.output[1].clone());
     assert!(psbt_err(sign(&p)).contains("SegWit"));
 }
 
-/// Regression (owner's rule): a Dogecoin input's amount and script come **only** from the full
-/// previous transaction carried as `non_witness_utxo`, checked against the outpoint's txid —
-/// never from what a server's UTXO listing claimed. The legacy sighash does not commit to the
-/// amount, so this is what stops a lying server from making the user overpay fees.
 #[test]
 fn dogecoin_amounts_come_only_from_the_verified_previous_transaction() {
     let s = seed(ABANDON);
     let summary = |p: &Psbt| utxo_psbt_summary(&s, Network::Testnet, DOGE, 0, &p.to_string());
     let sign = |p: &Psbt| utxo_sign_psbt(&s, Network::Testnet, DOGE, 0, &p.to_string());
 
-    // (1) The server claims the UTXO holds 50 DOGE; the real previous transaction says 100.
-    // The adapter, trusting the claim, builds 10 DOGE out + 39.99774 DOGE change: the real fee
-    // would be 50 DOGE. Rust computes the fee from the real previous transaction, flags it, and
-    // requires the reinforced confirmation — the dialog never shows the server's figure.
     let (mut p, prev, _) = doge_psbt(226_000);
     assert_eq!(
         prev.output[1].value.to_sat(),
@@ -747,23 +689,18 @@ fn dogecoin_amounts_come_only_from_the_verified_previous_transaction() {
     assert_eq!(sum.fee, (10_000_000_000 - claimed + 226_000).to_string());
     assert!(sum.warnings.contains(&UtxoWarning::HighFee));
     assert!(sum.requires_extra_confirmation);
-    // The signed summary (what the dialog showed) carries the same real fee.
     assert_eq!(sign(&p).unwrap().1, sum);
 
-    // A previous transaction forged to match the lie (output = 50 DOGE) no longer hashes to
-    // the outpoint's txid: refused before any signature.
     let mut forged = prev.clone();
     forged.output[1].value = Amount::from_sat(claimed);
     p.inputs[0].non_witness_utxo = Some(forged);
     assert!(psbt_err(sign(&p)).contains("does not match"));
     assert!(matches!(summary(&p), Err(Error::Psbt(_))));
 
-    // (2) A previous transaction with another hash (any other transaction): refused.
     let (mut p, _, _) = doge_psbt(226_000);
     let other = prev_tx(spk("76a914e6c7989b8836301af965531c39865a73d745e46788ac"), 7);
     p.inputs[0].non_witness_utxo = Some(other);
     assert!(psbt_err(sign(&p)).contains("does not match"));
-    // The right transaction but an output index it does not have: refused.
     let (mut p, prev, _) = doge_psbt(226_000);
     p.unsigned_tx.input[0].previous_output = OutPoint {
         txid: prev.compute_txid(),
@@ -771,8 +708,6 @@ fn dogecoin_amounts_come_only_from_the_verified_previous_transaction() {
     };
     assert!(psbt_err(sign(&p)).contains("vout out of range"));
 
-    // (3) The spent output (by the verified previous transaction) pays a script that is not
-    // ours, while the PSBT claims our key: refused.
     let (mut p, _, _) = doge_psbt(226_000);
     let theirs = utxo_script_pubkey(
         &utxo_address(&seed(LEGAL), Network::Testnet, DOGE, 0, false, 0).unwrap(),
@@ -784,14 +719,11 @@ fn dogecoin_amounts_come_only_from_the_verified_previous_transaction() {
     p.unsigned_tx.input[0].previous_output.txid = not_ours.compute_txid();
     p.inputs[0].non_witness_utxo = Some(not_ours.clone());
     assert!(psbt_err(sign(&p)).contains("script is not ours"));
-    // Same coin without our key origin: nothing of ours to sign.
     p.inputs[0].bip32_derivation.clear();
     assert!(psbt_err(sign(&p)).contains("no input belongs to this wallet"));
 }
 
-/// Litecoin: only P2WPKH inputs are signed (BIP143 commits to the amount). If the previous
-/// transaction is also present, it must agree with `witness_utxo` (a lying amount is refused);
-/// a legacy (P2PKH) Litecoin coin is never signed.
+/// Litecoin: only P2WPKH inputs are signed (BIP143 commits to the amount).
 #[test]
 fn litecoin_witness_amount_must_match_a_given_previous_transaction() {
     let s = seed(ABANDON);
@@ -849,7 +781,6 @@ fn litecoin_requires_witness_utxo_and_refuses_bitcoin_paths() {
         psbt_err(utxo_sign_psbt(&s, Network::Mainnet, LTC, 0, &p.to_string())).contains("no input")
     );
 
-    // A key origin of ours whose key does not match the spent script.
     let (mut p, _) = ltc_psbt();
     p.inputs[0].witness_utxo = Some(out(
         utxo_script_pubkey(
@@ -864,7 +795,6 @@ fn litecoin_requires_witness_utxo_and_refuses_bitcoin_paths() {
         psbt_err(utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &p.to_string())).contains("not ours")
     );
 
-    // Only SIGHASH_ALL.
     let (mut p, _) = ltc_psbt();
     p.inputs[0].sighash_type = Some(PsbtSighashType::from(
         EcdsaSighashType::SinglePlusAnyoneCanPay,
@@ -874,7 +804,6 @@ fn litecoin_requires_witness_utxo_and_refuses_bitcoin_paths() {
             .contains("SIGHASH_ALL")
     );
 
-    // Wrong seed: nothing of ours.
     let (p, _) = ltc_psbt();
     assert!(psbt_err(utxo_sign_psbt(
         &seed(LEGAL),
@@ -889,7 +818,6 @@ fn litecoin_requires_witness_utxo_and_refuses_bitcoin_paths() {
 #[test]
 fn dust_outputs_are_refused() {
     let s = seed(ABANDON);
-    // Litecoin: 2 939 < 2 940 (P2WPKH dust at 30 000 litoshis/kvB).
     let (mut p, _) = ltc_psbt();
     p.unsigned_tx.output[0].value = Amount::from_sat(2_939);
     assert!(
@@ -898,7 +826,6 @@ fn dust_outputs_are_refused() {
     let (mut p, _) = ltc_psbt();
     p.unsigned_tx.output[0].value = Amount::from_sat(2_940);
     assert!(utxo_sign_psbt(&s, Network::Testnet, LTC, 0, &p.to_string()).is_ok());
-    // Dogecoin: below the hard dust limit (0.001 DOGE) refused; soft dust warned.
     let (mut p, _, _) = doge_psbt(226_000);
     p.unsigned_tx.output[0].value = Amount::from_sat(99_999);
     assert!(psbt_err(utxo_sign_psbt(
@@ -922,7 +849,6 @@ fn unknown_scripts_foreign_inputs_and_high_fees_need_a_reinforced_confirmation()
     let summary =
         |coin, p: &Psbt| utxo_psbt_summary(&s, Network::Testnet, coin, 0, &p.to_string()).unwrap();
 
-    // Bare multisig-like unknown script and OP_RETURN.
     let (mut p, _) = ltc_psbt();
     p.unsigned_tx.output[0].script_pubkey =
         spk("5121020202020202020202020202020202020202020202020202020202020202020251ae");
@@ -938,21 +864,18 @@ fn unknown_scripts_foreign_inputs_and_high_fees_need_a_reinforced_confirmation()
     assert!(sum.warnings.contains(&UtxoWarning::OpReturn { index: 2 }));
     assert!(sum.requires_extra_confirmation);
 
-    // A fee of 0.49 LTC on a 0.5 LTC send.
     let (mut p, _) = ltc_psbt();
     p.unsigned_tx.output[1].value = Amount::from_sat(1_000_000);
     let sum = summary(LTC, &p);
     assert!(sum.warnings.contains(&UtxoWarning::HighFee));
     assert!(sum.requires_extra_confirmation);
 
-    // No change output: the summary says so (whatever is not sent is fee).
     let (mut p, _) = ltc_psbt();
     p.unsigned_tx.output.truncate(1);
     p.outputs.truncate(1);
     let sum = summary(LTC, &p);
     assert!(!sum.has_change);
 
-    // Fee below the relay minimum: informative only.
     let (p, _, _) = doge_psbt(1_000);
     let sum = summary(DOGE, &p);
     assert!(
@@ -960,9 +883,7 @@ fn unknown_scripts_foreign_inputs_and_high_fees_need_a_reinforced_confirmation()
     );
     assert!(!sum.requires_extra_confirmation);
 
-    // A second input that is not ours.
     let (mut p, prev, _) = doge_psbt(226_000);
-    // Someone else's P2PKH coin (key not derived from our seed).
     let foreign_prev = prev_tx(prev.output[0].script_pubkey.clone(), 5_000_000_000);
     p.unsigned_tx.input.push(TxIn {
         previous_output: OutPoint {
@@ -1006,16 +927,8 @@ fn summary_json_shape() {
     assert_eq!(w, serde_json::json!({ "kind": "softDust", "index": 2 }));
 }
 
-// ------------------------------------------------------------------------------------------
-// PSBTs built by the TypeScript adapters (packages/chains, bitcoinjs-lib), "abandon … about".
-// ------------------------------------------------------------------------------------------
-
-/// `LitecoinAdapter.buildTx`: 0.5 tLTC from `m/84'/1'/0'/0/0` (fixture UTXO of 1 tLTC),
-/// change to `m/84'/1'/0'/1/0`, 1 litoshi/vB.
 const TS_LTC_PSBT: &str = "cHNidP8BAHECAAAAAaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAQAAAAD/////AoDw+gIAAAAAFgAUYUrtIN3XloIcpkD2vCSzI2cHQ9Dz7/oCAAAAABYAFC80qhzwClOwVaKRoDp9RfCmmItSAAAAAAABAR8A4fUFAAAAABYAFNDEo+8J6Ze26Z45flGP4+QaEYyhIgYC56slN7XUnpcDCargbp5J82zhyf671E7I4NHMoLT5wxkYc8XaClQAAIABAACAAAAAgAAAAAAAAAAAAAAiAgNdSezNVNAJnkNnYnfHptRiXWEdqIpd9Jv5UXp3kad3pRhzxdoKVAAAgAEAAIAAAACAAQAAAAAAAAAA";
 
-/// `DogecoinAdapter.buildTx`: 10 DOGE from `m/44'/1'/0'/0/0` (`nonWitnessUtxo` of 100 DOGE),
-/// change to `m/44'/1'/0'/1/0`, 0.01 DOGE/kB.
 const TS_DOGE_PSBT: &str = "cHNidP8BAHcCAAAAARJmgqwvI6lsL36LtKJLSB3aGOxwYXu6cubZdu0FFJJvAQAAAAD/////AgDKmjsAAAAAGXapFAkJCQkJCQkJCQkJCQkJCQkJCQkJiKwwp20YAgAAABl2qRQctzkgtaw49GDjjetoS5xKQI/zwIisAAAAAAABAHcBAAAAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAAAAAAD/////AtIEAAAAAAAAGXapFAkJCQkJCQkJCQkJCQkJCQkJCQkJiKwA5AtUAgAAABl2qRQ6LUFFpPCYUjs+gSfx2ofPxVuOeYisAAAAACIGAqdFE5VzU2ny7N/IKcD3dOiO8TA9/lsvBNuqswpTXf3WGHPF2gosAACAAQAAgAAAAIAAAAAAAAAAAAAAIgIDICgqxrN4JyGxdCwpRTCp8lBBM2Grv/ZZrMg1K8TB8/EYc8XaCiwAAIABAACAAAAAgAEAAAAAAAAAAA==";
 
 #[test]
@@ -1065,8 +978,7 @@ fn psbts_built_by_the_ts_adapters_are_decoded_and_signed() {
     );
 }
 
-/// Litecoin account 1 (`m/84'/1'/1'` on testnet) signs only its own coins: account 0 refuses
-/// the PSBT (nothing of its own), account 1 signs it and recognises its change.
+/// Litecoin account 1 signs only its own coins: account 0 refuses, account 1 signs with change.
 #[test]
 fn litecoin_signs_only_the_requested_account() {
     let me = key(ABANDON, "m/84'/1'/1'/0/0");
@@ -1111,7 +1023,6 @@ fn litecoin_signs_only_the_requested_account() {
     assert!(utxo_psbt_summary(&s, Network::Testnet, LTC, 0, &b64).is_err());
 }
 
-/// Audit finding: Litecoin / Dogecoin change at any index < 2^31 was labelled change.
 #[test]
 fn change_beyond_max_index_is_a_reinforced_payment() {
     use wallet_core::MAX_CHANGE_INDEX;
@@ -1143,7 +1054,6 @@ fn change_beyond_max_index_is_a_reinforced_payment() {
     }
 }
 
-/// Audit finding: a Litecoin witness v2+ output was shown as an ordinary `tltc1z…` address.
 #[test]
 fn litecoin_witness_v2_output_is_unknown() {
     let s = seed(ABANDON);

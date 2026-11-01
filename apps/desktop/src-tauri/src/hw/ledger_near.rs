@@ -1,14 +1,4 @@
 //! Ledger « NEAR » app (LedgerHQ/app-near, Rust app 2.x; host crate `near-ledger`).
-//!
-//! CLA 80, P2 = network byte `W` (ignored by the app). Paths: **exactly five** big-endian
-//! indices, no count byte (`PathBip32::parse` of the app) — hence Kyro's hardware NEAR path
-//! `m/44'/397'/0'/0'/(account + 1)'` (see `wallet_core::HwKeyChain`).
-//! - GET_PUBLIC_KEY (04): P1 = 00 shows the key on the screen (base58 `ed25519:…`), 01 does
-//!   not → 32-byte key.
-//! - GET_VERSION (06) is sent first before signing: like `near-ledger-js`, it resets a
-//!   half-received transaction left by an abandoned call.
-//! - SIGN_TRANSACTION (02): `path || Borsh transaction` in 250-byte chunks, P1 = 80 on the last
-//!   chunk, 00 before → 64-byte ed25519 signature of SHA-256(Borsh).
 
 use super::ledger_apdu::{self as apdu, SwContext};
 use super::ledger_apps::App;

@@ -19,7 +19,6 @@ describe('network choice texts (§2.10)', () => {
     const back = networkSwitchText({ network: 'mainnet', otherVaultExists: true }, 'testnet').join(' ');
     expect(back).toContain('Un coffre existe déjà sur le réseau de test');
     expect(back).toContain('aucune valeur');
-    // Welcome screen: no vault on the current network yet.
     expect(networkSwitchText({ network: 'mainnet', otherVaultExists: false }, 'testnet', false)[0]).toBe('Chaque réseau a son propre coffre : changer de réseau ne supprime rien.');
   });
 });

@@ -1,12 +1,4 @@
 //! XRP Ledger vectors.
-//!
-//! Sources (fetched 2026-10-30):
-//! - Trezor firmware `tests/device_tests/ripple/test_get_address.py` (mnemonic `all ×12` and
-//!   a 24-word custom mnemonic, `m/44'/144'/…` addresses) and `test_sign_tx.py` (three signed
-//!   Payments: serialized transaction and DER signature, RFC 6979 like libsecp256k1);
-//! - xrpl.js `packages/ripple-binary-codec/test/fixtures/data-driven-tests.json` (Amount
-//!   encodings, whole Payment objects) and `codec-fixtures.json` (a signed mainnet Payment),
-//!   `delivermin-tx-binary.json`, `signerlistset-tx-binary.json`.
 
 mod common;
 
@@ -47,7 +39,6 @@ fn trezor_address_vectors() {
         xrp_address_at(&custom, 0, 1).unwrap(),
         "rUt9ULSrUvfCmke8HTFU1szbmFpWzVbBXW"
     );
-    // Round trip and refusals.
     let a = "rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4H";
     assert_eq!(xrp_address_from_id(&xrp_account_id(a).unwrap()), a);
     for bad in [
@@ -58,7 +49,6 @@ fn trezor_address_vectors() {
     ] {
         assert!(xrp_account_id(bad).is_err(), "{bad}");
     }
-    // xrpl.js ACCOUNT_ONE.
     assert_eq!(
         xrp_address_from_id(&id("0000000000000000000000000000000000000001")),
         "rrrrrrrrrrrrrrrrrrrrBZbvji"
@@ -157,7 +147,6 @@ fn trezor_signed_payments_byte_for_byte() {
             hex::decode(expected).unwrap()
         );
     }
-    // Destination tag and LastLedgerSequence in the summary.
     let p = trezor_payment(
         2,
         "rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4H",
@@ -206,14 +195,12 @@ fn xrpl_js_amount_vectors() {
             destination: [2; 20],
             memos: vec![],
         };
-        // Amount follows TransactionType (3) + Flags (5) + Sequence (5) + its header (1).
         let b = p.encode(false);
         let len = if b[14] & 0x80 != 0 { 48 } else { 8 };
         hex::encode_upper(&b[14..14 + len])
     };
     assert_eq!(enc(XrpAmount::Xrp(0)), "4000000000000000");
     assert_eq!(enc(XrpAmount::Xrp(1)), "4000000000000001");
-    // Currency "USD" (20 bytes) then issuer ACCOUNT_ONE (20 bytes).
     let iou = concat!(
         "0000000000000000000000005553440000000000",
         "0000000000000000000000000000000000000001"
@@ -254,25 +241,18 @@ fn xrpl_js_amount_vectors() {
         let a = xrp_issued_amount(value, "USD", issuer).unwrap();
         assert_eq!(enc(a), format!("{head}{}", iou.to_uppercase()), "{value}");
     }
-    // "value precision of 17 is greater than maximum iou precision of 16", "exponent is too large".
     assert!(xrp_issued_amount("1111111111111111.1", "USD", issuer).is_err());
     assert!(xrp_issued_amount("9999999999999999000000000000000000000000000000000000000000000000000000000000000000000000000000000", "USD", issuer).is_err());
     assert!(xrp_issued_amount("1", "XRP", issuer).is_err());
 }
 
-/// xrpl.js `whole_objects`: unsigned Payments decode and re-encode identically.
 #[test]
 fn xrpl_js_whole_payments_round_trip() {
     for blob in [
-        // Issued currency with SendMax (RDD).
         "120000228000000024000054C761D54416B0AE3B00000000000000000000000000005244440000000000387B5123A1C93417271BA6DBBBD087E68E7445B268400000000000000A69D54417BCE6C800000000000000000000000000005244440000000000387B5123A1C93417271BA6DBBBD087E68E7445B28114F7B414E9D25EE050553D8A0BB27202F4249AD3288314B83EB506BBE5BCF3E89C638FDB185B1DEAC96584",
-        // XRP.
         "120000220000000024000000026140000000017D784068400000000000000A81145CCB151F6E9D603F394AE778ACF10D3BECE874F68314E851BBBE79E328E43D68F43445368133DF5FBA5A",
-        // LastLedgerSequence.
         "12000022000000002400000090201B005EE9BA614000000000030D4068400000000000000F8114AA1BD19D9E87BE8069FDBF6843653C43837C03C6831467FE6EC28E0464DD24FB2D62A492AAC697CFAD02",
-        // DestinationTag 4146942154.
         "120000220000000024000000012EF72D50CA6140000000017D784068400000000000000C8114E851BBBE79E328E43D68F43445368133DF5FBA5A831476DAC5E814CD4AA74142C3AB45E69A900E637AA2",
-        // SourceTag.
         "12000023000A34F8240000888A61400000000007A120684000000000000014811408F41F116A1F60D60296B16907F0A041BF10619783146E2F0455C46CF5DF61A1E58419A89D45459045EA",
     ] {
         let raw = hex::decode(blob).unwrap();
@@ -337,7 +317,6 @@ fn memos_encode_like_xrpl_js() {
     assert!(sum.requires_extra_confirmation);
 }
 
-/// Audit finding: MemoData was shown as is, control and bidi characters included.
 #[test]
 fn memo_text_is_sanitized() {
     let p = XrpPayment {
@@ -406,7 +385,6 @@ fn refusals() {
             "{h}"
         );
     };
-    // Partial payment, unknown flag, payment to oneself, zero amount, zero fee, negative IOU.
     refused(&XrpPayment {
         flags: Some(TF_FULLY_CANONICAL_SIG | 0x0002_0000),
         ..base.clone()
@@ -431,12 +409,10 @@ fn refusals() {
         amount: xrp_issued_amount("-5", "USD", "rrrrrrrrrrrrrrrrrrrrBZbvji").unwrap(),
         ..base.clone()
     });
-    // Audit finding: no LastLedgerSequence (valid for ever) used to be signed.
     refused(&XrpPayment {
         last_ledger_sequence: None,
         ..base.clone()
     });
-    // Another sender, another signing key, already signed.
     refused(&XrpPayment {
         account: [9; 20],
         ..base.clone()
@@ -449,14 +425,12 @@ fn refusals() {
         txn_signature: Some(vec![0x30, 0x00]),
         ..base.clone()
     });
-    // xrpl.js DeliverMin payment (partial payment with Paths) and SignerListSet (type 12).
     for fixture in [
         "1200002280020000240000689E201B010BF0E361D4950EA99C657EF800000000000000000000000055534400000000000A20B3C85F482532A9578DBB3950B85CA06594D1684000000000002AF8694000000000003A986AD40485B690F28E8000000000000000000000000055534400000000000A20B3C85F482532A9578DBB3950B85CA06594D1",
         "12000C22800000002400003B49201B01724E3520230000000368400000000000000B",
     ] {
         assert!(XrpPayment::decode(&hex::decode(fixture).unwrap()).is_err(), "{fixture}");
     }
-    // Duplicate field / bad order: refused by the round trip.
     let mut dup = base.encode(true);
     dup.extend_from_slice(&[0x24, 0, 0, 0, 2]);
     assert!(XrpPayment::decode(&dup).is_err());
@@ -467,7 +441,6 @@ fn refusals() {
     };
     let sum = xrp_decode_tx(&hex::encode(sm.encode(false)), &me, &pk).unwrap();
     assert!(sum.warnings.contains(&XrpWarning::SendMax) && sum.requires_extra_confirmation);
-    // Fee above 1 XRP: reinforced.
     let hf = XrpPayment {
         fee: 2_000_000,
         ..base

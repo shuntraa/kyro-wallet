@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // TON user-friendly addresses (48 characters, base64url or base64 of tag ‖ workchain ‖ hash ‖
-// CRC16-XModem), the same rules as wallet-core `ton_parse_address`: checksum, tag 0x11
-// (bounceable `EQ…`) / 0x51 (non-bounceable `UQ…`), + 0x80 testnet-only (`kQ…` / `0Q…`),
-// workchain 0 or -1. Raw `0:…` forms are refused (no checksum). Used by the interface to give
-// early feedback and by the demo backend; Rust re-checks everything on every command.
 import { crc16Xmodem } from './stellar';
 import { l10n } from './i18n';
 

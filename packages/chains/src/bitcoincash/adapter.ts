@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Bitcoin Cash: BIP44 P2PKH, `m/44'/145'/0'` (chipnet: `m/44'/1'/0'`), CashAddr
-// `bitcoincash:q…` / `bchtest:q…` only — the legacy `1…` / `3…` form is refused, it cannot be
-// told apart from a Bitcoin address. Reads and broadcast through Rust's `bch_*` commands
-// (default: public Fulcrum servers, genesis and post-split checkpoint checked, CashTokens coins
-// left out); every input carries its full previous transaction (`nonWitnessUtxo`, from
-// `bch_tx_hex`), and Rust takes amounts only from it. Rust signs `SIGHASH_ALL|FORKID` (BIP143
-// digest, amounts committed) and returns the PSBT already finalized.
-//
-// Parameters: Bitcoin Cash Node `chainparams.cpp` / `policy.h` (see wallet-core `utxo.rs`):
-// relay minimum 1 sat/byte, dust 546 sat for P2PKH (dust relay fee 3 000 sat/kB).
+// Bitcoin Cash: BIP44 P2PKH, `m/44'/145'/0'` (chipnet: `m/44'/1'/0'`), CashAddr `bitcoincash:q…` / `bchtest:q…` only — the legacy `1…` / `3…` form is refused, it cannot be told apart from a Bitcoin address.
 
 import type * as bitcoin from 'bitcoinjs-lib';
 import { CASHADDR_PREFIX, cashaddrToScript, scriptToCashaddr, type Network } from '@kyro/shared';

@@ -1,14 +1,5 @@
 //! Ledger « Hedera » app (LedgerHQ/app-hedera 1.x, `docs/accounts.md`; host library
 //! `@ledgerhq/hw-app-hedera`).
-//!
-//! CLA E0. The app derives `m/44'/3030'/0'/0'/index'` itself from a 4-byte **little-endian**
-//! key index (Kyro: index = account number, see `wallet_core::HwKeyChain`).
-//! - GET_PUBLIC_KEY (02): P1 = 00 shows « Export public key #index » and waits for the user,
-//!   P1 = 01 answers silently → 32-byte ED25519 key.
-//! - SIGN_TRANSACTION (04): P1 = P2 = 00, data `index (LE) ‖ TransactionBody` in **one** APDU
-//!   (body ≤ 251 bytes): the app decodes the body (nanopb), shows the transfer (accounts,
-//!   amount, fee, memo) and, once approved, returns the 64-byte ED25519 signature of the body
-//!   bytes, verified by Kyro (`wallet_core::hbar_hw_signed`).
 
 use super::ledger_apdu::{self as apdu, SwContext};
 use super::ledger_apps::App;
@@ -21,7 +12,6 @@ const P1_DISPLAY: u8 = 0x00;
 const P1_SILENT: u8 = 0x01;
 const MAX_BODY: usize = 251;
 
-/// The key index the app expects: the last (hardened) element of Kyro's path.
 fn index_of(path: &[u32]) -> HwResult<[u8; 4]> {
     match path {
         [a, b, c, d, i]

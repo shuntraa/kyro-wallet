@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Kyro signature components: mark, coin icons, address blocks, "En clair",
-// big amounts, copy button, password field, empty / error states.
+// Kyro signature components: mark, coin icons, address blocks, "En clair", big amounts, copy
+// button, password field, empty / error states.
 
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Currency } from '@kyro/shared';
@@ -177,10 +177,8 @@ export function EmptyState({ title, children, action, className }: { title: stri
 }
 
 /**
- * Network data error. While Tor (enabled) is not ready, or when `error` is TOR_UNAVAILABLE,
- * it shows "En attente de Tor…" instead: nothing failed, Kyro is refusing to go out in clear.
- * When `error` says the user's own server is down, it shows « Ton serveur ne répond pas »
- * with a way to the settings (never a fallback to the default).
+ * Network data error. While Tor (enabled) is not ready, or when `error` is TOR_UNAVAILABLE, it
+ * shows "En attente de Tor…" instead: nothing failed, Kyro is refusing to go out in clear.
  */
 export function ErrorLine({ children, onRetry, className, error }: { children: ReactNode; onRetry?: () => void; className?: string; error?: unknown }) {
   const torBlocked = useTorBlocked(error);

@@ -1,12 +1,4 @@
 //! Ledger « Cosmos » app (Zondax ledger-cosmos, host library `@zondax/ledger-cosmos-js`).
-//!
-//! CLA 55. Paths: **five little-endian** indices, no count byte. The app signs only amino JSON
-//! (P2 = 00) or SIGN_MODE_TEXTUAL (01), not SIGN_MODE_DIRECT: hardware Cosmos transactions are
-//! built in LEGACY_AMINO_JSON mode (`wallet_core::cosmos_amino_sign_doc`).
-//! - GET_ADDR_SECP256K1 (04), P1 = 01 to show the address, data = `len || "cosmos" || path`
-//!   → `compressed pubkey (33) || bech32 address (ASCII)` (checked against the key).
-//! - SIGN_SECP256K1 (02): first chunk = the path, then the JSON in 250-byte chunks; P1 = 00
-//!   (init), 01 (add), 02 (last) → DER signature of SHA-256(JSON).
 
 use super::ledger_apdu::{self as apdu, SwContext};
 use super::ledger_apps::App;
@@ -83,7 +75,6 @@ pub fn sign(app: &App<'_>, path: &[u32], json: &[u8]) -> HwResult<Vec<u8>> {
     for a in sign_apdus(path, json)? {
         last = app.call(&a, SwContext::Signing)?;
     }
-    // DER: 30 len … (70 to 72 bytes); parsed and verified by wallet-core.
     if last.len() < 8 || last.len() > 72 || last[0] != 0x30 {
         return Err(HwError::bad("malformed Cosmos (DER) signature"));
     }
@@ -96,7 +87,6 @@ mod tests {
     use super::*;
     use wallet_core::HwKeyChain;
 
-    /// A compressed secp256k1 key; the address the app returns is its bech32 `cosmos1…`.
     const PK: &str = "02baa4ef93f2ce84592a49b1d729c074eab640112522a7a89f7d03ebab21ded7b6";
 
     #[test]
@@ -131,7 +121,6 @@ mod tests {
         assert_eq!(&apdus[0][..5], &[0x55, 0x02, 0x00, 0x00, 20]);
         assert_eq!(&apdus[1][..5], &[0x55, 0x02, 0x01, 0x00, 250]);
         assert_eq!(&apdus[2][..5], &[0x55, 0x02, 0x02, 0x00, 50]);
-        // A short JSON: init then last.
         let two = sign_apdus(&path, b"{}").unwrap();
         assert_eq!((two[0][2], two[1][2]), (P1_INIT, P1_LAST));
         let der = "3044022012345678901234567890123456789012345678901234567890123456789002201234567890123456789012345678901234567890123456789012345678";

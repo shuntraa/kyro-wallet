@@ -1,12 +1,4 @@
 //! TRON vectors.
-//!
-//! Sources (fetched 2026-10-30):
-//! - Trezor firmware `common/tests/fixtures/tron/get_address.json` and `sign_tx.json`
-//!   (mnemonic `all ×12`): addresses at `m/44'/195'/0'/0/i`; structured transactions with their
-//!   `raw_data_hex`, txID and signature (Trezor signs with RFC 6979, like libsecp256k1);
-//! - Trust Wallet Core `tests/chains/Tron/` (signatures over a known txid, in `src/tron.rs`);
-//! - two real Nile transactions read from `nile.trongrid.io` (`getblockbynum`), signed by
-//!   other wallets: a TRX transfer (v = 0x01) and a TRC-20 transfer (v = 0x1b).
 
 mod common;
 
@@ -48,7 +40,6 @@ fn trezor_address_vectors() {
         hex::encode(tron_address_bytes(TREZOR_OWNER).unwrap()),
         "41f2cd810c48c401d392ead3c6e1e1cb9f57750a58"
     );
-    // Trust Wallet `TronAddress.Invalid`.
     for bad in [
         "abc",
         "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
@@ -185,7 +176,6 @@ fn summaries_of_the_trezor_vectors() {
     assert_eq!(t.fee_limit, "0");
     assert!(t.warnings.is_empty() && !t.requires_extra_confirmation);
 
-    // Memo: shown, reinforced.
     let m = sum(2);
     assert_eq!(m.memo, "68656c6c6f20776f726c6421");
     assert_eq!(m.warnings, vec![TronWarning::Memo]);
@@ -205,7 +195,6 @@ fn summaries_of_the_trezor_vectors() {
     );
     assert_eq!(u.fee_limit, "50000000");
     assert!(!u.requires_extra_confirmation);
-    // Kyro's own call data for the same transfer is identical.
     let TronAction::Trc20Transfer { to, .. } = &u.action else {
         panic!()
     };
@@ -214,9 +203,7 @@ fn summaries_of_the_trezor_vectors() {
         "a9059cbb000000000000000000000000d093f24888ab06073a4bdffbb8107db1ea9dc0a000000000000000000000000000000000000000000000000000000000013bb450"
     );
 
-    // TRX sent along a transfer: reinforced.
     assert_eq!(sum(4).warnings, vec![TronWarning::CallValue]);
-    // approve(): not a transfer → shown raw as an unknown call, reinforced.
     let a = sum(5);
     assert!(
         matches!(&a.action, TronAction::ContractCall { selector, .. } if selector == "095ea7b3")
@@ -237,26 +224,20 @@ fn refusals() {
             "{hex_raw}"
         )
     };
-    // Another owner (Trezor "different owner" case: our key is m/44'/195'/0'/0/1).
     refused(transfer, "TFz2CJn9CJb8C4i1Gke3jmZX2fRMJxniH2");
     assert!(tron_sign(&seed(ALL), 1, transfer).is_err());
-    // Trezor's Stake_for_Energy (FreezeBalanceV2, type 54): unsupported contract type.
     refused("0a027e0b2208ed0f599cb230d51240f884eee8c3335a5a083612560a34747970652e676f6f676c65617069732e636f6d2f70726f746f636f6c2e467265657a6542616c616e63655632436f6e7472616374121e0a1541f2cd810c48c401d392ead3c6e1e1cb9f57750a581080e1eb1718017098b0eae8c333", TREZOR_OWNER);
-    // Appended field (duplicate timestamp): non-canonical.
     refused(&format!("{transfer}70e0b5fae68033"), TREZOR_OWNER);
-    // Permission_id = 2 appended inside the contract (multi-signature permission).
     let contract = &transfer[transfer.find("5a68").unwrap() + 4..transfer.find("70e0b5").unwrap()];
     let with_perm = transfer.replace(&format!("5a68{contract}"), &format!("5a6a{contract}2802"));
     assert_ne!(with_perm, transfer);
     refused(&with_perm, TREZOR_OWNER);
     let mut raw = v[0].raw.clone();
-    // Non-minimal varint for the amount (c095d208 → c095d28800): refused by the round trip.
     let non_minimal = transfer
         .replace("5a680801126", "5a690801126")
         .replace("12330a15", "12340a15")
         .replace("18c095d208", "18c095d28800");
     refused(&non_minimal, TREZOR_OWNER);
-    // Self-transfer, zero amount, negative amount.
     if let TronContract::Transfer { owner, .. } = raw.contract {
         raw.contract = TronContract::Transfer {
             owner,
@@ -277,7 +258,6 @@ fn refusals() {
         };
         refused(&hex::encode(raw.encode()), TREZOR_OWNER);
     }
-    // Garbage.
     refused("zz", TREZOR_OWNER);
     refused("0a", TREZOR_OWNER);
 }
@@ -307,7 +287,6 @@ fn real_nile_transactions() {
         assert_eq!(tron_recover_signer(raw, &h(sig)).unwrap(), owner);
         let s = tron_decode_raw(raw, &owner).unwrap();
         assert_eq!(s.txid, txid);
-        // The Transaction message for broadcasthex: raw_data (1) then signature (2).
         let signed = tron_signed_transaction(raw, &h(sig).try_into().unwrap()).unwrap();
         assert!(signed.ends_with(sig));
     }
@@ -315,7 +294,6 @@ fn real_nile_transactions() {
 
 #[test]
 fn reference_block_from_a_nile_block() {
-    // nile.trongrid.io getnowblock, 2026-10-30: number 72 272 568.
     let (b, hash) = tron_ref_block(
         72_272_568,
         "00000000044ecab8883caa0677c5a7f36c8cb18c62016efac0da52a696a7b736",
@@ -323,7 +301,6 @@ fn reference_block_from_a_nile_block() {
     .unwrap();
     assert_eq!(hex::encode(b), "cab8");
     assert_eq!(hex::encode(hash), "883caa0677c5a7f3");
-    // A block id that does not start with the block number: refused.
     assert!(tron_ref_block(
         72_272_569,
         "00000000044ecab8883caa0677c5a7f36c8cb18c62016efac0da52a696a7b736"

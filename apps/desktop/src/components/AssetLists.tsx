@@ -119,7 +119,6 @@ function MineList({ sort }: { sort: Sort }) {
   const { settings, hideBalances, navigate, selectChainAccount } = useApp();
   const { t } = useT();
   const cur = settings.currency;
-  // A chain with several vault accounts: one row per account (§2.9).
   const rows = sortHoldings(pf.accountHoldings, sort);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -305,7 +304,6 @@ function MarketList({ sort, query, favs, toggle, onlyFavs }: { sort: Sort; query
 
 export function compactFiat(v: number, cur: Currency): string {
   const raw = fiatSymbol(cur);
-  // Letter symbols (CHF, kr…) keep a space from the number: « 1,2 Md CHF », « CHF 1.2B ».
   const sym = /^\p{L}/u.test(raw) ? (getLang() === 'fr' ? `${NNBSP}${raw}` : `${raw}${NNBSP}`) : raw;
   if (v >= 1e12) return t('portfolio.trillions', { n: fmtNumber(v / 1e12, 2), sym });
   if (v >= 1e9) return t('portfolio.billions', { n: fmtNumber(v / 1e9, 1), sym });

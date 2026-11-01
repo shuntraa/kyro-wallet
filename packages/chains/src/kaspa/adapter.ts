@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Kaspa adapter (KAS). Thin on purpose: reads, payment building (coin selection over 20 receive
-// + 20 change addresses, KIP-9 mass, fee), live re-read of the coins, signature (BIP340 Schnorr)
-// and broadcast are Rust commands (`kas_*`, docs/IPC.md §2.11). This adapter validates input
-// early and checks that what Rust built is what was asked (recipient, amount).
+// Kaspa adapter (KAS). Thin on purpose: reads, payment building (coin selection over 20 receive + 20 change addresses, KIP-9 mass, fee), live re-read of the coins, signature (BIP340 Schnorr) and broadcast are Rust commands (`kas_*`, docs/IPC.md §2.11).
 
 import { accountArg } from '../types';
 import {

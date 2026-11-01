@@ -1,16 +1,4 @@
 //! Kaspa vectors.
-//!
-//! Sources (rusty-kaspa **v2.1.0**, read 2026-11-01):
-//! - `crypto/hashes/src/hashers.rs` `test_vectors` (keyed BLAKE2b domains, incremental);
-//! - `crypto/addresses/src/lib.rs` `test_address_*` / `test_errors` (encodings, checksums);
-//! - `wallet/keys/src/derivation/gen1/hd.rs` (`hd_wallet_gen1`: 20 receive + 20 change
-//!   addresses of a master `kprv`; `wallet_from_mnemonic`: account `kpub` of a 24-word phrase;
-//!   `address_test_by_ktrv`: a `kaspatest:` address of another phrase);
-//! - `consensus/core/src/hashing/tx.rs` `test_transaction_hashing` (ids and hashes #1–#8);
-//! - `consensus/core/src/hashing/sighash.rs` `test_signature_hash` (Schnorr sighashes);
-//! - `consensus/core/src/mass/mod.rs` `test_storage_mass` (KIP-9);
-//! - a real mainnet transaction (`tests/data/kaspa_mainnet_tx.json`, fetched from api.kaspa.org
-//!   on 2026-11-01): id, compute mass and both BIP340 signatures recomputed / verified.
 
 mod common;
 
@@ -30,8 +18,6 @@ use wallet_core::{
 fn h32(s: &str) -> [u8; 32] {
     hex::decode(s).unwrap().try_into().unwrap()
 }
-
-// ---------------------------------------------------------------- hashers
 
 #[test]
 fn hasher_domain_vectors() {
@@ -91,8 +77,6 @@ fn hasher_domain_vectors() {
     }
 }
 
-// ---------------------------------------------------------------- addresses
-
 #[test]
 fn address_vectors() {
     let ecdsa: [u8; 33] =
@@ -137,7 +121,6 @@ fn address_vectors() {
         let (k, p) = kaspa_address_decode(net, want).unwrap();
         assert_eq!((k, p.as_slice()), (kind, payload));
     }
-    // Script public keys of each kind, and back.
     let p2pk = kaspa_script_pubkey(
         Network::Mainnet,
         "kaspa:qp0l70zd5x85ttwd6jv7g3s3a8llzj96d8dncn4zmhv4tlzx5k2jyqh70xmfj",
@@ -177,7 +160,6 @@ fn address_vectors() {
 fn address_errors() {
     let good = "kaspa:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkx9awp4e";
     for bad in [
-        // rusty-kaspa `test_errors`: invalid character, bad checksum, too short.
         "kaspa:qqqqqqqqqqqqq1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkx9awp4e",
         "kaspa:qqqqqqqqqqqqqbqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkx9awp4e",
         "kaspa:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkx9awp4l",
@@ -194,7 +176,6 @@ fn address_errors() {
         );
     }
     assert!(kaspa_address_decode(Network::Mainnet, good).is_ok());
-    // A mainnet address on testnet (and the reverse) is refused, with the reason.
     let e = kaspa_address_decode(Network::Testnet, good).unwrap_err();
     assert!(e.to_string().contains("mainnet"), "{e}");
     let e = kaspa_address_decode(
@@ -204,8 +185,6 @@ fn address_errors() {
     .unwrap_err();
     assert!(e.to_string().contains("testnet"), "{e}");
 }
-
-// ---------------------------------------------------------------- derivation
 
 const GEN1_RECEIVE: [&str; 20] = [
     "kaspa:qz7ulu4c25dh7fzec9zjyrmlhnkzrg4wmf89q7gzr3gfrsj3uz6xjellj43pf",
@@ -263,7 +242,6 @@ fn kaspa_xkey_bytes(s: &str) -> Vec<u8> {
 
 #[test]
 fn gen1_wallet_vectors() {
-    // `hd_wallet_gen1`: master kprv → m/44'/111111'/0'/{0,1}/0..19.
     let mut raw = kaspa_xkey_bytes(
         "kprv5y2qurMHCsXYrNfU3GCihuwG3vMqFji7PZXajMEqyBkNh9UZUJgoHYBLTKu1eM4MvUtomcXPQ3Sw9HZ5ebbM4byoUciHo1zrPJBQfqpLorQ",
     );
@@ -279,7 +257,6 @@ fn gen1_wallet_vectors() {
             );
         }
     }
-    // `generate_kaspatest_addresses`: same keys, `kaspatest:` prefix.
     let keys = kaspa_keys_from_master(&master, 0, false, 2).unwrap();
     assert_eq!(
         kaspa_address_of_xonly(Network::Testnet, &keys[0]),
@@ -293,7 +270,6 @@ fn gen1_wallet_vectors() {
 
 #[test]
 fn mnemonic_vectors() {
-    // `wallet_from_mnemonic`: 24 words → master kprv and account kpub (m/44'/111111'/0').
     let fringe = seed("fringe ceiling crater inject pilot travel gas nurse bulb bullet horn segment snack harbor dice laugh vital cigar push couple plastic into slender worry");
     let master = Xpriv::new_master(bitcoin::NetworkKind::Main, &fringe[..]).unwrap();
     let kprv = kaspa_xkey_bytes(
@@ -303,7 +279,6 @@ fn mnemonic_vectors() {
     let kpub = kaspa_xkey_bytes(
         "kpub2HtoTgsG6e1c7ixJ6JY49otNSzhEKkwnH6bsPHLAXUdYnfEuYw9LnhT7uRzaS4LSeit2rzutV6z8Fs9usdEGKnNe6p1JxfP71mK8rbUfYWo",
     );
-    // Our receive key 0 is the kpub's child 0/0.
     let mut x = kpub.clone();
     x[..4].copy_from_slice(&[0x04, 0x88, 0xb2, 0x1e]);
     let account = bitcoin::bip32::Xpub::decode(&x).unwrap();
@@ -324,7 +299,6 @@ fn mnemonic_vectors() {
             kaspa_address_of_xonly(Network::Mainnet, &xonly)
         );
     }
-    // `address_test_by_ktrv`: testnet keys use the same path (coin type 111111), receive index 1.
     let hunt = seed("hunt bitter praise lift buyer topic crane leopard uniform network inquiry over grain pass match crush marine strike doll relax fortune trumpet sunny silk");
     assert_eq!(
         kaspa_address(&hunt, Network::Testnet, 0, false, 1).unwrap(),
@@ -348,13 +322,11 @@ fn own_keys_window_and_accounts() {
         keys[KASPA_SCAN_WINDOW as usize].address,
         kaspa_address(&s, Network::Mainnet, 0, true, 0).unwrap()
     );
-    // Testnet: same keys, other prefix. Account 1: other keys.
     let t = kaspa_own_keys(&s, Network::Testnet, 0, 1).unwrap();
     assert_eq!(t[0].xonly, keys[0].xonly);
     assert!(t[0].address.starts_with("kaspatest:q"));
     let a1 = kaspa_own_keys(&s, Network::Mainnet, 1, 1).unwrap();
     assert_ne!(a1[0].xonly, keys[0].xonly);
-    // Account 0, receive 0 of « abandon … about » is frozen here (it must never change).
     assert_eq!(
         keys[0].address,
         kaspa_address(&s, Network::Mainnet, 0, false, 0).unwrap()
@@ -365,8 +337,6 @@ fn own_keys_window_and_accounts() {
         keys[0]
     );
 }
-
-// ---------------------------------------------------------------- transaction ids
 
 fn input(tx_id: [u8; 32], index: u32, script: Vec<u8>, sequence: u64, sig_ops: u8) -> KaspaInput {
     KaspaInput {
@@ -463,8 +433,6 @@ fn transaction_id_vectors() {
     v1.version = 1;
     assert!(kaspa_tx_id(&v1).is_err());
 }
-
-// ---------------------------------------------------------------- signature hashes
 
 fn sighash_fixture(version: u16) -> (KaspaTx, Vec<KaspaUtxoEntry>) {
     let prev = h32("880eb9819a31821d9d2399e2f35e2433b72637e393d71ecc9b8d0250f49153c3");
@@ -832,8 +800,6 @@ fn signature_hash_vectors() {
     assert!(kaspa_sighash(&native, &native_entries[..2], 0, ALL).is_err());
 }
 
-// ---------------------------------------------------------------- storage mass (KIP-9)
-
 #[test]
 fn storage_mass_vectors() {
     let c = 10u64.pow(12);
@@ -860,8 +826,6 @@ fn storage_mass_vectors() {
     assert_eq!(m(&[100, 200], &[50, 250]), 9_000_000_000);
     assert_eq!(m(&[100, 200], &[100, 200]), 0);
     assert_eq!(m(&[100, 200], &[50]), 5_000_000_000);
-    // Plurality: a 3:4 transaction equals a 2:4 one whose second input has plurality 2
-    // (`test_storage_mass_pluralities`, script of (2 − 1) × 100 bytes).
     let a = kaspa_storage_mass(
         &[(300, 0), (200, 0), (200, 0)],
         &[(200, 0), (200, 0), (200, 0), (100, 0)],
@@ -872,11 +836,8 @@ fn storage_mass_vectors() {
     );
     assert_eq!(a, b);
     assert!(a.unwrap() > 0);
-    // A zero amount makes the mass incomputable.
     assert_eq!(kaspa_storage_mass(&[(100, 0)], &[(0, 0)]), None);
 }
-
-// ---------------------------------------------------------------- a real mainnet transaction
 
 #[derive(serde::Deserialize)]
 struct FixtureInput {
@@ -906,8 +867,6 @@ struct Fixture {
 
 fn mainnet_fixture() -> (KaspaTx, Vec<KaspaUtxoEntry>, Fixture) {
     let f: Fixture = serde_json::from_str(include_str!("data/kaspa_mainnet_tx.json")).unwrap();
-    // The API does not return sequence, lock time and gas: the standard wallet uses 0, and the
-    // recomputed id below proves it (the id commits to them).
     let tx = KaspaTx {
         version: 0,
         inputs: f
@@ -974,21 +933,18 @@ fn real_mainnet_transaction() {
             s
         );
     }
-    // Any change to what is signed breaks the signatures: amount of a spent coin, an output.
     let mut lying = entries.clone();
     lying[1].amount += 1;
     assert!(kaspa_verify_signed(&tx, &lying).is_err());
     let mut other = tx.clone();
     other.outputs[0].value -= 1;
     assert!(kaspa_verify_signed(&other, &entries).is_err());
-    // JSON round trip (the REST API's submit shape).
     let json = kaspa_tx_to_json(&tx).unwrap();
     assert!(
         json.contains("\"sigOpCount\":1")
             && json.contains("\"subnetworkId\":\"0000000000000000000000000000000000000000\"")
     );
     assert_eq!(kaspa_tx_from_json(&json).unwrap(), tx);
-    // Paid 317 600 sompi for a 3 154-gram transaction (the wallet used 100 sompi/gram).
     let mass = kaspa_mass(&tx, &entries).unwrap();
     assert_eq!(mass.compute, 3154);
     assert!(mass.minimum_fee() <= 317_600);
@@ -1003,8 +959,6 @@ fn json_is_strict() {
     assert!(kaspa_tx_from_json(&json.replace("\"version\":0", "\"version\":-1")).is_err());
     assert!(kaspa_tx_from_json("{}").is_err());
 }
-
-// ---------------------------------------------------------------- building, decoding, signing
 
 fn coin(tx_byte: u8, index: u32, amount: u64, script: &[u8]) -> KaspaSpendable {
     KaspaSpendable {
@@ -1038,7 +992,6 @@ fn build_sign_verify_round_trip() {
         coin(2, 1, 50 * SOMPI_PER_KAS, &receive5),
         coin(3, 0, 2 * SOMPI_PER_KAS, &change0),
     ];
-    // 50 + 3 + 2 KAS are not enough for 60.
     assert!(kaspa_build_send(
         &coins,
         &to,
@@ -1047,7 +1000,6 @@ fn build_sign_verify_round_trip() {
         0
     )
     .is_err());
-    // Largest coin first.
     let built = kaspa_build_send(
         &coins,
         &to,
@@ -1066,7 +1018,6 @@ fn build_sign_verify_round_trip() {
     assert!(summary.has_change && summary.outputs[1].is_change && !summary.outputs[0].is_change);
     assert_eq!(summary.outputs[0].address.as_deref(), Some(DEST));
     assert_eq!(summary.outputs[0].kind, KaspaOutputKind::Address);
-    // 1 input, 2 outputs: compute mass 2 036 g → 203 600 sompi at the minimum.
     assert_eq!(summary.mass.compute, 2036);
     assert_eq!(summary.fee, "203600");
     assert_eq!(summary.minimum_fee, "203600");
@@ -1081,7 +1032,6 @@ fn build_sign_verify_round_trip() {
     );
     assert_eq!(hex::encode(kaspa_tx_id(&signed).unwrap()), summary.tx_id);
     assert!(signed.inputs.iter().all(|i| i.signature_script.len() == 66));
-    // Another account does not own these coins.
     assert!(kaspa_sign(&s, net, 1, &built.tx, &built.entries).is_err());
 }
 
@@ -1098,10 +1048,8 @@ fn builder_rules() {
     )
     .unwrap();
     let one = [coin(9, 0, 10 * SOMPI_PER_KAS, &me)];
-    // Too small for KIP-9.
     let e = kaspa_build_send(&one, &to, KaspaAmount::Exact(10_000_000), &change, 0).unwrap_err();
     assert!(e.to_string().contains("0.2 KAS"), "{e}");
-    // Insufficient funds.
     assert!(kaspa_build_send(
         &one,
         &to,
@@ -1110,19 +1058,16 @@ fn builder_rules() {
         0
     )
     .is_err());
-    // Almost everything: the tiny rest cannot be a change output (storage mass), it goes to fee.
     let almost = 10 * SOMPI_PER_KAS - 1_000_000;
     let b = kaspa_build_send(&one, &to, KaspaAmount::Exact(almost), &change, 0).unwrap();
     assert_eq!(b.tx.outputs.len(), 1);
     let sum = kaspa_tx_summary(net, &b.tx, &b.entries, &ours).unwrap();
     assert!(!sum.has_change);
     assert_eq!(sum.fee, "1000000");
-    // Max: one output, fee = minimum.
     let b = kaspa_build_send(&one, &to, KaspaAmount::Max, &change, 0).unwrap();
     assert_eq!(b.tx.outputs.len(), 1);
     let sum = kaspa_tx_summary(net, &b.tx, &b.entries, &ours).unwrap();
     assert_eq!(sum.fee, sum.minimum_fee);
-    // Busy network: the priority rate prices the whole mass.
     assert_eq!(kaspa_priority_feerate(100), 0);
     assert_eq!(kaspa_priority_feerate(250), 250);
     assert_eq!(kaspa_priority_feerate(u64::MAX), 10_000);
@@ -1130,10 +1075,8 @@ fn builder_rules() {
         kaspa_build_send(&one, &to, KaspaAmount::Exact(SOMPI_PER_KAS), &change, 250).unwrap();
     let sum = kaspa_tx_summary(net, &busy.tx, &busy.entries, &ours).unwrap();
     assert_eq!(sum.fee.parse::<u64>().unwrap(), sum.mass.total * 250);
-    // 1 KAS output: storage mass C / 10⁸ = 10 000 g dominates the 2 036 g compute mass.
     assert!(sum.mass.storage > sum.mass.compute);
     assert!(sum.mass.total <= KASPA_MAX_STANDARD_MASS);
-    // Many small coins: the builder stops at 84 inputs.
     let many: Vec<KaspaSpendable> = (0..200).map(|i| coin(7, i, SOMPI_PER_KAS, &me)).collect();
     let e = kaspa_build_send(
         &many,
@@ -1214,7 +1157,6 @@ fn summary_refusals_and_warnings() {
     );
     refuse(&|_, e| e.clear(), "one UTXO entry per input");
 
-    // A non-standard output: shown as unknown, reinforced dialog.
     let mut tx = b.tx.clone();
     tx.outputs[0].script = vec![0x51];
     let sum = ok(&tx, &b.entries).unwrap();
@@ -1223,12 +1165,10 @@ fn summary_refusals_and_warnings() {
         .warnings
         .contains(&KaspaWarning::UnknownOutput { index: 0 }));
     assert!(sum.requires_extra_confirmation);
-    // A huge fee: reinforced dialog.
     let mut tx = b.tx.clone();
     tx.outputs[1].value -= 2 * SOMPI_PER_KAS;
     let sum = ok(&tx, &b.entries).unwrap();
     assert!(sum.warnings.contains(&KaspaWarning::HighFee));
-    // Sent to ourselves (receive address): it is change, nothing leaves.
     let mut tx = b.tx.clone();
     tx.outputs[0].script = me.clone();
     let sum = ok(&tx, &b.entries).unwrap();

@@ -1,6 +1,6 @@
 //! Kaspa data from the public REST API of the Kaspa developers (`kaspa-rest-server`):
 //! `api.kaspa.org` (mainnet) and `api-tn10.kaspa.org` (testnet-10), on the `kaspa` Tor family,
-//! never with a fallback. Endpoints checked live on 2026-11-01 (OpenAPI of both hosts).
+//! never with a fallback.
 //!
 //! | Use | Endpoint |
 //! |---|---|
@@ -13,13 +13,7 @@
 //! | acceptance of a transaction | `GET /transactions/{id}` |
 //! | broadcast | `POST /transactions` (`{ transaction, allowOrphan: false }`) |
 //!
-//! Kyro builds every transaction itself (wallet-core); a server-built transaction is never
-//! signed. What the server can lie about: balances, coins (a coin that does not exist, or with
-//! another amount, makes the signature invalid — the signature hash commits to each spent
-//! coin's amount and script —, so the network rejects the transaction; a hidden coin only
-//! lowers the balance), history, fee estimate (bounded, and the fee is shown before signing).
-//! Every coin it returns must pay the exact script of one of our addresses, else the whole list
-//! is refused.
+//! Kyro builds every transaction itself (wallet-core); a server-built transaction is never signed.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -32,11 +26,8 @@ use wallet_core::{
 use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient, ServerRequest};
 
-/// Most coins accepted in one answer (more = refused, consolidate first).
 const MAX_UTXOS: usize = 5_000;
-/// History: at most this many of our addresses are read (the most recently active first).
 const MAX_HISTORY_ADDRESSES: usize = 10;
-/// History: transactions per address, and in the merged list.
 const MAX_TXS: usize = 50;
 
 pub struct KaspaCtx<'a> {
@@ -130,8 +121,7 @@ fn addresses(keys: &[KaspaOwnKey]) -> Vec<String> {
     keys.iter().map(|k| k.address.clone()).collect()
 }
 
-/// Sum of the balances of our addresses (`POST /addresses/balances`). Unknown addresses in the
-/// answer are ignored; each of ours counts once.
+/// Sum of the balances of our addresses (`POST /addresses/balances`).
 pub async fn balance(ctx: &KaspaCtx<'_>, keys: &[KaspaOwnKey]) -> AppResult<u64> {
     let v = call(
         ctx,
@@ -264,7 +254,6 @@ pub fn parse_fee_estimate(v: &Value) -> AppResult<u64> {
     if !f.is_finite() || f < 0.0 {
         return Err(bad("Kaspa API: invalid fee estimate"));
     }
-    // Rounded up, bounded by wallet-core (`kaspa_priority_feerate`).
     Ok(f.ceil().min(1e9) as u64)
 }
 
@@ -402,8 +391,7 @@ pub async fn history(
     Ok(out)
 }
 
-/// One transaction of `full-transactions` seen from `ours`; `None` if it does not touch them
-/// (a server cannot add someone else's transactions to the history).
+/// One transaction of `full-transactions` seen from `ours`.
 pub fn history_entry(t: &Value, ours: &BTreeSet<&str>, net: Network) -> Option<KaspaHistoryEntry> {
     let txid = t["transaction_id"]
         .as_str()
@@ -456,7 +444,6 @@ pub fn history_entry(t: &Value, ours: &BTreeSet<&str>, net: Network) -> Option<K
     let has_inputs = t["inputs"].as_array().is_some_and(|a| !a.is_empty());
     let fee = (outgoing && all_known && has_inputs && in_total >= out_total)
         .then(|| (in_total - out_total).to_string());
-    // Only a well-formed address of this network is shown (the server's text is untrusted).
     let counterparty = if outgoing { foreign_out } else { foreign_in }
         .filter(|a| wallet_core::kaspa_address_decode(net, a).is_ok());
     Some(KaspaHistoryEntry {
@@ -510,7 +497,6 @@ mod tests {
         assert_eq!(coins.len(), 1, "duplicates counted once");
         assert_eq!(coins[0].entry.amount, 11_160_106_612);
         assert_eq!(coins[0].entry.script, me.script());
-        // Someone else's address, a script that is not the address's, a malformed coin.
         let other = "kaspa:qr85gz7hvp76mtws6p236uv5xxdk57dzfe4p06ues0rlqhtqy3rtqqx7eeq3u";
         assert!(parse_utxos(&json!([utxo(other, &script, txid, "1", false)]), &k).is_err());
         let wrong = hex::encode(k[1].script());
@@ -519,7 +505,6 @@ mod tests {
         assert!(parse_utxos(&json!([utxo(&me.address, &script, txid, "-1", false)]), &k).is_err());
         assert!(parse_utxos(&json!([utxo(&me.address, &script, txid, "0", false)]), &k).is_err());
         assert!(parse_utxos(&json!({}), &k).is_err());
-        // Coinbase maturity.
         let cb = parse_utxos(&json!([utxo(&me.address, &script, txid, "5", true)]), &k).unwrap();
         assert!(mature(cb.clone(), 2_999).is_empty());
         assert_eq!(mature(cb, 3_000).len(), 1);
@@ -550,8 +535,6 @@ mod tests {
         assert!(parse_fee_estimate(&json!({"normalBuckets":[{"feerate":-1}]})).is_err());
     }
 
-    /// A public mainnet address (2 coins on 2026-11-01) as if it were ours: watch-only key built
-    /// from the address payload.
     fn public_key_of(address: &str) -> KaspaOwnKey {
         let (_, payload) = wallet_core::kaspa_address_decode(Network::Mainnet, address).unwrap();
         KaspaOwnKey {
@@ -584,7 +567,6 @@ mod tests {
         assert!(!h.is_empty());
         assert!(h.iter().all(|e| e.txid.len() == 64));
         assert_eq!(tx_status(&c, &"00".repeat(32)).await.unwrap(), None);
-        // testnet-10 host answers as testnet-10 (the name is checked on every read).
         let t = KaspaCtx {
             network: Network::Testnet,
             ..c
@@ -593,7 +575,6 @@ mod tests {
         assert!(fee_estimate(&t).await.unwrap() >= 1);
     }
 
-    /// Real reads from api.kaspa.org in clear (`cargo test -p kyro … kas_live -- --ignored`).
     #[test]
     #[ignore = "network"]
     fn kas_live_mainnet_reads_clear() {
@@ -637,7 +618,6 @@ mod tests {
         let e = history_entry(&received, &ours, n).unwrap();
         assert_eq!((e.delta.as_str(), e.fee.as_deref()), ("900", None));
         assert_eq!(e.counterparty.as_deref(), Some(other));
-        // A counterparty that is not a valid address of this network is not shown.
         let mut odd = received.clone();
         odd["inputs"][0]["previous_outpoint_address"] = json!("kaspa:\u{202e}evil");
         assert_eq!(history_entry(&odd, &ours, n).unwrap().counterparty, None);
@@ -647,7 +627,6 @@ mod tests {
                 .counterparty,
             None
         );
-        // A transaction that does not touch us is dropped.
         let foreign = json!({
             "transaction_id": id, "inputs": [], "outputs": [{ "amount": 1, "script_public_key_address": other }]
         });

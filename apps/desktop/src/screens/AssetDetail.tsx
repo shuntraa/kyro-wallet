@@ -35,9 +35,7 @@ export function AssetDetail({ id }: { id: string }) {
   const coinId = asset?.coingeckoId ?? id.replace(/^cg:/, '');
   const coin = pf.marketById.get(coinId);
   const watch = WATCH_ONLY_CHAINS.find((w) => w.coingeckoId === coinId);
-  // A market coin we support natively → its native asset.
   const supported = asset ?? assetsFor(network).find((a) => a.coingeckoId === coinId && a.kind === 'native');
-  // Several vault accounts on this chain (§2.9): the selected account's balance.
   const multi = !!supported && isMultiAccount(supported.family);
   const holding = supported ? (multi ? pf.accountHoldings.find((h) => h.asset.id === supported.id && h.account?.index === selectedAccounts[supported.family]) : pf.holdings.find((h) => h.asset.id === supported.id)) : undefined;
   const chart = useCoinChart(coinId, period);
@@ -59,7 +57,6 @@ export function AssetDetail({ id }: { id: string }) {
   const m30 = month.data;
   const change30 = m30 && m30.length > 1 ? (((m30[m30.length - 1]?.[1] ?? 0) - (m30[0]?.[1] ?? 0)) / (m30[0]?.[1] || 1)) * 100 : null;
 
-  // Same asset across EVM chains (same address).
   const perNetwork = useMemo(() => {
     if (!supported || supported.family !== 'evm') return [];
     return evmChains(network).map((c) => {
@@ -72,16 +69,12 @@ export function AssetDetail({ id }: { id: string }) {
   const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, bch: accounts.bch?.address, dash: accounts.dash?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address, xlm: accounts.stellar?.address, near: accounts.near?.address, sui: accounts.sui?.address, hbar: accounts.hbar?.address, kas: accounts.kas?.address, dot: accounts.polkadot?.address, algo: accounts.algo?.address, xmr: accounts.xmr?.address, ton: accounts.ton?.address, cosmos: accounts.cosmos?.address, apt: accounts.aptos?.address, zec: accounts.zec?.address }[supported.family] ?? null) : null;
   const fav = favs.includes(coinId);
   const stakeChain = supported ? ({ sol: 'sol', ada: 'ada', tron: 'tron' } as const)[supported.family as 'sol' | 'ada' | 'tron'] : undefined;
-  // Cardano: ADA tied to tokens and the native tokens themselves (not separate assets).
-  // Hedera: the account ID 0.0.x (created by the first HBAR received on the EVM address).
   const hbarAccount = useAsync(supported?.family === 'hbar' && adapters.hbar ? () => adapters.hbar!.account() : null, [supported?.id, adapters.hbar], { intervalMs: 30_000 });
   const adaAccount = useAsync(supported?.family === 'ada' && adapters.cardano ? () => adapters.cardano!.account() : null, [supported?.id, adapters.cardano], { intervalMs: 30_000 });
-  // Monero: the balance comes from Kyro's own scan (started here, polled while it runs).
   const xmr = useXmrStatus(supported?.family === 'xmr' ? adapters.xmr : null);
   const xmrRunning = xmr.status?.running ?? false;
   const xmrWasRunning = useRef(false);
   useEffect(() => {
-    // End of a scan: the portfolio re-reads the Monero balance.
     if (xmrWasRunning.current && !xmrRunning) pf.refresh();
     xmrWasRunning.current = xmrRunning;
   }, [xmrRunning]);
@@ -120,7 +113,6 @@ export function AssetDetail({ id }: { id: string }) {
             >
               <IconSwap size={16} sw={2.2} /> Swap
             </Button>
-            {/* Native staking: SOL, ADA, TRX only (none for BTC / LTC / DOGE / BCH / DASH / XRP, ETH out of scope). */}
             {supported.kind === 'native' && stakeChain && (
               <Button
                 size="lg"
@@ -140,7 +132,6 @@ export function AssetDetail({ id }: { id: string }) {
       </header>
 
       <div className="flex min-h-0 flex-[1.15] gap-5">
-        {/* Price + curve on the page itself, on a ruled baseline (no box). */}
         <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden border-b border-line">
           <div className="flex items-start justify-between pt-2">
             <div className="flex flex-col gap-2.5">
@@ -227,7 +218,6 @@ export function AssetDetail({ id }: { id: string }) {
                 </div>
               )}
               <div className="flex-1" />
-              {/* Cardano: the tokens panel takes this room; « Recevoir » shows the same single address. */}
               {address && supported.family !== 'ada' && (
                 <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
                   <AddressShort address={address} />

@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// NEAR pieces of the Send screen (docs/IPC.md §2.11):
-// - what the receiver is (implicit / named / Ethereum-style) and whether it exists, as Rust reads
-//   it: a named account must exist, an implicit one is created by the transfer;
-// - spendable = balance − storage reserve;
-// - the Rust-decoded transfer before the password (fees are NOT in a NEAR transaction: Kyro shows
-//   an estimate and the bound it checked), and the execution follow-up (near_tx_status).
+// NEAR pieces of the Send screen (docs/IPC.md §2.11): - what the receiver is (implicit / named /
+// Ethereum-style) and whether it exists, as Rust reads it: a named account must exist, an implicit
+// one is created by the transfer; - spendable = balance − storage reserve; - the Rust-decoded
+// transfer before the password (fees are NOT in a NEAR transaction: Kyro shows an estimate and the
+// bound it checked), and the execution follow-up (near_tx_status).
 
 import { useEffect, useState } from 'react';
 import type { Currency, NearAccountInfo } from '@kyro/shared';

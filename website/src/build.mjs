@@ -1,12 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Builds kyrowallet.com into ../site from chains.json and pages.mjs. Node 24, no dependencies.
-//
-//   node website/src/build.mjs
-//
-// Writes every HTML page, chains.css (one colour class per blockchain), sitemap.xml, robots.txt,
-// llms.txt and llms-full.txt, install.ps1 and install.sh (copied from this folder), removes pages of blockchains that are no longer live, then checks the
-// result: every internal link and #anchor resolves, one <h1> per page, no inline script or style.
-// Exits with code 1 if a check fails.
+// Builds kyrowallet.com into ../site from chains.json and pages.mjs.
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, statSync, copyFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -18,8 +11,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = resolve(HERE, '..', 'public');
 const ICONS = resolve(HERE, '..', 'icons');
 const today = new Date().toISOString().slice(0, 10);
-
-// ------------------------------------------------------------------ data
 
 const data = JSON.parse(readFileSync(join(HERE, 'chains.json'), 'utf8'));
 const all = data.chains;
@@ -39,8 +30,6 @@ for (const c of all) {
 if (errors.length) fail(errors);
 const chains = all.filter((c) => c.status === 'live');
 
-// ------------------------------------------------------------------ write helpers
-
 const written = [];
 function write(rel, content) {
   const file = join(OUT, rel);
@@ -50,14 +39,10 @@ function write(rel, content) {
 }
 const fileFor = (path) => (path.endsWith('/') ? path.slice(1) + 'index.html' : path.slice(1));
 
-// ------------------------------------------------------------------ _redirects (Cloudflare Pages, not served)
-
 write(
   '_redirects',
   `# Cloudflare Pages redirects (this file is not served).\n/frais /fees/ 301\n/frais/ /fees/ 301\n`
 );
-
-// ------------------------------------------------------------------ chains.css (CSP forbids inline style attributes)
 
 write(
   'chains.css',
@@ -65,8 +50,6 @@ write(
     chains.map((c) => `.c-${c.slug}{--c:${c.color}${c.fg ? `;--fg:${c.fg}` : ''}}`).join('\n') +
     '\n'
 );
-
-// ------------------------------------------------------------------ coin icons (our own set, copied from ../site-icons)
 
 const coinsDir = join(OUT, 'img', 'coins');
 rmSync(coinsDir, { recursive: true, force: true });
@@ -77,18 +60,13 @@ for (const f of readdirSync(ICONS).filter((f) => f.endsWith('.svg')).sort()) {
   iconCount++;
 }
 
-// ------------------------------------------------------------------ install scripts (text/plain, see _headers)
-
-//   irm https://kyrowallet.com/install.ps1 | iex
-//   curl -fsSL https://kyrowallet.com/install.sh | sh
+// irm https://kyrowallet.com/install.ps1 | iex curl -fsSL https://kyrowallet.com/install.sh | sh
 for (const f of ['install.ps1', 'install.sh']) {
   const src = readFileSync(join(HERE, f), 'utf8');
   if (src.includes('\r')) errors.push(`${f}: use LF line endings`);
   if (/[^\t\n -~]/.test(src)) errors.push(`${f}: keep it plain ASCII (it is piped into iex / sh)`);
   write(f, src);
 }
-
-// ------------------------------------------------------------------ pages
 
 const pages = [
   P.home(chains),
@@ -106,7 +84,6 @@ const notFound = P.notFound();
 
 for (const p of [...pages, notFound]) write(fileFor(p.path), page({ ...p, chains }));
 
-// Blockchains that were live before and are now hidden or removed: delete their pages.
 const chainsDir = join(OUT, 'chains');
 if (existsSync(chainsDir)) {
   const live = new Set(chains.map((c) => c.slug));
@@ -117,8 +94,6 @@ if (existsSync(chainsDir)) {
     }
   }
 }
-
-// ------------------------------------------------------------------ sitemap, robots
 
 const priority = (path) => (path === '/' ? '1.0' : path.startsWith('/chains/') && path !== '/chains/' ? '0.6' : '0.8');
 write(
@@ -139,8 +114,6 @@ write(
     AI_BOTS.map((b) => `User-agent: ${b}`).join('\n') +
     `\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`
 );
-
-// ------------------------------------------------------------------ llms.txt and llms-full.txt
 
 const ascii = (s) =>
   s
@@ -265,8 +238,6 @@ const full = pages
   .join('\n');
 write('llms-full.txt', ascii(`# Kyro Wallet: full text of kyrowallet.com\n\nGenerated ${today} from the published pages. Short index: ${SITE}/llms.txt\n\n${full}`));
 
-// ------------------------------------------------------------------ checks
-
 const htmlFiles = written.filter((f) => f.endsWith('.html'));
 const idsCache = new Map();
 function idsOf(file) {
@@ -317,7 +288,6 @@ for (const f of htmlFiles) {
     else if (t.frag && t.file.endsWith('.html') && !idsOf(t.file).has(t.frag)) errors.push(`${f}: missing anchor ${ref}`);
   }
 }
-// CSS url() references
 for (const css of ['style.css', 'chains.css']) {
   for (const m of readFileSync(join(OUT, css), 'utf8').matchAll(/url\('?(\/[^')]+)'?\)/g)) if (!existsSync(join(OUT, m[1].slice(1)))) errors.push(`${css}: missing ${m[1]}`);
 }

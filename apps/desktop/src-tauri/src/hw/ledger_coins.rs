@@ -7,9 +7,6 @@
 //! | XRP | P1 `01` = show, P2 `40` = secp256k1 (`80` ed25519) → `len‖key‖len‖address` | path ‖ tx in 150-byte APDUs, P1 = (`00` first / `01` next) ∣ `80` if more, P2 `40` → DER |
 //! | Stellar | P1 `00`, P2 `01` = show → 32-byte key | path ‖ signature base in 255-byte APDUs, P1 `00` first / `80` next, P2 `80` more / `00` last → 64-byte ed25519 |
 //! | Tron | P1 `01` = show, P2 `00` → `len‖key(65)‖len‖address` | path ‖ `raw_data` split between protobuf fields, ≤ 250 bytes per APDU, P1 `10` single / `00` first / `80` middle / `90` last → 65-byte `r‖s‖v` |
-//!
-//! Status words: `6985` = refused on the device (all three apps); Stellar `6C66` = hash signing
-//! disabled, `B004` data too large, `B005` parsing failed.
 
 use super::ledger_apdu::{apdu, encode_path};
 use super::{HwError, HwResult};
@@ -17,8 +14,6 @@ use super::{HwError, HwResult};
 const CLA: u8 = 0xE0;
 const INS_GET: u8 = 0x02;
 const INS_SIGN: u8 = 0x04;
-
-// ---------------------------------------------------------------- XRP
 
 const XRP_SECP256K1: u8 = 0x40;
 const XRP_CHUNK: usize = 150;
@@ -67,8 +62,6 @@ pub fn xrp_sign(path: &[u32], tx: &[u8]) -> HwResult<Vec<Vec<u8>>> {
     Ok(out)
 }
 
-// ---------------------------------------------------------------- Stellar
-
 const STELLAR_CHUNK: usize = 255;
 
 pub fn stellar_get_public_key(path: &[u32], display: bool) -> HwResult<Vec<u8>> {
@@ -100,8 +93,6 @@ pub fn stellar_sign(path: &[u32], signature_base: &[u8]) -> HwResult<Vec<Vec<u8>
         .collect()
 }
 
-// ---------------------------------------------------------------- Tron
-
 const TRON_CHUNK: usize = 250;
 
 pub fn tron_get_address(path: &[u32], display: bool) -> HwResult<Vec<u8>> {
@@ -123,9 +114,6 @@ fn varint(data: &[u8], mut pos: usize) -> HwResult<(u64, usize)> {
     Err(HwError::bad("varint too long"))
 }
 
-/// Length of the protobuf field at the start of `tx` (hw-app-trx `getNextLength`: varint
-/// fields end after their value, every other wire type is read as length-delimited — Kyro's
-/// `raw_data` only has varint and length-delimited fields).
 fn next_field_len(tx: &[u8]) -> HwResult<usize> {
     let (tag, p) = varint(tx, 0)?;
     match tag & 7 {
@@ -206,7 +194,6 @@ mod tests {
             hex::encode(xrp_get_address(&path, true).unwrap()),
             "e002014015058000002c80000090800000000000000000000000"
         );
-        // 21-byte path + 300-byte tx = 321 bytes → 150 + 150 + 21.
         let tx = vec![0x12u8; 300];
         let a = xrp_sign(&path, &tx).unwrap();
         assert_eq!(a.len(), 3);
@@ -214,7 +201,6 @@ mod tests {
         assert_eq!(&a[0][5..26], encode_path(&path).as_slice());
         assert_eq!((a[1][2], a[1][4]), (0x81, 150));
         assert_eq!((a[2][2], a[2][4]), (0x01, 21));
-        // A short transaction fits in one APDU: P1 00.
         assert_eq!(xrp_sign(&path, &[1, 2, 3]).unwrap()[0][2], 0x00);
         let mut resp = vec![33u8];
         resp.extend([2u8; 33]);
@@ -235,7 +221,6 @@ mod tests {
             "e00200000d038000002c8000009480000000"
         );
         assert_eq!(stellar_get_public_key(&path, true).unwrap()[3], 0x01);
-        // 13-byte path + 400 bytes = 413 → 255 (P1 00, P2 80) + 158 (P1 80, P2 00).
         let a = stellar_sign(&path, &[7u8; 400]).unwrap();
         assert_eq!(a.len(), 2);
         assert_eq!((a[0][2], a[0][3], a[0][4]), (0x00, 0x80, 255));
@@ -248,7 +233,6 @@ mod tests {
     #[test]
     fn tron_field_chunking() {
         let path = [44 | H, 195 | H, H, 0, 0];
-        // A TransferContract raw_data (Kyro's encoder): fits in one APDU, P1 10.
         let raw = wallet_core::TronRaw {
             ref_block_bytes: [1, 2],
             ref_block_hash: [3; 8],
@@ -272,7 +256,6 @@ mod tests {
         );
         // Fields are never split: a large contract field goes into its own APDUs.
         let mut big = raw.clone();
-        // A 240-byte length-delimited field 10 (data), then varint fields.
         big.extend([0x52, 0xf0, 0x01]);
         big.extend([0u8; 240]);
         let b = tron_sign(&path, &big).unwrap();
@@ -284,7 +267,6 @@ mod tests {
             tron_sign(&path, &[0x52, 0x05, 1]).is_err(),
             "truncated field"
         );
-        // v normalised to 27/28.
         let mut s = vec![1u8; 64];
         s.push(1);
         assert_eq!(tron_parse_signature(&s).unwrap()[64], 28);

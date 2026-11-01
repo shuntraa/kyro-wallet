@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// DEMO ONLY — real (unsigned-input) funding transactions for the fake chains, so that every
-// demo UTXO has a raw transaction whose txid (double SHA-256 of the serialization) is the
-// UTXO's txid. `btc_tx_hex` / `ltc_tx_hex` / `doge_tx_hex` return them, and a PSBT can carry
-// them as `non_witness_utxo` (bitcoinjs checks the hash, like Rust does).
+// DEMO ONLY — real (unsigned-input) funding transactions for the fake chains, so that every demo
 
 import * as bitcoin from 'bitcoinjs-lib';
 import { sha256 } from '@noble/hashes/sha2';
@@ -29,10 +25,7 @@ export function demoFundingTx(seed: string, script: Uint8Array, value: number): 
   return { txid: tx.getId(), hex: tx.toHex() };
 }
 
-/**
- * Adds a funded UTXO for `address` to `utxos`, and its raw tx to `raw`. `net` = its network, or
- * directly its scriptPubKey (Bitcoin Cash: CashAddr, which bitcoinjs does not parse).
- */
+/** Adds a funded UTXO for `address` to `utxos`, and its raw tx to `raw`. */
 export function demoFund(utxos: Map<string, DemoUtxo[]>, raw: Map<string, string>, address: string, net: bitcoin.Network | Uint8Array, seed: string, value: number, height: number): DemoUtxo {
   const script = net instanceof Uint8Array ? net : bitcoin.address.toOutputScript(address, net);
   const { txid, hex } = demoFundingTx(`${seed}:${address}`, script, value);

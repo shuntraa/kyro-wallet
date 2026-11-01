@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Aptos pieces of the Send screen (docs/IPC.md §2.11): the Rust-decoded transfer before the
-// password (function, fees estimated / reserved, sequence, expiration, new recipient account),
-// and the follow-up after submission (aptos_tx_status).
+// password (function, fees estimated / reserved, sequence, expiration, new recipient account), and
+// the follow-up after submission (aptos_tx_status).
 
 import { useEffect, useState } from 'react';
 import type { Currency } from '@kyro/shared';
@@ -20,7 +20,6 @@ export function AptosSummaryView({ u, aptPrice, currency }: { u: AptosUnsigned; 
   useT();
   const s = u.summary;
   const c = u.context;
-  // No « 0,00 € » for a 0.0001 APT fee: fiat only from one cent.
   const fiat = (o: bigint) => {
     const v = aptPrice !== null ? (Number(o) / 1e8) * aptPrice : 0;
     return v >= 0.01 ? ` · ${fmtFiat(v, currency)}` : '';
@@ -62,11 +61,7 @@ function Line({ k, v, warn, last, mono }: { k: string; v: string; warn?: boolean
 
 type Status = { state: 'pending' } | { state: 'committed' } | { state: 'failed'; vmStatus: string } | { state: 'expired' } | { state: 'error'; message: string };
 
-/**
- * After `aptos_broadcast`: follows `aptos_tx_status` until the transaction is committed.
- * Success → « confirmée »; failure → « échouée » (the gas used is still taken). Not committed
- * after its expiration (10 min) + margin → it can no longer be included.
- */
+/** After `aptos_broadcast`: follows `aptos_tx_status` until the transaction is committed. */
 export function AptosTxStatusLine({ adapter, hash, onCommitted }: { adapter: AptosAdapter; hash: string; onCommitted?: () => void }) {
   useT();
   const [status, setStatus] = useState<Status>({ state: 'pending' });

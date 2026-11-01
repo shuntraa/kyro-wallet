@@ -1,17 +1,8 @@
-//! Hardware-wallet commands of Cardano (Ledger "Cardano ADA" app, Trezor Model T / Safe) and
-//! Zcash transparent (Trezor), docs/IPC.md §2.3. Same rules as `commands_hw_coins.rs`: Rust
-//! builds, decodes and re-checks what will be signed (the same live checks as the vault's
-//! `ada_sign_tx` / `zec_sign`), the device's keys are compared with the stored account first
-//! (`HW_WRONG_DEVICE`), Kyro's native dialog shows its own summary, the user confirms on the
-//! device, and what the device returns is verified in `wallet-core` before anything is
-//! returned:
+//! Hardware-wallet commands of Cardano (Ledger "Cardano ADA" app, Trezor Model T / Safe) and Zcash
+//! transparent (Trezor), docs/IPC.md §2.3.
 //!
-//! - Cardano: the body hash the device computed must be Kyro's transaction id, and the
-//!   witness must verify over it with the payment key derived from the stored account key
-//!   (`cardano_hw_assemble`); `hw_ada_broadcast` checks the witness again before `submittx`.
-//! - Zcash: every signature must verify against Kyro's own ZIP-244 digest of its input and the
-//!   key derived from the stored xpub (`zec_hw_finalize`); the signed transaction goes out with
-//!   `zec_broadcast`.
+//! Cardano: the body hash the device computed must be Kyro's transaction id, and the witness must
+//! verify over it with the payment key derived from the stored account key (`cardano_hw_assemble`).
 
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -41,7 +32,6 @@ fn title(lang: Lang, chain: Chain) -> &'static str {
     }
 }
 
-/// Account + device info, checked: same brand, and the account holds keys of `chain`.
 fn account_for(
     state: &AppState,
     id: Option<&str>,
@@ -91,9 +81,6 @@ async fn check_same_device(
     Ok(())
 }
 
-// ---------------------------------------------------------------- Cardano
-
-/// Our base address and payment key `…/0/0`, from the stored account key.
 fn ada_keys(acc: &WatchOnlyAccount) -> AppResult<(String, [u8; 32])> {
     let k = acc
         .cardano
@@ -140,7 +127,6 @@ pub async fn hw_sign_ada_tx(
     let (me, pk) = ada_keys(&acc)?;
     let net = state.network;
     let c = crate::commands_cardano::ctx(&state);
-    // Same live checks as the vault: inputs ours and unspent, balance, fee, ttl.
     let (summary, context) = crate::commands_cardano::prepare_sign(&c, &me, &tx).await?;
     let own = [me.clone()];
     let verified = crate::cardano_backend::verified_tokens(net);
@@ -214,8 +200,6 @@ pub async fn hw_ada_broadcast(
     crate::commands_cardano::broadcast_checked(&crate::commands_cardano::ctx(&state), &pk, &tx)
         .await
 }
-
-// ---------------------------------------------------------------- Zcash
 
 fn zec_account(acc: &WatchOnlyAccount) -> AppResult<ZecAccount> {
     acc.zec
@@ -304,8 +288,6 @@ mod tests {
     const ABANDON: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
-    /// Verify-on-device targets of Cardano and Zcash resolve to the address Kyro derives from
-    /// the stored keys; any other path is refused.
     #[test]
     fn verify_targets_resolve_to_stored_keys() {
         let m = Mnemonic::parse(ABANDON).unwrap();

@@ -37,8 +37,8 @@ function node(opts: { batches: boolean; perItemErrors?: boolean }) {
   return { fetch, seen, contracts };
 }
 
-describe('soldes EVM par lots JSON-RPC', () => {
-  it('un appel HTTP par lot, ids appariés, contrat absent ou en échec omis', async () => {
+describe('EVM balances via JSON-RPC batches', () => {
+  it('one HTTP call per batch, matched ids, missing or failing contract omitted', async () => {
     const n = node({ batches: true });
     const a = new EvmAdapter({ chain: eth, address: ME, fetch: n.fetch });
     const bal = await a.getBalance();
@@ -54,7 +54,7 @@ describe('soldes EVM par lots JSON-RPC', () => {
     expect(bal).toHaveLength(tokens.length + 1 - 2);
   });
 
-  it('repli appel par appel si le nœud refuse les lots', async () => {
+  it('falls back to call by call if the node refuses batches', async () => {
     const n = node({ batches: false });
     const a = new EvmAdapter({ chain: eth, address: ME, fetch: n.fetch });
     const bal = await a.getBalance();
@@ -63,7 +63,7 @@ describe('soldes EVM par lots JSON-RPC', () => {
     expect(n.seen.length).toBeGreaterThan(a.tokens().length);
   });
 
-  it('repli aussi quand le lot revient avec une erreur par appel (offres gratuites)', async () => {
+  it('also falls back when the batch comes back with one error per call (free plans)', async () => {
     const n = node({ batches: true, perItemErrors: true });
     const a = new EvmAdapter({ chain: eth, address: ME, fetch: n.fetch });
     const bal = await a.getBalance();
@@ -71,7 +71,7 @@ describe('soldes EVM par lots JSON-RPC', () => {
     expect(bal.length).toBeGreaterThan(1);
   });
 
-  it('historique : eth_getLogs par paquets de 10 contrats au plus, envoyés en lots', async () => {
+  it('history: eth_getLogs in groups of at most 10 contracts, sent in batches', async () => {
     const seen: Rpc[][] = [];
     const fetch = async (req: NetRequest): Promise<NetResponse> => {
       const body = JSON.parse(req.body ?? 'null') as Rpc | Rpc[];

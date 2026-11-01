@@ -1,12 +1,4 @@
 //! Sui vectors.
-//!
-//! Sources (fetched 2026-11-01):
-//! - MystenLabs/sui `crates/sui/src/unit_tests/keytool_tests.rs`: `test_mnemonics_ed25519`
-//!   (three 24-word mnemonics → address at the default `m/44'/784'/0'/0'/0'`, generated with
-//!   `sui keytool`, the same cases as the TypeScript SDK's `ed25519-keypair.test.ts`) and
-//!   `test_private_keys_import_export` (raw ed25519 private key → address);
-//! - MystenLabs/ts-sdks `packages/sui/test/unit/cryptography/ed25519-keypair.test.ts`
-//!   (secret key `0x08 × 32` → public key).
 
 mod common;
 
@@ -40,12 +32,10 @@ fn keytool_mnemonic_vectors() {
         assert_eq!(sui_address(&s, 0).unwrap(), address);
         let pk = sui_public_key(&s, 0).unwrap();
         assert_eq!(sui_address_of_pubkey(&pk).unwrap(), address);
-        // Another account is another key.
         assert_ne!(sui_address(&s, 1).unwrap(), address);
     }
 }
 
-/// `test_private_keys_import_export`: (private key hex, address).
 #[test]
 fn keytool_private_key_vectors() {
     for (sk, address) in [
@@ -67,7 +57,6 @@ fn keytool_private_key_vectors() {
         assert_eq!(sui_address_of_pubkey(pk.as_bytes()).unwrap(), address);
         assert_eq!(sui_parse_address(address).unwrap().len(), 32);
     }
-    // TypeScript SDK: secret key 0x08 × 32.
     let pk = ed25519_dalek::SigningKey::from_bytes(&[8u8; 32]).verifying_key();
     use base64::Engine as _;
     assert_eq!(
@@ -79,13 +68,10 @@ fn keytool_private_key_vectors() {
 #[test]
 fn invalid_public_keys_are_refused() {
     assert!(sui_address_of_pubkey(&[0u8; 31]).is_err());
-    // Not a curve point (y = 2 has no x on edwards25519).
     let mut not_a_point = [0u8; 32];
     not_a_point[0] = 2;
     assert!(sui_address_of_pubkey(&not_a_point).is_err());
 }
-
-// ---------------------------------------------------------------- transfers (BCS, signing)
 
 use base64::Engine as _;
 use wallet_core::{
@@ -125,16 +111,13 @@ fn mainnet_transfers_decode_reencode_and_verify() {
         let t = SuiTransfer::decode(&raw).unwrap();
         assert_eq!(t.encode().unwrap(), raw);
         assert_eq!(sui_tx_digest(&raw), digest);
-        // The chain's own signature verifies over BLAKE2b(intent || bcs), by the sender's key.
         assert_eq!(sui_verify_signed(bcs, sig).unwrap(), digest);
         let s = sui_decode_tx(bcs, &sui_address_string(&t.sender)).unwrap();
         assert_eq!(s.digest, digest);
         assert_eq!(s.coin_type, "0x2::sui::SUI");
         assert_eq!(s.gas_coins.len(), 1);
-        // These SDK transactions carry no expiration: flagged.
         assert_eq!(s.warnings, vec![SuiWarning::NoExpiration]);
         assert!(s.requires_extra_confirmation);
-        // Someone else's transaction is refused.
         assert!(sui_decode_tx(bcs, KEYTOOL_MNEMONICS[0].1).is_err());
     }
     // Field values of the first vector, rebuilt from scratch: same bytes.
@@ -222,13 +205,10 @@ fn sign_round_trip_and_send_all() {
                 assert_eq!(summary.warnings, vec![SuiWarning::SendAll]);
             }
         }
-        // Another account cannot sign it (it is not the sender).
         assert!(sui_sign(&s, 1, &bcs).is_err());
-        // A tampered signature is refused.
         let mut forged = raw.clone();
         forged[10] ^= 1;
         assert!(sui_verify_signed(&bcs, &b64(&forged)).is_err());
-        // A valid signature by another key is refused (not the sender's key).
         let other = seed(KEYTOOL_MNEMONICS[1].0);
         let mut t2 = t.clone();
         t2.sender = sui_parse_address(KEYTOOL_MNEMONICS[1].1).unwrap();
@@ -236,7 +216,6 @@ fn sign_round_trip_and_send_all() {
         let (sig2, _) = sui_sign(&other, 0, &b64(&t2.encode().unwrap())).unwrap();
         assert!(sui_verify_signed(&bcs, &sig2).is_err());
     }
-    // Self transfer and a high budget are flagged.
     let (s, mut t) = ours_transfer(SuiTransferAmount::Mist(1));
     t.recipient = t.sender;
     t.gas_budget = 200_000_000;
@@ -258,43 +237,35 @@ fn everything_else_is_refused() {
     let refused = |bytes: &[u8], why: &str| {
         assert!(sui_decode_tx(&b64(bytes), &me).is_err(), "{why}");
     };
-    // Trailing byte, truncation.
     let mut v = good.clone();
     v.push(0);
     refused(&v, "trailing byte");
     refused(&good[..good.len() - 1], "truncated");
-    // TransactionData::V2 / another kind.
     let mut v = good.clone();
     v[0] = 1;
     refused(&v, "V2");
     let mut v = good.clone();
     v[1] = 1;
     refused(&v, "not a PTB");
-    // Object input instead of Pure.
     let mut v = good.clone();
     v[3] = 1;
     refused(&v, "object input");
-    // Result(0) instead of NestedResult(0, 0): valid for Sui, but not what Kyro builds.
     let hexs = hex::encode(&good);
     let alt = hexs.replacen("0101030000000001", "010102000001", 1);
     assert_ne!(alt, hexs);
     refused(&hex::decode(alt).unwrap(), "Result(0)");
-    // MoveCall in place of SplitCoins.
     let pos = hexs.find("02000101000001").unwrap() / 2;
     let mut v = good.clone();
     v[pos] = 0;
     refused(&v, "MoveCall");
-    // Sponsor (gas owner ≠ sender): owner, price, budget, expiration tag + epoch at the end.
     let owner_at = good.len() - 9 - 8 - 8 - 32;
     let mut v = good.clone();
     v[owner_at] ^= 1;
     refused(&v, "sponsored");
-    // ValidDuring expiration (tag 2).
     let mut v = good.clone();
     let exp_at = good.len() - 9;
     v[exp_at] = 2;
     refused(&v, "ValidDuring");
-    // Encoder-side checks.
     let cases: Vec<(Mutation, &str)> = vec![
         (Box::new(|t| t.gas_payment.clear()), "no gas coin"),
         (
@@ -313,7 +284,6 @@ fn everything_else_is_refused() {
         f(&mut x);
         assert!(x.encode().is_err(), "{why}");
     }
-    // Not base64.
     assert!(sui_decode_tx("@@", &me).is_err());
 }
 
@@ -322,7 +292,6 @@ fn hardware_wallet_message_and_signature() {
     let (s, t) = ours_transfer(SuiTransferAmount::Mist(1));
     let bytes = t.encode().unwrap();
     let bcs = b64(&bytes);
-    // Ledger Sui app: intent `TransactionData` (0, 0, 0) then the BCS.
     let msg = wallet_core::sui_hw_message(&bcs).unwrap();
     assert_eq!(&msg[..3], &[0, 0, 0]);
     assert_eq!(&msg[3..], bytes.as_slice());
@@ -340,8 +309,6 @@ fn hardware_wallet_message_and_signature() {
     let other = wallet_core::sui_public_key(&s, 1).unwrap();
     assert!(wallet_core::sui_hw_signature(&bcs, &other, &raw[1..65]).is_err());
 }
-
-// ---------------------------------------------------------------- token transfers (USDC)
 
 const USDC_MAINNET: &str =
     "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC";
@@ -364,8 +331,6 @@ fn token_transfers_layout_sign_and_refusals() {
     assert_eq!(sui_known_coins(false).len(), 1);
     assert_eq!(sui_known_coin(USDC_MAINNET, false).unwrap().decimals, 6);
     assert!(sui_known_coin(USDC_MAINNET, true).is_none());
-    // One coin, amount: [Object, Pure u64, Pure address], SplitCoins(Input(0), [Input(1)]),
-    // TransferObjects([NestedResult(0, 0)], Input(2)).
     let (s, t) = token_transfer(1, SuiTransferAmount::Mist(1_500_000));
     let raw = t.encode().unwrap();
     let h = hex::encode(&raw);
@@ -386,7 +351,6 @@ fn token_transfers_layout_sign_and_refusals() {
     assert_eq!(SuiTransfer::decode(&raw).unwrap(), t);
     let bcs = b64(&raw);
     let me = sui_address_string(&t.sender);
-    // Without the coin type (SUI path), or with an unknown one: refused.
     assert!(sui_decode_tx(&bcs, &me).is_err());
     assert!(sui_decode_coin_tx(&bcs, &me, "0x2::sui::SUI", false).is_err());
     assert!(sui_decode_coin_tx(&bcs, &me, USDC_MAINNET, true).is_err());
@@ -401,11 +365,8 @@ fn token_transfers_layout_sign_and_refusals() {
     let (sig, again) = sui_sign_coin(&s, 0, &bcs, USDC_MAINNET, false).unwrap();
     assert_eq!(again, d);
     assert_eq!(sui_verify_signed(&bcs, &sig).unwrap(), d.digest);
-    // A SUI transfer cannot be presented as a token transfer.
     let (_, plain) = ours_transfer(SuiTransferAmount::Mist(5));
     assert!(sui_decode_coin_tx(&b64(&plain.encode().unwrap()), &me, USDC_MAINNET, false).is_err());
-    // Three coins merged, then split: MergeCoins(Input(0), [Input(1), Input(2)]) first, the
-    // split result is NestedResult(1, 0).
     let (_, t3) = token_transfer(3, SuiTransferAmount::Mist(7));
     let raw3 = t3.encode().unwrap();
     let h3 = hex::encode(&raw3);
@@ -414,7 +375,6 @@ fn token_transfers_layout_sign_and_refusals() {
         "{h3}"
     );
     assert_eq!(SuiTransfer::decode(&raw3).unwrap(), t3);
-    // Whole balance: MergeCoins then TransferObjects([Input(0)], Input(2)).
     let (_, ta) = token_transfer(2, SuiTransferAmount::All);
     let rawa = ta.encode().unwrap();
     assert!(
@@ -425,7 +385,6 @@ fn token_transfers_layout_sign_and_refusals() {
     let da = sui_decode_coin_tx(&b64(&rawa), &me, USDC_MAINNET, false).unwrap();
     assert_eq!(da.amount, None);
     assert_eq!(da.warnings, vec![SuiWarning::SendAll]);
-    // Encoder checks: a token coin also used as gas, a duplicate, too many coins.
     let mut x = t3.clone();
     x.coins[1].object_id = x.gas_payment[0].object_id;
     assert!(x.encode().is_err());
@@ -434,7 +393,6 @@ fn token_transfers_layout_sign_and_refusals() {
     assert!(x.encode().is_err());
     let (_, x) = token_transfer(33, SuiTransferAmount::Mist(1));
     assert!(x.encode().is_err());
-    // A shared object input (ObjectArg tag 1) is refused.
     let mut v = raw.clone();
     v[4] = 1;
     assert!(SuiTransfer::decode(&v).is_err());

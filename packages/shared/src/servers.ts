@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Custom servers (B2b): pure helpers shared by the settings UI (instant feedback) and the
-// demo backend. The source of truth stays Rust (apps/desktop/src-tauri/src/servers.rs):
-// these rules mirror docs/IPC.md §2.1 so the UI can flag an obvious mistake before the
-// live check, never to relax anything.
+// Custom servers (B2b): pure helpers shared by the settings UI (instant feedback) and the demo
 
 import type { BtcNetworkKey, BtcServer, Network, Servers, SolanaCluster } from './ipc';
 import { l10n } from './i18n';
@@ -84,10 +80,7 @@ export function isOnionV3(host: string): boolean {
   return /^[a-z2-7]{56}\.onion$/.test(host.toLowerCase());
 }
 
-/**
- * Compact-filter peer rule (servers.rs `parse_peer`): "onion:port" (v3) or "ip:port"
- * ("[v6]:port"), never a host name (no DNS). Returns the reason, or null.
- */
+/** Compact-filter peer rule (servers.rs `parse_peer`): "onion:port" (v3) or "ip:port" ("[v6]:port"), never a host name (no DNS). */
 export function checkCbfPeer(peer: string): string | null {
   const p = peer.trim();
   const i = p.lastIndexOf(':');
@@ -135,7 +128,6 @@ export function checkBtcServer(s: BtcServer, tor: boolean): string | null {
       if (bad) return bad;
       if (s.auth.kind === 'cookie') {
         // Same rules as servers.rs: the cookie only goes to a local / LAN node, and the file is
-        // exactly `.cookie` (chosen with the native picker, `btc_core_pick_cookie`).
         if (!coreIsLocal(s.url)) return l10n('fichier .cookie : seulement pour un nœud local (127.0.0.1, ::1) ou de ton réseau local ; pour un nœud distant, utilise rpcuser / rpcpassword', '.cookie file: only for a local node (127.0.0.1, ::1) or one on your local network; for a remote node, use rpcuser / rpcpassword');
         const p = s.auth.cookiePath.trim();
         const absolute = p.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('\\\\');
@@ -171,8 +163,8 @@ export function redactServers(servers: Servers): Servers {
 }
 
 /**
- * Merge rule of `settings_set` (servers.rs `merge_secrets_from`): a Core `userpass` entry
- * without `password` keeps the stored one when URL and user are unchanged; `""` clears it.
+ * Merge rule of `settings_set` (servers.rs `merge_secrets_from`): a Core `userpass` entry without
+ * `password` keeps the stored one when URL and user are unchanged;
  */
 export function mergeServerSecrets(next: Servers, stored: Servers): Servers {
   const out = structuredClone(next);

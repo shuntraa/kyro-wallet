@@ -1,12 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// TRON adapter (TRX + TRC-20). Thin on purpose: every read, the transaction building, the
-// signature and the broadcast are Rust commands (`tron_*`, docs/IPC.md §2.5).
-// - Rust builds `raw_data` itself from the latest block (never the server's
-//   `createtransaction`), simulates the energy of a TRC-20 transfer and sets `fee_limit`;
-// - Rust decodes it again before signing, shows the native dialog (bandwidth / energy
-//   available, TRX burned at most, activation of a new account) and signs `sha256(raw_data)`;
-// - this adapter only checks that what Rust built is what was asked (recipient, amount, token).
+// TRON adapter (TRX + TRC-20). - Rust builds `raw_data` itself from the latest block (never the server's `createtransaction`), simulates the energy of a TRC-20 transfer and sets `fee_limit`; - Rust decodes it again before signing, shows the native dialog (bandwidth / energy available, TRX burned at most, activation of a new account) and signs `sha256(raw_data)`; - this adapter only checks that what Rust built is what was asked (recipient, amount, token).
 
 import { accountArg } from '../types';
 import type { HwSigner } from '../hw';
@@ -23,7 +16,6 @@ import {
 import type { AssetDef, TronChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
-// ---------------------------------------------------------------- Rust contract (§2.5)
 
 export type { TronAccountInfo, TronAction, TronEstimate, TronHistoryEntry, TronTxSummary, TronWarning };
 
@@ -49,10 +41,7 @@ export function rustTronBackend(account = 0): TronBackend {
   };
 }
 
-/**
- * Hardware-wallet account `accountId` (docs/IPC.md §2.3, Ledger only): Rust builds and
- * broadcasts with the account's stored address; signing is `hw_sign_tron_tx`.
- */
+/** Hardware-wallet account `accountId` (docs/IPC.md §2.3, Ledger only): Rust builds and broadcasts with the account's stored address; signing is `hw_sign_tron_tx`. */
 export function hwTronBackend(accountId: string): TronBackend {
   return {
     ...rustTronBackend(0),
@@ -62,7 +51,6 @@ export function hwTronBackend(accountId: string): TronBackend {
   };
 }
 
-// ---------------------------------------------------------------- tokens
 
 export interface Trc20Token {
   contract: string;
@@ -71,11 +59,7 @@ export interface Trc20Token {
   decimals: number;
 }
 
-/**
- * USDT per network. Mainnet: Tether's contract. Nile has **its own** test USDT
- * (TXYZopYR…, checked on chain 2026-10-30: symbol USDT, name "Tether USD", 6 decimals), unrelated
- * to mainnet's; obtained from TRON's TronFAQBot (`!nile_usdt <address>`), not the captcha faucet.
- */
+/** USDT per network. Mainnet: Tether's contract. */
 export const TRON_USDT: Record<Network, Trc20Token> = {
   mainnet: { contract: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', symbol: 'USDT', name: 'Tether USD', decimals: 6 },
   testnet: { contract: 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', symbol: 'USDT', name: 'Tether USD', decimals: 6 },
@@ -88,13 +72,7 @@ export function isKnownTronToken(network: Network, contract: string): boolean {
   return TRON_USDT[network].contract === contract;
 }
 
-/**
- * Can the TRX balance pay what this transaction burns? `sent`: TRX leaving (sun, 0 for a token).
- * - `expected`: balance covers sent + expected burn (bandwidth + activation + energy);
- * - `worst`: balance covers sent + the maximum (energy up to `fee_limit`).
- * Below `expected`, the network refuses the TRX transfer or the TRC-20 call runs out of energy
- * (and still burns TRX): the UI blocks it. Between the two, it may fail if energy costs more.
- */
+/** Can the TRX balance pay what this transaction burns? */
 export interface TronCoverage {
   expected: boolean;
   worst: boolean;
@@ -126,7 +104,6 @@ export function isTronAddress(address: string): boolean {
   }
 }
 
-// ---------------------------------------------------------------- adapter
 
 export interface TronUnsigned {
   family: 'tron';
@@ -218,10 +195,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
     return this.tokens.find((t) => t.contract === asset.contract) ?? { contract: asset.contract, symbol: asset.symbol, name: asset.name, decimals: asset.decimals };
   }
 
-  /**
-   * `ChainAdapter` entry point. `max`: a token → its whole balance; TRX → balance minus the most
-   * the transfer may burn (built twice: the burn depends on the recipient and the size).
-   */
+  /** `ChainAdapter` entry point. */
   async buildTx(params: BuildParams): Promise<TronUnsigned> {
     const token = this.tokenOf(params.asset);
     if (!params.max) return this.buildTransfer({ to: params.to, amount: params.amount, ...(token ? { token } : {}) });
@@ -245,10 +219,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
     return built;
   }
 
-  /**
-   * Rust builds from the latest block. `amount`: sun (TRX) or token units. The adapter checks
-   * that Rust's decoding is exactly the request.
-   */
+  /** Rust builds from the latest block. */
   async buildTransfer(params: { to: string; amount: bigint; token?: Trc20Token }): Promise<TronUnsigned> {
     const to = params.to.trim();
     if (!isTronAddress(to)) throw new Error(l10n('Adresse TRON invalide', 'Invalid TRON address'));
@@ -259,8 +230,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
     const ok = params.token
       ? a.type === 'trc20Transfer' && a.contract === params.token.contract && a.to === to && a.amount === params.amount.toString() && a.callValue === '0'
       : a.type === 'trxTransfer' && a.to === to && a.amount === params.amount.toString();
-    // Kyro's own builds carry no memo, no call value, no unknown call; only a very high
-    // fee_limit (huge energy) may be flagged.
+    // Kyro's own builds carry no memo, no call value, no unknown call; only a very high fee_limit (huge energy) may be flagged.
     const unexpected = built.summary.warnings.some((w) => w.kind !== 'highFeeLimit');
     if (!ok || built.summary.owner !== this.address || built.summary.txid !== built.txid || unexpected) {
       throw new Error(l10n('La transaction construite par Rust ne correspond pas à la demande', 'The transaction built by Rust does not match the request'));
@@ -318,9 +288,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
       };
       const counterparty = out ? t.to : t.from;
       if (counterparty) item.counterparty = counterparty;
-      // TronGrid's TRC-20 list gives the EVENT's from/to, not who signed: `transferFrom(you, X, 0)`
-      // appears as « sent by you ». A zero amount is a lure in either direction (poisoning.ts);
-      // outgoing entries are never trusted anyway (only sends signed by this device are).
+      // TronGrid's TRC-20 list gives the EVENT's from/to, not who signed: `transferFrom(you, X, 0)` appears as « sent by you ». A zero amount is a lure in either direction (poisoning.ts); outgoing entries are never trusted anyway (only sends signed by this device are).
       if (item.amount === 0n) item.suspect = 'zero';
       if (t.timestamp) item.time = t.timestamp;
       return item;

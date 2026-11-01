@@ -21,7 +21,6 @@ use crate::tor::TorStatus;
 
 const MIN_PASSWORD_LEN: usize = 10;
 
-/// Argon2id and signing are CPU-heavy: keep them off the async runtime's workers.
 pub(crate) async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> AppResult<T> + Send + 'static,
 ) -> AppResult<T> {
@@ -38,8 +37,6 @@ pub(crate) async fn seed_from_password(
     Ok(mnemonic_from_password(state, password).await?.to_seed(""))
 }
 
-/// Opens the vault with `password`. The attempt is reserved (counted, persisted) under the
-/// same lock as the delay check before Argon2id runs, so parallel calls cannot bypass it.
 pub(crate) async fn mnemonic_from_password(
     state: &AppState,
     password: Zeroizing<String>,
@@ -53,7 +50,6 @@ pub(crate) async fn mnemonic_from_password(
     result
 }
 
-/// Cardano Icarus root key re-derived from the vault (signing asks for the password again).
 pub(crate) async fn cardano_root_from_password(
     state: &AppState,
     password: Zeroizing<String>,
@@ -62,7 +58,6 @@ pub(crate) async fn cardano_root_from_password(
     blocking(move || Ok(wallet_core::CardanoRoot::from_mnemonic(&m, ""))).await
 }
 
-/// Polkadot sr25519 root re-derived from the vault (signing asks for the password again).
 pub(crate) async fn polkadot_root_from_password(
     state: &AppState,
     password: Zeroizing<String>,
@@ -71,8 +66,6 @@ pub(crate) async fn polkadot_root_from_password(
     blocking(move || Ok(wallet_core::PolkadotRoot::from_mnemonic(&m, "")?)).await
 }
 
-/// Native OS dialog — rendered outside the webview, so a compromised UI cannot fake or skip it.
-/// Buttons « Signer » / « Annuler » (Sign / Cancel) in the current language.
 pub(crate) async fn confirm_native(
     app: &AppHandle,
     title: &'static str,
@@ -82,7 +75,6 @@ pub(crate) async fn confirm_native(
     confirm_native_with(app, title, body, lang.sign(), lang.cancel()).await
 }
 
-/// [`confirm_native`] with its own button labels. `Err(UserRejected)` unless approved.
 pub(crate) async fn confirm_native_with(
     app: &AppHandle,
     title: &'static str,
@@ -90,10 +82,8 @@ pub(crate) async fn confirm_native_with(
     ok: &'static str,
     cancel: &'static str,
 ) -> AppResult<()> {
-    // Counted while shown: `network_set` (app restart) is refused until it is answered.
     let _open = app.state::<AppState>().dialogs.enter();
     let app = app.clone();
-    // Last pass: no bidi / invisible / stray control character from any field can survive.
     let body = crate::dialog_text::body(&body);
     let approved = blocking(move || {
         Ok(app
@@ -137,7 +127,6 @@ async fn show_words_native(app: &AppHandle, words: Zeroizing<Vec<String>>) -> Ap
     .await
 }
 
-/// Text of the native recovery-phrase dialog: numbered words, three per line.
 pub(crate) fn words_text(lang: Lang, words: &[String]) -> Zeroizing<String> {
     let mut out = Zeroizing::new(match lang {
         Lang::Fr => format!(
@@ -174,8 +163,6 @@ fn check_password_strength(password: &str) -> AppResult<()> {
     }
     Ok(())
 }
-
-// ---------------------------------------------------------------- vault
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -227,7 +214,6 @@ async fn seal_and_start(
     Ok(())
 }
 
-/// Three distinct positions in `0..n`, from OS randomness, sorted.
 fn random_checks(n: usize) -> AppResult<[usize; 3]> {
     let mut picked: Vec<usize> = Vec::with_capacity(3);
     while picked.len() < 3 {
@@ -242,14 +228,11 @@ fn random_checks(n: usize) -> AppResult<[usize; 3]> {
     Ok([picked[0], picked[1], picked[2]])
 }
 
-/// Wrong 3-word checks allowed before the pending phrase is dropped (it can still be shown
-/// later from Réglages › Sécurité, with the password and a native confirmation).
 const MAX_BACKUP_FAILURES: u32 = 5;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatedOut {
-    /// 12 or 24. The words themselves are only ever shown natively (`vault_backup_show`).
     word_count: usize,
 }
 
@@ -282,12 +265,11 @@ pub async fn vault_create(
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupChecks {
-    /// 0-based positions of the three words to type back.
     checks: [usize; 3],
 }
 
-/// Shows the phrase of the vault just created in a native dialog (returns when it is closed),
-/// then picks the three positions to check. Only while that phrase is pending.
+/// Shows the phrase of the vault just created in a native dialog (returns when it is closed), then
+/// picks the three positions to check.
 #[tauri::command]
 pub async fn vault_backup_show(
     app: AppHandle,
@@ -317,8 +299,6 @@ pub struct BackupVerified {
     attempts_left: u32,
 }
 
-/// Checks the three words typed by the user against the pending phrase (positions chosen by
-/// Rust). Answers only ok / not ok, a few times: not an oracle for guessing the phrase.
 fn backup_answers_match(p: &PendingBackup, answers: &[String]) -> bool {
     answers.len() == 3
         && p.checks.iter().zip(answers).all(|(i, a)| {
@@ -396,9 +376,8 @@ pub fn vault_lock(state: State<'_, AppState>) {
     state.lock_session();
 }
 
-/// Shows the recovery phrase again: password (rate-limited), then a native confirmation, then
-/// the words in a native dialog. Nothing is returned to the webview, which knows the password
-/// it typed and so could otherwise read the phrase.
+/// Shows the recovery phrase again: password (rate-limited), then a native confirmation, then the
+/// words in a native dialog.
 #[tauri::command]
 pub async fn vault_reveal_mnemonic(
     app: AppHandle,
@@ -427,7 +406,6 @@ pub async fn vault_reveal_mnemonic(
     Ok(())
 }
 
-/// Body of the confirmation before the phrase is shown again.
 pub(crate) fn reveal_text(lang: Lang) -> &'static str {
     lang.pick(
         "Kyro va afficher ta phrase de récupération dans une fenêtre du système.\n\nQuiconque la \
@@ -446,8 +424,6 @@ pub fn session_touch(state: State<'_, AppState>) {
     state.touch();
 }
 
-// ---------------------------------------------------------------- accounts
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BtcAccountOut {
@@ -460,7 +436,6 @@ pub struct BtcAccountOut {
 #[derive(Serialize)]
 pub struct AddressOut {
     address: String,
-    /// Derivation path of the key behind `address`.
     path: String,
 }
 
@@ -484,46 +459,32 @@ pub struct UtxoAccountOut {
 #[derive(Serialize)]
 pub struct Accounts {
     network: &'static str,
-    /// Account index these addresses belong to (`accounts_get({ account })`).
     account: u32,
     btc: BtcAccounts,
     evm: AddressOut,
     sol: AddressOut,
     ltc: UtxoAccountOut,
     doge: UtxoAccountOut,
-    /// `m/44'/145'/a'` (chipnet `m/44'/1'/a'`), CashAddr.
     bch: UtxoAccountOut,
-    /// `m/44'/5'/a'` (testnet `m/44'/1'/a'`).
     dash: UtxoAccountOut,
-    /// `m/44'/195'/a'/0/0`.
     tron: AddressOut,
-    /// `m/44'/144'/a'/0/0`.
     xrp: AddressOut,
     /// `m/44'/148'/a'` (SEP-0005).
     stellar: AddressOut,
     /// Base address `m/1852'/1815'/a'/0/0` + stake key `…/2/0` (CIP-1852, Icarus).
     cardano: AddressOut,
-    /// Implicit account (64 hex of the ed25519 key) `m/44'/397'/a'`.
     near: AddressOut,
     /// `m/44'/784'/a'/0'/0'` (SLIP-10 ed25519).
     sui: AddressOut,
-    /// Hedera: EVM address (alias) of the ECDSA key `m/44'/3030'/0'/0/a`.
     hbar: AddressOut,
-    /// Receive address `m/44'/111111'/a'/0/0` (change: `…/1/0`).
     kas: AddressOut,
-    /// sr25519 (substrate-bip39): the phrase's root key for account 0, `//a` otherwise.
     polkadot: AddressOut,
-    /// `m/44'/283'/a'/0/0` (Ledger's Algorand derivation).
     algo: AddressOut,
-    /// Monero primary address (stagenet on testnet), spend key from `m/44'/128'/a'/0/0`.
     xmr: AddressOut,
-    /// Wallet v4R2 of `m/44'/607'/a'`, non-bounceable form (`UQ…`, testnet `0Q…`).
     ton: AddressOut,
-    /// `m/44'/118'/a'/0/0`, `cosmos1…`.
     cosmos: AddressOut,
     /// `m/44'/637'/a'/0'/0'` (Petra, SLIP-10 ed25519), `0x` + 64 hex.
     aptos: AddressOut,
-    /// Zcash transparent `m/44'/133'/a'` (testnet `m/44'/1'/a'`): first `t1…` address.
     zec: UtxoAccountOut,
 }
 
@@ -574,8 +535,7 @@ fn btc_account_out(
     })
 }
 
-/// Public data of account `account` (absent = 0) on every chain. Used for the accounts of the
-/// user's lists and to preview the next one before adding it (`vault_account_add`).
+/// Public data of account `account` (absent = 0) on every chain.
 #[tauri::command]
 pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResult<Accounts> {
     let a = account_arg(account)?;
@@ -688,8 +648,6 @@ pub fn btc_address(
     state.with_seed(|seed| Ok(wallet_core::btc_address(seed, net, kind, a, change, index)?))
 }
 
-// ---------------------------------------------------------------- signing
-
 pub(crate) fn format_units(raw: &str, decimals: usize) -> String {
     let digits = raw.trim_start_matches('0');
     if digits.is_empty() {
@@ -705,13 +663,10 @@ pub(crate) fn format_units(raw: &str, decimals: usize) -> String {
     }
 }
 
-/// [`format_units`] with the decimal mark of `lang` (« 0,25 » / « 0.25 »), for dialog text.
-/// [`format_units`] alone writes English (dot decimal mark): error details are English.
 pub(crate) fn format_units_in(lang: Lang, raw: &str, decimals: usize) -> String {
     lang.decimal(&format_units(raw, decimals))
 }
 
-/// Name of an EVM chain for the dialog: Kyro's registry (generated `known_tokens` table).
 fn chain_name(lang: Lang, id: u64) -> String {
     match crate::known_tokens::evm_chain(id) {
         Some(c) if c.network == wallet_core::Network::Testnet => format!("{} (testnet)", c.name),
@@ -720,15 +675,12 @@ fn chain_name(lang: Lang, id: u64) -> String {
     }
 }
 
-/// Native coin ticker of an EVM chain (ETH, POL, BNB, CRO, …); « unités natives » if unknown.
 pub(crate) fn native_symbol(lang: Lang, id: u64) -> &'static str {
     crate::known_tokens::evm_chain(id).map_or(lang.pick("unités natives", "native units"), |c| {
         c.native_symbol
     })
 }
 
-/// Symbol and decimals of a token, from a source Rust trusts: the `known_tokens` table, or a
-/// Ledger-signed descriptor verified offline. Never from the interface.
 #[derive(Debug, Clone)]
 pub(crate) struct TokenLabel {
     pub(crate) symbol: String,
@@ -744,7 +696,6 @@ impl TokenLabel {
     }
 }
 
-/// The token of an ERC-20 transfer/approve, if Kyro knows its contract on this chain.
 pub(crate) fn evm_token_label(net: Network, s: &wallet_core::EvmTxSummary) -> Option<TokenLabel> {
     let contract = s.token_contract.as_deref()?;
     crate::known_tokens::lookup(
@@ -755,12 +706,10 @@ pub(crate) fn evm_token_label(net: Network, s: &wallet_core::EvmTxSummary) -> Op
     .map(TokenLabel::from_known)
 }
 
-/// ERC-20 call on a contract Kyro does not know: the amount can only be shown in raw units.
 pub(crate) fn evm_unknown_token(s: &wallet_core::EvmTxSummary, token: Option<&TokenLabel>) -> bool {
     matches!(s.kind, EvmTxKind::Erc20Transfer | EvmTxKind::Erc20Approve) && token.is_none()
 }
 
-/// Whether the reinforced dialog is needed: wallet-core's reasons, or an unknown token.
 pub(crate) fn evm_needs_extra(s: &wallet_core::EvmTxSummary, token: Option<&TokenLabel>) -> bool {
     s.requires_extra_confirmation || evm_unknown_token(s, token)
 }
@@ -863,7 +812,6 @@ pub(crate) fn describe_evm(
     out
 }
 
-/// Reasons for caution of an EVM transaction, one bullet each (reinforced dialog).
 pub(crate) fn evm_warning_lines(
     lang: Lang,
     s: &wallet_core::EvmTxSummary,
@@ -935,7 +883,6 @@ pub(crate) fn evm_warning_lines(
     out
 }
 
-/// Text of the reinforced dialog for EVM transactions signed by the vault.
 pub(crate) fn describe_evm_extra(
     lang: Lang,
     s: &wallet_core::EvmTxSummary,
@@ -1041,7 +988,6 @@ pub(crate) fn describe_btc(lang: Lang, s: &wallet_core::BtcTxSummary) -> String 
     out
 }
 
-/// Text of the reinforced dialog for Bitcoin (vault and hardware wallet).
 pub(crate) fn describe_btc_extra(lang: Lang, s: &wallet_core::BtcTxSummary) -> String {
     use wallet_core::BtcWarning;
     let mut out = String::from(lang.unusual_intro());
@@ -1115,8 +1061,6 @@ pub async fn btc_sign_psbt(
     let net = state.network;
     let signer = SignerInfo::new(&state, Chain::Btc, a, btc_paths(net, a));
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
-    // Same summary as the signature computes (change and own inputs by key origin, in this
-    // account only: the other accounts' inputs are foreign and stay unsigned).
     let (s, p) = (seed.clone(), psbt.clone());
     let summary = blocking(move || Ok(wallet_core::btc_psbt_summary(&s, net, a, &p)?)).await?;
     let lang = crate::i18n::current();
@@ -1149,7 +1093,6 @@ pub async fn btc_sign_psbt(
     })
 }
 
-/// Our Solana address of `account` from the unlocked session.
 fn sol_own_address(state: &AppState, account: u32) -> AppResult<String> {
     state.with_seed(|seed| Ok(wallet_core::sol_address(seed, account)?))
 }
@@ -1187,7 +1130,6 @@ pub async fn sol_sign_tx(
     let bytes = solana::message_bytes(&message)?;
     let me = sol_own_address(&state, a)?;
     let signer = SignerInfo::new(&state, Chain::Sol, a, wallet_core::sol_path(a));
-    // Decoded (and lookup tables resolved) in Rust only — nothing from the UI is trusted.
     let decoded = solana::decode(&state, &bytes, &me).await?;
     let summary = decoded.summary.clone();
     if summary.our_signer_index.is_none() {
@@ -1226,8 +1168,6 @@ pub async fn sol_sign_tx(
     })
 }
 
-// ---------------------------------------------------------------- network & settings
-
 #[tauri::command]
 pub async fn net_fetch(state: State<'_, AppState>, req: FetchRequest) -> AppResult<FetchResponse> {
     let settings = state.settings();
@@ -1260,12 +1200,10 @@ pub fn set_capture_protection(window: WebviewWindow, enabled: bool) -> AppResult
     Ok(())
 }
 
-/// The only external page the app opens: Kyro's public swap fee schedule (Swap screen,
-/// « Frais de service inclus »). No argument: the URL is fixed here, so the webview cannot make
-/// the system browser open anything else. It opens in the user's own browser (outside Kyro's Tor).
+/// The only external page the app opens: Kyro's public swap fee schedule (Swap screen, « Frais de
+/// service inclus »).
 pub const FEES_PAGE_URL: &str = "https://kyrowallet.com/frais";
 
-/// System command that opens `FEES_PAGE_URL` in the default browser.
 fn fees_page_command() -> std::process::Command {
     #[cfg(target_os = "windows")]
     {
@@ -1302,7 +1240,6 @@ pub struct ConfigOut {
     has_zerox_key: bool,
     has_coingecko_key: bool,
     has_trongrid_key: bool,
-    /// The computer's language (`fr` | `en`): what `settings.language = auto` means.
     system_language: crate::i18n::Lang,
 }
 
@@ -1354,10 +1291,8 @@ mod tests {
         assert!(token.is_some());
         assert!(describe_evm_extra(Lang::Fr, &s, token.as_ref())
             .contains("dépenser 1 USDC (unités brutes : 1000000)"));
-        // Same contract on mainnet chain id 1: not a known token there.
         let s1 = wallet_core::evm_decode(&tx(&exact, 1, "0"), Network::Mainnet).unwrap();
         assert!(evm_token_label(Network::Mainnet, &s1).is_none());
-        // 31337 (a local devnet): unknown to Kyro.
         let s =
             wallet_core::evm_decode(&tx("0xdeadbeef", 31_337, "1000000000000000000"), net).unwrap();
         let d = describe_evm_extra(Lang::Fr, &s, None);
@@ -1368,7 +1303,6 @@ mod tests {
         ] {
             assert!(d.contains(needle), "{needle} in {d}");
         }
-        // 424242: unknown as well, on either network.
         let s = wallet_core::evm_decode(&tx("0xdeadbeef", 424_242, "0"), Network::Mainnet).unwrap();
         assert!(describe_evm_extra(Lang::Fr, &s, None)
             .contains("réseau INCONNU de Kyro (chainId 424242)"));
@@ -1416,9 +1350,6 @@ mod tests {
         assert_eq!(native_symbol(Lang::Fr, 424_242), "unités natives");
     }
 
-    /// ÉLEVÉE 2: an ERC-20 transfer on a contract Kyro does not know is labelled « jeton
-    /// inconnu », shown in raw units, and needs the reinforced dialog even though wallet-core
-    /// sees a plain transfer.
     #[test]
     fn unknown_erc20_is_raw_and_reinforced() {
         let to = "9858effd232b4033e47d90003d41ec34ecaeda94";
@@ -1433,7 +1364,6 @@ mod tests {
             max_fee_per_gas: "2000000000".into(),
             max_priority_fee_per_gas: "1000000000".into(),
         };
-        // Fake token contract on mainnet.
         let s = wallet_core::evm_decode(
             &tx("0x00000000000000000000000000000000DeaDBeef", 1),
             Network::Mainnet,
@@ -1450,7 +1380,6 @@ mod tests {
             "{d}"
         );
         assert!(describe_evm_extra(Lang::Fr, &s, None).contains("jeton INCONNU de Kyro"));
-        // Real USDC on mainnet: named by Rust, 6 decimals, no extra dialog.
         let s = wallet_core::evm_decode(
             &tx("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", 1),
             Network::Mainnet,
@@ -1460,7 +1389,6 @@ mod tests {
         assert!(!evm_needs_extra(&s, token.as_ref()));
         assert!(describe_evm(Lang::Fr, &s, token.as_ref())
             .contains("Envoi de token : 1 USDC (unités brutes : 1000000)"));
-        // Polygon: native currency is POL, not ETH.
         let native = wallet_core::evm_decode(
             &EvmTxRequest {
                 data: "0x".into(),
@@ -1620,8 +1548,6 @@ mod tests {
         assert_eq!(format_units_in(Lang::Fr, "5000000", 6), "5");
     }
 
-    /// CRITIQUE 2: the phrase is shown natively, numbered; the check needs the 3 words Rust
-    /// chose, in order, and nothing else.
     #[test]
     fn backup_words_and_check() {
         let words: Vec<String> = (1..=12).map(|i| format!("mot{i}")).collect();

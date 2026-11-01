@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // CashAddr spec vectors (bitcoincash.org spec/cashaddr.md, read 2026-11-01), generated from the
-// spec tables: every size and type, four prefixes; and the address-translation examples.
 
 import { describe, expect, it } from "vitest";
 import { cashaddrDecode, cashaddrEncode, cashaddrToScript, scriptToCashaddr } from "../src/cashaddr";

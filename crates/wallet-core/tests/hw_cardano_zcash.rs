@@ -1,11 +1,6 @@
 //! Hardware wallets, device-independent part, Cardano and Zcash: keys of a watch-only account,
 //! the data the device is given, and the independent check of what it returns (a wrong
 //! signature, body hash or key must always be rejected).
-//!
-//! "Device" signatures are made here with the software keys of the same seed (exactly what an
-//! honest device returns: Ed25519 and RFC 6979 ECDSA are deterministic), then tampered with.
-//! Trezor's Cardano vector (`tests/fixtures/cardano/sign_tx.json`, "simple transaction with
-//! change", ICARUS derivation of `all all … all`) pins the body hash and the signature.
 
 mod common;
 
@@ -103,7 +98,6 @@ fn watch_only_cardano_and_zcash_are_validated() {
         cardano_address(&root(ABANDON), Network::Mainnet, 0, 0)
             .unwrap()));
     assert!(bad(&|a| a.cardano.as_mut().unwrap().pubkey.truncate(64)));
-    // Testnet address for a mainnet record.
     assert!(bad(&|a| a.network = Network::Testnet));
 
     let s = seed(ABANDON);
@@ -182,7 +176,6 @@ fn cardano_device_witness_is_checked_before_assembly() {
     assert_eq!(plan.outputs[1].destination, CardanoHwDestination::Own);
     assert_eq!((plan.fee, plan.ttl, plan.aux_hash), (42, Some(10), None));
 
-    // Trezor's recorded signature for that body and key.
     let sig = hex::decode("6a78f07836dcf4a303448d2b16b217265a9226be3984a69a04dba5d04f4dbb2a47b5e1cbb345f474c0b9634a2f37b921ab26e6a65d5dfd015dacb4455fb8430a").unwrap();
     let pk = cardano_xpub_child(&xpub, 0, 0).unwrap();
     let (signed, tx_id, summary) =
@@ -194,7 +187,6 @@ fn cardano_device_witness_is_checked_before_assembly() {
     );
     assert_eq!(tx_id, id);
 
-    // Another body hash (the device serialized something else), another key, a bad signature.
     let mut other = plan.tx_id;
     other[0] ^= 1;
     assert!(cardano_hw_assemble(&unsigned, &ctx, &pk, &other, &sig).is_err());
@@ -206,10 +198,6 @@ fn cardano_device_witness_is_checked_before_assembly() {
     assert!(cardano_hw_assemble(&unsigned, &ctx, &pk, &plan.tx_id, &bad).is_err());
     assert!(cardano_hw_assemble(&unsigned, &ctx, &pk, &plan.tx_id, &sig[..63]).is_err());
 }
-
-// ------------------------------------------------------------------------------------------
-// Zcash (v5, transparent)
-// ------------------------------------------------------------------------------------------
 
 const MAIN: Network = Network::Mainnet;
 const NU6_3: u32 = 0x37a5_165b;
@@ -276,7 +264,6 @@ fn device_sign(phrase: &str, path: &[u32], digest: &[u8; 32]) -> Vec<u8> {
 #[test]
 fn zcash_device_signatures_are_checked_before_assembly() {
     let acc = zec_account(&seed(ABANDON), MAIN, 0).unwrap();
-    // Two inputs needed: 3 + 2 ZEC for 4 ZEC.
     let req = request(
         vec![
             coin(300_000_000, 1, false, 0),
@@ -330,14 +317,12 @@ fn zcash_device_signatures_are_checked_before_assembly() {
     for (k, d) in plan.digests.iter().enumerate() {
         assert_eq!(&zec_input_sighash(&signed, &prevouts, k).unwrap(), d);
     }
-    // With the SIGHASH_ALL byte appended (as some devices return it): same result.
     let with_type: Vec<Vec<u8>> = sigs.iter().map(|s| [s.as_slice(), &[1]].concat()).collect();
     assert_eq!(
         zec_hw_finalize(&acc, MAIN, &req, &with_type).unwrap().0,
         signed
     );
 
-    // Signatures swapped, by another seed, missing, or corrupted: refused.
     let swapped = vec![sigs[1].clone(), sigs[0].clone()];
     assert!(zec_hw_finalize(&acc, MAIN, &req, &swapped).is_err());
     let other: Vec<Vec<u8>> = plan
@@ -351,7 +336,6 @@ fn zcash_device_signatures_are_checked_before_assembly() {
     let mut bad = sigs.clone();
     bad[0][8] ^= 1;
     assert!(zec_hw_finalize(&acc, MAIN, &req, &bad).is_err());
-    // A testnet xpub for a mainnet transaction.
     let t = zec_account(&seed(ABANDON), Network::Testnet, 0).unwrap();
     assert!(zec_hw_plan(&t, MAIN, &req).is_err());
     assert!(bitcoin::bip32::Xpub::from_str(&acc.xpub).is_ok());

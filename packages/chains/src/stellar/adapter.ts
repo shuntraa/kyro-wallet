@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Stellar adapter (XLM). Thin on purpose: reads, transaction building (sequence / fee / time
-// bounds filled by Rust, XDR encoded by wallet-core; CreateAccount when the destination does not
-// exist yet), signature and submission are Rust commands (`stellar_*`, docs/IPC.md §2.11). This
-// adapter only validates input and checks that what Rust built is what was asked (destination,
-// amount, **memo**).
+// Stellar adapter (XLM).
 
 import {
   call,
@@ -25,7 +20,6 @@ import { STELLAR_ASSETS, type StellarChain } from '../registry';
 import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
-// ---------------------------------------------------------------- Rust contract (§2.11)
 
 export type { StellarAccountInfo, StellarContext, StellarHistoryEntry, StellarMemoSpec, StellarMemoView, StellarOpView, StellarTxSummary, StellarWarning };
 
@@ -65,10 +59,7 @@ export function rustStellarBackend(account = 0): StellarBackend {
   };
 }
 
-/**
- * Hardware-wallet account `accountId` (docs/IPC.md §2.3): Rust builds and broadcasts with the
- * account's stored key; signing is `hw_sign_stellar_tx`.
- */
+/** Hardware-wallet account `accountId` (docs/IPC.md §2.3): Rust builds and broadcasts with the account's stored key; signing is `hw_sign_stellar_tx`. */
 export function hwStellarBackend(accountId: string): StellarBackend {
   // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
   const { buildAsset: _buildAssetVaultOnly, buildTrust: _buildTrustVaultOnly, ...base } = rustStellarBackend(0);
@@ -80,7 +71,6 @@ export function hwStellarBackend(accountId: string): StellarBackend {
   };
 }
 
-// ---------------------------------------------------------------- addresses, amounts, memos
 
 export { isStellarAddress, stellarAddressKind };
 
@@ -108,10 +98,7 @@ export function xlmToStroops(input: string): bigint {
 
 const utf8Length = (s: string) => new TextEncoder().encode(s).length;
 
-/**
- * Memo typed by the user: empty → none; `kind` chosen in the UI. Same rules as Rust's
- * `parse_memo` (text ≤ 28 bytes without control / invisible character, id = u64, hash = 64 hex).
- */
+/** Memo typed by the user: empty → none; `kind` chosen in the UI. */
 export function parseStellarMemo(kind: StellarMemoSpec['kind'], value: string): StellarMemoSpec | undefined {
   if (kind === 'text') {
     if (value === '') return undefined;
@@ -159,7 +146,6 @@ export function stellarMemoText(m: StellarMemoView | StellarHistoryEntry['memo']
   }
 }
 
-// ---------------------------------------------------------------- adapter
 
 export interface StellarUnsigned {
   family: 'xlm';

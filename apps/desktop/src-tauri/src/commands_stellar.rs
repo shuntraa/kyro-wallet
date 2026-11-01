@@ -1,8 +1,8 @@
 //! IPC commands for Stellar (`stellar_*`): address, account (balance, reserve, spendable, memo
-//! required), history, XLM payment building **by Kyro** (Payment, or CreateAccount for an
-//! unfunded destination; sequence / fee / time bounds from Horizon, encoded by wallet-core),
-//! signing behind the password and the native dialog (memo highlighted, reserve re-read live),
-//! and submission with hash check. Contract: docs/IPC.md §2.11.
+//! required), history, XLM payment building **by Kyro** (Payment, or CreateAccount for an unfunded
+//! destination; sequence / fee / time bounds from Horizon, encoded by wallet-core), signing behind
+//! the password and the native dialog (memo highlighted, reserve re-read live), and submission with
+//! hash check.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -34,7 +34,6 @@ pub(crate) fn ctx(state: &AppState) -> StellarCtx<'_> {
     }
 }
 
-/// Address of Stellar account `account` (`m/44'/148'/account'`).
 fn ours(state: &AppState, account: u32) -> AppResult<String> {
     state.with_seed(|seed| Ok(wallet_core::stellar_address(seed, account)?))
 }
@@ -133,7 +132,6 @@ fn memo_block(lang: Lang, m: &StellarMemoView) -> String {
     }
 }
 
-/// The known asset an asset view names on `net` (exact code and issuer), if any.
 fn known_view(a: &StellarAssetView, net: Network) -> Option<&'static StellarKnownAsset> {
     match a {
         StellarAssetView::Credit { code, issuer } => {
@@ -143,7 +141,6 @@ fn known_view(a: &StellarAssetView, net: Network) -> Option<&'static StellarKnow
     }
 }
 
-/// « Verified issuer » line of a known asset.
 fn verified_line(lang: Lang, k: &StellarKnownAsset) -> String {
     match lang {
         Lang::Fr => format!(
@@ -168,7 +165,6 @@ fn asset_text(lang: Lang, a: &StellarAssetView) -> String {
     }
 }
 
-/// Body of the native dialog. The memo gets its own framed block, whatever it is.
 pub(crate) fn describe_stellar(lang: Lang, s: &StellarTxSummary, c: &StellarContext) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     let xlm = |v: &str| format!("{} XLM", format_units_in(lang, v, 7));
@@ -325,8 +321,6 @@ pub(crate) fn describe_stellar_extra(lang: Lang, s: &StellarTxSummary) -> String
     out
 }
 
-// ---------------------------------------------------------------- reads
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StellarBackendInfo {
@@ -368,8 +362,6 @@ pub async fn stellar_txs(state: State<'_, AppState>, address: String) -> AppResu
     stellar_backend::payments(&ctx(&state), &address).await
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StellarBuilt {
@@ -408,8 +400,6 @@ fn next_sequence(a: &StellarAccountInfo) -> AppResult<i64> {
         .ok_or_else(|| AppError::ServerUnreachable("Horizon: invalid sequence number".into()))
 }
 
-/// Builds an unsigned XLM transfer from live data: a Payment, or a CreateAccount when the
-/// destination does not exist yet. `stroops` is the amount, in stroops.
 pub(crate) async fn build(
     c: &StellarCtx<'_>,
     me: &str,
@@ -488,9 +478,6 @@ fn trustline<'a>(
         .find(|t| t.code == k.code && t.issuer == k.issuer)
 }
 
-/// Checks of a known-asset payment against live data: both accounts exist, the recipient trusts
-/// the asset (authorized, room under its limit) and takes a memo if it requires one; our
-/// trustline holds the amount; our XLM covers the fee.
 fn check_asset_payment(
     k: &StellarKnownAsset,
     c: &StellarContext,
@@ -556,8 +543,6 @@ fn check_asset_payment(
     Ok(())
 }
 
-/// Checks of a trustline change: enabling needs one more base reserve available (+ fee) and no
-/// existing line; removing needs an existing line with a zero balance.
 fn check_trust(k: &StellarKnownAsset, c: &StellarContext, enable: bool, fee: u32) -> AppResult<()> {
     if !c.account.exists {
         return Err(AppError::InvalidInput(
@@ -614,8 +599,6 @@ fn envelope_of(tx: StellarTransaction) -> String {
     .to_base64()
 }
 
-/// Builds an unsigned payment of `amount` units (7 decimals) of the known asset `asset_id`
-/// (`CODE-ISSUER`) to `to`.
 pub(crate) async fn build_asset(
     c: &StellarCtx<'_>,
     me: &str,
@@ -660,8 +643,6 @@ pub(crate) async fn build_asset(
     })
 }
 
-/// Builds an unsigned `ChangeTrust` for the known asset `asset_id`: no limit (`enable`) or
-/// limit 0 (removal, at a zero balance).
 pub(crate) async fn build_trust(
     c: &StellarCtx<'_>,
     me: &str,
@@ -745,7 +726,6 @@ pub struct StellarSigned {
     pub context: StellarContext,
 }
 
-/// What a decoded transaction is, among the shapes Kyro builds.
 enum Shape<'a> {
     /// XLM payment or account creation.
     Xlm { stroops: &'a str, creates: bool },
@@ -761,8 +741,6 @@ enum Shape<'a> {
     },
 }
 
-/// Decoding + live re-checks, i.e. everything `stellar_sign_tx` does before the dialog. Signed:
-/// XLM transfers, payments of a known asset (Circle's USDC) and trustlines of a known asset.
 pub(crate) async fn prepare_sign(
     c: &StellarCtx<'_>,
     me: &str,
@@ -934,8 +912,6 @@ pub async fn stellar_sign_tx(
     })
 }
 
-/// Checks the signed envelope (decodes, one valid signature of our key **for this network**)
-/// then submits it.
 pub(crate) async fn broadcast_checked(
     c: &StellarCtx<'_>,
     me: &str,
@@ -1120,14 +1096,10 @@ mod tests {
             value: h[..62].into()
         }))
         .is_err());
-        // IPC shape.
         let m: MemoSpec = serde_json::from_str(r#"{"kind":"id","value":"42"}"#).unwrap();
         assert_eq!(parse_memo(Some(&m)).unwrap(), StellarMemo::Id(42));
     }
 
-    /// USDC payment and trustline removal built by Kyro for real mainnet accounts (no key:
-    /// build + the live checks of `stellar_sign_tx`, nothing signed or sent). `cargo test -p
-    /// kyro-desktop --lib stellar_usdc_live_mainnet -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn stellar_usdc_live_mainnet() {
@@ -1187,7 +1159,6 @@ mod tests {
         });
     }
 
-    /// GET through the app's client (Horizon is on the allowlist).
     async fn reqwest_like(net: &crate::net::NetClient, url: &str) -> Value {
         let req = crate::net::ServerRequest::get(
             url::Url::parse(url).unwrap(),
@@ -1256,7 +1227,6 @@ mod tests {
             },
         );
         assert!(!describe_stellar(Lang::Fr, &fake, &context(true)).contains("vérifié"));
-        // Checks.
         let k = wallet_core::stellar_known_assets(Network::Testnet)[0];
         let mut c = context(true);
         assert!(
@@ -1285,7 +1255,6 @@ mod tests {
             check_asset_payment(&k, &c, 10, 100, false).is_err(),
             "not authorized"
         );
-        // Trustline: enabling twice, removing with a balance.
         assert!(check_trust(&k, &c, true, 100).is_err());
         assert!(check_trust(&k, &c, false, 100).is_err());
         c.account.trustlines = vec![usdc_line("0")];

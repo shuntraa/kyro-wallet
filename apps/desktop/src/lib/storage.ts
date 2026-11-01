@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Per-device conveniences in localStorage (always try/catch: private mode,
-// disabled storage, quota). PUBLIC DATA ONLY: never a secret, never the phrase.
+// Per-device conveniences in localStorage (always try/catch: private mode, disabled storage,
+// quota).
 
 import type { Network } from '@kyro/shared';
 
@@ -24,8 +23,6 @@ export function writeJson(key: string, value: unknown): void {
   }
 }
 
-// ---------------------------------------------------------------- favourites
-
 export function getFavorites(): string[] {
   const v = readJson<unknown>('favorites', []);
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
@@ -34,8 +31,6 @@ export function setFavorites(ids: string[]): void {
   writeJson('favorites', [...new Set(ids)]);
 }
 
-// ---------------------------------------------------------------- address book
-
 /** XRP contacts: the classic address only (the destination tag is per payment). TON: no comment either. */
 export type ContactFamily = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt' | 'zec';
 export interface Contact {
@@ -43,7 +38,6 @@ export interface Contact {
   name: string;
   address: string;
   family: ContactFamily;
-  /** Number of sends from Kyro to this contact. */
   sends: number;
 }
 
@@ -55,7 +49,6 @@ export function saveContacts(list: Contact[]): void {
   writeJson('contacts', list);
 }
 export function findContact(address: string, family: ContactFamily): Contact | undefined {
-  // EVM and Aptos addresses are hex: compared lowercase.
   const hex = family === 'evm' || family === 'apt';
   const a = hex ? address.trim().toLowerCase() : address.trim();
   return getContacts().find((c) => c.family === family && (hex ? c.address.toLowerCase() : c.address) === a);
@@ -63,8 +56,6 @@ export function findContact(address: string, family: ContactFamily): Contact | u
 export function bumpContactSends(id: string): void {
   saveContacts(getContacts().map((c) => (c.id === id ? { ...c, sends: (c.sends ?? 0) + 1 } : c)));
 }
-
-// ---------------------------------------------------------------- local tx records
 
 /** Transactions sent from this device (EVM native sends cannot be listed without an indexer). */
 export interface LocalTx {
@@ -80,12 +71,10 @@ export interface LocalTx {
   label?: string;
   time: number;
   status: 'pending' | 'confirmed' | 'failed';
-  /** Cross-chain swap: what the history follows with li.quest `/v1/status` until it arrives. */
   cross?: LocalCross;
 }
 
 export interface LocalCross {
-  /** Swap chain ids as strings: EVM chain id, `solana`, `bitcoin`. */
   fromChain: string;
   toChain: string;
   /** Registry key of the arrival chain (label). */
@@ -93,11 +82,10 @@ export interface LocalCross {
   bridge: string;
   /**
    * Last status: li.quest (PENDING, DONE, FAILED) or, for a direct NEAR Intents swap (`bridge`
-   * `1click`), 1Click's (PENDING_DEPOSIT, PROCESSING, SUCCESS, REFUNDED…). Absent until first read.
+   * `1click`), 1Click's (PENDING_DEPOSIT, PROCESSING, SUCCESS, REFUNDED…).
    */
   status?: string;
   receivingTxHash?: string;
-  /** Direct NEAR Intents swap: the deposit address, followed with `1click…/v0/status` (`bitcoincash:q…`, TON `UQ…-_`). */
   depositAddress?: string;
 }
 
@@ -114,8 +102,7 @@ const DECIMAL = /^\d{1,78}$/;
 
 /**
  * Shape check of a record read back from localStorage (an old version, a manual edit or another
- * script may have left anything there). Its recipient counts as « already paid from this Kyro »
- * for the address-poisoning check, so a malformed entry is dropped rather than trusted.
+ * script may have left anything there).
  */
 export function isLocalTx(x: unknown, network: Network): x is LocalTx {
   if (!x || typeof x !== 'object') return false;
@@ -153,8 +140,6 @@ export function updateLocalTx(network: Network, id: string, patch: Partial<Local
   writeJson(`txs.${network}`, getLocalTxs(network).map((t) => (t.id === id ? { ...t, ...patch } : t)));
 }
 
-// ---------------------------------------------------------------- last known prices
-
 /** Last plausible price seen on this device, per coin and currency (fiat-entry check in Envoyer). */
 export function getLastPrice(coinId: string, currency: string): { price: number; at: number } | null {
   const v = readJson<unknown>(`price.${currency}.${coinId}`, null);
@@ -165,8 +150,6 @@ export function getLastPrice(coinId: string, currency: string): { price: number;
 export function setLastPrice(coinId: string, currency: string, price: number): void {
   if (Number.isFinite(price) && price > 0) writeJson(`price.${currency}.${coinId}`, { price, at: Date.now() });
 }
-
-// ---------------------------------------------------------------- approvals
 
 export interface ApprovalRecord {
   network: Network;
@@ -198,8 +181,6 @@ export function removeApproval(network: Network, chainId: number, token: string,
     getApprovals(network).filter((x) => !(x.chainId === chainId && x.token.toLowerCase() === token.toLowerCase() && x.spender.toLowerCase() === spender.toLowerCase())),
   );
 }
-
-// ---------------------------------------------------------------- backup flag
 
 export type BackupState = 'confirmed' | 'imported' | 'unknown';
 export function getBackupState(): BackupState {

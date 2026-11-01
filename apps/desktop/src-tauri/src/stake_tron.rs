@@ -1,13 +1,9 @@
-//! TRON Stake 2.0 and voting (`tron_stake_*`, docs/IPC.md §2.8): `FreezeBalanceV2`
-//! (BANDWIDTH / ENERGY), `UnfreezeBalanceV2`, `WithdrawExpireUnfreeze`, `CancelAllUnfreezeV2`,
-//! `VoteWitness` and `WithdrawBalance` (voting rewards), owner = our address only. Lending
-//! resources to another account (`DelegateResource`) is refused by wallet-core.
+//! TRON Stake 2.0 and voting (`tron_stake_*`, docs/IPC.md §2.8): `FreezeBalanceV2` (BANDWIDTH /
+//! ENERGY), `UnfreezeBalanceV2`, `WithdrawExpireUnfreeze`, `CancelAllUnfreezeV2`, `VoteWitness` and
+//! `WithdrawBalance` (voting rewards), owner = our address only.
 //!
-//! Kyro builds `raw_data` itself from the latest block, like `tron_build_tx`; wallet-core decodes
-//! it again (`tron_decode_stake_raw`) and signs it after the native dialog. Broadcast: the
-//! existing `tron_broadcast` (signature must recover to our address, txid = sha256(raw_data)).
-//! Reads: `getaccount`, `getaccountresource`, `getReward`, `getchainparameters`
-//! (`getUnfreezeDelayDays`), `getnextmaintenancetime`, `listwitnesses`, `getBrokerage`.
+//! Broadcast: the existing `tron_broadcast` (signature must recover to our address, txid =
+//! sha256(raw_data)).
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -28,13 +24,9 @@ use crate::i18n::Lang;
 use crate::state::AppState;
 use crate::tron_backend::{self, request, TronCtx, TronEstimate, EXPIRATION_MS};
 
-/// java-tron `UNFREEZE_MAX_TIMES`: at most 32 unstakes waiting at the same time.
 const MAX_PENDING_UNFREEZE: usize = 32;
-/// Minimum stake (java-tron: `frozen_balance` ≥ 1 TRX).
 const MIN_FREEZE: i64 = 1_000_000;
-/// Voting rewards can be claimed once every 24 h.
 const CLAIM_INTERVAL_MS: i64 = 24 * 3600 * 1000;
-/// Super representatives produce blocks; the top 127 (SRs + partners) share vote rewards.
 const SR_COUNT: usize = 27;
 const PAID_RANKS: usize = 127;
 
@@ -70,8 +62,6 @@ fn resource_name(lang: Lang, r: TronResource) -> &'static str {
         TronResource::Energy => lang.pick("l'ÉNERGIE", "ENERGY"),
     }
 }
-
-// ---------------------------------------------------------------- reads
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -226,8 +216,6 @@ pub struct TronWitness {
     pub brokerage: Option<u64>,
 }
 
-/// `T…` form of an address java-tron returned as base58 or as 21-byte hex (`41…`): some
-/// endpoints ignore `visible`.
 fn address_of(s: &str) -> Option<String> {
     if wallet_core::tron_address_bytes(s).is_ok() {
         return Some(s.to_owned());
@@ -302,8 +290,6 @@ pub async fn tron_stake_witnesses(state: State<'_, AppState>) -> AppResult<Vec<T
     witnesses(&ctx(&state)).await
 }
 
-// ---------------------------------------------------------------- build
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VoteInput {
@@ -373,7 +359,6 @@ pub struct TronStakeContext {
     pub requires_extra_confirmation: bool,
 }
 
-/// Live checks and the dialog's context for a decoded staking transaction (build and sign).
 pub(crate) async fn context_for(
     c: &TronCtx<'_>,
     s: &TronStakeSummary,
@@ -595,8 +580,6 @@ pub async fn tron_stake_build(
     build(&ctx(&state), &me, &action).await
 }
 
-// ---------------------------------------------------------------- dialog
-
 fn net_label(net: Network) -> &'static str {
     match net {
         Network::Mainnet => "TRON",
@@ -617,7 +600,6 @@ fn trx_in(lang: Lang, sun: &str) -> String {
     format!("{} TRX", format_units_in(lang, sun, 6))
 }
 
-/// Body of the native dialog, from Rust's decoding and live data only.
 pub(crate) fn describe(
     lang: Lang,
     s: &TronStakeSummary,
@@ -842,8 +824,6 @@ pub(crate) fn describe_extra(lang: Lang, c: &TronStakeContext) -> String {
     out += lang.pick("\nContinuer quand même ?", "\nContinue anyway?");
     out
 }
-
-// ---------------------------------------------------------------- sign
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1118,7 +1098,6 @@ mod tests {
             }
         )
         .is_err());
-        // The request JSON the UI sends.
         let r: TronStakeRequest =
             serde_json::from_str(r#"{"kind":"freeze","resource":"BANDWIDTH","amount":"1000000"}"#)
                 .unwrap();
@@ -1134,13 +1113,10 @@ mod tests {
     }
 }
 
-/// Real Nile staking through the Rust path of `tron_stake_*`, over Tor, from the public Trezor
-/// test wallet (`all × 12`, `TY72iA3S…`). Always: java-tron's own `freezebalancev2`,
+/// Real Nile staking through the Rust path of `tron_stake_*`, over Tor, from the public Trezor test
+/// wallet (`all × 12`, `TY72iA3S…`). Always: java-tron's own `freezebalancev2`,
 /// `unfreezebalancev2`, `votewitnessaccount`, `cancelallunfreezev2`, `withdrawexpireunfreeze` and
 /// `withdrawbalance` (unsigned, never used to sign) compared with Kyro's encoding byte for byte.
-/// With `KYRO_TRON_STAKE=yes`: freeze 10 TRX for ENERGY, vote 10 for the top SR, unfreeze 5,
-/// cancel all unfreezes, unfreeze 10 (they come back after the delay: 1 day on Nile).
-/// `KYRO_TRON_STAKE=yes cargo test -p kyro-desktop --lib -- --ignored --nocapture tron_stake_live`
 #[cfg(test)]
 mod live {
     use super::*;
@@ -1150,7 +1126,6 @@ mod live {
 
     const ALL: &str = "all all all all all all all all all all all all";
 
-    /// java-tron's unsigned transaction for `path` vs Kyro's with the same block fields.
     async fn compare(c: &TronCtx<'_>, path: &str, body: Value, contract: TronContract) {
         let server = match request(c, path, Some(body)).await {
             Ok(v) if v.get("raw_data_hex").is_some() => v,

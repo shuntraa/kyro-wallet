@@ -1,11 +1,4 @@
-//! TON jettons (TEP-74) Kyro knows: the jetton wallet address is **computed here** from the
-//! master's wallet code and our wallet address (never taken from a server), and the
-//! `transfer#0f8a7ea5` body sent to it is written and strictly decoded here.
-//!
-//! Only jettons listed in [`JETTONS`] are accepted: their master address comes from the issuer
-//! (Tether's list for USD₮ on TON) and CoinGecko, and the wallet code is the cell the master
-//! returns in `get_jetton_data` (for USD₮ a library reference to the audited `stablecoin-contract`
-//! jetton wallet). Test vectors: owner → jetton wallet pairs read on mainnet (2026-11-01).
+//! TON jettons (TEP-74): jetton wallet address computed here, `transfer#0f8a7ea5` body codec.
 
 use serde::{Deserialize, Serialize};
 use tycho_types::cell::{Cell, CellBuilder, CellSlice};
@@ -15,18 +8,13 @@ use crate::error::{Error, Result};
 
 /// `transfer` opcode of a jetton wallet (TEP-74).
 pub const TON_JETTON_TRANSFER_OP: u32 = 0x0f8a_7ea5;
-/// TON attached to a jetton transfer for the jetton wallets' fees; the excess comes back to our
-/// wallet (`response_destination`).
+/// TON attached for the jetton wallets' fees; the excess returns to `response_destination`.
 pub const TON_JETTON_ATTACHED_NANOTON: u64 = 50_000_000;
-/// TON forwarded to the recipient with the `transfer_notification` (1 nanoton, as Tonkeeper):
-/// enough for the recipient (an exchange) to see the transfer and its comment.
+/// TON forwarded with `transfer_notification` (1 nanoton, as Tonkeeper), so the comment is seen.
 pub const TON_JETTON_FORWARD_NANOTON: u64 = 1;
-/// Most TON Kyro accepts to attach to a jetton transfer.
 const MAX_ATTACHED_NANOTON: u64 = 200_000_000;
-/// `VarUInteger 16`: at most 15 bytes.
 const MAX_JETTON_UNITS: u128 = (1u128 << 120) - 1;
 
-/// How a jetton wallet's initial data is laid out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WalletLayout {
     /// `stablecoin-contract` (USD₮): `status:uint4 balance:Coins owner:MsgAddress master:MsgAddress`.
@@ -44,11 +32,9 @@ struct JettonDef {
     layout: WalletLayout,
 }
 
-/// Jettons Kyro knows. Mainnet only: Tether and Circle publish no testnet jetton on TON.
 const JETTONS: &[JettonDef] = &[JettonDef {
     testnet: false,
     // EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs (tether.to, CoinGecko `tether`).
-    // 0:b113a994b5024a16719f69139328eb759596c38a25f59028b146fecdc3621dfe
     master: [
         0xb1, 0x13, 0xa9, 0x94, 0xb5, 0x02, 0x4a, 0x16, 0x71, 0x9f, 0x69, 0x13, 0x93, 0x28, 0xeb,
         0x75, 0x95, 0x96, 0xc3, 0x8a, 0x25, 0xf5, 0x90, 0x28, 0xb1, 0x46, 0xfe, 0xcd, 0xc3, 0x62,
@@ -107,8 +93,7 @@ pub fn ton_known_jetton(master: &TonAddress, testnet: bool) -> Option<TonJettonI
     })
 }
 
-/// Address of `owner`'s jetton wallet for the known jetton `master`: hash of the `StateInit`
-/// the master deploys (its wallet code, initial data with a zero balance).
+/// `owner`'s jetton wallet for known `master`: hash of the `StateInit` the master deploys.
 pub fn ton_jetton_wallet_address(
     master: &TonAddress,
     owner: &TonAddress,
@@ -221,7 +206,6 @@ impl TonJettonBody {
         b.build().map_err(cell_err)
     }
 
-    /// Strict decoding (the caller re-encodes the whole message and compares the bytes).
     pub(super) fn parse(s: &mut CellSlice<'_>) -> Result<Self> {
         if s.load_u32().map_err(cell_err)? != TON_JETTON_TRANSFER_OP {
             return Err(Error::input("token operation expected (transfer)"));

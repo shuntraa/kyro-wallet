@@ -1,9 +1,7 @@
-//! IPC commands for Cardano (`ada_*`): base address (CIP-1852, Icarus), balance and native
-//! tokens, history, payment building **by Kyro** (UTxOs and protocol parameters from Koios,
-//! encoded by wallet-core), signing behind the password and the native dialog (every output with
-//! its ADA, tokens and min-ADA; fee, ttl, memo), and `submittx` with transaction-id check.
-//! Single-address mode: receive and change both use `m/1852'/1815'/a'/0/0` of account `a`.
-//! Contract: docs/IPC.md §2.7.
+//! IPC commands for Cardano (`ada_*`): base address (CIP-1852, Icarus), balance and native tokens,
+//! history, payment building **by Kyro** (UTxOs and protocol parameters from Koios, encoded by
+//! wallet-core), signing behind the password and the native dialog (every output with its ADA,
+//! tokens and min-ADA; fee, ttl, memo), and `submittx` with transaction-id check.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -21,7 +19,6 @@ use crate::i18n::Lang;
 use crate::servers::{host_of, utxo_network_key, CardanoServer};
 use crate::state::AppState;
 
-/// Address index used for Cardano (single-address mode; the account is the caller's).
 const INDEX: u32 = 0;
 
 pub(crate) fn ctx(state: &AppState) -> CardanoCtx<'_> {
@@ -34,7 +31,6 @@ pub(crate) fn ctx(state: &AppState) -> CardanoCtx<'_> {
     }
 }
 
-/// Our address and payment public key of Cardano account `account`.
 fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
     let net = state.network;
     state.with_cardano(|r| {
@@ -45,7 +41,6 @@ fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
     })
 }
 
-/// Path of the payment key of account `account`.
 pub(crate) fn payment_path(account: u32) -> String {
     format!("{}/0/{INDEX}", wallet_core::cardano_account_path(account))
 }
@@ -91,7 +86,6 @@ fn token_line(lang: Lang, t: &wallet_core::CardanoTokenView) -> String {
     )
 }
 
-/// Body of the native dialog: every output (address, ADA, tokens, min-ADA), fee, validity.
 pub(crate) fn describe_ada(
     lang: Lang,
     s: &CardanoTxSummary,
@@ -198,7 +192,6 @@ pub(crate) fn describe_ada(
             s.tx_id
         ),
     };
-    // Untrusted text: one quoted line, after the amounts, fees and validity.
     if let Some(m) = &s.memo {
         out += &format!(
             "\n{}{}\n",
@@ -257,8 +250,6 @@ pub(crate) fn describe_ada_extra(lang: Lang, s: &CardanoTxSummary) -> String {
     out += lang.sign_anyway();
     out
 }
-
-// ---------------------------------------------------------------- reads
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -356,8 +347,6 @@ pub async fn ada_tx_status(state: State<'_, AppState>, hash: String) -> AppResul
     })
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 /// Native token to send.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -393,8 +382,6 @@ fn decode_ctx<'a>(
     }
 }
 
-/// Builds an unsigned payment from live data. `lovelace` may be omitted when a token is sent
-/// (the output then carries exactly its min-UTxO).
 pub(crate) async fn build(
     c: &CardanoCtx<'_>,
     me: &str,
@@ -503,8 +490,6 @@ pub struct CardanoSigned {
     pub context: CardanoContextOut,
 }
 
-/// Decoding + live re-checks (inputs unspent and ours, balance, fee ≥ minimum, ttl not passed),
-/// i.e. everything `ada_sign_tx` does before the dialog.
 pub(crate) async fn prepare_sign(
     c: &CardanoCtx<'_>,
     me: &str,
@@ -525,8 +510,6 @@ pub(crate) async fn prepare_sign(
     let (account, utxos) = account_and_utxos(c, me, &p).await?;
     let me_b = wallet_core::cardano_address_bytes(me, c.network)?;
     let leaving = cardano_backend::check_balance(&body, &utxos, &me_b)?;
-    // Signed size = size with one vkey witness and no auxiliary data, plus what the auxiliary
-    // data adds over `null` (the unsigned transaction is the same with an empty witness set).
     let aux_extra =
         (tx.trim().len() / 2).saturating_sub(wallet_core::cardano_unsigned_tx(&body, None)?.len());
     let size = wallet_core::cardano_signed_size(&body, None, 1)? + aux_extra;
@@ -641,7 +624,6 @@ pub async fn ada_broadcast(
     broadcast_checked(&ctx(&state), &pk, &tx).await
 }
 
-/// Probe used by `settings_set` / `server_test`.
 pub(crate) async fn probe(
     net: &crate::net::NetClient,
     network: Network,

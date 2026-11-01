@@ -1,26 +1,6 @@
 //! Single-key chains of a watch-only hardware-wallet account (Ledger apps Sui, Aptos,
 //! Algorand, NEAR, Cosmos, TON, Hedera): one public key per chain and account, read from the
 //! device.
-//!
-//! Each [`HwWatchKey`] stores the public key, the address Kyro derives from it and the path the
-//! device used. [`HwWatchKey::validate`] recomputes the address from the key and the path from
-//! the account number, so a tampered record cannot pair a key with someone else's address
-//! (and the key itself is re-read from the device before every signature, see SECURITY.md).
-//!
-//! Paths: the same as the software wallet (so one phrase gives the same addresses in Kyro's
-//! vault and on the Ledger), **except NEAR**: the Ledger NEAR app only accepts five-level
-//! paths, Kyro's vault uses `m/44'/397'/account'`; hardware NEAR accounts therefore use the
-//! path of Ledger Live and the NEAR wallets, `m/44'/397'/0'/0'/(account + 1)'` — another key,
-//! another implicit account than the vault's. **TON** likewise: the Ledger TON app's path is
-//! the six-level one of Ledger Live / `@ton-community/ton-ledger`,
-//! `m/44'/607'/0'/0'/account'/0'` (the vault uses `m/44'/607'/account'`), so a hardware TON
-//! account is another key and another wallet address than the vault's. Its address also
-//! depends on the network (v4R2 wallet id, see `ton.rs`): it is recomputed for the account's
-//! network. **Hedera** too: the Ledger Hedera app signs with ED25519 keys at
-//! `m/44'/3030'/0'/0'/account'`, the vault uses ECDSA secp256k1 (`m/44'/3030'/0'/0/account`);
-//! a hardware Hedera account is an ED25519 account, its account ID (`0.0.x`) is not derived
-//! from the key but looked up on the mirror node: the stored « address » is the key's DER
-//! form (`302a300506032b6570032100…`, what Hedera wallets show).
 
 use serde::{Deserialize, Serialize};
 
@@ -98,7 +78,7 @@ impl HwKeyChain {
 
     /// Address of a public key on `network` (also checks the key's length and, for Cosmos,
     /// that it is a valid compressed secp256k1 point; ed25519 keys are checked by
-    /// `ed25519-dalek`). Only TON's address depends on the network.
+    /// `ed25519-dalek`).
     pub fn address_of(self, pubkey: &[u8], network: Network) -> Result<String> {
         if pubkey.len() != self.key_len() {
             return Err(Error::input(
@@ -182,7 +162,6 @@ impl HwWatchKey {
     }
 }
 
-/// Checks a list of keys: valid each, at most one per chain.
 pub(crate) fn validate_keys(keys: &[HwWatchKey], account: u32, network: Network) -> Result<()> {
     for (i, k) in keys.iter().enumerate() {
         k.validate(account, network)?;

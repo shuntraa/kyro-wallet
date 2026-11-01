@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Algorand address format, for the interface only (Rust checks every address again with
-// wallet-core `algo_address_bytes`): 58 upper-case base32 characters (RFC 4648, no padding) of
-// the 32-byte public key followed by the last 4 bytes of its SHA-512/256.
+// Algorand address format, for the interface only (Rust checks every address again with wallet-core
 
 import { base32nopad } from '@scure/base';
 import { sha512_256 } from '@noble/hashes/sha2';

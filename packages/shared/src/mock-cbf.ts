@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — compact block filters (BIP157/158), mirroring the `cbf` cargo feature of
-// apps/desktop/src-tauri/src/cbf. Off by default, like today's build: every CBF command and
-// a `kind: 'cbf'` server answer FEATURE_DISABLED. `?cbf=on` (or `MockOptions.cbf`) enables a
-// simulated sync: connecting → headers → filters (matching blocks downloaded) → synced, with
-// `cbf-status` events at most twice per second.
 
 import { IpcError, type CbfStatus, type Network } from './ipc';
 import { emitDemoEvent } from './events';

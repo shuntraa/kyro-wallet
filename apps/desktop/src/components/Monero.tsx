@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Monero pieces of the app (docs/IPC.md §2.11):
-// - the scan status: Rust downloads the blocks and scans them on this machine (no key sent to
-//   the node), in a background task started here and polled while it runs;
-// - Receive: primary address + subaddresses handed out one by one (recommended: one per payer);
-// - Send: Rust's decoding of the destination, then of the built transfer, before the password;
-// - Réglages › Sécurité: the 25-word Monero seed (native window only) and the restore height.
+// Monero pieces of the app (docs/IPC.md §2.11): - the scan status: Rust downloads the blocks and
+// scans them on this machine (no key sent to the node), in a background task started here and
+// polled while it runs; - Receive: primary address + subaddresses handed out one by one
+// (recommended: one per payer); - Send: Rust's decoding of the destination, then of the built
+// transfer, before the password; - Réglages › Sécurité: the 25-word Monero seed (native window
+// only) and the restore height.
 
 import { useEffect, useRef, useState } from 'react';
 import { toIpcError, type Currency } from '@kyro/shared';
@@ -28,10 +28,7 @@ const WARNINGS: Record<XmrUnsigned['summary']['warnings'][number], Key> = {
   ownAddress: 'xmr.wOwnAddress',
 };
 
-/**
- * Scan status of the active Monero account. Starts the background scan once when mounted (and
- * on `sync()`), polls `xmr_status` every 2 s while it runs, every 60 s otherwise.
- */
+/** Scan status of the active Monero account. */
 export function useXmrStatus(adapter: XmrAdapter | null | undefined): { status: XmrStatus | null; error: string | null; sync: () => void; reload: () => void } {
   const [status, setStatus] = useState<XmrStatus | null>(null);
   const [error, setError] = useState<string | null>(null);

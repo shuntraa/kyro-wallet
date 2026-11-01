@@ -1,16 +1,5 @@
 //! Ledger « TON » app (LedgerHQ/app-ton 2.x, `doc/COMMANDS.md`; host library
 //! `@ton-community/ton-ledger`).
-//!
-//! CLA E0. Paths: count byte then big-endian indices; Kyro uses the six-level path of Ledger
-//! Live, `m/44'/607'/0'/0'/account'/0'` (see `wallet_core::HwKeyChain`).
-//! - GET_PUBLIC_KEY (05): P1 = 00, P2 = 00 → 32-byte key, nothing shown. P1 = 01 shows the
-//!   **address** of the v4R2 wallet (non-bounceable form), P2 = 04 (wallet id given, here the
-//!   network's) | 01 on testnet, data `path ‖ is_v3r2 = 00 ‖ wallet_id (u32 BE)`.
-//! - SIGN_TX (06): first APDU P2 = 03 with the path, then the structured transfer request of
-//!   `doc/TRANSACTION.md` (built by `wallet_core::ton_hw_request`) in chunks of 255 bytes,
-//!   P2 = 02 (more) / 00 (last) → `40 ‖ signature (64) ‖ 20 ‖ hash (32)`: the app rebuilds the
-//!   order cell itself, shows recipient, amount and comment, and signs its hash. Kyro checks
-//!   that hash against its own and verifies the signature (`wallet_core::ton_hw_signed`).
 
 use super::ledger_apdu::{self as apdu, SwContext};
 use super::ledger_apps::App;
@@ -25,7 +14,6 @@ const P2_FIRST_MORE: u8 = 0x03;
 const P2_MORE: u8 = 0x02;
 const P2_LAST: u8 = 0x00;
 const CHUNK: usize = 255;
-/// Longest request the app accepts (`MAX_TRANSACTION_LEN`).
 const MAX_REQUEST: usize = 510;
 
 fn path_bytes(path: &[u32]) -> HwResult<Vec<u8>> {
@@ -106,7 +94,6 @@ mod tests {
     use super::*;
     use wallet_core::HwKeyChain;
 
-    /// `m/44'/607'/0'/0'/0'/0'` as `@ton-community/ton-ledger` sends it.
     const PATH0: &str = "068000002c8000025f80000000800000008000000080000000";
 
     #[test]
@@ -116,7 +103,6 @@ mod tests {
             hex::encode(get_pubkey(&path, None).unwrap()),
             format!("e005000019{PATH0}")
         );
-        // Display on testnet with Kyro's testnet wallet id.
         assert_eq!(
             hex::encode(get_pubkey(&path, Some((true, 0x4B59_524F))).unwrap()),
             format!("e00501051e{PATH0}004b59524f")

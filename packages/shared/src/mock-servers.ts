@@ -1,19 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// DEMO ONLY — custom servers (B2b): live checks, Electrum certificates, Bitcoin data in
-// Esplora shapes whatever the backend, Bitcoin Core watch-only wallet. Mirrors
-// apps/desktop/src-tauri/src/{servers,commands_servers,btc_backend}.rs.
-//
-// Scenarios are chosen by the URL / host the user types (like `?tor=fail` for Tor):
-//   - contains « down »    → SERVER_UNREACHABLE (connection, TLS, timeout);
-//   - contains « flaky »   → passes the check at save, then SERVER_UNREACHABLE on every data
-//     request (a server that went down later: the UI must say so, never fall back);
-//   - contains « wrong »   → SERVER_WRONG_NETWORK (other genesis / chainId);
-//   - Electrum host with « self » → self-signed certificate (webpkiValid = false, must be pinned);
-//   - Core: user/password « wrong » → SERVER_INVALID (RPC auth refused); a cookie path
-//     containing « missing » → SERVER_INVALID (unreadable .cookie).
-// Once a custom server is set for a chain, the default host of that chain is refused
-// (DEFAULT_SERVER_DISABLED), exactly like Rust: never a silent fallback.
+// DEMO ONLY — custom servers (B2b): live checks, Electrum certificates, Bitcoin data in Esplora
 
 import * as bitcoin from 'bitcoinjs-lib';
 import { sha256 } from '@noble/hashes/sha2';
@@ -101,15 +87,10 @@ export interface DemoServersDeps {
   requireUnlocked: () => void;
   /** Compact filters (feature `cbf`: FEATURE_DISABLED unless enabled). */
   cbf: DemoCbf;
-  /** Litecoin / Dogecoin servers (checks and probes). */
   utxo: Pick<ReturnType<typeof createDemoUtxo>, 'probe' | 'validate'>;
-  /** TRON servers (checks and probes). */
   tron: Pick<ReturnType<typeof createDemoTron>, 'probe' | 'validate'>;
-  /** XRP Ledger servers (checks and probes). */
   xrp: Pick<ReturnType<typeof createDemoXrp>, 'probe' | 'validate'>;
-  /** Cardano servers (checks and probes). */
   cardano: Pick<ReturnType<typeof createDemoCardano>, 'probe' | 'validate'>;
-  /** Monero servers (checks and probes). */
   xmr: Pick<ReturnType<typeof createDemoXmr>, 'probe' | 'validate'>;
 }
 
@@ -284,11 +265,8 @@ export function createDemoServers(d: DemoServersDeps) {
     return demoElectrumCert(h, p);
   };
 
-  // ------------------------------------------------------------ Bitcoin data (Esplora shapes)
-
   const current = (): BtcServer => bitcoinServerFor(d.settings().servers, d.network);
 
-  /** Gate + checks of the active backend before a read or a broadcast. */
   const backend = async (): Promise<BtcServer> => {
     const s = current();
     if (s.kind === 'default') {
@@ -378,8 +356,6 @@ export function createDemoServers(d: DemoServersDeps) {
     },
   };
 
-  // ------------------------------------------------------------ Bitcoin Core watch-only wallet
-
   const coreServer = (): Extract<BtcServer, { kind: 'core' }> => {
     const s = current();
     if (s.kind !== 'core') throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : aucun nœud Bitcoin Core n’est configuré pour ce réseau', 'Invalid input: no Bitcoin Core node is configured for this network'));
@@ -425,8 +401,6 @@ export function createDemoServers(d: DemoServersDeps) {
     job = { url: s.url, state: 'importing', started: Date.now(), rescanMs: (rescanFrom as CoreRescanFrom) === 'now' ? 0 : DEMO_RESCAN_MS };
     return { wallet: walletName, state: 'importing', walletLoaded: false };
   };
-
-  // ------------------------------------------------------------ net_fetch routing
 
   /** Custom-server policy of `net_fetch`: replaced defaults refused, custom hosts served (or down). */
   const routeNet = (req: NetRequest): DemoRoute | undefined => {

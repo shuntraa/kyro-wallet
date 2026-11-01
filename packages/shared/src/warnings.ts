@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Reinforced-confirmation triggers of the Bitcoin and EVM summaries (docs/IPC.md §1, wallet-core
-// btc.rs / evm.rs `with_warnings`). Rust is the authority: these mirror its rules so the demo
-// backend and the locally built Bitcoin summary say the same as the shell before signing.
 
 import type { BtcSummaryOutput, BtcWarning, EvmTxRequest, EvmWarning } from './ipc';
 
@@ -31,11 +28,7 @@ export function evmHighFeeThresholdWei(chainId: number): bigint {
   return 10n ** 15n * (HIGH_FEE_MILLI[chainId] ?? 50n);
 }
 
-/**
- * Bitcoin: unknown script, OP_RETURN, foreign input, fee > 100 sat/vB or fee > outputs total.
- * Output addresses follow Rust's rendering: `op_return:<hex>` / `script:<hex>` for non-address
- * outputs. `vsize`: estimated virtual size (Rust: fee ÷ estimated vsize, integer division).
- */
+/** Bitcoin: unknown script, OP_RETURN, foreign input, fee > 100 sat/vB or fee > outputs total. */
 export function btcWarnings(p: { outputs: BtcSummaryOutput[]; feeSats: number; vsize: number; foreignInputs?: number[] }): { warnings: BtcWarning[]; requiresExtraConfirmation: boolean } {
   const warnings: BtcWarning[] = [];
   for (const input of p.foreignInputs ?? []) warnings.push({ kind: 'foreignInput', input });

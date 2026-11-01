@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Inline state when the user's own server does not answer (SERVER_UNREACHABLE) or the UI hit
-// a replaced default (DEFAULT_SERVER_DISABLED). Kyro never retries against a public default:
-// the only way out is the user's server, or the settings.
+// Inline state when the user's own server does not answer (SERVER_UNREACHABLE) or the UI hit a
+// replaced default (DEFAULT_SERVER_DISABLED).
 
 import { isCustomServerDown } from '@kyro/shared';
 import { useApp } from '../state/app';
@@ -11,8 +9,8 @@ import { IconWarn } from './icons';
 import { useT } from '../i18n';
 
 /**
- * Compact filters before their first sync: Rust answers SERVER_UNREACHABLE « pas encore
- * synchronisé ». Not a server failure: the sync is running.
+ * Compact filters before their first sync: Rust answers SERVER_UNREACHABLE « pas encore synchronisé
+ * ».
  */
 export function cbfPending(error: unknown): boolean {
   const m = typeof error === 'string' ? error : error instanceof Error ? error.message : '';
@@ -20,8 +18,8 @@ export function cbfPending(error: unknown): boolean {
 }
 
 /**
- * Dogecoin / Dash testnets have no free public server: until the user sets one, Rust answers SERVER_INVALID
- * « aucun serveur public gratuit… configure ton serveur ». Not a failure: a missing setting.
+ * Dogecoin / Dash testnets have no free public server: until the user sets one, Rust answers
+ * SERVER_INVALID « aucun serveur public gratuit… configure ton serveur ».
  */
 export function serverMissing(error: unknown): boolean {
   const m = typeof error === 'string' ? error : error instanceof Error ? error.message : typeof error === 'object' && error !== null ? String((error as { message?: unknown }).message ?? '') : '';
@@ -49,9 +47,8 @@ export function ServerMissingLine({ className, coin = 'Dogecoin' }: { className?
 }
 
 /**
- * TRON with a plain java-tron node: everything works but the history, which needs TronGrid's
- * `/v1` API (Rust: SERVER_UNREACHABLE « …l'historique exige l'API /v1 de TronGrid »). Not a
- * server failure: a limitation of that kind of server.
+ * TRON with a plain java-tron node: everything works but the history, which needs TronGrid's `/v1`
+ * API (Rust: SERVER_UNREACHABLE « …l'historique exige l'API /v1 de TronGrid »).
  */
 export function tronNoHistory(error: unknown): boolean {
   const m = typeof error === 'string' ? error : error instanceof Error ? error.message : typeof error === 'object' && error !== null ? String((error as { message?: unknown }).message ?? '') : '';

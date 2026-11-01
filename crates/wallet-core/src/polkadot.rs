@@ -1,44 +1,4 @@
-//! Polkadot (DOT on **Polkadot Asset Hub**, WND on Westend Asset Hub for the testnet): sr25519
-//! keys, SS58 addresses and two extrinsics, `Balances.transfer_keep_alive` and, for the few
-//! verified stablecoins of [`dot_known_assets`] (USD₮ 1984, USDC 1337), `Assets.transfer_keep_alive`,
-//! in SCALE (fees always in DOT).
-//!
-//! Since the Asset Hub migration (Polkadot, November 2025), balances and transfers live on
-//! **Asset Hub** (parachain 1000), not on the relay chain: Polkadot.js, Nova, Talisman and
-//! SubWallet show DOT there, with the same SS58 prefix (0).
-//!
-//! **Keys: sr25519 from the BIP39 entropy (`substrate-bip39`)**, like Polkadot.js, Nova,
-//! Talisman and SubWallet — not the BIP39 seed, and not Ledger's ed25519 `m/44'/354'/…` path
-//! (a phrase used with the Ledger Polkadot app gives other addresses). Account 0 is the
-//! keypair of the phrase itself (the « root » account every one of those wallets shows first,
-//! URI `phrase`); account `a ≥ 1` is the hard derivation `phrase//a` (Polkadot.js notation,
-//! numeric junction = `u64` little-endian in a 32-byte chain code). Mini-secret:
-//! `PBKDF2-HMAC-SHA512(entropy, "mnemonic" ‖ passphrase, 2048)[..32]` (`substrate-bip39`);
-//! expansion and signing: `schnorrkel` (ExpansionMode::Ed25519, signing context `substrate`),
-//! the crate Substrate itself uses. Checked against Polkadot.js (independent wasm
-//! implementation) for root, `//1`, `//2` and `//Alice`.
-//!
-//! **SS58**: `base58(prefix ‖ pubkey ‖ blake2b-512("SS58PRE" ‖ prefix ‖ pubkey)[..2])`, one-byte
-//! prefixes only (0 Polkadot, 42 Westend / generic); an address of another prefix is refused
-//! (Kusama `H…`/`C…`/…, generic `5…` on mainnet: same key, but a different network was meant).
-//!
-//! **Runtime**: the call index of `Balances.transfer_keep_alive` is **pinned** per chain and
-//! must be confirmed by the runtime metadata (V15) the node returns, together with the shape
-//! of its arguments, the address / signature types, the layout of `System.Account` and the
-//! transaction extensions: every extension must be one Kyro knows, with the expected types,
-//! otherwise nothing is built or signed (a runtime upgrade that adds an unknown extension
-//! needs a Kyro update). A node lying about metadata can only make the transaction invalid:
-//! the call index and its encoding are Kyro's, and spec / transaction versions, genesis and
-//! block hash are signed (the chain rejects a signature made for anything else).
-//!
-//! **Encoding** is SCALE (`parity-scale-codec`) for compact integers, by hand for the few
-//! fixed fields: `call = [pallet, call] ‖ MultiAddress::Id(0x00 ‖ dest) ‖ Compact(value)`,
-//! signing payload `call ‖ extra ‖ additional` (blake2-256 of it above 256 bytes), extrinsic
-//! v4 `Compact(len) ‖ 0x84 ‖ 0x00 ‖ signer ‖ 0x01 ‖ sr25519 sig ‖ extra ‖ call`. Same safety
-//! rule as XRP / TRON: **a payload or extrinsic is accepted only if re-encoding what was
-//! decoded gives back the same bytes**. Kyro never sets a tip, never enables
-//! `CheckMetadataHash` (mode 0, like Polkadot.js without a metadata-hash-aware signer), always
-//! pays fees in DOT (`asset_id = None`) and always signs a **mortal** transaction.
+//! Polkadot Asset Hub (DOT; WND on Westend): sr25519, SS58, Balances/Assets `transfer_keep_alive`.
 
 use blake2::digest::consts::{U16, U32};
 use blake2::{Blake2b, Blake2b512, Digest};
@@ -56,18 +16,12 @@ use crate::error::{Error, Result};
 use crate::mnemonic::Mnemonic;
 use crate::network::Network;
 
-/// Signing context of every Substrate sr25519 signature.
 const SIGNING_CTX: &[u8] = b"substrate";
-/// Above this size the signing payload is replaced by its blake2-256 hash (Substrate rule).
 const MAX_RAW_PAYLOAD: usize = 256;
-/// Signed extrinsic, format version 4.
 const EXTRINSIC_V4_SIGNED: u8 = 0x84;
-/// `MultiAddress::Id`.
 const MULTIADDRESS_ID: u8 = 0;
-/// `MultiSignature::Sr25519`.
 const MULTISIG_SR25519: u8 = 1;
 const MAX_EXTRINSIC: usize = 1024;
-/// Highest account number (hard junction `//a`), like the other chains.
 const MAX_ACCOUNT: u32 = 0x7FFF_FFFF;
 
 fn bad(msg: impl Into<String>) -> Error {
@@ -82,10 +36,6 @@ pub fn dot_blake2_256(data: &[u8]) -> [u8; 32] {
 fn blake2_128(data: &[u8]) -> [u8; 16] {
     Blake2b::<U16>::digest(data).into()
 }
-
-// ---------------------------------------------------------------------------------------------
-// Chains
-// ---------------------------------------------------------------------------------------------
 
 /// What Kyro pins for a chain (never taken from the node).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,7 +64,6 @@ pub struct DotChain {
     pub assets_transfer_keep_alive: u8,
 }
 
-/// 32 bytes from 64 lowercase hex digits, at compile time (constants only; checked by tests).
 const fn h32(s: &[u8; 64]) -> [u8; 32] {
     const fn nib(c: u8) -> u8 {
         match c {
@@ -132,9 +81,7 @@ const fn h32(s: &[u8; 64]) -> [u8; 32] {
     out
 }
 
-/// Polkadot Asset Hub (`statemint`, parachain 1000): where DOT balances live. Genesis and
-/// indices checked on 2026-11-01 against `polkadot-asset-hub-rpc.polkadot.io` (runtime
-/// 2005002, metadata V15: `Balances` = 10, `transfer_keep_alive` = 3, ED 0.01 DOT).
+/// Polkadot Asset Hub (`statemint`, parachain 1000): where DOT balances live.
 pub const DOT_POLKADOT_ASSET_HUB: DotChain = DotChain {
     network: Network::Mainnet,
     name: "Polkadot Asset Hub",
@@ -149,8 +96,7 @@ pub const DOT_POLKADOT_ASSET_HUB: DotChain = DotChain {
     assets_transfer_keep_alive: 9,
 };
 
-/// Westend Asset Hub (`westmint`): Parity's public testnet (WND, 12 decimals, generic prefix
-/// 42). Checked on 2026-11-01 against `westend-asset-hub-rpc.polkadot.io` (runtime 1025003).
+/// Westend Asset Hub (`westmint`): Parity's public testnet (WND, 12 decimals, generic prefix 42).
 pub const DOT_WESTEND_ASSET_HUB: DotChain = DotChain {
     network: Network::Testnet,
     name: "Westend Asset Hub",
@@ -180,9 +126,6 @@ pub struct DotKnownAsset {
     pub decimals: u8,
 }
 
-/// Polkadot Asset Hub: USD₮ (Tether's list: asset 1984) and USDC (Circle's list: asset 1337).
-/// `Assets.Metadata` read on 2026-11-01: « Tether USD » / `USDt` and « USD Coin » / `USDC`, 6
-/// decimals, both sufficient (they can create an account), `min_balance` 0.01, status Live.
 const POLKADOT_ASSETS: &[DotKnownAsset] = &[
     DotKnownAsset {
         id: 1984,
@@ -224,10 +167,6 @@ pub fn dot_chain(network: Network) -> &'static DotChain {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Keys and addresses
-// ---------------------------------------------------------------------------------------------
-
 /// sr25519 mini-secret of the phrase (substrate-bip39), erased on drop.
 pub struct PolkadotRoot(MiniSecretKey);
 
@@ -260,8 +199,7 @@ impl PolkadotRoot {
         if account == 0 {
             return Ok(root);
         }
-        // `//a`: numeric junction = u64 LE, zero-padded to the 32-byte chain code; hard
-        // derivation of sp-core (`hard_derive_mini_secret_key(cc, b"")`, then Ed25519 expansion).
+        // `//a`: u64 LE junction padded to 32 bytes; sp-core hard derive, then Ed25519 expand.
         let mut cc = [0u8; 32];
         cc[..8].copy_from_slice(&u64::from(account).to_le_bytes());
         let (mini, _) = root
@@ -348,10 +286,6 @@ pub fn dot_account_id(address: &str, network: Network) -> Result<[u8; 32]> {
     Ok(pk)
 }
 
-// ---------------------------------------------------------------------------------------------
-// Runtime metadata
-// ---------------------------------------------------------------------------------------------
-
 /// A transaction extension Kyro knows how to fill (metadata order is kept).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DotExtension {
@@ -375,7 +309,6 @@ pub enum DotExtension {
     MetadataHash,
 }
 
-/// Extensions without data that Kyro accepts (identifier, as in the metadata).
 const NO_DATA_EXTENSIONS: &[&str] = &[
     "AuthorizeCall",
     "CheckNonZeroSender",
@@ -398,8 +331,7 @@ pub struct DotRuntime {
     pub existential_deposit: u128,
     /// Transaction extensions, in order.
     pub extensions: Vec<DotExtension>,
-    /// `Assets` pallet as Kyro expects it (index, `transfer_keep_alive`, `Account` / `Asset` /
-    /// `Metadata` layouts), or why not: tokens are then refused, DOT still works.
+    /// `Assets` pallet as Kyro expects it, or why not (tokens then refused; DOT still works).
     pub assets: core::result::Result<(), String>,
 }
 
@@ -431,7 +363,6 @@ impl<'a> Reg<'a> {
         matches!(self.def(id), Ok(TypeDef::Compact(c)) if self.is_prim(c.type_param.id, p))
     }
 
-    /// `[u8; n]`, possibly wrapped in single-field composites (AccountId32, H256, Signature).
     fn is_bytes(&self, id: u32, n: u32) -> bool {
         self.is_bytes_depth(id, n, 0)
     }
@@ -451,7 +382,6 @@ impl<'a> Reg<'a> {
         }
     }
 
-    /// Encodes to zero bytes (empty composite / tuple, recursively).
     fn is_empty(&self, id: u32) -> bool {
         self.is_empty_depth(id, 0)
     }
@@ -484,7 +414,6 @@ impl<'a> Reg<'a> {
         })
     }
 
-    /// Single-field composite: that field's type.
     fn only_field(&self, id: u32) -> Option<u32> {
         match self.def(id) {
             Ok(TypeDef::Composite(c)) if c.fields.len() == 1 => Some(c.fields[0].ty.id),
@@ -492,7 +421,6 @@ impl<'a> Reg<'a> {
         }
     }
 
-    /// Variant `(name, index)` with exactly one field, of a type accepted by `field_ok`.
     fn has_variant(&self, id: u32, name: &str, index: u8, field_ok: impl Fn(u32) -> bool) -> bool {
         match self.def(id) {
             Ok(TypeDef::Variant(v)) => v.variants.iter().any(|x| {
@@ -505,7 +433,6 @@ impl<'a> Reg<'a> {
         }
     }
 
-    /// Variant without fields named `name` at `index`.
     fn has_unit_variant(&self, id: u32, name: &str, index: u8) -> bool {
         match self.def(id) {
             Ok(TypeDef::Variant(v)) => v
@@ -516,7 +443,6 @@ impl<'a> Reg<'a> {
         }
     }
 
-    /// Named fields of a composite.
     fn fields(&self, id: u32) -> Option<Vec<(&'a str, u32)>> {
         match self.def(id) {
             Ok(TypeDef::Composite(c)) => c
@@ -528,13 +454,11 @@ impl<'a> Reg<'a> {
         }
     }
 
-    /// `MultiAddress` whose `Id` variant (index 0) is a 32-byte account.
     fn is_multiaddress(&self, id: u32) -> bool {
         self.path_is(id, &["sp_runtime", "multiaddress", "MultiAddress"])
             && self.has_variant(id, "Id", MULTIADDRESS_ID, |f| self.is_bytes(f, 32))
     }
 
-    /// `u128`, possibly wrapped (ExtraFlags).
     fn is_u128ish(&self, id: u32) -> bool {
         self.is_prim(id, TypeDefPrimitive::U128)
             || self
@@ -543,10 +467,8 @@ impl<'a> Reg<'a> {
     }
 }
 
-/// Decodes `Option<OpaqueMetadata>` (the result of `state_call("Metadata_metadata_at_version",
-/// 15u32)`) and builds the [`DotRuntime`] of `network`, after checking it against the pinned
-/// [`DotChain`] (spec name, SS58 prefix, call index and argument types, address / signature
-/// types, `System.Account` layout, known extensions only).
+/// Decodes `Option<OpaqueMetadata>` (`Metadata_metadata_at_version(15)`) into the [`DotRuntime`]
+/// of `network`, checked against the pinned [`DotChain`] (spec, SS58, call/type/extension layout).
 pub fn dot_runtime(network: Network, state_call_result: &[u8]) -> Result<DotRuntime> {
     let chain = dot_chain(network);
     let md = |m: &str| Error::input(format!("{} metadata refused: {m}", chain.name));
@@ -780,8 +702,6 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
     })
 }
 
-/// `Assets`: pallet and call indices, `transfer_keep_alive(id: Compact<u32>, target:
-/// MultiAddress, amount: Compact<u128>)`, and the storage layouts Kyro decodes.
 fn check_assets(
     chain: &'static DotChain,
     r: &Reg<'_>,
@@ -907,9 +827,6 @@ fn check_assets(
     Ok(())
 }
 
-/// `System.Account`: map `Blake2_128Concat(AccountId32) → AccountInfo { nonce, consumers,
-/// providers, sufficients: u32, data: { free, reserved, frozen, flags: u128 } }`, the 80-byte
-/// layout [`dot_decode_account_info`] reads.
 fn check_account_layout(
     r: &Reg<'_>,
     system: &frame_metadata::v15::PalletMetadata<PortableForm>,
@@ -948,11 +865,6 @@ fn check_account_layout(
     Ok(())
 }
 
-// ---------------------------------------------------------------------------------------------
-// Storage and runtime API helpers
-// ---------------------------------------------------------------------------------------------
-
-/// `twox128("System") ‖ twox128("Account")`.
 const SYSTEM_ACCOUNT_PREFIX: [u8; 32] =
     h32(b"26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9");
 
@@ -965,7 +877,6 @@ pub fn dot_account_storage_key(account: &[u8; 32]) -> Vec<u8> {
     k
 }
 
-/// `twox128("Assets")`, then `twox128("Account")`, `twox128("Asset")`, `twox128("Metadata")`.
 const ASSETS_PREFIX: [u8; 16] = h16(b"682a59d51ab9e48a8c8cc418ff9708d2");
 const ASSETS_ACCOUNT: [u8; 16] = h16(b"b99d880ec681799c0cf30e8886371da9");
 const ASSETS_ASSET: [u8; 16] = h16(b"d34371a193a751eea5883e9553457b2e");
@@ -1032,8 +943,7 @@ pub struct DotAssetAccount {
     pub blocked: bool,
 }
 
-/// Decodes an `Assets.Account` value: `balance: u128`, `status: u8`, then the existence reason
-/// (not needed; layout checked by [`dot_runtime`]).
+/// Decodes an `Assets.Account` value (`balance: u128`, `status: u8`, reason; see [`dot_runtime`]).
 pub fn dot_decode_asset_account(bytes: &[u8]) -> Result<DotAssetAccount> {
     if bytes.len() < 18 {
         return Err(Error::input("Assets.Account too short"));
@@ -1118,8 +1028,7 @@ impl DotAccountInfo {
         self.providers > 0 || self.sufficients > 0
     }
 
-    /// What `transfer_keep_alive` (and the fee) may take: `free − max(frozen − reserved, ED)`,
-    /// pallet-balances' `reducible_balance(Preserve, Polite)`.
+    /// Spendable by `transfer_keep_alive`: `free − max(frozen − reserved, ED)`.
     pub fn spendable(&self, existential_deposit: u128) -> u128 {
         let untouchable = self
             .frozen
@@ -1155,8 +1064,7 @@ pub fn dot_decode_account_info(bytes: &[u8]) -> Result<DotAccountInfo> {
     })
 }
 
-/// `partial_fee` (planck) of a `TransactionPaymentApi_query_info` result:
-/// `RuntimeDispatchInfo { weight: { Compact<u64>, Compact<u64> }, class: u8, partial_fee: u128 }`.
+/// `partial_fee` (planck) of a `TransactionPaymentApi_query_info` `RuntimeDispatchInfo` result.
 pub fn dot_decode_fee_info(bytes: &[u8]) -> Result<u128> {
     let (_rt, _ps, class, fee): (Compact<u64>, Compact<u64>, u8, u128) =
         DecodeAll::decode_all(&mut &bytes[..])
@@ -1174,12 +1082,7 @@ pub fn dot_fee_query_arg(extrinsic: &[u8]) -> Vec<u8> {
     out
 }
 
-// ---------------------------------------------------------------------------------------------
-// Era
-// ---------------------------------------------------------------------------------------------
-
-/// A **mortal** era (sp_runtime `Era::Mortal(period, phase)`): valid from block `birth` for
-/// `period` blocks. Immortal transactions are never built nor signed.
+/// A **mortal** era (`Era::Mortal`): valid from block `birth` for `period` blocks; never immortal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DotEra {
@@ -1261,10 +1164,6 @@ fn compact_u128(input: &mut &[u8]) -> Result<u128> {
         .map_err(|_| bad("invalid compact integer"))
 }
 
-// ---------------------------------------------------------------------------------------------
-// Transfer: encoding, decoding, signing
-// ---------------------------------------------------------------------------------------------
-
 /// A `Balances.transfer_keep_alive` and what is signed with it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DotTransfer {
@@ -1285,8 +1184,7 @@ pub struct DotTransfer {
 }
 
 impl DotTransfer {
-    /// `[pallet, call] ‖ MultiAddress::Id(dest) ‖ Compact(value)`, or for an asset
-    /// `[pallet, call] ‖ Compact(id) ‖ MultiAddress::Id(dest) ‖ Compact(value)`.
+    /// `[pallet, call] ‖ (Compact(asset id) ‖)? MultiAddress::Id(dest) ‖ Compact(value)`.
     pub fn call(&self, rt: &DotRuntime) -> Vec<u8> {
         let c = rt.chain();
         let mut o = match self.asset {
@@ -1504,8 +1402,7 @@ fn check_transfer(t: &DotTransfer, from: &[u8; 32]) -> Result<()> {
     Ok(())
 }
 
-/// Decodes a signing payload (bytes) into a transfer, refusing anything Kyro would not build
-/// (see [`dot_decode_payload`]).
+/// Decodes a signing payload into a transfer, refusing what Kyro would not build.
 pub fn dot_parse_payload(rt: &DotRuntime, payload: &[u8], from: &[u8; 32]) -> Result<DotTransfer> {
     if payload.len() > MAX_RAW_PAYLOAD {
         return Err(bad("signing payload too long for a transfer"));
@@ -1565,8 +1462,7 @@ pub struct DotTxSummary {
     pub spec_version: u32,
     /// Transaction version signed.
     pub tx_version: u32,
-    /// Token transfer (`Assets.transfer_keep_alive`): `amount`, `symbol` and `decimals` are then
-    /// the token's (fees are still paid in DOT).
+    /// Token transfer (`Assets.transfer_keep_alive`): amount/symbol/decimals are the token's.
     #[serde(default)]
     pub asset: Option<DotAssetSummary>,
 }
@@ -1623,11 +1519,7 @@ pub fn dot_transfer_payload(rt: &DotRuntime, t: &DotTransfer, from: &[u8; 32]) -
     Ok(hex::encode(t.payload(rt)))
 }
 
-/// Decodes a signing payload (hex) for the dialog. Refused: any call but
-/// `Balances.transfer_keep_alive` to a plain account, a zero amount, a transfer to `from`, a
-/// tip, fees in another asset, `CheckMetadataHash` enabled, an immortal era or one above 4096
-/// blocks, another genesis / spec / transaction version than `rt`, trailing or non-canonical
-/// bytes.
+/// Decodes a signing payload (hex) for the dialog.
 pub fn dot_decode_payload(
     rt: &DotRuntime,
     payload_hex: &str,
@@ -1638,9 +1530,7 @@ pub fn dot_decode_payload(
     Ok(summarize(rt, &t, from))
 }
 
-/// The extrinsic of a payload (hex) with an all-zero signature, for
-/// `TransactionPaymentApi_query_info` only (fees do not depend on the signature; the node
-/// would reject it). Same refusals as [`dot_decode_payload`].
+/// Payload's extrinsic with a zero signature, only for `query_info` (fees ignore the signature).
 pub fn dot_fee_probe_extrinsic(
     rt: &DotRuntime,
     payload_hex: &str,
@@ -1659,9 +1549,7 @@ fn signing_message(payload: &[u8]) -> Vec<u8> {
     }
 }
 
-/// Signs a payload (hex) with account `account`, after decoding it like
-/// [`dot_decode_payload`]. Returns `(signed extrinsic hex, extrinsic hash hex, summary)`; the
-/// signature is verified and the extrinsic re-decoded ([`dot_verify_extrinsic`]) before return.
+/// Signs a payload (hex) with `account`, after decoding it like [`dot_decode_payload`].
 pub fn dot_sign(
     root: &PolkadotRoot,
     account: u32,
@@ -1683,10 +1571,7 @@ pub fn dot_sign(
     Ok((hex::encode(ext), hash, summary))
 }
 
-/// Decodes a signed extrinsic (hex), checks its sr25519 signature over the payload rebuilt from
-/// `rt` and `block_hash` (the era's birth block: it is signed but not part of the extrinsic)
-/// and the same refusals as [`dot_decode_payload`]. Returns `(signer, hash hex, summary)`; the
-/// hash is blake2-256 of the whole extrinsic, what `author_submitExtrinsic` returns.
+/// Decodes a signed extrinsic and checks its sr25519 signature (`block_hash` = era birth block)
 pub fn dot_verify_extrinsic(
     rt: &DotRuntime,
     extrinsic_hex: &str,

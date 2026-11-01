@@ -1,23 +1,5 @@
-//! Cardano: CIP-0003 **Icarus** master key, CIP-1852 derivation `m/1852'/1815'/account'/role/i`
-//! (BIP32-Ed25519, Khovratovich–Law "V2"), CIP-19 Shelley addresses, and Conway-era transaction
-//! bodies for **plain payments** (ADA + native tokens, optional CIP-20 memo) and, through a
-//! separate decoder, **staking** of our own stake key (Conway certificates 7, 8, 2, 9, withdrawals).
-//!
-//! Cryptography (none written here):
-//! - Icarus: PBKDF2-HMAC-SHA512 (RustCrypto `pbkdf2`), 4096 iterations, salt = BIP39 entropy,
-//!   password = passphrase, 96 bytes, then `XPrv::normalize_bytes_force3rd` (clamping);
-//! - derivation: `ed25519-bip32` (IOHK lineage; the scheme used by CML, CSL, pallas-wallet);
-//! - signatures: **ed25519-dalek** `hazmat::raw_sign` with the extended scalar `kL` and nonce
-//!   prefix `kR`, then `verify_strict`; the public key from dalek must equal ed25519-bip32's;
-//! - hashes: RustCrypto `blake2` (blake2b-224 key hashes, blake2b-256 transaction id).
-//!
-//! CBOR: hand-written for the subset used here (unsigned ints, byte/text strings, arrays,
-//! maps, tag 258, `true`/`null`), definite lengths only. A transaction is accepted only if
-//! re-encoding what was decoded gives back the same bytes — canonical integer/length forms,
-//! canonical key order, no duplicate, no unknown field — tested against Trezor's firmware
-//! fixtures (transaction hashes and signatures) and real preprod transactions. `minicbor`
-//! (the CBOR library of pallas) was not used: its BlueOak-1.0.0 licence is not on the project's
-//! allow list, and pallas-primitives would add a second, older cryptoxide.
+//! Cardano: CIP-0003 Icarus root, CIP-1852 paths (BIP32-Ed25519 V2), CIP-19 addresses,
+//! Conway bodies for payments (ADA, tokens, CIP-20 memo) and own-key staking (certs 7/8/2/9).
 
 use bitcoin::bech32::{self, primitives::decode::CheckedHrpstring, Bech32, Hrp};
 use blake2::digest::{consts::U28, consts::U32, Digest};
@@ -37,18 +19,14 @@ const HARDENED: u32 = 0x8000_0000;
 /// CIP-1852 purpose and Cardano coin type.
 const PURPOSE: u32 = 1852;
 const COIN: u32 = 1815;
-/// Role 0 = external payment keys, 1 = change, 2 = stake key.
 const ROLE_EXTERNAL: u32 = 0;
 const ROLE_STAKE: u32 = 2;
-/// Transactions larger than this are refused (protocol maximum is 16 384 bytes).
 const MAX_TX: usize = 16_384;
 /// CIP-20 transaction message label.
 const CIP20_LABEL: u64 = 674;
 /// A CIP-20 line is at most 64 bytes, hence at most 64 characters.
 const MAX_CIP20_LINE: usize = 64;
-/// An asset name is at most 32 bytes, hence at most 32 characters.
 const MAX_TOKEN_NAME: usize = 32;
-/// Fees above 5 ADA need a reinforced confirmation (a payment costs ~0.17–0.3 ADA).
 const HIGH_FEE: u64 = 5_000_000;
 
 fn blake2b224(data: &[u8]) -> [u8; 28] {
@@ -60,10 +38,6 @@ pub fn cardano_blake2b256(data: &[u8]) -> [u8; 32] {
     Blake2b::<U32>::digest(data).into()
 }
 
-// ---------------------------------------------------------------------------------------------
-// Keys
-// ---------------------------------------------------------------------------------------------
-
 /// Icarus root key (`XPrv`, 96 bytes: kL ‖ kR ‖ chain code), erased on drop.
 pub struct CardanoRoot(XPrv);
 
@@ -74,19 +48,16 @@ impl core::fmt::Debug for CardanoRoot {
 }
 
 impl CardanoRoot {
-    /// CIP-0003 Icarus: PBKDF2-HMAC-SHA512(password = passphrase, salt = entropy, 4096, 96 B),
-    /// then clamping. Same result as Yoroi / Eternl / Lace and Trezor's "ICARUS" derivation.
+    /// CIP-0003 Icarus: PBKDF2-HMAC-SHA512(passphrase, entropy, 4096, 96 B) then clamping.
     pub fn from_mnemonic(mnemonic: &Mnemonic, passphrase: &str) -> CardanoRoot {
         let entropy = mnemonic.entropy();
         let mut out = Zeroizing::new([0u8; 96]);
         pbkdf2::pbkdf2_hmac::<sha2::Sha512>(passphrase.as_bytes(), &entropy, 4096, &mut out[..]);
-        // Clamping of `XPrv::normalize_bytes_force3rd`, done in place: that function takes the
-        // array by value, and `*out` would leave an unerased copy of the root key behind.
+        // Clamp in place: `normalize_bytes_force3rd` by value would leave an unerased root copy.
         out[0] &= 0b1111_1000;
         out[31] &= 0b0001_1111;
         out[31] |= 0b0100_0000;
-        // `from_slice_verified` only checks the length (96) and the clamping bits set just
-        // above: it cannot fail here, whatever the mnemonic or passphrase.
+        // Only checks length and the clamping set above: cannot fail here.
         #[allow(clippy::expect_used)]
         let root = XPrv::from_slice_verified(&out[..]).expect("clamped 96-byte key");
         CardanoRoot(root)
@@ -128,8 +99,7 @@ fn public(k: &XPrv) -> [u8; 32] {
     k.public().public_key()
 }
 
-/// Path of Cardano account `account`: `m/1852'/1815'/account'` (Kyro uses its payment key
-/// `…/0/0` and stake key `…/2/0`).
+/// Path `m/1852'/1815'/account'` (payment key `…/0/0`, stake key `…/2/0`).
 pub fn cardano_account_path(account: u32) -> String {
     format!("m/1852'/1815'/{account}'")
 }
@@ -143,10 +113,6 @@ pub fn cardano_account_xpub(root: &CardanoRoot, account: u32) -> Result<String> 
         hex::encode(x.chain_code())
     ))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Addresses (CIP-19)
-// ---------------------------------------------------------------------------------------------
 
 fn network_id(net: Network) -> u8 {
     match net {
@@ -232,11 +198,7 @@ pub fn cardano_account_stake_address(
     cardano_stake_address(net, &public(&root.key(account, ROLE_STAKE, 0)?))
 }
 
-/// Raw bytes of a recipient address valid for `net`. Accepted: base addresses with a **key**
-/// payment part (types 0 and 2) and enterprise key addresses (type 6). Refused: Byron
-/// (bootstrap, base58) addresses, script payment addresses (types 1, 3, 5, 7: sending without a
-/// datum can lock the funds for ever), pointer addresses (4, 5: deprecated in Conway), reward
-/// addresses (14, 15: they cannot receive outputs), and the other network.
+/// Raw bytes of a recipient address valid for `net`.
 pub fn cardano_address_bytes(address: &str, net: Network) -> Result<Vec<u8>> {
     let a = address.trim();
     if a.starts_with("Ae2") || a.starts_with("DdzFF") || a.starts_with("37btjrVyb4K") {
@@ -283,11 +245,6 @@ pub fn cardano_address_string(data: &[u8], net: Network) -> Option<String> {
     bech32_encode(hrp(net), data).ok()
 }
 
-// ---------------------------------------------------------------------------------------------
-// CBOR (subset)
-// ---------------------------------------------------------------------------------------------
-
-/// A decoded CBOR item (definite lengths only).
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Cbor {
     Uint(u64),
@@ -454,10 +411,6 @@ fn parse_one(raw: &[u8]) -> Result<Cbor> {
     Ok(c)
 }
 
-// ---------------------------------------------------------------------------------------------
-// Transaction model (plain payments only)
-// ---------------------------------------------------------------------------------------------
-
 /// One input.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CardanoInput {
@@ -497,8 +450,6 @@ pub enum CardanoDrep {
 }
 
 /// The only certificates Kyro accepts (Conway forms), always for a **key** stake credential.
-/// Legacy registration / deregistration (0, 1), combined certificates (10–13), pool, committee,
-/// DRep and MIR certificates are refused by the decoder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CardanoCert {
     /// `reg_cert` (7): registers the stake key, paying `deposit` (protocol `keyDeposit`).
@@ -649,11 +600,7 @@ fn decode_cert(c: &Cbor) -> Result<CardanoCert> {
     }
 }
 
-/// A Conway transaction body restricted to keys 0 (inputs), 1 (outputs), 2 (fee), 3 (ttl),
-/// 4 (certificates, staking only), 5 (reward withdrawals), 7 (auxiliary data hash) and 8
-/// (validity interval start, accepted and shown; Kyro does not set it). Certificates and
-/// withdrawals are refused by the payment decoder ([`cardano_decode_tx`]) and accepted, for our
-/// own stake key only, by the staking decoder ([`cardano_decode_stake_tx`]).
+/// Conway tx body limited to keys 0, 1, 2, 3, 4 (staking), 5, 7 and 8 (shown, never set).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardanoBody {
     /// Inputs.
@@ -720,10 +667,7 @@ impl CardanoOutput {
     }
 }
 
-/// Babbage/Conway minimum lovelace of an output: `(160 + size) × coinsPerUTxOByte`, computed
-/// with the coin field at its final width (iterated to a fixed point). On overflow (absurd
-/// `coinsPerUTxOByte`) the result is `u64::MAX`: no output can satisfy it, so it is refused,
-/// instead of a wrapped — tiny — minimum.
+/// Babbage/Conway min lovelace: `(160 + size) × coinsPerUTxOByte`, iterated to a fixed point.
 pub fn cardano_min_utxo(address: &[u8], assets: &CardanoAssets, coins_per_byte: u64) -> u64 {
     let mut coin = 1_000_000u64;
     for _ in 0..4 {
@@ -1067,7 +1011,6 @@ fn decode_cip20(c: &Cbor) -> Result<Vec<String>> {
     }
 }
 
-/// Full transaction CBOR `[body, witness set, true, auxiliary data | null]`.
 fn tx_cbor(body: &Cbor, witnesses: Cbor, aux: Option<&Cbor>) -> Vec<u8> {
     Cbor::Array(vec![
         body.clone(),
@@ -1102,10 +1045,6 @@ pub fn cardano_signed_size(body: &CardanoBody, aux: Option<&[u8]>, keys: usize) 
     )
     .len())
 }
-
-// ---------------------------------------------------------------------------------------------
-// Summary, signing
-// ---------------------------------------------------------------------------------------------
 
 /// A native token in an output, for display.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1162,8 +1101,7 @@ pub enum CardanoWarning {
     HighFee,
     /// No validity limit (ttl absent): the transaction stays valid for ever.
     NoTtl,
-    /// A CIP-20 line or a token name had control / invisible / bidi characters removed or was
-    /// cut: the dialog shows a cleaned version (the hex name is exact).
+    /// A CIP-20 line or token name was cleaned or cut (the hex name is exact).
     UnusualText,
 }
 
@@ -1320,8 +1258,7 @@ fn decode_full(
                         name: nh.clone(),
                     });
                 }
-                // A name that needs cleaning is shown as hex only (and flagged): a cleaned name
-                // could pass for another token's.
+                // Names needing cleaning shown as hex only: a cleaned one could mimic another.
                 let name_text = core::str::from_utf8(n)
                     .ok()
                     .filter(|t| !t.is_empty())
@@ -1393,13 +1330,7 @@ fn decode_full(
     })
 }
 
-/// Decodes an **unsigned** transaction (hex) for the dialog. Refused: certificates,
-/// withdrawals, updates, mint, script data hash, collateral, required signers,
-/// network id, reference inputs, voting / governance, treasury fields, outputs with datum or
-/// reference script, script / pointer / reward / Byron / other-network addresses, outputs under
-/// their min-UTxO, zero token quantities, auxiliary data other than a CIP-20 message (or with a
-/// wrong hash), duplicated inputs, a non-empty witness set, and any non-canonical
-/// encoding.
+/// Decodes an **unsigned** transaction (hex) for the dialog.
 pub fn cardano_decode_tx(raw_hex: &str, ctx: &CardanoContext<'_>) -> Result<CardanoTxSummary> {
     Ok(decode_full(raw_hex, ctx, None)?.summary)
 }
@@ -1409,11 +1340,6 @@ pub fn cardano_tx_body(raw_hex: &str, ctx: &CardanoContext<'_>) -> Result<Cardan
     Ok(decode_full(raw_hex, ctx, None)?.body)
 }
 
-// ---------------------------------------------------------------------------------------------
-// Staking (Conway): registration, pool delegation, vote delegation, withdrawal, deregistration
-// ---------------------------------------------------------------------------------------------
-
-/// Staking decoder parameters.
 struct StakeMode {
     /// blake2b-224 of our stake public key.
     stake_hash: [u8; 28],
@@ -1470,9 +1396,7 @@ pub fn cardano_pool_bech32(hash: &[u8; 28]) -> Result<String> {
     bech32_encode("pool", hash)
 }
 
-/// Parses a DRep: `alwaysAbstain`, `alwaysNoConfidence`, a CIP-129 id (`drep1…`, 29 bytes:
-/// header `0x22` key / `0x23` script) or a CIP-105 id (`drep1…` 28-byte key hash,
-/// `drep_script1…` 28-byte script hash).
+/// Parses a DRep: `alwaysAbstain`, `alwaysNoConfidence`, CIP-129 or CIP-105 `drep…` ids.
 pub fn cardano_drep_parse(s: &str) -> Result<CardanoDrep> {
     match s.trim() {
         "alwaysAbstain" => return Ok(CardanoDrep::AlwaysAbstain),
@@ -1596,8 +1520,7 @@ pub struct CardanoWithdrawalView {
     pub lovelace: String,
 }
 
-/// Summary of a staking transaction: the payment part (inputs, outputs, fee, ttl) plus every
-/// certificate and withdrawal, all for our stake key.
+/// Staking tx summary: payment part plus every certificate and withdrawal (our stake key).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CardanoStakeSummary {
@@ -1622,8 +1545,7 @@ fn check_stake(body: &CardanoBody, s: &StakeMode, ctx: &CardanoContext<'_>) -> R
     if body.certs.is_empty() && body.withdrawals.is_empty() {
         return Err(bad("no staking operation in this transaction"));
     }
-    // The only output is the change, back to our own address: a staking transaction pays no
-    // one (deposits and fees are not outputs).
+    // Staking pays no one: the only output is change back to our address.
     let [out] = body.outputs.as_slice() else {
         return Err(bad(
             "a staking transaction must have a single output, to your own address",
@@ -1758,13 +1680,7 @@ fn stake_summary(d: &Decoded, net: Network, stake_pk: &[u8; 32]) -> Result<Carda
     })
 }
 
-/// Decodes an unsigned **staking** transaction for the dialog. On top of the payment rules
-/// ([`cardano_decode_tx`]), it requires at least one certificate or withdrawal, and refuses:
-/// a certificate or withdrawal for any stake credential other than `stake_pk`'s (another key or
-/// a script), a registration whose deposit is not `key_deposit`, duplicate certificates,
-/// registration + deregistration (or delegation + deregistration) together, more than one
-/// withdrawal, a zero withdrawal, metadata, and every certificate type other than Conway
-/// registration (7), deregistration (8), pool delegation (2) and vote delegation (9).
+/// Decodes an unsigned **staking** transaction for the dialog.
 pub fn cardano_decode_stake_tx(
     raw_hex: &str,
     ctx: &CardanoContext<'_>,
@@ -1793,10 +1709,7 @@ pub fn cardano_stake_tx_body(
     Ok(decode_full(raw_hex, ctx, Some(&mode))?.body)
 }
 
-/// Signs a staking transaction with the payment key `m/1852'/1815'/account'/0/index` and the
-/// stake key `m/1852'/1815'/stake_account'/2/0` (Kyro: `stake_account` = `account` = 0), after
-/// decoding it like [`cardano_decode_stake_tx`] with **that** stake key. Both signatures are
-/// made by ed25519-dalek and verified before they are returned.
+/// Signs a staking tx with payment key `…/0/index` and stake key `…/2/0`, after decoding.
 pub fn cardano_sign_stake(
     root: &CardanoRoot,
     account: u32,
@@ -1839,9 +1752,7 @@ pub fn cardano_sign_stake(
     Ok((hex::encode(signed), hex::encode(tx_id), summary))
 }
 
-/// Signs with the payment key `m/1852'/1815'/account'/0/index`: Ed25519 over the transaction
-/// id, by ed25519-dalek from the BIP32-Ed25519 extended key, verified (`verify_strict`) before
-/// it is returned. Returns `(signed transaction hex, tx id hex, summary)`.
+/// Signs with payment key `m/1852'/1815'/account'/0/index` (Ed25519, `verify_strict`ed).
 pub fn cardano_sign(
     root: &CardanoRoot,
     account: u32,
@@ -1875,8 +1786,7 @@ fn sign_extended(key: &XPrv, msg: &[u8], expected_pk: &[u8; 32]) -> Result<[u8; 
     let ext = Zeroizing::new(key.extended_secret_key());
     let mut kl = Zeroizing::new([0u8; 32]);
     kl.copy_from_slice(&ext[..32]);
-    // `hash_prefix` is filled in place: a local `[u8; 32]` moved into the struct would stay
-    // on the stack, unerased (`ExpandedSecretKey` erases itself on drop).
+    // `hash_prefix` filled in place: a moved local `[u8; 32]` would stay unerased on the stack.
     let mut esk = ExpandedSecretKey {
         scalar: curve25519_dalek::Scalar::from_bytes_mod_order(*kl),
         hash_prefix: [0u8; 32],
@@ -1906,8 +1816,7 @@ pub fn cardano_verify(public_key: &[u8], msg: &[u8], signature: &[u8]) -> Result
         .map_err(|_| Error::input("the signature does not verify"))
 }
 
-/// Tx id, witness keys and signatures of a signed transaction (hex), each signature verified
-/// against the tx id. Used before broadcast and on real transactions in tests.
+/// Tx id, witness keys and signatures of a signed tx (hex), each verified against the id.
 pub fn cardano_signed_witnesses(raw_hex: &str) -> Result<(String, Vec<[u8; 32]>)> {
     let raw = hex::decode(raw_hex.trim())
         .map_err(|_| Error::input("transaction: hexadecimal expected"))?;
@@ -1948,19 +1857,13 @@ pub fn cardano_signed_witnesses(raw_hex: &str) -> Result<(String, Vec<[u8; 32]>)
     Ok((hex::encode(tx_id), keys))
 }
 
-// ---------------------------------------------------------------------------------------------
-// Hardware wallets (Ledger "Cardano ADA" app, Trezor): watch-only keys and device witnesses
-// ---------------------------------------------------------------------------------------------
-
-/// Parses an account public key `m/1852'/1815'/account'` (public key ‖ chain code, 128 hex).
 fn account_xpub_of_hex(xpub_hex: &str) -> Result<ed25519_bip32::XPub> {
     let b = hex::decode(xpub_hex.trim()).map_err(|_| Error::input("Cardano account key: hex"))?;
     ed25519_bip32::XPub::from_slice(&b)
         .map_err(|_| Error::input("Cardano account key: 64 bytes expected"))
 }
 
-/// Public key `<account xpub>/role/index` (soft BIP32-Ed25519 derivation, `ed25519-bip32` V2:
-/// the same as the private derivation of [`CardanoRoot`], public side only).
+/// Public key `<account xpub>/role/index` (soft BIP32-Ed25519 V2 derivation).
 pub fn cardano_xpub_child(xpub_hex: &str, role: u32, index: u32) -> Result<[u8; 32]> {
     if role >= HARDENED || index >= HARDENED {
         return Err(Error::input(
@@ -1974,8 +1877,7 @@ pub fn cardano_xpub_child(xpub_hex: &str, role: u32, index: u32) -> Result<[u8; 
     Ok(x.public_key())
 }
 
-/// Base address `…/0/index` + stake key `…/2/0` of an account public key (Kyro's address of a
-/// hardware-wallet Cardano account, `index` = 0).
+/// Base address `…/0/index` + stake `…/2/0` of an account public key (hardware accounts).
 pub fn cardano_address_from_xpub(xpub_hex: &str, net: Network, index: u32) -> Result<String> {
     cardano_base_address(
         net,
@@ -1987,8 +1889,7 @@ pub fn cardano_address_from_xpub(xpub_hex: &str, net: Network, index: u32) -> Re
 /// Where an output of a hardware-wallet transaction goes, as the device is told.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CardanoHwDestination {
-    /// Our own base address `…/0/0` + `…/2/0` (the device derives it from the two paths and
-    /// shows it as change).
+    /// Our base address `…/0/0` + `…/2/0` (the device shows it as change).
     Own,
     /// Any other address, as raw bytes.
     Address(Vec<u8>),
@@ -2007,9 +1908,7 @@ pub struct CardanoHwOutput {
     pub map_form: bool,
 }
 
-/// What a hardware wallet needs to rebuild, hash and sign the body of a Kyro payment: every
-/// field of the body, in body order. The device serializes the body itself from these fields;
-/// the transaction id it returns must be ours ([`cardano_hw_assemble`]).
+/// Body fields (in order) a hardware wallet needs to rebuild, hash and sign a payment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardanoHwPlan {
     /// Inputs, in body order.
@@ -2032,9 +1931,7 @@ pub struct CardanoHwPlan {
     pub summary: CardanoTxSummary,
 }
 
-/// Decodes an unsigned **payment** like [`cardano_decode_tx`] and lists its fields for a
-/// hardware wallet. Outputs paying `own_address` (raw bytes of our base address) go to the
-/// device as its own address (path-based), the others as raw addresses.
+/// Decodes an unsigned payment like [`cardano_decode_tx`] and lists fields for a device.
 pub fn cardano_hw_plan(
     raw_hex: &str,
     ctx: &CardanoContext<'_>,
@@ -2070,10 +1967,7 @@ pub fn cardano_hw_plan(
     })
 }
 
-/// Attaches a hardware wallet's witness to an unsigned payment, after checking that the body
-/// hash the device computed is Kyro's transaction id and that the signature verifies
-/// (`verify_strict`) over that id with `payment_pk` (our key `…/0/0`, derived from the stored
-/// account public key). Returns `(signed transaction hex, tx id hex, summary)`.
+/// Attaches a device witness after checking its body hash is our tx id and sig verifies.
 pub fn cardano_hw_assemble(
     raw_hex: &str,
     ctx: &CardanoContext<'_>,

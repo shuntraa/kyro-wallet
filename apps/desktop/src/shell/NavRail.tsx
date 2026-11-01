@@ -32,7 +32,6 @@ function RailItem({ active, label, icon, onClick }: { active: boolean; label: st
       aria-current={active ? 'page' : undefined}
       className={cn('group press relative flex h-[58px] w-[72px] flex-col items-center justify-center gap-[6px] rounded-ctl', active ? 'text-text' : 'text-faint hover:text-text2')}
     >
-      {/* The active mark slides from item to item (shared layout). */}
       {active && (
         <motion.span layoutId="rail-active" aria-hidden="true" className="absolute inset-0 rounded-ctl border border-line-2 bg-raised" transition={{ type: 'spring', stiffness: 480, damping: 38, mass: 0.8 }}>
           <span className="absolute top-1/2 -left-[7px] h-5 w-[2px] -translate-y-1/2 rounded-full bg-ice" />

@@ -1,16 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Stellar (`stellar_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
-// commands_stellar.rs and stellar_backend.rs. Addresses are valid strkeys of a demo key (NOT the
-// SEP-0005 derivation wallet-core does); the envelope is a demo encoding (base64 JSON, NOT XDR)
-// and the signature is fake. The rules are Rust's:
-// - reserve = (2 + subentries) × 0.5 XLM; spendable = balance − reserve;
-// - destination with `config.memo_required` (SEP-0029) and no memo → refused; unfunded
-//   destination → CreateAccount, at least 1 XLM (2 × base reserve); amount + fee > spendable →
-//   refused; our account not created → refused;
-// - M… (muxed) addresses and S… secret keys refused with their own messages;
-// - sign re-reads everything live, refuses an expired transaction or a stale sequence number;
-// - Horizon answers the submission once the transaction is in a ledger (≈ 5 s).
 
 import { sha256 } from '@noble/hashes/sha2';
 import { base64 } from '@scure/base';
@@ -104,7 +93,6 @@ export interface DemoStellarState {
   me: string;
   /** An exchange deposit account that requires a memo (SEP-0029). */
   exchange: string;
-  /** A funded account without any requirement. */
   friend: string;
   accounts: Map<string, DemoStellarAccount>;
   history: StellarHistoryEntry[];
@@ -214,7 +202,6 @@ export function createDemoStellar(d: DemoStellarDeps) {
     };
   };
 
-  /** stellar_backend::check_payment, same order and messages. */
   const checkPayment = (ours: StellarAccountInfo, dest: StellarAccountInfo, stroops: bigint, fee: bigint, hasMemo: boolean) => {
     if (!ours.exists) throw invalidInput(l10n('ton compte Stellar n’est pas encore activé : il doit d’abord recevoir au moins 1 XLM', 'your Stellar account is not activated yet: it must first receive at least 1 XLM'));
     if (stroops <= 0n) throw invalidInput(l10n('montant nul', 'zero amount'));
@@ -275,7 +262,6 @@ export function createDemoStellar(d: DemoStellarDeps) {
     }
   };
 
-  /** commands_stellar.rs describe_stellar (main lines). */
   const describe = (s: StellarTxSummary, c: StellarContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     const op = s.operation;

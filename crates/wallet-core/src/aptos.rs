@@ -1,15 +1,7 @@
-//! Aptos: SLIP-10 ed25519 keys at `m/44'/637'/account'/0'/0'` (Petra, the Aptos CLI and SDKs,
-//! Ledger; account 0 = their default `m/44'/637'/0'/0'/0'`), `0x…` addresses, and APT transfers
-//! (`0x1::aptos_account::transfer`) in strict BCS.
+//! Aptos: SLIP-10 ed25519 at `m/44'/637'/account'/0'/0'` (Petra/CLI/Ledger), APT transfers in BCS.
 //!
-//! - Address = authentication key of a legacy single ed25519 key =
-//!   `SHA3-256(32-byte public key || 0x00 (Ed25519 scheme))`, written `0x` + 64 lower-case hex
-//!   characters (AIP-40 long form). Aptos addresses have **no checksum**: a typo gives another
-//!   valid address, so the UI shows the full address and the native dialog repeats it in full.
-//!   An account whose key was rotated keeps its address but not this key: Kyro only signs for
-//!   the address derived here, and the network refuses a signature by a rotated-away key.
-//! - Hashes: RustCrypto `sha3` (already used for EVM); keys and signatures: ed25519-dalek and
-//!   ed25519-dalek-bip32 (the same crates as Solana). No new dependency.
+//! - Address = `SHA3-256(pk || 0x00)`, `0x` + 64 hex (AIP-40). **No checksum**: shown in full.
+//!   Rotated-key accounts aren't supported: Kyro signs only for the address derived here.
 //!
 //! Kyro never signs bytes it did not build. The only accepted `RawTransaction` is
 //!
@@ -21,8 +13,7 @@
 //! }
 //! ```
 //!
-//! and, for the fungible assets Kyro knows ([`aptos_known_assets`]: Circle's USDC, Tether's
-//! USDt), the call Petra and the SDKs make:
+//! and, for the known fungible assets ([`aptos_known_assets`]), the call Petra and the SDKs make:
 //!
 //! ```text
 //!   payload: EntryFunction(0x1::primary_fungible_store::transfer,
@@ -32,15 +23,10 @@
 //!
 //! The metadata address is in the bytes and must be a known one for the transaction's chain id.
 //!
-//! Decoding is strict (canonical ULEB128, known variants only, no trailing byte) **and** the
-//! decoded value is re-encoded and compared byte for byte with the input: any other layout
-//! (another function or module, type arguments, a script, a multisig or "inner payload" (V1
-//! orderless) transaction, a fee payer or secondary signers) is refused before anything is shown.
+//! Strict decode + byte-exact re-encode: scripts, multisig, orderless, fee payer etc. are refused.
 //!
-//! Signing: `ed25519(SHA3-256("APTOS::RawTransaction") || bcs(RawTransaction))`. Signed
-//! transaction: `bcs(RawTransaction) || 0x00 (TransactionAuthenticator::Ed25519) ||
-//! uleb(32) || public key || uleb(64) || signature`. Transaction hash:
-//! `SHA3-256(SHA3-256("APTOS::Transaction") || 0x00 (Transaction::UserTransaction) || signed)`.
+//! Sign `ed25519(SHA3-256("APTOS::RawTransaction") || bcs)`; signed = `bcs || 0x00 || uleb(32) ||
+//! pk || uleb(64) || sig`; hash = `SHA3-256(SHA3-256("APTOS::Transaction") || 0x00 || signed)`.
 
 use ed25519_dalek::Signer as _;
 use ed25519_dalek_bip32::{ChildIndex, ExtendedSigningKey};
@@ -59,8 +45,7 @@ pub const OCTAS_PER_APT: u64 = 100_000_000;
 pub const APTOS_MAINNET_CHAIN_ID: u8 = 1;
 /// Chain id of Aptos testnet.
 pub const APTOS_TESTNET_CHAIN_ID: u8 = 2;
-/// Maximum fee (`max_gas_amount × gas_unit_price`) above this (0.02 APT) is flagged: a plain
-/// transfer costs about 0.0001 APT, creating the recipient's account a few thousandths.
+/// Max fee above 0.02 APT is flagged (a transfer costs ~0.0001 APT, account creation ~0.00x).
 pub const APTOS_HIGH_FEE_OCTAS: u64 = 2_000_000;
 /// The function Kyro calls for APT.
 pub const APTOS_TRANSFER_FUNCTION: &str = "0x1::aptos_account::transfer";
@@ -68,8 +53,7 @@ pub const APTOS_TRANSFER_FUNCTION: &str = "0x1::aptos_account::transfer";
 pub const APTOS_FA_TRANSFER_FUNCTION: &str = "0x1::primary_fungible_store::transfer";
 const FA_MODULE: &[u8] = b"primary_fungible_store";
 
-/// A fungible asset Kyro knows, from the issuer's official list (cross-checked with CoinGecko,
-/// `Metadata` read on chain).
+/// A fungible asset Kyro knows (issuer's list, cross-checked, `Metadata` read on chain).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AptosKnownAsset {
@@ -83,9 +67,6 @@ pub struct AptosKnownAsset {
     pub decimals: u8,
 }
 
-/// Mainnet: USDC (developers.circle.com › USDC contract addresses; CoinGecko `usd-coin`
-/// platform `aptos`) and USDt (tether.to › supported protocols, « Object Asset ID »; CoinGecko
-/// `tether` platform `aptos`); `Metadata` on chain: decimals 6, symbols USDC / USDt (2026-11-01).
 const APTOS_MAINNET_ASSETS: &[AptosKnownAsset] = &[
     AptosKnownAsset {
         metadata: "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b",
@@ -100,7 +81,6 @@ const APTOS_MAINNET_ASSETS: &[AptosKnownAsset] = &[
         decimals: 6,
     },
 ];
-/// Testnet: Circle's testnet USDC (same page). Tether lists no testnet deployment.
 const APTOS_TESTNET_ASSETS: &[AptosKnownAsset] = &[AptosKnownAsset {
     metadata: "0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832",
     symbol: "USDC",
@@ -125,7 +105,6 @@ pub fn aptos_known_asset(metadata: &[u8; 32], chain_id: u8) -> Option<&'static A
         .find(|a| a.metadata == m)
 }
 
-/// `TypeTag::Struct(0x1::fungible_asset::Metadata)`, the one type argument of the FA transfer.
 fn metadata_type_tag() -> Vec<u8> {
     let mut o = vec![7u8]; // TypeTag::Struct
     let mut one = [0u8; 32];
@@ -154,8 +133,6 @@ fn sha3(parts: &[&[u8]]) -> [u8; 32] {
     }
     h.finalize().into()
 }
-
-// ---------------------------------------------------------------- keys and addresses
 
 fn hardened(index: u32) -> Result<ChildIndex> {
     ChildIndex::hardened(index).map_err(|_| Error::input("derivation index must be < 2^31"))
@@ -218,10 +195,7 @@ pub fn aptos_address(seed: &Seed, account: u32) -> Result<String> {
     )))
 }
 
-/// Parses a recipient address: `0x` followed by exactly 64 hexadecimal characters (either
-/// case). Short forms (`0x1`, an address whose leading zeros were dropped) and ANS names
-/// (`nom.apt`) are refused: Kyro only sends to a full address the user can compare character
-/// by character.
+/// Parses a recipient address: `0x` + exactly 64 hex characters (either case).
 pub fn aptos_parse_address(address: &str) -> Result<[u8; 32]> {
     let a = address.trim();
     if a.ends_with(".apt") {
@@ -242,8 +216,6 @@ pub fn aptos_parse_address(address: &str) -> Result<[u8; 32]> {
         .map_err(|_| Error::input("invalid Aptos address (non-hexadecimal character)"))?;
     Ok(out)
 }
-
-// ---------------------------------------------------------------- BCS
 
 fn put_uleb(out: &mut Vec<u8>, mut v: u64) {
     loop {
@@ -290,7 +262,6 @@ impl<'a> Reader<'a> {
         Ok(a)
     }
 
-    /// Canonical ULEB128 ≤ u32::MAX (BCS lengths and variant tags).
     fn uleb(&mut self) -> Result<u32> {
         let mut v: u64 = 0;
         for i in 0..5 {
@@ -315,8 +286,7 @@ impl<'a> Reader<'a> {
     }
 }
 
-/// An APT transfer (`0x1::aptos_account::transfer(recipient, amount)`), the only transaction
-/// Kyro builds and signs on Aptos.
+/// An APT/known-asset transfer: the only transaction Kyro builds and signs on Aptos.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AptosTransfer {
     /// Sender (pays the gas: no fee payer).
@@ -335,8 +305,7 @@ pub struct AptosTransfer {
     pub expiration_timestamp_secs: u64,
     /// 1 mainnet, 2 testnet.
     pub chain_id: u8,
-    /// Known fungible asset (metadata object address) sent with
-    /// `primary_fungible_store::transfer`; `None` = APT.
+    /// Known asset metadata address (`primary_fungible_store::transfer`); `None` = APT.
     pub token: Option<[u8; 32]>,
 }
 
@@ -369,8 +338,7 @@ impl AptosTransfer {
         Ok(())
     }
 
-    /// Maximum fee in octas (`max_gas_amount × gas_unit_price`), what the account must hold
-    /// on top of the amount.
+    /// Max fee in octas (`max_gas_amount × gas_unit_price`), needed on top of the amount.
     pub fn max_fee(&self) -> u64 {
         self.max_gas_amount.saturating_mul(self.gas_unit_price)
     }
@@ -497,8 +465,7 @@ impl AptosTransfer {
         Ok(t)
     }
 
-    /// Signed transaction bytes with a single ed25519 authenticator. With an all-zero
-    /// signature, this is what `/transactions/simulate` expects (it refuses a valid one).
+    /// Signed transaction bytes with a single ed25519 authenticator.
     pub fn signed_bytes(&self, pubkey: &[u8; 32], signature: &[u8; 64]) -> Result<Vec<u8>> {
         let mut o = self.encode()?;
         o.push(0); // TransactionAuthenticator::Ed25519
@@ -515,8 +482,7 @@ pub fn aptos_signing_message(raw_bcs: &[u8]) -> Vec<u8> {
     m
 }
 
-/// `0x` + hex of `SHA3-256(SHA3-256("APTOS::Transaction") || 0x00 || signed)`, the hash the
-/// network and explorers show.
+/// Explorer hash: `0x` + hex of `SHA3-256(SHA3-256("APTOS::Transaction") || 0x00 || signed)`.
 pub fn aptos_tx_hash(signed: &[u8]) -> String {
     format!(
         "0x{}",
@@ -531,7 +497,6 @@ fn unhex(s: &str, what: &str) -> Result<Vec<u8>> {
 }
 
 /// Splits signed transaction bytes into the transfer, the public key and the signature.
-/// Only a single ed25519 authenticator is accepted.
 fn split_signed(signed: &[u8]) -> Result<(AptosTransfer, [u8; 32], [u8; 64])> {
     if signed.len() < 99 {
         return Err(bad("truncated signed transaction"));
@@ -549,8 +514,6 @@ fn split_signed(signed: &[u8]) -> Result<(AptosTransfer, [u8; 32], [u8; 64])> {
     sig.copy_from_slice(&auth[35..99]);
     Ok((t, pk, sig))
 }
-
-// ---------------------------------------------------------------- summary
 
 /// Reasons for caution (all of them require the reinforced confirmation).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -655,16 +618,13 @@ fn summarize(t: &AptosTransfer, ours: &[u8; 32]) -> Result<AptosTxSummary> {
 }
 
 /// Decodes an unsigned transfer (hex BCS `RawTransaction`, as built by Kyro) for the dialog.
-/// Refused: anything [`AptosTransfer::decode`] refuses and a sender other than `our_address`.
 pub fn aptos_decode_tx(raw_hex: &str, our_address: &str) -> Result<AptosTxSummary> {
     let raw = unhex(raw_hex, "transaction")?;
     let t = AptosTransfer::decode(&raw)?;
     summarize(&t, &aptos_parse_address(our_address)?)
 }
 
-/// Signs an unsigned transfer (hex BCS) with account `account`'s key after decoding it like
-/// [`aptos_decode_tx`]. Returns `(signed transaction hex, transaction hash, summary)`; the
-/// signature is verified before it is returned.
+/// Signs an unsigned transfer (hex BCS) with `account`'s key after [`aptos_decode_tx`].
 pub fn aptos_sign(
     seed: &Seed,
     account: u32,
@@ -683,9 +643,7 @@ pub fn aptos_sign(
     Ok((hex::encode(&signed), aptos_tx_hash(&signed), summary))
 }
 
-/// Checks a signed transfer before it is sent: the raw transaction decodes like
-/// [`aptos_decode_tx`], the authenticator is a single ed25519 key whose address is the
-/// sender's, and the signature verifies (strict). Returns `(hash, transfer)`.
+/// Pre-send check: decodes like [`aptos_decode_tx`], single ed25519 sender key, strict sig.
 pub fn aptos_verify_signed(signed_hex: &str) -> Result<(String, AptosTransfer)> {
     let signed = unhex(signed_hex, "signed transaction")?;
     let (t, pk, sig) = split_signed(&signed)?;
@@ -702,16 +660,14 @@ pub fn aptos_verify_signed(signed_hex: &str) -> Result<(String, AptosTransfer)> 
     Ok((aptos_tx_hash(&signed), t))
 }
 
-/// Hardware wallet (Ledger Aptos app): the signing message sent to the device
-/// (`SHA3-256("APTOS::RawTransaction") || bcs`), after strict decoding of the transfer.
+/// Ledger Aptos app: signing message `SHA3-256("APTOS::RawTransaction") || bcs`, strictly decoded.
 pub fn aptos_hw_message(raw_hex: &str) -> Result<Vec<u8>> {
     let raw = unhex(raw_hex, "transaction")?;
     AptosTransfer::decode(&raw)?;
     Ok(aptos_signing_message(&raw))
 }
 
-/// Hardware wallet: signed transaction (hex) and hash from the device's signature, checked
-/// like [`aptos_verify_signed`] (key of the sender, strict signature) before it is returned.
+/// HW: signed tx (hex) and hash from the device sig, checked like [`aptos_verify_signed`].
 pub fn aptos_hw_signed(raw_hex: &str, pubkey: &[u8; 32], sig: &[u8]) -> Result<(String, String)> {
     let sig: [u8; 64] = sig
         .try_into()
@@ -723,8 +679,7 @@ pub fn aptos_hw_signed(raw_hex: &str, pubkey: &[u8; 32], sig: &[u8]) -> Result<(
     Ok((signed_hex, hash))
 }
 
-/// Body for `/transactions/simulate`: the transfer with our public key and an all-zero
-/// signature (the node refuses to simulate a validly signed transaction).
+/// `/transactions/simulate` body: zero signature (nodes refuse to simulate validly signed txs).
 pub fn aptos_simulation_bytes(raw_hex: &str, pubkey: &[u8; 32]) -> Result<Vec<u8>> {
     let raw = unhex(raw_hex, "transaction")?;
     AptosTransfer::decode(&raw)?.signed_bytes(pubkey, &[0u8; 64])

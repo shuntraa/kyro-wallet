@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Catalog strings with markup: `<b>bold part</b>` tags (no nesting) rendered by the caller, and
-// `{name}` placeholders that may be React nodes (an address block, a link…). Translators move
-// the tags and placeholders freely; the text in between stays plain text (no HTML injection).
+// `{name}` placeholders that may be React nodes (an address block, a link…).
 
 import { Fragment, type ReactNode } from 'react';
 import { t, type Key } from './index';
@@ -41,6 +39,5 @@ export function richText(text: string, tags: TagRenderers = {}, params: Record<s
 
 /** Rich version of `t`: `rt('key', { b: (c) => <strong>{c}</strong> }, { addr: <Addr/> })`. */
 export function rt(key: Key, tags: TagRenderers = {}, params: Record<string, ReactNode> = {}): ReactNode {
-  // Placeholders are filled here (they may be nodes), so the raw string is looked up untouched.
   return richText((t as (k: Key) => string)(key), tags, params);
 }

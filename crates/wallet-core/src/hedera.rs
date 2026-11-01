@@ -1,29 +1,4 @@
-//! Hedera (HBAR): ECDSA secp256k1 keys at `m/44'/3030'/0'/0/account` — the "standard" ECDSA path
-//! of the Hedera SDKs (`Mnemonic.toStandardECDSAsecp256k1PrivateKey(passphrase, index)`, used by
-//! HashPack and the other SDK-based wallets for ECDSA accounts; account 0 = `m/44'/3030'/0'/0/0`)
-//! — the key's EVM address (`keccak256(uncompressed pubkey)[12..]`, the account's *alias*), and
-//! the protobuf of a **HBAR CryptoTransfer**, and for the verified HTS tokens of
-//! [`hbar_known_tokens`] (USDC) a **token CryptoTransfer** (one token list, `expected_decimals`
-//! set) and a **TokenAssociate** of the payer.
-//!
-//! Why ECDSA and not ED25519 (`m/44'/3030'/0'/0'/a'`, Ledger and legacy HashPack accounts): an
-//! ECDSA key has an EVM address, so the account can be **created by the first incoming
-//! transfer** to that address (HIP-583 auto-creation, no one has to pay `AccountCreate` for us),
-//! and an ED25519 account cannot be found from the phrase alone. ED25519 accounts are not
-//! supported (documented in SECURITY.md).
-//!
-//! - Body: `TransactionBody` (services/transaction.proto) with only `transactionID`,
-//!   `nodeAccountID`, `transactionFee`, `transactionValidDuration`, `memo` and `cryptoTransfer`
-//!   (one HBAR debit of the payer, one credit). Anything else (token transfers, approvals,
-//!   hooks, scheduled, nonce, other transaction types, unknown fields) is refused.
-//! - Hand-written protobuf for this subset (proto3 canonical encoding: ascending field numbers,
-//!   default values omitted). Same rule as XRP / TRON: **a body is accepted only if re-encoding
-//!   the decoded body gives back the same bytes**. Cross-checked against Google's `protobuf`
-//!   Python runtime with the official `.proto` files (see `tests/hedera.rs`).
-//! - Signature: libsecp256k1 ECDSA over `keccak256(bodyBytes)` (what the Hedera SDKs and the
-//!   consensus nodes use for `ECDSA_secp256k1` keys), compact `r ‖ s`, **low-S**; the
-//!   `SignaturePair` carries the full 33-byte compressed key (needed to finalize a *hollow*
-//!   account created by a transfer to the EVM address).
+//! Hedera (HBAR): ECDSA secp256k1 at `m/44'/3030'/0'/0/account`, the SDKs' standard ECDSA path.
 
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, Secp256k1};
 use serde::{Deserialize, Serialize};
@@ -41,19 +16,13 @@ pub const HBAR_TINYBARS: u64 = 100_000_000;
 pub const HBAR_MAX_MEMO_BYTES: usize = 100;
 /// Longest `transactionValidDuration` accepted by the network (seconds).
 pub const HBAR_MAX_VALID_DURATION: i64 = 180;
-/// Max fees above 2 HBAR need a reinforced confirmation (a transfer costs ≈ $0.0001, an
-/// auto-created account ≈ $0.05).
+/// Max fees above 2 HBAR need reinforced confirmation (transfer ≈ $0.0001, new account ≈ $0.05).
 pub const HBAR_HIGH_FEE_TINYBARS: u64 = 2 * HBAR_TINYBARS;
-/// 50 billion HBAR, the whole supply.
 const MAX_TINYBARS: u64 = 50_000_000_000 * HBAR_TINYBARS;
 const MAX_BODY: usize = 2048;
 const MAX_MEMO_TEXT: usize = 100;
 /// At most this many copies of one transfer (one per consensus node, same transaction ID).
 pub const HBAR_MAX_NODES: usize = 4;
-
-// ---------------------------------------------------------------------------------------------
-// Keys and addresses
-// ---------------------------------------------------------------------------------------------
 
 fn path(account: u32) -> Result<[bitcoin::bip32::ChildNumber; 5]> {
     Ok([
@@ -65,8 +34,7 @@ fn path(account: u32) -> Result<[bitcoin::bip32::ChildNumber; 5]> {
     ])
 }
 
-/// Path of the key of Hedera account `account`: `m/44'/3030'/0'/0/account` (SDK standard ECDSA
-/// path; the account number is the last, non-hardened index, like the SDKs' `index`).
+/// Key path of `account`: `m/44'/3030'/0'/0/account` (last index non-hardened, like SDK `index`).
 pub fn hbar_path(account: u32) -> String {
     format!("m/44'/3030'/0'/0/{account}")
 }
@@ -91,8 +59,7 @@ fn evm_bytes_of_pubkey(pk: &PublicKey) -> [u8; 20] {
     a
 }
 
-/// EVM address (EIP-55) of a compressed or uncompressed secp256k1 public key: the alias under
-/// which Hedera auto-creates the account.
+/// EIP-55 EVM address of a secp256k1 public key: the alias Hedera auto-creates the account under.
 pub fn hbar_evm_address_of_pubkey(pk: &[u8]) -> Result<String> {
     crate::evm::evm_address_of_pubkey(pk)
 }
@@ -108,8 +75,7 @@ fn evm_string(a: &[u8; 20]) -> String {
         .unwrap_or_else(|_| format!("0x{}", hex::encode(a)))
 }
 
-/// HIP-15 checksum (5 letters) of `0.0.num` for a ledger (mainnet ledger ID `0x00`, testnet
-/// `0x01`).
+/// HIP-15 checksum (5 letters) of `0.0.num` (ledger ID mainnet `0x00`, testnet `0x01`).
 pub fn hbar_checksum(network: Network, num: u64) -> String {
     let ledger: u8 = match network {
         Network::Mainnet => 0,
@@ -144,9 +110,7 @@ pub fn hbar_checksum(network: Network, num: u64) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Parses `0.0.num`, optionally followed by its HIP-15 checksum (`0.0.123-vfmkw`), which must
-/// then be the checksum **of this network**. Other shards / realms are refused (Hedera only uses
-/// 0.0 today).
+/// Parses `0.0.num`, optionally `-checksum` (HIP-15), which must match **this network**.
 pub fn hbar_parse_account_id(s: &str, network: Network) -> Result<u64> {
     let s = s.trim();
     let (id, sum) = match s.split_once('-') {
@@ -177,8 +141,7 @@ pub fn hbar_parse_account_id(s: &str, network: Network) -> Result<u64> {
     Ok(n)
 }
 
-/// Recipient of a transfer: an account ID, or an EVM address (alias; the network creates the
-/// account if none has it).
+/// Transfer recipient: account ID, or EVM alias (the network creates the account if needed).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HbarRecipient {
     /// `0.0.num`.
@@ -197,8 +160,6 @@ impl HbarRecipient {
     }
 }
 
-/// A "long-zero" EVM address (`0x` + 4 zero bytes shard + 8 zero bytes realm + 8 bytes num) is
-/// the EVM form of an account ID, not an alias.
 fn long_zero(a: &[u8; 20]) -> Option<u64> {
     if a[..12].iter().all(|b| *b == 0) {
         let mut n = [0u8; 8];
@@ -209,9 +170,7 @@ fn long_zero(a: &[u8; 20]) -> Option<u64> {
     }
 }
 
-/// Parses a recipient: `0.0.num` (checksum optional, verified for `network`), or a `0x` EVM
-/// address (all lower / upper case, or a valid EIP-55 checksum). A long-zero address is turned
-/// into its account ID.
+/// Parses `0.0.num` (checksum checked for `network`) or a `0x` EVM address (one case or EIP-55).
 pub fn hbar_parse_recipient(s: &str, network: Network) -> Result<HbarRecipient> {
     let t = s.trim();
     if t.starts_with("0x") || t.starts_with("0X") {
@@ -229,10 +188,6 @@ pub fn hbar_parse_recipient(s: &str, network: Network) -> Result<HbarRecipient> 
     }
     Ok(HbarRecipient::Id(hbar_parse_account_id(t, network)?))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Protobuf (proto3, canonical) for the CryptoTransfer subset
-// ---------------------------------------------------------------------------------------------
 
 fn bad(msg: impl Into<String>) -> Error {
     Error::input(format!("Hedera transaction refused: {}", msg.into()))
@@ -271,7 +226,6 @@ fn unzigzag(v: u64) -> i64 {
     ((v >> 1) as i64) ^ -((v & 1) as i64)
 }
 
-/// One field read from the wire: varint or length-delimited (other wire types are refused).
 enum Val<'a> {
     Varint(u64),
     Bytes(&'a [u8]),
@@ -293,7 +247,6 @@ fn read_varint(b: &mut &[u8]) -> Result<u64> {
     Err(bad("varint too long"))
 }
 
-/// All fields of a message, in wire order.
 fn fields(mut b: &[u8]) -> Result<Vec<(u32, Val<'_>)>> {
     let mut out = Vec::new();
     while !b.is_empty() {
@@ -351,7 +304,6 @@ fn enc_recipient(r: &HbarRecipient) -> Vec<u8> {
     }
 }
 
-/// `AccountID` of shard 0, realm 0: a number, or (`allow_alias`) a 20-byte EVM alias.
 fn dec_account(b: &[u8], allow_alias: bool, what: &str) -> Result<HbarRecipient> {
     let mut out = None;
     for (f, v) in fields(b)? {
@@ -404,15 +356,12 @@ pub struct HbarKnownToken {
     pub decimals: u32,
 }
 
-/// Mainnet USDC: `0.0.456858` (Circle's list; mirror node 2026-11-01: « USD Coin », USDC, 6
-/// decimals, no custom fee, no KYC key, `freeze_default` false).
 const MAINNET_TOKENS: &[HbarKnownToken] = &[HbarKnownToken {
     num: 456_858,
     symbol: "USDC",
     name: "USD Coin",
     decimals: 6,
 }];
-/// Testnet USDC: `0.0.429274` (Circle's list; mirror node: « USD Coin », USDC, 6 decimals).
 const TESTNET_TOKENS: &[HbarKnownToken] = &[HbarKnownToken {
     num: 429_274,
     symbol: "USDC",
@@ -452,8 +401,7 @@ pub enum HbarKind {
     Associate(u64),
 }
 
-/// A HBAR or known-token transfer, or a token association: the only `TransactionBody` Kyro builds
-/// and signs.
+/// HBAR/known-token transfer or token association: the only `TransactionBody` Kyro signs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HbarTransfer {
     /// Payer and sender (`transactionID.accountID`, debited in the transfer list).
@@ -485,7 +433,6 @@ fn enc_token_id(num: u64) -> Vec<u8> {
     o
 }
 
-/// `TokenID` of shard 0, realm 0.
 fn dec_token_id(b: &[u8]) -> Result<u64> {
     let mut out = None;
     for (f, v) in fields(b)? {
@@ -501,7 +448,6 @@ fn dec_token_id(b: &[u8]) -> Result<u64> {
     out.ok_or_else(|| bad("missing token id"))
 }
 
-/// `AccountAmount` entries (repeated field `field` of `list`).
 fn dec_amounts(list: &[u8], field: u32, what: &str) -> Result<Vec<(HbarRecipient, i64)>> {
     let mut entries = Vec::new();
     for (f, v) in fields(list)? {
@@ -583,11 +529,7 @@ impl HbarTransfer {
         o
     }
 
-    /// Strict decoding of a `TransactionBody`. Refused: any field other than the six above (other
-    /// transaction types, `batch_key`, `max_custom_fees`, …), `scheduled`, `nonce`, token
-    /// transfers, `is_approval` (allowance spending), hooks, anything but one debit of the payer
-    /// followed by one credit of the same amount, and any encoding that does not re-encode
-    /// identically.
+    /// Strict decoding of a `TransactionBody`.
     pub fn decode(raw: &[u8]) -> Result<HbarTransfer> {
         if raw.len() > MAX_BODY {
             return Err(bad("too large"));
@@ -780,8 +722,7 @@ impl HbarTransfer {
     }
 }
 
-/// Validates a memo typed by the user: ≤ 100 bytes, no NUL (refused by the network), no
-/// control / invisible / bidi character.
+/// Validates a user memo: ≤ 100 bytes, no NUL, no control / invisible / bidi character.
 pub fn hbar_check_memo(memo: &str) -> Result<()> {
     if memo.len() > HBAR_MAX_MEMO_BYTES {
         return Err(Error::input(format!(
@@ -796,18 +737,13 @@ pub fn hbar_check_memo(memo: &str) -> Result<()> {
     Ok(())
 }
 
-// ---------------------------------------------------------------------------------------------
-// Summary, signing, verification
-// ---------------------------------------------------------------------------------------------
-
 /// Reasons for caution (all of them require the reinforced confirmation).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum HbarWarning {
     /// Max fee above 2 HBAR.
     HighFee,
-    /// The memo had control / invisible / bidi characters removed or was cut: the dialog shows
-    /// a cleaned version (the hex is exact).
+    /// Memo cleaned of control/invisible/bidi chars or cut for display (the hex is exact).
     UnusualText,
 }
 
@@ -837,15 +773,13 @@ pub struct HbarTxSummary {
     pub valid_start: i64,
     /// Seconds of validity after `valid_start`.
     pub valid_duration: i64,
-    /// Consensus nodes this transfer is signed for (one copy each, same transaction ID: the
-    /// network executes it at most once).
+    /// Nodes signed for (one copy each, same tx ID: the network executes it at most once).
     pub nodes: Vec<String>,
     /// Reasons for caution.
     pub warnings: Vec<HbarWarning>,
     /// The confirmation must be followed by a reinforced one.
     pub requires_extra_confirmation: bool,
-    /// Token transfer or association of a known token (`amount` = token units, `"0"` for an
-    /// association, whose `to` is our own account).
+    /// Known token transfer/association (`amount` = units; association: `"0"`, `to` = us).
     #[serde(default)]
     pub token: Option<HbarTokenSummary>,
 }
@@ -990,9 +924,6 @@ fn evm_of_pubkey33(pk: &[u8]) -> Result<[u8; 20]> {
 }
 
 /// Decodes the **unsigned** bodies (hex, one per consensus node) of a transfer for the dialog.
-/// Refused: anything [`HbarTransfer::decode`] refuses, copies that differ other than by their
-/// node, a node outside `allowed_nodes`, a payer other than `our_account`, a transfer to
-/// ourselves (account ID or our EVM address), a zero amount or fee, a validity outside 1–180 s.
 pub fn hbar_decode_tx(
     bodies: &[String],
     our_account: u64,
@@ -1009,8 +940,7 @@ pub fn hbar_decode_tx(
     )
 }
 
-/// [`hbar_decode_tx`] on `network`, which also accepts transfers and associations of the known
-/// tokens of that network ([`hbar_known_tokens`]; `hbar_decode_tx` refuses every token).
+/// [`hbar_decode_tx`] on `network`, also accepting its [`hbar_known_tokens`] (plain refuses all).
 pub fn hbar_decode_tx_on(
     network: Network,
     bodies: &[String],
@@ -1042,10 +972,7 @@ fn signed_transaction(body: &[u8], pk: &[u8; 33], sig: &[u8; 64]) -> Vec<u8> {
     tx
 }
 
-/// Signs the bodies (hex, one per node) with the key of account `account`
-/// (`m/44'/3030'/0'/0/account`) after decoding them like [`hbar_decode_tx`]. Returns
-/// `(signed Transaction protobufs, hex, same order; summary)`. Each signature is checked before
-/// it is returned.
+/// Signs the bodies (hex, one per node) with `account`'s key after [`hbar_decode_tx`].
 pub fn hbar_sign(
     seed: &Seed,
     account: u32,
@@ -1056,8 +983,7 @@ pub fn hbar_sign(
     sign_inner(seed, account, our_account, bodies, allowed_nodes, None)
 }
 
-/// [`hbar_sign`] on `network`: also signs the known tokens of that network (like
-/// [`hbar_decode_tx_on`]).
+/// [`hbar_sign`] on `network`, also for its known tokens (like [`hbar_decode_tx_on`]).
 pub fn hbar_sign_on(
     network: Network,
     seed: &Seed,
@@ -1125,9 +1051,6 @@ pub struct HbarSignedTransfer {
     pub public_key: [u8; 33],
 }
 
-/// `(bodyBytes, pubKeyPrefix, signature field number, signature)` of a signed `Transaction`
-/// with only `signedTransactionBytes` and exactly one signature pair (ECDSA field 6 or ED25519
-/// field 3).
 type SignedParts<'a> = (&'a [u8], &'a [u8], u32, &'a [u8]);
 
 fn parse_signed(raw: &[u8]) -> Result<SignedParts<'_>> {
@@ -1175,9 +1098,8 @@ fn parse_signed(raw: &[u8]) -> Result<SignedParts<'_>> {
     Ok((body, prefix, field, sig))
 }
 
-/// Decodes a signed `Transaction` (hex) strictly — only `signedTransactionBytes`, a body that
-/// [`HbarTransfer::decode`] accepts, exactly one `ECDSA_secp256k1` signature pair with a full
-/// 33-byte key — and checks the low-S signature over `keccak256(bodyBytes)`.
+/// Strict decode of a signed tx (one full-key `ECDSA_secp256k1` pair, [`HbarTransfer::decode`]
+/// body) and low-S signature check over `keccak256(bodyBytes)`.
 pub fn hbar_verify_signed(tx_hex: &str) -> Result<HbarSignedTransfer> {
     let raw = hex::decode(tx_hex.trim()).map_err(|_| Error::input("hexadecimal expected"))?;
     let (body, prefix, field, sig) = parse_signed(&raw)?;
@@ -1210,31 +1132,22 @@ pub fn hbar_verify_signed(tx_hex: &str) -> Result<HbarSignedTransfer> {
     })
 }
 
-// ---------------------------------------------------------------------------------------------
-// ED25519 hardware accounts (Ledger « Hedera » app)
-// ---------------------------------------------------------------------------------------------
-
-/// DER (`SubjectPublicKeyInfo`) prefix of an ED25519 key, the form Hedera wallets and the
-/// mirror node show (`302a300506032b6570032100` ‖ key).
 const ED25519_DER_PREFIX: &str = "302a300506032b6570032100";
 /// Longest body the Ledger Hedera app takes (one APDU: 255 bytes minus the 4-byte key index).
 pub const HBAR_HW_MAX_BODY: usize = 251;
 
-/// DER hex of an ED25519 public key (what a hardware Hedera account stores as « address »: the
-/// account ID is not derived from the key, it is looked up on the mirror node).
+/// DER hex of an ED25519 key (HW account « address »; the ID is looked up on the mirror node).
 pub fn hbar_ed25519_key_string(pk: &[u8; 32]) -> String {
     format!("{ED25519_DER_PREFIX}{}", hex::encode(pk))
 }
 
-/// Long-zero EVM form of an account number (to refuse a transfer to ourselves by that form).
 fn long_zero_of(num: u64) -> [u8; 20] {
     let mut a = [0u8; 20];
     a[12..].copy_from_slice(&num.to_be_bytes());
     a
 }
 
-/// [`hbar_decode_tx`] for an ED25519 account `our_account` (no EVM alias: the long-zero form
-/// of the account is the one that names it).
+/// [`hbar_decode_tx`] for ED25519 account `our_account` (no EVM alias: long-zero form names it).
 pub fn hbar_decode_tx_ed25519(
     bodies: &[String],
     our_account: u64,
@@ -1250,9 +1163,7 @@ pub fn hbar_decode_tx_ed25519(
     )
 }
 
-/// The bytes the Ledger signs for one body (hex): the body itself (the app signs `bodyBytes`
-/// with ED25519, as the network checks them), after strict decoding; at most
-/// [`HBAR_HW_MAX_BODY`] bytes.
+/// Bytes the Ledger signs: the strictly decoded body itself, ≤ [`HBAR_HW_MAX_BODY`] bytes.
 pub fn hbar_hw_message(body_hex: &str) -> Result<Vec<u8>> {
     let raw =
         hex::decode(body_hex.trim()).map_err(|_| Error::input("body: hexadecimal expected"))?;
@@ -1281,8 +1192,7 @@ fn signed_transaction_ed25519(body: &[u8], pk: &[u8; 32], sig: &[u8; 64]) -> Vec
     tx
 }
 
-/// Signed `Transaction` (hex) from the device's ED25519 signature of `body_hex`, checked with
-/// [`hbar_verify_signed_ed25519`] before it is returned.
+/// Signed tx (hex) from the device sig of `body_hex`, checked by [`hbar_verify_signed_ed25519`].
 pub fn hbar_hw_signed(body_hex: &str, pk: &[u8; 32], sig: &[u8]) -> Result<String> {
     let body = hbar_hw_message(body_hex)?;
     let sig: [u8; 64] = sig
@@ -1296,9 +1206,7 @@ pub fn hbar_hw_signed(body_hex: &str, pk: &[u8; 32], sig: &[u8]) -> Result<Strin
     Ok(out)
 }
 
-/// Strict decoding of a signed `Transaction` (hex) with exactly one **ED25519** signature
-/// pair (full 32-byte key) and its strict verification over `bodyBytes`. Returns the body and
-/// the key.
+/// Strict decode of a signed tx with one full-key **ED25519** pair, strictly verified on the body.
 pub fn hbar_verify_signed_ed25519(tx_hex: &str) -> Result<(HbarTransfer, [u8; 32])> {
     let raw = hex::decode(tx_hex.trim()).map_err(|_| Error::input("hexadecimal expected"))?;
     let (body, prefix, field, sig) = parse_signed(&raw)?;

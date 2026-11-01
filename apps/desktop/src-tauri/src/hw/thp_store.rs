@@ -1,15 +1,6 @@
 //! THP pairing state on disk: `trezor-thp.json` in the app data directory (next to the vault).
 //!
-//! Contents (see SECURITY.md, "Trezor Safe 7"):
-//! - `hostKey`: Kyro's static X25519 **private** key for THP (one per installation, generated
-//!   from the OS RNG the first time a THP device is opened);
-//! - `pairings`: for each paired device, its static X25519 **public** key, the opaque credential
-//!   it issued (a MAC by the device over Kyro's public key and the label "Kyro Wallet"), its
-//!   model and the pairing date.
-//!
-//! Plain JSON, not encrypted (hardware-wallet-only users have no vault password), written
-//! atomically with owner-only permissions on Unix. A corrupt file is an error, never a silent
-//! reset; `hw_thp_forget` (all) deletes it.
+//! A corrupt file is an error, never a silent reset.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -154,7 +145,6 @@ fn render(s: &Stored) -> HwResult<Zeroizing<String>> {
         .map_err(|e| HwError::Internal(e.to_string()))
 }
 
-/// Atomic write (temporary file + rename), owner-only on Unix.
 fn write_private(path: &Path, bytes: &[u8]) -> HwResult<()> {
     use std::io::Write;
     let io = |e: std::io::Error| HwError::Internal(format!("trezor-thp.json: {e}"));
@@ -174,7 +164,7 @@ fn write_private(path: &Path, bytes: &[u8]) -> HwResult<()> {
 }
 
 /// Shared THP state of the [`super::HwManager`]: where the pairings live and the lock that
-/// serialises their read-modify-write. Without a path (tests), pairings live in memory.
+/// serialises their read-modify-write.
 #[derive(Default)]
 pub struct ThpEnv {
     path: Mutex<Option<PathBuf>>,
@@ -225,7 +215,6 @@ impl ThpEnv {
         write_private(&path, render(&s)?.as_bytes())
     }
 
-    /// Kyro's host key (created and saved on first use) and the known devices.
     pub fn load_or_init(&self) -> HwResult<(Zeroizing<[u8; 32]>, Vec<Pairing>)> {
         let _io = lock(&self.io);
         let s = self.read()?;
@@ -242,7 +231,6 @@ impl ThpEnv {
         Ok((k, s.pairings))
     }
 
-    /// Records (or replaces) the pairing of one device.
     pub fn add(&self, p: Pairing) -> HwResult<()> {
         let _io = lock(&self.io);
         let mut s = self.read()?;
@@ -254,7 +242,6 @@ impl ThpEnv {
         self.write(s)
     }
 
-    /// Drops the pairing of one device (stale credential).
     pub fn remove(&self, trezor_key: &[u8; 32]) -> HwResult<()> {
         let _io = lock(&self.io);
         let mut s = self.read()?;
@@ -280,8 +267,6 @@ impl ThpEnv {
             .collect())
     }
 
-    /// Forgets one device, or everything (pairings **and** Kyro's host key: the file is
-    /// deleted, a new key is generated next time). Returns how many pairings were removed.
     pub fn forget(&self, trezor_key: Option<&[u8; 32]>) -> HwResult<usize> {
         let _io = lock(&self.io);
         let Some(key) = trezor_key else {
@@ -333,7 +318,6 @@ mod tests {
         env.set_path(path.clone());
         let (k1, known) = env.load_or_init().unwrap();
         assert!(known.is_empty());
-        // The host key is persisted immediately and stays the same.
         let (k2, _) = env.load_or_init().unwrap();
         assert_eq!(*k1, *k2);
         env.add(pairing(1)).unwrap();
@@ -354,7 +338,6 @@ mod tests {
         assert_eq!(env.forget(Some(&[9; 32])).unwrap(), 0);
         assert_eq!(env.forget(Some(&[1; 32])).unwrap(), 1);
         env.add(pairing(3)).unwrap();
-        // Forget all: file deleted, a new host key next time.
         assert_eq!(env.forget(None).unwrap(), 1);
         assert!(!path.exists());
         let (k3, known) = env.load_or_init().unwrap();

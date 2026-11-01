@@ -1,18 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// DEMO ONLY — Litecoin, Dogecoin, Bitcoin Cash and Dash (`ltc_*` / `doge_*` / `bch_*` /
-// `dash_*`, docs/IPC.md §2.4), mirroring apps/desktop/src-tauri/src/commands_utxo.rs. Same
-// Esplora shapes as Bitcoin, the server is picked here (Litecoin: litecoinspace.org by default;
-// Dogecoin and Dash mainnet: Komodo's public ElectrumX servers; Bitcoin Cash: public Fulcrum
-// servers on mainnet and chipnet; Dogecoin and Dash testnets: NO default, every read fails
-// with SERVER_INVALID until an Esplora server is set), fake signatures. Like Rust, a legacy
-// (Dogecoin / Bitcoin Cash / Dash) input is signed only if its previous transaction hashes to
-// the outpoint's txid and its output pays one of our addresses; the amount (fee of the dialog)
-// comes from that transaction. Bitcoin Cash: CashAddr addresses, and the signed PSBT comes back
-// finalized (FORKID), as from Rust.
-//
-// Scenario words in a custom Esplora URL, like Bitcoin: « down » / « flaky » → SERVER_UNREACHABLE,
-// « wrong » → SERVER_WRONG_NETWORK.
+// DEMO ONLY — Litecoin, Dogecoin, Bitcoin Cash and Dash (`ltc_*` / `doge_*` / `bch_*` / `dash_*`,
 
 import { HDKey } from '@scure/bip32';
 import * as bitcoin from 'bitcoinjs-lib';

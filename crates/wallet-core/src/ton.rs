@@ -1,28 +1,5 @@
-//! TON (The Open Network): ed25519 keys at `m/44'/607'/account'` (SLIP-10, the BIP39 route of
-//! Trust Wallet — account 0 = Trust Wallet's address; Tonkeeper / Tonhub use TON's own mnemonic
-//! scheme and Ledger a six-level path, so the same words give other addresses there), the
-//! standard **wallet v4R2** contract, user-friendly addresses, and TON transfers (TON + optional
-//! text comment) only.
-//!
-//! - Wallet address = `0:` ‖ hash of the v4R2 `StateInit` (official code, hash
-//!   `feb5ff68…dabd5c0`; data = seqno 0, wallet id, public key, no plugin). Wallet id
-//!   698 983 191 on mainnet (the standard one), [`TON_WALLET_ID_TESTNET`] on testnet: a v4R2
-//!   signature does not name the network, so with the standard id a testnet transfer could be
-//!   replayed on mainnet (same key, same seqno) — a distinct testnet id makes it impossible.
-//! - User-friendly address: base64url of tag (`0x11` bounceable, `0x51` non-bounceable,
-//!   `| 0x80` testnet) ‖ workchain ‖ hash ‖ CRC16-XModem. Raw `0:…` forms (no checksum) are not
-//!   accepted from the user.
-//! - Transfer = external message to our wallet: `ext_in_msg_info`, our `StateInit` while the
-//!   wallet is not deployed (seqno 0), body = ed25519 signature of the hash of
-//!   `wallet_id ‖ valid_until ‖ seqno ‖ op 0 ‖ mode ‖ ^internal message`. One message, mode 3
-//!   (fees paid on top, errors ignored) or 130 (whole balance), body = nothing or a text comment
-//!   (`0x00000000` ‖ UTF-8, one cell).
-//!
-//! Cells and BOC come from tycho-types; the TL-B layouts above are written here, for this subset
-//! only. Same rule as for XRP and TRON: **a BOC is accepted only if re-encoding what was decoded
-//! gives back the same bytes**. Vectors: Trust Wallet Core (addresses from keys and from a
-//! mnemonic, v4R2 `StateInit`, transfers broadcast on mainnet, signatures included) and the
-//! official v4R2 code of ton-org/ton.
+//! TON: ed25519 `m/44'/607'/account'` (SLIP-10, Trust Wallet's route), wallet v4R2,
+//! user-friendly addresses, TON transfers with optional comment.
 
 use base64::Engine as _;
 use ed25519_dalek::Signer as _;
@@ -46,9 +23,7 @@ pub use jetton::{
 
 /// Standard v4R2 wallet id (`698983191 + workchain`), mainnet.
 pub const TON_WALLET_ID_MAINNET: u32 = 698_983_191;
-/// Kyro's v4R2 wallet id on testnet (`"KYRO"` in ASCII): never equal to the mainnet one, so a
-/// testnet signature can never be valid on mainnet. Testnet addresses therefore differ from
-/// other wallets' testnet addresses for the same key.
+/// Kyro's testnet v4R2 wallet id (`"KYRO"`): differs from mainnet, so no cross-net replay.
 pub const TON_WALLET_ID_TESTNET: u32 = 0x4B59_524F;
 /// Representation hash of the official wallet v4R2 code.
 pub const TON_V4R2_CODE_HASH: &str =
@@ -59,20 +34,11 @@ pub const TON_MODE_PAY_FEES: u8 = 3;
 pub const TON_MODE_ALL_BALANCE: u8 = 130;
 /// Longest comment: what fits in one cell after the 32-bit text opcode (1023 bits → 123 bytes).
 pub const TON_MAX_COMMENT_BYTES: usize = 123;
-/// Comment characters shown in the dialog.
 const MAX_COMMENT_CHARS: usize = 123;
-/// 5.2 billion TON (total supply ≈ 5.1 billion) in nanotons: anything above is a mistake.
 const MAX_NANOTON: u64 = 5_200_000_000_000_000_000;
-/// Base64 of a transfer is ≈ 1.1 KB with the `StateInit`, ≈ 300 bytes without.
 const MAX_BOC_BASE64: usize = 4096;
 
-/// Official wallet v4R2 code (ton-org/ton `src/wallets/v4/WalletContractV4.ts`); its hash is
-/// checked against [`TON_V4R2_CODE_HASH`] every time it is used.
 const V4R2_CODE_BOC: &str = "te6ccgECFAEAAtQAART/APSkE/S88sgLAQIBIAIDAgFIBAUE+PKDCNcYINMf0x/THwL4I7vyZO1E0NMf0x/T//QE0VFDuvKhUVG68qIF+QFUEGT5EPKj+AAkpMjLH1JAyx9SMMv/UhD0AMntVPgPAdMHIcAAn2xRkyDXSpbTB9QC+wDoMOAhwAHjACHAAuMAAcADkTDjDQOkyMsfEssfy/8QERITAubQAdDTAyFxsJJfBOAi10nBIJJfBOAC0x8hghBwbHVnvSKCEGRzdHK9sJJfBeAD+kAwIPpEAcjKB8v/ydDtRNCBAUDXIfQEMFyBAQj0Cm+hMbOSXwfgBdM/yCWCEHBsdWe6kjgw4w0DghBkc3RyupJfBuMNBgcCASAICQB4AfoA9AQw+CdvIjBQCqEhvvLgUIIQcGx1Z4MesXCAGFAEywUmzxZY+gIZ9ADLaRfLH1Jgyz8gyYBA+wAGAIpQBIEBCPRZMO1E0IEBQNcgyAHPFvQAye1UAXKwjiOCEGRzdHKDHrFwgBhQBcsFUAPPFiP6AhPLassfyz/JgED7AJJfA+ICASAKCwBZvSQrb2omhAgKBrkPoCGEcNQICEekk30pkQzmkD6f+YN4EoAbeBAUiYcVnzGEAgFYDA0AEbjJftRNDXCx+AA9sp37UTQgQFA1yH0BDACyMoHy//J0AGBAQj0Cm+hMYAIBIA4PABmtznaiaEAga5Drhf/AABmvHfaiaEAQa5DrhY/AAG7SB/oA1NQi+QAFyMoHFcv/ydB3dIAYyMsFywIizxZQBfoCFMtrEszMyXP7AMhAFIEBCPRR8qcCAHCBAQjXGPoA0z/IVCBHgQEI9FHyp4IQbm90ZXB0gBjIywXLAlAGzxZQBPoCFMtqEssfyz/Jc/sAAgBsgQEI1xj6ANM/MFIkgQEI9Fnyp4IQZHN0cnB0gBjIywXLAlAFzxZQA/oCE8tqyx8Syz/Jc/sAAAr0AMntVA==";
-
-// ---------------------------------------------------------------------------------------------
-// Keys
-// ---------------------------------------------------------------------------------------------
 
 fn hardened(index: u32) -> Result<ChildIndex> {
     ChildIndex::hardened(index).map_err(|_| Error::input("derivation index must be < 2^31"))
@@ -111,10 +77,6 @@ pub fn ton_wallet_id(testnet: bool) -> u32 {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Addresses
-// ---------------------------------------------------------------------------------------------
-
 /// A TON account: workchain and 256-bit account id (`wc:hex`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TonAddress {
@@ -135,7 +97,6 @@ pub struct TonFriendly {
     pub testnet: bool,
 }
 
-/// CRC-16/XMODEM (polynomial 0x1021, initial value 0): the checksum of user-friendly addresses.
 fn crc16(data: &[u8]) -> u16 {
     let mut crc: u16 = 0;
     for &b in data {
@@ -169,9 +130,7 @@ impl TonAddress {
     }
 }
 
-/// Parses a user-friendly address (48 characters, base64url or standard base64): checksum,
-/// tag and workchain (0 or -1) are verified. Raw `wc:hex` addresses are refused (no checksum: a
-/// typo would send to another account).
+/// Parses a 48-char user-friendly address; checksum, tag and workchain (0/-1) verified.
 pub fn ton_parse_address(s: &str) -> Result<TonFriendly> {
     let s = s.trim();
     if s.contains(':') {
@@ -237,10 +196,6 @@ pub fn ton_parse_raw_address(s: &str) -> Result<TonAddress> {
     Ok(TonAddress { workchain, hash })
 }
 
-// ---------------------------------------------------------------------------------------------
-// Cells
-// ---------------------------------------------------------------------------------------------
-
 fn cell_err(_: tycho_types::error::Error) -> Error {
     Error::input("invalid TON cell")
 }
@@ -262,8 +217,6 @@ fn v4r2_data(public_key: &[u8; 32], wallet_id: u32) -> Result<Cell> {
     b.build().map_err(cell_err)
 }
 
-/// `StateInit` of our v4R2 wallet: `split_depth` and `special` absent, code and data present,
-/// no library.
 fn state_init(public_key: &[u8; 32], wallet_id: u32) -> Result<Cell> {
     let mut b = CellBuilder::new();
     b.store_small_uint(0b00110, 5).map_err(cell_err)?;
@@ -281,14 +234,12 @@ pub fn ton_wallet_address(public_key: &[u8; 32], wallet_id: u32) -> Result<TonAd
     })
 }
 
-/// Our address for TON account `account`, user-friendly **non-bounceable** (`UQ…`, testnet
-/// `0Q…`), the form wallets show for themselves.
+/// Our non-bounceable user-friendly address (`UQ…`, testnet `0Q…`) for account `account`.
 pub fn ton_address(seed: &Seed, account: u32, testnet: bool) -> Result<String> {
     let pk = ton_public_key(seed, account)?;
     Ok(ton_wallet_address(&pk, ton_wallet_id(testnet))?.to_friendly(false, testnet))
 }
 
-/// `addr_std$10 anycast:(Maybe Anycast) workchain_id:int8 address:bits256`, without anycast.
 fn store_addr(b: &mut CellBuilder, a: &TonAddress) -> Result<()> {
     b.store_small_uint(0b100, 3).map_err(cell_err)?;
     b.store_u8(a.workchain.to_be_bytes()[0]).map_err(cell_err)?;
@@ -308,7 +259,6 @@ fn load_addr(s: &mut CellSlice<'_>) -> Result<TonAddress> {
     })
 }
 
-/// `Grams` = `VarUInteger 16`: 4-bit byte length, then the value, big-endian, minimal length.
 fn store_grams(b: &mut CellBuilder, v: u64) -> Result<()> {
     let bytes = v.to_be_bytes();
     let skip = bytes.iter().take_while(|x| **x == 0).count();
@@ -363,8 +313,6 @@ fn slice(c: &Cell) -> Result<CellSlice<'_>> {
     CellSlice::new(c.as_ref()).map_err(|_| Error::input("special TON cell refused"))
 }
 
-/// BOC with CRC32-C, no index (`b5ee9c72`, the `te6cck…` form). The serializer's hash map only
-/// indexes cells: the output does not depend on its hasher.
 fn encode_boc(c: &Cell) -> Vec<u8> {
     let mut out = Vec::new();
     let header: BocHeader<'_> = BocHeader::with_root(c.as_ref());
@@ -379,10 +327,6 @@ fn decode_boc_b64(text: &str) -> Result<(Vec<u8>, Cell)> {
     let root = Boc::decode(&bytes).map_err(|_| Error::input("invalid TON BOC"))?;
     Ok((bytes, root))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Transfer
-// ---------------------------------------------------------------------------------------------
 
 /// A v4R2 transfer: one internal message, in an external message to our wallet.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -399,8 +343,7 @@ pub struct TonTransfer {
     pub mode: u8,
     /// Recipient.
     pub destination: TonAddress,
-    /// Bounce flag of the internal message: if the recipient fails (or is not deployed), the
-    /// funds come back.
+    /// Internal message bounce flag: funds return if the recipient fails or is undeployed.
     pub bounce: bool,
     /// Nanotons.
     pub amount: u64,
@@ -408,12 +351,9 @@ pub struct TonTransfer {
     pub comment: Option<String>,
     /// Carries our wallet's `StateInit` (first transfer, wallet not deployed yet).
     pub with_state_init: bool,
-    /// Jetton transfer: `destination` is then our jetton wallet, `amount` the TON attached for
-    /// its fees, `comment` empty (the comment goes in the jetton's forward payload).
+    /// Jetton transfer: `destination` = our jetton wallet, `amount` = TON for its fees.
     pub jetton: Option<TonJettonBody>,
-    /// Without a comment, the (empty) body is stored inline instead of in an empty referenced
-    /// cell: the layout the Ledger TON app rebuilds and signs for a transfer without payload
-    /// (`hash.c` of LedgerHQ/app-ton). Only for hardware accounts; never with a comment.
+    /// No comment: empty body inline, as the Ledger TON app rebuilds it (app-ton `hash.c`).
     pub inline_empty_body: bool,
 }
 
@@ -491,7 +431,6 @@ impl TonTransfer {
         b.build().map_err(cell_err)
     }
 
-    /// The signed part of the body: `wallet_id ‖ valid_until ‖ seqno ‖ op 0 ‖ mode ‖ ^message`.
     fn signing_builder(&self) -> Result<CellBuilder> {
         self.check()?;
         let mut b = CellBuilder::new();
@@ -542,13 +481,11 @@ impl TonTransfer {
         b.build().map_err(cell_err)
     }
 
-    /// BOC (standard base64, CRC32-C) of the external message with an **all-zero** signature:
-    /// what the interface carries between `ton_build_tx` and `ton_sign_tx`.
+    /// BOC of the external message with an all-zero signature (between build and sign).
     pub fn encode_unsigned(&self) -> Result<String> {
         Ok(base64::engine::general_purpose::STANDARD.encode(encode_boc(&self.external(&[0; 64])?)))
     }
 
-    /// Signed BOC (standard base64) and the external message's hash.
     fn encode_signed(&self, signature: &[u8; 64]) -> Result<(String, [u8; 32])> {
         let ext = self.external(signature)?;
         Ok((
@@ -557,8 +494,6 @@ impl TonTransfer {
         ))
     }
 
-    /// Hash of the *normalized* external message (TEP-467: no `StateInit`, `src` and
-    /// `import_fee` empty, body in a reference), what explorers and toncenter v3 index.
     fn normalized_hash(&self, signature: &[u8; 64]) -> Result<[u8; 32]> {
         let mut b = CellBuilder::new();
         b.store_small_uint(0b1000, 4).map_err(cell_err)?;
@@ -570,14 +505,12 @@ impl TonTransfer {
         Ok(b.build().map_err(cell_err)?.repr_hash().0)
     }
 
-    /// Fee estimation inputs (toncenter `estimateFee`): body BOC (zero signature, checked with
-    /// `ignore_chksig`), and the `StateInit` code / data BOCs when the wallet is not deployed.
+    /// toncenter `estimateFee` inputs: body BOC (zero sig) and `StateInit` BOCs if undeployed.
     pub fn estimate_parts(&self) -> Result<TonEstimateParts> {
         self.estimate_parts_signed(&[0; 64])
     }
 
-    /// [`Self::estimate_parts`] with a given signature (to emulate the signed message with its
-    /// signature checked).
+    /// [`Self::estimate_parts`] with a given signature (emulates the signed message).
     pub fn estimate_parts_signed(&self, signature: &[u8; 64]) -> Result<TonEstimateParts> {
         let b64 = |c: &Cell| base64::engine::general_purpose::STANDARD.encode(encode_boc(c));
         let (init_code, init_data) = if self.with_state_init {
@@ -595,9 +528,7 @@ impl TonTransfer {
         })
     }
 
-    /// Strict decoding of an external-message BOC (standard base64). `public_key` and
-    /// `wallet_id` are ours: the message must be addressed to our wallet, and a `StateInit`, if
-    /// any, must be exactly ours. Returns the transfer and its signature (zero when unsigned).
+    /// Strict decoding of an external-message BOC (standard base64).
     pub fn decode(
         boc_b64: &str,
         public_key: &[u8; 32],
@@ -749,8 +680,7 @@ impl TonTransfer {
     }
 }
 
-/// Inputs of toncenter's `estimateFee` (standard base64 BOCs; init parts empty when the
-/// wallet is deployed).
+/// toncenter `estimateFee` inputs (base64 BOCs; init parts empty when deployed).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TonEstimateParts {
@@ -761,10 +691,6 @@ pub struct TonEstimateParts {
     /// v4R2 initial data (empty if no `StateInit`).
     pub init_data: String,
 }
-
-// ---------------------------------------------------------------------------------------------
-// Summary, signature
-// ---------------------------------------------------------------------------------------------
 
 /// Things that need the reinforced confirmation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -806,8 +732,7 @@ pub struct TonTxSummary {
     pub warnings: Vec<TonWarning>,
     /// At least one warning: second, reinforced confirmation.
     pub requires_extra_confirmation: bool,
-    /// Jetton transfer (known jetton, to our jetton wallet computed by Kyro); the comment above
-    /// is then the jetton's forward comment.
+    /// Jetton transfer (known jetton, to our computed jetton wallet); comment = forward comment.
     pub jetton: Option<TonJettonSummary>,
 }
 
@@ -845,8 +770,7 @@ fn summarize(t: &TonTransfer, testnet: bool) -> Result<TonTxSummary> {
     })
 }
 
-/// Strictly decodes an **unsigned** transfer BOC (zero signature) of our account `public_key`
-/// on `testnet` / mainnet (the wallet id must be the network's).
+/// Strictly decodes an unsigned transfer BOC of `public_key` (network's wallet id required).
 pub fn ton_decode_tx(boc_b64: &str, public_key: &[u8; 32], testnet: bool) -> Result<TonTxSummary> {
     let (t, sig) = TonTransfer::decode(boc_b64, public_key, ton_wallet_id(testnet))?;
     if sig != [0u8; 64] {
@@ -884,8 +808,7 @@ fn sign_with(key: &ed25519_dalek::SigningKey, t: &TonTransfer, testnet: bool) ->
     })
 }
 
-/// Decodes (strictly, as [`ton_decode_tx`]) then signs an unsigned transfer BOC with the key of
-/// TON account `account`.
+/// Strictly decodes then signs an unsigned transfer BOC with TON account `account`'s key.
 pub fn ton_sign(seed: &Seed, account: u32, boc_b64: &str, testnet: bool) -> Result<TonSigned> {
     let key = signing_key(seed, account)?;
     let pk = key.verifying_key().to_bytes();
@@ -896,9 +819,7 @@ pub fn ton_sign(seed: &Seed, account: u32, boc_b64: &str, testnet: bool) -> Resu
     sign_with(&key, &t, testnet)
 }
 
-/// Checks a **signed** transfer BOC before broadcasting: strict decoding (our wallet, our
-/// network's wallet id) and a valid ed25519 signature by `public_key`. Returns the transfer,
-/// the message hash and the normalized hash (hex).
+/// Checks a signed BOC before broadcast: strict decode and valid ed25519 sig by `public_key`.
 pub fn ton_verify_signed(
     boc_b64: &str,
     public_key: &[u8; 32],
@@ -925,17 +846,11 @@ pub fn ton_unsigned_transfer(t: &TonTransfer) -> Result<String> {
     t.encode_unsigned()
 }
 
-// ---------------------------------------------------------------------------------------------
-// Ledger « TON » app (hardware accounts)
-// ---------------------------------------------------------------------------------------------
-
 /// Longest comment the Ledger TON app displays (`MAX_MEMO_LEN`, printable ASCII only).
 pub const TON_HW_MAX_COMMENT: usize = 120;
-/// Hint id « message with comment » of the Ledger TON app (doc/MESSAGES.md).
 const HW_HINT_COMMENT: u32 = 0x00;
 
-/// A comment the Ledger TON app can show: printable ASCII (0x20–0x7E), at most
-/// [`TON_HW_MAX_COMMENT`] bytes (the app refuses anything else).
+/// Comment the Ledger TON app can show: printable ASCII, ≤ [`TON_HW_MAX_COMMENT`] bytes.
 pub fn ton_hw_check_comment(text: &str) -> Result<()> {
     if text.len() > TON_HW_MAX_COMMENT || !text.bytes().all(|b| (0x20..0x7f).contains(&b)) {
         return Err(Error::input(
@@ -945,8 +860,7 @@ pub fn ton_hw_check_comment(text: &str) -> Result<()> {
     check_comment(text)
 }
 
-/// Minimal big-endian bytes of an amount (the app's `varuint`: length byte, then the bytes;
-/// the cell stores the same bytes as `VarUInteger 16`, so they must be minimal like ours).
+/// Minimal big-endian amount bytes (app `varuint` / cell `VarUInteger 16`, must be minimal).
 fn varuint(v: u64) -> Vec<u8> {
     let b = v.to_be_bytes();
     let skip = b.iter().take_while(|x| **x == 0).count();
@@ -955,15 +869,8 @@ fn varuint(v: u64) -> Vec<u8> {
     out
 }
 
-/// What the Ledger TON app signs for an **unsigned** transfer BOC of hardware account
-/// `public_key`: the structured request of LedgerHQ/app-ton `doc/TRANSACTION.md`, tag `0x01`
-/// (app ≥ 2.1.0: wallet id given, wallet op included), and the hash the app must sign (the
-/// hash of the order cell, computed by Kyro).
-///
-/// The app rebuilds the order cell from this request; it can only rebuild what Kyro builds
-/// for hardware accounts: no `StateInit` in the internal message (ours goes in the external
-/// message, which is not signed), body inline when empty, otherwise a text comment sent with
-/// its « comment » hint so the device shows it (never blind signing).
+/// Ledger TON app request for an unsigned BOC (app-ton `doc/TRANSACTION.md`, tag 0x01, ≥2.1.0)
+/// and the order-cell hash it must sign.
 pub fn ton_hw_request(
     boc_b64: &str,
     public_key: &[u8; 32],
@@ -1011,9 +918,7 @@ pub fn ton_hw_request(
     Ok((r, t.signing_hash()?))
 }
 
-/// Signed transfer from the Ledger's answer (`signature`, and the `hash` it says it signed):
-/// the hash must be Kyro's own, the signature valid for `public_key` (`verify_strict`), and
-/// the result goes through [`ton_verify_signed`] before being returned.
+/// Signed transfer from a Ledger answer: hash must be Kyro's, sig `verify_strict`, then checked.
 pub fn ton_hw_signed(
     boc_b64: &str,
     public_key: &[u8; 32],
@@ -1053,11 +958,7 @@ pub fn ton_hw_signed(
 
 #[cfg(test)]
 mod tests {
-    //! Trust Wallet Core vectors signed with raw private keys (Kyro only derives keys from a
-    //! seed, so these go through the private `sign_with`). Source:
-    //! `rust/tw_tests/tests/chains/ton/ton_sign.rs` (fetched 2026-11-01); each transaction was
-    //! broadcast on mainnet by Trust Wallet. Their test compares cells, not BOC bytes (« the
-    //! same Cell can be BoC encoded differently »): so do we, and the external message hash too.
+    //! Trust Wallet Core vectors from raw private keys (via the private `sign_with`).
     use super::*;
 
     fn key(hex_key: &str) -> ed25519_dalek::SigningKey {
@@ -1108,9 +1009,7 @@ mod tests {
     fn twc_transfer_and_deploy() {
         // test_ton_sign_transfer_and_deploy: https://tonviewer.com/transaction/6ZzWOFKZt_m3kZjbwfbATwLaVwmUOdDp0xjhuY7PO3k=
         let k = key("63474e5fe9511f1526a50567ce142befc343e71a49b865ac3908f58667319cb8");
-        // For a first transfer (seqno 0), Trust Wallet (like the old tonweb) ignores `expire_at`
-        // and signs `valid_until = 0xFFFFFFFF` (visible in its BOC: `29a9a317 ffffffff 00000000`).
-        // Kyro never does (always now + 10 min, checked by the shell); the cell layout is the same.
+        // Seqno 0: Trust Wallet ignores `expire_at` and signs `valid_until = 0xFFFFFFFF`.
         let t = transfer(
             &k,
             "EQDYW_1eScJVxtitoBRksvoV9cCYo4uKGWLVNIHB1JqRR3n0",
@@ -1125,9 +1024,7 @@ mod tests {
             "b3d9462c13a8c67e19b62002447839c386de51415ace3ff6473b1e6294299819"
         );
         assert!(s.summary.deploys_wallet && s.summary.bounce);
-        // What `ton_sign_tx` receives back decodes to the same transfer, and Trust Wallet's own
-        // BOC decodes too (Kyro's re-encoding differs only in cell order / CRC: refused as
-        // non-canonical, never misread).
+        // Round-trips; Trust Wallet's BOC is refused as non-canonical, never misread.
         let (back, sig) = TonTransfer::decode(
             &t.encode_unsigned().unwrap(),
             &t.public_key,
@@ -1184,8 +1081,7 @@ mod tests {
         t.inline_empty_body = true;
         let boc = t.encode_unsigned().unwrap();
         let (req, hash) = ton_hw_request(&boc, &pk, false).unwrap();
-        // tag 1, wallet id, op, seqno, timeout, varuint(10), address, bounce, mode 3, no
-        // StateInit, no payload, no hints (doc/TRANSACTION.md).
+        // tag 1, wallet id, op, seqno, timeout, varuint(10), addr, bounce, mode 3 (TRANSACTION.md).
         assert_eq!(
             hex::encode(&req),
             format!(
@@ -1231,9 +1127,7 @@ mod tests {
 
     #[test]
     fn twc_all_balance() {
-        // test_ton_sign_transfer_all_balance (mode 128) and _non_bounceable: Kyro only emits
-        // mode 130 (128 + ignore errors) with a zero value, so only the cell layout of the
-        // message is compared here (mode and value are part of the signed data).
+        // all_balance/_non_bounceable: Kyro only emits mode 130, so compare cell layout only.
         let k = key("c38f49de2fb13223a9e7d37d5d0ffbdd89a5eb7c8b0ee4d1c299f2cefe7dc4a0");
         let mut t = transfer(
             &k,

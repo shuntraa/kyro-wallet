@@ -1,17 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Settings › Networks and servers (B2b): the user's own server per chain.
-// Contract: docs/IPC.md §2–2.2; what each server sees: docs/NETWORK.md.
-//
-// Rules shown and enforced here (Rust stays the judge, see settings_set / server_test):
-// - a custom server replaces the chain's default; if it goes down Kyro shows an error and
-//   never falls back to the default;
-// - every save is checked live by Rust; its typed error is shown inline, in the card;
-// - the Core password is never received (`hasPassword`): an empty field = unchanged;
-// - removing a custom server goes back to the default, with a note that the default now
-//   sees the addresses again;
-// - compact block filters (BIP157/158) stay visible but disabled while the build answers
-//   FEATURE_DISABLED (cargo feature `cbf`, off until the security review).
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -53,13 +41,10 @@ import { rt } from '../../i18n/rich';
 const bold = { b: (c: ReactNode) => <strong className="font-semibold text-text">{c}</strong> };
 const boldPlain = { b: (c: ReactNode) => <strong className="font-semibold">{c}</strong> };
 
-/** A notice under a card: success, or a warning (default server back, server removed). */
 interface Note {
   text: string;
   warn?: boolean;
 }
-
-// ---------------------------------------------------------------- shared bits
 
 interface Failure {
   code: string;
@@ -81,7 +66,6 @@ const toFailure = (e: unknown): Failure => {
   return { code: err.code, message: err.message };
 };
 
-/** Shell message without its « Serveur invalide : » style prefix, French or English (the title says it). */
 function detail(message: string): string {
   return message.replace(/^(Serveur invalide|Mauvais réseau|Serveur injoignable|Tor indisponible|Entrée invalide|Erreur interne|Invalid server|Wrong network|Server unreachable|Tor unavailable|Invalid input|Internal error)\s*:\s*/i, '');
 }
@@ -97,7 +81,6 @@ function FailureNotice({ failure }: { failure: Failure }) {
   );
 }
 
-/** `chainLabel`: what `detected.chainId` is for that family (XRP Ledger: `network_id`). */
 function TestOk({ result, chainLabel = 'chainId', ledgerLabel }: { result: ServerTestResult; chainLabel?: string; ledgerLabel?: string }) {
   const { t } = useT();
   const d = result.detected;
@@ -140,7 +123,6 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
   );
 }
 
-/** What a server sees: one honest line (docs/NETWORK.md). */
 function Sees({ children }: { children: ReactNode }) {
   return (
     <p className="m-0 flex items-start gap-2 text-[12px] leading-[1.5] text-mute">
@@ -192,8 +174,6 @@ function BackToDefaultDialog({ open, host, sees, busy, failure, onConfirm, onCan
   );
 }
 
-// ---------------------------------------------------------------- section
-
 export function ServersSection() {
   const { network, settings } = useApp();
   const { t } = useT();
@@ -224,7 +204,6 @@ export function ServersSection() {
   );
 }
 
-/** Réseau principal / réseau de test (docs/IPC.md §2.10): saved by the shell, applied by a restart. */
 function NetworkChoiceCard() {
   const { network, status, demo } = useApp();
   const info = useNetworkInfo();
@@ -270,8 +249,6 @@ function NetworkChoiceCard() {
   );
 }
 
-// ---------------------------------------------------------------- Bitcoin
-
 interface BtcDraft {
   kind: BtcServerKind;
   esploraUrl: string;
@@ -284,7 +261,6 @@ interface BtcDraft {
   authKind: 'cookie' | 'userpass';
   cookiePath: string;
   user: string;
-  /** Empty = unchanged (the stored one is kept by Rust if URL and user are the same). */
   password: string;
   hasPassword: boolean;
   /** Compact filters: extra peers, one per line ("ip:port" or "onion:port"). */
@@ -341,11 +317,7 @@ function draftOf(s: BtcServer, network: 'mainnet' | 'testnet'): BtcDraft {
   return d;
 }
 
-/**
- * Approximate block height at a date, minus a one-week safety margin (1008 blocks). Reference
- * points: mainnet block 840 000 (halving, 2024-04-20), testnet4 genesis (2024-05-03); about
- * one block per 10 minutes. Starting earlier only costs time, starting later would miss funds.
- */
+/** Approximate block height at a date, minus a one-week safety margin (1008 blocks). */
 export function estimateBirthHeight(dateIso: string, network: 'mainnet' | 'testnet'): number | null {
   const t = Date.parse(`${dateIso}T00:00:00Z`) / 1000;
   if (!Number.isFinite(t)) return null;
@@ -385,13 +357,11 @@ function serverOf(d: BtcDraft, network: 'mainnet' | 'testnet' = 'testnet'): BtcS
   }
 }
 
-/** Comparable form of a saved server (no `hasPassword`). */
 function comparable(s: BtcServer): string {
   if (s.kind === 'core' && s.auth.kind === 'userpass') return JSON.stringify({ ...s, auth: { kind: 'userpass', user: s.auth.user } });
   return JSON.stringify(s);
 }
 
-/** Server kinds (labels in the current language). */
 function btcKinds(): Array<{ value: BtcServerKind; label: string }> {
   return [
     { value: 'default', label: t('servers.default') },
@@ -475,7 +445,6 @@ function BitcoinCard() {
   const test = async () => {
     reset();
     if (d.kind === 'electrum' && d.tls) {
-      // TLS: fetch the certificate first (trust on first use), then test with the chosen validation.
       setBusy('cert');
       try {
         const host = d.host.trim();
@@ -779,7 +748,6 @@ const CBF_STEPS: Array<{ key: 'headers' | 'filters' | 'blocks'; label: Key }> = 
   { key: 'blocks', label: 'servers.cbf.step.blocks' },
 ];
 
-/** Compact-filter sync: phases, progress, peers. Driven by the `cbf-status` event. */
 function CbfPanel() {
   const { status, error } = useCbf();
   const [busy, setBusy] = useState(false);
@@ -806,7 +774,6 @@ function CbfPanel() {
       </div>
       <ol className="m-0 grid list-none grid-cols-3 gap-2 p-0" aria-label={t('servers.cbf.stepsLabel')}>
         {CBF_STEPS.map((step, i) => {
-          // Blocks matching our scripts are downloaded during the filter scan.
           const done = phaseIndex > i || (step.key === 'blocks' && phaseIndex >= 3);
           const active = phaseIndex === i || (step.key === 'blocks' && phaseIndex === 1 && (st?.matchedBlocks ?? 0) > 0);
           const detail =
@@ -915,8 +882,8 @@ function CoreForm({ d, set, savedIsCore, passwordLost, tor }: { d: BtcDraft; set
 }
 
 /**
- * `.cookie` chosen in the system file picker opened by Rust (`btc_core_pick_cookie`): the
- * interface cannot type a path, so it cannot point Kyro at another file (settings, vault…).
+ * `.cookie` chosen in the system file picker opened by Rust (`btc_core_pick_cookie`): the interface
+ * cannot type a path, so it cannot point Kyro at another file (settings, vault…).
  */
 function CookiePicker({ d, set, local }: { d: BtcDraft; set: (p: Partial<BtcDraft>) => void; local: boolean }) {
   const [busy, setBusy] = useState(false);
@@ -952,7 +919,6 @@ function CookiePicker({ d, set, local }: { d: BtcDraft; set: (p: Partial<BtcDraf
   );
 }
 
-/** Bitcoin Core watch-only wallet: setup + rescan progress (polls a local command). */
 function CoreWallet() {
   const pf = usePortfolio();
   const [status, setStatus] = useState<CoreStatus | null>(null);
@@ -980,7 +946,6 @@ function CoreWallet() {
     void refresh();
   }, []);
 
-  // Poll while the import / rescan runs.
   const importing = status?.state === 'importing';
   useEffect(() => {
     if (!importing) return;
@@ -1100,8 +1065,6 @@ function CoreWallet() {
   );
 }
 
-// ---------------------------------------------------------------- EVM / Solana
-
 function RpcRow({
   title,
   subtitle,
@@ -1118,7 +1081,6 @@ function RpcRow({
   saved: string | undefined;
   target: (url: string) => ServerTestTarget;
   onSave: (url: string | null) => Promise<void>;
-  /** What the default sees again once restored. */
   defaultSees: string;
   last?: boolean;
 }) {
@@ -1213,7 +1175,6 @@ function RpcRow({
   );
 }
 
-/** What each UTXO chain's card says (Rust: `servers::utxo_default_*`, docs/NETWORK.md). */
 function utxoMeta(): Record<UtxoCoinKey, { name: string; testnet: string; noDefaultTestnet: boolean; hosts: Record<'mainnet' | 'testnet', string>; first: Record<'mainnet' | 'testnet', string>; electrs: string; sees: (hosts: string, tor: boolean) => string }> {
   return {
     litecoin: {
@@ -1257,9 +1218,7 @@ function utxoMeta(): Record<UtxoCoinKey, { name: string; testnet: string; noDefa
 
 /**
  * Litecoin / Dogecoin / Bitcoin Cash / Dash: Rust accepts the default or an Esplora server
- * (docs/IPC.md §2.4). Dogecoin and Dash mainnet default to Komodo's public ElectrumX servers,
- * Bitcoin Cash to public Fulcrum servers (mainnet and chipnet); Dogecoin and Dash testnets have NO
- * public default: an unconfigured one says so, it never pretends to load.
+ * (docs/IPC.md §2.4).
  */
 function UtxoServerCard({ coin }: { coin: UtxoCoinKey }) {
   const { settings, network } = useApp();
@@ -1271,7 +1230,6 @@ function UtxoServerCard({ coin }: { coin: UtxoCoinKey }) {
   const name = meta.name;
   /** Dogecoin / Dash testnet: no public server found, the user must set one. */
   const noDefault = meta.noDefaultTestnet && nk === 'testnet';
-  /** Host(s) of the default, as the user sees them (Rust: `servers::utxo_default_*`). */
   const { t } = useT();
   const defaultHosts = meta.hosts[nk];
   const [kind, setKind] = useState<'default' | 'esplora'>(savedUrl ? 'esplora' : 'default');
@@ -1396,12 +1354,9 @@ function UtxoServerCard({ coin }: { coin: UtxoCoinKey }) {
   );
 }
 
-// ---------------------------------------------------------------- TRON
-
 /**
  * TRON: TronGrid by default (api.trongrid.io / nile.trongrid.io) or the user's java-tron HTTP API
- * (FullNode). Balances, resources, building and broadcast work with any java-tron node; the
- * history needs TronGrid's `/v1` API, which a plain node does not have (tron_txs then fails).
+ * (FullNode).
  */
 function TronServerCard() {
   const { settings, network, config } = useApp();
@@ -1524,12 +1479,9 @@ function TronServerCard() {
   );
 }
 
-// ---------------------------------------------------------------- XRP Ledger
-
 /**
  * XRP Ledger: Ripple's public rippled by default (s.altnet.rippletest.net on testnet,
- * xrplcluster.com on mainnet) or the user's rippled JSON-RPC. Kyro checks `network_id` before
- * saving (0 mainnet, 1 testnet). Everything (reserve, tags, history) comes from that server.
+ * xrplcluster.com on mainnet) or the user's rippled JSON-RPC.
  */
 function XrpServerCard() {
   const { settings, network } = useApp();
@@ -1645,12 +1597,9 @@ function XrpServerCard() {
   );
 }
 
-// ---------------------------------------------------------------- Monero
-
 /**
  * Monero: a public monerod by default (Cake Wallet's on mainnet, Stack Wallet's on stagenet) or the
- * user's own node. Kyro checks `nettype` and block 0 before saving. Rust downloads the blocks and
- * scans them on this machine: the node never receives a key, not even the view key.
+ * user's own node.
  */
 function MoneroServerCard() {
   const { settings, network } = useApp();
@@ -1766,12 +1715,9 @@ function MoneroServerCard() {
   );
 }
 
-// ---------------------------------------------------------------- Cardano
-
 /**
  * Cardano: Koios by default (preprod.koios.rest / api.koios.rest, free keyless tier) or the user's
- * Koios-compatible REST API (`…/api/v1`). Kyro checks the genesis network magic before saving
- * (preprod 1, mainnet 764824073; preview refused). UTxOs, parameters, history and submission.
+ * Koios-compatible REST API (`…/api/v1`).
  */
 function CardanoServerCard() {
   const { settings, network } = useApp();

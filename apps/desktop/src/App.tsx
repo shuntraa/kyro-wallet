@@ -27,12 +27,10 @@ import { serverDown, serverMissing } from './components/ServerDown';
 import { screenEnter } from './components/motion';
 import { t, useT } from './i18n';
 
-// Staking screens: loaded on first visit (keeps the main chunk smaller).
 const Staking = lazy(() => import('./screens/Staking').then((m) => ({ default: m.Staking })));
 
 export function App() {
   return (
-    // reducedMotion="user": every motion/react animation honours prefers-reduced-motion.
     <MotionConfig reducedMotion="user">
       <AppProvider>
         <Root />
@@ -40,7 +38,6 @@ export function App() {
         <TorDialogs />
         {/* Trezor One blind PIN matrix, whatever screen started the device call. */}
         <HwPromptLayer />
-        {/* « Kyro updated to X », once after an automatic update. */}
         <UpdateNotice />
       </AppProvider>
     </MotionConfig>
@@ -145,7 +142,6 @@ function Unlocked() {
           out.push({ id: `cg:${w.coingeckoId}`, label: w.name, hint: t('shell.searchSoon'), onSelect: () => navigate({ name: 'asset', id: `cg:${w.coingeckoId}` }) });
         }
       }
-      // A pasted address → offer to send to it.
       if (/^(0x[0-9a-fA-F]{40}|(bc|tb)1[0-9a-z]{20,}|[1-9A-HJ-NP-Za-km-z]{32,44})$/.test(q)) {
         out.unshift({ id: `send:${q}`, label: t('shell.searchSendTo', { address: q.slice(0, 10) }), hint: t('shell.searchAddressHint'), onSelect: () => navigate({ name: 'send', to: q }) });
       }
@@ -187,7 +183,6 @@ function Unlocked() {
     }
   }, [route, lang]);
 
-  // A chain without any server (Dogecoin by default) is a missing setting, not a failure.
   const failed = Object.entries(pf.chainErrors).filter(([, m]) => !serverMissing(m)).map(([k]) => k);
 
   return (
@@ -195,8 +190,10 @@ function Unlocked() {
       <TitleBar crumbs={crumbsOf(route, assetName)} search={search} account={<AccountSwitcher />} />
       <div className="flex min-h-0 flex-1">
         <NavRail />
-        {/* Enter-only transition: the next screen mounts at once (an exit animation
-            would block navigation while the window is hidden and rAF is paused). */}
+        {/*
+         * Enter-only transition: the next screen mounts at once (an exit animation would block
+         * navigation while the window is hidden and rAF is paused).
+         */}
         <motion.main
           key={JSON.stringify(route)}
           {...screenEnter}

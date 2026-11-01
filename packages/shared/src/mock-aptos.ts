@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Aptos (`aptos_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
-// commands_aptos.rs and aptos_backend.rs. The address is a demo value (`0x` + SHA3-256 of a
-// label, NOT the SLIP-10 key of the demo phrase); the transaction is a demo encoding (hex JSON,
-// NOT the BCS wallet-core writes) and the signature is fake. The rules are Rust's:
-// - only `0x1::aptos_account::transfer` of APT, full `0x` + 64 hex addresses (no short form, no ANS);
-// - max fee = max gas (simulated gas × 1.5, at least 200) × gas price, reserved up front:
-//   amount + max fee > balance → refused;
-// - sign re-reads everything live, refuses an expired transaction or a stale sequence number;
-// - a submitted transfer is committed a few seconds later (`aptos_tx_status`).
 
 import { sha3_256 } from '@noble/hashes/sha3';
 import { bytesToHex } from '@noble/hashes/utils';
@@ -90,13 +81,10 @@ export interface DemoAptosDeps {
 
 export interface DemoAptosState {
   me: string;
-  /** A funded account. */
   friend: string;
   accounts: Map<string, DemoAptosAccount>;
   history: AptosHistoryEntry[];
-  /** hash → submit time and result. */
   submitted: Map<string, { at: number; success: boolean }>;
-  /** Tests: the next submitted transfer fails on chain. */
   failNext: boolean;
 }
 
@@ -140,7 +128,6 @@ export function createDemoAptos(d: DemoAptosDeps) {
     const g = (gas * 3n + 1n) / 2n;
     return g < MIN_MAX_GAS ? MIN_MAX_GAS : g;
   };
-  /** aptos_backend::check_transfer, same messages. */
   const checkTransfer = (ours: AptosAccountInfo, amount: bigint, maxFee: bigint) => {
     const balance = BigInt(ours.balance);
     if (amount + maxFee > balance) {

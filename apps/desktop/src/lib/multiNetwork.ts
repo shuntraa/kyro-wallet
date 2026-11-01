@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // One asset on several networks (USDT on Ethereum, TRON, Solana, BNB Chain…; ETH on Ethereum,
-// Arbitrum, Base…). Envoyer shows such an asset once in « Depuis », then asks for the network,
-// with the balance on each one. Pure helpers: no network, no React.
+// Arbitrum, Base…).
 
 import type { AssetDef } from '@kyro/chains';
 
@@ -47,8 +45,8 @@ export function groupTotal(siblings: readonly AssetDef[], balanceOf: (a: AssetDe
 }
 
 /**
- * The recipient does not fit the chosen network: the other networks of the same asset whose
- * address format accepts it (« ceci est une adresse TRON »). Empty when it fits, or fits nothing.
+ * The recipient does not fit the chosen network: the other networks of the same asset whose address
+ * format accepts it (« ceci est une adresse TRON »).
  */
 export function otherNetworksForAddress(address: string, asset: AssetDef, siblings: readonly AssetDef[], isValidOn: (a: AssetDef, address: string) => boolean): AssetDef[] {
   const to = address.trim();

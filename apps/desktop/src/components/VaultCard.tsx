@@ -14,7 +14,6 @@ export function VaultCard() {
   const { t, tp } = useT();
   const [left, setLeft] = useState<number | null>(status?.lockInSecs ?? null);
 
-  // Local 1 s countdown between the 5 s vault_status polls.
   useEffect(() => {
     setLeft(status?.lockInSecs ?? null);
     if (status?.lockInSecs === null || status?.lockInSecs === undefined) return;

@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Swap screen helpers: which chains a swap can start from / arrive on, our own address there
-// (never typed: the destination of a cross-chain swap is always one of your accounts), the
-// « Tu reçois » list grouped by chain, the label of a cross-chain transfer's status, and the
-// check of the ordinary transfer Kyro builds for a NEAR Intents deposit (before the password).
+// Swap screen helpers: which chains a swap can start from / arrive on, our own address there (never
+// typed: the destination of a cross-chain swap is always one of your accounts), the « Tu reçois »
+// list grouped by chain, the label of a cross-chain transfer's status, and the check of the
+// ordinary transfer Kyro builds for a NEAR Intents deposit (before the password).
 
 import { checkSolSummary, NATIVE_EVM_TOKEN, NATIVE_SOL_MINT, tronCoverage, type AdapterSet, type AnyAdapter, type AnyUnsigned, type AssetDef, type Chain } from '@kyro/chains';
 import { sameTonAccount, type EvmTxSummary, type Network, type SolTxSummary } from '@kyro/shared';
 import { evmSwapSupported, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, type DepositPlan, type SwapChain } from '@kyro/swap';
 import { t } from '../i18n';
 
-/** Swap id of the chains only NEAR Intents 1Click reaches (docs/SWAP_FEES.md). */
 const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = {
   btc: 'bitcoin',
   ltc: 'litecoin',
@@ -26,7 +25,6 @@ const NEAR_ONLY: Partial<Record<Chain['family'], SwapChain>> = {
   xlm: 'stellar',
 };
 
-/** Does NEAR Intents 1Click serve this chain (`ONE_CLICK_CHAINS`)? */
 const oneClickServes = (c: SwapChain | null) => c !== null && ONE_CLICK_CHAINS[String(c)] !== undefined;
 
 /** The swap id of a chain: EVM chain id, 'solana', 'bitcoin', 'litecoin'…; null when swaps don't serve it. */
@@ -43,23 +41,14 @@ export function swapChainOf(chain: Chain | undefined): SwapChain | null {
  */
 const sameChainSwaps = (chain: Chain | undefined, network: Network) => chain?.family === 'sol' || (chain?.family === 'evm' && (network === 'testnet' || evmSwapSupported(chain.chainId)));
 
-/**
- * Can a swap START on this chain? EVM / Solana: when a provider serves it (testnet: same chain
- * only). Chains reached through NEAR Intents (Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash,
- * Zcash, TRON, XRP, Cardano, Sui, TON, Aptos): mainnet only. Stellar: arrival only (1Click wants a
- * memo on a Stellar deposit, Kyro never sends one).
- */
+/** Can a swap START on this chain? */
 export function canSwapFrom(chain: Chain | undefined, network: Network = 'mainnet'): boolean {
   if (sameChainSwaps(chain, network)) return true;
   const c = swapChainOf(chain);
   return network === 'mainnet' && c !== null && !ONE_CLICK_ARRIVAL_ONLY.has(c) && (chain?.family !== 'evm' || oneClickServes(c));
 }
 
-/**
- * Can a swap from `from` ARRIVE on `to`? Same chain: EVM / Solana when served, TRON (TRX ⇄ USDT)
- * on mainnet. Another chain: mainnet only (LI.FI and NEAR Intents have no testnet routes), and
- * only between chains the NEAR Intents routes reach.
- */
+/** Can a swap from `from` ARRIVE on `to`? */
 export function canSwapTo(network: Network, from: Chain | undefined, to: Chain | undefined): boolean {
   if (!from || !to || !canSwapFrom(from, network)) return false;
   if (from.key === to.key) return sameChainSwaps(from, network) || (network === 'mainnet' && from.family === 'tron');
@@ -84,13 +73,7 @@ export interface OwnAccounts {
   stellar?: { address: string };
 }
 
-/**
- * Our own receiving address on `chain` (the selected account). Bitcoin: the native SegWit
- * (`bc1q…`) receive address, the only form a cross-chain bridge call can carry unambiguously.
- * Litecoin: `ltc1…`; Dogecoin: `D…`; TRON: `T…`; XRP: the classic `r…` address (no tag: your own
- * account); Cardano: the base address `addr1…`; Bitcoin Cash: `bitcoincash:q…`; Dash: `X…`;
- * Zcash: the transparent `t1…`; Sui / Aptos: `0x…`; TON: `UQ…`; Stellar: `G…` (no memo).
- */
+/** Our own receiving address on `chain` (the selected account). */
 export function ownAddressOn(accounts: OwnAccounts, chain: Chain | undefined): string | null {
   if (!chain) return null;
   switch (chain.family) {
@@ -125,7 +108,6 @@ export function ownAddressOn(accounts: OwnAccounts, chain: Chain | undefined): s
     case 'xlm':
       return accounts.stellar?.address || null;
     default:
-      // Chains NEAR Intents / LI.FI routes do not cover in Kyro yet.
       return null;
   }
 }
@@ -149,8 +131,8 @@ export interface BuyGroup {
 }
 
 /**
- * « Tu reçois » list: the sell chain first, then every other chain a swap can arrive on, each
- * with its assets (read-only assets and the sold asset left out).
+ * « Tu reçois » list: the sell chain first, then every other chain a swap can arrive on, each with
+ * its assets (read-only assets and the sold asset left out).
  */
 export function buyGroups(network: Network, chains: Chain[], assets: AssetDef[], sell: AssetDef | undefined): BuyGroup[] {
   const from = chains.find((c) => c.key === sell?.chainKey);
@@ -188,11 +170,10 @@ export interface DepositDecoded {
  * The ordinary transfer Kyro built for a NEAR Intents deposit must do EXACTLY what 1Click
  * confirmed: send `plan.amountIn` of the sold token to `plan.depositAddress`, and nothing else
  * (Bitcoin / Litecoin / Dogecoin: one payment, the rest back to our change, no OP_RETURN, no
- * unknown script; TRON: a plain TRX / TRC-20 transfer of that token, no memo; XRP: no tag, no
- * memo, no path / SendMax; Cardano: ADA only, no token, no message; Bitcoin Cash / Dash: like
- * Bitcoin; Zcash: one transparent payment, the rest back to our change; Sui / Aptos: one plain
- * transfer of the native coin; TON: no comment, not « whole balance »). Returns the problem in
- * French, or null when it matches.
+ * unknown script; TRON: a plain TRX / TRC-20 transfer of that token, no memo; XRP: no tag, no memo,
+ * no path / SendMax; Cardano: ADA only, no token, no message; Bitcoin Cash / Dash: like Bitcoin;
+ * Zcash: one transparent payment, the rest back to our change; Sui / Aptos: one plain transfer of
+ * the native coin; TON: no comment, not « whole balance »).
  */
 export function depositTxProblem(u: AnyUnsigned, sell: AssetDef, plan: Pick<DepositPlan, 'depositAddress' | 'amountIn'>, decoded: DepositDecoded = {}): string | null {
   const to = plan.depositAddress;
@@ -305,7 +286,6 @@ export function depositAdapterFor(asset: AssetDef, adapters: DepositAdapters): A
     case 'evm':
       return adapters.evm.get(asset.chainKey);
     default:
-      // Stellar (arrival only) and the chains no swap leaves from.
       return undefined;
   }
 }
@@ -323,7 +303,7 @@ const stop = (why: string) => new Error(t('swap.depStop', { why }));
  * NEAR Intents: the ordinary transfer of `plan.amountIn` to the deposit address 1Click confirmed,
  * built by the chain's own adapter, decoded by Rust (EVM / Solana: `evm_decode_tx` /
  * `sol_decode_tx`; the other chains are decoded again by Rust in the native dialog) and checked
- * against the plan (`depositTxProblem`). Throws in French; nothing is signed here.
+ * against the plan (`depositTxProblem`).
  */
 export async function buildDepositTx(sell: AssetDef, adapters: DepositAdapters, plan: DepositPlan): Promise<PreparedDeposit> {
   const ad = depositAdapterFor(sell, adapters);
@@ -336,7 +316,6 @@ export async function buildDepositTx(sell: AssetDef, adapters: DepositAdapters, 
   const fee = (await ad.estimateFees()).options.normal.params;
   const unsigned = (await (ad as { buildTx: (p: unknown) => Promise<AnyUnsigned> }).buildTx({ asset: sell, to: plan.depositAddress, amount: plan.amountIn, fee })) as AnyUnsigned;
   const decoded: DepositDecoded = {};
-  // Rust's decoding (the concrete EVM / Solana adapters of the set; `ad` is the same object).
   const evmAd = unsigned.family === 'evm' ? adapters.evm.get(sell.chainKey) : undefined;
   if (unsigned.family === 'evm' && evmAd) decoded.evm = await evmAd.decode(unsigned);
   if (unsigned.family === 'sol' && adapters.sol) {

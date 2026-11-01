@@ -1,22 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Cardano (`ada_*`, docs/IPC.md §2.7), mirroring apps/desktop/src-tauri/src/
-// commands_cardano.rs and cardano_backend.rs. The demo account is a FIXED published address
-// (Trezor `all ×12` / CIP-19 fixture), not derived from the demo seed (Icarus BIP32-Ed25519 is
-// not reimplemented here); the transaction is a demo encoding (hex JSON, NOT CBOR) and the
-// witness is fake. The rules are Rust's, with its French messages:
-// - addresses: Byron, script (types 1, 3, 5, 7), pointer (4, 5), stake (14, 15) and other-network
-//   addresses refused; base (0, 2) and enterprise (6) accepted;
-// - min-UTxO = (160 + output size) × coinsPerUtxoByte (Babbage/Conway), iterated like wallet-core;
-// - fee = min_fee_a × signed size + min_fee_b, iterated; one recipient output + one change output
-//   carrying every leftover token, each at or above its min-UTxO; ttl = slot + 3 600;
-// - coin selection: UTxOs with the requested token first, then ADA-only by decreasing value,
-//   token-carrying ones last; CIP-20 memo (64-byte lines, 1 024 bytes max.);
-// - signing re-reads the UTxOs live (inputs unspent, inputs = outputs + fee), refuses an expired
-//   ttl; warnings (memo, unverified token, fee > 5 ADA) → reinforced confirmation.
-//
-// Scenario words in a custom Koios URL: « down » → SERVER_UNREACHABLE, « wrong » →
-// SERVER_WRONG_NETWORK.
 
 import { bech32 } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha2';
@@ -123,8 +106,6 @@ export function demoCardanoAddress(net: Network): string {
   return cardanoAddressOf(bytes, hrpOf(net));
 }
 
-// ---------------------------------------------------------------- CBOR sizes (output, body)
-
 const uintSize = (n: bigint | number) => {
   const v = BigInt(n);
   return v < 24n ? 1 : v < 256n ? 2 : v < 65_536n ? 3 : v < 4_294_967_296n ? 5 : 9;
@@ -203,8 +184,6 @@ function signedSize(inputs: number, outputs: Array<{ addressLen: number; coin: b
   return 1 + body + witnesses + 1 + (lines ? auxSize(lines) : 1);
 }
 
-// ---------------------------------------------------------------- state
-
 interface DemoUtxo {
   txHash: string;
   index: number;
@@ -236,7 +215,6 @@ export interface DemoCardanoState {
   me: string;
   /** Another base address (a friend). */
   friend: string;
-  /** Demo token policies (preprod, unverified). */
   policies: { kyro: string; hosky: string };
   utxos: Map<string, DemoUtxo[]>;
   history: CardanoHistoryEntry[];
@@ -327,7 +305,6 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     return { address: address.trim(), balance: balance.toString(), tokens: list, utxoCount: utxos.length, lockedWithTokens: (locked < balance ? locked : balance).toString() };
   };
 
-  /** cardano_backend::plan + finish: selection, fee iteration, min-UTxO checks. */
   const plan = (toBytes: Uint8Array, to: string, lovelace: bigint | null, token: { key: string; q: bigint } | null, lines: string[] | null) => {
     const send: Assets = token ? new Map([[token.key, token.q]]) : new Map();
     const minTo = minUtxo(toBytes.length, send);
@@ -408,7 +385,6 @@ export function createDemoCardano(d: DemoCardanoDeps) {
   const encode = (t: DemoAdaTx) => bytesToHex(new TextEncoder().encode(JSON.stringify(t)));
   const bodyId = (t: DemoAdaTx) => bytesToHex(sha256(new TextEncoder().encode(JSON.stringify({ ...t, txId: '', witness: undefined }))));
 
-  /** wallet-core decode: outputs as views (min-UTxO, change, verified), warnings. */
   const decode = (txHex: unknown): { t: DemoAdaTx; summary: CardanoTxSummary } => {
     let t: DemoAdaTx;
     try {
@@ -431,7 +407,6 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     return { t, summary };
   };
 
-  /** cardano_backend::check_balance against the live UTxO set. Returns lovelace leaving. */
   const checkBalance = (t: DemoAdaTx): bigint => {
     const ours = state.utxos.get(me) ?? [];
     let inCoin = 0n;
@@ -458,7 +433,6 @@ export function createDemoCardano(d: DemoCardanoDeps) {
 
   const context = (leaving: bigint): CardanoContext => ({ account: accountOf(me), params: { ...ADA_PARAMS }, tip: tip(), leaving: leaving.toString() });
 
-  /** commands_cardano.rs describe_ada: every output, tokens, min-ADA, fee, total, ttl, memo. */
   const describe = (s: CardanoTxSummary, c: CardanoContext): string => {
     let out = l10n(`Envoi Cardano${d.network === 'testnet' ? ' (preprod)' : ''}\n`, `Cardano transfer${d.network === 'testnet' ? ' (preprod)' : ''}\n`);
     s.outputs.forEach((o, i) => {
@@ -592,7 +566,6 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     state,
     handlers,
     probe,
-    /** Staking (mock-stake.ts): our account, and a net cost taken from the plain-ADA UTxO. */
     stakeHooks: {
       account: () => accountOf(me),
       spend(lovelace: bigint) {

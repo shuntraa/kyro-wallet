@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Simple, predictable coin selection: largest-first, change back to our own
-// change address, dust folded into the fee. Pure (no I/O), unit-tested.
+// Simple, predictable coin selection: largest-first, change back to our own change address, dust folded into the fee.
 
 import { l10n } from '@kyro/shared';
 

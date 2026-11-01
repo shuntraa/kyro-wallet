@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Zcash, transparent addresses only (`zec_*`, docs/IPC.md §2.4b), mirroring
-// apps/desktop/src-tauri/src/commands_zcash.rs. Same Esplora shapes as Litecoin / Dogecoin;
-// mainnet = Komodo's ElectrumX by default, testnet = no server (every read fails with
-// SERVER_INVALID, like Rust). Sending: like Rust, the interface only proposes coins; the demo
-// selects them largest first, applies ZIP 317 (5 000 zatoshis per logical action, 2 at least),
-// sends the change to our own address and refuses shielded / unified recipients. Fake signatures.
 
 import { HDKey } from '@scure/bip32';
 import { sha256 } from '@noble/hashes/sha2';

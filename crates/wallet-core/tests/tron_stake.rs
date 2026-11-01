@@ -1,11 +1,4 @@
 //! TRON Stake 2.0 and voting.
-//!
-//! Vectors: Trezor firmware fixtures `common/tests/fixtures/tron/sign_tx.json` (trezor-firmware
-//! commit f158cb46, mnemonic `all × 12`, owner `m/44'/195'/0'/0/0`): `raw_data_hex` of
-//! FreezeBalanceV2, UnfreezeBalanceV2, WithdrawExpireUnfreeze, WithdrawBalance, VoteWitness and
-//! DelegateResource / UnDelegateResource transactions, with Trezor's signatures. Kyro must decode
-//! and re-encode each one identically, refuse the delegations, and sign the others with a
-//! byte-identical signature (RFC 6979, like Trezor).
 
 use wallet_core::{
     tron_address, tron_decode_raw, tron_decode_stake_raw, tron_recover_signer, tron_stake_sign,
@@ -61,12 +54,9 @@ fn trezor_stake_vectors_decode_reencode_and_sign_identically() {
         let tx = decoded.unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!(hex::encode(tx.encode()), *raw, "{name}: re-encoding");
         assert!(tx.is_staking());
-        // The payment decoder never accepts them.
         assert!(tron_decode_raw(raw, OWNER).is_err(), "{name}");
         let summary = tron_decode_stake_raw(raw, OWNER).unwrap();
         if *idx == 99 {
-            // Trezor's "different owner": signed by m/44'/195'/0'/1/0, not the owner. Kyro only
-            // signs with the owner's key: with any other of its keys it refuses.
             assert!(tron_stake_sign(&s, 1, raw).is_err(), "{name}");
             continue;
         }
@@ -133,7 +123,6 @@ fn trezor_stake_summaries() {
     assert_eq!(votes.len(), 4);
     assert_eq!(votes[0].count, "11606");
     assert_eq!(total, (11606 + 12496 + 2587 + 8594).to_string());
-    // 10 votes: within TRON's limit of 30 (Trezor's own limit is 9).
     let TronStakeAction::Vote { votes, .. } =
         tron_decode_stake_raw(vector("Vote_10_candidates_too_many"), OWNER)
             .unwrap()
@@ -142,7 +131,6 @@ fn trezor_stake_summaries() {
         panic!("vote")
     };
     assert_eq!(votes.len(), 10);
-    // Another owner than us.
     assert!(tron_decode_stake_raw(
         vector("Vote_1_candidate"),
         "TFz2CJn9CJb8C4i1Gke3jmZX2fRMJxniH2"
@@ -172,7 +160,6 @@ fn stake_refusals() {
             .to_string();
         assert!(e.contains(needle), "{needle}: {e}");
     };
-    // Zero amounts.
     refused(
         &base(TronContract::FreezeV2 {
             owner,
@@ -189,14 +176,12 @@ fn stake_refusals() {
         }),
         "positive",
     );
-    // Memo, fee_limit.
     let mut r = base(TronContract::WithdrawBalance { owner });
     r.memo = b"hi".to_vec();
     refused(&r, "memo");
     let mut r = base(TronContract::WithdrawBalance { owner });
     r.fee_limit = 1;
     refused(&r, "fee_limit");
-    // Votes: none, 31, duplicate SR, zero.
     refused(
         &base(TronContract::VoteWitness {
             owner,
@@ -231,7 +216,6 @@ fn stake_refusals() {
         }),
         "positive",
     );
-    // A TRX transfer is not a staking transaction.
     refused(
         &base(TronContract::Transfer {
             owner,
@@ -240,14 +224,12 @@ fn stake_refusals() {
         }),
         "not a staking transaction",
     );
-    // TRON_POWER resource (2) and the deprecated `support` field: refused by the strict decoder.
     let tp = vector("Stake_for_Energy").replace("17180170", "17180270");
     let e = TronRaw::decode(&hex::decode(&tp).unwrap())
         .unwrap_err()
         .to_string();
     assert!(e.contains("TRON_POWER"), "{e}");
     let v1 = vector("Vote_1_candidate");
-    // Append `support = true` (field 3, 1801) to the VoteWitnessContract value, lengths adjusted.
     let with_support = v1
         .replace("5a6b080412670a30", "5a6d080412690a30")
         .replace("12330a1541f2cd", "12350a1541f2cd")

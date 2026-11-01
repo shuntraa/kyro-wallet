@@ -1,8 +1,7 @@
 //! IPC commands for TON (`ton_*`): address, account (state, balance, seqno), history, transfer
-//! building **by Kyro** (seqno and states read from TON Center, cells written by wallet-core,
-//! fee estimated by emulation), signing behind the password and the native dialog (comment
-//! highlighted, both address forms shown, states re-read live), and broadcast with hash check.
-//! Contract: docs/IPC.md §2.11.
+//! building **by Kyro** (seqno and states read from TON Center, cells written by wallet-core, fee
+//! estimated by emulation), signing behind the password and the native dialog (comment highlighted,
+//! both address forms shown, states re-read live), and broadcast with hash check.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -32,7 +31,6 @@ pub(crate) fn ctx(state: &AppState) -> TonCtx<'_> {
     }
 }
 
-/// Our public key and wallet address for TON account `account` (`m/44'/607'/account'`).
 fn ours(state: &AppState, account: u32) -> AppResult<([u8; 32], TonAddress)> {
     let net = state.network;
     state.with_seed(|seed| {
@@ -55,7 +53,6 @@ fn ton(lang: Lang, nano: &str) -> String {
     format!("{} GRAM", format_units_in(lang, nano, 9))
 }
 
-/// A user-friendly address the user typed, for this network.
 fn parse_user_address(s: &str, net: Network) -> AppResult<wallet_core::TonFriendly> {
     let f = wallet_core::ton_parse_address(s)?;
     if f.testnet && net == Network::Mainnet {
@@ -81,7 +78,6 @@ pub struct TonContext {
     pub fee: String,
 }
 
-/// Body of the native dialog. The comment gets its own framed block, whatever it is.
 pub(crate) fn describe_ton(
     lang: Lang,
     s: &TonTxSummary,
@@ -192,8 +188,6 @@ pub(crate) fn describe_ton(
     out
 }
 
-/// Dialog body of a jetton transfer: token, verified master, decimals, recipient (both forms),
-/// comment framed, TON attached for the jetton wallets' fees.
 fn describe_jetton(
     lang: Lang,
     s: &TonTxSummary,
@@ -253,7 +247,6 @@ fn describe_jetton(
     out
 }
 
-/// `HH:MM:SS` (UTC) of a UNIX time.
 fn utc_hms(t: u32) -> String {
     let d = t % 86_400;
     format!("{:02}:{:02}:{:02}", d / 3600, d % 3600 / 60, d % 60)
@@ -276,8 +269,6 @@ pub(crate) fn describe_ton_extra(lang: Lang, s: &TonTxSummary) -> String {
     out += lang.sign_anyway();
     out
 }
-
-// ---------------------------------------------------------------- reads
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -339,8 +330,6 @@ pub async fn ton_jetton_txs(
     ton_backend::jetton_txs(&ctx(&state), &a.address).await
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TonBuilt {
@@ -362,7 +351,6 @@ fn amount_of(amount: &str, send_all: bool) -> AppResult<u64> {
         .ok_or_else(|| AppError::InvalidInput("invalid amount in nanotons".into()))
 }
 
-/// What the user asked: recipient, nanotons (ignored with `send_all`), optional comment.
 pub(crate) struct TransferRequest<'a> {
     pub to: &'a str,
     pub amount: &'a str,
@@ -372,7 +360,6 @@ pub(crate) struct TransferRequest<'a> {
     pub hw: bool,
 }
 
-/// Builds an unsigned transfer from live data.
 pub(crate) async fn build(
     c: &TonCtx<'_>,
     public_key: &[u8; 32],
@@ -413,8 +400,6 @@ pub(crate) async fn build(
             wallet_core::TON_MODE_PAY_FEES
         },
         destination: dest.address,
-        // The address's own flag, unless the account is not deployed: a bounceable message to
-        // an inactive account would only come back (minus fees).
         bounce: dest.bounceable && destination.status == TonStatus::Active,
         amount,
         comment,
@@ -422,7 +407,6 @@ pub(crate) async fn build(
         jetton: None,
         inline_empty_body,
     };
-    // Cell layout and limits are checked by wallet-core before any request.
     let boc = wallet_core::ton_unsigned_transfer(&t)?;
     let fee = ton_backend::estimate_fee(c, me, &t.estimate_parts()?).await?;
     ton_backend::check_transfer(&TransferCheck {
@@ -442,7 +426,6 @@ pub(crate) async fn build(
     })
 }
 
-/// Our live balance of the jetton whose wallet is `jetton_wallet`; refuses `amount` above it.
 async fn check_jetton_balance(
     c: &TonCtx<'_>,
     me: &TonAddress,
@@ -466,8 +449,6 @@ async fn check_jetton_balance(
     Ok(())
 }
 
-/// Builds an unsigned jetton transfer: `amount` jetton units of the known jetton `master` to the
-/// wallet `to`, through our jetton wallet (computed by Kyro).
 pub(crate) async fn build_jetton(
     c: &TonCtx<'_>,
     public_key: &[u8; 32],
@@ -602,7 +583,6 @@ pub struct TonSignedOut {
     pub context: TonContext,
 }
 
-/// Refuses a message that is expired (or about to) or valid suspiciously long.
 fn check_validity(valid_until: u32, now: u32) -> AppResult<()> {
     if valid_until <= now.saturating_add(15) {
         return Err(AppError::InvalidInput(
@@ -617,7 +597,6 @@ fn check_validity(valid_until: u32, now: u32) -> AppResult<()> {
     Ok(())
 }
 
-/// Decoding + live re-checks, i.e. everything `ton_sign_tx` does before the dialog.
 pub(crate) async fn prepare_sign(
     c: &TonCtx<'_>,
     public_key: &[u8; 32],
@@ -717,8 +696,6 @@ pub async fn ton_sign_tx(
     })
 }
 
-/// Checks the signed BOC (strict decoding, our wallet and network, valid signature, not
-/// expired) then sends it. Returns the normalized message hash (hex).
 pub(crate) async fn broadcast_checked(
     c: &TonCtx<'_>,
     public_key: &[u8; 32],
@@ -880,7 +857,6 @@ mod tests {
             Network::Mainnet
         )
         .is_ok());
-        // Testnet-only flag: refused on mainnet, accepted on testnet.
         assert!(parse_user_address(
             "kQCKhieGGl3ZbJ2zzggHsSLaXtRzk0znVopbSxw2HLsorvzv",
             Network::Mainnet
@@ -911,15 +887,7 @@ mod tests {
     }
 }
 
-/// Real-network test on TON testnet over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture ton_live`.
-/// - keys: a NEW random test mnemonic, generated once and kept in the gitignored
-///   `.env.ton-testnet` at the repository root (testnet only);
-/// - always: account state, history, a transfer built by the real path (`build`,
-///   `prepare_sign`, dialog text, signature), and TON Center's emulation of the *signed*
-///   message (`estimateFee` with the signature checked) — accepted with Kyro's signature,
-///   refused with a corrupted one;
-/// - `KYRO_TON_SEND=yes` (and a funded address): broadcast, then wait for the transaction.
+/// Real-network test on TON testnet over Tor.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -981,7 +949,6 @@ mod live {
             let acc = ton_backend::account(&c, &me).await.unwrap();
             eprintln!("account {acc:?} in {:.1?}", t.elapsed());
             eprintln!("history {:?}", ton_backend::txs(&c, &me).await.unwrap());
-            // A well-known mainnet wallet read over the mainnet host (Trust Wallet's vector).
             let main = TonCtx {
                 net_client: &net,
                 network: Network::Mainnet,
@@ -1004,7 +971,6 @@ mod live {
 
             let balance: u64 = acc.balance.parse().unwrap_or(0);
             if balance == 0 {
-                // Unfunded: build is refused before anything is signed.
                 let req = TransferRequest {
                     to: &other,
                     amount: "1000000",
@@ -1034,7 +1000,6 @@ mod live {
             );
             let signed = wallet_core::ton_sign(&seed, 0, &built.boc, true).unwrap();
             assert_eq!(signed.summary, summary);
-            // The real v4R2 contract, emulated by TON Center's node, checks Kyro's signature.
             let (t, sig) =
                 TonTransfer::decode(&signed.boc, &pk, wallet_core::TON_WALLET_ID_TESTNET).unwrap();
             let good =

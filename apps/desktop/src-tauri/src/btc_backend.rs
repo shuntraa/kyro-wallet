@@ -26,7 +26,6 @@ use crate::error::{AppError, AppResult};
 use crate::net::{Family, Method, NetClient, ServerRequest};
 use crate::servers::{validate_http_url, BtcServer, CoreAuth};
 
-/// Most recent transactions returned per address (Esplora returns 25 per page).
 const MAX_TXS: usize = 50;
 
 pub fn esplora_default_base(net: Network) -> &'static str {
@@ -49,8 +48,6 @@ pub struct Ctx<'a> {
 fn bad(msg: impl Into<String>) -> AppError {
     AppError::ServerUnreachable(msg.into())
 }
-
-// ---------------------------------------------------------------- Esplora
 
 async fn esplora_get(ctx: &Ctx<'_>, base: &str, path: &str) -> AppResult<Vec<u8>> {
     let url = url::Url::parse(&format!("{}{path}", base.trim_end_matches('/')))
@@ -93,7 +90,6 @@ fn check_address(a: &str, net: Network) -> AppResult<()> {
         .map_err(AppError::from)
 }
 
-/// Esplora page size of `/address/{a}/txs/chain/{last_seen_txid}`.
 const ESPLORA_CHAIN_PAGE: usize = 25;
 
 /// Unconfirmed first, then confirmed newest first, at most `max`, following Esplora's
@@ -126,7 +122,6 @@ where
                 out.push(t);
             }
         }
-        // Stop at the end of history, at `max`, or if a page brought nothing new.
         if out.len() >= max || !full || out.len() == before {
             break;
         }
@@ -140,7 +135,6 @@ where
     Ok(out)
 }
 
-/// mempool.space `/v1/fees/recommended` from a plain Esplora `/fee-estimates` map.
 pub(crate) fn fees_from_estimates(est: &Value) -> Value {
     let at = |n: &str| {
         est.get(n)
@@ -154,8 +148,6 @@ pub(crate) fn fees_from_estimates(est: &Value) -> Value {
     json!({ "fastestFee": fastest, "halfHourFee": half, "hourFee": hour,
             "economyFee": economy, "minimumFee": 1 })
 }
-
-// ---------------------------------------------------------------- Electrum
 
 fn electrum_target(server: &BtcServer) -> AppResult<Option<electrum::Target>> {
     Ok(match server {
@@ -244,7 +236,6 @@ pub fn esplora_txs(
     out
 }
 
-/// Fetches and decodes `txids` plus every prevout transaction, on one Electrum session.
 async fn electrum_raw_with_prevouts(
     conn: &mut electrum::Conn<electrum::BoxStream>,
     txids: &[String],
@@ -276,7 +267,6 @@ async fn electrum_raw_with_prevouts(
             }
             raws.insert(txid.clone(), tx);
         }
-        // Second round: prevouts of the requested transactions only.
         want = txids
             .iter()
             .filter_map(|t| raws.get(t))
@@ -285,8 +275,6 @@ async fn electrum_raw_with_prevouts(
     }
     Ok(raws)
 }
-
-// ---------------------------------------------------------------- Core
 
 fn core_client<'a>(ctx: &'a Ctx<'_>) -> AppResult<Option<(CoreClient<'a>, String)>> {
     let BtcServer::Core { url, auth } = &ctx.server else {
@@ -315,7 +303,6 @@ async fn core_call(c: &CoreClient<'_>, w: &str, method: &str, params: Value) -> 
         .map_err(AppError::from)
 }
 
-/// Raw transactions known to the wallet (+ prevouts that are wallet transactions).
 async fn core_raw(
     c: &CoreClient<'_>,
     w: &str,
@@ -337,7 +324,6 @@ async fn core_raw(
                 .ok_or_else(|| bad("gettransaction: missing hex"))?;
             Some(wallet_core::btc_decode_raw_tx(hex, net)?)
         }
-        // -5: not a wallet transaction (e.g. a prevout from someone else).
         Err(CallError::Rpc(r)) if r.code == -5 => None,
         Err(e) => return Err(e.into()),
     };
@@ -345,11 +331,7 @@ async fn core_raw(
     Ok(tx)
 }
 
-// ---------------------------------------------------------------- public API
-
 /// `GET /address/{a}` shape: `{ address, chain_stats, mempool_stats }`.
-/// For Electrum and Core, `funded_txo_sum`/`spent_txo_sum` carry the *net* balance
-/// (funded = balance, spent = 0, or spent = |negative unconfirmed|); `tx_count` is exact.
 pub async fn address_info(ctx: &Ctx<'_>, address: &str) -> AppResult<Value> {
     check_address(address, ctx.network)?;
     if let Some(base) = esplora_base(ctx)? {
@@ -487,8 +469,6 @@ pub async fn address_utxos(ctx: &Ctx<'_>, address: &str) -> AppResult<Value> {
 pub async fn address_txs(ctx: &Ctx<'_>, address: &str) -> AppResult<Value> {
     check_address(address, ctx.network)?;
     if let Some(base) = esplora_base(ctx)? {
-        // `/txs` returns up to 50 mempool + 25 confirmed; page through `/txs/chain/{last}` so
-        // every backend returns the same "50 most recent, unconfirmed first".
         let first = esplora_json(ctx, &base, &format!("/address/{address}/txs")).await?;
         let first = first.as_array().cloned().unwrap_or_default();
         let txs = paginate_esplora(first, MAX_TXS, |last| {
@@ -517,7 +497,6 @@ pub async fn address_txs(ctx: &Ctx<'_>, address: &str) -> AppResult<Value> {
                 h.get("height").and_then(Value::as_i64).unwrap_or(0),
             ));
         }
-        // Mempool first, then newest confirmed first; keep the most recent MAX_TXS.
         order.sort_by_key(|(_, h)| if *h > 0 { -*h } else { i64::MIN });
         order.truncate(MAX_TXS);
         let txids: Vec<String> = order.iter().map(|(t, _)| t.clone()).collect();
@@ -544,7 +523,6 @@ pub async fn address_txs(ctx: &Ctx<'_>, address: &str) -> AppResult<Value> {
     if let Some((c, w)) = core_client(ctx)? {
         core_wallet(&c, &w).await?;
         let list = core_call(&c, &w, "listtransactions", json!(["*", 1000, 0, true])).await?;
-        // Unique wallet txids with their block height and time.
         let mut meta: Vec<(String, i64, Option<u64>)> = Vec::new();
         let mut seen = HashSet::new();
         for e in list.as_array().into_iter().flatten().rev() {
@@ -600,7 +578,6 @@ pub async fn fee_rates(ctx: &Ctx<'_>) -> AppResult<Value> {
         if ctx.server.is_default() {
             return esplora_json(ctx, &base, "/v1/fees/recommended").await;
         }
-        // Plain Esplora (electrs/Blockstream) has /fee-estimates instead.
         return match esplora_json(ctx, &base, "/v1/fees/recommended").await {
             Ok(v) if v.get("fastestFee").is_some() => Ok(v),
             _ => Ok(fees_from_estimates(
@@ -652,7 +629,6 @@ pub async fn fee_rates(ctx: &Ctx<'_>) -> AppResult<Value> {
     Err(AppError::Internal("unknown Bitcoin backend".into()))
 }
 
-/// Monotonic fee ladder; unknown estimates (-1 / missing) fall back to the next slower rate.
 fn fees_json(
     fastest: Option<u64>,
     half: Option<u64>,
@@ -714,11 +690,9 @@ pub fn verified_tx_hex(raw: &str, txid: &str, source: &str) -> AppResult<String>
     Ok(raw)
 }
 
-/// Raw transaction (hex) by txid, from the configured backend — e.g. the full previous
-/// transaction a hardware wallet needs as `non_witness_utxo`. Esplora `GET /tx/{txid}/hex`,
-/// Electrum `blockchain.transaction.get`, Core `gettransaction` (watch wallet) then
-/// `getrawtransaction` (needs `-txindex=1` for confirmed transactions outside the wallet).
-/// Whatever the backend, the answer must hash to `txid` ([`verified_tx_hex`]).
+/// Raw transaction (hex) by txid, from the configured backend — e.g. the full previous transaction
+/// a hardware wallet needs as `non_witness_utxo`. Whatever the backend, the answer must hash to
+/// `txid` ([`verified_tx_hex`]).
 pub async fn tx_hex(ctx: &Ctx<'_>, txid: &str) -> AppResult<String> {
     let t = check_txid(txid)?;
     if let Some(base) = esplora_base(ctx)? {
@@ -746,7 +720,6 @@ pub async fn tx_hex(ctx: &Ctx<'_>, txid: &str) -> AppResult<String> {
                 .and_then(Value::as_str)
                 .ok_or_else(|| bad("gettransaction: missing hex"))?
                 .to_owned(),
-            // -5: not a wallet transaction: ask the node itself.
             Err(CallError::Rpc(r)) if r.code == -5 => {
                 match c
                     .call(None, "getrawtransaction", json!([t, false]), false)
@@ -821,8 +794,6 @@ pub async fn broadcast(ctx: &Ctx<'_>, hex_tx: &str) -> AppResult<String> {
     }
     Ok(txid)
 }
-
-// ---------------------------------------------------------------- probe & Core setup
 
 /// What a connection test found.
 #[derive(Debug, Clone, Default, Serialize)]
@@ -920,8 +891,6 @@ pub async fn probe(ctx: &Ctx<'_>) -> AppResult<Detected> {
             ..Default::default()
         });
     }
-    // CBF has no server to probe: peers are checked syntactically by `validate_btc`, and the
-    // chain itself is verified header by header during sync (proof of work from genesis).
     if matches!(ctx.server, BtcServer::Cbf { .. }) {
         return Ok(Detected {
             network: Some(net_label(ctx.network).into()),
@@ -954,7 +923,6 @@ struct Job {
     error: Option<String>,
 }
 
-/// Import jobs keyed per node and wallet: `network|url|wallet`.
 static JOBS: Mutex<Option<HashMap<String, Job>>> = Mutex::new(None);
 
 pub fn job_key(net: Network, url: &str, wallet: &str) -> String {
@@ -1065,7 +1033,6 @@ pub async fn core_status(
 ) -> AppResult<CoreStatus> {
     let c = CoreClient::new(net_client, url, auth, tor)?;
     let name = core_rpc::wallet_name(fingerprint);
-    // Only this node's job counts: another URL/network/wallet reports nothing.
     let job = get_job(&job_key(network, url, &name));
     let loaded = c.ensure_loaded(&name).await?;
     let mut st = CoreStatus {
@@ -1143,7 +1110,6 @@ mod tests {
         );
         assert_eq!(txs[0]["vin"][0]["prevout"]["value"], 10_000);
         assert_eq!(txs[0]["vout"][1]["value"], 2_500);
-        // Unknown prevout: null, and no fee.
         assert_eq!(txs[1]["vin"][0]["prevout"], Value::Null);
         assert!(txs[1].get("fee").is_none());
         assert_eq!(txs[1]["status"]["block_time"], 1_793_333_429);
@@ -1188,7 +1154,6 @@ mod tests {
     #[test]
     fn esplora_history_is_paginated_to_fifty() {
         tauri::async_runtime::block_on(async {
-            // 3 mempool + 25 confirmed on the first page, then 25-sized chain pages.
             let mut first = page("m", 3, false);
             first.extend(page("c0-", 25, true));
             let calls = std::cell::RefCell::new(Vec::new());
@@ -1211,7 +1176,6 @@ mod tests {
             );
             assert_eq!(out[49]["txid"], "c1-21");
 
-            // Short history: no extra request.
             let calls = std::cell::RefCell::new(0);
             let out = paginate_esplora(page("c", 7, true), 50, |_| {
                 *calls.borrow_mut() += 1;
@@ -1221,13 +1185,11 @@ mod tests {
             .unwrap();
             assert_eq!((out.len(), *calls.borrow()), (7, 0));
 
-            // History ending exactly on a page boundary: stops on the empty page.
             let out = paginate_esplora(page("c", 25, true), 50, |_| async { Ok(Vec::new()) })
                 .await
                 .unwrap();
             assert_eq!(out.len(), 25);
 
-            // A server that repeats itself does not produce duplicates.
             let out = paginate_esplora(page("c", 25, true), 50, |_| async {
                 Ok(page("c", 25, true))
             })
@@ -1272,7 +1234,6 @@ mod tests {
         assert_eq!(core_not_configured().state, "not-configured");
     }
 
-    /// Minimal fake Bitcoin Core JSON-RPC server on 127.0.0.1 (one canned answer per method).
     async fn fake_core(answers: HashMap<&'static str, (u16, String)>) -> String {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1351,7 +1312,6 @@ mod tests {
                 }
             };
 
-            // Wrong chain.
             let url = fake_core(HashMap::from([(
                 "getblockchaininfo",
                 ok(json!({ "chain": "main", "blocks": 1 })),
@@ -1361,7 +1321,6 @@ mod tests {
                 prep(url).await,
                 Err(AppError::ServerWrongNetwork(_))
             ));
-            // Auth refused.
             let url = fake_core(HashMap::from([("getblockchaininfo", (401, String::new()))])).await;
             assert!(matches!(prep(url).await, Err(AppError::ServerInvalid(_))));
             // Existing wallet with private keys: refused.
@@ -1383,12 +1342,10 @@ mod tests {
             ]))
             .await;
             assert!(matches!(prep(url).await, Err(AppError::ServerInvalid(_))));
-            // Unreachable node.
             assert!(matches!(
                 prep("http://127.0.0.1:9".into()).await,
                 Err(AppError::ServerUnreachable(_))
             ));
-            // Success: the import job is registered for this node only.
             let url = fake_core(HashMap::from([
                 (
                     "getblockchaininfo",
@@ -1428,8 +1385,6 @@ mod tests {
         assert_eq!(check_txid(&txid.to_uppercase()).unwrap(), txid);
     }
 
-    /// Bitcoin Core: wallet transaction first, then the node; a wrong transaction or a missing
-    /// txindex give typed errors.
     #[test]
     fn core_tx_hex_paths() {
         let raw = "01000000019d53382244ce54a4129e041d0b29cedd293d1cfcd2cff7930d6e800332441876010000006a473044022020cdcc4c5072aca5e52f18d78d811308f8d79fd92e0198b998f06ac8dcacd6d2022053f6ca9c4e1f80dc8714c77914fad862e78064adbd4710dceb507b43fef3b6b7012103648adbede7ed318fc35e2b7d310046111f626e975d87e103a11e8cd84e5a1b76ffffffff02a23694fa010000001976a914e6c7989b8836301af965531c39865a73d745e46788acb0cc81d86c2b00001976a91498b24d9d9928caab02f40a57b9e7fdcc9dd8e34e88ac00000000";
@@ -1466,14 +1421,12 @@ mod tests {
                     tx_hex(&ctx, txid).await
                 }
             };
-            // In the watch wallet.
             let r = run(HashMap::from([
                 loaded.clone(),
                 ("gettransaction", ok(json!({ "hex": raw }))),
             ]))
             .await;
             assert_eq!(r.unwrap(), raw);
-            // Not in the wallet: the node's getrawtransaction.
             let r = run(HashMap::from([
                 loaded.clone(),
                 ("gettransaction", not_wallet.clone()),
@@ -1481,7 +1434,6 @@ mod tests {
             ]))
             .await;
             assert_eq!(r.unwrap(), raw);
-            // Neither: clear txindex error.
             let r = run(HashMap::from([
                 loaded.clone(),
                 ("gettransaction", not_wallet.clone()),
@@ -1492,7 +1444,6 @@ mod tests {
                 matches!(r, Err(AppError::InvalidInput(ref m)) if m.contains("-txindex=1")),
                 "{r:?}"
             );
-            // A node that answers another transaction: refused.
             let other = raw.replacen("a23694fa01", "a23694fa02", 1);
             let r = run(HashMap::from([
                 loaded,
@@ -1508,7 +1459,6 @@ mod tests {
 
     #[test]
     fn header_timestamp() {
-        // Genesis block header: timestamp 1231006505.
         let h = "0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a29ab5f49ffff001d1dac2b7c";
         assert_eq!(header_time(h), Some(1_231_006_505));
         assert_eq!(header_time("00"), None);
@@ -1516,9 +1466,7 @@ mod tests {
 }
 
 /// Real-network differential test: a public **testnet4 Electrum** server over **Tor** versus
-/// mempool's onion Esplora, on the same addresses. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture electrum_live`.
-/// `KYRO_ELECTRUM=host:port` overrides the server (default: blackie.c3-soft.com:57010).
+/// mempool's onion Esplora, on the same addresses.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -1592,7 +1540,6 @@ mod live {
                 det.genesis_hash.as_deref(),
                 Some(wallet_core::btc_genesis_hash(Network::Testnet).as_str())
             );
-            // A wrong pin is refused.
             let wrong = Ctx {
                 server: BtcServer::Electrum {
                     host: host.into(),
@@ -1609,7 +1556,6 @@ mod live {
                 probe(&wrong).await,
                 Err(AppError::ServerUnreachable(_))
             ));
-            // Mainnet expectation on a testnet4 server: wrong network.
             let mainnet = Ctx {
                 network: Network::Mainnet,
                 ..e_clone(&e)
@@ -1733,13 +1679,9 @@ mod live {
     }
 }
 
-/// Bitcoin testnet4 broadcast from the public "abandon … about" wallet (BIP84 and BIP86),
-/// in three phases like Litecoin's: (1) Rust reads the wallet over Tor (the `btc_*` code,
-/// default backend = mempool's onion) and dumps it to `$KYRO_BTC_DUMP`; (2) the TS
-/// `BitcoinAdapter` builds the PSBT from that dump; (3) Rust runs exactly what `btc_sign_psbt`
-/// runs (summary, dialog text, reinforced dialog if required, signature, identical summary),
-/// finalizes, and calls the `btc_broadcast` code over Tor (txid check), then waits for
-/// `btc_address_txs`. Broadcasts only when `KYRO_BTC_BROADCAST=yes`.
+/// Bitcoin testnet4 broadcast from the public "abandon … about" wallet (BIP84 and BIP86), in three
+/// phases like Litecoin's: (1) Rust reads the wallet over Tor (the `btc_*` code, default backend =
+/// mempool's onion) and dumps it to `$KYRO_BTC_DUMP`.
 #[cfg(test)]
 mod live_send {
     use super::*;
@@ -1750,7 +1692,6 @@ mod live_send {
     const ALL: &str = "all all all all all all all all all all all all";
     const SCAN: u32 = 20;
 
-    /// `KYRO_BTC_WALLET=trezor` uses Trezor's public `all × 12` test wallet instead.
     fn phrase() -> &'static str {
         match std::env::var("KYRO_BTC_WALLET").as_deref() {
             Ok("trezor") => ALL,

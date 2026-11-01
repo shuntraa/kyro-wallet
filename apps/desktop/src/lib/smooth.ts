@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Smooth chart curves: Catmull-Rom spline converted to cubic Bézier segments.
-// The curve passes through every point, with no angles. Control points are
-// clamped to the data's vertical range so flat stretches never overshoot.
 
 export interface Pt {
   x: number;
@@ -47,7 +44,6 @@ export function areaPath(line: string, points: Pt[], bottom: number): string {
 export interface FitOptions {
   width: number;
   height: number;
-  /** Space kept above the max / below the min, in px. */
   padTop?: number;
   padBottom?: number;
 }

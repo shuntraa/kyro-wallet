@@ -1,20 +1,4 @@
 //! Kyro wallet core.
-//!
-//! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
-//! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
-//! Bitcoin derivation and PSBT signing, Litecoin (BIP84), Dogecoin, Zcash transparent (v5, ZIP 244), Bitcoin Cash (CashAddr,
-//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Aptos (APT transfers, BCS), Cosmos Hub (MsgSend, SIGN_MODE_DIRECT)
-//!, TON (wallet v4R2 transfers), Algorand (pay), Polkadot Asset Hub (sr25519, `transfer_keep_alive`), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer), Cardano (CIP-1852 payments) and Monero (CLSAG, via monero-oxide) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
-//! human-readable transaction decoding.
-//!
-//! Design rules:
-//! - no network, no filesystem, no async, no Tauri;
-//! - no home-made cryptography: every primitive comes from an audited, maintained crate;
-//! - secrets live in zeroize-on-drop containers, private keys are derived per call and
-//!   dropped immediately; `Debug` never prints secrets;
-//! - user input never panics: every failure is a [`Error`].
-//!
-//! The public API mirrors `docs/IPC.md` §1.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]

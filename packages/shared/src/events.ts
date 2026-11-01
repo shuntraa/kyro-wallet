@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Events emitted by the shell (Rust → UI).
-//   - `vault-locked` (no payload): the session was zeroized (auto-lock, sleep…).
-//   - `tor-status` (`TorStatus`): every state or bootstrap-progress change of the embedded Tor.
-//   - `cbf-status` (`CbfStatus`): compact-filter sync progress (at most 2 per second).
-//   - `hw-prompt` (`HwPrompt`): what to tell the user during a hardware-wallet call.
 
 import { isTauri, type CbfStatus, type HwPrompt, type TorStatus } from './ipc';
 

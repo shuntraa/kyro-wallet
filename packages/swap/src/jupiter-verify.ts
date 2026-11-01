@@ -1,25 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// What Kyro checks in Jupiter's `swapTransaction` before asking for the password. Jupiter builds
-// the whole Solana transaction; Rust decodes it (`sol_decode_tx`, tables included) but sees the
-// Jupiter route and the Token wrap/unwrap instructions as « unknown ». So, on top of the Rust
-// summary (resolved accounts), the TypeScript side reads each instruction's DATA from the wire
-// transaction and accepts only this shape:
-//
-// - fee payer = the only signer = the taker (us);
-// - programs: ComputeBudget, the ATA program (creating OUR token accounts of the pair's mints),
-//   System (only to wrap SOL into OUR wSOL account), Token / Token-2022 SyncNative on that
-//   account and CloseAccount of it back to us, and exactly ONE Jupiter v6 `route` or
-//   `shared_accounts_route` instruction;
-// - no token transfer, approval, account creation or SOL transfer to anyone else;
-// - the route: our transfer authority, source = our account of the sold mint, destination = our
-//   account of the bought mint, in_amount = the amount sold, slippage = the one chosen, platform
-//   fee = the Kyro rate paid into the expected Kyro fee account (none when the fee is off);
-// - a capped priority fee.
-//
-// Layout of the two route instructions: Jupiter v6 IDL (accounts and trailing
-// `in_amount u64, quoted_out_amount u64, slippage_bps u16, platform_fee_bps u8`), checked against
-// two live lite-api.jup.ag transactions (01/11/2026, USDC → SOL and SOL → USDC).
+// Checks Jupiter's `swapTransaction` before the password. Rust sees the route as unknown, so we read
+// instruction data and accept only: us as sole signer, ComputeBudget/ATA/wSOL wrap-unwrap on our
+// accounts, exactly one Jupiter v6 `route`/`shared_accounts_route` (our accounts, amount, slippage,
+// Kyro fee account), no other transfer or approval, capped priority fee. Layout: Jupiter v6 IDL.
 
 import { getBase64Encoder, getCompiledTransactionMessageDecoder, getTransactionDecoder } from '@solana/kit';
 import type { SolTxSummary } from '@kyro/shared';
@@ -43,7 +27,6 @@ const SHARED_ACCOUNTS_ROUTE = 'c1209b3341d69c81';
 export const JUPITER_MAX_PRIORITY_LAMPORTS = 10_000_000n;
 
 export interface JupiterCheckInput {
-  /** Base64 wire transaction from /swap. */
   wire: string;
   /** Rust's decoding of the same message (`sol_decode_tx`). */
   summary: SolTxSummary;
@@ -52,7 +35,6 @@ export interface JupiterCheckInput {
   buyMint: string;
   sellAmount: bigint;
   slippageBps: number;
-  /** `outAmount` of the quote. */
   quotedOut: bigint;
   /** Kyro fee: bps and the token account it must be paid into, or null when off. */
   fee: { bps: number; account: string } | null;

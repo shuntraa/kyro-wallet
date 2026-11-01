@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// TON pieces of the Send screen (docs/IPC.md §2.11):
-// - the comment field, ALWAYS visible right under the recipient (exchanges ask for one, often
-//   called « memo » or « tag »), with Rust's limit (123 bytes);
-// - what Rust reads about the recipient: active, never used (the transfer goes without bounce),
-//   frozen (refused); the form typed (EQ… bounceable / UQ… non-bounceable);
-// - the Rust-decoded transfer before the password, and the follow-up (ton_tx_status).
+// TON pieces of the Send screen (docs/IPC.md §2.11): - the comment field, ALWAYS visible right
+// under the recipient (exchanges ask for one, often called « memo » or « tag »), with Rust's limit
+// (123 bytes); - what Rust reads about the recipient: active, never used (the transfer goes without
+// bounce), frozen (refused); the form typed (EQ… bounceable / UQ… non-bounceable); - the
+// Rust-decoded transfer before the password, and the follow-up (ton_tx_status).
 
 import { useEffect, useState } from 'react';
 import { parseTonAddress, type Currency, type TonAccountInfo } from '@kyro/shared';
@@ -27,9 +26,7 @@ export function TonCommentField({
 }: {
   value: string;
   onChange: (v: string) => void;
-  /** Recipient as typed (valid user-friendly address), for the bounce hint. */
   to: string;
-  /** Recipient account as Rust reads it; undefined while unknown. */
   dest: TonAccountInfo | undefined;
   destLoading: boolean;
 }) {
@@ -145,8 +142,7 @@ type Status = { state: 'pending' } | { state: 'done' } | { state: 'failed' } | {
 
 /**
  * After `ton_broadcast`: follows `ton_tx_status` (normalized message hash) until our wallet's
- * transaction is found. Not found after the message's 10-minute validity + margin → it can no
- * longer be processed.
+ * transaction is found.
  */
 export function TonTxStatusLine({ adapter, hash, recipient, onDone }: { adapter: TonAdapter; hash: string; recipient: string; onDone?: () => void }) {
   useT();
@@ -172,7 +168,6 @@ export function TonTxStatusLine({ adapter, hash, recipient, onDone }: { adapter:
         if (!alive) return;
         setStatus({ state: 'error', message: e instanceof Error ? e.message : String(e) });
       }
-      // TON Center's public tier: about one request per second for the whole app.
       timer = window.setTimeout(() => void tick(), 4_000);
     };
     void tick();

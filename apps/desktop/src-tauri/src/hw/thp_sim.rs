@@ -1,16 +1,4 @@
 //! Simulated Trezor Safe 7, for tests only.
-//!
-//! - Transport, channel allocation, Noise handshake (with the masked static key), ACKs,
-//!   retransmissions and encryption: **Trezor's own device-side implementation**, the
-//!   `trezor-thp` crate from the trezor-firmware repository (the code the Safe 7 firmware runs
-//!   since 2.12.4, "Switch to optimized THP implementation"). Kyro's host side ([`super::thp`])
-//!   is written independently (snow + its own framing), so these tests are a real interop check.
-//! - Application layer (pairing, credentials, sessions, a few wallet messages): written here
-//!   from the THP specification and the firmware's `apps/thp/pairing.py`; keys come from the
-//!   public "abandon … about" test phrase, so Kyro's own checks (xpub, signatures) apply.
-//!
-//! Fault injection: lost and corrupted packets in both directions, locked device, refusal,
-//! wrong pairing code, a device that cheats on the code commitment, unplug, silence.
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -37,7 +25,6 @@ pub const ABANDON: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
 thread_local! {
-    /// When set, the simulated device's "random" keys are a deterministic sequence.
     static DETERMINISTIC: RefCell<Option<u32>> = const { RefCell::new(None) };
 }
 
@@ -107,8 +94,6 @@ impl Backend for SimBackend {
 
 type Creds = Arc<Mutex<Vec<([u8; 32], Vec<u8>)>>>;
 
-/// The device's credential check: Paired when the handshake payload carries a credential this
-/// device issued to that host key.
 #[derive(Clone)]
 struct SimVerifier(Creds);
 
@@ -337,8 +322,6 @@ impl Sim {
         }
     }
 
-    /// Called when the host finds nothing to read: the device retransmits unacknowledged
-    /// messages after a while, like the firmware's event loop.
     fn tick(&mut self) {
         self.idle += 1;
         if self.idle % 15 != 0 {
@@ -456,8 +439,6 @@ impl Sim {
                 let code = thp::code_entry_value(&hh, &secret, ch.challenge());
                 self.shown_code = Some(String::from_utf8(code.to_vec()).unwrap());
                 sim_random(&mut self.cpace_priv);
-                // The device's key on the same code-derived generator (Kyro's CPace code is
-                // checked against trezorlib's own implementation in thp.rs tests).
                 let pubkey =
                     thp::cpace_host(&code, &hh, &self.cpace_priv, &Sim::trezor_public_key())
                         .unwrap()
@@ -689,7 +670,6 @@ mod tests {
     use crate::hw::{Chain, ChainState, Ctl, HardwareWallet, Prompt, PromptFn};
     use wallet_core::Zeroizing;
 
-    /// What the simulated user does when the device shows the pairing code.
     #[derive(Clone, Copy)]
     enum User {
         TypesCode,
@@ -771,7 +751,6 @@ mod tests {
         assert_eq!(list[0].key, hex::encode(Sim::trezor_public_key()));
         assert_eq!(list[0].model, "T3W1");
 
-        // Every existing operation goes through the encrypted channel.
         let st = dev.status(&ctl(), Network::Testnet).unwrap();
         assert_eq!(st.model, "Trezor Safe 7");
         assert_eq!(st.protocol, Some("thp"));
@@ -799,7 +778,6 @@ mod tests {
             *lock(&prompts),
             vec![Prompt::ConfirmOnDevice, Prompt::ConfirmOnDevice]
         );
-        // Wallet messages used session 1, created after GetFeatures on session 0.
         let log = lock(&sim).log.clone();
         let features = log
             .iter()
@@ -817,8 +795,6 @@ mod tests {
             .any(|&(s, t)| s == 1 && t == MessageType::MessageType_SolanaSignTx.value() as u16));
         drop(dev);
 
-        // Reconnect (new channel): the credential skips the code; the device asks to confirm
-        // the connection; no pairing permission needed.
         lock(&sim).faults.confirm_connection = true;
         lock(&sim).log.clear();
         let r = connect(&sim, &env, false, User::Away, t());
@@ -834,11 +810,6 @@ mod tests {
         assert_eq!(acc.fingerprint, "73c5da0a");
     }
 
-    /// Fixed keys on both sides: Kyro's host key and ephemeral key, the device's static key and
-    /// (deterministic) ephemeral key, a known credential. The messages Kyro computes (snow) are
-    /// compared with those computed by Trezor Suite's own handshake code (`@trezor/protocol`,
-    /// `handleHandshakeInit` / `getTrezorState`, run under Node on the same inputs), and the
-    /// device side is Trezor's `trezor-thp`, which accepted them.
     #[test]
     fn fixed_key_handshake_transcript_matches_trezor_suite() {
         set_deterministic(true);
@@ -889,11 +860,6 @@ mod tests {
         assert_eq!(tr[4], SIM_COMP_RESP, "encrypted trezor_state = PAIRED");
     }
 
-    // Device side (trezor-thp, deterministic ephemeral key): HandshakeInitiationResponse and the
-    // encrypted trezor_state. Given these, Trezor Suite's `handleHandshakeInit` (run under Node
-    // 24 on the same host keys and credential) prints exactly SUITE_COMP_REQ and
-    // SUITE_HANDSHAKE_HASH, finds the credential (masked key match), and its `getTrezorState`
-    // decrypts SIM_COMP_RESP to 1 (PAIRED).
     const SIM_INIT_RESP: &str = "290009952c2d31b1f9737cf07ff8b0076310409899ab630365dd59083c8cca7587fb6326414428b403a440145e3497ad139c3f381673293e2d662635e906ee21f6625a2e1662bc6983ba96f71ebcd7e94af34eb2cf19121f5b4e914a3a8f21a6";
     const SIM_COMP_RESP: &str = "4f1b2d38771ea80003c210a965a5719c6d";
     const SUITE_COMP_REQ: &str = "162fd66675fe10bcb5b40e64e6ba3ffcbc57843fbb095f12eb4dd2c13960db7db445a372957d416e167797fec79c6a23cbd08958b849e1464291ae70746bc6faba7518dfab9b4d571eb8e09ea6c6fcdf0a465431af21b6759f85b2c3eed17178007d8a2746db07c6a259";
@@ -925,8 +891,8 @@ mod tests {
         let r = connect(&sim, &env, true, User::TypesCode, t());
         assert_eq!(r.result.err(), Some(HwError::Rejected));
 
-        // The device reveals a secret that does not match its commitment: whoever answered
-        // is not the device that showed the code. Nothing is stored.
+        // The device reveals a secret that does not match its commitment: whoever answered is not
+        // the device that showed the code.
         let mut s = lock(&sim);
         s.faults.reject_pairing = false;
         s.faults.cheat_secret = true;
@@ -951,7 +917,6 @@ mod tests {
             env.list().unwrap().is_empty(),
             "rejected credential removed"
         );
-        // hw_open pairs again.
         connect(&sim, &env, true, User::TypesCode, t())
             .result
             .unwrap();
@@ -971,18 +936,15 @@ mod tests {
     #[test]
     fn lost_and_corrupted_packets_are_recovered() {
         for faults in [
-            // init response lost, then a corrupted retransmission
             Faults {
                 drop_out: vec![2],
                 corrupt_out: vec![3],
                 ..Faults::default()
             },
-            // host packets lost (handshake init, an application message)
             Faults {
                 drop_in: vec![2, 9],
                 ..Faults::default()
             },
-            // ACKs lost in both directions
             Faults {
                 drop_out: vec![1, 6],
                 drop_in: vec![4],
@@ -1010,7 +972,6 @@ mod tests {
         let r = connect(&sim, &env, true, User::Away, Duration::from_millis(1500));
         assert_eq!(r.result.err(), Some(HwError::Timeout));
         assert!(started.elapsed() < Duration::from_secs(6));
-        // Kyro asked the device to leave its code screen.
         assert_eq!(lock(&sim).log.last().map(|&(_, t)| t), Some(mt::CANCEL));
     }
 
@@ -1040,7 +1001,6 @@ mod tests {
         );
     }
 
-    /// Kyro's v1 probe on an older model still gives the v1 path (no THP at all).
     #[test]
     fn v1_device_is_not_treated_as_thp() {
         struct V1Only(VecDeque<Vec<u8>>);
@@ -1081,7 +1041,6 @@ mod tests {
         let env = ThpEnv::default();
         let mut dev = open_link(V1Only(VecDeque::new()), limit, &ctl(), &env)
             .unwrap_or_else(|e| panic!("{e:?}"));
-        // This fake answers Features to everything: enough for `status`.
         let st = dev.status(&ctl(), Network::Testnet).unwrap();
         assert_eq!(st.model, "Trezor Safe 5");
         assert_eq!(st.protocol, None);

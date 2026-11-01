@@ -99,17 +99,7 @@ jobs:
           # unsigned update packages.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # OS code signing (not set up yet). When the certificates exist, add them as repository
-          # secrets and uncomment:
-          # # macOS (Apple Developer Program): Developer ID Application certificate + notarization.
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}                   # .p12, base64
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}         # "Developer ID Application: ..."
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}                         # app-specific password
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # # Windows: an OV/EV code-signing certificate, or Azure Trusted Signing, configured through
-          # # bundle.windows.signCommand / certificateThumbprint in tauri.conf.json.
+          # OS code signing (not set up yet).
         with:
           projectPath: apps/desktop
           tauriScript: pnpm tauri
@@ -239,8 +229,7 @@ jobs:
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           name: Kyro ${{ github.ref_name }}
-          # Draft: the maintainer checks the files, then publishes. Only a published, non-pre
-          # release is "latest", i.e. what the installed wallets update to.
+          # Draft: the maintainer checks the files, then publishes.
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           fail_on_unmatched_files: true

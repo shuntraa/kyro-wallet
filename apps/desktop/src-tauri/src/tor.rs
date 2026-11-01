@@ -1,13 +1,7 @@
 //! Embedded Tor (arti) and HTTPS over Tor.
 //!
-//! - Bootstraps in the background; progress is published as `tor-status` events.
-//! - `send` performs one HTTPS request per Tor stream: `TorClient::connect((host, 443))` →
-//!   tokio-rustls (webpki roots, SNI = host) → hyper 1 HTTP/1.1. Policy (allowlist, headers,
-//!   redirects, size cap) lives in `net.rs` and is identical to the clear transport.
-//! - **Fail closed**: if Tor is not ready within [`READY_WAIT`], the request fails with
-//!   `TOR_UNAVAILABLE`; it is never retried in clear.
-//! - Each activity family (bitcoin / litecoin / dogecoin / zcash / tron / xrp / stellar / ton / cardano / near / sui / hedera / kaspa / algorand / cosmos / aptos / evm / solana / market / swap) uses its own
-//!   `isolated_client()`, so their streams never share a circuit.
+//! **Fail closed**: if Tor is not ready within [`READY_WAIT`], the request fails with
+//! `TOR_UNAVAILABLE`; it is never retried in clear.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -27,13 +21,10 @@ use tor_rtcompat::PreferredRuntime;
 use crate::error::{AppError, AppResult};
 use crate::net::{self, BodyCap, Family, Method, Prepared};
 
-/// How long a request waits for an in-progress bootstrap before failing closed.
 const READY_WAIT: Duration = Duration::from_secs(60);
-/// A bootstrap that hangs (blocked network, censored guards) ends in `error` instead of
-/// staying `bootstrapping` forever, so the UI can ask the user.
 const BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(120);
-/// Opening a Tor stream may first require building a 3-hop circuit (arti retries failed
-/// extends itself); this bounds that phase. The HTTP exchange then gets `net::TIMEOUT`.
+/// Opening a Tor stream may first require building a 3-hop circuit (arti retries failed extends
+/// itself); this bounds that phase.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -74,12 +65,10 @@ pub struct TorManager {
     base: Mutex<Option<Client>>,
     isolated: Mutex<HashMap<Family, Client>>,
     emitter: Mutex<Option<Emitter>>,
-    /// Incremented on every start/stop so a stale bootstrap task cannot publish over a newer one.
     generation: Mutex<u64>,
     tls: tokio_rustls::TlsConnector,
 }
 
-/// rustls with the ring provider and Mozilla's root store (webpki-roots), TLS 1.2+.
 fn tls_connector() -> AppResult<tokio_rustls::TlsConnector> {
     let roots = rustls::RootCertStore {
         roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
@@ -178,7 +167,6 @@ impl TorManager {
                 }
                 self.publish(generation, TorStatus::new(TorState::Ready, 100, None));
             }
-            // Store the bare detail: `client_for` wraps it in `TorUnavailable` again.
             Err(e) => {
                 let detail = match e {
                     AppError::TorUnavailable(m) => m,
@@ -190,8 +178,6 @@ impl TorManager {
     }
 
     async fn try_bootstrap(self: &Arc<Self>, generation: u64) -> AppResult<Client> {
-        // On Windows, fs-mistrust performs no permission checks (they are Unix-only), so the
-        // per-user app data directory is accepted as is; no mistrust override is configured.
         let config = TorClientConfigBuilder::from_directories(&self.state_dir, &self.cache_dir)
             .build()
             .map_err(|e| AppError::Internal(format!("Tor configuration: {e}")))?;
@@ -305,8 +291,6 @@ impl TorManager {
                     (p.max_body(), p.timeout()),
                 )
                 .await?;
-            // Same rule as the clear transport (`net::redirect_hop`): allowlisted hosts only,
-            // API-key headers dropped when the host changes.
             match net::redirect_hop(
                 status,
                 location.as_deref(),
@@ -439,8 +423,6 @@ where
     Ok((status, location, cap.into_inner()))
 }
 
-/// Opens a stream; if the *exit* fails (timeout, DNS failure, refused), retries on a fresh
-/// circuit (new isolation token derived from the family client, so no cross-family linking).
 async fn connect_with_retry(
     client: &Client,
     host: &str,
@@ -536,9 +518,7 @@ mod tests {
         );
     }
 
-    /// Real network test: bootstraps Tor, then fetches through it. Run with
-    /// `cargo test -p kyro-desktop -- --ignored --nocapture tor_real`
-    /// (`KYRO_TOR_TRACE=info,tor_circmgr=debug` shows arti logs, `KYRO_TOR_URL` overrides).
+    /// Real network test: bootstraps Tor, then fetches through it.
     #[test]
     #[ignore]
     fn tor_real_fetch() {

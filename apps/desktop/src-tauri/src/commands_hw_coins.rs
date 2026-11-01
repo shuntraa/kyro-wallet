@@ -1,11 +1,5 @@
 //! Hardware-wallet commands of Litecoin, Dogecoin, Bitcoin Cash, Dash, XRP, TRON and Stellar
-//! (docs/IPC.md §2.3). Same rules as `commands_hw.rs`: Rust decodes and re-checks what will be
-//! signed, the device's keys are compared with the stored account first (`HW_WRONG_DEVICE`),
-//! Kyro's native dialog shows its own summary, the user confirms on the device, and the
-//! signature is verified in `wallet-core` before anything is returned.
-//!
-//! Build and broadcast take the hardware account (`accountId`) instead of a vault account: a
-//! hardware-only user has no vault.
+//! (docs/IPC.md §2.3).
 
 use std::str::FromStr;
 
@@ -58,7 +52,6 @@ fn title(lang: Lang, chain: Chain) -> &'static str {
     lang.pick(fr, en)
 }
 
-/// Account + device info, checked: same brand, and the account holds keys of `chain`.
 fn account_for(
     state: &AppState,
     id: Option<&str>,
@@ -97,7 +90,6 @@ fn key_of(acc: &WatchOnlyAccount, chain: Chain) -> Option<&WatchKey> {
     }
 }
 
-/// Step 1 of every signature: is the device the one of this account?
 async fn check_same_device(
     app: &AppHandle,
     state: &AppState,
@@ -118,8 +110,6 @@ async fn check_same_device(
     Ok(())
 }
 
-// ---------------------------------------------------------------- Litecoin / Dogecoin / BCH / Dash
-
 #[derive(serde::Serialize)]
 pub struct HwUtxoSigned {
     psbt: String,
@@ -131,9 +121,8 @@ fn coin_of(chain: Chain) -> AppResult<UtxoCoin> {
         .ok_or_else(|| AppError::InvalidInput("chain expected: ltc, doge, bch or dash".into()))
 }
 
-/// Signs a Litecoin / Dogecoin / Bitcoin Cash / Dash PSBT on the device. Every input must be
-/// of this account and carry its previous transaction (`non_witness_utxo`, also for Litecoin).
-/// Returns the PSBT with verified partial signatures (Bitcoin Cash: inputs finalized).
+/// Signs a Litecoin / Dogecoin / Bitcoin Cash / Dash PSBT on the device. Every input must be of
+/// this account and carry its previous transaction (`non_witness_utxo`, also for Litecoin).
 #[tauri::command]
 pub async fn hw_sign_utxo_psbt(
     app: AppHandle,
@@ -190,8 +179,6 @@ pub async fn hw_sign_utxo_psbt(
         summary,
     })
 }
-
-// ---------------------------------------------------------------- XRP
 
 fn xrp_key(acc: &WatchOnlyAccount) -> AppResult<(String, [u8; 33])> {
     let k = key_of(acc, Chain::Xrp).ok_or_else(|| AppError::InvalidInput("no XRP key".into()))?;
@@ -287,8 +274,6 @@ pub async fn hw_xrp_broadcast(
     let (me, _) = xrp_key(&acc)?;
     crate::commands_xrp::broadcast_checked(&crate::commands_xrp::ctx(&state), &me, &blob).await
 }
-
-// ---------------------------------------------------------------- TRON
 
 fn tron_address(acc: &WatchOnlyAccount) -> AppResult<String> {
     key_of(acc, Chain::Tron)
@@ -396,8 +381,6 @@ pub async fn hw_tron_broadcast(
     )
     .await
 }
-
-// ---------------------------------------------------------------- Stellar
 
 fn stellar_key(acc: &WatchOnlyAccount) -> AppResult<(String, [u8; 32])> {
     let k = key_of(acc, Chain::Stellar)

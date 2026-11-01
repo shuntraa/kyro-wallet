@@ -1,14 +1,4 @@
 //! Watch-only hardware-wallet accounts: public keys only, never a secret.
-//!
-//! A hardware-wallet user may have no recovery phrase in Kyro at all, so these records live
-//! outside the encrypted [`crate::VaultFile`] (whose format is unchanged). They hold what is
-//! needed to show balances and receive addresses without the device, and to check every
-//! signature the device returns: account xpubs + master fingerprint (Bitcoin), the
-//! `m/44'/60'/0'/0` node (EVM), the address (Solana, ed25519 has no public derivation).
-//!
-//! A tampered record (attacker with write access to the app data folder) could only change
-//! public keys; Kyro re-reads them from the device before signing and before showing a
-//! receive address on the device, and refuses any mismatch (see SECURITY.md).
 
 use core::str::FromStr;
 
@@ -81,8 +71,7 @@ pub struct WatchOnlyAccount {
     /// Solana address.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sol: Option<WatchSol>,
-    /// Litecoin / Dogecoin / Bitcoin Cash / Dash account xpubs (at most one per coin, same
-    /// master fingerprint as the Bitcoin accounts).
+    /// LTC / DOGE / BCH / DASH account xpubs (≤ 1 per coin, same fingerprint as Bitcoin).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub utxo: Vec<UtxoAccount>,
     /// XRP key `m/44'/144'/account'/0/0` (secp256k1).
@@ -94,12 +83,10 @@ pub struct WatchOnlyAccount {
     /// Stellar key `m/44'/148'/account'` (ed25519).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stellar: Option<WatchKey>,
-    /// Cardano account public key `m/1852'/1815'/account'` (`pubkey`: public key ‖ chain
-    /// code, 64 bytes; `address`: base address `…/0/0` + stake key `…/2/0`).
+    /// Cardano `m/1852'/1815'/account'` key (pubkey ‖ chain code) and base address.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cardano: Option<WatchKey>,
-    /// Zcash transparent account `m/44'/133'/account'` (Trezor only; its own master
-    /// fingerprint field, checked like the UTXO accounts).
+    /// Zcash transparent `m/44'/133'/account'` (Trezor only; own checked master fingerprint).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub zec: Option<crate::zcash::ZecAccount>,
     /// Single-key chains (Sui, Aptos, Algorand, NEAR, Cosmos), see [`crate::HwWatchKey`].
@@ -145,9 +132,7 @@ fn plain_text(field: &str, s: &str, max: usize, allow_empty: bool) -> Result<()>
 }
 
 impl WatchOnlyAccount {
-    /// Checks every field: id format, label, account range, that each xpub parses, is for
-    /// `network`, sits at its declared standard path and that all Bitcoin accounts share one
-    /// master fingerprint; EVM node depth and path; Solana key and path.
+    /// Checks every field: id, label, account range, xpub network/path/fingerprint, EVM and Solana.
     pub fn validate(&self) -> Result<()> {
         let hex_ok = self.id.strip_prefix("hw-").is_some_and(|h| {
             h.len() == 16 && h.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
@@ -217,8 +202,6 @@ impl WatchOnlyAccount {
         self.validate_other_chains()
     }
 
-    /// UTXO xpubs (standard path, network, account number, one per coin, one fingerprint) and
-    /// the XRP / TRON / Stellar keys (address = the key's, standard path).
     fn validate_other_chains(&self) -> Result<()> {
         for (i, u) in self.utxo.iter().enumerate() {
             if self.utxo[..i].iter().any(|v| v.coin == u.coin) {

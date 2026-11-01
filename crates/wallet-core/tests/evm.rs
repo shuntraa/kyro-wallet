@@ -1,8 +1,4 @@
 //! EVM derivation, EIP-1559 signing and calldata decoding.
-//!
-//! The signed transaction is re-parsed here with alloy-rlp's decoder (independent of the
-//! encoder in the crate), its signing hash recomputed, and the signer recovered with
-//! libsecp256k1.
 
 mod common;
 
@@ -93,7 +89,6 @@ fn sign_eip1559_and_recover() {
     let raw_bytes = hex::decode(&raw[2..]).unwrap();
     assert_eq!(hash, format!("0x{}", hex::encode(keccak256(&raw_bytes))));
 
-    // Parse 0x02 || rlp([12 items]) with alloy-rlp's decoder.
     assert_eq!(raw_bytes[0], 0x02);
     let mut body = &raw_bytes[1..];
     let outer = Header::decode(&mut body).unwrap();
@@ -125,7 +120,6 @@ fn sign_eip1559_and_recover() {
     let (r, s_) = (items[10].1, items[11].1);
     assert!(r.len() <= 32 && s_.len() <= 32);
 
-    // Recompute the signing hash: keccak256(0x02 || rlp(first 9 items)).
     let unsigned = &list[..ends[8]];
     let mut preimage = vec![0x02];
     Header {
@@ -240,8 +234,6 @@ fn decode_erc20_approve_limited_and_unlimited() {
     ))
     .unwrap();
     assert!(half.unlimited_approval);
-    // Audit finding: the summary flag (2^255) and the warning (2^128) disagreed. One rule now:
-    // ≥ 2^128 is ILLIMITÉ, in both.
     for (amount, unlimited) in [
         ((U256::one() << 255) - U256::one(), true),
         (U256::one() << 128, true),
@@ -296,19 +288,16 @@ fn chain_of_the_other_network_family_is_refused() {
 
 #[test]
 fn decode_contract_call_fallbacks() {
-    // Unknown selector.
     let sum = evm_decode(&req(TOKEN, "5", "0x12345678")).unwrap();
     assert_eq!(sum.kind, EvmTxKind::ContractCall);
     assert_eq!(sum.to, TOKEN);
     assert_eq!(sum.amount, "5");
-    // transfer() with a dirty (non-ABI-canonical) address word is not trusted as a transfer.
     let mut dirty = calldata("a9059cbb", BOB, U256::from(1u8));
     dirty.replace_range(10..12, "ff");
     assert_eq!(
         evm_decode(&req(TOKEN, "0", &dirty)).unwrap().kind,
         EvmTxKind::ContractCall
     );
-    // Wrong length.
     let long = format!("{}00", calldata("a9059cbb", BOB, U256::from(1u8)));
     assert_eq!(
         evm_decode(&req(TOKEN, "0", &long)).unwrap().kind,
@@ -325,10 +314,6 @@ fn request_serde_is_camel_case() {
     assert_eq!(sum["kind"], "NativeTransfer");
     assert!(sum.get("maxFeeWei").is_some());
 }
-
-// ---------------------------------------------------------------------------------------------
-// Reinforced-confirmation triggers
-// ---------------------------------------------------------------------------------------------
 
 const OTHER: &str = "0x9858EfFD232B4033E47d90003D41EC34EcaEda94";
 
@@ -416,7 +401,6 @@ fn evm_contract_call_value_chain_and_fee_triggers() {
         w(&unknown).0,
         vec![EvmWarning::UnknownChain { chain_id: 999_999 }]
     );
-    // 1 000 000 gas × 100 gwei = 0.1 ETH > 0.05 ETH.
     let mut fee = req(OTHER, "1", "0x");
     fee.gas_limit = 1_000_000;
     fee.max_fee_per_gas = "100000000000".into();
@@ -426,10 +410,8 @@ fn evm_contract_call_value_chain_and_fee_triggers() {
             max_fee_wei: "100000000000000000".into()
         }]
     );
-    // The same 0.1 POL on Polygon is normal (threshold 50 POL).
     fee.chain_id = 137;
     assert_eq!(w(&fee), (vec![], false));
-    // Exactly at the threshold: not above it.
     let mut at = req(OTHER, "1", "0x");
     at.gas_limit = 500_000;
     at.max_fee_per_gas = "100000000000".into();

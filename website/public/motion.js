@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Kyro Wallet site: scroll reveals, header state, reading progress, the tilted app screenshot,
-// the floating app cut-outs, the pointer spotlight on cards and the small-screen menu.
-// Loaded in <head> so the `js` class is set before first paint. Without JavaScript everything is
-// visible and the menu still opens (it is a <details> element).
+// Kyro Wallet site: scroll reveals, header state, reading progress, the tilted app screenshot, the
+// floating app cut-outs, the pointer spotlight on cards and the small-screen menu.
 (function () {
   'use strict';
 
@@ -29,21 +27,18 @@
       }
       if (reduced) return;
       if (frame) {
-        // The screenshot starts tilted back and lies flat once it reaches the middle of the screen.
         var r = frame.getBoundingClientRect();
         var p = Math.min(Math.max((vh - r.top) / (vh * 0.75), 0), 1);
         frame.style.setProperty('--tilt', (18 * (1 - p)).toFixed(2) + 'deg');
         frame.style.setProperty('--zoom', (0.94 + 0.06 * p).toFixed(3));
       }
       for (var s = 0; s < stages.length; s++) {
-        // Layered app windows: -1 below the fold, 0 centred, 1 leaving at the top.
         var sr = stages[s].getBoundingClientRect();
         if (sr.bottom < -200 || sr.top > vh + 200) continue;
         var sp = Math.max(-1, Math.min(1, (vh / 2 - (sr.top + sr.height / 2)) / (vh * 0.7)));
         stages[s].style.setProperty('--p', sp.toFixed(3));
       }
       for (var i = 0; i < chips.length; i++) {
-        // Cut-outs drift at slightly different speeds than the page: a light parallax.
         var rect = chips[i].parentNode.getBoundingClientRect();
         var speed = i % 2 ? -0.08 : 0.06;
         chips[i].style.setProperty('--float', ((rect.top + rect.height / 2 - vh / 2) * speed).toFixed(1) + 'px');
@@ -62,7 +57,6 @@
     window.addEventListener('resize', onScroll);
     onScroll();
 
-    // Small-screen menu: close on Escape, on a link click or a click outside.
     var menu = document.querySelector('.menu');
     if (menu) {
       document.addEventListener('keydown', function (e) {
@@ -76,7 +70,6 @@
       });
     }
 
-    // Pointer spotlight: cards light up where the pointer is.
     if (!reduced && window.matchMedia('(hover: hover)').matches) {
       document.addEventListener(
         'pointermove',
@@ -93,7 +86,6 @@
 
     if (!root.classList.contains('js')) return;
 
-    // Children of a group come in one after another.
     var groups = document.querySelectorAll('[data-reveal-group]');
     for (var g = 0; g < groups.length; g++) {
       var kids = groups[g].children;
@@ -115,7 +107,6 @@
           if (!entries[i].isIntersecting) continue;
           var el = entries[i].target;
           el.classList.add('in');
-          // Drop the stagger once revealed so hover effects respond immediately.
           if (el.style.transitionDelay) window.setTimeout(clearDelay.bind(null, el), 1600);
           io.unobserve(el);
         }
@@ -125,7 +116,6 @@
     var items = document.querySelectorAll('[data-reveal]');
     for (var j = 0; j < items.length; j++) io.observe(items[j]);
 
-    // Printing or saving as PDF: show everything, scrolled into view or not.
     window.addEventListener('beforeprint', function () {
       for (var p = 0; p < items.length; p++) items[p].classList.add('in');
     });

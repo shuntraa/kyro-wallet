@@ -1,19 +1,5 @@
-//! XRP Ledger: secp256k1 keys at `m/44'/144'/account'/0/0` (the BIP44 route of Ledger, Trezor and
-//! Xumm/Xaman-compatible wallets — not rippled's "family seed" derivation; one address per
-//! account like Ledger Live, account 0 = the historical `m/44'/144'/0'/0/0`), classic `r…`
-//! addresses, and the XRPL binary codec for **Payment** transactions only.
-//!
-//! - Account ID = `RIPEMD160(SHA256(compressed pubkey))`; address = base58check with the Ripple
-//!   alphabet (`bs58::Alphabet::RIPPLE`), version byte 0, checksum = first 4 bytes of SHA-256d.
-//! - Signing: `SHA-512Half(0x53545800 "STX\0" || serialization without TxnSignature)`,
-//!   libsecp256k1 ECDSA, **DER, low-S** (canonical, what `tfFullyCanonicalSig` requires).
-//!   Transaction hash: `SHA-512Half(0x54584E00 "TXN\0" || signed serialization)`.
-//!
-//! Codec: hand-written for the Payment subset (≈ 20 fields, 7 types): the Rust XRPL crates
-//! bring large, young dependency trees for a format this small. Same safety rule as for TRON:
-//! **a blob is accepted only if re-encoding the decoded transaction gives back the same bytes**
-//! (canonical field order, no duplicate, no unknown field). Tested byte for byte against
-//! Trezor's firmware fixtures and xrpl.js `ripple-binary-codec` fixtures.
+//! XRP Ledger: secp256k1 at BIP44 `m/44'/144'/account'/0/0` (Ledger/Xaman, not family seed),
+//! classic `r…` addresses, and the XRPL binary codec for **Payment** transactions only.
 
 use bitcoin::hashes::{hash160, sha256d, sha512, Hash};
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, Secp256k1};
@@ -36,17 +22,10 @@ pub const TF_LIMIT_QUALITY: u32 = 0x0004_0000;
 pub const LSF_REQUIRE_DEST_TAG: u32 = 0x0002_0000;
 /// Account flag `lsfDisallowXRP` (advisory).
 pub const LSF_DISALLOW_XRP: u32 = 0x0008_0000;
-/// Fees above 1 XRP need a reinforced confirmation (the usual fee is 10–20 drops).
 const HIGH_FEE_DROPS: u64 = 1_000_000;
-/// Longest memo text shown in the dialog (characters).
 const MAX_MEMO_TEXT: usize = 256;
-/// 100 billion XRP in drops: the largest valid native amount.
 const MAX_DROPS: u64 = 100_000_000_000_000_000;
 const MAX_BLOB: usize = 4096;
-
-// ---------------------------------------------------------------------------------------------
-// Keys and addresses
-// ---------------------------------------------------------------------------------------------
 
 fn path(account: u32, index: u32) -> Result<[bitcoin::bip32::ChildNumber; 5]> {
     Ok([
@@ -75,8 +54,7 @@ pub fn xrp_address_from_id(id: &[u8; 20]) -> String {
         .into_string()
 }
 
-/// Account ID of a classic `r…` address. X-addresses (`X…`/`T…`, tag embedded) are refused:
-/// ask for the classic address and the destination tag separately.
+/// Account ID of a classic `r…` address; X-addresses are refused (ask address + tag separately).
 pub fn xrp_account_id(address: &str) -> Result<[u8; 20]> {
     let a = address.trim();
     if (a.starts_with('X') || a.starts_with('T')) && a.len() >= 46 {
@@ -112,14 +90,12 @@ pub fn xrp_address_of_pubkey(pk: &[u8]) -> Result<String> {
     Ok(xrp_address_from_id(&id_of_pubkey(&pk)))
 }
 
-/// Compressed public key of account `account` (`m/44'/144'/account'/0/0`, the transaction's
-/// `SigningPubKey`).
+/// Compressed public key (`SigningPubKey`) of `account` at `m/44'/144'/account'/0/0`.
 pub fn xrp_public_key(seed: &Seed, account: u32) -> Result<[u8; 33]> {
     xrp_public_key_at(seed, account, 0)
 }
 
-/// Compressed public key at `m/44'/144'/account'/0/index` (Kyro only uses `index` 0; other
-/// indices exist for test vectors of other wallets).
+/// Compressed public key at `m/44'/144'/account'/0/index` (Kyro uses 0; others for test vectors).
 pub fn xrp_public_key_at(seed: &Seed, account: u32, index: u32) -> Result<[u8; 33]> {
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
@@ -138,10 +114,6 @@ pub fn xrp_address_at(seed: &Seed, account: u32, index: u32) -> Result<String> {
         seed, account, index,
     )?)))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Amounts
-// ---------------------------------------------------------------------------------------------
 
 /// An `STAmount`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -238,7 +210,6 @@ impl XrpAmount {
     }
 }
 
-/// Parses a decimal string ("12.5", "0.001", "1e3" not accepted) into a normalized IOU value.
 fn parse_iou_value(s: &str) -> Result<(u64, i32, bool)> {
     let s = s.trim();
     let (negative, s) = match s.strip_prefix('-') {
@@ -276,7 +247,6 @@ fn parse_iou_value(s: &str) -> Result<(u64, i32, bool)> {
     Ok((m, exponent as i32, negative))
 }
 
-/// Decimal text of `mantissa × 10^exponent`.
 fn iou_value_string(mantissa: u64, exponent: i32, negative: bool) -> String {
     if mantissa == 0 {
         return "0".into();
@@ -395,10 +365,6 @@ impl XrpAmount {
         }
     }
 }
-
-// ---------------------------------------------------------------------------------------------
-// Binary codec (Payment subset)
-// ---------------------------------------------------------------------------------------------
 
 fn bad(msg: impl Into<String>) -> Error {
     Error::input(format!("XRP transaction: {}", msg.into()))
@@ -590,9 +556,7 @@ impl XrpPayment {
         o
     }
 
-    /// Strict decoding of a Payment. Refused: any other transaction type, `NetworkID`,
-    /// `TicketSequence`, `Paths`, `DeliverMin`, MPT amounts, unknown fields, and any encoding
-    /// that does not re-encode identically.
+    /// Strict decoding of a Payment.
     pub fn decode(raw: &[u8]) -> Result<XrpPayment> {
         if raw.len() > MAX_BLOB {
             return Err(bad("too large"));
@@ -722,10 +686,6 @@ fn read_memos(b: &mut &[u8]) -> Result<Vec<XrpMemo>> {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Summary and signing
-// ---------------------------------------------------------------------------------------------
-
 /// One memo, hex fields plus UTF-8 text when readable.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -754,8 +714,7 @@ pub enum XrpWarning {
     HighFee,
     /// `InvoiceID` present.
     InvoiceId,
-    /// A memo text had control / invisible / bidi characters removed or was cut: the dialog
-    /// shows a cleaned version (the hex fields are exact).
+    /// Memo cleaned of control/invisible/bidi chars or cut for display (hex fields are exact).
     UnusualText,
 }
 
@@ -793,10 +752,7 @@ pub struct XrpTxSummary {
     pub requires_extra_confirmation: bool,
 }
 
-/// Decodes an **unsigned** Payment blob (hex) for the dialog. Refused: anything
-/// [`XrpPayment::decode`] refuses, an already signed blob, `Account` ≠ `our_address`,
-/// `SigningPubKey` ≠ `our_pubkey`, `tfPartialPayment`, unknown flags, a payment to oneself,
-/// a non-positive amount, a zero fee, a missing `LastLedgerSequence`.
+/// Decodes an **unsigned** Payment blob (hex) for the dialog.
 pub fn xrp_decode_tx(blob_hex: &str, our_address: &str, our_pubkey: &[u8]) -> Result<XrpTxSummary> {
     let raw =
         hex::decode(blob_hex.trim()).map_err(|_| Error::input("the blob is not hexadecimal"))?;
@@ -843,8 +799,7 @@ fn summarize(
     if p.fee == 0 {
         return Err(bad("zero fee"));
     }
-    // Without LastLedgerSequence a signed payment stays valid for ever: whoever holds the blob
-    // (a node, a log) could submit it months later.
+    // Without LastLedgerSequence a signed blob stays valid forever (replayable months later).
     if p.last_ledger_sequence.is_none() {
         return Err(bad(
             "missing LastLedgerSequence: the transaction would stay valid forever",
@@ -910,9 +865,7 @@ fn summarize(
     })
 }
 
-/// Signs an unsigned Payment blob (hex) with the key of account `account`
-/// (`m/44'/144'/account'/0/0`), after decoding it like [`xrp_decode_tx`]. Returns `(signed blob
-/// hex, transaction hash hex, summary)`. DER, low-S, verified before it is returned.
+/// Signs an unsigned Payment blob (hex) with `account`'s key after [`xrp_decode_tx`].
 pub fn xrp_sign(
     seed: &Seed,
     account: u32,
@@ -950,8 +903,7 @@ pub fn xrp_sign_at(
     Ok((hex::encode_upper(signed), hash, summary))
 }
 
-/// Hash of a signed blob, after checking that it decodes, that its signature is a canonical
-/// (DER, low-S) signature by its `SigningPubKey`, and that this key is `Account`'s.
+/// Hash of a signed blob after checking: decodes, DER low-S sig by `SigningPubKey` of `Account`.
 pub fn xrp_verify_signed(blob_hex: &str) -> Result<String> {
     let raw =
         hex::decode(blob_hex.trim()).map_err(|_| Error::input("the blob is not hexadecimal"))?;

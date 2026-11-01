@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Full-page previews of the built site in headless Edge, scrolled through first so every reveal
-// has played.  node website/src/preview.mjs <base-url> <out-dir> [path=name@width ...]
-//   e.g. node website/src/preview.mjs http://127.0.0.1:8099 ../site-preview /=home-desktop@1440 /=home-mobile@390
+// Full-page previews of the built site in headless Edge, scrolled through first so every reveal has
+// played. node website/src/preview.mjs <base-url> <out-dir> [path=name@width ...] e.g. node
+// website/src/preview.mjs http://127.0.0.1:8099 ../site-preview /=home-desktop@1440
+// /=home-mobile@390
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { launch, viewport, goto, screenshot, sleep } from './cdp.mjs';

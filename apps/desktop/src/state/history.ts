@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Unified history: adapters (Esplora, ERC-20 logs, Solana signatures) merged
-// with the transactions sent from this device (local records).
+// Unified history: adapters (Esplora, ERC-20 logs, Solana signatures) merged with the transactions
+// sent from this device (local records).
 
 import { useEffect } from 'react';
 import { findAsset, findChain, nativeAssetId, type AssetDef, type HistoryItem } from '@kyro/chains';
@@ -20,7 +20,6 @@ export interface HistoryEntry extends HistoryItem {
 }
 
 const swapChain = (c: string): SwapChain => (/^\d+$/.test(c) ? Number(c) : (c as SwapChain));
-/** Final statuses: li.quest (DONE, FAILED) and 1Click (SUCCESS, REFUNDED, FAILED). */
 const FINAL = new Set(['DONE', 'FAILED', 'SUCCESS', 'REFUNDED']);
 
 function fromLocal(t: LocalTx, network: LocalTx['network']): HistoryItem & { label?: string } {
@@ -37,7 +36,6 @@ function fromLocal(t: LocalTx, network: LocalTx['network']): HistoryItem & { lab
   if (t.fee) item.fee = BigInt(t.fee);
   if (t.counterparty) item.counterparty = t.counterparty;
   if (t.label) item.label = t.label;
-  // Cross-chain: the source transaction may be confirmed while the bridge is still delivering.
   if (t.cross && t.label) item.label = `${t.label} · ${crossStatusLabel(t.cross.status, findChain(network, t.cross.toChainKey)?.label ?? t.cross.toChainKey)}`;
   return item;
 }
@@ -78,8 +76,6 @@ export function useHistory() {
         return { ...x, asset, feeAsset, chainLabel: account ? `${chainLabel} · ${account}` : chainLabel, local: localIds.has(x.id) };
       });
       entries.sort((a, b) => (b.time ?? Date.now()) - (a.time ?? Date.now()));
-      // Bitcoin servers return at most BTC_TXS_CAP transactions per address: say so.
-      // Polkadot (Statescan, undocumented): the worst outcome of its accounts, null without one.
       const dotStatuses = jobs.filter((j) => j.a.family === 'dot').map((j) => (j.a as { historyStatus?: string | null }).historyStatus);
       const dotHistory: 'ok' | 'partial' | 'unavailable' | null = dotStatuses.length === 0 ? null : dotStatuses.includes('unavailable') ? 'unavailable' : dotStatuses.includes('partial') ? 'partial' : 'ok';
       return { entries, errors, btcCapped: jobs.some((j) => j.a.family === 'btc' && (j.a as { historyCapped?: boolean }).historyCapped), dotHistory };
@@ -88,7 +84,6 @@ export function useHistory() {
     { intervalMs: 60_000 },
   );
 
-  // Resolve pending EVM transactions sent from this device.
   useEffect(() => {
     const pending = getLocalTxs(network).filter((t) => t.status === 'pending' && findChain(network, t.chainKey)?.family === 'evm');
     if (pending.length === 0) return;
@@ -118,7 +113,6 @@ export function useHistory() {
         const c = t.cross;
         if (!c) return;
         try {
-          // Direct NEAR Intents swap: 1Click's own status of the deposit address; LI.FI route: li.quest.
           const st = c.bridge === '1click' && c.depositAddress
             ? await nearDepositStatus(netFetch, c.depositAddress).then((r) => ({ status: r.status, ...(r.destinationTxHash ? { receivingTxHash: r.destinationTxHash } : {}) }))
             : await lifiTransferStatus(netFetch, { txHash: t.id, fromChain: swapChain(c.fromChain), toChain: swapChain(c.toChain), bridge: c.bridge });

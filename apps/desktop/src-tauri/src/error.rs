@@ -32,7 +32,7 @@ pub enum AppError {
     FeatureDisabled(String),
     #[error("Default server disabled: {0} (a custom server is configured for this chain)")]
     DefaultServerDisabled(String),
-    // ---- hardware wallets (docs/IPC.md §2.3) ----
+    // hardware wallets (docs/IPC.md §2.3)
     #[error("Device not found: plug it in, unlock it, then run the detection again.")]
     HwNotFound,
     #[error("Device locked: unlock it with your PIN, then try again.")]
@@ -95,9 +95,7 @@ impl AppError {
         }
     }
 
-    /// The user-facing message in `lang`. English is the `Display` text. In French, the fixed
-    /// texts are translated here and the free-form details (`InvalidInput(…)` and the like)
-    /// through [`crate::i18n::detail_fr`]: the common ones in French, any other in English.
+    /// The user-facing message in `lang`.
     pub fn message(&self, lang: crate::i18n::Lang) -> String {
         use crate::i18n::Lang;
         if lang == Lang::En {
@@ -158,7 +156,6 @@ impl AppError {
         }
     }
 
-    /// Structured details for the UI (`data` field), only for errors that carry some.
     fn data(&self) -> Option<serde_json::Value> {
         match self {
             AppError::HwWrongApp { expected, open } => {
@@ -191,8 +188,6 @@ impl From<wallet_core::Error> for AppError {
         match e {
             wallet_core::Error::WrongPassword => AppError::WrongPassword,
             wallet_core::Error::Device(m) => AppError::HwBadResponse(m),
-            // The core's own Display is English ("invalid input: …"): only the inner message is
-            // kept, after the shell's "Invalid input: " prefix.
             wallet_core::Error::InvalidInput(m) => AppError::InvalidInput(m),
             wallet_core::Error::InvalidMnemonic => {
                 AppError::InvalidInput("invalid recovery phrase".into())
@@ -266,7 +261,6 @@ mod tests {
             .message(Lang::Fr),
             "Mauvaise application ouverte sur l'appareil : ouvre « Bitcoin » (ouverte : « Ethereum »)."
         );
-        // Common details are in French for a French UI, any other stays in English.
         assert_eq!(
             AppError::InvalidInput("a vault already exists on this device".into())
                 .message(Lang::Fr),

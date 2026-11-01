@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Hardware wallets, UI side (docs/IPC.md §2.3).
-// - one prompt store, fed by the `hw-prompt` event (confirm / PIN / passphrase on the device,
-//   Trezor One blind PIN matrix), started once in main.tsx;
-// - device picking for a stored account (`hw_list`, same brand; Rust then checks the keys);
-// - precise messages (current language, ../i18n) for every HW_* error, using the error `data`.
+// Hardware wallets, UI side (docs/IPC.md §2.3). - one prompt store, fed by the `hw-prompt` event
+// (confirm / PIN / passphrase on the device, Trezor One blind PIN matrix), started once in
+// main.tsx; - device picking for a stored account (`hw_list`, same brand; Rust then checks the
+// keys); - precise messages (current language, ../i18n) for every HW_* error, using the error
+// `data`.
 
 import { useSyncExternalStore } from 'react';
 import { call, errorData, ipcErrorIn, onHwPrompt, toIpcError, type HwDeviceInfo, type HwDeviceKind, type HwPrompt, type IpcError, type Unlisten } from '@kyro/shared';
 import { t } from '../i18n';
 
-// ---------------------------------------------------------------- prompts
-
 export interface HwPromptSnapshot {
-  /** Last prompt per device id, cleared when the operation ends. */
   byDevice: Record<string, HwPrompt['kind']>;
 }
 
@@ -22,7 +18,6 @@ export interface HwPromptStore {
   subscribe(l: () => void): () => void;
   start(): Promise<void>;
   stop(): void;
-  /** The operation on `id` ended (success, error, cancel): forget its prompt. */
   clear(id: string): void;
 }
 
@@ -77,8 +72,6 @@ export async function withDevice<T>(id: string, op: () => Promise<T>): Promise<T
   }
 }
 
-// ---------------------------------------------------------------- devices
-
 export const BRAND: Record<HwDeviceKind, string> = { ledger: 'Ledger', trezor: 'Trezor' };
 
 /** A plugged-in device of the account's brand (Rust compares the keys before anything). */
@@ -89,14 +82,9 @@ export async function pickDevice(kind: HwDeviceKind): Promise<HwDeviceInfo> {
   return d;
 }
 
-// ---------------------------------------------------------------- errors
-
 export interface HwErrorView {
-  /** Short title. */
   title: string;
-  /** What happened and what to do, in plain words (current language). */
   detail: string;
-  /** Nothing was sent / signed (the user can retry safely). */
   safe: boolean;
 }
 
@@ -124,7 +112,6 @@ export function hwErrorView(e: unknown): HwErrorView {
       return { title: t('hw.err.timeoutTitle'), detail: t('hw.err.timeoutDetail'), safe: true };
     case 'HW_UNSUPPORTED': {
       const d = errorData(e, 'HW_UNSUPPORTED');
-      // Rust's message starts with its own prefix (French or English): the title says it already.
       const reason = err.message.replace(/^(Non pris en charge|Not supported|Unsupported)\s*:\s*/i, '');
       return {
         title: d?.min ? t('hw.err.tooOldTitle') : t('hw.err.unsupportedTitle'),
@@ -159,14 +146,9 @@ export function isAddressMismatch(e: unknown): boolean {
   return ipcErrorIn(e)?.code === 'HW_ADDRESS_MISMATCH';
 }
 
-// ---------------------------------------------------------------- Trezor One PIN matrix
-
 /**
- * Trezor One blind PIN: the device shows a scrambled 3×3 layout, the computer shows 9 blank
- * cells, and only POSITIONS travel. Trezor's protocol numbers positions like a numeric KEYPAD
- * (trezorlib, firmware): 7 8 9 on the top row, 4 5 6 in the middle, 1 2 3 at the bottom.
- * Rust (`hw_pin_matrix` → `PinMatrixAck.pin`) forwards the positions verbatim, so this is the
- * convention the UI must send. Row 0 = top row of the grid as drawn.
+ * Trezor One blind PIN: the device shows a scrambled 3×3 layout, the computer shows 9 blank cells,
+ * and only POSITIONS travel.
  */
 export const PIN_MATRIX_KEYPAD: readonly (readonly string[])[] = [
   ['7', '8', '9'],

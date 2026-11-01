@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Sui pieces of the Send screen (docs/IPC.md §2.11):
-// - the full-address rule (0x + 64 hex, no checksum on Sui: compare it entirely);
-// - spendable = SUI held in coin objects (the address balance is shown, not spent);
-// - the Rust-decoded transfer before the password (gas budget / price, simulated fee, epoch);
-// - the execution follow-up (sui_tx_status).
+// Sui pieces of the Send screen (docs/IPC.md §2.11): - the full-address rule (0x + 64 hex, no
+// checksum on Sui: compare it entirely); - spendable = SUI held in coin objects (the address
+// balance is shown, not spent); - the Rust-decoded transfer before the password (gas budget /
+// price, simulated fee, epoch); - the execution follow-up (sui_tx_status).
 
 import { useEffect, useState } from 'react';
 import type { Currency, SuiBalance } from '@kyro/shared';

@@ -1,8 +1,8 @@
-//! IPC commands for Hedera (`hbar_*`): EVM address (alias) of the key, our account (found on
-//! the mirror node by alias or public key), recipient facts, history, HBAR transfers built **by
-//! Kyro** (one copy per consensus node, same transaction ID), signing behind the password and
-//! the native dialog (memo framed, balance and recipient re-read live), and submission to the
-//! nodes' gRPC-web proxies. Contract: docs/IPC.md §2.11.
+//! IPC commands for Hedera (`hbar_*`): EVM address (alias) of the key, our account (found on the
+//! mirror node by alias or public key), recipient facts, history, HBAR transfers built **by Kyro**
+//! (one copy per consensus node, same transaction ID), signing behind the password and the native
+//! dialog (memo framed, balance and recipient re-read live), and submission to the nodes' gRPC-web
+//! proxies.
 
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -26,7 +26,6 @@ pub(crate) fn ctx(state: &AppState) -> HbarCtx<'_> {
     }
 }
 
-/// EVM address and public key of Hedera account `account` (`m/44'/3030'/0'/0/account`).
 fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     state.with_seed(|seed| {
         Ok((
@@ -36,8 +35,6 @@ fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     })
 }
 
-/// The key of the account that sends: the vault's ECDSA key (and its EVM address), or a
-/// hardware account's ED25519 key (Ledger, `commands_hw_hbar.rs`).
 #[derive(Clone, Copy)]
 pub(crate) enum OurKey<'a> {
     Ecdsa { evm: &'a str, pk: &'a [u8; 33] },
@@ -52,7 +49,6 @@ impl OurKey<'_> {
         }
     }
 
-    /// Hardware (ED25519) accounts: HBAR only, token transfers and associations are refused.
     fn decode(
         self,
         net: Network,
@@ -68,7 +64,6 @@ impl OurKey<'_> {
         })
     }
 
-    /// Strict check of a signed copy: body, and signed by this key.
     fn verify(self, signed: &str) -> AppResult<HbarTransfer> {
         let (t, ours) = match self {
             OurKey::Ecdsa { pk, .. } => {
@@ -139,7 +134,6 @@ fn token_units(lang: Lang, units: &str, t: &wallet_core::HbarTokenSummary) -> St
     )
 }
 
-/// Dialog of a token association (TokenAssociate).
 fn describe_associate(
     lang: Lang,
     s: &HbarTxSummary,
@@ -278,7 +272,6 @@ pub(crate) fn describe_hbar(
             s.nodes.join(", ")
         ),
     };
-    // Free text: after the amounts and fees, framed, one quoted line.
     out += &format!("{line}\n");
     match &s.memo {
         Some(m) => {
@@ -318,8 +311,6 @@ pub(crate) fn describe_hbar_extra(lang: Lang, s: &HbarTxSummary) -> String {
     out += lang.sign_anyway();
     out
 }
-
-// ---------------------------------------------------------------- reads
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -373,7 +364,6 @@ pub async fn hbar_account(
     .await
 }
 
-/// Our account on the mirror node, with `address` (EVM address, or the hardware account's key).
 pub(crate) async fn own_account(
     c: &HbarCtx<'_>,
     key: OurKey<'_>,
@@ -433,8 +423,6 @@ pub async fn hbar_txs(
     hbar_backend::txs(&ctx(&state), n).await
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HbarBuilt {
@@ -444,7 +432,6 @@ pub struct HbarBuilt {
     pub context: HbarContext,
 }
 
-/// Facts about the recipient, user-facing refusals included.
 fn check_recipient(r: &HbarRecipient, info: &HbarAccountInfo) -> AppResult<bool> {
     if info.deleted {
         return Err(AppError::InvalidInput(
@@ -495,8 +482,6 @@ async fn live_context(
     ))
 }
 
-/// Live token facts for a transfer of `amount` units of known token `num` from `0.0.me` to
-/// `to`, or (`to` = None) for its association. User-facing refusals.
 async fn token_context(
     c: &HbarCtx<'_>,
     me: u64,
@@ -569,7 +554,6 @@ fn check_balance(amount: u64, max_fee: u64, balance: &str) -> AppResult<()> {
     Ok(())
 }
 
-/// Builds one copy per node of `nodes` (Kyro's list or a part of it).
 pub(crate) async fn build(
     c: &HbarCtx<'_>,
     key: OurKey<'_>,
@@ -581,8 +565,6 @@ pub(crate) async fn build(
     build_kind(c, key, Some(to), amount, memo, None, nodes).await
 }
 
-/// HBAR transfer (`token` None), transfer of known token `token` (`to` set), or its
-/// association (`to` None, `amount` "0").
 pub(crate) async fn build_kind(
     c: &HbarCtx<'_>,
     key: OurKey<'_>,
@@ -662,7 +644,6 @@ pub(crate) async fn build_kind(
         HbarKind::Hbar => {}
     }
     let rate = hbar_backend::exchange_rate(c).await?;
-    // An association costs ≈ $0.05: the same budget as an account creation.
     let max_fee = hbar_backend::max_fee(
         rate,
         context.creates_account || matches!(kind, HbarKind::Associate(_)),
@@ -795,7 +776,6 @@ pub struct HbarSigned {
 /// Seconds that must remain in the validity window when signing (reading the dialog, sending).
 const MIN_REMAINING: i64 = 45;
 
-/// Decoding + live re-checks, i.e. everything `hbar_sign_tx` does before the dialog.
 pub(crate) async fn prepare_sign(
     c: &HbarCtx<'_>,
     key: OurKey<'_>,
@@ -925,9 +905,6 @@ pub async fn hbar_sign_tx(
     })
 }
 
-/// Checks every signed copy (strict decoding, low-S signature by **our** key, copies identical
-/// but for distinct known nodes) then submits them one after the other until a node accepts.
-/// Returns the transaction ID (`0.0.x@secs.nanos`).
 pub(crate) async fn broadcast_checked(
     c: &HbarCtx<'_>,
     key: OurKey<'_>,
@@ -1011,7 +988,6 @@ pub async fn hbar_tx_status(state: State<'_, AppState>, id: String) -> AppResult
     Ok(HbarTxStatus { found, result })
 }
 
-/// `0.0.x@secs.nanos` → `0.0.x-secs-nanos`, strictly.
 pub(crate) fn mirror_tx_id(id: &str) -> AppResult<String> {
     let err = || AppError::InvalidInput("invalid Hedera transaction ID".into());
     let id = id.trim();

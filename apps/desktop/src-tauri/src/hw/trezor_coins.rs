@@ -1,22 +1,5 @@
 //! Litecoin, Dogecoin, Bitcoin Cash, Dash and Stellar on a Trezor (messages of Trezor's
 //! `messages-bitcoin.proto` / `messages-stellar.proto`, through `trezor-client`'s bindings).
-//!
-//! - Bitcoin-like coins: same `SignTx` / `TxRequest` / `TxAck*` protocol as Bitcoin
-//!   (`trezor_btc.rs`), with the firmware's coin name ("Litecoin", "Dogecoin", "Bcash", "Dash";
-//!   testnets "Litecoin Testnet", "Bcash Testnet", "Dash Testnet" — Trezor has no Dogecoin
-//!   testnet). Inputs are ours only (`address_n` checked against the account xpub by
-//!   `wallet_core::utxo_hw_plan`), `SPENDWITNESS` (Litecoin) or `SPENDADDRESS`; change outputs
-//!   go as `address_n` (the firmware re-derives them), other outputs as the address Kyro decoded
-//!   (CashAddr for Bitcoin Cash); previous transactions from the PSBT, txid recomputed. The
-//!   firmware signs Bitcoin Cash with `SIGHASH_ALL|FORKID` itself. Returned DER signatures are
-//!   checked by `wallet_core::utxo_hw_finalize`.
-//! - Stellar: `StellarSignTx` (source, fee, sequence, time bounds, memo, operation count) then
-//!   one operation message per `StellarTxOpRequest`; the firmware rebuilds the XDR itself and
-//!   returns an ed25519 signature, which Kyro verifies over **its own** transaction hash
-//!   (`wallet_core::stellar_hw_assemble`): any difference in the firmware's rebuild fails there.
-//!
-//! XRP is not offered on Trezor: the firmware gives no public key before signing (only the
-//! address), and Kyro builds and checks the Payment with its `SigningPubKey`.
 
 use bitcoin::hashes::Hash;
 use bitcoin::psbt::Psbt;
@@ -339,8 +322,6 @@ pub fn sign_utxo(
     Err(HwError::bad("too many exchanges with the device"))
 }
 
-// ---------------------------------------------------------------- Stellar
-
 /// `StellarSignTx` + the operation message of Kyro's envelope (one XLM payment or account
 /// creation, the only transactions Kyro builds and signs).
 pub fn stellar_messages(
@@ -463,7 +444,6 @@ mod tests {
     use std::time::Duration;
     use trezor_client::transport::ProtoMessage;
 
-    /// Simulated firmware: answers each call with the next scripted message, records acks.
     struct Firmware {
         script: VecDeque<(MessageType, Vec<u8>)>,
         acks: Vec<(MessageType, Vec<u8>)>,
@@ -610,9 +590,6 @@ mod tests {
         assert_eq!(op.starting_balance(), 20_000_000);
     }
 
-    /// A Dogecoin send against a simulated firmware: inputs with `address_n` and the verified
-    /// amount, the change as `address_n`, the payment as Kyro's address, the previous
-    /// transaction streamed, the signature handed back.
     #[test]
     fn utxo_flow_against_simulated_firmware() {
         use bitcoin::{absolute::LockTime, transaction::Version, Amount, OutPoint, ScriptBuf};

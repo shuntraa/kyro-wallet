@@ -1,18 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Polkadot adapter (DOT on Polkadot Asset Hub, WND on Westend Asset Hub). Thin on purpose:
-// reads, transfer building (nonce, era, runtime checked against the metadata, all by Rust,
-// encoded by wallet-core), signature and `author_submitExtrinsic` are Rust commands (`dot_*`,
-// docs/IPC.md §2.11). This adapter only validates input and checks that what Rust built is
-// what was asked (recipient, amount, our account).
-//
-// Tokens (USD₮ 1984, USDC 1337): balances and `Assets.transfer_keep_alive` built and signed by
-// Rust like DOT sends (fees in DOT). No token history yet: Statescan's account transfers list
-// only native DOT in a form Kyro has checked.
-//
-// History: native DOT transfers from Statescan's keyless API, read by Rust (`dot_txs`, Asset Hub
-// + relay chain, mainnet only). Undocumented API: when it cannot be read, `historyStatus` says
-// « unavailable » and the UI says so instead of showing an empty list as « no transaction ».
+// Polkadot adapter (DOT on Polkadot Asset Hub, WND on Westend Asset Hub).
 
 import { accountArg } from '../types';
 import { call, l10n, type DotAccountInfo, type DotAssetBalance, type DotContext, type DotHistory, type DotTxSummary } from '@kyro/shared';
@@ -53,13 +40,8 @@ export function rustDotBackend(account = 0): DotBackend {
   };
 }
 
-// ---------------------------------------------------------------- addresses
 
-/**
- * SS58 address shape of the network: prefix 0 (Polkadot, « 1… ») on mainnet, 42 (generic,
- * « 5… ») on Westend; base58, 47–48 characters. The checksum and prefix are verified by Rust
- * (`dot_account_id`) on every command.
- */
+/** SS58 address shape of the network: prefix 0 (Polkadot, « 1… ») on mainnet, 42 (generic, « 5… ») on Westend; base58, 47–48 characters. */
 export function isDotAddress(address: string, network: 'mainnet' | 'testnet'): boolean {
   const a = address.trim();
   const first = network === 'mainnet' ? '1' : '5';
@@ -75,7 +57,6 @@ export function dotAddressProblem(address: string, network: 'mainnet' | 'testnet
   return l10n('Adresse d’un autre réseau Substrate (Kusama ou autre) : refusée.', 'Address from another Substrate network (Kusama or other): refused.');
 }
 
-// ---------------------------------------------------------------- adapter
 
 export interface DotUnsigned {
   family: 'dot';

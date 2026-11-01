@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Motion helpers. Rules: fast (150–350 ms), enter-only (never delays a click or a navigation),
-// and off under prefers-reduced-motion (MotionConfig reducedMotion="user" in App + the CSS
-// media query in styles.css).
+// Motion helpers. Rules: fast (150–350 ms), enter-only (never delays a click or a navigation), and
+// off under prefers-reduced-motion (MotionConfig reducedMotion="user" in App + the CSS media query
+// in styles.css).
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { animate, useReducedMotion } from 'motion/react';
@@ -17,9 +17,8 @@ export const screenEnter = {
 } as const;
 
 /**
- * Animated number: eases from the previous value to the new one (count-up from `from` on the
- * first display). Purely visual: the real value is what the caller passes, always used for
- * aria-labels and copies.
+ * Animated number: eases from the previous value to the new one (count-up from `from` on the first
+ * display).
  */
 export function useTicker(value: number, { duration = 0.5, from }: { duration?: number; from?: number } = {}): number {
   const reduce = useReducedMotion();

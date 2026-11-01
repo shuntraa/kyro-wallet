@@ -1,21 +1,5 @@
 //! Text taken from chain data (memos, CIP-20 messages, seeds, token names) before it reaches a
 //! confirmation dialog.
-//!
-//! A transaction can carry arbitrary UTF-8. Shown as is, line breaks can push the real content
-//! of a dialog out of view, and Unicode bidi / invisible characters can make text read
-//! differently from what it is (`U+202E` reverses what follows, `U+200B` hides a separator).
-//! [`sanitize_text`] is the single place where Kyro turns such text into something safe to show:
-//!
-//! - control characters (Unicode category Cc: C0, DEL, C1) are replaced — `\n`, `\r`, `\t` by a
-//!   space, the others by [`CONTROL_MARKER`];
-//! - format, bidi and invisible characters are removed (`U+00AD`, `U+061C`, `U+180E`,
-//!   `U+200B`–`U+200F`, `U+202A`–`U+202E`, `U+2060`–`U+206F`, `U+FEFF`, `U+FFF9`–`U+FFFB`,
-//!   tag characters `U+E0000`–`U+E007F`); line / paragraph separators (`U+2028`, `U+2029`)
-//!   become a space;
-//! - the result is capped at `max_chars` characters, the last one being `…`.
-//!
-//! Whenever anything was changed, [`SanitizedText::altered`] is `true`: decoders then add a
-//! warning and require the reinforced confirmation.
 
 use serde::{Deserialize, Serialize};
 
@@ -36,7 +20,6 @@ pub struct SanitizedText {
     pub truncated: bool,
 }
 
-/// Format / bidi / invisible characters removed from displayed text.
 fn is_hidden(c: char) -> bool {
     matches!(
         c,
@@ -52,8 +35,7 @@ fn is_hidden(c: char) -> bool {
     )
 }
 
-/// Makes chain-provided text safe to display (see the module documentation). `max_chars` is the
-/// maximum number of characters returned, ellipsis included (0 is treated as 1).
+/// Makes chain-provided text safe to display (see the module documentation).
 pub fn sanitize_text(s: &str, max_chars: usize) -> SanitizedText {
     let max_chars = max_chars.max(1);
     let mut cleaned = String::with_capacity(s.len().min(max_chars.saturating_mul(4)));

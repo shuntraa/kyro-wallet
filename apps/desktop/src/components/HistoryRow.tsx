@@ -28,7 +28,6 @@ export function statusBadge(e: HistoryEntry) {
   if (e.suspect) return <Badge tone="warn">{t('history.badgeSuspect')}</Badge>;
   if (e.status === 'pending') return <Badge tone="warn">{t('history.badgePending')}</Badge>;
   if (e.status === 'failed') return <Badge tone="down">{t('history.badgeFailed')}</Badge>;
-  // The normal case stays quiet; only pending and failed carry a colour.
   return <Badge tone="mute">{e.asset?.family === 'sol' ? t('history.badgeFinalized') : t('history.badgeConfirmed')}</Badge>;
 }
 

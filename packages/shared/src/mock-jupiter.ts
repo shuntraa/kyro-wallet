@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — a Jupiter-shaped swap transaction (legacy message, no lookup table) with the same
-// instructions and account layout as a live lite-api.jup.ag `route`, so that Kyro's check
-// (packages/swap/src/jupiter-verify.ts) runs on it exactly as on a real one. Includes the
-// program-derived address (ATA) derivation, with the ed25519 « off curve » test it needs.
 
 import { base58, base64 } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha2';
@@ -15,8 +11,6 @@ const COMPUTE_BUDGET = 'ComputeBudget111111111111111111111111111111';
 const JUP6 = 'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4';
 const JUP_EVENT_AUTHORITY = 'D8cy77BBepLMngZx6ZukaTff5hCt1HrWyKk3Hnd9oitf';
 export const DEMO_WSOL = 'So11111111111111111111111111111111111111112';
-
-// ---------------------------------------------------------------- ed25519 curve test
 
 const P = 2n ** 255n - 19n;
 const mod = (a: bigint) => ((a % P) + P) % P;
@@ -59,8 +53,6 @@ export function demoFindPda(seeds: Uint8Array[], program: string): string {
 export function demoAta(owner: string, mint: string, tokenProgram = TOKEN): string {
   return demoFindPda([base58.decode(owner), base58.decode(tokenProgram), base58.decode(mint)], ATA);
 }
-
-// ---------------------------------------------------------------- transaction
 
 const u32 = (n: number) => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff];
 const u64 = (n: bigint) => Array.from({ length: 8 }, (_, i) => Number((n >> BigInt(8 * i)) & 0xffn));

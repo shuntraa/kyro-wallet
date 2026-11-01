@@ -1,11 +1,7 @@
 //! `net_fetch`: the only way the app talks to the outside world.
 //!
-//! One policy, two transports:
-//! - **policy** (this module): HTTPS only, allowlisted hosts (see docs/NETWORK.md), header
-//!   filtering, API-key injection, redirects only to allowlisted hosts (max 3), 5 MB body cap,
-//!   20 s timeout, CoinGecko cache and 429 backoff;
-//! - **transport**: Tor (default, see `tor.rs`, fail closed) or clear (`reqwest`), chosen by
-//!   the user's settings. There is never a silent fallback from Tor to clear.
+//! **transport**: Tor (default, see `tor.rs`, fail closed) or clear (`reqwest`), chosen by the
+//! user's settings.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -104,8 +100,7 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "gnosis-rpc.publicnode.com",
     "hyperliquid-rpc.publicnode.com",
     "sei-evm-rpc.publicnode.com",
-    // No publicnode endpoint for these three. Flare's and Kaia's own public RPCs answer 403 to
-    // Tor exits (checked 2026-11-01): Ankr's public RPC (Flare) and Pocket Network (Kaia) instead.
+    // No publicnode endpoint for these three.
     "rpc.ankr.com",
     "kaia.api.pocket.network",
     "evm.confluxrpc.com",
@@ -117,9 +112,8 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // NEAR Intents 1Click (public, no key): quotes for the direct routes (POST /v0/quote), token
     // list, and the status that confirms where a cross-chain deposit goes.
     "1click.chaindefuser.com",
-    // Automatic updates (`updater.rs`): Kyro's GitHub releases (`latest.json`, signed packages)
-    // and the release-asset CDN GitHub redirects downloads to. Rust only: refused to `net_fetch`
-    // ([`UPDATE_HOSTS`]), Tor family `update`.
+    // Automatic updates (`updater.rs`): Kyro's GitHub releases (`latest.json`, signed packages) and
+    // the release-asset CDN GitHub redirects downloads to.
     "github.com",
     "release-assets.githubusercontent.com",
 ];
@@ -151,28 +145,6 @@ pub const ALGORAND_HOSTS: &[&str] = &[
 /// Electrum servers (raw TLS sockets, not HTTP) that Rust itself may open **as defaults**,
 /// each with its family's isolated Tor circuits. `net_fetch` never reaches them (the webview
 /// cannot open sockets); a user's own Electrum server is validated separately (`servers.rs`).
-///
-/// Dogecoin mainnet: Komodo Platform's public ElectrumX servers, listed in
-/// https://github.com/KomodoPlatform/coins/blob/master/electrums/DOGE (operator « cipig »),
-/// TLS port 20060, Let's Encrypt certificate (`*.cipig.net`, checked 2026-10-31): validated
-/// normally. `doge.electrum3.cipig.net`, also listed, refused connections on 2026-10-31.
-///
-/// Bitcoin Cash mainnet: public Fulcrum servers of three operators, listed in Electron Cash's
-/// `electroncash/servers.json` and Komodo's `electrums/BCH`; chipnet (Kyro's Bitcoin Cash
-/// testnet): Electron Cash's `servers_chipnet.json`. TLS port 50002 (in Tor's reduced exit
-/// policy), Let's Encrypt certificates validated normally, genesis **and** the post-split
-/// checkpoint checked live on 2026-11-01 (`wallet_core::utxo_checkpoint`).
-///
-/// Dash mainnet: Komodo's public ElectrumX servers (`electrums/DASH`, operator « cipig »), TLS
-/// port 20061, Let's Encrypt, genesis checked 2026-11-01; `dash.electrum3.cipig.net` refused
-/// connections that day. No public Dash **testnet** server was found.
-///
-/// See docs/NETWORK.md.
-///
-/// Zcash mainnet (transparent addresses only): the same operator's ElectrumX servers for ZEC,
-/// listed in https://github.com/KomodoPlatform/coins/blob/master/electrums/ZEC, TLS port 20058,
-/// same Let's Encrypt `*.cipig.net` certificate (checked 2026-11-01), validated normally.
-/// `zec.electrum3.cipig.net`, also listed, refused connections on 2026-11-01.
 pub const ELECTRUM_HOSTS: &[(&str, u16, Family)] = &[
     ("doge.electrum1.cipig.net", 20060, Family::Dogecoin),
     ("doge.electrum2.cipig.net", 20060, Family::Dogecoin),
@@ -198,31 +170,27 @@ pub fn electrum_default_allowed(host: &str, port: u16, family: Family) -> bool {
 /// served by https://mempool.space/ (checked 2026-10-30), see docs/NETWORK.md.
 pub const MEMPOOL_ONION: &str = "mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion";
 
-/// Onion services we may reach — ONLY over Tor, and only these. Plain `http://` is accepted
-/// for them because the onion protocol authenticates the service key (the address *is* the
-/// key) and encrypts end to end, which is what TLS provides for clearnet hosts.
+/// Onion services we may reach — ONLY over Tor, and only these.
 pub const ONION_HOSTS: &[&str] = &[MEMPOOL_ONION];
 
 /// Clearnet hosts that, in Tor mode, are transparently replaced by their onion service
 /// (same scheme-less path and query), so no exit relay is involved at all.
 const ONION_REWRITES: &[(&str, &str)] = &[("mempool.space", MEMPOOL_ONION)];
 
-/// Request headers the webview may set. Everything else is dropped.
 const ALLOWED_HEADERS: &[&str] = &["accept", "content-type", "0x-version"];
 
 pub const MAX_BODY: usize = 5 * 1024 * 1024;
 pub const TIMEOUT: Duration = Duration::from_secs(20);
-/// Bulk downloads Rust asks for itself (Monero blocks, output distribution): body cap and
-/// exchange timeout. Never available to `net_fetch` (the webview).
+/// Bulk downloads Rust asks for itself (Monero blocks, output distribution): body cap and exchange
+/// timeout.
 pub const BULK_MAX_BODY: usize = 64 * 1024 * 1024;
 pub const BULK_TIMEOUT: Duration = Duration::from_secs(180);
 pub const MAX_REDIRECTS: usize = 3;
-/// Update packages (family `update`, Rust only): an AppImage or an installer can be large, and
-/// Tor is slow. Never available to `net_fetch`.
+/// Update packages (family `update`, Rust only): an AppImage or an installer can be large, and Tor
+/// is slow.
 pub const UPDATE_MAX_BODY: usize = 256 * 1024 * 1024;
 pub const UPDATE_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const CACHE_TTL: Duration = Duration::from_secs(60);
-/// CoinGecko cache bounds: entries and total body bytes (oldest evicted first).
 const MAX_CACHE_ENTRIES: usize = 128;
 const MAX_CACHE_BYTES: usize = 16 * 1024 * 1024;
 const BACKOFF_429: Duration = Duration::from_secs(30);
@@ -272,8 +240,6 @@ impl EnvKeys {
     }
 }
 
-// ---------------------------------------------------------------- policy
-
 /// Per-request network context derived from the settings and the app's network.
 #[derive(Debug, Clone, Default)]
 pub struct NetContext {
@@ -299,9 +265,6 @@ impl NetContext {
     }
 }
 
-/// Scheme rule shared by requests and redirects: HTTPS for clearnet hosts; `.onion` only over
-/// Tor, and only allowlisted ones (mempool's, plain `http://`; or a user's own onion server,
-/// `http://` or `https://`); any `.onion` is refused in clear.
 fn scheme_ok(url: &url::Url, host: &str, tor: bool, custom_onion: bool) -> Result<(), String> {
     if host.ends_with(".onion") {
         if !tor {
@@ -324,8 +287,8 @@ fn scheme_ok(url: &url::Url, host: &str, tor: bool, custom_onion: bool) -> Resul
     Ok(())
 }
 
-/// Redirects are followed only to allowlisted hosts (never to user RPC hosts), with the same
-/// scheme rule as requests, at most [`MAX_REDIRECTS`] times. Shared by both transports.
+/// Redirects are followed only to allowlisted hosts (never to user RPC hosts), with the same scheme
+/// rule as requests, at most [`MAX_REDIRECTS`] times.
 pub fn redirect_allowed(next: &url::Url, hops_done: usize, tor: bool) -> bool {
     let Some(host) = next.host_str() else {
         return false;
@@ -375,8 +338,6 @@ pub fn redirect_hop(
     Some(hop)
 }
 
-/// Adds a CoinGecko response to the cache, keeping it bounded: expired entries go first, then
-/// the oldest ones, until both [`MAX_CACHE_ENTRIES`] and [`MAX_CACHE_BYTES`] hold.
 fn cache_insert(
     cache: &mut HashMap<String, (Instant, FetchResponse)>,
     key: String,
@@ -452,7 +413,6 @@ pub enum Family {
     Other,
 }
 
-/// Default EVM RPC hosts that are not on publicnode (Flare: Ankr, Kaia: Pocket Network, Conflux).
 const EVM_OWN_RPC_HOSTS: &[&str] = &[
     "rpc.ankr.com",
     "kaia.api.pocket.network",
@@ -643,7 +603,6 @@ pub fn prepare(
 }
 
 /// A request issued by Rust itself to a server (Esplora, Bitcoin Core, validation probes).
-/// The caller has validated the URL with `servers::validate_http_url`.
 #[derive(Debug, Clone)]
 pub struct ServerRequest {
     pub url: url::Url,
@@ -702,8 +661,7 @@ impl ServerRequest {
     }
 }
 
-/// API keys are injected here so they never need to live in the webview. Also used for the
-/// requests Rust issues itself to TronGrid (`tron_backend`).
+/// API keys are injected here so they never need to live in the webview.
 pub fn api_key_headers(host: &str, env: &EnvKeys, saved: &ApiKeys) -> Vec<(String, String)> {
     let pick = |e: &Option<String>, s: &Option<String>| e.clone().or_else(|| s.clone());
     let (name, value) = match host {
@@ -760,11 +718,8 @@ pub fn is_cacheable(p: &Prepared) -> bool {
     p.method == Method::Get && p.host.ends_with("coingecko.com")
 }
 
-// ---------------------------------------------------------------- client
-
 pub struct NetClient {
     clear: reqwest::Client,
-    /// For a Bitcoin Core node on loopback/LAN only: no proxy, no redirect, http allowed.
     local: reqwest::Client,
     pub tor: Arc<TorManager>,
     cache: Mutex<HashMap<String, (Instant, FetchResponse)>>,
@@ -860,9 +815,7 @@ impl NetClient {
         Ok(out)
     }
 
-    /// Requests issued by Rust to a server (custom or default). Same transport rules:
-    /// Tor when enabled (onion allowed), clear HTTPS otherwise; Bitcoin Core on a private
-    /// address goes direct. Transport failures map to `SERVER_UNREACHABLE` (never a fallback).
+    /// Requests issued by Rust to a server (custom or default).
     pub async fn server_request(&self, r: ServerRequest, tor: bool) -> AppResult<(u16, Vec<u8>)> {
         let mut url = r.url.clone();
         if tor {
@@ -916,8 +869,6 @@ impl NetClient {
         })
     }
 
-    /// Clear transport. `follow`: redirects are followed with [`redirect_hop`] (API keys never
-    /// cross hosts); `false` for a Bitcoin Core node on the LAN (no redirect at all).
     async fn send_clear(
         &self,
         client: &reqwest::Client,
@@ -1114,17 +1065,14 @@ mod tests {
             ]
         );
         assert_eq!(p.secret_headers, vec!["x-cg-demo-api-key".to_string()]);
-        // A key saved in settings (no env key): 0x.
         let p = prep("https://api.0x.org/swap", &c).unwrap();
         assert_eq!(
             p.headers,
             vec![("0x-api-key".to_string(), "zx".to_string())]
         );
-        // 1inch is gone: not on the allowlist any more.
         assert!(prep("https://api.1inch.dev/swap", &c).is_err());
         let p = prep("https://mempool.space/", &c).unwrap();
         assert!(p.headers.is_empty() && p.secret_headers.is_empty());
-        // TronGrid key: TronGrid hosts only, from the env first, then the settings.
         let env = EnvKeys {
             trongrid: Some("tg-env".into()),
             ..Default::default()
@@ -1272,7 +1220,6 @@ mod tests {
                 "{url}"
             );
         }
-        // Other defaults are untouched.
         assert!(prep("https://ethereum-rpc.publicnode.com/", &c).is_ok());
         assert!(prep("https://my-esplora.example/api", &c).is_ok());
     }
@@ -1408,7 +1355,6 @@ mod tests {
             10060,
             Family::Dogecoin
         ));
-        // Bitcoin Cash and Dash defaults: their own families, TLS ports only.
         assert_eq!(family_for("bch.loping.net", &c), Family::BitcoinCash);
         assert_eq!(family_for("chipnet.bch.ninja", &c), Family::BitcoinCash);
         assert_eq!(family_for("dash.electrum1.cipig.net", &c), Family::Dash);
@@ -1471,7 +1417,6 @@ mod tests {
         assert!(c.disabled.contains(&"api.devnet.solana.com"));
         assert_eq!(family_for("esplora.example", &c), Family::Bitcoin);
         assert_eq!(family_for("sol.example", &c), Family::Solana);
-        // Mainnet app: bitcoin mainnet still on the default server.
         let m = NetContext::from_settings(&s, Network::Mainnet);
         assert!(!m.disabled.contains(&"mempool.space"));
     }
@@ -1496,7 +1441,6 @@ mod tests {
             run("http://x.onion/api", false),
             Err(AppError::ServerInvalid(_))
         ));
-        // Private http is only direct when the caller asks for it (Bitcoin Core).
         assert!(matches!(
             run("http://127.0.0.1:9/", false),
             Err(AppError::ServerInvalid(_))
@@ -1523,13 +1467,11 @@ mod tests {
         };
         let has_key = |h: &Hop| h.headers.iter().any(|(k, _)| k == "0x-api-key");
         assert!(has_key(&start));
-        // Same host: the key stays (307 keeps method and body).
         let same =
             redirect_hop(307, Some("/v2/quote"), &start, &p.secret_headers, 0, false).unwrap();
         assert!(has_key(&same));
         assert_eq!(same.method, Method::Post);
         assert!(same.body.is_some());
-        // Other allowlisted host: the key is dropped; 302 becomes a GET without body.
         let other = redirect_hop(
             302,
             Some("https://li.quest/v1/quote"),
@@ -1542,7 +1484,6 @@ mod tests {
         assert!(!has_key(&other));
         assert_eq!(other.method, Method::Get);
         assert!(other.body.is_none());
-        // Off the allowlist, not a redirect, or too many hops: not followed.
         assert!(redirect_hop(
             302,
             Some("https://evil.example/"),
@@ -1565,7 +1506,6 @@ mod tests {
         .is_none());
     }
 
-    /// INFO: the CoinGecko cache is bounded in entries and bytes.
     #[test]
     fn cache_is_bounded() {
         let mut c = HashMap::new();
@@ -1585,7 +1525,6 @@ mod tests {
         assert_eq!(c.len(), MAX_CACHE_ENTRIES);
         assert!(!c.contains_key("k0"), "oldest evicted first");
         assert!(c.contains_key(&format!("k{}", MAX_CACHE_ENTRIES + 49)));
-        // Big bodies: total bytes capped.
         for i in 0..10 {
             cache_insert(
                 &mut c,
@@ -1596,7 +1535,6 @@ mod tests {
         }
         let total: usize = c.values().map(|(_, r)| r.body.len()).sum();
         assert!(total <= MAX_CACHE_BYTES);
-        // Expired entries are dropped on the next insert.
         cache_insert(
             &mut c,
             "late".into(),

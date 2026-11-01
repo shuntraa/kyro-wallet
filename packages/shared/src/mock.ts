@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// MODE DÉMO — in-memory backend used automatically when the UI runs outside
-// Tauri (plain `vite` in a browser, unit tests). It emulates every command of
-// docs/IPC.md with a fake vault and fake chains, so all screens are demoable.
-//
-// ⚠ The demo "keys" come from a hard-coded, public seed. They protect nothing
-// and are never used by the real application, which derives and signs in Rust.
+// DEMO ONLY — in-memory backend used automatically when the UI runs outside Tauri (plain `vite` in
 
 import { HDKey } from '@scure/bip32';
 import { generateMnemonic, validateMnemonic } from '@scure/bip39';
@@ -119,10 +113,8 @@ const MAX_UINT256 = (1n << 256n) - 1n;
 
 interface DemoKeys {
   accounts: Accounts;
-  /** Every address we own (receive + change, both kinds), for change detection. */
   ownBtc: Set<string>;
   receive: Record<BtcKind, HDKey>;
-  /** Litecoin / Dogecoin / Bitcoin Cash / Dash account nodes. */
   utxo: { ltc: HDKey; doge: HDKey; bch: HDKey; dash: HDKey };
 }
 
@@ -285,11 +277,9 @@ function seedChainState(keys: DemoKeys, network: Network): DemoChainState {
     evmLogs: testnet
       ? [
           // Address-poisoning demo: a real USDC payment to a colleague, then a zero-value
-          // « transfer » from an address forged to share its first and last characters.
           { chainId: 11155111, token: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', from: me, to: DEMO_EVM_COLLEAGUE, value: 25_000_000n, blocksAgo: 3_600, txHash: '0x' + demoHash('evm-log-colleague') },
           { chainId: 11155111, token: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', from: DEMO_EVM_LOOKALIKE, to: me, value: 0n, blocksAgo: 400, txHash: '0x' + demoHash('evm-log-poison') },
           // The same attacker's free « outgoing » lure: transferFrom(you, look-alike, 0), sent by
-          // the attacker. The log says « from you »; the transaction was not signed by you.
           { chainId: 11155111, token: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', from: me, to: DEMO_EVM_LOOKALIKE, value: 0n, blocksAgo: 390, txHash: '0x' + demoHash('evm-log-poison-out'), sender: DEMO_EVM_LOOKALIKE },
         ]
       : [],
@@ -314,11 +304,9 @@ export interface MockOptions {
   networkSource?: NetworkSource;
   /** Saved network choice (default: localStorage, in memory without storage). */
   networkStore?: DemoNetworkStore;
-  /** Called by `network_set` instead of reloading the page (tests). */
   onNetworkRestart?: (n: Network) => void;
   /** Emulates the native confirmation dialog. Default: `window.confirm` when available, else accept. */
   confirm?: (summary: string) => boolean;
-  /** Start with an existing vault (tests). */
   preset?: { password: string; words?: string[]; unlocked?: boolean };
   /** Simulated Tor (see mock-tor.ts). Default: `?tor=…` in a browser, `ready` without `window`. */
   tor?: DemoTorScenario;
@@ -332,48 +320,28 @@ export interface MockOptions {
 
 export interface MockBackend {
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
-  /** Exposed for tests. */
   chain: DemoChainState;
-  /** Advance the fake clock (tests). */
   advance(ms: number): void;
-  /** Simulated hardware wallet (tests). */
   hw: DemoHw;
-  /** Simulated Tor (tests). */
   tor: DemoTor;
-  /** TRON demo chain (tests). */
   tron: DemoTronState;
-  /** XRP Ledger demo chain (tests). */
   xrp: DemoXrpState;
-  /** Stellar demo chain (tests). */
   stellar: DemoStellarState;
-  /** NEAR demo chain (tests). */
   near: DemoNearState;
-  /** Sui demo chain (tests). */
   sui: DemoSuiState;
-  /** Hedera demo chain (tests). */
   hbar: DemoHbarState;
-  /** TON demo chain (tests). */
   ton: DemoTonState;
-  /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
-  /** Kaspa demo chain (tests). */
   kaspa: DemoKaspaState;
-  /** Polkadot Asset Hub demo chain (tests). */
   dot: DemoDotState;
-  /** Algorand demo chain (tests). */
   algo: DemoAlgoState;
-  /** Monero demo chain (tests). */
   xmr: DemoXmrState;
-  /** Cosmos Hub demo chain (tests). */
   cosmos: DemoCosmosState;
-  /** Aptos demo chain (tests). */
   aptos: DemoAptosState;
-  /** Staking demo (tests). */
   stake: ReturnType<typeof createDemoStake>;
 }
 
 export function createMockBackend(opts: MockOptions = {}): MockBackend {
-  // Network choice (§2.10): same precedence as the shell (`?network=` = KYRO_NETWORK).
   const networkStore = opts.networkStore ?? demoNetworkStore();
   const resolved = opts.network ? { network: opts.network, source: opts.networkSource ?? ('default' as const) } : resolveDemoNetwork(demoNetworkParam(), networkStore.get());
   const network: Network = resolved.network;
@@ -429,7 +397,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     },
     ...(opts.onNetworkRestart ? { onRestart: opts.onNetworkRestart } : {}),
   });
-  // Several accounts per chain (§2.9): lists, accounts_get({ account }), signer line.
   const accts = createDemoAccounts({ network, seed: demoSeed(), base: keys.accounts, baseOwnBtc: keys.ownBtc, chain, requireUnlocked: () => requireUnlocked() });
   // Litecoin / Dogecoin / Bitcoin Cash / Dash (§2.4): `ltc_*` / `doge_*` / `bch_*` / `dash_*`.
   const utxoChains = createDemoUtxo({
@@ -443,7 +410,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     checkPassword: (p) => checkPassword(p),
     confirm: (text) => confirmFn(text),
   });
-  // Zcash, transparent only (§2.4b): `zec_*`, built like Rust (ZIP 317, change to us).
   const zecChain = createDemoZec({
     network,
     seed: demoSeed(),
@@ -454,7 +420,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     checkPassword: (p) => checkPassword(p),
     confirm: (text) => confirmFn(text),
   });
-  // TRON (§2.5): `tron_*`, resources estimated like Rust.
   const tronChain = createDemoTron({
     network,
     seed: demoSeed(),
@@ -466,7 +431,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     now: () => now(),
     stakeBroadcast: (raw, sig) => stake.tronStakeBroadcast(raw, sig),
   });
-  // XRP Ledger (§2.6): `xrp_*`, reserves and destination-tag rules like Rust.
   const xrpChain = createDemoXrp({
     network,
     seed: demoSeed(),
@@ -477,7 +441,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Stellar (§2.11): `stellar_*`, reserve, CreateAccount and memo-required rules like Rust.
   const stellarChain = createDemoStellar({
     network,
     seed: demoSeed(),
@@ -488,7 +451,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // NEAR (§2.11): `near_*`, storage reserve and fee bound like Rust.
   const nearChain = createDemoNear({
     network,
     tor,
@@ -498,7 +460,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Sui (§2.11): `sui_*`, gas budget / coin rules like Rust.
   const suiChain = createDemoSui({
     network,
     tor,
@@ -508,7 +469,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Hedera (§2.11): `hbar_*`, mirror-node facts and max-fee rules like Rust.
   const hbarChain = createDemoHbar({
     network,
     seed: demoSeed(),
@@ -519,7 +479,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Algorand (§2.11): `algo_*`, minimum balance and refusals like Rust.
   const algoChain = createDemoAlgo({
     network,
     tor,
@@ -529,7 +488,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // TON (§2.11): `ton_*`, bounce, deployment and comment rules like Rust.
   const tonChain = createDemoTon({
     network,
     tor,
@@ -539,7 +497,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Cosmos Hub (§2.11): `cosmos_*`, gas / fee / sequence rules like Rust.
   const cosmosChain = createDemoCosmos({
     network,
     seed: demoSeed(),
@@ -550,7 +507,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Aptos (§2.11): `aptos_*`, max fee reserved up front like Rust.
   const aptosChain = createDemoAptos({
     network,
     tor,
@@ -560,7 +516,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Cardano (§2.7): `ada_*`, min-UTxO / fee / coin selection like Rust.
   const cardanoChain = createDemoCardano({
     network,
     tor,
@@ -570,7 +525,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Kaspa (§2.11): `kas_*`, coin selection / KIP-9 mass / fee like Rust.
   const kaspaChain = createDemoKaspa({
     network,
     seed: demoSeed(),
@@ -581,7 +535,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Polkadot (§2.11): `dot_*`, existential deposit / keep-alive rules like Rust.
   const dotChain = createDemoDot({
     network,
     seed: demoSeed(),
@@ -592,7 +545,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Monero (§2.10): `xmr_*`, scan, unlock and transfer rules like Rust (nothing real).
   const xmrChain = createDemoXmr({
     network,
     tor,
@@ -602,7 +554,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     confirm: (text) => confirmFn(text),
     now: () => now(),
   });
-  // Staking (§2.8): Solana, Cardano, TRON.
   const stake = createDemoStake({
     network,
     now: () => now(),
@@ -664,7 +615,6 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     walk(v);
     return [...new Set(out)];
   };
-  /** server_approval.rs: a host neither saved nor approved this session needs the native dialog. */
   const approveHosts = (incoming: unknown, saved: unknown) => {
     const known = new Set(hostsOf(saved));
     const pending = hostsOf(incoming).filter((h) => !known.has(h) && !approvedHosts.has(h));
@@ -988,11 +938,9 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       // Missing `tor` → default (enabled), like serde's `#[serde(default)]`.
       const torEnabled = torIn === undefined ? true : (torIn as { enabled: boolean }).enabled;
       // No `servers` key (older caller) → keep the stored ones. Legacy `rpc` is ignored here:
-      // Rust migrates it once at load, the UI never sends it.
       const incoming = 'servers' in next && next.servers ? next.servers : settings.servers;
       const { rpc: _legacy, apiKeys: keyUpdate, apiKeysSet: _ignored, ...rest } = next as SettingsInput & { rpc?: unknown; apiKeysSet?: unknown };
       // API keys (settings.rs ApiKeys::apply_patch): absent or null = unchanged, "" = remove,
-      // non-empty = set after trim; blank after trim or a control character → INVALID_INPUT.
       const nextKeys = { ...apiKeys };
       if (keyUpdate !== undefined) {
         if (typeof keyUpdate !== 'object' || keyUpdate === null) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : apiKeys : objet attendu', 'Invalid input: apiKeys: object expected'));

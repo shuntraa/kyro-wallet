@@ -1,13 +1,4 @@
-//! Zcash transparent: derivation, addresses (t-addresses only, shielded refused), real mainnet
-//! v5 transaction (ZIP-244 txid and signature digest checked against a signature made by
-//! another wallet), consensus branch checks, building and signing.
-//!
-//! Sources:
-//! - address derivation: recomputed independently with `@scure/bip32` + `@scure/base`
-//!   (base58check) from the BIP39 vectors, see `ADDRESS_VECTORS`;
-//! - ZIP 320 example (TEX ↔ t-address of the same key hash): https://zips.z.cash/zip-0320;
-//! - real chain data: `tests/data/zec_mainnet_v5.json`, read-only from
-//!   `zec.electrum1.cipig.net:20058` (Komodo's public ElectrumX) on 2026-11-01.
+//! Zcash transparent: derivation, t-addresses, ZIP-244 mainnet v5 tx, branch checks, signing.
 
 mod common;
 
@@ -35,12 +26,7 @@ fn fixture() -> Value {
     serde_json::from_str(include_str!("data/zec_mainnet_v5.json")).unwrap()
 }
 
-// ------------------------------------------------------------------------------------------
-// Derivation and addresses
-// ------------------------------------------------------------------------------------------
-
-/// `(phrase, network, account, change, index, address)`, recomputed with @scure/bip32 1.7.0
-/// (`HDKey.fromMasterSeed(mnemonicToSeed(phrase)).derive("m/44'/133'/a'/c/i")`) and
+/// `(phrase, network, account, change, index, address)`, recomputed with @scure/bip32 1.7.0 and
 /// `@scure/base` base58check over `0x1cb8 ‖ hash160(pubkey)` (testnet `0x1d25`, coin type 1).
 const ADDRESS_VECTORS: &[(&str, Network, u32, bool, u32, &str)] = &[
     (
@@ -137,10 +123,8 @@ fn account_paths_and_xpub_network() {
     let t = zec_account(&s, TEST, 0).unwrap();
     assert_eq!(t.path, "m/44'/1'/0'");
     assert!(t.xpub.starts_with("tpub"));
-    // A mainnet xpub is refused on testnet, and the reverse.
     assert!(zec_address_from_xpub(&a.xpub, TEST, false, 0).is_err());
     assert!(zec_address_from_xpub(&t.xpub, MAIN, false, 0).is_err());
-    // Mainnet t1…, testnet tm…; accounts and wallets differ.
     let m0 = zec_address(&s, MAIN, 0, false, 0).unwrap();
     assert!(m0.starts_with("t1"), "{m0}");
     assert!(zec_address(&s, TEST, 0, false, 0)
@@ -175,7 +159,6 @@ fn destinations_t_addresses_only() {
     let (spk, kind) = zec_parse_address(&mine, MAIN).unwrap();
     assert_eq!(kind, ZecAddressKind::P2pkh);
     assert_eq!(zec_address_of_script(&spk, MAIN).unwrap(), mine);
-    // Real mainnet P2SH (t3…) round trip.
     let p2sh = [&[0xa9u8, 0x14][..], &[7u8; 20], &[0x87]].concat();
     let t3 = zec_address_of_script(&p2sh, MAIN).unwrap();
     assert!(t3.starts_with("t3"), "{t3}");
@@ -186,7 +169,6 @@ fn destinations_t_addresses_only() {
     let t2 = zec_address_of_script(&p2sh, TEST).unwrap();
     assert!(t2.starts_with("t2"), "{t2}");
 
-    // Shielded and unified addresses: refused, with a message that says why.
     for z in [
         "zs1z7rejlpsa98s2rrrfkwmaxu53e4ue0ulcrw0h4x5g8jl04tak0d3mm47vdtahatqrlkngh9sly",
         "u1l8xunezsvhq8fgzfl7404m450nwnd76zshscn6nfys7vyz2ywyh4cc5daaq0c7q2su5lqfh23sp7fkf3kt27ve5948mzpfdvckzaect2jtte308mkwlycj2u0eac077wu70vqcetkxf",
@@ -200,7 +182,6 @@ fn destinations_t_addresses_only() {
             "{z}: {e}"
         );
     }
-    // Other network, Bitcoin, garbage: refused.
     let tm = zec_address(&s, TEST, 0, false, 0).unwrap();
     assert!(
         matches!(zec_parse_address(&tm, MAIN), Err(Error::InvalidInput(m)) if m.contains("another network"))
@@ -217,13 +198,12 @@ fn destinations_t_addresses_only() {
     ] {
         assert!(zec_parse_address(bad, MAIN).is_err(), "{bad}");
     }
-    // Non-standard scripts have no address.
     assert!(zec_address_of_script(&[0x6a, 0x01, 0x00], MAIN).is_none());
     assert!(zec_address_of_script(&[0x51], MAIN).is_none());
 }
 
 /// ZIP 320: `tex1s2rt77ggv6q989lr49rkgzmh5slsksa9khdgte` is the TEX form of
-/// `t1VmmGiyjVNeCjxDZzg7vZmd99WyzVby9yC` (same 20-byte key hash, transparent-source-only).
+/// `t1VmmGiyjVNeCjxDZzg7vZmd99WyzVby9yC` (same key hash).
 #[test]
 fn tex_addresses_pay_the_same_key_hash() {
     let (t_spk, t_kind) = zec_parse_address("t1VmmGiyjVNeCjxDZzg7vZmd99WyzVby9yC", MAIN).unwrap();
@@ -232,16 +212,10 @@ fn tex_addresses_pay_the_same_key_hash() {
     assert_eq!(t_kind, ZecAddressKind::P2pkh);
     assert_eq!(x_kind, ZecAddressKind::Tex);
     assert_eq!(t_spk, x_spk);
-    // Bad checksum (bech32m), testnet TEX on mainnet: refused.
     assert!(zec_parse_address("tex1s2rt77ggv6q989lr49rkgzmh5slsksa9khdgtf", MAIN).is_err());
     assert!(zec_parse_address("tex1s2rt77ggv6q989lr49rkgzmh5slsksa9khdgte", TEST).is_err());
 }
 
-// ------------------------------------------------------------------------------------------
-// Real mainnet data
-// ------------------------------------------------------------------------------------------
-
-/// Pushes of a P2PKH scriptSig: `<sig‖hashtype> <pubkey>`.
 fn script_sig_parts(raw: &[u8]) -> (Vec<u8>, Vec<u8>) {
     let l1 = raw[0] as usize;
     let sig = raw[1..1 + l1].to_vec();
@@ -251,8 +225,6 @@ fn script_sig_parts(raw: &[u8]) -> (Vec<u8>, Vec<u8>) {
     (sig, pk)
 }
 
-/// First input's scriptSig of a one-input v5 transaction (fixed v5 layout: 20-byte header,
-/// vin count, outpoint 36, scriptSig length).
 fn first_script_sig(tx: &[u8]) -> Vec<u8> {
     assert_eq!(tx[20], 1, "one input");
     let len = tx[57] as usize;
@@ -279,14 +251,12 @@ fn real_mainnet_v5_txid_and_signature_digest() {
         .all(|o| o.0.as_deref().is_some_and(|a| a.starts_with("t1"))));
     assert_eq!(tx.outputs[0].1, 6_715_070);
 
-    // The previous transaction, and the output it spends.
     let (prev_id, vout) = &tx.inputs[0];
     let prev_hex = f["prev_txs"][prev_id].as_str().unwrap();
     let prev = zec_decode_raw_tx(prev_hex, MAIN).unwrap();
     assert_eq!(&prev.txid, prev_id);
     let (_, value, spk) = &prev.outputs[*vout as usize];
 
-    // The signature another wallet made verifies against the digest Kyro computes.
     let digest = zec_input_sighash(hex_tx, &[(*value, hex::decode(spk).unwrap())], 0).unwrap();
     let (sig, pk) = script_sig_parts(&first_script_sig(&raw));
     assert_eq!(*sig.last().unwrap(), 0x01, "SIGHASH_ALL");
@@ -295,8 +265,7 @@ fn real_mainnet_v5_txid_and_signature_digest() {
     let pk = PublicKey::from_slice(&pk).unwrap();
     let msg = Message::from_digest(digest);
     secp.verify_ecdsa(&msg, &sig, &pk).unwrap();
-    // The digest commits to the spent amount and script (ZIP 244): one zatoshi off, or
-    // another script, and the same signature no longer verifies.
+    // ZIP 244 digest commits to spent amount and script: altering either breaks the signature.
     let lie = zec_input_sighash(hex_tx, &[(*value + 1, hex::decode(spk).unwrap())], 0).unwrap();
     assert!(secp
         .verify_ecdsa(&Message::from_digest(lie), &sig, &pk)
@@ -313,21 +282,15 @@ fn real_mainnet_v5_txid_and_signature_digest() {
     assert!(c.coinbase && c.inputs.is_empty());
     assert_eq!(zec_header_branch_id(&hex::decode(cb).unwrap()), Some(NU6_3));
 
-    // Malformed: truncated, trailing byte, not hex.
     assert!(zec_decode_raw_tx(&hex_tx[..hex_tx.len() - 2], MAIN).is_err());
     assert!(zec_decode_raw_tx(&format!("{hex_tx}00"), MAIN).is_err());
     assert!(zec_decode_raw_tx("zz", MAIN).is_err());
-    // v4 and earlier carry no branch id.
     assert_eq!(
         zec_header_branch_id(&[0x04, 0, 0, 0x80, 0x85, 0x20, 0x2f, 0x89, 1, 2, 3, 4]),
         None
     );
     assert_eq!(zec_header_branch_id(&[0x05, 0, 0, 0x80]), None);
 }
-
-// ------------------------------------------------------------------------------------------
-// Consensus branch
-// ------------------------------------------------------------------------------------------
 
 #[test]
 fn consensus_branch_is_read_from_the_chain_and_checked() {
@@ -341,14 +304,11 @@ fn consensus_branch_is_read_from_the_chain_and_checked() {
     assert!(zec_consensus(MAIN, TIP, TIP - 2, NU6_3).is_ok());
     assert!(zec_consensus(MAIN, TIP, TIP - 11, NU6_3).is_err());
     assert!(zec_consensus(MAIN, TIP, TIP + 1, NU6_3).is_err());
-    // A branch id this build does not know (a newer network upgrade): refused, says to update.
     let e = zec_consensus(MAIN, TIP, TIP, 0xdead_beef).unwrap_err();
     assert!(
         matches!(&e, Error::InvalidInput(m) if m.contains("0xdeadbeef") && m.contains("update Kyro")),
         "{e}"
     );
-    // A known branch that is not the one of this height (older NU6.1, or NU7 activated on the
-    // network while this build has no mainnet height for it): refused.
     for other in [0x4dec_4df0u32, 0x7719_0ad9] {
         let e = zec_consensus(MAIN, TIP, TIP, other).unwrap_err();
         assert!(
@@ -360,7 +320,6 @@ fn consensus_branch_is_read_from_the_chain_and_checked() {
 
 #[test]
 fn expiry_is_capped_before_a_known_upgrade() {
-    // Testnet: zcash_protocol knows NU7 at 4 465 026 (NU6.3 since 4 134 000).
     let (name, at) = zec_next_upgrade(TEST, 4_400_000).unwrap();
     assert_eq!((name.as_str(), at), ("NU7", 4_465_026));
     let tip = at - 10;
@@ -368,18 +327,12 @@ fn expiry_is_capped_before_a_known_upgrade() {
     assert_eq!(c.upgrade, "NU6.3");
     assert_eq!(c.expiry_height, at - 1);
     assert!(c.expiry_capped);
-    // At the activation height itself, the new branch applies to the next block.
     let c = zec_consensus(TEST, at - 1, at - 1, NU6_3).unwrap();
     assert_eq!(c.upgrade, "NU7");
     assert_eq!(c.branch_id, 0x7719_0ad9);
 }
 
-// ------------------------------------------------------------------------------------------
-// Building and signing
-// ------------------------------------------------------------------------------------------
-
-/// A v5 transparent transaction paying `outputs`, with one dummy input (`salt` makes the txid
-/// unique) or a coinbase input. Layout: ZIP 225.
+/// v5 transparent tx (ZIP 225) paying `outputs`, with a dummy (`salt`) or coinbase input.
 fn fake_prev(outputs: &[(u64, Vec<u8>)], salt: u8, coinbase: bool) -> String {
     let mut b = Vec::new();
     b.extend_from_slice(&0x8000_0005u32.to_le_bytes());
@@ -450,8 +403,6 @@ fn builds_and_signs_a_v5_transaction() {
         12_345_678,
     );
     let summary = zec_tx_summary(&s, MAIN, 0, &req).unwrap();
-    // Largest coin first: one input is enough. ZIP 317: 1 input, 2 outputs → 2 logical
-    // actions = the 2 grace actions → 10 000 zatoshis.
     assert_eq!(summary.inputs, 1);
     assert_eq!(summary.input_total, "30000000");
     assert_eq!(summary.amount, "12345678");
@@ -495,8 +446,7 @@ fn builds_and_signs_a_v5_transaction() {
     let prev = zec_decode_raw_tx(&req.coins[0].prev_tx, MAIN).unwrap();
     assert_eq!(tx.inputs, vec![(prev.txid.clone(), 0)]);
 
-    // The signature verifies against the ZIP-244 digest (recomputed from the signed bytes)
-    // and the key of m/44'/133'/0'/0/0.
+    // Signature verifies against the ZIP-244 digest and the key of m/44'/133'/0'/0/0.
     let raw = hex::decode(&signed_hex).unwrap();
     let (sig, pk) = script_sig_parts(&first_script_sig(&raw));
     assert_eq!(*sig.last().unwrap(), 0x01);
@@ -529,7 +479,6 @@ fn builds_and_signs_a_v5_transaction() {
 #[test]
 fn selection_change_max_and_dust() {
     let s = seed(ABANDON);
-    // Two coins needed: 2 inputs, 2 outputs → still 2 logical actions (300/150, 68/34).
     let r = zec_tx_summary(
         &s,
         MAIN,
@@ -543,7 +492,6 @@ fn selection_change_max_and_dust() {
     .unwrap();
     assert_eq!((r.inputs, r.fee.as_str()), (2, "10000"));
     assert_eq!(r.change.unwrap().amount, "390000");
-    // Three inputs: 3 logical actions → 15 000.
     let r = zec_tx_summary(
         &s,
         MAIN,
@@ -569,7 +517,6 @@ fn selection_change_max_and_dust() {
 #[test]
 fn small_remainder_is_folded_into_the_fee() {
     let s = seed(ABANDON);
-    // 1 000 000 − 985 000 − 10 000 = 5 000 − 1: below ZEC_MIN_CHANGE, folded.
     let r = zec_tx_summary(
         &s,
         MAIN,
@@ -582,7 +529,6 @@ fn small_remainder_is_folded_into_the_fee() {
     assert_eq!(r.zip317_fee, "10000");
     assert_eq!(r.folded, (1_000_000u64 - 985_001 - 10_000).to_string());
     assert!(r.warnings.is_empty());
-    // Exactly ZEC_MIN_CHANGE left: a change output.
     let r = zec_tx_summary(
         &s,
         MAIN,
@@ -609,7 +555,6 @@ fn send_everything() {
     assert_eq!(r.amount, "990000");
     let (hex_tx, _) = zec_sign(&s, MAIN, 0, &req).unwrap();
     assert_eq!(zec_decode_raw_tx(&hex_tx, MAIN).unwrap().outputs.len(), 1);
-    // Nothing left after the fee: refused.
     let mut tiny = request(vec![coin(9_000, 1, false, 0)], DEST, 0);
     tiny.max = true;
     assert!(zec_tx_summary(&s, MAIN, 0, &tiny).is_err());
@@ -618,7 +563,6 @@ fn send_everything() {
 #[test]
 fn high_fee_needs_the_reinforced_confirmation() {
     let s = seed(ABANDON);
-    // Sending 1 000 zatoshis costs 10 000 of fee: more than the amount.
     let r = zec_tx_summary(
         &s,
         MAIN,
@@ -641,7 +585,6 @@ fn refusals() {
     let mut r = ok();
     r.to = "zs1z7rejlpsa98s2rrrfkwmaxu53e4ue0ulcrw0h4x5g8jl04tak0d3mm47vdtahatqrlkngh9sly".into();
     assert!(err(r).contains("shielded"));
-    // Insufficient funds, dust, no coin.
     let mut r = ok();
     r.amount = 995_000;
     assert!(err(r).contains("insufficient"));
@@ -651,7 +594,6 @@ fn refusals() {
     let mut r = ok();
     r.coins.clear();
     assert!(err(r).contains("no coin"));
-    // A coin that pays another address of ours than claimed, another wallet, another account.
     let mut r = ok();
     r.coins[0].index = 1;
     assert!(err(r).contains("does not pay"));
@@ -662,7 +604,6 @@ fn refusals() {
         .unwrap_err()
         .to_string()
         .contains("does not pay"));
-    // vout out of range, malformed previous transaction, duplicate, coinbase.
     let mut r = ok();
     r.coins[0].vout = 1;
     assert!(err(r).contains("vout"));
@@ -675,18 +616,15 @@ fn refusals() {
     let mut r = ok();
     r.coins[0].prev_tx = fake_prev(&[(1_000_000, our_script(ABANDON, 0, false, 0))], 3, true);
     assert!(err(r).contains("coinbase"));
-    // Change index beyond MAX_CHANGE_INDEX.
     let mut r = ok();
     r.change_index = 1_001;
     assert!(err(r).contains("change index"));
-    // Unknown network upgrade, mismatching branch.
     let mut r = ok();
     r.network_branch_id = 0x1234_5678;
     assert!(err(r).contains("update Kyro"));
     let mut r = ok();
     r.network_branch_id = 0x4dec_4df0;
     assert!(err(r).contains("update Kyro"));
-    // The signing path refuses exactly the same things.
     let mut r = ok();
     r.network_branch_id = 0x1234_5678;
     assert!(zec_sign(&s, MAIN, 0, &r).is_err());
@@ -712,7 +650,6 @@ fn tex_recipient_and_testnet() {
         "a TEX address pays the P2PKH of its key hash"
     );
 
-    // Testnet: tm… keys at m/44'/1'/0', its own branch table.
     let to = zec_address(&s, TEST, 0, false, 5).unwrap();
     let c = ZecCoin {
         prev_tx: fake_prev(
@@ -744,6 +681,5 @@ fn tex_recipient_and_testnet() {
             .as_deref()
             == Some(to.as_str())
     );
-    // The same request on mainnet: the coin's script is not a mainnet key of ours.
     assert!(zec_tx_summary(&s, MAIN, 0, &req).is_err());
 }

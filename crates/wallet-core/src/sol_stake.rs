@@ -1,18 +1,4 @@
-//! Solana native staking (Stake program `Stake11111111111111111111111111111111111111`):
-//! messages Kyro builds itself, stake-account and stake-history parsing, and the activation
-//! (warm-up / cool-down) computation of the Stake program.
-//!
-//! Kyro builds only four operations, always with **our** address as fee payer, stake authority,
-//! withdraw authority and withdrawal recipient, and **no lockup**:
-//! - create + delegate: `SystemProgram::CreateAccountWithSeed` (base = us, owner = Stake, 200
-//!   bytes, so no second signer is needed), `Initialize` (staker = withdrawer = us, zero lockup),
-//!   `DelegateStake`;
-//! - `DelegateStake` of an existing, inactive stake account;
-//! - `Deactivate`;
-//! - `Withdraw` to our own address.
-//!
-//! Every message built here is decoded again by [`crate::sol_decode_message`] before it is
-//! returned, with the same rules as before signing.
+//! Solana native staking: Kyro-built messages, stake account/history parsing, activation math.
 
 use serde::{Deserialize, Serialize};
 
@@ -28,10 +14,6 @@ pub const SOL_STAKE_PROGRAM: &str = STAKE_PROGRAM;
 pub const SOL_STAKE_ACCOUNT_SIZE: u64 = STAKE_STATE_SIZE;
 /// Stake-history sysvar address (read to compute activation).
 pub const SOL_STAKE_HISTORY_SYSVAR: &str = SYSVAR_STAKE_HISTORY;
-/// Warm-up / cool-down rate of the Stake program since `reduce_stake_warmup_cooldown`
-/// (9 % of the cluster's effective stake per epoch). Before that feature it was 25 %; the
-/// feature is active on every cluster today, so Kyro uses 9 % for all epochs (the difference only
-/// matters for a stake that was still warming up before the feature: none can be any more).
 const WARMUP_COOLDOWN_RATE: f64 = 0.09;
 const SYSTEM_PROGRAM: &str = "11111111111111111111111111111111";
 
@@ -60,8 +42,7 @@ pub fn sol_create_with_seed(base: &str, seed: &str, owner: &str) -> Result<Strin
     rename_all_fields = "camelCase"
 )]
 pub enum SolStakeOp {
-    /// New stake account at `create_with_seed(us, seed, Stake)` funded with `lamports` (stake +
-    /// rent-exempt reserve), initialised with us as both authorities, delegated to `vote_account`.
+    /// New stake account at `create_with_seed(us, seed, Stake)`, us as authorities, delegated.
     CreateAndDelegate {
         /// Seed (≤ 32 bytes, ASCII).
         seed: String,
@@ -116,8 +97,6 @@ fn compact_u16(n: usize, out: &mut Vec<u8>) -> Result<()> {
     }
 }
 
-/// Legacy message with one signer (`payer`, writable): keys = payer, writable non-signers,
-/// read-only non-signers (programs included), each group in order of first appearance.
 fn legacy_message(payer: &[u8; 32], blockhash: &[u8; 32], ixs: &[Ix]) -> Result<Vec<u8>> {
     let mut writable: Vec<[u8; 32]> = Vec::new();
     let mut readonly: Vec<[u8; 32]> = Vec::new();
@@ -262,10 +241,6 @@ pub fn sol_stake_message(me: &str, op: &SolStakeOp, blockhash: &str) -> Result<V
     legacy_message(&me_k, &bh, &ixs)
 }
 
-// ---------------------------------------------------------------------------------------------
-// Stake accounts and stake history
-// ---------------------------------------------------------------------------------------------
-
 /// Delegation part of a delegated stake account.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -317,10 +292,8 @@ fn key_at(d: &[u8], at: usize) -> Result<String> {
     Ok(b58(&k))
 }
 
-/// Parses the 200-byte data of a stake account (layout of `StakeStateV2`, bincode): `u32` tag,
-/// `Meta { rent_exempt_reserve u64, Authorized { staker, withdrawer }, Lockup { unix_timestamp
-/// i64, epoch u64, custodian } }` at 4..124, then for `Stake`: `Delegation { voter, stake,
-/// activation_epoch, deactivation_epoch, warmup_cooldown_rate f64 }` at 124..188.
+/// Parses a 200-byte stake account (`StakeStateV2`, bincode): tag, `Meta` at 4..124, then
+/// for `Stake` the `Delegation` at 124..188.
 pub fn sol_parse_stake_account(data: &[u8]) -> Result<SolStakeAccount> {
     if data.len() as u64 != STAKE_STATE_SIZE {
         return Err(Error::input("stake account: unexpected size"));
@@ -381,8 +354,7 @@ pub struct SolStakeHistoryEntry {
     pub deactivating: u64,
 }
 
-/// Parses the StakeHistory sysvar (`Vec<(Epoch, StakeHistoryEntry)>`, bincode: `u64` length then
-/// 32-byte entries).
+/// Parses the StakeHistory sysvar (bincode `u64` length, then 32-byte entries).
 pub fn sol_parse_stake_history(data: &[u8]) -> Result<Vec<SolStakeHistoryEntry>> {
     let n = usize::try_from(u64_at(data, 0)?).map_err(|_| Error::input("invalid history"))?;
     if n > 512 || data.len() < 8 + n * 32 {
@@ -466,8 +438,7 @@ fn stake_and_activating(d: &SolDelegation, target: u64, h: &[SolStakeHistoryEntr
     (effective, delegated.saturating_sub(effective))
 }
 
-/// The Stake program's `Delegation::stake_activating_and_deactivating` at `target_epoch`
-/// (usually the current epoch), from the StakeHistory sysvar.
+/// Stake program's `stake_activating_and_deactivating` at `target_epoch`, from StakeHistory.
 pub fn sol_stake_activation(
     d: &SolDelegation,
     target_epoch: u64,
@@ -519,9 +490,7 @@ pub fn sol_stake_activation(
     }
 }
 
-/// What can be withdrawn now, with the Stake program's `withdraw` rule: `(partial maximum that
-/// keeps the account open, whole balance allowed)`. The whole balance (closing the account) is
-/// allowed only when nothing is staked any more.
+/// Withdrawable now (Stake `withdraw` rule): `(partial max keeping account open, whole allowed)`.
 pub fn sol_stake_withdrawable(
     account: &SolStakeAccount,
     balance: u64,

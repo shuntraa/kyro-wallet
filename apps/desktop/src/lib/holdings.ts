@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Portfolio rows and totals from per-account balances (docs/IPC.md §2.9): one row per asset with
 // every account added together (totals, allocation), and one row per account for chains with
-// several accounts. Pure, so the totals are tested with many accounts.
+// several accounts.
 
 import { assetsFor, findChain, unitsToNumber, type AssetDef } from '@kyro/chains';
 import type { AccountChain, Network } from '@kyro/shared';
@@ -12,7 +11,6 @@ export interface Holding {
   /** Unique row key: the asset id, plus `@index` for a row of one account among several. */
   key: string;
   asset: AssetDef;
-  /** Set on per-account rows of a chain with several vault accounts (§2.9). */
   account?: { family: AccountChain; index: number; name: string };
   amount: bigint;
   units: number;
@@ -21,9 +19,7 @@ export interface Holding {
   change7d: number | null;
   value: number | null;
   spark: number[];
-  /** 0..1 of the portfolio value. */
   share: number;
-  /** Balance could not be loaded (RPC error). */
   failed: boolean;
 }
 
@@ -77,8 +73,8 @@ export function computeHoldings({ network, sources: allSources, accountBalances,
   };
   for (const asset of assetsFor(network)) {
     const family = asset.family as AccountChain;
-    // Only the chains of the active wallet (a hardware wallet may hold only some of them),
-    // and every account of the chain that has this asset's chain (each account counted once).
+    // Only the chains of the active wallet (a hardware wallet may hold only some of them), and
+    // every account of the chain that has this asset's chain (each account counted once).
     const sources: HoldingSource[] = [];
     for (const x of allSources) if (x.family === family && x.chainKeys.includes(asset.chainKey) && !sources.some((s) => s.index === x.index)) sources.push(x);
     if (sources.length === 0) continue;

@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Algorand adapter (ALGO payments). Thin on purpose: reads, payment building (fee, validity
-// window and genesis filled by Rust, canonical msgpack encoded by wallet-core), signature and
-// submission are Rust commands (`algo_*`, docs/IPC.md §2.11). This adapter only validates input
-// and checks that what Rust built is what was asked (receiver, amount, note).
+// Algorand adapter (ALGO payments).
 
 import {
   call,
@@ -59,10 +55,7 @@ export function rustAlgoBackend(account = 0): AlgoBackend {
   };
 }
 
-/**
- * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature
- * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
- */
+/** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature on the device (`hw_*` commands). */
 export function rustAlgoHwBackend(accountId: string): AlgoBackend {
   const base = rustAlgoBackend();
   // Tokens are not signed on a hardware wallet yet (holdings stay readable).
@@ -76,10 +69,7 @@ export function rustAlgoHwBackend(accountId: string): AlgoBackend {
   };
 }
 
-/**
- * Algorand address: 58 upper-case base32 characters = public key ‖ last 4 bytes of
- * SHA-512/256(key) (`@kyro/shared`). Checked here for the UI; Rust checks again on every command.
- */
+/** Algorand address: 58 upper-case base32 characters = public key ‖ last 4 bytes of SHA-512/256(key) (`@kyro/shared`). */
 export { isAlgoAddress };
 
 /** Size of a note in bytes (UTF-8), what the 1024-byte limit counts. */

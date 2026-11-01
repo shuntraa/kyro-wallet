@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Send: recipient with clipboard guard + 4-char blocks, amount + MAX,
-// fees slow/normal/fast/custom, recap decoded by the Rust core, password.
+// Send: recipient with clipboard guard + 4-char blocks, amount + MAX, fees slow/normal/fast/custom,
+// recap decoded by the Rust core, password.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { call, kaspaAddressProblem, sameTonAccount, toIpcError, type AccountChain, type EvmTxSummary, type SolTxSummary } from '@kyro/shared';
@@ -150,11 +150,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const network = accounts.network;
   const cur = settings.currency;
 
-  // Only the chains of the active account (a hardware wallet may hold only some of them).
   const sendable = useMemo(() => assetsFor(network).filter((a) => !a.readOnly && !!adapterFor(a, adapters) && (a.kind === 'native' || (pf.balances.get(a.id) ?? 0n) > 0n)), [network, pf.balances, adapters]);
   const defaultAsset = sendable.find((a) => a.id === assetId) ?? pf.holdings.find((h) => h.amount > 0n && !h.asset.readOnly)?.asset ?? sendable[0];
   const [selectedId, setSelectedId] = useState(defaultAsset?.id ?? '');
-  // Every network an asset can be sent from (zero balances included), for the network choice.
   const pickable = useMemo(() => assetsFor(network).filter((a) => !a.readOnly && !!adapterFor(a, adapters)), [network, adapters]);
   const asset = sendable.find((a) => a.id === selectedId) ?? pickable.find((a) => a.id === selectedId) ?? defaultAsset;
   const siblings = useMemo(() => (asset ? networkSiblings(asset, pickable) : []), [asset, pickable]);
@@ -176,7 +174,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const fiatPrice = priceCheck.ok ? price : null;
   const nativePrice = nativeAsset ? pf.price(nativeAsset.coingeckoId)?.price ?? null : null;
 
-  // Recipient + clipboard guard.
   const [to, setTo] = useState(initialTo ?? '');
   // An address handed over by the search palette: its origin is unknown (typed or pasted there), never « pasted here ».
   const [guard, setGuard] = useState<GuardState>(initialTo ? handedOverGuard : initialGuard);
@@ -185,12 +182,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const otherNetworks = asset && !addrValid && siblings.length > 1 ? otherNetworksForAddress(toTrim, asset, siblings, (a, x) => !!adapterFor(a, adapters)?.isValidAddress(x)) : [];
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
-  // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
   const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.zec?.address, accounts.cosmos?.address, accounts.ton?.address, accounts.xmr?.address, accounts.algo?.address, accounts.polkadot?.address, accounts.kas?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address.toLowerCase(), accounts.hbar?.address.toLowerCase(), accounts.aptos?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' || x.family === 'apt' || x.family === 'sui' || x.family === 'hbar' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
-  // TON: the EQ… and UQ… forms of one account are the same address.
   const isOwn = ownAddresses.includes(asset?.family === 'evm' || asset?.family === 'sui' || asset?.family === 'hbar' || asset?.family === 'apt' ? toTrim.toLowerCase() : toTrim) || (asset?.family === 'ton' && ownAddresses.some((a) => sameTonAccount(a, toTrim)));
-  // « Mes comptes »: the user's OTHER accounts of this chain. A transfer between two of them is an
-  // ordinary send (same Rust decoding, native dialog, poisoning check: own addresses are known).
   const family = asset?.family as AccountChain | undefined;
   const ownAccount = family && addrValid ? ownAccountOf(accountSources, family, toTrim) : undefined;
   const myOtherAccounts = family && !activeHw ? otherOwnAccounts(accountSources, family, selectedAccounts[family]) : [];
@@ -202,7 +195,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     setTo(addr);
     setGuard(pickedGuard(addr));
   };
-  /** Creates the next account of this chain (without switching the sending one) and fills its address. */
   const createOwnRecipient = async () => {
     if (!family) return;
     setOwnBusy(true);
@@ -221,8 +213,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
   // Address poisoning: compare the recipient with every reference address of this chain family
   // (address book, own addresses, recipients of sends signed by this device, other non-suspect
-  // counterparties). The server's history is never « trusted »: zero-value, dust and unsigned
-  // transfers are suspects, never references (see packages/chains/src/poisoning.ts).
+  // counterparties).
   const history = useHistory();
   const poisoning = useMemo(() => {
     if (!asset || !addrValid) return { lookalike: null, suspect: false };
@@ -251,9 +242,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       apt: [accounts.aptos?.address],
       zec: [accounts.zec?.address],
     };
-    // The other accounts of the vault are trusted too.
     for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
-    // Recipients of transfers this device signed and broadcast (Kyro's own record, by txid).
     const signedHere = getLocalTxs(network)
       .filter((t) => t.kind === 'transfer' && t.status !== 'failed' && !!t.counterparty && findChain(network, t.chainKey)?.family === family)
       .map((t) => t.counterparty as string);
@@ -279,17 +268,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   useEffect(() => setPoisonAck(false), [toTrim, asset?.id]);
   const poisonBlocked = !!poisoning.lookalike && !poisonAck;
 
-  // Amount.
   const [amountStr, setAmountStr] = useState('');
   const [fiatMode, setFiatMode] = useState(false);
   const [max, setMax] = useState(false);
   const decimals = asset?.decimals ?? 18;
-  /** Litecoin / Dogecoin / Bitcoin Cash / Dash: Bitcoin-style UTXO chains (same fee field, PSBT, change). */
   const utxoLike = asset?.family === 'btc' || asset?.family === 'ltc' || asset?.family === 'doge' || asset?.family === 'bch' || asset?.family === 'dash';
   const rateUnit = asset?.family === 'ltc' ? 'litoshi/vB' : asset?.family === 'doge' ? 'koinus/octet' : asset?.family === 'bch' ? 'sat/octet' : asset?.family === 'dash' ? 'duff/octet' : 'sat/vB';
-  /** TRON: no fee to choose; Rust's resource estimate is shown with the summary. */
   const isTron = asset?.family === 'tron';
-  /** XRP Ledger: no fee to choose; destination tag, reserve and activation rules (§2.6). */
   const isXrp = asset?.family === 'xrp';
   const xrpAdapter = isXrp ? (adapter as XrpAdapter | undefined) : undefined;
   const [tagStr, setTagStr] = useState('');
@@ -301,13 +286,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       return { error: (e as Error).message };
     }
   }, [tagStr]);
-  /** A pasted X-address (tag embedded): Rust refuses it, Kyro asks for the classic address + tag. */
   const xAddress = isXrp && isXAddress(toTrim);
-  // Destination as Rust reads it (exists? lsfRequireDestTag?), and our own reserve / spendable.
   const xrpDest = useAsync(xrpAdapter && addrValid ? () => xrpAdapter.destinationInfo(toTrim) : null, [xrpAdapter, addrValid, toTrim]);
   const xrpDestInfo = xrpDest.data?.address === toTrim ? xrpDest.data : undefined;
   const xrpMe = useAsync(xrpAdapter ? () => xrpAdapter.account() : null, [xrpAdapter], { intervalMs: 30_000 });
-  /** Stellar: no fee to choose; memo (required by some destinations), reserve, CreateAccount (§2.11). */
   const isXlm = asset?.family === 'xlm';
   const xlmAdapter = isXlm ? (adapter as StellarAdapter | undefined) : undefined;
   const [xlmMemoKind, setXlmMemoKind] = useState<StellarMemoKind>('id');
@@ -324,28 +306,23 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const xlmDest = useAsync(xlmAdapter && addrValid ? () => xlmAdapter.destinationInfo(toTrim) : null, [xlmAdapter, addrValid, toTrim]);
   const xlmDestInfo = xlmDest.data?.address === toTrim ? xlmDest.data : undefined;
   const xlmMe = useAsync(xlmAdapter ? () => xlmAdapter.account() : null, [xlmAdapter], { intervalMs: 30_000 });
-  /** NEAR: receiver kind / existence and spendable (balance − storage reserve), §2.11. */
   const isNear = asset?.family === 'near';
   const nearAdapter = isNear ? (adapter as NearAdapter | undefined) : undefined;
   const nearRecv = useAsync(nearAdapter && addrValid ? () => nearAdapter.receiverInfo(toTrim) : null, [nearAdapter, addrValid, toTrim]);
   const nearRecvInfo = nearRecv.data?.accountId === toTrim ? nearRecv.data : undefined;
   const nearMe = useAsync(nearAdapter ? () => nearAdapter.account() : null, [nearAdapter], { intervalMs: 30_000 });
-  /** NEAR: a named or 0x… receiver that does not exist, or not read yet: nothing is built. */
   const nearBlocked = isNear && (!nearRecvInfo || nearReceiverBlocked(toTrim, nearRecvInfo));
   const nearProblem = isNear && toTrim ? nearAccountIdProblem(toTrim) : null;
-  /** Sui: no fee to choose; full 0x + 64 hex address; spendable = SUI in coin objects (§2.11). */
   const isSui = asset?.family === 'sui';
   const suiAdapter = isSui ? (adapter as SuiAdapter | undefined) : undefined;
   const suiMe = useAsync(suiAdapter ? () => suiAdapter.balanceInfo() : null, [suiAdapter], { intervalMs: 30_000 });
   const suiProblem = isSui && toTrim ? suiAddressProblem(toTrim) : null;
-  /** Polkadot: existential deposit and keep-alive rules (§2.11), no fee to choose. */
   const isDot = asset?.family === 'dot';
   const dotAdapter = isDot ? (adapter as PolkadotAdapter | undefined) : undefined;
   const dotDest = useAsync(dotAdapter && addrValid ? () => dotAdapter.destinationInfo(toTrim) : null, [dotAdapter, addrValid, toTrim]);
   const dotDestInfo = dotDest.data?.address === toTrim ? dotDest.data : undefined;
   const dotMe = useAsync(dotAdapter ? () => dotAdapter.account() : null, [dotAdapter], { intervalMs: 30_000 });
   const dotProblem = isDot && toTrim && !addrValid ? dotAddressProblem(toTrim, network) : null;
-  /** Polkadot token (USD₮, USDC): `Assets.transfer_keep_alive`, the token's minimum balance stays; fees in DOT. */
   const dotToken = isDot && asset?.kind === 'dotasset';
   const dotAssets = useAsync(dotAdapter && dotToken ? () => dotAdapter.assetBalances() : null, [dotAdapter, dotToken], { intervalMs: 30_000 });
   const dotTokenRow = dotToken ? dotAssets.data?.find((b) => `dotasset:${b.assetId}` === asset?.id) : undefined;
@@ -361,7 +338,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const adaTokenQty = adaToken && /^\d+$/.test(tokenQty) ? BigInt(tokenQty) : null;
   const adaTokenOver = !!adaToken && adaTokenQty !== null && adaTokenQty > BigInt(adaToken.quantity);
   const adaMemoTooLong = isAda && new TextEncoder().encode(memo).length > 1024;
-  /** TON: optional text comment (reuses `memo`, not trimmed: it is sent exactly), recipient state (§2.10). */
   const isTon = asset?.family === 'ton';
   const tonAdapter = isTon ? (adapter as TonAdapter | undefined) : undefined;
   const tonProblem = isTon && toTrim ? tonRecipientProblem(toTrim, network) : null;
@@ -370,21 +346,17 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const tonCommentBad = isTon && tonCommentProblem(memo) !== null;
   /** TON: everything that must be right before Rust is even asked to build. */
   const tonBlocked = isTon && (!tonDestInfo || tonDestInfo.status === 'frozen' || tonCommentBad);
-  /** Refused Cardano address types, in Rust's words (Byron, script, pointer, stake, other network). */
   const adaProblem = isAda && toTrim ? cardanoAddressProblem(toTrim, network) : null;
-  /** Cosmos Hub: no fee to choose; memo always visible (exchanges), §2.11. */
   const isCosmos = asset?.family === 'cosmos';
   const cosmosAdapter = isCosmos ? (adapter as CosmosAdapter | undefined) : undefined;
   const cosmosMe = useAsync(cosmosAdapter ? () => cosmosAdapter.account() : null, [cosmosAdapter], { intervalMs: 30_000 });
   const cosmosBlocked = isCosmos && cosmosMemoProblem(memo.trim()) !== null;
-  /** Aptos: APT only, full 0x + 64 hex addresses, the max fee is reserved up front (§2.11). */
   const isApt = asset?.family === 'apt';
   const aptAdapter = isApt ? (adapter as AptosAdapter | undefined) : undefined;
   const aptProblem = isApt && toTrim ? aptosAddressProblem(toTrim) : null;
   const aptDest = useAsync(aptAdapter && addrValid ? () => aptAdapter.recipientInfo(toTrim) : null, [aptAdapter, addrValid, toTrim]);
   const aptDestNew = !!aptDest.data && aptDest.data.address === toTrim.toLowerCase() && aptDest.data.sequenceNumber === '0' && aptDest.data.balance === '0';
   const adaBlocked = isAda && (adaMemoTooLong || (adaTokenMode && (adaTokenQty === null || adaTokenQty <= 0n || adaTokenOver)));
-  /** Hedera: memo always visible, recipient facts and our account from the mirror node (§2.11). */
   const isHbar = asset?.family === 'hbar';
   const hbarAdapter = isHbar ? (adapter as HbarAdapter | undefined) : undefined;
   const hbarDest = useAsync(hbarAdapter && addrValid ? () => hbarAdapter.recipientInfo(toTrim) : null, [hbarAdapter, addrValid, toTrim]);
@@ -392,12 +364,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const hbarMe = useAsync(hbarAdapter ? () => hbarAdapter.account() : null, [hbarAdapter], { intervalMs: 30_000 });
   const hbarProblem = isHbar ? hbarRecipientProblem(hbarDestInfo) : null;
   const hbarBlocked = isHbar && (!hbarDestInfo || !!hbarMemoError(memo.trim()) || !!hbarProblem || hbarMe.data?.exists === false);
-  /** Kaspa: no fee to choose; Rust builds from the account's coins (§2.11). */
   const isKas = asset?.family === 'kas';
   const kasAdapter = isKas ? (adapter as KaspaAdapter | undefined) : undefined;
   const kasMe = useAsync(kasAdapter ? () => kasAdapter.account() : null, [kasAdapter], { intervalMs: 30_000 });
   const kasProblem = isKas && toTrim ? kaspaAddressProblem(toTrim, network) : null;
-  /** Algorand: optional note (the `memo` field), minimum balance rules (§2.11). */
   const isAlgo = asset?.family === 'algo';
   const algoAdapter = isAlgo ? (adapter as AlgorandAdapter | undefined) : undefined;
   const algoDest = useAsync(algoAdapter && addrValid ? () => algoAdapter.destinationInfo(toTrim) : null, [algoAdapter, addrValid, toTrim]);
@@ -422,7 +392,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const xmrSynced = !!xmr.status && !xmr.status.running && xmr.status.restoreHeight !== null && xmr.status.progress >= 1;
   const [xmrGo, setXmrGo] = useState(0);
   const xmrBlocked = isXmr && (!xmrDestInfo || !xmrSynced || xmrGo === 0);
-  /** Zcash: transparent addresses only; shielded / unified recipients get a clear refusal. */
   const isZec = asset?.family === 'zec';
   const zecProblem = isZec && toTrim ? zecAddressProblem(toTrim, network) : null;
   const amountBase = useMemo(() => {
@@ -434,33 +403,26 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     }
     return tryParseUnits(amountStr, decimals);
   }, [amountStr, fiatMode, fiatPrice, decimals]);
-  /** Share of the balance this amount represents (fiat entry: the market price decided it). */
   const balanceShare = amountBase !== null && balance > 0n ? Number((amountBase * 10_000n) / balance) / 100 : null;
-  // XRP: a new account needs at least the base reserve (1 XRP), else tecNO_DST_INSUF_XRP.
   const xrpBelowActivation = isXrp && !!xrpDestInfo && !xrpDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XRP_ACTIVATION;
   const xrpTagMissing = isXrp && !!xrpDestInfo?.requireDestTag && tagParsed.tag === undefined;
-  // Stellar: creating an account needs at least 2 × base reserve (1 XLM).
   const xlmBelowActivation = isXlm && asset?.kind === 'native' && !!xlmDestInfo && !xlmDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XLM_ACTIVATION;
   const xlmMemoMissing = isXlm && !!xlmDestInfo?.memoRequired && !xlmMemoParsed.memo;
   const xlmBlocked = isXlm && (!xlmDestInfo || !!xlmMemoParsed.error || xlmMemoMissing || xlmBelowActivation);
   /** XRP: everything that must be right before Rust is even asked to build. */
   const xrpBlocked = isXrp && (!xrpDestInfo || !!tagParsed.error || xrpTagMissing || xrpBelowActivation);
-  // Polkadot: a new account needs at least the existential deposit, else the transfer fails.
   const dotBelowEd = isDot && !dotToken && !!dotDestInfo && !dotDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < BigInt(dotDestInfo.existentialDeposit);
   const dotBlocked = isDot && (!dotDestInfo || dotBelowEd);
   // Algorand: a receiver must end at or above its minimum balance (0.1 ALGO for a new account).
   const algoDestMin = algoDestInfo ? BigInt(algoDestInfo.minBalance) - BigInt(algoDestInfo.balance) : ALGO_ACTIVATION;
   const algoBelowMinimum = isAlgo && !algoToken && !!algoDestInfo && !max && amountBase !== null && amountBase > 0n && amountBase < algoDestMin;
   const algoBlocked = isAlgo && (!algoDestInfo || algoNoteTooLong || algoBelowMinimum || !!algoMe.data?.authAddr || algoAsaRefused);
-  // Dogecoin dust (Dogecoin Core policy): no output under 0.01 DOGE.
   const dogeBelowDust = asset?.family === 'doge' && amountBase !== null && amountBase > 0n && amountBase < DOGE_SOFT_DUST && !max;
   // Kaspa: KIP-9 storage mass makes outputs under 0.2 KAS non-standard (Rust refuses them).
   const kasBelowMin = isKas && amountBase !== null && amountBase > 0n && amountBase < KASPA_MIN_SEND && !max;
 
-  // Fees.
   const fees = useAsync<FeeEstimates>(adapter ? () => adapter.estimateFees() : null, [adapter], { intervalMs: 30_000 });
   const feesTorBlocked = useTorBlocked(fees.error);
-  // Compact filters: rates are an average of recent blocks, not a mempool estimate.
   const blockAverage = fees.data?.source === 'block-average';
   useOnTorReady(fees.reload);
   const [choice, setChoice] = useState<FeeChoice>('normal');
@@ -481,33 +443,24 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     if (asset.family === 'btc') return validateBtcFeeRate(customBtc, fees.data);
     if (asset.family === 'ltc') return validateBtcFeeRate(customBtc, fees.data, { unit: 'litoshi/vB' });
     if (asset.family === 'doge') return validateBtcFeeRate(customBtc, fees.data, { unit: 'koinus/octet', floor: 1_000, ceiling: 100_000, high: 10_000 });
-    // Bitcoin Cash / Dash: relay minimum 1 per byte, Rust's ceiling 100 (high-fee threshold).
     if (asset.family === 'bch' || asset.family === 'dash') return validateBtcFeeRate(customBtc, fees.data, { unit: rateUnit, floor: 1, ceiling: 100, high: 10 });
     return validateSolPriorityFee(customSol);
   }, [choice, asset, customEvm, customBtc, customSol, fees.data, rateUnit]);
   const feeParams: FeeParams | null = choice === 'custom' ? custom?.params ?? null : fees.data?.options[choice].params ?? null;
 
-  // Build (debounced) → unsigned tx + Rust decoding for EVM.
   const buildKey = useDebounced(JSON.stringify([asset?.id, toTrim, isXmr && max ? 'max' : amountBase?.toString(), max, feeParams, addrValid, isXrp ? tagStr : null, xrpBlocked, dotBlocked, isXlm ? [xlmMemoKind, xlmMemo, xlmBlocked] : null, nearBlocked, isAda ? [tokenSel, tokenQty, memo.trim(), adaBlocked] : null, isHbar ? [memo.trim(), hbarBlocked] : null, isAlgo ? [memo.trim(), algoBlocked] : null, isXmr ? [xmrGo, xmrBlocked] : null, isTon ? [memo, tonBlocked] : null, isCosmos ? [memo.trim(), cosmosBlocked] : null], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), 450);
   const [built, setBuilt] = useState<Built | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
-  // XRP: what can be sent is the spendable part (balance − reserve), not the balance.
   const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : isCosmos && cosmosMe.data ? BigInt(cosmosMe.data.spendable) : null;
   const kasSpendable = isKas && kasMe.data ? BigInt(kasMe.data.spendable) : isXlm && asset?.kind === 'native' && xlmMe.data ? BigInt(xlmMe.data.spendable) : null;
-  // NEAR: likewise, balance − storage reserve.
   const nearSpendable = isNear && asset?.kind === 'native' && nearMe.data ? BigInt(nearMe.data.spendable) : null;
-  // Sui: the address balance is not spent by Kyro, only SUI coin objects.
   const suiSpendable = isSui && asset?.kind === 'native' && suiMe.data ? BigInt(suiMe.data.coin) : null;
-  // Polkadot: the existential deposit and the frozen part cannot be sent.
   const dotSpendable = isDot && !dotToken && dotMe.data ? BigInt(dotMe.data.spendable) : dotTokenRow ? (BigInt(dotTokenRow.balance) > BigInt(dotTokenRow.minBalance) ? BigInt(dotTokenRow.balance) - BigInt(dotTokenRow.minBalance) : 0n) : null;
-  // Algorand: likewise, balance − minimum balance.
   const algoSpendable = isAlgo && !algoToken && algoMe.data ? BigInt(algoMe.data.spendable) : null;
-  // Monero: only unlocked outputs (10 confirmations) can be spent.
   const xmrSpendable = isXmr && xmr.status ? BigInt(xmr.status.unlocked) : null;
   const overBalance = !max && amountBase !== null && amountBase > (xrpSpendable ?? nearSpendable ?? suiSpendable ?? kasSpendable ?? dotSpendable ?? algoSpendable ?? xmrSpendable ?? balance);
   // Monero: a new preparation is needed whenever the request changes.
-  // (MAX writes the prepared amount back into the field: that is not a new request.)
   useEffect(() => setXmrGo(0), [toTrim, max ? 'max' : amountBase?.toString(), max, asset?.id]);
 
   const doBuild = async (): Promise<Built> => {
@@ -529,7 +482,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     }
     let sol: SolTxSummary | null = null;
     if (unsigned.family === 'sol') {
-      // Solana: the recap comes from the Rust decoder only (sol_decode_tx).
       sol = await (adapter as SolanaAdapter).decode(unsigned);
       const problem = checkSolSummary(unsigned, sol, adapter.getAddress());
       if (problem) throw new Error(t('send.solProblemBlocked', { problem }));
@@ -541,7 +493,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     setBuilt(null);
     setBuildError(null);
     if (!addrValid || !feeParams || dogeBelowDust || kasBelowMin || xrpBlocked || xlmBlocked || nearBlocked || dotBlocked || adaBlocked || hbarBlocked || algoBlocked || xmrBlocked || tonBlocked || cosmosBlocked) return;
-    // A Cardano token payment carries only its min-ADA: no ADA amount to type.
     if (!adaTokenMode && (overBalance || (!max && (amountBase === null || amountBase <= 0n)))) return;
     let alive = true;
     setBuilding(true);
@@ -554,7 +505,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     };
   }, [buildKey]);
 
-  // Reflect MAX in the amount field.
   useEffect(() => {
     if (max && built) setAmountStr(fiatMode && price ? sanitizeDecimalInput(String(unitsToNumber(built.unsigned.amount, decimals) * price), 2) : toInputDecimal(built.unsigned.amount, decimals));
   }, [max, built]);
@@ -569,11 +519,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const amountFiat = sendAmount !== null && price !== null ? unitsToNumber(sendAmount, decimals) * price : null;
   const after = sendAmount !== null ? balance - sendAmount - (asset?.kind === 'native' && maxFee !== null ? maxFee : 0n) : null;
 
-  // Sign.
   const [password, setPassword] = useState('');
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
-  /** Hardware wallet: the device in use while signing, and its error (precise HW_* message). */
   const [hwDevice, setHwDevice] = useState<string | null>(null);
   const [hwError, setHwError] = useState<unknown>(null);
   const [done, setDone] = useState<{ id: string; dot?: { nonce: number; validUntil: number } } | null>(null);
@@ -625,7 +573,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       const err = toIpcError(e);
       if (activeHw && (err.code.startsWith('HW_') || err.code === 'USER_REJECTED')) setHwError(e);
       else setSignError(err.code === 'USER_REJECTED' ? t('send.signCancelled') : err.message);
-      // Monero: a prepared transfer is used once by Rust, even on failure: prepare it again.
       if (isXmr) {
         setBuilt(null);
         setXmrGo(0);
@@ -712,7 +659,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
       <div className="flex min-h-0 flex-1 gap-5">
         <form onSubmit={(e) => e.preventDefault()} className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto rounded-panel border border-line bg-card px-[26px] py-6 scroll-thin">
-          {/* From */}
           <div className="flex flex-col gap-2">
             <span className="eyebrow">{t('send.from')}</span>
             <Menu
@@ -746,7 +692,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {fees.error && serverMissing(fees.error) && <ServerMissingLine coin={asset.name} />}
           </div>
 
-          {/* To */}
           <div className="flex flex-col gap-2">
             <label htmlFor="dest" className="eyebrow">
               {t('send.to')}
@@ -886,7 +831,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="-mt-2 text-[12px] leading-[1.45] text-mute">{t('send.adaWithToken')}</span>
           ) : (
           <>
-          {/* Amount */}
           <div className="flex flex-col gap-2">
             <div className="flex justify-between">
               <label htmlFor="amount" className="eyebrow">
@@ -991,7 +935,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
 
           </>
           )}
-          {/* Fees */}
           {isKas ? (
             <div className="flex flex-col gap-2">
               <span className="eyebrow">{t('send.networkFees')}</span>
@@ -1165,8 +1108,6 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           </div>
         </form>
 
-        {/* Verification */}
-        {/* Verification: a receipt. Ice top rule, dashed tear lines between parts. */}
         <aside aria-label={t('send.review')} className="relative flex w-[400px] shrink-0 flex-col gap-4 overflow-y-auto rounded-panel border border-line bg-panel px-6 py-[22px] scroll-thin before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-ice/70">
           <div className="flex items-center justify-between">
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('send.review')}</span>
@@ -1478,7 +1419,6 @@ function dataLabel(b: Built | null, family?: string): string {
   const u = b.unsigned;
   if (u.family === 'btc') {
     const outs = u.summary.outputs.length;
-    // Dogecoin, Bitcoin Cash and Dash have no SegWit: bytes, not vbytes.
     return `${tp('send.dataOutputs', outs)} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' || family === 'bch' || family === 'dash' ? t('send.dataBytes') : 'vB'}`;
   }
   if (u.family === 'ada') return `${tp('send.dataInputs', u.summary.inputs.length)} · ${t('send.dataAdaOutputs', { n: u.summary.outputs.length })}${u.token ? ' · token' : ''}${u.summary.memo ? ` · ${t('send.dataMessage')}` : ''}`;

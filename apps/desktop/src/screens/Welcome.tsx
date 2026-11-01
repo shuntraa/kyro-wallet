@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Onboarding: create a vault (phrase shown once in a native window, 3-word check by Rust) or import a
-// BIP39 phrase (wordlist autocomplete). Hardware wallets: coming soon.
+// Onboarding: create a vault (phrase shown once in a native window, 3-word check by Rust) or import
+// a BIP39 phrase (wordlist autocomplete).
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { validateMnemonic } from '@scure/bip39';
@@ -24,7 +24,6 @@ import { idx } from '../components/motion';
 import { t, useT } from '../i18n';
 import { rt } from '../i18n/rich';
 
-/** Onboarding side panel: the logo and the name, nothing decorative. */
 function BrandPanel() {
   return (
     <section aria-hidden="true" className="flex w-[40%] max-w-[560px] min-w-[360px] shrink-0 flex-col items-center justify-center gap-5 border-r border-rail bg-panel">
@@ -145,7 +144,6 @@ export function Welcome() {
   );
 }
 
-/** One row of the welcome list: numbered, ruled, no box. */
 function ChoiceCard({ icon, title, subtitle, onClick, disabled, iconClass }: { icon: ReactNode; title: ReactNode; subtitle: string; onClick?: () => void; disabled?: boolean; iconClass?: string }) {
   return (
     <button
@@ -217,7 +215,6 @@ function PasswordStep({ busy, error, onSubmit, cta, extra }: { busy: boolean; er
   );
 }
 
-/** Capture protection on while the phrase is on screen; restored on unmount. */
 function useCaptureProtection(active: boolean) {
   const { settings } = useApp();
   const restore = useRef(settings.captureProtection);
@@ -261,7 +258,6 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
     }
   };
 
-  /** Opens the system window with the words (Rust), and gets the 3 positions to check. */
   const show = async () => {
     setBusy(true);
     setError(null);
@@ -471,7 +467,6 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
   const [step, setStep] = useState<'phrase' | 'password'>('phrase');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Monero: from Kyro's first release unless the phrase was used with Monero on a Ledger before.
   const [xmrLedger, setXmrLedger] = useState(false);
   const [xmrMode, setXmrMode] = useState<'date' | 'genesis'>('date');
   const [xmrDate, setXmrDate] = useState('');
@@ -485,7 +480,7 @@ function ImportFlow({ onCancel }: { onCancel: () => void }) {
 
   useCaptureProtection(true);
   // No unmount cleanup clearing `words`: StrictMode's mount/unmount/remount ran it right away and
-  // left the grid empty. The state dies with the component; `submit` clears it explicitly.
+  // left the grid empty.
 
   const resize = (n: 12 | 24) => {
     setCount(n);

@@ -1,50 +1,4 @@
-//! Kaspa (KAS): keys, `kaspa:` addresses, transaction ids, Schnorr signature hashes, mass and
-//! fees, building, decoding and signing of plain KAS payments.
-//!
-//! Source of every rule below: rusty-kaspa **v2.1.0** (2026-09-22, the release running on
-//! mainnet after the Toccata hard fork), read 2026-11-01:
-//! `consensus/core/src/hashing/{sighash,tx,mod}.rs`, `consensus/core/src/mass/mod.rs`,
-//! `consensus/core/src/config/{params,constants}.rs`, `crypto/addresses/src/{lib,bech32}.rs`,
-//! `crypto/hashes/src/hashers.rs`, `mining/src/mempool/{config,check_transaction_standard}.rs`,
-//! `wallet/core/src/tx/mass.rs`, `wallet/keys/src/derivation/gen1/hd.rs`. Official test vectors
-//! from those files are replayed in `tests/kaspa.rs`.
-//!
-//! **Derivation** (Kaspa NG / Kaspium / rusty-kaspa wallet « gen1 », BIP44, coin type 111111 on
-//! **every** network — testnet keys are the same, only the address prefix differs):
-//! `m/44'/111111'/account'/0/i` (receive) and `m/44'/111111'/account'/1/i` (change). Kyro shows
-//! the receive address `…/0/0`, sends change to `…/1/0`, and reads (balance, coins, history)
-//! the first [`KASPA_SCAN_WINDOW`] addresses of both chains, so a phrase used in Kaspa NG or
-//! Kaspium shows its funds. The legacy KDX / web-wallet derivation (`m/44'/972/0'`) is not read.
-//!
-//! **Addresses**: CashAddr-style bech32 (`kaspa:` mainnet, `kaspatest:` testnet-10), version
-//! byte 0 = P2PK Schnorr (32-byte x-only key), 1 = P2PK ECDSA (33 bytes), 8 = P2SH (32 bytes,
-//! blake2b). Kyro's own addresses are P2PK Schnorr: script `OP_DATA_32 <key> OP_CHECKSIG`.
-//!
-//! **Transactions**: version 0 only (what the official wallet still builds: `TX_VERSION = 0`;
-//! the Toccata v1 format — compute budgets, covenants, lanes — is never produced nor signed),
-//! native subnetwork, no gas, no payload, lock time 0, sequence 0, one sig-op per input,
-//! `SIG_HASH_ALL` only. Signature hash = keyed BLAKE2b-256 (`TransactionSigningHash`),
-//! transaction id = keyed BLAKE2b-256 (`TransactionID`) over the encoding without signature
-//! scripts. Signatures are BIP340 Schnorr (libsecp256k1 via `bitcoin::secp256k1`, random
-//! auxiliary data, self-verified), signature script `OP_DATA_65 <sig64> <sighash type>`.
-//!
-//! **Mass and fees**: compute mass (bytes + 10 × script bytes + 1 000 per sig-op), transient
-//! mass (4 × bytes, normalized by the block limits: ÷ 2) and KIP-9 storage mass
-//! (`C · (Σ 1/outputs − Σ 1/inputs)`, relaxed or arithmetic form, C = 10¹² sompi·gram) are all
-//! computed; the transaction mass is their maximum, at most [`KASPA_MAX_STANDARD_MASS`]
-//! (100 000 grams, the wallet standard). Fee, as the official wallet's generator
-//! (`calc_transaction_fees`): the **minimum relay fee** = [`KASPA_MIN_FEERATE`] (100 sompi per
-//! gram, `DEFAULT_MINIMUM_RELAY_TRANSACTION_FEE = 100 000` sompi/kg since Toccata) × the relay
-//! mass (max of compute and normalized transient — what the mempool checks), or, when the
-//! network is busy (the server's estimate is above the minimum), the estimated rate × the whole
-//! mass, whichever is higher. Storage mass is what makes tiny outputs costly: a recipient amount
-//! under [`KASPA_MIN_SEND`] is refused, and a change output that would push the mass over the
-//! standard limit is never created (folded into the fee if at most [`KASPA_MAX_FOLDED_CHANGE`],
-//! otherwise more coins are used).
-//!
-//! The only cryptography used: BLAKE2b (RustCrypto `blake2`, keyed mode, already used for
-//! Cardano) and secp256k1 BIP340 Schnorr (libsecp256k1). Nothing is home-made: hashing and
-//! signing are whole-primitive calls; this module only lays out bytes as rusty-kaspa does.
+//! Kaspa (KAS): keys, addresses, txids, Schnorr sighashes, mass/fees, plain KAS payments.
 
 use bitcoin::bip32::{ChildNumber, Xpriv, Xpub};
 use bitcoin::key::Keypair;
@@ -59,10 +13,6 @@ use crate::keys::{hardened, normal, path_string, random32, secp, XprivGuard};
 use crate::mnemonic::Seed;
 use crate::network::Network;
 
-// ---------------------------------------------------------------------------------------------
-// Constants (rusty-kaspa v2.1.0)
-// ---------------------------------------------------------------------------------------------
-
 /// SLIP-44 coin type of Kaspa (`m/44'/111111'/…`), on mainnet **and** testnet.
 pub const KASPA_COIN_TYPE: u32 = 111_111;
 /// 1 KAS = 10⁸ sompi.
@@ -73,8 +23,7 @@ pub const KASPA_MAX_SOMPI: u64 = 29_000_000_000 * SOMPI_PER_KAS;
 pub const KASPA_STORAGE_MASS_PARAMETER: u64 = SOMPI_PER_KAS * 10_000;
 /// Largest mass of a standard transaction (`MAXIMUM_STANDARD_TRANSACTION_MASS`, grams).
 pub const KASPA_MAX_STANDARD_MASS: u64 = 100_000;
-/// Minimum relay fee rate, sompi per gram of relay mass (mempool
-/// `DEFAULT_MINIMUM_RELAY_TRANSACTION_FEE` = 100 000 sompi/kg).
+/// Minimum relay fee rate, sompi/gram (`DEFAULT_MINIMUM_RELAY_TRANSACTION_FEE` = 100 000/kg).
 pub const KASPA_MIN_FEERATE: u64 = 100;
 /// Highest priority fee rate Kyro accepts from the server's estimate (100× the minimum).
 pub const KASPA_MAX_FEERATE: u64 = 10_000;
@@ -82,11 +31,9 @@ pub const KASPA_MAX_FEERATE: u64 = 10_000;
 pub const KASPA_HIGH_FEE_FACTOR: u64 = 10;
 /// Above this absolute fee (sompi, 1 KAS) the summary asks for the reinforced confirmation.
 pub const KASPA_HIGH_FEE: u64 = SOMPI_PER_KAS;
-/// Smallest recipient amount (0.2 KAS): its storage mass alone (C ÷ amount) is then at most
-/// half the standard limit (50 000 grams).
+/// Smallest recipient amount (0.2 KAS): its storage mass is then at most half the limit.
 pub const KASPA_MIN_SEND: u64 = 20_000_000;
-/// Change at most this small (sompi, 0.2 KAS) may be left to the miner when a change output
-/// would exceed the standard mass (its storage mass alone would be ≥ 5 000 grams).
+/// Change up to 0.2 KAS may go to the miner when a change output would exceed standard mass.
 pub const KASPA_MAX_FOLDED_CHANGE: u64 = 20_000_000;
 /// Addresses read per chain (receive `…/0/0..19`, change `…/1/0..19`).
 pub const KASPA_SCAN_WINDOW: u32 = 20;
@@ -105,16 +52,10 @@ const MASS_PER_TX_BYTE: u64 = 1;
 const MASS_PER_SCRIPT_PUB_KEY_BYTE: u64 = 10;
 const MASS_PER_SIG_OP: u64 = 1_000;
 const TRANSIENT_BYTE_TO_MASS_FACTOR: u64 = 4;
-/// Block mass limits (compute 500 000, transient 1 000 000): transient is normalized ÷ 2.
 const TRANSIENT_DIVISOR: u64 = 2;
-/// Signature script of a P2PK Schnorr spend: `OP_DATA_65 <64-byte sig> <type>`.
 const SIGNATURE_SCRIPT_LEN: usize = 66;
 
 const CHARSET: &[u8; 32] = b"qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-
-// ---------------------------------------------------------------------------------------------
-// Hashing (keyed BLAKE2b-256, rusty-kaspa `blake2b_hasher!` domains)
-// ---------------------------------------------------------------------------------------------
 
 /// Hash domains of rusty-kaspa (`crypto/hashes/src/hashers.rs`): the domain is the BLAKE2b key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -175,10 +116,6 @@ pub fn kaspa_hash(domain: KaspaHashDomain, data: &[u8]) -> Result<[u8; 32]> {
     h.raw(data);
     Ok(h.finish())
 }
-
-// ---------------------------------------------------------------------------------------------
-// Transactions
-// ---------------------------------------------------------------------------------------------
 
 /// A previous output reference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -277,8 +214,7 @@ fn write_tx(h: &mut Hasher, tx: &KaspaTx, include_signature_scripts: bool) {
         .var_bytes(&tx.payload);
 }
 
-/// Transaction id (version 0): `TransactionID` hash of the encoding without signature scripts
-/// nor mass commitment.
+/// Transaction id (v0): `TransactionID` hash without signature scripts or mass commitment.
 pub fn kaspa_tx_id(tx: &KaspaTx) -> Result<[u8; 32]> {
     if tx.version != 0 {
         return Err(Error::input(
@@ -316,9 +252,7 @@ fn hash_output(h: &mut Hasher, o: &KaspaOutput, version: u16) {
     }
 }
 
-/// Schnorr signature hash of input `index` (`calc_schnorr_signature_hash`), for any of the six
-/// standard hash types. `entries[i]` is the UTXO entry spent by input `i`. Kyro only signs
-/// `SIG_HASH_ALL` (0x01); the others exist for the official test vectors.
+/// Schnorr signature hash of input `index` (`calc_schnorr_signature_hash`), any standard type.
 pub fn kaspa_sighash(
     tx: &KaspaTx,
     entries: &[KaspaUtxoEntry],
@@ -414,10 +348,6 @@ pub fn kaspa_sighash(
     })
 }
 
-// ---------------------------------------------------------------------------------------------
-// Mass
-// ---------------------------------------------------------------------------------------------
-
 /// Masses of a (signed, or sized-as-signed) transaction, grams.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -440,8 +370,7 @@ impl KaspaMass {
         self.relay.saturating_mul(KASPA_MIN_FEERATE)
     }
 
-    /// Fee Kyro pays: the minimum relay fee, or `priority_feerate` × the whole mass if higher
-    /// (`priority_feerate` = 0 when the network is not busy).
+    /// Fee: minimum relay fee, or `priority_feerate` × whole mass if higher (0 when not busy).
     pub fn fee(&self, priority_feerate: u64) -> u64 {
         self.minimum_fee().max(
             self.total
@@ -450,8 +379,7 @@ impl KaspaMass {
     }
 }
 
-/// Priority fee rate from the server's estimate (sompi/gram): 0 while the estimate is at the
-/// minimum (the network is not busy), else the estimate, at most [`KASPA_MAX_FEERATE`].
+/// Priority fee rate from the estimate: 0 at the minimum, else capped at [`KASPA_MAX_FEERATE`].
 pub fn kaspa_priority_feerate(estimate: u64) -> u64 {
     if estimate <= KASPA_MIN_FEERATE {
         0
@@ -481,14 +409,11 @@ pub fn kaspa_compute_mass(tx: &KaspaTx) -> u64 {
     size * MASS_PER_TX_BYTE + spk * MASS_PER_SCRIPT_PUB_KEY_BYTE + sigops * MASS_PER_SIG_OP
 }
 
-/// UTXO storage plurality: 100-byte units occupied (63 fixed bytes + script length).
 fn plurality(script_len: usize) -> u64 {
     (63 + script_len as u64).div_ceil(100)
 }
 
-/// KIP-9 storage mass (`calc_storage_mass`, generalized with pluralities), from
-/// `(amount, script length)` of inputs and outputs. `None` = incomputable (zero amount or
-/// overflow): too high.
+/// KIP-9 storage mass (`calc_storage_mass`, with pluralities) from `(amount, script len)` pairs.
 pub fn kaspa_storage_mass(inputs: &[(u64, usize)], outputs: &[(u64, usize)]) -> Option<u64> {
     let c = KASPA_STORAGE_MASS_PARAMETER;
     if inputs.is_empty() || inputs.iter().chain(outputs).any(|(a, _)| *a == 0) {
@@ -520,8 +445,7 @@ pub fn kaspa_storage_mass(inputs: &[(u64, usize)], outputs: &[(u64, usize)]) -> 
     Some(harmonic_outs.saturating_sub(arithmetic_ins))
 }
 
-/// All masses of `tx` spending `entries`. Signature scripts must be present or sized
-/// ([`kaspa_with_dummy_signatures`]).
+/// All masses of `tx` spending `entries`.
 pub fn kaspa_mass(tx: &KaspaTx, entries: &[KaspaUtxoEntry]) -> Result<KaspaMass> {
     let compute = kaspa_compute_mass(tx);
     let transient = kaspa_serialized_size(tx) * TRANSIENT_BYTE_TO_MASS_FACTOR;
@@ -543,8 +467,7 @@ pub fn kaspa_mass(tx: &KaspaTx, entries: &[KaspaUtxoEntry]) -> Result<KaspaMass>
     })
 }
 
-/// Copy of `tx` with every signature script replaced by a 66-byte placeholder (the exact size
-/// of a P2PK Schnorr signature script), to price an unsigned transaction.
+/// Copy of `tx` with 66-byte placeholder signature scripts (P2PK Schnorr size), for pricing.
 pub fn kaspa_with_dummy_signatures(tx: &KaspaTx) -> KaspaTx {
     let mut t = tx.clone();
     for i in &mut t.inputs {
@@ -552,10 +475,6 @@ pub fn kaspa_with_dummy_signatures(tx: &KaspaTx) -> KaspaTx {
     }
     t
 }
-
-// ---------------------------------------------------------------------------------------------
-// Addresses
-// ---------------------------------------------------------------------------------------------
 
 /// Address version byte.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -601,7 +520,6 @@ pub fn kaspa_prefix(net: Network) -> &'static str {
     }
 }
 
-/// CashAddr polymod (BCH spec), as rusty-kaspa `crypto/addresses/src/bech32.rs`.
 fn polymod(values: impl Iterator<Item = u8>) -> u64 {
     let mut c = 1u64;
     for d in values {
@@ -696,8 +614,7 @@ pub fn kaspa_address_encode(
     Ok(encode_address(kaspa_prefix(net), kind, payload))
 }
 
-/// Decodes a `kaspa:` / `kaspatest:` address: lowercase only, prefix of `net` required,
-/// checksum, version and payload length checked, canonical (re-encodes identically).
+/// Decodes a `kaspa:`/`kaspatest:` address: lowercase, `net` prefix, checksum, canonical.
 pub fn kaspa_address_decode(net: Network, address: &str) -> Result<(KaspaAddressKind, Vec<u8>)> {
     let a = address.trim();
     let want = kaspa_prefix(net);
@@ -749,7 +666,6 @@ pub fn kaspa_address_decode(net: Network, address: &str) -> Result<(KaspaAddress
     Ok((kind, payload.to_vec()))
 }
 
-/// Script public key (version 0) paying `kind`/`payload`.
 fn script_for(kind: KaspaAddressKind, payload: &[u8]) -> Vec<u8> {
     let mut s = Vec::with_capacity(payload.len() + 3);
     match kind {
@@ -792,10 +708,6 @@ pub fn kaspa_address_of_script(net: Network, version: u16, script: &[u8]) -> Opt
     };
     Some(encode_address(kaspa_prefix(net), kind, payload))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Keys
-// ---------------------------------------------------------------------------------------------
 
 /// `m/44'/111111'/account'/change/index` as text (`change`: 0 receive, 1 change).
 pub fn kaspa_path(account: u32, change: bool, index: u32) -> String {
@@ -922,8 +834,7 @@ pub fn kaspa_account_path(account: u32) -> Result<String> {
     Ok(path_string(&account_path(account)?))
 }
 
-/// Receive and change x-only keys `0..count` derived from an account-level extended private
-/// key (used by the vectors published as `kprv` master keys, converted to `xprv` bytes).
+/// Receive/change x-only keys `0..count` from an account-level xprv (for `kprv` test vectors).
 pub fn kaspa_keys_from_master(
     master: &Xpriv,
     account: u32,
@@ -939,10 +850,6 @@ pub fn kaspa_keys_from_master(
         .map(|i| xonly_at(&secp, &xpub, change, i))
         .collect()
 }
-
-// ---------------------------------------------------------------------------------------------
-// JSON form (the REST API's `SubmitTxModel`): what crosses IPC and what is broadcast
-// ---------------------------------------------------------------------------------------------
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1037,8 +944,7 @@ pub fn kaspa_tx_to_json(tx: &KaspaTx) -> Result<String> {
     serde_json::to_string(&j).map_err(|_| Error::crypto("Kaspa: JSON encoding failed"))
 }
 
-/// Parses the JSON of [`kaspa_tx_to_json`] strictly (unknown fields refused, lowercase hex,
-/// at most 1 000 inputs and outputs).
+/// Strictly parses [`kaspa_tx_to_json`] JSON (no unknown fields, lowercase hex, ≤ 1 000 in/out).
 pub fn kaspa_tx_from_json(json: &str) -> Result<KaspaTx> {
     if json.len() > 512 * 1024 {
         return Err(Error::input("Kaspa: transaction too large"));
@@ -1084,10 +990,6 @@ pub fn kaspa_tx_from_json(json: &str) -> Result<KaspaTx> {
         payload: hex_bytes(&j.payload, "payload")?,
     })
 }
-
-// ---------------------------------------------------------------------------------------------
-// Building
-// ---------------------------------------------------------------------------------------------
 
 /// How much to send.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1135,15 +1037,12 @@ fn out(value: u64, script: &[u8]) -> KaspaOutput {
     }
 }
 
-/// Mass of `coins` paying `outputs` (`None`: storage mass incomputable).
 fn priced(coins: &[KaspaSpendable], outputs: Vec<KaspaOutput>) -> Option<KaspaMass> {
     let entries: Vec<KaspaUtxoEntry> = coins.iter().map(|c| c.entry.clone()).collect();
     let tx = kaspa_with_dummy_signatures(&unsigned_tx(coins, outputs));
     kaspa_mass(&tx, &entries).ok()
 }
 
-/// Fee for `coins` → recipient (+ change of `total − amount − fee`), iterated to a fixed point
-/// because the change amount moves the storage mass. `None`: no valid change.
 fn fee_with_change(
     coins: &[KaspaSpendable],
     total: u64,
@@ -1171,11 +1070,7 @@ fn fee_with_change(
     None
 }
 
-/// Builds an unsigned payment: coins by decreasing amount (deterministic), a recipient output
-/// and a change output to `change_script`, fee = [`KaspaMass::fee`] with `priority_feerate`
-/// ([`kaspa_priority_feerate`]). A change output that would exceed the standard mass is left
-/// to the miner only when it is at most [`KASPA_MAX_FOLDED_CHANGE`]; otherwise more coins are
-/// added. `Max`: every coin (up to [`KASPA_MAX_INPUTS`]), one output.
+/// Builds an unsigned payment (largest coins first, change to `change_script`, [`KaspaMass::fee`]).
 pub fn kaspa_build_send(
     coins: &[KaspaSpendable],
     to_script: &[u8],
@@ -1277,10 +1172,6 @@ pub fn kaspa_build_send(
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Decoding (what the native dialog shows)
-// ---------------------------------------------------------------------------------------------
-
 /// What an output pays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1350,11 +1241,7 @@ pub struct KaspaTxSummary {
     pub requires_extra_confirmation: bool,
 }
 
-/// Strict decoding of an unsigned (or signed) payment spending `entries`, with `ours` the keys of
-/// the signing account. Refused: anything but version 0 / native / no gas / no payload /
-/// lock time 0, a sequence other than 0, a sig-op count other than 1, an input that is not one
-/// of our P2PK coins, duplicate inputs, no output, a zero output, a script version other than
-/// 0, outputs above inputs, a mass above the standard limit, a fee below the minimum relay fee.
+/// Strict decoding of an unsigned or signed payment spending `entries` (`ours`: account keys).
 pub fn kaspa_tx_summary(
     net: Network,
     tx: &KaspaTx,
@@ -1479,10 +1366,6 @@ pub fn kaspa_tx_summary(
     })
 }
 
-// ---------------------------------------------------------------------------------------------
-// Signing and verification
-// ---------------------------------------------------------------------------------------------
-
 fn verify_input(
     secp: &Secp256k1<All>,
     tx: &KaspaTx,
@@ -1516,8 +1399,7 @@ fn verify_input(
         .map_err(|_| Error::input(format!("Kaspa: input {i}: signature does not verify")))
 }
 
-/// Verifies every input's BIP340 signature (`SIG_HASH_ALL`) against the key of the coin it
-/// spends.
+/// Verifies every input's BIP340 signature (`SIG_HASH_ALL`) against its spent coin's key.
 pub fn kaspa_verify_signed(tx: &KaspaTx, entries: &[KaspaUtxoEntry]) -> Result<()> {
     if entries.len() != tx.inputs.len() {
         return Err(Error::input("Kaspa: one UTXO entry per input expected"));
@@ -1529,9 +1411,8 @@ pub fn kaspa_verify_signed(tx: &KaspaTx, entries: &[KaspaUtxoEntry]) -> Result<(
     Ok(())
 }
 
-/// Signs every input of `tx` (each must spend one of `account`'s first [`KASPA_SCAN_WINDOW`]
-/// receive or change keys), after [`kaspa_tx_summary`]; returns the signed transaction and the
-/// summary (identical to the one computed on the unsigned transaction).
+/// Signs every input (must spend `account`'s first [`KASPA_SCAN_WINDOW`] keys) after
+/// [`kaspa_tx_summary`]; returns the signed tx and its summary.
 pub fn kaspa_sign(
     seed: &Seed,
     net: Network,

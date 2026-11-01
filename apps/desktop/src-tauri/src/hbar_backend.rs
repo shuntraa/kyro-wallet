@@ -1,16 +1,4 @@
 //! Hedera data and submission, on the `hedera` Tor family, never with a fallback:
-//!
-//! - **mirror node** (REST, read only): `mainnet-public.mirrornode.hedera.com` /
-//!   `testnet.mirrornode.hedera.com` — account by EVM address (alias) or by public key, balance,
-//!   history, recipient facts, exchange rate, transaction status;
-//! - **consensus nodes** through their official **gRPC-web proxies** (HTTPS POST, HTTP/1.1, the
-//!   proxies the Hedera JS SDK uses): `proto.CryptoService/cryptoTransfer` with the signed
-//!   `Transaction`. gRPC-web carries the protobuf in a 5-byte frame and the gRPC status in a
-//!   trailer frame of the body, so a plain HTTPS POST through `net` is enough (no HTTP/2).
-//!
-//! Kyro builds the `TransactionBody` itself (wallet-core): nothing from a server is signed. The
-//! mirror node is trusted for **facts** only (our account ID, balance, recipient existence), as
-//! any explorer would be; what is signed is decoded and shown by Rust.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -24,7 +12,7 @@ pub const MIRROR_TESTNET: &str = "https://testnet.mirrornode.hedera.com";
 
 /// gRPC-web proxies of consensus nodes, `(node account number, host)`, from the Hedera JS SDK
 /// (`hiero-sdk-js` `src/constants/ClientConstants.js`, `MAINNET` and `WEB_TESTNET`, checked
-/// 2026-11-01; each answered a gRPC-web request on 2026-11-01). Port 443, HTTPS.
+/// 2026-11-01; each answered a gRPC-web request on 2026-11-01).
 pub const MAINNET_NODES: &[(u64, &str)] = &[
     (3, "node00.swirldslabs.com"),
     (4, "node01-00-grpc.swirlds.com"),
@@ -41,8 +29,6 @@ pub const VALID_DURATION: i64 = 180;
 /// The valid start is set this many seconds in the past (clock skew with the network).
 pub const START_SKEW: i64 = 10;
 const MAX_TXS: u32 = 50;
-/// Max fee budget in hundredths of a US cent: 0.5 ¢ for a transfer (≈ 50 × its $0.0001), 10 ¢
-/// when the transfer auto-creates the recipient's account (≈ 2 × the $0.05 creation fee).
 const FEE_HUNDREDTHS_OF_CENT: u64 = 50;
 const FEE_CREATE_HUNDREDTHS_OF_CENT: u64 = 1_000;
 /// Max fee bounds, tinybars: 0.01 HBAR … 5 HBAR.
@@ -77,7 +63,6 @@ pub fn node_ids(net: Network) -> Vec<u64> {
     nodes(net).iter().map(|(n, _)| *n).collect()
 }
 
-/// `GET` on the mirror node; `Ok(None)` on 404.
 async fn mirror(ctx: &HbarCtx<'_>, path: &str) -> AppResult<Option<Value>> {
     let u = url::Url::parse(&format!("{}{path}", mirror_base(ctx.network)))
         .map_err(|_| AppError::Internal("invalid mirror node URL".into()))?;
@@ -102,7 +87,6 @@ async fn mirror(ctx: &HbarCtx<'_>, path: &str) -> AppResult<Option<Value>> {
         .map_err(|_| bad("Hedera mirror node: invalid JSON"))
 }
 
-/// `"0.0.123"` → 123.
 fn num_of(v: &Value) -> Option<u64> {
     v.as_str()?.strip_prefix("0.0.")?.parse().ok()
 }
@@ -160,7 +144,6 @@ fn not_found() -> HbarAccountInfo {
     }
 }
 
-/// The key of a mirror account is exactly our ECDSA key.
 fn key_is(v: &Value, pk_hex: &str) -> bool {
     v["key"]["_type"] == "ECDSA_SECP256K1" && v["key"]["key"].as_str() == Some(pk_hex)
 }
@@ -211,8 +194,8 @@ pub async fn our_account(
     })
 }
 
-/// A hardware (Ledger) account: an ED25519 account found by its public key (the mirror's key
-/// must be exactly ours). Not found: it has not been created yet.
+/// A hardware (Ledger) account: an ED25519 account found by its public key (the mirror's key must
+/// be exactly ours).
 pub async fn our_account_ed25519(
     ctx: &HbarCtx<'_>,
     pubkey: &[u8; 32],
@@ -323,7 +306,6 @@ pub fn max_fee(rate: (u64, u64), creates_account: bool) -> u64 {
     } else {
         FEE_HUNDREDTHS_OF_CENT
     };
-    // tinybars = budget/100 cents × (hbars / cents) HBAR/cent × 10^8.
     let t = u128::from(budget) * u128::from(hbars) * u128::from(wallet_core::HBAR_TINYBARS)
         / (100 * u128::from(cents.max(1)));
     u64::try_from(t)
@@ -408,7 +390,6 @@ fn normalize_tx(t: &Value, me: &str) -> Value {
         .and_then(|s| s.split('.').next())
         .and_then(|s| s.parse::<i64>().ok())
         .map(|s| s * 1000);
-    // Known tokens only (USDC): our net change per token, as a decimal string.
     let mut tokens = Vec::new();
     for row in t["token_transfers"].as_array().into_iter().flatten() {
         let (Some(tid), Some(acc), Some(n)) = (
@@ -451,7 +432,6 @@ pub async fn tx_status(ctx: &HbarCtx<'_>, mirror_id: &str) -> AppResult<(bool, S
         None => Ok((false, String::new())),
         Some(v) => {
             let list = v["transactions"].as_array().cloned().unwrap_or_default();
-            // The parent (nonce 0, not scheduled) is the transfer itself.
             let main = list
                 .iter()
                 .find(|t| t["nonce"].as_u64().unwrap_or(0) == 0 && t["scheduled"] != true)
@@ -471,7 +451,7 @@ pub struct Precheck {
 }
 
 /// Parses a gRPC-web response body: one data frame (flag 0) with the `TransactionResponse`, and a
-/// trailer frame (flag 0x80) with `grpc-status`. A gRPC error is an error.
+/// trailer frame (flag 0x80) with `grpc-status`.
 pub fn parse_grpc_web(body: &[u8]) -> AppResult<Precheck> {
     let mut b = body;
     let mut data = None;
@@ -566,28 +546,23 @@ mod tests {
 
     #[test]
     fn fee_from_exchange_rate() {
-        // 2026-11-01 testnet rate: 215465 cents for 30000 HBAR (≈ 7.18 ¢ / HBAR).
         let r = (215_465, 30_000);
         assert_eq!(max_fee(r, false), 6_961_687); // 0.5 ¢ ≈ 0.0696 HBAR
         assert_eq!(max_fee(r, true), 139_233_750); // 10 ¢ ≈ 1.39 HBAR
-                                                   // Bounds.
         assert_eq!(max_fee((1_000_000_000, 1), false), MIN_MAX_FEE);
         assert_eq!(max_fee((1, 1_000_000), true), MAX_MAX_FEE);
     }
 
     #[test]
     fn grpc_web_frames() {
-        // Real answer of node00.swirldslabs.com (2026-11-01), data frame + trailers.
         let mut ok = vec![0, 0, 0, 0, 2, 0x08, 0x07];
         ok.extend_from_slice(&[0x80, 0, 0, 0, 0x0f]);
         ok.extend_from_slice(b"grpc-status:0\r\n");
         assert_eq!(parse_grpc_web(&ok).unwrap(), Precheck { code: 7 });
-        // OK (code 0) is an empty TransactionResponse.
         let mut zero = vec![0, 0, 0, 0, 0];
         zero.extend_from_slice(&[0x80, 0, 0, 0, 0x0f]);
         zero.extend_from_slice(b"grpc-status:0\r\n");
         assert_eq!(parse_grpc_web(&zero).unwrap(), Precheck { code: 0 });
-        // gRPC error.
         let mut err = vec![0x80, 0, 0, 0, 0x22];
         err.extend_from_slice(b"grpc-status:14\r\ngrpc-message:down\r\n");
         assert!(parse_grpc_web(&err).is_err());
@@ -597,7 +572,6 @@ mod tests {
 
     #[test]
     fn history_entries() {
-        // Shapes of real mirror-node records (mainnet, 2026-11-01), accounts renumbered.
         let out = json!({
             "transaction_id": "0.0.5005-1793508161-304559252",
             "name": "CRYPTOTRANSFER", "result": "SUCCESS", "node": "0.0.33",
@@ -625,14 +599,12 @@ mod tests {
     }
 }
 
-/// Real-network checks over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture hbar_live`.
-/// - mirror node of mainnet and testnet: exchange rate, node list, account lookups;
-/// - each gRPC-web proxy of Kyro: a **correctly signed transfer from an account that is not
-///   ours** (`0.0.98`'s key is not our key) is sent; the node must parse it and refuse it at
-///   precheck with `INVALID_SIGNATURE` (or `INVALID_PAYER_SIGNATURE`) — precheck failures are not
-///   charged and nothing is executed. This proves the body, the signature map and the transport
-///   are understood by real consensus nodes, without funds.
+/// Real-network checks over Tor. Run with `cargo test -p kyro-desktop -- --ignored --nocapture
+/// hbar_live`. mirror node of mainnet and testnet: exchange rate, node list, account lookups; each
+/// gRPC-web proxy of Kyro: a **correctly signed transfer from an account that is not ours**
+/// (`0.0.98`'s key is not our key) is sent; the node must parse it and refuse it at precheck with
+/// `INVALID_SIGNATURE` (or `INVALID_PAYER_SIGNATURE`) — precheck failures are not charged and
+/// nothing is executed.
 #[cfg(test)]
 mod live {
     use super::*;

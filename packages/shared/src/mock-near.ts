@@ -1,17 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — NEAR Protocol (`near_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
-// commands_near.rs and near_backend.rs. The implicit account is NOT derived (no ed25519 in this
-// package: it is the SHA-256 of a label, like the Solana demo address); the transaction is a demo
-// encoding (hex JSON, NOT the Borsh wallet-core writes) and the signature is fake. The rules are
-// Rust's:
-// - spendable = balance − storage reserve (storage_usage × 10^19 yocto); fees come from the
-//   protocol costs (transfer 0.446 Tgas, + 7.9 Tgas when the transfer creates an implicit
-//   account), estimate at the current gas price (10^8), bound = 2 × gas × max(price, 10^9);
-// - our account not on chain → refused; a named or `0x…` receiver that does not exist → refused;
-//   amount + fee bound > spendable → refused; transfer to oneself → refused;
-// - sign re-reads everything live and refuses a stale nonce;
-// - a sent transfer executes at once (`success`), unless `failNext` is set.
 
 import { sha256 } from '@noble/hashes/sha2';
 import { base58 } from '@scure/base';
@@ -87,11 +75,9 @@ export interface DemoNearDeps {
 
 export interface DemoNearState {
   me: string;
-  /** A named account that exists. */
   friend: string;
   accounts: Map<string, DemoNearAccount>;
   history: NearHistoryEntry[];
-  /** Tests: the next sent transfer fails on chain with this message. */
   failNext: string | null;
 }
 
@@ -156,7 +142,6 @@ export function createDemoNear(d: DemoNearDeps) {
     };
   };
 
-  /** near_backend::check_transfer, same order and messages. */
   const check = (s: NearTxSummary, c: NearContext) => {
     if (!c.account.exists) throw invalidInput(l10n('ton compte NEAR n’existe pas encore : il est créé par le premier NEAR reçu', 'your NEAR account does not exist yet: it is created by the first NEAR received'));
     if (!c.receiver.exists) {
@@ -205,7 +190,6 @@ export function createDemoNear(d: DemoNearDeps) {
     };
   };
 
-  /** commands_near.rs describe_near. */
   const describe = (s: NearTxSummary, c: NearContext): string => {
     const kindText = { implicit: l10n('compte implicite : la clé publique du destinataire, en hexadécimal', 'implicit account: the recipient’s public key, in hexadecimal'), ethImplicit: l10n('compte de style Ethereum, contrôlé par une clé Ethereum', 'Ethereum-style account, controlled by an Ethereum key'), named: l10n('compte nommé', 'named account') }[s.receiverKind];
     let out = l10n(`Envoi NEAR${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.receiverId}\n(${kindText})\n\nMontant : ${nearText(s.deposit)} (${s.deposit} yoctoNEAR)\n`, `NEAR send${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.receiverId}\n(${kindText})\n\nAmount: ${nearText(s.deposit)} (${s.deposit} yoctoNEAR)\n`);

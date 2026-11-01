@@ -1,10 +1,4 @@
 //! Solana decoder against REAL devnet transactions.
-//!
-//! Message bytes come from `getTransaction` (`"encoding":"base64"`, signatures stripped) on
-//! https://api.devnet.solana.com; every expected value comes from the same RPC's `jsonParsed`
-//! encoding of the same transaction (compute-budget values from its raw `data` field, unknown
-//! instructions from its `accounts`/`data`). The lookup table comes from `getAccountInfo`
-//! (base64) and its expected addresses from `getAccountInfo` (`jsonParsed`). Fetched 2026-10-30.
 
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine as _;
@@ -17,11 +11,8 @@ fn b64(s: &str) -> Vec<u8> {
     B64.decode(s).unwrap()
 }
 
-/// Lookup table `6V3VBaaX5tLD49eRgaY7TjWBPtgkmEC7sirA4NDVkLBQ` (owner
-/// `AddressLookupTab1e1111111111111111111111111`), raw account data.
 const ALT_KEY: &str = "6V3VBaaX5tLD49eRgaY7TjWBPtgkmEC7sirA4NDVkLBQ";
 const ALT_DATA: &str = "AQAAAP//////////WJkqHgAAAAAUAb4Zt7ub+89GK+HzDTCm5loLP95YNXDNzKvXK5RdjzT6AABoDr6j/Gam4NoLQOODHpdfFniFRp6utQouyf90FZKyPsdkI4qjcI6bOnbG7StmtDuB+xBbzU/p7+iQfQczY/ibjzp9k1u+Qnx/G/z7sdzOwVcTCnFw7rpGEFqB0/IEnOeSoH5UmPWFJoQfCP1ZAtC0f5QeyQKXSYnJX5uMR850IBQ23NPvrQlkM/AQnimMx4LEjH86Wtzb47VMXNfJRBhpyNGTDKttEkYNAt2cY8pqz3GKZE6EOCxvs3j+x2yuLcfGsMlGwj5+tGnjCMX7VdswfxjwTUyGC1xlaAl3PGNRxdh/R/Uz4JefK6VDFBGUrovrjGvousOE4pST5ilkYOk16pPmG/Iehx1BEWsCUpEjoXUin+b+arx7TN47edE/M12nxKuJG1d0K5BbggvgeLeQoXrUCxQUSUVXSmWok8JL8lBr53wdHtTh4M2QQWCdZHPgRsjaDZ3WofjMyqFnn0M6Xe2CSae9qwZKxICaHvGUQYqw4B2CIhZr73r8KyCLOiPSZEaXMbfkDMGCZD/XYmwZG/ps20QJTX+GQZjvADYSGI8WyHYu2zHA5o05ZPoI4g+liAuGpNpKtrDhGFGRei/3VWbiEw5Uixm8MopASmCzi4ZYepgpHg84LdQ55Uq1ea0fSfMToqcxIvCn4/ZHbAVcg3H4tPcmNMI/JnW/cuuJ7H+eDKgTRE+uuMcUTgtWxOGR+wSKc8Yf9vWeBBm1P9xbYyi31lvNzwTnZC59pQ5bSE/knYWGApEMek1JtU+QCW4Wc3yyAuZFSvk5CMq5uwX/uD3cLSRt33XaAVIZwxCWtbj8or+D6faqu6ZpOLdAC2NvbcAbFjFfIjWF9vm6omzPV2AEJv+aYN5LWNH5/ig5TS+SLf/z2yFi3XJP48Dd1Ko=";
-/// `jsonParsed` addresses of the same account.
 const ALT_ADDRESSES: &[&str] = &[
     "81CSa1FTbc75dmZ9kEaFrb4fYzdxG8bVA533cQRMhdid",
     "ERLhKUYPMfiTM2946xjJEPwMNaF5taHjAw9wpUdqSMmk",
@@ -66,7 +57,6 @@ fn devnet_lookup_table_account() {
     assert_eq!(data.len(), 56 + 21 * 32);
     let parsed = sol_parse_lookup_table(&data).unwrap();
     assert_eq!(parsed, ALT_ADDRESSES);
-    // Same account marked as deactivated (deactivation slot != u64::MAX) is rejected.
     let mut deactivated = data.clone();
     deactivated[4..12].copy_from_slice(&506_108_248u64.to_le_bytes());
     assert!(sol_parse_lookup_table(&deactivated).is_err());
@@ -84,13 +74,11 @@ fn devnet_v0_unresolved_table_fails_closed() {
         sol_decode_message(&msg, &[], owner),
         Err(Error::InvalidInput(_))
     ));
-    // A truncated table (index 8 missing) also fails.
     let short = SolLookupTable {
         key: ALT_KEY.into(),
         addresses: ALT_ADDRESSES[..8].iter().map(|s| s.to_string()).collect(),
     };
     assert!(sol_decode_message(&msg, &[short], owner).is_err());
-    // A table for another key does not count.
     let wrong = SolLookupTable {
         key: "11111111111111111111111111111111".into(),
         addresses: ALT_ADDRESSES.iter().map(|s| s.to_string()).collect(),
@@ -120,8 +108,6 @@ fn check_sol_transfer_with_compute_budget(s: &SolTxSummary) {
 }
 
 fn check_memo_and_sol_transfer(s: &SolTxSummary) {
-    // The memo is a 252-character JSON blob: longer than a glance (80 characters), so the
-    // reinforced confirmation is required.
     assert_eq!(s.warnings, vec![SolWarning::UnusualText { instruction: 0 }]);
     assert!(s.requires_extra_confirmation);
 }
@@ -132,7 +118,6 @@ fn check_spl_transfer_checked_ata_memo(s: &SolTxSummary) {
 }
 
 fn check_spl_transfer_ata_memo_unknown(s: &SolTxSummary) {
-    // 3 signers; only the fee payer is writable. Transfer authority is the 2nd signer.
     assert_eq!(
         s.warnings,
         vec![
@@ -182,7 +167,6 @@ const MSG_SPL_TRANSFER_ATA_MEMO_UNKNOWN: &str = "AwIKE40XNuQf8SUxa/9K7Bj2Ilc4xmC
 const MSG_TOKEN2022_TRANSFER_CHECKED_MULTISIG: &str = "AgEGC5AOzlqxOfWyqB7uZgbTsjWtKexhC2zbtRG82dvtekrbjhCYWP6SaLZyjJfd/DjBZQ6wBqxpGBCTlwPVNgM4VRCJNg1U/QAqglTulTu8Y2p8TgaMp1MgfQJqrDi7Z/ecAs+/AL7+msLWhOmCF02tv/rDw76p11nOYGnf6mb87Sw1B0vkY3+4mv60NhB1U9/svBV0J3l5HIgD3iKd/iGcxspncCXh9JgxA3ROlWaEB5K39zsbFsRE7hOjfZtzZf/q7GgKvl/rHJqf8ARpo4nxDW5vB61hICVKkao+GE3MWK6mbB4OQuJK9Ip12Ru4WHZsuId4tcAIV1Xkut4eAbjagdTYc9BXo3/o/pJTLykdSIkYGFAkYWdoUtHj3vbqcJQ6z+I6cadhYc3W9bPWPRYhBhI8s/hBcu+teqxwc/ffgMtSBt324e51j94YQl285GzN2rYa/E2DuQ0n/r35KNihi/yHNWjivDqeFJahxekIBhx68Gs6X1RkCdmHbX2AlA0CqgEKCQIJAwEIBgQFBwoMAOQLVAIAAAAG";
 const MSG_V0_WITH_LOOKUP_TABLE: &str = "gAEABAW+Gbe7m/vPRivh8w0wpuZaCz/eWDVwzcyr1yuUXY80+gMGRm/lIRcy/+ytunLDm+e8jOW7xfcSayxDmzpAAAAAciadoXAmjQnrS9dXAEa/e/6JdSSPsRrpaXdzADTO2vYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAO7HTS/nMQRoCQZtAZcYS1T1GbElFmH2yxNMnL9LynFSF9DI7SeTXeApwizBmhOP2rE3q1U2INkfqywcEgOpDVQDAQAFAgA1DAACAwUAAzUA7w2Lb9os66QdoV1AldHaOSoNL47Qxse8D0z6yMKAtW0A4fUFAAAAAAEAAAAAAAAA+v///wQHCQYHCAUKCwxXARIALRfkagAAAAABUXmCEzgfHzGl9N2uFScVpNfLjWev9qIbr+/PQeK8K78ECAECAwMABAY=";
 
-/// Every devnet message above, for the differential and robustness tests.
 const ALL_MSGS: &[&str] = &[
     MSG_SOL_TRANSFER_WITH_COMPUTE_BUDGET,
     MSG_MEMO_AND_SOL_TRANSFER,
@@ -194,7 +178,6 @@ const ALL_MSGS: &[&str] = &[
 
 const V0_MSG: &str = MSG_V0_WITH_LOOKUP_TABLE;
 
-/// Devnet tx `4rEFgVVU74WT95GdkRE3TDaumZbanAfVUXYMuxg35YH7oVfSU512u7ondVrxD3Ym8XHQ15erMjP2Crar9of9TEiL` (slot 516650528).
 #[test]
 fn devnet_sol_transfer_with_compute_budget() {
     let msg = b64(MSG_SOL_TRANSFER_WITH_COMPUTE_BUDGET);
@@ -235,7 +218,6 @@ fn devnet_sol_transfer_with_compute_budget() {
     check_sol_transfer_with_compute_budget(&s);
 }
 
-/// Devnet tx `3PMYbhTShrVPtNet5WTHSCq51vihP748UBi2Xdfjm1QgszEKxH5efD4HkvNhPutoaL6AVqCiEZUis4Vj6ady9a2m` (slot 516650528).
 #[test]
 fn devnet_memo_and_sol_transfer() {
     let msg = b64(MSG_MEMO_AND_SOL_TRANSFER);
@@ -327,7 +309,6 @@ fn devnet_spl_transfer_checked_ata_memo() {
     check_spl_transfer_checked_ata_memo(&s);
 }
 
-/// Devnet tx `62PCCzTrBs3RVBbRJqUeUKmmzUQ74f71vCvZBjdpQLn44BPoGaRJFnFauesuuqfgV9vkcRCJcnNVay34qfFhu9Xy` (slot 516650528).
 #[test]
 fn devnet_spl_transfer_ata_memo_unknown() {
     let msg = b64(MSG_SPL_TRANSFER_ATA_MEMO_UNKNOWN);
@@ -418,7 +399,6 @@ fn devnet_spl_transfer_ata_memo_unknown() {
     check_spl_transfer_ata_memo_unknown(&s);
 }
 
-/// Devnet tx `G9kxDzrCDpWdGBwE3hujmT83w6jZWUU6f9XzhU9ioyGqk3YpjFswWpaWuv3it51Hp2dbqm1YLtB5PxrQZizCCTh` (slot 516650655).
 #[test]
 fn devnet_token2022_transfer_checked_multisig() {
     let msg = b64(MSG_TOKEN2022_TRANSFER_CHECKED_MULTISIG);
@@ -468,7 +448,6 @@ fn devnet_token2022_transfer_checked_multisig() {
     check_token2022_transfer_checked_multisig(&s);
 }
 
-/// Devnet tx `gSLaSgW4zkYXemrW8M6D2FZgpEJmAwvgiERSCXbuLaD1RCDR3hbxiF7mb1Ffkm4EudCK41ZS7VxPyQQG7QpVg4q` (slot 516650530).
 #[test]
 fn devnet_v0_with_lookup_table() {
     let msg = b64(MSG_V0_WITH_LOOKUP_TABLE);
@@ -528,17 +507,12 @@ fn devnet_v0_with_lookup_table() {
     check_v0_with_lookup_table(&s);
 }
 
-// ------------------------------------------------------------------------------------------
-// Differential tests against Anza's reference `solana-message` crate (dev-dependency only).
-// ------------------------------------------------------------------------------------------
-
 use solana_message::VersionedMessage;
 
 struct Reference {
     signers: Vec<String>,
     blockhash: String,
     tables: Vec<String>,
-    /// (program id, accounts, data) with lookup-table entries resolved.
     instructions: Vec<(String, Vec<String>, Vec<u8>)>,
 }
 

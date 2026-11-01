@@ -1,16 +1,4 @@
 //! Ledger « Sui » app (LedgerHQ/app-sui, host library `@mysten/ledgerjs-hw-app-sui`).
-//!
-//! Every command uses the app's **block protocol**: each parameter is cut into 180-byte chunks
-//! linked from the last to the first by SHA-256 (`block = hash(next block) || chunk`), the
-//! command carries `START || hash(first block)…`, then the device asks for blocks by hash
-//! (`GET_CHUNK`), may store some (`PUT_CHUNK`) and streams its result (`RESULT_ACCUMULATING` /
-//! `RESULT_FINAL`). CLA 00; INS 01 = verify address (shown on screen), 02 = get public key,
-//! 03 = sign. Paths: count then **little-endian** indices.
-//!
-//! - Public key → `32 || pubkey || 32 || address` (address = BLAKE2b-256(0x00 || pubkey),
-//!   checked).
-//! - Sign: parameters `len (u32 LE) || intent message` and the path → 64-byte ed25519
-//!   signature of BLAKE2b-256(intent message).
 
 use std::collections::HashMap;
 
@@ -38,7 +26,6 @@ const GET_CHUNK_FAIL: u8 = 2;
 const PUT_CHUNK_OK: u8 = 3;
 const RESULT_ACK: u8 = 4;
 
-/// A transaction is a few hundred bytes: bounds the conversation.
 const MAX_ROUNDS: usize = 4096;
 
 pub fn path_payload(path: &[u32]) -> Vec<u8> {
@@ -165,7 +152,6 @@ mod tests {
 
     #[test]
     fn blocks_chain_by_sha256() {
-        // Two-chunk parameter: block 2 = zeros || tail, block 1 = hash(block 2) || head.
         let p: Vec<u8> = (0..200u8).collect();
         let (start, store) = blocks(&[p.clone(), vec![9]]);
         assert_eq!(start.len(), 1 + 64);
@@ -192,8 +178,6 @@ mod tests {
 
     #[test]
     fn get_public_key_through_block_protocol() {
-        // Public key of the NEAR app vector reused as an ed25519 key; the address is
-        // BLAKE2b-256(0x00 || pk) as the Sui app computes it.
         let pk = hex::decode("c4f5941e81e071c2fd1dae2e71fd3d859d462484391d9a90bf219211dcbb320f")
             .unwrap();
         let pk32: [u8; 32] = pk.clone().try_into().unwrap();
@@ -220,7 +204,6 @@ mod tests {
         let a = App::open(&r, &c, HwKeyChain::Sui).unwrap();
         assert_eq!(pubkey(&a, &path, false).unwrap(), pk);
         assert!(r.done());
-        // A device address that is not the key's is refused.
         let mut bad = [&[32u8][..], &pk, &[32], &addr].concat();
         bad[40] ^= 1;
         assert!(parse_pubkey(&bad).is_err());

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Balances (all adapters) + market data (CoinGecko top 250), shared by every
-// screen of the unlocked app.
+// Balances (all adapters) + market data (CoinGecko top 250), shared by every screen of the unlocked
+// app.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { assetsFor } from '@kyro/chains';
@@ -14,7 +13,6 @@ import { useOnCbfSynced } from './cbf';
 export type { Holding } from '../lib/holdings';
 
 interface PortfolioValue {
-  /** Balances of the SELECTED account of each chain (what Envoyer / Swap spend from). */
   balances: Map<string, bigint>;
   /** Balances per account: key `${family}:${index}` → asset id → amount. */
   accountBalances: Map<string, Map<string, bigint>>;
@@ -27,9 +25,7 @@ interface PortfolioValue {
   marketError: string | null;
   marketUpdatedAt: number | null;
   price: (coinId: string) => SimplePrice | null;
-  /** One row per asset, all accounts added together (totals, allocation, charts). */
   holdings: Holding[];
-  /** Like `holdings`, but a chain with several vault accounts gets one row per account. */
   accountHoldings: Holding[];
   total: number;
   change24hFiat: number;
@@ -65,19 +61,16 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(() => setTick((t) => t + 1), []);
   const sourcesRef = useRef<AccountSource[]>(accountSources);
   sourcesRef.current = accountSources;
-  // Reload when the set of accounts (or their adapters) changes, not on every selection.
   const sourcesKey = accountSources.map((x) => `${x.family}:${x.index}:${x.addresses.join(',')}`).join('|');
 
   // Tor just became ready (after a bootstrap, a retry or a re-enable): reload now rather than at the next poll.
   useOnTorReady(refresh);
   useOnCbfSynced(refresh);
 
-  // Balances.
   useEffect(() => {
     let alive = true;
     const load = async () => {
       setBalancesLoading(true);
-      // Every account of every chain (§2.9): one request per account and chain.
       const jobs = sourcesRef.current.flatMap((src) => src.adapters.map((a) => ({ key: `${src.family}:${src.index}`, a })));
       const results = await Promise.allSettled(jobs.map((j) => j.a.getBalance()));
       if (!alive) return;
@@ -93,7 +86,6 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         } else errors[j.a.chain.key] ??= r.reason instanceof Error ? r.reason.message : String(r.reason);
       });
       setAccountBalances((prev) => {
-        // Keep the last known value of chains that failed this round.
         const merged = new Map<string, Map<string, bigint>>();
         for (const [k, m] of prev) merged.set(k, new Map(m));
         next.forEach((m, k) => {
@@ -116,7 +108,6 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     };
   }, [sourcesKey, tick]);
 
-  // Market data.
   useEffect(() => {
     let alive = true;
     const load = async () => {
@@ -155,18 +146,15 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     [marketById, extraPrices],
   );
 
-  // What Envoyer / Swap spend: the selected account of each chain.
   const balances = useMemo(() => {
     const out = new Map<string, bigint>();
     for (const src of accountSources) {
-      // Selected = its adapters are the active ones (vault: the chain's selected account).
       if (!src.adapters.some((a) => adapters.all.includes(a))) continue;
       accountBalances.get(`${src.family}:${src.index}`)?.forEach((v, k) => out.set(k, v));
     }
     return out;
   }, [accountSources, accountBalances, adapters]);
 
-  // Totals: every account of every chain added together, each account once (lib/holdings.ts).
   const { holdings, accountHoldings, total, change24hFiat } = useMemo(
     () =>
       computeHoldings({

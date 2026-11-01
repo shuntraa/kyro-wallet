@@ -5,13 +5,8 @@
 //!
 //! The firmware's Zcash signer (`core/src/apps/zcash/signer.py`) signs the ZIP-244 digest and,
 //! since ZIP 244 commits to the amount and script of every spent output, does not ask for the
-//! previous transactions (it runs the taproot-only path of `step3_verify_inputs`): an input is
-//! its outpoint, path and amount. A request for a previous transaction is refused here.
-//!
-//! Inputs are ours only (`address_n` from Kyro's plan, built from the stored xpub), the change
-//! goes as `address_n` (the firmware re-derives it), the payment as Kyro's decoded address.
-//! The returned DER signatures are verified by `wallet_core::zec_hw_finalize` against Kyro's own
-//! ZIP-244 digests and keys before anything is assembled.
+//! previous transactions (it runs the taproot-only path of `step3_verify_inputs`): an input is its
+//! outpoint, path and amount.
 
 use protobuf::{Message, MessageField};
 use trezor_client::protos::{self, tx_request::RequestType, MessageType};
@@ -79,7 +74,6 @@ fn ack_input(plan: &ZecHwPlan, i: usize) -> HwResult<Vec<u8>> {
         .get(i)
         .ok_or_else(|| HwError::bad("invalid input index"))?;
     let mut hash = inp.prev_hash;
-    // Trezor takes the txid in display order.
     hash.reverse();
     let mut input = protos::TxInput::new();
     input.address_n = inp.path.clone();
@@ -262,8 +256,6 @@ mod tests {
         }
     }
 
-    /// The flow of the firmware's Zcash signer: inputs, outputs (second pass included), the
-    /// signature serialized with a later request, no previous transaction.
     #[test]
     fn flow_against_simulated_firmware() {
         let p = plan();
@@ -315,7 +307,6 @@ mod tests {
             p.outputs[1].change_path.clone().unwrap()
         );
 
-        // A firmware asking for a previous transaction, or finishing without a signature.
         let mut fw = Firmware {
             script: VecDeque::from(vec![req(RequestType::TXMETA, None, Some(vec![1; 32]))]),
             sent: vec![],

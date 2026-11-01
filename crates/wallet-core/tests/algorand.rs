@@ -1,14 +1,4 @@
 //! Algorand vectors.
-//!
-//! Sources (fetched 2026-11-01):
-//! - Ledger Algorand app, Zondax `ledger-algorand` `tests_zemu/tests/common.ts` (`APP_SEED`,
-//!   24 words; `txPayment`, a 221-byte payment with `close`) and `standard.test.ts` (`get
-//!   address` / `get pubkey`: account 123 → public key `0dfdbcdb…b377`, address
-//!   `BX63ZW4O…KUQRCA`). The emulator (speculos) runs the Ledger OS derivation, so this vector
-//!   pins Kyro's `m/44'/283'/a'/0/0` to what a real Ledger shows.
-//! - py-algorand-sdk `tests/unit_tests/test_transaction.py`: `test_serialize_pay` /
-//!   `test_sign` (signed payment, golden base64 and transaction id `5FJDJD5L…GZHQ`) and
-//!   `test_serialize_zero_receiver` (unsigned payment without receiver, golden base64).
 
 mod common;
 
@@ -29,7 +19,6 @@ fn b64(s: &str) -> Vec<u8> {
 
 /// Algorand's own 25-word format (py-algorand-sdk `mnemonic.to_private_key`): 24 words of 11
 /// bits, little-endian bit order, = the 32-byte ed25519 secret key; the 25th is a checksum.
-/// Test helper only: Kyro does not import these phrases.
 fn algorand_25_words_to_secret(phrase: &str) -> [u8; 32] {
     let list = bip39::Language::English.word_list();
     let words: Vec<&str> = phrase.split_whitespace().collect();
@@ -90,7 +79,6 @@ fn addresses_parse_strictly() {
         algo_address_bytes(&format!("  {a} ")).unwrap(),
         algo_address_bytes(a).unwrap()
     );
-    // The zero address is a valid address (refused only as a receiver).
     assert_eq!(
         algo_address_bytes("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ").unwrap(),
         [0u8; 32]
@@ -144,13 +132,11 @@ fn py_sdk_signed_payment_is_reproduced_byte_for_byte() {
         p.txid(),
         "5FJDJD5LMZC3EHUYYJNH5I23U4X6H2KXABNDGPIL557ZMJ33GZHQ"
     );
-    // Same signature from the SDK's key over "TX" ‖ our encoding of the transaction.
     let sk = ed25519_dalek::SigningKey::from_bytes(&algorand_25_words_to_secret(PY_SDK_MNEMONIC));
     assert_eq!(sk.verifying_key().to_bytes(), p.sender);
     let again = sk.sign(&p.signing_bytes()).to_bytes();
     assert_eq!(again, sig);
     assert_eq!(algo_encode_signed(&p, &again), raw);
-    // ... but Kyro refuses to sign or broadcast it: close-remainder-to.
     let me = algo_address_of_pubkey(&p.sender);
     let e = algo_decode_tx(&hex::encode(p.encode()), Network::Testnet, &me).unwrap_err();
     assert!(e.to_string().contains("close-remainder-to"), "{e}");
@@ -205,8 +191,6 @@ fn ledger_app_payment_fixture_round_trips() {
     assert_eq!(p.encode(), ZONDAX_TX_PAYMENT.to_vec());
 }
 
-// ---------------------------------------------------------------- Kyro's own payments
-
 fn kyro_payment(net: Network, sender: [u8; 32]) -> AlgoPayment {
     let (gen, gh) = algo_genesis(net).unwrap();
     AlgoPayment {
@@ -227,8 +211,6 @@ fn kyro_payment(net: Network, sender: [u8; 32]) -> AlgoPayment {
         asset: None,
     }
 }
-
-// ---------------------------------------------------------------- asset transfers (axfer)
 
 /// Zondax `ledger-algorand` `tests_zemu/tests/common.ts` `txAssetXfer` (fetched 2026-11-01): a
 /// msgpack asset transfer (asset 1234, 10 units, receiver = sender).
@@ -288,7 +270,6 @@ fn opt_in_and_asset_transfer_are_signed_with_their_summary() {
     let pk = algo_public_key(&s, 0).unwrap();
     let opt = usdc_opt_in(pk);
     let raw = opt.encode();
-    // Keys sorted bytewise: arcv … snd, type, xaid (no aamt: zero is omitted).
     assert_eq!(raw[0], 0x89, "9 fields");
     assert_eq!(AlgoPayment::decode(&raw).unwrap(), opt);
     let blob = hex::encode(&raw);
@@ -311,7 +292,6 @@ fn opt_in_and_asset_transfer_are_signed_with_their_summary() {
             .0,
         txid
     );
-    // A real transfer of 12.5 USDT to someone else.
     let other =
         algo_address_bytes("BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA").unwrap();
     let mut x = opt.clone();
@@ -330,7 +310,6 @@ fn opt_in_and_asset_transfer_are_signed_with_their_summary() {
         sm.receiver,
         "BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA"
     );
-    // Not on a hardware wallet yet.
     assert!(wallet_core::algo_hw_message(&blob).is_err());
 }
 
@@ -358,14 +337,12 @@ fn dangerous_or_unknown_asset_transfers_are_refused() {
     refused(&with(&|a| a.amount = 5), m, &me, "yourself");
     refused(&with(&|a| a.receiver = other), m, &me, "zero amount");
     refused(&with(&|a| a.receiver = [0; 32]), m, &me, "null recipient");
-    // Testnet USDC is not mainnet USDC.
     refused(&usdc_opt_in(pk), Network::Testnet, &me, "network");
     let mut t = kyro_payment(Network::Testnet, pk);
     t.amount = 0;
     t.receiver = [0; 32];
     t.asset = with(&|a| a.asset_id = 31_566_704).asset;
     refused(&t, Network::Testnet, &me, "unknown");
-    // ALGO fields inside an asset transfer, or asset fields inside a payment.
     let mut mixed = usdc_opt_in(pk);
     mixed.amount = 1;
     assert!(AlgoPayment::decode(&mixed.encode())
@@ -410,7 +387,6 @@ fn sign_verify_and_summary() {
             &ed25519_dalek::Signature::from_bytes(&sig),
         )
         .unwrap();
-    // Tampered signature or amount: refused before broadcast.
     let mut bad = raw.clone();
     bad[10] ^= 1;
     assert!(algo_verify_signed(&hex::encode(&bad), Network::Testnet, &me).is_err());
@@ -418,11 +394,8 @@ fn sign_verify_and_summary() {
     other.amount += 1;
     let forged = algo_encode_signed(&other, &sig);
     assert!(algo_verify_signed(&hex::encode(forged), Network::Testnet, &me).is_err());
-    // Signed on testnet: refused on mainnet.
     assert!(algo_verify_signed(&signed, Network::Mainnet, &me).is_err());
-    // Another account signs nothing of ours.
     assert!(algo_sign(&s, 1, Network::Testnet, &blob).is_err());
-    // Plain payment without note: no warning.
     let plain = hex::encode(kyro_payment(Network::Mainnet, pk).encode());
     let sm = algo_decode_tx(&plain, Network::Mainnet, &me).unwrap();
     assert!(!sm.requires_extra_confirmation);
@@ -489,7 +462,6 @@ fn dangerous_or_odd_payments_are_refused() {
         "validity",
     );
     refused(&with(&|p| p.note = vec![b'x'; 1025]), t, &me, "1024");
-    // High fee and binary / unusual notes: accepted, with the reinforced confirmation.
     let sm = algo_decode_tx(&hex::encode(with(&|p| p.fee = 20_000).encode()), t, &me).unwrap();
     assert_eq!(sm.warnings, vec![AlgoWarning::HighFee]);
     let sm = algo_decode_tx(
@@ -523,11 +495,9 @@ fn non_canonical_or_foreign_encodings_are_refused() {
     let raw = kyro_payment(Network::Testnet, pk).encode();
     assert_eq!(raw[0], 0x89, "9 fields");
     let dec = |b: &[u8]| AlgoPayment::decode(b);
-    // Trailing byte.
     let mut x = raw.clone();
     x.push(0);
     assert!(dec(&x).is_err());
-    // `amt` 1 500 000 as uint64 instead of uint32.
     let mut x = raw.clone();
     let at = x
         .windows(4)
@@ -540,11 +510,9 @@ fn non_canonical_or_foreign_encodings_are_refused() {
         .splice(at..at + 5, [&[0xCFu8, 0, 0, 0, 0][..], &v[..]].concat())
         .collect();
     assert!(dec(&x).unwrap_err().to_string().contains("non-canonical"));
-    // Explicit zero field (`amt: 0` would be omitted canonically).
     let mut x = vec![0x8A, 0xA3, b'a', b'm', b't', 0x00];
     x.extend_from_slice(&raw[1..]);
     assert!(dec(&x).is_err());
-    // Unknown field and other transaction types.
     let mut x = vec![0x8A, 0xA4, b'z', b'a', b'm', b't', 0x01];
     x.extend_from_slice(&raw[1..]);
     assert!(dec(&x).unwrap_err().to_string().contains("unknown field"));
@@ -563,7 +531,6 @@ fn non_canonical_or_foreign_encodings_are_refused() {
         .unwrap_err()
         .to_string()
         .contains("\"appl\" refused"));
-    // A signed transaction is not an unsigned one, and vice versa.
     let (signed, _, _) = algo_sign(&s, 0, Network::Testnet, &hex::encode(&raw)).unwrap();
     assert!(algo_decode_tx(&signed, Network::Testnet, &me).is_err());
     assert!(algo_verify_signed(&hex::encode(&raw), Network::Testnet, &me).is_err());
@@ -577,11 +544,9 @@ fn hardware_wallet_message_and_signature() {
     let pk = algo_public_key(&s, 0).unwrap();
     let p = kyro_payment(Network::Testnet, pk);
     let blob = hex::encode(p.encode());
-    // Ledger Algorand app: the msgpack without the `TX` prefix (the app adds it).
     let msg = wallet_core::algo_hw_message(&blob).unwrap();
     assert_eq!(msg, p.encode());
     assert_eq!(&p.signing_bytes()[2..], msg.as_slice());
-    // The Zondax fixture is sent as is.
     assert_eq!(
         wallet_core::algo_hw_message(&hex::encode(ZONDAX_TX_PAYMENT)).unwrap(),
         ZONDAX_TX_PAYMENT.to_vec()

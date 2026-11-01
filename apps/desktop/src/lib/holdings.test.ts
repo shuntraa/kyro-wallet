@@ -34,9 +34,7 @@ describe('portfolio totals with many accounts (§2.9)', () => {
     const rows = r.accountHoldings.filter((h) => h.asset.id === btc.id);
     expect(rows).toHaveLength(20);
     expect(rows.every((h) => h.account && h.amount === 10_000_000n)).toBe(true);
-    // Per-account shares add up to the aggregate share.
     expect(rows.reduce((s, h) => s + h.share, 0)).toBeCloseTo(agg?.share ?? 0, 9);
-    // 24 h change: +10 % on everything.
     expect(r.change24hFiat).toBeCloseTo(100_000 - 100_000 / 1.1, 6);
   });
 

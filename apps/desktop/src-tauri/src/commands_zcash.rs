@@ -1,9 +1,7 @@
-//! IPC commands for Zcash, **transparent addresses only** (`zec_*`): addresses, Esplora-shaped
-//! data from Kyro's default Electrum servers, and sending — Rust builds the v5 transaction
-//! itself (coin selection, ZIP-317 fee, change to our own address, consensus branch read from
-//! the chain), shows the native dialog with what it decoded, then signs. The interface only
-//! proposes the candidate coins (outpoint + which of our addresses), the recipient and the
-//! amount. Contract: docs/IPC.md §2.4b.
+//! IPC commands for Zcash, **transparent addresses only** (`zec_*`): addresses, Esplora-shaped data
+//! from Kyro's default Electrum servers, and sending — Rust builds the v5 transaction itself (coin
+//! selection, ZIP-317 fee, change to our own address, consensus branch read from the chain), shows
+//! the native dialog with what it decoded, then signs.
 
 use std::collections::HashSet;
 
@@ -21,7 +19,6 @@ use crate::i18n::Lang;
 use crate::state::AppState;
 use crate::zcash_backend::{self, ZecCtx};
 
-/// Most candidate coins one send may propose (each one's previous transaction is fetched).
 const MAX_CANDIDATES: usize = 200;
 
 fn ctx(state: &AppState) -> ZecCtx<'_> {
@@ -132,11 +129,8 @@ fn parse_amount(args: &ZecSendArgs) -> AppResult<u64> {
         .map_err(|_| AppError::InvalidInput("amount out of range".into()))
 }
 
-/// Reads the chain state and the previous transaction of every candidate (one Electrum
-/// session), then assembles the request wallet-core builds from.
 pub(crate) async fn request(state: &AppState, args: &ZecSendArgs) -> AppResult<ZecSendRequest> {
     let net = state.network;
-    // Local checks first: nothing is sent for a recipient Kyro would refuse anyway.
     wallet_core::zec_parse_address(&args.to, net)?;
     let amount = parse_amount(args)?;
     if args.coins.is_empty() {
@@ -225,7 +219,6 @@ fn net_suffix(net: Network) -> &'static str {
     }
 }
 
-/// Body of the native dialog, built from Rust's own construction and decoding only.
 pub(crate) fn describe_zec(lang: Lang, s: &ZecTxSummary, net: Network) -> String {
     let z = |v: &str| zec(lang, v);
     let mut out = format!(
@@ -338,7 +331,6 @@ pub(crate) fn describe_zec(lang: Lang, s: &ZecTxSummary, net: Network) -> String
     out
 }
 
-/// Body of the reinforced (second) dialog.
 pub(crate) fn describe_zec_extra(lang: Lang, s: &ZecTxSummary) -> String {
     let mut out = String::from(lang.unusual_intro());
     for w in &s.warnings {
@@ -358,7 +350,7 @@ pub(crate) fn describe_zec_extra(lang: Lang, s: &ZecTxSummary) -> String {
 }
 
 /// Password, Rust's construction and decoding, native dialog (+ reinforced one if needed),
-/// signature. Returns the signed transaction; `zec_broadcast` sends it.
+/// signature.
 #[tauri::command]
 pub async fn zec_sign(
     app: AppHandle,
@@ -499,7 +491,6 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(parse_amount(&ok).unwrap(), 1000);
-        // Unknown fields (e.g. an amount the interface claims for a coin) are refused.
         assert!(serde_json::from_value::<ZecSendArgs>(serde_json::json!({
             "to": "t1", "amount": "1", "changeIndex": 0,
             "coins": [{ "txid": "ab", "vout": 0, "change": false, "index": 0, "value": 5 }]

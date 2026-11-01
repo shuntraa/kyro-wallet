@@ -1,10 +1,6 @@
 //! Hardware-wallet signing of Litecoin / Dogecoin / Bitcoin Cash / Dash PSBTs
 //! (`utxo_hw_plan`, `utxo_hw_finalize`): only the account xpub is known, the device returns raw
 //! signatures, Kyro verifies them against the xpub and its own sighash.
-//!
-//! The "device" signatures are the ones Kyro's software signer produces for the same seed
-//! (`abandon … about`): a correct device returns exactly those (RFC 6979 is deterministic, but
-//! only validity matters here); a tampered one must be refused.
 
 mod common;
 
@@ -113,7 +109,6 @@ fn psbt(coin: UtxoCoin) -> Psbt {
     p
 }
 
-/// The signature of input 0 as a device returns it (DER ‖ sighash byte).
 fn device_signature(coin: UtxoCoin, signed: &Psbt) -> Vec<u8> {
     let input = &signed.inputs[0];
     if coin == UtxoCoin::BitcoinCash {
@@ -161,7 +156,6 @@ fn device_signatures_are_verified_and_stored_like_kyro_s_own() {
         let (hw, summary) = utxo_hw_finalize(T, coin, &account, &b64, &dev).unwrap();
         assert_eq!(hw, soft, "{coin:?}: same PSBT as the software signer");
         assert_eq!(summary, soft_summary);
-        // Without the sighash byte (Trezor's form): same result.
         let der = vec![HwBtcSignature {
             input: 0,
             pubkey: None,
@@ -172,7 +166,6 @@ fn device_signatures_are_verified_and_stored_like_kyro_s_own() {
             soft
         );
 
-        // A tampered signature, a wrong sighash byte, a missing or duplicated one: refused.
         let mut bad = dev.clone();
         bad[0].signature[8] ^= 1;
         assert!(utxo_hw_finalize(T, coin, &account, &b64, &bad).is_err());
@@ -183,10 +176,8 @@ fn device_signatures_are_verified_and_stored_like_kyro_s_own() {
         let twice = vec![dev[0].clone(), dev[0].clone()];
         assert!(utxo_hw_finalize(T, coin, &account, &b64, &twice).is_err());
 
-        // Another account's xpub: the input is not ours.
         let other = utxo_account(&seed(LEGAL), T, coin, 0).unwrap();
         assert!(utxo_hw_plan(T, coin, &other, &b64).is_err());
-        // An xpub moved to another path is refused.
         let mut moved = account.clone();
         moved.path = format!("m/{pp}'/1'/1'");
         assert!(utxo_hw_plan(T, coin, &moved, &b64).is_err());

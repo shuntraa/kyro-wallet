@@ -58,12 +58,10 @@ fn tampered_ciphertext() {
     let mut f = sealed();
     f.ciphertext = flip_b64(&f.ciphertext, 3);
     assert_eq!(open(&f, PW), Err(Error::WrongPassword));
-    // Tag byte.
     let mut f = sealed();
     let len = B64.decode(&f.ciphertext).unwrap().len();
     f.ciphertext = flip_b64(&f.ciphertext, len - 1);
     assert_eq!(open(&f, PW), Err(Error::WrongPassword));
-    // Truncated.
     let mut f = sealed();
     f.ciphertext = B64.encode(&B64.decode(&f.ciphertext).unwrap()[..10]);
     assert!(matches!(open(&f, PW), Err(Error::InvalidVault(_))));
@@ -79,7 +77,6 @@ fn tampered_header() {
     f.nonce = flip_b64(&f.nonce, 0);
     assert_eq!(open(&f, PW), Err(Error::WrongPassword));
 
-    // KDF params are bound twice: different key AND different AAD.
     for kdf in [
         KdfParams {
             t_cost: 3,
@@ -111,7 +108,6 @@ fn tampered_header() {
     f.nonce = "***".into();
     assert!(matches!(open(&f, PW), Err(Error::InvalidVault(_))));
 
-    // Absurd KDF cost is rejected before any allocation.
     let mut f = sealed();
     f.kdf.m_cost_kib = u32::MAX;
     assert!(matches!(open(&f, PW), Err(Error::InvalidVault(_))));
@@ -157,7 +153,6 @@ fn secret_types_are_send_static() {
     assert_send_static::<Error>();
 }
 
-/// Slow (~1 s optimised, 256 MiB): run with `cargo test --release -- --ignored`.
 #[test]
 #[ignore]
 fn production_params_roundtrip() {

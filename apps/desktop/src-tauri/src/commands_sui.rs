@@ -1,8 +1,8 @@
-//! IPC commands for Sui (`sui_*`): address, balance, history, SUI transfers **built by Kyro**
-//! (gas coins, reference gas price and epoch read live, BCS encoded by wallet-core, budget from a
+//! IPC commands for Sui (`sui_*`): address, balance, history, SUI transfers **built by Kyro** (gas
+//! coins, reference gas price and epoch read live, BCS encoded by wallet-core, budget from a
 //! simulation of a draft), signing behind the password and the native dialog (recipient in full,
 //! amount, coin type, gas budget / price, simulated fee, signing account), and execution with a
-//! digest check. Contract: docs/IPC.md §2.11.
+//! digest check.
 
 use serde::{Serialize, Serializer};
 use serde_json::Value;
@@ -18,7 +18,6 @@ use crate::servers::{host_of, utxo_network_key};
 use crate::state::AppState;
 use crate::sui_backend::{self, SuiCtx, DRAFT_BUDGET};
 
-/// A gas price above this many times the reference price is refused (Kyro uses the reference).
 const MAX_PRICE_FACTOR: u64 = 10;
 
 pub(crate) fn ctx(state: &AppState) -> SuiCtx<'_> {
@@ -93,8 +92,6 @@ fn units(lang: Lang, v: &str, k: &wallet_core::SuiTokenSummary) -> String {
     )
 }
 
-/// Dialog body of a token transfer: token, verified coin type, decimals, amount, recipient,
-/// the token coins merged, then the gas (paid in SUI) like a SUI transfer.
 fn describe_token(
     lang: Lang,
     s: &SuiTxSummary,
@@ -181,7 +178,6 @@ fn describe_token(
     out
 }
 
-/// Body of the native dialog.
 pub(crate) fn describe_sui(lang: Lang, s: &SuiTxSummary, c: &SuiContext, net: Network) -> String {
     let testnet = if net == Network::Testnet {
         " (testnet)"
@@ -197,7 +193,6 @@ pub(crate) fn describe_sui(lang: Lang, s: &SuiTxSummary, c: &SuiContext, net: Ne
     out
 }
 
-/// Recipient, amount and coin type of a SUI transfer.
 fn describe_sui_head(lang: Lang, s: &SuiTxSummary, c: &SuiContext, testnet: &str) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     let su = |v: &str| sui(lang, v);
@@ -246,7 +241,6 @@ fn describe_sui_head(lang: Lang, s: &SuiTxSummary, c: &SuiContext, testnet: &str
     out
 }
 
-/// Fee, gas budget and price, gas coins, expiration and digest (every transfer).
 fn describe_gas(lang: Lang, s: &SuiTxSummary, c: &SuiContext) -> String {
     let su = |v: &str| sui(lang, v);
     let mut out = String::new();
@@ -316,11 +310,8 @@ fn describe_gas(lang: Lang, s: &SuiTxSummary, c: &SuiContext) -> String {
     out
 }
 
-/// Gas coins listed one by one in the dialog.
 const SHOWN_GAS_COINS: usize = 5;
 
-/// One line per gas coin (full object id and version decoded from the bytes, balance read live),
-/// the first [`SHOWN_GAS_COINS`], then the count and total of the others.
 fn gas_coin_lines(lang: Lang, s: &SuiTxSummary, c: &SuiContext) -> String {
     let mut out = String::new();
     for (i, g) in s.gas_coins.iter().take(SHOWN_GAS_COINS).enumerate() {
@@ -387,8 +378,6 @@ pub(crate) fn describe_sui_extra(lang: Lang, s: &SuiTxSummary) -> String {
     out
 }
 
-// ---------------------------------------------------------------- reads
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiBackendInfo {
@@ -437,8 +426,6 @@ pub async fn sui_token_balances(
     sui_backend::token_balances(&ctx(&state), &address).await
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiBuilt {
@@ -461,7 +448,6 @@ fn b64(bytes: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
-/// Builds an unsigned transfer from live data: `amount` in MIST, `None` = the whole balance.
 pub(crate) async fn build(
     c: &SuiCtx<'_>,
     me: &str,
@@ -544,8 +530,6 @@ fn known_coin(c: &SuiCtx<'_>, coin_type: &str) -> AppResult<&'static wallet_core
         .ok_or_else(|| AppError::InvalidInput("Sui token unknown to Kyro on this network".into()))
 }
 
-/// Builds an unsigned token transfer of the known `coin_type`: `amount` in token units
-/// (`None` = every coin of that token, at most 32), gas paid with SUI coins.
 pub(crate) async fn build_token(
     c: &SuiCtx<'_>,
     me: &str,
@@ -661,7 +645,6 @@ pub async fn sui_build_token_tx(
     build_token(&ctx(&state), &me, &to, &coin_type, amount).await
 }
 
-/// Decodes like wallet-core will sign: SUI transfer, or token transfer of `coin_type`.
 fn decode(c: &SuiCtx<'_>, bcs: &str, me: &str, coin_type: Option<&str>) -> AppResult<SuiTxSummary> {
     Ok(match coin_type {
         None => wallet_core::sui_decode_tx(bcs, me)?,
@@ -695,8 +678,6 @@ pub async fn sui_build_tx(
     build(&ctx(&state), &me, &to, amount).await
 }
 
-/// Decoding + live re-checks + simulation of the exact bytes: everything `sui_sign_tx` does
-/// before the dialog.
 pub(crate) async fn prepare_sign(
     c: &SuiCtx<'_>,
     me: &str,
@@ -810,9 +791,6 @@ pub(crate) async fn prepare_sign(
     ))
 }
 
-/// Token side of [`prepare_sign`]: every token coin is ours, of this type, at this version and
-/// digest (read live); the gas coins cover the budget; the simulation moves only this token
-/// between us and the recipient (exactly the amount) and our SUI for the gas.
 #[allow(clippy::too_many_arguments)]
 async fn prepare_token(
     c: &SuiCtx<'_>,
@@ -1143,7 +1121,6 @@ mod tests {
             &summary(None, vec![SuiWarning::SendAll, SuiWarning::HighGasBudget]),
         );
         assert!(x.contains("tout le solde") && x.contains("0,1 SUI"));
-        // Gas coins: decoded id and version, live balance; beyond 5, a count and a total.
         let coin = |i: u8| wallet_core::SuiGasCoinView {
             object_id: format!("0x{}", hex::encode([i; 32])),
             version: format!("{}", 100 + u64::from(i)),

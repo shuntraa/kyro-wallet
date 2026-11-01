@@ -1,5 +1,4 @@
-//! Sui SUI transfers: strict hand-written BCS for the one transaction shape Kyro builds, intent
-//! signing, digest and signature checks.
+//! Sui transfers: strict hand-written BCS for Kyro's one tx shape, intent signing, digest, checks.
 //!
 //! Kyro never signs bytes it did not build. The only accepted `TransactionData` is
 //!
@@ -19,8 +18,7 @@
 //! }
 //! ```
 //!
-//! Token transfers (coin types of [`sui_known_coins`] only: Circle's USDC) take the coin objects
-//! as owned-object inputs, merge them into the first one, then split it or send it whole:
+//! Token transfers ([`sui_known_coins`] only) merge owned coin inputs, then split or send whole:
 //!
 //! ```text
 //!   inputs:   [Object(ImmOrOwned c0), …, Object(ImmOrOwned cN), Pure(u64 amount), Pure(address)]
@@ -31,20 +29,13 @@
 //!     commands: [MergeCoins(…) if N ≥ 1, TransferObjects([Input(0)], Input(N+1))]  // « tout »
 //! ```
 //!
-//! The bytes do not name the coin type of these objects: the caller states it (a known one only)
-//! and the shell checks, live, that every listed object is a coin of that type owned by the
-//! sender at exactly that version and digest (and the simulation must move only that token).
+//! Bytes omit the coin type: caller states it; shell checks each object live (type/owner/version).
 //!
-//! The SUI shapes are exactly what the official TypeScript SDK produces for `tx.splitCoins(tx.gas, [amount])`
-//! then `tx.transferObjects([coin], to)`, and for `tx.transferObjects([tx.gas], to)`. Decoding is
-//! strict (canonical ULEB128, known variants only, no trailing byte) **and** the decoded value
-//! is re-encoded and compared byte for byte with the input: any other layout (an `Object`
-//! input, a `MoveCall`, `Result(0)` instead of `NestedResult(0, 0)`, a sponsor, gas paid from
-//! the address balance, `ValidDuring` expiration…) is refused before anything is shown.
+//! SUI shapes match the TS SDK's splitCoins/transferObjects. Strict decode + byte-exact re-encode:
+//! anything else (MoveCall, sponsor, `Result(0)`, `ValidDuring`…) is refused before display.
 //!
-//! Signing: `ed25519(BLAKE2b-256(IntentMessage { [0, 0, 0], TransactionData }))`; the
-//! serialized signature is `0x00 (ed25519 flag) || 64-byte signature || 32-byte public key`.
-//! Digest: `base58(BLAKE2b-256("TransactionData::" || bcs))`.
+//! Sign `ed25519(BLAKE2b-256([0,0,0] || bcs))`; sig `0x00 || sig64 || pk32`; digest
+//! `base58(BLAKE2b-256("TransactionData::" || bcs))`.
 
 use base64::Engine as _;
 use ed25519_dalek::Signer as _;
@@ -65,14 +56,12 @@ pub const MIST_PER_SUI: u64 = 1_000_000_000;
 pub const SUI_MAX_GAS_OBJECTS: usize = 256;
 /// Gas budget above this (0.1 SUI) is flagged: a plain transfer costs a few thousandths of SUI.
 pub const SUI_HIGH_GAS_BUDGET: u64 = 100_000_000;
-/// Intent `TransactionData` / `V0` / `Sui`.
 const INTENT: [u8; 3] = [0, 0, 0];
 const MAX_BCS: usize = 128 * 1024;
 /// At most this many coin objects of a token in one transfer (merged into the first one).
 pub const SUI_MAX_TOKEN_COINS: usize = 32;
 
-/// A coin type Kyro knows besides SUI, from the issuer's official list (cross-checked with a
-/// second source, decimals read on chain from its `CoinMetadata`).
+/// A non-SUI coin type Kyro knows (issuer's list, cross-checked, decimals from `CoinMetadata`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SuiKnownCoin {
@@ -86,16 +75,12 @@ pub struct SuiKnownCoin {
     pub decimals: u8,
 }
 
-/// Native USDC by Circle (developers.circle.com › USDC contract addresses; CoinGecko `usd-coin`
-/// platform `sui`, 6 decimals). Tether lists no USDT on Sui (tether.to › supported protocols):
-/// the bridged copies are left out.
 const SUI_MAINNET_COINS: &[SuiKnownCoin] = &[SuiKnownCoin {
     coin_type: "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
     symbol: "USDC",
     name: "USD Coin",
     decimals: 6,
 }];
-/// Circle's testnet USDC (same page, « Testnet » column).
 const SUI_TESTNET_COINS: &[SuiKnownCoin] = &[SuiKnownCoin {
     coin_type: "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC",
     symbol: "USDC",
@@ -153,11 +138,9 @@ impl SuiObjectRef {
 /// What is sent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SuiTransferAmount {
-    /// This many MIST, split from the gas coin (token transfer: this many token units, split
-    /// from the merged token coin).
+    /// This many MIST split from the gas coin (token: units split from the merged token coin).
     Mist(u64),
-    /// The whole (merged) gas coin minus the gas actually used (token transfer: the whole merged
-    /// token coin).
+    /// The whole gas coin minus gas used (token: the whole merged token coin).
     All,
 }
 
@@ -181,8 +164,6 @@ pub struct SuiTransfer {
     /// Token transfer: the coin objects sent (merged into the first). Empty: SUI from the gas coin.
     pub coins: Vec<SuiObjectRef>,
 }
-
-// ---------------------------------------------------------------- BCS
 
 fn put_uleb(out: &mut Vec<u8>, mut v: u64) {
     loop {
@@ -234,7 +215,6 @@ impl<'a> Reader<'a> {
         Ok(a)
     }
 
-    /// Canonical ULEB128 ≤ u32::MAX (BCS lengths and variant tags).
     fn uleb(&mut self) -> Result<u32> {
         let mut v: u64 = 0;
         for i in 0..5 {
@@ -293,7 +273,6 @@ fn read_ref(r: &mut Reader<'_>) -> Result<SuiObjectRef> {
     })
 }
 
-/// One `CallArg`: `Pure(bytes)` or `Object(ImmOrOwnedObject(ref))`.
 enum Input {
     Pure(Vec<u8>),
     Owned(SuiObjectRef),
@@ -466,7 +445,6 @@ impl SuiTransfer {
         Ok(o)
     }
 
-    /// Inputs and commands of the one layout Kyro builds for this transfer.
     fn layout(&self) -> (Vec<Input>, Vec<Cmd>) {
         if self.coins.is_empty() {
             return match self.amount {
@@ -578,8 +556,7 @@ impl SuiTransfer {
                 .map_err(|_| bad("recipient: 32 bytes expected"))
         };
         let (recipient, amount) = match (inputs.as_slice(), cmds.as_slice()) {
-            // Token transfer: coin objects first, then (amount,) recipient; the commands are
-            // checked by the byte-for-byte re-encoding below.
+            // Token: coins, then (amount,) recipient; commands checked by the re-encoding below.
             ([amount, to], _) if !coins.is_empty() => {
                 let m: [u8; 8] = amount
                     .as_slice()
@@ -642,8 +619,6 @@ fn b64(s: &str, what: &str) -> Result<Vec<u8>> {
         .map_err(|_| Error::input(format!("{what}: base64 expected")))
 }
 
-// ---------------------------------------------------------------- summary
-
 /// One gas coin, for display.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -666,8 +641,7 @@ pub enum SuiWarning {
     SelfTransfer,
     /// Gas budget above [`SUI_HIGH_GAS_BUDGET`].
     HighGasBudget,
-    /// No expiration epoch: the signed transaction stays valid as long as its gas coins are
-    /// unchanged.
+    /// No expiration epoch: the signed tx stays valid while its gas coins are unchanged.
     NoExpiration,
 }
 
@@ -681,8 +655,7 @@ pub struct SuiTxSummary {
     pub recipient: String,
     /// [`SUI_COIN_TYPE`] for a SUI transfer, else the known token's coin type.
     pub coin_type: String,
-    /// MIST, decimal; `None` = the whole balance of the gas coins minus the gas used (token
-    /// transfer: token units; `None` = the whole balance of the token coins of `token`).
+    /// MIST (token: units), decimal; `None` = whole balance (gas coins minus gas, or token coins).
     pub amount: Option<String>,
     /// MIST, decimal.
     pub gas_budget: String,
@@ -786,16 +759,14 @@ fn known(coin_type: &str, testnet: bool) -> Result<&'static SuiKnownCoin> {
         .ok_or_else(|| bad("coin type unknown to Kyro on this network"))
 }
 
-/// Decodes an unsigned transfer (base64 BCS, as built by Kyro) for the dialog. Refused:
-/// anything [`SuiTransfer::decode`] refuses and a sender other than `our_address`.
+/// Decodes an unsigned transfer (base64 BCS, as built by Kyro) for the dialog.
 pub fn sui_decode_tx(bcs_b64: &str, our_address: &str) -> Result<SuiTxSummary> {
     let bcs = b64(bcs_b64, "transaction")?;
     let t = SuiTransfer::decode(&bcs)?;
     summarize(&t, &bcs, &sui_parse_address(our_address)?, None)
 }
 
-/// Like [`sui_decode_tx`] for a token transfer of the known `coin_type` (exact form). The
-/// objects' type is not in the bytes: the caller checks them live.
+/// Like [`sui_decode_tx`] for a token transfer of the known `coin_type` (exact form).
 pub fn sui_decode_coin_tx(
     bcs_b64: &str,
     our_address: &str,
@@ -808,15 +779,12 @@ pub fn sui_decode_coin_tx(
     summarize(&t, &bcs, &sui_parse_address(our_address)?, Some(coin))
 }
 
-/// Signs an unsigned transfer (base64 BCS) with account `account`'s key after decoding it like
-/// [`sui_decode_tx`]. Returns `(serialized signature base64 = flag || sig || pubkey, summary)`;
-/// the signature is verified before it is returned.
+/// Signs an unsigned transfer (base64 BCS) with `account`'s key after [`sui_decode_tx`].
 pub fn sui_sign(seed: &Seed, account: u32, bcs_b64: &str) -> Result<(String, SuiTxSummary)> {
     sign_inner(seed, account, bcs_b64, None)
 }
 
-/// [`sui_sign`] for a token transfer of the known `coin_type`, decoded like
-/// [`sui_decode_coin_tx`].
+/// [`sui_sign`] for a known `coin_type` token transfer, decoded like [`sui_decode_coin_tx`].
 pub fn sui_sign_coin(
     seed: &Seed,
     account: u32,
@@ -852,9 +820,7 @@ fn sign_inner(
     ))
 }
 
-/// Checks a signed transfer before it is sent: the BCS decodes like [`sui_decode_tx`], the
-/// signature is an ed25519 one (`flag 0x00`), its public key is the sender's and it verifies
-/// (strict). Returns the transaction digest.
+/// Pre-send check: BCS decodes like [`sui_decode_tx`], ed25519 sig by the sender verifies strictly.
 pub fn sui_verify_signed(bcs_b64: &str, signature_b64: &str) -> Result<String> {
     let bcs = b64(bcs_b64, "transaction")?;
     let t = SuiTransfer::decode(&bcs)?;
@@ -881,8 +847,7 @@ pub fn sui_verify_signed(bcs_b64: &str, signature_b64: &str) -> Result<String> {
     Ok(sui_tx_digest(&bcs))
 }
 
-/// Hardware wallet (Ledger Sui app): the intent message the device hashes and signs,
-/// `[0, 0, 0] || bcs`, after strict decoding of the transfer.
+/// Ledger Sui app: intent message `[0, 0, 0] || bcs` to sign, after strict decoding.
 pub fn sui_hw_message(bcs_b64: &str) -> Result<Vec<u8>> {
     let bcs = b64(bcs_b64, "transaction")?;
     SuiTransfer::decode(&bcs)?;
@@ -891,8 +856,7 @@ pub fn sui_hw_message(bcs_b64: &str) -> Result<Vec<u8>> {
     Ok(m)
 }
 
-/// Hardware wallet: serialized signature (`flag || sig || pubkey`, base64) of a signature
-/// returned by the device, checked like [`sui_verify_signed`] before it is returned.
+/// HW: base64 `flag || sig || pubkey` from the device sig, checked like [`sui_verify_signed`].
 pub fn sui_hw_signature(bcs_b64: &str, pubkey: &[u8; 32], sig: &[u8]) -> Result<String> {
     if sig.len() != 64 {
         return Err(bad("device signature: 64 bytes expected"));

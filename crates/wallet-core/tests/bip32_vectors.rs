@@ -66,7 +66,6 @@ fn check(seed_hex: &str, chains: &[Chain]) {
             *xpub,
             "xpub at {path}"
         );
-        // Round-trip parsing as well.
         assert_eq!(Xpriv::from_str(xprv).unwrap(), child);
     }
 }

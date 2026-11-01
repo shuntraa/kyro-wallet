@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Application state: vault lifecycle, settings, accounts/adapters, routing.
-// No secret is ever stored here (passwords stay in the screen that asks for
-// them; the recovery phrase lives only in the onboarding/reveal components).
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ACCOUNT_CHAINS, call, EMPTY_SERVERS, isDemoMode, listenShell, navigatorCurrency, toIpcError, type AccountChain, type Accounts, type ApiKeysUpdate, type AppConfig, type Network, type Settings, type VaultAccountLists, type VaultStatus, type WatchOnlyAccount } from '@kyro/shared';
@@ -12,11 +9,9 @@ import { accountAddress, defaultAccountName, familyAdapters } from '../lib/accou
 import { CoinGeckoClient } from '@kyro/market';
 import { createProviders, KYRO_SWAP_FEE, type SwapFeeConfig, type SwapProvider } from '@kyro/swap';
 
-/** Demo mode only: obviously fake fee recipients so the swap screen has quotes (nothing is ever sent). */
 const DEMO_SWAP_FEES: SwapFeeConfig = {
   ...KYRO_SWAP_FEE,
   recipients: { evm: '0x000000000000000000000000000000000000dEaD', solana: 'Vote111111111111111111111111111111111111111' },
-  // Demo runs on devnet mints (USDC devnet) and also accepts wrapped SOL, so every demo pair quotes.
   solanaFeeMints: [...KYRO_SWAP_FEE.solanaFeeMints, '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 'So11111111111111111111111111111111111111112'],
 };
 import { torStore } from './tor';
@@ -38,18 +33,15 @@ export type Route =
 
 /**
  * One account of the active wallet on one chain family: a vault account of the user's list
- * (docs/IPC.md §2.9), or the hardware-wallet account. Public data only.
+ * (docs/IPC.md §2.9), or the hardware-wallet account.
  */
 export interface AccountSource {
   family: AccountChain;
-  /** Vault account index (hardware wallet: its account number). */
   index: number;
   name: string;
-  /** This account's adapters of the family (EVM: one per chain). */
   adapters: AnyAdapter[];
   /** Addresses of this account on the family (own addresses, poisoning check). */
   addresses: string[];
-  /** Derivation path(s) of the account (vault; empty for a hardware wallet). */
   path: string;
 }
 
@@ -79,38 +71,23 @@ interface AppContextValue {
   saveSettings: (next: Settings, apiKeys?: ApiKeysUpdate) => Promise<void>;
   status: VaultStatus | null;
   refreshStatus: () => Promise<VaultStatus | null>;
-  /**
-   * Accounts of the ACTIVE wallet: the vault, or a hardware-wallet account (only its chains).
-   * Vault: per chain, the account selected with `selectChainAccount` (0 by default).
-   */
   accounts: WalletAccounts | null;
-  /** Adapters of `accounts` (vault: each family's adapter is its selected account's). */
   adapters: AdapterSet | null;
-  /** Vault account lists per chain (§2.9); null while loading or without a vault. */
   vaultLists: VaultAccountLists | null;
-  /** Re-reads the lists (after add / rename / remove); `select` activates an account. */
   refreshVaultAccounts: (select?: { family: AccountChain; index: number }) => Promise<void>;
-  /** Selected vault account per chain (always 0 for a hardware-wallet account). */
   selectedAccounts: Record<AccountChain, number>;
   selectChainAccount: (family: AccountChain, index: number) => void;
-  /** Every account of the active wallet, per family (portfolio, history, own addresses). */
   accountSources: AccountSource[];
-  /** The vault has more than one account on `family` (show pickers and account names). */
   isMultiAccount: (family: AccountChain) => boolean;
-  /** Name of the selected account of `family` (vault), or of the active wallet. */
   accountName: (family: AccountChain) => string;
   /** Hardware-wallet accounts stored on this computer (public keys only). */
   hwAccounts: WatchOnlyAccount[];
-  /** The active hardware-wallet account, or null when the vault is active. */
   activeHw: WatchOnlyAccount | null;
-  /** `'vault'` or a hardware-wallet account id. */
   activeAccountId: string;
   selectAccount: (id: string) => void;
-  /** Re-reads `hw_accounts_get` (after add / remove). Activates `select` when given. */
   refreshHwAccounts: (select?: string) => Promise<void>;
   /** No vault on this computer: hardware-wallet-only user (no Kyro password, nothing to lock). */
   hwOnly: boolean;
-  /** Called after create/import/unlock, or after adding the first hardware wallet. */
   enterVault: () => Promise<void>;
   lock: () => Promise<void>;
   route: Route;
@@ -147,7 +124,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<VaultStatus | null>(null);
   const [vaultAccounts, setVaultAccounts] = useState<Accounts | null>(null);
   const [vaultLists, setVaultLists] = useState<VaultAccountLists | null>(null);
-  /** accounts_get({ account }) of every listed index other than 0. */
   const [extraAccounts, setExtraAccounts] = useState<ReadonlyMap<number, Accounts>>(new Map());
   const [selection, setSelection] = useState<Partial<Record<AccountChain, number>>>({});
   const [hwAccounts, setHwAccounts] = useState<WatchOnlyAccount[]>([]);
@@ -219,7 +195,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPhase('ready');
   }, [toLocked]);
 
-  // Boot.
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -227,7 +202,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const [cfg, st] = await Promise.all([call('config_get'), call('settings_get')]);
         if (!alive) return;
         setConfig(cfg);
-        // Language first, so the first screen already speaks it (auto = Rust's system language).
         if (cfg.systemLanguage) setSystemLanguage(cfg.systemLanguage);
         setLanguagePreference(st.language);
         setSettings(st);
@@ -245,7 +219,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [enterVault]);
 
-  // Shell event: auto-lock / sleep → unlock screen.
   useEffect(() => {
     let un: (() => void) | null = null;
     let cancelled = false;
@@ -262,18 +235,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [toLocked, refreshStatus]);
 
-  // Poll the vault status while unlocked (countdown + safety net if an event is missed).
   useEffect(() => {
     if (phase !== 'ready') return;
     const id = window.setInterval(async () => {
       const s = await refreshStatus();
-      // Hardware-wallet-only user: no vault, nothing to lock.
       if (s && s.exists && !s.unlocked) toLocked();
     }, 5000);
     return () => window.clearInterval(id);
   }, [phase, refreshStatus, toLocked]);
 
-  // User activity → session_touch (throttled).
   useEffect(() => {
     if (phase !== 'ready') return;
     let last = 0;
@@ -309,7 +279,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activeHw = activeAccountId === 'vault' ? null : (hwAccounts.find((a) => a.id === activeAccountId) ?? null);
   const serversKey = JSON.stringify(settings.servers);
 
-  // ---- vault accounts (§2.9): public data of every listed account index ----
   const listedIndices = useMemo(() => {
     const set = new Set<number>([0]);
     if (vaultLists) for (const c of ACCOUNT_CHAINS) for (const e of vaultLists[c] ?? []) set.add(e.index);
@@ -335,7 +304,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       alive = false;
     };
   }, [vaultAccounts, listedIndices, extraAccounts]);
-  /** Adapters per vault account index (signing commands carry the index). */
   const vaultSets = useMemo(() => {
     const out = new Map<number, { accounts: Accounts; adapters: AdapterSet }>();
     if (!vaultAccounts) return out;
@@ -438,8 +406,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refreshVaultAccounts = useCallback(
     async (select?: { family: AccountChain; index: number }) => {
       const lists = await call('vault_accounts_get');
-      // A just-created account: read its public addresses first, so the selection shows it at
-      // once instead of falling back to account 0 until the background load ends.
+      // A just-created account: read its public addresses first, so the selection shows it at once
+      // instead of falling back to account 0 until the background load ends.
       if (select && select.index !== 0) {
         const acc = await call('accounts_get', { account: select.index }).catch(() => null);
         if (acc) setExtraAccounts((prev) => (prev.has(select.index) ? prev : new Map(prev).set(select.index, acc)));
@@ -452,8 +420,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const activeAccountRef = useRef(activeAccountId);
   activeAccountRef.current = activeAccountId;
-  // Re-picking the active account (title-bar switcher) must not wipe the screen in use
-  // (e.g. « Transaction diffusée »): only a real switch resets the stack.
+  // Re-picking the active account (title-bar switcher) must not wipe the screen in use (e.g. «
+  // Transaction diffusée »): only a real switch resets the stack.
   const selectAccount = useCallback((id: string) => {
     if (id === activeAccountRef.current) return;
     setActiveAccountId(id);
@@ -485,7 +453,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setHistory((h) => {
       const top = h[h.length - 1];
       if (top && JSON.stringify(top) === JSON.stringify(r)) return h;
-      // Rail destinations reset the stack; sub-screens push.
       const root = r.name === 'portfolio' || r.name === 'assets' || r.name === 'swap' || r.name === 'history' || r.name === 'settings';
       return root ? [r] : [...h, r].slice(-20);
     });

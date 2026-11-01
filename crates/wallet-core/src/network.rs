@@ -3,11 +3,6 @@
 use serde::{Deserialize, Serialize};
 
 /// Which family of networks the wallet operates on.
-///
-/// `Testnet` means: Bitcoin testnet (`tb1…` addresses, `tpub`, BIP44 coin type 1 — the
-/// encoding is identical for testnet3 and testnet4), Ethereum Sepolia (chain id 11155111)
-/// and Solana devnet. Only Bitcoin derivation depends on it; EVM and Solana keys are the
-/// same on every network.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {

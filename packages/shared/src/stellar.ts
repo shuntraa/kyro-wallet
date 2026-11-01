@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Stellar strkeys (SEP-0023), TS side: the same rules as wallet-core's `stellar_account_id`, so
-// the interface can say early what Rust will refuse. Rust still checks every address itself.
-// Version byte ‖ payload ‖ CRC16-XModem (little endian), RFC 4648 base32 without padding,
-// canonical only (the text must re-encode to itself).
+// Stellar strkeys (SEP-0023), TS side: the same rules as wallet-core's `stellar_account_id`, so the
 
 import { base32nopad } from '@scure/base';
 import { l10n } from './i18n';

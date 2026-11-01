@@ -1,16 +1,8 @@
 //! Which network the app runs on (mainnet or testnet), chosen once at startup.
 //!
-//! Precedence: environment variable `KYRO_NETWORK` (developer override) > the user's saved
-//! choice (`network.json` in the app data directory, written by `network_set`) > the build
-//! default (**mainnet in release builds, testnet in debug builds**).
-//!
 //! One refinement for installs made before the choice existed (no `network.json`): if a vault
 //! exists on exactly one network, that network is used instead of the build default, so an
 //! updated app never greets an existing user with an empty « Bienvenue » screen.
-//!
-//! Each network has its own vault (`coffre-{mainnet|testnet}.kyrovault`) and hardware-wallet
-//! list; switching never deletes the other network's files. The network never changes while
-//! the app runs: `network_set` saves the choice and restarts the app.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -69,9 +61,8 @@ pub fn parse(s: &str) -> Option<Network> {
     }
 }
 
-/// Applies the precedence rule. `only_vault` = the network that has a vault when exactly one
-/// has. An unrecognised `KYRO_NETWORK` value is ignored (never a silent switch to a network
-/// the user did not ask for).
+/// Applies the precedence rule. An unrecognised `KYRO_NETWORK` value is ignored (never a silent
+/// switch to a network the user did not ask for).
 pub fn resolve(
     env: Option<&str>,
     saved: Option<Network>,
@@ -144,8 +135,6 @@ fn other(n: Network) -> Network {
     }
 }
 
-// ---------------------------------------------------------------- native dialogs in progress
-
 /// Counts the native signature dialogs currently shown: the network cannot be switched (app
 /// restart) while one of them waits for the user.
 #[derive(Default, Clone)]
@@ -171,21 +160,14 @@ impl Drop for DialogGuard {
     }
 }
 
-// ---------------------------------------------------------------- IPC
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NetworkInfo {
-    /// Network of this run.
     network: &'static str,
     source: Source,
-    /// The saved choice (`network.json`), if any.
     saved: Option<&'static str>,
-    /// Build default (mainnet in release builds, testnet in debug builds).
     default: &'static str,
-    /// False when `KYRO_NETWORK` forces the network (switching from the app would not apply).
     can_switch: bool,
-    /// A vault already exists on the other network (it is kept when switching).
     other_vault_exists: bool,
 }
 
@@ -201,7 +183,6 @@ fn info(state: &AppState) -> NetworkInfo {
     }
 }
 
-/// Checks done before saving a new choice (pure, tested).
 fn check_switch(
     source: Source,
     dialog_open: bool,
@@ -236,9 +217,8 @@ pub fn network_get(state: State<'_, AppState>) -> NetworkInfo {
     info(&state)
 }
 
-/// Saves the choice; if it differs from the running network, locks the session and restarts
-/// the app (the vault of the other network is opened after the restart, nothing is deleted).
-/// Returns `true` when a restart was requested.
+/// Saves the choice; if it differs from the running network, locks the session and restarts the app
+/// (the vault of the other network is opened after the restart, nothing is deleted).
 #[tauri::command]
 pub fn network_set(app: AppHandle, state: State<'_, AppState>, network: String) -> AppResult<bool> {
     let n = check_switch(
@@ -305,7 +285,6 @@ mod tests {
             (m, Source::Saved)
         );
         assert_eq!(resolve(Some(""), None, None, m), (m, Source::Default));
-        // No saved choice: the only existing vault wins over the build default.
         assert_eq!(resolve(None, None, Some(t), m), (t, Source::Vault));
         assert_eq!(resolve(None, None, Some(m), t), (m, Source::Vault));
     }
@@ -320,7 +299,6 @@ mod tests {
             resolve(None, load_saved(&dir), only_vault(&dir), Network::Mainnet),
             (Network::Testnet, Source::Vault)
         );
-        // Both networks have a vault: back to the saved choice / build default.
         std::fs::write(vault_file(&dir, Network::Mainnet), "{}").unwrap();
         assert_eq!(only_vault(&dir), None);
         assert_eq!(
@@ -342,7 +320,6 @@ mod tests {
             resolve(None, load_saved(&dir), None, Network::Testnet),
             (Network::Mainnet, Source::Saved)
         );
-        // No temp file left behind.
         assert!(!dir.join("network.tmp").exists());
         std::fs::write(dir.join(FILE), "{ pas du json").unwrap();
         assert_eq!(load_saved(&dir), None);

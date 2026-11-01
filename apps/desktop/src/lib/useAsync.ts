@@ -5,14 +5,12 @@ export interface AsyncState<T> {
   data: T | undefined;
   error: Error | null;
   loading: boolean;
-  /** Time of the last successful load. */
   updatedAt: number | null;
   reload: () => void;
 }
 
 /**
- * Run an async loader, keep the previous data while reloading, optionally
- * refresh on an interval. `key` changes trigger a reload.
+ * Run an async loader, keep the previous data while reloading, optionally refresh on an interval.
  */
 export function useAsync<T>(loader: (() => Promise<T>) | null, key: unknown[], opts: { intervalMs?: number } = {}): AsyncState<T> {
   const [data, setData] = useState<T>();

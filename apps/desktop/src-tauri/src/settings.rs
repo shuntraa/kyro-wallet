@@ -34,7 +34,6 @@ pub struct ApiKeys {
 
 impl ApiKeys {
     /// Every key name Settings supports (`settings_get.apiKeysSet`, `settings_set.apiKeys`).
-    /// (1inch was removed: a key left in an old settings.json is ignored and dropped on next save.)
     pub const NAMES: [&'static str; 3] = ["coingecko", "zerox", "trongrid"];
 
     fn get(&self, name: &str) -> Option<&Option<String>> {
@@ -128,15 +127,12 @@ pub struct Settings {
     pub api_keys: ApiKeys,
     pub tor: TorSettings,
     /// Display language of the UI and the native dialogs: `auto` (system), `fr` or `en`.
-    /// Read leniently from the file (an unknown value = `auto`, the other settings are kept);
-    /// `settings_set` refuses anything else ([`Settings::from_ui`]).
     #[serde(deserialize_with = "lenient_language")]
     pub language: crate::i18n::LanguagePref,
     /// Automatic updates (`updater.rs`): ON by default; off = no check, a staged update is
     /// discarded.
     pub auto_update: bool,
-    /// The vault's account lists (see `accounts.rs`). Managed only by the `vault_account_*`
-    /// commands: never sent by `settings_get`, never taken from `settings_set`.
+    /// The vault's account lists (see `accounts.rs`).
     pub accounts: VaultAccounts,
 }
 
@@ -176,8 +172,6 @@ impl Settings {
         s
     }
 
-    /// Saved settings (None = first run, or unreadable). The currency comes from the OS region
-    /// on first run, when the file has none, or when it holds one Kyro does not offer.
     fn from_saved(
         raw: Option<serde_json::Value>,
         system_currency: fn() -> &'static str,
@@ -245,7 +239,7 @@ impl Settings {
     }
 
     /// Parses a `settings_set` payload: `apiKeys` is a patch applied to `current`'s keys (see
-    /// [`ApiKeys::apply_patch`]); `apiKeysSet` is ignored.
+    /// [`ApiKeys::apply_patch`]).
     pub fn from_ui(mut v: serde_json::Value, current: &ApiKeys) -> AppResult<Settings> {
         let patch = v.as_object_mut().and_then(|o| {
             o.remove("apiKeysSet");
@@ -283,7 +277,6 @@ impl Settings {
     }
 }
 
-/// `<file name>.<suffix>` next to `path` (each file gets its own temporary name).
 fn sibling(path: &Path, suffix: &str) -> std::path::PathBuf {
     let name = path
         .file_name()
@@ -292,8 +285,6 @@ fn sibling(path: &Path, suffix: &str) -> std::path::PathBuf {
     path.with_file_name(format!("{name}.{suffix}"))
 }
 
-/// Writes `bytes` to a file readable by the owner only on Unix (0600; settings.json holds API
-/// keys and maybe the Bitcoin Core password), flushed to disk.
 fn write_private(path: &Path, bytes: &[u8], create_new: bool) -> std::io::Result<()> {
     use std::io::Write as _;
     let mut opts = fs::OpenOptions::new();
@@ -313,8 +304,7 @@ fn write_private(path: &Path, bytes: &[u8], create_new: bool) -> std::io::Result
     f.sync_all()
 }
 
-/// Write to a temp file then rename, so a crash never leaves a half-written vault or settings
-/// file. Owner-only permissions on Unix (the temp file is created 0600, before any byte).
+/// Write to a temp file then rename, so a crash never leaves a half-written vault or settings file.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
     let tmp = sibling(path, "tmp");
     let _ = fs::remove_file(&tmp);
@@ -323,10 +313,9 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
     Ok(())
 }
 
-/// Creates `path` with `bytes`, refusing to replace an existing file (`AlreadyExists`), and
-/// never leaving a half-written file: written to a temp file first, then hard-linked into
-/// place (atomic, fails if the target exists). A file system without hard links falls back to
-/// `create_new` on the target itself.
+/// Creates `path` with `bytes`, refusing to replace an existing file (`AlreadyExists`), and never
+/// leaving a half-written file: written to a temp file first, then hard-linked into place (atomic,
+/// fails if the target exists).
 pub fn write_new(path: &Path, bytes: &[u8]) -> AppResult<()> {
     let exists = || AppError::InvalidInput("a vault already exists on this device".into());
     let tmp = sibling(path, "new.tmp");
@@ -384,7 +373,6 @@ mod tests {
         let ui = serde_json::to_string(&s.for_ui()).unwrap();
         assert!(!ui.contains("hunter2"));
         assert!(ui.contains("hasPassword"));
-        // ...but the file on disk keeps it.
         assert!(serde_json::to_string(&s).unwrap().contains("hunter2"));
     }
 
@@ -420,13 +408,10 @@ mod tests {
             ui["apiKeysSet"],
             serde_json::json!({ "coingecko": true, "zerox": false, "trongrid": true })
         );
-        // Round trip: the UI sends back what it got (apiKeysSet, no apiKeys): nothing changes,
-        // and the response still leaks nothing.
         let back = Settings::from_ui(ui.clone(), &s.api_keys).unwrap();
         assert_eq!(back.api_keys.coingecko.as_deref(), Some("CG-secret-1"));
         assert_eq!(back.api_keys.trongrid.as_deref(), Some("tron-secret-3"));
         assert!(!back.for_ui().to_string().contains("secret"));
-        // The file on disk keeps them.
         assert!(serde_json::to_string(&s).unwrap().contains("tron-secret-3"));
     }
 
@@ -443,14 +428,11 @@ mod tests {
             .unwrap();
         let ui = s.for_ui();
         assert!(ui.get("accounts").is_none());
-        // A UI sending `accounts` back (or a forged list) is ignored: the caller keeps the
-        // stored lists (AppState::save_settings).
         let mut forged = ui.clone();
         forged["accounts"] =
             serde_json::json!({ "testnet": { "btc": [{ "index": 9, "name": "x" }] } });
         let back = Settings::from_ui(forged, &s.api_keys).unwrap();
         assert_eq!(back.accounts, VaultAccounts::default());
-        // On disk, the lists are kept.
         let disk: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
         assert_eq!(disk.accounts, s.accounts);
     }
@@ -459,7 +441,6 @@ mod tests {
     fn api_key_merge_rule() {
         let s = with_keys();
         let mut ui = s.for_ui();
-        // Absent = unchanged, "" = removed, non-empty = set (trimmed), null = unchanged.
         ui["apiKeys"] =
             serde_json::json!({ "coingecko": "", "zerox": "  0x-new \t", "trongrid": null });
         let n = Settings::from_ui(ui.clone(), &s.api_keys).unwrap();
@@ -467,7 +448,6 @@ mod tests {
         assert_eq!(n.api_keys.zerox.as_deref(), Some("0x-new"));
         assert_eq!(n.api_keys.trongrid.as_deref(), Some("tron-secret-3"));
         assert_eq!(n.for_ui()["apiKeysSet"]["coingecko"], false);
-        // Refused: control characters, blank, unknown name, non-string, not an object.
         for bad in [
             serde_json::json!({ "zerox": "abc\ndef" }),
             serde_json::json!({ "zerox": "abc\u{7f}" }),
@@ -493,7 +473,6 @@ mod tests {
     #[test]
     fn currency_defaults_from_the_os_region_and_is_validated() {
         let chf = || "CHF";
-        // First run, unreadable file, file without a currency, or one no longer offered.
         assert_eq!(Settings::from_saved(None, chf).currency, "CHF");
         let v = |s: &str| Some(serde_json::from_str::<serde_json::Value>(s).unwrap());
         assert_eq!(
@@ -502,12 +481,10 @@ mod tests {
         );
         let s = Settings::from_saved(v(r#"{"currency":"XYZ","autoLockSecs":300}"#), chf);
         assert_eq!((s.currency.as_str(), s.auto_lock_secs), ("CHF", 300));
-        // A saved choice is kept.
         assert_eq!(
             Settings::from_saved(v(r#"{"currency":"JPY"}"#), chf).currency,
             "JPY"
         );
-        // settings_set: every offered currency, nothing else.
         for c in crate::fiat::FIAT_CURRENCIES {
             let s = Settings {
                 currency: (*c).into(),
@@ -527,7 +504,6 @@ mod tests {
     #[test]
     fn language_defaults_to_auto_and_is_validated() {
         use crate::i18n::LanguagePref;
-        // Older file without the field, or an unknown value: auto, other settings kept.
         let s: Settings = serde_json::from_str(r#"{"currency":"USD"}"#).unwrap();
         assert_eq!(s.language, LanguagePref::Auto);
         let s: Settings = serde_json::from_str(r#"{"currency":"USD","language":"de"}"#).unwrap();
@@ -535,7 +511,6 @@ mod tests {
             (s.language, s.currency.as_str()),
             (LanguagePref::Auto, "USD")
         );
-        // settings_get sends it, settings_set takes auto / fr / en and refuses anything else.
         let ui = Settings::default().for_ui();
         assert_eq!(ui["language"], "auto");
         let mut next = ui.clone();
@@ -579,7 +554,6 @@ mod tests {
                 assert_eq!(fs::metadata(p).unwrap().permissions().mode() & 0o777, 0o600);
             }
         }
-        // No temporary file left behind.
         let names: Vec<_> = fs::read_dir(&dir)
             .unwrap()
             .map(|e| e.unwrap().file_name())

@@ -9,7 +9,6 @@ import { cn } from '../../lib/cn';
 type Variant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger' | 'dangerOutline' | 'ice';
 type Size = 'sm' | 'md' | 'lg' | 'xl';
 
-// One solid action colour (frosted white on ink); everything else is a quiet outline.
 const variants: Record<Variant, string> = {
   primary: 'bg-primary text-on-primary hover:bg-primary-hover disabled:bg-control-2 disabled:text-faint',
   secondary: 'border border-line-2 bg-control/60 text-text hover:border-line-3 hover:bg-control disabled:text-faint',
@@ -29,7 +28,6 @@ const sizes: Record<Size, string> = {
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
-  /** Pill (rare: inline chips) vs the default squared control. */
   pill?: boolean;
 }
 
@@ -81,7 +79,6 @@ export function Card({ children, className, as: As = 'section', ...rest }: { chi
 }
 
 type Tone = 'up' | 'down' | 'warn' | 'ice' | 'mute' | 'primary';
-// Tags, not pills: a hairline frame, mono small caps, the tone carried by the text.
 const tones: Record<Tone, string> = {
   up: 'border-up/30 text-up',
   down: 'border-down/40 text-down bg-down/[.06]',

@@ -1,6 +1,4 @@
-//! Watch-only hardware-wallet accounts on disk: `hw-accounts-<network>.json` next to the
-//! vault. Public data only (xpubs, addresses); the encrypted vault file is not touched, so a
-//! hardware-wallet user needs no recovery phrase in Kyro.
+//! Watch-only hardware-wallet accounts on disk: `hw-accounts-<network>.json` next to the vault.
 
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};

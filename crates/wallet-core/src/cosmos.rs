@@ -1,27 +1,5 @@
-//! Cosmos Hub (ATOM): secp256k1 keys at `m/44'/118'/account'/0/0` (SLIP-44 coin type 118, the
-//! path of Keplr, Leap, Ledger Live and `gaiad keys add`; one address per account, account 0 =
-//! `m/44'/118'/0'/0/0`), `cosmos1…` addresses, and `MsgSend` of `uatom` in a
-//! **SIGN_MODE_DIRECT** transaction only.
-//!
-//! - Address: `bech32("cosmos", RIPEMD160(SHA256(compressed pubkey)))` (BIP-173 bech32, not
-//!   bech32m; `bitcoin::hashes` and the `bech32` crate of rust-bitcoin).
-//! - Signing (SIGN_MODE_DIRECT): `SignDoc { body_bytes, auth_info_bytes, chain_id,
-//!   account_number }` is serialized, hashed with SHA-256 and signed with libsecp256k1 ECDSA
-//!   (RFC 6979), **low-S**, 64 bytes `r || s`. Transaction hash: `SHA-256(TxRaw)`, upper hex.
-//!
-//! Protobuf: the ten messages involved are declared below with `prost`'s derive (no `protoc`, no
-//! generated crate) with only the fields Kyro uses. Same safety rule as TRON and XRP: **bytes
-//! are accepted only if re-encoding what was decoded gives back exactly the same bytes**, at every
-//! level (SignDoc, TxBody, the `Any` of the message, AuthInfo, the public key, TxRaw). Since
-//! `prost` silently skips unknown fields, merges duplicates and accepts non-minimal varints,
-//! the re-encoding check is what turns any of these — a `TxBody.unordered` or
-//! `timeout_timestamp` (SDK 0.53), an extension option, a fee `Tip`, a multisig `ModeInfo`, a
-//! second coin — into a refusal instead of something signed without being shown.
-//!
-//! Refused before anything is signed: another message than one `MsgSend`, another denomination
-//! than `uatom`, several coins, another sign mode than DIRECT, several signers, a public key that
-//! is not ours, a fee payer or granter, a chain id that is not the one of the network, a missing
-//! `timeout_height` (a signed transaction would stay valid until its sequence is used).
+//! Cosmos Hub (ATOM): secp256k1 at `m/44'/118'/account'/0/0` (SLIP-44 118, Keplr/Ledger path),
+//! `cosmos1…` addresses, and `uatom` `MsgSend` in **SIGN_MODE_DIRECT** only.
 
 use bech32::{Bech32, Hrp};
 use bitcoin::hashes::{hash160, sha256, Hash};
@@ -49,17 +27,12 @@ pub const COSMOS_MSG_SEND: &str = "/cosmos.bank.v1beta1.MsgSend";
 pub const COSMOS_SECP256K1_PUBKEY: &str = "/cosmos.crypto.secp256k1.PubKey";
 /// `SignMode.SIGN_MODE_DIRECT`.
 pub const COSMOS_SIGN_MODE_DIRECT: i32 = 1;
-/// `SignMode.SIGN_MODE_LEGACY_AMINO_JSON`: the only mode of the Ledger Cosmos app (hardware
-/// wallets only, see [`cosmos_amino_json`]).
+/// `SIGN_MODE_LEGACY_AMINO_JSON`: the Ledger Cosmos app's only mode (see [`cosmos_amino_json`]).
 pub const COSMOS_SIGN_MODE_AMINO_JSON: i32 = 127;
-/// Longest memo accepted (characters): the Hub's `max_memo_characters` auth parameter (512,
-/// read live on 2026-11-01 on mainnet and on the testnet).
+/// Longest memo (chars): the Hub's `max_memo_characters` (512, read live 2026-11-01).
 pub const COSMOS_MAX_MEMO: usize = 512;
-/// Fees above 0.1 ATOM need a reinforced confirmation (a MsgSend usually costs ≈ 0.0005 ATOM).
 const HIGH_FEE_UATOM: u128 = 100_000;
-/// Longest memo text shown in the dialog (characters).
 const MAX_MEMO_TEXT: usize = 256;
-/// Upper bound of any SignDoc / TxRaw Kyro decodes.
 const MAX_TX: usize = 8192;
 
 /// Chain id expected on `net`.
@@ -69,10 +42,6 @@ pub fn cosmos_chain_id(net: Network) -> &'static str {
         Network::Testnet => COSMOS_CHAIN_ID_TESTNET,
     }
 }
-
-// ---------------------------------------------------------------------------------------------
-// Keys and addresses
-// ---------------------------------------------------------------------------------------------
 
 fn path(account: u32) -> Result<[bitcoin::bip32::ChildNumber; 5]> {
     Ok([
@@ -98,8 +67,7 @@ pub fn cosmos_address_from_bytes(bytes: &[u8]) -> Result<String> {
     bech32::encode::<Bech32>(hrp()?, bytes).map_err(|_| Error::input("Cosmos address: encoding"))
 }
 
-/// Raw bytes of a `cosmos1…` address: bech32 (not bech32m) checksum verified, prefix
-/// `cosmos`, 20 bytes (key) or 32 bytes (module / interchain account). Mixed case refused.
+/// Raw bytes of a `cosmos1…` address (bech32, not bech32m; 20 or 32 bytes; mixed case refused).
 pub fn cosmos_address_bytes(address: &str) -> Result<Vec<u8>> {
     use bech32::primitives::decode::CheckedHrpstring;
     let a = address.trim();
@@ -146,12 +114,7 @@ pub fn cosmos_address(seed: &Seed, account: u32) -> Result<String> {
     cosmos_address_of_pubkey(&cosmos_public_key(seed, account)?)
 }
 
-// ---------------------------------------------------------------------------------------------
-// Protobuf messages (only the fields Kyro uses; anything else fails the re-encoding check)
-// ---------------------------------------------------------------------------------------------
-
-/// The protobuf messages of a SIGN_MODE_DIRECT `MsgSend`, as declared by the Cosmos SDK
-/// (`cosmos-sdk/proto`, v0.50 / v0.53), restricted to the fields Kyro uses.
+/// Protobuf messages of a SIGN_MODE_DIRECT `MsgSend` (cosmos-sdk v0.50/v0.53), Kyro's fields only.
 pub mod proto {
     #![allow(missing_docs)]
 
@@ -185,8 +148,7 @@ pub mod proto {
         pub value: Vec<u8>,
     }
 
-    /// `cosmos.tx.v1beta1.TxBody` without `unordered` (4), `timeout_timestamp` (5),
-    /// `extension_options` (1023) and `non_critical_extension_options` (2047): refused.
+    /// `TxBody` without `unordered`, `timeout_timestamp` and extension options (all refused).
     #[derive(Clone, PartialEq, Eq, prost::Message)]
     pub struct TxBody {
         #[prost(message, repeated, tag = "1")]
@@ -281,7 +243,6 @@ fn bad(msg: impl Into<String>) -> Error {
     Error::input(format!("Cosmos transaction: {}", msg.into()))
 }
 
-/// Decodes `bytes` as `M` and accepts it only if it re-encodes to exactly `bytes`.
 fn strict<M: prost::Message + Default>(bytes: &[u8], what: &str) -> Result<M> {
     let m = M::decode(bytes).map_err(|_| bad(format!("{what}: invalid protobuf")))?;
     if m.encode_to_vec() != bytes {
@@ -292,7 +253,6 @@ fn strict<M: prost::Message + Default>(bytes: &[u8], what: &str) -> Result<M> {
     Ok(m)
 }
 
-/// A Cosmos `Int` amount: decimal digits, no sign, no leading zero, > 0.
 fn parse_amount(s: &str, what: &str) -> Result<u128> {
     if s.is_empty()
         || s.len() > 38
@@ -320,10 +280,6 @@ fn one_uatom(coins: &[proto::Coin], what: &str) -> Result<u128> {
         _ => Err(bad(format!("{what}: a single coin (uatom) expected"))),
     }
 }
-
-// ---------------------------------------------------------------------------------------------
-// Building
-// ---------------------------------------------------------------------------------------------
 
 /// What Kyro puts in a `MsgSend` transaction (filled from live data by the shell).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -357,8 +313,7 @@ fn any(type_url: &str, m: &impl prost::Message) -> proto::Any {
     }
 }
 
-/// Serialized `SignDoc` of a `MsgSend` of `uatom` (what [`cosmos_sign`] signs). The sender is
-/// the address of `public_key`. Checked by decoding it back ([`cosmos_decode_sign_doc`] rules).
+/// Serialized `SignDoc` of a `MsgSend` of `uatom` (what [`cosmos_sign`] signs).
 pub fn cosmos_send_sign_doc(r: &CosmosSendRequest) -> Result<Vec<u8>> {
     if r.memo.chars().count() > COSMOS_MAX_MEMO {
         return Err(Error::input(format!(
@@ -416,8 +371,7 @@ pub fn cosmos_send_sign_doc(r: &CosmosSendRequest) -> Result<Vec<u8>> {
     Ok(doc)
 }
 
-/// `TxRaw` of a SignDoc with one empty signature: what `/cosmos/tx/v1beta1/simulate` takes
-/// (signatures are not verified in simulation, their count is).
+/// `TxRaw` with one empty signature, for `/simulate` (signatures unchecked, their count is).
 pub fn cosmos_simulation_tx(sign_doc: &[u8]) -> Result<Vec<u8>> {
     let doc: proto::SignDoc = strict(sign_doc, "SignDoc")?;
     Ok(proto::TxRaw {
@@ -428,18 +382,13 @@ pub fn cosmos_simulation_tx(sign_doc: &[u8]) -> Result<Vec<u8>> {
     .encode_to_vec())
 }
 
-// ---------------------------------------------------------------------------------------------
-// Decoding
-// ---------------------------------------------------------------------------------------------
-
 /// Reasons for caution (all of them require the reinforced confirmation).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum CosmosWarning {
     /// Fee above 0.1 ATOM.
     HighFee,
-    /// The memo had control / invisible / bidi characters removed or was cut: the dialog shows
-    /// a cleaned version (`memo_hex` is exact).
+    /// Memo had control/invisible/bidi characters removed or was cut (`memo_hex` is exact).
     UnusualText,
 }
 
@@ -603,15 +552,11 @@ fn parse_sign_doc(doc_bytes: &[u8], our_pubkey: &[u8; 33], chain_id: &str) -> Re
     })
 }
 
-/// Memo characters that need no escaping in the amino JSON of any encoder (Go's
-/// `encoding/json` escapes `<`, `>`, `&`): printable ASCII without `"` and `\`.
 fn amino_safe_memo(memo: &str) -> bool {
     memo.bytes()
         .all(|b| (0x20..0x7f).contains(&b) && !matches!(b, b'"' | b'\\' | b'<' | b'>' | b'&'))
 }
 
-/// Canonical amino JSON (`StdSignDoc`, keys sorted, no whitespace, integers as strings) of a
-/// parsed `MsgSend`, as the Cosmos SDK's `aminojson` sign-mode handler and CosmJS produce it.
 fn amino_json(p: &Parsed) -> String {
     let s = &p.summary;
     format!(
@@ -639,9 +584,7 @@ fn sign_doc_bytes(sign_doc_hex: &str) -> Result<Vec<u8>> {
     hex::decode(sign_doc_hex.trim()).map_err(|_| Error::input("SignDoc: hexadecimal expected"))
 }
 
-/// Hardware wallet: the same transaction as a DIRECT SignDoc (hex) built by
-/// [`cosmos_send_sign_doc`], with the sign mode set to LEGACY_AMINO_JSON (the only one the
-/// Ledger Cosmos app signs). The result is decoded back under the usual rules.
+/// Hardware wallet: [`cosmos_send_sign_doc`] SignDoc with sign mode LEGACY_AMINO_JSON (Ledger).
 pub fn cosmos_amino_sign_doc(
     sign_doc_hex: &str,
     our_pubkey: &[u8; 33],
@@ -664,8 +607,7 @@ pub fn cosmos_amino_sign_doc(
     Ok(hex::encode(doc))
 }
 
-/// Hardware wallet: the amino JSON the Ledger Cosmos app displays and signs (SHA-256 of these
-/// bytes, ECDSA), for a SignDoc in LEGACY_AMINO_JSON mode decoded under the usual rules.
+/// Hardware wallet: amino JSON the Ledger Cosmos app shows and signs, for an AMINO_JSON SignDoc.
 pub fn cosmos_amino_json(
     sign_doc_hex: &str,
     our_pubkey: &[u8; 33],
@@ -682,9 +624,7 @@ pub fn cosmos_amino_json(
     Ok(amino_json(&parsed).into_bytes())
 }
 
-/// Hardware wallet: `(TxRaw base64, hash, summary)` from the DER signature returned by the
-/// Ledger Cosmos app over [`cosmos_amino_json`]. Normalized to low-S and verified (key of the
-/// SignDoc, SHA-256 of the amino JSON) before it is returned.
+/// Hardware wallet: `(TxRaw base64, hash, summary)` from the Ledger's DER signature.
 pub fn cosmos_amino_signed(
     sign_doc_hex: &str,
     our_pubkey: &[u8; 33],
@@ -721,9 +661,7 @@ pub fn cosmos_amino_signed(
     ))
 }
 
-/// Decodes a serialized SignDoc (hex) for the dialog. Refused: see the module documentation;
-/// in particular a chain id other than [`cosmos_chain_id`]`(net)` and a signer key other than
-/// `our_pubkey`.
+/// Decodes a serialized SignDoc (hex) for the dialog.
 pub fn cosmos_decode_sign_doc(
     sign_doc_hex: &str,
     our_pubkey: &[u8; 33],
@@ -734,9 +672,7 @@ pub fn cosmos_decode_sign_doc(
     Ok(parse_sign_doc(&raw, our_pubkey, cosmos_chain_id(net))?.summary)
 }
 
-/// Signs a serialized SignDoc (hex) with the key of account `account`
-/// (`m/44'/118'/account'/0/0`), after decoding it like [`cosmos_decode_sign_doc`]. Returns
-/// `(TxRaw base64, transaction hash upper hex, summary)`. Low-S, verified before it is returned.
+/// Signs a SignDoc (hex) with `m/44'/118'/account'/0/0`, after [`cosmos_decode_sign_doc`].
 pub fn cosmos_sign(
     seed: &Seed,
     account: u32,
@@ -775,11 +711,8 @@ pub fn cosmos_sign(
     ))
 }
 
-/// Checks a signed `TxRaw` (base64) before it is broadcast and returns `(hash upper hex,
-/// summary)`: it decodes strictly, under the rules of [`cosmos_decode_sign_doc`] for the
-/// public key it carries, with `chain_id` / `account_number` (the live values: a signature
-/// for another chain or account would not verify), and its one signature must be a 64-byte
-/// low-S signature by that key of the reconstructed SignDoc.
+/// Checks a signed `TxRaw` (base64) before broadcast, returns `(hash upper hex, summary)`: strict
+/// decode, live `chain_id`/`account_number`, one 64-byte low-S signature by its key.
 pub fn cosmos_verify_signed(
     tx_b64: &str,
     net: Network,

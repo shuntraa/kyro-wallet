@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Hardware wallets (Ledger, Trezor): device badge, waiting state with Cancel, error notice,
-// the full-screen stop for HW_ADDRESS_MISMATCH, the Trezor One blind PIN matrix (global), and
-// the add-device flow (Welcome and Settings › Devices). Contract: docs/IPC.md §2.3.
+// Hardware wallets (Ledger, Trezor): device badge, waiting state with Cancel, error notice, the
+// full-screen stop for HW_ADDRESS_MISMATCH, the Trezor One blind PIN matrix (global), and the
+// add-device flow (Welcome and Settings › Devices).
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { call, errorData, ipcErrorIn, isDemoMode, MAX_HW_ACCOUNT, type HwChain, type HwChainStatus, type HwDeviceInfo, type HwDeviceKind, type HwDeviceStatus, type HwImplementedChain, type HwKeyChain, type WatchOnlyAccount } from '@kyro/shared';
@@ -16,8 +15,6 @@ import { Badge, Button, Input, Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconInfo, IconPhoneKey, IconRefresh, IconUsbKey, IconWarn, IconX } from './icons';
 import { t, useT, type Key } from '../i18n';
 import { rt } from '../i18n/rich';
-
-// ---------------------------------------------------------------- small pieces
 
 export function DeviceBadge({ device, model, className }: { device: HwDeviceKind; model?: string; className?: string }) {
   return (
@@ -38,7 +35,6 @@ const PROMPT_KEYS: Record<string, { title: Key; detail: Key }> = {
   'thp-confirm-connection': { title: 'hw.prompt.thpConnectionTitle', detail: 'hw.prompt.thpConnectionDetail' },
 };
 
-/** Title and detail of a device prompt, in the current language. */
 function promptText(kind: string): { title: string; detail: string } | null {
   const k = PROMPT_KEYS[kind];
   return k ? { title: t(k.title as 'hw.prompt.confirmTitle'), detail: t(k.detail as 'hw.prompt.confirmDetail') } : null;
@@ -79,7 +75,6 @@ export function HwErrorNotice({ error, onRetry, className }: { error: unknown; o
   const { t } = useT();
   const v = hwErrorView(error);
   const { navigate } = useApp();
-  // Safe 7 not paired (any command but hw_open): the way out is « Connecter ».
   const pairing = ipcErrorIn(error)?.code === 'HW_PAIRING_REQUIRED';
   return (
     <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />} {...(className ? { className } : {})}>
@@ -139,8 +134,6 @@ export function AddressMismatchStop({ error, onClose }: { error: unknown; onClos
   );
 }
 
-// ---------------------------------------------------------------- Trezor One PIN matrix (global)
-
 /** Mounted once at the root: answers `hw-prompt: pin-matrix` with positions only. */
 export function HwPromptLayer() {
   const { byDevice } = useHwPrompts();
@@ -156,8 +149,7 @@ export function HwPromptLayer() {
 
 /**
  * Trezor Safe 7 pairing (THP): the device shows a 6-digit code, the user types it here
- * (`hw_thp_pairing_code`). A malformed code (INVALID_INPUT) keeps this open; a wrong one makes
- * hw_open fail with HW_PAIRING_FAILED (shown where hw_open was called, with « Réessayer »).
+ * (`hw_thp_pairing_code`).
  */
 export function ThpCodeDialog({ deviceId }: { deviceId: string | null }) {
   const [code, setCode] = useState('');
@@ -181,7 +173,6 @@ export function ThpCodeDialog({ deviceId }: { deviceId: string | null }) {
       await call('hw_thp_pairing_code', { id: deviceId, code });
       hwPromptStore.clear(deviceId);
     } catch (e) {
-      // INVALID_INPUT: hw_open keeps waiting, the entry stays open.
       setError(e);
     } finally {
       setBusy(false);
@@ -306,19 +297,15 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
   );
 }
 
-// ---------------------------------------------------------------- add a device
-
 const CHAIN_NAME: Record<Exclude<HwChain, 'evm'>, string> = {
   btc: 'Bitcoin', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', stellar: 'Stellar', zec: 'Zcash', xmr: 'Monero',
   sui: 'Sui', apt: 'Aptos', algo: 'Algorand', near: 'NEAR', cosmos: 'Cosmos Hub', dot: 'Polkadot', hbar: 'Hedera', kas: 'Kaspa', ton: 'TON',
 };
-/** Chain name shown in the add-device flow (« Ethereum et EVM » is translated). */
 const chainLabel = (c: HwChain): string => (c === 'evm' ? t('hw.chain.evm') : CHAIN_NAME[c]);
 /** Chains of the add-device flow: xpub / address chains, then the Ledger single-key chains (`hw_key_add`). */
 type SetupChain = HwImplementedChain | HwKeyChain;
 const IMPLEMENTED: SetupChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar', 'cardano', 'zec', ...HW_KEY_CHAINS];
 const isKeyChain = (c: SetupChain): c is HwKeyChain => (HW_KEY_CHAINS as readonly string[]).includes(c);
-/** Pre-selected when the device supports them (the others are one click away: each needs its own Ledger app). */
 const DEFAULT_CHAINS: readonly HwImplementedChain[] = ['btc', 'evm', 'sol'];
 
 type Step = 'detect' | 'device' | 'reading' | 'done';
@@ -350,11 +337,9 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
       setError(e);
     }
     setBusy(null);
-    // A single device: open it right away (after clearing `busy`, which `open` sets again).
     if (only) void open(only);
   };
 
-  // Once (StrictMode runs effects twice in dev: a 2nd hw_open would be HW_BUSY).
   const detected = useRef(false);
   useEffect(() => {
     if (detected.current) return;
@@ -370,7 +355,6 @@ export function HwSetup({ onDone, onCancel }: { onDone: (acc: WatchOnlyAccount) 
     try {
       const st = await withDevice(d.id, () => call('hw_open', { id: d.id }));
       setStatus(st);
-      // Default selection: every implemented chain the device supports.
       setChains(new Set(DEFAULT_CHAINS.filter((c) => st.chains.find((x) => x.chain === c)?.state !== 'unsupported')));
     } catch (e) {
       setError(e);

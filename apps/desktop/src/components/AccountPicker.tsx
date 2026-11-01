@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Per-chain vault account picker (docs/IPC.md §2.9), always shown for the vault (even with one
-// account) so creating another account is one click away: « Nouveau compte » adds the next
-// account with its default name (« Bitcoin 2 »), selects it, and the trigger shows its address.
-// Choosing an account changes the adapters every screen uses for that chain (Envoyer, Recevoir,
-// Swap, Staking, Actif). Hardware-wallet accounts: not shown (unchanged). Public data only.
+// account) so creating another account is one click away: « Nouveau compte » adds the next account
+// with its default name (« Bitcoin 2 »), selects it, and the trigger shows its address.
 
 import { useCallback, useState } from 'react';
 import { assetsFor } from '@kyro/chains';
@@ -38,8 +36,7 @@ export function useAccountBalanceText(): (family: AccountChain, index: number) =
 
 /**
  * Creates the next `count` accounts of a chain with their default names (one `vault_account_add`
- * each, Rust checks every rule), then re-reads the lists. `select`: activate the first created.
- * Returns the created indices; on a failure midway, the accounts already created stay.
+ * each, Rust checks every rule), then re-reads the lists.
  */
 export function useCreateAccounts(): (family: AccountChain, count: number, opts?: { select?: boolean }) => Promise<number[]> {
   const { vaultLists, refreshVaultAccounts } = useApp();
@@ -64,7 +61,6 @@ export function useCreateAccounts(): (family: AccountChain, count: number, opts?
   );
 }
 
-/** Index the next « Nouveau compte » would create, or null when the chain is full. */
 function useNextAccount(family: AccountChain): number | null {
   const { vaultLists } = useApp();
   return vaultLists ? (planNewAccounts(vaultLists[family], 1, MAX_ACCOUNTS_PER_CHAIN, MAX_VAULT_ACCOUNT)[0] ?? null) : null;

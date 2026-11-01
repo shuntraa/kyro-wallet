@@ -50,7 +50,6 @@ export const history: Record<keyof typeof fr, string> = {
   'history.signatureCancelled': 'Signature cancelled.',
   'history.revokeTitle': 'Revoke {token} → {spender}',
   'history.revokeExplain': 'An <code>approve(spender, 0)</code> transaction resets the approval to zero. It costs network fees, like a transfer.',
-  // Rows
   'history.approvalOf': '{symbol} approval',
   'history.approval': 'Approval',
   'history.swap': 'Swap',
@@ -70,7 +69,6 @@ export const history: Record<keyof typeof fr, string> = {
   'history.rowInProgress': 'in progress',
   'history.rowFee': 'fee {fee}',
   'history.rowPending': 'pending',
-  // Cross-chain status (lib/crossSwap.ts)
   'history.crossArrived': 'arrived on {chain}',
   'history.crossFailed': 'bridge failed, refund planned to your departure address',
   'history.crossRefunded': 'refunded to your departure address',

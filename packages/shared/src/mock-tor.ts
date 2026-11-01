@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// DEMO ONLY — simulated embedded Tor, mirroring apps/desktop/src-tauri/src/tor.rs:
-// `off` → `bootstrapping` (0..99) → `ready` (100) or `error` (message), one
-// `tor-status` event per change, and a fail-closed gate for `net_fetch`
-// (waits for an in-progress bootstrap, then `TOR_UNAVAILABLE`; never in clear).
-//
-// Scenarios (demo URL `?tor=…`, or `MockOptions.tor` in tests):
-//   - `bootstrap` (default in a browser): ~2 s of progress, then `ready`;
-//   - `fail`: every bootstrap fails at ~35 % (Retry fails too);
-//   - `fail-once`: the first bootstrap fails, the next one (Retry) succeeds;
-//   - `ready` (default without `window`, i.e. unit tests): ready at once, no timers.
+// DEMO ONLY — simulated embedded Tor, mirroring apps/desktop/src-tauri/src/tor.rs: `off` →
 
 import { IpcError, type TorStatus } from './ipc';
 import { emitDemoEvent } from './events';

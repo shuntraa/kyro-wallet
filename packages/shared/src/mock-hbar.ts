@@ -1,17 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Hedera (`hbar_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
-// commands_hbar.rs and hbar_backend.rs. The EVM address is really derived (ECDSA secp256k1
-// `m/44'/3030'/0'/0/a`, keccak256 of the public key); the transaction bodies are a demo encoding
-// (hex JSON, NOT the protobuf wallet-core writes) and the signature is fake. The rules are Rust's:
-// - our account `0.0.x` is the one created by the first HBAR received on the EVM address;
-// - recipient `0.0.x` unknown / deleted / requiring its signature → refused; an EVM address
-//   without account → auto-created (higher max fee);
-// - max fee = 0.5 ¢ (10 ¢ with an account creation) at the mirror's exchange rate;
-//   amount + max fee > balance → refused; memo ≤ 100 bytes, no control character;
-// - one body per node (0.0.3, 0.0.4, 0.0.7 mainnet / 0.0.3, 0.0.4, 0.0.5 testnet), same
-//   transaction ID; sign refuses an (almost) expired body; a submitted transfer reaches the
-//   mirror node a few seconds later (`hbar_tx_status`).
 
 import { HDKey } from '@scure/bip32';
 import * as ecc from '@bitcoinerlab/secp256k1';
@@ -147,9 +135,7 @@ export interface DemoHbarDeps {
 
 export interface DemoHbarState {
   me: string;
-  /** Our account number (created by the demo's first incoming transfer). */
   num: number;
-  /** A funded exchange account (a memo is expected). */
   exchange: string;
   friend: string;
   /** An account that requires its own signature to receive. */
@@ -230,7 +216,6 @@ export function createDemoHbar(d: DemoHbarDeps) {
     }
   };
 
-  /** wallet-core hbar_decode_tx: copies identical but for their node, payer = us. */
   const decode = (bodies: unknown): { b: DemoBody; summary: HbarTxSummary } => {
     if (!Array.isArray(bodies) || bodies.length === 0 || bodies.length > 4) throw invalidInput(l10n('transaction Hedera refusée : 1 à 4 copies attendues', 'Hedera transaction refused: 1 to 4 copies expected'));
     const all = bodies.map(parse);
@@ -261,7 +246,6 @@ export function createDemoHbar(d: DemoHbarDeps) {
     return { b, summary };
   };
 
-  /** commands_hbar.rs describe_hbar: memo framed after the amounts. */
   const describe = (s: HbarTxSummary, c: HbarContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     let out = l10n(`Envoi Hedera${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.to}${s.toIsEvm ? " (adresse EVM : l'alias du compte)" : ''}\n`, `Hedera send${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.to}${s.toIsEvm ? ' (EVM address: the account alias)' : ''}\n`);

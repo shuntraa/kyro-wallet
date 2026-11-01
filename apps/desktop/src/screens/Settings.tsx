@@ -40,8 +40,8 @@ export function SettingsScreen({ section: initial = 'security', family }: { sect
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const { t } = useT();
-  // Below 1280 px the outgoing-connections summary moves under the section instead of
-  // squeezing it into a 300 px column.
+  // Below 1280 px the outgoing-connections summary moves under the section instead of squeezing it
+  // into a 300 px column.
   const wide = useMedia('(min-width: 1280px)');
 
   const save = async (patch: Partial<Settings>) => {
@@ -202,7 +202,6 @@ function Privacy() {
             checked={enabled}
             disabled={tor.busy}
             onCheckedChange={(v) => {
-              // Off: explicit confirmation first (nothing is saved before it). On: immediate.
               if (v) void torStore.enable(() => saveSettings({ ...settings, tor: { enabled: true } }));
               else torStore.requestDisable('settings');
             }}
@@ -244,7 +243,6 @@ function Privacy() {
   );
 }
 
-/** Monero: 25-word seed (native window) and restore height of the active Monero account. */
 function MoneroWallet() {
   const { adapters } = useVault();
   return <XmrWalletSection adapter={adapters.xmr} />;
@@ -342,7 +340,6 @@ function Display({ save }: { save: Save }) {
           onChange={(v) => void save({ language: v })}
           options={[
             { value: 'auto', label: t('settings.languageAuto') },
-            // Each language named in itself, so it can be found whatever the current one is.
             { value: 'fr', label: t('settings.languageFr') },
             { value: 'en', label: t('settings.languageEn') },
           ]}
@@ -359,9 +356,8 @@ function Display({ save }: { save: Save }) {
 }
 
 /**
- * API keys are write-only (settings_get returns `apiKeysSet` only): a saved key shows
- * « Clé enregistrée » with Remplacer / Supprimer, never its value. The field holds only what the
- * user is typing now, is cleared once saved, and is the only key value ever sent.
+ * API keys are write-only (settings_get returns `apiKeysSet` only): a saved key shows « Clé
+ * enregistrée » with Remplacer / Supprimer, never its value.
  */
 function ApiKeys() {
   const { settings, config } = useApp();
@@ -491,8 +487,7 @@ function Contacts() {
     setList(l);
     saveContacts(l);
   };
-  // Address poisoning: a contact saved from a look-alike would become a « known » address. Compare
-  // the new one with the other contacts and your own addresses before it goes into the book.
+  // Address poisoning: a contact saved from a look-alike would become a « known » address.
   const lookalike = (() => {
     if (!valid) return null;
     const own = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address, accounts.sol?.address, accounts.ltc?.address, accounts.doge?.address, accounts.bch?.address, accounts.dash?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address, accounts.kas?.address, accounts.polkadot?.address, accounts.algo?.address, accounts.xmr?.address, accounts.ton?.address, accounts.cosmos?.address, accounts.aptos?.address, accounts.zec?.address, ...accountSources.filter((x) => x.family === family).flatMap((x) => x.addresses)];

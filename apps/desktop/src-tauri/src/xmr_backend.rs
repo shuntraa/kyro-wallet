@@ -4,17 +4,8 @@
 //!
 //! **The node never receives a key.** Rust downloads the blocks (`get_blocks.bin`, pruned) and
 //! scans them locally with monero-wallet's `Scanner` (private view key in memory only); spent
-//! outputs are recognised by their key images, computed locally with the spend key (derived
-//! from the session seed, then erased). The node does learn the transactions you publish and
-//! the decoys you request (as with any remote node), and the IP of a Tor exit (yours in clear
-//! mode).
-//!
-//! **Scan state** (our outputs, key images, history, scanned height, recent block hashes) is
-//! kept encrypted next to the vault (`monero/<network>-<account>-<key>.bin`, XChaCha20-Poly1305
-//! with a key derived from the private view key, see wallet-core `xmr_cache_seal`).
-//!
-//! Reorganisations: the hash of the last scanned block is re-checked before each batch; on a
-//! mismatch the last [`REORG_DEPTH`] blocks are forgotten and scanned again.
+//! outputs are recognised by their key images, computed locally with the spend key (derived from
+//! the session seed, then erased).
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
@@ -42,29 +33,23 @@ use crate::servers::{
 };
 use crate::state::AppState;
 
-/// Blocks per `get_blocks.bin` request (pruned blocks: usually well under 1 MiB each).
 const BATCH: usize = 20;
 /// Blocks forgotten and scanned again when the chain changed under us.
 pub const REORG_DEPTH: u64 = 30;
-/// Recent block hashes kept for the reorganisation check.
 const KEEP_HASHES: usize = 64;
 /// First scan of a never-used account: from 1 day (720 blocks) before the account was first
 /// shown on this device.
 const FIRST_SCAN_MARGIN: u64 = 720;
 const BLOCK_SECS: u64 = 120;
-/// Fee per weight above which the node's estimate is refused (its "priority" level is 4 000 000;
-/// "normal" is ≈ 80 000 piconero on 2026-11-01).
+/// Fee per weight above which the node's estimate is refused (its "priority" level is 4 000 000.
 pub const MAX_FEE_PER_WEIGHT: u64 = 4_000_000;
 /// Inputs per transfer (wallet2's limit is higher; this keeps a transfer far below the weight cap).
 pub const MAX_INPUTS: usize = 16;
 /// A built transfer must be signed within this delay (decoys and fee rate get stale).
 const PENDING_TTL_SECS: u64 = 600;
-/// A local spend not seen in a block after this delay is released (transaction dropped).
 const PENDING_SPEND_TTL_SECS: u64 = 24 * 3600;
 const CACHE_VERSION: u32 = 1;
-/// Mainnet block a phrase restored into Kyro starts scanning from. A Kyro-derived Monero wallet
-/// cannot be older than Kyro's first release (2026-11-01, block ≈ 3 797 000 per xmrchain.net):
-/// this is ≈ 2026-10-22, rounded down by ~10 days so an early test install misses nothing.
+/// Mainnet block a phrase restored into Kyro starts scanning from.
 pub const KYRO_FIRST_RELEASE_HEIGHT: u64 = 3_790_000;
 /// The same moment as a Unix time (2026-10-22 00:00 UTC), for stagenet (heights differ there).
 pub const KYRO_FIRST_RELEASE_TIME: u64 = 1_792_627_200;
@@ -111,8 +96,6 @@ fn tx_err(e: TransactionsError) -> AppError {
         other => bad(format!("Monero node: {other}")),
     }
 }
-
-// ---------------------------------------------------------------- transport
 
 /// `monero-daemon-rpc` transport over Kyro's network layer (policy, Tor family `monero`, bulk
 /// limits: 64 MiB / 180 s per response).
@@ -236,8 +219,6 @@ pub async fn probe(
     })
 }
 
-/// Decoy source that downloads the output distribution once per transfer (it is ≈ 20 MB on
-/// mainnet and monero-wallet asks for it once per input).
 struct CachedDecoys<'a> {
     daemon: &'a Daemon,
     dist: Mutex<Option<(usize, Vec<u64>)>>,
@@ -289,8 +270,6 @@ impl ProvidesUnvalidatedDecoys for CachedDecoys<'_> {
         ProvidesUnvalidatedDecoys::unlocked_ringct_outputs(self.daemon, indexes, evaluate_unlocked)
     }
 }
-
-// ---------------------------------------------------------------- encrypted scan state
 
 /// Computes our outputs' key images (needs the spend key).
 pub type KeyImagesOf<'a> = dyn Fn(&[WalletOutput]) -> AppResult<Vec<[u8; 32]>> + 'a;
@@ -445,7 +424,6 @@ impl XmrCache {
         }
         let time = block.block.header.timestamp;
         let miner = hex::encode(block.block.miner_transaction().hash());
-        // Spends first (a transaction cannot spend an output of the same block).
         let mut spent_by: HashMap<String, u64> = HashMap::new();
         for (txh, tx) in block.block.transactions.iter().zip(&block.transactions) {
             let txid = hex::encode(txh);
@@ -486,7 +464,6 @@ impl XmrCache {
                     .iter()
                     .any(|x: &WalletOutput| hex::encode(x.key().compress().to_bytes()) == key);
             if dup {
-                // Burning bug: only the first output with a given key is spendable.
                 self.burnt_duplicates = self.burnt_duplicates.saturating_add(1);
                 continue;
             }
@@ -555,7 +532,6 @@ impl Default for XmrCache {
 
 fn output_key(data_hex: &str) -> Option<String> {
     let b = hex::decode(data_hex).ok()?;
-    // AbsoluteId (32 + 8) + RelativeId (8), then the 32-byte output key.
     b.get(48..80).map(hex::encode)
 }
 
@@ -576,8 +552,8 @@ pub fn first_restore_height(tip: u64, created_at: u64, at: u64) -> u64 {
     tip.saturating_sub(back)
 }
 
-/// Where the first scan of a vault restored from a recovery phrase starts (chosen in the
-/// restore flow, kept in `monero/<network>-restore-<key>.json`). A vault created in Kyro has none.
+/// Where the first scan of a vault restored from a recovery phrase starts (chosen in the restore
+/// flow, kept in `monero/<network>-restore-<key>.json`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum RestoreFrom {
@@ -606,7 +582,6 @@ pub fn start_height(
             Network::Mainnet => KYRO_FIRST_RELEASE_HEIGHT,
             Network::Testnet => first_restore_height(tip, KYRO_FIRST_RELEASE_TIME, at),
         },
-        // Never after Kyro's release: the phrase existed in Kyro from then on at the latest.
         Some(RestoreFrom::Date { date }) => {
             let by_date = first_restore_height(tip, date.min(KYRO_FIRST_RELEASE_TIME), at);
             match network {
@@ -715,8 +690,6 @@ pub fn reset(state: &AppState, account: u32, restore_height: Option<u64>) -> App
     Ok(c)
 }
 
-// ---------------------------------------------------------------- tasks and pending transfers
-
 /// Progress of the scan of one account, shown by the UI (`xmr_status`).
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -746,9 +719,7 @@ type FileLock = Arc<tokio::sync::Mutex<()>>;
 pub struct XmrManager {
     progress: Mutex<HashMap<(Network, u32), SyncProgress>>,
     pending: Mutex<HashMap<String, PendingTx>>,
-    /// One lock per account around every read-modify-write of its cache file.
     file_locks: Mutex<HashMap<(Network, u32), FileLock>>,
-    /// Bumped on every lock of the vault: scan tasks of an older epoch stop.
     epoch: AtomicU64,
 }
 
@@ -843,8 +814,7 @@ impl XmrCtx {
     }
 }
 
-/// Scans `account` up to the node's tip, batch by batch, saving after each batch. Stops early
-/// (keeping what was scanned) if the vault is locked.
+/// Scans `account` up to the node's tip, batch by batch, saving after each batch.
 pub async fn sync(state: &AppState, account: u32) -> AppResult<()> {
     let epoch = state.xmr.epoch();
     let ctx = XmrCtx::of(state);
@@ -861,8 +831,6 @@ pub async fn sync(state: &AppState, account: u32) -> AppResult<()> {
             .update(ctx.network, account, |p| p.tip = Some(height));
         let _guard = lock.lock().await;
         let mut c = load(state, account)?;
-        // Only the very first sync picks the start: later runs (and restarts) resume from the
-        // stored `next`, saved after each batch.
         if c.restore_height.is_none() {
             let restored = load_restore_from(state);
             let r = start_height(tip_number, c.created_at, now(), ctx.network, restored);
@@ -921,8 +889,6 @@ pub async fn sync(state: &AppState, account: u32) -> AppResult<()> {
         save(state, account, &c)?;
     }
 }
-
-// ---------------------------------------------------------------- history
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -995,8 +961,6 @@ pub fn history(c: &XmrCache, height: u64) -> Vec<XmrHistoryEntry> {
     out
 }
 
-// ---------------------------------------------------------------- sending
-
 /// Our unspent, unlocked outputs, largest first.
 pub fn candidates(c: &XmrCache, height: u64) -> Vec<&OwnedOutput> {
     let mut v: Vec<&OwnedOutput> = c
@@ -1024,9 +988,8 @@ pub struct XmrPrepared {
     pub summary: XmrTxSummary,
 }
 
-/// Selects inputs, fetches their decoys and the fee rate, builds the transfer (Rust), and keeps
-/// it for `xmr_send_tx`. `amount` = `None`: send everything that is unlocked (up to
-/// [`MAX_INPUTS`] outputs).
+/// Selects inputs, fetches their decoys and the fee rate, builds the transfer (Rust), and keeps it
+/// for `xmr_send_tx`.
 pub async fn prepare(
     state: &AppState,
     account: u32,
@@ -1058,7 +1021,6 @@ pub async fn prepare(
             "Monero: no funds available".into()
         }));
     }
-    // Rough fee to pick inputs: weight ≈ 1 500 + 700 per extra input.
     let est = |n: usize| fee_rate.per_weight().saturating_mul(1_500 + 700 * n as u64);
     let mut chosen: Vec<&OwnedOutput> = Vec::new();
     match amount {
@@ -1101,7 +1063,6 @@ pub async fn prepare(
     let send_amount = match amount {
         Some(a) => a,
         None => {
-            // Fee of this exact shape (fee does not depend on the amount), then everything else.
             let probe = state.with_seed(|s| {
                 Ok(wallet_core::xmr_build(
                     s,
@@ -1183,7 +1144,6 @@ pub async fn publish(
                 r.chars().take(200).collect::<String>()
             )),
         })?;
-    // Re-read: the scan task may have saved meanwhile (it takes the same lock, so not).
     let mut c = load(state, account)?;
     let at = now();
     for o in &mut c.outputs {
@@ -1234,7 +1194,6 @@ mod tests {
             out(105, 7, false, "b"),
             out(100, 11, true, "c"),
         ];
-        // Height 110: block 100 has 10 blocks on top of it (100..=109) → spendable.
         assert_eq!(c.balance(110), (23, 5));
         assert_eq!(c.balance(109), (23, 0));
         assert_eq!(c.balance(160), (23, 23));
@@ -1292,7 +1251,6 @@ mod tests {
 
     #[test]
     fn first_scan_starts_before_the_address_was_shown() {
-        // Created 2 h ago: 60 blocks + 1 day of margin.
         assert_eq!(
             first_restore_height(3_000_000, 1_000, 1_000 + 7_200),
             3_000_000 - 60 - 720
@@ -1304,17 +1262,14 @@ mod tests {
     fn restored_vault_scans_from_kyro_release_by_default() {
         let at = KYRO_FIRST_RELEASE_TIME + 30 * 86_400;
         let tip = KYRO_FIRST_RELEASE_HEIGHT + 30 * 720;
-        // Created here: from the address's first display (minus one day), as before.
         assert_eq!(
             start_height(tip, at - 7_200, at, Network::Mainnet, None),
             tip - 60 - 720
         );
-        // Restored: Kyro's first release height, even though the cache is brand new.
         assert_eq!(
             start_height(tip, at, at, Network::Mainnet, Some(RestoreFrom::Kyro)),
             KYRO_FIRST_RELEASE_HEIGHT
         );
-        // Stagenet: estimated from the release date.
         assert_eq!(
             start_height(1_900_000, at, at, Network::Testnet, Some(RestoreFrom::Kyro)),
             1_900_000 - 30 * 720 - 720

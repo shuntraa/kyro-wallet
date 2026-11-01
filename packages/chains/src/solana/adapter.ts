@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Solana adapter. Messages are built with @solana/kit. Rust decodes them
-// (`sol_decode_tx`, shown before the password) and signs them (`sol_sign_tx`,
-// native dialog); the UI places the signature at `summary.ourSignerIndex`.
-// SPL sends: TransferChecked (Token or Token-2022, program read from the mint
-// owner, decimals read on-chain), recipient ATA created idempotently if absent.
+// Solana adapter. Messages are built with @solana/kit.
 
 import { accountArg } from '../types';
 import {
@@ -78,13 +73,7 @@ interface RpcAccount {
   executable?: boolean;
 }
 
-/**
- * Why this recipient would lose the funds, or null. Kyro sends to WALLETS only:
- * - an address off the ed25519 curve (a PDA, owned by a program: nobody signs for it);
- * - a program (executable account);
- * - a token account or a mint (owned by the Token programs): native SOL sent there is stuck, and
- *   a token sent to the ATA of a token account is unreachable.
- */
+/** Why this recipient would lose the funds, or null. */
 export function solanaRecipientProblem(recipient: string, acc: Pick<RpcAccount, 'owner' | 'executable'> | null): string | null {
   if (!isAddress(recipient)) return l10n('Adresse Solana invalide.', 'Invalid Solana address.');
   if (isOffCurveAddress(address(recipient))) return l10n('Cette adresse est dérivée d’un programme (PDA), pas un portefeuille : personne ne peut signer pour elle, les fonds seraient perdus. Demande l’adresse du portefeuille.', 'This address is derived from a program (PDA), not a wallet: nobody can sign for it, the funds would be lost. Ask for the wallet address.');
@@ -166,10 +155,7 @@ export function parseMintAccount(account: RpcAccount | null): { tokenProgram: Ad
   return { tokenProgram: address(account.owner), decimals: bytes[44] ?? 0 };
 }
 
-/**
- * Put our signature in the slot `index` of the transaction's ordered signature
- * map, after checking that this slot belongs to `expected`.
- */
+/** Put our signature in the slot `index` of the transaction's ordered signature map, after checking that this slot belongs to `expected`. */
 export function placeSignature(tx: Transaction, index: number, signature: SignatureBytes, expected: string): Transaction {
   const entries = Object.entries(tx.signatures) as Array<[Address, SignatureBytes | null]>;
   const slot = entries[index];
@@ -180,10 +166,7 @@ export function placeSignature(tx: Transaction, index: number, signature: Signat
   return { ...tx, signatures: Object.fromEntries(next) as Transaction['signatures'] };
 }
 
-/**
- * Cross-check the Rust decoding against what the UI built. Returns a French
- * error message when something differs (the send must then be blocked).
- */
+/** Cross-check the Rust decoding against what the UI built. */
 export function checkSolSummary(u: SolUnsigned, s: SolTxSummary, me: string): string | null {
   if (s.ourSignerIndex === null) return l10n('Ton adresse ne signe pas cette transaction.', 'Your address does not sign this transaction.');
   if (s.feePayer !== me) return l10n('Le payeur des frais n’est pas ton adresse.', 'The fee payer is not your address.');
@@ -493,16 +476,7 @@ export interface ParsedIx {
   parsed?: { type?: string; info?: { source?: string; destination?: string; lamports?: number | string } } | string;
 }
 
-/**
- * One SOL history entry from our balance change and the transaction's decoded instructions.
- *
- * - A change of 0 for an account that did not pay the fees (a 0-lamport transfer involving us,
- *   sent by someone else) is neither received nor sent: a poisoning lure (`suspect: 'zero'`,
- *   shown as a received 0), never an outgoing payment.
- * - The counterparty comes from the decoded System transfers that involve us, never from the
- *   fee payer or « the first other account key » (an attacker who pays the fees would otherwise
- *   be shown as an address we paid). No decoded transfer: no counterparty.
- */
+/** One SOL history entry from our balance change and the transaction's decoded instructions. - A change of 0 for an account that did not pay the fees (a 0-lamport transfer involving us, sent by someone else) is neither received nor sent: a poisoning lure (`suspect: 'zero'`, shown as a received 0), never an outgoing payment. */
 export function solHistoryItem(p: { me: string; isPayer: boolean; delta: bigint; fee: bigint; instructions: ParsedIx[] }): HistoryItem {
   const transfers = p.instructions
     .filter((ix) => ix.program === 'system' || ix.programId === SYSTEM_PROGRAM)

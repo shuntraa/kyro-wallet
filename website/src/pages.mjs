@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Content of every page on kyrowallet.com. Each export returns { path, title, description, body, ld, ... }.
-// Copy rules: short, concrete, plain English. Say what the app does, not how great it is.
+// Content of every page on kyrowallet.com.
 
 import { SITE, VERSION, REPO, DL, FILES, esc, html, coin, pageHero, dlButton, osCards, installBlock, ctaPanel, shot, breadcrumbLd, window as win, dialog } from './layout.mjs';
-
-// ------------------------------------------------------------------ shared bits
 
 const IMG = {
   portfolio: { src: '/img/win-portfolio.webp', w: 2160, h: 1350 },
@@ -129,7 +126,6 @@ function appLd(chains) {
   };
 }
 
-
 // App windows staged on the home page. Screenshots come from the app's demo mode (website/src/capture.mjs).
 const W = {
   send: { src: '/img/win-send.webp', w: 1416, h: 886 },
@@ -176,7 +172,6 @@ function tour() {
     </section>`;
 }
 
-/** Two rows of coin icons scrolling in opposite directions. Links in the first copy only. */
 function coinWall(chains) {
   const half = Math.ceil(chains.length / 2);
   const row = (list, cls) => {
@@ -186,8 +181,6 @@ function coinWall(chains) {
   };
   return `<nav class="coin-wall" aria-label="All supported blockchains" data-reveal>${row(chains.slice(0, half), 'cr-a')}${row(chains.slice(half), 'cr-b')}</nav>`;
 }
-
-// ------------------------------------------------------------------ home
 
 export function home(chains) {
   const n = chains.length;
@@ -467,8 +460,6 @@ ${tour()}
   };
 }
 
-// ------------------------------------------------------------------ features
-
 export function features(chains) {
   const path = '/features/';
   const trail = [['/', 'Home'], [path, 'Features']];
@@ -630,8 +621,6 @@ export function features(chains) {
   return { path, title, description, body, scripts: ['/download.js'], ld: webPage(path, 'Kyro Wallet features', description, trail) };
 }
 
-// ------------------------------------------------------------------ security
-
 export function security() {
   const path = '/security/';
   const trail = [['/', 'Home'], [path, 'Security']];
@@ -729,8 +718,6 @@ export function security() {
 
   return { path, title, description, body, scripts: ['/download.js'], ld: webPage(path, 'Kyro Wallet security', description, trail) };
 }
-
-// ------------------------------------------------------------------ fees
 
 export function fees() {
   const path = '/fees/';
@@ -854,8 +841,6 @@ export function fees() {
 
   return { path, title, description, body, scripts: ['/download.js'], ld: webPage(path, 'Kyro Wallet fees', description, trail) };
 }
-
-// ------------------------------------------------------------------ download
 
 export function download(chains) {
   const path = '/download/';
@@ -983,9 +968,6 @@ pnpm build</code></pre>
   };
 }
 
-// ------------------------------------------------------------------ FAQ
-
-// home: true = also shown on the home page.
 const FAQ = [
   {
     title: 'The basics',
@@ -1088,8 +1070,6 @@ export function faq(chains) {
   return { path, title, description, body, scripts: ['/download.js'], ld };
 }
 
-// ------------------------------------------------------------------ chains overview
-
 const GROUPS = [
   ['Bitcoin and other UTXO coins', (c) => c.kind === 'utxo'],
   ['Ethereum and EVM chains', (c) => c.kind === 'evm'],
@@ -1150,8 +1130,6 @@ export function chainsIndex(chains) {
   ];
   return { path, title, description, body, scripts: ['/download.js'], ld };
 }
-
-// ------------------------------------------------------------------ one page per blockchain
 
 const tokensPhrase = (c) => {
   if (!c.tokens) return '';
@@ -1255,8 +1233,6 @@ export function chainPage(c, chains) {
   ld[0].about = [{ '@id': APP_ID }, { '@type': 'Thing', name: c.name, alternateName: c.ticker }];
   return { path, title, description, body, scripts: ['/download.js'], ld, chain: c };
 }
-
-// ------------------------------------------------------------------ 404
 
 export function notFound() {
   const body = html`

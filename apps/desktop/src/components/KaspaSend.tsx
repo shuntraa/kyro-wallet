@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Kaspa pieces of the Send screen (docs/IPC.md §2.11):
-// - what Rust will check before building: 0.2 KAS minimum (KIP-9 storage mass), spendable coins;
-// - the Rust-decoded payment before the password (outputs, change, fee, mass breakdown);
-// - the acceptance follow-up (`kas_tx_status`).
+// Kaspa pieces of the Send screen (docs/IPC.md §2.11): - what Rust will check before building: 0.2
+// KAS minimum (KIP-9 storage mass), spendable coins; - the Rust-decoded payment before the password
+// (outputs, change, fee, mass breakdown); - the acceptance follow-up (`kas_tx_status`).
 
 import { useEffect, useState } from 'react';
 import type { Currency, KaspaAccountInfo } from '@kyro/shared';

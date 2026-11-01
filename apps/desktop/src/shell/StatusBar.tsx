@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Status bar (28 px, Geist Mono): sync state, BTC block, RPC latencies,
-// Tor state (always visible), TESTNET / MODE DÉMO badges, version.
+// Status bar (28 px, Geist Mono): sync state, BTC block, RPC latencies, Tor state (always visible),
+// TESTNET / MODE DÉMO badges, version.
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { fmtNumber } from '../lib/format';
@@ -16,7 +16,6 @@ export function StatusFrame({ left, right }: { left: ReactNode; right?: ReactNod
   const { t } = useT();
   return (
     <footer className="flex h-7 shrink-0 items-center justify-between gap-2 border-t border-rail bg-bg-deep px-3.5 font-mono text-[11px] text-faint">
-      {/* Fades out instead of being cut mid-word when the window is narrow. */}
       <div className="flex min-w-0 items-center gap-[18px] overflow-hidden pr-6 whitespace-nowrap [mask-image:linear-gradient(to_right,black_calc(100%-28px),transparent)]">{left}</div>
       <div className="flex shrink-0 items-center gap-[18px]">
         <TorIndicator />
@@ -49,7 +48,6 @@ interface NetStat {
 export function StatusBar({ syncing, failedChains, serverDownChains = [], extra }: { syncing: boolean; failedChains: string[]; serverDownChains?: string[]; extra?: ReactNode }) {
   const { adapters, accounts, settings, network } = useApp();
   const { t, tp } = useT();
-  // Small "perso" hint next to a chain served by the user's own server.
   const custom = {
     btc: bitcoinServerFor(settings.servers, network).kind !== 'default',
     evm: adapters ? settings.servers.evm[String([...adapters.evm.values()][0]?.chain.chainId)] !== undefined : false,
@@ -60,7 +58,6 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
   const torBlocked = torWaiting(tor);
   // Re-probe as soon as Tor comes up instead of waiting for the next 30 s tick.
   const torReady = tor.status?.state === 'ready';
-  // …and as soon as a compact-filter sync completes.
   const cbfSyncedAt = useCbf().status?.lastSyncUnix ?? null;
   const [stat, setStat] = useState<NetStat>({ btcHeight: null, evmMs: null, solMs: null, errors: 0 });
 
@@ -70,7 +67,6 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
     const probe = async () => {
       const evm = [...adapters.evm.values()][0];
       const [btc, e, s] = await Promise.allSettled([
-        // A hardware-wallet account may lack a chain: nothing to probe, not an error.
         adapters.btc ? adapters.btc.tipHeight() : Promise.resolve(null),
         (async () => {
           if (!evm) return null;
@@ -104,7 +100,6 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
   const evmLabel = adapters ? [...adapters.evm.values()][0]?.chain.label ?? 'EVM' : 'EVM';
   const solLabel = adapters?.sol?.chain.label ?? 'Solana';
   const btcLabel = accounts?.network === 'testnet' ? 'BTC testnet' : 'BTC';
-  // Compact filters: the sync phase replaces the block height (driven by `cbf-status`).
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const cbf = useCbf().status;
   const cbfText = !cbf
@@ -152,7 +147,6 @@ export function StatusBar({ syncing, failedChains, serverDownChains = [], extra 
             )}
           </span>
           )}
-          {/* A hardware-wallet account only shows the chains read from the device. */}
           {(!adapters || adapters.evm.size > 0) && (
             <span>
               {evmLabel}

@@ -15,7 +15,6 @@ describe('XRP Ledger in the UI', () => {
   it('X-addresses are detected before Rust (the Send screen explains them)', () => {
     expect(isXAddress('XVLhHMPHU98es4dbozjVtdWzVrDjtV18pX8yuPT7y4xaEHi')).toBe(true);
     expect(isXAddress('rNaqKtKrMSwpwZSzRckPf7S96DkimjkF4H')).toBe(false);
-    // A TRON address (34 chars, T…) is not an X-address.
     expect(isXAddress('TFz2CJn9CJb8C4i1Gke3jmZX2fRMJxniH2')).toBe(false);
   });
 

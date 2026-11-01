@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Hedera pieces of the Send / Receive screens (docs/IPC.md §2.11):
-// - the memo field, ALWAYS visible right under the recipient (exchanges identify deposits by it);
-// - what Rust will check: our account exists (created by the first HBAR received), the
-//   recipient exists / is not deleted / does not require its own signature; an EVM address
-//   without account is auto-created (higher max fee);
-// - the Rust-decoded transfer before the password, and the consensus follow-up (hbar_tx_status).
+// Hedera pieces of the Send / Receive screens (docs/IPC.md §2.11): - the memo field, ALWAYS visible
+// right under the recipient (exchanges identify deposits by it); - what Rust will check: our
+// account exists (created by the first HBAR received), the recipient exists / is not deleted / does
+// not require its own signature; an EVM address without account is auto-created (higher max fee); -
+// the Rust-decoded transfer before the password, and the consensus follow-up (hbar_tx_status).
 
 import { useEffect, useState } from 'react';
 import { toIpcError, type Currency, type HbarOwnAccount, type HbarRecipientInfo } from '@kyro/shared';
@@ -210,10 +209,8 @@ export function HbarTxStatusLine({ adapter, id, recipient, onDone }: { adapter: 
 }
 
 /**
- * Known Hedera tokens (USDC): associated or not, and the "Associate" flow (TokenAssociate built
- * and signed by Rust behind the password and the native dialog, about $0.05). Accounts with
- * automatic association (those auto-created by a transfer to their EVM address) receive the token
- * without it.
+ * Known Hedera tokens (USDC): associated or not, and the "Associate" flow (TokenAssociate built and
+ * signed by Rust behind the password and the native dialog, about $0.05).
  */
 export function HbarTokens({ adapter, account, onChanged }: { adapter: HbarAdapter; account: HbarOwnAccount; onChanged?: () => void }) {
   useT();

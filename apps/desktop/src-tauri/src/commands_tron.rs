@@ -1,7 +1,7 @@
 //! IPC commands for TRON (`tron_*`): address, account resources, TRC-20 balance, history,
 //! transaction building **by Kyro** from the latest block, signing behind the password and the
-//! native dialog (decoded by Rust, resources and TRX burned re-read live), and broadcast with
-//! txid check. Contract: docs/IPC.md §2.5.
+//! native dialog (decoded by Rust, resources and TRX burned re-read live), and broadcast with txid
+//! check.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -22,12 +22,10 @@ fn known_token(net: Network, contract: &str) -> Option<&'static crate::known_tok
     crate::known_tokens::lookup(net, crate::known_tokens::TokenChain::Tron, contract)
 }
 
-/// A TRC-20 transfer of a token Kyro does not know: raw units, reinforced dialog.
 pub(crate) fn unknown_trc20(s: &TronTxSummary, net: Network) -> bool {
     matches!(&s.action, TronAction::Trc20Transfer { contract, .. } if known_token(net, contract).is_none())
 }
 
-/// Whether the reinforced dialog is needed: wallet-core's reasons, or an unknown token.
 pub(crate) fn tron_needs_extra(s: &TronTxSummary, net: Network) -> bool {
     s.requires_extra_confirmation || unknown_trc20(s, net)
 }
@@ -49,7 +47,6 @@ pub(crate) fn ctx(state: &AppState) -> TronCtx<'_> {
     }
 }
 
-/// Our address of TRON account `account` (`m/44'/195'/account'/0/0`).
 pub(crate) fn our_address(state: &AppState, account: u32) -> AppResult<String> {
     state.with_seed(|seed| Ok(wallet_core::tron_address(seed, account)?))
 }
@@ -71,7 +68,6 @@ fn net_label(net: Network) -> &'static str {
     }
 }
 
-/// Body of the native dialog, built from Rust's decoding and the live resource estimate.
 pub(crate) fn describe_tron(
     lang: Lang,
     s: &TronTxSummary,
@@ -162,8 +158,6 @@ pub(crate) fn describe_tron(
             };
         }
     }
-    // Creating an account always burns 0.1 TRX of bandwidth (free bandwidth does not apply);
-    // that amount is already part of the activation fee shown above.
     let new_account = e.activation_fee != "0";
     let bw_source = if new_account {
         lang.pick("compris dans l'activation", "included in the activation")
@@ -225,8 +219,6 @@ pub(crate) fn describe_tron(
         ),
     };
     if !s.memo.is_empty() {
-        // Untrusted text: wallet-core's cleaned text when present, else the UTF-8 decoding of the
-        // hex, else the exact hex; always one quoted line (dialog_text), after amounts and fees.
         let text = s.memo_text.clone().unwrap_or_else(|| {
             hex::decode(&s.memo)
                 .ok()
@@ -299,8 +291,6 @@ pub(crate) fn describe_tron_extra(lang: Lang, s: &TronTxSummary, net: Network) -
     out
 }
 
-// ---------------------------------------------------------------- read commands
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TronBackendInfo {
@@ -364,8 +354,6 @@ pub async fn tron_txs(state: State<'_, AppState>, address: String) -> AppResult<
     tron_backend::history(&ctx(&state), &address).await
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TronBuilt {
@@ -376,9 +364,6 @@ pub struct TronBuilt {
     pub estimate: TronEstimate,
 }
 
-/// Builds `raw_data` in Rust from the latest block: TRX if `token` is absent, else a TRC-20
-/// `transfer(to, amount)` on `token` with `fee_limit` from an energy simulation. `amount`:
-/// smallest unit (sun or token units), decimal string.
 pub(crate) async fn build(
     c: &TronCtx<'_>,
     owner: &str,
@@ -440,7 +425,6 @@ pub(crate) async fn build(
         fee_limit: i64::try_from(fee_limit).unwrap_or(i64::MAX),
     };
     let raw_hex = hex::encode(raw.encode());
-    // Rust re-decodes what it built, with the same checks as before signing.
     let summary = wallet_core::tron_decode_raw(&raw_hex, owner)?;
     let estimate = tron_backend::estimate(&tron_backend::EstimateInput {
         account: &acc,
@@ -538,7 +522,6 @@ pub async fn tron_sign_tx(
     })
 }
 
-/// Checks that `signature` recovers to `owner` over `raw`, then broadcasts.
 pub(crate) async fn broadcast_checked(
     c: &TronCtx<'_>,
     owner: &str,
@@ -568,7 +551,6 @@ pub async fn tron_broadcast(
     broadcast_checked(&ctx(&state), &me, &raw, &signature).await
 }
 
-/// Probe used by `settings_set` / `server_test`.
 pub(crate) async fn probe(
     net: &crate::net::NetClient,
     network: Network,
@@ -589,7 +571,6 @@ pub(crate) async fn probe(
 mod tests {
     use super::*;
 
-    /// The 7 mainnet TRC-20 of the registry (and Nile's test USDT) are named by Rust's table.
     #[test]
     fn every_curated_trc20_is_named() {
         for (contract, symbol) in [
@@ -677,8 +658,6 @@ mod tests {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
         assert!(!tron_needs_extra(&s, Network::Testnet));
-        // Nile's USDT contract on mainnet: unknown there. Raw units, « jeton inconnu », and
-        // the reinforced dialog (ÉLEVÉE 2: the interface can no longer name the token).
         let d = describe_tron(Lang::Fr, &s, &est(true), Network::Mainnet, 0);
         assert!(
             d.contains("Envoi de token TRC-20 (JETON INCONNU) : 1500000 unités brutes"),
@@ -688,7 +667,6 @@ mod tests {
         assert!(
             describe_tron_extra(Lang::Fr, &s, Network::Mainnet).contains("jeton INCONNU de Kyro")
         );
-        // A memo cannot add lines to the dialog.
         let mut m = s.clone();
         m.memo = hex::encode("ok\nÀ : TAttacker\u{202E}");
         let d = describe_tron(Lang::Fr, &m, &est(true), Network::Testnet, 0);
@@ -697,7 +675,6 @@ mod tests {
             "{d}"
         );
         assert!(!d.contains("\nÀ : TAttacker"));
-        // TRX to a new account: activation shown.
         let t = summary(
             TronAction::TrxTransfer {
                 to: "TFz2CJn9CJb8C4i1Gke3jmZX2fRMJxniH2".into(),

@@ -1,17 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — TON (`ton_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
-// commands_ton.rs and ton_backend.rs. Addresses are well-formed user-friendly addresses (CRC16
-// checked) of DEMO account ids (sha256 of a label), NOT the real v4R2 address of a key; the
-// transfer "BOC" is a demo encoding (base64 JSON, not a bag of cells) and the signature is fake.
-// The rules are Rust's:
-// - user-friendly addresses only (raw `0:…` refused), testnet-flagged ones refused on mainnet,
-//   masterchain refused; frozen recipient refused;
-// - bounce = the address's flag, off when the recipient is not an active contract;
-// - our wallet: `uninit` with a balance → first transfer deploys it (seqno 0); empty or frozen →
-//   refused; amount + estimated fee ≥ balance → refused; comment ≤ 123 bytes;
-// - sign re-reads everything live, refuses an expired message or a stale seqno;
-// - a sent transfer is processed a few seconds later (`ton_tx_status`).
 
 import { sha256 } from '@noble/hashes/sha2';
 import { base64 } from '@scure/base';
@@ -88,16 +76,12 @@ export interface DemoTonDeps {
 
 export interface DemoTonState {
   me: string;
-  /** An exchange's deposit wallet (active, bounceable form): needs a comment. */
   exchange: string;
-  /** A friend's wallet (active). */
   friend: string;
   /** A wallet that never received anything (uninit). */
   fresh: string;
-  /** Account hash (hex) → state. */
   accounts: Map<string, DemoTonAccount>;
   history: TonHistoryEntry[];
-  /** Normalized hash → send time and result. */
   sent: Map<string, { at: number; success: boolean; txHash: string }>;
 }
 
@@ -138,7 +122,6 @@ export function createDemoTon(d: DemoTonDeps) {
     await wait(80 + Math.random() * 150);
   };
 
-  /** commands_ton.rs parse_user_address. */
   const userAddress = (a: unknown) => {
     const s = String(a ?? '').trim();
     const problem = tonAddressProblem(s);
@@ -162,7 +145,6 @@ export function createDemoTon(d: DemoTonDeps) {
     };
   };
 
-  /** ton_backend::check_transfer. */
   const checkTransfer = (ours: TonAccountInfo, amount: bigint | null, fee: bigint) => {
     const balance = BigInt(ours.balance);
     if (ours.status === 'frozen') throw invalidInput(l10n('ton portefeuille TON est gelé (frais de stockage impayés) : il ne peut rien envoyer', 'your TON wallet is frozen (unpaid storage fees): it cannot send anything'));
@@ -208,7 +190,6 @@ export function createDemoTon(d: DemoTonDeps) {
     };
   };
 
-  /** commands_ton.rs describe_ton: the comment gets its own framed block. */
   const describe = (s: TonTxSummary, c: TonContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     let out = l10n(`Envoi TON${testnet ? ' (testnet)' : ''}\n\nÀ : ${s.destination}\n(même compte que ${s.destinationOther} : seul l'indicateur de rebond diffère)\n${line}\n`, `TON send${testnet ? ' (testnet)' : ''}\n\nTo: ${s.destination}\n(same account as ${s.destinationOther}: only the bounce flag differs)\n${line}\n`);

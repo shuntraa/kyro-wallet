@@ -1,9 +1,7 @@
 //! Official BIP39 vectors from trezor/python-mnemonic `vectors.json` (passphrase "TREZOR").
-//! Source: https://github.com/trezor/python-mnemonic/blob/master/vectors.json
 
 use wallet_core::Mnemonic;
 
-/// (entropy hex, mnemonic, seed hex) — entries 0,1,2,3,8,9,12,16,17,18,20,23 of the "english" list.
 const VECTORS: &[(&str, &str, &str)] = &[
     ("00000000000000000000000000000000",
      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
@@ -51,7 +49,6 @@ fn trezor_vectors_entropy_mnemonic_seed() {
         let from_entropy = bip39::Mnemonic::from_entropy(&entropy).unwrap();
         assert_eq!(from_entropy.to_string(), *phrase, "entropy {entropy_hex}");
 
-        // mnemonic -> words / seed through the public API
         let m = Mnemonic::parse(phrase).unwrap();
         assert_eq!(m.words().join(" "), *phrase);
         assert_eq!(m.word_count(), phrase.split(' ').count());

@@ -1,11 +1,4 @@
 //! Ledger « Aptos » app (LedgerHQ/app-aptos, host library `@ledgerhq/hw-app-aptos`).
-//!
-//! CLA 5B. Paths: count then big-endian indices.
-//! - GET_PUBLIC_KEY (05), P1 = 01 to show the address on the screen, P2 = 00 → `33 || 04 ||
-//!   pubkey (32) || 32 || chain code`.
-//! - SIGN_TX (06): first the path (P1 = 00, P2 = 80 « more »), then the signing message
-//!   (`SHA3-256("APTOS::RawTransaction") || BCS`) in 255-byte chunks, P1 = 1, 2, 3…, P2 = 80
-//!   except 00 on the last one → `64 || signature`.
 
 use super::ledger_apdu::{self as apdu, SwContext};
 use super::ledger_apps::App;
@@ -29,8 +22,6 @@ pub fn get_pubkey(path: &[u32], display: bool) -> HwResult<Vec<u8>> {
 }
 
 pub fn parse_pubkey(data: &[u8]) -> HwResult<Vec<u8>> {
-    // `unpack_get_public_key_response` of the app's tests: 33-byte key (prefix 04), 32-byte
-    // chain code, nothing else.
     match data {
         [33, 0x04, rest @ ..] if rest.len() == 32 + 1 + 32 && rest[32] == 32 => {
             Ok(rest[..32].to_vec())
@@ -90,7 +81,6 @@ mod tests {
 
     #[test]
     fn get_public_key() {
-        // m/44'/637'/1'/0'/0', the path of the app's `test_get_public_key_confirm_accepted`.
         let path = HwKeyChain::Aptos.path(1);
         let cmd = get_pubkey(&path, true).unwrap();
         assert_eq!(

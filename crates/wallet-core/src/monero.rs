@@ -1,20 +1,4 @@
-//! Monero (XMR): keys from the wallet's BIP39 seed, addresses (primary and subaddresses), the
-//! standard 25-word Monero seed of that key, scanning helpers, and transaction signing.
-//!
-//! **Key derivation (documented in SECURITY.md, same scheme as Ledger's Monero app).**
-//! `k = BIP32-secp256k1(seed, m/44'/128'/a'/0/0)` (32-byte private key), then
-//! `spend = sc_reduce32(keccak256(k))` and `view = sc_reduce32(keccak256(spend))` — Monero's own
-//! rule for the view key, so the 25-word seed of `spend` restores the same wallet (both keys) in
-//! Monero GUI, Feather or Cake. `sc_reduce32(keccak256(·))` is monero-oxide's `Scalar::hash`.
-//!
-//! **No home-made cryptography.** Everything below comes from monero-oxide / monero-wallet
-//! (Cypher Stack audit, May 2025): addresses, subaddress derivation, output scanning (view tags,
-//! amount decryption and commitment check), key images, CLSAG, Bulletproofs+, decoy-ready
-//! transaction building and the post-signing [`Eventuality`] check. Kyro only adds the BIP39 →
-//! Monero mapping above, the 25-word encoding (a word list + CRC32, no cryptography), the
-//! encrypted local cache (XChaCha20-Poly1305 of RustCrypto) and the refusals.
-//!
-//! On Kyro's `Testnet`, Monero means **stagenet** (mainnet's rules, worthless coins).
+//! Monero: keys from the BIP39 seed, (sub)addresses, 25-word seed, scanning and signing.
 
 use bitcoin::bip32::ChildNumber;
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
@@ -50,8 +34,7 @@ pub const XMR_RING_LEN: u8 = 16;
 pub const XMR_SUBADDRESS_LOOKAHEAD: u32 = 200;
 /// Highest subaddress index Kyro hands out (account 0 only).
 pub const XMR_MAX_SUBADDRESS: u32 = 100_000;
-/// Fees above 0.01 XMR need a reinforced confirmation (a usual 2-output transfer pays
-/// ≈ 0.00003 XMR at normal priority).
+/// Fees above 0.01 XMR need reinforced confirmation (usual ≈ 0.00003 XMR).
 pub const XMR_HIGH_FEE: u64 = 10_000_000_000;
 /// Blocks before a received output can be spent (protocol rule, `CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE`).
 pub const XMR_SPENDABLE_AGE: u64 = 10;
@@ -59,10 +42,6 @@ pub const XMR_SPENDABLE_AGE: u64 = 10;
 pub const XMR_COINBASE_AGE: u64 = 60;
 
 const CACHE_MAGIC: &[u8; 5] = b"KXMR1";
-
-// ---------------------------------------------------------------------------------------------
-// Keys
-// ---------------------------------------------------------------------------------------------
 
 /// `m/44'/128'/account'/0/0` (the secp256k1 BIP32 node Kyro maps to Monero's spend key).
 pub fn xmr_path(account: u32) -> String {
@@ -95,7 +74,6 @@ fn spend_key(seed: &Seed, account: u32) -> Result<Zeroizing<Scalar>> {
     Ok(Zeroizing::new(Scalar::hash(&k[..])))
 }
 
-/// Monero's view key rule: `sc_reduce32(keccak256(spend))`.
 fn view_key(spend: &Scalar) -> Zeroizing<Scalar> {
     let bytes = Zeroizing::new(<[u8; 32]>::from(*spend));
     Zeroizing::new(Scalar::hash(&bytes[..]))
@@ -130,8 +108,7 @@ fn address_of(vp: &ViewPair, net: Network, index: u32) -> Result<String> {
     .to_string())
 }
 
-/// Address of account `account`: `index` 0 = the primary (standard) address `4…` / `5…`,
-/// `index` n ≥ 1 = subaddress `(0, n)` `8…` / `7…` (the ones Monero GUI lists under account #0).
+/// Address: `index` 0 = primary `4…`/`5…`, n ≥ 1 = subaddress `(0, n)` `8…`/`7…`.
 pub fn xmr_address(seed: &Seed, net: Network, account: u32, index: u32) -> Result<String> {
     address_of(&xmr_view_pair(seed, account)?, net, index)
 }
@@ -147,8 +124,7 @@ pub fn xmr_addresses(
     indices.map(|i| address_of(&vp, net, i)).collect()
 }
 
-/// Public view key and public spend key, hex (what a view-only wallet needs, with the
-/// private view key — which Kyro never returns).
+/// Public view and spend keys, hex (the private view key is never returned).
 pub fn xmr_public_keys(seed: &Seed, account: u32) -> Result<(String, String)> {
     let vp = xmr_view_pair(seed, account)?;
     Ok((
@@ -156,10 +132,6 @@ pub fn xmr_public_keys(seed: &Seed, account: u32) -> Result<(String, String)> {
         hex::encode(vp.view().compress().to_bytes()),
     ))
 }
-
-// ---------------------------------------------------------------------------------------------
-// 25-word Monero seed (English, Electrum-style word list with a checksum word)
-// ---------------------------------------------------------------------------------------------
 
 const PREFIX: usize = 3;
 
@@ -184,7 +156,6 @@ fn checksum_index(words: &[&str]) -> usize {
     usize::try_from(crc32(trimmed.as_bytes())).unwrap_or(0) % words.len()
 }
 
-/// The 25 English words of a 32-byte key (Monero's `bytes_to_words`).
 fn key_to_words(key: &[u8; 32]) -> Zeroizing<Vec<String>> {
     const N: u64 = ENGLISH.len() as u64;
     let mut idx = Zeroizing::new(Vec::with_capacity(25));
@@ -210,8 +181,7 @@ fn key_to_words(key: &[u8; 32]) -> Zeroizing<Vec<String>> {
     out
 }
 
-/// Decodes 25 English words back to the 32-byte key (checksum verified). Used by the tests to
-/// prove the round trip and by nothing else (Kyro never imports a Monero seed).
+/// Decodes 25 English words back to the 32-byte key (checksum verified).
 #[doc(hidden)]
 pub fn xmr_words_to_key(phrase: &str) -> Result<Zeroizing<[u8; 32]>> {
     const N: usize = ENGLISH.len();
@@ -247,17 +217,12 @@ pub fn xmr_words_to_key(phrase: &str) -> Result<Zeroizing<[u8; 32]>> {
     Ok(out)
 }
 
-/// The standard 25-word Monero seed of account `account`'s spend key: restores the same wallet
-/// in Monero GUI, Feather or Cake. **Only for the native backup window** (never sent to the UI).
+/// 25-word Monero seed of the spend key. **Only for the native backup window** (never UI).
 pub fn xmr_seed_words(seed: &Seed, account: u32) -> Result<Zeroizing<Vec<String>>> {
     let spend = spend_key(seed, account)?;
     let bytes = Zeroizing::new(<[u8; 32]>::from(*spend));
     Ok(key_to_words(&bytes))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Destination addresses
-// ---------------------------------------------------------------------------------------------
 
 /// Kind of a Monero destination, as decoded by Rust.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -330,15 +295,10 @@ fn parse_destination(address: &str, net: Network) -> Result<(MoneroAddress, XmrD
     ))
 }
 
-/// Decodes a destination for `net`: standard, subaddress or integrated only; another network,
-/// a "featured" (guaranteed / experimental) address or a non-canonical encoding are refused.
+/// Decodes a destination for `net`: standard, subaddress or integrated, canonical only.
 pub fn xmr_parse_address(address: &str, net: Network) -> Result<XmrDestination> {
     parse_destination(address, net).map(|(_, d)| d)
 }
-
-// ---------------------------------------------------------------------------------------------
-// Scanning
-// ---------------------------------------------------------------------------------------------
 
 /// Scanner of account `account`: primary address + subaddresses `(0, 1 … subaddresses)`.
 pub fn xmr_scanner(seed: &Seed, account: u32, subaddresses: u32) -> Result<Scanner> {
@@ -351,9 +311,7 @@ pub fn xmr_scanner(seed: &Seed, account: u32, subaddresses: u32) -> Result<Scann
     Ok(s)
 }
 
-/// Key images of `outputs` (received by account `account`), in order: what a spending
-/// transaction reveals, so Kyro can tell which of its outputs are spent. Needs the private
-/// spend key (derived here, then erased). An output that is not ours is refused.
+/// Key images of `outputs` of `account`, in order (to tell which outputs are spent).
 pub fn xmr_key_images(
     seed: &Seed,
     account: u32,
@@ -403,10 +361,6 @@ pub fn xmr_tx_fee(tx: &Transaction<Pruned>) -> Option<u64> {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Encrypted local cache (scan state)
-// ---------------------------------------------------------------------------------------------
-
 fn cache_header(net: Network, account: u32) -> Vec<u8> {
     let mut h = CACHE_MAGIC.to_vec();
     h.push(match net {
@@ -426,8 +380,7 @@ fn cache_key(seed: &Seed, net: Network, account: u32) -> Result<Zeroizing<[u8; 3
     Ok(Zeroizing::new(keccak256(&pre[..])))
 }
 
-/// Encrypts the scan cache of `(net, account)` (XChaCha20-Poly1305; key derived from the
-/// private view key, so only this seed can read it; network and account authenticated).
+/// Encrypts the scan cache (XChaCha20-Poly1305, key from private view key; net/account AAD).
 pub fn xmr_cache_seal(seed: &Seed, net: Network, account: u32, plain: &[u8]) -> Result<Vec<u8>> {
     let key = cache_key(seed, net, account)?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key[..])
@@ -479,10 +432,6 @@ pub fn xmr_cache_open(
         .map_err(|_| Error::input("unreadable Monero cache (different phrase or modified file)"))
 }
 
-// ---------------------------------------------------------------------------------------------
-// Sending
-// ---------------------------------------------------------------------------------------------
-
 /// Something in a transfer that deserves a second, reinforced confirmation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -527,8 +476,7 @@ pub struct XmrTxSummary {
     pub requires_extra_confirmation: bool,
 }
 
-/// A transaction ready to be signed. Holds no private key (the spend key is only derived in
-/// [`xmr_sign`]); it does hold our outputs' one-time offsets: it never leaves Rust.
+/// A transaction ready to be signed.
 pub struct XmrUnsigned {
     signable: SignableTransaction,
     /// What the dialog shows.
@@ -543,11 +491,7 @@ impl core::fmt::Debug for XmrUnsigned {
     }
 }
 
-/// Builds the transfer of `amount` piconero to `to` from `inputs` (our unlocked outputs with
-/// their decoys, chosen by the shell), change to this account's primary address.
-///
-/// `fee_rate`: the node's estimate, bounded by the shell. `own_addresses`: this account's
-/// addresses handed out so far (a send to one of them is flagged).
+/// Builds a transfer of `amount` to `to` from `inputs` (with decoys), change to primary.
 #[allow(clippy::too_many_arguments)]
 pub fn xmr_build(
     seed: &Seed,
@@ -638,8 +582,7 @@ pub fn xmr_build(
     Ok(XmrUnsigned { signable, summary })
 }
 
-/// A signed transaction, checked: its outputs are exactly the planned payment and change, and
-/// its fee is the one shown.
+/// A signed tx whose outputs are exactly the planned ones and whose fee is the one shown.
 pub struct XmrSigned {
     /// The transaction (published by the shell through the daemon interface).
     pub tx: Transaction,
@@ -651,9 +594,7 @@ pub struct XmrSigned {
     pub summary: XmrTxSummary,
 }
 
-/// Signs `unsigned` with account `account`'s spend key (derived here, then erased), then checks
-/// the result with monero-wallet's [`Eventuality`] (the transaction creates exactly the planned
-/// outputs — payment and change — with the planned data) and that its fee is the one shown.
+/// Signs with the spend key (then erased), checks outputs via [`Eventuality`] and the fee.
 pub fn xmr_sign(seed: &Seed, account: u32, unsigned: XmrUnsigned) -> Result<XmrSigned> {
     if unsigned.summary.account != account {
         return Err(Error::input("transaction prepared for another account"));

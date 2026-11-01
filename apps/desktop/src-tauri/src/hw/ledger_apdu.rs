@@ -1,14 +1,9 @@
 //! Ledger wire protocol, pure functions (no I/O): USB HID framing, APDUs of the Ethereum and
 //! Solana apps, "get app and version", status words.
 //!
-//! Specs:
-//! - HID framing ("Transport protocol"): <https://github.com/LedgerHQ/app-solana/blob/develop/doc/api.md>
-//!   (same framing for every app: channel `0x0101`, tag `0x05`, 64-byte packets).
-//! - Ethereum app: <https://github.com/LedgerHQ/app-ethereum/blob/develop/doc/apdu.md>
-//! - Solana app: <https://github.com/LedgerHQ/app-solana/blob/develop/doc/api.md>; multi-APDU
-//!   flags `P2_MORE`/`P2_EXTEND` as in Ledger's `hw-app-solana` (`sendToDevice`).
-//! - Bitcoin app (status words): <https://github.com/LedgerHQ/app-bitcoin-new/blob/develop/doc/bitcoin.md>
-//!   The Bitcoin protocol itself is driven by Ledger's `ledger_bitcoin_client`.
+//! Specs: HID framing ("Transport protocol"):
+//! <https://github.com/LedgerHQ/app-solana/blob/develop/doc/api.md> (same framing for every app:
+//! channel `0x0101`, tag `0x05`, 64-byte packets).
 
 use super::{HwError, HwResult};
 
@@ -51,7 +46,7 @@ pub struct Deframer {
 
 impl Deframer {
     /// Feeds one packet; returns the full response (data followed by the status word) once
-    /// complete. Any packet that does not continue the sequence is an error.
+    /// complete.
     pub fn push(&mut self, pkt: &[u8]) -> HwResult<Option<Vec<u8>>> {
         if pkt.len() < 5 || pkt[..2] != CHANNEL || pkt[2] != TAG_APDU {
             return Err(HwError::bad("unexpected HID packet"));
@@ -113,8 +108,6 @@ pub fn encode_path(path: &[u32]) -> Vec<u8> {
     out
 }
 
-// ------------------------------------------------------------------ dashboard / any app
-
 pub const SW_OK: u16 = 0x9000;
 /// Ledger's dashboard reports itself as this app name.
 pub const DASHBOARD: &str = "BOLOS";
@@ -157,14 +150,11 @@ pub fn is_wrong_app(sw: u16) -> bool {
     matches!(sw, 0x6E00 | 0x6E01 | 0x6D00 | 0x6D02 | 0x6511 | 0x650F)
 }
 
-/// Maps a non-`9000` status word. Wrong-app codes return `WrongApp` with empty names (the
-/// caller fills them with GET APP AND VERSION).
+/// Maps a non-`9000` status word.
 pub fn sw_error(sw: u16, ctx: SwContext) -> HwError {
     match sw {
-        // Locked device (current firmware), "security status not satisfied" (older firmware).
         0x5515 => HwError::Locked,
         0x6982 if ctx == SwContext::General => HwError::Locked,
-        // Refused on the device (Solana app uses 6982 for it).
         0x6985 | 0x5501 | 0x6982 => HwError::Rejected,
         sw if is_wrong_app(sw) => HwError::WrongApp {
             expected: String::new(),
@@ -184,8 +174,6 @@ pub fn sw_error(sw: u16, ctx: SwContext) -> HwError {
         other => HwError::bad(format!("device status {other:04X}")),
     }
 }
-
-// ------------------------------------------------------------------ Ethereum app
 
 const ETH_CLA: u8 = 0xE0;
 
@@ -262,8 +250,6 @@ pub fn eth_provide_erc20(descriptor_payload: &[u8]) -> HwResult<Vec<u8>> {
     apdu(ETH_CLA, 0x0A, 0x00, 0x00, descriptor_payload)
 }
 
-// ------------------------------------------------------------------ Solana app
-
 const SOL_CLA: u8 = 0xE0;
 const P2_EXTEND: u8 = 0x01;
 const P2_MORE: u8 = 0x02;
@@ -302,7 +288,6 @@ mod tests {
     fn hid_framing_single_packet() {
         let f = frames(&get_app_and_version());
         assert_eq!(f.len(), 1);
-        // channel 0101, tag 05, seq 0000, length 0005, APDU, zero padding.
         assert_eq!(
             hex::encode(&f[0][..12]),
             "0101050000".to_owned() + "0005b001000000"
@@ -314,11 +299,9 @@ mod tests {
     fn hid_framing_multi_packet_roundtrip() {
         let apdu: Vec<u8> = (0..=200u8).collect();
         let f = frames(&apdu);
-        // 2 + 201 bytes: 57 in the first packet, then 59 per packet → 4 packets.
         assert_eq!(f.len(), 4);
         assert_eq!(&f[1][..5], &[0x01, 0x01, 0x05, 0x00, 0x01]);
         assert_eq!(&f[3][..5], &[0x01, 0x01, 0x05, 0x00, 0x03]);
-        // The device answers with the same framing: reassemble our own frames.
         let mut d = Deframer::default();
         let mut out = None;
         for p in &f {
@@ -341,8 +324,6 @@ mod tests {
         assert!(Deframer::default().push(&[1, 1, 5]).is_err());
     }
 
-    /// Recorded exchange from Ledger's own client tests (app "Bitcoin Test" 2.1.0):
-    /// `=> b001000000`, `<= 010c426974636f696e205465737405322e312e3001009000`.
     #[test]
     fn app_and_version_official_vector() {
         let resp = hex::decode("010c426974636f696e205465737405322e312e3001009000").unwrap();
@@ -386,13 +367,11 @@ mod tests {
 
     #[test]
     fn eth_get_address_encoding() {
-        // E0 02 P1 P2(=01 chain code) Lc, 5 path elements m/44'/60'/0'/0/0.
         let a = eth_get_address(&super::super::evm_path(0), true).unwrap();
         assert_eq!(
             hex::encode(a),
             "e002010115058000002c8000003c800000000000000000000000"
         );
-        // Response: 65-byte key, 40-char address, chain code.
         let mut resp = vec![65u8];
         resp.extend([4u8; 65]);
         resp.push(40);
@@ -411,7 +390,6 @@ mod tests {
         let path = super::super::evm_path(0);
         let payload: Vec<u8> = (0..600u32).map(|i| i as u8).collect();
         let apdus = eth_sign(&path, &payload).unwrap();
-        // First: 21 path bytes + 234 payload bytes; then 255, then the remaining 111.
         assert_eq!(apdus.len(), 3);
         assert_eq!(&apdus[0][..5], &[0xE0, 0x04, 0x00, 0x00, 0xFF]);
         assert_eq!(apdus[0][5], 5);
@@ -421,7 +399,6 @@ mod tests {
         joined.extend(&apdus[1][5..]);
         joined.extend(&apdus[2][5..]);
         assert_eq!(joined, payload);
-        // Small transaction: one APDU.
         assert_eq!(eth_sign(&path, &[0x02, 0xc0]).unwrap().len(), 1);
         let mut sig = vec![1u8];
         sig.extend([0xaa; 32]);
@@ -442,7 +419,6 @@ mod tests {
         assert_eq!(&one[0][..6], &[0xE0, 0x06, 0x01, 0x00, 118, 0x01]);
         let msg = vec![9u8; 600];
         let many = sol_sign(&path, &msg).unwrap();
-        // payload = 1 + 17 + 600 = 618 → 255 + 255 + 108.
         assert_eq!(many.len(), 3);
         assert_eq!(many[0][3], P2_MORE);
         assert_eq!(many[1][3], P2_MORE | P2_EXTEND);

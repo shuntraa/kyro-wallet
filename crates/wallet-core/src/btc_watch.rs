@@ -1,6 +1,4 @@
-//! Public-data helpers for watching a Bitcoin wallet through a user-chosen server:
-//! Electrum script hashes, output descriptors for a Bitcoin Core watch-only wallet, and the
-//! expected genesis hash per network. No private key is ever exposed here.
+//! Bitcoin watch helpers: Electrum script hashes, Core watch-only descriptors, genesis hashes.
 
 use core::str::FromStr;
 
@@ -14,7 +12,6 @@ use crate::mnemonic::Seed;
 use crate::network::{BtcKind, Network};
 
 /// Electrum "script hash" of a raw scriptPubKey: `sha256(script)`, byte-reversed, hex.
-/// See the Electrum protocol, "Script Hashes".
 pub fn btc_scripthash_of_script(script: &[u8]) -> String {
     let mut h = sha256::Hash::hash(script).to_byte_array();
     h.reverse();
@@ -44,8 +41,7 @@ pub fn btc_address_of_script(script: &[u8], net: Network) -> Option<String> {
         .map(|a| a.to_string())
 }
 
-/// Address at `<account xpub>/change/index` (public derivation only), for a watch-only
-/// scanner. Same result as [`crate::btc_address`] for the same account.
+/// Address at `<account xpub>/change/index` (public derivation only), for a watch-only scanner.
 pub fn btc_address_from_xpub(
     xpub: &str,
     net: Network,
@@ -78,8 +74,7 @@ pub fn btc_address_from_xpub(
     .to_string())
 }
 
-/// Genesis block hash (hex, display order) of the Bitcoin network Kyro uses for `net`:
-/// mainnet, or **testnet4** for `Network::Testnet`.
+/// Genesis hash (hex, display order) for `net`: mainnet, or **testnet4** for testnet.
 pub fn btc_genesis_hash(net: Network) -> String {
     let params = match net {
         Network::Mainnet => bitcoin::Network::Bitcoin,
@@ -102,8 +97,7 @@ pub struct BtcRawTx {
     pub outputs: Vec<(Option<String>, u64, String)>,
 }
 
-/// Decodes a consensus-serialized transaction (hex), e.g. from Electrum
-/// `blockchain.transaction.get`. Fails on trailing bytes or malformed data.
+/// Decodes a consensus-serialized tx (hex); fails on trailing bytes or malformed data.
 pub fn btc_decode_raw_tx(raw_hex: &str, net: Network) -> Result<BtcRawTx> {
     let bytes = hex::decode(raw_hex.trim()).map_err(|_| Error::input("transaction is not hex"))?;
     let tx: bitcoin::Transaction = bitcoin::consensus::deserialize(&bytes)
@@ -134,10 +128,7 @@ pub fn btc_decode_raw_tx(raw_hex: &str, net: Network) -> Result<BtcRawTx> {
     })
 }
 
-/// Checks that `raw_hex` is one complete consensus-serialized transaction whose txid — the
-/// double SHA-256 of its non-witness serialization, display order — is `txid`. Used on every
-/// raw transaction a server returns (Bitcoin, Litecoin, Dogecoin: same serialization and txid),
-/// e.g. before it becomes a PSBT `non_witness_utxo`. A mismatch is an error.
+/// Checks `raw_hex` is one complete tx whose txid (non-witness double SHA-256) is `txid`.
 pub fn verify_tx_hex(raw_hex: &str, txid: &str) -> Result<()> {
     let bytes = hex::decode(raw_hex.trim()).map_err(|_| Error::input("transaction is not hex"))?;
     let tx: bitcoin::Transaction = bitcoin::consensus::deserialize(&bytes)
@@ -163,8 +154,7 @@ pub struct BtcDescriptor {
     pub descriptor: String,
 }
 
-/// Receive and change descriptors of the BIP84 (`wpkh`) and BIP86 (`tr`) accounts, built from
-/// the account xpubs (public data only), with key origin `[fingerprint/purpose'/coin'/account']`.
+/// BIP84 `wpkh` / BIP86 `tr` receive and change descriptors from account xpubs, with key origin.
 pub fn btc_descriptors(seed: &Seed, net: Network, account: u32) -> Result<Vec<BtcDescriptor>> {
     let mut out = Vec::with_capacity(4);
     for kind in [BtcKind::Segwit, BtcKind::Taproot] {

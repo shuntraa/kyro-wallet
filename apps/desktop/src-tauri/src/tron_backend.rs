@@ -2,10 +2,7 @@
 //! on the `tron` Tor family, never with a fallback.
 //!
 //! Kyro builds every `raw_data` itself (wallet-core `TronRaw`) from the latest block
-//! (`/wallet/getnowblock`): the server's `createtransaction` is never used to build what is
-//! signed. Resources and fees come from `/wallet/getaccount`, `/wallet/getaccountresource`,
-//! `/wallet/getchainparameters` and, for TRC-20, an energy simulation
-//! (`/wallet/triggerconstantcontract`). History uses TronGrid's `/v1` API.
+//! (`/wallet/getnowblock`): the server's `createtransaction` is never used to build what is signed.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -16,13 +13,9 @@ use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient, ServerRequest};
 use crate::servers::{tron_default_base, validate_http_url, TronServer, TRON_GENESIS};
 
-/// java-tron adds this to the serialized size when it charges bandwidth (MAX_RESULT_SIZE_IN_TX).
 const RESULT_SIZE: u64 = 64;
-/// Bytes a signed transaction adds to its raw_data: field keys/lengths + one 65-byte signature.
 const SIGNED_OVERHEAD: u64 = 3 + 2 + 65;
-/// Energy margin on the simulation for `fee_limit` (+30 %).
 const FEE_LIMIT_MARGIN_PCT: u64 = 130;
-/// Floor of the `fee_limit` Kyro sets on a TRC-20 transfer: 1 TRX.
 const MIN_FEE_LIMIT: u64 = 1_000_000;
 /// Expiration Kyro sets: 10 minutes after the reference block (leaves time for the password
 /// and the dialog; java-tron accepts up to 24 h).
@@ -119,8 +112,7 @@ pub async fn now_block(ctx: &TronCtx<'_>) -> AppResult<(u64, String, i64)> {
 #[serde(rename_all = "camelCase")]
 pub struct TronAccount {
     pub address: String,
-    /// The account exists on chain (has received TRX at least once). Sending TRX to an
-    /// address that does not exist activates it, for an extra fee.
+    /// The account exists on chain (has received TRX at least once).
     pub exists: bool,
     /// Sun, decimal string.
     pub balance: String,
@@ -234,7 +226,6 @@ pub async fn trc20_balance(ctx: &TronCtx<'_>, contract: &str, address: &str) -> 
 }
 
 fn be_to_decimal(be: &[u8]) -> String {
-    // Repeated division by 10 on a big-endian byte string (≤ 32 bytes): no float, no overflow.
     let mut n = be.to_vec();
     let mut digits = Vec::new();
     while n.iter().any(|b| *b != 0) {
@@ -253,8 +244,7 @@ fn be_to_decimal(be: &[u8]) -> String {
     String::from_utf8(digits).unwrap_or_default()
 }
 
-/// Energy a TRC-20 call would use, by simulation (`energy_used` + `energy_penalty`). A call
-/// that reverts (insufficient token balance, paused token…) is an error: nothing is built.
+/// Energy a TRC-20 call would use, by simulation (`energy_used` + `energy_penalty`).
 pub async fn simulate_energy(
     ctx: &TronCtx<'_>,
     owner: &str,
@@ -290,7 +280,6 @@ pub async fn simulate_energy(
     Ok(u64_at(&v, "energy_used") + u64_at(&v, "energy_penalty"))
 }
 
-/// TronGrid error messages are often hex-encoded text.
 pub(crate) fn message(v: &Value) -> String {
     let m = v["message"].as_str().unwrap_or("");
     hex::decode(m)
@@ -349,7 +338,6 @@ pub fn estimate(i: &EstimateInput<'_>) -> TronEstimate {
     let (free, staked) = (i.account.free_bandwidth(), i.account.staked_bandwidth());
     let creates = i.is_trx && !i.recipient_exists;
     let (bandwidth_burn, activation) = if creates {
-        // Account creation: staked bandwidth or a fixed burn, plus the creation fee.
         let bw = if staked >= needed {
             0
         } else {
@@ -416,7 +404,6 @@ pub async fn estimate_for(ctx: &TronCtx<'_>, summary: &TronTxSummary) -> AppResu
                 simulate_energy(ctx, &summary.owner, contract, &data).await?,
             )
         }
-        // Unknown call: no simulation; the fee_limit is the bound shown.
         TronAction::ContractCall { .. } => (false, true, 0),
     };
     Ok(estimate(&EstimateInput {
@@ -598,7 +585,6 @@ mod tests {
 
     #[test]
     fn bandwidth_activation_and_energy() {
-        // 101-byte TRX transfer raw_data → 101+1+70+64 = 236 bytes.
         let mut i = EstimateInput {
             account: &acc(600, 0, 0),
             params: P,
@@ -614,18 +600,15 @@ mod tests {
             (e.bandwidth_burn.as_str(), e.activation_fee.as_str()),
             ("0", "0")
         );
-        // No free bandwidth left: 236 × 1 000 sun.
         let a = acc(100, 0, 0);
         i.account = &a;
         assert_eq!(estimate(&i).bandwidth_burn, "236000");
-        // New recipient without staked bandwidth: 1 TRX + 0.1 TRX.
         let a = acc(600, 0, 0);
         i.account = &a;
         i.recipient_exists = false;
         let e = estimate(&i);
         assert_eq!(e.activation_fee, "1100000");
         assert_eq!(e.total_burn, "1100000");
-        // TRC-20: 30 000 energy, none staked, fee_limit 3.9 TRX.
         i.is_trx = false;
         i.recipient_exists = true;
         i.raw_size = 210;
@@ -681,10 +664,7 @@ mod tests {
     }
 }
 
-/// Real-network test on Nile (and a mainnet probe) over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture tron_live`.
-/// `KYRO_TRON_BROADCAST=yes` also broadcasts the TRX transfer, from the public Trezor test
-/// wallet (`all ×12`, m/44'/195'/0'/0/0) to its own next address (m/44'/195'/0'/0/1).
+/// Real-network test on Nile (and a mainnet probe) over Tor.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -814,7 +794,6 @@ mod live {
                 theirs.len() / 2
             );
 
-            // Kyro-built TRX transfer, signed and checked (decode, recovery).
             let now = || {
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -842,7 +821,6 @@ mod live {
                 )
             );
 
-            // Kyro-built TRC-20 transfer of a token the test wallet holds, signed and checked.
             let token = "TFT7sNiNDGZcqL7z7dwXUPpxrx1Ewk8iGL";
             eprintln!(
                 "token balance {}",
@@ -914,13 +892,6 @@ mod live {
         });
     }
 
-    /// One TRC-20 self-send on Nile through the real path: Kyro builds, Rust decodes, the
-    /// dialog text is the one `tron_sign_tx` shows (resources re-read live), signature with the
-    /// identical-summary check, `tron_broadcast`'s checks, then the energy actually burned is
-    /// compared with the announcement. From the public "abandon … about" Tron address if it holds
-    /// the token and has staked energy, else from the public Trezor test wallet (`all ×12`).
-    /// Broadcasts only with `KYRO_TRON_TRC20=yes`.
-    /// `cargo test -p kyro-desktop -- --ignored --nocapture tron_live_trc20`
     #[test]
     #[ignore]
     fn tron_live_trc20_self_send() {

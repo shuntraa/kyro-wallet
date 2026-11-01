@@ -1,8 +1,4 @@
 //! secp256k1 BIP32 key handling shared by the Bitcoin and EVM modules.
-//!
-//! `bitcoin::bip32::Xpriv` and `secp256k1::SecretKey` are `Copy` types without
-//! zeroize-on-drop, so wiping is best effort: every private key we hold is wrapped in
-//! [`XprivGuard`], which erases the key and chain code when it goes out of scope.
 
 use bitcoin::bip32::{ChainCode, ChildNumber, Fingerprint, Xpriv};
 use bitcoin::secp256k1::{All, Secp256k1};
@@ -27,7 +23,6 @@ pub(crate) fn random32() -> Result<Zeroizing<[u8; 32]>> {
     Ok(out)
 }
 
-/// An extended private key that is erased (best effort) on drop.
 pub(crate) struct XprivGuard(Xpriv);
 
 impl XprivGuard {
@@ -69,7 +64,6 @@ pub(crate) fn normal(index: u32) -> Result<ChildNumber> {
     ChildNumber::from_normal_idx(index).map_err(|_| Error::input("derivation index must be < 2^31"))
 }
 
-/// Renders a path as `m/84'/0'/0'`.
 pub(crate) fn path_string(path: &[ChildNumber]) -> String {
     let mut s = String::from("m");
     for c in path {

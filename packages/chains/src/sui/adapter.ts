@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Sui adapter (SUI). Thin on purpose: reads, transfer building (gas coins, reference gas price,
-// budget from a simulation, BCS encoded by wallet-core), signature and execution are Rust
-// commands (`sui_*`, docs/IPC.md §2.11). This adapter only validates input and checks that what
-// Rust built is what was asked (recipient, amount or « tout le solde », sender, coin type).
+// Sui adapter (SUI). Thin on purpose: reads, transfer building (gas coins, reference gas price, budget from a simulation, BCS encoded by wallet-core), signature and execution are Rust commands (`sui_*`, docs/IPC.md §2.11).
 
 import { call, l10n, type SuiBalance, type SuiBuilt, type SuiContext, type SuiHistoryEntry, type SuiTokenBalance, type SuiTxStatus, type SuiTxSummary, type SuiWarning } from '@kyro/shared';
 import { SUI_COINS, type SuiChain } from '../registry';
@@ -42,10 +38,7 @@ export function rustSuiBackend(account = 0): SuiBackend {
   };
 }
 
-/**
- * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature
- * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
- */
+/** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature on the device (`hw_*` commands). */
 export function rustSuiHwBackend(accountId: string): SuiBackend {
   // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
   const { buildToken: _buildTokenVaultOnly, ...base } = rustSuiBackend();

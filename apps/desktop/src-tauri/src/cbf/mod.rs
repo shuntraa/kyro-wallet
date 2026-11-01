@@ -1,13 +1,8 @@
 //! Compact block filters backend (BIP157/158) via `bip157` — cargo feature `cbf`.
 //!
-//! Kyro downloads block filters from P2P peers, matches them locally against our scripts
-//! (no server learns our addresses), and fetches only the matching blocks.
-//!
-//! Network rule (fail closed): with Tor enabled, bip157 is ALWAYS given our loopback SOCKS
-//! bridge (see `socks.rs`) and connects to nothing else; peers come only from our own list
-//! (no DNS seeds, no addr gossip: `whitelist_only`), onion peers first, IPv4 through Tor exits
-//! as a fallback. With Tor disabled (explicit user choice), IPv4/IPv6 peers are reached
-//! directly and onion peers are skipped.
+//! Network rule (fail closed): with Tor enabled, bip157 is ALWAYS given our loopback SOCKS bridge
+//! (see `socks.rs`) and connects to nothing else; peers come only from our own list (no DNS seeds,
+//! no addr gossip: `whitelist_only`), onion peers first, IPv4 through Tor exits as a fallback.
 
 mod scan;
 mod socks;
@@ -35,8 +30,8 @@ use crate::error::{AppError, AppResult};
 use crate::servers::{parse_peer, Peer, PeerHost};
 use crate::tor::TorManager;
 
-/// Filter-serving peers verified over Tor on 2026-10-30 (NODE_COMPACT_FILTERS advertised),
-/// from Bitcoin Core's `contrib/seeds/nodes_testnet4.txt`. Users can add more.
+/// Filter-serving peers verified over Tor on 2026-10-30 (NODE_COMPACT_FILTERS advertised), from
+/// Bitcoin Core's `contrib/seeds/nodes_testnet4.txt`.
 pub const TESTNET4_PEERS: &[&str] = &[
     "a6yijgwn4vtmmhl7uybtbuyvtl7mtj7arld5f4csqsx4syeii4gt3vqd.onion:48333",
     "fsijrllgzgeg4pa5ebq4qy3swmplxkzvuvji5swt36quy42dznq3t3ad.onion:48333",
@@ -70,16 +65,11 @@ pub const MAINNET_PEERS: &[&str] = &[
     "37.189.10.185:8333",
 ];
 
-/// Recent headers kept on disk to resume header sync without starting from genesis
-/// (one difficulty period plus margin).
 const HEADER_SNAPSHOT: u32 = 2_200;
-/// No progress for this long → the sync fails (and the bridge closes).
 const STALL: Duration = Duration::from_secs(300);
 const BROADCAST_WAIT: Duration = Duration::from_secs(120);
 const FEE_BLOCKS: u32 = 3;
 const MAX_RESCANS: usize = 4;
-
-// ---------------------------------------------------------------- peers & plan
 
 /// Default peer list for the network, plus user additions (user peers first).
 pub fn peer_list(net: Network, user: &[String]) -> AppResult<Vec<Peer>> {
@@ -149,8 +139,6 @@ fn btc_network(net: Network) -> bitcoin::Network {
         Network::Testnet => bitcoin::Network::Testnet4,
     }
 }
-
-// ---------------------------------------------------------------- store
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -238,8 +226,6 @@ impl Store {
     }
 }
 
-// ---------------------------------------------------------------- status
-
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CbfStatus {
@@ -305,8 +291,6 @@ fn now_unix() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-// ---------------------------------------------------------------- node
-
 pub struct Params {
     pub network: Network,
     pub tor: bool,
@@ -332,7 +316,6 @@ async fn start_node(
     let peers = match &plan {
         Plan::Tor(v) | Plan::Clear(v) => v.clone(),
     };
-    // bip157 pops its whitelist from the end: reverse so the preferred peers come first.
     let mut builder = Builder::new(btc_network(p.network))
         .whitelist_only()
         .add_peers(peers.iter().rev().map(trusted))
@@ -391,7 +374,6 @@ pub async fn sync(
     let path = store_path(&p.data_dir, p.network);
     let mut store = Store::load(&path);
     if store.birth_height != p.birth_height {
-        // Birthday changed: rescan everything from the new birthday.
         store.birth_height = p.birth_height;
         store.scanned_to = None;
     }
@@ -582,7 +564,6 @@ async fn drive(
                     other => other.to_string(),
                 });
             }
-            // A channel closed: the node stopped (e.g. no reachable peer).
             _ => {
                 return Err(AppError::ServerUnreachable(
                     "compact filters: no reachable peer".into(),
@@ -596,7 +577,6 @@ async fn drive(
     }
 }
 
-/// After a successful scan: recent headers for a fast restart, and fee rates.
 async fn finish(running: &Running, store: &mut Store) {
     let r = &running.client.requester;
     let Ok(tip) = r.chain_tip().await else { return };
@@ -663,8 +643,6 @@ pub async fn broadcast(tor_mgr: Arc<TorManager>, p: Params, hex_tx: &str) -> App
     Ok(txid)
 }
 
-// ---------------------------------------------------------------- reads (Esplora shapes)
-
 pub fn ledger(data_dir: &Path, net: Network) -> AppResult<(Store, Ledger)> {
     let store = Store::load(&store_path(data_dir, net));
     let ledger = Ledger::new(&store.txs, net)?;
@@ -683,8 +661,8 @@ pub fn address_txs(data_dir: &Path, net: Network, address: &str) -> AppResult<Va
     ledger(data_dir, net)?.1.address_txs(address, net, 50)
 }
 
-/// Raw transaction from the local store (transactions of the matched blocks that touch our
-/// scripts, and our own broadcasts). Anything else is unknown to the compact-filter backend.
+/// Raw transaction from the local store (transactions of the matched blocks that touch our scripts,
+/// and our own broadcasts).
 pub fn tx_hex(data_dir: &Path, net: Network, txid: &str) -> AppResult<String> {
     let store = Store::load(&store_path(data_dir, net));
     let t = txid.trim().to_ascii_lowercase();
@@ -704,8 +682,8 @@ pub fn tip_height(data_dir: &Path, net: Network) -> AppResult<u64> {
         .ok_or_else(|| AppError::ServerUnreachable("compact filters: not synced yet".into()))
 }
 
-/// No mempool with compact filters: rates are the average fee paid (fees / weight) in the
-/// last blocks, with the peers' minimum relay rate as the floor. The UI keeps a manual fee.
+/// No mempool with compact filters: rates are the average fee paid (fees / weight) in the last
+/// blocks, with the peers' minimum relay rate as the floor.
 pub fn fee_rates(data_dir: &Path, net: Network) -> AppResult<Value> {
     let s = Store::load(&store_path(data_dir, net));
     if s.block_fee_rates.is_empty() {
@@ -744,7 +722,6 @@ mod tests {
             time: None,
         };
         store.txs.insert(txid.into(), stored(raw));
-        // A corrupted store entry (key ≠ hash of the stored transaction).
         store.txs.insert(wrong.clone(), stored(raw));
         store.save(&store_path(&dir, Network::Testnet)).unwrap();
         assert_eq!(tx_hex(&dir, Network::Testnet, txid).unwrap(), raw);
@@ -763,7 +740,6 @@ mod tests {
                 .iter()
                 .any(|p| matches!(p.host, PeerHost::Onion { .. })));
         }
-        // User peers first, duplicates removed, hostnames refused.
         let user = vec![
             "203.132.94.196:48333".to_string(),
             "1.2.3.4:48333".to_string(),
@@ -836,10 +812,7 @@ mod tests {
         assert!(fee_rates(&dir, Network::Mainnet).is_err());
     }
 
-    /// Real sync over Tor on testnet4. Run with
-    /// `cargo test -p kyro-desktop --features cbf -- --ignored --nocapture cbf_live`.
-    /// Watches the two B2b addresses from a birthday just before their first transaction
-    /// (`KYRO_CBF_BIRTH`, default 0) and compares with mempool's onion Esplora.
+    /// Real sync over Tor on testnet4.
     #[test]
     #[ignore]
     fn cbf_live_testnet4_over_tor() {

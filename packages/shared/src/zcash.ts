@@ -1,12 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Zcash transparent address encoding for the interface (display, validation, demo mode). Rust
-// (wallet-core `zcash.rs`) stays the authority: it re-parses every destination before building,
-// and refuses shielded and unified addresses itself.
-//
-// Base58check with Zcash's two-byte prefixes (protocol spec §5.6.1.1): P2PKH `t1…` 0x1cb8 /
-// testnet `tm…` 0x1d25, P2SH `t3…` 0x1cbd / testnet `t2…` 0x1cba. TEX (ZIP 320): bech32m,
-// HRP `tex` / `textest`, 20-byte key hash. Hashes from @noble/hashes, encodings from @scure/base.
+// Zcash transparent address encoding for the interface (display, validation, demo mode).
 
 import { bech32m, createBase58check } from '@scure/base';
 import { ripemd160 } from '@noble/hashes/legacy';
@@ -35,10 +28,7 @@ export function zecP2pkhScriptHex(pubkey: Uint8Array): string {
   return `76a914${Array.from(hash, (b) => b.toString(16).padStart(2, '0')).join('')}88ac`;
 }
 
-/**
- * Why Kyro will not pay this address, for an address that looks shielded or unified (Sapling
- * `zs…`, Sprout `zc…`, unified `u1…`); `null` otherwise.
- */
+/** Why Kyro will not pay this address, for an address that looks shielded or unified (Sapling `zs…`, Sprout `zc…`, unified `u1…`); `null` otherwise. */
 export function zecShieldedRefusal(address: string): string | null {
   const a = address.trim().toLowerCase();
   if (/^(zs1|ztestsapling1|zregtestsapling1)/.test(a)) return l10n('Adresse protégée Sapling (zs…) : pas encore prise en charge. Kyro n’envoie qu’à des adresses transparentes (t1…, t3…, tex1…).', 'Sapling shielded address (zs…): not supported yet. Kyro only sends to transparent addresses (t1…, t3…, tex1…).');

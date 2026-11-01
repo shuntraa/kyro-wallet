@@ -1,6 +1,6 @@
-//! IPC commands for user-chosen servers (B2b): settings with live validation, connection
-//! test, Electrum certificate fetch (TOFU), Bitcoin data in Esplora shapes from any backend,
-//! and the Bitcoin Core watch-only wallet. Contract: docs/IPC.md.
+//! IPC commands for user-chosen servers (B2b): settings with live validation, connection test,
+//! Electrum certificate fetch (TOFU), Bitcoin data in Esplora shapes from any backend, and the
+//! Bitcoin Core watch-only wallet.
 
 use std::time::Instant;
 
@@ -30,7 +30,6 @@ fn network_of(key: &str) -> AppResult<Network> {
     }
 }
 
-/// Network key of `servers.{litecoin,dogecoin,bitcoincash,dash}` (and TRON / XRP / Cardano).
 fn utxo_network_of(key: &str) -> AppResult<Network> {
     match key {
         "mainnet" => Ok(Network::Mainnet),
@@ -46,7 +45,6 @@ fn fingerprint(state: &AppState) -> AppResult<String> {
     state.with_seed(|seed| Ok(wallet_core::btc_account(seed, net, BtcKind::Segwit, 0)?.fingerprint))
 }
 
-/// Backend context for the app's network; the fingerprint is only read for Bitcoin Core.
 fn ctx<'a>(state: &'a AppState, settings: &Settings) -> AppResult<Ctx<'a>> {
     let server = settings.servers.bitcoin_for(state.network);
     let fingerprint = match server {
@@ -61,8 +59,6 @@ fn ctx<'a>(state: &'a AppState, settings: &Settings) -> AppResult<Ctx<'a>> {
         fingerprint,
     })
 }
-
-// ---------------------------------------------------------------- probes
 
 async fn json_rpc(
     net: &NetClient,
@@ -147,7 +143,6 @@ async fn probe_btc(
     btc_backend::probe(&ctx).await
 }
 
-/// Probes every server entry of `new` that differs from `old`.
 async fn probe_changes(
     net: &std::sync::Arc<NetClient>,
     new: &Servers,
@@ -210,9 +205,6 @@ async fn probe_changes(
     Ok(())
 }
 
-// ---------------------------------------------------------------- cookie gate
-
-/// `.cookie` paths of the Bitcoin Core entries of `s`.
 fn cookie_paths(s: &Servers) -> Vec<&str> {
     [&s.bitcoin.mainnet, &s.bitcoin.testnet4]
         .into_iter()
@@ -227,9 +219,6 @@ fn cookie_paths(s: &Servers) -> Vec<&str> {
         .collect()
 }
 
-/// A cookie path is accepted only if it is already saved, or was just chosen by the user in
-/// the native file picker (`btc_core_pick_cookie`): the interface cannot point Kyro at any
-/// other file.
 pub(crate) fn check_cookie_paths(
     new: &Servers,
     saved: &Servers,
@@ -249,8 +238,7 @@ pub(crate) fn check_cookie_paths(
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PickedCookie {
-    /// Path of the file the user chose (theirs to see; it is a `.cookie` that passed the
-    /// checks). `null` when the picker was cancelled.
+    /// Path of the file the user chose (theirs to see; it is a `.cookie` that passed the checks).
     pub path: Option<String>,
 }
 
@@ -286,18 +274,13 @@ pub async fn btc_core_pick_cookie(
     Ok(PickedCookie { path: Some(path) })
 }
 
-// ---------------------------------------------------------------- settings
-
 #[tauri::command]
 pub fn settings_get(state: State<'_, AppState>) -> Value {
     state.settings().for_ui()
 }
 
-/// Validates (syntax, then a live check of every changed server: network/chain must match),
-/// saves, and starts/stops Tor. Every new custom server host and Tor going off are confirmed
-/// in a native dialog first (`USER_REJECTED` if refused). Errors: `SERVER_INVALID`,
-/// `SERVER_WRONG_NETWORK`, `SERVER_UNREACHABLE`, `TOR_UNAVAILABLE`, `INVALID_INPUT`,
-/// `USER_REJECTED`.
+/// Validates (syntax, then a live check of every changed server: network/chain must match), saves,
+/// and starts/stops Tor.
 #[tauri::command]
 pub async fn settings_set(
     app: tauri::AppHandle,
@@ -330,8 +313,6 @@ pub async fn settings_set(
     }
     Ok(saved.for_ui())
 }
-
-// ---------------------------------------------------------------- connection test
 
 #[derive(Debug, Deserialize)]
 #[serde(
@@ -401,7 +382,6 @@ pub struct ServerTestResult {
     pub detected: Detected,
 }
 
-/// Servers of a test target, in a `Servers` value (for validation and native approval).
 fn probe_servers(target: &ServerTestTarget) -> AppResult<Servers> {
     let mut probe = Servers::default();
     match target {
@@ -460,9 +440,8 @@ fn probe_servers(target: &ServerTestTarget) -> AppResult<Servers> {
     Ok(probe)
 }
 
-/// Tests a server WITHOUT saving it (same checks as `settings_set`, including the native
-/// approval of a new host, BEFORE any request). For a Core `userpass` entry sent without
-/// `password`, the stored password of that slot is used.
+/// Tests a server WITHOUT saving it (same checks as `settings_set`, including the native approval
+/// of a new host, BEFORE any request).
 #[tauri::command]
 pub async fn server_test(
     app: tauri::AppHandle,
@@ -584,8 +563,6 @@ async fn probe_utxo(
 }
 
 /// Fetches an Electrum server's TLS certificate fingerprint for the trust-on-first-use prompt.
-/// The handshake is aborted right after the certificate is seen: nothing else is sent. A host
-/// not saved nor approved yet is confirmed natively first (its name alone would leave).
 #[tauri::command]
 pub async fn electrum_fetch_cert(
     app: tauri::AppHandle,
@@ -609,8 +586,6 @@ pub async fn electrum_fetch_cert(
     confirm_endpoints(&app, &[endpoint], &state.settings().servers).await?;
     crate::electrum::fetch_certificate(&state.net, &host, port, tor).await
 }
-
-// ---------------------------------------------------------------- Bitcoin data (Esplora shapes)
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -735,8 +710,6 @@ pub async fn btc_broadcast(state: State<'_, AppState>, hex: String) -> AppResult
     btc_backend::broadcast(&ctx(&state, &s)?, &hex).await
 }
 
-// ---------------------------------------------------------------- Bitcoin Core wallet
-
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum RescanFrom {
@@ -756,11 +729,8 @@ fn core_settings(state: &AppState) -> AppResult<(String, crate::servers::CoreAut
     }
 }
 
-/// Creates the watch-only wallet `kyro-watch-<fingerprint>` and imports the BIP84/BIP86
-/// descriptors (public keys only). The pre-flight (node reachable, auth, chain, wallet
-/// created/loaded, checksums) runs synchronously, so its errors come back from this call;
-/// only `importdescriptors` and its rescan run in the background (poll `btc_core_status`).
-/// Without a Core node configured: `INVALID_INPUT`.
+/// Creates the watch-only wallet `kyro-watch-<fingerprint>` and imports the BIP84/BIP86 descriptors
+/// (public keys only).
 #[tauri::command]
 pub async fn btc_core_setup(
     app: tauri::AppHandle,
@@ -779,7 +749,6 @@ pub async fn btc_core_setup(
     };
     let net = state.network;
     let fp = fingerprint(&state)?;
-    // Every Bitcoin account of the user's list (an account added later needs a new setup).
     let accounts = state
         .settings()
         .accounts
@@ -807,8 +776,7 @@ pub async fn btc_core_setup(
     })
 }
 
-/// Status of the configured node's watch-only wallet; `state: "not-configured"` when no
-/// Bitcoin Core node is set for the app's network.
+/// Status of the configured node's watch-only wallet.
 #[tauri::command]
 pub async fn btc_core_status(state: State<'_, AppState>) -> AppResult<btc_backend::CoreStatus> {
     let Ok((url, auth, tor)) = core_settings(&state) else {
@@ -817,8 +785,6 @@ pub async fn btc_core_status(state: State<'_, AppState>) -> AppResult<btc_backen
     let fp = fingerprint(&state)?;
     btc_backend::core_status(&state.net, state.network, &url, &auth, tor, &fp).await
 }
-
-// ---------------------------------------------------------------- compact block filters (feature `cbf`)
 
 #[cfg(not(feature = "cbf"))]
 fn cbf_disabled() -> AppError {
@@ -833,8 +799,7 @@ mod cbf_glue {
     use std::sync::Arc;
     use tauri::Emitter;
 
-    /// Starts a background sync (no-op if one is running). Needs the unlocked session to read
-    /// the account xpubs (public keys only).
+    /// Starts a background sync (no-op if one is running).
     pub fn start_sync(app: &tauri::AppHandle, state: &AppState) -> AppResult<()> {
         let s = state.settings();
         let BtcServer::Cbf {
@@ -914,7 +879,6 @@ fn now_unix() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-/// Answers a Bitcoin read for the CBF backend from the local store (`None` = not CBF).
 #[allow(unused_variables)]
 fn cbf_read(
     app: &tauri::AppHandle,
@@ -987,8 +951,7 @@ pub fn btc_cbf_sync(app: tauri::AppHandle, state: State<'_, AppState>) -> AppRes
     }
 }
 
-/// Real-network probes over Tor (EVM chainId, Solana genesis, Esplora genesis). Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture probes_live`.
+/// Real-network probes over Tor (EVM chainId, Solana genesis, Esplora genesis).
 #[cfg(test)]
 mod live {
     use super::*;
@@ -1060,7 +1023,6 @@ mod live {
             )
             .await;
             assert!(matches!(e, Err(AppError::ServerWrongNetwork(_))), "{e:?}");
-            // Unreachable custom server: typed error, no fallback.
             let e = probe_evm(&net, 1, &rpc("https://kyro-does-not-exist.invalid"), true).await;
             assert!(matches!(e, Err(AppError::ServerUnreachable(_))), "{e:?}");
         });

@@ -129,7 +129,6 @@ describe('Tor store: failure flow (never a silent fallback)', () => {
     expect((await call('settings_get')).tor.enabled).toBe(true);
     expect(sent).not.toContain('settings_set');
 
-    // The status bar can reopen it.
     s.openFailure();
     expect(s.getSnapshot().dialog).toBe('failure');
   });
@@ -142,7 +141,6 @@ describe('Tor store: failure flow (never a silent fallback)', () => {
     expect(results.every((r) => r.status === 'rejected')).toBe(true);
     expect(s.getSnapshot().dialog).toBe('failure');
     expect(s.getSnapshot().episode?.reason).toMatch(/pas prêt/);
-    // One dialog for the burst, and nothing was retried or switched to clear.
     expect(sent.filter((c) => c === 'net_fetch')).toHaveLength(3);
     expect(sent).not.toContain('settings_set');
   });
@@ -212,7 +210,6 @@ describe('Tor store: settings switch', () => {
     const s = await startStore();
     const save = vi.fn(async () => undefined);
 
-    // confirmDisable without the confirmation dialog is a no-op.
     await s.confirmDisable(save);
     expect(save).not.toHaveBeenCalled();
 
