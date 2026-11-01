@@ -58,10 +58,28 @@ pub const ALLOWED_HOSTS: &[&str] = &[
 /// https://github.com/KomodoPlatform/coins/blob/master/electrums/DOGE (operator « cipig »),
 /// TLS port 20060, Let's Encrypt certificate (`*.cipig.net`, checked 2026-10-31): validated
 /// normally. `doge.electrum3.cipig.net`, also listed, refused connections on 2026-10-31.
+///
+/// Bitcoin Cash mainnet: public Fulcrum servers of three operators, listed in Electron Cash's
+/// `electroncash/servers.json` and Komodo's `electrums/BCH`; chipnet (Kyro's Bitcoin Cash
+/// testnet): Electron Cash's `servers_chipnet.json`. TLS port 50002 (in Tor's reduced exit
+/// policy), Let's Encrypt certificates validated normally, genesis **and** the post-split
+/// checkpoint checked live on 2026-11-01 (`wallet_core::utxo_checkpoint`).
+///
+/// Dash mainnet: Komodo's public ElectrumX servers (`electrums/DASH`, operator « cipig »), TLS
+/// port 20061, Let's Encrypt, genesis checked 2026-11-01; `dash.electrum3.cipig.net` refused
+/// connections that day. No public Dash **testnet** server was found.
+///
 /// See docs/NETWORK.md.
 pub const ELECTRUM_HOSTS: &[(&str, u16, Family)] = &[
     ("doge.electrum1.cipig.net", 20060, Family::Dogecoin),
     ("doge.electrum2.cipig.net", 20060, Family::Dogecoin),
+    ("bch.imaginary.cash", 50002, Family::BitcoinCash),
+    ("bch.loping.net", 50002, Family::BitcoinCash),
+    ("cashnode.bch.ninja", 50002, Family::BitcoinCash),
+    ("chipnet.imaginary.cash", 50002, Family::BitcoinCash),
+    ("chipnet.bch.ninja", 50002, Family::BitcoinCash),
+    ("dash.electrum1.cipig.net", 20061, Family::Dash),
+    ("dash.electrum2.cipig.net", 20061, Family::Dash),
 ];
 
 /// Whether `host:port` is an allowlisted default Electrum server of `family`.
@@ -291,6 +309,8 @@ pub enum Family {
     Bitcoin,
     Litecoin,
     Dogecoin,
+    BitcoinCash,
+    Dash,
     Tron,
     Xrp,
     Cardano,
@@ -1088,6 +1108,40 @@ mod tests {
             "doge.electrum2.cipig.net",
             10060,
             Family::Dogecoin
+        ));
+        // Bitcoin Cash and Dash defaults: their own families, TLS ports only.
+        assert_eq!(family_for("bch.loping.net", &c), Family::BitcoinCash);
+        assert_eq!(family_for("chipnet.bch.ninja", &c), Family::BitcoinCash);
+        assert_eq!(family_for("dash.electrum1.cipig.net", &c), Family::Dash);
+        assert!(electrum_default_allowed(
+            "bch.imaginary.cash",
+            50002,
+            Family::BitcoinCash
+        ));
+        assert!(!electrum_default_allowed(
+            "bch.imaginary.cash",
+            50001,
+            Family::BitcoinCash
+        ));
+        assert!(!electrum_default_allowed(
+            "bch.imaginary.cash",
+            50002,
+            Family::Bitcoin
+        ));
+        assert!(electrum_default_allowed(
+            "dash.electrum2.cipig.net",
+            20061,
+            Family::Dash
+        ));
+        assert!(!electrum_default_allowed(
+            "dash.electrum2.cipig.net",
+            10061,
+            Family::Dash
+        ));
+        assert!(!electrum_default_allowed(
+            "dash.electrum3.cipig.net",
+            20061,
+            Family::Dash
         ));
         for (h, _, f) in ELECTRUM_HOSTS {
             assert_eq!(family_for(h, &NetContext::default()), *f, "{h}");

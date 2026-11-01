@@ -141,9 +141,10 @@ pub struct BtcServers {
     pub testnet4: Option<BtcServer>,
 }
 
-/// Server of a Litecoin or Dogecoin network: Kyro's default (litecoinspace.org for Litecoin;
-/// Komodo's public ElectrumX servers for Dogecoin mainnet, none for Dogecoin testnet — see
-/// `utxo_backend`) or the user's Esplora-compatible REST API.
+/// Server of a Litecoin / Dogecoin / Bitcoin Cash / Dash network: Kyro's default
+/// (litecoinspace.org for Litecoin; public Electrum servers for Dogecoin mainnet, Bitcoin Cash
+/// mainnet and chipnet, Dash mainnet; none for Dogecoin and Dash testnets — see `utxo_backend`)
+/// or the user's Esplora-compatible REST API.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(
     tag = "kind",
@@ -170,7 +171,8 @@ impl UtxoServer {
     }
 }
 
-/// Key `testnet` = Litecoin testnet4 / Dogecoin testnet (the chain checked by its genesis).
+/// Key `testnet` = Litecoin testnet4 / Dogecoin testnet / Bitcoin Cash chipnet / Dash testnet
+/// (the chain checked by its genesis, and Bitcoin Cash by a post-split checkpoint).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct UtxoServers {
@@ -201,13 +203,31 @@ pub fn utxo_default_base(coin: UtxoCoin, net: Network) -> Option<&'static str> {
     match (coin, net) {
         (UtxoCoin::Litecoin, Network::Mainnet) => Some("https://litecoinspace.org/api"),
         (UtxoCoin::Litecoin, Network::Testnet) => Some("https://litecoinspace.org/testnet/api"),
-        (UtxoCoin::Dogecoin, _) => None,
+        (UtxoCoin::Dogecoin | UtxoCoin::BitcoinCash | UtxoCoin::Dash, _) => None,
     }
 }
 
+/// Bitcoin Cash mainnet defaults (allowlisted in `net::ELECTRUM_HOSTS`), three operators.
+const BCH_MAINNET_ELECTRUM: &[(&str, u16)] = &[
+    ("bch.imaginary.cash", 50002),
+    ("bch.loping.net", 50002),
+    ("cashnode.bch.ninja", 50002),
+];
+/// Bitcoin Cash chipnet defaults.
+const BCH_CHIPNET_ELECTRUM: &[(&str, u16)] = &[
+    ("chipnet.imaginary.cash", 50002),
+    ("chipnet.bch.ninja", 50002),
+];
+/// Dash mainnet defaults.
+const DASH_MAINNET_ELECTRUM: &[(&str, u16)] = &[
+    ("dash.electrum1.cipig.net", 20061),
+    ("dash.electrum2.cipig.net", 20061),
+];
+
 /// Default Electrum servers of a UTXO chain, in the order they are tried (allowlist:
-/// `net::ELECTRUM_HOSTS`). Dogecoin mainnet: Komodo's public ElectrumX servers (no free public
-/// Dogecoin **testnet** server was found, 2026-10-31: the user configures one).
+/// `net::ELECTRUM_HOSTS`). Dogecoin and Dash mainnet: Komodo's public ElectrumX servers;
+/// Bitcoin Cash mainnet and chipnet: public Fulcrum servers. No free public Dogecoin or Dash
+/// **testnet** server was found (2026-10-31 / 2026-11-01): the user configures one.
 pub fn utxo_default_electrum(coin: UtxoCoin, net: Network) -> Vec<(&'static str, u16)> {
     match (coin, net) {
         (UtxoCoin::Dogecoin, Network::Mainnet) => crate::net::ELECTRUM_HOSTS
@@ -215,6 +235,9 @@ pub fn utxo_default_electrum(coin: UtxoCoin, net: Network) -> Vec<(&'static str,
             .filter(|(_, _, f)| *f == Family::Dogecoin)
             .map(|(h, p, _)| (*h, *p))
             .collect(),
+        (UtxoCoin::BitcoinCash, Network::Mainnet) => BCH_MAINNET_ELECTRUM.to_vec(),
+        (UtxoCoin::BitcoinCash, Network::Testnet) => BCH_CHIPNET_ELECTRUM.to_vec(),
+        (UtxoCoin::Dash, Network::Mainnet) => DASH_MAINNET_ELECTRUM.to_vec(),
         _ => Vec::new(),
     }
 }
@@ -229,6 +252,14 @@ pub fn utxo_default_hosts(coin: UtxoCoin) -> &'static [&'static str] {
     match coin {
         UtxoCoin::Litecoin => &["litecoinspace.org"],
         UtxoCoin::Dogecoin => &["doge.electrum1.cipig.net", "doge.electrum2.cipig.net"],
+        UtxoCoin::BitcoinCash => &[
+            "bch.imaginary.cash",
+            "bch.loping.net",
+            "cashnode.bch.ninja",
+            "chipnet.imaginary.cash",
+            "chipnet.bch.ninja",
+        ],
+        UtxoCoin::Dash => &["dash.electrum1.cipig.net", "dash.electrum2.cipig.net"],
     }
 }
 
@@ -243,6 +274,8 @@ pub fn utxo_family(coin: UtxoCoin) -> Family {
     match coin {
         UtxoCoin::Litecoin => Family::Litecoin,
         UtxoCoin::Dogecoin => Family::Dogecoin,
+        UtxoCoin::BitcoinCash => Family::BitcoinCash,
+        UtxoCoin::Dash => Family::Dash,
     }
 }
 
@@ -468,6 +501,12 @@ pub struct Servers {
     /// Dogecoin: the user's Esplora (electrs-dogecoin), or the default (mainnet: public
     /// ElectrumX servers; testnet: none).
     pub dogecoin: UtxoServers,
+    /// Bitcoin Cash: the user's Esplora-compatible API, or the default (public Fulcrum
+    /// servers, mainnet and chipnet). Key `testnet` = chipnet.
+    pub bitcoincash: UtxoServers,
+    /// Dash: the user's Esplora-compatible API, or the default (mainnet: public ElectrumX
+    /// servers; testnet: none).
+    pub dash: UtxoServers,
     /// TRON: java-tron HTTP API (default TronGrid). Key `testnet` = Nile.
     pub tron: TronServers,
     /// XRP Ledger: rippled JSON-RPC. Key `testnet` = XRPL Testnet.
@@ -508,6 +547,8 @@ impl Servers {
         match coin {
             UtxoCoin::Litecoin => &self.litecoin,
             UtxoCoin::Dogecoin => &self.dogecoin,
+            UtxoCoin::BitcoinCash => &self.bitcoincash,
+            UtxoCoin::Dash => &self.dash,
         }
     }
 
@@ -515,10 +556,13 @@ impl Servers {
         match coin {
             UtxoCoin::Litecoin => &mut self.litecoin,
             UtxoCoin::Dogecoin => &mut self.dogecoin,
+            UtxoCoin::BitcoinCash => &mut self.bitcoincash,
+            UtxoCoin::Dash => &mut self.dash,
         }
     }
 
-    /// Litecoin / Dogecoin server for the app's network (`Default` when unset).
+    /// Litecoin / Dogecoin / Bitcoin Cash / Dash server for the app's network (`Default` when
+    /// unset).
     pub fn utxo_for(&self, coin: UtxoCoin, net: Network) -> UtxoServer {
         self.utxo(coin).for_network(net)
     }
@@ -560,7 +604,7 @@ impl Servers {
         if !self.bitcoin_for(net).is_default() {
             out.extend(["mempool.space", MEMPOOL_ONION]);
         }
-        for coin in [UtxoCoin::Litecoin, UtxoCoin::Dogecoin] {
+        for coin in UtxoCoin::ALL {
             if !self.utxo_for(coin, net).is_default() {
                 out.extend(utxo_default_hosts(coin));
             }
@@ -606,7 +650,7 @@ impl Servers {
                 validate_btc(s, tor).map_err(|e| prefix(e, &format!("bitcoin {key}")))?;
             }
         }
-        for coin in [UtxoCoin::Litecoin, UtxoCoin::Dogecoin] {
+        for coin in UtxoCoin::ALL {
             for (key, s) in self.utxo(coin).entries() {
                 if let Some(UtxoServer::Esplora { url }) = s {
                     let what = format!("{} {key}", coin.name().to_lowercase());
@@ -1592,6 +1636,64 @@ mod tests {
             utxo_default_base(UtxoCoin::Litecoin, Network::Testnet),
             Some("https://litecoinspace.org/testnet/api")
         );
+    }
+
+    #[test]
+    fn bitcoin_cash_and_dash_servers() {
+        use crate::net::{electrum_default_allowed, ELECTRUM_HOSTS};
+        // Defaults: Electrum on both Bitcoin Cash networks and on Dash mainnet; Dash testnet
+        // has none (the user configures one). Every default is allowlisted for its family and
+        // listed among the hosts refused once replaced.
+        for (coin, net, n) in [
+            (UtxoCoin::BitcoinCash, Network::Mainnet, 3),
+            (UtxoCoin::BitcoinCash, Network::Testnet, 2),
+            (UtxoCoin::Dash, Network::Mainnet, 2),
+            (UtxoCoin::Dash, Network::Testnet, 0),
+        ] {
+            let d = utxo_default_electrum(coin, net);
+            assert_eq!(d.len(), n, "{coin:?} {net:?}");
+            assert_eq!(utxo_has_default(coin, net), n > 0);
+            assert!(utxo_default_base(coin, net).is_none());
+            for (h, p) in d {
+                assert!(electrum_default_allowed(h, p, utxo_family(coin)), "{h}");
+                assert!(utxo_default_hosts(coin).contains(&h), "{h}");
+            }
+        }
+        // Every allowlisted Electrum host of these families is a default of its chain.
+        for (h, p, f) in ELECTRUM_HOSTS {
+            for coin in [UtxoCoin::BitcoinCash, UtxoCoin::Dash] {
+                if *f == utxo_family(coin) {
+                    assert!(
+                        [Network::Mainnet, Network::Testnet]
+                            .iter()
+                            .any(|n| utxo_default_electrum(coin, *n).contains(&(*h, *p))),
+                        "{h}"
+                    );
+                }
+            }
+        }
+        let mut s = Servers::default();
+        s.bitcoincash.testnet = Some(UtxoServer::Esplora {
+            url: "https://bch.my-node.example/api".into(),
+        });
+        s.dash.mainnet = Some(UtxoServer::Esplora {
+            url: "http://dash.example/api".into(),
+        });
+        assert!(
+            matches!(s.validate(true), Err(AppError::ServerInvalid(ref m)) if m.starts_with("dash mainnet"))
+        );
+        s.dash.mainnet = None;
+        assert!(s.validate(true).is_ok());
+        let off = s.disabled_defaults(Network::Testnet);
+        assert!(off.contains(&"chipnet.bch.ninja") && off.contains(&"bch.loping.net"));
+        assert!(!s
+            .disabled_defaults(Network::Mainnet)
+            .contains(&"bch.loping.net"));
+        let v = serde_json::to_value(&s).unwrap();
+        assert_eq!(v["bitcoincash"]["testnet"]["kind"], "esplora");
+        assert_eq!(v["dash"], serde_json::json!({}));
+        let back: Servers = serde_json::from_value(serde_json::json!({ "bitcoin": {} })).unwrap();
+        assert_eq!(back.bitcoincash, UtxoServers::default());
     }
 
     #[test]

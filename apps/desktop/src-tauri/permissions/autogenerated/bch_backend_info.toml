@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-bch-backend-info"
+description = "Enables the bch_backend_info command without any pre-configured scope."
+commands.allow = ["bch_backend_info"]
+
+[[permission]]
+identifier = "deny-bch-backend-info"
+description = "Denies the bch_backend_info command without any pre-configured scope."
+commands.deny = ["bch_backend_info"]

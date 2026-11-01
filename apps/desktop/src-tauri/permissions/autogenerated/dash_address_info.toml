@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dash-address-info"
+description = "Enables the dash_address_info command without any pre-configured scope."
+commands.allow = ["dash_address_info"]
+
+[[permission]]
+identifier = "deny-dash-address-info"
+description = "Denies the dash_address_info command without any pre-configured scope."
+commands.deny = ["dash_address_info"]

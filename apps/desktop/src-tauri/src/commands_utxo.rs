@@ -1,4 +1,5 @@
-//! IPC commands for Litecoin (`ltc_*`) and Dogecoin (`doge_*`): addresses, Esplora-shaped data
+//! IPC commands for Litecoin (`ltc_*`), Dogecoin (`doge_*`), Bitcoin Cash (`bch_*`) and Dash
+//! (`dash_*`): addresses, Esplora-shaped data
 //! from the chain's server (default or the user's), broadcast with txid check, and PSBT signing
 //! behind the password + the native confirmation dialog with the summary decoded by Rust.
 //! Contract: docs/IPC.md §2.4.
@@ -18,6 +19,8 @@ use crate::utxo_backend::{self, UtxoCtx};
 
 const LTC: UtxoCoin = UtxoCoin::Litecoin;
 const DOGE: UtxoCoin = UtxoCoin::Dogecoin;
+const BCH: UtxoCoin = UtxoCoin::BitcoinCash;
+const DASH: UtxoCoin = UtxoCoin::Dash;
 
 fn ctx<'a>(state: &'a AppState, coin: UtxoCoin) -> UtxoCtx<'a> {
     let s = state.settings();
@@ -37,7 +40,8 @@ fn ctx<'a>(state: &'a AppState, coin: UtxoCoin) -> UtxoCtx<'a> {
 pub struct UtxoBackendInfo {
     /// `default` | `esplora` (the setting; the default of Dogecoin mainnet speaks Electrum)
     pub kind: &'static str,
-    /// `mainnet` | `testnet` (Litecoin testnet4 / Dogecoin testnet)
+    /// `mainnet` | `testnet` (Litecoin testnet4 / Dogecoin testnet / Bitcoin Cash chipnet /
+    /// Dash testnet)
     pub network: &'static str,
     /// Host of the server, `""` when there is none (Dogecoin without a configured server).
     pub label: String,
@@ -78,6 +82,8 @@ fn chain_of(coin: UtxoCoin) -> Chain {
     match coin {
         UtxoCoin::Litecoin => Chain::Ltc,
         UtxoCoin::Dogecoin => Chain::Doge,
+        UtxoCoin::BitcoinCash => Chain::Bch,
+        UtxoCoin::Dash => Chain::Dash,
     }
 }
 
@@ -89,7 +95,8 @@ fn net_suffix(coin: UtxoCoin, net: Network) -> &'static str {
     match (coin, net) {
         (_, Network::Mainnet) => "",
         (UtxoCoin::Litecoin, Network::Testnet) => " (testnet4)",
-        (UtxoCoin::Dogecoin, Network::Testnet) => " (testnet)",
+        (UtxoCoin::BitcoinCash, Network::Testnet) => " (chipnet)",
+        (UtxoCoin::Dogecoin | UtxoCoin::Dash, Network::Testnet) => " (testnet)",
     }
 }
 
@@ -128,10 +135,22 @@ pub(crate) fn describe_utxo(s: &UtxoTxSummary, net: Network) -> String {
             format_units(&s.fee_per_kb.to_string(), 8),
             s.size
         ),
+        UtxoCoin::BitcoinCash | UtxoCoin::Dash => format!(
+            "{} {}/octet · taille estimée {} octets",
+            format_units(&s.fee_per_kb.to_string(), 3),
+            if coin == UtxoCoin::Dash {
+                "duff"
+            } else {
+                "sat"
+            },
+            s.size
+        ),
     };
     let unit = match coin {
         UtxoCoin::Litecoin => "litoshis",
         UtxoCoin::Dogecoin => "koinus",
+        UtxoCoin::BitcoinCash => "satoshis",
+        UtxoCoin::Dash => "duffs",
     };
     out += &format!(
         "\nFrais : {} ({} {unit})\nTaux : {rate}",
@@ -219,6 +238,8 @@ async fn sign(
     let title = match coin {
         UtxoCoin::Litecoin => "Confirmer la transaction Litecoin",
         UtxoCoin::Dogecoin => "Confirmer la transaction Dogecoin",
+        UtxoCoin::BitcoinCash => "Confirmer la transaction Bitcoin Cash",
+        UtxoCoin::Dash => "Confirmer la transaction Dash",
     };
     confirm_native(app, title, signer.body(&describe_utxo(&summary, net))).await?;
     confirm_signer(app, &signer).await?;
@@ -370,7 +391,136 @@ pub async fn doge_sign_psbt(
     sign(&app, &state, DOGE, psbt, password, account).await
 }
 
-/// Probe used by `settings_set` / `server_test` (network checked by genesis hash).
+// ---------------------------------------------------------------- Bitcoin Cash
+
+#[tauri::command]
+pub fn bch_backend_info(state: State<'_, AppState>) -> UtxoBackendInfo {
+    backend_info(&state, BCH)
+}
+
+#[tauri::command]
+pub fn bch_address(
+    state: State<'_, AppState>,
+    change: bool,
+    index: u32,
+    account: Option<u32>,
+) -> AppResult<String> {
+    address(&state, BCH, change, index, account)
+}
+
+#[tauri::command]
+pub async fn bch_address_info(state: State<'_, AppState>, address: String) -> AppResult<Value> {
+    utxo_backend::address_info(&ctx(&state, BCH), &address).await
+}
+
+#[tauri::command]
+pub async fn bch_address_utxos(state: State<'_, AppState>, address: String) -> AppResult<Value> {
+    utxo_backend::address_utxos(&ctx(&state, BCH), &address).await
+}
+
+#[tauri::command]
+pub async fn bch_address_txs(state: State<'_, AppState>, address: String) -> AppResult<Value> {
+    utxo_backend::address_txs(&ctx(&state, BCH), &address).await
+}
+
+#[tauri::command]
+pub async fn bch_tx_hex(state: State<'_, AppState>, txid: String) -> AppResult<String> {
+    utxo_backend::tx_hex(&ctx(&state, BCH), &txid).await
+}
+
+#[tauri::command]
+pub async fn bch_fee_rates(state: State<'_, AppState>) -> AppResult<Value> {
+    utxo_backend::fee_rates(&ctx(&state, BCH)).await
+}
+
+#[tauri::command]
+pub async fn bch_tip_height(state: State<'_, AppState>) -> AppResult<u64> {
+    utxo_backend::tip_height(&ctx(&state, BCH)).await
+}
+
+#[tauri::command]
+pub async fn bch_broadcast(state: State<'_, AppState>, hex: String) -> AppResult<String> {
+    utxo_backend::broadcast(&ctx(&state, BCH), &hex).await
+}
+
+/// Bitcoin Cash: the returned PSBT is **already finalized** by wallet-core (a FORKID signature
+/// cannot be a PSBT partial signature); the adapter only extracts the transaction.
+#[tauri::command]
+pub async fn bch_sign_psbt(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    psbt: String,
+    password: String,
+    account: Option<u32>,
+) -> AppResult<UtxoSigned> {
+    sign(&app, &state, BCH, psbt, password, account).await
+}
+
+// ---------------------------------------------------------------- Dash
+
+#[tauri::command]
+pub fn dash_backend_info(state: State<'_, AppState>) -> UtxoBackendInfo {
+    backend_info(&state, DASH)
+}
+
+#[tauri::command]
+pub fn dash_address(
+    state: State<'_, AppState>,
+    change: bool,
+    index: u32,
+    account: Option<u32>,
+) -> AppResult<String> {
+    address(&state, DASH, change, index, account)
+}
+
+#[tauri::command]
+pub async fn dash_address_info(state: State<'_, AppState>, address: String) -> AppResult<Value> {
+    utxo_backend::address_info(&ctx(&state, DASH), &address).await
+}
+
+#[tauri::command]
+pub async fn dash_address_utxos(state: State<'_, AppState>, address: String) -> AppResult<Value> {
+    utxo_backend::address_utxos(&ctx(&state, DASH), &address).await
+}
+
+#[tauri::command]
+pub async fn dash_address_txs(state: State<'_, AppState>, address: String) -> AppResult<Value> {
+    utxo_backend::address_txs(&ctx(&state, DASH), &address).await
+}
+
+#[tauri::command]
+pub async fn dash_tx_hex(state: State<'_, AppState>, txid: String) -> AppResult<String> {
+    utxo_backend::tx_hex(&ctx(&state, DASH), &txid).await
+}
+
+#[tauri::command]
+pub async fn dash_fee_rates(state: State<'_, AppState>) -> AppResult<Value> {
+    utxo_backend::fee_rates(&ctx(&state, DASH)).await
+}
+
+#[tauri::command]
+pub async fn dash_tip_height(state: State<'_, AppState>) -> AppResult<u64> {
+    utxo_backend::tip_height(&ctx(&state, DASH)).await
+}
+
+#[tauri::command]
+pub async fn dash_broadcast(state: State<'_, AppState>, hex: String) -> AppResult<String> {
+    utxo_backend::broadcast(&ctx(&state, DASH), &hex).await
+}
+
+#[tauri::command]
+pub async fn dash_sign_psbt(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    psbt: String,
+    password: String,
+    account: Option<u32>,
+) -> AppResult<UtxoSigned> {
+    sign(&app, &state, DASH, psbt, password, account).await
+}
+
+/// Probe used by `settings_set` / `server_test` (network checked by genesis hash, and for
+/// Bitcoin Cash by the post-split checkpoint).
 pub(crate) async fn probe(
     net: &crate::net::NetClient,
     network: Network,
@@ -467,5 +617,38 @@ mod tests {
         assert!(d.contains("Monnaie (revient chez toi) : 10 LTC\n  tltc1qme"));
         assert!(d.contains("Taux : 1 litoshi/vB · taille estimée 141 vB"));
         assert!(!d.contains("Pas de monnaie"));
+    }
+
+    #[test]
+    fn bitcoin_cash_and_dash_dialogs() {
+        let mut bch = summary();
+        bch.coin = BCH;
+        bch.outputs[0].address = Some("bchtest:qr08q88p9etk89wgv05nwlrkm4l0urz4cyl36hh9sv".into());
+        bch.fee = "226".into();
+        bch.fee_per_kb = 1_000;
+        bch.warnings = vec![UtxoWarning::HighFee];
+        let d = describe_utxo(&bch, Network::Testnet);
+        for needle in [
+            "Envoi Bitcoin Cash (chipnet)",
+            "À : bchtest:qr08q88p9etk89wgv05nwlrkm4l0urz4cyl36hh9sv",
+            "Montant : 10 BCH",
+            "Frais : 0,00000226 BCH (226 satoshis)",
+            "Taux : 1 sat/octet · taille estimée 226 octets",
+            "Sortie INCONNUE",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        assert!(describe_utxo_extra(&bch).contains("frais très élevés"));
+
+        let mut dash = summary();
+        dash.coin = DASH;
+        dash.fee = "1000".into();
+        dash.fee_per_kb = 5_208;
+        let d = describe_utxo(&dash, Network::Mainnet);
+        assert!(d.starts_with("Envoi Dash\n"), "{d}");
+        assert!(d.contains("Frais : 0,00001 DASH (1000 duffs)"), "{d}");
+        assert!(d.contains("Taux : 5,208 duff/octet"), "{d}");
+        assert_eq!(chain_of(BCH), Chain::Bch);
+        assert_eq!(chain_of(DASH), Chain::Dash);
     }
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dash-address-utxos"
+description = "Enables the dash_address_utxos command without any pre-configured scope."
+commands.allow = ["dash_address_utxos"]
+
+[[permission]]
+identifier = "deny-dash-address-utxos"
+description = "Denies the dash_address_utxos command without any pre-configured scope."
+commands.deny = ["dash_address_utxos"]

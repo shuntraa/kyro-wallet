@@ -38,10 +38,12 @@ pub enum Chain {
     Tron,
     Xrp,
     Ada,
+    Bch,
+    Dash,
 }
 
 impl Chain {
-    pub const ALL: [Chain; 8] = [
+    pub const ALL: [Chain; 10] = [
         Chain::Btc,
         Chain::Evm,
         Chain::Sol,
@@ -50,6 +52,8 @@ impl Chain {
         Chain::Tron,
         Chain::Xrp,
         Chain::Ada,
+        Chain::Bch,
+        Chain::Dash,
     ];
 
     /// Name used for default account names ("Bitcoin 2").
@@ -63,6 +67,8 @@ impl Chain {
             Chain::Tron => "TRON",
             Chain::Xrp => "XRP",
             Chain::Ada => "Cardano",
+            Chain::Bch => "Bitcoin Cash",
+            Chain::Dash => "Dash",
         }
     }
 
@@ -83,6 +89,8 @@ impl Chain {
             Chain::Tron => "tron",
             Chain::Xrp => "xrp",
             Chain::Ada => "ada",
+            Chain::Bch => "bch",
+            Chain::Dash => "dash",
         }
     }
 }
@@ -474,6 +482,23 @@ mod tests {
         assert_eq!(back, a);
         let empty: VaultAccounts = serde_json::from_str("{}").unwrap();
         assert_eq!(empty, VaultAccounts::default());
+    }
+
+    #[test]
+    fn bitcoin_cash_and_dash_have_their_own_lists() {
+        assert_eq!(Chain::parse("bch").unwrap(), Chain::Bch);
+        assert_eq!(Chain::parse("dash").unwrap(), Chain::Dash);
+        assert_eq!(default_name(Chain::Bch, 1), "Bitcoin Cash 2");
+        let mut a = VaultAccounts::default();
+        a.add(T, Chain::Dash, 3, "Dash 4").unwrap();
+        assert_eq!(a.indices(T, Chain::Dash), vec![0, 3]);
+        assert_eq!(a.indices(T, Chain::Bch), vec![0]);
+        assert_eq!(a.indices(T, Chain::Doge), vec![0]);
+        let json = serde_json::to_string(&a).unwrap();
+        assert_eq!(
+            json,
+            r#"{"testnet":{"dash":[{"index":3,"name":"Dash 4"}]}}"#
+        );
     }
 
     #[test]

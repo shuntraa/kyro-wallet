@@ -103,27 +103,37 @@ pub struct BtcDescriptor { pub kind: BtcKind, pub internal: bool, pub descriptor
 pub fn btc_descriptors(seed: &Seed, net: Network, account: u32) -> Result<Vec<BtcDescriptor>>;
 // wpkh([fp/84h/coin'h/0h]xpub/{0,1}/*) et tr([fp/86h/coin'h/0h]xpub/{0,1}/*) — clés publiques uniquement
 
-// --- Litecoin (BIP84 P2WPKH) et Dogecoin (BIP44 P2PKH) : crate `bitcoin` 0.32 réutilisée (clés, PSBT, sighash),
-//     encodages d'adresse construits avec ses propres `bech32` / `base58` et les paramètres de chainparams.cpp
-pub enum UtxoCoin { Litecoin, Dogecoin }                                  // JSON "litecoin" | "dogecoin"
+// --- Litecoin (BIP84 P2WPKH), Dogecoin, Bitcoin Cash et Dash (BIP44 P2PKH) : crate `bitcoin` 0.32 réutilisée (clés,
+//     PSBT, sighash), encodages d'adresse construits avec ses propres `bech32` / `base58` et les paramètres de
+//     chainparams.cpp ; CashAddr (`cashaddr.rs`) = moteur de somme de contrôle générique de la crate `bech32` configuré
+//     avec le générateur de la spécification (tous les vecteurs de la spec vérifiés)
+pub enum UtxoCoin { Litecoin, Dogecoin, BitcoinCash, Dash }               // JSON "litecoin" | "dogecoin" | "bitcoincash" | "dash"
 pub struct UtxoAccount { pub coin: UtxoCoin, pub xpub: String /*xpub/tpub*/, pub fingerprint: String, pub path: String }
-pub fn utxo_account(seed, net, coin, account) -> Result<UtxoAccount>;   // m/84'/2'/a' (LTC) · m/44'/3'/a' (DOGE) · testnet : coin type 1
-pub fn utxo_address(seed, net, coin, account, change, index) -> Result<String>;   // ltc1…/tltc1… · D…/n…
+pub fn utxo_account(seed, net, coin, account) -> Result<UtxoAccount>;   // m/84'/2'/a' (LTC) · m/44'/3'/a' (DOGE) · m/44'/145'/a' (BCH) · m/44'/5'/a' (DASH) · testnet : coin type 1
+pub fn utxo_address(seed, net, coin, account, change, index) -> Result<String>;   // ltc1…/tltc1… · D…/n… · bitcoincash:q…/bchtest:q… · X…/y…
 pub fn utxo_address_from_xpub(xpub, net, coin, change, index) -> Result<String>;
-pub fn utxo_script_pubkey(address, net, coin) -> Result<ScriptBuf>;     // LTC : ltc1 (v0/v1+), L…, M… (testnet m/n…, Q…) ; refuse 3…/2… (P2SH ancien = Bitcoin) et MWEB. DOGE : D…, 9…/A… (testnet n…, 2…)
+pub fn utxo_script_pubkey(address, net, coin) -> Result<ScriptBuf>;     // LTC : ltc1 (v0/v1+), L…, M… (testnet m/n…, Q…) ; refuse 3…/2… (P2SH ancien = Bitcoin) et MWEB. DOGE : D…, 9…/A… (testnet n…, 2…). DASH : X…, 7… (testnet y…, 8…/9…). BCH : CashAddr seulement (préfixe facultatif, casse mixte refusée, types jeton z…/r… = mêmes scripts, P2SH32 refusé) ; la forme legacy 1…/3… est refusée (indiscernable d'une adresse Bitcoin)
 pub fn utxo_address_of_script(script, net, coin) -> Option<String>;
-pub fn utxo_genesis_hash(net, coin) -> &'static str;                    // LTC mainnet 12a765e3…, testnet4 4966625a… · DOGE mainnet 1a91e3da…, testnet bb0a7826…
-pub fn utxo_decode_raw_tx(raw_hex, net, coin) -> Result<BtcRawTx>;      // DOGE : données témoin refusées
-pub fn utxo_dust_threshold(coin, script) -> u64;                        // LTC : GetDustThreshold à 30 000 lit/kvB (P2WPKH 2 940) · DOGE : 0,001 DOGE (poussière dure)
+pub fn utxo_genesis_hash(net, coin) -> &'static str;                    // LTC mainnet 12a765e3…, testnet4 4966625a… · DOGE mainnet 1a91e3da…, testnet bb0a7826… · BCH = genesis de Bitcoin (chipnet : celui de testnet4) · DASH mainnet 00000ffd…, testnet 00000bad…
+pub fn utxo_checkpoint(net, coin) -> Option<(u64, &'static str)>;       // BCH seulement : bloc 478 559 (000…651ef99c…5eec, 1er bloc après la scission) · chipnet 200 000 (000…5d7d9946…7c05)
+pub fn utxo_header_hash(header_hex) -> Result<String>;                  // hash (double SHA-256) d'un en-tête de 80 octets, pour le point de contrôle
+pub fn utxo_decode_raw_tx(raw_hex, net, coin) -> Result<BtcRawTx>;      // DOGE/BCH/DASH : données témoin refusées · DASH : transaction spéciale DIP2 décodée (charge utile sautée, couverte par le txid)
+pub fn utxo_is_special_tx(raw_hex, coin) -> bool;                       // DASH : transaction spéciale (type ≠ 0, version ≥ 3) : affichée, jamais dépensée
+pub fn bch_forkid_sighash(tx, input, script_code, value, sighash_type) -> Result<[u8; 32]>;   // digest BIP143 + type 32 bits (FORKID obligatoire, SIGHASH_UTXOS refusé) ; Kyro ne signe qu'en 0x41
+pub fn utxo_dust_threshold(coin, script) -> u64;                        // LTC : GetDustThreshold à 30 000 lit/kvB (P2WPKH 2 940) · DOGE : 0,001 DOGE (poussière dure) · BCH/DASH : 3 000/kB (P2PKH 546, P2SH 540)
 pub fn utxo_psbt_summary(seed, net, coin, account, psbt_b64) -> Result<UtxoTxSummary>;     // décodage pour le dialogue, sans signer
 pub fn utxo_sign_psbt(seed, net, coin, account, psbt_b64) -> Result<(String /*PSBT signée, non finalisée*/, UtxoTxSummary)>;   // comme Bitcoin : compte `account` seulement
-// Refusé : PSBT mal formée ; entrée LTC sans witness_utxo ; entrée DOGE sans non_witness_utxo dont le txid = l'outpoint, ou avec témoin ;
-// origine de clé « à nous » qui ne correspond pas à la clé ou au script ; sighash ≠ ALL ; sortie sous la poussière ; frais négatifs ; aucune entrée à nous.
-// Signature : LTC BIP143 (P2WPKH), DOGE legacy (P2PKH), SIGHASH_ALL, chaque signature vérifiée avant d'être gardée.
+// Refusé : PSBT mal formée ; entrée LTC sans witness_utxo ; entrée DOGE/BCH/DASH sans non_witness_utxo dont le txid = l'outpoint, ou avec témoin ;
+// origine de clé « à nous » qui ne correspond pas à la clé ou au script ; sighash ≠ ALL ; sortie sous la poussière ; frais négatifs ; aucune entrée à nous ;
+// BCH : version ≠ 1/2 ; DASH : transaction spéciale (type ≠ 0) — et une pièce issue d'une transaction spéciale ne peut pas être dépensée (la PSBT
+// ne porte pas sa charge utile, son txid ne correspond donc jamais).
+// Signature : LTC BIP143 (P2WPKH), DOGE/DASH legacy (P2PKH), SIGHASH_ALL ; BCH digest BIP143 avec SIGHASH_ALL|FORKID (0x41, montants engagés) ;
+// chaque signature vérifiée avant d'être gardée. BCH : une signature 0x41 ne tient pas dans une signature partielle PSBT, l'entrée est donc
+// FINALISÉE par wallet-core (final_script_sig = <DER‖41> <clé>, origines de clé retirées) ; LTC/DOGE/DASH : signatures partielles, non finalisées.
 pub struct UtxoTxSummary {                     // serde camelCase ; montants en chaînes décimales (unité minimale)
     pub coin, pub outputs: Vec<UtxoOutput { address: Option<String>, script /*hex*/, amount, is_change, kind: Address|OpReturn|Unknown }>,
     pub inputs: usize, pub our_inputs: usize, pub fee: String,
-    pub size: u64 /*vB (LTC) ou octets (DOGE), signature la plus longue*/, pub fee_per_kb: u64 /*lit/kvB ou koinus/kB*/,
+    pub size: u64 /*vB (LTC) ou octets (DOGE/BCH/DASH), signature la plus longue*/, pub fee_per_kb: u64 /*lit/kvB, koinus/kB, sat/kB, duffs/kB*/,
     pub has_change: bool /*false : tout ce qui n'est pas envoyé — poussière comprise — part en frais*/,
     pub warnings: Vec<UtxoWarning>, pub requires_extra_confirmation: bool }
 pub enum UtxoWarning {                         // JSON { "kind": "softDust", "index": 2 }
@@ -132,7 +142,8 @@ pub enum UtxoWarning {                         // JSON { "kind": "softDust", "in
     FeeBelowMinimum { minimum } /*informatif*/ }
 // requires_extra_confirmation = tout avertissement sauf FeeBelowMinimum.
 // Constantes : LTC_MIN_RELAY_FEE_PER_KVB 1 000, LTC_DUST_RELAY_FEE_PER_KVB 30 000 ; DOGE_RECOMMENDED_FEE_PER_KB 1 000 000 (0,01 DOGE/kB),
-// DOGE_MIN_RELAY_FEE_PER_KB 100 000, DOGE_SOFT_DUST 1 000 000, DOGE_HARD_DUST 100 000.
+// DOGE_MIN_RELAY_FEE_PER_KB 100 000, DOGE_SOFT_DUST 1 000 000, DOGE_HARD_DUST 100 000 ; BCH_DASH_MIN_RELAY_FEE_PER_KB 1 000,
+// BCH_DASH_DUST_RELAY_FEE_PER_KB 3 000, BCH_SIGHASH_ALL_FORKID 0x41. Frais très élevés (HighFee) : > 100 sat/o (BCH), > 100 duffs/o (DASH).
 
 // --- TRON : m/44'/195'/a'/0/0 (un compte = une adresse, comme Ledger Live ; compte 0 = l'historique m/44'/195'/0'/0/0), adresse = base58check(0x41 || keccak256(pubkey)[12..]) ; raw_data protobuf
 //     (codec écrit à la main, strict : refusé si le ré-encodage diffère d'un seul octet)
@@ -368,7 +379,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `vault_lock` | — | `void` | zeroize de la session |
 | `vault_reveal_mnemonic` | `{ password }` | `void` | mot de passe (limité comme ci-dessus, 10 s entre deux demandes), puis **confirmation native** (« Afficher » / « Annuler » → `USER_REJECTED`), puis les mots dans une **fenêtre native** ; rien n'est renvoyé à l'interface (qui connaît le mot de passe qu'elle a fait taper). Le blocage des captures d'écran ne s'applique pas à ces fenêtres système |
 | `session_touch` | — | `void` | activité utilisateur → repousse l'auto-lock |
-| `accounts_get` | `{ account? }` | `Accounts` | adresses publiques uniquement, du compte `account` (absent = 0) de chaque chaîne ; contient aussi `ltc` et `doge` (§2.4). Comptes multiples : §2.9 |
+| `accounts_get` | `{ account? }` | `Accounts` | adresses publiques uniquement, du compte `account` (absent = 0) de chaque chaîne ; contient aussi `ltc`, `doge`, `bch` et `dash` (§2.4). Comptes multiples : §2.9 |
 | `vault_accounts_get` / `vault_account_add` / `vault_account_rename` / `vault_account_remove` | voir §2.9 | `VaultAccountLists` | listes de comptes du coffre, par chaîne |
 | `btc_address` | `{ kind, change, index, account? }` | `string` | `m/84'\|86'/coin'/account'/change/index` |
 | `evm_decode_tx` | `{ tx: EvmTxRequest }` | `EvmTxSummary` | pour l'aperçu avant mot de passe ; `INVALID_INPUT` si le chainId est d'un réseau principal en mode test (ou Sepolia en mainnet) |
@@ -391,7 +402,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_tip_height` | — | `number` | |
 | `btc_tx_hex` | `{ txid }` | `string` (transaction brute, hex) | transaction complète, par exemple le `non_witness_utxo` d'une entrée SegWit v0 pour un hardware wallet. Esplora/défaut `GET /tx/{txid}/hex` ; Electrum `blockchain.transaction.get` ; Core `gettransaction` (portefeuille de surveillance) puis `getrawtransaction` — hors portefeuille et sans `-txindex=1` : `INVALID_INPUT` explicite ; filtres compacts : transactions gardées des blocs synchronisés, sinon `INVALID_INPUT` explicite. **Toujours** : Rust vérifie que la réponse est une transaction dont le txid (double SHA-256 de la sérialisation sans témoin) = `txid`, sinon `SERVER_UNREACHABLE` ; `txid` mal formé : `INVALID_INPUT` |
 | `btc_broadcast` | `{ hex }` | `string` (txid) | le txid renvoyé par le serveur doit correspondre à la transaction, sinon erreur |
-| `ltc_*`, `doge_*` | voir §2.4 | | Litecoin, Dogecoin : mêmes formes Esplora que `btc_*`, signature avec dialogue natif |
+| `ltc_*`, `doge_*`, `bch_*`, `dash_*` | voir §2.4 | | Litecoin, Dogecoin, Bitcoin Cash, Dash : mêmes formes Esplora que `btc_*`, signature avec dialogue natif |
 | `ada_*` | voir §2.7 | | Cardano : transaction construite **par Rust** depuis les UTxO et les paramètres de protocole, chaque sortie détaillée (ADA, tokens, min-ADA) |
 | `xrp_*` | voir §2.6 | | XRP Ledger : paiement construit **par Rust** (Sequence, Fee, LastLedgerSequence), tag de destination mis en évidence, réserve |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
@@ -430,6 +441,8 @@ type Accounts = {                 // accounts_get({ account? }) : tout est celui
   sol: { address: string };
   ltc: { address: string; xpub: string; fingerprint: string; path: string };   // m/84'/2'/0' (testnet m/84'/1'/0'), address = …/0/0
   doge: { address: string; xpub: string; fingerprint: string; path: string };  // m/44'/3'/0' (testnet m/44'/1'/0')
+  bch: { address: string; xpub: string; fingerprint: string; path: string };   // m/44'/145'/0' (chipnet m/44'/1'/0'), CashAddr bitcoincash:q… / bchtest:q…
+  dash: { address: string; xpub: string; fingerprint: string; path: string };  // m/44'/5'/0' (testnet m/44'/1'/0'), X… / y…
   tron: { address: string };                                                    // m/44'/195'/0'/0/0 (même chemin sur Nile)
   xrp: { address: string };                                                     // m/44'/144'/0'/0/0
   cardano: { address: string };   // adresse de base m/1852'/1815'/0'/0/0 + staking …/2/0 (CIP-1852, Icarus) ; addr_test1… sur preprod
@@ -458,11 +471,13 @@ type Servers = {
   solana: { 'devnet'?: { url: string }; 'mainnet-beta'?: { url: string } };
   litecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };   // testnet = Litecoin testnet4
   dogecoin: { mainnet?: UtxoServer; testnet?: UtxoServer };
+  bitcoincash: { mainnet?: UtxoServer; testnet?: UtxoServer };   // testnet = chipnet
+  dash: { mainnet?: UtxoServer; testnet?: UtxoServer };
   tron: { mainnet?: TronServer; testnet?: TronServer };       // testnet = Nile
   xrp: { mainnet?: XrpServer; testnet?: XrpServer };          // testnet = XRPL Testnet
   cardano: { mainnet?: CardanoServer; testnet?: CardanoServer };  // testnet = preprod
 };
-type UtxoServer = { kind: 'default' }       // Litecoin : litecoinspace.org ; Dogecoin mainnet : ElectrumX de Komodo ; Dogecoin testnet : AUCUN (lectures → SERVER_INVALID, voir §2.4)
+type UtxoServer = { kind: 'default' }       // Litecoin : litecoinspace.org ; Dogecoin / Dash mainnet : ElectrumX de Komodo ; Bitcoin Cash mainnet et chipnet : Fulcrum publics ; Dogecoin / Dash testnet : AUCUN (lectures → SERVER_INVALID, voir §2.4)
                 | { kind: 'esplora'; url: string };   // même type que le serveur par défaut (Esplora : electrs, mempool)
 type BtcServer =
   | { kind: 'default' }                                   // mempool.space (son .onion en mode Tor)
@@ -488,7 +503,7 @@ type ServerTestTarget =
   | { family: 'bitcoin'; network: 'mainnet' | 'testnet4'; server: BtcServer }
   | { family: 'evm'; chainId: number; server: { url: string } }
   | { family: 'solana'; cluster: 'devnet' | 'mainnet-beta'; server: { url: string } }
-  | { family: 'litecoin' | 'dogecoin'; network: 'mainnet' | 'testnet'; server: UtxoServer }   // { kind: 'default' } Dogecoin testnet : SERVER_INVALID
+  | { family: 'litecoin' | 'dogecoin' | 'bitcoincash' | 'dash'; network: 'mainnet' | 'testnet'; server: UtxoServer }   // { kind: 'default' } Dogecoin / Dash testnet : SERVER_INVALID
   | { family: 'tron'; network: 'mainnet' | 'testnet'; server: TronServer }
   | { family: 'xrp'; network: 'mainnet' | 'testnet'; server: XrpServer }       // detected.chainId = network_id XRPL (0 mainnet, 1 testnet)
   | { family: 'cardano'; network: 'mainnet' | 'testnet'; server: CardanoServer };   // detected.chainId = networkmagic (764824073 / 1)
@@ -639,11 +654,11 @@ PIN et passphrase : Ledger se déverrouille sur l'appareil (`HW_LOCKED` → l'UI
 - **Ledger** : apps « Litecoin » et « Dogecoin » = **ancien protocole Bitcoin** (APDU `GET WALLET PUBLIC KEY`, `UNTRUSTED HASH TRANSACTION INPUT START/FINALIZE`, `UNTRUSTED HASH SIGN`), pas l'app Bitcoin v2 (PSBT + politiques) utilisée par Kyro pour BTC : il faudrait écrire ce transport (non fait ; `ledger_bitcoin_client` ne le couvre pas). L'app Dogecoin exige aussi les transactions précédentes complètes (trusted inputs).
 - **Vérification Kyro** identique à BTC : recalcul du sighash (BIP143 LTC, legacy DOGE) avec `wallet-core`, signature vérifiée contre la clé dérivée de l'xpub enregistrée, low-S ; il faudrait ajouter `utxo_hw_plan` / `utxo_hw_finalize` (miroirs de `btc_hw_plan` / `btc_hw_finalize`) et des champs `ltc` / `doge` dans `WatchOnlyAccount` (format de fichier à versionner).
 
-### 2.4 Litecoin et Dogecoin
+### 2.4 Litecoin, Dogecoin, Bitcoin Cash et Dash
 
-Mêmes principes que Bitcoin (§2.2) : Rust choisit le serveur (`servers.litecoin` / `servers.dogecoin`, sinon le défaut), passe par les circuits Tor de la famille `litecoin` / `dogecoin`, ne se rabat jamais ; les lectures renvoient **exactement les formes Esplora** de §2.2. Adaptateurs TS : `LitecoinAdapter`, `DogecoinAdapter` (`packages/chains/src/litecoin/`, `dogecoin/`), créés par `createUtxoAdapters(accounts)`.
+Mêmes principes que Bitcoin (§2.2) : Rust choisit le serveur (`servers.litecoin` / `servers.dogecoin` / `servers.bitcoincash` / `servers.dash`, sinon le défaut), passe par les circuits Tor de la famille de la chaîne, ne se rabat jamais ; les lectures renvoient **exactement les formes Esplora** de §2.2. Adaptateurs TS : `LitecoinAdapter`, `DogecoinAdapter`, `BitcoinCashAdapter`, `DashAdapter` (`packages/chains/src/litecoin/`, `dogecoin/`, `bitcoincash/`, `dash/`), créés par `createUtxoAdapters(accounts)`. Bitcoin Cash : adresses CashAddr (codec TS `@kyro/shared` `cashaddr.ts`, miroir de Rust, mêmes vecteurs de la spec), sorties ajoutées par script.
 
-| Commande (`ltc_…` / `doge_…`) | Arguments | Retour | Notes |
+| Commande (`ltc_…` / `doge_…` / `bch_…` / `dash_…`) | Arguments | Retour | Notes |
 |---|---|---|---|
 | `…_backend_info` | — | `{ kind: 'default' \| 'esplora', network: 'mainnet' \| 'testnet', label, available, tor }` | `kind` = le réglage (`default` même quand le défaut Dogecoin mainnet parle Electrum) ; `label` = hôte (Dogecoin mainnet par défaut : `doge.electrum1.cipig.net`) ; `available: false` = Dogecoin **testnet** sans serveur configuré |
 | `…_address` | `{ change, index, account? }` | `string` | coffre déverrouillé ; `m/84'/2'/account'/…` (LTC), `m/44'/3'/account'/…` (DOGE) |
@@ -652,7 +667,7 @@ Mêmes principes que Bitcoin (§2.2) : Rust choisit le serveur (`servers.litecoi
 | `…_fee_rates` | — | `{ fastestFee, halfHourFee, hourFee, economyFee, minimumFee, source? }` | unité minimale **par vbyte** (litoshis/vB ; koinus/octet). `/v1/fees/recommended` puis `/fee-estimates`. Dogecoin : bornes [0,01 ; 1] DOGE/kB (1 000–100 000 koinus/o) ; serveur sans estimation (404) → 0,01 DOGE/kB, `source: 'policy'`. Electrum (Dogecoin mainnet) : `estimatefee` à 2 / 30 / 60 / 144 blocs (≈ 2 min / ½ h / 1 h / 1 j) + `relayfee`, mêmes bornes ; aucune estimation → `source: 'policy'` |
 | `…_tip_height` | — | `number` | |
 | `…_broadcast` | `{ hex }` | `string` (txid) | transaction décodée d'abord ; txid du serveur = le nôtre, sinon erreur (Electrum : `blockchain.transaction.broadcast`) |
-| `…_sign_psbt` | `{ psbt, password, account? }` | `{ psbt /*signée, non finalisée*/, summary: UtxoTxSummary }` | mot de passe → `utxo_psbt_summary` → dialogue natif (destinataires, montants, monnaie, frais, taux, taille ; « Pas de monnaie… » si aucune ; entrées étrangères) → **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` (sortie inconnue « INCONNUE », OP_RETURN, entrée étrangère, poussière douce DOGE, frais très élevés) → signature ; le résumé de la signature doit être identique à celui affiché |
+| `…_sign_psbt` | `{ psbt, password, account? }` | `{ psbt /*signée, non finalisée — finalisée pour Bitcoin Cash*/, summary: UtxoTxSummary }` | mot de passe → `utxo_psbt_summary` → dialogue natif (destinataires, montants, monnaie, frais, taux, taille ; « Pas de monnaie… » si aucune ; entrées étrangères) → **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` (sortie inconnue « INCONNUE », OP_RETURN, entrée étrangère, poussière douce DOGE, frais très élevés) → signature ; le résumé de la signature doit être identique à celui affiché |
 
 Règles de construction (TS) vérifiées par Rust :
 - **Litecoin** : chaque entrée a `witness_utxo` + `bip32_derivation` (`m/84'/2'|1'/0'/…`) ; la monnaie porte sa dérivation (sinon elle s'affiche comme un destinataire) ; poussière = `GetDustThreshold` de Litecoin Core à 30 000 lit/kvB (P2WPKH 2 940 litoshis, P2PKH 5 460) : destinataire en dessous refusé, monnaie en dessous ajoutée aux frais ; minimum 1 litoshi/vB.
@@ -661,6 +676,9 @@ Règles de construction (TS) vérifiées par Rust :
 - **Serveur par défaut Dogecoin** : mainnet → ElectrumX publics de Komodo (`doge.electrum1.cipig.net:20060`, secours `doge.electrum2.cipig.net:20060`, allowlist `net::ELECTRUM_HOSTS`, TLS validé, genesis vérifié à chaque session, circuits Tor `dogecoin`) ; **testnet → aucun** : `{ kind: 'default' }` → toute lecture `SERVER_INVALID` (« configure ton serveur Esplora (electrs-dogecoin) »). Voir NETWORK.md.
 - **Avant toute signature Dogecoin** (et toute entrée Litecoin qui porte `non_witness_utxo`), Rust (`wallet-core`) recalcule le hash de la transaction précédente : il doit égaler le txid de l'outpoint ; le `vout` doit exister ; son script doit être le nôtre ; **le montant (et donc les frais du dialogue natif) vient uniquement de cette transaction**, jamais de la liste d'UTXO du serveur. Sinon : refus (`INVALID_INPUT`), avant le dialogue.
 - Montants JSON : une sortie au-delà de 2⁵³ unités (≈ 90 millions de DOGE) n'est pas lisible sans perte en JS : l'adaptateur la refuse (la signature, elle, prend les montants dans les transactions précédentes, en Rust).
+- **Bitcoin Cash** (`bch_*`, famille Tor `bitcoincash`) : comme Dogecoin, chaque entrée porte `non_witness_utxo` (`bch_tx_hex`) et Rust n'en prend que montant et script, même si le digest FORKID engage déjà les montants ; adresses CashAddr seulement (`bitcoincash:q…`, chipnet `bchtest:q…`) ; poussière 546 sat (P2PKH), minimum 1 sat/o, estimations bornées à [1 ; 100] sat/o (`estimatefee` à 1 / 3 / 6 / 144 blocs) ; signature `SIGHASH_ALL|FORKID` et PSBT **renvoyée finalisée**. Serveurs par défaut : Fulcrum publics `bch.imaginary.cash:50002` (secours `bch.loping.net:50002`, `cashnode.bch.ninja:50002`), chipnet `chipnet.imaginary.cash:50002` (secours `chipnet.bch.ninja:50002`). Bitcoin Cash partageant le genesis de Bitcoin (chipnet : celui de testnet4), chaque session vérifie **aussi** `blockchain.block.header` au point de contrôle (`utxo_checkpoint`, hash recalculé par Rust) : un serveur Bitcoin est refusé (`SERVER_WRONG_NETWORK`) ; même contrôle pour un Esplora perso (`GET /block-height/478559`). `get_balance` et `listunspent` sont appelés avec `token_filter = "exclude_tokens"` (Fulcrum) : une pièce portant des CashTokens n'est ni comptée ni dépensée (la dépenser brûlerait les jetons) ; si un serveur en glisse une quand même, son script (préfixe de jeton) ne correspond pas au nôtre → liste refusée, et wallet-core refuse de la signer.
+- **Dash** (`dash_*`, famille Tor `dash`) : chemin Dogecoin (sighash legacy, `non_witness_utxo` obligatoire et vérifié, montants pris uniquement dans la transaction précédente) ; poussière 546 duffs, minimum 1 duff/o, bornes [1 ; 100] duffs/o (`estimatefee` à 1 / 12 / 24 / 144 blocs). Les transactions spéciales DIP2 (version 3, type ≠ 0 : coinbase CbTx, ProTx, retraits Platform…) sont décodées (txid sur la sérialisation complète) mais leurs sorties sont **exclues** de `dash_address_utxos` et `dash_tx_hex` les refuse (`INVALID_INPUT`) : une PSBT ne peut pas porter leur charge utile. Serveur par défaut : ElectrumX de Komodo `dash.electrum1.cipig.net:20061` (secours `dash.electrum2.cipig.net:20061`) sur mainnet ; **testnet : aucun** (`SERVER_INVALID`).
+- Serveur perso Bitcoin Cash / Dash : seul le type « Esplora » est accepté (comme Litecoin / Dogecoin) ; il n'existe guère d'API Esplora publique pour ces chaînes, un **serveur Electrum perso** pour les chaînes UTXO n'est pas encore pris en charge.
 
 **Fait côté UI** (commit de l'UI Litecoin / Dogecoin) : types `Commands` de `@kyro/shared` (`ltc_*`, `doge_*`, `btc_tx_hex`, `Accounts.ltc/doge`, `Servers.litecoin/dogecoin`, `ServerTestTarget`), backend démo, écrans Envoyer/Recevoir/Actif/Historique pour ces familles, réglages serveurs, liste « Connexions sortantes », sortie de `WATCH_ONLY_CHAINS`.
 
@@ -868,7 +886,7 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | Chaîne (`chain`) | Compte `a` | Compte 0 (inchangé) |
 |---|---|---|
 | `btc` | BIP84 `m/84'/c'/a'` + BIP86 `m/86'/c'/a'` (adresses `…/0\|1/i`) | `m/84'/c'/0'`, `m/86'/c'/0'` |
-| `ltc` / `doge` | `m/84'/2'/a'` / `m/44'/3'/a'` (testnet : `c` = 1) | `…/0'` |
+| `ltc` / `doge` / `bch` / `dash` | `m/84'/2'/a'` / `m/44'/3'/a'` / `m/44'/145'/a'` / `m/44'/5'/a'` (testnet : `c` = 1) | `…/0'` |
 | `evm` | **`m/44'/60'/0'/0/a`** (index d'adresse : MetaMask, Trezor Suite et les comptes hardware wallet de Kyro ; pas `m/44'/60'/a'/0/0` de Ledger Live — identique pour le compte 0, et une phrase importée de MetaMask retrouve ses comptes dans le même ordre) ; une seule liste pour toutes les chaînes EVM | `m/44'/60'/0'/0/0` |
 | `sol` | `m/44'/501'/a'/0'` (Phantom, Solflare) | `m/44'/501'/0'/0'` |
 | `tron` | `m/44'/195'/a'/0/0` (Ledger Live) | `m/44'/195'/0'/0/0` |
@@ -883,7 +901,7 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `vault_account_remove` | `{ chain, account }` | `VaultAccountLists` | coffre déverrouillé ; compte 0 → `INVALID_INPUT` |
 
 ```ts
-type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'bch' | 'dash';
 type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[] };   // triées par index ; nom par défaut « Bitcoin 2 » pour l'index 1
 ```
 
@@ -943,7 +961,8 @@ type NetworkInfo = {
 | `api.0x.org`, `li.quest`, `lite-api.jup.ag` | devis de swap |
 | + hôtes des serveurs HTTP personnalisés (`servers.bitcoin.*` de type `esplora`, `servers.evm.*`, `servers.solana.*`) | autorisés **uniquement pour leur famille** (circuits Tor de la famille) ; le serveur par défaut remplacé est refusé (`DEFAULT_SERVER_DISABLED`) |
 | Electrum et Bitcoin Core | **pas** joignables par `net_fetch` : uniquement via les commandes `btc_*` (Rust) |
+| `bch.imaginary.cash:50002`, `bch.loping.net:50002`, `cashnode.bch.ninja:50002`, `chipnet.imaginary.cash:50002`, `chipnet.bch.ninja:50002` (Fulcrum publics, défaut Bitcoin Cash mainnet / chipnet) ; `dash.electrum1.cipig.net:20061`, `dash.electrum2.cipig.net:20061` (ElectrumX de Komodo, défaut Dash mainnet) ; `net::ELECTRUM_HOSTS` | **pas** joignables par `net_fetch` (sockets TLS brutes) : uniquement via `bch_*` / `dash_*` (Rust), circuits Tor des familles `bitcoincash` / `dash`, hôte **et** port allowlistés |
 | `doge.electrum1.cipig.net:20060`, `doge.electrum2.cipig.net:20060` (ElectrumX de Komodo, défaut Dogecoin mainnet ; `net::ELECTRUM_HOSTS`) | **pas** joignables par `net_fetch` (sockets TLS brutes, hors `ALLOWED_HOSTS`) : uniquement via `doge_*` (Rust), circuits Tor `dogecoin`, hôte **et** port vérifiés |
-| serveurs Esplora Litecoin / Dogecoin personnalisés (`servers.litecoin.*`, `servers.dogecoin.*`) | **pas** joignables par `net_fetch` : uniquement via `ltc_*` / `doge_*` (Rust), circuits Tor de leur famille ; le défaut remplacé (`litecoinspace.org`) est refusé (`DEFAULT_SERVER_DISABLED`) |
+| serveurs Esplora Litecoin / Dogecoin / Bitcoin Cash / Dash personnalisés (`servers.litecoin.*`, `servers.dogecoin.*`, `servers.bitcoincash.*`, `servers.dash.*`) | **pas** joignables par `net_fetch` : uniquement via `ltc_*` / `doge_*` (Rust), circuits Tor de leur famille ; le défaut remplacé (`litecoinspace.org`) est refusé (`DEFAULT_SERVER_DISABLED`) |
 
 HTTPS uniquement (sauf `.onion` via Tor : mempool, ou un serveur personnalisé), pas de redirection vers un hôte hors liste ni vers un serveur personnalisé (redirections suivies par Kyro lui-même dans les deux modes ; une clé API n'est jamais renvoyée vers un autre hôte), réponse plafonnée à 5 Mo, timeout 20 s, cache CoinGecko borné (128 réponses, 16 Mio). Un serveur personnalisé n'entre dans cette liste qu'après la fenêtre native « Nouveau serveur ».

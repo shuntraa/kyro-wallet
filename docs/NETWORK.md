@@ -18,7 +18,7 @@ Kyro embarque un client Tor (Arti, de The Tor Project). Il démarre en arrière-
 | Ton adresse IP | **Cachée** : le serveur voit l'IP d'un relais de sortie Tor. Ton fournisseur d'accès voit seulement que tu utilises Tor. | Visible par chaque serveur contacté et par ton fournisseur d'accès (qui voit les noms d'hôtes). |
 | Contenu des requêtes | Chiffré de bout en bout en TLS jusqu'au serveur (le relais de sortie ne voit que le nom d'hôte et le volume). | Chiffré en TLS. |
 | Tes adresses publiques, tes transactions | **Toujours visibles par le serveur interrogé** : Tor cache *qui* tu es sur le réseau, pas *ce que* tu demandes. | Visibles par le serveur interrogé, et associées à ton IP. |
-| Liens entre activités | Chaque famille — **bitcoin**, **litecoin**, **dogecoin**, **tron**, **xrp**, **cardano**, **evm**, **solana**, **marché** (CoinGecko), **swap** — utilise ses propres circuits isolés : un relais de sortie ou un serveur ne peut pas relier, par le circuit, ta consultation Bitcoin et ta consultation Solana. | Toutes les requêtes partent de la même IP. |
+| Liens entre activités | Chaque famille — **bitcoin**, **litecoin**, **dogecoin**, **bitcoincash**, **dash**, **tron**, **xrp**, **cardano**, **evm**, **solana**, **marché** (CoinGecko), **swap** — utilise ses propres circuits isolés : un relais de sortie ou un serveur ne peut pas relier, par le circuit, ta consultation Bitcoin et ta consultation Solana. | Toutes les requêtes partent de la même IP. |
 | Panne | **Échec fermé** : si Tor n'est pas prêt dans les 60 s, la requête échoue (`TOR_UNAVAILABLE`) et **rien n'est envoyé en clair**. Aucun repli automatique. | — |
 
 Par serveur, en mode Tor : CoinGecko voit les cryptos et la devise demandées ; mempool, litecoinspace, TronGrid, les serveurs XRPL, Koios (Cardano), les RPC EVM et Solana voient les adresses et transactions demandées ; les API de swap voient les tokens, montants et l'adresse destinataire — mais aucun ne voit ton IP, et deux familles différentes ne partagent jamais un circuit.
@@ -84,14 +84,46 @@ Le robinet Cardano preprod (`faucet.preprod.world.dev.cardano.org`) n'est contac
 | Blockbook de Trezor (`doge1.trezor.io`) | bloqué par Cloudflare pour les clients autres que Trezor |
 | NOWNodes, Tatum, QuickNode (Blockbook) | testnet disponible mais **clé API payante** |
 
+### Bitcoin Cash : Fulcrum publics (mainnet et chipnet)
+
+Kyro utilise par défaut des serveurs **Fulcrum** publics de trois opérateurs, listés dans la liste officielle d'Electron Cash ([Electron-Cash › electroncash/servers.json](https://github.com/Electron-Cash/Electron-Cash/blob/master/electroncash/servers.json), [servers_chipnet.json](https://github.com/Electron-Cash/Electron-Cash/blob/master/electroncash/servers_chipnet.json)) et, pour le mainnet, dans [KomodoPlatform/coins › electrums/BCH](https://github.com/KomodoPlatform/coins/blob/master/electrums/BCH). Gratuits, sans clé, protocole Electrum 1.4. Le testnet de Kyro pour Bitcoin Cash est **chipnet** (le réseau de test des mises à niveau, dérivé de testnet4).
+
+| Hôte (Rust uniquement, socket TLS brute — **pas** `net_fetch`) | Rôle | Ce qu'il voit |
+|---|---|---|
+| `bch.imaginary.cash:50002` | mainnet, serveur principal (mêmes appels que Dogecoin, plus `blockchain.block.header` au point de contrôle) | Tes *script hashes* Bitcoin Cash, les txid de tes pièces et de leurs transactions précédentes, tes transactions signées ; l'IP d'un relais de sortie Tor (ton IP en mode clair) |
+| `bch.loping.net:50002`, `cashnode.bch.ninja:50002` | mainnet, secours, essayés dans cet ordre **seulement** si le précédent est injoignable | Idem |
+| `chipnet.imaginary.cash:50002` | chipnet, serveur principal | Idem (chipnet) |
+| `chipnet.bch.ninja:50002` | chipnet, secours | Idem |
+
+- Allowlist : `net::ELECTRUM_HOSTS` (famille `bitcoincash`, hôte **et** port), liste « Connexions sortantes » (`outgoingHosts`). Port 50002 : il fait partie de la politique de sortie réduite de Tor (*reduced exit policy*), donc joignable par la plupart des relais de sortie.
+- TLS : certificats Let's Encrypt, validés normalement (webpki), aucune exception.
+- **Bitcoin Cash partage le bloc d'origine (genesis) de Bitcoin** (chipnet : celui de testnet4) : le genesis seul ne prouve pas la chaîne. À chaque session, Rust lit aussi l'en-tête du **bloc 478 559** (premier bloc après la scission du 1ᵉʳ août 2017 ; chipnet : bloc 200 000, après la divergence avec testnet4), en recalcule le hash et le compare au point de contrôle (`wallet_core::utxo_checkpoint`) : un serveur Bitcoin (ou testnet4) est refusé (`SERVER_WRONG_NETWORK`). Même contrôle pour un Esplora perso (`/block-height/478559`).
+- **CashTokens** : `get_balance` et `listunspent` sont demandés avec `token_filter = "exclude_tokens"` : une pièce qui porte des jetons n'est ni comptée ni dépensée (la dépenser sans eux les brûlerait).
+- Vérifié en direct le 01/11/2026, en clair, lectures seulement (sonde Node.js en TLS validé, puis les analyseurs Rust de Kyro — voir le rapport du test `bch_dash_live`) : Fulcrum 2.1.4 sur les cinq hôtes, genesis `000000000019d668…` (chipnet `000000001dd410c4…`), bloc 478 559 = `000000000000000000651ef99cb9fcbe0dadde1d424bd9f15ff20136191a5eec` sur les trois serveurs mainnet, bloc 200 000 de chipnet = `000000005d7d99462a40e3fc6219070ad619bdc7f4c27b5474ac269fc9357c05` (et `00000000071ca109…` sur testnet4 : différent, comme attendu), `estimatefee` = 0,00001 BCH/kB (1 sat/o), `token_filter` accepté. Non retenus ce jour-là : `electroncash.dk` et `fulcrum.criptolayer.net` (certificat auto-signé), `bch.electrum3.cipig.net` et `electrum.bitcoinverde.org` (connexion refusée), `bch.crypto.mldlabs.com` et `node.minisatoshi.cash` (délai dépassé). Les ElectrumX de Komodo pour BCH (`bch.electrum{1,2}.cipig.net:20055`) répondaient aussi mais sont des ElectrumX (pas de `token_filter`) : non retenus.
+
+### Dash : ElectrumX publics de Komodo (mainnet) ; pas de défaut sur testnet
+
+**Mainnet** : serveurs **ElectrumX publics de Komodo** ([KomodoPlatform/coins › electrums/DASH](https://github.com/KomodoPlatform/coins/blob/master/electrums/DASH)), comme pour Dogecoin.
+
+| Hôte (Rust uniquement, socket TLS brute) | Rôle | Ce qu'il voit |
+|---|---|---|
+| `dash.electrum1.cipig.net:20061` | serveur principal (mêmes appels que Dogecoin) | Tes *script hashes* Dash, les txid de tes pièces et de leurs transactions précédentes, tes transactions signées ; l'IP d'un relais de sortie Tor (ton IP en mode clair) |
+| `dash.electrum2.cipig.net:20061` | secours, essayé **seulement** si le premier est injoignable | Idem |
+
+- Allowlist : `net::ELECTRUM_HOSTS` (famille `dash`, hôte et port). TLS Let's Encrypt validé normalement. `dash.electrum3.cipig.net`, aussi listé, refusait les connexions le 01/11/2026 : non retenu.
+- Vérifié en direct le 01/11/2026 (en clair, lectures seulement) : ElectrumX 2.0.0, genesis Dash mainnet `00000ffd590b1485…`, `estimatefee` 0,00001 DASH/kB.
+- Les transactions **spéciales** de Dash (DIP2 : coinbase, ProTx, retraits Platform…) sont lues et vérifiées (txid sur la sérialisation complète) mais leurs pièces ne sont pas proposées à la dépense (voir SECURITY.md).
+
+**Testnet** : **aucun** serveur par défaut (`dash_*` → `SERVER_INVALID` tant que tu n'as pas configuré un serveur). Komodo ne publie pas de serveur Dash testnet ; la liste de serveurs de Dash Electrum (`dashpay/electrum-dash`) est archivée (novembre 2024) et ne contient plus de liste exploitable ; la documentation Dash décrit seulement comment monter son propre ElectrumX testnet (ports 51001/51002).
+
 Les tables d'adresses (ALT) d'une transaction Solana v0 sont lues par Rust auprès du RPC Solana (celui des réglages, sinon le RPC par défaut ci-dessus), jamais transmises par l'interface. Kyro fait confiance à ce RPC pour leur contenu, comme pour les soldes ; une table introuvable, désactivée ou incomplète bloque l'aperçu et la signature.
 
 ## Serveurs personnalisés (Réglages → Réseaux)
 
-Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, Electrum ou ton nœud Bitcoin Core), Litecoin et Dogecoin (Esplora ; pour Dogecoin mainnet, il remplace les ElectrumX de Komodo), TRON (API HTTP java-tron, comme TronGrid ; l'historique exige l'API `/v1` de TronGrid : avec un nœud seul, il est refusé avec un message clair), XRP Ledger (JSON-RPC rippled), Cardano (instance Koios), chaque chaîne EVM, chaque cluster Solana. Règles communes :
+Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, Electrum ou ton nœud Bitcoin Core), Litecoin, Dogecoin, Bitcoin Cash et Dash (Esplora ; pour Dogecoin et Dash mainnet il remplace les ElectrumX de Komodo, pour Bitcoin Cash les Fulcrum publics — un serveur **Electrum** perso n'est pas encore accepté pour ces chaînes), TRON (API HTTP java-tron, comme TronGrid ; l'historique exige l'API `/v1` de TronGrid : avec un nœud seul, il est refusé avec un message clair), XRP Ledger (JSON-RPC rippled), Cardano (instance Koios), chaque chaîne EVM, chaque cluster Solana. Règles communes :
 - **chaque nouvel hôte est confirmé dans une fenêtre système native avant la moindre requête** (« Nouveau serveur » : à quoi il sert, `schéma://hôte:port`), que ce soit pour l'enregistrer, le tester ou lire le certificat d'un serveur Electrum. Sans ton accord, rien ne part : ni requête, ni résolution DNS, ni connexion à une adresse de ton réseau local. Un hôte déjà enregistré, ou autorisé plus tôt dans la session, n'est pas redemandé ; changer de port compte comme un nouvel hôte. Si tu n'as pas saisi l'adresse toi-même, refuse : une interface compromise pourrait s'en servir pour faire sortir des données (le nom d'hôte lui-même peut porter des données) ou sonder ton réseau local ;
 - un serveur personnalisé n'est autorisé **que pour sa propre famille** et passe par les **circuits Tor isolés** de cette famille ;
-- il est vérifié à l'enregistrement : il doit être sur le bon réseau (genesis Bitcoin, Litecoin, Dogecoin ou TRON, `network_id` XRPL, `networkmagic` Cardano, `eth_chainId`, genesis Solana), sinon il est refusé ;
+- il est vérifié à l'enregistrement : il doit être sur le bon réseau (genesis Bitcoin, Litecoin, Dogecoin, Dash ou TRON ; Bitcoin Cash : genesis **et** bloc 478 559 après la scission, `network_id` XRPL, `networkmagic` Cardano, `eth_chainId`, genesis Solana), sinon il est refusé ;
 - dès qu'il est configuré, le serveur par défaut de cette chaîne est **refusé** : si ton serveur tombe, Kyro affiche une erreur (`SERVER_UNREACHABLE`) et **ne se rabat jamais** sur le serveur par défaut — sinon tes adresses partiraient chez le tiers que tu as justement voulu éviter ;
 - jamais d'identifiants dans une URL ; `http://` en clair n'est permis que pour une adresse `.onion` via Tor (le protocole onion authentifie le service et chiffre de bout en bout) et, pour Bitcoin Core seulement, pour une adresse locale ;
 - Bitcoin Core : le fichier `.cookie` n'est utilisé que pour un nœud **local ou de ton réseau local**, et se choisit dans le sélecteur de fichiers du système (voir [SECURITY.md](../SECURITY.md)) ; pour un nœud distant, `rpcuser` / `rpcpassword`.
@@ -105,7 +137,8 @@ Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, E
 | Bitcoin Core **distant** (`https://` ou `.onion`) | Tes descripteurs publics (xpub : **tout l'historique de ton compte**, présent et futur), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés privées |
 | litecoinspace.org (défaut Litecoin) | Tes adresses Litecoin, les txid de tes pièces, tes transactions ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
 | ElectrumX de Komodo (défaut Dogecoin mainnet) | Tes *script hashes* Dogecoin, les txid de tes pièces et de leurs transactions précédentes, tes transactions ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
-| Esplora Litecoin / Dogecoin personnalisé (`https://` ou `.onion`) | Tes adresses, les txid de tes pièces (Dogecoin : chaque transaction précédente que tu dépenses), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés |
+| Fulcrum publics (défaut Bitcoin Cash, mainnet et chipnet) / ElectrumX de Komodo (défaut Dash mainnet) | Tes *script hashes* Bitcoin Cash / Dash, les txid de tes pièces et de leurs transactions précédentes, tes transactions ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
+| Esplora Litecoin / Dogecoin / Bitcoin Cash / Dash personnalisé (`https://` ou `.onion`) | Tes adresses, les txid de tes pièces (Dogecoin : chaque transaction précédente que tu dépenses), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés |
 | TronGrid (défaut TRON) / nœud java-tron personnalisé | Ton adresse TRON, tes soldes et ressources, le destinataire et le montant simulés, tes transactions signées ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** | Ta phrase, tes clés |
 | Serveur XRPL par défaut / rippled personnalisé | Ton adresse XRP, l'adresse des destinataires, tes transactions signées ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** | Ta phrase, tes clés |
 | Koios par défaut / Koios personnalisé (Cardano) | Ton adresse Cardano (et donc ta clé de staking), tes transactions signées ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** | Ta phrase, tes clés |

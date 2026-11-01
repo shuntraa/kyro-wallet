@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dash-tx-hex"
+description = "Enables the dash_tx_hex command without any pre-configured scope."
+commands.allow = ["dash_tx_hex"]
+
+[[permission]]
+identifier = "deny-dash-tx-hex"
+description = "Denies the dash_tx_hex command without any pre-configured scope."
+commands.deny = ["dash_tx_hex"]
