@@ -55,19 +55,20 @@ mod tron;
 mod utxo;
 mod vault;
 mod watch;
+mod hw_keys;
 mod xrp;
 mod zcash;
 
 pub use algorand::{
     algo_address, algo_address_bytes, algo_address_of_pubkey, algo_decode_signed, algo_decode_tx,
-    algo_encode_signed, algo_genesis, algo_path, algo_public_key, algo_sign, algo_verify_signed,
+    algo_encode_signed, algo_genesis, algo_path, algo_public_key, algo_sign, algo_verify_signed, algo_hw_message, algo_hw_signed,
     AlgoPayment, AlgoTxSummary, AlgoWarning, ALGO_MAINNET_GENESIS, ALGO_MAX_NOTE,
     ALGO_MAX_VALIDITY, ALGO_MIN_BALANCE, ALGO_MIN_FEE, ALGO_TESTNET_GENESIS,
 };
 pub use aptos::{
     aptos_address, aptos_address_bytes_of_pubkey, aptos_address_of_pubkey, aptos_address_string,
     aptos_decode_tx, aptos_parse_address, aptos_path, aptos_public_key, aptos_sign,
-    aptos_signing_message, aptos_simulation_bytes, aptos_tx_hash, aptos_verify_signed,
+    aptos_signing_message, aptos_simulation_bytes, aptos_tx_hash, aptos_verify_signed, aptos_hw_message, aptos_hw_signed,
     AptosTransfer, AptosTxSummary, AptosWarning, APTOS_ED25519_SCHEME, APTOS_HIGH_FEE_OCTAS,
     APTOS_MAINNET_CHAIN_ID, APTOS_TESTNET_CHAIN_ID, APTOS_TRANSFER_FUNCTION, OCTAS_PER_APT,
 };
@@ -103,7 +104,7 @@ pub use cosmos::{
     cosmos_address, cosmos_address_bytes, cosmos_address_from_bytes, cosmos_address_of_pubkey,
     cosmos_chain_id, cosmos_decode_sign_doc, cosmos_normalize_address, cosmos_path,
     cosmos_public_key, cosmos_send_sign_doc, cosmos_sign, cosmos_simulation_tx,
-    cosmos_verify_signed, proto as cosmos_proto, CosmosSendRequest, CosmosTxSummary, CosmosWarning,
+    cosmos_verify_signed, cosmos_amino_sign_doc, cosmos_amino_json, cosmos_amino_signed, COSMOS_SIGN_MODE_AMINO_JSON, proto as cosmos_proto, CosmosSendRequest, CosmosTxSummary, CosmosWarning,
     COSMOS_CHAIN_ID_MAINNET, COSMOS_CHAIN_ID_TESTNET, COSMOS_DENOM, COSMOS_HRP, COSMOS_MAX_MEMO,
     COSMOS_MSG_SEND, COSMOS_SECP256K1_PUBKEY, COSMOS_SIGN_MODE_DIRECT,
 };
@@ -153,7 +154,7 @@ pub use monero::{
 pub use near::{
     near_account_kind, near_address, near_decode_tx, near_hash_string, near_parse_hash,
     near_parse_public_key, near_path, near_public_key, near_public_key_string, near_sign,
-    near_verify_signed, NearAccountKind, NearTransfer, NearTxSummary, NearWarning, NEAR_DECIMALS,
+    near_verify_signed, near_hw_message, near_hw_signed, NearAccountKind, NearTransfer, NearTxSummary, NearWarning, NEAR_DECIMALS,
 };
 pub use network::{BtcKind, Network};
 pub use polkadot::{
@@ -190,7 +191,7 @@ pub use sui::{
     sui_parse_address, sui_path, sui_public_key, SUI_ED25519_FLAG,
 };
 pub use sui_tx::{
-    sui_decode_tx, sui_sign, sui_tx_digest, sui_verify_signed, SuiGasCoinView, SuiObjectRef,
+    sui_decode_tx, sui_sign, sui_tx_digest, sui_verify_signed, sui_hw_message, sui_hw_signature, SuiGasCoinView, SuiObjectRef,
     SuiTransfer, SuiTransferAmount, SuiTxSummary, SuiWarning, MIST_PER_SUI, SUI_COIN_TYPE,
     SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS,
 };
@@ -221,6 +222,7 @@ pub use utxo::{
     LTC_DUST_RELAY_FEE_PER_KVB, LTC_MIN_RELAY_FEE_PER_KVB,
 };
 pub use vault::{open, seal, KdfParams, VaultFile, VAULT_VERSION};
+pub use hw_keys::{HwKeyChain, WatchKey};
 pub use watch::{
     sol_path, HwDeviceKind, WatchEvm, WatchOnlyAccount, WatchOnlyStore, WatchSol, EVM_NODE_PATH,
     MAX_HW_ACCOUNT, WATCH_ONLY_VERSION,

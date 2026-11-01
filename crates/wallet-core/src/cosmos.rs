@@ -49,6 +49,9 @@ pub const COSMOS_MSG_SEND: &str = "/cosmos.bank.v1beta1.MsgSend";
 pub const COSMOS_SECP256K1_PUBKEY: &str = "/cosmos.crypto.secp256k1.PubKey";
 /// `SignMode.SIGN_MODE_DIRECT`.
 pub const COSMOS_SIGN_MODE_DIRECT: i32 = 1;
+/// `SignMode.SIGN_MODE_LEGACY_AMINO_JSON`: the only mode of the Ledger Cosmos app (hardware
+/// wallets only, see [`cosmos_amino_json`]).
+pub const COSMOS_SIGN_MODE_AMINO_JSON: i32 = 127;
 /// Longest memo accepted (characters): the Hub's `max_memo_characters` auth parameter (512,
 /// read live on 2026-11-01 on mainnet and on the testnet).
 pub const COSMOS_MAX_MEMO: usize = 512;
@@ -475,6 +478,9 @@ pub struct CosmosTxSummary {
 struct Parsed {
     doc: proto::SignDoc,
     summary: CosmosTxSummary,
+    /// [`COSMOS_SIGN_MODE_DIRECT`] or [`COSMOS_SIGN_MODE_AMINO_JSON`].
+    mode: i32,
+    memo: String,
 }
 
 fn parse_sign_doc(doc_bytes: &[u8], our_pubkey: &[u8; 33], chain_id: &str) -> Result<Parsed> {
@@ -529,8 +535,14 @@ fn parse_sign_doc(doc_bytes: &[u8], our_pubkey: &[u8; 33], chain_id: &str) -> Re
         .as_ref()
         .and_then(|m| m.single.as_ref())
         .map(|s| s.mode);
-    if mode != Some(COSMOS_SIGN_MODE_DIRECT) {
-        return Err(bad("mode de signature : SIGN_MODE_DIRECT attendu"));
+    let mode = match mode {
+        Some(m @ (COSMOS_SIGN_MODE_DIRECT | COSMOS_SIGN_MODE_AMINO_JSON)) => m,
+        _ => return Err(bad("mode de signature : SIGN_MODE_DIRECT attendu")),
+    };
+    if mode == COSMOS_SIGN_MODE_AMINO_JSON && !amino_safe_memo(&body.memo) {
+        return Err(bad(
+            "mémo : avec un Ledger, caractères ASCII imprimables seulement (sans \" \\ < > &)",
+        ));
     }
     let fee = auth.fee.as_ref().ok_or_else(|| bad("frais absents"))?;
     if !fee.payer.is_empty() || !fee.granter.is_empty() {
@@ -556,6 +568,7 @@ fn parse_sign_doc(doc_bytes: &[u8], our_pubkey: &[u8; 33], chain_id: &str) -> Re
     if fee_amount > HIGH_FEE_UATOM {
         warnings.push(CosmosWarning::HighFee);
     }
+    let raw_memo = body.memo.clone();
     let (memo, memo_hex) = if body.memo.is_empty() {
         (None, None)
     } else {
@@ -580,7 +593,114 @@ fn parse_sign_doc(doc_bytes: &[u8], our_pubkey: &[u8; 33], chain_id: &str) -> Re
         requires_extra_confirmation: !warnings.is_empty(),
         warnings,
     };
-    Ok(Parsed { doc, summary })
+    Ok(Parsed {
+        doc,
+        summary,
+        mode,
+        memo: raw_memo,
+    })
+}
+
+/// Memo characters that need no escaping in the amino JSON of any encoder (Go's
+/// `encoding/json` escapes `<`, `>`, `&`): printable ASCII without `"` and `\`.
+fn amino_safe_memo(memo: &str) -> bool {
+    memo.bytes()
+        .all(|b| (0x20..0x7f).contains(&b) && !matches!(b, b'"' | b'\\' | b'<' | b'>' | b'&'))
+}
+
+/// Canonical amino JSON (`StdSignDoc`, keys sorted, no whitespace, integers as strings) of a
+/// parsed `MsgSend`, as the Cosmos SDK's `aminojson` sign-mode handler and CosmJS produce it.
+fn amino_json(p: &Parsed) -> String {
+    let s = &p.summary;
+    format!(
+        concat!(
+            r#"{{"account_number":"{}","chain_id":"{}","fee":{{"amount":[{{"amount":"{}","denom":"{}"}}],"gas":"{}"}},"#,
+            r#""memo":"{}","msgs":[{{"type":"cosmos-sdk/MsgSend","value":{{"amount":[{{"amount":"{}","denom":"{}"}}],"#,
+            r#""from_address":"{}","to_address":"{}"}}}}],"sequence":"{}","timeout_height":"{}"}}"#
+        ),
+        s.account_number,
+        s.chain_id,
+        s.fee,
+        COSMOS_DENOM,
+        s.gas_limit,
+        p.memo,
+        s.amount,
+        COSMOS_DENOM,
+        s.from,
+        s.to,
+        s.sequence,
+        s.timeout_height,
+    )
+}
+
+fn sign_doc_bytes(sign_doc_hex: &str) -> Result<Vec<u8>> {
+    hex::decode(sign_doc_hex.trim()).map_err(|_| Error::input("SignDoc : hexadécimal attendu"))
+}
+
+/// Hardware wallet: the same transaction as a DIRECT SignDoc (hex) built by
+/// [`cosmos_send_sign_doc`], with the sign mode set to LEGACY_AMINO_JSON (the only one the
+/// Ledger Cosmos app signs). The result is decoded back under the usual rules.
+pub fn cosmos_amino_sign_doc(sign_doc_hex: &str, our_pubkey: &[u8; 33], net: Network) -> Result<String> {
+    let raw = sign_doc_bytes(sign_doc_hex)?;
+    let parsed = parse_sign_doc(&raw, our_pubkey, cosmos_chain_id(net))?;
+    let mut auth: proto::AuthInfo = strict(&parsed.doc.auth_info_bytes, "AuthInfo")?;
+    auth.signer_infos[0].mode_info = Some(proto::ModeInfo {
+        single: Some(proto::ModeInfoSingle {
+            mode: COSMOS_SIGN_MODE_AMINO_JSON,
+        }),
+    });
+    let doc = proto::SignDoc {
+        auth_info_bytes: auth.encode_to_vec(),
+        ..parsed.doc
+    }
+    .encode_to_vec();
+    parse_sign_doc(&doc, our_pubkey, cosmos_chain_id(net))?;
+    Ok(hex::encode(doc))
+}
+
+/// Hardware wallet: the amino JSON the Ledger Cosmos app displays and signs (SHA-256 of these
+/// bytes, ECDSA), for a SignDoc in LEGACY_AMINO_JSON mode decoded under the usual rules.
+pub fn cosmos_amino_json(sign_doc_hex: &str, our_pubkey: &[u8; 33], net: Network) -> Result<Vec<u8>> {
+    let parsed = parse_sign_doc(&sign_doc_bytes(sign_doc_hex)?, our_pubkey, cosmos_chain_id(net))?;
+    if parsed.mode != COSMOS_SIGN_MODE_AMINO_JSON {
+        return Err(bad("mode de signature : LEGACY_AMINO_JSON attendu"));
+    }
+    Ok(amino_json(&parsed).into_bytes())
+}
+
+/// Hardware wallet: `(TxRaw base64, hash, summary)` from the DER signature returned by the
+/// Ledger Cosmos app over [`cosmos_amino_json`]. Normalized to low-S and verified (key of the
+/// SignDoc, SHA-256 of the amino JSON) before it is returned.
+pub fn cosmos_amino_signed(
+    sign_doc_hex: &str,
+    our_pubkey: &[u8; 33],
+    net: Network,
+    der_sig: &[u8],
+) -> Result<(String, String, CosmosTxSummary)> {
+    use base64::Engine as _;
+    let parsed = parse_sign_doc(&sign_doc_bytes(sign_doc_hex)?, our_pubkey, cosmos_chain_id(net))?;
+    if parsed.mode != COSMOS_SIGN_MODE_AMINO_JSON {
+        return Err(bad("mode de signature : LEGACY_AMINO_JSON attendu"));
+    }
+    let mut sig = Signature::from_der(der_sig).map_err(|_| bad("signature DER de l'appareil invalide"))?;
+    sig.normalize_s();
+    let pk = PublicKey::from_slice(our_pubkey).map_err(|_| bad("clé publique invalide"))?;
+    let digest = sha256::Hash::hash(amino_json(&parsed).as_bytes()).to_byte_array();
+    Secp256k1::verification_only()
+        .verify_ecdsa(&Message::from_digest(digest), &sig, &pk)
+        .map_err(|_| bad("la signature de l'appareil ne se vérifie pas"))?;
+    let tx = proto::TxRaw {
+        body_bytes: parsed.doc.body_bytes,
+        auth_info_bytes: parsed.doc.auth_info_bytes,
+        signatures: vec![sig.serialize_compact().to_vec()],
+    }
+    .encode_to_vec();
+    let hash = hex::encode_upper(sha256::Hash::hash(&tx).to_byte_array());
+    Ok((
+        base64::engine::general_purpose::STANDARD.encode(&tx),
+        hash,
+        parsed.summary,
+    ))
 }
 
 /// Decodes a serialized SignDoc (hex) for the dialog. Refused: see the module documentation;
@@ -615,6 +735,9 @@ pub fn cosmos_sign(
     let sk = &key.xpriv().private_key;
     let pk = sk.public_key(&secp);
     let parsed = parse_sign_doc(&raw, &pk.serialize(), cosmos_chain_id(net))?;
+    if parsed.mode != COSMOS_SIGN_MODE_DIRECT {
+        return Err(bad("mode de signature : SIGN_MODE_DIRECT attendu"));
+    }
     let msg = Message::from_digest(sha256::Hash::hash(&raw).to_byte_array());
     let mut sig = secp.sign_ecdsa(&msg, sk);
     sig.normalize_s();
@@ -682,12 +805,13 @@ pub fn cosmos_verify_signed(
         return Err(bad("la signature n'est pas low-S (non canonique)"));
     }
     let pk = PublicKey::from_slice(&pk_bytes).map_err(|_| bad("clé publique invalide"))?;
+    let digest = if parsed.mode == COSMOS_SIGN_MODE_AMINO_JSON {
+        sha256::Hash::hash(amino_json(&parsed).as_bytes())
+    } else {
+        sha256::Hash::hash(&doc)
+    };
     Secp256k1::verification_only()
-        .verify_ecdsa(
-            &Message::from_digest(sha256::Hash::hash(&doc).to_byte_array()),
-            &sig,
-            &pk,
-        )
+        .verify_ecdsa(&Message::from_digest(digest.to_byte_array()), &sig, &pk)
         .map_err(|_| bad("la signature ne se vérifie pas"))?;
     Ok((
         hex::encode_upper(sha256::Hash::hash(&raw).to_byte_array()),

@@ -314,3 +314,27 @@ fn everything_else_is_refused() {
     // Not base64.
     assert!(sui_decode_tx("@@", &me).is_err());
 }
+
+#[test]
+fn hardware_wallet_message_and_signature() {
+    let (s, t) = ours_transfer(SuiTransferAmount::Mist(1));
+    let bytes = t.encode().unwrap();
+    let bcs = b64(&bytes);
+    // Ledger Sui app: intent `TransactionData` (0, 0, 0) then the BCS.
+    let msg = wallet_core::sui_hw_message(&bcs).unwrap();
+    assert_eq!(&msg[..3], &[0, 0, 0]);
+    assert_eq!(&msg[3..], bytes.as_slice());
+    let (sig, _) = sui_sign(&s, 0, &bcs).unwrap();
+    let raw = unb64(&sig);
+    let pk: [u8; 32] = raw[65..].try_into().unwrap();
+    assert_eq!(
+        wallet_core::sui_hw_signature(&bcs, &pk, &raw[1..65]).unwrap(),
+        sig
+    );
+    let mut bad = raw[1..65].to_vec();
+    bad[0] ^= 1;
+    assert!(wallet_core::sui_hw_signature(&bcs, &pk, &bad).is_err());
+    assert!(wallet_core::sui_hw_signature(&bcs, &pk, &raw[1..64]).is_err());
+    let other = wallet_core::sui_public_key(&s, 1).unwrap();
+    assert!(wallet_core::sui_hw_signature(&bcs, &other, &raw[1..65]).is_err());
+}

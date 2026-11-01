@@ -543,6 +543,27 @@ pub fn aptos_verify_signed(signed_hex: &str) -> Result<(String, AptosTransfer)> 
     Ok((aptos_tx_hash(&signed), t))
 }
 
+/// Hardware wallet (Ledger Aptos app): the signing message sent to the device
+/// (`SHA3-256("APTOS::RawTransaction") || bcs`), after strict decoding of the transfer.
+pub fn aptos_hw_message(raw_hex: &str) -> Result<Vec<u8>> {
+    let raw = unhex(raw_hex, "transaction")?;
+    AptosTransfer::decode(&raw)?;
+    Ok(aptos_signing_message(&raw))
+}
+
+/// Hardware wallet: signed transaction (hex) and hash from the device's signature, checked
+/// like [`aptos_verify_signed`] (key of the sender, strict signature) before it is returned.
+pub fn aptos_hw_signed(raw_hex: &str, pubkey: &[u8; 32], sig: &[u8]) -> Result<(String, String)> {
+    let sig: [u8; 64] = sig
+        .try_into()
+        .map_err(|_| bad("signature de l'appareil : 64 octets attendus"))?;
+    let raw = unhex(raw_hex, "transaction")?;
+    let signed = AptosTransfer::decode(&raw)?.signed_bytes(pubkey, &sig)?;
+    let signed_hex = hex::encode(&signed);
+    let (hash, _) = aptos_verify_signed(&signed_hex)?;
+    Ok((signed_hex, hash))
+}
+
 /// Body for `/transactions/simulate`: the transfer with our public key and an all-zero
 /// signature (the node refuses to simulate a validly signed transaction).
 pub fn aptos_simulation_bytes(raw_hex: &str, pubkey: &[u8; 32]) -> Result<Vec<u8>> {
