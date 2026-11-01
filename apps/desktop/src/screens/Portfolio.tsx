@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useApp } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
 import { PERIODS, usePortfolioChart, type Period } from '../state/charts';
-import { NNBSP, fmtChartTime, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
+import { fmtChartTime, fmtFiat, fmtPct } from '../lib/format';
 import { BigFiat, HIDDEN, TrendPill } from '../components/kit';
 import { AllocationBar, SmoothChart } from '../components/charts';
 import { AssetListsCard } from '../components/AssetLists';
@@ -13,10 +13,12 @@ import { useTorBlocked } from '../components/Tor';
 import { useOnTorReady } from '../state/tor';
 import { idx, useMedia } from '../components/motion';
 import { IconDown, IconEye, IconEyeOff, IconSwap, IconUp } from '../components/icons';
+import { useT } from '../i18n';
 
 export function Portfolio() {
   const { settings, hideBalances, setHideBalances, navigate, network } = useApp();
   const pf = usePortfolio();
+  const { t, tp } = useT();
   const [period, setPeriod] = useState<Period>('1J');
   const chart = usePortfolioChart(period);
   useOnTorReady(chart.reload);
@@ -31,25 +33,25 @@ export function Portfolio() {
   // At the 720 px minimum height the hero gives room back to the asset list.
   const tall = useMedia('(min-height: 820px)');
   const chartH = tall ? 170 : 120;
-  const periodLabel = { '1J': 'aujourd’hui', '1S': 'sur 7 jours', '1M': 'sur 30 jours', '1A': 'sur un an', Tout: 'depuis le début' }[period];
+  const periodLabel = t(`portfolio.periodLabel${period}`);
 
   const alloc = pf.holdings.filter((h) => (h.value ?? 0) > 0);
   const top = alloc.slice(0, 5);
   const rest = alloc.slice(5).reduce((s, h) => s + (h.value ?? 0), 0);
-  const slices = [...top.map((h) => ({ id: h.asset.id, label: top.filter((x) => x.asset.name === h.asset.name).length > 1 ? `${h.asset.name} · ${h.asset.kind === 'spl' ? 'Solana' : h.asset.kind === 'erc20' ? 'ERC-20' : h.asset.kind === 'trc20' ? 'TRC-20' : h.asset.symbol}` : h.asset.name, value: h.value ?? 0, color: h.asset.color })), ...(rest > 0 ? [{ id: 'other', label: 'Autres', value: rest, color: '#5E6470' }] : [])];
+  const slices = [...top.map((h) => ({ id: h.asset.id, label: top.filter((x) => x.asset.name === h.asset.name).length > 1 ? `${h.asset.name} · ${h.asset.kind === 'spl' ? 'Solana' : h.asset.kind === 'erc20' ? 'ERC-20' : h.asset.kind === 'trc20' ? 'TRC-20' : h.asset.symbol}` : h.asset.name, value: h.value ?? 0, color: h.asset.color })), ...(rest > 0 ? [{ id: 'other', label: t('portfolio.others'), value: rest, color: '#5E6470' }] : [])];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 px-7 pt-6 pb-5">
       {/* The balance sits on the page, not in a box: figure, then the curve on a ruled baseline. */}
-      <section aria-label="Valeur du portefeuille" className={`relative flex shrink-0 flex-col border-b border-line ${tall ? 'h-[300px]' : 'h-[250px]'}`}>
+      <section aria-label={t('portfolio.valueAria')} className={`relative flex shrink-0 flex-col border-b border-line ${tall ? 'h-[300px]' : 'h-[250px]'}`}>
         <div className="relative z-10 flex items-start justify-between gap-6">
           <div className="flex min-w-0 flex-col gap-3">
             <div className="flex items-center gap-2">
-              <span className="eyebrow">Valeur totale</span>
-              <button type="button" aria-label={hideBalances ? 'Afficher les soldes' : 'Masquer les soldes'} onClick={() => setHideBalances(!hideBalances)} className="press flex size-[24px] items-center justify-center rounded-[5px] text-faint hover:bg-raised hover:text-text">
+              <span className="eyebrow">{t('portfolio.totalValue')}</span>
+              <button type="button" aria-label={hideBalances ? t('portfolio.showBalances') : t('portfolio.hideBalances')} onClick={() => setHideBalances(!hideBalances)} className="press flex size-[24px] items-center justify-center rounded-[5px] text-faint hover:bg-raised hover:text-text">
                 {hideBalances ? <IconEyeOff size={14} /> : <IconEye size={14} />}
               </button>
-              {network === 'testnet' && <span className="text-[11px] text-faint">· prix mainnet, valeur indicative</span>}
+              {network === 'testnet' && <span className="text-[11px] text-faint">{t('portfolio.testnetPrices')}</span>}
             </div>
             <div className="figure text-[clamp(56px,5.4vw,76px)] leading-[0.92] tracking-[-0.05em]">
               {pf.balancesLoaded && pf.markets ? <BigFiat value={pf.total} currency={cur} hidden={hideBalances} tick className="fade-in inline-block" /> : <Skeleton className="h-[64px] w-[340px]" />}
@@ -63,18 +65,18 @@ export function Portfolio() {
                   <span className="text-mute">{periodLabel}</span>
                 </span>
               ) : (
-                <span className="text-mute">{pf.balancesLoaded ? (pf.total === 0 ? 'Aucun fonds pour l’instant' : '') : 'Chargement des soldes…'}</span>
+                <span className="text-mute">{pf.balancesLoaded ? (pf.total === 0 ? t('portfolio.noFundsYet') : '') : t('portfolio.loadingBalances')}</span>
               )}
             </div>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-4">
-            <Segmented label="Période" value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p, label: p }))} />
+            <Segmented label={t('portfolio.period')} value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p, label: t(`portfolio.period${p}`) }))} />
             <div className="flex gap-2">
               <Button variant="primary" size="lg" onClick={() => navigate({ name: 'send' })}>
-                <IconUp size={16} /> Envoyer
+                <IconUp size={16} /> {t('common.send')}
               </Button>
               <Button size="lg" onClick={() => navigate({ name: 'receive' })}>
-                <IconDown size={16} /> Recevoir
+                <IconDown size={16} /> {t('common.receive')}
               </Button>
               <Button size="lg" onClick={() => navigate({ name: 'swap' })}>
                 <IconSwap size={16} sw={2.2} /> Swap
@@ -90,7 +92,7 @@ export function Portfolio() {
               height={chartH}
               defaultPoint="last"
               padBottom={10}
-              ariaLabel={`Courbe du portefeuille ${periodLabel}`}
+              ariaLabel={t('portfolio.chartAria', { period: periodLabel })}
               renderTooltip={(i) => ({ label: fmtChartTime(series[i]?.[0] ?? Date.now()), value: hideBalances ? HIDDEN : fmtFiat(values[i] ?? 0, cur) })}
             />
           ) : (
@@ -98,7 +100,7 @@ export function Portfolio() {
               <svg width="100%" height="60" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
                 <path d="M0,40 L1000,40" stroke="#22252B" strokeWidth="1.5" strokeDasharray="3 6" vectorEffect="non-scaling-stroke" />
               </svg>
-              <span className="absolute bottom-14 left-0 text-[12px] text-faint">{chart.loading ? 'Chargement de la courbe…' : chart.error ? (torBlocked ? 'En attente de Tor…' : `Courbe indisponible : ${chart.error.message}`) : 'La courbe apparaîtra avec tes premiers fonds.'}</span>
+              <span className="absolute bottom-14 left-0 text-[12px] text-faint">{chart.loading ? t('portfolio.loadingChart') : chart.error ? (torBlocked ? t('shell.waitingTor') : t('portfolio.chartUnavailable', { error: chart.error.message })) : t('portfolio.chartLater')}</span>
             </div>
           )}
         </div>
@@ -108,23 +110,22 @@ export function Portfolio() {
         <AssetListsCard className="rise flex-1" />
         {/* One column, two ruled sections: allocation, then the vault. */}
         <div className="rise flex w-[340px] shrink-0 flex-col overflow-y-auto rounded-panel border border-line bg-card scroll-thin" style={idx(1)}>
-          <section aria-label="Répartition" className="flex flex-col gap-3.5 border-b border-line px-5 pt-4 pb-[18px]">
+          <section aria-label={t('portfolio.allocation')} className="flex flex-col gap-3.5 border-b border-line px-5 pt-4 pb-[18px]">
             <div className="flex items-baseline justify-between">
-              <span className="eyebrow">Répartition</span>
+              <span className="eyebrow">{t('portfolio.allocation')}</span>
               <span className="font-mono text-[11px] text-mute">
-                {alloc.length} actif{alloc.length > 1 ? 's' : ''}
+                {tp('portfolio.assetCount', alloc.length)}
               </span>
             </div>
             <AllocationBar slices={slices} />
             <div className="grid grid-cols-2 gap-x-5 gap-y-[7px] text-[13px]">
-              {slices.length === 0 && <span className="col-span-2 text-mute">La répartition s’affichera avec tes premiers fonds.</span>}
+              {slices.length === 0 && <span className="col-span-2 text-mute">{t('portfolio.allocationLater')}</span>}
               {slices.map((s) => (
                 <span key={s.id} className="flex min-w-0 items-center gap-2">
                   <span className="size-[7px] shrink-0 rounded-[1.5px]" style={{ background: s.color }} />
                   <span className="min-w-0 flex-1 truncate text-text2">{s.label}</span>
                   <span className="font-mono text-[12px] text-text">
-                    {fmtNumber(pf.total ? (s.value / pf.total) * 100 : 0, 0)}
-                    {NNBSP}%
+                    {fmtPct(pf.total ? (s.value / pf.total) * 100 : 0, { sign: false, decimals: 0 })}
                   </span>
                 </span>
               ))}
