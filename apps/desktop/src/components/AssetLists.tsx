@@ -187,6 +187,9 @@ function MineList({ sort }: { sort: Sort }) {
         )}
         {!torBlocked && downChains.length > 0 && <ServerDownLine className="px-5 py-3" what={downChains.join(', ')} />}
         {!torBlocked && Object.entries(pf.chainErrors).some(([k, m]) => k === 'dogecoin' && serverMissing(m)) && <ServerMissingLine className="px-5 py-3" coin="Dogecoin" />}
+        {!torBlocked && Object.entries(pf.chainErrors).some(([k, m]) => k === 'zcash' && serverMissing(m)) && (
+          <span role="status" className="px-5 py-3 text-[12px] text-warn">Zcash testnet : aucun serveur public, Kyro ne peut ni lire ni envoyer de ZEC de test (Zcash fonctionne sur le réseau principal).</span>
+        )}
         {pf.marketError && <ErrorLine className="px-5 py-3" error={pf.marketError}>Prix indisponibles : {pf.marketError}</ErrorLine>}
       </div>
     </div>

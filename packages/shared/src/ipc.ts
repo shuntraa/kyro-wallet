@@ -60,11 +60,16 @@ export interface Accounts {
    * and change both use it; Rust signs with index 0 of the account only (§2.7).
    */
   cardano: AddressInfo;
+  /**
+   * Zcash, transparent addresses only: BIP44 P2PKH `m/44'/133'/a'` (testnet `m/44'/1'/a'`),
+   * `address` = `…/0/0` (`t1…` / `tm…`) (§2.4b).
+   */
+  zec: UtxoAccountInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'zec';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'zec'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -381,6 +386,81 @@ export interface UtxoCommands<P extends 'ltc' | 'doge'> {
 }
 
 type Prefixed<P extends 'ltc' | 'doge'> = { [K in keyof UtxoCommands<P> as `${P}_${K & string}`]: UtxoCommands<P>[K] };
+
+// ---------------------------------------------------------------- Zcash, transparent only (§2.4b)
+
+/** Zcash backend: Kyro's default Electrum servers only (mainnet); none on testnet. */
+export interface ZecBackendInfo {
+  kind: 'default';
+  network: Network;
+  /** Host, `""` on testnet (no public server). */
+  label: string;
+  /** `false`: no server, every read fails with SERVER_INVALID. */
+  available: boolean;
+  tor: boolean;
+}
+
+/** A coin the interface proposes: outpoint and which address of the account it pays. No amount: Rust reads it from the previous transaction. */
+export interface ZecCandidate {
+  txid: string;
+  vout: number;
+  change: boolean;
+  index: number;
+}
+
+/** A Zcash send as the interface describes it; Rust builds the transaction. `amount` in zatoshis. */
+export interface ZecSendArgs {
+  to: string;
+  amount: string;
+  max: boolean;
+  coins: ZecCandidate[];
+  /** Our change address `m/44'/133'/a'/1/changeIndex`. */
+  changeIndex: number;
+}
+
+export type ZecWarning = { kind: 'highFee' } | { kind: 'expiryCapped'; nextUpgradeHeight: number };
+
+/** Rust's construction and decoding (`wallet_core::ZecTxSummary`). Amounts: zatoshis, decimal strings. */
+export interface ZecTxSummary {
+  to: string;
+  toKind: 'p2pkh' | 'p2sh' | 'tex';
+  /** For a TEX recipient (ZIP 320), the `t1…` address it encodes. */
+  toAddress: string;
+  amount: string;
+  change: { address: string; amount: string; index: number } | null;
+  fee: string;
+  zip317Fee: string;
+  /** Remainder too small for a change output, included in `fee`. */
+  folded: string;
+  inputs: number;
+  inputTotal: string;
+  /** e.g. `NU6.3`. */
+  upgrade: string;
+  branchId: string;
+  targetHeight: number;
+  expiryHeight: number;
+  txid: string;
+  warnings: ZecWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+export interface ZecCommands {
+  zec_backend_info: { args: undefined; ret: ZecBackendInfo };
+  /** Vault unlocked. */
+  zec_address: { args: { change: boolean; index: number } & WithAccount; ret: string };
+  zec_address_info: { args: { address: string }; ret: EsploraAddressInfo };
+  /** Each UTXO checked by Rust against its previous transaction (`coinbase`: mined coin, not spendable by Kyro). */
+  zec_address_utxos: { args: { address: string }; ret: Array<EsploraUtxo & { coinbase?: boolean }> };
+  /** At most `BTC_TXS_CAP`, unconfirmed first; `shielded: true` = the transaction also moves shielded value (no transparent fee). */
+  zec_address_txs: { args: { address: string }; ret: Array<EsploraTx & { shielded?: boolean }> };
+  zec_tip_height: { args: undefined; ret: number };
+  /** The server's txid must equal the one Rust computes (ZIP 244). */
+  zec_broadcast: { args: { hex: string }; ret: string };
+  /** Vault unlocked; no password. What `zec_sign` would sign (same construction). */
+  zec_send_preview: { args: { request: ZecSendArgs } & WithAccount; ret: ZecTxSummary };
+  /** Password → Rust builds and decodes → native dialog (+ reinforced) → signed v5 transaction. */
+  zec_sign: { args: { request: ZecSendArgs; password: string } & WithAccount; ret: { hex: string; txid: string; summary: ZecTxSummary } };
+}
 
 // ---------------------------------------------------------------- TRON (§2.5)
 
@@ -1421,8 +1501,8 @@ export interface Commands {
   network_set: { args: { network: Network }; ret: boolean };
 }
 
-/** Every command, including the generated `ltc_*` / `doge_*` ones. */
-export interface AllCommands extends Commands, Prefixed<'ltc'>, Prefixed<'doge'> {}
+/** Every command, including the generated `ltc_*` / `doge_*` ones and the `zec_*` ones. */
+export interface AllCommands extends Commands, Prefixed<'ltc'>, Prefixed<'doge'>, ZecCommands {}
 
 export type CommandName = keyof AllCommands;
 export type ArgsOf<K extends CommandName> = AllCommands[K]['args'];

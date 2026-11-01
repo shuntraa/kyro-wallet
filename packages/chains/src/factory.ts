@@ -15,7 +15,8 @@ import { TronAdapter } from './tron/adapter';
 import { XrpAdapter } from './xrp/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
-import { xrpChain } from './registry';
+import { xrpChain, zecChain } from './registry';
+import { ZcashAdapter } from './zcash/adapter';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -34,6 +35,8 @@ export interface AdapterSet {
   xrp: XrpAdapter | null;
   /** Cardano: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   cardano: CardanoAdapter | null;
+  /** Zcash, transparent addresses only: vault only (hardware wallets: HW_UNSUPPORTED). */
+  zec: ZcashAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -74,9 +77,15 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...a }) : null;
   // Cardano: Rust picks the server (servers.cardano, default Koios).
   const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...a }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : [])];
-  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, all, hw: hw ?? null };
+  // Zcash (transparent only): Rust picks the server (Komodo's ElectrumX on mainnet, none on testnet).
+  const zec = accounts.zec && !hw ? new ZcashAdapter({ chain: zecChain(network), account: accounts.zec, ...(account ? { vaultAccount: account } : {}) }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(zec ? [zec] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : [])];
+  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, zec, all, hw: hw ?? null };
 }
+
+// ---------------------------------------------------------------- Zcash (transparent only)
+
+export { ZcashAdapter, rustZecBackend, zecAddressProblem, type ZecBackend, type ZecUnsigned, type ZecSigned, type DerivedZecAddress } from './zcash/adapter';
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin
 

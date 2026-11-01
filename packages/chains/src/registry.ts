@@ -10,7 +10,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+/** `zec`: Zcash, transparent addresses only (`zec_*`, §2.4b; Rust builds the transaction). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'zec';
 
 interface ChainBase {
   key: string;
@@ -47,7 +48,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | ZcashChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -178,6 +179,30 @@ export function dogeChain(network: Network): UtxoChain {
 }
 
 /**
+ * Zcash, TRANSPARENT ADDRESSES ONLY (t1… / t3…): Rust `zec_*` commands and `ZcashAdapter`
+ * (`packages/chains/src/zcash/`). Shielded (zs…) and unified (u1…) addresses are refused.
+ * Mainnet: Komodo's public ElectrumX servers; testnet: no public server (reads fail, said in the
+ * UI). Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface ZcashChain extends Omit<ChainBase, 'phase'> {
+  family: 'zec';
+  phase: 4;
+  /** Shielded pools are not supported: the UI says so wherever the address appears. */
+  transparentOnly: true;
+}
+
+const ZEC_CHAINS: Record<Network, ZcashChain> = {
+  testnet: { family: 'zec', key: 'zcash', name: 'Zcash testnet', label: 'ZEC testnet', network: 'testnet', color: '#F4B728', glyph: 'ⓩ',
+    nativeSymbol: 'ZEC', nativeName: 'Zcash', nativeDecimals: 8, coingeckoId: 'zcash', phase: 4, blockTimeSecs: 75, transparentOnly: true },
+  mainnet: { family: 'zec', key: 'zcash', name: 'Zcash', label: 'ZEC', network: 'mainnet', color: '#F4B728', glyph: 'ⓩ',
+    nativeSymbol: 'ZEC', nativeName: 'Zcash', nativeDecimals: 8, coingeckoId: 'zcash', phase: 4, blockTimeSecs: 75, transparentOnly: true },
+};
+
+export function zecChain(network: Network): ZcashChain {
+  return ZEC_CHAINS[network];
+}
+
+/**
  * TRON (phase 4): Rust `tron_*` commands and `TronAdapter` (`packages/chains/src/tron/`).
  * Testnet = Nile. Part of `allChains()` / `assetsFor()` (TRX + the network's USDT, TRC-20).
  * Hardware wallets: not supported yet (HW_UNSUPPORTED), the UI disables TRON for such accounts.
@@ -301,7 +326,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), zecChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -397,6 +422,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     list.push({ host: 'doge.electrum1.cipig.net:20060', purpose: 'Dogecoin : soldes, historique, frais, diffusion (ElectrumX public de Komodo)' });
     list.push({ host: 'doge.electrum2.cipig.net:20060', purpose: 'Dogecoin : serveur de secours (ElectrumX public de Komodo)' });
   } else list.push({ host: 'aucun serveur', purpose: 'Dogecoin testnet : aucun serveur public gratuit, configure le tien (rien n’est contacté)' });
+  // Zcash (transparent only): Komodo's public ElectrumX servers, Rust only (zec_*), `zcash` Tor family.
+  if (network === 'mainnet') {
+    list.push({ host: 'zec.electrum1.cipig.net:20058', purpose: 'Zcash (transparent) : soldes, historique, mise à niveau réseau, diffusion (ElectrumX public de Komodo)' });
+    list.push({ host: 'zec.electrum2.cipig.net:20058', purpose: 'Zcash : serveur de secours (ElectrumX public de Komodo)' });
+  } else list.push({ host: 'aucun serveur', purpose: 'Zcash testnet : aucun serveur public, rien n’est contacté' });
   // TRON: reached by Rust only (tron_*), Tor circuits of the `tron` family.
   // Cardano: reached by Rust only (ada_*), Tor circuits of the `cardano` family.
   const ada = servers.cardano?.[nk];

@@ -41,6 +41,7 @@ import {
   type SolanaAdapter,
   type XrpAdapter,
   type CardanoAdapter,
+  zecAddressProblem,
 } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -79,6 +80,7 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   if (asset.family === 'tron') return adapters.tron ?? undefined;
   if (asset.family === 'xrp') return adapters.xrp ?? undefined;
   if (asset.family === 'ada') return adapters.cardano ?? undefined;
+  if (asset.family === 'zec') return adapters.zec ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -126,7 +128,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
   // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
-  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.zec?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
   const isOwn = ownAddresses.includes(asset?.family === 'evm' ? toTrim.toLowerCase() : toTrim);
   // « Mes comptes »: the user's OTHER accounts of this chain. A transfer between two of them is an
   // ordinary send (same Rust decoding, native dialog, poisoning check: own addresses are known).
@@ -175,6 +177,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       tron: [accounts.tron?.address],
       xrp: [accounts.xrp?.address],
       ada: [accounts.cardano?.address],
+      zec: [accounts.zec?.address],
     };
     // The other accounts of the vault are trusted too.
     for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
@@ -247,6 +250,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   /** Refused Cardano address types, in Rust's words (Byron, script, pointer, stake, other network). */
   const adaProblem = isAda && toTrim ? cardanoAddressProblem(toTrim, network) : null;
   const adaBlocked = isAda && (adaMemoTooLong || (adaTokenMode && (adaTokenQty === null || adaTokenQty <= 0n || adaTokenOver)));
+  /** Zcash: transparent addresses only; shielded / unified recipients get a clear refusal. */
+  const isZec = asset?.family === 'zec';
+  const zecProblem = isZec && toTrim ? zecAddressProblem(toTrim, network) : null;
   const amountBase = useMemo(() => {
     if (!amountStr) return null;
     if (fiatMode) {
@@ -529,7 +535,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? 'r… (adresse classique)' : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
+                  placeholder={asset.family === 'zec' ? (network === 'testnet' ? 'tm… (adresse transparente)' : 't1… (adresse transparente)') : asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? 'r… (adresse classique)' : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'sol' ? 'Adresse Solana' : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -605,8 +611,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               )}
             </div>
             {ownError && <span className="text-[12px] text-down">{ownError}</span>}
-            {toTrim && !addrValid && !xAddress && !adaProblem && <span className="text-[12px] text-down">Adresse invalide pour {chain.name}.</span>}
+            {toTrim && !addrValid && !xAddress && !adaProblem && !zecProblem && <span className="text-[12px] text-down">Adresse invalide pour {chain.name}.</span>}
             {adaProblem && <span className="text-[12px] text-down">{adaProblem.charAt(0).toUpperCase() + adaProblem.slice(1)}.</span>}
+            {zecProblem && <span className="text-[12px] text-down">{zecProblem}</span>}
             {poisoning.lookalike && <PoisoningWarning recipient={toTrim} lookalike={poisoning.lookalike} family={asset.family} acknowledged={poisonAck} onAcknowledge={setPoisonAck} />}
             {!poisoning.lookalike && poisoning.suspect && !contact && !isOwn && <DustOnlyNote />}
             {xAddress && (
@@ -693,6 +700,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 Dogecoin : un destinataire sous 0,01 DOGE est refusé ; une monnaie sous 0,01 DOGE n’est pas créée, elle est ajoutée aux frais (« Pas de monnaie… » dans la fenêtre de confirmation).
               </span>
             )}
+            {isZec && (
+              <span className="text-[12px] leading-[1.5] text-mute">
+                Zcash transparent : comme Bitcoin, le montant, ton adresse et le destinataire sont publics. Les adresses protégées (zs…) et unifiées (u1…) ne sont pas encore prises en charge. Une monnaie sous 0,00005 ZEC n’est pas créée, elle est ajoutée aux frais.
+              </span>
+            )}
             {asset.family === 'ltc' && (
               <span className="text-[12px] leading-[1.5] text-mute">
                 Litecoin : un destinataire sous le seuil de poussière ({litecoinDust('p2wpkh').toString()} litoshis pour une adresse ltc1…) est refusé ; une monnaie plus petite est ajoutée aux frais.
@@ -703,7 +715,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           </>
           )}
           {/* Fees */}
-          {isAda ? (
+          {isZec ? (
+            <div className="flex flex-col gap-2">
+              <span className="eyebrow">Frais réseau</span>
+              <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
+                <strong className="font-semibold text-text">Rien à choisir sur Zcash.</strong> Les frais suivent la règle ZIP 317 : 0,00005 ZEC par action logique, 0,0001 ZEC au minimum (un envoi simple). Le coffre les calcule et les montre dans la vérification.
+              </div>
+            </div>
+          ) : isAda ? (
             <div className="flex flex-col gap-2">
               <span className="eyebrow">Frais réseau</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
@@ -786,7 +805,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-medium tracking-[-0.01em]">Vérification</span>
             <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[10.5px] font-medium tracking-[0.02em] text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'ada' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
+              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'zec' ? 'Décodé dans le coffre' : utxoLike ? 'PSBT vérifiée localement' : 'Résumé local'}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
@@ -843,13 +862,16 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           )}
           {built?.unsigned.family === 'xrp' && <XrpSummaryView u={built.unsigned} xrpPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'ada' && <CardanoSummaryView u={built.unsigned} adaPrice={nativePrice} currency={cur} />}
+          {built?.unsigned.family === 'zec' && built.unsigned.summary.requiresExtraConfirmation && (
+            <SecondConfirmNotice lines={built.unsigned.summary.warnings.filter((w) => w.kind === 'highFee').map(() => 'Frais très élevés : plus de 10 fois les frais ZIP 317, ou plus que le montant envoyé.')} />
+          )}
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
               <Spinner /> Préparation et décodage…
             </span>
           )}
-          {buildError && (serverMissing(buildError) ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
+          {buildError && (serverMissing(buildError) && !isZec ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'tron' && (
             <EnClair tone={tronShort ? 'warn' : 'ice'}>
               Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>. TRON ne prend pas de frais fixes : cette transaction brûle environ{' '}
@@ -885,7 +907,16 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {built.unsigned.summary.warnings.some((w) => w.kind === 'unknownToken') ? ' Token non vérifié : une 2ᵉ confirmation te sera demandée.' : ''}
             </EnClair>
           )}
-          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'ada' && (
+          {built && addrValid && built.unsigned.family === 'zec' && (
+            <EnClair>
+              Tu envoies <strong>{fmtCrypto(built.unsigned.amount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>
+              {built.unsigned.summary.toKind === 'tex' ? ` (adresse TEX : paie ${shortAddress(built.unsigned.summary.toAddress)})` : ''}
+              {built.unsigned.summary.change ? ', la monnaie revient sur ton adresse de change' : ''}. Frais ZIP 317 : {fmtCrypto(built.unsigned.fee, decimals, asset.symbol)}
+              {feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : ''}.
+              {built.unsigned.summary.folded !== '0' ? ` Pas de monnaie : le reste (${built.unsigned.summary.folded} zatoshis) est ajouté aux frais.` : ''} Transaction v5, mise à niveau réseau {built.unsigned.summary.upgrade} lue sur la chaîne ; valable jusqu’au bloc {built.unsigned.summary.expiryHeight}. Transparent : visible de tous, comme Bitcoin.
+            </EnClair>
+          )}
+          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'zec' && (
             <EnClair>
               Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>
               {utxoLike && built.unsigned.family === 'btc' && built.unsigned.summary.outputs.some((o) => o[2]) ? ', la monnaie revient sur ton adresse de change' : ''}. Personne d’autre ne reçoit rien, et tu paies au maximum{' '}
@@ -958,6 +989,7 @@ function dataLabel(b: Built | null, family?: string): string {
     return `${outs} sortie${outs > 1 ? 's' : ''} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' ? 'octets' : 'vB'}`;
   }
   if (u.family === 'ada') return `${u.summary.inputs.length} entrée${u.summary.inputs.length > 1 ? 's' : ''} · ${u.summary.outputs.length} sorties${u.token ? ' · token' : ''}${u.summary.memo ? ' · message' : ''}`;
+  if (u.family === 'zec') return `v5 · ${u.summary.inputs} entrée${u.summary.inputs > 1 ? 's' : ''} · ${u.summary.change ? 2 : 1} sortie${u.summary.change ? 's' : ''} · ${u.summary.upgrade}`;
   if (u.family === 'xrp') return `Payment${u.summary.destinationTag !== null ? ` · tag ${u.summary.destinationTag}` : ' · sans tag'}`;
   if (u.family === 'tron') return u.token ? `transfer() TRC-20 · ${u.size.bandwidth} octets` : `TransferContract · ${u.size.bandwidth} octets`;
   if (u.family === 'sol') return u.mint ? `TransferChecked ${u.tokenProgram === 'token2022' ? 'Token-2022' : 'SPL'}${u.createsAta ? ' + création du compte' : ''}` : 'Aucune · transfert système';

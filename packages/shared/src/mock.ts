@@ -37,6 +37,7 @@ import { emitDemoEvent } from './events';
 import { createDemoServers } from './mock-servers';
 import { createDemoCbf, detectDemoCbf } from './mock-cbf';
 import { createDemoUtxo, demoUtxoAccount, DEMO_DOGE_NETWORKS, DEMO_LTC_NETWORKS } from './mock-utxo';
+import { createDemoZec, demoZecAccount } from './mock-zec';
 import { createDemoTron, demoTronAddress, type DemoTronState } from './mock-tron';
 export { demoTronAddress } from './mock-tron';
 import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
@@ -161,6 +162,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       tron: { address: demoTronAddress(demoSeed(), 0), path: "m/44'/195'/0'/0/0" },
       xrp: { address: demoXrpAddress(demoSeed(), 0), path: "m/44'/144'/0'/0/0" },
       cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
+      zec: demoZecAccount(demoSeed(), network, 0).info,
     },
     ownBtc,
     receive,
@@ -354,6 +356,17 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     accounts: accts,
     tor,
     settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+  });
+  // Zcash, transparent only (§2.4b): `zec_*`, built like Rust (ZIP 317, change to us).
+  const zecChain = createDemoZec({
+    network,
+    seed: demoSeed(),
+    accounts: accts,
+    tor,
+    torOn: () => settings.tor.enabled,
     requireUnlocked: () => requireUnlocked(),
     checkPassword: (p) => checkPassword(p),
     confirm: (text) => confirmFn(text),
@@ -865,7 +878,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
       clockOffset += ms;
     },
     invoke: async (cmd, args = {}) => {
-      const h = (handlers as Record<string, ((a: Record<string, unknown>) => unknown) | undefined>)[cmd] ?? utxoChains.handlers[cmd];
+      const h = (handlers as Record<string, ((a: Record<string, unknown>) => unknown) | undefined>)[cmd] ?? utxoChains.handlers[cmd] ?? zecChain.handlers[cmd];
       if (!h) throw new IpcError('INVALID_INPUT', `Commande inconnue : ${cmd}`);
       // §2.9: the TRON, XRP, Cardano and staking demo modules simulate account 0 only.
       if (cmd === 'ada_address' && accts.arg(args.account) !== 0) {

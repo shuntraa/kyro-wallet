@@ -16,6 +16,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   tron: 'TRON',
   xrp: 'XRP',
   ada: 'Cardano',
+  zec: 'Zcash',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -28,6 +29,7 @@ export const ACCOUNT_CHAIN_HINT: Record<AccountChain, string> = {
   tron: 'TRX et TRC-20',
   xrp: 'XRP et monnaies émises',
   ada: 'ADA et tokens',
+  zec: 'adresses transparentes (t1…)',
 };
 
 /** « Bitcoin 1 » for index 0, « Bitcoin 2 » for index 1… */
@@ -64,6 +66,8 @@ export function accountAddress(acc: Accounts, family: AccountChain): { address: 
       return { address: acc.ltc.address, path: acc.ltc.path };
     case 'doge':
       return { address: acc.doge.address, path: acc.doge.path };
+    case 'zec':
+      return { address: acc.zec.address, path: acc.zec.path };
     case 'ada':
       return acc.cardano;
     default:
