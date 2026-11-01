@@ -266,7 +266,7 @@ fn chain_of_the_other_network_family_is_refused() {
         ..req(BOB, "1", "0x")
     };
     for chain in [
-        1, 42_161, 137, 61, 25, 5_000, 146, 14, 8_217, 100, 999, 1_329, 1_030,
+        1, 42_161, 137, 25, 5_000, 146, 14, 8_217, 100, 999, 1_329, 1_030,
     ] {
         let tx = on(chain);
         assert!(

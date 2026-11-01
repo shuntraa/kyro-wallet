@@ -14,6 +14,7 @@ import {
   buildApproval,
   buildRevoke,
   compareFreshQuote,
+  evmSwapSupported,
   feeLabel,
   fetchQuotes,
   isCurrentZeroExSettler,
@@ -93,9 +94,9 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const cur = settings.currency;
   const now = useNow(1000);
 
-  const chains = useMemo(() => [...evmChains(network).map((c) => ({ key: c.key, label: c.label })), { key: 'solana', label: solChain(network).label }], [network]);
+  const chains = useMemo(() => [...evmChains(network).filter((c) => evmSwapSupported(c.chainId)).map((c) => ({ key: c.key, label: c.label })), { key: 'solana', label: solChain(network).label }], [network]);
   const initialSell = sellAssetId ? assetsFor(network).find((a) => a.id === sellAssetId) : undefined;
-  const [chainKey, setChainKey] = useState(initialSell && initialSell.family !== 'btc' ? initialSell.chainKey : chains[0]?.key ?? 'sepolia');
+  const [chainKey, setChainKey] = useState(initialSell && initialSell.family !== 'btc' && chains.some((c) => c.key === initialSell.chainKey) ? initialSell.chainKey : chains[0]?.key ?? 'sepolia');
   const tokens = useMemo(() => assetsFor(network).filter((a) => a.chainKey === chainKey), [network, chainKey]);
   const [sellId, setSellId] = useState(initialSell?.id ?? tokens.find((t) => t.kind !== 'native')?.id ?? tokens[0]?.id ?? '');
   const [buyId, setBuyId] = useState(tokens.find((t) => t.id !== (initialSell?.id ?? sellId))?.id ?? '');

@@ -55,10 +55,21 @@ export const EVM_HOSTS: Record<string, number> = {
   'polygon-bor-rpc.publicnode.com': 137,
   'bsc-rpc.publicnode.com': 56,
   'avalanche-c-chain-rpc.publicnode.com': 43114,
+  'cronos-evm-rpc.publicnode.com': 25,
+  'mantle-rpc.publicnode.com': 5000,
+  'sonic-rpc.publicnode.com': 146,
+  'rpc.ankr.com': 14,
+  'kaia.api.pocket.network': 8217,
+  'gnosis-rpc.publicnode.com': 100,
+  'hyperliquid-rpc.publicnode.com': 999,
+  'sei-evm-rpc.publicnode.com': 1329,
+  'evm.confluxrpc.com': 1030,
 };
 
+/** Rough base fees seen on 2026-10-31 (gwei). */
 const BASE_FEE_GWEI: Record<number, number> = {
   1: 4.2, 11155111: 4.2, 42161: 0.01, 10: 0.002, 8453: 0.004, 137: 32, 56: 1, 43114: 25,
+  25: 375, 5000: 50, 146: 50, 14: 500, 8217: 25, 100: 0.001, 999: 0.1, 1329: 50, 1030: 20,
 };
 
 export const SOL_HOSTS = new Set(['api.devnet.solana.com', 'api.mainnet-beta.solana.com']);
@@ -104,12 +115,12 @@ export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: 
   // Small artificial latency so loading states are visible in the demo.
   await new Promise((r) => setTimeout(r, 60 + Math.random() * 120));
   const host = url.host;
-  if (route?.kind === 'evm') return evmRpc(route.chainId, req, s);
+  if (route?.kind === 'evm') return evmRpcAny(route.chainId, req, s);
   if (route?.kind === 'sol') return solRpc(req, s);
   if (route?.kind === 'esplora') return esplora(url, req, s);
   if (host === 'api.coingecko.com' || host === 'pro-api.coingecko.com') return coingecko(url);
   if (host === 'mempool.space') return esplora(url, req, s);
-  if (host in EVM_HOSTS) return evmRpc(EVM_HOSTS[host] ?? 1, req, s);
+  if (host in EVM_HOSTS) return evmRpcAny(EVM_HOSTS[host] ?? 1, req, s);
   if (SOL_HOSTS.has(host)) return solRpc(req, s);
   if (host === 'api.0x.org') return zerox(url);
   if (host === 'li.quest') return lifi(url);
@@ -232,6 +243,19 @@ function esplora(url: URL, req: NetRequest, s: DemoChainState): NetResponse {
 }
 
 // ---------------------------------------------------------------- EVM
+
+/** JSON-RPC request or batch (array of requests, answered as an array, like publicnode). */
+function evmRpcAny(chainId: number, req: NetRequest, s: DemoChainState): NetResponse {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(req.body ?? '{}');
+  } catch {
+    return json(400, { error: 'bad json' });
+  }
+  if (!Array.isArray(parsed)) return evmRpc(chainId, req, s);
+  const out = parsed.map((one) => JSON.parse(evmRpc(chainId, { ...req, body: JSON.stringify(one) }, s).body) as unknown);
+  return json(200, out);
+}
 
 function evmRpc(chainId: number, req: NetRequest, s: DemoChainState): NetResponse {
   let body: { id?: unknown; method?: string; params?: unknown[] };

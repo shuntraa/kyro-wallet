@@ -33,10 +33,15 @@ Les paramètres envoyés ne suffisent pas : un fournisseur pourrait renvoyer une
 | Fournisseur | Frais Kyro contrôlés | Autres contrôles |
 |---|---|---|
 | **0x** | `fees.integratorFee` présent, pris dans le jeton vendu, **montant ≤ montant vendu × 70 / 10 000** ; l'adresse de frais doit figurer dans la transaction. Le détail de l'action Settler qui paie les frais n'est pas décodé. | `to` et autorisation = AllowanceHolder `0x0000000000001fF3684f28c67538d4D072C22734` ; Settler appelé = celui du registre `0x00000000000004533Fe15556B1E086BB1A72cEae` (`ownerOf(2)` ou `prev(2)`) ; destinataire = toi, minimum ≥ annoncé − slippage. |
-| **LI.FI** | Étape `FeeForwarder` (`0xCE40449B773a3E6E5e769ADb4e567179d4828cbd`) décodée : un versement à `recipients.evm`, **≤ montant vendu × 70 / 10 000** ; total des frais de cette étape ≤ 0,7 % + 0,5 % (part de LI.FI comprise). | `to` et autorisation = Diamond `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` ; `_receiver` = toi, `_minAmountOut` ≥ annoncé − slippage ; première et dernière étapes = jetons et montant de la paire. Routes entre chaînes refusées. |
+| **LI.FI** | Étape `FeeForwarder` (`0xCE40449B773a3E6E5e769ADb4e567179d4828cbd`, `0x79C3F5B651Ee5782Ba15d968B088458cd5f1f4EF` sur Mantle) décodée : un versement à `recipients.evm`, **≤ montant vendu × 70 / 10 000** ; total des frais de cette étape ≤ 0,7 % + 0,5 % (part de LI.FI comprise). | `to` et autorisation = Diamond `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` ; `_receiver` = toi, `_minAmountOut` ≥ annoncé − slippage ; première et dernière étapes = jetons et montant de la paire. Routes entre chaînes refusées. |
 | **Jupiter** | `platform_fee_bps` = 70 et compte de frais = le compte attendu de `recipients.solana` (lus dans l'instruction de route). | Payeur et seul signataire = toi ; programmes autorisés seulement (budget de calcul, ATA, emballage SOL, une route Jupiter v6) ; comptes débité et crédité à toi ; montant et slippage ; frais de priorité ≤ 0,01 SOL. |
 
-Adresses relevées dans les dépôts officiels (0x : docs.0x.org et 0x-settler ; LI.FI : `lifinance/contracts`, `deployments/<chaîne>.json`) le 01/11/2026, identiques sur Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain et Avalanche. Sur un autre réseau (testnet compris), aucun contrat n'est connu : les devis 0x et LI.FI sont refusés.
+Adresses relevées dans les dépôts officiels (0x : docs.0x.org et 0x-settler ; LI.FI : `lifinance/contracts`, `deployments/<chaîne>.json`) le 01/11/2026, identiques sur Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain et Avalanche, et présents on-chain (`eth_getCode` non vide) sur les nouvelles chaînes retenues :
+
+- **0x** aussi sur Sonic (liste « Cancun » de docs.0x.org) et HyperEVM (liste « Cancun » du README de 0x-settler). **Pas Mantle** : chaîne « Shanghai », autre AllowanceHolder (`0x0000000000005E88410CcDFaDe4a5EfaE4b49562`), non proposé plutôt que validé sur une seule lecture.
+- **LI.FI** aussi sur Cronos, Mantle, Sonic, Gnosis et Sei (même Diamond ; FeeForwarder propre à Mantle). **Pas Flare, Kaia ni HyperEVM** : leur Diamond est une autre adresse (`0x198F…`, `0x1255…`, `0x0a07…`), non vérifiée par Kyro.
+
+Le sélecteur de chaîne du Swap ne montre que les chaînes où au moins un de ces contrats est connu (`evmSwapSupported`) : ni Flare, ni Kaia, ni Conflux eSpace. Sur un autre réseau (testnet compris), aucun contrat n'est connu : les devis 0x et LI.FI sont refusés.
 
 ## Ce qu'il faut configurer avant d'encaisser
 

@@ -32,6 +32,15 @@ pub const EVM_DEFAULTS: &[(u64, &str)] = &[
     (137, "polygon-bor-rpc.publicnode.com"),
     (56, "bsc-rpc.publicnode.com"),
     (43_114, "avalanche-c-chain-rpc.publicnode.com"),
+    (25, "cronos-evm-rpc.publicnode.com"),
+    (5_000, "mantle-rpc.publicnode.com"),
+    (146, "sonic-rpc.publicnode.com"),
+    (14, "rpc.ankr.com"),
+    (8_217, "kaia.api.pocket.network"),
+    (100, "gnosis-rpc.publicnode.com"),
+    (999, "hyperliquid-rpc.publicnode.com"),
+    (1_329, "sei-evm-rpc.publicnode.com"),
+    (1_030, "evm.confluxrpc.com"),
 ];
 
 /// Solana genesis hashes (`getGenesisHash`), checked live on 2026-10-30 against
@@ -1062,6 +1071,40 @@ pub fn parse_fingerprint(s: &str) -> AppResult<[u8; 32]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// EVM_DEFAULTS = the registry's chains and RPC hosts (fixture generated from registry.ts by
+    /// packages/chains/test/known-tokens-table.test.ts), every host in the net_fetch allowlist.
+    #[test]
+    fn evm_defaults_match_registry_and_allowlist() {
+        let f: serde_json::Value =
+            serde_json::from_str(include_str!("../fixtures/known_tokens.json")).unwrap();
+        let mut registry: Vec<(u64, String)> = f["evmChains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| {
+                (
+                    c["chainId"].as_u64().unwrap(),
+                    c["rpcHost"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        let mut defaults: Vec<(u64, String)> = EVM_DEFAULTS
+            .iter()
+            .map(|(id, h)| (*id, h.to_string()))
+            .collect();
+        registry.sort();
+        defaults.sort();
+        assert_eq!(registry, defaults);
+        for (_, h) in EVM_DEFAULTS {
+            assert!(crate::net::ALLOWED_HOSTS.contains(h), "{h}");
+            assert_eq!(
+                crate::net::family_for(h, &crate::net::NetContext::default()),
+                Family::Evm,
+                "{h}"
+            );
+        }
+    }
 
     fn esplora(url: &str) -> BtcServer {
         BtcServer::Esplora { url: url.into() }

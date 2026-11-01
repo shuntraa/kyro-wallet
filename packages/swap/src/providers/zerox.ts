@@ -28,6 +28,15 @@ interface ZeroExQuote {
   transaction: { to: string; data: `0x${string}`; gas?: string | null; gasPrice?: string | null; value?: string | null };
 }
 
+/**
+ * Kyro chains served by the 0x Swap API (docs.0x.org « Supported Chains », read 2026-10-31) AND
+ * where Kyro knows the AllowanceHolder (verify.ts): Ethereum, Arbitrum, Optimism, Base, Polygon,
+ * BNB Chain, Avalanche, Sonic, HyperEVM. The API also serves Mantle, but with another
+ * AllowanceHolder (Shanghai chain): not offered. Not Cronos, Flare, Kaia, Gnosis, Sei nor Conflux;
+ * not Sepolia (no checked contract: every quote would be refused).
+ */
+export const ZEROX_CHAINS: ReadonlySet<number> = new Set([1, 42_161, 10, 8_453, 137, 56, 43_114, 146, 999]);
+
 export class ZeroExProvider implements SwapProvider {
   readonly id = 'zerox' as const;
   readonly name = '0x';
@@ -51,7 +60,7 @@ export class ZeroExProvider implements SwapProvider {
   }
 
   supports(p: QuoteParams): boolean {
-    return typeof p.chain === 'number' && (p.toChain === undefined || p.toChain === p.chain);
+    return typeof p.chain === 'number' && ZEROX_CHAINS.has(p.chain) && (p.toChain === undefined || p.toChain === p.chain);
   }
 
   async quote(p: QuoteParams): Promise<Quote> {

@@ -128,7 +128,6 @@ pub const EVM_KNOWN_CHAINS: &[(u64, Network)] = &[
     (137, Network::Mainnet),        // Polygon PoS
     (56, Network::Mainnet),         // BNB Smart Chain
     (43_114, Network::Mainnet),     // Avalanche C-Chain
-    (61, Network::Mainnet),         // Ethereum Classic
     (25, Network::Mainnet),         // Cronos
     (5_000, Network::Mainnet),      // Mantle
     (146, Network::Mainnet),        // Sonic
@@ -172,13 +171,23 @@ fn is_unlimited(amount: U256) -> bool {
 
 /// Worst-case fee (`gas_limit × max_fee_per_gas`, native units in wei) above which the
 /// reinforced confirmation is required: 0.05 of the native coin on ETH-native chains (Ethereum,
-/// Sepolia, Arbitrum, Optimism, Base) and BNB Chain, 50 POL on Polygon, 1 AVAX on Avalanche,
-/// 0.05 elsewhere. A plain transfer costs ~0.0005 ETH at 20 gwei; a swap ~0.005–0.02 ETH.
+/// Sepolia, Arbitrum, Optimism, Base), BNB Chain and HyperEVM, 50 POL on Polygon, 1 AVAX on
+/// Avalanche, 0.05 elsewhere. A plain transfer costs ~0.0005 ETH at 20 gwei; a swap ~0.005–0.02 ETH.
+/// Chains with a low-priced native coin get a threshold of roughly 10 USD (prices of 2026-10-31):
+/// 200 CRO (Cronos, ~380 gwei), 20 MNT (Mantle), 250 S (Sonic), 2 000 FLR (Flare, ~650 gwei),
+/// 300 KAIA, 10 XDAI (Gnosis), 200 SEI, 200 CFX (Conflux eSpace); 0.05 of those coins would flag
+/// ordinary token transfers.
 pub fn evm_high_fee_threshold_wei(chain_id: u64) -> U256 {
     let milli = U256::exp10(15); // 0.001 native
     match chain_id {
         137 => milli * 50_000u64,
         43_114 => milli * 1_000u64,
+        25 | 1_329 | 1_030 => milli * 200_000u64,
+        5_000 => milli * 20_000u64,
+        146 => milli * 250_000u64,
+        14 => milli * 2_000_000u64,
+        8_217 => milli * 300_000u64,
+        100 => milli * 10_000u64,
         _ => milli * 50u64,
     }
 }
@@ -839,5 +848,19 @@ mod tests {
         )
         .is_err());
         assert!(parse_decimal_u128("v", "340282366920938463463374607431768211456").is_err());
+    }
+
+    #[test]
+    fn high_fee_thresholds_follow_the_native_coin() {
+        let one = U256::exp10(18);
+        assert_eq!(evm_high_fee_threshold_wei(1), one / 20u64);
+        assert_eq!(evm_high_fee_threshold_wei(999), one / 20u64);
+        assert_eq!(evm_high_fee_threshold_wei(137), one * 50u64);
+        assert_eq!(evm_high_fee_threshold_wei(14), one * 2_000u64);
+        assert_eq!(evm_high_fee_threshold_wei(25), one * 200u64);
+        assert_eq!(evm_high_fee_threshold_wei(100), one * 10u64);
+        assert_eq!(evm_high_fee_threshold_wei(424_242), one / 20u64);
+        assert_eq!(evm_chain_network(1_030), Some(Network::Mainnet));
+        assert_eq!(evm_chain_network(61), None);
     }
 }

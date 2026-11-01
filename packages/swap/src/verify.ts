@@ -27,28 +27,43 @@ import { applySlippage } from './compare';
 import { NATIVE_EVM, ZERO_ADDRESS, isNative } from './providers/common';
 import type { ProviderId, SwapToken } from './types';
 
-/** 0x AllowanceHolder, same address on every Cancun chain (Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche). */
+/** 0x AllowanceHolder on Cancun chains (Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche, Sonic, HyperEVM). */
 export const ZEROX_ALLOWANCE_HOLDER = '0x0000000000001fF3684f28c67538d4D072C22734';
-/** 0x deployer / Settler registry (ERC-721-like: `ownerOf(featureId)` is the current Settler). */
+/** 0x deployer / Settler registry (ERC-721-like: `ownerOf(featureId)` is the current Settler), same address on all chains. */
 export const ZEROX_SETTLER_REGISTRY = '0x00000000000004533Fe15556B1E086BB1A72cEae';
 /** Feature id of the taker-submitted Settler (the one AllowanceHolder.exec targets). */
 export const ZEROX_TAKER_SETTLER_FEATURE = 2n;
-/** LI.FI Diamond (`LiFiDiamond` in deployments/<chain>.json, same on all 7 chains). */
+/** LI.FI Diamond (`LiFiDiamond` in deployments/<chain>.json) on every chain listed in {@link LIFI_CHECKED_CHAINS}. */
 export const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE';
-/** LI.FI FeeForwarder (`FeeForwarder` in deployments/<chain>.json): pays `distributionFees`. */
+/** LI.FI FeeForwarder (`FeeForwarder` in deployments/<chain>.json): pays `distributionFees`. Mantle has its own. */
 export const LIFI_FEE_FORWARDER = '0xCE40449B773a3E6E5e769ADb4e567179d4828cbd';
+/** LI.FI FeeForwarder on Mantle (deployments/mantle.json; the default address has no code there). */
+export const LIFI_FEE_FORWARDER_MANTLE = '0x79C3F5B651Ee5782Ba15d968B088458cd5f1f4EF';
 
-/** Mainnet chains where those addresses were checked. Anything else (testnets…) has no known contract. */
-const CHECKED_CHAINS = [1, 10, 56, 137, 8453, 42161, 43114] as const;
+/*
+ * Mainnet chains where those addresses were checked (01/11/2026: deployment records above, plus
+ * `eth_getCode` non-empty at each address on the chain's registry RPC). Anything else (testnets,
+ * chains not listed) has no known contract and its quotes are refused.
+ * - 0x: also Sonic (docs.0x.org « Contracts », Cancun list) and HyperEVM (0x-settler README,
+ *   Cancun list). Not Mantle: it is a Shanghai chain with another AllowanceHolder
+ *   (0x0000000000005E88410CcDFaDe4a5EfaE4b49562), not offered rather than trusted on one reading.
+ * - LI.FI: also Cronos, Mantle, Sonic, Gnosis, Sei (same Diamond; Mantle's FeeForwarder differs).
+ *   Not Flare, Kaia nor HyperEVM: their Diamond is another address (0x198F…, 0x1255…, 0x0a07…).
+ */
+const ZEROX_CHECKED_CHAINS = [1, 10, 56, 137, 8_453, 42_161, 43_114, 146, 999] as const;
+const LIFI_CHECKED_CHAINS = [1, 10, 56, 137, 8_453, 42_161, 43_114, 25, 5_000, 146, 100, 1_329] as const;
 
 export interface SwapContracts {
   zerox?: { allowanceHolder: string };
   lifi?: { diamond: string; feeForwarder: string };
 }
 
-export const SWAP_CONTRACTS: Readonly<Record<number, SwapContracts>> = Object.fromEntries(
-  CHECKED_CHAINS.map((id) => [id, { zerox: { allowanceHolder: ZEROX_ALLOWANCE_HOLDER }, lifi: { diamond: LIFI_DIAMOND, feeForwarder: LIFI_FEE_FORWARDER } }]),
-);
+export const SWAP_CONTRACTS: Readonly<Record<number, SwapContracts>> = (() => {
+  const t: Record<number, SwapContracts> = {};
+  for (const id of ZEROX_CHECKED_CHAINS) t[id] = { ...t[id], zerox: { allowanceHolder: ZEROX_ALLOWANCE_HOLDER } };
+  for (const id of LIFI_CHECKED_CHAINS) t[id] = { ...t[id], lifi: { diamond: LIFI_DIAMOND, feeForwarder: id === 5_000 ? LIFI_FEE_FORWARDER_MANTLE : LIFI_FEE_FORWARDER } };
+  return t;
+})();
 
 /** The provider's entry contract (also the ERC-20 spender) on `chainId`, or null when Kyro knows none. */
 export function knownSwapContract(provider: ProviderId, chainId: number): string | null {

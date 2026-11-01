@@ -85,3 +85,29 @@ export async function jsonRpc<T>(fetcher: NetFetch, url: string, method: string,
   if (res.error) throw new JsonRpcError(res.error.code, res.error.message, res.error.data);
   return res.result as T;
 }
+
+/** One answer of a JSON-RPC batch: the result, or the call's own error. */
+export type JsonRpcOutcome = { ok: true; result: unknown } | { ok: false; error: JsonRpcError };
+
+/**
+ * JSON-RPC 2.0 batch (one HTTP request for many calls, same host). Answers are matched by id and
+ * returned in call order; a call without an answer gets an error. Throws if the server does not
+ * answer with an array (batches unsupported), so the caller can fall back on single calls.
+ */
+export async function jsonRpcBatch(fetcher: NetFetch, url: string, calls: Array<{ method: string; params: unknown[] }>): Promise<JsonRpcOutcome[]> {
+  if (calls.length === 0) return [];
+  const ids = calls.map(() => (rpcId = (rpcId + 1) % 1_000_000));
+  const res = await fetchJson<unknown>(fetcher, url, {
+    method: 'POST',
+    body: calls.map((c, i) => ({ jsonrpc: '2.0', id: ids[i], method: c.method, params: c.params })),
+  });
+  if (!Array.isArray(res)) throw new JsonRpcError(-32600, 'lot JSON-RPC non pris en charge par ce nœud');
+  const byId = new Map<unknown, { result?: unknown; error?: { code: number; message: string; data?: unknown } }>();
+  for (const r of res as Array<{ id?: unknown; result?: unknown; error?: { code: number; message: string; data?: unknown } }>) if (r && typeof r === 'object') byId.set(r.id, r);
+  return ids.map((id) => {
+    const r = byId.get(id);
+    if (!r) return { ok: false, error: new JsonRpcError(-32603, 'réponse absente du lot') };
+    if (r.error) return { ok: false, error: new JsonRpcError(r.error.code, r.error.message, r.error.data) };
+    return { ok: true, result: r.result };
+  });
+}

@@ -1,0 +1,1925 @@
+{
+  "evmChains": [
+    {
+      "network": "mainnet",
+      "chainId": 1,
+      "name": "Ethereum",
+      "nativeSymbol": "ETH",
+      "rpcHost": "ethereum-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 42161,
+      "name": "Arbitrum One",
+      "nativeSymbol": "ETH",
+      "rpcHost": "arbitrum-one-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 10,
+      "name": "Optimism",
+      "nativeSymbol": "ETH",
+      "rpcHost": "optimism-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 8453,
+      "name": "Base",
+      "nativeSymbol": "ETH",
+      "rpcHost": "base-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 137,
+      "name": "Polygon",
+      "nativeSymbol": "POL",
+      "rpcHost": "polygon-bor-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 56,
+      "name": "BNB Chain",
+      "nativeSymbol": "BNB",
+      "rpcHost": "bsc-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 43114,
+      "name": "Avalanche C-Chain",
+      "nativeSymbol": "AVAX",
+      "rpcHost": "avalanche-c-chain-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 25,
+      "name": "Cronos",
+      "nativeSymbol": "CRO",
+      "rpcHost": "cronos-evm-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 5000,
+      "name": "Mantle",
+      "nativeSymbol": "MNT",
+      "rpcHost": "mantle-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 146,
+      "name": "Sonic",
+      "nativeSymbol": "S",
+      "rpcHost": "sonic-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 14,
+      "name": "Flare",
+      "nativeSymbol": "FLR",
+      "rpcHost": "rpc.ankr.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 8217,
+      "name": "Kaia",
+      "nativeSymbol": "KAIA",
+      "rpcHost": "kaia.api.pocket.network"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 100,
+      "name": "Gnosis",
+      "nativeSymbol": "XDAI",
+      "rpcHost": "gnosis-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 999,
+      "name": "HyperEVM",
+      "nativeSymbol": "HYPE",
+      "rpcHost": "hyperliquid-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 1329,
+      "name": "Sei EVM",
+      "nativeSymbol": "SEI",
+      "rpcHost": "sei-evm-rpc.publicnode.com"
+    },
+    {
+      "network": "mainnet",
+      "chainId": 1030,
+      "name": "Conflux eSpace",
+      "nativeSymbol": "CFX",
+      "rpcHost": "evm.confluxrpc.com"
+    },
+    {
+      "network": "testnet",
+      "chainId": 11155111,
+      "name": "Ethereum Sepolia",
+      "nativeSymbol": "ETH",
+      "rpcHost": "ethereum-sepolia-rpc.publicnode.com"
+    }
+  ],
+  "tokens": [
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+      "symbol": "USDS",
+      "name": "USDS",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+      "symbol": "LINK",
+      "name": "Chainlink",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x925206b8a707096Ed26ae47C84747fE0bb734F59",
+      "symbol": "WBT",
+      "name": "WhiteBIT Coin",
+      "decimals": 8
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x2AF5D2aD76741191D15Dfe7bF6aC92d4Bd912Ca3",
+      "symbol": "LEO",
+      "name": "LEO Token",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+      "symbol": "DAI",
+      "name": "Dai",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
+      "symbol": "USDe",
+      "name": "Ethena USDe",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+      "symbol": "UNI",
+      "name": "Uniswap",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x68749665FF8D2d112Fa859AA293F07A622782F38",
+      "symbol": "XAUt",
+      "name": "Tether Gold",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xe343167631d89B6Ffc58B88d6b7fB0228795491D",
+      "symbol": "USDG",
+      "name": "Global Dollar",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x4a220E6096B25EADb88358cb44068A3248254675",
+      "symbol": "QNT",
+      "name": "Quant",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x6c3ea9036406852006290770BEdFcAbA0e23A0e8",
+      "symbol": "PYUSD",
+      "name": "PayPal USD",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
+      "symbol": "SHIB",
+      "name": "Shiba Inu",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xA0b73E1Ff0B80914AB6fe0444E65848C4C34450b",
+      "symbol": "CRO",
+      "name": "Cronos",
+      "decimals": 8
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x57e114B691Db790C35207b2e685D4A43181e6061",
+      "symbol": "ENA",
+      "name": "Ethena",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x75231F58b43240C9718Dd58B4967c5114342a86c",
+      "symbol": "OKB",
+      "name": "OKB",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
+      "symbol": "PEPE",
+      "name": "Pepe",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9",
+      "symbol": "AAVE",
+      "name": "Aave",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3",
+      "symbol": "ONDO",
+      "name": "Ondo",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xFa2B947eEc368f42195f24F36d2aF29f7c24CeC2",
+      "symbol": "USDf",
+      "name": "Falcon USD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+      "symbol": "PAXG",
+      "name": "PAX Gold",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x58D97B57BB95320F9a05dC918Aef65434969c2B2",
+      "symbol": "MORPHO",
+      "name": "Morpho",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xdA5e1988097297dCdc1f90D4dFE7909e847CBeF6",
+      "symbol": "WLFI",
+      "name": "World Liberty Financial",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x56072C95FAA701256059aa122697B133aDEd9279",
+      "symbol": "SKY",
+      "name": "Sky",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x3c3a81e81dc49A522A592e7622A7E711c06bf354",
+      "symbol": "MNT",
+      "name": "Mantle",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x163f8C2467924be0ae7B5347228CABF260318753",
+      "symbol": "WLD",
+      "name": "Worldcoin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x54D2252757e1672EEaD234D27B1270728fF90581",
+      "symbol": "BGB",
+      "name": "Bitget Token",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xB50721BCf8d664c30412Cfbc6cf7a15145234ad1",
+      "symbol": "ARB",
+      "name": "Arbitrum",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xE66747a101bFF2dBA3697199DCcE5b743b454759",
+      "symbol": "GT",
+      "name": "Gate",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x455e53CBB86018Ac2B8092FdCd39d8444aFFC3F6",
+      "symbol": "POL",
+      "name": "POL (ex-MATIC)",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x9f6F3991D525015a6F8CaF062C83b62fD3AC4436",
+      "symbol": "OUSD",
+      "name": "Open USD",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x232CE3bd40fCd6f80f3d55A522d03f25Df784Ee2",
+      "symbol": "LIT",
+      "name": "Lighter",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xB62132e35a6c13ee1EE0f84dC5d40bad8d815206",
+      "symbol": "NEXO",
+      "name": "NEXO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x6985884C4392D348587B19cb9eAAf157F13271cd",
+      "symbol": "ZRO",
+      "name": "LayerZero",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xe28b3B32B6c345A34Ff64674606124Dd5Aceca30",
+      "symbol": "INJ",
+      "name": "Injective",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f",
+      "symbol": "GHO",
+      "name": "GHO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xFe0c30065B384F05761f15d0CC899D4F9F9Cc0eB",
+      "symbol": "ETHFI",
+      "name": "Ether.fi",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x73A15FeD60Bf67631dC6cd7Bc5B6e8da8190aCF5",
+      "symbol": "USD0",
+      "name": "Usual USD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
+      "symbol": "EURC",
+      "name": "EURC",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x0000000000085d4780B73119b644AE5ecd22b376",
+      "symbol": "TUSD",
+      "name": "TrueUSD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xD533a949740bb3306d119CC777fa900bA034cd52",
+      "symbol": "CRV",
+      "name": "Curve DAO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x44ff8620b8cA30902395A7bD3F2407e1A091BF73",
+      "symbol": "VIRTUAL",
+      "name": "Virtuals Protocol",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xaea46A60368A7bD060eec7DF8CBa43b7EF41Ad85",
+      "symbol": "FET",
+      "name": "Artificial Superintelligence Alliance",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xB1D1eae60EEA9525032a6DCb4c1CE336a1dE71BE",
+      "symbol": "DRV",
+      "name": "Derive",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xCa14007Eff0dB1f8135f4C25B34De49AB0d42766",
+      "symbol": "STRK",
+      "name": "Starknet",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xE0f63A424a4439cBE457D80E4f4b51aD25b2c56C",
+      "symbol": "SPX",
+      "name": "SPX6900",
+      "decimals": 8
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x808507121B80c02388fAd14726482e061B8da827",
+      "symbol": "PENDLE",
+      "name": "Pendle",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xFA1C09fC8B491B6A4d3Ff53A10CAd29381b3F949",
+      "symbol": "FF",
+      "name": "Falcon Finance",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x98A878b1Cd98131B271883B390f68D2c90674665",
+      "symbol": "apxUSD",
+      "name": "apxUSD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x0CB6d03B0aC88A463F67B7Ad99f9f3ec4678092E",
+      "symbol": "SOFID",
+      "name": "SoFiUSD",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",
+      "symbol": "FDUSD",
+      "name": "First Digital USD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5",
+      "symbol": "OHM",
+      "name": "Olympus",
+      "decimals": 9
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x6810e776880C02933D47DB1b9fc05908e5386b96",
+      "symbol": "GNO",
+      "name": "Gnosis",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32",
+      "symbol": "LDO",
+      "name": "Lido DAO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x118B70dF4F06Fa5678E7d543e6066e028C8ea0c0",
+      "symbol": "KITE",
+      "name": "Kite",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x62D0A8458eD7719FDAF978fe5929C6D342B0bFcE",
+      "symbol": "BEAM",
+      "name": "Beam",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xcf0C122c6b73ff809C693DB761e7BaeBe62b6a2E",
+      "symbol": "FLOKI",
+      "name": "FLOKI",
+      "decimals": 9
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xc944E90C64B2c07662A292be6244BDf05Cda44a7",
+      "symbol": "GRT",
+      "name": "The Graph",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x853d955aCEf822Db058eb8505911ED77F175b99e",
+      "symbol": "FRAX",
+      "name": "Legacy Frax Dollar",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x0D8775F648430679A709E98d2b0Cb6250d2887EF",
+      "symbol": "BAT",
+      "name": "Basic Attention",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72",
+      "symbol": "ENS",
+      "name": "Ethereum Name Service",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xc00e94Cb662C3520282E6f5717214004A7f26888",
+      "symbol": "COMP",
+      "name": "Compound",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x8881562783028F5c1BCB985d2283D5E170D88888",
+      "symbol": "SHFL",
+      "name": "Shuffle",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xec53bF9167f50cDEB3Ae105f56099aaaB9061F83",
+      "symbol": "EIGEN",
+      "name": "EigenCloud (prev. EigenLayer)",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x5F7827FDeb7c20b443265Fc2F40845B715385Ff2",
+      "symbol": "EURCV",
+      "name": "EUR CoinVertible",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x4e3FBD56CD56c3e72c1403e103b45Db9da5B9D2B",
+      "symbol": "CVX",
+      "name": "Convex Finance",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x643C4E15d7d62Ad0aBeC4a9BD4b001aA3Ef52d66",
+      "symbol": "SYRUP",
+      "name": "Maple Finance",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x666d875C600AA06AC1cf15641361dEC3b00432Ef",
+      "symbol": "BTSE",
+      "name": "BTSE Token",
+      "decimals": 8
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x7420B4b9a0110cdC71fB720908340C03F9Bc03EC",
+      "symbol": "JASMY",
+      "name": "JasmyCoin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x07041776f5007ACa2A54844F50503a18A72A8b68",
+      "symbol": "USAT",
+      "name": "USAT",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xA12CC123ba206d4031D1c7f6223D1C2Ec249f4f3",
+      "symbol": "ZAMA",
+      "name": "Zama",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xAEEAa594e7dc112D67b8547fe9767a02c15B5597",
+      "symbol": "ANVL",
+      "name": "Anvil",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+      "symbol": "crvUSD",
+      "name": "crvUSD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xaA7a9CA87d3694B5755f213B5D04094b8d0F0A6F",
+      "symbol": "TRAC",
+      "name": "OriginTrail",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xc07e1300dc138601FA6B0b59f8D0FA477e690589",
+      "symbol": "Q",
+      "name": "Quack AI",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xA2cd3D43c775978A96BdBf12d733D5A1ED94fb18",
+      "symbol": "XCN",
+      "name": "Onyxcoin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xBB0E17EF65F82Ab018d8EDd776e8DD940327B28b",
+      "symbol": "AXS",
+      "name": "Axie Infinity",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x6f40d4A6237C257fff2dB00FA0510DeEECd303eb",
+      "symbol": "FLUID",
+      "name": "Fluid",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a",
+      "symbol": "AUSD",
+      "name": "AUSD",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x64d0f55Cd8C7133a9D7102b13987235F486F2224",
+      "symbol": "BORG",
+      "name": "SwissBorg",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x11eeF04c884E24d9B7B4760e7476D06ddF797f36",
+      "symbol": "MX",
+      "name": "MX",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x0F5D2fB29fb7d3CFeE444a200298f468908cC942",
+      "symbol": "MANA",
+      "name": "Decentraland",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x699Ccf919C1dfdFa4C374292f42CAdC9899BF753",
+      "symbol": "VSN",
+      "name": "Vision",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x56A3BA04E95d34268A19b2a4474DC979baBDaf76",
+      "symbol": "SENT",
+      "name": "Sentient",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xe76C6c83af64e4C60245D8C7dE953DF673a7A33D",
+      "symbol": "RAIL",
+      "name": "Railgun",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x3845badAde8e6dFF049820680d1F14bD3903a5d0",
+      "symbol": "SAND",
+      "name": "The Sandbox",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xE7C3D8C9a439feDe00D2600032D5dB0Be71C3c29",
+      "symbol": "JPYC",
+      "name": "JPY Coin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x6781d5631BFe47432b089e64e3EaB3b6eDd26177",
+      "symbol": "JPYSC",
+      "name": "JPYSC",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x3506424F91fD33084466F402d5D97f05F8e3b4AF",
+      "symbol": "CHZ",
+      "name": "Chiliz",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x8eD97a637A790Be1feff5e888d43629dc05408F6",
+      "symbol": "NPC",
+      "name": "Non-Playable Coin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xB0076DE78Dc50581770BBa1D211dDc0aD4F2a241",
+      "symbol": "EDGE",
+      "name": "edgeX",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x626E8036dEB333b408Be468F951bdB42433cBF18",
+      "symbol": "AIOZ",
+      "name": "AIOZ Network",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0xE76c5b78f93909d34404E9eb4C1f19e7582a5dE1",
+      "symbol": "H",
+      "name": "Humanity",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x99991c6AAbba5a096f24f250b73580F5179b9999",
+      "symbol": "CAP",
+      "name": "Cap",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x4d224452801ACEd8B2F0aebE155379bb5D594381",
+      "symbol": "APE",
+      "name": "ApeCoin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x111111111117dC0aa78b770fA6A738034120C302",
+      "symbol": "1INCH",
+      "name": "1INCH",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
+      "contract": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+      "symbol": "WBTC",
+      "name": "Wrapped Bitcoin",
+      "decimals": 8
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
+      "symbol": "LINK",
+      "name": "Chainlink",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x25118290e6A5f4139381D072181157035864099d",
+      "symbol": "RAIN",
+      "name": "Rain",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0",
+      "symbol": "UNI",
+      "name": "Uniswap",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x004B506865409877C9fA29bfb1ebA929984B9bbC",
+      "symbol": "USDG",
+      "name": "Global Dollar",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x46850aD61C2B7d64d08c9C754F45254596696984",
+      "symbol": "PYUSD",
+      "name": "PayPal USD",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0xba5DdD1f9d7F570dc94a51479a000E3BCE967196",
+      "symbol": "AAVE",
+      "name": "Aave",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+      "symbol": "ARB",
+      "name": "Arbitrum",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x11cDb42B0EB46D95f990BeDD4695A6e3fA034978",
+      "symbol": "CRV",
+      "name": "Curve DAO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x0c880f6761F1af8d9Aa9C466984b80DAb9a8c9e8",
+      "symbol": "PENDLE",
+      "name": "Pendle",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0xa0b862F60edEf4452F25B4160F177db44DeB6Cf1",
+      "symbol": "GNO",
+      "name": "Gnosis",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x13Ad51ed4F1B7e9Dc168d8a00cB3f4dDD85EfA60",
+      "symbol": "LDO",
+      "name": "Lido DAO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x9623063377AD1B27544C965cCd7342f7EA7e88C7",
+      "symbol": "GRT",
+      "name": "The Graph",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x354A6dA3fcde098F8389cad84b0182725c6C91dE",
+      "symbol": "COMP",
+      "name": "Compound",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x498Bf2B1e120FeD3ad3D42EA2165E9b73f99C1e5",
+      "symbol": "crvUSD",
+      "name": "crvUSD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:42161",
+      "contract": "0x6314C31A7a1652cE482cffe247E9CB7c3f4BB9aF",
+      "symbol": "1INCH",
+      "name": "1INCH",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6",
+      "symbol": "LINK",
+      "name": "Chainlink",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0x6fd9d7AD17242c41f7131d257212c54A0e816691",
+      "symbol": "UNI",
+      "name": "Uniswap",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0x76FB31fb4af56892A25e32cFC43De717950c9278",
+      "symbol": "AAVE",
+      "name": "Aave",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0xdC6fF44d5d932Cbd77B52E5612Ba0529DC6226F1",
+      "symbol": "WLD",
+      "name": "Worldcoin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53",
+      "symbol": "CRV",
+      "name": "Curve DAO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0xBC7B1Ff1c6989f006a1185318eD4E7b5796e66E1",
+      "symbol": "PENDLE",
+      "name": "Pendle",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0xFdb794692724153d1488CcdBE0C56c252596735F",
+      "symbol": "LDO",
+      "name": "Lido DAO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0x4200000000000000000000000000000000000042",
+      "symbol": "OP",
+      "name": "Optimism",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0xC52D7F23a2e460248Db6eE192Cb23dD12bDDCbf6",
+      "symbol": "crvUSD",
+      "name": "crvUSD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:10",
+      "contract": "0xAd42D013ac31486B73b6b059e748172994736426",
+      "symbol": "1INCH",
+      "name": "1INCH",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x63706e401c06ac8513145b7687A14804d17f814b",
+      "symbol": "AAVE",
+      "name": "Aave",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842",
+      "symbol": "MORPHO",
+      "name": "Morpho",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0xacfE6019Ed1A7Dc6f7B508C02d1b04ec88cC21bf",
+      "symbol": "VVV",
+      "name": "Venice Token",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+      "symbol": "AERO",
+      "name": "Aerodrome Finance",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
+      "symbol": "EURC",
+      "name": "EURC",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x8Ee73c484A26e0A5df2Ee2a4960B789967dd0415",
+      "symbol": "CRV",
+      "name": "Curve DAO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b",
+      "symbol": "VIRTUAL",
+      "name": "Virtuals Protocol",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0xA99F6e6785Da0F5d6fB42495Fe424BCE029Eeb3E",
+      "symbol": "PENDLE",
+      "name": "Pendle",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x9e1028F5F1D5eDE59748FFceE5532509976840E0",
+      "symbol": "COMP",
+      "name": "Compound",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x2081Ab0D9EC9e4303234Ab26D86b20B3367946ee",
+      "symbol": "EIGEN",
+      "name": "EigenCloud (prev. EigenLayer)",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x417Ac0e078398C154EdFadD9Ef675d30Be60Af93",
+      "symbol": "crvUSD",
+      "name": "crvUSD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0xA81a52B4dda010896cDd386C7fBdc5CDc835ba23",
+      "symbol": "TRAC",
+      "name": "OriginTrail",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x9c632E6Aaa3eA73f91554f8A3cB2ED2F29605e0C",
+      "symbol": "XCN",
+      "name": "Onyxcoin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0x1B4617734C43F6159F3a70b7E06d883647512778",
+      "symbol": "AWE",
+      "name": "AWE Network",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8453",
+      "contract": "0xc5fecC3a29Fb57B5024eEc8a2239d4621e111CBE",
+      "symbol": "1INCH",
+      "name": "1INCH",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39",
+      "symbol": "LINK",
+      "name": "Chainlink",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xb33EaAd8d922B1083446DC23f610c2567fB5180f",
+      "symbol": "UNI",
+      "name": "Uniswap",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0x99aF3EeA856556646C98c8B9b2548Fe815240750",
+      "symbol": "PYUSD",
+      "name": "PayPal USD",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xD6DF932A45C0f255f85145f286eA0b292B21C90B",
+      "symbol": "AAVE",
+      "name": "Aave",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0x41b3966B4FF7b427969ddf5da3627d6AEAE9a48E",
+      "symbol": "NEXO",
+      "name": "NEXO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0x172370d5Cd63279eFa6d502DAB29171933a610AF",
+      "symbol": "CRV",
+      "name": "Curve DAO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xC3C7d422809852031b44ab29EEC9F1EfF2A58756",
+      "symbol": "LDO",
+      "name": "Lido DAO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xA3f751662e282E83EC3cBc387d225Ca56dD63D3A",
+      "symbol": "APEPE",
+      "name": "Ape and Pepe",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0x5fe2B58c013d7601147DcdD68C143A77499f5531",
+      "symbol": "GRT",
+      "name": "The Graph",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0x3Cef98bb43d732E2F285eE605a8158cDE967D219",
+      "symbol": "BAT",
+      "name": "Basic Attention",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0x8505b9d2254A7Ae468c0E9dd10Ccea3A837aef5c",
+      "symbol": "COMP",
+      "name": "Compound",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xAC0F66379A6d7801D7726d5a943356A172549Adb",
+      "symbol": "GEOD",
+      "name": "Geodnet",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xc4Ce1D6F5D98D65eE25Cf85e9F2E9DcFEe6Cb5d6",
+      "symbol": "crvUSD",
+      "name": "crvUSD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xA1c57f48F0Deb89f569dFbE6E2B7f46D33606fD4",
+      "symbol": "MANA",
+      "name": "Decentraland",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xBbba073C31bF03b8ACf7c28EF0738DeCF3695683",
+      "symbol": "SAND",
+      "name": "The Sandbox",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:137",
+      "contract": "0xB7b31a6BC18e48888545CE79e83E06003bE70930",
+      "symbol": "APE",
+      "name": "ApeCoin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x55d398326f99059fF775485246999027B3197955",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d",
+      "symbol": "USD1",
+      "name": "USD1",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x000Ae314E2A2172a039B26378814C252734f556A",
+      "symbol": "ASTER",
+      "name": "Aster",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x444045B0EE1ee319A660a5E3d604CA0ffA35ACaA",
+      "symbol": "BTW",
+      "name": "Bitway",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0xcE24439F2D9C6a2289F741120FE202248B666666",
+      "symbol": "U",
+      "name": "United Stables",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+      "symbol": "Cake",
+      "name": "PancakeSwap",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x9d10a1ec41Fe7878429BB457e31F9b050D38c633",
+      "symbol": "BDX",
+      "name": "Beldex",
+      "decimals": 9
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x924fa68a0FC644485b8df8AbfA0A41C2e7744444",
+      "symbol": "币安人生",
+      "name": "币安人生 (BinanceLife)",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x40b8129B786D766267A7a118cF8C07E31CDB6Fde",
+      "symbol": "UB",
+      "name": "Unibase",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x0E63B9C287E32A05E6b9AB8ee8dF88A2760225A9",
+      "symbol": "PIEVERSE",
+      "name": "Pieverse",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x2c3a8Ee94dDD97244a93Bc48298f97d2C412F7Db",
+      "symbol": "AKE",
+      "name": "Akedo",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0xe6DF05CE8C8301223373CF5B969AFCb1498c5528",
+      "symbol": "KOGE",
+      "name": "KOGE",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x4B0F1812e5Df2A09796481Ff14017e6005508003",
+      "symbol": "TWT",
+      "name": "Trust Wallet",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x80F1fF15B887CB19295D88C8c16F89d47f6D8888",
+      "symbol": "COCO",
+      "name": "coco",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0xFf7d6A96ae471BbCD7713aF9CB1fEeB16cf56B41",
+      "symbol": "BR",
+      "name": "Bedrock",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:56",
+      "contract": "0x6bdcCe4A559076e37755a78Ce0c06214E59e4444",
+      "symbol": "B",
+      "name": "BUILDon",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:43114",
+      "contract": "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:43114",
+      "contract": "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:43114",
+      "contract": "0xC891EB4cbdEFf6e073e859e987815Ed1505c2ACD",
+      "symbol": "EURC",
+      "name": "EURC",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:43114",
+      "contract": "0x24dE8771bC5DdB3362Db529Fc3358F2df3A0E346",
+      "symbol": "avUSD",
+      "name": "Avant USD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:25",
+      "contract": "0x3D7F2C478aAfdB65542BCB44bCeeC05849999d2D",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:25",
+      "contract": "0xA6dE01a2d62C6B5f3525d768f34d276652C554c8",
+      "symbol": "EURC",
+      "name": "EURC",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:5000",
+      "contract": "0x063C1d1ef6e9099Ce3E8e9AD5C6173d12C49C086",
+      "symbol": "USDG",
+      "name": "Global Dollar",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:146",
+      "contract": "0x29219dd400f2Bf60E5a23d13Be72B486D4038894",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:8217",
+      "contract": "0xd077A400968890Eacc75cdc901F0356c943e4fDb",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:100",
+      "contract": "0x9C58BAcC331c9aa871AFD802DB6379a98e80CEdb",
+      "symbol": "GNO",
+      "name": "Gnosis",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:999",
+      "contract": "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:999",
+      "contract": "0x000000000000780555bD0BCA3791f89f9542c2d6",
+      "symbol": "KNTQ",
+      "name": "Kinetiq",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1329",
+      "contract": "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "testnet",
+      "chain": "evm:11155111",
+      "contract": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH",
+      "symbol": "USDG",
+      "name": "Global Dollar",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+      "symbol": "PYUSD",
+      "name": "PayPal USD",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
+      "symbol": "PUMP",
+      "name": "Pump.fun",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "72puLt71H93Z9CzHuBRTwFpL4TG3WZUhnoCC7p8gxigu",
+      "symbol": "USDGO",
+      "name": "USDGO",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+      "symbol": "JUP",
+      "name": "Jupiter",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3",
+      "symbol": "PYTH",
+      "name": "Pyth Network",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr",
+      "symbol": "EURC",
+      "name": "EURC",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv",
+      "symbol": "PENGU",
+      "name": "Pudgy Penguins",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN",
+      "symbol": "TRUMP",
+      "name": "Official Trump",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+      "symbol": "RAY",
+      "name": "Raydium",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "Grass7B4RdKfBCjTKgSqnXkqjwiGvQyFbuSCUJr3XXjs",
+      "symbol": "GRASS",
+      "name": "Grass",
+      "decimals": 9
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+      "symbol": "Bonk",
+      "name": "Bonk",
+      "decimals": 5
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "CARDSccUMFKoPRZxt5vt3ksUbxEFEcnZ3H2pd3dKxYjp",
+      "symbol": "CARDS",
+      "name": "Collector Crypt",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "6FrrzDk5mQARGc1TDYoyVnSyRdds1t4PbtohCD6p3tgG",
+      "symbol": "USX",
+      "name": "USX",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
+      "symbol": "JTO",
+      "name": "Jito",
+      "decimals": 9
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "ZBCNpuD7YMXzTHB2fhGkGi78MNsHGLRXUhRewNRm9RU",
+      "symbol": "ZBCN",
+      "name": "Zebec Network",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS",
+      "symbol": "KMNO",
+      "name": "Kamino",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL",
+      "symbol": "MET",
+      "name": "Meteora",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "J6pQQ3FAcJQeWPPGppWRb4nM8jU3wLyYbRrLh7feMfvd",
+      "symbol": "2Z",
+      "name": "DoubleZero",
+      "decimals": 8
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH",
+      "symbol": "CASH",
+      "name": "CASH",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk",
+      "symbol": "USELESS",
+      "name": "Useless Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump",
+      "symbol": "Fartcoin",
+      "name": "Fartcoin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "solana",
+      "contract": "BCNT4t3rv5Hva8RnUtJUJLnxzeFAabcYp8CghC1SmWin",
+      "symbol": "BC",
+      "name": "BCGame Coin",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "tron",
+      "contract": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "tron",
+      "contract": "TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz",
+      "symbol": "USDD",
+      "name": "USDD",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "tron",
+      "contract": "TUPM7K8REVzD2UdV4R5fe5M8XbnR2DdoJ6",
+      "symbol": "HTX",
+      "name": "HTX DAO",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "tron",
+      "contract": "TCFLL5dx5ZJdKnWuesXxi1VPwjLVmWZZy9",
+      "symbol": "JST",
+      "name": "JUST",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "tron",
+      "contract": "TAFjULxiVgT4qWk6UZwjqwZXTSaGaqnVp4",
+      "symbol": "BTT",
+      "name": "BitTorrent",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "tron",
+      "contract": "TSSMHYeV2uE9qYH95DqyoCuNCzEL1NvU3S",
+      "symbol": "SUN",
+      "name": "Sun Token",
+      "decimals": 18
+    },
+    {
+      "network": "mainnet",
+      "chain": "tron",
+      "contract": "TFczxzPhnThNSqr5by8tvxsdCFRRz6cPNq",
+      "symbol": "NFT",
+      "name": "AINFT",
+      "decimals": 6
+    },
+    {
+      "network": "testnet",
+      "chain": "solana",
+      "contract": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "decimals": 6
+    },
+    {
+      "network": "testnet",
+      "chain": "tron",
+      "contract": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
+      "symbol": "USDT",
+      "name": "Tether",
+      "decimals": 6
+    }
+  ]
+}

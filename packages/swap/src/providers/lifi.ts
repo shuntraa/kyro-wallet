@@ -29,6 +29,13 @@ interface LifiQuote {
   transactionRequest: { to: string; data: `0x${string}`; value?: string; gasLimit?: string; gasPrice?: string };
 }
 
+/**
+ * Kyro chains LI.FI routes (`GET https://li.quest/v1/chains?chainTypes=EVM`, 2026-10-31: every
+ * Kyro EVM chain except Conflux eSpace) AND where Kyro knows the Diamond (verify.ts). Flare, Kaia
+ * and HyperEVM have another Diamond address: not offered. Not Sepolia (no checked contract).
+ */
+export const LIFI_CHAINS: ReadonlySet<number> = new Set([1, 42_161, 10, 8_453, 137, 56, 43_114, 25, 5_000, 146, 100, 1_329]);
+
 export class LifiProvider implements SwapProvider {
   readonly id = 'lifi' as const;
   readonly name = 'LI.FI';
@@ -50,7 +57,7 @@ export class LifiProvider implements SwapProvider {
   }
 
   supports(p: QuoteParams): boolean {
-    return typeof p.chain === 'number' && (p.toChain === undefined || typeof p.toChain === 'number');
+    return typeof p.chain === 'number' && LIFI_CHAINS.has(p.chain) && (p.toChain === undefined || (typeof p.toChain === 'number' && LIFI_CHAINS.has(p.toChain)));
   }
 
   async quote(p: QuoteParams): Promise<Quote> {

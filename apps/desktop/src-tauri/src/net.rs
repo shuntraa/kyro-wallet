@@ -43,6 +43,18 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "polygon-bor-rpc.publicnode.com",
     "bsc-rpc.publicnode.com",
     "avalanche-c-chain-rpc.publicnode.com",
+    // Other EVM chains (registry.ts, checked 2026-10-31: eth_chainId, type-2 transactions).
+    "cronos-evm-rpc.publicnode.com",
+    "mantle-rpc.publicnode.com",
+    "sonic-rpc.publicnode.com",
+    "gnosis-rpc.publicnode.com",
+    "hyperliquid-rpc.publicnode.com",
+    "sei-evm-rpc.publicnode.com",
+    // No publicnode endpoint for these three. Flare's and Kaia's own public RPCs answer 403 to
+    // Tor exits (checked 2026-11-01): Ankr's public RPC (Flare) and Pocket Network (Kaia) instead.
+    "rpc.ankr.com",
+    "kaia.api.pocket.network",
+    "evm.confluxrpc.com",
     "api.devnet.solana.com",
     "api.mainnet-beta.solana.com",
     "api.0x.org",
@@ -301,6 +313,13 @@ pub enum Family {
     Other,
 }
 
+/// Default EVM RPC hosts that are not on publicnode (Flare: Ankr, Kaia: Pocket Network, Conflux).
+const EVM_OWN_RPC_HOSTS: &[&str] = &[
+    "rpc.ankr.com",
+    "kaia.api.pocket.network",
+    "evm.confluxrpc.com",
+];
+
 pub fn family_for(host: &str, ctx: &NetContext) -> Family {
     if let Some(f) = ctx.custom_family(host) {
         return f;
@@ -317,7 +336,7 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
-    } else if host.ends_with("-rpc.publicnode.com") {
+    } else if host.ends_with("-rpc.publicnode.com") || EVM_OWN_RPC_HOSTS.contains(&host) {
         Family::Evm
     } else if host.ends_with(".solana.com") {
         Family::Solana
@@ -1057,6 +1076,14 @@ mod tests {
             Family::Evm
         );
         assert_eq!(family_for("eth.my-node.example", &c), Family::Evm);
+        for h in [
+            "sei-evm-rpc.publicnode.com",
+            "rpc.ankr.com",
+            "kaia.api.pocket.network",
+            "evm.confluxrpc.com",
+        ] {
+            assert_eq!(family_for(h, &c), Family::Evm, "{h}");
+        }
         assert_eq!(family_for("api.devnet.solana.com", &c), Family::Solana);
         assert_eq!(family_for("api.coingecko.com", &c), Family::Market);
         assert_eq!(family_for("lite-api.jup.ag", &c), Family::Swap);

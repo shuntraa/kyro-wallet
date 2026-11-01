@@ -485,6 +485,31 @@ pub(crate) async fn probe(
 mod tests {
     use super::*;
 
+    /// The 7 mainnet TRC-20 of the registry (and Nile's test USDT) are named by Rust's table.
+    #[test]
+    fn every_curated_trc20_is_named() {
+        for (contract, symbol) in [
+            ("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", "USDT"),
+            ("TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz", "USDD"),
+            ("TUPM7K8REVzD2UdV4R5fe5M8XbnR2DdoJ6", "HTX"),
+            ("TCFLL5dx5ZJdKnWuesXxi1VPwjLVmWZZy9", "JST"),
+            ("TAFjULxiVgT4qWk6UZwjqwZXTSaGaqnVp4", "BTT"),
+            ("TSSMHYeV2uE9qYH95DqyoCuNCzEL1NvU3S", "SUN"),
+            ("TFczxzPhnThNSqr5by8tvxsdCFRRz6cPNq", "NFT"),
+        ] {
+            assert_eq!(
+                known_token(Network::Mainnet, contract).map(|t| t.symbol),
+                Some(symbol)
+            );
+            assert!(known_token(Network::Testnet, contract).is_none());
+        }
+        let nile = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf";
+        assert_eq!(
+            known_token(Network::Testnet, nile).map(|t| t.symbol),
+            Some("USDT")
+        );
+    }
+
     fn summary(action: TronAction, warnings: Vec<TronWarning>) -> TronTxSummary {
         TronTxSummary {
             txid: "ab".repeat(32),

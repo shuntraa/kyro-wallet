@@ -10,12 +10,25 @@ import type { BtcSummaryOutput, BtcWarning, EvmTxRequest, EvmWarning } from './i
 export const BTC_HIGH_FEE_SAT_PER_VB = 100;
 
 /** wallet-core `EVM_KNOWN_CHAINS`. */
-export const EVM_KNOWN_CHAINS: readonly number[] = [1, 42_161, 10, 8_453, 137, 56, 43_114, 61, 25, 5_000, 146, 14, 8_217, 100, 999, 1_329, 1_030, 11_155_111];
+export const EVM_KNOWN_CHAINS: readonly number[] = [1, 42_161, 10, 8_453, 137, 56, 43_114, 25, 5_000, 146, 14, 8_217, 100, 999, 1_329, 1_030, 11_155_111];
 
-/** wallet-core `evm_high_fee_threshold_wei`: 0.05 native, 50 POL on Polygon, 1 AVAX on Avalanche. */
+/** wallet-core `evm_high_fee_threshold_wei`, in thousandths of the native coin (default 0.05). */
+const HIGH_FEE_MILLI: Record<number, bigint> = {
+  137: 50_000n, // 50 POL
+  43_114: 1_000n, // 1 AVAX
+  25: 200_000n, // 200 CRO
+  1_329: 200_000n, // 200 SEI
+  1_030: 200_000n, // 200 CFX
+  5_000: 20_000n, // 20 MNT
+  146: 250_000n, // 250 S
+  14: 2_000_000n, // 2 000 FLR
+  8_217: 300_000n, // 300 KAIA
+  100: 10_000n, // 10 XDAI
+};
+
+/** wallet-core `evm_high_fee_threshold_wei`: 0.05 native, more on chains whose coin is cheap. */
 export function evmHighFeeThresholdWei(chainId: number): bigint {
-  const milli = 10n ** 15n;
-  return chainId === 137 ? milli * 50_000n : chainId === 43_114 ? milli * 1_000n : milli * 50n;
+  return 10n ** 15n * (HIGH_FEE_MILLI[chainId] ?? 50n);
 }
 
 /**

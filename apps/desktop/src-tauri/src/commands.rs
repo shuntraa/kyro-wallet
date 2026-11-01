@@ -569,29 +569,18 @@ pub(crate) fn format_units(raw: &str, decimals: usize) -> String {
     }
 }
 
+/// Name of an EVM chain for the dialog: Kyro's registry (generated `known_tokens` table).
 fn chain_name(id: u64) -> String {
-    match id {
-        1 => "Ethereum".into(),
-        11155111 => "Ethereum Sepolia (testnet)".into(),
-        42161 => "Arbitrum One".into(),
-        10 => "Optimism".into(),
-        8453 => "Base".into(),
-        137 => "Polygon".into(),
-        56 => "BNB Chain".into(),
-        43114 => "Avalanche C-Chain".into(),
-        other => format!("chaîne {other}"),
+    match crate::known_tokens::evm_chain(id) {
+        Some(c) if c.network == wallet_core::Network::Testnet => format!("{} (testnet)", c.name),
+        Some(c) => c.name.into(),
+        None => format!("chaîne {id}"),
     }
 }
 
-/// Native currency of an EVM chain (what `value` and the fees are paid in).
-fn native_symbol(id: u64) -> &'static str {
-    match id {
-        137 => "POL",
-        56 => "BNB",
-        43114 => "AVAX",
-        1 | 11155111 | 42161 | 10 | 8453 => "ETH",
-        _ => "(monnaie native)",
-    }
+/// Native coin ticker of an EVM chain (ETH, POL, BNB, CRO, …); « unités natives » if unknown.
+pub(crate) fn native_symbol(id: u64) -> &'static str {
+    crate::known_tokens::evm_chain(id).map_or("unités natives", |c| c.native_symbol)
 }
 
 /// Symbol and decimals of a token, from a source Rust trusts: the `known_tokens` table, or a
@@ -736,9 +725,10 @@ pub(crate) fn evm_warning_lines(
                 "• réseau INCONNU de Kyro (chainId {chain_id}) : vérifie que c'est bien celui que tu veux\n"
             ),
             EvmWarning::HighFee { max_fee_wei } => format!(
-                "• frais maximum très élevés : {} (seuil {})\n",
+                "• frais maximum très élevés : {} {sym} (seuil {} {sym})\n",
                 format_units(max_fee_wei, 18),
-                format_units(&wallet_core::evm_high_fee_threshold_wei(s.chain_id).to_string(), 18)
+                format_units(&wallet_core::evm_high_fee_threshold_wei(s.chain_id).to_string(), 18),
+                sym = native
             ),
         };
     }
@@ -1085,11 +1075,56 @@ mod tests {
         let d = describe_evm_extra(&s, None);
         for needle in [
             "action INCONNUE",
-            "valeur native envoyée au contrat avec l'appel : 1 (monnaie native)",
+            "valeur native envoyée au contrat avec l'appel : 1 unités natives",
             "réseau INCONNU de Kyro (chainId 31337)",
         ] {
             assert!(d.contains(needle), "{needle} in {d}");
         }
+        // 424242: unknown as well, on either network.
+        let s = wallet_core::evm_decode(&tx("0xdeadbeef", 424_242, "0"), Network::Mainnet).unwrap();
+        assert!(describe_evm_extra(&s, None).contains("réseau INCONNU de Kyro (chainId 424242)"));
+        let s = wallet_core::evm_decode(
+            &tx("0xdeadbeef", 1, "1000000000000000000"),
+            Network::Mainnet,
+        )
+        .unwrap();
+        assert!(describe_evm_extra(&s, None)
+            .contains("valeur native envoyée au contrat avec l'appel : 1 ETH"));
+    }
+
+    #[test]
+    fn evm_dialog_names_the_chain_and_its_native_coin() {
+        let tx = EvmTxRequest {
+            chain_id: 25,
+            nonce: 0,
+            to: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238".into(),
+            value_wei: "1500000000000000000".into(),
+            data: "0x".into(),
+            gas_limit: 21_000,
+            max_fee_per_gas: "1000000000000".into(),
+            max_priority_fee_per_gas: "1000000000".into(),
+        };
+        let s = wallet_core::evm_decode(&tx, Network::Mainnet).unwrap();
+        assert!(!s.requires_extra_confirmation, "{:?}", s.warnings);
+        let d = describe_evm(&s, None);
+        for needle in [
+            "Réseau : Cronos",
+            "Envoi de 1,5 CRO",
+            "Frais maximum : 0,021 CRO",
+        ] {
+            assert!(d.contains(needle), "{needle} in {d}");
+        }
+        let s = wallet_core::evm_decode(
+            &EvmTxRequest {
+                chain_id: 11_155_111,
+                ..tx
+            },
+            Network::Testnet,
+        )
+        .unwrap();
+        assert!(describe_evm(&s, None).contains("Réseau : Ethereum Sepolia (testnet)"));
+        assert_eq!(native_symbol(137), "POL");
+        assert_eq!(native_symbol(424_242), "unités natives");
     }
 
     /// ÉLEVÉE 2: an ERC-20 transfer on a contract Kyro does not know is labelled « jeton
