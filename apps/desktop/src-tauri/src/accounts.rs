@@ -47,10 +47,11 @@ pub enum Chain {
     Hbar,
     Kas,
     Dot,
+    Algo,
 }
 
 impl Chain {
-    pub const ALL: [Chain; 16] = [
+    pub const ALL: [Chain; 17] = [
         Chain::Btc,
         Chain::Evm,
         Chain::Sol,
@@ -67,6 +68,7 @@ impl Chain {
         Chain::Hbar,
         Chain::Kas,
         Chain::Dot,
+        Chain::Algo,
     ];
 
     /// Name used for default account names ("Bitcoin 2").
@@ -88,6 +90,7 @@ impl Chain {
             Chain::Hbar => "Hedera",
             Chain::Kas => "Kaspa",
             Chain::Dot => "Polkadot",
+            Chain::Algo => "Algorand",
         }
     }
 
@@ -116,6 +119,7 @@ impl Chain {
             Chain::Hbar => "hbar",
             Chain::Kas => "kas",
             Chain::Dot => "dot",
+            Chain::Algo => "algo",
         }
     }
 }

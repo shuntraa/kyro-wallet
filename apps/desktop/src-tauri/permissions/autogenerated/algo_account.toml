@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-algo-account"
+description = "Enables the algo_account command without any pre-configured scope."
+commands.allow = ["algo_account"]
+
+[[permission]]
+identifier = "deny-algo-account"
+description = "Denies the algo_account command without any pre-configured scope."
+commands.deny = ["algo_account"]

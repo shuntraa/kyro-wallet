@@ -49,6 +49,8 @@ export { demoStellarAddress } from './mock-stellar';
 import { createDemoNear, demoNearAddress, type DemoNearState } from './mock-near';
 export { demoNearAddress } from './mock-near';
 export { demoHbarAddress, hbarChecksum, parseHbarRecipient } from './mock-hbar';
+import { createDemoAlgo, demoAlgoAddress, type DemoAlgoState } from './mock-algo';
+export { algoAddressOf, demoAlgoAddress } from './mock-algo';
 import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
 export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
 import { createDemoKaspa, demoKaspaAddress, type DemoKaspaState } from './mock-kaspa';
@@ -191,6 +193,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       hbar: { address: demoHbarAddress(demoSeed(), 0), path: "m/44'/3030'/0'/0/0" },
       kas: { address: demoKaspaAddress(demoSeed(), network, 0), path: "m/44'/111111'/0'/0/0" },
       polkadot: { address: demoDotAddress(demoSeed(), 0, network), path: 'sr25519 · phrase (compte racine, comme Polkadot.js)' },
+      algo: { address: demoAlgoAddress(0), path: "m/44'/283'/0'/0/0" },
     },
     ownBtc,
     receive,
@@ -338,6 +341,8 @@ export interface MockBackend {
   kaspa: DemoKaspaState;
   /** Polkadot Asset Hub demo chain (tests). */
   dot: DemoDotState;
+  /** Algorand demo chain (tests). */
+  algo: DemoAlgoState;
   /** Staking demo (tests). */
   stake: ReturnType<typeof createDemoStake>;
 }
@@ -470,6 +475,16 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const hbarChain = createDemoHbar({
     network,
     seed: demoSeed(),
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // Algorand (§2.11): `algo_*`, minimum balance and refusals like Rust.
+  const algoChain = createDemoAlgo({
+    network,
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -959,6 +974,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     ...cardanoChain.handlers,
     ...kaspaChain.handlers,
     ...dotChain.handlers,
+    ...algoChain.handlers,
     ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
@@ -996,6 +1012,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     cardano: cardanoChain.state,
     kaspa: kaspaChain.state,
     dot: dotChain.state,
+    algo: algoChain.state,
     stake,
     advance(ms: number) {
       clockOffset += ms;
@@ -1003,14 +1020,14 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     invoke: async (cmd, args = {}) => {
       const h = (handlers as Record<string, ((a: Record<string, unknown>) => unknown) | undefined>)[cmd] ?? utxoChains.handlers[cmd];
       if (!h) throw new IpcError('INVALID_INPUT', l10n(`Commande inconnue : ${cmd}`, `Unknown command: ${cmd}`));
-      // §2.9: the TRON, XRP, Stellar, NEAR, Cardano and staking demo modules simulate account 0 only.
+      // §2.9: the TRON, XRP, Stellar, NEAR, Cardano, Algorand and staking demo modules simulate account 0 only.
       if (cmd === 'ada_address' && accts.arg(args.account) !== 0) {
         requireUnlocked();
         if (Number(args.index ?? 0) !== 0) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)', 'Invalid input: demo: only the address at index 0 exists (Kyro only signs that one)'));
         return accts.adaAddress(accts.arg(args.account));
       }
       if (DEMO_ACCOUNT0_ONLY.test(cmd) && accts.arg(args.account) !== 0) {
-        throw new IpcError('INVALID_INPUT', l10n('Mode démo : les comptes supplémentaires TRON, XRP, Stellar, NEAR, Hedera, Polkadot et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).', 'Demo mode: extra TRON, XRP, Stellar, NEAR, Hedera, Polkadot and Cardano accounts and staking are only simulated for the first account (the real app handles all of them).'));
+        throw new IpcError('INVALID_INPUT', l10n('Mode démo : les comptes supplémentaires TRON, XRP, Stellar, NEAR, Hedera, Polkadot, Algorand et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).', 'Demo mode: extra TRON, XRP, Stellar, NEAR, Hedera, Polkadot, Algorand and Cardano accounts and staking are only simulated for the first account (the real app handles all of them).'));
       }
       void captureProtected;
       return await h(args);
@@ -1019,7 +1036,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
 }
 
 /** Demo commands simulated for account 0 only (§2.9). */
-const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|hbar_(build_tx|sign_tx|broadcast)|stellar_(build_tx|sign_tx|broadcast)|near_(build_tx|sign_tx|broadcast|tx_status)|ada_(build_tx|sign_tx|broadcast)|dot_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
+const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|hbar_(build_tx|sign_tx|broadcast)|stellar_(build_tx|sign_tx|broadcast)|near_(build_tx|sign_tx|broadcast|tx_status)|ada_(build_tx|sign_tx|broadcast)|dot_(build_tx|sign_tx|broadcast)|algo_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
 
 function decodeSolMessageArg(m: unknown): Uint8Array {
   try {

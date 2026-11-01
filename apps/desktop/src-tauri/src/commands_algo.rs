@@ -1,0 +1,593 @@
+//! IPC commands for Algorand (`algo_*`): address, account (balance, minimum balance, spendable,
+//! rekey), history, payment building **by Kyro** (fee / validity / genesis from algod, encoded by
+//! wallet-core), signing behind the password and the native dialog (what Rust decoded: amount,
+//! receiver, note, fee, genesis; minimum balances re-read live), and submission with id check.
+//! Contract: docs/IPC.md §2.11.
+
+use serde::Serialize;
+use serde_json::Value;
+use tauri::{AppHandle, State};
+use wallet_core::{AlgoPayment, AlgoTxSummary, AlgoWarning, Network};
+use zeroize::Zeroizing;
+
+use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
+use crate::algo_backend::{self, AlgoAccountInfo, AlgoCtx, AlgoTxStatus, PaymentCheck, LV_OFFSET};
+use crate::commands::{blocking, confirm_native, format_units, seed_from_password};
+use crate::error::{AppError, AppResult};
+use crate::servers::utxo_network_key;
+use crate::state::AppState;
+
+pub(crate) fn ctx(state: &AppState) -> AlgoCtx<'_> {
+    AlgoCtx {
+        net_client: &state.net,
+        network: state.network,
+        tor: state.settings().tor.enabled,
+    }
+}
+
+/// Address of Algorand account `account` (`m/44'/283'/account'/0/0`).
+fn ours(state: &AppState, account: u32) -> AppResult<String> {
+    state.with_seed(|seed| Ok(wallet_core::algo_address(seed, account)?))
+}
+
+fn algo(micro: &str) -> String {
+    format!("{} ALGO", format_units(micro, 6))
+}
+
+/// Live context shown in the dialog.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlgoContext {
+    pub account: AlgoAccountInfo,
+    pub destination: AlgoAccountInfo,
+    /// Current round when the payment was checked.
+    pub round: u64,
+}
+
+/// Body of the native dialog: everything comes from wallet-core's decoding, except the live
+/// balances of the context.
+pub(crate) fn describe_algo(s: &AlgoTxSummary, c: &AlgoContext, net: Network) -> String {
+    let mut out = format!(
+        "Envoi Algorand{}\n\nÀ : {}\nMontant : {} ({} µALGO)\n",
+        if net == Network::Testnet {
+            " (testnet)"
+        } else {
+            ""
+        },
+        s.receiver,
+        algo(&s.amount),
+        s.amount
+    );
+    if !c.destination.exists {
+        out += &format!(
+            "\nCe compte n'existe pas encore : ce paiement le crée (au moins {} doivent y rester, solde minimum).\n",
+            algo(&c.destination.min_balance)
+        );
+    }
+    out += &format!(
+        "\nFrais : {} ({} µALGO)\nSolde : {} · solde minimum bloqué : {} · disponible : {}\n",
+        algo(&s.fee),
+        s.fee,
+        algo(&c.account.balance),
+        algo(&c.account.min_balance),
+        algo(&c.account.spendable)
+    );
+    out += &format!(
+        "Réseau : {} (genesis {})\nValable des rounds {} à {} (≈ {} min)\n",
+        s.genesis_id,
+        s.genesis_hash,
+        s.first_valid,
+        s.last_valid,
+        (s.last_valid.saturating_sub(c.round.max(s.first_valid)) * 28).div_ceil(600)
+    );
+    // Untrusted text, after the amounts and fees, on one quoted line.
+    if s.note_len > 0 {
+        match &s.note_text {
+            Some(t) => {
+                out += &format!(
+                    "Note (texte libre, publique à jamais) : {}\n",
+                    crate::dialog_text::field(t, crate::dialog_text::MAX_FIELD)
+                )
+            }
+            None => {
+                out += &format!(
+                    "Note binaire ({} octets, publique à jamais) : {}\n",
+                    s.note_len,
+                    crate::dialog_text::sanitize(
+                        s.note_hex.as_deref().unwrap_or_default(),
+                        crate::dialog_text::MAX_FIELD
+                    )
+                )
+            }
+        }
+    }
+    out += &format!("Identifiant : {}\n", s.txid);
+    out
+}
+
+pub(crate) fn describe_algo_extra(s: &AlgoTxSummary) -> String {
+    let mut out = String::from("Kyro a trouvé des éléments à vérifier dans ce paiement :\n");
+    for w in &s.warnings {
+        out += match w {
+            AlgoWarning::Note => {
+                "• la transaction porte une note, lisible par tous et pour toujours sur la chaîne\n"
+            }
+            AlgoWarning::BinaryNote => "• la note n'est pas du texte (octets bruts affichés en hexadécimal)\n",
+            AlgoWarning::UnusualText => {
+                "• note contenant des caractères invisibles / de contrôle, ou trop longue (affichée nettoyée)\n"
+            }
+            AlgoWarning::HighFee => "• frais supérieurs à 0,01 ALGO (d'habitude 0,001 ALGO)\n",
+        };
+    }
+    out += "\nNe signe que si tu sais exactement pourquoi. Signer quand même ?";
+    out
+}
+
+// ---------------------------------------------------------------- reads
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlgoBackendInfo {
+    pub kind: &'static str,
+    pub network: &'static str,
+    pub label: String,
+    pub indexer: String,
+    pub tor: bool,
+}
+
+#[tauri::command]
+pub fn algo_backend_info(state: State<'_, AppState>) -> AlgoBackendInfo {
+    let c = ctx(&state);
+    let host = |u: &str| crate::servers::host_of(u).unwrap_or_default();
+    AlgoBackendInfo {
+        kind: "default",
+        network: utxo_network_key(state.network),
+        label: host(algo_backend::algod_url(state.network)),
+        indexer: host(algo_backend::indexer_url(state.network)),
+        tor: c.tor,
+    }
+}
+
+/// Address of Algorand account `account` (absent = 0).
+#[tauri::command]
+pub fn algo_address(state: State<'_, AppState>, account: Option<u32>) -> AppResult<String> {
+    ours(&state, account_arg(account)?)
+}
+
+#[tauri::command]
+pub async fn algo_account(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<AlgoAccountInfo> {
+    algo_backend::account(&ctx(&state), &address).await
+}
+
+#[tauri::command]
+pub async fn algo_txs(state: State<'_, AppState>, address: String) -> AppResult<Value> {
+    algo_backend::txs(&ctx(&state), &address).await
+}
+
+// ---------------------------------------------------------------- build, sign, broadcast
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlgoBuilt {
+    /// Unsigned transaction (canonical msgpack), hex: what `algo_sign_tx` signs.
+    pub blob: String,
+    pub summary: AlgoTxSummary,
+    pub context: AlgoContext,
+}
+
+async fn live_context(
+    c: &AlgoCtx<'_>,
+    me: &str,
+    to: &str,
+) -> AppResult<(algo_backend::AlgoParams, AlgoContext)> {
+    let params = algo_backend::params(c).await?;
+    let account = algo_backend::account(c, me).await?;
+    let destination = algo_backend::account(c, to).await?;
+    Ok((
+        params.clone(),
+        AlgoContext {
+            account,
+            destination,
+            round: params.last_round,
+        },
+    ))
+}
+
+fn micro_of(s: &AlgoTxSummary) -> (u64, u64) {
+    (s.amount.parse().unwrap_or(0), s.fee.parse().unwrap_or(0))
+}
+
+/// Builds an unsigned payment from live data: `amount` in µALGO, optional UTF-8 `note`.
+pub(crate) async fn build(
+    c: &AlgoCtx<'_>,
+    me: &str,
+    to: &str,
+    amount: &str,
+    note: Option<&str>,
+) -> AppResult<AlgoBuilt> {
+    let sender = wallet_core::algo_address_bytes(me)?;
+    let receiver = wallet_core::algo_address_bytes(to)?;
+    let amount: u64 = amount
+        .trim()
+        .parse()
+        .ok()
+        .filter(|a| *a > 0)
+        .ok_or_else(|| AppError::InvalidInput("montant en µALGO invalide".into()))?;
+    let note = note.map(str::as_bytes).unwrap_or_default().to_vec();
+    if note.len() > wallet_core::ALGO_MAX_NOTE {
+        return Err(AppError::InvalidInput("note : au plus 1024 octets".into()));
+    }
+    let (params, context) = live_context(c, me, to).await?;
+    let (gen, gh) = wallet_core::algo_genesis(c.network)?;
+    let mut p = AlgoPayment {
+        amount,
+        close_remainder_to: None,
+        fee: params.fee_for(0),
+        first_valid: params.last_round,
+        genesis_id: gen.into(),
+        genesis_hash: gh,
+        group: None,
+        last_valid: params.last_round + LV_OFFSET,
+        lease: None,
+        note,
+        receiver,
+        rekey_to: None,
+        sender,
+    };
+    p.fee = params.fee_for(p.encode().len());
+    // A larger fee can take one more byte: price it again.
+    p.fee = params.fee_for(p.encode().len());
+    algo_backend::check_payment(&PaymentCheck {
+        ours: &context.account,
+        dest: &context.destination,
+        amount,
+        fee: p.fee,
+    })?;
+    let blob = hex::encode(p.encode());
+    let summary = wallet_core::algo_decode_tx(&blob, c.network, me)?;
+    Ok(AlgoBuilt {
+        blob,
+        summary,
+        context,
+    })
+}
+
+#[tauri::command]
+pub async fn algo_build_tx(
+    state: State<'_, AppState>,
+    to: String,
+    amount: String,
+    note: Option<String>,
+    account: Option<u32>,
+) -> AppResult<AlgoBuilt> {
+    let me = ours(&state, account_arg(account)?)?;
+    build(&ctx(&state), &me, &to, &amount, note.as_deref()).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlgoSigned {
+    /// Signed transaction (msgpack), hex: what `algo_broadcast` submits.
+    pub blob: String,
+    pub txid: String,
+    pub summary: AlgoTxSummary,
+    pub context: AlgoContext,
+}
+
+/// Decoding + live re-checks, i.e. everything `algo_sign_tx` does before the dialog.
+pub(crate) async fn prepare_sign(
+    c: &AlgoCtx<'_>,
+    me: &str,
+    blob: &str,
+) -> AppResult<(AlgoTxSummary, AlgoContext)> {
+    let summary = wallet_core::algo_decode_tx(blob, c.network, me)?;
+    let (_, context) = live_context(c, me, &summary.receiver).await?;
+    if summary.last_valid <= context.round {
+        return Err(AppError::InvalidInput(
+            "paiement Algorand expiré (dernier round de validité dépassé) : reconstruis-le".into(),
+        ));
+    }
+    let (amount, fee) = micro_of(&summary);
+    algo_backend::check_payment(&PaymentCheck {
+        ours: &context.account,
+        dest: &context.destination,
+        amount,
+        fee,
+    })?;
+    Ok((summary, context))
+}
+
+#[tauri::command]
+pub async fn algo_sign_tx(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    blob: String,
+    password: String,
+    account: Option<u32>,
+) -> AppResult<AlgoSigned> {
+    if !state.is_unlocked() {
+        return Err(AppError::Locked);
+    }
+    let a = account_arg(account)?;
+    let me = ours(&state, a)?;
+    let signer = SignerInfo::new(&state, Chain::Algo, a, wallet_core::algo_path(a));
+    let c = ctx(&state);
+    let net = state.network;
+    let (summary, context) = prepare_sign(&c, &me, &blob).await?;
+    let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
+    confirm_native(
+        &app,
+        "Confirmer le paiement Algorand",
+        signer.body(
+            crate::i18n::current(),
+            &describe_algo(&summary, &context, net),
+        ),
+    )
+    .await?;
+    confirm_signer(&app, &signer).await?;
+    if summary.requires_extra_confirmation {
+        confirm_native(
+            &app,
+            "Attention : paiement à vérifier",
+            describe_algo_extra(&summary),
+        )
+        .await?;
+    }
+    let b = blob.clone();
+    let (signed, txid, again) =
+        blocking(move || Ok(wallet_core::algo_sign(&seed, a, net, &b)?)).await?;
+    if again != summary {
+        return Err(AppError::Internal(
+            "résumé différent entre l'aperçu et la signature".into(),
+        ));
+    }
+    state.touch();
+    Ok(AlgoSigned {
+        blob: signed,
+        txid,
+        summary,
+        context,
+    })
+}
+
+/// Checks the signed transaction (strict decoding, policy, signature by our key) then submits
+/// it; the id algod returns must be ours.
+pub(crate) async fn broadcast_checked(c: &AlgoCtx<'_>, me: &str, blob: &str) -> AppResult<String> {
+    let (txid, raw) = wallet_core::algo_verify_signed(blob, c.network, me)?;
+    algo_backend::submit(c, raw, &txid).await
+}
+
+#[tauri::command]
+pub async fn algo_broadcast(
+    state: State<'_, AppState>,
+    blob: String,
+    account: Option<u32>,
+) -> AppResult<String> {
+    let me = ours(&state, account_arg(account)?)?;
+    broadcast_checked(&ctx(&state), &me, &blob).await
+}
+
+fn valid_txid(t: &str) -> bool {
+    t.len() == 52
+        && t.bytes()
+            .all(|b| b.is_ascii_uppercase() || (b'2'..=b'7').contains(&b))
+}
+
+#[tauri::command]
+pub async fn algo_tx_status(state: State<'_, AppState>, txid: String) -> AppResult<AlgoTxStatus> {
+    let t = txid.trim();
+    if !valid_txid(t) {
+        return Err(AppError::InvalidInput(
+            "identifiant de transaction Algorand : 52 caractères base32".into(),
+        ));
+    }
+    algo_backend::tx_status(&ctx(&state), t).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn summary(note: Option<&str>) -> AlgoTxSummary {
+        AlgoTxSummary {
+            sender: "SENDER".into(),
+            receiver: "BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA".into(),
+            amount: "1500000".into(),
+            fee: "1000".into(),
+            first_valid: 1000,
+            last_valid: 1200,
+            genesis_id: "testnet-v1.0".into(),
+            genesis_hash: "SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=".into(),
+            note_len: note.map_or(0, str::len),
+            note_hex: note.map(|n| hex::encode(n.as_bytes())),
+            note_text: note.map(str::to_owned),
+            txid: "TXID".into(),
+            warnings: if note.is_some() {
+                vec![AlgoWarning::Note]
+            } else {
+                vec![]
+            },
+            requires_extra_confirmation: note.is_some(),
+        }
+    }
+
+    fn context(dest_exists: bool) -> AlgoContext {
+        AlgoContext {
+            account: AlgoAccountInfo {
+                exists: true,
+                balance: "10000000".into(),
+                min_balance: "100000".into(),
+                spendable: "9900000".into(),
+                ..Default::default()
+            },
+            destination: AlgoAccountInfo {
+                exists: dest_exists,
+                balance: if dest_exists { "1".into() } else { "0".into() },
+                min_balance: "100000".into(),
+                ..Default::default()
+            },
+            round: 1000,
+        }
+    }
+
+    #[test]
+    fn dialog_shows_what_rust_decoded() {
+        let d = describe_algo(
+            &summary(Some("Loyer\noctobre")),
+            &context(true),
+            Network::Testnet,
+        );
+        for needle in [
+            "Envoi Algorand (testnet)",
+            "À : BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA",
+            "Montant : 1,5 ALGO (1500000 µALGO)",
+            "Frais : 0,001 ALGO (1000 µALGO)",
+            "solde minimum bloqué : 0,1 ALGO · disponible : 9,9 ALGO",
+            "Réseau : testnet-v1.0 (genesis SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=)",
+            "Valable des rounds 1000 à 1200 (≈ 10 min)",
+            "Note (texte libre, publique à jamais) : « Loyer octobre »",
+            "Identifiant : TXID",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        assert!(!d.contains("n'existe pas encore"));
+        let d = describe_algo(&summary(None), &context(false), Network::Mainnet);
+        assert!(d.starts_with("Envoi Algorand\n"));
+        assert!(d.contains("ce paiement le crée (au moins 0,1 ALGO"));
+        assert!(!d.contains("Note"));
+        let x = describe_algo_extra(&summary(Some("x")));
+        assert!(x.contains("note, lisible par tous"));
+    }
+
+    #[test]
+    fn txid_shape() {
+        assert!(valid_txid(
+            "5FJDJD5LMZC3EHUYYJNH5I23U4X6H2KXABNDGPIL557ZMJ33GZHQ"
+        ));
+        assert!(!valid_txid(
+            "5fjdjd5lmzc3ehuyyjnh5i23u4x6h2kxabndgpil557zmj33gzhq"
+        ));
+        assert!(!valid_txid(
+            "5FJDJD5LMZC3EHUYYJNH5I23U4X6H2KXABNDGPIL557ZMJ33GZH"
+        ));
+        assert!(!valid_txid(
+            "5FJDJD5LMZC3EHUYYJNH5I23U4X6H2KXABNDGPIL557ZMJ33GZH1"
+        ));
+    }
+}
+
+/// Real-network test on Algorand TestNet over Tor. Run with
+/// `cargo test -p kyro-desktop -- --ignored --nocapture algo_live`.
+/// - reads only by default: genesis check on both networks, account and history of the test
+///   address;
+/// - keys: a NEW random test mnemonic, generated once and kept in the gitignored
+///   `.env.algo-testnet` at the repository root (testnet only);
+/// - `KYRO_ALGO_SEND=yes` and a funded first address (the TestNet dispenser has a captcha: fund
+///   it by hand): one payment with a note to the second address through the real path (live
+///   checks, dialog text, signature with identical summary, submission, id check, confirmation).
+#[cfg(test)]
+mod live {
+    use super::*;
+    use crate::net::NetClient;
+    use crate::tor::TorState;
+
+    fn test_seed() -> wallet_core::Seed {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.env.algo-testnet");
+        let words = match std::fs::read_to_string(&path) {
+            Ok(s) => s
+                .lines()
+                .find_map(|l| l.strip_prefix("KYRO_ALGO_TEST_MNEMONIC="))
+                .expect("mnemonic line")
+                .trim()
+                .to_owned(),
+            Err(_) => {
+                let m = wallet_core::Mnemonic::generate(wallet_core::WordCount::W12).unwrap();
+                let w = m.words().join(" ");
+                std::fs::write(
+                    &path,
+                    format!("# ALGORAND TESTNET ONLY — random test mnemonic generated by Kyro's live test (commands_algo.rs).\n# Never use it for real funds. This file is gitignored (.env.*).\nKYRO_ALGO_TEST_MNEMONIC={w}\n"),
+                )
+                .unwrap();
+                eprintln!("new test mnemonic written to {}", path.display());
+                w
+            }
+        };
+        wallet_core::Mnemonic::parse(&words).unwrap().to_seed("")
+    }
+
+    #[test]
+    #[ignore]
+    fn algo_live_testnet_over_tor() {
+        let net = NetClient::new(std::env::temp_dir().join("kyro-algo-live")).unwrap();
+        let seed = test_seed();
+        let me = wallet_core::algo_address(&seed, 0).unwrap();
+        let other = wallet_core::algo_address(&seed, 1).unwrap();
+        eprintln!("addresses: {me} {other}");
+        tauri::async_runtime::block_on(async {
+            net.tor.restart();
+            while net.tor.status().state != TorState::Ready {
+                assert_ne!(net.tor.status().state, TorState::Error);
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            }
+            let c = AlgoCtx {
+                net_client: &net,
+                network: Network::Testnet,
+                tor: true,
+            };
+            let t = std::time::Instant::now();
+            eprintln!(
+                "testnet probe {:?} in {:.1?}",
+                algo_backend::probe(&c).await,
+                t.elapsed()
+            );
+            let main = AlgoCtx {
+                net_client: &net,
+                network: Network::Mainnet,
+                tor: true,
+            };
+            eprintln!("mainnet probe {:?}", algo_backend::probe(&main).await);
+            let acc = algo_backend::account(&c, &me).await.unwrap();
+            eprintln!("account {acc:?}");
+            eprintln!("history: {}", algo_backend::txs(&c, &me).await.unwrap());
+            // Below the minimum balance to an empty account: refused before anything is signed.
+            if acc.exists {
+                let r = build(&c, &me, &other, "1000", None).await;
+                eprintln!("0.001 ALGO to empty {other}: {:?}", r.as_ref().err());
+            }
+            if std::env::var("KYRO_ALGO_SEND").as_deref() != Ok("yes") || !acc.exists {
+                eprintln!("KYRO_ALGO_SEND != yes or account not funded: no payment");
+                return;
+            }
+            let built = build(&c, &me, &other, "200000", Some("Kyro test Algorand"))
+                .await
+                .unwrap();
+            let (summary, context) = prepare_sign(&c, &me, &built.blob).await.unwrap();
+            assert_eq!(summary, built.summary);
+            eprintln!(
+                "--- dialog ---\n{}---\n{}---",
+                describe_algo(&summary, &context, Network::Testnet),
+                describe_algo_extra(&summary)
+            );
+            let (signed, txid, again) =
+                wallet_core::algo_sign(&seed, 0, Network::Testnet, &built.blob).unwrap();
+            assert_eq!(again, summary, "identical summary");
+            let got = broadcast_checked(&c, &me, &signed).await.unwrap();
+            assert_eq!(got, txid);
+            eprintln!("SUBMITTED {txid}");
+            for _ in 0..30 {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                let s = algo_backend::tx_status(&c, &txid).await.unwrap();
+                if s.confirmed {
+                    eprintln!("confirmed in round {:?}", s.round);
+                    return;
+                }
+                assert!(s.error.is_none(), "{:?}", s.error);
+            }
+            panic!("{txid} not confirmed");
+        });
+    }
+}

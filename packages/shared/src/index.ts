@@ -9,3 +9,4 @@ export * from './stellar';
 export * from './near';
 export * from './cashaddr';
 export * from './kaspa';
+export * from './algo';

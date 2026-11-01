@@ -12,6 +12,7 @@ import type { SuiSigned, SuiUnsigned } from './sui/adapter';
 import type { HbarSigned, HbarUnsigned } from './hedera/adapter';
 import type { KaspaSigned, KaspaUnsigned } from './kaspa/adapter';
 import type { DotSigned, DotUnsigned } from './polkadot/adapter';
+import type { AlgoSigned, AlgoUnsigned } from './algorand/adapter';
 import type { CardanoTokenSpec, StellarMemoSpec } from '@kyro/shared';
 
 import { l10n } from '@kyro/shared';
@@ -40,7 +41,9 @@ export type FeeParams =
   /** Kaspa: no fee to choose. Rust: 100 sompi per gram of relay mass (more when the network is busy). */
   | { family: 'kas' }
   /** Polkadot: no fee to choose (runtime weight + length fee, no tip), estimated by the node. */
-  | { family: 'dot' };
+  | { family: 'dot' }
+  /** Algorand: no fee to choose. Rust sets the protocol minimum (0.001 ALGO), more under congestion. */
+  | { family: 'algo' };
 
 export interface FeeOption {
   level: FeeLevel;
@@ -77,7 +80,8 @@ export type SizeHint =
   | { family: 'sui' }
   | { family: 'hbar' }
   | { family: 'kas' }
-  | { family: 'dot' };
+  | { family: 'dot' }
+  | { family: 'algo' };
 
 export interface Balance {
   assetId: string;
@@ -96,7 +100,7 @@ export interface BuildParams {
   destinationTag?: number;
   /** Cardano only: native token to send (its output carries the min-ADA; `amount` is then ignored). */
   cardanoToken?: CardanoTokenSpec;
-  /** Cardano: CIP-20 message; Hedera: transaction memo (≤ 100 bytes). Public and permanent. */
+  /** Cardano: CIP-20 message; Hedera: transaction memo (≤ 100 bytes); Algorand: transaction note (≤ 1024 bytes). Public and permanent. */
   memo?: string;
   /** Stellar only: memo (text / id / hash), public and permanent; exchanges often require one. */
   stellarMemo?: StellarMemoSpec;
@@ -193,9 +197,11 @@ export interface FamilyTypes {
   kas: { unsigned: KaspaUnsigned; signed: KaspaSigned };
   /** Polkadot: `transfer_keep_alive` payload built and strictly decoded by Rust. */
   dot: { unsigned: DotUnsigned; signed: DotSigned };
+  /** Algorand: payment built and strictly decoded by Rust, with the live context. */
+  algo: { unsigned: AlgoUnsigned; signed: AlgoSigned };
 }
-export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned | KaspaUnsigned | DotUnsigned;
-export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned | KaspaSigned | DotSigned;
+export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned | KaspaUnsigned | DotUnsigned | AlgoUnsigned;
+export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned | KaspaSigned | DotSigned | AlgoSigned;
 
 export type HistoryDirection = 'in' | 'out' | 'self';
 export type HistoryStatus = 'pending' | 'confirmed' | 'failed';
@@ -247,7 +253,7 @@ export type AnyAdapter =
   | ChainAdapter<'doge'>
   | ChainAdapter<'bch'> | ChainAdapter<'dash'> | ChainAdapter<'tron'>
   | ChainAdapter<'xrp'>
-  | ChainAdapter<'ada'> | ChainAdapter<'dot'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>
+  | ChainAdapter<'ada'> | ChainAdapter<'algo'> | ChainAdapter<'dot'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>
   | ChainAdapter<'kas'>;
 
 /** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin / Bitcoin Cash / Dash: Bitcoin's PSBT shape). */

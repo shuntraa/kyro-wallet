@@ -12,7 +12,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `xlm`: Stellar (XLM, `stellar_*`, §2.11). */
 /** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). `kas`: Kaspa (KAS, `kas_*`, §2.11). `dot`: Polkadot Asset Hub (`dot_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot';
+/** `algo`: Algorand (ALGO payments, `algo_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
@@ -53,7 +54,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -428,6 +429,27 @@ export function polkadotChain(network: Network): PolkadotChain {
   return POLKADOT_CHAINS[network];
 }
 
+/**
+ * Algorand (phase 4): Rust `algo_*` commands and `AlgorandAdapter` (`packages/chains/src/algorand/`).
+ * Testnet = Algorand TestNet. Keys: `m/44'/283'/a'/0/0` like the Ledger Algorand app (not Pera's
+ * 25 words). ALGO only (no ASA). Hardware wallets: not offered.
+ */
+export interface AlgorandChain extends Omit<ChainBase, 'phase'> {
+  family: 'algo';
+  phase: 4;
+}
+
+const ALGORAND_CHAINS: Record<Network, AlgorandChain> = {
+  testnet: { family: 'algo', key: 'algorand', name: 'Algorand TestNet', label: 'ALGO testnet', network: 'testnet', color: '#2B2B2F', glyph: 'A',
+    nativeSymbol: 'ALGO', nativeName: 'Algorand', nativeDecimals: 6, coingeckoId: 'algorand', phase: 4, blockTimeSecs: 3 },
+  mainnet: { family: 'algo', key: 'algorand', name: 'Algorand', label: 'ALGO', network: 'mainnet', color: '#2B2B2F', glyph: 'A',
+    nativeSymbol: 'ALGO', nativeName: 'Algorand', nativeDecimals: 6, coingeckoId: 'algorand', phase: 4, blockTimeSecs: 3 },
+};
+
+export function algorandChain(network: Network): AlgorandChain {
+  return ALGORAND_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -742,7 +764,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -902,6 +924,9 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     host: network === 'mainnet' ? 'api.kaspa.org' : 'api-tn10.kaspa.org',
     purpose: `Kaspa${network === 'mainnet' ? '' : ' testnet-10'} : soldes, pièces, frais, historique, diffusion (API REST publique des développeurs Kaspa)`,
   });
+  // Algorand: reached by Rust only (algo_*), Tor circuits of the `algorand` family. No custom server yet.
+  list.push({ host: `${nk}-api.algonode.cloud`, purpose: `Algorand${network === 'mainnet' ? '' : ' TestNet'} : soldes, paramètres, diffusion (algod AlgoNode / Nodely)` });
+  list.push({ host: `${nk}-idx.algonode.cloud`, purpose: `Algorand${network === 'mainnet' ? '' : ' TestNet'} : historique (indexer AlgoNode / Nodely)` });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'

@@ -1,6 +1,6 @@
 [package]
 name = "wallet-core"
-description = "Kyro wallet core: BIP39/BIP32 derivation, encrypted vault, BTC/LTC/DOGE/EVM/Solana/TRON/XRP/Stellar/NEAR/Cardano/Sui/Hedera/Cardano/Kaspa/Polkadot signing. Pure, no I/O."
+description = "Kyro wallet core: BIP39/BIP32 derivation, encrypted vault, BTC/LTC/DOGE/EVM/Solana/TRON/XRP/Stellar/NEAR/Cardano/Sui/Hedera/Cardano/Kaspa/Polkadot/Algorand signing. Pure, no I/O."
 version.workspace = true
 edition.workspace = true
 license = "GPL-3.0-or-later"
@@ -59,6 +59,8 @@ serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.145" }
 base64 = { version = "=0.22.1" }
 hex = { version = "=0.4.3" }
+# Algorand addresses and transaction ids (base32, RFC 4648). Already in the tree (arti).
+data-encoding = { version = "=2.11.1" }
 thiserror = { version = "=2.0.18" }
 
 [dev-dependencies]

@@ -99,6 +99,7 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.hintNear': 'NEAR (implicit account)',
   'settings.hintHbar': 'HBAR (EVM address, 0.0.x account created on the first deposit)',
   'settings.hintKas': 'KAS (20 receive + 20 change addresses)',
+  'settings.hintAlgo': 'ALGO (no ASA)',
   'settings.nameEmpty': 'Give the account a name.',
   'settings.nameTooLong': '32 characters at most.',
   'settings.nameBadChar': 'Character not allowed.',

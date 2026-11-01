@@ -201,6 +201,7 @@ function StakingHome({ disabled, has }: { disabled: boolean; has: Record<StakeCh
           ['Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash', t('staking.otherUtxoNo')],
           ['XRP Ledger', t('staking.otherXrp')],
           ['NEAR', t('staking.otherNear')],
+          ['Algorand', t('staking.otherAlgo')],
           ['Stellar', t('staking.otherXlm')],
           [t('staking.otherEvmName'), t('staking.otherEvm')],
         ].map(([k, v]) => (

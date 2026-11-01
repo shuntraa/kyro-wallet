@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-algo-sign-tx"
+description = "Enables the algo_sign_tx command without any pre-configured scope."
+commands.allow = ["algo_sign_tx"]
+
+[[permission]]
+identifier = "deny-algo-sign-tx"
+description = "Denies the algo_sign_tx command without any pre-configured scope."
+commands.deny = ["algo_sign_tx"]

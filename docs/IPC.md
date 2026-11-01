@@ -47,7 +47,7 @@ pub fn btc_account(seed: &Seed, net: Network, kind: BtcKind, account: u32) -> Re
 pub fn btc_address(seed: &Seed, net: Network, kind: BtcKind, account: u32, change: bool, index: u32) -> Result<String>;
 pub fn evm_address(seed: &Seed, index: u32) -> Result<String>;          // m/44'/60'/0'/0/i, EIP-55 — compte EVM n° i = index d'adresse (voir « Comptes » ci-dessous)
 pub fn evm_path(index) -> String;  pub fn sol_path(account) -> String;  pub fn tron_path(account) -> String;
-pub fn xrp_path(account) -> String;  pub fn cardano_account_path(account) -> String;  pub fn stellar_path(account) -> String;   // chemins affichés (dialogue natif, UI)
+pub fn xrp_path(account) -> String;  pub fn cardano_account_path(account) -> String;  pub fn stellar_path(account) -> String;  pub fn algo_path(account) -> String;   // chemins affichés (dialogue natif, UI)
 pub fn sol_address(seed: &Seed, account: u32) -> Result<String>;        // m/44'/501'/i'/0' (SLIP-10 ed25519), base58
 
 // --- signing (clés dérivées à la demande, zeroizées aussitôt) ---
@@ -299,6 +299,27 @@ pub fn dot_fee_probe_extrinsic(&DotRuntime, payload_hex, from) -> Result<Vec<u8>
 pub fn dot_account_storage_key(&[u8; 32]) -> Vec<u8>;  pub fn dot_decode_account_info(&[u8]) -> Result<DotAccountInfo>;   // System.Account, 80 octets
 pub fn dot_decode_fee_info(&[u8]) -> Result<u128>;   // TransactionPaymentApi_query_info → partial_fee
 
+// --- Algorand : m/44'/283'/a'/0/0 dérivé comme l'app Algorand de Ledger (racine HMAC-SHA512 « ed25519 seed » re-hachée tant
+//     que le 3ᵉ bit de poids fort de kL est à 1, chaîne HMAC-SHA256 ; enfants BIP32-Ed25519 V2 (44'/283'/a' durcis, 0/0 non durcis) par le crate ed25519-bip32 ;
+//     les 32 octets kL du dernier nœud = clé secrète ed25519 RFC 8032, signée par ed25519-dalek). Pas le format Pera à 25 mots.
+//     Adresse = base32 sans remplissage (data-encoding) de pk ‖ 4 derniers octets de SHA-512/256(pk), 58 caractères.
+//     msgpack canonique du seul type `pay` écrit à la main, strict (ré-encodage identique exigé) ; signé : ed25519("TX" ‖ msgpack)
+pub fn algo_address(seed, account) -> Result<String>; pub fn algo_public_key(seed, account) -> Result<[u8; 32]>;
+pub fn algo_address_bytes(address) -> Result<[u8; 32]>;   // 58 car. base32 majuscules, somme de contrôle (clé, ou hash d'application / de programme)
+pub fn algo_address_of_pubkey(&[u8; 32]) -> String; pub fn algo_genesis(net) -> Result<(&str /*gen*/, [u8; 32] /*gh*/)>;
+pub struct AlgoPayment { amount, close_remainder_to: Option<[u8; 32]>, fee, first_valid, genesis_id, genesis_hash, group, last_valid,
+                         lease, note: Vec<u8>, receiver, rekey_to, sender }   // close / rekey / grp / lx décodés pour être refusés
+impl AlgoPayment { pub fn encode(&self) -> Vec<u8> /*msgpack canonique*/; pub fn decode(raw) -> Result<Self>;
+                   pub fn signing_bytes(&self) -> Vec<u8> /*"TX" ‖ msgpack*/; pub fn txid(&self) -> String /*base32(SHA-512/256(…))*/ }
+pub fn algo_encode_signed(&AlgoPayment, &[u8; 64]) -> Vec<u8>; pub fn algo_decode_signed(raw) -> Result<(AlgoPayment, [u8; 64])>;
+pub fn algo_decode_tx(blob_hex, net, our_address) -> Result<AlgoTxSummary>;   // refuse : autre type, close, rekey, grp, lx, champ inconnu,
+// encodage non canonique, expéditeur ≠ nous, autre réseau (gen/gh), destinataire nul ou nous, montant 0, frais < 1000, fenêtre > 1000, note > 1024 o
+pub struct AlgoTxSummary { sender, receiver, amount, fee /*µALGO*/, first_valid, last_valid, genesis_id, genesis_hash /*b64*/,
+                           note_len, note_hex, note_text /*nettoyé*/, txid, warnings: Vec<AlgoWarning>, requires_extra_confirmation }
+pub enum AlgoWarning { Note, BinaryNote, UnusualText, HighFee /*> 0,01 ALGO*/ }   // → renforcée
+pub fn algo_sign(seed, account, net, blob_hex) -> Result<(String /*signé, hex*/, String /*txid*/, AlgoTxSummary)>;   // verify_strict
+pub fn algo_verify_signed(signed_hex, net, our_address) -> Result<(String /*txid*/, Vec<u8> /*à diffuser*/)>;
+
 // --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
 //     sel = ENTROPIE BIP39, puis clamping), dérivation BIP32-Ed25519 V2 par le crate ed25519-bip32 (aucune crypto écrite
 //     ici), signature ed25519-dalek (hazmat::raw_sign avec le scalaire étendu kL ‖ kR) vérifiée (verify_strict) ;
@@ -543,6 +564,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `hbar_*` | voir §2.11 | | Hedera : CryptoTransfer construit **par Rust** (une copie par nœud, même identifiant), mémo mis en évidence, diffusion gRPC-web |
 | `kas_*` | voir §2.11 | | Kaspa : transaction construite **par Rust** depuis les pièces du compte (20 adresses de réception + 20 de monnaie), masse KIP-9 et frais calculés, pièces relues avant signature |
 | `dot_*` | voir §2.11 | | Polkadot Asset Hub : transfert `transfer_keep_alive` construit **par Rust** (métadonnées vérifiées, nonce, ère), dépôt existentiel, signature sr25519 |
+| `algo_*` | voir §2.11 | | Algorand : paiement `pay` construit **par Rust** (frais, fenêtre de validité, genesis), msgpack canonique, solde minimum, close-remainder-to et rekey refusés |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `sol_stake_*`, `ada_stake_*`, `tron_stake_*` | voir §2.8 | | Staking : Solana natif, délégation Cardano, TRON Stake 2.0 ; opérations construites **par Rust**, décodées et vérifiées en direct avant le dialogue natif |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
@@ -586,6 +608,7 @@ type Accounts = {                 // accounts_get({ account? }) : tout est celui
   stellar: { address: string };                                                 // m/44'/148'/0' (SEP-0005, même clé sur testnet), G…
   cardano: { address: string };   // adresse de base m/1852'/1815'/0'/0/0 + staking …/2/0 (CIP-1852, Icarus) ; addr_test1… sur preprod
   sui: { address: string };       // m/44'/784'/0'/0'/0' (SLIP-10 ed25519, même chemin sur testnet), 0x + 64 hex (§2.11)
+  algo: { address: string };      // m/44'/283'/0'/0/0 (dérivation de l'app Algorand de Ledger, même chemin sur testnet), 58 caractères
 };
 type ApiKeyName = 'coingecko' | 'zerox' | 'trongrid';   // toutes les clés que Settings connaît (1inch retiré : une ancienne clé est ignorée puis effacée)
 // coingecko : en-tête x-cg-demo-api-key / x-cg-pro-api-key (api / pro-api.coingecko.com) ; zerox : 0x-api-key (api.0x.org) ;
@@ -1041,6 +1064,7 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `ada` | CIP-1852 `m/1852'/1815'/a'/0/0` + staking `…/a'/2/0` | `m/1852'/1815'/0'/…` |
 | `xlm` | SEP-0005 `m/44'/148'/a'` (Lobstr, Freighter, Ledger, Trezor ; vecteurs SEP-0005) | `m/44'/148'/0'` |
 | `sui` | `m/44'/784'/a'/0'/0'` (Sui Wallet / Slush, `sui keytool`) | `m/44'/784'/0'/0'/0'` |
+| `algo` | `m/44'/283'/a'/0/0` (app Algorand de Ledger) | `m/44'/283'/0'/0/0` |
 
 | Commande | Arguments | Retour | Notes |
 |---|---|---|---|
@@ -1050,11 +1074,11 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `vault_account_remove` | `{ chain, account }` | `VaultAccountLists` | coffre déverrouillé ; compte 0 → `INVALID_INPUT` |
 
 ```ts
-type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'bch' | 'dash' | 'sui';
+type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'bch' | 'dash' | 'sui' | 'algo';
 type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[] };   // triées par index ; nom par défaut « Bitcoin 2 » pour l'index 1
 ```
 
-**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `stellar_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sui_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`, `kas_address` / `_account` / `_txs` / `_build_tx` / `_sign_tx` / `_broadcast` (Kaspa lit les adresses du compte, donc ses lectures aussi). Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
+**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `algo_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `stellar_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sui_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`, `kas_address` / `_account` / `_txs` / `_build_tx` / `_sign_tx` / `_broadcast` (Kaspa lit les adresses du compte, donc ses lectures aussi). Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
 
 **Dialogue natif.** La première ligne de chaque fenêtre de signature du coffre dit **quel compte signe** : « Compte signataire : Bitcoin 2 — m/84'/1'/1' (SegWit), m/86'/1'/1' (Taproot) » (EVM : plus l'adresse « De »). Un compte qui n'est **pas** dans la liste de l'utilisateur est affiché « inconnu » (« n° N, absent de ta liste ») avec son chemin, et la signature exige une **2ᵉ fenêtre renforcée** (« Attention : compte inconnu »). Bitcoin, Litecoin, Dogecoin : seules les entrées du compte choisi sont signées ; une entrée d'un autre compte du coffre est étrangère (2ᵉ fenêtre déjà existante) et la monnaie n'est reconnue que dans le compte choisi.
 
@@ -1230,6 +1254,27 @@ Depuis la migration vers Asset Hub (Polkadot, novembre 2025), les soldes DOT et 
 
 **Fait côté UI** : `Family` `'dot'`, `AccountChain` `'dot'`, `Accounts.polkadot`, types `Commands` (`dot_*`), backend démo (`mock-dot.ts`, clé démo : pas la vraie dérivation sr25519), Envoyer (disponible, dépôt existentiel, frais, aperçu Rust, suivi par nonce), Recevoir (adresse, chemin, dépôt existentiel), Actif, « Connexions sortantes ». Adaptateur : `PolkadotAdapter` (`packages/chains/src/polkadot/`), `polkadotChain(network)`.
 
+### 2.11 Algorand (paiements ALGO)
+
+Serveurs par défaut, **sans clé** (offre gratuite d'AlgoNode / Nodely) : algod `mainnet-api.algonode.cloud` / `testnet-api.algonode.cloud` (comptes, paramètres, diffusion, suivi) et indexer `mainnet-idx.algonode.cloud` / `testnet-idx.algonode.cloud` (historique), famille Tor `algorand`, jamais de repli. Pas encore de serveur personnalisé (algod / indexer à toi) : seuls ces hôtes sont contactés. **Rust construit le paiement** : `fee` = max(`min-fee`, `fee` par octet × taille signée) de `/v2/transactions/params` (0,001 ALGO hors congestion), `fv` = `last-round`, `lv` = `fv` + 200 (≈ 9 min ; le protocole autorise 1000), `gen` / `gh` = ceux de wallet-core pour le réseau de l'app (le serveur doit annoncer exactement le même genesis, sinon `SERVER_WRONG_NETWORK`), note UTF-8 facultative ; encodé par wallet-core en msgpack canonique. Une transaction construite par le serveur n'est jamais signée.
+
+Clés : BIP39 (la phrase du coffre), chemin **`m/44'/283'/a'/0/0` dérivé comme l'app Algorand de Ledger** (BIP32-Ed25519 du Ledger OS, vecteur des tests de l'app Ledger : compte 123). **Pas** le format Pera / « Algorand Wallet » à 25 mots (une clé brute, sans BIP39 ni dérivation) : une phrase de 25 mots ne s'importe pas dans Kyro, et une phrase Kyro ne s'ouvre pas dans Pera ; elle s'ouvre dans Ledger Live (app Algorand) avec les mêmes adresses.
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `algo_backend_info` | — | `{ kind: 'default', network: 'mainnet' \| 'testnet', label /*algod*/, indexer, tor }` | |
+| `algo_address` | `{ account? }` | `string` | `m/44'/283'/{account}'/0/0`, coffre déverrouillé ; `algo_build_tx`, `algo_sign_tx`, `algo_broadcast` prennent le même `account?` |
+| `algo_account` | `{ address }` | `{ address, exists, balance /*µALGO*/, minBalance, spendable, assets, authAddr, round }` | algod `/v2/accounts/{a}?exclude=all` ; `minBalance` = celui calculé par algod (**0,1 ALGO** + 0,1 par ASA / application activés…) ; `spendable` = solde − `minBalance` ; compte vide : `exists: false` (il n'existe sur la chaîne qu'après ≥ 0,1 ALGO) ; `authAddr` ≠ null : compte « rekeyé », la clé de Kyro ne signe plus pour lui |
+| `algo_txs` | `{ address }` | `[{ id, type, from, to, amount, fee, closeTo, closeAmount, round, time, note }]` | indexer, 50 dernières ; `note` = texte UTF-8 nettoyé (ou null) ; types autres que `pay` gardés avec `amount: '0'` |
+| `algo_build_tx` | `{ to, amount /*µALGO*/, note?, account? }` | `{ blob /*msgpack non signé, hex*/, summary: AlgoTxSummary, context: { account, destination, round } }` | refusé avant toute construction : compte rekeyé ou vide ; montant + frais > `spendable` ; destinataire qui resterait sous son `minBalance` (compte vide : au moins 0,1 ALGO) ; note > 1024 octets |
+| `algo_sign_tx` | `{ blob, password, account? }` | `{ blob /*signé*/, txid, summary, context }` | décode (strict, voir ci-dessous), refuse une fenêtre de validité dépassée, **relit en direct** paramètres (genesis) et les deux comptes et refait les vérifications ci-dessus, mot de passe → dialogue natif avec ce que Rust a décodé : destinataire, montant, création du compte destinataire, frais, solde / solde minimum / disponible, **réseau (genesis id et hash)**, rounds de validité, note (texte nettoyé, ou hexadécimal si binaire), identifiant ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` (note, frais > 0,01 ALGO) ; résumé de la signature = résumé affiché |
+| `algo_broadcast` | `{ blob, account? }` | `string` (txid) | `algo_verify_signed` (décodage strict, mêmes refus, signature ed25519 `verify_strict` par l'expéditeur = nous, bon réseau) puis `POST /v2/transactions` (msgpack brut) ; refus du nœud → `INVALID_INPUT` avec son message ; `txId` du serveur ≠ le nôtre → `SERVER_UNREACHABLE` |
+| `algo_tx_status` | `{ txid }` | `{ confirmed, round, error }` | algod `/v2/transactions/pending/{txid}` (`confirmed-round`, `pool-error`), puis l'indexer s'il n'y est plus ; un bloc Algorand est définitif |
+
+Refusé avant toute signature (wallet-core `algo_decode_tx`) : tout autre type que `pay` (`axfer`, `appl`, `keyreg`, `acfg`, `afrz`…), **`close` (close-remainder-to : tout le solde restant partirait ailleurs et le compte serait fermé)**, **`rekey` (le contrôle du compte passerait à une autre clé)**, `grp` (transaction groupée), `lx` (bail), tout champ inconnu, tout encodage qui ne se ré-encode pas **octet pour octet** à l'identique (ordre des clés, champ vide explicite, forme d'entier ou de longueur non minimale, octets en trop), expéditeur ≠ nous, autre réseau (`gen` ou `gh`), destinataire nul ou nous-mêmes, montant nul, frais < 0,001 ALGO, fenêtre `fv`…`lv` invalide ou > 1000 rounds, note > 1024 octets. Transaction signée : exactement `{ sig, txn }` (pas de `sgnr`, `msig`, `lsig`). Hardware wallets : non proposé (l'UI masque Algorand pour un compte hardware wallet).
+
+**Pour l'UI** : afficher `spendable` (pas seulement le solde) et le solde minimum ; pour un destinataire vide, « au moins 0,1 ALGO » ; la note est facultative, publique pour toujours, ≤ 1024 octets ; après `algo_broadcast`, suivre `algo_tx_status`. **Fait côté UI** : `Family` `'algo'`, `AccountChain` `'algo'`, types `Commands` (`algo_*`, `Accounts.algo`), backend démo (`mock-algo.ts`), écrans Envoyer (note, solde dépensable, minimum du destinataire, résumé décodé, suivi) / Recevoir (solde minimum expliqué, Ledger ≠ Pera) / Actif / Historique, « Connexions sortantes ». Adaptateur : `AlgorandAdapter` (`packages/chains/src/algorand/`), `algorandChain(network)`, prix CoinGecko `algorand`.
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -1242,6 +1287,7 @@ Depuis la migration vers Asset Hub (Polkadot, novembre 2025), les soldes DOT et 
 | `free.rpc.fastnear.com`, `test.rpc.fastnear.com`, `tx.main.fastnear.com`, `tx.test.fastnear.com` | NEAR mainnet et testnet (FastNEAR : RPC JSON et API d'historique) : utilisés par les commandes Rust `near_*`, famille Tor `near` |
 | `graphql.testnet.sui.io`, `graphql.mainnet.sui.io` | Sui testnet et mainnet (GraphQL de la Sui Foundation, POST JSON) : utilisés par les commandes Rust `sui_*` (solde, pièces de gaz, époque et prix de référence, simulation, exécution, historique), famille Tor `sui` |
 | `westend-asset-hub-rpc.polkadot.io`, `polkadot-asset-hub-rpc.polkadot.io` | Polkadot : nœuds JSON-RPC publics de Parity pour Westend Asset Hub et Polkadot Asset Hub, utilisés par les commandes Rust `dot_*`, famille Tor `polkadot` |
+| `mainnet-api.algonode.cloud`, `testnet-api.algonode.cloud`, `mainnet-idx.algonode.cloud`, `testnet-idx.algonode.cloud` | Algorand mainnet et testnet (AlgoNode / Nodely, sans clé : algod et indexer) : utilisés par les commandes Rust `algo_*` uniquement, famille Tor `algorand` (`net::ALGORAND_HOSTS`) |
 | `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
 | `api.kaspa.org`, `api-tn10.kaspa.org` | Kaspa mainnet et testnet-10 (`kaspa-rest-server`, API publique sans clé) : utilisés par les commandes Rust `kas_*`, famille Tor `kaspa` |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |

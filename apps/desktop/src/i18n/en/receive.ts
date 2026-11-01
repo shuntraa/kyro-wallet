@@ -29,6 +29,7 @@ export const receive: Record<keyof typeof fr, string> = {
   'receive.descKas': 'Kaspa address ({prefix}…), Schnorr key. Same addresses as Kaspa NG and Kaspium with the same phrase.',
   'receive.descDot': 'Polkadot address (1…) on Polkadot Asset Hub, where DOT lives since the migration: the same as in Polkadot.js, Nova or Talisman for the same phrase.',
   'receive.descDotTestnet': 'Westend Asset Hub address (5…, generic format): for test WND.',
+  'receive.descAlgo': 'Algorand address (58 characters): for ALGO. Algorand tokens (ASA) are not handled by Kyro yet.',
   'receive.xlmReserve': '<b>1 XLM reserve:</b> a Stellar account only exists once it has received at least 1 XLM (2 × the 0.5 XLM base reserve), which stays locked; each trustline, offer or signer adds 0.5 XLM. The first send to this address must therefore be at least 1 XLM (the sender creates your account with a CreateAccount operation). Only send XLM here: other Stellar assets need a trustline, which Kyro does not handle yet.',
   'receive.xlmNotCreated': 'Your account is not created yet: ask for at least 1 XLM to start.',
   'receive.xlmExists': 'Your account exists: locked reserve {reserve}.',

@@ -49,6 +49,7 @@ const TAIL = 4;
  * - EVM: `0x`, hex compared lowercase.
  * - Solana (base58): none.
  * - TRON: `T`. XRP: `r`. Stellar: `G` (base32, upper case).
+ * - Algorand (base32, upper case): none.
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
  * - NEAR: none (implicit 64 hex or named id, lowercase).
  * - Sui: `0x`, hex compared lowercase (no checksum at all).
@@ -86,6 +87,7 @@ export function addressParts(address: string, family: Family): AddressParts & { 
     case 'xlm':
       return a.startsWith('G') ? { prefix: 'G', body: a.slice(1), caseInsensitive: false } : { prefix: '', body: a, caseInsensitive: false };
     case 'sol':
+    case 'algo':
       return { prefix: '', body: a, caseInsensitive: false };
     case 'near':
       // Implicit (64 hex) or named account ids: always lowercase.

@@ -506,6 +506,8 @@ pub struct Accounts {
     kas: AddressOut,
     /// sr25519 (substrate-bip39): the phrase's root key for account 0, `//a` otherwise.
     polkadot: AddressOut,
+    /// `m/44'/283'/a'/0/0` (Ledger's Algorand derivation).
+    algo: AddressOut,
 }
 
 fn utxo_account_out(
@@ -609,6 +611,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             polkadot: AddressOut {
                 address: polkadot,
                 path: wallet_core::dot_path(a),
+            },
+            algo: AddressOut {
+                address: wallet_core::algo_address(seed, a)?,
+                path: wallet_core::algo_path(a),
             },
         })
     })

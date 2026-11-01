@@ -36,6 +36,7 @@ import { demoSuiAddress } from './mock-sui';
 import { demoHbarAddress } from './mock-hbar';
 import { demoKaspaAddress } from './mock-kaspa';
 import { demoDotAddress } from './mock-dot';
+import { demoAlgoAddress } from './mock-algo';
 import { demoFund } from './mock-tx';
 import type { DemoChainState } from './mock-net';
 import { l10n } from './i18n';
@@ -62,6 +63,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   hbar: 'Hedera',
   kas: 'Kaspa',
   dot: 'Polkadot',
+  algo: 'Algorand',
 };
 
 export const defaultAccountName = (chain: AccountChain, index: number): string => `${ACCOUNT_CHAIN_LABEL[chain]} ${index + 1}`;
@@ -169,6 +171,7 @@ export function createDemoAccounts(d: {
       hbar: { address: demoHbarAddress(d.seed, a), path: `m/44'/3030'/0'/0/${a}` },
       kas: { address: demoKaspaAddress(d.seed, d.network, a), path: `m/44'/111111'/${a}'/0/0` },
       polkadot: { address: demoDotAddress(d.seed, a, d.network), path: `sr25519 · phrase//${a}` },
+      algo: { address: demoAlgoAddress(a), path: `m/44'/283'/${a}'/0/0` },
     };
   };
 

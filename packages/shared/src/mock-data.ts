@@ -35,6 +35,7 @@ export const DEMO_COINS: DemoCoin[] = [
   { id: 'chainlink', symbol: 'link', name: 'Chainlink', price: 11.2, change24h: -2.4, change7d: 5.2, marketCapEur: 6.8e9 },
   { id: 'near', symbol: 'near', name: 'NEAR Protocol', price: 2.35, change24h: 1.8, change7d: -2.6, marketCapEur: 2.9e9 },
   { id: 'polkadot', symbol: 'dot', name: 'Polkadot', price: 3.9, change24h: 0.5, change7d: -1.8, marketCapEur: 6.1e9 },
+  { id: 'algorand', symbol: 'algo', name: 'Algorand', price: 0.17, change24h: 1.4, change7d: -1.8, marketCapEur: 1.45e9 },
   { id: 'litecoin', symbol: 'ltc', name: 'Litecoin', price: 64.1, change24h: 0.2, change7d: -0.9, marketCapEur: 4.8e9 },
   { id: 'bitcoin-cash', symbol: 'bch', name: 'Bitcoin Cash', price: 318, change24h: -0.6, change7d: 1.9, marketCapEur: 6.3e9 },
   { id: 'dash', symbol: 'dash', name: 'Dash', price: 21.7, change24h: 1.1, change7d: -2.4, marketCapEur: 2.7e8 },

@@ -64,6 +64,12 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // mainnet), where DOT balances live since the Asset Hub migration; only Rust's `dot_*`.
     "westend-asset-hub-rpc.polkadot.io",
     "polkadot-asset-hub-rpc.polkadot.io",
+    // Algorand (AlgoNode / Nodely free tier, no token): algod + indexer, mainnet and testnet;
+    // only Rust's `algo_*` commands.
+    "mainnet-api.algonode.cloud",
+    "testnet-api.algonode.cloud",
+    "mainnet-idx.algonode.cloud",
+    "testnet-idx.algonode.cloud",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -104,6 +110,14 @@ pub const HEDERA_HOSTS: &[&str] = &[
     "node00.swirldslabs.com",
     "node01-00-grpc.swirlds.com",
     "node04.swirldslabs.com",
+];
+
+/// Algorand default servers (algod + indexer), the `algorand` Tor family.
+pub const ALGORAND_HOSTS: &[&str] = &[
+    "mainnet-api.algonode.cloud",
+    "testnet-api.algonode.cloud",
+    "mainnet-idx.algonode.cloud",
+    "testnet-idx.algonode.cloud",
 ];
 
 /// Electrum servers (raw TLS sockets, not HTTP) that Rust itself may open **as defaults**,
@@ -376,6 +390,7 @@ pub enum Family {
     Hedera,
     Kaspa,
     Polkadot,
+    Algorand,
     Evm,
     Solana,
     Market,
@@ -426,6 +441,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         || host == "polkadot-asset-hub-rpc.polkadot.io"
     {
         Family::Polkadot
+    } else if ALGORAND_HOSTS.contains(&host) {
+        Family::Algorand
     } else if host.ends_with("-rpc.publicnode.com") || EVM_OWN_RPC_HOSTS.contains(&host) {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1191,6 +1208,11 @@ mod tests {
             family_for("horizon-testnet.stellar.org", &c),
             Family::Stellar
         );
+        for h in ALGORAND_HOSTS {
+            assert!(ALLOWED_HOSTS.contains(h), "{h}");
+            assert_eq!(family_for(h, &c), Family::Algorand);
+        }
+        assert_eq!(family_for("algonode.cloud", &c), Family::Other);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
         for h in [

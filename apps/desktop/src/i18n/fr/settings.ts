@@ -99,6 +99,7 @@ export const settings = {
   'settings.hintNear': 'NEAR (compte implicite)',
   'settings.hintHbar': 'HBAR (adresse EVM, compte 0.0.x créé au premier dépôt)',
   'settings.hintKas': 'KAS (20 adresses de réception + 20 de monnaie)',
+  'settings.hintAlgo': 'ALGO (pas d’ASA)',
   'settings.nameEmpty': 'Donne un nom au compte.',
   'settings.nameTooLong': '32 caractères au plus.',
   'settings.nameBadChar': 'Caractère non autorisé.',

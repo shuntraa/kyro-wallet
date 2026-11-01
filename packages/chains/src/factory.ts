@@ -50,6 +50,8 @@ import { KaspaAdapter } from './kaspa/adapter';
 import { kaspaChain } from './registry';
 import { PolkadotAdapter } from './polkadot/adapter';
 import { polkadotChain } from './registry';
+import { AlgorandAdapter } from './algorand/adapter';
+import { algorandChain } from './registry';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -83,6 +85,8 @@ export interface AdapterSet {
   kaspa: KaspaAdapter | null;
   /** Polkadot Asset Hub: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   polkadot: PolkadotAdapter | null;
+  /** Algorand: vault only (not offered on hardware wallets). */
+  algo: AlgorandAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -136,6 +140,8 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const kaspa = accounts.kas && !hw ? new KaspaAdapter({ chain: kaspaChain(network), address: accounts.kas.address, ...a }) : null;
   // Polkadot: Rust picks the node (Parity's public Asset Hub RPC; no custom server yet).
   const polkadot = accounts.polkadot ? new PolkadotAdapter({ chain: polkadotChain(network), address: accounts.polkadot.address, ...a }) : null;
+  // Algorand: Rust picks the server (AlgoNode / Nodely algod + indexer).
+  const algo = accounts.algo ? new AlgorandAdapter({ chain: algorandChain(network), address: accounts.algo.address, ...a }) : null;
   const all: AnyAdapter[] = [
     ...(btc ? [btc] : []),
     ...evm.values(),
@@ -147,8 +153,9 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
     ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : []), ...(near ? [near] : []), ...(sui ? [sui] : []), ...(hbar ? [hbar] : []),
     ...(kaspa ? [kaspa] : []),
     ...(polkadot ? [polkadot] : []),
+    ...(algo ? [algo] : []),
   ];
-  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, all, hw: hw ?? null };
+  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin, Bitcoin Cash, Dash
@@ -293,6 +300,24 @@ export {
   type StellarUnsigned,
   type StellarSigned,
 } from './stellar/adapter';
+export {
+  AlgorandAdapter,
+  rustAlgoBackend,
+  isAlgoAddress,
+  algoNoteBytes,
+  ALGO_MIN_BALANCE,
+  ALGO_MAX_NOTE,
+  type AlgorandAdapterOptions,
+  type AlgoBackend,
+  type AlgoAccountInfo,
+  type AlgoContext,
+  type AlgoHistoryEntry,
+  type AlgoTxStatus,
+  type AlgoTxSummary,
+  type AlgoWarning,
+  type AlgoUnsigned,
+  type AlgoSigned,
+} from './algorand/adapter';
 export {
   CardanoAdapter,
   rustCardanoBackend,

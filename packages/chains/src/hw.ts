@@ -49,6 +49,8 @@ export interface WalletAccounts {
   kas?: { address: string; path?: string };
   /** Vault only: Polkadot on a hardware wallet is HW_UNSUPPORTED. */
   polkadot?: { address: string; path?: string };
+  /** Vault only: Algorand is not offered on hardware wallets. */
+  algo?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {
