@@ -50,6 +50,7 @@ import { emitDemoEvent } from './events';
 import { btcWarnings } from './warnings';
 import { demoVsize } from './mock-tx';
 import { demoDecodeSolMessage, demoSolSummaryText } from './mock-sol';
+import { l10n } from './i18n';
 
 bitcoin.initEccLib(ecc);
 
@@ -125,17 +126,17 @@ function checksum(addrHexNo0x: string): string {
 
 function evmAddressFromNode(node: HDKey, index: number): string {
   const pk = node.deriveChild(index).publicKey;
-  if (!pk) throw new IpcError('INTERNAL', 'dérivation EVM');
+  if (!pk) throw new IpcError('INTERNAL', l10n('dérivation EVM', 'EVM derivation'));
   return checksum(bytesToHex(keccak_256(ecc.pointCompress(pk, false).slice(1))).slice(-40));
 }
 
 function btcAddress(xpub: string, network: Network, kind: BtcKind, change: number, index: number): string {
   const key = HDKey.fromExtendedKey(xpub, network === 'testnet' ? TESTNET_VERSIONS : undefined).deriveChild(change).deriveChild(index);
   const pk = key.publicKey;
-  if (!pk) throw new IpcError('INTERNAL', 'dérivation BTC');
+  if (!pk) throw new IpcError('INTERNAL', l10n('dérivation BTC', 'BTC derivation'));
   const net = network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
   const p = kind === 'segwit' ? bitcoin.payments.p2wpkh({ pubkey: pk, network: net }) : bitcoin.payments.p2tr({ internalPubkey: pk.slice(1, 33), network: net });
-  if (!p.address) throw new IpcError('INTERNAL', 'adresse');
+  if (!p.address) throw new IpcError('INTERNAL', l10n('adresse', 'address'));
   return p.address;
 }
 
@@ -192,12 +193,12 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
 
   const appFor = (chain: HwChain) => (chain === 'btc' ? (testnet ? 'Bitcoin Test' : 'Bitcoin') : chain === 'evm' ? 'Ethereum' : 'Solana');
 
-  const cancelled = () => new IpcError('USER_REJECTED', 'Action annulée.');
+  const cancelled = () => new IpcError('USER_REJECTED', l10n('Action annulée.', 'Action cancelled.'));
 
   /** Runs one device operation (one per device: HW_BUSY otherwise), cancellable. */
   const run = async <T>(id: string, op: (wait: (ms: number) => Promise<void>) => Promise<T>): Promise<T> => {
-    if (!device || id !== device.id) throw new IpcError('HW_NOT_FOUND', 'Appareil introuvable : branche-le, déverrouille-le, puis relance la détection.');
-    if (pending) throw new IpcError('HW_BUSY', 'Appareil occupé : une autre opération est en cours sur cet appareil.');
+    if (!device || id !== device.id) throw new IpcError('HW_NOT_FOUND', l10n('Appareil introuvable : branche-le, déverrouille-le, puis relance la détection.', 'Device not found: plug it in, unlock it, then run the detection again.'));
+    if (pending) throw new IpcError('HW_BUSY', l10n('Appareil occupé : une autre opération est en cours sur cet appareil.', 'Device busy: another operation is in progress on this device.'));
     let rejectCurrent: ((e: unknown) => void) | null = null;
     let isCancelled = false;
     pending = {
@@ -232,7 +233,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   const requirePaired = () => {
     if (safe7 && (!thpConnected || !thpPairings.some((p) => p.key === DEMO_THP_KEY))) {
       thpConnected = false;
-      throw new IpcError('HW_PAIRING_REQUIRED', 'Appairage requis : ce Trezor Safe 7 n’est pas (ou plus) appairé avec Kyro. Connecte-le d’abord (hw_open).');
+      throw new IpcError('HW_PAIRING_REQUIRED', l10n('Appairage requis : ce Trezor Safe 7 n’est pas (ou plus) appairé avec Kyro. Connecte-le d’abord (hw_open).', 'Pairing required: this Trezor Safe 7 is not (or no longer) paired with Kyro. Connect it first (hw_open).'));
     }
   };
 
@@ -250,13 +251,13 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       };
       // 180 s, polled in 100 ms slices (cancellable: hw_cancel → USER_REJECTED).
       for (let i = 0; box.code === null; i++) {
-        if (i >= 1800) throw new IpcError('HW_TIMEOUT', 'Délai dépassé : pas de réponse de l’appareil à temps. Opération abandonnée.');
+        if (i >= 1800) throw new IpcError('HW_TIMEOUT', l10n('Délai dépassé : pas de réponse de l’appareil à temps. Opération abandonnée.', 'Timed out: no answer from the device in time. Operation aborted.'));
         await wait(100);
       }
       thpCodeWaiter = null;
       const ok = box.code === thpCodeOnDevice;
       thpCodeOnDevice = null;
-      if (!ok) throw new IpcError('HW_PAIRING_FAILED', 'Appairage échoué : code incorrect. Relance la connexion : l’appareil affichera un nouveau code.');
+      if (!ok) throw new IpcError('HW_PAIRING_FAILED', l10n('Appairage échoué : code incorrect. Relance la connexion : l’appareil affichera un nouveau code.', 'Pairing failed: wrong code. Connect again: the device will show a new code.'));
       thpPairings = [...thpPairings, { key: DEMO_THP_KEY, model: 'T3W1', added: Math.floor(Date.now() / 1000) }];
     }
     prompt('thp-confirm-connection');
@@ -284,48 +285,48 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       box.positions = p;
     };
     for (let i = 0; box.positions === null; i++) {
-      if (i >= 900) throw new IpcError('HW_TIMEOUT', 'Délai dépassé : pas de réponse de l’appareil à temps. Opération abandonnée.');
+      if (i >= 900) throw new IpcError('HW_TIMEOUT', l10n('Délai dépassé : pas de réponse de l’appareil à temps. Opération abandonnée.', 'Timed out: no answer from the device in time. Operation aborted.'));
       await wait(100);
     }
     pinWaiter = null;
-    if (demoDecodePin(box.positions) !== DEMO_TREZOR_PIN) throw new IpcError('HW_LOCKED', 'Appareil verrouillé : PIN incorrect.');
+    if (demoDecodePin(box.positions) !== DEMO_TREZOR_PIN) throw new IpcError('HW_LOCKED', l10n('Appareil verrouillé : PIN incorrect.', 'Device locked: wrong PIN.'));
     pinOk = true;
     if (scenario === 'trezor-one-passphrase') {
-      throw new IpcError('HW_UNSUPPORTED', 'Non pris en charge : passphrase de la Trezor One (elle se tape sur l’ordinateur, ce que Kyro refuse)', { min: null });
+      throw new IpcError('HW_UNSUPPORTED', l10n('Non pris en charge : passphrase de la Trezor One (elle se tape sur l’ordinateur, ce que Kyro refuse)', 'Not supported: Trezor One passphrase (it is typed on the computer, which Kyro refuses)'), { min: null });
     }
   };
 
   /** The device must be usable for `chain` (unlocked, right app / firmware). */
   const ensure = async (chain: HwChain, wait: (ms: number) => Promise<void>) => {
-    if (PHASE4.includes(chain)) throw new IpcError('HW_UNSUPPORTED', `Non pris en charge : ${LABEL[chain]} : pas encore pris en charge par Kyro (phase 4)`, { min: null });
+    if (PHASE4.includes(chain)) throw new IpcError('HW_UNSUPPORTED', l10n(`Non pris en charge : ${LABEL[chain]} : pas encore pris en charge par Kyro (phase 4)`, `Not supported: ${LABEL[chain]}: not yet supported by Kyro (phase 4)`), { min: null });
     if (ledger) {
       if (locked) {
         locked = false; // the simulated user unlocks it now
-        throw new IpcError('HW_LOCKED', 'Appareil verrouillé : déverrouille-le avec ton code PIN, puis réessaie.');
+        throw new IpcError('HW_LOCKED', l10n('Appareil verrouillé : déverrouille-le avec ton code PIN, puis réessaie.', 'Device locked: unlock it with your PIN, then try again.'));
       }
       const expected = appFor(chain);
       if (openApp !== expected) {
         const open = openApp;
         openApp = expected; // the simulated user opens it now
-        throw new IpcError('HW_WRONG_APP', `Mauvaise application ouverte sur l’appareil : ouvre « ${expected} » (ouverte : « ${open} »).`, { expected, open });
+        throw new IpcError('HW_WRONG_APP', l10n(`Mauvaise application ouverte sur l’appareil : ouvre « ${expected} » (ouverte : « ${open} »).`, `Wrong app open on the device: open “${expected}” (open: “${open}”).`), { expected, open });
       }
       return;
     }
-    if (scenario === 'old' && chain !== 'sol') throw new IpcError('HW_UNSUPPORTED', 'Non pris en charge : firmware Trezor One 1.9.0 trop ancien', { min: '1.10.4' });
-    if (one && chain === 'sol') throw new IpcError('HW_UNSUPPORTED', 'Non pris en charge : Solana n’existe pas sur la Trezor One', { min: null });
+    if (scenario === 'old' && chain !== 'sol') throw new IpcError('HW_UNSUPPORTED', l10n('Non pris en charge : firmware Trezor One 1.9.0 trop ancien', 'Not supported: Trezor One firmware 1.9.0 too old'), { min: '1.10.4' });
+    if (one && chain === 'sol') throw new IpcError('HW_UNSUPPORTED', l10n('Non pris en charge : Solana n’existe pas sur la Trezor One', 'Not supported: Solana does not exist on the Trezor One'), { min: null });
     await unlockTrezor(wait);
   };
 
   const status = (): HwDeviceStatus => {
-    if (!device) throw new IpcError('HW_NOT_FOUND', 'Appareil introuvable.');
+    if (!device) throw new IpcError('HW_NOT_FOUND', l10n('Appareil introuvable.', 'Device not found.'));
     const chain = (c: HwChain): HwChainStatus => {
-      if (PHASE4.includes(c)) return { chain: c, state: 'unsupported', reason: `${LABEL[c]} : pas encore pris en charge par Kyro (phase 4)` };
+      if (PHASE4.includes(c)) return { chain: c, state: 'unsupported', reason: l10n(`${LABEL[c]} : pas encore pris en charge par Kyro (phase 4)`, `${LABEL[c]}: not yet supported by Kyro (phase 4)`) };
       if (ledger) {
         if (locked) return { chain: c, state: 'unlock' };
         return openApp === appFor(c) ? { chain: c, state: 'ready', app: appFor(c) } : { chain: c, state: 'open-app', app: appFor(c), min: c === 'btc' ? '2.1.0' : c === 'evm' ? '1.9.0' : '1.3.1' };
       }
-      if (one && c === 'sol') return { chain: c, state: 'unsupported', reason: 'Solana : pas sur la Trezor One' };
-      if (scenario === 'old') return { chain: c, state: 'unsupported', min: '1.10.4', reason: 'firmware trop ancien' };
+      if (one && c === 'sol') return { chain: c, state: 'unsupported', reason: l10n('Solana : pas sur la Trezor One', 'Solana: not on the Trezor One') };
+      if (scenario === 'old') return { chain: c, state: 'unsupported', min: '1.10.4', reason: l10n('firmware trop ancien', 'firmware too old') };
       return { chain: c, state: pinOk ? 'ready' : 'unlock' };
     };
     const st: HwDeviceStatus = { id: device.id, kind: device.kind, model: safe7 ? 'Trezor Safe 7' : device.model, locked: ledger ? locked : !pinOk, chains: (['btc', 'evm', 'sol', ...PHASE4] as HwChain[]).map(chain) };
@@ -353,7 +354,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   };
 
   const readKeys = async (id: string, chain: HwChain, account: number): Promise<HwXpub> => {
-    if (!Number.isInteger(account) || account < 0 || account > 100) throw new IpcError('INVALID_INPUT', 'Entrée invalide : numéro de compte : 0 à 100');
+    if (!Number.isInteger(account) || account < 0 || account > 100) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : numéro de compte : 0 à 100', 'Invalid input: account number: 0 to 100'));
     return run(id, async (wait) => {
       requirePaired();
       await ensure(chain, wait);
@@ -364,36 +365,36 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
 
   const find = (accountId: unknown): WatchOnlyAccount => {
     const a = accounts.find((x) => x.id === accountId);
-    if (!a) throw new IpcError('INVALID_INPUT', 'Entrée invalide : compte hardware wallet inconnu');
+    if (!a) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : compte hardware wallet inconnu', 'Invalid input: unknown hardware wallet account'));
     return a;
   };
 
   const checkBrand = (acc: WatchOnlyAccount) => {
-    if (!device || device.kind !== acc.device) throw new IpcError('HW_WRONG_DEVICE', 'Ce n’est pas l’appareil de ce compte (clés différentes).');
+    if (!device || device.kind !== acc.device) throw new IpcError('HW_WRONG_DEVICE', l10n('Ce n’est pas l’appareil de ce compte (clés différentes).', 'This is not the device of this account (different keys).'));
   };
 
   /** Re-reads the keys (`same_device`): this demo device always holds the demo seed. */
   const sameDevice = async (acc: WatchOnlyAccount, chain: HwChain, wait: (ms: number) => Promise<void>) => {
     await ensure(chain, wait);
     await wait(600);
-    if (chain === 'btc' && acc.btc?.[0]?.fingerprint !== fingerprint) throw new IpcError('HW_WRONG_DEVICE', 'Ce n’est pas l’appareil de ce compte (clés différentes).');
+    if (chain === 'btc' && acc.btc?.[0]?.fingerprint !== fingerprint) throw new IpcError('HW_WRONG_DEVICE', l10n('Ce n’est pas l’appareil de ce compte (clés différentes).', 'This is not the device of this account (different keys).'));
   };
 
-  const deviceLine = () => `\n\n— Appareil : ${device?.model} —\nAprès « Signer », vérifie les MÊMES informations sur l’écran de l’appareil et confirme-les là-bas.`;
+  const deviceLine = () => l10n(`\n\n— Appareil : ${device?.model} —\nAprès « Signer », vérifie les MÊMES informations sur l’écran de l’appareil et confirme-les là-bas.`, `\n\n— Device: ${device?.model} —\nAfter “Sign”, check the SAME information on the device screen and confirm it there.`);
 
   /** Waiting for the user's confirmation on the device, with the failure scenarios. */
   const onDevice = async (wait: (ms: number) => Promise<void>) => {
     prompt('confirm-on-device');
     if (scenario === 'unplug') {
       await wait(DEMO_HW_DELAYS.unplugAfter);
-      throw new IpcError('HW_DISCONNECTED', 'Appareil débranché ou injoignable : opération abandonnée, rien n’a été signé.');
+      throw new IpcError('HW_DISCONNECTED', l10n('Appareil débranché ou injoignable : opération abandonnée, rien n’a été signé.', 'Device unplugged or unreachable: operation aborted, nothing was signed.'));
     }
     if (scenario === 'timeout') {
       await wait(DEMO_HW_DELAYS.timeoutAfter);
-      throw new IpcError('HW_TIMEOUT', 'Délai dépassé : pas de réponse de l’appareil à temps. Opération abandonnée.');
+      throw new IpcError('HW_TIMEOUT', l10n('Délai dépassé : pas de réponse de l’appareil à temps. Opération abandonnée.', 'Timed out: no answer from the device in time. Operation aborted.'));
     }
     await wait(DEMO_HW_DELAYS.sign);
-    if (scenario === 'reject') throw new IpcError('HW_REJECTED', 'Refusé sur l’appareil.');
+    if (scenario === 'reject') throw new IpcError('HW_REJECTED', l10n('Refusé sur l’appareil.', 'Refused on the device.'));
   };
 
   const ownBtc = (acc: WatchOnlyAccount): Set<string> => {
@@ -403,7 +404,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   };
 
   const resolvePath = (acc: WatchOnlyAccount, chain: HwChain, path: string): string => {
-    const wrong = () => new IpcError('INVALID_INPUT', 'Entrée invalide : ce chemin n’appartient pas à ce compte hardware wallet');
+    const wrong = () => new IpcError('INVALID_INPUT', l10n('Entrée invalide : ce chemin n’appartient pas à ce compte hardware wallet', 'Invalid input: this path does not belong to this hardware wallet account'));
     if (chain === 'btc') {
       const m = /^(m\/(84|86)'\/[01]'\/\d+')\/([01])\/(\d+)$/.exec(path.trim());
       if (!m) throw wrong();
@@ -420,7 +421,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       if (!acc.sol || acc.sol.path !== path.trim()) throw wrong();
       return acc.sol.address;
     }
-    throw new IpcError('HW_UNSUPPORTED', `Non pris en charge : ${LABEL[chain]} (phase 4)`, { min: null });
+    throw new IpcError('HW_UNSUPPORTED', l10n(`Non pris en charge : ${LABEL[chain]} (phase 4)`, `Not supported: ${LABEL[chain]} (phase 4)`), { min: null });
   };
 
   return {
@@ -440,15 +441,15 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
         return status();
       }),
     cancel(id: unknown): boolean {
-      if (!device || id !== device.id) throw new IpcError('HW_NOT_FOUND', 'Appareil introuvable.');
+      if (!device || id !== device.id) throw new IpcError('HW_NOT_FOUND', l10n('Appareil introuvable.', 'Device not found.'));
       if (!pending) return false;
       pending.cancel();
       return true;
     },
     thpPairingCode(id: unknown, code: unknown) {
       const c = String(code ?? '');
-      if (!/^[0-9]{6}$/.test(c)) throw new IpcError('INVALID_INPUT', 'Entrée invalide : code d’appairage : 6 chiffres');
-      if (!device || id !== device.id || !thpCodeWaiter) throw new IpcError('HW_BAD_RESPONSE', 'Réponse de l’appareil refusée par Kyro : aucun appairage en attente');
+      if (!/^[0-9]{6}$/.test(c)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : code d’appairage : 6 chiffres', 'Invalid input: pairing code: 6 digits'));
+      if (!device || id !== device.id || !thpCodeWaiter) throw new IpcError('HW_BAD_RESPONSE', l10n('Réponse de l’appareil refusée par Kyro : aucun appairage en attente', 'Device response refused by Kyro: no pairing pending'));
       thpCodeWaiter(c);
     },
     thpPairings: () => structuredClone(thpPairings),
@@ -461,8 +462,8 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
     },
     pinMatrix(id: unknown, positions: unknown) {
       const p = String(positions ?? '');
-      if (!p || p.length > 50 || !/^[1-9]+$/.test(p)) throw new IpcError('INVALID_INPUT', 'Entrée invalide : positions : chiffres 1 à 9');
-      if (!device || id !== device.id || !pinWaiter) throw new IpcError('HW_BAD_RESPONSE', 'Réponse de l’appareil refusée par Kyro : aucune saisie de PIN en attente');
+      if (!p || p.length > 50 || !/^[1-9]+$/.test(p)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : positions : chiffres 1 à 9', 'Invalid input: positions: digits 1 to 9'));
+      if (!device || id !== device.id || !pinWaiter) throw new IpcError('HW_BAD_RESPONSE', l10n('Réponse de l’appareil refusée par Kyro : aucune saisie de PIN en attente', 'Device response refused by Kyro: no PIN entry pending'));
       pinWaiter(p);
     },
     getXpub(a: Record<string, unknown>) {
@@ -474,20 +475,20 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       d.guard();
       const chain = a.chain as HwChain;
       const account = Number(a.account);
-      if (!device || a.id !== device.id) throw new IpcError('HW_NOT_FOUND', 'Appareil introuvable.');
+      if (!device || a.id !== device.id) throw new IpcError('HW_NOT_FOUND', l10n('Appareil introuvable.', 'Device not found.'));
       const keys = await readKeys(String(a.id), chain, account);
       let acc: WatchOnlyAccount;
       if (typeof a.accountId === 'string') {
         acc = structuredClone(find(a.accountId));
         checkBrand(acc);
-        if (acc.account !== account) throw new IpcError('INVALID_INPUT', 'Entrée invalide : numéro de compte différent de celui du compte existant');
+        if (acc.account !== account) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : numéro de compte différent de celui du compte existant', 'Invalid input: account number differs from the existing account'));
       } else {
         acc = { id: `hw-${(0xa1b2c3d400000000n + BigInt(nextId++)).toString(16).padStart(16, '0')}`, label: '', device: device.kind, model: device.model, network: d.network, account };
       }
       if (typeof a.label === 'string') acc.label = a.label.trim();
       if (!acc.label) acc.label = `${device.model} ${account + 1}`;
       if (keys.btc) {
-        if (acc.btc?.[0] && acc.btc[0].fingerprint !== keys.btc[0]?.fingerprint) throw new IpcError('HW_WRONG_DEVICE', 'Ce n’est pas l’appareil de ce compte (clés différentes).');
+        if (acc.btc?.[0] && acc.btc[0].fingerprint !== keys.btc[0]?.fingerprint) throw new IpcError('HW_WRONG_DEVICE', l10n('Ce n’est pas l’appareil de ce compte (clés différentes).', 'This is not the device of this account (different keys).'));
         acc.btc = keys.btc;
       }
       if (keys.evm) acc.evm = { xpub: keys.evm.xpub, path: keys.evm.path };
@@ -520,7 +521,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
         await onDevice(wait);
         if (scenario === 'mismatch') {
           const shown = chain === 'evm' ? evmAddressFromNode(evmNode, acc.account + 7) : chain === 'btc' ? btcAddress(acc.btc![0]!.xpub, acc.network, acc.btc![0]!.kind, 0, 99) : base58.encode(sha256(new TextEncoder().encode('attacker')));
-          throw new IpcError('HW_ADDRESS_MISMATCH', `ADRESSES DIFFÉRENTES : l’appareil donne ${shown}, Kyro attendait ${expected}. N’utilise pas cette adresse.`, { device: shown, expected });
+          throw new IpcError('HW_ADDRESS_MISMATCH', l10n(`ADRESSES DIFFÉRENTES : l’appareil donne ${shown}, Kyro attendait ${expected}. N’utilise pas cette adresse.`, `ADDRESSES DIFFER: the device gives ${shown}, Kyro expected ${expected}. Do not use this address.`), { device: shown, expected });
         }
         return { address: expected, path: path.trim() };
       });
@@ -529,25 +530,25 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       d.guard();
       const acc = find(a.accountId);
       checkBrand(acc);
-      if (!acc.btc?.length) throw new IpcError('INVALID_INPUT', 'Entrée invalide : ce compte n’a pas de clés Bitcoin');
+      if (!acc.btc?.length) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : ce compte n’a pas de clés Bitcoin', 'Invalid input: this account has no Bitcoin keys'));
       const net = testnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
       let psbt: bitcoin.Psbt;
       try {
         psbt = bitcoin.Psbt.fromBase64(String(a.psbt ?? ''), { network: net });
       } catch {
-        throw new IpcError('INVALID_INPUT', 'Entrée invalide : PSBT invalide');
+        throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : PSBT invalide', 'Invalid input: invalid PSBT'));
       }
       const kinds = new Set<BtcKind>();
       psbt.data.inputs.forEach((input, i) => {
         const tap = (input.tapBip32Derivation?.length ?? 0) > 0;
         const seg = (input.bip32Derivation?.length ?? 0) > 0;
-        if (!input.witnessUtxo || (!tap && !seg)) throw new IpcError('HW_UNSUPPORTED', 'Non pris en charge : transaction avec des entrées qui n’appartiennent pas à ce compte', { min: null });
+        if (!input.witnessUtxo || (!tap && !seg)) throw new IpcError('HW_UNSUPPORTED', l10n('Non pris en charge : transaction avec des entrées qui n’appartiennent pas à ce compte', 'Not supported: transaction with inputs that do not belong to this account'), { min: null });
         if (seg && !input.nonWitnessUtxo) {
-          throw new IpcError('INVALID_INPUT', `Entrée invalide : la PSBT doit inclure la transaction précédente (non_witness_utxo) de l’entrée ${i} pour une signature sur hardware wallet`);
+          throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : la PSBT doit inclure la transaction précédente (non_witness_utxo) de l’entrée ${i} pour une signature sur hardware wallet`, `Invalid input: the PSBT must include the previous transaction (non_witness_utxo) of input ${i} for a hardware wallet signature`));
         }
         kinds.add(tap ? 'taproot' : 'segwit');
       });
-      if (ledger && kinds.size > 1) throw new IpcError('HW_UNSUPPORTED', 'Non pris en charge : entrées SegWit et Taproot mélangées (Ledger)', { min: null });
+      if (ledger && kinds.size > 1) throw new IpcError('HW_UNSUPPORTED', l10n('Non pris en charge : entrées SegWit et Taproot mélangées (Ledger)', 'Not supported: mixed SegWit and Taproot inputs (Ledger)'), { min: null });
       const own = ownBtc(acc);
       let inSum = 0n;
       psbt.data.inputs.forEach((i) => (inSum += i.witnessUtxo?.value ?? 0n));
@@ -560,8 +561,8 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       return run(String(a.id), async (wait) => {
         requirePaired();
         await sameDevice(acc, 'btc', wait);
-        const lines = outputs.map(([ad, v, ch]) => `${ch ? '(monnaie) ' : ''}${ad} : ${v} sats`).join('\n');
-        if (!d.confirm(`Confirmer la transaction (hardware wallet)\n${lines}\nFrais : ${summary.feeSats} sats${deviceLine()}`)) throw new IpcError('USER_REJECTED', 'Action annulée.');
+        const lines = outputs.map(([ad, v, ch]) => l10n(`${ch ? '(monnaie) ' : ''}${ad} : ${v} sats`, `${ch ? '(change) ' : ''}${ad}: ${v} sats`)).join('\n');
+        if (!d.confirm(l10n(`Confirmer la transaction (hardware wallet)\n${lines}\nFrais : ${summary.feeSats} sats${deviceLine()}`, `Confirm the transaction (hardware wallet)\n${lines}\nFees: ${summary.feeSats} sats${deviceLine()}`))) throw new IpcError('USER_REJECTED', l10n('Action annulée.', 'Action cancelled.'));
         await onDevice(wait);
         psbt.data.inputs.forEach((input, i) => {
           const h = sha256(new TextEncoder().encode(`hw:${i}:${a.psbt}`));
@@ -585,7 +586,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       d.guard();
       const acc = find(a.accountId);
       checkBrand(acc);
-      if (!acc.evm) throw new IpcError('INVALID_INPUT', 'Entrée invalide : ce compte n’a pas de clé EVM');
+      if (!acc.evm) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : ce compte n’a pas de clé EVM', 'Invalid input: this account has no EVM key'));
       const tx = a.tx as EvmTxRequest;
       const s = d.decodeEvm(tx);
       const from = evmAddressFromNode(HDKey.fromExtendedKey(acc.evm.xpub), acc.account);
@@ -596,9 +597,9 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       return run(String(a.id), async (wait) => {
         requirePaired();
         await sameDevice(acc, 'evm', wait);
-        if (!d.confirm(`Confirmer la transaction (hardware wallet)\n${s.kind} vers ${s.to}\nMontant : ${s.amount}\nFrais max. : ${s.maxFeeWei} wei${deviceLine()}`)) throw new IpcError('USER_REJECTED', 'Action annulée.');
+        if (!d.confirm(l10n(`Confirmer la transaction (hardware wallet)\n${s.kind} vers ${s.to}\nMontant : ${s.amount}\nFrais max. : ${s.maxFeeWei} wei${deviceLine()}`, `Confirm the transaction (hardware wallet)\n${s.kind} to ${s.to}\nAmount: ${s.amount}\nMax fee: ${s.maxFeeWei} wei${deviceLine()}`))) throw new IpcError('USER_REJECTED', l10n('Action annulée.', 'Action cancelled.'));
         if (!clear || s.kind === 'ContractCall') {
-          if (!d.confirm('Attention : vérification limitée\nTon appareil ne pourra PAS afficher le détail de cette transaction (blind signing). Seul le résumé de Kyro décrit ce que tu signes.')) throw new IpcError('USER_REJECTED', 'Action annulée.');
+          if (!d.confirm(l10n('Attention : vérification limitée\nTon appareil ne pourra PAS afficher le détail de cette transaction (blind signing). Seul le résumé de Kyro décrit ce que tu signes.', 'Warning: limited verification\nYour device will NOT be able to show the details of this transaction (blind signing). Only Kyro’s summary describes what you sign.'))) throw new IpcError('USER_REJECTED', l10n('Action annulée.', 'Action cancelled.'));
         }
         await onDevice(wait);
         const raw = '0x02' + bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(tx) + Math.random()))) + '00'.repeat(40);
@@ -611,19 +612,19 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       d.guard();
       const acc = find(a.accountId);
       checkBrand(acc);
-      if (!acc.sol) throw new IpcError('INVALID_INPUT', 'Entrée invalide : ce compte n’a pas de clé Solana');
+      if (!acc.sol) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : ce compte n’a pas de clé Solana', 'Invalid input: this account has no Solana key'));
       let message: Uint8Array;
       try {
         message = base64.decode(String(a.message ?? ''));
       } catch {
-        throw new IpcError('INVALID_INPUT', 'Entrée invalide : message Solana invalide');
+        throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : message Solana invalide', 'Invalid input: invalid Solana message'));
       }
       const summary = demoDecodeSolMessage(message, acc.sol.address);
-      if (summary.ourSignerIndex === null) throw new IpcError('INVALID_INPUT', 'Entrée invalide : cette transaction ne demande pas la signature de cette adresse Solana');
+      if (summary.ourSignerIndex === null) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : cette transaction ne demande pas la signature de cette adresse Solana', 'Invalid input: this transaction does not ask for this Solana address’s signature'));
       return run(String(a.id), async (wait) => {
         requirePaired();
         await sameDevice(acc, 'sol', wait);
-        if (!d.confirm(`Confirmer la transaction Solana (hardware wallet)\n${demoSolSummaryText(summary)}${deviceLine()}`)) throw new IpcError('USER_REJECTED', 'Action annulée.');
+        if (!d.confirm(l10n(`Confirmer la transaction Solana (hardware wallet)\n${demoSolSummaryText(summary)}${deviceLine()}`, `Confirm the Solana transaction (hardware wallet)\n${demoSolSummaryText(summary)}${deviceLine()}`))) throw new IpcError('USER_REJECTED', l10n('Action annulée.', 'Action cancelled.'));
         await onDevice(wait);
         const sig = new Uint8Array(64);
         sig.set(sha256(message), 0);

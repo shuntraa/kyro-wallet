@@ -7,6 +7,7 @@
 // Amounts travel as decimal strings in the smallest unit (sats, wei, lamports).
 
 import type { Lang, LanguagePref } from './i18n';
+import { l10n } from './i18n';
 
 export type Network = 'mainnet' | 'testnet';
 export type BtcKind = 'segwit' | 'taproot';
@@ -1520,14 +1521,14 @@ export function isIpcError(e: unknown): e is IpcError {
 /**
  * True when `e` means "Tor is not ready, nothing was sent". Accepts an `IpcError`, any error
  * or a plain message (adapters sometimes keep only the message, possibly prefixed): the
- * shell's French message for `TOR_UNAVAILABLE` always contains « Tor indisponible ».
+ * shell's message for `TOR_UNAVAILABLE` always contains « Tor indisponible » (French) or « Tor unavailable » (English).
  */
 export function isTorUnavailable(e: unknown): boolean {
   const ipc = ipcErrorIn(e);
   if (ipc) return ipc.code === 'TOR_UNAVAILABLE';
   if (typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 'TOR_UNAVAILABLE') return true;
   const message = typeof e === 'string' ? e : e instanceof Error ? e.message : '';
-  return message.includes('Tor indisponible');
+  return message.includes('Tor indisponible') || message.includes('Tor unavailable');
 }
 
 /** Normalise anything a command can reject with into an `IpcError`. */
@@ -1542,7 +1543,7 @@ export function toIpcError(e: unknown): IpcError {
   }
   if (typeof e === 'string') return new IpcError('INTERNAL', e);
   if (e instanceof Error) return new IpcError('INTERNAL', e.message);
-  return new IpcError('INTERNAL', 'Erreur inconnue');
+  return new IpcError('INTERNAL', l10n('Erreur inconnue', 'Unknown error'));
 }
 
 /** Pluggable backend: real Tauri `invoke` or the in-memory demo backend. */
@@ -1609,7 +1610,7 @@ export async function call<K extends CommandName>(cmd: K, ...args: CallArgs<K>):
 }
 
 /** Shell message prefixes of the server-down codes (error.rs), for errors reduced to a message. */
-const SERVER_DOWN_PREFIXES = ['Serveur injoignable', 'Serveur par défaut désactivé'];
+const SERVER_DOWN_PREFIXES = ['Serveur injoignable', 'Serveur par défaut désactivé', 'Server unreachable', 'Default server disabled'];
 
 /**
  * True when the user's custom server is down (`SERVER_UNREACHABLE`) or the UI hit a replaced

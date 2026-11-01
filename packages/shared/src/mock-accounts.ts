@@ -32,6 +32,7 @@ import { demoTronAddress } from './mock-tron';
 import { demoXrpAddress } from './mock-xrp';
 import { demoFund } from './mock-tx';
 import type { DemoChainState } from './mock-net';
+import { l10n } from './i18n';
 
 bitcoin.initEccLib(ecc);
 
@@ -78,7 +79,7 @@ export interface DemoAccounts extends DemoAccountHooks {
   remove(chain: unknown, account: unknown): VaultAccountLists;
 }
 
-const invalid = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+const invalid = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 
 function toChecksumAddress(hex40: string): string {
   const lower = hex40.toLowerCase();
@@ -110,14 +111,14 @@ export function createDemoAccounts(d: {
 
   const btcAddr = (kind: BtcKind, pk: Uint8Array) => {
     const p = kind === 'segwit' ? bitcoin.payments.p2wpkh({ pubkey: pk, network: net }) : bitcoin.payments.p2tr({ internalPubkey: pk.slice(1, 33), network: net });
-    if (!p.address) throw new IpcError('INTERNAL', 'Adresse démo introuvable');
+    if (!p.address) throw new IpcError('INTERNAL', l10n('Adresse démo introuvable', 'Demo address not found'));
     return p.address;
   };
   const btcInfo = (kind: BtcKind, a: number) => {
     const path = `m/${kind === 'segwit' ? 84 : 86}'/${coin}'/${a}'`;
     const acct = master.derive(path);
     const pk = acct.deriveChild(0).deriveChild(0).publicKey;
-    if (!pk) throw new IpcError('INTERNAL', 'Clé démo introuvable');
+    if (!pk) throw new IpcError('INTERNAL', l10n('Clé démo introuvable', 'Demo key not found'));
     return { address: btcAddr(kind, pk), xpub: acct.publicExtendedKey, fingerprint, path };
   };
   const cardanoOf = (a: number): string => {
@@ -133,7 +134,7 @@ export function createDemoAccounts(d: {
   const derive = (a: number): Accounts => {
     if (a === 0) return { ...structuredClone(d.base), account: 0 };
     const evmPk = evmMaster.derive(`m/44'/60'/0'/0/${a}`).publicKey;
-    if (!evmPk) throw new IpcError('INTERNAL', 'Clé démo introuvable');
+    if (!evmPk) throw new IpcError('INTERNAL', l10n('Clé démo introuvable', 'Demo key not found'));
     const evm = toChecksumAddress(bytesToHex(keccak_256(ecc.pointCompress(evmPk, false).slice(1))).slice(-40));
     return {
       network: d.network,
@@ -151,16 +152,16 @@ export function createDemoAccounts(d: {
 
   const arg = (v: unknown): number => {
     const a = v === undefined || v === null ? 0 : Number(v);
-    if (!Number.isInteger(a) || a < 0 || a > MAX_VAULT_ACCOUNT) throw invalid(`numéro de compte : au plus ${MAX_VAULT_ACCOUNT}`);
+    if (!Number.isInteger(a) || a < 0 || a > MAX_VAULT_ACCOUNT) throw invalid(l10n(`numéro de compte : au plus ${MAX_VAULT_ACCOUNT}`, `account number: at most ${MAX_VAULT_ACCOUNT}`));
     return a;
   };
   const chainArg = (v: unknown): AccountChain => {
     if (typeof v === 'string' && (ACCOUNT_CHAINS as readonly string[]).includes(v)) return v as AccountChain;
-    throw invalid(`chaîne inconnue « ${String(v)} »`);
+    throw invalid(l10n(`chaîne inconnue « ${String(v)} »`, `unknown chain “${String(v)}”`));
   };
   const cleanName = (v: unknown): string => {
     const n = typeof v === 'string' ? v.trim() : '';
-    if (!n || [...n].length > MAX_ACCOUNT_NAME || /\p{Cc}/u.test(n)) throw invalid(`nom du compte : 1 à ${MAX_ACCOUNT_NAME} caractères, sans caractère de contrôle`);
+    if (!n || [...n].length > MAX_ACCOUNT_NAME || /\p{Cc}/u.test(n)) throw invalid(l10n(`nom du compte : 1 à ${MAX_ACCOUNT_NAME} caractères, sans caractère de contrôle`, `account name: 1 to ${MAX_ACCOUNT_NAME} characters, no control character`));
     return n;
   };
   const list = (c: AccountChain): VaultAccountEntry[] => {
@@ -231,9 +232,9 @@ export function createDemoAccounts(d: {
     signer: (c, a, path) => {
       const name = nameOf(c, a);
       return {
-        line: name ? `Compte signataire : ${name} — ${path}` : `Compte signataire : « inconnu » (n° ${a + 1} ${ACCOUNT_CHAIN_LABEL[c]}, absent de ta liste) — ${path}`,
+        line: name ? l10n(`Compte signataire : ${name} — ${path}`, `Signing account: ${name} — ${path}`) : l10n(`Compte signataire : « inconnu » (n° ${a + 1} ${ACCOUNT_CHAIN_LABEL[c]}, absent de ta liste) — ${path}`, `Signing account: “unknown” (no. ${a + 1} ${ACCOUNT_CHAIN_LABEL[c]}, not in your list) — ${path}`),
         unknown: name === null,
-        unknownText: `Attention : compte inconnu\nCette signature utilise un compte ${ACCOUNT_CHAIN_LABEL[c]} qui n'est PAS dans ta liste de comptes :\n• n° ${a + 1} — ${path}\n\nSigner quand même ?`,
+        unknownText: l10n(`Attention : compte inconnu\nCette signature utilise un compte ${ACCOUNT_CHAIN_LABEL[c]} qui n'est PAS dans ta liste de comptes :\n• n° ${a + 1} — ${path}\n\nSigner quand même ?`, `Warning: unknown account\nThis signature uses a ${ACCOUNT_CHAIN_LABEL[c]} account that is NOT in your account list:\n• no. ${a + 1} — ${path}\n\nSign anyway?`),
       };
     },
     lists,
@@ -243,8 +244,8 @@ export function createDemoAccounts(d: {
       const a = arg(account);
       const n = cleanName(name);
       const cur = list(c);
-      if (cur.some((e) => e.index === a)) throw invalid('ce compte est déjà dans ta liste');
-      if (cur.length >= MAX_ACCOUNTS_PER_CHAIN) throw invalid(`au plus ${MAX_ACCOUNTS_PER_CHAIN} comptes par chaîne`);
+      if (cur.some((e) => e.index === a)) throw invalid(l10n('ce compte est déjà dans ta liste', 'this account is already in your list'));
+      if (cur.length >= MAX_ACCOUNTS_PER_CHAIN) throw invalid(l10n(`au plus ${MAX_ACCOUNTS_PER_CHAIN} comptes par chaîne`, `at most ${MAX_ACCOUNTS_PER_CHAIN} accounts per chain`));
       stored[c] = [...stored[c], { index: a, name: n }].sort((x, y) => x.index - y.index);
       return lists();
     },
@@ -263,7 +264,7 @@ export function createDemoAccounts(d: {
       d.requireUnlocked();
       const c = chainArg(chain);
       const a = arg(account);
-      if (a === 0) throw invalid('le premier compte ne peut pas être retiré (tu peux le renommer)');
+      if (a === 0) throw invalid(l10n('le premier compte ne peut pas être retiré (tu peux le renommer)', 'the first account cannot be removed (you can rename it)'));
       if (!stored[c].some((e) => e.index === a)) throw invalid("ce compte n'est pas dans ta liste");
       stored[c] = stored[c].filter((e) => e.index !== a);
       return lists();

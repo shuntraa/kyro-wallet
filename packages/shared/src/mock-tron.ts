@@ -34,6 +34,7 @@ import {
 } from './ipc';
 import { checkServerUrl } from './servers';
 import type { DemoTor } from './mock-tor';
+import { l10n } from './i18n';
 
 /** Same as TRON_USDT of packages/chains and KNOWN_TOKENS of commands_tron.rs. */
 export const DEMO_TRON_USDT: Record<Network, string> = {
@@ -69,7 +70,7 @@ export function tronAddressOf(pubkey: Uint8Array): string {
 /** Demo address of TRON account `account` (`m/44'/195'/account'/0/0`, like Rust). */
 export function demoTronAddress(seed: Uint8Array, account: number): string {
   const pk = HDKey.fromMasterSeed(seed).derive(`m/44'/195'/${account}'/0/0`).publicKey;
-  if (!pk) throw new IpcError('INTERNAL', 'dérivation TRON');
+  if (!pk) throw new IpcError('INTERNAL', l10n('dérivation TRON', 'TRON derivation'));
   return tronAddressOf(pk);
 }
 
@@ -108,8 +109,8 @@ export interface DemoTronState {
   block: number;
 }
 
-const invalidInput = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
-const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', `Serveur injoignable : ${m}`);
+const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
+const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', l10n(`Serveur injoignable : ${m}`, `Server unreachable: ${m}`));
 const has = (s: string, w: string) => s.toLowerCase().includes(w);
 const hostOf = (u: string) => {
   try {
@@ -171,17 +172,17 @@ export function createDemoTron(d: DemoTronDeps) {
     const s = serverOf();
     if (s.kind === 'http') {
       const bad = checkServerUrl(s.url, torOn());
-      if (bad) throw new IpcError('SERVER_INVALID', `Serveur invalide : ${bad}`);
+      if (bad) throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : ${bad}`, `Invalid server: ${bad}`));
     }
     if (torOn()) await d.tor.waitReady();
     await wait(60 + Math.random() * 140);
-    if (s.kind === 'http' && has(s.url, 'down')) throw unreachable(`${hostOf(s.url)} : délai de connexion dépassé`);
+    if (s.kind === 'http' && has(s.url, 'down')) throw unreachable(l10n(`${hostOf(s.url)} : délai de connexion dépassé`, `${hostOf(s.url)}: connection timed out`));
     return s;
   };
 
-  const checkAddress = (a: unknown, what = 'adresse'): string => {
+  const checkAddress = (a: unknown, what = l10n('adresse', 'address')): string => {
     const addr = String(a ?? '').trim();
-    if (!isTron(addr)) throw invalidInput(`${what} TRON invalide « ${addr} »`);
+    if (!isTron(addr)) throw invalidInput(l10n(`${what} TRON invalide « ${addr} »`, `invalid TRON ${what} “${addr}”`));
     return addr;
   };
 
@@ -205,8 +206,8 @@ export function createDemoTron(d: DemoTronDeps) {
 
   /** `triggerconstantcontract` of transfer(to, amount): reverts when the balance is short. */
   const simulateEnergy = (contract: string, to: string, amount: bigint): number => {
-    if (contract !== usdt && !state.tokens.has(`${contract}:${me}`)) throw unreachable('TRON : simulation refusée (contrat introuvable)');
-    if (tokenBalance(contract, me) < amount) throw invalidInput('le transfert de token échouerait (REVERT) : solde de token insuffisant ?');
+    if (contract !== usdt && !state.tokens.has(`${contract}:${me}`)) throw unreachable(l10n('TRON : simulation refusée (contrat introuvable)', 'TRON: simulation refused (contract not found)'));
+    if (tokenBalance(contract, me) < amount) throw invalidInput(l10n('le transfert de token échouerait (REVERT) : solde de token insuffisant ?', 'the token transfer would fail (REVERT): insufficient token balance?'));
     return tokenBalance(contract, to) > 0n ? ENERGY.holder : ENERGY.newHolder;
   };
 
@@ -253,11 +254,11 @@ export function createDemoTron(d: DemoTronDeps) {
     try {
       raw = JSON.parse(new TextDecoder().decode(hexToBytes(String(rawHex ?? '').trim()))) as DemoRaw;
     } catch {
-      throw invalidInput('raw_data TRON illisible');
+      throw invalidInput(l10n('raw_data TRON illisible', 'unreadable TRON raw_data'));
     }
-    if (raw.owner !== me) throw invalidInput('le propriétaire de la transaction n’est pas ton adresse TRON');
+    if (raw.owner !== me) throw invalidInput(l10n('le propriétaire de la transaction n’est pas ton adresse TRON', 'the transaction owner is not your TRON address'));
     const a = raw.action;
-    if (a.type === 'trxTransfer' && (BigInt(a.amount) <= 0n || a.to === me)) throw invalidInput('montant TRX invalide ou envoi à soi-même');
+    if (a.type === 'trxTransfer' && (BigInt(a.amount) <= 0n || a.to === me)) throw invalidInput(l10n('montant TRX invalide ou envoi à soi-même', 'invalid TRX amount or sending to yourself'));
     const warnings: TronWarning[] = [];
     if (a.type === 'contractCall') warnings.push({ kind: 'unknownCall', selector: a.selector });
     if (a.type !== 'trxTransfer' && a.callValue !== '0') warnings.push({ kind: 'callValue' });
@@ -294,42 +295,42 @@ export function createDemoTron(d: DemoTronDeps) {
       const b = BigInt(v);
       const p = 10n ** BigInt(dec);
       const frac = (b % p).toString().padStart(dec, '0').replace(/0+$/, '');
-      return `${b / p}${frac ? `,${frac}` : ''}`;
+      return `${b / p}${frac ? `${l10n(',', '.')}${frac}` : ''}`;
     };
-    let out = `Envoi ${d.network === 'mainnet' ? 'TRON' : 'TRON Nile (testnet)'}\n\n`;
+    let out = l10n(`Envoi ${d.network === 'mainnet' ? 'TRON' : 'TRON Nile (testnet)'}\n\n`, `${d.network === 'mainnet' ? 'TRON' : 'TRON Nile (testnet)'} transfer\n\n`);
     const a = s.action;
     if (a.type === 'trxTransfer') {
-      out += `À : ${a.to}\nMontant : ${trxText(a.amount)}\n`;
-      if (!e.recipientExists) out += `\nCe compte n'existe pas encore sur TRON : l'activer brûle ${trxText(e.activationFee)} en plus.\n`;
+      out += l10n(`À : ${a.to}\nMontant : ${trxText(a.amount)}\n`, `To: ${a.to}\nAmount: ${trxText(a.amount)}\n`);
+      if (!e.recipientExists) out += l10n(`\nCe compte n'existe pas encore sur TRON : l'activer brûle ${trxText(e.activationFee)} en plus.\n`, `\nThis account does not exist on TRON yet: activating it burns ${trxText(e.activationFee)} more.\n`);
     } else if (a.type === 'trc20Transfer') {
       // Like Rust: only its own table names a token; anything else is « jeton inconnu ».
       const known = a.contract === usdt;
-      const shown = known ? `${units(a.amount, 6)} USDT (unités brutes : ${a.amount})` : `${a.amount} unités brutes (jeton inconnu : décimales non vérifiées)`;
-      out += `Envoi de token TRC-20${known ? '' : ' (JETON INCONNU)'} : ${shown}\nContrat du token : ${a.contract}\nÀ : ${a.to}\n`;
+      const shown = known ? l10n(`${units(a.amount, 6)} USDT (unités brutes : ${a.amount})`, `${units(a.amount, 6)} USDT (raw units: ${a.amount})`) : l10n(`${a.amount} unités brutes (jeton inconnu : décimales non vérifiées)`, `${a.amount} raw units (unknown token: decimals not verified)`);
+      out += l10n(`Envoi de token TRC-20${known ? '' : ' (JETON INCONNU)'} : ${shown}\nContrat du token : ${a.contract}\nÀ : ${a.to}\n`, `TRC-20 token transfer${known ? '' : ' (UNKNOWN TOKEN)'}: ${shown}\nToken contract: ${a.contract}\nTo: ${a.to}\n`);
     } else {
-      out += `Appel de contrat INCONNU : ${a.contract}\nFonction (sélecteur) : ${a.selector}\n`;
+      out += l10n(`Appel de contrat INCONNU : ${a.contract}\nFonction (sélecteur) : ${a.selector}\n`, `UNKNOWN contract call: ${a.contract}\nFunction (selector): ${a.selector}\n`);
     }
-    const src = e.stakedBandwidth >= e.bandwidthNeeded ? 'bande passante gelée' : e.freeBandwidth >= e.bandwidthNeeded ? 'bande passante gratuite' : 'TRX brûlés';
-    out += `\nBande passante : ${e.bandwidthNeeded} octets nécessaires · disponible ${e.freeBandwidth} gratuite + ${e.stakedBandwidth} gelée → ${trxText(e.bandwidthBurn)} (${src})\n`;
+    const src = e.stakedBandwidth >= e.bandwidthNeeded ? l10n('bande passante gelée', 'staked bandwidth') : e.freeBandwidth >= e.bandwidthNeeded ? l10n('bande passante gratuite', 'free bandwidth') : l10n('TRX brûlés', 'burned TRX');
+    out += l10n(`\nBande passante : ${e.bandwidthNeeded} octets nécessaires · disponible ${e.freeBandwidth} gratuite + ${e.stakedBandwidth} gelée → ${trxText(e.bandwidthBurn)} (${src})\n`, `\nBandwidth: ${e.bandwidthNeeded} bytes needed · available ${e.freeBandwidth} free + ${e.stakedBandwidth} staked → ${trxText(e.bandwidthBurn)} (${src})\n`);
     if (a.type !== 'trxTransfer') {
-      out += `Énergie : ${e.energyNeeded} estimée · ${e.energyAvailable} disponible → ≈ ${trxText(e.energyBurn)} brûlés (${e.energyFee} sun par unité)\nTRX brûlés au maximum pour l'énergie (fee_limit) : ${trxText(s.feeLimit)}\n`;
+      out += l10n(`Énergie : ${e.energyNeeded} estimée · ${e.energyAvailable} disponible → ≈ ${trxText(e.energyBurn)} brûlés (${e.energyFee} sun par unité)\nTRX brûlés au maximum pour l'énergie (fee_limit) : ${trxText(s.feeLimit)}\n`, `Energy: ${e.energyNeeded} estimated · ${e.energyAvailable} available → ≈ ${trxText(e.energyBurn)} burned (${e.energyFee} sun per unit)\nMaximum TRX burned for energy (fee_limit): ${trxText(s.feeLimit)}\n`);
     }
-    out += `\nTotal brûlé estimé : ${trxText(e.totalBurn)} · au maximum : ${trxText(e.totalBurnMax)}\nSolde : ${trxText(e.balance)}`;
-    out += `\n\nExpire dans ${Math.max(0, Math.floor((s.expiration - d.now()) / 60_000))} min · bloc de référence ${s.refBlockBytes}/${s.refBlockHash}\nID : ${s.txid}`;
+    out += l10n(`\nTotal brûlé estimé : ${trxText(e.totalBurn)} · au maximum : ${trxText(e.totalBurnMax)}\nSolde : ${trxText(e.balance)}`, `\nEstimated total burned: ${trxText(e.totalBurn)} · at most: ${trxText(e.totalBurnMax)}\nBalance: ${trxText(e.balance)}`);
+    out += l10n(`\n\nExpire dans ${Math.max(0, Math.floor((s.expiration - d.now()) / 60_000))} min · bloc de référence ${s.refBlockBytes}/${s.refBlockHash}\nID : ${s.txid}`, `\n\nExpires in ${Math.max(0, Math.floor((s.expiration - d.now()) / 60_000))} min · reference block ${s.refBlockBytes}/${s.refBlockHash}\nID: ${s.txid}`);
     return out;
   };
 
   const probe = async (network: string, s: TronServer): Promise<ServerTestResult['detected']> => {
-    if (network !== 'mainnet' && network !== 'testnet') throw new IpcError('SERVER_INVALID', `Serveur invalide : tron : réseau inconnu « ${network} » (mainnet ou testnet)`);
+    if (network !== 'mainnet' && network !== 'testnet') throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : tron : réseau inconnu « ${network} » (mainnet ou testnet)`, `Invalid server: tron: unknown network “${network}” (mainnet or testnet)`));
     const want = network === 'mainnet' ? 'mainnet' : 'nile';
     if (s.kind === 'http') {
       const bad = checkServerUrl(s.url, torOn());
-      if (bad) throw new IpcError('SERVER_INVALID', `Serveur invalide : tron ${network} : ${bad}`);
+      if (bad) throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : tron ${network} : ${bad}`, `Invalid server: tron ${network}: ${bad}`));
     }
     if (torOn()) await d.tor.waitReady();
     await wait(100 + Math.random() * 200);
-    if (s.kind === 'http' && has(s.url, 'down')) throw unreachable(`${hostOf(s.url)} : délai de connexion dépassé`);
-    if (s.kind === 'http' && has(s.url, 'wrong')) throw new IpcError('SERVER_WRONG_NETWORK', `Mauvais réseau : ce serveur TRON est sur shasta, pas sur ${want}`);
+    if (s.kind === 'http' && has(s.url, 'down')) throw unreachable(l10n(`${hostOf(s.url)} : délai de connexion dépassé`, `${hostOf(s.url)}: connection timed out`));
+    if (s.kind === 'http' && has(s.url, 'wrong')) throw new IpcError('SERVER_WRONG_NETWORK', l10n(`Mauvais réseau : ce serveur TRON est sur shasta, pas sur ${want}`, `Wrong network: this TRON server is on shasta, not on ${want}`));
     return { network: want, genesisHash: GENESIS[network], blockHeight: state.block };
   };
 
@@ -340,9 +341,9 @@ export function createDemoTron(d: DemoTronDeps) {
     },
     tron_address: (a) => {
       d.requireUnlocked();
-      if ((a.index ?? 0) !== 0) throw invalidInput('TRON : une seule adresse par compte (index 0)');
+      if ((a.index ?? 0) !== 0) throw invalidInput(l10n('TRON : une seule adresse par compte (index 0)', 'TRON: a single address per account (index 0)'));
       const account = a.account === undefined ? 0 : Number(a.account);
-      if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput('numéro de compte : au plus 100');
+      if (!Number.isInteger(account) || account < 0 || account > 100) throw invalidInput(l10n('numéro de compte : au plus 100', 'account number: at most 100'));
       return demoTronAddress(d.seed, account);
     },
     tron_account: async (a) => {
@@ -351,7 +352,7 @@ export function createDemoTron(d: DemoTronDeps) {
       return account(addr);
     },
     tron_trc20_balance: async (a) => {
-      const contract = checkAddress(a.contract, 'contrat');
+      const contract = checkAddress(a.contract, l10n('contrat', 'contract'));
       const addr = checkAddress(a.address);
       await backend();
       return tokenBalance(contract, addr).toString();
@@ -360,7 +361,7 @@ export function createDemoTron(d: DemoTronDeps) {
       const addr = checkAddress(a.address);
       const s = await backend();
       if (s.kind === 'http' && !has(s.url, 'grid')) {
-        throw unreachable(`TRON : HTTP 404 sur /v1/accounts/${addr}/transactions?limit=50 (l'historique exige l'API /v1 de TronGrid)`);
+        throw unreachable(l10n(`TRON : HTTP 404 sur /v1/accounts/${addr}/transactions?limit=50 (l'historique exige l'API /v1 de TronGrid)`, `TRON: HTTP 404 on /v1/accounts/${addr}/transactions?limit=50 (history requires the TronGrid /v1 API)`));
       }
       return state.history.filter((t) => t.from === addr || t.to === addr).sort((x, y) => (y.timestamp ?? Infinity) - (x.timestamp ?? Infinity));
     },
@@ -368,9 +369,9 @@ export function createDemoTron(d: DemoTronDeps) {
       d.requireUnlocked();
       const to = checkAddress(a.to);
       const amountStr = String(a.amount ?? '').trim();
-      if (!/^[0-9]+$/.test(amountStr) || BigInt(amountStr) <= 0n) throw invalidInput('montant invalide');
+      if (!/^[0-9]+$/.test(amountStr) || BigInt(amountStr) <= 0n) throw invalidInput(l10n('montant invalide', 'invalid amount'));
       const amount = BigInt(amountStr);
-      const token = a.token === undefined || a.token === null ? undefined : checkAddress(a.token, 'contrat');
+      const token = a.token === undefined || a.token === null ? undefined : checkAddress(a.token, l10n('contrat', 'contract'));
       await backend();
       const ts = d.now();
       state.block += 1;
@@ -403,20 +404,20 @@ export function createDemoTron(d: DemoTronDeps) {
     tron_sign_tx: async (a) => {
       d.requireUnlocked();
       const { summary } = decodeRaw(a.raw);
-      if (summary.expiration <= d.now()) throw invalidInput('transaction TRON expirée : reconstruis-la');
-      if (summary.expiration > d.now() + 24 * 3600 * 1000) throw invalidInput('expiration TRON à plus de 24 h : refusée');
+      if (summary.expiration <= d.now()) throw invalidInput(l10n('transaction TRON expirée : reconstruis-la', 'TRON transaction expired: rebuild it'));
+      if (summary.expiration > d.now() + 24 * 3600 * 1000) throw invalidInput(l10n('expiration TRON à plus de 24 h : refusée', 'TRON expiration more than 24 h away: refused'));
       d.checkPassword(a.password);
       await backend();
       const est = estimateFor(summary);
-      if (!d.confirm(`Confirmer la transaction TRON\n${describe(summary, est)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(l10n(`Confirmer la transaction TRON\n${describe(summary, est)}`, `Confirm the TRON transaction\n${describe(summary, est)}`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const unknownToken = summary.action.type === 'trc20Transfer' && summary.action.contract !== usdt;
-      if ((summary.requiresExtraConfirmation || unknownToken) && !d.confirm('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if ((summary.requiresExtraConfirmation || unknownToken) && !d.confirm(l10n('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?', 'Warning: transaction to check\nOnly sign if you know exactly why. Sign anyway?'))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
       const r = sha256(new TextEncoder().encode(`r:${summary.txid}`));
       const s = sha256(new TextEncoder().encode(`s:${summary.txid}`));
       return { signature: bytesToHex(r) + bytesToHex(s) + '1b', txid: summary.txid, summary, estimate: est };
     },
     tron_broadcast: async (a) => {
-      if (!/^[0-9a-f]{130}$/i.test(String(a.signature ?? '').trim())) throw invalidInput('signature : 65 octets hex');
+      if (!/^[0-9a-f]{130}$/i.test(String(a.signature ?? '').trim())) throw invalidInput(l10n('signature : 65 octets hex', 'signature: 65 hex bytes'));
       const staked = d.stakeBroadcast?.(String(a.raw ?? ''), String(a.signature));
       if (staked) {
         await backend();
@@ -429,7 +430,7 @@ export function createDemoTron(d: DemoTronDeps) {
       const bal = state.trx.get(me) ?? 0n;
       const act = summary.action;
       const sent = act.type === 'trxTransfer' ? BigInt(act.amount) : 0n;
-      if (bal < sent + burn) throw invalidInput('diffusion TRON refusée : CONTRACT_VALIDATE_ERROR balance is not sufficient');
+      if (bal < sent + burn) throw invalidInput(l10n('diffusion TRON refusée : CONTRACT_VALIDATE_ERROR balance is not sufficient', 'TRON broadcast refused: CONTRACT_VALIDATE_ERROR balance is not sufficient'));
       state.trx.set(me, bal - sent - burn);
       if (est.freeBandwidth >= est.bandwidthNeeded && est.recipientExists && BigInt(est.bandwidthBurn) === 0n) {
         state.freeBandwidthUsed.set(me, (state.freeBandwidthUsed.get(me) ?? 0) + est.bandwidthNeeded);
@@ -458,7 +459,7 @@ export function createDemoTron(d: DemoTronDeps) {
         const s = servers.tron?.[nk];
         if (s?.kind === 'http') {
           const bad = checkServerUrl(s.url, tor);
-          if (bad) throw new IpcError('SERVER_INVALID', `Serveur invalide : tron ${nk} : ${bad}`);
+          if (bad) throw new IpcError('SERVER_INVALID', l10n(`Serveur invalide : tron ${nk} : ${bad}`, `Invalid server: tron ${nk}: ${bad}`));
         }
       }
     },

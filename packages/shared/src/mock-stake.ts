@@ -43,8 +43,9 @@ import {
   type TronStakeWarning,
   type TronWitness,
 } from './ipc';
+import { l10n } from './i18n';
 
-const invalid = (m: string) => new IpcError('INVALID_INPUT', `Entrée invalide : ${m}`);
+const invalid = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 const units = (v: bigint | string, dec: number) => {
   const b = BigInt(v);
   const p = 10n ** BigInt(dec);
@@ -60,7 +61,7 @@ const decode = <T>(hexStr: unknown): T => {
   try {
     return JSON.parse(new TextDecoder().decode(hexToBytes(String(hexStr ?? '').trim()))) as T;
   } catch {
-    throw invalid('transaction de staking illisible');
+    throw invalid(l10n('transaction de staking illisible', 'unreadable staking transaction'));
   }
 };
 
@@ -79,8 +80,8 @@ export function createDemoStake(d: DemoStakeDeps) {
   const t0 = d.now();
   const testnet = d.network === 'testnet';
   const confirmTwice = (first: string, reinforced: boolean, extra: string) => {
-    if (!d.confirm(first)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-    if (reinforced && !d.confirm(`Attention : opération à vérifier\n${extra}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+    if (!d.confirm(first)) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
+    if (reinforced && !d.confirm(l10n(`Attention : opération à vérifier\n${extra}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`, `Warning: operation to check\n${extra}\nOnly sign if you know exactly why. Sign anyway?`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
   };
 
   // ============================================================== Solana
@@ -173,12 +174,12 @@ export function createDemoStake(d: DemoStakeDeps) {
     const ep = solEpoch();
     const findV = (vote: string) => {
       const v = validators.find((x) => x.voteAccount === vote);
-      if (!v) throw invalid('compte de vote inconnu de getVoteAccounts');
+      if (!v) throw invalid(l10n('compte de vote inconnu de getVoteAccounts', 'vote account unknown to getVoteAccounts'));
       return v;
     };
     const findA = (addr: string) => {
       const a = solAccounts.find((x) => x.address === addr);
-      if (!a) throw invalid('compte de staking introuvable (ou pas entièrement à toi)');
+      if (!a) throw invalid(l10n('compte de staking introuvable (ou pas entièrement à toi)', 'stake account not found (or not entirely yours)'));
       return a;
     };
     const ixs: SolInstruction[] = [];
@@ -186,8 +187,8 @@ export function createDemoStake(d: DemoStakeDeps) {
     const base = { rentExemptReserve: SOL_RENT.toString(), balance: balance.toString(), fee: SOL_FEE.toString(), epoch: ep };
     if (action.kind === 'createAndDelegate') {
       const lamports = BigInt(action.lamports || '0');
-      if (lamports < SOL_MIN) throw invalid(`montant sous le minimum de délégation (${units(SOL_MIN, 9)} SOL)`);
-      if (balance < lamports + SOL_RENT + SOL_FEE) throw invalid(`solde insuffisant : il faut ${units(lamports + SOL_RENT + SOL_FEE, 9)} SOL (montant + réserve de rent + frais)`);
+      if (lamports < SOL_MIN) throw invalid(l10n(`montant sous le minimum de délégation (${units(SOL_MIN, 9)} SOL)`, `amount below the delegation minimum (${units(SOL_MIN, 9)} SOL)`));
+      if (balance < lamports + SOL_RENT + SOL_FEE) throw invalid(l10n(`solde insuffisant : il faut ${units(lamports + SOL_RENT + SOL_FEE, 9)} SOL (montant + réserve de rent + frais)`, `insufficient balance: ${units(lamports + SOL_RENT + SOL_FEE, 9)} SOL needed (amount + rent reserve + fees)`));
       const v = findV(action.voteAccount);
       const seed = `kyro-stake-${solSeed}`;
       const addr = b58(`stake:${me}:${seed}`);
@@ -199,8 +200,8 @@ export function createDemoStake(d: DemoStakeDeps) {
     } else if (action.kind === 'delegate') {
       const a = findA(action.stakeAccount);
       const st = solState(a);
-      if (st.state !== 'initialized' && st.state !== 'inactive') throw invalid('ce compte de staking n’est pas inactif : désactive-le d’abord');
-      if (balance < SOL_FEE) throw invalid('solde insuffisant pour les frais');
+      if (st.state !== 'initialized' && st.state !== 'inactive') throw invalid(l10n('ce compte de staking n’est pas inactif : désactive-le d’abord', 'this stake account is not inactive: deactivate it first'));
+      if (balance < SOL_FEE) throw invalid(l10n('solde insuffisant pour les frais', 'insufficient balance for the fees'));
       const v = findV(action.voteAccount);
       ixs.push({ type: 'stakeDelegate', stakeAccount: a.address, voteAccount: v.voteAccount, authority: me });
       const w = solWarnings(v);
@@ -208,7 +209,7 @@ export function createDemoStake(d: DemoStakeDeps) {
     } else if (action.kind === 'deactivate') {
       const a = findA(action.stakeAccount);
       const st = solState(a);
-      if (st.state !== 'active' && st.state !== 'activating') throw invalid('ce compte n’est pas délégué');
+      if (st.state !== 'active' && st.state !== 'activating') throw invalid(l10n('ce compte n’est pas délégué', 'this account is not delegated'));
       ixs.push({ type: 'stakeDeactivate', stakeAccount: a.address, authority: me });
       const v = validators.find((x) => x.voteAccount === a.vote) ?? null;
       preview = { ...base, kind: 'deactivate', stakeAccount: a.address, seed: a.seed, lamports: null, delegated: a.delegated.toString(), validator: v, account: st, closesAccount: false, warnings: [], requiresExtraConfirmation: false };
@@ -217,9 +218,9 @@ export function createDemoStake(d: DemoStakeDeps) {
       const st = solState(a);
       const max = st.canClose ? a.lamports : BigInt(st.withdrawable);
       const want = action.lamports !== undefined ? BigInt(action.lamports) : max;
-      if (want <= 0n) throw invalid('rien à retirer');
-      if (want > max) throw invalid(st.canClose ? 'retrait au-delà du solde du compte' : `retrait au-delà du montant retirable (${units(max, 9)} SOL) : désactive d’abord le stake`);
-      if (!st.canClose && want === a.lamports) throw invalid('tout retirer alors que du stake reste actif : désactive-le d’abord');
+      if (want <= 0n) throw invalid(l10n('rien à retirer', 'nothing to withdraw'));
+      if (want > max) throw invalid(st.canClose ? l10n('retrait au-delà du solde du compte', 'withdrawal beyond the account balance') : l10n(`retrait au-delà du montant retirable (${units(max, 9)} SOL) : désactive d’abord le stake`, `withdrawal beyond the withdrawable amount (${units(max, 9)} SOL): deactivate the stake first`));
+      if (!st.canClose && want === a.lamports) throw invalid(l10n('tout retirer alors que du stake reste actif : désactive-le d’abord', 'withdrawing everything while stake is still active: deactivate it first'));
       ixs.push({ type: 'stakeWithdraw', stakeAccount: a.address, to: me, lamports: want.toString(), authority: me });
       preview = { ...base, kind: 'withdraw', stakeAccount: a.address, seed: a.seed, lamports: want.toString(), delegated: null, validator: null, account: st, closesAccount: want === a.lamports, warnings: [], requiresExtraConfirmation: false };
     }
@@ -233,16 +234,16 @@ export function createDemoStake(d: DemoStakeDeps) {
       if (!o.action || !['createAndDelegate', 'delegate', 'deactivate', 'withdraw'].includes(o.action.kind)) throw new Error('kind');
       return o.action;
     } catch {
-      throw invalid('ce message n’est pas une opération de staking Kyro');
+      throw invalid(l10n('ce message n’est pas une opération de staking Kyro', 'this message is not a Kyro staking operation'));
     }
   };
   const solDescribe = (p: SolStakePreview) => {
-    const op = { createAndDelegate: 'Créer un compte de staking et déléguer', delegate: 'Déléguer', deactivate: 'Désactiver (début du refroidissement)', withdraw: 'Retirer' }[p.kind];
-    let out = `Staking Solana${testnet ? ' (devnet)' : ''} : ${op}\nCompte de staking : ${p.stakeAccount}\n`;
-    if (p.delegated) out += `Délégué : ${units(p.delegated, 9)} SOL${p.kind === 'createAndDelegate' ? ` + réserve de rent ${units(p.rentExemptReserve, 9)} SOL` : ''}\n`;
-    if (p.kind === 'withdraw' && p.lamports) out += `Retiré vers ton adresse : ${units(p.lamports, 9)} SOL${p.closesAccount ? ' (ferme le compte)' : ''}\n`;
-    if (p.validator) out += `Validateur : ${p.validator.name ?? '(sans nom)'} (nom déclaré, non vérifié) · commission ${p.validator.commission} %${p.validator.delinquent ? ' · EN RETARD' : ''}\n  vote ${p.validator.voteAccount}\n`;
-    out += `Époque ${p.epoch.epoch}, ≈ ${Math.round(p.epoch.secondsLeft / 3600)} h restantes. ${p.kind === 'deactivate' ? 'Refroidissement jusqu’à la fin de l’époque (pas de récompense pendant ce temps).' : p.kind === 'withdraw' ? '' : 'Activation au début de l’époque suivante.'}\nFrais : ${units(p.fee, 9)} SOL · pas de slashing sur Solana`;
+    const op = { createAndDelegate: l10n('Créer un compte de staking et déléguer', 'Create a stake account and delegate'), delegate: l10n('Déléguer', 'Delegate'), deactivate: l10n('Désactiver (début du refroidissement)', 'Deactivate (start of the cooldown)'), withdraw: l10n('Retirer', 'Withdraw') }[p.kind];
+    let out = l10n(`Staking Solana${testnet ? ' (devnet)' : ''} : ${op}\nCompte de staking : ${p.stakeAccount}\n`, `Solana staking${testnet ? ' (devnet)' : ''}: ${op}\nStake account: ${p.stakeAccount}\n`);
+    if (p.delegated) out += l10n(`Délégué : ${units(p.delegated, 9)} SOL${p.kind === 'createAndDelegate' ? ` + réserve de rent ${units(p.rentExemptReserve, 9)} SOL` : ''}\n`, `Delegated: ${units(p.delegated, 9)} SOL${p.kind === 'createAndDelegate' ? ` + rent reserve ${units(p.rentExemptReserve, 9)} SOL` : ''}\n`);
+    if (p.kind === 'withdraw' && p.lamports) out += l10n(`Retiré vers ton adresse : ${units(p.lamports, 9)} SOL${p.closesAccount ? ' (ferme le compte)' : ''}\n`, `Withdrawn to your address: ${units(p.lamports, 9)} SOL${p.closesAccount ? ' (closes the account)' : ''}\n`);
+    if (p.validator) out += l10n(`Validateur : ${p.validator.name ?? '(sans nom)'} (nom déclaré, non vérifié) · commission ${p.validator.commission} %${p.validator.delinquent ? ' · EN RETARD' : ''}\n  vote ${p.validator.voteAccount}\n`, `Validator: ${p.validator.name ?? '(no name)'} (declared name, not verified) · commission ${p.validator.commission}%${p.validator.delinquent ? ' · DELINQUENT' : ''}\n  vote ${p.validator.voteAccount}\n`);
+    out += l10n(`Époque ${p.epoch.epoch}, ≈ ${Math.round(p.epoch.secondsLeft / 3600)} h restantes. ${p.kind === 'deactivate' ? 'Refroidissement jusqu’à la fin de l’époque (pas de récompense pendant ce temps).' : p.kind === 'withdraw' ? '' : 'Activation au début de l’époque suivante.'}\nFrais : ${units(p.fee, 9)} SOL · pas de slashing sur Solana`, `Epoch ${p.epoch.epoch}, ≈ ${Math.round(p.epoch.secondsLeft / 3600)} h left. ${p.kind === 'deactivate' ? 'Cooldown until the end of the epoch (no rewards meanwhile).' : p.kind === 'withdraw' ? '' : 'Activation at the start of the next epoch.'}\nFees: ${units(p.fee, 9)} SOL · no slashing on Solana`);
     return out;
   };
   const solHandlers: Record<Extract<keyof Commands, `sol_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
@@ -256,8 +257,8 @@ export function createDemoStake(d: DemoStakeDeps) {
       d.requireUnlocked();
       const built = solBuild(solFromMessage(a.message));
       d.checkPassword(a.password);
-      const w = built.stake.warnings.map((x) => (x.kind === 'delinquent' ? '• validateur EN RETARD : il ne vote plus, pas de récompense' : `• commission élevée : ${x.commission} % des récompenses gardées par le validateur`)).join('\n');
-      confirmTwice(`Confirmer le staking Solana\n${solDescribe(built.stake)}`, built.stake.requiresExtraConfirmation, w);
+      const w = built.stake.warnings.map((x) => (x.kind === 'delinquent' ? l10n('• validateur EN RETARD : il ne vote plus, pas de récompense', '• DELINQUENT validator: it no longer votes, no rewards') : l10n(`• commission élevée : ${x.commission} % des récompenses gardées par le validateur`, `• high commission: ${x.commission}% of the rewards kept by the validator`))).join('\n');
+      confirmTwice(l10n(`Confirmer le staking Solana\n${solDescribe(built.stake)}`, `Confirm the Solana staking\n${solDescribe(built.stake)}`), built.stake.requiresExtraConfirmation, w);
       const sig = new Uint8Array([...sha256(new TextEncoder().encode(`sig-r:${String(a.message)}`)), ...sha256(new TextEncoder().encode(`sig-s:${String(a.message)}`))]);
       return { signature: base64.encode(sig), summary: built.summary, stake: built.stake };
     },
@@ -267,9 +268,9 @@ export function createDemoStake(d: DemoStakeDeps) {
       try {
         sig = base64.decode(String(a.signature ?? ''));
       } catch {
-        throw invalid('signature : base64 attendu');
+        throw invalid(l10n('signature : base64 attendu', 'signature: base64 expected'));
       }
-      if (sig.length !== 64) throw invalid('signature : 64 octets attendus');
+      if (sig.length !== 64) throw invalid(l10n('signature : 64 octets attendus', 'signature: 64 bytes expected'));
       const built = solBuild(action);
       const ep = solEpoch().epoch;
       const p = built.stake;
@@ -336,8 +337,8 @@ export function createDemoStake(d: DemoStakeDeps) {
     if (choice === 'alwaysAbstain') return { drep: { kind: 'alwaysAbstain' }, registered: true, active: true };
     if (choice === 'alwaysNoConfidence') return { drep: { kind: 'alwaysNoConfidence' }, registered: true, active: true };
     if (choice === DREPS.active || choice === DREPS.inactive) return { drep: { kind: 'key', id: choice, hash: h(choice).slice(0, 56) }, registered: true, active: choice === DREPS.active };
-    if (/^drep(_script)?1[0-9a-z]{20,}$/.test(choice)) throw invalid('DRep non enregistré');
-    throw invalid('DRep invalide : « alwaysAbstain », « alwaysNoConfidence » ou un identifiant drep1…');
+    if (/^drep(_script)?1[0-9a-z]{20,}$/.test(choice)) throw invalid(l10n('DRep non enregistré', 'DRep not registered'));
+    throw invalid(l10n('DRep invalide : « alwaysAbstain », « alwaysNoConfidence » ou un identifiant drep1…', 'Invalid DRep: “alwaysAbstain”, “alwaysNoConfidence” or a drep1… identifier'));
   };
   const adaBuild = (action: AdaStakeRequest) => {
     const before = adaAccount();
@@ -356,8 +357,8 @@ export function createDemoStake(d: DemoStakeDeps) {
     };
     if (action.kind === 'delegate') {
       pool = findPool(action.poolId);
-      if (!pool) throw invalid('pool inconnu');
-      if (pool.status === 'retired') throw invalid('pool retiré');
+      if (!pool) throw invalid(l10n('pool inconnu', 'unknown pool'));
+      if (pool.status === 'retired') throw invalid(l10n('pool retiré', 'retired pool'));
       register();
       certs.push({ type: 'stakeDelegation', poolId: pool.poolId, poolHash: pool.poolHash });
       if (action.drep) {
@@ -369,15 +370,15 @@ export function createDemoStake(d: DemoStakeDeps) {
       register();
       certs.push({ type: 'voteDelegation', drep: drep.drep });
     } else if (action.kind === 'withdraw') {
-      if (!ada.registered) throw invalid('opération sur une clé de staking non enregistrée');
-      if (ada.rewards === 0n) throw invalid('aucune récompense à retirer');
-      if (!ada.drep) throw invalid('retrait sans délégation de vote : le réseau l’interdit depuis Plomin — délègue d’abord ton vote (par exemple « toujours s’abstenir »)');
+      if (!ada.registered) throw invalid(l10n('opération sur une clé de staking non enregistrée', 'operation on an unregistered stake key'));
+      if (ada.rewards === 0n) throw invalid(l10n('aucune récompense à retirer', 'no rewards to withdraw'));
+      if (!ada.drep) throw invalid(l10n('retrait sans délégation de vote : le réseau l’interdit depuis Plomin — délègue d’abord ton vote (par exemple « toujours s’abstenir »)', 'withdrawal without vote delegation: the network forbids it since Plomin — delegate your vote first (for example “always abstain”)'));
       withdrawn = ada.rewards;
       withdrawals.push({ rewardAddress: adaStakeAddress, lovelace: withdrawn.toString() });
     } else {
-      if (!ada.registered) throw invalid('opération sur une clé de staking non enregistrée');
+      if (!ada.registered) throw invalid(l10n('opération sur une clé de staking non enregistrée', 'operation on an unregistered stake key'));
       if (ada.rewards > 0n) {
-        if (!ada.drep) throw invalid('désinscription : les récompenses doivent être retirées, ce qui exige une délégation de vote — délègue d’abord ton vote');
+        if (!ada.drep) throw invalid(l10n('désinscription : les récompenses doivent être retirées, ce qui exige une délégation de vote — délègue d’abord ton vote', 'deregistration: the rewards must be withdrawn, which requires a vote delegation — delegate your vote first'));
         withdrawn = ada.rewards;
         withdrawals.push({ rewardAddress: adaStakeAddress, lovelace: withdrawn.toString() });
       }
@@ -386,7 +387,7 @@ export function createDemoStake(d: DemoStakeDeps) {
     }
     const acc = d.ada.account();
     const netCost = ADA_FEE + deposit - refund - withdrawn;
-    if (BigInt(acc.balance) - BigInt(acc.lockedWithTokens) < ADA_FEE + deposit + 1_000_000n) throw invalid('solde insuffisant pour les frais et le dépôt');
+    if (BigInt(acc.balance) - BigInt(acc.lockedWithTokens) < ADA_FEE + deposit + 1_000_000n) throw invalid(l10n('solde insuffisant pour les frais et le dépôt', 'insufficient balance for the fees and the deposit'));
     const warnings: AdaStakeWarning[] = [];
     if (pool?.status === 'retiring' && pool.retiringEpoch !== null) warnings.push({ kind: 'poolRetiring', epoch: pool.retiringEpoch });
     if (pool && pool.margin > 0.1) warnings.push({ kind: 'highMargin', margin: Math.round(pool.margin * 1000) / 10 });
@@ -409,13 +410,13 @@ export function createDemoStake(d: DemoStakeDeps) {
   const adaDescribe = (s: CardanoStakeSummary, c: AdaStakeContext) => {
     let out = `Staking Cardano${testnet ? ' (preprod)' : ''}\n`;
     for (const cert of s.certificates) {
-      if (cert.type === 'stakeRegistration') out += `• Enregistrement de la clé de staking : dépôt ${units(cert.deposit, 6)} ADA (remboursé à la désinscription)\n`;
-      if (cert.type === 'stakeDeregistration') out += `• Désinscription : remboursement du dépôt ${units(cert.refund, 6)} ADA\n`;
-      if (cert.type === 'stakeDelegation') out += `• Délégation au pool ${c.pool?.ticker ?? '?'} (« ${c.pool?.name ?? ''} », déclaré) · marge ${((c.pool?.margin ?? 0) * 100).toFixed(1)} % · coût fixe ${units(c.pool?.fixedCost ?? '0', 6)} ADA · saturation ${c.pool?.liveSaturation ?? '?'} %\n`;
-      if (cert.type === 'voteDelegation') out += `• Délégation de vote : ${cert.drep.kind === 'alwaysAbstain' ? 'toujours s’abstenir' : cert.drep.kind === 'alwaysNoConfidence' ? 'toujours défiance' : cert.drep.id}\n`;
+      if (cert.type === 'stakeRegistration') out += l10n(`• Enregistrement de la clé de staking : dépôt ${units(cert.deposit, 6)} ADA (remboursé à la désinscription)\n`, `• Stake key registration: deposit ${units(cert.deposit, 6)} ADA (refunded on deregistration)\n`);
+      if (cert.type === 'stakeDeregistration') out += l10n(`• Désinscription : remboursement du dépôt ${units(cert.refund, 6)} ADA\n`, `• Deregistration: deposit refund ${units(cert.refund, 6)} ADA\n`);
+      if (cert.type === 'stakeDelegation') out += l10n(`• Délégation au pool ${c.pool?.ticker ?? '?'} (« ${c.pool?.name ?? ''} », déclaré) · marge ${((c.pool?.margin ?? 0) * 100).toFixed(1)} % · coût fixe ${units(c.pool?.fixedCost ?? '0', 6)} ADA · saturation ${c.pool?.liveSaturation ?? '?'} %\n`, `• Delegation to pool ${c.pool?.ticker ?? '?'} (“${c.pool?.name ?? ''}”, declared) · margin ${((c.pool?.margin ?? 0) * 100).toFixed(1)}% · fixed cost ${units(c.pool?.fixedCost ?? '0', 6)} ADA · saturation ${c.pool?.liveSaturation ?? '?'}%\n`);
+      if (cert.type === 'voteDelegation') out += l10n(`• Délégation de vote : ${cert.drep.kind === 'alwaysAbstain' ? 'toujours s’abstenir' : cert.drep.kind === 'alwaysNoConfidence' ? 'toujours défiance' : cert.drep.id}\n`, `• Vote delegation: ${cert.drep.kind === 'alwaysAbstain' ? 'always abstain' : cert.drep.kind === 'alwaysNoConfidence' ? 'always no confidence' : cert.drep.id}\n`);
     }
-    for (const w of s.withdrawals) out += `• Retrait des récompenses : ${units(w.lovelace, 6)} ADA\n`;
-    out += `Frais : ${units(s.tx.fee, 6)} ADA · coût net : ${units(c.netCost, 6)} ADA\nÉpoque ${c.epoch.epoch} : la délégation compte à l’époque ${c.epoch.epoch + 2}, premières récompenses au début de l’époque ${c.epoch.epoch + 4}.\nPas de blocage, pas de slashing : tes ADA restent sur ton adresse.`;
+    for (const w of s.withdrawals) out += l10n(`• Retrait des récompenses : ${units(w.lovelace, 6)} ADA\n`, `• Rewards withdrawal: ${units(w.lovelace, 6)} ADA\n`);
+    out += l10n(`Frais : ${units(s.tx.fee, 6)} ADA · coût net : ${units(c.netCost, 6)} ADA\nÉpoque ${c.epoch.epoch} : la délégation compte à l’époque ${c.epoch.epoch + 2}, premières récompenses au début de l’époque ${c.epoch.epoch + 4}.\nPas de blocage, pas de slashing : tes ADA restent sur ton adresse.`, `Fees: ${units(s.tx.fee, 6)} ADA · net cost: ${units(c.netCost, 6)} ADA\nEpoch ${c.epoch.epoch}: the delegation counts from epoch ${c.epoch.epoch + 2}, first rewards at the start of epoch ${c.epoch.epoch + 4}.\nNo lock-up, no slashing: your ADA stay on your address.`);
     return out;
   };
   const adaHandlers: Record<Extract<keyof Commands, `ada_stake_${string}`>, (a: Record<string, unknown>) => unknown> = {
@@ -426,7 +427,7 @@ export function createDemoStake(d: DemoStakeDeps) {
     ada_stake_pools: (a) => pools.slice(0, Math.min(200, Number(a.limit ?? 50))),
     ada_stake_pool: (a) => {
       const p = findPool(String(a.poolId ?? '').trim());
-      if (!p) throw invalid('pool inconnu');
+      if (!p) throw invalid(l10n('pool inconnu', 'unknown pool'));
       return p;
     },
     ada_stake_build: (a) => {
@@ -439,14 +440,14 @@ export function createDemoStake(d: DemoStakeDeps) {
       const built = adaBuild(action);
       d.checkPassword(a.password);
       const w = built.context.warnings
-        .map((x) => (x.kind === 'poolRetiring' ? `• le pool part à la retraite à l’époque ${x.epoch}` : x.kind === 'highMargin' ? `• marge élevée : ${x.margin} %` : x.kind === 'poolSaturated' ? `• pool saturé (${x.saturation} %) : récompenses réduites` : '• DRep inactif : ton vote ne compte pas'))
+        .map((x) => (x.kind === 'poolRetiring' ? l10n(`• le pool part à la retraite à l’époque ${x.epoch}`, `• the pool retires at epoch ${x.epoch}`) : x.kind === 'highMargin' ? l10n(`• marge élevée : ${x.margin} %`, `• high margin: ${x.margin}%`) : x.kind === 'poolSaturated' ? l10n(`• pool saturé (${x.saturation} %) : récompenses réduites`, `• saturated pool (${x.saturation}%): reduced rewards`) : l10n('• DRep inactif : ton vote ne compte pas', '• inactive DRep: your vote does not count')))
         .join('\n');
-      confirmTwice(`Confirmer le staking Cardano\n${adaDescribe(built.summary, built.context)}`, built.context.requiresExtraConfirmation, w);
+      confirmTwice(l10n(`Confirmer le staking Cardano\n${adaDescribe(built.summary, built.context)}`, `Confirm the Cardano staking\n${adaDescribe(built.summary, built.context)}`), built.context.requiresExtraConfirmation, w);
       return { tx: encode({ action, signed: true, slot: adaEpoch().slot }), txId: built.summary.tx.txId, summary: built.summary, context: built.context };
     },
     ada_stake_broadcast: (a) => {
       const o = decode<{ action: AdaStakeRequest; signed?: boolean }>(a.tx);
-      if (!o.signed) throw invalid('transaction Cardano non signée (témoins manquants)');
+      if (!o.signed) throw invalid(l10n('transaction Cardano non signée (témoins manquants)', 'unsigned Cardano transaction (missing witnesses)'));
       const built = adaBuild(o.action);
       d.ada.spend(BigInt(built.context.netCost));
       const act = o.action;
@@ -520,42 +521,42 @@ export function createDemoStake(d: DemoStakeDeps) {
     const ctxWitnesses: TronWitness[] = [];
     if (action.kind === 'freeze') {
       const amt = BigInt(action.amount || '0');
-      if (amt < SUN) throw invalid('stake minimum : 1 TRX');
-      if (amt > BigInt(acc.balance)) throw invalid('stake supérieur au solde');
+      if (amt < SUN) throw invalid(l10n('stake minimum : 1 TRX', 'minimum stake: 1 TRX'));
+      if (amt > BigInt(acc.balance)) throw invalid(l10n('stake supérieur au solde', 'stake above the balance'));
       summaryAction = { type: 'freeze', resource: action.resource, amount: amt.toString() };
     } else if (action.kind === 'unfreeze') {
       const amt = BigInt(action.amount || '0');
-      if (amt <= 0n || amt > tr.staked[action.resource]) throw invalid(`dégel supérieur au stake ${action.resource === 'ENERGY' ? 'énergie' : 'bande passante'}`);
-      if (tr.unfreezing.length >= 32) throw invalid('32 dégels déjà en attente');
+      if (amt <= 0n || amt > tr.staked[action.resource]) throw invalid(l10n(`dégel supérieur au stake ${action.resource === 'ENERGY' ? 'énergie' : 'bande passante'}`, `unfreeze above the ${action.resource === 'ENERGY' ? 'energy' : 'bandwidth'} stake`));
+      if (tr.unfreezing.length >= 32) throw invalid(l10n('32 dégels déjà en attente', '32 unfreezes already pending'));
       const powerAfter = acc.tronPowerLimit - Number(amt / SUN);
       if (powerAfter < acc.tronPowerUsed) warnings.push({ kind: 'votesReduced' });
       summaryAction = { type: 'unfreeze', resource: action.resource, amount: amt.toString() };
     } else if (action.kind === 'withdrawUnfrozen') {
-      if (BigInt(acc.withdrawableNow) === 0n) throw invalid('rien à retirer : aucun dégel arrivé à son terme');
+      if (BigInt(acc.withdrawableNow) === 0n) throw invalid(l10n('rien à retirer : aucun dégel arrivé à son terme', 'nothing to withdraw: no unfreeze has completed'));
       summaryAction = { type: 'withdrawUnfrozen' };
     } else if (action.kind === 'cancelAllUnfreeze') {
-      if (tr.unfreezing.length === 0) throw invalid('aucun dégel à annuler');
+      if (tr.unfreezing.length === 0) throw invalid(l10n('aucun dégel à annuler', 'no unfreeze to cancel'));
       summaryAction = { type: 'cancelAllUnfreeze' };
     } else if (action.kind === 'claimRewards') {
-      if (tr.reward === 0n) throw invalid('récompense nulle');
-      if (now - tr.lastClaim < 86_400_000) throw invalid('récompense déjà réclamée il y a moins de 24 h');
+      if (tr.reward === 0n) throw invalid(l10n('récompense nulle', 'zero reward'));
+      if (now - tr.lastClaim < 86_400_000) throw invalid(l10n('récompense déjà réclamée il y a moins de 24 h', 'reward already claimed less than 24 h ago'));
       summaryAction = { type: 'claimRewards' };
     } else {
       const votes = action.votes ?? [];
-      if (votes.length === 0 || votes.length > 30) throw invalid('il faut voter pour 1 à 30 SR');
+      if (votes.length === 0 || votes.length > 30) throw invalid(l10n('il faut voter pour 1 à 30 SR', 'you must vote for 1 to 30 SRs'));
       let total = 0;
       for (const v of votes) {
         const w = witnesses.find((x) => x.address === v.address);
-        if (!w) throw invalid(`adresse qui n’est pas un candidat SR : ${v.address}`);
+        if (!w) throw invalid(l10n(`adresse qui n’est pas un candidat SR : ${v.address}`, `address that is not an SR candidate: ${v.address}`));
         const c = Number(v.count);
-        if (!Number.isInteger(c) || c <= 0) throw invalid('nombre de votes invalide');
+        if (!Number.isInteger(c) || c <= 0) throw invalid(l10n('nombre de votes invalide', 'invalid number of votes'));
         total += c;
         const b = brokerageOf(w.address);
         ctxWitnesses.push({ ...w, brokerage: b });
         if (!w.isPaid) warnings.push({ kind: 'srNotPaid', address: w.address, rank: w.rank });
         if (b >= 100) warnings.push({ kind: 'brokerageAll', address: w.address });
       }
-      if (total > acc.tronPowerLimit) throw invalid(`votes (${total}) supérieurs à ton TRON Power (${acc.tronPowerLimit})`);
+      if (total > acc.tronPowerLimit) throw invalid(l10n(`votes (${total}) supérieurs à ton TRON Power (${acc.tronPowerLimit})`, `votes (${total}) above your TRON Power (${acc.tronPowerLimit})`));
       summaryAction = { type: 'vote', votes: votes.map((v) => ({ ...v })), total: String(total) };
     }
     const raw = encode({ stake: true, owner: d.tron.address, action, timestamp: now, expiration: now + 600_000 });
@@ -566,21 +567,21 @@ export function createDemoStake(d: DemoStakeDeps) {
   };
   const tronDescribe = (s: TronStakeSummary, c: TronStakeContext) => {
     const a = s.action;
-    const res = (r: TronResource) => (r === 'ENERGY' ? 'énergie' : 'bande passante');
+    const res = (r: TronResource) => l10n((r === 'ENERGY' ? 'énergie' : 'bande passante'), (r === 'ENERGY' ? l10n('énergie', 'energy') : l10n('bande passante', 'bandwidth')));
     let out = `Staking TRON${testnet ? ' (Nile)' : ''}\n`;
-    if (a.type === 'freeze') out += `Staker ${units(a.amount, 6)} TRX pour ${res(a.resource)} (+${Number(BigInt(a.amount) / SUN)} TRON Power)\n`;
-    if (a.type === 'unfreeze') out += `Dégeler ${units(a.amount, 6)} TRX (${res(a.resource)}) : disponibles dans ${c.account.unfreezeDelayDays} jour(s)\n`;
-    if (a.type === 'withdrawUnfrozen') out += `Retirer les dégels arrivés à terme : ${units(c.account.withdrawableNow, 6)} TRX\n`;
-    if (a.type === 'cancelAllUnfreeze') out += 'Annuler tous les dégels en cours (les TRX sont re-stakés)\n';
-    if (a.type === 'claimRewards') out += `Réclamer les récompenses de vote : ${units(c.account.reward, 6)} TRX\n`;
+    if (a.type === 'freeze') out += l10n(`Staker ${units(a.amount, 6)} TRX pour ${res(a.resource)} (+${Number(BigInt(a.amount) / SUN)} TRON Power)\n`, `Stake ${units(a.amount, 6)} TRX for ${res(a.resource)} (+${Number(BigInt(a.amount) / SUN)} TRON Power)\n`);
+    if (a.type === 'unfreeze') out += l10n(`Dégeler ${units(a.amount, 6)} TRX (${res(a.resource)}) : disponibles dans ${c.account.unfreezeDelayDays} jour(s)\n`, `Unfreeze ${units(a.amount, 6)} TRX (${res(a.resource)}): available in ${c.account.unfreezeDelayDays} day(s)\n`);
+    if (a.type === 'withdrawUnfrozen') out += l10n(`Retirer les dégels arrivés à terme : ${units(c.account.withdrawableNow, 6)} TRX\n`, `Withdraw completed unfreezes: ${units(c.account.withdrawableNow, 6)} TRX\n`);
+    if (a.type === 'cancelAllUnfreeze') out += l10n('Annuler tous les dégels en cours (les TRX sont re-stakés)\n', 'Cancel all pending unfreezes (the TRX are re-staked)\n');
+    if (a.type === 'claimRewards') out += l10n(`Réclamer les récompenses de vote : ${units(c.account.reward, 6)} TRX\n`, `Claim the vote rewards: ${units(c.account.reward, 6)} TRX\n`);
     if (a.type === 'vote') {
-      out += `Votes (REMPLACENT tous tes votes actuels), ${a.total} / ${c.account.tronPowerLimit} TRON Power :\n`;
+      out += l10n(`Votes (REMPLACENT tous tes votes actuels), ${a.total} / ${c.account.tronPowerLimit} TRON Power :\n`, `Votes (REPLACE all your current votes), ${a.total} / ${c.account.tronPowerLimit} TRON Power:\n`);
       for (const v of a.votes) {
         const w = c.witnesses.find((x) => x.address === v.address);
-        out += `  ${v.count} → ${w?.url ?? v.address} (rang ${w?.rank ?? '?'}, garde ${w?.brokerage ?? '?'} %)\n`;
+        out += l10n(`  ${v.count} → ${w?.url ?? v.address} (rang ${w?.rank ?? '?'}, garde ${w?.brokerage ?? '?'} %)\n`, `  ${v.count} → ${w?.url ?? v.address} (rank ${w?.rank ?? '?'}, keeps ${w?.brokerage ?? '?'}%)\n`);
       }
     }
-    out += `Bande passante : ${c.estimate.bandwidthNeeded} octets · ${units(c.estimate.bandwidthBurn, 6)} TRX brûlés · pas de slashing sur TRON\nExpire dans 10 min · ID : ${s.txid}`;
+    out += l10n(`Bande passante : ${c.estimate.bandwidthNeeded} octets · ${units(c.estimate.bandwidthBurn, 6)} TRX brûlés · pas de slashing sur TRON\nExpire dans 10 min · ID : ${s.txid}`, `Bandwidth: ${c.estimate.bandwidthNeeded} bytes · ${units(c.estimate.bandwidthBurn, 6)} TRX burned · no slashing on TRON\nExpires in 10 min · ID: ${s.txid}`);
     return out;
   };
   /** Signed staking raw_data, broadcast through the existing `tron_broadcast` (null: not a staking tx). */
@@ -592,7 +593,7 @@ export function createDemoStake(d: DemoStakeDeps) {
       return null;
     }
     if (!o.stake || !o.action) return null;
-    if (!/^[0-9a-f]{130}$/i.test(signature.trim())) throw invalid('signature : 65 octets hex');
+    if (!/^[0-9a-f]{130}$/i.test(signature.trim())) throw invalid(l10n('signature : 65 octets hex', 'signature: 65 hex bytes'));
     const built = tronBuild(o.action);
     const act = o.action;
     const now = d.now();
@@ -633,12 +634,12 @@ export function createDemoStake(d: DemoStakeDeps) {
     tron_stake_sign: (a) => {
       d.requireUnlocked();
       const o = decode<{ stake?: boolean; action?: TronStakeRequest; expiration?: number }>(a.raw);
-      if (!o.stake || !o.action) throw invalid('ce raw_data n’est pas une opération de staking Kyro');
-      if ((o.expiration ?? 0) <= d.now()) throw invalid('transaction TRON expirée : reconstruis-la');
+      if (!o.stake || !o.action) throw invalid(l10n('ce raw_data n’est pas une opération de staking Kyro', 'this raw_data is not a Kyro staking operation'));
+      if ((o.expiration ?? 0) <= d.now()) throw invalid(l10n('transaction TRON expirée : reconstruis-la', 'TRON transaction expired: rebuild it'));
       const built = tronBuild(o.action);
       d.checkPassword(a.password);
-      const w = built.context.warnings.map((x) => (x.kind === 'srNotPaid' ? `• SR hors des 127 premiers (rang ${x.rank}) : aucune récompense` : x.kind === 'brokerageAll' ? '• ce SR garde 100 % des récompenses : rien pour toi' : '• ce dégel va réduire tes votes (le réseau les retire en proportion)')).join('\n');
-      confirmTwice(`Confirmer le staking TRON\n${tronDescribe(built.summary, built.context)}`, built.context.requiresExtraConfirmation, w);
+      const w = built.context.warnings.map((x) => (x.kind === 'srNotPaid' ? l10n(`• SR hors des 127 premiers (rang ${x.rank}) : aucune récompense`, `• SR outside the top 127 (rank ${x.rank}): no rewards`) : x.kind === 'brokerageAll' ? l10n('• ce SR garde 100 % des récompenses : rien pour toi', '• this SR keeps 100% of the rewards: nothing for you') : l10n('• ce dégel va réduire tes votes (le réseau les retire en proportion)', '• this unfreeze will reduce your votes (the network removes them proportionally)'))).join('\n');
+      confirmTwice(l10n(`Confirmer le staking TRON\n${tronDescribe(built.summary, built.context)}`, `Confirm the TRON staking\n${tronDescribe(built.summary, built.context)}`), built.context.requiresExtraConfirmation, w);
       const txid = bytesToHex(sha256(hexToBytes(String(a.raw).trim())));
       return { signature: h(`r:${txid}`) + h(`s:${txid}`) + '1b', txid, summary: { ...built.summary, txid }, context: built.context };
     },

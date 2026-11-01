@@ -6,6 +6,7 @@
 // live check, never to relax anything.
 
 import type { BtcNetworkKey, BtcServer, Network, Servers, SolanaCluster } from './ipc';
+import { l10n } from './i18n';
 
 export const EMPTY_SERVERS: Servers = { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, tron: {}, xrp: {}, cardano: {} };
 
@@ -45,25 +46,25 @@ export function isOnion(host: string): boolean {
   return host.toLowerCase().endsWith('.onion');
 }
 
-/** URL rule of §2.1. Returns the French reason, or null when acceptable. `allowPrivateHttp` = Bitcoin Core only. */
+/** URL rule of §2.1. Returns the reason (current language), or null when acceptable. `allowPrivateHttp` = Bitcoin Core only. */
 export function checkServerUrl(url: string, tor: boolean, allowPrivateHttp = false): string | null {
   let u: URL;
   try {
     u = new URL(url.trim());
   } catch {
-    return `URL invalide « ${url} »`;
+    return l10n(`URL invalide « ${url} »`, `invalid URL “${url}”`);
   }
-  if (u.username || u.password) return 'pas d’identifiants dans l’URL (utilise les champs d’authentification)';
+  if (u.username || u.password) return l10n('pas d’identifiants dans l’URL (utilise les champs d’authentification)', 'no credentials in the URL (use the authentication fields)');
   const host = u.hostname;
-  if (!host) return 'URL sans hôte';
+  if (!host) return l10n('URL sans hôte', 'URL without a host');
   const onion = isOnion(host);
-  if (u.protocol === 'https:') return onion && !tor ? 'adresse .onion : exige Tor activé' : null;
+  if (u.protocol === 'https:') return onion && !tor ? l10n('adresse .onion : exige Tor activé', '.onion address: requires Tor enabled') : null;
   if (u.protocol === 'http:') {
-    if (onion) return tor ? null : 'adresse .onion : exige Tor activé';
+    if (onion) return tor ? null : l10n('adresse .onion : exige Tor activé', '.onion address: requires Tor enabled');
     if (allowPrivateHttp && isPrivateHost(host)) return null;
-    return allowPrivateHttp ? 'http:// n’est permis que pour une adresse locale ou .onion via Tor ; sinon https://' : 'http:// n’est permis que pour une adresse .onion via Tor ; sinon https://';
+    return allowPrivateHttp ? l10n('http:// n’est permis que pour une adresse locale ou .onion via Tor ; sinon https://', 'http:// is only allowed for a local address or a .onion over Tor; otherwise https://') : l10n('http:// n’est permis que pour une adresse .onion via Tor ; sinon https://', 'http:// is only allowed for a .onion address over Tor; otherwise https://');
   }
-  return `schéma non autorisé « ${u.protocol.replace(':', '')} »`;
+  return l10n(`schéma non autorisé « ${u.protocol.replace(':', '')} »`, `scheme not allowed “${u.protocol.replace(':', '')}”`);
 }
 
 /** SHA-256 fingerprint (`AB:CD…`, spaces or plain hex) → 64 lowercase hex, or null. */
@@ -90,14 +91,14 @@ export function isOnionV3(host: string): boolean {
 export function checkCbfPeer(peer: string): string | null {
   const p = peer.trim();
   const i = p.lastIndexOf(':');
-  if (i <= 0) return `pair « ${p} » : hôte:port attendu`;
+  if (i <= 0) return l10n(`pair « ${p} » : hôte:port attendu`, `peer “${p}”: host:port expected`);
   const port = Number(p.slice(i + 1));
-  if (!Number.isInteger(port) || port < 1 || port > 65535) return `pair « ${p} » : port invalide`;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return l10n(`pair « ${p} » : port invalide`, `peer “${p}”: invalid port`);
   const host = p.slice(0, i).replace(/^\[|\]$/g, '').toLowerCase();
-  if (host.endsWith('.onion')) return isOnionV3(host) ? null : `pair « ${p} » : adresse .onion v3 attendue (56 caractères)`;
+  if (host.endsWith('.onion')) return isOnionV3(host) ? null : l10n(`pair « ${p} » : adresse .onion v3 attendue (56 caractères)`, `peer “${p}”: .onion v3 address expected (56 characters)`);
   const v4 = /^(\d{1,3})(\.\d{1,3}){3}$/.test(host) && host.split('.').every((x) => Number(x) <= 255);
   const v6 = host.includes(':') && /^[0-9a-f:.]+$/.test(host);
-  return v4 || v6 ? null : `pair « ${p} » : adresse IP ou .onion attendue (pas de nom d’hôte : aucune requête DNS)`;
+  return v4 || v6 ? null : l10n(`pair « ${p} » : adresse IP ou .onion attendue (pas de nom d’hôte : aucune requête DNS)`, `peer “${p}”: IP or .onion address expected (no host name: no DNS request)`);
 }
 
 /** Syntax check of a Bitcoin server (no network). Returns the reason, or null. */
@@ -112,21 +113,21 @@ export function checkBtcServer(s: BtcServer, tor: boolean): string | null {
         if (bad) return bad;
       }
       if (!tor && peers.length > 0 && peers.every((p) => p.trim().toLowerCase().replace(/:\d+$/, '').endsWith('.onion'))) {
-        return 'pairs .onion uniquement : exige Tor activé (ajoute un pair IP pour le mode clair)';
+        return l10n('pairs .onion uniquement : exige Tor activé (ajoute un pair IP pour le mode clair)', '.onion peers only: requires Tor enabled (add an IP peer for direct mode)');
       }
-      if (s.birthHeight !== undefined && (!Number.isInteger(s.birthHeight) || s.birthHeight < 0)) return 'hauteur de départ invalide';
+      if (s.birthHeight !== undefined && (!Number.isInteger(s.birthHeight) || s.birthHeight < 0)) return l10n('hauteur de départ invalide', 'invalid start height');
       return null;
     }
     case 'esplora':
       return checkServerUrl(s.url, tor);
     case 'electrum': {
       const h = s.host.trim();
-      if (!h || /[/@\s]/.test(h) || (h.includes(':') && !h.startsWith('['))) return `hôte Electrum invalide « ${s.host} »`;
-      if (!Number.isInteger(s.port) || s.port < 1 || s.port > 65535) return 'port Electrum invalide';
+      if (!h || /[/@\s]/.test(h) || (h.includes(':') && !h.startsWith('['))) return l10n(`hôte Electrum invalide « ${s.host} »`, `invalid Electrum host “${s.host}”`);
+      if (!Number.isInteger(s.port) || s.port < 1 || s.port > 65535) return l10n('port Electrum invalide', 'invalid Electrum port');
       const onion = isOnion(h);
-      if (onion && !tor) return 'adresse .onion : exige Tor activé';
-      if (s.tls === 'none' && !(onion && tor)) return 'Electrum sans TLS : uniquement vers une adresse .onion via Tor';
-      if (s.tls === 'pinned' && !normalizeFingerprint(s.certSha256 ?? '')) return 'empreinte SHA-256 du certificat : 64 caractères hexadécimaux attendus';
+      if (onion && !tor) return l10n('adresse .onion : exige Tor activé', '.onion address: requires Tor enabled');
+      if (s.tls === 'none' && !(onion && tor)) return l10n('Electrum sans TLS : uniquement vers une adresse .onion via Tor', 'Electrum without TLS: only to a .onion address over Tor');
+      if (s.tls === 'pinned' && !normalizeFingerprint(s.certSha256 ?? '')) return l10n('empreinte SHA-256 du certificat : 64 caractères hexadécimaux attendus', 'certificate SHA-256 fingerprint: 64 hexadecimal characters expected');
       return null;
     }
     case 'core': {
@@ -135,13 +136,13 @@ export function checkBtcServer(s: BtcServer, tor: boolean): string | null {
       if (s.auth.kind === 'cookie') {
         // Same rules as servers.rs: the cookie only goes to a local / LAN node, and the file is
         // exactly `.cookie` (chosen with the native picker, `btc_core_pick_cookie`).
-        if (!coreIsLocal(s.url)) return 'fichier .cookie : seulement pour un nœud local (127.0.0.1, ::1) ou de ton réseau local ; pour un nœud distant, utilise rpcuser / rpcpassword';
+        if (!coreIsLocal(s.url)) return l10n('fichier .cookie : seulement pour un nœud local (127.0.0.1, ::1) ou de ton réseau local ; pour un nœud distant, utilise rpcuser / rpcpassword', '.cookie file: only for a local node (127.0.0.1, ::1) or one on your local network; for a remote node, use rpcuser / rpcpassword');
         const p = s.auth.cookiePath.trim();
         const absolute = p.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('\\\\');
         const name = p.split(/[\\/]/).pop();
-        return absolute && name === '.cookie' ? null : 'fichier .cookie : choisis le fichier « .cookie » du dossier de données de ton nœud';
+        return absolute && name === '.cookie' ? null : l10n('fichier .cookie : choisis le fichier « .cookie » du dossier de données de ton nœud', '.cookie file: choose the “.cookie” file in your node’s data folder');
       }
-      if (!s.auth.user || s.auth.user.includes(':')) return 'utilisateur RPC invalide';
+      if (!s.auth.user || s.auth.user.includes(':')) return l10n('utilisateur RPC invalide', 'invalid RPC user');
       return null;
     }
   }

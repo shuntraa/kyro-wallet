@@ -43,6 +43,7 @@ import type { createDemoUtxo } from './mock-utxo';
 import type { createDemoTron } from './mock-tron';
 import type { createDemoXrp } from './mock-xrp';
 import type { createDemoCardano } from './mock-cardano';
+import { l10n } from './i18n';
 
 const BTC_GENESIS: Record<BtcNetworkKey, string> = {
   mainnet: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f',
@@ -59,9 +60,9 @@ const EVM_DEFAULT_HOST = new Map(Object.entries(EVM_HOSTS).map(([host, id]) => [
 export const DEMO_RESCAN_MS = 8000;
 const IMPORT_MS = 1200;
 
-const invalid = (m: string) => new IpcError('SERVER_INVALID', `Serveur invalide : ${m}`);
-const wrongNet = (m: string) => new IpcError('SERVER_WRONG_NETWORK', `Mauvais réseau : ${m}`);
-const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', `Serveur injoignable : ${m}`);
+const invalid = (m: string) => new IpcError('SERVER_INVALID', l10n(`Serveur invalide : ${m}`, `Invalid server: ${m}`));
+const wrongNet = (m: string) => new IpcError('SERVER_WRONG_NETWORK', l10n(`Mauvais réseau : ${m}`, `Wrong network: ${m}`));
+const unreachable = (m: string) => new IpcError('SERVER_UNREACHABLE', l10n(`Serveur injoignable : ${m}`, `Server unreachable: ${m}`));
 
 const hostOfUrl = (url: string): string => {
   try {
@@ -125,16 +126,16 @@ export function createDemoServers(d: DemoServersDeps) {
     if (s.tls === 'none') return;
     const cert = demoElectrumCert(s.host, s.port);
     if (s.tls === 'pinned' && cert.sha256 !== (s.certSha256 ?? '').replace(/[:\s]/g, '').toLowerCase()) {
-      throw unreachable(`${s.host}:${s.port} : le certificat ne correspond pas à l’empreinte épinglée`);
+      throw unreachable(l10n(`${s.host}:${s.port} : le certificat ne correspond pas à l’empreinte épinglée`, `${s.host}:${s.port}: the certificate does not match the pinned fingerprint`));
     }
-    if (s.tls === 'webpki' && !cert.webpkiValid) throw unreachable(`${s.host}:${s.port} : certificat non reconnu par les autorités (auto-signé ?) — épingle-le`);
+    if (s.tls === 'webpki' && !cert.webpkiValid) throw unreachable(l10n(`${s.host}:${s.port} : certificat non reconnu par les autorités (auto-signé ?) — épingle-le`, `${s.host}:${s.port}: certificate not recognized by the authorities (self-signed?) — pin it`));
   };
 
   const checkCoreAuth = (s: Extract<BtcServer, { kind: 'core' }>) => {
-    if (s.auth.kind === 'cookie' && has(s.auth.cookiePath, 'missing')) throw invalid(`fichier .cookie illisible (${s.auth.cookiePath})`);
+    if (s.auth.kind === 'cookie' && has(s.auth.cookiePath, 'missing')) throw invalid(l10n(`fichier .cookie illisible (${s.auth.cookiePath})`, `unreadable .cookie file (${s.auth.cookiePath})`));
     if (s.auth.kind === 'userpass') {
-      if (!s.auth.password) throw invalid('mot de passe RPC manquant');
-      if (s.auth.user === 'wrong' || s.auth.password === 'wrong') throw invalid('authentification RPC refusée par le nœud (HTTP 401)');
+      if (!s.auth.password) throw invalid(l10n('mot de passe RPC manquant', 'RPC password missing'));
+      if (s.auth.user === 'wrong' || s.auth.password === 'wrong') throw invalid(l10n('authentification RPC refusée par le nœud (HTTP 401)', 'RPC authentication refused by the node (HTTP 401)'));
     }
   };
 
@@ -148,30 +149,30 @@ export function createDemoServers(d: DemoServersDeps) {
     }
     await gate(s.kind === 'core' && coreIsLocal(s.url));
     const text = scenarioText(s);
-    if (has(text, 'down')) throw unreachable(`${s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(text)} : délai de connexion dépassé`);
+    if (has(text, 'down')) throw unreachable(l10n(`${s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(text)} : délai de connexion dépassé`, `${s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(text)}: connection timed out`));
     if (s.kind === 'electrum') checkElectrumCert(s);
     if (s.kind === 'core') checkCoreAuth(s);
     const other: BtcNetworkKey = net === 'mainnet' ? 'testnet4' : 'mainnet';
     if (has(text, 'wrong')) {
-      throw wrongNet(s.kind === 'core' ? `le nœud est sur « ${other === 'mainnet' ? 'main' : 'testnet4'} », pas sur « ${net === 'mainnet' ? 'main' : 'testnet4'} »` : `genesis de ${other} au lieu de ${net}`);
+      throw wrongNet(s.kind === 'core' ? l10n(`le nœud est sur « ${other === 'mainnet' ? 'main' : 'testnet4'} », pas sur « ${net === 'mainnet' ? 'main' : 'testnet4'} »`, `the node is on “${other === 'mainnet' ? 'main' : 'testnet4'}”, not on “${net === 'mainnet' ? 'main' : 'testnet4'}”`) : l10n(`genesis de ${other} au lieu de ${net}`, `${other} genesis instead of ${net}`));
     }
     const out: ServerTestResult['detected'] = { network: net, genesisHash: BTC_GENESIS[net], blockHeight: d.chain.tipHeight };
-    if (s.kind === 'electrum') out.serverVersion = 'ElectrumX 1.18.0 (démo)';
-    if (s.kind === 'core') out.serverVersion = '/Satoshi:28.1.0/ (démo)';
+    if (s.kind === 'electrum') out.serverVersion = l10n('ElectrumX 1.18.0 (démo)', 'ElectrumX 1.18.0 (demo)');
+    if (s.kind === 'core') out.serverVersion = l10n('/Satoshi:28.1.0/ (démo)', '/Satoshi:28.1.0/ (demo)');
     return out;
   };
 
   const probeEvm = async (chainId: number, s: RpcServer): Promise<ServerTestResult['detected']> => {
     await gate();
-    if (has(s.url, 'down')) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
-    if (has(s.url, 'wrong')) throw wrongNet(`chainId ${chainId === 1 ? 11155111 : 1} au lieu de ${chainId}`);
+    if (has(s.url, 'down')) throw unreachable(l10n(`${hostOfUrl(s.url)} : délai de connexion dépassé`, `${hostOfUrl(s.url)}: connection timed out`));
+    if (has(s.url, 'wrong')) throw wrongNet(l10n(`chainId ${chainId === 1 ? 11155111 : 1} au lieu de ${chainId}`, `chainId ${chainId === 1 ? 11155111 : 1} instead of ${chainId}`));
     return { chainId };
   };
 
   const probeSol = async (cluster: SolanaCluster, s: RpcServer): Promise<ServerTestResult['detected']> => {
     await gate();
-    if (has(s.url, 'down')) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
-    if (has(s.url, 'wrong')) throw wrongNet(`ce RPC est sur ${cluster === 'devnet' ? 'mainnet-beta' : 'devnet'}, pas sur ${cluster}`);
+    if (has(s.url, 'down')) throw unreachable(l10n(`${hostOfUrl(s.url)} : délai de connexion dépassé`, `${hostOfUrl(s.url)}: connection timed out`));
+    if (has(s.url, 'wrong')) throw wrongNet(l10n(`ce RPC est sur ${cluster === 'devnet' ? 'mainnet-beta' : 'devnet'}, pas sur ${cluster}`, `this RPC is on ${cluster === 'devnet' ? 'mainnet-beta' : 'devnet'}, not on ${cluster}`));
     return { network: cluster, genesisHash: SOL_GENESIS[cluster] };
   };
 
@@ -181,18 +182,18 @@ export function createDemoServers(d: DemoServersDeps) {
       const s = servers.bitcoin[key];
       if (!s) continue;
       if (s.kind === 'cbf' && !d.cbf.enabled) throw cbfDisabled();
-      const bad = checkBtcServer(s, tor) ?? (s.kind === 'core' && s.auth.kind === 'userpass' && !s.auth.password ? 'mot de passe RPC manquant' : null);
-      if (bad) throw invalid(`bitcoin ${key} : ${bad}`);
+      const bad = checkBtcServer(s, tor) ?? (s.kind === 'core' && s.auth.kind === 'userpass' && !s.auth.password ? l10n('mot de passe RPC manquant', 'RPC password missing') : null);
+      if (bad) throw invalid(l10n(`bitcoin ${key} : ${bad}`, `bitcoin ${key}: ${bad}`));
     }
     for (const [chain, s] of Object.entries(servers.evm)) {
-      if (!/^[1-9]\d*$/.test(chain)) throw invalid(`evm : chainId invalide « ${chain} »`);
+      if (!/^[1-9]\d*$/.test(chain)) throw invalid(l10n(`evm : chainId invalide « ${chain} »`, `evm: invalid chainId “${chain}”`));
       const bad = checkServerUrl(s.url, tor);
-      if (bad) throw invalid(`evm ${chain} : ${bad}`);
+      if (bad) throw invalid(l10n(`evm ${chain} : ${bad}`, `evm ${chain}: ${bad}`));
     }
     for (const [cluster, s] of Object.entries(servers.solana)) {
-      if (cluster !== 'devnet' && cluster !== 'mainnet-beta') throw invalid(`solana : cluster inconnu « ${cluster} » (devnet ou mainnet-beta)`);
+      if (cluster !== 'devnet' && cluster !== 'mainnet-beta') throw invalid(l10n(`solana : cluster inconnu « ${cluster} » (devnet ou mainnet-beta)`, `solana: unknown cluster “${cluster}” (devnet or mainnet-beta)`));
       const bad = s ? checkServerUrl(s.url, tor) : null;
-      if (bad) throw invalid(`solana ${cluster} : ${bad}`);
+      if (bad) throw invalid(l10n(`solana ${cluster} : ${bad}`, `solana ${cluster}: ${bad}`));
     }
     d.utxo.validate(servers, tor);
     d.tron.validate(servers, tor);
@@ -237,7 +238,7 @@ export function createDemoServers(d: DemoServersDeps) {
     const t0 = Date.now();
     let detected: ServerTestResult['detected'];
     if (target.family === 'bitcoin') {
-      if (target.network !== 'mainnet' && target.network !== 'testnet4') throw invalid(`réseau Bitcoin inconnu « ${String(target.network)} » (mainnet ou testnet4)`);
+      if (target.network !== 'mainnet' && target.network !== 'testnet4') throw invalid(l10n(`réseau Bitcoin inconnu « ${String(target.network)} » (mainnet ou testnet4)`, `unknown Bitcoin network “${String(target.network)}” (mainnet or testnet4)`));
       const probe: Servers = { bitcoin: { [target.network]: target.server }, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, tron: {}, xrp: {}, cardano: {} };
       const merged = mergeServerSecrets(probe, d.settings().servers);
       validate(merged, tor);
@@ -245,7 +246,7 @@ export function createDemoServers(d: DemoServersDeps) {
     } else if (target.family === 'litecoin' || target.family === 'dogecoin') {
       if (target.server.kind === 'esplora') {
         const bad = checkServerUrl(target.server.url, tor);
-        if (bad) throw invalid(`${target.family} ${target.network} : ${bad}`);
+        if (bad) throw invalid(l10n(`${target.family} ${target.network} : ${bad}`, `${target.family} ${target.network}: ${bad}`));
       }
       detected = await d.utxo.probe(target.family === 'litecoin' ? 'ltc' : 'doge', target.network, target.server);
     } else if (target.family === 'tron') {
@@ -267,10 +268,10 @@ export function createDemoServers(d: DemoServersDeps) {
   const electrumFetchCert = async (host: unknown, port: unknown): Promise<ElectrumCertInfo> => {
     const h = String(host ?? '').trim();
     const p = Number(port);
-    if (!h || /[/@\s]/.test(h) || !Number.isInteger(p) || p < 1 || p > 65535) throw invalid('hôte ou port Electrum invalide');
-    if (isOnion(h) && !torOn()) throw invalid('adresse .onion : exige Tor activé');
+    if (!h || /[/@\s]/.test(h) || !Number.isInteger(p) || p < 1 || p > 65535) throw invalid(l10n('hôte ou port Electrum invalide', 'invalid Electrum host or port'));
+    if (isOnion(h) && !torOn()) throw invalid(l10n('adresse .onion : exige Tor activé', '.onion address: requires Tor enabled'));
     await gate();
-    if (has(h, 'down')) throw unreachable(`${h}:${p} : délai de connexion dépassé`);
+    if (has(h, 'down')) throw unreachable(l10n(`${h}:${p} : délai de connexion dépassé`, `${h}:${p}: connection timed out`));
     return demoElectrumCert(h, p);
   };
 
@@ -289,17 +290,17 @@ export function createDemoServers(d: DemoServersDeps) {
       // Answered from the local store, never a network request during the call.
       if (!d.cbf.enabled) throw cbfDisabled();
       d.cbf.refreshIfStale();
-      if (!d.cbf.synced()) throw unreachable('filtres compacts : pas encore synchronisé (synchronisation en cours)');
+      if (!d.cbf.synced()) throw unreachable(l10n('filtres compacts : pas encore synchronisé (synchronisation en cours)', 'compact filters: not synced yet (sync in progress)'));
       await wait(20);
       return s;
     }
     await gate(s.kind === 'core' && coreIsLocal(s.url));
     const text = scenarioText(s);
-    if (downLater(text)) throw unreachable(`${s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(text)} : délai de connexion dépassé`);
+    if (downLater(text)) throw unreachable(l10n(`${s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(text)} : délai de connexion dépassé`, `${s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(text)}: connection timed out`));
     if (s.kind === 'electrum') checkElectrumCert(s);
     if (s.kind === 'core') {
       checkCoreAuth(s);
-      if (!wallets.has(s.url)) throw invalid(`portefeuille de surveillance « ${walletName} » absent sur le nœud : lance la configuration (btc_core_setup)`);
+      if (!wallets.has(s.url)) throw invalid(l10n(`portefeuille de surveillance « ${walletName} » absent sur le nœud : lance la configuration (btc_core_setup)`, `watch-only wallet “${walletName}” missing on the node: run the setup (btc_core_setup)`));
     }
     return s;
   };
@@ -309,7 +310,7 @@ export function createDemoServers(d: DemoServersDeps) {
     try {
       bitcoin.address.toOutputScript(addr, d.network === 'testnet' ? bitcoin.networks.testnet : bitcoin.networks.bitcoin);
     } catch {
-      throw new IpcError('INVALID_INPUT', `Entrée invalide : adresse Bitcoin invalide pour ce réseau « ${addr} »`);
+      throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : adresse Bitcoin invalide pour ce réseau « ${addr} »`, `Invalid input: invalid Bitcoin address for this network “${addr}”`));
     }
     return addr;
   };
@@ -344,10 +345,10 @@ export function createDemoServers(d: DemoServersDeps) {
     /** Raw transaction, as Rust returns it after checking its txid. */
     async txHex(txid: unknown) {
       const t = String(txid ?? '');
-      if (!/^[0-9a-f]{64}$/.test(t)) throw new IpcError('INVALID_INPUT', 'Entrée invalide : txid : 64 caractères hexadécimaux attendus');
+      if (!/^[0-9a-f]{64}$/.test(t)) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : txid : 64 caractères hexadécimaux attendus', 'Invalid input: txid: 64 hexadecimal characters expected'));
       await backend();
       const hex = d.chain.rawTx.get(t);
-      if (!hex) throw new IpcError('INVALID_INPUT', `Entrée invalide : transaction ${t.slice(0, 10)}… inconnue du serveur`);
+      if (!hex) throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : transaction ${t.slice(0, 10)}… inconnue du serveur`, `Invalid input: transaction ${t.slice(0, 10)}… unknown to the server`));
       return hex;
     },
     async broadcast(hex: unknown) {
@@ -356,14 +357,14 @@ export function createDemoServers(d: DemoServersDeps) {
       try {
         txid = bitcoin.Transaction.fromHex(raw).getId();
       } catch {
-        throw new IpcError('INVALID_INPUT', 'Entrée invalide : transaction hexadécimale invalide');
+        throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : transaction hexadécimale invalide', 'Invalid input: invalid hexadecimal transaction'));
       }
       await backend();
       return txid;
     },
     info() {
       const s = current();
-      const label = s.kind === 'default' ? 'mempool.space' : s.kind === 'cbf' ? 'P2P (filtres compacts)' : s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(s.url);
+      const label = s.kind === 'default' ? 'mempool.space' : s.kind === 'cbf' ? l10n('P2P (filtres compacts)', 'P2P (compact filters)') : s.kind === 'electrum' ? `${s.host}:${s.port}` : hostOfUrl(s.url);
       return { kind: s.kind, network: btcNetworkKey(d.network), label, tor: torOn() };
     },
   };
@@ -372,7 +373,7 @@ export function createDemoServers(d: DemoServersDeps) {
 
   const coreServer = (): Extract<BtcServer, { kind: 'core' }> => {
     const s = current();
-    if (s.kind !== 'core') throw new IpcError('INVALID_INPUT', 'Entrée invalide : aucun nœud Bitcoin Core n’est configuré pour ce réseau');
+    if (s.kind !== 'core') throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : aucun nœud Bitcoin Core n’est configuré pour ce réseau', 'Invalid input: no Bitcoin Core node is configured for this network'));
     return s;
   };
 
@@ -383,7 +384,7 @@ export function createDemoServers(d: DemoServersDeps) {
     const s = cur;
     d.requireUnlocked();
     await gate(coreIsLocal(s.url));
-    if (has(s.url, 'down')) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
+    if (has(s.url, 'down')) throw unreachable(l10n(`${hostOfUrl(s.url)} : délai de connexion dépassé`, `${hostOfUrl(s.url)}: connection timed out`));
     checkCoreAuth(s);
     const loaded = wallets.has(s.url);
     const st: CoreStatus = { wallet: walletName, state: loaded ? 'ready' : 'idle', walletLoaded: loaded };
@@ -404,13 +405,13 @@ export function createDemoServers(d: DemoServersDeps) {
     const s = coreServer();
     d.requireUnlocked();
     if (rescanFrom !== 'now' && !(typeof rescanFrom === 'number' && Number.isInteger(rescanFrom) && rescanFrom >= 0)) {
-      throw new IpcError('INVALID_INPUT', `Entrée invalide : rescanFrom : « now » ou un horodatage UNIX attendu (reçu « ${String(rescanFrom)} »)`);
+      throw new IpcError('INVALID_INPUT', l10n(`Entrée invalide : rescanFrom : « now » ou un horodatage UNIX attendu (reçu « ${String(rescanFrom)} »)`, `Invalid input: rescanFrom: “now” or a UNIX timestamp expected (got “${String(rescanFrom)}”)`));
     }
     // Synchronous pre-flight, like Rust: reachable, auth, chain, watch wallet. Only the import runs in the background.
     await gate(coreIsLocal(s.url));
-    if (downLater(s.url)) throw unreachable(`${hostOfUrl(s.url)} : délai de connexion dépassé`);
+    if (downLater(s.url)) throw unreachable(l10n(`${hostOfUrl(s.url)} : délai de connexion dépassé`, `${hostOfUrl(s.url)}: connection timed out`));
     checkCoreAuth(s);
-    if (has(s.url, 'wrong')) throw wrongNet('le nœud n’est pas sur le réseau de l’app');
+    if (has(s.url, 'wrong')) throw wrongNet(l10n('le nœud n’est pas sur le réseau de l’app', 'the node is not on the app’s network'));
     wallets.add(s.url);
     job = { url: s.url, state: 'importing', started: Date.now(), rescanMs: (rescanFrom as CoreRescanFrom) === 'now' ? 0 : DEMO_RESCAN_MS };
     return { wallet: walletName, state: 'importing', walletLoaded: false };
@@ -422,13 +423,13 @@ export function createDemoServers(d: DemoServersDeps) {
   const routeNet = (req: NetRequest): DemoRoute | undefined => {
     const host = hostOfUrl(req.url);
     const servers = d.settings().servers;
-    const disabled = (what: string) => new IpcError('DEFAULT_SERVER_DISABLED', `Serveur par défaut désactivé : ${what} (un serveur personnalisé est configuré pour cette chaîne)`);
+    const disabled = (what: string) => new IpcError('DEFAULT_SERVER_DISABLED', l10n(`Serveur par défaut désactivé : ${what} (un serveur personnalisé est configuré pour cette chaîne)`, `Default server disabled: ${what} (a custom server is configured for this chain)`));
     const btcSrv = bitcoinServerFor(servers, d.network);
     if (host === 'mempool.space' && btcSrv.kind !== 'default') throw disabled(host);
     for (const [chain, s] of Object.entries(servers.evm)) {
       if (EVM_DEFAULT_HOST.get(Number(chain)) === host) throw disabled(host);
       if (hostOfUrl(s.url) === host) {
-        if (downLater(s.url)) throw unreachable(`${host} : délai de connexion dépassé`);
+        if (downLater(s.url)) throw unreachable(l10n(`${host} : délai de connexion dépassé`, `${host}: connection timed out`));
         return { kind: 'evm', chainId: Number(chain) };
       }
     }
@@ -437,12 +438,12 @@ export function createDemoServers(d: DemoServersDeps) {
       if (!s) continue;
       if (SOL_DEFAULT_HOST[cluster] === host) throw disabled(host);
       if (hostOfUrl(s.url) === host) {
-        if (downLater(s.url)) throw unreachable(`${host} : délai de connexion dépassé`);
+        if (downLater(s.url)) throw unreachable(l10n(`${host} : délai de connexion dépassé`, `${host}: connection timed out`));
         return { kind: 'sol' };
       }
     }
     if (btcSrv.kind === 'esplora' && hostOfUrl(btcSrv.url) === host) {
-      if (downLater(btcSrv.url)) throw unreachable(`${host} : délai de connexion dépassé`);
+      if (downLater(btcSrv.url)) throw unreachable(l10n(`${host} : délai de connexion dépassé`, `${host}: connection timed out`));
       return { kind: 'esplora' };
     }
     return undefined;
