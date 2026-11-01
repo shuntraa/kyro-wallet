@@ -836,6 +836,14 @@
     {
       "network": "mainnet",
       "chain": "evm:1",
+      "contract": "0x6fA0BE17e4beA2fCfA22ef89BF8ac9aab0AB0fc9",
+      "symbol": "A7A5",
+      "name": "A7A5",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "evm:1",
       "contract": "0x3506424F91fD33084466F402d5D97f05F8e3b4AF",
       "symbol": "CHZ",
       "name": "Chiliz",
@@ -1903,6 +1911,22 @@
       "contract": "TFczxzPhnThNSqr5by8tvxsdCFRRz6cPNq",
       "symbol": "NFT",
       "name": "AINFT",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "tron",
+      "contract": "TLeVfrdym8RoJreJ23dAGyfJDygRtiWKBZ",
+      "symbol": "A7A5",
+      "name": "A7A5",
+      "decimals": 6
+    },
+    {
+      "network": "mainnet",
+      "chain": "ton",
+      "contract": "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs",
+      "symbol": "USDT",
+      "name": "Tether",
       "decimals": 6
     },
     {

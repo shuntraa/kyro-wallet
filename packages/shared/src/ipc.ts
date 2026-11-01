@@ -1486,6 +1486,45 @@ export interface TonTxSummary {
   walletId: number;
   warnings: TonWarning[];
   requiresExtraConfirmation: boolean;
+  /** Jetton transfer (known jetton, sent through our jetton wallet computed by Rust); `comment` is then the jetton's forward comment. */
+  jetton?: TonJettonSummary | null;
+}
+
+/** wallet-core `TonJettonSummary`. */
+export interface TonJettonSummary {
+  /** Master, bounceable `EQ…`: the jetton's verified id. */
+  master: string;
+  symbol: string;
+  decimals: number;
+  /** Jetton units. */
+  amount: string;
+  /** Recipient, non-bounceable `UQ…`. */
+  recipient: string;
+  recipientOther: string;
+  recipientRaw: string;
+  /** Our jetton wallet (computed by Rust), the message's destination. */
+  jettonWallet: string;
+  forwardTonAmount: string;
+}
+
+/** `ton_jetton_balances` line: our jetton wallet as Rust computes it. */
+export interface TonJettonBalance {
+  master: string;
+  wallet: string;
+  /** Jetton units. */
+  balance: string;
+}
+
+/** `ton_jetton_txs` line (fake jetton contracts dropped by Rust). */
+export interface TonJettonHistoryEntry {
+  hash: string;
+  time: number | null;
+  direction: 'in' | 'out';
+  master: string;
+  counterparty: string | null;
+  amount: string;
+  comment: string | null;
+  success: boolean;
 }
 
 /** Live context Rust read for the dialog. `fee`: TON Center's emulation, nanotons. */
@@ -2573,6 +2612,10 @@ export interface Commands {
    * our wallet empty or frozen. Bounce = the address's flag, off if the recipient is not active.
    */
   ton_build_tx: { args: { to: string; amount: string; comment?: string; sendAll?: boolean } & WithAccount; ret: TonBuilt };
+  /** Known jettons only (`master` `EQ…`); `amount` in jetton units; 0.05 TON attached, the excess comes back. */
+  ton_build_jetton_tx: { args: { master: string; to: string; amount: string; comment?: string } & WithAccount; ret: TonBuilt };
+  ton_jetton_balances: { args: { address: string }; ret: TonJettonBalance[] };
+  ton_jetton_txs: { args: { address: string }; ret: TonJettonHistoryEntry[] };
   ton_sign_tx: { args: { boc: string; password: string } & WithAccount; ret: { boc: string; hash: string; normalizedHash: string; summary: TonTxSummary; context: TonContext } };
   /** Signature verified, message hashes returned by TON Center must be ours. Returns the normalized hash. */
   ton_broadcast: { args: { boc: string } & WithAccount; ret: string };

@@ -251,6 +251,7 @@ fn transfer(seed_words: &str, testnet: bool) -> TonTransfer {
         amount: 1_500_000_000,
         comment: Some("123456".into()),
         with_state_init: false,
+        jetton: None,
     }
 }
 
@@ -424,4 +425,61 @@ fn estimate_parts() {
     t.with_state_init = true;
     let p = t.estimate_parts().unwrap();
     assert!(p.init_code.starts_with("te6cck") && p.init_data.starts_with("te6cck"));
+}
+
+#[test]
+fn usdt_jetton_transfer_round_trip() {
+    use wallet_core::{
+        ton_jetton_wallet_address, ton_known_jettons, TonJettonBody, TON_JETTON_ATTACHED_NANOTON,
+    };
+    let s = seed(ABANDON);
+    let usdt = ton_known_jettons(false)[0];
+    assert_eq!(usdt.symbol, "USDT");
+    let mut t = transfer(ABANDON, false);
+    let me = t.wallet_address().unwrap();
+    let recipient = t.destination;
+    t.destination = ton_jetton_wallet_address(&usdt.master, &me, false).unwrap();
+    t.amount = TON_JETTON_ATTACHED_NANOTON;
+    t.comment = None;
+    t.jetton = Some(TonJettonBody {
+        query_id: 1_800_000_000,
+        amount: 12_340_000,
+        destination: recipient,
+        response_destination: me,
+        forward_ton_amount: 1,
+        comment: Some("dépôt 42".into()),
+    });
+    let boc = ton_unsigned_transfer(&t).unwrap();
+    let sum = ton_decode_tx(&boc, &t.public_key, false).unwrap();
+    let j = sum.jetton.clone().unwrap();
+    assert_eq!(j.master, "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs");
+    assert_eq!(
+        (j.symbol.as_str(), j.decimals, j.amount.as_str()),
+        ("USDT", 6, "12340000")
+    );
+    assert_eq!(j.recipient_raw, recipient.to_raw());
+    assert_eq!(sum.comment.as_deref(), Some("dépôt 42"));
+    assert_eq!(sum.amount, TON_JETTON_ATTACHED_NANOTON.to_string());
+    let signed = ton_sign(&s, 0, &boc, false).unwrap();
+    assert_eq!(signed.summary, sum);
+    let (back, _, _) = ton_verify_signed(&signed.boc, &t.public_key, false).unwrap();
+    assert_eq!(back.jetton, t.jetton);
+
+    // A jetton body to a contract that is not our wallet of a known jetton: refused.
+    let mut fake = t.clone();
+    fake.destination = recipient;
+    let boc = ton_unsigned_transfer(&fake).unwrap();
+    assert!(ton_decode_tx(&boc, &t.public_key, false).is_err());
+    // Not on testnet (no known jetton there).
+    let mut tn = t.clone();
+    tn.wallet_id = ton_wallet_id(true);
+    assert!(ton_unsigned_transfer(&tn)
+        .and_then(|b| ton_decode_tx(&b, &t.public_key, true))
+        .is_err());
+    // Excess TON must come back to us.
+    let mut other = t.clone();
+    if let Some(j) = other.jetton.as_mut() {
+        j.response_destination = recipient;
+    }
+    assert!(ton_unsigned_transfer(&other).is_err());
 }

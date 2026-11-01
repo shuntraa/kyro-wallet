@@ -37,6 +37,13 @@ use crate::display::sanitize_text;
 use crate::error::{Error, Result};
 use crate::mnemonic::Seed;
 
+mod jetton;
+pub use jetton::{
+    ton_jetton_wallet_address, ton_known_jetton, ton_known_jettons, TonJettonBody, TonJettonInfo,
+    TonJettonSummary, TON_JETTON_ATTACHED_NANOTON, TON_JETTON_FORWARD_NANOTON,
+    TON_JETTON_TRANSFER_OP,
+};
+
 /// Standard v4R2 wallet id (`698983191 + workchain`), mainnet.
 pub const TON_WALLET_ID_MAINNET: u32 = 698_983_191;
 /// Kyro's v4R2 wallet id on testnet (`"KYRO"` in ASCII): never equal to the mainnet one, so a
@@ -407,6 +414,9 @@ pub struct TonTransfer {
     pub comment: Option<String>,
     /// Carries our wallet's `StateInit` (first transfer, wallet not deployed yet).
     pub with_state_init: bool,
+    /// Jetton transfer: `destination` is then our jetton wallet, `amount` the TON attached for
+    /// its fees, `comment` empty (the comment goes in the jetton's forward payload).
+    pub jetton: Option<TonJettonBody>,
 }
 
 impl TonTransfer {
@@ -436,6 +446,14 @@ impl TonTransfer {
         if let Some(c) = &self.comment {
             check_comment(c)?;
         }
+        if let Some(j) = &self.jetton {
+            if self.mode != TON_MODE_PAY_FEES || !self.bounce || self.comment.is_some() {
+                return Err(Error::input(
+                    "transfert de jeton : mode 3, rebond et commentaire dans le jeton seulement",
+                ));
+            }
+            j.check(self.amount, &self.wallet_address()?)?;
+        }
         Ok(())
     }
 
@@ -459,9 +477,10 @@ impl TonTransfer {
         b.store_u32(0).map_err(cell_err)?; // created_at
         b.store_bit_zero().map_err(cell_err)?; // init: nothing
         b.store_bit_one().map_err(cell_err)?; // body: in a reference (empty when no comment)
-        b.store_reference(match &self.comment {
-            Some(c) => comment_cell(c)?,
-            None => Cell::empty_cell(),
+        b.store_reference(match (&self.jetton, &self.comment) {
+            (Some(j), _) => j.cell()?,
+            (None, Some(c)) => comment_cell(c)?,
+            (None, None) => Cell::empty_cell(),
         })
         .map_err(cell_err)?;
         b.build().map_err(cell_err)
@@ -670,7 +689,14 @@ impl TonTransfer {
         ensure_empty(&m)?;
 
         let mut p = slice(&payload)?;
-        let comment = if p.size_bits() == 0 && p.size_refs() == 0 {
+        let is_jetton = p.size_bits() >= 32
+            && p.clone().load_u32().map_err(cell_err)? == TON_JETTON_TRANSFER_OP;
+        let jetton = if is_jetton {
+            Some(TonJettonBody::parse(&mut p)?)
+        } else {
+            None
+        };
+        let comment = if is_jetton || (p.size_bits() == 0 && p.size_refs() == 0) {
             None
         } else {
             if p.size_refs() != 0 || p.size_bits() < 32 || p.size_bits() % 8 != 0 {
@@ -704,6 +730,7 @@ impl TonTransfer {
             amount,
             comment,
             with_state_init,
+            jetton,
         };
         t.check()?;
         if wallet != t.wallet_address()? {
@@ -777,19 +804,28 @@ pub struct TonTxSummary {
     pub warnings: Vec<TonWarning>,
     /// At least one warning: second, reinforced confirmation.
     pub requires_extra_confirmation: bool,
+    /// Jetton transfer (known jetton, to our jetton wallet computed by Kyro); the comment above
+    /// is then the jetton's forward comment.
+    pub jetton: Option<TonJettonSummary>,
 }
 
 fn summarize(t: &TonTransfer, testnet: bool) -> Result<TonTxSummary> {
     let comment = t
         .comment
         .as_deref()
+        .or(t.jetton.as_ref().and_then(|j| j.comment.as_deref()))
         .map(|c| sanitize_text(c, MAX_COMMENT_CHARS));
+    let wallet = t.wallet_address()?;
+    let jetton = match &t.jetton {
+        Some(j) => Some(jetton::summarize(j, &t.destination, &wallet, testnet)?),
+        None => None,
+    };
     let mut warnings = Vec::new();
     if comment.as_ref().is_some_and(|c| c.altered) {
         warnings.push(TonWarning::UnusualText);
     }
     Ok(TonTxSummary {
-        wallet: t.wallet_address()?.to_friendly(false, testnet),
+        wallet: wallet.to_friendly(false, testnet),
         destination: t.destination.to_friendly(t.bounce, testnet),
         destination_other: t.destination.to_friendly(!t.bounce, testnet),
         destination_raw: t.destination.to_raw(),
@@ -803,6 +839,7 @@ fn summarize(t: &TonTransfer, testnet: bool) -> Result<TonTxSummary> {
         wallet_id: t.wallet_id,
         requires_extra_confirmation: !warnings.is_empty(),
         warnings,
+        jetton,
     })
 }
 
@@ -921,6 +958,7 @@ mod tests {
             amount: 10,
             comment: None,
             with_state_init: seqno == 0,
+            jetton: None,
         }
     }
 

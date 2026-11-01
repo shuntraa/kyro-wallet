@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ton-jetton-txs"
+description = "Enables the ton_jetton_txs command without any pre-configured scope."
+commands.allow = ["ton_jetton_txs"]
+
+[[permission]]
+identifier = "deny-ton-jetton-txs"
+description = "Denies the ton_jetton_txs command without any pre-configured scope."
+commands.deny = ["ton_jetton_txs"]

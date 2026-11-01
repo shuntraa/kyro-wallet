@@ -71,7 +71,7 @@ export interface WatchOnlyChain {
   phase: 4;
 }
 
-export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20';
+export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'jetton';
 
 export interface AssetDef {
   /** Unique id, e.g. `btc`, `eth:1`, `erc20:11155111:0x1c7d…`. */
@@ -85,7 +85,7 @@ export interface AssetDef {
   coingeckoId: string;
   color: string;
   glyph: string;
-  /** Contract (ERC-20, TRC-20 `T…`) or mint (SPL). */
+  /** Contract (ERC-20, TRC-20 `T…`), mint (SPL) or jetton master (TON, bounceable `EQ…`). */
   contract?: string;
   /** Balance shown, but sending not supported yet. */
   readOnly?: boolean;
@@ -602,7 +602,10 @@ const tok = (symbol: string, name: string, decimals: number, coingeckoId: string
  * Other bridged copies (Binance-Peg, `.e`, Wormhole, OFT…) are left out. Every entry was checked
  * on chain on 2026-11-01 against the registry RPC: code present (EVM `eth_getCode`, Solana mint
  * owned by Token / Token-2022, TRON contract), `symbol()` and `decimals()` equal to CoinGecko.
- * Excluded: permissioned / RWA / fund / tokenized-stock tokens, A7A5, Pi, Canton.
+ * Excluded: permissioned / RWA / fund / tokenized-stock tokens, Pi, Canton.
+ * A7A5 (rouble stablecoin, asked by the user, listed by Exodus) is kept on Ethereum and TRON only:
+ * CoinGecko `a7a5` platforms + Ethplorer / TronGrid `getcontract`, `symbol()` = `name()` = A7A5,
+ * `decimals()` = 6 read on chain (2026-11-01). Upgradeable contract with an owner (GoPlus).
  * Pre-existing entries are kept (BNB Chain Binance-Peg USDC / USDT, Arbitrum USD₮0, Polygon PoS
  * USDT, WBTC). The Rust table `known_tokens.rs` is generated from these lists.
  */
@@ -698,6 +701,7 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
     tok('SAND', 'The Sandbox', 18, 'the-sandbox', '0x3845badAde8e6dFF049820680d1F14bD3903a5d0', '#6E6E6E'),
     tok('JPYC', 'JPY Coin', 18, 'jpycoin', '0xE7C3D8C9a439feDe00D2600032D5dB0Be71C3c29', '#5B6B8C'),
     tok('JPYSC', 'JPYSC', 18, 'jpysc', '0x6781d5631BFe47432b089e64e3EaB3b6eDd26177', '#8C7F4F'),
+    tok('A7A5', 'A7A5', 6, 'a7a5', '0x6fA0BE17e4beA2fCfA22ef89BF8ac9aab0AB0fc9', '#8C4F4F'),
     tok('CHZ', 'Chiliz', 18, 'chiliz', '0x3506424F91fD33084466F402d5D97f05F8e3b4AF', '#4F6F7A'),
     tok('NPC', 'Non-Playable Coin', 18, 'non-playable-coin', '0x8eD97a637A790Be1feff5e888d43629dc05408F6', '#5E7A4F'),
     tok('EDGE', 'edgeX', 18, 'edgex', '0xB0076DE78Dc50581770BBa1D211dDc0aD4F2a241', '#6E6E6E'),
@@ -907,7 +911,20 @@ export const TRC20_TOKENS: Record<Network, TokenSpec[]> = {
     tok('BTT', 'BitTorrent', 18, 'bittorrent', 'TAFjULxiVgT4qWk6UZwjqwZXTSaGaqnVp4', '#4F5E7A'),
     tok('SUN', 'Sun Token', 18, 'sun-token', 'TSSMHYeV2uE9qYH95DqyoCuNCzEL1NvU3S', '#4F7A6B'),
     tok('NFT', 'AINFT', 6, 'apenft', 'TFczxzPhnThNSqr5by8tvxsdCFRRz6cPNq', '#4F7A6B'),
+    tok('A7A5', 'A7A5', 6, 'a7a5', 'TLeVfrdym8RoJreJ23dAGyfJDygRtiWKBZ', '#8C4F4F'),
   ],
+};
+
+/**
+ * TON jettons (TEP-74), by master (bounceable `EQ…`). USD₮: master listed by Tether (tether.to)
+ * and CoinGecko `tether` (`the-open-network`), `decimals` 6 in its metadata. No official USDC on
+ * TON (Circle lists none). wallet-core (`ton/jetton.rs`) holds the same masters with their
+ * jetton wallet code: Rust computes our jetton wallet itself (checked by
+ * known_tokens.rs tests against the generated fixture).
+ */
+export const TON_JETTONS: Record<Network, TokenSpec[]> = {
+  testnet: [],
+  mainnet: [USDT('EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs')],
 };
 
 /** Every asset Kyro tracks on a network, natives first. */
@@ -934,6 +951,11 @@ export function assetsFor(network: Network): AssetDef[] {
     if (chain.family === 'tron') {
       for (const t of TRC20_TOKENS[network]) {
         out.push({ id: `trc20:${t.contract}`, chainKey: chain.key, family: 'tron', kind: 'trc20', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'ton') {
+      for (const t of TON_JETTONS[network]) {
+        out.push({ id: `jetton:${t.contract}`, chainKey: chain.key, family: 'ton', kind: 'jetton', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
       }
     }
     if (chain.family === 'sol') {
