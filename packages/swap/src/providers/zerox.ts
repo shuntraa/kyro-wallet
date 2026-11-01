@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// 0x Swap API v2, allowance-holder flow (plain ERC-20 approve, no Permit2
-// signature). Header `0x-api-key` is injected by the shell; `0x-version` is sent.
-// Kyro fee: swapFeeRecipient + swapFeeBps + swapFeeToken=sellToken (docs.0x.org, « Monetize your app
-// using Swap »). Taken from the sell token, so `buyAmount` is what the remaining amount buys; the
-// response must echo it in `fees.integratorFee`, otherwise the quote is refused.
-// Every answer then goes through verify.ts: `to` and spender = AllowanceHolder, `value`, the
-// AllowanceHolder.exec → Settler.execute calldata (recipient = taker, enforced minimum, buy token)
-// and the fee (sell token, ≤ the configured rate, recipient written in the transaction).
+// 0x Swap API v2, allowance-holder flow (no Permit2). `0x-api-key` is injected by the shell.
+// Fee: swapFeeBps on the sell token (docs.0x.org "Monetize your app using Swap"), echoed in
+// `fees.integratorFee` or refused. verify.ts then checks every answer's calldata.
 
 import { fetchJson, netFetch, type NetFetch, l10n } from '@kyro/shared';
 import { gasFiat } from '../compare';
@@ -28,13 +23,7 @@ interface ZeroExQuote {
   transaction: { to: string; data: `0x${string}`; gas?: string | null; gasPrice?: string | null; value?: string | null };
 }
 
-/**
- * Kyro chains served by the 0x Swap API (docs.0x.org « Supported Chains », read 2026-10-31) AND
- * where Kyro knows the AllowanceHolder (verify.ts): Ethereum, Arbitrum, Optimism, Base, Polygon,
- * BNB Chain, Avalanche, Sonic, HyperEVM. The API also serves Mantle, but with another
- * AllowanceHolder (Shanghai chain): not offered. Not Cronos, Flare, Kaia, Gnosis, Sei nor Conflux;
- * not Sepolia (no checked contract: every quote would be refused).
- */
+/** Chains served by 0x where Kyro knows the AllowanceHolder (verify.ts). Mantle and Sepolia are not offered. */
 export const ZEROX_CHAINS: ReadonlySet<number> = new Set([1, 42_161, 10, 8_453, 137, 56, 43_114, 146, 999]);
 
 export class ZeroExProvider implements SwapProvider {
@@ -64,7 +53,6 @@ export class ZeroExProvider implements SwapProvider {
   }
 
   async quote(p: QuoteParams): Promise<Quote> {
-    // The rate of THIS quote (curve of its USD value): asked for, then demanded back by verify.ts.
     const fee = feeForQuote(this.fee, p);
     if (typeof p.chain !== 'number') throw new Error(l10n('0x : réseau non pris en charge', '0x: network not supported'));
     const url = `https://api.0x.org/swap/allowance-holder/quote?${qs({

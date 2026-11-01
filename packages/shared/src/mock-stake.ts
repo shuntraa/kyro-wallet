@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — staking (docs/IPC.md §2.8): Solana (native Stake program), Cardano (pool + vote
-// delegation) and TRON (Stake 2.0 + SR votes), mirroring the Rust rules, refusals and
-// reinforced-dialog triggers. Messages, CBOR and raw_data are demo encodings (hex / base64 JSON,
-// NOT the real wire formats); signatures are fake. Balances are taken from the demo chains.
-//
-// Reinforced confirmation (2nd native dialog):
-// - Solana: validator commission > 10 % or delinquent;
-// - Cardano: pool retiring, margin > 10 %, saturation > 100 %, or an inactive DRep;
-// - TRON: an SR outside the first 127 (no reward), an SR keeping 100 %, or an unfreeze that cuts votes.
 
 import { sha256 } from '@noble/hashes/sha2';
 import { base58, base64 } from '@scure/base';
@@ -84,13 +75,11 @@ export function createDemoStake(d: DemoStakeDeps) {
     if (reinforced && !d.confirm(l10n(`Attention : opération à vérifier\n${extra}\nNe signe que si tu sais exactement pourquoi. Signer quand même ?`, `Warning: operation to check\n${extra}\nOnly sign if you know exactly why. Sign anyway?`))) throw new IpcError('USER_REJECTED', l10n('Signature refusée.', 'Signature refused.'));
   };
 
-  // ============================================================== Solana
   const SLOTS = 432_000;
   const SOL_RENT = 2_282_880n;
   const SOL_MIN = testnet ? 1_000_000_000n : 1n;
   const SOL_FEE = 5_000n;
   const solBase = { epoch: testnet ? 812 : 702, slot: 241_000 };
-  /** Tests can move the clock by whole epochs. */
   let solEpochShift = 0;
   const solEpoch = (): SolEpoch => {
     const elapsed = Math.floor((d.now() - t0) / 400);
@@ -295,7 +284,6 @@ export function createDemoStake(d: DemoStakeDeps) {
     },
   };
 
-  // ============================================================== Cardano
   const KEY_DEPOSIT = 2_000_000n;
   const ADA_FEE = 183_721n;
   const ADA_EPOCH_LEN = 432_000;
@@ -464,7 +452,6 @@ export function createDemoStake(d: DemoStakeDeps) {
     },
   };
 
-  // ============================================================== TRON
   const DELAY_DAYS = testnet ? 1 : 14;
   const SUN = 1_000_000n;
   const W = (i: number): TronWitness => ({
@@ -648,7 +635,6 @@ export function createDemoStake(d: DemoStakeDeps) {
   return {
     handlers: { ...solHandlers, ...adaHandlers, ...tronHandlers },
     tronStakeBroadcast,
-    /** Tests: move Solana by whole epochs (activation, cool-down). */
     advanceSolEpochs(n: number) {
       solEpochShift += n;
     },

@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// A price used to turn a fiat amount into crypto (Envoyer, « saisir en EUR ») comes from CoinGecko
-// through the network: wrong by mistake, or on purpose, it changes how much crypto leaves the
-// wallet. Before using it, compare it with what Kyro already knew: the last price seen on this
-// device (if recent) and the median of the 7-day sparkline. Too far from them → refused.
+// A network price changes how much crypto a fiat-entered send moves, so compare it with the last
+// price seen locally and the 7-day sparkline median; too far off is refused.
 
 import { l10n } from '@kyro/shared';
 
@@ -27,10 +25,7 @@ function median(xs: number[]): number | null {
   return v.length % 2 ? (v[m] as number) : ((v[m - 1] as number) + (v[m] as number)) / 2;
 }
 
-/**
- * `price` against the references. Without any reference it is accepted (first use), but a price
- * that is not a finite positive number never is.
- */
+/** Checks `price` against the references; accepted without any, but never if not finite and positive. */
 export function checkPricePlausible(price: number | null | undefined, refs: { sparkline7d?: number[]; lastKnown?: { price: number; at: number } | null; now?: number }): PriceCheck {
   if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return { ok: false, deviation: null, reason: l10n('Prix indisponible ou invalide.', 'Price unavailable or invalid.') };
   const now = refs.now ?? Date.now();

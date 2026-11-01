@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — minimal TypeScript stand-in for wallet-core's `sol_decode_message`
-// (crates/wallet-core/src/sol_decode.rs), enough for the messages Kyro's own
-// adapter builds (System transfer, SPL Transfer/TransferChecked, ATA create,
-// compute budget, memo) and the demo Jupiter transaction. Same summary rules
-// as the Rust decoder; v0 lookup tables are refused (the real shell fetches them).
 
 import { base58 } from '@scure/base';
 import { IpcError, type SolInstruction, type SolTokenProgram, type SolTxSummary, type SolWarning } from './ipc';

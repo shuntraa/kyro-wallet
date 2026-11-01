@@ -1,18 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Monero (`xmr_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
-// commands_xmr.rs and xmr_backend.rs. The addresses are well-formed Monero addresses (network
-// byte, two 32-byte "keys", Keccak-256 checksum, Monero base58) but their keys are NOT derived
-// from the seed: the real mapping (BIP32 m/44'/128'/a'/0/0 → keccak → spend/view keys) lives in
-// wallet-core only. Nothing is scanned or signed: the scan is a counter that advances on each
-// poll, the transfer and its txid are fake. The rules are Rust's:
-// - unlocked = outputs with ≥ 10 confirmations; balance = everything not spent;
-// - `xmr_prepare_tx` refuses while the scan is incomplete, another network's address, an amount
-//   above the unlocked balance + fee; `amount` absent = everything unlocked;
-// - subaddresses are handed out one by one (`xmr_new_subaddress`), index 0 = primary address.
-//
-// Scenario words in a custom monerod URL: « down » → SERVER_UNREACHABLE, « wrong » →
-// SERVER_WRONG_NETWORK.
 
 import { base58xmr } from '@scure/base';
 import { keccak_256 } from '@noble/hashes/sha3';
@@ -128,7 +115,6 @@ interface DemoOutput {
 
 export interface DemoXmrState {
   me: string;
-  /** A third party's subaddress to send to. */
   friend: string;
   tip: number;
   restoreHeight: number | null;

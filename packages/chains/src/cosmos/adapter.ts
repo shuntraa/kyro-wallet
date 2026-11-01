@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Cosmos Hub adapter (ATOM). Thin on purpose: reads, MsgSend building (chain id, account number,
-// sequence, timeout height, simulated gas and fee filled by Rust, encoded by wallet-core),
-// signature and broadcast are Rust commands (`cosmos_*`, docs/IPC.md §2.11). This adapter only
-// validates input and checks that what Rust built is what was asked (recipient, amount, memo).
+// Cosmos Hub adapter (ATOM).
 
 import {
   call,
@@ -21,7 +17,6 @@ import type { CosmosChain } from '../registry';
 import type { HwSigner } from '../hw';
 import { accountArg, type Balance, type BuildParams, type ChainAdapter, type FeeEstimates, type HistoryItem } from '../types';
 
-// ---------------------------------------------------------------- Rust contract (§2.11)
 
 export type { CosmosAccountInfo, CosmosContext, CosmosHistoryEntry, CosmosTxStatus, CosmosTxSummary, CosmosWarning };
 
@@ -50,10 +45,7 @@ export function rustCosmosBackend(account = 0): CosmosBackend {
   };
 }
 
-/**
- * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature
- * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
- */
+/** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature on the device (`hw_*` commands). */
 export function rustCosmosHwBackend(accountId: string): CosmosBackend {
   return {
     ...rustCosmosBackend(),
@@ -63,10 +55,8 @@ export function rustCosmosHwBackend(accountId: string): CosmosBackend {
   };
 }
 
-// ---------------------------------------------------------------- addresses and amounts
 
-// Address shape: `cosmosAddressProblem` / `isCosmosAddress` of `@kyro/shared` (Rust checks it
-// again, `cosmos_normalize_address`, on every command).
+// Address shape: `cosmosAddressProblem` / `isCosmosAddress` of `@kyro/shared` (Rust checks it again, `cosmos_normalize_address`, on every command).
 export { cosmosAddressProblem, isCosmosAddress };
 
 /** `"1.5"` ATOM → `1500000n` uatom (at most 6 decimals). */
@@ -77,10 +67,7 @@ export function atomToUatom(input: string): bigint {
   return BigInt(int) * 1_000_000n + BigInt(frac.padEnd(6, '0'));
 }
 
-/**
- * Longest memo the Send screen accepts: what the native dialog shows in full (Rust cuts the
- * displayed memo at 256 characters, which would require the reinforced confirmation).
- */
+/** Longest memo the Send screen accepts: what the native dialog shows in full (Rust cuts the displayed memo at 256 characters, which would require the reinforced confirmation). */
 export const COSMOS_UI_MAX_MEMO = 256;
 
 /** Memo the user typed: at most 256 characters, no control character. */
@@ -93,7 +80,6 @@ export function cosmosMemoProblem(memo: string): string | null {
   return null;
 }
 
-// ---------------------------------------------------------------- adapter
 
 export interface CosmosUnsigned {
   family: 'cosmos';

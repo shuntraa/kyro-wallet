@@ -1,8 +1,5 @@
-// NEAR Intents 1Click used directly (providers/near.ts): swaps FROM Bitcoin, Litecoin, Dogecoin,
-// TRON (TRX, USDT TRC-20), XRP, Cardano, and from EVM / Solana TO the chains LI.FI does not reach.
-// Against REAL 1Click answers (fixtures/cross/1click-direct.json, recorded 01/11/2026: `POST
-// /v0/quote` with Kyro's app fee, then `GET /v0/status` of each deposit address; read-only, nothing
-// was ever deposited). The recorded « user » addresses are the owner's own Kyro addresses.
+// Direct 1Click routes (providers/near.ts) against recorded 1Click answers
+// (fixtures/cross/1click-direct.json, read-only, nothing deposited).
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setBackend, type NetRequest, type NetResponse } from '@kyro/shared';
@@ -114,7 +111,6 @@ describe('Kyro fee through 1Click appFees (live answers)', () => {
     const c = checkOneClickQuote(s.f.quote, s.expect);
     expect(c).toMatchObject({ depositAddress: s.depositAddress, kyroFeeBps: 70, oneClickFeeBps: 70 });
     expect(c.minAmountOut).toBe(BigInt(s.f.quote.quote?.minAmountOut ?? '0'));
-    // And 1Click's own status of that deposit address says the same.
     const n = checkNearDeposit(s.f.status, TOKENS, depositExpect(s));
     expect(n).toMatchObject({ kyroFeeBps: 70, otherFeeBps: 70, minAmountOut: c.minAmountOut });
     // Deadline: the earlier of 1Click's (3 days) and the one Kyro asked (3 h).

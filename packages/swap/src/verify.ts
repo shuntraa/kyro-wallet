@@ -1,25 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// What Kyro checks in an aggregator's EVM answer BEFORE it is shown, and again on the fresh quote
-// right before signing. The aggregator builds the transaction; Rust only decodes « contract call »
-// for it. So the TypeScript side decodes the calldata itself and refuses anything that does not
-// match what the user asked for:
-//
-// - `to` and the ERC-20 spender are the provider's OFFICIAL entry contract on this chain (fixed
-//   list below, from the providers' own deployment records) — never an address taken from the
-//   answer alone;
-// - the native value sent is 0 for an ERC-20 sale and exactly the amount for a native sale;
-// - the recipient written in the calldata is the taker (us), the minimum written in the calldata
-//   is at least `buyAmount` minus the chosen slippage;
-// - the Kyro fee goes to the configured recipient, at exactly the rate asked for this quote.
-//
-// Sources (checked 01/11/2026):
-// - 0x: docs.0x.org « Contracts » (AllowanceHolder on Cancun chains), 0x-settler README and
-//   interfaces (`IAllowanceHolder.exec`, `ISettlerTakerSubmitted.execute`, `AllowedSlippage`,
-//   deployer/registry `ownerOf(2)` / `prev(2)` for the current taker-submitted Settler).
-// - LI.FI: github.com/lifinance/contracts `deployments/<chain>.json` (LiFiDiamond, FeeForwarder),
-//   `GenericSwapFacetV3.sol`, `LibSwap.SwapData`, `Periphery/FeeForwarder.sol`; calldata checked
-//   against two live li.quest quotes (Arbitrum USDC → ETH, Base ETH → USDC).
+// Checks an aggregator's EVM answer before it is shown and again right before signing. Rust only
+// decodes it as a contract call, so we decode the calldata here: `to`/spender must be the provider's
+// official contract, value/recipient/minimum/fee must match the request.
+// Sources: docs.0x.org "Contracts", 0x-settler README, github.com/lifinance/contracts deployments.
 
 import { decodeFunctionData, getAddress, isAddress, pad, parseAbi, toHex, type Hex } from 'viem';
 import { base58, bech32 } from '@scure/base';
@@ -33,7 +17,6 @@ import { l10n } from '@kyro/shared';
 export const ZEROX_ALLOWANCE_HOLDER = '0x0000000000001fF3684f28c67538d4D072C22734';
 /** 0x deployer / Settler registry (ERC-721-like: `ownerOf(featureId)` is the current Settler), same address on all chains. */
 export const ZEROX_SETTLER_REGISTRY = '0x00000000000004533Fe15556B1E086BB1A72cEae';
-/** Feature id of the taker-submitted Settler (the one AllowanceHolder.exec targets). */
 export const ZEROX_TAKER_SETTLER_FEATURE = 2n;
 /** LI.FI Diamond (`LiFiDiamond` in deployments/<chain>.json) on the chains of {@link LIFI_CHECKED_CHAINS}, except {@link LIFI_OTHER_DEPLOYMENTS}. */
 export const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE';
@@ -41,33 +24,15 @@ export const LIFI_DIAMOND = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE';
 export const LIFI_FEE_FORWARDER = '0xCE40449B773a3E6E5e769ADb4e567179d4828cbd';
 /** LI.FI FeeForwarder on Mantle (deployments/mantle.json; the default address has no code there). */
 export const LIFI_FEE_FORWARDER_MANTLE = '0x79C3F5B651Ee5782Ba15d968B088458cd5f1f4EF';
-/**
- * LI.FI on the chains where its Diamond is ANOTHER address (`LiFiDiamond` / `FeeForwarder` in
- * deployments/<chain>.json, same Diamond as `diamondAddress` in li.quest `/v1/chains`, 01/11/2026).
- * Each Diamond has the 5 176-byte code of the other Diamonds, each FeeForwarder the exact same
- * code as the default one (`eth_getCode`, 01/11/2026).
- */
+/** LI.FI chains where the Diamond and FeeForwarder are other addresses (same code, checked via `eth_getCode`). */
 export const LIFI_OTHER_DEPLOYMENTS: Readonly<Record<number, { diamond: string; feeForwarder: string }>> = {
   14: { diamond: '0x198FC70Dfe05E755C81e54bd67Bff3F729344B9b', feeForwarder: '0xA5971Bd73Dbb879aAaA6fEcB95Dc3fD50c2e3C25' },
   999: { diamond: '0x0a0758d937d1059c356D4714e57F5df0239bce1A', feeForwarder: '0xba072Bf218314E51d5c3d254800d799840ae6a25' },
   8_217: { diamond: '0x1255d17c1BC2f764d087536410879F2d0D8772fD', feeForwarder: '0x5161370f81b3054f43361644Ad332625f5E0804F' },
 };
 
-/*
- * Mainnet chains where those addresses were checked (01/11/2026: deployment records above, plus
- * `eth_getCode` non-empty at each address on the chain's registry RPC). Anything else (testnets,
- * chains not listed) has no known contract and its quotes are refused.
- * - 0x: also Sonic (docs.0x.org « Contracts », Cancun list) and HyperEVM (0x-settler README,
- *   Cancun list). Not Mantle: docs.0x.org lists it with the Shanghai AllowanceHolder
- *   (0x0000000000005E88410CcDFaDe4a5EfaE4b49562, code on-chain), but 0x gives native MNT its own
- *   token address (0xdeaddead…0000) instead of 0xEeee…, and no live 0x answer could be checked
- *   (API key) — not offered rather than trusted untested. 0x serves none of Cronos, Gnosis, Sei,
- *   Flare, Kaia, Conflux eSpace (docs.0x.org « Supported Chains »).
- * - LI.FI: also Cronos, Mantle, Sonic, Gnosis, Sei (same Diamond; Mantle's FeeForwarder differs),
- *   and Flare, HyperEVM, Kaia with their own Diamond and FeeForwarder ({@link LIFI_OTHER_DEPLOYMENTS};
- *   live li.quest answers on Flare and HyperEVM accepted unmodified by `verifyEvmSwap`, Kaia had no
- *   route to quote). Not Conflux eSpace: not a LI.FI chain (li.quest `/v1/chains`).
- */
+// Mainnet chains where those addresses were checked; anything else is refused. 0x is not offered on
+// Mantle (native MNT has its own token address and no live answer could be checked).
 const ZEROX_CHECKED_CHAINS = [1, 10, 56, 137, 8_453, 42_161, 43_114, 146, 999] as const;
 const LIFI_CHECKED_CHAINS = [1, 10, 56, 137, 8_453, 42_161, 43_114, 25, 5_000, 146, 100, 1_329, 14, 999, 8_217] as const;
 
@@ -118,13 +83,11 @@ export const LIFI_NEAR_ABI = parseAbi([
   `function startBridgeTokensViaNEARIntents(${BRIDGE_DATA} bridgeData, ${NEAR_DATA} nearData) payable`,
   `function swapAndStartBridgeTokensViaNEARIntents(${BRIDGE_DATA} bridgeData, ${SWAP_DATA}[] swapData, ${NEAR_DATA} nearData) payable`,
 ]);
-/** LI.FI chain ids of the non-EVM chains Kyro bridges to (li.quest `/v1/chains`). */
 export const LIFI_CHAIN_SOLANA = 1151111081099710;
 export const LIFI_CHAIN_BITCOIN = 20000000000001;
 /** `BridgeData.receiver` sentinel for a non-EVM destination (LiFiData.sol `NON_EVM_ADDRESS`); the real receiver is in the facet data. */
 export const LIFI_NON_EVM_ADDRESS = '0x11f111f111f111F111f111f111F111f111f111F1';
 
-/** LI.FI chain id of a Kyro swap chain. */
 export function lifiChainId(c: SwapChain): number {
   if (typeof c === 'number') return c;
   if (c === 'solana') return LIFI_CHAIN_SOLANA;
@@ -132,11 +95,7 @@ export function lifiChainId(c: SwapChain): number {
   throw new SwapCheckError(l10n(`LI.FI : chaîne ${c} non prise en charge`, `LI.FI: chain ${c} not supported`));
 }
 
-/**
- * `nonEVMReceiver` LI.FI writes for our address (live calldata, 01/11/2026): Solana = the 32-byte
- * public key; Bitcoin SegWit v0 P2WPKH = its 32 five-bit program words (`bc1q` + 32 characters),
- * one byte each. Other forms (Taproot…) are not representable unambiguously: null ⇒ refused.
- */
+/** `nonEVMReceiver` for our address: Solana pubkey or P2WPKH program words; other forms are refused (null). */
 export function nonEvmReceiverWord(chain: 'solana' | 'bitcoin', address: string): Hex | null {
   try {
     if (chain === 'solana') {
@@ -190,32 +149,22 @@ export interface EvmSwapCheckInput {
   sellAmount: bigint;
   taker: string;
   slippageBps: number;
-  /** Amount announced by the provider (after fees). */
   buyAmount: bigint;
   tx: { to: string; data: Hex; value: bigint };
   /** ERC-20 spender the answer asks to approve (null for a native sale). */
   allowanceTarget: string | null;
-  /** The fee of THIS quote (fees.ts `feeForQuote`): the exact rate asked for in the request. */
   fee: QuoteFee;
-  /** 0x only: `fees.integratorFee` of the answer. */
   integratorFee?: { amount: bigint; token: string } | null;
-  /**
-   * LI.FI cross-chain route: destination chain and OUR address there. The calldata must then be a
-   * NEAR Intents bridge call (`LIFI_NEAR_ABI`) instead of a GenericSwapFacetV3 swap.
-   */
+  /** LI.FI cross-chain route: the calldata must then be a NEAR Intents bridge call. */
   cross?: { toChain: SwapChain; recipient: string };
 }
 
 export interface EvmSwapCheck {
-  /** Entry contract = `to` = ERC-20 spender (checksummed). */
   contract: string;
-  /** Recipient written in the calldata (= taker). */
   recipient: string;
-  /** Minimum written in the calldata, the one the contract enforces. */
   minBuyAmount: bigint;
   /** 0x: Settler targeted by AllowanceHolder.exec, to confirm against the on-chain registry before signing. */
   settler?: string;
-  /** Kyro fee read from the calldata (LI.FI) or the answer (0x), base units of the sold token. */
   kyroFee?: bigint;
   /** Cross-chain (NEAR Intents): deposit address and amount, confirmed with NEAR Intents before signing. */
   bridge?: { tool: 'near'; depositAddress: string; amountIn: bigint; deadline: bigint };
@@ -225,11 +174,9 @@ const same = (a: string | null | undefined, b: string | null | undefined) => !!a
 const fail = (provider: string, why: string): never => {
   throw new SwapCheckError(l10n(`${provider} : ${why} — devis refusé.`, `${provider}: ${why} — quote refused.`));
 };
-/** Most the Kyro fee may be: ceil(sellAmount × bps / 10 000). */
 export const maxKyroFee = (sellAmount: bigint, bps: number) => (sellAmount * BigInt(bps) + 9_999n) / 10_000n;
-/** Least the Kyro fee may be: floor(sellAmount × bps / 10 000) − 1 (one base unit of rounding). */
+/** One base unit of rounding below floor(sellAmount × bps / 10 000). */
 export const minKyroFee = (sellAmount: bigint, bps: number) => (sellAmount * BigInt(bps)) / 10_000n - 1n;
-/** Is `amount` the Kyro fee at exactly `bps` of `sellAmount` (to the base unit)? */
 export const kyroFeeAtRate = (amount: bigint, sellAmount: bigint, bps: number) => amount > 0n && amount >= minKyroFee(sellAmount, bps) && amount <= maxKyroFee(sellAmount, bps);
 /** min ≥ buyAmount − slippage, with 1 bp of rounding tolerance. */
 const minOk = (min: bigint, buyAmount: bigint, slippageBps: number) => min > 0n && min >= applySlippage(buyAmount, Math.min(10_000, slippageBps + 1));
@@ -372,13 +319,7 @@ interface NearData {
   signature: Hex;
 }
 
-/**
- * LI.FI cross-chain call through NEAR Intents: `BridgeData` (destination chain, receiver = us or
- * the non-EVM sentinel with OUR address in `nonEVMReceiver`, no destination call), source steps
- * (first = the token and amount sold, last = the bridged token, Kyro fee step), and the NEAR data
- * (refund to us, minimum ≥ slippage bound, destination token = the one asked). The deposit address
- * is then confirmed with NEAR Intents itself (near-intents.ts) before signing.
- */
+/** LI.FI cross-chain call through NEAR Intents; the deposit address is confirmed with NEAR Intents before signing. */
 function checkLifiBridge(i: EvmSwapCheckInput, cross: { toChain: SwapChain; recipient: string }, name: string, entry: string): EvmSwapCheck {
   const d = decode(LIFI_NEAR_ABI, i.tx.data);
   if (!d) return fail(name, l10n('fonction du Diamond inconnue de Kyro (pont NEAR Intents attendu)', 'Diamond function unknown to Kyro (NEAR Intents bridge expected)'));
@@ -422,11 +363,7 @@ function checkLifiBridge(i: EvmSwapCheckInput, cross: { toChain: SwapChain; reci
   return out;
 }
 
-/**
- * The fresh quote fetched right before signing, against the one the user reviewed: the contract
- * and the spender must not change (refused); a lower guaranteed minimum is `degraded` (the UI asks
- * again instead of accepting it silently).
- */
+/** Fresh pre-sign quote vs the reviewed one: contract/spender change is refused, a lower minimum is `degraded`. */
 export function compareFreshQuote(
   reviewed: { allowanceTarget: string | null; minBuyAmount: bigint; tx: { kind: 'evm'; to: string } },
   fresh: { allowanceTarget: string | null; minBuyAmount: bigint; tx: { kind: 'evm'; to: string } },

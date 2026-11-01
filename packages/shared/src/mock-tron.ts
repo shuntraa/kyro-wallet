@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — TRON (`tron_*`, docs/IPC.md §2.5), mirroring apps/desktop/src-tauri/src/
-// commands_tron.rs and tron_backend.rs: the address is really derived (m/44'/195'/0'/0/i,
-// base58check 0x41 ‖ keccak256(pubkey)[12..]); `raw_data` is a demo encoding (hex JSON, NOT the
-// protobuf Rust builds), the signature is fake. The resource estimate follows Rust exactly:
-// bandwidth = signed size + 64 (free, then staked, else burned), activation of a new account
-// (1 TRX + 0.1 TRX), simulated TRC-20 energy, fee_limit = energy × price × 1.3 (≥ 1 TRX).
-//
-// Scenario words in a custom server URL: « down » → SERVER_UNREACHABLE, « wrong » →
-// SERVER_WRONG_NETWORK (Shasta); a custom server without « grid » in its URL behaves like a plain
-// java-tron node: no `/v1` API, so `tron_txs` fails (SERVER_UNREACHABLE) while the rest works.
 
 import { HDKey } from '@scure/bip32';
 import * as bitcoin from 'bitcoinjs-lib';
@@ -213,7 +203,6 @@ export function createDemoTron(d: DemoTronDeps) {
 
   const feeLimitFor = (energy: number) => Math.min(Math.max(Math.floor((energy * PARAMS.energyFee * 130) / 100), MIN_FEE_LIMIT), PARAMS.maxFeeLimit);
 
-  /** tron_backend::estimate, same formula. */
   const estimate = (rawSize: number, recipientExists: boolean, isTrx: boolean, energyNeeded: number, feeLimit: number): TronEstimate => {
     const acc = account(me);
     const needed = rawSize + (rawSize < 128 ? 1 : 2) + SIGNED_OVERHEAD + RESULT_SIZE;
@@ -281,7 +270,6 @@ export function createDemoTron(d: DemoTronDeps) {
     return { raw, summary };
   };
 
-  /** Live estimate of a decoded transaction (tron_backend::estimate_for). */
   const estimateFor = (s: TronTxSummary): TronEstimate => {
     const a = s.action;
     if (a.type === 'trxTransfer') return estimate(s.rawSize, account(a.to).exists, true, 0, Number(s.feeLimit));
@@ -289,7 +277,6 @@ export function createDemoTron(d: DemoTronDeps) {
     return estimate(s.rawSize, true, false, 0, Number(s.feeLimit));
   };
 
-  /** commands_tron.rs describe_tron, same lines. */
   const describe = (s: TronTxSummary, e: TronEstimate): string => {
     const units = (v: string, dec: number) => {
       const b = BigInt(v);

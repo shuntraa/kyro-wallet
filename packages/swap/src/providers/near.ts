@@ -1,21 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// NEAR Intents 1Click, used DIRECTLY (no aggregator) for the routes LI.FI cannot serve: from
-// Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, TRON (TRX, USDT TRC-20), XRP, Cardano,
-// Sui, TON and Aptos to any chain 1Click serves in Kyro, and from EVM / Solana to all of those plus
-// Stellar (arrival only) (docs.near-intents.org « 1Click API »: `POST /v0/quote`, public, no key).
-//
-// There is no third-party transaction to sign: 1Click hands out a one-time DEPOSIT ADDRESS bound
-// (off-chain, signed quote) to our recipient, our refund address, the amount and the minimum.
-// Kyro checks that binding twice (the quote answer, then `GET /v0/status?depositAddress=` as read
-// back from 1Click), then builds an ORDINARY transfer of exactly that amount to that address with
-// the chain's own adapter (Rust decodes and signs it like any send; no memo, no OP_RETURN, no tag).
-//
-// Kyro fee: `appFees: [{ recipient, fee }]` (« Fee configuration »), taken by 1Click from the
-// deposited token and credited to the NEAR Intents account `recipient` = `recipients.evm` in lower
-// case (the account the owner's EVM key controls on NEAR Intents). 1Click splits the requested fee
-// 50/50 with itself (live quotes, 01/11/2026), so Kyro requests twice its rate and accepts the
-// quote only if 1Click echoes EXACTLY `bps` to that account and at most `bps` to itself.
+// NEAR Intents 1Click used directly for routes LI.FI cannot serve (docs.near-intents.org "1Click API").
+// No third-party tx: 1Click binds a one-time deposit address to our recipient/refund/amount/minimum,
+// we check it twice (quote, then `/v0/status`) and send an ordinary transfer there.
+// Fee: `appFees`, split 50/50 by 1Click, so we request twice our rate and demand exactly `bps` back.
 
 import { fetchJson, l10n, netFetch, type NetFetch } from '@kyro/shared';
 import type { DepositPlan, Quote, QuoteParams, SwapChain, SwapProvider } from '../types';
@@ -25,7 +13,6 @@ import { applySlippage } from '../compare';
 import { SwapCheckError } from '../verify';
 import { NEAR_INTENTS_HOST, NearIntentsClient, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, checkAppFees, oneClickAssetIs, sameChainAddress, type OneClickStatus, type OneClickToken } from '../near-intents';
 
-/** 1Click quote answer (`POST /v0/quote`). */
 export interface OneClickQuoteAnswer {
   quoteRequest?: NonNullable<OneClickStatus['quoteResponse']>['quoteRequest'] & { dry?: boolean };
   quote?: NonNullable<NonNullable<OneClickStatus['quoteResponse']>['quote']>;
@@ -69,15 +56,10 @@ export interface OneClickQuoteExpect {
   toChain: SwapChain;
   slippageBps: number;
   fee: NearFee | null;
-  /** A real (non-dry) quote must carry a deposit address. */
   dry: boolean;
 }
 
-/**
- * Checks a 1Click quote answer against what Kyro asked: same assets, amount, recipient (ours),
- * refund (ours), exact input, SIMPLE deposit (no memo), our fee echoed, minimum within the
- * slippage. Throws `SwapCheckError`.
- */
+/** Checks a 1Click quote answer against what Kyro asked. Throws `SwapCheckError`. */
 export function checkOneClickQuote(r: OneClickQuoteAnswer, e: OneClickQuoteExpect): { amountOut: bigint; minAmountOut: bigint; depositAddress: string | null; kyroFeeBps: number; oneClickFeeBps: number; timeEstimateSecs: number | null } {
   const req = r.quoteRequest;
   const q = r.quote;
@@ -106,12 +88,7 @@ export class NearIntentsProvider implements SwapProvider {
   private readonly fetcher: NetFetch;
   private readonly fee: ProviderFee & { requestBps?: number };
   readonly client: NearIntentsClient;
-  /**
-   * `appFees[0].fee` actually sent: twice Kyro's rate (1Click's live 50/50 split), re-derived once
-   * from 1Click's echo if its split differs (its docs also describe « your fee + 25 bps » without a
-   * key). Whatever is sent, a quote is only accepted if Kyro's echoed share is EXACTLY `bps`.
-   * Kept per Kyro rate (the rate follows the curve, so it changes with the swap value).
-   */
+  /** `appFees[0].fee` sent per Kyro rate: twice our rate, re-derived once if 1Click's echoed split differs. */
   private readonly requestBps = new Map<number, number>();
 
   constructor(opts: { fetch?: NetFetch; fee?: ProviderFee & { requestBps?: number } } = {}) {
@@ -182,8 +159,7 @@ export class NearIntentsProvider implements SwapProvider {
     } catch (e) {
       throw providerError(this.name, e);
     }
-    // 1Click split the fee differently than asked for: ask once more with the request that pays
-    // Kyro exactly `bps` (the check below still demands that exact share, or refuses).
+    // 1Click split the fee differently: retry once with the request that pays exactly `bps`.
     const ours = fee ? answer.quoteRequest?.appFees?.find((f) => (f.recipient ?? '').toLowerCase() === fee.recipient)?.fee : undefined;
     if (fee && !retried && typeof ours === 'number' && Number.isInteger(ours) && ours > 0 && ours !== fee.bps) {
       const next = Math.round((fee.requestBps * fee.bps) / ours);
@@ -195,7 +171,6 @@ export class NearIntentsProvider implements SwapProvider {
     return { answer, expect: { originAsset: origin.assetId, destinationAsset: dest.assetId, amount: p.sellAmount, recipient, refundTo: p.taker, fromChain: p.chain, toChain, slippageBps: p.slippageBps, fee, dry } };
   }
 
-  /** Dry quote (no deposit address): the price shown; the real one is taken by `prepare`. */
   async quote(p: QuoteParams): Promise<Quote> {
     if (!this.supports(p)) throw new Error(l10n('NEAR Intents : route non prise en charge', 'NEAR Intents: route not supported'));
     const toChain = p.toChain ?? p.chain;

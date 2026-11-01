@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Fiat currencies Kyro shows values in (all are CoinGecko `vs_currencies`). The default on first
-// run comes from the REGION of the computer's locale (fr-FR → EUR, de-CH → CHF, en-GB → GBP…),
-// never from the IP address. Rust does the same from the OS locale (src-tauri/src/fiat.rs);
-// this copy is the WebView fallback and the demo mode. Keep both tables identical.
+// Fiat currencies Kyro shows values in (all are CoinGecko `vs_currencies`).
 
 export const FIAT_CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'NZD', 'JPY', 'CNY', 'HKD', 'SGD', 'KRW', 'INR', 'BRL', 'MXN', 'ARS', 'TRY', 'PLN', 'CZK', 'SEK', 'NOK', 'DKK', 'ZAR', 'AED', 'ILS', 'RUB'] as const;
 export type Currency = (typeof FIAT_CURRENCIES)[number];
@@ -59,10 +55,7 @@ export function localeRegion(tag: string): string | null {
   return null;
 }
 
-/**
- * Currency for the computer's locales, in preference order: the first locale whose region (or,
- * without a region, whose language) Kyro knows decides; USD when none does.
- */
+/** Currency for the computer's locales, in preference order: the first locale whose region (or, without a region, whose language) Kyro knows decides; */
 export function currencyForLocales(locales: readonly string[] | undefined | null): Currency {
   for (const l of locales ?? []) {
     if (typeof l !== 'string' || l.trim() === '') continue;

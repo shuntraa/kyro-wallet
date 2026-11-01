@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Cosmos Hub address shape for the interface (Send screen, adapter, demo). Rust checks the same
-// rules again on every command (wallet-core `cosmos_address_bytes`): this is for messages only.
+// Cosmos Hub address shape for the interface (Send screen, adapter, demo).
 
 import { bech32 } from '@scure/base';
 import { l10n } from './i18n';
 
 /**
- * Why `address` is not a Cosmos Hub account address (null = it is): bech32 (not bech32m)
- * checksum, prefix `cosmos`, 20 bytes (key) or 32 bytes (module / interchain account), not mixed
- * case. A validator operator address (`cosmosvaloper1…`) or another chain's (`osmo1…`) is named.
+ * Why `address` is not a Cosmos Hub account address (null = it is): bech32 (not bech32m) checksum,
+ * prefix `cosmos`, 20 bytes (key) or 32 bytes (module / interchain account), not mixed case.
  */
 export function cosmosAddressProblem(address: string): string | null {
   const a = address.trim();

@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Litecoin: BIP84 native SegWit (P2WPKH), `m/84'/2'/0'` (testnet4: `m/84'/1'/0'`), `ltc1…` /
-// `tltc1…`. Reads and broadcast through Rust's `ltc_*` commands (default server
-// litecoinspace.org, or the user's Esplora); signing by `ltc_sign_psbt` (BIP143, same code path
-// as Bitcoin in wallet-core).
-//
-// Parameters: Litecoin Core 0.21 `chainparams.cpp` / `policy.h` (see wallet-core `utxo.rs`).
+// Litecoin: BIP84 native SegWit (P2WPKH), `m/84'/2'/0'` (testnet4: `m/84'/1'/0'`), `ltc1…` / `tltc1…`.
 
 import type * as bitcoin from 'bitcoinjs-lib';
 import type { Network } from '@kyro/shared';
@@ -17,8 +11,7 @@ export const LITECOIN_NETWORKS: Record<Network, bitcoin.Network> = {
     bech32: 'ltc',
     bip32: { public: 0x0488b21e, private: 0x0488ade4 },
     pubKeyHash: 0x30,
-    // `M…`. The legacy `3…` form (version 5, Bitcoin's) is refused on purpose: a Bitcoin
-    // address pasted here would otherwise be accepted.
+    // `M…`. The legacy `3…` form (version 5, Bitcoin's) is refused on purpose: a Bitcoin address pasted here would otherwise be accepted.
     scriptHash: 0x32,
     wif: 0xb0,
   },

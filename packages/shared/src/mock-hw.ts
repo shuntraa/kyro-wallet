@@ -1,27 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// DEMO ONLY — simulated Ledger / Trezor, mirroring apps/desktop/src-tauri/src/commands_hw.rs
-// and hw/*. The "device" keys come from a hard-coded public seed: they protect nothing.
-//
-// Scenario: `?hw=…` in the demo URL (or `MockOptions.hw` in tests):
-//   none (default)  no device plugged in
-//   ledger          Ledger Nano S Plus, « Bitcoin Test » open (Ethereum / Solana to open)
-//   trezor          Trezor Safe 5: PIN typed on the device (`pin-on-device`)
-//   trezor-one      Trezor One: blind PIN matrix (`pin-matrix` → hw_pin_matrix), no Solana
-//   trezor-one-passphrase  Trezor One with a passphrase (typed on the computer: refused)
-//   locked          Ledger locked (unlocked "by the user" after the first HW_LOCKED)
-//   wrongapp        Ledger on the dashboard (the expected app is "opened" after HW_WRONG_APP)
-//   reject          the user refuses on the device (HW_REJECTED)
-//   unplug          unplugged in the middle of the signature (HW_DISCONNECTED)
-//   mismatch        the device shows another address (HW_ADDRESS_MISMATCH)
-//   timeout         no answer on the device (HW_TIMEOUT)
-//   old             Trezor One firmware 1.9.0, too old (HW_UNSUPPORTED, min 1.10.4)
-//   safe7           Trezor Safe 7 (THP), never paired: hw_open asks to allow « Kyro Wallet », shows a
-//                   6-digit code (demo: `demoThpCode()`), checks it (HW_PAIRING_FAILED if wrong), then
-//                   confirms the connection; any other command before that: HW_PAIRING_REQUIRED
-//   safe7-paired    Trezor Safe 7 already paired: hw_open only asks to confirm the connection
-// A wrong app or a locked device is "fixed" by the simulated user right after the error, so
-// « Réessayer » works, as on a real device once the user opened the app / unlocked it.
+// DEMO ONLY — simulated Ledger / Trezor, mirroring apps/desktop/src-tauri/src/commands_hw.rs and
 
 import { HDKey } from '@scure/bip32';
 import { base58, base64 } from '@scure/base';
@@ -76,9 +54,8 @@ export const DEMO_TREZOR_LAYOUT: number[][] = [
 ];
 
 /**
- * Trezor protocol: a PinMatrixAck position is a digit laid out like a numeric KEYPAD —
- * 7 8 9 on the top row, 4 5 6 in the middle, 1 2 3 at the bottom (trezorlib, firmware).
- * Rust forwards the positions verbatim (hw/trezor.rs: `ack.set_pin(positions)`).
+ * Trezor protocol: a PinMatrixAck position is a digit laid out like a numeric KEYPAD — 7 8 9 on the
+ * top row, 4 5 6 in the middle, 1 2 3 at the bottom (trezorlib, firmware).
  */
 export const TREZOR_KEYPAD: string[][] = [
   ['7', '8', '9'],
@@ -142,14 +119,11 @@ function btcAddress(xpub: string, network: Network, kind: BtcKind, change: numbe
 
 export interface DemoHwDeps {
   network: Network;
-  /** LOCKED when a vault exists on this computer and is locked. */
   guard: () => void;
-  /** Emulates Kyro's native dialog. */
   confirm: (text: string) => boolean;
   decodeEvm: (tx: EvmTxRequest) => EvmTxSummary;
   /** Signed EVM transactions known to the fake chain (so the broadcast works). */
   registerEvm: (raw: string, hash: string, tx: EvmTxRequest, from: string) => void;
-  /** Gives the new hardware-wallet addresses some demo funds. */
   fund: (acc: WatchOnlyAccount, addresses: { taproot?: string; segwit?: string; evm?: string }) => void;
 }
 
@@ -180,7 +154,6 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   // Safe 7: listed as « Trezor » (same USB id), the real model comes from hw_open (THP).
   /** THP pairings of this installation (`trezor-thp.json`). */
   let thpPairings: Array<{ key: string; model: string; added: number }> = scenario === 'safe7-paired' ? [{ key: DEMO_THP_KEY, model: 'T3W1', added: Math.floor(Date.now() / 1000) - 86_400 }] : [];
-  /** The THP channel is open (pairing + connection done this session). */
   let thpConnected = false;
   let thpCodeWaiter: ((code: string) => void) | null = null;
   const firmware = scenario === 'old' ? '1.9.0' : one ? '1.12.1' : safe7 ? '2.9.3' : '2.8.7';
@@ -189,7 +162,6 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   /** `null` = the Ledger dashboard (shown as « Tableau de bord » / "Dashboard"). */
   let openApp: string | null = scenario === 'wrongapp' ? null : testnet ? 'Bitcoin Test' : 'Bitcoin';
   const appName = (a: string | null): string => a ?? l10n('Tableau de bord', 'Dashboard');
-  /** Trezor: the PIN was entered this session. */
   let pinOk = false;
   let pinWaiter: ((positions: string) => void) | null = null;
   let pending: { cancel: () => void } | null = null;
@@ -200,7 +172,6 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
 
   const cancelled = () => new IpcError('USER_REJECTED', l10n('Action annulée.', 'Action cancelled.'));
 
-  /** Runs one device operation (one per device: HW_BUSY otherwise), cancellable. */
   const run = async <T>(id: string, op: (wait: (ms: number) => Promise<void>) => Promise<T>): Promise<T> => {
     if (!device || id !== device.id) throw new IpcError('HW_NOT_FOUND', l10n('Appareil introuvable : branche-le, déverrouille-le, puis relance la détection.', 'Device not found: plug it in, unlock it, then run the detection again.'));
     if (pending) throw new IpcError('HW_BUSY', l10n('Appareil occupé : une autre opération est en cours sur cet appareil.', 'Device busy: another operation is in progress on this device.'));
@@ -274,7 +245,6 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
     if (device) emitDemoEvent('hw-prompt', { id: device.id, kind });
   };
 
-  /** Trezor PIN: on the device (T / Safe) or the blind matrix (One). */
   const unlockTrezor = async (wait: (ms: number) => Promise<void>) => {
     if (ledger || pinOk) return;
     if (!one) {
@@ -387,7 +357,6 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
 
   const deviceLine = () => l10n(`\n\n— Appareil : ${device?.model} —\nAprès « Signer », vérifie les MÊMES informations sur l’écran de l’appareil et confirme-les là-bas.`, `\n\n— Device: ${device?.model} —\nAfter “Sign”, check the SAME information on the device screen and confirm it there.`);
 
-  /** Waiting for the user's confirmation on the device, with the failure scenarios. */
   const onDevice = async (wait: (ms: number) => Promise<void>) => {
     prompt('confirm-on-device');
     if (scenario === 'unplug') {

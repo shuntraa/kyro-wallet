@@ -16,7 +16,6 @@ import { bchChain, dashChain, dogeChain, ltcChain, TRC20_TOKENS, tronChain } fro
 import { TronAdapter } from './tron/adapter';
 import { XrpAdapter } from './xrp/adapter';
 
-// ---------------------------------------------------------------- phase 4: Hedera
 
 export {
   HbarAdapter,
@@ -68,63 +67,40 @@ export interface AdapterSet {
   evm: Map<string, EvmAdapter>;
   /** Null for a hardware-wallet account without Solana keys (e.g. Trezor One). */
   sol: SolanaAdapter | null;
-  /** Litecoin / Dogecoin: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   ltc: LitecoinAdapter | null;
   doge: DogecoinAdapter | null;
-  /** Bitcoin Cash / Dash: vault only, like Litecoin / Dogecoin. */
   bch: BitcoinCashAdapter | null;
   dash: DashAdapter | null;
-  /** TRON: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   tron: TronAdapter | null;
-  /** XRP Ledger: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   xrp: XrpAdapter | null;
-  /** Cardano: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   cardano: CardanoAdapter | null;
-  /** Stellar: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   stellar: StellarAdapter | null;
-  /** NEAR: vault only (hardware wallets: not supported). */
   near: NearAdapter | null;
-  /** Sui: vault only (hardware wallets: not supported). */
   sui: SuiAdapter | null;
-  /** Hedera: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   hbar: HbarAdapter | null;
-  /** Kaspa: vault only (not offered on hardware wallets). */
   kaspa: KaspaAdapter | null;
-  /** Polkadot Asset Hub: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   polkadot: PolkadotAdapter | null;
-  /** Algorand: vault only (not offered on hardware wallets). */
   algo: AlgorandAdapter | null;
-  /** Monero: vault only (hardware wallets: HW_UNSUPPORTED). */
   xmr: XmrAdapter | null;
   /** TON: vault or Ledger (structured transfer request). */
   ton: TonAdapter | null;
   /** Cosmos Hub: vault or Ledger (amino JSON). */
   cosmos: CosmosAdapter | null;
-  /** Aptos: vault or Ledger. */
   aptos: AptosAdapter | null;
-  /** Zcash, transparent addresses only: vault only (hardware wallets: HW_UNSUPPORTED). */
   zec: ZcashAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
 }
 
-/**
- * Build every adapter for the vault's network.
- *
- * - Bitcoin: no URL here, Rust picks the user's server (`btc_*` commands).
- * - EVM / Solana: the user's RPC (`servers.evm[chainId]`, `servers.solana[cluster]`) when set,
- *   else the registry default. Never both: Rust refuses a replaced default
- *   (`DEFAULT_SERVER_DISABLED`), so there is no fallback to retry against.
- */
+/** Build every adapter for the vault's network. A user RPC replaces the registry default (Rust refuses a disabled default, no fallback). */
 export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers, 'evm' | 'solana'>, fetch?: NetFetch, hw?: HwSigner, account = 0): AdapterSet {
   const network = accounts.network;
   const f = fetch ? { fetch } : {};
   const h = hw ? { hw } : {};
   // Vault account (§2.9): every signing command of these adapters carries it (absent = 0).
   const a = !hw && account ? { account } : {};
-  // Hardware wallet: SegWit v0 inputs carry their full previous transaction (`non_witness_utxo`),
-  // fetched by `btc_tx_hex` (Rust checks its txid against the input).
+  // Hardware wallet: SegWit v0 inputs carry their full previous tx (`non_witness_utxo`), txid checked by Rust.
   const btcHw = hw ? { hw: { ...hw, prevTx: (txid: string) => call('btc_tx_hex', { txid }) } } : {};
   const btc = accounts.btc ? new BitcoinAdapter({ chain: btcChain(network), accounts: accounts.btc, ...btcHw, ...a }) : null;
   const evm = new Map<string, EvmAdapter>();
@@ -136,39 +112,24 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   }
   const solCustom = servers?.solana[solanaCluster(network)]?.url;
   const sol = accounts.sol ? new SolanaAdapter({ chain: solChain(network), address: accounts.sol.address, ...(solCustom ? { rpcUrl: solCustom } : {}), ...f, ...h, ...a }) : null;
-  // Litecoin / Dogecoin / Bitcoin Cash / Dash: Rust picks their servers (servers.litecoin…).
   const { ltc, doge, bch, dash } = createUtxoAdapters(accounts, {}, hw ? 0 : account, hw);
-  // TRON: Rust picks the server (servers.tron, default TronGrid).
   const tronTokens = TRC20_TOKENS[network].map((t) => ({ contract: t.contract, symbol: t.symbol, name: t.name, decimals: t.decimals }));
   const tron = accounts.tron ? new TronAdapter({ chain: tronChain(network), address: accounts.tron.address, tokens: tronTokens, ...h, ...a }) : null;
-  // XRP Ledger: Rust picks the server (servers.xrp, default rippled).
   const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...h, ...a }) : null;
-  // Cardano: Rust picks the server (servers.cardano, default Koios).
   const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...h, ...a }) : null;
-  // Stellar: SDF's Horizon, reached by Rust only.
   const stellar = accounts.stellar ? new StellarAdapter({ chain: stellarChain(network), address: accounts.stellar.address, ...h, ...a }) : null;
-  // NEAR: Rust picks the server (default FastNEAR).
   const near = accounts.near ? new NearAdapter({ chain: nearChain(network), address: accounts.near.address, ...h, ...a }) : null;
-  // Sui: Rust picks the server (Sui Foundation GraphQL RPC).
   const sui = accounts.sui ? new SuiAdapter({ chain: suiChain(network), address: accounts.sui.address, ...h, ...a }) : null;
-  // Hedera: Rust reads the mirror node and submits to the nodes (no custom server).
   // Hedera on a Ledger: only the ED25519 key read with `hw_key_add` (never a vault EVM address).
   const hbar = accounts.hbar && (!hw || isHbarEd25519Key(accounts.hbar.address)) ? new HbarAdapter({ chain: hbarChain(network), address: accounts.hbar.address, ...h, ...a }) : null;
-  // Kaspa: Rust reads the account's 20 receive + 20 change addresses (api.kaspa.org).
   const kaspa = accounts.kas && !hw ? new KaspaAdapter({ chain: kaspaChain(network), address: accounts.kas.address, ...a }) : null;
-  // Polkadot: Rust picks the node (Parity's public Asset Hub RPC; no custom server yet).
   const polkadot = accounts.polkadot ? new PolkadotAdapter({ chain: polkadotChain(network), address: accounts.polkadot.address, ...a }) : null;
-  // Algorand: Rust picks the server (AlgoNode / Nodely algod + indexer).
   const algo = accounts.algo ? new AlgorandAdapter({ chain: algorandChain(network), address: accounts.algo.address, ...h, ...a }) : null;
-  // Monero: Rust picks the node (servers.monero) and scans locally.
+  // Monero: scanned locally by Rust.
   const xmr = accounts.xmr && !hw ? new XmrAdapter({ chain: xmrChain(network), address: accounts.xmr.address, ...a }) : null;
-  // TON: Rust picks the server (TON Center).
   const ton = accounts.ton ? new TonAdapter({ chain: tonChain(network), address: accounts.ton.address, ...h, ...a }) : null;
-  // Cosmos Hub: Rust picks the server (default LCD, no custom server yet).
   const cosmos = accounts.cosmos ? new CosmosAdapter({ chain: cosmosChain(network), address: accounts.cosmos.address, ...h, ...a }) : null;
-  // Aptos: Rust picks the server (Aptos Labs fullnode, no custom server yet).
   const aptos = accounts.aptos ? new AptosAdapter({ chain: aptosChain(network), address: accounts.aptos.address, ...h, ...a }) : null;
-  // Zcash (transparent only): Rust picks the server (Komodo's ElectrumX on mainnet, none on testnet).
   const zec = accounts.zec ? new ZcashAdapter({ chain: zecChain(network), account: accounts.zec, ...(account && !hw ? { vaultAccount: account } : {}), ...h }) : null;
   const all: AnyAdapter[] = [
     ...(btc ? [btc] : []),
@@ -190,11 +151,9 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, xmr, ton, cosmos, aptos, zec, all, hw: hw ?? null };
 }
 
-// ---------------------------------------------------------------- Zcash (transparent only)
 
 export { ZcashAdapter, rustZecBackend, zecAddressProblem, type ZecBackend, type ZecUnsigned, type ZecSigned, type DerivedZecAddress } from './zcash/adapter';
 
-// ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin, Bitcoin Cash, Dash
 
 export { LitecoinAdapter, LITECOIN_NETWORKS, LITECOIN_SPEC, litecoinDust } from './litecoin/adapter';
 export { DogecoinAdapter, DOGECOIN_NETWORKS, DOGECOIN_SPEC, DOGE_RECOMMENDED_RATE, DOGE_SOFT_DUST } from './dogecoin/adapter';
@@ -227,12 +186,7 @@ export interface UtxoAdapterSet {
   dash: DashAdapter | null;
 }
 
-/**
- * Litecoin, Dogecoin, Bitcoin Cash and Dash adapters from the `ltc` / `doge` / `bch` / `dash`
- * entries of `accounts_get`, or of a hardware-wallet account (`hw`: signing through
- * `hw_sign_utxo_psbt`). Also part of `createAdapters`; Rust picks their servers, so nothing here
- * depends on the settings.
- */
+/** Litecoin / Dogecoin / Bitcoin Cash / Dash adapters from `accounts_get` or a hardware-wallet account. */
 export function createUtxoAdapters(
   accounts: { network: Network; ltc?: UtxoAccountView; doge?: UtxoAccountView; bch?: UtxoAccountView; dash?: UtxoAccountView },
   backends: { ltc?: UtxoBackend; doge?: UtxoBackend; bch?: UtxoBackend; dash?: UtxoBackend } = {},
@@ -249,7 +203,6 @@ export function createUtxoAdapters(
   };
 }
 
-// ---------------------------------------------------------------- phase 4: TRON
 
 export {
   TronAdapter,
@@ -273,7 +226,6 @@ export {
   isKnownTronToken,
 } from './tron/adapter';
 
-// ---------------------------------------------------------------- phase 4: NEAR
 
 export {
   NearAdapter,
@@ -294,7 +246,6 @@ export {
   type NearSigned,
 } from './near/adapter';
 
-// ---------------------------------------------------------------- phase 4: XRP Ledger
 
 export {
   XrpAdapter,
@@ -398,7 +349,6 @@ export {
   cardanoTokenLabel,
 } from './cardano/adapter';
 
-// ---------------------------------------------------------------- phase 4: Sui
 
 export {
   SuiAdapter,
@@ -420,7 +370,6 @@ export {
   type SuiSigned,
 } from './sui/adapter';
 
-// ---------------------------------------------------------------- phase 4: Kaspa
 
 export {
   KaspaAdapter,
@@ -452,7 +401,6 @@ export {
   type DotSigned,
 } from './polkadot/adapter';
 
-// ---------------------------------------------------------------- phase 4: TON
 
 export {
   TonAdapter,
@@ -473,7 +421,6 @@ export {
   type TonSigned,
 } from './ton/adapter';
 
-// ---------------------------------------------------------------- phase 4: Cosmos Hub
 
 export {
   CosmosAdapter,
@@ -495,7 +442,6 @@ export {
   type CosmosSigned,
 } from './cosmos/adapter';
 
-// ---------------------------------------------------------------- phase 4: Aptos
 
 export {
   AptosAdapter,

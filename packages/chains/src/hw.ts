@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Hardware-wallet accounts, TS side (docs/IPC.md §2.3): public derivation from the stored
-// xpubs, the input rules of the devices, and the clear-signing table. No key, no signature
-// here: signing is the Rust `hw_sign_*` commands (native dialog, device, verification).
+// Hardware-wallet accounts, TS side (docs/IPC.md §2.3). No key, no signature here: signing is Rust `hw_sign_*`.
 
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
@@ -20,51 +17,33 @@ import { DASH_SPEC } from './dash/adapter';
 import { l10n, zecP2pkhAddress } from '@kyro/shared';
 bitcoin.initEccLib(ecc);
 
-/**
- * Accounts of the active wallet: the vault (all chains) or a hardware-wallet account (only the
- * chains read from the device). Same shape as `Accounts`, each chain optional.
- */
+/** Accounts of the active wallet: the vault or a hardware-wallet account (each chain optional). */
 export interface WalletAccounts {
   network: Network;
   btc?: { segwit: BtcAccountView; taproot: BtcAccountView };
   /** `path`: derivation path of the chosen vault account (Rust `accounts_get`), for display. */
   evm?: { address: string; path?: string };
   sol?: { address: string; path?: string };
-  /** Vault, or a hardware wallet (Ledger mainnet / Trezor): `hw_sign_utxo_psbt`. */
   ltc?: { address: string; xpub: string; fingerprint: string; path: string };
   doge?: { address: string; xpub: string; fingerprint: string; path: string };
-  /** Vault or hardware wallet, like Litecoin / Dogecoin. */
   bch?: { address: string; xpub: string; fingerprint: string; path: string };
   dash?: { address: string; xpub: string; fingerprint: string; path: string };
-  /** Vault, or a Ledger (`hw_sign_tron_tx`; not in Trezor's firmware). */
   tron?: { address: string; path?: string };
-  /** Vault, or a Ledger (`hw_sign_xrp_tx`). */
   xrp?: { address: string; path?: string };
-  /** Vault only: Hedera on a hardware wallet is HW_UNSUPPORTED. EVM address of the ECDSA key. */
   hbar?: { address: string; path?: string };
-  /** Vault, or a Ledger / Trezor T-Safe (`hw_sign_ada_tx`). */
   cardano?: { address: string; path?: string };
-  /** Vault, or a Ledger / Trezor (`hw_sign_stellar_tx`). */
   stellar?: { address: string; path?: string };
   /** NEAR implicit account (Ledger: key at `m/44'/397'/0'/0'/(account+1)'`, not the vault's path). */
   near?: { address: string; path?: string };
-  /** Sui (vault, or Ledger « Sui » app). */
   sui?: { address: string; path?: string };
-  /** Vault only: Kaspa is not offered on hardware wallets. */
   kas?: { address: string; path?: string };
-  /** Vault only: Polkadot on a hardware wallet is HW_UNSUPPORTED. */
   polkadot?: { address: string; path?: string };
-  /** Algorand (vault, or Ledger « Algorand » app). */
   algo?: { address: string; path?: string };
-  /** Vault only: Monero on a hardware wallet is HW_UNSUPPORTED. */
   xmr?: { address: string; path?: string };
   /** TON v4R2 wallet (vault, or Ledger « TON » app: key at `m/44'/607'/0'/0'/account'/0'`, another wallet than the vault's). */
   ton?: { address: string; path?: string };
-  /** Cosmos Hub (vault, or Ledger « Cosmos » app, amino JSON signing). */
   cosmos?: { address: string; path?: string };
-  /** Aptos (vault, or Ledger « Aptos » app). */
   aptos?: { address: string; path?: string };
-  /** Vault, or a Trezor (`hw_sign_zec_tx`; not offered on Ledger). */
   zec?: { address: string; xpub: string; fingerprint: string; path: string };
 }
 
@@ -142,10 +121,7 @@ const UTXO_SPECS: Record<'ltc' | 'doge' | 'bch' | 'dash', UtxoCoinSpec> = { ltc:
 /** Single-key chains a Ledger can add to a hardware-wallet account (`hw_key_add`). */
 export const HW_KEY_CHAINS: readonly HwKeyChain[] = ['sui', 'apt', 'algo', 'near', 'cosmos', 'ton', 'hbar'];
 
-/**
- * Chains a hardware-wallet brand can hold in Kyro (mirror of `hw/chains.rs`; the device and
- * its firmware / apps decide in the end, see `hw_open` → `chains`).
- */
+/** Chains a hardware-wallet brand can hold (mirror of `hw/chains.rs`). */
 export const HW_CHAINS: Record<HwDeviceKind, readonly HwChain[]> = {
   ledger: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'xrp', 'tron', 'stellar', 'cardano', ...HW_KEY_CHAINS],
   trezor: ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'stellar', 'cardano', 'zec'],
@@ -185,10 +161,7 @@ const LEDGER_CLEAR_TOKENS: Array<[number, string]> = [
   [11155111, '0x1c7d4b196cb0c7b01d743fbc6116a902379c7238'], // tUSDC Sepolia
 ];
 
-/**
- * What the device will be able to show (mirror of `evm_clear_signs` in hw/ledger.rs and
- * hw/trezor.rs): `clear`, or `blind` (raw data / hash only: Rust adds a reinforced dialog).
- */
+/** What the device can show (mirror of `evm_clear_signs`): `blind` gets a reinforced Rust dialog. */
 export function evmHwDisplay(device: HwDeviceKind, chainId: number, summary: Pick<EvmTxSummary, 'kind' | 'tokenContract'>): 'clear' | 'blind' {
   switch (summary.kind) {
     case 'NativeTransfer':

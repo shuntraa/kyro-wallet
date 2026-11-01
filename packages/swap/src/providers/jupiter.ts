@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Jupiter (lite-api.jup.ag swap/v1): quote, then the swap transaction is built
-// on demand (it embeds a recent blockhash). The Rust side signs the message bytes.
-// Kyro fee: `platformFeeBps` on /quote + `feeAccount` on /swap (developers.jup.ag, « Add fees to
-// swap », Metis). `feeAccount` must be an initialised token account of the input or output mint:
-// we use the fee wallet's associated token account for the first of the pair's mints found in
-// `solanaFeeMints` (output first: `outAmount` is documented as net of platform fees).
-// The transaction it returns is third-party: before the password, the UI decodes it in Rust and
-// checks it with jupiter-verify.ts (programs, accounts, amounts, fee account).
+// Jupiter (lite-api.jup.ag swap/v1); the swap tx is built on demand (recent blockhash).
+// Fee: `platformFeeBps` + `feeAccount` (developers.jup.ag "Add fees to swap"), paid into the fee
+// wallet's ATA for a mint in `solanaFeeMints`. The tx is checked by jupiter-verify.ts before signing.
 
 import { fetchJson, netFetch, type NetFetch, l10n } from '@kyro/shared';
 import { address, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
@@ -32,7 +27,6 @@ const MINT_LABELS: Record<string, string> = {
 };
 const mintLabel = (m: string) => MINT_LABELS[m] ?? `${m.slice(0, 4)}…`;
 
-/** Associated token account of `owner` for `mint` (classic SPL Token program by default). */
 export async function associatedTokenAccount(owner: string, mint: string, tokenProgram: string = TOKEN_PROGRAM): Promise<string> {
   const enc = getAddressEncoder();
   const [ata] = await getProgramDerivedAddress({ programAddress: ATA_PROGRAM, seeds: [enc.encode(address(owner)), enc.encode(address(tokenProgram)), enc.encode(address(mint))] });

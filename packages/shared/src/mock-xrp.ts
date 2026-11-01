@@ -1,19 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — XRP Ledger (`xrp_*`, docs/IPC.md §2.6), mirroring apps/desktop/src-tauri/src/
-// commands_xrp.rs and xrp_backend.rs. The address is really derived (m/44'/144'/0'/0/0, Ripple
-// base58check of RIPEMD160(SHA256(pubkey))); the Payment blob is a demo encoding (hex JSON, NOT
-// the canonical binary format wallet-core writes) and the signature is fake. The rules are Rust's:
-// - reserve = 1 XRP base + 0.2 XRP per owned object; spendable = balance − reserve;
-// - destination with lsfRequireDestTag and no tag → refused; unfunded destination → ≥ 1 XRP
-//   (tecNO_DST_INSUF_XRP); issued currency to an unfunded account → refused (tecNO_DST);
-//   amount + fee > spendable → refused; our account not activated → refused;
-// - decoding refuses X-addresses, Paths, DeliverMin and partial payments (tfPartialPayment);
-// - sign re-reads everything live, refuses an expired LastLedgerSequence or a stale Sequence;
-// - a submitted payment is validated a few seconds later (`xrp_tx_status`).
-//
-// Scenario words in a custom rippled URL: « down » → SERVER_UNREACHABLE, « wrong » →
-// SERVER_WRONG_NETWORK.
 
 import { HDKey } from '@scure/bip32';
 import * as bitcoin from 'bitcoinjs-lib';
@@ -133,17 +119,13 @@ export interface DemoXrpDeps {
 
 export interface DemoXrpState {
   me: string;
-  /** A funded account that requires a destination tag (an exchange's deposit address). */
   exchange: string;
-  /** A funded account without any requirement. */
   friend: string;
   accounts: Map<string, DemoXrpAccount>;
   lines: Map<string, XrpTrustLine[]>;
   history: XrpHistoryEntry[];
-  /** hash → submit time and final result. */
   submitted: Map<string, { at: number; result: string }>;
   ledger: number;
-  /** Tests: the next submitted payment fails in the ledger with this code. */
   failNext: string | null;
 }
 
@@ -215,7 +197,6 @@ export function createDemoXrp(d: DemoXrpDeps) {
     };
   };
 
-  /** xrp_backend::check_payment, same order and messages. */
   const checkPayment = (ours: XrpAccountInfo, dest: XrpAccountInfo, drops: bigint | null, fee: bigint, tag: number | null) => {
     if (!ours.exists) throw invalidInput(l10n('ton compte XRP n’est pas encore activé (aucun XRP reçu)', 'your XRP account is not activated yet (no XRP received)'));
     if (dest.requireDestTag && tag === null) {
@@ -237,7 +218,6 @@ export function createDemoXrp(d: DemoXrpDeps) {
   const encode = (p: DemoPayment) => bytesToHex(new TextEncoder().encode(JSON.stringify(p))).toUpperCase();
   const hashOf = (blob: string) => bytesToHex(sha256(new TextEncoder().encode(`TXN\0${blob}`))).toUpperCase();
 
-  /** wallet-core xrp_decode_tx: strict, Account = us, refuses Paths / DeliverMin / partial payments. */
   const decode = (blob: unknown): { p: DemoPayment; summary: XrpTxSummary } => {
     let p: DemoPayment;
     try {
@@ -276,7 +256,6 @@ export function createDemoXrp(d: DemoXrpDeps) {
 
   const contextFor = (to: string): XrpContext => ({ account: account(me), destination: account(to), reserveBase: XRP_RESERVE_BASE.toString(), reserveInc: XRP_RESERVE_INC.toString() });
 
-  /** commands_xrp.rs describe_xrp: the destination tag gets its own framed block. */
   const describe = (s: XrpTxSummary, c: XrpContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     let out = l10n(`Envoi XRP Ledger${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.destination}\n${line}\n`, `XRP Ledger transfer${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.destination}\n${line}\n`);

@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Cardano adapter (ADA + native tokens). Thin on purpose: reads, payment building (UTxOs and
-// protocol parameters from Koios, coin selection, fee and min-UTxO by Rust, CBOR by
-// wallet-core), signature and `submittx` are Rust commands (`ada_*`, docs/IPC.md §2.7). This
-// adapter only validates input and checks that what Rust built is what was asked.
+// Cardano adapter (ADA + native tokens).
 
 import { accountArg } from '../types';
 import {
@@ -22,7 +18,6 @@ import type { CardanoChain } from '../registry';
 import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
-// ---------------------------------------------------------------- Rust contract (§2.7)
 
 export type {
   CardanoAccount,
@@ -61,11 +56,7 @@ export function rustCardanoBackend(account = 0): CardanoBackend {
   };
 }
 
-/**
- * Hardware-wallet account `accountId` (docs/IPC.md §2.3, Ledger « Cardano ADA » app or Trezor
- * Model T / Safe): Rust builds and broadcasts with the account's stored key; signing is
- * `hw_sign_ada_tx`.
- */
+/** Hardware-wallet account `accountId` (docs/IPC.md §2.3, Ledger « Cardano ADA » app or Trezor Model T / Safe): Rust builds and broadcasts with the account's stored key; signing is `hw_sign_ada_tx`. */
 export function hwCardanoBackend(accountId: string): CardanoBackend {
   return {
     ...rustCardanoBackend(0),
@@ -75,33 +66,23 @@ export function hwCardanoBackend(accountId: string): CardanoBackend {
   };
 }
 
-// ---------------------------------------------------------------- addresses
 
 const BECH32 = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 
-/**
- * Shape of a Shelley payment address for `network`: `addr1…` / `addr_test1…`, bech32 charset,
- * base (type 0 / 2) or enterprise (type 6) header. The checksum and every refusal (script,
- * pointer, reward, Byron, other network) are enforced by Rust (`cardano_address_bytes`).
- */
+/** Shape of a Shelley payment address for `network`: `addr1…` / `addr_test1…`, bech32 charset, base (type 0 / 2) or enterprise (type 6) header. */
 export function isCardanoAddress(address: string, network: 'mainnet' | 'testnet'): boolean {
   const a = address.trim().toLowerCase();
   const hrp = network === 'mainnet' ? 'addr1' : 'addr_test1';
   if (!a.startsWith(hrp) || a !== address.trim()) return false;
   const data = a.slice(hrp.length);
   if (![...data].every((c) => BECH32.includes(c))) return false;
-  // The first data character carries the header's type nibble and one network bit:
-  // q (type 0), y (2), v (6) with network bit 0; z / x / w are scripts, refused.
+  // The first data character carries the header's type nibble and one network bit: q (type 0), y (2), v (6) with network bit 0; z / x / w are scripts, refused.
   const kind = BECH32.indexOf(data[0] ?? '?') >> 1;
   // Base (57 bytes → 92 characters) or enterprise (29 bytes → 47), plus a 6-character checksum.
   return (kind === 0 || kind === 2 || kind === 6) && (data.length === 92 + 6 || data.length === 47 + 6);
 }
 
-/**
- * Why an address is refused, in Rust's words (wallet-core `cardano_address_bytes`), or null when
- * its shape is acceptable. Read from the bech32 prefix and the header's type nibble (first data
- * character); the checksum itself is verified by Rust.
- */
+/** Why an address is refused, in Rust's words (wallet-core `cardano_address_bytes`), or null when its shape is acceptable. */
 export function cardanoAddressProblem(address: string, network: 'mainnet' | 'testnet'): string | null {
   const a = address.trim();
   if (!a) return null;
@@ -138,7 +119,6 @@ export function adaToLovelace(input: string): bigint {
   return BigInt(i ?? '0') * 1_000_000n + BigInt((f + '000000').slice(0, 6));
 }
 
-// ---------------------------------------------------------------- adapter
 
 export interface CardanoUnsigned {
   family: 'ada';
@@ -216,11 +196,7 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
     });
   }
 
-  /**
-   * `ChainAdapter` entry point. `cardanoToken`: a native token (its output carries exactly its
-   * min-ADA). `max` (ADA): everything except the fee and the change output Rust always keeps
-   * (its min-UTxO, plus every token), built until it fits.
-   */
+  /** `ChainAdapter` entry point. */
   async buildTx(params: BuildParams): Promise<CardanoUnsigned> {
     if (params.asset.kind !== 'native') throw new Error(l10n('Actif Cardano inattendu', 'Unexpected Cardano asset'));
     const memo = params.memo?.trim() ? { memo: params.memo.trim() } : {};
@@ -231,8 +207,7 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
     const probe = await this.buildPayment({ to: params.to, lovelace: 1_500_000n, ...memo });
     const change = probe.summary.outputs.find((o) => o.isChange);
     let amount = balance - BigInt(probe.summary.fee) - BigInt(change?.minLovelace ?? '1000000');
-    // Sending everything pulls every UTxO in: the change then carries all the tokens and needs a
-    // larger min-UTxO. Rust's refusal gives both numbers; step down by the shortfall.
+    // Sending everything pulls every UTxO in: the change then carries all the tokens and needs a larger min-UTxO.
     const toLovelace = (s: string) => adaToLovelace(s);
     for (let i = 0; i < 5; i++) {
       if (amount <= 0n) break;
@@ -255,10 +230,7 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
     return { ada: { amount, spendable: amount - BigInt(acc.lockedWithTokens) }, tokens: acc.tokens };
   }
 
-  /**
-   * Builds a payment. `lovelace` omitted with a token = the min-UTxO the output needs. Rust
-   * re-checks everything; this checks that what came back is what was asked.
-   */
+  /** Builds a payment. `lovelace` omitted with a token = the min-UTxO the output needs. */
   async buildPayment(params: { to: string; lovelace?: bigint; token?: CardanoTokenSpec; memo?: string }): Promise<CardanoUnsigned> {
     const to = params.to.trim();
     if (isByronAddress(to)) throw new Error(l10n('Adresse Byron refusée : demande une adresse Shelley (addr1…)', 'Byron address refused: ask for a Shelley address (addr1…)'));

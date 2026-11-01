@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — several accounts per chain (docs/IPC.md §2.9), mirroring
-// apps/desktop/src-tauri/src/accounts.rs: per-chain account lists (public bookmarks: index +
-// name), `accounts_get({ account })`, and the « Compte signataire » line of the simulated
-// native dialog (« inconnu » + reinforced confirmation for an account outside the list).
-// Account 0 is exactly the demo vault's existing account. Demo keys only (public seed).
 
 import { HDKey } from '@scure/bip32';
 import { base58 } from '@scure/base';

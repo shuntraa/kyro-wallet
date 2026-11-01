@@ -1,5 +1,4 @@
 // API keys are write-only: settings_get / settings_set return `apiKeysSet` (booleans), never a
-// value; settings_set `apiKeys.<name>`: absent = unchanged, "" = remove, non-empty = set.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { call, IpcError, setBackend, type Settings, type SettingsInput } from '../src';
 import { createMockBackend } from '../src/mock';

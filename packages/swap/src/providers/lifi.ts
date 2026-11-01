@@ -1,22 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// LI.FI (li.quest): same-chain EVM swaps, and cross-chain swaps between EVM chains, Solana and
-// (as a destination) Bitcoin. Works without a key (reduced quota).
-//
-// Kyro fee: `distributionFees[0][receiver]` + `[percentage]` (FRACTION, 0.007 = 0,7 %) (docs.li.fi,
-// « Monetizing the integration »): paid straight to the receiver, no portal registration needed,
-// taken from the SENT token on the SOURCE chain and `included` in `toAmount`. So the receiver is
-// our address on the source chain: `recipients.evm` for an EVM source, `recipients.solana` for a
-// Solana source (li.quest refuses an EVM receiver there). The quote must list it back (feeCosts
-// « Distributions » with our receiver and percentage), otherwise it is refused.
-//
-// Same chain: verify.ts decodes GenericSwapFacetV3 (`_receiver` = taker, `_minAmountOut`, steps,
-// FeeForwarder).
-// Cross-chain: only the NEAR Intents bridge (`allowBridges=near`), the one whose transactions Kyro
-// decodes end to end. The destination address is OUR account on the destination chain (`toAddress`,
-// never typed). EVM source: verify.ts decodes `NEARIntentsFacet` (receiver, refund, minimum,
-// destination token, fee step); Solana source: lifi-cross.ts checks the transaction Rust decoded.
-// In both cases NEAR Intents itself must confirm the deposit address (near-intents.ts).
+// LI.FI (li.quest): same-chain EVM swaps and cross-chain via the NEAR Intents bridge only.
+// Fee: `distributionFees` (docs.li.fi "Monetizing the integration"), taken on the source chain, so the
+// receiver is our source-chain address; the quote must echo it or it is refused. Calldata is decoded
+// by verify.ts (EVM) or lifi-cross.ts (Solana); NEAR Intents confirms the deposit (near-intents.ts).
 
 import { fetchJson, netFetch, type NetFetch, type SolTxSummary, l10n } from '@kyro/shared';
 import type { CrossChainInfo, Quote, QuoteParams, SolanaRouteCheck, SwapChain, SwapProvider } from '../types';
@@ -51,12 +38,10 @@ export interface LifiQuote {
   transactionRequest: { to?: string; data: string; value?: string; gasLimit?: string; gasPrice?: string };
 }
 
-/** Bridges Kyro accepts on cross-chain routes (the ones it decodes). */
 export const LIFI_CROSS_BRIDGES = ['near'] as const;
 const BRIDGE_NAMES: Record<string, string> = { near: 'NEAR Intents' };
 const SOL_NATIVE = '11111111111111111111111111111111';
 
-/** Token id as LI.FI names it on `chain`. */
 function lifiToken(chain: SwapChain, address: string): string {
   if (chain === 'solana') return address === WSOL_MINT ? SOL_NATIVE : address;
   if (chain === 'bitcoin') return 'bitcoin';
@@ -69,11 +54,7 @@ export function lifiFeeEchoed(fees: readonly LifiFeeCost[] | undefined, recipien
   return (fees ?? []).some((f) => Math.round(Number(f.percentage ?? 0) * 10_000) === bps && (f.feeSplit?.recipients ?? []).some((x) => (evm ? x.walletAddress?.toLowerCase() : x.walletAddress) === want));
 }
 
-/**
- * Kyro chains LI.FI routes (`GET https://li.quest/v1/chains?chainTypes=EVM`, 2026-10-31: every
- * Kyro EVM chain except Conflux eSpace) AND where Kyro knows the Diamond (verify.ts; Flare, Kaia
- * and HyperEVM with their own Diamond, `LIFI_OTHER_DEPLOYMENTS`). Not Sepolia (no checked contract).
- */
+/** Chains LI.FI routes where Kyro knows the Diamond (verify.ts). Not Sepolia or Conflux eSpace. */
 export const LIFI_CHAINS: ReadonlySet<number> = new Set([1, 42_161, 10, 8_453, 137, 56, 43_114, 25, 5_000, 146, 100, 1_329, 14, 999, 8_217]);
 
 export class LifiProvider implements SwapProvider {
@@ -103,8 +84,6 @@ export class LifiProvider implements SwapProvider {
   supports(p: QuoteParams): boolean {
     const to = p.toChain ?? p.chain;
     if (to === p.chain) return typeof p.chain === 'number' && LIFI_CHAINS.has(p.chain);
-    // Cross-chain: from EVM or Solana, to EVM, Solana or Bitcoin, on chains NEAR Intents serves.
-    // (Litecoin, Dogecoin, TRON, XRP, Cardano: NEAR Intents 1Click directly, providers/near.ts.)
     const lifiSide = (c: typeof to) => (typeof c === 'number' && LIFI_CHAINS.has(c)) || c === 'solana';
     return lifiSide(p.chain) && (lifiSide(to) || to === 'bitcoin') && ONE_CLICK_CHAINS[String(p.chain)] !== undefined && ONE_CLICK_CHAINS[String(to)] !== undefined;
   }
@@ -161,7 +140,6 @@ export class LifiProvider implements SwapProvider {
   }
 
   private async sameChain(p: QuoteParams, chain: number): Promise<Quote> {
-    // The rate of THIS quote (curve of its USD value): asked for, then demanded back by verify.ts.
     const fee = feeForQuote(this.fee, p);
     const r = await this.get(p, {}, fee);
     const fx = p.usdToFiat ?? 1;
@@ -204,9 +182,7 @@ export class LifiProvider implements SwapProvider {
   private async evmCross(p: QuoteParams, chain: number, toChain: SwapChain): Promise<Quote> {
     const recipient = p.recipient ?? (typeof toChain === 'number' ? p.taker : '');
     if (!recipient) throw new Error(l10n('LI.FI : pas de compte à toi sur la chaîne de destination', 'LI.FI: no account of yours on the destination chain'));
-    // LI.FI applies the slippage to EACH leg (source DEX swap, then the bridge): live quotes give a
-    // minimum ≈ 1 − 2 × slippage. Half per leg keeps the whole route within the user's choice,
-    // which is what verify.ts then enforces on the bridge minimum.
+    // LI.FI applies slippage to each leg (minimum ≈ 1 − 2 × slippage): half per leg keeps the route within the user's choice.
     const legSlippage = Math.max(1, Math.floor(p.slippageBps / 2)) / 10_000;
     const fee = feeForQuote(this.fee, p);
     const r = await this.get(p, { toAddress: recipient, allowBridges: LIFI_CROSS_BRIDGES.join(','), slippage: legSlippage }, fee);
@@ -233,7 +209,6 @@ export class LifiProvider implements SwapProvider {
     });
     const bridge = check.bridge;
     if (!bridge) throw new SwapCheckError(l10n('LI.FI : dépôt du pont absent — devis refusé.', 'LI.FI: bridge deposit missing — quote refused.'));
-    // The bridge itself must confirm where this deposit goes (recipient, token, minimum, refund).
     const near = await this.near.confirm({ depositAddress: bridge.depositAddress, amountIn: bridge.amountIn, fromChain: chain, toChain, buyToken: p.buy.address, recipient, refundTo: p.taker, minAmountOut: check.minBuyAmount });
     const out: Quote = {
       ...this.base(p, r, fee),
@@ -251,7 +226,6 @@ export class LifiProvider implements SwapProvider {
 
   private async solanaCross(p: QuoteParams, toChain: SwapChain): Promise<Quote> {
     if (this.solFee.kind === 'unavailable') throw new Error(this.solFee.reason);
-    // Same rate in the request, in every fresh build and in the transaction check (`kyro`).
     const fee = feeForQuote(this.solFee, p);
     const recipient = p.recipient ?? '';
     if (!recipient) throw new Error(l10n('LI.FI : pas de compte à toi sur la chaîne de destination', 'LI.FI: no account of yours on the destination chain'));
@@ -277,7 +251,7 @@ export class LifiProvider implements SwapProvider {
       minBuyAmount,
       gasFeeFiat: lamports !== null && p.nativePriceFiat !== undefined ? (Number(lamports) / 1e9) * p.nativePriceFiat : null,
       allowanceTarget: null,
-      // Every build is a fresh quote (a NEAR deposit address is single-use and the blockhash expires).
+      // Every build is a fresh quote: the NEAR deposit address is single-use and the blockhash expires.
       tx: {
         kind: 'solana',
         build: async () => {

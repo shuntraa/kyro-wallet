@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// CoinGecko client over `net_fetch`.
-// - in-memory + localStorage cache (TTL 60 s, stale copy served on error)
-// - exponential backoff on HTTP 429
-// - the API key (if any) is injected by the Rust shell: never sent from JS.
+// CoinGecko client over `net_fetch`, cached with 429 backoff. The API key is injected by Rust, never sent from JS.
 
 import { HttpError, fetchJson, netFetch, type Currency, type NetFetch } from '@kyro/shared';
 
@@ -43,7 +40,6 @@ export interface CoinGeckoOptions {
   ttlMs?: number;
   /** Persistent cache; default `window.localStorage` when available. `null` disables it. */
   storage?: CacheStorage | null;
-  /** Injected for tests. */
   sleep?: (ms: number) => Promise<void>;
   maxRetries?: number;
   now?: () => number;
@@ -162,7 +158,6 @@ export class CoinGeckoClient {
     }
   }
 
-  /** Top coins by market cap, with 7-day sparkline. */
   async markets(currency: Currency, perPage = 250): Promise<MarketCoin[]> {
     const vs = currency.toLowerCase();
     const raw = await this.get<RawMarket[]>(

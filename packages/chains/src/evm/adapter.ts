@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// One EVM adapter, parametrised by the chain registry. JSON-RPC goes through a
-// viem *custom transport* that calls `net_fetch` — viem never touches fetch.
+// One EVM adapter, parametrised by the chain registry. JSON-RPC goes through a viem *custom transport* that calls `net_fetch` — viem never touches fetch.
 
 import { accountArg } from '../types';
 import {
@@ -81,10 +79,7 @@ const GAS_PRICE_ORACLE = '0x420000000000000000000000000000000000000F';
 const GAS_PRICE_ORACLE_ABI = [parseAbiItem('function getL1FeeUpperBound(uint256 unsignedTxSize) view returns (uint256)')] as const;
 const L1_FEE_FALLBACK = 100_000_000_000_000n;
 
-/**
- * Recipients that burn the funds, refused before building: the zero address, and the token's own
- * contract (a classic mistake: tokens sent to their contract are lost on almost every token).
- */
+/** Recipients that burn the funds, refused before building: the zero address, and the token's own contract (a classic mistake: tokens sent to their contract are lost on almost every token). */
 export function evmRecipientProblem(recipient: string, asset: Pick<AssetDef, 'kind' | 'contract'>): string | null {
   const r = recipient.trim().toLowerCase();
   if (/^0x0{40}$/.test(r)) return l10n('Adresse nulle (0x000…000) : les fonds seraient détruits. Envoi refusé.', 'Null address (0x000…000): the funds would be destroyed. Sending refused.');
@@ -163,12 +158,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     return this.client.getBlockNumber({ cacheTime: 0 });
   }
 
-  /**
-   * Native balance + `balanceOf` of every curated token. One JSON-RPC batch per
-   * {@link BALANCE_BATCH} calls (100+ tokens on Ethereum, a single host: no new server sees
-   * anything); if the node refuses batches, one call per token as before. A token whose call
-   * fails is left out (unknown), like a missing contract.
-   */
+  /** Native balance + `balanceOf` of every curated token. */
   async getBalance(): Promise<Balance[]> {
     const tokens = this.tokens();
     const data = encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [this.address] });
@@ -186,8 +176,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
       return this.getBalanceOneByOne(tokens);
     }
     const [native, ...rest] = outcomes;
-    // Some public RPCs answer a too-large batch with one error per call (« batch size too
-    // large », free plans): read one by one, the native balance call reports any real outage.
+    // Some public RPCs answer a too-large batch with one error per call (« batch size too large », free plans): read one by one, the native balance call reports any real outage.
     if (!native?.ok) return this.getBalanceOneByOne(tokens);
     const out: Balance[] = [{ assetId: nativeAssetId(this.chain), amount: hexToBigInt(native.result) }];
     tokens.forEach((t, i) => {
@@ -233,11 +222,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     }
   }
 
-  /**
-   * OP-stack chains (Optimism, Base): upper bound of the L1 data fee of a simple transfer, from the
-   * GasPriceOracle predeploy (`getL1FeeUpperBound`, Fjord), doubled; 0,0001 ETH if the RPC cannot
-   * answer. 0 elsewhere (Arbitrum counts its L1 cost in the gas estimate).
-   */
+  /** OP-stack chains (Optimism, Base): upper bound of the L1 data fee of a simple transfer, from the GasPriceOracle predeploy (`getL1FeeUpperBound`, Fjord), doubled; 0,0001 ETH if the RPC cannot answer. */
   async l1DataFeeMargin(): Promise<bigint> {
     if (!OP_STACK_CHAINS.has(this.chain.chainId)) return 0n;
     try {
@@ -387,13 +372,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     }
   }
 
-  /**
-   * Dry-run that also measures what we RECEIVE: `eth_simulateV1` with `traceTransfers` (native
-   * transfers then appear as Transfer logs from 0xEeee…), summing the Transfer logs of `token`
-   * (`native` for the chain's coin) to our address. An RPC without `eth_simulateV1` falls back to
-   * the plain `eth_call` (`received: null`: it passes, amount unknown). Note: the RPC is the one
-   * that simulates; a lying RPC can lie here too (the minimum enforced on-chain still holds).
-   */
+  /** Dry-run that also measures what we RECEIVE: `eth_simulateV1` with `traceTransfers` (native transfers then appear as Transfer logs from 0xEeee…), summing the Transfer logs of `token` (`native` for the chain's coin) to our address. */
   async simulateReceived(tx: { to: string; data: Hex; value?: bigint }, token: string | 'native'): Promise<{ ok: true; received: bigint | null } | { ok: false; reason: string }> {
     type SimLog = { address: string; topics: string[]; data: string };
     type SimCall = { status: string; logs?: SimLog[]; error?: { message?: string } };
@@ -421,11 +400,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     return { ok: true, received };
   }
 
-  /**
-   * `Transfer` logs to or from us of the given tokens: one `eth_getLogs` per
-   * {@link LOG_ADDRESSES} contracts and direction (publicnode refuses more addresses per query),
-   * sent as JSON-RPC batches; one call at a time if the node refuses batches.
-   */
+  /** `Transfer` logs to or from us of the given tokens: one `eth_getLogs` per {@link LOG_ADDRESSES} contracts and direction (publicnode refuses more addresses per query), sent as JSON-RPC batches; one call at a time if the node refuses batches. */
   private async transferLogs(addresses: string[], fromBlock: bigint, toBlock: bigint): Promise<Array<{ log: RawLog; dir: 'in' | 'out' }>> {
     const me = '0x' + this.address.slice(2).toLowerCase().padStart(64, '0');
     const range = { fromBlock: '0x' + fromBlock.toString(16), toBlock: '0x' + toBlock.toString(16) };
@@ -452,11 +427,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
     return queries.flatMap((q, i) => (results[i] ?? []).filter(isRawLog).map((log) => ({ log, dir: q.dir })));
   }
 
-  /**
-   * ERC-20 transfers of the curated tokens over the last `logRange` blocks.
-   * Native transfers can't be listed without an indexer: the UI merges
-   * them from its local record of transactions sent from Kyro.
-   */
+  /** ERC-20 transfers of the curated tokens over the last `logRange` blocks. */
   async getHistory(): Promise<HistoryItem[]> {
     const tokens = this.tokens();
     if (tokens.length === 0) return [];
@@ -485,9 +456,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
         /* time unknown */
       }
     }
-    // A Transfer(from = us) log does not prove that we sent it: anyone can call
-    // `transferFrom(us, lookalike, 0)` (no allowance needed for 0 on most tokens). The sender of
-    // the TRANSACTION (not of the log) must be us; otherwise the entry is a lure, not a payment.
+    // A Transfer(from = us) log does not prove that we sent it: anyone can call `transferFrom(us, lookalike, 0)` (no allowance needed for 0 on most tokens).
     const outHashes = [...new Set(all.filter((x) => x.dir === 'out' && x.l.transactionHash).map((x) => x.l.transactionHash as `0x${string}`))].slice(0, 15);
     const txFrom = new Map<string, string>();
     await Promise.all(

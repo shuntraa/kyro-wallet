@@ -1,5 +1,4 @@
 // Hedera demo derivation and helpers against official vectors (same vectors as wallet-core's
-// tests/hedera.rs): hiero-sdk-java MnemonicTest (toStandardECDSAsecp256k1PrivateKey) and HIP-15.
 import { describe, expect, it } from 'vitest';
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { HDKey } from '@scure/bip32';

@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// DEMO DATA ONLY — used by the in-memory backend when the app runs in a plain
-// browser (no Tauri). Nothing here is ever used by the real application.
+// DEMO DATA ONLY — used by the in-memory backend when the app runs in a plain browser (no Tauri).
 
 export interface DemoCoin {
   id: string;
   symbol: string;
   name: string;
-  /** EUR price. */
   price: number;
   change24h: number;
   change7d: number;

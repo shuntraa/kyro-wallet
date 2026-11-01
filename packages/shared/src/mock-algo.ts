@@ -1,16 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Algorand (`algo_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
-// commands_algo.rs and algo_backend.rs. Addresses are real Algorand addresses (base32 of a key ‖
-// SHA-512/256 checksum) but the keys are NOT derived from the demo phrase (Kyro derives them in
-// Rust like the Ledger Algorand app); the transaction blob is a demo encoding (hex JSON, NOT the
-// canonical msgpack wallet-core writes) and the signature is fake. The rules are Rust's:
-// - minimum balance 0.1 ALGO (+ 0.1 per asset opted in); spendable = balance − minimum balance;
-// - a receiver must end at or above its minimum balance (an empty account needs ≥ 0.1 ALGO);
-// - amount + fee > spendable → refused; empty or rekeyed sender → refused;
-// - decoding refuses close-remainder-to, rekey, group and lease, another network, a note > 1024 B;
-// - sign re-reads both accounts live and refuses an expired validity window;
-// - a submitted payment is confirmed a few seconds later (`algo_tx_status`).
 
 import { base32nopad } from '@scure/base';
 import { sha256, sha512_256 } from '@noble/hashes/sha2';
@@ -108,7 +97,6 @@ export interface DemoAlgoDeps {
 
 export interface DemoAlgoState {
   me: string;
-  /** A funded account. */
   friend: string;
   /** An account that never received ALGO (needs ≥ 0.1 ALGO). */
   empty: string;
@@ -166,7 +154,6 @@ export function createDemoAlgo(d: DemoAlgoDeps) {
     };
   };
 
-  /** algo_backend::check_payment, same order and messages. */
   const checkPayment = (ours: AlgoAccountInfo, dest: AlgoAccountInfo, amount: bigint, fee: bigint) => {
     if (ours.authAddr) throw invalidInput(l10n(`ce compte Algorand a été « rekeyé » vers ${ours.authAddr} : sa clé de signature n'est plus celle de ce portefeuille, Kyro ne peut pas signer pour lui`, `this Algorand account was “rekeyed” to ${ours.authAddr}: its signing key is no longer this wallet's, Kyro cannot sign for it`));
     if (!ours.exists) throw invalidInput(l10n("ton compte Algorand n'est pas encore activé (aucun ALGO reçu)", 'your Algorand account is not activated yet (no ALGO received)'));
@@ -188,7 +175,6 @@ export function createDemoAlgo(d: DemoAlgoDeps) {
   const encode = (p: DemoPayment) => bytesToHex(new TextEncoder().encode(JSON.stringify(p)));
   const txidOf = (p: DemoPayment) => base32nopad.encode(sha512_256(new TextEncoder().encode(`TX${JSON.stringify({ ...p, sig: undefined })}`)));
 
-  /** wallet-core algo_decode_tx: sender = us, this network, no close / rekey. */
   const decode = (blob: unknown): { p: DemoPayment; summary: AlgoTxSummary } => {
     let p: DemoPayment;
     try {
@@ -231,7 +217,6 @@ export function createDemoAlgo(d: DemoAlgoDeps) {
 
   const contextFor = (to: string): AlgoContext => ({ account: account(me), destination: account(to), round: state.round });
 
-  /** commands_algo.rs describe_algo. */
   const describe = (s: AlgoTxSummary, c: AlgoContext): string => {
     let out = l10n(`Envoi Algorand${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.receiver}\nMontant : ${algoText(s.amount)} (${s.amount} µALGO)\n`, `Algorand send${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.receiver}\nAmount: ${algoText(s.amount)} (${s.amount} µALGO)\n`);
     if (!c.destination.exists) out += l10n(`\nCe compte n'existe pas encore : ce paiement le crée (au moins ${algoText(c.destination.minBalance)} doivent y rester, solde minimum).\n`, `\nThis account does not exist yet: this payment creates it (at least ${algoText(c.destination.minBalance)} must stay on it, minimum balance).\n`);

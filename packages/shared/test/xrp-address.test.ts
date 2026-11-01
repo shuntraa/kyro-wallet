@@ -1,5 +1,4 @@
 // The demo XRP address derivation matches the Trezor firmware fixtures (`all ×12`,
-// m/44'/144'/0'/0/0 = rNaqKtKr…; account 1 = m/44'/144'/1'/0/0 = rJX2KwzaL…), i.e. wallet-core's.
 import { describe, expect, it } from 'vitest';
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { checkXrpAddress, demoXrpAddress } from '../src/mock-xrp';

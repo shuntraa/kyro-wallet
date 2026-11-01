@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// DEMO ONLY — network choice (docs/IPC.md §2.10), mirroring src-tauri/src/network.rs:
-// `?network=` in the URL plays the role of KYRO_NETWORK (forces it, switching refused), then
-// the saved choice (localStorage, public data), then the default (testnet, like a debug build).
-// `network_set` saves and « restarts »: in a browser, the page reloads without `?network=`.
+// DEMO ONLY — network choice (docs/IPC.md §2.10), mirroring src-tauri/src/network.rs: `?network=`
 
 import { IpcError, type Network, type NetworkInfo, type NetworkSource } from './ipc';
 import { l10n } from './i18n';
@@ -84,7 +80,6 @@ export interface DemoNetworkDeps {
   store: DemoNetworkStore;
   /** Locks the demo vault before the restart (like Rust's `lock_session`). */
   lock: () => void;
-  /** Called instead of reloading the page (tests). */
   onRestart?: (n: Network) => void;
 }
 

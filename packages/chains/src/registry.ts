@@ -1,21 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Chain & asset registry. Same seed / same EVM address on every EVM chain.
-// RPC hosts must match the net_fetch allowlist (docs/IPC.md §3).
+// Chain & asset registry. RPC hosts must match the net_fetch allowlist (docs/IPC.md §3).
 
 import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } from '@kyro/shared';
 
-/**
- * `ltc` / `doge` / `bch` / `dash`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*` / `bch_*` /
- * `dash_*`, docs/IPC.md §2.4).
- * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
- */
-/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `xlm`: Stellar (XLM, `stellar_*`, §2.11). */
-/** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). `kas`: Kaspa (KAS, `kas_*`, §2.11). `dot`: Polkadot Asset Hub (`dot_*`, §2.11). */
-/** `algo`: Algorand (ALGO payments, `algo_*`, §2.11). */
-/** `xmr`: Monero (scanned, built, signed and published by Rust, `xmr_*`, §2.10). */
-/** `ton`: TON (Gram, ex-Toncoin, wallet v4R2, `ton_*`, §2.11). `cosmos`: Cosmos Hub (ATOM, `cosmos_*`, §2.11). `apt`: Aptos (APT, `aptos_*`, §2.11). */
-/** `zec`: Zcash, transparent addresses only (`zec_*`, §2.4b; Rust builds the transaction). */
+/** Chain families; each non-btc/evm/sol family is built and signed by Rust (docs/IPC.md §2). */
 export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt' | 'zec';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
@@ -147,12 +135,7 @@ const EVM_MAINNET: EvmChain[] = [
     coingeckoId: 'binancecoin', phase: 2, blockTimeSecs: 3, chainId: 56, rpcUrl: 'https://bsc-rpc.publicnode.com' }),
   evm({ key: 'avalanche', name: 'Avalanche C-Chain', label: 'Avalanche', network: 'mainnet', color: '#E84142', glyph: 'A', nativeSymbol: 'AVAX', nativeName: 'Avalanche',
     coingeckoId: 'avalanche-2', phase: 2, blockTimeSecs: 2, chainId: 43114, rpcUrl: 'https://avalanche-c-chain-rpc.publicnode.com' }),
-  // Other EVM-compatible chains (same address and key). Each RPC was checked on 2026-10-31:
-  // `eth_chainId` matches, EIP-1559 (type 2) transactions accepted by the pool (an unfunded
-  // type-2 transfer is refused for « insufficient funds », not for its type), JSON-RPC batches
-  // answered; reachable over Tor (Flare's and Kaia's own public RPCs answer 403 to Tor exits, hence
-  // Ankr for Flare and Pocket Network for Kaia). Not added: Ethereum Classic (61, type 2 refused: « pool not yet in London », Kyro
-  // only signs EIP-1559), XDC (50, `xdc…` address format; public RPCs answering 502/520).
+  // Extra EVM chains, RPCs checked 2026-10-31 (EIP-1559, batches, reachable over Tor). Ethereum Classic and XDC left out.
   evm({ key: 'cronos', name: 'Cronos', label: 'Cronos', network: 'mainnet', color: '#1D2D5C', glyph: 'C', nativeSymbol: 'CRO', nativeName: 'Cronos',
     coingeckoId: 'crypto-com-chain', phase: 2, blockTimeSecs: 1, chainId: 25, rpcUrl: 'https://cronos-evm-rpc.publicnode.com' }),
   evm({ key: 'mantle', name: 'Mantle', label: 'Mantle', network: 'mainnet', color: '#3F8F87', glyph: 'M', nativeSymbol: 'MNT', nativeName: 'Mantle',
@@ -186,16 +169,11 @@ const SOL: Record<Network, SolChain> = {
   },
 };
 
-/** Phase 4: listed with their price, shown as "Bientôt". Empty now: Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar, Polkadot and TON all have a full send path. */
+/** Listed with their price but not wired yet ("Bientôt"). */
 export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
 ];
 
-/**
- * Phase 4 UTXO chains with a full send path: Rust `ltc_*` / `doge_*` / `bch_*` / `dash_*`
- * commands and the `LitecoinAdapter` / `DogecoinAdapter` / `BitcoinCashAdapter` /
- * `DashAdapter`. Part of `allChains()` / `assetsFor()` like Bitcoin.
- * Hardware wallets: not supported yet (HW_UNSUPPORTED), the UI hides them for such accounts.
- */
+/** Phase 4 UTXO chains (Rust `ltc_*` / `doge_*` / `bch_*` / `dash_*`). No hardware wallets yet. */
 export interface UtxoChain extends Omit<ChainBase, 'phase'> {
   family: UtxoFamily;
   phase: 4;
@@ -251,12 +229,7 @@ export function utxoChainOf(family: UtxoFamily, network: Network): UtxoChain {
   return { ltc: LTC_CHAINS, doge: DOGE_CHAINS, bch: BCH_CHAINS, dash: DASH_CHAINS }[family][network];
 }
 
-/**
- * Zcash, TRANSPARENT ADDRESSES ONLY (t1… / t3…): Rust `zec_*` commands and `ZcashAdapter`
- * (`packages/chains/src/zcash/`). Shielded (zs…) and unified (u1…) addresses are refused.
- * Mainnet: Komodo's public ElectrumX servers; testnet: no public server (reads fail, said in the
- * UI). Hardware wallets: HW_UNSUPPORTED.
- */
+/** Zcash, transparent addresses only (t1… / t3…); shielded and unified addresses are refused. */
 export interface ZcashChain extends Omit<ChainBase, 'phase'> {
   family: 'zec';
   phase: 4;
@@ -275,11 +248,7 @@ export function zecChain(network: Network): ZcashChain {
   return ZEC_CHAINS[network];
 }
 
-/**
- * TRON (phase 4): Rust `tron_*` commands and `TronAdapter` (`packages/chains/src/tron/`).
- * Testnet = Nile. Part of `allChains()` / `assetsFor()` (TRX + the network's USDT, TRC-20).
- * Hardware wallets: not supported yet (HW_UNSUPPORTED), the UI disables TRON for such accounts.
- */
+/** TRON (testnet = Nile). No hardware wallets. */
 export interface TronChain extends Omit<ChainBase, 'phase'> {
   family: 'tron';
   phase: 4;
@@ -296,11 +265,7 @@ export function tronChain(network: Network): TronChain {
   return TRON_CHAINS[network];
 }
 
-/**
- * XRP Ledger (phase 4): Rust `xrp_*` commands and `XrpAdapter` (`packages/chains/src/xrp/`).
- * Testnet = XRPL Testnet. Part of `allChains()` / `assetsFor()` (XRP; issued currencies are read
- * as trust lines). Hardware wallets: HW_UNSUPPORTED, the UI disables XRP for such accounts.
- */
+/** XRP Ledger (issued currencies read as trust lines). No hardware wallets. */
 export interface XrpChain extends Omit<ChainBase, 'phase'> {
   family: 'xrp';
   phase: 4;
@@ -317,12 +282,7 @@ export function xrpChain(network: Network): XrpChain {
   return XRP_CHAINS[network];
 }
 
-/**
- * Hedera (phase 4): Rust `hbar_*` commands and `HbarAdapter` (`packages/chains/src/hedera/`).
- * The "address" is the EVM address of the ECDSA key (`m/44'/3030'/0'/0/a`): the first HBAR sent
- * to it creates the account `0.0.x` (read with `hbar_account`). Testnet = Hedera testnet. HBAR
- * only (HTS tokens: not supported). Hardware wallets: HW_UNSUPPORTED.
- */
+/** Hedera: the address is the ECDSA key's EVM address; the first HBAR received creates `0.0.x`. */
 export interface HbarChain extends Omit<ChainBase, 'phase'> {
   family: 'hbar';
   phase: 4;
@@ -339,11 +299,7 @@ export function hbarChain(network: Network): HbarChain {
   return HBAR_CHAINS[network];
 }
 
-/**
- * Cardano (phase 4): Rust `ada_*` commands and `CardanoAdapter` (`packages/chains/src/cardano/`).
- * Testnet = preprod. Part of `allChains()` / `assetsFor()` (ADA; native tokens are read from the
- * balance, not listed). Single-address mode. Hardware wallets: HW_UNSUPPORTED.
- */
+/** Cardano (testnet = preprod), single-address mode. No hardware wallets. */
 export interface CardanoChain extends Omit<ChainBase, 'phase'> {
   family: 'ada';
   phase: 4;
@@ -360,11 +316,7 @@ export function cardanoChain(network: Network): CardanoChain {
   return CARDANO_CHAINS[network];
 }
 
-/**
- * Stellar (phase 4): Rust `stellar_*` commands and `StellarAdapter` (`packages/chains/src/stellar/`).
- * Testnet = SDF's test network (Friendbot). XLM only (asset id `xlm`); issued assets held by the
- * account are listed by `stellar_account` but not sendable yet. Hardware wallets: HW_UNSUPPORTED.
- */
+/** Stellar: XLM plus known issued assets. No hardware wallets. */
 export interface StellarChain extends Omit<ChainBase, 'phase'> {
   family: 'xlm';
   phase: 4;
@@ -381,12 +333,7 @@ export function stellarChain(network: Network): StellarChain {
   return STELLAR_CHAINS[network];
 }
 
-/**
- * NEAR Protocol (phase 4): Rust `near_*` commands and `NearAdapter` (`packages/chains/src/near/`).
- * Testnet = NEAR testnet. Our address is the implicit account (64 hex of the ed25519 key);
- * named accounts are send destinations only. NEP-141 tokens are not listed (no function-call
- * signing). Hardware wallets: not supported, the UI disables NEAR for such accounts.
- */
+/** NEAR: our address is the implicit account (hex of the ed25519 key). No hardware wallets. */
 export interface NearChain extends Omit<ChainBase, 'phase'> {
   family: 'near';
   phase: 4;
@@ -403,11 +350,7 @@ export function nearChain(network: Network): NearChain {
   return NEAR_CHAINS[network];
 }
 
-/**
- * Sui (phase 4): Rust `sui_*` commands and `SuiAdapter` (`packages/chains/src/sui/`). Testnet =
- * Sui testnet. SUI only (other coins are not listed). Server: the Sui Foundation's GraphQL RPC,
- * reached by Rust only. Hardware wallets: not supported, the UI hides Sui for such accounts.
- */
+/** Sui (GraphQL RPC, reached by Rust only). No hardware wallets. */
 export interface SuiChain extends Omit<ChainBase, 'phase'> {
   family: 'sui';
   phase: 4;
@@ -424,12 +367,7 @@ export function suiChain(network: Network): SuiChain {
   return SUI_CHAINS[network];
 }
 
-/**
- * Kaspa (phase 4): Rust `kas_*` commands and `KaspaAdapter` (`packages/chains/src/kaspa/`).
- * Testnet = testnet-10. Part of `allChains()` / `assetsFor()` (KAS). Receive address
- * `m/44'/111111'/a'/0/0`; balance and history read 20 receive + 20 change addresses.
- * Hardware wallets: not offered.
- */
+/** Kaspa: receive `m/44'/111111'/a'/0/0`; balance reads 20 receive + 20 change addresses. */
 export interface KaspaChain extends Omit<ChainBase, 'phase'> {
   family: 'kas';
   phase: 4;
@@ -446,12 +384,7 @@ export function kaspaChain(network: Network): KaspaChain {
   return KASPA_CHAINS[network];
 }
 
-/**
- * Polkadot (phase 4): DOT on **Polkadot Asset Hub** (where balances live since the Asset Hub
- * migration), Rust `dot_*` commands and `PolkadotAdapter` (`packages/chains/src/polkadot/`).
- * Testnet = Westend Asset Hub (WND, 12 decimals, SS58 prefix 42). No history (no keyless
- * indexer). Hardware wallets: HW_UNSUPPORTED.
- */
+/** Polkadot Asset Hub (where DOT balances live since the migration). Testnet = Westend Asset Hub. */
 export interface PolkadotChain extends Omit<ChainBase, 'phase'> {
   family: 'dot';
   phase: 4;
@@ -468,11 +401,7 @@ export function polkadotChain(network: Network): PolkadotChain {
   return POLKADOT_CHAINS[network];
 }
 
-/**
- * Algorand (phase 4): Rust `algo_*` commands and `AlgorandAdapter` (`packages/chains/src/algorand/`).
- * Testnet = Algorand TestNet. Keys: `m/44'/283'/a'/0/0` like the Ledger Algorand app (not Pera's
- * 25 words). ALGO only (no ASA). Hardware wallets: not offered.
- */
+/** Algorand, keys `m/44'/283'/a'/0/0` like the Ledger app (not Pera's 25 words). */
 export interface AlgorandChain extends Omit<ChainBase, 'phase'> {
   family: 'algo';
   phase: 4;
@@ -489,11 +418,7 @@ export function algorandChain(network: Network): AlgorandChain {
   return ALGORAND_CHAINS[network];
 }
 
-/**
- * Monero (phase 4): Rust `xmr_*` commands and `XmrAdapter` (`packages/chains/src/xmr/`).
- * Testnet = Monero **stagenet**. Rust scans the blocks locally (no key sent to the node).
- * Hardware wallets: HW_UNSUPPORTED.
- */
+/** Monero (testnet = stagenet). Rust scans blocks locally, no key is sent to the node. */
 export interface XmrChain extends Omit<ChainBase, 'phase'> {
   family: 'xmr';
   phase: 4;
@@ -510,12 +435,7 @@ export function xmrChain(network: Network): XmrChain {
   return XMR_CHAINS[network];
 }
 
-/**
- * TON (phase 4): Rust `ton_*` commands and `TonAdapter` (`packages/chains/src/ton/`). Wallet
- * v4R2 of `m/44'/607'/a'` (Trust Wallet's route). Testnet = TON testnet (another wallet id, so
- * another address: a testnet signature can never be replayed on mainnet). Gram (TON's coin, ticker GRAM since June 2026, formerly Toncoin) and the
- * known jettons (USD₮). Hardware wallets: not supported (the UI disables TON for such accounts).
- */
+/** TON wallet v4R2 of `m/44'/607'/a'`; the testnet wallet id differs so signatures can't replay on mainnet. */
 export interface TonChain extends Omit<ChainBase, 'phase'> {
   family: 'ton';
   phase: 4;
@@ -532,11 +452,7 @@ export function tonChain(network: Network): TonChain {
   return TON_CHAINS[network];
 }
 
-/**
- * Cosmos Hub (phase 4): Rust `cosmos_*` commands and `CosmosAdapter` (`packages/chains/src/cosmos/`).
- * Testnet = the Hub's public testnet (chain id `provider`). Part of `allChains()` / `assetsFor()`
- * (ATOM only: IBC tokens are not listed nor sent). Hardware wallets: HW_UNSUPPORTED.
- */
+/** Cosmos Hub (ATOM only, no IBC tokens). */
 export interface CosmosChain extends Omit<ChainBase, 'phase'> {
   family: 'cosmos';
   phase: 4;
@@ -555,11 +471,7 @@ export function cosmosChain(network: Network): CosmosChain {
   return COSMOS_CHAINS[network];
 }
 
-/**
- * Aptos (phase 4): Rust `aptos_*` commands and `AptosAdapter` (`packages/chains/src/aptos/`).
- * Testnet = Aptos testnet (chain id 2). Part of `allChains()` / `assetsFor()` (APT only).
- * Hardware wallets: not offered (no `hw_*` path), the UI disables Aptos for such accounts.
- */
+/** Aptos (APT; testnet chain id 2). */
 export interface AptosChain extends Omit<ChainBase, 'phase'> {
   family: 'apt';
   phase: 4;
@@ -603,23 +515,8 @@ const tok = (symbol: string, name: string, decimals: number, coingeckoId: string
 });
 
 /*
- * Curated tokens: the top 250 of CoinGecko by market cap (2026-10-31) that live on a chain Kyro
- * supports, sorted by market cap. Source of each contract: CoinGecko `detail_platforms`, kept only
- * if it is
- * - the token's own chain (CoinGecko `asset_platform_id`), or
- * - on Arbitrum / Optimism / Base / Polygon, the canonical bridge token of the Ethereum contract
- *   (read on chain: `l1Address()`, `l1Token()` / `remoteToken()`, PoS `childToRootToken()`), or
- * - listed by the issuer itself (Circle USDC / EURC, Tether USDT, Paxos PYUSD / USDG pages), or
- * - GNO on Gnosis and the original ERC-20 of ApeCoin (named exceptions).
- * Other bridged copies (Binance-Peg, `.e`, Wormhole, OFT…) are left out. Every entry was checked
- * on chain on 2026-11-01 against the registry RPC: code present (EVM `eth_getCode`, Solana mint
- * owned by Token / Token-2022, TRON contract), `symbol()` and `decimals()` equal to CoinGecko.
- * Excluded: permissioned / RWA / fund / tokenized-stock tokens, Pi, Canton.
- * A7A5 (rouble stablecoin, asked by the user, listed by Exodus) is kept on Ethereum and TRON only:
- * CoinGecko `a7a5` platforms + Ethplorer / TronGrid `getcontract`, `symbol()` = `name()` = A7A5,
- * `decimals()` = 6 read on chain (2026-11-01). Upgradeable contract with an owner (GoPlus).
- * Pre-existing entries are kept (BNB Chain Binance-Peg USDC / USDT, Arbitrum USD₮0, Polygon PoS
- * USDT, WBTC). The Rust table `known_tokens.rs` is generated from these lists.
+ * Curated tokens: CoinGecko top 250 (2026-10-31) on supported chains: the native contract, the canonical
+ * L2 bridge token, or an issuer-listed one, each checked on chain 2026-11-01. `known_tokens.rs` is generated from these.
  */
 export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
   sepolia: [USDC('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238')],
@@ -849,52 +746,25 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
 };
 
 /** SPL tokens (Token or Token-2022: the program is read from the mint account). Same selection. */
-/**
- * Sui coin types (`contract` = full coin type `0x…::module::NAME`). USDC: Circle's native USDC
- * (developers.circle.com › USDC contract addresses, mainnet and testnet), cross-checked with
- * CoinGecko `usd-coin` (platform `sui`); `CoinMetadata.decimals` = 6 read on chain (2026-11-01).
- * No USDT: Tether lists no Sui deployment (tether.to › supported protocols), bridged copies are
- * left out. wallet-core (`sui_tx.rs`, `sui_known_coins`) holds the same list (checked by
- * known_tokens.rs tests against the generated fixture).
- */
+/** Sui coin types (full `0x…::module::NAME`): Circle's native USDC only. Mirrored in wallet-core. */
 export const SUI_COINS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC')],
   mainnet: [USDC('0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC')],
 };
 
-/**
- * Aptos fungible assets (`contract` = metadata object `0x` + 64 hex). USDC: Circle's native USDC
- * (developers.circle.com, mainnet and testnet), USDt: Tether's « Object Asset ID »
- * (tether.to › supported protocols, mainnet only); both cross-checked with CoinGecko
- * (`usd-coin` / `tether`, platform `aptos`), `fungible_asset::Metadata` read on chain
- * (decimals 6, 2026-11-01). wallet-core (`aptos.rs`, `aptos_known_assets`) holds the same list.
- */
+/** Aptos fungible assets (metadata object address): Circle USDC, Tether USDt. Mirrored in wallet-core. */
 export const APTOS_ASSETS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832')],
   mainnet: [USDC('0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b'), USDT('0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b')],
 };
 
-/**
- * Stellar issued assets (`contract` = `CODE-ISSUER`, the form Circle publishes; asset id
- * `xlm:CODE:ISSUER`, the history's). USDC: issuer GA5Z…KZVN (developers.circle.com › USDC
- * contract addresses), whose `home_domain` is circle.com and listed in circle.com's
- * stellar.toml (read 2026-11-01); testnet issuer from the same page. Amounts: 7 decimals (every
- * Stellar asset). Receiving needs a trustline (« Activer USDC », one 0.5 XLM base reserve).
- * wallet-core (`stellar.rs`, `stellar_known_assets`) holds the same list.
- */
+/** Stellar issued assets (`CODE-ISSUER`): Circle USDC. Receiving needs a trustline. Mirrored in wallet-core. */
 export const STELLAR_ASSETS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5', 7)],
   mainnet: [USDC('USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN', 7)],
 };
 
-/**
- * NEAR NEP-141 tokens (`contract` = token account). USDC: Circle's native USDC
- * (developers.circle.com, mainnet and testnet), USDt: `usdt.tether-token.near`
- * (tether.to › supported protocols, mainnet only); cross-checked with CoinGecko (`usd-coin` /
- * `tether`, platform `near-protocol`), `ft_metadata` read on chain (decimals 6, 2026-11-01).
- * Sending to an unregistered recipient adds `storage_deposit` (≈ 0.00125 NEAR, paid by the
- * sender). wallet-core (`near.rs`, `near_known_tokens`) holds the same list.
- */
+/** NEAR NEP-141 tokens. Sending to an unregistered recipient adds `storage_deposit`. Mirrored in wallet-core. */
 export const NEAR_TOKENS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af')],
   mainnet: [USDC('17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1'), USDT('usdt.tether-token.near')],
@@ -958,12 +828,7 @@ export function nativeAssetId(chain: Chain): string {
   return chain.family === 'evm' ? `eth:${chain.chainId}` : chain.family === 'tron' ? 'trx' : chain.family;
 }
 
-/**
- * TRC-20 tokens per network (mainnet: same selection as ERC20_TOKENS; Nile has its own test USDT,
- * unrelated to mainnet's). USDT is `TRON_USDT` (tron/adapter.ts) and the only token
- * commands_tron.rs KNOWN_TOKENS names in the dialog today; the others are shown « non vérifié »
- * there until the dialog reads the generated `known_tokens.rs`.
- */
+/** TRC-20 tokens per network (Nile has its own test USDT). */
 export const TRC20_TOKENS: Record<Network, TokenSpec[]> = {
   testnet: [USDT('TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf')],
   mainnet: [
@@ -978,51 +843,25 @@ export const TRC20_TOKENS: Record<Network, TokenSpec[]> = {
   ],
 };
 
-/**
- * Algorand Standard Assets, by asset id (`contract` = the decimal id). USDC: Circle's list
- * (mainnet ASA 31566704, testnet 10458941); USD₮: Tether's list (ASA 312769). algod
- * `/v2/assets/{id}` read on 2026-11-01: unit `USDC` / `USDt`, 6 decimals, url centre.io /
- * tether.to. An asset must be enabled (opt-in: 0-unit transfer to oneself, +0.1 ALGO of minimum
- * balance) before it can be received. wallet-core (`algorand.rs` `algo_known_assets`) holds the
- * same ids: Rust signs no other asset.
- */
+/** Algorand Standard Assets by id; must be opted in before receiving. Rust signs no other asset. */
 export const ALGO_ASSETS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('10458941')],
   mainnet: [USDC('31566704'), USDT('312769')],
 };
 
-/**
- * Polkadot Asset Hub trust-backed assets (pallet `Assets`), by asset id (`contract` = the decimal
- * id). USD₮: Tether's list (asset 1984); USDC: Circle's list (asset 1337). `Assets.Metadata` read
- * on 2026-11-01 from polkadot-asset-hub-rpc.polkadot.io: « Tether USD » `USDt` / « USD Coin »
- * `USDC`, 6 decimals, sufficient, minimum balance 0.01. Sent with `Assets.transfer_keep_alive`
- * (fees in DOT). wallet-core (`polkadot.rs` `dot_known_assets`) holds the same ids. None on
- * Westend (no official test stablecoin).
- */
+/** Polkadot Asset Hub assets by id (USD₮ 1984, USDC 1337). None on Westend. */
 export const DOT_ASSETS: Record<Network, TokenSpec[]> = {
   testnet: [],
   mainnet: [USDT('1984'), USDC('1337')],
 };
 
-/**
- * Hedera Token Service tokens, by token ID (`contract` = `0.0.num`). USDC: Circle's list (mainnet
- * 0.0.456858, testnet 0.0.429274); mirror node read on 2026-11-01: « USD Coin », USDC, 6
- * decimals, fungible, no custom fee, no KYC key. A token must be associated with the account
- * (TokenAssociate, ≈ $0.05) unless the account has automatic association. wallet-core
- * (`hedera.rs` `hbar_known_tokens`) holds the same IDs.
- */
+/** Hedera Token Service tokens by ID; must be associated with the account first. */
 export const HBAR_TOKENS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('0.0.429274')],
   mainnet: [USDC('0.0.456858')],
 };
 
-/**
- * TON jettons (TEP-74), by master (bounceable `EQ…`). USD₮: master listed by Tether (tether.to)
- * and CoinGecko `tether` (`the-open-network`), `decimals` 6 in its metadata. No official USDC on
- * TON (Circle lists none). wallet-core (`ton/jetton.rs`) holds the same masters with their
- * jetton wallet code: Rust computes our jetton wallet itself (checked by
- * known_tokens.rs tests against the generated fixture).
- */
+/** TON jettons (TEP-74) by master. Rust computes our jetton wallet itself. */
 export const TON_JETTONS: Record<Network, TokenSpec[]> = {
   testnet: [],
   mainnet: [USDT('EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs')],
@@ -1131,20 +970,18 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   const sol = solChain(network);
   const solCustom = servers.solana[sol.cluster]?.url;
   list.push(solCustom ? { host: host(solCustom), purpose: l10n('Solana : ton nœud RPC', 'Solana: your RPC node'), custom: true } : { host: host(sol.rpcUrl), purpose: l10n('Solana : nœud RPC', 'Solana: RPC node') });
-  // Litecoin / Dogecoin: reached by Rust only (ltc_* / doge_*), Tor circuits of their family.
+  // Non-EVM hosts below are reached by Rust only, over per-family Tor circuits.
   const nk = network === 'mainnet' ? 'mainnet' : 'testnet';
   const ltc = servers.litecoin?.[nk];
   list.push(ltc?.kind === 'esplora' ? { host: host(ltc.url), purpose: l10n('Litecoin : ton serveur Esplora', 'Litecoin: your Esplora server'), custom: true } : { host: 'litecoinspace.org', purpose: l10n('Litecoin : soldes, frais, diffusion', 'Litecoin: balances, fees, broadcast') });
   const doge = servers.dogecoin?.[nk];
   if (doge?.kind === 'esplora') list.push({ host: host(doge.url), purpose: l10n('Dogecoin : ton serveur Esplora', 'Dogecoin: your Esplora server'), custom: true });
   else if (network === 'mainnet') {
-    // Komodo's public ElectrumX servers (Rust only, raw TLS sockets; the second one is a
-    // fallback). Every UTXO is checked against its previous transaction before signing.
+    // Komodo's ElectrumX servers; every UTXO is checked against its previous tx before signing.
     list.push({ host: 'doge.electrum1.cipig.net:20060', purpose: l10n('Dogecoin : soldes, historique, frais, diffusion (ElectrumX public de Komodo)', 'Dogecoin: balances, history, fees, broadcast (Komodo public ElectrumX)') });
     list.push({ host: 'doge.electrum2.cipig.net:20060', purpose: l10n('Dogecoin : serveur de secours (ElectrumX public de Komodo)', 'Dogecoin: backup server (Komodo public ElectrumX)') });
   } else list.push({ host: l10n('aucun serveur', 'no server'), purpose: l10n('Dogecoin testnet : aucun serveur public gratuit, configure le tien (rien n’est contacté)', 'Dogecoin testnet: no free public server, set up your own (nothing is contacted)') });
-  // Bitcoin Cash: public Fulcrum servers (Rust only, raw TLS sockets, tried in order). Genesis
-  // and a block after the 2017 split checked on every session; CashTokens coins left out.
+  // Bitcoin Cash: public Fulcrum servers; the 2017 split is checked every session.
   const bch = servers.bitcoincash?.[nk];
   if (bch?.kind === 'esplora') list.push({ host: host(bch.url), purpose: l10n('Bitcoin Cash : ton serveur Esplora', 'Bitcoin Cash: your Esplora server'), custom: true });
   else if (network === 'mainnet') {
@@ -1167,15 +1004,12 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     list.push({ host: 'zec.electrum1.cipig.net:20058', purpose: l10n('Zcash (transparent) : soldes, historique, mise à niveau réseau, diffusion (ElectrumX public de Komodo)', 'Zcash (transparent): balances, history, network upgrade, broadcast (Komodo public ElectrumX)') });
     list.push({ host: 'zec.electrum2.cipig.net:20058', purpose: l10n('Zcash : serveur de secours (ElectrumX public de Komodo)', 'Zcash: backup server (Komodo public ElectrumX)') });
   } else list.push({ host: l10n('aucun serveur', 'no server'), purpose: l10n('Zcash testnet : aucun serveur public, rien n’est contacté', 'Zcash testnet: no public server, nothing is contacted') });
-  // TRON: reached by Rust only (tron_*), Tor circuits of the `tron` family.
-  // Cardano: reached by Rust only (ada_*), Tor circuits of the `cardano` family.
   const ada = servers.cardano?.[nk];
   list.push(
     ada?.kind === 'koios'
       ? { host: host(ada.url), purpose: l10n('Cardano : ton serveur Koios', 'Cardano: your Koios server'), custom: true }
       : { host: network === 'mainnet' ? 'api.koios.rest' : 'preprod.koios.rest', purpose: l10n(`Cardano${network === 'mainnet' ? '' : ' preprod'} : UTxO, paramètres, historique, diffusion (Koios)`, `Cardano${network === 'mainnet' ? '' : ' preprod'}: UTxOs, parameters, history, broadcast (Koios)`) },
   );
-  // Polkadot Asset Hub: reached by Rust only (dot_*), Tor circuits of the `polkadot` family.
   list.push({
     host: network === 'mainnet' ? 'polkadot-asset-hub-rpc.polkadot.io' : 'westend-asset-hub-rpc.polkadot.io',
     purpose: l10n(`Polkadot${network === 'mainnet' ? '' : ' (Westend)'} : soldes, métadonnées du runtime, nonce, frais, diffusion (nœud public de Parity)`, `Polkadot${network === 'mainnet' ? '' : ' (Westend)'}: balances, runtime metadata, nonce, fees, broadcast (Parity public node)`),
@@ -1185,35 +1019,27 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     list.push({ host: 'ahp-api.statescan.io', purpose: l10n('Polkadot : historique des transferts DOT sur Asset Hub (Statescan)', 'Polkadot: DOT transfer history on Asset Hub (Statescan)') });
     list.push({ host: 'polkadot-api.statescan.io', purpose: l10n('Polkadot : historique des transferts DOT sur la relay chain, d’avant la migration (Statescan)', 'Polkadot: DOT transfer history on the relay chain, from before the migration (Statescan)') });
   }
-  // XRP Ledger: reached by Rust only (xrp_*), Tor circuits of the `xrp` family.
   const xrp = servers.xrp?.[nk];
   list.push(
     xrp?.kind === 'jsonRpc'
       ? { host: host(xrp.url), purpose: l10n('XRP Ledger : ton serveur rippled', 'XRP Ledger: your rippled server'), custom: true }
       : { host: network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net', purpose: l10n(`XRP Ledger${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (rippled)`, `XRP Ledger${network === 'mainnet' ? '' : ' testnet'}: balances, reserve, history, broadcast (rippled)`) },
   );
-  // Stellar: reached by Rust only (stellar_*), Tor circuits of the `stellar` family; SDF's Horizon.
   list.push({ host: network === 'mainnet' ? 'horizon.stellar.org' : 'horizon-testnet.stellar.org', purpose: l10n(`Stellar${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (Horizon de la SDF)`, `Stellar${network === 'mainnet' ? '' : ' testnet'}: balances, reserve, history, broadcast (SDF Horizon)`) });
-  // NEAR: reached by Rust only (near_*), Tor circuits of the `near` family. Defaults only.
   list.push({ host: network === 'mainnet' ? 'free.rpc.fastnear.com' : 'test.rpc.fastnear.com', purpose: l10n(`NEAR${network === 'mainnet' ? '' : ' testnet'} : solde, clé d’accès, frais, diffusion (RPC FastNEAR)`, `NEAR${network === 'mainnet' ? '' : ' testnet'}: balance, access key, fees, broadcast (FastNEAR RPC)`) });
   list.push({ host: network === 'mainnet' ? 'tx.main.fastnear.com' : 'tx.test.fastnear.com', purpose: l10n(`NEAR${network === 'mainnet' ? '' : ' testnet'} : historique des transactions (API FastNEAR)`, `NEAR${network === 'mainnet' ? '' : ' testnet'}: transaction history (FastNEAR API)`) });
-  // Hedera: reached by Rust only (hbar_*), Tor circuits of the `hedera` family; no custom server.
   list.push({ host: network === 'mainnet' ? 'mainnet-public.mirrornode.hedera.com' : 'testnet.mirrornode.hedera.com', purpose: l10n(`Hedera${network === 'mainnet' ? '' : ' testnet'} : compte, solde, historique, taux de change (nœud miroir)`, `Hedera${network === 'mainnet' ? '' : ' testnet'}: account, balance, history, exchange rate (mirror node)`) });
   list.push({
     host: network === 'mainnet' ? 'node00.swirldslabs.com, node01-00-grpc.swirlds.com, node04.swirldslabs.com' : 'testnet-node00/01/02-00-grpc.hedera.com',
     purpose: l10n(`Hedera${network === 'mainnet' ? '' : ' testnet'} : diffusion des transferts signés (proxys gRPC-web des nœuds de consensus)`, `Hedera${network === 'mainnet' ? '' : ' testnet'}: broadcast of signed transfers (consensus nodes’ gRPC-web proxies)`),
   });
-  // Kaspa: reached by Rust only (kas_*), Tor circuits of the `kaspa` family. No custom server yet.
   list.push({
     host: network === 'mainnet' ? 'api.kaspa.org' : 'api-tn10.kaspa.org',
     purpose: l10n(`Kaspa${network === 'mainnet' ? '' : ' testnet-10'} : soldes, pièces, frais, historique, diffusion (API REST publique des développeurs Kaspa)`, `Kaspa${network === 'mainnet' ? '' : ' testnet-10'}: balances, coins, fees, history, broadcast (Kaspa developers’ public REST API)`),
   });
-  // Algorand: reached by Rust only (algo_*), Tor circuits of the `algorand` family. No custom server yet.
   list.push({ host: `${nk}-api.algonode.cloud`, purpose: l10n(`Algorand${network === 'mainnet' ? '' : ' TestNet'} : soldes, paramètres, diffusion (algod AlgoNode / Nodely)`, `Algorand${network === 'mainnet' ? '' : ' TestNet'}: balances, parameters, broadcast (AlgoNode / Nodely algod)`) });
   list.push({ host: `${nk}-idx.algonode.cloud`, purpose: l10n(`Algorand${network === 'mainnet' ? '' : ' TestNet'} : historique (indexer AlgoNode / Nodely)`, `Algorand${network === 'mainnet' ? '' : ' TestNet'}: history (AlgoNode / Nodely indexer)`) });
-  // TON: reached by Rust only (ton_*), Tor circuits of the `ton` family; no custom server yet.
   list.push({ host: network === 'mainnet' ? 'toncenter.com' : 'testnet.toncenter.com', purpose: l10n(`TON${network === 'mainnet' ? '' : ' testnet'} : solde, seqno, historique, frais estimés, diffusion (TON Center, ≈ 1 requête/s sans clé)`, `TON${network === 'mainnet' ? '' : ' testnet'}: balance, seqno, history, estimated fees, broadcast (TON Center, ≈ 1 request/s without a key)`) });
-  // Cosmos Hub: reached by Rust only (cosmos_*), Tor circuits of the `cosmos` family; no custom server yet.
   list.push({
     host: network === 'mainnet' ? 'cosmos-rest.publicnode.com' : 'rest.provider-sentry-01.hub-testnet.polypore.xyz',
     purpose: l10n(`Cosmos Hub${network === 'mainnet' ? '' : ' testnet'} : compte, soldes, simulation, historique, diffusion (LCD)`, `Cosmos Hub${network === 'mainnet' ? '' : ' testnet'}: account, balances, simulation, history, broadcast (LCD)`),
@@ -1224,10 +1050,8 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       ? { host: host(tron.url), purpose: l10n('TRON : ton nœud java-tron (l’historique exige l’API /v1 de TronGrid)', 'TRON: your java-tron node (history requires the TronGrid /v1 API)'), custom: true }
       : { host: network === 'mainnet' ? 'api.trongrid.io' : 'nile.trongrid.io', purpose: l10n(`TRON${network === 'mainnet' ? '' : ' Nile'} : soldes, ressources, historique, diffusion (TronGrid)`, `TRON${network === 'mainnet' ? '' : ' Nile'}: balances, resources, history, broadcast (TronGrid)`) },
   );
-  // Sui: reached by Rust only (sui_*), Tor circuits of the `sui` family. No custom server yet.
   list.push({ host: network === 'mainnet' ? 'graphql.mainnet.sui.io' : 'graphql.testnet.sui.io', purpose: l10n(`Sui${network === 'mainnet' ? '' : ' testnet'} : solde, pièces de gaz, simulation, historique, envoi (GraphQL de la Sui Foundation)`, `Sui${network === 'mainnet' ? '' : ' testnet'}: balance, gas coins, simulation, history, sending (Sui Foundation GraphQL)`) });
-  // Monero: reached by Rust only (xmr_*), Tor circuits of the `monero` family. Blocks are
-  // scanned locally: the node never receives a key.
+  // Monero: blocks are scanned locally, the node never receives a key.
   const xmr = servers.monero?.[nk];
   list.push(
     xmr?.kind === 'node'
@@ -1236,7 +1060,6 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
         ? { host: 'xmr-node.cakewallet.com:18081', purpose: l10n('Monero : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Cake Wallet)', 'Monero: blocks (scanned on your machine), fees, decoys, broadcast (Cake Wallet public node)') }
         : { host: 'monero-stagenet.stackwallet.com:38081', purpose: l10n('Monero stagenet : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Stack Wallet)', 'Monero stagenet: blocks (scanned on your machine), fees, decoys, broadcast (Stack Wallet public node)') },
   );
-  // Aptos: reached by Rust only (aptos_*), Tor circuits of the `aptos` family. No custom server yet.
   list.push({
     host: network === 'mainnet' ? 'api.mainnet.aptoslabs.com' : 'api.testnet.aptoslabs.com',
     purpose: l10n(`Aptos${network === 'mainnet' ? '' : ' testnet'} : solde, simulation, historique (indexeur), diffusion (Aptos Labs, sans clé)`, `Aptos${network === 'mainnet' ? '' : ' testnet'}: balance, simulation, history (indexer), broadcast (Aptos Labs, no key)`),
@@ -1248,10 +1071,7 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   return list;
 }
 
-/**
- * Former names and tickers a search must still find (Gram was Toncoin / TON until June 2026),
- * and the display name Kyro shows whatever a cached market list still says.
- */
+/** Former names and tickers a search must still find (Gram was Toncoin until June 2026). */
 export const COIN_RENAMES: Record<string, { name: string; symbol: string; aliases: string[] }> = {
   'the-open-network': { name: 'Gram', symbol: 'GRAM', aliases: ['ton', 'toncoin', 'gram'] },
 };

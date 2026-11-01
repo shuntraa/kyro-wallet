@@ -1,20 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Generic single-account UTXO adapter for Bitcoin-derived chains other than Bitcoin (phase 4:
-// Litecoin BIP84 P2WPKH; Dogecoin, Bitcoin Cash and Dash BIP44 P2PKH). Same design as
-// `../bitcoin/adapter.ts`:
-//
-// - every read and the broadcast go through the Rust `{ltc,doge,bch,dash}_*` commands (docs/IPC.md
-//   §2.4), which return Esplora shapes and pick the server (no fallback);
-// - addresses come from the account xpub (public derivation only, checked against Rust's);
-// - the unsigned PSBT carries the key origins (and, for legacy P2PKH, the full previous
-//   transactions); Rust decodes it, shows the native dialog and signs.
-//
-// Fee unit: the chain's smallest unit per virtual byte (litoshis/vB; koinus, satoshis, duffs per
-// byte for Dogecoin, Bitcoin Cash, Dash, which have no SegWit, so vbytes = bytes). Addresses go
-// through the spec's codec: bitcoinjs for base58 / bech32, CashAddr for Bitcoin Cash (which
-// bitcoinjs does not know), so outputs are added by script. It travels in `FeeParams { family: 'btc', satPerVb }`
-// so the shared fee types can be reused as they are.
+// Generic single-account UTXO adapter for Bitcoin-derived chains other than Bitcoin (phase 4: Litecoin BIP84 P2WPKH; Dogecoin, Bitcoin Cash and Dash BIP44 P2PKH).
 
 import { accountArg } from '../types';
 import * as bitcoin from 'bitcoinjs-lib';
@@ -28,7 +13,6 @@ import type { HwSigner } from '../hw';
 
 bitcoin.initEccLib(ecc);
 
-// ---------------------------------------------------------------- Rust contract (§2.4)
 
 /** One chain's account, as returned by `accounts_get` (`ltc`, `doge`, `bch`, `dash`). */
 export type UtxoAccountView = UtxoAccountInfo;
@@ -61,7 +45,6 @@ export function rustUtxoBackend(prefix: UtxoPrefix, account = 0): UtxoBackend {
   };
 }
 
-// ---------------------------------------------------------------- sizes, dust, coin selection
 
 export type UtxoScriptType = 'p2wpkh' | 'p2wsh' | 'p2tr' | 'p2pkh' | 'p2sh';
 
@@ -79,11 +62,7 @@ export function scriptTypeOf(script: Uint8Array): UtxoScriptType | null {
 /** Output sizes in bytes (8 value + 1 length + script). */
 export const OUTPUT_BYTES: Record<UtxoScriptType, number> = { p2wpkh: 31, p2wsh: 43, p2tr: 43, p2pkh: 34, p2sh: 32 };
 
-/**
- * Size model, identical to Rust's worst-case estimate (wallet-core `utxo.rs`):
- * P2WPKH input = 41 bytes + 108 WU witness = 68 vB, overhead 10.5 vB (with marker/flag);
- * P2PKH input = 41 + 107 (scriptSig) = 148 bytes, overhead 10 bytes.
- */
+/** Size model, identical to Rust's worst-case estimate (wallet-core `utxo.rs`): P2WPKH input = 41 bytes + 108 WU witness = 68 vB, overhead 10.5 vB (with marker/flag); P2PKH input = 41 + 107 (scriptSig) = 148 bytes, overhead 10 bytes. */
 export interface SizeModel {
   overhead: number;
   input: number;
@@ -123,10 +102,7 @@ export function estimateSize(model: SizeModel, inputs: number, outputs: UtxoScri
 
 const feeFor = (vsize: number, rate: number) => BigInt(Math.ceil(vsize * rate));
 
-/**
- * Largest-first selection. `minOutput(type)` = smallest standard output (dust limit): the
- * recipient below it is refused; a change below it is folded into the fee.
- */
+/** Largest-first selection. */
 export function selectUtxoCoins(
   coins: SelectableCoin[],
   target: bigint,
@@ -169,7 +145,6 @@ export function selectAllUtxoCoins(coins: SelectableCoin[], rate: number, recipi
   return { inputs: [...coins], amount, change: 0n, fee, dustFolded: 0n, vsize };
 }
 
-// ---------------------------------------------------------------- the adapter
 
 export interface UtxoCoinSpec {
   /** Command prefix and asset id. */
@@ -188,10 +163,7 @@ export interface UtxoCoinSpec {
   rateHint: (rate: number) => string;
   /** Extra address check (e.g. Dogecoin: base58 only). */
   acceptAddress?: (address: string, net: bitcoin.Network) => boolean;
-  /**
-   * Address codec when bitcoinjs's is not the chain's (Bitcoin Cash: CashAddr). `toScript`
-   * throws on an invalid address; `toAddress` returns null for a non-address script.
-   */
+  /** Address codec when bitcoinjs's is not the chain's (Bitcoin Cash: CashAddr). */
   codec?: {
     toScript: (address: string, network: Network) => Uint8Array;
     toAddress: (script: Uint8Array, network: Network) => string | null;
@@ -444,8 +416,7 @@ export class UtxoAdapter {
       recipient: to,
       fee: sel.fee,
       maxFee: sel.fee,
-      // Bitcoin's thresholds (100 sat/vB) do not apply to litoshis / koinus: Rust's own
-      // UtxoTxSummary warnings (ltc_/doge_sign_psbt) decide the reinforced confirmation.
+      // Bitcoin's thresholds (100 sat/vB) do not apply to litoshis / koinus: Rust's own UtxoTxSummary warnings (ltc_/doge_sign_psbt) decide the reinforced confirmation.
       summary: { outputs, feeSats: Number(sel.fee), warnings: [], requiresExtraConfirmation: false },
       size: { family: 'btc', vsize: sel.vsize },
       dustFolded: sel.dustFolded,
@@ -467,12 +438,10 @@ export class UtxoAdapter {
   private finish(unsigned: UtxoUnsigned, res: { psbt: string; summary: UtxoTxSummary }): UtxoSigned {
     if (BigInt(res.summary.fee) !== unsigned.fee) throw new Error(l10n('Les frais décodés par Rust diffèrent de ceux de la transaction construite', 'The fees decoded by Rust differ from those of the built transaction'));
     const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
-    // Bitcoin Cash: Rust returns the inputs finalized (FORKID signatures); the others are
-    // finalized here from Rust's partial signatures.
+    // Bitcoin Cash: Rust returns the inputs finalized (FORKID signatures); the others are finalized here from Rust's partial signatures.
     const finalized = psbt.data.inputs.every((i) => i.finalScriptWitness || i.finalScriptSig);
     if (!finalized) psbt.finalizeAllInputs();
-    // The fee was shown and approved in Rust's dialog: no extra bitcoinjs fee-rate limit here
-    // (its default is in sat/vB for Bitcoin, meaningless for koinus).
+    // The fee was shown and approved in Rust's dialog: no extra bitcoinjs fee-rate limit here (its default is in sat/vB for Bitcoin, meaningless for koinus).
     const tx = psbt.extractTransaction(true);
     return { family: 'btc', hex: tx.toHex(), txid: tx.getId(), summary: res.summary };
   }

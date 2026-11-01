@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Monero adapter (XMR). Thin on purpose: Rust scans the blocks itself (the node never receives a
-// key, view key included), keeps the encrypted scan state, picks the inputs, fetches the decoys
-// and the fee rate, builds, signs AND publishes the transfer (`xmr_*`, docs/IPC.md §2.11). This
-// adapter only checks the input shape and that what Rust built is what was asked (destination,
-// amount). The transfer itself never leaves Rust: the UI only holds a handle (`id`).
+// Monero adapter (XMR). Thin on purpose: Rust scans the blocks itself (the node never receives a key, view key included), keeps the encrypted scan state, picks the inputs, fetches the decoys and the fee rate, builds, signs AND publishes the transfer (`xmr_*`, docs/IPC.md §2.11).
 
 import { accountArg } from '../types';
 import { call, l10n, type XmrDestination, type XmrHistoryEntry, type XmrStatus, type XmrSubaddress, type XmrTxSummary, type XmrWarning } from '@kyro/shared';
@@ -18,7 +13,6 @@ export const XMR_DECIMALS = 12;
 /** Blocks before a received output can be spent (protocol rule). */
 export const XMR_LOCK_BLOCKS = 10;
 
-// ---------------------------------------------------------------- Rust contract (§2.11)
 
 export interface XmrBackend {
   status(): Promise<XmrStatus>;
@@ -50,15 +44,10 @@ export function rustXmrBackend(account = 0): XmrBackend {
   };
 }
 
-// ---------------------------------------------------------------- addresses
 
 const XMR_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
-/**
- * Shape of a Monero address (Monero base58, 95 characters; integrated: 106). Mainnet: `4…`
- * (standard / integrated) or `8…` (subaddress); stagenet: `5…` or `7…`. The checksum, the
- * network and the kind are decoded by Rust (`xmr_validate_address`, wallet-core) before anything.
- */
+/** Shape of a Monero address (Monero base58, 95 characters; integrated: 106). */
 export function isXmrAddress(address: string, network: 'mainnet' | 'testnet' = 'mainnet'): boolean {
   const a = address.trim();
   if (![...a].every((c) => XMR_ALPHABET.includes(c))) return false;
@@ -86,7 +75,6 @@ export function xmrHeightAt(date: number, tip: number, tipTime: number): number 
   return Math.max(0, tip - back);
 }
 
-// ---------------------------------------------------------------- adapter
 
 export interface XmrUnsigned {
   family: 'xmr';
@@ -147,11 +135,7 @@ export class XmrAdapter implements ChainAdapter<'xmr'> {
     return this.backend.sync();
   }
 
-  /**
-   * Balance = everything not spent; `spendable` = unlocked (10 confirmations). An account already
-   * scanned once (restore height set) is brought up to date in the background; a never-used one is
-   * only scanned once its Monero screen is opened (no block download for a user without XMR).
-   */
+  /** Balance = everything not spent; `spendable` = unlocked (10 confirmations). An account already scanned once (restore height set) is brought up to date in the background; a never-used one is only scanned once its Monero screen is opened (no block download for a user without XMR). */
   async getBalance(): Promise<Array<Balance & { spendable: bigint }>> {
     let s = await this.backend.status();
     if (s.restoreHeight !== null && !s.running) s = await this.backend.sync().catch(() => s);

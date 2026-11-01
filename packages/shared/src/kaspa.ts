@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Kaspa addresses (`kaspa:` mainnet, `kaspatest:` testnet-10): CashAddr-style bech32 with the
-// BCH polymod, exactly as rusty-kaspa `crypto/addresses/src/bech32.rs` and wallet-core
-// `kaspa_address_decode` (lowercase only, network prefix required, checksum, version byte
-// 0 = P2PK Schnorr / 1 = P2PK ECDSA / 8 = P2SH, payload length, canonical form). Used by the UI
-// to validate input early and by the demo backend; Rust re-checks everything.
+// Kaspa addresses (`kaspa:` mainnet, `kaspatest:` testnet-10): CashAddr-style bech32 with the BCH
 
 import type { Network } from './ipc';
 import { l10n } from './i18n';

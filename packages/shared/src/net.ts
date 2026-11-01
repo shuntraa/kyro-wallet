@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Network helpers. The webview has no direct network access (CSP):
-// every request goes through the `net_fetch` command, which enforces the
-// host allowlist of docs/IPC.md §3 and injects API keys on the Rust side.
+// Network helpers. The webview has no direct network access (CSP): every request goes through the
 
 import { call, type NetRequest, type NetResponse } from './ipc';
 import { l10n } from './i18n';
@@ -90,11 +87,7 @@ export async function jsonRpc<T>(fetcher: NetFetch, url: string, method: string,
 /** One answer of a JSON-RPC batch: the result, or the call's own error. */
 export type JsonRpcOutcome = { ok: true; result: unknown } | { ok: false; error: JsonRpcError };
 
-/**
- * JSON-RPC 2.0 batch (one HTTP request for many calls, same host). Answers are matched by id and
- * returned in call order; a call without an answer gets an error. Throws if the server does not
- * answer with an array (batches unsupported), so the caller can fall back on single calls.
- */
+/** JSON-RPC 2.0 batch (one HTTP request for many calls, same host). */
 export async function jsonRpcBatch(fetcher: NetFetch, url: string, calls: Array<{ method: string; params: unknown[] }>): Promise<JsonRpcOutcome[]> {
   if (calls.length === 0) return [];
   const ids = calls.map(() => (rpcId = (rpcId + 1) % 1_000_000));

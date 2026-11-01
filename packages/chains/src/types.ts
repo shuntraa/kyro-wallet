@@ -37,25 +37,19 @@ export type FeeParams =
   | { family: 'ada' }
   /** Stellar: no fee to choose. Rust bids from Horizon's fee stats (≤ 0.01 XLM, usually 100 stroops charged). */
   | { family: 'xlm' }
-  /** NEAR: no fee to choose. Charged at the block's gas price; Rust checks a bound. */
   | { family: 'near' }
-  /** Sui: no fee to choose. Rust uses the reference gas price and a budget from a simulation. */
   | { family: 'sui' }
   /** Hedera: no fee to choose. Rust sets the max fee from the exchange rate (≈ $0.0001 charged). */
   | { family: 'hbar' }
   /** Kaspa: no fee to choose. Rust: 100 sompi per gram of relay mass (more when the network is busy). */
   | { family: 'kas' }
-  /** Polkadot: no fee to choose (runtime weight + length fee, no tip), estimated by the node. */
   | { family: 'dot' }
   /** Algorand: no fee to choose. Rust sets the protocol minimum (0.001 ALGO), more under congestion. */
   | { family: 'algo' }
   /** Monero: no fee to choose. Rust takes the node's « normal » rate (bounded) × the exact weight. */
   | { family: 'xmr' }
-  /** TON: no fee to choose. The network's price, estimated by emulation (TON Center). */
   | { family: 'ton' }
-  /** Cosmos Hub: no fee to choose. Rust simulates the gas and prices it at the fee market. */
   | { family: 'cosmos' }
-  /** Aptos: no fee to choose. Rust uses the node's gas price and a simulated max gas. */
   | { family: 'apt' }
   /** Zcash (transparent): no fee to choose. Rust applies ZIP 317 (5 000 zatoshis per logical action). */
   | { family: 'zec' };
@@ -74,10 +68,7 @@ export interface FeeEstimates {
   /** Human hint ("4,2 gwei", "3 sat/vB"). */
   hint: string;
   fetchedAt: number;
-  /**
-   * Bitcoin compact filters: rates are the average of the fees paid in the last blocks, not a
-   * mempool estimate. The UI says so and suggests the custom rate.
-   */
+  /** Bitcoin compact filters: rates are recent blocks' average, not a mempool estimate. */
   source?: 'block-average';
 }
 
@@ -196,38 +187,23 @@ export interface FamilyTypes {
   /** Litecoin / Dogecoin: Bitcoin shapes (PSBT, hex), the unsigned tx tagged `family: 'btc'`. */
   ltc: { unsigned: UtxoUnsigned; signed: UtxoSigned };
   doge: { unsigned: UtxoUnsigned; signed: UtxoSigned };
-  /** Bitcoin Cash / Dash: same shapes (Bitcoin Cash comes back finalized from Rust). */
   bch: { unsigned: UtxoUnsigned; signed: UtxoSigned };
   dash: { unsigned: UtxoUnsigned; signed: UtxoSigned };
-  /** TRON: `raw_data` built and decoded by Rust, its resource estimate. */
   tron: { unsigned: TronUnsigned; signed: TronSigned };
-  /** XRP Ledger: Payment built and strictly decoded by Rust, with the live context. */
   xrp: { unsigned: XrpUnsigned; signed: XrpSigned };
-  /** Cardano: transaction built (selection, fee, min-UTxO) and decoded by Rust. */
   ada: { unsigned: CardanoUnsigned; signed: CardanoSigned };
-  /** Stellar: transaction built (Payment or CreateAccount) and strictly decoded by Rust. */
   xlm: { unsigned: StellarUnsigned; signed: StellarSigned };
-  /** NEAR: one Transfer built and strictly decoded by Rust, with the live context. */
   near: { unsigned: NearUnsigned; signed: NearSigned };
-  /** Sui: SUI transfer built (gas coins, budget) and decoded (BCS) by Rust. */
   sui: { unsigned: SuiUnsigned; signed: SuiSigned };
-  /** Hedera: CryptoTransfer built (one copy per node) and decoded by Rust. */
   hbar: { unsigned: HbarUnsigned; signed: HbarSigned };
-  /** Kaspa: payment built (coin selection, KIP-9 mass, fee) and decoded by Rust. */
   kas: { unsigned: KaspaUnsigned; signed: KaspaSigned };
-  /** Polkadot: `transfer_keep_alive` payload built and strictly decoded by Rust. */
   dot: { unsigned: DotUnsigned; signed: DotSigned };
-  /** Algorand: payment built and strictly decoded by Rust, with the live context. */
   algo: { unsigned: AlgoUnsigned; signed: AlgoSigned };
   /** Monero: transfer built by Rust (kept in Rust, handle `id`), signed and published by `xmr_send_tx`. */
   xmr: { unsigned: XmrUnsigned; signed: XmrSigned };
-  /** TON: v4R2 external message built and strictly decoded by Rust, with the live context. */
   ton: { unsigned: TonUnsigned; signed: TonSigned };
-  /** Cosmos Hub: MsgSend built (gas simulated, fee) and its SignDoc strictly decoded by Rust. */
   cosmos: { unsigned: CosmosUnsigned; signed: CosmosSigned };
-  /** Aptos: `0x1::aptos_account::transfer` built (simulated) and strictly decoded by Rust. */
   apt: { unsigned: AptosUnsigned; signed: AptosSigned };
-  /** Zcash transparent: v5 transaction built (selection, ZIP-317 fee, branch) and decoded by Rust. */
   zec: { unsigned: ZecUnsigned; signed: ZecSigned };
 }
 export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned | KaspaUnsigned | DotUnsigned | AlgoUnsigned | XmrUnsigned | TonUnsigned | CosmosUnsigned | AptosUnsigned | ZecUnsigned;
@@ -251,12 +227,7 @@ export interface HistoryItem {
   kind: 'transfer' | 'swap' | 'approval' | 'contract';
   /** Extra line (Cardano: tokens moved, CIP-20 message). */
   note?: string;
-  /**
-   * Address-poisoning lure (packages/chains/src/poisoning.ts): `zero` = a transfer of nothing, in
-   * any direction (EVM / TRON `transferFrom(you, X, 0)`, a 0-lamport Solana transfer…);
-   * `notSigned` = shown as outgoing although this account did not sign the transaction. Its
-   * counterparty is never a reference address.
-   */
+  /** Address-poisoning lure (see poisoning.ts); its counterparty is never a reference address. */
   suspect?: 'zero' | 'notSigned';
 }
 

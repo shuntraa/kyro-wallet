@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Display language shared by the packages (chains, swap, market, demo mocks). The desktop UI owns
-// the choice (Settings → Display, `settings.language`) and calls `setLang` whenever it changes;
-// packages only read it, at the moment they build a user-facing message, through `l10n(fr, en)`.
-// Nothing here is persisted: the default is French until the UI says otherwise.
+// Display language shared by the packages (chains, swap, market, demo mocks).
 
 /** Languages Kyro is translated into. */
 export type Lang = 'fr' | 'en';

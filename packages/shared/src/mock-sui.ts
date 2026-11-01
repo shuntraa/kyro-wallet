@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Sui (`sui_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
-// commands_sui.rs and sui_backend.rs. Addresses have the real shape (`0x` + BLAKE2b-256(0x00 ||
-// 32 bytes)) but the 32 bytes are a demo value, not an ed25519 key of the seed; the transaction
-// is a demo encoding (base64 JSON, NOT the BCS wallet-core writes) and the signature is fake.
-// The rules are Rust's:
-// - recipient: `0x` + exactly 64 hex characters; short forms (`0x2`) and SuiNS names refused;
-// - gas: reference gas price × (computation + 1000 units of margin) + storage − rebate (SDK
-//   formula), amount + budget ≤ SUI coins, else refused; addressBalance is shown, not spent;
-// - sign re-reads everything live, refuses an expired epoch or a changed gas coin;
-// - an executed transfer is indexed a few seconds later (`sui_tx_status`).
 
 import { blake2b } from '@noble/hashes/blake2b';
 import { sha256 } from '@noble/hashes/sha2';
@@ -217,9 +207,7 @@ export function createDemoSui(d: DemoSuiDeps) {
     };
   };
 
-  /** commands_sui.rs SHOWN_GAS_COINS. */
   const SHOWN_GAS_COINS = 5;
-  /** commands_sui.rs describe_sui. */
   const describe = (s: SuiTxSummary, c: SuiContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     let out = l10n(`Envoi Sui${d.network === 'testnet' ? ' (testnet)' : ''}\n\nÀ : ${s.recipient}\n(adresse Sui complète : 0x + 64 caractères, sans somme de contrôle — compare-la en entier)\n${line}\n`, `Sui send${d.network === 'testnet' ? ' (testnet)' : ''}\n\nTo: ${s.recipient}\n(full Sui address: 0x + 64 characters, no checksum — compare all of it)\n${line}\n`);

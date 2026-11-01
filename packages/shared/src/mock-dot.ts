@@ -1,16 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Polkadot Asset Hub (`dot_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/
-// src/commands_dot.rs and dot_backend.rs. The address is a real SS58 address (prefix 0 mainnet,
-// 42 Westend, blake2b-512 checksum) of a DEMO public key (blake2b of the demo seed: NOT the
-// sr25519 derivation Rust does, which needs schnorrkel); the payload is a demo encoding (hex
-// JSON, NOT the SCALE payload wallet-core writes) and the signature is fake. The rules are Rust's:
-// - spendable = free − max(frozen − reserved, existential deposit) (transfer_keep_alive);
-// - new recipient → amount ≥ existential deposit; amount + fee > spendable → refused; our
-//   account not existing → refused; SS58 prefix of another network → refused; to oneself →
-//   refused;
-// - sign re-reads everything live, refuses a stale nonce or an era about to expire;
-// - a submitted transfer is « finalized » a few seconds later (`dot_tx_status`, by nonce).
 
 import { blake2b } from '@noble/hashes/blake2b';
 import { base58 } from '@scure/base';
@@ -92,7 +81,6 @@ export interface DemoDotDeps {
 
 export interface DemoDotState {
   me: string;
-  /** A funded account (a friend). */
   friend: string;
   accounts: Map<string, DemoDotAccount>;
   /** `from:nonce` → submit time. */
@@ -154,7 +142,6 @@ export function createDemoDot(d: DemoDotDeps) {
       existentialDeposit: c.ed.toString(),
     };
   };
-  /** dot_backend::check_transfer, same order and messages. */
   const check = (ours: DotAccountInfo, dest: DotAccountInfo, value: bigint) => {
     if (!ours.exists) throw invalidInput(l10n(`ton compte n'existe pas encore sur la chaîne (aucun ${c.symbol} reçu)`, `your account does not exist on chain yet (no ${c.symbol} received)`));
     if (!dest.exists && value < c.ed) throw invalidInput(l10n(`ce compte n'existe pas encore : il faut lui envoyer au moins le dépôt existentiel (${fmt(c.ed)}), sinon le transfert échoue`, `this account does not exist yet: you must send it at least the existential deposit (${fmt(c.ed)}), otherwise the transfer fails`));

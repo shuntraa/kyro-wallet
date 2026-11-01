@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// XRP Ledger adapter (XRP + issued currencies). Thin on purpose: reads, Payment building
-// (Sequence / Fee / LastLedgerSequence filled by Rust, encoded by wallet-core), signature and
-// `submit` are Rust commands (`xrp_*`, docs/IPC.md §2.6). This adapter only validates input and
-// checks that what Rust built is what was asked (destination, amount, **destination tag**).
+// XRP Ledger adapter (XRP + issued currencies).
 
 import { accountArg } from '../types';
 import {
@@ -19,7 +15,6 @@ import type { XrpChain } from '../registry';
 import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
-// ---------------------------------------------------------------- Rust contract (§2.6)
 
 export type { XrpAccountInfo, XrpAmountView, XrpContext, XrpHistoryEntry, XrpTrustLine, XrpTxSummary, XrpWarning };
 
@@ -52,10 +47,7 @@ export function rustXrpBackend(account = 0): XrpBackend {
   };
 }
 
-/**
- * Hardware-wallet account `accountId` (docs/IPC.md §2.3): Rust builds and broadcasts with the
- * account's stored key (`hw_xrp_build_tx`, `hw_xrp_broadcast`); signing is `hw_sign_xrp_tx`.
- */
+/** Hardware-wallet account `accountId` (docs/IPC.md §2.3): Rust builds and broadcasts with the account's stored key (`hw_xrp_build_tx`, `hw_xrp_broadcast`); signing is `hw_sign_xrp_tx`. */
 export function hwXrpBackend(accountId: string): XrpBackend {
   const reads = rustXrpBackend(0);
   return {
@@ -66,23 +58,16 @@ export function hwXrpBackend(accountId: string): XrpBackend {
   };
 }
 
-// ---------------------------------------------------------------- addresses and tags
 
 const RIPPLE_ALPHABET = 'rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz';
 
-/**
- * Classic `r…` address shape (Ripple base58 alphabet, 25–35 characters). The checksum is
- * verified by Rust (`xrp_account_id`) on every command; X-addresses are refused.
- */
+/** Classic `r…` address shape (Ripple base58 alphabet, 25–35 characters). */
 export function isXrpAddress(address: string): boolean {
   const a = address.trim();
   return /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(a) && [...a].every((c) => RIPPLE_ALPHABET.includes(c));
 }
 
-/**
- * X-address (`X…` mainnet / `T…` testnet, destination tag embedded): Rust refuses them
- * (wallet-core `xrp_account_id`, same rule). The UI asks for the classic address + tag instead.
- */
+/** X-address (`X…` mainnet / `T…` testnet, destination tag embedded): Rust refuses them (wallet-core `xrp_account_id`, same rule). */
 export function isXAddress(address: string): boolean {
   const a = address.trim();
   return (a.startsWith('X') || a.startsWith('T')) && a.length >= 46 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(a);
@@ -98,7 +83,6 @@ export function parseDestinationTag(input: string): number | undefined {
   return n;
 }
 
-// ---------------------------------------------------------------- adapter
 
 export interface XrpUnsigned {
   family: 'xrp';
@@ -188,10 +172,7 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
     });
   }
 
-  /**
-   * `ChainAdapter` entry point (XRP only; issued currencies go through `buildPayment`). `max`:
-   * spendable (balance − reserve) minus the fee Rust sets, built twice.
-   */
+  /** `ChainAdapter` entry point (XRP only; issued currencies go through `buildPayment`). */
   async buildTx(params: BuildParams): Promise<XrpUnsigned> {
     if (params.asset.kind !== 'native') throw new Error(l10n('Actif XRP Ledger inattendu', 'Unexpected XRP Ledger asset'));
     const tag = params.destinationTag !== undefined ? { destinationTag: params.destinationTag } : {};

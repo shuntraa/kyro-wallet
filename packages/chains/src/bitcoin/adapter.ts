@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Bitcoin adapter (BIP84 SegWit + BIP86 Taproot).
-//
-// Every read and the broadcast go through the Rust `btc_*` commands (docs/IPC.md §2.2),
-// which return Esplora shapes whatever the user's server (default mempool.space, Esplora,
-// Electrum, Bitcoin Core). Rust picks the server and never falls back to the default:
-// this adapter never calls `net_fetch` for Bitcoin.
-//
-// - Addresses are derived from the account xpubs (public derivation only).
-// - Unsigned PSBTs carry witnessUtxo + bip32Derivation / tapBip32Derivation so
-//   that wallet-core can find the keys; signing happens in Rust.
+// Bitcoin adapter (BIP84 SegWit + BIP86 Taproot). Rust picks the server and never falls back to the default: this adapter never calls `net_fetch` for Bitcoin.
 
 import { accountArg } from '../types';
 import * as bitcoin from 'bitcoinjs-lib';
@@ -39,12 +29,7 @@ export interface DerivedAddress {
 export interface BitcoinAdapterOptions {
   chain: BtcChain;
   accounts: Accounts['btc'];
-  /**
-   * Hardware-wallet account: input rules of the devices (docs/IPC.md §2.3).
-   * - every SegWit v0 input carries `non_witness_utxo`, the full previous transaction, from
-   *   `prevTx` (`btc_tx_hex`: Rust checks its txid; bitcoinjs checks it again here);
-   * - Ledger: one kind of input per transaction (SegWit OR Taproot), never mixed.
-   */
+  /** Hardware-wallet account: input rules of the devices (docs/IPC.md §2.3). - every SegWit v0 input carries `non_witness_utxo`, the full previous transaction, from `prevTx` (`btc_tx_hex`: Rust checks its txid; bitcoinjs checks it again here); - Ledger: one kind of input per transaction (SegWit OR Taproot), never mixed. */
   hw?: HwSigner & { prevTx: (txid: string) => Promise<string> };
   /** Consecutive unused addresses before stopping a scan. */
   gapLimit?: number;
@@ -67,10 +52,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   private readonly keys: Record<BtcKind, HDKey>;
   private scanCache: { at: number; addrs: DerivedAddress[] } | null = null;
   private scanning: Promise<DerivedAddress[]> | null = null;
-  /**
-   * True when the last `getHistory` hit the cap (`BTC_TXS_CAP` transactions for at least one
-   * address, every backend): older ones may exist and are not shown. The UI says "50 dernières".
-   */
+  /** True when the last `getHistory` hit the cap (`BTC_TXS_CAP` transactions for at least one address, every backend): older ones may exist and are not shown. */
   historyCapped = false;
 
   constructor(opts: BitcoinAdapterOptions) {
@@ -94,11 +76,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     return this.accounts[kind].address;
   }
 
-  /**
-   * Only the five standard types: P2PKH, P2SH, P2WPKH, P2WSH, P2TR. A « future » SegWit address
-   * (witness v2 to v16, or v1 that is not 32 bytes) is valid bech32m but nobody can spend it
-   * today: coins sent there are lost (or taken by whoever first defines the rule).
-   */
+  /** Only the five standard types: P2PKH, P2SH, P2WPKH, P2WSH, P2TR. */
   isValidAddress(address: string): boolean {
     try {
       return scriptTypeOf(bitcoin.address.toOutputScript(address.trim(), this.net)) !== null;
@@ -130,8 +108,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
             const info = await call('btc_address_info', { address: d.address });
             const txs = info.chain_stats.tx_count + info.mempool_stats.tx_count;
             d.used = txs > 0;
-            // Esplora: funded − spent. Electrum / Core: funded already carries the net balance
-            // (spent = 0, or the negative part of an unconfirmed spend): same formula.
+            // Esplora: funded − spent.
             d.balance = BigInt(info.chain_stats.funded_txo_sum - info.chain_stats.spent_txo_sum + info.mempool_stats.funded_txo_sum - info.mempool_stats.spent_txo_sum);
             out.push(d);
             unused = d.used ? 0 : unused + 1;
@@ -198,10 +175,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     return this.addressAt('segwit', 1, MAX_SCAN);
   }
 
-  /**
-   * Candidate input sets. Vault and Trezor: everything. Ledger: never SegWit + Taproot in the
-   * same transaction (its Bitcoin app refuses mixed inputs), so one set per kind.
-   */
+  /** Candidate input sets. Ledger: never SegWit + Taproot in the same transaction (its Bitcoin app refuses mixed inputs), so one set per kind. */
   inputGroups<T extends { owner: { kind: BtcKind } }>(utxos: T[]): T[][] {
     if (!this.hw || this.hw.device === 'trezor') return [utxos];
     const groups = (['segwit', 'taproot'] as const).map((k) => utxos.filter((u) => u.owner.kind === k)).filter((g) => g.length > 0);
@@ -245,8 +219,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
       if (owner.kind === 'segwit') {
         const input: Parameters<typeof psbt.addInput>[0] = { hash: u.txid, index: u.vout, witnessUtxo: { script, value: u.value }, bip32Derivation: [{ masterFingerprint: fp, pubkey: owner.pubkey, path: owner.path }] };
         if (this.hw) {
-          // Rust refuses a SegWit v0 input without its previous transaction (INVALID_INPUT) and
-          // checks its txid; checked here too (txid and the spent output), never trusted blindly.
+          // Rust refuses a SegWit v0 input without its previous transaction (INVALID_INPUT) and checks its txid; checked here too (txid and the spent output), never trusted blindly.
           const prev = bitcoin.Transaction.fromHex(await this.hw.prevTx(u.txid));
           const out = prev.outs[u.vout];
           if (prev.getId() !== u.txid || !out || out.value !== u.value || !bytesEqual(out.script, script)) {

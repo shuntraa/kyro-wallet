@@ -1,25 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// LI.FI cross-chain from SOLANA (to EVM or Bitcoin), through NEAR Intents. li.quest returns the
-// whole Solana transaction (`transactionRequest.data`, base64). Rust decodes it (`sol_decode_tx`)
-// and this file accepts only the shape LI.FI builds for the `near` bridge (live transactions,
-// 01/11/2026, SOL → ETH Arbitrum and USDC → USDC Base):
-//
-// - fee payer = the only signer = the taker (us); no warning other than the unknown LI.FI tracker;
-// - ComputeBudget (priority fee capped), at most one LI.FI tracking instruction (`TrackV1`:
-//   program 3i5Jeu… from LI.FI's `@lifi/solana-programs`, data = tag 0 + 8-byte id, accounts =
-//   Clock sysvar + its epoch PDA, both read-only: it moves nothing);
-// - transfers FROM US ONLY, of the sold token only (System transfers for SOL, SPL TransferChecked
-//   from our token account for a token), to exactly three kinds of destination:
-//     · the Kyro fee wallet (`recipients.solana`, or its token account) — exactly the quote's rate;
-//     · LI.FI's fee wallet (34FKjA…, or its token account) — ≤ 0,5 %;
-//     · ONE bridge deposit address (for a token: the token account of an owner created in the same
-//       transaction), which NEAR Intents must then confirm (near-intents.ts): recipient = us…;
-// - the transfers add up to exactly the amount sold; token account creation paid by us, for the
-//   sold mint only.
-//
-// Rust shows an unknown instruction (the tracker), hence the reinforced 2nd window: the UI lists
-// what Kyro checked above.
+// LI.FI cross-chain from Solana through NEAR Intents. Rust decodes the li.quest transaction; we accept
+// only LI.FI's `near` bridge shape: we are the sole signer, at most one read-only `TrackV1` tracker,
+// and transfers of the sold token from us only, to the Kyro fee wallet (exact rate), LI.FI's fee
+// wallet (≤ 0,5 %) and one deposit address that NEAR Intents must confirm, summing to the amount sold.
 
 import { l10n, type SolTxSummary } from '@kyro/shared';
 import { getBase64Encoder, getCompiledTransactionMessageDecoder, getTransactionDecoder } from '@solana/kit';
@@ -30,11 +14,7 @@ import { SwapCheckError, kyroFeeAtRate, maxKyroFee } from './verify';
 
 /** LI.FI's Solana tracking program (`lifi-solana-program-1`, npm `@lifi/solana-programs` 0.1.12). */
 export const LIFI_SOLANA_TRACKER = '3i5JeuZuUxeKtVysUnwQNGerJP2bSMX9fTFfS4Nxe3Br';
-/**
- * Wallet LI.FI's own 0,25 % is paid to on Solana. Not documented by LI.FI: read in every live
- * transaction (01/11/2026; SOL directly, tokens to its associated token account). If LI.FI changes
- * it, Solana-source quotes are refused until this is updated (fail closed).
- */
+/** LI.FI's Solana fee wallet, undocumented (read from live txs). If it changes, quotes are refused (fail closed). */
 export const LIFI_SOLANA_FEE_WALLET = '34FKjAdVcTax2DHqV2XnbXa9J3zmyKcFuFKWbcmgxjgm';
 const COMPUTE_BUDGET = 'ComputeBudget111111111111111111111111111111';
 const SYSTEM = '11111111111111111111111111111111';
@@ -49,7 +29,6 @@ export interface LifiSolanaCheckInput {
   wire: string;
   summary: SolTxSummary;
   taker: string;
-  /** Mint sold (wSOL mint or `1111…` for native SOL). */
   sellMint: string;
   sellAmount: bigint;
   /** Kyro fee, null when off. `recipient` = the Solana fee WALLET. */
@@ -59,7 +38,6 @@ export interface LifiSolanaCheckInput {
 export interface LifiSolanaCheck {
   /** NEAR Intents deposit address (wallet; for a token, the owner of the credited token account). */
   depositAddress: string;
-  /** Amount deposited (base units). */
   amountIn: bigint;
   kyroFee: bigint;
   lifiFee: bigint;
@@ -73,10 +51,7 @@ const fail = (why: string): never => {
 /** Rent of a token account (165 bytes), paid by us when the transaction creates one. */
 export const TOKEN_ACCOUNT_RENT_LAMPORTS = 2_039_280n;
 
-/**
- * Network cost of a wire transaction, estimated for display: base fee per signature + priority
- * fee (ComputeBudget limit × price) + rent of every token account it creates. Null if unreadable.
- */
+/** Estimated network cost: base fee + priority fee + rent of created token accounts. Null if unreadable. */
 export function solWireCostLamports(wire: string): bigint | null {
   try {
     const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wire));

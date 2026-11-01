@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// TON adapter (Toncoin, wallet v4R2). Thin on purpose: reads, transfer building (seqno and
-// account states read by Rust, cells written by wallet-core, fee emulated by TON Center),
-// signature and broadcast are Rust commands (`ton_*`, docs/IPC.md §2.11). This adapter only
-// validates input and checks that what Rust built is what was asked (recipient, amount,
-// **comment**).
+// TON adapter (Toncoin, wallet v4R2).
 
 import { accountArg } from '../types';
 import {
@@ -63,11 +58,7 @@ export function rustTonBackend(account = 0): TonBackend {
   };
 }
 
-/**
- * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its own v4R2 wallet,
- * signature on the device (`hw_*` commands). `sign`'s second argument is the device id, not a
- * password. Status: the generic `ton_tx_status`.
- */
+/** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its own v4R2 wallet, signature on the device (`hw_*` commands). */
 export function rustTonHwBackend(accountId: string): TonBackend {
   // Jetton sends are vault-only for now (the Ledger request has no jetton payload).
   const { buildJetton: _vaultOnly, ...base } = rustTonBackend();
@@ -90,13 +81,8 @@ export function tonHwCommentProblem(comment: string): string | null {
   return null;
 }
 
-// ---------------------------------------------------------------- addresses and comments
 
-/**
- * Why `address` cannot receive TON from Kyro on `network`, or null: user-friendly form only
- * (checksum verified), basechain only, testnet-only addresses refused on mainnet. Rust checks
- * the same on every command.
- */
+/** Why `address` cannot receive TON from Kyro on `network`, or null: user-friendly form only (checksum verified), basechain only, testnet-only addresses refused on mainnet. */
 export function tonRecipientProblem(address: string, network: 'mainnet' | 'testnet'): string | null {
   const problem = tonAddressProblem(address);
   if (problem) return problem;
@@ -122,7 +108,6 @@ export function tonCommentProblem(comment: string): string | null {
   return null;
 }
 
-// ---------------------------------------------------------------- adapter
 
 const maxBig = (a: bigint, b: bigint) => (a > b ? a : b);
 
@@ -274,8 +259,7 @@ export class TonAdapter implements ChainAdapter<'ton'> {
       summary: s,
       context: built.context,
       recipient: to,
-      // Whole balance: what should arrive (balance − estimated fee), for display only; Rust's
-      // message carries « everything » (mode 130), not this number.
+      // Whole balance: what should arrive (balance − estimated fee), for display only; Rust's message carries « everything » (mode 130), not this number.
       amount: sendAll ? maxBig(0n, BigInt(built.context.account.balance) - BigInt(built.context.fee)) : params.amount,
       ...(comment ? { comment } : {}),
       sendAll,

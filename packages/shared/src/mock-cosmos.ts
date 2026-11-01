@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Cosmos Hub (`cosmos_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
-// commands_cosmos.rs and cosmos_backend.rs. The address is really derived (m/44'/118'/0'/0/0,
-// bech32 `cosmos` of RIPEMD160(SHA256(pubkey))); the SignDoc is a demo encoding (hex JSON, NOT the
-// protobuf wallet-core writes) and the signature is fake. The rules are Rust's:
-// - MsgSend of uatom only; memo ≤ 512 characters; self-send refused;
-// - gas = simulated × 1.4, fee = gas × 0.005 uatom × 1.2; timeout_height = latest + 100 blocks;
-// - amount + fee > spendable → refused; our account unknown to the chain → refused;
-// - sign re-reads the account live, refuses a stale sequence or an expired timeout height;
-// - a broadcast transaction is in a block a few seconds later (`cosmos_tx_status`).
 
 import { HDKey } from '@scure/bip32';
 import * as bitcoin from 'bitcoinjs-lib';
@@ -106,14 +97,11 @@ export interface DemoCosmosDeps {
 
 export interface DemoCosmosState {
   me: string;
-  /** An exchange deposit address (send to it with a memo). */
   exchange: string;
   accounts: Map<string, DemoCosmosAccount>;
   history: CosmosHistoryEntry[];
-  /** hash → broadcast time and final code. */
   submitted: Map<string, { at: number; code: number }>;
   height: number;
-  /** Tests: the next broadcast transaction fails in its block with this code. */
   failNext: number | null;
 }
 
@@ -160,7 +148,6 @@ export function createDemoCosmos(d: DemoCosmosDeps) {
     return { address, exists: true, accountNumber: a.accountNumber, sequence: a.sequence, pubKey: null, balance: a.balance.toString(), spendable: a.balance.toString() };
   };
 
-  /** cosmos_backend::check_send, same messages. */
   const checkSend = (ours: CosmosAccountInfo, amount: bigint, fee: bigint) => {
     if (!ours.exists) throw invalidInput(l10n('ton compte Cosmos n’est pas encore connu du réseau (aucun ATOM reçu)', 'your Cosmos account is not known to the network yet (no ATOM received)'));
     const spendable = BigInt(ours.spendable);
@@ -208,7 +195,6 @@ export function createDemoCosmos(d: DemoCosmosDeps) {
 
   const contextNow = (): CosmosContext => ({ account: account(me), height: state.height });
 
-  /** commands_cosmos.rs describe_cosmos: memo framed, after the amount and the fee. */
   const describe = (s: CosmosTxSummary, c: CosmosContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     const left = BigInt(c.account.spendable) - BigInt(s.amount) - BigInt(s.fee);

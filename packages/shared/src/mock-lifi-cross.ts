@@ -1,13 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — cross-chain swaps as LI.FI builds them through NEAR Intents (live shapes of
-// 01/11/2026), so the demo runs Kyro's real checks (packages/swap: verify.ts NEARIntentsFacet,
-// lifi-cross.ts Solana source, near-intents.ts 1Click confirmation) end to end:
-// - EVM source: `swapAndStartBridgeTokensViaNEARIntents` (FeeForwarder step + NEAR data);
-// - Solana source: a legacy transaction (ComputeBudget, LI.FI TrackV1, fee transfers, deposit);
-// - `1click.chaindefuser.com`: `/v0/status` of every deposit address handed out, `/v0/tokens`,
-//   and `POST /v0/quote` for the DIRECT 1Click routes (from / to Bitcoin, Litecoin, Dogecoin, TRON,
-//   XRP, Cardano: packages/swap providers/near.ts), app fees split 50/50 like the live service.
 
 import { base58, base64, bech32, createBase58check } from '@scure/base';
 import * as bitcoin from 'bitcoinjs-lib';
@@ -320,7 +312,6 @@ export function demoOneClick(url: URL, req?: { method?: string; body?: string })
     if (!d) return json(404, { message: 'Deposit address not found' });
     const { reads, ...quoteResponse } = d;
     // Direct route: after Kyro's two checks (quote, then just before signing), the demo swap has
-    // « arrived », so the history follows it to SUCCESS like a real one.
     if (reads !== undefined) {
       d.reads = reads + 1;
       if (reads >= 2) return json(200, { status: 'SUCCESS', quoteResponse, swapDetails: { destinationChainTxHashes: [{ hash: bytesToHex(hash(`demo-arrival:${String(quoteResponse.quote.depositAddress)}`)) }] } });

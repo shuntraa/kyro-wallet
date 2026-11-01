@@ -1,26 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Address-poisoning detection (SECURITY.md). An attacker sends a dust or zero-value transfer
-// involving an address forged to share the first and last characters of one the user really
-// pays, hoping the user copies it from the history. Before review, the recipient is compared with
-// every reference address of the chain (address book, the user's own addresses, recipients of
-// sends signed by this device, other non-suspect counterparties of the history): not identical
-// but the same first 4 and last 4 characters after the format's prefix → look-alike, blocking
-// until the user confirms explicitly. Being exactly one of the references never exempts the
-// recipient from the comparison with the others.
-//
-// What the server's history says is never « trusted »: a zero-value `transferFrom(victim, L, 0)`
-// shows up as « sent by you to L », a 0-lamport Solana transfer as an outgoing payment. Suspect
-// transfers (zero, dust, not signed by us) never make an address a reference; their counterparties
-// only trigger a note when the recipient is one of them.
+// Address-poisoning detection (SECURITY.md): a recipient that shares the first and last 4 chars of a
+// reference address without being it blocks until the user confirms. Server history is never trusted:
+// zero-value / dust / unsigned transfers never make an address a reference.
 
 import type { Family } from './registry';
 import { sameTonAccount } from '@kyro/shared';
 
-/**
- * Where a reference comes from. `sent`: a recipient of a send signed by this device (Kyro's own
- * record). `history`: another counterparty of the server's history (not proof of anything).
- */
+/** `sent`: recipient of a send signed by this device. `history`: other server-history counterparty (proves nothing). */
 export type KnownSource = 'contact' | 'own' | 'sent' | 'history';
 
 export interface KnownAddress {
@@ -40,28 +26,8 @@ const HEAD = 4;
 const TAIL = 4;
 
 /**
- * The format prefix, which carries no entropy (every address of the kind has it), and whether the
- * format is case-insensitive (hex, bech32).
- * - Bitcoin / Litecoin bech32: hrp + `1` + witness-version char (`bc1q`, `tb1p`, `ltc1q`, `tltc1q`);
- *   legacy base58: the version char (`1`, `3`, `m`, `n`, `2`, `L`, `M`).
- * - Dogecoin, Dash (base58): the version char (`D`, `A`, `9`, `n`, `m`, `2`; `X`, `7`, `y`, `8`, `9`).
- * - Bitcoin Cash (CashAddr): `bitcoincash:` / `bchtest:` (optional) + the type char (`q`, `p`),
- *   compared lowercase.
- * - EVM: `0x`, hex compared lowercase.
- * - Solana (base58): none.
- * - TRON: `T`. XRP: `r`. Stellar: `G` (base32, upper case).
- * - Algorand (base32, upper case): none. Monero (base58): the network / kind char (`4`, `8`, `5`, `7`).
- * - TON (user-friendly): the first 2 characters (`EQ`, `UQ`, `kQ`, `0Q`: flags + workchain). The
- *   `EQ…` and `UQ…` forms of one account are the same address (`sameAddress`).
- * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
- * - NEAR: none (implicit 64 hex or named id, lowercase).
- * - Sui: `0x`, hex compared lowercase (no checksum at all).
- * - Hedera: `0x` (EVM address, hex lowercase) or `0.0.` (account number; HIP-15 checksum dropped).
- * - Kaspa: `kaspa:` / `kaspatest:` + version char (`kaspa:q`, `kaspa:p`), bech32 lowercase.
- * - Polkadot (SS58): the first char (`1` for prefix 0, `5` for prefix 42).
- * - Cosmos Hub: `cosmos1` + first data char, bech32 lowercase.
- * - Aptos: `0x`, hex compared lowercase (no checksum at all).
- * - Zcash transparent (base58, two-byte version): `t1`, `t3`, `tm`, `t2`; TEX `tex1` / `textest1` (bech32m, lowercase).
+ * The format prefix (carries no entropy) and whether the format is case-insensitive (hex, bech32).
+ * TON `EQ…` / `UQ…` forms of one account are the same address (`sameAddress`).
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -105,7 +71,6 @@ export function addressParts(address: string, family: Family): AddressParts & { 
     case 'algo':
       return { prefix: '', body: a, caseInsensitive: false };
     case 'near':
-      // Implicit (64 hex) or named account ids: always lowercase.
       return { prefix: '', body: a.toLowerCase(), caseInsensitive: true };
     case 'hbar':
       if (a.toLowerCase().startsWith('0x')) return { prefix: '0x', body: a.slice(2).toLowerCase(), caseInsensitive: true };
@@ -151,24 +116,15 @@ export function isLookalike(a: string, b: string, family: Family): boolean {
 export interface Lookalike {
   /** The reference address the recipient imitates. */
   known: KnownAddress;
-  /**
-   * Set when the recipient is ITSELF one of the references (for example a contact, or a
-   * counterparty of the history) while looking like another one: one of the two may be the
-   * look-alike, already saved or already paid once.
-   */
+  /** Set when the recipient is itself a reference while looking like another one. */
   recipientKnown?: KnownAddress;
 }
 
 const ORDER: KnownSource[] = ['contact', 'own', 'sent', 'history'];
 
 /**
- * The first reference the recipient looks like (contacts first, then own, sent from this
- * device, then the rest of the history), or null.
- *
- * An exact match with a reference does NOT end the check: the recipient is still compared with
- * every other reference. Otherwise an attacker who manages to get his look-alike into the list
- * (a zero-value `transferFrom` shown as « sent », a contact saved from the history) would silence
- * the alert on exactly the address he planted.
+ * The first reference the recipient looks like, or null. An exact match does NOT end the check:
+ * otherwise an attacker who gets his look-alike into the list would silence the alert on it.
  */
 export function findLookalike(recipient: string, known: KnownAddress[], family: Family): Lookalike | null {
   const to = recipient.trim();
@@ -191,23 +147,13 @@ export function lookalikeSegments(address: string, family: Family): { prefix: st
 
 export interface HistoryAddressEvent {
   counterparty: string;
-  /**
-   * Zero-value or dust transfer in ANY direction, or a transfer this account did not sign (an
-   * EVM / TRON `transferFrom` shown as outgoing): exactly what an address-poisoning attacker can
-   * plant for free. See `isDustAmount` and `HistoryItem.suspect`.
-   */
+  /** Zero-value, dust or not-signed-by-us transfer: what a poisoning attacker can plant for free. */
   suspect: boolean;
 }
 
 /**
- * Splits the history's counterparties:
- * - `trusted`: recipients of sends SIGNED BY THIS DEVICE (`signedHere`, from Kyro's own record of
- *   what it signed and broadcast). The server's history is never enough: anyone can make an
- *   address appear in it, even as « sent by you ».
- * - `references`: the other counterparties of the history that are not suspect. Compared with
- *   the recipient (a look-alike of them is flagged) but an exact match proves nothing.
- * - `suspects`: seen only through suspect transfers. Never a reference: comparing against them
- *   would flag the real address. They only trigger a note when the recipient is one of them.
+ * `trusted`: recipients of sends signed by this device. `references`: other non-suspect counterparties
+ * (compared, but an exact match proves nothing). `suspects`: seen only via suspect transfers, never a reference.
  */
 export function classifyHistoryAddresses(events: HistoryAddressEvent[], signedHere: string[], family: Family): { trusted: string[]; references: string[]; suspects: string[] } {
   const keyOf = (a: string) => {
@@ -238,20 +184,13 @@ export function isSuspectAddress(recipient: string, suspects: string[], family: 
   return suspects.some((d) => sameAddress(d, recipient, family));
 }
 
-/**
- * Base-unit amounts at or under which a transfer counts as dust, per chain: 10 × the network's
- * dust limit (Bitcoin 546 sat, Litecoin 294 litoshis for ltc1, Dogecoin 0,01 DOGE, Bitcoin Cash
- * and Dash 546, Zcash 54 zatoshis). Planting an address in someone's history costs at least that much on these chains.
- */
+/** Per-chain dust thresholds, base units: 10 × the network's dust limit. */
 const DUST_UNITS: Partial<Record<Family, bigint>> = { btc: 5_460n, ltc: 2_940n, doge: 10_000_000n, bch: 5_460n, dash: 5_460n, zec: 540n };
 
 /** Fiat value under which any transfer is dust (planting a look-alike costs less than that). */
 export const DUST_FIAT = 1;
 
-/**
- * Zero, under 1 (fiat) when the price is known, or under 10 × the dust limit on UTXO chains:
- * cheap enough to be a poisoning lure rather than a payment.
- */
+/** Zero, under 1 (fiat) when priced, or under 10 × the UTXO dust limit: a lure, not a payment. */
 export function isDustAmount(family: Family, amount: bigint, fiat: number | null): boolean {
   if (amount <= 0n) return true;
   if (fiat !== null && Number.isFinite(fiat) && fiat < DUST_FIAT) return true;

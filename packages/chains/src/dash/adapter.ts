@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Dash: BIP44 legacy P2PKH, `m/44'/5'/0'` (testnet: `m/44'/1'/0'`), `X…` / `y…` (P2SH `7…` /
-// `8…`). No SegWit, legacy sighash (amounts NOT committed): every PSBT input carries the full
-// previous transaction (`nonWitnessUtxo`, from `dash_tx_hex`), checked by Rust against the
-// outpoint, amounts and scripts taken only from it — the Dogecoin path. Coins created by a DIP2
-// special transaction (coinbase payload, Platform withdrawals…) are left out by Rust: a PSBT
-// cannot carry their previous transaction.
-//
-// Default server: Komodo's public ElectrumX on mainnet; testnet has none (no free public
-// server found), the user configures an Esplora-compatible one. Parameters: Dash Core
-// `chainparams.cpp` / `policy.h` (see wallet-core `utxo.rs`): relay minimum 1 duff/byte, dust 546.
+// Dash: BIP44 legacy P2PKH, `m/44'/5'/0'` (testnet: `m/44'/1'/0'`), `X…` / `y…` (P2SH `7…` / `8…`).
 
 import * as bitcoin from 'bitcoinjs-lib';
 import type { Network } from '@kyro/shared';

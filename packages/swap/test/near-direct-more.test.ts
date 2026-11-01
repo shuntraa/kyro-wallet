@@ -1,8 +1,5 @@
-// NEAR Intents 1Click direct routes added on 01/11/2026: from Bitcoin Cash, Dash, Zcash, TON, Sui,
-// Aptos, from Gnosis (xDAI), and to Stellar (arrival only). Against REAL 1Click answers
-// (fixtures/cross/1click-direct-more.json: `POST /v0/quote` with Kyro's app fee, then `GET
-// /v0/status` of each deposit address; read-only, nothing was ever deposited). The non-EVM « user »
-// addresses are sample addresses from the chain adapters' tests; the EVM one is the owner's.
+// More direct 1Click routes (BCH, Dash, Zcash, TON, Sui, Aptos, Gnosis, to Stellar) against
+// recorded answers (fixtures/cross/1click-direct-more.json, read-only).
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {

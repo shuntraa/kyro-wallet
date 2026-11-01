@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Aptos adapter (APT). Thin on purpose: reads, transfer building (sequence number, gas price,
-// simulated max gas, expiration filled by Rust, BCS encoded by wallet-core), signature and
-// submission are Rust commands (`aptos_*`, docs/IPC.md §2.11). This adapter only validates input
-// and checks that what Rust built is what was asked (recipient, amount, function).
+// Aptos adapter (APT). Thin on purpose: reads, transfer building (sequence number, gas price, simulated max gas, expiration filled by Rust, BCS encoded by wallet-core), signature and submission are Rust commands (`aptos_*`, docs/IPC.md §2.11).
 
 import { accountArg } from '../types';
 import { call, l10n, type AptosAccountInfo, type AptosContext, type AptosHistoryEntry, type AptosTokenBalance, type AptosTokenHistoryEntry, type AptosTxSummary, type AptosWarning } from '@kyro/shared';
@@ -47,10 +43,7 @@ export function rustAptosBackend(account = 0): AptosBackend {
   };
 }
 
-/**
- * Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature
- * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
- */
+/** Ledger account `accountId` (docs/IPC.md §2.3): build and broadcast for its address, signature on the device (`hw_*` commands). */
 export function rustAptosHwBackend(accountId: string): AptosBackend {
   // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
   const { buildToken: _buildTokenVaultOnly, ...base } = rustAptosBackend();
@@ -62,12 +55,8 @@ export function rustAptosHwBackend(accountId: string): AptosBackend {
   };
 }
 
-// ---------------------------------------------------------------- addresses
 
-/**
- * Full `0x` + 64 hex (AIP-40 long form), the only form Rust accepts. Aptos addresses have no
- * checksum: any 64 hex characters are a valid address, so a typo sends elsewhere.
- */
+/** Full `0x` + 64 hex (AIP-40 long form), the only form Rust accepts. */
 export function isAptosAddress(address: string): boolean {
   return /^0x[0-9a-fA-F]{64}$/.test(address.trim());
 }
@@ -87,7 +76,6 @@ export function aptosAddressProblem(address: string): string | null {
 
 const norm = (a: string) => a.trim().toLowerCase();
 
-// ---------------------------------------------------------------- adapter
 
 export interface AptosUnsigned {
   family: 'apt';
@@ -212,10 +200,7 @@ export class AptosAdapter implements ChainAdapter<'apt'> {
     });
   }
 
-  /**
-   * `max`: balance minus the maximum fee (the network reserves max gas × price up front, so the
-   * whole balance can never be sent), built twice like XRP.
-   */
+  /** `max`: balance minus the maximum fee (the network reserves max gas × price up front, so the whole balance can never be sent), built twice like XRP. */
   async buildTx(params: BuildParams): Promise<AptosUnsigned> {
     if (params.asset.kind === 'fa') return this.buildToken(params);
     if (params.asset.kind !== 'native') throw new Error(l10n('Actif Aptos inattendu', 'Unexpected Aptos asset'));

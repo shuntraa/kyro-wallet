@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // Public-only BIP32 derivation from the account xpub returned by `accounts_get`.
-// No private key ever exists in JS.
 
 import { HDKey } from '@scure/bip32';
 

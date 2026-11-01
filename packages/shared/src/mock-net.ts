@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// DEMO ONLY — fake answers for every allowlisted host, so the real adapters
-// (Esplora, EVM JSON-RPC, Solana RPC, CoinGecko, swap APIs) can run end to end
-// in a plain browser without any network access.
+// DEMO ONLY — fake answers for every allowlisted host, so the real adapters (Esplora, EVM JSON-RPC,
 
 import { base58, base64 } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha2';
@@ -23,14 +20,11 @@ export interface DemoChainState {
   accounts: Accounts;
   tipHeight: number;
   btcUtxos: Map<string, DemoUtxo[]>;
-  /** Raw funding transactions of every demo UTXO (all chains), by txid. */
   rawTx: Map<string, string>;
-  /** Litecoin / Dogecoin UTXOs by address, and their tips. */
   ltcUtxos: Map<string, DemoUtxo[]>;
   dogeUtxos: Map<string, DemoUtxo[]>;
   ltcTip: number;
   dogeTip: number;
-  /** Bitcoin Cash (CashAddr keys) / Dash UTXOs by address, and their tips. */
   bchUtxos: Map<string, DemoUtxo[]>;
   dashUtxos: Map<string, DemoUtxo[]>;
   bchTip: number;
@@ -45,10 +39,7 @@ export interface DemoChainState {
   /** rawTx → request (filled by evm_sign_tx, applied on eth_sendRawTransaction) */
   signedEvm: Map<string, { hash: string; tx: EvmTxRequest; from: string }>;
   minedEvm: Map<string, { blockNumber: number }>;
-  /**
-   * ERC-20 Transfer logs (`eth_getLogs`). `blocksAgo`: relative to the current block. Seeded
-   * with the demo's address-poisoning scenario (a zero-value transfer from a look-alike).
-   */
+  /** ERC-20 Transfer logs (`eth_getLogs`). */
   evmLogs: Array<{ chainId: number; token: string; from: string; to: string; value: bigint; blocksAgo: number; txHash: string; /** Sender of the transaction (default: the log's `from`); differs for a `transferFrom`. */ sender?: string }>;
   solLamports: bigint;
   solTokens: Map<string, bigint>;
@@ -137,8 +128,6 @@ export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: 
   throw new IpcError('HOST_NOT_ALLOWED', l10n(`Hôte non autorisé : ${host}`, `Host not allowed: ${host}`));
 }
 
-// ---------------------------------------------------------------- CoinGecko
-
 function coingecko(url: URL): NetResponse {
   const path = url.pathname.replace(/^\/api\/v3/, '');
   const cur = (url.searchParams.get('vs_currency') ?? url.searchParams.get('vs_currencies') ?? 'eur').toLowerCase();
@@ -191,14 +180,9 @@ function coingecko(url: URL): NetResponse {
   return json(404, { error: 'not found' });
 }
 
-// ---------------------------------------------------------------- Esplora
-
 export const DEMO_FEE_RATES = { fastestFee: 12, halfHourFee: 6, hourFee: 3, economyFee: 2, minimumFee: 1 };
 
-/**
- * Esplora `GET /address/{a}`. Nothing is ever spent in the demo, so funded = net balance and
- * spent = 0: the shape Electrum / Core produce too.
- */
+/** Esplora `GET /address/{a}`. Nothing is ever spent in the demo, so funded = net balance and spent = 0: the shape Electrum / Core produce too. */
 export function demoEsploraAddress(s: DemoChainState, addr: string, map: Map<string, DemoUtxo[]> = s.btcUtxos) {
   const utxos = map.get(addr) ?? [];
   const sum = utxos.reduce((a, u) => a + u.value, 0);
@@ -215,7 +199,6 @@ export function demoEsploraTxs(
   s: DemoChainState,
   addr: string,
   map: Map<string, DemoUtxo[]> = s.btcUtxos,
-  /** Placeholder addresses of the external sender / its change, in the coin's own format. */
   foreign: { sender: string; change: string } = { sender: 'tb1qdemoexternalsender0000000000000000000', change: 'tb1qdemoexternalchange000000000000000000' },
 ) {
   const utxos = map.get(addr) ?? [];
@@ -250,8 +233,6 @@ function esplora(url: URL, req: NetRequest, s: DemoChainState): NetResponse {
   }
   return text(404, 'Not found');
 }
-
-// ---------------------------------------------------------------- EVM
 
 /** JSON-RPC request or batch (array of requests, answered as an array, like publicnode). */
 function evmRpcAny(chainId: number, req: NetRequest, s: DemoChainState): NetResponse {
@@ -462,8 +443,6 @@ function applyEvmTx(chainId: number, tx: EvmTxRequest, from: string, s: DemoChai
 
 const maxZero = (n: bigint) => (n < 0n ? 0n : n);
 
-// ---------------------------------------------------------------- Solana
-
 function solRpc(req: NetRequest, s: DemoChainState): NetResponse {
   let body: { id?: unknown; method?: string; params?: unknown[] };
   try {
@@ -571,8 +550,6 @@ function demoSig(seed: string): string {
   out.set(b, 32);
   return base58.encode(out);
 }
-
-// ---------------------------------------------------------------- swap APIs
 
 function convert(sellToken: string, buyToken: string, sellAmount: bigint, haircut: number): bigint {
   const norm = (t: string) => (t.startsWith('0x') ? t.toLowerCase() : t);

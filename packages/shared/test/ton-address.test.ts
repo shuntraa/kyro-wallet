@@ -1,5 +1,4 @@
 // TON user-friendly addresses: the same rules as wallet-core `ton_parse_address`, checked against
-// Trust Wallet Core's vectors (rust/tw_tests/tests/chains/ton/ton_address.rs, fetched 2026-11-01).
 import { describe, expect, it } from 'vitest';
 import { crc16Xmodem, parseTonAddress, sameTonAccount, tonAddressProblem, tonFriendly } from '../src/ton-address';
 

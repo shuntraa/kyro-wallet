@@ -1,13 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
 // DEMO ONLY — Kaspa (`kas_*`, docs/IPC.md §2.11), mirroring apps/desktop/src-tauri/src/
-// commands_kaspa.rs, kaspa_backend.rs and wallet-core `kaspa.rs`. Addresses are really derived
-// (m/44'/111111'/a'/{0,1}/i, x-only key, `kaspa:` bech32); the transaction JSON has Rust's shape,
-// but the id is a demo hash (SHA-256, not keyed BLAKE2b) and the signature is fake. The rules are
-// Rust's: coins of 20 receive + 20 change addresses, largest first, compute mass
-// 94 + 1 118 per input + 412 per output grams, KIP-9 storage mass, fee = 100 sompi per gram of
-// relay mass, recipient ≥ 0.2 KAS, change that would exceed 100 000 grams folded into the fee
-// when ≤ 0.2 KAS, at most 84 inputs; signing re-reads the coins (spent → refused).
 
 import { HDKey } from '@scure/bip32';
 import { sha256 } from '@noble/hashes/sha2';
@@ -98,7 +90,6 @@ export interface DemoKaspaDeps {
 export interface DemoKaspaState {
   me: string;
   change: string;
-  /** A friend's address (receives in the demo). */
   friend: string;
   coins: DemoCoin[];
   history: KaspaHistoryEntry[];
