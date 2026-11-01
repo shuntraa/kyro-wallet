@@ -1,11 +1,46 @@
 # Frais Kyro sur les swaps
 
-Kyro prend **0,7 % (70 bps)** sur chaque swap. Ces frais servent à financer le projet. Kyro étant open source, ils sont publics : n'importe qui peut lire le code, les modifier, les passer à 0 ou les retirer dans sa propre version.
+Kyro prend des frais de service sur chaque swap, à un **taux dégressif** selon la valeur du swap en dollars : de 5 % pour un swap de 5 $ ou moins à 0,7 % à partir de 10 000 $. Ces frais servent à financer le projet. Kyro étant open source, ils sont publics : n'importe qui peut lire le code, les modifier, les passer à 0 ou les retirer dans sa propre version. Barème public : <https://kyrowallet.com/frais>.
 
-- **Configuration** : un seul fichier, [`packages/swap/src/fees.ts`](../packages/swap/src/fees.ts) (`KYRO_SWAP_FEE`).
-- **Affichage** : l'écran Swap ne montre que ce que tu donnes et ce que tu reçois, déjà net de tous les frais. La confirmation, avant ton mot de passe, montre une seule ligne « Frais inclus ≈ … » : le total des frais Kyro et du fournisseur, sans détail par fournisseur.
+- **Configuration** : un seul fichier, [`packages/swap/src/fees.ts`](../packages/swap/src/fees.ts) (`KYRO_FEE_CURVE`, `UNKNOWN_PRICE_FEE_BPS`, `KYRO_SWAP_FEE`).
+- **Affichage** : l'écran Swap montre « Tu envoies X » et « Tu reçois ≈ Y », **Y déjà net** des frais de service, puis le minimum garanti et les frais réseau. Aucune ligne (écran ni confirmation) ne montre le montant ou le taux de la commission ; sous le montant reçu, la mention discrète « Frais de service inclus » ouvre <https://kyrowallet.com/frais> dans le navigateur du système (commande Rust `open_fees_page`, URL fixe en Rust ; la page s'ouvre dans ton navigateur, hors du Tor de Kyro).
 - **Collecte** : les frais sont prélevés sur la blockchain par le **mécanisme officiel « intégrateur »** de chaque fournisseur. Kyro n'ajoute jamais de transfert supplémentaire.
-- **Plafond** : 1 % (`MAX_FEE_BPS`). Au-delà, la configuration est refusée.
+- **Plafond** : 5 % (`MAX_FEE_BPS` = 500). Une configuration au-delà (ou une courbe mal formée) est refusée ; chaque fournisseur est en plus limité à son propre maximum (ci-dessous).
+
+## Barème
+
+Valeur du swap = montant vendu × prix du jeton vendu (source de prix de l'application, dans ta devise) ÷ taux USD → ta devise (`sellValueUsd`).
+
+| Valeur du swap | Taux |
+|---|---|
+| ≤ 5 $ | 500 bps (5 %) |
+| 10 $ | 200 bps (2 %) |
+| 25 $ | 180 bps (1,8 %) |
+| 50 $ | 160 bps (1,6 %) |
+| 80 $ | 140 bps (1,4 %) |
+| 100 $ | 120 bps (1,2 %) |
+| 1 000 $ | 90 bps (0,9 %) |
+| ≥ 10 000 $ | 70 bps (0,7 %), fixe au-delà |
+| prix inconnu | 90 bps (0,9 %) |
+
+Entre deux points (u₁, b₁) et (u₂, b₂), interpolation **linéaire sur le logarithme** du montant, arrondie au bps **entier le plus proche** (`Math.round`, ,5 vers le haut) :
+
+```
+bps(u) = round( b₁ + (b₂ − b₁) × (ln u − ln u₁) / (ln u₂ − ln u₁) )
+```
+
+Exemples : 7 $ → 354 bps ; 300 $ → 106 bps ; 3 000 $ → 80 bps.
+
+**Un seul taux par devis.** Le fournisseur calcule le taux (`feeForQuote`) une fois, à partir des paramètres du devis : c'est ce taux qui part dans la requête, que Kyro exige en retour (écho, calldata, transaction) et qui est gardé dans `Quote.kyroFeeBps` pour la vérification faite à la signature (Jupiter). Tout devis dont les frais diffèrent de ce qui a été demandé (taux, montant au jeton près, bénéficiaire) est refusé.
+
+**Maximum par fournisseur** (`PROVIDER_MAX_FEE_BPS`, lu le 01/11/2026) :
+
+| Fournisseur | Maximum documenté | Taux Kyro appliqué |
+|---|---|---|
+| 0x | `swapFeeBps` : « default limit of 1000 Bps » | la courbe (≤ 500), sans écrêtage |
+| LI.FI | `distributionFees` : « greater than 0 and less than 0.5 per entry » | la courbe, sans écrêtage |
+| Jupiter | `platform_fee_bps` est un `u8` dans l'instruction de route (≤ 255) | **écrêté à 255 bps** (swaps de moins de ≈ 9 $) |
+| NEAR Intents 1Click | total des `appFees` ≤ 500 bps, et Kyro demande le double de son taux (1Click en garde la moitié) | **écrêté à 250 bps** (swaps de moins de ≈ 9 $) |
 
 ## Règle : chaque swap porte les frais
 
@@ -17,10 +52,10 @@ Les paramètres ci-dessous ont été vérifiés dans la documentation officielle
 
 | Fournisseur | Paramètres envoyés | Qui reçoit | Prélevé sur | Contrôle par Kyro |
 |---|---|---|---|---|
-| **0x** (Swap API v2) | `swapFeeRecipient`, `swapFeeBps=70`, `swapFeeToken=<jeton vendu>` | `recipients.evm`, payé dans la transaction | le jeton vendu | le devis doit renvoyer `fees.integratorFee`, sinon il est refusé |
-| **LI.FI** | `distributionFees[0][receiver]`, `distributionFees[0][percentage]=0.007` (**en fraction**) | ton adresse **sur la chaîne de départ** : `recipients.evm` (départ EVM) ou `recipients.solana` (départ Solana), versé directement (aucune inscription) | le jeton envoyé, sur la chaîne de départ (`included` → déjà déduit de `toAmount`) | le devis doit renvoyer une ligne « Distributions » à 0,7 % vers cette adresse, sinon il est refusé |
-| **Jupiter** (Metis `swap/v1`) | `platformFeeBps=70` sur `/quote`, `feeAccount` sur `/swap` | le compte de jetons associé (ATA) de `recipients.solana` | **USDC** pour l'instant (`solanaFeeMints`) : le jeton de sortie s'il est en USDC, sinon le jeton d'entrée | le devis doit renvoyer `platformFee.feeBps = 70`, sinon il est refusé |
-| **NEAR Intents 1Click** (en direct, `POST /v0/quote`) | `appFees: [{ recipient: "0x86cd…8b44", fee: 140 }]` | le **compte NEAR Intents** `0x86cd9af8067ff5e0001c709a550cd62b5e968b44` (= `recipients.evm` en minuscules ; compte du registre `intents.near` contrôlé par la clé de cette adresse EVM) | le jeton **déposé** (vendu), retenu par 1Click sur le dépôt et crédité à ce compte | 1Click partage la commission demandée **50/50** avec lui-même (vrais devis du 01/11/2026 : `fee: 140` → 70 pour Kyro + 70 pour le compte 1Click `5880ad…47dd`). Kyro demande donc 140 et exige dans la réponse du devis **et** dans `/v0/status` de l'adresse de dépôt : **exactement 70 bps** vers ce compte, une seule fois, et **au plus 70 bps** pour 1Click ; sinon refus. Si 1Click partage autrement (sa doc décrit aussi « ta commission + 25 bps » sans clé API), Kyro redemande une fois le montant qui donne exactement 70, puis revérifie |
+| **0x** (Swap API v2) | `swapFeeRecipient`, `swapFeeBps=<taux du devis>`, `swapFeeToken=<jeton vendu>` | `recipients.evm`, payé dans la transaction | le jeton vendu | le devis doit renvoyer `fees.integratorFee` égal au taux demandé (au jeton près), sinon il est refusé |
+| **LI.FI** | `distributionFees[0][receiver]`, `distributionFees[0][percentage]=<taux>/10000` (**en fraction**, ex. 0.0106) | ton adresse **sur la chaîne de départ** : `recipients.evm` (départ EVM) ou `recipients.solana` (départ Solana), versé directement (aucune inscription) | le jeton envoyé, sur la chaîne de départ (`included` → déjà déduit de `toAmount`) | le devis doit renvoyer une ligne « Distributions » au taux demandé vers cette adresse, sinon il est refusé |
+| **Jupiter** (Metis `swap/v1`) | `platformFeeBps=<taux, ≤ 255>` sur `/quote`, `feeAccount` sur `/swap` | le compte de jetons associé (ATA) de `recipients.solana` | **USDC** pour l'instant (`solanaFeeMints`) : le jeton de sortie s'il est en USDC, sinon le jeton d'entrée | le devis doit renvoyer `platformFee.feeBps` = ce taux, sinon il est refusé |
+| **NEAR Intents 1Click** (en direct, `POST /v0/quote`) | `appFees: [{ recipient: "0x86cd…8b44", fee: 2 × taux }]` (taux ≤ 250) | le **compte NEAR Intents** `0x86cd9af8067ff5e0001c709a550cd62b5e968b44` (= `recipients.evm` en minuscules ; compte du registre `intents.near` contrôlé par la clé de cette adresse EVM) | le jeton **déposé** (vendu), retenu par 1Click sur le dépôt et crédité à ce compte | 1Click partage la commission demandée **50/50** avec lui-même (vrais devis du 01/11/2026 : `fee: 140` → 70 pour Kyro + 70 pour le compte 1Click `5880ad…47dd`). Kyro demande donc le double du taux du devis et exige dans la réponse du devis **et** dans `/v0/status` de l'adresse de dépôt : **exactement ce taux** vers ce compte, une seule fois, et **au plus ce taux** pour 1Click ; sinon refus. Si 1Click partage autrement (sa doc décrit aussi « ta commission + 25 bps » sans clé API), Kyro redemande une fois le montant qui donne exactement ce taux (≤ 500 au total), puis revérifie |
 
 ### Par route (où et dans quel jeton)
 
@@ -44,7 +79,7 @@ Les paramètres ci-dessous ont été vérifiés dans la documentation officielle
 
 Vérifié par de vrais devis 1Click (lecture seule, aucun dépôt) le 01/11/2026 : BTC → ETH, LTC → SOL, DOGE → BTC, TRX → ETH, USDT TRC-20 → USDC Solana, XRP → SOL, ADA → ETH, ETH Arbitrum → LTC ; à chaque fois `appFees` renvoie 70 vers `0x86cd…8b44` et 70 vers 1Click, dépôt `SIMPLE` sans mémo, et `/v0/status` de l'adresse de dépôt répète les mêmes conditions. 1Click impose temporairement un minimum de **100 $** au départ de TRON.
 
-Même vérification le 01/11/2026 (14 h UTC) pour les nouvelles chaînes (`packages/swap/test/fixtures/cross/1click-direct-more.json`) : BCH → ETH, DASH → ETH, ZEC → ETH, TON → ETH, SUI → ETH, APT → ETH, ETH Arbitrum → XLM, xDAI Gnosis → BCH ; à chaque fois 70 bps vers `0x86cd…8b44`, 70 vers 1Click, dépôt `SIMPLE` sans mémo (BCH `bitcoincash:q…`, DASH `X…`, ZEC `t1…`, TON `UQ…`, Sui / Aptos `0x…` de 64 caractères), confirmé par `/v0/status`. Au départ de **Stellar**, 1Click refuse un dépôt `SIMPLE` (« Incorrect depositMode for originAsset from stellar chain ») : il lui faut un mémo, que Kyro n'envoie jamais. Stellar n'est donc qu'une chaîne d'**arrivée**.
+Même vérification le 01/11/2026 (14 h UTC) pour les nouvelles chaînes (`packages/swap/test/fixtures/cross/1click-direct-more.json`) : BCH → ETH, DASH → ETH, ZEC → ETH, TON → ETH, SUI → ETH, APT → ETH, ETH Arbitrum → XLM, xDAI Gnosis → BCH ; à chaque fois 70 bps vers `0x86cd…8b44`, 70 vers 1Click (relevés à l'époque du taux fixe de 70 bps ; les tests rejouent ces réponses avec une configuration fixe à 70), dépôt `SIMPLE` sans mémo (BCH `bitcoincash:q…`, DASH `X…`, ZEC `t1…`, TON `UQ…`, Sui / Aptos `0x…` de 64 caractères), confirmé par `/v0/status`. Au départ de **Stellar**, 1Click refuse un dépôt `SIMPLE` (« Incorrect depositMode for originAsset from stellar chain ») : il lui faut un mémo, que Kyro n'envoie jamais. Stellar n'est donc qu'une chaîne d'**arrivée**.
 
 Vérifié par de vrais devis li.quest (lecture seule) le 01/11/2026 : Arbitrum USDC → SOL, Base ETH → USDC Solana, Arbitrum USDC → BTC (frais en USDC ou ETH vers `0x86cD…`) ; SOL → ETH Arbitrum et USDC Solana → USDC Base (frais en SOL / USDC vers `ptsb…` ou `CFPW…`). li.quest refuse un bénéficiaire EVM pour un départ Solana (« not a valid Solana address for chain 1151111081099710 ») : le bénéficiaire suit la chaîne de départ.
 
@@ -63,11 +98,11 @@ Les paramètres envoyés ne suffisent pas : un fournisseur pourrait renvoyer une
 | Fournisseur | Frais Kyro contrôlés | Autres contrôles |
 |---|---|---|
 | **0x** | `fees.integratorFee` présent, pris dans le jeton vendu, **montant ≤ montant vendu × 70 / 10 000** ; l'adresse de frais doit figurer dans la transaction. Le détail de l'action Settler qui paie les frais n'est pas décodé. | `to` et autorisation = AllowanceHolder `0x0000000000001fF3684f28c67538d4D072C22734` ; Settler appelé = celui du registre `0x00000000000004533Fe15556B1E086BB1A72cEae` (`ownerOf(2)` ou `prev(2)`) ; destinataire = toi, minimum ≥ annoncé − slippage. |
-| **LI.FI** (même chaîne) | Étape `FeeForwarder` (`0xCE40449B773a3E6E5e769ADb4e567179d4828cbd`, `0x79C3F5B651Ee5782Ba15d968B088458cd5f1f4EF` sur Mantle) décodée : un versement à `recipients.evm`, **≤ montant vendu × 70 / 10 000** ; total des frais de cette étape ≤ 0,7 % + 0,5 % (part de LI.FI comprise). | `to` et autorisation = Diamond `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` ; `_receiver` = toi, `_minAmountOut` ≥ annoncé − slippage ; première et dernière étapes = jetons et montant de la paire. |
+| **LI.FI** (même chaîne) | Étape `FeeForwarder` (`0xCE40449B773a3E6E5e769ADb4e567179d4828cbd`, `0x79C3F5B651Ee5782Ba15d968B088458cd5f1f4EF` sur Mantle) décodée : un versement à `recipients.evm`, **= montant vendu × taux / 10 000** (à une unité près) ; total des frais de cette étape ≤ taux + 0,5 % (part de LI.FI comprise). | `to` et autorisation = Diamond `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` ; `_receiver` = toi, `_minAmountOut` ≥ annoncé − slippage ; première et dernière étapes = jetons et montant de la paire. |
 | **LI.FI entre chaînes, départ EVM** | Même étape `FeeForwarder`, dans le jeton envoyé. | Pont **NEAR Intents seul** (`allowBridges=near`) ; appel `swapAndStartBridgeTokensViaNEARIntents` (facette `NEARIntentsFacet`) décodé : chaîne d'arrivée, `BridgeData.receiver` = toi (EVM) ou `0x11f1…11F1` avec `nonEVMReceiver` = ta clé Solana / les 32 mots de ton adresse `bc1q`, pas d'appel à l'arrivée, remboursement vers toi, `minAmountOut` ≥ annoncé − slippage, token d'arrivée, étapes de départ cohérentes. Puis **NEAR Intents confirme l'adresse de dépôt** (`1click.chaindefuser.com/v0/status`) : destinataire = ton compte, remboursement vers toi, montant déposé, token et minimum. |
 | **LI.FI entre chaînes, départ Solana** | Transfert vers `recipients.solana` (SOL) ou son compte du jeton (SPL), **> 0 et ≤ montant vendu × 70 / 10 000**. | Transaction décodée par Rust, puis seuls sont acceptés : budget de calcul (priorité ≤ 0,01 SOL), une instruction de suivi LI.FI (`3i5JeuZuUxeKtVysUnwQNGerJP2bSMX9fTFfS4Nxe3Br`, qui ne déplace rien), des transferts **depuis ton compte du jeton vendu** vers les frais Kyro, les frais LI.FI (`34FKjAdVcTax2DHqV2XnbXa9J3zmyKcFuFKWbcmgxjgm`, ≤ 0,5 %) et **une** adresse de dépôt ; total = montant vendu exactement. Puis même confirmation par NEAR Intents. |
-| **NEAR Intents 1Click (direct)** | `appFees` renvoyé par 1Click, dans le devis puis dans `/v0/status` de l'adresse de dépôt : **exactement** 70 bps vers `0x86cd…8b44`, une seule entrée, part de 1Click ≤ 70 bps. | Aucune transaction tierce : 1Click donne une **adresse de dépôt à usage unique** liée (devis signé) à ton compte d'arrivée et à ton adresse de remboursement. Kyro exige `EXACT_INPUT`, dépôt `SIMPLE` (**pas de mémo, pas d'OP_RETURN, pas de tag**), destinataire = ton compte (`DESTINATION_CHAIN`), remboursement = ton adresse de départ (`ORIGIN_CHAIN`), montant = ta saisie, jetons demandés, minimum ≥ annoncé − slippage, adresse de dépôt ≠ la tienne, statut `PENDING_DEPOSIT` et au moins 2 h avant l'échéance (la plus proche entre celle de 1Click et les 3 h demandées par Kyro). Puis Kyro construit **lui-même** un envoi ordinaire de ce montant vers cette adresse avec l'adaptateur de la chaîne, et le contrôle (`depositTxProblem`) : un seul paiement vers l'adresse de dépôt (BTC/LTC/DOGE : le reste en monnaie, aucune sortie OP_RETURN ou script inconnu ; TRON : simple transfert TRX ou TRC-20 du bon contrat, sans mémo ; XRP : sans tag, mémo ni chemin, et refus si l'adresse exige un tag ; Cardano : ADA seul, sans message ; EVM / Solana : décodage Rust identique). 1Click est relu **juste avant de signer**. |
-| **Jupiter** | `platform_fee_bps` = 70 et compte de frais = le compte attendu de `recipients.solana` (lus dans l'instruction de route). | Payeur et seul signataire = toi ; programmes autorisés seulement (budget de calcul, ATA, emballage SOL, une route Jupiter v6) ; comptes débité et crédité à toi ; montant et slippage ; frais de priorité ≤ 0,01 SOL. |
+| **NEAR Intents 1Click (direct)** | `appFees` renvoyé par 1Click, dans le devis puis dans `/v0/status` de l'adresse de dépôt : **exactement** le taux du devis vers `0x86cd…8b44`, une seule entrée, part de 1Click ≤ ce taux. | Aucune transaction tierce : 1Click donne une **adresse de dépôt à usage unique** liée (devis signé) à ton compte d'arrivée et à ton adresse de remboursement. Kyro exige `EXACT_INPUT`, dépôt `SIMPLE` (**pas de mémo, pas d'OP_RETURN, pas de tag**), destinataire = ton compte (`DESTINATION_CHAIN`), remboursement = ton adresse de départ (`ORIGIN_CHAIN`), montant = ta saisie, jetons demandés, minimum ≥ annoncé − slippage, adresse de dépôt ≠ la tienne, statut `PENDING_DEPOSIT` et au moins 2 h avant l'échéance (la plus proche entre celle de 1Click et les 3 h demandées par Kyro). Puis Kyro construit **lui-même** un envoi ordinaire de ce montant vers cette adresse avec l'adaptateur de la chaîne, et le contrôle (`depositTxProblem`) : un seul paiement vers l'adresse de dépôt (BTC/LTC/DOGE : le reste en monnaie, aucune sortie OP_RETURN ou script inconnu ; TRON : simple transfert TRX ou TRC-20 du bon contrat, sans mémo ; XRP : sans tag, mémo ni chemin, et refus si l'adresse exige un tag ; Cardano : ADA seul, sans message ; EVM / Solana : décodage Rust identique). 1Click est relu **juste avant de signer**. |
+| **Jupiter** | `platform_fee_bps` = le taux du devis et compte de frais = le compte attendu de `recipients.solana` (lus dans l'instruction de route). | Payeur et seul signataire = toi ; programmes autorisés seulement (budget de calcul, ATA, emballage SOL, une route Jupiter v6) ; comptes débité et crédité à toi ; montant et slippage ; frais de priorité ≤ 0,01 SOL. |
 
 Adresses relevées dans les dépôts officiels (0x : docs.0x.org et 0x-settler ; LI.FI : `lifinance/contracts`, `deployments/<chaîne>.json`) le 01/11/2026, identiques sur Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain et Avalanche, et présents on-chain (`eth_getCode` non vide) sur les nouvelles chaînes retenues :
 
@@ -114,7 +149,7 @@ Limites des routes NEAR Intents :
 - **Pas de route** pour NEAR (1Click ne connaît que le wNEAR, un jeton NEP-141 que Kyro ne gère pas), Hedera, Kaspa, Polkadot, Algorand, Monero, Cosmos Hub, ni pour Cronos, Mantle, Sonic, Sei, Flare, Kaia, HyperEVM et Conflux eSpace entre chaînes (absents de `/v0/tokens` au 01/11/2026 ; « hypercore » n'est pas HyperEVM).
 - **XRP** : XRP seulement (pas de jetons émis) ; refus si l'adresse de dépôt exige un tag.
 - **Minimums** de 1Click (par exemple 100 $ au départ de TRON au 01/11/2026) : en dessous, pas de devis.
-- **Coût pour l'utilisateur** : 0,7 % Kyro **plus** 0,7 % pour 1Click (sa moitié du partage), soit 1,4 % retenus sur le dépôt, comptés ensemble dans « Frais inclus » de la confirmation.
+- **Coût pour l'utilisateur** : le taux Kyro **plus** autant pour 1Click (sa moitié du partage), soit le double retenu sur le dépôt (ex. 0,9 % + 0,9 % à 1 000 $), déjà déduit du montant reçu affiché.
 
 ## Chaînes × fournisseurs (01/11/2026)
 
@@ -143,12 +178,12 @@ Ce sont les frais propres à chaque fournisseur, en plus de ceux de Kyro et sans
 - **0x** : 0,15 % sur certaines paires (offre Standard), renvoyés dans `fees.zeroExFee`. Le gain de slippage positif revient à 0x, sauf sur offre personnalisée.
 - **LI.FI** : 0,25 % de frais de service, prélevés en plus de la commission Kyro.
 - **Jupiter (Metis)** : aucune part des frais de plateforme annoncée.
-- **NEAR Intents 1Click** : sa moitié des `appFees` (0,7 % aujourd'hui, renvoyée dans le devis et comptée dans « Frais inclus »), plus le protocole (0,0001 %) ; si le swap est exécuté à un meilleur prix que le devis, l'écart est partagé avec 1Click. En cas de remboursement, 1Click retient `refundFee` (frais réseau du renvoi).
+- **NEAR Intents 1Click** : sa moitié des `appFees` (autant que le taux Kyro, renvoyée dans le devis et déjà déduite du montant reçu), plus le protocole (0,0001 %) ; si le swap est exécuté à un meilleur prix que le devis, l'écart est partagé avec 1Click. En cas de remboursement, 1Click retient `refundFee` (frais réseau du renvoi).
 
 ## Non vérifié à ce jour
 
 - **Aucun swap réel n'a été envoyé** : tout est testé contre des réponses simulées, plus de vraies réponses li.quest (six sur une même chaîne dont quatre sur Flare et HyperEVM, cinq entre chaînes avec le statut 1Click de leur dépôt), seize vrais devis 1Click en direct avec le statut de leur adresse de dépôt, et deux vraies transactions Jupiter (01/11/2026, non signés) que le décodeur accepte tels quels. Les agrégateurs et les ponts ne fonctionnent pas sur testnet.
-- **NEAR Intents en direct** : le versement effectif de la commission au compte `0x86cd…8b44` n'a pas été observé (il faudrait un vrai dépôt) ; Kyro vérifie seulement ce que 1Click s'engage à faire dans son devis signé et son statut. Le partage 50/50 sans clé API est observé en direct, alors que la doc décrit « commission + 25 bps » sans clé : Kyro s'adapte (une seule nouvelle demande) mais n'accepte jamais une part différente de 0,7 %. La signature ed25519 des devis 1Click n'est pas vérifiée par Kyro (la réponse arrive en HTTPS de l'hôte allowlisté et est relue par `/v0/status`).
+- **NEAR Intents en direct** : le versement effectif de la commission au compte `0x86cd…8b44` n'a pas été observé (il faudrait un vrai dépôt) ; Kyro vérifie seulement ce que 1Click s'engage à faire dans son devis signé et son statut. Le partage 50/50 sans clé API est observé en direct, alors que la doc décrit « commission + 25 bps » sans clé : Kyro s'adapte (une seule nouvelle demande) mais n'accepte jamais une part différente du taux demandé. La signature ed25519 des devis 1Click n'est pas vérifiée par Kyro (la réponse arrive en HTTPS de l'hôte allowlisté et est relue par `/v0/status`).
 - **Entre chaînes** : la livraison à l'arrivée dépend du réseau de solveurs de NEAR Intents (remboursement sur l'adresse de départ s'il échoue). Kyro vérifie ce qui est signé et ce que le pont s'engage à faire, pas la livraison. LI.FI applique le slippage à **chaque** étape (swap de départ puis pont) : Kyro demande la moitié du slippage choisi par étape, puis exige que le minimum du pont respecte le slippage choisi. L'adresse du portefeuille de frais LI.FI sur Solana (`34FK…xjgm`) n'est pas documentée par LI.FI : relevée dans les vraies transactions ; si elle change, les départs Solana sont refusés jusqu'à mise à jour.
 - **0x** : le décodage n'a pas été confronté à une vraie réponse (clé API nécessaire) ; il suit les interfaces publiées (`IAllowanceHolder.exec`, `ISettlerTakerSubmitted.execute`). Une vente de jeton natif dont `transaction.to` ne serait pas AllowanceHolder est refusée (comportement non documenté par 0x), tout comme un échange ETH ⇄ WETH (adressé directement au contrat WETH).
 - **0x** : la documentation ne dit pas noir sur blanc si `buyAmount` est déjà net des frais intégrateur. Kyro prélève les frais sur le jeton vendu : le montant annoncé correspond à ce qui est réellement échangé.

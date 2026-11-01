@@ -30,6 +30,7 @@ import {
   type OneClickToken,
   type QuoteParams,
 } from '../src';
+import { FLAT70 } from './flat-fee';
 import { staticKeys, summaryOf } from './solsummary';
 
 interface Fixture {
@@ -158,7 +159,7 @@ describe('EVM → Solana (Arbitrum USDC → SOL, real NEARIntentsFacet calldata)
 
     it('asks for the NEAR bridge, our address as toAddress and the EVM fee receiver, then confirms with NEAR Intents', async () => {
       const s = server(f);
-      const lifi = new LifiProvider({ fetch: s.fetch, fee: providerFee('lifi'), solFee: lifiFeeFor('solana') });
+      const lifi = new LifiProvider({ fetch: s.fetch, fee: providerFee('lifi', FLAT70), solFee: lifiFeeFor('solana', FLAT70) });
       expect(lifi.supports(params)).toBe(true);
       const q = await lifi.quote(params);
       const sent = new URL(s.seen[0] ?? '').searchParams;
@@ -177,14 +178,14 @@ describe('EVM → Solana (Arbitrum USDC → SOL, real NEARIntentsFacet calldata)
     it('refuses a quote whose deposit NEAR Intents sends elsewhere, a non-NEAR bridge, or a fee not echoed', async () => {
       const req = f.nearIntentsStatus.quoteResponse?.quoteRequest ?? {};
       const bad = { ...f.nearIntentsStatus, quoteResponse: { ...f.nearIntentsStatus.quoteResponse, quoteRequest: { ...req, recipient: THIEF_SOL } } };
-      const lifi = (o: Parameters<typeof server>[1]) => new LifiProvider({ fetch: server(f, o).fetch, fee: providerFee('lifi'), solFee: lifiFeeFor('solana') });
+      const lifi = (o: Parameters<typeof server>[1]) => new LifiProvider({ fetch: server(f, o).fetch, fee: providerFee('lifi', FLAT70), solFee: lifiFeeFor('solana', FLAT70) });
       await expect(lifi({ status: bad }).quote(params)).rejects.toThrow(/NEAR Intents : destinataire/);
       await expect(lifi({ lifi: { ...f, tool: 'mayan' } }).quote(params)).rejects.toThrow(/pont « mayan » non vérifiable/);
       await expect(lifi({ lifi: { ...f, estimate: { ...f.estimate, feeCosts: [] } } }).quote(params)).rejects.toThrow(/frais Kyro non appliqués/);
     });
 
     it('the aggregator keeps it among the quotes (0x and Jupiter do not serve cross-chain)', async () => {
-      const providers = createProviders({ fetch: server(f).fetch, hasZeroxKey: () => true });
+      const providers = createProviders({ fetch: server(f).fetch, hasZeroxKey: () => true, fees: FLAT70 });
       const { quotes, results } = await fetchQuotes(providers, params);
       expect(results.map((r) => r.provider)).toEqual(['lifi']);
       expect(quotes[0]?.provider).toBe('lifi');
@@ -274,7 +275,7 @@ describe('Solana → EVM (real LI.FI Solana transactions, NEAR Intents)', () => 
     it('sends the SOLANA fee receiver, builds a fresh transaction, verifies it and confirms with NEAR Intents', async () => {
       const f = load('sol-evm');
       const s = server(f);
-      const lifi = new LifiProvider({ fetch: s.fetch, fee: providerFee('lifi'), solFee: lifiFeeFor('solana') });
+      const lifi = new LifiProvider({ fetch: s.fetch, fee: providerFee('lifi', FLAT70), solFee: lifiFeeFor('solana', FLAT70) });
       const params: QuoteParams = { chain: 'solana', toChain: 42161, recipient: EVM_TAKER, sell: { address: WSOL_MINT, symbol: 'SOL', decimals: 9 }, buy: { address: NATIVE_EVM, symbol: 'ETH', decimals: 18 }, sellAmount: 500_000_000n, taker: SOL_TAKER, slippageBps: 50, nativePriceFiat: 90 };
       const q = await lifi.quote(params);
       const sent = new URL(s.seen[0] ?? '').searchParams;
@@ -287,10 +288,10 @@ describe('Solana → EVM (real LI.FI Solana transactions, NEAR Intents)', () => 
       const c = await q.tx.verify(wire, summaryOf(wire, staticKeys(wire), SOL_TAKER));
       expect(c).toMatchObject({ depositAddress: 'AmcBByD5w4PdFHdknnAtDFLcVYkXPq8fu5CuNb5Xa1CB', kyroFee: 3_500_000n });
       // An EVM fee receiver for a Solana source would be refused by li.quest: the fee echo must name the Solana wallet.
-      const evmEcho = new LifiProvider({ fetch: server(f).fetch, fee: providerFee('lifi'), solFee: providerFee('lifi') });
+      const evmEcho = new LifiProvider({ fetch: server(f).fetch, fee: providerFee('lifi', FLAT70), solFee: providerFee('lifi', FLAT70) });
       await expect(evmEcho.quote(params)).rejects.toThrow(/frais Kyro non appliqués/);
       // No Solana fee wallet configured ⇒ no Solana-source route at all.
-      const none = new LifiProvider({ fetch: server(f).fetch, fee: providerFee('lifi'), solFee: { kind: 'unavailable', reason: 'Adresse Solana des frais Kyro non configurée' } });
+      const none = new LifiProvider({ fetch: server(f).fetch, fee: providerFee('lifi', FLAT70), solFee: { kind: 'unavailable', reason: 'Adresse Solana des frais Kyro non configurée' } });
       await expect(none.quote(params)).rejects.toThrow(/Solana des frais/);
     });
   });
@@ -323,7 +324,9 @@ describe('demo mode: cross-chain answers (mock-lifi-cross.ts) pass the same chec
       const out = await fetchQuotes(providers, { chain: 42161, toChain, recipient, sell, buy, sellAmount: amount, taker: evm, slippageBps: 50 });
       expect(out.results.filter((r) => r.error)).toEqual([]);
       expect(out.quotes[0]?.cross).toMatchObject({ toChain, recipient, bridge: 'near' });
-      expect(out.quotes[0]?.evmCheck?.kyroFee).toBe((amount * 70n) / 10_000n);
+      // Real curve, no price given → 90 bps, asked for and found in the calldata.
+      expect(out.quotes[0]?.kyroFeeBps).toBe(90);
+      expect(out.quotes[0]?.evmCheck?.kyroFee).toBe((amount * 90n) / 10_000n);
     }
     for (const [sell, amount] of [[{ address: WSOL_MINT, symbol: 'SOL', decimals: 9 }, 500_000_000n], [{ address: SOL_USDC, symbol: 'USDC', decimals: 6 }, 50_000_000n]] as const) {
       const out = await fetchQuotes(providers, { chain: 'solana', toChain: 42161, recipient: evm, sell, buy: eth, sellAmount: amount, taker: a.sol.address, slippageBps: 50 });
@@ -334,7 +337,7 @@ describe('demo mode: cross-chain answers (mock-lifi-cross.ts) pass the same chec
       const tx = getTransactionDecoder().decode(getBase64Encoder().encode(wire));
       const summary = (await backend.invoke('sol_decode_tx', { message: getBase64Decoder().decode(tx.messageBytes) })) as SolTxSummary;
       const c = await q.tx.verify(wire, summary);
-      expect(c.kyroFee).toBe((amount * 70n) / 10_000n);
+      expect(c.kyroFee).toBe((amount * 90n) / 10_000n);
     }
   });
 });

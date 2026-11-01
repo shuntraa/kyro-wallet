@@ -26,6 +26,7 @@ import {
   type QuoteParams,
   type SwapChain,
 } from '../src';
+import { FLAT70 } from './flat-fee';
 
 interface Route {
   quote: OneClickQuoteAnswer;
@@ -95,13 +96,14 @@ afterEach(() => {
 
 describe('Kyro fee through 1Click appFees (live answers)', () => {
   it('1Click keeps half of what is asked: 140 bps asked → 70 to the Kyro account + 70 to 1Click', () => {
-    expect(nearIntentsAppFee()).toEqual({ kind: 'fee', bps: 70, recipient: FEE_ACCOUNT, requestBps: 140 });
+    expect(nearIntentsAppFee()).toMatchObject({ kind: 'curve', recipient: FEE_ACCOUNT, maxBps: 250 });
+    expect(nearIntentsAppFee(FLAT70)).toMatchObject({ kind: 'curve', recipient: FEE_ACCOUNT });
     expect(FIX.dry.quoteRequest?.appFees).toEqual([
       { recipient: FEE_ACCOUNT, fee: 70 },
       { recipient: ONE_CLICK_ACCOUNT, fee: 70 },
     ]);
     // Over 1Click's 500 bps cap once doubled: no NEAR Intents route rather than a lower fee.
-    expect(nearIntentsAppFee({ ...KYRO_SWAP_FEE, bps: 300 }).kind).toBe('unavailable');
+    expect(nearIntentsAppFee({ ...KYRO_SWAP_FEE, curve: [{ usd: 1, bps: 501 }] }).kind).toBe('unavailable');
     expect(nearIntentsAppFee({ ...KYRO_SWAP_FEE, recipients: { ...R, evm: '0x1234' } }).kind).toBe('unavailable');
   });
 
@@ -211,7 +213,7 @@ describe('the provider', () => {
   it.each(ROUTES.map((r) => r[0]))('%s: dry quote, then a real one confirmed by 1Click (prepare, reconfirm)', async (name) => {
     const s = setup(name);
     const srv = server(name);
-    const p = new NearIntentsProvider({ fetch: srv.fetch, fee: nearIntentsAppFee() });
+    const p = new NearIntentsProvider({ fetch: srv.fetch, fee: nearIntentsAppFee(FLAT70) });
     const q = await p.quote(s.params);
     expect(q).toMatchObject({ provider: 'near', kyroFeeBps: 70, providerFeeIncluded: true, cross: { fromChain: s.expect.fromChain, toChain: s.expect.toChain, recipient: s.expect.recipient, bridge: '1click' } });
     expect(srv.bodies[0]).toMatchObject({
@@ -239,13 +241,13 @@ describe('the provider', () => {
   it('a real quote whose terms differ from the dry one is refused before any transfer is built', async () => {
     const s = setup('xrp-sol');
     const f = FIX.routes['xrp-sol'] as Route;
-    const q0 = await new NearIntentsProvider({ fetch: server('xrp-sol').fetch, fee: nearIntentsAppFee() }).quote(s.params);
+    const q0 = await new NearIntentsProvider({ fetch: server('xrp-sol').fetch, fee: nearIntentsAppFee(FLAT70) }).quote(s.params);
     if (q0.tx.kind !== 'deposit') throw new Error('deposit expected');
     // Same dry answer, but 1Click's status of the deposit address now pays someone else.
     const st = clone(f.status);
     (st.quoteResponse?.quoteRequest as { recipient?: string }).recipient = '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr';
     const fetch = async (r: NetRequest): Promise<NetResponse> => (r.url.includes('/v0/status') ? { status: 200, body: JSON.stringify(st) } : server('xrp-sol').fetch(r));
-    const q = await new NearIntentsProvider({ fetch, fee: nearIntentsAppFee() }).quote(s.params);
+    const q = await new NearIntentsProvider({ fetch, fee: nearIntentsAppFee(FLAT70) }).quote(s.params);
     if (q.tx.kind !== 'deposit') throw new Error('deposit expected');
     await expect(q.tx.prepare()).rejects.toThrow(/destinataire/);
   });
@@ -264,7 +266,7 @@ describe('the provider', () => {
       if (body.dry) delete q.quote?.depositAddress;
       return { status: 201, body: JSON.stringify(q) };
     };
-    const q = await new NearIntentsProvider({ fetch, fee: nearIntentsAppFee() }).quote(s.params);
+    const q = await new NearIntentsProvider({ fetch, fee: nearIntentsAppFee(FLAT70) }).quote(s.params);
     expect(asked).toEqual([140, 70]);
     expect(q.kyroFeeBps).toBe(70);
     // Never more than our rate to us, never a silent cut: an echo of 35 for 70 asked is refused.
@@ -274,13 +276,13 @@ describe('the provider', () => {
       if (q2.quoteRequest) q2.quoteRequest.appFees = [{ recipient: FEE_ACCOUNT, fee: 35 }, { recipient: ONE_CLICK_ACCOUNT, fee: 105 }];
       return { status: 201, body: JSON.stringify(q2) };
     };
-    await expect(new NearIntentsProvider({ fetch: low, fee: nearIntentsAppFee() }).quote(s.params)).rejects.toThrow(/35 bps au lieu de 70/);
+    await expect(new NearIntentsProvider({ fetch: low, fee: nearIntentsAppFee(FLAT70) }).quote(s.params)).rejects.toThrow(/35 bps au lieu de 70/);
   });
 
   it('the aggregator: from Bitcoin only NEAR Intents answers (LI.FI, 0x, Jupiter are not asked)', async () => {
     const s = setup('btc-eth');
     const srv = server('btc-eth');
-    const out = await fetchQuotes(createProviders({ fetch: srv.fetch, hasZeroxKey: () => true }), s.params);
+    const out = await fetchQuotes(createProviders({ fetch: srv.fetch, hasZeroxKey: () => true, fees: FLAT70 }), s.params);
     expect(out.results.filter((r) => r.error)).toEqual([]);
     expect(out.quotes.map((q) => q.provider)).toEqual(['near']);
     expect(srv.seen.every((x) => x.includes('1click.chaindefuser.com'))).toBe(true);
@@ -316,9 +318,10 @@ describe('demo mode: direct 1Click answers (mock-lifi-cross.ts) pass the same ch
       expect(out.results.filter((r) => r.error)).toEqual([]);
       const q = out.quotes[0];
       if (q?.tx.kind !== 'deposit') throw new Error(`${String(chain)}: deposit expected`);
-      expect(q.kyroFeeBps).toBe(70);
+      // Real curve, no price given → 90 bps: 180 asked, 90 echoed to Kyro and 90 to 1Click.
+      expect(q.kyroFeeBps).toBe(90);
       const plan = await q.tx.prepare();
-      expect(plan).toMatchObject({ amountIn: amount, kyroFeeBps: 70, oneClickFeeBps: 70 });
+      expect(plan).toMatchObject({ amountIn: amount, kyroFeeBps: 90, oneClickFeeBps: 90 });
       expect(plan.depositAddress).not.toBe(taker);
     }
   }, 30_000);

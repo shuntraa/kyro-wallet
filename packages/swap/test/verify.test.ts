@@ -163,7 +163,7 @@ describe('providers refuse an answer that fails the checks (the quote is dropped
 
   it('0x: the shown minimum is the one decoded from the calldata', async () => {
     const tx = { to: ZEROX_ALLOWANCE_HOLDER, data: zeroExData({ sellToken: USDC, sellAmount, recipient: TAKER, buyToken: NATIVE_EVM, minAmountOut: min, feeRecipient: FEE }), gas: '100000', gasPrice: '1', value: '0' };
-    const ok = await new ZeroExProvider({ fetch: answer({ buyAmount: buyAmount.toString(), minBuyAmount: (min + 5n).toString(), transaction: tx, issues: { allowance: { spender: ZEROX_ALLOWANCE_HOLDER } }, fees: { integratorFee: { amount: '7000000', token: USDC } } }), hasKey: () => true, fee: providerFee('zerox', { bps: 70, recipients: { evm: FEE, solana: '' }, solanaFeeMints: [] }) }).quote(params);
+    const ok = await new ZeroExProvider({ fetch: answer({ buyAmount: buyAmount.toString(), minBuyAmount: (min + 5n).toString(), transaction: tx, issues: { allowance: { spender: ZEROX_ALLOWANCE_HOLDER } }, fees: { integratorFee: { amount: '7000000', token: USDC } } }), hasKey: () => true, fee: providerFee('zerox', { curve: [{ usd: 1, bps: 70 }], unknownPriceBps: 70, recipients: { evm: FEE, solana: '' }, solanaFeeMints: [] }) }).quote(params);
     expect(ok.minBuyAmount).toBe(min);
     expect(ok.evmCheck?.settler).toBe(SETTLER);
     const evil = { ...tx, data: zeroExData({ sellToken: USDC, sellAmount, recipient: THIEF, buyToken: NATIVE_EVM, minAmountOut: min, feeRecipient: FEE }) };

@@ -20,7 +20,7 @@
 
 import { fetchJson, netFetch, type NetFetch, type SolTxSummary, l10n } from '@kyro/shared';
 import type { CrossChainInfo, Quote, QuoteParams, SolanaRouteCheck, SwapChain, SwapProvider } from '../types';
-import type { ProviderFee } from '../fees';
+import { feeForQuote, type ProviderFee, type QuoteFee } from '../fees';
 import { ZERO_ADDRESS, WSOL_MINT, isNative, providerError, qs, toBig, unavailableReason, type ProviderOptions } from './common';
 import { lifiChainId, verifyEvmSwap, SwapCheckError } from '../verify';
 import { applySlippage } from '../compare';
@@ -119,7 +119,7 @@ export class LifiProvider implements SwapProvider {
     return typeof p.chain === 'number' ? this.evmCross(p, p.chain, toChain) : this.solanaCross(p, toChain);
   }
 
-  private async get(p: QuoteParams, extra: Record<string, string | number | undefined>, fee: ProviderFee): Promise<LifiQuote> {
+  private async get(p: QuoteParams, extra: Record<string, string | number | undefined>, fee: QuoteFee): Promise<LifiQuote> {
     const toChain = p.toChain ?? p.chain;
     const url = `https://li.quest/v1/quote?${qs({
       fromChain: lifiChainId(p.chain),
@@ -142,7 +142,7 @@ export class LifiProvider implements SwapProvider {
     return r;
   }
 
-  private base(p: QuoteParams, r: LifiQuote, fee: ProviderFee): Omit<Quote, 'tx' | 'minBuyAmount' | 'allowanceTarget' | 'gasFeeFiat'> {
+  private base(p: QuoteParams, r: LifiQuote, fee: QuoteFee): Omit<Quote, 'tx' | 'minBuyAmount' | 'allowanceTarget' | 'gasFeeFiat'> {
     const fx = p.usdToFiat ?? 1;
     const fees = r.estimate.feeCosts ?? [];
     const sum = (xs: Array<{ amountUSD?: string }> | undefined) => (xs ?? []).reduce((s, x) => s + Number(x.amountUSD ?? 0), 0);
@@ -161,7 +161,9 @@ export class LifiProvider implements SwapProvider {
   }
 
   private async sameChain(p: QuoteParams, chain: number): Promise<Quote> {
-    const r = await this.get(p, {}, this.fee);
+    // The rate of THIS quote (curve of its USD value): asked for, then demanded back by verify.ts.
+    const fee = feeForQuote(this.fee, p);
+    const r = await this.get(p, {}, fee);
     const fx = p.usdToFiat ?? 1;
     const tx = r.transactionRequest;
     const gas = toBig(tx.gasLimit);
@@ -178,10 +180,10 @@ export class LifiProvider implements SwapProvider {
       buyAmount: toBig(r.estimate.toAmount),
       tx: { to: tx.to ?? '', data: tx.data as `0x${string}`, value },
       allowanceTarget,
-      fee: this.fee,
+      fee,
     });
     const out: Quote = {
-      ...this.base(p, r, this.fee),
+      ...this.base(p, r, fee),
       // What the Diamond enforces (decoded `_minAmountOut`), never only what the answer claims.
       minBuyAmount: check.minBuyAmount < toBig(r.estimate.toAmountMin) ? check.minBuyAmount : toBig(r.estimate.toAmountMin),
       gasFeeFiat: (r.estimate.gasCosts ?? []).reduce((s, x) => s + Number(x.amountUSD ?? 0), 0) * fx,
@@ -206,7 +208,8 @@ export class LifiProvider implements SwapProvider {
     // minimum ≈ 1 − 2 × slippage. Half per leg keeps the whole route within the user's choice,
     // which is what verify.ts then enforces on the bridge minimum.
     const legSlippage = Math.max(1, Math.floor(p.slippageBps / 2)) / 10_000;
-    const r = await this.get(p, { toAddress: recipient, allowBridges: LIFI_CROSS_BRIDGES.join(','), slippage: legSlippage }, this.fee);
+    const fee = feeForQuote(this.fee, p);
+    const r = await this.get(p, { toAddress: recipient, allowBridges: LIFI_CROSS_BRIDGES.join(','), slippage: legSlippage }, fee);
     const cross = this.crossInfo({ ...p, recipient }, toChain, r);
     const fx = p.usdToFiat ?? 1;
     const tx = r.transactionRequest;
@@ -225,7 +228,7 @@ export class LifiProvider implements SwapProvider {
       buyAmount,
       tx: { to: tx.to ?? '', data: tx.data as `0x${string}`, value },
       allowanceTarget,
-      fee: this.fee,
+      fee,
       cross: { toChain, recipient },
     });
     const bridge = check.bridge;
@@ -233,7 +236,7 @@ export class LifiProvider implements SwapProvider {
     // The bridge itself must confirm where this deposit goes (recipient, token, minimum, refund).
     const near = await this.near.confirm({ depositAddress: bridge.depositAddress, amountIn: bridge.amountIn, fromChain: chain, toChain, buyToken: p.buy.address, recipient, refundTo: p.taker, minAmountOut: check.minBuyAmount });
     const out: Quote = {
-      ...this.base(p, r, this.fee),
+      ...this.base(p, r, fee),
       minBuyAmount: check.minBuyAmount < toBig(r.estimate.toAmountMin) ? check.minBuyAmount : toBig(r.estimate.toAmountMin),
       gasFeeFiat: (r.estimate.gasCosts ?? []).reduce((s, x) => s + Number(x.amountUSD ?? 0), 0) * fx,
       allowanceTarget: allowanceTarget === null ? null : check.contract,
@@ -248,7 +251,8 @@ export class LifiProvider implements SwapProvider {
 
   private async solanaCross(p: QuoteParams, toChain: SwapChain): Promise<Quote> {
     if (this.solFee.kind === 'unavailable') throw new Error(this.solFee.reason);
-    const fee = this.solFee;
+    // Same rate in the request, in every fresh build and in the transaction check (`kyro`).
+    const fee = feeForQuote(this.solFee, p);
     const recipient = p.recipient ?? '';
     if (!recipient) throw new Error(l10n('LI.FI : pas de compte à toi sur la chaîne de destination', 'LI.FI: no account of yours on the destination chain'));
     const params = { toAddress: recipient, allowBridges: LIFI_CROSS_BRIDGES.join(',') };

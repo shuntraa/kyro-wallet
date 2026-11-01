@@ -19,7 +19,7 @@
 
 import { fetchJson, l10n, netFetch, type NetFetch } from '@kyro/shared';
 import type { DepositPlan, Quote, QuoteParams, SwapChain, SwapProvider } from '../types';
-import { ONE_CLICK_MAX_TOTAL_BPS, type ProviderFee } from '../fees';
+import { ONE_CLICK_FEE_REQUEST_FACTOR, ONE_CLICK_MAX_TOTAL_BPS, feeForQuote, type ProviderFee } from '../fees';
 import { providerError } from './common';
 import { applySlippage } from '../compare';
 import { SwapCheckError } from '../verify';
@@ -110,8 +110,9 @@ export class NearIntentsProvider implements SwapProvider {
    * `appFees[0].fee` actually sent: twice Kyro's rate (1Click's live 50/50 split), re-derived once
    * from 1Click's echo if its split differs (its docs also describe « your fee + 25 bps » without a
    * key). Whatever is sent, a quote is only accepted if Kyro's echoed share is EXACTLY `bps`.
+   * Kept per Kyro rate (the rate follows the curve, so it changes with the swap value).
    */
-  private requestBps: number | null = null;
+  private readonly requestBps = new Map<number, number>();
 
   constructor(opts: { fetch?: NetFetch; fee?: ProviderFee & { requestBps?: number } } = {}) {
     this.fetcher = opts.fetch ?? netFetch;
@@ -136,16 +137,20 @@ export class NearIntentsProvider implements SwapProvider {
     return true;
   }
 
-  private nearFee(): NearFee | null {
+  /** The fee of THIS quote: the curve's rate for its USD value (≤ 250 bps), asked for then demanded back. */
+  private nearFee(p: QuoteParams): NearFee | null {
     if (this.fee.kind === 'unavailable') throw new Error(this.fee.reason);
-    return this.fee.kind === 'fee' ? { bps: this.fee.bps, recipient: this.fee.recipient.toLowerCase(), requestBps: this.requestBps ?? this.fee.requestBps ?? this.fee.bps * 2 } : null;
+    const f = feeForQuote(this.fee, p);
+    if (f.kind !== 'fee') return null;
+    const fixed = this.fee.kind === 'fee' ? this.fee.requestBps : undefined;
+    return { bps: f.bps, recipient: f.recipient.toLowerCase(), requestBps: this.requestBps.get(f.bps) ?? fixed ?? f.bps * ONE_CLICK_FEE_REQUEST_FACTOR };
   }
 
   private async ask(p: QuoteParams, dry: boolean, retried = false): Promise<{ answer: OneClickQuoteAnswer; expect: OneClickQuoteExpect }> {
     const toChain = p.toChain ?? p.chain;
     const recipient = p.recipient ?? (toChain === p.chain ? p.taker : '');
     if (!recipient) throw new Error(l10n('NEAR Intents : pas de compte à toi sur la chaîne de destination', 'NEAR Intents: no account of yours on the destination chain'));
-    const fee = this.nearFee();
+    const fee = this.nearFee(p);
     let tokens: OneClickToken[];
     try {
       tokens = await this.client.tokenList();
@@ -183,7 +188,7 @@ export class NearIntentsProvider implements SwapProvider {
     if (fee && !retried && typeof ours === 'number' && Number.isInteger(ours) && ours > 0 && ours !== fee.bps) {
       const next = Math.round((fee.requestBps * fee.bps) / ours);
       if (next >= fee.bps && next <= ONE_CLICK_MAX_TOTAL_BPS && next !== fee.requestBps) {
-        this.requestBps = next;
+        this.requestBps.set(fee.bps, next);
         return this.ask(p, dry, true);
       }
     }

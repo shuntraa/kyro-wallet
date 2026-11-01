@@ -11,7 +11,7 @@
 // - the native value sent is 0 for an ERC-20 sale and exactly the amount for a native sale;
 // - the recipient written in the calldata is the taker (us), the minimum written in the calldata
 //   is at least `buyAmount` minus the chosen slippage;
-// - the Kyro fee goes to the configured recipient, at most at the configured rate.
+// - the Kyro fee goes to the configured recipient, at exactly the rate asked for this quote.
 //
 // Sources (checked 01/11/2026):
 // - 0x: docs.0x.org « Contracts » (AllowanceHolder on Cancun chains), 0x-settler README and
@@ -23,7 +23,7 @@
 
 import { decodeFunctionData, getAddress, isAddress, pad, parseAbi, toHex, type Hex } from 'viem';
 import { base58, bech32 } from '@scure/base';
-import type { ProviderFee } from './fees';
+import type { QuoteFee } from './fees';
 import { applySlippage } from './compare';
 import { NATIVE_EVM, WSOL_MINT, ZERO_ADDRESS, isNative } from './providers/common';
 import type { ProviderId, SwapChain, SwapToken } from './types';
@@ -195,7 +195,8 @@ export interface EvmSwapCheckInput {
   tx: { to: string; data: Hex; value: bigint };
   /** ERC-20 spender the answer asks to approve (null for a native sale). */
   allowanceTarget: string | null;
-  fee: ProviderFee;
+  /** The fee of THIS quote (fees.ts `feeForQuote`): the exact rate asked for in the request. */
+  fee: QuoteFee;
   /** 0x only: `fees.integratorFee` of the answer. */
   integratorFee?: { amount: bigint; token: string } | null;
   /**
@@ -226,6 +227,10 @@ const fail = (provider: string, why: string): never => {
 };
 /** Most the Kyro fee may be: ceil(sellAmount × bps / 10 000). */
 export const maxKyroFee = (sellAmount: bigint, bps: number) => (sellAmount * BigInt(bps) + 9_999n) / 10_000n;
+/** Least the Kyro fee may be: floor(sellAmount × bps / 10 000) − 1 (one base unit of rounding). */
+export const minKyroFee = (sellAmount: bigint, bps: number) => (sellAmount * BigInt(bps)) / 10_000n - 1n;
+/** Is `amount` the Kyro fee at exactly `bps` of `sellAmount` (to the base unit)? */
+export const kyroFeeAtRate = (amount: bigint, sellAmount: bigint, bps: number) => amount > 0n && amount >= minKyroFee(sellAmount, bps) && amount <= maxKyroFee(sellAmount, bps);
 /** min ≥ buyAmount − slippage, with 1 bp of rounding tolerance. */
 const minOk = (min: bigint, buyAmount: bigint, slippageBps: number) => min > 0n && min >= applySlippage(buyAmount, Math.min(10_000, slippageBps + 1));
 
@@ -279,6 +284,7 @@ function checkZeroEx(i: EvmSwapCheckInput, name: string, entry: string): EvmSwap
     const fee = f as { amount: bigint; token: string };
     if (!same(fee.token, i.sell.address) && !(isNative(i.sell.address) && isNative(fee.token))) fail(name, l10n('frais Kyro pris dans un autre token que le token vendu', 'Kyro fees taken in another token than the sold token'));
     if (fee.amount > maxKyroFee(i.sellAmount, i.fee.bps)) fail(name, l10n('frais Kyro supérieurs au taux configuré', 'Kyro fees above the configured rate'));
+    if (!kyroFeeAtRate(fee.amount, i.sellAmount, i.fee.bps)) fail(name, l10n('frais Kyro différents du taux demandé', 'Kyro fees differ from the rate asked for'));
     // The fee recipient must be written somewhere in the Settler actions (the fee transfer).
     const needle = i.fee.recipient.toLowerCase().replace(/^0x/, '');
     if (!actions.some((a) => a.toLowerCase().includes(needle))) fail(name, l10n('bénéficiaire des frais Kyro absent de la transaction', 'Kyro fee recipient missing from the transaction'));
@@ -336,6 +342,7 @@ function lifiFees(i: EvmSwapCheckInput, steps: readonly SwapData[], name: string
   if (i.fee.kind === 'fee') {
     if (kyro <= 0n) fail(name, l10n('frais Kyro absents de la transaction', 'Kyro fees missing from the transaction'));
     if (kyro > maxKyroFee(i.sellAmount, i.fee.bps)) fail(name, l10n('frais Kyro supérieurs au taux configuré', 'Kyro fees above the configured rate'));
+    if (!kyroFeeAtRate(kyro, i.sellAmount, i.fee.bps)) fail(name, l10n('frais Kyro différents du taux demandé', 'Kyro fees differ from the rate asked for'));
   }
   const kyroBps = i.fee.kind === 'fee' ? BigInt(i.fee.bps) : 0n;
   if (total > (i.sellAmount * (kyroBps + LIFI_OWN_FEE_CAP_BPS) + 9_999n) / 10_000n) fail(name, l10n('frais prélevés au total plus élevés que prévu', 'total fees taken higher than expected'));

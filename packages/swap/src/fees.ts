@@ -3,9 +3,10 @@
 // Kyro swap fee: the ONE place where it is configured.
 //
 // Kyro is open source: this fee is public, and anyone building Kyro from source can change it,
-// set it to 0 or remove it. It is already deducted from the amount shown, counted in the
-// confirmation's « Frais inclus » total before signing, and is collected on-chain by each provider's OFFICIAL integrator-fee mechanism, never by an extra
-// transfer added by Kyro. Details, parameters and doc links: docs/SWAP_FEES.md.
+// set it to 0 or remove it. Its rate follows a declining curve of the swap value in USD
+// (`KYRO_FEE_CURVE`). It is already deducted from the amount shown (« Frais de service inclus »,
+// linked to kyrowallet.com/frais), and is collected on-chain by each provider's OFFICIAL
+// integrator-fee mechanism, never by an extra transfer added by Kyro. Details, parameters and doc links: docs/SWAP_FEES.md.
 //
 // Rule: every swap carries the fee. A provider that cannot collect it with the current settings
 // (missing recipient, Solana pair without a fee mint…) is left out of the quotes, with the reason; it is never used fee-free behind the user's
@@ -13,12 +14,44 @@
 
 import { isAddress, sha256 } from 'viem';
 import { base58, base58xrp, bech32, createBase58check } from '@scure/base';
-import type { ProviderId } from './types';
+import type { ProviderId, QuoteParams } from './types';
 import { intlLocale, l10n } from '@kyro/shared';
 
-export interface SwapFeeConfig {
-  /** Fee in basis points: 70 = 0,7 %. 0 turns the Kyro fee off everywhere. Hard cap: 100 (1 %). */
+/** One point of the fee curve: a swap worth `usd` US dollars pays `bps` basis points (70 = 0,7 %). */
+export interface FeePoint {
+  usd: number;
   bps: number;
+}
+
+/**
+ * Kyro fee curve (docs/SWAP_FEES.md): a declining rate as the swap value in USD grows.
+ * - at or below the first point (5 $): its rate (500 bps); at or above the last (10 000 $): its rate (70 bps, flat);
+ * - between two points: linear interpolation on log(amount), rounded to the NEAREST integer bps
+ *   (`Math.round`, .5 rounded up), see `swapFeeBps`.
+ */
+export const KYRO_FEE_CURVE: readonly FeePoint[] = [
+  { usd: 5, bps: 500 },
+  { usd: 10, bps: 200 },
+  { usd: 25, bps: 180 },
+  { usd: 50, bps: 160 },
+  { usd: 80, bps: 140 },
+  { usd: 100, bps: 120 },
+  { usd: 1_000, bps: 90 },
+  { usd: 10_000, bps: 70 },
+];
+
+/** Rate when the sold token has no price (its USD value is unknown). */
+export const UNKNOWN_PRICE_FEE_BPS = 90;
+
+/** What decides the Kyro rate of one swap. Every rate at 0 turns the Kyro fee off everywhere. */
+export interface FeeSchedule {
+  /** Points sorted by strictly increasing `usd` (> 0), integer `bps` in 0…MAX_FEE_BPS. */
+  curve: readonly FeePoint[];
+  /** Rate applied when the swap value in USD is unknown (no price for the sold token). */
+  unknownPriceBps: number;
+}
+
+export interface SwapFeeConfig extends FeeSchedule {
   recipients: {
     /** EVM address (0x…) paid on every EVM chain by 0x and LI.FI. */
     evm: string;
@@ -56,7 +89,8 @@ export interface SwapFeeConfig {
 }
 
 export const KYRO_SWAP_FEE: SwapFeeConfig = {
-  bps: 70,
+  curve: KYRO_FEE_CURVE,
+  unknownPriceBps: UNKNOWN_PRICE_FEE_BPS,
   recipients: {
     evm: '0x86cD9af8067fF5e0001c709a550cD62b5e968B44',
     solana: 'ptsbLdrhmEfC2eQ9gj4aieF4irdhQqYzK1fdNwHBZcM',
@@ -75,16 +109,94 @@ export const KYRO_SWAP_FEE: SwapFeeConfig = {
   ],
 };
 
-/** What a provider must do about the Kyro fee. */
+/** What a provider must do about the Kyro fee (built once, from the config). */
 export type ProviderFee =
   /** Fee deliberately at 0: quote without fee parameters. */
   | { kind: 'none' }
-  /** `recipient` = EVM address (0x, LI.FI) or Solana owner (Jupiter). */
+  /** A FIXED rate (tests, or a fork that wants one). `recipient` = EVM address (0x, LI.FI) or Solana owner (Jupiter). */
   | { kind: 'fee'; bps: number; recipient: string }
+  /**
+   * The Kyro curve: the rate of each quote is `feeForQuote` (swap value in USD → `swapFeeBps`),
+   * at most `maxBps`, the provider's own documented maximum (`PROVIDER_MAX_FEE_BPS`).
+   */
+  | { kind: 'curve'; recipient: string; schedule: FeeSchedule; maxBps: number }
   /** The fee cannot be collected through this provider: leave it out. */
   | { kind: 'unavailable'; reason: string };
 
-export const MAX_FEE_BPS = 100;
+/** The fee of ONE quote: what is asked for in the request AND demanded back when verifying it. */
+export type QuoteFee = Exclude<ProviderFee, { kind: 'curve' }>;
+
+/** Hard cap of any Kyro rate (the curve's highest point). Above it, the configuration is refused. */
+export const MAX_FEE_BPS = 500;
+
+/**
+ * Most each provider's fee mechanism accepts (docs/SWAP_FEES.md, read 01/11/2026). The Kyro rate
+ * of a quote is clamped to it:
+ * - 0x: `swapFeeBps` « has a default limit of 1000 Bps » → no clamp (Kyro ≤ 500);
+ * - LI.FI: `distributionFees` percentage « greater than 0 and less than 0.5 per entry » → no clamp;
+ * - Jupiter: `platform_fee_bps` is a `u8` in the on-chain route instruction → 255;
+ * - NEAR Intents 1Click: Kyro asks twice its rate (1Click keeps half) and the total may not
+ *   exceed 500 bps (`ONE_CLICK_MAX_TOTAL_BPS`) → 250.
+ */
+export const PROVIDER_MAX_FEE_BPS: Readonly<Record<ProviderId, number>> = { zerox: 1_000, lifi: 4_999, jupiter: 255, near: 250 };
+
+const validBps = (b: number) => Number.isInteger(b) && b >= 0 && b <= MAX_FEE_BPS;
+
+/** Is the schedule usable? (non-empty curve, strictly increasing positive `usd`, integer rates ≤ MAX_FEE_BPS) */
+export function validFeeSchedule(s: FeeSchedule): boolean {
+  if (!Array.isArray(s.curve) || s.curve.length === 0 || !validBps(s.unknownPriceBps)) return false;
+  return s.curve.every((pt, i) => Number.isFinite(pt.usd) && pt.usd > 0 && validBps(pt.bps) && (i === 0 || pt.usd > (s.curve[i - 1] as FeePoint).usd));
+}
+
+const feeOff = (s: FeeSchedule) => s.unknownPriceBps === 0 && s.curve.every((pt) => pt.bps === 0);
+const scheduleOf = (cfg: FeeSchedule): FeeSchedule => ({ curve: cfg.curve, unknownPriceBps: cfg.unknownPriceBps });
+
+/**
+ * Kyro rate (integer bps) for a swap worth `usd` US dollars; null / undefined / NaN / negative =
+ * unknown value → `unknownPriceBps`. Flat below the first point and above the last; between two
+ * points, linear on log(usd). ROUNDING: to the nearest integer bps (`Math.round`, .5 up).
+ */
+export function swapFeeBps(usd: number | null | undefined, s: FeeSchedule = KYRO_SWAP_FEE): number {
+  if (usd === null || usd === undefined || !Number.isFinite(usd) || usd < 0) return s.unknownPriceBps;
+  const pts = s.curve;
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  if (!first || !last) return s.unknownPriceBps;
+  if (usd <= first.usd) return first.bps;
+  if (usd >= last.usd) return last.bps;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1] as FeePoint;
+    const b = pts[i] as FeePoint;
+    if (usd <= b.usd) {
+      const t = (Math.log(usd) - Math.log(a.usd)) / (Math.log(b.usd) - Math.log(a.usd));
+      return Math.round(a.bps + t * (b.bps - a.bps));
+    }
+  }
+  return last.bps;
+}
+
+/**
+ * USD value of what is sold: amount × the sold token's price (the app's price source, in the
+ * user's currency) ÷ `usdToFiat` (USD → user currency). Null when the price is unknown.
+ */
+export function sellValueUsd(p: Pick<QuoteParams, 'sell' | 'sellAmount' | 'usdToFiat'>): number | null {
+  const price = p.sell.priceFiat;
+  const fx = p.usdToFiat ?? 1;
+  if (price === undefined || !Number.isFinite(price) || price < 0 || !Number.isFinite(fx) || fx <= 0) return null;
+  return (Number(p.sellAmount) / 10 ** p.sell.decimals) * (price / fx);
+}
+
+/**
+ * The fee of one quote, computed ONCE by the provider from the quote's own parameters: the same
+ * value goes into the request (0x `swapFeeBps`, LI.FI `distributionFees`, Jupiter
+ * `platformFeeBps`, 1Click `appFees`) and into every check of the answer (echo, calldata,
+ * transaction), and is kept as `Quote.kyroFeeBps` for the checks done at signing time.
+ */
+export function feeForQuote(fee: ProviderFee, p: Pick<QuoteParams, 'sell' | 'sellAmount' | 'usdToFiat'>): QuoteFee {
+  if (fee.kind !== 'curve') return fee;
+  const bps = Math.min(fee.maxBps, swapFeeBps(sellValueUsd(p), fee.schedule));
+  return bps > 0 ? { kind: 'fee', bps, recipient: fee.recipient } : { kind: 'none' };
+}
 
 export function validSolanaAddress(a: string): boolean {
   try {
@@ -183,9 +295,9 @@ export function thornameFor(cfg: SwapFeeConfig = KYRO_SWAP_FEE): string | null {
 
 /** Fee instructions for one provider under a config (default: KYRO_SWAP_FEE). */
 export function providerFee(id: ProviderId, cfg: SwapFeeConfig = KYRO_SWAP_FEE): ProviderFee {
-  if (!Number.isInteger(cfg.bps) || cfg.bps < 0 || cfg.bps > MAX_FEE_BPS) return { kind: 'unavailable', reason: l10n('Frais Kyro mal configurés', 'Kyro fees misconfigured') };
-  if (cfg.bps === 0) return { kind: 'none' };
-  const fee = (recipient: string): ProviderFee => ({ kind: 'fee', bps: cfg.bps, recipient });
+  if (!validFeeSchedule(cfg)) return { kind: 'unavailable', reason: l10n('Frais Kyro mal configurés', 'Kyro fees misconfigured') };
+  if (feeOff(cfg)) return { kind: 'none' };
+  const fee = (recipient: string): ProviderFee => ({ kind: 'curve', recipient, schedule: scheduleOf(cfg), maxBps: PROVIDER_MAX_FEE_BPS[id] });
   switch (id) {
     case 'zerox':
       return validEvm(cfg.recipients.evm) ? fee(cfg.recipients.evm) : { kind: 'unavailable', reason: l10n('Adresse EVM des frais Kyro non configurée', 'EVM address for Kyro fees not configured') };
@@ -206,21 +318,18 @@ export function providerFee(id: ProviderId, cfg: SwapFeeConfig = KYRO_SWAP_FEE):
  * account (`recipient`: « a named account, an implicit account, or an EVM-style address ») —
  * Kyro uses `recipients.evm` in lower case, the NEAR Intents account its EVM key controls. 1Click
  * then SPLITS the requested fee 50/50 with itself (live answer: `fee: 70` → 35 to us + 35 to
- * 1Click's account `5880ad…47dd`; `fee: 140` → 70 + 70). So Kyro requests twice its rate to be
- * paid exactly `bps`, and checks the echo: 1Click's share at most `bps` (else refused). The docs
+ * 1Click's account `5880ad…47dd`; `fee: 140` → 70 + 70). So Kyro requests twice the rate of
+ * the quote (from the curve, at most 250 bps so the request stays ≤ 500) to be paid exactly `bps`, and checks the echo: 1Click's share at most `bps` (else refused). The docs
  * (« Fees », 01/11/2026) describe the 50/50 split for API-key holders and « your fee + 25 bps »
  * without a key; if 1Click's echo shows another split, the provider asks once more with the
  * request that pays exactly `bps` (providers/near.ts), and refuses anything else.
  */
 export const ONE_CLICK_FEE_REQUEST_FACTOR = 2;
-/** 1Click: Kyro's fee + 1Click's share may not exceed 500 bps. */
+/** 1Click: Kyro's fee + 1Click's share may not exceed 500 bps (hence Kyro ≤ 250 bps there: `PROVIDER_MAX_FEE_BPS.near`). */
 export const ONE_CLICK_MAX_TOTAL_BPS = 500;
+/** 1Click fee: the curve (rate per quote, clamped to 250 bps). `requestBps` only goes with a fixed rate. */
 export function nearIntentsAppFee(cfg: SwapFeeConfig = KYRO_SWAP_FEE): ProviderFee & { requestBps?: number } {
-  const f = providerFee('near', cfg);
-  if (f.kind !== 'fee') return f;
-  const requestBps = f.bps * ONE_CLICK_FEE_REQUEST_FACTOR;
-  if (requestBps > ONE_CLICK_MAX_TOTAL_BPS) return { kind: 'unavailable', reason: l10n('Frais Kyro trop élevés pour NEAR Intents', 'Kyro fees too high for NEAR Intents') };
-  return { ...f, requestBps };
+  return providerFee('near', cfg);
 }
 
 /**
@@ -231,16 +340,16 @@ export function nearIntentsAppFee(cfg: SwapFeeConfig = KYRO_SWAP_FEE): ProviderF
  */
 export function lifiFeeFor(source: 'evm' | 'solana' | 'bitcoin', cfg: SwapFeeConfig = KYRO_SWAP_FEE): ProviderFee {
   if (source === 'evm') return providerFee('lifi', cfg);
-  if (!Number.isInteger(cfg.bps) || cfg.bps < 0 || cfg.bps > MAX_FEE_BPS) return { kind: 'unavailable', reason: l10n('Frais Kyro mal configurés', 'Kyro fees misconfigured') };
-  if (cfg.bps === 0) return { kind: 'none' };
+  if (!validFeeSchedule(cfg)) return { kind: 'unavailable', reason: l10n('Frais Kyro mal configurés', 'Kyro fees misconfigured') };
+  if (feeOff(cfg)) return { kind: 'none' };
   if (source === 'solana') {
     const r = feeRecipientFor('solana', cfg);
-    return r ? { kind: 'fee', bps: cfg.bps, recipient: r } : { kind: 'unavailable', reason: l10n('Adresse Solana des frais Kyro non configurée', 'Solana address for Kyro fees not configured') };
+    return r ? { kind: 'curve', recipient: r, schedule: scheduleOf(cfg), maxBps: PROVIDER_MAX_FEE_BPS.lifi } : { kind: 'unavailable', reason: l10n('Adresse Solana des frais Kyro non configurée', 'Solana address for Kyro fees not configured') };
   }
   return { kind: 'unavailable', reason: l10n('Frais Kyro impossibles depuis Bitcoin avec LI.FI (bénéficiaire bc1… refusé)', 'Kyro fees impossible from Bitcoin with LI.FI (bc1… recipient refused)') };
 }
 
-/** "0,7 %" */
+/** "0,7 %" (one quote's rate; the Swap screen never shows it). */
 export function feeLabel(bps: number): string {
   return `${(bps / 100).toLocaleString(intlLocale(), { maximumFractionDigits: 2 })}${l10n(' %', '%')}`;
 }
