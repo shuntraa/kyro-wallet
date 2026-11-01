@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-zec-sign"
+description = "Enables the zec_sign command without any pre-configured scope."
+commands.allow = ["zec_sign"]
+
+[[permission]]
+identifier = "deny-zec-sign"
+description = "Denies the zec_sign command without any pre-configured scope."
+commands.deny = ["zec_sign"]

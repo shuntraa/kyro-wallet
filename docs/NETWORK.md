@@ -18,7 +18,7 @@ Kyro embarque un client Tor (Arti, de The Tor Project). Il démarre en arrière-
 | Ton adresse IP | **Cachée** : le serveur voit l'IP d'un relais de sortie Tor. Ton fournisseur d'accès voit seulement que tu utilises Tor. | Visible par chaque serveur contacté et par ton fournisseur d'accès (qui voit les noms d'hôtes). |
 | Contenu des requêtes | Chiffré de bout en bout en TLS jusqu'au serveur (le relais de sortie ne voit que le nom d'hôte et le volume). | Chiffré en TLS. |
 | Tes adresses publiques, tes transactions | **Toujours visibles par le serveur interrogé** : Tor cache *qui* tu es sur le réseau, pas *ce que* tu demandes. | Visibles par le serveur interrogé, et associées à ton IP. |
-| Liens entre activités | Chaque famille — **bitcoin**, **litecoin**, **dogecoin**, **tron**, **xrp**, **cardano**, **evm**, **solana**, **marché** (CoinGecko), **swap** — utilise ses propres circuits isolés : un relais de sortie ou un serveur ne peut pas relier, par le circuit, ta consultation Bitcoin et ta consultation Solana. | Toutes les requêtes partent de la même IP. |
+| Liens entre activités | Chaque famille — **bitcoin**, **litecoin**, **dogecoin**, **zcash**, **tron**, **xrp**, **cardano**, **evm**, **solana**, **marché** (CoinGecko), **swap** — utilise ses propres circuits isolés : un relais de sortie ou un serveur ne peut pas relier, par le circuit, ta consultation Bitcoin et ta consultation Solana. | Toutes les requêtes partent de la même IP. |
 | Panne | **Échec fermé** : si Tor n'est pas prêt dans les 60 s, la requête échoue (`TOR_UNAVAILABLE`) et **rien n'est envoyé en clair**. Aucun repli automatique. | — |
 
 Par serveur, en mode Tor : CoinGecko voit les cryptos et la devise demandées ; mempool, litecoinspace, TronGrid, les serveurs XRPL, Koios (Cardano), les RPC EVM et Solana voient les adresses et transactions demandées ; les API de swap voient les tokens, montants et l'adresse destinataire — mais aucun ne voit ton IP, et deux familles différentes ne partagent jamais un circuit.
@@ -84,6 +84,24 @@ Le robinet Cardano preprod (`faucet.preprod.world.dev.cardano.org`) n'est contac
 | Blockbook de Trezor (`doge1.trezor.io`) | bloqué par Cloudflare pour les clients autres que Trezor |
 | NOWNodes, Tatum, QuickNode (Blockbook) | testnet disponible mais **clé API payante** |
 
+### Zcash (adresses transparentes seulement) : ElectrumX publics de Komodo (mainnet) ; pas de défaut sur testnet
+
+**Mainnet** : Kyro utilise par défaut les serveurs **ElectrumX publics de Komodo Platform** pour Zcash (même opérateur « cipig » que pour Dogecoin), listés dans le dépôt officiel des pièces de Komodo : [KomodoPlatform/coins › electrums/ZEC](https://github.com/KomodoPlatform/coins/blob/master/electrums/ZEC). Gratuits, sans clé API, protocole Electrum 1.4. **Seules les adresses transparentes** (`t1…`) sont interrogées : Kyro ne gère pas les adresses protégées (`zs…`) ni unifiées (`u1…`), qui demanderaient un serveur lightwalletd (gRPC) et le déchiffrement des notes.
+
+| Hôte (Rust uniquement, socket TLS brute — **pas** `net_fetch`) | Rôle | Ce qu'il voit |
+|---|---|---|
+| `zec.electrum1.cipig.net:20058` | serveur principal : `server.version` / `server.features` (genesis Zcash vérifié à chaque session), `scripthash.get_balance` / `get_history` / `listunspent`, `transaction.get`, `block.header`, `headers.subscribe`, `transaction.id_from_pos` (une transaction récente : **mise à niveau réseau lue sur la chaîne** avant chaque envoi), `transaction.broadcast` | Tes *script hashes* Zcash (= tes adresses `t1…`), les txid de tes pièces et de leurs transactions précédentes, tes transactions signées ; l'IP d'un relais de sortie Tor (ton IP en mode clair) |
+| `zec.electrum2.cipig.net:20058` | secours, essayé **seulement** si le premier est injoignable (même famille Tor, même transport ; jamais en clair si Tor est activé) | Idem |
+
+- Allowlist : `net::ELECTRUM_HOSTS` (famille `zcash`, hôte **et** port) ; liste affichée dans Réglages › Connexions sortantes. Ces hôtes ne sont **pas** dans `ALLOWED_HOSTS` : l'interface ne peut pas les joindre.
+- TLS : certificat Let's Encrypt `*.cipig.net`, validé normalement (webpki), aucune exception (vérifié le 01/11/2026). `zec.electrum3.cipig.net`, aussi listé, refusait les connexions le 01/11/2026 : non retenu. Le serveur exige `server.version` avant toute autre requête (Kyro l'envoie toujours).
+- Tor par défaut (circuits isolés de la famille `zcash`) ; mode clair : connexion directe, ton IP visible.
+- Vérifié en direct le 01/11/2026 (en clair, lectures seulement ; **pas encore via Tor**, aucune diffusion) : ElectrumX 2.0.0, genesis Zcash mainnet `00040fe8…3dce08`, hauteur 3 537 784, branche NU6.3 (`0x37a5165b`) dans la coinbase (v6) et les transactions v5, `relayfee` 0,000001 ZEC/kB, `estimatefee` −1 (sans objet : Kyro applique ZIP 317). Réponses réelles enregistrées dans `apps/desktop/src-tauri/src/testdata/zec_electrum_mainnet.json` et `crates/wallet-core/tests/data/zec_mainnet_v5.json`.
+- **Un serveur Electrum peut mentir** (solde, historique, liste de pièces, hauteur, branche). Ce qui le neutralise pour la signature : chaque pièce est confrontée à sa **transaction précédente complète**, que Rust ré-analyse et re-hache ; le condensé de signature ZIP 244 engage le montant et le script de chaque entrée (un montant faux rend la signature invalide) ; une branche de consensus annoncée par le serveur n'est acceptée que si elle est connue de Kyro **et** cohérente avec sa table d'activation pour la hauteur (sinon refus de signer). Un serveur qui ment sur la hauteur ou la branche ne peut que faire produire une transaction refusée par le réseau.
+- Pas de serveur Zcash personnalisé pour l'instant (Réglages).
+
+**Testnet** : **aucun** serveur par défaut (les commandes `zec_*` répondent `SERVER_INVALID`) : Komodo ne publie pas de serveur Zcash testnet, et les serveurs testnet publics connus sont des lightwalletd (gRPC : `testnet.zec.rocks`…), protocole que Kyro ne parle pas.
+
 Les tables d'adresses (ALT) d'une transaction Solana v0 sont lues par Rust auprès du RPC Solana (celui des réglages, sinon le RPC par défaut ci-dessus), jamais transmises par l'interface. Kyro fait confiance à ce RPC pour leur contenu, comme pour les soldes ; une table introuvable, désactivée ou incomplète bloque l'aperçu et la signature.
 
 ## Serveurs personnalisés (Réglages → Réseaux)
@@ -105,6 +123,7 @@ Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, E
 | Bitcoin Core **distant** (`https://` ou `.onion`) | Tes descripteurs publics (xpub : **tout l'historique de ton compte**, présent et futur), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés privées |
 | litecoinspace.org (défaut Litecoin) | Tes adresses Litecoin, les txid de tes pièces, tes transactions ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
 | ElectrumX de Komodo (défaut Dogecoin mainnet) | Tes *script hashes* Dogecoin, les txid de tes pièces et de leurs transactions précédentes, tes transactions ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
+| ElectrumX de Komodo (défaut Zcash mainnet, transparent) | Tes *script hashes* Zcash (adresses `t1…`), les txid de tes pièces et de leurs transactions précédentes, tes transactions ; l'IP d'un relais de sortie | Idem **et ton IP** | Ta phrase, tes clés |
 | Esplora Litecoin / Dogecoin personnalisé (`https://` ou `.onion`) | Tes adresses, les txid de tes pièces (Dogecoin : chaque transaction précédente que tu dépenses), tes transactions ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** ; `.onion` refusé | Ta phrase, tes clés |
 | TronGrid (défaut TRON) / nœud java-tron personnalisé | Ton adresse TRON, tes soldes et ressources, le destinataire et le montant simulés, tes transactions signées ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** | Ta phrase, tes clés |
 | Serveur XRPL par défaut / rippled personnalisé | Ton adresse XRP, l'adresse des destinataires, tes transactions signées ; l'IP d'un relais de sortie (aucune si `.onion`) | Idem **et ton IP** | Ta phrase, tes clés |

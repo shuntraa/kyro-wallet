@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-zec-backend-info"
+description = "Enables the zec_backend_info command without any pre-configured scope."
+commands.allow = ["zec_backend_info"]
+
+[[permission]]
+identifier = "deny-zec-backend-info"
+description = "Denies the zec_backend_info command without any pre-configured scope."
+commands.deny = ["zec_backend_info"]

@@ -10,6 +10,7 @@ mod commands_servers;
 mod commands_tron;
 mod commands_utxo;
 mod commands_xrp;
+mod commands_zcash;
 mod core_rpc;
 mod dialog_text;
 mod electrum;
@@ -31,6 +32,7 @@ mod tor;
 mod tron_backend;
 mod utxo_backend;
 mod xrp_backend;
+mod zcash_backend;
 
 use std::time::Duration;
 
@@ -147,6 +149,15 @@ pub fn run() {
             commands_utxo::doge_tip_height,
             commands_utxo::doge_broadcast,
             commands_utxo::doge_sign_psbt,
+            commands_zcash::zec_backend_info,
+            commands_zcash::zec_address,
+            commands_zcash::zec_address_info,
+            commands_zcash::zec_address_utxos,
+            commands_zcash::zec_address_txs,
+            commands_zcash::zec_tip_height,
+            commands_zcash::zec_broadcast,
+            commands_zcash::zec_send_preview,
+            commands_zcash::zec_sign,
             commands_tron::tron_backend_info,
             commands_tron::tron_address,
             commands_tron::tron_account,
