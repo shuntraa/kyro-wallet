@@ -1,6 +1,6 @@
 [package]
 name = "wallet-core"
-description = "Kyro wallet core: BIP39/BIP32 derivation, encrypted vault, BTC/LTC/DOGE/EVM/Solana/TRON/XRP signing. Pure, no I/O."
+description = "Kyro wallet core: BIP39/BIP32 derivation, encrypted vault, BTC/LTC/DOGE/EVM/Solana/TRON/XRP/Cosmos signing. Pure, no I/O."
 version.workspace = true
 edition.workspace = true
 license = "GPL-3.0-or-later"
@@ -40,6 +40,12 @@ sha2 = { version = "=0.10.9", default-features = false }
 # Cardano hashes: blake2b-224 (key hashes) and blake2b-256 (transaction id). Already in the tree.
 blake2 = { version = "=0.10.6", default-features = false }
 curve25519-dalek = { version = "=4.1.3", default-features = false }
+# Cosmos Hub: protobuf messages of SIGN_MODE_DIRECT (TxBody, AuthInfo, SignDoc, TxRaw, MsgSend)
+# declared by hand with prost's derive (no protoc, no generated crate); every decoded message must
+# re-encode to the exact same bytes. bech32 (rust-bitcoin's, already in the tree) for `cosmos1…`.
+# ECDSA stays libsecp256k1 via `bitcoin::secp256k1` (no k256, see the EVM note above).
+prost = { version = "=0.14.4", default-features = false, features = ["std", "derive"] }
+bech32 = { version = "=0.11.1", default-features = false, features = ["std"] }
 # Vault.
 argon2 = { version = "=0.5.3", default-features = false, features = ["alloc", "zeroize"] }
 chacha20poly1305 = { version = "=0.10.1", default-features = false, features = ["alloc"] }

@@ -1471,7 +1471,7 @@ checksum = "36e10ac4bd47bf8d24a4852f001df23b7acbbca6e59d0adec0c2e2c4409dfe5b"
 dependencies = [
  "heck 0.5.0",
  "indexmap 2.14.2",
- "itertools",
+ "itertools 0.15.0",
  "proc-macro-crate 3.5.0",
  "proc-macro2",
  "quote",
@@ -3118,6 +3118,15 @@ dependencies = [
 
 [[package]]
 name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
@@ -4594,6 +4603,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "prost"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "528ac67416ff8646872a3c02cad9cc4ee5dc9f9540c9b10771855c95cb2e5ae1"
+dependencies = [
+ "bytes",
+ "prost-derive",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
+dependencies = [
+ "anyhow",
+ "itertools 0.14.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -6723,7 +6755,7 @@ dependencies = [
  "extend",
  "getrandom 0.4.3",
  "hex",
- "itertools",
+ "itertools 0.15.0",
  "libc",
  "paste",
  "rand 0.10.3",
@@ -6768,7 +6800,7 @@ dependencies = [
  "derive-deftly",
  "derive_more",
  "educe",
- "itertools",
+ "itertools 0.15.0",
  "paste",
  "rand 0.10.3",
  "smallvec",
@@ -6854,7 +6886,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e58a50a2dbf5d21758c9e2dbaaf085403670b8bf52475c815dd1185698b7af9a"
 dependencies = [
  "humantime",
- "itertools",
+ "itertools 0.15.0",
  "signature",
  "thiserror 2.0.18",
  "tor-llcrypto",
@@ -6878,7 +6910,7 @@ dependencies = [
  "educe",
  "futures",
  "humantime-serde",
- "itertools",
+ "itertools 0.15.0",
  "once_cell",
  "oneshot-fused-workaround",
  "pin-project",
@@ -6928,7 +6960,7 @@ dependencies = [
  "fs-mistrust",
  "futures",
  "humantime-serde",
- "itertools",
+ "itertools 0.15.0",
  "notify",
  "paste",
  "postage",
@@ -6991,7 +7023,7 @@ dependencies = [
  "http",
  "httparse",
  "httpdate",
- "itertools",
+ "itertools 0.15.0",
  "thiserror 2.0.18",
  "tor-circmgr",
  "tor-error",
@@ -7045,7 +7077,7 @@ dependencies = [
  "hex",
  "humantime",
  "humantime-serde",
- "itertools",
+ "itertools 0.15.0",
  "memmap2",
  "oneshot-fused-workaround",
  "paste",
@@ -7128,7 +7160,7 @@ dependencies = [
  "futures",
  "humantime",
  "humantime-serde",
- "itertools",
+ "itertools 0.15.0",
  "num_enum",
  "oneshot-fused-workaround",
  "pin-project",
@@ -7169,7 +7201,7 @@ dependencies = [
  "educe",
  "either",
  "futures",
- "itertools",
+ "itertools 0.15.0",
  "oneshot-fused-workaround",
  "postage",
  "rand 0.10.3",
@@ -7214,7 +7246,7 @@ dependencies = [
  "digest",
  "hex",
  "humantime",
- "itertools",
+ "itertools 0.15.0",
  "paste",
  "rand 0.10.3",
  "safelog",
@@ -7274,7 +7306,7 @@ dependencies = [
  "glob-match",
  "humantime",
  "inventory",
- "itertools",
+ "itertools 0.15.0",
  "rand 0.10.3",
  "safelog",
  "serde",
@@ -7310,7 +7342,7 @@ dependencies = [
  "derive_builder_fork_arti",
  "derive_more",
  "hex",
- "itertools",
+ "itertools 0.15.0",
  "safelog",
  "serde",
  "serde_with",
@@ -7396,7 +7428,7 @@ dependencies = [
  "educe",
  "extend",
  "futures",
- "itertools",
+ "itertools 0.15.0",
  "paste",
  "pin-project",
  "serde",
@@ -7422,7 +7454,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5e5712bfe2995a60eddcc32d07e2e38a42120318a8f5411d621bf0a8fa77219"
 dependencies = [
  "derive-deftly",
- "itertools",
+ "itertools 0.15.0",
  "paste",
  "void",
 ]
@@ -7440,7 +7472,7 @@ dependencies = [
  "futures",
  "hex",
  "humantime",
- "itertools",
+ "itertools 0.15.0",
  "num_enum",
  "rand 0.10.3",
  "serde",
@@ -7481,7 +7513,7 @@ dependencies = [
  "humantime",
  "ipnet",
  "iprange",
- "itertools",
+ "itertools 0.15.0",
  "memchr",
  "paste",
  "phf 0.14.0",
@@ -7526,7 +7558,7 @@ dependencies = [
  "fs-mistrust",
  "fslock-guard",
  "futures",
- "itertools",
+ "itertools 0.15.0",
  "oneshot-fused-workaround",
  "paste",
  "sanitize-filename",
@@ -7568,7 +7600,7 @@ dependencies = [
  "futures-util",
  "hkdf",
  "hmac",
- "itertools",
+ "itertools 0.15.0",
  "nonany",
  "oneshot-fused-workaround",
  "pin-project",
@@ -7690,7 +7722,7 @@ dependencies = [
  "educe",
  "futures",
  "humantime",
- "itertools",
+ "itertools 0.15.0",
  "oneshot-fused-workaround",
  "pin-project",
  "priority-queue",
@@ -8171,6 +8203,7 @@ dependencies = [
  "alloy-rlp",
  "argon2",
  "base64 0.22.1",
+ "bech32",
  "bip39",
  "bitcoin",
  "blake2",
@@ -8185,6 +8218,7 @@ dependencies = [
  "hex",
  "hmac",
  "pbkdf2",
+ "prost",
  "serde",
  "serde_json",
  "sha2",

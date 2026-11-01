@@ -3,7 +3,8 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Cosmos Hub (MsgSend, SIGN_MODE_DIRECT)
+//! and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -26,6 +27,7 @@ mod btc;
 mod btc_hw;
 mod btc_watch;
 mod cardano;
+mod cosmos;
 mod display;
 mod error;
 mod evm;
@@ -69,6 +71,14 @@ pub use cardano::{
     cardano_pool_bech32, cardano_pool_id, cardano_reward_address_bytes, cardano_sign_stake,
     cardano_stake_public_key, cardano_stake_tx_body, CardanoCert, CardanoCertView, CardanoDrep,
     CardanoDrepView, CardanoStakeSummary, CardanoWithdrawalView,
+};
+pub use cosmos::{
+    cosmos_address, cosmos_address_bytes, cosmos_address_from_bytes, cosmos_address_of_pubkey,
+    cosmos_chain_id, cosmos_decode_sign_doc, cosmos_normalize_address, cosmos_path,
+    cosmos_public_key, cosmos_send_sign_doc, cosmos_sign, cosmos_simulation_tx,
+    cosmos_verify_signed, proto as cosmos_proto, CosmosSendRequest, CosmosTxSummary, CosmosWarning,
+    COSMOS_CHAIN_ID_MAINNET, COSMOS_CHAIN_ID_TESTNET, COSMOS_DENOM, COSMOS_HRP, COSMOS_MAX_MEMO,
+    COSMOS_MSG_SEND, COSMOS_SECP256K1_PUBKEY, COSMOS_SIGN_MODE_DIRECT,
 };
 pub use display::{sanitize_text, SanitizedText, CONTROL_MARKER};
 pub use error::{Error, Result};
