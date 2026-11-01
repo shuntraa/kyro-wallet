@@ -4,6 +4,8 @@
 export const update = {
   'update.auto': 'Mises à jour automatiques',
   'update.autoDesc': 'Version {version}. Téléchargées en arrière-plan (via Tor si activé), signature vérifiée, installées au prochain démarrage.',
+  'update.title': 'Mises à jour',
+  'update.store': 'Version {version}. Les mises à jour sont gérées par le Microsoft Store.',
   'update.updated': 'Kyro a été mis à jour en version {version}.',
   'update.dismiss': 'Fermer',
 } as const;

@@ -119,3 +119,53 @@ curl -sL https://github.com/shuntraa/kyro-wallet/releases/latest/download/latest
 must show the new version and one entry per platform. An installed wallet applies it on its
 next close (check ≈ 45 s after launch), and shows "Kyro updated to X.Y.Z." at the
 following startup.
+
+## 7. Microsoft Store
+
+The Store package is `Kyro-windows-x64.msix` (identity `KyroWallet.KyroWallet`, publisher
+`CN=7F2DA35F-5094-4C2D-9CB5-BC0ACBA1123A`, display name "Kyro Wallet", version `x.y.z.0`).
+The release workflow builds it from the same `kyro-desktop.exe` and attaches it to the draft
+release; it is **unsigned** (Partner Center signs it) and not part of `latest.json`. To build it
+by hand (Windows SDK needed for `makeappx.exe` / `makepri.exe`):
+
+```powershell
+pnpm tauri build --no-bundle          # or any release build of kyro-desktop.exe
+apps/desktop/packaging/msix/build-msix.ps1 -Exe target/release/kyro-desktop.exe -Out Kyro-windows-x64.msix
+```
+
+Packaging files live in `apps/desktop/packaging/msix/`: `AppxManifest.xml` (full-trust app,
+`internetClient` + `runFullTrust`, Windows 10 1809+; USB access for Ledger / Trezor needs no
+extra capability in a full-trust app), `Assets/` (logos, regenerated from the app icon by
+`make-assets.ps1`). The package relies on the system WebView2 Evergreen runtime.
+
+Behaviour when installed from the Store: Kyro detects its package identity
+(`GetCurrentPackageFullName`) and never checks, downloads or installs its own updates; Settings
+shows "Updates are handled by the Microsoft Store" instead of the toggle. App data stays in
+`%APPDATA%\org.kyro.wallet`, which Windows redirects to the package's private folder
+(`%LOCALAPPDATA%\Packages\KyroWallet.KyroWallet_<id>\LocalCache\Roaming\…`); it is removed when the
+app is uninstalled, so users must keep their recovery phrase.
+
+Local test install (optional): sign a **copy** with a throwaway self-signed certificate whose
+subject is exactly the manifest publisher, trust it (`Cert:\LocalMachine\TrustedPeople`), then
+`Add-AppxPackage`; remove the package and the certificate afterwards. Never commit that certificate.
+
+Submitting in [Partner Center](https://partner.microsoft.com/dashboard) (Apps and games → Kyro Wallet):
+
+1. **Start a submission** (first time: "Start your submission").
+2. **Pricing and availability**: Free, markets, visibility (public).
+3. **Properties**: category Finance (subcategory Personal finance), privacy policy URL
+   `https://kyrowallet.com/privacy/`, website, support contact (GitHub issues), system
+   requirements.
+4. **Age ratings**: fill in the IARC questionnaire honestly (no user-generated content, no ads, no
+   in-app purchases; users send and swap cryptocurrency).
+5. **Packages**: upload `Kyro-windows-x64.msix` (Windows 10/11 desktop, x64). Partner Center
+   checks the identity against the reserved name.
+6. **Store listings** (English and French): description, short description, what's new,
+   keywords, screenshots (PNG, 1920×1080), copyright.
+7. **Submission options** → `runFullTrust` is a restricted capability: explain "Desktop
+   (Win32) app packaged as MSIX; needs full trust for its Rust core, embedded Tor client and USB
+   access to Ledger and Trezor hardware wallets."
+8. **Submit to the Store**, then wait for certification (usually a few business days).
+
+For each new version: tag the release, download `Kyro-windows-x64.msix` from the draft release,
+create a new submission (Update), replace the package, update "What's new", submit.

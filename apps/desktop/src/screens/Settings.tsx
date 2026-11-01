@@ -129,6 +129,17 @@ function SettingRow({ title, desc, children, last }: { title: string; desc: stri
 function Security({ save }: { save: Save }) {
   const { settings } = useApp();
   const { t } = useT();
+  // Microsoft Store (MSIX) install: the Store updates Kyro, its own updater is off.
+  const [store, setStore] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    call('update_status')
+      .then((s) => alive && setStore(s.store))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
   return (
     <>
       <Panel>
@@ -161,9 +172,15 @@ function Security({ save }: { save: Save }) {
         </SettingRow>
       </Panel>
       <Panel>
-        <SettingRow title={t('update.auto')} desc={t('update.autoDesc', { version: __APP_VERSION__ })} last>
-          <Switch label={t('update.auto')} checked={settings.autoUpdate} onCheckedChange={(v) => void save({ autoUpdate: v })} />
-        </SettingRow>
+        {store ? (
+          <SettingRow title={t('update.title')} desc={t('update.store', { version: __APP_VERSION__ })} last>
+            {null}
+          </SettingRow>
+        ) : (
+          <SettingRow title={t('update.auto')} desc={t('update.autoDesc', { version: __APP_VERSION__ })} last>
+            <Switch label={t('update.auto')} checked={settings.autoUpdate} onCheckedChange={(v) => void save({ autoUpdate: v })} />
+          </SettingRow>
+        )}
       </Panel>
       <RevealPhrase />
       <MoneroWallet />
