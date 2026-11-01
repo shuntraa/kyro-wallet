@@ -41,7 +41,8 @@ fn runtime() -> DotRuntime {
 #[test]
 fn keys_match_polkadot_js() {
     // (phrase, mini-secret, [(account, public key, SS58 prefix 0, prefix 42)])
-    let cases: [(&str, &str, [(u32, &str, &str, &str); 3]); 3] = [
+    type Derivation<'a> = (u32, &'a str, &'a str, &'a str);
+    let cases: [(&str, &str, [Derivation; 3]); 3] = [
         (
             ABANDON,
             "4ed8d4b17698ddeaa1f1559f152f87b5d472f725ca86d341bd0276f1b61197e2",

@@ -523,15 +523,16 @@ fn signature_hash_vectors() {
     const NONE: u8 = 0x02;
     const SINGLE: u8 = 0x04;
     const ACP: u8 = 0x80;
-    let cases: Vec<(
-        &str,
-        &KaspaTx,
-        &Vec<KaspaUtxoEntry>,
+    type Case<'a> = (
+        &'a str,
+        &'a KaspaTx,
+        &'a Vec<KaspaUtxoEntry>,
         u8,
         usize,
         Modify,
-        &str,
-    )> = vec![
+        &'a str,
+    );
+    let cases: Vec<Case> = vec![
         (
             "native-all-0",
             &native,
@@ -1211,7 +1212,7 @@ fn summary_refusals_and_warnings() {
         },
         "spent twice",
     );
-    refuse(&|_, e| e.truncate(0), "one UTXO entry per input");
+    refuse(&|_, e| e.clear(), "one UTXO entry per input");
 
     // A non-standard output: shown as unknown, reinforced dialog.
     let mut tx = b.tx.clone();
