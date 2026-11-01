@@ -1,0 +1,266 @@
+name: Release
+
+# On every tag v* (e.g. v1.0.0): build Kyro for Windows (NSIS .exe + .msi), macOS (universal .dmg)
+# and Linux (.AppImage + .deb), sign the auto-update packages with the updater key, rename every
+# file to a FIXED name and create a DRAFT GitHub Release (the maintainer reviews and publishes it,
+# see docs/RELEASING.md). Fixed names keep the website links valid for every version:
+#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe
+#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64.msi
+#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg
+#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage
+#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-amd64.deb
+#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/SHA256SUMS
+#
+# Auto-update (apps/desktop/src-tauri/src/updater.rs): the app reads
+# .../releases/latest/download/latest.json, which points (per-version URLs) to
+# Kyro-windows-x64-setup.exe, Kyro-macos.app.tar.gz and Kyro-linux-x86_64.AppImage, each with the
+# content of its .sig (minisign, key pinned in tauri.conf.json `plugins.updater.pubkey`).
+#
+# The installers are NOT code-signed yet (Windows SmartScreen / macOS Gatekeeper warnings): see the
+# commented block in the build step for what OS code signing needs.
+#
+# Third-party actions are pinned to commit SHAs (version in the comment).
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build (${{ matrix.id }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: windows
+            os: windows-2022
+            args: --bundles nsis,msi
+          - id: macos
+            os: macos-14
+            # One universal binary (Apple Silicon + Intel): one .dmg, one update package.
+            args: --target universal-apple-darwin --bundles app,dmg
+          - id: linux
+            # 22.04: oldest supported glibc for the AppImage / .deb, as Tauri recommends.
+            os: ubuntu-22.04
+            args: --bundles appimage,deb
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Tag must match the app version
+        shell: bash
+        run: |
+          app="v$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
+          if [ "$app" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME != version $app (apps/desktop/src-tauri/tauri.conf.json)"
+            exit 1
+          fi
+
+      - name: Linux system dependencies (Tauri + USB for Ledger / Trezor)
+        if: matrix.id == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential file patchelf libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev \
+            libudev-dev libusb-1.0-0-dev pkg-config
+
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Rust toolchain (pinned by rust-toolchain.toml)
+        shell: bash
+        run: |
+          set -euo pipefail
+          channel="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)"
+          rustup toolchain install "$channel" --profile minimal
+          if [ "${{ matrix.id }}" = "macos" ]; then
+            rustup target add --toolchain "$channel" aarch64-apple-darwin x86_64-apple-darwin
+          fi
+          rustc --version
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build installers + signed update packages (no upload here)
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          # bundle.createUpdaterArtifacts is true: the build fails without the key, never ships
+          # unsigned update packages.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # OS code signing (not set up yet). When the certificates exist, add them as repository
+          # secrets and uncomment:
+          # # macOS (Apple Developer Program): Developer ID Application certificate + notarization.
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}                   # .p12, base64
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}         # "Developer ID Application: ..."
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}                         # app-specific password
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # # Windows: an OV/EV code-signing certificate, or Azure Trusted Signing, configured through
+          # # bundle.windows.signCommand / certificateThumbprint in tauri.conf.json.
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm tauri
+          args: ${{ matrix.args }}
+
+      - name: Collect and rename with fixed names
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p dist-release
+          one() { # one <glob> <fixed name>: exactly one match, copied under its fixed name
+            local files=($1)
+            if [ "${#files[@]}" -ne 1 ]; then echo "::error::expected 1 file for $1, got ${#files[@]}"; exit 1; fi
+            cp "${files[0]}" "dist-release/$2"
+          }
+          case "${{ matrix.id }}" in
+            windows)
+              b=target/release/bundle
+              one "$b/nsis/*-setup.exe" Kyro-windows-x64-setup.exe
+              one "$b/nsis/*-setup.exe.sig" Kyro-windows-x64-setup.exe.sig
+              one "$b/msi/*.msi" Kyro-windows-x64.msi ;;
+            macos)
+              b=target/universal-apple-darwin/release/bundle
+              one "$b/dmg/*.dmg" Kyro-macos.dmg
+              one "$b/macos/*.app.tar.gz" Kyro-macos.app.tar.gz
+              one "$b/macos/*.app.tar.gz.sig" Kyro-macos.app.tar.gz.sig ;;
+            linux)
+              b=target/release/bundle
+              one "$b/appimage/*.AppImage" Kyro-linux-x86_64.AppImage
+              one "$b/appimage/*.AppImage.sig" Kyro-linux-x86_64.AppImage.sig
+              one "$b/deb/*.deb" Kyro-linux-amd64.deb ;;
+          esac
+          ls -l dist-release
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kyro-${{ matrix.id }}
+          path: dist-release/*
+          if-no-files-found: error
+
+  release:
+    name: Publish the draft GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist-release
+          merge-multiple: true
+
+      - name: Check the update signatures (key pinned in tauri.conf.json, version)
+        run: |
+          python3 - <<'EOF'
+          import base64, json, re, sys
+          conf = json.load(open("apps/desktop/src-tauri/tauri.conf.json"))
+          version = conf["version"]
+          pub = base64.b64decode(conf["plugins"]["updater"]["pubkey"]).decode().splitlines()
+          key_id = base64.b64decode(pub[1])[2:10]
+          for f in ["Kyro-windows-x64-setup.exe", "Kyro-macos.app.tar.gz", "Kyro-linux-x86_64.AppImage"]:
+              sig = base64.b64decode(open(f"dist-release/{f}.sig").read().strip()).decode().splitlines()
+              raw = base64.b64decode(sig[1])
+              if raw[:2] != b"ED" or raw[2:10] != key_id:
+                  sys.exit(f"{f}.sig: not a prehashed signature by the pinned updater key")
+              comment = sig[2]
+              versions = {t for t in re.split(r"[_\-\s\t]", comment) if re.fullmatch(r"v?\d+\.\d+\.\d+\S*", t)}
+              if versions - {version, "v" + version}:
+                  sys.exit(f"{f}.sig: signed for {versions}, app version {version}")
+              print(f"{f}.sig OK: {comment}")
+          EOF
+
+      - name: latest.json (auto-update manifest) and SHA256SUMS
+        working-directory: dist-release
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          case "$base" in
+            https://github.com/shuntraa/kyro-wallet/releases/download/*) ;;
+            *) echo "::error::the app only accepts packages from shuntraa/kyro-wallet ($base)"; exit 1 ;;
+          esac
+          jq -n \
+            --arg version "${TAG#v}" \
+            --arg notes "Kyro ${TAG}: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}" \
+            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg win_url "$base/Kyro-windows-x64-setup.exe" \
+            --rawfile win_sig Kyro-windows-x64-setup.exe.sig \
+            --arg mac_url "$base/Kyro-macos.app.tar.gz" \
+            --rawfile mac_sig Kyro-macos.app.tar.gz.sig \
+            --arg lin_url "$base/Kyro-linux-x86_64.AppImage" \
+            --rawfile lin_sig Kyro-linux-x86_64.AppImage.sig \
+            '{
+              version: $version, notes: $notes, pub_date: $pub_date,
+              platforms: {
+                "windows-x86_64-nsis":   {signature: ($win_sig | rtrimstr("\n")), url: $win_url},
+                "windows-x86_64":        {signature: ($win_sig | rtrimstr("\n")), url: $win_url},
+                "darwin-aarch64-app":    {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
+                "darwin-aarch64":        {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
+                "darwin-x86_64-app":     {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
+                "darwin-x86_64":         {signature: ($mac_sig | rtrimstr("\n")), url: $mac_url},
+                "linux-x86_64-appimage": {signature: ($lin_sig | rtrimstr("\n")), url: $lin_url},
+                "linux-x86_64":          {signature: ($lin_sig | rtrimstr("\n")), url: $lin_url}
+              }
+            }' > latest.json
+          # Every URL must name a file of this release.
+          for f in $(jq -r '.platforms[].url' latest.json | sort -u); do
+            test -f "${f##*/}" || { echo "::error::latest.json points to a missing file: $f"; exit 1; }
+          done
+          cat latest.json
+          sha256sum Kyro-windows-x64-setup.exe Kyro-windows-x64.msi Kyro-macos.dmg \
+            Kyro-linux-x86_64.AppImage Kyro-linux-amd64.deb Kyro-macos.app.tar.gz latest.json > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          name: Kyro ${{ github.ref_name }}
+          # Draft: the maintainer checks the files, then publishes. Only a published, non-pre
+          # release is "latest", i.e. what the installed wallets update to.
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          body: |
+            Kyro ${{ github.ref_name }} installers.
+
+            | Platform | File |
+            |---|---|
+            | Windows 10/11 (x64) | `Kyro-windows-x64-setup.exe` (recommended, updates itself) or `Kyro-windows-x64.msi` |
+            | macOS 11+ (Apple Silicon and Intel) | `Kyro-macos.dmg` |
+            | Linux (x86_64) | `Kyro-linux-x86_64.AppImage` (updates itself) or `Kyro-linux-amd64.deb` |
+
+            **Verify the checksum before installing** (download `SHA256SUMS` next to the file):
+            - Linux: `sha256sum -c SHA256SUMS --ignore-missing`
+            - macOS: `shasum -a 256 -c SHA256SUMS --ignore-missing`
+            - Windows (PowerShell): `Get-FileHash .\Kyro-windows-x64-setup.exe -Algorithm SHA256`, then compare with the line in `SHA256SUMS`
+
+            **The installers are not code-signed yet.** Windows SmartScreen ("Windows protected your PC" → *More info* → *Run anyway*) and macOS Gatekeeper (right-click the app → *Open*, or *System Settings* → *Privacy & Security* → *Open Anyway*) show a warning. Automatic updates are signed separately with Kyro's update key and verified by the app.
+
+            Kyro uses mainnet by default.
+          files: |
+            dist-release/Kyro-windows-x64-setup.exe
+            dist-release/Kyro-windows-x64-setup.exe.sig
+            dist-release/Kyro-windows-x64.msi
+            dist-release/Kyro-macos.dmg
+            dist-release/Kyro-macos.app.tar.gz
+            dist-release/Kyro-macos.app.tar.gz.sig
+            dist-release/Kyro-linux-x86_64.AppImage
+            dist-release/Kyro-linux-x86_64.AppImage.sig
+            dist-release/Kyro-linux-amd64.deb
+            dist-release/latest.json
+            dist-release/SHA256SUMS
