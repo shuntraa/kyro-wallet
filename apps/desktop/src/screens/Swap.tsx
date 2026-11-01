@@ -456,10 +456,10 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const tokenItems = (exclude?: string) =>
     tokens
       .filter((t) => t.id !== exclude)
-      .map((t) => ({ value: t.id, label: t.symbol, hint: `${t.name} · ${fmtCrypto(pf.balances.get(t.id) ?? 0n, t.decimals)}`, icon: <CoinIcon glyph={t.glyph} color={t.color} size={24} /> }));
+      .map((t) => ({ value: t.id, label: t.symbol, hint: `${t.name} · ${fmtCrypto(pf.balances.get(t.id) ?? 0n, t.decimals)}`, icon: <CoinIcon asset={t} size={24} /> }));
   // Grouped by chain: with another chain, the swap arrives on YOUR account there.
   const buyItems = groups.flatMap((g) =>
-    g.assets.map((a) => ({ value: a.id, group: g.chain.key === chainKey ? t('swap.groupSameNetwork', { chain: g.chain.label }) : t('swap.groupToYourAccount', { chain: g.chain.label }), label: a.symbol, hint: `${a.name} · ${fmtCrypto(pf.balances.get(a.id) ?? 0n, a.decimals)}`, icon: <CoinIcon glyph={a.glyph} color={a.color} size={24} /> })),
+    g.assets.map((a) => ({ value: a.id, group: g.chain.key === chainKey ? t('swap.groupSameNetwork', { chain: g.chain.label }) : t('swap.groupToYourAccount', { chain: g.chain.label }), label: a.symbol, hint: `${a.name} · ${fmtCrypto(pf.balances.get(a.id) ?? 0n, a.decimals)}`, icon: <CoinIcon asset={a} size={24} /> })),
   );
   const canInvert = !cross || canSwapFrom(buyChain, network);
 
@@ -866,7 +866,7 @@ function TokenButton({ asset, items, onSelect }: { asset: AssetDef; items: Array
       items={items}
       trigger={
         <button type="button" className="press flex h-11 shrink-0 items-center gap-2 rounded-ctl border border-line-2 bg-card pr-3 pl-1.5 text-[15px] font-medium tracking-[-0.01em] hover:border-line-3 hover:bg-raised">
-          <CoinIcon glyph={asset.glyph} color={asset.color} size={30} />
+          <CoinIcon asset={asset} size={30} />
           {asset.symbol}
           <IconChevronDown size={13} className="text-mute" />
         </button>

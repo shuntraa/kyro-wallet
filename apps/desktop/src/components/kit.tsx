@@ -23,27 +23,8 @@ export function KyroMark({ size = 16, className }: { size?: number; className?: 
   );
 }
 
-function luminance(hex: string): number {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return 0;
-  const n = parseInt(m[1] ?? '0', 16);
-  return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-}
-
-/** Round coin badge (glyph + colour): no remote images (CSP, privacy). */
-export function CoinIcon({ glyph, color, size = 34, fg, className, badge }: { glyph: string; color: string; size?: number; fg?: string; className?: string; badge?: { glyph: string; color: string } }) {
-  const text = fg ?? (luminance(color) > 0.55 ? '#0A0B0D' : '#FFFFFF');
-  return (
-    <span className={cn('relative inline-flex shrink-0 items-center justify-center rounded-full font-semibold', className)} style={{ width: size, height: size, background: color, color: text, fontSize: Math.round(size * 0.46) }} aria-hidden="true">
-      {glyph}
-      {badge && (
-        <span className="absolute -right-1 -bottom-1 flex items-center justify-center rounded-full border-2 border-card font-bold" style={{ width: 16, height: 16, background: badge.color, color: '#fff', fontSize: 8 }}>
-          {badge.glyph}
-        </span>
-      )}
-    </span>
-  );
-}
+/** Coin disc: Kyro's own drawn mark (components/coins), monogram fallback; inline SVG, no remote images. */
+export { CoinIcon, type CoinIconProps } from './coins/CoinIcon';
 
 /** Address in 4-char blocks, first/last two highlighted in ice blue. */
 export function AddressBlocks({ address, size = 'lg', className, wrap = true }: { address: string; size?: 'sm' | 'md' | 'lg' | 'xl'; className?: string; wrap?: boolean }) {

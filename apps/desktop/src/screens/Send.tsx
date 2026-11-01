@@ -705,11 +705,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 value: a.id,
                 label: `${a.name} · ${findChain(network, a.chainKey)?.label ?? ''}`,
                 hint: t('send.availableAmount', { amount: fmtCrypto(pf.balances.get(a.id) ?? 0n, a.decimals, a.symbol) }),
-                icon: <CoinIcon glyph={a.glyph} color={a.color} size={26} />,
+                icon: <CoinIcon asset={a} size={26} />,
               }))}
               trigger={
                 <button type="button" className="press flex h-[58px] items-center gap-3 rounded-box border border-line-2 bg-bg px-4 text-left hover:border-line-3 hover:bg-raised/50">
-                  <CoinIcon glyph={asset.glyph} color={asset.color} />
+                  <CoinIcon asset={asset} />
                   <span className="flex flex-1 flex-col">
                     <span className="text-[14px] font-medium">
                       {asset.name} · {accountName(asset.family)}
@@ -1162,7 +1162,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             )}
           </div>
           <div className="flex items-center gap-2.5 rounded-box border border-line bg-bg px-3.5 py-3">
-            <CoinIcon glyph={asset.glyph} color={asset.color} size={30} />
+            <CoinIcon asset={asset} size={30} />
             <span className="flex flex-col text-[12px]">
               <span className="font-medium">{ownAccount && !activeHw ? accountName(asset.family) : t('send.you')}</span>
               <span className="font-mono text-[11px] text-mute">{shortAddress(adapter.getAddress())}</span>

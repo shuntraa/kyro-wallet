@@ -155,7 +155,7 @@ function MineList({ sort }: { sort: Sort }) {
                 className={cn(GRID, 'group h-[54px] w-full border-t border-line/70 px-5 text-left transition-colors duration-150 hover:bg-raised/60')}>
 
                 <span className="flex min-w-0 items-center gap-3">
-                  <CoinIcon glyph={h.asset.glyph} color={h.asset.color} />
+                  <CoinIcon asset={h.asset} />
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-[14px] font-medium">{h.asset.name}</span>
                     <span className="truncate text-[12px] text-mute">
@@ -209,7 +209,7 @@ function WatchRow({ coinId, name, symbol, glyph, color, i }: { coinId: string; n
   return (
     <button type="button" style={idx(i)} onClick={() => navigate({ name: 'asset', id: `cg:${coinId}` })} className={cn(GRID, 'h-[54px] w-full border-t border-line/70 px-5 text-left transition-[background-color,filter] duration-150 [filter:saturate(.4)_brightness(.85)] hover:bg-raised/60 hover:[filter:none]')}>
       <span className="flex min-w-0 items-center gap-3">
-        <CoinIcon glyph={glyph} color={color} fg="#C8CDD6" />
+        <CoinIcon glyph={glyph} color={color} symbol={symbol} id={`cg:${coinId}`} />
         <span className="flex min-w-0 flex-col">
           <span className="truncate text-[14px] font-medium">{name}</span>
           <span className="truncate text-[12px] text-mute">{t('portfolio.readOnly', { symbol })}</span>
@@ -277,7 +277,7 @@ function MarketList({ sort, query, favs, toggle, onlyFavs }: { sort: Sort; query
             <div key={c.id} style={idx(i)} className={cn(MG, 'h-[50px] border-t border-line/70 px-5 transition-colors duration-150 hover:bg-raised/60')}>
               <span className="font-mono text-[11px] text-faint">{c.rank ?? '—'}</span>
               <button type="button" onClick={() => navigate({ name: 'asset', id: `cg:${c.id}` })} className="flex min-w-0 items-center gap-3 text-left">
-                <CoinIcon glyph={c.symbol.slice(0, 1)} color="#22252B" fg="#C8CDD6" size={30} />
+                <CoinIcon symbol={c.symbol} id={`cg:${c.id}`} size={30} />
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-[14px] font-medium">{c.name}</span>
                   <span className="text-[12px] text-mute">{c.symbol}</span>
