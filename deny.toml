@@ -14,6 +14,10 @@ ignore = [
   # directory/relay signatures; arti documents that "Tor clients never actually need RSA
   # private keys", and we never create or load one. No fixed rsa release exists yet.
   { id = "RUSTSEC-2023-0071", reason = "arti client: RSA signature verification only, no private-key operation" },
+  # crypto-bigint 0.5 (non-constant-time operations). Pulled only by monero-ed25519 0.1 (monero-oxide);
+  # no release of it on crypto-bigint >= 0.7.6 yet. All Monero computation runs locally in the desktop
+  # process: a remote node cannot time it. Re-check on every monero-oxide update.
+  { id = "RUSTSEC-2026-0387", reason = "monero-oxide only, local computation; waiting for an upstream release on crypto-bigint >= 0.7.6" },
 ]
 
 [licenses]
