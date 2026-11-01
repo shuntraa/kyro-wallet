@@ -309,6 +309,8 @@ export function createDemoStellar(d: DemoStellarDeps) {
       await backend();
       return state.history.filter((t) => t.from === addr || t.to === addr).slice(0, 50);
     },
+    stellar_build_asset_tx: () => Promise.reject(new Error(l10n('Démo : envoi d’actifs Stellar non simulé', 'Demo: Stellar asset sends are not simulated'))),
+    stellar_build_trust_tx: () => Promise.reject(new Error(l10n('Démo : lignes de confiance non simulées', 'Demo: trustlines are not simulated'))),
     stellar_build_tx: async (a) => {
       d.requireUnlocked();
       const to = checkStellarAddress(a.to);

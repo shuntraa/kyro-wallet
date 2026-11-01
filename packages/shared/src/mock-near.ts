@@ -240,6 +240,8 @@ export function createDemoNear(d: DemoNearDeps) {
       await backend();
       return state.history.filter((t) => t.from === id || t.to === id).slice(0, 20);
     },
+    near_token_balances: () => Promise.resolve([]),
+    near_build_token_tx: () => Promise.reject(new Error(l10n('Démo : envoi de jetons NEAR non simulé', 'Demo: NEAR token sends are not simulated'))),
     near_build_tx: async (a) => {
       d.requireUnlocked();
       const to = checkNearAccount(a.to);

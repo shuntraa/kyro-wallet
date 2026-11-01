@@ -28,4 +28,9 @@ export const sui = {
   'sui.failed': '<b>Échouée :</b> {error}. Rien n’a été transféré ; les frais de gaz sont tout de même prélevés.',
   'sui.slow': 'L’indexeur ne la montre pas encore après 1 minute. La transaction était finale à l’envoi : vérifie l’historique avant de renvoyer.',
   'sui.trackError': 'Suivi impossible pour l’instant : {message}',
+  'sui.lTokenValue': '{symbol} · {decimals} décimales (table de Kyro)',
+  'sui.lCoinType': 'Type de pièce vérifié',
+  'sui.lTokenCoins': 'Pièces {symbol} fusionnées',
+  'sui.allToken': 'tout le solde {symbol} ({amount})',
+  'sui.gasInSui': 'Les frais de gaz sont payés en SUI : garde quelques millièmes de SUI sur ce compte.',
 } as const;

@@ -30,6 +30,14 @@ pub enum TokenChain {
     Tron,
     /// TON (jetton, master in bounceable user-friendly form `EQ…`).
     Ton,
+    /// Sui (coin type `0x…::module::NAME`, held by wallet-core `sui_known_coins`).
+    Sui,
+    /// Aptos (fungible-asset metadata object `0x` + 64 hex, wallet-core `aptos_known_assets`).
+    Aptos,
+    /// Stellar issued asset (`CODE-ISSUER`, wallet-core `stellar_known_assets`).
+    Stellar,
+    /// NEAR NEP-141 token contract (wallet-core `near_known_tokens`).
+    Near,
 }
 
 /// What Kyro knows about a curated token. Symbol and decimals were checked on chain against
@@ -78,9 +86,8 @@ pub fn lookup(network: Network, chain: TokenChain, contract: &str) -> Option<&'s
                 && e.chain == chain
                 && match chain {
                     TokenChain::Evm(_) => e.contract.eq_ignore_ascii_case(contract),
-                    TokenChain::Solana | TokenChain::Tron | TokenChain::Ton => {
-                        e.contract == contract
-                    }
+                    TokenChain::Solana | TokenChain::Tron => e.contract == contract,
+                    _ => e.contract == contract,
                 }
         })
         .map(|e| &e.token)
@@ -133,6 +140,10 @@ mod tests {
             "solana" => TokenChain::Solana,
             "tron" => TokenChain::Tron,
             "ton" => TokenChain::Ton,
+            "sui" => TokenChain::Sui,
+            "aptos" => TokenChain::Aptos,
+            "stellar" => TokenChain::Stellar,
+            "near" => TokenChain::Near,
             evm => TokenChain::Evm(evm.strip_prefix("evm:").unwrap().parse().unwrap()),
         }
     }
@@ -253,6 +264,24 @@ mod tests {
                         "{e:?}"
                     );
                 }
+                TokenChain::Sui => {
+                    let (pkg, rest) = e.contract.split_once("::").unwrap();
+                    assert_eq!(pkg.len(), 66, "{e:?}");
+                    wallet_core::sui_parse_address(pkg).unwrap();
+                    assert_eq!(rest.split("::").count(), 2, "{e:?}");
+                }
+                TokenChain::Aptos => {
+                    assert_eq!(e.contract.len(), 66, "{e:?}");
+                    wallet_core::aptos_parse_address(e.contract).unwrap();
+                }
+                TokenChain::Stellar => {
+                    let (code, issuer) = e.contract.split_once('-').unwrap();
+                    wallet_core::stellar_asset(code, issuer).unwrap();
+                    assert_eq!(e.token.decimals, 7, "{e:?}");
+                }
+                TokenChain::Near => {
+                    wallet_core::near_account_kind(e.contract).unwrap();
+                }
             }
         }
     }
@@ -275,6 +304,49 @@ mod tests {
             table.sort();
             core.sort();
             assert_eq!(table, core);
+        }
+    }
+
+    /// The non-EVM token tables of registry.ts are exactly those wallet-core knows (it builds and
+    /// decodes their transfers), with the same symbol and decimals.
+    #[test]
+    fn non_evm_tokens_are_wallet_core_tokens() {
+        for net in [Network::Mainnet, Network::Testnet] {
+            let tn = net == Network::Testnet;
+            let table = |chain: TokenChain| {
+                let mut v: Vec<_> = data::TOKENS
+                    .iter()
+                    .filter(|e| e.network == net && e.chain == chain)
+                    .map(|e| (e.contract.to_string(), e.token.symbol, e.token.decimals))
+                    .collect();
+                v.sort();
+                v
+            };
+            let mut sui: Vec<_> = wallet_core::sui_known_coins(tn)
+                .iter()
+                .map(|c| (c.coin_type.to_string(), c.symbol, c.decimals))
+                .collect();
+            sui.sort();
+            assert_eq!(table(TokenChain::Sui), sui);
+            let chain_id = if tn { 2 } else { 1 };
+            let mut apt: Vec<_> = wallet_core::aptos_known_assets(chain_id)
+                .iter()
+                .map(|a| (a.metadata.to_string(), a.symbol, a.decimals))
+                .collect();
+            apt.sort();
+            assert_eq!(table(TokenChain::Aptos), apt);
+            let mut xlm: Vec<_> = wallet_core::stellar_known_assets(net)
+                .iter()
+                .map(|a| (a.id(), a.code, 7u8))
+                .collect();
+            xlm.sort();
+            assert_eq!(table(TokenChain::Stellar), xlm);
+            let mut near: Vec<_> = wallet_core::near_known_tokens(tn)
+                .iter()
+                .map(|t| (t.contract.to_string(), t.symbol, t.decimals))
+                .collect();
+            near.sort();
+            assert_eq!(table(TokenChain::Near), near);
         }
     }
 

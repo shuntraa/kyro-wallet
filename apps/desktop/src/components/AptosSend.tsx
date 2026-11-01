@@ -32,8 +32,16 @@ export function AptosSummaryView({ u, aptPrice, currency }: { u: AptosUnsigned; 
         <span className="font-semibold text-text">{t('aptos.title')}</span>
         <span className="text-[11px] text-mute">{t('aptos.decodedByVault')}</span>
       </div>
+      {s.token && (
+        <>
+          <Line k={t('aptos.lToken')} v={t('aptos.lTokenValue', { symbol: s.token.symbol, decimals: s.token.decimals })} />
+          <Line k={t('aptos.lMetadata')} v={s.token.metadata} mono />
+          <Line k={t('aptos.lAmount')} v={fmtCrypto(BigInt(s.amount), s.token.decimals, s.token.symbol, s.token.decimals)} />
+          {c.tokenBalance != null && <Line k={t('aptos.lTokenBalance', { symbol: s.token.symbol })} v={fmtCrypto(BigInt(c.tokenBalance), s.token.decimals, s.token.symbol, s.token.decimals)} />}
+        </>
+      )}
       <Line k={t('aptos.lFunction')} v={s.function} mono />
-      {c.recipientNew && <Line k={t('aptos.lDest')} v={t('aptos.lDestCreated')} warn />}
+      {c.recipientNew && <Line k={t('aptos.lDest')} v={s.token ? t('aptos.lDestStore', { symbol: s.token.symbol }) : t('aptos.lDestCreated')} warn />}
       <Line k={t('aptos.lFeeEstimate')} v={t('aptos.lFeeEstimateValue', { fee: `${APT(u.estimatedFee)}${fiat(u.estimatedFee)}`, units: c.gasUsed, price: s.gasUnitPrice })} />
       <Line k={t('aptos.lFeeMax')} v={t('aptos.lFeeMaxValue', { fee: `${APT(s.maxFee)}${fiat(BigInt(s.maxFee))}`, units: s.maxGasAmount })} />
       <Line k={t('aptos.lBalance')} v={APT(c.account.balance)} />

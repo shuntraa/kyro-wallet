@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aptos-token-txs"
+description = "Enables the aptos_token_txs command without any pre-configured scope."
+commands.allow = ["aptos_token_txs"]
+
+[[permission]]
+identifier = "deny-aptos-token-txs"
+description = "Denies the aptos_token_txs command without any pre-configured scope."
+commands.deny = ["aptos_token_txs"]

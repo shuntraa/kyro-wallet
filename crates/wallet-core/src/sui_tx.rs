@@ -19,7 +19,23 @@
 //! }
 //! ```
 //!
-//! i.e. exactly what the official TypeScript SDK produces for `tx.splitCoins(tx.gas, [amount])`
+//! Token transfers (coin types of [`sui_known_coins`] only: Circle's USDC) take the coin objects
+//! as owned-object inputs, merge them into the first one, then split it or send it whole:
+//!
+//! ```text
+//!   inputs:   [Object(ImmOrOwned c0), …, Object(ImmOrOwned cN), Pure(u64 amount), Pure(address)]
+//!   commands: [MergeCoins(Input(0), [Input(1) … Input(N)])        // only when N ≥ 1
+//!              SplitCoins(Input(0), [Input(N+1)]),
+//!              TransferObjects([NestedResult(k, 0)], Input(N+2))]  // k = index of SplitCoins
+//!   | inputs: [Object c0 … cN, Pure(address)]
+//!     commands: [MergeCoins(…) if N ≥ 1, TransferObjects([Input(0)], Input(N+1))]  // « tout »
+//! ```
+//!
+//! The bytes do not name the coin type of these objects: the caller states it (a known one only)
+//! and the shell checks, live, that every listed object is a coin of that type owned by the
+//! sender at exactly that version and digest (and the simulation must move only that token).
+//!
+//! The SUI shapes are exactly what the official TypeScript SDK produces for `tx.splitCoins(tx.gas, [amount])`
 //! then `tx.transferObjects([coin], to)`, and for `tx.transferObjects([tx.gas], to)`. Decoding is
 //! strict (canonical ULEB128, known variants only, no trailing byte) **and** the decoded value
 //! is re-encoded and compared byte for byte with the input: any other layout (an `Object`
@@ -52,6 +68,56 @@ pub const SUI_HIGH_GAS_BUDGET: u64 = 100_000_000;
 /// Intent `TransactionData` / `V0` / `Sui`.
 const INTENT: [u8; 3] = [0, 0, 0];
 const MAX_BCS: usize = 128 * 1024;
+/// At most this many coin objects of a token in one transfer (merged into the first one).
+pub const SUI_MAX_TOKEN_COINS: usize = 32;
+
+/// A coin type Kyro knows besides SUI, from the issuer's official list (cross-checked with a
+/// second source, decimals read on chain from its `CoinMetadata`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiKnownCoin {
+    /// Full coin type, `0x` + 64 hex `::module::NAME`, as GraphQL prints it.
+    pub coin_type: &'static str,
+    /// Ticker.
+    pub symbol: &'static str,
+    /// Display name.
+    pub name: &'static str,
+    /// Decimals of the token (units per whole token = 10^decimals).
+    pub decimals: u8,
+}
+
+/// Native USDC by Circle (developers.circle.com › USDC contract addresses; CoinGecko `usd-coin`
+/// platform `sui`, 6 decimals). Tether lists no USDT on Sui (tether.to › supported protocols):
+/// the bridged copies are left out.
+const SUI_MAINNET_COINS: &[SuiKnownCoin] = &[SuiKnownCoin {
+    coin_type: "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+}];
+/// Circle's testnet USDC (same page, « Testnet » column).
+const SUI_TESTNET_COINS: &[SuiKnownCoin] = &[SuiKnownCoin {
+    coin_type: "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC",
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+}];
+
+/// The token coin types Kyro sends and shows on this network.
+pub fn sui_known_coins(testnet: bool) -> &'static [SuiKnownCoin] {
+    if testnet {
+        SUI_TESTNET_COINS
+    } else {
+        SUI_MAINNET_COINS
+    }
+}
+
+/// `coin_type` (exact form) if Kyro knows it on this network.
+pub fn sui_known_coin(coin_type: &str, testnet: bool) -> Option<&'static SuiKnownCoin> {
+    sui_known_coins(testnet)
+        .iter()
+        .find(|c| c.coin_type == coin_type)
+}
 
 fn bad(msg: impl Into<String>) -> Error {
     Error::input(format!("transaction Sui refusée : {}", msg.into()))
@@ -87,9 +153,11 @@ impl SuiObjectRef {
 /// What is sent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SuiTransferAmount {
-    /// This many MIST, split from the gas coin.
+    /// This many MIST, split from the gas coin (token transfer: this many token units, split
+    /// from the merged token coin).
     Mist(u64),
-    /// The whole (merged) gas coin minus the gas actually used.
+    /// The whole (merged) gas coin minus the gas actually used (token transfer: the whole merged
+    /// token coin).
     All,
 }
 
@@ -110,6 +178,8 @@ pub struct SuiTransfer {
     pub gas_budget: u64,
     /// `Some(e)`: void after epoch `e`. `None`: valid as long as the gas coins are unchanged.
     pub expiration_epoch: Option<u64>,
+    /// Token transfer: the coin objects sent (merged into the first). Empty: SUI from the gas coin.
+    pub coins: Vec<SuiObjectRef>,
 }
 
 // ---------------------------------------------------------------- BCS
@@ -201,6 +271,32 @@ enum Arg {
 enum Cmd {
     TransferObjects(Vec<Arg>, Arg),
     SplitCoins(Arg, Vec<Arg>),
+    MergeCoins(Arg, Vec<Arg>),
+}
+
+fn put_ref(out: &mut Vec<u8>, g: &SuiObjectRef) {
+    out.extend_from_slice(&g.object_id);
+    out.extend_from_slice(&g.version.to_le_bytes());
+    put_bytes(out, &g.digest);
+}
+
+fn read_ref(r: &mut Reader<'_>) -> Result<SuiObjectRef> {
+    let object_id = r.arr32()?;
+    let version = r.u64()?;
+    if r.uleb()? != 32 {
+        return Err(bad("empreinte d'objet : 32 octets attendus"));
+    }
+    Ok(SuiObjectRef {
+        object_id,
+        version,
+        digest: r.arr32()?,
+    })
+}
+
+/// One `CallArg`: `Pure(bytes)` or `Object(ImmOrOwnedObject(ref))`.
+enum Input {
+    Pure(Vec<u8>),
+    Owned(SuiObjectRef),
 }
 
 fn put_arg(out: &mut Vec<u8>, a: Arg) {
@@ -248,7 +344,12 @@ fn read_cmd(r: &mut Reader<'_>) -> Result<Cmd> {
         0 => Err(bad(
             "appel de fonction Move (MoveCall) : non pris en charge",
         )),
-        3 => Err(bad("fusion de pièces (MergeCoins) : non prise en charge")),
+        3 => {
+            let into = read_arg(r)?;
+            let n = r.len(SUI_MAX_TOKEN_COINS)?;
+            let from = (0..n).map(|_| read_arg(r)).collect::<Result<Vec<_>>>()?;
+            Ok(Cmd::MergeCoins(into, from))
+        }
         4 | 6 => Err(bad(
             "publication / mise à jour de paquet : non prise en charge",
         )),
@@ -272,6 +373,14 @@ fn put_cmd(out: &mut Vec<u8>, c: &Cmd) {
             put_arg(out, *coin);
             put_uleb(out, amounts.len() as u64);
             for a in amounts {
+                put_arg(out, *a);
+            }
+        }
+        Cmd::MergeCoins(into, from) => {
+            out.push(3);
+            put_arg(out, *into);
+            put_uleb(out, from.len() as u64);
+            for a in from {
                 put_arg(out, *a);
             }
         }
@@ -305,6 +414,20 @@ impl SuiTransfer {
         if self.amount == SuiTransferAmount::Mist(0) {
             return Err(bad("montant nul"));
         }
+        if self.coins.len() > SUI_MAX_TOKEN_COINS {
+            return Err(bad(format!(
+                "plus de {SUI_MAX_TOKEN_COINS} pièces de jeton"
+            )));
+        }
+        for (i, a) in self.coins.iter().enumerate() {
+            if self.coins[..i].iter().any(|b| b.object_id == a.object_id)
+                || self.gas_payment.iter().any(|g| g.object_id == a.object_id)
+            {
+                return Err(bad(
+                    "pièce de jeton en double ou aussi utilisée pour le gaz",
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -314,23 +437,20 @@ impl SuiTransfer {
         let mut o = Vec::with_capacity(256 + 80 * self.gas_payment.len());
         o.push(0); // TransactionData::V1
         o.push(0); // TransactionKind::ProgrammableTransaction
-        let (inputs, cmds): (Vec<Vec<u8>>, Vec<Cmd>) = match self.amount {
-            SuiTransferAmount::Mist(m) => (
-                vec![m.to_le_bytes().to_vec(), self.recipient.to_vec()],
-                vec![
-                    Cmd::SplitCoins(Arg::GasCoin, vec![Arg::Input(0)]),
-                    Cmd::TransferObjects(vec![Arg::NestedResult(0, 0)], Arg::Input(1)),
-                ],
-            ),
-            SuiTransferAmount::All => (
-                vec![self.recipient.to_vec()],
-                vec![Cmd::TransferObjects(vec![Arg::GasCoin], Arg::Input(0))],
-            ),
-        };
+        let (inputs, cmds) = self.layout();
         put_uleb(&mut o, inputs.len() as u64);
         for i in &inputs {
-            o.push(0); // CallArg::Pure
-            put_bytes(&mut o, i);
+            match i {
+                Input::Pure(b) => {
+                    o.push(0); // CallArg::Pure
+                    put_bytes(&mut o, b);
+                }
+                Input::Owned(r) => {
+                    o.push(1); // CallArg::Object
+                    o.push(0); // ObjectArg::ImmOrOwnedObject
+                    put_ref(&mut o, r);
+                }
+            }
         }
         put_uleb(&mut o, cmds.len() as u64);
         for c in &cmds {
@@ -339,9 +459,7 @@ impl SuiTransfer {
         o.extend_from_slice(&self.sender);
         put_uleb(&mut o, self.gas_payment.len() as u64);
         for g in &self.gas_payment {
-            o.extend_from_slice(&g.object_id);
-            o.extend_from_slice(&g.version.to_le_bytes());
-            put_bytes(&mut o, &g.digest);
+            put_ref(&mut o, g);
         }
         o.extend_from_slice(&self.sender); // gas owner
         o.extend_from_slice(&self.gas_price.to_le_bytes());
@@ -356,6 +474,55 @@ impl SuiTransfer {
         Ok(o)
     }
 
+    /// Inputs and commands of the one layout Kyro builds for this transfer.
+    fn layout(&self) -> (Vec<Input>, Vec<Cmd>) {
+        if self.coins.is_empty() {
+            return match self.amount {
+                SuiTransferAmount::Mist(m) => (
+                    vec![
+                        Input::Pure(m.to_le_bytes().to_vec()),
+                        Input::Pure(self.recipient.to_vec()),
+                    ],
+                    vec![
+                        Cmd::SplitCoins(Arg::GasCoin, vec![Arg::Input(0)]),
+                        Cmd::TransferObjects(vec![Arg::NestedResult(0, 0)], Arg::Input(1)),
+                    ],
+                ),
+                SuiTransferAmount::All => (
+                    vec![Input::Pure(self.recipient.to_vec())],
+                    vec![Cmd::TransferObjects(vec![Arg::GasCoin], Arg::Input(0))],
+                ),
+            };
+        }
+        // ≤ SUI_MAX_TOKEN_COINS (checked before).
+        let n = self.coins.len() as u16;
+        let mut inputs: Vec<Input> = self.coins.iter().map(|c| Input::Owned(*c)).collect();
+        let mut cmds = Vec::new();
+        if n > 1 {
+            cmds.push(Cmd::MergeCoins(
+                Arg::Input(0),
+                (1..n).map(Arg::Input).collect(),
+            ));
+        }
+        match self.amount {
+            SuiTransferAmount::Mist(m) => {
+                inputs.push(Input::Pure(m.to_le_bytes().to_vec()));
+                inputs.push(Input::Pure(self.recipient.to_vec()));
+                let k = cmds.len() as u16;
+                cmds.push(Cmd::SplitCoins(Arg::Input(0), vec![Arg::Input(n)]));
+                cmds.push(Cmd::TransferObjects(
+                    vec![Arg::NestedResult(k, 0)],
+                    Arg::Input(n + 1),
+                ));
+            }
+            SuiTransferAmount::All => {
+                inputs.push(Input::Pure(self.recipient.to_vec()));
+                cmds.push(Cmd::TransferObjects(vec![Arg::Input(0)], Arg::Input(n)));
+            }
+        }
+        (inputs, cmds)
+    }
+
     /// Strict decoding; the result re-encodes to exactly `bcs` (checked).
     pub fn decode(bcs: &[u8]) -> Result<SuiTransfer> {
         if bcs.len() > MAX_BCS {
@@ -368,19 +535,25 @@ impl SuiTransfer {
         if r.uleb()? != 0 {
             return Err(bad("transaction système ou de type inconnu"));
         }
-        let n = r.len(16)?;
+        let n = r.len(SUI_MAX_TOKEN_COINS + 2)?;
         let mut inputs = Vec::with_capacity(n);
+        let mut coins = Vec::new();
         for _ in 0..n {
             match r.uleb()? {
                 0 => {
                     let l = r.len(16 * 1024)?;
                     inputs.push(r.take(l)?.to_vec());
                 }
-                1 => return Err(bad("objet en entrée : non pris en charge")),
+                // Owned coin objects of a token transfer: only before every pure input.
+                1 if inputs.is_empty() => match r.uleb()? {
+                    0 => coins.push(read_ref(&mut r)?),
+                    _ => return Err(bad("objet partagé ou à recevoir : non pris en charge")),
+                },
+                1 => return Err(bad("objet en entrée après une valeur : non pris en charge")),
                 _ => return Err(bad("entrée de type inconnu")),
             }
         }
-        let n = r.len(16)?;
+        let n = r.len(4)?;
         let cmds = (0..n)
             .map(|_| read_cmd(&mut r))
             .collect::<Result<Vec<_>>>()?;
@@ -388,16 +561,7 @@ impl SuiTransfer {
         let n = r.len(SUI_MAX_GAS_OBJECTS)?;
         let mut gas_payment = Vec::with_capacity(n);
         for _ in 0..n {
-            let object_id = r.arr32()?;
-            let version = r.u64()?;
-            if r.uleb()? != 32 {
-                return Err(bad("empreinte d'objet : 32 octets attendus"));
-            }
-            gas_payment.push(SuiObjectRef {
-                object_id,
-                version,
-                digest: r.arr32()?,
-            });
+            gas_payment.push(read_ref(&mut r)?);
         }
         let owner = r.arr32()?;
         let gas_price = r.u64()?;
@@ -422,6 +586,19 @@ impl SuiTransfer {
                 .map_err(|_| bad("destinataire : 32 octets attendus"))
         };
         let (recipient, amount) = match (inputs.as_slice(), cmds.as_slice()) {
+            // Token transfer: coin objects first, then (amount,) recipient; the commands are
+            // checked by the byte-for-byte re-encoding below.
+            ([amount, to], _) if !coins.is_empty() => {
+                let m: [u8; 8] = amount
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| bad("montant : u64 attendu"))?;
+                (pure32(to)?, SuiTransferAmount::Mist(u64::from_le_bytes(m)))
+            }
+            ([to], _) if !coins.is_empty() => (pure32(to)?, SuiTransferAmount::All),
+            _ if !coins.is_empty() => {
+                return Err(bad("structure de transfert de jeton inconnue"));
+            }
             (
                 [amount, to],
                 [Cmd::SplitCoins(Arg::GasCoin, a), Cmd::TransferObjects(o, Arg::Input(1))],
@@ -449,6 +626,7 @@ impl SuiTransfer {
             gas_price,
             gas_budget,
             expiration_epoch,
+            coins,
         };
         if t.encode()? != bcs {
             return Err(bad("ré-encodage différent"));
@@ -509,9 +687,10 @@ pub struct SuiTxSummary {
     pub sender: String,
     /// Recipient, full `0x` + 64 hex.
     pub recipient: String,
-    /// Always [`SUI_COIN_TYPE`] (the gas coin is SUI).
+    /// [`SUI_COIN_TYPE`] for a SUI transfer, else the known token's coin type.
     pub coin_type: String,
-    /// MIST, decimal; `None` = the whole balance of the gas coins minus the gas used.
+    /// MIST, decimal; `None` = the whole balance of the gas coins minus the gas used (token
+    /// transfer: token units; `None` = the whole balance of the token coins of `token`).
     pub amount: Option<String>,
     /// MIST, decimal.
     pub gas_budget: String,
@@ -527,12 +706,55 @@ pub struct SuiTxSummary {
     pub warnings: Vec<SuiWarning>,
     /// The confirmation must be followed by a reinforced one.
     pub requires_extra_confirmation: bool,
+    /// Token transfer (known coin type), `None` for SUI.
+    pub token: Option<SuiTokenSummary>,
 }
 
-fn summarize(t: &SuiTransfer, bcs: &[u8], ours: &[u8; 32]) -> Result<SuiTxSummary> {
+/// The token side of a token transfer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiTokenSummary {
+    /// Known coin type (verified id).
+    pub coin_type: String,
+    /// Ticker.
+    pub symbol: String,
+    /// Display name.
+    pub name: String,
+    /// Decimals of the token (units per whole token = 10^decimals).
+    pub decimals: u8,
+    /// The token coin objects sent (merged into the first), decoded from the bytes.
+    pub coins: Vec<SuiGasCoinView>,
+}
+
+fn view(g: &SuiObjectRef) -> SuiGasCoinView {
+    SuiGasCoinView {
+        object_id: sui_address_string(&g.object_id),
+        version: g.version.to_string(),
+        digest: bs58::encode(g.digest).into_string(),
+    }
+}
+
+fn summarize(
+    t: &SuiTransfer,
+    bcs: &[u8],
+    ours: &[u8; 32],
+    coin: Option<&SuiKnownCoin>,
+) -> Result<SuiTxSummary> {
     if &t.sender != ours {
         return Err(bad("l'expéditeur n'est pas l'adresse de ce compte"));
     }
+    let token = match (coin, t.coins.is_empty()) {
+        (None, true) => None,
+        (Some(c), false) => Some(SuiTokenSummary {
+            coin_type: c.coin_type.into(),
+            symbol: c.symbol.into(),
+            name: c.name.into(),
+            decimals: c.decimals,
+            coins: t.coins.iter().map(view).collect(),
+        }),
+        (None, false) => return Err(bad("transfert de jeton : type de pièce non indiqué")),
+        (Some(_), true) => return Err(bad("transfert de SUI présenté comme un jeton")),
+    };
     let mut warnings = Vec::new();
     if t.amount == SuiTransferAmount::All {
         warnings.push(SuiWarning::SendAll);
@@ -549,27 +771,27 @@ fn summarize(t: &SuiTransfer, bcs: &[u8], ours: &[u8; 32]) -> Result<SuiTxSummar
     Ok(SuiTxSummary {
         sender: sui_address_string(&t.sender),
         recipient: sui_address_string(&t.recipient),
-        coin_type: SUI_COIN_TYPE.into(),
+        coin_type: token
+            .as_ref()
+            .map_or_else(|| SUI_COIN_TYPE.into(), |k| k.coin_type.clone()),
         amount: match t.amount {
             SuiTransferAmount::Mist(m) => Some(m.to_string()),
             SuiTransferAmount::All => None,
         },
         gas_budget: t.gas_budget.to_string(),
         gas_price: t.gas_price.to_string(),
-        gas_coins: t
-            .gas_payment
-            .iter()
-            .map(|g| SuiGasCoinView {
-                object_id: sui_address_string(&g.object_id),
-                version: g.version.to_string(),
-                digest: bs58::encode(g.digest).into_string(),
-            })
-            .collect(),
+        gas_coins: t.gas_payment.iter().map(view).collect(),
         expiration_epoch: t.expiration_epoch,
         digest: sui_tx_digest(bcs),
         requires_extra_confirmation: !warnings.is_empty(),
         warnings,
+        token,
     })
+}
+
+fn known(coin_type: &str, testnet: bool) -> Result<&'static SuiKnownCoin> {
+    sui_known_coin(coin_type, testnet)
+        .ok_or_else(|| bad("type de pièce inconnu de Kyro sur ce réseau"))
 }
 
 /// Decodes an unsigned transfer (base64 BCS, as built by Kyro) for the dialog. Refused:
@@ -577,18 +799,53 @@ fn summarize(t: &SuiTransfer, bcs: &[u8], ours: &[u8; 32]) -> Result<SuiTxSummar
 pub fn sui_decode_tx(bcs_b64: &str, our_address: &str) -> Result<SuiTxSummary> {
     let bcs = b64(bcs_b64, "transaction")?;
     let t = SuiTransfer::decode(&bcs)?;
-    summarize(&t, &bcs, &sui_parse_address(our_address)?)
+    summarize(&t, &bcs, &sui_parse_address(our_address)?, None)
+}
+
+/// Like [`sui_decode_tx`] for a token transfer of the known `coin_type` (exact form). The
+/// objects' type is not in the bytes: the caller checks them live.
+pub fn sui_decode_coin_tx(
+    bcs_b64: &str,
+    our_address: &str,
+    coin_type: &str,
+    testnet: bool,
+) -> Result<SuiTxSummary> {
+    let coin = known(coin_type, testnet)?;
+    let bcs = b64(bcs_b64, "transaction")?;
+    let t = SuiTransfer::decode(&bcs)?;
+    summarize(&t, &bcs, &sui_parse_address(our_address)?, Some(coin))
 }
 
 /// Signs an unsigned transfer (base64 BCS) with account `account`'s key after decoding it like
 /// [`sui_decode_tx`]. Returns `(serialized signature base64 = flag || sig || pubkey, summary)`;
 /// the signature is verified before it is returned.
 pub fn sui_sign(seed: &Seed, account: u32, bcs_b64: &str) -> Result<(String, SuiTxSummary)> {
+    sign_inner(seed, account, bcs_b64, None)
+}
+
+/// [`sui_sign`] for a token transfer of the known `coin_type`, decoded like
+/// [`sui_decode_coin_tx`].
+pub fn sui_sign_coin(
+    seed: &Seed,
+    account: u32,
+    bcs_b64: &str,
+    coin_type: &str,
+    testnet: bool,
+) -> Result<(String, SuiTxSummary)> {
+    sign_inner(seed, account, bcs_b64, Some(known(coin_type, testnet)?))
+}
+
+fn sign_inner(
+    seed: &Seed,
+    account: u32,
+    bcs_b64: &str,
+    coin: Option<&SuiKnownCoin>,
+) -> Result<(String, SuiTxSummary)> {
     let bcs = b64(bcs_b64, "transaction")?;
     let t = SuiTransfer::decode(&bcs)?;
     let key = signing_key(seed, account)?;
     let pk = key.verifying_key();
-    let summary = summarize(&t, &bcs, &sui_address_bytes_of_pubkey(pk.as_bytes()))?;
+    let summary = summarize(&t, &bcs, &sui_address_bytes_of_pubkey(pk.as_bytes()), coin)?;
     let msg = signing_digest(&bcs);
     let sig = key.sign(&msg);
     pk.verify_strict(&msg, &sig)

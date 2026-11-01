@@ -19,7 +19,7 @@ import {
   type NearTxSummary,
   type NearWarning,
 } from '@kyro/shared';
-import type { NearChain } from '../registry';
+import { NEAR_TOKENS, type NearChain } from '../registry';
 import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
@@ -35,6 +35,9 @@ export interface NearBackend {
   sign(tx: string, password: string): Promise<{ signed: string; hash: string; summary: NearTxSummary; context: NearContext }>;
   broadcast(signed: string): Promise<NearTxOutcome>;
   txStatus(hash: string): Promise<NearTxOutcome>;
+  /** Known NEP-141 tokens (USDC, USDt); optional so that test backends can leave them out. */
+  tokenBalances?(accountId: string): Promise<Array<{ contract: string; symbol: string; decimals: number; balance: string; registered: boolean }>>;
+  buildToken?(contract: string, to: string, amount: string): Promise<{ tx: string; summary: NearTxSummary; context: NearContext }>;
 }
 
 /** The typed `near_*` commands of `@kyro/shared` (docs/IPC.md §2.11), for vault account `account`. */
@@ -47,6 +50,8 @@ export function rustNearBackend(account = 0): NearBackend {
     sign: (tx, password) => call('near_sign_tx', { tx, password, ...acct }),
     broadcast: (signed) => call('near_broadcast', { signed, ...acct }),
     txStatus: (hash) => call('near_tx_status', { hash, ...acct }),
+    tokenBalances: (accountId) => call('near_token_balances', { accountId }),
+    buildToken: (contract, to, amount) => call('near_build_token_tx', { contract, to, amount, ...acct }),
   };
 }
 
@@ -55,8 +60,10 @@ export function rustNearBackend(account = 0): NearBackend {
  * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
  */
 export function rustNearHwBackend(accountId: string): NearBackend {
+  // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
+  const { buildToken: _buildTokenVaultOnly, ...base } = rustNearBackend();
   return {
-    ...rustNearBackend(),
+    ...base,
     build: (to, amount) => call('hw_near_build_tx', { accountId, to, amount }),
     sign: (tx, id) => call('hw_sign_near_tx', { id, accountId, tx }),
     broadcast: (signed) => call('hw_near_broadcast', { accountId, signed }),
@@ -135,10 +142,57 @@ export class NearAdapter implements ChainAdapter<'near'> {
     return this.backend.account(accountId.trim());
   }
 
-  /** NEAR balance, plus `spendable` = balance − storage reserve. */
+  /** NEAR balance, plus `spendable` = balance − storage reserve; known NEP-141 tokens too. */
   async getBalance(): Promise<Array<Balance & { spendable: bigint }>> {
     const acc = await this.backend.account(this.address);
-    return [{ assetId: 'near', amount: BigInt(acc.balance), spendable: BigInt(acc.spendable) }];
+    const out = [{ assetId: 'near', amount: BigInt(acc.balance), spendable: BigInt(acc.spendable) }];
+    const known = NEAR_TOKENS[this.chain.network];
+    if (known.length && this.backend.tokenBalances) {
+      for (const b of await this.backend.tokenBalances(this.address)) {
+        const k = known.find((x) => x.contract === b.contract);
+        if (k && /^\d+$/.test(b.balance)) out.push({ assetId: `nep141:${k.contract}`, amount: BigInt(b.balance), spendable: BigInt(b.balance) });
+      }
+    }
+    return out;
+  }
+
+  /** Known tokens of this network: balance and whether this account is registered with each. */
+  async tokenStatus(): Promise<Array<{ contract: string; symbol: string; balance: string; registered: boolean }>> {
+    if (!NEAR_TOKENS[this.chain.network].length || !this.backend.tokenBalances) return [];
+    return (await this.backend.tokenBalances(this.address)).filter((b) => NEAR_TOKENS[this.chain.network].some((k) => k.contract === b.contract));
+  }
+
+  /** NEP-141 transfer: Rust adds `storage_deposit` for an unregistered recipient (paid in NEAR); `max` = the whole token balance. */
+  private async buildToken(params: BuildParams): Promise<NearUnsigned> {
+    if (this.hw) throw new Error(l10n('Jetons NEAR : pas encore pris en charge sur hardware wallet', 'NEAR tokens: not yet supported on hardware wallets'));
+    const k = NEAR_TOKENS[this.chain.network].find((x) => x.contract === params.asset.contract);
+    if (!k || k.decimals !== params.asset.decimals || !this.backend.buildToken) throw new Error(l10n('Jeton NEAR inconnu', 'Unknown NEAR token'));
+    const to = params.to.trim();
+    const problem = nearAccountIdProblem(to);
+    if (problem) throw new Error(problem);
+    if (to === this.address) throw new Error(l10n('Envoi à soi-même impossible', 'Cannot send to yourself'));
+    let amount = params.amount;
+    if (params.max === true && this.backend.tokenBalances) {
+      const b = (await this.backend.tokenBalances(this.address)).find((x) => x.contract === k.contract);
+      amount = b && /^\d+$/.test(b.balance) ? BigInt(b.balance) : 0n;
+    }
+    if (amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
+    const built = await this.backend.buildToken(k.contract, to, amount.toString());
+    const s = built.summary;
+    const tk = s.token;
+    if (!tk || s.receiverId !== k.contract || tk.contract !== k.contract || tk.decimals !== k.decimals || tk.recipient !== to || tk.amount !== amount.toString() || tk.testnet !== (this.chain.network === 'testnet') || s.signerId !== this.address || tk.recipientKind !== nearAccountKind(to)) {
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
+    }
+    return {
+      family: 'near',
+      tx: built.tx,
+      summary: s,
+      context: built.context,
+      recipient: to,
+      amount,
+      maxFee: BigInt(built.context.feeBound) + BigInt(s.deposit),
+      size: { family: 'near' },
+    };
   }
 
   /** No fee to choose: charged at the block's gas price (≈ 0,00005 NEAR for a transfer). */
@@ -155,6 +209,7 @@ export class NearAdapter implements ChainAdapter<'near'> {
 
   /** `max`: spendable minus Kyro's fee bound (first build to learn it, then exactly). */
   async buildTx(params: BuildParams): Promise<NearUnsigned> {
+    if (params.asset.kind === 'nep141') return this.buildToken(params);
     if (params.asset.kind !== 'native') throw new Error(l10n('Actif NEAR inattendu', 'Unexpected NEAR asset'));
     if (!params.max) return this.buildTransfer(params.to, params.amount);
     const spendable = BigInt((await this.backend.account(this.address)).spendable);
@@ -174,7 +229,7 @@ export class NearAdapter implements ChainAdapter<'near'> {
     if (amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const built = await this.backend.build(to, amount.toString());
     const s = built.summary;
-    if (s.receiverId !== to || s.signerId !== this.address || s.deposit !== amount.toString() || s.receiverKind !== nearAccountKind(to)) {
+    if (s.receiverId !== to || s.signerId !== this.address || s.deposit !== amount.toString() || s.receiverKind !== nearAccountKind(to) || s.token) {
       throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
     }
     return {
@@ -216,7 +271,24 @@ export class NearAdapter implements ChainAdapter<'near'> {
 
   async getHistory(): Promise<HistoryItem[]> {
     const list = await this.backend.txs(this.address);
-    return list.map((t) => {
+    const known = NEAR_TOKENS[this.chain.network];
+    return list.flatMap((t): HistoryItem[] => {
+      const tokens = (t.tokens ?? []).flatMap((e, i): HistoryItem[] => {
+        const k = known.find((x) => x.contract === e.contract);
+        if (!k || !/^\d+$/.test(e.amount)) return [];
+        const item: HistoryItem = { id: `${t.hash}:${k.contract}:${i}`, chainKey: this.chain.key, assetId: `nep141:${k.contract}`, direction: e.direction, amount: BigInt(e.amount), status: t.success ? 'confirmed' : 'failed', kind: 'transfer' };
+        if (e.counterparty) item.counterparty = e.counterparty;
+        if (t.time) item.time = t.time;
+        return [item];
+      });
+      const native = this.nativeItem(t);
+      // A token call moves no NEAR besides fees and deposits: its NEAR row is kept only when we paid.
+      return tokens.length ? (t.from === this.address ? [...tokens, native] : tokens) : [native];
+    });
+  }
+
+  private nativeItem(t: NearHistoryEntry): HistoryItem {
+    return (() => {
       const out = t.from === this.address;
       const self = out && t.to === this.address;
       const item: HistoryItem = {
@@ -233,6 +305,6 @@ export class NearAdapter implements ChainAdapter<'near'> {
       if (counterparty && !self) item.counterparty = counterparty;
       if (t.time) item.time = t.time;
       return item;
-    });
+    })();
   }
 }

@@ -154,6 +154,7 @@ fn mainnet_transfers_decode_reencode_and_verify() {
         gas_price: 100,
         gas_budget: 2_076_000,
         expiration_epoch: None,
+        coins: vec![],
     };
     assert_eq!(b64(&rebuilt.encode().unwrap()), MAINNET[0].1);
     let s = sui_decode_tx(MAINNET[0].1, &sui_address_string(&rebuilt.sender)).unwrap();
@@ -193,6 +194,7 @@ fn ours_transfer(amount: SuiTransferAmount) -> (Seed, SuiTransfer) {
         gas_price: 1000,
         gas_budget: 5_000_000,
         expiration_epoch: Some(1271),
+        coins: vec![],
     };
     (s, t)
 }
@@ -337,4 +339,103 @@ fn hardware_wallet_message_and_signature() {
     assert!(wallet_core::sui_hw_signature(&bcs, &pk, &raw[1..64]).is_err());
     let other = wallet_core::sui_public_key(&s, 1).unwrap();
     assert!(wallet_core::sui_hw_signature(&bcs, &other, &raw[1..65]).is_err());
+}
+
+// ---------------------------------------------------------------- token transfers (USDC)
+
+const USDC_MAINNET: &str =
+    "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC";
+
+fn token_transfer(n: u8, amount: SuiTransferAmount) -> (Seed, SuiTransfer) {
+    let (s, mut t) = ours_transfer(amount);
+    t.coins = (0..n)
+        .map(|i| SuiObjectRef {
+            object_id: [0x20 + i; 32],
+            version: 500 + u64::from(i),
+            digest: [0x40 + i; 32],
+        })
+        .collect();
+    (s, t)
+}
+
+#[test]
+fn token_transfers_layout_sign_and_refusals() {
+    use wallet_core::{sui_decode_coin_tx, sui_known_coin, sui_known_coins, sui_sign_coin};
+    assert_eq!(sui_known_coins(false).len(), 1);
+    assert_eq!(sui_known_coin(USDC_MAINNET, false).unwrap().decimals, 6);
+    assert!(sui_known_coin(USDC_MAINNET, true).is_none());
+    // One coin, amount: [Object, Pure u64, Pure address], SplitCoins(Input(0), [Input(1)]),
+    // TransferObjects([NestedResult(0, 0)], Input(2)).
+    let (s, t) = token_transfer(1, SuiTransferAmount::Mist(1_500_000));
+    let raw = t.encode().unwrap();
+    let h = hex::encode(&raw);
+    let coin = format!(
+        "0100{}{}20{}",
+        "20".repeat(32),
+        hex::encode(500u64.to_le_bytes()),
+        "40".repeat(32)
+    );
+    assert!(
+        h.starts_with(&format!(
+            "000003{coin}0008{}0020",
+            hex::encode(1_500_000u64.to_le_bytes())
+        )),
+        "{h}"
+    );
+    assert!(h.contains("02020100000101010001010300000000010200"), "{h}");
+    assert_eq!(SuiTransfer::decode(&raw).unwrap(), t);
+    let bcs = b64(&raw);
+    let me = sui_address_string(&t.sender);
+    // Without the coin type (SUI path), or with an unknown one: refused.
+    assert!(sui_decode_tx(&bcs, &me).is_err());
+    assert!(sui_decode_coin_tx(&bcs, &me, "0x2::sui::SUI", false).is_err());
+    assert!(sui_decode_coin_tx(&bcs, &me, USDC_MAINNET, true).is_err());
+    let d = sui_decode_coin_tx(&bcs, &me, USDC_MAINNET, false).unwrap();
+    assert_eq!(d.coin_type, USDC_MAINNET);
+    assert_eq!(d.amount.as_deref(), Some("1500000"));
+    let tok = d.token.clone().unwrap();
+    assert_eq!(
+        (tok.symbol.as_str(), tok.decimals, tok.coins.len()),
+        ("USDC", 6, 1)
+    );
+    let (sig, again) = sui_sign_coin(&s, 0, &bcs, USDC_MAINNET, false).unwrap();
+    assert_eq!(again, d);
+    assert_eq!(sui_verify_signed(&bcs, &sig).unwrap(), d.digest);
+    // A SUI transfer cannot be presented as a token transfer.
+    let (_, plain) = ours_transfer(SuiTransferAmount::Mist(5));
+    assert!(sui_decode_coin_tx(&b64(&plain.encode().unwrap()), &me, USDC_MAINNET, false).is_err());
+    // Three coins merged, then split: MergeCoins(Input(0), [Input(1), Input(2)]) first, the
+    // split result is NestedResult(1, 0).
+    let (_, t3) = token_transfer(3, SuiTransferAmount::Mist(7));
+    let raw3 = t3.encode().unwrap();
+    let h3 = hex::encode(&raw3);
+    assert!(
+        h3.contains("030301000002010100010200020100000101030001010301000000010400"),
+        "{h3}"
+    );
+    assert_eq!(SuiTransfer::decode(&raw3).unwrap(), t3);
+    // Whole balance: MergeCoins then TransferObjects([Input(0)], Input(2)).
+    let (_, ta) = token_transfer(2, SuiTransferAmount::All);
+    let rawa = ta.encode().unwrap();
+    assert!(
+        hex::encode(&rawa).contains("0203010000010101000101010000010200"),
+        "{}",
+        hex::encode(&rawa)
+    );
+    let da = sui_decode_coin_tx(&b64(&rawa), &me, USDC_MAINNET, false).unwrap();
+    assert_eq!(da.amount, None);
+    assert_eq!(da.warnings, vec![SuiWarning::SendAll]);
+    // Encoder checks: a token coin also used as gas, a duplicate, too many coins.
+    let mut x = t3.clone();
+    x.coins[1].object_id = x.gas_payment[0].object_id;
+    assert!(x.encode().is_err());
+    let mut x = t3.clone();
+    x.coins[2].object_id = x.coins[0].object_id;
+    assert!(x.encode().is_err());
+    let (_, x) = token_transfer(33, SuiTransferAmount::Mist(1));
+    assert!(x.encode().is_err());
+    // A shared object input (ObjectArg tag 1) is refused.
+    let mut v = raw.clone();
+    v[4] = 1;
+    assert!(SuiTransfer::decode(&v).is_err());
 }

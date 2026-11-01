@@ -958,3 +958,29 @@ fn with_bytes(raw: &[u8], at: usize, bytes: &[u8]) -> Vec<u8> {
     r.splice(at..at + bytes.len(), bytes.iter().copied());
     r
 }
+
+#[test]
+fn known_assets_are_circle_usdc() {
+    use wallet_core::{stellar_known_asset, stellar_known_assets};
+    let m = stellar_known_assets(Network::Mainnet);
+    assert_eq!(m.len(), 1);
+    assert_eq!(
+        m[0].id(),
+        "USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+    );
+    let t = stellar_known_assets(Network::Testnet);
+    assert_eq!(
+        t[0].id(),
+        "USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+    );
+    for k in m.iter().chain(t) {
+        // The constant parses (canonical code, valid issuer key).
+        assert_eq!(k.asset(), stellar_asset(k.code, k.issuer).unwrap());
+        assert_ne!(k.asset(), StellarAsset::Native);
+    }
+    // Exact match only: another network's issuer, a lowercase code or a lookalike issuer are
+    // not the known asset.
+    assert!(stellar_known_asset("USDC", t[0].issuer, Network::Mainnet).is_none());
+    assert!(stellar_known_asset("usdc", m[0].issuer, Network::Mainnet).is_none());
+    assert!(stellar_known_asset("USDC", m[0].issuer, Network::Mainnet).is_some());
+}

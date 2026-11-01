@@ -52,6 +52,64 @@ pub struct AptosContext {
     pub gas_used: String,
     /// UNIX seconds of the ledger when read.
     pub ledger_time: u64,
+    /// Token transfer: our live balance of that token (token units). `recipient_new` then means
+    /// the recipient holds none of it yet (its primary store is created: a bit more gas).
+    pub token_balance: Option<String>,
+}
+
+/// Dialog head of a fungible-asset transfer: token, verified metadata object, decimals.
+fn describe_token_head(
+    lang: Lang,
+    s: &AptosTxSummary,
+    k: &wallet_core::AptosTokenSummary,
+    c: &AptosContext,
+    testnet: &str,
+) -> String {
+    let units = |v: &str| {
+        format!(
+            "{} {}",
+            format_units_in(lang, v, usize::from(k.decimals)),
+            k.symbol
+        )
+    };
+    let mut out = match lang {
+        Lang::Fr => format!(
+            "Envoi de jeton Aptos{testnet}\n\nJeton : {} — actif vérifié par Kyro\n{}\n{} décimales\n\nÀ : {}\n(adresse sans somme de contrôle : compare-la en entier)\n\nMontant : {} ({} unités)\nSolde {} : {}\n",
+            k.symbol,
+            k.metadata,
+            k.decimals,
+            s.recipient,
+            units(&s.amount),
+            s.amount,
+            k.symbol,
+            c.token_balance.as_deref().map_or("?".into(), units)
+        ),
+        Lang::En => format!(
+            "Aptos token send{testnet}\n\nToken: {} — asset verified by Kyro\n{}\n{} decimals\n\nTo: {}\n(address without checksum: compare all of it)\n\nAmount: {} ({} units)\n{} balance: {}\n",
+            k.symbol,
+            k.metadata,
+            k.decimals,
+            s.recipient,
+            units(&s.amount),
+            s.amount,
+            k.symbol,
+            c.token_balance.as_deref().map_or("?".into(), units)
+        ),
+    };
+    if c.recipient_new {
+        out += &match lang {
+            Lang::Fr => format!(
+                "Ce compte n'a pas encore de {} : le transfert crée sa réserve (un peu plus de gaz).\n",
+                k.symbol
+            ),
+            Lang::En => format!(
+                "This account holds no {} yet: the transfer creates its store (a bit more gas).\n",
+                k.symbol
+            ),
+        };
+    }
+    out += lang.pick("Frais payés en APT :\n", "Fee paid in APT:\n");
+    out
 }
 
 /// Body of the native dialog.
@@ -67,21 +125,22 @@ pub(crate) fn describe_aptos(
     } else {
         ""
     };
-    let mut out = match lang {
-        Lang::Fr => format!(
+    let mut out = match (&s.token, lang) {
+        (Some(k), _) => describe_token_head(lang, s, k, c, testnet),
+        (None, Lang::Fr) => format!(
             "Envoi Aptos{testnet}\n\nÀ : {}\n(adresse sans somme de contrôle : compare-la en entier)\n\nMontant : {} ({} octas)\n",
             s.recipient,
             ap(&s.amount),
             s.amount
         ),
-        Lang::En => format!(
+        (None, Lang::En) => format!(
             "Aptos send{testnet}\n\nTo: {}\n(address without checksum: compare all of it)\n\nAmount: {} ({} octas)\n",
             s.recipient,
             ap(&s.amount),
             s.amount
         ),
     };
-    if c.recipient_new {
+    if c.recipient_new && s.token.is_none() {
         out += lang.pick(
             "Ce compte n'a encore rien reçu : le transfert le crée (un peu plus de gaz).\n",
             "This account has not received anything yet: the transfer creates it (a bit more gas).\n",
@@ -190,6 +249,43 @@ pub async fn aptos_txs(state: State<'_, AppState>, address: String) -> AppResult
     aptos_backend::txs(&ctx(&state), &address).await
 }
 
+/// One line per fungible asset Kyro knows on this network.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AptosTokenBalance {
+    pub metadata: String,
+    pub symbol: String,
+    pub decimals: u8,
+    /// Token units.
+    pub balance: String,
+}
+
+#[tauri::command]
+pub async fn aptos_token_balances(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<Vec<AptosTokenBalance>> {
+    let c = ctx(&state);
+    let mut out = Vec::new();
+    for k in wallet_core::aptos_known_assets(c.chain_id) {
+        out.push(AptosTokenBalance {
+            metadata: k.metadata.into(),
+            symbol: k.symbol.into(),
+            decimals: k.decimals,
+            balance: aptos_backend::fa_balance(&c, &address, k.metadata)
+                .await?
+                .to_string(),
+        });
+    }
+    Ok(out)
+}
+
+/// Transfers of the known fungible assets (indexer, known metadata objects only).
+#[tauri::command]
+pub async fn aptos_token_txs(state: State<'_, AppState>, address: String) -> AppResult<Value> {
+    aptos_backend::token_txs(&ctx(&state), &address).await
+}
+
 // ---------------------------------------------------------------- build, sign, broadcast
 
 #[derive(Serialize)]
@@ -236,6 +332,7 @@ pub(crate) async fn build(
         gas_unit_price: price,
         expiration_timestamp_secs: ledger.timestamp_secs + aptos_backend::EXPIRATION_SECS,
         chain_id: c.chain_id,
+        token: None,
     };
     // Simulation with the widest gas limit the balance allows, then the real limit.
     let balance: u64 = account.balance.parse().unwrap_or(0);
@@ -266,8 +363,115 @@ pub(crate) async fn build(
             recipient_new: recipient_new(c, to).await?,
             gas_used: gas_used.to_string(),
             ledger_time: ledger.timestamp_secs,
+            token_balance: None,
         },
     })
+}
+
+fn known_asset(c: &AptosCtx<'_>, metadata: &str) -> AppResult<[u8; 32]> {
+    let m = wallet_core::aptos_parse_address(metadata)?;
+    wallet_core::aptos_known_asset(&m, c.chain_id).ok_or_else(|| {
+        AppError::InvalidInput("jeton Aptos inconnu de Kyro sur ce réseau".into())
+    })?;
+    Ok(m)
+}
+
+/// Our live balance of the token `metadata`; refuses `amount` above it.
+async fn check_token(c: &AptosCtx<'_>, me: &str, metadata: &str, amount: u64) -> AppResult<u64> {
+    let m = wallet_core::aptos_parse_address(metadata)?;
+    let k = wallet_core::aptos_known_asset(&m, c.chain_id).ok_or_else(|| {
+        AppError::InvalidInput("jeton Aptos inconnu de Kyro sur ce réseau".into())
+    })?;
+    let have = aptos_backend::fa_balance(c, me, k.metadata).await?;
+    if amount > have {
+        return Err(AppError::InvalidInput(format!(
+            "solde {} insuffisant : {} {}",
+            k.symbol,
+            crate::commands::format_units(&have.to_string(), usize::from(k.decimals)),
+            k.symbol
+        )));
+    }
+    Ok(have)
+}
+
+/// Builds an unsigned transfer of `amount` units of the known fungible asset `metadata`
+/// (`0x1::primary_fungible_store::transfer<Metadata>`), gas paid in APT.
+pub(crate) async fn build_token(
+    c: &AptosCtx<'_>,
+    me: &str,
+    pubkey: &[u8; 32],
+    metadata: &str,
+    to: &str,
+    amount: &str,
+) -> AppResult<AptosBuilt> {
+    let token = known_asset(c, metadata)?;
+    let sender = wallet_core::aptos_parse_address(me)?;
+    let recipient = wallet_core::aptos_parse_address(to)?;
+    let amount: u64 = amount
+        .trim()
+        .parse()
+        .ok()
+        .filter(|a| *a > 0)
+        .ok_or_else(|| AppError::InvalidInput("montant de jeton invalide".into()))?;
+    let ledger = aptos_backend::checked_ledger(c).await?;
+    let account = aptos_backend::account(c, me).await?;
+    aptos_backend::check_transfer(&account, 0, 0)?;
+    let have = check_token(c, me, metadata, amount).await?;
+    let price = aptos_backend::gas_price(c).await?;
+    let balance: u64 = account.balance.parse().unwrap_or(0);
+    let mut t = AptosTransfer {
+        sender,
+        sequence_number: account.sequence_number.parse().unwrap_or(0),
+        recipient,
+        amount,
+        max_gas_amount: (balance / price).clamp(1, aptos_backend::MAX_MAX_GAS),
+        gas_unit_price: price,
+        expiration_timestamp_secs: ledger.timestamp_secs + aptos_backend::EXPIRATION_SECS,
+        chain_id: c.chain_id,
+        token: Some(token),
+    };
+    let raw = hex::encode(t.encode()?);
+    let (ok, vm_status, gas_used) =
+        aptos_backend::simulate(c, wallet_core::aptos_simulation_bytes(&raw, pubkey)?).await?;
+    if !ok {
+        return Err(AppError::InvalidInput(format!(
+            "la simulation du transfert échoue : {vm_status}{}",
+            if vm_status.contains("MAX_GAS_UNITS") || vm_status.contains("INSUFFICIENT_BALANCE") {
+                " (pas assez d'APT pour les frais)"
+            } else {
+                ""
+            }
+        )));
+    }
+    t.max_gas_amount = aptos_backend::max_gas_for(gas_used)?;
+    aptos_backend::check_transfer(&account, 0, t.max_fee())?;
+    let raw = hex::encode(t.encode()?);
+    let summary = wallet_core::aptos_decode_tx(&raw, me)?;
+    Ok(AptosBuilt {
+        raw,
+        summary,
+        context: AptosContext {
+            account,
+            recipient_new: aptos_backend::fa_balance(c, to, metadata).await? == 0,
+            gas_used: gas_used.to_string(),
+            ledger_time: ledger.timestamp_secs,
+            token_balance: Some(have.to_string()),
+        },
+    })
+}
+
+/// Transfer of a known fungible asset: `metadata` = its metadata object (`0x` + 64 hex),
+/// `amount` in token units.
+#[tauri::command]
+pub async fn aptos_build_token_tx(
+    state: State<'_, AppState>,
+    metadata: String,
+    to: String,
+    amount: String,
+    account: Option<u32>,
+) -> AppResult<AptosBuilt> {
+    let (me, pk) = ours(&state, account_arg(account)?)?;
+    build_token(&ctx(&state), &me, &pk, &metadata, &to, &amount).await
 }
 
 #[tauri::command]
@@ -330,7 +534,17 @@ pub(crate) async fn prepare_sign(
     }
     let amount: u64 = summary.amount.parse().unwrap_or(u64::MAX);
     let max_fee: u64 = summary.max_fee.parse().unwrap_or(u64::MAX);
-    aptos_backend::check_transfer(&account, amount, max_fee)?;
+    let token_balance = match &summary.token {
+        None => {
+            aptos_backend::check_transfer(&account, amount, max_fee)?;
+            None
+        }
+        Some(k) => {
+            // The token's amount comes from its store, the fee from the APT balance.
+            aptos_backend::check_transfer(&account, 0, max_fee)?;
+            Some(check_token(c, me, &k.metadata, amount).await?.to_string())
+        }
+    };
     let (ok, vm_status, gas_used) =
         aptos_backend::simulate(c, wallet_core::aptos_simulation_bytes(raw, pubkey)?).await?;
     if !ok {
@@ -338,7 +552,10 @@ pub(crate) async fn prepare_sign(
             "la simulation du transfert échoue : {vm_status}"
         )));
     }
-    let recipient_new = recipient_new(c, &summary.recipient).await?;
+    let recipient_new = match &summary.token {
+        None => recipient_new(c, &summary.recipient).await?,
+        Some(k) => aptos_backend::fa_balance(c, &summary.recipient, &k.metadata).await? == 0,
+    };
     Ok((
         summary,
         AptosContext {
@@ -346,6 +563,7 @@ pub(crate) async fn prepare_sign(
             recipient_new,
             gas_used: gas_used.to_string(),
             ledger_time: ledger.timestamp_secs,
+            token_balance,
         },
     ))
 }
@@ -370,7 +588,14 @@ pub async fn aptos_sign_tx(
     let lang = crate::i18n::current();
     confirm_native(
         &app,
-        lang.pick("Confirmer l'envoi d'APT", "Confirm the APT send"),
+        if summary.token.is_some() {
+            lang.pick(
+                "Confirmer l'envoi de jeton Aptos",
+                "Confirm the Aptos token send",
+            )
+        } else {
+            lang.pick("Confirmer l'envoi d'APT", "Confirm the APT send")
+        },
         signer.body(
             lang,
             &describe_aptos(lang, &summary, &context, state.network),
@@ -484,6 +709,7 @@ mod tests {
             chain_id: 2,
             warnings: vec![],
             requires_extra_confirmation: false,
+            token: None,
         }
     }
 
@@ -496,7 +722,43 @@ mod tests {
             recipient_new: new,
             gas_used: "11".into(),
             ledger_time: 1_000_000,
+            token_balance: None,
         }
+    }
+
+    #[test]
+    fn token_dialog_shows_asset_metadata_and_decimals() {
+        let mut s = summary();
+        s.function = "0x1::primary_fungible_store::transfer".into();
+        s.amount = "2500000".into();
+        s.token = Some(wallet_core::AptosTokenSummary {
+            metadata: "0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b".into(),
+            symbol: "USDT".into(),
+            name: "Tether".into(),
+            decimals: 6,
+        });
+        let mut c = context(true);
+        c.token_balance = Some("10000000".into());
+        let d = describe_aptos(Lang::Fr, &s, &c, Network::Mainnet);
+        for needle in [
+            "Envoi de jeton Aptos\n",
+            "Jeton : USDT — actif vérifié par Kyro\n0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b\n6 décimales",
+            "À : 0x726c91e2852985c2a8c16f32a64c131bd2a0fd1e0aa985a1e0e6002407506ac0\n",
+            "Montant : 2,5 USDT (2500000 unités)",
+            "Solde USDT : 10 USDT",
+            "pas encore de USDT",
+            "Frais payés en APT",
+            "Frais maximum : 0,0002 APT",
+            "Fonction : 0x1::primary_fungible_store::transfer",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        assert!(!d.contains("le transfert le crée"));
+        let en = describe_aptos(Lang::En, &s, &c, Network::Testnet);
+        assert!(
+            en.contains("Aptos token send (testnet)")
+                && en.contains("Amount: 2.5 USDT (2500000 units)")
+        );
     }
 
     #[test]
@@ -694,6 +956,51 @@ mod live {
                 }
             }
             panic!("{hash} not committed");
+        });
+    }
+
+    /// USDC transfer built by Kyro for a real mainnet holder whose public key is known (read
+    /// from one of its signed transactions, 2026-11-01), simulated only (zero signature): the node accepts the bytes,
+    /// the dialog text is printed. `cargo test -p kyro-desktop --lib aptos_token_simulation_mainnet
+    /// -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn aptos_token_simulation_mainnet() {
+        let net = NetClient::new(std::env::temp_dir().join("kyro-aptos-live")).unwrap();
+        tauri::async_runtime::block_on(async {
+            let c = AptosCtx {
+                net_client: &net,
+                tor: false,
+                base: aptos_backend::default_url(Network::Mainnet).to_owned(),
+                chain_id: 1,
+            };
+            let me = "0xbabf76f1e6ac1af9c2666c07be12f90b188ed484fcef0bf1408961b5461373e9";
+            let pk: [u8; 32] =
+                hex::decode("7a446f7fd8a470fa8abe6c32aa8264c0ecbe78ce83b52e55b0006d5e43957c05")
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+            let to = "0xa044357a441c87a85c5887ddfeb0428a8a25ab2a789b23a2b472b6c6c385d228";
+            for k in wallet_core::aptos_known_assets(1) {
+                let have = aptos_backend::fa_balance(&c, me, k.metadata).await.unwrap();
+                eprintln!("{} balance {have}", k.symbol);
+                if have == 0 {
+                    continue;
+                }
+                let built = build_token(&c, me, &pk, k.metadata, to, "1").await.unwrap();
+                eprintln!(
+                    "--- dialog ---\n{}",
+                    describe_aptos(Lang::Fr, &built.summary, &built.context, Network::Mainnet)
+                );
+                let (s, _) = prepare_sign(&c, me, &pk, &built.raw).await.unwrap();
+                assert_eq!(s, built.summary);
+            }
+            assert!(!aptos_backend::token_txs(&c, me)
+                .await
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .is_empty());
         });
     }
 }

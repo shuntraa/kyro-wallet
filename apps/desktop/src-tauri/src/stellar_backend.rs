@@ -203,6 +203,8 @@ pub struct StellarTrustline {
     /// Stroops, decimal string.
     pub balance: String,
     pub limit: String,
+    /// The issuer authorizes this account to hold the asset (`is_authorized`).
+    pub authorized: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
@@ -268,6 +270,7 @@ pub fn parse_account(address: &str, r: &Value, base_reserve: i64) -> AppResult<S
                 issuer: b["asset_issuer"].as_str().unwrap_or("").to_owned(),
                 balance: to_stroops(&b["balance"]).unwrap_or(0).to_string(),
                 limit: to_stroops(&b["limit"]).unwrap_or(0).to_string(),
+                authorized: b["is_authorized"].as_bool().unwrap_or(false),
             }),
             _ => {} // liquidity pool shares: not shown
         }

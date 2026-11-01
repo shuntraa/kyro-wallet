@@ -21,7 +21,7 @@ import {
   type StellarWarning,
 } from '@kyro/shared';
 import { accountArg } from '../types';
-import type { StellarChain } from '../registry';
+import { STELLAR_ASSETS, type StellarChain } from '../registry';
 import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
@@ -36,6 +36,18 @@ export interface StellarBackend {
   sign(envelope: string, password: string): Promise<{ envelope: string; hash: string; summary: StellarTxSummary; context: StellarContext }>;
   broadcast(envelope: string): Promise<string>;
   txStatus(hash: string): Promise<{ found: boolean; successful: boolean }>;
+  /** Known issued assets (Circle's USDC); optional so that test backends can leave them out. */
+  buildAsset?(asset: string, to: string, amount: string, memo?: StellarMemoSpec): Promise<{ envelope: string; summary: StellarTxSummary; context: StellarContext }>;
+  buildTrust?(asset: string, enable: boolean): Promise<{ envelope: string; summary: StellarTxSummary; context: StellarContext }>;
+}
+
+/** `xlm:CODE:ISSUER`, the asset id of an issued asset (registry and history). */
+export const stellarAssetId = (contract: string): string => `xlm:${contract.replace('-', ':')}`;
+
+/** `CODE-ISSUER` → its parts. */
+export function splitStellarAsset(contract: string): { code: string; issuer: string } {
+  const [code = '', issuer = ''] = contract.split('-');
+  return { code, issuer };
 }
 
 /** The typed `stellar_*` commands of `@kyro/shared` (docs/IPC.md §2.11), for vault account `account`. */
@@ -48,6 +60,8 @@ export function rustStellarBackend(account = 0): StellarBackend {
     sign: (envelope, password) => call('stellar_sign_tx', { envelope, password, ...acct }),
     broadcast: (envelope) => call('stellar_broadcast', { envelope, ...acct }),
     txStatus: (hash) => call('stellar_tx_status', { hash }),
+    buildAsset: (asset, to, amount, memo) => call('stellar_build_asset_tx', { asset, to, amount, ...(memo ? { memo } : {}), ...acct }),
+    buildTrust: (asset, enable) => call('stellar_build_trust_tx', { asset, enable, ...acct }),
   };
 }
 
@@ -56,8 +70,10 @@ export function rustStellarBackend(account = 0): StellarBackend {
  * account's stored key; signing is `hw_sign_stellar_tx`.
  */
 export function hwStellarBackend(accountId: string): StellarBackend {
+  // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
+  const { buildAsset: _buildAssetVaultOnly, buildTrust: _buildTrustVaultOnly, ...base } = rustStellarBackend(0);
   return {
-    ...rustStellarBackend(0),
+    ...base,
     build: (to, amount, memo) => call('hw_stellar_build_tx', { accountId, to, amount, ...(memo ? { memo } : {}) }),
     sign: () => Promise.reject(new Error(l10n('Compte hardware wallet : signature sur l’appareil', 'Hardware-wallet account: sign on the device'))),
     broadcast: (envelope) => call('hw_stellar_broadcast', { accountId, envelope }),
@@ -212,10 +228,69 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
     return this.backend.account(address);
   }
 
-  /** XLM balance, plus `spendable` = balance − reserve (what can actually be sent). */
+  /** XLM balance, plus `spendable` = balance − reserve (what can actually be sent); known issued assets from their trustlines. */
   async getBalance(): Promise<Array<Balance & { spendable: bigint }>> {
     const acc = await this.backend.account(this.address);
-    return [{ assetId: 'xlm', amount: BigInt(acc.balance), spendable: BigInt(acc.spendable) }];
+    const out = [{ assetId: 'xlm', amount: BigInt(acc.balance), spendable: BigInt(acc.spendable) }];
+    for (const k of STELLAR_ASSETS[this.chain.network]) {
+      const { code, issuer } = splitStellarAsset(k.contract);
+      const line = acc.trustlines.find((l) => l.code === code && l.issuer === issuer);
+      if (line && /^\d+$/.test(line.balance)) out.push({ assetId: stellarAssetId(k.contract), amount: BigInt(line.balance), spendable: BigInt(line.balance) });
+    }
+    return out;
+  }
+
+  /** The known issued assets of this network, with our trustline (null = not enabled). */
+  async trustlines(): Promise<Array<{ asset: (typeof STELLAR_ASSETS)['mainnet'][number]; line: StellarAccountInfo['trustlines'][number] | null; account: StellarAccountInfo }>> {
+    const acc = await this.backend.account(this.address);
+    return STELLAR_ASSETS[this.chain.network].map((k) => {
+      const { code, issuer } = splitStellarAsset(k.contract);
+      return { asset: k, line: acc.trustlines.find((l) => l.code === code && l.issuer === issuer) ?? null, account: acc };
+    });
+  }
+
+  /** Builds the ChangeTrust of a known asset (`enable`: open; else remove at a zero balance). Signed and sent like a payment. */
+  async buildTrust(contract: string, enable: boolean): Promise<StellarUnsigned> {
+    if (this.hw) throw new Error(l10n('Jetons Stellar : pas encore pris en charge sur hardware wallet', 'Stellar tokens: not yet supported on hardware wallets'));
+    const k = STELLAR_ASSETS[this.chain.network].find((x) => x.contract === contract);
+    if (!k || !this.backend.buildTrust) throw new Error(l10n('Actif Stellar inconnu', 'Unknown Stellar asset'));
+    const { code, issuer } = splitStellarAsset(k.contract);
+    const built = await this.backend.buildTrust(k.contract, enable);
+    const s = built.summary;
+    const op = s.operation;
+    const okOp = op.kind === 'changeTrust' && op.asset.kind === 'credit' && op.asset.code === code && op.asset.issuer === issuer && op.limit === (enable ? '9223372036854775807' : '0');
+    const okWarn = s.warnings.every((w) => !enable && w.kind === 'removeTrustline');
+    if (!okOp || !okWarn || s.memo.kind !== 'none' || s.source !== this.address || s.network !== this.chain.network) {
+      throw new Error(l10n('La transaction construite par Rust ne correspond pas à la demande', 'The transaction built by Rust does not match the request'));
+    }
+    return { family: 'xlm', envelope: built.envelope, summary: s, context: built.context, recipient: this.address, amount: 0n, createsAccount: false, maxFee: BigInt(s.fee), size: { family: 'xlm' } };
+  }
+
+  /** Payment of a known issued asset; `max` = our whole trustline balance. */
+  private async buildAssetPayment(params: BuildParams): Promise<StellarUnsigned> {
+    if (this.hw) throw new Error(l10n('Jetons Stellar : pas encore pris en charge sur hardware wallet', 'Stellar tokens: not yet supported on hardware wallets'));
+    const k = STELLAR_ASSETS[this.chain.network].find((x) => x.contract === params.asset.contract);
+    if (!k || !this.backend.buildAsset) throw new Error(l10n('Actif Stellar inconnu', 'Unknown Stellar asset'));
+    const { code, issuer } = splitStellarAsset(k.contract);
+    const to = params.to.trim();
+    const problem = stellarAddressProblem(to);
+    if (problem) throw new Error(problem);
+    if (to === this.address) throw new Error(l10n('Envoi à soi-même impossible', 'Cannot send to yourself'));
+    let amount = params.amount;
+    if (params.max === true) {
+      const line = (await this.backend.account(this.address)).trustlines.find((l) => l.code === code && l.issuer === issuer);
+      amount = line && /^\d+$/.test(line.balance) ? BigInt(line.balance) : 0n;
+    }
+    if (amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
+    const memo = params.stellarMemo;
+    const built = await this.backend.buildAsset(k.contract, to, amount.toString(), memo);
+    const s = built.summary;
+    const op = s.operation;
+    const okOp = op.kind === 'payment' && op.destination === to && op.asset.kind === 'credit' && op.asset.code === code && op.asset.issuer === issuer && op.amount === amount.toString();
+    if (!okOp || !sameMemo(memo, s.memo) || s.source !== this.address || s.network !== this.chain.network || s.requiresExtraConfirmation) {
+      throw new Error(l10n('La transaction construite par Rust ne correspond pas à la demande', 'The transaction built by Rust does not match the request'));
+    }
+    return { family: 'xlm', envelope: built.envelope, summary: s, context: built.context, recipient: to, amount, ...(memo ? { memo } : {}), createsAccount: false, maxFee: BigInt(s.fee), size: { family: 'xlm' } };
   }
 
   /** No fee to choose: Rust bids from Horizon's fee stats (≤ 0.01 XLM); usually 100 stroops are charged. */
@@ -232,7 +307,8 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
 
   /** `ChainAdapter` entry point. `max`: spendable (balance − reserve) minus the fee Rust bids, built twice. */
   async buildTx(params: BuildParams): Promise<StellarUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif Stellar inattendu (XLM seulement)');
+    if (params.asset.kind === 'xlmasset') return this.buildAssetPayment(params);
+    if (params.asset.kind !== 'native') throw new Error('Actif Stellar inattendu');
     const memo = params.stellarMemo;
     if (!params.max) return this.buildPayment({ to: params.to, stroops: params.amount, ...(memo ? { memo } : {}) });
     const spendable = BigInt((await this.backend.account(this.address)).spendable);

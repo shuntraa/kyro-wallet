@@ -431,7 +431,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const xrpBelowActivation = isXrp && !!xrpDestInfo && !xrpDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XRP_ACTIVATION;
   const xrpTagMissing = isXrp && !!xrpDestInfo?.requireDestTag && tagParsed.tag === undefined;
   // Stellar: creating an account needs at least 2 × base reserve (1 XLM).
-  const xlmBelowActivation = isXlm && !!xlmDestInfo && !xlmDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XLM_ACTIVATION;
+  const xlmBelowActivation = isXlm && asset?.kind === 'native' && !!xlmDestInfo && !xlmDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XLM_ACTIVATION;
   const xlmMemoMissing = isXlm && !!xlmDestInfo?.memoRequired && !xlmMemoParsed.memo;
   const xlmBlocked = isXlm && (!xlmDestInfo || !!xlmMemoParsed.error || xlmMemoMissing || xlmBelowActivation);
   /** XRP: everything that must be right before Rust is even asked to build. */
@@ -485,11 +485,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [building, setBuilding] = useState(false);
   // XRP: what can be sent is the spendable part (balance − reserve), not the balance.
   const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : isCosmos && cosmosMe.data ? BigInt(cosmosMe.data.spendable) : null;
-  const kasSpendable = isKas && kasMe.data ? BigInt(kasMe.data.spendable) : isXlm && xlmMe.data ? BigInt(xlmMe.data.spendable) : null;
+  const kasSpendable = isKas && kasMe.data ? BigInt(kasMe.data.spendable) : isXlm && asset?.kind === 'native' && xlmMe.data ? BigInt(xlmMe.data.spendable) : null;
   // NEAR: likewise, balance − storage reserve.
-  const nearSpendable = isNear && nearMe.data ? BigInt(nearMe.data.spendable) : null;
+  const nearSpendable = isNear && asset?.kind === 'native' && nearMe.data ? BigInt(nearMe.data.spendable) : null;
   // Sui: the address balance is not spent by Kyro, only SUI coin objects.
-  const suiSpendable = isSui && suiMe.data ? BigInt(suiMe.data.coin) : null;
+  const suiSpendable = isSui && asset?.kind === 'native' && suiMe.data ? BigInt(suiMe.data.coin) : null;
   // Polkadot: the existential deposit and the frozen part cannot be sent.
   const dotSpendable = isDot && dotMe.data ? BigInt(dotMe.data.spendable) : null;
   // Algorand: likewise, balance − minimum balance.
@@ -931,7 +931,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {isXlm && <StellarSpendable account={xlmMe.data} hidden={hideBalances} />}
             {xlmBelowActivation && <span className="text-[12px] text-down">{t('send.xlmBelowActivation')}</span>}
             {isNear && <NearSpendable account={nearMe.data} hidden={hideBalances} />}
-            {isSui && <SuiSpendable balance={suiMe.data} hidden={hideBalances} />}
+            {isSui && <SuiSpendable balance={suiMe.data} hidden={hideBalances} token={asset?.kind !== 'native'} />}
             {isHbar && <HbarAccountState account={hbarMe.data} hidden={hideBalances} />}
             {isKas && <KaspaSpendable account={kasMe.data} hidden={hideBalances} />}
             {kasBelowMin && <span className="text-[12px] text-down">{t('send.kasBelowMin')}</span>}
@@ -1291,6 +1291,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 fiat: feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : '',
               })}
               {built.unsigned.context.createsAccount ? t('send.clearNearCreates') : ''}
+              {built.unsigned.summary.token?.storageDeposit ? t('send.clearNearStorage', { amount: fmtCrypto(BigInt(built.unsigned.summary.token.storageDeposit), 24, 'NEAR', 6) }) : ''}
               {built.unsigned.summary.requiresExtraConfirmation ? t('send.clearNearEthStyle') : ''}
             </EnClair>
           )}
@@ -1320,7 +1321,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {built && addrValid && built.unsigned.family === 'sui' && (
             <EnClair tone={built.unsigned.all ? 'warn' : 'ice'}>
               {rt('send.clearSui', { b: (c) => <strong>{c}</strong> }, {
-                amount: built.unsigned.all ? t('send.clearSuiAll', { receives: built.unsigned.context.receives ? t('send.clearSuiReceives', { amount: fmtCrypto(BigInt(built.unsigned.context.receives), 9, 'SUI') }) : '' }) : fmtCrypto(built.unsigned.amount, 9, 'SUI'),
+                amount: built.unsigned.summary.token ? fmtCrypto(built.unsigned.amount, built.unsigned.summary.token.decimals, built.unsigned.summary.token.symbol) : built.unsigned.all ? t('send.clearSuiAll', { receives: built.unsigned.context.receives ? t('send.clearSuiReceives', { amount: fmtCrypto(BigInt(built.unsigned.context.receives), 9, 'SUI') }) : '' }) : fmtCrypto(built.unsigned.amount, 9, 'SUI'),
                 recipient: recipientName,
                 gas: fmtCrypto(BigInt(built.unsigned.context.fee) > 0n ? BigInt(built.unsigned.context.fee) : 0n, 9, 'SUI'),
                 max: fmtCrypto(built.unsigned.maxFee, 9, 'SUI'),
@@ -1338,7 +1339,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'apt' && (
             <EnClair>
               {rt('send.clearApt', { b: (c) => <strong>{c}</strong> }, { amount: fmtCrypto(sendAmount, decimals, asset.symbol), recipient: recipientName, fee: fmtCrypto(built.unsigned.estimatedFee, 8, 'APT', 8), max: fmtCrypto(built.unsigned.maxFee, 8, 'APT', 8) })}
-              {built.unsigned.context.recipientNew ? t('send.clearAptCreates') : ''}
+              {built.unsigned.context.recipientNew && !built.unsigned.summary.token ? t('send.clearAptCreates') : ''}
             </EnClair>
           )}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'cosmos' && (
@@ -1480,7 +1481,7 @@ function dataLabel(b: Built | null, family?: string): string {
   if (u.family === 'dot') return `transfer_keep_alive · nonce ${u.summary.nonce}`;
   if (u.family === 'kas') return `${tp('send.dataInputs', u.summary.inputs)} · ${tp('send.dataOutputs', u.summary.outputs.length)} · ${u.summary.mass.total} g`;
   if (u.family === 'hbar') return `CryptoTransfer · ${u.summary.memo !== null ? t('send.dataMemo') : t('send.dataNoMemo')} · ${t('send.dataHbarNodes', { n: u.summary.nodes.length })}`;
-  if (u.family === 'sui') return u.all ? t('send.dataSuiAll') : 'SplitCoins + TransferObjects';
+  if (u.family === 'sui') return u.summary.token ? `${(u.summary.token.coins.length > 1 ? 'MergeCoins + ' : '')}${u.all ? '' : 'SplitCoins + '}TransferObjects · ${u.summary.token.symbol}` : u.all ? t('send.dataSuiAll') : 'SplitCoins + TransferObjects';
   if (u.family === 'near') return `Transfer · nonce ${u.summary.nonce}${u.context.createsAccount ? ` · ${t('send.dataNearCreates')}` : ''}`;
   if (u.family === 'xlm') return `${u.createsAccount ? 'CreateAccount' : 'Payment'}${u.memo ? ` · ${t('send.dataXlmMemo', { kind: u.memo.kind === 'id' ? t('send.dataXlmMemoId') : u.memo.kind })}` : ` · ${t('send.dataNoMemo')}`}`;
   if (u.family === 'xrp') return `Payment${u.summary.destinationTag !== null ? ` · tag ${u.summary.destinationTag}` : ` · ${t('send.dataNoTag')}`}`;

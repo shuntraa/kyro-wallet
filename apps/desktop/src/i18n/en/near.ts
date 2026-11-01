@@ -35,4 +35,12 @@ export const near: Record<keyof typeof fr, string> = {
   'near.failed': '<b>Failed:</b> the network rejected the transfer{detail}. The amount returns to your account; the fee is charged.',
   'near.late': 'Still not executed after 2 minutes. Check the history before sending again: the transaction stays valid for about 24 h.',
   'near.trackError': 'Tracking unavailable for now: {message}',
+  'near.lToken': 'Token (NEP-141)',
+  'near.lTokenValue': '{symbol} · {decimals} decimals (Kyro’s table)',
+  'near.lContract': 'Verified contract',
+  'near.lTokenTo': 'Token recipient',
+  'near.lTokenAmount': 'Amount',
+  'near.lStorage': 'Recipient registration',
+  'near.lStorageValue': 'storage_deposit paid by you: {amount}',
+  'near.lStorageNone': 'already registered',
 };

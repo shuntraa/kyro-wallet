@@ -44,6 +44,7 @@ fn transfer_vector() -> NearTransfer {
         receiver_id: "whatever.near".into(),
         block_hash: near_parse_hash("244ZQ9cgj3CQ6bWBdytfrJMuMQ1jdXLFGnr4HhvtCTnM").unwrap(),
         deposit: 1,
+        ft: None,
     }
 }
 
@@ -151,6 +152,7 @@ fn decode_and_sign_our_transfer() {
         receiver_id: "kyro-test.testnet".into(),
         block_hash: [3; 32],
         deposit: 1_500_000_000_000_000_000_000, // 0.0015 NEAR
+        ft: None,
     };
     let raw = hex::encode(tx.encode());
     let summary = near_decode_tx(&raw, &me, &pk).unwrap();
@@ -234,6 +236,7 @@ fn hardware_wallet_message_and_signature() {
         receiver_id: "kyro-test.testnet".into(),
         block_hash: [3; 32],
         deposit: 1,
+        ft: None,
     };
     let raw = hex::encode(tx.encode());
     // Ledger NEAR app: the Borsh transaction itself (the app hashes it).
@@ -249,4 +252,167 @@ fn hardware_wallet_message_and_signature() {
     bad[5] ^= 1;
     assert!(wallet_core::near_hw_signed(&raw, &bad).is_err());
     assert!(wallet_core::near_hw_message("zz").is_err());
+}
+
+// ---------------------------------------------------------------- NEP-141 (USDC, USDt)
+
+/// Borsh of a transaction with the given function calls, written independently of wallet-core.
+fn raw_calls(tx: &NearTransfer, calls: &[(&str, &str, u64, u128)]) -> Vec<u8> {
+    let s = |o: &mut Vec<u8>, b: &[u8]| {
+        o.extend_from_slice(&(b.len() as u32).to_le_bytes());
+        o.extend_from_slice(b);
+    };
+    let mut o = Vec::new();
+    s(&mut o, tx.signer_id.as_bytes());
+    o.push(0);
+    o.extend_from_slice(&tx.public_key);
+    o.extend_from_slice(&tx.nonce.to_le_bytes());
+    s(&mut o, tx.receiver_id.as_bytes());
+    o.extend_from_slice(&tx.block_hash);
+    o.extend_from_slice(&(calls.len() as u32).to_le_bytes());
+    for (m, args, gas, dep) in calls {
+        o.push(2);
+        s(&mut o, m.as_bytes());
+        s(&mut o, args.as_bytes());
+        o.extend_from_slice(&gas.to_le_bytes());
+        o.extend_from_slice(&dep.to_le_bytes());
+    }
+    o
+}
+
+#[test]
+fn nep141_transfers_layout_sign_and_refusals() {
+    use wallet_core::{near_known_token, NearFtTransfer, NEAR_FT_GAS};
+    let s = seed(ABANDON);
+    let me = near_address(&s, 0).unwrap();
+    let pk = near_public_key(&s, 0).unwrap();
+    let usdt = "usdt.tether-token.near";
+    assert_eq!(
+        near_known_token(usdt).map(|(k, tn)| (k.decimals, tn)),
+        Some((6, false))
+    );
+    assert!(near_known_token("usdt.fake.near").is_none());
+    let base = NearTransfer {
+        signer_id: me.clone(),
+        public_key: pk,
+        nonce: 5,
+        receiver_id: usdt.into(),
+        block_hash: [4; 32],
+        deposit: 0,
+        ft: Some(NearFtTransfer {
+            recipient: "bob.near".into(),
+            amount: 2_500_000,
+            storage_deposit: Some(1_250_000_000_000_000_000_000),
+        }),
+    };
+    let args_sd = r#"{"account_id":"bob.near","registration_only":true}"#;
+    let args_ft = r#"{"receiver_id":"bob.near","amount":"2500000"}"#;
+    let expected = raw_calls(
+        &base,
+        &[
+            (
+                "storage_deposit",
+                args_sd,
+                NEAR_FT_GAS,
+                1_250_000_000_000_000_000_000,
+            ),
+            ("ft_transfer", args_ft, NEAR_FT_GAS, 1),
+        ],
+    );
+    assert_eq!(base.encode(), expected);
+    assert_eq!(NearTransfer::decode(&expected).unwrap(), base);
+    let sm = near_decode_tx(&hex::encode(&expected), &me, &pk).unwrap();
+    let t = sm.token.clone().unwrap();
+    assert_eq!(sm.receiver_id, usdt);
+    assert_eq!(sm.deposit, "1250000000000000000001");
+    assert_eq!(
+        (t.symbol.as_str(), t.decimals, t.testnet),
+        ("USDT", 6, false)
+    );
+    assert_eq!(
+        (t.recipient.as_str(), t.amount.as_str()),
+        ("bob.near", "2500000")
+    );
+    assert_eq!(t.storage_deposit.as_deref(), Some("1250000000000000000000"));
+    let (signed, hash, again) = near_sign(&s, 0, &hex::encode(&expected)).unwrap();
+    assert_eq!(again, sm);
+    assert_eq!(near_verify_signed(&signed).unwrap().1, hash);
+    // Registered recipient: ft_transfer alone.
+    let mut one = base.clone();
+    one.ft.as_mut().unwrap().storage_deposit = None;
+    assert_eq!(
+        one.encode(),
+        raw_calls(&one, &[("ft_transfer", args_ft, NEAR_FT_GAS, 1)])
+    );
+    let s1 = near_decode_tx(&hex::encode(one.encode()), &me, &pk).unwrap();
+    assert_eq!(s1.deposit, "1");
+    assert_eq!(s1.token.unwrap().storage_deposit, None);
+    // Refused: unknown contract, a memo, other gas or deposit, a non-canonical JSON, storage for
+    // someone else, a third action, another method, a zero amount, a transfer to ourselves.
+    let refused = |raw: Vec<u8>, why: &str| {
+        assert!(
+            near_decode_tx(&hex::encode(raw), &me, &pk).is_err(),
+            "{why}"
+        );
+    };
+    let mut fake = one.clone();
+    fake.receiver_id = "usdt.fake.near".into();
+    refused(
+        raw_calls(&fake, &[("ft_transfer", args_ft, NEAR_FT_GAS, 1)]),
+        "unknown contract",
+    );
+    let memo = r#"{"receiver_id":"bob.near","amount":"2500000","memo":"x"}"#;
+    refused(
+        raw_calls(&one, &[("ft_transfer", memo, NEAR_FT_GAS, 1)]),
+        "memo",
+    );
+    refused(
+        raw_calls(&one, &[("ft_transfer", args_ft, NEAR_FT_GAS * 10, 1)]),
+        "gas",
+    );
+    refused(
+        raw_calls(&one, &[("ft_transfer", args_ft, NEAR_FT_GAS, 2)]),
+        "deposit",
+    );
+    let spaced = r#"{"receiver_id": "bob.near","amount":"2500000"}"#;
+    refused(
+        raw_calls(&one, &[("ft_transfer", spaced, NEAR_FT_GAS, 1)]),
+        "non-canonical",
+    );
+    let other = r#"{"account_id":"eve.near","registration_only":true}"#;
+    refused(
+        raw_calls(
+            &one,
+            &[
+                ("storage_deposit", other, NEAR_FT_GAS, 1),
+                ("ft_transfer", args_ft, NEAR_FT_GAS, 1),
+            ],
+        ),
+        "storage for another account",
+    );
+    refused(
+        raw_calls(
+            &one,
+            &[
+                ("storage_deposit", args_sd, NEAR_FT_GAS, 1),
+                ("ft_transfer", args_ft, NEAR_FT_GAS, 1),
+                ("ft_transfer", args_ft, NEAR_FT_GAS, 1),
+            ],
+        ),
+        "three actions",
+    );
+    refused(
+        raw_calls(&one, &[("ft_transfer_call", args_ft, NEAR_FT_GAS, 1)]),
+        "ft_transfer_call",
+    );
+    let zero = r#"{"receiver_id":"bob.near","amount":"0"}"#;
+    refused(
+        raw_calls(&one, &[("ft_transfer", zero, NEAR_FT_GAS, 1)]),
+        "zero",
+    );
+    let selfa = format!(r#"{{"receiver_id":"{me}","amount":"1"}}"#);
+    refused(
+        raw_calls(&one, &[("ft_transfer", &selfa, NEAR_FT_GAS, 1)]),
+        "self",
+    );
 }

@@ -33,4 +33,12 @@ export const near = {
   'near.failed': '<b>Échoué :</b> le réseau a refusé le transfert{detail}. Le montant revient sur ton compte ; les frais sont prélevés.',
   'near.late': 'Toujours pas exécuté après 2 minutes. Vérifie l’historique avant de renvoyer : la transaction reste valable environ 24 h.',
   'near.trackError': 'Suivi impossible pour l’instant : {message}',
+  'near.lToken': 'Jeton (NEP-141)',
+  'near.lTokenValue': '{symbol} · {decimals} décimales (table de Kyro)',
+  'near.lContract': 'Contrat vérifié',
+  'near.lTokenTo': 'Destinataire des jetons',
+  'near.lTokenAmount': 'Montant',
+  'near.lStorage': 'Inscription du destinataire',
+  'near.lStorageValue': 'storage_deposit payé par toi : {amount}',
+  'near.lStorageNone': 'déjà inscrit',
 } as const;

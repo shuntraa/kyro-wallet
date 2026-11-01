@@ -71,7 +71,7 @@ export interface WatchOnlyChain {
   phase: 4;
 }
 
-export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'jetton';
+export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'jetton' | 'suicoin' | 'fa' | 'xlmasset' | 'nep141';
 
 export interface AssetDef {
   /** Unique id, e.g. `btc`, `eth:1`, `erc20:11155111:0x1c7d…`. */
@@ -837,6 +837,57 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
 };
 
 /** SPL tokens (Token or Token-2022: the program is read from the mint account). Same selection. */
+/**
+ * Sui coin types (`contract` = full coin type `0x…::module::NAME`). USDC: Circle's native USDC
+ * (developers.circle.com › USDC contract addresses, mainnet and testnet), cross-checked with
+ * CoinGecko `usd-coin` (platform `sui`); `CoinMetadata.decimals` = 6 read on chain (2026-11-01).
+ * No USDT: Tether lists no Sui deployment (tether.to › supported protocols), bridged copies are
+ * left out. wallet-core (`sui_tx.rs`, `sui_known_coins`) holds the same list (checked by
+ * known_tokens.rs tests against the generated fixture).
+ */
+export const SUI_COINS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC')],
+  mainnet: [USDC('0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC')],
+};
+
+/**
+ * Aptos fungible assets (`contract` = metadata object `0x` + 64 hex). USDC: Circle's native USDC
+ * (developers.circle.com, mainnet and testnet), USDt: Tether's « Object Asset ID »
+ * (tether.to › supported protocols, mainnet only); both cross-checked with CoinGecko
+ * (`usd-coin` / `tether`, platform `aptos`), `fungible_asset::Metadata` read on chain
+ * (decimals 6, 2026-11-01). wallet-core (`aptos.rs`, `aptos_known_assets`) holds the same list.
+ */
+export const APTOS_ASSETS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832')],
+  mainnet: [USDC('0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b'), USDT('0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b')],
+};
+
+/**
+ * Stellar issued assets (`contract` = `CODE-ISSUER`, the form Circle publishes; asset id
+ * `xlm:CODE:ISSUER`, the history's). USDC: issuer GA5Z…KZVN (developers.circle.com › USDC
+ * contract addresses), whose `home_domain` is circle.com and listed in circle.com's
+ * stellar.toml (read 2026-11-01); testnet issuer from the same page. Amounts: 7 decimals (every
+ * Stellar asset). Receiving needs a trustline (« Activer USDC », one 0.5 XLM base reserve).
+ * wallet-core (`stellar.rs`, `stellar_known_assets`) holds the same list.
+ */
+export const STELLAR_ASSETS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5', 7)],
+  mainnet: [USDC('USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN', 7)],
+};
+
+/**
+ * NEAR NEP-141 tokens (`contract` = token account). USDC: Circle's native USDC
+ * (developers.circle.com, mainnet and testnet), USDt: `usdt.tether-token.near`
+ * (tether.to › supported protocols, mainnet only); cross-checked with CoinGecko (`usd-coin` /
+ * `tether`, platform `near-protocol`), `ft_metadata` read on chain (decimals 6, 2026-11-01).
+ * Sending to an unregistered recipient adds `storage_deposit` (≈ 0.00125 NEAR, paid by the
+ * sender). wallet-core (`near.rs`, `near_known_tokens`) holds the same list.
+ */
+export const NEAR_TOKENS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af')],
+  mainnet: [USDC('17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1'), USDT('usdt.tether-token.near')],
+};
+
 export const SPL_TOKENS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')],
   mainnet: [
@@ -961,6 +1012,26 @@ export function assetsFor(network: Network): AssetDef[] {
     if (chain.family === 'sol') {
       for (const t of SPL_TOKENS[network]) {
         out.push({ id: `spl:${t.contract}`, chainKey: chain.key, family: 'sol', kind: 'spl', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'sui') {
+      for (const t of SUI_COINS[network]) {
+        out.push({ id: `suicoin:${t.contract}`, chainKey: chain.key, family: 'sui', kind: 'suicoin', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'apt') {
+      for (const t of APTOS_ASSETS[network]) {
+        out.push({ id: `fa:${t.contract}`, chainKey: chain.key, family: 'apt', kind: 'fa', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'xlm') {
+      for (const t of STELLAR_ASSETS[network]) {
+        out.push({ id: `xlm:${t.contract.replace('-', ':')}`, chainKey: chain.key, family: 'xlm', kind: 'xlmasset', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'near') {
+      for (const t of NEAR_TOKENS[network]) {
+        out.push({ id: `nep141:${t.contract}`, chainKey: chain.key, family: 'near', kind: 'nep141', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
       }
     }
   }

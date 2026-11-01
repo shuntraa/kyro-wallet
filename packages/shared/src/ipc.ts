@@ -744,6 +744,8 @@ export interface StellarTrustline {
   issuer: string;
   balance: string;
   limit: string;
+  /** The issuer authorizes this account to hold the asset (Horizon `is_authorized`). */
+  authorized?: boolean;
 }
 
 /** `stellar_account`: Horizon `/accounts/{id}` + base reserve of the latest ledger. Amounts: stroops. */
@@ -890,6 +892,24 @@ export interface NearTxSummary {
   hash: string;
   warnings: NearWarning[];
   requiresExtraConfirmation: boolean;
+  /** NEP-141 transfer (`receiverId` = the known token contract; `deposit` = NEAR attached: 1 yocto + storage deposit). */
+  token?: NearTokenSummary | null;
+}
+
+/** wallet-core `NearTokenSummary`. */
+export interface NearTokenSummary {
+  contract: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  /** The contract is Kyro's testnet one. */
+  testnet: boolean;
+  recipient: string;
+  recipientKind: NearAccountKind;
+  /** Token units. */
+  amount: string;
+  /** yoctoNEAR paid to register the recipient (`storage_deposit`), null if already registered. */
+  storageDeposit: string | null;
 }
 
 /** Live context Rust read for the dialog. Fees are not in a NEAR transaction: `feeBound` is Kyro's bound. */
@@ -901,6 +921,8 @@ export interface NearContext {
   gasPrice: string;
   feeEstimate: string;
   feeBound: string;
+  /** Token transfer: our token balance (units), recipient registered with the token. */
+  token?: { balance: string; recipientRegistered: boolean } | null;
 }
 
 /** `near_txs` entry (last 20, newest first). `deposit`: the transaction's own Transfer actions. */
@@ -915,6 +937,8 @@ export interface NearHistoryEntry {
   /** ms epoch. */
   time: number | null;
   success: boolean;
+  /** NEP-141 `ft_transfer` events of known token contracts involving the account (receipts executed by those contracts only). */
+  tokens?: Array<{ contract: string; direction: 'in' | 'out'; amount: string; counterparty: string }>;
 }
 
 export interface NearTxOutcome {
@@ -952,9 +976,9 @@ export type SuiWarning = { kind: 'sendAll' } | { kind: 'selfTransfer' } | { kind
 export interface SuiTxSummary {
   sender: string;
   recipient: string;
-  /** Always `0x2::sui::SUI`. */
+  /** `0x2::sui::SUI`, or the known token's coin type (token transfer). */
   coinType: string;
-  /** MIST; null = the whole balance of the gas coins minus the gas used. */
+  /** MIST; null = the whole balance of the gas coins minus the gas used (token: token units; null = the whole balance of the token coins). */
   amount: string | null;
   /** MIST. */
   gasBudget: string;
@@ -966,6 +990,30 @@ export interface SuiTxSummary {
   digest: string;
   warnings: SuiWarning[];
   requiresExtraConfirmation: boolean;
+  /** Token transfer (known coin type, objects checked live by Rust); null for SUI. */
+  token?: SuiTokenSummary | null;
+}
+
+/** wallet-core `SuiTokenSummary`. */
+export interface SuiTokenSummary {
+  /** Verified coin type, e.g. Circle's `0xdba3…::usdc::USDC`. */
+  coinType: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  /** Token coin objects sent (merged into the first). */
+  coins: Array<{ objectId: string; version: string; digest: string }>;
+}
+
+/** `sui_token_balances` line (one per known token), token units. */
+export interface SuiTokenBalance {
+  coinType: string;
+  symbol: string;
+  decimals: number;
+  total: string;
+  /** Held in coin objects: what Kyro can send. */
+  coin: string;
+  addressBalance: string;
 }
 
 /** Live context Rust read for the dialog (MIST): balance, gas coins, simulation. */
@@ -983,6 +1031,8 @@ export interface SuiContext {
   fee: string;
   /** Whole-balance transfer: what the recipient receives according to the simulation. */
   receives: string | null;
+  /** Token transfer: token coins read live (token units). */
+  token?: { balance: string; coinsTotal: string; coinBalances: string[] } | null;
 }
 
 /** `sui_txs` entry: last 20 transactions touching the address, newest first. */
@@ -998,8 +1048,10 @@ export interface SuiHistoryEntry {
   /** Net gas paid (MIST) when the address sent it. */
   fee: string | null;
   counterparty: string | null;
-  /** Other coin types moved for the address (not detailed). */
+  /** Other coin types moved for the address (not detailed; known tokens excluded). */
   otherCoins: boolean;
+  /** Known tokens moved for the address: net change (token units, signed) and the other side. */
+  tokens?: Array<{ coinType: string; change: string; counterparty: string | null }>;
 }
 
 export interface SuiTxStatus {
@@ -1722,16 +1774,48 @@ export interface AptosTxSummary {
   chainId: number;
   warnings: AptosWarning[];
   requiresExtraConfirmation: boolean;
+  /** Known fungible asset (`0x1::primary_fungible_store::transfer`); null for APT. `amount` is then in token units. */
+  token?: AptosTokenSummary | null;
+}
+
+/** wallet-core `AptosTokenSummary` (metadata object checked against Kyro's list for the chain id). */
+export interface AptosTokenSummary {
+  metadata: string;
+  symbol: string;
+  name: string;
+  decimals: number;
 }
 
 /** Live context Rust read for the dialog. */
 export interface AptosContext {
   account: AptosAccountInfo;
-  /** The recipient has nothing yet: the transfer creates its account. */
+  /** The recipient has nothing yet: the transfer creates its account (token: its store for that token). */
   recipientNew: boolean;
   /** Simulated gas units (fee ≈ gasUsed × gasUnitPrice). */
   gasUsed: string;
   ledgerTime: number;
+  /** Token transfer: our live balance of the token (units). */
+  tokenBalance?: string | null;
+}
+
+/** `aptos_token_balances` line (one per known fungible asset). */
+export interface AptosTokenBalance {
+  metadata: string;
+  symbol: string;
+  decimals: number;
+  balance: string;
+}
+
+/** `aptos_token_txs` entry (indexer, known metadata objects only). */
+export interface AptosTokenHistoryEntry {
+  version: string;
+  hash: string | null;
+  time: number | null;
+  metadata: string;
+  direction: 'in' | 'out' | 'self';
+  amount: string;
+  counterparty: string | null;
+  success: boolean;
 }
 
 /** `aptos_txs` entry (indexer, newest first). Amounts: octas. */
@@ -2577,6 +2661,10 @@ export interface Commands {
    */
   stellar_build_tx: { args: { to: string; amount: string; memo?: StellarMemoSpec } & WithAccount; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
   stellar_sign_tx: { args: { envelope: string; password: string } & WithAccount; ret: { envelope: string; hash: string; summary: StellarTxSummary; context: StellarContext } };
+  /** Payment of a known issued asset (`asset` = `CODE-ISSUER`, Circle's USDC); `amount` in units of 7 decimals. Refused: recipient without an authorized trustline, our trustline short. */
+  stellar_build_asset_tx: { args: { asset: string; to: string; amount: string; memo?: StellarMemoSpec } & WithAccount; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
+  /** ChangeTrust of a known asset: `enable` = no limit (one base reserve locked), else limit 0 (zero balance only). Signed by `stellar_sign_tx`. */
+  stellar_build_trust_tx: { args: { asset: string; enable: boolean } & WithAccount; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
   /** Horizon waits for the ledger: the hash comes back once included and successful; else INVALID_INPUT with the result codes. */
   stellar_broadcast: { args: { envelope: string } & WithAccount; ret: string };
   stellar_tx_status: { args: { hash: string }; ret: { found: boolean; successful: boolean } };
@@ -2593,6 +2681,10 @@ export interface Commands {
    * `amount`: yoctoNEAR. Refused before building: our account not on chain; a named or `0x…`
    * receiver that does not exist; amount + fee bound > spendable; a key without full access.
    */
+  /** Known NEP-141 tokens only (USDC, USDt): balance and registration of `accountId`. */
+  near_token_balances: { args: { accountId: string }; ret: Array<{ contract: string; symbol: string; decimals: number; balance: string; registered: boolean }> };
+  /** NEP-141 transfer of a known `contract`: `amount` in token units; `storage_deposit` added for an unregistered recipient (paid in NEAR). Signed by `near_sign_tx`. */
+  near_build_token_tx: { args: { contract: string; to: string; amount: string } & WithAccount; ret: { tx: string; summary: NearTxSummary; context: NearContext } };
   near_build_tx: { args: { to: string; amount: string } & WithAccount; ret: { tx: string; summary: NearTxSummary; context: NearContext } };
   /** Stale nonce or a block older than ≈ 1 h → INVALID_INPUT « reconstruis ». */
   near_sign_tx: { args: { tx: string; password: string } & WithAccount; ret: { signed: string; hash: string; summary: NearTxSummary; context: NearContext } };
@@ -2613,7 +2705,12 @@ export interface Commands {
    * simulation.
    */
   sui_build_tx: { args: { to: string; amount?: string; all?: boolean } & WithAccount; ret: SuiBuilt };
-  sui_sign_tx: { args: { bcs: string; password: string } & WithAccount; ret: SuiBuilt & { signature: string; digest: string } };
+  /** Known tokens only (Circle's USDC). */
+  sui_token_balances: { args: { address: string }; ret: SuiTokenBalance[] };
+  /** Token transfer of a known `coinType`: `amount` in token units or `all`; gas paid in SUI. */
+  sui_build_token_tx: { args: { coinType: string; to: string; amount?: string; all?: boolean } & WithAccount; ret: SuiBuilt };
+  /** `coinType`: required for a token transfer (Rust re-checks every token coin live). */
+  sui_sign_tx: { args: { bcs: string; password: string; coinType?: string } & WithAccount; ret: SuiBuilt & { signature: string; digest: string } };
   /** Signature checked (ed25519 by our key over these bytes), executed, effects digest = ours. */
   sui_broadcast: { args: { bcs: string; signature: string } & WithAccount; ret: string };
   /** Not indexed yet: `found: false`. */
@@ -2733,6 +2830,11 @@ export interface Commands {
   /** `amount`: octas. Refused: rotated key, amount + max fee > balance, failing simulation. */
   aptos_build_tx: { args: { to: string; amount: string } & WithAccount; ret: { raw: string; summary: AptosTxSummary; context: AptosContext } };
   aptos_sign_tx: { args: { raw: string; password: string } & WithAccount; ret: { signed: string; hash: string; summary: AptosTxSummary; context: AptosContext } };
+  /** Known fungible assets only (USDC, USDt). */
+  aptos_token_balances: { args: { address: string }; ret: AptosTokenBalance[] };
+  aptos_token_txs: { args: { address: string }; ret: AptosTokenHistoryEntry[] };
+  /** `metadata`: known metadata object; `amount` in token units; gas in APT. Signed by `aptos_sign_tx` (metadata in the bytes). */
+  aptos_build_token_tx: { args: { metadata: string; to: string; amount: string } & WithAccount; ret: { raw: string; summary: AptosTxSummary; context: AptosContext } };
   /** Signature checked (single ed25519 key = sender); the node's hash must be ours. */
   aptos_broadcast: { args: { signed: string } & WithAccount; ret: string };
   aptos_tx_status: { args: { hash: string }; ret: { committed: boolean; success: boolean; vmStatus: string } };

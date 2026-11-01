@@ -209,6 +209,113 @@ pub async fn account(ctx: &AptosCtx<'_>, address: &str) -> AppResult<AptosAccoun
     })
 }
 
+/// Balance of the fungible asset `metadata` (`0x` + 64 hex) in `address`'s primary store, in
+/// token units (`/accounts/{a}/balance/{metadata}`, 0 when the store does not exist).
+pub async fn fa_balance(ctx: &AptosCtx<'_>, address: &str, metadata: &str) -> AppResult<u64> {
+    let a = wallet_core::aptos_address_string(&wallet_core::aptos_parse_address(address)?);
+    let m = wallet_core::aptos_address_string(&wallet_core::aptos_parse_address(metadata)?);
+    let (status, b) = get(ctx, &format!("/accounts/{a}/balance/{m}")).await?;
+    match status {
+        200 => u64_at(&b).ok_or_else(|| bad("Aptos : solde de jeton illisible")),
+        404 => Ok(0),
+        _ => Err(api_error("/balance", status, &b)),
+    }
+}
+
+/// Movements of the known fungible assets for `address` (indexer `fungible_asset_activities`,
+/// asset types = the known metadata objects only), merged per transaction and asset:
+/// `[{ version, hash, time, metadata, direction, amount, counterparty, success }]`.
+/// Counterparty: the recipient of our own `primary_fungible_store::transfer` calls.
+pub async fn token_txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
+    let a = wallet_core::aptos_address_string(&wallet_core::aptos_parse_address(address)?);
+    let known: Vec<&str> = wallet_core::aptos_known_assets(ctx.chain_id)
+        .iter()
+        .map(|k| k.metadata)
+        .collect();
+    if known.is_empty() {
+        return Ok(json!([]));
+    }
+    let query = "query($a:String!,$t:[String!]!,$n:Int!){fungible_asset_activities(where:{owner_address:{_eq:$a},asset_type:{_in:$t},is_gas_fee:{_eq:false}},limit:$n,order_by:{transaction_version:desc}){transaction_version transaction_timestamp type amount asset_type is_transaction_success}}";
+    let body = json!({ "query": query, "variables": { "a": a, "t": known, "n": MAX_TXS * 2 } })
+        .to_string();
+    let req = ServerRequest::post_json(url(ctx, "/graphql")?, Family::Aptos, body);
+    let (status, v) = send(ctx, req, "/graphql").await?;
+    if status != 200 || v["errors"].is_array() {
+        return Err(bad(format!(
+            "Aptos : indexeur indisponible (HTTP {status}) {}",
+            v["errors"][0]["message"].as_str().unwrap_or("")
+        )));
+    }
+    let (status, sent) = get(ctx, &format!("/accounts/{a}/transactions?limit=50")).await?;
+    let sent = if status == 200 { sent } else { json!([]) };
+    let mut by_version: std::collections::BTreeMap<u64, Value> = Default::default();
+    for t in sent.as_array().into_iter().flatten() {
+        if let Some(ver) = u64_at(&t["version"]) {
+            by_version.insert(ver, t.clone());
+        }
+    }
+    // (version, metadata) → (time, deposit, withdraw, success)
+    type Movement = (Option<String>, u128, u128, bool);
+    let mut agg: std::collections::BTreeMap<(u64, String), Movement> = Default::default();
+    for e in v["data"]["fungible_asset_activities"]
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let (Some(ver), Some(m)) = (u64_at(&e["transaction_version"]), e["asset_type"].as_str())
+        else {
+            continue;
+        };
+        if !known.contains(&m) {
+            continue;
+        }
+        let amt = u128::from(u64_at(&e["amount"]).unwrap_or(0));
+        let g = agg.entry((ver, m.to_owned())).or_insert((
+            e["transaction_timestamp"].as_str().map(str::to_owned),
+            0,
+            0,
+            e["is_transaction_success"] == true,
+        ));
+        let ty = e["type"].as_str().unwrap_or("");
+        if ty.ends_with("::Deposit") || ty.ends_with("::DepositEvent") {
+            g.1 += amt;
+        } else if ty.ends_with("::Withdraw") || ty.ends_with("::WithdrawEvent") {
+            g.2 += amt;
+        }
+    }
+    let mut out = Vec::new();
+    for ((ver, m), (time, dep, wd, success)) in agg.into_iter().rev().take(MAX_TXS as usize) {
+        let (direction, amount) = if wd > dep {
+            ("out", wd - dep)
+        } else if dep > wd {
+            ("in", dep - wd)
+        } else {
+            ("self", 0)
+        };
+        let s = by_version.get(&ver);
+        let counterparty = s
+            .filter(|t| {
+                t["payload"]["function"] == wallet_core::APTOS_FA_TRANSFER_FUNCTION
+                    && t["payload"]["arguments"][0]["inner"].as_str() == Some(m.as_str())
+            })
+            .and_then(|t| t["payload"]["arguments"][1].as_str().map(str::to_owned));
+        let time = s
+            .and_then(|t| u64_at(&t["timestamp"]).map(|us| us / 1000))
+            .or_else(|| time.as_deref().and_then(parse_utc_ms));
+        out.push(json!({
+            "version": ver.to_string(),
+            "hash": s.and_then(|t| t["hash"].as_str()),
+            "time": time,
+            "metadata": m,
+            "direction": direction,
+            "amount": amount.to_string(),
+            "counterparty": counterparty,
+            "success": success,
+        }));
+    }
+    Ok(Value::Array(out))
+}
+
 /// `gas_estimate` of `/estimate_gas_price` (octas per gas unit).
 pub async fn gas_price(ctx: &AptosCtx<'_>) -> AppResult<u64> {
     let (status, v) = get(ctx, "/estimate_gas_price").await?;

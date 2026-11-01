@@ -68,11 +68,7 @@ pub use algorand::{
 };
 pub use aptos::{
     aptos_address, aptos_address_bytes_of_pubkey, aptos_address_of_pubkey, aptos_address_string,
-    aptos_decode_tx, aptos_hw_message, aptos_hw_signed, aptos_parse_address, aptos_path,
-    aptos_public_key, aptos_sign, aptos_signing_message, aptos_simulation_bytes, aptos_tx_hash,
-    aptos_verify_signed, AptosTransfer, AptosTxSummary, AptosWarning, APTOS_ED25519_SCHEME,
-    APTOS_HIGH_FEE_OCTAS, APTOS_MAINNET_CHAIN_ID, APTOS_TESTNET_CHAIN_ID, APTOS_TRANSFER_FUNCTION,
-    OCTAS_PER_APT,
+    aptos_decode_tx, aptos_hw_message, aptos_hw_signed, aptos_known_asset, aptos_known_assets, aptos_parse_address, aptos_path, aptos_public_key, aptos_sign, aptos_signing_message, aptos_simulation_bytes, aptos_tx_hash, aptos_verify_signed, AptosKnownAsset, AptosTokenSummary, AptosTransfer, AptosTxSummary, AptosWarning, APTOS_ED25519_SCHEME, APTOS_FA_TRANSFER_FUNCTION, APTOS_HIGH_FEE_OCTAS, APTOS_MAINNET_CHAIN_ID, APTOS_TESTNET_CHAIN_ID, APTOS_TRANSFER_FUNCTION, OCTAS_PER_APT,
 };
 pub use btc::{
     btc_account, btc_address, btc_decode_psbt, btc_psbt_summary, btc_sign_psbt, BtcAccount,
@@ -162,10 +158,7 @@ pub use monero::{
     XMR_SPENDABLE_AGE, XMR_SUBADDRESS_LOOKAHEAD,
 };
 pub use near::{
-    near_account_kind, near_address, near_decode_tx, near_hash_string, near_hw_message,
-    near_hw_signed, near_parse_hash, near_parse_public_key, near_path, near_public_key,
-    near_public_key_string, near_sign, near_verify_signed, NearAccountKind, NearTransfer,
-    NearTxSummary, NearWarning, NEAR_DECIMALS,
+    near_account_kind, near_address, near_decode_tx, near_hash_string, near_hw_message, near_hw_signed, near_known_token, near_known_tokens, near_parse_hash, near_parse_public_key, near_path, near_public_key, near_public_key_string, near_sign, near_verify_signed, NearAccountKind, NearFtTransfer, NearKnownToken, NearTokenSummary, NearTransfer, NearTxSummary, NearWarning, NEAR_DECIMALS, NEAR_FT_GAS, NEAR_MAX_STORAGE_DEPOSIT,
 };
 pub use network::{BtcKind, Network};
 pub use polkadot::{
@@ -190,21 +183,19 @@ pub use sol_stake::{
 };
 pub use stellar::{
     stellar_account_id, stellar_address, stellar_address_from_key, stellar_asset,
-    stellar_decode_tx, stellar_muxed_parts, stellar_network_passphrase, stellar_path,
-    stellar_public_key, stellar_sign, stellar_verify_signed, StellarAsset, StellarAssetView,
-    StellarEnvelope, StellarMemo, StellarMemoView, StellarOp, StellarOpView, StellarOperation,
-    StellarSignature, StellarTransaction, StellarTxSummary, StellarWarning,
-    STELLAR_HIGH_FEE_STROOPS, STELLAR_MAINNET_PASSPHRASE, STELLAR_MAX_MEMO_TEXT,
-    STELLAR_TESTNET_PASSPHRASE, STROOPS_PER_XLM,
+    stellar_decode_tx, stellar_known_asset, stellar_known_assets, stellar_muxed_parts,
+    stellar_network_passphrase, stellar_path, stellar_public_key, stellar_sign,
+    stellar_verify_signed, StellarAsset, StellarAssetView, StellarEnvelope, StellarKnownAsset,
+    StellarMemo, StellarMemoView, StellarOp, StellarOpView, StellarOperation, StellarSignature,
+    StellarTransaction, StellarTxSummary, StellarWarning, STELLAR_HIGH_FEE_STROOPS,
+    STELLAR_MAINNET_PASSPHRASE, STELLAR_MAX_MEMO_TEXT, STELLAR_TESTNET_PASSPHRASE, STROOPS_PER_XLM,
 };
 pub use sui::{
     sui_address, sui_address_bytes_of_pubkey, sui_address_of_pubkey, sui_address_string,
     sui_parse_address, sui_path, sui_public_key, SUI_ED25519_FLAG,
 };
 pub use sui_tx::{
-    sui_decode_tx, sui_hw_message, sui_hw_signature, sui_sign, sui_tx_digest, sui_verify_signed,
-    SuiGasCoinView, SuiObjectRef, SuiTransfer, SuiTransferAmount, SuiTxSummary, SuiWarning,
-    MIST_PER_SUI, SUI_COIN_TYPE, SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS,
+    sui_decode_coin_tx, sui_decode_tx, sui_hw_message, sui_hw_signature, sui_known_coin, sui_known_coins, sui_sign, sui_sign_coin, sui_tx_digest, sui_verify_signed, SuiGasCoinView, SuiKnownCoin, SuiObjectRef, SuiTokenSummary, SuiTransfer, SuiTransferAmount, SuiTxSummary, SuiWarning, MIST_PER_SUI, SUI_COIN_TYPE, SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS, SUI_MAX_TOKEN_COINS,
 };
 pub use ton::{
     ton_address, ton_decode_tx, ton_hw_check_comment, ton_hw_request, ton_hw_signed,

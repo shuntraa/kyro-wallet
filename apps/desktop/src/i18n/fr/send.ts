@@ -133,6 +133,7 @@ export const send = {
   'send.clearCosmosMemo': 'Tu envoies <b>{amount}</b> à <b>{recipient}</b> avec le mémo <memo>{memo}</memo>. Frais : {fee}.',
   'send.clearCosmosNoMemo': 'Tu envoies <b>{amount}</b> à <b>{recipient}</b>, sans mémo. Frais : {fee}.',
   'send.clearCosmosMemoPublic': ' Le mémo est public pour toujours.',
+  'send.clearNearStorage': ' Le destinataire n’étant pas encore inscrit auprès de ce jeton, Kyro paie aussi son inscription (storage_deposit, {amount}).',
   'send.clearApt': 'Tu envoies <b>{amount}</b> à <b>{recipient}</b>. Frais estimés : {fee} ; le réseau en réserve au plus {max} pendant l’exécution.',
   'send.clearAptCreates': ' Ce compte n’a encore rien reçu : le transfert le crée.',
   'send.clearZec': 'Tu envoies <b>{amount}</b> à <b>{recipient}</b>{tex}{change}. Frais ZIP 317 : {fee}{fiat}.',

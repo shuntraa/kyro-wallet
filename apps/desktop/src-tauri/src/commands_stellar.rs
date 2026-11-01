@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, State};
 use wallet_core::{
-    Network, StellarAsset, StellarAssetView, StellarEnvelope, StellarMemo, StellarMemoView,
-    StellarOp, StellarOpView, StellarOperation, StellarTransaction, StellarTxSummary,
-    StellarWarning, STELLAR_MAX_MEMO_TEXT,
+    Network, StellarAsset, StellarAssetView, StellarEnvelope, StellarKnownAsset, StellarMemo,
+    StellarMemoView, StellarOp, StellarOpView, StellarOperation, StellarTransaction,
+    StellarTxSummary, StellarWarning, STELLAR_MAX_MEMO_TEXT,
 };
 use zeroize::Zeroizing;
 
@@ -133,6 +133,30 @@ fn memo_block(lang: Lang, m: &StellarMemoView) -> String {
     }
 }
 
+/// The known asset an asset view names on `net` (exact code and issuer), if any.
+fn known_view(a: &StellarAssetView, net: Network) -> Option<&'static StellarKnownAsset> {
+    match a {
+        StellarAssetView::Credit { code, issuer } => {
+            wallet_core::stellar_known_asset(code, issuer, net)
+        }
+        StellarAssetView::Native => None,
+    }
+}
+
+/// « Verified issuer » line of a known asset.
+fn verified_line(lang: Lang, k: &StellarKnownAsset) -> String {
+    match lang {
+        Lang::Fr => format!(
+            "Émetteur vérifié par Kyro : {} — {}\n",
+            k.issuer_name, k.issuer
+        ),
+        Lang::En => format!(
+            "Issuer verified by Kyro: {} — {}\n",
+            k.issuer_name, k.issuer
+        ),
+    }
+}
+
 fn asset_text(lang: Lang, a: &StellarAssetView) -> String {
     match a {
         StellarAssetView::Native => "XLM".into(),
@@ -185,11 +209,18 @@ pub(crate) fn describe_stellar(lang: Lang, s: &StellarTxSummary, c: &StellarCont
                 StellarAssetView::Native => {
                     format!("{amount_label}{} ({amount} stroops)\n", xlm(amount))
                 }
-                other => format!(
-                    "{amount_label}{} {}\n",
-                    format_units_in(lang, amount, 7),
-                    asset_text(lang, other)
-                ),
+                other => {
+                    let mut t = format!(
+                        "{amount_label}{} {} ({amount} {})\n",
+                        format_units_in(lang, amount, 7),
+                        asset_text(lang, other),
+                        lang.pick("unités, 7 décimales", "units, 7 decimals")
+                    );
+                    if let Some(k) = known_view(other, s.network) {
+                        t += &verified_line(lang, k);
+                    }
+                    t
+                }
             };
         }
         StellarOpView::CreateAccount {
@@ -228,6 +259,20 @@ pub(crate) fn describe_stellar(lang: Lang, s: &StellarTxSummary, c: &StellarCont
                     asset_text(lang, asset),
                     xlm(&c.base_reserve)
                 ),
+            };
+            if let Some(k) = known_view(asset, s.network) {
+                out += &verified_line(lang, k);
+            }
+            out += if limit == "0" {
+                lang.pick(
+                    "Tu ne pourras plus recevoir cet actif ; la réserve redevient disponible.\n",
+                    "You will no longer be able to receive this asset; the reserve becomes available again.\n",
+                )
+            } else {
+                lang.pick(
+                    "Ton compte pourra recevoir cet actif ; la réserve reste bloquée tant que la ligne existe (rendue quand tu la supprimes, solde à 0).\n",
+                    "Your account will be able to receive this asset; the reserve stays locked while the line exists (given back when you remove it, at a zero balance).\n",
+                )
             };
             out += &memo_block(lang, &s.memo);
         }
@@ -424,6 +469,259 @@ pub(crate) async fn build(
     })
 }
 
+fn known_asset(net: Network, id: &str) -> AppResult<&'static StellarKnownAsset> {
+    let (code, issuer) = id
+        .trim()
+        .split_once('-')
+        .ok_or_else(|| AppError::InvalidInput("actif Stellar : CODE-ÉMETTEUR attendu".into()))?;
+    wallet_core::stellar_known_asset(code, issuer, net)
+        .ok_or_else(|| AppError::InvalidInput("actif Stellar inconnu de Kyro sur ce réseau".into()))
+}
+
+fn trustline<'a>(
+    a: &'a StellarAccountInfo,
+    k: &StellarKnownAsset,
+) -> Option<&'a stellar_backend::StellarTrustline> {
+    a.trustlines
+        .iter()
+        .find(|t| t.code == k.code && t.issuer == k.issuer)
+}
+
+/// Checks of a known-asset payment against live data: both accounts exist, the recipient trusts
+/// the asset (authorized, room under its limit) and takes a memo if it requires one; our
+/// trustline holds the amount; our XLM covers the fee.
+fn check_asset_payment(
+    k: &StellarKnownAsset,
+    c: &StellarContext,
+    amount: i64,
+    fee: u32,
+    has_memo: bool,
+) -> AppResult<()> {
+    if !c.account.exists {
+        return Err(AppError::InvalidInput(
+            "ton compte Stellar n'est pas encore activé : il doit d'abord recevoir au moins 1 XLM"
+                .into(),
+        ));
+    }
+    if amount <= 0 {
+        return Err(AppError::InvalidInput("montant nul".into()));
+    }
+    if !c.destination.exists {
+        return Err(AppError::InvalidInput(format!(
+            "ce compte Stellar n'existe pas : il doit d'abord être activé (XLM) puis accepter {}",
+            k.code
+        )));
+    }
+    if c.destination.memo_required && !has_memo {
+        return Err(AppError::InvalidInput(
+            "ce destinataire exige un mémo (SEP-0029, souvent une plateforme d'échange) : ajoute-le, sinon les fonds risquent d'être perdus".into(),
+        ));
+    }
+    let Some(dest) = trustline(&c.destination, k) else {
+        return Err(AppError::InvalidInput(format!(
+            "le destinataire n'a pas de ligne de confiance pour {} (émis par {}) : il doit d'abord l'activer, sinon le paiement est refusé",
+            k.code, k.issuer_name
+        )));
+    };
+    if !dest.authorized {
+        return Err(AppError::InvalidInput(format!(
+            "l'émetteur de {} n'autorise pas ce destinataire",
+            k.code
+        )));
+    }
+    let room = dest.limit.parse::<i64>().unwrap_or(0) - dest.balance.parse::<i64>().unwrap_or(0);
+    if amount > room {
+        return Err(AppError::InvalidInput(
+            "la ligne de confiance du destinataire est pleine (limite atteinte)".into(),
+        ));
+    }
+    let have = trustline(&c.account, k)
+        .and_then(|t| t.balance.parse::<i64>().ok())
+        .unwrap_or(0);
+    if amount > have {
+        return Err(AppError::InvalidInput(format!(
+            "solde {} insuffisant : {} {}",
+            k.code,
+            crate::commands::format_units(&have.to_string(), 7),
+            k.code
+        )));
+    }
+    let spendable: i64 = c.account.spendable.parse().unwrap_or(0);
+    if i64::from(fee) > spendable {
+        return Err(AppError::InvalidInput(
+            "pas assez de XLM disponibles pour les frais (solde − réserve)".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Checks of a trustline change: enabling needs one more base reserve available (+ fee) and no
+/// existing line; removing needs an existing line with a zero balance.
+fn check_trust(k: &StellarKnownAsset, c: &StellarContext, enable: bool, fee: u32) -> AppResult<()> {
+    if !c.account.exists {
+        return Err(AppError::InvalidInput(
+            "ton compte Stellar n'est pas encore activé : il doit d'abord recevoir au moins 1 XLM"
+                .into(),
+        ));
+    }
+    let spendable: i64 = c.account.spendable.parse().unwrap_or(0);
+    let line = trustline(&c.account, k);
+    if enable {
+        if line.is_some() {
+            return Err(AppError::InvalidInput(format!(
+                "{} est déjà activé sur ce compte",
+                k.code
+            )));
+        }
+        let reserve: i64 = c.base_reserve.parse().unwrap_or(0);
+        let need = reserve.saturating_add(i64::from(fee));
+        if need > spendable {
+            return Err(AppError::InvalidInput(format!(
+                "pas assez de XLM disponibles : la ligne de confiance bloque {} XLM de réserve (+ frais), tu as {} XLM disponibles",
+                crate::commands::format_units(&reserve.to_string(), 7),
+                crate::commands::format_units(&spendable.to_string(), 7)
+            )));
+        }
+    } else {
+        let Some(l) = line else {
+            return Err(AppError::InvalidInput(format!(
+                "{} n'est pas activé sur ce compte",
+                k.code
+            )));
+        };
+        if l.balance != "0" {
+            return Err(AppError::InvalidInput(format!(
+                "il te reste {} {} : envoie-les d'abord, une ligne de confiance ne se supprime qu'à solde nul",
+                crate::commands::format_units(&l.balance, 7),
+                k.code
+            )));
+        }
+        if i64::from(fee) > spendable {
+            return Err(AppError::InvalidInput(
+                "pas assez de XLM disponibles pour les frais".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn envelope_of(tx: StellarTransaction) -> String {
+    StellarEnvelope {
+        tx,
+        signatures: vec![],
+    }
+    .to_base64()
+}
+
+/// Builds an unsigned payment of `amount` units (7 decimals) of the known asset `asset_id`
+/// (`CODE-ISSUER`) to `to`.
+pub(crate) async fn build_asset(
+    c: &StellarCtx<'_>,
+    me: &str,
+    to: &str,
+    asset_id: &str,
+    amount: &str,
+    memo: Option<&MemoSpec>,
+) -> AppResult<StellarBuilt> {
+    let k = known_asset(c.network, asset_id)?;
+    let source = wallet_core::stellar_account_id(me)?;
+    let destination = wallet_core::stellar_account_id(to)?;
+    let amount: i64 = amount
+        .trim()
+        .parse()
+        .ok()
+        .filter(|a| *a > 0)
+        .ok_or_else(|| AppError::InvalidInput("montant d'actif invalide".into()))?;
+    let memo = parse_memo(memo)?;
+    let (ledger, context) = live_context(c, me, to).await?;
+    let fee = stellar_backend::fee(c, &ledger).await?;
+    check_asset_payment(k, &context, amount, fee, memo != StellarMemo::None)?;
+    let envelope = envelope_of(StellarTransaction {
+        source,
+        fee,
+        sequence: next_sequence(&context.account)?,
+        time_bounds: Some((0, ledger.closed_at + VALIDITY_SECS)),
+        memo,
+        operations: vec![StellarOp {
+            source: None,
+            body: StellarOperation::Payment {
+                destination,
+                asset: k.asset(),
+                amount,
+            },
+        }],
+    });
+    let summary = wallet_core::stellar_decode_tx(&envelope, me, c.network)?;
+    Ok(StellarBuilt {
+        envelope,
+        summary,
+        context,
+    })
+}
+
+/// Builds an unsigned `ChangeTrust` for the known asset `asset_id`: no limit (`enable`) or
+/// limit 0 (removal, at a zero balance).
+pub(crate) async fn build_trust(
+    c: &StellarCtx<'_>,
+    me: &str,
+    asset_id: &str,
+    enable: bool,
+) -> AppResult<StellarBuilt> {
+    let k = known_asset(c.network, asset_id)?;
+    let source = wallet_core::stellar_account_id(me)?;
+    let (ledger, context) = live_context(c, me, me).await?;
+    let fee = stellar_backend::fee(c, &ledger).await?;
+    check_trust(k, &context, enable, fee)?;
+    let envelope = envelope_of(StellarTransaction {
+        source,
+        fee,
+        sequence: next_sequence(&context.account)?,
+        time_bounds: Some((0, ledger.closed_at + VALIDITY_SECS)),
+        memo: StellarMemo::None,
+        operations: vec![StellarOp {
+            source: None,
+            body: StellarOperation::ChangeTrust {
+                asset: k.asset(),
+                limit: if enable { i64::MAX } else { 0 },
+            },
+        }],
+    });
+    let summary = wallet_core::stellar_decode_tx(&envelope, me, c.network)?;
+    Ok(StellarBuilt {
+        envelope,
+        summary,
+        context,
+    })
+}
+
+/// Payment of a known issued asset (Circle's USDC): `asset` = `CODE-ISSUER`, `amount` in units
+/// of 7 decimals.
+#[tauri::command]
+pub async fn stellar_build_asset_tx(
+    state: State<'_, AppState>,
+    asset: String,
+    to: String,
+    amount: String,
+    memo: Option<MemoSpec>,
+    account: Option<u32>,
+) -> AppResult<StellarBuilt> {
+    let me = ours(&state, account_arg(account)?)?;
+    build_asset(&ctx(&state), &me, &to, &asset, &amount, memo.as_ref()).await
+}
+
+/// Trustline for a known issued asset: `enable: true` opens it (one base reserve locked),
+/// `false` removes it (zero balance only).
+#[tauri::command]
+pub async fn stellar_build_trust_tx(
+    state: State<'_, AppState>,
+    asset: String,
+    enable: bool,
+    account: Option<u32>,
+) -> AppResult<StellarBuilt> {
+    let me = ours(&state, account_arg(account)?)?;
+    build_trust(&ctx(&state), &me, &asset, enable).await
+}
+
 #[tauri::command]
 pub async fn stellar_build_tx(
     state: State<'_, AppState>,
@@ -446,28 +744,84 @@ pub struct StellarSigned {
     pub context: StellarContext,
 }
 
-/// Decoding + live re-checks, i.e. everything `stellar_sign_tx` does before the dialog. Only
-/// XLM transfers are signed (Kyro builds nothing else yet).
+/// What a decoded transaction is, among the shapes Kyro builds.
+enum Shape<'a> {
+    /// XLM payment or account creation.
+    Xlm { stroops: &'a str, creates: bool },
+    /// Payment of a known issued asset.
+    Asset {
+        k: &'static StellarKnownAsset,
+        amount: &'a str,
+    },
+    /// Trustline of a known issued asset.
+    Trust {
+        k: &'static StellarKnownAsset,
+        enable: bool,
+    },
+}
+
+/// Decoding + live re-checks, i.e. everything `stellar_sign_tx` does before the dialog. Signed:
+/// XLM transfers, payments of a known asset (Circle's USDC) and trustlines of a known asset.
 pub(crate) async fn prepare_sign(
     c: &StellarCtx<'_>,
     me: &str,
     envelope: &str,
 ) -> AppResult<(StellarTxSummary, StellarContext)> {
     let summary = wallet_core::stellar_decode_tx(envelope, me, c.network)?;
-    let (to, stroops, creates) = match &summary.operation {
+    let unknown = || {
+        AppError::InvalidInput(
+            "Kyro ne signe que des envois de XLM et des actifs qu'il connaît (USDC de Circle)"
+                .into(),
+        )
+    };
+    let (to, shape) = match &summary.operation {
         StellarOpView::Payment {
             destination,
             asset: StellarAssetView::Native,
             amount,
-        } => (destination.clone(), amount, false),
+        } => (
+            destination.clone(),
+            Shape::Xlm {
+                stroops: amount,
+                creates: false,
+            },
+        ),
         StellarOpView::CreateAccount {
             destination,
             starting_balance,
-        } => (destination.clone(), starting_balance, true),
-        _ => {
-            return Err(AppError::InvalidInput(
-                "Kyro ne signe que des envois de XLM pour l'instant".into(),
-            ))
+        } => (
+            destination.clone(),
+            Shape::Xlm {
+                stroops: starting_balance,
+                creates: true,
+            },
+        ),
+        StellarOpView::Payment {
+            destination,
+            asset,
+            amount,
+        } => (
+            destination.clone(),
+            Shape::Asset {
+                k: known_view(asset, c.network).ok_or_else(unknown)?,
+                amount,
+            },
+        ),
+        StellarOpView::ChangeTrust { asset, limit } => {
+            let enable = if limit == &i64::MAX.to_string() {
+                true
+            } else if limit == "0" {
+                false
+            } else {
+                return Err(unknown());
+            };
+            (
+                me.to_owned(),
+                Shape::Trust {
+                    k: known_view(asset, c.network).ok_or_else(unknown)?,
+                    enable,
+                },
+            )
         }
     };
     let (ledger, context) = live_context(c, me, &to).await?;
@@ -488,24 +842,39 @@ pub(crate) async fn prepare_sign(
             "numéro de séquence périmé : reconstruis la transaction".into(),
         ));
     }
-    if creates == context.destination.exists {
-        return Err(AppError::InvalidInput(
-            if creates {
-                "ce compte existe maintenant : reconstruis la transaction (paiement simple)"
-            } else {
-                "ce compte n'existe pas : reconstruis la transaction (création de compte)"
+    let fee: u32 = summary.fee.parse().unwrap_or(u32::MAX);
+    let has_memo = summary.memo != StellarMemoView::None;
+    match shape {
+        Shape::Xlm { stroops, creates } => {
+            if creates == context.destination.exists {
+                return Err(AppError::InvalidInput(
+                    if creates {
+                        "ce compte existe maintenant : reconstruis la transaction (paiement simple)"
+                    } else {
+                        "ce compte n'existe pas : reconstruis la transaction (création de compte)"
+                    }
+                    .into(),
+                ));
             }
-            .into(),
-        ));
+            stellar_backend::check_payment(&PaymentCheck {
+                ours: &context.account,
+                dest: &context.destination,
+                ledger: &ledger,
+                stroops: stroops.parse().unwrap_or(0),
+                fee,
+                has_memo,
+            })?;
+        }
+        Shape::Asset { k, amount } => {
+            check_asset_payment(k, &context, amount.parse().unwrap_or(0), fee, has_memo)?;
+        }
+        Shape::Trust { k, enable } => {
+            if has_memo {
+                return Err(unknown());
+            }
+            check_trust(k, &context, enable, fee)?;
+        }
     }
-    stellar_backend::check_payment(&PaymentCheck {
-        ours: &context.account,
-        dest: &context.destination,
-        ledger: &ledger,
-        stroops: stroops.parse().unwrap_or(0),
-        fee: summary.fee.parse().unwrap_or(u32::MAX),
-        has_memo: summary.memo != StellarMemoView::None,
-    })?;
     Ok((summary, context))
 }
 
@@ -529,7 +898,14 @@ pub async fn stellar_sign_tx(
     let lang = crate::i18n::current();
     confirm_native(
         &app,
-        lang.pick("Confirmer l'envoi Stellar", "Confirm the Stellar send"),
+        if matches!(summary.operation, StellarOpView::ChangeTrust { .. }) {
+            lang.pick(
+                "Confirmer la ligne de confiance Stellar",
+                "Confirm the Stellar trustline",
+            )
+        } else {
+            lang.pick("Confirmer l'envoi Stellar", "Confirm the Stellar send")
+        },
         signer.body(lang, &describe_stellar(lang, &summary, &context)),
     )
     .await?;
@@ -749,5 +1125,179 @@ mod tests {
         // IPC shape.
         let m: MemoSpec = serde_json::from_str(r#"{"kind":"id","value":"42"}"#).unwrap();
         assert_eq!(parse_memo(Some(&m)).unwrap(), StellarMemo::Id(42));
+    }
+
+    /// USDC payment and trustline removal built by Kyro for real mainnet accounts (no key:
+    /// build + the live checks of `stellar_sign_tx`, nothing signed or sent). `cargo test -p
+    /// kyro-desktop --lib stellar_usdc_live_mainnet -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn stellar_usdc_live_mainnet() {
+        let net = crate::net::NetClient::new(std::env::temp_dir().join("kyro-xlm-live")).unwrap();
+        let k = wallet_core::stellar_known_assets(Network::Mainnet)[0];
+        tauri::async_runtime::block_on(async {
+            let c = StellarCtx {
+                net_client: &net,
+                network: Network::Mainnet,
+                tor: false,
+            };
+            let ledger = stellar_backend::latest_ledger(&c).await.unwrap();
+            let path = format!(
+                "https://horizon.stellar.org/accounts?asset=USDC:{}&limit=100",
+                k.issuer
+            );
+            let list = reqwest_like(&net, &path).await;
+            let mut sender = None;
+            let mut empty = None;
+            let mut receiver = None;
+            for r in list["_embedded"]["records"].as_array().unwrap() {
+                let id = r["id"].as_str().unwrap();
+                let a = stellar_backend::account(&c, id, &ledger).await.unwrap();
+                let line = trustline(&a, &k).unwrap();
+                let spendable: i64 = a.spendable.parse().unwrap();
+                if a.memo_required || spendable < 100_000 {
+                    continue;
+                }
+                if line.balance != "0" && sender.is_none() {
+                    sender = Some(id.to_owned());
+                } else if line.balance == "0" && empty.is_none() {
+                    empty = Some(id.to_owned());
+                } else if receiver.is_none() {
+                    receiver = Some(id.to_owned());
+                }
+            }
+            let (sender, receiver) = (sender.unwrap(), receiver.or(empty.clone()).unwrap());
+            let built = build_asset(&c, &sender, &receiver, &k.id(), "1", None)
+                .await
+                .unwrap();
+            let (s, ctx) = prepare_sign(&c, &sender, &built.envelope).await.unwrap();
+            assert_eq!(s, built.summary);
+            eprintln!("--- payment ---\n{}", describe_stellar(Lang::Fr, &s, &ctx));
+            if let Some(e) = empty {
+                let built = build_trust(&c, &e, &k.id(), false).await.unwrap();
+                let (s, ctx) = prepare_sign(&c, &e, &built.envelope).await.unwrap();
+                eprintln!("--- removal ---\n{}", describe_stellar(Lang::Fr, &s, &ctx));
+                assert!(
+                    build_trust(&c, &e, &k.id(), true).await.is_err(),
+                    "already enabled"
+                );
+            }
+            assert!(
+                build_trust(&c, &sender, &k.id(), false).await.is_err(),
+                "balance not zero"
+            );
+        });
+    }
+
+    /// GET through the app's client (Horizon is on the allowlist).
+    async fn reqwest_like(net: &crate::net::NetClient, url: &str) -> Value {
+        let req = crate::net::ServerRequest::get(
+            url::Url::parse(url).unwrap(),
+            crate::net::Family::Stellar,
+        );
+        let (_, bytes) = net.server_request(req, false).await.unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    const USDC_TESTNET: &str = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
+
+    fn usdc_line(balance: &str) -> stellar_backend::StellarTrustline {
+        stellar_backend::StellarTrustline {
+            code: "USDC".into(),
+            issuer: USDC_TESTNET.into(),
+            balance: balance.into(),
+            limit: i64::MAX.to_string(),
+            authorized: true,
+        }
+    }
+
+    #[test]
+    fn usdc_payment_and_trustline_dialogs_and_checks() {
+        let usdc = StellarAssetView::Credit {
+            code: "USDC".into(),
+            issuer: USDC_TESTNET.into(),
+        };
+        let pay = summary(
+            StellarMemoView::Id { id: "7".into() },
+            StellarOpView::Payment {
+                destination: TO.into(),
+                asset: usdc.clone(),
+                amount: "25000000".into(),
+            },
+        );
+        let d = describe_stellar(Lang::Fr, &pay, &context(true));
+        for needle in [
+            "Montant : 2,5 USDC (émis par GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5) (25000000 unités, 7 décimales)",
+            "Émetteur vérifié par Kyro : Circle (testnet) — GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+            "MÉMO (identifiant) : 7",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in: {d}");
+        }
+        let trust = summary(
+            StellarMemoView::None,
+            StellarOpView::ChangeTrust {
+                asset: usdc.clone(),
+                limit: i64::MAX.to_string(),
+            },
+        );
+        let d = describe_stellar(Lang::Fr, &trust, &context(true));
+        assert!(d.contains("Ajout d'une ligne de confiance : USDC"), "{d}");
+        assert!(d.contains("Chaque ligne de confiance bloque 0,5 XLM de réserve."));
+        assert!(d.contains("Émetteur vérifié par Kyro : Circle (testnet)"));
+        assert!(d.contains("la réserve reste bloquée tant que la ligne existe"));
+        // An unknown issuer is never « verified ».
+        let fake = summary(
+            StellarMemoView::None,
+            StellarOpView::Payment {
+                destination: TO.into(),
+                asset: StellarAssetView::Credit {
+                    code: "USDC".into(),
+                    issuer: TO.into(),
+                },
+                amount: "1".into(),
+            },
+        );
+        assert!(!describe_stellar(Lang::Fr, &fake, &context(true)).contains("vérifié"));
+        // Checks.
+        let k = wallet_core::stellar_known_assets(Network::Testnet)[0];
+        let mut c = context(true);
+        assert!(
+            check_asset_payment(&k, &c, 10, 100, false).is_err(),
+            "no trustline at the recipient"
+        );
+        c.destination.trustlines = vec![usdc_line("0")];
+        assert!(
+            check_asset_payment(&k, &c, 10, 100, false).is_err(),
+            "our line is missing"
+        );
+        c.account.trustlines = vec![usdc_line("50")];
+        check_asset_payment(&k, &c, 10, 100, false).unwrap();
+        assert!(
+            check_asset_payment(&k, &c, 51, 100, false).is_err(),
+            "above our balance"
+        );
+        c.destination.memo_required = true;
+        assert!(
+            check_asset_payment(&k, &c, 10, 100, false).is_err(),
+            "memo required"
+        );
+        c.destination.memo_required = false;
+        c.destination.trustlines[0].authorized = false;
+        assert!(
+            check_asset_payment(&k, &c, 10, 100, false).is_err(),
+            "not authorized"
+        );
+        // Trustline: enabling twice, removing with a balance.
+        assert!(check_trust(&k, &c, true, 100).is_err());
+        assert!(check_trust(&k, &c, false, 100).is_err());
+        c.account.trustlines = vec![usdc_line("0")];
+        check_trust(&k, &c, false, 100).unwrap();
+        c.account.trustlines.clear();
+        check_trust(&k, &c, true, 100).unwrap();
+        c.account.spendable = "5000000".into();
+        assert!(
+            check_trust(&k, &c, true, 100).is_err(),
+            "reserve + fee not covered"
+        );
     }
 }

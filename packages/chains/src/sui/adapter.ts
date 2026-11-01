@@ -5,21 +5,26 @@
 // commands (`sui_*`, docs/IPC.md §2.11). This adapter only validates input and checks that what
 // Rust built is what was asked (recipient, amount or « tout le solde », sender, coin type).
 
-import { call, l10n, type SuiBalance, type SuiBuilt, type SuiContext, type SuiHistoryEntry, type SuiTxStatus, type SuiTxSummary, type SuiWarning } from '@kyro/shared';
-import type { SuiChain } from '../registry';
+import { call, l10n, type SuiBalance, type SuiBuilt, type SuiContext, type SuiHistoryEntry, type SuiTokenBalance, type SuiTxStatus, type SuiTxSummary, type SuiWarning } from '@kyro/shared';
+import { SUI_COINS, type SuiChain } from '../registry';
 import type { HwSigner } from '../hw';
 import { accountArg, type Balance, type BuildParams, type ChainAdapter, type FeeEstimates, type HistoryItem } from '../types';
 
-export type { SuiBalance, SuiContext, SuiHistoryEntry, SuiTxStatus, SuiTxSummary, SuiWarning };
+export type { SuiBalance, SuiContext, SuiHistoryEntry, SuiTokenBalance, SuiTxStatus, SuiTxSummary, SuiWarning };
 
 export interface SuiBackend {
   balance(address: string): Promise<SuiBalance>;
   txs(address: string): Promise<SuiHistoryEntry[]>;
   /** `amount` MIST; null = the whole balance. */
   build(to: string, amount: bigint | null): Promise<SuiBuilt>;
-  sign(bcs: string, password: string): Promise<SuiBuilt & { signature: string; digest: string }>;
+  /** `coinType`: token transfer (Rust re-checks the token coins live). */
+  sign(bcs: string, password: string, coinType?: string): Promise<SuiBuilt & { signature: string; digest: string }>;
   broadcast(bcs: string, signature: string): Promise<string>;
   txStatus(digest: string): Promise<SuiTxStatus>;
+  /** Known tokens (Circle's USDC); optional so that test backends can leave them out. */
+  tokenBalances?(address: string): Promise<SuiTokenBalance[]>;
+  /** Token units; null = the whole balance of that token. */
+  buildToken?(coinType: string, to: string, amount: bigint | null): Promise<SuiBuilt>;
 }
 
 /** The typed `sui_*` commands of `@kyro/shared` (docs/IPC.md §2.11), for vault account `account`. */
@@ -29,9 +34,11 @@ export function rustSuiBackend(account = 0): SuiBackend {
     balance: (address) => call('sui_balance', { address }),
     txs: (address) => call('sui_txs', { address }),
     build: (to, amount) => call('sui_build_tx', amount === null ? { to, all: true, ...acct } : { to, amount: amount.toString(), ...acct }),
-    sign: (bcs, password) => call('sui_sign_tx', { bcs, password, ...acct }),
+    sign: (bcs, password, coinType) => call('sui_sign_tx', { bcs, password, ...(coinType ? { coinType } : {}), ...acct }),
     broadcast: (bcs, signature) => call('sui_broadcast', { bcs, signature, ...acct }),
     txStatus: (digest) => call('sui_tx_status', { digest }),
+    tokenBalances: (address) => call('sui_token_balances', { address }),
+    buildToken: (coinType, to, amount) => call('sui_build_token_tx', amount === null ? { coinType, to, all: true, ...acct } : { coinType, to, amount: amount.toString(), ...acct }),
   };
 }
 
@@ -40,8 +47,10 @@ export function rustSuiBackend(account = 0): SuiBackend {
  * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
  */
 export function rustSuiHwBackend(accountId: string): SuiBackend {
+  // Token sends are vault-only for now (Rust's hw_* builders only do the native coin).
+  const { buildToken: _buildTokenVaultOnly, ...base } = rustSuiBackend();
   return {
-    ...rustSuiBackend(),
+    ...base,
     build: (to, amount) => call('hw_sui_build_tx', amount === null ? { accountId, to, all: true } : { accountId, to, amount: amount.toString() }),
     sign: (bcs, id) => call('hw_sign_sui_tx', { id, accountId, bcs }),
     broadcast: (bcs, signature) => call('hw_sui_broadcast', { accountId, bcs, signature }),
@@ -81,9 +90,11 @@ export interface SuiUnsigned {
   /** MIST asked; for « tout le solde », what the simulation says the recipient receives. */
   amount: bigint;
   all: boolean;
-  /** Gas budget (MIST): the most the transfer can cost on top of the amount. */
+  /** Gas budget (MIST): the most the transfer can cost on top of the amount (always SUI). */
   maxFee: bigint;
   size: { family: 'sui' };
+  /** Token transfer: its coin type (passed again to `sui_sign_tx`); `amount` is then in token units. */
+  coinType?: string;
 }
 
 export interface SuiSigned {
@@ -131,10 +142,47 @@ export class SuiAdapter implements ChainAdapter<'sui'> {
     return this.backend.balance(this.address);
   }
 
-  /** Total SUI, plus `spendable` = what sits in coin objects (the address balance is not spent by Kyro). */
+  /** Total SUI, plus `spendable` = what sits in coin objects (the address balance is not spent by Kyro). Known tokens too. */
   async getBalance(): Promise<Array<Balance & { spendable: bigint }>> {
     const b = await this.backend.balance(this.address);
-    return [{ assetId: 'sui', amount: BigInt(b.total), spendable: BigInt(b.coin) }];
+    const out = [{ assetId: 'sui', amount: BigInt(b.total), spendable: BigInt(b.coin) }];
+    const known = SUI_COINS[this.chain.network];
+    if (known.length && this.backend.tokenBalances) {
+      for (const t of await this.backend.tokenBalances(this.address)) {
+        const k = known.find((x) => x.contract === t.coinType);
+        if (k && /^\d+$/.test(t.total) && /^\d+$/.test(t.coin)) out.push({ assetId: `suicoin:${k.contract}`, amount: BigInt(t.total), spendable: BigInt(t.coin) });
+      }
+    }
+    return out;
+  }
+
+  /** Token transfer: Rust picks and merges the token coins, pays the gas in SUI, simulates. */
+  private async buildToken(params: BuildParams, to: string): Promise<SuiUnsigned> {
+    if (this.hw) throw new Error(l10n('Jetons Sui : pas encore pris en charge sur hardware wallet', 'Sui tokens: not yet supported on hardware wallets'));
+    const k = SUI_COINS[this.chain.network].find((x) => x.contract === params.asset.contract);
+    if (!k || k.decimals !== params.asset.decimals || !this.backend.buildToken) throw new Error(l10n('Jeton Sui inconnu', 'Unknown Sui token'));
+    const all = !!params.max;
+    if (!all && params.amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
+    const built = await this.backend.buildToken(k.contract, to, all ? null : params.amount);
+    const s = built.summary;
+    const tk = s.token;
+    const amountOk = all ? s.amount === null : s.amount === params.amount.toString();
+    const warningsOk = s.warnings.every((w) => (all && w.kind === 'sendAll') || (to === this.address && w.kind === 'selfTransfer'));
+    if (!tk || tk.coinType !== k.contract || tk.decimals !== k.decimals || s.coinType !== k.contract || !amountOk || !warningsOk || s.recipient !== to || s.sender !== this.address) {
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
+    }
+    return {
+      family: 'sui',
+      bcs: built.bcs,
+      summary: s,
+      context: built.context,
+      recipient: to,
+      amount: all ? BigInt(built.context.receives ?? built.context.token?.coinsTotal ?? '0') : params.amount,
+      all,
+      maxFee: BigInt(s.gasBudget),
+      size: { family: 'sui' },
+      coinType: k.contract,
+    };
   }
 
   /** No fee to choose: Rust uses the reference gas price and a budget from a simulation. */
@@ -150,18 +198,19 @@ export class SuiAdapter implements ChainAdapter<'sui'> {
   }
 
   async buildTx(params: BuildParams): Promise<SuiUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error(l10n('Actif Sui inattendu', 'Unexpected Sui asset'));
+    if (params.asset.kind !== 'native' && params.asset.kind !== 'suicoin') throw new Error(l10n('Actif Sui inattendu', 'Unexpected Sui asset'));
     const problem = suiAddressProblem(params.to);
     if (problem) throw new Error(problem);
     const to = normalizeSuiAddress(params.to);
     if (!isSuiAddress(to)) throw new Error(l10n('Adresse Sui invalide', 'Invalid Sui address'));
+    if (params.asset.kind === 'suicoin') return this.buildToken(params, to);
     const all = !!params.max;
     if (!all && params.amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const built = await this.backend.build(to, all ? null : params.amount);
     const s = built.summary;
     const amountOk = all ? s.amount === null : s.amount === params.amount.toString();
     const warningsOk = s.warnings.every((w) => (all && w.kind === 'sendAll') || (to === this.address && w.kind === 'selfTransfer'));
-    if (!amountOk || !warningsOk || s.recipient !== to || s.sender !== this.address || s.coinType !== SUI_COIN_TYPE) {
+    if (!amountOk || !warningsOk || s.recipient !== to || s.sender !== this.address || s.coinType !== SUI_COIN_TYPE || s.token) {
       throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
     }
     return {
@@ -185,7 +234,7 @@ export class SuiAdapter implements ChainAdapter<'sui'> {
 
   /** Rust: live checks, simulation, native dialog, signature. */
   async signTx(unsigned: SuiUnsigned, password: string): Promise<SuiSigned> {
-    const res = await this.backend.sign(unsigned.bcs, password);
+    const res = await this.backend.sign(unsigned.bcs, password, unsigned.coinType);
     if (res.digest !== unsigned.summary.digest || res.bcs !== unsigned.bcs) throw new Error(l10n('Transaction Sui signée inattendue', 'Unexpected signed Sui transaction'));
     return { family: 'sui', bcs: res.bcs, signature: res.signature, digest: res.digest, summary: res.summary };
   }
@@ -203,7 +252,25 @@ export class SuiAdapter implements ChainAdapter<'sui'> {
 
   async getHistory(): Promise<HistoryItem[]> {
     const list = await this.backend.txs(this.address);
-    return list.map((t) => suiHistoryItem(t, this.address, this.chain.key));
+    const known = SUI_COINS[this.chain.network];
+    return list.flatMap((t) => {
+      const tokens = (t.tokens ?? []).flatMap((x): HistoryItem[] => {
+        const k = known.find((y) => y.contract === x.coinType);
+        if (!k || !/^-?\d+$/.test(x.change)) return [];
+        const ch = BigInt(x.change);
+        const item: HistoryItem = { id: `${t.digest}:${k.contract}`, chainKey: this.chain.key, assetId: `suicoin:${k.contract}`, direction: ch < 0n ? 'out' : 'in', amount: ch < 0n ? -ch : ch, status: t.success ? 'confirmed' : 'failed', kind: 'transfer' };
+        const cp = x.counterparty ?? (t.sender !== this.address ? t.sender : null);
+        if (cp) item.counterparty = cp;
+        if (t.timestamp) {
+          const ms = Date.parse(t.timestamp);
+          if (Number.isFinite(ms)) item.time = ms;
+        }
+        return [item];
+      });
+      const native = suiHistoryItem(t, this.address, this.chain.key);
+      // A token transfer we sent: its SUI row is only the gas (shown on the token row).
+      return tokens.length && native.amount === 0n ? tokens : [...tokens, native];
+    });
   }
 }
 

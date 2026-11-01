@@ -51,7 +51,7 @@ pub async fn hw_sign_sui_tx(
     let (acc, key) = stored_key(&state, &account_id, CHAIN)?;
     let info = check_device(&app, &state, &id, &acc, &key).await?;
     let c = ctx(&state);
-    let (summary, context) = prepare_sign(&c, &key.address, &bcs).await?;
+    let (summary, context) = prepare_sign(&c, &key.address, &bcs, None).await?;
     let lang = crate::i18n::current();
     confirm_native(
         &app,

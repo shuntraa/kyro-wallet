@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-near-token-balances"
+description = "Enables the near_token_balances command without any pre-configured scope."
+commands.allow = ["near_token_balances"]
+
+[[permission]]
+identifier = "deny-near-token-balances"
+description = "Denies the near_token_balances command without any pre-configured scope."
+commands.deny = ["near_token_balances"]

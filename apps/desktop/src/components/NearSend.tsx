@@ -97,7 +97,17 @@ export function NearSummaryView({ u, nearPrice, currency }: { u: NearUnsigned; n
         <span className="font-semibold text-text">{t('near.title')}</span>
         <span className="text-[11px] text-mute">{t('near.decodedByVault')}</span>
       </div>
-      <Line k={t('near.lReceiver')} v={`${s.receiverKind === 'named' ? t('near.kindNamed') : s.receiverKind === 'implicit' ? t('near.kindImplicit') : t('near.kindEth')}${c.createsAccount ? t('near.createdByThis') : ''}`} warn={c.createsAccount || s.receiverKind === 'ethImplicit'} />
+      {s.token ? (
+        <>
+          <Line k={t('near.lToken')} v={t('near.lTokenValue', { symbol: s.token.symbol, decimals: s.token.decimals })} />
+          <Line k={t('near.lContract')} v={s.token.contract} />
+          <Line k={t('near.lTokenTo')} v={`${s.token.recipient} · ${s.token.recipientKind === 'named' ? t('near.kindNamed') : s.token.recipientKind === 'implicit' ? t('near.kindImplicit') : t('near.kindEth')}`} warn={s.token.recipientKind === 'ethImplicit'} />
+          <Line k={t('near.lTokenAmount')} v={fmtCrypto(BigInt(s.token.amount), s.token.decimals, s.token.symbol, s.token.decimals)} />
+          <Line k={t('near.lStorage')} v={s.token.storageDeposit ? t('near.lStorageValue', { amount: NEAR(s.token.storageDeposit) }) : t('near.lStorageNone')} warn={!!s.token.storageDeposit} />
+        </>
+      ) : (
+        <Line k={t('near.lReceiver')} v={`${s.receiverKind === 'named' ? t('near.kindNamed') : s.receiverKind === 'implicit' ? t('near.kindImplicit') : t('near.kindEth')}${c.createsAccount ? t('near.createdByThis') : ''}`} warn={c.createsAccount || s.receiverKind === 'ethImplicit'} />
+      )}
       <Line k={t('near.lFeeEstimate')} v={`${NEAR(c.feeEstimate)}${fiat(c.feeEstimate)}`} />
       <Line k={t('near.lFeeBound')} v={t('near.lFeeBoundValue', { fee: NEAR(c.feeBound) })} />
       <Line k={t('near.lBalance')} v={NEAR(c.account.balance)} />
