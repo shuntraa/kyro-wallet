@@ -98,6 +98,8 @@ const pages = [
   P.download(chains),
   P.faq(chains),
   P.chainsIndex(chains),
+  P.privacy(),
+  P.codeSigningPolicy(),
   ...chains.map((c) => P.chainPage(c, chains))
 ];
 const notFound = P.notFound();

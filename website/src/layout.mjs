@@ -128,6 +128,8 @@ function footer(chains) {
             <li><a href="${REPO}/releases">Releases</a></li>
             <li><a href="${REPO}/blob/main/SECURITY.md">Security policy</a></li>
             <li><a href="${REPO}/blob/main/LICENSE">License</a></li>
+            <li><a href="/privacy/">Privacy</a></li>
+            <li><a href="/code-signing-policy/">Code signing policy</a></li>
           </ul>
         </div>
         <div>

@@ -438,9 +438,29 @@ impl Store for FsStore {
 
 // ---------------------------------------------------------------- install
 
-/// This copy's installation, if it can update itself (never a debug build).
+/// True when this process runs with MSIX package identity (Microsoft Store install). The
+/// Store updates such a copy: Kyro's updater never checks, stages or installs anything then.
+#[cfg(windows)]
+pub fn is_store_package() -> bool {
+    use windows_sys::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
+    use windows_sys::Win32::Storage::Packaging::Appx::GetCurrentPackageFullName;
+    let mut len = 0u32;
+    // SAFETY: a null buffer with length 0 only queries the required length (documented use);
+    // `len` is a valid, writable u32 for the duration of the call.
+    let rc = unsafe { GetCurrentPackageFullName(&mut len, std::ptr::null_mut()) };
+    // An unpackaged process gets APPMODEL_ERROR_NO_PACKAGE (15700).
+    rc == ERROR_INSUFFICIENT_BUFFER
+}
+
+#[cfg(not(windows))]
+pub fn is_store_package() -> bool {
+    false
+}
+
+/// This copy's installation, if it can update itself (never a debug build, never a Store
+/// package).
 fn detect_install() -> Option<Install> {
-    if cfg!(debug_assertions) {
+    if cfg!(debug_assertions) || is_store_package() {
         return None;
     }
     let exe = std::env::current_exe().ok()?;
@@ -566,6 +586,8 @@ pub struct UpdateStatus {
     pub version: String,
     /// `Some(version)` once, on the first call after a start that applied an update.
     pub updated_to: Option<String>,
+    /// Microsoft Store (MSIX) install: the Store updates it, Kyro's updater is off.
+    pub store: bool,
 }
 
 #[tauri::command]
@@ -573,6 +595,7 @@ pub fn update_status(app: tauri::AppHandle, state: tauri::State<'_, UpdaterState
     UpdateStatus {
         version: app.package_info().version.to_string(),
         updated_to: crate::net::lock(&state.updated_to).take(),
+        store: is_store_package(),
     }
 }
 

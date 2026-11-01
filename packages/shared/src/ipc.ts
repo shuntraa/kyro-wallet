@@ -190,6 +190,8 @@ export interface Settings {
 export interface UpdateStatus {
   version: string;
   updatedTo: string | null;
+  /** Microsoft Store (MSIX) install: the Store updates Kyro, its own updater is off. */
+  store: boolean;
 }
 
 // ---------------------------------------------------------------- custom servers (B2b, docs/IPC.md §2–2.2)

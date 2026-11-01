@@ -95,6 +95,10 @@ semver = { version = "=1.0.28" }
 # Monero daemon RPC (monero-oxide family, MIT) over Kyro's own transport (`xmr_backend.rs`).
 monero-daemon-rpc = { version = "=0.2.0" }
 
+[target.'cfg(windows)'.dependencies]
+# Microsoft Store (MSIX) detection: GetCurrentPackageFullName (updater.rs). Already in the tree.
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Storage_Packaging_Appx"] }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # Pinned below 0.1.3 (published 2026-10-23, < 2 weeks old); pulled by hidapi's Linux backend.
 basic-udev = { version = "=0.1.2" }

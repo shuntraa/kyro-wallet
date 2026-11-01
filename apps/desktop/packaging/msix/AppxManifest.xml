@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SPDX-License-Identifier: GPL-3.0-or-later
+  Kyro Wallet MSIX manifest (Microsoft Store). build-msix.ps1 replaces __VERSION__ (x.y.z.0).
+  Identity values come from Partner Center (product "Kyro Wallet"); the Store re-signs the package.
+  Full-trust Win32 app: USB HID / WinUSB access for Ledger and Trezor needs no device capability
+  (device capabilities only gate the UWP device APIs). WebView2: the system Evergreen runtime
+  (built into Windows 11, installed on up-to-date Windows 10).
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="KyroWallet.KyroWallet"
+    Publisher="CN=7F2DA35F-5094-4C2D-9CB5-BC0ACBA1123A"
+    Version="__VERSION__"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Kyro Wallet</DisplayName>
+    <PublisherDisplayName>Kyro Wallet</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Open-source, non-custodial crypto wallet.</Description>
+  </Properties>
+
+  <Dependencies>
+    <!-- Windows 10 1809 (17763) and later, including Windows 11. -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+    <Resource Language="fr-fr" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Kyro" Executable="kyro-desktop.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Kyro Wallet"
+        Description="Open-source, non-custodial crypto wallet."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square71x71Logo="Assets\SmallTile.png"
+          Square310x310Logo="Assets\LargeTile.png"
+          ShortName="Kyro" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

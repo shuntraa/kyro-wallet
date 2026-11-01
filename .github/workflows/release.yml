@@ -6,6 +6,7 @@ name: Release
 # see docs/RELEASING.md). Fixed names keep the website links valid for every version:
 #   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe
 #   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64.msi
+#   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64.msix (Microsoft Store upload, unsigned)
 #   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg
 #   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage
 #   https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-amd64.deb
@@ -144,6 +145,13 @@ jobs:
           esac
           ls -l dist-release
 
+      # Microsoft Store package from the same release exe (unsigned: Partner Center signs it).
+      # Kyro's updater is off when it runs packaged; not part of latest.json.
+      - name: Microsoft Store package (MSIX)
+        if: matrix.id == 'windows'
+        shell: pwsh
+        run: apps/desktop/packaging/msix/build-msix.ps1 -Exe target/release/kyro-desktop.exe -Out dist-release/Kyro-windows-x64.msix
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kyro-${{ matrix.id }}
@@ -224,7 +232,8 @@ jobs:
           done
           cat latest.json
           sha256sum Kyro-windows-x64-setup.exe Kyro-windows-x64.msi Kyro-macos.dmg \
-            Kyro-linux-x86_64.AppImage Kyro-linux-amd64.deb Kyro-macos.app.tar.gz latest.json > SHA256SUMS
+            Kyro-linux-x86_64.AppImage Kyro-linux-amd64.deb Kyro-macos.app.tar.gz Kyro-windows-x64.msix \
+            latest.json > SHA256SUMS
           cat SHA256SUMS
 
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
@@ -256,6 +265,7 @@ jobs:
             dist-release/Kyro-windows-x64-setup.exe
             dist-release/Kyro-windows-x64-setup.exe.sig
             dist-release/Kyro-windows-x64.msi
+            dist-release/Kyro-windows-x64.msix
             dist-release/Kyro-macos.dmg
             dist-release/Kyro-macos.app.tar.gz
             dist-release/Kyro-macos.app.tar.gz.sig

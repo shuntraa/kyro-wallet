@@ -1275,4 +1275,89 @@ export function notFound() {
   return { path: '/404.html', title: 'Page not found | Kyro Wallet', description: 'This page does not exist on kyrowallet.com.', body, noindex: true, ld: [] };
 }
 
+// ------------------------------------------------------------------ privacy
+
+export function privacy() {
+  const path = '/privacy/';
+  const trail = [['/', 'Home'], [path, 'Privacy']];
+  const title = 'Privacy policy | Kyro Wallet';
+  const description =
+    'Kyro Wallet collects no personal data: no account, no analytics, no telemetry. Network requests go only to the blockchain, price and swap providers listed in NETWORK.md, over Tor by default.';
+
+  const body = html`
+    ${pageHero({
+      trail,
+      eyebrow: 'Privacy',
+      h1: 'Privacy policy',
+      lead: 'Kyro Wallet collects no personal data. There is no account, no analytics and no telemetry.'
+    })}
+
+    <section class="section section-tight" aria-label="Privacy policy">
+      <div class="wrap">
+        <div class="prose">
+          <h2 id="collect">What Kyro collects</h2>
+          <p>Nothing. The Kyro developers do not receive any data from the app: no personal data, no usage statistics, no crash reports, no identifiers. Kyro has no user accounts and no sign-up.</p>
+
+          <h2 id="device">Data on your device</h2>
+          <p>Your recovery phrase and keys are encrypted with your password (Argon2id, then XChaCha20-Poly1305) and stored only on your computer. Settings, contacts and cached balances also stay on your computer. Nothing is backed up to a server or a cloud. Uninstalling Kyro and deleting its app folder removes this data; keep your recovery phrase on paper to restore your wallet.</p>
+
+          <h2 id="network">Network requests</h2>
+          <p>To show balances, prices and history, and to send transactions and swaps, Kyro contacts only the blockchain, price and swap providers listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>, which also says what each one sees. These requests go through the Tor network built into Kyro by default, so the providers do not see your IP address. They do see what you ask for: the public addresses you look up, the transactions you broadcast and, for swaps, the tokens, amounts and receiving address. Their own privacy policies apply to that data. You can use your own nodes and servers instead (Settings, Networks).</p>
+          <p>The website kyrowallet.com sets no cookies and uses no trackers or analytics.</p>
+
+          <h2 id="contact">Contact</h2>
+          <p>Questions about privacy: open an issue on <a href="${REPO}/issues">GitHub</a>. Security issues: report them privately through <a href="${REPO}/security">GitHub security advisories</a>.</p>
+          <p>Last updated: 1 November 2026.</p>
+        </div>
+      </div>
+    </section>`;
+
+  return { path, title, description, body, ld: webPage(path, 'Kyro Wallet privacy policy', description, trail) };
+}
+
+// ------------------------------------------------------------------ code signing policy
+
+export function codeSigningPolicy() {
+  const path = '/code-signing-policy/';
+  const trail = [['/', 'Home'], [path, 'Code signing policy']];
+  const title = 'Code signing policy | Kyro Wallet';
+  const description =
+    'How Kyro Wallet release builds are code signed: free code signing by SignPath.io with a certificate by SignPath Foundation (pending approval), only for builds from the public GitHub Actions workflow.';
+
+  const body = html`
+    ${pageHero({
+      trail,
+      eyebrow: 'Code signing',
+      h1: 'Code signing policy',
+      lead: 'Free code signing provided by SignPath.io, certificate by SignPath Foundation.'
+    })}
+
+    <section class="section section-tight" aria-label="Code signing policy">
+      <div class="wrap">
+        <div class="prose">
+          <h2 id="status">Status</h2>
+          <p>Code signing through the SignPath Foundation program for open-source projects is planned and pending approval. <b>Until it is approved, Kyro releases are not code signed</b> (Windows SmartScreen shows a warning; see <a href="/download/#first-launch">First launch</a>). Automatic updates are signed separately with Kyro's update key and checked by the app. This page applies as soon as signing is active.</p>
+
+          <h2 id="what">What is signed</h2>
+          <p>Only release builds of Kyro Wallet built by the public GitHub Actions <a href="${REPO}/blob/main/.github/workflows/release.yml">release workflow</a> of <a href="${REPO}">github.com/shuntraa/kyro-wallet</a>, from a version tag, from the source code in that repository. Nothing built on a personal computer is signed, and the certificate is never used to sign anything else: no third-party software, no other project, no modified builds.</p>
+
+          <h2 id="roles">Team roles</h2>
+          <ul>
+            <li>Committers and reviewers: <a href="https://github.com/shuntraa">shuntraa</a> (maintainer).</li>
+            <li>Approvers (each signing request is approved by hand): <a href="https://github.com/shuntraa">shuntraa</a>.</li>
+          </ul>
+          <p>Every change to the repository goes through the maintainer.</p>
+
+          <h2 id="privacy">Privacy</h2>
+          <p>Kyro collects no personal data and transfers no information to other networked systems unless you ask for it: the blockchain, price and swap requests you trigger go to the providers listed in <a href="${REPO}/blob/main/docs/NETWORK.md">NETWORK.md</a>, over Tor by default. See the <a href="/privacy/">privacy policy</a>.</p>
+
+          <h2 id="report">Report a problem</h2>
+          <p>If you find a signed file that does not come from this project's release workflow, report it through <a href="${REPO}/security">GitHub security advisories</a>.</p>
+        </div>
+      </div>
+    </section>`;
+
+  return { path, title, description, body, ld: webPage(path, 'Kyro Wallet code signing policy', description, trail) };
+}
+
 export { FAQ };
