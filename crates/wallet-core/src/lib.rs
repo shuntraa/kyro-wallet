@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Aptos (APT transfers, BCS) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -22,6 +22,7 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+mod aptos;
 mod btc;
 mod btc_hw;
 mod btc_watch;
@@ -42,6 +43,13 @@ mod vault;
 mod watch;
 mod xrp;
 
+pub use aptos::{
+    aptos_address, aptos_address_bytes_of_pubkey, aptos_address_of_pubkey, aptos_address_string,
+    aptos_decode_tx, aptos_parse_address, aptos_path, aptos_public_key, aptos_sign,
+    aptos_signing_message, aptos_simulation_bytes, aptos_tx_hash, aptos_verify_signed,
+    AptosTransfer, AptosTxSummary, AptosWarning, APTOS_ED25519_SCHEME, APTOS_HIGH_FEE_OCTAS,
+    APTOS_MAINNET_CHAIN_ID, APTOS_TESTNET_CHAIN_ID, APTOS_TRANSFER_FUNCTION, OCTAS_PER_APT,
+};
 pub use btc::{
     btc_account, btc_address, btc_decode_psbt, btc_psbt_summary, btc_sign_psbt, BtcAccount,
     BtcTxSummary, BtcWarning, BTC_HIGH_FEE_SAT_PER_VB, MAX_CHANGE_INDEX,
