@@ -96,7 +96,7 @@ export interface AdapterSet {
   algo: AlgorandAdapter | null;
   /** Monero: vault only (hardware wallets: HW_UNSUPPORTED). */
   xmr: XmrAdapter | null;
-  /** TON: vault only (no hardware wallet support). */
+  /** TON: vault or Ledger (structured transfer request). */
   ton: TonAdapter | null;
   /** Cosmos Hub: vault or Ledger (amino JSON). */
   cosmos: CosmosAdapter | null;
@@ -162,7 +162,7 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   // Monero: Rust picks the node (servers.monero) and scans locally.
   const xmr = accounts.xmr && !hw ? new XmrAdapter({ chain: xmrChain(network), address: accounts.xmr.address, ...a }) : null;
   // TON: Rust picks the server (TON Center).
-  const ton = accounts.ton ? new TonAdapter({ chain: tonChain(network), address: accounts.ton.address, ...a }) : null;
+  const ton = accounts.ton ? new TonAdapter({ chain: tonChain(network), address: accounts.ton.address, ...h, ...a }) : null;
   // Cosmos Hub: Rust picks the server (default LCD, no custom server yet).
   const cosmos = accounts.cosmos ? new CosmosAdapter({ chain: cosmosChain(network), address: accounts.cosmos.address, ...h, ...a }) : null;
   // Aptos: Rust picks the server (Aptos Labs fullnode, no custom server yet).

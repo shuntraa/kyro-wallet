@@ -293,7 +293,7 @@ Détails techniques : [docs/IPC.md §2.8](docs/IPC.md). Comme pour les paiements
 
 ## Hardware wallets (Ledger, Trezor)
 
-Détails techniques : [docs/IPC.md §2.3](docs/IPC.md). **État : jamais exécuté contre un vrai appareil ni un émulateur** ; testé sur des échanges APDU enregistrés par Ledger et un firmware Trezor simulé (Trezor Safe 7 : contre l'implémentation THP côté appareil de Trezor, voir plus bas). Chaînes : Bitcoin, EVM, Solana (Ledger et Trezor) ; Sui, Aptos, Algorand, NEAR et Cosmos Hub (**Ledger seulement**, aucune app Trezor n'existe). Litecoin, Dogecoin, Zcash, TRON, XRP, Cardano, Stellar et Hedera : `HW_UNSUPPORTED` ; Polkadot, Kaspa, TON : non proposés (raisons plus bas).
+Détails techniques : [docs/IPC.md §2.3](docs/IPC.md). **État : jamais exécuté contre un vrai appareil ni un émulateur** ; testé sur des échanges APDU enregistrés par Ledger et un firmware Trezor simulé (Trezor Safe 7 : contre l'implémentation THP côté appareil de Trezor, voir plus bas). Chaînes : Bitcoin, EVM, Solana (Ledger et Trezor) ; Sui, Aptos, Algorand, NEAR, Cosmos Hub et TON (**Ledger seulement**, aucune app Trezor n'existe). Litecoin, Dogecoin, Zcash, TRON, XRP, Cardano, Stellar et Hedera : `HW_UNSUPPORTED` ; Polkadot, Kaspa : non proposés (raisons plus bas).
 
 ### Ce que l'appareil protège
 
@@ -336,7 +336,14 @@ Le Safe 7 parle le **Trezor Host Protocol** (THP) : un canal chiffré et authent
 
 ### Chaînes non prises en charge sur hardware wallet
 
-Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar et Monero : `HW_UNSUPPORTED`. Non proposés, pour des raisons de protocole ([docs/IPC.md](docs/IPC.md) §2.3) : **Polkadot** (l'app Ledger exige la preuve des métadonnées RFC-0078 et des clés ed25519, Kyro signe en sr25519 sans cette preuve), **Hedera** (l'app Ledger signe en ed25519, les comptes Kyro sont ECDSA), **Kaspa** (protocole de l'app non vérifié contre les règles actuelles), **TON** (l'app reconstruit le message elle-même ; pas encore écrit). Les mêmes règles s'appliqueraient (dialogue natif, vérification de chaque signature par Rust).
+Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar et Monero : `HW_UNSUPPORTED`. Non proposés, pour des raisons de protocole ([docs/IPC.md](docs/IPC.md) §2.3) : **Polkadot** (l'app Ledger exige la preuve des métadonnées RFC-0078 et des clés ed25519, Kyro signe en sr25519 sans cette preuve), **Hedera** (l'app Ledger signe en ed25519, les comptes Kyro sont ECDSA), **Kaspa** (protocole de l'app non vérifié contre les règles actuelles). Les mêmes règles s'appliqueraient (dialogue natif, vérification de chaque signature par Rust).
+
+### TON sur Ledger
+
+- **Autre portefeuille que le coffre.** L'app Ledger « TON » (≥ 2.1.0) utilise le chemin à six niveaux de Ledger Live, `m/44'/607'/0'/0'/n'/0'` ; le coffre utilise `m/44'/607'/n'` : une même phrase donne une autre clé, donc une autre adresse v4R2. Le compte hardware wallet est étiqueté comme tel ; son adresse est recalculée par Kyro depuis la clé (portefeuille v4R2, **wallet id du réseau** : standard 698983191 sur mainnet, `0x4B59524F` sur testnet comme le coffre — la requête « tag 1 » de l'app permet de le fixer, donc la protection testnet → mainnet est la même).
+- **L'appareil reconstruit et affiche le transfert.** Kyro n'envoie pas d'octets opaques : il envoie la requête structurée de l'app (`doc/TRANSACTION.md` de LedgerHQ/app-ton : wallet id, seqno, échéance, montant, destinataire, rebond, mode, commentaire et son « hint »), l'appareil reconstruit la cellule d'ordre v4R2, affiche destinataire, montant et commentaire, et signe son hash. Kyro compare ce hash à **son propre** hash de la cellule (sinon refus : l'appareil aurait signé autre chose), vérifie la signature ed25519 (`verify_strict`), puis revérifie le message signé avant diffusion. Jamais de signature « à l'aveugle » (pas de charge utile sans hint).
+- **Restrictions sur Ledger** : commentaire en **ASCII imprimable, 120 caractères au plus** (limite de l'app) ; sans commentaire, le corps vide est en ligne (forme que l'app reconstruit) ; mêmes règles que le coffre pour le reste (un message, mode 3 ou 130, pas de `StateInit` interne, pas de jetons).
+- **Risques résiduels.** Écrit d'après le code de l'app (LedgerHQ/app-ton 2.9) et `@ton-community/ton-ledger` ; **jamais exécuté contre un vrai appareil ni Speculos**. Une erreur de format ferait refuser le transfert par l'appareil ou par Kyro (hash différent), pas signer autre chose.
 
 ### Sui, Aptos, Algorand, NEAR, Cosmos Hub sur Ledger
 

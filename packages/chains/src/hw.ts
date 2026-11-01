@@ -53,7 +53,7 @@ export interface WalletAccounts {
   algo?: { address: string; path?: string };
   /** Vault only: Monero on a hardware wallet is HW_UNSUPPORTED. */
   xmr?: { address: string; path?: string };
-  /** Vault only: no hardware wallet signs TON in Kyro. */
+  /** TON v4R2 wallet (vault, or Ledger « TON » app: key at `m/44'/607'/0'/0'/account'/0'`, another wallet than the vault's). */
   ton?: { address: string; path?: string };
   /** Cosmos Hub (vault, or Ledger « Cosmos » app, amino JSON signing). */
   cosmos?: { address: string; path?: string };
@@ -110,13 +110,14 @@ export function hwToAccounts(acc: WatchOnlyAccount): WalletAccounts {
     else if (k.chain === 'apt') out.aptos = view;
     else if (k.chain === 'algo') out.algo = view;
     else if (k.chain === 'near') out.near = view;
-    else out.cosmos = view;
+    else if (k.chain === 'cosmos') out.cosmos = view;
+    else out.ton = view;
   }
   return out;
 }
 
 /** Single-key chains a Ledger can add to a hardware-wallet account (`hw_key_add`). */
-export const HW_KEY_CHAINS: readonly HwKeyChain[] = ['sui', 'apt', 'algo', 'near', 'cosmos'];
+export const HW_KEY_CHAINS: readonly HwKeyChain[] = ['sui', 'apt', 'algo', 'near', 'cosmos', 'ton'];
 
 /** Master fingerprint of the account (Bitcoin keys), for display. */
 export function hwFingerprint(acc: WatchOnlyAccount): string | null {

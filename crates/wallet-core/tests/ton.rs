@@ -251,6 +251,7 @@ fn transfer(seed_words: &str, testnet: bool) -> TonTransfer {
         amount: 1_500_000_000,
         comment: Some("123456".into()),
         with_state_init: false,
+        inline_empty_body: false,
     }
 }
 

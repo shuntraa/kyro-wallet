@@ -163,7 +163,7 @@ impl WatchOnlyAccount {
                 .map_err(|_| Error::input("invalid Solana address"))?;
             crate::sol::sol_address_of_pubkey(&bytes)?;
         }
-        crate::hw_keys::validate_keys(&self.keys, self.account)?;
+        crate::hw_keys::validate_keys(&self.keys, self.account, self.network)?;
         Ok(())
     }
 

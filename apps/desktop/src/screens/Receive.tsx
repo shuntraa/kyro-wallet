@@ -242,7 +242,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
 
   const verifyOnDevice = async () => {
     // Ledger single-key chains: the app shows the address (NEAR: the ed25519 key), Rust compares.
-    if (activeHw && (family === 'sui' || family === 'apt' || family === 'algo' || family === 'near' || family === 'cosmos')) {
+    if (activeHw && (family === 'sui' || family === 'apt' || family === 'algo' || family === 'near' || family === 'cosmos' || family === 'ton')) {
       const keyChain = family;
       const shown = address;
       let deviceId = '';

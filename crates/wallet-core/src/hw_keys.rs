@@ -1,5 +1,5 @@
 //! Single-key chains of a watch-only hardware-wallet account (Ledger apps Sui, Aptos,
-//! Algorand, NEAR, Cosmos): one public key per chain and account, read from the device.
+//! Algorand, NEAR, Cosmos, TON): one public key per chain and account, read from the device.
 //!
 //! Each [`WatchKey`] stores the public key, the address Kyro derives from it and the path the
 //! device used. [`WatchKey::validate`] recomputes the address from the key and the path from
@@ -10,11 +10,17 @@
 //! vault and on the Ledger), **except NEAR**: the Ledger NEAR app only accepts five-level
 //! paths, Kyro's vault uses `m/44'/397'/account'`; hardware NEAR accounts therefore use the
 //! path of Ledger Live and the NEAR wallets, `m/44'/397'/0'/0'/(account + 1)'` — another key,
-//! another implicit account than the vault's.
+//! another implicit account than the vault's. **TON** likewise: the Ledger TON app's path is
+//! the six-level one of Ledger Live / `@ton-community/ton-ledger`,
+//! `m/44'/607'/0'/0'/account'/0'` (the vault uses `m/44'/607'/account'`), so a hardware TON
+//! account is another key and another wallet address than the vault's. Its address also
+//! depends on the network (v4R2 wallet id, see `ton.rs`): it is recomputed for the account's
+//! network.
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
+use crate::network::Network;
 
 /// Chains stored as a single public key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -31,16 +37,19 @@ pub enum HwKeyChain {
     Near,
     /// Cosmos Hub (secp256k1, Ledger app « Cosmos »).
     Cosmos,
+    /// TON (ed25519, Ledger app « TON », wallet v4R2).
+    Ton,
 }
 
 impl HwKeyChain {
     /// Every chain, in display order.
-    pub const ALL: [HwKeyChain; 5] = [
+    pub const ALL: [HwKeyChain; 6] = [
         HwKeyChain::Sui,
         HwKeyChain::Aptos,
         HwKeyChain::Algo,
         HwKeyChain::Near,
         HwKeyChain::Cosmos,
+        HwKeyChain::Ton,
     ];
 
     /// BIP32 path (raw indices) used on the device for `account`.
@@ -53,6 +62,7 @@ impl HwKeyChain {
             HwKeyChain::Algo => vec![44 | H, 283 | H, a, 0, 0],
             HwKeyChain::Near => vec![44 | H, 397 | H, H, H, (account + 1) | H],
             HwKeyChain::Cosmos => vec![44 | H, 118 | H, a, 0, 0],
+            HwKeyChain::Ton => vec![44 | H, 607 | H, H, H, a, H],
         }
     }
 
@@ -77,9 +87,10 @@ impl HwKeyChain {
         }
     }
 
-    /// Address of a public key (also checks the key's length and, for Cosmos, that it is a
-    /// valid compressed secp256k1 point; ed25519 keys are checked by `ed25519-dalek`).
-    pub fn address_of(self, pubkey: &[u8]) -> Result<String> {
+    /// Address of a public key on `network` (also checks the key's length and, for Cosmos,
+    /// that it is a valid compressed secp256k1 point; ed25519 keys are checked by
+    /// `ed25519-dalek`). Only TON's address depends on the network.
+    pub fn address_of(self, pubkey: &[u8], network: Network) -> Result<String> {
         if pubkey.len() != self.key_len() {
             return Err(Error::input(
                 "hardware-wallet public key of the wrong length",
@@ -103,6 +114,12 @@ impl HwKeyChain {
                     .map_err(|_| Error::input("invalid secp256k1 public key"))?;
                 crate::cosmos::cosmos_address_of_pubkey(pubkey)?
             }
+            HwKeyChain::Ton => {
+                let k: [u8; 32] = pubkey.try_into().map_err(|_| Error::input("public key"))?;
+                let testnet = network == Network::Testnet;
+                crate::ton::ton_wallet_address(&k, crate::ton::ton_wallet_id(testnet))?
+                    .to_friendly(false, testnet)
+            }
         })
     }
 }
@@ -122,11 +139,11 @@ pub struct WatchKey {
 }
 
 impl WatchKey {
-    /// Builds the record for `pubkey` read at `account`.
-    pub fn new(chain: HwKeyChain, account: u32, pubkey: &[u8]) -> Result<Self> {
+    /// Builds the record for `pubkey` read at `account`, for `network`.
+    pub fn new(chain: HwKeyChain, account: u32, network: Network, pubkey: &[u8]) -> Result<Self> {
         Ok(WatchKey {
             chain,
-            address: chain.address_of(pubkey)?,
+            address: chain.address_of(pubkey, network)?,
             pubkey: hex::encode(pubkey),
             path: chain.path_string(account),
         })
@@ -137,12 +154,12 @@ impl WatchKey {
         hex::decode(&self.pubkey).map_err(|_| Error::input("public key must be hex"))
     }
 
-    /// The address is the one of the key, the path the one of `account`.
-    pub fn validate(&self, account: u32) -> Result<()> {
+    /// The address is the one of the key (on `network`), the path the one of `account`.
+    pub fn validate(&self, account: u32, network: Network) -> Result<()> {
         if self.pubkey != self.pubkey.to_ascii_lowercase() {
             return Err(Error::input("public key must be lowercase hex"));
         }
-        if self.chain.address_of(&self.pubkey_bytes()?)? != self.address {
+        if self.chain.address_of(&self.pubkey_bytes()?, network)? != self.address {
             return Err(Error::input("address does not match the stored public key"));
         }
         if self.path != self.chain.path_string(account) {
@@ -153,9 +170,9 @@ impl WatchKey {
 }
 
 /// Checks a list of keys: valid each, at most one per chain.
-pub(crate) fn validate_keys(keys: &[WatchKey], account: u32) -> Result<()> {
+pub(crate) fn validate_keys(keys: &[WatchKey], account: u32, network: Network) -> Result<()> {
     for (i, k) in keys.iter().enumerate() {
-        k.validate(account)?;
+        k.validate(account, network)?;
         if keys[..i].iter().any(|o| o.chain == k.chain) {
             return Err(Error::input("at most one key per chain"));
         }
@@ -184,6 +201,8 @@ mod tests {
         );
         // Ledger Live's default NEAR path for account 0.
         assert_eq!(HwKeyChain::Near.path_string(0), "m/44'/397'/0'/0'/1'");
+        // `@ton-community/ton-ledger` pathForAccount({ testOnly: false, chain: 0, account: 3 }).
+        assert_eq!(HwKeyChain::Ton.path_string(3), "m/44'/607'/0'/0'/3'/0'");
     }
 
     #[test]
@@ -191,14 +210,22 @@ mod tests {
         // NEAR app vector (LedgerHQ/app-near tests/common.py, path 44'/397'/0'/0'/1').
         let pk = hex::decode("c4f5941e81e071c2fd1dae2e71fd3d859d462484391d9a90bf219211dcbb320f")
             .unwrap();
-        let k = WatchKey::new(HwKeyChain::Near, 0, &pk).unwrap();
+        let m = Network::Mainnet;
+        let k = WatchKey::new(HwKeyChain::Near, 0, m, &pk).unwrap();
         assert_eq!(k.address, hex::encode(&pk));
-        k.validate(0).unwrap();
-        assert!(k.validate(1).is_err());
+        k.validate(0, m).unwrap();
+        assert!(k.validate(1, m).is_err());
         let mut bad = k.clone();
         bad.address = "f".repeat(64);
-        assert!(bad.validate(0).is_err());
-        assert!(WatchKey::new(HwKeyChain::Cosmos, 0, &pk).is_err());
-        assert!(validate_keys(&[k.clone(), k], 0).is_err());
+        assert!(bad.validate(0, m).is_err());
+        assert!(WatchKey::new(HwKeyChain::Cosmos, 0, m, &pk).is_err());
+        assert!(validate_keys(&[k.clone(), k], 0, m).is_err());
+        // TON: the address depends on the network (wallet id and testnet flag).
+        let t = WatchKey::new(HwKeyChain::Ton, 0, m, &pk).unwrap();
+        assert!(t.address.starts_with("UQ"));
+        t.validate(0, m).unwrap();
+        assert!(t.validate(0, Network::Testnet).is_err());
+        let tt = WatchKey::new(HwKeyChain::Ton, 0, Network::Testnet, &pk).unwrap();
+        assert!(tt.address.starts_with("0Q"));
     }
 }

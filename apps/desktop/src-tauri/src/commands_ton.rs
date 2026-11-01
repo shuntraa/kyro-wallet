@@ -44,7 +44,7 @@ fn ours(state: &AppState, account: u32) -> AppResult<([u8; 32], TonAddress)> {
     })
 }
 
-fn now() -> u32 {
+pub(crate) fn now() -> u32 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| u32::try_from(d.as_secs()).unwrap_or(u32::MAX))
@@ -284,6 +284,8 @@ pub(crate) struct TransferRequest<'a> {
     pub amount: &'a str,
     pub comment: Option<&'a str>,
     pub send_all: bool,
+    /// Ledger account: the layout the Ledger TON app signs (empty body inline, ASCII comment).
+    pub hw: bool,
 }
 
 /// Builds an unsigned transfer from live data.
@@ -306,6 +308,12 @@ pub(crate) async fn build(
         ));
     }
     let deploy = account.status == TonStatus::Uninit;
+    if req.hw {
+        if let Some(c) = &comment {
+            wallet_core::ton_hw_check_comment(c)?;
+        }
+    }
+    let inline_empty_body = req.hw && comment.is_none();
     let t = TonTransfer {
         public_key: *public_key,
         wallet_id: wallet_core::ton_wallet_id(testnet(c.network)),
@@ -327,6 +335,7 @@ pub(crate) async fn build(
         amount,
         comment,
         with_state_init: deploy,
+        inline_empty_body,
     };
     // Cell layout and limits are checked by wallet-core before any request.
     let boc = wallet_core::ton_unsigned_transfer(&t)?;
@@ -363,6 +372,7 @@ pub async fn ton_build_tx(
         amount: &amount,
         comment: comment.as_deref(),
         send_all: send_all.unwrap_or(false),
+        hw: false,
     };
     build(&ctx(&state), &pk, &me, &req, now()).await
 }
@@ -783,6 +793,7 @@ mod live {
                     amount: "1000000",
                     comment: Some("kyro"),
                     send_all: false,
+                    hw: false,
                 };
                 let r = build(&c, &pk, &me, &req, now()).await;
                 eprintln!("unfunded build: {:?}", r.as_ref().err());
@@ -795,6 +806,7 @@ mod live {
                 amount: "10000000",
                 comment: Some("Kyro test"),
                 send_all: false,
+                hw: false,
             };
             let built = build(&c, &pk, &me, &req, now()).await.unwrap();
             let (summary, context) = prepare_sign(&c, &pk, &me, &built.boc, now()).await.unwrap();

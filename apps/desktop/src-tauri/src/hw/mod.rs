@@ -23,6 +23,7 @@ pub mod ledger_aptos;
 pub mod ledger_cosmos;
 pub mod ledger_near;
 pub mod ledger_sui;
+pub mod ledger_ton;
 pub mod store;
 pub mod thp;
 #[cfg(test)]

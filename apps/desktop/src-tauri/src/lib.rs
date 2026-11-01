@@ -22,6 +22,7 @@ mod commands_hw_cosmos;
 mod commands_hw_keys;
 mod commands_hw_near;
 mod commands_hw_sui;
+mod commands_hw_ton;
 mod commands_kaspa;
 mod commands_near;
 mod commands_servers;
@@ -380,6 +381,9 @@ pub fn run() {
             commands_hw_near::hw_sign_near_tx,
             commands_hw_near::hw_near_broadcast,
             commands_hw_near::hw_near_tx_status,
+            commands_hw_ton::hw_ton_build_tx,
+            commands_hw_ton::hw_sign_ton_tx,
+            commands_hw_ton::hw_ton_broadcast,
             commands_hw_cosmos::hw_cosmos_build_tx,
             commands_hw_cosmos::hw_sign_cosmos_tx,
             commands_hw_cosmos::hw_cosmos_broadcast,
