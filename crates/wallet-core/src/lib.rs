@@ -37,6 +37,7 @@ mod sol;
 mod sol_decode;
 mod sol_stake;
 mod sui;
+mod sui_tx;
 mod tron;
 mod utxo;
 mod vault;
@@ -100,6 +101,11 @@ pub use sol_stake::{
 pub use sui::{
     sui_address, sui_address_bytes_of_pubkey, sui_address_of_pubkey, sui_address_string,
     sui_parse_address, sui_path, sui_public_key, SUI_ED25519_FLAG,
+};
+pub use sui_tx::{
+    sui_decode_tx, sui_sign, sui_tx_digest, sui_verify_signed, SuiGasCoinView, SuiObjectRef,
+    SuiTransfer, SuiTransferAmount, SuiTxSummary, SuiWarning, MIST_PER_SUI, SUI_COIN_TYPE,
+    SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS,
 };
 pub use tron::{
     tron_address, tron_address_at, tron_address_bytes, tron_address_from_bytes,

@@ -84,3 +84,233 @@ fn invalid_public_keys_are_refused() {
     not_a_point[0] = 2;
     assert!(sui_address_of_pubkey(&not_a_point).is_err());
 }
+
+// ---------------------------------------------------------------- transfers (BCS, signing)
+
+use base64::Engine as _;
+use wallet_core::{
+    sui_address_string, sui_decode_tx, sui_sign, sui_tx_digest, sui_verify_signed, Seed,
+    SuiObjectRef, SuiTransfer, SuiTransferAmount, SuiWarning,
+};
+
+fn b64(b: &[u8]) -> String {
+    base64::engine::general_purpose::STANDARD.encode(b)
+}
+
+fn unb64(s: &str) -> Vec<u8> {
+    base64::engine::general_purpose::STANDARD.decode(s).unwrap()
+}
+
+/// Mainnet SUI transfers made with the official TypeScript SDK (`splitCoins(gas, [amount])` +
+/// `transferObjects([coin], to)`), fetched 2026-11-01 from `graphql.mainnet.sui.io`
+/// (`transaction(digest) { transactionBcs signatures { signatureBytes } }`, status SUCCESS):
+/// (digest, transactionBcs, user signature).
+const MAINNET: [(&str, &str, &str); 2] = [
+    (
+        "qoQG6UgMDH39fa9hxUHxRcFDrmFR3zURqHP2FPcYXG9",
+        "AAACAAhgrR8AAAAAAAAgYkkPS1gdnrlMpzX0c13xp7iGjcsB0uL1MadmQ7eTgt4CAgABAQAAAQEDAAAAAAEBABd6D2uW4sdnA9l7OZkKYhBq7juwSLX7+k/P38ZxxUhpAVnypLM4p9uMIC/4T4MUy7X6RmX77Az4gMEC6NtWS85zS5CUKAAAAAAgK7D+xsyF+SZZVJan490OJ2Hb5sAJ0iinLtHTB72d6EIXeg9rluLHZwPZezmZCmIQau47sEi1+/pPz9/GccVIaWQAAAAAAAAAYK0fAAAAAAAA",
+        "ACie0reggetvwlNmNoGywfxoPpUoMKcM5pKTDHkPG8nR6EsZuu8/cwNsVeQnilRlaf1lkEAZ1LX25AfW3I5eaw8jUSXrJy5K5wd8LegagQBocErsDTiHUyp8HhRTA3kv9Q==",
+    ),
+    (
+        "GJmVEkKPbmC9Q5pwi7uanUxRFhbkjNBmnopuEMJp27tm",
+        "AAACAAjGBk2fGQAAAAAgP5ilws7vKotLPHtJFV14Wj/I0J1hGd8b8+IGNXmruekCAgABAQAAAQEDAAAAAAEBAPeORg2c2AzrM3C0cF7d7/0/x3qHUCppGAjbQcOoNhCeAY+JJheGrtiwGXf1+draBcAPTEXbNPMGxnxBxiAltKzrAEO/PgAAAAAga1CH4NfE/MMWokMmN0UZ5LTHaDWf6vFhRR+D1zKya+b3jkYNnNgM6zNwtHBe3e/9P8d6h1AqaRgI20HDqDYQnugDAAAAAAAAAOH1BQAAAAAA",
+        "AHUHFuH3ly7yyG/kxlKNn566Xzp4nWsH6Nu4A2K6pfdl5nEuG5xdStAdRNiKprcULZ3QESQw7BYF5HRz4iH9sAYAVUWxpBnDJwVHGFWThUuix+vDVM7cLXXL5+gkMoCBTg==",
+    ),
+];
+
+#[test]
+fn mainnet_transfers_decode_reencode_and_verify() {
+    for (digest, bcs, sig) in MAINNET {
+        let raw = unb64(bcs);
+        let t = SuiTransfer::decode(&raw).unwrap();
+        assert_eq!(t.encode().unwrap(), raw);
+        assert_eq!(sui_tx_digest(&raw), digest);
+        // The chain's own signature verifies over BLAKE2b(intent || bcs), by the sender's key.
+        assert_eq!(sui_verify_signed(bcs, sig).unwrap(), digest);
+        let s = sui_decode_tx(bcs, &sui_address_string(&t.sender)).unwrap();
+        assert_eq!(s.digest, digest);
+        assert_eq!(s.coin_type, "0x2::sui::SUI");
+        assert_eq!(s.gas_coins.len(), 1);
+        // These SDK transactions carry no expiration: flagged.
+        assert_eq!(s.warnings, vec![SuiWarning::NoExpiration]);
+        assert!(s.requires_extra_confirmation);
+        // Someone else's transaction is refused.
+        assert!(sui_decode_tx(bcs, KEYTOOL_MNEMONICS[0].1).is_err());
+    }
+    // Field values of the first vector, rebuilt from scratch: same bytes.
+    let addr = |a: &str| sui_parse_address(a).unwrap();
+    let rebuilt = SuiTransfer {
+        sender: addr("0x177a0f6b96e2c76703d97b39990a62106aee3bb048b5fbfa4fcfdfc671c54869"),
+        recipient: addr("0x62490f4b581d9eb94ca735f4735df1a7b8868dcb01d2e2f531a76643b79382de"),
+        amount: SuiTransferAmount::Mist(2_076_000),
+        gas_payment: vec![SuiObjectRef {
+            object_id: addr("0x59f2a4b338a7db8c202ff84f8314cbb5fa4665fbec0cf880c102e8db564bce73"),
+            version: 0x2894_904b,
+            digest: hex::decode("2bb0fec6cc85f926595496a7e3dd0e2761dbe6c009d228a72ed1d307bd9de842")
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        }],
+        gas_price: 100,
+        gas_budget: 2_076_000,
+        expiration_epoch: None,
+    };
+    assert_eq!(b64(&rebuilt.encode().unwrap()), MAINNET[0].1);
+    let s = sui_decode_tx(MAINNET[0].1, &sui_address_string(&rebuilt.sender)).unwrap();
+    assert_eq!(s.amount.as_deref(), Some("2076000"));
+    assert_eq!(s.gas_price, "100");
+    assert_eq!(s.gas_budget, "2076000");
+    assert_eq!(
+        s.recipient,
+        "0x62490f4b581d9eb94ca735f4735df1a7b8868dcb01d2e2f531a76643b79382de"
+    );
+    let g = &s.gas_coins[0];
+    assert_eq!(
+        SuiObjectRef::parse(&g.object_id, g.version.parse().unwrap(), &g.digest).unwrap(),
+        rebuilt.gas_payment[0]
+    );
+}
+
+fn ours_transfer(amount: SuiTransferAmount) -> (Seed, SuiTransfer) {
+    let s = seed(KEYTOOL_MNEMONICS[0].0);
+    let me = sui_parse_address(&sui_address(&s, 0).unwrap()).unwrap();
+    let t = SuiTransfer {
+        sender: me,
+        recipient: sui_parse_address(KEYTOOL_MNEMONICS[1].1).unwrap(),
+        amount,
+        gas_payment: vec![
+            SuiObjectRef {
+                object_id: [7u8; 32],
+                version: 42,
+                digest: [9u8; 32],
+            },
+            SuiObjectRef {
+                object_id: [8u8; 32],
+                version: 43,
+                digest: [10u8; 32],
+            },
+        ],
+        gas_price: 1000,
+        gas_budget: 5_000_000,
+        expiration_epoch: Some(1271),
+    };
+    (s, t)
+}
+
+#[test]
+fn sign_round_trip_and_send_all() {
+    for amount in [SuiTransferAmount::Mist(123_456_789), SuiTransferAmount::All] {
+        let (s, t) = ours_transfer(amount);
+        let bcs = b64(&t.encode().unwrap());
+        let (sig, summary) = sui_sign(&s, 0, &bcs).unwrap();
+        let raw = unb64(&sig);
+        assert_eq!(raw.len(), 97);
+        assert_eq!(raw[0], 0);
+        assert_eq!(&raw[65..], &sui_public_key(&s, 0).unwrap());
+        assert_eq!(sui_verify_signed(&bcs, &sig).unwrap(), summary.digest);
+        assert_eq!(summary.expiration_epoch, Some(1271));
+        match amount {
+            SuiTransferAmount::Mist(_) => {
+                assert_eq!(summary.amount.as_deref(), Some("123456789"));
+                assert!(summary.warnings.is_empty());
+                assert!(!summary.requires_extra_confirmation);
+            }
+            SuiTransferAmount::All => {
+                assert_eq!(summary.amount, None);
+                assert_eq!(summary.warnings, vec![SuiWarning::SendAll]);
+            }
+        }
+        // Another account cannot sign it (it is not the sender).
+        assert!(sui_sign(&s, 1, &bcs).is_err());
+        // A tampered signature is refused.
+        let mut forged = raw.clone();
+        forged[10] ^= 1;
+        assert!(sui_verify_signed(&bcs, &b64(&forged)).is_err());
+        // A valid signature by another key is refused (not the sender's key).
+        let other = seed(KEYTOOL_MNEMONICS[1].0);
+        let mut t2 = t.clone();
+        t2.sender = sui_parse_address(KEYTOOL_MNEMONICS[1].1).unwrap();
+        t2.recipient = t.sender;
+        let (sig2, _) = sui_sign(&other, 0, &b64(&t2.encode().unwrap())).unwrap();
+        assert!(sui_verify_signed(&bcs, &sig2).is_err());
+    }
+    // Self transfer and a high budget are flagged.
+    let (s, mut t) = ours_transfer(SuiTransferAmount::Mist(1));
+    t.recipient = t.sender;
+    t.gas_budget = 200_000_000;
+    let (_, summary) = sui_sign(&s, 0, &b64(&t.encode().unwrap())).unwrap();
+    assert_eq!(
+        summary.warnings,
+        vec![SuiWarning::SelfTransfer, SuiWarning::HighGasBudget]
+    );
+}
+
+type Mutation = Box<dyn Fn(&mut SuiTransfer)>;
+
+#[test]
+fn everything_else_is_refused() {
+    let (_, t) = ours_transfer(SuiTransferAmount::Mist(5));
+    let good = t.encode().unwrap();
+    let me = sui_address_string(&t.sender);
+    assert!(sui_decode_tx(&b64(&good), &me).is_ok());
+    let refused = |bytes: &[u8], why: &str| {
+        assert!(sui_decode_tx(&b64(bytes), &me).is_err(), "{why}");
+    };
+    // Trailing byte, truncation.
+    let mut v = good.clone();
+    v.push(0);
+    refused(&v, "trailing byte");
+    refused(&good[..good.len() - 1], "truncated");
+    // TransactionData::V2 / another kind.
+    let mut v = good.clone();
+    v[0] = 1;
+    refused(&v, "V2");
+    let mut v = good.clone();
+    v[1] = 1;
+    refused(&v, "not a PTB");
+    // Object input instead of Pure.
+    let mut v = good.clone();
+    v[3] = 1;
+    refused(&v, "object input");
+    // Result(0) instead of NestedResult(0, 0): valid for Sui, but not what Kyro builds.
+    let hexs = hex::encode(&good);
+    let alt = hexs.replacen("0101030000000001", "010102000001", 1);
+    assert_ne!(alt, hexs);
+    refused(&hex::decode(alt).unwrap(), "Result(0)");
+    // MoveCall in place of SplitCoins.
+    let pos = hexs.find("02000101000001").unwrap() / 2;
+    let mut v = good.clone();
+    v[pos] = 0;
+    refused(&v, "MoveCall");
+    // Sponsor (gas owner ≠ sender): owner, price, budget, expiration tag + epoch at the end.
+    let owner_at = good.len() - 9 - 8 - 8 - 32;
+    let mut v = good.clone();
+    v[owner_at] ^= 1;
+    refused(&v, "sponsored");
+    // ValidDuring expiration (tag 2).
+    let mut v = good.clone();
+    let exp_at = good.len() - 9;
+    v[exp_at] = 2;
+    refused(&v, "ValidDuring");
+    // Encoder-side checks.
+    let cases: Vec<(Mutation, &str)> = vec![
+        (Box::new(|t| t.gas_payment.clear()), "no gas coin"),
+        (
+            Box::new(|t| t.gas_payment[1].object_id = t.gas_payment[0].object_id),
+            "duplicate gas coin",
+        ),
+        (Box::new(|t| t.gas_price = 0), "gas price 0"),
+        (Box::new(|t| t.gas_budget = 0), "budget 0"),
+        (
+            Box::new(|t| t.amount = SuiTransferAmount::Mist(0)),
+            "amount 0",
+        ),
+    ];
+    for (f, why) in cases {
+        let mut x = t.clone();
+        f(&mut x);
+        assert!(x.encode().is_err(), "{why}");
+    }
+    // Not base64.
+    assert!(sui_decode_tx("@@", &me).is_err());
+}
