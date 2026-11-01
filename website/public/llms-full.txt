@@ -924,6 +924,72 @@ Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
 One-line install, all files and checksums
 
 ================================================================
+Privacy policy | Kyro Wallet
+URL: https://kyrowallet.com/privacy/
+================================================================
+
+Privacy
+
+# Privacy policy
+
+Kyro Wallet collects no personal data. There is no account, no analytics and no telemetry.
+
+## What Kyro collects
+
+Nothing. The Kyro developers do not receive any data from the app: no personal data, no usage statistics, no crash reports, no identifiers. Kyro has no user accounts and no sign-up.
+
+## Data on your device
+
+Your recovery phrase and keys are encrypted with your password (Argon2id, then XChaCha20-Poly1305) and stored only on your computer. Settings, contacts and cached balances also stay on your computer. Nothing is backed up to a server or a cloud. Uninstalling Kyro and deleting its app folder removes this data; keep your recovery phrase on paper to restore your wallet.
+
+## Network requests
+
+To show balances, prices and history, and to send transactions and swaps, Kyro contacts only the blockchain, price and swap providers listed in NETWORK.md, which also says what each one sees. These requests go through the Tor network built into Kyro by default, so the providers do not see your IP address. They do see what you ask for: the public addresses you look up, the transactions you broadcast and, for swaps, the tokens, amounts and receiving address. Their own privacy policies apply to that data. You can use your own nodes and servers instead (Settings, Networks).
+
+The website kyrowallet.com sets no cookies and uses no trackers or analytics.
+
+## Contact
+
+Questions about privacy: open an issue on GitHub. Security issues: report them privately through GitHub security advisories.
+
+Last updated: 1 November 2026.
+
+================================================================
+Code signing policy | Kyro Wallet
+URL: https://kyrowallet.com/code-signing-policy/
+================================================================
+
+Code signing
+
+# Code signing policy
+
+Free code signing provided by SignPath.io, certificate by SignPath Foundation.
+
+## Status
+
+Code signing through the SignPath Foundation program for open-source projects is planned and pending approval. Until it is approved, Kyro releases are not code signed (Windows SmartScreen shows a warning; see First launch). Automatic updates are signed separately with Kyro's update key and checked by the app. This page applies as soon as signing is active.
+
+## What is signed
+
+Only release builds of Kyro Wallet built by the public GitHub Actions release workflow of github.com/shuntraa/kyro-wallet, from a version tag, from the source code in that repository. Nothing built on a personal computer is signed, and the certificate is never used to sign anything else: no third-party software, no other project, no modified builds.
+
+## Team roles
+
+- Committers and reviewers: shuntraa (maintainer).
+
+- Approvers (each signing request is approved by hand): shuntraa.
+
+Every change to the repository goes through the maintainer.
+
+## Privacy
+
+Kyro collects no personal data and transfers no information to other networked systems unless you ask for it: the blockchain, price and swap requests you trigger go to the providers listed in NETWORK.md, over Tor by default. See the privacy policy.
+
+## Report a problem
+
+If you find a signed file that does not come from this project's release workflow, report it through GitHub security advisories.
+
+================================================================
 Bitcoin wallet for Windows, macOS and Linux | Kyro
 URL: https://kyrowallet.com/chains/bitcoin/
 ================================================================

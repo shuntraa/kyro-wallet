@@ -36,6 +36,16 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://kyrowallet.com/privacy/</loc>
+    <lastmod>2026-11-01</lastmod>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kyrowallet.com/code-signing-policy/</loc>
+    <lastmod>2026-11-01</lastmod>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://kyrowallet.com/chains/bitcoin/</loc>
     <lastmod>2026-11-01</lastmod>
     <priority>0.6</priority>
