@@ -17,6 +17,7 @@ import { Menu } from './ui/menu';
 import { Button, Spinner } from './ui/primitives';
 import { IconChevronDown, IconPlus } from './icons';
 import { HIDDEN } from './kit';
+import { t, useT } from '../i18n';
 
 const NEW = '__new__';
 const MANAGE = '__manage__';
@@ -44,9 +45,9 @@ export function useCreateAccounts(): (family: AccountChain, count: number, opts?
   const { vaultLists, refreshVaultAccounts } = useApp();
   return useCallback(
     async (family, count, opts = {}) => {
-      if (!vaultLists) throw new Error('Comptes en cours de chargement.');
+      if (!vaultLists) throw new Error(t('settings.accountsLoadingError'));
       const plan = planNewAccounts(vaultLists[family], count, MAX_ACCOUNTS_PER_CHAIN, MAX_VAULT_ACCOUNT);
-      if (plan.length === 0) throw new Error(`Au plus ${MAX_ACCOUNTS_PER_CHAIN} comptes ${ACCOUNT_CHAIN_LABEL[family]}.`);
+      if (plan.length === 0) throw new Error(t('settings.accountsMaxChain', { max: MAX_ACCOUNTS_PER_CHAIN, chain: ACCOUNT_CHAIN_LABEL[family] }));
       const created: number[] = [];
       try {
         for (const index of plan) {
@@ -69,8 +70,10 @@ function useNextAccount(family: AccountChain): number | null {
   return vaultLists ? (planNewAccounts(vaultLists[family], 1, MAX_ACCOUNTS_PER_CHAIN, MAX_VAULT_ACCOUNT)[0] ?? null) : null;
 }
 
-export function AccountPicker({ family, className, label = 'Compte' }: { family: AccountChain; className?: string; label?: string }) {
+export function AccountPicker({ family, className, label: labelProp }: { family: AccountChain; className?: string; label?: string }) {
   const { activeHw, vaultLists, selectedAccounts, selectChainAccount, navigate, accountSources } = useApp();
+  const { t } = useT();
+  const label = labelProp ?? t('common.account');
   const balance = useAccountBalanceText();
   const create = useCreateAccounts();
   const next = useNextAccount(family);
@@ -88,18 +91,18 @@ export function AccountPicker({ family, className, label = 'Compte' }: { family:
       return {
         value: String(e.index),
         label: e.name,
-        hint: [src?.addresses[0] ? shortAddress(src.addresses[0]) : null, bal, `n° ${e.index + 1}`].filter(Boolean).join(' · '),
+        hint: [src?.addresses[0] ? shortAddress(src.addresses[0]) : null, bal, t('settings.accountNumber', { n: e.index + 1 })].filter(Boolean).join(' · '),
         disabled: !src,
       };
     }),
     {
       value: NEW,
-      label: 'Nouveau compte',
-      hint: next === null ? `Limite de ${MAX_ACCOUNTS_PER_CHAIN} comptes atteinte` : `${defaultAccountName(family, next)} · créé en un clic, issu de ta phrase`,
+      label: t('settings.newAccount'),
+      hint: next === null ? t('settings.accountsLimitReached', { max: MAX_ACCOUNTS_PER_CHAIN }) : t('settings.newAccountHint', { name: defaultAccountName(family, next) }),
       icon: <IconPlus size={15} className="text-ice" />,
       disabled: next === null || busy,
     },
-    { value: MANAGE, label: 'Gérer les comptes…', hint: 'Renommer, retirer, en créer plusieurs' },
+    { value: MANAGE, label: t('settings.manageAccounts'), hint: t('settings.manageAccountsHint') },
   ];
   const onSelect = (v: string) => {
     if (v === MANAGE) return navigate({ name: 'settings', section: 'accounts', family });
@@ -114,13 +117,13 @@ export function AccountPicker({ family, className, label = 'Compte' }: { family:
     <div className={cn('flex min-w-0 items-center gap-2', className)}>
       <span className="text-[12px] font-medium text-mute">{label}</span>
       <Menu
-        label="Compte utilisé"
+        label={t('settings.accountInUse')}
         value={String(current?.index ?? 0)}
         items={items}
         onSelect={onSelect}
         trigger={
-          <button type="button" aria-label={`Changer de compte ${ACCOUNT_CHAIN_LABEL[family]}`} className="flex min-w-0 items-center gap-1.5 rounded-[10px] border border-line-2 bg-raised px-2.5 py-1 text-[13px] hover:border-ice-line">
-            <span className="truncate font-semibold">{current?.name ?? 'Compte'}</span>
+          <button type="button" aria-label={t('settings.switchAccount', { chain: ACCOUNT_CHAIN_LABEL[family] })} className="flex min-w-0 items-center gap-1.5 rounded-[10px] border border-line-2 bg-raised px-2.5 py-1 text-[13px] hover:border-ice-line">
+            <span className="truncate font-semibold">{current?.name ?? t('common.account')}</span>
             {currentAddress && <span className="hidden truncate font-mono text-[11px] text-mute sm:inline">{shortAddress(currentAddress)}</span>}
             {busy ? <Spinner /> : <IconChevronDown size={13} className="shrink-0 text-mute" />}
           </button>
@@ -138,6 +141,7 @@ export function AccountPicker({ family, className, label = 'Compte' }: { family:
 /** « Nouveau compte » as a visible button (Recevoir): creates, selects, and the screen shows its address. */
 export function NewAccountButton({ family, className }: { family: AccountChain; className?: string }) {
   const { activeHw, vaultLists } = useApp();
+  const { t } = useT();
   const create = useCreateAccounts();
   const next = useNextAccount(family);
   const [busy, setBusy] = useState(false);
@@ -149,7 +153,7 @@ export function NewAccountButton({ family, className }: { family: AccountChain; 
         size="sm"
         variant="ghost"
         disabled={next === null || busy}
-        title={next === null ? `Limite de ${MAX_ACCOUNTS_PER_CHAIN} comptes atteinte` : `Crée « ${defaultAccountName(family, next)} » (issu de ta phrase de récupération) et affiche son adresse`}
+        title={next === null ? t('settings.accountsLimitReached', { max: MAX_ACCOUNTS_PER_CHAIN }) : t('settings.newAccountButtonTitle', { name: defaultAccountName(family, next) })}
         onClick={() => {
           setBusy(true);
           setError(null);
@@ -158,7 +162,7 @@ export function NewAccountButton({ family, className }: { family: AccountChain; 
             .finally(() => setBusy(false));
         }}
       >
-        {busy ? <Spinner /> : <IconPlus size={14} />} Nouveau compte
+        {busy ? <Spinner /> : <IconPlus size={14} />} {t('settings.newAccount')}
       </Button>
       {error && (
         <span role="alert" className="text-[12px] text-down">
