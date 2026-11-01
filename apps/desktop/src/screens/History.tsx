@@ -152,6 +152,8 @@ export function History() {
                 {t('history.partial', { details: Object.entries(history.data.errors).filter(([, v]) => !tronNoHistory(v)).map(([k, v]) => `${k} (${v})`).join(', ') })}
               </ErrorLine>
             )}
+            {history.data?.dotHistory === 'unavailable' && <p className="m-0 px-[22px] pt-3 text-[12px] leading-[1.5] text-mute">{t('history.dotUnavailable')}</p>}
+            {history.data?.dotHistory === 'partial' && <p className="m-0 px-[22px] pt-3 text-[12px] leading-[1.5] text-mute">{t('history.dotPartial')}</p>}
             {history.data?.btcCapped && (
               <p className="m-0 px-[22px] pt-3 text-[12px] leading-[1.5] text-mute">
                 {t('history.btcCapped', { cap: BTC_TXS_CAP })}

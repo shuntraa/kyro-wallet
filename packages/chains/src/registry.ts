@@ -1022,6 +1022,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     host: network === 'mainnet' ? 'polkadot-asset-hub-rpc.polkadot.io' : 'westend-asset-hub-rpc.polkadot.io',
     purpose: l10n(`Polkadot${network === 'mainnet' ? '' : ' (Westend)'} : soldes, métadonnées du runtime, nonce, frais, diffusion (nœud public de Parity)`, `Polkadot${network === 'mainnet' ? '' : ' (Westend)'}: balances, runtime metadata, nonce, fees, broadcast (Parity public node)`),
   });
+  // Polkadot history (Statescan, keyless, mainnet only): Rust `dot_txs`, same `polkadot` Tor family.
+  if (network === 'mainnet') {
+    list.push({ host: 'ahp-api.statescan.io', purpose: l10n('Polkadot : historique des transferts DOT sur Asset Hub (Statescan)', 'Polkadot: DOT transfer history on Asset Hub (Statescan)') });
+    list.push({ host: 'polkadot-api.statescan.io', purpose: l10n('Polkadot : historique des transferts DOT sur la relay chain, d’avant la migration (Statescan)', 'Polkadot: DOT transfer history on the relay chain, from before the migration (Statescan)') });
+  }
   // XRP Ledger: reached by Rust only (xrp_*), Tor circuits of the `xrp` family.
   const xrp = servers.xrp?.[nk];
   list.push(

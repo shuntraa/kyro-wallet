@@ -6,8 +6,7 @@
 //! version, metadata V15 (decoded and checked by wallet-core, cached per spec version),
 //! nonce (`system_accountNextIndex`), finalized block (era), balances (`System.Account`
 //! storage), fee estimate (`TransactionPaymentApi_query_info` on a zero-signature copy).
-//! There is no keyless public indexer for the history (Subscan requires an API key since
-//! 2025): Kyro shows none and says so.
+//! History: not from the node (no index by account) but from Statescan, see `dot_history`.
 
 use std::sync::Mutex;
 

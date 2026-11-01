@@ -31,6 +31,7 @@ mod core_rpc;
 mod cosmos_backend;
 mod dialog_text;
 mod dot_backend;
+mod dot_history;
 mod electrum;
 mod error;
 mod fiat;
@@ -322,6 +323,7 @@ pub fn run() {
             commands_dot::dot_sign_tx,
             commands_dot::dot_broadcast,
             commands_dot::dot_tx_status,
+            commands_dot::dot_txs,
             stake_sol::sol_stake_overview,
             stake_sol::sol_stake_validators,
             stake_sol::sol_stake_build,

@@ -106,6 +106,35 @@ describe('Polkadot in the app', () => {
     expect(all.amount + all.maxFee).toBe(BigInt(me.spendable));
   });
 
+  it('history: unavailable on Westend; Statescan entries mapped; any failure = unavailable, never an error', async () => {
+    const dot = createAdapters(accounts).polkadot!;
+    expect(await dot.getHistory()).toEqual([]);
+    expect(dot.historyStatus).toBe('unavailable');
+    expect(outgoingHosts('mainnet').map((h) => h.host)).toEqual(expect.arrayContaining(['ahp-api.statescan.io', 'polkadot-api.statescan.io']));
+    expect(outgoingHosts('testnet').map((h) => h.host)).not.toContain('ahp-api.statescan.io');
+    const me = '13KVd4f2a4S5pLp4gTTFezyXdPWx27vQ9vS6xBXJ9yWVd7xo';
+    const other = '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5';
+    const items = [
+      { id: '0xab', hash: '0xab', chain: 'assetHub' as const, blockHeight: 9, extrinsicIndex: 2, eventIndex: 3, time: 2000, from: other, to: me, amount: '25000000000', direction: 'in' as const },
+      { id: 'relay:5-1', chain: 'relay' as const, blockHeight: 5, extrinsicIndex: 1, time: 1000, from: me, to: other, amount: '7', direction: 'out' as const },
+      { id: 'bad', chain: 'assetHub' as const, blockHeight: 1, time: 1, from: me, to: other, amount: '-1', direction: 'out' as const },
+    ];
+    const withTxs = (txs: () => Promise<unknown>) => new PolkadotAdapter({ chain: polkadotChain('mainnet'), address: me, backend: { ...rustDotBackend(), txs: txs as never } });
+    const ok = withTxs(() => Promise.resolve({ available: true, partial: true, items }));
+    const h = await ok.getHistory();
+    expect(ok.historyStatus).toBe('partial');
+    expect(h).toHaveLength(2);
+    expect(h[0]).toMatchObject({ id: '0xab', assetId: 'dot', direction: 'in', amount: 25_000_000_000n, counterparty: other, time: 2000, status: 'confirmed', kind: 'transfer' });
+    expect(h[1]).toMatchObject({ direction: 'out', counterparty: other });
+    expect(h[1]?.note).toBeTruthy();
+    const down = withTxs(() => Promise.reject(new Error('boom')));
+    expect(await down.getHistory()).toEqual([]);
+    expect(down.historyStatus).toBe('unavailable');
+    const odd = withTxs(() => Promise.resolve({ available: true, partial: false, items: 'nope' }));
+    expect(await odd.getHistory()).toEqual([]);
+    expect(odd.historyStatus).toBe('unavailable');
+  });
+
   it('refuses a transfer Rust built differently from the request', async () => {
     const real = await call('dot_build_tx', { to: mock.dot.friend, amount: '1000000000000' });
     const backend = { ...rustDotBackend(), build: () => Promise.resolve({ ...real, summary: { ...real.summary, amount: '9' } }) };

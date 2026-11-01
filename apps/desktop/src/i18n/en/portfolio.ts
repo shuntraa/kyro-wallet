@@ -108,5 +108,6 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.hbarNoAccount': 'No account yet: the first HBAR received on your EVM address creates it.',
   'portfolio.hbarHollow': 'Account created by an incoming transfer: your first send sets its key.',
   'portfolio.dotNoHistoryTitle': 'History not available',
-  'portfolio.dotNoHistory': 'Polkadot has no keyless public indexer: Kyro shows your balance, and only the sends made from this device.',
+  'portfolio.dotNoHistory': 'The Statescan indexer is not answering, or answered in an unexpected format: Kyro shows your balance, and only the sends made from this device. It tries again on every refresh.',
+  'portfolio.dotNoHistoryTestnet': 'No history on Westend (Statescan only indexes Polkadot): Kyro shows your balance, and only the sends made from this device.',
 };

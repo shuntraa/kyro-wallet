@@ -6,12 +6,12 @@
 // docs/IPC.md §2.11). This adapter only validates input and checks that what Rust built is
 // what was asked (recipient, amount, our account).
 //
-// History: none. Substrate nodes do not index transfers by account and the public indexers
-// (Subscan…) require an API key; the UI says so instead of showing an empty list as « no
-// transaction ».
+// History: native DOT transfers from Statescan's keyless API, read by Rust (`dot_txs`, Asset Hub
+// + relay chain, mainnet only). Undocumented API: when it cannot be read, `historyStatus` says
+// « unavailable » and the UI says so instead of showing an empty list as « no transaction ».
 
 import { accountArg } from '../types';
-import { call, l10n, type DotAccountInfo, type DotContext, type DotTxSummary } from '@kyro/shared';
+import { call, l10n, type DotAccountInfo, type DotContext, type DotHistory, type DotTxSummary } from '@kyro/shared';
 import type { PolkadotChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
@@ -25,7 +25,11 @@ export interface DotBackend {
   sign(payload: string, password: string): Promise<{ extrinsic: string; hash: string; blockHash: string; summary: DotTxSummary; context: DotContext }>;
   broadcast(extrinsic: string, blockHash: string): Promise<string>;
   txStatus(address: string, nonce: number, validUntil: number): Promise<{ state: DotTxState; finalized: number }>;
+  txs(address: string): Promise<DotHistory>;
 }
+
+/** Outcome of the last `getHistory`: `null` before the first one. */
+export type DotHistoryStatus = 'ok' | 'partial' | 'unavailable' | null;
 
 /** The typed `dot_*` commands of `@kyro/shared` (docs/IPC.md §2.11), for vault account `account`. */
 export function rustDotBackend(account = 0): DotBackend {
@@ -36,6 +40,7 @@ export function rustDotBackend(account = 0): DotBackend {
     sign: (payload, password) => call('dot_sign_tx', { payload, password, ...acct }),
     broadcast: (extrinsic, blockHash) => call('dot_broadcast', { extrinsic, blockHash, ...acct }),
     txStatus: (address, nonce, validUntil) => call('dot_tx_status', { address, nonce, validUntil }),
+    txs: (address) => call('dot_txs', { address }),
   };
 }
 
@@ -199,8 +204,40 @@ export class PolkadotAdapter implements ChainAdapter<'dot'> {
     return this.backend.txStatus(this.address, nonce, validUntil);
   }
 
-  /** No keyless public indexer: Kyro shows no history for Polkadot (see the module comment). */
-  getHistory(): Promise<HistoryItem[]> {
-    return Promise.resolve([]);
+  historyStatus: DotHistoryStatus = null;
+
+  /** Native DOT transfers (Statescan via Rust). Never throws: see `historyStatus`. */
+  async getHistory(): Promise<HistoryItem[]> {
+    let h: DotHistory;
+    try {
+      h = await this.backend.txs(this.address);
+    } catch {
+      this.historyStatus = 'unavailable';
+      return [];
+    }
+    if (!h || !h.available || !Array.isArray(h.items)) {
+      this.historyStatus = 'unavailable';
+      return [];
+    }
+    this.historyStatus = h.partial ? 'partial' : 'ok';
+    const out: HistoryItem[] = [];
+    for (const e of h.items) {
+      if (!/^\d+$/.test(e.amount) || !Number.isFinite(e.time)) continue;
+      const item: HistoryItem = {
+        id: e.id,
+        chainKey: this.chain.key,
+        assetId: 'dot',
+        direction: e.direction,
+        amount: BigInt(e.amount),
+        time: e.time,
+        status: 'confirmed',
+        kind: 'transfer',
+      };
+      const counterparty = e.direction === 'out' ? e.to : e.direction === 'in' ? e.from : undefined;
+      if (counterparty) item.counterparty = counterparty;
+      if (e.chain === 'relay') item.note = l10n('Relay chain Polkadot (avant la migration vers Asset Hub)', 'Polkadot relay chain (before the Asset Hub migration)');
+      out.push(item);
+    }
+    return out;
   }
 }

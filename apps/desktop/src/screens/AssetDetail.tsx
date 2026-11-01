@@ -256,8 +256,8 @@ export function AssetDetail({ id }: { id: string }) {
           <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
             {history.loading && !history.data ? (
               <div className="flex flex-col gap-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-9 w-full" />)}</div>
-            ) : activity.length === 0 && supported?.family === 'dot' ? (
-              <EmptyState title={t('portfolio.dotNoHistoryTitle')}>{t('portfolio.dotNoHistory')}</EmptyState>
+            ) : activity.length === 0 && supported?.family === 'dot' && history.data?.dotHistory === 'unavailable' ? (
+              <EmptyState title={t('portfolio.dotNoHistoryTitle')}>{network === 'testnet' ? t('portfolio.dotNoHistoryTestnet') : t('portfolio.dotNoHistory')}</EmptyState>
             ) : activity.length === 0 ? (
               <EmptyState title={t('portfolio.noActivity')}>{supported ? t('portfolio.noActivityHint') : t('portfolio.noAccountHere')}</EmptyState>
             ) : (

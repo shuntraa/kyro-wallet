@@ -1204,6 +1204,30 @@ export interface DotBackendInfo {
   tor: boolean;
 }
 
+/** One native DOT transfer of `dot_txs` (Statescan; planck, decimal string; `time` in ms). */
+export interface DotHistoryEntry {
+  /** Extrinsic hash when known, else `ahp:{block}-{index}` / `relay:{block}-{index}`. */
+  id: string;
+  hash?: string;
+  chain: 'assetHub' | 'relay';
+  blockHeight: number;
+  extrinsicIndex?: number;
+  eventIndex?: number;
+  time: number;
+  from: string;
+  to: string;
+  amount: string;
+  direction: 'in' | 'out' | 'self';
+}
+
+/** `dot_txs`: never an error. `available: false` = nothing reliable to show (testnet, indexer down). */
+export interface DotHistory {
+  available: boolean;
+  /** One of the two chains (Asset Hub, relay) could not be read. */
+  partial: boolean;
+  items: DotHistoryEntry[];
+}
+
 /** `dot_account`: `System.Account` of the address. Amounts: planck, decimal strings. */
 export interface DotAccountInfo {
   address: string;
@@ -2668,6 +2692,8 @@ export interface Commands {
   dot_broadcast: { args: { extrinsic: string; blockHash: string } & WithAccount; ret: string };
   /** `finalized`: the nonce is used in the finalized state (events are not decoded). */
   dot_tx_status: { args: { address: string; nonce: number; validUntil: number }; ret: { state: 'pending' | 'finalized' | 'expired'; finalized: number } };
+  /** Native DOT transfers (Statescan, Asset Hub + relay chain, mainnet only). */
+  dot_txs: { args: { address: string }; ret: DotHistory };
   // Staking (§2.8): not available on hardware-wallet accounts (no hw_* command offers it).
   sol_stake_overview: { args: WithAccount | undefined; ret: SolStakeOverview };
   sol_stake_validators: { args: { withNames?: boolean }; ret: { validators: SolValidator[]; namesAvailable: boolean } };
