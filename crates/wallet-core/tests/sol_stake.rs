@@ -1,13 +1,5 @@
 //! Solana native staking: decoder rules, Kyro's message builder, stake-account parsing and the
 //! activation (warm-up / cool-down) computation.
-//!
-//! Vectors:
-//! - Trezor firmware fixtures `common/tests/fixtures/solana/sign_tx.stake_program.json` and
-//!   `sign_tx.staking_transactions.json` (trezor-firmware commit f158cb46, mnemonic `all × 12`,
-//!   `m/44'/501'/0'/0'`): each message is serialized here from the fixture's description and
-//!   **signed with our key: the Ed25519 signature must equal Trezor's expected signature**, which
-//!   proves the bytes are the ones Trezor signed. Kyro's decoder then accepts or refuses them.
-//! - A real devnet stake account (`6D4CkN7V…`, read with `getProgramAccounts` on 2026-10-30).
 
 use base64::Engine as _;
 use wallet_core::{
@@ -51,7 +43,6 @@ fn sv(n: usize, out: &mut Vec<u8>) {
     }
 }
 
-/// Legacy message from a fixture description (header, keys, blockhash, compiled instructions).
 fn message(v: &Vector) -> Vec<u8> {
     let mut m = v.header.to_vec();
     sv(v.accounts.len(), &mut m);
@@ -75,7 +66,6 @@ fn seed() -> wallet_core::Seed {
     Mnemonic::parse(ALL).unwrap().to_seed("")
 }
 
-// Generated from trezor-firmware common/tests/fixtures/solana/{sign_tx.stake_program,sign_tx.staking_transactions}.json
 const TREZOR: &[Vector] = &[
     Vector {
         name: "Initialize Stake Account",
@@ -386,8 +376,6 @@ fn trezor_stake_fixtures_accepted_or_refused() {
             );
             assert_eq!(s.our_signer_index, Some(0));
         } else {
-            // Refused: a staking rule, or (Trezor's synthetic "Stake instructions") a created
-            // address that is not derived from its base and seed.
             let e = r.expect_err(v.name).to_string();
             assert!(
                 e.contains("Solana staking") || e.contains("not derived"),
@@ -412,7 +400,6 @@ fn trezor_stake_fixtures_accepted_or_refused() {
         SolInstruction::StakeWithdraw { to, lamports, authority, .. }
             if to == ME && lamports == "1000000" && authority == ME
     ));
-    // The refusal names the problem.
     for (n, needle) in [
         ("Authorize", "Authorize"),
         ("Set Lockup - with epoch only", "SetLockup"),
@@ -421,8 +408,6 @@ fn trezor_stake_fixtures_accepted_or_refused() {
         ("Initialize Stake Account", "lockup"),
         ("Stake instructions with warning", "authorities"),
         ("Create Stake Account", "1000 bytes"),
-        // Trezor's "claim" fixtures pass the Compute Budget program where the StakeHistory
-        // sysvar belongs: Kyro checks every sysvar position.
         ("Claim instructions", "StakeHistory"),
         ("Multiple claim instructions", "StakeHistory"),
         ("Claim instructions with warning", "StakeHistory"),
@@ -432,7 +417,6 @@ fn trezor_stake_fixtures_accepted_or_refused() {
             .to_string();
         assert!(e.contains(needle), "{n}: {e}");
     }
-    // Decoded for someone else's wallet: our key is not the authority → refused.
     assert!(sol_decode_message(&message(by_name("Deactivate")), &[], OTHER).is_err());
 }
 
@@ -517,7 +501,6 @@ fn builder_messages_decode_to_exactly_the_operation() {
         assert_eq!(s.instructions, vec![want]);
         assert!(!s.requires_extra_confirmation);
     }
-    // Builder input checks.
     for bad_seed in ["", "this seed is definitely longer than 32", "é"] {
         assert!(sol_stake_message(
             ME,
@@ -541,7 +524,6 @@ fn builder_messages_decode_to_exactly_the_operation() {
     .is_err());
 }
 
-/// Legacy message: one signer (us), then `keys`, header `[1, 0, readonly]`.
 fn raw_message(keys: &[[u8; 32]], readonly: u8, ixs: &[(u8, Vec<u8>, Vec<u8>)]) -> Vec<u8> {
     let mut m = vec![1, 0, readonly];
     sv(keys.len(), &mut m);
@@ -573,7 +555,6 @@ fn tampered_stake_messages_are_refused() {
         BLOCKHASH,
     )
     .unwrap();
-    // 1. Seed changed in the data only: the created address is no longer the derived one.
     let pos = m
         .windows(seed_s.len())
         .position(|w| w == seed_s.as_bytes())
@@ -582,10 +563,8 @@ fn tampered_stake_messages_are_refused() {
     t[pos + seed_s.len() - 1] = b'8';
     let e = sol_decode_message(&t, &[], ME).unwrap_err().to_string();
     assert!(e.contains("derived"), "{e}");
-    // 2. Decoded as somebody else's wallet (authorities are not them): refused.
     assert!(sol_decode_message(&m, &[], OTHER).is_err());
 
-    // 3. Stake account created but not initialised in the same message.
     let stake = key(&sol_create_with_seed(ME, seed_s, SOL_STAKE_PROGRAM).unwrap());
     let mut create = 3u32.to_le_bytes().to_vec();
     create.extend_from_slice(&key(ME));
@@ -604,7 +583,6 @@ fn tampered_stake_messages_are_refused() {
         .to_string();
     assert!(e.contains("without being initialized"), "{e}");
 
-    // 4. Delegation whose stake authority is another (co-signing) key.
     let other = key(OTHER);
     let delegate_other = raw_message(
         &[
@@ -625,7 +603,6 @@ fn tampered_stake_messages_are_refused() {
         .to_string();
     assert!(e.contains("stake authority"), "{e}");
 
-    // 5. Withdrawal to another address.
     let mut wd = 4u32.to_le_bytes().to_vec();
     wd.extend_from_slice(&1_000u64.to_le_bytes());
     let to_other = raw_message(
@@ -645,7 +622,6 @@ fn tampered_stake_messages_are_refused() {
         .to_string();
     assert!(e.contains("withdrawal recipient"), "{e}");
 
-    // 6. Deactivate with the wrong sysvar at position 1.
     let d = sol_stake_message(
         ME,
         &SolStakeOp::Deactivate {
@@ -661,7 +637,6 @@ fn tampered_stake_messages_are_refused() {
     t[at..at + 32].copy_from_slice(&rent);
     let e = sol_decode_message(&t, &[], ME).unwrap_err().to_string();
     assert!(e.contains("Clock"), "{e}");
-    // 7. Another Stake instruction tag (MoveLamports = 17): refused, not "unknown".
     let mut t = d.clone();
     let n = t.len();
     t[n - 4..].copy_from_slice(&17u32.to_le_bytes());
@@ -683,7 +658,6 @@ fn real_devnet_stake_account() {
     assert_eq!(a.staker, "HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk");
     assert_eq!(a.withdrawer, a.staker);
     assert_eq!((a.lockup_unix_timestamp, a.lockup_epoch), (0, 0));
-    // A non-zero custodian (the same key), even without a lockup.
     assert_eq!(a.lockup_custodian, a.staker);
     let d = a.delegation.as_ref().unwrap();
     assert_eq!(
@@ -693,9 +667,6 @@ fn real_devnet_stake_account() {
     assert_eq!(d.stake, 5_068_792_651);
     assert_eq!(d.activation_epoch, 1169);
     assert_eq!(d.deactivation_epoch, u64::MAX);
-    // Older than any history passed: fully effective. Its balance (stake + today's devnet rent of
-    // 1 666 240) is below stake + the reserve recorded at creation (2 282 880): nothing
-    // withdrawable, as the Stake program computes it.
     assert_eq!(
         sol_stake_activation(d, 1196, &[]),
         SolStakeActivation {
@@ -730,7 +701,6 @@ fn warmup_and_cooldown() {
         activation_epoch: act,
         deactivation_epoch: deact,
     };
-    // Same-epoch activate + deactivate: never staked, the whole balance can be withdrawn.
     let x = d(10, 10);
     assert_eq!(
         sol_stake_activation(&x, 10, &[]),
@@ -747,12 +717,10 @@ fn warmup_and_cooldown() {
         delegation: Some(x),
     };
     assert_eq!(sol_stake_withdrawable(&acc, 3_000, 10, &[]), (1_000, true));
-    // Activation epoch: all activating.
     assert_eq!(
         sol_stake_activation(&d(10, u64::MAX), 10, &[]).activating,
         1_000
     );
-    // Next epoch, plenty of cluster stake: fully effective.
     let hist = [h(10, 1_000_000, 1_000, 0)];
     assert_eq!(
         sol_stake_activation(&d(10, u64::MAX), 11, &hist),
@@ -762,7 +730,6 @@ fn warmup_and_cooldown() {
             deactivating: 0
         }
     );
-    // Rate-limited warm-up: 9 % of 10 000 = 900, half of it for our half of the activating stake.
     let hist = [h(10, 10_000, 2_000, 0)];
     assert_eq!(
         sol_stake_activation(&d(10, u64::MAX), 11, &hist),
@@ -772,7 +739,6 @@ fn warmup_and_cooldown() {
             deactivating: 0
         }
     );
-    // Deactivation epoch: all deactivating; next epoch, cooled down.
     let x = d(1, 20);
     assert_eq!(sol_stake_activation(&x, 20, &[]).deactivating, 1_000);
     let hist = [h(20, 1_000_000, 0, 1_000)];
@@ -804,8 +770,6 @@ fn stake_history_sysvar_layout() {
     assert!(sol_parse_stake_history(&data[..60]).is_err());
 }
 
-/// Epochs and amounts come from the RPC (StakeHistory sysvar): extreme values must neither
-/// panic nor wrap (hardening — no overflow was reachable before, see SECURITY.md).
 #[test]
 fn activation_with_extreme_epochs_does_not_wrap() {
     let d = |act, deact| SolDelegation {

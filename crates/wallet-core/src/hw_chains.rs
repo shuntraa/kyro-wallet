@@ -1,8 +1,7 @@
 //! Hardware-wallet signatures for XRP and Stellar: a device returns only a signature over the
 //! transaction Kyro built; it is checked here against the stored public key and Kyro's own
 //! signing hash, then attached to Kyro's unsigned transaction (never to whatever the device
-//! may have serialized). TRON needs nothing here: `tron_recover_signer` +
-//! `tron_signed_transaction` already do it.
+//! may have serialized).
 
 use bitcoin::secp256k1::{ecdsa::Signature, Message, PublicKey, Secp256k1};
 
@@ -15,10 +14,7 @@ fn bad(msg: &str) -> Error {
     Error::input(msg.to_string())
 }
 
-/// Attaches a device's DER signature to an unsigned XRP Payment blob (hex). The blob's
-/// `SigningPubKey` must be `pubkey` and its `Account` that key's address; the signature is
-/// normalised to low-S (the XRP Ledger's canonical form, equally valid) and must verify over
-/// the blob's signing hash. Returns `(signed blob hex, transaction hash hex)`.
+/// Attaches a device's DER signature to an unsigned XRP Payment blob (hex).
 pub fn xrp_hw_assemble(blob_hex: &str, pubkey: &[u8; 33], der: &[u8]) -> Result<(String, String)> {
     let raw = hex::decode(blob_hex.trim()).map_err(|_| bad("blob: hexadecimal expected"))?;
     let mut p = XrpPayment::decode(&raw)?;
@@ -44,8 +40,6 @@ pub fn xrp_hw_assemble(blob_hex: &str, pubkey: &[u8; 33], der: &[u8]) -> Result<
 }
 
 /// Attaches a device's ed25519 signature to an unsigned Stellar envelope (base64) for `net`.
-/// The transaction's source must be `pubkey` and the signature must verify (strictly) over
-/// Kyro's transaction hash on `net`. Returns `(signed envelope base64, hash hex)`.
 pub fn stellar_hw_assemble(
     envelope_b64: &str,
     net: Network,

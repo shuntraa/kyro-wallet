@@ -1,15 +1,4 @@
 //! TON vectors.
-//!
-//! Sources (fetched 2026-11-01):
-//! - Trust Wallet Core `tests/chains/TheOpenNetwork/TWAnyAddressTests.cpp` (mnemonic → address at
-//!   `m/44'/607'/0'`, `registry.json` path), `rust/tw_tests/tests/chains/ton/ton_address.rs`
-//!   (17 private keys → v4R2 addresses, valid / invalid user-friendly forms, flags) and
-//!   `ton_wallet.rs` (v4R2 `StateInit` of a public key);
-//! - ton-org/ton `src/wallets/v4/WalletContractV4.ts` (official v4R2 code, hash
-//!   `feb5ff68…dabd5c0` as published by TON).
-//!
-//! Signed transfers (Trust Wallet's mainnet transactions) are tested in `src/ton.rs`: they are
-//! given as raw private keys, and Kyro only derives keys from a seed.
 
 mod common;
 
@@ -40,8 +29,6 @@ fn trust_wallet_mnemonic_address() {
         ton_address(&s, 0, false).unwrap(),
         "UQDYW_1eScJVxtitoBRksvoV9cCYo4uKGWLVNIHB1JqRRyQx"
     );
-    // The bounceable form of the same wallet is the destination of Trust Wallet's
-    // `SignMessageToTransferAndDeployWalletV4R2` test.
     let pk = ton_public_key(&s, 0).unwrap();
     assert_eq!(
         ton_wallet_address(&pk, TON_WALLET_ID_MAINNET)
@@ -125,8 +112,6 @@ fn trust_wallet_private_key_addresses() {
 
 #[test]
 fn trust_wallet_v4r2_state_init() {
-    // ton_wallet.rs `test_ton_wallet_v4_r2_create_state_init`: the address is the hash of this
-    // StateInit, so comparing addresses compares the cell.
     let pk: [u8; 32] =
         hex::decode("f229a9371fa7c2108b3d90ea22c9be705ff5d0cfeaee9cbb9366ff0171579357")
             .unwrap()
@@ -193,7 +178,6 @@ fn friendly_address_forms() {
     ] {
         assert_eq!(ton_parse_address(s).unwrap().address.workchain, -1, "{s}");
     }
-    // Invalid: size, workchain, tag, checksum, raw forms (no checksum), mixed alphabets.
     for s in [
         "random string",
         "EQIcIZpPoMnWXd8FbC1KaLtcyIgVUlwsbFK_3P6f5uf_YyzoE",
@@ -313,18 +297,14 @@ fn decode_sign_verify_round_trip() {
                 )
             );
             if !init {
-                // Without StateInit, the normalized message is the message itself.
                 assert_eq!(signed.hash, signed.normalized_hash);
             } else {
                 assert_ne!(signed.hash, signed.normalized_hash);
             }
-            // The signed BOC is not accepted where an unsigned one is expected, and the other
-            // network's wallet id (and so the other network) is refused.
             assert!(ton_decode_tx(&signed.boc, &t.public_key, testnet).is_err());
             assert!(ton_sign(&s, 0, &signed.boc, testnet).is_err());
             assert!(ton_decode_tx(&boc, &t.public_key, !testnet).is_err());
             assert!(ton_verify_signed(&signed.boc, &t.public_key, !testnet).is_err());
-            // Another account's key: not our wallet.
             assert!(ton_sign(&s, 1, &boc, testnet).is_err());
         }
     }
@@ -337,7 +317,6 @@ fn tampered_or_unusual_bocs_are_refused() {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&boc)
         .unwrap();
-    // Any changed byte: bad CRC or another message — never silently accepted as is.
     for i in 0..bytes.len() {
         let mut b = bytes.clone();
         b[i] ^= 0x01;
@@ -349,11 +328,9 @@ fn tampered_or_unusual_bocs_are_refused() {
     assert!(ton_decode_tx("", &t.public_key, false).is_err());
     assert!(ton_decode_tx("not base64!", &t.public_key, false).is_err());
     assert!(ton_decode_tx(&"A".repeat(5000), &t.public_key, false).is_err());
-    // A signed signature slot (non-zero) is refused as "already signed" by decode.
     let s = seed(ABANDON);
     let signed = ton_sign(&s, 0, &boc, false).unwrap();
     assert!(ton_decode_tx(&signed.boc, &t.public_key, false).is_err());
-    // A broken signature does not verify.
     let mut sb = base64::engine::general_purpose::STANDARD
         .decode(&signed.boc)
         .unwrap();
@@ -402,14 +379,12 @@ fn transfer_rules() {
         .is_err(),
         "masterchain"
     );
-    // Unusual text: shown cleaned, reinforced confirmation.
     let mut t = transfer(ABANDON, false);
     t.comment = Some("pay\u{202E}evil\nline".into());
     let sum = ton_decode_tx(&ton_unsigned_transfer(&t).unwrap(), &pk, false).unwrap();
     assert_eq!(sum.comment.as_deref(), Some("payevil line"));
     assert_eq!(sum.warnings, vec![TonWarning::UnusualText]);
     assert!(sum.requires_extra_confirmation);
-    // Non-bounceable destination.
     t.bounce = false;
     let sum = ton_decode_tx(&ton_unsigned_transfer(&t).unwrap(), &pk, false).unwrap();
     assert!(
@@ -466,18 +441,15 @@ fn usdt_jetton_transfer_round_trip() {
     let (back, _, _) = ton_verify_signed(&signed.boc, &t.public_key, false).unwrap();
     assert_eq!(back.jetton, t.jetton);
 
-    // A jetton body to a contract that is not our wallet of a known jetton: refused.
     let mut fake = t.clone();
     fake.destination = recipient;
     let boc = ton_unsigned_transfer(&fake).unwrap();
     assert!(ton_decode_tx(&boc, &t.public_key, false).is_err());
-    // Not on testnet (no known jetton there).
     let mut tn = t.clone();
     tn.wallet_id = ton_wallet_id(true);
     assert!(ton_unsigned_transfer(&tn)
         .and_then(|b| ton_decode_tx(&b, &t.public_key, true))
         .is_err());
-    // Excess TON must come back to us.
     let mut other = t.clone();
     if let Some(j) = other.jetton.as_mut() {
         j.response_destination = recipient;

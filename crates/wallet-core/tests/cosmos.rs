@@ -1,16 +1,4 @@
 //! Cosmos Hub vectors.
-//!
-//! Sources:
-//! - cosmjs `packages/proto-signing/src/directsecp256k1hdwallet.spec.ts` (mnemonic « special sign
-//!   fit … », `m/44'/118'/0'/0/0`, public key and address);
-//! - addresses of « abandon … about » and « all × 12 » cross-checked on 2026-11-01 with
-//!   independent implementations: `@scure/bip39` 1.6.0, `@scure/bip32` 1.7.0, `@noble/hashes`
-//!   1.8.0 (SHA-256, RIPEMD-160) and `@scure/base` 1.2.6 (bech32);
-//! - three real Cosmos Hub mainnet transactions (SIGN_MODE_DIRECT `MsgSend`, signed by other
-//!   wallets), raw bytes read on 2026-11-01 from `cosmos-rest.publicnode.com`
-//!   (`/cosmos/tx/v1beta1/txs/block/{height}`), with the senders' `account_number`
-//!   (`/cosmos/auth/v1beta1/accounts/{address}`): their signatures verify against the SignDoc
-//!   Kyro rebuilds, and every message re-encodes to the same bytes.
 
 mod common;
 
@@ -86,7 +74,6 @@ fn address_parsing() {
     let bytes = cosmos_address_bytes(a).unwrap();
     assert_eq!(bytes.len(), 20);
     assert_eq!(cosmos_address_from_bytes(&bytes).unwrap(), a);
-    // All upper case is valid bech32; it is normalized to lower case.
     assert_eq!(cosmos_normalize_address(&a.to_uppercase()).unwrap(), a);
     assert_eq!(cosmos_normalize_address(&format!("  {a} ")).unwrap(), a);
     // 32-byte (module / interchain account) addresses.
@@ -129,9 +116,6 @@ const A846: (&str, &str, u64) = (
     1_939_622,
 );
 
-/// Low-level check, independent of Kyro's decoder rules: every message of a real transaction
-/// re-encodes byte for byte, and its signature verifies over the SignDoc rebuilt with
-/// `cosmoshub-4` and the sender's account number.
 #[test]
 fn real_mainnet_transactions_reencode_and_verify() {
     for (hash, tx, account_number) in [BF2C, F7D8, A846] {
@@ -187,10 +171,8 @@ fn real_mainnet_transaction_through_kyro_rules() {
     assert_eq!(s.timeout_height, 33_672_991);
     assert_eq!(s.memo, None);
     assert!(!s.requires_extra_confirmation);
-    // Another account number or the testnet chain id: the signature does not verify.
     assert!(cosmos_verify_signed(tx, Network::Mainnet, account_number + 1).is_err());
     assert!(cosmos_verify_signed(tx, Network::Testnet, account_number).is_err());
-    // No timeout_height (valid forever until its sequence is used): Kyro would not sign it.
     let (_, tx, n) = F7D8;
     let e = cosmos_verify_signed(tx, Network::Mainnet, n).unwrap_err();
     assert!(e.to_string().contains("timeout_height"), "{e}");
@@ -236,9 +218,7 @@ fn build_decode_sign_verify_round_trip() {
     );
     assert_eq!(summary.timeout_height, 1_000_100);
     assert!(summary.warnings.is_empty() && !summary.requires_extra_confirmation);
-    // Mainnet expects cosmoshub-4: refused.
     assert!(cosmos_decode_sign_doc(&doc_hex, &pk, Network::Mainnet).is_err());
-    // Another account's key: refused.
     let other = cosmos_public_key(&s, 1).unwrap();
     assert!(cosmos_decode_sign_doc(&doc_hex, &other, Network::Testnet).is_err());
     assert!(cosmos_sign(&s, 1, &doc_hex, Network::Testnet).is_err());
@@ -254,13 +234,11 @@ fn build_decode_sign_verify_round_trip() {
     assert_eq!(h, hash);
     assert_eq!(again, summary);
     assert!(cosmos_verify_signed(&tx, Network::Testnet, 13).is_err());
-    // A high-S version of the same signature is refused.
     let mut t = p::TxRaw::decode(b64(&tx).as_slice()).unwrap();
     let sig = Signature::from_compact(&t.signatures[0]).unwrap();
     let n =
         hex::decode("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141").unwrap();
     let mut compact = sig.serialize_compact();
-    // s' = n - s (big-endian subtraction on the last 32 bytes).
     let mut borrow = 0i16;
     for (out, &nb) in compact[32..].iter_mut().rev().zip(n.iter().rev()) {
         let v = i16::from(nb) - i16::from(*out) - borrow;
@@ -271,7 +249,6 @@ fn build_decode_sign_verify_round_trip() {
     let high = base64::engine::general_purpose::STANDARD.encode(t.encode_to_vec());
     let e = cosmos_verify_signed(&high, Network::Testnet, 12).unwrap_err();
     assert!(e.to_string().contains("low-S"), "{e}");
-    // Simulation transaction: same body / auth info, one empty signature.
     let sim = p::TxRaw::decode(cosmos_simulation_tx(&doc).unwrap().as_slice()).unwrap();
     assert_eq!(sim.signatures, vec![Vec::<u8>::new()]);
     let d = p::SignDoc::decode(doc.as_slice()).unwrap();
@@ -279,7 +256,6 @@ fn build_decode_sign_verify_round_trip() {
     assert_eq!(sim.auth_info_bytes, d.auth_info_bytes);
 }
 
-/// Rebuilds a SignDoc after `edit` changed its parts, for the refusal tests.
 fn tampered(
     s: &wallet_core::Seed,
     edit: impl FnOnce(&mut p::TxBody, &mut p::MsgSend, &mut p::AuthInfo, &mut p::SignDoc),
@@ -311,7 +287,6 @@ fn refusals() {
         denom: denom.into(),
         amount: amount.into(),
     };
-    // Untouched: accepted.
     assert!(cosmos_decode_sign_doc(&tampered(&s, |_, _, _, _| {}), &pk, Network::Testnet).is_ok());
     refused(
         tampered(&s, |_, m, _, _| {
@@ -402,7 +377,6 @@ fn refusals() {
         "chain-id",
     );
 
-    // Fields Kyro does not declare are dropped by prost: the re-encoding check refuses them.
     let raw = hex::decode(tampered(&s, |_, _, _, _| {})).unwrap();
     let d = p::SignDoc::decode(raw.as_slice()).unwrap();
     let with_body = |extra: &[u8]| {
@@ -416,11 +390,8 @@ fn refusals() {
             .encode_to_vec(),
         )
     };
-    // TxBody.unordered = true (field 4, SDK 0.53).
     refused(with_body(&[0x20, 0x01]), "TxBody");
-    // TxBody.timeout_timestamp (field 5, empty Timestamp).
     refused(with_body(&[0x2a, 0x00]), "TxBody");
-    // TxBody.extension_options (field 1023, empty Any): key = (1023 << 3) | 2 = 0x1ffa.
     refused(with_body(&[0xfa, 0x3f, 0x00]), "TxBody");
     // AuthInfo.tip (field 3).
     let mut a = d.auth_info_bytes.clone();
@@ -435,14 +406,12 @@ fn refusals() {
         ),
         "AuthInfo",
     );
-    // A ModeInfo without `single` (e.g. a multisig one, whose `multi` field is dropped).
     refused(
         tampered(&s, |_, _, a, _| {
             a.signer_infos[0].mode_info = Some(p::ModeInfo { single: None });
         }),
         "SIGN_MODE_DIRECT",
     );
-    // Trailing garbage after the SignDoc.
     let mut g = raw.clone();
     g.extend_from_slice(&[0x28, 0x01]);
     refused(hex::encode(g), "SignDoc");
@@ -502,12 +471,10 @@ fn hardware_wallet_amino_json() {
     let direct = hex::encode(cosmos_send_sign_doc(&req).unwrap());
     let amino = wallet_core::cosmos_amino_sign_doc(&direct, &pk, Network::Testnet).unwrap();
     assert_ne!(amino, direct);
-    // Same summary in both modes.
     assert_eq!(
         cosmos_decode_sign_doc(&amino, &pk, Network::Testnet).unwrap(),
         cosmos_decode_sign_doc(&direct, &pk, Network::Testnet).unwrap()
     );
-    // The software signer refuses an amino SignDoc, the amino JSON refuses a DIRECT one.
     assert!(cosmos_sign(&s, 0, &amino, Network::Testnet).is_err());
     assert!(wallet_core::cosmos_amino_json(&direct, &pk, Network::Testnet).is_err());
     let json = wallet_core::cosmos_amino_json(&amino, &pk, Network::Testnet).unwrap();
@@ -520,7 +487,6 @@ fn hardware_wallet_amino_json() {
             r#""sequence":"3","timeout_height":"1000100"}"#
         )
     );
-    // What the device does: ECDSA over SHA-256 of the JSON, DER-encoded.
     let secp = Secp256k1::new();
     let master = Xpriv::new_master(bitcoin::NetworkKind::Main, &s[..]).unwrap();
     let key = master
@@ -536,13 +502,11 @@ fn hardware_wallet_amino_json() {
         wallet_core::cosmos_amino_signed(&amino, &pk, Network::Testnet, &der).unwrap();
     let (h2, s2) = cosmos_verify_signed(&tx, Network::Testnet, 12).unwrap();
     assert_eq!((h2, s2), (hash, summary));
-    // Another account number: the amino JSON differs, the signature does not verify.
     assert!(cosmos_verify_signed(&tx, Network::Testnet, 13).is_err());
     let mut bad = der.clone();
     let n = bad.len();
     bad[n - 1] ^= 1;
     assert!(wallet_core::cosmos_amino_signed(&amino, &pk, Network::Testnet, &bad).is_err());
-    // Memos that would need JSON escaping are refused in amino mode.
     req.memo = "a\"b".into();
     let direct = hex::encode(cosmos_send_sign_doc(&req).unwrap());
     assert!(wallet_core::cosmos_amino_sign_doc(&direct, &pk, Network::Testnet).is_err());

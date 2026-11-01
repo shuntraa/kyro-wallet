@@ -1,14 +1,5 @@
 //! Bitcoin with a hardware wallet: what the device is asked to sign, and independent checks of
 //! what it returns. Nothing here holds a private key; the device is never trusted.
-//!
-//! - [`btc_hw_plan`] matches every PSBT input and output against the stored watch-only
-//!   accounts (account xpub + master fingerprint + path). A key origin that claims to be ours
-//!   must derive, from the xpub, to the very key and script in the PSBT, otherwise it is an
-//!   error (inputs) or treated as a foreign output (outputs, shown as a recipient).
-//! - [`btc_hw_finalize`] recomputes each sighash (BIP143 for P2WPKH, BIP341 key-path for P2TR)
-//!   and verifies every signature returned by the device against the key derived from the xpub
-//!   (tweaked output key for Taproot) before writing it into the PSBT. A missing, duplicated,
-//!   extra or invalid signature fails the whole operation.
 
 use core::str::FromStr;
 
@@ -119,7 +110,6 @@ fn parse_accounts(net: Network, accounts: &[BtcAccount]) -> Result<Vec<Account>>
     Ok(out)
 }
 
-/// The account a key origin points into, with the two unhardened steps below the account.
 fn match_origin<'a>(
     accounts: &'a [Account],
     kind: BtcKind,
@@ -153,10 +143,7 @@ fn raw_path(path: &DerivationPath) -> Vec<u32> {
     path.as_ref().iter().map(|c| u32::from(*c)).collect()
 }
 
-/// Matches a PSBT against stored hardware-wallet accounts. Fails if no input is ours, if an
-/// input claims one of our key origins but its key or script does not derive from the xpub,
-/// if an input of ours uses a sighash type other than ALL (DEFAULT/ALL for Taproot), or for any
-/// malformed PSBT (see [`crate::btc_decode_psbt`]).
+/// Matches a PSBT against stored hardware-wallet accounts.
 pub fn btc_hw_plan(net: Network, psbt_b64: &str, accounts: &[BtcAccount]) -> Result<HwBtcPlan> {
     let psbt = parse_psbt(psbt_b64)?;
     plan_of(net, &psbt, accounts)
@@ -335,7 +322,6 @@ fn plan_of(net: Network, psbt: &Psbt, accounts: &[BtcAccount]) -> Result<HwBtcPl
     })
 }
 
-/// Strict DER, with or without a trailing SIGHASH_ALL byte. Any other sighash is refused.
 fn parse_ecdsa(bytes: &[u8]) -> Result<ecdsa::Signature> {
     if let Ok(sig) = ecdsa::Signature::from_der(bytes) {
         return Ok(sig);
@@ -351,10 +337,7 @@ fn parse_ecdsa(bytes: &[u8]) -> Result<ecdsa::Signature> {
 }
 
 /// Verifies every signature returned by a device and writes it into the PSBT (`partial_sigs`
-/// for P2WPKH, `tap_key_sig` for P2TR). Returns the signed, non-finalized PSBT in base64 and
-/// the summary of [`btc_hw_plan`]. Fails with [`Error::Device`] if a signature is for an input
-/// that is not ours, uses another key, is malformed, does not verify against the recomputed
-/// sighash, is duplicated, or if any of our inputs was left unsigned.
+/// for P2WPKH, `tap_key_sig` for P2TR).
 pub fn btc_hw_finalize(
     net: Network,
     psbt_b64: &str,
@@ -473,7 +456,6 @@ pub fn btc_hw_own_addresses(
     Ok(out)
 }
 
-/// Validates stored Bitcoin accounts (xpub network, depth 3, standard path).
 pub(crate) fn check_accounts(net: Network, accounts: &[BtcAccount]) -> Result<()> {
     parse_accounts(net, accounts).map(|_| ())
 }

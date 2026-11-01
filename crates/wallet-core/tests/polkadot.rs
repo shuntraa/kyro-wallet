@@ -1,16 +1,4 @@
 //! Polkadot (Asset Hub) vectors.
-//!
-//! Sources:
-//! - Polkadot.js (`@polkadot/util-crypto` / `@polkadot/keyring` 13.5.1, wasm sr25519 — an
-//!   implementation independent of schnorrkel-in-Rust's call path): mini-secrets, public keys
-//!   and SS58 addresses of the phrase (root), `//1` and `//2`, computed on 2026-11-01; the dev
-//!   phrase root key is also Substrate's well-known `5DfhGyQd…EqRzV`;
-//! - sp-runtime `generic::era` tests (`mortal_codec_works`, `long_period_mortal_codec_works`);
-//! - `tests/data/polkadot_asset_hub_2005002.metadata_v15`: the real result of
-//!   `state_call("Metadata_metadata_at_version", 15)` on `polkadot-asset-hub-rpc.polkadot.io`
-//!   (runtime 2005002, 2026-11-01);
-//! - the signing payload of the test transfer, encoded independently by a short Python script
-//!   (SCALE compact by hand) and signed by Polkadot.js with the dev phrase.
 
 use wallet_core::{
     dot_account_id, dot_account_storage_key, dot_address, dot_asset_account_key,
@@ -43,7 +31,6 @@ fn runtime() -> DotRuntime {
 
 #[test]
 fn keys_match_polkadot_js() {
-    // (phrase, mini-secret, [(account, public key, SS58 prefix 0, prefix 42)])
     type Derivation<'a> = (u32, &'a str, &'a str, &'a str);
     let cases: [(&str, &str, [Derivation; 3]); 3] = [
         (
@@ -148,14 +135,12 @@ fn keys_match_polkadot_js() {
 fn ss58_refusals() {
     let ok = "13KVd4f2a4S5pLp4gTTFezyXdPWx27vQ9vS6xBXJ9yWVd7xo";
     assert!(dot_account_id(ok, Network::Mainnet).is_ok());
-    // Generic prefix 42 on mainnet, Polkadot prefix 0 on Westend: other network meant.
     assert!(dot_account_id(
         "5EPCUjPxiHAcNooYipQFWr9NmmXJKpNG5RhcntXwbtUySrgH",
         Network::Mainnet
     )
     .is_err());
     assert!(dot_account_id(ok, Network::Testnet).is_err());
-    // Kusama (prefix 2) form of the same key.
     let ksm = dot_ss58_encode(
         &h32("66933bd1f37070ef87bd1198af3dacceb095237f803f3d32b173e6b425ed7972"),
         2,
@@ -218,16 +203,12 @@ fn runtime_from_real_metadata() {
             NoData, // StorageWeightReclaim
         ]
     );
-    // The same metadata is not Westend's (spec name, SS58 prefix).
     assert!(dot_runtime(Network::Testnet, METADATA).is_err());
-    // Not an Option<metadata>, truncated, None.
     assert!(dot_runtime(Network::Mainnet, &METADATA[..METADATA.len() - 1]).is_err());
     assert!(dot_runtime(Network::Mainnet, &[0]).is_err());
     assert!(dot_runtime(Network::Mainnet, b"garbage").is_err());
 }
 
-/// Patches the metadata: replaces every occurrence of `from` (a string with its SCALE length
-/// prefix: type names, call names, extension identifiers) by `to` of the same length.
 fn patched(from: &str, to: &str) -> Vec<u8> {
     assert_eq!(from.len(), to.len());
     let mut m = METADATA.to_vec();
@@ -250,16 +231,13 @@ fn patched(from: &str, to: &str) -> Vec<u8> {
 
 #[test]
 fn runtime_changes_are_refused() {
-    // An unknown transaction extension.
     let e = dot_runtime(Network::Mainnet, &patched("CheckWeight", "CheckWeigxt")).unwrap_err();
     assert!(e.to_string().contains("CheckWeigxt"), "{e}");
-    // transfer_keep_alive renamed: the pinned call cannot be confirmed.
     assert!(dot_runtime(
         Network::Mainnet,
         &patched("transfer_keep_alive", "transfer_keep_alivx")
     )
     .is_err());
-    // Another runtime name.
     assert!(dot_runtime(Network::Mainnet, &patched("statemint", "statemixt")).is_err());
 }
 
@@ -275,8 +253,6 @@ fn transfer() -> DotTransfer {
     }
 }
 
-// ---------------------------------------------------------------- Assets (USD₮ 1984, USDC 1337)
-
 #[test]
 fn asset_hub_metadata_has_the_assets_pallet_kyro_expects() {
     let rt = runtime();
@@ -288,7 +264,6 @@ fn asset_hub_metadata_has_the_assets_pallet_kyro_expects() {
         ),
         (50, 9)
     );
-    // The Assets pallet renamed: tokens refused, DOT still fine.
     let rt = dot_runtime(Network::Mainnet, &patched("min_balance", "min_balancx")).unwrap();
     assert!(rt.assets.is_err());
     let mut t = transfer();
@@ -325,7 +300,6 @@ fn asset_transfer_is_encoded_signed_and_summarized() {
     let mut t = transfer();
     t.asset = Some(1984);
     t.value = 12_500_000;
-    // [50, 9] ‖ Compact(1984) ‖ MultiAddress::Id ‖ dest ‖ Compact(12.5 USDT).
     let call = t.call(&rt);
     assert_eq!(&call[..5], &[50, 9, 0x01, 0x1f, 0x00]);
     assert_eq!(
@@ -349,7 +323,6 @@ fn asset_transfer_is_encoded_signed_and_summarized() {
     assert_eq!(again, s);
     let (signer, h, _) = dot_verify_extrinsic(&rt, &ext, &t.block_hash).unwrap();
     assert_eq!((signer, h), (from, hash));
-    // A native transfer still says DOT.
     let p = dot_transfer_payload(&rt, &transfer(), &from).unwrap();
     let n = dot_decode_payload(&rt, &p, &from).unwrap();
     assert!(n.asset.is_none() && n.symbol == "DOT");
@@ -371,8 +344,6 @@ fn unknown_assets_are_refused() {
 
 #[test]
 fn asset_storage_keys_and_values() {
-    // twox128("Assets") ‖ twox128("Asset") ‖ blake2_128(1337 LE) ‖ 1337 LE: the key that returned
-    // USDC's AssetDetails on polkadot-asset-hub-rpc.polkadot.io (2026-11-01).
     let k = hex::encode(dot_asset_details_key(1337));
     assert!(k.starts_with("682a59d51ab9e48a8c8cc418ff9708d2d34371a193a751eea5883e9553457b2e"));
     assert!(k.ends_with("39050000"));
@@ -380,7 +351,6 @@ fn asset_storage_keys_and_values() {
         .starts_with("682a59d51ab9e48a8c8cc418ff9708d2b5f3822e35ca2f31ce3526eab1363fd2"));
     let acc = dot_asset_account_key(1984, &[7; 32]);
     assert_eq!(acc.len(), 32 + 20 + 48);
-    // Real AssetDetails of USDC (1337) on 2026-11-01: min_balance 0.01, sufficient, Live.
     let d = hex::decode("5670f9f348bd7f967539de1856c5b11de4302122233100adb22ceb9846f98b2c383a171d3c8fbbdcc9a831831663cd83f2efd57d0e84776469cc61c347d1dcfe6c7aa3e3187f04f100c14f7d29ebd9e2cdc7e78d367d46ae099751f72f55da3645fd34d372d89f1934e14f99fb3a7a977df9779763d265ce7a450af4d6df8a155026295f573e0100000000000000000000e87648170000000000000000000000102700000000000000000000000000000116bb1f000abb1f000c00000000").unwrap();
     let det = dot_decode_asset_details(&d).unwrap();
     assert_eq!(
@@ -391,7 +361,6 @@ fn asset_storage_keys_and_values() {
             live: true
         }
     );
-    // AssetAccount { balance, status: Liquid, reason: Sufficient, extra: () }.
     let mut v = 2_500_000u128.to_le_bytes().to_vec();
     v.extend([0u8, 1]);
     assert_eq!(
@@ -406,7 +375,6 @@ fn asset_storage_keys_and_values() {
     assert!(dot_decode_asset_account(&v).unwrap().frozen);
     v[16] = 3;
     assert!(dot_decode_asset_account(&v).is_err());
-    // AssetMetadata { deposit, name, symbol, decimals, is_frozen }.
     let m = parity_scale_codec::Encode::encode(&(
         0u128,
         b"Tether USD".to_vec(),
@@ -420,22 +388,17 @@ fn asset_storage_keys_and_values() {
     );
 }
 
-/// Encoded independently (Python, SCALE by hand) for the transfer above.
 const PAYLOAD: &str = "0a0300367af3b0d5bae948f910bf5365da6cb7639b0e4b6c3b0131f7d36637556a833f07341cdcdf0207041c0000000a981e000f00000068d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f71542782ee36b20f2c24ec0eb6dd5f709e666ffe0fe05140dcd1b6966fc97c3800";
-/// Polkadot.js `pair.sign(PAYLOAD)` with the dev phrase's root key.
 const PJS_SIG: &str = "2210877cbe307e88a7a02dcf78de7d07b12ebb569dbd0eea0b4d7891553afa3d72af0fb4774730f92ce9dc1b0acd82931c5742615ae22911ddf5ac264d3a6082";
 
 #[test]
 fn era_codec() {
-    // sp-runtime: Era::mortal(64, 42) encodes to [5 + 42 % 16 * 16, 42 / 16].
     let e = DotEra::mortal(64, 42);
     assert_eq!((e.period, e.phase), (64, 42));
     assert_eq!((e.birth(42), e.death(42)), (42, 106));
     assert_eq!(e.birth(105), 42);
-    // long period: quantized phase.
     let l = DotEra::mortal(32_768, 20_000);
     assert_eq!((l.period, l.phase), (32_768, 20_000));
-    // Kyro's era: 256 blocks from block 1 000 000 → phase 64, encoded 0x0407 (LE 07 04).
     let k = DotEra::mortal(256, 1_000_000);
     assert_eq!(
         (k.period, k.phase, k.birth(1_000_000)),
@@ -462,7 +425,6 @@ fn payload_matches_independent_encoding_and_polkadot_js_signature() {
     assert_eq!((s.nonce, s.era_period, s.era_phase), (7, 256, 64));
     assert_eq!((s.spec_version, s.tx_version), (2_005_002, 15));
     assert_eq!(s.call, "Balances.transfer_keep_alive");
-    // An extrinsic carrying Polkadot.js's signature verifies with Kyro's check.
     let t = transfer();
     let sig: [u8; 64] = hex::decode(PJS_SIG).unwrap().try_into().unwrap();
     let ext = hex::encode(t.extrinsic(&rt, &dev, &sig));
@@ -472,7 +434,6 @@ fn payload_matches_independent_encoding_and_polkadot_js_signature() {
         hash,
         hex::encode(dot_blake2_256(&hex::decode(&ext).unwrap()))
     );
-    // Same signature, another era block: refused.
     let other = h32("00000000000000000000000000000000000000000000000000000000000000aa");
     assert!(dot_verify_extrinsic(&rt, &ext, &other).is_err());
 }
@@ -488,8 +449,6 @@ fn sign_then_verify() {
     assert_eq!(summary, dot_decode_payload(&rt, &payload, &me).unwrap());
     let raw = hex::decode(&ext).unwrap();
     assert_eq!(hash, hex::encode(dot_blake2_256(&raw)));
-    // Layout: compact length (two bytes here: 64 ≤ len < 2^14), 0x84, MultiAddress::Id(me),
-    // Sr25519 tag, 64-byte signature, extra, call.
     assert_eq!(raw[0] & 0b11, 0b01);
     assert_eq!(
         (u16::from_le_bytes([raw[0], raw[1]]) >> 2) as usize,
@@ -501,7 +460,6 @@ fn sign_then_verify() {
     assert!(raw.ends_with(&t.call(&rt)));
     let (signer, h2, s2) = dot_verify_extrinsic(&rt, &ext, &t.block_hash).unwrap();
     assert_eq!((signer, h2, s2), (me, hash, summary));
-    // Account 1 signs with its own key.
     let me1 = dot_public_key(&r, 1).unwrap();
     let mut t1 = t;
     t1.dest = me;
@@ -512,9 +470,7 @@ fn sign_then_verify() {
         me1
     );
     assert_eq!(s1.from, dot_address(&r, 1, Network::Mainnet).unwrap());
-    // Account 0 cannot sign account 1's payload (its `from` is account 1, dest is account 0).
     assert!(dot_sign(&r, 0, &rt, &p1).is_err());
-    // Any flipped byte of the signed extrinsic is refused.
     for i in [2usize, 10, 40, raw.len() - 1, raw.len() - 20] {
         let mut x = raw.clone();
         x[i] ^= 1;
@@ -523,7 +479,6 @@ fn sign_then_verify() {
             "byte {i}"
         );
     }
-    // The fee probe has the same shape with a zero signature.
     let probe = dot_fee_probe_extrinsic(&rt, &payload, &me).unwrap();
     assert_eq!(probe.len(), raw.len());
     assert!(probe[37..101].iter().all(|b| *b == 0));
@@ -557,10 +512,8 @@ fn payload_refusals() {
     assert!(refused(&at(p.len() - 1, 1))); // metadata hash Some
     assert!(refused(&[&p[..], &[0]].concat())); // trailing byte
     assert!(refused(&p[..p.len() - 1])); // truncated
-                                         // Non-canonical compact: nonce 7 as a two-byte compact.
     let nc = [&p[..extra + 2], &[0x1d, 0x00], &p[extra + 3..]].concat();
     assert!(refused(&nc));
-    // Era longer than 4096 blocks.
     let mut long = transfer();
     long.era = DotEra::mortal(8192, 1_000_000);
     assert!(dot_transfer_payload(&rt, &long, &me).is_err());
@@ -574,14 +527,11 @@ fn payload_refusals() {
     let mut t = transfer();
     t.tip = 1;
     assert!(dot_transfer_payload(&rt, &t, &me).is_err());
-    // Not our payload: decoding is tied to `from` only through the self-transfer check, but
-    // signing derives the key itself — covered in sign_then_verify.
     assert!(dot_decode_payload(&rt, "zz", &me).is_err());
 }
 
 #[test]
 fn account_storage_and_fee_info() {
-    // System.Account key = twox128("System") ‖ twox128("Account") ‖ blake2_128(id) ‖ id.
     let id = h32("66933bd1f37070ef87bd1198af3dacceb095237f803f3d32b173e6b425ed7972");
     let k = dot_account_storage_key(&id);
     assert_eq!(
@@ -590,8 +540,6 @@ fn account_storage_and_fee_info() {
     );
     assert_eq!(&k[48..], &id);
     assert_eq!(k.len(), 80);
-    // nonce 14, consumers 0, providers 1, sufficients 0, free 1.8909 WND, reserved 0,
-    // frozen 0.5, flags 2^127.
     let mut v = Vec::new();
     for n in [14u32, 0, 1, 0] {
         v.extend_from_slice(&n.to_le_bytes());
@@ -618,7 +566,6 @@ fn account_storage_and_fee_info() {
     assert_eq!(DotAccountInfo::default().spendable(1), 0);
     assert!(!DotAccountInfo::default().exists());
     assert!(dot_decode_account_info(&v[..79]).is_err());
-    // RuntimeDispatchInfo { weight: (Compact 1000, Compact 64), class 0, partial_fee 155_000_000 }.
     let mut f = vec![0xa1, 0x0f, 0x01, 0x01, 0x00];
     f.extend_from_slice(&155_000_000u128.to_le_bytes());
     assert_eq!(dot_decode_fee_info(&f).unwrap(), 155_000_000);

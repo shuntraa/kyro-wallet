@@ -1,11 +1,4 @@
 //! EVM: `m/44'/60'/0'/0/i` addresses (EIP-55), EIP-1559 signing and calldata decoding.
-//!
-//! - ECDSA: libsecp256k1 (`bitcoin::secp256k1`, constant-time, RFC6979, low-S).
-//! - Keccak-256: RustCrypto `sha3`.
-//! - RLP: `alloy-rlp` primitives; the EIP-1559 field layout is checked against a real
-//!   mainnet transaction in the unit tests.
-//!
-//! The RustCrypto `k256`/`crypto-bigint` stack is deliberately absent from the dependency graph.
 
 use alloy_rlp::{Encodable, Header};
 use bitcoin::secp256k1::{All, Message, PublicKey, Secp256k1};
@@ -34,12 +27,10 @@ fn keccak256(data: &[u8]) -> [u8; 32] {
     Keccak256::digest(data).into()
 }
 
-/// 20-byte account address.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Address([u8; 20]);
 
 impl Address {
-    /// `keccak256(uncompressed_pubkey[1..65])[12..32]`.
     fn from_pubkey(pk: &PublicKey) -> Self {
         let uncompressed = pk.serialize_uncompressed(); // 0x04 || X || Y
         let hash = keccak256(&uncompressed[1..]);
@@ -80,8 +71,7 @@ impl Address {
     }
 }
 
-/// Unsigned EIP-1559 transaction as requested by the frontend. Amounts are decimal strings
-/// in wei; `data` is `0x`-prefixed hex (empty or `0x` for none).
+/// Unsigned EIP-1559 transaction as requested by the frontend.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EvmTxRequest {
@@ -116,10 +106,7 @@ pub enum EvmTxKind {
     ContractCall,
 }
 
-/// The one list of EVM chains Kyro knows, with the network family each belongs to. A chain of
-/// the other family is refused ([`evm_decode`], [`evm_sign_tx`]): a wallet in test mode never
-/// signs a mainnet transaction, and the other way round. Any chain id not listed needs the
-/// reinforced confirmation ([`EvmWarning::UnknownChain`]).
+/// The one list of EVM chains Kyro knows, with the network family each belongs to.
 pub const EVM_KNOWN_CHAINS: &[(u64, Network)] = &[
     (1, Network::Mainnet),          // Ethereum
     (42_161, Network::Mainnet),     // Arbitrum One
@@ -148,7 +135,6 @@ pub fn evm_chain_network(chain_id: u64) -> Option<Network> {
         .map(|(_, n)| *n)
 }
 
-/// Refuses a chain id that Kyro knows as belonging to the other network family.
 fn check_chain_family(chain_id: u64, net: Network) -> Result<()> {
     match evm_chain_network(chain_id) {
         Some(n) if n != net => Err(Error::input(match net {
@@ -163,20 +149,12 @@ fn check_chain_family(chain_id: u64, net: Network) -> Result<()> {
     }
 }
 
-/// Approval amounts with more than 128 significant bits (≥ 2^128) are shown as ILLIMITÉ: no
-/// token has that much supply; it is `uint256::MAX` or close to it.
 fn is_unlimited(amount: U256) -> bool {
     amount.bits() > 128
 }
 
-/// Worst-case fee (`gas_limit × max_fee_per_gas`, native units in wei) above which the
-/// reinforced confirmation is required: 0.05 of the native coin on ETH-native chains (Ethereum,
-/// Sepolia, Arbitrum, Optimism, Base), BNB Chain and HyperEVM, 50 POL on Polygon, 1 AVAX on
-/// Avalanche, 0.05 elsewhere. A plain transfer costs ~0.0005 ETH at 20 gwei; a swap ~0.005–0.02 ETH.
-/// Chains with a low-priced native coin get a threshold of roughly 10 USD (prices of 2026-10-31):
-/// 200 CRO (Cronos, ~380 gwei), 20 MNT (Mantle), 250 S (Sonic), 2 000 FLR (Flare, ~650 gwei),
-/// 300 KAIA, 10 XDAI (Gnosis), 200 SEI, 200 CFX (Conflux eSpace); 0.05 of those coins would flag
-/// ordinary token transfers.
+/// Worst-case fee (wei) needing reinforced confirmation: 0.05 native on ETH-native chains, BNB
+/// and HyperEVM, 50 POL on Polygon, 1 AVAX on Avalanche, 0.05 elsewhere.
 pub fn evm_high_fee_threshold_wei(chain_id: u64) -> U256 {
     let milli = U256::exp10(15); // 0.001 native
     match chain_id {
@@ -208,8 +186,7 @@ pub enum EvmWarning {
         spender: String,
         /// Raw token units, decimal string.
         amount: String,
-        /// `≥ 2^128` (max or close to it): shown as ILLIMITÉ (same as
-        /// [`EvmTxSummary::unlimited_approval`]).
+        /// `≥ 2^128`: shown as ILLIMITÉ (as [`EvmTxSummary::unlimited_approval`]).
         unlimited: bool,
     },
     /// Native value attached to a contract call (non-empty calldata).
@@ -235,8 +212,7 @@ pub enum EvmWarning {
 pub struct EvmTxSummary {
     /// Detected kind.
     pub kind: EvmTxKind,
-    /// Beneficiary: the recipient for transfers (token recipient for ERC-20 transfers),
-    /// the called contract for approvals and contract calls.
+    /// Beneficiary: recipient (token recipient for ERC-20) or the called contract.
     pub to: String,
     /// The ERC-20 contract, for `Erc20Transfer` / `Erc20Approve`.
     pub token_contract: Option<String>,
@@ -326,15 +302,12 @@ struct EcdsaSig {
     s: [u8; 32],
 }
 
-/// Big-endian bytes without leading zeros (RLP integer encoding; zero becomes empty).
 fn trim_be(bytes: &[u8]) -> &[u8] {
     let first = bytes.iter().position(|b| *b != 0).unwrap_or(bytes.len());
     &bytes[first..]
 }
 
 impl Eip1559 {
-    /// RLP list payload: `chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
-    /// gas_limit, to, value, data, access_list (empty) [, y_parity, r, s]`.
     fn payload(&self, sig: Option<&EcdsaSig>) -> Vec<u8> {
         let mut out = Vec::new();
         self.chain_id.encode(&mut out);
@@ -371,7 +344,6 @@ impl Eip1559 {
         out
     }
 
-    /// Hash that is signed: `keccak256(0x02 || rlp(unsigned fields))`.
     fn signing_hash(&self) -> [u8; 32] {
         keccak256(&self.envelope(None))
     }
@@ -404,8 +376,7 @@ fn parse_request(tx: &EvmTxRequest) -> Result<Eip1559> {
     })
 }
 
-/// Decodes a request into a plain-language summary (no secret needed). Refused: a chain id
-/// of the other network family than `net` (see [`EVM_KNOWN_CHAINS`]).
+/// Decodes a request into a plain-language summary (no secret needed).
 pub fn evm_decode(tx: &EvmTxRequest, net: Network) -> Result<EvmTxSummary> {
     let p = parse_request(tx)?;
     check_chain_family(p.chain_id, net)?;
@@ -484,7 +455,6 @@ fn with_warnings(mut s: EvmTxSummary, p: &Eip1559, max_fee_wei: U256) -> EvmTxSu
     s
 }
 
-/// Derives the key at `m/44'/60'/0'/0/index`. The returned guard erases it on drop.
 fn derive_key(secp: &Secp256k1<All>, seed: &Seed, index: u32) -> Result<XprivGuard> {
     let path = [
         hardened(44)?,
@@ -498,11 +468,6 @@ fn derive_key(secp: &Secp256k1<All>, seed: &Seed, index: u32) -> Result<XprivGua
 }
 
 /// Path of EVM account `index`: `m/44'/60'/0'/0/index`.
-///
-/// Kyro's EVM accounts are **address indices** below one BIP44 account (MetaMask, Trezor Suite
-/// and Kyro's own hardware-wallet accounts), not Ledger Live's `m/44'/60'/index'/0/0`: account 0
-/// is the same in both layouts, and this one keeps a seed imported from MetaMask showing the
-/// same accounts in the same order.
 pub fn evm_path(index: u32) -> String {
     format!("m/44'/60'/0'/0/{index}")
 }
@@ -515,9 +480,7 @@ pub fn evm_address(seed: &Seed, index: u32) -> Result<String> {
     Ok(Address::from_pubkey(&pk).to_checksum())
 }
 
-/// Signs an EIP-1559 (type 2) transaction with the key at `m/44'/60'/0'/0/index`, for a
-/// wallet on `net` (a chain id of the other family is refused, as in [`evm_decode`]).
-/// Returns `(raw "0x02..." hex, transaction hash "0x...")`.
+/// Signs an EIP-1559 tx with `m/44'/60'/0'/0/index` for `net` (other family's chain id refused).
 pub fn evm_sign_tx(
     seed: &Seed,
     index: u32,
@@ -565,12 +528,7 @@ pub fn evm_sign_tx(
     ))
 }
 
-// ---------------------------------------------------------------------------------------------
-// Hardware wallets (no private key): payloads for the device, and checks of what it returns.
-// ---------------------------------------------------------------------------------------------
-
-/// Big-endian integer fields of an EIP-1559 transaction, minimal encoding (no leading zero
-/// byte, zero is empty), as hardware-wallet protocols expect them.
+/// Big-endian minimal integer fields of an EIP-1559 tx, as hardware-wallet protocols expect.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvmTxFields {
     /// Chain id.
@@ -609,8 +567,7 @@ pub fn evm_tx_fields(tx: &EvmTxRequest) -> Result<EvmTxFields> {
     })
 }
 
-/// The exact bytes whose Keccak-256 is signed: `0x02 || rlp(unsigned fields)` (EIP-2718 /
-/// EIP-1559). This is what the Ledger Ethereum app receives in SIGN ETH TRANSACTION.
+/// Bytes whose Keccak-256 is signed: `0x02 || rlp(fields)` (EIP-2718/1559), as sent to Ledger.
 pub fn evm_signing_payload(tx: &EvmTxRequest) -> Result<Vec<u8>> {
     Ok(parse_request(tx)?.envelope(None))
 }
@@ -623,9 +580,6 @@ pub fn evm_address_of_pubkey(sec1: &[u8]) -> Result<String> {
 }
 
 /// Encodes the node at `m/44'/60'/0'/0` (public key + chain code, as returned by a device)
-/// as a standard `xpub` string, so addresses `…/0/i` can be derived publicly. The parent
-/// fingerprint is not known to the device protocol and is left zero; it is unused for
-/// derivation.
 pub fn evm_xpub_from_node(sec1: &[u8], chain_code: &[u8]) -> Result<String> {
     use bitcoin::bip32::{ChainCode, ChildNumber, Fingerprint, Xpub};
     let public_key =
@@ -659,11 +613,6 @@ pub fn evm_address_from_xpub(xpub: &str, index: u32) -> Result<String> {
 }
 
 /// Checks a signature `(r, s)` returned by a device for `tx` and builds the signed transaction.
-///
-/// The device's `v` is ignored: both recovery ids are tried and the one that recovers
-/// `expected_address` over the signing hash computed here is used. Fails with
-/// [`Error::Device`] if `s` is not low (EIP-2) or if no recovery id gives the expected address
-/// (wrong key, wrong transaction, forged signature). Returns `(raw "0x02…", tx hash)`.
 pub fn evm_hw_finalize(
     tx: &EvmTxRequest,
     r: &[u8],
@@ -730,8 +679,7 @@ mod tests {
     }
 
     /// Ethereum mainnet tx 0x0ec0b6a2df4d87424e5f6ad2a654e27aaeb7dac20ae9e8385cc09087ad532ee0
-    /// (also the vector of alloy-consensus' own test suite): fields, signature, signing hash,
-    /// tx hash and sender are public on-chain data.
+    /// (also alloy-consensus' test vector): all public on-chain data.
     #[test]
     fn eip1559_mainnet_vector() {
         let tx = Eip1559 {

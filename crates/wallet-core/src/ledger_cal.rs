@@ -1,15 +1,5 @@
 //! Ledger ERC-20 token descriptors (Ethereum app, PROVIDE ERC 20 TOKEN INFORMATION, legacy
 //! format `P1 = 00`), so that a Ledger can *clear sign* ERC-20 transfers and approvals.
-//!
-//! Spec: <https://github.com/LedgerHQ/app-ethereum/blob/develop/doc/apdu.md#provide-erc-20-token-information>
-//! The device verifies `sig` over `sha256(ticker || address || decimals (u32 BE) || chainId
-//! (u32 BE))` with Ledger's key [`LEDGER_ERC20_SIGNER`]. Without a descriptor the app falls
-//! back to blind signing.
-//!
-//! Kyro does **not** contact Ledger's "Crypto Asset List" service at runtime (no new network
-//! host): the few descriptors below were downloaded once (2026-10-30) from
-//! `crypto-assets-service.api.ledger.com/v1/tokens` (`descriptor.signatures.prod`) and are
-//! re-verified against the documented key in the unit tests and again before each use.
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{ecdsa, Message, PublicKey, Secp256k1};
@@ -34,7 +24,6 @@ pub struct LedgerErc20Descriptor {
     pub signature: Vec<u8>,
 }
 
-/// (chain id, contract, ticker, decimals, DER signature hex) — from Ledger's CAL, 2026-10-30.
 const BUNDLED: &[(u64, &str, &str, u8, &str)] = &[
     (
         1,
@@ -120,8 +109,7 @@ pub fn ledger_erc20_verify(d: &LedgerErc20Descriptor) -> Result<()> {
 }
 
 /// APDU data for PROVIDE ERC 20 TOKEN INFORMATION (legacy): `len(ticker) || ticker ||
-/// address || decimals (u32 BE) || chainId (u32 BE) || signature`. Verifies the descriptor
-/// first.
+/// address || decimals (u32 BE) || chainId (u32 BE) || signature`.
 pub fn ledger_erc20_payload(d: &LedgerErc20Descriptor) -> Result<Vec<u8>> {
     ledger_erc20_verify(d)?;
     let data = signed_data(d)?;

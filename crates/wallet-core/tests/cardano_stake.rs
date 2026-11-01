@@ -1,11 +1,4 @@
 //! Cardano staking (Conway certificates and reward withdrawals).
-//!
-//! Vectors: Trezor firmware fixtures `common/tests/fixtures/cardano/sign_tx.json`
-//! (trezor-firmware commit f158cb46, mnemonic `all × 12`, input `m/1852'/1815'/0'/0/0`, stake key
-//! `m/1852'/1815'/0'/2/0`, one 1-lovelace output, fee 42, ttl 10): transaction hashes and the
-//! **Ed25519 signatures of both witnesses**, which Kyro must reproduce byte for byte. Fixtures with
-//! certificates Kyro refuses (legacy registration 0 / deregistration 1) are rebuilt by hand, their
-//! hash checked against Trezor's, and then shown to be refused.
 
 use wallet_core::{
     cardano_address_bytes, cardano_blake2b224, cardano_blake2b256, cardano_cip20_aux,
@@ -62,7 +55,6 @@ fn body(certs: Vec<CardanoCert>, withdrawals: Vec<(Vec<u8>, u64)>, tagged: bool)
 }
 
 /// Trezor pays 1 lovelace: the min-UTxO rule is disabled (coinsPerUTxOByte = 0) to reproduce it.
-/// Trezor's single output plays our own address (a staking transaction pays only us).
 fn ctx() -> CardanoContext<'static> {
     CardanoContext {
         net: Network::Mainnet,
@@ -98,13 +90,11 @@ fn check(
         keys.iter().map(hex::encode).collect::<Vec<_>>(),
         vec![PAY_PK.to_string(), STAKE_PK.to_string()]
     );
-    // Same decode without signing.
     let stake_pk: [u8; 32] = hex::decode(STAKE_PK).unwrap().try_into().unwrap();
     assert_eq!(
         cardano_decode_stake_tx(&unsigned, &ctx(), &stake_pk, DEPOSIT).unwrap(),
         s
     );
-    // The payment decoder never accepts a certificate or a withdrawal.
     let e = cardano_decode_tx(&unsigned, &ctx())
         .unwrap_err()
         .to_string();
@@ -152,7 +142,6 @@ fn trezor_conway_registration() {
         )
         .unwrap()
     );
-    // 258-tagged sets (inputs and certificates).
     check(
         body(vec![reg], vec![], true),
         "5e27f8fba938603411452a8cb373462fb64305539573b7a9edc9155be5cd6473",
@@ -227,7 +216,6 @@ fn trezor_vote_delegations() {
     }
 }
 
-/// Raw body hex, for fixtures with certificates Kyro cannot encode (legacy 0 / 1).
 fn body_hex(n_keys: u8, extra: &str) -> String {
     let addr = hex::encode(cardano_address_bytes(TZ_DEST, Network::Mainnet).unwrap());
     format!("a{n_keys}00818258 20{TZ_PREV}00 01818258 39{addr}01 02182a 030a {extra}")
@@ -243,8 +231,6 @@ fn trezor_legacy_certificates_are_rebuilt_and_refused() {
     let me = hex::encode(stake_hash());
     let legacy_reg = format!("820082 00581c{me}");
     let legacy_dereg = format!("820182 00581c{me}");
-    // Kyro's own encoding of a pool delegation and of a withdrawal, spliced into the legacy
-    // fixtures: Trezor's hash proves both encodings.
     let deleg = body(
         vec![CardanoCert::StakeDelegation {
             stake: stake_hash(),
@@ -297,8 +283,6 @@ fn trezor_legacy_certificates_are_rebuilt_and_refused() {
             .to_string();
         assert!(e.contains("legacy"), "{e}");
     }
-    // Trezor's withdrawal from m/1852'/1815'/0'/2/1: the encoding is the same as Kyro's, but it is
-    // another stake credential than ours, so it is refused.
     let other = cardano_blake2b224(&hex::decode(STAKE_PK_2_1).unwrap());
     let b = body(
         vec![],
@@ -333,13 +317,11 @@ fn staking_transaction_pays_only_our_address() {
     };
     let b = body(deleg(), vec![], true);
     assert!(decode(&b, &ctx()).is_ok());
-    // Same transaction, but the output is not one of our addresses.
     let not_ours = CardanoContext { own: &[], ..ctx() };
     let e = decode(&b, &not_ours).unwrap_err().to_string();
     assert!(e.contains("only pay your own address"), "{e}");
     let u = hex::encode(cardano_unsigned_tx(&b, None).unwrap());
     assert!(cardano_sign_stake(&root(), 0, 0, 0, &u, &not_ours, DEPOSIT).is_err());
-    // A second output, even to our own address.
     let mut two = body(deleg(), vec![], true);
     two.outputs.push(two.outputs[0].clone());
     let e = decode(&two, &ctx()).unwrap_err().to_string();
@@ -357,7 +339,6 @@ fn foreign_credentials_and_other_certificates_are_refused() {
         assert!(e.contains(needle), "{needle}: {e}");
     };
     let other = cardano_blake2b224(&hex::decode(STAKE_PK_2_1).unwrap());
-    // Another stake key in every certificate type.
     for c in [
         CardanoCert::StakeRegistration {
             stake: other,
@@ -379,7 +360,6 @@ fn foreign_credentials_and_other_certificates_are_refused() {
         refused(body(vec![c], vec![], false), "stake key other than yours");
     }
     let me = stake_hash();
-    // A deposit that is not the protocol's.
     refused(
         body(
             vec![CardanoCert::StakeRegistration {
@@ -391,7 +371,6 @@ fn foreign_credentials_and_other_certificates_are_refused() {
         ),
         "deposit",
     );
-    // Duplicates, register + deregister, delegate + deregister, registration not first.
     let reg = CardanoCert::StakeRegistration {
         stake: me,
         deposit: DEPOSIT,
@@ -420,7 +399,6 @@ fn foreign_credentials_and_other_certificates_are_refused() {
         body(vec![deleg.clone(), reg.clone()], vec![], false),
         "first",
     );
-    // Withdrawals: someone else's reward account, zero, two of them.
     let mine = cardano_reward_address_bytes(Network::Mainnet, &me);
     refused(
         body(
@@ -437,11 +415,8 @@ fn foreign_credentials_and_other_certificates_are_refused() {
         body(vec![], vec![(mine.clone(), 5), (script, 5)], false),
         "multiple withdrawals",
     );
-    // A plain payment is not a staking transaction.
     refused(body(vec![], vec![], false), "no staking operation");
 
-    // Raw certificate forms Kyro never accepts: script credential, pool registration (3),
-    // combined (13), DRep registration (16), committee (14); and governance body fields.
     let me_hex = hex::encode(me);
     for (cert, needle) in [
         (format!("830782 01581c{me_hex}1a001e8480"), "script"),
@@ -464,7 +439,6 @@ fn foreign_credentials_and_other_certificates_are_refused() {
             .to_string();
         assert!(e.contains(what), "{what}: {e}");
     }
-    // Metadata in a staking transaction.
     let aux = cardano_cip20_aux("hi").unwrap();
     let mut b = body(vec![deleg], vec![], false);
     b.aux_hash = Some(cardano_blake2b256(&aux));
@@ -519,7 +493,6 @@ fn withdrawal_and_delegation_views() {
     let (_, _, s) = cardano_sign_stake(&root(), 0, 0, 0, &u, &ctx(), DEPOSIT).unwrap();
     assert_eq!(s.withdrawn, "1234");
     assert_eq!(s.withdrawals[0].reward_address, s.stake_address);
-    // Signing with a stake account whose key is not the one in the certificates: refused.
     let b = body(
         vec![CardanoCert::StakeDelegation {
             stake: me,
@@ -540,7 +513,6 @@ fn pool_and_drep_identifiers() {
     assert_eq!(cardano_pool_id(POOL).unwrap(), h28(POOL));
     assert!(cardano_pool_id("pool1xyz").is_err());
     assert!(cardano_pool_id(&POOL[..54]).is_err());
-    // A real preprod pool id (Koios pool_list, 2026-10-30) and its hex.
     assert_eq!(
         hex::encode(
             cardano_pool_id("pool187jmkalfzyz5cdlw4mxz9t9n8plcxpj7ve7a74mk05umvufp7jh").unwrap()

@@ -1,21 +1,5 @@
-//! Stellar: SEP-0005 keys (SLIP-10 ed25519 at `m/44'/148'/account'`, the path of every Stellar
-//! wallet: Lobstr, Freighter, Ledger, Trezor), `G…` strkey addresses (SEP-0023) and a strict XDR
-//! codec for the few transaction shapes Kyro signs.
-//!
-//! - Strkey: version byte (`6 << 3` = `G`, account) ‖ 32-byte key ‖ CRC16-XModem (little
-//!   endian), RFC 4648 base32 without padding. Decoding is **canonical only**: lengths congruent
-//!   to 1, 3 or 6 mod 8 and non-zero unused bits are refused, and the result must re-encode to the
-//!   same text (SEP-0023's rule).
-//! - Signing: `ed25519(SHA-256(networkId ‖ ENVELOPE_TYPE_TX ‖ Transaction XDR))` with
-//!   `networkId = SHA-256(network passphrase)`: a transaction signed for the testnet is invalid on
-//!   the public network and vice versa. The transaction hash is the same SHA-256.
-//!
-//! Codec: hand-written for `TransactionEnvelope` v1 with one `CreateAccount`, `Payment` or
-//! `ChangeTrust` operation (≈ 15 XDR types). The official `stellar-xdr` crate generates thousands
-//! of types (Soroban included) for a format this small. Same safety rule as for XRP and TRON:
-//! **an envelope is accepted only if re-encoding the decoded value gives back the same bytes**
-//! (no trailing data, zero padding, canonical asset codes, no unknown arm). Tested against real
-//! mainnet / testnet envelopes and their Horizon hashes (`tests/stellar.rs`).
+//! Stellar: SEP-0005 keys (SLIP-10 `m/44'/148'/account'`), SEP-0023 `G…` strkeys, strict
+//! XDR codec for the few transaction shapes Kyro signs.
 
 use ed25519_dalek::Signer as _;
 use ed25519_dalek_bip32::{ChildIndex, ExtendedSigningKey};
@@ -64,11 +48,6 @@ fn network_id(net: Network) -> [u8; 32] {
     Sha256::digest(stellar_network_passphrase(net).as_bytes()).into()
 }
 
-// ---------------------------------------------------------------------------------------------
-// Strkey (SEP-0023)
-// ---------------------------------------------------------------------------------------------
-
-/// CRC16-XModem (polynomial 0x1021, initial value 0): the strkey checksum.
 fn crc16_xmodem(data: &[u8]) -> u16 {
     let mut crc: u16 = 0;
     for b in data {
@@ -103,7 +82,6 @@ fn base32_encode(data: &[u8]) -> String {
     out
 }
 
-/// Strict RFC 4648 base32 without padding: refuses impossible lengths and non-zero unused bits.
 fn base32_decode(s: &str) -> Option<Vec<u8>> {
     if matches!(s.len() % 8, 1 | 3 | 6) {
         return None;
@@ -134,7 +112,6 @@ fn strkey_encode(version: u8, payload: &[u8]) -> String {
     base32_encode(&data)
 }
 
-/// `(version byte, payload)` of a canonical strkey.
 fn strkey_decode(s: &str) -> Option<(u8, Vec<u8>)> {
     let raw = base32_decode(s)?;
     if raw.len() < 3 {
@@ -154,8 +131,7 @@ pub fn stellar_address_from_key(key: &[u8; 32]) -> String {
     strkey_encode(VERSION_ACCOUNT, key)
 }
 
-/// Public key of a `G…` address. Refused with a dedicated message: `M…` muxed addresses (ask
-/// for the `G…` address and the memo instead), and a secret key `S…` pasted by mistake.
+/// Public key of a `G…` address; muxed `M…` and secret `S…` keys refused with a message.
 pub fn stellar_account_id(address: &str) -> Result<[u8; 32]> {
     let a = address.trim();
     match strkey_decode(a) {
@@ -187,10 +163,6 @@ pub fn stellar_muxed_parts(address: &str) -> Result<(String, u64)> {
         _ => Err(Error::input("invalid M… address")),
     }
 }
-
-// ---------------------------------------------------------------------------------------------
-// Keys (SEP-0005)
-// ---------------------------------------------------------------------------------------------
 
 /// Path of Stellar account `account`: `m/44'/148'/account'` (SEP-0005).
 pub fn stellar_path(account: u32) -> String {
@@ -224,10 +196,6 @@ pub fn stellar_address(seed: &Seed, account: u32) -> Result<String> {
         seed, account,
     )?))
 }
-
-// ---------------------------------------------------------------------------------------------
-// XDR model
-// ---------------------------------------------------------------------------------------------
 
 /// An `Asset` (or the credit arms of `ChangeTrustAsset`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -290,15 +258,12 @@ impl StellarKnownAsset {
     }
 }
 
-/// USDC issued by Circle: developers.circle.com › USDC contract addresses (`USDC-GA5Z…KZVN`),
-/// the issuer's `home_domain` is `circle.com` and circle.com/.well-known/stellar.toml lists it.
 const STELLAR_MAINNET_ASSETS: &[StellarKnownAsset] = &[StellarKnownAsset {
     code: "USDC",
     issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
     name: "USD Coin",
     issuer_name: "Circle (circle.com)",
 }];
-/// Circle's testnet USDC (same page, « Testnet » column).
 const STELLAR_TESTNET_ASSETS: &[StellarKnownAsset] = &[StellarKnownAsset {
     code: "USDC",
     issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
@@ -411,10 +376,6 @@ pub struct StellarEnvelope {
     /// Signatures (empty before signing).
     pub signatures: Vec<StellarSignature>,
 }
-
-// ---------------------------------------------------------------------------------------------
-// XDR encoding
-// ---------------------------------------------------------------------------------------------
 
 fn put_u32(o: &mut Vec<u8>, v: u32) {
     o.extend_from_slice(&v.to_be_bytes());
@@ -561,10 +522,7 @@ impl StellarEnvelope {
         StellarEnvelope::decode(&raw)
     }
 
-    /// Strict decoding. Refused: v0 and fee-bump envelopes, muxed accounts, `PRECOND_V2`,
-    /// Soroban data, any operation other than CreateAccount / Payment / ChangeTrust, pool-share
-    /// trustlines, non-canonical asset codes or padding, trailing bytes, and any encoding that
-    /// does not re-encode identically.
+    /// Strict decoding.
     pub fn decode(raw: &[u8]) -> Result<StellarEnvelope> {
         if raw.len() > MAX_ENVELOPE {
             return Err(bad("too large"));
@@ -742,7 +700,6 @@ impl<'a> Reader<'a> {
         Ok(b)
     }
 
-    /// Variable-length opaque / string of at most `max` bytes, zero padding checked.
     fn var(&mut self, max: usize) -> Result<Vec<u8>> {
         let len = self.u32()? as usize;
         if len > max {
@@ -770,7 +727,6 @@ impl<'a> Reader<'a> {
         }
     }
 
-    /// `Asset`, or `ChangeTrustAsset` when `trust` (native and pool shares refused there).
     fn asset(&mut self, trust: bool) -> Result<StellarAsset> {
         let width = match self.u32()? {
             0 if !trust => return Ok(StellarAsset::Native),
@@ -783,8 +739,7 @@ impl<'a> Reader<'a> {
         let raw = self.take(width)?;
         let len = raw.iter().position(|b| *b == 0).unwrap_or(width);
         let (code, pad) = raw.split_at(len);
-        // stellar-core's isAssetValid: alphanumeric, zero padded at the end only, and a
-        // 5-12 character code for ALPHANUM12 (a short code there would be a second encoding).
+        // stellar-core isAssetValid: alnum, zero padded at the end, ALPHANUM12 = 5-12 chars.
         if code.is_empty()
             || !code.iter().all(u8::is_ascii_alphanumeric)
             || pad.iter().any(|b| *b != 0)
@@ -799,10 +754,6 @@ impl<'a> Reader<'a> {
         })
     }
 }
-
-// ---------------------------------------------------------------------------------------------
-// Summary and signing
-// ---------------------------------------------------------------------------------------------
 
 /// Asset as shown (serde: `{ "kind": "native" }` or `{ "kind": "credit", "code", "issuer" }`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -842,8 +793,7 @@ impl StellarAsset {
 pub enum StellarMemoView {
     /// No memo.
     None,
-    /// Text: `text` cleaned for display ([`crate::sanitize_text`]) or `None` if not UTF-8;
-    /// `hex` = exact bytes.
+    /// Text cleaned for display ([`crate::sanitize_text`]), `None` if not UTF-8; `hex` exact.
     Text {
         /// Display text.
         text: Option<String>,
@@ -940,11 +890,7 @@ pub struct StellarTxSummary {
     pub requires_extra_confirmation: bool,
 }
 
-/// Decodes an **unsigned** envelope (base64) for the dialog. Refused: anything
-/// [`StellarEnvelope::decode`] refuses, an already signed envelope, a source other than
-/// `our_address`, no time bounds or `maxTime` 0, a zero fee, a non-positive sequence, anything but
-/// exactly one operation, an operation with its own source, a payment / activation to oneself, a
-/// non-positive amount, a negative trust limit, a trustline to an asset we issue.
+/// Decodes an **unsigned** envelope (base64) for the dialog.
 pub fn stellar_decode_tx(
     envelope_b64: &str,
     our_address: &str,
@@ -967,8 +913,7 @@ fn summarize(
     if &t.source != ours {
         return Err(bad("the source is not this wallet's address"));
     }
-    // Without maxTime a signed transaction stays valid for ever: whoever holds it could submit
-    // it much later (same rule as XRP's LastLedgerSequence).
+    // No maxTime = valid forever, submittable much later (like XRP LastLedgerSequence).
     let (min_time, max_time) = match t.time_bounds {
         Some((min, max)) if max != 0 && min <= max => (min, max),
         Some(_) => return Err(bad("invalid time bounds")),
@@ -1091,10 +1036,7 @@ fn summarize(
     })
 }
 
-/// Signs an unsigned envelope (base64) for `net` with the key of account `account`
-/// (`m/44'/148'/account'`), after decoding it like [`stellar_decode_tx`]. Returns `(signed
-/// envelope base64, transaction hash hex, summary)`. The signature is verified (strictly) before
-/// it is returned.
+/// Signs an unsigned envelope for `net` with `m/44'/148'/account'`, after decoding it.
 pub fn stellar_sign(
     seed: &Seed,
     account: u32,
@@ -1118,10 +1060,7 @@ pub fn stellar_sign(
     Ok((env.to_base64(), hex::encode(hash), summary))
 }
 
-/// Hash (hex) of a signed envelope for `net`, after checking that it decodes, that it carries
-/// exactly one signature, and that this signature is a valid (strict) ed25519 signature of the
-/// source account over the transaction hash **on `net`** — a testnet transaction does not verify
-/// on the public network.
+/// Hash of a signed envelope after checking one strict ed25519 sig by the source on `net`.
 pub fn stellar_verify_signed(envelope_b64: &str, net: Network) -> Result<String> {
     let env = StellarEnvelope::from_base64(envelope_b64)?;
     let [s] = env.signatures.as_slice() else {

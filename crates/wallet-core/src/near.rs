@@ -1,17 +1,5 @@
-//! NEAR Protocol: SLIP-10 ed25519 keys at `m/44'/397'/account'` (the path of `near-seed-phrase`,
-//! used by near-cli, MyNearWallet, Meteor; account 0 = the historical `m/44'/397'/0'`), implicit
-//! accounts (the 64 lowercase hex characters of the public key) and a strict Borsh codec for the
-//! only transaction Kyro signs: **one `Transfer` of NEAR** (`TransactionV0`).
-//!
-//! - Signature: ed25519 over `SHA-256(borsh(Transaction))`; this SHA-256 is also the transaction
-//!   hash (base58 in explorers and RPC answers).
-//! - Codec: hand-written for `TransactionV0 { signer_id, public_key, nonce, receiver_id,
-//!   block_hash, actions: [Transfer { deposit }] }` and `SignedTransaction { transaction,
-//!   signature }` (≈ 10 fields, 5 Borsh types): the `near-*` crates bring a very large dependency
-//!   tree for a format this small, and `borsh` is not in the lockfile. Same safety rule as for TRON
-//!   and XRP: **bytes are accepted only if re-encoding the decoded transaction gives back the same
-//!   bytes**, any other action, key type, transaction version or trailing byte is refused. Tested
-//!   byte for byte against near-api-js fixtures (transfer transaction, signed transfer, signature).
+//! NEAR: SLIP-10 ed25519 at `m/44'/397'/account'` (near-seed-phrase), implicit hex accounts, and
+//! a strict Borsh codec for the only tx Kyro signs: **one NEAR `Transfer`** (`TransactionV0`).
 
 use ed25519_dalek::Signer as _;
 use ed25519_dalek_bip32::{ChildIndex, ExtendedSigningKey};
@@ -24,22 +12,16 @@ use crate::mnemonic::Seed;
 
 /// 1 NEAR = 10^24 yoctoNEAR.
 pub const NEAR_DECIMALS: u32 = 24;
-/// NEAR's total supply is ≈ 1.2 × 10^9 NEAR; anything above 10^10 NEAR is certainly malformed.
 const MAX_DEPOSIT: u128 = 10_000_000_000 * 1_000_000_000_000_000_000_000_000;
-/// Borsh tag of `KeyType::ED25519` (public keys and signatures).
 const ED25519: u8 = 0;
-/// Borsh tag of `Action::Transfer`.
 const ACTION_TRANSFER: u8 = 3;
-/// Borsh tag of `Action::FunctionCall`.
 const ACTION_FUNCTION_CALL: u8 = 2;
 /// Gas attached to each call to a token contract (30 Tgas, what NEAR wallets attach).
 pub const NEAR_FT_GAS: u64 = 30_000_000_000_000;
-/// Most storage deposit Kyro attaches to register a recipient with a token (0.0125 NEAR; the
-/// usual `storage_balance_bounds.min` is 0.00125 NEAR).
+/// Max storage deposit to register a token recipient (0.0125 NEAR; usual min 0.00125 NEAR).
 pub const NEAR_MAX_STORAGE_DEPOSIT: u128 = 12_500_000_000_000_000_000_000;
 
-/// A NEP-141 token Kyro knows, from the issuer's official list (cross-checked with CoinGecko,
-/// `ft_metadata` read on chain).
+/// A NEP-141 token Kyro knows (issuer's list, cross-checked, `ft_metadata` read on chain).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NearKnownToken {
@@ -53,8 +35,6 @@ pub struct NearKnownToken {
     pub decimals: u8,
 }
 
-/// Mainnet: USDC (developers.circle.com › USDC contract addresses; CoinGecko `usd-coin`
-/// platform `near-protocol`) and USDt (tether.to › supported protocols; CoinGecko `tether`).
 const NEAR_MAINNET_TOKENS: &[NearKnownToken] = &[
     NearKnownToken {
         contract: "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
@@ -69,7 +49,6 @@ const NEAR_MAINNET_TOKENS: &[NearKnownToken] = &[
         decimals: 6,
     },
 ];
-/// Testnet: Circle's testnet USDC (same page). Tether lists no testnet contract.
 const NEAR_TESTNET_TOKENS: &[NearKnownToken] = &[NearKnownToken {
     contract: "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af",
     symbol: "USDC",
@@ -87,7 +66,6 @@ pub fn near_known_tokens(testnet: bool) -> &'static [NearKnownToken] {
 }
 
 /// The known token of contract `contract` and the network it belongs to (`true` = testnet).
-/// The two lists never share a contract id.
 pub fn near_known_token(contract: &str) -> Option<(&'static NearKnownToken, bool)> {
     [false, true].into_iter().find_map(|tn| {
         near_known_tokens(tn)
@@ -97,8 +75,7 @@ pub fn near_known_token(contract: &str) -> Option<(&'static NearKnownToken, bool
     })
 }
 
-/// The token side of a token transfer: `ft_transfer` to `recipient`, preceded, when the recipient
-/// is not registered with the token yet, by `storage_deposit` for it (paid by us, in NEAR).
+/// Token side: `ft_transfer` to `recipient`, after our `storage_deposit` if it isn't registered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NearFtTransfer {
     /// Who receives the tokens.
@@ -139,7 +116,6 @@ fn put_call(o: &mut Vec<u8>, method: &str, args: &str, deposit: u128) {
     o.extend_from_slice(&deposit.to_le_bytes());
 }
 
-/// One `FunctionCall`: `(method, args, gas, deposit)`.
 fn read_call(b: &mut &[u8]) -> Result<(String, Vec<u8>, u64, u128)> {
     let tag = read_u8(b)?;
     if tag != ACTION_FUNCTION_CALL {
@@ -163,10 +139,6 @@ fn read_call(b: &mut &[u8]) -> Result<(String, Vec<u8>, u64, u128)> {
     Ok((method, args, read_u64(b)?, read_u128(b)?))
 }
 const MAX_TX: usize = 1024;
-
-// ---------------------------------------------------------------------------------------------
-// Keys and account ids
-// ---------------------------------------------------------------------------------------------
 
 fn hardened(index: u32) -> Result<ChildIndex> {
     ChildIndex::hardened(index).map_err(|_| Error::input("derivation index must be < 2^31"))
@@ -197,7 +169,6 @@ pub fn near_public_key(seed: &Seed, account: u32) -> Result<[u8; 32]> {
 }
 
 /// Implicit account id (64 lowercase hex characters of the public key) of account `account`.
-/// It exists on chain once it has received NEAR.
 pub fn near_address(seed: &Seed, account: u32) -> Result<String> {
     Ok(hex::encode(near_public_key(seed, account)?))
 }
@@ -243,8 +214,7 @@ pub fn near_hash_string(hash: &[u8; 32]) -> String {
 pub enum NearAccountKind {
     /// 64 lowercase hex characters: an ed25519 public key (created by a first transfer).
     Implicit,
-    /// `0x` + 40 lowercase hex characters: an Ethereum-style implicit account (NEP-518),
-    /// controlled by an **Ethereum** key, not by an ed25519 key.
+    /// `0x` + 40 lowercase hex: NEP-518 implicit account controlled by an **Ethereum** key.
     EthImplicit,
     /// A named account (`alice.near`, `bob.testnet`, `aurora`…): it must already exist.
     Named,
@@ -255,10 +225,7 @@ fn is_lower_hex(s: &str) -> bool {
         .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
-/// Validates a NEAR account id with nearcore's rules (`near-account-id`): 2 to 64 characters,
-/// lowercase letters, digits and the separators `-`, `_`, `.`; no separator at either end, never
-/// two separators in a row. Uppercase is refused (not lowercased): NEAR ids are case-sensitive
-/// and an uppercase id is not the same account.
+/// Validates an account id (nearcore rules): 2–64 of `a-z0-9-_.`, no edge or doubled separators.
 pub fn near_account_kind(id: &str) -> Result<NearAccountKind> {
     let b = id.as_bytes();
     if !(2..=64).contains(&b.len()) {
@@ -293,10 +260,6 @@ pub fn near_account_kind(id: &str) -> Result<NearAccountKind> {
     }
     Ok(NearAccountKind::Named)
 }
-
-// ---------------------------------------------------------------------------------------------
-// Borsh codec (TransactionV0 with a single Transfer)
-// ---------------------------------------------------------------------------------------------
 
 fn bad(msg: impl Into<String>) -> Error {
     Error::input(format!("NEAR transaction: {}", msg.into()))
@@ -379,8 +342,7 @@ pub struct NearTransfer {
     pub block_hash: [u8; 32],
     /// `Transfer.deposit`, yoctoNEAR (0 for a token transfer).
     pub deposit: u128,
-    /// Token transfer: `receiver_id` is then the (known) token contract, the actions are
-    /// `[storage_deposit?, ft_transfer]` instead of one `Transfer`.
+    /// Token transfer: `receiver_id` = known contract, actions `[storage_deposit?, ft_transfer]`.
     pub ft: Option<NearFtTransfer>,
 }
 
@@ -430,7 +392,6 @@ impl NearTransfer {
         }
     }
 
-    /// `[storage_deposit?, ft_transfer]` after the action count `n`.
     fn read_ft(b: &mut &[u8], n: u32) -> Result<NearFtTransfer> {
         if n != 1 && n != 2 {
             return Err(bad(format!("{n} actions in a token transfer")));
@@ -471,8 +432,7 @@ impl NearTransfer {
     }
 
     fn read(b: &mut &[u8]) -> Result<NearTransfer> {
-        // nearcore tells the versions apart by the first byte: a `TransactionV1` starts with the
-        // tag 1, a `TransactionV0` with the length of `signer_id` (u32 LE, ≥ 2 for a valid id).
+        // First byte: V1 starts with tag 1, V0 with `signer_id` length (u32 LE, ≥ 2 if valid).
         if b.first() == Some(&1) {
             return Err(bad("TransactionV1 (priority fees, gas keys) not supported"));
         }
@@ -529,8 +489,7 @@ impl NearTransfer {
         })
     }
 
-    /// Strict decoding of an unsigned transaction: one Transfer, ed25519 key, no trailing byte,
-    /// identical re-encoding.
+    /// Strict decode: one Transfer, ed25519 key, no trailing byte, identical re-encoding.
     pub fn decode(raw: &[u8]) -> Result<NearTransfer> {
         if raw.len() > MAX_TX {
             return Err(bad("too large"));
@@ -580,16 +539,11 @@ impl NearTransfer {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Summary and signing
-// ---------------------------------------------------------------------------------------------
-
 /// Reasons for caution (each one requires the reinforced confirmation).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum NearWarning {
-    /// The recipient is an Ethereum-style account (`0x…`, NEP-518): it is controlled by an
-    /// Ethereum key on NEAR. An exchange's EVM deposit address is NOT a NEAR account.
+    /// Recipient is a NEP-518 `0x…` account; an exchange's EVM deposit address is NOT one.
     EthImplicitReceiver,
 }
 
@@ -617,8 +571,7 @@ pub struct NearTxSummary {
     pub warnings: Vec<NearWarning>,
     /// The confirmation must be followed by a reinforced one.
     pub requires_extra_confirmation: bool,
-    /// Token transfer (known NEP-141 contract = `receiver_id`); `deposit` is then the NEAR
-    /// attached in total (1 yoctoNEAR + the storage deposit, if any).
+    /// Token transfer; `deposit` is then the total NEAR attached (1 yocto + any storage deposit).
     pub token: Option<NearTokenSummary>,
 }
 
@@ -719,9 +672,7 @@ fn unhex(s: &str) -> Result<Vec<u8>> {
     hex::decode(s.trim()).map_err(|_| Error::input("NEAR transaction: hexadecimal expected"))
 }
 
-/// Decodes an **unsigned** transfer (hex Borsh) for the dialog. Refused: anything
-/// [`NearTransfer::decode`] refuses, a signer other than `our_account`, a key other than
-/// `our_pubkey`, a transfer to oneself, a zero or absurd amount, a zero nonce.
+/// Decodes an **unsigned** transfer (hex Borsh) for the dialog.
 pub fn near_decode_tx(
     tx_hex: &str,
     our_account: &str,
@@ -734,10 +685,7 @@ pub fn near_decode_tx(
     )
 }
 
-/// Signs an unsigned transfer (hex Borsh) with the key of account `account`
-/// (`m/44'/397'/account'`), after decoding it like [`near_decode_tx`] against that key's
-/// implicit account. Returns `(signed transaction hex, transaction hash base58, summary)`;
-/// the signature is verified (strictly) before it is returned.
+/// Signs a transfer (hex Borsh) with `account`'s key after [`near_decode_tx`] for its account.
 pub fn near_sign(
     seed: &Seed,
     account: u32,
@@ -756,9 +704,7 @@ pub fn near_sign(
     Ok((hex::encode(signed), near_hash_string(&hash), summary))
 }
 
-/// Checks a signed transaction (hex Borsh): strict decoding, ed25519 signature by its
-/// `public_key` (verified strictly), and — implicit signer — that this key is the signer's.
-/// Returns the transaction and its hash (base58).
+/// Checks a signed tx: strict decode, strict ed25519 sig, key = implicit signer's.
 pub fn near_verify_signed(signed_hex: &str) -> Result<(NearTransfer, String)> {
     let (tx, sig) = NearTransfer::decode_signed(&unhex(signed_hex)?)?;
     let key = ed25519_dalek::VerifyingKey::from_bytes(&tx.public_key)
@@ -774,16 +720,14 @@ pub fn near_verify_signed(signed_hex: &str) -> Result<(NearTransfer, String)> {
     Ok((tx, near_hash_string(&hash)))
 }
 
-/// Hardware wallet (Ledger NEAR app): the Borsh transaction sent to the device (the app
-/// hashes it with SHA-256 and signs the hash), after strict decoding.
+/// Ledger NEAR app: the strictly decoded Borsh tx (the app signs its SHA-256).
 pub fn near_hw_message(tx_hex: &str) -> Result<Vec<u8>> {
     let raw = unhex(tx_hex)?;
     NearTransfer::decode(&raw)?;
     Ok(raw)
 }
 
-/// Hardware wallet: signed transaction (hex) and hash (base58) from the device's signature,
-/// checked like [`near_verify_signed`] before it is returned.
+/// HW: signed tx (hex) and hash (base58) from the device sig, checked by [`near_verify_signed`].
 pub fn near_hw_signed(tx_hex: &str, sig: &[u8]) -> Result<(String, String)> {
     let sig: [u8; 64] = sig
         .try_into()

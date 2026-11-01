@@ -1,14 +1,4 @@
 //! Stellar vectors.
-//!
-//! Sources (fetched 2026-11-01):
-//! - SEP-0005 (stellar-protocol `ecosystem/sep-0005.md`): the five official mnemonics, ten
-//!   accounts each (`m/44'/148'/0'` … `/9'`), test 4 with a BIP39 passphrase;
-//! - SEP-0023 (`ecosystem/sep-0023.md`): valid and invalid strkeys (account `G…`, muxed `M…`);
-//! - real envelopes from Horizon (`horizon.stellar.org` and `horizon-testnet.stellar.org`,
-//!   `/payments` and `/operations` with `join=transactions`): one operation each (Payment of XLM,
-//!   USDC, a 12-character asset; CreateAccount; ChangeTrust), every memo type, with and without
-//!   time bounds. Each must decode, re-encode to the same bytes, hash to Horizon's `hash` on its
-//!   own network, and carry a valid signature of its source on that network only.
 
 use wallet_core::{
     stellar_account_id, stellar_address, stellar_address_from_key, stellar_asset,
@@ -343,7 +333,6 @@ fn sep0023_strkeys() {
         "3f0c34bf93ad0d9971d04ccc90f705511c838aad9734a4a2fb0d7a03fc7fe89a"
     );
     assert_eq!(stellar_address_from_key(&key), g);
-    // Spaces around are tolerated (paste), nothing else.
     assert_eq!(stellar_account_id(&format!(" {g}\n")).unwrap(), key);
     // Valid muxed accounts: decoded (for the error message) but never accepted as a recipient.
     for (m, id) in [
@@ -430,13 +419,11 @@ fn horizon_envelopes_round_trip_hash_and_signature() {
         assert_eq!(&env.to_base64(), b64);
         assert_eq!(hex::encode(env.tx.hash(*net)), *hash, "Horizon hash");
         assert_eq!(stellar_verify_signed(b64, *net).unwrap(), *hash);
-        // Same bytes, other network: other hash, the signature no longer verifies.
         assert_ne!(hex::encode(env.tx.hash(other(*net))), *hash);
         assert!(stellar_verify_signed(b64, other(*net)).is_err(), "{hash}");
         let [o] = env.tx.operations.as_slice() else {
             panic!("{hash}: one operation")
         };
-        // Some wallets repeat the source on the operation (Kyro never does, and refuses it).
         assert!(o.source.is_none() || o.source == Some(env.tx.source));
         let asset_code = |a: &StellarAsset| match a {
             StellarAsset::Native => String::new(),
@@ -484,7 +471,6 @@ fn horizon_envelopes_round_trip_hash_and_signature() {
             StellarMemo::Return(h) => ("return", hex::encode(h)),
         };
         assert_eq!(got, (*memo_type, memo.to_string()), "{hash}: memo");
-        // Every byte matters: a flipped bit anywhere is refused or changes the hash.
         for i in [8usize, raw.len() / 2, raw.len() - 70] {
             let mut m = raw.clone();
             m[i] ^= 1;
@@ -561,7 +547,6 @@ fn sign_decode_and_verify() {
         }
     );
     assert!(!summary.requires_extra_confirmation);
-    // Serialized as the IPC contract says.
     let j = serde_json::to_value(&summary).unwrap();
     assert_eq!(j["operation"]["kind"], "payment");
     assert_eq!(j["operation"]["asset"]["kind"], "native");
@@ -575,12 +560,10 @@ fn sign_decode_and_verify() {
         hash
     );
     assert_eq!(hash, hex::encode(tx.hash(Network::Testnet)));
-    // Ed25519 is deterministic: same bytes every time.
     assert_eq!(
         stellar_sign(&s, 0, &b64, Network::Testnet).unwrap().0,
         signed
     );
-    // The network passphrase is in what is signed: a testnet signature is not a mainnet one.
     assert!(stellar_verify_signed(&signed, Network::Mainnet).is_err());
     let (main, main_hash, _) = stellar_sign(&s, 0, &b64, Network::Mainnet).unwrap();
     assert_ne!(main, signed);
@@ -589,17 +572,13 @@ fn sign_decode_and_verify() {
         stellar_verify_signed(&main, Network::Mainnet).unwrap(),
         main_hash
     );
-    // Signed envelope: one signature, hint = last 4 bytes of our key.
     let env = StellarEnvelope::from_base64(&signed).unwrap();
     assert_eq!(env.tx, tx);
     assert_eq!(env.signatures.len(), 1);
     assert_eq!(env.signatures[0].hint, key(&me)[28..]);
-    // An already signed envelope is not signed again, nor shown as unsigned.
     assert!(stellar_decode_tx(&signed, &me, Network::Testnet).is_err());
     assert!(stellar_sign(&s, 0, &signed, Network::Testnet).is_err());
-    // Another account of the same wallet cannot sign it (source mismatch).
     assert!(stellar_sign(&s, 1, &b64, Network::Testnet).is_err());
-    // A signature by another key (account 1) does not verify as the source's.
     let mut forged = env.clone();
     let s1 = stellar_sign(
         &s,
@@ -648,17 +627,14 @@ fn create_account_change_trust_and_memos() {
             hex: hex::encode("facture 42")
         }
     );
-    // Invisible characters in a memo: shown cleaned, reinforced confirmation.
     tx.memo = StellarMemo::Text("a\u{202E}b".as_bytes().to_vec());
     let sum = stellar_decode_tx(&unsigned(&tx), &me, Network::Mainnet).unwrap();
     assert!(sum.warnings.contains(&StellarWarning::UnusualText));
     assert!(sum.requires_extra_confirmation);
-    // Not UTF-8: no text, hex only, reinforced.
     tx.memo = StellarMemo::Text(vec![0xff, 0xfe]);
     let sum = stellar_decode_tx(&unsigned(&tx), &me, Network::Mainnet).unwrap();
     assert!(matches!(sum.memo, StellarMemoView::Text { text: None, .. }));
     assert!(sum.requires_extra_confirmation);
-    // Return memo and high fee: reinforced.
     tx.memo = StellarMemo::Return([7; 32]);
     tx.fee = 200_000;
     let sum = stellar_decode_tx(&unsigned(&tx), &me, Network::Mainnet).unwrap();
@@ -667,7 +643,6 @@ fn create_account_change_trust_and_memos() {
         vec![StellarWarning::HighFee, StellarWarning::MemoReturn]
     );
 
-    // USDC trustline (Circle's mainnet issuer), then its removal (limit 0).
     let usdc = stellar_asset(
         "USDC",
         "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
@@ -693,7 +668,6 @@ fn create_account_change_trust_and_memos() {
     assert!(sum.warnings.is_empty());
     let sum = stellar_decode_tx(&unsigned(&trust(0)), &me, Network::Mainnet).unwrap();
     assert_eq!(sum.warnings, vec![StellarWarning::RemoveTrustline]);
-    // Asset codes: 1–12 alphanumerics; "XLM" from an issuer is not the native asset.
     for bad in ["", "TOOLONGCODE13", "US-D", "XLM", "xlm"] {
         assert!(
             stellar_asset(
@@ -719,7 +693,6 @@ fn refusals() {
         assert!(stellar_sign(&s, 0, &unsigned(tx), Network::Testnet).is_err());
     };
     let base = base_tx(pay(1_000));
-    // No time bounds (valid for ever), maxTime 0, min > max.
     refused(
         &StellarTransaction {
             time_bounds: None,
@@ -755,7 +728,6 @@ fn refusals() {
         },
         "sequence",
     );
-    // Another source, two operations, none, an operation with its own source.
     refused(
         &StellarTransaction {
             source: key("GDVSYYTUAJ3ACHTPQNSTQBDQ4LDHQCMNY4FCEQH5TJUMSSLWQSTG42MV"),
@@ -776,7 +748,6 @@ fn refusals() {
     let mut op_src = base.clone();
     op_src.operations[0].source = Some(key(&me));
     refused(&op_src, "own source");
-    // To oneself, zero / negative amount, negative trust limit, trust in one's own asset.
     refused(
         &base_tx(StellarOperation::Payment {
             destination: key(&me),
@@ -825,8 +796,6 @@ fn refusals() {
     );
 }
 
-/// Byte-level refusals of the codec: other envelope kinds, muxed accounts, unknown arms,
-/// non-canonical encodings, trailing data.
 #[test]
 fn strict_codec() {
     use base64::Engine as _;
@@ -852,13 +821,10 @@ fn strict_codec() {
         r.splice(at..at + bytes.len(), bytes.iter().copied());
         r
     };
-    // Envelope types: v0, fee bump, unknown.
     refused(with(0, &[0, 0, 0, 0]), "v0");
     refused(with(0, &[0, 0, 0, 5]), "fee bump");
     refused(with(0, &[0, 0, 0, 9]), "envelope type");
-    // Muxed source (KEY_TYPE_MUXED_ED25519 = 0x100).
     refused(with(4, &[0, 0, 1, 0]), "muxed");
-    // Layout: type(4) source(36) fee(4) seq(8) cond(4) tb(16) memo(4) nops(4) opsrc(4) optype(4)
     let cond = 4 + 36 + 4 + 8;
     refused(with(cond, &[0, 0, 0, 2]), "PRECOND_V2");
     let memo = cond + 4 + 16;
@@ -868,7 +834,6 @@ fn strict_codec() {
     refused(with(optype, &[0, 0, 0, 8]), "AccountMerge");
     refused(with(optype, &[0, 0, 0, 5]), "SetOptions");
     refused(with(optype - 4, &[0, 0, 0, 2]), "operation source");
-    // Soroban extension (ext v = 1), trailing byte, truncation.
     let ext = good.len() - 8;
     refused(with(ext, &[0, 0, 0, 1]), "Soroban");
     let mut trailing = good.clone();
@@ -877,7 +842,6 @@ fn strict_codec() {
     refused(good[..good.len() - 1].to_vec(), "truncated");
     refused(vec![0; 5000], "too large");
 
-    // Memo text with non-zero padding: refused (one encoding per value).
     let mut tx = base_tx(pay(1_000));
     tx.memo = StellarMemo::Text(b"abc".to_vec());
     let raw = StellarEnvelope {
@@ -890,7 +854,6 @@ fn strict_codec() {
     let mut bad = raw.clone();
     bad[pad] = 1;
     refused(bad, "padding");
-    // Memo text longer than 28 bytes.
     tx.memo = StellarMemo::Text(vec![b'a'; 29]);
     refused(
         StellarEnvelope {
@@ -900,8 +863,6 @@ fn strict_codec() {
         .encode(),
         "too long",
     );
-    // Asset codes: "USD" as ALPHANUM12 (second encoding of a 4-char code), a zero byte inside
-    // the code, a non-alphanumeric code.
     let credit = |code: &str| {
         let mut t = base_tx(StellarOperation::Payment {
             destination: key("GDVSYYTUAJ3ACHTPQNSTQBDQ4LDHQCMNY4FCEQH5TJUMSSLWQSTG42MV"),
@@ -919,7 +880,6 @@ fn strict_codec() {
         .encode()
     };
     let usd12 = {
-        // Build the ALPHANUM12 layout by hand: asset type 2, "USD" + 9 zero bytes.
         let r = credit("USDCOIN");
         let at = optype + 4 + 36; // after the destination
         assert_eq!(&r[at..at + 4], &[0, 0, 0, 2]);
@@ -935,7 +895,6 @@ fn strict_codec() {
     let mut dash = credit("USDC");
     dash[at + 1] = b'-';
     refused(dash, "asset code");
-    // ChangeTrust to the native asset or to a liquidity-pool share.
     let trust = StellarEnvelope {
         tx: base_tx(StellarOperation::ChangeTrust {
             asset: stellar_asset(
@@ -974,7 +933,6 @@ fn known_assets_are_circle_usdc() {
         "USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
     );
     for k in m.iter().chain(t) {
-        // The constant parses (canonical code, valid issuer key).
         assert_eq!(k.asset(), stellar_asset(k.code, k.issuer).unwrap());
         assert_ne!(k.asset(), StellarAsset::Native);
     }

@@ -1,16 +1,4 @@
-//! CashAddr, the Bitcoin Cash address format
-//! (spec: <https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/cashaddr.md>,
-//! read 2026-11-01).
-//!
-//! `prefix:payload`, the payload being base32 (bech32's alphabet) of `version byte || hash`
-//! followed by an 8-character (40-bit) BCH-code checksum computed over the prefix's lower
-//! 5 bits, a zero separator and the payload. Nothing here is cryptography: the checksum is
-//! run by the audited `bech32` crate's generic checksum engine (re-exported by `bitcoin`),
-//! configured with the CashAddr generator from the spec, and the 8↔5-bit regrouping is the
-//! crate's own. Every vector of the spec is checked below (all sizes, types 0, 1 and 15).
-//!
-//! Appending the target residue `0…01` (what the engine does) is the spec's
-//! `PolyMod(… ‖ 0×8) ^ 1`: the last symbol only enters the low 5 bits, after the reduction.
+//! CashAddr: <https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/cashaddr.md>
 
 use bitcoin::bech32::primitives::checksum::{Checksum, Engine};
 use bitcoin::bech32::primitives::iter::{ByteIterExt, Fe32IterExt};
@@ -18,15 +6,13 @@ use bitcoin::bech32::Fe32;
 
 use crate::error::{Error, Result};
 
-/// The CashAddr checksum: degree-8 generator over GF(32) (spec `PolyMod`, constants
-/// `0x98f2bc8e61 … 0x1e4f43e470`); a valid string has residue 1.
+/// CashAddr checksum: degree-8 generator over GF(32) (spec `PolyMod`); valid residue is 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CashAddrCk {}
 
 impl Checksum for CashAddrCk {
     type MidstateRepr = u64;
-    /// BCH code length 2^20 − 1 (spec, "Checksum"); only checksum length and generator are
-    /// used by the engine.
+    /// BCH code length 2^20 − 1 (spec, "Checksum"); unused by the engine.
     const CODE_LENGTH: usize = 1_048_575;
     const CHECKSUM_LENGTH: usize = 8;
     const GENERATOR_SH: [u64; 5] = [
@@ -39,10 +25,8 @@ impl Checksum for CashAddrCk {
     const TARGET_RESIDUE: u64 = 1;
 }
 
-/// Hash sizes in bits, indexed by the version byte's size bits (0–2).
 const SIZES: [usize; 8] = [160, 192, 224, 256, 320, 384, 448, 512];
 
-/// Address types Kyro uses (version byte bits 3–6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CashKind {
     /// Type 0 (`q…`), or 2 (`z…`, CashTokens-aware): pay to public key hash.
@@ -67,8 +51,6 @@ fn engine_with_prefix(prefix: &str) -> Result<Engine<CashAddrCk>> {
     Ok(e)
 }
 
-/// Encodes `payload` (a hash of one of the spec's sizes) with address type `kind_type`
-/// (0–15) as `prefix:…`, lower case.
 pub(crate) fn encode_raw(prefix: &str, kind_type: u8, payload: &[u8]) -> Result<String> {
     let size = SIZES
         .iter()
@@ -102,19 +84,14 @@ pub(crate) fn encode_raw(prefix: &str, kind_type: u8, payload: &[u8]) -> Result<
     Ok(out)
 }
 
-/// Why a string is not a CashAddr of the expected prefix.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DecodeError {
     /// A valid-looking string with another prefix (another network).
     OtherPrefix(String),
-    /// Anything else: mixed case, bad characters, bad checksum, bad padding, bad size, bad
-    /// version byte.
+    /// Anything else: mixed case, bad chars/checksum/padding/size/version byte.
     Invalid,
 }
 
-/// Decodes a CashAddr string for `prefix` into `(type, hash)`. The prefix may be omitted (it is
-/// then assumed, and the checksum proves it). Mixed case, a bad checksum, non-zero padding, a
-/// reserved version bit, or a hash whose length disagrees with the size bits are refused.
 pub(crate) fn decode_raw(
     address: &str,
     prefix: &str,
@@ -164,7 +141,6 @@ pub(crate) fn decode_raw(
     Ok(((version >> 3) & 0x0f, hash.to_vec()))
 }
 
-/// Encodes a 20-byte hash as `prefix:q…` / `prefix:p…`.
 pub(crate) fn encode(prefix: &str, kind: CashKind, hash: &[u8; 20]) -> Result<String> {
     let t = match kind {
         CashKind::P2pkh => 0,
@@ -173,8 +149,6 @@ pub(crate) fn encode(prefix: &str, kind: CashKind, hash: &[u8; 20]) -> Result<St
     encode_raw(prefix, t, hash)
 }
 
-/// Decodes a P2PKH / P2SH CashAddr of `prefix` (20-byte hash, types 0–3). Other types and
-/// sizes (P2SH32, unknown types) are [`DecodeError::Invalid`].
 pub(crate) fn decode(
     address: &str,
     prefix: &str,
@@ -198,7 +172,6 @@ mod tests {
         CashAddrCk::sanity_check();
     }
 
-    /// Spec, "Larger test vectors": every size, types 0, 1 and 15, four prefixes.
     #[test]
     fn spec_test_vectors() {
         let v: &[(usize, u8, &str, &str)] = &[

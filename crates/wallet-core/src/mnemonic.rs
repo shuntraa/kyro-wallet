@@ -27,8 +27,7 @@ impl WordCount {
     }
 }
 
-/// A validated English BIP39 mnemonic. Its contents are wiped on drop and never printed by
-/// `Debug`. It is intentionally not `Clone`.
+/// A validated English BIP39 mnemonic.
 pub struct Mnemonic(bip39::Mnemonic);
 
 impl Mnemonic {
@@ -42,9 +41,7 @@ impl Mnemonic {
             .map_err(|_| Error::crypto("recovery phrase generation failed"))
     }
 
-    /// Parses an English BIP39 phrase. Case and whitespace are normalised (any run of
-    /// whitespace becomes a single space, letters are lower-cased); the checksum is verified.
-    /// Every standard length (12, 15, 18, 21, 24 words) is accepted.
+    /// Parses an English BIP39 phrase.
     pub fn parse(phrase: &str) -> Result<Mnemonic> {
         let mut normalized = Zeroizing::new(String::with_capacity(phrase.len()));
         for (i, word) in phrase.split_whitespace().enumerate() {

@@ -1,12 +1,6 @@
 //! Sui: SLIP-10 ed25519 keys at `m/44'/784'/account'/0'/0'` (the path of Sui Wallet / Slush,
 //! `sui keytool` and the official SDKs; account 0 = their default `m/44'/784'/0'/0'/0'`) and
 //! `0x…` addresses.
-//!
-//! - Address = `BLAKE2b-256(0x00 (ed25519 scheme flag) || 32-byte public key)`, written `0x` +
-//!   64 lower-case hex characters. Sui addresses have **no checksum**: a typo gives another valid
-//!   address, so the UI shows the full address and the native dialog repeats it in full.
-//! - Hashes: RustCrypto `blake2` (already used for Cardano); keys and signatures: ed25519-dalek
-//!   and ed25519-dalek-bip32 (the same crates as Solana). No new dependency.
 
 use blake2::digest::{consts::U32, Digest};
 use blake2::Blake2b;
@@ -89,8 +83,6 @@ pub fn sui_address(seed: &Seed, account: u32) -> Result<String> {
 }
 
 /// Parses a recipient address: `0x` followed by exactly 64 hexadecimal characters (either case).
-/// The short forms of system objects (`0x2`) and SuiNS names (`nom.sui`) are refused: Kyro only
-/// sends to a full address the user can compare character by character.
 pub fn sui_parse_address(address: &str) -> Result<[u8; 32]> {
     let a = address.trim();
     if a.ends_with(".sui") || a.starts_with('@') {

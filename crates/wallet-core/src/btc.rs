@@ -29,22 +29,16 @@ pub struct BtcAccount {
     pub path: String,
 }
 
-/// Fee rate above which a Bitcoin transaction needs the reinforced confirmation: 100 sat/vB,
-/// i.e. 100 × the 1 sat/vB relay minimum (same rule as Litecoin's `HighFee`).
+/// Fee rate needing reinforced confirmation: 100 sat/vB, 100 × relay minimum (as Litecoin).
 pub const BTC_HIGH_FEE_SAT_PER_VB: u64 = 100;
 
-/// Highest address index (`…/{0,1}/index`) Kyro labels as change, on every UTXO chain and for
-/// hardware wallets. Kyro's own accounts never get near it; beyond it an output is shown as a
-/// payment (with [`BtcWarning::ChangeIndexOutOfRange`]): a key at index 2 000 000 000 is ours,
-/// but no wallet scanning with a gap limit would ever find the coins sent there.
+/// Highest address index (`…/{0,1}/index`) labelled change, on all UTXO chains and HW wallets.
 pub const MAX_CHANGE_INDEX: u32 = 1_000;
 
-/// Whether the address index of `path` (its last step) is at most [`MAX_CHANGE_INDEX`].
 pub(crate) fn change_index_in_range(path: &DerivationPath) -> bool {
     matches!(path.as_ref().last(), Some(ChildNumber::Normal { index }) if *index <= MAX_CHANGE_INDEX)
 }
 
-/// How a PSBT output relates to the signing account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Ownership {
     /// Not provably ours.
@@ -55,7 +49,6 @@ pub(crate) enum Ownership {
     FarIndex,
 }
 
-/// [`Ownership`] of an output whose key origin matched one of our keys.
 pub(crate) fn ownership(path: &DerivationPath) -> Ownership {
     if change_index_in_range(path) {
         Ownership::Change
@@ -64,9 +57,6 @@ pub(crate) fn ownership(path: &DerivationPath) -> Ownership {
     }
 }
 
-/// A witness program Kyro does not know: any version from 2 on (reserved for future soft
-/// forks) and version 1 other than a 32-byte taproot output. Shown as `script:<hex>` (unknown
-/// script, reinforced confirmation) rather than as an ordinary-looking `bc1z…` address.
 pub(crate) fn is_unknown_witness(spk: &Script) -> bool {
     match spk.witness_version() {
         None | Some(WitnessVersion::V0) => false,
@@ -76,7 +66,6 @@ pub(crate) fn is_unknown_witness(spk: &Script) -> bool {
 }
 
 /// Reasons for caution in a Bitcoin PSBT (each one requires the reinforced confirmation).
-/// A sighash other than ALL / DEFAULT on one of our inputs is not a warning: it is refused.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
@@ -94,8 +83,7 @@ pub enum BtcWarning {
         /// Output index.
         output: usize,
     },
-    /// Input that does not belong to this wallet (not signed by Kyro; someone else adds funds
-    /// or co-signs — coinjoin, payjoin, or a trap).
+    /// Input not ours (coinjoin, payjoin, or a trap): Kyro does not sign it.
     ForeignInput {
         /// Input index.
         input: usize,
@@ -105,8 +93,7 @@ pub enum BtcWarning {
         /// Estimated fee rate, sat/vB.
         sat_per_vb: u64,
     },
-    /// Output paying one of our keys at an address index beyond [`MAX_CHANGE_INDEX`]: not
-    /// shown as change.
+    /// Output to one of our keys beyond [`MAX_CHANGE_INDEX`]: not shown as change.
     ChangeIndexOutOfRange {
         /// Output index.
         output: usize,
@@ -118,9 +105,6 @@ pub enum BtcWarning {
 #[serde(rename_all = "camelCase")]
 pub struct BtcTxSummary {
     /// Every output in order: (address, amount in sats, is_change).
-    ///
-    /// Non-address outputs are rendered as `op_return:<hex payload script>` or
-    /// `script:<hex script>`.
     pub outputs: Vec<(String, u64, bool)>,
     /// Sum of inputs (from `witness_utxo`) minus sum of outputs.
     pub fee_sats: u64,
@@ -132,8 +116,7 @@ pub struct BtcTxSummary {
     pub requires_extra_confirmation: bool,
 }
 
-/// Estimated virtual size once signed: P2WPKH inputs 108 weight units of witness, P2TR
-/// key-path 66 (a lower bound for other scripts, so the fee rate is never underestimated).
+/// Signed vsize estimate: P2WPKH 108 WU witness, P2TR 66 (lower bound, never underestimates fee).
 fn estimated_vsize(psbt: &Psbt, prevouts: &[TxOut]) -> u64 {
     let base = psbt.unsigned_tx.base_size() as u64;
     let witness: u64 = prevouts
@@ -210,16 +193,11 @@ pub fn btc_address(
     Ok(address_for(&secp, child.public_key, net, kind).to_string())
 }
 
-// ---------------------------------------------------------------------------------------------
-// PSBT
-// ---------------------------------------------------------------------------------------------
-
 pub(crate) fn parse_psbt(psbt_b64: &str) -> Result<Psbt> {
     Psbt::from_str(psbt_b64.trim()).map_err(|_| Error::psbt("not a valid base64 PSBT"))
 }
 
-/// Spent outputs of every input, from `witness_utxo` (mandatory). When a `non_witness_utxo`
-/// is also present it must be consistent with the outpoint and the `witness_utxo`.
+/// Spent outputs of every input, from `witness_utxo` (mandatory).
 pub(crate) fn prevouts(psbt: &Psbt) -> Result<Vec<TxOut>> {
     if psbt.inputs.len() != psbt.unsigned_tx.input.len() {
         return Err(Error::psbt("input count mismatch"));
@@ -316,8 +294,7 @@ pub(crate) fn summarize(
     })
 }
 
-/// Decodes a PSBT without any secret. `own` lists the wallet's addresses: outputs paying to
-/// one of them are flagged `is_change`. Fails if any input lacks `witness_utxo`.
+/// Decodes a PSBT without any secret.
 pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String]) -> Result<BtcTxSummary> {
     let psbt = parse_psbt(psbt_b64)?;
     let prevouts = prevouts(&psbt)?;
@@ -343,8 +320,6 @@ pub fn btc_decode_psbt(net: Network, psbt_b64: &str, own: &[String]) -> Result<B
     )
 }
 
-/// `true` iff `path` is `m/purpose'/coin'/account'/{0,1}/index` for our purpose, coin type and
-/// account: keys of the wallet's other accounts are not "ours" for a signature by `account`.
 pub(crate) fn is_our_path(path: &DerivationPath, purpose: u32, coin: u32, account: u32) -> bool {
     match path.as_ref() {
         [ChildNumber::Hardened { index: p }, ChildNumber::Hardened { index: c }, ChildNumber::Hardened { index: a }, ChildNumber::Normal { index: change }, ChildNumber::Normal { .. }] => {
@@ -386,8 +361,7 @@ impl Signer {
         self.master.derive(&self.secp, path.as_ref())
     }
 
-    /// Whether Kyro would sign this input: a key origin with our fingerprint and path for the
-    /// spent script type (the signing loop then checks key and script, or fails).
+    /// Whether Kyro would sign this input: key origin with our fingerprint and the right path.
     fn input_is_ours(&self, input: &bitcoin::psbt::Input, prevout: &TxOut) -> bool {
         let spk = &prevout.script_pubkey;
         if spk.is_p2wpkh() {
@@ -409,8 +383,6 @@ impl Signer {
         }
     }
 
-    /// Whether a PSBT output provably pays to one of our keys (key origin + script match), and
-    /// at which kind of index.
     fn output_is_ours(&self, spk: &Script, meta: &PsbtOutput) -> Result<Ownership> {
         if spk.is_p2wpkh() {
             for (pk, (fp, path)) in &meta.bip32_derivation {
@@ -443,8 +415,6 @@ impl Signer {
     }
 }
 
-/// Summary as `btc_sign_psbt` computes it (change and own inputs by key origin), without
-/// signing: what the native dialog shows before the password-protected signature.
 fn sign_summary(
     signer: &Signer,
     net: Network,
@@ -490,18 +460,8 @@ pub fn btc_psbt_summary(
     sign_summary(&signer, net, &psbt, &prevouts)
 }
 
-/// Signs every P2WPKH (BIP84) and P2TR key-path (BIP86) input whose key origin
-/// (`bip32_derivation` / `tap_key_origins`) carries our master fingerprint and a path
-/// `m/purpose'/coin'/account'/{0,1}/index` for this network **and this `account`**. Other
-/// inputs — including those of the wallet's other accounts — are left untouched (and reported
-/// as [`BtcWarning::ForeignInput`]); change is recognised in this account only.
-///
-/// Safety checks: every input must have a `witness_utxo`; the derived key must match the key
-/// in the PSBT and the spent script; only `SIGHASH_ALL` / `SIGHASH_DEFAULT` are signed;
-/// taproot inputs with a script tree are refused. Fails if no input could be signed.
-///
-/// Returns the signed (not finalized) PSBT in base64 and a summary in which `is_change`
-/// marks outputs whose key origin provably belongs to this wallet.
+/// Signs P2WPKH (BIP84) and P2TR key-path (BIP86) inputs whose key origin has our fingerprint
+/// and path `m/purpose'/coin'/account'/{0,1}/index` for this network **and this `account`**.
 pub fn btc_sign_psbt(
     seed: &Seed,
     net: Network,

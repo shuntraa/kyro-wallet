@@ -51,7 +51,6 @@ pub fn sol_sign_message(seed: &Seed, account: u32, message: &[u8]) -> Result<[u8
 }
 
 /// Base58 address of a raw 32-byte ed25519 public key (as returned by a hardware wallet).
-/// Fails if the bytes are not a valid curve point.
 pub fn sol_address_of_pubkey(pubkey: &[u8]) -> Result<String> {
     let bytes: [u8; 32] = pubkey
         .try_into()
@@ -62,8 +61,7 @@ pub fn sol_address_of_pubkey(pubkey: &[u8]) -> Result<String> {
 }
 
 /// Verifies (strictly: canonical `S`, no small-order key) a 64-byte ed25519 signature returned
-/// by a hardware wallet over `message`, against the expected base58 `address`. Fails with
-/// [`Error::Device`] on any mismatch; returns the signature bytes otherwise.
+/// by a hardware wallet over `message`, against the expected base58 `address`.
 pub fn sol_verify_signature(address: &str, message: &[u8], signature: &[u8]) -> Result<[u8; 64]> {
     let key: [u8; 32] = bs58::decode(address.trim())
         .into_vec()

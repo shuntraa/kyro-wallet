@@ -1,22 +1,5 @@
-//! TRON: secp256k1 keys at `m/44'/195'/account'/0/0` (SLIP-44 coin type 195, the same path on
-//! Nile, Shasta and mainnet; one address per account, Ledger Live's layout — account 0 is the
-//! historical `m/44'/195'/0'/0/0`), `T…` addresses, and the protobuf `Transaction.raw` of the two
-//! transactions Kyro sends: `TransferContract` (TRX) and `TriggerSmartContract` (TRC-20
-//! `transfer(address,uint256)`).
-//!
-//! - Address: `base58check(0x41 || keccak256(uncompressed_pubkey[1..])[12..])` (Keccak from
-//!   RustCrypto `sha3`, base58check = double-SHA-256 checksum from `bitcoin::base58`).
-//! - Transaction id: `sha256(raw_data)`; signature: libsecp256k1 recoverable ECDSA over that id,
-//!   65 bytes `r || s || v` with `v = 27 + recovery id` (TronWeb and Trezor; java-tron also
-//!   accepts `v ∈ {0, 1}`, Trust Wallet's format, on input).
-//!
-//! Protobuf: neither `prost` nor generated `protobuf` code is in the tree, and only two wire
-//! types and ~15 fields are needed, so the codec below is written by hand — with one rule that
-//! makes it safe to decode untrusted bytes: **a raw transaction is accepted only if re-encoding
-//! what was decoded gives back exactly the same bytes** (canonical field order, minimal varints,
-//! no duplicate field — whose "last value wins" semantics could differ from java-tron's — no
-//! unknown or ignored field). It is tested byte for byte against Trezor's firmware fixtures
-//! and real Nile transactions. This is wire-format handling, not cryptography.
+//! TRON: secp256k1 at `m/44'/195'/account'/0/0` (SLIP-44 195, Ledger Live layout), `T…` addresses,
+//! and `Transaction.raw` for `TransferContract` and TRC-20 `TriggerSmartContract`.
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::ecdsa::{RecoverableSignature, RecoveryId};
@@ -63,12 +46,7 @@ const WITHDRAW_EXPIRE_URL: &str = "type.googleapis.com/protocol.WithdrawExpireUn
 const CANCEL_ALL_URL: &str = "type.googleapis.com/protocol.CancelAllUnfreezeV2Contract";
 /// java-tron `MAX_VOTE_NUMBER`: at most 30 votes per `VoteWitnessContract`.
 pub const TRON_MAX_VOTES: usize = 30;
-/// Raw transactions larger than this are refused (a TRC-20 transfer is ~200 bytes).
 const MAX_RAW: usize = 4096;
-
-// ---------------------------------------------------------------------------------------------
-// Addresses
-// ---------------------------------------------------------------------------------------------
 
 fn path(account: u32, index: u32) -> Result<[bitcoin::bip32::ChildNumber; 5]> {
     Ok([
@@ -123,8 +101,7 @@ pub fn tron_address(seed: &Seed, account: u32) -> Result<String> {
     tron_address_at(seed, account, 0)
 }
 
-/// Address at `m/44'/195'/account'/0/index` (Kyro only uses `index` 0; other indices exist for
-/// test vectors of other wallets).
+/// Address at `m/44'/195'/account'/0/index` (Kyro uses index 0; others for test vectors).
 pub fn tron_address_at(seed: &Seed, account: u32, index: u32) -> Result<String> {
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
@@ -132,10 +109,6 @@ pub fn tron_address_at(seed: &Seed, account: u32, index: u32) -> Result<String> 
     let pk = key.xpriv().private_key.public_key(&secp);
     Ok(tron_address_from_bytes(&address_bytes_of_pubkey(&pk)))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Protobuf wire format (the subset used here)
-// ---------------------------------------------------------------------------------------------
 
 fn put_varint(out: &mut Vec<u8>, mut v: u64) {
     while v >= 0x80 {
@@ -169,7 +142,6 @@ enum Value<'a> {
     Bytes(&'a [u8]),
 }
 
-/// Splits a message into `(field, value)` pairs, wire types 0 and 2 only.
 fn fields(mut b: &[u8]) -> Result<Vec<(u64, Value<'_>)>> {
     fn varint(b: &mut &[u8]) -> Result<u64> {
         let mut v: u64 = 0;
@@ -236,10 +208,6 @@ fn addr21(b: &[u8], what: &str) -> Result<[u8; 21]> {
     Ok(a)
 }
 
-// ---------------------------------------------------------------------------------------------
-// Transaction.raw
-// ---------------------------------------------------------------------------------------------
-
 /// Resource a Stake 2.0 freeze / unfreeze applies to (`ResourceCode`; `TRON_POWER` is refused).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -259,8 +227,7 @@ impl TronResource {
     }
 }
 
-/// The single contract of a transaction Kyro accepts. Transfers and contract calls go through
-/// [`tron_decode_raw`]; the Stake 2.0 / voting variants only through [`tron_decode_stake_raw`].
+/// The single contract of a transaction Kyro accepts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TronContract {
     /// `FreezeBalanceV2Contract` (54): stakes `amount` sun for `resource`.
@@ -286,8 +253,7 @@ pub enum TronContract {
         /// Staker.
         owner: [u8; 21],
     },
-    /// `CancelAllUnfreezeV2Contract` (59): cancels every pending unstake (re-stakes it; what is
-    /// already claimable is withdrawn).
+    /// `CancelAllUnfreezeV2Contract` (59): cancels pending unstakes (claimable part is withdrawn).
     CancelAllUnfreezeV2 {
         /// Staker.
         owner: [u8; 21],
@@ -346,8 +312,7 @@ pub struct TronRaw {
 }
 
 impl TronRaw {
-    /// Canonical protobuf encoding (field order, defaults omitted), as java-tron and TronWeb
-    /// produce it.
+    /// Canonical protobuf encoding (field order, defaults omitted), as java-tron and TronWeb do.
     pub fn encode(&self) -> Vec<u8> {
         let (ty, url, param) = match &self.contract {
             TronContract::Transfer { owner, to, amount } => {
@@ -437,10 +402,8 @@ impl TronRaw {
         out
     }
 
-    /// Strict decoding: refuses unknown or unsupported fields (`ref_block_num`, `auths`,
-    /// `scripts`, `provider`, `ContractName`, `Permission_id`, TRC-10 token value), any
-    /// contract type other than TRX transfer / smart-contract call, more or fewer than one
-    /// contract, negative integers, and any encoding that does not re-encode identically.
+    /// Strict decoding: refuses unknown/unsupported fields, other contract types, ≠ 1 contract,
+    /// negative integers, and any encoding that does not re-encode identically.
     pub fn decode(raw: &[u8]) -> Result<TronRaw> {
         if raw.len() > MAX_RAW {
             return Err(bad("too large"));
@@ -528,7 +491,6 @@ impl TronRaw {
     }
 }
 
-/// `owner_address`-only contracts (56, 59, 13).
 fn owner_only(value: &[u8], name: &str) -> Result<[u8; 21]> {
     let mut owner = None;
     for (f, v) in fields(value)? {
@@ -540,8 +502,6 @@ fn owner_only(value: &[u8], name: &str) -> Result<[u8; 21]> {
     owner.ok_or_else(|| bad("missing owner_address"))
 }
 
-/// Freeze / unfreeze V2: `owner_address = 1`, `frozen_balance` / `unfreeze_balance = 2`,
-/// `resource = 3` (BANDWIDTH = 0 omitted, ENERGY = 1; TRON_POWER = 2 refused).
 fn freeze_fields(value: &[u8], name: &str) -> Result<([u8; 21], i64, TronResource)> {
     let (mut owner, mut amount, mut resource) = (None, 0, TronResource::Bandwidth);
     for (f, v) in fields(value)? {
@@ -727,9 +687,7 @@ fn decode_contract(b: &[u8]) -> Result<TronContract> {
     }
 }
 
-/// Reference block fields from the block Kyro builds on: `ref_block_bytes` = bytes 6..8 of the
-/// 8-byte big-endian block number, `ref_block_hash` = bytes 8..16 of the block id. Checks that
-/// the block id starts with the block number (as every TRON block id does).
+/// `ref_block_bytes` = bytes 6..8 of the BE block number, `ref_block_hash` = id bytes 8..16.
 pub fn tron_ref_block(number: u64, block_id_hex: &str) -> Result<([u8; 2], [u8; 8])> {
     let id: [u8; 32] = hex::decode(block_id_hex.trim())
         .ok()
@@ -755,10 +713,6 @@ pub fn tron_trc20_transfer_data(to: &str, amount: &str) -> Result<Vec<u8>> {
     data.extend_from_slice(&amount.to_big_endian());
     Ok(data)
 }
-
-// ---------------------------------------------------------------------------------------------
-// Summary
-// ---------------------------------------------------------------------------------------------
 
 /// What the transaction does, as decoded by Rust.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -818,8 +772,7 @@ pub enum TronWarning {
     Memo,
     /// `fee_limit` above 100 TRX.
     HighFeeLimit,
-    /// The memo text had control / invisible / bidi characters removed or was cut: the dialog
-    /// shows a cleaned version (`memo`, hex, is exact).
+    /// Memo had control/invisible/bidi characters removed or was cut (`memo`, hex, is exact).
     UnusualText,
 }
 
@@ -856,10 +809,8 @@ pub struct TronTxSummary {
 }
 
 const HIGH_FEE_LIMIT: i64 = 100_000_000;
-/// Longest memo text shown in the dialog (characters).
 const MAX_MEMO_TEXT: usize = 256;
-/// java-tron refuses an expiration more than 24 h after the head block; Kyro refuses to sign one
-/// more than 24 h after its own clock, whatever the caller says.
+/// Max expiration (24 h, as java-tron), enforced against Kyro's own clock.
 pub const TRON_MAX_EXPIRATION_MS: i64 = 24 * 60 * 60 * 1000;
 
 /// Current time in ms since the epoch (system clock). A clock before 1970 fails closed.
@@ -871,8 +822,6 @@ fn now_ms() -> Result<i64> {
         .ok_or_else(|| Error::input("invalid system clock"))
 }
 
-/// Refuses an expiration more than [`TRON_MAX_EXPIRATION_MS`] after `now` (ms). An expiration
-/// in the past is left to the caller (java-tron refuses it at broadcast).
 fn check_expiration_at(expiration: i64, now: i64) -> Result<()> {
     if expiration > now.saturating_add(TRON_MAX_EXPIRATION_MS) {
         return Err(bad("expiration more than 24 h away: refused"));
@@ -880,9 +829,7 @@ fn check_expiration_at(expiration: i64, now: i64) -> Result<()> {
     Ok(())
 }
 
-/// Decodes `raw` (hex `raw_data`) for the confirmation dialog. Refused: anything
-/// [`TronRaw::decode`] refuses, an owner other than `our_address` and an expiration more than
-/// 24 h ahead of the system clock.
+/// Decodes `raw` (hex `raw_data`) for the confirmation dialog.
 pub fn tron_decode_raw(raw_hex: &str, our_address: &str) -> Result<TronTxSummary> {
     tron_decode_raw_at(raw_hex, our_address, now_ms()?)
 }
@@ -984,10 +931,6 @@ fn tron_decode_raw_at(raw_hex: &str, our_address: &str, now: i64) -> Result<Tron
     })
 }
 
-// ---------------------------------------------------------------------------------------------
-// Stake 2.0 and voting
-// ---------------------------------------------------------------------------------------------
-
 /// One vote, as decoded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1057,13 +1000,7 @@ pub struct TronStakeSummary {
     pub raw_size: usize,
 }
 
-/// Decodes a **staking** `raw_data` (hex): `FreezeBalanceV2` / `UnfreezeBalanceV2` (BANDWIDTH
-/// or ENERGY, amount > 0), `WithdrawExpireUnfreeze`, `CancelAllUnfreezeV2`, `VoteWitness` (1 to
-/// 30 votes, each > 0, no SR twice, `support` absent) and `WithdrawBalance`. Refused: everything
-/// [`TronRaw::decode`] refuses (including `DelegateResource` / `UnDelegateResource`, i.e. lending
-/// resources to another account, and `TRON_POWER`), a transfer or contract call, an owner other
-/// than `our_address`, a memo, a `fee_limit` (system contracts burn no energy) and an expiration
-/// more than 24 h ahead of the system clock.
+/// Decodes a **staking** `raw_data` (hex): Freeze/UnfreezeV2, withdraw, cancel, votes (1–30).
 pub fn tron_decode_stake_raw(raw_hex: &str, our_address: &str) -> Result<TronStakeSummary> {
     tron_decode_stake_raw_at(raw_hex, our_address, now_ms()?)
 }
@@ -1155,8 +1092,7 @@ fn tron_decode_stake_raw_at(
     })
 }
 
-/// Signs a staking `raw_data` (hex) with the key of account `account` (`m/44'/195'/account'/0/0`),
-/// after decoding it like [`tron_decode_stake_raw`] (owner must be that key's address).
+/// Signs a staking `raw_data` (hex) with `account`'s key, after [`tron_decode_stake_raw`].
 pub fn tron_stake_sign(
     seed: &Seed,
     account: u32,
@@ -1175,10 +1111,6 @@ pub fn tron_stake_sign(
     let sig = sign_digest(&secp, sk, digest)?;
     Ok((sig, summary))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Signing
-// ---------------------------------------------------------------------------------------------
 
 fn sign_digest(
     secp: &Secp256k1<bitcoin::secp256k1::All>,
@@ -1205,9 +1137,7 @@ fn sign_digest(
     Ok(out)
 }
 
-/// Signs `raw_data` (hex) with the key of account `account` (`m/44'/195'/account'/0/0`), after
-/// decoding it like [`tron_decode_raw`] (owner must be that key's address). Returns the 65-byte
-/// signature `r || s || v` (`v` = 27/28) and the summary.
+/// Signs `raw_data` (hex) with `account`'s key, after [`tron_decode_raw`] (owner must match).
 pub fn tron_sign(seed: &Seed, account: u32, raw_hex: &str) -> Result<([u8; 65], TronTxSummary)> {
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
@@ -1247,8 +1177,7 @@ pub fn tron_recover_signer(raw_hex: &str, signature: &[u8]) -> Result<String> {
     Ok(tron_address_from_bytes(&address_bytes_of_pubkey(&pk)))
 }
 
-/// Serialized `Transaction { raw_data = 1; repeated bytes signature = 2 }`, hex — what
-/// `/wallet/broadcasthex` takes.
+/// Serialized `Transaction { raw_data, signature }` hex, for `/wallet/broadcasthex`.
 pub fn tron_signed_transaction(raw_hex: &str, signature: &[u8; 65]) -> Result<String> {
     let raw =
         hex::decode(raw_hex.trim()).map_err(|_| Error::input("raw_data is not hexadecimal"))?;
@@ -1263,9 +1192,6 @@ pub fn tron_signed_transaction(raw_hex: &str, signature: &[u8; 65]) -> Result<St
 mod tests {
     use super::*;
 
-    /// Trust Wallet Core `TronSigner.SignTransfer` / `SignTransferTrc20Contract`: the private
-    /// key, the transaction id (sha256 of raw_data) and the expected `r || s` (Trust Wallet
-    /// writes `v` as 0/1, Kyro as 27/28 — same recovery id).
     #[test]
     fn signature_matches_trust_wallet_vectors() {
         let secp = Secp256k1::new();
@@ -1359,7 +1285,6 @@ mod tests {
         )
     }
 
-    /// Audit finding: the 24 h expiration ceiling was only enforced by the shell.
     #[test]
     fn expiration_more_than_24h_ahead_is_refused() {
         let ours = tron_address_from_bytes(&me());
@@ -1385,7 +1310,6 @@ mod tests {
         assert!(tron_decode_stake_raw(&stake(year), &ours).is_err());
     }
 
-    /// Audit finding: the memo was shown by the shell with its control / bidi characters.
     #[test]
     fn memo_text_is_sanitized() {
         let ours = tron_address_from_bytes(&me());

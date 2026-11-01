@@ -1,8 +1,5 @@
 //! Hardware wallets, device-independent part: independent verification of device signatures
 //! (a wrong signature must always be rejected), watch-only records, vault compatibility.
-//!
-//! "Device" signatures are produced here by the software signer of the same seed (they are
-//! exactly what an honest device returns), then tampered with.
 
 mod common;
 
@@ -24,10 +21,6 @@ use wallet_core::{
     EvmTxRequest, HwBtcSignature, HwDeviceKind, Network, UtxoCoin, VaultFile, WatchEvm, WatchKey,
     WatchOnlyAccount, WatchOnlyStore, WatchSol, EVM_NODE_PATH,
 };
-
-// ------------------------------------------------------------------------------------------
-// Bitcoin
-// ------------------------------------------------------------------------------------------
 
 struct Wallet {
     master: Xpriv,
@@ -86,8 +79,6 @@ fn accounts(phrase: &str) -> Vec<wallet_core::BtcAccount> {
     ]
 }
 
-/// Input 0: P2WPKH m/84'/1'/0'/0/0 (100 000 sats). Input 1: P2TR m/86'/1'/0'/0/2 (50 000).
-/// Outputs: 120 000 to a foreign address, 28 000 change to m/84'/1'/0'/1/0. Fee 2 000.
 fn mixed_psbt() -> Psbt {
     let us = Wallet::new(ABANDON);
     let s = seed(ABANDON);
@@ -137,7 +128,6 @@ fn mixed_psbt() -> Psbt {
     psbt
 }
 
-/// What an honest device returns for `psbt`: the software signer's signatures.
 fn honest_sigs(psbt: &Psbt) -> Vec<HwBtcSignature> {
     let (signed, _) =
         btc_sign_psbt(&seed(ABANDON), Network::Testnet, 0, &psbt.to_string()).unwrap();
@@ -182,23 +172,19 @@ fn btc_plan_matches_inputs_and_change_against_xpubs() {
     assert_eq!(plan.summary.fee_sats, 2_000);
     assert!(!plan.summary.outputs[0].2 && plan.summary.outputs[1].2);
 
-    // Same change flags as the address-based decoder used for the native dialog.
     let own = btc_hw_own_addresses(Network::Testnet, &accounts(ABANDON), 20).unwrap();
     let decoded = wallet_core::btc_decode_psbt(Network::Testnet, &psbt.to_string(), &own).unwrap();
     assert_eq!(decoded, plan.summary);
 
-    // Another wallet's xpubs: nothing is ours.
     assert!(matches!(
         btc_hw_plan(Network::Testnet, &psbt.to_string(), &accounts(LEGAL)),
         Err(Error::Psbt(_))
     ));
-    // Wrong network.
     assert!(btc_hw_plan(Network::Mainnet, &psbt.to_string(), &accounts(ABANDON)).is_err());
 }
 
 #[test]
 fn btc_plan_rejects_lying_key_origin() {
-    // Key origin says m/84'/1'/0'/0/0 but the key is the one at /0/1.
     let mut psbt = mixed_psbt();
     let us = Wallet::new(ABANDON);
     psbt.inputs[0].bip32_derivation.clear();
@@ -240,7 +226,6 @@ fn btc_finalize_accepts_honest_device_signatures() {
     assert_eq!(signed.inputs[0].partial_sigs.len(), 1);
     assert!(signed.inputs[1].tap_key_sig.is_some());
 
-    // Trezor form: DER without the sighash byte, no pubkey.
     let mut trezor = sigs.clone();
     let der = trezor[0].signature.clone();
     trezor[0].signature = der[..der.len() - 1].to_vec();
@@ -268,17 +253,14 @@ fn btc_finalize_rejects_wrong_signatures() {
     };
 
     for which in 0..2 {
-        // One bit flipped in r (ECDSA) / in the nonce point (Schnorr).
         let mut bad = good.clone();
         let pos = if which == 0 { 8 } else { 5 };
         bad[which].signature[pos] ^= 0x01;
         assert!(device(&bad), "flipped signature {which} accepted");
-        // Missing signature for one of our inputs.
         let mut missing = good.clone();
         missing.remove(which);
         assert!(device(&missing), "missing signature {which} accepted");
     }
-    // Signatures swapped between inputs, duplicated, or for a foreign index.
     let mut swapped = good.clone();
     swapped[0].input = 1;
     swapped[1].input = 0;
@@ -292,7 +274,6 @@ fn btc_finalize_rejects_wrong_signatures() {
         ..good[0].clone()
     });
     assert!(device(&extra));
-    // Device reports another key.
     let mut other_key = good.clone();
     other_key[0].pubkey = Some(
         Wallet::new(ABANDON)
@@ -301,11 +282,9 @@ fn btc_finalize_rejects_wrong_signatures() {
             .to_vec(),
     );
     assert!(device(&other_key));
-    // SIGHASH_NONE byte instead of ALL.
     let mut none = good.clone();
     *none[0].signature.last_mut().unwrap() = 0x02;
     assert!(device(&none));
-    // Signature by another wallet over the same transaction.
     let mut foreign = mixed_psbt();
     let them = Wallet::new(LEGAL);
     let p = path("m/84'/1'/0'/0/0");
@@ -333,10 +312,6 @@ fn btc_finalize_rejects_wrong_signatures() {
     forged[0].pubkey = None;
     assert!(device(&forged));
 }
-
-// ------------------------------------------------------------------------------------------
-// EVM
-// ------------------------------------------------------------------------------------------
 
 /// Ethereum mainnet tx 0x0ec0b6a2df4d87424e5f6ad2a654e27aaeb7dac20ae9e8385cc09087ad532ee0
 /// (also used by alloy-consensus' tests): public on-chain fields and signature.
@@ -389,18 +364,15 @@ fn evm_rejects_wrong_signatures() {
     let device = |tx: &EvmTxRequest, r: &[u8], s: &[u8], from: &str| {
         matches!(evm_hw_finalize(tx, r, s, from), Err(Error::Device(_)))
     };
-    // Expected key is someone else.
     assert!(device(
         &tx,
         &r,
         &s,
         "0x9858EfFD232B4033E47d90003D41EC34EcaEda94"
     ));
-    // Flipped bit in s.
     let mut s2 = s.clone();
     s2[31] ^= 1;
     assert!(device(&tx, &r, &s2, MAINNET_FROM));
-    // Signature for another transaction (nonce changed).
     let mut other = tx.clone();
     other.nonce += 1;
     assert!(device(&other, &r, &s, MAINNET_FROM));
@@ -415,7 +387,6 @@ fn evm_rejects_wrong_signatures() {
         high[i] = (v + 256 * borrow) as u8;
     }
     assert!(device(&tx, &r, &high, MAINNET_FROM));
-    // Wrong lengths.
     assert!(device(&tx, &r[..31], &s, MAINNET_FROM));
 }
 
@@ -439,10 +410,6 @@ fn evm_xpub_node_derives_same_addresses_as_seed() {
     );
     assert!(evm_xpub_from_node(&pk.serialize(), &[0u8; 31]).is_err());
 }
-
-// ------------------------------------------------------------------------------------------
-// Solana
-// ------------------------------------------------------------------------------------------
 
 #[test]
 fn sol_verifies_device_signature() {
@@ -470,10 +437,6 @@ fn sol_verifies_device_signature() {
         Err(Error::Device(_))
     ));
 }
-
-// ------------------------------------------------------------------------------------------
-// Watch-only store and vault compatibility
-// ------------------------------------------------------------------------------------------
 
 fn watch_account() -> WatchOnlyAccount {
     let secp = Secp256k1::new();
@@ -564,7 +527,6 @@ fn watch_only_other_chains_are_validated() {
     assert!(bad(&|a| a.tron.as_mut().unwrap().pubkey = "04".into()));
     assert!(bad(&|a| a.stellar.as_mut().unwrap().address =
         wallet_core::stellar_address(&seed(LEGAL), 0).unwrap()));
-    // A record with only an XRP key is a valid account.
     let mut only = watch_account();
     only.btc.clear();
     only.evm = None;
@@ -594,9 +556,7 @@ fn watch_only_store_roundtrip_and_validation() {
         WatchOnlyStore::from_json(&json, Network::Testnet).unwrap(),
         store
     );
-    // Per-network file.
     assert!(WatchOnlyStore::from_json(&json, Network::Mainnet).is_err());
-    // Unknown fields, unknown version, duplicates.
     assert!(WatchOnlyStore::from_json(
         &json.replacen("\"label\"", "\"seed\": 1, \"label\"", 1),
         Network::Testnet
@@ -642,8 +602,6 @@ fn watch_only_store_roundtrip_and_validation() {
     }));
 }
 
-/// A v1 vault (frozen bytes, minimum KDF parameters): still opens, and the vault format is
-/// untouched by the watch-only store (which lives in its own file).
 #[test]
 fn vault_v1_fixture_still_opens() {
     let json = r#"{"version":1,"kdf":{"m_cost_kib":65536,"t_cost":2,"p_cost":1},"salt":"rvr2EjvXY8Uu+xmPMYv8KA==","nonce":"pNpbiCLhmKrV/OIth2S7cSTfBYFx1B9N","ciphertext":"Ux7Bfob3SAlWHIsYk2oQFWlk40jn3HixH/QjNRezGCmi+Nyi2+vZuPj2/KlGC72Q3IAcOBkEHvMJ7eIfjDcz/RheqwQneajmzOKgMZmoyIvDK3CTAfwXHAqsKJOaSnCJWoTBxO7LdA6K3ghAgg=="}"#;
@@ -651,8 +609,6 @@ fn vault_v1_fixture_still_opens() {
     assert_eq!(file.version, 1);
     let m = open(&file, "correct horse battery staple").unwrap();
     assert_eq!(m.phrase().as_str(), ABANDON);
-    // The former fixture of this test (1 MiB, 1 pass: below the KDF floor) is now refused
-    // before any key derivation, with the right password.
     let weak = r#"{"version":1,"kdf":{"m_cost_kib":1024,"t_cost":1,"p_cost":1},"salt":"dtXEFQtrVj8HlzwKrxaxKw==","nonce":"3YEMAf1YazFtbLg2G5xKYhPPYZx1X3NQ","ciphertext":"xDqwZSPGiU5aDqx0eryE58S+RqFqM0WtHEdggVXkAvirFVf2E+D0Kg8TuYkygkSOiUO48kX8q+H9WqR8GgFoLHJfCMPnNiwexZ8zvvmY4LG6gcrFwWMe2coO6slOyUk+V5+0Q6ftFCN6RZnbxw=="}"#;
     assert!(matches!(
         open(
@@ -661,7 +617,6 @@ fn vault_v1_fixture_still_opens() {
         ),
         Err(Error::InvalidVault(_))
     ));
-    // A watch-only store is not a vault and vice versa.
     assert!(VaultFile::from_json(&WatchOnlyStore::default().to_json().unwrap()).is_err());
     assert!(WatchOnlyStore::from_json(json, Network::Testnet).is_err());
 }

@@ -1,17 +1,4 @@
 //! Monero vectors.
-//!
-//! - BIP39 → Monero (Kyro's documented mapping, the scheme of Ledger's Monero app:
-//!   `spend = sc_reduce32(keccak256(BIP32-secp256k1(m/44'/128'/a'/0/0)))`, `view =
-//!   sc_reduce32(keccak256(spend))`): keys, primary addresses, subaddresses `(0, 1)` / `(0, 2)`
-//!   and 25-word seeds computed by an **independent** pure-Python implementation (stdlib only:
-//!   PBKDF2, HMAC-SHA512, its own secp256k1, Keccak-256, ed25519 and Monero base58), itself
-//!   checked against the official English seed vector below. Not checked against a Ledger
-//!   device.
-//! - 25-word seeds: English vectors of kayabaNerve/monero-wallet-util `seed/src/tests.rs`
-//!   (`washing thirsty …`, `plus × 25`, `audio × 25`), with their spend and view keys.
-//! - Signing: a transfer built from a synthetic output and a mock decoy provider, signed, then
-//!   checked by monero-wallet's `Eventuality`; the key image the transaction reveals must be
-//!   the one `xmr_key_images` computes.
 
 mod common;
 
@@ -84,12 +71,10 @@ fn bip39_to_monero_matches_the_independent_reference() {
     assert_eq!(xmr_seed_words(&s, 0).unwrap().join(" "), A0_WORDS);
     assert_eq!(xmr_seed_words(&s, 1).unwrap().join(" "), A1_WORDS);
     assert_eq!(hex::encode(*xmr_words_to_key(A0_WORDS).unwrap()), A0_SPEND);
-    // Public keys = the ones inside the primary address (spend, then view).
     let (spend_pub, view_pub) = xmr_public_keys(&s, 0).unwrap();
     let a = MoneroAddress::from_str(XNet::Mainnet, A0_MAIN).unwrap();
     assert_eq!(spend_pub, hex::encode(a.spend().compress().to_bytes()));
     assert_eq!(view_pub, hex::encode(a.view().compress().to_bytes()));
-    // Too far for Kyro.
     assert!(xmr_address(&s, Network::Mainnet, 0, 100_001).is_err());
 }
 
@@ -111,7 +96,6 @@ fn official_english_seed_vectors() {
     ] {
         assert_eq!(hex::encode(*xmr_words_to_key(words).unwrap()), spend);
     }
-    // Wrong checksum word, unknown word, wrong length.
     let mut w: Vec<&str> = A0_WORDS.split(' ').collect();
     w[24] = "abbey";
     assert!(xmr_words_to_key(&w.join(" ")).is_err());
@@ -149,12 +133,10 @@ fn destinations_are_decoded_strictly() {
             payment_id: "0102030405060708".into()
         }
     );
-    // Wrong network, both ways; testnet (not stagenet) refused on Kyro's testnet.
     assert!(xmr_parse_address(A0_STAGE, Network::Mainnet).is_err());
     assert!(xmr_parse_address(A0_MAIN, Network::Testnet).is_err());
     let testnet = vp.legacy_address(XNet::Testnet).to_string();
     assert!(xmr_parse_address(&testnet, Network::Testnet).is_err());
-    // "Featured" / guaranteed addresses (experimental, not wallet2-compatible): refused.
     let g =
         GuaranteedViewPair::new(vp.spend(), zeroize::Zeroizing::new(Scalar::hash(b"x"))).unwrap();
     let featured = g
@@ -164,7 +146,6 @@ fn destinations_are_decoded_strictly() {
         .unwrap_err()
         .to_string()
         .contains("featured"));
-    // Corrupted checksum, garbage, other coins.
     let mut bad = A0_MAIN.to_owned();
     bad.replace_range(10..11, if &A0_MAIN[10..11] == "a" { "b" } else { "a" });
     assert!(xmr_parse_address(&bad, Network::Mainnet).is_err());
@@ -194,14 +175,11 @@ fn cache_is_bound_to_seed_network_and_account() {
     let last = tampered.len() - 1;
     tampered[last] ^= 1;
     assert!(xmr_cache_open(&s, Network::Mainnet, 0, &tampered).is_err());
-    // Fresh nonce each time.
     assert_ne!(
         sealed,
         xmr_cache_seal(&s, Network::Mainnet, 0, b"scan state").unwrap()
     );
 }
-
-// ---------------------------------------------------------------- signing with mock decoys
 
 fn block_on<F: Future>(f: F) -> F::Output {
     let mut f = pin!(f);
@@ -213,8 +191,6 @@ fn block_on<F: Future>(f: F) -> F::Output {
     }
 }
 
-/// 2 000 blocks of 10 RingCT outputs each; every output is a hash-to-point key and commitment,
-/// except the output being spent, which the node must present as it is (key, commitment).
 struct MockChain {
     real: (u64, [Point; 2]),
 }
@@ -260,8 +236,6 @@ impl ProvidesUnvalidatedDecoys for MockChain {
     }
 }
 
-/// An output of `amount` to account 0's primary address, as the scanner would have found it:
-/// key `B + offset·G`, at global index 12 345 (block 1 234).
 fn our_output(amount: u64, offset: u8) -> WalletOutput {
     let s = seed(ABANDON);
     let vp = xmr_view_pair(&s, 0).unwrap();
@@ -337,14 +311,12 @@ fn transfer_is_built_signed_and_checked() {
     );
     assert!(sum.warnings.is_empty() && !sum.requires_extra_confirmation);
 
-    // Another account cannot sign it.
     let signed = xmr_sign(&s, 0, u).unwrap();
     assert_eq!(signed.summary, sum);
     assert_eq!(signed.txid.len(), 64);
     let pruned = Transaction::<Pruned>::from(signed.tx.clone());
     assert_eq!(xmr_tx_fee(&pruned), Some(fee));
     assert_eq!(pruned.prefix().outputs.len(), 2);
-    // The key images revealed are exactly the ones Kyro computes for its outputs.
     let mut revealed = signed.key_images.clone();
     revealed.sort_unstable();
     let mut expected = kis.clone();
@@ -361,7 +333,6 @@ fn build_refusals_and_warnings() {
     let s = seed(ABANDON);
     let fee_rate = FeeRate::new(20_000, 10_000).unwrap();
     let input = || vec![with_decoys(our_output(1_000_000_000, 5))];
-    // Not enough funds, zero amount, wrong network, no input.
     assert!(xmr_build(
         &s,
         Network::Mainnet,
@@ -396,7 +367,6 @@ fn build_refusals_and_warnings() {
         &[]
     )
     .is_err());
-    // To ourselves, tiny amount (fee above amount): reinforced.
     let u = xmr_build(
         &s,
         Network::Mainnet,
@@ -411,7 +381,6 @@ fn build_refusals_and_warnings() {
     assert!(u.summary.requires_extra_confirmation);
     assert!(u.summary.warnings.contains(&XmrWarning::OwnAddress));
     assert!(u.summary.warnings.contains(&XmrWarning::FeeAboveAmount));
-    // Integrated address: reinforced; signed by the wrong account: refused.
     let vp = xmr_view_pair(&seed(common::LEGAL), 0).unwrap();
     let integrated = vp
         .legacy_integrated_address(XNet::Mainnet, [9; 8])
@@ -429,7 +398,6 @@ fn build_refusals_and_warnings() {
     .unwrap();
     assert!(u.summary.warnings.contains(&XmrWarning::IntegratedAddress));
     assert!(xmr_sign(&s, 1, u).is_err());
-    // An output that is not ours: no key image.
     let other = {
         let mut o = our_output(1, 5).serialize();
         o[56] ^= 1; // flip a bit of the output key

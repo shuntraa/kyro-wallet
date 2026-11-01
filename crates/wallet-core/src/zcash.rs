@@ -1,29 +1,4 @@
 //! Zcash, **transparent addresses only** (`t1…` P2PKH / `t3…` P2SH; testnet `tm…` / `t2…`).
-//!
-//! Shielded addresses (Sapling `zs…`, Sprout `zc…`, unified `u1…`) are refused with an explicit
-//! message: Kyro neither builds nor reads shielded parts. A transparent Zcash address is as
-//! public as a Bitcoin one (amounts, counterparties and history are visible on chain).
-//!
-//! What comes from where (no cryptography is written here):
-//! - keys: BIP44 `m/44'/133'/account'/change/index` (testnet coin type 1, as zcashd), derived
-//!   with rust-bitcoin's BIP32 and signed with libsecp256k1 (the `bitcoin` crate), keys wiped by
-//!   [`XprivGuard`]; addresses are base58check with Zcash's two-byte prefixes
-//!   (`zcash_protocol` constants, protocol spec §5.6.1.1);
-//! - transaction format, parsing, ZIP-244 transaction id and **signature digest**, consensus
-//!   branch ids and activation heights, ZIP-317 fee: the official librustzcash crates
-//!   (`zcash_primitives`, `zcash_transparent`, `zcash_protocol`).
-//!
-//! Kyro **builds the transaction itself** (v5, ZIP 225): the shell supplies the previous
-//! transactions of our coins (each one parsed and re-hashed here: its txid must be the
-//! outpoint's), the recipient, the amount, the change index, the chain tip and the consensus
-//! branch id read from a recent block. Rust selects the coins, computes the ZIP-317 fee, sends
-//! the change to our own derived address, and refuses to sign for a branch id it does not know
-//! or that does not match its own activation table (a network upgrade this build does not know:
-//! signing would produce an invalid transaction).
-//!
-//! ZIP 244 commits to the amount and script of **every** transparent input, so a server lying
-//! about a coin's value cannot change what the signature means (the network would reject it);
-//! amounts still come only from the verified previous transactions.
 
 use core::str::FromStr;
 use std::io::Cursor;
@@ -54,21 +29,14 @@ use crate::keys::{hardened, normal, path_string, secp, XprivGuard};
 use crate::mnemonic::Seed;
 use crate::network::Network;
 
-/// ZIP 203: default number of blocks after which an unmined transaction expires (≈ 50 min at
-/// 75 s per block).
+/// ZIP 203: default expiry delta in blocks (≈ 50 min at 75 s per block).
 pub const ZEC_EXPIRY_DELTA: u32 = 40;
-/// Smallest output the nodes relay (zcashd `GetDustThreshold` with the 100 zatoshis/kB relay
-/// fee: 3 × (34 + 148) × 100 / 1000 = 54 zatoshis for a P2PKH output).
+/// Relay dust threshold (zcashd `GetDustThreshold`): 54 zatoshis for a P2PKH output.
 pub const ZEC_DUST: u64 = 54;
-/// A change smaller than this (ZIP 317 marginal fee, 0.00005 ZEC) is added to the fee instead
-/// of creating an output that would cost more to spend than it is worth.
+/// Change below this (ZIP 317 marginal fee, 0.00005 ZEC) goes to the fee instead.
 pub const ZEC_MIN_CHANGE: u64 = 5_000;
 /// Most inputs one transaction spends (the ZIP-317 fee grows with each one).
 pub const ZEC_MAX_INPUTS: usize = 50;
-
-// ---------------------------------------------------------------------------------------------
-// Network parameters
-// ---------------------------------------------------------------------------------------------
 
 fn params(net: Network) -> ZcashNetwork {
     match net {
@@ -110,10 +78,6 @@ pub fn zec_genesis_hash(net: Network) -> &'static str {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Addresses
-// ---------------------------------------------------------------------------------------------
-
 /// Kind of a Zcash destination Kyro can pay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -122,8 +86,7 @@ pub enum ZecAddressKind {
     P2pkh,
     /// `t3…` / `t2…`: pay to script hash.
     P2sh,
-    /// `tex1…` (ZIP 320): a P2PKH address that only accepts funds from transparent inputs
-    /// (exchanges). Kyro's transactions are fully transparent, so it can pay it.
+    /// `tex1…` (ZIP 320): P2PKH accepting only transparent inputs; Kyro can pay it.
     Tex,
 }
 
@@ -164,9 +127,7 @@ fn is_shielded_form(a: &str) -> bool {
             && bitcoin::base58::decode_check(a).is_ok_and(|d| d.len() == 66))
 }
 
-/// What a destination address pays: its scriptPubKey and kind. Accepts `t1…`/`t3…` (testnet
-/// `tm…`/`t2…`) and ZIP-320 `tex1…` (`textest1…`). Refuses shielded and unified addresses with
-/// an explicit message, the other network's addresses, and anything else.
+/// What a destination address pays: its scriptPubKey and kind.
 pub fn zec_parse_address(address: &str, net: Network) -> Result<(Vec<u8>, ZecAddressKind)> {
     let a = address.trim();
     if a.is_empty() {
@@ -244,8 +205,7 @@ fn own_address(net: Network, pk: &PublicKey) -> String {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ZecAccount {
-    /// Account-level extended public key (`xpub`/`tpub` encoding; the key material is what
-    /// matters, Zcash has no registered prefix of its own).
+    /// Account-level xpub (`xpub`/`tpub` encoding; Zcash has no registered prefix).
     pub xpub: String,
     /// Master key fingerprint, 8 lowercase hex chars.
     pub fingerprint: String,
@@ -305,8 +265,7 @@ pub fn zec_address(
     Ok(own_address(net, &child_pubkey(&xpub, change, index)?))
 }
 
-/// Address at `<account xpub>/change/index` (public derivation only), same result as
-/// [`zec_address`]. Accepts `xpub`/`tpub` only.
+/// Address at `<account xpub>/change/index`, same as [`zec_address`]; `xpub`/`tpub` only.
 pub fn zec_address_from_xpub(xpub: &str, net: Network, change: bool, index: u32) -> Result<String> {
     let xpub = Xpub::from_str(xpub.trim()).map_err(|_| Error::input("invalid account xpub"))?;
     if xpub.network != net.btc_kind() {
@@ -314,10 +273,6 @@ pub fn zec_address_from_xpub(xpub: &str, net: Network, change: bool, index: u32)
     }
     Ok(own_address(net, &child_pubkey(&xpub, change, index)?))
 }
-
-// ---------------------------------------------------------------------------------------------
-// Raw transactions
-// ---------------------------------------------------------------------------------------------
 
 /// The transparent view of a Zcash transaction (any version), for the backend and history.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -333,16 +288,13 @@ pub struct ZecRawTx {
     pub inputs: Vec<(String, u32)>,
     /// Transparent outputs `(address if standard, zatoshis, scriptPubKey hex)`.
     pub outputs: Vec<(Option<String>, u64, String)>,
-    /// The transaction also has shielded parts (Sprout, Sapling, Orchard…): value moves that
-    /// Kyro does not see, so a transparent "fee" cannot be computed from it.
+    /// The tx has shielded parts: a transparent "fee" cannot be computed.
     pub shielded: bool,
     /// Coinbase transaction.
     pub coinbase: bool,
 }
 
-/// Consensus branch id written in a v5+ transaction header (bytes 8..12), read without parsing
-/// the rest: it is how Kyro learns which network upgrade the chain is on, including one this
-/// build does not know. `None` for v4 and earlier (no branch id in the encoding).
+/// Consensus branch id in a v5+ header (bytes 8..12): reveals the chain's network upgrade.
 pub fn zec_header_branch_id(raw: &[u8]) -> Option<u32> {
     let word = |i: usize| -> Option<u32> {
         raw.get(i..i + 4)
@@ -357,8 +309,7 @@ pub fn zec_header_branch_id(raw: &[u8]) -> Option<u32> {
 
 fn parse_tx(raw: &[u8]) -> Result<Transaction> {
     let mut cur = Cursor::new(raw);
-    // The branch id only matters for v4 and earlier (it is not in their encoding and only
-    // feeds their sighash, never their txid); v5+ carry their own.
+    // Branch id only feeds the sighash of v4 and earlier; v5+ carry their own.
     let tx = Transaction::read(&mut cur, BranchId::Nu5)
         .map_err(|_| Error::input("malformed Zcash transaction"))?;
     if cur.position() != raw.len() as u64 {
@@ -410,19 +361,13 @@ fn view(tx: &Transaction, net: Network) -> ZecRawTx {
     }
 }
 
-/// Decodes a consensus-serialized Zcash transaction (hex) of any version; fails on malformed
-/// data and trailing bytes. The txid is recomputed by `zcash_primitives`.
+/// Decodes a Zcash tx (hex) of any version; rejects malformed/trailing data; txid recomputed.
 pub fn zec_decode_raw_tx(raw_hex: &str, net: Network) -> Result<ZecRawTx> {
     let bytes =
         hex::decode(raw_hex.trim()).map_err(|_| Error::input("transaction is not hexadecimal"))?;
     Ok(view(&parse_tx(&bytes)?, net))
 }
 
-// ---------------------------------------------------------------------------------------------
-// Consensus: which branch to sign for
-// ---------------------------------------------------------------------------------------------
-
-/// Network upgrade name as Zcash writes it (`NU6.3`).
 fn upgrade_name(b: BranchId) -> String {
     b.network_upgrade()
         .map_or_else(|| "Sprout".into(), |nu| nu.to_string().to_uppercase())
@@ -444,13 +389,7 @@ pub struct ZecConsensus {
     pub expiry_capped: bool,
 }
 
-/// Decides the branch id and expiry for a transaction built at `tip_height`, and checks them
-/// against `observed_branch_id`, the branch id written in a transaction of the block at
-/// `observed_height` (read from the network, at most 10 blocks below the tip).
-///
-/// Refused: a branch id this build does not know (a network upgrade newer than Kyro: update
-/// it), or one that is not what the activation table of `zcash_protocol` says for that height
-/// (wrong chain, or an upgrade whose height this build does not have).
+/// Decides branch id and expiry at `tip_height`, checked against an observed recent tx.
 pub fn zec_consensus(
     net: Network,
     tip_height: u32,
@@ -521,12 +460,7 @@ pub fn zec_next_upgrade(net: Network, height: u32) -> Option<(String, u32)> {
     ))
 }
 
-// ---------------------------------------------------------------------------------------------
-// Building and signing
-// ---------------------------------------------------------------------------------------------
-
-/// One of our coins, as the shell supplies it: the full previous transaction (hex) and which of
-/// our addresses (`change`/`index` of the signing account) the output pays.
+/// One of our coins: full previous tx (hex) and the `change`/`index` it pays.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ZecCoin {
     /// Previous transaction, consensus-serialized hex.
@@ -540,7 +474,6 @@ pub struct ZecCoin {
 }
 
 /// A send to build: candidate coins (Rust selects among them), recipient, amount (zatoshis)
-/// or everything, our change index, and the chain state read from the network.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ZecSendRequest {
     /// Candidate coins of the account.
@@ -581,11 +514,9 @@ pub struct ZecChange {
     rename_all_fields = "camelCase"
 )]
 pub enum ZecWarning {
-    /// Fee above 10× the ZIP-317 conventional fee, or larger than the amount sent
-    /// (reinforced confirmation).
+    /// Fee above 10× the ZIP-317 fee, or above the amount sent (reinforced confirmation).
     HighFee,
-    /// A network upgrade activates within 40 blocks: the transaction expires earlier than
-    /// usual (informative).
+    /// Network upgrade within 40 blocks: the tx expires earlier (informative).
     ExpiryCapped {
         /// Upgrade activation height.
         next_upgrade_height: u32,
@@ -632,8 +563,6 @@ pub struct ZecTxSummary {
     pub requires_extra_confirmation: bool,
 }
 
-/// Transparent authorization context of an unsigned bundle: the amount and script of every
-/// spent output, which ZIP 244 commits to.
 #[derive(Debug)]
 struct Unsigned {
     coins: Vec<TxOut>,
@@ -656,7 +585,6 @@ impl TransparentAuthorizingContext for Unsigned {
     }
 }
 
-/// A transaction with a transparent part only (no Sapling / Orchard bundle is ever built).
 struct TransparentOnly;
 
 impl Authorization for TransparentOnly {
@@ -705,8 +633,6 @@ fn zip317_fee(net: Network, target: u32, inputs: usize, outputs: &[&[u8]]) -> Re
         .map_err(|_| Error::input("overflow in the fee calculation"))
 }
 
-/// Verifies the candidate coins (previous transaction re-hashed, output exists, pays the key
-/// of this account at the given `change`/`index`), largest first.
 fn verified_coins(xpub: &Xpub, coins: &[ZecCoin]) -> Result<Vec<Spend>> {
     let mut out: Vec<Spend> = Vec::with_capacity(coins.len());
     for (i, c) in coins.iter().enumerate() {
@@ -902,8 +828,6 @@ fn plan_xpub(xpub: &Xpub, net: Network, req: &ZecSendRequest) -> Result<Plan> {
     })
 }
 
-/// Decodes the transaction encoding back and checks it says exactly what the summary says:
-/// version 5, the branch and expiry, our inputs, the recipient, the amount and our change.
 fn check_encoding(
     tx: &Transaction,
     net: Network,
@@ -942,13 +866,7 @@ fn check_encoding(
     Ok(())
 }
 
-/// Builds the transaction (see [`ZecSendRequest`]) and returns the summary shown in the native
-/// dialog, without signing.
-///
-/// Refused: shielded / unified / other-network recipient, unknown or mismatching consensus
-/// branch, a coin whose previous transaction does not parse, whose output does not exist or
-/// does not pay this account at the stated index, a coinbase coin, a duplicate coin, an amount
-/// under the dust limit, insufficient funds, a change index above [`MAX_CHANGE_INDEX`].
+/// Builds the transaction (see [`ZecSendRequest`]) and returns its summary, unsigned.
 pub fn zec_tx_summary(
     seed: &Seed,
     net: Network,
@@ -958,10 +876,7 @@ pub fn zec_tx_summary(
     Ok(plan(seed, net, account, req)?.summary)
 }
 
-/// Builds and signs (`SIGHASH_ALL`, ZIP-244 digest computed by `zcash_primitives`), verifies
-/// every signature against its key and digest, re-decodes the encoding and checks it matches
-/// the summary. Returns the signed transaction (hex) and the same summary as
-/// [`zec_tx_summary`].
+/// Builds and signs (ZIP-244, `SIGHASH_ALL`), verifies every sig and re-checks the encoding.
 pub fn zec_sign(
     seed: &Seed,
     net: Network,
@@ -1021,8 +936,6 @@ fn input_digests(
     Ok(out)
 }
 
-/// Puts the (already verified) signatures in the script sigs, encodes the transaction, parses
-/// it back and checks it says what `summary` says.
 fn assemble(
     unsigned: &TransactionData<TransparentOnly>,
     spends: &[Spend],
@@ -1075,8 +988,7 @@ fn assemble(
     Ok(hex::encode(bytes))
 }
 
-/// The watch-only Zcash account of a hardware wallet must be `m/44'/133'/account'` (testnet
-/// `m/44'/1'/account'`) of this network, depth 3, with an 8-hex master fingerprint.
+/// HW Zcash account must be `m/44'/133'|1'/account'` of this net, depth 3, 8-hex fingerprint.
 pub(crate) fn check_watch_account(net: Network, acc: &ZecAccount, account: u32) -> Result<()> {
     let xpub = Xpub::from_str(acc.xpub.trim()).map_err(|_| Error::input("invalid Zcash xpub"))?;
     let path = account_path(net, account)?;
@@ -1168,8 +1080,7 @@ fn hw_path(net: Network, xpub: &Xpub, change: bool, index: u32) -> Vec<u32> {
     ]
 }
 
-/// Builds the transaction of `req` from the hardware account's xpub (same coin selection, fee,
-/// checks and summary as [`zec_tx_summary`]) and lists what the device needs.
+/// Builds `req` from the hardware xpub (as [`zec_tx_summary`]) and lists device needs.
 pub fn zec_hw_plan(acc: &ZecAccount, net: Network, req: &ZecSendRequest) -> Result<ZecHwPlan> {
     let xpub = hw_xpub(acc, net)?;
     let p = plan_xpub(&xpub, net, req)?;
@@ -1215,9 +1126,7 @@ pub fn zec_hw_plan(acc: &ZecAccount, net: Network, req: &ZecSendRequest) -> Resu
     })
 }
 
-/// Rebuilds the transaction of `req`, verifies each device signature (DER, optionally followed
-/// by the `SIGHASH_ALL` byte) against the ZIP-244 digest of its input and the key Kyro derived
-/// for it, then assembles and re-checks the transaction. Returns `(signed hex, summary)`.
+/// Rebuilds `req`, verifies each device sig against its ZIP-244 digest and key, assembles.
 pub fn zec_hw_finalize(
     acc: &ZecAccount,
     net: Network,
@@ -1261,9 +1170,7 @@ pub fn zec_hw_finalize(
     Ok((hex_tx, p.summary))
 }
 
-/// ZIP-244 signature digest of transparent input `index` of `tx` (`SIGHASH_ALL`), given the
-/// amount and script of every spent output: for checking real transactions in tests and for
-/// re-verifying a signed transaction.
+/// ZIP-244 digest of transparent input `index` (`SIGHASH_ALL`) given every spent output.
 pub fn zec_input_sighash(
     raw_hex: &str,
     prevouts: &[(u64, Vec<u8>)],

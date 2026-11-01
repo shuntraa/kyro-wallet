@@ -1,22 +1,4 @@
-//! Bitcoin Cash (BIP44 coin 145, CashAddr, `SIGHASH_ALL|FORKID`) and Dash (BIP44 coin 5, P2PKH
-//! `X…`, legacy sighash) vectors, real-chain signature checks, PSBT signing and refusals.
-//!
-//! Sources of the expected values (fetched 2026-11-01):
-//! - CashAddr spec `spec/cashaddr.md` (bitcoincash.org), "Examples of address translation";
-//!   the spec's size/type vectors are in `src/cashaddr.rs`;
-//! - Trezor firmware `tests/device_tests/bitcoin/test_getaddress.py` (`test_bch`),
-//!   `test_bcash.py` (`test_send_bch_change`, `test_send_bch_nochange`) and `test_dash.py`
-//!   (`test_send_dash`, `test_send_dash_dip2_input`), mnemonic `all ×12`, with their previous
-//!   transactions from `tests/txcache/{bcash,dash}/`. Trezor signs with RFC 6979 like
-//!   libsecp256k1, so Kyro must produce **byte-identical** signed transactions;
-//! - Trust Wallet Core `tests/common/CoinAddressDerivationTests.cpp` (key `0x46…46`) and
-//!   `tests/chains/Dash/TWDashTests.cpp` (`Dash.LockScripts`);
-//! - Bitcoin Cash Node `src/test/data/sighash.json`: every vector whose type has the FORKID bit
-//!   and not `SIGHASH_UTXOS` (236 of 1 000), digest computed with amount 0 as in
-//!   `sighash_tests.cpp` → `tests/data/bchn_sighash_forkid.json`;
-//! - real mainnet transactions read from public Electrum servers (bch.imaginary.cash,
-//!   dash.electrum1.cipig.net), never broadcast; checkpoint headers from bch.loping.net and
-//!   chipnet.bch.ninja.
+//! Bitcoin Cash (coin 145, CashAddr, FORKID) and Dash (coin 5) vectors, signing and refusals.
 
 mod common;
 
@@ -61,10 +43,6 @@ fn pushes(script: &bitcoin::Script) -> Vec<Vec<u8>> {
         .collect()
 }
 
-// ------------------------------------------------------------------------------------------
-// Addresses and derivation
-// ------------------------------------------------------------------------------------------
-
 /// CashAddr spec, "Examples of address translation": legacy `1…`/`3…` ↔ `bitcoincash:q…`/`p…`.
 #[test]
 fn cashaddr_spec_address_translation() {
@@ -105,20 +83,17 @@ fn cashaddr_spec_address_translation() {
             cash
         );
         assert_eq!(utxo_script_pubkey(cash, M, BCH).unwrap(), script);
-        // Prefix optional, upper case accepted (never mixed).
         let bare = cash.trim_start_matches("bitcoincash:");
         assert_eq!(utxo_script_pubkey(bare, M, BCH).unwrap(), script);
         assert_eq!(
             utxo_script_pubkey(&cash.to_uppercase(), M, BCH).unwrap(),
             script
         );
-        // The legacy form is refused: it cannot be told apart from a Bitcoin address.
         let e = utxo_script_pubkey(legacy, M, BCH).unwrap_err();
         assert!(
             matches!(&e, Error::InvalidInput(m) if m.contains("CashAddr")),
             "{e:?}"
         );
-        // A mainnet CashAddr on chipnet: another network.
         assert!(matches!(
             utxo_script_pubkey(cash, T, BCH),
             Err(Error::InvalidInput(m)) if m.contains("another network")
@@ -161,8 +136,7 @@ fn bch_bip44_trezor_vectors() {
     }
 }
 
-/// Trezor `test_dash.py` (`all ×12`): `m/44'/5'/0'/0/0` = `XdTw4G5…`, and the change address
-/// `m/44'/5'/0'/1/0` pays `76a914fd61dd…` in the signed transaction of `test_send_dash_dip2_input`.
+/// Trezor `test_dash.py` (`all ×12`): receive and change addresses of `test_send_dash_dip2_input`.
 #[test]
 fn dash_bip44_trezor_vectors() {
     let s = seed(ALL);
@@ -183,8 +157,7 @@ fn dash_bip44_trezor_vectors() {
     );
 }
 
-/// Trust Wallet Core `Coin.DeriveAddress` (private key `0x46…46`): the same key hash is
-/// `qz7eyzy…` on Bitcoin Cash, `XsyCV5y…` on Dash (and `DNRTC6G…` on Dogecoin).
+/// Trust Wallet Core `Coin.DeriveAddress` (key `0x46…46`): same key hash on BCH, Dash, Doge.
 #[test]
 fn trust_wallet_cross_chain_encodings() {
     let secp = Secp256k1::new();
@@ -228,8 +201,7 @@ fn dash_lock_scripts_trust_wallet_vectors() {
     }
 }
 
-/// Testnets use SLIP-44 coin type 1 (same keys as Bitcoin testnet BIP44, Trezor `test_tbtc`
-/// `mvbu1Gd…`), each with its own encoding: chipnet `bchtest:q…`, Dash testnet `y…` (140).
+/// Testnets use SLIP-44 coin 1 (Trezor `test_tbtc` keys): chipnet `bchtest:q…`, Dash `y…`.
 #[test]
 fn testnet_paths_and_encodings() {
     let s = seed(ALL);
@@ -254,12 +226,10 @@ fn testnet_paths_and_encodings() {
 #[test]
 fn addresses_of_other_chains_are_refused() {
     let refused = [
-        // Bitcoin (and BCH legacy) addresses, segwit, other chains on Bitcoin Cash.
         (BCH, M, "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"),
         (BCH, M, "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu"),
         (BCH, M, "XdTw4G5AWW4cogGd7ayybyBNDbuB45UpgH"),
         (BCH, M, "bchtest:qr08q88p9etk89wgv05nwlrkm4l0urz4cyl36hh9sv"),
-        // Broken checksum, mixed case, P2SH32 (32-byte hash).
         (
             BCH,
             M,
@@ -276,7 +246,6 @@ fn addresses_of_other_chains_are_refused() {
             "bitcoincash:pvch8mmxy0rtfrlarg7ucrxxfzds5pamg73h7370aa87d80gyhqxq5nlegake",
         ),
         (BCH, M, ""),
-        // Dash: Bitcoin, Dogecoin, testnet on mainnet and vice versa, CashAddr, bad checksum.
         (DASH, M, "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"),
         (DASH, M, "D5taDndQJ1fDF3AM1yWavmJY2BgSi17CUv"),
         (DASH, T, "XdTw4G5AWW4cogGd7ayybyBNDbuB45UpgH"),
@@ -286,7 +255,6 @@ fn addresses_of_other_chains_are_refused() {
             "bitcoincash:qr08q88p9etk89wgv05nwlrkm4l0urz4cyl36hh9sv",
         ),
         (DASH, M, "XdTw4G5AWW4cogGd7ayybyBNDbuB45UpgJ"),
-        // And BCH / Dash addresses on the existing chains.
         (UtxoCoin::Dogecoin, M, "XdTw4G5AWW4cogGd7ayybyBNDbuB45UpgH"),
         (
             UtxoCoin::Litecoin,
@@ -307,8 +275,6 @@ fn addresses_of_other_chains_are_refused() {
 
 #[test]
 fn genesis_hashes_and_checkpoints() {
-    // Bitcoin Cash Node / Dash Core chainparams.cpp. Bitcoin Cash shares Bitcoin's genesis
-    // (chipnet: testnet4's), hence the checkpoint after the split.
     assert_eq!(
         utxo_genesis_hash(M, BCH),
         "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
@@ -325,8 +291,6 @@ fn genesis_hashes_and_checkpoints() {
         utxo_genesis_hash(T, DASH),
         "00000bafbc94add76cb75e2ec92894837288a481e5c005f6563d91623bf8bc2c"
     );
-    // Block 478 559 (first Bitcoin Cash block, 1 Aug 2017) and chipnet block 200 000: the
-    // headers served by public servers hash to the checkpoints.
     let main = "00000020432d350741fbf28f2e1486eabe2c4e143bfe2241af6518010000000000000000abaa4bd8a48c1c6bc08ee39b66065e5e9484304cab8b56d5eed3e40b1ac996c899c480593547011822ca4ae8";
     let chip = "00000020270088a5d78fd25a32c8bf3f0704aacbd77211bfee9bd5e9afb3dd630000000092c12e2a7f7fc79c64a79ac03e51fa26f819c13906bd1a5612cd6dd0cd568972e6083e66cc9d731c85cf1b8d";
     let (h, hash) = utxo_checkpoint(M, BCH).unwrap();
@@ -343,10 +307,6 @@ fn genesis_hashes_and_checkpoints() {
     assert!(utxo_checkpoint(M, UtxoCoin::Litecoin).is_none());
     assert!(utxo_header_hash("00").is_err());
 }
-
-// ------------------------------------------------------------------------------------------
-// Signature hashes
-// ------------------------------------------------------------------------------------------
 
 /// Bitcoin Cash Node `sighash.json`, every FORKID vector (amount 0, as in its test).
 #[test]
@@ -367,7 +327,6 @@ fn bchn_forkid_sighash_vectors() {
         checked += 1;
     }
     assert_eq!(checked, 236);
-    // Without FORKID, or with SIGHASH_UTXOS: refused.
     let tx = parse_tx(v[0][0].as_str().unwrap());
     assert!(bch_forkid_sighash(&tx, 0, &ScriptBuf::new(), 0, 0x01).is_err());
     assert!(bch_forkid_sighash(&tx, 0, &ScriptBuf::new(), 0, 0x61).is_err());
@@ -383,8 +342,7 @@ fn verify(msg: Message, der_with_type: &[u8], pk: &[u8], ty: u8) {
         .expect("the chain's signature verifies against Kyro's sighash");
 }
 
-/// Bitcoin Cash mainnet tx 21c41fcc…e3e6 (block 975 300), one P2PKH input signed
-/// `ALL|FORKID` over its amount (1 260 283 sat, from the previous transaction 8189ea81…).
+/// BCH mainnet tx 21c41fcc…e3e6 (block 975 300): one P2PKH input signed `ALL|FORKID`.
 #[test]
 fn bch_mainnet_real_forkid_signature_verifies() {
     let raw = "02000000016cdf10e541185ada1628953b77779c34b82937aa32371f7526d700fd81ea8981010000006a473044022040030e78772203ec69d8e3f1be92efa6760445ec9eb00e98fdf512328c4561d3022005fb59355d4e7ff61e2dda1d85037eae80cffd468e5b3b60b91e23e396ea2dc1412103806da3f15c15259ae0d64dd9135d741306709938c2e886083ef05ba9a7d32de1ffffffff01eb131300000000001976a91478ab4b7159a1a6e3a873b696933ee5898e2e599888ac00000000";
@@ -408,7 +366,6 @@ fn bch_mainnet_real_forkid_signature_verifies() {
     )
     .unwrap();
     verify(Message::from_digest(h), &p[0], &p[1], 0x41);
-    // A different amount gives another digest: the signature no longer verifies.
     let wrong = bch_forkid_sighash(&tx, 0, &prevout.script_pubkey, 1_260_282, 0x41).unwrap();
     let (_, der) = p[0].split_last().unwrap();
     assert!(Secp256k1::verification_only()
@@ -455,10 +412,6 @@ fn dash_mainnet_real_legacy_signature_verifies() {
     assert!(a.starts_with('X'), "{a}");
     assert!(!utxo_is_special_tx(raw, DASH));
 }
-
-// ------------------------------------------------------------------------------------------
-// Trezor vectors: Kyro's signed transactions must be byte-identical.
-// ------------------------------------------------------------------------------------------
 
 /// A transaction from Trezor's `txcache` JSON fields.
 fn cached_tx(
@@ -511,8 +464,7 @@ fn key(phrase: &str, path: &str) -> Key {
     }
 }
 
-/// PSBT spending `(prev, vout, our key path)` inputs to `outputs` (with an optional change
-/// output index and its path), version 1, sequence `ffffffff`, lock time 0 (Trezor's).
+/// PSBT spending `(prev, vout, path)` inputs to `outputs`, Trezor's version/sequence/lock time.
 fn psbt_of(
     phrase: &str,
     inputs: &[(&Transaction, u32, &str)],
@@ -573,9 +525,7 @@ fn bch_prev_bc37c2() -> Transaction {
     )
 }
 
-/// Trezor `test_send_bch_change`: 1 995 344 sat from `m/44'/145'/0'/0/0` → 1 896 050 change to
-/// `m/44'/145'/0'/1/0`, 73 452 to `qr23ajj…`. Kyro's signed transaction is Trezor's, byte for
-/// byte (its txid 502e8577… is on chain).
+/// Trezor `test_send_bch_change`: 1 995 344 sat, 1 896 050 change to `/1/0`, 73 452 to `qr23ajj…`.
 #[test]
 fn bch_trezor_send_with_change_is_byte_identical() {
     let s = seed(ALL);
@@ -609,12 +559,9 @@ fn bch_trezor_send_with_change_is_byte_identical() {
         summary.outputs[1].address.as_deref(),
         Some("bitcoincash:qr23ajjfd9wd73l87j642puf8cad20lfmqdgwvpat4")
     );
-    // 114 sat/B is above 100× the relay minimum: reinforced confirmation.
     assert_eq!(summary.warnings, vec![UtxoWarning::HighFee]);
     assert!(summary.requires_extra_confirmation);
 
-    // Signed with FORKID, so finalized by wallet-core (a PSBT partial signature cannot carry
-    // type 0x41): the extracted transaction is Trezor's.
     let p = Psbt::from_str(&signed).unwrap();
     assert!(p.inputs[0].partial_sigs.is_empty());
     assert!(p.inputs[0].bip32_derivation.is_empty());
@@ -633,8 +580,7 @@ fn bch_trezor_send_with_change_is_byte_identical() {
     );
 }
 
-/// Trezor `test_send_bch_nochange`: both outputs of 502e8577… (keys `/1/0` and `/0/1`) to
-/// `qq6wnnk…`, no change. Two inputs, each FORKID-signed: byte-identical again.
+/// Trezor `test_send_bch_nochange`: two FORKID-signed inputs to `qq6wnnk…`, byte-identical.
 #[test]
 fn bch_trezor_two_inputs_no_change_is_byte_identical() {
     let s = seed(ALL);
@@ -688,7 +634,6 @@ fn dash_prev_5579ea() -> Transaction {
 }
 
 /// Trezor `test_send_dash`: 10 DASH from `m/44'/5'/0'/0/0` to `XpTc36D…`, 1 000 duffs of fee.
-/// Legacy sighash, partial signature, finalized here: byte-identical to Trezor's.
 #[test]
 fn dash_trezor_send_is_byte_identical() {
     let s = seed(ALL);
@@ -739,10 +684,7 @@ fn dash_trezor_send_is_byte_identical() {
     assert_eq!(d.txid, tx.compute_txid().to_string());
 }
 
-/// Trezor `test_send_dash_dip2_input`'s previous transaction 15575a1c… is a DIP2 coinbase
-/// (type 5, version 3, 38-byte payload). Kyro decodes it (txid over the payload, outputs shown)
-/// but cannot spend it: a PSBT `non_witness_utxo` cannot carry the payload, so the spent
-/// transaction it carries never hashes to the outpoint — refused, never signed blindly.
+/// Trezor `test_send_dash_dip2_input`'s prev tx 15575a1c… is a DIP2 coinbase (type 5, v3).
 #[test]
 fn dash_dip2_special_transaction_is_decoded_but_not_spent() {
     let base = cached_tx(
@@ -777,13 +719,10 @@ fn dash_dip2_special_transaction_is_decoded_but_not_spent() {
     );
     assert!(utxo_is_special_tx(&raw, DASH));
     assert!(!utxo_is_special_tx(&raw, BCH));
-    // Truncated payload / trailing garbage: malformed.
     assert!(utxo_decode_raw_tx(&raw[..raw.len() - 2], M, DASH).is_err());
     assert!(utxo_decode_raw_tx(&format!("{raw}00"), M, DASH).is_err());
-    // The other chains' decoder does not know the payload.
     assert!(utxo_decode_raw_tx(&raw, M, BCH).is_err());
 
-    // Spending it: the PSBT can only carry the payload-less transaction → txid mismatch.
     let s = seed(ALL);
     let change =
         utxo_script_pubkey(&utxo_address(&s, M, DASH, 0, true, 0).unwrap(), M, DASH).unwrap();
@@ -800,10 +739,6 @@ fn dash_dip2_special_transaction_is_decoded_but_not_spent() {
         "{e:?}"
     );
 }
-
-// ------------------------------------------------------------------------------------------
-// Refusals and warnings
-// ------------------------------------------------------------------------------------------
 
 fn psbt_err(r: Result<(String, UtxoTxSummary), Error>) -> String {
     match r {
@@ -843,7 +778,6 @@ fn testnet_psbt(coin: UtxoCoin, fee: u64) -> (Psbt, Transaction) {
         vec![out(dest, 100_000_000), out(change, 900_000_000 - fee)],
         Some((1, "m/44'/1'/0'/1/0")),
     );
-    // Testnet keys: the fingerprint is the same, only the xpub version differs.
     psbt.unsigned_tx.version = Version::TWO;
     (psbt, prev)
 }
@@ -890,30 +824,24 @@ fn previous_transaction_is_mandatory_and_must_match() {
         let (mut p, prev) = testnet_psbt(coin, 226);
         p.inputs[0].non_witness_utxo = None;
         assert!(psbt_err(sign(&p)).contains("non_witness_utxo"), "{coin:?}");
-        // The server lies about the amount and forges the previous transaction: txid mismatch.
         let (mut p, mut forged) = testnet_psbt(coin, 226);
         forged.output[1].value = Amount::from_sat(2_000_000_000);
         p.inputs[0].non_witness_utxo = Some(forged);
         assert!(psbt_err(sign(&p)).contains("does not match"));
-        // SegWit data refused.
         let (mut p, _) = testnet_psbt(coin, 226);
         p.inputs[0].witness_utxo = Some(prev.output[1].clone());
         assert!(psbt_err(sign(&p)).contains("SegWit"));
-        // Only SIGHASH_ALL is asked for (Bitcoin Cash: signed ALL|FORKID).
         let (mut p, _) = testnet_psbt(coin, 226);
         p.inputs[0].sighash_type = Some(EcdsaSighashType::None.into());
         assert!(psbt_err(sign(&p)).contains("SIGHASH_ALL"));
     }
 }
 
-/// Owner's rule for Dash (legacy sighash, amounts not committed): the fee comes from the
-/// verified previous transaction, never from what a server claimed.
 #[test]
 fn dash_amounts_come_only_from_the_verified_previous_transaction() {
     let s = seed(ABANDON);
     let (mut p, prev) = testnet_psbt(DASH, 226);
     assert_eq!(prev.output[1].value.to_sat(), 1_000_000_000);
-    // The adapter believed a 5 DASH coin: 1 out, 3.99999774 back. The real fee is 5 DASH.
     p.unsigned_tx.output[1].value = Amount::from_sat(400_000_000 - 226);
     let sum = utxo_psbt_summary(&s, T, DASH, 0, &p.to_string()).unwrap();
     assert_eq!(sum.fee, (500_000_000u64 + 226).to_string());
@@ -925,14 +853,12 @@ fn dash_amounts_come_only_from_the_verified_previous_transaction() {
 fn dust_versions_and_fees() {
     let s = seed(ABANDON);
     for coin in [BCH, DASH] {
-        // 546 is the P2PKH dust limit (3 000 per kB relay dust fee): 545 refused.
         let (mut p, _) = testnet_psbt(coin, 226);
         p.unsigned_tx.output[0].value = Amount::from_sat(545);
         assert!(psbt_err(utxo_sign_psbt(&s, T, coin, 0, &p.to_string())).contains("dust"));
         let (mut p, _) = testnet_psbt(coin, 226);
         p.unsigned_tx.output[0].value = Amount::from_sat(546);
         assert!(utxo_sign_psbt(&s, T, coin, 0, &p.to_string()).is_ok());
-        // Below 1 sat/B: informative only.
         let (p, _) = testnet_psbt(coin, 100);
         let sum = utxo_psbt_summary(&s, T, coin, 0, &p.to_string()).unwrap();
         assert!(
@@ -940,22 +866,17 @@ fn dust_versions_and_fees() {
         );
         assert!(!sum.requires_extra_confirmation);
     }
-    // Bitcoin Cash: transaction versions other than 1 / 2 are invalid since May 2023.
     let (mut p, _) = testnet_psbt(BCH, 226);
     p.unsigned_tx.version = Version(3);
     assert!(psbt_err(utxo_sign_psbt(&s, T, BCH, 0, &p.to_string())).contains("version"));
-    // Dash: a special transaction (type ≠ 0) is never signed.
     let (mut p, _) = testnet_psbt(DASH, 226);
     p.unsigned_tx.version = Version(0x0001_0003);
     assert!(psbt_err(utxo_sign_psbt(&s, T, DASH, 0, &p.to_string())).contains("special"));
-    // Dash version 3, type 0: an ordinary transaction.
     let (mut p, _) = testnet_psbt(DASH, 226);
     p.unsigned_tx.version = Version(3);
     assert!(utxo_sign_psbt(&s, T, DASH, 0, &p.to_string()).is_ok());
 }
 
-/// A Bitcoin Cash key origin (`m/44'/145'/…`) is foreign to Dash (`m/44'/5'/…`), and another
-/// account of the same chain is foreign too: nothing of ours, nothing signed.
 #[test]
 fn other_coin_types_and_accounts_are_foreign() {
     let s = seed(ALL);
@@ -968,7 +889,6 @@ fn other_coin_types_and_accounts_are_foreign() {
         None,
     );
     assert!(psbt_err(utxo_sign_psbt(&s, M, DASH, 0, &psbt.to_string())).contains("no input"));
-    // Account 1 of Bitcoin Cash does not sign account 0's coin.
     let dest = utxo_script_pubkey(
         "bitcoincash:qr23ajjfd9wd73l87j642puf8cad20lfmqdgwvpat4",
         M,

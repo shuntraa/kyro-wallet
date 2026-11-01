@@ -1,14 +1,4 @@
 //! Hedera vectors.
-//!
-//! Sources (fetched 2026-11-01):
-//! - hiero-sdk-java `MnemonicTest.toStandardECDSAsecp256k1PrivateKey()` and `…2()` (vectors of
-//!   hedera-sdk-reference issue 73): public keys at `m/44'/3030'/0'/0/i` for a 24- and a 12-word
-//!   mnemonic, with and without passphrase;
-//! - HIP-15 (address checksums): `0.0.123-vfmkw` on mainnet, `0.0.123-esxsf` on testnet;
-//! - `TransactionBody` bytes produced by Google's `protobuf` Python runtime (7.34.1) from the
-//!   official field numbers of hiero-consensus-node `services/transaction.proto`,
-//!   `basic_types.proto`, `crypto_transfer.proto`, `timestamp.proto`, `duration.proto`
-//!   (`SerializeToString(deterministic=True)`).
 
 mod common;
 
@@ -33,7 +23,6 @@ fn pk_hex(phrase: &str, pass: &str, index: u32) -> String {
 fn sdk_standard_ecdsa_vectors() {
     assert_eq!(hbar_path(0), "m/44'/3030'/0'/0/0");
     assert_eq!(hbar_path(5), "m/44'/3030'/0'/0/5");
-    // 24 words.
     assert_eq!(
         pk_hex(W24, "", 0),
         "03b1c064b4d04d52e51f6c8e8bb1bff75d62fa7b1446412d5901d424f6aedd6fd4"
@@ -46,7 +35,6 @@ fn sdk_standard_ecdsa_vectors() {
         pk_hex(W24, "some pass", 2_147_483_647),
         "02b59f348a6b69bd97afa80115e2d5331749b3c89c61297255430c487d6677f404"
     );
-    // 12 words.
     assert_eq!(
         pk_hex(W12, "", 0),
         "0294bf84a54806989a74ca4b76291d386914610b40b610d303162b9e495bc06416"
@@ -66,13 +54,11 @@ fn sdk_standard_ecdsa_vectors() {
         hbar_evm_address(&s, 0).unwrap(),
         hbar_evm_address_of_pubkey(&pk).unwrap()
     );
-    // Accounts differ, account 0 is frozen.
     let a = seed(ABANDON);
     assert_ne!(
         hbar_evm_address(&a, 0).unwrap(),
         hbar_evm_address(&a, 1).unwrap()
     );
-    // Frozen: account 0 must never change.
     assert_eq!(
         hbar_evm_address(&a, 0).unwrap(),
         "0xC283f34aDafdB758a557304C5F5e4c1E0A554713"
@@ -131,7 +117,6 @@ fn hip15_checksums_and_ids() {
         Network::Mainnet
     )
     .is_err());
-    // Long-zero address = account ID.
     assert_eq!(
         hbar_parse_recipient(
             "0x0000000000000000000000000000000000000320",
@@ -199,7 +184,6 @@ fn body_bytes_match_google_protobuf() {
     assert_eq!(t2.transaction_id(), "0.0.1234567@1793500000.000000000");
 }
 
-/// Appends a field to a body (raw protobuf), to build refused variants.
 fn with(raw: &str, extra: &[u8]) -> Vec<u8> {
     let mut b = hex::decode(raw).unwrap();
     b.extend_from_slice(extra);
@@ -212,24 +196,19 @@ fn decoder_refuses_everything_else() {
         let e = HbarTransfer::decode(b).unwrap_err().to_string();
         assert!(e.contains(needle), "{needle} not in {e}");
     };
-    // Other transaction types / fields of TransactionBody.
     refused(&with(CASE1, &[0x3a, 0x00]), "field 7"); // contractCall
     refused(&with(CASE1, &[0x5a, 0x00]), "field 11"); // cryptoCreateAccount
     refused(&with(CASE1, &[0xca, 0x3e, 0x00]), "field 1001"); // max_custom_fees
     refused(&with(CASE1, &[0x28, 0x01]), "generateRecord");
-    // Duplicated / reordered field: re-encoding differs.
     refused(&with(CASE1, &[0x18, 0x01]), "non-canonical");
-    // A zero-valued field written explicitly (proto3 omits defaults).
     let mut t = case1();
     t.memo = String::new();
     let mut raw = t.encode();
     raw.extend_from_slice(&[0x32, 0x00]);
     refused(&raw, "non-canonical");
-    // Token transfers (field 2 of CryptoTransfer).
     let ct_tokens = {
         let mut b = Vec::new();
         b.extend_from_slice(&hex::decode(CASE1).unwrap());
-        // rebuild cryptoTransfer with an extra tokenTransfers entry
         let pos = b.iter().rposition(|x| *x == 0x72).unwrap();
         let mut inner = b[pos + 2..].to_vec();
         inner.extend_from_slice(&[0x12, 0x00]);
@@ -241,7 +220,6 @@ fn decoder_refuses_everything_else() {
     };
     refused(&ct_tokens, "HBAR and tokens");
     refused(&with(CASE1, &[0xc2, 0x02, 0x00]), "two operations");
-    // scheduled flag in the transaction ID.
     let scheduled = hex::decode(CASE1.replacen("0a130a0b", "0a150a0b", 1).replacen(
         "12041887ad4b1202",
         "12041887ad4b18011202",
@@ -253,7 +231,6 @@ fn decoder_refuses_everything_else() {
 
 #[test]
 fn decoder_refuses_odd_transfer_lists() {
-    // is_approval on the debit.
     let raw = hex::decode(CASE1).unwrap();
     let approval = {
         let s = hex::encode(&raw).replacen(
@@ -265,12 +242,10 @@ fn decoder_refuses_odd_transfer_lists() {
     };
     let e = HbarTransfer::decode(&approval).unwrap_err().to_string();
     assert!(e.contains("is_approval"), "{e}");
-    // Debit of someone else than the payer.
     let other_payer = HbarTransfer::decode(
         &hex::decode(CASE1.replacen("0a0c0a041887ad4b10", "0a0c0a041888ad4b10", 1)).unwrap(),
     );
     assert!(other_payer.unwrap_err().to_string().contains("payer"));
-    // Credit ≠ debit.
     let unbalanced =
         hex::decode(CASE1.replacen("0a0418cd83061080c6868f01", "0a0418cd83061082c6868f01", 1))
             .unwrap();
@@ -318,12 +293,10 @@ fn sign_verify_round_trip() {
     // Google's protobuf runtime (parse + identical re-serialization) and python-ecdsa (signature
     // over keccak256(bodyBytes) by the 33-byte key of the SignaturePair).
     assert_eq!(signed[0], SIGNED0);
-    // Tampering: one byte of the body.
     let mut bad = hex::decode(&signed[0]).unwrap();
     bad[10] ^= 1;
     assert!(hbar_verify_signed(&hex::encode(bad)).is_err());
 
-    // Refusals at signing.
     let not_ours = hbar_sign(&s, 0, 4_243, &bodies, &nodes);
     assert!(not_ours.unwrap_err().to_string().contains("payer"));
     let unknown_node = hbar_decode_tx(&bodies, 4_242, &pk, &[3, 4]);
@@ -345,7 +318,6 @@ fn sign_verify_round_trip() {
         .unwrap_err()
         .to_string()
         .contains("differ"));
-    // To ourselves: by account ID and by our own EVM address.
     let me = hex::encode(
         HbarTransfer {
             to: HbarRecipient::Id(4_242),
@@ -365,7 +337,6 @@ fn sign_verify_round_trip() {
         .encode(),
     );
     assert!(hbar_decode_tx(&[me], 4_242, &pk, &nodes).is_err());
-    // Validity > 180 s.
     let long = hex::encode(
         HbarTransfer {
             valid_duration: 181,
@@ -374,7 +345,6 @@ fn sign_verify_round_trip() {
         .encode(),
     );
     assert!(hbar_decode_tx(&[long], 4_242, &pk, &nodes).is_err());
-    // High fee and unusual memo → reinforced confirmation.
     let fee = hex::encode(
         HbarTransfer {
             max_fee: 300_000_000,
@@ -394,7 +364,6 @@ fn sign_verify_round_trip() {
 
 #[test]
 fn precheck_response() {
-    // TransactionResponse { nodeTransactionPrecheckCode: INVALID_SIGNATURE (7) }.
     assert_eq!(hbar_decode_precheck(&[0x08, 0x07]).unwrap(), (7, 0));
     assert_eq!(hbar_decode_precheck(&[]).unwrap(), (0, 0));
     assert_eq!(
@@ -402,8 +371,6 @@ fn precheck_response() {
         (10, 5)
     );
 }
-
-// ---------------------------------------------------------------- HTS tokens (USDC)
 
 const USDC_MAIN: u64 = 456_858;
 const USDC_TEST: u64 = 429_274;
@@ -440,8 +407,6 @@ fn token_transfer_and_association_encoding() {
         ..case1()
     };
     let raw = token.encode();
-    // cryptoTransfer (field 14) holds only tokenTransfers (field 2): TokenID {tokenNum},
-    // two AccountAmounts, expected_decimals { value: 6 }.
     let mut tid = vec![0x0a, 0x00, 0x18];
     put_varint(&mut tid, USDC_MAIN);
     tid[1] = (tid.len() - 2) as u8;
@@ -462,7 +427,6 @@ fn token_transfer_and_association_encoding() {
         ..case1()
     };
     let raw = assoc.encode();
-    // tokenAssociate = field 40 (key 0xC2 0x02): { account: 0.0.payer, tokens: [0.0.456858] }.
     let at = raw.windows(2).position(|w| w == [0xc2, 0x02]).unwrap();
     let msg = |field: u8, num: u64| {
         let mut inner = vec![0x18];
@@ -475,7 +439,6 @@ fn token_transfer_and_association_encoding() {
     assert_eq!(&raw[at + 3..], body.as_slice());
     assert_eq!(raw[at + 2] as usize, body.len());
     assert_eq!(HbarTransfer::decode(&raw).unwrap(), assoc);
-    // Without decimals, with an NFT list, two token lists: refused.
     let mut no_dec = token.clone().encode();
     no_dec.truncate(no_dec.len() - 4);
     assert!(HbarTransfer::decode(&no_dec).is_err());
@@ -507,7 +470,6 @@ fn tokens_are_signed_only_on_their_network() {
         HbarRecipient::Id(98_765),
         2_000_000,
     );
-    // The network-less API refuses every token.
     assert!(
         hbar_decode_tx(std::slice::from_ref(&usdc), 4_242, &pk, &nodes)
             .unwrap_err()
@@ -533,7 +495,6 @@ fn tokens_are_signed_only_on_their_network() {
         ("0.0.456858", "USDC", 6, false)
     );
     assert_eq!(sm.amount, "2000000");
-    // Mainnet USDC on testnet, wrong decimals, unknown token: refused.
     assert!(hbar_decode_tx_on(
         Network::Testnet,
         std::slice::from_ref(&usdc),
@@ -570,7 +531,6 @@ fn tokens_are_signed_only_on_their_network() {
             .to_string()
             .contains("unknown")
     );
-    // Association: for ourselves only.
     let assoc = body(HbarKind::Associate(USDC_MAIN), HbarRecipient::Id(4_242), 0);
     let sa = hbar_decode_tx_on(
         Network::Mainnet,
