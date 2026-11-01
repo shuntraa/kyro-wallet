@@ -71,10 +71,10 @@ export function lifiFeeEchoed(fees: readonly LifiFeeCost[] | undefined, recipien
 
 /**
  * Kyro chains LI.FI routes (`GET https://li.quest/v1/chains?chainTypes=EVM`, 2026-10-31: every
- * Kyro EVM chain except Conflux eSpace) AND where Kyro knows the Diamond (verify.ts). Flare, Kaia
- * and HyperEVM have another Diamond address: not offered. Not Sepolia (no checked contract).
+ * Kyro EVM chain except Conflux eSpace) AND where Kyro knows the Diamond (verify.ts; Flare, Kaia
+ * and HyperEVM with their own Diamond, `LIFI_OTHER_DEPLOYMENTS`). Not Sepolia (no checked contract).
  */
-export const LIFI_CHAINS: ReadonlySet<number> = new Set([1, 42_161, 10, 8_453, 137, 56, 43_114, 25, 5_000, 146, 100, 1_329]);
+export const LIFI_CHAINS: ReadonlySet<number> = new Set([1, 42_161, 10, 8_453, 137, 56, 43_114, 25, 5_000, 146, 100, 1_329, 14, 999, 8_217]);
 
 export class LifiProvider implements SwapProvider {
   readonly id = 'lifi' as const;

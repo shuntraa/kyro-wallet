@@ -120,7 +120,8 @@ describe('LI.FI: GenericSwapFacetV3 + FeeForwarder', () => {
   });
 
   // Live li.quest answers (01/11/2026), unmodified calldata: the decoder must accept the real thing.
-  for (const name of ['lifi-arbitrum-usdc-eth', 'lifi-base-eth-usdc']) {
+  // Flare and HyperEVM: their own Diamond and FeeForwarder (LIFI_OTHER_DEPLOYMENTS).
+  for (const name of ['lifi-arbitrum-usdc-eth', 'lifi-base-eth-usdc', 'lifi-flare-flr-usdt0', 'lifi-flare-usdt0-flr', 'lifi-hyperevm-hype-usdt0', 'lifi-hyperevm-usdt0-hype']) {
     it(`real answer: ${name}`, () => {
       const j = JSON.parse(readFileSync(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8')) as {
         action: { fromChainId: number; fromAmount: string; fromToken: string; toToken: string; fromAddress: string; slippage: number };
@@ -142,12 +143,16 @@ describe('LI.FI: GenericSwapFacetV3 + FeeForwarder', () => {
         fee,
       };
       const c = verifyEvmSwap(input);
+      expect(c.contract.toLowerCase()).toBe(j.transactionRequest.to.toLowerCase());
       expect(c.minBuyAmount).toBe(BigInt(j.estimate.toAmountMin));
       expect(c.kyroFee).toBe((BigInt(j.action.fromAmount) * 70n) / 10_000n);
       // The same calldata for another taker, or with a tighter slippage than it encodes: refused.
       expect(() => verifyEvmSwap({ ...input, taker: TAKER })).toThrow(/destinataire/);
       expect(() => verifyEvmSwap({ ...input, slippageBps: 10 })).toThrow(/minimum garanti/);
       expect(() => verifyEvmSwap({ ...input, sellAmount: input.sellAmount - 1n, tx: { ...input.tx, value: nativeSell ? input.sellAmount - 1n : 0n } })).toThrow(/première étape/);
+      // The same answer on a chain whose Diamond is another address: refused.
+      const other = input.chainId === 1 || input.chainId === 42_161 || input.chainId === 8_453 ? 14 : 42_161;
+      expect(() => verifyEvmSwap({ ...input, chainId: other })).toThrow();
     });
   }
 });

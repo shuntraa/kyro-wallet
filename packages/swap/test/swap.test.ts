@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { decodeFunctionData, erc20Abi, maxUint256 } from 'viem';
 import type { NetRequest, NetResponse } from '@kyro/shared';
 import { zeroExData } from './calldata';
-import { applySlippage, buildApproval, buildRevoke, compareQuotes, evmSwapSupported, fetchQuotes, isUnlimitedAllowance, knownSwapContract, LIFI_CHAINS, LIFI_DIAMOND, LifiProvider, netValueFiat, NATIVE_EVM, ZEROX_ALLOWANCE_HOLDER, ZEROX_CHAINS, ZeroExProvider, type Quote } from '../src';
+import { applySlippage, buildApproval, buildRevoke, compareQuotes, evmSwapSupported, fetchQuotes, isUnlimitedAllowance, knownSwapContract, LIFI_CHAINS, LIFI_DIAMOND, LIFI_OTHER_DEPLOYMENTS, LifiProvider, SWAP_CONTRACTS, netValueFiat, NATIVE_EVM, ZEROX_ALLOWANCE_HOLDER, ZEROX_CHAINS, ZeroExProvider, type Quote } from '../src';
 
 const TOKEN = '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
 const SPENDER = '0x0000000000001fF3684f28c67538d4D072C22734';
@@ -115,21 +115,29 @@ describe('providers', () => {
     expect([1, 146, 999].every((c) => zerox.supports(params(c)))).toBe(true);
     // Mantle: served by 0x, but with another AllowanceHolder than the one Kyro checks.
     expect([5_000, 25, 14, 8_217, 100, 1_329, 1_030, 11_155_111].some((c) => zerox.supports(params(c)))).toBe(false);
-    expect([1, 25, 5_000, 146, 100, 1_329].every((c) => lifi.supports(params(c)))).toBe(true);
-    // Flare, Kaia, HyperEVM: another LI.FI Diamond address; Conflux: not served.
-    expect([14, 8_217, 999, 1_030, 11_155_111].some((c) => lifi.supports(params(c)))).toBe(false);
+    // Flare, Kaia, HyperEVM: their own LI.FI Diamond (LIFI_OTHER_DEPLOYMENTS).
+    expect([1, 25, 5_000, 146, 100, 1_329, 14, 8_217, 999].every((c) => lifi.supports(params(c)))).toBe(true);
+    // Conflux: not served by LI.FI; Sepolia: no checked contract.
+    expect([1_030, 11_155_111].some((c) => lifi.supports(params(c)))).toBe(false);
     expect(lifi.supports({ ...params(1), toChain: 1_030 })).toBe(false);
     expect(evmSwapSupported(1_030)).toBe(false);
-    expect(evmSwapSupported(14)).toBe(false);
-    expect(evmSwapSupported(8_217)).toBe(false);
+    expect(evmSwapSupported(14)).toBe(true);
+    expect(evmSwapSupported(8_217)).toBe(true);
     expect(evmSwapSupported(999)).toBe(true);
     expect(evmSwapSupported(25)).toBe(true);
   });
 
   it('every chain offered has the provider contract Kyro checks', () => {
     for (const c of ZEROX_CHAINS) expect(knownSwapContract('zerox', c)).toBe(ZEROX_ALLOWANCE_HOLDER);
-    for (const c of LIFI_CHAINS) expect(knownSwapContract('lifi', c)).toBe(LIFI_DIAMOND);
+    for (const c of LIFI_CHAINS) expect(knownSwapContract('lifi', c)).toBe(LIFI_OTHER_DEPLOYMENTS[c]?.diamond ?? LIFI_DIAMOND);
+    expect(knownSwapContract('lifi', 14)).toBe('0x198FC70Dfe05E755C81e54bd67Bff3F729344B9b');
+    expect(knownSwapContract('lifi', 999)).toBe('0x0a0758d937d1059c356D4714e57F5df0239bce1A');
+    expect(knownSwapContract('lifi', 8_217)).toBe('0x1255d17c1BC2f764d087536410879F2d0D8772fD');
+    expect(SWAP_CONTRACTS[14]?.lifi?.feeForwarder).toBe('0xA5971Bd73Dbb879aAaA6fEcB95Dc3fD50c2e3C25');
+    expect(SWAP_CONTRACTS[999]?.lifi?.feeForwarder).toBe('0xba072Bf218314E51d5c3d254800d799840ae6a25');
+    expect(SWAP_CONTRACTS[8_217]?.lifi?.feeForwarder).toBe('0x5161370f81b3054f43361644Ad332625f5E0804F');
     expect(knownSwapContract('zerox', 5_000)).toBeNull();
-    expect(knownSwapContract('lifi', 14)).toBeNull();
+    expect(knownSwapContract('lifi', 1_030)).toBeNull();
+    expect(knownSwapContract('zerox', 14)).toBeNull();
   });
 });
