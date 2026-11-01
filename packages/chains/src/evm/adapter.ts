@@ -15,7 +15,7 @@ import {
   type Hex,
   type PublicClient,
 } from 'viem';
-import { call, jsonRpc, netFetch, type EvmTokenHint, type EvmTxRequest, type EvmTxSummary, type NetFetch } from '@kyro/shared';
+import { call, jsonRpc, netFetch, type EvmTokenHint, type EvmTxRequest, type EvmTxSummary, type NetFetch, l10n } from '@kyro/shared';
 import { ERC20_TOKENS, nativeAssetId, type AssetDef, type EvmChain } from '../registry';
 import { evmFeeOptionsFromHistory } from '../fees';
 import type { Balance, BuildParams, ChainAdapter, EvmSigned, EvmUnsigned, FeeEstimates, FeeParams, HistoryItem } from '../types';
@@ -61,8 +61,8 @@ const L1_FEE_FALLBACK = 100_000_000_000_000n;
  */
 export function evmRecipientProblem(recipient: string, asset: Pick<AssetDef, 'kind' | 'contract'>): string | null {
   const r = recipient.trim().toLowerCase();
-  if (/^0x0{40}$/.test(r)) return 'Adresse nulle (0x000…000) : les fonds seraient détruits. Envoi refusé.';
-  if (asset.kind === 'erc20' && asset.contract && asset.contract.toLowerCase() === r) return 'Cette adresse est le contrat du token lui-même, pas un portefeuille : les fonds seraient perdus. Envoi refusé.';
+  if (/^0x0{40}$/.test(r)) return l10n('Adresse nulle (0x000…000) : les fonds seraient détruits. Envoi refusé.', 'Null address (0x000…000): the funds would be destroyed. Sending refused.');
+  if (asset.kind === 'erc20' && asset.contract && asset.contract.toLowerCase() === r) return l10n('Cette adresse est le contrat du token lui-même, pas un portefeuille : les fonds seraient perdus. Envoi refusé.', 'This address is the token contract itself, not a wallet: the funds would be lost. Sending refused.');
   return null;
 }
 
@@ -203,10 +203,10 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
   }
 
   async buildTx(params: BuildParams): Promise<EvmUnsigned> {
-    if (params.fee.family !== 'evm') throw new Error('Frais EVM attendus');
+    if (params.fee.family !== 'evm') throw new Error(l10n('Frais EVM attendus', 'EVM fees expected'));
     const fee = params.fee;
     const recipient = params.to.trim();
-    if (!this.isValidAddress(recipient)) throw new Error('Adresse invalide (format ou somme de contrôle EIP-55)');
+    if (!this.isValidAddress(recipient)) throw new Error(l10n('Adresse invalide (format ou somme de contrôle EIP-55)', 'Invalid address (format or EIP-55 checksum)'));
     const problem = evmRecipientProblem(recipient, params.asset);
     if (problem) throw new Error(problem);
     const nonce = await this.nonce();
@@ -218,7 +218,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
       if (params.max) {
         const bal = await this.client.getBalance({ address: this.address });
         value = bal - gasLimit * fee.maxFeePerGas - l1;
-        if (value <= 0n) throw new Error('Solde insuffisant pour couvrir les frais');
+        if (value <= 0n) throw new Error(l10n('Solde insuffisant pour couvrir les frais', 'Insufficient balance to cover the fees'));
       }
       return {
         family: 'evm',
@@ -231,11 +231,11 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
         kind: 'transfer',
       };
     }
-    if (params.asset.kind !== 'erc20' || !params.asset.contract) throw new Error('Actif non pris en charge sur ce réseau');
+    if (params.asset.kind !== 'erc20' || !params.asset.contract) throw new Error(l10n('Actif non pris en charge sur ce réseau', 'Asset not supported on this network'));
     const token = getAddress(params.asset.contract);
     let amount = params.amount;
     if (params.max) amount = await this.client.readContract({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [this.address] });
-    if (amount <= 0n) throw new Error('Montant invalide');
+    if (amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
     const data = encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [getAddress(recipient), amount] });
     const gasLimit = await this.gas(token, data, 0n);
     return {
@@ -283,7 +283,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
 
   /** Signs on the hardware wallet `deviceId` (native dialog, 2nd one if blind signing, device). */
   async signTxHw(unsigned: EvmUnsigned, deviceId: string): Promise<EvmSigned> {
-    if (!this.hw) throw new Error('Ce compte n’est pas un hardware wallet');
+    if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
     const res = await call('hw_sign_evm_tx', { id: deviceId, accountId: this.hw.accountId, tx: unsigned.tx });
     return { family: 'evm', rawTx: res.rawTx, hash: res.hash };
   }
@@ -301,7 +301,7 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
       if (r) return r.status === '0x1';
       await new Promise((res) => setTimeout(res, intervalMs));
     }
-    throw new Error('Délai dépassé en attendant la confirmation');
+    throw new Error(l10n('Délai dépassé en attendant la confirmation', 'Timed out waiting for confirmation'));
   }
 
   async allowance(token: string, spender: string): Promise<bigint> {
@@ -341,8 +341,8 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
       return s.ok ? { ok: true, received: null } : s;
     }
     const c = blocks[0]?.calls[0];
-    if (!c) return { ok: false, reason: 'Réponse de simulation vide' };
-    if (c.status !== '0x1') return { ok: false, reason: c.error?.message ?? 'la transaction échoue' };
+    if (!c) return { ok: false, reason: l10n('Réponse de simulation vide', 'Empty simulation response') };
+    if (c.status !== '0x1') return { ok: false, reason: c.error?.message ?? l10n('la transaction échoue', 'the transaction fails') };
     const want = token === 'native' ? '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' : token.toLowerCase();
     const me = this.address.slice(2).toLowerCase().padStart(64, '0');
     const topic0 = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';

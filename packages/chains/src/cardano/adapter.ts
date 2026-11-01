@@ -17,8 +17,7 @@ import {
   type CardanoTokenSpec,
   type CardanoTokenView,
   type CardanoTxSummary,
-  type CardanoWarning,
-} from '@kyro/shared';
+  type CardanoWarning, l10n } from '@kyro/shared';
 import type { CardanoChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
@@ -91,23 +90,23 @@ export function isCardanoAddress(address: string, network: 'mainnet' | 'testnet'
 export function cardanoAddressProblem(address: string, network: 'mainnet' | 'testnet'): string | null {
   const a = address.trim();
   if (!a) return null;
-  if (isByronAddress(a) || /^(Ae2|DdzFF|37btjrVyb4K)/.test(a)) return 'les adresses Byron ne sont pas prises en charge : demande au destinataire une adresse Shelley (addr1…)';
+  if (isByronAddress(a) || /^(Ae2|DdzFF|37btjrVyb4K)/.test(a)) return l10n('les adresses Byron ne sont pas prises en charge : demande au destinataire une adresse Shelley (addr1…)', 'Byron addresses are not supported: ask the recipient for a Shelley address (addr1…)');
   const lower = a.toLowerCase();
   const pay = network === 'mainnet' ? 'addr1' : 'addr_test1';
   const stake = network === 'mainnet' ? 'stake1' : 'stake_test1';
-  if (lower.startsWith(stake)) return 'une adresse de staking (stake…) ne peut pas recevoir de paiement';
-  if (lower.startsWith(network === 'mainnet' ? 'addr_test1' : 'addr1') || lower.startsWith(network === 'mainnet' ? 'stake_test1' : 'stake1')) return "adresse Cardano d'un autre réseau, ou pas une adresse de paiement";
-  if (!lower.startsWith(pay)) return 'adresse Cardano invalide';
+  if (lower.startsWith(stake)) return l10n('une adresse de staking (stake…) ne peut pas recevoir de paiement', 'a staking address (stake…) cannot receive payments');
+  if (lower.startsWith(network === 'mainnet' ? 'addr_test1' : 'addr1') || lower.startsWith(network === 'mainnet' ? 'stake_test1' : 'stake1')) return l10n("adresse Cardano d'un autre réseau, ou pas une adresse de paiement", 'Cardano address from another network, or not a payment address');
+  if (!lower.startsWith(pay)) return l10n('adresse Cardano invalide', 'invalid Cardano address');
   const kind = BECH32.indexOf(lower[pay.length] ?? '?') >> 1;
-  if (kind === 1 || kind === 3 || kind === 5 || kind === 7) return 'adresses de script refusées : un paiement sans datum pourrait bloquer les fonds';
-  if (kind === 4) return 'adresses pointeur obsolètes (Conway) : refusées';
-  if (kind === 14 || kind === 15) return 'une adresse de staking (stake…) ne peut pas recevoir de paiement';
+  if (kind === 1 || kind === 3 || kind === 5 || kind === 7) return l10n('adresses de script refusées : un paiement sans datum pourrait bloquer les fonds', 'script addresses refused: a payment without a datum could lock the funds');
+  if (kind === 4) return l10n('adresses pointeur obsolètes (Conway) : refusées', 'pointer addresses are obsolete (Conway): refused');
+  if (kind === 14 || kind === 15) return l10n('une adresse de staking (stake…) ne peut pas recevoir de paiement', 'a staking address (stake…) cannot receive payments');
   return isCardanoAddress(a, network) ? null : 'adresse Cardano invalide';
 }
 
 /** Display name of a native token: ticker (verified), printable name, else the hex. */
 export function cardanoTokenLabel(t: { name: string; nameText: string | null; ticker?: string }): string {
-  return t.ticker ?? t.nameText ?? (t.name ? `0x${t.name.slice(0, 16)}${t.name.length > 16 ? '…' : ''}` : '(nom vide)');
+  return t.ticker ?? t.nameText ?? (t.name ? `0x${t.name.slice(0, 16)}${t.name.length > 16 ? '…' : ''}` : l10n('(nom vide)', '(empty name)'));
 }
 
 /** Byron (bootstrap) addresses: refused by Kyro, the UI says why. */
@@ -119,7 +118,7 @@ export function isByronAddress(address: string): boolean {
 /** "1,5" / "1.5" ADA → lovelace (6 decimals), exact. */
 export function adaToLovelace(input: string): bigint {
   const s = input.trim().replace(',', '.');
-  if (!/^\d+(\.\d{1,6})?$/.test(s)) throw new Error('Montant ADA invalide (6 décimales max.)');
+  if (!/^\d+(\.\d{1,6})?$/.test(s)) throw new Error(l10n('Montant ADA invalide (6 décimales max.)', 'Invalid ADA amount (6 decimals max.)'));
   const [i, f = ''] = s.split('.');
   return BigInt(i ?? '0') * 1_000_000n + BigInt((f + '000000').slice(0, 6));
 }
@@ -162,7 +161,7 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
   private readonly backend: CardanoBackend;
 
   constructor(opts: CardanoAdapterOptions) {
-    if (!isCardanoAddress(opts.address, opts.chain.network)) throw new Error('Adresse Cardano invalide');
+    if (!isCardanoAddress(opts.address, opts.chain.network)) throw new Error(l10n('Adresse Cardano invalide', 'Invalid Cardano address'));
     this.chain = opts.chain;
     this.address = opts.address;
     this.backend = opts.backend ?? rustCardanoBackend(opts.account ?? 0);
@@ -193,7 +192,7 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: 'frais calculés par le coffre (≈ 0,17 ADA)',
+      hint: l10n('frais calculés par le coffre (≈ 0,17 ADA)', 'fees computed by the vault (≈ 0.17 ADA)'),
       fetchedAt: Date.now(),
     });
   }
@@ -204,7 +203,7 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
    * (its min-UTxO, plus every token), built until it fits.
    */
   async buildTx(params: BuildParams): Promise<CardanoUnsigned> {
-    if (params.asset.kind !== 'native') throw new Error('Actif Cardano inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif Cardano inattendu', 'Unexpected Cardano asset'));
     const memo = params.memo?.trim() ? { memo: params.memo.trim() } : {};
     if (params.cardanoToken) return this.buildPayment({ to: params.to, token: params.cardanoToken, ...memo });
     if (!params.max) return this.buildPayment({ to: params.to, lovelace: params.amount, ...memo });
@@ -227,7 +226,7 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
         amount -= shortfall > 0n ? shortfall : 10_000n;
       }
     }
-    throw new Error('Solde trop faible : Kyro garde toujours une sortie de monnaie (≈ 1 ADA minimum)');
+    throw new Error(l10n('Solde trop faible : Kyro garde toujours une sortie de monnaie (≈ 1 ADA minimum)', 'Balance too low: Kyro always keeps a change output (≈ 1 ADA minimum)'));
   }
 
   /** ADA balance (`spendable` = balance − ADA tied to the tokens) and native tokens. */
@@ -243,11 +242,11 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
    */
   async buildPayment(params: { to: string; lovelace?: bigint; token?: CardanoTokenSpec; memo?: string }): Promise<CardanoUnsigned> {
     const to = params.to.trim();
-    if (isByronAddress(to)) throw new Error('Adresse Byron refusée : demande une adresse Shelley (addr1…)');
-    if (!isCardanoAddress(to, this.chain.network)) throw new Error('Adresse Cardano invalide');
-    if (params.lovelace === undefined && !params.token) throw new Error('Montant ADA manquant');
-    if (params.lovelace !== undefined && params.lovelace <= 0n) throw new Error('Montant ADA invalide');
-    if (params.memo !== undefined && new TextEncoder().encode(params.memo).length > 1024) throw new Error('Message trop long (1 024 octets max.)');
+    if (isByronAddress(to)) throw new Error(l10n('Adresse Byron refusée : demande une adresse Shelley (addr1…)', 'Byron address refused: ask for a Shelley address (addr1…)'));
+    if (!isCardanoAddress(to, this.chain.network)) throw new Error(l10n('Adresse Cardano invalide', 'Invalid Cardano address'));
+    if (params.lovelace === undefined && !params.token) throw new Error(l10n('Montant ADA manquant', 'ADA amount missing'));
+    if (params.lovelace !== undefined && params.lovelace <= 0n) throw new Error(l10n('Montant ADA invalide', 'Invalid ADA amount'));
+    if (params.memo !== undefined && new TextEncoder().encode(params.memo).length > 1024) throw new Error(l10n('Message trop long (1 024 octets max.)', 'Message too long (1,024 bytes max.)'));
     const built = await this.backend.build(to, params.lovelace?.toString(), params.token, params.memo);
     const s = built.summary;
     const dest = s.outputs.find((o) => !o.isChange || o.address === to);
@@ -258,7 +257,7 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
     const memoOk = (s.memo?.join('') ?? '') === (params.memo?.trim() ?? '');
     const changeOk = s.outputs.every((o) => o === dest || o.isChange);
     if (!dest || dest.address !== to || !tokensOk || !amountOk || !memoOk || !changeOk || s.outputs.length > 2) {
-      throw new Error('La transaction construite par Rust ne correspond pas à la demande');
+      throw new Error(l10n('La transaction construite par Rust ne correspond pas à la demande', 'The transaction built by Rust does not match the request'));
     }
     return {
       family: 'ada',
@@ -277,14 +276,14 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
   /** Rust: live checks, native dialog (each output, tokens, min-ADA, fee, ttl), signature. */
   async signTx(unsigned: CardanoUnsigned, password: string): Promise<CardanoSigned> {
     const res = await this.backend.sign(unsigned.tx, password);
-    if (!/^[0-9a-f]{64}$/.test(res.txId) || res.txId !== unsigned.summary.txId) throw new Error('Identifiant de transaction Cardano inattendu');
+    if (!/^[0-9a-f]{64}$/.test(res.txId) || res.txId !== unsigned.summary.txId) throw new Error(l10n('Identifiant de transaction Cardano inattendu', 'Unexpected Cardano transaction ID'));
     return { family: 'ada', tx: res.tx, txId: res.txId, summary: res.summary };
   }
 
   /** Rust verifies the witness and that Koios answers our tx id. */
   async broadcast(signed: CardanoSigned): Promise<string> {
     const id = await this.backend.broadcast(signed.tx);
-    if (id !== signed.txId) throw new Error('Identifiant diffusé inattendu');
+    if (id !== signed.txId) throw new Error(l10n('Identifiant diffusé inattendu', 'Unexpected broadcast ID'));
     return id;
   }
 

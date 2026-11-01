@@ -8,6 +8,7 @@ import type { XrpSigned, XrpUnsigned } from './xrp/adapter';
 import type { CardanoSigned, CardanoUnsigned } from './cardano/adapter';
 import type { CardanoTokenSpec } from '@kyro/shared';
 
+import { l10n } from '@kyro/shared';
 export type FeeLevel = 'slow' | 'normal' | 'fast';
 export type FeeChoice = FeeLevel | 'custom';
 
@@ -206,7 +207,7 @@ export function unsignedFamilyOf(family: Family): AnyUnsigned['family'] {
 
 /** Sign + broadcast with a union-typed adapter. */
 export async function signAndBroadcast(adapter: AnyAdapter, unsigned: AnyUnsigned, password: string): Promise<string> {
-  if (unsignedFamilyOf(adapter.family) !== unsigned.family) throw new Error('Famille de transaction incohérente');
+  if (unsignedFamilyOf(adapter.family) !== unsigned.family) throw new Error(l10n('Famille de transaction incohérente', 'Inconsistent transaction family'));
   const a = adapter as ChainAdapter<Family>;
   const signed = await a.signTx(unsigned as never, password);
   return a.broadcast(signed as never);

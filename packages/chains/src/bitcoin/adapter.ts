@@ -15,7 +15,7 @@ import { accountArg } from '../types';
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { HDKey } from '@scure/bip32';
-import { BTC_TXS_CAP, btcWarnings, call, type Accounts, type BtcKind, type BtcTxSummary, type EsploraTx } from '@kyro/shared';
+import { BTC_TXS_CAP, btcWarnings, call, type Accounts, type BtcKind, type BtcTxSummary, type EsploraTx, l10n } from '@kyro/shared';
 import type { BtcChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 import { outputTypeOf, selectAll, selectCoins, type SelectableUtxo, type Selection } from './coinselect';
@@ -85,7 +85,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
     for (const kind of ['segwit', 'taproot'] as const) {
       const first = this.addressAt(kind, 0, 0);
       if (first.address !== opts.accounts[kind].address) {
-        throw new Error(`Dérivation ${kind} incohérente avec le coffre (${first.address} ≠ ${opts.accounts[kind].address})`);
+        throw new Error(l10n(`Dérivation ${kind} incohérente avec le coffre (${first.address} ≠ ${opts.accounts[kind].address})`, `${kind} derivation inconsistent with the vault (${first.address} ≠ ${opts.accounts[kind].address})`));
       }
     }
   }
@@ -111,7 +111,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   addressAt(kind: BtcKind, change: 0 | 1, index: number): DerivedAddress {
     const pubkey = derivePubkey(this.keys[kind], change, index);
     const payment = kind === 'segwit' ? bitcoin.payments.p2wpkh({ pubkey, network: this.net }) : bitcoin.payments.p2tr({ internalPubkey: pubkey.slice(1, 33), network: this.net });
-    if (!payment.address) throw new Error('Adresse introuvable');
+    if (!payment.address) throw new Error(l10n('Adresse introuvable', 'Address not found'));
     return { kind, change, index, address: payment.address, pubkey, path: `${this.accounts[kind].path}/${change}/${index}`, used: false, balance: 0n };
   }
 
@@ -209,9 +209,9 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
   }
 
   async buildTx(params: BuildParams): Promise<BtcUnsigned> {
-    if (params.fee.family !== 'btc') throw new Error('Frais Bitcoin attendus');
+    if (params.fee.family !== 'btc') throw new Error(l10n('Frais Bitcoin attendus', 'Bitcoin fees expected'));
     const to = params.to.trim();
-    if (!this.isValidAddress(to)) throw new Error('Adresse Bitcoin invalide pour ce réseau');
+    if (!this.isValidAddress(to)) throw new Error(l10n('Adresse Bitcoin invalide pour ce réseau', 'Invalid Bitcoin address for this network'));
     const utxos = await this.utxos();
     const recipientType = outputTypeOf(to);
     const feeRate = params.fee.satPerVb;
@@ -231,11 +231,11 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
         const total = utxos.reduce((s, u) => s + u.value, 0n);
         if (params.max || total >= params.amount) {
           throw new Error(
-            'Ledger : une transaction ne peut pas mélanger des entrées SegWit et Taproot, et aucun des deux soldes ne suffit seul. Envoie un montant plus petit, ou regroupe d’abord tes fonds sur un seul type d’adresse.',
+            l10n('Ledger : une transaction ne peut pas mélanger des entrées SegWit et Taproot, et aucun des deux soldes ne suffit seul. Envoie un montant plus petit, ou regroupe d’abord tes fonds sur un seul type d’adresse.', 'Ledger: a transaction cannot mix SegWit and Taproot inputs, and neither balance is enough on its own. Send a smaller amount, or first move your funds to a single address type.'),
           );
         }
       }
-      throw lastError instanceof Error ? lastError : new Error('Sélection des entrées impossible');
+      throw lastError instanceof Error ? lastError : new Error(l10n('Sélection des entrées impossible', 'Input selection failed'));
     }
     const psbt = new bitcoin.Psbt({ network: this.net });
     for (const u of sel.inputs) {
@@ -250,7 +250,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
           const prev = bitcoin.Transaction.fromHex(await this.hw.prevTx(u.txid));
           const out = prev.outs[u.vout];
           if (prev.getId() !== u.txid || !out || out.value !== u.value || !bytesEqual(out.script, script)) {
-            throw new Error(`Transaction précédente incohérente pour l’entrée ${u.txid.slice(0, 10)}… : signature refusée.`);
+            throw new Error(l10n(`Transaction précédente incohérente pour l’entrée ${u.txid.slice(0, 10)}… : signature refusée.`, `Previous transaction inconsistent for input ${u.txid.slice(0, 10)}…: signing refused.`));
           }
           input.nonWitnessUtxo = prev.toBuffer();
         }
@@ -301,7 +301,7 @@ export class BitcoinAdapter implements ChainAdapter<'btc'> {
 
   /** Signs on the hardware wallet `deviceId` (no password: native dialog + device screen). */
   async signTxHw(unsigned: BtcUnsigned, deviceId: string): Promise<BtcSigned> {
-    if (!this.hw) throw new Error('Ce compte n’est pas un hardware wallet');
+    if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
     const res = await call('hw_sign_btc_psbt', { id: deviceId, accountId: this.hw.accountId, psbt: unsigned.psbt });
     const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
     const finalized = psbt.data.inputs.every((i) => i.finalScriptWitness || i.finalScriptSig);

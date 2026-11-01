@@ -6,6 +6,7 @@
 import { formatUnits, GWEI, parseUnits } from './units';
 import type { FeeEstimates, FeeParams, SizeHint } from './types';
 
+import { intlLocale, l10n } from '@kyro/shared';
 /** "8", "1,5", "0.000000001" gwei → wei. Throws on invalid input or > 9 decimals. */
 export function gweiToWei(gwei: string): bigint {
   return parseUnits(gwei, 9);
@@ -26,7 +27,7 @@ export function feeCost(params: FeeParams, size: SizeHint): bigint {
     const priority = (params.microLamports * BigInt(size.computeUnits) + 999_999n) / 1_000_000n;
     return SOL_BASE_FEE_LAMPORTS * BigInt(size.signatures) + priority;
   }
-  throw new Error('Paramètres de frais incompatibles avec la transaction');
+  throw new Error(l10n('Paramètres de frais incompatibles avec la transaction', 'Fee parameters incompatible with the transaction'));
 }
 
 export interface FeeValidation {
@@ -53,21 +54,21 @@ export function validateEvmCustomFee(input: EvmCustomFeeInput, estimates?: Pick<
   try {
     maxFee = gweiToWei(input.maxFeeGwei);
   } catch {
-    errors.push('Frais max. par gas invalides.');
+    errors.push(l10n('Frais max. par gas invalides.', 'Invalid max fee per gas.'));
   }
   try {
     tip = gweiToWei(input.priorityGwei);
   } catch {
-    errors.push('Pourboire prioritaire invalide.');
+    errors.push(l10n('Pourboire prioritaire invalide.', 'Invalid priority tip.'));
   }
-  if (maxFee !== null && maxFee <= 0n) errors.push('Les frais max. doivent être supérieurs à 0.');
-  if (maxFee !== null && tip !== null && tip > maxFee) errors.push('Le pourboire ne peut pas dépasser les frais max.');
-  if (maxFee !== null && maxFee > 10_000n * GWEI) warnings.push('Frais très élevés : vérifie le montant en gwei.');
+  if (maxFee !== null && maxFee <= 0n) errors.push(l10n('Les frais max. doivent être supérieurs à 0.', 'The max fee must be greater than 0.'));
+  if (maxFee !== null && tip !== null && tip > maxFee) errors.push(l10n('Le pourboire ne peut pas dépasser les frais max.', 'The tip cannot exceed the max fee.'));
+  if (maxFee !== null && maxFee > 10_000n * GWEI) warnings.push(l10n('Frais très élevés : vérifie le montant en gwei.', 'Very high fees: check the amount in gwei.'));
   if (estimates && maxFee !== null && estimates.minimum.family === 'evm') {
     const baseFee = estimates.minimum.maxFeePerGas;
-    if (maxFee < baseFee) warnings.push(`Sous le minimum du réseau (${trimGwei(baseFee)} gwei) : la transaction risque de rester bloquée.`);
+    if (maxFee < baseFee) warnings.push(l10n(`Sous le minimum du réseau (${trimGwei(baseFee)} gwei) : la transaction risque de rester bloquée.`, `Below the network minimum (${trimGwei(baseFee)} gwei): the transaction may get stuck.`));
   }
-  if (tip !== null && tip === 0n) warnings.push('Sans pourboire, les validateurs peuvent ignorer ta transaction.');
+  if (tip !== null && tip === 0n) warnings.push(l10n('Sans pourboire, les validateurs peuvent ignorer ta transaction.', 'Without a tip, validators may ignore your transaction.'));
   const out = result(errors, warnings);
   return out.ok && maxFee !== null && tip !== null ? { ...out, params: { family: 'evm', maxFeePerGas: maxFee, maxPriorityFeePerGas: tip } } : out;
 }
@@ -88,14 +89,14 @@ export function validateBtcFeeRate(
   const ceiling = opts.ceiling ?? 2000;
   const s = input.trim().replace(',', '.');
   const rate = Number(s);
-  if (s === '' || !Number.isFinite(rate) || !/^\d*\.?\d*$/.test(s)) return result([`Taux invalide (${unit}).`], []);
+  if (s === '' || !Number.isFinite(rate) || !/^\d*\.?\d*$/.test(s)) return result([l10n(`Taux invalide (${unit}).`, `Invalid rate (${unit}).`)], []);
   const errors: string[] = [];
   const warnings: string[] = [];
-  if (rate < floor) errors.push(`Minimum ${floor.toLocaleString('fr-FR')} ${unit} (règle de relais des nœuds).`);
-  if (rate > ceiling) errors.push(`Taux absurde (> ${ceiling.toLocaleString('fr-FR')} ${unit}).`);
-  else if (rate > (opts.high ?? 500)) warnings.push('Taux très élevé : vérifie avant de signer.');
+  if (rate < floor) errors.push(l10n(`Minimum ${floor.toLocaleString(intlLocale())} ${unit} (règle de relais des nœuds).`, `Minimum ${floor.toLocaleString(intlLocale())} ${unit} (node relay rule).`));
+  if (rate > ceiling) errors.push(l10n(`Taux absurde (> ${ceiling.toLocaleString(intlLocale())} ${unit}).`, `Absurd rate (> ${ceiling.toLocaleString(intlLocale())} ${unit}).`));
+  else if (rate > (opts.high ?? 500)) warnings.push(l10n('Taux très élevé : vérifie avant de signer.', 'Very high rate: check before signing.'));
   if (estimates?.minimum.family === 'btc' && rate < estimates.minimum.satPerVb) {
-    warnings.push(`Sous le minimum actuel (${estimates.minimum.satPerVb.toLocaleString('fr-FR')} ${unit}) : la transaction risque de ne jamais confirmer.`);
+    warnings.push(l10n(`Sous le minimum actuel (${estimates.minimum.satPerVb.toLocaleString(intlLocale())} ${unit}) : la transaction risque de ne jamais confirmer.`, `Below the current minimum (${estimates.minimum.satPerVb.toLocaleString(intlLocale())} ${unit}): the transaction may never confirm.`));
   }
   const out = result(errors, warnings);
   return out.ok ? { ...out, params: { family: 'btc', satPerVb: rate } } : out;
@@ -104,11 +105,11 @@ export function validateBtcFeeRate(
 /** Parse + validate a Solana priority fee (micro-lamports per compute unit). */
 export function validateSolPriorityFee(input: string): FeeValidation & { params?: FeeParams } {
   const s = input.trim();
-  if (!/^\d+$/.test(s)) return result(['Valeur invalide : entier en micro-lamports.'], []);
+  if (!/^\d+$/.test(s)) return result([l10n('Valeur invalide : entier en micro-lamports.', 'Invalid value: integer in micro-lamports.')], []);
   const v = BigInt(s);
   const warnings: string[] = [];
-  if (v > 50_000_000n) warnings.push('Priority fee très élevée.');
-  if (v === 0n) warnings.push('Sans priority fee, la transaction peut être plus lente en période chargée.');
+  if (v > 50_000_000n) warnings.push(l10n('Priority fee très élevée.', 'Very high priority fee.'));
+  if (v === 0n) warnings.push(l10n('Sans priority fee, la transaction peut être plus lente en période chargée.', 'Without a priority fee, the transaction may be slower when the network is busy.'));
   return { ...result([], warnings), params: { family: 'sol', microLamports: v } };
 }
 

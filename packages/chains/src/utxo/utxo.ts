@@ -17,7 +17,7 @@ import { accountArg } from '../types';
 import * as bitcoin from 'bitcoinjs-lib';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import type { HDKey } from '@scure/bip32';
-import { BTC_TXS_CAP, call, type EsploraAddressInfo, type EsploraTx, type EsploraUtxo, type Network, type UtxoAccountInfo, type UtxoFeeRates, type UtxoTxSummary } from '@kyro/shared';
+import { BTC_TXS_CAP, call, type EsploraAddressInfo, type EsploraTx, type EsploraUtxo, type Network, type UtxoAccountInfo, type UtxoFeeRates, type UtxoTxSummary, l10n } from '@kyro/shared';
 import type { UtxoChain } from '../registry';
 import type { Balance, BtcSigned, BtcUnsigned, BuildParams, FeeEstimates, HistoryItem } from '../types';
 import { derivePubkey, fingerprintBytes, parseXpub } from '../bitcoin/xpub';
@@ -118,7 +118,7 @@ export class UtxoInsufficientFundsError extends Error {
   readonly needed: bigint;
   readonly available: bigint;
   constructor(needed: bigint, available: bigint) {
-    super('Solde insuffisant pour couvrir le montant et les frais.');
+    super(l10n('Solde insuffisant pour couvrir le montant et les frais.', 'Insufficient balance to cover the amount and the fees.'));
     this.name = 'UtxoInsufficientFundsError';
     this.needed = needed;
     this.available = available;
@@ -145,8 +145,8 @@ export function selectUtxoCoins(
   minOutput: (t: UtxoScriptType) => bigint,
   unit: string,
 ): CoinSelection {
-  if (target <= 0n) throw new Error('Montant invalide');
-  if (target < minOutput(recipient)) throw new Error(`Montant sous le seuil de poussière (${minOutput(recipient)} ${unit})`);
+  if (target <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
+  if (target < minOutput(recipient)) throw new Error(l10n(`Montant sous le seuil de poussière (${minOutput(recipient)} ${unit})`, `Amount below the dust threshold (${minOutput(recipient)} ${unit})`));
   const sorted = [...coins].sort((a, b) => (a.value > b.value ? -1 : a.value < b.value ? 1 : 0));
   const chosen: SelectableCoin[] = [];
   let sum = 0n;
@@ -258,7 +258,7 @@ export class UtxoAdapter {
     this.key = parseXpub(opts.account.xpub);
     const first = this.addressAt(0, 0);
     if (first.address !== opts.account.address) {
-      throw new Error(`Dérivation ${opts.chain.name} incohérente avec le coffre (${first.address} ≠ ${opts.account.address})`);
+      throw new Error(l10n(`Dérivation ${opts.chain.name} incohérente avec le coffre (${first.address} ≠ ${opts.account.address})`, `${opts.chain.name} derivation inconsistent with the vault (${first.address} ≠ ${opts.account.address})`));
     }
   }
 
@@ -280,7 +280,7 @@ export class UtxoAdapter {
   addressAt(change: 0 | 1, index: number): DerivedUtxoAddress {
     const pubkey = derivePubkey(this.key, change, index);
     const payment = this.spec.own === 'p2wpkh' ? bitcoin.payments.p2wpkh({ pubkey, network: this.net }) : bitcoin.payments.p2pkh({ pubkey, network: this.net });
-    if (!payment.address) throw new Error('Adresse introuvable');
+    if (!payment.address) throw new Error(l10n('Adresse introuvable', 'Address not found'));
     return { change, index, address: payment.address, pubkey, path: `${this.account.path}/${change}/${index}`, used: false, balance: 0n };
   }
 
@@ -348,7 +348,7 @@ export class UtxoAdapter {
         const list = await this.backend.addressUtxos(owner.address);
         return list.map((u) => {
           // JSON numbers above 2^53 lose precision in JS (≈ 90 M DOGE in one output).
-          if (!Number.isSafeInteger(u.value) || u.value < 0) throw new Error('Montant de sortie hors limites (trop grand pour être lu sans perte)');
+          if (!Number.isSafeInteger(u.value) || u.value < 0) throw new Error(l10n('Montant de sortie hors limites (trop grand pour être lu sans perte)', 'Output amount out of range (too large to read without loss)'));
           return { txid: u.txid, vout: u.vout, value: BigInt(u.value), owner };
         });
       }),
@@ -366,14 +366,14 @@ export class UtxoAdapter {
   }
 
   async buildTx(params: BuildParams): Promise<UtxoUnsigned> {
-    if (params.fee.family !== 'btc') throw new Error('Frais attendus en unité par vbyte');
-    if (params.asset.id !== this.assetId) throw new Error('Actif incohérent avec cette chaîne');
+    if (params.fee.family !== 'btc') throw new Error(l10n('Frais attendus en unité par vbyte', 'Fees expected per vbyte'));
+    if (params.asset.id !== this.assetId) throw new Error(l10n('Actif incohérent avec cette chaîne', 'Asset inconsistent with this chain'));
     const rate = params.fee.satPerVb;
-    if (!(rate >= this.spec.minRate)) throw new Error(`Taux minimum : ${this.spec.rateHint(this.spec.minRate)}`);
+    if (!(rate >= this.spec.minRate)) throw new Error(l10n(`Taux minimum : ${this.spec.rateHint(this.spec.minRate)}`, `Minimum rate: ${this.spec.rateHint(this.spec.minRate)}`));
     const to = params.to.trim();
-    if (!this.isValidAddress(to)) throw new Error(`Adresse ${this.chain.nativeName} invalide pour ce réseau`);
+    if (!this.isValidAddress(to)) throw new Error(l10n(`Adresse ${this.chain.nativeName} invalide pour ce réseau`, `Invalid ${this.chain.nativeName} address for this network`));
     const recipientType = scriptTypeOf(bitcoin.address.toOutputScript(to, this.net));
-    if (!recipientType) throw new Error('Type d’adresse non pris en charge');
+    if (!recipientType) throw new Error(l10n('Type d’adresse non pris en charge', 'Address type not supported'));
     const coins = await this.coins();
     const { model, minOutput } = this.spec;
     const sel = params.max
@@ -385,7 +385,7 @@ export class UtxoAdapter {
     if (this.spec.needsPrevTx) {
       for (const txid of new Set(sel.inputs.map((c) => c.txid))) {
         const tx = bitcoin.Transaction.fromHex(await this.backend.txHex(txid));
-        if (tx.getId() !== txid) throw new Error('Transaction précédente incohérente');
+        if (tx.getId() !== txid) throw new Error(l10n('Transaction précédente incohérente', 'Inconsistent previous transaction'));
         prevTx.set(txid, tx.toBuffer());
       }
     }
@@ -394,7 +394,7 @@ export class UtxoAdapter {
       const derivation = [{ masterFingerprint: fp, pubkey: owner.pubkey, path: owner.path }];
       if (this.spec.needsPrevTx) {
         const raw = prevTx.get(c.txid);
-        if (!raw) throw new Error('Transaction précédente manquante');
+        if (!raw) throw new Error(l10n('Transaction précédente manquante', 'Previous transaction missing'));
         psbt.addInput({ hash: c.txid, index: c.vout, nonWitnessUtxo: raw, bip32Derivation: derivation });
       } else {
         const script = bitcoin.address.toOutputScript(owner.address, this.net);
@@ -426,7 +426,7 @@ export class UtxoAdapter {
   /** Rust: password, decoding, native dialog (+ reinforced one if needed), signature. */
   async signTx(unsigned: UtxoUnsigned, password: string): Promise<UtxoSigned> {
     const res = await this.backend.signPsbt(unsigned.psbt, password);
-    if (BigInt(res.summary.fee) !== unsigned.fee) throw new Error('Les frais décodés par Rust diffèrent de ceux de la transaction construite');
+    if (BigInt(res.summary.fee) !== unsigned.fee) throw new Error(l10n('Les frais décodés par Rust diffèrent de ceux de la transaction construite', 'The fees decoded by Rust differ from those of the built transaction'));
     const psbt = bitcoin.Psbt.fromBase64(res.psbt, { network: this.net });
     const finalized = psbt.data.inputs.every((i) => i.finalScriptWitness || i.finalScriptSig);
     if (!finalized) psbt.finalizeAllInputs();
