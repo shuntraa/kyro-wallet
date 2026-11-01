@@ -63,7 +63,8 @@ mod zcash;
 pub use algorand::{
     algo_address, algo_address_bytes, algo_address_of_pubkey, algo_decode_signed, algo_decode_tx,
     algo_encode_signed, algo_genesis, algo_hw_message, algo_hw_signed, algo_path, algo_public_key,
-    algo_sign, algo_verify_signed, AlgoPayment, AlgoTxSummary, AlgoWarning, ALGO_MAINNET_GENESIS,
+    algo_known_asset, algo_known_assets, algo_sign, algo_verify_signed, AlgoAssetSummary,
+    AlgoAssetTransfer, AlgoKnownAsset, AlgoPayment, AlgoTxSummary, AlgoWarning, ALGO_MAINNET_GENESIS,
     ALGO_MAX_NOTE, ALGO_MAX_VALIDITY, ALGO_MIN_BALANCE, ALGO_MIN_FEE, ALGO_TESTNET_GENESIS,
 };
 pub use aptos::{

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
 import { aptosChain, bchChain, btcChain, dashChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, stellarChain, nearChain, suiChain, hbarChain, kaspaChain, polkadotChain, algorandChain, xmrChain, tonChain, cosmosChain, zecChain } from '@kyro/chains';
+import { AlgoTokens } from '../components/AlgoSend';
 import { useAsync } from '../lib/useAsync';
 import { useApp, useVault } from '../state/app';
 import { cn } from '../lib/cn';
@@ -623,6 +624,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               {algoAccount.data?.authAddr && <span className="mt-1 block font-semibold text-down">{t('receive.algoRekeyed', { addr: algoAccount.data.authAddr })}</span>}
             </Notice>
           )}
+          {family === 'algo' && adapters.algo && <AlgoTokens adapter={adapters.algo} />}
           {family === 'cosmos' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               {rt('receive.cosmosNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}

@@ -1365,6 +1365,32 @@ export interface AlgoHistoryEntry {
   closeAmount: string | null;
   round: number | null;
   /** ms epoch. */
+  /** Asset transfer (`axfer`) of a known asset: `amount` is then "0" (µALGO) and `receiver` the asset receiver (us for an opt-in). */
+  asset?: AlgoAssetSummary | null;
+}
+
+/** wallet-core `AlgoAssetSummary`: the token as Kyro's table knows it. */
+export interface AlgoAssetSummary {
+  /** Verified asset id (ASA). */
+  assetId: number;
+  symbol: string;
+  name: string;
+  decimals: number;
+  /** Base units ("0" for an opt-in). */
+  amount: string;
+  /** 0-unit transfer to ourselves: enables the asset (+0.1 ALGO of minimum balance). */
+  optIn: boolean;
+}
+
+/** `algo_asset_holdings` line: algod `/v2/accounts/{a}/assets/{id}`. */
+export interface AlgoHolding {
+  assetId: number;
+  /** Opted in: the account can receive the asset. */
+  optedIn: boolean;
+  /** Base units. */
+  amount: string;
+  /** Frozen by the issuer: can neither send nor receive. */
+  frozen: boolean;
   time: number | null;
   /** UTF-8 note, cleaned (null if none or binary). */
   note: string | null;
@@ -1372,6 +1398,8 @@ export interface AlgoHistoryEntry {
 
 export interface AlgoTxStatus {
   confirmed: boolean;
+  /** Asset transfer / opt-in: both holdings, read live. */
+  asset?: { ours: AlgoHolding; destination: AlgoHolding } | null;
   round: number | null;
   /** `pool-error`: dropped from the pool, never confirmed. */
   error: string | null;
@@ -1392,6 +1420,9 @@ export interface XmrBackendInfo {
   label: string;
   tor: boolean;
 }
+  /** `axfer`: asset id and base units (`to` = asset receiver). */
+  assetId?: number | null;
+  assetAmount?: string | null;
 
 /** `xmr_status`: background scan and balance. Amounts: piconero (1 XMR = 10^12). */
 export interface XmrStatus {
@@ -2675,6 +2706,12 @@ export interface Commands {
   /** 25-word Monero seed, shown in a native window only. Returns nothing. */
   xmr_seed_show: { args: { password: string } & WithAccount; ret: void };
   // TON (§2.11): Rust builds the v4R2 transfer (seqno and states from TON Center, fee emulated),
+  /** Holdings of the known assets of the network (USDC, USD₮ on mainnet; test USDC on testnet). */
+  algo_asset_holdings: { args: { address: string }; ret: AlgoHolding[] };
+  /** Opt-in to a known asset: 0-unit transfer to ourselves, +0.1 ALGO of minimum balance. Signed with `algo_sign_tx`. */
+  algo_build_optin_tx: { args: { assetId: number } & WithAccount; ret: AlgoBuilt };
+  /** `amount`: base units of the known asset; the receiver must have opted in. Signed with `algo_sign_tx`. */
+  algo_build_asset_tx: { args: { assetId: number; to: string; amount: string; note?: string } & WithAccount; ret: AlgoBuilt };
   // decodes it strictly (re-encoding identical), re-reads both accounts live, signs behind the
   // password and the native dialog (comment framed, both address forms). HW: not supported.
   ton_backend_info: { args: undefined; ret: TonBackendInfo };

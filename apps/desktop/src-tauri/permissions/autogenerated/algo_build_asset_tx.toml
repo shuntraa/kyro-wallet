@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-algo-build-asset-tx"
+description = "Enables the algo_build_asset_tx command without any pre-configured scope."
+commands.allow = ["algo_build_asset_tx"]
+
+[[permission]]
+identifier = "deny-algo-build-asset-tx"
+description = "Denies the algo_build_asset_tx command without any pre-configured scope."
+commands.deny = ["algo_build_asset_tx"]

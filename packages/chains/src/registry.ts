@@ -71,7 +71,7 @@ export interface WatchOnlyChain {
   phase: 4;
 }
 
-export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'jetton';
+export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'jetton' | 'asa';
 
 export interface AssetDef {
   /** Unique id, e.g. `btc`, `eth:1`, `erc20:11155111:0x1c7d…`. */
@@ -916,6 +916,19 @@ export const TRC20_TOKENS: Record<Network, TokenSpec[]> = {
 };
 
 /**
+ * Algorand Standard Assets, by asset id (`contract` = the decimal id). USDC: Circle's list
+ * (mainnet ASA 31566704, testnet 10458941); USD₮: Tether's list (ASA 312769). algod
+ * `/v2/assets/{id}` read on 2026-11-01: unit `USDC` / `USDt`, 6 decimals, url centre.io /
+ * tether.to. An asset must be enabled (opt-in: 0-unit transfer to oneself, +0.1 ALGO of minimum
+ * balance) before it can be received. wallet-core (`algorand.rs` `algo_known_assets`) holds the
+ * same ids: Rust signs no other asset.
+ */
+export const ALGO_ASSETS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('10458941')],
+  mainnet: [USDC('31566704'), USDT('312769')],
+};
+
+/**
  * TON jettons (TEP-74), by master (bounceable `EQ…`). USD₮: master listed by Tether (tether.to)
  * and CoinGecko `tether` (`the-open-network`), `decimals` 6 in its metadata. No official USDC on
  * TON (Circle lists none). wallet-core (`ton/jetton.rs`) holds the same masters with their
@@ -951,6 +964,11 @@ export function assetsFor(network: Network): AssetDef[] {
     if (chain.family === 'tron') {
       for (const t of TRC20_TOKENS[network]) {
         out.push({ id: `trc20:${t.contract}`, chainKey: chain.key, family: 'tron', kind: 'trc20', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'algo') {
+      for (const t of ALGO_ASSETS[network]) {
+        out.push({ id: `asa:${t.contract}`, chainKey: chain.key, family: 'algo', kind: 'asa', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
       }
     }
     if (chain.family === 'ton') {

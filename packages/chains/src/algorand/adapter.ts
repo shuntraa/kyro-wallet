@@ -13,16 +13,17 @@ import {
   type AlgoBuilt,
   type AlgoContext,
   type AlgoHistoryEntry,
+  type AlgoHolding,
   type AlgoTxStatus,
   type AlgoTxSummary,
   type AlgoWarning,
 } from '@kyro/shared';
 import { accountArg } from '../types';
-import type { AlgorandChain } from '../registry';
+import { ALGO_ASSETS, type AlgorandChain } from '../registry';
 import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
-export type { AlgoAccountInfo, AlgoContext, AlgoHistoryEntry, AlgoTxStatus, AlgoTxSummary, AlgoWarning };
+export type { AlgoAccountInfo, AlgoContext, AlgoHistoryEntry, AlgoHolding, AlgoTxStatus, AlgoTxSummary, AlgoWarning };
 
 /** 0.1 ALGO: minimum balance of an account (each asset opted in adds 0.1 ALGO). */
 export const ALGO_MIN_BALANCE = 100_000n;
@@ -36,6 +37,10 @@ export interface AlgoBackend {
   sign(blob: string, password: string): Promise<{ blob: string; txid: string; summary: AlgoTxSummary; context: AlgoContext }>;
   broadcast(blob: string): Promise<string>;
   txStatus(txid: string): Promise<AlgoTxStatus>;
+  /** Tokens (ASA, known ids only); optional so that test backends and hardware wallets can leave them out. */
+  holdings?(address: string): Promise<AlgoHolding[]>;
+  buildOptIn?(assetId: number): Promise<AlgoBuilt>;
+  buildAsset?(assetId: number, to: string, amount: string, note?: string): Promise<AlgoBuilt>;
 }
 
 /** The typed `algo_*` commands of `@kyro/shared` (docs/IPC.md §2.11), for vault account `account`. */
@@ -48,6 +53,9 @@ export function rustAlgoBackend(account = 0): AlgoBackend {
     sign: (blob, password) => call('algo_sign_tx', { blob, password, ...acct }),
     broadcast: (blob) => call('algo_broadcast', { blob, ...acct }),
     txStatus: (txid) => call('algo_tx_status', { txid }),
+    holdings: (address) => call('algo_asset_holdings', { address }),
+    buildOptIn: (assetId) => call('algo_build_optin_tx', { assetId, ...acct }),
+    buildAsset: (assetId, to, amount, note) => call('algo_build_asset_tx', { assetId, to, amount, ...(note ? { note } : {}), ...acct }),
   };
 }
 
@@ -56,8 +64,12 @@ export function rustAlgoBackend(account = 0): AlgoBackend {
  * on the device (`hw_*` commands). `sign`'s second argument is the device id, not a password.
  */
 export function rustAlgoHwBackend(accountId: string): AlgoBackend {
+  const base = rustAlgoBackend();
+  // Tokens are not signed on a hardware wallet yet (holdings stay readable).
+  delete base.buildOptIn;
+  delete base.buildAsset;
   return {
-    ...rustAlgoBackend(),
+    ...base,
     build: (to, amount, note) => call('hw_algo_build_tx', { accountId, to, amount, ...(note ? { note } : {}) }),
     sign: (blob, id) => call('hw_sign_algo_tx', { id, accountId, blob }),
     broadcast: (blob) => call('hw_algo_broadcast', { accountId, blob }),
@@ -81,7 +93,7 @@ export interface AlgoUnsigned {
   summary: AlgoTxSummary;
   context: AlgoContext;
   recipient: string;
-  /** µALGO. */
+  /** µALGO (token: its base units). */
   amount: bigint;
   note?: string;
   /** Fee set by Rust (µALGO): the whole cost on top of the amount. */
@@ -138,10 +150,73 @@ export class AlgorandAdapter implements ChainAdapter<'algo'> {
     return this.backend.account(address);
   }
 
-  /** ALGO balance, plus `spendable` = balance − minimum balance (what can actually be sent). */
+  /** ALGO balance, plus `spendable` = balance − minimum balance (what can actually be sent); then the known tokens enabled. */
   async getBalance(): Promise<Array<Balance & { spendable: bigint }>> {
     const acc = await this.backend.account(this.address);
-    return [{ assetId: 'algo', amount: BigInt(acc.balance), spendable: BigInt(acc.spendable) }];
+    const out = [{ assetId: 'algo', amount: BigInt(acc.balance), spendable: BigInt(acc.spendable) }];
+    if (acc.exists) {
+      for (const h of await this.holdings()) {
+        if (h.optedIn && /^\d+$/.test(h.amount)) out.push({ assetId: `asa:${h.assetId}`, amount: BigInt(h.amount), spendable: h.frozen ? 0n : BigInt(h.amount) });
+      }
+    }
+    return out;
+  }
+
+  /** Known tokens of the network (USDC, USD₮), in registry order. */
+  knownAssets() {
+    return ALGO_ASSETS[this.chain.network];
+  }
+
+  /** Holdings of the known tokens (an asset id the backend answers for but Kyro does not know is dropped). */
+  async holdings(address = this.address): Promise<AlgoHolding[]> {
+    if (!this.backend.holdings || !this.knownAssets().length) return [];
+    const known = new Set(this.knownAssets().map((k) => Number(k.contract)));
+    return (await this.backend.holdings(address)).filter((h) => known.has(h.assetId));
+  }
+
+  /** Tokens can be enabled and sent from this account (not on a hardware wallet yet). */
+  get tokensSignable(): boolean {
+    return !!this.backend.buildOptIn && !!this.backend.buildAsset;
+  }
+
+  /** Opt-in to a known token: 0-unit transfer to ourselves, +0.1 ALGO of minimum balance. Signed with `signTx`. */
+  async buildOptIn(assetId: number): Promise<AlgoUnsigned> {
+    const k = this.knownAssets().find((x) => Number(x.contract) === assetId);
+    if (!k || !this.backend.buildOptIn) throw new Error(l10n('Jeton Algorand inconnu', 'Unknown Algorand token'));
+    const built = await this.backend.buildOptIn(assetId);
+    const s = built.summary;
+    const a = s.asset;
+    if (!a || !a.optIn || a.assetId !== assetId || a.decimals !== k.decimals || a.amount !== '0' || s.sender !== this.address || s.receiver !== this.address || s.amount !== '0' || s.noteLen !== 0 || s.warnings.length) {
+      throw new Error(l10n('L’activation construite par Rust ne correspond pas à la demande', 'The opt-in built by Rust does not match the request'));
+    }
+    return { family: 'algo', blob: built.blob, summary: s, context: built.context, recipient: this.address, amount: 0n, maxFee: BigInt(s.fee), size: { family: 'algo' } };
+  }
+
+  /** Token transfer (base units); Rust re-checks both holdings (opt-in, frozen) and the ALGO for the fee. */
+  private async buildAssetTx(params: BuildParams): Promise<AlgoUnsigned> {
+    const k = this.knownAssets().find((x) => `asa:${x.contract}` === params.asset.id);
+    if (!k || k.decimals !== params.asset.decimals || !this.backend.buildAsset) throw new Error(l10n('Jeton Algorand inconnu', 'Unknown Algorand token'));
+    const assetId = Number(k.contract);
+    const to = params.to.trim();
+    if (!isAlgoAddress(to)) throw new Error(l10n('Adresse Algorand invalide (58 caractères A–Z, 2–7)', 'Invalid Algorand address (58 characters A–Z, 2–7)'));
+    if (to === this.address) throw new Error(l10n('Envoi à soi-même impossible', 'Sending to yourself is not possible'));
+    let amount = params.amount;
+    if (params.max === true) {
+      const h = (await this.holdings()).find((x) => x.assetId === assetId);
+      amount = h ? BigInt(h.amount) : 0n;
+    }
+    if (amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
+    const note = params.memo?.trim() ?? '';
+    if (algoNoteBytes(note) > ALGO_MAX_NOTE) throw new Error(l10n('Note trop longue (1024 octets au plus)', 'Note too long (1024 bytes at most)'));
+    const built = await this.backend.buildAsset(assetId, to, amount.toString(), note || undefined);
+    const s = built.summary;
+    const a = s.asset;
+    const noteOk = note ? s.noteLen === algoNoteBytes(note) && s.noteText === note : s.noteLen === 0;
+    const extraOk = s.warnings.every((w) => w.kind === 'note' && note !== '');
+    if (!a || a.optIn || a.assetId !== assetId || a.decimals !== k.decimals || a.amount !== amount.toString() || s.receiver !== to || s.sender !== this.address || s.amount !== '0' || !noteOk || !extraOk) {
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
+    }
+    return { family: 'algo', blob: built.blob, summary: s, context: built.context, recipient: to, amount, ...(note ? { note } : {}), maxFee: BigInt(s.fee), size: { family: 'algo' } };
   }
 
   /** No fee to choose: Rust sets the protocol minimum (0.001 ALGO), more only under congestion. */
@@ -158,6 +233,7 @@ export class AlgorandAdapter implements ChainAdapter<'algo'> {
 
   /** `ChainAdapter` entry point. `max`: spendable (balance − minimum balance) minus the fee Rust sets. */
   async buildTx(params: BuildParams): Promise<AlgoUnsigned> {
+    if (params.asset.kind === 'asa') return this.buildAssetTx(params);
     if (params.asset.kind !== 'native') throw new Error(l10n('Actif Algorand inattendu', 'Unexpected Algorand asset'));
     const note = params.memo?.trim() ? { note: params.memo } : {};
     if (!params.max) return this.buildPayment({ to: params.to, amount: params.amount.toString(), ...note });
@@ -223,9 +299,22 @@ export class AlgorandAdapter implements ChainAdapter<'algo'> {
 
   async getHistory(): Promise<HistoryItem[]> {
     const list = await this.backend.txs(this.address);
+    const known = this.knownAssets();
     return list.map((t) => {
       const out = t.from === this.address;
       const self = out && t.to === this.address;
+      const k = t.type === 'axfer' && t.assetId != null ? known.find((x) => Number(x.contract) === t.assetId) : undefined;
+      if (k && /^\d+$/.test(t.assetAmount ?? '')) {
+        const optIn = self && t.assetAmount === '0';
+        const item: HistoryItem = { id: t.id, chainKey: this.chain.key, assetId: `asa:${k.contract}`, direction: self ? 'self' : out ? 'out' : 'in', amount: BigInt(t.assetAmount ?? '0'), status: t.round ? 'confirmed' : 'pending', kind: 'transfer' };
+        if (out) item.fee = BigInt(t.fee || '0');
+        const counterparty = out ? t.to : t.from;
+        if (counterparty && !self) item.counterparty = counterparty;
+        if (t.time) item.time = t.time;
+        if (optIn) item.note = l10n(`Activation de ${k.symbol} (opt-in, +0,1 ALGO de solde minimum)`, `${k.symbol} enabled (opt-in, +0.1 ALGO of minimum balance)`);
+        else if (t.note) item.note = t.note;
+        return item;
+      }
       const item: HistoryItem = {
         id: t.id,
         chainKey: this.chain.key,

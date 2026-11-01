@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-algo-asset-holdings"
+description = "Enables the algo_asset_holdings command without any pre-configured scope."
+commands.allow = ["algo_asset_holdings"]
+
+[[permission]]
+identifier = "deny-algo-asset-holdings"
+description = "Denies the algo_asset_holdings command without any pre-configured scope."
+commands.deny = ["algo_asset_holdings"]

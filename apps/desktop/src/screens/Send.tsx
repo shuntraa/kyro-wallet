@@ -400,6 +400,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const algoDestInfo = algoDest.data?.address === toTrim ? algoDest.data : undefined;
   const algoMe = useAsync(algoAdapter ? () => algoAdapter.account() : null, [algoAdapter], { intervalMs: 30_000 });
   const algoNoteTooLong = isAlgo && new TextEncoder().encode(memo.trim()).length > 1024;
+  /** Algorand token (ASA): both accounts must have enabled it (opt-in); ALGO only pays the fee. */
+  const algoToken = isAlgo && asset?.kind === 'asa';
+  const algoDestHold = useAsync(algoAdapter && algoToken && addrValid ? () => algoAdapter.holdings(toTrim).then((hs) => ({ to: toTrim, h: hs.find((x) => `asa:${x.assetId}` === asset?.id) ?? null })) : null, [algoAdapter, algoToken, addrValid, toTrim, asset?.id]);
+  const algoDestAsa = algoDestHold.data?.to === toTrim ? algoDestHold.data.h : undefined;
+  const algoAsaRefused = algoToken && (algoDestAsa === undefined || algoDestAsa === null || !algoDestAsa.optedIn || algoDestAsa.frozen);
   /**
    * Monero (§2.11): Rust decodes the destination (standard / subaddress / integrated), the scan
    * must be complete, and the transfer is prepared on demand only (decoys and the output
@@ -441,8 +446,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const dotBlocked = isDot && (!dotDestInfo || dotBelowEd);
   // Algorand: a receiver must end at or above its minimum balance (0.1 ALGO for a new account).
   const algoDestMin = algoDestInfo ? BigInt(algoDestInfo.minBalance) - BigInt(algoDestInfo.balance) : ALGO_ACTIVATION;
-  const algoBelowMinimum = isAlgo && !!algoDestInfo && !max && amountBase !== null && amountBase > 0n && amountBase < algoDestMin;
-  const algoBlocked = isAlgo && (!algoDestInfo || algoNoteTooLong || algoBelowMinimum || !!algoMe.data?.authAddr);
+  const algoBelowMinimum = isAlgo && !algoToken && !!algoDestInfo && !max && amountBase !== null && amountBase > 0n && amountBase < algoDestMin;
+  const algoBlocked = isAlgo && (!algoDestInfo || algoNoteTooLong || algoBelowMinimum || !!algoMe.data?.authAddr || algoAsaRefused);
   // Dogecoin dust (Dogecoin Core policy): no output under 0.01 DOGE.
   const dogeBelowDust = asset?.family === 'doge' && amountBase !== null && amountBase > 0n && amountBase < DOGE_SOFT_DUST && !max;
   // Kaspa: KIP-9 storage mass makes outputs under 0.2 KAS non-standard (Rust refuses them).
@@ -493,7 +498,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   // Polkadot: the existential deposit and the frozen part cannot be sent.
   const dotSpendable = isDot && dotMe.data ? BigInt(dotMe.data.spendable) : null;
   // Algorand: likewise, balance − minimum balance.
-  const algoSpendable = isAlgo && algoMe.data ? BigInt(algoMe.data.spendable) : null;
+  const algoSpendable = isAlgo && !algoToken && algoMe.data ? BigInt(algoMe.data.spendable) : null;
   // Monero: only unlocked outputs (10 confirmations) can be spent.
   const xmrSpendable = isXmr && xmr.status ? BigInt(xmr.status.unlocked) : null;
   const overBalance = !max && amountBase !== null && amountBase > (xrpSpendable ?? nearSpendable ?? suiSpendable ?? kasSpendable ?? dotSpendable ?? algoSpendable ?? xmrSpendable ?? balance);
@@ -1409,7 +1414,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 : ''}
             </EnClair>
           )}
-          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? (xAddress ? t('send.hintXAddress') : t('send.hintRecipient')) : dogeBelowDust ? t('send.hintDogeDust') : kasBelowMin ? t('send.hintKasMin') : xlmMemoMissing ? t('send.hintXlmMemo') : xlmBelowActivation ? t('send.hintXlmActivation') : isXlm && !xlmDestInfo ? t('send.hintXrpReading') : xrpTagMissing ? t('send.hintXrpTag') : xrpBelowActivation ? t('send.hintXrpActivation') : isXrp && !xrpDestInfo ? t('send.hintXrpReading') : dotBelowEd ? t('send.hintDotBelowEd') : algoBelowMinimum ? t('send.hintAlgoBelowMin') : isAlgo && algoMe.data?.authAddr ? t('send.hintAlgoRekeyed') : isAlgo && !algoDestInfo ? t('send.hintXrpReading') : isDot && !dotDestInfo ? t('send.hintXrpReading') : isNear && nearRecvInfo && nearReceiverBlocked(toTrim, nearRecvInfo) ? t('send.hintNearNoReceiver') : isNear && !nearRecvInfo ? t('send.hintXrpReading') : isHbar && hbarMe.data?.exists === false ? t('send.hintHbarNoAccount') : isHbar && hbarProblem ? t('send.hintHbarRefused') : isHbar && !hbarDestInfo ? t('send.hintXrpReading') : isTon && tonCommentBad ? t('send.hintTonComment') : isTon && tonDestInfo?.status === 'frozen' ? t('send.hintTonFrozen') : isTon && !tonDestInfo ? t('send.hintXrpReading') : isXmr ? (!xmrSynced ? t('send.hintXmrScanning') : t('send.hintXmrPrepare')) : t('send.hintAmount')}</p>}
+          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? (xAddress ? t('send.hintXAddress') : t('send.hintRecipient')) : dogeBelowDust ? t('send.hintDogeDust') : kasBelowMin ? t('send.hintKasMin') : xlmMemoMissing ? t('send.hintXlmMemo') : xlmBelowActivation ? t('send.hintXlmActivation') : isXlm && !xlmDestInfo ? t('send.hintXrpReading') : xrpTagMissing ? t('send.hintXrpTag') : xrpBelowActivation ? t('send.hintXrpActivation') : isXrp && !xrpDestInfo ? t('send.hintXrpReading') : dotBelowEd ? t('send.hintDotBelowEd') : algoToken && algoDestAsa && !algoDestAsa.optedIn ? t('send.hintAlgoAsaNotOptedIn', { symbol: asset.symbol }) : algoToken && algoDestAsa?.frozen ? t('send.hintAlgoAsaFrozen', { symbol: asset.symbol }) : algoToken && addrValid && !algoDestAsa ? t('send.hintXrpReading') : algoBelowMinimum ? t('send.hintAlgoBelowMin') : isAlgo && algoMe.data?.authAddr ? t('send.hintAlgoRekeyed') : isAlgo && !algoDestInfo ? t('send.hintXrpReading') : isDot && !dotDestInfo ? t('send.hintXrpReading') : isNear && nearRecvInfo && nearReceiverBlocked(toTrim, nearRecvInfo) ? t('send.hintNearNoReceiver') : isNear && !nearRecvInfo ? t('send.hintXrpReading') : isHbar && hbarMe.data?.exists === false ? t('send.hintHbarNoAccount') : isHbar && hbarProblem ? t('send.hintHbarRefused') : isHbar && !hbarDestInfo ? t('send.hintXrpReading') : isTon && tonCommentBad ? t('send.hintTonComment') : isTon && tonDestInfo?.status === 'frozen' ? t('send.hintTonFrozen') : isTon && !tonDestInfo ? t('send.hintXrpReading') : isXmr ? (!xmrSynced ? t('send.hintXmrScanning') : t('send.hintXmrPrepare')) : t('send.hintAmount')}</p>}
 
           {blindSigning && activeHw && (
             <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
@@ -1476,7 +1481,7 @@ function dataLabel(b: Built | null, family?: string): string {
   if (u.family === 'xmr') return `${tp('send.dataInputs', u.summary.inputCount)} · ${t('send.dataXmrRings', { n: u.summary.ringSize })} · ${tp('send.dataOutputs', 2)}`;
   if (u.family === 'cosmos') return `MsgSend · gas ${u.summary.gasLimit} · ${u.summary.memo !== null ? t('send.dataMemo') : t('send.dataNoMemo')}`;
   if (u.family === 'ton') return `${t('send.dataTon')}${u.summary.deploysWallet ? ` + ${t('send.dataTonDeploy')}` : ''}${u.summary.comment !== null ? ` · ${t('send.dataTonComment')}` : ''}${u.summary.sendAll ? ` · ${t('send.dataTonAll')}` : ''}`;
-  if (u.family === 'algo') return `pay${u.summary.noteLen > 0 ? ` · ${t('send.dataAlgoNote', { n: u.summary.noteLen })}` : ''}`;
+  if (u.family === 'algo') return `${u.summary.asset ? `axfer · ASA ${u.summary.asset.assetId}` : 'pay'}${u.summary.noteLen > 0 ? ` · ${t('send.dataAlgoNote', { n: u.summary.noteLen })}` : ''}`;
   if (u.family === 'dot') return `transfer_keep_alive · nonce ${u.summary.nonce}`;
   if (u.family === 'kas') return `${tp('send.dataInputs', u.summary.inputs)} · ${tp('send.dataOutputs', u.summary.outputs.length)} · ${u.summary.mass.total} g`;
   if (u.family === 'hbar') return `CryptoTransfer · ${u.summary.memo !== null ? t('send.dataMemo') : t('send.dataNoMemo')} · ${t('send.dataHbarNodes', { n: u.summary.nodes.length })}`;

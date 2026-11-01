@@ -325,6 +325,14 @@ export function createDemoAlgo(d: DemoAlgoDeps) {
       if (at === undefined) return { confirmed: false, round: null, error: null };
       return d.now() - at >= CONFIRM_MS ? { confirmed: true, round: state.round, error: null } : { confirmed: false, round: null, error: null };
     },
+    // Tokens (ASA): not simulated in the demo (no holdings, opt-in and sends refused).
+    algo_asset_holdings: async (a) => {
+      checkAlgoAddress(a.address);
+      await backend();
+      return [];
+    },
+    algo_build_optin_tx: () => Promise.reject(invalidInput(l10n('Démo : jetons Algorand non simulés', 'Demo: Algorand tokens are not simulated'))),
+    algo_build_asset_tx: () => Promise.reject(invalidInput(l10n('Démo : jetons Algorand non simulés', 'Demo: Algorand tokens are not simulated'))),
   };
 
   return { state, handlers };

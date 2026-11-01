@@ -164,6 +164,8 @@ export const send = {
   'send.hintKasMin': 'Montant sous 0,2 KAS : aucune transaction construite.',
   'send.hintDotBelowEd': 'Moins que le dépôt existentiel vers un compte inexistant : aucun transfert construit.',
   'send.hintAlgoBelowMin': 'Sous le solde minimum du destinataire : aucun paiement construit.',
+  'send.hintAlgoAsaNotOptedIn': 'Ce destinataire n’a pas activé {symbol} (opt-in) : il doit d’abord l’activer dans son portefeuille, sinon le transfert serait rejeté.',
+  'send.hintAlgoAsaFrozen': 'Le solde {symbol} de ce destinataire est gelé par l’émetteur : il ne peut rien recevoir.',
   'send.hintAlgoRekeyed': 'Compte « rekeyé » : Kyro ne peut pas signer pour lui.',
   'send.hintXmrScanning': 'Scan Monero en cours : le transfert pourra être préparé à la fin.',
   'send.hintXmrPrepare': 'Indique un montant, puis « Préparer le transfert » : le coffre choisit les sorties, les leurres et les frais.',

@@ -11,7 +11,9 @@ use wallet_core::{AlgoPayment, AlgoTxSummary, AlgoWarning, Network};
 use zeroize::Zeroizing;
 
 use crate::accounts::{account_arg, confirm_signer, Chain, SignerInfo};
-use crate::algo_backend::{self, AlgoAccountInfo, AlgoCtx, AlgoTxStatus, PaymentCheck, LV_OFFSET};
+use crate::algo_backend::{
+    self, AlgoAccountInfo, AlgoCtx, AlgoHolding, AlgoTxStatus, PaymentCheck, LV_OFFSET,
+};
 use crate::commands::{blocking, confirm_native, format_units_in, seed_from_password};
 use crate::error::{AppError, AppResult};
 use crate::i18n::Lang;
@@ -43,6 +45,70 @@ pub struct AlgoContext {
     pub destination: AlgoAccountInfo,
     /// Current round when the payment was checked.
     pub round: u64,
+    /// Asset transfer / opt-in: both holdings of the asset, read live.
+    pub asset: Option<AlgoAssetContext>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlgoAssetContext {
+    pub ours: AlgoHolding,
+    pub destination: AlgoHolding,
+}
+
+fn units(lang: Lang, raw: &str, a: &wallet_core::AlgoAssetSummary) -> String {
+    format!(
+        "{} {}",
+        format_units_in(lang, raw, usize::from(a.decimals)),
+        a.symbol
+    )
+}
+
+/// Head of the dialog for an asset transfer / opt-in: token, verified id, decimals.
+fn describe_asset_head(
+    lang: Lang,
+    s: &AlgoTxSummary,
+    a: &wallet_core::AlgoAssetSummary,
+    testnet: &str,
+) -> String {
+    let token = match lang {
+        Lang::Fr => format!(
+            "Jeton : {} ({}) · actif n° {} (vérifié, table de Kyro) · {} décimales\n",
+            a.symbol, a.name, a.asset_id, a.decimals
+        ),
+        Lang::En => format!(
+            "Token: {} ({}) · asset ID {} (verified, Kyro's table) · {} decimals\n",
+            a.symbol, a.name, a.asset_id, a.decimals
+        ),
+    };
+    if a.opt_in {
+        return match lang {
+            Lang::Fr => format!(
+                "Activer {sym} sur Algorand{testnet}\n\n{token}Transaction : transfert de 0 {sym} à toi-même (opt-in), rien n'est envoyé à personne\nEffet : ton solde minimum augmente de 0,1 ALGO (bloqués tant que {sym} reste activé) ; tu pourras ensuite recevoir des {sym}\n",
+                sym = a.symbol
+            ),
+            Lang::En => format!(
+                "Enable {sym} on Algorand{testnet}\n\n{token}Transaction: a 0 {sym} transfer to yourself (opt-in), nothing is sent to anyone\nEffect: your minimum balance rises by 0.1 ALGO (locked while {sym} stays enabled); you can then receive {sym}\n",
+                sym = a.symbol
+            ),
+        };
+    }
+    match lang {
+        Lang::Fr => format!(
+            "Envoi {} sur Algorand{testnet}\n\n{token}À : {}\nMontant : {} ({} unités)\n",
+            a.symbol,
+            s.receiver,
+            units(lang, &a.amount, a),
+            a.amount
+        ),
+        Lang::En => format!(
+            "{} send on Algorand{testnet}\n\n{token}To: {}\nAmount: {} ({} units)\n",
+            a.symbol,
+            s.receiver,
+            units(lang, &a.amount, a),
+            a.amount
+        ),
+    }
 }
 
 /// Body of the native dialog: everything comes from wallet-core's decoding, except the live
@@ -59,21 +125,38 @@ pub(crate) fn describe_algo(
     } else {
         ""
     };
-    let mut out = match lang {
-        Lang::Fr => format!(
+    let mut out = match (&s.asset, lang) {
+        (Some(a), _) => describe_asset_head(lang, s, a, testnet),
+        (None, Lang::Fr) => format!(
             "Envoi Algorand{testnet}\n\nÀ : {}\nMontant : {} ({} µALGO)\n",
             s.receiver,
             al(&s.amount),
             s.amount
         ),
-        Lang::En => format!(
+        (None, Lang::En) => format!(
             "Algorand send{testnet}\n\nTo: {}\nAmount: {} ({} µALGO)\n",
             s.receiver,
             al(&s.amount),
             s.amount
         ),
     };
-    if !c.destination.exists {
+    if let (Some(a), Some(h)) = (&s.asset, &c.asset) {
+        if !a.opt_in {
+            out += &match lang {
+                Lang::Fr => format!(
+                    "Ton solde {} : {}\n",
+                    a.symbol,
+                    units(lang, &h.ours.amount, a)
+                ),
+                Lang::En => format!(
+                    "Your {} balance: {}\n",
+                    a.symbol,
+                    units(lang, &h.ours.amount, a)
+                ),
+            };
+        }
+    }
+    if s.asset.is_none() && !c.destination.exists {
         out += &match lang {
             Lang::Fr => format!(
                 "\nCe compte n'existe pas encore : ce paiement le crée (au moins {} doivent y rester, solde minimum).\n",
@@ -238,18 +321,119 @@ async fn live_context(
     c: &AlgoCtx<'_>,
     me: &str,
     to: &str,
+    asset: Option<u64>,
 ) -> AppResult<(algo_backend::AlgoParams, AlgoContext)> {
     let params = algo_backend::params(c).await?;
     let account = algo_backend::account(c, me).await?;
     let destination = algo_backend::account(c, to).await?;
+    let asset = match asset {
+        None => None,
+        Some(id) => {
+            let ours = algo_backend::holding(c, me, id).await?;
+            let destination = if to == me {
+                ours.clone()
+            } else {
+                algo_backend::holding(c, to, id).await?
+            };
+            Some(AlgoAssetContext { ours, destination })
+        }
+    };
     Ok((
         params.clone(),
         AlgoContext {
             account,
             destination,
             round: params.last_round,
+            asset,
         },
     ))
+}
+
+/// Live checks of an asset transfer / opt-in decoded by wallet-core.
+fn check_asset_live(
+    a: &wallet_core::AlgoAssetSummary,
+    fee: u64,
+    context: &AlgoContext,
+) -> AppResult<()> {
+    let h = context
+        .asset
+        .as_ref()
+        .ok_or_else(|| AppError::Internal("contexte d'actif absent".into()))?;
+    algo_backend::check_asset(&algo_backend::AssetCheck {
+        ours: &context.account,
+        symbol: &a.symbol,
+        decimals: a.decimals,
+        mine: &h.ours,
+        dest: &h.destination,
+        amount: a.amount.parse().unwrap_or(u64::MAX),
+        fee,
+        opt_in: a.opt_in,
+    })
+}
+
+/// Builds an unsigned asset transfer of a known asset: `to` = `me` and `amount` 0 for an
+/// opt-in, otherwise base units to someone else.
+pub(crate) async fn build_asset(
+    c: &AlgoCtx<'_>,
+    me: &str,
+    asset_id: u64,
+    to: &str,
+    amount: u64,
+    note: Option<&str>,
+) -> AppResult<AlgoBuilt> {
+    let known = wallet_core::algo_known_asset(c.network, asset_id).ok_or_else(|| {
+        AppError::InvalidInput(format!("actif Algorand {asset_id} inconnu de Kyro"))
+    })?;
+    let sender = wallet_core::algo_address_bytes(me)?;
+    let receiver = wallet_core::algo_address_bytes(to)?;
+    let opt_in = receiver == sender;
+    if opt_in != (amount == 0) {
+        return Err(AppError::InvalidInput(
+            "montant invalide (0 seulement pour activer le jeton sur ton propre compte)".into(),
+        ));
+    }
+    let note = note.map(str::as_bytes).unwrap_or_default().to_vec();
+    if note.len() > wallet_core::ALGO_MAX_NOTE {
+        return Err(AppError::InvalidInput("note : au plus 1024 octets".into()));
+    }
+    let (params, context) = live_context(c, me, to, Some(known.id)).await?;
+    let (gen, gh) = wallet_core::algo_genesis(c.network)?;
+    let mut p = AlgoPayment {
+        amount: 0,
+        close_remainder_to: None,
+        fee: params.fee_for(0),
+        first_valid: params.last_round,
+        genesis_id: gen.into(),
+        genesis_hash: gh,
+        group: None,
+        last_valid: params.last_round + LV_OFFSET,
+        lease: None,
+        note,
+        receiver: [0u8; 32],
+        rekey_to: None,
+        sender,
+        asset: Some(wallet_core::AlgoAssetTransfer {
+            asset_id: known.id,
+            amount,
+            receiver,
+            close_to: None,
+            asset_sender: None,
+        }),
+    };
+    p.fee = params.fee_for(p.encode().len());
+    p.fee = params.fee_for(p.encode().len());
+    let blob = hex::encode(p.encode());
+    let summary = wallet_core::algo_decode_tx(&blob, c.network, me)?;
+    let a = summary
+        .asset
+        .as_ref()
+        .ok_or_else(|| AppError::Internal("transfert d'actif attendu".into()))?;
+    check_asset_live(a, p.fee, &context)?;
+    Ok(AlgoBuilt {
+        blob,
+        summary,
+        context,
+    })
 }
 
 fn micro_of(s: &AlgoTxSummary) -> (u64, u64) {
@@ -276,9 +460,10 @@ pub(crate) async fn build(
     if note.len() > wallet_core::ALGO_MAX_NOTE {
         return Err(AppError::InvalidInput("note : au plus 1024 octets".into()));
     }
-    let (params, context) = live_context(c, me, to).await?;
+    let (params, context) = live_context(c, me, to, None).await?;
     let (gen, gh) = wallet_core::algo_genesis(c.network)?;
     let mut p = AlgoPayment {
+        asset: None,
         amount,
         close_remainder_to: None,
         fee: params.fee_for(0),
@@ -323,6 +508,55 @@ pub async fn algo_build_tx(
     build(&ctx(&state), &me, &to, &amount, note.as_deref()).await
 }
 
+/// Our holdings of the known assets of the network (USDC, USD₮ on mainnet), in their order.
+#[tauri::command]
+pub async fn algo_asset_holdings(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<Vec<AlgoHolding>> {
+    let c = ctx(&state);
+    let mut out = Vec::new();
+    for a in wallet_core::algo_known_assets(c.network) {
+        out.push(algo_backend::holding(&c, &address, a.id).await?);
+    }
+    Ok(out)
+}
+
+/// Opt-in to a known asset: a 0-unit transfer of it to ourselves (raises the minimum balance by
+/// 0.1 ALGO). Signed with `algo_sign_tx` like a payment.
+#[tauri::command]
+pub async fn algo_build_optin_tx(
+    state: State<'_, AppState>,
+    asset_id: u64,
+    account: Option<u32>,
+) -> AppResult<AlgoBuilt> {
+    let me = ours(&state, account_arg(account)?)?;
+    build_asset(&ctx(&state), &me, asset_id, &me, 0, None).await
+}
+
+/// Transfer of `amount` base units of a known asset to `to` (who must have opted in).
+#[tauri::command]
+pub async fn algo_build_asset_tx(
+    state: State<'_, AppState>,
+    asset_id: u64,
+    to: String,
+    amount: String,
+    note: Option<String>,
+    account: Option<u32>,
+) -> AppResult<AlgoBuilt> {
+    let me = ours(&state, account_arg(account)?)?;
+    let units: u64 = amount
+        .trim()
+        .parse()
+        .ok()
+        .filter(|a| *a > 0)
+        .ok_or_else(|| AppError::InvalidInput("montant du jeton invalide".into()))?;
+    if to.trim() == me {
+        return Err(AppError::InvalidInput("envoi à soi-même".into()));
+    }
+    build_asset(&ctx(&state), &me, asset_id, to.trim(), units, note.as_deref()).await
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AlgoSigned {
@@ -340,13 +574,18 @@ pub(crate) async fn prepare_sign(
     blob: &str,
 ) -> AppResult<(AlgoTxSummary, AlgoContext)> {
     let summary = wallet_core::algo_decode_tx(blob, c.network, me)?;
-    let (_, context) = live_context(c, me, &summary.receiver).await?;
+    let asset_id = summary.asset.as_ref().map(|a| a.asset_id);
+    let (_, context) = live_context(c, me, &summary.receiver, asset_id).await?;
     if summary.last_valid <= context.round {
         return Err(AppError::InvalidInput(
             "paiement Algorand expiré (dernier round de validité dépassé) : reconstruis-le".into(),
         ));
     }
     let (amount, fee) = micro_of(&summary);
+    if let Some(a) = &summary.asset {
+        check_asset_live(a, fee, &context)?;
+        return Ok((summary, context));
+    }
     algo_backend::check_payment(&PaymentCheck {
         ours: &context.account,
         dest: &context.destination,
@@ -375,12 +614,23 @@ pub async fn algo_sign_tx(
     let (summary, context) = prepare_sign(&c, &me, &blob).await?;
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
     let lang = crate::i18n::current();
-    confirm_native(
-        &app,
-        lang.pick(
+    let title = match &summary.asset {
+        Some(a) if a.opt_in => lang.pick(
+            "Activer un jeton Algorand (opt-in)",
+            "Enable an Algorand token (opt-in)",
+        ),
+        Some(_) => lang.pick(
+            "Confirmer l'envoi de jetons Algorand",
+            "Confirm the Algorand token send",
+        ),
+        None => lang.pick(
             "Confirmer le paiement Algorand",
             "Confirm the Algorand payment",
         ),
+    };
+    confirm_native(
+        &app,
+        title,
         signer.body(lang, &describe_algo(lang, &summary, &context, net)),
     )
     .await?;
@@ -471,7 +721,54 @@ mod tests {
                 vec![]
             },
             requires_extra_confirmation: note.is_some(),
+            asset: None,
         }
+    }
+
+    fn usdc(amount: &str, opt_in: bool) -> wallet_core::AlgoAssetSummary {
+        wallet_core::AlgoAssetSummary {
+            asset_id: 31_566_704,
+            symbol: "USDC".into(),
+            name: "USD Coin".into(),
+            decimals: 6,
+            amount: amount.into(),
+            opt_in,
+        }
+    }
+
+    #[test]
+    fn dialog_shows_the_token_its_verified_id_and_decimals() {
+        let mut s = summary(None);
+        s.amount = "0".into();
+        s.asset = Some(usdc("12500000", false));
+        let mut c = context(true);
+        let h = AlgoHolding {
+            asset_id: 31_566_704,
+            opted_in: true,
+            amount: "20000000".into(),
+            frozen: false,
+        };
+        c.asset = Some(AlgoAssetContext {
+            ours: h.clone(),
+            destination: h,
+        });
+        let d = describe_algo(Lang::Fr, &s, &c, Network::Mainnet);
+        for needle in [
+            "Envoi USDC sur Algorand\n",
+            "Jeton : USDC (USD Coin) · actif n° 31566704 (vérifié, table de Kyro) · 6 décimales",
+            "À : BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA",
+            "Montant : 12,5 USDC (12500000 unités)",
+            "Ton solde USDC : 20 USDC",
+            "Frais : 0,001 ALGO",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        assert!(!d.contains("µALGO)\nFrais") && !d.contains("Montant : 0 ALGO"));
+        s.asset = Some(usdc("0", true));
+        let d = describe_algo(Lang::En, &s, &c, Network::Testnet);
+        assert!(d.starts_with("Enable USDC on Algorand (testnet)\n"), "{d}");
+        assert!(d.contains("asset ID 31566704 (verified, Kyro's table) · 6 decimals"));
+        assert!(d.contains("minimum balance rises by 0.1 ALGO"));
     }
 
     fn context(dest_exists: bool) -> AlgoContext {
@@ -490,6 +787,7 @@ mod tests {
                 ..Default::default()
             },
             round: 1000,
+            asset: None,
         }
     }
 
