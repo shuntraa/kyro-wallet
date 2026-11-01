@@ -472,12 +472,7 @@ pub fn check_asset_transfer(c: &AssetCheck<'_>) -> AppResult<()> {
             c.symbol
         )
     };
-    let dot = |v: u128| {
-        format!(
-            "{} DOT",
-            crate::commands::format_units(&v.to_string(), 10)
-        )
-    };
+    let dot = |v: u128| format!("{} DOT", crate::commands::format_units(&v.to_string(), 10));
     let s = c.symbol;
     if !c.details.live {
         return Err(AppError::InvalidInput(format!(
@@ -563,18 +558,27 @@ mod tests {
         };
         let me = h(5_000_000);
         assert!(check(&me, &h(1), 4_990_000, &ours, &det).is_ok());
-        err(check(&me, &h(1), 4_990_001, &ours, &det), "au plus 4,99 USDT");
+        err(
+            check(&me, &h(1), 4_990_001, &ours, &det),
+            "au plus 4,99 USDT",
+        );
         err(check(&me, &h(0), 9_999, &ours, &det), "au moins 0,01 USDT");
         assert!(check(&me, &h(0), 10_000, &ours, &det).is_ok());
         let frozen = wallet_core::DotAssetAccount { frozen: true, ..me };
         err(check(&frozen, &h(1), 1, &ours, &det), "gelé");
-        let blocked = wallet_core::DotAssetAccount { blocked: true, ..h(1) };
+        let blocked = wallet_core::DotAssetAccount {
+            blocked: true,
+            ..h(1)
+        };
         err(check(&me, &blocked, 1, &ours, &det), "bloqué");
         let dead = wallet_core::DotAssetDetails { live: false, ..det };
         err(check(&me, &h(1), 1, &ours, &dead), "gelé ou en cours");
         // DOT for the fee.
         err(check(&me, &h(1), 1, &acc(100_000_000, 0), &det), "frais");
-        err(check(&me, &h(1), 1, &DotAccountInfo::default(), &det), "frais");
+        err(
+            check(&me, &h(1), 1, &DotAccountInfo::default(), &det),
+            "frais",
+        );
     }
 
     fn acc(free: u128, frozen: u128) -> DotAccountInfo {

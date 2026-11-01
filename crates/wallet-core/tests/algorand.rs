@@ -295,11 +295,22 @@ fn opt_in_and_asset_transfer_are_signed_with_their_summary() {
     let sm = algo_decode_tx(&blob, Network::Mainnet, &me).unwrap();
     let a = sm.asset.clone().unwrap();
     assert!(a.opt_in);
-    assert_eq!((a.asset_id, a.symbol.as_str(), a.decimals, a.amount.as_str()), (31_566_704, "USDC", 6, "0"));
-    assert_eq!((sm.receiver.as_str(), sm.amount.as_str()), (me.as_str(), "0"));
+    assert_eq!(
+        (a.asset_id, a.symbol.as_str(), a.decimals, a.amount.as_str()),
+        (31_566_704, "USDC", 6, "0")
+    );
+    assert_eq!(
+        (sm.receiver.as_str(), sm.amount.as_str()),
+        (me.as_str(), "0")
+    );
     let (signed, txid, again) = algo_sign(&s, 0, Network::Mainnet, &blob).unwrap();
     assert_eq!(again, sm);
-    assert_eq!(algo_verify_signed(&signed, Network::Mainnet, &me).unwrap().0, txid);
+    assert_eq!(
+        algo_verify_signed(&signed, Network::Mainnet, &me)
+            .unwrap()
+            .0,
+        txid
+    );
     // A real transfer of 12.5 USDT to someone else.
     let other =
         algo_address_bytes("BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA").unwrap();
@@ -315,7 +326,10 @@ fn opt_in_and_asset_transfer_are_signed_with_their_summary() {
     let a = sm.asset.unwrap();
     assert!(!a.opt_in);
     assert_eq!((a.symbol.as_str(), a.amount.as_str()), ("USDT", "12500000"));
-    assert_eq!(sm.receiver, "BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA");
+    assert_eq!(
+        sm.receiver,
+        "BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA"
+    );
     // Not on a hardware wallet yet.
     assert!(wallet_core::algo_hw_message(&blob).is_err());
 }
@@ -334,7 +348,12 @@ fn dangerous_or_unknown_asset_transfers_are_refused() {
         p
     };
     refused(&with(&|a| a.asset_id = 1234), m, &me, "inconnu");
-    refused(&with(&|a| a.close_to = Some(other)), m, &me, "asset-close-to");
+    refused(
+        &with(&|a| a.close_to = Some(other)),
+        m,
+        &me,
+        "asset-close-to",
+    );
     refused(&with(&|a| a.asset_sender = Some(other)), m, &me, "clawback");
     refused(&with(&|a| a.amount = 5), m, &me, "soi-même");
     refused(&with(&|a| a.receiver = other), m, &me, "montant nul");
@@ -539,9 +558,7 @@ fn non_canonical_or_foreign_encodings_are_refused() {
         .unwrap_err()
         .to_string()
         .contains("champs de paiement ALGO dans un transfert d'actif"));
-    let _old: Vec<u8> = x
-        .splice(n - 4.., [0xA4, b'a', b'p', b'p', b'l'])
-        .collect();
+    let _old: Vec<u8> = x.splice(n - 4.., [0xA4, b'a', b'p', b'p', b'l']).collect();
     assert!(dec(&x).unwrap_err().to_string().contains("« appl » refusé"));
     // A signed transaction is not an unsigned one, and vice versa.
     let (signed, _, _) = algo_sign(&s, 0, Network::Testnet, &hex::encode(&raw)).unwrap();

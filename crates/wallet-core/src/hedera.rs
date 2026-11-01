@@ -686,12 +686,21 @@ impl HbarTransfer {
                                     for (g, w) in fields(bytes_of(&v, "expected_decimals")?)? {
                                         match g {
                                             1 => d = varint_of(&w, "expected_decimals")?,
-                                            g => return Err(bad(format!("UInt32Value : champ inconnu {g}"))),
+                                            g => {
+                                                return Err(bad(format!(
+                                                    "UInt32Value : champ inconnu {g}"
+                                                )))
+                                            }
                                         }
                                     }
-                                    decimals = Some(u32::try_from(d).map_err(|_| bad("décimales"))?);
+                                    decimals =
+                                        Some(u32::try_from(d).map_err(|_| bad("décimales"))?);
                                 }
-                                f => return Err(bad(format!("TokenTransferList : champ inconnu {f}"))),
+                                f => {
+                                    return Err(bad(format!(
+                                        "TokenTransferList : champ inconnu {f}"
+                                    )))
+                                }
                             }
                         }
                         let token = token.ok_or_else(|| bad("jeton manquant"))?;
@@ -1064,7 +1073,14 @@ pub fn hbar_sign_on(
     bodies: &[String],
     allowed_nodes: &[u64],
 ) -> Result<(Vec<String>, HbarTxSummary)> {
-    sign_inner(seed, account, our_account, bodies, allowed_nodes, Some(network))
+    sign_inner(
+        seed,
+        account,
+        our_account,
+        bodies,
+        allowed_nodes,
+        Some(network),
+    )
 }
 
 fn sign_inner(
@@ -1232,7 +1248,13 @@ pub fn hbar_decode_tx_ed25519(
     allowed_nodes: &[u64],
 ) -> Result<HbarTxSummary> {
     let ts: Vec<HbarTransfer> = decode_bodies(bodies)?.into_iter().map(|(_, t)| t).collect();
-    summarize(&ts, our_account, &long_zero_of(our_account), allowed_nodes, None)
+    summarize(
+        &ts,
+        our_account,
+        &long_zero_of(our_account),
+        allowed_nodes,
+        None,
+    )
 }
 
 /// The bytes the Ledger signs for one body (hex): the body itself (the app signs `bodyBytes`

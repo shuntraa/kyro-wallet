@@ -269,9 +269,10 @@ pub struct HbarTokenHolding {
 /// Parses the mirror's `tokens` list for token `0.0.num` (other rows are ignored).
 pub fn parse_holding(v: Option<&Value>, num: u64) -> HbarTokenHolding {
     let id = format!("0.0.{num}");
-    let row = v
-        .and_then(|v| v["tokens"].as_array())
-        .and_then(|a| a.iter().find(|t| t["token_id"].as_str() == Some(id.as_str())));
+    let row = v.and_then(|v| v["tokens"].as_array()).and_then(|a| {
+        a.iter()
+            .find(|t| t["token_id"].as_str() == Some(id.as_str()))
+    });
     match row {
         Some(t) => HbarTokenHolding {
             token_id: id,
@@ -288,7 +289,11 @@ pub fn parse_holding(v: Option<&Value>, num: u64) -> HbarTokenHolding {
 }
 
 /// `account` (`0.0.x`) and known token `0.0.num`.
-pub async fn token_holding(ctx: &HbarCtx<'_>, account: &str, num: u64) -> AppResult<HbarTokenHolding> {
+pub async fn token_holding(
+    ctx: &HbarCtx<'_>,
+    account: &str,
+    num: u64,
+) -> AppResult<HbarTokenHolding> {
     let v = mirror(
         ctx,
         &format!("/api/v1/accounts/{account}/tokens?token.id=0.0.{num}&limit=1"),
@@ -416,7 +421,10 @@ fn normalize_tx(t: &Value, me: &str) -> Value {
         if acc != me {
             continue;
         }
-        match tokens.iter_mut().find(|(id, _): &&mut (String, i64)| id == tid) {
+        match tokens
+            .iter_mut()
+            .find(|(id, _): &&mut (String, i64)| id == tid)
+        {
             Some((_, d)) => *d += n,
             None => tokens.push((tid.to_owned(), n)),
         }

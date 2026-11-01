@@ -210,7 +210,10 @@ pub fn dot_known_assets(network: Network) -> &'static [DotKnownAsset] {
 
 /// The known asset `id` on `network`.
 pub fn dot_known_asset(network: Network, id: u32) -> Option<DotKnownAsset> {
-    dot_known_assets(network).iter().copied().find(|a| a.id == id)
+    dot_known_assets(network)
+        .iter()
+        .copied()
+        .find(|a| a.id == id)
 }
 
 /// The chain Kyro uses on `network`.
@@ -838,7 +841,11 @@ fn check_assets(
         let StorageEntryType::Map { hashers, value, .. } = &entry(name)?.ty else {
             return Err(format!("Assets.{name} n'est pas une map"));
         };
-        if hashers.len() != n || !hashers.iter().all(|h| *h == StorageHasher::Blake2_128Concat) {
+        if hashers.len() != n
+            || !hashers
+                .iter()
+                .all(|h| *h == StorageHasher::Blake2_128Concat)
+        {
             return Err(format!("clé de Assets.{name} inattendue"));
         }
         Ok(value.id)
@@ -878,9 +885,13 @@ fn check_assets(
     ];
     if names(det) != want
         || !f[..4].iter().all(|x| r.is_bytes(x.1, 32))
-        || !f[4..7].iter().all(|x| r.is_prim(x.1, TypeDefPrimitive::U128))
+        || !f[4..7]
+            .iter()
+            .all(|x| r.is_prim(x.1, TypeDefPrimitive::U128))
         || !r.is_prim(f[7].1, TypeDefPrimitive::Bool)
-        || !f[8..11].iter().all(|x| r.is_prim(x.1, TypeDefPrimitive::U32))
+        || !f[8..11]
+            .iter()
+            .all(|x| r.is_prim(x.1, TypeDefPrimitive::U32))
         || !r.has_unit_variant(f[11].1, "Live", 0)
     {
         return Err("AssetDetails inattendu".into());
@@ -1475,7 +1486,9 @@ fn decode_additional(rt: &DotRuntime, input: &mut &[u8]) -> Result<[u8; 32]> {
 }
 
 fn check_transfer(t: &DotTransfer, from: &[u8; 32]) -> Result<()> {
-    if t.asset.is_some_and(|id| !POLKADOT_ASSETS.iter().any(|a| a.id == id)) {
+    if t.asset
+        .is_some_and(|id| !POLKADOT_ASSETS.iter().any(|a| a.id == id))
+    {
         return Err(bad("actif inconnu"));
     }
     if t.value == 0 {

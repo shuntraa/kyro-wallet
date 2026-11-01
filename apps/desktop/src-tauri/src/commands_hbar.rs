@@ -61,7 +61,9 @@ impl OurKey<'_> {
         nodes: &[u64],
     ) -> AppResult<HbarTxSummary> {
         Ok(match self {
-            OurKey::Ecdsa { pk, .. } => wallet_core::hbar_decode_tx_on(net, bodies, num, pk, nodes)?,
+            OurKey::Ecdsa { pk, .. } => {
+                wallet_core::hbar_decode_tx_on(net, bodies, num, pk, nodes)?
+            }
             OurKey::Ed25519(_) => wallet_core::hbar_decode_tx_ed25519(bodies, num, nodes)?,
         })
     }
@@ -507,7 +509,9 @@ async fn token_context(
     let ours = hbar_backend::token_holding(c, &format!("0.0.{me}"), num).await?;
     let Some((_, info)) = to else {
         if ours.associated {
-            return Err(AppError::InvalidInput(format!("{s} est déjà associé à ce compte")));
+            return Err(AppError::InvalidInput(format!(
+                "{s} est déjà associé à ce compte"
+            )));
         }
         return Ok(HbarTokenContext {
             ours,
@@ -604,7 +608,13 @@ pub(crate) async fn build_kind(
                 creates_account: false,
                 token: None,
             };
-            (num, HbarRecipient::Id(num), 0, context, HbarKind::Associate(t))
+            (
+                num,
+                HbarRecipient::Id(num),
+                0,
+                context,
+                HbarKind::Associate(t),
+            )
         }
         (Some(to), _) => {
             let recipient = wallet_core::hbar_parse_recipient(to, c.network)?;
@@ -623,7 +633,9 @@ pub(crate) async fn build_kind(
                 Some(t) => HbarKind::Token {
                     token: t,
                     decimals: wallet_core::hbar_known_token(c.network, t)
-                        .ok_or_else(|| AppError::InvalidInput(format!("jeton 0.0.{t} inconnu de Kyro")))?
+                        .ok_or_else(|| {
+                            AppError::InvalidInput(format!("jeton 0.0.{t} inconnu de Kyro"))
+                        })?
                         .decimals,
                 },
             };
@@ -634,7 +646,14 @@ pub(crate) async fn build_kind(
     match kind {
         HbarKind::Token { token, .. } => {
             context.token = Some(
-                token_context(c, num, token, Some((&recipient, &context.recipient)), amount).await?,
+                token_context(
+                    c,
+                    num,
+                    token,
+                    Some((&recipient, &context.recipient)),
+                    amount,
+                )
+                .await?,
             );
         }
         HbarKind::Associate(token) => {
@@ -730,7 +749,10 @@ pub async fn hbar_build_associate_tx(
     build_kind(
         &ctx(&state),
         OurKey::Ecdsa { evm: &evm, pk: &pk },
-        None, "0", None, Some(t),
+        None,
+        "0",
+        None,
+        Some(t),
         &hbar_backend::node_ids(state.network),
     )
     .await
@@ -752,7 +774,10 @@ pub async fn hbar_build_token_tx(
     build_kind(
         &ctx(&state),
         OurKey::Ecdsa { evm: &evm, pk: &pk },
-        Some(&to), &amount, memo.as_deref(), Some(t),
+        Some(&to),
+        &amount,
+        memo.as_deref(),
+        Some(t),
         &hbar_backend::node_ids(state.network),
     )
     .await
@@ -787,9 +812,13 @@ pub(crate) async fn prepare_sign(
     let (num, mut context) = match t.kind {
         HbarKind::Associate(_) => {
             let account = key.account(c).await?;
-            let num = account.account_id.as_deref().and_then(num_of).ok_or_else(|| {
-                AppError::InvalidInput("ton compte Hedera n'existe pas encore".into())
-            })?;
+            let num = account
+                .account_id
+                .as_deref()
+                .and_then(num_of)
+                .ok_or_else(|| {
+                    AppError::InvalidInput("ton compte Hedera n'existe pas encore".into())
+                })?;
             (
                 num,
                 HbarContext {
@@ -849,10 +878,9 @@ pub async fn hbar_sign_tx(
     confirm_native(
         &app,
         match &summary.token {
-            Some(t) if t.associate => lang.pick(
-                "Associer un jeton Hedera",
-                "Associate a Hedera token",
-            ),
+            Some(t) if t.associate => {
+                lang.pick("Associer un jeton Hedera", "Associate a Hedera token")
+            }
             Some(_) => lang.pick(
                 "Confirmer l'envoi de jetons Hedera",
                 "Confirm the Hedera token send",
@@ -1072,15 +1100,23 @@ mod tests {
             "Ton solde : 20 USDC",
             "association automatique",
         ] {
-            assert!(d.contains(needle), "{needle} missing in:
-{d}");
+            assert!(
+                d.contains(needle),
+                "{needle} missing in:
+{d}"
+            );
         }
         assert!(!d.contains("tinybars)"));
         s.token = Some(usdc(true));
         s.amount = "0".into();
         let d = describe_hbar(Lang::En, &s, &c, Network::Testnet);
-        assert!(d.starts_with("Associate USDC with your Hedera account (testnet)
-"), "{d}");
+        assert!(
+            d.starts_with(
+                "Associate USDC with your Hedera account (testnet)
+"
+            ),
+            "{d}"
+        );
         assert!(d.contains("0.0.456858 (verified, Kyro's table) · 6 decimals"));
         assert!(d.contains("Nothing is sent to anyone"));
     }
@@ -1089,7 +1125,10 @@ mod tests {
     fn token_holdings_from_the_mirror() {
         let v = serde_json::json!({"tokens":[{"token_id":"0.0.456858","balance":2500000,"freeze_status":"UNFROZEN","kyc_status":"NOT_APPLICABLE","automatic_association":true}]});
         let h = hbar_backend::parse_holding(Some(&v), 456_858);
-        assert_eq!((h.associated, h.balance.as_str(), h.frozen), (true, "2500000", false));
+        assert_eq!(
+            (h.associated, h.balance.as_str(), h.frozen),
+            (true, "2500000", false)
+        );
         assert!(!hbar_backend::parse_holding(Some(&v), 429_274).associated);
         assert!(!hbar_backend::parse_holding(None, 456_858).associated);
         let f = serde_json::json!({"tokens":[{"token_id":"0.0.456858","balance":1,"freeze_status":"FROZEN"}]});

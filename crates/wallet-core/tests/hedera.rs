@@ -421,14 +421,22 @@ fn known_tokens_are_circle_usdc() {
     let m = hbar_known_token(Network::Mainnet, USDC_MAIN).unwrap();
     assert_eq!((m.symbol, m.decimals), ("USDC", 6));
     assert!(hbar_known_token(Network::Mainnet, USDC_TEST).is_none());
-    assert_eq!(hbar_known_token(Network::Testnet, USDC_TEST).unwrap().symbol, "USDC");
+    assert_eq!(
+        hbar_known_token(Network::Testnet, USDC_TEST)
+            .unwrap()
+            .symbol,
+        "USDC"
+    );
 }
 
 #[test]
 fn token_transfer_and_association_encoding() {
     let token = HbarTransfer {
         amount: 12_500_000,
-        kind: HbarKind::Token { token: USDC_MAIN, decimals: 6 },
+        kind: HbarKind::Token {
+            token: USDC_MAIN,
+            decimals: 6,
+        },
         ..case1()
     };
     let raw = token.encode();
@@ -437,9 +445,15 @@ fn token_transfer_and_association_encoding() {
     let mut tid = vec![0x0a, 0x00, 0x18];
     put_varint(&mut tid, USDC_MAIN);
     tid[1] = (tid.len() - 2) as u8;
-    let at = raw.windows(tid.len()).position(|w| w == tid.as_slice()).unwrap();
+    let at = raw
+        .windows(tid.len())
+        .position(|w| w == tid.as_slice())
+        .unwrap();
     assert_eq!(raw[at - 2], 0x12, "tokenTransfers is field 2");
-    assert!(raw.ends_with(&[0x22, 0x02, 0x08, 0x06]), "expected_decimals = 6");
+    assert!(
+        raw.ends_with(&[0x22, 0x02, 0x08, 0x06]),
+        "expected_decimals = 6"
+    );
     assert_eq!(HbarTransfer::decode(&raw).unwrap(), token);
     let assoc = HbarTransfer {
         amount: 0,
@@ -485,26 +499,94 @@ fn tokens_are_signed_only_on_their_network() {
             .encode(),
         )
     };
-    let usdc = body(HbarKind::Token { token: USDC_MAIN, decimals: 6 }, HbarRecipient::Id(98_765), 2_000_000);
+    let usdc = body(
+        HbarKind::Token {
+            token: USDC_MAIN,
+            decimals: 6,
+        },
+        HbarRecipient::Id(98_765),
+        2_000_000,
+    );
     // The network-less API refuses every token.
-    assert!(hbar_decode_tx(std::slice::from_ref(&usdc), 4_242, &pk, &nodes).unwrap_err().to_string().contains("réseau"));
-    let sm = hbar_decode_tx_on(Network::Mainnet, std::slice::from_ref(&usdc), 4_242, &pk, &nodes).unwrap();
+    assert!(
+        hbar_decode_tx(std::slice::from_ref(&usdc), 4_242, &pk, &nodes)
+            .unwrap_err()
+            .to_string()
+            .contains("réseau")
+    );
+    let sm = hbar_decode_tx_on(
+        Network::Mainnet,
+        std::slice::from_ref(&usdc),
+        4_242,
+        &pk,
+        &nodes,
+    )
+    .unwrap();
     let t = sm.token.clone().unwrap();
-    assert_eq!((t.token_id.as_str(), t.symbol.as_str(), t.decimals, t.associate), ("0.0.456858", "USDC", 6, false));
+    assert_eq!(
+        (
+            t.token_id.as_str(),
+            t.symbol.as_str(),
+            t.decimals,
+            t.associate
+        ),
+        ("0.0.456858", "USDC", 6, false)
+    );
     assert_eq!(sm.amount, "2000000");
     // Mainnet USDC on testnet, wrong decimals, unknown token: refused.
-    assert!(hbar_decode_tx_on(Network::Testnet, std::slice::from_ref(&usdc), 4_242, &pk, &nodes).is_err());
-    let bad_dec = body(HbarKind::Token { token: USDC_MAIN, decimals: 2 }, HbarRecipient::Id(98_765), 1);
-    assert!(hbar_decode_tx_on(Network::Mainnet, &[bad_dec], 4_242, &pk, &nodes).unwrap_err().to_string().contains("expected_decimals"));
-    let other = body(HbarKind::Token { token: 731_861, decimals: 6 }, HbarRecipient::Id(98_765), 1);
-    assert!(hbar_decode_tx_on(Network::Mainnet, &[other], 4_242, &pk, &nodes).unwrap_err().to_string().contains("inconnu"));
+    assert!(hbar_decode_tx_on(
+        Network::Testnet,
+        std::slice::from_ref(&usdc),
+        4_242,
+        &pk,
+        &nodes
+    )
+    .is_err());
+    let bad_dec = body(
+        HbarKind::Token {
+            token: USDC_MAIN,
+            decimals: 2,
+        },
+        HbarRecipient::Id(98_765),
+        1,
+    );
+    assert!(
+        hbar_decode_tx_on(Network::Mainnet, &[bad_dec], 4_242, &pk, &nodes)
+            .unwrap_err()
+            .to_string()
+            .contains("expected_decimals")
+    );
+    let other = body(
+        HbarKind::Token {
+            token: 731_861,
+            decimals: 6,
+        },
+        HbarRecipient::Id(98_765),
+        1,
+    );
+    assert!(
+        hbar_decode_tx_on(Network::Mainnet, &[other], 4_242, &pk, &nodes)
+            .unwrap_err()
+            .to_string()
+            .contains("inconnu")
+    );
     // Association: for ourselves only.
     let assoc = body(HbarKind::Associate(USDC_MAIN), HbarRecipient::Id(4_242), 0);
-    let sa = hbar_decode_tx_on(Network::Mainnet, std::slice::from_ref(&assoc), 4_242, &pk, &nodes).unwrap();
+    let sa = hbar_decode_tx_on(
+        Network::Mainnet,
+        std::slice::from_ref(&assoc),
+        4_242,
+        &pk,
+        &nodes,
+    )
+    .unwrap();
     assert!(sa.token.as_ref().unwrap().associate);
     let (signed, again) = hbar_sign_on(Network::Mainnet, &s, 0, 4_242, &[assoc], &nodes).unwrap();
     assert_eq!(again, sa);
-    assert_eq!(hbar_verify_signed(&signed[0]).unwrap().transfer.kind, HbarKind::Associate(USDC_MAIN));
+    assert_eq!(
+        hbar_verify_signed(&signed[0]).unwrap().transfer.kind,
+        HbarKind::Associate(USDC_MAIN)
+    );
     let (signed, _) = hbar_sign_on(Network::Mainnet, &s, 0, 4_242, &[usdc], &nodes).unwrap();
     assert!(hbar_verify_signed(&signed[0]).is_ok());
 }

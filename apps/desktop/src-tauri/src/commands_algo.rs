@@ -554,7 +554,15 @@ pub async fn algo_build_asset_tx(
     if to.trim() == me {
         return Err(AppError::InvalidInput("envoi à soi-même".into()));
     }
-    build_asset(&ctx(&state), &me, asset_id, to.trim(), units, note.as_deref()).await
+    build_asset(
+        &ctx(&state),
+        &me,
+        asset_id,
+        to.trim(),
+        units,
+        note.as_deref(),
+    )
+    .await
 }
 
 #[derive(Serialize)]

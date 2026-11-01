@@ -1344,7 +1344,10 @@ mod tests {
         let j = |s: &str| serde_json::from_str::<RestoreFrom>(s).unwrap();
         assert_eq!(j(r#"{"kind":"kyro"}"#), RestoreFrom::Kyro);
         assert_eq!(j(r#"{"kind":"genesis"}"#), RestoreFrom::Genesis);
-        assert_eq!(j(r#"{"kind":"date","date":5}"#), RestoreFrom::Date { date: 5 });
+        assert_eq!(
+            j(r#"{"kind":"date","date":5}"#),
+            RestoreFrom::Date { date: 5 }
+        );
     }
 
     #[test]

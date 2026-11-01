@@ -424,7 +424,9 @@ pub(crate) async fn build_any(
 ) -> AppResult<DotBuilt> {
     if let Some(id) = asset {
         if wallet_core::dot_known_asset(c.network, id).is_none() {
-            return Err(AppError::InvalidInput(format!("actif {id} inconnu de Kyro")));
+            return Err(AppError::InvalidInput(format!(
+                "actif {id} inconnu de Kyro"
+            )));
         }
         if let Err(why) = &rt.assets {
             return Err(AppError::InvalidInput(format!(

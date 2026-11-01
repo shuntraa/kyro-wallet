@@ -264,7 +264,9 @@ pub fn check_asset(c: &AssetCheck<'_>) -> AppResult<()> {
     let s = c.symbol;
     if c.opt_in {
         if c.mine.opted_in {
-            return Err(AppError::InvalidInput(format!("{s} est déjà activé sur ce compte")));
+            return Err(AppError::InvalidInput(format!(
+                "{s} est déjà activé sur ce compte"
+            )));
         }
         let need = c.fee.saturating_add(wallet_core::ALGO_MIN_BALANCE);
         if spendable < need {
@@ -631,17 +633,31 @@ mod tests {
         let v = json!({"transactions": [{"id":"TXC","tx-type":"axfer","sender":"S","fee":1000,"confirmed-round":7,
             "asset-transfer-transaction":{"amount":2500000,"asset-id":31566704,"close-amount":0,"receiver":"R"}}]});
         let h = parse_txs(&v);
-        assert_eq!((h[0]["assetId"].as_u64(), h[0]["assetAmount"].as_str()), (Some(31_566_704), Some("2500000")));
-        assert_eq!((h[0]["to"].as_str(), h[0]["amount"].as_str()), (Some("R"), Some("0")));
+        assert_eq!(
+            (h[0]["assetId"].as_u64(), h[0]["assetAmount"].as_str()),
+            (Some(31_566_704), Some("2500000"))
+        );
+        assert_eq!(
+            (h[0]["to"].as_str(), h[0]["amount"].as_str()),
+            (Some("R"), Some("0"))
+        );
     }
 
     #[test]
     fn asset_holdings_and_checks() {
         let ok = json!({"asset-holding":{"amount":12500000,"asset-id":31566704,"is-frozen":false},"round":1});
         let h = parse_holding(200, &ok, 31_566_704).unwrap();
-        assert_eq!((h.opted_in, h.amount.as_str(), h.frozen), (true, "12500000", false));
+        assert_eq!(
+            (h.opted_in, h.amount.as_str(), h.frozen),
+            (true, "12500000", false)
+        );
         assert!(parse_holding(200, &ok, 312_769).is_err(), "another asset");
-        let none = parse_holding(404, &json!({"message":"account asset info not found"}), 312_769).unwrap();
+        let none = parse_holding(
+            404,
+            &json!({"message":"account asset info not found"}),
+            312_769,
+        )
+        .unwrap();
         assert!(!none.opted_in);
         let ours = AlgoAccountInfo {
             exists: true,
@@ -650,15 +666,31 @@ mod tests {
             spendable: "200000".into(),
             ..Default::default()
         };
-        let check = |mine: &AlgoHolding, dest: &AlgoHolding, amount, opt_in, ours: &AlgoAccountInfo| {
-            check_asset(&AssetCheck { ours, symbol: "USDC", decimals: 6, mine, dest, amount, fee: 1000, opt_in })
-        };
+        let check =
+            |mine: &AlgoHolding, dest: &AlgoHolding, amount, opt_in, ours: &AlgoAccountInfo| {
+                check_asset(&AssetCheck {
+                    ours,
+                    symbol: "USDC",
+                    decimals: 6,
+                    mine,
+                    dest,
+                    amount,
+                    fee: 1000,
+                    opt_in,
+                })
+            };
         let err = |r: AppResult<()>, needle: &str| {
-            assert!(matches!(&r, Err(AppError::InvalidInput(m)) if m.contains(needle)), "{needle}: {r:?}");
+            assert!(
+                matches!(&r, Err(AppError::InvalidInput(m)) if m.contains(needle)),
+                "{needle}: {r:?}"
+            );
         };
         // Opt-in: needs 0.1 ALGO more of minimum balance + the fee.
         assert!(check(&none, &none, 0, true, &ours).is_ok());
-        let poor = AlgoAccountInfo { spendable: "100500".into(), ..ours.clone() };
+        let poor = AlgoAccountInfo {
+            spendable: "100500".into(),
+            ..ours.clone()
+        };
         err(check(&none, &none, 0, true, &poor), "0,1 ALGO de plus");
         err(check(&h, &h, 0, true, &ours), "déjà activé");
         // Transfer: opted in on both sides, enough units, ALGO for the fee.
@@ -666,10 +698,16 @@ mod tests {
         err(check(&h, &h, 12_500_001, false, &ours), "insuffisant");
         err(check(&none, &h, 1, false, &ours), "n'est pas activé");
         err(check(&h, &none, 1, false, &ours), "n'a pas activé USDC");
-        let frozen = AlgoHolding { frozen: true, ..h.clone() };
+        let frozen = AlgoHolding {
+            frozen: true,
+            ..h.clone()
+        };
         err(check(&frozen, &h, 1, false, &ours), "gelé");
         err(check(&h, &frozen, 1, false, &ours), "gelé");
-        let broke = AlgoAccountInfo { spendable: "0".into(), ..ours.clone() };
+        let broke = AlgoAccountInfo {
+            spendable: "0".into(),
+            ..ours.clone()
+        };
         err(check(&h, &h, 1, false, &broke), "frais");
     }
 }
