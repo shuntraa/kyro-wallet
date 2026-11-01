@@ -67,6 +67,7 @@ pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
 3. Check the draft (files, `latest.json`, `SHA256SUMS`), then **publish** it: that makes it
    "latest", so the website links and the installed wallets pick it up (a pre-release, tag
    with a `-`, is never taken).
+4. Submit the Windows installers to Microsoft for SmartScreen (section 7).
 
 ## 5. The release workflow (`.github/workflows/release.yml`)
 
@@ -119,3 +120,34 @@ curl -sL https://github.com/shuntraa/kyro-wallet/releases/latest/download/latest
 must show the new version and one entry per platform. An installed wallet applies it on its
 next close (check ≈ 45 s after launch), and shows "Kyro updated to X.Y.Z." at the
 following startup.
+
+## 7. Windows SmartScreen (unsigned installers)
+
+The Windows installers are not code-signed. A browser download of an unsigned file carries the
+"downloaded from the internet" mark (Mark of the Web), so SmartScreen shows "Windows protected
+your PC" until the file has built reputation. That reputation is tied to the file's hash: every
+release starts from zero. Never affected: updates applied by the in-app updater, and installs
+through `install.ps1`, which fetch the file without that mark.
+
+After publishing a release, submit both Windows installers to Microsoft, one submission per file:
+
+1. Download `Kyro-windows-x64-setup.exe` and `Kyro-windows-x64.msi` from the **published**
+   release (the exact files users get, so the hashes match).
+2. Open <https://www.microsoft.com/en-us/wdsi/filesubmission>, sign in with a Microsoft account,
+   choose **Software developer**, then fill in:
+
+   | Field | Value |
+   |---|---|
+   | Product | Microsoft Defender Smartscreen |
+   | Company name / Affected organization | Kyro Wallet |
+   | Number of affected devices | 1 - 100 |
+   | Submission priority | Low |
+   | What do you believe this file is? | Incorrectly detected as malware/malicious |
+   | Detection name | SmartScreen: Windows protected your PC (unrecognized app) |
+   | Additional information | `Kyro Wallet vX.Y.Z, open-source (GPL-3.0-or-later) crypto wallet. Source and release: https://github.com/shuntraa/kyro-wallet/releases/tag/vX.Y.Z. SHA-256: <hash from SHA256SUMS>. Built by GitHub Actions from the public repository.` |
+
+3. Complete the CAPTCHA and submit. Microsoft answers by email with the submission ID; keep it.
+
+Microsoft does not guarantee that a submission clears SmartScreen for home users: reputation
+mostly builds with downloads. The download page explains the warning (*More info* → *Run
+anyway*) and points to the one-line command, which avoids it.
