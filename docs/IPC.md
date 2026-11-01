@@ -721,6 +721,11 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `hw_stellar_build_tx` | `{ accountId, to, amount, memo? }` | comme `stellar_build_tx` | adresse du compte hardware wallet |
 | `hw_sign_stellar_tx` | `{ id, accountId, envelope }` | comme `stellar_sign_tx` | Ledger (app « Stellar », sur la *signature base*) ou Trezor (`StellarSignTx` + opération, le firmware reconstruit l'XDR) ; signature ed25519 vérifiée strictement sur **le hash de Kyro** pour ce réseau, attachée à l'enveloppe de Kyro (`stellar_hw_assemble`) |
 | `hw_stellar_broadcast` | `{ accountId, envelope }` | `string` (hash) | comme `stellar_broadcast` |
+| `hw_ada_build_tx` | `{ accountId, to, lovelace?, token?, memo? }` | comme `ada_build_tx` | construit pour l'adresse du compte hardware wallet (base `…/0/0` + `…/2/0`, dérivée de la clé de compte enregistrée) |
+| `hw_sign_ada_tx` | `{ id, accountId, tx }` | comme `ada_sign_tx` | mêmes vérifications en direct que `ada_sign_tx` (entrées à nous et non dépensées, solde, frais, ttl) → `cardano_hw_plan` → clés relues → dialogue natif (+ renforcé) → Ledger (app « Cardano ADA ») ou Trezor T / Safe (`CardanoSignTx*`) → `cardano_hw_assemble` : le hash du corps calculé par l'appareil doit être l'identifiant de Kyro, et le témoin doit se vérifier (ed25519 strict) avec la clé `…/0/0` dérivée de la clé de compte enregistrée |
+| `hw_ada_broadcast` | `{ accountId, tx }` | `string` (tx id) | comme `ada_broadcast` (seul témoin : notre clé de paiement) |
+| `hw_zec_send_preview` | `{ accountId, request: ZecSendArgs }` | `ZecTxSummary` | comme `zec_send_preview`, construit avec l'xpub du compte hardware wallet |
+| `hw_sign_zec_tx` | `{ id, accountId, request: ZecSendArgs }` | `{ hex, txid, summary }` | **Trezor seulement** : même construction que `zec_sign` (`zec_hw_plan`, xpub enregistrée) → clés relues → dialogue natif (+ renforcé) → `SignTx` Zcash v5 → `zec_hw_finalize` (chaque signature vérifiée contre le digest ZIP-244 calculé par Kyro et la clé dérivée de l'xpub, low-S). Diffusion : `zec_broadcast` |
 
 ```ts
 type Accounts = {                 // accounts_get({ account? }) : tout est celui du compte `account` (0 = l'historique)
@@ -885,7 +890,7 @@ Avec un coffre sur cet ordinateur, toutes les commandes `hw_*` qui lisent des cl
 ```ts
 type DeviceInfo = { id: string; kind: 'ledger' | 'trezor'; model: string; transport: 'hid' | 'webusb' };
 type Chain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'xrp' | 'tron' | 'stellar'
-  | 'cardano' | 'zec';   // cardano, zec : HW_UNSUPPORTED
+  | 'cardano' | 'zec';   // zec : Trezor seulement ; cardano : pas sur la Trezor One
 type DeviceStatus = { id: string; kind: 'ledger' | 'trezor'; model: string; locked: boolean;
   app?: { name: string; version: string };        // Ledger : app ouverte ("Tableau de bord" = dashboard)
   firmware?: string; passphrase?: boolean;        // Trezor
@@ -897,7 +902,9 @@ type HwXpub = { chain: Chain; account: number;
   evm?: { xpub: string /*nœud m/44'/60'/0'/0*/; path: string; address: string /*…/0/{account}*/ };
   sol?: { address: string; path: string /*m/44'/501'/{account}'/0'*/ };
   utxo?: UtxoKey;   // ltc, doge, bch, dash
-  key?: ChainKey };  // xrp, tron, stellar
+  key?: ChainKey;   // xrp, tron, stellar ; cardano : pubkey = clé de compte ‖ code de chaîne (64 o)
+  zec?: ZecKey };   // Trezor
+type ZecKey = { xpub: string; fingerprint: string; path: string /*m/44'/133'/a' ; testnet m/44'/1'/a'*/ };
 type UtxoKey = { coin: 'litecoin' | 'dogecoin' | 'bitcoincash' | 'dash'; xpub: string /*xpub/tpub standard*/;
   fingerprint: string; path: string /*m/84'/2'/a', m/44'/3'/a', m/44'/145'/a', m/44'/5'/a' ; testnet …/1'/a'*/ };
 type ChainKey = { address: string; pubkey: string /*hex : XRP 33 o, TRON 65 o, Stellar 32 o*/;
@@ -906,7 +913,9 @@ type WatchOnlyAccount = { id: string; label: string; device: 'ledger' | 'trezor'
   network: 'mainnet' | 'testnet'; account: number; btc?: HwXpub['btc']; evm?: { xpub: string; path: string };
   sol?: { address: string; path: string };
   utxo?: UtxoKey[];   // une par chaîne, même empreinte maître que btc
-  xrp?: ChainKey; tron?: ChainKey; stellar?: ChainKey };   // adresse = celle de la clé, chemin standard (vérifiés au chargement)
+  xrp?: ChainKey; tron?: ChainKey; stellar?: ChainKey;   // adresse = celle de la clé, chemin standard (vérifiés au chargement)
+  cardano?: ChainKey;   // m/1852'/1815'/a' ; adresse de base …/0/0 + …/2/0, recalculée au chargement
+  zec?: ZecKey };       // même empreinte maître que btc / utxo
 ```
 
 **Déroulé d'une signature** : (1) Rust décode (`btc_hw_plan` / `evm_decode` / `sol_decode_message`) ; (2) Rust relit les clés de l'appareil et les compare au compte enregistré (`HW_WRONG_DEVICE`) ; (3) dialogue natif Kyro avec le résumé décodé + « vérifie les mêmes informations sur l'appareil », puis 2ᵉ dialogue renforcé si quelque chose est « inconnu » (sortie BTC non décodée, appel de contrat EVM, instruction Solana inconnue) ou si l'appareil ne pourra pas afficher le détail (blind signing) ; (4) confirmation finale sur l'écran de l'appareil (`hw-prompt: confirm-on-device`) ; (5) Rust vérifie chaque signature (sighash recalculé, clé dérivée de l'xpub enregistrée ; EVM : adresse récupérée = adresse attendue, low-S ; Solana : ed25519 strict) avant de répondre. Une réponse de l'appareil qui ne passe pas : `HW_BAD_RESPONSE`, rien n'est renvoyé.
@@ -925,7 +934,8 @@ type WatchOnlyAccount = { id: string; label: string; device: 'ledger' | 'trezor'
 | XRP | « XRP » ≥ 2.0.0 (secp256k1) | **non** : le firmware ne donne pas la clé publique avant la signature |
 | TRON | « Tron » ≥ 0.5.0 (TRC-20 : réglages de l'app selon le jeton) | **non** (absent du firmware Trezor) |
 | Stellar | « Stellar » ≥ 5.0.0 (`6C66` : « Hash signing » désactivé → `HW_UNSUPPORTED`) | One ≥ 1.10.4 ; T/Safe ≥ 2.4.3 |
-| Cardano, Zcash | non proposés (`HW_UNSUPPORTED`) | non proposés |
+| Cardano (ADA + tokens natifs, mémo CIP-20) | « Cardano ADA » ≥ 7.0.0 (ensembles tag 258 de Conway) ; protocole v7 (une APDU par élément) ou v8 (corps en flux) selon la version de l'app | T/Safe ≥ 2.7.2 (dérivation ICARUS) ; pas sur la One |
+| Zcash transparent (v5, ZIP 244) | **non** (voir plus bas) | One ≥ 1.11.1 ; T/Safe ≥ 2.5.1 |
 | Non pris en charge | — | mode bootloader, One < 1.7 (HID) ; Safe 7 : appairage autre que par code (QR, NFC : pas proposés par le firmware de production) |
 
 PIN et passphrase : Ledger se déverrouille sur l'appareil (`HW_LOCKED` → l'UI demande de le déverrouiller puis de réessayer). Trezor T/Safe : PIN et passphrase saisis **sur l'appareil** (`hw-prompt`). Trezor One : PIN par la grille aveugle (`pin-matrix` → `hw_pin_matrix`) ; passphrase à saisir sur l'ordinateur → refusée (`HW_UNSUPPORTED`) : aucun secret ne transite par l'UI.
@@ -954,7 +964,7 @@ PIN et passphrase : Ledger se déverrouille sur l'appareil (`HW_LOCKED` → l'UI
 | `HW_WRONG_APP` | Ledger : mauvaise app ouverte (dashboard compris ; `6E00`, `6E01`, `6D00`, `6D02`, `6511`) | `{ expected, open }` |
 | `HW_REJECTED` | refus sur l'appareil (Ledger `6985`, `5501`, `6982` en signature ; Trezor `ActionCancelled` / `PinCancelled`) | |
 | `HW_DISCONNECTED` | erreur USB / débranchement, y compris pendant une signature : opération abandonnée, connexion fermée | |
-| `HW_UNSUPPORTED` | chaîne non proposée sur cet appareil (Cardano, Zcash ; XRP / TRON sur Trezor ; LTC / DOGE / BCH / DASH sur Ledger en testnet), firmware/app trop ancien, « Hash signing » désactivé (app Stellar `6C66`), blind signing désactivé (Ledger `6A80` en signature EVM, `6808` Solana), passphrase Trezor One, entrées mixtes Ledger ; Safe 7 : version THP ≠ 2.x, appairage par code non proposé | `{ min }` |
+| `HW_UNSUPPORTED` | chaîne non proposée sur cet appareil (Zcash sur Ledger ; Cardano sur la Trezor One ; XRP / TRON sur Trezor ; LTC / DOGE / BCH / DASH sur Ledger en testnet), firmware/app trop ancien, « Hash signing » désactivé (app Stellar `6C66`), blind signing désactivé (Ledger `6A80` en signature EVM, `6808` Solana), passphrase Trezor One, entrées mixtes Ledger ; Safe 7 : version THP ≠ 2.x, appairage par code non proposé | `{ min }` |
 | `HW_BUSY` | autre opération en cours sur cet appareil ; interface USB prise par une autre application (Trezor Suite, Ledger Live) ; Linux sans règles udev | |
 | `HW_TIMEOUT` | pas de réponse dans le délai : opération abandonnée | |
 | `HW_BAD_RESPONSE` | réponse mal formée, ou signature/adresse/clé qui ne passe pas la vérification de Kyro | |
@@ -970,7 +980,10 @@ PIN et passphrase : Ledger se déverrouille sur l'appareil (`HW_LOCKED` → l'UI
 - **Trezor, LTC / DOGE / BCH / DASH** : `GetPublicKey` (xpub reconstruite depuis `node`, version standard), `GetAddress`, `SignTx` / `TxRequest` comme Bitcoin avec `coin_name` « Litecoin » / « Dogecoin » / « Bcash » / « Dash » (testnet : « Litecoin Testnet », « Bcash Testnet », « Dash Testnet »), `SPENDWITNESS` (Litecoin) ou `SPENDADDRESS` ; transactions précédentes depuis la PSBT, txid recalculé.
 - **Ledger XRP / Stellar / Tron** (`hw-app-xrp`, `hw-app-str`, `hw-app-trx`) : clé lue avec `E0 02` (XRP et Tron renvoient aussi l'adresse, qui doit être celle de la clé), signature `E0 04` : XRP = transaction binaire non signée en blocs de 150 octets ; Stellar = *signature base* (`networkId ‖ ENVELOPE_TYPE_TX ‖ XDR`) en blocs de 255 ; Tron = `raw_data` découpé entre champs protobuf (≤ 250 octets par APDU, P1 `10` / `00` / `80` / `90`).
 - **Trezor Stellar** : `StellarGetAddress`, puis `StellarSignTx` + l'opération (paiement XLM ou création de compte) ; le firmware reconstruit l'XDR lui-même : si sa reconstruction différait de celle de Kyro, la signature ne se vérifierait pas sur le hash de Kyro (`HW_BAD_RESPONSE`).
-- **Non proposés** : XRP sur Trezor (le firmware ne livre que l'adresse, pas la clé publique dont Kyro a besoin pour construire et vérifier le Payment) ; TRON sur Trezor (absent du firmware) ; **Cardano** (protocole de signature en plusieurs étapes, Ledger « Cardano ADA » comme Trezor `CardanoSignTx*` : pas écrit, faute de pouvoir le valider sans appareil) ; **Zcash** (transactions v5 / ZIP 244 : l'app Ledger Zcash et Trezor exigent les parties blindées des transactions précédentes, non fait).
+- **Ledger Cardano** (`hw/ledger_cardano.rs`, d'après `@cardano-foundation/ledgerjs-hw-app-cardano` 8.1.0) : CLA `D7` ; clé de compte `10` (`m/1852'/1815'/a'` → clé ‖ code de chaîne), adresse `11` (P1 `01` renvoyer, `02` afficher ; paramètres : base, paiement `…/0/0`, staking « chemin » `…/2/0`), signature `21` en mode « transaction ordinaire ». App 7.x : INIT (`01`, tous les champs Conway), hash des métadonnées (`08`, type « hash arbitraire » : le mémo CIP-20), entrées (`02`), sorties (`03` : `30` données de base, `31` groupe d'actifs, `32` token, `33` fin), frais (`04`), ttl (`05`), début de validité (`09`), confirmation (`0A` → hash du corps), témoin (`0F` → signature). App ≥ 8 : INIT (`10`) avec les compteurs et la longueur, puis le flux sérialisé des mêmes éléments en blocs de 250 octets (`11`, dernier `12` → hash du corps), témoin (`0F`). Notre monnaie est envoyée comme adresse de l'appareil (deux chemins) : il la dérive lui-même. Statuts : `6E09` / `6985` refus, `6E11` verrouillé, `6E10` politique de l'app, `6Bxx` lecture impossible.
+- **Trezor Cardano** (`hw/trezor_cardano.rs`, ordre de `trezorlib/cardano.py`) : `CardanoGetPublicKey` / `CardanoGetAddress` (ICARUS), `CardanoSignTxInit` (`tag_cbor_sets`), entrées, sorties suivies de leurs `CardanoAssetGroup` / `CardanoToken`, `CardanoTxAuxiliaryData` (hash), `CardanoTxWitnessRequest` (`…/0/0`), `CardanoTxHostAck` → `CardanoTxBodyHash`, `CardanoTxHostAck` → `CardanoSignTxFinished`. Une Trezor et le coffre Kyro donnent le même compte Cardano pour la même phrase (sans passphrase) ; un Ledger, non (sa propre dérivation de la graine).
+- **Trezor Zcash** (`hw/trezor_zcash.rs`) : `GetPublicKey` / `GetAddress` / `SignTx` avec `coin_name` « Zcash » (« Zcash Testnet »), `version` 5, `version_group_id` `0x26A7270A`, `branch_id`, `expiry` ; entrées : outpoint, chemin, montant (le firmware ne demande pas les transactions précédentes : ZIP 244 engage les montants et scripts de toutes les entrées) ; monnaie en `address_n`.
+- **Non proposés** : XRP sur Trezor (le firmware ne livre que l'adresse, pas la clé publique dont Kyro a besoin pour construire et vérifier le Payment) ; TRON sur Trezor (absent du firmware) ; Cardano sur la Trezor One (absent du firmware) ; **Zcash sur Ledger** : l'app Zcash (transparent) de Ledger utilise l'ancien protocole Bitcoin, qui exige chaque transaction précédente **en entier** par `GET TRUSTED INPUT`, y compris, pour une transaction précédente v5, ses parties Sapling / Orchard dont l'app recalcule le txid ZIP 244 (`@ledgerhq/hw-app-btc`, `getTrustedInput`, `splitTransaction`) ; Kyro ne lit pas ces parties, Ledger ne publie pas d'échanges v5 enregistrés pour tester, et sa propre bibliothèque refuse déjà les transactions précédentes v6 : non fait sans appareil.
 
 ### 2.4 Litecoin, Dogecoin, Bitcoin Cash et Dash
 
@@ -1042,7 +1055,7 @@ type ZecTxSummary = {
 
 - **Serveurs** : mainnet → ElectrumX publics de Komodo (`zec.electrum1.cipig.net:20058`, secours `zec.electrum2.cipig.net:20058`, allowlist `net::ELECTRUM_HOSTS` famille `zcash`, TLS validé normalement, genesis Zcash vérifié à chaque session, circuits Tor `zcash`, jamais en clair si Tor est activé) ; **testnet → aucun** : toute lecture `SERVER_INVALID`. Pas de serveur personnalisé Zcash pour l'instant. Voir NETWORK.md.
 - **Mise à niveau réseau** : la table d'activation vient de `zcash_protocol` 0.11.0-pre.1 (NU6.3 depuis le bloc 3 428 143 sur mainnet, en vigueur le 01/11/2026 ; NU7 : branche connue, **hauteur mainnet absente** de cette version). Quand le réseau passera à une branche que cette table ne donne pas pour la hauteur, Kyro refusera de signer (rien n'est perdu : pas de transaction invalide) jusqu'à la mise à jour des crates.
-- Hardware wallets : `HW_UNSUPPORTED` (pas de clés Zcash dans `WatchOnlyAccount`).
+- Hardware wallets : Trezor (`hw_zec_send_preview`, `hw_sign_zec_tx`, §2.3 ; compte `WatchOnlyAccount.zec`) ; pas Ledger (§2.3).
 - **Comptes** (§2.9) : chaîne `zec`, `m/44'/133'/a'`.
 
 **Fait côté UI** : types `ZecCommands` de `@kyro/shared` (`Accounts.zec`, `AccountChain` `zec`), `ZcashAdapter` (`packages/chains/src/zcash/`, balayage des adresses avec limite d'écart, historique, pièces candidates, aperçu Rust), chaîne `zcash` du registre (prix CoinGecko `zcash`), écrans Envoyer (refus clair des adresses protégées et unifiées, frais ZIP 317 « rien à choisir », récapitulatif décodé), Recevoir (adresse `t1…`, URI ZIP 321 `zcash:`, avertissement « adresses protégées pas encore prises en charge »), Actif, carnet d'adresses, Connexions sortantes ; backend démo (`mock-zec.ts`).
@@ -1109,7 +1122,7 @@ Rust choisit le serveur (`servers.cardano`, sinon Koios : `preprod.koios.rest` /
 
 Table de tokens vérifiés (mainnet seulement, vérifiée le 30/10/2026 via Koios `asset_info` / registre de tokens Cardano) : DJED (`8db269c3…cd61` / `446a65644d6963726f555344`), USDM (`c48cbb3d…47ad` / `0014df105553444d`), iUSD (`f66d78b4…9880` / `69555344`). Sur preprod : aucune, tout token demande la confirmation renforcée. N'importe qui peut créer un token au même nom : seule la policy id compte.
 
-Hardware wallets : `HW_UNSUPPORTED`. Ce qu'il faudrait : Ledger app « Cardano ADA » (APDU `DERIVE_ADDRESS` / `GET_EXT_PUBKEY` pour `m/1852'/1815'/a'`, `SIGN_TX` qui reçoit la transaction champ par champ et rend les témoins ; dérivation « Ledger » ≠ Icarus pour une même phrase de 24 mots) ; Trezor `CardanoGetPublicKey` / `CardanoGetAddress` / `CardanoSignTxInit` + flux d'entrées / sorties / tokens (`derivation_type` ICARUS ou ICARUS_TREZOR, qui diffère d'Icarus pour 24 mots). Dans les deux cas Kyro reconstruirait le corps lui-même et vérifierait chaque témoin contre blake2b-256 du corps, comme `btc_hw_finalize`.
+Hardware wallets : Ledger (app « Cardano ADA » ≥ 7.0.0) et Trezor T / Safe, paiements seulement (`hw_ada_build_tx`, `hw_sign_ada_tx`, `hw_ada_broadcast`, §2.3 ; le staking reste au coffre). L'appareil reconstruit le corps à partir des éléments que Kyro lui envoie ; le hash qu'il rend doit être l'identifiant de Kyro et le témoin se vérifier avec la clé `…/0/0` dérivée de la clé de compte enregistrée (`cardano_hw_assemble`). Dérivation : Ledger utilise la sienne (≠ Icarus) ; Trezor ICARUS, comme le coffre.
 
 **Fait côté UI** (commit 45208d5) : `Family` `'ada'` (aujourd'hui `CardanoChain` / `cardanoChain(network)` existent dans le registre mais hors `Family` et `allChains()`), types `Commands` de `@kyro/shared` (`ada_*`, `Accounts.cardano`, `Servers.cardano`, `CardanoServer`, `ServerTestTarget` `cardano` ; les types sont aujourd'hui dans `packages/chains/src/cardano/adapter.ts`, à déplacer dans `ipc.ts`), `WalletAccounts.cardano` et `AdapterSet.cardano` (`createAdapters`), backend démo, écrans Envoyer (adresse, montant ADA avec `adaToLovelace`, token facultatif avec quantité, message facultatif public, aperçu du `summary` avant le mot de passe : sorties, min-ADA, frais), Recevoir (adresse de base seule), Actif (ADA, `spendable` = solde − `lockedWithTokens`, liste des tokens avec policy id et mention « non vérifié »), Historique (`lovelaceDelta`, tokens, message), réglage serveur Cardano (Koios), « Connexions sortantes » (`preprod.koios.rest` / `api.koios.rest`), sortie de Cardano de `WATCH_ONLY_CHAINS`. Adaptateur : `CardanoAdapter` (`packages/chains/src/cardano/`), `isCardanoAddress`, `isByronAddress`.
 
