@@ -13,7 +13,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `xlm`: Stellar (XLM, `stellar_*`, §2.11). */
 /** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). `kas`: Kaspa (KAS, `kas_*`, §2.11). `dot`: Polkadot Asset Hub (`dot_*`, §2.11). */
 /** `algo`: Algorand (ALGO payments, `algo_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo';
+/** `xmr`: Monero (scanned, built, signed and published by Rust, `xmr_*`, §2.10). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
@@ -54,7 +55,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain | XmrChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -450,6 +451,27 @@ export function algorandChain(network: Network): AlgorandChain {
   return ALGORAND_CHAINS[network];
 }
 
+/**
+ * Monero (phase 4): Rust `xmr_*` commands and `XmrAdapter` (`packages/chains/src/xmr/`).
+ * Testnet = Monero **stagenet**. Rust scans the blocks locally (no key sent to the node).
+ * Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface XmrChain extends Omit<ChainBase, 'phase'> {
+  family: 'xmr';
+  phase: 4;
+}
+
+const XMR_CHAINS: Record<Network, XmrChain> = {
+  testnet: { family: 'xmr', key: 'monero', name: 'Monero stagenet', label: 'XMR stagenet', network: 'testnet', color: '#FF6600', glyph: 'ɱ',
+    nativeSymbol: 'XMR', nativeName: 'Monero', nativeDecimals: 12, coingeckoId: 'monero', phase: 4, blockTimeSecs: 120 },
+  mainnet: { family: 'xmr', key: 'monero', name: 'Monero', label: 'XMR', network: 'mainnet', color: '#FF6600', glyph: 'ɱ',
+    nativeSymbol: 'XMR', nativeName: 'Monero', nativeDecimals: 12, coingeckoId: 'monero', phase: 4, blockTimeSecs: 120 },
+};
+
+export function xmrChain(network: Network): XmrChain {
+  return XMR_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -764,7 +786,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -935,6 +957,16 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   );
   // Sui: reached by Rust only (sui_*), Tor circuits of the `sui` family. No custom server yet.
   list.push({ host: network === 'mainnet' ? 'graphql.mainnet.sui.io' : 'graphql.testnet.sui.io', purpose: `Sui${network === 'mainnet' ? '' : ' testnet'} : solde, pièces de gaz, simulation, historique, envoi (GraphQL de la Sui Foundation)` });
+  // Monero: reached by Rust only (xmr_*), Tor circuits of the `monero` family. Blocks are
+  // scanned locally: the node never receives a key.
+  const xmr = servers.monero?.[nk];
+  list.push(
+    xmr?.kind === 'node'
+      ? { host: host(xmr.url), purpose: 'Monero : ton nœud monerod (aucune clé envoyée)', custom: true }
+      : network === 'mainnet'
+        ? { host: 'xmr-node.cakewallet.com:18081', purpose: 'Monero : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Cake Wallet)' }
+        : { host: 'monero-stagenet.stackwallet.com:38081', purpose: 'Monero stagenet : blocs (scannés sur ta machine), frais, leurres, diffusion (nœud public de Stack Wallet)' },
+  );
   list.push({ host: 'api.0x.org', purpose: l10n('Devis de swap EVM (clé requise)', 'EVM swap quotes (key required)') });
   list.push({ host: 'li.quest', purpose: l10n('Devis de swap (même chaîne et entre chaînes), suivi des swaps entre chaînes', 'Swap quotes (same chain and cross-chain), cross-chain swap tracking') });
   list.push({ host: '1click.chaindefuser.com', purpose: l10n('Swap entre chaînes (NEAR Intents) : devis des routes directes (BTC, LTC, DOGE, TRON, XRP, Cardano), confirmation du dépôt (destinataire, montant, minimum, frais), suivi', 'Cross-chain swaps (NEAR Intents): quotes for direct routes (BTC, LTC, DOGE, TRON, XRP, Cardano), deposit confirmation (recipient, amount, minimum, fees), tracking') });

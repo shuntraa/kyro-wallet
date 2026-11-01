@@ -40,6 +40,7 @@ export const DEMO_COINS: DemoCoin[] = [
   { id: 'bitcoin-cash', symbol: 'bch', name: 'Bitcoin Cash', price: 318, change24h: -0.6, change7d: 1.9, marketCapEur: 6.3e9 },
   { id: 'dash', symbol: 'dash', name: 'Dash', price: 21.7, change24h: 1.1, change7d: -2.4, marketCapEur: 2.7e8 },
   { id: 'kaspa', symbol: 'kas', name: 'Kaspa', price: 0.071, change24h: 1.4, change7d: -2.6, marketCapEur: 1.9e9 },
+  { id: 'monero', symbol: 'xmr', name: 'Monero', price: 148, change24h: 0.9, change7d: 2.6, marketCapEur: 4.7e9 },
   { id: 'dai', symbol: 'dai', name: 'Dai', price: 0.925, change24h: 0, change7d: 0, marketCapEur: 4.6e9 },
   { id: 'polygon-ecosystem-token', symbol: 'pol', name: 'POL (ex-MATIC)', price: 0.37, change24h: -1.1, change7d: -4.4, marketCapEur: 3.1e9 },
   { id: 'arbitrum', symbol: 'arb', name: 'Arbitrum', price: 0.52, change24h: -2.1, change7d: -5.6, marketCapEur: 2.1e9 },

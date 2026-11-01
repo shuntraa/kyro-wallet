@@ -49,7 +49,7 @@ const TAIL = 4;
  * - EVM: `0x`, hex compared lowercase.
  * - Solana (base58): none.
  * - TRON: `T`. XRP: `r`. Stellar: `G` (base32, upper case).
- * - Algorand (base32, upper case): none.
+ * - Algorand (base32, upper case): none. Monero (base58): the network / kind char (`4`, `8`, `5`, `7`).
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
  * - NEAR: none (implicit 64 hex or named id, lowercase).
  * - Sui: `0x`, hex compared lowercase (no checksum at all).
@@ -74,6 +74,7 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       return { prefix: a.slice(0, 1), body: a.slice(1), caseInsensitive: false };
     case 'doge':
     case 'dash':
+    case 'xmr':
       return { prefix: a.slice(0, 1), body: a.slice(1), caseInsensitive: false };
     case 'bch': {
       const lower = a.toLowerCase();

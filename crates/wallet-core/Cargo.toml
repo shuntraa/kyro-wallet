@@ -49,6 +49,11 @@ substrate-bip39 = { version = "=0.6.1", default-features = false, features = ["s
 parity-scale-codec = { version = "=3.7.5", default-features = false, features = ["std"] }
 frame-metadata = { version = "=23.0.1", default-features = false, features = ["current", "decode"] }
 scale-info = { version = "=2.11.6", default-features = false, features = ["decode"] }
+# Monero (monero-oxide family, MIT): scanning, CLSAG, Bulletproofs+, key images, addresses.
+monero-wallet = { version = "=0.2.0" }
+# RNG for monero-wallet's signing API (rand_core 0.6 traits), seeded from the OS (getrandom).
+rand_core = { version = "=0.6.4", default-features = false }
+rand_chacha = { version = "=0.3.1", default-features = false }
 # Vault.
 argon2 = { version = "=0.5.3", default-features = false, features = ["alloc", "zeroize"] }
 chacha20poly1305 = { version = "=0.10.1", default-features = false, features = ["alloc"] }

@@ -528,6 +528,83 @@ pub fn cardano_network_magic(net: Network) -> u64 {
     }
 }
 
+/// Monero server: a `monerod` RPC endpoint (restricted RPC is enough), the same kind as the
+/// defaults. Rust scans the blocks itself: the node never receives a key, view key included.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum MoneroServer {
+    #[default]
+    Default,
+    /// e.g. `https://my-node.example:18089` or `http://xxxx.onion:18081` (Tor only).
+    Node { url: String },
+}
+
+impl MoneroServer {
+    pub fn is_default(&self) -> bool {
+        matches!(self, MoneroServer::Default)
+    }
+
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            MoneroServer::Default => "default",
+            MoneroServer::Node { .. } => "node",
+        }
+    }
+}
+
+/// Key `testnet` = Monero **stagenet** (mainnet's rules, worthless coins).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MoneroServers {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mainnet: Option<MoneroServer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub testnet: Option<MoneroServer>,
+}
+
+impl MoneroServers {
+    pub fn for_network(&self, net: Network) -> MoneroServer {
+        match net {
+            Network::Mainnet => self.mainnet.clone(),
+            Network::Testnet => self.testnet.clone(),
+        }
+        .unwrap_or_default()
+    }
+
+    pub fn entries(&self) -> [(&'static str, &Option<MoneroServer>); 2] {
+        [("mainnet", &self.mainnet), ("testnet", &self.testnet)]
+    }
+}
+
+/// Public `monerod` nodes with a valid HTTPS certificate (checked 2026-11-01, see
+/// docs/NETWORK.md): Cake Wallet's mainnet node and Stack Wallet's stagenet node.
+pub fn monero_default_url(net: Network) -> &'static str {
+    match net {
+        Network::Mainnet => "https://xmr-node.cakewallet.com:18081",
+        Network::Testnet => "https://monero-stagenet.stackwallet.com:38081",
+    }
+}
+
+/// Hash of block 0 (`on_get_block_hash [0]`), read on 2026-11-01 from the default nodes.
+pub fn monero_genesis(net: Network) -> &'static str {
+    match net {
+        Network::Mainnet => "418015bb9ae982a1975da7d79277c2705727a56894ba0fb246adaabb1f4632e3",
+        Network::Testnet => "76ee3cc98646292206cd3e86f74d88b4dcc1d937088645e9b0cbca84b7ce74eb",
+    }
+}
+
+/// `get_info.nettype` expected for `net`.
+pub fn monero_nettype(net: Network) -> &'static str {
+    match net {
+        Network::Mainnet => "mainnet",
+        Network::Testnet => "stagenet",
+    }
+}
+
 /// `settings.servers`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -550,6 +627,8 @@ pub struct Servers {
     pub xrp: XrpServers,
     /// Cardano: Koios REST. Key `testnet` = preprod.
     pub cardano: CardanoServers,
+    /// Monero: `monerod` RPC. Key `testnet` = stagenet.
+    pub monero: MoneroServers,
     /// Key: EVM chain id in decimal (e.g. `"11155111"`).
     pub evm: BTreeMap<String, RpcServer>,
     /// Key: `"devnet"` or `"mainnet-beta"`.
@@ -658,6 +737,12 @@ impl Servers {
                 Network::Testnet => "preprod.koios.rest",
             });
         }
+        if !self.monero.for_network(net).is_default() {
+            out.push(match net {
+                Network::Mainnet => "xmr-node.cakewallet.com",
+                Network::Testnet => "monero-stagenet.stackwallet.com",
+            });
+        }
         if !self.tron.for_network(net).is_default() {
             out.push(match net {
                 Network::Mainnet => "api.trongrid.io",
@@ -704,6 +789,12 @@ impl Servers {
             if let Some(CardanoServer::Koios { url }) = s {
                 validate_http_url(url, tor, false)
                     .map_err(|e| prefix(e, &format!("cardano {key}")))?;
+            }
+        }
+        for (key, s) in self.monero.entries() {
+            if let Some(MoneroServer::Node { url }) = s {
+                validate_http_url(url, tor, false)
+                    .map_err(|e| prefix(e, &format!("monero {key}")))?;
             }
         }
         for (key, s) in self.tron.entries() {

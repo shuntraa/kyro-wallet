@@ -14,8 +14,8 @@ use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient, ServerRequest};
 use crate::server_approval::{confirm_endpoints, confirm_tor_off, endpoints, host_port_endpoint};
 use crate::servers::{
-    btc_network_key, validate_http_url, BtcServer, CardanoServer, CoreAuth, RpcServer, Servers,
-    TronServer, UtxoServer, XrpServer, SOLANA_GENESIS,
+    btc_network_key, validate_http_url, BtcServer, CardanoServer, CoreAuth, MoneroServer,
+    RpcServer, Servers, TronServer, UtxoServer, XrpServer, SOLANA_GENESIS,
 };
 use crate::settings::Settings;
 use crate::state::AppState;
@@ -150,7 +150,12 @@ async fn probe_btc(
 }
 
 /// Probes every server entry of `new` that differs from `old`.
-async fn probe_changes(net: &NetClient, new: &Servers, old: &Servers, tor: bool) -> AppResult<()> {
+async fn probe_changes(
+    net: &std::sync::Arc<NetClient>,
+    new: &Servers,
+    old: &Servers,
+    tor: bool,
+) -> AppResult<()> {
     for (key, n, o) in [
         ("mainnet", &new.bitcoin.mainnet, &old.bitcoin.mainnet),
         ("testnet4", &new.bitcoin.testnet4, &old.bitcoin.testnet4),
@@ -184,6 +189,11 @@ async fn probe_changes(net: &NetClient, new: &Servers, old: &Servers, tor: bool)
     for ((key, n), (_, o)) in new.tron.entries().into_iter().zip(old.tron.entries()) {
         if let Some(s) = n.as_ref().filter(|s| !s.is_default() && *n != *o) {
             crate::commands_tron::probe(net, utxo_network_of(key)?, s, tor).await?;
+        }
+    }
+    for ((key, n), (_, o)) in new.monero.entries().into_iter().zip(old.monero.entries()) {
+        if let Some(s) = n.as_ref().filter(|s| !s.is_default() && *n != *o) {
+            crate::commands_xmr::probe(net, utxo_network_of(key)?, s, tor).await?;
         }
     }
     for (chain, s) in &new.evm {
@@ -371,6 +381,11 @@ pub enum ServerTestTarget {
         network: String,
         server: CardanoServer,
     },
+    /// `network`: `mainnet` | `testnet` (Monero stagenet).
+    Monero {
+        network: String,
+        server: MoneroServer,
+    },
     Evm {
         chain_id: u64,
         server: RpcServer,
@@ -423,6 +438,12 @@ fn probe_servers(target: &ServerTestTarget) -> AppResult<Servers> {
             *match utxo_network_of(network)? {
                 Network::Mainnet => &mut probe.xrp.mainnet,
                 Network::Testnet => &mut probe.xrp.testnet,
+            } = Some(server.clone());
+        }
+        ServerTestTarget::Monero { network, server } => {
+            *match utxo_network_of(network)? {
+                Network::Mainnet => &mut probe.monero.mainnet,
+                Network::Testnet => &mut probe.monero.testnet,
             } = Some(server.clone());
         }
         ServerTestTarget::Cardano { network, server } => {
@@ -514,6 +535,16 @@ pub async fn server_test(
             } = Some(server.clone());
             probe.validate(tor)?;
             crate::commands_tron::probe(&state.net, net, &server, tor).await?
+        }
+        ServerTestTarget::Monero { network, server } => {
+            let net = utxo_network_of(&network)?;
+            let mut probe = Servers::default();
+            *match net {
+                Network::Mainnet => &mut probe.monero.mainnet,
+                Network::Testnet => &mut probe.monero.testnet,
+            } = Some(server.clone());
+            probe.validate(tor)?;
+            crate::commands_xmr::probe(&state.net, net, &server, tor).await?
         }
         ServerTestTarget::Evm { chain_id, server } => {
             let mut probe = Servers::default();

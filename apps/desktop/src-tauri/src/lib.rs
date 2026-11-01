@@ -1,3 +1,6 @@
+// monero-wallet's decoy selection nests futures deeply (layout of `CachedDecoys`'s async block).
+#![recursion_limit = "256"]
+
 mod accounts;
 mod algo_backend;
 mod btc_backend;
@@ -17,6 +20,7 @@ mod commands_stellar;
 mod commands_sui;
 mod commands_tron;
 mod commands_utxo;
+mod commands_xmr;
 mod commands_xrp;
 mod core_rpc;
 mod dialog_text;
@@ -45,6 +49,7 @@ mod sui_backend;
 mod tor;
 mod tron_backend;
 mod utxo_backend;
+mod xmr_backend;
 mod xrp_backend;
 
 use std::time::Duration;
@@ -240,6 +245,18 @@ pub fn run() {
             commands_algo::algo_sign_tx,
             commands_algo::algo_broadcast,
             commands_algo::algo_tx_status,
+            commands_xmr::xmr_backend_info,
+            commands_xmr::xmr_address,
+            commands_xmr::xmr_new_subaddress,
+            commands_xmr::xmr_subaddresses,
+            commands_xmr::xmr_status,
+            commands_xmr::xmr_sync,
+            commands_xmr::xmr_txs,
+            commands_xmr::xmr_validate_address,
+            commands_xmr::xmr_set_restore_height,
+            commands_xmr::xmr_prepare_tx,
+            commands_xmr::xmr_send_tx,
+            commands_xmr::xmr_seed_show,
             commands_cardano::ada_backend_info,
             commands_cardano::ada_address,
             commands_cardano::ada_account,

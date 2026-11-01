@@ -785,6 +785,7 @@ pub async fn broadcast(ctx: &Ctx<'_>, hex_tx: &str) -> AppResult<String> {
             family: Family::Bitcoin,
             direct_private: false,
             long: false,
+            bulk: false,
         };
         let (status, body) = ctx.net_client.server_request(req, ctx.tor).await?;
         let text = String::from_utf8_lossy(&body).trim().to_owned();

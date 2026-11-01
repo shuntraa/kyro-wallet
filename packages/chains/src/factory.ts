@@ -40,7 +40,7 @@ export {
 } from './hedera/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
-import { stellarChain, xrpChain, nearChain, hbarChain } from './registry';
+import { stellarChain, xrpChain, nearChain, hbarChain, xmrChain } from './registry';
 import { StellarAdapter } from './stellar/adapter';
 import { NearAdapter } from './near/adapter';
 import { SuiAdapter } from './sui/adapter';
@@ -52,6 +52,7 @@ import { PolkadotAdapter } from './polkadot/adapter';
 import { polkadotChain } from './registry';
 import { AlgorandAdapter } from './algorand/adapter';
 import { algorandChain } from './registry';
+import { XmrAdapter } from './xmr/adapter';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -87,6 +88,8 @@ export interface AdapterSet {
   polkadot: PolkadotAdapter | null;
   /** Algorand: vault only (not offered on hardware wallets). */
   algo: AlgorandAdapter | null;
+  /** Monero: vault only (hardware wallets: HW_UNSUPPORTED). */
+  xmr: XmrAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -142,6 +145,8 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const polkadot = accounts.polkadot ? new PolkadotAdapter({ chain: polkadotChain(network), address: accounts.polkadot.address, ...a }) : null;
   // Algorand: Rust picks the server (AlgoNode / Nodely algod + indexer).
   const algo = accounts.algo ? new AlgorandAdapter({ chain: algorandChain(network), address: accounts.algo.address, ...a }) : null;
+  // Monero: Rust picks the node (servers.monero) and scans locally.
+  const xmr = accounts.xmr && !hw ? new XmrAdapter({ chain: xmrChain(network), address: accounts.xmr.address, ...a }) : null;
   const all: AnyAdapter[] = [
     ...(btc ? [btc] : []),
     ...evm.values(),
@@ -154,8 +159,9 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
     ...(kaspa ? [kaspa] : []),
     ...(polkadot ? [polkadot] : []),
     ...(algo ? [algo] : []),
+    ...(xmr ? [xmr] : []),
   ];
-  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, all, hw: hw ?? null };
+  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, xmr, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin, Bitcoin Cash, Dash
@@ -318,6 +324,25 @@ export {
   type AlgoUnsigned,
   type AlgoSigned,
 } from './algorand/adapter';
+export {
+  XmrAdapter,
+  rustXmrBackend,
+  isXmrAddress,
+  xmrDestinationLabel,
+  xmrHeightAt,
+  XMR_DECIMALS,
+  XMR_LOCK_BLOCKS,
+  type XmrAdapterOptions,
+  type XmrBackend,
+  type XmrDestination,
+  type XmrHistoryEntry,
+  type XmrStatus,
+  type XmrSubaddress,
+  type XmrTxSummary,
+  type XmrWarning,
+  type XmrUnsigned,
+  type XmrSigned,
+} from './xmr/adapter';
 export {
   CardanoAdapter,
   rustCardanoBackend,

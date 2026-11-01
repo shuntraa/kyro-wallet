@@ -390,6 +390,25 @@ pub fn kaspa_sign(seed, net, account, tx, entries) -> Result<(KaspaTx /*signée*
 pub fn kaspa_verify_signed(tx, entries) -> Result<()>;   // script de signature = OP_DATA_65 ‖ sig64 ‖ 0x01, Schnorr contre la clé de la pièce
 pub fn kaspa_tx_to_json(tx) -> Result<String>; pub fn kaspa_tx_from_json(json) -> Result<KaspaTx>;   // forme SubmitTxModel de l'API, champs inconnus refusés, hex minuscule
 
+// --- Monero (monero-oxide / monero-wallet 0.2, MIT, audit Cypher Stack mai 2025 ; aucune crypto maison) :
+//     k = BIP32-secp256k1(seed, m/44'/128'/a'/0/0) ; spend = sc_reduce32(keccak256(k)) ; view = sc_reduce32(keccak256(spend))
+//     (schéma de l'app Monero de Ledger ; la phrase de 25 mots de `spend` restaure le même portefeuille dans Monero GUI, Feather, Cake).
+//     Testnet de Kyro = **stagenet** Monero.
+pub fn xmr_path(account) -> String; pub fn xmr_view_pair(seed, account) -> Result<ViewPair>;
+pub fn xmr_address(seed, net, account, index) -> Result<String>;   // 0 = adresse principale, n ≥ 1 = sous-adresse (0, n)
+pub fn xmr_addresses(seed, net, account, range) -> Result<Vec<String>>; pub fn xmr_public_keys(seed, account) -> Result<(String, String)>;
+pub fn xmr_seed_words(seed, account) -> Result<Zeroizing<Vec<String>>>; pub fn xmr_words_to_key(phrase) -> Result<Zeroizing<[u8; 32]>>;   // 25 mots anglais + somme CRC32
+pub fn xmr_parse_address(address, net) -> Result<XmrDestination { address, kind: standard | subaddress | integrated { paymentId } }>;
+                                                                   // autre réseau, adresse « featured », encodage non canonique : refusés
+pub fn xmr_scanner(seed, account, subaddresses) -> Result<Scanner>;   // clé de vue privée en mémoire, jamais envoyée
+pub fn xmr_key_images(seed, account, outputs) -> Result<Vec<[u8; 32]>>;   // vérifie que chaque sortie est bien à nous
+pub fn xmr_cache_seal(seed, net, account, plain) / xmr_cache_open(...);   // état de scan chiffré (XChaCha20-Poly1305, clé dérivée de la clé de vue)
+pub fn xmr_build(seed, net, account, inputs: Vec<OutputWithDecoys>, to, amount, fee_rate, own) -> Result<XmrUnsigned>;   // anneau 16, CLSAG + Bulletproofs+
+pub struct XmrTxSummary { network, account, destination, amount, fee, change, inputsTotal, inputCount, ringSize, feePerWeight,
+                          warnings: Vec<XmrWarning /*integratedAddress | highFee (> 0,01 XMR) | feeAboveAmount | ownAddress*/>, requiresExtraConfirmation }
+pub fn xmr_sign(seed, account, unsigned) -> Result<XmrSigned { tx, txid, key_images, summary }>;
+                                                                   // puis Eventuality : exactement les sorties prévues (paiement + monnaie), frais = ceux affichés
+
 // --- Solana : décodage des messages legacy et v0 (parseur écrit à la main, format filaire documenté) ---
 pub struct SolLookupTable { pub key: String, pub addresses: Vec<String> }            // base58
 pub fn sol_message_lookup_tables(message: &[u8]) -> Result<Vec<String>>;             // tables à récupérer (v0)
@@ -565,6 +584,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `kas_*` | voir §2.11 | | Kaspa : transaction construite **par Rust** depuis les pièces du compte (20 adresses de réception + 20 de monnaie), masse KIP-9 et frais calculés, pièces relues avant signature |
 | `dot_*` | voir §2.11 | | Polkadot Asset Hub : transfert `transfer_keep_alive` construit **par Rust** (métadonnées vérifiées, nonce, ère), dépôt existentiel, signature sr25519 |
 | `algo_*` | voir §2.11 | | Algorand : paiement `pay` construit **par Rust** (frais, fenêtre de validité, genesis), msgpack canonique, solde minimum, close-remainder-to et rekey refusés |
+| `xmr_*` | voir §2.11 | | Monero : blocs analysés **localement** par Rust (clé de vue en mémoire seulement), transfert construit **par Rust** (anneau de 16, CLSAG, Bulletproofs+, monero-wallet), dialogue natif |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `sol_stake_*`, `ada_stake_*`, `tron_stake_*` | voir §2.8 | | Staking : Solana natif, délégation Cardano, TRON Stake 2.0 ; opérations construites **par Rust**, décodées et vérifiées en direct avant le dialogue natif |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
@@ -1275,6 +1295,27 @@ Refusé avant toute signature (wallet-core `algo_decode_tx`) : tout autre type q
 
 **Pour l'UI** : afficher `spendable` (pas seulement le solde) et le solde minimum ; pour un destinataire vide, « au moins 0,1 ALGO » ; la note est facultative, publique pour toujours, ≤ 1024 octets ; après `algo_broadcast`, suivre `algo_tx_status`. **Fait côté UI** : `Family` `'algo'`, `AccountChain` `'algo'`, types `Commands` (`algo_*`, `Accounts.algo`), backend démo (`mock-algo.ts`), écrans Envoyer (note, solde dépensable, minimum du destinataire, résumé décodé, suivi) / Recevoir (solde minimum expliqué, Ledger ≠ Pera) / Actif / Historique, « Connexions sortantes ». Adaptateur : `AlgorandAdapter` (`packages/chains/src/algorand/`), `algorandChain(network)`, prix CoinGecko `algorand`.
 
+### 2.11 Monero (XMR)
+
+**Conception : nœud `monerod` + analyse locale.** Rust télécharge les blocs (`get_blocks.bin`, élagués) et les analyse **lui-même** avec monero-wallet (`Scanner`, clé de vue privée en mémoire uniquement) ; les sorties dépensées sont reconnues par leurs *key images*, calculées localement avec la clé de dépense. **Aucun serveur « light wallet »** (MyMonero, `monero-lws`) : ils exigent la clé de vue, donc voient tout l'historique entrant. En contrepartie, la première synchronisation télécharge chaque bloc depuis la hauteur de restauration (1 jour avant la première ouverture du compte sur cet appareil ; plus ancienne avec `xmr_set_restore_height`). État de scan chiffré à côté du coffre (`monero/<réseau>-<compte>-<clé>.bin`). Réorganisation : le hash du dernier bloc est revérifié ; en cas d'écart, les 30 derniers blocs sont rescannés. Hardware wallet : `HW_UNSUPPORTED`.
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `xmr_backend_info` | — | `{ kind: 'default' \| 'node', network: 'mainnet' \| 'stagenet', label, tor }` | |
+| `xmr_address` | `{ index?, account? }` | `string` | 0 = adresse principale ; `n ≥ 1` = sous-adresse déjà distribuée seulement ; le premier appel crée l'état de scan |
+| `xmr_new_subaddress` | `{ account? }` | `{ index, address, received }` | sous-adresse suivante (100 000 au plus), surveillée avec 200 d'avance |
+| `xmr_subaddresses` | `{ account? }` | `[{ index, address, received /*piconero*/ }]` | |
+| `xmr_status` | `{ account? }` | `{ running, restoreHeight, scanned, tip, tipTime, progress /*0…1*/, balance, unlocked, syncedAt, error, subaddresses, ignoredOutputs, node }` | `unlocked` = dépensable (10 confirmations, 60 pour un coinbase) ; sorties brûlées en double ou à timelock ignorées et comptées |
+| `xmr_sync` | `{ account? }` | `XmrStatus` | lance le scan en arrière-plan (sans effet s'il tourne) ; s'arrête au verrouillage ; `LOCKED` si verrouillé |
+| `xmr_txs` | `{ account? }` | `[{ txid, direction: 'in' \| 'out' \| 'self', amount, fee?, to?, height, time, confirmations }]` | historique local (500 au plus) ; `to` seulement pour nos envois |
+| `xmr_validate_address` | `{ address }` | `XmrDestination` | décodage Rust (voir §1) |
+| `xmr_set_restore_height` | `{ height, account? }` | `XmrStatus` | oublie l'état de scan et repart de `height` ; refusé pendant un scan |
+| `xmr_prepare_tx` | `{ to, amount? /*piconero, absent = tout le disponible*/, account? }` | `{ id, summary: XmrTxSummary }` | Rust choisit les entrées (16 au plus), télécharge distribution et leurres, borne le taux de frais du nœud (4 000 000 piconero/poids max), fixe la monnaie vers l'adresse principale ; le transfert **reste dans Rust** (usage unique, 10 min) |
+| `xmr_send_tx` | `{ id, password, account? }` | `{ txid, summary }` | mot de passe → dialogue natif (destination et son type, montant, frais, monnaie, entrées, anneau, nœud) → 2ᵉ fenêtre renforcée si `requiresExtraConfirmation` → signature → vérification (sorties exactes, frais, key images = sorties prévues) → `send_raw_transaction` → sorties marquées dépensées localement (libérées après 24 h si la transaction n'apparaît pas) |
+| `xmr_seed_show` | `{ password, account? }` | — | phrase Monero de 25 mots + hauteur de restauration, **en fenêtre native uniquement** (rien n'est renvoyé à l'interface) |
+
+Serveur : `Servers.monero.{mainnet,testnet}` = `{ kind: 'default' } | { kind: 'node', url }` (`https://` ou `.onion` via Tor), vérifié à l'enregistrement (`get_info.nettype` et hash du bloc 0), jamais de repli sur le nœud par défaut. Famille Tor `monero`, **échec fermé** (`TOR_UNAVAILABLE` reste `TOR_UNAVAILABLE` à travers monero-daemon-rpc).
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -1290,6 +1331,7 @@ Refusé avant toute signature (wallet-core `algo_decode_tx`) : tout autre type q
 | `mainnet-api.algonode.cloud`, `testnet-api.algonode.cloud`, `mainnet-idx.algonode.cloud`, `testnet-idx.algonode.cloud` | Algorand mainnet et testnet (AlgoNode / Nodely, sans clé : algod et indexer) : utilisés par les commandes Rust `algo_*` uniquement, famille Tor `algorand` (`net::ALGORAND_HOSTS`) |
 | `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
 | `api.kaspa.org`, `api-tn10.kaspa.org` | Kaspa mainnet et testnet-10 (`kaspa-rest-server`, API publique sans clé) : utilisés par les commandes Rust `kas_*`, famille Tor `kaspa` |
+| `xmr-node.cakewallet.com` (port 18081), `monero-stagenet.stackwallet.com` (port 38081) | Monero mainnet et stagenet (RPC `monerod`, JSON et `.bin`) : utilisés par les commandes Rust `xmr_*`, famille Tor `monero`, réponses « bulk » (64 Mio / 180 s) |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |
 | `testnet.mirrornode.hedera.com`, `mainnet-public.mirrornode.hedera.com` | Hedera testnet et mainnet, nœud miroir REST officiel (compte, solde, historique, taux de change, statut) : utilisés par les commandes Rust `hbar_*`, famille Tor `hedera` |
 | `testnet-node00-00-grpc.hedera.com`, `testnet-node01-00-grpc.hedera.com`, `testnet-node02-00-grpc.hedera.com`, `node00.swirldslabs.com`, `node01-00-grpc.swirlds.com`, `node04.swirldslabs.com` | Hedera : proxys gRPC-web des nœuds de consensus (diffusion de `CryptoService/cryptoTransfer`, HTTPS port 443) : utilisés par `hbar_broadcast` (Rust) seulement, famille Tor `hedera` |

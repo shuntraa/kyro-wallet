@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -50,7 +50,8 @@ pub struct AppState {
     pub dialogs: crate::network::DialogCounter,
     pub vault_path: PathBuf,
     pub settings_path: PathBuf,
-    pub net: NetClient,
+    /// Shared with background tasks (Monero scanning).
+    pub net: Arc<NetClient>,
     pub env_keys: EnvKeys,
     /// Hardware wallets seen in this session (one lock per device).
     pub hw: HwManager,
@@ -61,6 +62,8 @@ pub struct AppState {
     /// Held from the "no vault yet" check until the new vault is written and the session
     /// started (`vault_create` / `vault_import`): two calls can never both create one.
     pub vault_create_lock: tokio::sync::Mutex<()>,
+    /// Monero: scan tasks, their status and transfers awaiting signature (`xmr_backend`).
+    pub xmr: crate::xmr_backend::XmrManager,
     attempts_path: PathBuf,
     session: Mutex<Option<Session>>,
     settings: Mutex<Settings>,
@@ -134,12 +137,13 @@ impl AppState {
             vault_path,
             settings: Mutex::new(settings),
             settings_path,
-            net: NetClient::new(data_dir.join("tor"))?,
+            net: Arc::new(NetClient::new(data_dir.join("tor"))?),
             env_keys: EnvKeys::from_env(),
             hw: HwManager::default(),
             hw_accounts_path: crate::network::hw_accounts_file(&data_dir, network),
             hw_store_lock: Mutex::new(()),
             vault_create_lock: tokio::sync::Mutex::new(()),
+            xmr: crate::xmr_backend::XmrManager::default(),
             session: Mutex::new(None),
             last_reveal: Mutex::new(None),
             approved_hosts: Mutex::new(BTreeSet::new()),
@@ -189,6 +193,8 @@ impl AppState {
     pub fn lock_session(&self) {
         *lock(&self.session) = None;
         *lock(&self.pending_backup) = None;
+        // Scan tasks stop at their next step (they need the seed); unsigned transfers go.
+        self.xmr.on_lock();
     }
 
     pub fn is_unlocked(&self) -> bool {

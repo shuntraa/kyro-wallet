@@ -51,6 +51,8 @@ export interface WalletAccounts {
   polkadot?: { address: string; path?: string };
   /** Vault only: Algorand is not offered on hardware wallets. */
   algo?: { address: string; path?: string };
+  /** Vault only: Monero on a hardware wallet is HW_UNSUPPORTED. */
+  xmr?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {

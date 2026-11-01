@@ -300,6 +300,7 @@ impl TorManager {
                     &hop.headers,
                     hop.body.as_deref(),
                     allow_plain,
+                    (p.max_body(), p.timeout()),
                 )
                 .await?;
             // Same rule as the clear transport (`net::redirect_hop`): allowlisted hosts only,
@@ -321,6 +322,7 @@ impl TorManager {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn one_request(
         &self,
         client: &Client,
@@ -329,6 +331,7 @@ impl TorManager {
         headers: &[(String, String)],
         body: Option<&[u8]>,
         allow_plain: bool,
+        (max_body, timeout): (usize, Duration),
     ) -> AppResult<(u16, Option<String>, Vec<u8>)> {
         let host = url
             .host_str()
@@ -353,7 +356,7 @@ impl TorManager {
             .map_err(|e| net_err(&e))?;
         let exchange = async {
             if plain {
-                http_exchange(stream, url, &host, method, headers, body).await
+                http_exchange(stream, url, &host, method, headers, body, max_body).await
             } else {
                 let server_name = rustls::pki_types::ServerName::try_from(host.clone())
                     .map_err(|_| AppError::InvalidInput("nom d'hôte invalide".into()))?;
@@ -362,10 +365,10 @@ impl TorManager {
                     .connect(server_name, stream)
                     .await
                     .map_err(|e| net_err(&e))?;
-                http_exchange(tls, url, &host, method, headers, body).await
+                http_exchange(tls, url, &host, method, headers, body, max_body).await
             }
         };
-        tokio::time::timeout(net::TIMEOUT, exchange)
+        tokio::time::timeout(timeout, exchange)
             .await
             .map_err(|_| AppError::Internal("réseau (Tor) : délai dépassé".into()))?
     }
@@ -379,6 +382,7 @@ async fn http_exchange<S>(
     method: Method,
     headers: &[(String, String)],
     body: Option<&[u8]>,
+    max_body: usize,
 ) -> AppResult<(u16, Option<String>, Vec<u8>)>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
@@ -423,7 +427,7 @@ where
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
     let mut incoming = response.into_body();
-    let mut cap = BodyCap::default();
+    let mut cap = BodyCap::with_limit(max_body);
     while let Some(frame) = incoming.frame().await {
         let frame = frame.map_err(|e| net_err(&e))?;
         if let Ok(data) = frame.into_data() {

@@ -26,6 +26,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   kas: 'Kaspa',
   dot: 'Polkadot',
   algo: 'Algorand',
+  xmr: 'Monero',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -65,6 +66,8 @@ export function accountChainHint(chain: AccountChain): string {
       return 'DOT (Polkadot Asset Hub)';
     case 'algo':
       return t('settings.hintAlgo');
+    case 'xmr':
+      return t('settings.hintXmr');
   }
 }
 

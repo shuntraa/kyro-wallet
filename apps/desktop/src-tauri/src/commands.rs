@@ -508,6 +508,8 @@ pub struct Accounts {
     polkadot: AddressOut,
     /// `m/44'/283'/a'/0/0` (Ledger's Algorand derivation).
     algo: AddressOut,
+    /// Monero primary address (stagenet on testnet), spend key from `m/44'/128'/a'/0/0`.
+    xmr: AddressOut,
 }
 
 fn utxo_account_out(
@@ -615,6 +617,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             algo: AddressOut {
                 address: wallet_core::algo_address(seed, a)?,
                 path: wallet_core::algo_path(a),
+            },
+            xmr: AddressOut {
+                address: wallet_core::xmr_address(seed, net, a, 0)?,
+                path: wallet_core::xmr_path(a),
             },
         })
     })

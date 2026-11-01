@@ -100,6 +100,7 @@ export const settings = {
   'settings.hintHbar': 'HBAR (adresse EVM, compte 0.0.x créé au premier dépôt)',
   'settings.hintKas': 'KAS (20 adresses de réception + 20 de monnaie)',
   'settings.hintAlgo': 'ALGO (pas d’ASA)',
+  'settings.hintXmr': 'XMR, adresse principale et sous-adresses',
   'settings.nameEmpty': 'Donne un nom au compte.',
   'settings.nameTooLong': '32 caractères au plus.',
   'settings.nameBadChar': 'Caractère non autorisé.',

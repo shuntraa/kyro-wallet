@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84), Dogecoin, Bitcoin Cash (CashAddr,
-//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Algorand (pay), Polkadot Asset Hub (sr25519, `transfer_keep_alive`), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer) and Cardano (CIP-1852 payments) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Algorand (pay), Polkadot Asset Hub (sr25519, `transfer_keep_alive`), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer), Cardano (CIP-1852 payments) and Monero (CLSAG, via monero-oxide) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -36,6 +36,8 @@ mod kaspa;
 mod keys;
 mod ledger_cal;
 mod mnemonic;
+mod monero;
+mod monero_words;
 mod near;
 mod network;
 mod polkadot;
@@ -120,6 +122,14 @@ pub use ledger_cal::{
     LEDGER_ERC20_SIGNER,
 };
 pub use mnemonic::{Mnemonic, Seed, WordCount};
+pub use monero::{
+    monero_wallet, xmr_address, xmr_addresses, xmr_build, xmr_cache_open, xmr_cache_seal,
+    xmr_key_images, xmr_parse_address, xmr_path, xmr_public_keys, xmr_rng, xmr_scanner,
+    xmr_seed_words, xmr_sign, xmr_spent_key_images, xmr_tx_fee, xmr_view_pair, xmr_words_to_key,
+    XmrAddressKind, XmrDestination, XmrSigned, XmrTxSummary, XmrUnsigned, XmrWarning,
+    XMR_COINBASE_AGE, XMR_DECIMALS, XMR_HIGH_FEE, XMR_MAX_SUBADDRESS, XMR_RING_LEN,
+    XMR_SPENDABLE_AGE, XMR_SUBADDRESS_LOOKAHEAD,
+};
 pub use near::{
     near_account_kind, near_address, near_decode_tx, near_hash_string, near_parse_hash,
     near_parse_public_key, near_path, near_public_key, near_public_key_string, near_sign,

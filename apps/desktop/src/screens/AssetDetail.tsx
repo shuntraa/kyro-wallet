@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { assetsFor, evmChains, findAsset, findChain, WATCH_ONLY_CHAINS, type AssetDef } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -10,6 +10,7 @@ import { cn } from '../lib/cn';
 import { fmtAgo, fmtChartTime, fmtCrypto, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
 import { useAsync, useNow } from '../lib/useAsync';
 import { CardanoTokensPanel } from '../components/Cardano';
+import { XmrLockedNote, XmrSyncLine, useXmrStatus } from '../components/Monero';
 import { AddressShort, BigFiat, CoinIcon, EmptyState, ErrorLine, HIDDEN, TrendPill } from '../components/kit';
 import { SmoothChart } from '../components/charts';
 import { HistoryRow } from '../components/HistoryRow';
@@ -68,13 +69,22 @@ export function AssetDetail({ id }: { id: string }) {
   }, [supported, network, pf.balances]);
 
   const activity = (history.data?.entries ?? []).filter((e) => supported && e.assetId === supported.id).slice(0, 6);
-  const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, bch: accounts.bch?.address, dash: accounts.dash?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address, xlm: accounts.stellar?.address, near: accounts.near?.address, sui: accounts.sui?.address, hbar: accounts.hbar?.address, kas: accounts.kas?.address, dot: accounts.polkadot?.address, algo: accounts.algo?.address }[supported.family] ?? null) : null;
+  const address = supported ? ({ btc: accounts.btc?.segwit.address, sol: accounts.sol?.address, evm: accounts.evm?.address, ltc: accounts.ltc?.address, doge: accounts.doge?.address, bch: accounts.bch?.address, dash: accounts.dash?.address, tron: accounts.tron?.address, xrp: accounts.xrp?.address, ada: accounts.cardano?.address, xlm: accounts.stellar?.address, near: accounts.near?.address, sui: accounts.sui?.address, hbar: accounts.hbar?.address, kas: accounts.kas?.address, dot: accounts.polkadot?.address, algo: accounts.algo?.address, xmr: accounts.xmr?.address }[supported.family] ?? null) : null;
   const fav = favs.includes(coinId);
   const stakeChain = supported ? ({ sol: 'sol', ada: 'ada', tron: 'tron' } as const)[supported.family as 'sol' | 'ada' | 'tron'] : undefined;
   // Cardano: ADA tied to tokens and the native tokens themselves (not separate assets).
   // Hedera: the account ID 0.0.x (created by the first HBAR received on the EVM address).
   const hbarAccount = useAsync(supported?.family === 'hbar' && adapters.hbar ? () => adapters.hbar!.account() : null, [supported?.id, adapters.hbar], { intervalMs: 30_000 });
   const adaAccount = useAsync(supported?.family === 'ada' && adapters.cardano ? () => adapters.cardano!.account() : null, [supported?.id, adapters.cardano], { intervalMs: 30_000 });
+  // Monero: the balance comes from Kyro's own scan (started here, polled while it runs).
+  const xmr = useXmrStatus(supported?.family === 'xmr' ? adapters.xmr : null);
+  const xmrRunning = xmr.status?.running ?? false;
+  const xmrWasRunning = useRef(false);
+  useEffect(() => {
+    // End of a scan: the portfolio re-reads the Monero balance.
+    if (xmrWasRunning.current && !xmrRunning) pf.refresh();
+    xmrWasRunning.current = xmrRunning;
+  }, [xmrRunning]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
@@ -208,6 +218,12 @@ export function AssetDetail({ id }: { id: string }) {
                     <span className="text-[12px] text-warn">Pas encore de compte : le premier HBAR reçu sur ton adresse EVM le crée.</span>
                   )}
                   {hbarAccount.data.hollow && <span className="text-[12px] text-mute">Compte créé par un transfert reçu : ton premier envoi fixe sa clé.</span>}
+                </div>
+              )}
+              {supported.family === 'xmr' && (
+                <div className="mt-2 flex flex-col gap-2">
+                  <XmrLockedNote status={xmr.status} hidden={hideBalances} />
+                  <XmrSyncLine status={xmr.status} error={xmr.error} onRetry={xmr.sync} />
                 </div>
               )}
               <div className="flex-1" />

@@ -308,7 +308,7 @@ export function PinMatrixDialog({ deviceId }: { deviceId: string | null }) {
 
 // ---------------------------------------------------------------- add a device
 
-const CHAIN_NAME: Record<Exclude<HwChain, 'evm'>, string> = { btc: 'Bitcoin', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP' };
+const CHAIN_NAME: Record<Exclude<HwChain, 'evm'>, string> = { btc: 'Bitcoin', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', cardano: 'Cardano', xrp: 'XRP', xmr: 'Monero' };
 /** Chain name shown in the add-device flow (« Ethereum et EVM » is translated). */
 const chainLabel = (c: HwChain): string => (c === 'evm' ? t('hw.chain.evm') : CHAIN_NAME[c]);
 const IMPLEMENTED: HwImplementedChain[] = ['btc', 'evm', 'sol'];

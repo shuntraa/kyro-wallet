@@ -15,7 +15,7 @@ use tauri::{AppHandle, Manager};
 use crate::error::AppResult;
 use crate::i18n::Lang;
 use crate::servers::{
-    BtcServer, CardanoServer, CoreAuth, Servers, TronServer, UtxoServer, XrpServer,
+    BtcServer, CardanoServer, CoreAuth, MoneroServer, Servers, TronServer, UtxoServer, XrpServer,
 };
 use crate::state::AppState;
 
@@ -120,6 +120,12 @@ pub fn endpoints(s: &Servers) -> Vec<Endpoint> {
     for (net, c) in s.cardano.entries() {
         if let Some(CardanoServer::Koios { url }) = c {
             out.extend(url_endpoint(&format!("Cardano {net} (Koios)"), url));
+        }
+    }
+    for (net, m) in s.monero.entries() {
+        if let Some(MoneroServer::Node { url }) = m {
+            let net = if net == "testnet" { "stagenet" } else { net };
+            out.extend(url_endpoint(&format!("Monero {net} (monerod)"), url));
         }
     }
     for (chain, r) in &s.evm {

@@ -37,6 +37,7 @@ import { demoHbarAddress } from './mock-hbar';
 import { demoKaspaAddress } from './mock-kaspa';
 import { demoDotAddress } from './mock-dot';
 import { demoAlgoAddress } from './mock-algo';
+import { demoXmrAddress } from './mock-xmr';
 import { demoFund } from './mock-tx';
 import type { DemoChainState } from './mock-net';
 import { l10n } from './i18n';
@@ -64,6 +65,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   kas: 'Kaspa',
   dot: 'Polkadot',
   algo: 'Algorand',
+  xmr: 'Monero',
 };
 
 export const defaultAccountName = (chain: AccountChain, index: number): string => `${ACCOUNT_CHAIN_LABEL[chain]} ${index + 1}`;
@@ -172,6 +174,7 @@ export function createDemoAccounts(d: {
       kas: { address: demoKaspaAddress(d.seed, d.network, a), path: `m/44'/111111'/${a}'/0/0` },
       polkadot: { address: demoDotAddress(d.seed, a, d.network), path: `sr25519 · phrase//${a}` },
       algo: { address: demoAlgoAddress(a), path: `m/44'/283'/${a}'/0/0` },
+      xmr: { address: demoXmrAddress(d.network, a), path: `m/44'/128'/${a}'/0/0` },
     };
   };
 

@@ -8,7 +8,7 @@
 import type { BtcNetworkKey, BtcServer, Network, Servers, SolanaCluster } from './ipc';
 import { l10n } from './i18n';
 
-export const EMPTY_SERVERS: Servers = { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, bitcoincash: {}, dash: {}, tron: {}, xrp: {}, cardano: {} };
+export const EMPTY_SERVERS: Servers = { bitcoin: {}, evm: {}, solana: {}, litecoin: {}, dogecoin: {}, bitcoincash: {}, dash: {}, tron: {}, xrp: {}, cardano: {}, monero: {} };
 
 export function btcNetworkKey(network: Network): BtcNetworkKey {
   return network === 'mainnet' ? 'mainnet' : 'testnet4';

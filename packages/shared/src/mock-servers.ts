@@ -44,6 +44,7 @@ import type { createDemoTron } from './mock-tron';
 import type { createDemoXrp } from './mock-xrp';
 import type { createDemoCardano } from './mock-cardano';
 import { l10n } from './i18n';
+import type { createDemoXmr } from './mock-xmr';
 
 const BTC_GENESIS: Record<BtcNetworkKey, string> = {
   mainnet: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f',
@@ -108,6 +109,8 @@ export interface DemoServersDeps {
   xrp: Pick<ReturnType<typeof createDemoXrp>, 'probe' | 'validate'>;
   /** Cardano servers (checks and probes). */
   cardano: Pick<ReturnType<typeof createDemoCardano>, 'probe' | 'validate'>;
+  /** Monero servers (checks and probes). */
+  xmr: Pick<ReturnType<typeof createDemoXmr>, 'probe' | 'validate'>;
 }
 
 export function createDemoServers(d: DemoServersDeps) {
@@ -199,6 +202,7 @@ export function createDemoServers(d: DemoServersDeps) {
     d.tron.validate(servers, tor);
     d.xrp.validate(servers, tor);
     d.cardano.validate(servers, tor);
+    d.xmr.validate(servers, tor);
   };
 
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -229,6 +233,8 @@ export function createDemoServers(d: DemoServersDeps) {
       if (x && x.kind !== 'default' && !same(x, stored.xrp?.[nk])) await d.xrp.probe(nk, x);
       const c = merged.cardano?.[nk];
       if (c && c.kind !== 'default' && !same(c, stored.cardano?.[nk])) await d.cardano.probe(nk, c);
+      const m = merged.monero?.[nk];
+      if (m && m.kind !== 'default' && !same(m, stored.monero?.[nk])) await d.xmr.probe(nk, m);
     }
     return merged;
   };
@@ -256,6 +262,8 @@ export function createDemoServers(d: DemoServersDeps) {
       detected = await d.xrp.probe(target.network, target.server);
     } else if (target.family === 'cardano') {
       detected = await d.cardano.probe(target.network, target.server);
+    } else if (target.family === 'monero') {
+      detected = await d.xmr.probe(target.network, target.server);
     } else if (target.family === 'evm') {
       validate({ ...EMPTY_SERVERS, evm: { [String(target.chainId)]: target.server } }, tor);
       detected = await probeEvm(target.chainId, target.server);

@@ -30,6 +30,7 @@ export const receive = {
   'receive.descDot': 'Adresse Polkadot (1…) sur Polkadot Asset Hub, là où vivent les DOT depuis la migration : la même que dans Polkadot.js, Nova ou Talisman pour la même phrase.',
   'receive.descDotTestnet': 'Adresse Westend Asset Hub (5…, format générique) : pour les WND de test.',
   'receive.descAlgo': 'Adresse Algorand (58 caractères) : pour les ALGO. Les tokens Algorand (ASA) ne sont pas encore gérés par Kyro.',
+  'receive.descXmr': 'Adresse principale Monero. Pour chaque personne ou service qui te paie, préfère une sous-adresse (ci-dessous) : elles ne peuvent pas être reliées entre elles.',
   'receive.xlmReserve': '<b>Réserve de 1 XLM :</b> un compte Stellar n’existe qu’après avoir reçu au moins 1 XLM (2 × la réserve de base de 0,5 XLM), qui reste bloqué ; chaque ligne de confiance, offre ou signataire ajoute 0,5 XLM. Le premier envoi vers cette adresse doit donc être d’au moins 1 XLM (l’expéditeur crée ton compte avec une opération CreateAccount). N’envoie ici que des XLM : les autres actifs Stellar demandent une ligne de confiance, que Kyro ne gère pas encore.',
   'receive.xlmNotCreated': 'Ton compte n’est pas encore créé : demande au moins 1 XLM pour commencer.',
   'receive.xlmExists': 'Ton compte existe : réserve bloquée {reserve}.',
