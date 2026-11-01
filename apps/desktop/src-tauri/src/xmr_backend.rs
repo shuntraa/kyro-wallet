@@ -62,6 +62,12 @@ const PENDING_TTL_SECS: u64 = 600;
 /// A local spend not seen in a block after this delay is released (transaction dropped).
 const PENDING_SPEND_TTL_SECS: u64 = 24 * 3600;
 const CACHE_VERSION: u32 = 1;
+/// Mainnet block a phrase restored into Kyro starts scanning from. A Kyro-derived Monero wallet
+/// cannot be older than Kyro's first release (2026-11-01, block ≈ 3 797 000 per xmrchain.net):
+/// this is ≈ 2026-10-22, rounded down by ~10 days so an early test install misses nothing.
+pub const KYRO_FIRST_RELEASE_HEIGHT: u64 = 3_790_000;
+/// The same moment as a Unix time (2026-10-22 00:00 UTC), for stagenet (heights differ there).
+pub const KYRO_FIRST_RELEASE_TIME: u64 = 1_792_627_200;
 const MAX_HISTORY: usize = 500;
 
 fn now() -> u64 {
@@ -570,6 +576,76 @@ pub fn first_restore_height(tip: u64, created_at: u64, at: u64) -> u64 {
     tip.saturating_sub(back)
 }
 
+/// Where the first scan of a vault restored from a recovery phrase starts (chosen in the
+/// restore flow, kept in `monero/<network>-restore-<key>.json`). A vault created in Kyro has none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum RestoreFrom {
+    /// Default: Kyro's first release (a Kyro-derived Monero wallet cannot be older).
+    Kyro,
+    /// The phrase was used with Monero before (Ledger): from this Unix time.
+    Date { date: u64 },
+    /// From the genesis block (can take hours).
+    Genesis,
+}
+
+/// Height to start the first scan of an account from: [`first_restore_height`] for a vault
+/// created here, never later than the restore choice for a restored one.
+pub fn start_height(
+    tip: u64,
+    created_at: u64,
+    at: u64,
+    network: Network,
+    restored: Option<RestoreFrom>,
+) -> u64 {
+    let created = first_restore_height(tip, created_at, at);
+    let restored = match restored {
+        None => return created,
+        Some(RestoreFrom::Genesis) => 0,
+        Some(RestoreFrom::Kyro) => match network {
+            Network::Mainnet => KYRO_FIRST_RELEASE_HEIGHT,
+            Network::Testnet => first_restore_height(tip, KYRO_FIRST_RELEASE_TIME, at),
+        },
+        // Never after Kyro's release: the phrase existed in Kyro from then on at the latest.
+        Some(RestoreFrom::Date { date }) => {
+            let by_date = first_restore_height(tip, date.min(KYRO_FIRST_RELEASE_TIME), at);
+            match network {
+                Network::Mainnet => by_date.min(KYRO_FIRST_RELEASE_HEIGHT),
+                Network::Testnet => by_date,
+            }
+        }
+    };
+    restored.min(created)
+}
+
+fn restore_path(state: &AppState) -> AppResult<PathBuf> {
+    let (spend, _) = state.with_seed(|s| Ok(wallet_core::xmr_public_keys(s, 0)?))?;
+    let net = match state.network {
+        Network::Mainnet => "mainnet",
+        Network::Testnet => "stagenet",
+    };
+    Ok(state
+        .data_dir()
+        .join("monero")
+        .join(format!("{net}-restore-{}.json", &spend[..16])))
+}
+
+/// Records the restore choice of the vault just imported (applies to all its Monero accounts).
+pub fn save_restore_from(state: &AppState, from: RestoreFrom) -> AppResult<()> {
+    let path = restore_path(state)?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| AppError::Internal(e.to_string()))?;
+    }
+    let json = serde_json::to_vec(&from).map_err(|e| AppError::Internal(e.to_string()))?;
+    std::fs::write(&path, json).map_err(|e| AppError::Internal(e.to_string()))
+}
+
+/// The restore choice of this vault, `None` if it was created in Kyro.
+pub fn load_restore_from(state: &AppState) -> Option<RestoreFrom> {
+    let bytes = std::fs::read(restore_path(state).ok()?).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
 fn cache_path(state: &AppState, account: u32) -> AppResult<PathBuf> {
     let (spend, _) = state.with_seed(|s| Ok(wallet_core::xmr_public_keys(s, account)?))?;
     let net = match state.network {
@@ -787,8 +863,11 @@ pub async fn sync(state: &AppState, account: u32) -> AppResult<()> {
             .update(ctx.network, account, |p| p.tip = Some(height));
         let _guard = lock.lock().await;
         let mut c = load(state, account)?;
+        // Only the very first sync picks the start: later runs (and restarts) resume from the
+        // stored `next`, saved after each batch.
         if c.restore_height.is_none() {
-            let r = first_restore_height(tip_number, c.created_at, now());
+            let restored = load_restore_from(state);
+            let r = start_height(tip_number, c.created_at, now(), ctx.network, restored);
             c.restore_height = Some(r);
             c.next = r;
         }
@@ -1219,6 +1298,53 @@ mod tests {
             3_000_000 - 60 - 720
         );
         assert_eq!(first_restore_height(100, 0, 1_000_000), 0);
+    }
+
+    #[test]
+    fn restored_vault_scans_from_kyro_release_by_default() {
+        let at = KYRO_FIRST_RELEASE_TIME + 30 * 86_400;
+        let tip = KYRO_FIRST_RELEASE_HEIGHT + 30 * 720;
+        // Created here: from the address's first display (minus one day), as before.
+        assert_eq!(
+            start_height(tip, at - 7_200, at, Network::Mainnet, None),
+            tip - 60 - 720
+        );
+        // Restored: Kyro's first release height, even though the cache is brand new.
+        assert_eq!(
+            start_height(tip, at, at, Network::Mainnet, Some(RestoreFrom::Kyro)),
+            KYRO_FIRST_RELEASE_HEIGHT
+        );
+        // Stagenet: estimated from the release date.
+        assert_eq!(
+            start_height(1_900_000, at, at, Network::Testnet, Some(RestoreFrom::Kyro)),
+            1_900_000 - 30 * 720 - 720
+        );
+    }
+
+    #[test]
+    fn restored_with_ledger_history_goes_back_further() {
+        let at = KYRO_FIRST_RELEASE_TIME + 10 * 86_400;
+        let tip = KYRO_FIRST_RELEASE_HEIGHT + 10 * 720;
+        let year_before = KYRO_FIRST_RELEASE_TIME - 365 * 86_400;
+        let from = |r| start_height(tip, at, at, Network::Mainnet, Some(r));
+        assert_eq!(
+            from(RestoreFrom::Date { date: year_before }),
+            tip - 375 * 720 - 720
+        );
+        assert_eq!(from(RestoreFrom::Genesis), 0);
+        // A date after Kyro's release never starts later than the release (estimate − 1 day).
+        assert_eq!(
+            from(RestoreFrom::Date { date: at }),
+            KYRO_FIRST_RELEASE_HEIGHT - 720
+        );
+    }
+
+    #[test]
+    fn restore_choice_wire_format() {
+        let j = |s: &str| serde_json::from_str::<RestoreFrom>(s).unwrap();
+        assert_eq!(j(r#"{"kind":"kyro"}"#), RestoreFrom::Kyro);
+        assert_eq!(j(r#"{"kind":"genesis"}"#), RestoreFrom::Genesis);
+        assert_eq!(j(r#"{"kind":"date","date":5}"#), RestoreFrom::Date { date: 5 });
     }
 
     #[test]

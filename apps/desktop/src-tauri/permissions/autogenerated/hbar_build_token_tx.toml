@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hbar-build-token-tx"
+description = "Enables the hbar_build_token_tx command without any pre-configured scope."
+commands.allow = ["hbar_build_token_tx"]
+
+[[permission]]
+identifier = "deny-hbar-build-token-tx"
+description = "Denies the hbar_build_token_tx command without any pre-configured scope."
+commands.deny = ["hbar_build_token_tx"]

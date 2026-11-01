@@ -185,6 +185,134 @@ pub async fn account(ctx: &AlgoCtx<'_>, address: &str) -> AppResult<AlgoAccountI
     parse_account(&v, a)
 }
 
+/// Our holding of one known asset (algod `/v2/accounts/{a}/assets/{id}`).
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AlgoHolding {
+    pub asset_id: u64,
+    /// The account opted in (it can receive the asset).
+    pub opted_in: bool,
+    /// Asset base units, decimal string.
+    pub amount: String,
+    /// Frozen by the asset's freeze address: it can neither send nor receive.
+    pub frozen: bool,
+}
+
+/// `200` = opted in (the server's asset id must be ours), `404` = not opted in.
+pub fn parse_holding(status: u16, v: &Value, asset_id: u64) -> AppResult<AlgoHolding> {
+    match status {
+        200 => {
+            let h = &v["asset-holding"];
+            if u64_at(&h["asset-id"]) != Some(asset_id) {
+                return Err(bad("Algorand : réponse pour un autre actif"));
+            }
+            Ok(AlgoHolding {
+                asset_id,
+                opted_in: true,
+                amount: u64_at(&h["amount"])
+                    .ok_or_else(|| bad("Algorand : solde d'actif absent"))?
+                    .to_string(),
+                frozen: h["is-frozen"].as_bool().unwrap_or(false),
+            })
+        }
+        404 => Ok(AlgoHolding {
+            asset_id,
+            opted_in: false,
+            amount: "0".into(),
+            frozen: false,
+        }),
+        s => Err(bad(format!("Algorand : HTTP {s} sur l'actif {asset_id}"))),
+    }
+}
+
+pub async fn holding(ctx: &AlgoCtx<'_>, address: &str, asset_id: u64) -> AppResult<AlgoHolding> {
+    let a = address.trim();
+    wallet_core::algo_address_bytes(a)?;
+    let (status, v) = get(
+        ctx,
+        algod_url(ctx.network),
+        &format!("/v2/accounts/{a}/assets/{asset_id}"),
+    )
+    .await?;
+    parse_holding(status, &v, asset_id)
+}
+
+/// Checks before building / signing an asset transfer or an opt-in, against live data.
+pub struct AssetCheck<'a> {
+    pub ours: &'a AlgoAccountInfo,
+    pub symbol: &'a str,
+    pub decimals: u8,
+    pub mine: &'a AlgoHolding,
+    pub dest: &'a AlgoHolding,
+    pub amount: u64,
+    pub fee: u64,
+    pub opt_in: bool,
+}
+
+pub fn check_asset(c: &AssetCheck<'_>) -> AppResult<()> {
+    if let Some(auth) = &c.ours.auth_addr {
+        return Err(AppError::InvalidInput(format!(
+            "ce compte Algorand a été « rekeyé » vers {auth} : Kyro ne peut pas signer pour lui"
+        )));
+    }
+    if !c.ours.exists {
+        return Err(AppError::InvalidInput(
+            "ton compte Algorand n'est pas encore activé : reçois d'abord au moins 0,2 ALGO".into(),
+        ));
+    }
+    let spendable: u64 = c.ours.spendable.parse().unwrap_or(0);
+    let s = c.symbol;
+    if c.opt_in {
+        if c.mine.opted_in {
+            return Err(AppError::InvalidInput(format!("{s} est déjà activé sur ce compte")));
+        }
+        let need = c.fee.saturating_add(wallet_core::ALGO_MIN_BALANCE);
+        if spendable < need {
+            return Err(AppError::InvalidInput(format!(
+                "activer {s} bloque 0,1 ALGO de plus (solde minimum) : il faut {} disponibles, tu en as {}",
+                algo(need),
+                algo(spendable)
+            )));
+        }
+        return Ok(());
+    }
+    if !c.mine.opted_in {
+        return Err(AppError::InvalidInput(format!(
+            "{s} n'est pas activé sur ce compte"
+        )));
+    }
+    if c.mine.frozen {
+        return Err(AppError::InvalidInput(format!(
+            "ton solde {s} est gelé par l'émetteur : envoi impossible"
+        )));
+    }
+    let have: u64 = c.mine.amount.parse().unwrap_or(0);
+    if c.amount > have {
+        return Err(AppError::InvalidInput(format!(
+            "solde {s} insuffisant : {} disponibles",
+            crate::commands::format_units(&have.to_string(), usize::from(c.decimals))
+        )));
+    }
+    if c.fee > spendable {
+        return Err(AppError::InvalidInput(format!(
+            "pas assez d'ALGO pour les frais : {} disponibles (solde − solde minimum), il en faut {}",
+            algo(spendable),
+            algo(c.fee)
+        )));
+    }
+    if !c.dest.opted_in {
+        return Err(AppError::InvalidInput(format!(
+            "ce destinataire n'a pas activé {s} (opt-in) : il doit d'abord l'activer, sinon le transfert est rejeté"
+        )));
+    }
+    if c.dest.frozen {
+        return Err(AppError::InvalidInput(format!(
+            "le solde {s} de ce destinataire est gelé par l'émetteur : il ne peut rien recevoir"
+        )));
+    }
+    Ok(())
+}
+
 /// Last 50 transactions touching `address` (indexer), payments normalized:
 /// `[{ id, type, from, to, amount, fee, closeTo, closeAmount, round, time, note }]` (µALGO
 /// strings, `time` in ms, `note` = sanitized UTF-8 text or null). Other types keep
@@ -203,11 +331,16 @@ pub fn parse_txs(v: &Value) -> Value {
             .and_then(|b| String::from_utf8(b).ok())
             .map(|s| crate::dialog_text::sanitize(&s, 120));
         let num = |x: &Value| x.as_u64().map(|n| n.to_string());
+        let xfer = &t["asset-transfer-transaction"];
+        let is_xfer = ty == "axfer" && xfer.is_object();
         out.push(json!({
             "id": t["id"],
             "type": ty,
             "from": t["sender"],
-            "to": if ty == "pay" { pay["receiver"].clone() } else { Value::Null },
+            "to": if ty == "pay" { pay["receiver"].clone() } else if is_xfer { xfer["receiver"].clone() } else { Value::Null },
+            // Asset transfers: asset id and base units (the asset is identified by its id alone).
+            "assetId": if is_xfer { xfer["asset-id"].clone() } else { Value::Null },
+            "assetAmount": if is_xfer { num(&xfer["amount"]) } else { None },
             "amount": if ty == "pay" { num(&pay["amount"]).unwrap_or_else(|| "0".into()) } else { "0".into() },
             "fee": num(&t["fee"]).unwrap_or_else(|| "0".into()),
             "closeTo": pay["close-remainder-to"],
@@ -494,5 +627,49 @@ mod tests {
         assert_eq!((p.confirmed, p.round), (true, Some(123)));
         let p = parse_pending(&json!({"confirmed-round": 0, "pool-error": "overspend"}));
         assert_eq!(p.error.as_deref(), Some("overspend"));
+        // Asset transfer (indexer shape).
+        let v = json!({"transactions": [{"id":"TXC","tx-type":"axfer","sender":"S","fee":1000,"confirmed-round":7,
+            "asset-transfer-transaction":{"amount":2500000,"asset-id":31566704,"close-amount":0,"receiver":"R"}}]});
+        let h = parse_txs(&v);
+        assert_eq!((h[0]["assetId"].as_u64(), h[0]["assetAmount"].as_str()), (Some(31_566_704), Some("2500000")));
+        assert_eq!((h[0]["to"].as_str(), h[0]["amount"].as_str()), (Some("R"), Some("0")));
+    }
+
+    #[test]
+    fn asset_holdings_and_checks() {
+        let ok = json!({"asset-holding":{"amount":12500000,"asset-id":31566704,"is-frozen":false},"round":1});
+        let h = parse_holding(200, &ok, 31_566_704).unwrap();
+        assert_eq!((h.opted_in, h.amount.as_str(), h.frozen), (true, "12500000", false));
+        assert!(parse_holding(200, &ok, 312_769).is_err(), "another asset");
+        let none = parse_holding(404, &json!({"message":"account asset info not found"}), 312_769).unwrap();
+        assert!(!none.opted_in);
+        let ours = AlgoAccountInfo {
+            exists: true,
+            balance: "300000".into(),
+            min_balance: "100000".into(),
+            spendable: "200000".into(),
+            ..Default::default()
+        };
+        let check = |mine: &AlgoHolding, dest: &AlgoHolding, amount, opt_in, ours: &AlgoAccountInfo| {
+            check_asset(&AssetCheck { ours, symbol: "USDC", decimals: 6, mine, dest, amount, fee: 1000, opt_in })
+        };
+        let err = |r: AppResult<()>, needle: &str| {
+            assert!(matches!(&r, Err(AppError::InvalidInput(m)) if m.contains(needle)), "{needle}: {r:?}");
+        };
+        // Opt-in: needs 0.1 ALGO more of minimum balance + the fee.
+        assert!(check(&none, &none, 0, true, &ours).is_ok());
+        let poor = AlgoAccountInfo { spendable: "100500".into(), ..ours.clone() };
+        err(check(&none, &none, 0, true, &poor), "0,1 ALGO de plus");
+        err(check(&h, &h, 0, true, &ours), "déjà activé");
+        // Transfer: opted in on both sides, enough units, ALGO for the fee.
+        assert!(check(&h, &h, 12_500_000, false, &ours).is_ok());
+        err(check(&h, &h, 12_500_001, false, &ours), "insuffisant");
+        err(check(&none, &h, 1, false, &ours), "n'est pas activé");
+        err(check(&h, &none, 1, false, &ours), "n'a pas activé USDC");
+        let frozen = AlgoHolding { frozen: true, ..h.clone() };
+        err(check(&frozen, &h, 1, false, &ours), "gelé");
+        err(check(&h, &frozen, 1, false, &ours), "gelé");
+        let broke = AlgoAccountInfo { spendable: "0".into(), ..ours.clone() };
+        err(check(&h, &h, 1, false, &broke), "frais");
     }
 }

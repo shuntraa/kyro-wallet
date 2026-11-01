@@ -165,6 +165,8 @@ export const send: Record<keyof typeof fr, string> = {
   'send.hintKasMin': 'Amount below 0.2 KAS: no transaction built.',
   'send.hintDotBelowEd': 'Less than the existential deposit to a non-existent account: no transfer built.',
   'send.hintAlgoBelowMin': 'Below the recipient’s minimum balance: no payment built.',
+  'send.hintAlgoAsaNotOptedIn': 'This recipient has not enabled {symbol} (opt-in): they must enable it in their wallet first, otherwise the transfer would be rejected.',
+  'send.hintAlgoAsaFrozen': 'This recipient’s {symbol} balance is frozen by the issuer: it cannot receive anything.',
   'send.hintAlgoRekeyed': 'Rekeyed account: Kyro cannot sign for it.',
   'send.hintXmrScanning': 'Monero scan in progress: the transfer can be prepared when it ends.',
   'send.hintXmrPrepare': 'Enter an amount, then “Prepare the transfer”: the vault picks the outputs, the decoys and the fee.',

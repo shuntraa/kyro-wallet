@@ -63,7 +63,8 @@ mod zcash;
 pub use algorand::{
     algo_address, algo_address_bytes, algo_address_of_pubkey, algo_decode_signed, algo_decode_tx,
     algo_encode_signed, algo_genesis, algo_hw_message, algo_hw_signed, algo_path, algo_public_key,
-    algo_sign, algo_verify_signed, AlgoPayment, AlgoTxSummary, AlgoWarning, ALGO_MAINNET_GENESIS,
+    algo_known_asset, algo_known_assets, algo_sign, algo_verify_signed, AlgoAssetSummary,
+    AlgoAssetTransfer, AlgoKnownAsset, AlgoPayment, AlgoTxSummary, AlgoWarning, ALGO_MAINNET_GENESIS,
     ALGO_MAX_NOTE, ALGO_MAX_VALIDITY, ALGO_MIN_BALANCE, ALGO_MIN_FEE, ALGO_TESTNET_GENESIS,
 };
 pub use aptos::{
@@ -132,6 +133,10 @@ pub use hedera::{
     HbarSignedTransfer, HbarTransfer, HbarTxSummary, HbarWarning, HBAR_HIGH_FEE_TINYBARS,
     HBAR_HW_MAX_BODY, HBAR_MAX_MEMO_BYTES, HBAR_MAX_NODES, HBAR_MAX_VALID_DURATION, HBAR_TINYBARS,
 };
+pub use hedera::{
+    hbar_decode_tx_on, hbar_known_token, hbar_known_tokens, hbar_sign_on, HbarKind,
+    HbarKnownToken, HbarTokenSummary,
+};
 pub use hw_chains::{stellar_hw_assemble, stellar_signature_base, xrp_hw_assemble};
 pub use hw_keys::{HwKeyChain, HwWatchKey};
 pub use kaspa::{
@@ -177,6 +182,12 @@ pub use polkadot::{
     dot_ss58_decode, dot_ss58_encode, dot_transfer_payload, dot_verify_extrinsic, DotAccountInfo,
     DotChain, DotEra, DotExtension, DotRuntime, DotTransfer, DotTxSummary, PolkadotRoot,
     DOT_POLKADOT_ASSET_HUB, DOT_WESTEND_ASSET_HUB,
+};
+pub use polkadot::{
+    dot_asset_account_key, dot_asset_details_key, dot_asset_metadata_key,
+    dot_decode_asset_account, dot_decode_asset_details, dot_decode_asset_metadata,
+    dot_known_asset, dot_known_assets, DotAssetAccount, DotAssetDetails, DotAssetSummary,
+    DotKnownAsset,
 };
 pub use sol::{sol_address, sol_address_of_pubkey, sol_sign_message, sol_verify_signature};
 pub use sol_decode::{

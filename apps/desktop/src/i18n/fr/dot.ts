@@ -13,4 +13,8 @@ export const dot = {
   'dot.finalized': '<b>Incluse et finalisée :</b> la transaction de nonce {nonce} est dans un bloc finalisé. Kyro ne lit pas les événements de la chaîne : vérifie le solde du destinataire si besoin.',
   'dot.expired': '<b>Expirée :</b> la transaction n’a pas été incluse avant le bloc n° {until}. Elle ne le sera plus jamais ; rien n’a été débité. Tu peux renvoyer.',
   'dot.trackError': 'Suivi indisponible : {message}',
+  'dot.token': 'Jeton : {symbol} · actif n° {id} (vérifié, table de Kyro) · {decimals} décimales',
+  'dot.tokenAmount': 'Montant : {amount} · frais en DOT',
+  'dot.tokenNewHolder': 'Le destinataire n’a pas encore ce jeton : ce transfert le lui crée (au moins {min}).',
+  'dot.tokenSpendable': 'Envoyable : {spendable} ({min} restent toujours sur le compte, envoi « keep-alive ») · les frais se paient en DOT.',
 } as const;

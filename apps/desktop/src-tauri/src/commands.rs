@@ -362,11 +362,18 @@ pub async fn vault_import(
     state: State<'_, AppState>,
     password: String,
     phrase: String,
+    xmr_restore: Option<crate::xmr_backend::RestoreFrom>,
 ) -> AppResult<()> {
     let password = Zeroizing::new(password);
     let phrase = Zeroizing::new(phrase);
     let mnemonic = Mnemonic::parse(&phrase)?;
-    seal_and_start(&state, mnemonic, password).await
+    seal_and_start(&state, mnemonic, password).await?;
+    // Restored phrase: Monero scans from Kyro's first release (or the older date chosen),
+    // never just from today, so funds received before this install are found.
+    crate::xmr_backend::save_restore_from(
+        &state,
+        xmr_restore.unwrap_or(crate::xmr_backend::RestoreFrom::Kyro),
+    )
 }
 
 #[tauri::command]

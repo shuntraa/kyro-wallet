@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dot-build-asset-tx"
+description = "Enables the dot_build_asset_tx command without any pre-configured scope."
+commands.allow = ["dot_build_asset_tx"]
+
+[[permission]]
+identifier = "deny-dot-build-asset-tx"
+description = "Denies the dot_build_asset_tx command without any pre-configured scope."
+commands.deny = ["dot_build_asset_tx"]

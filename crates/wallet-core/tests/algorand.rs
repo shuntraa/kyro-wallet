@@ -17,8 +17,8 @@ use common::{seed, ABANDON};
 use ed25519_dalek::Signer as _;
 use wallet_core::{
     algo_address, algo_address_bytes, algo_address_of_pubkey, algo_decode_signed, algo_decode_tx,
-    algo_encode_signed, algo_genesis, algo_path, algo_public_key, algo_sign, algo_verify_signed,
-    AlgoPayment, AlgoWarning, Error, Network,
+    algo_encode_signed, algo_genesis, algo_known_asset, algo_path, algo_public_key, algo_sign,
+    algo_verify_signed, AlgoAssetTransfer, AlgoPayment, AlgoWarning, Error, Network,
 };
 
 const ZONDAX_SEED: &str = "glory promote mansion idle axis finger extra february uncover one trip resource lawn turtle enact monster seven myth punch hobby comfort wild raise skin";
@@ -224,7 +224,135 @@ fn kyro_payment(net: Network, sender: [u8; 32]) -> AlgoPayment {
             .unwrap(),
         rekey_to: None,
         sender,
+        asset: None,
     }
+}
+
+// ---------------------------------------------------------------- asset transfers (axfer)
+
+/// Zondax `ledger-algorand` `tests_zemu/tests/common.ts` `txAssetXfer` (fetched 2026-11-01): a
+/// msgpack asset transfer (asset 1234, 10 units, receiver = sender).
+const ZONDAX_TX_ASSET_XFER: &[u8] = &[
+    137, 164, 97, 97, 109, 116, 10, 164, 97, 114, 99, 118, 196, 32, 86, 149, 120, 43, 210, 87, 218,
+    245, 240, 34, 71, 114, 243, 188, 72, 116, 212, 242, 145, 254, 132, 88, 187, 108, 72, 154, 171,
+    40, 86, 45, 162, 57, 163, 102, 101, 101, 205, 9, 16, 162, 102, 118, 205, 3, 232, 162, 103, 104,
+    196, 32, 72, 99, 181, 24, 164, 179, 200, 78, 200, 16, 242, 45, 79, 16, 129, 203, 15, 113, 240,
+    89, 167, 172, 32, 222, 198, 47, 127, 112, 229, 9, 58, 34, 162, 108, 118, 205, 7, 208, 163, 115,
+    110, 100, 196, 32, 86, 149, 120, 43, 210, 87, 218, 245, 240, 34, 71, 114, 243, 188, 72, 116,
+    212, 242, 145, 254, 132, 88, 187, 108, 72, 154, 171, 40, 86, 45, 162, 57, 164, 116, 121, 112,
+    101, 165, 97, 120, 102, 101, 114, 164, 120, 97, 105, 100, 205, 4, 210,
+];
+
+#[test]
+fn ledger_app_asset_transfer_fixture_round_trips() {
+    let p = AlgoPayment::decode(ZONDAX_TX_ASSET_XFER).unwrap();
+    let a = p.asset.as_ref().unwrap();
+    assert_eq!((a.asset_id, a.amount, p.fee), (1234, 10, 2320));
+    assert_eq!((p.first_valid, p.last_valid), (1000, 2000));
+    assert_eq!(a.receiver, p.sender);
+    assert_eq!((p.amount, p.receiver), (0, [0u8; 32]));
+    assert_eq!(p.encode(), ZONDAX_TX_ASSET_XFER.to_vec());
+}
+
+fn usdc_opt_in(sender: [u8; 32]) -> AlgoPayment {
+    let mut p = kyro_payment(Network::Mainnet, sender);
+    p.amount = 0;
+    p.receiver = [0; 32];
+    p.asset = Some(AlgoAssetTransfer {
+        asset_id: 31_566_704,
+        amount: 0,
+        receiver: sender,
+        close_to: None,
+        asset_sender: None,
+    });
+    p
+}
+
+#[test]
+fn known_assets_are_the_verified_ones() {
+    let m = |id| algo_known_asset(Network::Mainnet, id).map(|a| (a.symbol, a.decimals));
+    assert_eq!(m(31_566_704), Some(("USDC", 6)));
+    assert_eq!(m(312_769), Some(("USDT", 6)));
+    assert_eq!(m(10_458_941), None);
+    assert_eq!(
+        algo_known_asset(Network::Testnet, 10_458_941).map(|a| a.symbol),
+        Some("USDC")
+    );
+    assert_eq!(algo_known_asset(Network::Testnet, 31_566_704), None);
+}
+
+#[test]
+fn opt_in_and_asset_transfer_are_signed_with_their_summary() {
+    let s = seed(ABANDON);
+    let me = algo_address(&s, 0).unwrap();
+    let pk = algo_public_key(&s, 0).unwrap();
+    let opt = usdc_opt_in(pk);
+    let raw = opt.encode();
+    // Keys sorted bytewise: arcv … snd, type, xaid (no aamt: zero is omitted).
+    assert_eq!(raw[0], 0x89, "9 fields");
+    assert_eq!(AlgoPayment::decode(&raw).unwrap(), opt);
+    let blob = hex::encode(&raw);
+    let sm = algo_decode_tx(&blob, Network::Mainnet, &me).unwrap();
+    let a = sm.asset.clone().unwrap();
+    assert!(a.opt_in);
+    assert_eq!((a.asset_id, a.symbol.as_str(), a.decimals, a.amount.as_str()), (31_566_704, "USDC", 6, "0"));
+    assert_eq!((sm.receiver.as_str(), sm.amount.as_str()), (me.as_str(), "0"));
+    let (signed, txid, again) = algo_sign(&s, 0, Network::Mainnet, &blob).unwrap();
+    assert_eq!(again, sm);
+    assert_eq!(algo_verify_signed(&signed, Network::Mainnet, &me).unwrap().0, txid);
+    // A real transfer of 12.5 USDT to someone else.
+    let other =
+        algo_address_bytes("BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA").unwrap();
+    let mut x = opt.clone();
+    x.asset = Some(AlgoAssetTransfer {
+        asset_id: 312_769,
+        amount: 12_500_000,
+        receiver: other,
+        close_to: None,
+        asset_sender: None,
+    });
+    let sm = algo_decode_tx(&hex::encode(x.encode()), Network::Mainnet, &me).unwrap();
+    let a = sm.asset.unwrap();
+    assert!(!a.opt_in);
+    assert_eq!((a.symbol.as_str(), a.amount.as_str()), ("USDT", "12500000"));
+    assert_eq!(sm.receiver, "BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA");
+    // Not on a hardware wallet yet.
+    assert!(wallet_core::algo_hw_message(&blob).is_err());
+}
+
+#[test]
+fn dangerous_or_unknown_asset_transfers_are_refused() {
+    let s = seed(ABANDON);
+    let me = algo_address(&s, 0).unwrap();
+    let pk = algo_public_key(&s, 0).unwrap();
+    let m = Network::Mainnet;
+    let other =
+        algo_address_bytes("BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA").unwrap();
+    let with = |f: &dyn Fn(&mut AlgoAssetTransfer)| {
+        let mut p = usdc_opt_in(pk);
+        f(p.asset.as_mut().unwrap());
+        p
+    };
+    refused(&with(&|a| a.asset_id = 1234), m, &me, "inconnu");
+    refused(&with(&|a| a.close_to = Some(other)), m, &me, "asset-close-to");
+    refused(&with(&|a| a.asset_sender = Some(other)), m, &me, "clawback");
+    refused(&with(&|a| a.amount = 5), m, &me, "soi-même");
+    refused(&with(&|a| a.receiver = other), m, &me, "montant nul");
+    refused(&with(&|a| a.receiver = [0; 32]), m, &me, "destinataire nul");
+    // Testnet USDC is not mainnet USDC.
+    refused(&usdc_opt_in(pk), Network::Testnet, &me, "réseau");
+    let mut t = kyro_payment(Network::Testnet, pk);
+    t.amount = 0;
+    t.receiver = [0; 32];
+    t.asset = with(&|a| a.asset_id = 31_566_704).asset;
+    refused(&t, Network::Testnet, &me, "inconnu");
+    // ALGO fields inside an asset transfer, or asset fields inside a payment.
+    let mut mixed = usdc_opt_in(pk);
+    mixed.amount = 1;
+    assert!(AlgoPayment::decode(&mixed.encode())
+        .unwrap_err()
+        .to_string()
+        .contains("champs de paiement"));
 }
 
 #[test]
@@ -398,7 +526,7 @@ fn non_canonical_or_foreign_encodings_are_refused() {
     x.extend_from_slice(&raw[1..]);
     assert!(dec(&x).is_err());
     // Unknown field and other transaction types.
-    let mut x = vec![0x8A, 0xA4, b'a', b'a', b'm', b't', 0x01];
+    let mut x = vec![0x8A, 0xA4, b'z', b'a', b'm', b't', 0x01];
     x.extend_from_slice(&raw[1..]);
     assert!(dec(&x).unwrap_err().to_string().contains("champ inconnu"));
     let mut x = raw.clone();
@@ -410,7 +538,11 @@ fn non_canonical_or_foreign_encodings_are_refused() {
     assert!(dec(&x)
         .unwrap_err()
         .to_string()
-        .contains("« axfer » refusé"));
+        .contains("champs de paiement ALGO dans un transfert d'actif"));
+    let _old: Vec<u8> = x
+        .splice(n - 4.., [0xA4, b'a', b'p', b'p', b'l'])
+        .collect();
+    assert!(dec(&x).unwrap_err().to_string().contains("« appl » refusé"));
     // A signed transaction is not an unsigned one, and vice versa.
     let (signed, _, _) = algo_sign(&s, 0, Network::Testnet, &hex::encode(&raw)).unwrap();
     assert!(algo_decode_tx(&signed, Network::Testnet, &me).is_err());

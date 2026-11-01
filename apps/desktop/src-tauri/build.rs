@@ -148,6 +148,9 @@ const COMMANDS: &[&str] = &[
     "hbar_sign_tx",
     "hbar_broadcast",
     "hbar_tx_status",
+    "hbar_token_holdings",
+    "hbar_build_associate_tx",
+    "hbar_build_token_tx",
     // Algorand (docs/IPC.md §2.11).
     "algo_backend_info",
     "algo_address",
@@ -157,6 +160,9 @@ const COMMANDS: &[&str] = &[
     "algo_sign_tx",
     "algo_broadcast",
     "algo_tx_status",
+    "algo_asset_holdings",
+    "algo_build_optin_tx",
+    "algo_build_asset_tx",
     "xmr_backend_info",
     "xmr_address",
     "xmr_new_subaddress",
@@ -226,6 +232,8 @@ const COMMANDS: &[&str] = &[
     "dot_broadcast",
     "dot_tx_status",
     "dot_txs",
+    "dot_asset_balances",
+    "dot_build_asset_tx",
     // Staking (docs/IPC.md §2.8).
     "sol_stake_overview",
     "sol_stake_validators",

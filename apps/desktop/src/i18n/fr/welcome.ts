@@ -66,6 +66,12 @@ export const welcome = {
   'welcome.badChecksum': 'Somme de contrôle invalide : un mot est faux ou mal placé.',
   'welcome.validPhrase': '✓ Phrase valide.',
   'welcome.wordsStayHere': 'Les mots restent sur cet appareil et sont effacés de l’écran après l’import.',
+  'welcome.xmrLedger': 'J’ai déjà utilisé cette phrase avec Monero sur un Ledger',
+  'welcome.xmrDefault': 'Monero : le scan commence à la première version de Kyro (un portefeuille Monero dérivé par Kyro ne peut pas être plus ancien).',
+  'welcome.xmrFromDate': 'Depuis une date',
+  'welcome.xmrFromGenesis': 'Depuis le tout début',
+  'welcome.xmrDateLabel': 'Date approximative de la première réception de XMR (prends-la un peu plus tôt)',
+  'welcome.xmrGenesisWarn': 'Scanner toute la chaîne Monero peut prendre plusieurs heures. Tu peux continuer à utiliser Kyro pendant ce temps.',
   // Unlock
   'welcome.lockedStatus': 'Coffre verrouillé · session effacée',
   'welcome.lockedTitle': 'Coffre verrouillé',

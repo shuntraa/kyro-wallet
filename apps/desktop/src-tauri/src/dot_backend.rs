@@ -216,6 +216,56 @@ pub async fn account_info(
     )?)?)
 }
 
+/// `Assets.Account(asset, id)` (absent = no holding).
+pub async fn asset_account(
+    ctx: &DotCtx<'_>,
+    asset: u32,
+    id: &[u8; 32],
+) -> AppResult<wallet_core::DotAssetAccount> {
+    let key = hex_param(&wallet_core::dot_asset_account_key(asset, id));
+    let v = rpc(ctx, "state_getStorage", json!([key])).await?;
+    if v.is_null() {
+        return Ok(wallet_core::DotAssetAccount::default());
+    }
+    Ok(wallet_core::dot_decode_asset_account(&hex_bytes(
+        &v,
+        "Assets.Account",
+    )?)?)
+}
+
+/// `Assets.Asset(asset)`, after checking `Assets.Metadata(asset)` (symbol and decimals) against
+/// Kyro's table: an asset whose on-chain metadata changed is refused.
+pub async fn asset_details(
+    ctx: &DotCtx<'_>,
+    known: &wallet_core::DotKnownAsset,
+) -> AppResult<wallet_core::DotAssetDetails> {
+    let meta = rpc(
+        ctx,
+        "state_getStorage",
+        json!([hex_param(&wallet_core::dot_asset_metadata_key(known.id))]),
+    )
+    .await?;
+    let (symbol, decimals) =
+        wallet_core::dot_decode_asset_metadata(&hex_bytes(&meta, "Assets.Metadata")?)?;
+    if symbol != known.chain_symbol || decimals != known.decimals {
+        return Err(AppError::InvalidInput(format!(
+            "actif {} : métadonnées on-chain inattendues (« {} », {decimals} décimales) : refusé",
+            known.id,
+            crate::dialog_text::sanitize(&symbol, 16)
+        )));
+    }
+    let v = rpc(
+        ctx,
+        "state_getStorage",
+        json!([hex_param(&wallet_core::dot_asset_details_key(known.id))]),
+    )
+    .await?;
+    Ok(wallet_core::dot_decode_asset_details(&hex_bytes(
+        &v,
+        "Assets.Asset",
+    )?)?)
+}
+
 /// Next nonce of `address`, transaction pool included (`system_accountNextIndex`).
 pub async fn next_nonce(ctx: &DotCtx<'_>, address: &str) -> AppResult<u32> {
     rpc(ctx, "system_accountNextIndex", json!([address]))
@@ -399,9 +449,133 @@ pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     Ok(())
 }
 
+/// Checks before building / signing a token transfer (`Assets.transfer_keep_alive`).
+pub struct AssetCheck<'a> {
+    /// Our DOT account (pays the fee).
+    pub ours: &'a DotAccountInfo,
+    pub existential_deposit: u128,
+    pub mine: &'a wallet_core::DotAssetAccount,
+    pub dest: &'a wallet_core::DotAssetAccount,
+    pub details: &'a wallet_core::DotAssetDetails,
+    pub value: u128,
+    /// DOT planck.
+    pub fee: u128,
+    pub symbol: &'a str,
+    pub decimals: u8,
+}
+
+pub fn check_asset_transfer(c: &AssetCheck<'_>) -> AppResult<()> {
+    let tok = |v: u128| {
+        format!(
+            "{} {}",
+            crate::commands::format_units(&v.to_string(), usize::from(c.decimals)),
+            c.symbol
+        )
+    };
+    let dot = |v: u128| {
+        format!(
+            "{} DOT",
+            crate::commands::format_units(&v.to_string(), 10)
+        )
+    };
+    let s = c.symbol;
+    if !c.details.live {
+        return Err(AppError::InvalidInput(format!(
+            "{s} est gelé ou en cours de destruction par son émetteur : transferts impossibles"
+        )));
+    }
+    if c.mine.frozen || c.mine.blocked {
+        return Err(AppError::InvalidInput(format!(
+            "ton solde {s} est gelé par l'émetteur : envoi impossible"
+        )));
+    }
+    if c.dest.blocked {
+        return Err(AppError::InvalidInput(format!(
+            "ce destinataire est bloqué par l'émetteur de {s} : il ne peut rien recevoir"
+        )));
+    }
+    // transfer_keep_alive: our holding must stay ≥ min_balance.
+    let sendable = c.mine.balance.saturating_sub(c.details.min_balance);
+    if c.value > sendable {
+        return Err(AppError::InvalidInput(format!(
+            "solde {s} insuffisant : au plus {} (solde {} − {} qui restent sur le compte)",
+            tok(sendable),
+            tok(c.mine.balance),
+            tok(c.details.min_balance)
+        )));
+    }
+    if c.dest.balance == 0 && c.value < c.details.min_balance {
+        return Err(AppError::InvalidInput(format!(
+            "ce destinataire n'a pas encore de {s} : envoie au moins {} (solde minimum de l'actif)",
+            tok(c.details.min_balance)
+        )));
+    }
+    let spendable = c.ours.spendable(c.existential_deposit);
+    if !c.ours.exists() || c.fee > spendable {
+        return Err(AppError::InvalidInput(format!(
+            "il faut des DOT pour les frais : {} disponibles, ≈ {} nécessaires",
+            dot(spendable),
+            dot(c.fee)
+        )));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn asset_transfer_checks() {
+        let ours = acc(10_000_000_000, 0);
+        let det = wallet_core::DotAssetDetails {
+            min_balance: 10_000,
+            is_sufficient: true,
+            live: true,
+        };
+        let h = |balance| wallet_core::DotAssetAccount {
+            balance,
+            frozen: false,
+            blocked: false,
+        };
+        let check = |mine: &wallet_core::DotAssetAccount,
+                     dest: &wallet_core::DotAssetAccount,
+                     value,
+                     ours: &DotAccountInfo,
+                     details: &wallet_core::DotAssetDetails| {
+            check_asset_transfer(&AssetCheck {
+                ours,
+                existential_deposit: 100_000_000,
+                mine,
+                dest,
+                details,
+                value,
+                fee: 20_000_000,
+                symbol: "USDT",
+                decimals: 6,
+            })
+        };
+        let err = |r: AppResult<()>, needle: &str| {
+            assert!(
+                matches!(&r, Err(AppError::InvalidInput(m)) if m.contains(needle)),
+                "{needle}: {r:?}"
+            );
+        };
+        let me = h(5_000_000);
+        assert!(check(&me, &h(1), 4_990_000, &ours, &det).is_ok());
+        err(check(&me, &h(1), 4_990_001, &ours, &det), "au plus 4,99 USDT");
+        err(check(&me, &h(0), 9_999, &ours, &det), "au moins 0,01 USDT");
+        assert!(check(&me, &h(0), 10_000, &ours, &det).is_ok());
+        let frozen = wallet_core::DotAssetAccount { frozen: true, ..me };
+        err(check(&frozen, &h(1), 1, &ours, &det), "gelé");
+        let blocked = wallet_core::DotAssetAccount { blocked: true, ..h(1) };
+        err(check(&me, &blocked, 1, &ours, &det), "bloqué");
+        let dead = wallet_core::DotAssetDetails { live: false, ..det };
+        err(check(&me, &h(1), 1, &ours, &dead), "gelé ou en cours");
+        // DOT for the fee.
+        err(check(&me, &h(1), 1, &acc(100_000_000, 0), &det), "frais");
+        err(check(&me, &h(1), 1, &DotAccountInfo::default(), &det), "frais");
+    }
 
     fn acc(free: u128, frozen: u128) -> DotAccountInfo {
         DotAccountInfo {
@@ -557,6 +731,7 @@ mod live {
                         block_hash: h,
                         nonce: info.nonce,
                         tip: 0,
+                        asset: None,
                     };
                     let payload = wallet_core::dot_transfer_payload(&rt, &t, &pk).unwrap();
                     let probe_ext =

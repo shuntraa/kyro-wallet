@@ -1095,6 +1095,31 @@ export interface HbarAccountInfo {
    * but another EVM address — then **only** `0.0.x` may be used to receive).
    */
   foundBy: 'alias' | 'publicKey' | null;
+  /** `max_automatic_token_associations`: -1 = unlimited, 0 = tokens must be associated first. */
+  maxAutoAssociations?: number;
+}
+
+/** `hbar_token_holdings` line / token part of the context: one account and one known HTS token. */
+export interface HbarTokenHolding {
+  /** `0.0.num` of the token. */
+  tokenId: string;
+  /** The account can hold / receive the token. */
+  associated: boolean;
+  /** Token units. */
+  balance: string;
+  /** Frozen by the token's freeze key. */
+  frozen: boolean;
+}
+
+/** wallet-core `HbarTokenSummary`: the token as Kyro's table knows it. */
+export interface HbarTokenSummary {
+  /** `0.0.num`, verified. */
+  tokenId: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  /** `TokenAssociate` (enable receiving) rather than a transfer. */
+  associate: boolean;
 }
 
 /** `hbar_account`: our account, plus our EVM address from the key (EIP-55) and `0.0.x-checksum`. */
@@ -1130,6 +1155,8 @@ export interface HbarTxSummary {
   nodes: string[];
   warnings: HbarWarning[];
   requiresExtraConfirmation: boolean;
+  /** Token transfer (`amount` in token units) or association (`amount` "0", `to` = us). */
+  token?: HbarTokenSummary | null;
 }
 
 export interface HbarContext {
@@ -1137,6 +1164,8 @@ export interface HbarContext {
   recipient: HbarAccountInfo;
   /** Transfer to an EVM address without account: the network creates it (≈ $0.05, paid by us). */
   createsAccount: boolean;
+  /** Token transfer / association: holdings read live (`recipient` null for an association). */
+  token?: { ours: HbarTokenHolding; recipient: HbarTokenHolding | null } | null;
 }
 
 /** `hbar_txs` entry (mirror node, last 50, newest first). Amounts: tinybars. */
@@ -1158,6 +1187,8 @@ export interface HbarHistoryEntry {
   amount: string;
   counterparty: string | null;
   outgoing: boolean;
+  /** Our net change per token (all tokens; the adapter keeps the known ones). */
+  tokenTransfers?: { tokenId: string; delta: string }[];
 }
 
 export interface HbarBuilt {
@@ -1312,7 +1343,7 @@ export interface DotTxSummary {
   amount: string;
   symbol: string;
   decimals: number;
-  /** Always `Balances.transfer_keep_alive`. */
+  /** `Balances.transfer_keep_alive`, or `Assets.transfer_keep_alive` for a token (`amount`, `symbol`, `decimals` are then the token's). */
   call: string;
   nonce: number;
   /** Always "0". */
@@ -1322,6 +1353,28 @@ export interface DotTxSummary {
   blockHash: string;
   specVersion: number;
   txVersion: number;
+  /** Token transfer: the token as Kyro's table knows it (fees still in DOT). */
+  asset?: DotAssetSummary | null;
+}
+
+/** wallet-core `DotAssetSummary`. */
+export interface DotAssetSummary {
+  /** Verified asset id (pallet Assets). */
+  assetId: number;
+  symbol: string;
+  name: string;
+  decimals: number;
+}
+
+/** `dot_asset_balances` line (known tokens only). */
+export interface DotAssetBalance {
+  assetId: number;
+  /** Base units. */
+  balance: string;
+  /** Frozen or blocked by the issuer. */
+  frozen: boolean;
+  /** Smallest holding: a keep-alive send always leaves at least this much. */
+  minBalance: string;
 }
 
 type DotAccountView = Omit<DotAccountInfo, 'existentialDeposit'>;
@@ -1337,6 +1390,8 @@ export interface DotContext {
   /** First block where the transaction is no longer valid. */
   validUntil: number;
   finalized: number;
+  /** Token transfer: both holdings (base units) and the token's minimum balance, read live. */
+  asset?: { assetId: number; ours: string; destination: string; minBalance: string; frozen: boolean } | null;
 }
 
 // ---------------------------------------------------------------- Algorand (§2.11)
@@ -1393,6 +1448,32 @@ export interface AlgoTxSummary {
   txid: string;
   warnings: AlgoWarning[];
   requiresExtraConfirmation: boolean;
+  /** Asset transfer (`axfer`) of a known asset: `amount` is then "0" (µALGO) and `receiver` the asset receiver (us for an opt-in). */
+  asset?: AlgoAssetSummary | null;
+}
+
+/** wallet-core `AlgoAssetSummary`: the token as Kyro's table knows it. */
+export interface AlgoAssetSummary {
+  /** Verified asset id (ASA). */
+  assetId: number;
+  symbol: string;
+  name: string;
+  decimals: number;
+  /** Base units ("0" for an opt-in). */
+  amount: string;
+  /** 0-unit transfer to ourselves: enables the asset (+0.1 ALGO of minimum balance). */
+  optIn: boolean;
+}
+
+/** `algo_asset_holdings` line: algod `/v2/accounts/{a}/assets/{id}`. */
+export interface AlgoHolding {
+  assetId: number;
+  /** Opted in: the account can receive the asset. */
+  optedIn: boolean;
+  /** Base units. */
+  amount: string;
+  /** Frozen by the issuer: can neither send nor receive. */
+  frozen: boolean;
 }
 
 /** Live context Rust read for the dialog. */
@@ -1400,6 +1481,8 @@ export interface AlgoContext {
   account: AlgoAccountInfo;
   destination: AlgoAccountInfo;
   round: number;
+  /** Asset transfer / opt-in: both holdings, read live. */
+  asset?: { ours: AlgoHolding; destination: AlgoHolding } | null;
 }
 
 /** `algo_txs` entry (indexer, last 50). Non-payment types keep `type` and `from`, amount 0. */
@@ -1420,6 +1503,9 @@ export interface AlgoHistoryEntry {
   time: number | null;
   /** UTF-8 note, cleaned (null if none or binary). */
   note: string | null;
+  /** `axfer`: asset id and base units (`to` = asset receiver). */
+  assetId?: number | null;
+  assetAmount?: string | null;
 }
 
 export interface AlgoTxStatus {
@@ -1444,6 +1530,11 @@ export interface XmrBackendInfo {
   label: string;
   tor: boolean;
 }
+
+/** Restore flow: first Monero block scanned for a restored phrase. `kyro` (default) = Kyro's
+ * first release (a Kyro-derived Monero wallet cannot be older); `date` (Unix seconds) or
+ * `genesis` only if the phrase was used with Monero before (Ledger). */
+export type XmrRestoreFrom = { kind: 'kyro' } | { kind: 'date'; date: number } | { kind: 'genesis' };
 
 /** `xmr_status`: background scan and balance. Amounts: piconero (1 XMR = 10^12). */
 export interface XmrStatus {
@@ -2567,7 +2658,8 @@ export interface Commands {
   /** Checks the 3 words (positions from `vault_backup_show`). After 5 wrong tries the pending
    * phrase is dropped (`attemptsLeft: 0`): show it again from Réglages › Sécurité. */
   vault_backup_verify: { args: { answers: string[] }; ret: { ok: boolean; attemptsLeft: number } };
-  vault_import: { args: { password: string; phrase: string }; ret: void };
+  /** `xmrRestore`: where Monero's first scan starts (default `kyro`: Kyro's first release). */
+  vault_import: { args: { password: string; phrase: string; xmrRestore?: XmrRestoreFrom }; ret: void };
   vault_unlock: { args: { password: string }; ret: void };
   vault_lock: { args: undefined; ret: void };
   /** Password, then a native confirmation, then the words in a native dialog. Returns nothing. */
@@ -2738,6 +2830,12 @@ export interface Commands {
   hbar_broadcast: { args: { signed: string[] } & WithAccount; ret: string };
   /** `found: true` once on the mirror node (reached consensus); `result: 'SUCCESS'`… */
   hbar_tx_status: { args: { id: string }; ret: { found: boolean; result: string } };
+  /** Holdings of the known HTS tokens (USDC 0.0.456858 on mainnet, 0.0.429274 on testnet) for `0.0.x`. */
+  hbar_token_holdings: { args: { accountId: string }; ret: HbarTokenHolding[] };
+  /** `TokenAssociate` of a known token for our account (≈ $0.05). Signed with `hbar_sign_tx`. */
+  hbar_build_associate_tx: { args: { tokenId: string } & WithAccount; ret: HbarBuilt };
+  /** Transfer of `amount` units of a known token (`expected_decimals` set). Signed with `hbar_sign_tx`. */
+  hbar_build_token_tx: { args: { tokenId: string; to: string; amount: string; memo?: string } & WithAccount; ret: HbarBuilt };
   // Algorand (§2.11): Rust builds the payment (fee, validity window, genesis from algod), decodes
   // it strictly (close-remainder-to, rekey, group, lease refused), re-reads both accounts live,
   // signs behind the password and the native dialog. Hardware wallets: not offered.
@@ -2756,6 +2854,12 @@ export interface Commands {
   /** Signature verified by Rust; algod's `txId` must be ours. Node refusal → INVALID_INPUT with its message. */
   algo_broadcast: { args: { blob: string } & WithAccount; ret: string };
   algo_tx_status: { args: { txid: string }; ret: AlgoTxStatus };
+  /** Holdings of the known assets of the network (USDC, USD₮ on mainnet; test USDC on testnet). */
+  algo_asset_holdings: { args: { address: string }; ret: AlgoHolding[] };
+  /** Opt-in to a known asset: 0-unit transfer to ourselves, +0.1 ALGO of minimum balance. Signed with `algo_sign_tx`. */
+  algo_build_optin_tx: { args: { assetId: number } & WithAccount; ret: AlgoBuilt };
+  /** `amount`: base units of the known asset; the receiver must have opted in. Signed with `algo_sign_tx`. */
+  algo_build_asset_tx: { args: { assetId: number; to: string; amount: string; note?: string } & WithAccount; ret: AlgoBuilt };
   // Monero (§2.11): Rust scans the blocks itself (no key sent to the node), builds the transfer
   // (inputs, decoys, fee, change), signs and publishes it behind the password and the native
   // dialog. Hardware wallets: HW_UNSUPPORTED.
@@ -2899,6 +3003,10 @@ export interface Commands {
   dot_tx_status: { args: { address: string; nonce: number; validUntil: number }; ret: { state: 'pending' | 'finalized' | 'expired'; finalized: number } };
   /** Native DOT transfers (Statescan, Asset Hub + relay chain, mainnet only). */
   dot_txs: { args: { address: string }; ret: DotHistory };
+  /** Known tokens (USD₮ 1984, USDC 1337 on Polkadot Asset Hub; none on Westend). */
+  dot_asset_balances: { args: { address: string }; ret: DotAssetBalance[] };
+  /** `Assets.transfer_keep_alive` of a known token, `amount` in its base units; fees in DOT. Signed with `dot_sign_tx`. */
+  dot_build_asset_tx: { args: { assetId: number; to: string; amount: string } & WithAccount; ret: { payload: string; summary: DotTxSummary; context: DotContext } };
   // Staking (§2.8): not available on hardware-wallet accounts (no hw_* command offers it).
   sol_stake_overview: { args: WithAccount | undefined; ret: SolStakeOverview };
   sol_stake_validators: { args: { withNames?: boolean }; ret: { validators: SolValidator[]; namesAvailable: boolean } };

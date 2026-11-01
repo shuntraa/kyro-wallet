@@ -93,6 +93,40 @@ pub struct DotContext {
     pub valid_until: u64,
     /// Last finalized block seen.
     pub finalized: u64,
+    /// Token transfer: both holdings of the asset and its minimum balance, read live.
+    pub asset: Option<DotAssetContext>,
+}
+
+/// Asset part of [`DotContext`] (token base units, decimal strings).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DotAssetContext {
+    pub asset_id: u32,
+    pub ours: String,
+    pub destination: String,
+    /// `Assets.Asset.min_balance`: smallest holding (ours stays ≥ it after a keep-alive send).
+    pub min_balance: String,
+    pub frozen: bool,
+}
+
+/// One known token of `dot_asset_balances`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DotAssetBalance {
+    pub asset_id: u32,
+    /// Base units.
+    pub balance: String,
+    pub frozen: bool,
+    /// Smallest holding; a keep-alive send leaves at least this much.
+    pub min_balance: String,
+}
+
+fn token(lang: Lang, units: u128, a: &wallet_core::DotAssetSummary) -> String {
+    format!(
+        "{} {}",
+        format_units_in(lang, &units.to_string(), usize::from(a.decimals)),
+        a.symbol
+    )
 }
 
 /// Body of the native dialog.
@@ -104,15 +138,39 @@ pub(crate) fn describe_dot(lang: Lang, s: &DotTxSummary, c: &DotContext, net: Ne
     } else {
         ""
     };
-    let mut out = match lang {
-        Lang::Fr => format!(
+    let mut out = match (&s.asset, lang) {
+        (Some(a), Lang::Fr) => format!(
+            "Envoi {} — {}{testnet}\n\nJeton : {} ({}) · actif n° {} (vérifié, table de Kyro) · {} décimales\nÀ : {}\n\nMontant : {} ({} unités)\n",
+            a.symbol,
+            s.chain,
+            a.symbol,
+            a.name,
+            a.asset_id,
+            a.decimals,
+            s.to,
+            token(lang, planck_of(&s.amount), a),
+            s.amount
+        ),
+        (Some(a), Lang::En) => format!(
+            "{} send — {}{testnet}\n\nToken: {} ({}) · asset ID {} (verified, Kyro's table) · {} decimals\nTo: {}\n\nAmount: {} ({} units)\n",
+            a.symbol,
+            s.chain,
+            a.symbol,
+            a.name,
+            a.asset_id,
+            a.decimals,
+            s.to,
+            token(lang, planck_of(&s.amount), a),
+            s.amount
+        ),
+        (None, Lang::Fr) => format!(
             "Envoi Polkadot — {}{testnet}\n\nÀ : {}\n\nMontant : {} ({} planck)\n",
             s.chain,
             s.to,
             am(planck_of(&s.amount)),
             s.amount
         ),
-        Lang::En => format!(
+        (None, Lang::En) => format!(
             "Polkadot send — {}{testnet}\n\nTo: {}\n\nAmount: {} ({} planck)\n",
             s.chain,
             s.to,
@@ -120,7 +178,30 @@ pub(crate) fn describe_dot(lang: Lang, s: &DotTxSummary, c: &DotContext, net: Ne
             s.amount
         ),
     };
-    if !c.destination.exists {
+    if let (Some(a), Some(h)) = (&s.asset, &c.asset) {
+        let min = planck_of(&h.min_balance);
+        out += &match lang {
+            Lang::Fr => format!(
+                "Ton solde {} : {} (au moins {} reste sur le compte)\n",
+                a.symbol,
+                token(lang, planck_of(&h.ours), a),
+                token(lang, min, a)
+            ),
+            Lang::En => format!(
+                "Your {} balance: {} (at least {} stays on the account)\n",
+                a.symbol,
+                token(lang, planck_of(&h.ours), a),
+                token(lang, min, a)
+            ),
+        };
+        if planck_of(&h.destination) == 0 {
+            out += lang.pick(
+                "Le destinataire n'a pas encore ce jeton : ce transfert le lui crée.\n",
+                "The recipient does not hold this token yet: this transfer creates it.\n",
+            );
+        }
+    }
+    if s.asset.is_none() && !c.destination.exists {
         out += &match lang {
             Lang::Fr => format!(
                 "Ce compte n'existe pas encore : ce transfert le crée (dépôt existentiel : {}).\n",
@@ -264,15 +345,45 @@ async fn live_context(
     let payload = wallet_core::dot_transfer_payload(rt, t, pk)?;
     let fee = dot_backend::fee(c, &wallet_core::dot_fee_probe_extrinsic(rt, &payload, pk)?).await?;
     let chain = rt.chain();
-    dot_backend::check_transfer(&TransferCheck {
-        ours: &ours,
-        dest: &dest,
-        existential_deposit: ed,
-        value: t.value,
-        fee,
-        decimals: chain.decimals,
-        symbol: chain.symbol,
-    })?;
+    let asset = match t.asset {
+        None => {
+            dot_backend::check_transfer(&TransferCheck {
+                ours: &ours,
+                dest: &dest,
+                existential_deposit: ed,
+                value: t.value,
+                fee,
+                decimals: chain.decimals,
+                symbol: chain.symbol,
+            })?;
+            None
+        }
+        Some(id) => {
+            let known = wallet_core::dot_known_asset(c.network, id)
+                .ok_or_else(|| AppError::InvalidInput(format!("actif {id} inconnu de Kyro")))?;
+            let details = dot_backend::asset_details(c, &known).await?;
+            let mine = dot_backend::asset_account(c, id, pk).await?;
+            let theirs = dot_backend::asset_account(c, id, &t.dest).await?;
+            dot_backend::check_asset_transfer(&dot_backend::AssetCheck {
+                ours: &ours,
+                existential_deposit: ed,
+                mine: &mine,
+                dest: &theirs,
+                details: &details,
+                value: t.value,
+                fee,
+                symbol: known.symbol,
+                decimals: known.decimals,
+            })?;
+            Some(DotAssetContext {
+                asset_id: id,
+                ours: mine.balance.to_string(),
+                destination: theirs.balance.to_string(),
+                min_balance: details.min_balance.to_string(),
+                frozen: mine.frozen || mine.blocked,
+            })
+        }
+    };
     Ok(DotContext {
         account: view(me, &ours, ed),
         destination: view(
@@ -285,6 +396,7 @@ async fn live_context(
         era_birth,
         valid_until: era_birth + t.era.period,
         finalized,
+        asset,
     })
 }
 
@@ -297,6 +409,29 @@ pub(crate) async fn build(
     to: &str,
     planck: &str,
 ) -> AppResult<DotBuilt> {
+    build_any(c, rt, me, pk, to, planck, None).await
+}
+
+/// Builds a native (`asset` = None) or token transfer of `planck` base units to `to`.
+pub(crate) async fn build_any(
+    c: &DotCtx<'_>,
+    rt: &DotRuntime,
+    me: &str,
+    pk: &[u8; 32],
+    to: &str,
+    planck: &str,
+    asset: Option<u32>,
+) -> AppResult<DotBuilt> {
+    if let Some(id) = asset {
+        if wallet_core::dot_known_asset(c.network, id).is_none() {
+            return Err(AppError::InvalidInput(format!("actif {id} inconnu de Kyro")));
+        }
+        if let Err(why) = &rt.assets {
+            return Err(AppError::InvalidInput(format!(
+                "pallet Assets différente de ce que Kyro connaît ({why}) : Kyro doit être mis à jour"
+            )));
+        }
+    }
     let dest = wallet_core::dot_account_id(to, c.network)?;
     let value: u128 = planck
         .trim()
@@ -316,6 +451,7 @@ pub(crate) async fn build(
         block_hash: hash,
         nonce,
         tip: 0,
+        asset,
     };
     let context = live_context(c, rt, me, pk, &t, t.era.birth(n), n).await?;
     let payload = wallet_core::dot_transfer_payload(rt, &t, pk)?;
@@ -338,6 +474,43 @@ pub async fn dot_build_tx(
     let c = ctx(&state);
     let rt = dot_backend::runtime(&c).await?;
     build(&c, &rt, &me, &pk, &to, &amount).await
+}
+
+/// Known tokens of the network (USD₮ 1984, USDC 1337 on Polkadot Asset Hub) held by `address`.
+#[tauri::command]
+pub async fn dot_asset_balances(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<Vec<DotAssetBalance>> {
+    let c = ctx(&state);
+    let id = wallet_core::dot_account_id(&address, c.network)?;
+    let mut out = Vec::new();
+    for k in wallet_core::dot_known_assets(c.network) {
+        let details = dot_backend::asset_details(&c, k).await?;
+        let a = dot_backend::asset_account(&c, k.id, &id).await?;
+        out.push(DotAssetBalance {
+            asset_id: k.id,
+            balance: a.balance.to_string(),
+            frozen: a.frozen || a.blocked,
+            min_balance: details.min_balance.to_string(),
+        });
+    }
+    Ok(out)
+}
+
+/// `Assets.transfer_keep_alive` of a known token (`amount` in its base units); fees in DOT.
+#[tauri::command]
+pub async fn dot_build_asset_tx(
+    state: State<'_, AppState>,
+    asset_id: u32,
+    to: String,
+    amount: String,
+    account: Option<u32>,
+) -> AppResult<DotBuilt> {
+    let (me, pk) = ours(&state, account_arg(account)?)?;
+    let c = ctx(&state);
+    let rt = dot_backend::runtime(&c).await?;
+    build_any(&c, &rt, &me, &pk, &to, &amount, Some(asset_id)).await
 }
 
 /// Decoding + live re-checks, i.e. everything `dot_sign_tx` does before the dialog: current
@@ -414,7 +587,14 @@ pub async fn dot_sign_tx(
     let lang = crate::i18n::current();
     confirm_native(
         &app,
-        lang.pick("Confirmer l'envoi Polkadot", "Confirm the Polkadot send"),
+        if summary.asset.is_some() {
+            lang.pick(
+                "Confirmer l'envoi de jetons (Polkadot Asset Hub)",
+                "Confirm the token send (Polkadot Asset Hub)",
+            )
+        } else {
+            lang.pick("Confirmer l'envoi Polkadot", "Confirm the Polkadot send")
+        },
         signer.body(lang, &describe_dot(lang, &summary, &context, state.network)),
     )
     .await?;
@@ -531,6 +711,7 @@ mod tests {
             block_hash: "00".repeat(32),
             spec_version: 2_005_002,
             tx_version: 15,
+            asset: None,
         }
     }
 
@@ -552,7 +733,45 @@ mod tests {
             era_birth: 1_000_000,
             valid_until: 1_000_256,
             finalized: 1_000_000,
+            asset: None,
         }
+    }
+
+    #[test]
+    fn dialog_shows_the_token_its_verified_id_and_decimals() {
+        let mut s = summary();
+        s.amount = "12500000".into();
+        s.symbol = "USDT".into();
+        s.decimals = 6;
+        s.call = "Assets.transfer_keep_alive".into();
+        s.asset = Some(wallet_core::DotAssetSummary {
+            asset_id: 1984,
+            symbol: "USDT".into(),
+            name: "Tether".into(),
+            decimals: 6,
+        });
+        let mut c = context(true);
+        c.asset = Some(DotAssetContext {
+            asset_id: 1984,
+            ours: "20000000".into(),
+            destination: "0".into(),
+            min_balance: "10000".into(),
+            frozen: false,
+        });
+        let d = describe_dot(Lang::Fr, &s, &c, Network::Mainnet);
+        for needle in [
+            "Envoi USDT — Polkadot Asset Hub",
+            "Jeton : USDT (Tether) · actif n° 1984 (vérifié, table de Kyro) · 6 décimales",
+            "Montant : 12,5 USDT (12500000 unités)",
+            "Ton solde USDT : 20 USDT (au moins 0,01 USDT reste sur le compte)",
+            "n'a pas encore ce jeton",
+            "Appel : Assets.transfer_keep_alive",
+        ] {
+            assert!(d.contains(needle), "{needle} missing in:\n{d}");
+        }
+        assert!(!d.contains("planck)\n") || d.contains("Frais"));
+        let en = describe_dot(Lang::En, &s, &c, Network::Mainnet);
+        assert!(en.contains("asset ID 1984 (verified, Kyro's table) · 6 decimals"));
     }
 
     #[test]

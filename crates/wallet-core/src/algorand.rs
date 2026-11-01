@@ -1,6 +1,7 @@
 //! Algorand: ed25519 keys at `m/44'/283'/account'/0/0` derived like the **Ledger Algorand
 //! app** (Ledger Live), 58-character base32 addresses, and the canonical msgpack encoding of
-//! **payment** (`pay`) transactions only.
+//! **payment** (`pay`) transactions and **asset transfers** (`axfer`) of the few verified assets
+//! of [`algo_known_assets`] (USDC, USD₮): opt-in (0 to ourselves) and plain transfers only.
 //!
 //! Derivation — the BIP39 seed (64 bytes, PBKDF2 of the phrase) goes through Ledger's
 //! BIP32-Ed25519 ("HDW_NORMAL" mode of the Ledger OS for the Ed25519 curve, reference:
@@ -253,8 +254,52 @@ fn put_bin(o: &mut Vec<u8>, b: &[u8]) {
 }
 
 fn put_map(o: &mut Vec<u8>, n: usize) {
-    // At most 14 entries here: always a fixmap.
-    o.push(0x80 | n as u8);
+    if n <= 15 {
+        o.push(0x80 | n as u8);
+    } else {
+        // An asset transfer with every field set has 16 entries: map16.
+        o.push(0xDE);
+        o.extend_from_slice(&(n as u16).to_be_bytes());
+    }
+}
+
+/// One `key → encoded value` entry of a transaction map (sorted by key before writing).
+type Entry = (&'static str, Vec<u8>);
+
+fn e_uint(f: &mut Vec<Entry>, k: &'static str, v: u64) {
+    if v != 0 {
+        let mut o = Vec::new();
+        put_uint(&mut o, v);
+        f.push((k, o));
+    }
+}
+
+fn e_bin(f: &mut Vec<Entry>, k: &'static str, v: Option<&[u8]>) {
+    if let Some(v) = v.filter(|v| !v.is_empty()) {
+        let mut o = Vec::new();
+        put_bin(&mut o, v);
+        f.push((k, o));
+    }
+}
+
+fn e_str(f: &mut Vec<Entry>, k: &'static str, v: &str) {
+    if !v.is_empty() {
+        let mut o = Vec::new();
+        put_str(&mut o, v);
+        f.push((k, o));
+    }
+}
+
+/// Canonical map: keys sorted bytewise, empty fields already left out.
+fn write_map(mut f: Vec<Entry>) -> Vec<u8> {
+    f.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    let mut o = Vec::with_capacity(64 + f.iter().map(|(_, v)| v.len() + 8).sum::<usize>());
+    put_map(&mut o, f.len());
+    for (k, v) in f {
+        put_str(&mut o, k);
+        o.extend(v);
+    }
+    o
 }
 
 fn take<'a>(b: &mut &'a [u8], n: usize) -> Result<&'a [u8]> {
@@ -313,8 +358,76 @@ fn read_map(b: &mut &[u8]) -> Result<usize> {
     let t = take(b, 1)?[0];
     match t {
         0x80..=0x8F => Ok(usize::from(t & 0x0F)),
+        0xDE => Ok(be(take(b, 2)?) as usize),
         _ => Err(bad("objet msgpack attendu")),
     }
+}
+
+/// An Algorand Standard Asset Kyro knows (verified id, see `registry.ts` `ALGO_ASSETS`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AlgoKnownAsset {
+    /// Asset id (ASA).
+    pub id: u64,
+    /// Symbol shown by Kyro.
+    pub symbol: &'static str,
+    /// Name shown by Kyro.
+    pub name: &'static str,
+    /// Decimals of the asset.
+    pub decimals: u8,
+}
+
+/// Mainnet: USDC (Circle's list: ASA 31566704; algod: unit `USDC`, 6 decimals, url centre.io)
+/// and USD₮ (Tether's list: ASA 312769; algod: unit `USDt`, 6 decimals, url tether.to), read
+/// on 2026-11-01.
+const MAINNET_ASSETS: &[AlgoKnownAsset] = &[
+    AlgoKnownAsset {
+        id: 31_566_704,
+        symbol: "USDC",
+        name: "USD Coin",
+        decimals: 6,
+    },
+    AlgoKnownAsset {
+        id: 312_769,
+        symbol: "USDT",
+        name: "Tether",
+        decimals: 6,
+    },
+];
+/// Testnet: Circle's test USDC (ASA 10458941, Circle's list).
+const TESTNET_ASSETS: &[AlgoKnownAsset] = &[AlgoKnownAsset {
+    id: 10_458_941,
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+}];
+
+/// The assets Kyro can opt in to, hold and send on `net`.
+pub fn algo_known_assets(net: Network) -> &'static [AlgoKnownAsset] {
+    match net {
+        Network::Mainnet => MAINNET_ASSETS,
+        Network::Testnet => TESTNET_ASSETS,
+    }
+}
+
+/// The known asset `id` on `net`, if any.
+pub fn algo_known_asset(net: Network, id: u64) -> Option<AlgoKnownAsset> {
+    algo_known_assets(net).iter().copied().find(|a| a.id == id)
+}
+
+/// Fields of an asset transfer (`type = "axfer"`). `close_to` and `asset_sender` (clawback) are
+/// decoded only so that they can be refused.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AlgoAssetTransfer {
+    /// `xaid`: asset id.
+    pub asset_id: u64,
+    /// `aamt`: asset base units (0 for an opt-in).
+    pub amount: u64,
+    /// `arcv`: receiver (the sender itself for an opt-in).
+    pub receiver: [u8; 32],
+    /// `aclose`: sends the whole asset balance there and opts out. Refused.
+    pub close_to: Option<[u8; 32]>,
+    /// `asnd`: clawback source (asset manager only). Refused.
+    pub asset_sender: Option<[u8; 32]>,
 }
 
 /// A payment (`type = "pay"`) transaction. `close_remainder_to`, `rekey_to`, `group` and
@@ -347,6 +460,9 @@ pub struct AlgoPayment {
     pub rekey_to: Option<[u8; 32]>,
     /// `snd`: sender.
     pub sender: [u8; 32],
+    /// `Some`: an asset transfer (`axfer`) instead of a payment; `amount`, `receiver` and
+    /// `close_remainder_to` (ALGO fields) are then zero / absent.
+    pub asset: Option<AlgoAssetTransfer>,
 }
 
 fn nonzero(x: &Option<[u8; 32]>) -> Option<&[u8; 32]> {
@@ -357,89 +473,38 @@ impl AlgoPayment {
     /// Canonical msgpack of the transaction (the `txn` object), keys sorted, empty fields
     /// omitted.
     pub fn encode(&self) -> Vec<u8> {
-        let close = nonzero(&self.close_remainder_to);
-        let group = nonzero(&self.group);
-        let lease = nonzero(&self.lease);
-        let rekey = nonzero(&self.rekey_to);
-        let gh = (self.genesis_hash != [0u8; 32]).then_some(&self.genesis_hash);
-        let rcv = (self.receiver != [0u8; 32]).then_some(&self.receiver);
-        let snd = (self.sender != [0u8; 32]).then_some(&self.sender);
-        let n = [
-            self.amount != 0,
-            close.is_some(),
-            self.fee != 0,
-            self.first_valid != 0,
-            !self.genesis_id.is_empty(),
-            gh.is_some(),
-            group.is_some(),
-            self.last_valid != 0,
-            lease.is_some(),
-            !self.note.is_empty(),
-            rcv.is_some(),
-            rekey.is_some(),
-            snd.is_some(),
-            true, // type
-        ]
-        .iter()
-        .filter(|x| **x)
-        .count();
-        let mut o = Vec::with_capacity(256 + self.note.len());
-        put_map(&mut o, n);
-        if self.amount != 0 {
-            put_str(&mut o, "amt");
-            put_uint(&mut o, self.amount);
+        fn z(v: &[u8; 32]) -> Option<&[u8]> {
+            (*v != [0u8; 32]).then_some(&v[..])
         }
-        if let Some(c) = close {
-            put_str(&mut o, "close");
-            put_bin(&mut o, c);
+        fn o32(v: &Option<[u8; 32]>) -> Option<&[u8]> {
+            nonzero(v).map(|v| &v[..])
         }
-        if self.fee != 0 {
-            put_str(&mut o, "fee");
-            put_uint(&mut o, self.fee);
+        let mut f: Vec<Entry> = Vec::with_capacity(18);
+        e_uint(&mut f, "amt", self.amount);
+        e_bin(&mut f, "close", o32(&self.close_remainder_to));
+        e_uint(&mut f, "fee", self.fee);
+        e_uint(&mut f, "fv", self.first_valid);
+        e_str(&mut f, "gen", &self.genesis_id);
+        e_bin(&mut f, "gh", z(&self.genesis_hash));
+        e_bin(&mut f, "grp", o32(&self.group));
+        e_uint(&mut f, "lv", self.last_valid);
+        e_bin(&mut f, "lx", o32(&self.lease));
+        e_bin(&mut f, "note", Some(self.note.as_slice()));
+        e_bin(&mut f, "rcv", z(&self.receiver));
+        e_bin(&mut f, "rekey", o32(&self.rekey_to));
+        e_bin(&mut f, "snd", z(&self.sender));
+        match &self.asset {
+            None => e_str(&mut f, "type", "pay"),
+            Some(a) => {
+                e_str(&mut f, "type", "axfer");
+                e_uint(&mut f, "aamt", a.amount);
+                e_bin(&mut f, "aclose", o32(&a.close_to));
+                e_bin(&mut f, "arcv", z(&a.receiver));
+                e_bin(&mut f, "asnd", o32(&a.asset_sender));
+                e_uint(&mut f, "xaid", a.asset_id);
+            }
         }
-        if self.first_valid != 0 {
-            put_str(&mut o, "fv");
-            put_uint(&mut o, self.first_valid);
-        }
-        if !self.genesis_id.is_empty() {
-            put_str(&mut o, "gen");
-            put_str(&mut o, &self.genesis_id);
-        }
-        if let Some(h) = gh {
-            put_str(&mut o, "gh");
-            put_bin(&mut o, h);
-        }
-        if let Some(g) = group {
-            put_str(&mut o, "grp");
-            put_bin(&mut o, g);
-        }
-        if self.last_valid != 0 {
-            put_str(&mut o, "lv");
-            put_uint(&mut o, self.last_valid);
-        }
-        if let Some(l) = lease {
-            put_str(&mut o, "lx");
-            put_bin(&mut o, l);
-        }
-        if !self.note.is_empty() {
-            put_str(&mut o, "note");
-            put_bin(&mut o, &self.note);
-        }
-        if let Some(r) = rcv {
-            put_str(&mut o, "rcv");
-            put_bin(&mut o, r);
-        }
-        if let Some(r) = rekey {
-            put_str(&mut o, "rekey");
-            put_bin(&mut o, r);
-        }
-        if let Some(s) = snd {
-            put_str(&mut o, "snd");
-            put_bin(&mut o, s);
-        }
-        put_str(&mut o, "type");
-        put_str(&mut o, "pay");
-        o
+        write_map(f)
     }
 
     fn read(b: &mut &[u8]) -> Result<AlgoPayment> {
@@ -458,10 +523,22 @@ impl AlgoPayment {
             receiver: [0u8; 32],
             rekey_to: None,
             sender: [0u8; 32],
+            asset: None,
         };
+        let mut a = AlgoAssetTransfer::default();
+        let mut asset_fields = false;
         let mut ty = None;
         for _ in 0..n {
-            match read_str(b)? {
+            let key = read_str(b)?;
+            if matches!(key, "aamt" | "aclose" | "arcv" | "asnd" | "xaid") {
+                asset_fields = true;
+            }
+            match key {
+                "aamt" => a.amount = read_uint(b)?,
+                "aclose" => a.close_to = Some(read_32(b, "aclose")?),
+                "arcv" => a.receiver = read_32(b, "arcv")?,
+                "asnd" => a.asset_sender = Some(read_32(b, "asnd")?),
+                "xaid" => a.asset_id = read_uint(b)?,
                 "amt" => p.amount = read_uint(b)?,
                 "close" => p.close_remainder_to = Some(read_32(b, "close")?),
                 "fee" => p.fee = read_uint(b)?,
@@ -486,11 +563,19 @@ impl AlgoPayment {
             }
         }
         match ty.as_deref() {
+            Some("pay") if asset_fields => Err(bad("champs d'actif dans un paiement ALGO")),
             Some("pay") => Ok(p),
+            Some("axfer") => {
+                if p.amount != 0 || p.receiver != [0u8; 32] || p.close_remainder_to.is_some() {
+                    return Err(bad("champs de paiement ALGO dans un transfert d'actif"));
+                }
+                p.asset = Some(a);
+                Ok(p)
+            }
             Some(t) => {
                 let t: String = t.chars().take(16).collect();
                 Err(bad(format!(
-                    "type « {} » refusé : seuls les paiements ALGO (pay) sont pris en charge",
+                    "type « {} » refusé : seuls les paiements ALGO (pay) et les transferts d'actifs connus (axfer) sont pris en charge",
                     t.escape_default()
                 )))
             }
@@ -620,6 +705,70 @@ pub struct AlgoTxSummary {
     pub warnings: Vec<AlgoWarning>,
     /// The confirmation must be followed by a reinforced one.
     pub requires_extra_confirmation: bool,
+    /// Asset transfer (`axfer`) of a known asset; `amount` (µALGO) is then `"0"` and
+    /// `receiver` the asset receiver (our own address for an opt-in).
+    #[serde(default)]
+    pub asset: Option<AlgoAssetSummary>,
+}
+
+/// Asset part of [`AlgoTxSummary`]: the token as Kyro's table knows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlgoAssetSummary {
+    /// Verified asset id (ASA).
+    pub asset_id: u64,
+    /// Symbol (Kyro's table).
+    pub symbol: String,
+    /// Name (Kyro's table).
+    pub name: String,
+    /// Decimals (Kyro's table).
+    pub decimals: u8,
+    /// Asset base units, decimal string (`"0"` for an opt-in).
+    pub amount: String,
+    /// 0-amount transfer to ourselves: enables the asset (raises the minimum balance by 0.1 ALGO).
+    pub opt_in: bool,
+}
+
+/// Checks of an asset transfer: known asset, no close-to / clawback, opt-in or real transfer.
+fn summarize_asset(
+    a: &AlgoAssetTransfer,
+    sender: &[u8; 32],
+    net: Network,
+) -> Result<AlgoAssetSummary> {
+    if a.close_to.is_some() {
+        return Err(bad(
+            "asset-close-to refusé : il enverrait TOUT le solde de l'actif à une autre adresse et le désactiverait",
+        ));
+    }
+    if a.asset_sender.is_some() {
+        return Err(bad(
+            "asset-sender (clawback) refusé : réservé au gestionnaire de l'actif",
+        ));
+    }
+    let known = algo_known_asset(net, a.asset_id).ok_or_else(|| {
+        bad(format!(
+            "actif {} inconnu : Kyro ne signe que les jetons vérifiés de sa table",
+            a.asset_id
+        ))
+    })?;
+    if a.receiver == [0u8; 32] {
+        return Err(bad("destinataire nul (adresse zéro) : refusé"));
+    }
+    let opt_in = a.receiver == *sender;
+    if opt_in && a.amount != 0 {
+        return Err(bad("transfert d'actif à soi-même"));
+    }
+    if !opt_in && a.amount == 0 {
+        return Err(bad("montant nul"));
+    }
+    Ok(AlgoAssetSummary {
+        asset_id: known.id,
+        symbol: known.symbol.into(),
+        name: known.name.into(),
+        decimals: known.decimals,
+        amount: a.amount.to_string(),
+        opt_in,
+    })
 }
 
 fn summarize(p: &AlgoPayment, net: Network, our_address: &str) -> Result<AlgoTxSummary> {
@@ -655,15 +804,22 @@ fn summarize(p: &AlgoPayment, net: Network, our_address: &str) -> Result<AlgoTxS
                 .escape_default()
         )));
     }
-    if p.receiver == [0u8; 32] {
-        return Err(bad("destinataire nul (adresse zéro) : refusé"));
-    }
-    if p.receiver == p.sender {
-        return Err(bad("paiement à soi-même"));
-    }
-    if p.amount == 0 {
-        return Err(bad("montant nul"));
-    }
+    let asset = match &p.asset {
+        Some(a) => Some(summarize_asset(a, &p.sender, net)?),
+        None => {
+            if p.receiver == [0u8; 32] {
+                return Err(bad("destinataire nul (adresse zéro) : refusé"));
+            }
+            if p.receiver == p.sender {
+                return Err(bad("paiement à soi-même"));
+            }
+            if p.amount == 0 {
+                return Err(bad("montant nul"));
+            }
+            None
+        }
+    };
+    let receiver = p.asset.as_ref().map_or(p.receiver, |a| a.receiver);
     if p.fee < ALGO_MIN_FEE {
         return Err(bad("frais sous le minimum du protocole (0,001 ALGO)"));
     }
@@ -697,7 +853,7 @@ fn summarize(p: &AlgoPayment, net: Network, our_address: &str) -> Result<AlgoTxS
     }
     Ok(AlgoTxSummary {
         sender: algo_address_of_pubkey(&p.sender),
-        receiver: algo_address_of_pubkey(&p.receiver),
+        receiver: algo_address_of_pubkey(&receiver),
         amount: p.amount.to_string(),
         fee: p.fee.to_string(),
         first_valid: p.first_valid,
@@ -710,6 +866,7 @@ fn summarize(p: &AlgoPayment, net: Network, our_address: &str) -> Result<AlgoTxS
         txid: p.txid(),
         requires_extra_confirmation: !warnings.is_empty(),
         warnings,
+        asset,
     })
 }
 
@@ -773,7 +930,13 @@ pub fn algo_verify_signed(
 /// Hardware wallet (Ledger Algorand app): the canonical msgpack sent to the device (the app
 /// prefixes `TX` itself), after strict decoding.
 pub fn algo_hw_message(blob_hex: &str) -> Result<Vec<u8>> {
-    Ok(AlgoPayment::decode(&unhex(blob_hex)?)?.encode())
+    let p = AlgoPayment::decode(&unhex(blob_hex)?)?;
+    if p.asset.is_some() {
+        return Err(bad(
+            "jetons Algorand : pas encore pris en charge sur hardware wallet",
+        ));
+    }
+    Ok(p.encode())
 }
 
 /// Hardware wallet: signed transaction (hex) and transaction id from the device's signature,
@@ -788,6 +951,11 @@ pub fn algo_hw_signed(
         .try_into()
         .map_err(|_| bad("signature de l'appareil : 64 octets attendus"))?;
     let p = AlgoPayment::decode(&unhex(blob_hex)?)?;
+    if p.asset.is_some() {
+        return Err(bad(
+            "jetons Algorand : pas encore pris en charge sur hardware wallet",
+        ));
+    }
     let signed = hex::encode(algo_encode_signed(&p, &sig));
     let (txid, _) = algo_verify_signed(&signed, net, our_address)?;
     Ok((signed, txid))

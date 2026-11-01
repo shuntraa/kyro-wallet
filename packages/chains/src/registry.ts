@@ -71,7 +71,19 @@ export interface WatchOnlyChain {
   phase: 4;
 }
 
-export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'jetton' | 'suicoin' | 'fa' | 'xlmasset' | 'nep141';
+export type AssetKind =
+  | 'native'
+  | 'erc20'
+  | 'spl'
+  | 'trc20'
+  | 'jetton'
+  | 'suicoin'
+  | 'fa'
+  | 'xlmasset'
+  | 'nep141'
+  | 'asa'
+  | 'dotasset'
+  | 'hts';
 
 export interface AssetDef {
   /** Unique id, e.g. `btc`, `eth:1`, `erc20:11155111:0x1c7d…`. */
@@ -967,6 +979,44 @@ export const TRC20_TOKENS: Record<Network, TokenSpec[]> = {
 };
 
 /**
+ * Algorand Standard Assets, by asset id (`contract` = the decimal id). USDC: Circle's list
+ * (mainnet ASA 31566704, testnet 10458941); USD₮: Tether's list (ASA 312769). algod
+ * `/v2/assets/{id}` read on 2026-11-01: unit `USDC` / `USDt`, 6 decimals, url centre.io /
+ * tether.to. An asset must be enabled (opt-in: 0-unit transfer to oneself, +0.1 ALGO of minimum
+ * balance) before it can be received. wallet-core (`algorand.rs` `algo_known_assets`) holds the
+ * same ids: Rust signs no other asset.
+ */
+export const ALGO_ASSETS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('10458941')],
+  mainnet: [USDC('31566704'), USDT('312769')],
+};
+
+/**
+ * Polkadot Asset Hub trust-backed assets (pallet `Assets`), by asset id (`contract` = the decimal
+ * id). USD₮: Tether's list (asset 1984); USDC: Circle's list (asset 1337). `Assets.Metadata` read
+ * on 2026-11-01 from polkadot-asset-hub-rpc.polkadot.io: « Tether USD » `USDt` / « USD Coin »
+ * `USDC`, 6 decimals, sufficient, minimum balance 0.01. Sent with `Assets.transfer_keep_alive`
+ * (fees in DOT). wallet-core (`polkadot.rs` `dot_known_assets`) holds the same ids. None on
+ * Westend (no official test stablecoin).
+ */
+export const DOT_ASSETS: Record<Network, TokenSpec[]> = {
+  testnet: [],
+  mainnet: [USDT('1984'), USDC('1337')],
+};
+
+/**
+ * Hedera Token Service tokens, by token ID (`contract` = `0.0.num`). USDC: Circle's list (mainnet
+ * 0.0.456858, testnet 0.0.429274); mirror node read on 2026-11-01: « USD Coin », USDC, 6
+ * decimals, fungible, no custom fee, no KYC key. A token must be associated with the account
+ * (TokenAssociate, ≈ $0.05) unless the account has automatic association. wallet-core
+ * (`hedera.rs` `hbar_known_tokens`) holds the same IDs.
+ */
+export const HBAR_TOKENS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('0.0.429274')],
+  mainnet: [USDC('0.0.456858')],
+};
+
+/**
  * TON jettons (TEP-74), by master (bounceable `EQ…`). USD₮: master listed by Tether (tether.to)
  * and CoinGecko `tether` (`the-open-network`), `decimals` 6 in its metadata. No official USDC on
  * TON (Circle lists none). wallet-core (`ton/jetton.rs`) holds the same masters with their
@@ -1002,6 +1052,21 @@ export function assetsFor(network: Network): AssetDef[] {
     if (chain.family === 'tron') {
       for (const t of TRC20_TOKENS[network]) {
         out.push({ id: `trc20:${t.contract}`, chainKey: chain.key, family: 'tron', kind: 'trc20', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'hbar') {
+      for (const t of HBAR_TOKENS[network]) {
+        out.push({ id: `hts:${t.contract}`, chainKey: chain.key, family: 'hbar', kind: 'hts', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'dot') {
+      for (const t of DOT_ASSETS[network]) {
+        out.push({ id: `dotasset:${t.contract}`, chainKey: chain.key, family: 'dot', kind: 'dotasset', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'algo') {
+      for (const t of ALGO_ASSETS[network]) {
+        out.push({ id: `asa:${t.contract}`, chainKey: chain.key, family: 'algo', kind: 'asa', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
       }
     }
     if (chain.family === 'ton') {

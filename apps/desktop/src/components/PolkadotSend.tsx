@@ -48,15 +48,21 @@ export function DotSummaryView({ u, price, currency }: { u: DotUnsigned; price: 
   const s = u.summary;
   const c = u.context;
   const f = (v: string) => fmtCrypto(BigInt(v), s.decimals, s.symbol);
+  // Fees are always in DOT (10 decimals), even for a token transfer.
+  const feeDecimals = s.asset ? 10 : s.decimals;
+  const fd = (v: string) => fmtCrypto(BigInt(v), feeDecimals, s.asset ? 'DOT' : s.symbol);
   const fee = BigInt(c.fee);
-  const feeFiat = price !== null ? (Number(fee) / 10 ** s.decimals) * price : null;
+  const feeFiat = price !== null ? (Number(fee) / 10 ** feeDecimals) * price : null;
   return (
     <div className="flex flex-col gap-1.5 rounded-box border border-line bg-bg px-3.5 py-3 text-[12px] leading-[1.45] text-text2">
       <span className="font-semibold text-text">{s.call}</span>
+      {s.asset && <span>{t('dot.token', { symbol: s.asset.symbol, id: s.asset.assetId, decimals: s.asset.decimals })}</span>}
+      {s.asset && <span>{t('dot.tokenAmount', { amount: f(s.amount) })}</span>}
+      {s.asset && c.asset && BigInt(c.asset.destination) === 0n && <span className="text-warn">{t('dot.tokenNewHolder', { min: f(c.asset.minBalance) })}</span>}
       <span>{rt('dot.to', {}, { to: <span className="font-mono">{shortAddress(s.to)}</span>, chain: s.chain })}</span>
-      <span>{t('dot.fee', { fee: f(c.fee), fiat: feeFiat !== null ? ` · ${fmtFiat(feeFiat, currency)}` : '', tip: f(s.tip) })}</span>
+      <span>{t('dot.fee', { fee: fd(c.fee), fiat: feeFiat !== null ? ` · ${fmtFiat(feeFiat, currency)}` : '', tip: fd(s.tip) })}</span>
       <span>{t('dot.validity', { until: c.validUntil, era: s.eraPeriod, nonce: s.nonce, spec: s.specVersion, tx: s.txVersion })}</span>
-      {!c.destination.exists && <span className="text-warn">{t('dot.createsAccount', { ed: f(c.existentialDeposit) })}</span>}
+      {!s.asset && !c.destination.exists && <span className="text-warn">{t('dot.createsAccount', { ed: f(c.existentialDeposit) })}</span>}
     </div>
   );
 }

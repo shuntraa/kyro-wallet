@@ -369,6 +369,13 @@ export function createDemoHbar(d: DemoHbarDeps) {
       if (!s || d.now() - s.at < CONSENSUS_MS) return { found: false, result: '' };
       return { found: true, result: s.result };
     },
+    // Tokens (USDC): not simulated in the demo.
+    hbar_token_holdings: async () => {
+      await backend();
+      return [];
+    },
+    hbar_build_associate_tx: () => Promise.reject(invalidInput(l10n('démo : jetons Hedera non simulés', 'demo: Hedera tokens are not simulated'))),
+    hbar_build_token_tx: () => Promise.reject(invalidInput(l10n('démo : jetons Hedera non simulés', 'demo: Hedera tokens are not simulated'))),
   };
 
   return { state, handlers };

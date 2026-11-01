@@ -66,6 +66,12 @@ export const welcome: Record<keyof typeof fr, string> = {
   'welcome.badChecksum': 'Invalid checksum: a word is wrong or out of place.',
   'welcome.validPhrase': '✓ Valid phrase.',
   'welcome.wordsStayHere': 'The words stay on this device and are cleared from the screen after the import.',
+  'welcome.xmrLedger': 'I used this phrase with Monero on a Ledger before',
+  'welcome.xmrDefault': 'Monero: scanning starts at Kyro’s first release (a Kyro-derived Monero wallet cannot be older).',
+  'welcome.xmrFromDate': 'From a date',
+  'welcome.xmrFromGenesis': 'From the very beginning',
+  'welcome.xmrDateLabel': 'Approximate date of your first XMR received (pick it a bit earlier)',
+  'welcome.xmrGenesisWarn': 'Scanning the whole Monero chain can take hours. You can keep using Kyro meanwhile.',
   // Unlock
   'welcome.lockedStatus': 'Vault locked · session cleared',
   'welcome.lockedTitle': 'Vault locked',
