@@ -181,6 +181,14 @@ export interface Settings {
    * `auto` (default) follows the computer: French if its language is French, English otherwise.
    */
   language: LanguagePref;
+  /** Automatic updates from Kyro's signed GitHub releases (default `true`, docs/IPC.md `update_status`). */
+  autoUpdate: boolean;
+}
+
+/** `update_status`: the running version, and (once, after a start that applied an update) the new one. */
+export interface UpdateStatus {
+  version: string;
+  updatedTo: string | null;
 }
 
 // ---------------------------------------------------------------- custom servers (B2b, docs/IPC.md §2–2.2)
@@ -2741,6 +2749,8 @@ export interface Commands {
   /** Opens https://kyrowallet.com/frais (URL fixed in Rust) in the system browser. */
   open_fees_page: { args: undefined; ret: void };
   config_get: { args: undefined; ret: AppConfig };
+  /** Running version; `updatedTo` is set once after an automatic update was applied. */
+  update_status: { args: undefined; ret: UpdateStatus };
   network_get: { args: undefined; ret: NetworkInfo };
   /**
    * Saves the choice; a different network locks the session and restarts the app (`true`).

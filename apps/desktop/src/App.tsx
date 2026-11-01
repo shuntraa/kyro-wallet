@@ -21,6 +21,7 @@ import { KyroMark } from './components/kit';
 import { Spinner } from './components/ui/primitives';
 import { TorDialogs } from './components/Tor';
 import { HwPromptLayer } from './components/hw';
+import { UpdateNotice } from './components/UpdateNotice';
 import { AccountSwitcher } from './components/AccountSwitcher';
 import { serverDown, serverMissing } from './components/ServerDown';
 import { screenEnter } from './components/motion';
@@ -39,6 +40,8 @@ export function App() {
         <TorDialogs />
         {/* Trezor One blind PIN matrix, whatever screen started the device call. */}
         <HwPromptLayer />
+        {/* « Kyro updated to X », once after an automatic update. */}
+        <UpdateNotice />
       </AppProvider>
     </MotionConfig>
   );

@@ -695,6 +695,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_cbf_sync` | — | `CbfStatus` | lance (ou rejoint) une synchronisation en arrière-plan ; progression par l'événement `cbf-status` ; exige le coffre déverrouillé (lit les xpubs) — une lecture coffre verrouillé ne lance pas de synchro ; build sans la fonction : `FEATURE_DISABLED` |
 | `set_capture_protection` | `{ enabled }` | `void` | `set_content_protected` |
 | `open_fees_page` | — | `void` | ouvre `https://kyrowallet.com/frais` (URL fixe en Rust) dans le navigateur du système ; aucun argument, aucune autre URL possible |
+| `update_status` | — | `{ version: string, updatedTo: string \| null }` | version en cours ; `updatedTo` = la version installée par une **mise à jour automatique**, renvoyée **une seule fois** après le démarrage qui l'a appliquée (l'interface affiche « Kyro a été mis à jour en version X »). Le reste (vérification, téléchargement, signature, installation) est fait par Rust seul, sans commande : voir SECURITY.md « Mises à jour automatiques » |
 | `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasTrongridKey, systemLanguage }` | `systemLanguage` : `'fr' \| 'en'`, la langue de l'ordinateur (ce que `settings.language = 'auto'` utilise) ; jamais les clés elles-mêmes ; chaque `hasXKey` = variable d'environnement **ou** clé enregistrée dans les réglages (ex. TronGrid : `KYRO_TRONGRID_API_KEY` ou `apiKeys.trongrid`) |
 | `network_get` / `network_set` | — / `{ network: 'mainnet' \| 'testnet' }` | `NetworkInfo` / `boolean` | choix du réseau depuis l'application, appliqué en **redémarrant** l'app : voir §2.10 |
 | `hw_list` | — | `DeviceInfo[]` | détecte les Ledger (HID) et Trezor (WebUSB) branchés ; ids stables pour la session (`ledger-1`, `trezor-1`…) tant que l'appareil reste sur le même port ; 10 s max. Voir §2.3 |
@@ -744,7 +745,8 @@ type Settings = { currency: 'EUR' | 'USD'; autoLockSecs: number; hideBalancesOnS
                   servers: Servers;               // remplace l'ancien `rpc` (encore accepté en entrée, migré, jamais renvoyé)
                   apiKeysSet: { [K in ApiKeyName]: boolean };   // clé enregistrée ou non ; JAMAIS la valeur (pas de champ `apiKeys`)
                   tor: { enabled: boolean };     // défaut : { enabled: true }
-                  language: 'auto' | 'fr' | 'en' };   // défaut : 'auto' (voir ci-dessous)
+                  language: 'auto' | 'fr' | 'en';   // défaut : 'auto' (voir ci-dessous)
+                  autoUpdate: boolean };   // défaut : true ; false = aucune vérification, une mise à jour en attente est supprimée
 // `language` : langue de l'interface ET des fenêtres natives (signature, avertissements, phrase,
 // serveurs, sélecteur de .cookie). `auto` = langue de l'ordinateur (français si elle est française,
 // anglais sinon), lue par Rust (crate `sys-locale`) et renvoyée par `config_get.systemLanguage`.
@@ -1564,6 +1566,7 @@ Hardware wallets : non proposé (aucune commande `hw_*`). Ce qu'il faudrait : Le
 | `cronos-evm-rpc.publicnode.com`, `mantle-rpc.publicnode.com`, `sonic-rpc.publicnode.com`, `gnosis-rpc.publicnode.com`, `hyperliquid-rpc.publicnode.com`, `sei-evm-rpc.publicnode.com` ; `rpc.ankr.com` (Flare, `/flare`), `kaia.api.pocket.network` (Kaia), `evm.confluxrpc.com` (Conflux eSpace) | RPC EVM (phase 2) : Cronos 25, Mantle 5000, Sonic 146, Gnosis 100, HyperEVM 999, Sei 1329, Flare 14, Kaia 8217, Conflux 1030 ; famille Tor `evm`. Les RPC publics de Flare et de Kaia répondent 403 aux sorties Tor : Ankr et Pocket Network à la place |
 | `mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion` | Bitcoin (Esplora) en mode Tor uniquement, `http://` (service onion officiel de mempool) ; réécriture automatique de `mempool.space` |
 | `api.devnet.solana.com`, `api.mainnet-beta.solana.com` | RPC Solana (aussi : tables d'adresses v0 lues par Rust pour `sol_decode_tx` / `sol_sign_tx` ; staking `sol_stake_*` lu et diffusé par Rust : `getProgramAccounts`, `getVoteAccounts`, sysvar StakeHistory, `sendTransaction` ; ou le RPC `servers.solana[cluster]` des réglages) |
+| `github.com`, `release-assets.githubusercontent.com` | mises à jour automatiques (`updater.rs`) : `latest.json` et paquets signés des releases de `shuntraa/kyro-wallet` (CDN de GitHub après redirection). **Rust uniquement** : `net_fetch` les refuse (`HOST_NOT_ALLOWED`, `net::UPDATE_HOSTS`), famille Tor `update`, corps jusqu'à 256 Mio |
 | `api.0x.org`, `li.quest`, `lite-api.jup.ag` | devis de swap (`li.quest` aussi : `/v1/status` d'un swap entre chaînes) |
 | `1click.chaindefuser.com` | NEAR Intents 1Click (public, sans clé) : `/v0/status?depositAddress=` et `/v0/tokens`, confirmation d'un dépôt de swap entre chaînes avant signature ; `POST /v0/quote` (JSON) pour les swaps directs (départ BTC / LTC / DOGE / TRON / XRP / Cardano, arrivée LTC / DOGE / TRON / XRP / Cardano) ; famille Tor `swap` |
 | + hôtes des serveurs HTTP personnalisés (`servers.bitcoin.*` de type `esplora`, `servers.evm.*`, `servers.solana.*`) | autorisés **uniquement pour leur famille** (circuits Tor de la famille) ; le serveur par défaut remplacé est refusé (`DEFAULT_SERVER_DISABLED`) |

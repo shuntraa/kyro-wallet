@@ -55,6 +55,7 @@ mod sui_backend;
 mod ton_backend;
 mod tor;
 mod tron_backend;
+mod updater;
 mod utxo_backend;
 mod xmr_backend;
 mod xrp_backend;
@@ -91,6 +92,9 @@ pub fn run() {
             if st.settings().tor.enabled {
                 st.net.tor.start();
             }
+            // Automatic updates: a staged one is applied before the window exists; the check
+            // itself runs in the background (updater.rs).
+            updater::on_start(app.handle());
             spawn_auto_lock(app.handle().clone());
             // The main window is created here, after the state exists (`"create": false` in
             // tauri.conf.json), so that `window.open` can be refused: a new window would load
@@ -358,9 +362,15 @@ pub fn run() {
             commands_hw::hw_thp_pairing_code,
             commands_hw::hw_thp_pairings,
             commands_hw::hw_thp_forget,
+            updater::update_status,
         ])
-        .run(context)
-        .expect("error while running Kyro");
+        .build(context)
+        .expect("error while running Kyro")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                updater::on_exit(app);
+            }
+        });
 }
 
 /// A 1 s tick that took longer than this means the machine was suspended (or the process was

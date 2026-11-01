@@ -65,6 +65,7 @@ const DEFAULT_SETTINGS: Settings = {
   apiKeysSet: {},
   tor: { enabled: true },
   language: 'auto',
+  autoUpdate: true,
 };
 
 interface AppContextValue {
