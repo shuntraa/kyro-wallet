@@ -614,6 +614,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                 amount: `${(dotAccount.data ? String(Number(dotAccount.data.existentialDeposit) / 10 ** dot.nativeDecimals) : '0.01').replace('.', lang === 'fr' ? ',' : '.')} ${dot.nativeSymbol}`,
               })}
               {dotAccount.data && !dotAccount.data.exists && <span className="mt-1 block font-semibold text-warn">{t('receive.dotNotCreated', { symbol: dot.nativeSymbol })}</span>}
+              {network === 'mainnet' && <span className="mt-1 block">{rt('receive.dotTokenNote', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}</span>}
             </Notice>
           )}
           {family === 'algo' && (

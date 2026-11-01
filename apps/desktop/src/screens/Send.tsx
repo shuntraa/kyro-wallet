@@ -345,6 +345,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const dotDestInfo = dotDest.data?.address === toTrim ? dotDest.data : undefined;
   const dotMe = useAsync(dotAdapter ? () => dotAdapter.account() : null, [dotAdapter], { intervalMs: 30_000 });
   const dotProblem = isDot && toTrim && !addrValid ? dotAddressProblem(toTrim, network) : null;
+  /** Polkadot token (USD₮, USDC): `Assets.transfer_keep_alive`, the token's minimum balance stays; fees in DOT. */
+  const dotToken = isDot && asset?.kind === 'dotasset';
+  const dotAssets = useAsync(dotAdapter && dotToken ? () => dotAdapter.assetBalances() : null, [dotAdapter, dotToken], { intervalMs: 30_000 });
+  const dotTokenRow = dotToken ? dotAssets.data?.find((b) => `dotasset:${b.assetId}` === asset?.id) : undefined;
   /** Cardano: ADA or a native token from the balance, optional CIP-20 memo (§2.7). */
   const isAda = asset?.family === 'ada';
   const adaAdapter = isAda ? (adapter as CardanoAdapter | undefined) : undefined;
@@ -442,7 +446,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   /** XRP: everything that must be right before Rust is even asked to build. */
   const xrpBlocked = isXrp && (!xrpDestInfo || !!tagParsed.error || xrpTagMissing || xrpBelowActivation);
   // Polkadot: a new account needs at least the existential deposit, else the transfer fails.
-  const dotBelowEd = isDot && !!dotDestInfo && !dotDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < BigInt(dotDestInfo.existentialDeposit);
+  const dotBelowEd = isDot && !dotToken && !!dotDestInfo && !dotDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < BigInt(dotDestInfo.existentialDeposit);
   const dotBlocked = isDot && (!dotDestInfo || dotBelowEd);
   // Algorand: a receiver must end at or above its minimum balance (0.1 ALGO for a new account).
   const algoDestMin = algoDestInfo ? BigInt(algoDestInfo.minBalance) - BigInt(algoDestInfo.balance) : ALGO_ACTIVATION;
@@ -496,7 +500,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   // Sui: the address balance is not spent by Kyro, only SUI coin objects.
   const suiSpendable = isSui && suiMe.data ? BigInt(suiMe.data.coin) : null;
   // Polkadot: the existential deposit and the frozen part cannot be sent.
-  const dotSpendable = isDot && dotMe.data ? BigInt(dotMe.data.spendable) : null;
+  const dotSpendable = isDot && !dotToken && dotMe.data ? BigInt(dotMe.data.spendable) : dotTokenRow ? (BigInt(dotTokenRow.balance) > BigInt(dotTokenRow.minBalance) ? BigInt(dotTokenRow.balance) - BigInt(dotTokenRow.minBalance) : 0n) : null;
   // Algorand: likewise, balance − minimum balance.
   const algoSpendable = isAlgo && !algoToken && algoMe.data ? BigInt(algoMe.data.spendable) : null;
   // Monero: only unlocked outputs (10 confirmations) can be spent.
@@ -855,7 +859,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {isXrp && <XrpTagField value={tagStr} onChange={setTagStr} error={tagParsed.error} dest={xrpDestInfo} destLoading={addrValid && xrpDest.loading && !xrpDestInfo} />}
             {isAlgo && <AlgoNoteField value={memo} onChange={setMemo} dest={addrValid ? algoDestInfo : undefined} destLoading={addrValid && algoDest.loading && !algoDestInfo} />}
             {isAlgo && algoDest.error && addrValid && <span className="text-[12px] text-down">{t('send.destUnreadable', { message: algoDest.error.message })}</span>}
-            {isDot && addrValid && <DotDestinationNote dest={dotDestInfo} decimals={asset.decimals} symbol={asset.symbol} />}
+            {isDot && !dotToken && addrValid && <DotDestinationNote dest={dotDestInfo} decimals={asset.decimals} symbol={asset.symbol} />}
             {isDot && dotDest.error && addrValid && <span className="text-[12px] text-down">{t('send.destUnreadable', { message: dotDest.error.message })}</span>}
             {isXlm && <StellarMemoField kind={xlmMemoKind} onKind={(k) => { setXlmMemoKind(k); setXlmMemo(''); }} value={xlmMemo} onChange={setXlmMemo} error={xlmMemoParsed.error} dest={xlmDestInfo} destLoading={addrValid && xlmDest.loading && !xlmDestInfo} />}
             {isXlm && xlmDest.error && addrValid && <span className="text-[12px] text-down">{t('send.destUnreadable', { message: xlmDest.error.message })}</span>}
@@ -940,7 +944,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {isHbar && <HbarAccountState account={hbarMe.data} hidden={hideBalances} />}
             {isKas && <KaspaSpendable account={kasMe.data} hidden={hideBalances} />}
             {kasBelowMin && <span className="text-[12px] text-down">{t('send.kasBelowMin')}</span>}
-            {isDot && <DotSpendable account={dotMe.data} decimals={asset.decimals} symbol={asset.symbol} hidden={hideBalances} />}
+            {isDot && !dotToken && <DotSpendable account={dotMe.data} decimals={asset.decimals} symbol={asset.symbol} hidden={hideBalances} />}
+            {dotToken && dotTokenRow && <span className="text-[12px] leading-[1.45] text-mute">{t('dot.tokenSpendable', { spendable: hideBalances ? '•••••' : fmtCrypto(dotSpendable ?? 0n, asset.decimals, asset.symbol), min: fmtCrypto(BigInt(dotTokenRow.minBalance), asset.decimals, asset.symbol) })}</span>}
             {dotBelowEd && dotDestInfo && <span className="text-[12px] text-down">{t('send.dotBelowEd', { amount: fmtCrypto(BigInt(dotDestInfo.existentialDeposit), asset.decimals, asset.symbol) })}</span>}
             {isAlgo && <AlgoSpendable account={algoMe.data} hidden={hideBalances} />}
             {algoBelowMinimum && <span className="text-[12px] text-down">{algoDestInfo?.exists ? t('send.algoBelowDestMin', { amount: fmtCrypto(algoDestMin, 6, 'ALGO', 6) }) : t('send.algoBelowActivation')}</span>}
@@ -1304,10 +1309,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {rt('send.clearDot', { b: (c) => <strong>{c}</strong> }, {
                 amount: fmtCrypto(sendAmount, decimals, asset.symbol),
                 recipient: recipientName,
-                fee: fmtCrypto(built.unsigned.maxFee, decimals, asset.symbol),
+                fee: built.unsigned.summary.asset && nativeAsset ? fmtCrypto(built.unsigned.maxFee, nativeAsset.decimals, nativeAsset.symbol) : fmtCrypto(built.unsigned.maxFee, decimals, asset.symbol),
                 fiat: feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : '',
               })}
-              {!built.unsigned.context.destination.exists ? t('send.clearDotCreates') : ''}
+              {!built.unsigned.summary.asset && !built.unsigned.context.destination.exists ? t('send.clearDotCreates') : ''}
             </EnClair>
           )}
           {built && addrValid && built.unsigned.family === 'ada' && (

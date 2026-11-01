@@ -16,7 +16,9 @@ use wallet_core::{
     dot_account_id, dot_account_storage_key, dot_address, dot_blake2_256, dot_decode_account_info,
     dot_decode_fee_info, dot_decode_payload, dot_fee_probe_extrinsic, dot_public_key, dot_runtime,
     dot_sign, dot_ss58_decode, dot_ss58_encode, dot_transfer_payload, dot_verify_extrinsic,
-    DotAccountInfo, DotEra, DotExtension, DotRuntime, DotTransfer, Mnemonic, Network, PolkadotRoot,
+    dot_asset_account_key, dot_asset_details_key, dot_asset_metadata_key, dot_decode_asset_account,
+    dot_decode_asset_details, dot_decode_asset_metadata, dot_known_asset, dot_known_assets,
+    DotAssetAccount, DotAssetDetails, DotAccountInfo, DotEra, DotExtension, DotRuntime, DotTransfer, Mnemonic, Network, PolkadotRoot,
     DOT_POLKADOT_ASSET_HUB, DOT_WESTEND_ASSET_HUB,
 };
 
@@ -268,7 +270,101 @@ fn transfer() -> DotTransfer {
         block_hash: h32("71542782ee36b20f2c24ec0eb6dd5f709e666ffe0fe05140dcd1b6966fc97c38"),
         nonce: 7,
         tip: 0,
+        asset: None,
     }
+}
+
+// ---------------------------------------------------------------- Assets (USD₮ 1984, USDC 1337)
+
+#[test]
+fn asset_hub_metadata_has_the_assets_pallet_kyro_expects() {
+    let rt = runtime();
+    assert_eq!(rt.assets, Ok(()));
+    assert_eq!(
+        (DOT_POLKADOT_ASSET_HUB.assets_pallet, DOT_POLKADOT_ASSET_HUB.assets_transfer_keep_alive),
+        (50, 9)
+    );
+    // The Assets pallet renamed: tokens refused, DOT still fine.
+    let rt = dot_runtime(Network::Mainnet, &patched("min_balance", "min_balancx")).unwrap();
+    assert!(rt.assets.is_err());
+    let mut t = transfer();
+    t.asset = Some(1984);
+    let from = dot_public_key(&root(DEV), 0).unwrap();
+    let p = hex::encode(t.payload(&rt));
+    assert!(dot_decode_payload(&rt, &p, &from).unwrap_err().to_string().contains("Assets"));
+}
+
+#[test]
+fn known_assets_are_the_verified_ones() {
+    let ids: Vec<_> = dot_known_assets(Network::Mainnet).iter().map(|a| (a.id, a.symbol, a.decimals)).collect();
+    assert_eq!(ids, [(1984, "USDT", 6), (1337, "USDC", 6)]);
+    assert!(dot_known_assets(Network::Testnet).is_empty());
+    assert_eq!(dot_known_asset(Network::Mainnet, 1984).unwrap().chain_symbol, "USDt");
+}
+
+#[test]
+fn asset_transfer_is_encoded_signed_and_summarized() {
+    let rt = runtime();
+    let r = root(DEV);
+    let from = dot_public_key(&r, 0).unwrap();
+    let mut t = transfer();
+    t.asset = Some(1984);
+    t.value = 12_500_000;
+    // [50, 9] ‖ Compact(1984) ‖ MultiAddress::Id ‖ dest ‖ Compact(12.5 USDT).
+    let call = t.call(&rt);
+    assert_eq!(&call[..5], &[50, 9, 0x01, 0x1f, 0x00]);
+    assert_eq!(&call[37..], &parity_scale_codec::Encode::encode(&parity_scale_codec::Compact(12_500_000u128))[..]);
+    let payload = dot_transfer_payload(&rt, &t, &from).unwrap();
+    let s = dot_decode_payload(&rt, &payload, &from).unwrap();
+    assert_eq!((s.call.as_str(), s.symbol.as_str(), s.decimals, s.amount.as_str()), ("Assets.transfer_keep_alive", "USDT", 6, "12500000"));
+    let a = s.asset.clone().unwrap();
+    assert_eq!((a.asset_id, a.name.as_str()), (1984, "Tether"));
+    let (ext, hash, again) = dot_sign(&r, 0, &rt, &payload).unwrap();
+    assert_eq!(again, s);
+    let (signer, h, _) = dot_verify_extrinsic(&rt, &ext, &t.block_hash).unwrap();
+    assert_eq!((signer, h), (from, hash));
+    // A native transfer still says DOT.
+    let p = dot_transfer_payload(&rt, &transfer(), &from).unwrap();
+    let n = dot_decode_payload(&rt, &p, &from).unwrap();
+    assert!(n.asset.is_none() && n.symbol == "DOT");
+}
+
+#[test]
+fn unknown_assets_are_refused() {
+    let rt = runtime();
+    let from = dot_public_key(&root(DEV), 0).unwrap();
+    let mut t = transfer();
+    t.asset = Some(1985);
+    let p = hex::encode(t.payload(&rt));
+    assert!(dot_decode_payload(&rt, &p, &from).unwrap_err().to_string().contains("inconnu"));
+    assert!(dot_transfer_payload(&rt, &t, &from).is_err());
+}
+
+#[test]
+fn asset_storage_keys_and_values() {
+    // twox128("Assets") ‖ twox128("Asset") ‖ blake2_128(1337 LE) ‖ 1337 LE: the key that returned
+    // USDC's AssetDetails on polkadot-asset-hub-rpc.polkadot.io (2026-11-01).
+    let k = hex::encode(dot_asset_details_key(1337));
+    assert!(k.starts_with("682a59d51ab9e48a8c8cc418ff9708d2d34371a193a751eea5883e9553457b2e"));
+    assert!(k.ends_with("39050000"));
+    assert!(hex::encode(dot_asset_metadata_key(1984)).starts_with("682a59d51ab9e48a8c8cc418ff9708d2b5f3822e35ca2f31ce3526eab1363fd2"));
+    let acc = dot_asset_account_key(1984, &[7; 32]);
+    assert_eq!(acc.len(), 32 + 20 + 48);
+    // Real AssetDetails of USDC (1337) on 2026-11-01: min_balance 0.01, sufficient, Live.
+    let d = hex::decode("5670f9f348bd7f967539de1856c5b11de4302122233100adb22ceb9846f98b2c383a171d3c8fbbdcc9a831831663cd83f2efd57d0e84776469cc61c347d1dcfe6c7aa3e3187f04f100c14f7d29ebd9e2cdc7e78d367d46ae099751f72f55da3645fd34d372d89f1934e14f99fb3a7a977df9779763d265ce7a450af4d6df8a155026295f573e0100000000000000000000e87648170000000000000000000000102700000000000000000000000000000116bb1f000abb1f000c00000000").unwrap();
+    let det = dot_decode_asset_details(&d).unwrap();
+    assert_eq!(det, DotAssetDetails { min_balance: 10_000, is_sufficient: true, live: true });
+    // AssetAccount { balance, status: Liquid, reason: Sufficient, extra: () }.
+    let mut v = 2_500_000u128.to_le_bytes().to_vec();
+    v.extend([0u8, 1]);
+    assert_eq!(dot_decode_asset_account(&v).unwrap(), DotAssetAccount { balance: 2_500_000, frozen: false, blocked: false });
+    v[16] = 1;
+    assert!(dot_decode_asset_account(&v).unwrap().frozen);
+    v[16] = 3;
+    assert!(dot_decode_asset_account(&v).is_err());
+    // AssetMetadata { deposit, name, symbol, decimals, is_frozen }.
+    let m = parity_scale_codec::Encode::encode(&(0u128, b"Tether USD".to_vec(), b"USDt".to_vec(), 6u8, false));
+    assert_eq!(dot_decode_asset_metadata(&m).unwrap(), ("USDt".to_string(), 6));
 }
 
 /// Encoded independently (Python, SCALE by hand) for the transfer above.

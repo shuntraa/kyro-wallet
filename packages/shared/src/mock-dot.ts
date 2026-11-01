@@ -279,6 +279,13 @@ export function createDemoDot(d: DemoDotDeps) {
       await backend();
       return { available: true, partial: false, items: state.history.map((e) => ({ ...e })) };
     },
+    // Tokens: none on the demo (Westend has no official stablecoin; mainnet demo holds none).
+    dot_asset_balances: async (a) => {
+      checkAddress(a.address);
+      await backend();
+      return [];
+    },
+    dot_build_asset_tx: () => Promise.reject(new IpcError('INVALID_INPUT', l10n('Démo : jetons Polkadot non simulés', 'Demo: Polkadot tokens are not simulated'))),
     dot_tx_status: async (a) => {
       const addr = checkAddress(a.address);
       await backend();

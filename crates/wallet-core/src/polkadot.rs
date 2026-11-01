@@ -1,5 +1,7 @@
 //! Polkadot (DOT on **Polkadot Asset Hub**, WND on Westend Asset Hub for the testnet): sr25519
-//! keys, SS58 addresses and one extrinsic, `Balances.transfer_keep_alive`, in SCALE.
+//! keys, SS58 addresses and two extrinsics, `Balances.transfer_keep_alive` and, for the few
+//! verified stablecoins of [`dot_known_assets`] (USD₮ 1984, USDC 1337), `Assets.transfer_keep_alive`,
+//! in SCALE (fees always in DOT).
 //!
 //! Since the Asset Hub migration (Polkadot, November 2025), balances and transfers live on
 //! **Asset Hub** (parachain 1000), not on the relay chain: Polkadot.js, Nova, Talisman and
@@ -106,6 +108,10 @@ pub struct DotChain {
     pub balances_pallet: u8,
     /// `transfer_keep_alive` call index in that pallet.
     pub transfer_keep_alive: u8,
+    /// `Assets` pallet index (trust-backed assets: USD₮, USDC).
+    pub assets_pallet: u8,
+    /// `Assets.transfer_keep_alive` call index.
+    pub assets_transfer_keep_alive: u8,
 }
 
 /// 32 bytes from 64 lowercase hex digits, at compile time (constants only; checked by tests).
@@ -139,6 +145,8 @@ pub const DOT_POLKADOT_ASSET_HUB: DotChain = DotChain {
     symbol: "DOT",
     balances_pallet: 10,
     transfer_keep_alive: 3,
+    assets_pallet: 50,
+    assets_transfer_keep_alive: 9,
 };
 
 /// Westend Asset Hub (`westmint`): Parity's public testnet (WND, 12 decimals, generic prefix
@@ -153,7 +161,57 @@ pub const DOT_WESTEND_ASSET_HUB: DotChain = DotChain {
     symbol: "WND",
     balances_pallet: 10,
     transfer_keep_alive: 3,
+    assets_pallet: 50,
+    assets_transfer_keep_alive: 9,
 };
+
+/// A trust-backed asset of Asset Hub that Kyro knows (pallet `Assets`, verified id).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DotKnownAsset {
+    /// Asset id (pallet Assets).
+    pub id: u32,
+    /// Symbol shown by Kyro.
+    pub symbol: &'static str,
+    /// `Assets.Metadata` symbol on chain (checked before building).
+    pub chain_symbol: &'static str,
+    /// Name shown by Kyro.
+    pub name: &'static str,
+    /// Decimals (equal to `Assets.Metadata`).
+    pub decimals: u8,
+}
+
+/// Polkadot Asset Hub: USD₮ (Tether's list: asset 1984) and USDC (Circle's list: asset 1337).
+/// `Assets.Metadata` read on 2026-11-01: « Tether USD » / `USDt` and « USD Coin » / `USDC`, 6
+/// decimals, both sufficient (they can create an account), `min_balance` 0.01, status Live.
+const POLKADOT_ASSETS: &[DotKnownAsset] = &[
+    DotKnownAsset {
+        id: 1984,
+        symbol: "USDT",
+        chain_symbol: "USDt",
+        name: "Tether",
+        decimals: 6,
+    },
+    DotKnownAsset {
+        id: 1337,
+        symbol: "USDC",
+        chain_symbol: "USDC",
+        name: "USD Coin",
+        decimals: 6,
+    },
+];
+
+/// Assets Kyro can hold and send on `network` (none on Westend: no official test stablecoin).
+pub fn dot_known_assets(network: Network) -> &'static [DotKnownAsset] {
+    match network {
+        Network::Mainnet => POLKADOT_ASSETS,
+        Network::Testnet => &[],
+    }
+}
+
+/// The known asset `id` on `network`.
+pub fn dot_known_asset(network: Network, id: u32) -> Option<DotKnownAsset> {
+    dot_known_assets(network).iter().copied().find(|a| a.id == id)
+}
 
 /// The chain Kyro uses on `network`.
 pub fn dot_chain(network: Network) -> &'static DotChain {
@@ -339,6 +397,9 @@ pub struct DotRuntime {
     pub existential_deposit: u128,
     /// Transaction extensions, in order.
     pub extensions: Vec<DotExtension>,
+    /// `Assets` pallet as Kyro expects it (index, `transfer_keep_alive`, `Account` / `Asset` /
+    /// `Metadata` layouts), or why not: tokens are then refused, DOT still works.
+    pub assets: core::result::Result<(), String>,
 }
 
 impl DotRuntime {
@@ -612,6 +673,7 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
     }
     let existential_deposit = u128::decode_all(&mut &constant(balances, "ExistentialDeposit")?[..])
         .map_err(|_| e("Balances.ExistentialDeposit illisible"))?;
+    let assets = check_assets(chain, &r, m);
 
     // Transaction extensions.
     let mut extensions = Vec::with_capacity(x.signed_extensions.len());
@@ -713,7 +775,127 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
         tx_version,
         existential_deposit,
         extensions,
+        assets,
     })
+}
+
+/// `Assets`: pallet and call indices, `transfer_keep_alive(id: Compact<u32>, target:
+/// MultiAddress, amount: Compact<u128>)`, and the storage layouts Kyro decodes.
+fn check_assets(
+    chain: &'static DotChain,
+    r: &Reg<'_>,
+    m: &RuntimeMetadataV15,
+) -> core::result::Result<(), String> {
+    use frame_metadata::v15::{StorageEntryType, StorageHasher};
+    let p = m
+        .pallets
+        .iter()
+        .find(|p| p.name == "Assets")
+        .ok_or("pallet Assets absente")?;
+    if p.index != chain.assets_pallet {
+        return Err(format!(
+            "index de la pallet Assets {} au lieu de {}",
+            p.index, chain.assets_pallet
+        ));
+    }
+    let calls = p.calls.as_ref().ok_or("Assets sans appels")?;
+    let Ok(TypeDef::Variant(v)) = r.def(calls.ty.id) else {
+        return Err("appels de Assets illisibles".into());
+    };
+    let call = v
+        .variants
+        .iter()
+        .find(|c| c.name == "transfer_keep_alive")
+        .ok_or("Assets.transfer_keep_alive absent")?;
+    if call.index != chain.assets_transfer_keep_alive {
+        return Err(format!(
+            "index de Assets.transfer_keep_alive {} au lieu de {}",
+            call.index, chain.assets_transfer_keep_alive
+        ));
+    }
+    let args: Vec<(Option<&str>, u32)> = call
+        .fields
+        .iter()
+        .map(|f| (f.name.as_deref(), f.ty.id))
+        .collect();
+    if !matches!(args.as_slice(),
+        [(Some("id"), i), (Some("target"), t), (Some("amount"), a)]
+            if r.is_compact_of(*i, TypeDefPrimitive::U32)
+                && r.is_multiaddress(*t)
+                && r.is_compact_of(*a, TypeDefPrimitive::U128))
+    {
+        return Err("arguments de Assets.transfer_keep_alive inattendus".into());
+    }
+    let storage = p.storage.as_ref().ok_or("Assets sans stockage")?;
+    let entry = |name: &str| {
+        storage
+            .entries
+            .iter()
+            .find(|e| e.name == name)
+            .ok_or(format!("Assets.{name} absent"))
+    };
+    let map = |name: &str, n: usize| -> core::result::Result<u32, String> {
+        let StorageEntryType::Map { hashers, value, .. } = &entry(name)?.ty else {
+            return Err(format!("Assets.{name} n'est pas une map"));
+        };
+        if hashers.len() != n || !hashers.iter().all(|h| *h == StorageHasher::Blake2_128Concat) {
+            return Err(format!("clé de Assets.{name} inattendue"));
+        }
+        Ok(value.id)
+    };
+    let names = |id: u32| -> Vec<&str> {
+        r.fields(id)
+            .map(|f| f.iter().map(|x| x.0).collect())
+            .unwrap_or_default()
+    };
+    // Account: (asset, account) → { balance: u128, status: Liquid | Frozen | Blocked, … }.
+    let acc = map("Account", 2)?;
+    let f = r.fields(acc).ok_or("Assets.Account illisible")?;
+    if names(acc) != ["balance", "status", "reason", "extra"]
+        || !r.is_prim(f[0].1, TypeDefPrimitive::U128)
+        || !(r.has_unit_variant(f[1].1, "Liquid", 0)
+            && r.has_unit_variant(f[1].1, "Frozen", 1)
+            && r.has_unit_variant(f[1].1, "Blocked", 2))
+    {
+        return Err("AssetAccount inattendu".into());
+    }
+    // Asset: asset → AssetDetails (190 bytes, decoded by `dot_decode_asset_details`).
+    let det = map("Asset", 1)?;
+    let f = r.fields(det).ok_or("Assets.Asset illisible")?;
+    let want = [
+        "owner",
+        "issuer",
+        "admin",
+        "freezer",
+        "supply",
+        "deposit",
+        "min_balance",
+        "is_sufficient",
+        "accounts",
+        "sufficients",
+        "approvals",
+        "status",
+    ];
+    if names(det) != want
+        || !f[..4].iter().all(|x| r.is_bytes(x.1, 32))
+        || !f[4..7].iter().all(|x| r.is_prim(x.1, TypeDefPrimitive::U128))
+        || !r.is_prim(f[7].1, TypeDefPrimitive::Bool)
+        || !f[8..11].iter().all(|x| r.is_prim(x.1, TypeDefPrimitive::U32))
+        || !r.has_unit_variant(f[11].1, "Live", 0)
+    {
+        return Err("AssetDetails inattendu".into());
+    }
+    // Metadata: asset → { deposit: u128, name, symbol: bytes, decimals: u8, is_frozen: bool }.
+    let meta = map("Metadata", 1)?;
+    let f = r.fields(meta).ok_or("Assets.Metadata illisible")?;
+    if names(meta) != ["deposit", "name", "symbol", "decimals", "is_frozen"]
+        || !r.is_prim(f[0].1, TypeDefPrimitive::U128)
+        || !r.is_prim(f[3].1, TypeDefPrimitive::U8)
+        || !r.is_prim(f[4].1, TypeDefPrimitive::Bool)
+    {
+        return Err("AssetMetadata inattendu".into());
+    }
+    Ok(())
 }
 
 /// `System.Account`: map `Blake2_128Concat(AccountId32) → AccountInfo { nonce, consumers,
@@ -772,6 +954,131 @@ pub fn dot_account_storage_key(account: &[u8; 32]) -> Vec<u8> {
     k.extend_from_slice(&blake2_128(account));
     k.extend_from_slice(account);
     k
+}
+
+/// `twox128("Assets")`, then `twox128("Account")`, `twox128("Asset")`, `twox128("Metadata")`.
+const ASSETS_PREFIX: [u8; 16] = h16(b"682a59d51ab9e48a8c8cc418ff9708d2");
+const ASSETS_ACCOUNT: [u8; 16] = h16(b"b99d880ec681799c0cf30e8886371da9");
+const ASSETS_ASSET: [u8; 16] = h16(b"d34371a193a751eea5883e9553457b2e");
+const ASSETS_METADATA: [u8; 16] = h16(b"b5f3822e35ca2f31ce3526eab1363fd2");
+
+const fn h16(s: &[u8; 32]) -> [u8; 16] {
+    let mut wide = [0u8; 64];
+    let mut i = 0;
+    while i < 32 {
+        wide[i] = s[i];
+        wide[32 + i] = b'0';
+        i += 1;
+    }
+    let full = h32(&wide);
+    let mut out = [0u8; 16];
+    let mut j = 0;
+    while j < 16 {
+        out[j] = full[j];
+        j += 1;
+    }
+    out
+}
+
+fn blake2_128_concat(o: &mut Vec<u8>, data: &[u8]) {
+    o.extend_from_slice(&blake2_128(data));
+    o.extend_from_slice(data);
+}
+
+fn assets_key(item: &[u8; 16], asset: u32, account: Option<&[u8; 32]>) -> Vec<u8> {
+    let mut k = Vec::with_capacity(32 + 20 + 48);
+    k.extend_from_slice(&ASSETS_PREFIX);
+    k.extend_from_slice(item);
+    blake2_128_concat(&mut k, &asset.to_le_bytes());
+    if let Some(a) = account {
+        blake2_128_concat(&mut k, a);
+    }
+    k
+}
+
+/// Storage key of `Assets.Account(asset, account)`.
+pub fn dot_asset_account_key(asset: u32, account: &[u8; 32]) -> Vec<u8> {
+    assets_key(&ASSETS_ACCOUNT, asset, Some(account))
+}
+
+/// Storage key of `Assets.Asset(asset)`.
+pub fn dot_asset_details_key(asset: u32) -> Vec<u8> {
+    assets_key(&ASSETS_ASSET, asset, None)
+}
+
+/// Storage key of `Assets.Metadata(asset)`.
+pub fn dot_asset_metadata_key(asset: u32) -> Vec<u8> {
+    assets_key(&ASSETS_METADATA, asset, None)
+}
+
+/// Our holding of an asset (`Assets.Account`; absent = no holding, balance 0).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DotAssetAccount {
+    /// Base units.
+    pub balance: u128,
+    /// Frozen or blocked by the issuer: cannot send (blocked: cannot receive either).
+    pub frozen: bool,
+    /// Blocked by the issuer: can neither send nor receive.
+    pub blocked: bool,
+}
+
+/// Decodes an `Assets.Account` value: `balance: u128`, `status: u8`, then the existence reason
+/// (not needed; layout checked by [`dot_runtime`]).
+pub fn dot_decode_asset_account(bytes: &[u8]) -> Result<DotAssetAccount> {
+    if bytes.len() < 18 {
+        return Err(Error::input("Assets.Account trop court"));
+    }
+    let mut b = [0u8; 16];
+    b.copy_from_slice(&bytes[..16]);
+    let status = bytes[16];
+    if status > 2 {
+        return Err(Error::input("Assets.Account : statut inconnu"));
+    }
+    Ok(DotAssetAccount {
+        balance: u128::from_le_bytes(b),
+        frozen: status == 1,
+        blocked: status == 2,
+    })
+}
+
+/// What `Assets.Asset` says of an asset (190-byte `AssetDetails`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DotAssetDetails {
+    /// Smallest balance an account may hold (below it the holding is removed).
+    pub min_balance: u128,
+    /// The asset alone can keep an account alive (no DOT needed to receive it).
+    pub is_sufficient: bool,
+    /// `Live` (otherwise frozen or being destroyed: transfers fail).
+    pub live: bool,
+}
+
+/// Decodes an `Assets.Asset` value (layout checked by [`dot_runtime`]).
+pub fn dot_decode_asset_details(bytes: &[u8]) -> Result<DotAssetDetails> {
+    if bytes.len() != 190 {
+        return Err(Error::input("Assets.Asset : 190 octets attendus"));
+    }
+    let mut mb = [0u8; 16];
+    mb.copy_from_slice(&bytes[160..176]);
+    let suff = bytes[176];
+    if suff > 1 || bytes[189] > 2 {
+        return Err(Error::input("Assets.Asset illisible"));
+    }
+    Ok(DotAssetDetails {
+        min_balance: u128::from_le_bytes(mb),
+        is_sufficient: suff == 1,
+        live: bytes[189] == 0,
+    })
+}
+
+/// `(symbol, decimals)` of an `Assets.Metadata` value.
+pub fn dot_decode_asset_metadata(bytes: &[u8]) -> Result<(String, u8)> {
+    let bad_md = || Error::input("Assets.Metadata illisible");
+    let (_deposit, _name, symbol, decimals, _frozen): (u128, Vec<u8>, Vec<u8>, u8, bool) =
+        DecodeAll::decode_all(&mut &bytes[..]).map_err(|_| bad_md())?;
+    let symbol = String::from_utf8(symbol).map_err(|_| bad_md())?;
+    Ok((symbol, decimals))
 }
 
 /// `System.Account` value (an absent key means an account that does not exist: all zero).
@@ -964,13 +1271,24 @@ pub struct DotTransfer {
     pub nonce: u32,
     /// Tip, planck (Kyro: always 0).
     pub tip: u128,
+    /// `Some(id)`: `Assets.transfer_keep_alive` of that known asset (`value` in its units).
+    pub asset: Option<u32>,
 }
 
 impl DotTransfer {
-    /// `[pallet, call] ‖ MultiAddress::Id(dest) ‖ Compact(value)`.
+    /// `[pallet, call] ‖ MultiAddress::Id(dest) ‖ Compact(value)`, or for an asset
+    /// `[pallet, call] ‖ Compact(id) ‖ MultiAddress::Id(dest) ‖ Compact(value)`.
     pub fn call(&self, rt: &DotRuntime) -> Vec<u8> {
         let c = rt.chain();
-        let mut o = vec![c.balances_pallet, c.transfer_keep_alive, MULTIADDRESS_ID];
+        let mut o = match self.asset {
+            None => vec![c.balances_pallet, c.transfer_keep_alive],
+            Some(id) => {
+                let mut o = vec![c.assets_pallet, c.assets_transfer_keep_alive];
+                Compact(id).encode_to(&mut o);
+                o
+            }
+        };
+        o.push(MULTIADDRESS_ID);
         o.extend_from_slice(&self.dest);
         Compact(self.value).encode_to(&mut o);
         o
@@ -1039,21 +1357,38 @@ impl DotTransfer {
     }
 }
 
-fn decode_call(rt: &DotRuntime, input: &mut &[u8]) -> Result<([u8; 32], u128)> {
+fn decode_call(rt: &DotRuntime, input: &mut &[u8]) -> Result<(Option<u32>, [u8; 32], u128)> {
     let c = rt.chain();
-    let head = take(input, 3)?;
-    if head[0] != c.balances_pallet || head[1] != c.transfer_keep_alive {
+    let head = take(input, 2)?;
+    let asset = if head == [c.balances_pallet, c.transfer_keep_alive] {
+        None
+    } else if head == [c.assets_pallet, c.assets_transfer_keep_alive] {
+        if let Err(why) = &rt.assets {
+            return Err(bad(format!(
+                "pallet Assets différente de ce que Kyro connaît ({why}) : Kyro doit être mis à jour"
+            )));
+        }
+        let id = Compact::<u32>::decode(input)
+            .map_err(|_| bad("identifiant d'actif invalide"))?
+            .0;
+        if dot_known_asset(rt.network, id).is_none() {
+            return Err(bad(format!(
+                "actif {id} inconnu : Kyro ne signe que les jetons vérifiés de sa table"
+            )));
+        }
+        Some(id)
+    } else {
         return Err(bad(format!(
-            "appel {:02x}{:02x} : seul Balances.transfer_keep_alive ({:02x}{:02x}) est accepté",
-            head[0], head[1], c.balances_pallet, c.transfer_keep_alive
+            "appel {:02x}{:02x} : seuls Balances.transfer_keep_alive ({:02x}{:02x}) et Assets.transfer_keep_alive ({:02x}{:02x}) sont acceptés",
+            head[0], head[1], c.balances_pallet, c.transfer_keep_alive, c.assets_pallet, c.assets_transfer_keep_alive
         )));
-    }
-    if head[2] != MULTIADDRESS_ID {
+    };
+    if take(input, 1)?[0] != MULTIADDRESS_ID {
         return Err(bad("destinataire autre qu'un compte (MultiAddress::Id)"));
     }
     let dest = take32(input)?;
     let value = compact_u128(input)?;
-    Ok((dest, value))
+    Ok((asset, dest, value))
 }
 
 fn decode_extra(rt: &DotRuntime, input: &mut &[u8]) -> Result<(DotEra, u32, u128)> {
@@ -1140,6 +1475,9 @@ fn decode_additional(rt: &DotRuntime, input: &mut &[u8]) -> Result<[u8; 32]> {
 }
 
 fn check_transfer(t: &DotTransfer, from: &[u8; 32]) -> Result<()> {
+    if t.asset.is_some_and(|id| !POLKADOT_ASSETS.iter().any(|a| a.id == id)) {
+        return Err(bad("actif inconnu"));
+    }
     if t.value == 0 {
         return Err(bad("montant nul"));
     }
@@ -1162,7 +1500,7 @@ pub fn dot_parse_payload(rt: &DotRuntime, payload: &[u8], from: &[u8; 32]) -> Re
         return Err(bad("charge à signer trop longue pour un transfert"));
     }
     let mut input = payload;
-    let (dest, value) = decode_call(rt, &mut input)?;
+    let (asset, dest, value) = decode_call(rt, &mut input)?;
     let (era, nonce, tip) = decode_extra(rt, &mut input)?;
     let block_hash = decode_additional(rt, &mut input)?;
     if !input.is_empty() {
@@ -1175,6 +1513,7 @@ pub fn dot_parse_payload(rt: &DotRuntime, payload: &[u8], from: &[u8; 32]) -> Re
         block_hash,
         nonce,
         tip,
+        asset,
     };
     if t.payload(rt) != payload {
         return Err(bad("encodage non canonique (ré-encodage différent)"));
@@ -1215,18 +1554,42 @@ pub struct DotTxSummary {
     pub spec_version: u32,
     /// Transaction version signed.
     pub tx_version: u32,
+    /// Token transfer (`Assets.transfer_keep_alive`): `amount`, `symbol` and `decimals` are then
+    /// the token's (fees are still paid in DOT).
+    #[serde(default)]
+    pub asset: Option<DotAssetSummary>,
+}
+
+/// The token of an asset transfer, as Kyro's table knows it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DotAssetSummary {
+    /// Verified asset id (pallet Assets).
+    pub asset_id: u32,
+    /// Symbol (Kyro's table).
+    pub symbol: String,
+    /// Name (Kyro's table).
+    pub name: String,
+    /// Decimals (Kyro's table).
+    pub decimals: u8,
 }
 
 fn summarize(rt: &DotRuntime, t: &DotTransfer, from: &[u8; 32]) -> DotTxSummary {
     let c = rt.chain();
+    let known = t.asset.and_then(|id| dot_known_asset(rt.network, id));
     DotTxSummary {
         chain: c.name.into(),
         from: dot_ss58_encode(from, c.ss58),
         to: dot_ss58_encode(&t.dest, c.ss58),
         amount: t.value.to_string(),
-        symbol: c.symbol.into(),
-        decimals: c.decimals,
-        call: "Balances.transfer_keep_alive".into(),
+        symbol: known.map_or(c.symbol, |k| k.symbol).into(),
+        decimals: known.map_or(c.decimals, |k| k.decimals),
+        call: if known.is_some() {
+            "Assets.transfer_keep_alive"
+        } else {
+            "Balances.transfer_keep_alive"
+        }
+        .into(),
         nonce: t.nonce,
         tip: t.tip.to_string(),
         era_period: t.era.period,
@@ -1234,6 +1597,12 @@ fn summarize(rt: &DotRuntime, t: &DotTransfer, from: &[u8; 32]) -> DotTxSummary 
         block_hash: hex::encode(t.block_hash),
         spec_version: rt.spec_version,
         tx_version: rt.tx_version,
+        asset: known.map(|k| DotAssetSummary {
+            asset_id: k.id,
+            symbol: k.symbol.into(),
+            name: k.name.into(),
+            decimals: k.decimals,
+        }),
     }
 }
 
@@ -1335,7 +1704,7 @@ pub fn dot_verify_extrinsic(
     let mut sig = [0u8; 64];
     sig.copy_from_slice(take(&mut input, 64)?);
     let (era, nonce, tip) = decode_extra(rt, &mut input)?;
-    let (dest, value) = decode_call(rt, &mut input)?;
+    let (asset, dest, value) = decode_call(rt, &mut input)?;
     if !input.is_empty() {
         return Err(bad("octets en trop"));
     }
@@ -1346,6 +1715,7 @@ pub fn dot_verify_extrinsic(
         block_hash: *block_hash,
         nonce,
         tip,
+        asset,
     };
     check_transfer(&t, &signer)?;
     if t.extrinsic(rt, &signer, &sig) != *raw {

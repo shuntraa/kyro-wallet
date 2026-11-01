@@ -220,6 +220,8 @@ const COMMANDS: &[&str] = &[
     "dot_broadcast",
     "dot_tx_status",
     "dot_txs",
+    "dot_asset_balances",
+    "dot_build_asset_tx",
     // Staking (docs/IPC.md §2.8).
     "sol_stake_overview",
     "sol_stake_validators",

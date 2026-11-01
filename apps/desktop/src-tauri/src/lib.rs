@@ -341,6 +341,8 @@ pub fn run() {
             commands_dot::dot_broadcast,
             commands_dot::dot_tx_status,
             commands_dot::dot_txs,
+            commands_dot::dot_asset_balances,
+            commands_dot::dot_build_asset_tx,
             stake_sol::sol_stake_overview,
             stake_sol::sol_stake_validators,
             stake_sol::sol_stake_build,

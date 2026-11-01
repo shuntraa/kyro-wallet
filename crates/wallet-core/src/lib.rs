@@ -172,6 +172,12 @@ pub use polkadot::{
     DotChain, DotEra, DotExtension, DotRuntime, DotTransfer, DotTxSummary, PolkadotRoot,
     DOT_POLKADOT_ASSET_HUB, DOT_WESTEND_ASSET_HUB,
 };
+pub use polkadot::{
+    dot_asset_account_key, dot_asset_details_key, dot_asset_metadata_key,
+    dot_decode_asset_account, dot_decode_asset_details, dot_decode_asset_metadata,
+    dot_known_asset, dot_known_assets, DotAssetAccount, DotAssetDetails, DotAssetSummary,
+    DotKnownAsset,
+};
 pub use sol::{sol_address, sol_address_of_pubkey, sol_sign_message, sol_verify_signature};
 pub use sol_decode::{
     sol_decode_message, sol_message_lookup_tables, sol_message_static_keys, sol_parse_lookup_table,

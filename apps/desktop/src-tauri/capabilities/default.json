@@ -223,6 +223,8 @@
     "allow-dot-broadcast",
     "allow-dot-tx-status",
     "allow-dot-txs",
+    "allow-dot-asset-balances",
+    "allow-dot-build-asset-tx",
     "allow-sol-stake-overview",
     "allow-sol-stake-validators",
     "allow-sol-stake-build",

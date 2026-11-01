@@ -6,16 +6,20 @@
 // docs/IPC.md §2.11). This adapter only validates input and checks that what Rust built is
 // what was asked (recipient, amount, our account).
 //
+// Tokens (USD₮ 1984, USDC 1337): balances and `Assets.transfer_keep_alive` built and signed by
+// Rust like DOT sends (fees in DOT). No token history yet: Statescan's account transfers list
+// only native DOT in a form Kyro has checked.
+//
 // History: native DOT transfers from Statescan's keyless API, read by Rust (`dot_txs`, Asset Hub
 // + relay chain, mainnet only). Undocumented API: when it cannot be read, `historyStatus` says
 // « unavailable » and the UI says so instead of showing an empty list as « no transaction ».
 
 import { accountArg } from '../types';
-import { call, l10n, type DotAccountInfo, type DotContext, type DotHistory, type DotTxSummary } from '@kyro/shared';
-import type { PolkadotChain } from '../registry';
+import { call, l10n, type DotAccountInfo, type DotAssetBalance, type DotContext, type DotHistory, type DotTxSummary } from '@kyro/shared';
+import { DOT_ASSETS, type PolkadotChain } from '../registry';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
-export type { DotAccountInfo, DotContext, DotTxSummary };
+export type { DotAccountInfo, DotAssetBalance, DotContext, DotTxSummary };
 
 export type DotTxState = 'pending' | 'finalized' | 'expired';
 
@@ -26,6 +30,9 @@ export interface DotBackend {
   broadcast(extrinsic: string, blockHash: string): Promise<string>;
   txStatus(address: string, nonce: number, validUntil: number): Promise<{ state: DotTxState; finalized: number }>;
   txs(address: string): Promise<DotHistory>;
+  /** Tokens (known asset ids only); optional so that test backends can leave them out. */
+  assetBalances?(address: string): Promise<DotAssetBalance[]>;
+  buildAsset?(assetId: number, to: string, amount: string): Promise<{ payload: string; summary: DotTxSummary; context: DotContext }>;
 }
 
 /** Outcome of the last `getHistory`: `null` before the first one. */
@@ -41,6 +48,8 @@ export function rustDotBackend(account = 0): DotBackend {
     broadcast: (extrinsic, blockHash) => call('dot_broadcast', { extrinsic, blockHash, ...acct }),
     txStatus: (address, nonce, validUntil) => call('dot_tx_status', { address, nonce, validUntil }),
     txs: (address) => call('dot_txs', { address }),
+    assetBalances: (address) => call('dot_asset_balances', { address }),
+    buildAsset: (assetId, to, amount) => call('dot_build_asset_tx', { assetId, to, amount, ...acct }),
   };
 }
 
@@ -75,9 +84,9 @@ export interface DotUnsigned {
   summary: DotTxSummary;
   context: DotContext;
   recipient: string;
-  /** Planck. */
+  /** Planck (token: its base units). */
   amount: bigint;
-  /** Fee estimate of the node (planck), paid on top of the amount. */
+  /** Fee estimate of the node (planck of DOT), paid on top of the amount. */
   maxFee: bigint;
   size: { family: 'dot' };
 }
@@ -133,7 +142,49 @@ export class PolkadotAdapter implements ChainAdapter<'dot'> {
   /** Free balance, plus `spendable` = free − max(frozen − reserved, existential deposit). */
   async getBalance(): Promise<Array<Balance & { spendable: bigint }>> {
     const acc = await this.backend.account(this.address);
-    return [{ assetId: 'dot', amount: BigInt(acc.free), spendable: BigInt(acc.spendable) }];
+    const out = [{ assetId: 'dot', amount: BigInt(acc.free), spendable: BigInt(acc.spendable) }];
+    for (const b of await this.assetBalances()) {
+      if (/^\d+$/.test(b.balance) && b.balance !== '0') {
+        const keep = BigInt(b.minBalance || '0');
+        out.push({ assetId: `dotasset:${b.assetId}`, amount: BigInt(b.balance), spendable: b.frozen ? 0n : BigInt(b.balance) > keep ? BigInt(b.balance) - keep : 0n });
+      }
+    }
+    return out;
+  }
+
+  /** Known tokens of the network (USD₮, USDC on Polkadot Asset Hub). */
+  knownAssets() {
+    return DOT_ASSETS[this.chain.network];
+  }
+
+  /** Holdings of the known tokens (rows for an unknown asset id are dropped). */
+  async assetBalances(address = this.address): Promise<DotAssetBalance[]> {
+    if (!this.backend.assetBalances || !this.knownAssets().length) return [];
+    const known = new Set(this.knownAssets().map((k) => Number(k.contract)));
+    return (await this.backend.assetBalances(address)).filter((b) => known.has(b.assetId));
+  }
+
+  /** Token transfer (`Assets.transfer_keep_alive`): `max` = balance − the token's minimum balance (it stays). */
+  private async buildAssetTx(params: BuildParams): Promise<DotUnsigned> {
+    const k = this.knownAssets().find((x) => `dotasset:${x.contract}` === params.asset.id);
+    if (!k || k.decimals !== params.asset.decimals || !this.backend.buildAsset) throw new Error(l10n('Jeton Polkadot inconnu', 'Unknown Polkadot token'));
+    const assetId = Number(k.contract);
+    const to = params.to.trim();
+    if (!isDotAddress(to, this.chain.network)) throw new Error(dotAddressProblem(to, this.chain.network) ?? l10n('Adresse Polkadot invalide', 'Invalid Polkadot address'));
+    if (to === this.address) throw new Error(l10n('Transfert à soi-même impossible', 'Cannot transfer to yourself'));
+    let amount = params.amount;
+    if (params.max === true) {
+      const b = (await this.assetBalances()).find((x) => x.assetId === assetId);
+      amount = b ? BigInt(b.balance) - BigInt(b.minBalance) : 0n;
+    }
+    if (amount <= 0n) throw new Error(l10n('Montant invalide', 'Invalid amount'));
+    const built = await this.backend.buildAsset(assetId, to, amount.toString());
+    const s = built.summary;
+    const a = s.asset;
+    if (!a || a.assetId !== assetId || a.decimals !== k.decimals || s.decimals !== k.decimals || s.to !== to || s.from !== this.address || s.amount !== amount.toString() || s.call !== 'Assets.transfer_keep_alive' || s.tip !== '0') {
+      throw new Error(l10n('Le transfert construit par Rust ne correspond pas à la demande', 'The transfer built by Rust does not match the request'));
+    }
+    return { family: 'dot', payload: built.payload, summary: s, context: built.context, recipient: to, amount, maxFee: BigInt(built.context.fee), size: { family: 'dot' } };
   }
 
   /** No fee to choose: weight and length fee of the runtime, estimated by the node, no tip. */
@@ -150,6 +201,7 @@ export class PolkadotAdapter implements ChainAdapter<'dot'> {
 
   /** `max`: spendable minus the fee Rust estimates, built twice. */
   async buildTx(params: BuildParams): Promise<DotUnsigned> {
+    if (params.asset.kind === 'dotasset') return this.buildAssetTx(params);
     if (params.asset.kind !== 'native') throw new Error(l10n('Actif Polkadot inattendu', 'Unexpected Polkadot asset'));
     if (!params.max) return this.buildTransfer(params.to, params.amount);
     const spendable = BigInt((await this.backend.account(this.address)).spendable);
