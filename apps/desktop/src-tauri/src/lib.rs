@@ -18,6 +18,7 @@ mod commands_near;
 mod commands_servers;
 mod commands_stellar;
 mod commands_sui;
+mod commands_ton;
 mod commands_tron;
 mod commands_utxo;
 mod commands_xmr;
@@ -46,6 +47,7 @@ mod stake_tron;
 mod state;
 mod stellar_backend;
 mod sui_backend;
+mod ton_backend;
 mod tor;
 mod tron_backend;
 mod utxo_backend;
@@ -257,6 +259,14 @@ pub fn run() {
             commands_xmr::xmr_prepare_tx,
             commands_xmr::xmr_send_tx,
             commands_xmr::xmr_seed_show,
+            commands_ton::ton_backend_info,
+            commands_ton::ton_address,
+            commands_ton::ton_account,
+            commands_ton::ton_txs,
+            commands_ton::ton_build_tx,
+            commands_ton::ton_sign_tx,
+            commands_ton::ton_broadcast,
+            commands_ton::ton_tx_status,
             commands_cardano::ada_backend_info,
             commands_cardano::ada_address,
             commands_cardano::ada_account,

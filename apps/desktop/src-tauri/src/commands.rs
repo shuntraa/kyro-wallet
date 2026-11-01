@@ -510,6 +510,8 @@ pub struct Accounts {
     algo: AddressOut,
     /// Monero primary address (stagenet on testnet), spend key from `m/44'/128'/a'/0/0`.
     xmr: AddressOut,
+    /// Wallet v4R2 of `m/44'/607'/a'`, non-bounceable form (`UQ…`, testnet `0Q…`).
+    ton: AddressOut,
 }
 
 fn utxo_account_out(
@@ -621,6 +623,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             xmr: AddressOut {
                 address: wallet_core::xmr_address(seed, net, a, 0)?,
                 path: wallet_core::xmr_path(a),
+            },
+            ton: AddressOut {
+                address: wallet_core::ton_address(seed, a, net == Network::Testnet)?,
+                path: wallet_core::ton_path(a),
             },
         })
     })

@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84), Dogecoin, Bitcoin Cash (CashAddr,
-//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Algorand (pay), Polkadot Asset Hub (sr25519, `transfer_keep_alive`), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer), Cardano (CIP-1852 payments) and Monero (CLSAG, via monero-oxide) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), TON (wallet v4R2 transfers), Algorand (pay), Polkadot Asset Hub (sr25519, `transfer_keep_alive`), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer), Cardano (CIP-1852 payments) and Monero (CLSAG, via monero-oxide) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -47,6 +47,7 @@ mod sol_stake;
 mod stellar;
 mod sui;
 mod sui_tx;
+mod ton;
 mod tron;
 mod utxo;
 mod vault;
@@ -173,6 +174,13 @@ pub use sui_tx::{
     sui_decode_tx, sui_sign, sui_tx_digest, sui_verify_signed, SuiGasCoinView, SuiObjectRef,
     SuiTransfer, SuiTransferAmount, SuiTxSummary, SuiWarning, MIST_PER_SUI, SUI_COIN_TYPE,
     SUI_HIGH_GAS_BUDGET, SUI_MAX_GAS_OBJECTS,
+};
+pub use ton::{
+    ton_address, ton_decode_tx, ton_parse_address, ton_parse_raw_address, ton_path, ton_public_key,
+    ton_sign, ton_unsigned_transfer, ton_verify_signed, ton_wallet_address, ton_wallet_id,
+    TonAddress, TonEstimateParts, TonFriendly, TonSigned, TonTransfer, TonTxSummary, TonWarning,
+    TON_MAX_COMMENT_BYTES, TON_MODE_ALL_BALANCE, TON_MODE_PAY_FEES, TON_V4R2_CODE_HASH,
+    TON_WALLET_ID_MAINNET, TON_WALLET_ID_TESTNET,
 };
 pub use tron::{
     tron_address, tron_address_at, tron_address_bytes, tron_address_from_bytes,

@@ -62,6 +62,7 @@ export const staking: Record<keyof typeof fr, string> = {
   'staking.otherXlm': 'No native staking (inflation was removed in 2019).',
   'staking.otherNear': 'Staking through pools (contracts): not in Kyro yet.',
   'staking.otherAlgo': 'Not offered: taking part in consensus requires registering a node’s participation keys (keyreg), which Kyro does not sign.',
+  'staking.otherTon': 'Not offered: TON staking goes through nominator pools (third-party contracts Kyro does not decode).',
   'staking.otherEvmName': 'Ethereum and EVM chains',
   'staking.otherEvm': 'Not offered: native staking requires 32 ETH and a validator running at all times, and Kyro does not go through a third party’s contract.',
 

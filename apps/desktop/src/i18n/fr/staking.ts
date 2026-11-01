@@ -62,6 +62,7 @@ export const staking = {
   'staking.otherXlm': 'Pas de staking natif (l’inflation a été supprimée en 2019).',
   'staking.otherNear': 'Staking via des pools (contrats) : pas encore dans Kyro.',
   'staking.otherAlgo': 'Non proposé : la participation au consensus exige d’enregistrer des clés de participation d’un nœud (keyreg), que Kyro ne signe pas.',
+  'staking.otherTon': 'Non proposé : le staking TON passe par des pools de nominateurs (contrats tiers que Kyro ne décode pas).',
   'staking.otherEvmName': 'Ethereum et chaînes EVM',
   'staking.otherEvm': 'Non proposé : le staking natif exige 32 ETH et un validateur qui tourne en permanence, et Kyro ne passe pas par le contrat d’un tiers.',
 

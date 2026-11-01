@@ -101,6 +101,7 @@ export const settings = {
   'settings.hintKas': 'KAS (20 adresses de réception + 20 de monnaie)',
   'settings.hintAlgo': 'ALGO (pas d’ASA)',
   'settings.hintXmr': 'XMR, adresse principale et sous-adresses',
+  'settings.hintTon': 'Toncoin (portefeuille v4R2)',
   'settings.nameEmpty': 'Donne un nom au compte.',
   'settings.nameTooLong': '32 caractères au plus.',
   'settings.nameBadChar': 'Caractère non autorisé.',

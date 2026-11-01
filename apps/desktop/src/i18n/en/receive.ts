@@ -31,6 +31,8 @@ export const receive: Record<keyof typeof fr, string> = {
   'receive.descDotTestnet': 'Westend Asset Hub address (5…, generic format): for test WND.',
   'receive.descAlgo': 'Algorand address (58 characters): for ALGO. Algorand tokens (ASA) are not handled by Kyro yet.',
   'receive.descXmr': 'Monero primary address. For each person or service paying you, prefer a subaddress (below): they cannot be linked to one another.',
+  'receive.descTon': 'TON address (UQ…, non-bounceable form, a wallet’s): for Toncoin. No comment to give: this wallet is yours alone.',
+  'receive.descTonTestnet': 'TON testnet address (0Q…, non-bounceable form): for test Toncoin only.',
   'receive.xlmReserve': '<b>1 XLM reserve:</b> a Stellar account only exists once it has received at least 1 XLM (2 × the 0.5 XLM base reserve), which stays locked; each trustline, offer or signer adds 0.5 XLM. The first send to this address must therefore be at least 1 XLM (the sender creates your account with a CreateAccount operation). Only send XLM here: other Stellar assets need a trustline, which Kyro does not handle yet.',
   'receive.xlmNotCreated': 'Your account is not created yet: ask for at least 1 XLM to start.',
   'receive.xlmExists': 'Your account exists: locked reserve {reserve}.',

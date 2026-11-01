@@ -53,6 +53,8 @@ export interface WalletAccounts {
   algo?: { address: string; path?: string };
   /** Vault only: Monero on a hardware wallet is HW_UNSUPPORTED. */
   xmr?: { address: string; path?: string };
+  /** Vault only: no hardware wallet signs TON in Kyro. */
+  ton?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {

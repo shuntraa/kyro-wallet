@@ -99,11 +99,16 @@ export interface Accounts {
    * BIP32 key `m/44'/128'/a'/0/0` (§2.11). Subaddresses: `xmr_new_subaddress`.
    */
   xmr: AddressInfo;
+  /**
+   * TON `m/44'/607'/a'` (SLIP-10 ed25519, Trust Wallet's route), wallet v4R2, non-bounceable
+   * `UQ…` (testnet `0Q…`, another wallet id: another address) (§2.11).
+   */
+  ton: AddressInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'bch' | 'dash' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm', 'near', 'bch', 'dash', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'bch' | 'dash' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm', 'near', 'bch', 'dash', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -1344,6 +1349,100 @@ export interface XmrTxSummary {
   requiresExtraConfirmation: boolean;
 }
 
+// ---------------------------------------------------------------- TON (§2.11)
+
+export interface TonBackendInfo {
+  network: UtxoNetworkKey;
+  /** `toncenter.com` / `testnet.toncenter.com`. */
+  label: string;
+  tor: boolean;
+}
+
+/** Account state as TON Center reports it. `uninit`: never deployed (may hold a balance). */
+export type TonStatus = 'active' | 'uninit' | 'frozen' | 'nonexist';
+
+/** `ton_account`. Amounts: nanotons (decimal strings). */
+export interface TonAccountInfo {
+  /** Non-bounceable form (`UQ…`, testnet `0Q…`). */
+  address: string;
+  /** `0:hex`. */
+  raw: string;
+  status: TonStatus;
+  balance: string;
+  /** Active wallets only. */
+  seqno: number | null;
+  /** `wallet v4 r2`… when TON Center recognizes the contract. */
+  walletType: string | null;
+}
+
+/** serde tag `kind`. Every warning → reinforced confirmation. */
+export type TonWarning = { kind: 'unusualText' };
+
+/** wallet-core `TonTxSummary`: Rust's strict decoding of the external message. */
+export interface TonTxSummary {
+  /** Our wallet (non-bounceable). */
+  wallet: string;
+  /** Recipient in the form matching the bounce flag (`EQ…` bounce, `UQ…` no bounce). */
+  destination: string;
+  /** Same account, other form. */
+  destinationOther: string;
+  destinationRaw: string;
+  /** Nanotons; `'0'` with `sendAll`. */
+  amount: string;
+  /** Mode 130: the whole balance (minus fees). */
+  sendAll: boolean;
+  bounce: boolean;
+  /** Cleaned text comment, null = none. */
+  comment: string | null;
+  seqno: number;
+  /** UNIX seconds. */
+  validUntil: number;
+  /** First transfer: carries the wallet's StateInit. */
+  deploysWallet: boolean;
+  walletId: number;
+  warnings: TonWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+/** Live context Rust read for the dialog. `fee`: TON Center's emulation, nanotons. */
+export interface TonContext {
+  account: TonAccountInfo;
+  destination: TonAccountInfo;
+  fee: string;
+}
+
+/** `ton_txs` entry (last 50 transactions of the wallet, newest first). */
+export interface TonHistoryEntry {
+  /** Transaction hash (hex). */
+  hash: string;
+  /** ms epoch. */
+  time: number | null;
+  direction: 'in' | 'out';
+  counterparty: string | null;
+  /** Nanotons. */
+  amount: string;
+  /** Total fees of our transaction (outgoing only). */
+  fee: string | null;
+  comment: string | null;
+  /** Funds that came back from a failed earlier transfer. */
+  bounced: boolean;
+  success: boolean;
+}
+
+export interface TonBuilt {
+  /** Unsigned external message, BOC base64 (zero signature). */
+  boc: string;
+  summary: TonTxSummary;
+  context: TonContext;
+}
+
+/** `ton_tx_status`: the transaction that processed our message, by normalized hash. */
+export interface TonTxStatus {
+  found: boolean;
+  success: boolean;
+  txHash: string | null;
+}
+
 // ---------------------------------------------------------------- Cardano (§2.7)
 
 export interface CardanoBackendInfo {
@@ -2222,6 +2321,25 @@ export interface Commands {
   xmr_send_tx: { args: { id: string; password: string } & WithAccount; ret: { txid: string; summary: XmrTxSummary } };
   /** 25-word Monero seed, shown in a native window only. Returns nothing. */
   xmr_seed_show: { args: { password: string } & WithAccount; ret: void };
+  // TON (§2.11): Rust builds the v4R2 transfer (seqno and states from TON Center, fee emulated),
+  // decodes it strictly (re-encoding identical), re-reads both accounts live, signs behind the
+  // password and the native dialog (comment framed, both address forms). HW: not supported.
+  ton_backend_info: { args: undefined; ret: TonBackendInfo };
+  /** `m/44'/607'/{account}'`, non-bounceable `UQ…` (testnet `0Q…`). */
+  ton_address: { args: WithAccount; ret: string };
+  /** User-friendly addresses only (raw `0:…` refused); testnet-flagged ones refused on mainnet. */
+  ton_account: { args: { address: string }; ret: TonAccountInfo };
+  ton_txs: { args: { address: string }; ret: TonHistoryEntry[] };
+  /**
+   * `amount`: nanotons (ignored with `sendAll`, mode 130). `comment`: text, ≤ 123 bytes UTF-8.
+   * Refused before building: frozen recipient, masterchain, amount + estimated fee ≥ balance,
+   * our wallet empty or frozen. Bounce = the address's flag, off if the recipient is not active.
+   */
+  ton_build_tx: { args: { to: string; amount: string; comment?: string; sendAll?: boolean } & WithAccount; ret: TonBuilt };
+  ton_sign_tx: { args: { boc: string; password: string } & WithAccount; ret: { boc: string; hash: string; normalizedHash: string; summary: TonTxSummary; context: TonContext } };
+  /** Signature verified, message hashes returned by TON Center must be ours. Returns the normalized hash. */
+  ton_broadcast: { args: { boc: string } & WithAccount; ret: string };
+  ton_tx_status: { args: { hash: string }; ret: TonTxStatus };
   // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
   // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
   // Hardware wallets: HW_UNSUPPORTED.

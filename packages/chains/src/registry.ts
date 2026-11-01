@@ -14,7 +14,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
 /** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). `kas`: Kaspa (KAS, `kas_*`, §2.11). `dot`: Polkadot Asset Hub (`dot_*`, §2.11). */
 /** `algo`: Algorand (ALGO payments, `algo_*`, §2.11). */
 /** `xmr`: Monero (scanned, built, signed and published by Rust, `xmr_*`, §2.10). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr';
+/** `ton`: TON (Toncoin, wallet v4R2, `ton_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
@@ -55,7 +56,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain | XmrChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain | XmrChain | TonChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -172,7 +173,7 @@ const SOL: Record<Network, SolChain> = {
   },
 };
 
-/** Phase 4: listed with their price, shown as "Bientôt". Empty now: Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar and Polkadot all have a full send path. */
+/** Phase 4: listed with their price, shown as "Bientôt". Empty now: Litecoin, Dogecoin, TRON, XRP, Cardano, Stellar, Polkadot and TON all have a full send path. */
 export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
 ];
 
@@ -470,6 +471,28 @@ const XMR_CHAINS: Record<Network, XmrChain> = {
 
 export function xmrChain(network: Network): XmrChain {
   return XMR_CHAINS[network];
+}
+
+/**
+ * TON (phase 4): Rust `ton_*` commands and `TonAdapter` (`packages/chains/src/ton/`). Wallet
+ * v4R2 of `m/44'/607'/a'` (Trust Wallet's route). Testnet = TON testnet (another wallet id, so
+ * another address: a testnet signature can never be replayed on mainnet). Toncoin only (no
+ * jettons). Hardware wallets: not supported (the UI disables TON for such accounts).
+ */
+export interface TonChain extends Omit<ChainBase, 'phase'> {
+  family: 'ton';
+  phase: 4;
+}
+
+const TON_CHAINS: Record<Network, TonChain> = {
+  testnet: { family: 'ton', key: 'ton', name: 'TON testnet', label: 'TON testnet', network: 'testnet', color: '#0098EA', glyph: '◇',
+    nativeSymbol: 'TON', nativeName: 'Toncoin', nativeDecimals: 9, coingeckoId: 'the-open-network', phase: 4, blockTimeSecs: 5 },
+  mainnet: { family: 'ton', key: 'ton', name: 'TON', label: 'TON', network: 'mainnet', color: '#0098EA', glyph: '◇',
+    nativeSymbol: 'TON', nativeName: 'Toncoin', nativeDecimals: 9, coingeckoId: 'the-open-network', phase: 4, blockTimeSecs: 5 },
+};
+
+export function tonChain(network: Network): TonChain {
+  return TON_CHAINS[network];
 }
 
 interface TokenSpec {
@@ -786,7 +809,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network), tonChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -949,6 +972,8 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   // Algorand: reached by Rust only (algo_*), Tor circuits of the `algorand` family. No custom server yet.
   list.push({ host: `${nk}-api.algonode.cloud`, purpose: `Algorand${network === 'mainnet' ? '' : ' TestNet'} : soldes, paramètres, diffusion (algod AlgoNode / Nodely)` });
   list.push({ host: `${nk}-idx.algonode.cloud`, purpose: `Algorand${network === 'mainnet' ? '' : ' TestNet'} : historique (indexer AlgoNode / Nodely)` });
+  // TON: reached by Rust only (ton_*), Tor circuits of the `ton` family; no custom server yet.
+  list.push({ host: network === 'mainnet' ? 'toncenter.com' : 'testnet.toncenter.com', purpose: `TON${network === 'mainnet' ? '' : ' testnet'} : solde, seqno, historique, frais estimés, diffusion (TON Center, ≈ 1 requête/s sans clé)` });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'

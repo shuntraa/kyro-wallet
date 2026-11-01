@@ -1,6 +1,6 @@
 [package]
 name = "wallet-core"
-description = "Kyro wallet core: BIP39/BIP32 derivation, encrypted vault, BTC/LTC/DOGE/EVM/Solana/TRON/XRP/Stellar/NEAR/Cardano/Sui/Hedera/Cardano/Kaspa/Polkadot/Algorand signing. Pure, no I/O."
+description = "Kyro wallet core: BIP39/BIP32 derivation, encrypted vault, BTC/LTC/DOGE/EVM/Solana/TRON/XRP/Stellar/NEAR/Cardano/Sui/Hedera/Cardano/Kaspa/Polkadot/Algorand/TON signing. Pure, no I/O."
 version.workspace = true
 edition.workspace = true
 license = "GPL-3.0-or-later"
@@ -54,6 +54,11 @@ monero-wallet = { version = "=0.2.0" }
 # RNG for monero-wallet's signing API (rand_core 0.6 traits), seeded from the OS (getrandom).
 rand_core = { version = "=0.6.4", default-features = false }
 rand_chacha = { version = "=0.3.1", default-features = false }
+# TON: cells and bags of cells (BOC) only. tycho-types is the cell library of the Tycho node
+# (Broxus), TVM-compatible (same cell representation and hashes, same BOC format as TON). Its
+# block / message models, serde and sync features are off: Kyro writes the few TL-B layouts it
+# needs itself and parses them strictly (re-encoding must give the same bytes).
+tycho-types = { version = "=0.3.6", default-features = false }
 # Vault.
 argon2 = { version = "=0.5.3", default-features = false, features = ["alloc", "zeroize"] }
 chacha20poly1305 = { version = "=0.10.1", default-features = false, features = ["alloc"] }

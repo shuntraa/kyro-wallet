@@ -3,7 +3,7 @@
 // Several vault accounts per chain (docs/IPC.md §2.9): pure helpers shared by the app state,
 // the portfolio and the account screens. Public data only (indices, names, addresses).
 
-import type { AccountChain, Accounts, VaultAccountEntry } from '@kyro/shared';
+import { sameTonAccount, type AccountChain, type Accounts, type VaultAccountEntry } from '@kyro/shared';
 import type { AdapterSet, AnyAdapter } from '@kyro/chains';
 import { t } from '../i18n';
 
@@ -27,6 +27,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   dot: 'Polkadot',
   algo: 'Algorand',
   xmr: 'Monero',
+  ton: 'TON',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -68,6 +69,8 @@ export function accountChainHint(chain: AccountChain): string {
       return t('settings.hintAlgo');
     case 'xmr':
       return t('settings.hintXmr');
+    case 'ton':
+      return t('settings.hintTon');
   }
 }
 
@@ -158,7 +161,7 @@ export interface OwnAccountRef {
   addresses: string[];
 }
 
-const sameAddress = (family: AccountChain, a: string, b: string) => (family === 'evm' || family === 'sui' || family === 'hbar' ? a.toLowerCase() === b.toLowerCase() : a === b);
+const sameAddress = (family: AccountChain, a: string, b: string) => (family === 'evm' || family === 'sui' || family === 'hbar' ? a.toLowerCase() === b.toLowerCase() : family === 'ton' ? sameTonAccount(a, b) : a === b);
 
 /** The user's OTHER accounts of `family` (not `current`), for « Mes comptes » in Envoyer. */
 export function otherOwnAccounts<T extends OwnAccountRef>(sources: T[], family: AccountChain, current: number): T[] {

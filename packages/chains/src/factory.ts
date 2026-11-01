@@ -40,7 +40,7 @@ export {
 } from './hedera/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
-import { stellarChain, xrpChain, nearChain, hbarChain, xmrChain } from './registry';
+import { stellarChain, xrpChain, nearChain, hbarChain, xmrChain, tonChain } from './registry';
 import { StellarAdapter } from './stellar/adapter';
 import { NearAdapter } from './near/adapter';
 import { SuiAdapter } from './sui/adapter';
@@ -53,6 +53,7 @@ import { polkadotChain } from './registry';
 import { AlgorandAdapter } from './algorand/adapter';
 import { algorandChain } from './registry';
 import { XmrAdapter } from './xmr/adapter';
+import { TonAdapter } from './ton/adapter';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -90,6 +91,8 @@ export interface AdapterSet {
   algo: AlgorandAdapter | null;
   /** Monero: vault only (hardware wallets: HW_UNSUPPORTED). */
   xmr: XmrAdapter | null;
+  /** TON: vault only (no hardware wallet support). */
+  ton: TonAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -147,6 +150,8 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const algo = accounts.algo ? new AlgorandAdapter({ chain: algorandChain(network), address: accounts.algo.address, ...a }) : null;
   // Monero: Rust picks the node (servers.monero) and scans locally.
   const xmr = accounts.xmr && !hw ? new XmrAdapter({ chain: xmrChain(network), address: accounts.xmr.address, ...a }) : null;
+  // TON: Rust picks the server (TON Center).
+  const ton = accounts.ton ? new TonAdapter({ chain: tonChain(network), address: accounts.ton.address, ...a }) : null;
   const all: AnyAdapter[] = [
     ...(btc ? [btc] : []),
     ...evm.values(),
@@ -160,8 +165,9 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
     ...(polkadot ? [polkadot] : []),
     ...(algo ? [algo] : []),
     ...(xmr ? [xmr] : []),
+    ...(ton ? [ton] : []),
   ];
-  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, xmr, all, hw: hw ?? null };
+  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, xmr, ton, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin, Bitcoin Cash, Dash
@@ -420,3 +426,24 @@ export {
   type DotUnsigned,
   type DotSigned,
 } from './polkadot/adapter';
+
+// ---------------------------------------------------------------- phase 4: TON
+
+export {
+  TonAdapter,
+  rustTonBackend,
+  isTonAddress,
+  tonRecipientProblem,
+  tonCommentProblem,
+  TON_MAX_COMMENT_BYTES,
+  type TonAdapterOptions,
+  type TonBackend,
+  type TonAccountInfo,
+  type TonContext,
+  type TonHistoryEntry,
+  type TonTxStatus,
+  type TonTxSummary,
+  type TonWarning,
+  type TonUnsigned,
+  type TonSigned,
+} from './ton/adapter';

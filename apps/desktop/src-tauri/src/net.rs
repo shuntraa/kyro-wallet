@@ -35,6 +35,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Stellar (SDF's public Horizon): mainnet and testnet; only Rust's `stellar_*` commands.
     "horizon.stellar.org",
     "horizon-testnet.stellar.org",
+    // TON Center API v3 (mainnet, testnet; keyless public tier, ≈ 1 request/s): only Rust's
+    // `ton_*` commands.
+    "toncenter.com",
+    "testnet.toncenter.com",
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
@@ -218,6 +222,9 @@ pub struct EnvKeys {
     pub lifi: Option<String>,
     pub jupiter: Option<String>,
     pub trongrid: Option<String>,
+    /// TON Center key (`X-API-Key`), dev `.env` only; sent by Rust's `ton_*` commands to
+    /// TON Center only (never injected into webview requests).
+    pub toncenter: Option<String>,
 }
 
 impl EnvKeys {
@@ -229,6 +236,7 @@ impl EnvKeys {
             lifi: get("KYRO_LIFI_API_KEY"),
             jupiter: get("KYRO_JUPITER_API_KEY"),
             trongrid: get("KYRO_TRONGRID_API_KEY"),
+            toncenter: get("KYRO_TONCENTER_API_KEY"),
         }
     }
 }
@@ -392,6 +400,7 @@ pub enum Family {
     Tron,
     Xrp,
     Stellar,
+    Ton,
     Cardano,
     Near,
     Sui,
@@ -430,6 +439,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "horizon.stellar.org" || host == "horizon-testnet.stellar.org" {
         Family::Stellar
+    } else if host == "toncenter.com" || host == "testnet.toncenter.com" {
+        Family::Ton
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
     } else if matches!(
@@ -1268,6 +1279,8 @@ mod tests {
             assert_eq!(family_for(h, &c), Family::Algorand);
         }
         assert_eq!(family_for("algonode.cloud", &c), Family::Other);
+        assert_eq!(family_for("toncenter.com", &c), Family::Ton);
+        assert_eq!(family_for("testnet.toncenter.com", &c), Family::Ton);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
         for h in [
