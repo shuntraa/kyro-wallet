@@ -337,6 +337,7 @@ pub fn run() {
             stake_tron::tron_stake_build,
             stake_tron::tron_stake_sign,
             commands::set_capture_protection,
+            commands::open_fees_page,
             commands::config_get,
             network::network_get,
             network::network_set,

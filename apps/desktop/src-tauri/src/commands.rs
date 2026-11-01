@@ -1252,6 +1252,41 @@ pub fn set_capture_protection(window: WebviewWindow, enabled: bool) -> AppResult
     Ok(())
 }
 
+/// The only external page the app opens: Kyro's public swap fee schedule (Swap screen,
+/// « Frais de service inclus »). No argument: the URL is fixed here, so the webview cannot make
+/// the system browser open anything else. It opens in the user's own browser (outside Kyro's Tor).
+pub const FEES_PAGE_URL: &str = "https://kyrowallet.com/frais";
+
+/// System command that opens `FEES_PAGE_URL` in the default browser.
+fn fees_page_command() -> std::process::Command {
+    #[cfg(target_os = "windows")]
+    {
+        let mut c = std::process::Command::new("rundll32.exe");
+        c.args(["url.dll,FileProtocolHandler", FEES_PAGE_URL]);
+        c
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let mut c = std::process::Command::new("open");
+        c.arg(FEES_PAGE_URL);
+        c
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(FEES_PAGE_URL);
+        c
+    }
+}
+
+#[tauri::command]
+pub fn open_fees_page() -> AppResult<()> {
+    fees_page_command()
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| AppError::Internal(format!("navigateur introuvable : {e}")))
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigOut {
@@ -1591,5 +1626,18 @@ mod tests {
         assert!(!backup_answers_match(&p, &a(["mot1", "mot6", "mot11"])));
         assert!(!backup_answers_match(&p, &a(["mot6", "mot1", "mot12"])));
         assert!(!backup_answers_match(&p, &["mot1".into(), "mot6".into()]));
+    }
+}
+
+#[cfg(test)]
+mod fees_page_tests {
+    use super::*;
+
+    #[test]
+    fn opens_only_the_fixed_fees_page() {
+        assert_eq!(FEES_PAGE_URL, "https://kyrowallet.com/frais");
+        let c = fees_page_command();
+        let args: Vec<String> = c.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(args.last().map(String::as_str), Some(FEES_PAGE_URL));
     }
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-fees-page"
+description = "Enables the open_fees_page command without any pre-configured scope."
+commands.allow = ["open_fees_page"]
+
+[[permission]]
+identifier = "deny-open-fees-page"
+description = "Denies the open_fees_page command without any pre-configured scope."
+commands.deny = ["open_fees_page"]

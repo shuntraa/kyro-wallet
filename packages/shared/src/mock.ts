@@ -1013,6 +1013,8 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
       if (wasEnabled && !settings.tor.enabled) tor.stop();
       return publicSettings();
     },
+    // Demo: nothing to open (no system browser behind the mock).
+    open_fees_page: () => undefined,
     set_capture_protection: (a) => {
       captureProtected = Boolean(a.enabled);
     },

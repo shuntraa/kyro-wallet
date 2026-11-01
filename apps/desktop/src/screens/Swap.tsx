@@ -16,13 +16,12 @@
 // and signed by Rust like any send).
 
 import { useEffect, useMemo, useState } from 'react';
-import { toIpcError, type AccountChain } from '@kyro/shared';
+import { call, toIpcError, type AccountChain } from '@kyro/shared';
 import { allChains, assetsFor, evmChains, findChain, signAndBroadcast, solChain, tryParseUnits, unitsToNumber, type AssetDef, type Chain, type EvmAdapter } from '@kyro/chains';
 import {
   buildApproval,
   buildRevoke,
   compareFreshQuote,
-  feeLabel,
   fetchQuotes,
   isCurrentZeroExSettler,
   isNative,
@@ -223,16 +222,6 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const busy = phase !== 'idle' && phase !== 'done';
   /** What the confirmation shows and what gets signed. */
   const shown = confirmOpen ? reviewed ?? chosen : chosen;
-  /**
-   * Confirmation only: ONE total of the fees already taken from what you receive (Kyro + the
-   * provider's own), no split, no provider name. Null when a price is missing ('inclus' alone).
-   */
-  const includedFeesFiat = (() => {
-    if (!shown || !sell || !sellAmount) return null;
-    const kyro = shown.kyroFeeBps > 0 ? (sellPrice !== undefined ? (unitsToNumber(sellAmount, sell.decimals) * sellPrice * shown.kyroFeeBps) / 10_000 : null) : 0;
-    const provider = shown.providerFeeIncluded ? shown.providerFeeFiat : 0;
-    return kyro === null || provider === null ? null : kyro + provider;
-  })();
   const canSwap = !!shown && !!password && !over && !busy && (shown.tx.kind !== 'evm' || (!!evmAdapter && !!shown.evmCheck)) && (shown.tx.kind !== 'deposit' || (!!deposit && !!sourceAdapter));
 
   // Most the swap may cost in network fees (gas limit × max fee per gas), shown before signing.
@@ -565,9 +554,24 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               right={<>{t('swap.balance', { amount: fmtCrypto(pf.balances.get(buy.id) ?? 0n, buy.decimals) })}</>}
               amount={<span key={buyAmount ? String(buyAmount) : 'none'} className={cn('figure fade-in block truncate text-[42px]', !buyAmount && 'text-faint')}>{buyAmount ? fmtCrypto(buyAmount, buy.decimals, undefined, 6) : quotes.loading ? '…' : '0'}</span>}
               sub={buyAmount && buyPrice !== undefined ? `≈ ${fmtFiat(unitsToNumber(buyAmount, buy.decimals) * buyPrice, cur)}` : ' '}
+              note={<FeesIncludedLink />}
               token={<TokenButton asset={buy} items={buyItems} onSelect={setBuyId} />}
             />
           </div>
+
+          {/* What you get: the guaranteed minimum and the network fees. The amount above is already net of the service fee. */}
+          {chosen && (
+            <div className="fade-in flex flex-col rounded-box border border-line bg-bg px-4 text-[13px]">
+              <div className="flex h-9 items-center justify-between border-b border-line">
+                <span className="text-mute">{t('swap.minGuaranteed')}</span>
+                <span className="font-medium">{fmtCrypto(chosen.minBuyAmount, buy.decimals, buy.symbol, 6)}</span>
+              </div>
+              <div className="flex h-9 items-center justify-between">
+                <span className="text-mute">{t('swap.networkFees')}</span>
+                <span className="text-text2">{chosen.gasFeeFiat !== null ? `≈ ${fmtFiat(chosen.gasFeeFiat, cur)}` : t('swap.networkFeesAtReview')}</span>
+              </div>
+            </div>
+          )}
 
 
           {chosen && needsAllowanceCheck && (
@@ -657,17 +661,21 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
               </div>
               <div className="flex h-10 items-center justify-between border-b border-line">
                 <span className="text-mute">{t('swap.youReceive')}</span>
-                <span className="font-medium">≈ {fmtCrypto(shown.buyAmount, buy.decimals, buy.symbol, 6)}</span>
+                <span className="flex flex-col items-end">
+                  <span className="font-medium">≈ {fmtCrypto(shown.buyAmount, buy.decimals, buy.symbol, 6)}</span>
+                  <FeesIncludedLink />
+                </span>
               </div>
               <div className="flex h-10 items-center justify-between border-b border-line">
                 <span className="text-mute">{t('swap.minGuaranteed')}</span>
                 <span className="font-medium">{fmtCrypto(shown.minBuyAmount, buy.decimals, buy.symbol, 6)}</span>
               </div>
-              {/* One total (Kyro + provider), taken from what you receive: no split, no provider name. */}
-              <div className="flex h-10 items-center justify-between border-b border-line">
-                <span className="text-mute">{t('swap.feesIncluded')}</span>
-                <span className="text-text2">{includedFeesFiat !== null ? `≈ ${fmtFiat(includedFeesFiat, cur)}` : t('swap.alreadyDeducted')}</span>
-              </div>
+              {shown.tx.kind === 'solana' && (
+                <div className="flex h-10 items-center justify-between border-b border-line">
+                  <span className="text-mute">{t('swap.networkFees')}</span>
+                  <span className="font-medium">{shown.gasFeeFiat !== null ? `≈ ${fmtFiat(shown.gasFeeFiat, cur)}` : '—'}</span>
+                </div>
+              )}
               {shown.tx.kind === 'deposit' && (
                 <div className="flex h-10 items-center justify-between border-b border-line">
                   <span className="text-mute">{t('swap.maxNetworkFees')}</span>
@@ -746,7 +754,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
             {shown.tx.kind === 'solana' && shown.cross && (
               <SecondConfirmNotice
                 lines={[
-                  t('swap.solCrossTransfers', { provider: shown.providerName, symbol: sell.symbol, kyroFee: feeLabel(shown.kyroFeeBps), bridge: shown.cross.bridgeName, amount: fmtCrypto(sellAmount, sell.decimals, sell.symbol) }),
+                  t('swap.solCrossTransfers', { provider: shown.providerName, symbol: sell.symbol, bridge: shown.cross.bridgeName, amount: fmtCrypto(sellAmount, sell.decimals, sell.symbol) }),
                   t('swap.solCrossBridgeConfirms', { bridge: shown.cross.bridgeName, chain: buyChain?.label ?? '', recipient: shortAddress(shown.cross.recipient), symbol: buy.symbol, min: fmtCrypto(shown.minBuyAmount, buy.decimals, buy.symbol, 6) }),
                   t('swap.solCrossTracker'),
                 ]}
@@ -819,7 +827,20 @@ function DepositChecks({ sell, buy, chainLabel, buyChainLabel, sellAmount, quote
   );
 }
 
-function TokenPanel({ label, right, amount, sub, token }: { label: string; right: React.ReactNode; amount: React.ReactNode; sub: string; token: React.ReactNode }) {
+/**
+ * « Frais de service inclus »: the amount shown is already net of Kyro's service fee. Opens the
+ * public schedule (kyrowallet.com/frais) in the system browser — Rust holds the URL (`open_fees_page`).
+ */
+function FeesIncludedLink() {
+  const { t } = useT();
+  return (
+    <button type="button" className="self-start text-[12px] text-faint underline decoration-dotted underline-offset-2 hover:text-mute" title={t('swap.feesIncludedHint')} onClick={() => void call('open_fees_page').catch(() => undefined)}>
+      {t('swap.feesIncluded')}
+    </button>
+  );
+}
+
+function TokenPanel({ label, right, amount, sub, note, token }: { label: string; right: React.ReactNode; amount: React.ReactNode; sub: string; note?: React.ReactNode; token: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1 rounded-box border border-line bg-bg px-[22px] py-3.5 transition-[border-color,box-shadow] duration-150 focus-within:shadow-[0_0_0_1px_rgba(124,196,255,.35)]">
       <div className="flex justify-between text-[13px]">
@@ -831,6 +852,7 @@ function TokenPanel({ label, right, amount, sub, token }: { label: string; right
         {token}
       </div>
       <span className="text-[13px] text-faint">{sub}</span>
+      {note}
     </div>
   );
 }

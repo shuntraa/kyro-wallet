@@ -2738,6 +2738,8 @@ export interface Commands {
    */
   settings_set: { args: { settings: SettingsInput }; ret: Settings };
   set_capture_protection: { args: { enabled: boolean }; ret: void };
+  /** Opens https://kyrowallet.com/frais (URL fixed in Rust) in the system browser. */
+  open_fees_page: { args: undefined; ret: void };
   config_get: { args: undefined; ret: AppConfig };
   network_get: { args: undefined; ret: NetworkInfo };
   /**

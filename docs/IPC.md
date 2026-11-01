@@ -694,6 +694,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `btc_cbf_status` | — | `CbfStatus` | mode filtres compacts (fonction `cbf`) ; build sans la fonction : `FEATURE_DISABLED` |
 | `btc_cbf_sync` | — | `CbfStatus` | lance (ou rejoint) une synchronisation en arrière-plan ; progression par l'événement `cbf-status` ; exige le coffre déverrouillé (lit les xpubs) — une lecture coffre verrouillé ne lance pas de synchro ; build sans la fonction : `FEATURE_DISABLED` |
 | `set_capture_protection` | `{ enabled }` | `void` | `set_content_protected` |
+| `open_fees_page` | — | `void` | ouvre `https://kyrowallet.com/frais` (URL fixe en Rust) dans le navigateur du système ; aucun argument, aucune autre URL possible |
 | `config_get` | — | `{ network, hasCoingeckoKey, hasZeroxKey, hasTrongridKey, systemLanguage }` | `systemLanguage` : `'fr' \| 'en'`, la langue de l'ordinateur (ce que `settings.language = 'auto'` utilise) ; jamais les clés elles-mêmes ; chaque `hasXKey` = variable d'environnement **ou** clé enregistrée dans les réglages (ex. TronGrid : `KYRO_TRONGRID_API_KEY` ou `apiKeys.trongrid`) |
 | `network_get` / `network_set` | — / `{ network: 'mainnet' \| 'testnet' }` | `NetworkInfo` / `boolean` | choix du réseau depuis l'application, appliqué en **redémarrant** l'app : voir §2.10 |
 | `hw_list` | — | `DeviceInfo[]` | détecte les Ledger (HID) et Trezor (WebUSB) branchés ; ids stables pour la session (`ledger-1`, `trezor-1`…) tant que l'appareil reste sur le même port ; 10 s max. Voir §2.3 |
