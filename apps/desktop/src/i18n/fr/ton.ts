@@ -23,7 +23,7 @@ export const ton = {
   'ton.lJettonValue': '{symbol} · {decimals} décimales (table de Kyro)',
   'ton.lJettonMaster': 'Contrat vérifié (master)',
   'ton.lJettonWallet': 'Ton portefeuille de jetons (calculé par Kyro)',
-  'ton.lAttached': 'TON joints pour les frais (le surplus revient)',
+  'ton.lAttached': 'GRAM joints pour les frais (le surplus revient)',
   'ton.lAmount': 'Montant',
   'ton.sendAll': 'tout le solde, moins les frais',
   'ton.lBounce': 'Rebond',

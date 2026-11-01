@@ -187,12 +187,12 @@ impl TonJettonBody {
         }
         if self.response_destination != *wallet {
             return Err(Error::input(
-                "le surplus de TON du transfert de jeton doit revenir à ton portefeuille",
+                "le surplus de GRAM du transfert de jeton doit revenir à ton portefeuille",
             ));
         }
         if attached == 0 || attached > MAX_ATTACHED_NANOTON || self.forward_ton_amount >= attached {
             return Err(Error::input(
-                "TON joints au transfert de jeton refusés (0,2 TON au plus, plus que le montant transmis)",
+                "GRAM joints au transfert de jeton refusés (0,2 GRAM au plus, plus que le montant transmis)",
             ));
         }
         if let Some(c) = &self.comment {

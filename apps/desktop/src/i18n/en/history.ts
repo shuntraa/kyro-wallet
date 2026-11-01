@@ -25,6 +25,8 @@ export const history: Record<keyof typeof fr, string> = {
   'history.noTransactionsHint': 'Your transfers, receipts, swaps and approvals will appear here.',
   'history.nothingForFilter': 'Nothing for this filter.',
   'history.partial': 'Partial history: {details}',
+  'history.dotUnavailable': 'Polkadot: history unavailable (Statescan indexer unreachable or unexpected answer, or testnet). Your balance is still exact; only the sends made from this device are listed.',
+  'history.dotPartial': 'Polkadot: the history of one of the two chains (Asset Hub or relay chain) could not be read; some transfers may be missing.',
   'history.btcCapped': 'Bitcoin: last {cap} transactions per address. Older ones are not listed (server limit); your balance is still exact.',
   'history.ethNote': 'Without a third-party indexer, native ETH transfers only show up if they were made from this device. ERC-20 transfers from the last {blocks} blocks are read directly from the node.',
   'history.received': 'Received',

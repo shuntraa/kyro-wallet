@@ -108,5 +108,6 @@ export const portfolio = {
   'portfolio.hbarNoAccount': 'Pas encore de compte : le premier HBAR reçu sur ton adresse EVM le crée.',
   'portfolio.hbarHollow': 'Compte créé par un transfert reçu : ton premier envoi fixe sa clé.',
   'portfolio.dotNoHistoryTitle': 'Historique non disponible',
-  'portfolio.dotNoHistory': 'Polkadot n’a pas d’indexeur public sans clé : Kyro affiche ton solde, et seulement les envois faits depuis cet appareil.',
+  'portfolio.dotNoHistory': 'L’indexeur Statescan ne répond pas ou a répondu dans un format inattendu : Kyro affiche ton solde, et seulement les envois faits depuis cet appareil. Il réessaie à chaque actualisation.',
+  'portfolio.dotNoHistoryTestnet': 'Pas d’historique sur Westend (Statescan n’indexe que Polkadot) : Kyro affiche ton solde, et seulement les envois faits depuis cet appareil.',
 } as const;

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dot-txs"
+description = "Enables the dot_txs command without any pre-configured scope."
+commands.allow = ["dot_txs"]
+
+[[permission]]
+identifier = "deny-dot-txs"
+description = "Denies the dot_txs command without any pre-configured scope."
+commands.deny = ["dot_txs"]

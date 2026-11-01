@@ -25,6 +25,8 @@ export const history = {
   'history.noTransactionsHint': 'Tes envois, réceptions, swaps et autorisations apparaîtront ici.',
   'history.nothingForFilter': 'Rien pour ce filtre.',
   'history.partial': 'Historique partiel : {details}',
+  'history.dotUnavailable': 'Polkadot : historique indisponible (indexeur Statescan injoignable ou réponse inattendue, ou testnet). Ton solde reste exact ; seuls les envois faits depuis cet appareil sont listés.',
+  'history.dotPartial': 'Polkadot : l’historique d’une des deux chaînes (Asset Hub ou relay chain) n’a pas pu être lu ; des transferts peuvent manquer.',
   'history.btcCapped': 'Bitcoin : {cap} dernières transactions par adresse. Les plus anciennes ne sont pas listées (limite du serveur), ton solde reste exact.',
   'history.ethNote': 'Sans indexeur tiers, les envois d’ETH natif n’apparaissent que s’ils ont été faits depuis cet appareil. Les transferts ERC-20 des {blocks} derniers blocs sont lus directement sur le nœud.',
   'history.received': 'Reçu',

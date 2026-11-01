@@ -68,6 +68,9 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // mainnet), where DOT balances live since the Asset Hub migration; only Rust's `dot_*`.
     "westend-asset-hub-rpc.polkadot.io",
     "polkadot-asset-hub-rpc.polkadot.io",
+    // Polkadot history (Statescan keyless REST API: Asset Hub, relay chain); only Rust's `dot_txs`.
+    "ahp-api.statescan.io",
+    "polkadot-api.statescan.io",
     // Algorand (AlgoNode / Nodely free tier, no token): algod + indexer, mainnet and testnet;
     // only Rust's `algo_*` commands.
     "mainnet-api.algonode.cloud",
@@ -492,6 +495,7 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Kaspa
     } else if host == "westend-asset-hub-rpc.polkadot.io"
         || host == "polkadot-asset-hub-rpc.polkadot.io"
+        || crate::dot_history::STATESCAN_HOSTS.contains(&host)
     {
         Family::Polkadot
     } else if ALGORAND_HOSTS.contains(&host) {

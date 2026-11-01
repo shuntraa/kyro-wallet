@@ -77,6 +77,8 @@ import { guardAllowsSend, guardOnInput, guardVerify, handedOverGuard, initialGua
 import { addLocalTx, bumpContactSends, findContact, getContacts, getLastPrice, getLocalTxs, saveContacts, setLastPrice, type ContactFamily } from '../lib/storage';
 import { checkPricePlausible } from '@kyro/market';
 import { useAsync, useDebounced } from '../lib/useAsync';
+import { dedupeByGroup, groupTotal, networkSiblings, otherNetworksForAddress } from '../lib/multiNetwork';
+import { NetworkPicker, WrongNetworkLine } from '../components/NetworkPicker';
 import { AddressBlocks, CoinIcon, CopyButton, EnClair, PasswordField } from '../components/kit';
 import { useTorBlocked } from '../components/Tor';
 import { ServerDownLine, ServerMissingLine, serverDown, serverMissing } from '../components/ServerDown';
@@ -152,7 +154,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const sendable = useMemo(() => assetsFor(network).filter((a) => !a.readOnly && !!adapterFor(a, adapters) && (a.kind === 'native' || (pf.balances.get(a.id) ?? 0n) > 0n)), [network, pf.balances, adapters]);
   const defaultAsset = sendable.find((a) => a.id === assetId) ?? pf.holdings.find((h) => h.amount > 0n && !h.asset.readOnly)?.asset ?? sendable[0];
   const [selectedId, setSelectedId] = useState(defaultAsset?.id ?? '');
-  const asset = sendable.find((a) => a.id === selectedId) ?? defaultAsset;
+  // Every network an asset can be sent from (zero balances included), for the network choice.
+  const pickable = useMemo(() => assetsFor(network).filter((a) => !a.readOnly && !!adapterFor(a, adapters)), [network, adapters]);
+  const asset = sendable.find((a) => a.id === selectedId) ?? pickable.find((a) => a.id === selectedId) ?? defaultAsset;
+  const siblings = useMemo(() => (asset ? networkSiblings(asset, pickable) : []), [asset, pickable]);
+  const balanceOf = (a: AssetDef) => pf.balances.get(a.id) ?? 0n;
   const adapter = asset ? adapterFor(asset, adapters) : undefined;
   const chain = asset ? findChain(network, asset.chainKey) : undefined;
   const nativeAsset = chain ? assetsFor(network).find((a) => a.chainKey === chain.key && a.kind === 'native') : undefined;
@@ -177,6 +183,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const toRef = useRef<HTMLInputElement>(null);
   const toTrim = to.trim();
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
+  const otherNetworks = asset && !addrValid && siblings.length > 1 ? otherNetworksForAddress(toTrim, asset, siblings, (a, x) => !!adapterFor(a, adapters)?.isValidAddress(x)) : [];
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
   // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
   const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.zec?.address, accounts.cosmos?.address, accounts.ton?.address, accounts.xmr?.address, accounts.algo?.address, accounts.polkadot?.address, accounts.kas?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address.toLowerCase(), accounts.hbar?.address.toLowerCase(), accounts.aptos?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' || x.family === 'apt' || x.family === 'sui' || x.family === 'hbar' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
@@ -620,6 +627,21 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     }
   };
 
+  function selectAsset(id: string): void {
+    setSelectedId(id);
+    setMax(false);
+    setAmountStr('');
+    setChoice('normal');
+    setCustomEvm({ maxFeeGwei: '', priorityGwei: '' });
+    setCustomBtc('');
+    setCustomSol('');
+    setTagStr('');
+    setXlmMemo('');
+    setTokenSel('');
+    setTokenQty('');
+    setMemo('');
+  }
+
   if (!asset || !adapter || !chain) {
     return (
       <div className="flex flex-1 items-center justify-center text-[14px] text-mute">
@@ -686,27 +708,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="eyebrow">{t('send.from')}</span>
             <Menu
               value={asset.id}
-              onSelect={(id) => {
-                setSelectedId(id);
-                setMax(false);
-                setAmountStr('');
-                setChoice('normal');
-                setCustomEvm({ maxFeeGwei: '', priorityGwei: '' });
-                setCustomBtc('');
-                setCustomSol('');
-                setTagStr('');
-                setXlmMemo('');
-                setTokenSel('');
-                setTokenQty('');
-                setMemo('');
-              }}
+              onSelect={selectAsset}
               className="w-[520px]"
-              items={sendable.map((a) => ({
-                value: a.id,
-                label: `${a.name} · ${findChain(network, a.chainKey)?.label ?? ''}`,
-                hint: t('send.availableAmount', { amount: fmtCrypto(pf.balances.get(a.id) ?? 0n, a.decimals, a.symbol) }),
-                icon: <CoinIcon asset={a} size={26} />,
-              }))}
+              items={dedupeByGroup(sendable.some((a) => a.id === asset.id) ? sendable : [...sendable, asset], balanceOf, asset.id).map((a) => {
+                const sib = networkSiblings(a, pickable);
+                if (sib.length < 2) return { value: a.id, label: `${a.name} · ${findChain(network, a.chainKey)?.label ?? ''}`, hint: t('send.availableAmount', { amount: fmtCrypto(balanceOf(a), a.decimals, a.symbol) }), icon: <CoinIcon asset={a} size={26} /> };
+                const tot = groupTotal(sib, balanceOf);
+                return { value: a.id, label: `${a.name} · ${a.symbol}`, hint: t('multinet.groupHint', { amount: fmtCrypto(tot.amount, tot.decimals, a.symbol), n: sib.length }), icon: <CoinIcon asset={a} size={26} /> };
+              })}
               trigger={
                 <button type="button" className="press flex h-[58px] items-center gap-3 rounded-box border border-line-2 bg-bg px-4 text-left hover:border-line-3 hover:bg-raised/50">
                   <CoinIcon asset={asset} />
@@ -722,6 +731,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 </button>
               }
             />
+            <NetworkPicker asset={asset} siblings={siblings} network={network} balanceOf={balanceOf} hidden={hideBalances} onSelect={selectAsset} />
             <AccountPicker family={asset.family} label={t('common.account')} />
             {activeHw && <span className="text-[12px] text-faint">{t('send.hwUnsupportedChains')}</span>}
             {fees.error && serverMissing(fees.error) && <ServerMissingLine coin={asset.name} />}
@@ -819,7 +829,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {ownError && <span className="text-[12px] text-down">{ownError}</span>}
             {dotProblem && <span className="text-[12px] text-down">{dotProblem}</span>}
             {xlmProblem && <span className="text-[12px] text-down">{xlmProblem}</span>}
-            {toTrim && !addrValid && !xAddress && !adaProblem && !zecProblem && !aptProblem && !kasProblem && !xlmProblem && !dotProblem && !tonProblem && <span className="text-[12px] text-down">{nearProblem ? `${nearProblem}.` : t('send.invalidAddressFor', { chain: chain.name })}</span>}
+            {toTrim && !addrValid && !xAddress && !adaProblem && !zecProblem && !aptProblem && !kasProblem && !xlmProblem && !dotProblem && !tonProblem && otherNetworks.length === 0 && <span className="text-[12px] text-down">{nearProblem ? `${nearProblem}.` : t('send.invalidAddressFor', { chain: chain.name })}</span>}
+            <WrongNetworkLine asset={asset} others={otherNetworks} network={network} />
             {tonProblem && <span className="text-[12px] text-down">{tonProblem.charAt(0).toUpperCase() + tonProblem.slice(1)}.</span>}
             {aptProblem && <span className="text-[12px] text-down">{aptProblem}</span>}
             {isApt && addrValid && <span className="text-[12px] leading-[1.45] text-mute">{t('send.aptNoChecksum')}{aptDestNew ? t('send.aptDestNew') : ''}</span>}
@@ -1347,7 +1358,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 amount: built.unsigned.sendAll ? t('send.clearTonAll', { amount: fmtCrypto(built.unsigned.amount, decimals, asset.symbol) }) : fmtCrypto(built.unsigned.amount, decimals, asset.symbol),
                 recipient: recipientName,
                 comment: built.unsigned.summary.comment ?? '',
-                fee: `${fmtCrypto(built.unsigned.maxFee, 9, 'TON', 6)}${feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : ''}`,
+                fee: `${fmtCrypto(built.unsigned.maxFee, 9, 'GRAM', 6)}${feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : ''}`,
               })}
               {built.unsigned.summary.deploysWallet ? t('send.clearTonDeploys') : ''}
               {built.unsigned.summary.comment === null ? t('send.clearTonCheckComment') : ''}

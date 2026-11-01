@@ -53,7 +53,7 @@ const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée 
 const tonText = (nano: bigint | string) => {
   const v = BigInt(nano);
   const frac = (v % 1_000_000_000n).toString().padStart(9, '0').replace(/0+$/, '');
-  return `${v / 1_000_000_000n}${frac ? `,${frac}` : ''} TON`;
+  return `${v / 1_000_000_000n}${frac ? `,${frac}` : ''} GRAM`;
 };
 
 interface DemoTonAccount {
@@ -169,7 +169,7 @@ export function createDemoTon(d: DemoTonDeps) {
     if (ours.status === 'nonexist' || (ours.status === 'uninit' && balance === 0n)) throw invalidInput(l10n("ton portefeuille TON n'a encore rien reçu : il ne peut rien envoyer", 'your TON wallet has not received anything yet: it cannot send anything'));
     const need = (amount ?? 0n) + fee;
     if (need >= balance) {
-      throw invalidInput(l10n(`solde TON insuffisant : ${tonText(balance).replace(' TON', '')} TON, il en faut plus de ${tonText(need).replace(' TON', '')} (montant + frais estimés${ours.status === 'uninit' ? ', dont le déploiement du portefeuille' : ''})`, `insufficient TON balance: ${tonText(balance).replace(' TON', '')} TON, more than ${tonText(need).replace(' TON', '')} needed (amount + estimated fee${ours.status === 'uninit' ? ', including the wallet deployment' : ''})`));
+      throw invalidInput(l10n(`solde GRAM insuffisant : ${tonText(balance).replace(' GRAM', '')} GRAM, il en faut plus de ${tonText(need).replace(' GRAM', '')} (montant + frais estimés${ours.status === 'uninit' ? ', dont le déploiement du portefeuille' : ''})`, `insufficient GRAM balance: ${tonText(balance).replace(' GRAM', '')} GRAM, more than ${tonText(need).replace(' GRAM', '')} needed (amount + estimated fee${ours.status === 'uninit' ? ', including the wallet deployment' : ''})`));
     }
   };
 

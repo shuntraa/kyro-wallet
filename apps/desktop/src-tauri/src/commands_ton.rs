@@ -52,7 +52,7 @@ fn now() -> u32 {
 }
 
 fn ton(lang: Lang, nano: &str) -> String {
-    format!("{} TON", format_units_in(lang, nano, 9))
+    format!("{} GRAM", format_units_in(lang, nano, 9))
 }
 
 /// A user-friendly address the user typed, for this network.
@@ -229,11 +229,11 @@ fn describe_jetton(
     out += &format!("{line}\n");
     out += &match lang {
         Lang::Fr => format!(
-            "Message envoyé à ton portefeuille de jetons {} (adresse calculée par Kyro), avec {} pour ses frais : le surplus revient à ton portefeuille.\nFrais estimés : ≈ {} en plus\nSolde TON : {}\n",
+            "Message envoyé à ton portefeuille de jetons {} (adresse calculée par Kyro), avec {} pour ses frais : le surplus revient à ton portefeuille.\nFrais estimés : ≈ {} en plus\nSolde GRAM : {}\n",
             j.jetton_wallet, ton(lang, &s.amount), ton(lang, &c.fee), ton(lang, &c.account.balance)
         ),
         Lang::En => format!(
-            "Message sent to your token wallet {} (address computed by Kyro), with {} for its fees: the excess comes back to your wallet.\nEstimated fee: ≈ {} on top\nTON balance: {}\n",
+            "Message sent to your token wallet {} (address computed by Kyro), with {} for its fees: the excess comes back to your wallet.\nEstimated fee: ≈ {} on top\nGRAM balance: {}\n",
             j.jetton_wallet, ton(lang, &s.amount), ton(lang, &c.fee), ton(lang, &c.account.balance)
         ),
     };
@@ -815,10 +815,10 @@ mod tests {
             "Envoi TON (testnet)",
             "À : EQBm--PFwDv1yCeS-QTJ-L8oiUpqo9IT1BwgVptlSq3ts90Q\n(même compte que UQBm--PFwDv1yCeS-QTJ-L8oiUpqo9IT1BwgVptlSq3ts4DV",
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nCOMMENTAIRE : « 123456 »\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-            "Montant : 1,5 TON (1500000000 nanotons)",
+            "Montant : 1,5 GRAM (1500000000 nanotons)",
             "Rebond : oui",
-            "Frais estimés : ≈ 0,0055 TON",
-            "Solde : 3 TON",
+            "Frais estimés : ≈ 0,0055 GRAM",
+            "Solde : 3 GRAM",
             "Valable encore ≈ 10 min",
             "seqno 7",
         ] {
@@ -834,7 +834,7 @@ mod tests {
         );
         assert!(d.starts_with("Envoi TON\n"));
         assert!(d.contains("AUCUN COMMENTAIRE"));
-        assert!(d.contains("TOUT LE SOLDE, ≈ 3 TON"));
+        assert!(d.contains("TOUT LE SOLDE, ≈ 3 GRAM"));
         assert!(d.contains("pas encore actif"));
         assert!(d.contains("déploie aussi ton portefeuille"));
         let mut s = summary(Some("x"), true, false, false);
@@ -848,7 +848,9 @@ mod tests {
             Network::Testnet,
             1_800_000_000,
         );
-        assert!(en.contains("Amount: 1.5 TON (1500000000 nanotons)") && en.contains("Bounce: yes"));
+        assert!(
+            en.contains("Amount: 1.5 GRAM (1500000000 nanotons)") && en.contains("Bounce: yes")
+        );
     }
 
     #[test]

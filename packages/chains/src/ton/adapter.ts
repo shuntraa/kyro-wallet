@@ -210,7 +210,7 @@ export class TonAdapter implements ChainAdapter<'ton'> {
     return Promise.resolve({
       options: { slow: { level: 'slow', params: p, etaSecs: eta }, normal: { level: 'normal', params: p, etaSecs: eta }, fast: { level: 'fast', params: p, etaSecs: eta } },
       minimum: p,
-      hint: l10n('frais fixés par le réseau (≈ 0,003 à 0,01 TON, estimés à la préparation)', 'fees set by the network (≈ 0.003 to 0.01 TON, estimated when preparing)'),
+      hint: l10n('frais fixés par le réseau (≈ 0,003 à 0,01 GRAM, estimés à la préparation)', 'fees set by the network (≈ 0.003 to 0.01 GRAM, estimated when preparing)'),
       fetchedAt: Date.now(),
     });
   }

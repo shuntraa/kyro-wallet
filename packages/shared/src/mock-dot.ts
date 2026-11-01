@@ -15,7 +15,7 @@
 import { blake2b } from '@noble/hashes/blake2b';
 import { base58 } from '@scure/base';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
-import { IpcError, type Commands, type DotAccountInfo, type DotBackendInfo, type DotContext, type DotTxSummary, type Network, type Settings } from './ipc';
+import { IpcError, type Commands, type DotAccountInfo, type DotBackendInfo, type DotContext, type DotHistoryEntry, type DotTxSummary, type Network, type Settings } from './ipc';
 import { l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
@@ -97,6 +97,8 @@ export interface DemoDotState {
   accounts: Map<string, DemoDotAccount>;
   /** `from:nonce` → submit time. */
   submitted: Map<string, number>;
+  /** `dot_txs` (mainnet only, like Statescan): a funding transfer, then the demo's sends. */
+  history: DotHistoryEntry[];
 }
 
 export function createDemoDot(d: DemoDotDeps) {
@@ -114,6 +116,7 @@ export function createDemoDot(d: DemoDotDeps) {
       [friend, { free: 40n * unit, frozen: 0n, nonce: 17 }],
     ]),
     submitted: new Map(),
+    history: [{ id: `0x${'d0'.repeat(32)}`, hash: `0x${'d0'.repeat(32)}`, chain: 'assetHub', blockHeight: 10_400_000, extrinsicIndex: 2, eventIndex: 4, time: t0 - 3 * 86_400_000, from: friend, to: me, amount: (15n * unit).toString(), direction: 'in' }],
   };
   const fee = (155n * unit) / 10_000n; // ≈ 0.0155
   const torOn = () => d.settings().tor.enabled;
@@ -266,7 +269,15 @@ export function createDemoDot(d: DemoDotDeps) {
       if (dest) dest.free += value;
       else state.accounts.set(p.to, { free: value, frozen: 0n, nonce: 0 });
       state.submitted.set(`${me}:${p.nonce}`, d.now());
-      return bytesToHex(blake2b(hexToBytes(String(a.extrinsic).trim().toLowerCase()), { dkLen: 32 }));
+      const hash = bytesToHex(blake2b(hexToBytes(String(a.extrinsic).trim().toLowerCase()), { dkLen: 32 }));
+      state.history.unshift({ id: hash, hash, chain: 'assetHub', blockHeight: block(), extrinsicIndex: 2, eventIndex: 3, time: d.now(), from: me, to: p.to, amount: value.toString(), direction: p.to === me ? 'self' : 'out' });
+      return hash;
+    },
+    dot_txs: async (a) => {
+      checkAddress(a.address);
+      if (d.network !== 'mainnet') return { available: false, partial: false, items: [] };
+      await backend();
+      return { available: true, partial: false, items: state.history.map((e) => ({ ...e })) };
     },
     dot_tx_status: async (a) => {
       const addr = checkAddress(a.address);

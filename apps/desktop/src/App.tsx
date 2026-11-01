@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { lazy, Suspense, useCallback, useMemo } from 'react';
 import { MotionConfig, motion } from 'motion/react';
-import { WATCH_ONLY_CHAINS } from '@kyro/chains';
+import { matchesCoinQuery, WATCH_ONLY_CHAINS } from '@kyro/chains';
 import { AppProvider, useApp, type Route } from './state/app';
 import { PortfolioProvider, usePortfolio } from './state/portfolio';
 import { TitleBar, type SearchResult } from './shell/TitleBar';
@@ -130,13 +130,13 @@ function Unlocked() {
       const s = q.toLowerCase();
       const out: SearchResult[] = [];
       for (const h of pf.holdings) {
-        if (h.asset.name.toLowerCase().includes(s) || h.asset.symbol.toLowerCase().includes(s)) {
+        if (matchesCoinQuery(s, h.asset)) {
           out.push({ id: h.asset.id, label: h.asset.name, hint: t('shell.searchMine', { symbol: h.asset.symbol }), onSelect: () => navigate({ name: 'asset', id: h.asset.id }) });
         }
       }
       for (const c of pf.markets ?? []) {
         if (out.length >= 8) break;
-        if (c.name.toLowerCase().includes(s) || c.symbol.toLowerCase().includes(s)) {
+        if (matchesCoinQuery(s, { name: c.name, symbol: c.symbol, coingeckoId: c.id })) {
           out.push({ id: `cg:${c.id}`, label: c.name, hint: t('shell.searchRank', { symbol: c.symbol, rank: c.rank ?? '—' }), onSelect: () => navigate({ name: 'asset', id: `cg:${c.id}` }) });
         }
       }

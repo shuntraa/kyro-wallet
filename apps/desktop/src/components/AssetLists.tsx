@@ -3,10 +3,11 @@
 
 import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { WATCH_ONLY_CHAINS } from '@kyro/chains';
+import { matchesCoinQuery, WATCH_ONLY_CHAINS } from '@kyro/chains';
 import type { MarketCoin } from '@kyro/market';
+import { getLang, type Currency } from '@kyro/shared';
 import { cn } from '../lib/cn';
-import { fmtCrypto, fmtFiat, fmtNumber, fmtPct } from '../lib/format';
+import { fiatSymbol, fmtCrypto, fmtFiat, fmtNumber, fmtPct, NNBSP } from '../lib/format';
 import { getFavorites, setFavorites } from '../lib/storage';
 import { useApp } from '../state/app';
 import { usePortfolio, type Holding } from '../state/portfolio';
@@ -239,7 +240,7 @@ function MarketList({ sort, query, favs, toggle, onlyFavs }: { sort: Sort; query
     let r: MarketCoin[] = pf.markets ?? [];
     if (onlyFavs) r = r.filter((c) => favs.includes(c.id));
     const q = query.trim().toLowerCase();
-    if (q) r = r.filter((c) => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q));
+    if (q) r = r.filter((c) => matchesCoinQuery(q, { name: c.name, symbol: c.symbol, coingeckoId: c.id }));
     r = [...r];
     if (sort === 'name') r.sort((a, b) => a.name.localeCompare(b.name, getLanguage()));
     else if (sort === 'change') r.sort((a, b) => (b.change24h ?? -999) - (a.change24h ?? -999));
@@ -302,8 +303,10 @@ function MarketList({ sort, query, favs, toggle, onlyFavs }: { sort: Sort; query
   );
 }
 
-export function compactFiat(v: number, cur: 'EUR' | 'USD'): string {
-  const sym = cur === 'EUR' ? '€' : '$';
+export function compactFiat(v: number, cur: Currency): string {
+  const raw = fiatSymbol(cur);
+  // Letter symbols (CHF, kr…) keep a space from the number: « 1,2 Md CHF », « CHF 1.2B ».
+  const sym = /^\p{L}/u.test(raw) ? (getLang() === 'fr' ? `${NNBSP}${raw}` : `${raw}${NNBSP}`) : raw;
   if (v >= 1e12) return t('portfolio.trillions', { n: fmtNumber(v / 1e12, 2), sym });
   if (v >= 1e9) return t('portfolio.billions', { n: fmtNumber(v / 1e9, 1), sym });
   if (v >= 1e6) return t('portfolio.millions', { n: fmtNumber(v / 1e6, 1), sym });

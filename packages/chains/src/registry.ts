@@ -14,7 +14,7 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
 /** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). `kas`: Kaspa (KAS, `kas_*`, §2.11). `dot`: Polkadot Asset Hub (`dot_*`, §2.11). */
 /** `algo`: Algorand (ALGO payments, `algo_*`, §2.11). */
 /** `xmr`: Monero (scanned, built, signed and published by Rust, `xmr_*`, §2.10). */
-/** `ton`: TON (Toncoin, wallet v4R2, `ton_*`, §2.11). `cosmos`: Cosmos Hub (ATOM, `cosmos_*`, §2.11). `apt`: Aptos (APT, `aptos_*`, §2.11). */
+/** `ton`: TON (Gram, ex-Toncoin, wallet v4R2, `ton_*`, §2.11). `cosmos`: Cosmos Hub (ATOM, `cosmos_*`, §2.11). `apt`: Aptos (APT, `aptos_*`, §2.11). */
 /** `zec`: Zcash, transparent addresses only (`zec_*`, §2.4b; Rust builds the transaction). */
 export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt' | 'zec';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
@@ -501,8 +501,8 @@ export function xmrChain(network: Network): XmrChain {
 /**
  * TON (phase 4): Rust `ton_*` commands and `TonAdapter` (`packages/chains/src/ton/`). Wallet
  * v4R2 of `m/44'/607'/a'` (Trust Wallet's route). Testnet = TON testnet (another wallet id, so
- * another address: a testnet signature can never be replayed on mainnet). Toncoin only (no
- * jettons). Hardware wallets: not supported (the UI disables TON for such accounts).
+ * another address: a testnet signature can never be replayed on mainnet). Gram (TON's coin, ticker GRAM since June 2026, formerly Toncoin) and the
+ * known jettons (USD₮). Hardware wallets: not supported (the UI disables TON for such accounts).
  */
 export interface TonChain extends Omit<ChainBase, 'phase'> {
   family: 'ton';
@@ -511,9 +511,9 @@ export interface TonChain extends Omit<ChainBase, 'phase'> {
 
 const TON_CHAINS: Record<Network, TonChain> = {
   testnet: { family: 'ton', key: 'ton', name: 'TON testnet', label: 'TON testnet', network: 'testnet', color: '#0098EA', glyph: '◇',
-    nativeSymbol: 'TON', nativeName: 'Toncoin', nativeDecimals: 9, coingeckoId: 'the-open-network', phase: 4, blockTimeSecs: 5 },
+    nativeSymbol: 'GRAM', nativeName: 'Gram', nativeDecimals: 9, coingeckoId: 'the-open-network', phase: 4, blockTimeSecs: 5 },
   mainnet: { family: 'ton', key: 'ton', name: 'TON', label: 'TON', network: 'mainnet', color: '#0098EA', glyph: '◇',
-    nativeSymbol: 'TON', nativeName: 'Toncoin', nativeDecimals: 9, coingeckoId: 'the-open-network', phase: 4, blockTimeSecs: 5 },
+    nativeSymbol: 'GRAM', nativeName: 'Gram', nativeDecimals: 9, coingeckoId: 'the-open-network', phase: 4, blockTimeSecs: 5 },
 };
 
 export function tonChain(network: Network): TonChain {
@@ -1044,6 +1044,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     host: network === 'mainnet' ? 'polkadot-asset-hub-rpc.polkadot.io' : 'westend-asset-hub-rpc.polkadot.io',
     purpose: l10n(`Polkadot${network === 'mainnet' ? '' : ' (Westend)'} : soldes, métadonnées du runtime, nonce, frais, diffusion (nœud public de Parity)`, `Polkadot${network === 'mainnet' ? '' : ' (Westend)'}: balances, runtime metadata, nonce, fees, broadcast (Parity public node)`),
   });
+  // Polkadot history (Statescan, keyless, mainnet only): Rust `dot_txs`, same `polkadot` Tor family.
+  if (network === 'mainnet') {
+    list.push({ host: 'ahp-api.statescan.io', purpose: l10n('Polkadot : historique des transferts DOT sur Asset Hub (Statescan)', 'Polkadot: DOT transfer history on Asset Hub (Statescan)') });
+    list.push({ host: 'polkadot-api.statescan.io', purpose: l10n('Polkadot : historique des transferts DOT sur la relay chain, d’avant la migration (Statescan)', 'Polkadot: DOT transfer history on the relay chain, from before the migration (Statescan)') });
+  }
   // XRP Ledger: reached by Rust only (xrp_*), Tor circuits of the `xrp` family.
   const xrp = servers.xrp?.[nk];
   list.push(
@@ -1105,4 +1110,20 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   list.push({ host: '1click.chaindefuser.com', purpose: l10n('Swap entre chaînes (NEAR Intents) : devis des routes directes (BTC, LTC, DOGE, TRON, XRP, Cardano), confirmation du dépôt (destinataire, montant, minimum, frais), suivi', 'Cross-chain swaps (NEAR Intents): quotes for direct routes (BTC, LTC, DOGE, TRON, XRP, Cardano), deposit confirmation (recipient, amount, minimum, fees), tracking') });
   list.push({ host: 'lite-api.jup.ag', purpose: l10n('Devis de swap Solana', 'Solana swap quotes') });
   return list;
+}
+
+/**
+ * Former names and tickers a search must still find (Gram was Toncoin / TON until June 2026),
+ * and the display name Kyro shows whatever a cached market list still says.
+ */
+export const COIN_RENAMES: Record<string, { name: string; symbol: string; aliases: string[] }> = {
+  'the-open-network': { name: 'Gram', symbol: 'GRAM', aliases: ['ton', 'toncoin', 'gram'] },
+};
+
+/** Search box match on a coin (name, ticker, former names), `q` already trimmed and lower-cased. */
+export function matchesCoinQuery(q: string, c: { name: string; symbol: string; coingeckoId?: string }): boolean {
+  if (!q) return true;
+  if (c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q)) return true;
+  const r = c.coingeckoId ? COIN_RENAMES[c.coingeckoId] : undefined;
+  return !!r && r.aliases.some((a) => a.includes(q));
 }

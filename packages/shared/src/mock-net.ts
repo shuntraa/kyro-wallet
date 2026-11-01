@@ -8,7 +8,7 @@ import { base58, base64 } from '@scure/base';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex } from '@noble/hashes/utils';
 import { IpcError, type Accounts, type EvmTxRequest, type Network, type NetRequest, type NetResponse } from './ipc';
-import { DEMO_COINS, DEMO_EUR_USD, DEMO_TOKENS, demoPrice, demoSeries } from './mock-data';
+import { DEMO_COINS, DEMO_EUR_FX, DEMO_EUR_USD, DEMO_TOKENS, demoPrice, demoSeries } from './mock-data';
 import { encodeCall, type AbiValue } from './mock-abi';
 import { demoJupiterWireTx } from './mock-jupiter';
 import { demoLifiCross, demoLifiStatus, demoOneClick } from './mock-lifi-cross';
@@ -142,7 +142,7 @@ export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: 
 function coingecko(url: URL): NetResponse {
   const path = url.pathname.replace(/^\/api\/v3/, '');
   const cur = (url.searchParams.get('vs_currency') ?? url.searchParams.get('vs_currencies') ?? 'eur').toLowerCase();
-  const fx = cur === 'usd' ? DEMO_EUR_USD : 1;
+  const fx = cur === 'usd' ? DEMO_EUR_USD : (DEMO_EUR_FX[cur] ?? 1);
   if (path === '/coins/markets') {
     return json(
       200,

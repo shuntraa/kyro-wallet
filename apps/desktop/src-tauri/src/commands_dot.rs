@@ -501,6 +501,16 @@ pub async fn dot_tx_status(
     })
 }
 
+/// Native DOT transfers of `address` (Statescan, Asset Hub + relay chain). Never an error:
+/// `available: false` when there is nothing reliable to show (see `dot_history`).
+#[tauri::command]
+pub async fn dot_txs(
+    state: State<'_, AppState>,
+    address: String,
+) -> AppResult<crate::dot_history::DotHistory> {
+    Ok(crate::dot_history::txs(&ctx(&state), &address).await)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

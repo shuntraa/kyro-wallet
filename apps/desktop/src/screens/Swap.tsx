@@ -186,7 +186,7 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
       sellAmount,
       taker,
       slippageBps,
-      usdToFiat: cur === 'USD' ? 1 : (pf.price('usd-coin')?.price ?? 0.92),
+      usdToFiat: cur === 'USD' ? 1 : (pf.price('usd-coin')?.price ?? pf.price('tether')?.price ?? 0.92),
     };
     if (nativePrice !== undefined) p.nativePriceFiat = nativePrice;
     return p;

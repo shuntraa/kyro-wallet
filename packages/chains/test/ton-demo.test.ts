@@ -9,6 +9,7 @@ import {
   createAdapters,
   findAsset,
   isLookalike,
+  matchesCoinQuery,
   outgoingHosts,
   sameAddress,
   tonCommentProblem,
@@ -44,12 +45,21 @@ beforeEach(async () => {
 });
 
 describe('TON in the app', () => {
-  it('is a full chain: Toncoin asset (9 decimals, CoinGecko the-open-network), TON Center in the outgoing list', () => {
+  it('is a full chain: Gram asset (GRAM, ex-Toncoin, 9 decimals, CoinGecko the-open-network), TON Center in the outgoing list', () => {
     expect(WATCH_ONLY_CHAINS.map((w) => w.key)).not.toContain('ton');
-    expect(TON).toMatchObject({ family: 'ton', kind: 'native', symbol: 'TON', decimals: 9, chainKey: 'ton', coingeckoId: 'the-open-network' });
+    expect(TON).toMatchObject({ family: 'ton', kind: 'native', symbol: 'GRAM', name: 'Gram', decimals: 9, chainKey: 'ton', coingeckoId: 'the-open-network' });
     expect(assetsFor('mainnet').some((a) => a.id === 'ton')).toBe(true);
     expect(outgoingHosts('testnet').map((h) => h.host)).toContain('testnet.toncenter.com');
     expect(outgoingHosts('mainnet').map((h) => h.host)).toContain('toncenter.com');
+  });
+
+  it('is found by its new and former names (gram, ton, toncoin), network still TON', () => {
+    const gram = assetsFor('mainnet').find((a) => a.id === 'ton')!;
+    for (const q of ['gram', 'ton', 'toncoin', 'gr']) expect(matchesCoinQuery(q, gram), q).toBe(true);
+    expect(matchesCoinQuery('bitcoin', gram)).toBe(false);
+    expect(tonChain('mainnet')).toMatchObject({ name: 'TON', label: 'TON', nativeSymbol: 'GRAM', nativeName: 'Gram' });
+    // A market list cached before the rename still shows Toncoin: found anyway.
+    expect(matchesCoinQuery('gram', { name: 'Toncoin', symbol: 'TON', coingeckoId: 'the-open-network' })).toBe(true);
   });
 
   it('vault account: non-bounceable testnet address, balance, seqno', async () => {
@@ -116,7 +126,7 @@ describe('TON in the app', () => {
     expect(tonCommentProblem('a‮b')).toMatch(/invisibles/);
     expect((await err(ton.buildTx({ asset: TON, to: accounts.ton.address, amount: 1n, fee }))).message).toMatch(/soi-même/);
     // More than the balance (amount + fee).
-    expect((await err(ton.buildTx({ asset: TON, to: mock.ton.friend, amount: 42_750_000_000n, fee }))).message).toMatch(/solde TON insuffisant/);
+    expect((await err(ton.buildTx({ asset: TON, to: mock.ton.friend, amount: 42_750_000_000n, fee }))).message).toMatch(/solde GRAM insuffisant/);
     // Rust refuses a raw address on its own too.
     expect((await err(call('ton_account', { address: `0:${'ab'.repeat(32)}` }))).code).toBe('INVALID_INPUT');
     // Wrong password: nothing signed.

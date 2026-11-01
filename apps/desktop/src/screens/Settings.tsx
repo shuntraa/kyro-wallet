@@ -20,6 +20,7 @@ import { torStore, useTor } from '../state/tor';
 import { useMedia } from '../components/motion';
 import { useT, type Key } from '../i18n';
 import { XmrWalletSection } from '../components/Monero';
+import { CurrencySelect } from '../components/CurrencySelect';
 
 const SECTIONS: Array<{ key: SettingsSection; label: Key }> = [
   { key: 'security', label: 'settings.sectionSecurity' },
@@ -331,7 +332,7 @@ function Display({ save }: { save: Save }) {
         />
       </SettingRow>
       <SettingRow title={t('settings.currency')} desc={t('settings.currencyDesc')}>
-        <Segmented label={t('settings.currency')} value={settings.currency} onChange={(v) => void save({ currency: v })} options={[{ value: 'EUR', label: 'EUR €' }, { value: 'USD', label: 'USD $' }]} />
+        <CurrencySelect label={t('settings.currency')} value={settings.currency} onChange={(v) => void save({ currency: v })} />
       </SettingRow>
       <SettingRow title={t('settings.hideBalances')} desc={t('settings.hideBalancesDisplayDesc')} last>
         <Switch label={t('settings.hideBalances')} checked={settings.hideBalancesOnStart} onCheckedChange={(v) => void save({ hideBalancesOnStart: v })} />

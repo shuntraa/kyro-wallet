@@ -59,7 +59,7 @@ export const settings: Record<keyof typeof fr, string> = {
 
   // Display
   'settings.currency': 'Currency',
-  'settings.currencyDesc': 'For prices, balances and fees.',
+  'settings.currencyDesc': 'For prices, balances and fees. Default: the currency of your computer’s region (never guessed from your IP address).',
   'settings.hideBalancesDisplayDesc': 'Amounts are shown as •••••; the eye reveals them.',
 
   // API keys
@@ -101,7 +101,7 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.hintKas': 'KAS (20 receive + 20 change addresses)',
   'settings.hintAlgo': 'ALGO (no ASA)',
   'settings.hintXmr': 'XMR, primary address and subaddresses',
-  'settings.hintTon': 'Toncoin (v4R2 wallet)',
+  'settings.hintTon': 'Gram, formerly Toncoin (v4R2 wallet)',
   'settings.hintZec': 'transparent addresses (t1…)',
   'settings.nameEmpty': 'Give the account a name.',
   'settings.nameTooLong': '32 characters at most.',

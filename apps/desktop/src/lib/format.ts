@@ -60,17 +60,42 @@ export function fmtIntl(n: number, opts: Intl.NumberFormatOptions = {}): string 
   return clean(nf(opts).format(n));
 }
 
-/** "12 480,32 €", "1 234,50 $" (FR) — "€12,480.32", "$1,234.50" (EN). */
+/** Minor units of a currency (EUR/USD 2, JPY/KRW 0), from Intl (ISO 4217). */
+export function fiatDigits(currency: Currency): number {
+  try {
+    return nf({ style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch {
+    return 2;
+  }
+}
+
+/** Short symbol of a currency in the current language: "€", "$", "£", "¥", "CHF", "₩"… */
+export function fiatSymbol(currency: Currency): string {
+  try {
+    return nf({ style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).formatToParts(0).find((p) => p.type === 'currency')?.value ?? currency;
+  } catch {
+    return currency;
+  }
+}
+
+/**
+ * "12 480,32 €", "1 234,50 $" (FR) — "€12,480.32", "$1,234.50", "¥12,480" (EN). Default decimals:
+ * the currency's own (0 for JPY/KRW), two more for tiny values (a token at 0,004 €, at ¥0.37).
+ * An explicit `decimals` is capped to the currency's (never "¥12,480.00").
+ */
 export function fmtFiat(value: number, currency: Currency, opts: { decimals?: number; sign?: boolean } = {}): string {
   const abs = Math.abs(value);
-  const decimals = opts.decimals ?? (abs > 0 && abs < 0.01 ? 4 : 2);
+  const minor = fiatDigits(currency);
+  const decimals = opts.decimals !== undefined ? Math.min(opts.decimals, minor) : abs > 0 && abs < 10 ** -minor ? minor + 2 : minor;
   const s = clean(nf({ style: 'currency', currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value));
   return opts.sign && value > 0 ? `+${s}` : s;
 }
 
 /** Split a fiat amount for the big display (integer bright, decimals faint): {int:"12 480", rest:",32 €"} / {int:"€12,480", rest:".32"}. */
 export function splitFiat(value: number, currency: Currency): { int: string; rest: string } {
-  const s = fmtFiat(value, currency, { decimals: 2 });
+  const minor = fiatDigits(currency);
+  const s = fmtFiat(value, currency, { decimals: minor });
+  if (minor === 0) return { int: s, rest: '' };
   const i = s.lastIndexOf(decimalSep());
   return i < 0 ? { int: s, rest: '' } : { int: s.slice(0, i), rest: s.slice(i) };
 }

@@ -13,3 +13,4 @@ export * from './algo';
 export * from './ton-address';
 export * from './cosmos';
 export * from './zcash';
+export * from './fiat';

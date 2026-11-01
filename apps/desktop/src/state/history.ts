@@ -79,7 +79,10 @@ export function useHistory() {
       });
       entries.sort((a, b) => (b.time ?? Date.now()) - (a.time ?? Date.now()));
       // Bitcoin servers return at most BTC_TXS_CAP transactions per address: say so.
-      return { entries, errors, btcCapped: jobs.some((j) => j.a.family === 'btc' && (j.a as { historyCapped?: boolean }).historyCapped) };
+      // Polkadot (Statescan, undocumented): the worst outcome of its accounts, null without one.
+      const dotStatuses = jobs.filter((j) => j.a.family === 'dot').map((j) => (j.a as { historyStatus?: string | null }).historyStatus);
+      const dotHistory: 'ok' | 'partial' | 'unavailable' | null = dotStatuses.length === 0 ? null : dotStatuses.includes('unavailable') ? 'unavailable' : dotStatuses.includes('partial') ? 'partial' : 'ok';
+      return { entries, errors, btcCapped: jobs.some((j) => j.a.family === 'btc' && (j.a as { historyCapped?: boolean }).historyCapped), dotHistory };
     },
     [sourcesKey, network],
     { intervalMs: 60_000 },

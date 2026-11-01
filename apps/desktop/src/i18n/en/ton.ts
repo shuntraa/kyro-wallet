@@ -25,7 +25,7 @@ export const ton: Record<keyof typeof fr, string> = {
   'ton.lJettonValue': '{symbol} · {decimals} decimals (Kyro’s table)',
   'ton.lJettonMaster': 'Verified contract (master)',
   'ton.lJettonWallet': 'Your token wallet (computed by Kyro)',
-  'ton.lAttached': 'TON attached for fees (the excess comes back)',
+  'ton.lAttached': 'GRAM attached for fees (the excess comes back)',
   'ton.lAmount': 'Amount',
   'ton.sendAll': 'the whole balance, minus the fee',
   'ton.lBounce': 'Bounce',

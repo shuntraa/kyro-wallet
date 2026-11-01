@@ -525,7 +525,7 @@ pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     let need = c.amount.unwrap_or(0).saturating_add(c.fee);
     if need >= balance {
         return Err(AppError::InvalidInput(format!(
-            "solde TON insuffisant : {} TON, il en faut plus de {} (montant + frais estimés{})",
+            "solde GRAM insuffisant : {} GRAM, il en faut plus de {} (montant + frais estimés{})",
             crate::commands::format_units(&balance.to_string(), 9),
             crate::commands::format_units(&need.to_string(), 9),
             if c.ours.status == TonStatus::Uninit {
