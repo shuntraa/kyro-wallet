@@ -1,8 +1,7 @@
 //! IPC commands for Kaspa (`kas_*`): address, balance and history of the account (receive and
-//! change chains, [`KASPA_SCAN_WINDOW`] addresses each), payments **built by Kyro** from the
-//! live coins (wallet-core: coin selection, KIP-9 mass, fee), signed behind the password and the
-//! native dialog after a live re-read of every spent coin, and broadcast with an id check.
-//! Contract: docs/IPC.md §2.11.
+//! change chains, [`KASPA_SCAN_WINDOW`] addresses each), payments **built by Kyro** from the live
+//! coins (wallet-core: coin selection, KIP-9 mass, fee), signed behind the password and the native
+//! dialog after a live re-read of every spent coin, and broadcast with an id check.
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
@@ -28,7 +27,6 @@ pub(crate) fn ctx(state: &AppState) -> KaspaCtx<'_> {
     }
 }
 
-/// Our receive and change keys of `account` (vault unlocked).
 fn keys(state: &AppState, account: u32) -> AppResult<Vec<KaspaOwnKey>> {
     let net = state.network;
     state.with_seed(|seed| {
@@ -52,7 +50,6 @@ fn net_suffix(net: Network) -> &'static str {
     }
 }
 
-/// Body of the native dialog, built from Rust's decoding only.
 pub(crate) fn describe_kaspa(lang: Lang, s: &KaspaTxSummary, net: Network) -> String {
     let mut out = format!(
         "{}{}\n\n",
@@ -132,7 +129,6 @@ pub(crate) fn describe_kaspa(lang: Lang, s: &KaspaTxSummary, net: Network) -> St
     out
 }
 
-/// Body of the reinforced (second) dialog.
 pub(crate) fn describe_kaspa_extra(lang: Lang, s: &KaspaTxSummary) -> String {
     let mut out = String::from(lang.unusual_intro());
     for w in &s.warnings {
@@ -159,8 +155,6 @@ pub(crate) fn describe_kaspa_extra(lang: Lang, s: &KaspaTxSummary) -> String {
     out += lang.sign_anyway();
     out
 }
-
-// ---------------------------------------------------------------- reads
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -252,8 +246,6 @@ pub async fn kas_tx_status(state: State<'_, AppState>, txid: String) -> AppResul
     })
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KaspaContext {
@@ -297,7 +289,6 @@ fn parse_amount(spec: &KaspaSendSpec) -> AppResult<KaspaAmount> {
     }
 }
 
-/// Live coins, network check, immature coinbase removed.
 async fn live_coins(c: &KaspaCtx<'_>, ks: &[KaspaOwnKey]) -> AppResult<Vec<KaspaSpendable>> {
     let daa = kaspa_backend::network_info(c).await?;
     Ok(kaspa_backend::mature(
@@ -316,7 +307,6 @@ pub(crate) async fn build(
     let coins = live_coins(c, ks).await?;
     let estimate = kaspa_backend::fee_estimate(c).await?;
     let priority = wallet_core::kaspa_priority_feerate(estimate);
-    // Change goes back to our first change address `…/1/0`.
     let change = ks
         .iter()
         .find(|k| k.change && k.index == 0)
@@ -393,7 +383,6 @@ pub struct KaspaSigned {
     pub summary: KaspaTxSummary,
 }
 
-/// Decoding against the live coins: everything `kas_sign_tx` does before the dialog.
 pub(crate) async fn prepare_sign(
     c: &KaspaCtx<'_>,
     ks: &[KaspaOwnKey],

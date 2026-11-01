@@ -22,17 +22,13 @@ pub struct Slot {
     pub index: u32,
 }
 
-/// The scripts we look for in filters. Derived from the account xpubs (public data only),
-/// or given explicitly (tests, or a fixed address list).
+/// The scripts we look for in filters.
 pub struct WatchSet {
     net: Network,
     xpubs: Option<(String, String)>,
     scripts: HashMap<ScriptBuf, Option<Slot>>,
-    /// Next index to derive per (kind, change).
     derived: HashMap<(BtcKind, bool), u32>,
-    /// Highest used index per (kind, change).
     used: HashMap<(BtcKind, bool), u32>,
-    /// Scripts were added since the last call to [`WatchSet::take_extended`].
     extended: bool,
 }
 
@@ -112,7 +108,6 @@ impl WatchSet {
         self.scripts.contains_key(s)
     }
 
-    /// Records that `script` was used and keeps the gap ahead of it.
     pub fn mark_used(&mut self, script: &ScriptBuf) -> AppResult<()> {
         let Some(Some(slot)) = self.scripts.get(script).copied() else {
             return Ok(());
@@ -124,21 +119,16 @@ impl WatchSet {
         self.derive_up_to(slot.kind, slot.change, want)
     }
 
-    /// True once if scripts were added since the last call (they need a rescan).
     pub fn take_extended(&mut self) -> bool {
         std::mem::take(&mut self.extended)
     }
 
-    /// Highest used index per (kind, change).
     #[cfg(test)]
     pub fn used(&self) -> &HashMap<(BtcKind, bool), u32> {
         &self.used
     }
 }
 
-/// Transactions of a block (in block order) that pay to a watched script or spend one of
-/// `known` outpoints. `known` is updated with our new outputs as we go, so a spend later in
-/// the same block is caught.
 pub fn relevant_txs(
     txs: &[Transaction],
     watch: &mut WatchSet,
@@ -166,18 +156,15 @@ pub fn relevant_txs(
     Ok(out)
 }
 
-/// A wallet transaction as stored on disk.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StoredTx {
     pub hex: String,
-    /// `None` = broadcast by us, not seen in a block yet.
     pub height: Option<u32>,
     pub block_hash: Option<String>,
     pub time: Option<u32>,
 }
 
-/// Decoded view over the stored transactions.
 pub struct Ledger {
     pub raws: HashMap<String, wallet_core::BtcRawTx>,
     pub meta: HashMap<String, (Option<u32>, Option<u32>)>,
@@ -213,7 +200,6 @@ impl Ledger {
         ))
     }
 
-    /// `[{ txid, vout, value, status: { confirmed, block_height? } }]`.
     pub fn utxos(&self, address: &str, net: Network) -> AppResult<Value> {
         let spk = Self::spk_hex(address, net)?;
         let spent = self.spent();
@@ -256,7 +242,6 @@ impl Ledger {
             })
             .map(|(id, _)| id.clone())
             .collect();
-        // Pending first, then newest first.
         ids.sort_by_key(|id| {
             let h = self.meta.get(id).and_then(|m| m.0);
             (h.is_some(), std::cmp::Reverse(h.unwrap_or(0)), id.clone())
@@ -264,7 +249,6 @@ impl Ledger {
         ids
     }
 
-    /// Esplora `GET /address/{a}` shape (net balance, exact tx counts).
     pub fn address_info(&self, address: &str, net: Network) -> AppResult<Value> {
         let utxos = self.utxos(address, net)?;
         let (mut conf, mut pending) = (0u64, 0u64);
@@ -288,7 +272,6 @@ impl Ledger {
         }))
     }
 
-    /// Esplora `GET /address/{a}/txs` shape, newest first (at most `max`).
     pub fn address_txs(&self, address: &str, net: Network, max: usize) -> AppResult<Value> {
         let spk = Self::spk_hex(address, net)?;
         let mut order = Vec::new();
@@ -362,7 +345,6 @@ mod tests {
         let (seg, tap) = ABANDON_SEGWIT_TPUB();
         let w = WatchSet::from_xpubs(Network::Testnet, &seg, &tap).unwrap();
         assert_eq!(w.len() as u32, 2 * (GAP_RECEIVE + GAP_CHANGE));
-        // m/84'/1'/0'/0/0 of "abandon ... about".
         assert!(w.contains(&addr_script("tb1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqcpvkl")));
         let seed = wallet_core::Mnemonic::parse(
             "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
@@ -451,7 +433,6 @@ mod tests {
         .unwrap();
         assert_eq!(found, vec![fund.clone(), spend.clone()]);
 
-        // Esplora views over the stored transactions.
         let store: BTreeMap<String, StoredTx> = [(&fund, Some(100u32)), (&spend, None)]
             .into_iter()
             .map(|(t, h)| {
@@ -485,7 +466,6 @@ mod tests {
         assert_eq!(txs[1]["status"]["block_height"], 100);
         assert_eq!(txs[1]["status"]["block_time"], 1_793_333_429);
         assert_eq!(txs[0]["vin"][0]["prevout"]["value"], 1_000);
-        // Before the spend: one confirmed UTXO.
         let mut only_fund = store.clone();
         only_fund.remove(&spend.compute_txid().to_string());
         let l = Ledger::new(&only_fund, Network::Testnet).unwrap();

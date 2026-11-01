@@ -1,11 +1,9 @@
 //! User-chosen servers per chain family (`settings.servers`) and their network policy.
 //!
-//! Rules (see docs/NETWORK.md, docs/IPC.md):
-//! - a custom server is allowlisted only for its own family and uses that family's Tor circuits;
-//! - URLs: HTTPS, never credentials in the URL; plain `http://` only for a `.onion` host over Tor,
-//!   or (Bitcoin Core only) for a loopback / private-LAN address reached directly;
-//! - once a custom server is set for a chain, that chain's **default** server is refused
-//!   (`DEFAULT_SERVER_DISABLED`) so a failure can never silently leak addresses to it.
+//! URLs: HTTPS, never credentials in the URL; plain `http://` only for a `.onion` host over Tor, or
+//! (Bitcoin Core only) for a loopback / private-LAN address reached directly; once a custom server
+//! is set for a chain, that chain's **default** server is refused (`DEFAULT_SERVER_DISABLED`) so a
+//! failure can never silently leak addresses to it.
 
 use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -80,8 +78,7 @@ pub enum ElectrumTls {
 pub enum CoreAuth {
     /// Bitcoin Core `.cookie` file, read fresh on every request (preferred).
     Cookie { cookie_path: String },
-    /// `rpcuser` / `rpcpassword`. The password is stored in plain text in the settings file and
-    /// is NEVER returned to the UI (`hasPassword` instead).
+    /// `rpcuser` / `rpcpassword`.
     Userpass {
         user: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -114,12 +111,10 @@ pub enum BtcServer {
     /// The user's own Bitcoin Core node (JSON-RPC), with a watch-only descriptor wallet.
     Core { url: String, auth: CoreAuth },
     /// Compact block filters (BIP157/158) from P2P peers; matching is done locally.
-    /// Requires the `cbf` cargo feature (off by default until reviewed).
     Cbf {
         /// Extra peers (`host:port`, host = onion v3 or IP literal; hostnames refused).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         peers: Vec<String>,
-        /// Height to start scanning filters from (wallet birthday). `None` = genesis.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         birth_height: Option<u32>,
     },
@@ -216,27 +211,22 @@ pub fn utxo_default_base(coin: UtxoCoin, net: Network) -> Option<&'static str> {
     }
 }
 
-/// Bitcoin Cash mainnet defaults (allowlisted in `net::ELECTRUM_HOSTS`), three operators.
 const BCH_MAINNET_ELECTRUM: &[(&str, u16)] = &[
     ("bch.imaginary.cash", 50002),
     ("bch.loping.net", 50002),
     ("cashnode.bch.ninja", 50002),
 ];
-/// Bitcoin Cash chipnet defaults.
 const BCH_CHIPNET_ELECTRUM: &[(&str, u16)] = &[
     ("chipnet.imaginary.cash", 50002),
     ("chipnet.bch.ninja", 50002),
 ];
-/// Dash mainnet defaults.
 const DASH_MAINNET_ELECTRUM: &[(&str, u16)] = &[
     ("dash.electrum1.cipig.net", 20061),
     ("dash.electrum2.cipig.net", 20061),
 ];
 
 /// Default Electrum servers of a UTXO chain, in the order they are tried (allowlist:
-/// `net::ELECTRUM_HOSTS`). Dogecoin and Dash mainnet: Komodo's public ElectrumX servers;
-/// Bitcoin Cash mainnet and chipnet: public Fulcrum servers. No free public Dogecoin or Dash
-/// **testnet** server was found (2026-10-31 / 2026-11-01): the user configures one.
+/// `net::ELECTRUM_HOSTS`).
 pub fn utxo_default_electrum(coin: UtxoCoin, net: Network) -> Vec<(&'static str, u16)> {
     match (coin, net) {
         (UtxoCoin::Dogecoin, Network::Mainnet) => crate::net::ELECTRUM_HOSTS
@@ -289,7 +279,6 @@ pub fn utxo_family(coin: UtxoCoin) -> Family {
 }
 
 /// TRON server: a java-tron HTTP API (`/wallet/*`), the same kind as the default TronGrid.
-/// History (`tron_txs`) also needs TronGrid's `/v1` API.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(
     tag = "kind",
@@ -340,8 +329,7 @@ impl TronServers {
     }
 }
 
-/// TronGrid: mainnet and Nile. Shasta is not used (Nile is TRON's recommended testnet and the
-/// one with a test USDT).
+/// TronGrid: mainnet and Nile.
 pub fn tron_default_base(net: Network) -> &'static str {
     match net {
         Network::Mainnet => "https://api.trongrid.io",
@@ -433,9 +421,7 @@ pub fn xrp_network_id(net: Network) -> u64 {
     }
 }
 
-/// NEAR JSON-RPC (FastNEAR's free public tier, listed by docs.near.org › RPC providers;
-/// `rpc.mainnet.near.org` / `rpc.testnet.near.org` are no longer listed there). No custom NEAR
-/// server yet: these defaults only.
+/// NEAR JSON-RPC (FastNEAR's free public tier, listed by docs.near.org › RPC providers.
 pub fn near_default_rpc(net: Network) -> &'static str {
     match net {
         Network::Mainnet => "https://free.rpc.fastnear.com/",
@@ -615,8 +601,8 @@ pub struct Servers {
     /// Dogecoin: the user's Esplora (electrs-dogecoin), or the default (mainnet: public
     /// ElectrumX servers; testnet: none).
     pub dogecoin: UtxoServers,
-    /// Bitcoin Cash: the user's Esplora-compatible API, or the default (public Fulcrum
-    /// servers, mainnet and chipnet). Key `testnet` = chipnet.
+    /// Bitcoin Cash: the user's Esplora-compatible API, or the default (public Fulcrum servers,
+    /// mainnet and chipnet).
     pub bitcoincash: UtxoServers,
     /// Dash: the user's Esplora-compatible API, or the default (mainnet: public ElectrumX
     /// servers; testnet: none).
@@ -688,7 +674,6 @@ impl Servers {
     }
 
     /// Hosts of custom HTTP servers with their family (allowlist extension for `net_fetch`).
-    /// Electrum and Bitcoin Core are not HTTP-fetchable from the webview.
     pub fn custom_http_hosts(&self) -> Vec<(String, Family)> {
         let mut out = Vec::new();
         for s in [&self.bitcoin.mainnet, &self.bitcoin.testnet4]
@@ -849,8 +834,8 @@ impl Servers {
         out
     }
 
-    /// Applies an update from the UI: a Core `userpass` entry without `password` keeps the
-    /// stored one (same URL and user); `password: ""` clears it.
+    /// Applies an update from the UI: a Core `userpass` entry without `password` keeps the stored
+    /// one (same URL and user).
     pub fn merge_secrets_from(&mut self, stored: &Servers) {
         let pairs = [
             (&mut self.bitcoin.mainnet, &stored.bitcoin.mainnet),
@@ -1056,8 +1041,7 @@ fn validate_btc(s: &BtcServer, tor: bool) -> AppResult<()> {
 /// Largest `.cookie` accepted (`__cookie__:` + 64 hex = 75 bytes, plus a newline).
 pub const MAX_COOKIE_LEN: u64 = 256;
 
-/// Syntax of a cookie path: absolute, file name exactly `.cookie`. The content is checked by
-/// [`read_cookie`]. Never echoes the path (it may come from a compromised interface).
+/// Syntax of a cookie path: absolute, file name exactly `.cookie`.
 pub fn validate_cookie_path(path: &str) -> AppResult<()> {
     let p = std::path::Path::new(path.trim());
     if !p.is_absolute() || p.file_name().and_then(|n| n.to_str()) != Some(".cookie") {
@@ -1104,8 +1088,7 @@ pub fn read_cookie(path: &str) -> AppResult<zeroize::Zeroizing<String>> {
     Ok(zeroize::Zeroizing::new(text.to_owned()))
 }
 
-/// A P2P peer (`host:port`): an onion v3 service or an IP literal. Hostnames are refused so
-/// that no DNS lookup ever happens.
+/// A P2P peer (`host:port`): an onion v3 service or an IP literal.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Peer {
     pub host: PeerHost,
@@ -1235,8 +1218,6 @@ pub fn parse_fingerprint(s: &str) -> AppResult<[u8; 32]> {
 mod tests {
     use super::*;
 
-    /// EVM_DEFAULTS = the registry's chains and RPC hosts (fixture generated from registry.ts by
-    /// packages/chains/test/known-tokens-table.test.ts), every host in the net_fetch allowlist.
     #[test]
     fn evm_defaults_match_registry_and_allowlist() {
         let f: serde_json::Value =
@@ -1323,7 +1304,6 @@ mod tests {
         assert!(validate_http_url(onion, true, false).is_ok());
         assert!(validate_http_url(onion, false, false).is_err());
         assert!(validate_http_url("http://node.example/api", true, false).is_err());
-        // Core only: private http.
         assert!(validate_http_url("http://127.0.0.1:8332/", false, true).is_ok());
         assert!(validate_http_url("http://192.168.1.5:48332/", true, true).is_ok());
         assert!(validate_http_url("http://127.0.0.1:8332/", false, false).is_err());
@@ -1500,7 +1480,6 @@ mod tests {
             assert!(d.contains(&h), "{h}");
         }
         assert!(!d.contains(&"ethereum-rpc.publicnode.com"));
-        // Mainnet bitcoin is still default.
         assert!(!s
             .disabled_defaults(Network::Mainnet)
             .contains(&"mempool.space"));
@@ -1524,7 +1503,6 @@ mod tests {
         let json = serde_json::to_string(&ui).unwrap();
         assert!(!json.contains("s3cret"));
         assert!(json.contains("\"hasPassword\":true"));
-        // UI sends the redacted form back: password kept.
         let mut update = ui.clone();
         update.merge_secrets_from(&stored);
         assert_eq!(update, {
@@ -1538,7 +1516,6 @@ mod tests {
             }
             s
         });
-        // Different user: not kept.
         let mut other = ui.clone();
         if let Some(BtcServer::Core {
             auth: CoreAuth::Userpass { user, .. },
@@ -1549,7 +1526,6 @@ mod tests {
         }
         other.merge_secrets_from(&stored);
         assert!(other.validate(true).is_err());
-        // Explicit "" clears.
         let mut cleared = ui;
         if let Some(BtcServer::Core {
             auth: CoreAuth::Userpass { password, .. },
@@ -1568,7 +1544,6 @@ mod tests {
         let p = parse_peer(onion).unwrap();
         assert!(matches!(p.host, PeerHost::Onion { .. }));
         assert_eq!(p.to_string(), onion);
-        // Upper case is normalised; a flipped character breaks the v3 checksum.
         assert_eq!(
             parse_peer(&onion.to_uppercase().replace(".ONION", ".onion")).unwrap(),
             p
@@ -1579,7 +1554,6 @@ mod tests {
             parse_peer("abc.onion:48333").is_err(),
             "v2/short onion refused"
         );
-        // IP literals.
         assert_eq!(
             parse_peer("203.132.94.196:48333").unwrap().to_string(),
             "203.132.94.196:48333"
@@ -1588,7 +1562,6 @@ mod tests {
             parse_peer("[2001:db8::1]:8333").unwrap().to_string(),
             "[2001:db8::1]:8333"
         );
-        // Hostnames (DNS) and bad ports refused.
         for bad in [
             "seed.testnet4.wiz.biz:48333",
             "localhost:8333",
@@ -1612,7 +1585,6 @@ mod tests {
         let r = s.validate(true);
         if cfg!(feature = "cbf") {
             assert!(r.is_ok(), "{r:?}");
-            // Onion-only peer list in clear mode: refused.
             let onion = with_btc(BtcServer::Cbf {
                 peers: vec![
                     "a6yijgwn4vtmmhl7uybtbuyvtl7mtj7arld5f4csqsx4syeii4gt3vqd.onion:48333".into(),
@@ -1624,7 +1596,6 @@ mod tests {
         } else {
             assert!(matches!(r, Err(AppError::FeatureDisabled(_))), "{r:?}");
         }
-        // A CBF server disables mempool for that network.
         assert!(s
             .disabled_defaults(Network::Testnet)
             .contains(&"mempool.space"));
@@ -1756,14 +1727,12 @@ mod tests {
         });
         assert!(s.validate(true).is_err());
         s.dogecoin.mainnet = None;
-        // The replaced default is refused, on that network only.
         assert!(s
             .disabled_defaults(Network::Testnet)
             .contains(&"litecoinspace.org"));
         assert!(!s
             .disabled_defaults(Network::Mainnet)
             .contains(&"litecoinspace.org"));
-        // JSON: `servers.litecoin.testnet = { kind: 'esplora', url }`; absent = default.
         let v = serde_json::to_value(&s).unwrap();
         assert_eq!(v["litecoin"]["testnet"]["kind"], "esplora");
         assert_eq!(v["dogecoin"], serde_json::json!({}));
@@ -1773,7 +1742,6 @@ mod tests {
         .unwrap();
         assert_eq!(back.litecoin, UtxoServers::default());
         assert!(utxo_default_base(UtxoCoin::Dogecoin, Network::Testnet).is_none());
-        // Dogecoin: Electrum default on mainnet only, from the allowlist; none on testnet.
         assert_eq!(
             utxo_default_electrum(UtxoCoin::Dogecoin, Network::Mainnet),
             vec![
@@ -1803,9 +1771,6 @@ mod tests {
     #[test]
     fn bitcoin_cash_and_dash_servers() {
         use crate::net::{electrum_default_allowed, ELECTRUM_HOSTS};
-        // Defaults: Electrum on both Bitcoin Cash networks and on Dash mainnet; Dash testnet
-        // has none (the user configures one). Every default is allowlisted for its family and
-        // listed among the hosts refused once replaced.
         for (coin, net, n) in [
             (UtxoCoin::BitcoinCash, Network::Mainnet, 3),
             (UtxoCoin::BitcoinCash, Network::Testnet, 2),
@@ -1821,7 +1786,6 @@ mod tests {
                 assert!(utxo_default_hosts(coin).contains(&h), "{h}");
             }
         }
-        // Every allowlisted Electrum host of these families is a default of its chain.
         for (h, p, f) in ELECTRUM_HOSTS {
             for coin in [UtxoCoin::BitcoinCash, UtxoCoin::Dash] {
                 if *f == utxo_family(coin) {
@@ -1886,7 +1850,6 @@ mod tests {
         ));
     }
 
-    /// CRITIQUE 1: only a real Bitcoin Core cookie is ever read and sent.
     #[test]
     fn cookie_reading_is_strict() {
         let dir = std::env::temp_dir().join(format!("kyro-cookie-strict-{}", std::process::id()));
@@ -1908,18 +1871,15 @@ mod tests {
             let e = read_cookie(&p).unwrap_err().to_string();
             assert!(!e.contains(&p) && !e.contains("abc"), "{e}");
         }
-        // Another file name (settings.json, the vault…) is refused before being opened.
         let other = dir.join("settings.json");
         std::fs::write(&other, &good).unwrap();
         assert!(read_cookie(&other.to_string_lossy()).is_err());
-        // A symlink named .cookie is refused (Unix: creating one needs no privilege).
         #[cfg(unix)]
         {
             std::fs::remove_file(&path).unwrap();
             std::os::unix::fs::symlink(&other, &path).unwrap();
             assert!(read_cookie(&p).is_err());
         }
-        // Missing file: same generic error, no OS text.
         let _ = std::fs::remove_file(&path);
         let e = read_cookie(&p).unwrap_err().to_string();
         assert!(!e.contains(&p), "{e}");

@@ -1,15 +1,6 @@
 //! Polkadot history from Statescan's keyless REST API (`ahp-api.statescan.io` for Polkadot Asset
 //! Hub, where DOT lives since the November 2025 migration; `polkadot-api.statescan.io` for the
 //! relay chain, where older transfers stay), on the `polkadot` Tor family, never with a fallback.
-//!
-//! The API is undocumented: everything is parsed defensively and any failure gives « history
-//! unavailable » (`available: false`), never an error. Only native DOT transfers are kept
-//! (`isNativeAsset`), each checked to involve our account (SS58 decoded, compared by account
-//! id). Seen in the responses (recorded 2026-11-01, `testdata/statescan_*.json`): `balance` is a
-//! decimal string or a big-endian `0x…` u128; `extrinsicIndex` is absent for transfers that no
-//! extrinsic made (`isSigned: false`, e.g. treasury payouts). Extrinsic hashes come from a second
-//! request per transfer, optional, capped per call and cached for the session. Mainnet only:
-//! Statescan has no Westend Asset Hub API.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
@@ -27,7 +18,6 @@ pub const RELAY_API: &str = "https://polkadot-api.statescan.io";
 pub const STATESCAN_HOSTS: &[&str] = &["ahp-api.statescan.io", "polkadot-api.statescan.io"];
 
 const PAGE_SIZE: usize = 50;
-/// New extrinsic hashes fetched per call (the others come on later refreshes, from the cache).
 const MAX_HASH_FETCHES: usize = 12;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
@@ -87,7 +77,6 @@ pub struct DotHistory {
     pub items: Vec<DotHistoryEntry>,
 }
 
-/// An account id from a Statescan address field: SS58 (any prefix) or 0x + 64 hex.
 fn account_id_of(v: &Value) -> Option<[u8; 32]> {
     let s = v.as_str()?.trim();
     if let Some(h) = s.strip_prefix("0x") {
@@ -104,7 +93,6 @@ fn u32_of(v: &Value) -> Option<u32> {
     u64_of(v).and_then(|n| u32::try_from(n).ok())
 }
 
-/// Planck from a decimal string, a big-endian `0x…` hex string (≤ 128 bits) or a JSON integer.
 fn planck_of(v: &Value) -> Option<u128> {
     match v {
         Value::String(s) => {
@@ -141,7 +129,6 @@ pub fn parse_transfers(
         let native = t.get("isNativeAsset").and_then(Value::as_bool);
         let is_dot = match chain {
             DotHistoryChain::AssetHub => native == Some(true),
-            // The relay chain has no other asset; the flag may be absent there.
             DotHistoryChain::Relay => native != Some(false),
         };
         if !is_dot {
@@ -182,7 +169,6 @@ pub fn parse_transfers(
             extrinsic_index,
             event_index,
             time,
-            // Polkadot SS58 (prefix 0), the format Kyro shows on mainnet.
             from: wallet_core::dot_ss58_encode(&from, 0),
             to: wallet_core::dot_ss58_encode(&to, 0),
             amount: amount.to_string(),
@@ -293,7 +279,6 @@ pub async fn txs(ctx: &DotCtx<'_>, address: &str) -> DotHistory {
     }
     let partial = hub.is_none() || relay.is_none();
     let mut items = merge(vec![hub.unwrap_or_default(), relay.unwrap_or_default()]);
-    // Missing hashes, newest first, a few per call.
     let mut fetched = 0;
     for e in &items {
         let Some(x) = e.extrinsic_index else { continue };
@@ -327,7 +312,6 @@ pub async fn txs(ctx: &DotCtx<'_>, address: &str) -> DotHistory {
 mod tests {
     use super::*;
 
-    // Recorded Statescan responses (public on-chain data, 2026-11-01).
     const HUB: &[u8] = include_bytes!("testdata/statescan_ahp_transfers.json");
     const HUB_SYSTEM: &[u8] = include_bytes!("testdata/statescan_ahp_transfers_system.json");
     const RELAY: &[u8] = include_bytes!("testdata/statescan_relay_transfers.json");
@@ -362,7 +346,6 @@ mod tests {
             hub[3].from,
             "1JVrK16XZm9vyZjHoYVPjtZ35LvTQ4oyufMoUFTFpAUhath"
         );
-        // Someone else's account: nothing is ours.
         let other = id("1EVdqVDMGnDLTVPXruvGNNzd7r5aBezXhQquAg8sbJGjdTs");
         assert_eq!(
             parse_transfers(HUB, DotHistoryChain::AssetHub, &other),
@@ -391,7 +374,6 @@ mod tests {
 
     #[test]
     fn transfers_without_extrinsic_and_hex_balances() {
-        // Treasury payouts: `isSigned: false`, no `extrinsicIndex`, `balance` in 0x… hex.
         let me = id("13UVJyLnbVp9RBZYFwFGyDvVd1y27Tt8tkntv6Q7JVPhFsTB");
         let list = parse_transfers(HUB_SYSTEM, DotHistoryChain::AssetHub, &me).unwrap();
         assert_eq!(list.len(), 3);
@@ -425,7 +407,6 @@ mod tests {
                 String::from_utf8_lossy(bad)
             );
         }
-        // Malformed entries, a non-native asset (USDT): skipped one by one.
         let odd = br#"{"items":[
             {"isNativeAsset":true,"indexer":{"blockHeight":"x"},"from":"?","to":"?","balance":"1"},
             {"isNativeAsset":true,"indexer":{"blockHeight":1,"extrinsicIndex":1,"blockTime":1},"from":"14ta64vXXABuqvcF4vozdi2R1tTx9t4pPGnaqiQrJR3YV4uN","to":"1JVrK16XZm9vyZjHoYVPjtZ35LvTQ4oyufMoUFTFpAUhath","balance":"-5"},
@@ -436,7 +417,6 @@ mod tests {
             parse_transfers(odd, DotHistoryChain::AssetHub, &me),
             Some(vec![])
         );
-        // On the relay chain an absent flag means DOT.
         let relay = br#"{"items":[{"indexer":{"blockHeight":7,"extrinsicIndex":1,"eventIndex":4,"blockTime":9},"from":"1JVrK16XZm9vyZjHoYVPjtZ35LvTQ4oyufMoUFTFpAUhath","to":"14ta64vXXABuqvcF4vozdi2R1tTx9t4pPGnaqiQrJR3YV4uN","balance":12}]}"#;
         let r = parse_transfers(relay, DotHistoryChain::Relay, &me).unwrap();
         assert_eq!(
@@ -456,7 +436,6 @@ mod tests {
         let mut list = parse_transfers(HUB, DotHistoryChain::AssetHub, &me).unwrap();
         list.truncate(2);
         list[1].event_index = Some(9);
-        // Both transfers in one (batch) extrinsic: same hash, distinct ids.
         apply_hashes(&mut list, |_| Some(h.to_owned()));
         assert_eq!(list[0].id, h);
         assert_eq!(list[1].id, format!("{h}:9"));

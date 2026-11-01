@@ -2,10 +2,7 @@
 //! the Hub testnet's official sentry `rest.provider-sentry-01.hub-testnet.polypore.xyz` — on the
 //! `cosmos` Tor family, never with a fallback to another server or to clear net.
 //!
-//! Kyro builds the transaction itself: chain id and height (`blocks/latest`), `account_number`
-//! and `sequence` (`auth/accounts`), gas from a simulation of the exact transaction, gas price
-//! from the Hub's fee market (`feemarket/v1/gas_price/uatom`, with a margin), encoded by
-//! wallet-core. A transaction built by the server is never signed.
+//! A transaction built by the server is never signed.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -16,22 +13,15 @@ use crate::net::{Family, NetClient, ServerRequest};
 
 /// `timeout_height` = latest height + this (≈ 10 min at ≈ 6 s per block).
 pub const TIMEOUT_BLOCKS: u64 = 100;
-/// Gas limit = simulated gas × 14 / 10 (cosmjs' "auto" multiplier).
 const GAS_NUM: u64 = 14;
 const GAS_DEN: u64 = 10;
 /// A MsgSend simulates to ≈ 70 000–100 000 gas: more than this is refused.
 pub const MAX_GAS: u64 = 500_000;
-/// Gas price paid = fee-market price × 12 / 10 (the price can rise by 12.5 % per block).
 const PRICE_NUM: u128 = 12;
 const PRICE_DEN: u128 = 10;
-/// Fee-market prices and gas prices are decimals with 18 digits (`sdk.Dec`).
 const DEC: u128 = 1_000_000_000_000_000_000;
-/// Hub `feemarket` `min_base_gas_price` (0.005 uatom/gas, read live on 2026-11-01 on mainnet
-/// and testnet): used only if the endpoint does not answer 200.
 const DEFAULT_GAS_PRICE: u128 = 5_000_000_000_000_000;
-/// A gas price above 1 uatom/gas (200 × today's) from the server is refused.
 const MAX_GAS_PRICE: u128 = DEC;
-/// History: per query (sent, received), newest first.
 const TXS_PER_QUERY: u32 = 25;
 
 pub fn default_url(net: Network) -> &'static str {
@@ -60,7 +50,6 @@ fn endpoint(ctx: &CosmosCtx<'_>, path: &str) -> AppResult<url::Url> {
         .map_err(|_| AppError::Internal("invalid Cosmos URL".into()))
 }
 
-/// `(status, JSON)`; a body that is not JSON is an error whatever the status.
 async fn call(ctx: &CosmosCtx<'_>, u: url::Url, body: Option<Value>) -> AppResult<(u16, Value)> {
     let path = u.path().to_owned();
     let req = match body {
@@ -120,8 +109,6 @@ pub fn parse_dec(s: &str) -> Option<u128> {
         .checked_add(format!("{frac:0<18}").parse().ok()?)
 }
 
-// ---------------------------------------------------------------- chain state
-
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CosmosChainInfo {
@@ -163,8 +150,6 @@ pub struct CosmosAccountInfo {
     pub spendable: String,
 }
 
-/// The `BaseAccount` inside what `auth/accounts` returns: itself, or the base account of a
-/// vesting account. Module accounts and other types are refused (Kyro cannot sign for them).
 fn base_account(a: &Value) -> AppResult<&Value> {
     let t = a["@type"].as_str().unwrap_or("");
     match t {
@@ -278,7 +263,6 @@ pub async fn simulate(ctx: &CosmosCtx<'_>, tx: &[u8]) -> AppResult<u64> {
     )
     .await?;
     if status != 200 {
-        // Typically "insufficient funds" or "account sequence mismatch": the user's problem.
         return Err(AppError::InvalidInput(format!(
             "simulation rejected by the Cosmos network: {}",
             crate::dialog_text::sanitize(v["message"].as_str().unwrap_or(""), 300)
@@ -311,7 +295,6 @@ pub async fn broadcast(ctx: &CosmosCtx<'_>, tx_b64: &str, hash: &str) -> AppResu
         )));
     }
     let code = r["code"].as_u64().unwrap_or(u64::MAX);
-    // 19 = ErrTxInMempoolCache: this very transaction is already in the mempool.
     if code != 0 && !(code == 19 && r["codespace"] == "sdk") {
         return Err(AppError::InvalidInput(format!(
             "Cosmos transaction rejected (code {code}): {}",
@@ -373,8 +356,6 @@ pub async fn tx_status(ctx: &CosmosCtx<'_>, hash: &str) -> AppResult<CosmosTxSta
     })
 }
 
-/// `{ hash, height, time, from, to, amount, fee, memo, success }` for every `MsgSend` of uatom
-/// touching `address` in one search result (other messages are left out).
 fn history_entries(v: &Value, address: &str, out: &mut Vec<Value>) {
     let txs = v["txs"].as_array().cloned().unwrap_or_default();
     let resps = v["tx_responses"].as_array().cloned().unwrap_or_default();
@@ -431,7 +412,6 @@ fn chrono_millis(t: &str) -> Option<i64> {
     let n = |r: core::ops::Range<usize>| t.get(r)?.parse::<i64>().ok();
     let (y, mo, d) = (n(0..4)?, n(5..7)?, n(8..10)?);
     let (h, mi, s) = (n(11..13)?, n(14..16)?, n(17..19)?);
-    // Days from civil (Howard Hinnant's algorithm).
     let y2 = if mo <= 2 { y - 1 } else { y };
     let era = y2.div_euclid(400);
     let yoe = y2 - era * 400;
@@ -442,8 +422,7 @@ fn chrono_millis(t: &str) -> Option<i64> {
     Some(((days * 24 + h) * 60 + mi) * 60_000 + s * 1000)
 }
 
-/// Last sends and receipts of uatom (`MsgSend`), newest first, at most 50. The public node only
-/// indexes recent blocks: older transactions are not listed.
+/// Last sends and receipts of uatom (`MsgSend`), newest first, at most 50.
 pub async fn txs(ctx: &CosmosCtx<'_>, address: &str) -> AppResult<Value> {
     let a = wallet_core::cosmos_normalize_address(address)?;
     let mut out = Vec::new();
@@ -473,8 +452,7 @@ pub async fn txs(ctx: &CosmosCtx<'_>, address: &str) -> AppResult<Value> {
     Ok(Value::Array(out))
 }
 
-/// Network check of the default server (chain id, height). Live tests only: no custom Cosmos
-/// server yet, so nothing in the app probes.
+/// Network check of the default server (chain id, height).
 #[cfg(test)]
 pub async fn probe(ctx: &CosmosCtx<'_>) -> AppResult<crate::btc_backend::Detected> {
     let i = chain_info(ctx).await?;
@@ -485,7 +463,6 @@ pub async fn probe(ctx: &CosmosCtx<'_>) -> AppResult<crate::btc_backend::Detecte
     })
 }
 
-/// Checks before building / signing, against live data. Errors are user-facing.
 pub fn check_send(ours: &CosmosAccountInfo, amount: u128, fee: u128) -> AppResult<()> {
     if !ours.exists {
         return Err(AppError::InvalidInput(
@@ -517,7 +494,6 @@ mod tests {
         assert_eq!(parse_dec("0.0000000000000000001"), None);
         assert_eq!(parse_dec("-1"), None);
         assert_eq!(parse_dec(".5"), None);
-        // 90 000 gas simulated → 126 000 limit; 0.005 × 1.2 = 0.006 uatom/gas → 756 uatom.
         assert_eq!(fee_for(90_000, DEFAULT_GAS_PRICE).unwrap(), (126_000, 756));
         assert_eq!(fee_for(1, 1).unwrap(), (2, 1));
         assert!(fee_for(0, DEFAULT_GAS_PRICE).is_err());

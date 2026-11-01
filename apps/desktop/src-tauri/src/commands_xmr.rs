@@ -1,7 +1,7 @@
 //! IPC commands for Monero (`xmr_*`): addresses (primary + subaddresses), background scan with
-//! progress, balance (total / unlocked), history, transfers **built by Rust** (inputs, decoys,
-//! fee, change) and signed behind the password and the native dialog, the 25-word Monero seed
-//! in a native window only, and the restore height. Contract: docs/IPC.md §2.10.
+//! progress, balance (total / unlocked), history, transfers **built by Rust** (inputs, decoys, fee,
+//! change) and signed behind the password and the native dialog, the 25-word Monero seed in a
+//! native window only, and the restore height.
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
@@ -43,7 +43,6 @@ fn node_label(state: &AppState) -> String {
         .unwrap_or_default()
 }
 
-/// Body of the native dialog: what Rust built, nothing from the interface.
 pub(crate) fn describe_xmr(lang: Lang, s: &XmrTxSummary, node: &str) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     let x = |v: &str| xmr(lang, v);
@@ -129,8 +128,6 @@ pub(crate) fn describe_xmr_extra(lang: Lang, s: &XmrTxSummary) -> String {
     out
 }
 
-// ---------------------------------------------------------------- reads
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct XmrBackendInfo {
@@ -152,9 +149,8 @@ pub fn xmr_backend_info(state: State<'_, AppState>) -> XmrBackendInfo {
     }
 }
 
-/// Address `index` of account `account`: 0 = primary, n ≥ 1 = subaddress `(0, n)` (only the
-/// ones already handed out, see `xmr_new_subaddress`). The first call creates the account's
-/// encrypted scan state, so the first scan starts before that moment.
+/// Address `index` of account `account`: 0 = primary, n ≥ 1 = subaddress `(0, n)` (only the ones
+/// already handed out, see `xmr_new_subaddress`).
 #[tauri::command]
 pub async fn xmr_address(
     state: State<'_, AppState>,
@@ -175,7 +171,6 @@ pub async fn xmr_address(
         c.restore_height.is_some() || c.next > 0 || !c.txs.is_empty()
     };
     if !path_exists {
-        // Persist `created_at` now (no-op if the file exists with the same content).
         let c = xmr_backend::load(&state, a)?;
         xmr_backend::save(&state, a, &c)?;
     }
@@ -384,10 +379,7 @@ pub async fn xmr_set_restore_height(
     status_of(&state, a)
 }
 
-// ---------------------------------------------------------------- send
-
-/// Builds a transfer of `amount` piconero (absent = everything unlocked) to `to`. Rust picks the
-/// inputs, fetches decoys and the fee rate, sets the change; the transfer stays in Rust.
+/// Builds a transfer of `amount` piconero (absent = everything unlocked) to `to`.
 #[tauri::command]
 pub async fn xmr_prepare_tx(
     state: State<'_, AppState>,
@@ -482,7 +474,7 @@ pub async fn xmr_send_tx(
     })
 }
 
-// ---------------------------------------------------------------- 25-word seed
+// 25-word seed
 
 pub(crate) fn seed_text(
     lang: Lang,
@@ -530,7 +522,7 @@ pub(crate) fn seed_text(
 }
 
 /// Shows the 25-word Monero seed of account `account` in a native window (password, native
-/// confirmation, then the words). Nothing is returned to the webview.
+/// confirmation, then the words).
 #[tauri::command]
 pub async fn xmr_seed_show(
     app: AppHandle,
@@ -589,7 +581,6 @@ pub async fn xmr_seed_show(
     Ok(())
 }
 
-/// Probe used by `settings_set` / `server_test`.
 pub(crate) async fn probe(
     net: &std::sync::Arc<crate::net::NetClient>,
     network: Network,

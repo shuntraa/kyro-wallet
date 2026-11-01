@@ -1,19 +1,4 @@
 //! Hardware wallets (Ledger over USB HID, Trezor over WebUSB).
-//!
-//! - [`HardwareWallet`] is what the commands use; [`ledger`] and [`trezor`] implement it.
-//!   Trezor Safe 7 (and later) devices speak the encrypted Trezor Host Protocol ([`thp`]) on the
-//!   same USB interface; their pairings live in [`thp_store`].
-//! - [`HwManager`] keeps the devices seen in this session (stable `ledger-1`, `trezor-1`… ids),
-//!   **one lock per device** (a second operation gets `HW_BUSY`), and runs every device call on
-//!   a blocking thread with a **deadline**. Transports read in 100 ms slices and check the
-//!   deadline and a cancellation flag between slices, so a timeout, `hw_cancel` or an unplugged
-//!   device ends the call cleanly: the half-used connection is dropped and reopened next time.
-//! - Nothing a device returns is trusted: callers verify addresses and signatures with
-//!   `wallet-core` (see `commands_hw.rs`).
-//!
-//! Phase-4 chains are part of [`Chain`] so that the IPC contract is stable; every backend
-//! answers `HW_UNSUPPORTED` for them until they are implemented (see docs/IPC.md §2.3 for the
-//! device apps that support them).
 
 pub mod chains;
 pub mod ledger;
@@ -54,14 +39,12 @@ use wallet_core::{
 
 use crate::error::AppError;
 
-/// Chains a hardware wallet can be asked about.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Chain {
     Btc,
     Evm,
     Sol,
-    // Device code of these chains: `hw/chains.rs` and the `ledger_*` / `trezor_*` modules.
     Ltc,
     Doge,
     Tron,
@@ -70,15 +53,12 @@ pub enum Chain {
     Bch,
     Dash,
     Stellar,
-    /// Zcash (transparent): Trezor only (no Ledger, see `chains::ZEC_LEDGER_REASON`).
     Zec,
-    // Single-key chains, Ledger only (see `ledger_apps`).
     Sui,
     Apt,
     Algo,
     Near,
     Cosmos,
-    // No hardware support (reasons in `ledger_apps::unavailable`).
     Dot,
     Hbar,
     Kas,
@@ -110,7 +90,6 @@ impl Chain {
         Chain::Ton,
     ];
 
-    /// Every chain has device code; what a given device / app can do is in its status.
     pub fn implemented(self) -> bool {
         matches!(
             self,
@@ -156,31 +135,20 @@ impl Chain {
     }
 }
 
-/// Device-level failure, mapped 1:1 to the `HW_*` IPC error codes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HwError {
     NotFound,
     Locked,
-    WrongApp {
-        expected: String,
-        open: String,
-    },
+    WrongApp { expected: String, open: String },
     Rejected,
     Disconnected,
-    Unsupported {
-        what: String,
-        min: Option<String>,
-    },
+    Unsupported { what: String, min: Option<String> },
     Busy(String),
     Timeout,
-    /// Cancelled by Kyro (`hw_cancel`), not by the user on the device.
     Cancelled,
     BadResponse(String),
-    /// THP device not paired with Kyro, and this operation may not pair (only `hw_open` does).
     PairingRequired,
-    /// THP pairing did not complete: wrong code, or the device did not prove the code.
     PairingFailed(String),
-    /// Local problem (pairing file, OS randomness), not the device's fault.
     Internal(String),
 }
 
@@ -239,41 +207,30 @@ impl From<HwError> for AppError {
     }
 }
 
-/// What the UI should tell the user while a device call is pending (event `hw-prompt`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Prompt {
-    /// Look at the device screen and confirm (or refuse) there.
     ConfirmOnDevice,
-    /// Enter the PIN on the device (Trezor T / Safe).
     PinOnDevice,
-    /// Enter the passphrase on the device (Trezor T / Safe).
     PassphraseOnDevice,
     /// Trezor One: show the 3×3 blind matrix, then call `hw_pin_matrix`.
     PinMatrix,
-    /// THP (Safe 7): the device asks whether "Kyro Wallet" (fixed label, no computer name) may pair; confirm there.
     ThpConfirmPairing,
-    /// THP: the device shows a 6-digit code; ask the user to type it, then `hw_thp_pairing_code`.
     ThpPairingCode,
-    /// THP: a paired device asks to confirm the connection of Kyro on its screen.
     ThpConfirmConnection,
 }
 
 pub type PromptFn = Arc<dyn Fn(Prompt) + Send + Sync>;
 
-/// Per-call control: deadline, cancellation, prompts to the UI, PIN-matrix input.
 pub struct Ctl {
     deadline: Instant,
     cancel: Arc<AtomicBool>,
     prompt: PromptFn,
     pin: Mutex<Option<Receiver<Zeroizing<String>>>>,
-    /// THP pairing code typed by the user (`hw_thp_pairing_code`).
     code: Mutex<Option<Receiver<Zeroizing<String>>>>,
-    /// Whether this call may pair a THP device (only `hw_open`).
     pairing: bool,
 }
 
-/// Transports wait for the device in slices this long, checking [`Ctl::check`] in between.
 pub const POLL: Duration = Duration::from_millis(100);
 
 impl Ctl {
@@ -288,7 +245,6 @@ impl Ctl {
         }
     }
 
-    /// This call may pair a THP device (and wait for the code typed by the user).
     pub fn allow_pairing(mut self) -> Self {
         self.pairing = true;
         self
@@ -298,7 +254,6 @@ impl Ctl {
         self.pairing
     }
 
-    /// Waits for `hw_thp_pairing_code` (the 6 digits shown on the device).
     pub fn wait_pairing_code(&self) -> HwResult<Zeroizing<String>> {
         let guard = lock(&self.code);
         let rx = guard
@@ -314,7 +269,6 @@ impl Ctl {
         }
     }
 
-    /// Tests: a control that may pair, fed with pairing codes through the returned sender.
     #[cfg(test)]
     pub fn for_pairing_tests(
         timeout: Duration,
@@ -326,7 +280,6 @@ impl Ctl {
         (ctl, tx)
     }
 
-    /// `Cancelled` if `hw_cancel` was called, `Timeout` past the deadline.
     pub fn check(&self) -> HwResult<()> {
         if self.cancel.load(Ordering::SeqCst) {
             return Err(HwError::Cancelled);
@@ -371,14 +324,12 @@ impl Ctl {
     }
 }
 
-/// A device as listed by `hw_list`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceInfo {
     pub id: String,
     pub kind: HwDeviceKind,
     pub model: String,
-    /// `hid` (Ledger) or `webusb` (Trezor).
     pub transport: &'static str,
 }
 
@@ -392,13 +343,9 @@ pub struct AppInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ChainState {
-    /// The device can be used for this chain right now.
     Ready,
-    /// Ledger: open `app` on the device first.
     OpenApp,
-    /// Unlock the device first.
     Unlock,
-    /// Not possible with this device / firmware / Kyro version (`reason`, `min`).
     Unsupported,
 }
 
@@ -438,7 +385,6 @@ impl ChainStatus {
     }
 }
 
-/// Result of `hw_open`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceStatus {
@@ -446,16 +392,12 @@ pub struct DeviceStatus {
     pub kind: HwDeviceKind,
     pub model: String,
     pub locked: bool,
-    /// Ledger: the app open right now (the dashboard is reported as « Dashboard »).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app: Option<AppInfo>,
-    /// Trezor: firmware version.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub firmware: Option<String>,
-    /// Trezor: passphrase protection enabled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub passphrase: Option<bool>,
-    /// Trezor Safe 7 and later: `"thp"` (encrypted, paired channel). Absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<&'static str>,
     pub chains: Vec<ChainStatus>,
@@ -470,7 +412,6 @@ pub struct BtcSignRequest<'a> {
 pub struct EvmSignRequest<'a> {
     pub tx: &'a EvmTxRequest,
     pub index: u32,
-    /// Ledger only: signed token descriptor, sent before the transaction.
     pub token: Option<&'a LedgerErc20Descriptor>,
 }
 
@@ -479,7 +420,6 @@ pub struct EvmSignRequest<'a> {
 pub trait HardwareWallet: Send {
     fn status(&mut self, ctl: &Ctl, net: Network) -> HwResult<DeviceStatus>;
 
-    /// Account xpub `m/purpose'/coin'/account'` and master fingerprint.
     fn btc_account(
         &mut self,
         ctl: &Ctl,
@@ -488,7 +428,6 @@ pub trait HardwareWallet: Send {
         account: u32,
     ) -> HwResult<BtcAccount>;
 
-    /// Shows `account/change/index` on the device screen and returns what the device derived.
     fn btc_display_address(
         &mut self,
         ctl: &Ctl,
@@ -505,10 +444,8 @@ pub trait HardwareWallet: Send {
         req: &BtcSignRequest<'_>,
     ) -> HwResult<Vec<HwBtcSignature>>;
 
-    /// Node `m/44'/60'/0'/0` as an xpub (see `wallet_core::evm_xpub_from_node`).
     fn evm_node(&mut self, ctl: &Ctl) -> HwResult<String>;
 
-    /// Address `m/44'/60'/0'/0/index`, shown on the screen when `display`.
     fn evm_address(&mut self, ctl: &Ctl, index: u32, display: bool) -> HwResult<String>;
 
     /// `(r, s)` of an EIP-1559 signature.
@@ -518,32 +455,25 @@ pub trait HardwareWallet: Send {
     /// (otherwise it is blind signing on the device and Kyro asks a reinforced confirmation).
     fn evm_clear_signs(&self, kind: EvmTxKind, has_descriptor: bool) -> bool;
 
-    /// Address `m/44'/501'/account'/0'`, shown on the screen when `display`.
     fn sol_address(&mut self, ctl: &Ctl, account: u32, display: bool) -> HwResult<String>;
 
-    /// Ed25519 signature over the serialized message.
     fn sol_sign(&mut self, ctl: &Ctl, account: u32, message: &[u8]) -> HwResult<Vec<u8>>;
 
-    /// Raw access for the per-chain device code of [`chains`] (LTC, DOGE, BCH, DASH, XRP,
-    /// TRON, Stellar), which talks to the device itself.
     fn raw(&mut self) -> RawDevice<'_> {
         RawDevice::None
     }
 
-    /// Ledger only: the raw APDU link, for the per-chain apps of [`ledger_apps`].
     fn apdu_link(&self) -> Option<&dyn ledger::ApduLink> {
         None
     }
 }
 
-/// See [`HardwareWallet::raw`].
 pub enum RawDevice<'a> {
     Ledger(&'a dyn ledger::ApduLink),
     Trezor(&'a mut dyn trezor::TrezorDevice),
     None,
 }
 
-/// Where a device was found (backend specific), plus a key stable for the session.
 #[derive(Debug, Clone)]
 pub enum Locator {
     Ledger(ledger::Locator),
@@ -586,7 +516,6 @@ impl Slot {
     }
 }
 
-/// Clears `busy` when the blocking call ends, however it ends.
 struct BusyGuard(Arc<Slot>);
 
 impl Drop for BusyGuard {
@@ -601,20 +530,16 @@ impl Drop for BusyGuard {
 pub struct HwManager {
     slots: Mutex<HashMap<String, Arc<Slot>>>,
     counter: AtomicU32,
-    /// THP pairings (Trezor Safe 7): file location and its lock.
     thp: Arc<thp_store::ThpEnv>,
 }
 
 impl HwManager {
-    /// A device call (open, read, signature…) is in progress on some device.
     pub fn any_busy(&self) -> bool {
         lock(&self.slots)
             .values()
             .any(|s| s.busy.load(Ordering::SeqCst))
     }
 
-    /// Enumerates devices (blocking: call from a blocking thread). Ids stay the same for a
-    /// device that stays plugged in the same port; unplugged devices are forgotten.
     pub fn list(&self) -> Vec<DeviceInfo> {
         let mut found = Vec::new();
         found.extend(ledger::enumerate());
@@ -655,14 +580,10 @@ impl HwManager {
             .ok_or(HwError::NotFound)
     }
 
-    /// Where THP pairings are stored (`trezor-thp.json` in the app data directory). Without
-    /// it (tests), pairings are kept in memory only.
     pub fn set_thp_store(&self, path: std::path::PathBuf) {
         self.thp.set_path(path);
     }
 
-    /// Runs `f` against device `id` on a blocking thread, with the device lock held and a
-    /// deadline of `timeout`. A THP device that is not paired yet gives `PairingRequired`.
     pub async fn run<T: Send + 'static>(
         &self,
         id: &str,
@@ -673,8 +594,6 @@ impl HwManager {
         self.run_inner(id, timeout, prompt, false, f).await
     }
 
-    /// Like [`HwManager::run`], but connecting may pair a THP device: the `thp-pairing-code`
-    /// prompt is emitted and the call waits for `hw_thp_pairing_code` (used by `hw_open`).
     pub async fn run_pairing<T: Send + 'static>(
         &self,
         id: &str,
@@ -733,7 +652,6 @@ impl HwManager {
             }
             result
         });
-        // Backstop only: the blocking side already honours the deadline within ~POLL.
         match tokio::time::timeout(timeout + Duration::from_secs(3), handle).await {
             Ok(Ok(result)) => result,
             Ok(Err(e)) => Err(HwError::bad(format!("task interrupted: {e}"))),
@@ -757,7 +675,6 @@ impl HwManager {
         lock(&self.slots).insert(id.into(), Arc::new(slot));
     }
 
-    /// Aborts the pending call on `id`, if any (returns whether one was pending).
     pub fn cancel(&self, id: &str) -> HwResult<bool> {
         let slot = lock(&self.slots)
             .get(id)
@@ -770,7 +687,6 @@ impl HwManager {
         Ok(pending)
     }
 
-    /// Hands PIN-matrix positions to the pending call on `id`.
     pub fn submit_pin(&self, id: &str, positions: Zeroizing<String>) -> HwResult<()> {
         let slot = lock(&self.slots)
             .get(id)
@@ -784,7 +700,6 @@ impl HwManager {
             .map_err(|_| HwError::bad("no PIN entry pending"))
     }
 
-    /// Hands the THP pairing code typed by the user to the pending `hw_open` on `id`.
     pub fn submit_pairing_code(&self, id: &str, code: Zeroizing<String>) -> HwResult<()> {
         let slot = lock(&self.slots)
             .get(id)
@@ -798,13 +713,10 @@ impl HwManager {
             .map_err(|_| HwError::bad("no pairing pending"))
     }
 
-    /// THP devices paired with this installation (public keys only).
     pub fn thp_pairings(&self) -> HwResult<Vec<thp_store::PairingInfo>> {
         self.thp.list()
     }
 
-    /// Forgets one THP pairing (`key` = hex of the device's static key) or all of them, and
-    /// closes idle Trezor connections so that the next operation reconnects (and re-pairs).
     pub fn thp_forget(&self, key: Option<&[u8; 32]>) -> HwResult<usize> {
         let n = self.thp.forget(key)?;
         for slot in lock(&self.slots).values() {
@@ -839,7 +751,6 @@ pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// `true` if dotted version `v` >= `min` (missing components count as 0).
 pub fn version_at_least(v: &str, min: &str) -> bool {
     let parse = |s: &str| -> Vec<u64> {
         s.split(|c: char| !c.is_ascii_digit())
@@ -861,7 +772,6 @@ pub fn version_at_least(v: &str, min: &str) -> bool {
     true
 }
 
-/// `m/…` with `'` for hardened steps.
 pub fn path_string(path: &[u32]) -> String {
     let mut s = String::from("m");
     for p in path {
@@ -962,7 +872,6 @@ mod tests {
         assert_eq!(v["data"]["min"], "2.4.2");
     }
 
-    /// A device that waits for the user forever (like a Ledger showing a transaction).
     struct Waiting;
 
     impl HardwareWallet for Waiting {
@@ -1037,7 +946,6 @@ mod tests {
                 .await;
             assert_eq!(r, Err(HwError::Timeout));
             assert!(t.elapsed() < Duration::from_secs(2));
-            // The half-used connection was dropped (reopen attempt → the fake has no device).
             assert_eq!(
                 m.run("ledger-9", Duration::from_secs(1), quiet(), |d, c| d
                     .sol_address(c, 0, false))
@@ -1045,7 +953,6 @@ mod tests {
                 Err(HwError::NotFound)
             );
 
-            // One operation per device: a second call is HW_BUSY; hw_cancel ends the first.
             m.insert_for_tests("ledger-9", Box::new(Waiting));
             let m2 = m.clone();
             let first = tauri::async_runtime::spawn(async move {
@@ -1065,16 +972,14 @@ mod tests {
             ));
             assert!(m.cancel("ledger-9").unwrap());
             assert_eq!(first.await.unwrap(), Err(HwError::Cancelled));
-            // No PIN can be submitted when nothing waits for one.
             assert!(m
                 .submit_pin("ledger-9", Zeroizing::new("123".into()))
                 .is_err());
         });
     }
 
-    /// READ-ONLY test against a real plugged-in device (never signs, never displays):
-    /// `cargo test -p kyro-desktop --lib real_device_read_only -- --ignored --nocapture`.
-    /// Ledger: open "Bitcoin Test". Trezor: unlock it (PIN on the device if asked).
+    /// READ-ONLY test against a real plugged-in device (never signs, never displays): `cargo test
+    /// -p kyro-desktop --lib real_device_read_only -- --ignored --nocapture`.
     #[test]
     #[ignore = "needs a real Ledger or Trezor plugged in"]
     fn real_device_read_only() {
@@ -1112,9 +1017,6 @@ mod tests {
 
     /// READ-ONLY test against a real Trezor Safe 7 (THP), never signs or displays an address:
     /// `cargo test -p kyro-desktop --lib real_thp_device_read_only -- --ignored --nocapture`.
-    /// Confirm the pairing on the device, then type the 6-digit code it shows into this
-    /// terminal. The pairing is kept in `<temp>/kyro-thp-real-test.json` (delete it to re-pair);
-    /// a second run must connect without a code.
     #[test]
     #[ignore = "needs a real Trezor Safe 7 plugged in and a person to type the code"]
     fn real_thp_device_read_only() {
@@ -1167,7 +1069,6 @@ mod tests {
         assert_eq!(ctl.check(), Err(HwError::Cancelled));
         let ctl = Ctl::for_tests(Duration::from_millis(0));
         assert_eq!(ctl.check(), Err(HwError::Timeout));
-        // No PIN arrives: the wait ends at the deadline instead of blocking forever.
         let ctl = Ctl::for_tests(Duration::from_millis(250));
         let (_tx, rx) = sync_channel::<Zeroizing<String>>(1);
         *lock(&ctl.pin) = Some(rx);

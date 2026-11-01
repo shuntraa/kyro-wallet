@@ -1,15 +1,8 @@
 //! TON data from TON Center's public API v3 (`toncenter.com` on mainnet,
 //! `testnet.toncenter.com` on testnet), on the `ton` Tor family, never with a fallback.
 //!
-//! The keyless tier allows about **one request per second per IP** (checked 2026-11-01: the
-//! third request within a second gets `429 Ratelimit exceed`). Every TON request of the app is
-//! therefore paced (≥ [`PACE`] apart, one at a time) and a `429` is retried a few times after a
-//! pause. An optional key (`KYRO_TONCENTER_API_KEY`, dev `.env`) is sent as `X-API-Key` to
-//! TON Center only.
-//!
 //! Kyro builds the transfer itself (seqno and account state read here, cells written by
-//! wallet-core): a server-built message is never signed. What the server can lie about is in
-//! SECURITY.md (balance, seqno, account states, history, fee estimate).
+//! wallet-core): a server-built message is never signed.
 
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -24,7 +17,6 @@ use crate::net::{Family, NetClient, ServerRequest};
 
 /// Minimum spacing between two TON Center requests (keyless tier: 1 request / s).
 pub const PACE: Duration = Duration::from_millis(1_100);
-/// Retries of a `429` (after 1.5 s, 3 s, 4.5 s).
 const RETRIES_429: u32 = 3;
 const MAX_TXS: u32 = 50;
 /// A transfer is valid this long after it is built (the wallet refuses it afterwards).
@@ -57,14 +49,11 @@ pub fn testnet(net: Network) -> bool {
     net == Network::Testnet
 }
 
-/// One TON request at a time, at least [`PACE`] after the previous one (all networks: the limit
-/// is per IP, and both hosts are the same service).
 fn pacer() -> &'static tokio::sync::Mutex<Option<Instant>> {
     static P: OnceLock<tokio::sync::Mutex<Option<Instant>>> = OnceLock::new();
     P.get_or_init(|| tokio::sync::Mutex::new(None))
 }
 
-/// Error text of a TON Center reply (`{"error": "…"}` or `{"detail": …}`), capped.
 fn error_text(bytes: &[u8]) -> String {
     let v: Value = serde_json::from_slice(bytes).unwrap_or(Value::Null);
     let s = v["error"]
@@ -76,7 +65,6 @@ fn error_text(bytes: &[u8]) -> String {
     crate::dialog_text::sanitize(&s, 200)
 }
 
-/// `(status, body)` of a request, paced, `429` retried.
 async fn send(ctx: &TonCtx<'_>, req: ServerRequest) -> AppResult<(u16, Vec<u8>)> {
     let mut attempt = 0;
     loop {
@@ -137,8 +125,6 @@ async fn get(ctx: &TonCtx<'_>, path: &str, query: &[(&str, &str)]) -> AppResult<
     }
     serde_json::from_slice(&bytes).map_err(|_| bad(format!("TON Center: invalid JSON on {path}")))
 }
-
-// ---------------------------------------------------------------- accounts
 
 /// Account state, as TON Center reports it.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -219,10 +205,8 @@ pub async fn account(ctx: &TonCtx<'_>, addr: &TonAddress) -> AppResult<TonAccoun
     parse_wallet_info(&v, addr, ctx.network)
 }
 
-// ---------------------------------------------------------------- fees
-
-/// Fee estimate (nanotons) of an external message: TON Center emulates it (`estimateFee`, the
-/// zero signature not checked). Sum of the source fees: import, storage, gas, forward.
+/// Fee estimate (nanotons) of an external message: TON Center emulates it (`estimateFee`, the zero
+/// signature not checked).
 pub async fn estimate_fee(
     ctx: &TonCtx<'_>,
     wallet: &TonAddress,
@@ -267,8 +251,6 @@ pub fn parse_fee(v: &Value) -> AppResult<u64> {
     Ok(total)
 }
 
-// ---------------------------------------------------------------- broadcast, status
-
 fn b64_to_hex(s: &str) -> Option<String> {
     let s = s.trim();
     base64::engine::general_purpose::STANDARD
@@ -279,9 +261,8 @@ fn b64_to_hex(s: &str) -> Option<String> {
         .map(hex::encode)
 }
 
-/// Sends a signed external message (`POST /message`). TON Center returns the message hash and
-/// the normalized hash: both must be ours. A message the node refuses (bad seqno, expired,
-/// signature) comes back as an HTTP error: nothing was sent.
+/// Sends a signed external message (`POST /message`). TON Center returns the message hash and the
+/// normalized hash: both must be ours.
 pub async fn submit(
     ctx: &TonCtx<'_>,
     boc: &str,
@@ -362,8 +343,6 @@ pub async fn tx_status(ctx: &TonCtx<'_>, normalized_hex: &str) -> AppResult<TonT
     })
 }
 
-// ---------------------------------------------------------------- history
-
 /// One history line: a transfer in or out of our wallet.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -421,7 +400,6 @@ pub fn parse_history(v: &Value, me: &TonAddress, net: Network) -> Vec<TonHistory
         if external {
             let outs = t["out_msgs"].as_array().cloned().unwrap_or_default();
             if outs.is_empty() {
-                // Our message was processed but nothing was sent (not enough funds…).
                 out.push(TonHistoryEntry {
                     hash,
                     time,
@@ -487,8 +465,6 @@ pub async fn txs(ctx: &TonCtx<'_>, me: &TonAddress) -> AppResult<Vec<TonHistoryE
     Ok(parse_history(&v, me, ctx.network))
 }
 
-// ---------------------------------------------------------------- checks
-
 /// What `ton_build_tx` and `ton_sign_tx` check against live data. Errors are user-facing.
 pub struct TransferCheck<'a> {
     pub ours: &'a TonAccountInfo,
@@ -536,10 +512,7 @@ pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     Ok(())
 }
 
-// ---------------------------------------------------------------- jettons
-
-/// Our balance of a known jetton. `wallet` is our jetton wallet **as Kyro computes it**: a
-/// TON Center line for another contract is ignored.
+/// Our balance of a known jetton.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TonJettonBalance {
@@ -754,7 +727,6 @@ mod tests {
             {"source": owner.to_raw(), "destination": other, "source_wallet": real, "jetton_master": usdt,
              "amount": "5", "transaction_hash": "KGkajBG/ld9GKDwF0Q/5UWLbmSEdzd54akiNagB43Zk=", "transaction_now": 1793164222,
              "transaction_aborted": false},
-            // Fake: the sending contract is not the USDT wallet of the sender.
             {"source": other, "destination": owner.to_raw(), "source_wallet": real, "jetton_master": usdt,
              "amount": "1000000000", "transaction_hash": "KGkajBG/ld9GKDwF0Q/5UWLbmSEdzd54akiNagB43Zk=", "transaction_now": 1793164222}
         ]});
@@ -780,7 +752,6 @@ mod tests {
 
     #[test]
     fn wallet_information_replies() {
-        // Recorded from toncenter.com/api/v3/walletInformation (2026-11-01).
         let active = json!({"balance":"849","wallet_type":"wallet v4 r2","seqno":17,"wallet_id":698983191,"last_transaction_lt":"37392640000001","last_transaction_hash":"YRP/8lga7kP+KzpaSdSuszRDk+ILbWD+/RZovuqCdJo=","status":"active"});
         let a = parse_wallet_info(&active, &me(), Network::Mainnet).unwrap();
         assert_eq!(
@@ -807,7 +778,6 @@ mod tests {
 
     #[test]
     fn fee_reply() {
-        // Recorded from toncenter.com/api/v3/estimateFee (2026-11-01).
         let v = json!({"source_fees":{"in_fwd_fee":105601,"storage_fee":24695655,"gas_fee":38134,"fwd_fee":0},"destination_fees":[]});
         assert_eq!(parse_fee(&v).unwrap(), 105_601 + 24_695_655 + 38_134);
         assert!(parse_fee(&json!({"source_fees":{}})).is_err());
@@ -840,7 +810,6 @@ mod tests {
 
     #[test]
     fn history_lines() {
-        // Shapes of toncenter.com/api/v3/transactions (2026-11-01), trimmed.
         let v = json!({"transactions":[
             {"account":"0:D85BFD5E49C255C6D8ADA01464B2FA15F5C098A38B8A1962D53481C1D49A9147","hash":"YRP/8lga7kP+KzpaSdSuszRDk+ILbWD+/RZovuqCdJo=","now":1683281528,"total_fees":"7390482",
              "description":{"aborted":false,"compute_ph":{"success":true},"action":{"success":true,"skipped_actions":0,"msgs_created":0}},

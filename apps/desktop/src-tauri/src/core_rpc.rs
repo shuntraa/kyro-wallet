@@ -1,13 +1,4 @@
 //! Bitcoin Core JSON-RPC client (the user's own node) and its watch-only descriptor wallet.
-//!
-//! Typing: plain `serde_json::Value` plus a handful of explicit field reads, not `corepc-types`.
-//! We use ~12 RPCs and a few fields of each; `corepc-types` models every field of every Core
-//! version (one module per major version) and would add a large, version-coupled dependency for
-//! no extra safety here — amounts are converted explicitly and every field is checked.
-//!
-//! Transport: a node on loopback/LAN is reached directly; anything else over HTTPS (Tor or
-//! clear per settings) or a `.onion` over Tor (`net::NetClient::server_request`).
-//! Auth: the `.cookie` file (re-read on every request) or rpcuser/rpcpassword.
 
 use base64::Engine as _;
 use serde_json::{json, Value};
@@ -138,7 +129,6 @@ impl<'a> CoreClient<'a> {
 
     fn authorization(&self) -> AppResult<String> {
         let creds = match &self.auth {
-            // Strict read: `.cookie` name, no symlink, <= 256 bytes, `__cookie__:<64 hex>`.
             CoreAuth::Cookie { cookie_path } => crate::servers::read_cookie(cookie_path)?,
             CoreAuth::Userpass { user, password, .. } => zeroize::Zeroizing::new(format!(
                 "{user}:{}",
@@ -153,8 +143,7 @@ impl<'a> CoreClient<'a> {
         ))
     }
 
-    /// One RPC call. `wallet` targets `/wallet/<name>`; `long` allows a long rescan
-    /// (direct connections only).
+    /// One RPC call.
     pub async fn call(
         &self,
         wallet: Option<&str>,
@@ -212,12 +201,10 @@ impl<'a> CoreClient<'a> {
 
     /// Creates (or loads) `name` as a blank, private-key-less descriptor wallet.
     pub async fn create_watch_wallet(&self, name: &str) -> AppResult<()> {
-        // createwallet name disable_private_keys blank passphrase avoid_reuse descriptors load_on_startup
         let params = json!([name, true, true, "", false, true, true]);
         match self.call(None, "createwallet", params, false).await {
             Ok(_) => Ok(()),
             Err(CallError::Rpc(RpcError { code: -4, .. })) => {
-                // Already exists: make sure it is loaded and really watch-only.
                 self.ensure_loaded(name).await?;
                 let info = self
                     .call(Some(name), "getwalletinfo", json!([]), false)
@@ -293,7 +280,6 @@ impl<'a> CoreClient<'a> {
 mod tests {
     use super::*;
 
-    // Recorded Bitcoin Core v28 JSON-RPC responses (shapes from the Core RPC docs).
     const GETBLOCKCHAININFO: &str = r#"{"result":{"chain":"testnet4","blocks":158172,"headers":158172,"bestblockhash":"00000000000000c5b3e8a6d3a6b1b0e1f0a2b3c4d5e6f708192a3b4c5d6e7f80","difficulty":1,"time":1793333429,"mediantime":1793333000,"verificationprogress":1,"initialblockdownload":false,"chainwork":"00","size_on_disk":1,"pruned":false,"warnings":[]},"error":null,"id":"kyro"}"#;
     const WALLET_NOT_FOUND: &str = r#"{"result":null,"error":{"code":-18,"message":"Requested wallet does not exist or is not loaded"},"id":"kyro"}"#;
     const ESTIMATESMARTFEE: &str =
@@ -305,7 +291,6 @@ mod tests {
         let v = parse_response(200, GETBLOCKCHAININFO.as_bytes()).unwrap();
         assert_eq!(v["chain"], "testnet4");
         assert_eq!(v["blocks"], 158172);
-        // Core reports RPC errors with HTTP 500 and a JSON body.
         match parse_response(500, WALLET_NOT_FOUND.as_bytes()) {
             Err(CallError::Rpc(RpcError { code: -18, .. })) => {}
             other => panic!("{other:?}"),
@@ -369,13 +354,10 @@ mod tests {
             c.authorization().unwrap(),
             format!("Basic {}", b64.encode(&rotated))
         );
-        // Not a cookie: refused, nothing sent.
         std::fs::write(&path, "{\"apiKeys\":{}}").unwrap();
         assert!(matches!(c.authorization(), Err(AppError::ServerInvalid(_))));
         std::fs::remove_file(&path).unwrap();
         assert!(matches!(c.authorization(), Err(AppError::ServerInvalid(_))));
-        // Remote plain http is refused at construction, and so is a remote HTTPS node with
-        // cookie auth (CRITIQUE 1: the cookie would leave the machine).
         assert!(CoreClient::new(&net, "http://node.example:8332", &auth, true).is_err());
         assert!(CoreClient::new(&net, "https://node.example:8332", &auth, true).is_err());
     }

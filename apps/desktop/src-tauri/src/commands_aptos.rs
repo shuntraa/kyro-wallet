@@ -1,8 +1,8 @@
 //! IPC commands for Aptos (`aptos_*`): address, account (balance, sequence number, key not
-//! rotated), history, APT transfer building **by Kyro** (`0x1::aptos_account::transfer`;
-//! sequence number, gas price, simulated maximum gas and expiration from the node, encoded by
-//! wallet-core), signing behind the password and the native dialog (what Rust decoded, balance
-//! and sequence re-read live), and submission with hash check. Contract: docs/IPC.md §2.11.
+//! rotated), history, APT transfer building **by Kyro** (`0x1::aptos_account::transfer`; sequence
+//! number, gas price, simulated maximum gas and expiration from the node, encoded by wallet-core),
+//! signing behind the password and the native dialog (what Rust decoded, balance and sequence
+//! re-read live), and submission with hash check.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -26,7 +26,6 @@ pub(crate) fn ctx(state: &AppState) -> AptosCtx<'_> {
     }
 }
 
-/// Address and public key of Aptos account `account` (`m/44'/637'/account'/0'/0'`).
 fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
     state.with_seed(|seed| {
         Ok((
@@ -52,12 +51,10 @@ pub struct AptosContext {
     pub gas_used: String,
     /// UNIX seconds of the ledger when read.
     pub ledger_time: u64,
-    /// Token transfer: our live balance of that token (token units). `recipient_new` then means
-    /// the recipient holds none of it yet (its primary store is created: a bit more gas).
+    /// Token transfer: our live balance of that token (token units).
     pub token_balance: Option<String>,
 }
 
-/// Dialog head of a fungible-asset transfer: token, verified metadata object, decimals.
 fn describe_token_head(
     lang: Lang,
     s: &AptosTxSummary,
@@ -112,7 +109,6 @@ fn describe_token_head(
     out
 }
 
-/// Body of the native dialog.
 pub(crate) fn describe_aptos(
     lang: Lang,
     s: &AptosTxSummary,
@@ -208,8 +204,6 @@ pub(crate) fn describe_aptos_extra(lang: Lang, s: &AptosTxSummary) -> String {
     out
 }
 
-// ---------------------------------------------------------------- reads
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AptosBackendInfo {
@@ -286,8 +280,6 @@ pub async fn aptos_token_txs(state: State<'_, AppState>, address: String) -> App
     aptos_backend::token_txs(&ctx(&state), &address).await
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AptosBuilt {
@@ -302,7 +294,6 @@ async fn recipient_new(c: &AptosCtx<'_>, to: &str) -> AppResult<bool> {
     Ok(r.sequence_number == "0" && r.balance == "0")
 }
 
-/// Builds an unsigned transfer of `amount` octas from live data.
 pub(crate) async fn build(
     c: &AptosCtx<'_>,
     me: &str,
@@ -320,7 +311,6 @@ pub(crate) async fn build(
         .ok_or_else(|| AppError::InvalidInput("invalid amount in octas".into()))?;
     let ledger = aptos_backend::checked_ledger(c).await?;
     let account = aptos_backend::account(c, me).await?;
-    // Key not rotated, amount within the balance (the fee is checked once simulated).
     aptos_backend::check_transfer(&account, amount, 0)?;
     let price = aptos_backend::gas_price(c).await?;
     let mut t = AptosTransfer {
@@ -334,7 +324,6 @@ pub(crate) async fn build(
         chain_id: c.chain_id,
         token: None,
     };
-    // Simulation with the widest gas limit the balance allows, then the real limit.
     let balance: u64 = account.balance.parse().unwrap_or(0);
     let room = balance.saturating_sub(amount) / price;
     t.max_gas_amount = room.clamp(1, aptos_backend::MAX_MAX_GAS);
@@ -376,7 +365,6 @@ fn known_asset(c: &AptosCtx<'_>, metadata: &str) -> AppResult<[u8; 32]> {
     Ok(m)
 }
 
-/// Our live balance of the token `metadata`; refuses `amount` above it.
 async fn check_token(c: &AptosCtx<'_>, me: &str, metadata: &str, amount: u64) -> AppResult<u64> {
     let m = wallet_core::aptos_parse_address(metadata)?;
     let k = wallet_core::aptos_known_asset(&m, c.chain_id).ok_or_else(|| {
@@ -394,8 +382,6 @@ async fn check_token(c: &AptosCtx<'_>, me: &str, metadata: &str, amount: u64) ->
     Ok(have)
 }
 
-/// Builds an unsigned transfer of `amount` units of the known fungible asset `metadata`
-/// (`0x1::primary_fungible_store::transfer<Metadata>`), gas paid in APT.
 pub(crate) async fn build_token(
     c: &AptosCtx<'_>,
     me: &str,
@@ -495,9 +481,6 @@ pub struct AptosSigned {
     pub context: AptosContext,
 }
 
-/// Decoding + live re-checks, i.e. everything `aptos_sign_tx` does before the dialog. The gas
-/// figure shown is the build's simulation (`gas_used`, carried by the caller), bounded by the
-/// maximum the user signs anyway.
 pub(crate) async fn prepare_sign(
     c: &AptosCtx<'_>,
     me: &str,
@@ -540,7 +523,6 @@ pub(crate) async fn prepare_sign(
             None
         }
         Some(k) => {
-            // The token's amount comes from its store, the fee from the APT balance.
             aptos_backend::check_transfer(&account, 0, max_fee)?;
             Some(check_token(c, me, &k.metadata, amount).await?.to_string())
         }
@@ -631,8 +613,6 @@ pub async fn aptos_sign_tx(
     })
 }
 
-/// Checks the signed transaction (decodes, single ed25519 signature by our key, right chain)
-/// then submits it.
 pub(crate) async fn broadcast_checked(
     c: &AptosCtx<'_>,
     me: &str,
@@ -791,14 +771,7 @@ mod tests {
     }
 }
 
-/// Real-network test over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture aptos_live`.
-/// - reads: testnet and mainnet ledgers (chain ids 2 / 1), a mainnet account, history;
-/// - `KYRO_APTOS_SEND=yes`: on **devnet** (the testnet faucet needs a sign-in; devnet's is
-///   open), a NEW random test mnemonic kept in the gitignored `.env.aptos-devnet` at the
-///   repository root is funded by the devnet faucet, then one transfer to account 1 (a new
-///   account) goes through the real path (build with simulation, live checks, dialog text,
-///   signature with identical summary, submission, hash check, committed and successful).
+/// Real-network test over Tor.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -919,7 +892,6 @@ mod live {
                 }
             }
             eprintln!("account {acc:?}");
-            // More than the balance: refused before anything is signed.
             let r = build(&dev, &me, &pk, &to, &acc.balance).await;
             eprintln!("whole balance (no room for gas): {:?}", r.as_ref().err());
             assert!(matches!(r, Err(AppError::InvalidInput(_))));
@@ -959,10 +931,6 @@ mod live {
         });
     }
 
-    /// USDC transfer built by Kyro for a real mainnet holder whose public key is known (read
-    /// from one of its signed transactions, 2026-11-01), simulated only (zero signature): the node accepts the bytes,
-    /// the dialog text is printed. `cargo test -p kyro-desktop --lib aptos_token_simulation_mainnet
-    /// -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn aptos_token_simulation_mainnet() {

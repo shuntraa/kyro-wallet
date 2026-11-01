@@ -1,12 +1,8 @@
 //! Stellar data from SDF's public Horizon (`horizon.stellar.org`, `horizon-testnet.stellar.org`),
 //! on the `stellar` Tor family, never with a fallback.
 //!
-//! Kyro fills the sequence number, the fee and the time bounds itself (`/accounts`,
-//! `/fee_stats`, `/ledgers`) and encodes the transaction with wallet-core: Horizon never builds
-//! what is signed. Every build, signature and submission first checks Horizon's
-//! `network_passphrase` against the app's network (the passphrase is also in what is signed, so
-//! a wrong-network signature would be invalid anyway). Reserves come from the latest ledger
-//! (`base_reserve_in_stroops`).
+//! Kyro fills the sequence number, the fee and the time bounds itself (`/accounts`, `/fee_stats`,
+//! `/ledgers`) and encodes the transaction with wallet-core: Horizon never builds what is signed.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -58,7 +54,6 @@ fn short(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).chars().take(200).collect()
 }
 
-/// GET `path`: `Ok(None)` on 404 (unknown account / transaction), JSON otherwise.
 async fn get(ctx: &StellarCtx<'_>, path: &str) -> AppResult<Option<Value>> {
     let (status, bytes) = ctx
         .net_client
@@ -116,7 +111,6 @@ pub fn parse_utc(s: &str) -> Option<u64> {
     if !(1..=12).contains(&mo) || !(1..=31).contains(&d) || h > 23 || mi > 59 || se > 60 {
         return None;
     }
-    // Days from civil (H. Hinnant), proleptic Gregorian calendar.
     let y = if mo <= 2 { y - 1 } else { y };
     let era = y / 400;
     let yoe = y - era * 400;
@@ -329,9 +323,8 @@ pub async fn account(
     }
 }
 
-/// Fee bid per operation (stroops): the 90th percentile of recently charged fees, at least the
-/// base fee, at most [`STELLAR_HIGH_FEE_STROOPS`] (0.01 XLM). Outside surge pricing the network
-/// only takes the base fee; the bid is a ceiling.
+/// Fee bid per operation (stroops): the 90th percentile of recently charged fees, at least the base
+/// fee, at most [`STELLAR_HIGH_FEE_STROOPS`] (0.01 XLM).
 pub fn fee_bid(stats: &Value, base_fee: u32) -> u32 {
     let p90 = stats["fee_charged"]["p90"]
         .as_str()
@@ -371,10 +364,9 @@ fn memo_json(t: &Value) -> Value {
     }
 }
 
-/// Normalizes `/accounts/{id}/payments?join=transactions` records:
-/// `[{ id, hash, type, from, to, amount: { kind:'native', stroops } | { kind:'credit', code,
-/// issuer, stroops }, fee, time, successful, memo, txSource }]`. Account merges and other
-/// operation types are skipped.
+/// Normalizes `/accounts/{id}/payments?join=transactions` records: `[{ id, hash, type, from, to,
+/// amount: { kind:'native', stroops } | { kind:'credit', code, issuer, stroops }, fee, time,
+/// successful, memo, txSource }]`.
 pub fn normalize_payments(r: &Value) -> Value {
     let mut out = Vec::new();
     for p in r["_embedded"]["records"].as_array().into_iter().flatten() {
@@ -387,7 +379,6 @@ pub fn normalize_payments(r: &Value) -> Value {
                 json!({ "kind": "native", "stroops": to_stroops(&p["starting_balance"]).map(|v| v.to_string()) }),
             ),
             Some("payment") => ("payment", &p["from"], &p["to"], amount_json(p, "amount")),
-            // Path payments: what the recipient received (`amount` in `asset_*`).
             Some(k @ ("path_payment_strict_send" | "path_payment_strict_receive")) => {
                 (k, &p["from"], &p["to"], amount_json(p, "amount"))
             }
@@ -453,8 +444,7 @@ pub fn explain_result(codes: &Value) -> String {
     )
 }
 
-/// `POST /transactions` (form `tx=`). Horizon waits for the ledger: 200 = included and
-/// successful. The returned hash must be ours.
+/// `POST /transactions` (form `tx=`). The returned hash must be ours.
 pub async fn submit(ctx: &StellarCtx<'_>, envelope_b64: &str, hash: &str) -> AppResult<String> {
     let body = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("tx", envelope_b64)
@@ -614,7 +604,6 @@ mod tests {
             "data": { "config.memo_required": "MQ==" }
         });
         let a = parse_account("G", &r, 5_000_000).unwrap();
-        // (2 + 1) × 0.5 XLM + 2 XLM in offers.
         assert_eq!(a.reserve, "35000000");
         assert_eq!(a.spendable, "965000000");
         assert_eq!(a.sequence, "4294967298");
@@ -712,13 +701,11 @@ mod tests {
             matches!(ok(&exchange, 10, false), Err(AppError::InvalidInput(m)) if m.contains("requires a memo"))
         );
         assert!(ok(&exchange, 10, true).is_ok());
-        // Unfunded destination: at least 2 × base reserve (1 XLM).
         let new = acc(false, 0, false);
         assert!(
             matches!(ok(&new, 9_999_999, false), Err(AppError::InvalidInput(m)) if m.contains("at least 1 XLM"))
         );
         assert!(ok(&new, 10_000_000, false).is_ok());
-        // More than spendable (fee included).
         assert!(
             matches!(ok(&acc(true, 0, false), 499_999_901, false), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
@@ -737,16 +724,8 @@ mod tests {
     }
 }
 
-/// Real-network test on SDF's Stellar testnet (Tor by default). Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture stellar_live`.
-/// - keys: a NEW random test mnemonic, generated once and kept in the gitignored
-///   `.env.stellar-testnet` at the repository root (testnet only);
-/// - `KYRO_STELLAR_FRIENDBOT=yes`: funds account 0 from Friendbot (`friendbot.stellar.org`, test
-///   only: the app never contacts it);
-/// - `KYRO_STELLAR_SEND=yes`: a CreateAccount to an unfunded new account (account 1), then a
-///   Payment with an id memo to it, through the real path (live checks, dialog text, signature
-///   with identical summary, submission, hash check);
-/// - `KYRO_STELLAR_CLEAR=yes`: clear HTTPS instead of Tor.
+/// Real-network test on SDF's Stellar testnet (Tor by default). `KYRO_STELLAR_FRIENDBOT=yes`: funds
+/// account 0 from Friendbot (`friendbot.stellar.org`, test only: the app never contacts it).
 #[cfg(test)]
 mod live {
     use super::*;
@@ -879,13 +858,11 @@ mod live {
                 eprintln!("KYRO_STELLAR_SEND != yes or account not funded: no payment");
                 return;
             }
-            // Below 2 × base reserve to an unfunded account: refused before anything is signed.
             let r = cmd::build(&c, &me, &a2, "5000000", None).await;
             eprintln!("0.5 XLM to unfunded {a2}: {:?}", r.as_ref().err());
             assert!(
                 matches!(r, Err(AppError::InvalidInput(ref m)) if m.contains("at least 1 XLM"))
             );
-            // 1) CreateAccount to an unfunded new account, 2) Payment with an id memo.
             if !account(&c, &a1, &ledger).await.unwrap().exists {
                 let h = pay(&c, &seed, &me, &a1, "20000000", None).await;
                 eprintln!("CREATE ACCOUNT: {h}");

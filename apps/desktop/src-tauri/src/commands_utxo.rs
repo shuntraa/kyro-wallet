@@ -1,8 +1,7 @@
 //! IPC commands for Litecoin (`ltc_*`), Dogecoin (`doge_*`), Bitcoin Cash (`bch_*`) and Dash
-//! (`dash_*`): addresses, Esplora-shaped data
-//! from the chain's server (default or the user's), broadcast with txid check, and PSBT signing
-//! behind the password + the native confirmation dialog with the summary decoded by Rust.
-//! Contract: docs/IPC.md §2.4.
+//! (`dash_*`): addresses, Esplora-shaped data from the chain's server (default or the user's),
+//! broadcast with txid check, and PSBT signing behind the password + the native confirmation dialog
+//! with the summary decoded by Rust.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -33,8 +32,6 @@ fn ctx<'a>(state: &'a AppState, coin: UtxoCoin) -> UtxoCtx<'a> {
         server: s.servers.utxo_for(coin, state.network),
     }
 }
-
-// ---------------------------------------------------------------- shared implementations
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,7 +98,6 @@ fn net_suffix(coin: UtxoCoin, net: Network) -> &'static str {
     }
 }
 
-/// Body of the native dialog, built from Rust's decoding only.
 pub(crate) fn describe_utxo(lang: Lang, s: &UtxoTxSummary, net: Network) -> String {
     let coin = s.coin;
     let mut out = match lang {
@@ -211,7 +207,6 @@ pub(crate) fn describe_utxo(lang: Lang, s: &UtxoTxSummary, net: Network) -> Stri
     out
 }
 
-/// Body of the reinforced (second) dialog.
 pub(crate) fn describe_utxo_extra(lang: Lang, s: &UtxoTxSummary) -> String {
     let mut out = String::from(lang.unusual_intro());
     for w in &s.warnings {
@@ -329,8 +324,6 @@ async fn sign(
     })
 }
 
-// ---------------------------------------------------------------- Litecoin
-
 #[tauri::command]
 pub fn ltc_backend_info(state: State<'_, AppState>) -> UtxoBackendInfo {
     backend_info(&state, LTC)
@@ -392,8 +385,6 @@ pub async fn ltc_sign_psbt(
     sign(&app, &state, LTC, psbt, password, account).await
 }
 
-// ---------------------------------------------------------------- Dogecoin
-
 #[tauri::command]
 pub fn doge_backend_info(state: State<'_, AppState>) -> UtxoBackendInfo {
     backend_info(&state, DOGE)
@@ -454,8 +445,6 @@ pub async fn doge_sign_psbt(
 ) -> AppResult<UtxoSigned> {
     sign(&app, &state, DOGE, psbt, password, account).await
 }
-
-// ---------------------------------------------------------------- Bitcoin Cash
 
 #[tauri::command]
 pub fn bch_backend_info(state: State<'_, AppState>) -> UtxoBackendInfo {
@@ -520,8 +509,6 @@ pub async fn bch_sign_psbt(
     sign(&app, &state, BCH, psbt, password, account).await
 }
 
-// ---------------------------------------------------------------- Dash
-
 #[tauri::command]
 pub fn dash_backend_info(state: State<'_, AppState>) -> UtxoBackendInfo {
     backend_info(&state, DASH)
@@ -583,8 +570,6 @@ pub async fn dash_sign_psbt(
     sign(&app, &state, DASH, psbt, password, account).await
 }
 
-/// Probe used by `settings_set` / `server_test` (network checked by genesis hash, and for
-/// Bitcoin Cash by the post-split checkpoint).
 pub(crate) async fn probe(
     net: &crate::net::NetClient,
     network: Network,

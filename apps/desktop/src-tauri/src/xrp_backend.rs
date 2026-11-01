@@ -1,9 +1,8 @@
 //! XRP Ledger data from a rippled JSON-RPC server (default: Ripple's public testnet server,
 //! xrplcluster.com on mainnet), on the `xrp` Tor family, never with a fallback.
 //!
-//! Kyro fills `Sequence`, `Fee` and `LastLedgerSequence` itself (`account_info`, `fee`) and
-//! encodes the Payment with wallet-core: a server-built blob is never signed. Reserves come from
-//! `server_info.validated_ledger` (`reserve_base_xrp`, `reserve_inc_xrp`).
+//! Kyro fills `Sequence`, `Fee` and `LastLedgerSequence` itself (`account_info`, `fee`) and encodes
+//! the Payment with wallet-core: a server-built blob is never signed.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -17,7 +16,6 @@ use crate::servers::{validate_http_url, xrp_default_url, xrp_network_id, XrpServ
 /// `LastLedgerSequence` = current ledger + this (≈ 1 min at 3–4 s per ledger).
 pub const LLS_OFFSET: u32 = 20;
 const MAX_TXS: u32 = 50;
-/// Seconds between the UNIX epoch and the Ripple epoch (2000-01-01).
 const RIPPLE_EPOCH: i64 = 946_684_800;
 
 pub struct XrpCtx<'a> {
@@ -274,7 +272,6 @@ pub async fn txs(ctx: &XrpCtx<'_>, address: &str) -> AppResult<Value> {
             continue;
         }
         let meta = &t["meta"];
-        // delivered_amount is what actually arrived (partial payments!), not Amount.
         let delivered = if meta["delivered_amount"].is_null() {
             &tx["Amount"]
         } else {
@@ -303,8 +300,7 @@ pub async fn txs(ctx: &XrpCtx<'_>, address: &str) -> AppResult<Value> {
     Ok(Value::Array(out))
 }
 
-/// `submit` a signed blob. Accepted: `tesSUCCESS`, `terQUEUED` (and `tec*` is an error: the fee
-/// is taken but nothing else happens). The server's hash must be ours.
+/// `submit` a signed blob. The server's hash must be ours.
 pub async fn submit(ctx: &XrpCtx<'_>, blob: &str, hash: &str) -> AppResult<String> {
     let r = rpc(ctx, "submit", json!({ "tx_blob": blob })).await?;
     let engine = r["engine_result"].as_str().unwrap_or("");
@@ -459,24 +455,20 @@ mod tests {
             })
         };
         assert!(ok(&acc(true, 0, false), Some(5_000_000), None).is_ok());
-        // Destination requires a tag.
         let tagged = acc(true, 0, true);
         assert!(
             matches!(ok(&tagged, Some(5_000_000), None), Err(AppError::InvalidInput(m)) if m.contains("destination tag"))
         );
         assert!(ok(&tagged, Some(5_000_000), Some(42)).is_ok());
-        // Unfunded destination: at least the base reserve.
         let new = acc(false, 0, false);
         assert!(
             matches!(ok(&new, Some(999_999), None), Err(AppError::InvalidInput(m)) if m.contains("tecNO_DST_INSUF_XRP"))
         );
         assert!(ok(&new, Some(1_000_000), None).is_ok());
         assert!(ok(&new, None, None).is_err());
-        // More than spendable (balance − reserve).
         assert!(
             matches!(ok(&acc(true, 0, false), Some(49_999_990), None), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
-        // Our account not activated.
         let none = acc(false, 0, false);
         assert!(check_payment(&PaymentCheck {
             ours: &none,
@@ -490,14 +482,7 @@ mod tests {
     }
 }
 
-/// Real-network test on the XRPL Testnet over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture xrp_live`.
-/// - keys: a NEW random test mnemonic, generated once and kept in the gitignored
-///   `.env.xrp-testnet` at the repository root (testnet only);
-/// - `KYRO_XRP_FAUCET=yes`: funds the first address from the official testnet faucet;
-/// - `KYRO_XRP_SEND=yes`: one payment to an unfunded new account (≥ reserve), then one payment
-///   with a destination tag to the same (now funded) second address, through the real path
-///   (live checks, dialog text, signature with identical summary, `submit`, hash check).
+/// Real-network test on the XRPL Testnet over Tor.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -647,13 +632,11 @@ mod live {
                 eprintln!("KYRO_XRP_SEND != yes or account not funded: no payment");
                 return;
             }
-            // Below the base reserve to an unfunded account: refused before anything is signed.
             let r = crate::commands_xrp::build(&c, &me, &pk, &a2, "500000", None, None).await;
             eprintln!("0.5 XRP to unfunded {a2}: {:?}", r.as_ref().err());
             assert!(
                 matches!(r, Err(AppError::InvalidInput(ref m)) if m.contains("tecNO_DST_INSUF_XRP"))
             );
-            // 1) to an unfunded new account (≥ reserve), 2) with a destination tag.
             let dest = account(&c, &a1, &info).await.unwrap();
             if !dest.exists {
                 let h = pay(&c, &seed, &me, &pk, &a1, "20000000", None).await;

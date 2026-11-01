@@ -1,13 +1,6 @@
 //! NEAR Protocol data from FastNEAR (JSON-RPC: `free.rpc.fastnear.com` / `test.rpc.fastnear.com`;
 //! history: the FastNEAR explorer API `tx.main.fastnear.com` / `tx.test.fastnear.com`), on the
 //! `near` Tor family, never with a fallback.
-//!
-//! Kyro fills the nonce (access key nonce + 1) and the block hash (the final block the access
-//! key was read at) itself and encodes the transfer with wallet-core: nothing built by a server
-//! is ever signed. Fees are not part of a NEAR transaction: they are charged at the gas price of
-//! the block that includes it. Kyro computes the gas of a transfer from the live protocol
-//! configuration (`EXPERIMENTAL_protocol_config`) and checks the balance against a **bound**
-//! (twice the gas at the higher of the current and minimum gas prices).
 
 use base64::Engine as _;
 use serde::Serialize;
@@ -19,7 +12,6 @@ use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient, ServerRequest};
 use crate::servers::{near_default_history, near_default_rpc, near_genesis};
 
-/// Transactions read for the history (one explorer page, then one batch of details).
 const MAX_TXS: usize = 20;
 /// A transaction built on a block older than this (≈ 1 h at ≈ 1 block/s) must be rebuilt,
 /// well inside NEAR's validity period (86 400 blocks ≈ 1 day).
@@ -147,8 +139,6 @@ fn u128_at(v: &Value) -> Option<u128> {
     }
 }
 
-// ---------------------------------------------------------------- network
-
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct NearStatus {
@@ -254,7 +244,6 @@ pub fn fee_params(config: &Value, gas_price: &Value) -> AppResult<NearFeeParams>
         create_gas: cost(&ac["create_account_cost"], "create_account")?
             + cost(&ac["add_key_cost"]["full_access_cost"], "add_key")?,
     };
-    // Sanity: a transfer is well under 100 Tgas, and the gas price is at most 10^13 yocto.
     if p.gas(true) > 100_000_000_000_000 || p.gas_price > 10_000_000_000_000 || p.gas_price == 0 {
         return Err(bad("NEAR: implausible fee parameters"));
     }
@@ -271,8 +260,6 @@ pub async fn fees(ctx: &NearCtx<'_>) -> AppResult<NearFeeParams> {
     let price = rpc(ctx, "gas_price", json!([null])).await?;
     fee_params(&config, &price)
 }
-
-// ---------------------------------------------------------------- accounts
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -348,8 +335,7 @@ pub async fn account(
     }
 }
 
-/// `view_access_key` of our key: `(nonce, final block hash, final block height)`. Only a
-/// full-access key can sign a transfer.
+/// `view_access_key` of our key: `(nonce, final block hash, final block height)`.
 pub async fn access_key(
     ctx: &NearCtx<'_>,
     account_id: &str,
@@ -403,7 +389,7 @@ pub async fn block_height(ctx: &NearCtx<'_>, hash: &str) -> AppResult<u64> {
         .ok_or_else(|| bad("NEAR: block height missing"))
 }
 
-// ---------------------------------------------------------------- NEP-141 tokens
+// NEP-141 tokens
 
 /// `call_function` view of `contract.method(args)`, its JSON result.
 pub async fn view_call(
@@ -515,8 +501,6 @@ pub fn token_events(t: &Value, me: &str, testnet: bool) -> Vec<Value> {
     out
 }
 
-// ---------------------------------------------------------------- checks
-
 /// Checks before building / signing a transfer, against live data. Errors are user-facing.
 pub struct TransferCheck<'a> {
     pub ours: &'a NearAccountInfo,
@@ -565,11 +549,9 @@ pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     Ok(())
 }
 
-// ---------------------------------------------------------------- history
-
-/// Last transactions touching `account_id`, normalized:
-/// `[{ hash, from, to, kind: 'transfer' | 'other', deposit, fee, height, time, success }]`
-/// (`deposit`: yoctoNEAR of the transaction's own Transfer actions; `fee`: yoctoNEAR burnt).
+/// Last transactions touching `account_id`, normalized: `[{ hash, from, to, kind: 'transfer' |
+/// 'other', deposit, fee, height, time, success }]` (`deposit`: yoctoNEAR of the transaction's own
+/// Transfer actions.
 pub async fn txs(ctx: &NearCtx<'_>, account_id: &str) -> AppResult<Value> {
     let id = account_id.trim();
     wallet_core::near_account_kind(id)?;
@@ -657,8 +639,6 @@ pub fn history_entry(t: &Value) -> Option<Value> {
     }))
 }
 
-// ---------------------------------------------------------------- broadcast
-
 /// Result of a broadcast or a status query.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -698,8 +678,7 @@ pub fn outcome_from(r: &Value, hash: &str) -> AppResult<NearTxOutcome> {
     })
 }
 
-/// `send_tx` (signed transaction, Borsh) waiting for optimistic execution. A node timeout is
-/// not a failure: the transaction may still land (status `pending`, follow it with `tx`).
+/// `send_tx` (signed transaction, Borsh) waiting for optimistic execution.
 pub async fn send(ctx: &NearCtx<'_>, signed: &[u8], hash: &str) -> AppResult<NearTxOutcome> {
     let b64 = base64::engine::general_purpose::STANDARD.encode(signed);
     match rpc(
@@ -755,7 +734,6 @@ mod tests {
     const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
 
     fn fee_params_sample() -> NearFeeParams {
-        // Live values of mainnet protocol 86 (2026-11-01).
         let config = json!({
             "min_gas_price": "1000000000",
             "runtime_config": {
@@ -778,7 +756,6 @@ mod tests {
         let p = fee_params_sample();
         assert_eq!(p.transfer_gas, 446_365_125_000);
         assert_eq!(p.create_gas, 7_903_530_250_000);
-        // 0.0000446 NEAR at 10^8 yocto/gas; bound at the minimum price 10^9, × 2.
         assert_eq!(p.estimate(false), 44_636_512_500_000_000_000);
         assert_eq!(p.bound(false), 892_730_250_000_000_000_000);
         assert!(
@@ -873,7 +850,6 @@ mod tests {
         );
         assert!(ok(&info(false, 0), Implicit, YOCTO / 2).is_ok());
         assert!(ok(&info(false, 0), EthImplicit, 1).is_err());
-        // Amount + fee bound above spendable.
         assert!(
             matches!(ok(&info(true, 0), Named, YOCTO - fees.bound(false) + 1), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
@@ -882,7 +858,6 @@ mod tests {
             ok(&info(false, 0), Implicit, YOCTO - fees.bound(false)).is_err(),
             "creation costs more"
         );
-        // Our account does not exist.
         let none = info(false, 0);
         assert!(check_transfer(&TransferCheck {
             ours: &none,
@@ -948,19 +923,7 @@ mod tests {
     }
 }
 
-/// Real-network test on NEAR testnet over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture near_live`.
-/// - keys: a NEW random test mnemonic and a NEW random ed25519 key for the funding account,
-///   generated once and kept in the gitignored `.env.near-testnet` at the repository root
-///   (testnet only);
-/// - `KYRO_NEAR_FAUCET=yes`: asks NEAR's account helper (`helper.nearprotocol.com/account`, the
-///   faucet of near-cli `sponsor-by-faucet-service`, no captcha) to create a named
-///   `kyro-….testnet` account with the funding key, then moves NEAR from it to our implicit
-///   account 0 (that one transfer is signed here, outside Kyro's path: its signer is a named
-///   account);
-/// - `KYRO_NEAR_SEND=yes`: through the real path (live checks, dialog text, signature with an
-///   identical summary, `send_tx`, hash check): one transfer that creates implicit account 1,
-///   one transfer to the named account.
+/// Real-network test on NEAR testnet over Tor.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -1023,7 +986,6 @@ mod live {
         panic!("{id} still missing");
     }
 
-    /// Funding only: a transfer signed by the named funding account (not Kyro's signing path).
     async fn fund(c: &NearCtx<'_>, k: &Keys, to: &str, deposit: u128) {
         let pk = k.funder.verifying_key().to_bytes();
         let (nonce, block_hash, _) = access_key(c, &k.funder_id, &pk).await.unwrap();
@@ -1115,7 +1077,6 @@ mod live {
                 tor: true,
             };
             eprintln!("mainnet probe {:?}", probe(&main).await);
-            // The mainnet node seen with testnet expectations: wrong network.
             let s = status(&main).await.unwrap();
             assert!(matches!(
                 check_status(&s, Network::Testnet),
@@ -1168,14 +1129,12 @@ mod live {
                 eprintln!("KYRO_NEAR_SEND != yes or account missing: no transfer");
                 return;
             }
-            // A named account that does not exist: refused before anything is signed.
             let r = crate::commands_near::build(&c, &me, &pk, "kyro-nexiste-pas-0000.testnet", "1")
                 .await;
             eprintln!("to a missing named account: {:?}", r.as_ref().err());
             assert!(
                 matches!(r, Err(AppError::InvalidInput(ref m)) if m.contains("does not exist"))
             );
-            // 1) creates implicit account 1, 2) to the named funding account.
             let h = transfer(&c, &k.seed, &me, &pk, &a1, "500000000000000000000000").await;
             eprintln!("TRANSFER CREATING AN IMPLICIT ACCOUNT: {h}");
             let h = transfer(

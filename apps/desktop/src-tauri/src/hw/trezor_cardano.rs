@@ -2,17 +2,9 @@
 //! `messages-cardano.proto` through `trezor-client`'s bindings, in the order of the official
 //! host library (`python/src/trezorlib/cardano.py`, `sign_tx`, read 2026-11-01):
 //!
-//! `CardanoSignTxInit` → `CardanoTxItemAck`; each `CardanoTxInput`, each `CardanoTxOutput`
-//! followed by its `CardanoAssetGroup` / `CardanoToken`s → `CardanoTxItemAck`; the auxiliary
-//! data hash (`CardanoTxAuxiliaryData`) → `CardanoTxAuxiliaryDataSupplement`, `CardanoTxHostAck`
-//! → `CardanoTxItemAck`; `CardanoTxWitnessRequest` → `CardanoTxWitnessResponse`;
-//! `CardanoTxHostAck` → `CardanoTxBodyHash`; `CardanoTxHostAck` → `CardanoSignTxFinished`.
-//!
-//! Keys use the ICARUS derivation (CIP-3, the one of Kyro's own vault and Trezor Suite's
-//! default), so a Trezor and Kyro's vault give the same Cardano account for the same mnemonic
-//! (without passphrase). Tag-258 sets need firmware 2.7.1 (published in 2.7.2). The firmware
-//! serializes and hashes the body itself: its hash must be Kyro's transaction id and its
-//! signature must verify with the stored key (`wallet_core::cardano_hw_assemble`).
+//! Keys use the ICARUS derivation (CIP-3, the one of Kyro's own vault and Trezor Suite's default),
+//! so a Trezor and Kyro's vault give the same Cardano account for the same mnemonic (without
+//! passphrase).
 
 use protobuf::{Message, MessageField};
 use trezor_client::protos::{self, MessageType};
@@ -66,7 +58,6 @@ pub fn read_account_key(io: &mut dyn TrezorIo, ctl: &Ctl, account: u32) -> HwRes
         .ok_or_else(|| HwError::bad("missing node"))?;
     let mut out = [0u8; 64];
     let key = node.public_key();
-    // Trezor's Cardano node carries the raw 32-byte Ed25519 key.
     if key.len() != 32 || node.chain_code().len() != 32 {
         return Err(HwError::bad("malformed Cardano public key"));
     }
@@ -112,7 +103,6 @@ pub fn address(
         .ok_or_else(|| HwError::bad("missing Cardano address"))
 }
 
-/// One message of the signing stream, with what it is answered by.
 struct Item(MessageType, Vec<u8>);
 
 fn item<M: TrezorMessage>(m: &M) -> HwResult<Item> {
@@ -154,7 +144,6 @@ pub fn sign_init(plan: &CardanoHwPlan, net: Network) -> HwResult<protos::Cardano
     Ok(m)
 }
 
-/// Inputs, then each output and its tokens (all answered by `CardanoTxItemAck`).
 fn body_items(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResult<Vec<Item>> {
     let n = |x: usize| u32::try_from(x).map_err(|_| HwError::unsupported("too many items"));
     let mut out = Vec::new();
@@ -283,8 +272,6 @@ mod tests {
         Ctl::for_tests(Duration::from_secs(5))
     }
 
-    /// Trezor's "simple transaction with change" plus a token and a memo hash, against a
-    /// simulated firmware: the messages and their order, the answers handed back.
     #[test]
     fn sign_flow_against_simulated_firmware() {
         let dest = "addr1q84sh2j72ux0l03fxndjnhctdg7hcppsaejafsa84vh7lwgmcs5wgus8qt4atk45lvt4xfxpjtwfhdmvchdf2m3u3hlsd5tq5r";
@@ -407,7 +394,6 @@ mod tests {
         let w = protos::CardanoTxWitnessRequest::parse_from_bytes(&fw.sent[8].1).unwrap();
         assert_eq!(w.path, payment_path(0).to_vec());
 
-        // A Byron witness, or a refusal on the device (Failure → error before any witness).
         let mut byron = wit.clone();
         byron.set_type(protos::CardanoTxWitnessType::BYRON_WITNESS);
         let mut plain = plan.clone();

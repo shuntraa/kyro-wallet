@@ -4,12 +4,7 @@
 //!
 //! Kyro fills the sequence number, gas price, maximum gas and expiration itself (`/accounts`,
 //! `/estimate_gas_price`, `/transactions/simulate`, ledger time) and encodes the transfer with
-//! wallet-core: a server-built transaction is never signed. The chain id answered by `/v1` must be
-//! the app's network (1 mainnet, 2 testnet) before anything is built.
-//!
-//! Rate limit: anonymous requests are limited per IP by Aptos Labs (50 000 compute units per
-//! 5 minutes, Geomi documentation, read 2026-11-01). Over Tor the exit relay's IP is shared with
-//! other users: a 429 is reported as such (`SERVER_UNREACHABLE`), never retried in clear.
+//! wallet-core: a server-built transaction is never signed.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -31,7 +26,6 @@ pub const MAX_MAX_GAS: u64 = 20_000;
 pub const MAX_GAS_UNIT_PRICE: u64 = 10_000;
 const MAX_TXS: u32 = 50;
 const APT_COIN: &str = "0x1::aptos_coin::AptosCoin";
-/// APT as a fungible asset (metadata object `0xa`).
 const APT_FA: &str = "0x000000000000000000000000000000000000000000000000000000000000000a";
 const BCS_SIGNED: &str = "application/x.aptos.signed_transaction+bcs";
 
@@ -62,7 +56,6 @@ fn bad(msg: impl Into<String>) -> AppError {
     AppError::ServerUnreachable(msg.into())
 }
 
-/// `(status, JSON)`. A 429 becomes a clear rate-limit error.
 async fn send(ctx: &AptosCtx<'_>, req: ServerRequest, what: &str) -> AppResult<(u16, Value)> {
     let (status, bytes) = ctx.net_client.server_request(req, ctx.tor).await?;
     if status == 429 {
@@ -117,8 +110,6 @@ fn u64_at(v: &Value) -> Option<u64> {
         _ => None,
     }
 }
-
-// ---------------------------------------------------------------- reads
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -181,8 +172,6 @@ pub struct AptosAccountInfo {
 pub async fn account(ctx: &AptosCtx<'_>, address: &str) -> AppResult<AptosAccountInfo> {
     let a = wallet_core::aptos_address_string(&wallet_core::aptos_parse_address(address)?);
     let (status, v) = get(ctx, &format!("/accounts/{a}")).await?;
-    // Accounts without an on-chain resource are "default accounts" (sequence 0, auth key =
-    // address) on current nodes; an older node answers 404 account_not_found.
     let (seq, auth) = match status {
         200 => (
             u64_at(&v["sequence_number"]).ok_or_else(|| bad("Aptos: sequence_number missing"))?,
@@ -222,10 +211,9 @@ pub async fn fa_balance(ctx: &AptosCtx<'_>, address: &str, metadata: &str) -> Ap
     }
 }
 
-/// Movements of the known fungible assets for `address` (indexer `fungible_asset_activities`,
-/// asset types = the known metadata objects only), merged per transaction and asset:
-/// `[{ version, hash, time, metadata, direction, amount, counterparty, success }]`.
-/// Counterparty: the recipient of our own `primary_fungible_store::transfer` calls.
+/// Movements of the known fungible assets for `address` (indexer `fungible_asset_activities`, asset
+/// types = the known metadata objects only), merged per transaction and asset: `[{ version, hash,
+/// time, metadata, direction, amount, counterparty, success }]`.
 pub async fn token_txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
     let a = wallet_core::aptos_address_string(&wallet_core::aptos_parse_address(address)?);
     let known: Vec<&str> = wallet_core::aptos_known_assets(ctx.chain_id)
@@ -254,7 +242,6 @@ pub async fn token_txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
             by_version.insert(ver, t.clone());
         }
     }
-    // (version, metadata) → (time, deposit, withdraw, success)
     type Movement = (Option<String>, u128, u128, bool);
     let mut agg: std::collections::BTreeMap<(u64, String), Movement> = Default::default();
     for e in v["data"]["fungible_asset_activities"]
@@ -410,9 +397,7 @@ pub async fn tx_status(ctx: &AptosCtx<'_>, hash: &str) -> AppResult<(bool, bool,
 
 /// Last APT movements of `address` from the indexer (`fungible_asset_activities`, coin and
 /// fungible-asset forms), merged per transaction, and the recipients of our own transfers from
-/// `/accounts/{a}/transactions`. Normalized:
-/// `[{ version, hash, time, direction: 'in'|'out'|'self', amount, fee, counterparty, success, function }]`
-/// (`amount`, `fee`: octas). Counterparty: only known for transfers we sent.
+/// `/accounts/{a}/transactions`.
 pub async fn txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
     let a = wallet_core::aptos_address_string(&wallet_core::aptos_parse_address(address)?);
     let query = "query($a:String!,$t:[String!]!,$n:Int!){fungible_asset_activities(where:{owner_address:{_eq:$a},asset_type:{_in:$t}},limit:$n,order_by:{transaction_version:desc}){transaction_version transaction_timestamp type amount is_gas_fee is_transaction_success entry_function_id_str}}";
@@ -425,7 +410,6 @@ pub async fn txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
             v["errors"][0]["message"].as_str().unwrap_or("")
         )));
     }
-    // Our own sent transactions: hash and recipient per version.
     let (status, sent) = get(ctx, &format!("/accounts/{a}/transactions?limit=50")).await?;
     let sent = if status == 200 { sent } else { json!([]) };
     let mut by_version: std::collections::BTreeMap<u64, Value> = Default::default();
@@ -482,7 +466,6 @@ pub async fn txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
         let counterparty = s
             .filter(|t| t["payload"]["function"] == wallet_core::APTOS_TRANSFER_FUNCTION)
             .and_then(|t| t["payload"]["arguments"][0].as_str().map(str::to_owned));
-        // Indexer timestamps are UTC without a zone (`2026-11-01T04:42:34`).
         let time = s
             .and_then(|t| u64_at(&t["timestamp"]).map(|us| us / 1000))
             .or_else(|| g.time.as_deref().and_then(parse_utc_ms));
@@ -502,7 +485,6 @@ pub async fn txs(ctx: &AptosCtx<'_>, address: &str) -> AppResult<Value> {
     Ok(Value::Array(out))
 }
 
-/// `YYYY-MM-DDTHH:MM:SS[.fff]` (UTC) → ms since the UNIX epoch.
 fn parse_utc_ms(s: &str) -> Option<u64> {
     let (date, time) = s.split_once('T')?;
     let mut d = date.split('-').map(|x| x.parse::<i64>().ok());
@@ -511,7 +493,6 @@ fn parse_utc_ms(s: &str) -> Option<u64> {
     let (hms, frac) = time.split_once('.').unwrap_or((time, ""));
     let mut t = hms.split(':').map(|x| x.parse::<i64>().ok());
     let (h, mi, sec) = (t.next()??, t.next()??, t.next()??);
-    // Days from civil (Howard Hinnant).
     let y2 = if m <= 2 { y - 1 } else { y };
     let era = y2.div_euclid(400);
     let yoe = y2 - era * 400;
@@ -542,7 +523,6 @@ pub async fn probe(ctx: &AptosCtx<'_>) -> AppResult<crate::btc_backend::Detected
     })
 }
 
-/// `max_gas_amount` for a simulated `gas_used`: × 1.5, within [`MIN_MAX_GAS`, `MAX_MAX_GAS`].
 pub fn max_gas_for(gas_used: u64) -> AppResult<u64> {
     let g = gas_used.saturating_mul(3).div_ceil(2).max(MIN_MAX_GAS);
     if g > MAX_MAX_GAS {
@@ -553,7 +533,6 @@ pub fn max_gas_for(gas_used: u64) -> AppResult<u64> {
     Ok(g)
 }
 
-/// Checks before building / signing, against live data. Errors are user-facing.
 pub fn check_transfer(ours: &AptosAccountInfo, amount: u64, max_fee: u64) -> AppResult<()> {
     if !ours.key_matches {
         return Err(AppError::InvalidInput(format!(

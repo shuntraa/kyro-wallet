@@ -1,13 +1,5 @@
 //! Display language of the native dialogs (signing summaries, warnings, recovery phrase, server
 //! approval, file picker) — the same choice as the interface (`settings.language`, docs/IPC.md).
-//!
-//! `auto` (the default) follows the computer: French if its preferred language is French, English
-//! otherwise. The system language is read once from the OS (`sys-locale`: Windows user UI
-//! languages, macOS preferred languages, `LC_ALL` / `LC_MESSAGES` / `LANG` on Linux).
-//!
-//! Text builders take a [`Lang`] argument (testable in both languages, no global in tests); the
-//! commands pass [`current()`], which [`apply`] keeps in sync with the saved setting. The choice
-//! only changes the words: every warning exists in both languages with the same strength.
 
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
@@ -30,8 +22,6 @@ impl Lang {
             Lang::En => en,
         }
     }
-
-    // ---- labels shared by the native dialogs ----
 
     /// OK button of a signing dialog.
     pub fn sign(self) -> &'static str {
@@ -76,8 +66,7 @@ impl Lang {
         self.pick(" : ", ": ")
     }
 
-    /// `"1.5"` → `"1,5"` in French. Only for plain decimal amounts (one mark, no grouping), as
-    /// produced by `commands::format_units` (English, dot decimal mark).
+    /// `"1.5"` → `"1,5"` in French.
     pub fn decimal(self, en_decimal: &str) -> String {
         match self {
             Lang::Fr => en_decimal.replace('.', ","),
@@ -86,8 +75,7 @@ impl Lang {
     }
 }
 
-/// `settings.language`: `auto` (default), `fr` or `en`. Anything else is refused by serde
-/// (`settings_set` → `INVALID_INPUT`).
+/// `settings.language`: `auto` (default), `fr` or `en`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum LanguagePref {
@@ -231,7 +219,6 @@ const FR: u8 = 0;
 const EN: u8 = 1;
 const UNSET: u8 = u8::MAX;
 
-/// Language of the next native dialog (set from the saved setting by [`apply`]).
 static CURRENT: AtomicU8 = AtomicU8::new(UNSET);
 
 /// Applies a (saved) preference: the next dialog uses it.

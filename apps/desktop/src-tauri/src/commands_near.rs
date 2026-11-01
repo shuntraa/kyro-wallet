@@ -1,8 +1,7 @@
-//! IPC commands for NEAR Protocol (`near_*`): implicit-account address, account (balance,
-//! storage reserve, spendable), history, transfer building **by Kyro** (nonce and block hash
-//! from the node, Borsh encoded by wallet-core), signing behind the password and the native
-//! dialog (receiver, amount, fee bound, signing account), and `send_tx` with hash check.
-//! Contract: docs/IPC.md §2.11.
+//! IPC commands for NEAR Protocol (`near_*`): implicit-account address, account (balance, storage
+//! reserve, spendable), history, transfer building **by Kyro** (nonce and block hash from the node,
+//! Borsh encoded by wallet-core), signing behind the password and the native dialog (receiver,
+//! amount, fee bound, signing account), and `send_tx` with hash check.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -28,7 +27,6 @@ pub(crate) fn ctx(state: &AppState) -> NearCtx<'_> {
     }
 }
 
-/// Implicit account id and public key of NEAR account `account` (`m/44'/397'/account'`).
 fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
     state.with_seed(|seed| {
         Ok((
@@ -70,8 +68,6 @@ pub struct NearTokenContext {
     pub recipient_registered: bool,
 }
 
-/// Gas a token call usually burns (5 Tgas): for the estimate only; the bound uses the 30 Tgas
-/// attached to each call, prepaid then refunded.
 const FT_GAS_ESTIMATE: u128 = 5_000_000_000_000;
 
 /// Dialog head of a NEP-141 transfer: token, verified contract, decimals, recipient, amount,
@@ -162,7 +158,6 @@ fn kind_text(lang: Lang, k: NearAccountKind) -> &'static str {
     }
 }
 
-/// Body of the native dialog.
 pub(crate) fn describe_near(
     lang: Lang,
     s: &NearTxSummary,
@@ -255,8 +250,6 @@ pub(crate) fn describe_near_extra(lang: Lang, s: &NearTxSummary) -> String {
     out
 }
 
-// ---------------------------------------------------------------- reads
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NearBackendInfo {
@@ -338,8 +331,6 @@ pub async fn near_token_balances(
     Ok(out)
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NearBuilt {
@@ -355,7 +346,6 @@ async fn live_context(
     to: &str,
 ) -> AppResult<(NearFeeParams, NearContext)> {
     let kind = wallet_core::near_account_kind(to)?;
-    // Before building or signing: the RPC is on the app's network (chain id + genesis), synced.
     near_backend::probe(c).await?;
     let fees = near_backend::fees(c).await?;
     let account = near_backend::account(c, me, fees.storage_per_byte).await?;
@@ -384,9 +374,8 @@ fn known_token(c: &NearCtx<'_>, contract: &str) -> AppResult<&'static wallet_cor
     }
 }
 
-/// Live context of a token transfer of `k` to `to`: our NEAR account (fees, deposit), the
-/// recipient (must exist if named), our token balance, the recipient's registration. The fee
-/// figures are for `calls` function calls of 30 Tgas each.
+/// Live context of a token transfer of `k` to `to`: our NEAR account (fees, deposit), the recipient
+/// (must exist if named), our token balance, the recipient's registration.
 async fn token_context(
     c: &NearCtx<'_>,
     me: &str,
@@ -426,7 +415,6 @@ async fn token_context(
     ))
 }
 
-/// Token amount ≤ our balance; NEAR attached + fee bound ≤ our spendable NEAR.
 fn check_token(
     s: &NearTxSummary,
     k: &wallet_core::NearTokenSummary,
@@ -558,7 +546,6 @@ fn check(s: &NearTxSummary, fees: &NearFeeParams, c: &NearContext) -> AppResult<
     })
 }
 
-/// Parses a yoctoNEAR amount (decimal integer string).
 fn parse_yocto(amount: &str) -> AppResult<u128> {
     let a = amount.trim();
     if a.is_empty() || a.len() > 40 || !a.bytes().all(|b| b.is_ascii_digit()) {
@@ -570,7 +557,6 @@ fn parse_yocto(amount: &str) -> AppResult<u128> {
         .ok_or_else(|| AppError::InvalidInput("invalid amount in yoctoNEAR".into()))
 }
 
-/// Builds an unsigned transfer of `amount` yoctoNEAR from live data.
 pub(crate) async fn build(
     c: &NearCtx<'_>,
     me: &str,
@@ -625,7 +611,6 @@ pub struct NearSigned {
     pub context: NearContext,
 }
 
-/// Decoding + live re-checks, i.e. everything `near_sign_tx` does before the dialog.
 pub(crate) async fn prepare_sign(
     c: &NearCtx<'_>,
     me: &str,
@@ -740,8 +725,6 @@ pub async fn near_sign_tx(
     })
 }
 
-/// Checks the signed transaction (strict decoding, signature by our key, our account) then
-/// sends it.
 pub(crate) async fn broadcast_checked(
     c: &NearCtx<'_>,
     me: &str,
@@ -933,7 +916,6 @@ mod tests {
     /// NEP-141 transfers built by Kyro for real mainnet implicit holders (the account id is the
     /// public key: no secret needed to build and run the live checks; nothing is signed or sent),
     /// to a registered recipient and to a fresh implicit account (storage_deposit added).
-    /// `cargo test -p kyro-desktop --lib near_token_live_mainnet -- --ignored --nocapture`.
     #[test]
     #[ignore]
     fn near_token_live_mainnet() {

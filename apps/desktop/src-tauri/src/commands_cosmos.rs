@@ -1,9 +1,8 @@
-//! IPC commands for Cosmos Hub (`cosmos_*`): address, account (balance, spendable, account
-//! number, sequence), history, `MsgSend` building **by Kyro** (chain id, account number,
-//! sequence, timeout height from the server, gas from a simulation of the exact transaction,
-//! encoded by wallet-core), signing behind the password and the native dialog (what Rust decoded
-//! from the SignDoc: amount, recipient, fee, gas, chain id, memo — all re-read live), and
-//! broadcast with hash check. Contract: docs/IPC.md §2.11.
+//! IPC commands for Cosmos Hub (`cosmos_*`): address, account (balance, spendable, account number,
+//! sequence), history, `MsgSend` building **by Kyro** (chain id, account number, sequence, timeout
+//! height from the server, gas from a simulation of the exact transaction, encoded by wallet-core),
+//! signing behind the password and the native dialog (what Rust decoded from the SignDoc: amount,
+//! recipient, fee, gas, chain id, memo — all re-read live), and broadcast with hash check.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -27,7 +26,6 @@ pub(crate) fn ctx(state: &AppState) -> CosmosCtx<'_> {
     }
 }
 
-/// Address and public key of Cosmos account `account` (`m/44'/118'/account'/0/0`).
 fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     state.with_seed(|seed| {
         Ok((
@@ -50,7 +48,6 @@ pub struct CosmosContext {
     pub height: u64,
 }
 
-/// Body of the native dialog: everything comes from the decoded SignDoc, except the balance.
 pub(crate) fn describe_cosmos(
     lang: Lang,
     s: &CosmosTxSummary,
@@ -119,7 +116,6 @@ pub(crate) fn describe_cosmos(
             s.account_number, s.sequence, s.timeout_height
         ),
     };
-    // Untrusted text last, framed on its own line.
     out += &format!("\n{line}\n");
     match &s.memo {
         Some(m) => {
@@ -169,8 +165,6 @@ pub(crate) fn describe_cosmos_extra(lang: Lang, s: &CosmosTxSummary) -> String {
     out
 }
 
-// ---------------------------------------------------------------- reads
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CosmosBackendInfo {
@@ -212,8 +206,6 @@ pub async fn cosmos_txs(state: State<'_, AppState>, address: String) -> AppResul
     cosmos_backend::txs(&ctx(&state), &address).await
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CosmosBuilt {
@@ -234,7 +226,6 @@ fn parse_uatom(amount: &str) -> AppResult<u128> {
         .ok_or_else(|| AppError::InvalidInput("invalid amount in uatom".into()))
 }
 
-/// Our account, checked: it exists and the key recorded on chain (if any) is ours.
 async fn our_account(c: &CosmosCtx<'_>, me: &str, pk: &[u8; 33]) -> AppResult<CosmosAccountInfo> {
     use base64::Engine as _;
     let acc = cosmos_backend::account(c, me).await?;
@@ -253,7 +244,6 @@ async fn our_account(c: &CosmosCtx<'_>, me: &str, pk: &[u8; 33]) -> AppResult<Co
     Ok(acc)
 }
 
-/// Builds an unsigned MsgSend from live data: `amount` in uatom.
 pub(crate) async fn build(
     c: &CosmosCtx<'_>,
     me: &str,
@@ -288,7 +278,6 @@ pub(crate) async fn build(
         memo: memo.to_owned(),
         timeout_height: info.height.saturating_add(TIMEOUT_BLOCKS),
     };
-    // Simulate the exact transaction (fee 0: simulation does not charge it), then set the fee.
     let probe = wallet_core::cosmos_send_sign_doc(&req)?;
     let gas_used = cosmos_backend::simulate(c, &wallet_core::cosmos_simulation_tx(&probe)?).await?;
     let price = cosmos_backend::gas_price(c).await?;
@@ -339,7 +328,6 @@ pub struct CosmosSigned {
     pub context: CosmosContext,
 }
 
-/// Decoding + live re-checks, i.e. everything `cosmos_sign_tx` does before the dialog.
 pub(crate) async fn prepare_sign(
     c: &CosmosCtx<'_>,
     me: &str,
@@ -429,8 +417,6 @@ pub async fn cosmos_sign_tx(
     })
 }
 
-/// Checks the signed transaction (strict decoding, low-S signature by our key over the SignDoc
-/// rebuilt with the live account number) then broadcasts it.
 pub(crate) async fn broadcast_checked(
     c: &CosmosCtx<'_>,
     me: &str,
@@ -525,7 +511,6 @@ mod tests {
         ] {
             assert!(d.contains(needle), "{needle} missing in:\n{d}");
         }
-        // The memo comes after the amount and the fee.
         assert!(d.find("MÉMO").unwrap() > d.find("Frais").unwrap());
         let d = describe_cosmos(Lang::Fr, &summary(None), &context(), Network::Mainnet);
         assert!(d.starts_with("Envoi Cosmos Hub\n"));
@@ -556,15 +541,7 @@ mod tests {
     }
 }
 
-/// Real-network test over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture cosmos_live`.
-/// - reads (always): chain id and height on mainnet and testnet, the account, balance and
-///   history of the public « abandon … about » address, the fee-market gas price;
-/// - simulation (always, nothing is signed or sent): a MsgSend built by Kyro from that address;
-/// - `KYRO_COSMOS_SEND=yes`: one real **testnet** send of 1 000 uatom from « abandon … about »
-///   (a public test wallet: its keys are known to everyone) to its account 1, with a memo, through
-///   the real path (live checks, dialog text, signature with identical summary, broadcast, hash
-///   check, inclusion).
+/// Real-network test over Tor.
 #[cfg(test)]
 mod live {
     use super::*;

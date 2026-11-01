@@ -4,19 +4,8 @@
 //!   Safe 5;
 //! - the Trezor Host Protocol ([`super::thp`], encrypted and paired): Trezor Safe 7 and later.
 //!
-//! [`open`] tells them apart the way python-trezorlib does: a THP device answers a v1 message
-//! with `Failure(InvalidProtocol)`.
-//!
-//! Supported: Trezor One (firmware ≥ 1.10.4), Model T, Safe 3, Safe 5, Safe 7 (≥ 2.4.3; Solana
-//! ≥ 2.6.4, not on the One). Not supported: bootloader mode, uninitialized devices, Trezor One
-//! firmware < 1.7 (HID only).
-//!
-//! PIN: on the device for T/Safe (Kyro only shows "enter your PIN on the device"); Trezor One
-//! uses the blind 3×3 matrix (event `hw-prompt: pin-matrix`, then `hw_pin_matrix` with the
-//! *positions*, which reveal nothing without the device's scrambled layout).
-//! Passphrase: entered on the device (T/Safe). A Trezor One with passphrase protection would
-//! need the passphrase typed on the computer: refused (`HW_UNSUPPORTED`), because the
-//! webview must never handle a secret.
+//! Trezor One uses the blind 3×3 matrix (event `hw-prompt: pin-matrix`, then `hw_pin_matrix` with
+//! the *positions*, which reveal nothing without the device's scrambled layout).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -66,7 +55,6 @@ pub fn enumerate() -> Vec<Found> {
         if ![TREZOR, TREZOR_ONE, TREZOR_BOOTLOADER].contains(&id) {
             continue;
         }
-        // WebUSB devices expose a vendor-specific interface 0 (old HID-only Ones do not).
         let webusb = dev.config_descriptor(0).ok().is_some_and(|c| {
             c.interfaces()
                 .find(|i| i.number() == IFACE)
@@ -125,8 +113,6 @@ pub fn open(loc: &Locator, ctl: &Ctl, thp_env: &ThpEnv) -> HwResult<Box<dyn Hard
     open_link(link, limit, ctl, thp_env)
 }
 
-/// Protocol detection, then either a v1 [`Trezor`] (features already read) or a THP channel
-/// (connected, paired if needed and allowed, session created).
 pub(super) fn open_link<L>(
     mut link: L,
     limit: Arc<Mutex<Limit>>,
@@ -162,8 +148,6 @@ where
     Ok(Box::new(t))
 }
 
-/// Protocol v1 `Initialize`: `Features` from a v1 device, `None` from a THP device (which
-/// answers `Failure(InvalidProtocol)`, see trezorlib `protocol_v1.probe`).
 fn probe_v1<L: Link>(
     v1: &mut ProtocolV1<L>,
     limit: &Mutex<Limit>,
@@ -176,7 +160,6 @@ fn probe_v1<L: Link>(
     for _ in 0..8 {
         let resp = match v1.read() {
             Ok(r) => r,
-            // Leftover THP packets from an earlier channel: skip them.
             Err(TErr::DeviceBadMagic) => continue,
             Err(e) => return Err(map_terr(limit, e)),
         };
@@ -203,7 +186,6 @@ fn arm(limit: &Mutex<Limit>, deadline: Instant, cancel: Option<Arc<AtomicBool>>)
 pub struct Limit {
     pub(super) deadline: Instant,
     pub(super) cancel: Option<Arc<AtomicBool>>,
-    /// Why the last read gave up (`Timeout` or `Cancelled`).
     stopped: Option<HwError>,
 }
 
@@ -222,7 +204,6 @@ pub struct UsbLink {
     limit: Arc<Mutex<Limit>>,
 }
 
-/// USB errors while a channel is open: an unplugged device is `Disconnected`.
 fn usb_io_err(e: rusb::Error) -> HwError {
     match e {
         rusb::Error::Busy | rusb::Error::Access => usb_err(e),
@@ -287,14 +268,11 @@ impl Link for UsbLink {
 
 /// Message-level exchange used by the Bitcoin signing flow (and mocked in its tests).
 pub trait TrezorIo {
-    /// Sends one message and returns the device's answer after all user interaction
-    /// (button, PIN, passphrase) has been handled. `Failure` is returned as an error.
     fn call(&mut self, ctl: &Ctl, mt: MessageType, payload: Vec<u8>) -> HwResult<ProtoMessage>;
 }
 
 /// A connected Trezor as the per-chain device code (`hw/chains.rs`) sees it.
 pub trait TrezorDevice: TrezorIo + Send {
-    /// Fails unless `chain` is usable on this model / firmware (see `chain_status`).
     fn ensure_chain(&self, chain: Chain) -> HwResult<()>;
 }
 
@@ -308,7 +286,6 @@ impl<W: Wire> TrezorDevice for Trezor<W> {
 pub trait Wire: Send {
     fn send_msg(&mut self, limit: &Mutex<Limit>, msg: ProtoMessage) -> HwResult<()>;
     fn recv_msg(&mut self, limit: &Mutex<Limit>) -> HwResult<ProtoMessage>;
-    /// THP only: route the following messages to this session.
     fn set_session(&mut self, _session: u8) {}
     fn is_thp(&self) -> bool {
         false
@@ -398,7 +375,6 @@ fn map_failure(f: &protos::Failure) -> HwError {
         F::Failure_PinInvalid | F::Failure_PinExpected => HwError::Locked,
         F::Failure_Busy | F::Failure_InProgress => HwError::Busy("the device is busy".into()),
         F::Failure_NotInitialized => HwError::unsupported("device not initialized"),
-        // THP: the device forgot Kyro's session (restart, eviction): reconnect.
         F::Failure_ThpUnallocatedSession => HwError::Disconnected,
         F::Failure_InvalidProtocol => HwError::bad("protocol rejected by the device"),
         code => HwError::bad(format!("Trezor: {code:?} “{}”", f.message())),
@@ -431,7 +407,6 @@ impl<W: Wire> Trezor<W> {
         self.proto.recv_msg(&self.limit)
     }
 
-    /// Best effort: tell the device to abandon the current workflow (it answers `Failure`).
     fn abort(&mut self) {
         self.arm(Instant::now() + Duration::from_secs(2), None);
         if self
@@ -794,8 +769,6 @@ impl<W: Wire> HardwareWallet for Trezor<W> {
     }
 
     fn evm_clear_signs(&self, kind: EvmTxKind, _has_descriptor: bool) -> bool {
-        // ERC-20 transfer: recipient, raw amount and contract are shown ("Unknown token"
-        // when not in the firmware's list). Approvals and other calls: data only.
         matches!(kind, EvmTxKind::NativeTransfer | EvmTxKind::Erc20Transfer)
     }
 
@@ -844,7 +817,6 @@ mod tests {
     use protobuf::Enum;
     use std::collections::VecDeque;
 
-    /// A fake USB link that records the chunks written and plays back canned chunks.
     struct FakeLink {
         written: Vec<Vec<u8>>,
         replies: VecDeque<Result<Vec<u8>, TErr>>,
@@ -862,7 +834,6 @@ mod tests {
         }
     }
 
-    /// Protocol v1 framing of one message: `?##` + type (u16 BE) + length (u32 BE) + payload.
     fn frame(mt: MessageType, payload: &[u8]) -> Vec<Vec<u8>> {
         let mut data = vec![0x23, 0x23];
         data.extend((mt.value() as u16).to_be_bytes());
@@ -910,14 +881,12 @@ mod tests {
 
     #[test]
     fn wire_framing_matches_protocol_v1() {
-        // GetFeatures (type 55, empty payload): "?##" 0037 00000000.
         let mut t = trezor(vec![]);
         t.write(MessageType::MessageType_GetFeatures, Vec::new())
             .unwrap();
         let w = &t.proto.link.written;
         assert_eq!(w.len(), 1);
         assert_eq!(hex::encode(&w[0][..9]), "3f2323003700000000");
-        // A 100-byte payload spans two chunks; the second starts with '?' only.
         let mut t = trezor(vec![]);
         t.write(MessageType::MessageType_SignTx, vec![7u8; 100])
             .unwrap();
@@ -954,7 +923,6 @@ mod tests {
         let a = t.sol_address(&c, 0, true).unwrap();
         assert_eq!(a, "addr");
         assert_eq!(*lock(&prompts), vec![Prompt::ConfirmOnDevice]);
-        // Written: SolanaGetAddress, then ButtonAck (type 27).
         let w = &t.proto.link.written;
         assert_eq!(u16::from_be_bytes([w[1][3], w[1][4]]), 27);
     }
@@ -1007,18 +975,15 @@ mod tests {
 
     #[test]
     fn timeout_and_cancel_are_reported_as_such() {
-        // The link gives up (deadline) → Timeout; then the abort sends Cancel.
         let mut t = trezor(vec![]);
         lock(&t.limit).stopped = None;
         let c = Ctl::for_tests(Duration::from_secs(5));
-        // Simulate the link deciding "timeout" on the first read.
         t.proto.link.replies.push_back(Err(TErr::DeviceReadTimeout));
         let r = {
             let res = t.call(&c, MessageType::MessageType_GetFeatures, Vec::new());
             res.map(|_| ())
         };
         assert_eq!(r, Err(HwError::Timeout));
-        // A Cancel message (type 20) was written after the request.
         let types: Vec<u16> = t
             .proto
             .link
@@ -1072,7 +1037,6 @@ mod tests {
         let btc = one.chain_status(Chain::Btc).unwrap();
         assert_eq!(btc.state, ChainState::Unsupported);
         assert_eq!(btc.min.as_deref(), Some("1.10.4"));
-        // Safe 7 (THP) is handled like the other T/Safe models once connected.
         let mut safe7 = trezor(vec![]);
         safe7
             .features

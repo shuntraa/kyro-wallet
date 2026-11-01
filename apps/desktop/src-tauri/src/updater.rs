@@ -1,24 +1,9 @@
 //! Automatic updates from Kyro's GitHub releases (SECURITY.md « Mises à jour automatiques »,
 //! docs/NETWORK.md, docs/IPC.md `update_status`).
 //!
-//! 1. **Check** (background, a while after launch, never blocking the UI): `latest.json` of the
-//!    latest release, through Kyro's own network layer ([`NetClient::server_request`], family
-//!    `update`, over Tor when Tor is on, never a fallback to clear). Only a strictly newer
-//!    semver is taken: no downgrade, no reinstall.
-//! 2. **Download + verify**: the package for this platform (NSIS installer, `.app.tar.gz`,
-//!    AppImage), only from this repository's release downloads. Its minisign signature is
-//!    checked against the public key pinned in `tauri.conf.json` (`plugins.updater.pubkey`,
-//!    compiled into the binary), with `minisign-verify` (the verifier of tauri-plugin-updater).
-//!    The signed trusted comment must not contradict the version, and its timestamp must be
-//!    newer than the last applied update's (no replay of an older signed package).
-//! 3. **Stage**: the verified package and `staged.json` in `<data>/update/`.
-//! 4. **Apply**: when the app quits (silently), or at the next start if it was not applied
-//!    then; the signature is checked again first. At most [`MAX_ATTEMPTS`] tries.
-//! 5. **Notice**: at the start that runs the staged version, the UI shows « Kyro updated to X »
-//!    once (`update_status`), and the stage is removed.
-//!
-//! Any failure (network, signature, disk) is logged and changes nothing: the running
-//! installation is never touched by an unverified file. Debug builds never update.
+//! **Check** (background, a while after launch, never blocking the UI): `latest.json` of the latest
+//! release, through Kyro's own network layer ([`NetClient::server_request`], family `update`, over
+//! Tor when Tor is on, never a fallback to clear).
 
 use std::collections::HashMap;
 use std::io;
@@ -50,8 +35,6 @@ const CHECKS: usize = 3;
 fn log(msg: impl std::fmt::Display) {
     eprintln!("[update] {msg}");
 }
-
-// ---------------------------------------------------------------- versions and manifest
 
 /// `1.2.3` or `v1.2.3` (release tags).
 pub fn parse_version(s: &str) -> Option<Version> {
@@ -188,8 +171,6 @@ fn safe_file_name(n: &str) -> bool {
         && n != "applied.json"
 }
 
-// ---------------------------------------------------------------- signature
-
 /// What the signed trusted comment says (`timestamp:<unix>\tfile:<name>`, Tauri's signer).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Trusted {
@@ -216,8 +197,8 @@ fn b64_text(s: &str) -> Result<String, String> {
     String::from_utf8(raw).map_err(|_| "invalid text".into())
 }
 
-/// Checks the minisign signature of `bytes` (Tauri encoding: base64 of the `.sig` file and of
-/// the public key file). Prehashed signatures only (what Tauri's signer produces).
+/// Checks the minisign signature of `bytes` (Tauri encoding: base64 of the `.sig` file and of the
+/// public key file).
 pub fn verify(bytes: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<Trusted, String> {
     let pk = minisign_verify::PublicKey::decode(&b64_text(pubkey_b64)?)
         .map_err(|e| format!("public key: {e}"))?;
@@ -260,8 +241,6 @@ fn verify_all(
     Ok(t)
 }
 
-// ---------------------------------------------------------------- stage (state machine)
-
 /// `staged.json`: a verified package waiting to be applied.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Staged {
@@ -279,9 +258,7 @@ pub trait Store {
     fn write_package(&self, name: &str, bytes: &[u8]) -> io::Result<()>;
     fn read_package(&self, name: &str) -> io::Result<Vec<u8>>;
     fn package_path(&self, name: &str) -> PathBuf;
-    /// Removes `staged.json` and every package (not `applied.json`).
     fn clear(&self);
-    /// Signature timestamp of the last applied update (0: none yet).
     fn floor(&self) -> u64;
     fn set_floor(&self, ts: u64);
 }
@@ -299,8 +276,7 @@ pub enum Step {
     },
 }
 
-/// The state machine. A stage whose version is already running (or older) is done; one that
-/// cannot be read, fails verification, is disabled or tried too often is discarded.
+/// The state machine.
 pub fn pending(store: &dyn Store, current: &Version, enabled: bool, pubkey: &str) -> Step {
     let Some(mut s) = store.load() else {
         return Step::Idle;
@@ -337,7 +313,6 @@ pub fn pending(store: &dyn Store, current: &Version, enabled: bool, pubkey: &str
         store.clear();
         return Step::Idle;
     }
-    // Counted before trying, so a crash during the install cannot loop forever.
     s.attempts += 1;
     if store.save(&s).is_err() {
         store.clear();
@@ -436,8 +411,6 @@ impl Store for FsStore {
     }
 }
 
-// ---------------------------------------------------------------- install
-
 /// This copy's installation, if it can update itself (never a debug build).
 fn detect_install() -> Option<Install> {
     if cfg!(debug_assertions) {
@@ -461,9 +434,6 @@ fn detect_install() -> Option<Install> {
     }
 }
 
-/// Installs a verified package. Windows: the NSIS installer in update mode, quiet at quit,
-/// passive (progress bar) with a restart at a start; the caller then exits. macOS / Linux: the
-/// bundle / AppImage is replaced in place (the caller restarts at a start).
 fn install(how: &Install, package: &Path, at_quit: bool) -> Result<(), String> {
     match how {
         Install::Nsis => {
@@ -536,9 +506,6 @@ fn replace_appimage(target: &Path, package: &Path) -> Result<(), String> {
     })
 }
 
-// ---------------------------------------------------------------- app wiring
-
-/// The public key pinned in `tauri.conf.json` (`plugins.updater.pubkey`), compiled in.
 fn pubkey(app: &tauri::AppHandle) -> Option<String> {
     app.config()
         .plugins
@@ -583,8 +550,8 @@ fn context(app: &tauri::AppHandle) -> Option<(FsStore, Version, bool, String)> {
     Some((store, current_version(app)?, enabled, pubkey(app)?))
 }
 
-/// At start, before the window: notice of an applied update, or a staged one not applied at
-/// quit (applied now, then the app restarts). Then the background check.
+/// At start, before the window: notice of an applied update, or a staged one not applied at quit
+/// (applied now, then the app restarts).
 pub fn on_start(app: &tauri::AppHandle) {
     app.manage(UpdaterState::default());
     let Some((store, current, enabled, key)) = context(app) else {
@@ -653,7 +620,6 @@ async fn get(app: &tauri::AppHandle, url: url::Url) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-/// One check: manifest, then (if newer and not staged yet) download, verify, stage.
 async fn check(app: &tauri::AppHandle) -> Result<(), String> {
     let (store, current, enabled, key) = context(app).ok_or("updates unavailable")?;
     let how = detect_install().ok_or("unsupported installation")?;
@@ -676,7 +642,6 @@ async fn check(app: &tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
     let bytes = get(app, c.url.clone()).await?;
-    // The setting may have been turned off during the download.
     if !app.state::<AppState>().settings().auto_update {
         return Ok(());
     }
@@ -743,7 +708,6 @@ mod tests {
             platform_keys("darwin", "aarch64", &Install::MacApp("/A/Kyro.app".into())),
             ["darwin-aarch64-app", "darwin-aarch64"]
         );
-        // Not newer: nothing to do.
         assert_eq!(
             select(&manifest("0.1.0", &url), &v("0.1.0"), &keys()),
             Ok(None)
@@ -752,7 +716,6 @@ mod tests {
             select(&manifest("0.0.5", &url), &v("0.1.0"), &keys()),
             Ok(None)
         );
-        // Refused: another host or repository, bad names, no entry, bad JSON, bad version.
         for bad in [
             "https://example.com/Kyro.exe",
             "https://github.com/someone/else/releases/download/v1/Kyro.exe",
@@ -780,8 +743,6 @@ mod tests {
         assert!(!Install::MacApp("/A/Kyro.app".into()).accepts("Kyro_0.2.0_aarch64.dmg"));
     }
 
-    /// Throwaway minisign key pair (prehashed Ed25519, the format of Tauri's signer), encoded
-    /// the way Tauri stores it: base64 of the key / `.sig` file text.
     struct TestKey {
         sk: ed25519_dalek::SigningKey,
         id: [u8; 8],
@@ -842,12 +803,10 @@ mod tests {
         let t = verify(data, &sig, &key.pubkey()).unwrap();
         assert_eq!(t.timestamp, 1_793_000_000);
         assert_eq!(t.file.as_deref(), Some("Kyro_0.2.0_x64-setup.exe"));
-        // Tampered file, wrong key, garbage.
         assert!(verify(b"Kyro 0.2.0 installer bytez", &sig, &key.pubkey()).is_err());
         assert!(verify(data, &sig, &TestKey::new().pubkey()).is_err());
         assert!(verify(data, "not base64!", &key.pubkey()).is_err());
         assert!(verify(data, &sig, "").is_err());
-        // Tampered trusted comment (global signature).
         let text = b64_text(&sig).unwrap().replace("1793000000", "1999999999");
         assert!(verify(data, &TestKey::b64(text.as_bytes()), &key.pubkey()).is_err());
     }
@@ -878,14 +837,11 @@ mod tests {
         assert!(check_binding(&t("Kyro_0.2.0_x64-setup.exe", 10), &v("0.2.0"), 0).is_ok());
         assert!(check_binding(&t("Kyro_0.2.0_amd64.AppImage", 10), &v("0.2.0"), 0).is_ok());
         assert!(check_binding(&t("Kyro.app.tar.gz", 10), &v("0.2.0"), 0).is_ok());
-        // An old signed installer announced as a newer version.
         assert!(check_binding(&t("Kyro_0.1.0_x64-setup.exe", 10), &v("0.2.0"), 0).is_err());
-        // Older than (or as old as) the last applied update: replay.
         assert!(check_binding(&t("Kyro.app.tar.gz", 10), &v("0.2.0"), 10).is_err());
         assert!(check_binding(&Trusted::default(), &v("0.2.0"), 0).is_err());
     }
 
-    /// In-memory [`Store`] (the "file system" of the state machine tests).
     #[derive(Default)]
     struct MemStore {
         staged: RefCell<Option<Staged>>,
@@ -954,7 +910,6 @@ mod tests {
 
         stage(&store, &candidate(&key, data), data, &pk).unwrap();
         assert_eq!(store.load().unwrap().attempts, 0);
-        // Quit (or next start) on 0.1.0: apply, the attempt is counted first.
         match pending(&store, &v("0.1.0"), true, &pk) {
             Step::Apply { staged, package } => {
                 assert_eq!((staged.version.as_str(), staged.attempts), ("0.2.0", 1));
@@ -962,7 +917,6 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
-        // The start that runs 0.2.0: notice once, stage removed, replay floor raised.
         assert_eq!(
             pending(&store, &v("0.2.0"), true, &pk),
             Step::Updated("0.2.0".into())
@@ -970,7 +924,6 @@ mod tests {
         assert!(store.load().is_none() && store.files.borrow().is_empty());
         assert_eq!(store.floor(), 1_793_000_000);
         assert_eq!(pending(&store, &v("0.2.0"), true, &pk), Step::Idle);
-        // The same signed package cannot be staged again (replay).
         assert!(stage(&store, &candidate(&key, data), data, &pk).is_err());
     }
 
@@ -980,14 +933,12 @@ mod tests {
         let pk = key.pubkey();
         let data = b"installer";
 
-        // Unverified download: nothing staged.
         let store = MemStore::default();
         let mut bad = candidate(&key, data);
         bad.signature = TestKey::new().sign(data, TRUSTED);
         assert!(stage(&store, &bad, data, &pk).is_err());
         assert!(store.load().is_none() && store.files.borrow().is_empty());
 
-        // Disk full: nothing half-staged.
         let full = MemStore {
             fail_writes: true,
             ..MemStore::default()
@@ -1006,7 +957,6 @@ mod tests {
         assert_eq!(pending(&store, &v("0.1.0"), true, &pk), Step::Idle);
         assert!(store.load().is_none());
 
-        // Package modified on disk after staging: re-verified, discarded.
         stage(&store, &candidate(&key, data), data, &pk).unwrap();
         store
             .files
@@ -1015,7 +965,6 @@ mod tests {
         assert_eq!(pending(&store, &v("0.1.0"), true, &pk), Step::Idle);
         assert!(store.load().is_none());
 
-        // Package missing, setting turned off, corrupt version: discarded.
         stage(&store, &candidate(&key, data), data, &pk).unwrap();
         store.files.borrow_mut().clear();
         assert_eq!(pending(&store, &v("0.1.0"), true, &pk), Step::Idle);
@@ -1026,7 +975,6 @@ mod tests {
         store.staged.borrow_mut().as_mut().unwrap().version = "x".into();
         assert_eq!(pending(&store, &v("0.1.0"), true, &pk), Step::Idle);
 
-        // A newer version was installed by hand: stale stage removed, no notice.
         stage(&store, &candidate(&key, data), data, &pk).unwrap();
         assert_eq!(pending(&store, &v("0.3.0"), true, &pk), Step::Idle);
         assert!(store.load().is_none());

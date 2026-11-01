@@ -1,6 +1,5 @@
-//! Unit tests of the THP host side ([`super`]): reference vectors from python-trezorlib,
-//! Trezor Suite and the firmware tests, and the Alternating Bit Protocol behaviour.
-//! End-to-end flows against Trezor's own device implementation are in `thp_sim.rs`.
+//! Unit tests of the THP host side ([`super`]): reference vectors from python-trezorlib, Trezor
+//! Suite and the firmware tests, and the Alternating Bit Protocol behaviour.
 
 use super::*;
 use std::collections::VecDeque;
@@ -23,9 +22,7 @@ fn limit(ms: u64) -> Mutex<Limit> {
 
 #[test]
 fn crc32_and_wire_vectors() {
-    // CRC-32/ISO-HDLC check value.
     assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
-    // Trezor Suite @trezor/protocol protocol-thp.test.ts (allocation request, ACK 0/1).
     let nonce = h("639ba57ff4e0c234");
     let p = packets(CB_ALLOC_REQ, BROADCAST, &nonce).unwrap();
     assert_eq!(p.len(), 1);
@@ -42,8 +39,6 @@ fn crc32_and_wire_vectors() {
         hex::encode(&packets(CB_ACK | ACK_BIT, 0x1234, &[]).unwrap()[0][..9]),
         "2812340004e98c8599"
     );
-    // python-trezorlib thp/message.py `Message.chunks(64)` (generated with trezorlib's own
-    // code): an encrypted-transport payload of 150 bytes, sequence bit 1, channel 0x0042.
     let data: Vec<u8> = (0..150u8).collect();
     let got: Vec<String> = packets(ENCRYPTED | SEQ_BIT, 0x0042, &data)
         .unwrap()
@@ -81,7 +76,6 @@ fn reassembly_crc_and_garbage() {
     assert_eq!(r.push(&pk[0]), None);
     assert_eq!(r.push(&bad), None);
     assert_eq!(r.push(&pk[2]), None);
-    // Stray continuation, protocol-v1 packet, continuation of another channel: ignored.
     assert_eq!(r.push(&pk[1]), None);
     let mut v1 = [0u8; PACKET];
     v1[..3].copy_from_slice(b"?##");
@@ -90,11 +84,9 @@ fn reassembly_crc_and_garbage() {
     let mut other = pk[1];
     other[1..3].copy_from_slice(&0x0043u16.to_be_bytes());
     assert_eq!(r.push(&other), None);
-    // A new initiation packet restarts reassembly.
     let ack = packets(CB_ACK, 0x0042, &[]).unwrap();
     let f = r.push(&ack[0]).unwrap();
     assert_eq!((f.cb, f.data.len()), (CB_ACK, 0));
-    // Suite: transport error UNALLOCATED_CHANNEL on channel 0x1222.
     let mut e = [0u8; PACKET];
     e[..10].copy_from_slice(&h("42122200050270303cfa"));
     let f = Reassembler::default().push(&e).unwrap();
@@ -108,8 +100,6 @@ fn reassembly_crc_and_garbage() {
 
 #[test]
 fn allocation_response_and_prologue() {
-    // Real T3W1 allocation response from Trezor Suite's tests, and the initial handshake hash
-    // they expect: SHA-256(protocol name ‖ device properties), i.e. the Noise prologue.
     let mut p = [0u8; PACKET];
     let wire = h("41ffff0020639ba57ff4e0c2343c830a0454335731180220002802280328042801c0171551");
     p[..wire.len()].copy_from_slice(&wire);
@@ -187,19 +177,13 @@ fn cpace_matches_trezorlib() {
         assert_eq!(hex::encode(r.public_key), want_pub);
         assert_eq!(hex::encode(r.tag), want_tag);
     }
-    // The generator string is the CPace one: lv(DSI) lv(PRS) lv(zpad) lv(CI) lv(sid).
     let s = cpace_generator_string(b"000000", &[0xAA; 32]);
     assert_eq!(s.len(), 9 + 7 + 112 + 33 + 1);
     assert_eq!(&s[..10], b"\x08CPace255\x06");
 }
 
-/// Property-style cross-check of Kyro's CPace (composed from curve25519-dalek primitives) on
-/// 200 random exchanges (fixed seed 20261030), in **both roles**. Generated with
-/// python-trezorlib's own `thp/cpace.py` + `thp/curve25519.py` (`testdata/gen_thp_cpace.py`:
-/// device key t, host key k, random code and handshake hash; trezorlib also checked that the
-/// device derives the same tag), and independently re-verified with Trezor Suite's
-/// `curve25519.ts` (Elligator2 + X25519) on the same file. `trezor-thp` has no CPace (the
-/// firmware's is Python over trezorcrypto C), so it cannot serve as the reference here.
+/// Property-style cross-check of Kyro's CPace (composed from curve25519-dalek primitives) on 200
+/// random exchanges (fixed seed 20261030), in **both roles**.
 #[test]
 fn cpace_matches_trezorlib_on_200_random_exchanges() {
     let v: Vec<[String; 7]> =
@@ -208,17 +192,14 @@ fn cpace_matches_trezorlib_on_200_random_exchanges() {
     for [code, hh, k, t, trezor_pub, host_pub, tag] in &v {
         let code: [u8; 6] = code.as_bytes().try_into().unwrap();
         let hh = h32(hh);
-        // Device role: the same generator, device key t.
         let gen = cpace_generator_string(&code, &hh);
         assert_eq!(
             hex::encode(cpace_public(&gen, &h32(t)).unwrap()),
             *trezor_pub
         );
-        // Host role.
         let r = cpace_host(&code, &hh, &h32(k), &h32(trezor_pub)).unwrap();
         assert_eq!(hex::encode(r.public_key), *host_pub);
         assert_eq!(hex::encode(r.tag), *tag);
-        // Another code gives another generator, hence another key.
         let mut other = code;
         other[5] = b'0' + (other[5] - b'0' + 1) % 10;
         let r2 = cpace_host(&other, &hh, &h32(k), &h32(trezor_pub)).unwrap();
@@ -228,7 +209,6 @@ fn cpace_matches_trezorlib_on_200_random_exchanges() {
 
 #[test]
 fn cpace_rejects_low_order_device_keys() {
-    // Low-order points from draft-irtf-cfrg-cpace (also in the firmware's own tests).
     for p in [
         "0000000000000000000000000000000000000000000000000000000000000000",
         "0100000000000000000000000000000000000000000000000000000000000000",
@@ -282,8 +262,6 @@ fn pairing_code_matches_trezorlib() {
 
 #[test]
 fn masked_static_key_matching() {
-    // Trezor Suite pairing.test.ts `findKnownPairingCredentials`: only the second stored
-    // device explains this masked key.
     let masked = h32("be8d024bbcd5ac116e041035fcc6243ce1d77d7075e351c87aa0831fbf46ce66");
     let eph = h32("f817f577f24d7ec08c1ea397df2da916e0ee81423961763dc45395e18fc02121");
     assert!(!mask_matches(
@@ -298,7 +276,6 @@ fn masked_static_key_matching() {
     ));
 }
 
-/// Scripted peer: reacts to each frame Kyro writes.
 type React = Box<dyn FnMut(&Frame, &mut VecDeque<Packet>) + Send>;
 
 struct Peer {
@@ -384,7 +361,6 @@ fn sender_gives_up_or_fails_fast() {
         ch.send_reliable(&limit(60_000), ENCRYPTED, b"x"),
         Err(HwError::Disconnected)
     );
-    // The caller's deadline and cancellation bound every wait.
     let (mut ch, _) = peer(Box::new(|_, _| {}));
     assert_eq!(ch.recv(&limit(150)), Err(HwError::Timeout));
     let l = limit(60_000);
@@ -398,7 +374,6 @@ fn receiver_acks_and_drops_duplicates() {
     ch.io.out.extend(pk(ENCRYPTED, b"A"));
     ch.io.out.extend(pk(ENCRYPTED, b"A")); // our ACK was lost: resent
     ch.io.out.extend(pk(CB_ACK, &[])); // stray ACK: ignored
-                                       // Another channel: ignored, not ACKed.
     ch.io
         .out
         .extend(packets(ENCRYPTED | SEQ_BIT, 0x9999, b"X").unwrap());

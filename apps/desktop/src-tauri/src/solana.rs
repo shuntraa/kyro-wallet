@@ -15,15 +15,12 @@ use crate::i18n::Lang;
 use crate::net::FetchRequest;
 use crate::state::AppState;
 
-/// Maximum size of a whole Solana transaction on the wire (IPv6 MTU minus headers).
 const MAX_TX_SIZE: usize = 1232;
 const MAX_LOOKUP_TABLES: usize = 16;
 const DEFAULT_RPC_MAINNET: &str = "https://api.mainnet-beta.solana.com";
 const DEFAULT_RPC_DEVNET: &str = "https://api.devnet.solana.com";
 
-/// Solana RPC endpoint: the user's override from settings, else the allowlisted default.
 pub(crate) fn rpc_url(state: &AppState) -> String {
-    // A custom cluster RPC replaces the default (which is then refused by the policy).
     match state.settings().servers.solana_for(state.network) {
         Some(s) => s.url.clone(),
         None => match state.network {
@@ -54,7 +51,6 @@ pub fn message_bytes(message_b64: &str) -> AppResult<Vec<u8>> {
     Ok(bytes)
 }
 
-/// Fetches one lookup table with `getAccountInfo` (base64) and parses it in wallet-core.
 async fn fetch_lookup_table(state: &AppState, url: &str, key: &str) -> AppResult<SolLookupTable> {
     let body = json!({
         "jsonrpc": "2.0",
@@ -111,11 +107,7 @@ pub struct SolDecoded {
     pub from_tables: BTreeSet<String>,
 }
 
-/// Decodes `message` (raw bytes), resolving v0 lookup tables from the chain. Fails closed if
-/// any table cannot be fetched or does not contain a referenced index. An account that comes
-/// from a table (recipient, authority, token account…) forces the reinforced dialog: the RPC
-/// that served the table chose it, and a custom RPC can be swapped by the interface (each new
-/// server is confirmed natively, but a wrong table is still possible).
+/// Decodes `message` (raw bytes), resolving v0 lookup tables from the chain.
 pub async fn decode(state: &AppState, message: &[u8], our_address: &str) -> AppResult<SolDecoded> {
     let keys = wallet_core::sol_message_lookup_tables(message)?;
     if keys.len() > MAX_LOOKUP_TABLES {
@@ -137,7 +129,6 @@ pub async fn decode(state: &AppState, message: &[u8], our_address: &str) -> AppR
     Ok(mark_tables(summary, !keys.is_empty(), &statics))
 }
 
-/// Every account address an instruction refers to (not program ids, not data).
 fn instruction_accounts(ins: &SolInstruction) -> Vec<&str> {
     match ins {
         SolInstruction::SystemTransfer { from, to, .. } => vec![from, to],
@@ -223,7 +214,6 @@ pub fn mark_tables(mut summary: SolTxSummary, has_lookups: bool, statics: &[Stri
                 }
             }
         }
-        // Signers and the fee payer are always static keys; anything else counts.
         if !from_tables.is_empty() {
             summary.requires_extra_confirmation = true;
         }
@@ -233,8 +223,6 @@ pub fn mark_tables(mut summary: SolTxSummary, has_lookups: bool, statics: &[Stri
         from_tables,
     }
 }
-
-// ---------------------------------------------------------------- dialog text
 
 fn sol(lang: Lang, lamports: &str) -> String {
     format!(
@@ -265,7 +253,6 @@ fn token_amount(lang: Lang, amount: &str, decimals: Option<u8>) -> String {
     }
 }
 
-/// How the dialog names an address: « toi », or the address, marked when a lookup table gave it.
 struct Names<'a> {
     lang: Lang,
     me: &'a str,
@@ -498,7 +485,6 @@ fn describe_instruction(lang: Lang, ins: &SolInstruction, n: &Names<'_>) -> Stri
             Lang::Fr => format!("Prix du calcul : {micro_lamports} micro-lamports / unité"),
             Lang::En => format!("Compute price: {micro_lamports} micro-lamports / unit"),
         },
-        // The text itself is shown at the end of the dialog, after the amounts and fees.
         SolInstruction::Memo { .. } => lang
             .pick(
                 "Mémo (texte affiché en bas de cette fenêtre)",
@@ -893,8 +879,6 @@ mod tests {
         assert!(extra.contains("PROG"));
     }
 
-    /// ÉLEVÉE 3: a recipient that comes from a lookup table (served by the RPC, not written in
-    /// the signed message) is marked and forces the reinforced dialog.
     #[test]
     fn lookup_table_accounts_are_marked_and_reinforced() {
         let s = summary(
@@ -906,11 +890,9 @@ mod tests {
             vec![],
         );
         assert!(!s.requires_extra_confirmation);
-        // Same transfer, every account static: nothing marked.
         let statics = ["ME".to_owned(), "FROM_TABLE".to_owned()];
         let d = mark_tables(s.clone(), true, &statics);
         assert!(d.from_tables.is_empty() && !d.summary.requires_extra_confirmation);
-        // The recipient was loaded from a table.
         let d = mark_tables(s, true, &statics[..1]);
         assert!(d.summary.requires_extra_confirmation);
         assert_eq!(d.from_tables.iter().collect::<Vec<_>>(), ["FROM_TABLE"]);
@@ -924,7 +906,6 @@ mod tests {
         assert!(extra.contains("– FROM_TABLE"), "{extra}");
     }
 
-    /// MOYENNE 2: a memo cannot add fake lines; it is quoted and shown after the fees.
     #[test]
     fn memo_is_one_quoted_line_at_the_end() {
         let s = summary(
@@ -1005,14 +986,6 @@ mod tests {
     }
 }
 
-/// Real devnet sends through the Rust path of `sol_sign_tx`: `decode` (lookup tables read by
-/// Rust), dialog text (+ reinforced text), `sol_sign_message`, signature verification, then
-/// `sendTransaction` through `net_fetch` (`NetClient::fetch`, the UI's path), signature check
-/// and confirmation. Messages are built here (the TS `SolanaAdapter` is not exercised).
-/// Key: a NEW random devnet mnemonic in the gitignored `.env.solana-devnet`; funding:
-/// `requestAirdrop` (plain RPC, no captcha). Run with
-/// `cargo test -p kyro-desktop --lib -- --ignored --nocapture sol_live`
-/// (`KYRO_SOL_CLEAR=yes`: clear mode, if devnet rate-limits Tor exits).
 #[cfg(test)]
 mod live {
     use super::*;
@@ -1050,7 +1023,6 @@ mod live {
         }
     }
 
-    /// Program-derived address (`find_program_address`).
     fn pda(seeds: &[&[u8]], program: &Key) -> (Key, u8) {
         for bump in (0..=255u8).rev() {
             let mut h = Sha256::new();
@@ -1081,7 +1053,6 @@ mod live {
         data: Vec<u8>,
     }
 
-    /// Legacy message, one signer (`payer`): keys = payer, `writable`, `readonly`.
     fn legacy(
         payer: &Key,
         writable: &[Key],
@@ -1119,8 +1090,6 @@ mod live {
     }
 
     fn seed() -> wallet_core::Seed {
-        // The RPC faucet of devnet answers 410 "closed" (2026-10-30); the web faucet has a
-        // captcha. Fallback: the public "abandon … about" wallet, which holds devnet SOL.
         if std::env::var("KYRO_SOL_WALLET").as_deref() == Ok("abandon") {
             return wallet_core::Mnemonic::parse(
                 "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
@@ -1214,8 +1183,6 @@ mod live {
                 .unwrap()
         }
 
-        /// What `sol_sign_tx` does, then `sendTransaction` and confirmation. Returns the
-        /// signature (transaction id).
         async fn send(&self, label: &str, message: Vec<u8>, expect_extra: bool) -> String {
             let decoded = decode(&self.state, &message, &self.me).await.unwrap();
             eprintln!(
@@ -1274,8 +1241,8 @@ mod live {
         }
     }
 
-    /// `seed_str` + create + initialize mint, our ATA, mint 1 000 units, then a TransferChecked
-    /// of 250 to the ATA of our address #1. `program`: Token or Token-2022.
+    /// `seed_str` + create + initialize mint, our ATA, mint 1 000 units, then a TransferChecked of
+    /// 250 to the ATA of our address #1.
     async fn spl_round(
         l: &Live,
         me: &Key,
@@ -1339,7 +1306,6 @@ mod live {
                 },
             ],
         );
-        // InitializeMint2 and MintTo are not decoded by Kyro: reinforced confirmation.
         let t1 = l.send(&format!("{program} mint"), m1, true).await;
         let their_ata = ata(other, &mint, program);
         let mut xfer = vec![12u8];
@@ -1412,7 +1378,6 @@ mod live {
             let (a, b) = (key(&me), key(&other));
             let sys = key(SYSTEM);
 
-            // 1. SOL to our own address #1.
             let m = legacy(
                 &a,
                 &[b],
@@ -1427,7 +1392,6 @@ mod live {
             let t = l.send("SOL", m, false).await;
             eprintln!("SOL SELF-SEND: {t}");
 
-            // 2. SPL Token and Token-2022: our own test mint, then a transfer.
             let tag = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -1438,7 +1402,6 @@ mod live {
             let (m2, t2) = spl_round(&l, &a, &b, TOKEN22, &format!("kyro-t22-{tag}")).await;
             eprintln!("TOKEN-2022 MINT: {m2}\nTOKEN-2022 TRANSFER: {t2}");
 
-            // 3. Address lookup table (create + extend), then a v0 SOL transfer through it.
             let slot = l
                 .rpc("getSlot", json!([{ "commitment": "finalized" }]))
                 .await["result"]
@@ -1490,7 +1453,6 @@ mod live {
             compact(1, &mut v0);
             v0.push(0);
             compact(0, &mut v0);
-            // The recipient comes from the table: reinforced dialog since ÉLEVÉE 3.
             let t = l.send("v0 + lookup table", v0, true).await;
             eprintln!("V0 TRANSFER: {t}");
             eprintln!(

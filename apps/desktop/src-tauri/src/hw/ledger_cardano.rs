@@ -8,19 +8,9 @@
 //! | `11` | address | P1 `01` return / `02` show, address parameters | same bytes |
 //! | `21` | sign transaction | one APDU per body item: init `01`, aux data `08`, inputs `02`, outputs `03` (P2 `30` basic, `31` asset group, `32` token, `33` confirm), fee `04`, ttl `05`, validity start `09`, confirm `0A` → body hash, witness `0F` → signature | init `10` (counts + raw length), the body items serialized in one stream, 250-byte chunks `11` / last `12` → body hash, witness `0F` |
 //!
-//! Only what Kyro's Cardano payments contain is encoded: inputs, outputs (ADA and native
-//! tokens, legacy array or Babbage map form, no datum / reference script), fee, ttl, the
-//! CIP-20 memo as an "arbitrary hash" of auxiliary data, validity start, Conway tag-258 sets.
-//! Signing mode: ordinary transaction. Our change goes as the device's own base address
-//! (payment `…/0/0`, stake `…/2/0`): the app derives it itself and shows it as change.
-//!
-//! The device rebuilds and hashes the body from these items: the hash it returns must be
-//! Kyro's transaction id, and its signature must verify with the stored key
-//! (`wallet_core::cardano_hw_assemble`).
-//!
-//! Status words (`deviceStatusError.ts`): v7 `6E09` refused, `6E10` refused by the app's
-//! policy, `6E11` locked, `6E07` invalid data, `6E04` still in a previous call; v8 `6985`
-//! refused, `6982` policy, `6Bxx` parsing errors.
+//! Only what Kyro's Cardano payments contain is encoded: inputs, outputs (ADA and native tokens,
+//! legacy array or Babbage map form, no datum / reference script), fee, ttl, the CIP-20 memo as an
+//! "arbitrary hash" of auxiliary data, validity start, Conway tag-258 sets.
 
 use wallet_core::{CardanoHwDestination, CardanoHwOutput, CardanoHwPlan, Network};
 
@@ -39,20 +29,14 @@ const INS_SIGN_TX: u8 = 0x21;
 const P1_ADDRESS_RETURN: u8 = 0x01;
 const P1_ADDRESS_DISPLAY: u8 = 0x02;
 
-/// `sign_tx_signingmode_t` ORDINARY_TRANSACTION.
 const SIGNING_MODE_ORDINARY: u8 = 3;
-/// `flag_included_e`.
 const NO: u8 = 0x01;
 const YES: u8 = 0x02;
-/// Option flag: CDDL sets with tag 258.
 const OPTION_TAG_CBOR_SETS: u64 = 1;
-/// Address type BASE_PAYMENT_KEY_STAKE_KEY; staking choice "key path".
 const ADDRESS_BASE_KEY_KEY: u8 = 0x00;
 const STAKING_KEY_PATH: u8 = 0x22;
-/// Output destinations.
 const DEST_THIRD_PARTY: u8 = 0x01;
 const DEST_DEVICE_OWNED: u8 = 0x02;
-/// Auxiliary data type "arbitrary hash".
 const AUX_ARBITRARY_HASH: u8 = 0x00;
 
 // v7 stages (P1) and output sub-steps (P2).
@@ -73,7 +57,6 @@ const V8_INIT: u8 = 0x10;
 const V8_CHUNK: u8 = 0x11;
 const V8_CONFIRM: u8 = 0x12;
 const V8_CHUNK_SIZE: usize = 250;
-/// Witness request (v7 and v8).
 const WITNESS: u8 = 0x0F;
 
 /// Kyro's account path `m/1852'/1815'/account'`.
@@ -131,7 +114,6 @@ pub fn parse_ext_public_key(data: &[u8]) -> HwResult<[u8; 64]> {
         .map_err(|_| HwError::bad("Cardano public key: 64 bytes expected"))
 }
 
-/// Base address parameters: type, network id, payment path, "staking key path", stake path.
 fn base_address_params(net: Network, account: u32) -> Vec<u8> {
     let mut out = vec![ADDRESS_BASE_KEY_KEY, network_id(net)];
     out.extend(encode_path(&payment_path(account)));
@@ -207,9 +189,6 @@ fn witness(account: u32) -> HwResult<Vec<u8>> {
     sign(WITNESS, 0x00, &encode_path(&payment_path(account)))
 }
 
-// ---------------------------------------------------------------- v7
-
-/// `serializeTxInit` for an app ≥ 7.0 (every Conway-era field present).
 fn v7_init(plan: &CardanoHwPlan, net: Network) -> HwResult<Vec<u8>> {
     let mut d = options(plan).to_vec();
     d.push(network_id(net));
@@ -223,10 +202,7 @@ fn v7_init(plan: &CardanoHwPlan, net: Network) -> HwResult<Vec<u8>> {
     d.push(SIGNING_MODE_ORDINARY);
     d.extend(u32_be(plan.inputs.len(), "inputs")?);
     d.extend(u32_be(plan.outputs.len(), "outputs")?);
-    // certificates, withdrawals, collateral inputs, required signers, reference inputs,
-    // voting procedures.
     d.extend([0u8; 4 * 6]);
-    // One witness: the payment key.
     d.extend(1u32.to_be_bytes());
     Ok(d)
 }
@@ -294,8 +270,6 @@ pub fn sign_apdus_v7(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResu
     })
 }
 
-// ---------------------------------------------------------------- v8
-
 fn v8_output(o: &CardanoHwOutput, net: Network, account: u32) -> HwResult<Vec<u8>> {
     let mut d = Vec::new();
     match &o.destination {
@@ -351,7 +325,6 @@ pub fn v8_raw_tx(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResult<V
     Ok(raw)
 }
 
-/// `serializeTxInitData`.
 fn v8_init(plan: &CardanoHwPlan, net: Network, raw_len: usize) -> HwResult<Vec<u8>> {
     let mut d = options(plan).to_vec();
     d.push(network_id(net));
@@ -480,8 +453,6 @@ mod tests {
         }
     }
 
-    /// Ledger's fixture `outputs.externalShelleyBaseKeyhashKeyhash` (signTx.ts
-    /// "Sign_tx_without_change_address": body hash 5268bded…).
     const EXT_ADDR: &str = "017cb05fce110fb999f01abb4f62bc455e217d4a51fde909fa9aea545443ac53c046cf6a42095e3c60310fa802771d0672f8fe2d1861138b09";
 
     fn ext_output() -> CardanoHwOutput {
@@ -493,8 +464,6 @@ mod tests {
         }
     }
 
-    /// The body Kyro would build for that fixture is byte-identical to Ledger's recorded body,
-    /// and its id is the hash the app returned.
     #[test]
     fn ledger_fixture_body_is_kyro_body() {
         let body = wallet_core::CardanoBody {
@@ -524,7 +493,6 @@ mod tests {
             hex::encode(body.tx_id()),
             "5268bdedcdbd3e2bad037cd292b3832ff2c77c8c628c37485da2dd930f5fc32a"
         );
-        // "Sign_tx_with_258_tag_on_inputs" (no outputs): the tag-258 form and its hash.
         let tagged = wallet_core::CardanoBody {
             outputs: vec![],
             tagged_sets: true,
@@ -546,7 +514,6 @@ mod tests {
             hex::encode(get_ext_public_key(0).unwrap()),
             "d71000000d038000073c8000071780000000"
         );
-        // Base address, mainnet, payment 0/0, staking key path 2/0, shown.
         assert_eq!(
             hex::encode(derive_address(Network::Mainnet, 0, true).unwrap()),
             "d71102002d000105\
@@ -561,7 +528,6 @@ mod tests {
         assert!(parse_ext_public_key(&[0; 63]).is_err());
     }
 
-    /// v7: INIT (Conway layout), inputs, outputs with their sub-steps, fee, ttl, confirm.
     #[test]
     fn v7_sequence() {
         let token = CardanoHwOutput {
@@ -596,7 +562,6 @@ mod tests {
                 .replace(' ', "")
         );
         assert_eq!(hexes[4], "d721033300");
-        // Own output: device-owned base address parameters, one asset group, one token.
         assert_eq!(
             hexes[5],
             "d72103303d 00 02 00 01 058000073c80000717800000000000000000000000 22 058000073c80000717800000000000000200000000 00000000001e8480 00000001 01 01"
@@ -618,8 +583,6 @@ mod tests {
         );
     }
 
-    /// v8: the INIT layout and stream of `test/unit/__fixtures__/v8/signTx.ts`
-    /// (`buildInitApduHex`, `serializeTransactionRaw`, 250-byte chunks).
     #[test]
     fn v8_sequence_and_chunks() {
         let p = plan(vec![ext_output()], None);
@@ -642,7 +605,6 @@ mod tests {
         );
         assert_eq!(a.body.len(), 2);
         assert_eq!(a.body[1][..5], [0xD7, 0x21, 0x12, 0x00, raw.len() as u8]);
-        // A body longer than one chunk: 250-byte CHUNKs, then the CONFIRM with the rest.
         let many: Vec<CardanoHwOutput> = (0..4).map(|_| ext_output()).collect();
         let p = plan(many, Some([1; 32]));
         let raw = v8_raw_tx(&p, Network::Testnet, 0).unwrap();
@@ -653,7 +615,6 @@ mod tests {
         assert_eq!(a.body.last().unwrap()[2], V8_CONFIRM);
         let stream: Vec<u8> = a.body[1..].iter().flat_map(|x| x[5..].to_vec()).collect();
         assert_eq!(stream, raw);
-        // INIT carries the aux hash, preprod network id 0 and protocol magic 1.
         let init = &a.body[0][5..];
         assert_eq!(init[8], 0);
         assert_eq!(init[9..13], 1u32.to_be_bytes());

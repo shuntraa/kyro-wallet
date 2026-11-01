@@ -1,9 +1,7 @@
-//! TON on a Ledger (app « TON » ≥ 2.1.0): build for the hardware account's own v4R2 wallet
-//! (key at `m/44'/607'/0'/0'/account'/0'`, not the vault's path, see `wallet_core::HwKeyChain`;
-//! the network's wallet id, like the vault), native dialog, then the device rebuilds the order
-//! from the structured request (`wallet_core::ton_hw_request`), shows it and signs; Kyro checks
-//! the hash it signed and the signature (`wallet_core::ton_hw_signed`) before returning it.
-//! Status of a sent transfer: the generic `ton_tx_status`.
+//! TON on a Ledger (app « TON » ≥ 2.1.0): build for the hardware account's own v4R2 wallet (key at
+//! `m/44'/607'/0'/0'/account'/0'`, not the vault's path, see `wallet_core::HwKeyChain`; the
+//! network's wallet id, like the vault), native dialog, then the device rebuilds the order from the
+//! structured request (`wallet_core::ton_hw_request`), shows it and signs.
 
 use tauri::{AppHandle, State};
 use wallet_core::{HwKeyChain, HwWatchKey, TonAddress};
@@ -21,7 +19,6 @@ use crate::ton_backend::testnet;
 
 const CHAIN: HwKeyChain = HwKeyChain::Ton;
 
-/// Public key and wallet address of the stored key (the address re-derived and compared).
 fn wallet_of(state: &AppState, key: &HwWatchKey) -> AppResult<([u8; 32], TonAddress)> {
     let pk = key_array::<32>(key)?;
     let t = testnet(state.network);
@@ -66,8 +63,6 @@ pub async fn hw_sign_ton_tx(
     let (acc, key) = stored_key(&state, &account_id, CHAIN)?;
     let (pk, me) = wallet_of(&state, &key)?;
     let net = state.network;
-    // The request the device will receive is built (and the layout checked) before anything
-    // is shown or the device is involved.
     let (request, _) = wallet_core::ton_hw_request(&boc, &pk, testnet(net))?;
     let info = check_device(&app, &state, &id, &acc, &key).await?;
     let c = ctx(&state);

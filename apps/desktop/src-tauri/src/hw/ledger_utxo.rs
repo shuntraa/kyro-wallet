@@ -1,23 +1,13 @@
 //! Litecoin, Dogecoin, Bitcoin Cash and Dash on a Ledger: the coin apps built on Ledger's
-//! `lib-app-bitcoin` (the legacy Bitcoin app code base, apps "Litecoin", "Dogecoin",
-//! "Bitcoin Cash", "Dash"), which speak the **legacy Bitcoin APDU protocol** (CLA `E0`), not the
-//! PSBT protocol of the Bitcoin app v2. Reference: `doc/btc.asc` of LedgerHQ/ledger-app-btc
-//! (1.6.5) and `@ledgerhq/hw-app-btc` (`getTrustedInput`, `startUntrustedHashTransactionInput`,
-//! `hashOutputFull`, `signTransaction`), read 2026-11-01.
+//! `lib-app-bitcoin` (the legacy Bitcoin app code base, apps "Litecoin", "Dogecoin", "Bitcoin
+//! Cash", "Dash"), which speak the **legacy Bitcoin APDU protocol** (CLA `E0`), not the PSBT
+//! protocol of the Bitcoin app v2.
 //!
-//! - GET WALLET PUBLIC KEY (`40`): uncompressed key + chain code (+ the address, shown on the
-//!   screen with P1 = `01`). P2 = address format: `00` legacy, `02` bech32, `03` CashAddr.
-//! - GET TRUSTED INPUT (`42`): each previous transaction, streamed element by element; the app
-//!   returns a 56-byte trusted input (txid, index, **amount**, HMAC) that proves the amount.
-//! - UNTRUSTED HASH TRANSACTION INPUT START (`44`), FINALIZE FULL (`4A`, the user checks the
-//!   outputs there; change path first with P1 = `FF`), HASH SIGN (`48`): BIP143 flow (Litecoin
-//!   P2 = `02`, Bitcoin Cash `03` + `SIGHASH_ALL|FORKID`) — all inputs once, outputs once, then
-//!   one pseudo-transaction per input — or legacy flow (Dogecoin, Dash, P2 = `00`) — the whole
-//!   transaction per input, the script only on the input being signed.
-//!
-//! Every input uses a trusted input (prefix `01`), as the apps require since 1.4.0 for SegWit.
-//! Signatures come back as DER ‖ sighash type, first byte masked with `0xFE`; they are checked
-//! by `wallet_core::utxo_hw_finalize` before anything leaves Rust.
+//! UNTRUSTED HASH TRANSACTION INPUT START (`44`), FINALIZE FULL (`4A`, the user checks the outputs
+//! there; change path first with P1 = `FF`), HASH SIGN (`48`): BIP143 flow (Litecoin P2 = `02`,
+//! Bitcoin Cash `03` + `SIGHASH_ALL|FORKID`) — all inputs once, outputs once, then one
+//! pseudo-transaction per input — or legacy flow (Dogecoin, Dash, P2 = `00`) — the whole
+//! transaction per input, the script only on the input being signed.
 
 use bitcoin::consensus::Encodable;
 use bitcoin::hashes::{hash160, Hash};
@@ -35,7 +25,6 @@ const INS_GET_TRUSTED_INPUT: u8 = 0x42;
 const INS_HASH_INPUT_START: u8 = 0x44;
 const INS_HASH_SIGN: u8 = 0x48;
 const INS_HASH_INPUT_FINALIZE_FULL: u8 = 0x4A;
-/// hw-app-btc's `MAX_SCRIPT_BLOCK`: scripts (and outputs) are sent in blocks of this size.
 const BLOCK: usize = 50;
 
 /// Sends one APDU, returns its data (status word checked by the caller's transport).
@@ -50,7 +39,6 @@ pub fn address_format(coin: UtxoCoin) -> u8 {
     }
 }
 
-/// UNTRUSTED HASH TRANSACTION INPUT START mode (P2) of a new transaction.
 fn start_mode(coin: UtxoCoin) -> u8 {
     match coin {
         UtxoCoin::Litecoin => 0x02,
@@ -73,7 +61,6 @@ fn sighash_type(coin: UtxoCoin) -> u8 {
 
 fn varint(n: usize) -> Vec<u8> {
     let mut v = Vec::new();
-    // Writing to a Vec cannot fail.
     let _ = VarInt(n as u64).consensus_encode(&mut v);
     v
 }
@@ -113,7 +100,6 @@ pub fn parse_wallet_public_key(data: &[u8]) -> HwResult<WalletPublicKey> {
     })
 }
 
-/// Script + sequence in blocks of [`BLOCK`] bytes, the sequence appended to the last one.
 fn script_blocks(script: &[u8], sequence: u32) -> Vec<Vec<u8>> {
     let mut out: Vec<Vec<u8>> = script.chunks(BLOCK).map(<[u8]>::to_vec).collect();
     match out.last_mut() {
@@ -175,9 +161,8 @@ pub struct StartInput<'a> {
     pub sequence: u32,
 }
 
-/// UNTRUSTED HASH TRANSACTION INPUT START: version ‖ input count, then per input
-/// `01 ‖ len ‖ trusted input ‖ script length`, the script blocks ‖ sequence. P1 `00` on the
-/// first APDU only; P2 = `mode` for a new transaction, `80` to continue the current one.
+/// UNTRUSTED HASH TRANSACTION INPUT START: version ‖ input count, then per input `01 ‖ len ‖
+/// trusted input ‖ script length`, the script blocks ‖ sequence.
 pub fn start_apdus(
     new_tx: bool,
     mode: u8,
@@ -276,8 +261,7 @@ fn p2wpkh_script_code(pubkey: &[u8; 33]) -> Vec<u8> {
     s
 }
 
-/// The legacy-protocol signing flow. `call` sends one APDU and returns its data (status word
-/// already checked, `SwContext::Signing` for the steps the user can refuse).
+/// The legacy-protocol signing flow.
 pub fn sign(
     call: &mut Call<'_>,
     ctl: &Ctl,
@@ -291,7 +275,6 @@ pub fn sign(
             "transaction with inputs that do not belong to this account",
         ));
     }
-    // 1. A trusted input per input (from the full previous transaction).
     let mut trusted = Vec::with_capacity(tx.input.len());
     for (txin, input) in tx.input.iter().zip(&psbt.inputs) {
         let prev = input.non_witness_utxo.as_ref().ok_or_else(|| {
@@ -417,10 +400,6 @@ mod tests {
     use super::*;
     use std::str::FromStr;
 
-    /// GET TRUSTED INPUT stream (btc.asc: "scripts may span several APDUs, other elements
-    /// may not be split"): index, version and input count; outpoint and script length;
-    /// script blocks and sequence; output count; each output; lock time. A typical P2PKH
-    /// spend: 1 input with a 106-byte scriptSig, 2 P2PKH outputs.
     #[test]
     fn trusted_input_stream_layout() {
         use bitcoin::{absolute::LockTime, transaction::Version, Amount, OutPoint, ScriptBuf};
@@ -454,25 +433,19 @@ mod tests {
         let raw = bitcoin::consensus::encode::serialize_hex(&tx);
         let apdus = trusted_input_apdus(&tx, 1).unwrap();
         let data = |k: usize| &apdus[k][5..];
-        // First APDU: P1 00, index 1 (BE), version 1 (LE), 1 input.
         assert_eq!(&apdus[0][..4], &[0xE0, 0x42, 0x00, 0x00]);
         assert_eq!(hex::encode(data(0)), "000000010100000001");
-        // Outpoint (36) + script length 0x6a.
         assert_eq!(apdus[1][2], 0x80);
         assert_eq!(data(1).len(), 37);
         assert_eq!(*data(1).last().unwrap(), 0x6a);
-        // 106-byte scriptSig in blocks of 50 (50, 50, 6 + sequence).
         assert_eq!((data(2).len(), data(3).len(), data(4).len()), (50, 50, 10));
         assert_eq!(&data(4)[6..], &[0xff; 4]);
-        // Output count, two outputs (8 + 1 + 25 → 34 bytes, the script head in the same
-        // APDU), lock time.
         assert_eq!(data(5), &[0x02]);
         assert_eq!(data(6).len(), 34);
         assert_eq!(&data(6)[..8], &100_000u64.to_le_bytes());
         assert_eq!(data(7).len(), 34);
         assert_eq!(data(8), &[0, 0, 0, 0]);
         assert_eq!(apdus.len(), 9);
-        // Reassembled, the stream is the transaction itself (after the 4-byte index).
         let stream: Vec<u8> = apdus.iter().flat_map(|a| a[5..].to_vec()).collect();
         assert_eq!(hex::encode(&stream[4..]), raw);
     }
@@ -486,7 +459,6 @@ mod tests {
             script: &script,
             sequence: 0xffff_fffd,
         }];
-        // New Bitcoin Cash transaction: P2 = 03 on every APDU, P1 00 then 80.
         let a = start_apdus(true, 0x03, 2, &inputs).unwrap();
         assert_eq!(hex::encode(&a[0]), "e0440003050200000001");
         assert_eq!(&a[1][..5], &[0xE0, 0x44, 0x80, 0x03, 59]);
@@ -496,10 +468,8 @@ mod tests {
             &a[2][5..],
             &[script.as_slice(), &[0xfd, 0xff, 0xff, 0xff]].concat()[..]
         );
-        // Continuing the current transaction: P2 = 80.
         let c = start_apdus(false, 0x03, 2, &inputs).unwrap();
         assert!(c.iter().all(|x| x[3] == 0x80));
-        // Change path, then outputs with P1 80 on the last block only.
         let ch =
             change_path_apdu(&[44 | 0x8000_0000, 145 | 0x8000_0000, 0x8000_0000, 1, 0]).unwrap();
         assert_eq!(
@@ -519,11 +489,9 @@ mod tests {
             ],
         };
         let f = finalize_apdus(&tx).unwrap();
-        // 1 + 2 × 34 = 69 bytes → blocks of 50 and 19.
         assert_eq!(f.len(), 2);
         assert_eq!((f[0][2], f[0][4]), (0x00, 50));
         assert_eq!((f[1][2], f[1][4]), (0x80, 19));
-        // HASH SIGN: path, 00, lock time BE, sighash.
         let s = hash_sign_apdu(
             &[0x8000_002c, 0x8000_0003, 0x8000_0000, 0, 7],
             0x0102_0304,
@@ -683,7 +651,6 @@ mod tests {
                     assert_eq!(starts, vec![0x02, 0x80, 0x80]);
                     assert_eq!(finals, 1);
                 }
-                // Legacy: the transaction again for each input, outputs each time.
                 _ => {
                     assert_eq!(starts, vec![0x00, 0x80]);
                     assert_eq!(finals, 2);

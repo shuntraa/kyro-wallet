@@ -1,10 +1,9 @@
 //! Algorand data from the public AlgoNode / Nodely endpoints (algod for accounts, parameters,
-//! submission and pending status; indexer for history), on the `algorand` Tor family, never with
-//! a fallback. No API token (free tier).
+//! submission and pending status; indexer for history), on the `algorand` Tor family, never with a
+//! fallback.
 //!
 //! Kyro fills `fee`, `fv`, `lv`, `gen` and `gh` itself from `/v2/transactions/params` and encodes
-//! the payment with wallet-core: a server-built transaction is never signed. The genesis id and
-//! hash the server reports must be the ones compiled into wallet-core for the app's network.
+//! the payment with wallet-core: a server-built transaction is never signed.
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -16,7 +15,6 @@ use crate::net::{Family, NetClient, ServerRequest};
 /// `lv` = `fv` + this (≈ 9 min at ≈ 2.8 s per round; protocol maximum 1000).
 pub const LV_OFFSET: u64 = 200;
 const MAX_TXS: u32 = 50;
-/// Upper bound on the signed size used to price the fee: unsigned + `{sig, txn}` envelope.
 const SIGNATURE_OVERHEAD: u64 = 75;
 
 pub struct AlgoCtx<'a> {
@@ -315,10 +313,9 @@ pub fn check_asset(c: &AssetCheck<'_>) -> AppResult<()> {
     Ok(())
 }
 
-/// Last 50 transactions touching `address` (indexer), payments normalized:
-/// `[{ id, type, from, to, amount, fee, closeTo, closeAmount, round, time, note }]` (µALGO
-/// strings, `time` in ms, `note` = sanitized UTF-8 text or null). Other types keep
-/// `type` and `from` only (amount 0).
+/// Last 50 transactions touching `address` (indexer), payments normalized: `[{ id, type, from, to,
+/// amount, fee, closeTo, closeAmount, round, time, note }]` (µALGO strings, `time` in ms, `note` =
+/// sanitized UTF-8 text or null).
 pub fn parse_txs(v: &Value) -> Value {
     let mut out = Vec::new();
     for t in v["transactions"].as_array().into_iter().flatten() {
@@ -340,7 +337,6 @@ pub fn parse_txs(v: &Value) -> Value {
             "type": ty,
             "from": t["sender"],
             "to": if ty == "pay" { pay["receiver"].clone() } else if is_xfer { xfer["receiver"].clone() } else { Value::Null },
-            // Asset transfers: asset id and base units (the asset is identified by its id alone).
             "assetId": if is_xfer { xfer["asset-id"].clone() } else { Value::Null },
             "assetAmount": if is_xfer { num(&xfer["amount"]) } else { None },
             "amount": if ty == "pay" { num(&pay["amount"]).unwrap_or_else(|| "0".into()) } else { "0".into() },
@@ -426,7 +422,6 @@ pub async fn tx_status(ctx: &AlgoCtx<'_>, txid: &str) -> AppResult<AlgoTxStatus>
     if status == 200 {
         return Ok(parse_pending(&v));
     }
-    // No longer in algod's pending map: look it up in the indexer.
     let (status, v) = get(
         ctx,
         indexer_url(ctx.network),
@@ -457,7 +452,6 @@ pub async fn probe(ctx: &AlgoCtx<'_>) -> AppResult<crate::btc_backend::Detected>
     })
 }
 
-/// Checks before building / signing a payment, against live data. Errors are user-facing.
 pub struct PaymentCheck<'a> {
     pub ours: &'a AlgoAccountInfo,
     pub dest: &'a AlgoAccountInfo,
@@ -522,7 +516,6 @@ mod tests {
 
     #[test]
     fn params_are_checked_against_the_genesis() {
-        // Real answers of testnet-api / mainnet-api.algonode.cloud (2026-11-01).
         let t = json!({"consensus-version":"https://github.com/algorandfoundation/specs/tree/73c43b4a9699390884c51e2a9598d49e28373d10","fee":0,"genesis-hash":"SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=","genesis-id":"testnet-v1.0","last-round":68824675,"min-fee":1000});
         let m = json!({"consensus-version":"https://github.com/algorandfoundation/specs/tree/268b63433a907455d439995bf916f6b296018f4f","fee":0,"genesis-hash":"wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=","genesis-id":"mainnet-v1.0","last-round":66529512,"min-fee":1000});
         let p = parse_params(&t, Network::Testnet).unwrap();
@@ -539,7 +532,6 @@ mod tests {
         let mut forged = t.clone();
         forged["genesis-hash"] = json!("wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=");
         assert!(parse_params(&forged, Network::Testnet).is_err());
-        // Congestion: fee per byte × signed size.
         let busy = AlgoParams {
             fee_per_byte: 10,
             ..p
@@ -549,7 +541,6 @@ mod tests {
 
     #[test]
     fn accounts_and_minimum_balance() {
-        // Real answer for an empty mainnet address (algod reports the 0.1 ALGO minimum).
         let empty = json!({"address":"BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA","amount":0,"amount-without-pending-rewards":0,"apps-total-schema":{"num-byte-slice":0,"num-uint":0},"min-balance":100000,"pending-rewards":0,"reward-base":218288,"rewards":0,"round":66529512,"status":"Offline","total-apps-opted-in":0,"total-assets-opted-in":0,"total-created-apps":0,"total-created-assets":0});
         let a = "BX63ZW4O5PWWFDH3J33QEB5YN7IN5XOKPDUQ5DCZ232EDY4DWN3XKUQRCA";
         let dest = parse_account(&empty, a).unwrap();
@@ -629,7 +620,6 @@ mod tests {
         assert_eq!((p.confirmed, p.round), (true, Some(123)));
         let p = parse_pending(&json!({"confirmed-round": 0, "pool-error": "overspend"}));
         assert_eq!(p.error.as_deref(), Some("overspend"));
-        // Asset transfer (indexer shape).
         let v = json!({"transactions": [{"id":"TXC","tx-type":"axfer","sender":"S","fee":1000,"confirmed-round":7,
             "asset-transfer-transaction":{"amount":2500000,"asset-id":31566704,"close-amount":0,"receiver":"R"}}]});
         let h = parse_txs(&v);
@@ -685,7 +675,6 @@ mod tests {
                 "{needle}: {r:?}"
             );
         };
-        // Opt-in: needs 0.1 ALGO more of minimum balance + the fee.
         assert!(check(&none, &none, 0, true, &ours).is_ok());
         let poor = AlgoAccountInfo {
             spendable: "100500".into(),
@@ -693,7 +682,6 @@ mod tests {
         };
         err(check(&none, &none, 0, true, &poor), "an extra 0.1 ALGO");
         err(check(&h, &h, 0, true, &ours), "already enabled");
-        // Transfer: opted in on both sides, enough units, ALGO for the fee.
         assert!(check(&h, &h, 12_500_000, false, &ours).is_ok());
         err(check(&h, &h, 12_500_001, false, &ours), "insufficient");
         err(check(&none, &h, 1, false, &ours), "is not enabled");

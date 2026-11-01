@@ -2,7 +2,6 @@
 //! rekey), history, payment building **by Kyro** (fee / validity / genesis from algod, encoded by
 //! wallet-core), signing behind the password and the native dialog (what Rust decoded: amount,
 //! receiver, note, fee, genesis; minimum balances re-read live), and submission with id check.
-//! Contract: docs/IPC.md §2.11.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -28,7 +27,6 @@ pub(crate) fn ctx(state: &AppState) -> AlgoCtx<'_> {
     }
 }
 
-/// Address of Algorand account `account` (`m/44'/283'/account'/0/0`).
 fn ours(state: &AppState, account: u32) -> AppResult<String> {
     state.with_seed(|seed| Ok(wallet_core::algo_address(seed, account)?))
 }
@@ -64,7 +62,6 @@ fn units(lang: Lang, raw: &str, a: &wallet_core::AlgoAssetSummary) -> String {
     )
 }
 
-/// Head of the dialog for an asset transfer / opt-in: token, verified id, decimals.
 fn describe_asset_head(
     lang: Lang,
     s: &AlgoTxSummary,
@@ -111,8 +108,6 @@ fn describe_asset_head(
     }
 }
 
-/// Body of the native dialog: everything comes from wallet-core's decoding, except the live
-/// balances of the context.
 pub(crate) fn describe_algo(
     lang: Lang,
     s: &AlgoTxSummary,
@@ -197,7 +192,6 @@ pub(crate) fn describe_algo(
             s.genesis_id, s.genesis_hash, s.first_valid, s.last_valid
         ),
     };
-    // Untrusted text, after the amounts and fees, on one quoted line.
     if s.note_len > 0 {
         match &s.note_text {
             Some(t) => {
@@ -262,8 +256,6 @@ pub(crate) fn describe_algo_extra(lang: Lang, s: &AlgoTxSummary) -> String {
     out
 }
 
-// ---------------------------------------------------------------- reads
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AlgoBackendInfo {
@@ -306,8 +298,6 @@ pub async fn algo_txs(state: State<'_, AppState>, address: String) -> AppResult<
     algo_backend::txs(&ctx(&state), &address).await
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AlgoBuilt {
@@ -349,7 +339,6 @@ async fn live_context(
     ))
 }
 
-/// Live checks of an asset transfer / opt-in decoded by wallet-core.
 fn check_asset_live(
     a: &wallet_core::AlgoAssetSummary,
     fee: u64,
@@ -371,8 +360,6 @@ fn check_asset_live(
     })
 }
 
-/// Builds an unsigned asset transfer of a known asset: `to` = `me` and `amount` 0 for an
-/// opt-in, otherwise base units to someone else.
 pub(crate) async fn build_asset(
     c: &AlgoCtx<'_>,
     me: &str,
@@ -440,7 +427,6 @@ fn micro_of(s: &AlgoTxSummary) -> (u64, u64) {
     (s.amount.parse().unwrap_or(0), s.fee.parse().unwrap_or(0))
 }
 
-/// Builds an unsigned payment from live data: `amount` in µALGO, optional UTF-8 `note`.
 pub(crate) async fn build(
     c: &AlgoCtx<'_>,
     me: &str,
@@ -479,7 +465,6 @@ pub(crate) async fn build(
         sender,
     };
     p.fee = params.fee_for(p.encode().len());
-    // A larger fee can take one more byte: price it again.
     p.fee = params.fee_for(p.encode().len());
     algo_backend::check_payment(&PaymentCheck {
         ours: &context.account,
@@ -522,8 +507,8 @@ pub async fn algo_asset_holdings(
     Ok(out)
 }
 
-/// Opt-in to a known asset: a 0-unit transfer of it to ourselves (raises the minimum balance by
-/// 0.1 ALGO). Signed with `algo_sign_tx` like a payment.
+/// Opt-in to a known asset: a 0-unit transfer of it to ourselves (raises the minimum balance by 0.1
+/// ALGO).
 #[tauri::command]
 pub async fn algo_build_optin_tx(
     state: State<'_, AppState>,
@@ -575,7 +560,6 @@ pub struct AlgoSigned {
     pub context: AlgoContext,
 }
 
-/// Decoding + live re-checks, i.e. everything `algo_sign_tx` does before the dialog.
 pub(crate) async fn prepare_sign(
     c: &AlgoCtx<'_>,
     me: &str,
@@ -856,15 +840,7 @@ mod tests {
     }
 }
 
-/// Real-network test on Algorand TestNet over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture algo_live`.
-/// - reads only by default: genesis check on both networks, account and history of the test
-///   address;
-/// - keys: a NEW random test mnemonic, generated once and kept in the gitignored
-///   `.env.algo-testnet` at the repository root (testnet only);
-/// - `KYRO_ALGO_SEND=yes` and a funded first address (the TestNet dispenser has a captcha: fund
-///   it by hand): one payment with a note to the second address through the real path (live
-///   checks, dialog text, signature with identical summary, submission, id check, confirmation).
+/// Real-network test on Algorand TestNet over Tor.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -930,7 +906,6 @@ mod live {
             let acc = algo_backend::account(&c, &me).await.unwrap();
             eprintln!("account {acc:?}");
             eprintln!("history: {}", algo_backend::txs(&c, &me).await.unwrap());
-            // Below the minimum balance to an empty account: refused before anything is signed.
             if acc.exists {
                 let r = build(&c, &me, &other, "1000", None).await;
                 eprintln!("0.001 ALGO to empty {other}: {:?}", r.as_ref().err());

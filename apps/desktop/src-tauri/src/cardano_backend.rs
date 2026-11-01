@@ -2,8 +2,8 @@
 //! `preprod.koios.rest` / `api.koios.rest`), on the `cardano` Tor family, never with a fallback.
 //!
 //! Kyro builds every transaction itself from the live UTxO set and protocol parameters
-//! (`min_fee_a`, `min_fee_b`, `coins_per_utxo_size`, `max_tx_size`) with wallet-core's encoder;
-//! a server-built transaction is never signed. Network check: genesis `networkmagic`.
+//! (`min_fee_a`, `min_fee_b`, `coins_per_utxo_size`, `max_tx_size`) with wallet-core's encoder; a
+//! server-built transaction is never signed.
 
 use std::collections::BTreeMap;
 
@@ -21,7 +21,6 @@ use crate::servers::{
 /// TTL = current slot + this (1 slot = 1 s on preprod and mainnet: one hour).
 pub const TTL_OFFSET: u64 = 3600;
 const MAX_TXS: usize = 20;
-/// Inputs used at most by one transaction (each input adds ~37 bytes).
 const MAX_INPUTS: usize = 100;
 
 pub struct CardanoCtx<'a> {
@@ -81,7 +80,6 @@ pub(crate) fn first(v: &Value, what: &str) -> AppResult<Value> {
         .ok_or_else(|| bad(format!("Koios: empty response ({what})")))
 }
 
-/// Koios returns some numbers as strings, others as JSON numbers.
 pub(crate) fn num(v: &Value) -> Option<u64> {
     match v {
         Value::String(s) => s.parse().ok(),
@@ -89,8 +87,6 @@ pub(crate) fn num(v: &Value) -> Option<u64> {
         _ => None,
     }
 }
-
-// ---------------------------------------------------------------- chain state
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -147,8 +143,8 @@ pub async fn params(ctx: &CardanoCtx<'_>) -> AppResult<Params> {
         coins_per_byte: get("coins_per_utxo_size")?,
         max_tx_size: get("max_tx_size")?,
     };
-    // Sanity bounds: a hostile server must not make Kyro pay absurd fees silently (the fee is
-    // also shown in the dialog). Current values: 44 / 155 381 / 4 310 / 16 384.
+    // Sanity bounds: a hostile server must not make Kyro pay absurd fees silently (the fee is also
+    // shown in the dialog).
     if out.min_fee_a > 1_000
         || out.min_fee_b > 10_000_000
         || out.coins_per_byte == 0
@@ -188,8 +184,6 @@ pub async fn probe(ctx: &CardanoCtx<'_>) -> AppResult<Detected> {
         ..Default::default()
     })
 }
-
-// ---------------------------------------------------------------- UTxOs, account, history
 
 /// `(policy hex, asset name hex)` → quantity.
 pub type AssetMap = BTreeMap<(String, String), u64>;
@@ -273,9 +267,8 @@ pub struct CardanoAccount {
     pub locked_with_tokens: String,
 }
 
-/// Verified tokens shown by name without a reinforced confirmation:
-/// `(policy, asset name hex, ticker, decimals)`. Checked against Koios mainnet `asset_info`
-/// (Cardano token registry metadata) on 2026-10-30. None on preprod.
+/// Verified tokens shown by name without a reinforced confirmation: `(policy, asset name hex,
+/// ticker, decimals)`.
 pub const VERIFIED_MAINNET: &[(&str, &str, &str, u8)] = &[
     (
         "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61",
@@ -373,7 +366,6 @@ pub async fn txs(ctx: &CardanoCtx<'_>, address: &str) -> AppResult<Value> {
     wallet_core::cardano_address_bytes(address, ctx.network)?;
     let me = address.trim();
     let list = call(ctx, "/address_txs", Some(json!({ "_addresses": [me] }))).await?;
-    // Koios lists oldest first: keep the most recent ones.
     let mut all: Vec<(u64, String)> = list
         .as_array()
         .into_iter()
@@ -465,8 +457,6 @@ pub async fn submit(ctx: &CardanoCtx<'_>, tx_cbor: Vec<u8>, tx_id: &str) -> AppR
     Ok(got)
 }
 
-// ---------------------------------------------------------------- building
-
 pub(crate) fn to_assets(m: &AssetMap) -> AppResult<CardanoAssets> {
     let mut by_policy: BTreeMap<[u8; 28], Vec<(Vec<u8>, u64)>> = BTreeMap::new();
     for ((p, n), q) in m {
@@ -484,7 +474,6 @@ pub(crate) fn to_assets(m: &AssetMap) -> AppResult<CardanoAssets> {
     Ok(by_policy
         .into_iter()
         .map(|(p, mut names)| {
-            // Canonical CBOR map order: shorter keys first, then bytewise.
             names.sort_by(|a, b| (a.0.len(), &a.0).cmp(&(b.0.len(), &b.0)));
             (p, names)
         })
@@ -682,7 +671,6 @@ fn finish(
         if fee >= req {
             return Ok(body);
         }
-        // Next pass: new fee, new change (and its min-UTxO is re-checked).
         fee = req;
     }
     Err(AppError::Internal(
@@ -691,9 +679,8 @@ fn finish(
 }
 
 /// Live balance check before signing: every input is one of our unspent UTxOs, and
-/// inputs = outputs + fee, lovelace and every token (no mint, no deposit, no withdrawal are
-/// possible in what wallet-core accepts). Returns the lovelace leaving the wallet (outputs to
-/// other addresses + fee).
+/// inputs = outputs plus fee, for lovelace and every token (wallet-core accepts no mint,
+/// deposit or withdrawal).
 pub fn check_balance(body: &CardanoBody, ours: &[Utxo], own_address: &[u8]) -> AppResult<u64> {
     let mut in_coin = 0u64;
     let mut in_assets = AssetMap::new();
@@ -792,7 +779,6 @@ mod tests {
         };
         let (signed, id, s) = wallet_core::cardano_sign(&root(), 0, 0, &unsigned, &ctx).unwrap();
         assert_eq!(id, s.tx_id);
-        // Fee covers the real signed size, and not by much.
         let fee: u64 = s.fee.parse().unwrap();
         let need = P.min_fee(signed.len() / 2);
         assert!(fee >= need && fee - need < 500, "fee {fee} need {need}");
@@ -820,7 +806,6 @@ mod tests {
             memo: Some("merci".into()),
         };
         let plan = plan(&utxos, &own_b, &spec, &P, 1000).unwrap();
-        // Largest ADA-only UTxO first; the token UTxO is left alone.
         assert_eq!(plan.body.inputs.len(), 1);
         assert_eq!(plan.body.inputs[0].tx_hash, [2; 32]);
         let s = sign_and_check(&plan, &utxos, &own, &own_b);
@@ -848,7 +833,6 @@ mod tests {
         let o = &s.outputs[0];
         assert_eq!(o.lovelace, o.min_lovelace, "min-ADA rides with the token");
         assert_eq!(o.tokens[0].quantity, "4");
-        // Change keeps 6 × "74" and 3 × "75".
         let c = &s.outputs[1];
         assert_eq!(
             c.tokens
@@ -857,7 +841,6 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["6", "3"]
         );
-        // Too little lovelace with a token: refused with the minimum.
         let low = PaymentSpec {
             lovelace: Some(1_000_000),
             ..spec.clone()
@@ -865,7 +848,6 @@ mod tests {
         assert!(
             matches!(plan_err(&utxos, &own_b, &low), AppError::InvalidInput(m) if m.contains("at least"))
         );
-        // More tokens than held.
         let many = PaymentSpec {
             token: Some((POL.into(), "74".into(), 11)),
             ..spec
@@ -889,7 +871,6 @@ mod tests {
             token: None,
             memo: None,
         };
-        // 2 ADA − 1 ADA − fee is below the change's min-UTxO (~0.97 ADA).
         assert!(
             matches!(plan_err(&utxos, &own_b, &spec), AppError::InvalidInput(m) if m.contains("min-UTxO"))
         );
@@ -908,9 +889,7 @@ mod tests {
         };
         let utxos = vec![utxo(1, 5_000_000, &[])];
         let mut p = plan(&utxos, &own_b, &ok, &P, 1).unwrap();
-        // Spent / foreign input.
         assert!(check_balance(&p.body, &[utxo(9, 5_000_000, &[])], &own_b).is_err());
-        // Outputs + fee ≠ inputs.
         p.body.fee += 1;
         assert!(check_balance(&p.body, &utxos, &own_b).is_err());
     }
@@ -931,16 +910,11 @@ mod tests {
     }
 }
 
-/// Real-network test on Cardano preprod over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture ada_live`.
-/// - keys: a NEW random test mnemonic, generated once and kept in the gitignored
-///   `.env.cardano-testnet` at the repository root (preprod only);
-/// - always: network checks (preprod, mainnet, wrong network), parameters, tip, our account, and
-///   a dry build (no signature) from the UTxOs of the public CIP-19 test address;
-/// - `KYRO_ADA_SEND=yes` and the address funded (faucet by hand: it has a captcha): one ADA
-///   payment to our address #1 with a CIP-20 memo, then one native-token payment if we hold
-///   one, through the real path (live checks, dialog text, signature with identical summary,
-///   `submittx`, tx-id check, confirmation).
+/// Real-network test on Cardano preprod over Tor. Run with `cargo test -p kyro-desktop -- --ignored
+/// --nocapture ada_live`. keys: a NEW random test mnemonic, generated once and kept in the
+/// gitignored `.env.cardano-testnet` at the repository root (preprod only); always: network checks
+/// (preprod, mainnet, wrong network), parameters, tip, our account, and a dry build (no signature)
+/// from the UTxOs of the public CIP-19 test address.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -1035,10 +1009,8 @@ mod live {
 
     /// Self-send on preprod from the public CIP-19 test-vector address, whose payment key is
     /// m/1852'/1815'/0'/0/0 of the published test mnemonic (verified in wallet-core's
-    /// `cip19_keys_come_from_the_published_test_mnemonic`): ADA only, minimum fee, back to the
-    /// same address; plus a native-token self-send if it holds a token. Only with
-    /// `KYRO_ADA_SEND=yes`.
-    /// `KYRO_ADA_SEND=yes cargo test -p kyro-desktop --lib -- --ignored --nocapture ada_live_cip19`
+    /// `cip19_keys_come_from_the_published_test_mnemonic`): ADA only, minimum fee, back to the same
+    /// address; plus a native-token self-send if it holds a token.
     #[test]
     #[ignore]
     fn ada_live_cip19_self_send() {

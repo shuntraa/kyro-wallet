@@ -23,18 +23,15 @@ pub struct Session {
     pub last_activity: Instant,
 }
 
-/// Password attempt counter, persisted next to the vault (`coffre-<réseau>.attempts`) so that
-/// restarting the app does not reset the delay.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct Guard {
     failures: u32,
-    /// Unix seconds before which no attempt is accepted.
     retry_after: Option<u64>,
 }
 
-/// Recovery phrase of a vault just created, kept only until the user has written it down and
-/// passed the 3-word check (`vault_backup_*`). Never sent to the webview.
+/// Recovery phrase of a vault just created, kept only until the user has written it down and passed
+/// the 3-word check (`vault_backup_*`).
 pub struct PendingBackup {
     pub words: Zeroizing<Vec<String>>,
     /// The three positions (0-based) the user must type, chosen by Rust.
@@ -69,15 +66,11 @@ pub struct AppState {
     settings: Mutex<Settings>,
     guard: Mutex<Guard>,
     last_reveal: Mutex<Option<Instant>>,
-    /// Custom server `host:port` approved in a native dialog during this session.
     approved_hosts: Mutex<BTreeSet<String>>,
-    /// Bitcoin Core `.cookie` file chosen in the native file picker (the only new cookie path
-    /// `settings_set` / `server_test` accept).
     picked_cookie: Mutex<Option<String>>,
     pending_backup: Mutex<Option<PendingBackup>>,
 }
 
-/// Free attempts before an increasing delay kicks in.
 const FREE_ATTEMPTS: u32 = 5;
 const MAX_DELAY: Duration = Duration::from_secs(15 * 60);
 const REVEAL_COOLDOWN: Duration = Duration::from_secs(10);
@@ -96,15 +89,11 @@ impl Guard {
             .unwrap_or_default()
     }
 
-    /// Seconds to wait before the next attempt, if any. A `retry_after` further away than the
-    /// longest delay (clock moved back, file edited) is clamped to that delay.
     fn wait(&self, now: u64) -> Option<u64> {
         let until = self.retry_after?;
         (until > now).then(|| (until - now).min(MAX_DELAY.as_secs()).max(1))
     }
 
-    /// Counts one attempt as failed *before* it runs (it is reset if it succeeds), so parallel
-    /// attempts cannot all slip through the same check.
     fn reserve(&mut self, now: u64) -> AppResult<()> {
         if let Some(s) = self.wait(now) {
             return Err(AppError::RateLimited(s));
@@ -121,7 +110,6 @@ impl Guard {
 
 impl AppState {
     pub fn new(data_dir: PathBuf) -> AppResult<Self> {
-        // Env `KYRO_NETWORK` > saved choice (`network.json`) > build default (network.rs).
         let (network, network_source) = crate::network::startup(&data_dir);
         let settings_path = data_dir.join("settings.json");
         let vault_path = crate::network::vault_file(&data_dir, network);
@@ -152,8 +140,6 @@ impl AppState {
         })
     }
 
-    // ---- vault file ----
-
     /// App data directory (holds the vault, settings, Tor and CBF state).
     #[cfg_attr(not(feature = "cbf"), allow(dead_code))]
     pub fn data_dir(&self) -> PathBuf {
@@ -173,13 +159,10 @@ impl AppState {
         Ok(serde_json::from_str(&raw)?)
     }
 
-    /// Writes a NEW vault: fails if one already exists (never overwrites). The caller holds
-    /// [`AppState::vault_create_lock`].
+    /// Writes a NEW vault: fails if one already exists (never overwrites).
     pub fn write_new_vault(&self, file: &VaultFile) -> AppResult<()> {
         crate::settings::write_new(&self.vault_path, serde_json::to_string(file)?.as_bytes())
     }
-
-    // ---- session ----
 
     pub fn start_session(&self, seed: Seed, cardano: CardanoRoot, polkadot: PolkadotRoot) {
         *lock(&self.session) = Some(Session {
@@ -254,8 +237,6 @@ impl AppState {
         was
     }
 
-    // ---- password attempt limiting ----
-
     /// Reserves one password attempt under the same lock as the check (the attempt counts as
     /// failed until [`AppState::attempt_succeeded`]) and persists the counter on disk.
     pub fn reserve_attempt(&self) -> AppResult<()> {
@@ -294,8 +275,6 @@ impl AppState {
         Ok(())
     }
 
-    // ---- recovery phrase backup (vault creation) ----
-
     pub fn set_pending_backup(&self, b: PendingBackup) {
         *lock(&self.pending_backup) = Some(b);
     }
@@ -314,8 +293,6 @@ impl AppState {
         f(&mut g)
     }
 
-    // ---- custom servers approved natively ----
-
     pub fn approved_hosts(&self) -> BTreeSet<String> {
         lock(&self.approved_hosts).clone()
     }
@@ -332,8 +309,6 @@ impl AppState {
         lock(&self.picked_cookie).clone()
     }
 
-    // ---- settings ----
-
     pub fn settings(&self) -> Settings {
         lock(&self.settings).clone()
     }
@@ -345,7 +320,6 @@ impl AppState {
         let mut current = lock(&self.settings);
         new.accounts = current.accounts.clone();
         new.save(&self.settings_path)?;
-        // The next native dialog speaks the newly chosen language.
         crate::i18n::apply(new.language);
         *current = new.clone();
         Ok(new)
@@ -373,8 +347,6 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use super::*;
 
-    /// F1: attempts are counted before they run, so N parallel attempts cannot all pass one
-    /// check; the delay survives a restart (persisted) and a clock moved back is clamped.
     #[test]
     fn attempts_reserved_and_persisted() {
         let mut g = Guard::default();
@@ -382,18 +354,15 @@ mod tests {
         for _ in 0..FREE_ATTEMPTS {
             g.reserve(now).unwrap();
         }
-        // The 5th reservation already armed the delay for the 6th, even if 5 run in parallel.
         assert!(matches!(g.reserve(now), Err(AppError::RateLimited(30))));
         assert!(g.reserve(now + 31).is_ok());
         assert!(matches!(
             g.reserve(now + 31),
             Err(AppError::RateLimited(60))
         ));
-        // Persisted form round-trips.
         let json = serde_json::to_string(&g).unwrap();
         let back: Guard = serde_json::from_str(&json).unwrap();
         assert_eq!(back, g);
-        // Clock moved back by a day: the wait is clamped to the longest delay.
         assert_eq!(g.wait(now - 86_400), Some(MAX_DELAY.as_secs()));
 
         let dir = std::env::temp_dir().join(format!("kyro-attempts-{}", std::process::id()));

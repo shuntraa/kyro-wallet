@@ -2,32 +2,8 @@
 //! Trezor Safe 7 (T3W1) and later models, over the same WebUSB interface and 64-byte packets
 //! as the older models.
 //!
-//! Specification: trezor-firmware `docs/common/thp/specification.md` and `sessions.md`.
-//! Cross-checked against python-trezorlib (`trezorlib/thp/`), Trezor Suite
-//! (`@trezor/protocol`, `protocol-thp`) and, in the tests, Trezor's own device-side Rust crate
-//! `trezor-thp` (the code that runs in the firmware, see `thp_sim.rs`).
-//!
-//! Layers, as implemented here:
-//! - **Transport**: control byte + channel id + length, CRC-32 (IEEE) over each payload,
-//!   segmentation into 64-byte packets, Alternating Bit Protocol (1-bit sequence number, explicit
-//!   ACKs, retransmission). Kyro never asks for ACK piggybacking (protocol 2.1 option), so the
-//!   device stays in the simpler half-duplex 2.0 mode.
-//! - **Handshake**: `Noise_XX_25519_AESGCM_SHA256` (crate `snow`), prologue = the device
-//!   properties of the channel allocation response. The device presents a *masked* static key
-//!   `X25519(SHA-256(S ‖ e), S)`, so a credential can only be matched by a host that already
-//!   knows `S`.
-//! - **Pairing**: Code Entry only (the only method production firmware offers): the device shows
-//!   a 6-digit code, the user types it into Kyro, CPace over Curve25519 proves both sides know
-//!   it, and the device's commitment/secret proves the code was not chosen after seeing Kyro's
-//!   challenge.
-//! - **Credentials**: after pairing, the device issues an opaque credential bound to Kyro's
-//!   static key; stored by [`super::thp_store`]. With it, later connections skip the code (the
-//!   device still asks to confirm the connection, Kyro never requests "autoconnect").
-//! - **Application**: session byte + message type + protobuf: the same messages as protocol v1
-//!   (`GetPublicKey`, `SignTx`, `EthereumSignTxEIP1559`, `SolanaSignTx`…).
-//!
-//! Every wait is bounded by the caller's deadline and cancellation flag (checked between
-//! 100 ms reads) and by a retransmission budget.
+//! Kyro never asks for ACK piggybacking (protocol 2.1 option), so the device stays in the simpler
+//! half-duplex 2.0 mode.
 
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
@@ -80,7 +56,6 @@ const ERR_LOCKED: u8 = 5;
 pub const ACK_TIMEOUT: Duration = Duration::from_millis(if cfg!(test) { 60 } else { 500 });
 /// Retransmissions of one message before the channel is declared dead (spec suggests ≤ 50).
 pub const MAX_RETRANSMISSIONS: u32 = 10;
-/// Channel allocation: attempts, and wait per attempt (no ACK on the broadcast channel).
 const ALLOC_ATTEMPTS: u32 = 3;
 const ALLOC_WAIT: Duration = Duration::from_secs(2);
 
@@ -113,25 +88,18 @@ pub const STATE_PAIRED: u8 = 1;
 pub const STATE_PAIRED_AUTOCONNECT: u8 = 2;
 
 const NOISE_PARAMS: &str = "Noise_XX_25519_AESGCM_SHA256";
-/// Largest handshake message on the wire (init response: 32 + 48 + 16; completion request
-/// carries a credential of at most a few hundred bytes).
 const HANDSHAKE_BUF: usize = 4096;
 /// Maximum credential size: the device-side limit of Trezor's `trezor-thp` (firmware
 /// credentials are ~50 bytes: metadata + 32-byte MAC).
 pub const MAX_CREDENTIAL_LEN: usize = 128;
 
-// ---------------------------------------------------------------- packet I/O
-
 /// 64-byte packet link (WebUSB interrupt endpoints, or a simulated device in tests).
 pub trait PacketIo: Send {
     fn write_packet(&mut self, packet: &Packet) -> HwResult<()>;
-    /// Waits at most one short slice (≤ [`super::POLL`]); `None` when nothing arrived.
     fn read_packet(&mut self) -> HwResult<Option<Packet>>;
 }
 
-/// CRC-32/ISO-HDLC ("CRC-32-IEEE", reflected polynomial 0xEDB88320), as THP specifies. This is
-/// the transport's error-detection code, not a security measure (AES-GCM authenticates the
-/// encrypted traffic). Bitwise implementation: messages are small, speed is irrelevant.
+/// CRC-32/ISO-HDLC ("CRC-32-IEEE", reflected polynomial 0xEDB88320), as THP specifies.
 pub fn crc32(data: &[u8]) -> u32 {
     let mut crc = !0u32;
     for &b in data {
@@ -234,9 +202,7 @@ fn is_data(cb: u8) -> bool {
     cb & DATA_DETECT_MASK == 0
 }
 
-/// Sequence bit of a data frame. The exact handshake control bytes without the bit set map
-/// like python-trezorlib does (`HANDSHAKE_SEQ_BITS`), for early Safe 7 firmware that did not
-/// toggle it on the handshake (fixed in 2.9.4, `#6138`).
+/// Sequence bit of a data frame.
 pub fn seq_bit(cb: u8) -> bool {
     match cb {
         HS_INIT_REQ | HS_INIT_RES => false,
@@ -260,7 +226,6 @@ fn transport_error(code: Option<u8>) -> HwError {
     match code {
         Some(ERR_LOCKED) => HwError::Locked,
         Some(ERR_BUSY) => HwError::Busy("the device is busy with another channel".into()),
-        // The device dropped the channel (restart, too many hosts) or could not decrypt.
         Some(ERR_UNALLOCATED) | Some(ERR_DECRYPTION) => HwError::Disconnected,
         other => HwError::bad(format!("THP transport error {other:?}")),
     }
@@ -277,8 +242,6 @@ fn snow_err(e: snow::Error) -> HwError {
     HwError::bad(format!("THP handshake: {e}"))
 }
 
-// ---------------------------------------------------------------- crypto helpers
-
 /// `X25519(SHA-256(S ‖ e), S) == masked`: does stored device key `S` explain the masked static
 /// key presented with ephemeral key `e` (spec state HH1, step 11)?
 pub fn mask_matches(trezor_static: &[u8; 32], ephemeral: &[u8; 32], masked: &[u8; 32]) -> bool {
@@ -289,8 +252,6 @@ pub fn mask_matches(trezor_static: &[u8; 32], ephemeral: &[u8; 32], masked: &[u8
     MontgomeryPoint(*trezor_static).mul_clamped(mask).to_bytes() == *masked
 }
 
-/// CPace generator string (draft-irtf-cfrg-cpace, CPace255, symmetric setting, empty sid and
-/// associated data): `lv(DSI) ‖ lv(code) ‖ lv(zpad) ‖ lv(handshake hash) ‖ lv(sid)`.
 fn cpace_generator_string(code: &[u8; 6], handshake_hash: &[u8; 32]) -> Vec<u8> {
     let mut s = vec![0x08, b'C', b'P', b'a', b'c', b'e', b'2', b'5', b'5', 0x06];
     s.extend(code);
@@ -304,14 +265,10 @@ fn cpace_generator_string(code: &[u8; 6], handshake_hash: &[u8; 32]) -> Vec<u8> 
 
 /// `X25519(k, G)` for the CPace generator `G = ELLIGATOR2(SHA-512(gen_str)[..32])`.
 ///
-/// curve25519-dalek 4.1.3 exposes its Elligator2 map (`montgomery::elligator_encode`, the
-/// RFC 9380 `map_to_curve_elligator2` for Curve25519) only through
-/// `EdwardsPoint::nonspec_map_to_curve::<Sha512>(bytes)`, which hashes `bytes` with SHA-512,
-/// maps the first 32 bytes (top bit ignored, as RFC 7748 `decodeUCoordinate`) and returns
-/// `8·G`. Because X25519 clamps `k` to a multiple of 8, `X25519(k, G) = u((clamp(k) / 8) · 8G)`
-/// exactly; `clamp(k) / 8 < 2^252 < ℓ`, so it is a canonical scalar and `8G` has order ℓ (or is
-/// the identity, rejected). No field arithmetic is done here; checked against trezorlib's own
-/// pure-Python CPace (tests).
+/// curve25519-dalek 4.1.3 exposes its Elligator2 map (`montgomery::elligator_encode`, the RFC 9380
+/// `map_to_curve_elligator2` for Curve25519) only through
+/// `EdwardsPoint::nonspec_map_to_curve::<Sha512>(bytes)`, which hashes `bytes` with SHA-512, maps
+/// the first 32 bytes (top bit ignored, as RFC 7748 `decodeUCoordinate`) and returns `8·G`.
 fn cpace_public(gen_str: &[u8], k: &[u8; 32]) -> HwResult<[u8; 32]> {
     #[allow(deprecated)] // the "nonspec" name refers to the hashing step, which matches CPace
     let g8 = EdwardsPoint::nonspec_map_to_curve::<Sha512>(gen_str);
@@ -393,8 +350,6 @@ pub fn code_entry_value(handshake_hash: &[u8; 32], secret: &[u8], challenge: &[u
 fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
-
-// ---------------------------------------------------------------- channel
 
 /// What the device advertised in the channel allocation response.
 #[derive(Debug, Clone)]
@@ -529,7 +484,6 @@ impl<P: PacketIo> Channel<P> {
         Ok(())
     }
 
-    /// Sends one data payload and waits for its ACK, retransmitting on timeout (ABP sender).
     fn send_reliable(&mut self, limit: &Mutex<Limit>, cb: u8, data: &[u8]) -> HwResult<()> {
         let cb = cb | if self.send_bit { SEQ_BIT } else { 0 };
         let pkts = packets(cb, self.cid, data)?;
@@ -569,19 +523,14 @@ impl<P: PacketIo> Channel<P> {
                 if is_data(f.cb) {
                     let s = seq_bit(f.cb);
                     if s != self.recv_bit {
-                        // Our ACK of the device's previous message was lost: ACK it again.
                         self.send_ack(s)?;
                     }
-                    // Otherwise the device answered before ACKing (impossible in half-duplex
-                    // mode): ignore it, the device resends it until we ACK.
                 }
             }
         }
         Err(HwError::Disconnected)
     }
 
-    /// Waits for the next data payload from the device (ABP receiver), ACKs it, drops
-    /// duplicates.
     fn recv(&mut self, limit: &Mutex<Limit>) -> HwResult<Frame> {
         loop {
             check(limit)?;
@@ -607,8 +556,6 @@ impl<P: PacketIo> Channel<P> {
         }
     }
 
-    /// Noise XX handshake (spec states HH0–HH3). `try_to_unlock` asks a locked device to show
-    /// its PIN screen instead of answering `DEVICE_LOCKED`.
     pub fn handshake(
         &mut self,
         limit: &Mutex<Limit>,
@@ -697,7 +644,6 @@ impl<P: PacketIo> Channel<P> {
             return Err(HwError::bad("invalid THP state"));
         }
         if matched.is_none() && state[0] != STATE_UNPAIRED {
-            // HH3: without a credential the device cannot say "paired".
             return Err(HwError::bad(
                 "the device claims to be paired without a credential",
             ));
@@ -711,7 +657,6 @@ impl<P: PacketIo> Channel<P> {
         })
     }
 
-    /// Encrypted application message: `session ‖ type (BE) ‖ protobuf`.
     pub fn send_app(
         &mut self,
         limit: &Mutex<Limit>,
@@ -754,8 +699,6 @@ impl<P: PacketIo> Channel<P> {
     }
 }
 
-// ---------------------------------------------------------------- pairing & credentials
-
 fn decode<M: Message>(data: &[u8], what: &str) -> HwResult<M> {
     M::parse_from_bytes(data).map_err(|e| HwError::bad(format!("invalid {what}: {e}")))
 }
@@ -781,8 +724,6 @@ fn pairing_failure(data: &[u8], wrong_code: bool) -> HwError {
 }
 
 impl<P: PacketIo> Channel<P> {
-    /// One request in the pairing/credential phase (session 0). Button requests are
-    /// acknowledged and reported to the UI as `prompt`.
     fn pairing_call(
         &mut self,
         limit: &Mutex<Limit>,
@@ -792,7 +733,6 @@ impl<P: PacketIo> Channel<P> {
         expect: u16,
         prompt: Prompt,
     ) -> HwResult<Vec<u8>> {
-        // A data error answering Kyro's CPace tag means the typed code was wrong.
         let wrong_code = msg_type == mt::CODE_ENTRY_CPACE_HOST_TAG;
         self.send_app(limit, 0, msg_type, payload)?;
         loop {
@@ -809,8 +749,6 @@ impl<P: PacketIo> Channel<P> {
         }
     }
 
-    /// Code Entry pairing (spec states HP0–HP5). Returns once the device has revealed a
-    /// secret that matches both its commitment and the code the user typed.
     pub fn pair_code_entry(&mut self, limit: &Mutex<Limit>, ctl: &Ctl) -> HwResult<()> {
         if !self.props.pairing_methods.contains(&METHOD_CODE_ENTRY) {
             return Err(HwError::unsupported(
@@ -866,7 +804,6 @@ impl<P: PacketIo> Channel<P> {
             .try_into()
             .map_err(|_| HwError::bad("CPace key of invalid size"))?;
 
-        // The device now shows the code: the user types it into Kyro.
         ctl.prompt(Prompt::ThpPairingCode);
         let typed = ctl.wait_pairing_code()?;
         let code: [u8; 6] = typed
@@ -892,8 +829,8 @@ impl<P: PacketIo> Channel<P> {
             "secret",
         )?;
         let secret = Zeroizing::new(s.secret().to_vec());
-        // HP5: the secret must match the commitment sent *before* Kyro's challenge, and give
-        // the code the user typed. Otherwise the peer is not the device that showed the code.
+        // HP5: the secret must match the commitment sent *before* Kyro's challenge, and give the
+        // code the user typed.
         let committed: [u8; 32] = Sha256::digest(&secret[..]).into();
         if !ct_eq(&committed, &commitment)
             || !ct_eq(
@@ -947,8 +884,6 @@ impl<P: PacketIo> Channel<P> {
         Ok((key, cred))
     }
 
-    /// `ThpEndRequest`: leaves the pairing/credential phase. A paired, non-autoconnect host is
-    /// asked to confirm the connection on the device here.
     pub fn end_pairing_phase(&mut self, limit: &Mutex<Limit>, ctl: &Ctl) -> HwResult<()> {
         self.pairing_call(
             limit,
@@ -961,7 +896,6 @@ impl<P: PacketIo> Channel<P> {
         .map(|_| ())
     }
 
-    /// Best effort: ask the device to leave a pending dialog (pairing code screen, PIN…).
     fn abort(&mut self, limit: &Mutex<Limit>) {
         {
             let mut l = lock(limit);
@@ -974,15 +908,8 @@ impl<P: PacketIo> Channel<P> {
     }
 }
 
-/// The only thing Kyro tells the device about itself, as both `host_name` and `app_name` of
-/// `ThpPairingRequest` (shown on the device's pairing screen and kept in the credential's
-/// metadata). Deliberately **not** the computer's name (privacy); the protocol needs no
-/// uniqueness here: credentials are bound to Kyro's host key, not to this label.
 pub const THP_LABEL: &str = "Kyro Wallet";
 
-/// Allocates a channel, runs the handshake (with the stored credential when the device is
-/// known), pairs when needed and allowed, and returns a channel in the encrypted transport
-/// state. On failure the device is asked to leave any pending dialog.
 pub fn connect<P: PacketIo>(
     io: P,
     limit: &Mutex<Limit>,
@@ -1000,8 +927,6 @@ pub fn connect<P: PacketIo>(
     let hs = match ch.handshake(limit, &host_key, &known, false) {
         Ok(hs) => hs,
         Err(HwError::Locked) => {
-            // Locked device: a new channel, and this time the device shows its PIN screen
-            // during the handshake (spec "try_to_unlock").
             ctl.prompt(Prompt::PinOnDevice);
             ch = Channel::allocate(ch.io, limit)?;
             ch.handshake(limit, &host_key, &known, true)?
@@ -1036,7 +961,6 @@ fn finish<P: PacketIo>(
         }
         (_, matched) => {
             if let Some(i) = matched {
-                // The device no longer accepts this credential (reset, hosts forgotten).
                 env.remove(&known[i].trezor_key)?;
             }
             if !ctl.pairing_allowed() {
@@ -1059,8 +983,6 @@ fn finish<P: PacketIo>(
     ch.end_pairing_phase(limit, ctl)
 }
 
-/// Test-only hooks: a fixed host ephemeral key and a record of the handshake messages (for
-/// the fixed-key transcript cross-checked against Trezor Suite). No-ops in normal builds.
 mod test_hooks {
     #[cfg(test)]
     use std::cell::RefCell;

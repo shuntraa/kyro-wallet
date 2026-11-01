@@ -1,9 +1,6 @@
 //! Hardware wallets for Litecoin, Dogecoin, Bitcoin Cash, Dash, XRP, TRON, Stellar, Cardano and
-//! Zcash (transparent): which
-//! device / app supports what, and the device calls (keys, address on screen, signature) of
-//! these chains on top of [`HardwareWallet::raw`]. Nothing returned here is trusted: the
-//! commands (`commands_hw*.rs`) compare keys with the stored account and verify signatures in
-//! `wallet-core`.
+//! Zcash (transparent): which device / app supports what, and the device calls (keys, address on
+//! screen, signature) of these chains on top of [`HardwareWallet::raw`].
 //!
 //! | chain | Ledger app (min) | Trezor |
 //! |---|---|---|
@@ -30,13 +27,10 @@ use super::{
 };
 use wallet_core::{CardanoHwPlan, ZecAccount, ZecHwPlan};
 
-/// Why Zcash is not offered on Ledger. Ledger's Zcash (transparent) app is the legacy Bitcoin
-/// app protocol: every previous transaction must be streamed in full through GET TRUSTED INPUT,
-/// and for v5 previous transactions that includes their Sapling / Orchard bundles, from which
-/// the app recomputes the ZIP-244 txid (`@ledgerhq/hw-app-btc` `getTrustedInput`,
-/// `splitTransaction`). Kyro does not parse those bundles itself, Ledger publishes no recorded
-/// v5 exchanges to test against, and its own host library already refuses v6 previous
-/// transactions ("sign them through the Zcash signer kit"): not done without a device.
+/// Why Zcash is not offered on Ledger. Ledger's Zcash (transparent) app is the legacy Bitcoin app
+/// protocol: every previous transaction must be streamed in full through GET TRUSTED INPUT, and for
+/// v5 previous transactions that includes their Sapling / Orchard bundles, from which the app
+/// recomputes the ZIP-244 txid (`@ledgerhq/hw-app-btc` `getTrustedInput`, `splitTransaction`).
 pub const ZEC_LEDGER_REASON: &str = "Zcash: not supported on Ledger in Kyro (the Zcash app requires every previous transaction in full, shielded parts included) — use a Trezor or the Kyro vault";
 
 pub fn utxo_coin(chain: Chain) -> Option<UtxoCoin> {
@@ -66,8 +60,6 @@ pub fn handles(chain: Chain) -> bool {
             Chain::Xrp | Chain::Tron | Chain::Stellar | Chain::Cardano | Chain::Zec
         )
 }
-
-// ---------------------------------------------------------------- support tables
 
 /// Ledger app (name, minimum version) for `chain` on `net`.
 pub fn ledger_app(chain: Chain, net: Network) -> Option<(&'static str, &'static str)> {
@@ -103,8 +95,7 @@ pub fn ledger_unavailable(chain: Chain, net: Network) -> Option<ChainStatus> {
     })
 }
 
-/// Trezor capability and minimum firmware for `chain`; `Err(Some(reason))` when the device
-/// cannot do it, `Err(None)` when Kyro does not offer it.
+/// Trezor capability and minimum firmware for `chain`.
 pub fn trezor_support(
     chain: Chain,
     one: bool,
@@ -134,8 +125,6 @@ pub fn trezor_support(
     }
 }
 
-// ---------------------------------------------------------------- paths
-
 pub fn utxo_account_path(coin: UtxoCoin, net: Network, account: u32) -> [u32; 3] {
     let purpose = if coin == UtxoCoin::Litecoin { 84 } else { 44 };
     let coin_type = match (coin, net) {
@@ -156,8 +145,6 @@ pub fn key_path(chain: Chain, account: u32) -> HwResult<Vec<u32>> {
         other => return Err(HwError::unsupported(other.label())),
     })
 }
-
-// ---------------------------------------------------------------- Ledger plumbing
 
 /// One APDU through `link`; a non-`9000` status is a typed error (wrong-app codes completed
 /// with the open app's name).
@@ -254,8 +241,6 @@ fn fingerprint_of(pubkey: &[u8; 33]) -> [u8; 4] {
     fp
 }
 
-/// Account xpub from three GET WALLET PUBLIC KEY: the master key (fingerprint), the parent
-/// (parent fingerprint) and the account node (key + chain code).
 fn ledger_utxo_account(
     link: &dyn ApduLink,
     ctl: &Ctl,
@@ -288,8 +273,6 @@ fn ledger_utxo_account(
     })
 }
 
-// ---------------------------------------------------------------- Trezor plumbing
-
 fn tsend<M: TrezorMessage, R: TrezorMessage>(
     t: &mut dyn TrezorDevice,
     ctl: &Ctl,
@@ -318,8 +301,6 @@ fn trezor_utxo_account(
         path: path_string(&path),
     })
 }
-
-// ---------------------------------------------------------------- keys
 
 /// What [`read_keys`] read for one chain.
 #[derive(Debug, Clone, Default)]
@@ -386,7 +367,6 @@ fn watch_key(chain: Chain, account: u32, pubkey: &[u8], address: String) -> HwRe
     })
 }
 
-/// XRP / TRON / Stellar key, checked: the address the device reports is the key's.
 fn ledger_key(
     link: &dyn ApduLink,
     ctl: &Ctl,
@@ -560,8 +540,6 @@ pub enum Target {
     },
 }
 
-/// Strips a CashAddr prefix (`bitcoincash:`, `bchtest:`): the Ledger app shows and returns the
-/// address without it.
 fn without_prefix(a: &str) -> &str {
     a.rsplit(':').next().unwrap_or(a)
 }
@@ -671,7 +649,6 @@ pub fn display_address(
         }
         (RawDevice::Ledger(link), Target::Cardano) => {
             let app = ledger_ensure(link, ctl, Chain::Cardano, net)?;
-            // The address the app derives from the two paths, then the same one on its screen.
             let raw = ledger_call(
                 link,
                 ctl,
@@ -706,8 +683,6 @@ pub fn display_address(
         )),
     }
 }
-
-// ---------------------------------------------------------------- signatures
 
 pub fn sign_utxo(
     dev: &mut dyn HardwareWallet,
@@ -781,8 +756,7 @@ pub fn sign_tron(
     }
 }
 
-/// Ed25519 signature of a Stellar envelope (Ledger: over the signature base; Trezor: the
-/// firmware rebuilds the transaction from its fields).
+/// Ed25519 signature of a Stellar envelope (Ledger: over the signature base.
 pub fn sign_stellar(
     dev: &mut dyn HardwareWallet,
     ctl: &Ctl,
@@ -862,7 +836,6 @@ mod tests {
     use std::sync::Mutex;
     use std::time::Duration;
 
-    /// Plays back `(apdu, response)` pairs; fails on any deviation.
     struct Replay(Mutex<Vec<(Vec<u8>, Vec<u8>)>>);
 
     impl ApduLink for Replay {
@@ -930,8 +903,6 @@ mod tests {
         );
     }
 
-    /// A Ledger with the Stellar app: the key is read with GET PUBLIC KEY, its address is the
-    /// stored one; with the XRP app open instead, the error names both apps.
     #[test]
     fn ledger_stellar_key_and_wrong_app() {
         let seed = wallet_core::Mnemonic::parse(
@@ -962,7 +933,6 @@ mod tests {
                 open: "XRP".into()
             }
         );
-        // An old app is refused with its minimum version.
         let mut l = Ledger::with_link(Replay(Mutex::new(vec![app("Stellar", "4.1.0")])));
         assert!(matches!(
             read_keys(&mut l, &ctl(), Network::Mainnet, Chain::Stellar, 0),
@@ -1009,7 +979,6 @@ mod tests {
             read_keys(&mut l, &ctl(), Network::Mainnet, Chain::Xrp, 0),
             Err(HwError::BadResponse(_))
         ));
-        // The user refuses a TRON signature on the device (6985).
         let raw = vec![0x0a, 0x02, 0x01, 0x02];
         let sign = ledger_coins::tron_sign(&key_path(Chain::Tron, 0).unwrap(), &raw).unwrap();
         let mut l = Ledger::with_link(Replay(Mutex::new(vec![
@@ -1068,7 +1037,6 @@ mod tests {
         let want = wallet_core::utxo_account(&seed, Network::Mainnet, coin, 0).unwrap();
         assert_eq!(got, want);
         let _ = bitcoin::bip32::Xpub::from_str(&got.xpub).unwrap();
-        // Testnet: no Ledger app, refused before talking to the device.
         let mut l = Ledger::with_link(Replay(Mutex::new(vec![])));
         assert!(matches!(
             read_keys(&mut l, &ctl(), Network::Testnet, Chain::Doge, 0),

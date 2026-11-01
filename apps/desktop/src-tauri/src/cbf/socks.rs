@@ -1,15 +1,4 @@
 //! Loopback SOCKS5 bridge from bip157 to our embedded Tor (arti), locked down:
-//!
-//! - bound to 127.0.0.1 on a random port, and only alive while a CBF sync/broadcast runs
-//!   (dropping [`SocksBridge`] closes the listener);
-//! - no authentication (bip157 only speaks SOCKS5 "no auth"), so instead it accepts CONNECT
-//!   **only** to the exact peers Kyro handed to bip157 (onion name or IP + port). Anything else
-//!   gets reply 0x02 "connection not allowed by ruleset": another local program cannot use it
-//!   as a general Tor proxy;
-//! - hostnames other than allowlisted `.onion` names are refused: no DNS ever happens;
-//! - SOCKS4 and non-CONNECT commands are refused.
-//!
-//! Parsing is arti's own `tor-socksproto`.
 
 use std::collections::HashSet;
 use std::future::Future;
@@ -162,7 +151,6 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    /// Fake upstream: an echo server on an in-memory pipe, counting opens.
     struct Echo(AtomicUsize);
 
     impl Upstream for Echo {
@@ -249,7 +237,6 @@ mod tests {
             let mut back = [0u8; 4];
             s.read_exact(&mut back).await.unwrap();
             assert_eq!(&back, b"ping");
-            // Allowed IPv4.
             assert_eq!(
                 socks5(bridge.addr, &[1, 203, 132, 94, 196], 48333).await.0,
                 0
@@ -259,7 +246,6 @@ mod tests {
             assert_eq!(socks5(bridge.addr, &[1, 8, 8, 8, 8], 48333).await.0, 2);
             let other = "fsijrllgzgeg4pa5ebq4qy3swmplxkzvuvji5swt36quy42dznq3t3ad.onion";
             assert_eq!(socks5(bridge.addr, &domain(other), 48333).await.0, 2);
-            // A DNS hostname is refused without any lookup.
             assert_eq!(
                 socks5(bridge.addr, &domain("seed.testnet4.wiz.biz"), 48333)
                     .await
@@ -283,7 +269,6 @@ mod tests {
         run(async {
             let up = Arc::new(Echo(AtomicUsize::new(0)));
             let bridge = SocksBridge::start(up.clone(), allowed()).await.unwrap();
-            // SOCKS4 CONNECT to an allowed IP.
             let mut s = TcpStream::connect(bridge.addr).await.unwrap();
             s.write_all(&[4, 1, 0xbc, 0xcd, 203, 132, 94, 196, 0])
                 .await
@@ -291,7 +276,6 @@ mod tests {
             let mut rep = [0u8; 8];
             s.read_exact(&mut rep).await.unwrap();
             assert_ne!(rep[1], 0x5a, "SOCKS4 must not succeed");
-            // SOCKS5 BIND (0x02) and UDP ASSOCIATE (0x03).
             for cmd in [2u8, 3u8] {
                 let mut s = TcpStream::connect(bridge.addr).await.unwrap();
                 s.write_all(&[5, 1, 0]).await.unwrap();

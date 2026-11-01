@@ -1,9 +1,8 @@
 //! Ledger over USB HID (hidapi): Bitcoin app v2 (Ledger's `ledger_bitcoin_client`, PSBT +
 //! default wallet policies), Ethereum app (EIP-1559, ERC-20 descriptors), Solana app.
 //!
-//! The right app must be open on the device: "Bitcoin Test" on testnet / "Bitcoin" on
-//! mainnet, "Ethereum" (all EVM chains), "Solana". Kyro checks it with GET APP AND VERSION
-//! before every operation and answers `HW_WRONG_APP { expected, open }` otherwise.
+//! The right app must be open on the device: "Bitcoin Test" on testnet / "Bitcoin" on mainnet,
+//! "Ethereum" (all EVM chains), "Solana".
 
 use std::ffi::CString;
 use std::str::FromStr;
@@ -46,7 +45,6 @@ pub fn app_for(chain: Chain, net: Network) -> Option<(&'static str, &'static str
     }
 }
 
-/// Ledger apps for the phase-4 chains (informative, shown by `hw_open`).
 fn phase4_app(chain: Chain) -> Option<&'static str> {
     match chain {
         Chain::Ltc => Some("Litecoin"),
@@ -84,7 +82,6 @@ pub fn model_of(pid: u16) -> &'static str {
     }
 }
 
-/// hidapi allows a single `HidApi` per process.
 fn hidapi() -> &'static Mutex<Option<HidApi>> {
     static API: OnceLock<Mutex<Option<HidApi>>> = OnceLock::new();
     API.get_or_init(|| Mutex::new(None))
@@ -105,7 +102,6 @@ pub fn enumerate() -> Vec<Found> {
         if d.vendor_id() != VENDOR_ID {
             continue;
         }
-        // The APDU interface: usage page 0xffa0 (Windows, macOS), interface 0 (Linux hidraw).
         let apdu_iface =
             d.usage_page() == USAGE_PAGE || (d.usage_page() == 0 && d.interface_number() == 0);
         if !apdu_iface {
@@ -140,7 +136,6 @@ pub fn open(loc: &Locator, model: &str) -> HwResult<Box<dyn HardwareWallet>> {
 
 /// Raw APDU exchange. `HidLink` in the app, a recorded replay in tests.
 pub trait ApduLink: Send {
-    /// Sends one APDU, returns `(data, status word)`.
     fn exchange(&self, ctl: &Ctl, apdu: &[u8]) -> HwResult<(Vec<u8>, u16)>;
 }
 
@@ -151,7 +146,6 @@ pub struct HidLink {
 impl ApduLink for HidLink {
     fn exchange(&self, ctl: &Ctl, apdu_bytes: &[u8]) -> HwResult<(Vec<u8>, u16)> {
         ctl.check()?;
-        // Drop whatever a previously abandoned exchange left in the input queue.
         let mut junk = [0u8; apdu::PACKET];
         for _ in 0..64 {
             match self.dev.read_timeout(&mut junk, 0) {
@@ -207,7 +201,6 @@ impl<L: ApduLink> Ledger<L> {
         apdu::parse_app_and_version(&data)
     }
 
-    /// Fails unless the app for `chain` is open, recent enough.
     fn ensure_app(&self, ctl: &Ctl, chain: Chain, net: Network) -> HwResult<()> {
         let (expected, min) = app_for(chain, net)
             .ok_or_else(|| HwError::unsupported(format!("{} on Ledger", chain.label())))?;
@@ -227,7 +220,6 @@ impl<L: ApduLink> Ledger<L> {
         Ok(())
     }
 
-    /// Exchange + status word check. Wrong-app codes are completed with the open app name.
     fn call(&self, ctl: &Ctl, cmd: &[u8], ctx: SwContext, expected_app: &str) -> HwResult<Vec<u8>> {
         let (data, sw) = self.link.exchange(ctl, cmd)?;
         if sw == SW_OK {
@@ -258,9 +250,6 @@ impl<L: ApduLink> Ledger<L> {
     }
 }
 
-/// Adapter for `ledger_bitcoin_client`: only `9000` and `E000` (interrupted, the client's
-/// interactive protocol) are passed through; every other status word becomes a typed error
-/// here, so locked / wrong app / refused are reported precisely.
 struct BtcTransport<'a, L: ApduLink> {
     ledger: &'a Ledger<L>,
     ctl: &'a Ctl,
@@ -276,7 +265,6 @@ impl<L: ApduLink> ledger_bitcoin_client::Transport for BtcTransport<'_, L> {
         match sw {
             SW_OK => Ok((StatusWord::OK, data)),
             0xE000 => Ok((StatusWord::InterruptedExecution, data)),
-            // SIGN_PSBT (0x04), GET_WALLET_ADDRESS with display (0x03): the user may refuse.
             other => {
                 let ctx = if matches!(cmd.ins, 0x03 | 0x04) {
                     SwContext::Signing
@@ -592,7 +580,6 @@ mod tests {
 
     type Exchange = (Vec<u8>, Vec<u8>);
 
-    /// Plays back a recorded `=> apdu` / `<= response` script; fails on any deviation.
     struct Replay {
         script: Mutex<Vec<Exchange>>,
     }
@@ -631,9 +618,6 @@ mod tests {
         "<= 010c426974636f696e205465737405322e312e3001009000",
     ];
 
-    /// Ledger's recorded `get_wallet_address` vector (ledger_bitcoin_client tests,
-    /// tests/data/get_wallet_address.json, case 0: default `tr(@0/**)`, address 0, display),
-    /// replayed through Kyro's transport adapter and policy builder.
     #[test]
     fn official_taproot_wallet_address_vector() {
         let mut lines = APP_BTC_TEST.to_vec();
@@ -648,7 +632,6 @@ mod tests {
         let addr = ledger
             .btc_display_address(&ctl(), Network::Testnet, &acc, false, 0)
             .unwrap();
-        // Kyro's own derivation from the xpub gives the same address.
         assert_eq!(
             addr,
             wallet_core::btc_address_from_xpub(
@@ -712,7 +695,6 @@ mod tests {
 
     #[test]
     fn transport_maps_refusal_inside_bitcoin_protocol() {
-        // First SIGN_PSBT APDU of the official vector answered with 6985 (refused).
         let first = OFFICIAL_SIGN_PSBT[0];
         let ledger = Ledger::with_link(Replay::new(&[first, "<= 6985"]));
         let psbt =
@@ -759,7 +741,6 @@ mod tests {
             ledger.ensure_app(&ctl(), Chain::Evm, Network::Testnet),
             Err(HwError::Locked)
         );
-        // "Bitcoin Test" 2.0.6 < 2.1.0.
         let ledger = Ledger::with_link(Replay::new(&[
             "=> b001000000",
             "<= 010c426974636f696e205465737405322e302e3601009000",
@@ -768,16 +749,13 @@ mod tests {
             ledger.ensure_app(&ctl(), Chain::Btc, Network::Testnet),
             Err(HwError::Unsupported { min: Some(_), .. })
         ));
-        // Status on a locked device: every chain says "unlock".
         let mut ledger = Ledger::with_link(Replay::new(&["=> b001000000", "<= 5515"]));
         let st = ledger.status(&ctl(), Network::Testnet).unwrap();
         assert!(st.locked);
         for c in &st.chains {
             let want = match c.chain {
-                // No Ledger testnet app for these coins; Zcash: not offered on Ledger.
                 Chain::Ltc | Chain::Doge | Chain::Bch | Chain::Dash => ChainState::Unsupported,
                 Chain::Zec => ChainState::Unsupported,
-                // No hardware support at all (reasons in `ledger_apps::unavailable`).
                 Chain::Dot | Chain::Kas => ChainState::Unsupported,
                 _ => ChainState::Unlock,
             };
@@ -787,7 +765,6 @@ mod tests {
 
     #[test]
     fn refusal_during_signing_and_wrong_app_mid_flow() {
-        // User refuses the Solana transaction on the device (6985).
         let path = sol_path(0);
         let sign = apdu::sol_sign(&path, &[1, 2, 3]).unwrap();
         let mut ledger = Ledger::with_link(Replay::new(&[

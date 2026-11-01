@@ -3,12 +3,6 @@
 //! delegation (9: "always abstain", "always no confidence" or a DRep id), reward withdrawal to our
 //! own reward address, and deregistration (8, deposit refunded) — always for **our** stake key
 //! `m/1852'/1815'/0'/2/0` (the stake part of Kyro's single address).
-//!
-//! Kyro builds the transaction (UTxOs, parameters and account state from Koios; one change
-//! output back to our own address), wallet-core decodes it again (certificates for any other
-//! credential, pool registration, governance actions… are refused) and signs it with the payment
-//! and stake keys. Koios endpoints: `account_info`, `pool_list`, `pool_info`, `drep_info`,
-//! `epoch_params`, `tip`, `genesis`, `address_utxos`, `submittx` (same host as `ada_*`).
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -30,10 +24,8 @@ use crate::error::{AppError, AppResult};
 use crate::i18n::Lang;
 use crate::state::AppState;
 
-/// Above this pool margin the dialog is followed by the reinforced confirmation.
 const HIGH_MARGIN: f64 = 0.10;
 const MAX_INPUTS: usize = 100;
-/// Witnesses of a staking transaction: payment key + stake key.
 const WITNESSES: usize = 2;
 
 fn invalid(m: impl Into<String>) -> AppError {
@@ -97,8 +89,6 @@ fn our_keys(state: &AppState, account: Option<u32>) -> AppResult<AdaStakeKeys> {
     })
 }
 
-// ---------------------------------------------------------------- reads
-
 /// Stake account state (Koios `account_info`).
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -138,7 +128,6 @@ pub(crate) async fn stake_account(
     .await?;
     let a = v.as_array().and_then(|a| a.first()).cloned();
     let Some(a) = a else {
-        // Never seen on chain: not registered, nothing delegated.
         return Ok(AdaStakeAccount {
             stake_address: stake_address.to_owned(),
             registered: false,
@@ -163,7 +152,6 @@ pub(crate) async fn stake_account(
     })
 }
 
-/// Protocol `keyDeposit` (lovelace), bounded against a hostile server.
 pub(crate) async fn key_deposit(c: &CardanoCtx<'_>) -> AppResult<u64> {
     let p = first(
         &call(c, "/epoch_params?limit=1&select=epoch_no,key_deposit", None).await?,
@@ -203,8 +191,7 @@ pub(crate) async fn epoch(c: &CardanoCtx<'_>) -> AppResult<AdaEpoch> {
     })
 }
 
-/// A stake pool (Koios `pool_info`). Name, ticker and homepage come from the pool's own
-/// metadata: declared by the operator, **not verified** by Kyro.
+/// A stake pool (Koios `pool_info`).
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AdaPool {
@@ -304,8 +291,6 @@ async fn drep_info(c: &CardanoCtx<'_>, d: &CardanoDrep) -> AppResult<AdaDrep> {
     })
 }
 
-// ---------------------------------------------------------------- commands: reads
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AdaStakeOverview {
@@ -380,8 +365,6 @@ pub async fn ada_stake_pool(state: State<'_, AppState>, pool_id: String) -> AppR
     pool(&crate::commands_cardano::ctx(&state), &pool_id).await
 }
 
-// ---------------------------------------------------------------- building
-
 /// What the UI asks Kyro to build.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(
@@ -416,9 +399,6 @@ fn change_out(change: &[u8], coin: u64, assets: wallet_core::CardanoAssets) -> C
 }
 
 #[allow(clippy::too_many_arguments)]
-/// Kyro's staking builder: ADA-only UTxOs by decreasing value, then UTxOs with tokens (all
-/// tokens come back in the change), one change output to our address, fee iterated on the size
-/// signed by two keys. Balance: inputs + withdrawal + refund = change + fee + deposit.
 pub(crate) fn plan(
     utxos: &[Utxo],
     change: &[u8],
@@ -509,8 +489,6 @@ pub(crate) fn plan(
     Err(last.unwrap_or_else(|| invalid("no UTxO: empty address")))
 }
 
-/// Inputs (our live UTxOs) + withdrawals + refunds = outputs + fee + deposits, lovelace and
-/// tokens. Returns the net cost for the wallet (fee + deposit − refund − withdrawal), signed.
 pub(crate) fn check_balance(
     body: &CardanoBody,
     ours: &[Utxo],
@@ -602,7 +580,6 @@ fn decode_ctx<'a>(net: Network, own: &'a [String], p: &Params) -> CardanoContext
     }
 }
 
-/// Decoding + every live check of `ada_stake_sign`, before the password.
 pub(crate) async fn prepare_sign(
     c: &CardanoCtx<'_>,
     keys: &AdaStakeKeys,
@@ -820,7 +797,6 @@ pub(crate) async fn build(
         ep.slot + TTL_OFFSET,
     )?;
     let tx = hex::encode(wallet_core::cardano_unsigned_tx(&body, None)?);
-    // The same checks as before signing, on what was just built.
     let (summary, context) = prepare_sign(c, keys, &tx).await?;
     Ok(AdaStakeBuilt {
         tx,
@@ -838,8 +814,6 @@ pub async fn ada_stake_build(
     let keys = our_keys(&state, account)?;
     build(&crate::commands_cardano::ctx(&state), &keys, &action).await
 }
-
-// ---------------------------------------------------------------- dialog
 
 fn ada_in(lang: Lang, lovelace: &str) -> String {
     format!("{} ADA", format_units_in(lang, lovelace, 6))
@@ -903,7 +877,6 @@ fn pool_text(lang: Lang, p: &AdaPool) -> String {
     }
 }
 
-/// Body of the native dialog, from the decoded transaction and the live context only.
 pub(crate) fn describe(
     lang: Lang,
     s: &CardanoStakeSummary,
@@ -1121,8 +1094,6 @@ pub(crate) fn describe_extra(lang: Lang, c: &AdaStakeContext) -> String {
     out
 }
 
-// ---------------------------------------------------------------- sign, broadcast
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AdaStakeSigned {
@@ -1315,7 +1286,6 @@ mod tests {
             wallet_core::cardano_sign_stake(&r, 0, 0, 0, &tx, &ctx, 2_000_000).unwrap();
         let cost = check_balance(&body, &utxos, &s).unwrap();
         assert_eq!(cost, i128::from(body.fee) + 2_000_000);
-        // Fee covers the real signed size (two witnesses), and not by much.
         let need = P.min_fee(signed.len() / 2);
         assert!(
             body.fee >= need && body.fee - need < 500,
@@ -1323,7 +1293,6 @@ mod tests {
             body.fee
         );
         assert!(s.tx.outputs[0].is_change);
-        // Deregistration with rewards: the change gets refund + rewards − fee.
         let reward = wallet_core::cardano_reward_address_bytes(Network::Testnet, &h);
         let body = plan(
             &utxos,
@@ -1345,11 +1314,9 @@ mod tests {
             check_balance(&body, &utxos, &s).unwrap() < 0,
             "the wallet gains"
         );
-        // Unbalanced: one lovelace less in the change.
         let mut b2 = body.clone();
         b2.outputs[0].coin -= 1;
         assert!(check_balance(&b2, &utxos, &s).is_err());
-        // Too little to pay the deposit.
         assert!(plan(
             &[utxo(1, 2_100_000)],
             &me_b,
@@ -1505,11 +1472,7 @@ mod tests {
 
 /// Real preprod staking through the Rust path of the `ada_stake_*` commands, over Tor, from the
 /// public CIP-19 test-vector address (payment key m/1852'/1815'/0'/0/0, stake key
-/// m/1852'/1815'/1'/2/0 of the published test mnemonic). With `KYRO_ADA_STAKE=yes`:
-/// 1. registration + pool delegation + vote delegation to "always abstain" (one transaction);
-/// 2. with `KYRO_ADA_DEREGISTER=yes`, deregistration (deposit refunded), then 1. again.
-///
-/// `KYRO_ADA_STAKE=yes cargo test -p kyro-desktop --lib -- --ignored --nocapture ada_stake_live`
+/// m/1852'/1815'/1'/2/0 of the published test mnemonic).
 #[cfg(test)]
 mod live {
     use super::*;
@@ -1617,7 +1580,6 @@ mod live {
             };
             let ov = overview(&c, &keys).await.unwrap();
             eprintln!("overview: {:#?}", serde_json::to_value(&ov).unwrap());
-            // A registered pool with a low margin, not saturated.
             let ids: Vec<String> = call(
                 &c,
                 "/pool_list?pool_status=eq.registered&order=active_stake.desc.nullslast&limit=40",

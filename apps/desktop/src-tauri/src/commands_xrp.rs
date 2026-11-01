@@ -1,8 +1,8 @@
 //! IPC commands for the XRP Ledger (`xrp_*`): address, account (balance, reserve, spendable,
 //! RequireDestTag), trust lines, history, Payment building **by Kyro** (Sequence / Fee /
-//! LastLedgerSequence from the server, encoded by wallet-core), signing behind the password and
-//! the native dialog (destination tag highlighted, reserve and spendable re-read live), and
-//! `submit` with hash check. Contract: docs/IPC.md §2.6.
+//! LastLedgerSequence from the server, encoded by wallet-core), signing behind the password and the
+//! native dialog (destination tag highlighted, reserve and spendable re-read live), and `submit`
+//! with hash check.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -28,7 +28,6 @@ pub(crate) fn ctx(state: &AppState) -> XrpCtx<'_> {
     }
 }
 
-/// Address and public key of XRP account `account` (`m/44'/144'/account'/0/0`).
 fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     state.with_seed(|seed| {
         Ok((
@@ -69,7 +68,6 @@ pub struct XrpContext {
     pub reserve_inc: String,
 }
 
-/// Body of the native dialog. The destination tag gets its own framed block, whatever it is.
 pub(crate) fn describe_xrp(lang: Lang, s: &XrpTxSummary, c: &XrpContext, net: Network) -> String {
     let line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
     let x = |d: &str| xrp(lang, d);
@@ -150,7 +148,6 @@ pub(crate) fn describe_xrp(lang: Lang, s: &XrpTxSummary, c: &XrpContext, net: Ne
             ),
         };
     }
-    // Untrusted text, after the amounts and fees, one quoted line each.
     for m in &s.memos {
         out += &format!(
             "{}{}\n",
@@ -207,8 +204,6 @@ pub(crate) fn describe_xrp_extra(lang: Lang, s: &XrpTxSummary) -> String {
     out += lang.sign_anyway();
     out
 }
-
-// ---------------------------------------------------------------- reads
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -267,8 +262,6 @@ pub async fn xrp_txs(state: State<'_, AppState>, address: String) -> AppResult<V
     xrp_backend::txs(&ctx(&state), &address).await
 }
 
-// ---------------------------------------------------------------- build, sign, broadcast
-
 /// Issued currency to send instead of XRP.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -312,8 +305,6 @@ fn drops_of(s: &XrpTxSummary) -> Option<u64> {
     }
 }
 
-/// Builds an unsigned Payment from live data: `amount` in drops (XRP) or as a decimal value
-/// (issued currency, with `issued`).
 pub(crate) async fn build(
     c: &XrpCtx<'_>,
     me: &str,
@@ -407,7 +398,6 @@ pub struct XrpSigned {
     pub context: XrpContext,
 }
 
-/// Decoding + live re-checks, i.e. everything `xrp_sign_tx` does before the dialog.
 pub(crate) async fn prepare_sign(
     c: &XrpCtx<'_>,
     me: &str,
@@ -491,7 +481,6 @@ pub async fn xrp_sign_tx(
     })
 }
 
-/// Checks the signed blob (decodes, canonical low-S signature by our key) then submits it.
 pub(crate) async fn broadcast_checked(c: &XrpCtx<'_>, me: &str, blob: &str) -> AppResult<String> {
     let hash = wallet_core::xrp_verify_signed(blob)?;
     let p = XrpPayment::decode(
@@ -536,7 +525,6 @@ pub async fn xrp_broadcast(
     broadcast_checked(&ctx(&state), &me, &blob).await
 }
 
-/// Probe used by `settings_set` / `server_test`.
 pub(crate) async fn probe(
     net: &crate::net::NetClient,
     network: Network,

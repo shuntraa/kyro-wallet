@@ -1,21 +1,9 @@
-//! Bitcoin signing on a Trezor. Trezor does not take a PSBT: the firmware asks for the
-//! transaction piece by piece (`TxRequest`) and Kyro answers from the PSBT (`TxAck*`).
+//! Bitcoin signing on a Trezor.
 //!
 //! Mapping (protocol of `messages-bitcoin.proto`, typed acks wire-compatible with `TxAck`):
-//! - `TXINPUT` (current tx): our inputs only, with `address_n` from the key origin already
-//!   checked against the account xpub (`wallet_core::btc_hw_plan`), `SPENDWITNESS` (BIP84) or
-//!   `SPENDTAPROOT` (BIP86), amount from `witness_utxo`. External inputs are refused.
-//! - `TXOUTPUT` (current tx): change outputs (verified against the xpub) as `address_n` +
-//!   `PAYTOWITNESS`/`PAYTOTAPROOT` (the firmware re-derives and hides them only if they
-//!   belong to the same account), `OP_RETURN` as `PAYTOOPRETURN`, everything else as an
-//!   address shown on the device.
-//! - `TXMETA` / `TXINPUT` / `TXOUTPUT` with `tx_hash`: the previous transaction, from the
-//!   PSBT's `non_witness_utxo`, whose txid is recomputed here. The firmware requires it for
-//!   SegWit v0 inputs (amount attack); it skips it when all our inputs are Taproot (≥ 2.4.3 /
-//!   1.10.4).
-//! - Signatures arrive in `serialized.signature` (DER for SegWit, 64-byte BIP340 for Taproot)
-//!   and are verified by `wallet_core::btc_hw_finalize` before anything is returned.
-//! - Replacement (`TXORIGINPUT`/`TXORIGOUTPUT`), payment requests and extra data are refused.
+//! `TXINPUT` (current tx): our inputs only, with `address_n` from the key origin already checked
+//! against the account xpub (`wallet_core::btc_hw_plan`), `SPENDWITNESS` (BIP84) or `SPENDTAPROOT`
+//! (BIP86), amount from `witness_utxo`.
 
 use bitcoin::hashes::Hash;
 use bitcoin::script::Instruction;
@@ -27,7 +15,6 @@ use wallet_core::{BtcKind, HwBtcSignature, Network};
 use super::trezor::{decode, TrezorIo};
 use super::{BtcSignRequest, Ctl, HwError, HwResult, Prompt};
 
-/// Hard cap on request/ack rounds (a 100-input transaction needs well under this).
 const MAX_STEPS: usize = 20_000;
 
 fn display_bytes(txid: &Txid) -> Vec<u8> {
@@ -41,7 +28,6 @@ fn encode<M: Message>(m: &M) -> HwResult<Vec<u8>> {
         .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))
 }
 
-/// The previous transaction with display-order txid `hash`, from `non_witness_utxo`.
 fn prev_tx<'a>(req: &'a BtcSignRequest<'_>, hash: &[u8]) -> HwResult<&'a Transaction> {
     for (txin, input) in req.psbt.unsigned_tx.input.iter().zip(&req.psbt.inputs) {
         if display_bytes(&txin.previous_output.txid) != hash {
@@ -98,7 +84,6 @@ fn ack_input(req: &BtcSignRequest<'_>, i: usize) -> HwResult<Vec<u8>> {
     encode(&ack)
 }
 
-/// `OP_RETURN <single push>` payload.
 fn op_return_data(spk: &bitcoin::Script) -> HwResult<Vec<u8>> {
     let mut it = spk.instructions();
     it.next(); // OP_RETURN
@@ -261,9 +246,6 @@ mod tests {
     const ABANDON: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
-    /// Simulated firmware: issues the TxRequests a real Trezor issues for a 1-input P2WPKH
-    /// transaction (phase 1: inputs, outputs, previous tx; phase 2: signing), checks every ack
-    /// and returns the given signature on the last input request.
     struct Firmware {
         script: VecDeque<protos::TxRequest>,
         acks: Vec<(MessageType, Vec<u8>)>,
@@ -323,7 +305,6 @@ mod tests {
         let ours = wallet_core::btc_address(&seed, net, BtcKind::Segwit, 0, false, 0).unwrap();
         let change = wallet_core::btc_address(&seed, net, BtcKind::Segwit, 0, true, 0).unwrap();
         let dest = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx";
-        // Previous transaction paying 100 000 sats to our address (output 1).
         let prev = Transaction {
             version: Version::TWO,
             lock_time: LockTime::ZERO,
@@ -382,7 +363,6 @@ mod tests {
         let b64 = psbt.to_string();
         let plan = wallet_core::btc_hw_plan(net, &b64, &accounts).unwrap();
 
-        // The signature an honest device returns (DER, no sighash byte).
         let (soft, _) = wallet_core::btc_sign_psbt(&seed, net, 0, &b64).unwrap();
         let soft = Psbt::from_str(&soft).unwrap();
         let der = soft.inputs[0]
@@ -426,7 +406,6 @@ mod tests {
         let sigs = sign(&mut fw, &ctl, net, "Testnet", &req).unwrap();
         assert_eq!(sigs.len(), 1);
 
-        // Check what Kyro told the "device".
         assert_eq!(fw.acks[0].0, MessageType::MessageType_SignTx);
         let start = protos::SignTx::parse_from_bytes(&fw.acks[0].1).unwrap();
         assert_eq!(
@@ -466,14 +445,11 @@ mod tests {
         assert_eq!(pout.tx.output.amount(), 100_000);
         assert_eq!(pout.tx.output.script_pubkey(), spk(&ours).as_bytes());
 
-        // And the returned signature passes Kyro's independent verification...
         wallet_core::btc_hw_finalize(net, &b64, &accounts, &sigs).unwrap();
-        // ...while a tampered one does not.
         let mut bad = sigs.clone();
         bad[0].signature[10] ^= 1;
         assert!(wallet_core::btc_hw_finalize(net, &b64, &accounts, &bad).is_err());
 
-        // Missing previous transaction: refused before anything is answered from nothing.
         let mut no_prev = psbt.clone();
         no_prev.inputs[0].non_witness_utxo = None;
         let req = BtcSignRequest {
@@ -489,7 +465,6 @@ mod tests {
             sign(&mut fw, &ctl, net, "Testnet", &req),
             Err(HwError::Unsupported { .. })
         ));
-        // Unsupported request types are refused, not answered.
         let req = BtcSignRequest {
             psbt: &psbt,
             plan: &plan,

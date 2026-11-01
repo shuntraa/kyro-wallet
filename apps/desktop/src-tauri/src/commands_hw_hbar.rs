@@ -1,10 +1,7 @@
 //! Hedera on a Ledger (app « Hedera »): an **ED25519** account (key at
-//! `m/44'/3030'/0'/0'/account'`, not the vault's ECDSA key, see `wallet_core::HwKeyChain`),
-//! found on the mirror node by its public key (it must have been created first: by Ledger
-//! Live, HashPack, an exchange…; Kyro does not create accounts). Build for that account with
-//! **one** copy (one consensus node: each copy is one confirmation on the device), native
-//! dialog, signature of the body on the device, ED25519 verification, sending. Status of a
-//! sent transfer: the generic `hbar_tx_status`.
+//! `m/44'/3030'/0'/0'/account'`, not the vault's ECDSA key, see `wallet_core::HwKeyChain`), found
+//! on the mirror node by its public key (it must have been created first: by Ledger Live, HashPack,
+//! an exchange….
 
 use tauri::{AppHandle, State};
 use wallet_core::HwKeyChain;
@@ -22,7 +19,6 @@ use crate::state::AppState;
 
 const CHAIN: HwKeyChain = HwKeyChain::Hbar;
 
-/// The node a hardware transfer is built for (the first of Kyro's list for the network).
 fn hw_nodes(state: &AppState) -> Vec<u64> {
     hbar_backend::node_ids(state.network)
         .into_iter()
@@ -60,7 +56,6 @@ pub async fn hw_hbar_build_tx(
         &hw_nodes(&state),
     )
     .await?;
-    // Refused now rather than by the device (one APDU).
     for b in &built.bodies {
         wallet_core::hbar_hw_message(b)?;
     }

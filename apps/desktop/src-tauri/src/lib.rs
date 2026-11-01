@@ -87,7 +87,6 @@ pub fn run() {
     let context = tauri::generate_context!();
     let dev_url = context.config().build.dev_url.clone();
     tauri::Builder::default()
-        // Every navigation outside the app's own origin is refused (docs/NETWORK.md).
         .plugin(nav_guard::init(dev_url))
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
@@ -95,7 +94,6 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             app.manage(state::AppState::new(dir)?);
             let st = app.state::<state::AppState>();
-            // THP pairings (Trezor Safe 7): next to the vault, see SECURITY.md.
             st.hw.set_thp_store(st.data_dir().join("trezor-thp.json"));
             let handle = app.handle().clone();
             st.net.tor.set_emitter(move |s| {
@@ -104,8 +102,6 @@ pub fn run() {
             if st.settings().tor.enabled {
                 st.net.tor.start();
             }
-            // Automatic updates: a staged one is applied before the window exists; the check
-            // itself runs in the background (updater.rs).
             updater::on_start(app.handle());
             spawn_auto_lock(app.handle().clone());
             // The main window is created here, after the state exists (`"create": false` in
@@ -446,20 +442,14 @@ pub fn run() {
         });
 }
 
-/// A 1 s tick that took longer than this means the machine was suspended (or the process was
-/// frozen): the session is locked.
 const SLEEP_GAP: Duration = Duration::from_secs(20);
 
-/// True when one tick of `expected` took `monotonic` (process clock) or `wall` (system clock)
-/// much longer: system sleep / hibernation. Both clocks are checked because the monotonic
-/// clock stops during sleep on Linux and macOS, and the wall clock may be adjusted.
 fn slept(expected: Duration, monotonic: Duration, wall: Option<Duration>) -> bool {
     let limit = expected + SLEEP_GAP;
     monotonic > limit || wall.is_some_and(|w| w > limit)
 }
 
-/// Checks idleness every second; drops (and zeroizes) the session and tells the UI. Also
-/// locks after a system sleep, detected when the machine wakes up (portable, no OS hook).
+/// Checks idleness every second; drops (and zeroizes) the session and tells the UI.
 fn spawn_auto_lock(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         let tick = Duration::from_secs(1);
@@ -489,11 +479,8 @@ mod tests {
         let s = Duration::from_secs;
         assert!(!slept(s(1), s(1), Some(s(1))));
         assert!(!slept(s(1), s(5), Some(s(5))), "busy machine, not asleep");
-        // Windows: the monotonic clock includes the sleep.
         assert!(slept(s(1), s(3600), Some(s(3600))));
-        // Linux / macOS: it does not, the wall clock jumps.
         assert!(slept(s(1), s(1), Some(s(600))));
-        // Wall clock moved backwards: `elapsed()` fails, the monotonic clock decides.
         assert!(!slept(s(1), s(1), None));
     }
 }

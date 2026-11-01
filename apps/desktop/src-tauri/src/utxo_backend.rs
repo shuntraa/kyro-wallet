@@ -1,8 +1,5 @@
-//! Litecoin, Dogecoin, Bitcoin Cash and Dash data, in **the same Esplora shapes** as the
-//! `btc_*` commands (docs/IPC.md §2.2), so the TypeScript adapters reuse the Bitcoin logic.
-//! Commands: `ltc_*`, `doge_*`, `bch_*`, `dash_*` (written `{ltc,doge}_*` below).
-//!
-//! Two backends:
+//! Litecoin, Dogecoin, Bitcoin Cash and Dash data, in **the same Esplora shapes** as the `btc_*`
+//! commands (docs/IPC.md §2.2), so the TypeScript adapters reuse the Bitcoin logic.
 //!
 //! | command                    | Esplora (litecoinspace.org, user's server) | Electrum (Dogecoin, Bitcoin Cash, Dash defaults) |
 //! |----------------------------|---------------------------------------------|-------------------------------------|
@@ -14,19 +11,9 @@
 //! | `{ltc,doge}_tip_height`    | `GET /blocks/tip/height`                    | `headers.subscribe` |
 //! | `{ltc,doge}_broadcast`     | `POST /tx` (returned txid must match)       | `transaction.broadcast` (same check) |
 //!
-//! Servers: Litecoin defaults to litecoinspace.org (mempool's Litecoin fork, mainnet and
-//! testnet4). Dogecoin mainnet defaults to Komodo's public ElectrumX servers
-//! (`net::ELECTRUM_HOSTS`, TLS validated normally, genesis checked on every session; the second
-//! is tried only if the first cannot be reached — same Tor family, same transport, never clear
-//! when Tor is on). Bitcoin Cash (mainnet and chipnet) defaults to public Fulcrum servers and
-//! Dash mainnet to Komodo's ElectrumX servers, same rules. Bitcoin Cash shares Bitcoin's
-//! genesis: every session also checks a block after the 2017 split
-//! (`wallet_core::utxo_checkpoint`), so a Bitcoin server is refused. Bitcoin Cash coins carrying
-//! CashTokens are excluded (`token_filter = exclude_tokens`: spending them would burn the
-//! tokens), Dash coins created by a DIP2 special transaction are excluded too (a PSBT cannot
-//! carry their previous transaction). Dogecoin and Dash testnets have no default (no free
-//! public server found, see docs/NETWORK.md): the user sets an Esplora server. A user's server
-//! is never replaced by a default: if it fails, the command fails.
+//! Dogecoin mainnet defaults to Komodo's public ElectrumX servers (`net::ELECTRUM_HOSTS`, TLS
+//! validated normally, genesis checked on every session; the second is tried only if the first
+//! cannot be reached — same Tor family, same transport, never clear when Tor is on).
 
 use std::collections::{HashMap, HashSet};
 
@@ -43,29 +30,17 @@ use crate::servers::{
     host_of, utxo_default_base, utxo_default_electrum, utxo_family, validate_http_url, UtxoServer,
 };
 
-/// Most recent transactions returned per address (same cap as Bitcoin).
 const MAX_TXS: usize = 50;
 
-/// Most UTXOs of one address that the Electrum backend lists (each one is checked against its
-/// previous transaction, so this bounds the work and the data downloaded).
 const MAX_UTXOS: usize = 1_000;
 
-/// Electrum requests pipelined per batch (keeps each batch well under the call timeout).
 const ELECTRUM_CHUNK: usize = 25;
 
-/// Dogecoin fee ladder bounds, koinus per byte: the recommended minimum (0.01 DOGE/kB, what
-/// miners include by default) and 100× that. A server's estimate is clamped into this range so
-/// a malicious server cannot push absurd fees (Rust's dialog would still show them).
 const DOGE_FEE_FLOOR: u64 = wallet_core::DOGE_RECOMMENDED_FEE_PER_KB / 1_000;
 const DOGE_FEE_CEIL: u64 = 100 * DOGE_FEE_FLOOR;
-/// Bitcoin Cash / Dash fee ladder bounds, satoshis (duffs) per byte: the relay minimum
-/// (1 sat/B, what both networks use in practice) and 100× that (wallet-core's high-fee
-/// threshold).
 const BCH_DASH_FEE_FLOOR: u64 = wallet_core::BCH_DASH_MIN_RELAY_FEE_PER_KB / 1_000;
 const BCH_DASH_FEE_CEIL: u64 = 100 * BCH_DASH_FEE_FLOOR;
 
-/// Fee ladder `[floor, ceil]` (smallest unit per byte) of a chain whose estimates are clamped,
-/// `None` for Litecoin (mempool-style estimates, floor 1 litoshi/vB, no ceiling).
 fn fee_bounds(coin: UtxoCoin) -> Option<(u64, u64)> {
     match coin {
         UtxoCoin::Litecoin => None,
@@ -74,8 +49,6 @@ fn fee_bounds(coin: UtxoCoin) -> Option<(u64, u64)> {
     }
 }
 
-/// `estimatefee` targets (blocks) for fastest / ½ h / 1 h / economy: Dogecoin 1-minute blocks,
-/// Dash 2.5-minute blocks, Bitcoin Cash 10-minute blocks.
 fn fee_targets(coin: UtxoCoin) -> [u64; 4] {
     match coin {
         UtxoCoin::Dogecoin => [2, 30, 60, 144],
@@ -84,8 +57,6 @@ fn fee_targets(coin: UtxoCoin) -> [u64; 4] {
     }
 }
 
-/// Extra Electrum parameters of the balance / UTXO calls: Bitcoin Cash servers (Fulcrum) are
-/// asked to leave CashTokens coins out — spending one without its tokens would burn them.
 fn token_filter(coin: UtxoCoin) -> Option<&'static str> {
     (coin == UtxoCoin::BitcoinCash).then_some("exclude_tokens")
 }
@@ -214,8 +185,6 @@ fn is_txid(t: &str) -> bool {
     t.len() == 64 && t.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-// ---------------------------------------------------------------- Electrum (Dogecoin default)
-
 /// Opens a session on the first reachable default server, on the chain's Tor family, and
 /// checks its genesis hash. Only a transport failure moves on to the next server (never Tor
 /// unavailability: nothing is ever sent in clear when Tor is on).
@@ -281,7 +250,6 @@ fn scripthash(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<(String, String)> {
     ))
 }
 
-/// `get_history` entries, strictly typed: `(txid, height)`; height ≤ 0 = unconfirmed.
 fn parse_history(coin: UtxoCoin, v: &Value) -> AppResult<Vec<(String, i64)>> {
     let list = v
         .as_array()
@@ -306,7 +274,6 @@ fn parse_history(coin: UtxoCoin, v: &Value) -> AppResult<Vec<(String, i64)>> {
     Ok(out)
 }
 
-/// A UTXO as the server claims it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ClaimedUtxo {
     txid: String,
@@ -354,8 +321,6 @@ fn parse_listunspent(coin: UtxoCoin, v: &Value) -> AppResult<Vec<ClaimedUtxo>> {
 
 /// Checks each claimed UTXO against its previous transaction (already verified to hash to its
 /// txid): the output must exist, pay **our** script, and hold exactly the claimed amount.
-/// Returns the Esplora shape, amounts taken from the transactions. Any mismatch is an error:
-/// a server that lies about one coin is not trusted for the others.
 fn verified_utxos(
     coin: UtxoCoin,
     claimed: &[ClaimedUtxo],
@@ -454,8 +419,6 @@ async fn fetch_raws(
     Ok(())
 }
 
-/// Keeps the history entries that really involve `our_spk` (an output paying it, or an input
-/// spending it), so a server cannot inject unrelated transactions into the history.
 fn involving(
     order: Vec<(String, i64)>,
     raws: &HashMap<String, BtcRawTx>,
@@ -476,18 +439,13 @@ fn involving(
         .collect()
 }
 
-/// Electrum `estimatefee` (coin per kB, `-1` = unknown) → smallest unit per byte, rounded up.
-/// Converted to whole units per kB first, so `0.00001` is exactly 1 (no float residue).
 fn per_kb_to_unit_per_byte(v: &Value) -> Option<f64> {
     v.as_f64()
         .filter(|f| f.is_finite() && *f > 0.0 && *f < 1e9)
         .map(|f| ((f * 1e8).round() as u64).div_ceil(1_000) as f64)
 }
 
-// ---------------------------------------------------------------- public API
-
-/// `GET /address/{a}` shape: `{ address, chain_stats, mempool_stats }`. With Electrum,
-/// `funded_txo_sum`/`spent_txo_sum` carry the *net* balance (as for Bitcoin's Electrum).
+/// `GET /address/{a}` shape: `{ address, chain_stats, mempool_stats }`.
 pub async fn address_info(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<Value> {
     let a = check_address(ctx, address)?;
     match backend(ctx)? {
@@ -547,8 +505,7 @@ fn electrum_info(
     ))
 }
 
-/// `GET /address/{a}/utxo`: `[{ txid, vout, value, status }]`. With Electrum, every UTXO is
-/// checked against its full previous transaction (hash, output, our script, amount).
+/// `GET /address/{a}/utxo`: `[{ txid, vout, value, status }]`.
 pub async fn address_utxos(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<Value> {
     let a = check_address(ctx, address)?;
     match backend(ctx)? {
@@ -589,7 +546,6 @@ pub async fn address_utxos(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<Value>
                 &mut specials,
             )
             .await?;
-            // Dash: coins of a special transaction cannot be spent by Kyro (left out).
             claimed.retain(|u| !specials.contains(&u.txid));
             verified_utxos(ctx.coin, &claimed, &raws, &spk)
         }
@@ -624,7 +580,6 @@ pub async fn address_txs(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<Value> {
                 .call("blockchain.scripthash.get_history", json!([sh]))
                 .await?;
             let mut order = parse_history(ctx.coin, &hist)?;
-            // Mempool first, then newest confirmed first; keep the most recent MAX_TXS.
             order.sort_by_key(|(_, h)| if *h > 0 { -*h } else { i64::MIN });
             order.truncate(MAX_TXS);
             let mut raws = HashMap::new();
@@ -699,23 +654,15 @@ pub async fn tx_hex(ctx: &UtxoCtx<'_>, txid: &str) -> AppResult<String> {
             ctx.coin.name()
         ))
     })?;
-    // Dogecoin: no witness data (refused by the chain decoder).
     wallet_core::utxo_decode_raw_tx(&hex_tx, ctx.network, ctx.coin)
         .map_err(|_| bad(format!("{}: unreadable transaction", ctx.coin.name())))?;
     Ok(hex_tx)
 }
 
 /// mempool shape `{ fastestFee, halfHourFee, hourFee, economyFee, minimumFee }`, in the chain's
-/// smallest unit per vbyte (Litecoin: litoshis/vB; Dogecoin: koinus/byte, Bitcoin Cash:
-/// sat/byte, Dash: duffs/byte — no SegWit).
-///
-/// Dogecoin: the ladder is clamped to [0.01, 1] DOGE/kB (Dogecoin Core's recommended minimum and
-/// 100× it); Bitcoin Cash and Dash to [1, 100] per byte (relay minimum and 100× it). If the
-/// server has no estimate, the floor is returned with `source: "policy"`.
+/// smallest unit per vbyte (Litecoin: litoshis/vB.
 pub async fn fee_rates(ctx: &UtxoCtx<'_>) -> AppResult<Value> {
     let raw = match backend(ctx)? {
-        // mempool-style servers (litecoinspace.org) first, then plain electrs. A 404 means "this
-        // server has no such endpoint"; any other failure is the server's and is returned as is.
         Backend::Esplora(base) => match get_json_opt(ctx, &base, "/v1/fees/recommended").await? {
             Some(v) if v.get("fastestFee").is_some() => Some(v),
             _ => get_json_opt(ctx, &base, "/fee-estimates")
@@ -723,7 +670,6 @@ pub async fn fee_rates(ctx: &UtxoCtx<'_>) -> AppResult<Value> {
                 .filter(|est| est.as_object().is_some_and(|m| !m.is_empty()))
                 .map(|est| fees_from_estimates(&est)),
         },
-        // Targets in blocks ≈ a few minutes / ½ h / 1 h / a day (see `fee_targets`).
         Backend::Electrum(targets) => {
             let mut conn = electrum_session(ctx, &targets).await?;
             let [a, b, c, d] = fee_targets(ctx.coin);
@@ -755,7 +701,6 @@ pub async fn fee_rates(ctx: &UtxoCtx<'_>) -> AppResult<Value> {
     })
 }
 
-/// Electrum estimates (coin/kB) → mempool-shaped ladder input; `None` if none is known.
 fn electrum_fees(r: &[Value]) -> Option<Value> {
     let keys = [
         "fastestFee",
@@ -770,13 +715,11 @@ fn electrum_fees(r: &[Value]) -> Option<Value> {
             m.insert((*k).into(), json!(f));
         }
     }
-    // Only a relay fee is not an estimate.
     m.keys()
         .any(|k| k != "minimumFee")
         .then_some(Value::Object(m))
 }
 
-/// Like `get_json`, but `Ok(None)` when the server answers 404 (endpoint not implemented).
 async fn get_json_opt(ctx: &UtxoCtx<'_>, base: &str, path: &str) -> AppResult<Option<Value>> {
     let (status, body) = ctx
         .net_client
@@ -794,7 +737,6 @@ async fn get_json_opt(ctx: &UtxoCtx<'_>, base: &str, path: &str) -> AppResult<Op
     }
 }
 
-/// Monotonic ladder clamped into `[floor, ceil]`.
 fn ladder(v: &Value, floor: u64, ceil: u64) -> Value {
     let at = |k: &str| {
         v.get(k)
@@ -858,7 +800,6 @@ pub async fn broadcast(ctx: &UtxoCtx<'_>, hex_tx: &str) -> AppResult<String> {
         }
         Backend::Electrum(targets) => {
             let mut conn = electrum_session(ctx, &targets).await?;
-            // A refusal by the node comes back as an Electrum error (`INVALID_INPUT`).
             let r = conn
                 .call("blockchain.transaction.broadcast", json!([hex_tx.trim()]))
                 .await?;
@@ -914,7 +855,6 @@ pub async fn probe(ctx: &UtxoCtx<'_>) -> AppResult<Detected> {
             .find(|(c, n)| wallet_core::utxo_genesis_hash(*n, *c) == genesis)
             .map_or_else(
                 || format!("genesis {}", genesis.chars().take(64).collect::<String>()),
-                // Bitcoin Cash shares Bitcoin's genesis (and chipnet testnet4's).
                 |(c, n)| match c {
                     UtxoCoin::BitcoinCash => {
                         format!("Bitcoin or Bitcoin Cash {}", network_label(c, n))
@@ -929,7 +869,6 @@ pub async fn probe(ctx: &UtxoCtx<'_>) -> AppResult<Detected> {
         )));
     }
     if let Some((h, _)) = wallet_core::utxo_checkpoint(ctx.network, ctx.coin) {
-        // Esplora: `/block-height/{h}` answers the block hash; compare it to the checkpoint.
         let hash = String::from_utf8_lossy(&get(ctx, &base, &format!("/block-height/{h}")).await?)
             .trim()
             .to_owned();
@@ -944,7 +883,6 @@ pub async fn probe(ctx: &UtxoCtx<'_>) -> AppResult<Detected> {
     })
 }
 
-/// Esplora variant of [`check_checkpoint`]: the server gives the hash, not the header.
 fn check_checkpoint_hash(ctx: &UtxoCtx<'_>, hash: &str) -> AppResult<()> {
     match wallet_core::utxo_checkpoint(ctx.network, ctx.coin) {
         Some((height, expected)) if hash != expected => Err(AppError::ServerWrongNetwork(format!(
@@ -994,10 +932,8 @@ mod tests {
             esplora(backend(&ctx(&n, UtxoCoin::Litecoin, UtxoServer::Default)).unwrap()),
             "https://litecoinspace.org/testnet/api"
         );
-        // Dogecoin testnet: no public default, a typed error that says what to do.
         let e = backend(&ctx(&n, UtxoCoin::Dogecoin, UtxoServer::Default)).unwrap_err();
         assert!(matches!(e, AppError::ServerInvalid(ref m) if m.contains("electrs-dogecoin")));
-        // Dogecoin mainnet: the allowlisted ElectrumX servers, in order, TLS validated normally.
         let main = UtxoCtx {
             network: Network::Mainnet,
             ..ctx(&n, UtxoCoin::Dogecoin, UtxoServer::Default)
@@ -1016,7 +952,6 @@ mod tests {
             t.port,
             crate::net::Family::Dogecoin
         )));
-        // The user's server replaces the default.
         let custom = UtxoCtx {
             server: UtxoServer::Esplora {
                 url: "https://doge.example/api".into(),
@@ -1027,7 +962,6 @@ mod tests {
             esplora(backend(&custom).unwrap()),
             "https://doge.example/api"
         );
-        // A custom server is re-validated at use (plain http refused).
         let e = backend(&ctx(
             &n,
             UtxoCoin::Dogecoin,
@@ -1043,7 +977,6 @@ mod tests {
         let n = NetClient::new(std::env::temp_dir().join("kyro-utxo-test2")).unwrap();
         let c = ctx(&n, UtxoCoin::Litecoin, UtxoServer::Default);
         tauri::async_runtime::block_on(async {
-            // A Bitcoin address, a mainnet address, a path injection: refused locally.
             for a in [
                 "tb1qkvwu9g3k2pdxewfqr7syz89r3gj557l3uuf9r9",
                 "ltc1qcgnevr9rp7aazy62m4gen0tfzlssa52axwytt6",
@@ -1078,10 +1011,8 @@ mod tests {
 
     #[test]
     fn fee_ladders() {
-        // litecoinspace.org answer (2026-10-30): everything at 1 litoshi/vB.
         let v = json!({ "fastestFee": 1, "halfHourFee": 1, "hourFee": 1, "economyFee": 1, "minimumFee": 1 });
         assert_eq!(ladder(&v, 1, u64::MAX), v);
-        // Dogecoin estimates in koinus/byte are clamped to [0.01, 1] DOGE/kB.
         let v = json!({ "fastestFee": 5_000_000.0, "halfHourFee": 2_240, "hourFee": 100, "economyFee": 1, "minimumFee": 1 });
         assert_eq!(
             ladder(&v, DOGE_FEE_FLOOR, DOGE_FEE_CEIL),
@@ -1091,11 +1022,6 @@ mod tests {
         assert_eq!(ladder(&v, 1_000, 100_000)["fastestFee"], 1_000);
     }
 
-    /// Real, read-only answers of `doge.electrum1.cipig.net:20060` (ElectrumX 2.0.0) for
-    /// `DSBM4ZW9Dz8jLJuPUBe623ch4yxNkXdV1h` (2 transactions, 1 coin), recorded 2026-10-31:
-    /// `server.features`, `scripthash.get_balance` / `get_history` / `listunspent`,
-    /// `transaction.get` of the history and of its previous transactions, `block.header`,
-    /// `estimatefee`, `relayfee`, `headers.subscribe`. Nothing was ever broadcast.
     const RECORDED: &str = include_str!("testdata/doge_electrum_mainnet.json");
 
     struct Recorded {
@@ -1131,7 +1057,6 @@ mod tests {
         let n = NetClient::new(std::env::temp_dir().join("kyro-utxo-rec")).unwrap();
         let r = recorded();
         let c = doge_main(&n);
-        // Our scripthash is the server's key for this address.
         assert_eq!(
             scripthash(&c, ADDR).unwrap(),
             (
@@ -1139,7 +1064,6 @@ mod tests {
                 SPK.to_owned()
             )
         );
-        // Genesis: Dogecoin mainnet accepted; the same server for testnet is refused.
         assert_eq!(
             check_genesis(&c, &r.v["server.features"]).unwrap(),
             wallet_core::utxo_genesis_hash(Network::Mainnet, UtxoCoin::Dogecoin)
@@ -1167,7 +1091,6 @@ mod tests {
         let net = info["chain_stats"]["funded_txo_sum"].as_i64().unwrap()
             - info["chain_stats"]["spent_txo_sum"].as_i64().unwrap();
         assert_eq!(net, 323_699_023, "3.23699023 DOGE");
-        // Strict types: a float, a string or a negative confirmed balance is refused.
         for bad in [
             json!({ "confirmed": 1.5, "unconfirmed": 0 }),
             json!({ "confirmed": "323699023", "unconfirmed": 0 }),
@@ -1203,7 +1126,6 @@ mod tests {
                      "status": { "confirmed": true, "block_height": 6_436_585 } }])
         );
 
-        // (1) A server lying about the amount (+1 koinu, or ×10): refused.
         for lie in [323_699_024, 3_236_990_230] {
             let mut c = claimed.clone();
             c[0].value = lie;
@@ -1213,9 +1135,6 @@ mod tests {
                 "{e}"
             );
         }
-        // (2) A previous transaction with another hash than the claimed txid: refused when it
-        // is fetched (before it can feed any amount), and a coin whose transaction could not be
-        // fetched is refused.
         let other = &r.v["transactions"][RECEIVED];
         let e = verified_raw(UtxoCoin::Dogecoin, Network::Mainnet, SPENT_BY, other).unwrap_err();
         assert!(e.to_string().contains("different"), "{e}");
@@ -1223,18 +1142,14 @@ mod tests {
         let mut missing = r.raws.clone();
         missing.remove(SPENT_BY);
         assert!(verified_utxos(UtxoCoin::Dogecoin, &claimed, &missing, SPK).is_err());
-        // (3) An output that pays someone else (vout 0 of the same transaction), or that does
-        // not exist: refused.
         for vout in [0, 3, u32::MAX] {
             let mut c = claimed.clone();
             c[0].vout = vout;
             assert!(verified_utxos(UtxoCoin::Dogecoin, &c, &r.raws, SPK).is_err());
         }
-        // Another address's script: the coin is not ours.
         let theirs = &r.raws[SPENT_BY].outputs[0].2;
         assert!(verified_utxos(UtxoCoin::Dogecoin, &claimed, &r.raws, theirs).is_err());
 
-        // Strict listing types: txid of 64 hex, integer koinus, u32 vout, integer height.
         let base = r.v["listunspent"][0].clone();
         for (k, bad) in [
             ("tx_hash", json!("91ac")),
@@ -1264,7 +1179,6 @@ mod tests {
             order,
             vec![(RECEIVED.into(), 6_436_571), (SPENT_BY.into(), 6_436_585)]
         );
-        // An unrelated transaction injected into the history is dropped.
         let mut injected = order.clone();
         injected.push((UNRELATED.into(), 6_436_000));
         let kept = involving(injected, &r.raws, SPK);
@@ -1282,14 +1196,12 @@ mod tests {
             .collect();
         let txs = esplora_txs(&kept, &r.raws, &times);
         assert_eq!(txs.len(), 2);
-        // Received 84.98984610 DOGE on output 0, then spent with 3.23699023 DOGE of change.
         assert_eq!(txs[0]["txid"], RECEIVED);
         assert_eq!(txs[0]["vout"][0]["scriptpubkey_address"], ADDR);
         assert_eq!(txs[0]["vout"][0]["value"], 8_498_984_610u64);
         assert_eq!(txs[1]["vin"][0]["prevout"]["scriptpubkey_address"], ADDR);
         assert_eq!(txs[1]["vout"][2]["value"], 323_699_023);
         assert!(txs[1]["status"]["block_time"].as_u64().unwrap() > 1_700_000_000);
-        // Strict history: a bad txid or a missing height is refused, duplicates collapse.
         assert!(parse_history(
             UtxoCoin::Dogecoin,
             &json!([{ "tx_hash": "x", "height": 1 }])
@@ -1300,7 +1212,6 @@ mod tests {
             json!([{ "tx_hash": RECEIVED, "height": 1 }, { "tx_hash": RECEIVED, "height": 1 }]);
         assert_eq!(parse_history(UtxoCoin::Dogecoin, &dup).unwrap().len(), 1);
 
-        // Fees: estimatefee(2) = 0.50731312 DOGE/kB, the others -1, relayfee 0.001 DOGE/kB.
         let answers: Vec<Value> = ["2", "30", "60", "144"]
             .iter()
             .map(|k| r.v["estimatefee"][*k].clone())
@@ -1329,14 +1240,11 @@ mod tests {
             ladder(&absurd, DOGE_FEE_FLOOR, DOGE_FEE_CEIL)["fastestFee"],
             100_000
         );
-        // Only a relay fee (no estimate): the policy value is used instead.
         assert!(
             electrum_fees(&[json!(-1), json!(-1), json!(-1), json!(-1), json!(0.001)]).is_none()
         );
     }
 
-    /// Bitcoin Cash shares Bitcoin's genesis: the post-split checkpoint is what refuses a Bitcoin
-    /// server. Headers as served by bch.loping.net / chipnet.bch.ninja (2026-11-01).
     #[test]
     fn bitcoin_cash_checkpoint_refuses_bitcoin_servers() {
         let n = NetClient::new(std::env::temp_dir().join("kyro-bch-cp")).unwrap();
@@ -1344,11 +1252,8 @@ mod tests {
             network: Network::Mainnet,
             ..ctx(&n, UtxoCoin::BitcoinCash, UtxoServer::Default)
         };
-        // Block 478 559 of Bitcoin Cash: accepted.
         let bch = "00000020432d350741fbf28f2e1486eabe2c4e143bfe2241af6518010000000000000000abaa4bd8a48c1c6bc08ee39b66065e5e9484304cab8b56d5eed3e40b1ac996c899c480593547011822ca4ae8";
         check_checkpoint(&main, bch).unwrap();
-        // Any other header (here block 478 558, before the split, the same on both chains),
-        // garbage, or an empty answer: refused as another network.
         let other = "02000020e42980330b7294bef6527af576e5cfe2c97d55f9c19beb0000000000000000004a88016082f466735a0f4bc9e5e42725fbc3d0ac28d4ab9547bf18654f14655b1e7f80593547011816dd5975";
         for h in [other, "00", ""] {
             assert!(matches!(
@@ -1356,7 +1261,6 @@ mod tests {
                 Err(AppError::ServerWrongNetwork(ref m)) if m.contains("478559") || m.contains("478 559") || m.contains("block")
             ));
         }
-        // Chipnet: block 200 000 accepted; testnet4's block 200 000 (another hash) refused.
         let chip = UtxoCtx {
             network: Network::Testnet,
             ..ctx(&n, UtxoCoin::BitcoinCash, UtxoServer::Default)
@@ -1368,13 +1272,11 @@ mod tests {
         )
         .is_err());
         assert!(check_checkpoint(&main, bch).is_ok());
-        // Chains with their own genesis have no checkpoint.
         let dash = UtxoCtx {
             network: Network::Mainnet,
             ..ctx(&n, UtxoCoin::Dash, UtxoServer::Default)
         };
         assert!(check_checkpoint(&dash, "00").is_ok());
-        // Genesis: a Bitcoin Cash server for Dash, a Dash server for Bitcoin Cash: refused.
         let bch_features = json!({ "genesis_hash": wallet_core::utxo_genesis_hash(Network::Mainnet, UtxoCoin::BitcoinCash) });
         let dash_features = json!({ "genesis_hash": wallet_core::utxo_genesis_hash(Network::Mainnet, UtxoCoin::Dash) });
         assert!(check_genesis(&dash, &bch_features).is_err());
@@ -1389,7 +1291,6 @@ mod tests {
             network,
             ..ctx(&n, coin, UtxoServer::Default)
         };
-        // Defaults: Electrum on Bitcoin Cash mainnet and chipnet, Dash mainnet; Dash testnet none.
         let label = |coin, net| backend(&at(coin, net)).map(|b| b.label());
         assert_eq!(
             label(UtxoCoin::BitcoinCash, Network::Mainnet).unwrap(),
@@ -1424,8 +1325,6 @@ mod tests {
         );
         assert_eq!(network_label(UtxoCoin::Dash, Network::Testnet), "testnet");
 
-        // Fees: the live answer of every default server (0.00001 per kB) is exactly 1 per byte;
-        // the ladder is clamped to [1, 100] per byte; no estimate → the floor, « policy ».
         assert_eq!(per_kb_to_unit_per_byte(&json!(0.00001)), Some(1.0));
         assert_eq!(per_kb_to_unit_per_byte(&json!(0.50731312)), Some(50_732.0));
         let live: Vec<Value> = std::iter::repeat_n(json!(0.00001), 5).collect();
@@ -1448,7 +1347,6 @@ mod tests {
         assert_eq!(fee_targets(UtxoCoin::BitcoinCash), [1, 3, 6, 144]);
         assert_eq!(fee_targets(UtxoCoin::Dash), [1, 12, 24, 144]);
 
-        // CashTokens: Bitcoin Cash balance / UTXO calls exclude them; other chains send nothing extra.
         assert_eq!(
             scripthash_params(UtxoCoin::BitcoinCash, "ab"),
             json!(["ab", "exclude_tokens"])
@@ -1456,8 +1354,6 @@ mod tests {
         assert_eq!(scripthash_params(UtxoCoin::Dash, "ab"), json!(["ab"]));
         assert_eq!(scripthash_params(UtxoCoin::Dogecoin, "ab"), json!(["ab"]));
 
-        // Addresses are checked for the chain before any request: a legacy BCH address, a
-        // Bitcoin address, a Dash address on Bitcoin Cash.
         let c = at(UtxoCoin::BitcoinCash, Network::Mainnet);
         tauri::async_runtime::block_on(async {
             for a in [
@@ -1473,9 +1369,6 @@ mod tests {
         });
     }
 
-    /// A Bitcoin Cash coin carrying CashTokens (token prefix 0xef before the locking script)
-    /// slipped into a listing despite `exclude_tokens`: its script is not ours, so the whole
-    /// listing is refused (and wallet-core would refuse to sign it anyway).
     #[test]
     fn bitcoin_cash_token_coin_is_never_listed_as_ours() {
         let ours = "76a914de701ce12e576395c863e9377c76dd7efe0c55c188ac";
@@ -1499,11 +1392,9 @@ mod tests {
     }
 
     /// Live check without Tor's bootstrap cost: a capture made just before (read-only Electrum
-    /// calls to `doge.electrum1.cipig.net:20060` — `server.features`, `get_balance`,
-    /// `get_history`, `listunspent`, `transaction.get` of every coin, `estimatefee`, `relayfee`)
-    /// is fed through the backend's own parsers and checks. File: `$KYRO_DOGE_CAPTURE` (JSON
-    /// keyed by method, as `testdata/doge_electrum_mainnet.json`).
-    /// `KYRO_DOGE_CAPTURE=… cargo test -p kyro-desktop --lib -- --ignored --nocapture doge_capture`
+    /// calls to `doge.electrum1.cipig.net:20060` — `server.features`, `get_balance`, `get_history`,
+    /// `listunspent`, `transaction.get` of every coin, `estimatefee`, `relayfee`) is fed through
+    /// the backend's own parsers and checks.
     #[test]
     #[ignore]
     fn doge_capture_through_the_parsers() {
@@ -1550,15 +1441,13 @@ mod tests {
             raws.len()
         );
         assert_eq!(sum as i64, bal, "balance = sum of the verified coins");
-        // One inflated amount on live data: the whole listing is refused.
         let mut lie = claimed.clone();
         lie[0].value += 1;
         assert!(verified_utxos(UtxoCoin::Dogecoin, &lie, &raws, &spk).is_err());
     }
 }
 
-/// Real-network tests over Tor. Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture utxo_live`.
+/// Real-network tests over Tor.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -1590,7 +1479,6 @@ mod live {
         }
     }
 
-    /// The public test wallet's first receive and change addresses (what the TS scan reads).
     fn abandon_addresses(seed: &wallet_core::Seed, n: u32) -> Vec<(bool, u32, String)> {
         let mut out = Vec::new();
         for change in [false, true] {
@@ -1610,10 +1498,9 @@ mod live {
         out
     }
 
-    /// Litecoin testnet4 broadcast, phase 1 of 2: reads the public "abandon … about" wallet
-    /// over Tor (`ltc_address_info` / `ltc_address_utxos` code) and writes it to
-    /// `$KYRO_LTC_DUMP` for the TS adapter, which builds the self-send PSBT.
-    /// `KYRO_LTC_DUMP=… cargo test -p kyro-desktop -- --ignored --nocapture ltc_broadcast_1_fetch`
+    /// Litecoin testnet4 broadcast, phase 1 of 2: reads the public "abandon … about" wallet over
+    /// Tor (`ltc_address_info` / `ltc_address_utxos` code) and writes it to `$KYRO_LTC_DUMP` for
+    /// the TS adapter, which builds the self-send PSBT.
     #[test]
     #[ignore]
     fn ltc_broadcast_1_fetch() {
@@ -1637,11 +1524,10 @@ mod live {
     }
 
     /// Phase 2 of 2: reads the TS-built PSBT from `$KYRO_LTC_PSBT`, runs exactly what
-    /// `ltc_sign_psbt` runs (decoding, dialog text, second dialog if required, signature,
-    /// identical summary) — the native dialog itself cannot be shown headless, its text is
-    /// printed — checks that every output pays this same public wallet, finalizes, then calls
-    /// the `ltc_broadcast` code over Tor (txid check) and waits for `ltc_address_txs` to show it.
-    /// Broadcasts only when `KYRO_LTC_BROADCAST=yes`.
+    /// `ltc_sign_psbt` runs (decoding, dialog text, second dialog if required, signature, identical
+    /// summary) — the native dialog itself cannot be shown headless, its text is printed — checks
+    /// that every output pays this same public wallet, finalizes, then calls the `ltc_broadcast`
+    /// code over Tor (txid check) and waits for `ltc_address_txs` to show it.
     #[test]
     #[ignore]
     fn ltc_broadcast_2_sign_and_send() {
@@ -1726,8 +1612,6 @@ mod live {
         });
     }
 
-    /// Self-send of one real UTXO to our own change address at 1 litoshi/vB, signed by
-    /// wallet-core; returns a one-line report. Never broadcast.
     fn live_self_send(
         seed: &wallet_core::Seed,
         prev: &bitcoin::Transaction,
@@ -1806,11 +1690,9 @@ mod live {
 
     /// Dogecoin mainnet on Kyro's default (Komodo's public ElectrumX) over Tor, read-only, nothing
     /// is ever broadcast: probe (genesis), tip, fees (bounds), then, through the very code of
-    /// `doge_address_info` / `_utxos` / `_txs` / `_tx_hex`, two public addresses:
-    /// `DSBM4ZW9…V1h` (the recorded fixture: same coin, same amount if still unspent) and
-    /// `DK4Ur92a…aXY` (≈ 40 coins, each checked against its previous transaction). Finally a
-    /// lying server is simulated on live data: the real coin with an inflated amount is refused.
-    /// `cargo test -p kyro-desktop -- --ignored --nocapture doge_live_mainnet`
+    /// `doge_address_info` / `_utxos` / `_txs` / `_tx_hex`, two public addresses: `DSBM4ZW9…V1h`
+    /// (the recorded fixture: same coin, same amount if still unspent) and `DK4Ur92a…aXY` (≈ 40
+    /// coins, each checked against its previous transaction).
     #[test]
     #[ignore]
     fn doge_live_mainnet_electrum_over_tor() {
@@ -1869,7 +1751,6 @@ mod live {
                     t.elapsed()
                 );
                 assert_eq!(info["address"], a);
-                // Every confirmed coin was checked against its previous transaction.
                 let confirmed: u64 = list
                     .iter()
                     .filter(|u| u["status"]["confirmed"] == true)
@@ -1892,7 +1773,6 @@ mod live {
                     assert!(touches, "{}", tx["txid"]);
                 }
             }
-            // The fixture's coin, if still unspent, is exactly what was recorded.
             let fixture = "91ac15690017a0aa953a696ee5dd63350ca2f270764c8b1f3c7ecff27b47b9f8";
             let utxos = address_utxos(&c, "DSBM4ZW9Dz8jLJuPUBe623ch4yxNkXdV1h")
                 .await
@@ -1906,7 +1786,6 @@ mod live {
                 assert_eq!(u["vout"], 2);
                 assert_eq!(u["value"], 323_699_023);
             }
-            // Previous transaction fetched live, hash checked; a lying amount is refused.
             let hex_tx = tx_hex(&c, fixture).await.unwrap();
             let prev =
                 wallet_core::utxo_decode_raw_tx(&hex_tx, Network::Mainnet, UtxoCoin::Dogecoin)
@@ -1931,15 +1810,6 @@ mod live {
         });
     }
 
-    /// Bitcoin Cash and Dash mainnet on Kyro's defaults (public Fulcrum / Komodo ElectrumX),
-    /// read-only, nothing is ever broadcast. Over Tor unless `KYRO_LIVE_TOR=0` (clear, faster).
-    /// Through the very code of `{bch,dash}_address_info` / `_utxos` / `_txs` / `_tx_hex`:
-    /// probe (genesis, and the post-split checkpoint for Bitcoin Cash), tip, fees (bounds), then
-    /// public addresses — Trezor's `all ×12` test wallets (`qr08q88p…` and `XdTw4G5A…`, the
-    /// ones of `test_bcash.py` / `test_dash.py`, with real mainnet history) and one active
-    /// address per chain whose every coin is checked against its previous transaction; finally a
-    /// lying server is simulated on live data (inflated amount refused).
-    /// `cargo test -p kyro-desktop -- --ignored --nocapture bch_dash_live`
     #[test]
     #[ignore]
     fn bch_dash_live_mainnet_electrum() {
@@ -2040,7 +1910,6 @@ mod live {
                                 .any(|i| i["prevout"]["scriptpubkey_address"] == a.as_str());
                         assert!(touches, "{}", tx["txid"]);
                     }
-                    // One coin re-fetched through `*_tx_hex` (hash checked), then a lie refused.
                     if let Some(u) = list.first() {
                         let txid = u["txid"].as_str().unwrap();
                         let vout = u["vout"].as_u64().unwrap() as u32;
@@ -2155,7 +2024,6 @@ mod live {
             } else {
                 eprintln!("no testnet4 UTXO above dust on {me}: build/sign step skipped");
             }
-            // A mainnet server for the testnet slot: wrong network, typed error.
             let wrong = UtxoCtx {
                 server: UtxoServer::Esplora {
                     url: "https://litecoinspace.org/api".into(),
@@ -2166,7 +2034,6 @@ mod live {
             eprintln!("wrong network: {e:?}");
             assert!(matches!(e, Err(AppError::ServerWrongNetwork(ref m)) if m.contains("mainnet")));
 
-            // Dogecoin candidates (QED electrs demo). Informative: printed, not asserted.
             for (network, url) in [
                 (Network::Testnet, "https://doge-electrs-testnet-demo.qed.me"),
                 (Network::Mainnet, "https://doge-electrs-demo.qed.me"),

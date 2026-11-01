@@ -1,12 +1,6 @@
 //! Polkadot Asset Hub data from Parity's public Substrate JSON-RPC node over HTTPS
 //! (`polkadot-asset-hub-rpc.polkadot.io`, `westend-asset-hub-rpc.polkadot.io` for the testnet),
 //! on the `polkadot` Tor family, never with a fallback.
-//!
-//! Kyro builds the transfer itself: genesis (checked against wallet-core's pin), runtime
-//! version, metadata V15 (decoded and checked by wallet-core, cached per spec version),
-//! nonce (`system_accountNextIndex`), finalized block (era), balances (`System.Account`
-//! storage), fee estimate (`TransactionPaymentApi_query_info` on a zero-signature copy).
-//! History: not from the node (no index by account) but from Statescan, see `dot_history`.
 
 use std::sync::Mutex;
 
@@ -150,7 +144,6 @@ pub async fn runtime_version(ctx: &DotCtx<'_>) -> AppResult<(u32, u32)> {
     Ok((n("specVersion")?, n("transactionVersion")?))
 }
 
-/// Runtimes already decoded in this process (metadata is ≈ 0.7 MB), by network and spec.
 static RUNTIMES: Mutex<Vec<DotRuntime>> = Mutex::new(Vec::new());
 
 /// The current runtime, checked by wallet-core: genesis pinned, metadata V15 of the node
@@ -167,7 +160,6 @@ pub async fn runtime(ctx: &DotCtx<'_>) -> AppResult<DotRuntime> {
     let rt = match cached {
         Some(r) => r,
         None => {
-            // `Metadata_metadata_at_version(15u32)` → `Option<OpaqueMetadata>`.
             let raw = hex_bytes(
                 &rpc(
                     ctx,
@@ -328,7 +320,6 @@ pub async fn submit(ctx: &DotCtx<'_>, extrinsic_hex: &str, hash: &str) -> AppRes
     .await
     {
         Ok(v) => v,
-        // 1010: invalid transaction (bad nonce, too low balance, outdated…): nothing happened.
         Err(RpcError::Node(code, msg)) => {
             return Err(AppError::InvalidInput(format!(
                 "Polkadot transaction rejected by the node ({code}): {}",
@@ -576,7 +567,6 @@ mod tests {
             check(&me, &h(1), 1, &ours, &dead),
             "frozen or being destroyed",
         );
-        // DOT for the fee.
         err(
             check(&me, &h(1), 1, &acc(100_000_000, 0), &det),
             "network fee",
@@ -613,21 +603,17 @@ mod tests {
         let exists = acc(1, 0);
         let new = DotAccountInfo::default();
         assert!(ok(&me, &exists, 1).is_ok());
-        // New account: at least the existential deposit (0.01 DOT).
         assert!(
             matches!(ok(&me, &new, 99_999_999), Err(AppError::InvalidInput(m)) if m.contains("existential deposit (0.01 DOT)"))
         );
         assert!(ok(&me, &new, 100_000_000).is_ok());
-        // Keep-alive: balance − ED − fee at most.
         assert!(ok(&me, &exists, 10_000_000_000 - 100_000_000 - 20_000_000).is_ok());
         assert!(
             matches!(ok(&me, &exists, 10_000_000_000 - 100_000_000 - 19_999_999), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
-        // Frozen (staking, vesting) part is not spendable.
         let locked = acc(10_000_000_000, 9_000_000_000);
         assert!(ok(&locked, &exists, 980_000_000).is_ok());
         assert!(ok(&locked, &exists, 980_000_001).is_err());
-        // Our account does not exist.
         assert!(ok(&new, &exists, 1).is_err());
     }
 
@@ -645,18 +631,6 @@ mod tests {
     }
 }
 
-/// Real-network test (Westend Asset Hub, and mainnet reads). Run with
-/// `cargo test -p kyro-desktop -- --ignored --nocapture dot_live`.
-/// - `KYRO_DOT_CLEAR=yes`: clear net instead of Tor;
-/// - mainnet: genesis, metadata, balances, fee of a transfer from the public « abandon … about »
-///   account, and `TaggedTransactionQueue_validate_transaction` of a REAL signed transfer: the
-///   node answers « Payment » (no funds) — not « BadProof » — which proves the signature
-///   payload (genesis, spec / transaction versions, era block, extensions) is what the runtime
-///   checks. Nothing is submitted on mainnet;
-/// - `KYRO_DOT_SEND=yes`: one real transfer on Westend Asset Hub from the public « abandon …
-///   about » account (account 0, funded by others) to its own account `//1`, through the real
-///   path (build, live checks, dialog text, signature with identical summary, broadcast with
-///   hash check, finalization through the nonce).
 #[cfg(test)]
 mod live {
     use super::*;
@@ -673,7 +647,6 @@ mod live {
     }
 
     async fn validate(c: &DotCtx<'_>, ext_hex: &str, at: &[u8; 32]) -> String {
-        // TaggedTransactionQueue_validate_transaction(source: External = 2, uxt, block_hash)
         let mut arg = vec![2u8];
         arg.extend(hex::decode(ext_hex).unwrap());
         arg.extend_from_slice(at);
@@ -730,9 +703,7 @@ mod live {
                 let built = crate::commands_dot::build(&c, &rt, &me, &pk, &a1, "10000000000").await;
                 eprintln!("build: {:?}", built.as_ref().map(|b| &b.summary));
                 if network == Network::Mainnet {
-                    // No DOT: building is refused before anything is signed…
                     assert!(matches!(built, Err(AppError::InvalidInput(_))));
-                    // …so sign a transfer by hand and ask the node to validate it.
                     let (n, h) = finalized(&c).await.unwrap();
                     let t = wallet_core::DotTransfer {
                         dest: wallet_core::dot_account_id(&a1, network).unwrap(),
@@ -753,7 +724,6 @@ mod live {
                     let (ext, _, _) = wallet_core::dot_sign(&r, 0, &rt, &payload).unwrap();
                     let v = validate(&c, &ext, &h).await;
                     eprintln!("validate_transaction (signed): {v}");
-                    // Err(Invalid(Payment)) = 0x01 00 01; Err(Invalid(BadProof)) = 0x01 00 04.
                     assert_eq!(v, "0x010001", "the runtime must accept the signature");
                     let v0 = validate(&c, &hex::encode(probe_ext), &h).await;
                     eprintln!("validate_transaction (zero signature): {v0}");

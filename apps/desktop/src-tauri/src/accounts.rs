@@ -1,15 +1,4 @@
 //! Several accounts per chain for the software vault (Ledger Live model).
-//!
-//! Keys are derived from the seed, so an "account" is only a public bookmark: the account
-//! **index** the user added for a chain and the **name** they gave it, stored per network in
-//! `settings.json` (`accounts`). Removing an account only removes the bookmark; adding it
-//! again gives back the same addresses. Account 0 always exists (it is every chain's
-//! historical account) and cannot be removed, only renamed.
-//!
-//! Every vault command that derives one of our addresses or signs takes an optional `account`
-//! (absent = 0, so an older UI keeps working unchanged). The native dialog always says which
-//! account and path signs; an account that is **not** in the user's list is shown as
-//! « inconnu » and needs a reinforced confirmation ([`confirm_signer`]).
 
 use std::collections::BTreeMap;
 
@@ -157,8 +146,8 @@ pub fn default_name(chain: Chain, index: u32) -> String {
     format!("{} {}", chain.label(), u64::from(index) + 1)
 }
 
-/// What `settings.json` stores: per network, per chain, the added accounts (and a renamed
-/// account 0). Public data only.
+/// What `settings.json` stores: per network, per chain, the added accounts (and a renamed account
+/// 0).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct VaultAccounts {
@@ -304,8 +293,6 @@ impl VaultAccounts {
     }
 }
 
-// ---------------------------------------------------------------- signing account
-
 /// Which account signs, for the native dialog.
 #[derive(Debug, Clone)]
 pub struct SignerInfo {
@@ -390,8 +377,7 @@ impl SignerInfo {
     }
 }
 
-/// Reinforced confirmation when the signing account is « unknown ». Call it after the main
-/// dialog (which already shows [`SignerInfo::line`]).
+/// Reinforced confirmation when the signing account is « unknown ».
 pub async fn confirm_signer(app: &AppHandle, signer: &SignerInfo) -> AppResult<()> {
     if signer.unknown() {
         let lang = crate::i18n::current();
@@ -413,8 +399,6 @@ pub fn btc_paths(net: Network, account: u32) -> String {
     };
     format!("m/84'/{coin}'/{account}' (SegWit), m/86'/{coin}'/{account}' (Taproot)")
 }
-
-// ---------------------------------------------------------------- IPC
 
 fn require_unlocked(state: &AppState) -> AppResult<()> {
     if state.is_unlocked() {
@@ -522,7 +506,6 @@ mod tests {
     fn limits_and_names() {
         let mut a = VaultAccounts::default();
         assert!(a.add(T, Chain::Btc, MAX_ACCOUNT + 1, "x").is_err());
-        // F6: bidi overrides, isolates and zero-width characters are refused too.
         for bad in [
             "",
             "   ",
@@ -587,7 +570,6 @@ mod tests {
             known.line(Lang::Fr),
             "Compte signataire : « Ethereum 2 » — m/44'/60'/0'/0/1"
         );
-        // A name stored before the bidi rule (or edited on disk) cannot reorder the line.
         let spoof = SignerInfo {
             name: Some("Pro\u{202E}\nÀ : 0xEvil".into()),
             ..known.clone()

@@ -1,9 +1,9 @@
 //! IPC commands for Polkadot (`dot_*`, DOT on Polkadot Asset Hub, WND on Westend Asset Hub):
 //! address, account (balance, frozen part, spendable above the existential deposit), transfer
 //! building **by Kyro** (`Balances.transfer_keep_alive`: nonce, era and runtime from the node,
-//! encoded by wallet-core after checking the metadata), signing behind the password and the
-//! native dialog (balances and existential deposit re-read live), and `author_submitExtrinsic`
-//! with hash check. Contract: docs/IPC.md §2.11.
+//! encoded by wallet-core after checking the metadata), signing behind the password and the native
+//! dialog (balances and existential deposit re-read live), and `author_submitExtrinsic` with hash
+//! check.
 
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -26,7 +26,6 @@ pub(crate) fn ctx(state: &AppState) -> DotCtx<'_> {
     }
 }
 
-/// Address and public key of Polkadot account `account` (root, or `//account`).
 fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 32])> {
     state.with_polkadot(|root| {
         Ok((
@@ -129,7 +128,6 @@ fn token(lang: Lang, units: u128, a: &wallet_core::DotAssetSummary) -> String {
     )
 }
 
-/// Body of the native dialog.
 pub(crate) fn describe_dot(lang: Lang, s: &DotTxSummary, c: &DotContext, net: Network) -> String {
     let ed = planck_of(&c.existential_deposit);
     let am = |p: u128| amount(lang, p, net);
@@ -256,8 +254,6 @@ pub(crate) fn describe_dot(lang: Lang, s: &DotTxSummary, c: &DotContext, net: Ne
     out
 }
 
-// ---------------------------------------------------------------- reads
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DotBackendInfo {
@@ -318,8 +314,6 @@ pub async fn dot_account(
         existential_deposit: rt.existential_deposit.to_string(),
     })
 }
-
-// ---------------------------------------------------------------- build, sign, broadcast
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -400,7 +394,6 @@ async fn live_context(
     })
 }
 
-/// Builds the payload of a transfer of `planck` to `to` from live data.
 pub(crate) async fn build(
     c: &DotCtx<'_>,
     rt: &DotRuntime,
@@ -412,7 +405,6 @@ pub(crate) async fn build(
     build_any(c, rt, me, pk, to, planck, None).await
 }
 
-/// Builds a native (`asset` = None) or token transfer of `planck` base units to `to`.
 pub(crate) async fn build_any(
     c: &DotCtx<'_>,
     rt: &DotRuntime,
@@ -619,8 +611,6 @@ pub async fn dot_sign_tx(
     })
 }
 
-/// Checks the signed extrinsic (decodes, sr25519 signature by our key over the current
-/// runtime and `block_hash`) then submits it.
 pub(crate) async fn broadcast_checked(
     c: &DotCtx<'_>,
     rt: &DotRuntime,
@@ -683,8 +673,7 @@ pub async fn dot_tx_status(
     })
 }
 
-/// Native DOT transfers of `address` (Statescan, Asset Hub + relay chain). Never an error:
-/// `available: false` when there is nothing reliable to show (see `dot_history`).
+/// Native DOT transfers of `address` (Statescan, Asset Hub + relay chain).
 #[tauri::command]
 pub async fn dot_txs(
     state: State<'_, AppState>,
@@ -794,7 +783,6 @@ mod tests {
         assert!(!d.contains("n'existe pas encore"));
         let d = describe_dot(Lang::Fr, &summary(), &context(false), Network::Testnet);
         assert!(d.contains("(testnet)"));
-        // Westend: WND, 12 decimals.
         assert!(
             d.contains("ce transfert le crée (dépôt existentiel : 0,0001 WND)"),
             "{d}"

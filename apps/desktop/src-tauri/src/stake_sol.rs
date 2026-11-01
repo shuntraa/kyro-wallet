@@ -2,12 +2,6 @@
 //! (read by Rust from the Solana RPC through `net_fetch`'s policy and Tor), messages **built by
 //! Kyro** (wallet-core `sol_stake_message`), signing behind the password and the native dialog
 //! (decoded by wallet-core, live state re-read), and broadcast with signature check.
-//!
-//! RPC methods used (all still served by Agave 4.x; `getStakeActivation` was removed in 2.0 and
-//! Kyro computes activation itself from the StakeHistory sysvar): `getEpochInfo`,
-//! `getProgramAccounts` (Stake program, `withdrawer = us`; Config program, validator info),
-//! `getAccountInfo`, `getVoteAccounts`, `getStakeMinimumDelegation`,
-//! `getMinimumBalanceForRentExemption`, `getBalance`, `getLatestBlockhash`, `sendTransaction`.
 
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
@@ -29,9 +23,7 @@ use crate::net::FetchRequest;
 use crate::solana;
 use crate::state::AppState;
 
-/// Above this commission (percent) the dialog is followed by the reinforced confirmation.
 const HIGH_COMMISSION: u64 = 10;
-/// Approximate slot time (the protocol target is 400 ms).
 const SLOT_MS: u64 = 400;
 const SEED_PREFIX: &str = "kyro-stake-";
 const VALIDATOR_INFO: &str = "Va1idator1nfo111111111111111111111111111111";
@@ -98,8 +90,6 @@ fn b64(v: &Value) -> AppResult<Vec<u8>> {
         .decode(d)
         .map_err(|_| bad("Solana RPC: invalid base64"))
 }
-
-// ---------------------------------------------------------------- reads
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -254,7 +244,6 @@ pub(crate) fn position(
     }
 }
 
-/// Our stake accounts: `getProgramAccounts(Stake, dataSize 200, memcmp(44 = withdrawer) = us)`.
 async fn our_stake_accounts(
     state: &AppState,
     me: &str,
@@ -287,7 +276,6 @@ async fn our_stake_accounts(
     Ok(out)
 }
 
-/// One stake account, read live.
 async fn stake_account(
     state: &AppState,
     address: &str,
@@ -383,8 +371,6 @@ fn info_name(a: &Value) -> Option<(String, String)> {
     Some((identity, name))
 }
 
-/// Self-declared validator names (Config program, `validatorInfo`), optionally for one identity
-/// only (`memcmp` at offset 34 = the second key of `ConfigKeys`).
 async fn validator_names(
     state: &AppState,
     identity: Option<&str>,
@@ -421,8 +407,6 @@ async fn validator(state: &AppState, vote: &str) -> AppResult<SolValidator> {
     Ok(v)
 }
 
-// ---------------------------------------------------------------- commands: reads
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SolStakeOverview {
@@ -437,7 +421,6 @@ pub struct SolStakeOverview {
     pub accounts: Vec<SolStakePosition>,
 }
 
-/// Our address of Solana account `account` (`m/44'/501'/account'/0'`).
 fn our_address(state: &AppState, account: u32) -> AppResult<String> {
     state.with_seed(|seed| Ok(wallet_core::sol_address(seed, account)?))
 }
@@ -510,8 +493,6 @@ pub async fn sol_stake_validators(
     })
 }
 
-// ---------------------------------------------------------------- build / check
-
 /// What the UI asks Kyro to build. Amounts: lamports, decimal strings.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(
@@ -580,7 +561,6 @@ pub struct SolStakePreview {
     pub requires_extra_confirmation: bool,
 }
 
-/// The operation a decoded message performs, if it is exactly one Kyro builds.
 pub(crate) fn classify(s: &SolTxSummary, me: &str) -> AppResult<SolStakeOp> {
     let refuse =
         || AppError::InvalidInput("this is not a staking operation built by Kyro: refused".into());
@@ -659,8 +639,6 @@ fn warnings_for(v: &SolValidator) -> Vec<SolStakeWarning> {
     w
 }
 
-/// Live checks of `op` for our address and the dialog's context. Used by build (before
-/// returning the message) and by sign (again, with fresh data).
 pub(crate) async fn preview(
     state: &AppState,
     me: &str,
@@ -921,7 +899,6 @@ pub(crate) async fn build(
         .as_str()
         .ok_or_else(|| bad("Solana RPC: blockhash missing"))?;
     let message = wallet_core::sol_stake_message(me, &op, blockhash)?;
-    // Decoded again by wallet-core, with the rules used before signing.
     let summary = wallet_core::sol_decode_message(&message, &[], me)?;
     if classify(&summary, me)? != op {
         return Err(AppError::Internal("unexpected staking message".into()));
@@ -945,8 +922,6 @@ pub async fn sol_stake_build(
     build(&state, &me, &action).await
 }
 
-// ---------------------------------------------------------------- dialog
-
 fn net_label(net: Network) -> &'static str {
     match net {
         Network::Mainnet => "Solana (mainnet)",
@@ -964,7 +939,6 @@ fn duration(lang: Lang, secs: u64) -> String {
     }
 }
 
-/// SOL amount for dialog text, with the decimal mark of `lang`.
 fn sol_in(lang: Lang, lamports: &str) -> String {
     format!("{} SOL", format_units_in(lang, lamports, 9))
 }
@@ -1010,7 +984,6 @@ fn validator_lines(lang: Lang, v: &SolValidator) -> String {
     }
 }
 
-/// Body of the native dialog, from the decoded message and the live context only.
 pub(crate) fn describe(lang: Lang, p: &SolStakePreview, net: Network) -> String {
     let sol = |l: &str| sol_in(lang, l);
     let fr = lang == Lang::Fr;
@@ -1180,8 +1153,6 @@ pub(crate) fn describe_extra(lang: Lang, p: &SolStakePreview) -> String {
     out
 }
 
-// ---------------------------------------------------------------- sign, broadcast
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SolStakeSigned {
@@ -1191,15 +1162,12 @@ pub struct SolStakeSigned {
     pub stake: SolStakePreview,
 }
 
-/// Everything `sol_stake_sign` does before the password: decode, classify, live checks.
 pub(crate) async fn prepare_sign(
     state: &AppState,
     me: &str,
     bytes: &[u8],
 ) -> AppResult<(SolTxSummary, SolStakePreview)> {
     let decoded = solana::decode(state, bytes, me).await?;
-    // Kyro builds staking messages itself, without lookup tables: an account given by the RPC
-    // through a table has no business here.
     if !decoded.from_tables.is_empty() {
         return Err(AppError::InvalidInput(
             "staking: accounts read from an address lookup table refused".into(),
@@ -1346,7 +1314,6 @@ mod tests {
             let s = wallet_core::sol_decode_message(&m, &[], ME).unwrap();
             assert_eq!(classify(&s, ME).unwrap(), op);
         }
-        // A plain SOL transfer is not a staking operation.
         let mut s = wallet_core::sol_decode_message(
             &wallet_core::sol_stake_message(
                 ME,
@@ -1366,7 +1333,6 @@ mod tests {
             lamports: "1".into(),
         }];
         assert!(classify(&s, ME).is_err());
-        // Two operations in one message.
         let m = wallet_core::sol_stake_message(
             ME,
             &SolStakeOp::Deactivate {
@@ -1378,7 +1344,6 @@ mod tests {
         let mut s2 = wallet_core::sol_decode_message(&m, &[], ME).unwrap();
         s2.instructions.push(s2.instructions[0].clone());
         assert!(classify(&s2, ME).is_err());
-        // Another fee payer.
         let mut s3 = wallet_core::sol_decode_message(&m, &[], ME).unwrap();
         s3.fee_payer = VOTE.into();
         assert!(classify(&s3, ME).is_err());
@@ -1498,11 +1463,9 @@ mod tests {
 
 /// Real devnet staking through the Rust path of the `sol_stake_*` commands (Kyro builds the
 /// message, `prepare_sign` decodes it and re-reads everything live, dialog text, signature
-/// verified, `broadcast` checks and sends), over Tor. Wallet: the public Trezor test mnemonic
-/// (`all × 12`, `14CCvQzQ…`), which holds devnet SOL (devnet's minimum delegation is 1 SOL; the
-/// public "abandon" wallet has less). Sequence: create + delegate (minimum), deactivate in the
-/// same epoch (never activated, so immediately withdrawable), withdraw everything back.
-/// `KYRO_SOL_STAKE=yes cargo test -p kyro-desktop --lib -- --ignored --nocapture sol_stake_live`
+/// verified, `broadcast` checks and sends), over Tor. Sequence: create + delegate (minimum),
+/// deactivate in the same epoch (never activated, so immediately withdrawable), withdraw everything
+/// back.
 #[cfg(test)]
 mod live {
     use super::*;
@@ -1593,7 +1556,6 @@ mod live {
                 .expect("a voting validator")
                 .clone();
             eprintln!("chosen validator {v:?}");
-            // 1. Create + delegate the minimum.
             let built = build(
                 &state,
                 &me,
@@ -1615,7 +1577,6 @@ mod live {
             }
             eprintln!("SOL STAKE CREATE+DELEGATE: {t1}");
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            // 2. Deactivate.
             let built = build(
                 &state,
                 &me,
@@ -1631,7 +1592,6 @@ mod live {
             let ov = overview(&state, &me).await.unwrap();
             let pos = ov.accounts.iter().find(|a| a.address == stake_acc).unwrap();
             eprintln!("after deactivate: {pos:#?}");
-            // 3. Withdraw everything back (possible at once if still in the activation epoch).
             if !pos.can_close {
                 eprintln!("not withdrawable yet (epoch changed between delegation and deactivation): withdraw after the cool-down");
                 return;

@@ -1,7 +1,4 @@
-//! Cosmos Hub on a Ledger (app « Cosmos »). The app signs amino JSON only: the transaction is
-//! built like the vault's (live account, simulation, fee), then switched to LEGACY_AMINO_JSON
-//! (`wallet_core::cosmos_amino_sign_doc`); the device signs the canonical JSON, the DER
-//! signature is normalized and verified, and the TxRaw is checked again before broadcast.
+//! Cosmos Hub on a Ledger (app « Cosmos »).
 
 use tauri::{AppHandle, State};
 use wallet_core::HwKeyChain;
@@ -58,7 +55,6 @@ pub async fn hw_sign_cosmos_tx(
     let (acc, key) = stored_key(&state, &account_id, CHAIN)?;
     let pk = key_array::<33>(&key)?;
     let net = state.network;
-    // Amino mode only (refused otherwise), before anything is shown.
     let json = wallet_core::cosmos_amino_json(&sign_doc, &pk, net)?;
     let info = check_device(&app, &state, &id, &acc, &key).await?;
     let c = ctx(&state);

@@ -1,10 +1,6 @@
 //! Hardware-wallet commands (docs/IPC.md §2.3).
 //!
-//! Signing is always: decode in Rust → Kyro's native summary dialog (plus a reinforced second
-//! dialog when something is unknown or the device cannot show the details) → the device's own
-//! confirmation → independent verification of what the device returned (signature against the
-//! key derived from the stored xpub and the sighash/hash computed here). Before any signature
-//! or address display, the device's keys are compared with the stored account
+//! Before any signature or address display, the device's keys are compared with the stored account
 //! (`HW_WRONG_DEVICE`), and a displayed address must equal Kyro's own derivation
 //! (`HW_ADDRESS_MISMATCH`).
 
@@ -34,11 +30,9 @@ use crate::solana;
 use crate::state::AppState;
 
 const T_LIST: Duration = Duration::from_secs(10);
-/// Reading keys may include the Trezor PIN typed on the device.
 pub(crate) const T_READ: Duration = Duration::from_secs(90);
 /// Anything the user must confirm on the device.
 pub(crate) const T_CONFIRM: Duration = Duration::from_secs(180);
-/// Receive + change addresses scanned to flag change in the native summary.
 const OWN_ADDRESS_GAP: u32 = 20;
 
 pub(crate) fn prompt_fn(app: &AppHandle, id: &str) -> PromptFn {
@@ -49,8 +43,6 @@ pub(crate) fn prompt_fn(app: &AppHandle, id: &str) -> PromptFn {
     })
 }
 
-/// With a vault on this computer, hardware-wallet operations need the unlocked session
-/// (same lock screen as the rest of the app). Hardware-only users have no vault.
 pub(crate) fn guard(state: &AppState) -> AppResult<()> {
     if state.vault_exists() && !state.is_unlocked() {
         return Err(AppError::Locked);
@@ -129,8 +121,6 @@ fn evm_hw_limited_text(lang: Lang, warnings: Option<String>, clear: bool) -> Str
     body
 }
 
-// ---------------------------------------------------------------- discovery
-
 #[tauri::command]
 pub async fn hw_list(app: AppHandle) -> AppResult<Vec<DeviceInfo>> {
     let h = app.clone();
@@ -149,8 +139,6 @@ pub async fn hw_open(
     id: String,
 ) -> AppResult<DeviceStatus> {
     let net = state.network;
-    // The only command that may pair a Trezor Safe 7 (THP): confirm on the device, then the
-    // user types the 6-digit code (`thp-pairing-code` → `hw_thp_pairing_code`).
     let mut st = state
         .hw
         .run_pairing(&id, T_CONFIRM, prompt_fn(&app, &id), move |dev, ctl| {
@@ -167,8 +155,8 @@ pub fn hw_cancel(state: State<'_, AppState>, id: String) -> AppResult<bool> {
 }
 
 /// Trezor One PIN matrix: `positions` are digits 1–9 = cells of the 3×3 grid in Trezor's
-/// numeric-keypad layout (top row 7 8 9, middle 4 5 6, bottom 1 2 3: top-left cell = "7"),
-/// passed to the device unchanged. Never the PIN digits themselves.
+/// numeric-keypad layout (top row 7 8 9, middle 4 5 6, bottom 1 2 3: top-left cell = "7"), passed
+/// to the device unchanged.
 #[tauri::command]
 pub fn hw_pin_matrix(state: State<'_, AppState>, id: String, positions: String) -> AppResult<()> {
     let positions = Zeroizing::new(positions);
@@ -180,8 +168,6 @@ pub fn hw_pin_matrix(state: State<'_, AppState>, id: String, positions: String) 
     }
     Ok(state.hw.submit_pin(&id, positions)?)
 }
-
-// ---------------------------------------------------------------- THP pairing (Safe 7)
 
 fn check_pairing_code(code: &str) -> AppResult<()> {
     if code.len() != 6 || !code.bytes().all(|b| b.is_ascii_digit()) {
@@ -198,8 +184,7 @@ fn parse_thp_key(key: &str) -> AppResult<[u8; 32]> {
     v.try_into().map_err(|_| bad())
 }
 
-/// After the `thp-pairing-code` prompt: the 6 digits the device shows. A wrong code makes the
-/// pending `hw_open` fail with `HW_PAIRING_FAILED` (the device then needs a new attempt).
+/// After the `thp-pairing-code` prompt: the 6 digits the device shows.
 #[tauri::command]
 pub fn hw_thp_pairing_code(state: State<'_, AppState>, id: String, code: String) -> AppResult<()> {
     let code = Zeroizing::new(code);
@@ -213,17 +198,14 @@ pub fn hw_thp_pairings(state: State<'_, AppState>) -> AppResult<Vec<hw::thp_stor
     Ok(state.hw.thp_pairings()?)
 }
 
-/// Forgets the THP pairing of one device (`key` from `hw_thp_pairings`) or, without `key`,
-/// all of them and Kyro's THP host key. Only on this computer: the device keeps its record of
-/// Kyro until reset or until its own host list is cleared. Returns how many were removed.
+/// Forgets the THP pairing of one device (`key` from `hw_thp_pairings`) or, without `key`, all of
+/// them and Kyro's THP host key.
 #[tauri::command]
 pub fn hw_thp_forget(state: State<'_, AppState>, key: Option<String>) -> AppResult<usize> {
     guard(&state)?;
     let key = key.as_deref().map(parse_thp_key).transpose()?;
     Ok(state.hw.thp_forget(key.as_ref())?)
 }
-
-// ---------------------------------------------------------------- keys
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -251,13 +233,10 @@ pub struct HwXpub {
     evm: Option<HwEvmKey>,
     #[serde(skip_serializing_if = "Option::is_none")]
     sol: Option<HwSolKey>,
-    /// Litecoin / Dogecoin / Bitcoin Cash / Dash account (`hw/chains.rs`).
     #[serde(skip_serializing_if = "Option::is_none")]
     utxo: Option<wallet_core::UtxoAccount>,
-    /// XRP / TRON / Stellar key, or the Cardano account key (`hw/chains.rs`).
     #[serde(skip_serializing_if = "Option::is_none")]
     key: Option<wallet_core::WatchKey>,
-    /// Zcash transparent account (Trezor, `hw/chains.rs`).
     #[serde(skip_serializing_if = "Option::is_none")]
     zec: Option<wallet_core::ZecAccount>,
 }
@@ -344,11 +323,8 @@ pub async fn hw_get_xpub(
     read_keys(&app, &state, &id, chain, account).await
 }
 
-// ---------------------------------------------------------------- watch-only accounts
-
 #[tauri::command]
 pub fn hw_accounts_get(state: State<'_, AppState>) -> AppResult<Vec<WatchOnlyAccount>> {
-    // xpubs reveal every address: only while unlocked (or in hardware-only mode, no vault).
     guard(&state)?;
     Ok(store::load(&state.hw_accounts_path, state.network)?.accounts)
 }
@@ -470,8 +446,6 @@ pub fn hw_account_remove(state: State<'_, AppState>, account_id: String) -> AppR
     store::save(&state.hw_accounts_path, &s, state.network)
 }
 
-// ---------------------------------------------------------------- address verification
-
 /// `m/a'/b'/…` → raw indices.
 pub fn parse_path(path: &str) -> AppResult<Vec<u32>> {
     let bad = || AppError::InvalidInput(format!("invalid derivation path: {path}"));
@@ -581,7 +555,6 @@ pub fn resolve_target(
     }
 }
 
-/// Re-reads the device's keys and compares them with the stored account.
 fn same_device(
     dev: &mut dyn hw::HardwareWallet,
     ctl: &hw::Ctl,
@@ -684,8 +657,6 @@ pub async fn hw_verify_address(
     })
 }
 
-// ---------------------------------------------------------------- signing
-
 #[derive(Serialize)]
 pub struct HwBtcSigned {
     psbt: String,
@@ -728,7 +699,6 @@ pub async fn hw_sign_btc_psbt(
             i.index
         )));
     }
-    // Same change flags as the address-based decoder (sanity check of the plan).
     let own = wallet_core::btc_hw_own_addresses(net, &acc.btc, OWN_ADDRESS_GAP)?;
     let decoded = wallet_core::btc_decode_psbt(net, &psbt, &own)?;
     if decoded.fee_sats != plan.summary.fee_sats
@@ -739,7 +709,6 @@ pub async fn hw_sign_btc_psbt(
     let mut kinds: Vec<BtcKind> = plan.inputs.iter().map(|i| i.kind).collect();
     kinds.dedup();
 
-    // 1. Is this the right device? (before asking the user anything)
     let (acc2, kinds2) = (acc.clone(), kinds.clone());
     let same = state
         .hw
@@ -750,7 +719,6 @@ pub async fn hw_sign_btc_psbt(
     if !same {
         return Err(AppError::HwWrongDevice);
     }
-    // 2. Kyro's own decoded summary, in a native dialog.
     let summary = plan.summary.clone();
     let lang = crate::i18n::current();
     confirm_native(
@@ -770,7 +738,6 @@ pub async fn hw_sign_btc_psbt(
         )
         .await?;
     }
-    // 3. The device.
     let parsed = bitcoin::psbt::Psbt::from_str(psbt.trim())
         .map_err(|_| AppError::InvalidInput("invalid PSBT".into()))?;
     let accounts = acc.btc.clone();
@@ -786,7 +753,6 @@ pub async fn hw_sign_btc_psbt(
             dev.btc_sign(ctl, net, &req)
         })
         .await?;
-    // 4. Never trust the device: every signature is verified before returning.
     let (signed, summary) = wallet_core::btc_hw_finalize(net, &psbt, &acc.btc, &sigs)?;
     state.touch();
     Ok(HwBtcSigned {
@@ -827,8 +793,6 @@ pub async fn hw_sign_evm_tx(
             .filter(|d| wallet_core::ledger_erc20_verify(d).is_ok()),
         _ => None,
     };
-    // Symbol/decimals: a Ledger-signed descriptor (verified offline) or Rust's own table.
-    // Never the interface: a fake `decimals` would hide the real amount.
     let hint = descriptor
         .as_ref()
         .map(|d| TokenLabel {
@@ -1083,7 +1047,6 @@ mod tests {
             resolve_target(&acc, Chain::Sol, &parse_path("m/44'/501'/0'/0'").unwrap()).unwrap();
         assert_eq!(t, Target::Sol);
         assert_eq!(sol, wallet_core::sol_address(&seed, 0).unwrap());
-        // Paths outside the stored account are refused.
         for (chain, p) in [
             (Chain::Btc, "m/84'/1'/1'/0/0"),  // other account
             (Chain::Btc, "m/84'/0'/0'/0/0"),  // mainnet coin type

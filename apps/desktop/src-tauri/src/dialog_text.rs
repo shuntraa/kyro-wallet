@@ -1,23 +1,9 @@
 //! Text that ends up in a native dialog (confirmations, recovery phrase, server approval).
-//!
-//! Native dialogs are the part of Kyro a compromised webview cannot fake, so nothing that comes
-//! from outside Rust's own decoding may change their layout: memos, account names, token names,
-//! validator / pool / SR names, device names and server hosts all go through [`field`] (one line,
-//! capped, quoted), and every dialog body goes through [`body`] (bidi and invisible format
-//! characters removed, other control characters replaced) right before it is shown.
-//!
-//! Semantics (same as wallet-core's planned `display::sanitize_text`):
-//! - control characters (Unicode `Cc`, including `\n`, `\r`, `\t`) → a single space in a field;
-//! - bidi controls U+202A–U+202E, U+2066–U+2069, zero-width / invisible U+200B–U+200F,
-//!   U+2060–U+2065, U+FEFF, soft hyphen U+00AD, U+061C, U+180E, U+FFF9–U+FFFB and the tag
-//!   characters U+E0000–U+E007F → removed;
-//! - runs of whitespace collapsed, ends trimmed, then capped at `max` characters (`…` added).
 
 /// Default cap for one untrusted field (memo, name, URL).
 pub const MAX_FIELD: usize = 120;
 
-/// Invisible / direction-changing characters that are removed everywhere. Covers the Unicode
-/// `Cf` characters that matter for spoofing (no Unicode table crate needed).
+/// Invisible / direction-changing characters that are removed everywhere.
 pub fn is_invisible(c: char) -> bool {
     matches!(
         c,
@@ -89,7 +75,6 @@ mod tests {
 
     #[test]
     fn bidi_and_invisible_are_removed() {
-        // U+202E would flip "0xabc…" so it reads backwards; zero-width chars hide differences.
         let name = "Compte\u{202E}cba\u{200B}\u{2066}x\u{FEFF}\u{E0041}";
         assert_eq!(sanitize(name, MAX_FIELD), "Comptecbax");
         let b = body("ligne 1\n\u{202E}ligne 2\r\tfin\u{1b}[31m");

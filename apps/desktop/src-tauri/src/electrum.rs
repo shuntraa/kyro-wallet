@@ -1,17 +1,6 @@
 //! Minimal Electrum protocol client (newline-delimited JSON-RPC 2.0 over TLS or TCP).
 //!
-//! Why not the `electrum-client` crate: it is synchronous and owns its sockets/TLS (std::net,
-//! optional SOCKS proxy), so it cannot run over our in-process arti stream. This is a wire
-//! protocol only; TLS is rustls, hashing is sha2.
-//!
-//! Transport (see docs/NETWORK.md):
-//! - loopback/LAN host → direct TCP (Tor cannot reach the user's LAN), TLS required;
-//! - Tor enabled → arti stream on the chain family's isolated circuits (Bitcoin for the user's
-//!   Bitcoin servers, Dogecoin for Kyro's default Dogecoin servers);
-//! - Tor disabled → direct TCP; `.onion` refused.
-//!
-//! TLS: webpki validation (default) or a pinned SHA-256 of the server certificate. Plain TCP
-//! only to a `.onion` host over Tor. An unvalidated, unpinned certificate is never accepted.
+//! An unvalidated, unpinned certificate is never accepted.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -31,7 +20,6 @@ use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient};
 use crate::servers::{is_private_host, ElectrumTls};
 
-/// Longest accepted response line (a large raw transaction is ~2 MB of hex).
 const MAX_LINE: usize = 8 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
 const CALL_TIMEOUT: Duration = Duration::from_secs(30);
@@ -72,7 +60,6 @@ fn unreachable(host: &str, e: impl std::fmt::Display) -> AppError {
     AppError::ServerUnreachable(format!("{host}: {e}"))
 }
 
-/// Raw transport (no TLS yet), following the transport rules above.
 async fn raw_stream(
     net: &NetClient,
     host: &str,
@@ -134,8 +121,6 @@ pub fn sha256_hex(der: &[u8]) -> String {
     hex::encode(Sha256::digest(der))
 }
 
-/// Accepts exactly the certificate whose SHA-256 equals the pin (handshake signatures are still
-/// verified against that certificate's key).
 #[derive(Debug)]
 struct PinVerifier {
     pin: [u8; 32],
@@ -196,8 +181,6 @@ impl ServerCertVerifier for PinVerifier {
     }
 }
 
-/// TOFU helper: records the server certificate (and whether webpki would accept it), then
-/// ABORTS the handshake. No data is ever sent over an unvalidated connection.
 #[derive(Debug)]
 struct CaptureVerifier {
     webpki: Arc<WebPkiServerVerifier>,
@@ -405,7 +388,6 @@ impl<S: AsyncRead + AsyncWrite> Conn<S> {
             let line = self.read_line().await?;
             let msg: Value = serde_json::from_slice(&line)
                 .map_err(|_| unreachable(&self.host, "invalid JSON response"))?;
-            // Notifications (no id) are ignored.
             let Some(id) = msg.get("id").and_then(Value::as_u64) else {
                 continue;
             };
@@ -436,7 +418,6 @@ impl<S: AsyncRead + AsyncWrite> Conn<S> {
         Ok(results.into_iter().map(Option::unwrap_or_default).collect())
     }
 
-    /// Reads one `\n`-terminated line, refusing lines longer than [`MAX_LINE`].
     async fn read_line(&mut self) -> AppResult<Vec<u8>> {
         let mut line = Vec::new();
         loop {
@@ -472,7 +453,6 @@ mod tests {
     use super::*;
     use tokio::io::AsyncReadExt;
 
-    /// A scripted fake server on an in-memory duplex pipe.
     async fn fake_server(mut io: tokio::io::DuplexStream, replies: Vec<String>) {
         let mut buf = vec![0u8; 65536];
         let mut seen = String::new();
@@ -503,7 +483,6 @@ mod tests {
     fn pipelined_batch_with_notifications_and_out_of_order() {
         run(async {
             let (client, server) = tokio::io::duplex(1 << 20);
-            // Reply to id N with N*10, after a notification; split writes arbitrarily.
             tauri::async_runtime::spawn(async move {
                 let (mut r, mut w) = tokio::io::split(server);
                 let mut buf = vec![0u8; 4096];

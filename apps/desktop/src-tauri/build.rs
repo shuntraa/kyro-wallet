@@ -1,5 +1,5 @@
 // Every command the webview may call must be listed here AND granted in
-// capabilities/default.json. Anything else is rejected by Tauri (least privilege).
+// capabilities/default.json.
 const COMMANDS: &[&str] = &[
     "vault_status",
     // Automatic updates: current version and the « updated to X » notice (docs/IPC.md).

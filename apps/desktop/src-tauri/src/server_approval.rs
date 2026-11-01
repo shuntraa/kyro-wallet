@@ -1,12 +1,8 @@
 //! Native approval of every custom server host before Kyro contacts it (docs/NETWORK.md).
 //!
-//! A compromised webview can call `settings_set`, `server_test` or `electrum_fetch_cert` with
-//! any host: once saved, a host is also reachable through `net_fetch`, and even a failed test
-//! leaks data (the host name itself goes to DNS / a Tor exit, a LAN address can be probed).
-//! So a host that is not already in the saved settings, and was not approved earlier in this
-//! session, is shown in a native dialog — host and port, sanitised — BEFORE any request.
-//!
-//! The same module asks before Tor goes from enabled to disabled (all traffic in clear).
+//! A compromised webview can call `settings_set`, `server_test` or `electrum_fetch_cert` with any
+//! host: once saved, a host is also reachable through `net_fetch`, and even a failed test leaks
+//! data (the host name itself goes to DNS / a Tor exit, a LAN address can be probed).
 
 use std::collections::BTreeSet;
 
@@ -155,8 +151,6 @@ pub fn unapproved(
     out
 }
 
-/// The description part of an endpoint label (written in French by [`endpoints`]) in `lang`.
-/// Only Kyro's own words before « — » change; the host part is left as it is.
 fn label_in(lang: Lang, label: &str) -> String {
     if lang == Lang::Fr {
         return label.to_owned();
@@ -224,8 +218,8 @@ pub fn tor_off_text(lang: Lang) -> &'static str {
     )
 }
 
-/// Asks natively for every endpoint of `new` that the user has not approved yet (not in the
-/// saved settings `saved`, not approved earlier this session). Nothing is sent before.
+/// Asks natively for every endpoint of `new` that the user has not approved yet (not in the saved
+/// settings `saved`, not approved earlier this session).
 pub async fn confirm_endpoints(
     app: &AppHandle,
     new: &[Endpoint],
@@ -289,7 +283,6 @@ mod tests {
             .label
             .contains("EVM chaîne 1 (RPC) — https://rpc.example:443"));
 
-        // A new host is pending; the same host already saved (another path) or approved is not.
         let mut n = s.clone();
         n.solana.insert(
             "devnet".into(),
@@ -308,7 +301,6 @@ mod tests {
         assert_eq!(p[0].key, "evil.example:8443");
         let approved: BTreeSet<String> = ["evil.example:8443".to_owned()].into();
         assert!(unapproved(&endpoints(&n), &e, &approved).is_empty());
-        // Changing only the port is a new endpoint (LAN scan).
         let mut lan = Servers::default();
         lan.xrp.testnet = Some(XrpServer::JsonRpc {
             url: "https://192.168.1.10:22/".into(),

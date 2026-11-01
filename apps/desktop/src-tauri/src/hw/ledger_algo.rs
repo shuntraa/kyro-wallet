@@ -1,11 +1,4 @@
 //! Ledger « Algorand » app (Zondax ledger-algorand, host library `@zondax/ledger-algorand`).
-//!
-//! CLA 80. The app derives `m/44'/283'/account'/0/0` itself from a 4-byte big-endian account
-//! number (Kyro's software derivation is the same, see `wallet_core::algorand`).
-//! - GET_ADDRESS (04), P1 = 01 to show the address → `pubkey (32) || address (58 ASCII)`.
-//! - SIGN_MSGPACK (08): `[account (u32 BE), only if ≠ 0] || msgpack` in 250-byte chunks; P1 =
-//!   00 (first chunk, account 0) / 01 (first chunk with account) / 80 (next ones), P2 = 80
-//!   while more chunks follow, 00 on the last → 64-byte signature of `"TX" || msgpack`.
 
 use super::ledger_apdu::{self as apdu, SwContext};
 use super::ledger_apps::App;
@@ -96,8 +89,6 @@ mod tests {
 
     #[test]
     fn get_address_vector() {
-        // Account 123 of the Zondax emulator tests (also used by wallet-core's derivation
-        // tests): key and address as the app returns them.
         let cmd = get_address(123, true).unwrap();
         assert_eq!(hex::encode(&cmd), "80040100040000007b");
         let pk = [0x42u8; 32];
@@ -118,12 +109,10 @@ mod tests {
     #[test]
     fn sign_chunks_like_zondax() {
         let msg = vec![0x8a; 260];
-        // Account 0: no account prefix, P1 00 then 80.
         let a0 = sign_apdus(0, &msg).unwrap();
         assert_eq!(a0.len(), 2);
         assert_eq!(&a0[0][..5], &[0x80, 0x08, 0x00, 0x80, 250]);
         assert_eq!(&a0[1][..5], &[0x80, 0x08, 0x80, 0x00, 10]);
-        // Account 7: 4-byte prefix in the first chunk, P1 01.
         let a7 = sign_apdus(7, &msg[..10]).unwrap();
         assert_eq!(hex::encode(&a7[0][..9]), "800801000e00000007");
         assert_eq!(a7[0][4], 14);
