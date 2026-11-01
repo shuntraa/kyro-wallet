@@ -2,8 +2,8 @@
 //!
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
-//! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! Bitcoin derivation and PSBT signing, Litecoin (BIP84), Dogecoin, Bitcoin Cash (CashAddr,
+//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -26,6 +26,7 @@ mod btc;
 mod btc_hw;
 mod btc_watch;
 mod cardano;
+mod cashaddr;
 mod display;
 mod error;
 mod evm;
@@ -107,10 +108,12 @@ pub use tron::{
     TronVote, TRON_MAX_VOTES,
 };
 pub use utxo::{
-    utxo_account, utxo_address, utxo_address_from_xpub, utxo_address_of_script, utxo_decode_raw_tx,
-    utxo_dust_threshold, utxo_genesis_hash, utxo_psbt_summary, utxo_script_pubkey, utxo_sign_psbt,
-    UtxoAccount, UtxoCoin, UtxoOutput, UtxoOutputKind, UtxoTxSummary, UtxoWarning, DOGE_HARD_DUST,
-    DOGE_MIN_RELAY_FEE_PER_KB, DOGE_RECOMMENDED_FEE_PER_KB, DOGE_SOFT_DUST,
+    bch_forkid_sighash, utxo_account, utxo_address, utxo_address_from_xpub, utxo_address_of_script,
+    utxo_checkpoint, utxo_decode_raw_tx, utxo_dust_threshold, utxo_genesis_hash, utxo_header_hash,
+    utxo_is_special_tx, utxo_psbt_summary, utxo_script_pubkey, utxo_sign_psbt, UtxoAccount,
+    UtxoCoin, UtxoOutput, UtxoOutputKind, UtxoTxSummary, UtxoWarning,
+    BCH_DASH_DUST_RELAY_FEE_PER_KB, BCH_DASH_MIN_RELAY_FEE_PER_KB, BCH_SIGHASH_ALL_FORKID,
+    DOGE_HARD_DUST, DOGE_MIN_RELAY_FEE_PER_KB, DOGE_RECOMMENDED_FEE_PER_KB, DOGE_SOFT_DUST,
     LTC_DUST_RELAY_FEE_PER_KVB, LTC_MIN_RELAY_FEE_PER_KVB,
 };
 pub use vault::{open, seal, KdfParams, VaultFile, VAULT_VERSION};
