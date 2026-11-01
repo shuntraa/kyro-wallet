@@ -9,6 +9,7 @@ mod commands_hw;
 mod commands_near;
 mod commands_servers;
 mod commands_stellar;
+mod commands_sui;
 mod commands_tron;
 mod commands_utxo;
 mod commands_xrp;
@@ -32,6 +33,7 @@ mod stake_sol;
 mod stake_tron;
 mod state;
 mod stellar_backend;
+mod sui_backend;
 mod tor;
 mod tron_backend;
 mod utxo_backend;
@@ -205,6 +207,14 @@ pub fn run() {
             commands_near::near_sign_tx,
             commands_near::near_broadcast,
             commands_near::near_tx_status,
+            commands_sui::sui_backend_info,
+            commands_sui::sui_address,
+            commands_sui::sui_balance,
+            commands_sui::sui_txs,
+            commands_sui::sui_build_tx,
+            commands_sui::sui_sign_tx,
+            commands_sui::sui_broadcast,
+            commands_sui::sui_tx_status,
             commands_cardano::ada_backend_info,
             commands_cardano::ada_address,
             commands_cardano::ada_account,

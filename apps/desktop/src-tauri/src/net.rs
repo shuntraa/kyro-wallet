@@ -43,6 +43,9 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "test.rpc.fastnear.com",
     "tx.main.fastnear.com",
     "tx.test.fastnear.com",
+    // Sui GraphQL RPC (Sui Foundation, testnet and mainnet): only Rust's `sui_*` commands.
+    "graphql.testnet.sui.io",
+    "graphql.mainnet.sui.io",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -339,6 +342,7 @@ pub enum Family {
     Stellar,
     Cardano,
     Near,
+    Sui,
     Evm,
     Solana,
     Market,
@@ -379,6 +383,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
             | "tx.test.fastnear.com"
     ) {
         Family::Near
+    } else if host == "graphql.testnet.sui.io" || host == "graphql.mainnet.sui.io" {
+        Family::Sui
     } else if host.ends_with("-rpc.publicnode.com") || EVM_OWN_RPC_HOSTS.contains(&host) {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1155,6 +1161,8 @@ mod tests {
             assert_eq!(family_for(h, &c), Family::Near);
         }
         assert_eq!(family_for("evil.fastnear.com", &c), Family::Other);
+        assert_eq!(family_for("graphql.testnet.sui.io", &c), Family::Sui);
+        assert_eq!(family_for("graphql.mainnet.sui.io", &c), Family::Sui);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

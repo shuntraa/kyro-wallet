@@ -11,8 +11,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `xlm`: Stellar (XLM, `stellar_*`, §2.11). */
-/** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near';
+/** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
@@ -53,7 +53,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -339,6 +339,27 @@ const NEAR_CHAINS: Record<Network, NearChain> = {
 
 export function nearChain(network: Network): NearChain {
   return NEAR_CHAINS[network];
+}
+
+/**
+ * Sui (phase 4): Rust `sui_*` commands and `SuiAdapter` (`packages/chains/src/sui/`). Testnet =
+ * Sui testnet. SUI only (other coins are not listed). Server: the Sui Foundation's GraphQL RPC,
+ * reached by Rust only. Hardware wallets: not supported, the UI hides Sui for such accounts.
+ */
+export interface SuiChain extends Omit<ChainBase, 'phase'> {
+  family: 'sui';
+  phase: 4;
+}
+
+const SUI_CHAINS: Record<Network, SuiChain> = {
+  testnet: { family: 'sui', key: 'sui', name: 'Sui testnet', label: 'Sui testnet', network: 'testnet', color: '#4DA2FF', glyph: 'S',
+    nativeSymbol: 'SUI', nativeName: 'Sui', nativeDecimals: 9, coingeckoId: 'sui', phase: 4, blockTimeSecs: 1 },
+  mainnet: { family: 'sui', key: 'sui', name: 'Sui', label: 'Sui', network: 'mainnet', color: '#4DA2FF', glyph: 'S',
+    nativeSymbol: 'SUI', nativeName: 'Sui', nativeDecimals: 9, coingeckoId: 'sui', phase: 4, blockTimeSecs: 1 },
+};
+
+export function suiChain(network: Network): SuiChain {
+  return SUI_CHAINS[network];
 }
 
 interface TokenSpec {
@@ -655,7 +676,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -805,6 +826,8 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       ? { host: host(tron.url), purpose: l10n('TRON : ton nœud java-tron (l’historique exige l’API /v1 de TronGrid)', 'TRON: your java-tron node (history requires the TronGrid /v1 API)'), custom: true }
       : { host: network === 'mainnet' ? 'api.trongrid.io' : 'nile.trongrid.io', purpose: l10n(`TRON${network === 'mainnet' ? '' : ' Nile'} : soldes, ressources, historique, diffusion (TronGrid)`, `TRON${network === 'mainnet' ? '' : ' Nile'}: balances, resources, history, broadcast (TronGrid)`) },
   );
+  // Sui: reached by Rust only (sui_*), Tor circuits of the `sui` family. No custom server yet.
+  list.push({ host: network === 'mainnet' ? 'graphql.mainnet.sui.io' : 'graphql.testnet.sui.io', purpose: `Sui${network === 'mainnet' ? '' : ' testnet'} : solde, pièces de gaz, simulation, historique, envoi (GraphQL de la Sui Foundation)` });
   list.push({ host: 'api.0x.org', purpose: l10n('Devis de swap EVM (clé requise)', 'EVM swap quotes (key required)') });
   list.push({ host: 'li.quest', purpose: l10n('Devis de swap (même chaîne et entre chaînes), suivi des swaps entre chaînes', 'Swap quotes (same chain and cross-chain), cross-chain swap tracking') });
   list.push({ host: '1click.chaindefuser.com', purpose: l10n('Swap entre chaînes (NEAR Intents) : devis des routes directes (BTC, LTC, DOGE, TRON, XRP, Cardano), confirmation du dépôt (destinataire, montant, minimum, frais), suivi', 'Cross-chain swaps (NEAR Intents): quotes for direct routes (BTC, LTC, DOGE, TRON, XRP, Cardano), deposit confirmation (recipient, amount, minimum, fees), tracking') });

@@ -21,6 +21,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   near: 'NEAR',
   bch: 'Bitcoin Cash',
   dash: 'Dash',
+  sui: 'Sui',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -50,6 +51,8 @@ export function accountChainHint(chain: AccountChain): string {
       return 'XLM';
     case 'near':
       return t('settings.hintNear');
+    case 'sui':
+      return 'SUI';
   }
 }
 
@@ -132,7 +135,7 @@ export interface OwnAccountRef {
   addresses: string[];
 }
 
-const sameAddress = (family: AccountChain, a: string, b: string) => (family === 'evm' ? a.toLowerCase() === b.toLowerCase() : a === b);
+const sameAddress = (family: AccountChain, a: string, b: string) => (family === 'evm' || family === 'sui' ? a.toLowerCase() === b.toLowerCase() : a === b);
 
 /** The user's OTHER accounts of `family` (not `current`), for « Mes comptes » in Envoyer. */
 export function otherOwnAccounts<T extends OwnAccountRef>(sources: T[], family: AccountChain, current: number): T[] {

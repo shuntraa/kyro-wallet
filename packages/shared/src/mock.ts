@@ -40,6 +40,8 @@ import { createDemoUtxo, demoUtxoAccount, demoUtxoScript, DEMO_DASH_NETWORKS, DE
 import { createDemoTron, demoTronAddress, type DemoTronState } from './mock-tron';
 export { demoTronAddress } from './mock-tron';
 import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
+import { createDemoSui, demoSuiAddress, type DemoSuiState } from './mock-sui';
+export { demoSuiAddress, suiAddressOf } from './mock-sui';
 export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
 import { createDemoStellar, demoStellarAddress, type DemoStellarState } from './mock-stellar';
 export { demoStellarAddress } from './mock-stellar';
@@ -179,6 +181,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       stellar: { address: demoStellarAddress(demoSeed(), 0), path: "m/44'/148'/0'" },
       cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
       near: { address: demoNearAddress(0), path: "m/44'/397'/0'" },
+      sui: { address: demoSuiAddress(0), path: "m/44'/784'/0'/0'/0'" },
     },
     ownBtc,
     receive,
@@ -316,6 +319,8 @@ export interface MockBackend {
   stellar: DemoStellarState;
   /** NEAR demo chain (tests). */
   near: DemoNearState;
+  /** Sui demo chain (tests). */
+  sui: DemoSuiState;
   /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
   /** Staking demo (tests). */
@@ -428,6 +433,16 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   });
   // NEAR (§2.11): `near_*`, storage reserve and fee bound like Rust.
   const nearChain = createDemoNear({
+    network,
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // Sui (§2.11): `sui_*`, gas budget / coin rules like Rust.
+  const suiChain = createDemoSui({
     network,
     tor,
     settings: () => settings,
@@ -891,6 +906,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     ...xrpChain.handlers,
     ...stellarChain.handlers,
     ...nearChain.handlers,
+    ...suiChain.handlers,
     ...cardanoChain.handlers,
     ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
@@ -924,6 +940,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     xrp: xrpChain.state,
     stellar: stellarChain.state,
     near: nearChain.state,
+    sui: suiChain.state,
     cardano: cardanoChain.state,
     stake,
     advance(ms: number) {

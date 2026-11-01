@@ -32,6 +32,7 @@ import { demoTronAddress } from './mock-tron';
 import { demoXrpAddress } from './mock-xrp';
 import { demoStellarAddress } from './mock-stellar';
 import { demoNearAddress } from './mock-near';
+import { demoSuiAddress } from './mock-sui';
 import { demoFund } from './mock-tx';
 import type { DemoChainState } from './mock-net';
 import { l10n } from './i18n';
@@ -54,6 +55,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   near: 'NEAR',
   bch: 'Bitcoin Cash',
   dash: 'Dash',
+  sui: 'Sui',
 };
 
 export const defaultAccountName = (chain: AccountChain, index: number): string => `${ACCOUNT_CHAIN_LABEL[chain]} ${index + 1}`;
@@ -157,6 +159,7 @@ export function createDemoAccounts(d: {
       stellar: { address: demoStellarAddress(d.seed, a), path: `m/44'/148'/${a}'` },
       cardano: { address: cardanoOf(a), path: `m/1852'/1815'/${a}'/0/0` },
       near: { address: demoNearAddress(a), path: `m/44'/397'/${a}'` },
+      sui: { address: demoSuiAddress(a), path: `m/44'/784'/${a}'/0'/0'` },
     };
   };
 

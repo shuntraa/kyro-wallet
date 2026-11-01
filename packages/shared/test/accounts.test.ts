@@ -43,7 +43,7 @@ describe('vault account lists (demo)', () => {
   it('account 0 always exists, cannot be removed, can be renamed', async () => {
     const l = await call('vault_accounts_get');
     expect(l.btc).toEqual([{ index: 0, name: 'Bitcoin 1' }]);
-    expect(Object.keys(l).sort()).toEqual(['ada', 'bch', 'btc', 'dash', 'doge', 'evm', 'ltc', 'near', 'sol', 'tron', 'xlm', 'xrp']);
+    expect(Object.keys(l).sort()).toEqual(['ada', 'bch', 'btc', 'dash', 'doge', 'evm', 'ltc', 'near', 'sol', 'sui', 'tron', 'xlm', 'xrp']);
     expect(await rejectCode(call('vault_account_remove', { chain: 'btc', account: 0 }))).toBe('INVALID_INPUT');
     const r = await call('vault_account_rename', { chain: 'btc', account: 0, name: '  Épargne ' });
     expect(r.btc).toEqual([{ index: 0, name: 'Épargne' }]);
@@ -73,7 +73,7 @@ describe('vault account lists (demo)', () => {
     expect(a1.btc.segwit.path).toBe("m/84'/1'/1'");
     expect(a1.evm.path).toBe("m/44'/60'/0'/0/1");
     expect(a1.tron.path).toBe("m/44'/195'/1'/0/0");
-    for (const k of ['evm', 'sol', 'tron', 'xrp', 'cardano', 'stellar'] as const) expect(a1[k].address).not.toBe(a0[k].address);
+    for (const k of ['evm', 'sol', 'tron', 'xrp', 'cardano', 'stellar', 'sui'] as const) expect(a1[k].address).not.toBe(a0[k].address);
     expect(a1.ltc.address).not.toBe(a0.ltc.address);
     expect(await call('tron_address', { account: 1 })).toBe(a1.tron.address);
     expect(await call('xrp_address', { account: 1 })).toBe(a1.xrp.address);

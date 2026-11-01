@@ -71,11 +71,13 @@ export interface Accounts {
   cardano: AddressInfo;
   /** NEAR `m/44'/397'/a'` (SLIP-10 ed25519), implicit account = 64 hex of the public key (§2.11). */
   near: AddressInfo;
+  /** Sui `m/44'/784'/a'/0'/0'` (SLIP-10 ed25519, same path on testnet), `0x` + 64 hex (§2.11). */
+  sui: AddressInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'bch' | 'dash';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm', 'near', 'bch', 'dash'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'bch' | 'dash' | 'sui';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm', 'near', 'bch', 'dash', 'sui'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -788,6 +790,99 @@ export interface NearTxOutcome {
   hash: string;
   status: 'success' | 'failure' | 'pending';
   message: string;
+}
+
+// ---------------------------------------------------------------- Sui (§2.11)
+
+/** Sui: default server only (Sui Foundation GraphQL RPC). */
+export interface SuiBackendInfo {
+  kind: 'default';
+  network: UtxoNetworkKey;
+  /** `graphql.testnet.sui.io` / `graphql.mainnet.sui.io`. */
+  label: string;
+  tor: boolean;
+}
+
+/** `sui_balance`, MIST (1 SUI = 10⁹ MIST), decimal strings. */
+export interface SuiBalance {
+  address: string;
+  /** `coin + addressBalance`. */
+  total: string;
+  /** Held in SUI coin objects: what Kyro can spend. */
+  coin: string;
+  /** Held in Sui's address-balance accumulator: shown, not spendable by Kyro yet. */
+  addressBalance: string;
+}
+
+/** serde tag `kind`. Every warning → reinforced confirmation. */
+export type SuiWarning = { kind: 'sendAll' } | { kind: 'selfTransfer' } | { kind: 'highGasBudget' } | { kind: 'noExpiration' };
+
+/** wallet-core `SuiTxSummary`: Rust's strict BCS decoding of the transfer. */
+export interface SuiTxSummary {
+  sender: string;
+  recipient: string;
+  /** Always `0x2::sui::SUI`. */
+  coinType: string;
+  /** MIST; null = the whole balance of the gas coins minus the gas used. */
+  amount: string | null;
+  /** MIST. */
+  gasBudget: string;
+  /** MIST per gas unit. */
+  gasPrice: string;
+  gasCoins: Array<{ objectId: string; version: string; digest: string }>;
+  expirationEpoch: number | null;
+  /** Transaction digest (base58). */
+  digest: string;
+  warnings: SuiWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+/** Live context Rust read for the dialog (MIST): balance, gas coins, simulation. */
+export interface SuiContext {
+  balance: string;
+  gasCoinsTotal: string;
+  /** MIST of each gas coin, same order as `summary.gasCoins` (read live). */
+  gasCoinBalances: string[];
+  referenceGasPrice: string;
+  epoch: number;
+  computationCost: string;
+  storageCost: string;
+  storageRebate: string;
+  /** `computation + storage − rebate`, signed decimal. */
+  fee: string;
+  /** Whole-balance transfer: what the recipient receives according to the simulation. */
+  receives: string | null;
+}
+
+/** `sui_txs` entry: last 20 transactions touching the address, newest first. */
+export interface SuiHistoryEntry {
+  digest: string;
+  /** RFC 3339, null if unknown. */
+  timestamp: string | null;
+  checkpoint: number | null;
+  success: boolean;
+  sender: string;
+  /** Net SUI change of the address, MIST, signed decimal (fees included). */
+  change: string;
+  /** Net gas paid (MIST) when the address sent it. */
+  fee: string | null;
+  counterparty: string | null;
+  /** Other coin types moved for the address (not detailed). */
+  otherCoins: boolean;
+}
+
+export interface SuiTxStatus {
+  found: boolean;
+  success: boolean;
+  error: string | null;
+  checkpoint: number | null;
+}
+
+export interface SuiBuilt {
+  /** Unsigned TransactionData, BCS base64 (what `sui_sign_tx` signs). */
+  bcs: string;
+  summary: SuiTxSummary;
+  context: SuiContext;
 }
 
 // ---------------------------------------------------------------- Cardano (§2.7)
@@ -1585,6 +1680,25 @@ export interface Commands {
   /** Signature verified (ed25519 strict), signer = our account, server hash = ours. */
   near_broadcast: { args: { signed: string } & WithAccount; ret: NearTxOutcome };
   near_tx_status: { args: { hash: string } & WithAccount; ret: NearTxOutcome };
+  // Sui (§2.11): Rust picks the gas coins, reads the reference gas price and the epoch, encodes
+  // the BCS (wallet-core), simulates the exact bytes, re-checks everything live before signing
+  // behind the password and the native dialog. Hardware wallets: not supported.
+  sui_backend_info: { args: undefined; ret: SuiBackendInfo };
+  /** `m/44'/784'/{account}'/0'/0'`, vault unlocked. */
+  sui_address: { args: WithAccount; ret: string };
+  sui_balance: { args: { address: string }; ret: SuiBalance };
+  sui_txs: { args: { address: string }; ret: SuiHistoryEntry[] };
+  /**
+   * `amount`: MIST; `all: true` = the whole balance (recipient gets it minus the gas). Refused:
+   * invalid / short address or SuiNS name, no SUI coin, amount + gas budget > coins, failing
+   * simulation.
+   */
+  sui_build_tx: { args: { to: string; amount?: string; all?: boolean } & WithAccount; ret: SuiBuilt };
+  sui_sign_tx: { args: { bcs: string; password: string } & WithAccount; ret: SuiBuilt & { signature: string; digest: string } };
+  /** Signature checked (ed25519 by our key over these bytes), executed, effects digest = ours. */
+  sui_broadcast: { args: { bcs: string; signature: string } & WithAccount; ret: string };
+  /** Not indexed yet: `found: false`. */
+  sui_tx_status: { args: { digest: string }; ret: SuiTxStatus };
   // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
   // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
   // Hardware wallets: HW_UNSUPPORTED.

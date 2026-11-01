@@ -47,6 +47,8 @@ import {
   type StellarAdapter,
   type NearAdapter,
   nearAccountIdProblem,
+  type SuiAdapter,
+  suiAddressProblem,
 } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -69,6 +71,7 @@ import { TronEstimateView } from '../components/TronEstimateView';
 import { XRP_ACTIVATION, XrpSpendable, XrpSummaryView, XrpTagField, XrpTxStatusLine } from '../components/XrpSend';
 import { StellarMemoField, StellarSpendable, StellarSummaryView, StellarTxStatusLine, XLM_ACTIVATION, type StellarMemoKind } from '../components/StellarSend';
 import { NearReceiverLine, NearSpendable, NearSummaryView, NearTxStatusLine, nearReceiverBlocked } from '../components/NearSend';
+import { SuiSpendable, SuiSummaryView, SuiTxStatusLine } from '../components/SuiSend';
 import { CardanoSendFields, CardanoSummaryView, CardanoTxStatusLine, tokenKey } from '../components/Cardano';
 import { DustOnlyNote, PoisoningWarning } from '../components/Poisoning';
 import { SecondConfirmNotice, btcWarningText, evmWarningText } from '../components/SecondConfirm';
@@ -93,6 +96,7 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   if (asset.family === 'ada') return adapters.cardano ?? undefined;
   if (asset.family === 'xlm') return adapters.stellar ?? undefined;
   if (asset.family === 'near') return adapters.near ?? undefined;
+  if (asset.family === 'sui') return adapters.sui ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -141,8 +145,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
   // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
-  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.stellar?.address, accounts.near?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
-  const isOwn = ownAddresses.includes(asset?.family === 'evm' ? toTrim.toLowerCase() : toTrim);
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address.toLowerCase(), ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' || x.family === 'sui' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
+  const isOwn = ownAddresses.includes(asset?.family === 'evm' || asset?.family === 'sui' ? toTrim.toLowerCase() : toTrim);
   // « Mes comptes »: the user's OTHER accounts of this chain. A transfer between two of them is an
   // ordinary send (same Rust decoding, native dialog, poisoning check: own addresses are known).
   const family = asset?.family as AccountChain | undefined;
@@ -194,6 +198,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       ada: [accounts.cardano?.address],
       xlm: [accounts.stellar?.address],
       near: [accounts.near?.address],
+      sui: [accounts.sui?.address],
     };
     // The other accounts of the vault are trusted too.
     for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
@@ -277,6 +282,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   /** NEAR: a named or 0x… receiver that does not exist, or not read yet: nothing is built. */
   const nearBlocked = isNear && (!nearRecvInfo || nearReceiverBlocked(toTrim, nearRecvInfo));
   const nearProblem = isNear && toTrim ? nearAccountIdProblem(toTrim) : null;
+  /** Sui: no fee to choose; full 0x + 64 hex address; spendable = SUI in coin objects (§2.11). */
+  const isSui = asset?.family === 'sui';
+  const suiAdapter = isSui ? (adapter as SuiAdapter | undefined) : undefined;
+  const suiMe = useAsync(suiAdapter ? () => suiAdapter.balanceInfo() : null, [suiAdapter], { intervalMs: 30_000 });
+  const suiProblem = isSui && toTrim ? suiAddressProblem(toTrim) : null;
   /** Cardano: ADA or a native token from the balance, optional CIP-20 memo (§2.7). */
   const isAda = asset?.family === 'ada';
   const adaAdapter = isAda ? (adapter as CardanoAdapter | undefined) : undefined;
@@ -354,7 +364,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : isXlm && xlmMe.data ? BigInt(xlmMe.data.spendable) : null;
   // NEAR: likewise, balance − storage reserve.
   const nearSpendable = isNear && nearMe.data ? BigInt(nearMe.data.spendable) : null;
-  const overBalance = !max && amountBase !== null && amountBase > (xrpSpendable ?? nearSpendable ?? balance);
+  // Sui: the address balance is not spent by Kyro, only SUI coin objects.
+  const suiSpendable = isSui && suiMe.data ? BigInt(suiMe.data.coin) : null;
+  const overBalance = !max && amountBase !== null && amountBase > (xrpSpendable ?? nearSpendable ?? suiSpendable ?? balance);
 
   const doBuild = async (): Promise<Built> => {
     if (!asset || !adapter || !feeParams) throw new Error(t('send.incompleteParams'));
@@ -502,6 +514,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
         {xlmAdapter && <StellarTxStatusLine adapter={xlmAdapter} hash={done.id} recipient={toTrim} onIncluded={pf.refresh} />}
         {adaAdapter && <CardanoTxStatusLine adapter={adaAdapter} hash={done.id} onConfirmed={pf.refresh} />}
         {nearAdapter && <NearTxStatusLine adapter={nearAdapter} hash={done.id} recipient={toTrim} onDone={pf.refresh} />}
+        {suiAdapter && <SuiTxStatusLine adapter={suiAdapter} digest={done.id} recipient={toTrim} onIndexed={pf.refresh} />}
       </SendDone>
     );
   }
@@ -586,7 +599,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : '0x…'}
+                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : asset.family === 'sui' ? t('send.suiPlaceholder') : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -672,6 +685,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 {rt('send.xAddress', { b: (c) => <strong className="font-semibold">{c}</strong> })}
               </Notice>
             )}
+            {suiProblem && <span className="text-[12px] text-down">{suiProblem}</span>}
+            {isSui && addrValid && <span className="text-[12px] leading-[1.45] text-mute">Les adresses Sui n’ont pas de somme de contrôle : une faute de frappe donne une autre adresse valide. Compare-la en entier ; la fenêtre système la répète au complet.</span>}
             {isXrp && <XrpTagField value={tagStr} onChange={setTagStr} error={tagParsed.error} dest={xrpDestInfo} destLoading={addrValid && xrpDest.loading && !xrpDestInfo} />}
             {isXlm && <StellarMemoField kind={xlmMemoKind} onKind={(k) => { setXlmMemoKind(k); setXlmMemo(''); }} value={xlmMemo} onChange={setXlmMemo} error={xlmMemoParsed.error} dest={xlmDestInfo} destLoading={addrValid && xlmDest.loading && !xlmDestInfo} />}
             {isXlm && xlmDest.error && addrValid && <span className="text-[12px] text-down">{t('send.destUnreadable', { message: xlmDest.error.message })}</span>}
@@ -745,6 +760,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {isXlm && <StellarSpendable account={xlmMe.data} hidden={hideBalances} />}
             {xlmBelowActivation && <span className="text-[12px] text-down">{t('send.xlmBelowActivation')}</span>}
             {isNear && <NearSpendable account={nearMe.data} hidden={hideBalances} />}
+            {isSui && <SuiSpendable balance={suiMe.data} hidden={hideBalances} />}
             {isAda && adaMe.data && (
               <span className="text-[12px] leading-[1.45] text-mute">
                 {t('send.adaBalance', {
@@ -792,6 +808,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
                 {rt('send.xlmFees', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
+              </div>
+            </div>
+          ) : isSui ? (
+            <div className="flex flex-col gap-2">
+              <span className="eyebrow">Frais réseau</span>
+              <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
+                <strong className="font-semibold text-text">Rien à choisir sur Sui.</strong> Le coffre prend le prix du gaz de référence de l’époque et fixe le budget d’après une simulation de la transaction exacte (d’habitude ≈ 0,002 SUI). Le budget est un plafond : seul le gaz consommé est prélevé.
               </div>
             </div>
           ) : isXrp ? (
@@ -877,7 +900,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('send.review')}</span>
             <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[10.5px] font-medium tracking-[0.02em] text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'xlm' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'near' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
+              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'xlm' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'sui' || built?.unsigned.family === 'near' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
@@ -936,6 +959,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {built?.unsigned.family === 'xlm' && <StellarSummaryView u={built.unsigned} xlmPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'ada' && <CardanoSummaryView u={built.unsigned} adaPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'near' && <NearSummaryView u={built.unsigned} nearPrice={nativePrice} currency={cur} />}
+          {built?.unsigned.family === 'sui' && <SuiSummaryView u={built.unsigned} suiPrice={nativePrice} currency={cur} />}
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
@@ -1000,7 +1024,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {built.unsigned.summary.warnings.some((w) => w.kind === 'unknownToken') ? t('send.clearAdaUnverified') : ''}
             </EnClair>
           )}
-          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'xlm' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'near' && (
+          {built && addrValid && built.unsigned.family === 'sui' && (
+            <EnClair tone={built.unsigned.all ? 'warn' : 'ice'}>
+              Tu envoies{' '}
+              <strong>{built.unsigned.all ? `tout ton solde SUI${built.unsigned.context.receives ? ` (≈ ${fmtCrypto(BigInt(built.unsigned.context.receives), 9, 'SUI')} reçus)` : ''}` : fmtCrypto(built.unsigned.amount, 9, 'SUI')}</strong> à <strong>{recipientName}</strong>. Gaz : ≈ {fmtCrypto(BigInt(built.unsigned.context.fee) > 0n ? BigInt(built.unsigned.context.fee) : 0n, 9, 'SUI')} selon la simulation, au plus {fmtCrypto(built.unsigned.maxFee, 9, 'SUI')}.
+              {built.unsigned.all ? ' Il ne restera aucun SUI sur ce compte : une 2ᵉ confirmation te sera demandée.' : ''}
+            </EnClair>
+          )}
+          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'xlm' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'near' && built.unsigned.family !== 'sui' && (
             <EnClair>
               {rt('send.clearGeneric', { b: (c) => <strong>{c}</strong> }, {
                 amount: fmtCrypto(sendAmount, decimals, asset.symbol),
@@ -1077,6 +1108,7 @@ function dataLabel(b: Built | null, family?: string): string {
     return `${tp('send.dataOutputs', outs)} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' || family === 'bch' || family === 'dash' ? t('send.dataBytes') : 'vB'}`;
   }
   if (u.family === 'ada') return `${tp('send.dataInputs', u.summary.inputs.length)} · ${t('send.dataAdaOutputs', { n: u.summary.outputs.length })}${u.token ? ' · token' : ''}${u.summary.memo ? ` · ${t('send.dataMessage')}` : ''}`;
+  if (u.family === 'sui') return u.all ? t('send.dataSuiAll') : 'SplitCoins + TransferObjects';
   if (u.family === 'near') return `Transfer · nonce ${u.summary.nonce}${u.context.createsAccount ? ` · ${t('send.dataNearCreates')}` : ''}`;
   if (u.family === 'xlm') return `${u.createsAccount ? 'CreateAccount' : 'Payment'}${u.memo ? ` · ${t('send.dataXlmMemo', { kind: u.memo.kind === 'id' ? t('send.dataXlmMemoId') : u.memo.kind })}` : ` · ${t('send.dataNoMemo')}`}`;
   if (u.family === 'xrp') return `Payment${u.summary.destinationTag !== null ? ` · tag ${u.summary.destinationTag}` : ` · ${t('send.dataNoTag')}`}`;

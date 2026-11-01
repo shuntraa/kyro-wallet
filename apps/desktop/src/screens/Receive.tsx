@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Receive: real QR (qrcode), BTC SegWit/Taproot, Litecoin, Dogecoin, Bitcoin Cash (CashAddr), Dash,
-// TRON, XRP, Cardano, Stellar, optional requested amount (BIP21-style / EIP-681 / Solana Pay URI; none for
-// TRON, XRP, Cardano, Stellar, NEAR), network warning.
+// TRON, XRP, Cardano, Sui, Stellar, optional requested amount (BIP21-style / EIP-681 / Solana Pay URI; none for
+// TRON, XRP, Cardano, Stellar, NEAR, Sui), network warning.
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
-import { bchChain, btcChain, dashChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, stellarChain, nearChain } from '@kyro/chains';
+import { bchChain, btcChain, dashChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, stellarChain, nearChain, suiChain } from '@kyro/chains';
 import { useAsync } from '../lib/useAsync';
 import { useApp, useVault } from '../state/app';
 import { cn } from '../lib/cn';
@@ -21,10 +21,10 @@ import { AddressMismatchStop, DeviceBadge, HwErrorNotice, HwWaiting } from '../c
 import { AccountPicker, NewAccountButton } from '../components/AccountPicker';
 import { BRAND, isAddressMismatch, pickDevice, withDevice } from '../state/hw';
 
-type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near';
-const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'tron', 'xrp', 'ada', 'xlm', 'near'];
+type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui';
+const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'tron', 'xrp', 'ada', 'xlm', 'near', 'sui'];
 /** Vault-only chains (hardware wallets: HW_UNSUPPORTED for now). */
-const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'bch', 'dash', 'tron', 'xrp', 'ada', 'xlm', 'near'];
+const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'bch', 'dash', 'tron', 'xrp', 'ada', 'xlm', 'near', 'sui'];
 /** UTXO chains with « Nouvelle adresse » (Rust `{prefix}_address`). */
 const UTXO_RECEIVE = ['ltc', 'doge', 'bch', 'dash'] as const;
 type UtxoReceive = (typeof UTXO_RECEIVE)[number];
@@ -36,7 +36,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts, adapters, activeHw } = useVault();
   // Hardware-wallet accounts have no Litecoin / Dogecoin / TRON (HW_UNSUPPORTED for now).
-  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, bch: !!accounts.bch, dash: !!accounts.dash, tron: !!accounts.tron, xrp: !!accounts.xrp, ada: !!accounts.cardano, xlm: !!accounts.stellar, near: !!accounts.near };
+  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, bch: !!accounts.bch, dash: !!accounts.dash, tron: !!accounts.tron, xrp: !!accounts.xrp, ada: !!accounts.cardano, xlm: !!accounts.stellar, near: !!accounts.near, sui: !!accounts.sui };
   const [family, setFamilyRaw] = useState<Family>(has[initial] ? initial : FAMILIES.find((f) => has[f]) ?? initial);
   // Dogecoin / Dash testnets have no public server: say so instead of showing an address as if payments would appear.
   const dogeInfo = useAsync(family === 'doge' ? () => call('doge_backend_info') : family === 'dash' ? () => call('dash_backend_info') : null, [family, JSON.stringify(settings.servers.dogecoin), JSON.stringify(settings.servers.dash)]);
@@ -75,6 +75,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const ada = cardanoChain(network);
   const xlm = stellarChain(network);
   const nearC = nearChain(network);
+  const sui = suiChain(network);
 
   const btcAcc = accounts.btc?.[kind];
   const utxoAcc = isUtxoReceive(family) ? accounts[family] : undefined;
@@ -98,6 +99,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                 ? accounts.stellar?.address
               : family === 'near'
                 ? accounts.near?.address
+              : family === 'sui'
+                ? accounts.sui?.address
               : family === 'evm'
             ? accounts.evm?.address
             : accounts.sol?.address) ?? '';
@@ -118,6 +121,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                 ? (accounts.stellar?.path ?? "m/44'/148'/0'")
               : family === 'near'
                 ? (accounts.near?.path ?? "m/44'/397'/0'")
+              : family === 'sui'
+                ? (accounts.sui?.path ?? "m/44'/784'/0'/0'/0'")
               : family === 'evm'
           ? activeHw
             ? hwPaths.evm(activeHw)
@@ -127,11 +132,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             : (accounts.sol?.path ?? "m/44'/501'/0'/0'");
   const verifiedHere = verify.state === 'ok' && verify.address === address;
   const blocked = mismatch !== null || (verify.state === 'error' && isAddressMismatch(verify.error) && verify.address === address);
-  const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name, bch: bch.name, dash: dash.name, tron: tron.name, xrp: xrp.name, ada: ada.name, xlm: xlm.name, near: nearC.name }[family];
-  const decimals = { btc: 8, evm: 18, sol: 9, ltc: 8, doge: 8, bch: 8, dash: 8, tron: 6, xrp: 6, ada: 6, xlm: 7, near: 24 }[family];
-  const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', bch: 'BCH', dash: 'DASH', tron: 'TRX', xrp: 'XRP', ada: 'ADA', xlm: 'XLM', near: 'NEAR' }[family];
-  // TRON, XRP, Cardano, Stellar and NEAR have no payment-link format Kyro relies on: the QR is the bare address.
-  const amountLink = family !== 'tron' && family !== 'xrp' && family !== 'ada' && family !== 'xlm' && family !== 'near';
+  const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name, bch: bch.name, dash: dash.name, tron: tron.name, xrp: xrp.name, ada: ada.name, xlm: xlm.name, near: nearC.name, sui: sui.name }[family];
+  const decimals = { btc: 8, evm: 18, sol: 9, ltc: 8, doge: 8, bch: 8, dash: 8, tron: 6, xrp: 6, ada: 6, xlm: 7, near: 24, sui: 9 }[family];
+  const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', bch: 'BCH', dash: 'DASH', tron: 'TRX', xrp: 'XRP', ada: 'ADA', xlm: 'XLM', near: 'NEAR', sui: 'SUI' }[family];
+  // TRON, XRP, Cardano, Stellar, NEAR and Sui have no payment-link format Kyro relies on: the QR is the bare address.
+  const amountLink = family !== 'tron' && family !== 'xrp' && family !== 'ada' && family !== 'xlm' && family !== 'near' && family !== 'sui';
   // XRP: is our account activated yet (≥ 1 XRP base reserve received)?
   // Stellar: is our account created yet (≥ 1 XLM received)? Its reserve, explained.
   const xlmAccount = useAsync(family === 'xlm' && adapters.stellar ? () => adapters.stellar!.account() : null, [family, adapters.stellar]);
@@ -148,7 +153,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
     if (!askAmount || !amountBase || amountBase <= 0n) return scheme ? `${scheme}:${address}` : address;
     if (scheme) return `${scheme}:${address}?amount=${dec}`;
     if (family === 'bch') return `${address}?amount=${dec}`;
-    if (family === 'tron' || family === 'xrp' || family === 'ada' || family === 'xlm' || family === 'near') return address;
+    if (family === 'tron' || family === 'xrp' || family === 'ada' || family === 'xlm' || family === 'near' || family === 'sui') return address;
     if (family === 'evm') return `ethereum:${address}@${evm.chainId}?value=${amountBase.toString()}`;
     return `solana:${address}?amount=${dec}`;
   }, [askAmount, amountBase, amount, family, address, evm.chainId]);
@@ -173,7 +178,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   };
 
   const verifyOnDevice = async () => {
-    if (!activeHw || isUtxoReceive(family) || family === 'tron' || family === 'xrp' || family === 'ada' || family === 'xlm' || family === 'near') return;
+    if (!activeHw || isUtxoReceive(family) || family === 'tron' || family === 'xrp' || family === 'ada' || family === 'sui' || family === 'xlm' || family === 'near') return;
     const chain: HwImplementedChain = family;
     const shown = address;
     let deviceId = '';
@@ -219,6 +224,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                     ? t('receive.descXlm')
                   : family === 'near'
                     ? t('receive.descNear')
+                  : family === 'sui'
+                    ? t('receive.descSui')
                   : t('receive.descSol');
 
   return (
@@ -247,6 +254,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               ['ada', 'Cardano', 'A', '#3468D1'],
               ['xlm', 'Stellar', '✦', '#7D00FF'],
               ['near', 'NEAR', 'N', '#00C08B'],
+              ['sui', 'Sui', 'S', '#4DA2FF'],
             ] as const
           ).map(([f, label, glyph, color]) => (
             <button
@@ -283,7 +291,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
 
         <div key={family} className="rise relative flex w-[460px] flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', xlm: 'Stellar', near: 'NEAR' }[family] })}</span>
+            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', sui: 'Sui', xlm: 'Stellar', near: 'NEAR' }[family] })}</span>
             <span className="text-[15px] leading-[1.45] text-text2">{desc}</span>
           </div>
           {isUtxoReceive(family) && (
@@ -375,7 +383,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               <dt className="text-mute">{t('receive.requestedAmount')}</dt>
               <dd className="m-0">
                 {!amountLink ? (
-                  <span className="text-[12px] text-faint">{t('receive.noPaymentLink', { chain: family === 'xrp' ? 'XRP Ledger' : family === 'ada' ? 'Cardano' : family === 'xlm' ? 'Stellar' : family === 'near' ? 'NEAR' : 'TRON' })}</span>
+                  <span className="text-[12px] text-faint">{t('receive.noPaymentLink', { chain: family === 'xrp' ? 'XRP Ledger' : family === 'ada' ? 'Cardano' : family === 'sui' ? 'Sui' : family === 'xlm' ? 'Stellar' : family === 'near' ? 'NEAR' : 'TRON' })}</span>
                 ) : askAmount ? (
                   <span className="flex items-center gap-2">
                     <input autoFocus value={amount} inputMode="decimal" placeholder="0" onChange={(e) => setAmount(sanitizeDecimalInput(e.target.value, decimals))} className="h-8 w-[120px] rounded-ctl border border-line-2 bg-bg px-2 text-right text-[13px] focus:border-ice-line" />
@@ -425,6 +433,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               <strong className="font-semibold text-text">Compte implicite :</strong> donne exactement ces 64 caractères. Ton compte NEAR n’existe sur la chaîne qu’après avoir reçu des NEAR (le premier envoi le crée, frais payés par l’expéditeur). Kyro n’envoie et ne reçoit que des NEAR, pas encore de tokens (NEP-141).
               {nearAccount.data && !nearAccount.data.exists && <span className="mt-1 block font-semibold text-warn">Ton compte n’existe pas encore : il sera créé par le premier NEAR reçu.</span>}
+            </Notice>
+          )}
+          {family === 'sui' && (
+            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
+              <strong className="font-semibold text-text">Adresse complète, sans somme de contrôle :</strong> une adresse Sui est 0x suivi de 64 caractères ; une seule faute en donne une autre, valide. Fais-la copier ou scanner, jamais recopier à la main. Les noms SuiNS (nom.sui) ne sont pas pris en charge par Kyro.
             </Notice>
           )}
           {family === 'btc' && cbfMode && (

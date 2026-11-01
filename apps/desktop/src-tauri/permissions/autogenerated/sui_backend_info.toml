@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sui-backend-info"
+description = "Enables the sui_backend_info command without any pre-configured scope."
+commands.allow = ["sui_backend_info"]
+
+[[permission]]
+identifier = "deny-sui-backend-info"
+description = "Denies the sui_backend_info command without any pre-configured scope."
+commands.deny = ["sui_backend_info"]

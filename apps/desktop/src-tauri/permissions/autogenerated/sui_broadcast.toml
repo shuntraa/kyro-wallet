@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sui-broadcast"
+description = "Enables the sui_broadcast command without any pre-configured scope."
+commands.allow = ["sui_broadcast"]
+
+[[permission]]
+identifier = "deny-sui-broadcast"
+description = "Denies the sui_broadcast command without any pre-configured scope."
+commands.deny = ["sui_broadcast"]

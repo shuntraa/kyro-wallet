@@ -487,6 +487,8 @@ pub struct Accounts {
     cardano: AddressOut,
     /// Implicit account (64 hex of the ed25519 key) `m/44'/397'/a'`.
     near: AddressOut,
+    /// `m/44'/784'/a'/0'/0'` (SLIP-10 ed25519).
+    sui: AddressOut,
 }
 
 fn utxo_account_out(
@@ -573,6 +575,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             near: AddressOut {
                 address: wallet_core::near_address(seed, a)?,
                 path: wallet_core::near_path(a),
+            },
+            sui: AddressOut {
+                address: wallet_core::sui_address(seed, a)?,
+                path: wallet_core::sui_path(a),
             },
         })
     })

@@ -43,10 +43,11 @@ pub enum Chain {
     Near,
     Bch,
     Dash,
+    Sui,
 }
 
 impl Chain {
-    pub const ALL: [Chain; 12] = [
+    pub const ALL: [Chain; 13] = [
         Chain::Btc,
         Chain::Evm,
         Chain::Sol,
@@ -59,6 +60,7 @@ impl Chain {
         Chain::Near,
         Chain::Bch,
         Chain::Dash,
+        Chain::Sui,
     ];
 
     /// Name used for default account names ("Bitcoin 2").
@@ -76,6 +78,7 @@ impl Chain {
             Chain::Near => "NEAR",
             Chain::Bch => "Bitcoin Cash",
             Chain::Dash => "Dash",
+            Chain::Sui => "Sui",
         }
     }
 
@@ -100,6 +103,7 @@ impl Chain {
             Chain::Near => "near",
             Chain::Bch => "bch",
             Chain::Dash => "dash",
+            Chain::Sui => "sui",
         }
     }
 }

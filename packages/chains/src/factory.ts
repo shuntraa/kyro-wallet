@@ -20,6 +20,8 @@ import { cardanoChain } from './registry';
 import { stellarChain, xrpChain, nearChain } from './registry';
 import { StellarAdapter } from './stellar/adapter';
 import { NearAdapter } from './near/adapter';
+import { SuiAdapter } from './sui/adapter';
+import { suiChain } from './registry';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -45,6 +47,8 @@ export interface AdapterSet {
   stellar: StellarAdapter | null;
   /** NEAR: vault only (hardware wallets: not supported). */
   near: NearAdapter | null;
+  /** Sui: vault only (hardware wallets: not supported). */
+  sui: SuiAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -90,8 +94,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const stellar = accounts.stellar ? new StellarAdapter({ chain: stellarChain(network), address: accounts.stellar.address, ...a }) : null;
   // NEAR: Rust picks the server (default FastNEAR).
   const near = accounts.near ? new NearAdapter({ chain: nearChain(network), address: accounts.near.address, ...a }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(bch ? [bch] : []), ...(dash ? [dash] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : []), ...(near ? [near] : [])];
-  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, all, hw: hw ?? null };
+  // Sui: Rust picks the server (Sui Foundation GraphQL RPC).
+  const sui = accounts.sui ? new SuiAdapter({ chain: suiChain(network), address: accounts.sui.address, ...a }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(bch ? [bch] : []), ...(dash ? [dash] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : []), ...(near ? [near] : []), ...(sui ? [sui] : [])];
+  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin, Bitcoin Cash, Dash
@@ -259,3 +265,25 @@ export {
   cardanoAddressProblem,
   cardanoTokenLabel,
 } from './cardano/adapter';
+
+// ---------------------------------------------------------------- phase 4: Sui
+
+export {
+  SuiAdapter,
+  rustSuiBackend,
+  isSuiAddress,
+  suiAddressProblem,
+  normalizeSuiAddress,
+  suiHistoryItem,
+  SUI_COIN_TYPE,
+  type SuiAdapterOptions,
+  type SuiBackend,
+  type SuiBalance,
+  type SuiContext,
+  type SuiHistoryEntry,
+  type SuiTxStatus,
+  type SuiTxSummary,
+  type SuiWarning,
+  type SuiUnsigned,
+  type SuiSigned,
+} from './sui/adapter';

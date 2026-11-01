@@ -41,6 +41,8 @@ export interface WalletAccounts {
   stellar?: { address: string; path?: string };
   /** Vault only: NEAR implicit account (hardware wallets: not supported). */
   near?: { address: string; path?: string };
+  /** Vault only: Sui on a hardware wallet is not supported. */
+  sui?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {

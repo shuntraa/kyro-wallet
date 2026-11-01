@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sui-build-tx"
+description = "Enables the sui_build_tx command without any pre-configured scope."
+commands.allow = ["sui_build_tx"]
+
+[[permission]]
+identifier = "deny-sui-build-tx"
+description = "Denies the sui_build_tx command without any pre-configured scope."
+commands.deny = ["sui_build_tx"]

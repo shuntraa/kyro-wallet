@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sui-tx-status"
+description = "Enables the sui_tx_status command without any pre-configured scope."
+commands.allow = ["sui_tx_status"]
+
+[[permission]]
+identifier = "deny-sui-tx-status"
+description = "Denies the sui_tx_status command without any pre-configured scope."
+commands.deny = ["sui_tx_status"]
