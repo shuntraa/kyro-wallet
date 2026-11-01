@@ -9,7 +9,8 @@
 // « Tu reçois » can be a token on ANOTHER chain (mainnet): LI.FI through NEAR Intents, delivered
 // to YOUR account on that chain (never a typed address); the bridge deposit is confirmed with
 // NEAR Intents before the password (lifi-cross.ts, near-intents.ts).
-// From Bitcoin, Litecoin, Dogecoin, TRON, XRP, Cardano (and to the last five): NEAR Intents 1Click
+// From Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, TRON, XRP, Cardano, Sui, TON, Aptos
+// (and to those, plus Stellar): NEAR Intents 1Click
 // directly (providers/near.ts). No third-party transaction: 1Click confirms a deposit address bound
 // to YOUR accounts, then Kyro builds an ordinary transfer to it (checked by depositTxProblem, decoded
 // and signed by Rust like any send).
@@ -117,9 +118,10 @@ function SwapVault({ sellAssetId }: { sellAssetId?: string }) {
   const cur = settings.currency;
   const now = useNow(1000);
 
-  // EVM and Solana first, then the chains swaps leave through NEAR Intents (mainnet).
+  // EVM (where 0x / LI.FI has a checked contract, or 1Click serves it) and Solana first, then the
+  // chains swaps leave through NEAR Intents (mainnet).
   const chains = useMemo(
-    () => [...evmChains(network), solChain(network), ...allChains(network).filter((c) => c.family !== 'evm' && c.family !== 'sol' && canSwapFrom(c, network))].map((c) => ({ key: c.key, label: c.label })),
+    () => [...evmChains(network).filter((c) => canSwapFrom(c, network)), solChain(network), ...allChains(network).filter((c) => c.family !== 'evm' && c.family !== 'sol' && canSwapFrom(c, network))].map((c) => ({ key: c.key, label: c.label })),
     [network],
   );
   const initialSell = sellAssetId ? assetsFor(network).find((a) => a.id === sellAssetId) : undefined;

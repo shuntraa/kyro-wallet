@@ -7,15 +7,16 @@ export type ProviderId = 'zerox' | 'jupiter' | 'lifi' | 'near';
 
 /**
  * EVM chain id, 'solana', or one of the chains reached only through NEAR Intents 1Click
- * (providers/near.ts): Bitcoin (also a LI.FI destination), Litecoin, Dogecoin, TRON, XRP Ledger, Cardano.
+ * (providers/near.ts): Bitcoin (also a LI.FI destination), Litecoin, Dogecoin, Bitcoin Cash, Dash,
+ * Zcash (transparent), TRON, XRP Ledger, Cardano, Sui, TON, Aptos, and Stellar (arrival only).
  */
 export type SwapChain = number | 'solana' | UtxoOrOtherChain;
-export type UtxoOrOtherChain = 'bitcoin' | 'litecoin' | 'dogecoin' | 'tron' | 'xrp' | 'cardano';
+export type UtxoOrOtherChain = 'bitcoin' | 'litecoin' | 'dogecoin' | 'bitcoincash' | 'dash' | 'zcash' | 'tron' | 'xrp' | 'cardano' | 'sui' | 'ton' | 'aptos' | 'stellar';
 
 export interface SwapToken {
   /**
    * ERC-20 address, `0xEeee…` for the native coin, a Solana mint, a TRC-20 contract (`T…`), or the
-   * chain's name for the native coin of Bitcoin / Litecoin / Dogecoin / TRON / XRP / Cardano.
+   * chain's name (`bitcoin`, `zcash`, `ton`…) for the native coin of the other chains.
    */
   address: string;
   symbol: string;

@@ -26,7 +26,7 @@ Les paramètres ci-dessous ont été vérifiés dans la documentation officielle
 
 | Route | Fournisseur | Frais Kyro prélevés | Versés à |
 |---|---|---|---|
-| Même chaîne EVM (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche) | 0x ou LI.FI | dans le jeton **vendu**, sur cette chaîne | `recipients.evm` (`0x86cD…8B44`) |
+| Même chaîne EVM (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche, Sonic, HyperEVM : 0x ou LI.FI ; Cronos, Mantle, Gnosis, Sei, Flare, Kaia : LI.FI) | 0x ou LI.FI | dans le jeton **vendu**, sur cette chaîne | `recipients.evm` (`0x86cD…8B44`) |
 | Même chaîne Solana | Jupiter | en **USDC** (jeton de sortie s'il est en USDC, sinon d'entrée) | compte USDC de `recipients.solana` (`CFPW…Qx7C`) |
 | EVM → autre chaîne EVM, EVM → Solana, EVM → Bitcoin | LI.FI (pont NEAR Intents) | dans le jeton **envoyé**, sur la chaîne EVM de départ (étape FeeForwarder) | `recipients.evm` |
 | Solana → EVM, Solana → Bitcoin | LI.FI (pont NEAR Intents) | dans le jeton **envoyé**, sur Solana : SOL par un transfert System, un jeton SPL par un `TransferChecked` vers le compte de ce jeton de `recipients.solana` | `recipients.solana` (`ptsb…BZcM`) ou son compte du jeton |
@@ -36,11 +36,15 @@ Les paramètres ci-dessous ont été vérifiés dans la documentation officielle
 | TRON → toute chaîne servie (TRX ⇄ USDT sur TRON compris) | NEAR Intents 1Click (direct) | en **TRX** ou en **USDT TRC-20**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
 | XRP → toute chaîne servie | NEAR Intents 1Click (direct) | en **XRP**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
 | Cardano (ADA seul) → toute chaîne servie | NEAR Intents 1Click (direct) | en **ADA**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
-| EVM / Solana → Litecoin, Dogecoin, TRON, XRP, Cardano | NEAR Intents 1Click (direct) | dans le jeton **envoyé** (ETH, USDC, SOL…), sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
+| Bitcoin Cash, Dash, Zcash (transparent), Sui, TON, Aptos (monnaie native seule) → toute chaîne servie | NEAR Intents 1Click (direct) | en **BCH / DASH / ZEC / SUI / TON (Gram) / APT**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
+| Gnosis (xDAI, jetons) → chaîne non EVM servie par 1Click seul (Litecoin, Bitcoin Cash…) | NEAR Intents 1Click (direct) | dans le jeton **envoyé**, sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
+| EVM servie par 1Click / Solana → Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, TRON, XRP, Cardano, Sui, TON, Aptos, Stellar | NEAR Intents 1Click (direct) | dans le jeton **envoyé** (ETH, USDC, SOL…), sur le dépôt | compte NEAR Intents `0x86cd…8b44` |
 
-« Toute chaîne servie » : les chaînes EVM servies par 1Click (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche), Solana, Bitcoin, Litecoin, Dogecoin, TRON, XRP et Cardano ; l'arrivée est toujours **ton propre compte** Kyro sur cette chaîne. Les frais NEAR Intents ne vont **pas** à `recipients.bitcoin`, `recipients.tron`… : 1Click ne paie les commissions d'intégrateur qu'à un compte NEAR Intents. Le propriétaire les retire depuis ce compte avec la clé de `0x86cD…8B44` (par exemple sur near-intents.org, en se connectant avec ce portefeuille EVM), dans le jeton où elles ont été prélevées.
+« Toute chaîne servie » : les chaînes EVM servies par 1Click (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche, Gnosis), Solana, Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, TRON, XRP, Cardano, Sui, TON, Aptos et Stellar (arrivée seulement) ; l'arrivée est toujours **ton propre compte** Kyro sur cette chaîne. Les frais NEAR Intents ne vont **pas** à `recipients.bitcoin`, `recipients.tron`… : 1Click ne paie les commissions d'intégrateur qu'à un compte NEAR Intents. Le propriétaire les retire depuis ce compte avec la clé de `0x86cD…8B44` (par exemple sur near-intents.org, en se connectant avec ce portefeuille EVM), dans le jeton où elles ont été prélevées.
 
 Vérifié par de vrais devis 1Click (lecture seule, aucun dépôt) le 01/11/2026 : BTC → ETH, LTC → SOL, DOGE → BTC, TRX → ETH, USDT TRC-20 → USDC Solana, XRP → SOL, ADA → ETH, ETH Arbitrum → LTC ; à chaque fois `appFees` renvoie 70 vers `0x86cd…8b44` et 70 vers 1Click, dépôt `SIMPLE` sans mémo, et `/v0/status` de l'adresse de dépôt répète les mêmes conditions. 1Click impose temporairement un minimum de **100 $** au départ de TRON.
+
+Même vérification le 01/11/2026 (14 h UTC) pour les nouvelles chaînes (`packages/swap/test/fixtures/cross/1click-direct-more.json`) : BCH → ETH, DASH → ETH, ZEC → ETH, TON → ETH, SUI → ETH, APT → ETH, ETH Arbitrum → XLM, xDAI Gnosis → BCH ; à chaque fois 70 bps vers `0x86cd…8b44`, 70 vers 1Click, dépôt `SIMPLE` sans mémo (BCH `bitcoincash:q…`, DASH `X…`, ZEC `t1…`, TON `UQ…`, Sui / Aptos `0x…` de 64 caractères), confirmé par `/v0/status`. Au départ de **Stellar**, 1Click refuse un dépôt `SIMPLE` (« Incorrect depositMode for originAsset from stellar chain ») : il lui faut un mémo, que Kyro n'envoie jamais. Stellar n'est donc qu'une chaîne d'**arrivée**.
 
 Vérifié par de vrais devis li.quest (lecture seule) le 01/11/2026 : Arbitrum USDC → SOL, Base ETH → USDC Solana, Arbitrum USDC → BTC (frais en USDC ou ETH vers `0x86cD…`) ; SOL → ETH Arbitrum et USDC Solana → USDC Base (frais en SOL / USDC vers `ptsb…` ou `CFPW…`). li.quest refuse un bénéficiaire EVM pour un départ Solana (« not a valid Solana address for chain 1151111081099710 ») : le bénéficiaire suit la chaîne de départ.
 
@@ -67,10 +71,18 @@ Les paramètres envoyés ne suffisent pas : un fournisseur pourrait renvoyer une
 
 Adresses relevées dans les dépôts officiels (0x : docs.0x.org et 0x-settler ; LI.FI : `lifinance/contracts`, `deployments/<chaîne>.json`) le 01/11/2026, identiques sur Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain et Avalanche, et présents on-chain (`eth_getCode` non vide) sur les nouvelles chaînes retenues :
 
-- **0x** aussi sur Sonic (liste « Cancun » de docs.0x.org) et HyperEVM (liste « Cancun » du README de 0x-settler). **Pas Mantle** : chaîne « Shanghai », autre AllowanceHolder (`0x0000000000005E88410CcDFaDe4a5EfaE4b49562`), non proposé plutôt que validé sur une seule lecture.
-- **LI.FI** aussi sur Cronos, Mantle, Sonic, Gnosis et Sei (même Diamond ; FeeForwarder propre à Mantle). **Pas Flare, Kaia ni HyperEVM** : leur Diamond est une autre adresse (`0x198F…`, `0x1255…`, `0x0a07…`), non vérifiée par Kyro.
+- **0x** aussi sur Sonic (liste « Cancun » de docs.0x.org) et HyperEVM (liste « Cancun » du README de 0x-settler). **Pas Mantle** : docs.0x.org le donne avec l'AllowanceHolder « Shanghai » (`0x0000000000005E88410CcDFaDe4a5EfaE4b49562`, présent on-chain), mais 0x y désigne le MNT natif par `0xdeaddeaddeaddeaddeaddeaddeaddeaddead0000` au lieu de `0xEeee…`, et aucune vraie réponse 0x n'a pu être vérifiée (clé API) : non proposé plutôt que validé sans test. 0x ne sert ni Cronos, ni Gnosis, ni Sei, ni Flare, ni Kaia, ni Conflux eSpace (« Supported Chains » de docs.0x.org).
+- **LI.FI** aussi sur Cronos, Mantle, Sonic, Gnosis et Sei (même Diamond ; FeeForwarder propre à Mantle), et sur **Flare, HyperEVM et Kaia** avec leur propre Diamond et FeeForwarder (`LIFI_OTHER_DEPLOYMENTS`), relevés dans `deployments/<chaîne>.json` **et** identiques au `diamondAddress` de li.quest `/v1/chains` :
 
-Le sélecteur de chaîne du Swap ne montre que les chaînes où au moins un de ces contrats est connu (`evmSwapSupported`) : ni Flare, ni Kaia, ni Conflux eSpace. Sur un autre réseau (testnet compris), aucun contrat n'est connu : les devis 0x et LI.FI sont refusés.
+  | Chaîne | Diamond (`to` et autorisation) | FeeForwarder |
+  |---|---|---|
+  | Flare (14) | `0x198FC70Dfe05E755C81e54bd67Bff3F729344B9b` | `0xA5971Bd73Dbb879aAaA6fEcB95Dc3fD50c2e3C25` |
+  | HyperEVM (999) | `0x0a0758d937d1059c356D4714e57F5df0239bce1A` | `0xba072Bf218314E51d5c3d254800d799840ae6a25` |
+  | Kaia (8217) | `0x1255d17c1BC2f764d087536410879F2d0D8772fD` | `0x5161370f81b3054f43361644Ad332625f5E0804F` |
+
+  `eth_getCode` (01/11/2026) : chaque Diamond a le code de 5 176 octets des autres Diamond, chaque FeeForwarder **exactement** le code du FeeForwarder par défaut. De vraies réponses li.quest sur Flare (FLR ⇄ USDT0) et HyperEVM (HYPE ⇄ USD₮0) sont acceptées telles quelles par le décodeur (`packages/swap/test/fixtures/lifi-flare-*.json`, `lifi-hyperevm-*.json`) ; Kaia n'avait aucune route à coter ce jour-là (« No available quotes »), ses adresses sont vérifiées mais son calldata ne l'a pas été en direct. **Pas Conflux eSpace** : ce n'est pas une chaîne LI.FI.
+
+Le sélecteur de chaîne du Swap ne montre que les chaînes EVM où au moins un de ces contrats est connu (`evmSwapSupported`) : toutes les chaînes EVM de Kyro sauf Conflux eSpace. Sur un autre réseau (testnet compris), aucun contrat n'est connu : les devis 0x et LI.FI sont refusés. Entre chaînes, une chaîne EVM n'est proposée que si NEAR Intents la sert (Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche, Gnosis).
 
 ## Ce qu'il faut configurer avant d'encaisser
 
@@ -97,9 +109,28 @@ Pourquoi pas un autre fournisseur :
 Limites des routes NEAR Intents :
 
 - **Cardano** : ADA seulement (1Click ne liste pas les jetons natifs Cardano).
+- **Bitcoin Cash, Dash, Zcash, Sui, TON, Aptos** : la monnaie native seulement (Kyro n'y gère pas de jetons). Zcash : adresses transparentes (`t1…`), jamais une adresse TEX ni blindée. TON : la monnaie s'appelle maintenant **Gram** chez 1Click (`GRAM`, actif `nep245:v2_1.omni.hot.tg:1117_`).
+- **Stellar** : arrivée seulement (1Click exige un mémo au départ de Stellar).
+- **Pas de route** pour NEAR (1Click ne connaît que le wNEAR, un jeton NEP-141 que Kyro ne gère pas), Hedera, Kaspa, Polkadot, Algorand, Monero, Cosmos Hub, ni pour Cronos, Mantle, Sonic, Sei, Flare, Kaia, HyperEVM et Conflux eSpace entre chaînes (absents de `/v0/tokens` au 01/11/2026 ; « hypercore » n'est pas HyperEVM).
 - **XRP** : XRP seulement (pas de jetons émis) ; refus si l'adresse de dépôt exige un tag.
 - **Minimums** de 1Click (par exemple 100 $ au départ de TRON au 01/11/2026) : en dessous, pas de devis.
 - **Coût pour l'utilisateur** : 0,7 % Kyro **plus** 0,7 % pour 1Click (sa moitié du partage), soit 1,4 % retenus sur le dépôt, comptés ensemble dans « Frais inclus » de la confirmation.
+
+## Chaînes × fournisseurs (01/11/2026)
+
+| Chaîne | Même chaîne | Entre chaînes (départ et arrivée) |
+|---|---|---|
+| Ethereum, Arbitrum, Optimism, Base, Polygon, BNB Chain, Avalanche | 0x, LI.FI | LI.FI (pont NEAR Intents) vers EVM servies / Solana / Bitcoin ; 1Click vers les autres chaînes ci-dessous |
+| Sonic, HyperEVM | 0x, LI.FI | — |
+| Cronos, Mantle, Sei, Flare, Kaia | LI.FI | — |
+| Gnosis | LI.FI | LI.FI (pont NEAR Intents) vers EVM servies / Solana / Bitcoin ; 1Click vers les autres |
+| Conflux eSpace | — | — |
+| Solana | Jupiter | LI.FI vers EVM servies / Bitcoin ; 1Click vers les autres |
+| Bitcoin | — | 1Click (départ) ; LI.FI ou 1Click (arrivée) |
+| Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, XRP, Cardano, Sui, TON, Aptos | — | 1Click |
+| TRON | 1Click (TRX ⇄ USDT) | 1Click |
+| Stellar | — | 1Click, **arrivée seulement** |
+| NEAR, Hedera, Kaspa, Polkadot, Algorand, Monero, Cosmos Hub | — | — |
 
 ## 1inch : retiré
 
@@ -116,7 +147,7 @@ Ce sont les frais propres à chaque fournisseur, en plus de ceux de Kyro et sans
 
 ## Non vérifié à ce jour
 
-- **Aucun swap réel n'a été envoyé** : tout est testé contre des réponses simulées, plus de vraies réponses li.quest (deux sur une même chaîne, cinq entre chaînes avec le statut 1Click de leur dépôt), huit vrais devis 1Click en direct avec le statut de leur adresse de dépôt, et deux vraies transactions Jupiter (01/11/2026, non signés) que le décodeur accepte tels quels. Les agrégateurs et les ponts ne fonctionnent pas sur testnet.
+- **Aucun swap réel n'a été envoyé** : tout est testé contre des réponses simulées, plus de vraies réponses li.quest (six sur une même chaîne dont quatre sur Flare et HyperEVM, cinq entre chaînes avec le statut 1Click de leur dépôt), seize vrais devis 1Click en direct avec le statut de leur adresse de dépôt, et deux vraies transactions Jupiter (01/11/2026, non signés) que le décodeur accepte tels quels. Les agrégateurs et les ponts ne fonctionnent pas sur testnet.
 - **NEAR Intents en direct** : le versement effectif de la commission au compte `0x86cd…8b44` n'a pas été observé (il faudrait un vrai dépôt) ; Kyro vérifie seulement ce que 1Click s'engage à faire dans son devis signé et son statut. Le partage 50/50 sans clé API est observé en direct, alors que la doc décrit « commission + 25 bps » sans clé : Kyro s'adapte (une seule nouvelle demande) mais n'accepte jamais une part différente de 0,7 %. La signature ed25519 des devis 1Click n'est pas vérifiée par Kyro (la réponse arrive en HTTPS de l'hôte allowlisté et est relue par `/v0/status`).
 - **Entre chaînes** : la livraison à l'arrivée dépend du réseau de solveurs de NEAR Intents (remboursement sur l'adresse de départ s'il échoue). Kyro vérifie ce qui est signé et ce que le pont s'engage à faire, pas la livraison. LI.FI applique le slippage à **chaque** étape (swap de départ puis pont) : Kyro demande la moitié du slippage choisi par étape, puis exige que le minimum du pont respecte le slippage choisi. L'adresse du portefeuille de frais LI.FI sur Solana (`34FK…xjgm`) n'est pas documentée par LI.FI : relevée dans les vraies transactions ; si elle change, les départs Solana sont refusés jusqu'à mise à jour.
 - **0x** : le décodage n'a pas été confronté à une vraie réponse (clé API nécessaire) ; il suit les interfaces publiées (`IAllowanceHolder.exec`, `ISettlerTakerSubmitted.execute`). Une vente de jeton natif dont `transaction.to` ne serait pas AllowanceHolder est refusée (comportement non documenté par 0x), tout comme un échange ETH ⇄ WETH (adressé directement au contrat WETH).

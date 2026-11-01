@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // NEAR Intents 1Click, used DIRECTLY (no aggregator) for the routes LI.FI cannot serve: from
-// Bitcoin, Litecoin, Dogecoin, TRON (TRX, USDT TRC-20), XRP and Cardano to any chain Kyro holds,
-// and from EVM / Solana to Litecoin, Dogecoin, TRON, XRP and Cardano (docs.near-intents.org
-// « 1Click API »: `POST /v0/quote`, public, no key).
+// Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash, TRON (TRX, USDT TRC-20), XRP, Cardano,
+// Sui, TON and Aptos to any chain 1Click serves in Kyro, and from EVM / Solana to all of those plus
+// Stellar (arrival only) (docs.near-intents.org « 1Click API »: `POST /v0/quote`, public, no key).
 //
 // There is no third-party transaction to sign: 1Click hands out a one-time DEPOSIT ADDRESS bound
 // (off-chain, signed quote) to our recipient, our refund address, the amount and the minimum.
@@ -23,7 +23,7 @@ import { ONE_CLICK_MAX_TOTAL_BPS, type ProviderFee } from '../fees';
 import { providerError } from './common';
 import { applySlippage } from '../compare';
 import { SwapCheckError } from '../verify';
-import { NEAR_INTENTS_HOST, NearIntentsClient, ONE_CLICK_CHAINS, checkAppFees, oneClickAssetIs, type OneClickStatus, type OneClickToken } from '../near-intents';
+import { NEAR_INTENTS_HOST, NearIntentsClient, ONE_CLICK_ARRIVAL_ONLY, ONE_CLICK_CHAINS, checkAppFees, oneClickAssetIs, sameChainAddress, type OneClickStatus, type OneClickToken } from '../near-intents';
 
 /** 1Click quote answer (`POST /v0/quote`). */
 export interface OneClickQuoteAnswer {
@@ -49,7 +49,7 @@ const lifiDestination = (c: SwapChain) => lifiSource(c) || c === 'bitcoin';
 const fail = (why: string): never => {
   throw new SwapCheckError(l10n(`NEAR Intents : ${why} — devis refusé, rien n’a été signé.`, `NEAR Intents: ${why} — quote refused, nothing was signed.`));
 };
-const sameAddr = (chain: SwapChain, a: string | undefined, b: string) => !!a && (typeof chain === 'number' ? a.toLowerCase() === b.toLowerCase() : a === b);
+const sameAddr = sameChainAddress;
 const big = (v: string | undefined): bigint | null => (v !== undefined && /^\d{1,78}$/.test(v) ? BigInt(v) : null);
 
 /** The 1Click asset for `token` on `chain` (native: the `nep141:` entry first), or null. */
@@ -131,6 +131,7 @@ export class NearIntentsProvider implements SwapProvider {
   supports(p: QuoteParams): boolean {
     const to = p.toChain ?? p.chain;
     if (ONE_CLICK_CHAINS[String(p.chain)] === undefined || ONE_CLICK_CHAINS[String(to)] === undefined) return false;
+    if (ONE_CLICK_ARRIVAL_ONLY.has(p.chain)) return false;
     if (lifiSource(p.chain) && (to === p.chain || lifiDestination(to))) return false;
     return true;
   }
