@@ -32,6 +32,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // XRP Ledger JSON-RPC (testnet :51234, mainnet): only Rust's `xrp_*` commands.
     "s.altnet.rippletest.net",
     "xrplcluster.com",
+    // TON Center API v3 (mainnet, testnet; keyless public tier, ≈ 1 request/s): only Rust's
+    // `ton_*` commands.
+    "toncenter.com",
+    "testnet.toncenter.com",
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
@@ -122,6 +126,9 @@ pub struct EnvKeys {
     pub lifi: Option<String>,
     pub jupiter: Option<String>,
     pub trongrid: Option<String>,
+    /// TON Center key (`X-API-Key`), dev `.env` only; sent by Rust's `ton_*` commands to
+    /// TON Center only (never injected into webview requests).
+    pub toncenter: Option<String>,
 }
 
 impl EnvKeys {
@@ -133,6 +140,7 @@ impl EnvKeys {
             lifi: get("KYRO_LIFI_API_KEY"),
             jupiter: get("KYRO_JUPITER_API_KEY"),
             trongrid: get("KYRO_TRONGRID_API_KEY"),
+            toncenter: get("KYRO_TONCENTER_API_KEY"),
         }
     }
 }
@@ -293,6 +301,7 @@ pub enum Family {
     Dogecoin,
     Tron,
     Xrp,
+    Ton,
     Cardano,
     Evm,
     Solana,
@@ -315,6 +324,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Tron
     } else if host == "s.altnet.rippletest.net" || host == "xrplcluster.com" {
         Family::Xrp
+    } else if host == "toncenter.com" || host == "testnet.toncenter.com" {
+        Family::Ton
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
     } else if host.ends_with("-rpc.publicnode.com") {
@@ -1065,6 +1076,8 @@ mod tests {
         assert_eq!(family_for("api.trongrid.io", &c), Family::Tron);
         assert_eq!(family_for("s.altnet.rippletest.net", &c), Family::Xrp);
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
+        assert_eq!(family_for("toncenter.com", &c), Family::Ton);
+        assert_eq!(family_for("testnet.toncenter.com", &c), Family::Ton);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
         let doge = NetContext {

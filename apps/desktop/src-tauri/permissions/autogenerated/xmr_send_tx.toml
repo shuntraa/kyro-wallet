@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xmr-send-tx"
+description = "Enables the xmr_send_tx command without any pre-configured scope."
+commands.allow = ["xmr_send_tx"]
+
+[[permission]]
+identifier = "deny-xmr-send-tx"
+description = "Denies the xmr_send_tx command without any pre-configured scope."
+commands.deny = ["xmr_send_tx"]

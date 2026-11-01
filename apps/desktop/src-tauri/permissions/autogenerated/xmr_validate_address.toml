@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xmr-validate-address"
+description = "Enables the xmr_validate_address command without any pre-configured scope."
+commands.allow = ["xmr_validate_address"]
+
+[[permission]]
+identifier = "deny-xmr-validate-address"
+description = "Denies the xmr_validate_address command without any pre-configured scope."
+commands.deny = ["xmr_validate_address"]

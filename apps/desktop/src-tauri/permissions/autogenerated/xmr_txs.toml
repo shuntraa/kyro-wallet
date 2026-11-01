@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xmr-txs"
+description = "Enables the xmr_txs command without any pre-configured scope."
+commands.allow = ["xmr_txs"]
+
+[[permission]]
+identifier = "deny-xmr-txs"
+description = "Denies the xmr_txs command without any pre-configured scope."
+commands.deny = ["xmr_txs"]

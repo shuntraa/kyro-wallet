@@ -186,6 +186,36 @@ pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, M
 pub fn xrp_sign(seed, account, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
 pub fn xrp_verify_signed(blob_hex) -> Result<String /*hash*/>;   // signature DER low-S de SigningPubKey, clé = Account
 
+// --- TON : SLIP-10 ed25519 m/44'/607'/a' (route BIP39 de Trust Wallet : compte 0 = son adresse ; Tonkeeper / Tonhub ont
+//     leur propre format de phrase et Ledger un chemin à 6 niveaux, donc d'autres adresses), portefeuille standard v4R2
+//     (code officiel, hash feb5ff68…dabd5c0 vérifié à chaque usage), wallet id 698983191 sur mainnet et 0x4B59524F
+//     (« KYRO ») sur testnet : une signature v4R2 ne nomme pas le réseau, un id distinct rend impossible de rejouer un
+//     transfert de testnet sur mainnet. Cellules et BOC : crate tycho-types ; mises en page TL-B écrites ici (message
+//     externe, corps v4R2, message interne, commentaire texte), décodage strict à ré-encodage **octet pour octet**.
+pub fn ton_path(account) -> String;  pub fn ton_public_key(seed, account) -> Result<[u8; 32]>;  pub fn ton_wallet_id(testnet) -> u32;
+pub fn ton_wallet_address(pubkey, wallet_id) -> Result<TonAddress>;        // 0: ‖ hash du StateInit v4R2
+pub fn ton_address(seed, account, testnet) -> Result<String>;              // forme lisible non rebondissante UQ… (testnet 0Q…)
+pub fn ton_parse_address(s) -> Result<TonFriendly>;   // 48 car. base64url ou base64, CRC16-XModem, tag 0x11/0x51 (+0x80 testnet), wc 0 ou -1 ;
+                                                      // forme brute « 0:… » refusée (pas de somme de contrôle)
+pub fn ton_parse_raw_address(s) -> Result<TonAddress>;   // « wc:hex » des réponses serveur uniquement
+pub struct TonTransfer { public_key, wallet_id, valid_until, seqno, mode /*3 ou 130*/, destination: TonAddress, bounce, amount /*nanotons*/,
+                         comment: Option<String> /*≤ 123 octets*/, with_state_init /*seqno 0 seulement*/ }
+impl TonTransfer { pub fn encode_unsigned(&self) -> Result<String /*BOC base64, signature nulle*/>; pub fn signing_hash(&self);
+                   pub fn estimate_parts(&self) -> Result<TonEstimateParts>;
+                   pub fn decode(boc, our_pubkey, wallet_id) -> Result<(TonTransfer, [u8; 64] /*signature*/)>; }   // strict (ci-dessous)
+pub fn ton_decode_tx(boc, our_pubkey, testnet) -> Result<TonTxSummary>;   // non signé (signature nulle) ; refuse : autre destinataire du message
+//     externe que notre portefeuille, autre wallet id (autre réseau), StateInit qui n'est pas le nôtre ou avec seqno ≠ 0, op ≠ 0 (plugins),
+//     ≠ 1 message, mode ≠ 3 (montant > 0) / 130 (montant 0), message interne rebondi / avec IHR / avec autres monnaies / qui déploie un
+//     contrat, corps autre que vide ou commentaire texte (op 0 + UTF-8 valide, une cellule), masterchain, cellule spéciale, données en trop,
+//     BOC non canonique (le ré-encodage doit redonner les mêmes octets, CRC compris)
+pub struct TonTxSummary { wallet, destination /*forme selon le drapeau bounce*/, destination_other /*l'autre forme*/, destination_raw, amount,
+                          send_all, bounce, comment /*nettoyé*/, seqno, valid_until, deploys_wallet, wallet_id, warnings: Vec<TonWarning>,
+                          requires_extra_confirmation }
+pub enum TonWarning { UnusualText }   // JSON { "kind": "unusualText" }
+pub fn ton_sign(seed, account, boc, testnet) -> Result<TonSigned { boc, hash, normalized_hash, summary }>;   // ed25519 du hash de la partie
+//     signée, vérifiée (verify_strict) ; hash = hash du message externe, normalized_hash = TEP-467 (sans StateInit), ce qu'indexent les explorateurs
+pub fn ton_verify_signed(boc, our_pubkey, testnet) -> Result<(TonTransfer, String /*hash*/, String /*normalisé*/)>;
+
 // --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
 //     sel = ENTROPIE BIP39, puis clamping), dérivation BIP32-Ed25519 V2 par le crate ed25519-bip32 (aucune crypto écrite
 //     ici), signature ed25519-dalek (hazmat::raw_sign avec le scalaire étendu kL ‖ kR) vérifiée (verify_strict) ;
@@ -394,6 +424,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `ltc_*`, `doge_*` | voir §2.4 | | Litecoin, Dogecoin : mêmes formes Esplora que `btc_*`, signature avec dialogue natif |
 | `ada_*` | voir §2.7 | | Cardano : transaction construite **par Rust** depuis les UTxO et les paramètres de protocole, chaque sortie détaillée (ADA, tokens, min-ADA) |
 | `xrp_*` | voir §2.6 | | XRP Ledger : paiement construit **par Rust** (Sequence, Fee, LastLedgerSequence), tag de destination mis en évidence, réserve |
+| `ton_*` | voir §2.11 | | TON : transfert v4R2 construit **par Rust** (seqno, état des comptes, frais émulés), commentaire mis en évidence, les deux formes d'adresse |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `sol_stake_*`, `ada_stake_*`, `tron_stake_*` | voir §2.8 | | Staking : Solana natif, délégation Cardano, TRON Stake 2.0 ; opérations construites **par Rust**, décodées et vérifiées en direct avant le dialogue natif |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
@@ -433,6 +464,7 @@ type Accounts = {                 // accounts_get({ account? }) : tout est celui
   tron: { address: string };                                                    // m/44'/195'/0'/0/0 (même chemin sur Nile)
   xrp: { address: string };                                                     // m/44'/144'/0'/0/0
   cardano: { address: string };   // adresse de base m/1852'/1815'/0'/0/0 + staking …/2/0 (CIP-1852, Icarus) ; addr_test1… sur preprod
+  ton: { address: string };       // v4R2 de m/44'/607'/0', UQ… (testnet 0Q…, autre wallet id donc autre adresse)
 };
 type ApiKeyName = 'coingecko' | 'zerox' | 'trongrid';   // toutes les clés que Settings connaît (1inch retiré : une ancienne clé est ignorée puis effacée)
 // coingecko : en-tête x-cg-demo-api-key / x-cg-pro-api-key (api / pro-api.coingecko.com) ; zerox : 0x-api-key (api.0x.org) ;
@@ -874,6 +906,7 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `tron` | `m/44'/195'/a'/0/0` (Ledger Live) | `m/44'/195'/0'/0/0` |
 | `xrp` | `m/44'/144'/a'/0/0` (Ledger Live, Trezor Suite) | `m/44'/144'/0'/0/0` |
 | `ada` | CIP-1852 `m/1852'/1815'/a'/0/0` + staking `…/a'/2/0` | `m/1852'/1815'/0'/…` |
+| `ton` | `m/44'/607'/a'` (Trust Wallet), portefeuille v4R2 | `m/44'/607'/0'` |
 
 | Commande | Arguments | Retour | Notes |
 |---|---|---|---|
@@ -883,7 +916,7 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `vault_account_remove` | `{ chain, account }` | `VaultAccountLists` | coffre déverrouillé ; compte 0 → `INVALID_INPUT` |
 
 ```ts
-type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'ton';
 type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[] };   // triées par index ; nom par défaut « Bitcoin 2 » pour l'index 1
 ```
 
@@ -926,6 +959,23 @@ type NetworkInfo = {
 
 **Fait côté UI** : Réglages › Réseaux et serveurs › « Réseau » (Réseau principal — fonds réels / Réseau de test — jetons sans valeur), fenêtre de confirmation qui rappelle que chaque réseau a son propre coffre (l'autre est gardé, pas supprimé), puis redémarrage ; écran d'accueil : une ligne « Le coffre sera créé sur le réseau … » avec un lien pour changer ; badge TESTNET de la barre d'état inchangé. **Mode démo** : `network_set` mémorise le choix (`localStorage`, comme l'environnement) et recharge la page sur `?network=…` ; `?network=` dans l'URL joue le rôle de `KYRO_NETWORK`.
 
+### 2.11 TON (Toncoin, portefeuille v4R2)
+
+Serveur : **TON Center** (API v3), `toncenter.com` sur mainnet, `testnet.toncenter.com` sur testnet, famille Tor `ton`, jamais de repli ; pas de serveur personnalisé TON pour l'instant. Offre sans clé ≈ 1 requête/s par IP : toutes les requêtes TON de l'app sont espacées d'au moins 1,1 s, une à la fois, et un `429` est réessayé trois fois (voir [NETWORK.md](NETWORK.md)). **Rust construit le transfert** : seqno et états lus à TON Center (`walletInformation`), `valid_until` = maintenant + 10 min, wallet id du réseau, cellules écrites par wallet-core ; un message construit par le serveur n'est jamais signé. Frais : **estimés** par émulation (`estimateFee`, signature non vérifiée), affichés « ≈ ».
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `ton_backend_info` | — | `{ network: 'mainnet' \| 'testnet', label /*hôte*/, tor }` | |
+| `ton_address` | `{ account? }` | `string` | `m/44'/607'/{account}'`, coffre déverrouillé, forme non rebondissante `UQ…` (testnet `0Q…`) |
+| `ton_account` | `{ address }` | `{ address /*UQ…*/, raw /*0:hex*/, status: 'active' \| 'uninit' \| 'frozen' \| 'nonexist', balance /*nanotons*/, seqno: number \| null, walletType: string \| null }` | forme lisible seulement (brute `0:…` refusée) ; adresse marquée testnet (`kQ…` / `0Q…`) refusée sur mainnet ; masterchain refusée |
+| `ton_txs` | `{ address }` | `[{ hash /*tx, hex*/, time, direction: 'in' \| 'out', counterparty, amount, fee, comment, bounced, success }]` | 50 dernières transactions du compte ; un message externe de notre portefeuille donne une ligne par message sortant (aucun : ligne « échouée » à 0) ; `success` = phases calcul **et** action réussies, aucune action ignorée |
+| `ton_build_tx` | `{ to, amount /*nanotons*/, comment?, sendAll?, account? }` | `{ boc /*non signé, base64*/, summary: TonTxSummary, context: { account, destination, fee } }` | refusé avant toute construction : destinataire gelé, masterchain, notre portefeuille vide (`uninit` à 0, `nonexist`) ou gelé, montant + frais estimés ≥ solde, commentaire > 123 octets. **Rebond** = drapeau de l'adresse saisie (`EQ…` oui, `UQ…` non), **coupé** si le destinataire n'est pas un contrat actif (sinon les fonds reviendraient). Portefeuille pas encore déployé (`uninit` avec un solde) : seqno 0 et notre `StateInit` dans le message. `sendAll` : mode 130 (tout le solde, frais déduits), montant 0 |
+| `ton_sign_tx` | `{ boc, password, account? }` | `{ boc /*signé*/, hash, normalizedHash, summary, context }` | décode (strict, wallet id du réseau, notre portefeuille), refuse un message expiré (ou à moins de 15 s de l'être) ou valable plus de 12 min, **relit en direct** notre portefeuille (seqno et déploiement doivent correspondre) et le destinataire, réestime les frais et refait les vérifications ci-dessus ; mot de passe → dialogue natif : destinataire dans la forme de son drapeau de rebond **et** dans l'autre forme (« même compte »), **COMMENTAIRE encadré sur sa propre ligne** (ou « AUCUN COMMENTAIRE », avec l'avertissement plateforme d'échange), montant en TON et nanotons (ou « TOUT LE SOLDE »), rebond expliqué, frais estimés, solde, déploiement du portefeuille, validité et seqno ; 2ᵉ fenêtre si le commentaire contient des caractères invisibles ou de contrôle ; signature, résumé identique exigé |
+| `ton_broadcast` | `{ boc, account? }` | `string` (hash normalisé, hex) | `ton_verify_signed` (strict, signature ed25519 valide par notre clé, notre réseau), refuse un message expiré, puis `POST /message` ; un refus du nœud (seqno, expiration, signature) → `INVALID_INPUT` avec son message ; les hashes renvoyés par TON Center doivent être les nôtres, sinon `SERVER_UNREACHABLE` |
+| `ton_tx_status` | `{ hash /*normalisé*/ }` | `{ found, success, txHash }` | `transactionsByMessage` : la transaction de notre portefeuille qui a traité le message |
+
+**Pour l'UI** : le champ **Commentaire** est visible en permanence sous le destinataire sur l'écran Envoyer TON (pas caché dans « options »), compteur d'octets (123 au plus), caractères de contrôle et invisibles refusés avant même l'appel ; avertissement « plateforme d'échange » quand il est vide ; état du destinataire (pas encore actif → envoi sans rebond, gelé → bloqué) ; « MAX » = `sendAll`. Comparer une adresse TON se fait **par compte** (`EQ…` et `UQ…` d'un même compte sont la même adresse : `sameTonAccount`). Lien de paiement à la réception : `ton://transfer/<adresse>?amount=<nanotons>`. Hardware wallets : pas de TON.
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -934,6 +984,7 @@ type NetworkInfo = {
 | `mempool.space` | Bitcoin : UTXO, frais, diffusion (Esplora) |
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`) : utilisé par les commandes Rust `ltc_*`, famille Tor `litecoin` |
 | `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet et mainnet (JSON-RPC rippled) : utilisés par les commandes Rust `xrp_*`, famille Tor `xrp` |
+| `toncenter.com`, `testnet.toncenter.com` | TON mainnet et testnet (TON Center, API v3, offre publique sans clé, ≈ 1 requête/s) : utilisés par les commandes Rust `ton_*`, famille Tor `ton` ; clé optionnelle `KYRO_TONCENTER_API_KEY` (dev) en `X-API-Key`, jamais injectée dans une requête de l'interface |
 | `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |
