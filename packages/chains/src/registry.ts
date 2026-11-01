@@ -328,7 +328,7 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
     tok('AAVE', 'Aave', 18, 'aave', '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9', '#6E6E6E'),
     tok('ONDO', 'Ondo', 18, 'ondo-finance', '0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3', '#6B5B8C'),
     tok('USDf', 'Falcon USD', 18, 'falcon-finance', '0xFa2B947eEc368f42195f24F36d2aF29f7c24CeC2', '#4F7A6B'),
-    tok('PAXG', 'PAX Gold', 18, 'pax-gold', '0x45804880De22913dAFE09f4980848ECE6EcbAf78', '#6E6E6E'), // frais de transfert de 0,02 % prélevés par le contrat (fee-on-transfer) : le destinataire reçoit un peu moins
+    tok('PAXG', 'PAX Gold', 18, 'pax-gold', '0x45804880De22913dAFE09f4980848ECE6EcbAf78', '#6E6E6E'), // fee-on-transfer : Paxos annonce des frais de transfert (0,02 %) prélevés par le contrat, le destinataire peut recevoir un peu moins (non mesuré on-chain)
     tok('MORPHO', 'Morpho', 18, 'morpho', '0x58D97B57BB95320F9a05dC918Aef65434969c2B2', '#8C6B4F'),
     tok('WLFI', 'World Liberty Financial', 18, 'world-liberty-financial', '0xdA5e1988097297dCdc1f90D4dFE7909e847CBeF6', '#4F6F7A'),
     tok('SKY', 'Sky', 18, 'sky', '0x56072C95FAA701256059aa122697B133aDEd9279', '#5E7A4F'),
@@ -364,7 +364,7 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
     tok('LDO', 'Lido DAO', 18, 'lido-dao', '0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32', '#6B5B8C'),
     tok('KITE', 'Kite', 18, 'kite-2', '0x118B70dF4F06Fa5678E7d543e6066e028C8ea0c0', '#4F7A6B'),
     tok('BEAM', 'Beam', 18, 'beam-2', '0x62D0A8458eD7719FDAF978fe5929C6D342B0bFcE', '#4F7A6B'),
-    tok('FLOKI', 'FLOKI', 9, 'floki', '0xcf0C122c6b73ff809C693DB761e7BaeBe62b6a2E', '#4F7A6B'), // contrat avec module de taxe (TaxHandler) : une taxe peut s’appliquer à certains transferts
+    tok('FLOKI', 'FLOKI', 9, 'floki', '0xcf0C122c6b73ff809C693DB761e7BaeBe62b6a2E', '#4F7A6B'), // taxe possible au transfert : taxHandler() non nul on-chain (0x834f…b67b, 01/11/2026), le destinataire peut recevoir moins
     tok('GRT', 'The Graph', 18, 'the-graph', '0xc944E90C64B2c07662A292be6244BDf05Cda44a7', '#5E7A4F'),
     tok('FRAX', 'Legacy Frax Dollar', 18, 'frax', '0x853d955aCEf822Db058eb8505911ED77F175b99e', '#4F6F7A'),
     tok('BAT', 'Basic Attention', 18, 'basic-attention-token', '0x0D8775F648430679A709E98d2b0Cb6250d2887EF', '#8C4F4F'),
