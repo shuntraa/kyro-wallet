@@ -7,6 +7,7 @@ mod commands;
 mod commands_cardano;
 mod commands_hw;
 mod commands_servers;
+mod commands_stellar;
 mod commands_tron;
 mod commands_utxo;
 mod commands_xrp;
@@ -27,6 +28,7 @@ mod stake_ada;
 mod stake_sol;
 mod stake_tron;
 mod state;
+mod stellar_backend;
 mod tor;
 mod tron_backend;
 mod utxo_backend;
@@ -164,6 +166,14 @@ pub fn run() {
             commands_xrp::xrp_sign_tx,
             commands_xrp::xrp_broadcast,
             commands_xrp::xrp_tx_status,
+            commands_stellar::stellar_backend_info,
+            commands_stellar::stellar_address,
+            commands_stellar::stellar_account,
+            commands_stellar::stellar_txs,
+            commands_stellar::stellar_build_tx,
+            commands_stellar::stellar_sign_tx,
+            commands_stellar::stellar_broadcast,
+            commands_stellar::stellar_tx_status,
             commands_cardano::ada_backend_info,
             commands_cardano::ada_address,
             commands_cardano::ada_account,

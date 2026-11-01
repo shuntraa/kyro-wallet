@@ -32,6 +32,9 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // XRP Ledger JSON-RPC (testnet :51234, mainnet): only Rust's `xrp_*` commands.
     "s.altnet.rippletest.net",
     "xrplcluster.com",
+    // Stellar (SDF's public Horizon): mainnet and testnet; only Rust's `stellar_*` commands.
+    "horizon.stellar.org",
+    "horizon-testnet.stellar.org",
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
@@ -293,6 +296,7 @@ pub enum Family {
     Dogecoin,
     Tron,
     Xrp,
+    Stellar,
     Cardano,
     Evm,
     Solana,
@@ -315,6 +319,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Tron
     } else if host == "s.altnet.rippletest.net" || host == "xrplcluster.com" {
         Family::Xrp
+    } else if host == "horizon.stellar.org" || host == "horizon-testnet.stellar.org" {
+        Family::Stellar
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
     } else if host.ends_with("-rpc.publicnode.com") {
@@ -1065,6 +1071,11 @@ mod tests {
         assert_eq!(family_for("api.trongrid.io", &c), Family::Tron);
         assert_eq!(family_for("s.altnet.rippletest.net", &c), Family::Xrp);
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
+        assert_eq!(family_for("horizon.stellar.org", &c), Family::Stellar);
+        assert_eq!(
+            family_for("horizon-testnet.stellar.org", &c),
+            Family::Stellar
+        );
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
         let doge = NetContext {

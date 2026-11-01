@@ -445,6 +445,8 @@ pub struct Accounts {
     tron: AddressOut,
     /// `m/44'/144'/a'/0/0`.
     xrp: AddressOut,
+    /// `m/44'/148'/a'` (SEP-0005).
+    stellar: AddressOut,
     /// Base address `m/1852'/1815'/a'/0/0` + stake key `…/2/0` (CIP-1852, Icarus).
     cardano: AddressOut,
 }
@@ -519,6 +521,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             xrp: AddressOut {
                 address: wallet_core::xrp_address(seed, a)?,
                 path: wallet_core::xrp_path(a),
+            },
+            stellar: AddressOut {
+                address: wallet_core::stellar_address(seed, a)?,
+                path: wallet_core::stellar_path(a),
             },
             cardano: AddressOut {
                 address: cardano,
