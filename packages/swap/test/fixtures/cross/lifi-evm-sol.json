@@ -1,0 +1,163 @@
+{
+  "note": "Live li.quest /v1/quote answer, 01/11/2026 (allowBridges=near, distributionFees 0.007 to the Kyro fee wallet of the source chain). Trimmed to the fields Kyro reads. Not signed, not broadcast.",
+  "request": {
+    "fromChain": 42161,
+    "toChain": 1151111081099710,
+    "fromToken": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    "toToken": "11111111111111111111111111111111",
+    "fromAmount": "20000000",
+    "fromAddress": "0x4F2A9c83b1E07D6a55C0E91B3D7f28aE6c19d7b2",
+    "toAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+    "slippage": 0.005,
+    "allowBridges": "near",
+    "distributionFees[0][receiver]": "0x86cD9af8067fF5e0001c709a550cD62b5e968B44",
+    "distributionFees[0][percentage]": 0.007
+  },
+  "tool": "near",
+  "toolDetails": {
+    "key": "near",
+    "name": "NearIntents"
+  },
+  "action": {
+    "fromChainId": 42161,
+    "toChainId": 1151111081099710,
+    "fromAmount": "20000000",
+    "fromAddress": "0x4F2A9c83b1E07D6a55C0E91B3D7f28aE6c19d7b2",
+    "toAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+    "slippage": 0.005
+  },
+  "estimate": {
+    "toAmount": "207528942",
+    "toAmountMin": "206491297",
+    "fromAmount": "20000000",
+    "approvalAddress": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE",
+    "executionDuration": 22,
+    "feeCosts": [
+      {
+        "name": "LIFI Fixed Fee",
+        "percentage": "0.0025",
+        "amount": "50000",
+        "amountUSD": "0.0500",
+        "included": true,
+        "feeSplit": {
+          "lifiFee": "50000",
+          "integratorFee": "0",
+          "recipients": [
+            {
+              "name": "lifi",
+              "type": "FIXED",
+              "fee": "50000"
+            }
+          ]
+        }
+      },
+      {
+        "name": "Distributions",
+        "percentage": "0.0070",
+        "amount": "140000",
+        "amountUSD": "0.1400",
+        "included": true,
+        "feeSplit": {
+          "integratorFee": "0",
+          "lifiFee": "0",
+          "recipients": [
+            {
+              "name": "0x86cD9af8067fF5e0001c709a550cD62b5e968B44",
+              "fee": "140000",
+              "type": "DISTRIBUTION",
+              "walletAddress": "0x86cD9af8067fF5e0001c709a550cD62b5e968B44"
+            }
+          ]
+        }
+      },
+      {
+        "name": "NearIntents Protocol Fee",
+        "percentage": "0.0001",
+        "amount": "1981",
+        "amountUSD": "0.0020",
+        "included": true
+      },
+      {
+        "name": "1ClickSwap API Fee",
+        "percentage": "0.0001",
+        "amount": "1981",
+        "amountUSD": "0.0020",
+        "included": true
+      },
+      {
+        "name": "NearIntents App Fee",
+        "percentage": "0.001",
+        "amount": "19810",
+        "amountUSD": "0.0198",
+        "included": true
+      }
+    ],
+    "gasCosts": [
+      {
+        "amountUSD": "0.0113"
+      }
+    ]
+  },
+  "transactionId": "0xe621342fda0472ab8a7a940908dd477d0dc000a519a8e4915cd2d67e7e933dd3",
+  "transactionRequest": {
+    "value": "0x0",
+    "to": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE",
+    "data": "0x02631b09000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000002200000000000000000000000000000000000000000000000000000000000000460e621342fda0472ab8a7a940908dd477d0dc000a519a8e4915cd2d67e7e933dd3000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000001800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e583100000000000000000000000011f111f111f111f111f111f111f111f111f111f100000000000000000000000000000000000000000000000000000000012e46d0000000000000000000000000000000000000000000000000000416edef1601be0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000046e6561720000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000086c6966692d61706900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000ce40449b773a3e6e5e769adb4e567179d4828cbd000000000000000000000000ce40449b773a3e6e5e769adb4e567179d4828cbd000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e5831000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e58310000000000000000000000000000000000000000000000000000000001312d0000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000e4332d746b000000000000000000000000af88d065e77c8cc2239327c5edb3a432268e583100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000002000000000000000000000000c06ebbefd94032b85424d51906e2a335efae264b000000000000000000000000000000000000000000000000000000000000c35000000000000000000000000086cd9af8067ff5e0001c709a550cd62b5e968b4400000000000000000000000000000000000000000000000000000000000222e0000000000000000000000000000000000000000000000000000000007e8c088760bfde1dddcf32c17f209b8242ee52aaf131facd88d0ea2c6d0b06f2000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000000a70e127a87bf8454dfa839d4f9af02610adc9bac87a5f2748ce4cdb75fda1aa64862d71c4a00f99201c5ce52022a0ced643af6b000000000000000000000000000000000000000000000000000000006aea878d000000000000000000000000000000000000000000000000000000000c4ecea10000000000000000000000004f2a9c83b1e07d6a55c0e91b3d7f28ae6c19d7b200000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000041a09c2e656a8a0e0177c117cf0b474c4fed64cd8f00aa93fc9c7947c202a7b2645ba104541fe862ab94c7ead79be6173a157c304caf4cf386f1be7cb9cc2a24661b00000000000000000000000000000000000000000000000000000000000000",
+    "from": "0x4F2A9c83b1E07D6a55C0E91B3D7f28aE6c19d7b2",
+    "chainId": 42161,
+    "gasPrice": "0x1319a60",
+    "gasLimit": "0x2bdf23"
+  },
+  "nearIntentsStatus": {
+    "status": "PENDING_DEPOSIT",
+    "quoteResponse": {
+      "quoteRequest": {
+        "dry": false,
+        "swapType": "FLEX_INPUT",
+        "depositMode": "SIMPLE",
+        "slippageTolerance": 50,
+        "originAsset": "nep141:arb-0xaf88d065e77c8cc2239327c5edb3a432268e5831.omft.near",
+        "depositType": "ORIGIN_CHAIN",
+        "destinationAsset": "nep141:sol.omft.near",
+        "amount": "19810000",
+        "refundTo": "0x4F2A9c83b1E07D6a55C0E91B3D7f28aE6c19d7b2",
+        "refundType": "ORIGIN_CHAIN",
+        "recipient": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+        "recipientType": "DESTINATION_CHAIN",
+        "deadline": "2026-11-01T01:17:01.138Z",
+        "appFees": [
+          {
+            "limitOrderId": null,
+            "recipient": "5880ad2b362620fadf759cbceb1cd5737ce8c6ed7fb8e9942881e6731f9247dd",
+            "fee": 5
+          },
+          {
+            "limitOrderId": null,
+            "recipient": "fae85d13273d1648ef3aab18ae4426122cf6b13170b633dac849ef7d83e1ed19",
+            "fee": 5
+          }
+        ],
+        "virtualChainRecipient": null,
+        "virtualChainRefundRecipient": null,
+        "referral": "lifi",
+        "confidentiality": "public"
+      },
+      "quote": {
+        "amountIn": "19810000",
+        "amountInFormatted": "19.81",
+        "amountInUsd": "19.809326460000",
+        "minAmountIn": "19710950",
+        "amountOut": "207528942",
+        "amountOutFormatted": "0.207528942",
+        "amountOutUsd": "19.787884619700",
+        "minAmountOut": "206491297",
+        "timeWhenInactive": "2026-11-04T01:17:01.138Z",
+        "depositAddress": "0x0A70e127a87bF8454dfA839d4F9AF02610AdC9Ba",
+        "deadline": "2026-11-04T01:17:01.138Z",
+        "timeEstimate": 22,
+        "refundFee": "5300",
+        "withdrawFee": "104877"
+      }
+    }
+  }
+}

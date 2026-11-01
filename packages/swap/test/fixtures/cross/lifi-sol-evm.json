@@ -1,0 +1,158 @@
+{
+  "note": "Live li.quest /v1/quote answer, 01/11/2026 (allowBridges=near, distributionFees 0.007 to the Kyro fee wallet of the source chain). Trimmed to the fields Kyro reads. Not signed, not broadcast.",
+  "request": {
+    "fromChain": 1151111081099710,
+    "toChain": 42161,
+    "fromToken": "11111111111111111111111111111111",
+    "toToken": "0x0000000000000000000000000000000000000000",
+    "fromAmount": "500000000",
+    "fromAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+    "toAddress": "0x4F2A9c83b1E07D6a55C0E91B3D7f28aE6c19d7b2",
+    "slippage": 0.005,
+    "allowBridges": "near",
+    "distributionFees[0][receiver]": "ptsbLdrhmEfC2eQ9gj4aieF4irdhQqYzK1fdNwHBZcM",
+    "distributionFees[0][percentage]": 0.007
+  },
+  "tool": "near",
+  "toolDetails": {
+    "key": "near",
+    "name": "NearIntents"
+  },
+  "action": {
+    "fromChainId": 1151111081099710,
+    "toChainId": 42161,
+    "fromAmount": "500000000",
+    "fromAddress": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+    "toAddress": "0x4F2A9c83b1E07D6a55C0E91B3D7f28aE6c19d7b2",
+    "slippage": 0.005
+  },
+  "estimate": {
+    "toAmount": "20880687307264668",
+    "toAmountMin": "20776283870728344",
+    "fromAmount": "500000000",
+    "approvalAddress": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE",
+    "executionDuration": 21,
+    "feeCosts": [
+      {
+        "name": "LIFI Fixed Fee",
+        "percentage": "0.0025",
+        "amount": "1250000",
+        "amountUSD": "0.1198",
+        "included": true,
+        "feeSplit": {
+          "lifiFee": "1250000",
+          "integratorFee": "0",
+          "recipients": [
+            {
+              "name": "lifi",
+              "type": "FIXED",
+              "fee": "1250000"
+            }
+          ]
+        }
+      },
+      {
+        "name": "NearIntents Protocol Fee",
+        "percentage": "0.0001",
+        "amount": "49525",
+        "amountUSD": "0.0047",
+        "included": true
+      },
+      {
+        "name": "1ClickSwap API Fee",
+        "percentage": "0.0001",
+        "amount": "49525",
+        "amountUSD": "0.0047",
+        "included": true
+      },
+      {
+        "name": "NearIntents App Fee",
+        "percentage": "0.001",
+        "amount": "495250",
+        "amountUSD": "0.0475",
+        "included": true
+      },
+      {
+        "name": "Distributions",
+        "percentage": "0.0070",
+        "amount": "3500000",
+        "amountUSD": "0.3355",
+        "included": true,
+        "feeSplit": {
+          "integratorFee": "0",
+          "lifiFee": "0",
+          "recipients": [
+            {
+              "name": "ptsbLdrhmEfC2eQ9gj4aieF4irdhQqYzK1fdNwHBZcM",
+              "fee": "3500000",
+              "type": "DISTRIBUTION",
+              "walletAddress": "ptsbLdrhmEfC2eQ9gj4aieF4irdhQqYzK1fdNwHBZcM"
+            }
+          ]
+        }
+      }
+    ],
+    "gasCosts": [
+      {
+        "amountUSD": "0.0025558680445042087"
+      }
+    ]
+  },
+  "transactionId": "0xac5806acfae0b400",
+  "transactionRequest": {
+    "data": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQAFCX6MCIdgv94d3c8ywX8gm4JC7lKq8TH6zYjQ6ixtCwbyHoxPq4mUSUyPHlwSh0RbKRfWDEPHmqlZFi9dYABZjTKRJoLd5v0m6Yqf3RuE/yPHyH7d2irjAJrirHk+lxnTEAxE80AXBoINagNEqxJkcUFJ8Vf3rerAyrO6nxGJ1LYSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAoPQ3SgjVP7wrjsOIn03zYnKJm+xfd+PfLfM775OvcVXQllcwEiHUCOQS1pnkETKJQVcAw4xbfcLWewVnJuPlPAwZGb+UhFzL/7K26csOb57yM5bvF9xJrLEObOkAAAAAGp9UXGMd0yShWY5hpHV62i164o5tLbVxzVVshAAAAAIe1V8yZjyzOY1SCeZVB/qfEdXSoqPh5YYtV6vFMnPALBgcABQIQ6wkABwAJAzWCAAAAAAAABQIIBgkArFgGrPrgtAAEAgABDAIAAADQEhMAAAAAAAQCAAMMAgAAAOBnNQAAAAAABAIAAgwCAAAAUOqEHQAAAAAA",
+    "svmTransactionVersion": 0
+  },
+  "nearIntentsStatus": {
+    "status": "PENDING_DEPOSIT",
+    "quoteResponse": {
+      "quoteRequest": {
+        "dry": false,
+        "swapType": "EXACT_INPUT",
+        "depositMode": "SIMPLE",
+        "slippageTolerance": 50,
+        "originAsset": "nep141:sol.omft.near",
+        "depositType": "ORIGIN_CHAIN",
+        "destinationAsset": "nep141:arb.omft.near",
+        "amount": "495250000",
+        "refundTo": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+        "refundType": "ORIGIN_CHAIN",
+        "recipient": "0x4F2A9c83b1E07D6a55C0E91B3D7f28aE6c19d7b2",
+        "recipientType": "DESTINATION_CHAIN",
+        "deadline": "2026-11-01T01:17:04.462Z",
+        "appFees": [
+          {
+            "limitOrderId": null,
+            "recipient": "5880ad2b362620fadf759cbceb1cd5737ce8c6ed7fb8e9942881e6731f9247dd",
+            "fee": 5
+          },
+          {
+            "limitOrderId": null,
+            "recipient": "fae85d13273d1648ef3aab18ae4426122cf6b13170b633dac849ef7d83e1ed19",
+            "fee": 5
+          }
+        ],
+        "virtualChainRecipient": null,
+        "virtualChainRefundRecipient": null,
+        "referral": "lifi",
+        "confidentiality": "public"
+      },
+      "quote": {
+        "amountIn": "495250000",
+        "amountInFormatted": "0.49525",
+        "amountInUsd": "47.222087500000",
+        "minAmountIn": "495250000",
+        "amountOut": "20880687307264668",
+        "amountOutFormatted": "0.020880687307264668",
+        "amountOutUsd": "47.066530838686",
+        "minAmountOut": "20776283870728344",
+        "timeWhenInactive": "2026-11-04T01:17:04.462Z",
+        "depositAddress": "AmcBByD5w4PdFHdknnAtDFLcVYkXPq8fu5CuNb5Xa1CB",
+        "deadline": "2026-11-04T01:17:04.462Z",
+        "timeEstimate": 21,
+        "refundFee": "104877",
+        "withdrawFee": "1200000000000"
+      }
+    }
+  }
+}
