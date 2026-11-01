@@ -114,7 +114,7 @@ export async function handleDemoNet(req: NetRequest, s: DemoChainState, route?: 
   if (SOL_HOSTS.has(host)) return solRpc(req, s);
   if (host === 'api.0x.org') return zerox(url);
   if (host === 'li.quest') return lifi(url);
-  if (host === '1click.chaindefuser.com') return demoOneClick(url);
+  if (host === '1click.chaindefuser.com') return demoOneClick(url, req);
   if (host === 'lite-api.jup.ag') return jupiter(url, req, s);
   throw new IpcError('HOST_NOT_ALLOWED', `Hôte non autorisé : ${host}`);
 }

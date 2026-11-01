@@ -5,15 +5,20 @@
 // lifi-cross.ts Solana source, near-intents.ts 1Click confirmation) end to end:
 // - EVM source: `swapAndStartBridgeTokensViaNEARIntents` (FeeForwarder step + NEAR data);
 // - Solana source: a legacy transaction (ComputeBudget, LI.FI TrackV1, fee transfers, deposit);
-// - `1click.chaindefuser.com`: `/v0/status` of every deposit address handed out, `/v0/tokens`.
+// - `1click.chaindefuser.com`: `/v0/status` of every deposit address handed out, `/v0/tokens`,
+//   and `POST /v0/quote` for the DIRECT 1Click routes (from / to Bitcoin, Litecoin, Dogecoin, TRON,
+//   XRP, Cardano: packages/swap providers/near.ts), app fees split 50/50 like the live service.
 
 import { base58, base64, bech32 } from '@scure/base';
+import * as bitcoin from 'bitcoinjs-lib';
 import { sha256 } from '@noble/hashes/sha2';
 import { bytesToHex } from '@noble/hashes/utils';
 import type { NetResponse } from './ipc';
 import { encodeCall, type AbiValue } from './mock-abi';
 import { demoAta } from './mock-jupiter';
 import { DEMO_TOKENS, demoPrice } from './mock-data';
+import { xrpAddressOfId } from './mock-xrp';
+import { cardanoAddressOf } from './mock-cardano';
 
 const LIFI_SOLANA = 1151111081099710;
 const LIFI_BITCOIN = 20000000000001;
@@ -39,6 +44,8 @@ const isEvmNative = (t: string) => t.toLowerCase() === NATIVE_EEEE || t === ZERO
 interface Deposit {
   quoteRequest: Record<string, unknown>;
   quote: Record<string, unknown>;
+  /** Direct route: status reads so far (the quote check, then the one just before signing). */
+  reads?: number;
 }
 /** Deposit addresses handed out by the demo, as 1Click would know them. */
 const deposits = new Map<string, Deposit>();
@@ -188,13 +195,115 @@ function solanaSourceTx(o: { taker: string; mint: string | null; kyroWallet: str
   return base64.encode(wire);
 }
 
-/** `1click.chaindefuser.com`: status of a deposit address handed out above, and the token list. */
-export function demoOneClick(url: URL): NetResponse {
-  if (url.pathname === '/v0/tokens') return json(200, [...assets.values()]);
+/** 1Click's own share of the app fee (live: half of what is requested, to this account). */
+const ONE_CLICK_FEE_ACCOUNT = '5880ad2b362620fadf759cbceb1cd5737ce8c6ed7fb8e9942881e6731f9247dd';
+
+/** Assets the direct 1Click routes use (same id scheme as `asset()` above). */
+const DIRECT_ASSETS: ReadonlyArray<[blockchain: string, contract: string | null, decimals: number, coin: string, symbol: string]> = [
+  ['eth', null, 18, 'ethereum', 'ETH'],
+  ['eth', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', 6, 'usd-coin', 'USDC'],
+  ['eth', '0xdac17f958d2ee523a2206206994597c13d831ec7', 6, 'tether', 'USDT'],
+  ['arb', null, 18, 'ethereum', 'ETH'],
+  ['arb', '0xaf88d065e77c8cc2239327c5edb3a432268e5831', 6, 'usd-coin', 'USDC'],
+  ['base', null, 18, 'ethereum', 'ETH'],
+  ['op', null, 18, 'ethereum', 'ETH'],
+  ['bsc', null, 18, 'binancecoin', 'BNB'],
+  ['pol', null, 18, 'polygon-ecosystem-token', 'POL'],
+  ['avax', null, 18, 'avalanche-2', 'AVAX'],
+  ['sol', null, 9, 'solana', 'SOL'],
+  ['sol', 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 6, 'usd-coin', 'USDC'],
+  ['btc', null, 8, 'bitcoin', 'BTC'],
+  ['ltc', null, 8, 'litecoin', 'LTC'],
+  ['doge', null, 8, 'dogecoin', 'DOGE'],
+  ['tron', null, 6, 'tron', 'TRX'],
+  ['tron', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', 6, 'tether', 'USDT'],
+  ['xrp', null, 6, 'ripple', 'XRP'],
+  ['cardano', null, 6, 'cardano', 'ADA'],
+];
+const directCoin = new Map<string, { coin: string; decimals: number; blockchain: string }>();
+function seedDirectAssets() {
+  if (directCoin.size > 0) return;
+  for (const [blockchain, contract, decimals, coin, symbol] of DIRECT_ASSETS) {
+    const assetId = contract ? `nep141:${blockchain}-${bytesToHex(hash(contract)).slice(0, 40)}.omft.near` : `nep141:${blockchain}.omft.near`;
+    directCoin.set(assetId, { coin, decimals, blockchain });
+    if (!assets.has(assetId)) assets.set(assetId, { assetId, blockchain, decimals, symbol, ...(contract ? { contractAddress: contract } : {}) });
+  }
+}
+
+/** A fresh one-time deposit address on `blockchain`, valid for Kyro's adapters (mainnet shapes, like 1Click's). */
+function depositAddressOn(blockchain: string, id: string): string {
+  const h = hash(`deposit:${id}`);
+  const h20 = h.slice(0, 20);
+  switch (blockchain) {
+    case 'btc':
+      return bech32.encode('bc', [0, ...bech32.toWords(h20)]);
+    case 'ltc':
+      return bitcoin.address.toBase58Check(h20, 0x30);
+    case 'doge':
+      return bitcoin.address.toBase58Check(h20, 0x1e);
+    case 'tron':
+      return bitcoin.address.toBase58Check(h20, 0x41);
+    case 'xrp':
+      return xrpAddressOfId(h20);
+    case 'cardano':
+      // Enterprise address (header 0x61), as 1Click hands out.
+      return cardanoAddressOf(new Uint8Array([0x61, ...h.slice(0, 28)]), 'addr');
+    case 'sol':
+      return base58.encode(h);
+    default:
+      return `0x${bytesToHex(h20)}`;
+  }
+}
+
+/** `POST /v0/quote` (direct route): app fees split 50/50 with 1Click, SIMPLE deposit, EXACT_INPUT. */
+function demoOneClickQuote(body: string | undefined): NetResponse {
+  seedDirectAssets();
+  let r: Record<string, unknown>;
+  try {
+    r = JSON.parse(body ?? '{}') as Record<string, unknown>;
+  } catch {
+    return json(400, { message: 'invalid JSON' });
+  }
+  const origin = directCoin.get(String(r.originAsset));
+  const dest = directCoin.get(String(r.destinationAsset));
+  if (!origin || !dest) return json(400, { message: 'tokenIn or tokenOut is not valid' });
+  const amount = BigInt(/^\d{1,78}$/.test(String(r.amount)) ? String(r.amount) : '0');
+  if (amount <= 0n) return json(400, { message: 'amount is not valid' });
+  const asked = Array.isArray(r.appFees) ? (r.appFees as Array<{ recipient?: string; fee?: number }>) : [];
+  const appFees = asked.map((f) => ({ recipient: f.recipient ?? '', fee: Math.floor((f.fee ?? 0) / 2) }));
+  const total = asked.reduce((s, f) => s + (f.fee ?? 0), 0);
+  if (total > 0) appFees.push({ recipient: ONE_CLICK_FEE_ACCOUNT, fee: Math.floor(total / 2) });
+  const net = amount - (amount * BigInt(total)) / 10_000n;
+  const out = BigInt(Math.floor(((Number(net) / 10 ** origin.decimals) * demoPrice(origin.coin) * 0.997 * 10 ** dest.decimals) / demoPrice(dest.coin)));
+  const slip = Number(r.slippageTolerance ?? 100);
+  const min = (out * BigInt(10_000 - slip)) / 10_000n;
+  const dry = r.dry !== false;
+  const id = bytesToHex(hash(`demo-1click:${String(r.originAsset)}:${String(r.destinationAsset)}:${amount}:${Date.now()}:${Math.random()}`));
+  const depositAddress = dry ? undefined : depositAddressOn(origin.blockchain, id);
+  const quoteRequest = { dry, depositMode: r.depositMode ?? 'SIMPLE', swapType: r.swapType, slippageTolerance: slip, originAsset: r.originAsset, depositType: r.depositType, destinationAsset: r.destinationAsset, amount: amount.toString(), refundTo: r.refundTo, refundType: r.refundType, recipient: r.recipient, recipientType: r.recipientType, deadline: r.deadline, appFees };
+  const quote = { amountIn: amount.toString(), minAmountIn: amount.toString(), amountOut: out.toString(), minAmountOut: min.toString(), timeEstimate: origin.blockchain === 'btc' ? 812 : 60, deadline: new Date(Date.now() + 3 * 86_400_000).toISOString(), ...(depositAddress ? { depositAddress } : {}) };
+  if (depositAddress) deposits.set(depositAddress.toLowerCase(), { quoteRequest, quote, reads: 0 });
+  return json(201, { quote, quoteRequest, signature: `ed25519:demo${id.slice(0, 16)}`, timestamp: new Date().toISOString() });
+}
+
+/** `1click.chaindefuser.com`: status of a deposit address handed out above, the token list, direct quotes. */
+export function demoOneClick(url: URL, req?: { method?: string; body?: string }): NetResponse {
+  if (url.pathname === '/v0/quote' && req?.method === 'POST') return demoOneClickQuote(req.body);
+  if (url.pathname === '/v0/tokens') {
+    seedDirectAssets();
+    return json(200, [...assets.values()]);
+  }
   if (url.pathname === '/v0/status') {
     const d = deposits.get((url.searchParams.get('depositAddress') ?? '').toLowerCase());
     if (!d) return json(404, { message: 'Deposit address not found' });
-    return json(200, { status: 'PENDING_DEPOSIT', quoteResponse: d });
+    const { reads, ...quoteResponse } = d;
+    // Direct route: after Kyro's two checks (quote, then just before signing), the demo swap has
+    // « arrived », so the history follows it to SUCCESS like a real one.
+    if (reads !== undefined) {
+      d.reads = reads + 1;
+      if (reads >= 2) return json(200, { status: 'SUCCESS', quoteResponse, swapDetails: { destinationChainTxHashes: [{ hash: bytesToHex(hash(`demo-arrival:${String(quoteResponse.quote.depositAddress)}`)) }] } });
+    }
+    return json(200, { status: 'PENDING_DEPOSIT', quoteResponse });
   }
   return json(404, { message: 'not found' });
 }
