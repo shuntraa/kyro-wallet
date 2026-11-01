@@ -48,12 +48,14 @@ const TAIL = 4;
  * - Solana (base58): none.
  * - TRON: `T`. XRP: `r`.
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
+ * - Sui: `0x`, hex compared lowercase (no checksum at all).
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
   const bech = /^([a-z_]+)1([02-9ac-hj-np-z])/i.exec(a);
   switch (family) {
     case 'evm':
+    case 'sui':
       return a.toLowerCase().startsWith('0x') ? { prefix: '0x', body: a.slice(2).toLowerCase(), caseInsensitive: true } : { prefix: '', body: a.toLowerCase(), caseInsensitive: true };
     case 'btc':
     case 'ltc':

@@ -40,6 +40,8 @@ import { createDemoUtxo, demoUtxoAccount, DEMO_DOGE_NETWORKS, DEMO_LTC_NETWORKS 
 import { createDemoTron, demoTronAddress, type DemoTronState } from './mock-tron';
 export { demoTronAddress } from './mock-tron';
 import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
+import { createDemoSui, demoSuiAddress, type DemoSuiState } from './mock-sui';
+export { demoSuiAddress, suiAddressOf } from './mock-sui';
 export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
 import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
 export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
@@ -161,6 +163,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       tron: { address: demoTronAddress(demoSeed(), 0), path: "m/44'/195'/0'/0/0" },
       xrp: { address: demoXrpAddress(demoSeed(), 0), path: "m/44'/144'/0'/0/0" },
       cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
+      sui: { address: demoSuiAddress(0), path: "m/44'/784'/0'/0'/0'" },
     },
     ownBtc,
     receive,
@@ -282,6 +285,8 @@ export interface MockBackend {
   tron: DemoTronState;
   /** XRP Ledger demo chain (tests). */
   xrp: DemoXrpState;
+  /** Sui demo chain (tests). */
+  sui: DemoSuiState;
   /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
   /** Staking demo (tests). */
@@ -374,6 +379,16 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const xrpChain = createDemoXrp({
     network,
     seed: demoSeed(),
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // Sui (§2.11): `sui_*`, gas budget / coin rules like Rust.
+  const suiChain = createDemoSui({
+    network,
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -828,6 +843,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     btc_tx_hex: (a) => servers.btc.txHex(a.txid),
     ...tronChain.handlers,
     ...xrpChain.handlers,
+    ...suiChain.handlers,
     ...cardanoChain.handlers,
     ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
@@ -859,6 +875,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     hw,
     tron: tronChain.state,
     xrp: xrpChain.state,
+    sui: suiChain.state,
     cardano: cardanoChain.state,
     stake,
     advance(ms: number) {
