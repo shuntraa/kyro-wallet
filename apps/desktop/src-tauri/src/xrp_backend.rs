@@ -58,14 +58,14 @@ impl From<RpcError> for AppError {
     fn from(e: RpcError) -> Self {
         match e {
             RpcError::App(e) => e,
-            RpcError::Rippled(code, msg) => bad(format!("XRPL : {code} ({msg})")),
+            RpcError::Rippled(code, msg) => bad(format!("XRPL: {code} ({msg})")),
         }
     }
 }
 
 async fn rpc(ctx: &XrpCtx<'_>, method: &str, params: Value) -> Result<Value, RpcError> {
     let u = url::Url::parse(&url(ctx)?)
-        .map_err(|_| AppError::ServerInvalid("URL XRPL invalide".into()))?;
+        .map_err(|_| AppError::ServerInvalid("invalid XRPL URL".into()))?;
     let body = json!({ "method": method, "params": [params] }).to_string();
     let (status, bytes) = ctx
         .net_client
@@ -73,7 +73,7 @@ async fn rpc(ctx: &XrpCtx<'_>, method: &str, params: Value) -> Result<Value, Rpc
         .await?;
     if status != 200 {
         return Err(bad(format!(
-            "XRPL : HTTP {status} sur {method} ({})",
+            "XRPL: HTTP {status} on {method} ({})",
             String::from_utf8_lossy(&bytes)
                 .chars()
                 .take(200)
@@ -82,7 +82,7 @@ async fn rpc(ctx: &XrpCtx<'_>, method: &str, params: Value) -> Result<Value, Rpc
         .into());
     }
     let v: Value = serde_json::from_slice(&bytes)
-        .map_err(|_| bad(format!("XRPL : JSON invalide sur {method}")))?;
+        .map_err(|_| bad(format!("XRPL: invalid JSON on {method}")))?;
     let r = v["result"].clone();
     if r["status"] == "error" {
         return Err(RpcError::Rippled(
@@ -146,9 +146,9 @@ pub async fn server_info(ctx: &XrpCtx<'_>) -> AppResult<XrpServerInfo> {
     Ok(XrpServerInfo {
         network_id: i["network_id"].as_u64().unwrap_or(0),
         reserve_base: xrp_to_drops(&v["reserve_base_xrp"])
-            .ok_or_else(|| bad("XRPL : réserve de base absente"))?,
+            .ok_or_else(|| bad("XRPL: base reserve missing"))?,
         reserve_inc: xrp_to_drops(&v["reserve_inc_xrp"])
-            .ok_or_else(|| bad("XRPL : réserve par objet absente"))?,
+            .ok_or_else(|| bad("XRPL: per-object reserve missing"))?,
         validated_ledger: v["seq"].as_u64().unwrap_or(0),
     })
 }
@@ -190,7 +190,7 @@ pub async fn account(
     {
         Ok(r) => {
             let d = &r["account_data"];
-            let balance = drops_at(&d["Balance"]).ok_or_else(|| bad("XRPL : solde absent"))?;
+            let balance = drops_at(&d["Balance"]).ok_or_else(|| bad("XRPL: balance missing"))?;
             let owner_count = d["OwnerCount"].as_u64().unwrap_or(0) as u32;
             let flags = d["Flags"].as_u64().unwrap_or(0) as u32;
             let reserve = info.reserve_base + info.reserve_inc * u64::from(owner_count);
@@ -223,11 +223,11 @@ pub async fn account(
 pub async fn fee(ctx: &XrpCtx<'_>) -> AppResult<(u64, u32)> {
     let r = rpc(ctx, "fee", json!({})).await?;
     let d = &r["drops"];
-    let base = drops_at(&d["base_fee"]).ok_or_else(|| bad("XRPL : base_fee absent"))?;
+    let base = drops_at(&d["base_fee"]).ok_or_else(|| bad("XRPL: base_fee missing"))?;
     let open = drops_at(&d["open_ledger_fee"]).unwrap_or(base);
     let current = r["ledger_current_index"]
         .as_u64()
-        .ok_or_else(|| bad("XRPL : ledger_current_index absent"))?;
+        .ok_or_else(|| bad("XRPL: ledger_current_index missing"))?;
     Ok((open.max(base), u32::try_from(current).unwrap_or(u32::MAX)))
 }
 
@@ -312,13 +312,13 @@ pub async fn submit(ctx: &XrpCtx<'_>, blob: &str, hash: &str) -> AppResult<Strin
     let got = r["tx_json"]["hash"].as_str().unwrap_or("");
     if !got.eq_ignore_ascii_case(hash) {
         return Err(bad(format!(
-            "le serveur a répondu un hash inattendu ({})",
+            "the server answered an unexpected hash ({})",
             got.chars().take(80).collect::<String>()
         )));
     }
     if engine != "tesSUCCESS" && engine != "terQUEUED" {
         return Err(AppError::InvalidInput(format!(
-            "paiement XRP refusé : {engine} ({msg})"
+            "XRP payment rejected: {engine} ({msg})"
         )));
     }
     Ok(hash.to_uppercase())
@@ -348,10 +348,10 @@ pub async fn probe(ctx: &XrpCtx<'_>) -> AppResult<Detected> {
             0 => "mainnet".to_owned(),
             1 => "testnet".to_owned(),
             2 => "devnet".to_owned(),
-            other => format!("réseau {other}"),
+            other => format!("network {other}"),
         };
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce serveur XRPL est sur {}, pas sur {}",
+            "this XRPL server is on {}, not on {}",
             name(i.network_id),
             name(want)
         )));
@@ -377,26 +377,26 @@ pub struct PaymentCheck<'a> {
 pub fn check_payment(c: &PaymentCheck<'_>) -> AppResult<()> {
     if !c.ours.exists {
         return Err(AppError::InvalidInput(
-            "ton compte XRP n'est pas encore activé (aucun XRP reçu)".into(),
+            "your XRP account is not activated yet (no XRP received)".into(),
         ));
     }
     if c.dest.require_dest_tag && c.destination_tag.is_none() {
         return Err(AppError::InvalidInput(
-            "ce destinataire exige un tag de destination (lsfRequireDestTag) : ajoute-le, sinon le paiement serait refusé ou perdu".into(),
+            "this recipient requires a destination tag (lsfRequireDestTag): add it, otherwise the payment would be rejected or lost".into(),
         ));
     }
     match c.drops {
         Some(d) => {
             if !c.dest.exists && d < c.info.reserve_base {
                 return Err(AppError::InvalidInput(format!(
-                    "ce compte n'existe pas encore : il faut lui envoyer au moins la réserve de base ({} XRP), sinon le paiement échoue (tecNO_DST_INSUF_XRP)",
+                    "this account does not exist yet: you must send it at least the base reserve ({} XRP), otherwise the payment fails (tecNO_DST_INSUF_XRP)",
                     crate::commands::format_units(&c.info.reserve_base.to_string(), 6)
                 )));
             }
             let spendable: u64 = c.ours.spendable.parse().unwrap_or(0);
             if d.saturating_add(c.fee) > spendable {
                 return Err(AppError::InvalidInput(format!(
-                    "solde disponible insuffisant : {} XRP disponibles (solde − réserve), il en faut {}",
+                    "insufficient available balance: {} XRP available (balance − reserve), {} needed",
                     crate::commands::format_units(&spendable.to_string(), 6),
                     crate::commands::format_units(&(d + c.fee).to_string(), 6)
                 )));
@@ -405,7 +405,7 @@ pub fn check_payment(c: &PaymentCheck<'_>) -> AppResult<()> {
         None => {
             if !c.dest.exists {
                 return Err(AppError::InvalidInput(
-                    "un token ne peut pas être envoyé à un compte XRP qui n'existe pas (tecNO_DST)"
+                    "a token cannot be sent to an XRP account that does not exist (tecNO_DST)"
                         .into(),
                 ));
             }
@@ -462,7 +462,7 @@ mod tests {
         // Destination requires a tag.
         let tagged = acc(true, 0, true);
         assert!(
-            matches!(ok(&tagged, Some(5_000_000), None), Err(AppError::InvalidInput(m)) if m.contains("tag de destination"))
+            matches!(ok(&tagged, Some(5_000_000), None), Err(AppError::InvalidInput(m)) if m.contains("destination tag"))
         );
         assert!(ok(&tagged, Some(5_000_000), Some(42)).is_ok());
         // Unfunded destination: at least the base reserve.
@@ -474,7 +474,7 @@ mod tests {
         assert!(ok(&new, None, None).is_err());
         // More than spendable (balance − reserve).
         assert!(
-            matches!(ok(&acc(true, 0, false), Some(49_999_990), None), Err(AppError::InvalidInput(m)) if m.contains("insuffisant"))
+            matches!(ok(&acc(true, 0, false), Some(49_999_990), None), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
         // Our account not activated.
         let none = acc(false, 0, false);

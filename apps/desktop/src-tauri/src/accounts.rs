@@ -113,7 +113,7 @@ impl Chain {
         Chain::ALL
             .into_iter()
             .find(|c| c.key() == s)
-            .ok_or_else(|| AppError::InvalidInput(format!("chaîne inconnue « {s} »")))
+            .ok_or_else(|| AppError::InvalidInput(format!("unknown chain « {s} »")))
     }
 
     pub fn key(self) -> &'static str {
@@ -173,7 +173,7 @@ pub fn account_arg(account: Option<u32>) -> AppResult<u32> {
     let a = account.unwrap_or(0);
     if a > MAX_ACCOUNT {
         return Err(AppError::InvalidInput(format!(
-            "numéro de compte : au plus {MAX_ACCOUNT}"
+            "account number: at most {MAX_ACCOUNT}"
         )));
     }
     Ok(a)
@@ -188,7 +188,7 @@ fn clean_name(name: &str) -> AppResult<String> {
             .any(|c| c.is_control() || crate::dialog_text::is_invisible(c))
     {
         return Err(AppError::InvalidInput(format!(
-            "nom du compte : 1 à {MAX_NAME} caractères, sans caractère de contrôle ni caractère invisible ou de direction"
+            "account name: 1 to {MAX_NAME} characters, with no control, invisible or direction characters"
         )));
     }
     Ok(n.to_owned())
@@ -246,12 +246,12 @@ impl VaultAccounts {
         let current = self.list(net, chain);
         if current.iter().any(|e| e.index == index) {
             return Err(AppError::InvalidInput(
-                "ce compte est déjà dans ta liste".into(),
+                "this account is already in your list".into(),
             ));
         }
         if current.len() >= MAX_ACCOUNTS_PER_CHAIN {
             return Err(AppError::InvalidInput(format!(
-                "au plus {MAX_ACCOUNTS_PER_CHAIN} comptes par chaîne"
+                "at most {MAX_ACCOUNTS_PER_CHAIN} accounts per chain"
             )));
         }
         let list = self.slot(net).entry(chain).or_default();
@@ -264,7 +264,7 @@ impl VaultAccounts {
         let name = clean_name(name)?;
         if self.name_of(net, chain, index).is_none() {
             return Err(AppError::InvalidInput(
-                "ce compte n'est pas dans ta liste".into(),
+                "this account is not in your list".into(),
             ));
         }
         let list = self.slot(net).entry(chain).or_default();
@@ -281,7 +281,7 @@ impl VaultAccounts {
     pub fn remove(&mut self, net: Network, chain: Chain, index: u32) -> AppResult<()> {
         if index == 0 {
             return Err(AppError::InvalidInput(
-                "le premier compte ne peut pas être retiré (tu peux le renommer)".into(),
+                "the first account cannot be removed (you can rename it)".into(),
             ));
         }
         let list = self.slot(net).entry(chain).or_default();
@@ -289,7 +289,7 @@ impl VaultAccounts {
         list.retain(|e| e.index != index);
         if list.len() == before {
             return Err(AppError::InvalidInput(
-                "ce compte n'est pas dans ta liste".into(),
+                "this account is not in your list".into(),
             ));
         }
         if list.is_empty() {
@@ -390,7 +390,7 @@ impl SignerInfo {
     }
 }
 
-/// Reinforced confirmation when the signing account is « inconnu ». Call it after the main
+/// Reinforced confirmation when the signing account is « unknown ». Call it after the main
 /// dialog (which already shows [`SignerInfo::line`]).
 pub async fn confirm_signer(app: &AppHandle, signer: &SignerInfo) -> AppResult<()> {
     if signer.unknown() {

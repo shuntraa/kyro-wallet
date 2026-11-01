@@ -358,7 +358,7 @@ fn check_asset_live(
     let h = context
         .asset
         .as_ref()
-        .ok_or_else(|| AppError::Internal("contexte d'actif absent".into()))?;
+        .ok_or_else(|| AppError::Internal("missing asset context".into()))?;
     algo_backend::check_asset(&algo_backend::AssetCheck {
         ours: &context.account,
         symbol: &a.symbol,
@@ -382,19 +382,19 @@ pub(crate) async fn build_asset(
     note: Option<&str>,
 ) -> AppResult<AlgoBuilt> {
     let known = wallet_core::algo_known_asset(c.network, asset_id).ok_or_else(|| {
-        AppError::InvalidInput(format!("actif Algorand {asset_id} inconnu de Kyro"))
+        AppError::InvalidInput(format!("Algorand asset {asset_id} unknown to Kyro"))
     })?;
     let sender = wallet_core::algo_address_bytes(me)?;
     let receiver = wallet_core::algo_address_bytes(to)?;
     let opt_in = receiver == sender;
     if opt_in != (amount == 0) {
         return Err(AppError::InvalidInput(
-            "montant invalide (0 seulement pour activer le jeton sur ton propre compte)".into(),
+            "invalid amount (0 only to enable the token on your own account)".into(),
         ));
     }
     let note = note.map(str::as_bytes).unwrap_or_default().to_vec();
     if note.len() > wallet_core::ALGO_MAX_NOTE {
-        return Err(AppError::InvalidInput("note : au plus 1024 octets".into()));
+        return Err(AppError::InvalidInput("note: at most 1024 bytes".into()));
     }
     let (params, context) = live_context(c, me, to, Some(known.id)).await?;
     let (gen, gh) = wallet_core::algo_genesis(c.network)?;
@@ -427,7 +427,7 @@ pub(crate) async fn build_asset(
     let a = summary
         .asset
         .as_ref()
-        .ok_or_else(|| AppError::Internal("transfert d'actif attendu".into()))?;
+        .ok_or_else(|| AppError::Internal("asset transfer expected".into()))?;
     check_asset_live(a, p.fee, &context)?;
     Ok(AlgoBuilt {
         blob,
@@ -455,10 +455,10 @@ pub(crate) async fn build(
         .parse()
         .ok()
         .filter(|a| *a > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant en µALGO invalide".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("invalid amount in µALGO".into()))?;
     let note = note.map(str::as_bytes).unwrap_or_default().to_vec();
     if note.len() > wallet_core::ALGO_MAX_NOTE {
-        return Err(AppError::InvalidInput("note : au plus 1024 octets".into()));
+        return Err(AppError::InvalidInput("note: at most 1024 bytes".into()));
     }
     let (params, context) = live_context(c, me, to, None).await?;
     let (gen, gh) = wallet_core::algo_genesis(c.network)?;
@@ -550,9 +550,9 @@ pub async fn algo_build_asset_tx(
         .parse()
         .ok()
         .filter(|a| *a > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant du jeton invalide".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("invalid token amount".into()))?;
     if to.trim() == me {
-        return Err(AppError::InvalidInput("envoi à soi-même".into()));
+        return Err(AppError::InvalidInput("send to yourself".into()));
     }
     build_asset(
         &ctx(&state),
@@ -586,7 +586,7 @@ pub(crate) async fn prepare_sign(
     let (_, context) = live_context(c, me, &summary.receiver, asset_id).await?;
     if summary.last_valid <= context.round {
         return Err(AppError::InvalidInput(
-            "paiement Algorand expiré (dernier round de validité dépassé) : reconstruis-le".into(),
+            "Algorand payment expired (last valid round passed): rebuild it".into(),
         ));
     }
     let (amount, fee) = micro_of(&summary);
@@ -659,7 +659,7 @@ pub async fn algo_sign_tx(
         blocking(move || Ok(wallet_core::algo_sign(&seed, a, net, &b)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -699,7 +699,7 @@ pub async fn algo_tx_status(state: State<'_, AppState>, txid: String) -> AppResu
     let t = txid.trim();
     if !valid_txid(t) {
         return Err(AppError::InvalidInput(
-            "identifiant de transaction Algorand : 52 caractères base32".into(),
+            "Algorand transaction ID: 52 base32 characters".into(),
         ));
     }
     algo_backend::tx_status(&ctx(&state), t).await

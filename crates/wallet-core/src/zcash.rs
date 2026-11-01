@@ -152,7 +152,7 @@ fn p2sh_script(hash: &[u8; 20]) -> Vec<u8> {
 
 /// Message for an address Kyro will never pay (shielded or unified).
 const SHIELDED_REFUSED: &str =
-    "adresse Zcash protégée (zs…, zc…) ou unifiée (u1…) : pas encore prise en charge. Kyro n'envoie qu'à des adresses transparentes (t1…, t3…, tex1…)";
+    "shielded (zs…, zc…) or unified (u1…) Zcash address: not supported yet. Kyro sends only to transparent addresses (t1…, t3…, tex1…)";
 
 fn is_shielded_form(a: &str) -> bool {
     let l = a.to_ascii_lowercase();
@@ -170,17 +170,17 @@ fn is_shielded_form(a: &str) -> bool {
 pub fn zec_parse_address(address: &str, net: Network) -> Result<(Vec<u8>, ZecAddressKind)> {
     let a = address.trim();
     if a.is_empty() {
-        return Err(Error::input("adresse Zcash vide"));
+        return Err(Error::input("empty Zcash address"));
     }
     if is_shielded_form(a) {
         return Err(Error::input(SHIELDED_REFUSED));
     }
     let (p2pkh, p2sh, tex) = prefixes(net);
-    let other = || Error::input("adresse Zcash d'un autre réseau");
+    let other = || Error::input("Zcash address of another network");
     let lower = a.to_ascii_lowercase();
     if lower.starts_with("tex1") || lower.starts_with("textest1") {
         let decoded = CheckedHrpstring::new::<Bech32m>(a)
-            .map_err(|_| Error::input("adresse TEX invalide (ZIP 320)"))?;
+            .map_err(|_| Error::input("invalid TEX address (ZIP 320)"))?;
         if decoded.hrp().to_lowercase() != tex {
             return Err(other());
         }
@@ -188,13 +188,13 @@ pub fn zec_parse_address(address: &str, net: Network) -> Result<(Vec<u8>, ZecAdd
         let hash: [u8; 20] = data
             .as_slice()
             .try_into()
-            .map_err(|_| Error::input("adresse TEX invalide (ZIP 320)"))?;
+            .map_err(|_| Error::input("invalid TEX address (ZIP 320)"))?;
         return Ok((p2pkh_script(&hash), ZecAddressKind::Tex));
     }
     let raw =
-        bitcoin::base58::decode_check(a).map_err(|_| Error::input("adresse Zcash invalide"))?;
+        bitcoin::base58::decode_check(a).map_err(|_| Error::input("invalid Zcash address"))?;
     if raw.len() != 22 {
-        return Err(Error::input("adresse Zcash invalide"));
+        return Err(Error::input("invalid Zcash address"));
     }
     let mut hash = [0u8; 20];
     hash.copy_from_slice(&raw[2..]);
@@ -211,7 +211,7 @@ pub fn zec_parse_address(address: &str, net: Network) -> Result<(Vec<u8>, ZecAdd
         if prefix == o1 || prefix == o2 {
             Err(other())
         } else {
-            Err(Error::input("adresse Zcash invalide"))
+            Err(Error::input("invalid Zcash address"))
         }
     }
 }
@@ -308,9 +308,9 @@ pub fn zec_address(
 /// Address at `<account xpub>/change/index` (public derivation only), same result as
 /// [`zec_address`]. Accepts `xpub`/`tpub` only.
 pub fn zec_address_from_xpub(xpub: &str, net: Network, change: bool, index: u32) -> Result<String> {
-    let xpub = Xpub::from_str(xpub.trim()).map_err(|_| Error::input("xpub de compte invalide"))?;
+    let xpub = Xpub::from_str(xpub.trim()).map_err(|_| Error::input("invalid account xpub"))?;
     if xpub.network != net.btc_kind() {
-        return Err(Error::input("xpub d'un autre réseau"));
+        return Err(Error::input("xpub is for another network"));
     }
     Ok(own_address(net, &child_pubkey(&xpub, change, index)?))
 }
@@ -360,11 +360,9 @@ fn parse_tx(raw: &[u8]) -> Result<Transaction> {
     // The branch id only matters for v4 and earlier (it is not in their encoding and only
     // feeds their sighash, never their txid); v5+ carry their own.
     let tx = Transaction::read(&mut cur, BranchId::Nu5)
-        .map_err(|_| Error::input("transaction Zcash mal formée"))?;
+        .map_err(|_| Error::input("malformed Zcash transaction"))?;
     if cur.position() != raw.len() as u64 {
-        return Err(Error::input(
-            "transaction Zcash mal formée (octets en trop)",
-        ));
+        return Err(Error::input("malformed Zcash transaction (trailing bytes)"));
     }
     Ok(tx)
 }
@@ -416,7 +414,7 @@ fn view(tx: &Transaction, net: Network) -> ZecRawTx {
 /// data and trailing bytes. The txid is recomputed by `zcash_primitives`.
 pub fn zec_decode_raw_tx(raw_hex: &str, net: Network) -> Result<ZecRawTx> {
     let bytes =
-        hex::decode(raw_hex.trim()).map_err(|_| Error::input("transaction non hexadécimale"))?;
+        hex::decode(raw_hex.trim()).map_err(|_| Error::input("transaction is not hexadecimal"))?;
     Ok(view(&parse_tx(&bytes)?, net))
 }
 
@@ -462,35 +460,35 @@ pub fn zec_consensus(
     let p = params(net);
     if observed_height > tip_height || tip_height - observed_height > 10 {
         return Err(Error::input(
-            "la mise à niveau du réseau doit être lue dans un des 10 derniers blocs",
+            "the network upgrade must be read from one of the last 10 blocks",
         ));
     }
     let observed = BranchId::try_from(observed_branch_id).map_err(|_| {
         Error::input(format!(
-            "le réseau Zcash utilise la branche de consensus 0x{observed_branch_id:08x}, inconnue de cette version de Kyro (mise à niveau du réseau) : mets Kyro à jour avant d'envoyer"
+            "the Zcash network uses consensus branch 0x{observed_branch_id:08x}, unknown to this version of Kyro (network upgrade): update Kyro before sending"
         ))
     })?;
     let expected = BranchId::for_height(&p, BlockHeight::from_u32(observed_height));
     if observed != expected {
         return Err(Error::input(format!(
-            "le réseau Zcash est en {} (0x{observed_branch_id:08x}) au bloc {observed_height}, cette version de Kyro attend {} : mets Kyro à jour avant d'envoyer",
+            "the Zcash network is on {} (0x{observed_branch_id:08x}) at block {observed_height}, this version of Kyro expects {}: update Kyro before sending",
             upgrade_name(observed),
             upgrade_name(expected),
         )));
     }
     let target_height = tip_height
         .checked_add(1)
-        .ok_or_else(|| Error::input("hauteur de bloc invalide"))?;
+        .ok_or_else(|| Error::input("invalid block height"))?;
     let branch = BranchId::for_height(&p, BlockHeight::from_u32(target_height));
     if !TxVersion::V5.valid_in_branch(branch) {
         return Err(Error::input(format!(
-            "les transactions v5 ne sont pas valides sous {}",
+            "v5 transactions are not valid under {}",
             upgrade_name(branch)
         )));
     }
     let mut expiry_height = target_height
         .checked_add(ZEC_EXPIRY_DELTA)
-        .ok_or_else(|| Error::input("hauteur de bloc invalide"))?;
+        .ok_or_else(|| Error::input("invalid block height"))?;
     let mut expiry_capped = false;
     if let Some(next) = branch
         .height_bounds(&p)
@@ -672,7 +670,7 @@ fn script(bytes: Vec<u8>) -> Script {
 }
 
 fn zats(v: u64) -> Result<Zatoshis> {
-    Zatoshis::from_u64(v).map_err(|_| Error::input("montant au-delà de la masse monétaire Zcash"))
+    Zatoshis::from_u64(v).map_err(|_| Error::input("amount above the Zcash money supply"))
 }
 
 struct Spend {
@@ -704,7 +702,7 @@ fn zip317_fee(net: Network, target: u32, inputs: usize, outputs: &[&[u8]]) -> Re
             0,
         )
         .map(Zatoshis::into_u64)
-        .map_err(|_| Error::input("dépassement dans le calcul des frais"))
+        .map_err(|_| Error::input("overflow in the fee calculation"))
 }
 
 /// Verifies the candidate coins (previous transaction re-hashed, output exists, pays the key
@@ -713,31 +711,31 @@ fn verified_coins(xpub: &Xpub, coins: &[ZecCoin]) -> Result<Vec<Spend>> {
     let mut out: Vec<Spend> = Vec::with_capacity(coins.len());
     for (i, c) in coins.iter().enumerate() {
         let bytes = hex::decode(c.prev_tx.trim())
-            .map_err(|_| Error::input("transaction non hexadécimale"))?;
+            .map_err(|_| Error::input("transaction is not hexadecimal"))?;
         let prev = parse_tx(&bytes)?;
         let bundle = prev
             .transparent_bundle()
-            .ok_or_else(|| Error::input(format!("pièce {i} : aucune sortie transparente")))?;
+            .ok_or_else(|| Error::input(format!("coin {i}: no transparent output")))?;
         if bundle.is_coinbase() {
             return Err(Error::input(format!(
-                "pièce {i} : issue d'un minage (coinbase) — Zcash impose de la protéger, Kyro ne peut pas la dépenser"
+                "coin {i}: from mining (coinbase) — Zcash requires shielding it, Kyro cannot spend it"
             )));
         }
         let txout = usize::try_from(c.vout)
             .ok()
             .and_then(|v| bundle.vout.get(v))
-            .ok_or_else(|| Error::input(format!("pièce {i} : sortie (vout) inexistante")))?;
+            .ok_or_else(|| Error::input(format!("coin {i}: output (vout) does not exist")))?;
         let pubkey = child_pubkey(xpub, c.change, c.index)?;
         if txout.script_pubkey().0 .0 != own_script(&pubkey) {
             return Err(Error::input(format!(
-                "pièce {i} : la sortie ne paie pas l'adresse {}/{} de ce compte",
+                "coin {i}: the output does not pay this account's address {}/{}",
                 u8::from(c.change),
                 c.index
             )));
         }
         let outpoint = OutPoint::new(*prev.txid().as_ref(), c.vout);
         if out.iter().any(|s| s.outpoint == outpoint) {
-            return Err(Error::input(format!("pièce {i} : listée deux fois")));
+            return Err(Error::input(format!("coin {i}: listed twice")));
         }
         out.push(Spend {
             outpoint,
@@ -772,14 +770,14 @@ fn plan_xpub(xpub: &Xpub, net: Network, req: &ZecSendRequest) -> Result<Plan> {
     let (to_script, to_kind) = zec_parse_address(&req.to, net)?;
     if req.change_index > MAX_CHANGE_INDEX {
         return Err(Error::input(format!(
-            "index de monnaie au-delà de {MAX_CHANGE_INDEX}"
+            "change index above {MAX_CHANGE_INDEX}"
         )));
     }
     let change_pk = child_pubkey(xpub, true, req.change_index)?;
     let change_script = own_script(&change_pk);
     let coins = verified_coins(xpub, &req.coins)?;
     if coins.is_empty() {
-        return Err(Error::input("aucune pièce à dépenser"));
+        return Err(Error::input("no coin to spend"));
     }
     let target = consensus.target_height;
 
@@ -793,25 +791,23 @@ fn plan_xpub(xpub: &Xpub, net: Network, req: &ZecSendRequest) -> Result<Plan> {
                 let amount = total
                     .checked_sub(fee1)
                     .filter(|a| *a >= ZEC_DUST)
-                    .ok_or_else(|| {
-                        Error::input("solde trop faible pour couvrir les frais du réseau")
-                    })?;
+                    .ok_or_else(|| Error::input("balance too low to cover the network fee"))?;
                 break (amount, 0, fee1, 0, fee1);
             }
             return Err(Error::input(format!(
-                "solde insuffisant : {total} zatoshis dans {chosen} pièce(s), il en faut plus pour le montant et les frais"
+                "insufficient balance: {total} zatoshis in {chosen} coin(s), more is needed for the amount and the fee"
             )));
         }
         total = total
             .checked_add(coins[chosen].coin.value().into_u64())
-            .ok_or_else(|| Error::input("dépassement de la somme des entrées"))?;
+            .ok_or_else(|| Error::input("input sum overflow"))?;
         chosen += 1;
         if req.max {
             continue;
         }
         if req.amount < ZEC_DUST {
             return Err(Error::input(format!(
-                "montant sous la limite de poussière du réseau ({ZEC_DUST} zatoshis)"
+                "amount below the network dust limit ({ZEC_DUST} zatoshis)"
             )));
         }
         let fee2 = zip317_fee(net, target, chosen, &[&to_script, &change_script])?;
@@ -1156,7 +1152,7 @@ fn hw_xpub(acc: &ZecAccount, net: Network) -> Result<Xpub> {
     let xpub = Xpub::from_str(acc.xpub.trim()).map_err(|_| Error::input("invalid Zcash xpub"))?;
     if xpub.network != net.btc_kind() || xpub.depth != 3 {
         return Err(Error::input(
-            "xpub Zcash d'un autre réseau ou d'une autre profondeur",
+            "Zcash xpub of another network or another depth",
         ));
     }
     Ok(xpub)
@@ -1194,7 +1190,7 @@ pub fn zec_hw_plan(acc: &ZecAccount, net: Network, req: &ZecSendRequest) -> Resu
         amount: s
             .amount
             .parse()
-            .map_err(|_| Error::crypto("montant du résumé"))?,
+            .map_err(|_| Error::crypto("summary amount"))?,
         address: s.to_address.clone(),
         change_path: None,
     }];
@@ -1203,7 +1199,7 @@ pub fn zec_hw_plan(acc: &ZecAccount, net: Network, req: &ZecSendRequest) -> Resu
             amount: c
                 .amount
                 .parse()
-                .map_err(|_| Error::crypto("monnaie du résumé"))?,
+                .map_err(|_| Error::crypto("summary change"))?,
             address: c.address.clone(),
             change_path: Some(hw_path(net, &xpub, true, c.index)),
         });
@@ -1231,7 +1227,7 @@ pub fn zec_hw_finalize(
     let xpub = hw_xpub(acc, net)?;
     let p = plan_xpub(&xpub, net, req)?;
     if signatures.len() != p.spends.len() {
-        return Err(Error::input("une signature par entrée est attendue"));
+        return Err(Error::input("one signature per input is expected"));
     }
     let digests = input_digests(&p.unsigned, &p.spends)?;
     let verifier = Secp256k1::verification_only();
@@ -1245,22 +1241,19 @@ pub fn zec_hw_finalize(
                 _ => Err(bitcoin::secp256k1::Error::InvalidSignature),
             }
         });
-        let sig =
-            parsed.map_err(|_| Error::input(format!("entrée {i} : signature DER invalide")))?;
+        let sig = parsed.map_err(|_| Error::input(format!("input {i}: invalid DER signature")))?;
         // Low-S only: a high-S signature is non-standard, refused rather than rewritten.
         let mut low = sig;
         low.normalize_s();
         if low != sig {
             return Err(Error::input(format!(
-                "entrée {i} : signature non canonique (high-S)"
+                "input {i}: non-canonical signature (high-S)"
             )));
         }
         verifier
             .verify_ecdsa(&Message::from_digest(*digest), &sig, &sp.pubkey)
             .map_err(|_| {
-                Error::crypto(format!(
-                    "entrée {i} : la signature de l'appareil ne se vérifie pas"
-                ))
+                Error::crypto(format!("input {i}: the device's signature does not verify"))
             })?;
         sigs.push(sig);
     }
@@ -1277,21 +1270,17 @@ pub fn zec_input_sighash(
     index: usize,
 ) -> Result<[u8; 32]> {
     let bytes =
-        hex::decode(raw_hex.trim()).map_err(|_| Error::input("transaction non hexadécimale"))?;
+        hex::decode(raw_hex.trim()).map_err(|_| Error::input("transaction is not hexadecimal"))?;
     let tx = parse_tx(&bytes)?;
     if tx.version() != TxVersion::V5 {
-        return Err(Error::input(
-            "seules les transactions v5 sont prises en charge",
-        ));
+        return Err(Error::input("only v5 transactions are supported"));
     }
     let data = tx.into_data();
     let bundle = data
         .transparent_bundle()
-        .ok_or_else(|| Error::input("aucune partie transparente"))?;
+        .ok_or_else(|| Error::input("no transparent part"))?;
     if prevouts.len() != bundle.vin.len() || index >= prevouts.len() {
-        return Err(Error::input(
-            "les sorties dépensées ne correspondent pas aux entrées",
-        ));
+        return Err(Error::input("the spent outputs do not match the inputs"));
     }
     let coins = prevouts
         .iter()
@@ -1309,7 +1298,7 @@ pub fn zec_input_sighash(
         },
     };
     if data.sapling_bundle().is_some() || data.orchard_bundle().is_some() {
-        return Err(Error::input("parties protégées non prises en charge"));
+        return Err(Error::input("shielded parts not supported"));
     }
     let unsigned = TransactionData::<TransparentOnly>::from_parts(
         TxVersion::V5,
@@ -1334,6 +1323,6 @@ pub fn zec_input_sighash(
         spk,
         coins[index].value(),
     )
-    .map_err(|_| Error::input("index d'entrée hors limites"))?;
+    .map_err(|_| Error::input("input index out of range"))?;
     Ok(*signature_hash(&unsigned, &SignableInput::Transparent(input), &digests).as_ref())
 }

@@ -78,7 +78,7 @@ pub const ALGO_TESTNET_GENESIS: (&str, &str) = (
 );
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("transaction Algorand : {}", msg.into()))
+    Error::input(format!("Algorand transaction: {}", msg.into()))
 }
 
 /// Genesis id and 32-byte genesis hash of `net` (Algorand mainnet / testnet).
@@ -133,7 +133,7 @@ fn ledger_root(seed: &Seed) -> Result<XPrv> {
     while i[31] & 0b0010_0000 != 0 {
         rounds += 1;
         if rounds > MAX_ROOT_ROUNDS {
-            return Err(Error::crypto("clé racine Algorand introuvable"));
+            return Err(Error::crypto("Algorand root key not found"));
         }
         let next = hmac512(KEY, &i[..])?;
         i = next;
@@ -179,7 +179,7 @@ pub fn algo_address_of_pubkey(pk: &[u8; 32]) -> String {
 /// characters with a valid checksum.
 pub fn algo_address_bytes(address: &str) -> Result<[u8; 32]> {
     let a = address.trim();
-    let invalid = || Error::input("adresse Algorand invalide");
+    let invalid = || Error::input("invalid Algorand address");
     if a.len() != 58 {
         return Err(invalid());
     }
@@ -188,9 +188,7 @@ pub fn algo_address_bytes(address: &str) -> Result<[u8; 32]> {
     let mut pk = [0u8; 32];
     pk.copy_from_slice(&raw[..32]);
     if raw[32..] != checksum(&pk) {
-        return Err(Error::input(
-            "adresse Algorand invalide (somme de contrôle)",
-        ));
+        return Err(Error::input("invalid Algorand address (checksum)"));
     }
     if algo_address_of_pubkey(&pk) != a {
         return Err(invalid());
@@ -304,7 +302,7 @@ fn write_map(mut f: Vec<Entry>) -> Vec<u8> {
 
 fn take<'a>(b: &mut &'a [u8], n: usize) -> Result<&'a [u8]> {
     if b.len() < n {
-        return Err(bad("tronquée"));
+        return Err(bad("truncated"));
     }
     let (head, rest) = b.split_at(n);
     *b = rest;
@@ -323,7 +321,7 @@ fn read_uint(b: &mut &[u8]) -> Result<u64> {
         0xCD => be(take(b, 2)?),
         0xCE => be(take(b, 4)?),
         0xCF => be(take(b, 8)?),
-        _ => return Err(bad("entier attendu")),
+        _ => return Err(bad("integer expected")),
     })
 }
 
@@ -333,9 +331,9 @@ fn read_str<'a>(b: &mut &'a [u8]) -> Result<&'a str> {
         0xA0..=0xBF => usize::from(t & 0x1F),
         0xD9 => be(take(b, 1)?) as usize,
         0xDA => be(take(b, 2)?) as usize,
-        _ => return Err(bad("texte attendu")),
+        _ => return Err(bad("text expected")),
     };
-    core::str::from_utf8(take(b, len)?).map_err(|_| bad("texte non UTF-8"))
+    core::str::from_utf8(take(b, len)?).map_err(|_| bad("non-UTF-8 text"))
 }
 
 fn read_bin<'a>(b: &mut &'a [u8]) -> Result<&'a [u8]> {
@@ -343,7 +341,7 @@ fn read_bin<'a>(b: &mut &'a [u8]) -> Result<&'a [u8]> {
     let len = match t {
         0xC4 => be(take(b, 1)?) as usize,
         0xC5 => be(take(b, 2)?) as usize,
-        _ => return Err(bad("octets attendus")),
+        _ => return Err(bad("bytes expected")),
     };
     take(b, len)
 }
@@ -351,7 +349,7 @@ fn read_bin<'a>(b: &mut &'a [u8]) -> Result<&'a [u8]> {
 fn read_32(b: &mut &[u8], what: &str) -> Result<[u8; 32]> {
     read_bin(b)?
         .try_into()
-        .map_err(|_| bad(format!("{what} : 32 octets attendus")))
+        .map_err(|_| bad(format!("{what}: 32 bytes expected")))
 }
 
 fn read_map(b: &mut &[u8]) -> Result<usize> {
@@ -359,7 +357,7 @@ fn read_map(b: &mut &[u8]) -> Result<usize> {
     match t {
         0x80..=0x8F => Ok(usize::from(t & 0x0F)),
         0xDE => Ok(be(take(b, 2)?) as usize),
-        _ => Err(bad("objet msgpack attendu")),
+        _ => Err(bad("msgpack object expected")),
     }
 }
 
@@ -556,18 +554,18 @@ impl AlgoPayment {
                 other => {
                     let name: String = other.chars().take(16).collect();
                     return Err(bad(format!(
-                        "champ inconnu « {} » : refusé",
+                        "unknown field \"{}\": refused",
                         name.escape_default()
                     )));
                 }
             }
         }
         match ty.as_deref() {
-            Some("pay") if asset_fields => Err(bad("champs d'actif dans un paiement ALGO")),
+            Some("pay") if asset_fields => Err(bad("asset fields in an ALGO payment")),
             Some("pay") => Ok(p),
             Some("axfer") => {
                 if p.amount != 0 || p.receiver != [0u8; 32] || p.close_remainder_to.is_some() {
-                    return Err(bad("champs de paiement ALGO dans un transfert d'actif"));
+                    return Err(bad("ALGO payment fields in an asset transfer"));
                 }
                 p.asset = Some(a);
                 Ok(p)
@@ -575,11 +573,11 @@ impl AlgoPayment {
             Some(t) => {
                 let t: String = t.chars().take(16).collect();
                 Err(bad(format!(
-                    "type « {} » refusé : seuls les paiements ALGO (pay) et les transferts d'actifs connus (axfer) sont pris en charge",
+                    "type \"{}\" refused: only ALGO payments (pay) and transfers of known assets (axfer) are supported",
                     t.escape_default()
                 )))
             }
-            None => Err(bad("type absent")),
+            None => Err(bad("missing type")),
         }
     }
 
@@ -587,16 +585,16 @@ impl AlgoPayment {
     /// unknown field, trailing bytes, and any encoding that does not re-encode identically.
     pub fn decode(raw: &[u8]) -> Result<AlgoPayment> {
         if raw.len() > MAX_BLOB {
-            return Err(bad("trop grande"));
+            return Err(bad("too large"));
         }
         let mut b = raw;
         let p = AlgoPayment::read(&mut b)?;
         if !b.is_empty() {
-            return Err(bad("octets en trop après la transaction"));
+            return Err(bad("trailing bytes after the transaction"));
         }
         if p.encode() != raw {
             return Err(bad(
-                "encodage non canonique (ordre, doublon, champ vide ou forme inattendue)",
+                "non-canonical encoding (order, duplicate, empty field or unexpected form)",
             ));
         }
         Ok(p)
@@ -631,26 +629,26 @@ pub fn algo_encode_signed(p: &AlgoPayment, sig: &[u8; 64]) -> Vec<u8> {
 /// (no `sgnr`, `msig`, `lsig`), identical re-encoding.
 pub fn algo_decode_signed(raw: &[u8]) -> Result<(AlgoPayment, [u8; 64])> {
     if raw.len() > MAX_BLOB {
-        return Err(bad("trop grande"));
+        return Err(bad("too large"));
     }
     let mut b = raw;
     if read_map(&mut b)? != 2 {
-        return Err(bad("transaction signée : exactement sig et txn attendus"));
+        return Err(bad("signed transaction: exactly sig and txn expected"));
     }
     if read_str(&mut b)? != "sig" {
         return Err(bad(
-            "transaction signée : sig attendu (multisig, lsig, sgnr refusés)",
+            "signed transaction: sig expected (multisig, lsig, sgnr refused)",
         ));
     }
     let sig: [u8; 64] = read_bin(&mut b)?
         .try_into()
-        .map_err(|_| bad("signature : 64 octets attendus"))?;
+        .map_err(|_| bad("signature: 64 bytes expected"))?;
     if read_str(&mut b)? != "txn" {
-        return Err(bad("transaction signée : txn attendu"));
+        return Err(bad("signed transaction: txn expected"));
     }
     let p = AlgoPayment::read(&mut b)?;
     if !b.is_empty() || algo_encode_signed(&p, &sig) != raw {
-        return Err(bad("transaction signée non canonique"));
+        return Err(bad("non-canonical signed transaction"));
     }
     Ok((p, sig))
 }
@@ -737,29 +735,29 @@ fn summarize_asset(
 ) -> Result<AlgoAssetSummary> {
     if a.close_to.is_some() {
         return Err(bad(
-            "asset-close-to refusé : il enverrait TOUT le solde de l'actif à une autre adresse et le désactiverait",
+            "asset-close-to refused: it would send the ENTIRE asset balance to another address and opt out of the asset",
         ));
     }
     if a.asset_sender.is_some() {
         return Err(bad(
-            "asset-sender (clawback) refusé : réservé au gestionnaire de l'actif",
+            "asset-sender (clawback) refused: reserved for the asset manager",
         ));
     }
     let known = algo_known_asset(net, a.asset_id).ok_or_else(|| {
         bad(format!(
-            "actif {} inconnu : Kyro ne signe que les jetons vérifiés de sa table",
+            "unknown asset {}: Kyro signs only the verified tokens in its table",
             a.asset_id
         ))
     })?;
     if a.receiver == [0u8; 32] {
-        return Err(bad("destinataire nul (adresse zéro) : refusé"));
+        return Err(bad("null recipient (zero address): refused"));
     }
     let opt_in = a.receiver == *sender;
     if opt_in && a.amount != 0 {
-        return Err(bad("transfert d'actif à soi-même"));
+        return Err(bad("asset transfer to yourself"));
     }
     if !opt_in && a.amount == 0 {
-        return Err(bad("montant nul"));
+        return Err(bad("zero amount"));
     }
     Ok(AlgoAssetSummary {
         asset_id: known.id,
@@ -774,29 +772,29 @@ fn summarize_asset(
 fn summarize(p: &AlgoPayment, net: Network, our_address: &str) -> Result<AlgoTxSummary> {
     if p.close_remainder_to.is_some() {
         return Err(bad(
-            "close-remainder-to refusé : il enverrait TOUT le solde restant à une autre adresse et fermerait le compte",
+            "close-remainder-to refused: it would send the ENTIRE remaining balance to another address and close the account",
         ));
     }
     if p.rekey_to.is_some() {
         return Err(bad(
-            "rekey refusé : il donnerait le contrôle de ce compte à une autre clé",
+            "rekey refused: it would hand control of this account to another key",
         ));
     }
     if p.group.is_some() {
         return Err(bad(
-            "transaction groupée (grp) refusée : Kyro ne signe que des paiements isolés",
+            "grouped transaction (grp) refused: Kyro signs only standalone payments",
         ));
     }
     if p.lease.is_some() {
-        return Err(bad("bail (lx) non pris en charge : refusé"));
+        return Err(bad("lease (lx) not supported: refused"));
     }
     if p.sender != algo_address_bytes(our_address)? {
-        return Err(bad("l'expéditeur n'est pas l'adresse de ce portefeuille"));
+        return Err(bad("the sender is not this wallet's address"));
     }
     let (gen, gh) = algo_genesis(net)?;
     if p.genesis_id != gen || p.genesis_hash != gh {
         return Err(bad(format!(
-            "réseau inattendu (« {} ») : ce portefeuille est sur {gen}",
+            "unexpected network (\"{}\"): this wallet is on {gen}",
             p.genesis_id
                 .chars()
                 .take(32)
@@ -808,29 +806,29 @@ fn summarize(p: &AlgoPayment, net: Network, our_address: &str) -> Result<AlgoTxS
         Some(a) => Some(summarize_asset(a, &p.sender, net)?),
         None => {
             if p.receiver == [0u8; 32] {
-                return Err(bad("destinataire nul (adresse zéro) : refusé"));
+                return Err(bad("null recipient (zero address): refused"));
             }
             if p.receiver == p.sender {
-                return Err(bad("paiement à soi-même"));
+                return Err(bad("payment to yourself"));
             }
             if p.amount == 0 {
-                return Err(bad("montant nul"));
+                return Err(bad("zero amount"));
             }
             None
         }
     };
     let receiver = p.asset.as_ref().map_or(p.receiver, |a| a.receiver);
     if p.fee < ALGO_MIN_FEE {
-        return Err(bad("frais sous le minimum du protocole (0,001 ALGO)"));
+        return Err(bad("fees below the protocol minimum (0.001 ALGO)"));
     }
     if p.first_valid == 0 || p.last_valid < p.first_valid {
-        return Err(bad("fenêtre de validité invalide"));
+        return Err(bad("invalid validity window"));
     }
     if p.last_valid - p.first_valid > ALGO_MAX_VALIDITY {
-        return Err(bad("fenêtre de validité de plus de 1000 rounds"));
+        return Err(bad("validity window longer than 1000 rounds"));
     }
     if p.note.len() > ALGO_MAX_NOTE {
-        return Err(bad("note de plus de 1024 octets"));
+        return Err(bad("note longer than 1024 bytes"));
     }
     let mut warnings = Vec::new();
     let (mut note_hex, mut note_text) = (None, None);
@@ -873,9 +871,9 @@ fn summarize(p: &AlgoPayment, net: Network, our_address: &str) -> Result<AlgoTxS
 fn unhex(blob_hex: &str) -> Result<Vec<u8>> {
     let s = blob_hex.trim();
     if s.len() > 2 * MAX_BLOB {
-        return Err(bad("trop grande"));
+        return Err(bad("too large"));
     }
-    hex::decode(s).map_err(|_| Error::input("le blob n'est pas en hexadécimal"))
+    hex::decode(s).map_err(|_| Error::input("the blob is not hexadecimal"))
 }
 
 /// Decodes an **unsigned** payment (msgpack, hex) for the dialog, on network `net`. Refused:
@@ -905,7 +903,7 @@ pub fn algo_sign(
     let msg = p.signing_bytes();
     let sig = key.sign(&msg);
     vk.verify_strict(&msg, &sig)
-        .map_err(|_| Error::crypto("échec de la vérification de la signature"))?;
+        .map_err(|_| Error::crypto("signature verification failed"))?;
     let signed = algo_encode_signed(&p, &sig.to_bytes());
     Ok((hex::encode(signed), p.txid(), summary))
 }
@@ -921,9 +919,9 @@ pub fn algo_verify_signed(
     let raw = unhex(signed_hex)?;
     let (p, sig) = algo_decode_signed(&raw)?;
     summarize(&p, net, our_address)?;
-    let vk = VerifyingKey::from_bytes(&p.sender).map_err(|_| bad("clé de l'expéditeur"))?;
+    let vk = VerifyingKey::from_bytes(&p.sender).map_err(|_| bad("sender key"))?;
     vk.verify_strict(&p.signing_bytes(), &Signature::from_bytes(&sig))
-        .map_err(|_| bad("la signature ne se vérifie pas"))?;
+        .map_err(|_| bad("the signature does not verify"))?;
     Ok((p.txid(), raw))
 }
 
@@ -933,7 +931,7 @@ pub fn algo_hw_message(blob_hex: &str) -> Result<Vec<u8>> {
     let p = AlgoPayment::decode(&unhex(blob_hex)?)?;
     if p.asset.is_some() {
         return Err(bad(
-            "jetons Algorand : pas encore pris en charge sur hardware wallet",
+            "Algorand tokens: not supported on hardware wallets yet",
         ));
     }
     Ok(p.encode())
@@ -949,11 +947,11 @@ pub fn algo_hw_signed(
 ) -> Result<(String, String)> {
     let sig: [u8; 64] = sig
         .try_into()
-        .map_err(|_| bad("signature de l'appareil : 64 octets attendus"))?;
+        .map_err(|_| bad("device signature: 64 bytes expected"))?;
     let p = AlgoPayment::decode(&unhex(blob_hex)?)?;
     if p.asset.is_some() {
         return Err(bad(
-            "jetons Algorand : pas encore pris en charge sur hardware wallet",
+            "Algorand tokens: not supported on hardware wallets yet",
         ));
     }
     let signed = hex::encode(algo_encode_signed(&p, &sig));

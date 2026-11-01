@@ -20,23 +20,23 @@ fn bad(msg: &str) -> Error {
 /// normalised to low-S (the XRP Ledger's canonical form, equally valid) and must verify over
 /// the blob's signing hash. Returns `(signed blob hex, transaction hash hex)`.
 pub fn xrp_hw_assemble(blob_hex: &str, pubkey: &[u8; 33], der: &[u8]) -> Result<(String, String)> {
-    let raw = hex::decode(blob_hex.trim()).map_err(|_| bad("blob : hexadécimal attendu"))?;
+    let raw = hex::decode(blob_hex.trim()).map_err(|_| bad("blob: hexadecimal expected"))?;
     let mut p = XrpPayment::decode(&raw)?;
     if p.txn_signature.is_some() {
-        return Err(bad("blob déjà signé"));
+        return Err(bad("blob already signed"));
     }
     if p.signing_pub_key.as_deref() != Some(&pubkey[..]) {
-        return Err(bad("SigningPubKey n'est pas la clé de ce compte"));
+        return Err(bad("SigningPubKey is not this account's key"));
     }
     if crate::xrp::xrp_address_of_pubkey(pubkey)? != crate::xrp::xrp_address_from_id(&p.account) {
-        return Err(bad("Account n'est pas l'adresse de cette clé"));
+        return Err(bad("Account is not this key's address"));
     }
-    let pk = PublicKey::from_slice(pubkey).map_err(|_| bad("clé publique invalide"))?;
-    let mut sig = Signature::from_der(der).map_err(|_| bad("signature : DER invalide"))?;
+    let pk = PublicKey::from_slice(pubkey).map_err(|_| bad("invalid public key"))?;
+    let mut sig = Signature::from_der(der).map_err(|_| bad("signature: invalid DER"))?;
     sig.normalize_s();
     Secp256k1::verification_only()
         .verify_ecdsa(&Message::from_digest(p.signing_hash()), &sig, &pk)
-        .map_err(|_| Error::crypto("la signature de l'appareil ne se vérifie pas"))?;
+        .map_err(|_| Error::crypto("the device's signature does not verify"))?;
     p.txn_signature = Some(sig.serialize_der().to_vec());
     let signed = hex::encode_upper(p.encode(true));
     let hash = crate::xrp::xrp_verify_signed(&signed)?;
@@ -54,18 +54,18 @@ pub fn stellar_hw_assemble(
 ) -> Result<(String, String)> {
     let mut env = StellarEnvelope::from_base64(envelope_b64)?;
     if !env.signatures.is_empty() {
-        return Err(bad("enveloppe déjà signée"));
+        return Err(bad("envelope already signed"));
     }
     if &env.tx.source != pubkey {
-        return Err(bad("le compte source n'est pas la clé de ce compte"));
+        return Err(bad("the source account is not this account's key"));
     }
     let sig: [u8; 64] = signature
         .try_into()
-        .map_err(|_| bad("signature : 64 octets attendus"))?;
-    let vk = ed25519_dalek::VerifyingKey::from_bytes(pubkey).map_err(|_| bad("clé invalide"))?;
+        .map_err(|_| bad("signature: 64 bytes expected"))?;
+    let vk = ed25519_dalek::VerifyingKey::from_bytes(pubkey).map_err(|_| bad("invalid key"))?;
     let hash = env.tx.hash(net);
     vk.verify_strict(&hash, &ed25519_dalek::Signature::from_bytes(&sig))
-        .map_err(|_| Error::crypto("la signature de l'appareil ne se vérifie pas"))?;
+        .map_err(|_| Error::crypto("the device's signature does not verify"))?;
     let mut hint = [0u8; 4];
     hint.copy_from_slice(&pubkey[28..]);
     env.signatures = vec![StellarSignature {

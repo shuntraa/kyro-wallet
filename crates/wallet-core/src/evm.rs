@@ -152,12 +152,12 @@ pub fn evm_chain_network(chain_id: u64) -> Option<Network> {
 fn check_chain_family(chain_id: u64, net: Network) -> Result<()> {
     match evm_chain_network(chain_id) {
         Some(n) if n != net => Err(Error::input(match net {
-            Network::Mainnet => format!(
-                "chainId {chain_id} est un réseau de test : refusé par un portefeuille mainnet"
-            ),
-            Network::Testnet => format!(
-                "chainId {chain_id} est un réseau principal (argent réel) : refusé en mode test"
-            ),
+            Network::Mainnet => {
+                format!("chainId {chain_id} is a test network: refused by a mainnet wallet")
+            }
+            Network::Testnet => {
+                format!("chainId {chain_id} is a main network (real money): refused in test mode")
+            }
         })),
         _ => Ok(()),
     }

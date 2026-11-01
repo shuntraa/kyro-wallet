@@ -41,7 +41,7 @@ pub async fn hw_cosmos_build_tx(
     let again = wallet_core::cosmos_decode_sign_doc(&built.sign_doc, &pk, state.network)?;
     if again != built.summary {
         return Err(AppError::Internal(
-            "résumé différent après passage en mode amino".into(),
+            "summary differs after switching to amino mode".into(),
         ));
     }
     Ok(built)
@@ -85,7 +85,7 @@ pub async fn hw_sign_cosmos_tx(
     let (tx, hash, again) = wallet_core::cosmos_amino_signed(&sign_doc, &pk, net, &der)?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();

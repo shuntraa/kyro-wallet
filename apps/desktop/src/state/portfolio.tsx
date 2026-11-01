@@ -42,7 +42,7 @@ const Ctx = createContext<PortfolioValue | null>(null);
 
 export function usePortfolio(): PortfolioValue {
   const v = useContext(Ctx);
-  if (!v) throw new Error('usePortfolio hors PortfolioProvider');
+  if (!v) throw new Error('usePortfolio outside PortfolioProvider');
   return v;
 }
 

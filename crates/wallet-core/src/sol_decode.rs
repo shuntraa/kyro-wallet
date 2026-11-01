@@ -869,27 +869,27 @@ fn decode_memo(ix: &CompiledIx<'_>) -> Option<(SolInstruction, bool)> {
 }
 
 fn stake_refused(msg: impl Into<String>) -> Error {
-    Error::input(format!("staking Solana : {}", msg.into()))
+    Error::input(format!("Solana staking: {}", msg.into()))
 }
 
 /// Name of a Stake program instruction Kyro refuses (for the error message).
 fn stake_instruction_name(tag: u32) -> &'static str {
     match tag {
-        1 => "Authorize (changement d'autorité)",
+        1 => "Authorize (authority change)",
         3 => "Split",
-        6 => "SetLockup (blocage)",
+        6 => "SetLockup (lockup)",
         7 => "Merge",
-        8 => "AuthorizeWithSeed (changement d'autorité)",
+        8 => "AuthorizeWithSeed (authority change)",
         9 => "InitializeChecked",
-        10 => "AuthorizeChecked (changement d'autorité)",
-        11 => "AuthorizeCheckedWithSeed (changement d'autorité)",
-        12 => "SetLockupChecked (blocage)",
+        10 => "AuthorizeChecked (authority change)",
+        11 => "AuthorizeCheckedWithSeed (authority change)",
+        12 => "SetLockupChecked (lockup)",
         13 => "GetMinimumDelegation",
         14 => "DeactivateDelinquent",
         15 => "Redelegate",
         16 => "MoveStake",
         17 => "MoveLamports",
-        _ => "inconnue",
+        _ => "unknown",
     }
 }
 
@@ -905,7 +905,7 @@ fn decode_stake(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
             Ok(())
         } else {
             Err(stake_refused(format!(
-                "nombre de comptes inattendu ({}) pour l'instruction {tag}",
+                "unexpected number of accounts ({}) for instruction {tag}",
                 ix.accounts.len()
             )))
         }
@@ -914,14 +914,14 @@ fn decode_stake(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
         if ctx.acc(ix, n, what)? == key {
             Ok(())
         } else {
-            Err(stake_refused(format!("{what} attendu à la position {n}")))
+            Err(stake_refused(format!("{what} expected at position {n}")))
         }
     };
     let ours = |n: usize, what: &str| -> Result<String> {
         let a = ctx.acc(ix, n, what)?;
         if a != ctx.me {
             return Err(stake_refused(format!(
-                "{what} ({a}) n'est pas ton adresse : refusé"
+                "{what} ({a}) is not your address: refused"
             )));
         }
         Ok(a)
@@ -935,13 +935,11 @@ fn decode_stake(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
             let epoch = r.u64_le()?;
             let custodian = r.key()?;
             if unix_timestamp != 0 || epoch != 0 || custodian != [0u8; 32] {
-                return Err(stake_refused(
-                    "blocage (lockup) ou dépositaire non nul : refusé",
-                ));
+                return Err(stake_refused("non-zero lockup or custodian: refused"));
             }
             if staker != ctx.me || withdrawer != ctx.me {
                 return Err(stake_refused(format!(
-                    "les autorités du compte de staking doivent être ton adresse (staker {staker}, withdrawer {withdrawer}) : refusé"
+                    "the stake account's authorities must be your address (staker {staker}, withdrawer {withdrawer}): refused"
                 )));
             }
             expect(1, SYSVAR_RENT, "sysvar Rent")?;
@@ -955,11 +953,11 @@ fn decode_stake(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
             accounts(&[6])?;
             expect(2, SYSVAR_CLOCK, "sysvar Clock")?;
             expect(3, SYSVAR_STAKE_HISTORY, "sysvar StakeHistory")?;
-            expect(4, STAKE_CONFIG, "compte StakeConfig")?;
+            expect(4, STAKE_CONFIG, "StakeConfig account")?;
             SolInstruction::StakeDelegate {
                 stake_account: ctx.acc(ix, 0, "stake account")?,
                 vote_account: ctx.acc(ix, 1, "vote account")?,
-                authority: ours(5, "autorité de staking")?,
+                authority: ours(5, "stake authority")?,
             }
         }
         5 => {
@@ -967,7 +965,7 @@ fn decode_stake(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
             expect(1, SYSVAR_CLOCK, "sysvar Clock")?;
             SolInstruction::StakeDeactivate {
                 stake_account: ctx.acc(ix, 0, "stake account")?,
-                authority: ours(2, "autorité de staking")?,
+                authority: ours(2, "stake authority")?,
             }
         }
         4 => {
@@ -975,21 +973,21 @@ fn decode_stake(ctx: &Ctx<'_>, ix: &CompiledIx<'_>) -> Result<SolInstruction> {
             let lamports = r.u64_le()?;
             expect(2, SYSVAR_CLOCK, "sysvar Clock")?;
             expect(3, SYSVAR_STAKE_HISTORY, "sysvar StakeHistory")?;
-            let authority = ours(4, "autorité de retrait")?;
+            let authority = ours(4, "withdraw authority")?;
             if ix.accounts.len() == 6 {
                 // Lockup custodian: only accepted when it is us (Kyro never sets a lockup).
-                ours(5, "dépositaire (custodian)")?;
+                ours(5, "custodian")?;
             }
             SolInstruction::StakeWithdraw {
                 stake_account: ctx.acc(ix, 0, "stake account")?,
-                to: ours(1, "destinataire du retrait")?,
+                to: ours(1, "withdrawal recipient")?,
                 lamports: lamports.to_string(),
                 authority,
             }
         }
         other => {
             return Err(stake_refused(format!(
-                "instruction {other} ({}) refusée par Kyro",
+                "instruction {other} ({}) refused by Kyro",
                 stake_instruction_name(other)
             )))
         }
@@ -1072,7 +1070,7 @@ fn check_creations(instructions: &[SolInstruction]) -> Result<Vec<(usize, String
         }
         if *space != STAKE_STATE_SIZE.to_string() {
             return Err(stake_refused(format!(
-                "compte de staking créé avec {space} octets au lieu de {STAKE_STATE_SIZE}"
+                "stake account created with {space} bytes instead of {STAKE_STATE_SIZE}"
             )));
         }
         let initialized = instructions[i + 1..].iter().any(|later| {
@@ -1080,7 +1078,7 @@ fn check_creations(instructions: &[SolInstruction]) -> Result<Vec<(usize, String
         });
         if !initialized {
             return Err(stake_refused(
-                "compte de staking créé sans être initialisé dans la même transaction : refusé",
+                "stake account created without being initialized in the same transaction: refused",
             ));
         }
     }

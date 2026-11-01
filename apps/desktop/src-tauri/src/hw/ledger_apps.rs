@@ -70,17 +70,17 @@ pub fn app_for(chain: Chain) -> Option<(&'static str, &'static str)> {
 pub fn unavailable(chain: Chain) -> Option<&'static str> {
     Some(match chain {
         Chain::Dot => {
-            "Polkadot : l'app Ledger « Polkadot » exige l'extension CheckMetadataHash et une \
-             preuve des métadonnées du runtime (RFC-0078) avec chaque transaction, et des clés \
-             ed25519 m/44'/354'/… ; Kyro signe en sr25519 sans cette extension, et la \
-             bibliothèque de Parity qui construit la preuve (merkleized-metadata) n'est pas \
-             encore intégrée : pas pris en charge sur hardware wallet"
+            "Polkadot: the Ledger « Polkadot » app requires the CheckMetadataHash extension and a \
+             runtime metadata proof (RFC-0078) with every transaction, and ed25519 keys \
+             m/44'/354'/…; Kyro signs in sr25519 without this extension, and the \
+             Parity library that builds the proof (merkleized-metadata) is not \
+             integrated yet: not supported on a hardware wallet"
         }
         Chain::Kas => {
-            "Kaspa : l'app Ledger signe des transactions version 0 avec le même hash de \
-             signature que Kyro (et le renvoie, donc vérifiable), mais dépense depuis plusieurs \
-             adresses m/44'/111111'/a'/0|1/i : il faudrait un compte hardware wallet à clé \
-             étendue et un parcours d'adresses, pas encore écrits ; pas pris en charge sur \
+            "Kaspa: the Ledger app signs version 0 transactions with the same signature \
+             hash as Kyro (and returns it, so it can be checked), but spends from several \
+             m/44'/111111'/a'/0|1/i addresses: it would need an extended-key hardware-wallet \
+             account and an address walk, not written yet; not supported on a \
              hardware wallet"
         }
         _ => return None,
@@ -103,7 +103,7 @@ pub fn trezor_status(chain: Chain) -> Option<ChainStatus> {
     }
     Some(ChainStatus {
         reason: Some(format!(
-            "{} : pas d'app Trezor pour cette chaîne (Ledger seulement)",
+            "{}: no Trezor app for this chain (Ledger only)",
             chain.label()
         )),
         ..ChainStatus::new(chain, ChainState::Unsupported)
@@ -130,7 +130,7 @@ impl<'a> App<'a> {
         }
         if !version_at_least(&version, min) {
             return Err(HwError::too_old(
-                format!("app {name} {version} trop ancienne : mets-la à jour"),
+                format!("{name} app {version} too old: update it"),
                 min,
             ));
         }
@@ -166,7 +166,7 @@ fn open_app(link: &dyn ApduLink, ctl: &Ctl) -> HwResult<(String, String)> {
 fn link(dev: &dyn HardwareWallet, chain: HwKeyChain) -> HwResult<&dyn ApduLink> {
     dev.apdu_link().ok_or_else(|| {
         HwError::unsupported(format!(
-            "{} : pas d'app Trezor pour cette chaîne (Ledger seulement)",
+            "{}: no Trezor app for this chain (Ledger only)",
             hw_chain(chain).label()
         ))
     })

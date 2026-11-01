@@ -54,7 +54,7 @@ fn trezor_stake_vectors_decode_reencode_and_sign_identically() {
         let decoded = TronRaw::decode(&bytes);
         if name.starts_with("Delegate") || name.starts_with("Undelegate") {
             let e = decoded.unwrap_err().to_string();
-            assert!(e.contains("délégation de ressources"), "{name}: {e}");
+            assert!(e.contains("resource delegation"), "{name}: {e}");
             assert!(tron_decode_stake_raw(raw, OWNER).is_err());
             continue;
         }
@@ -179,7 +179,7 @@ fn stake_refusals() {
             amount: 0,
             resource: TronResource::Energy,
         }),
-        "positif",
+        "positive",
     );
     refused(
         &base(TronContract::UnfreezeV2 {
@@ -187,12 +187,12 @@ fn stake_refusals() {
             amount: 0,
             resource: TronResource::Bandwidth,
         }),
-        "positif",
+        "positive",
     );
     // Memo, fee_limit.
     let mut r = base(TronContract::WithdrawBalance { owner });
     r.memo = b"hi".to_vec();
-    refused(&r, "mémo");
+    refused(&r, "memo");
     let mut r = base(TronContract::WithdrawBalance { owner });
     r.fee_limit = 1;
     refused(&r, "fee_limit");
@@ -202,7 +202,7 @@ fn stake_refusals() {
             owner,
             votes: vec![],
         }),
-        "1 à 30",
+        "1 to 30",
     );
     refused(
         &base(TronContract::VoteWitness {
@@ -215,21 +215,21 @@ fn stake_refusals() {
                 })
                 .collect(),
         }),
-        "1 à 30",
+        "1 to 30",
     );
     refused(
         &base(TronContract::VoteWitness {
             owner,
             votes: vec![(sr, 1), (sr, 2)],
         }),
-        "deux fois",
+        "twice",
     );
     refused(
         &base(TronContract::VoteWitness {
             owner,
             votes: vec![(sr, 0)],
         }),
-        "positif",
+        "positive",
     );
     // A TRX transfer is not a staking transaction.
     refused(
@@ -238,7 +238,7 @@ fn stake_refusals() {
             to: sr,
             amount: 1,
         }),
-        "pas une transaction de staking",
+        "not a staking transaction",
     );
     // TRON_POWER resource (2) and the deprecated `support` field: refused by the strict decoder.
     let tp = vector("Stake_for_Energy").replace("17180170", "17180270");

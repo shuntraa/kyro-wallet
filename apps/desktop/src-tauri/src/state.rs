@@ -169,7 +169,7 @@ impl AppState {
 
     pub fn read_vault(&self) -> AppResult<VaultFile> {
         let raw = fs::read_to_string(&self.vault_path)
-            .map_err(|_| AppError::InvalidInput("aucun coffre sur cet appareil".into()))?;
+            .map_err(|_| AppError::InvalidInput("no vault on this device".into()))?;
         Ok(serde_json::from_str(&raw)?)
     }
 
@@ -308,7 +308,7 @@ impl AppState {
         let mut g = lock(&self.pending_backup);
         if g.is_none() {
             return Err(AppError::InvalidInput(
-                "aucune phrase de récupération en attente de sauvegarde".into(),
+                "no recovery phrase waiting to be backed up".into(),
             ));
         }
         f(&mut g)

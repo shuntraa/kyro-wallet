@@ -116,7 +116,7 @@ export function cardanoAddressProblem(address: string, network: 'mainnet' | 'tes
   if (kind === 1 || kind === 3 || kind === 5 || kind === 7) return l10n('adresses de script refusées : un paiement sans datum pourrait bloquer les fonds', 'script addresses refused: a payment without a datum could lock the funds');
   if (kind === 4) return l10n('adresses pointeur obsolètes (Conway) : refusées', 'pointer addresses are obsolete (Conway): refused');
   if (kind === 14 || kind === 15) return l10n('une adresse de staking (stake…) ne peut pas recevoir de paiement', 'a staking address (stake…) cannot receive payments');
-  return isCardanoAddress(a, network) ? null : 'adresse Cardano invalide';
+  return isCardanoAddress(a, network) ? null : l10n('adresse Cardano invalide', 'invalid Cardano address');
 }
 
 /** Display name of a native token: ticker (verified), printable name, else the hex. */
@@ -323,7 +323,7 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
     const list = await this.historyEntries();
     return list.map((t) => {
       const parts = t.tokenDeltas.map((d) => `${d.delta.startsWith('-') ? '−' : '+'}${d.delta.replace('-', '')} ${d.nameText ?? (d.name ? `0x${d.name.slice(0, 12)}…` : 'token')}`);
-      if (t.memo) parts.push(`« ${t.memo} »`);
+      if (t.memo) parts.push(l10n(`« ${t.memo} »`, `“${t.memo}”`));
       const item: HistoryItem = { id: t.id, chainKey: this.chain.key, assetId: 'ada', direction: t.direction, amount: t.amount, status: 'confirmed', kind: 'transfer' };
       if (t.fee !== undefined) item.fee = t.fee;
       if (t.time) item.time = t.time;

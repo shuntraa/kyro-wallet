@@ -36,7 +36,7 @@ pub fn coin_name(net: Network) -> &'static str {
 
 fn encode<M: Message>(m: &M) -> HwResult<Vec<u8>> {
     m.write_to_bytes()
-        .map_err(|e| HwError::bad(format!("encodage protobuf : {e}")))
+        .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))
 }
 
 /// `GetPublicKey` of the account `m/44'/133'/a'` (testnet `m/44'/1'/a'`).
@@ -60,7 +60,7 @@ pub fn get_address(net: Network, path: &[u32], display: bool) -> protos::GetAddr
 }
 
 pub fn sign_tx_start(plan: &ZecHwPlan, net: Network) -> HwResult<protos::SignTx> {
-    let n = |x: usize| u32::try_from(x).map_err(|_| HwError::unsupported("trop d'éléments"));
+    let n = |x: usize| u32::try_from(x).map_err(|_| HwError::unsupported("too many items"));
     let mut start = protos::SignTx::new();
     start.set_inputs_count(n(plan.inputs.len())?);
     start.set_outputs_count(n(plan.outputs.len())?);
@@ -77,7 +77,7 @@ fn ack_input(plan: &ZecHwPlan, i: usize) -> HwResult<Vec<u8>> {
     let inp = plan
         .inputs
         .get(i)
-        .ok_or_else(|| HwError::bad("index d'entrée invalide"))?;
+        .ok_or_else(|| HwError::bad("invalid input index"))?;
     let mut hash = inp.prev_hash;
     // Trezor takes the txid in display order.
     hash.reverse();
@@ -99,7 +99,7 @@ fn ack_output(plan: &ZecHwPlan, j: usize) -> HwResult<Vec<u8>> {
     let out = plan
         .outputs
         .get(j)
-        .ok_or_else(|| HwError::bad("index de sortie invalide"))?;
+        .ok_or_else(|| HwError::bad("invalid output index"))?;
     let mut o = protos::TxOutput::new();
     o.set_amount(out.amount);
     match &out.change_path {
@@ -134,7 +134,7 @@ pub fn sign_tx(
             if let (Some(i), Some(sig)) = (s.signature_index, s.signature.as_ref()) {
                 let slot = sigs
                     .get_mut(i as usize)
-                    .ok_or_else(|| HwError::bad("signature d'une entrée inexistante"))?;
+                    .ok_or_else(|| HwError::bad("signature of a non-existent input"))?;
                 *slot = Some(sig.clone());
             }
         }
@@ -143,31 +143,31 @@ pub fn sign_tx(
             details
                 .request_index
                 .map(|i| i as usize)
-                .ok_or_else(|| HwError::bad("TxRequest sans index"))
+                .ok_or_else(|| HwError::bad("TxRequest without an index"))
         };
         let ack = match (r.request_type(), details.tx_hash.is_some()) {
             (RequestType::TXFINISHED, _) => {
                 return sigs
                     .into_iter()
-                    .map(|s| s.ok_or_else(|| HwError::bad("signature manquante")))
+                    .map(|s| s.ok_or_else(|| HwError::bad("missing signature")))
                     .collect();
             }
             (RequestType::TXINPUT, false) => ack_input(plan, index()?)?,
             (RequestType::TXOUTPUT, false) => ack_output(plan, index()?)?,
             (_, true) => {
                 return Err(HwError::unsupported(
-                    "ce firmware demande les transactions précédentes (Zcash v5 : non nécessaire) : mets la Trezor à jour",
+                    "this firmware asks for the previous transactions (Zcash v5: not needed): update the Trezor",
                 ))
             }
             (other, _) => {
                 return Err(HwError::unsupported(format!(
-                    "requête Trezor non prise en charge : {other:?}"
+                    "unsupported Trezor request: {other:?}"
                 )))
             }
         };
         resp = io.call(ctl, MessageType::MessageType_TxAck, ack)?;
     }
-    Err(HwError::bad("trop d'échanges avec l'appareil"))
+    Err(HwError::bad("too many exchanges with the device"))
 }
 
 #[cfg(test)]

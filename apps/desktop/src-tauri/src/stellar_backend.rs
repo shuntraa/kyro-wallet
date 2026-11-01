@@ -51,7 +51,7 @@ fn bad(msg: impl Into<String>) -> AppError {
 fn url(ctx: &StellarCtx<'_>, path: &str) -> AppResult<url::Url> {
     url::Url::parse(horizon_url(ctx.network))
         .and_then(|u| u.join(path))
-        .map_err(|_| AppError::Internal("URL Horizon invalide".into()))
+        .map_err(|_| AppError::Internal("invalid Horizon URL".into()))
 }
 
 fn short(bytes: &[u8]) -> String {
@@ -72,14 +72,14 @@ async fn get(ctx: &StellarCtx<'_>, path: &str) -> AppResult<Option<Value>> {
     }
     if status != 200 {
         return Err(bad(format!(
-            "Horizon : HTTP {status} sur {} ({})",
+            "Horizon: HTTP {status} on {} ({})",
             path.split('?').next().unwrap_or(path),
             short(&bytes)
         )));
     }
     serde_json::from_slice(&bytes)
         .map(Some)
-        .map_err(|_| bad("Horizon : JSON invalide"))
+        .map_err(|_| bad("Horizon: invalid JSON"))
 }
 
 async fn get_found(ctx: &StellarCtx<'_>, path: &str) -> AppResult<Value> {
@@ -153,7 +153,7 @@ pub async fn check_network(ctx: &StellarCtx<'_>) -> AppResult<Value> {
     let want = stellar_network_passphrase(ctx.network);
     if got != want {
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce serveur Horizon est sur « {} », pas sur « {want} »",
+            "this Horizon server is on \"{}\", not on \"{want}\"",
             crate::dialog_text::sanitize(got, 80)
         )));
     }
@@ -178,19 +178,19 @@ pub async fn latest_ledger(ctx: &StellarCtx<'_>) -> AppResult<StellarLedger> {
     Ok(StellarLedger {
         sequence: l["sequence"]
             .as_u64()
-            .ok_or_else(|| bad("Horizon : registre sans numéro"))?,
+            .ok_or_else(|| bad("Horizon: ledger without a number"))?,
         base_fee: l["base_fee_in_stroops"]
             .as_u64()
             .and_then(|f| u32::try_from(f).ok())
-            .ok_or_else(|| bad("Horizon : frais de base absents"))?,
+            .ok_or_else(|| bad("Horizon: base fee missing"))?,
         base_reserve: l["base_reserve_in_stroops"]
             .as_i64()
             .filter(|r| *r > 0)
-            .ok_or_else(|| bad("Horizon : réserve de base absente"))?,
+            .ok_or_else(|| bad("Horizon: base reserve missing"))?,
         closed_at: l["closed_at"]
             .as_str()
             .and_then(parse_utc)
-            .ok_or_else(|| bad("Horizon : heure du registre absente"))?,
+            .ok_or_else(|| bad("Horizon: ledger time missing"))?,
     })
 }
 
@@ -275,11 +275,11 @@ pub fn parse_account(address: &str, r: &Value, base_reserve: i64) -> AppResult<S
             _ => {} // liquidity pool shares: not shown
         }
     }
-    let balance = native.ok_or_else(|| bad("Horizon : solde XLM absent"))?;
+    let balance = native.ok_or_else(|| bad("Horizon: XLM balance missing"))?;
     let sequence = r["sequence"]
         .as_str()
         .and_then(|s| s.parse::<i64>().ok())
-        .ok_or_else(|| bad("Horizon : numéro de séquence absent"))?;
+        .ok_or_else(|| bad("Horizon: sequence number missing"))?;
     let (subentry_count, num_sponsoring, num_sponsored) =
         (u("subentry_count"), u("num_sponsoring"), u("num_sponsored"));
     let reserve = minimum_balance(
@@ -422,26 +422,26 @@ pub async fn payments(ctx: &StellarCtx<'_>, address: &str) -> AppResult<Value> {
     })
 }
 
-/// French reading of Horizon's `result_codes` (transaction, then operation).
+/// Plain-language reading of Horizon's `result_codes` (transaction, then operation).
 pub fn explain_result(codes: &Value) -> String {
     let tx = codes["transaction"].as_str().unwrap_or("");
     let op = codes["operations"][0].as_str().unwrap_or("");
     let what = match (tx, op) {
-        ("tx_bad_seq", _) => "numéro de séquence périmé : reconstruis la transaction",
-        ("tx_too_late", _) => "transaction expirée (limite de temps dépassée) : reconstruis-la",
-        ("tx_too_early", _) => "transaction pas encore valable",
-        ("tx_insufficient_fee", _) => "frais trop bas pour le moment (réseau chargé) : réessaie",
-        ("tx_insufficient_balance", _) => "solde insuffisant pour les frais et la réserve",
-        ("tx_bad_auth", _) => "signature refusée par le réseau",
-        ("tx_no_source_account", _) => "ton compte n'existe pas (encore) sur ce réseau",
-        (_, "op_underfunded") => "solde disponible insuffisant",
-        (_, "op_low_reserve") => "montant trop faible pour créer ce compte ou réserve insuffisante",
-        (_, "op_no_destination") => "le destinataire n'existe pas : il faut d'abord le créer",
-        (_, "op_already_exists") => "ce compte existe déjà",
-        (_, "op_no_trust") => "le destinataire n'a pas de ligne de confiance pour cet actif",
-        (_, "op_line_full") => "la ligne de confiance du destinataire est pleine",
-        (_, "op_not_authorized") => "l'émetteur de l'actif n'autorise pas ce compte",
-        _ => "refusée par le réseau",
+        ("tx_bad_seq", _) => "stale sequence number: rebuild the transaction",
+        ("tx_too_late", _) => "transaction expired (time limit passed): rebuild it",
+        ("tx_too_early", _) => "transaction not valid yet",
+        ("tx_insufficient_fee", _) => "fee too low for now (busy network): try again",
+        ("tx_insufficient_balance", _) => "insufficient balance for the fees and the reserve",
+        ("tx_bad_auth", _) => "signature refused by the network",
+        ("tx_no_source_account", _) => "your account does not exist (yet) on this network",
+        (_, "op_underfunded") => "insufficient available balance",
+        (_, "op_low_reserve") => "amount too low to create this account, or insufficient reserve",
+        (_, "op_no_destination") => "the recipient does not exist: it must be created first",
+        (_, "op_already_exists") => "this account already exists",
+        (_, "op_no_trust") => "the recipient has no trustline for this asset",
+        (_, "op_line_full") => "the recipient's trustline is full",
+        (_, "op_not_authorized") => "the asset's issuer does not authorize this account",
+        _ => "refused by the network",
     };
     format!(
         "{what} ({}{}{})",
@@ -471,7 +471,7 @@ pub async fn submit(ctx: &StellarCtx<'_>, envelope_b64: &str, hash: &str) -> App
         .await
         .map_err(|e| match e {
             AppError::ServerUnreachable(m) => bad(format!(
-                "{m} — la transaction {hash} a peut-être été transmise : vérifie l'historique avant de réessayer"
+                "{m} — transaction {hash} may have been transmitted: check the history before retrying"
             )),
             other => other,
         })?;
@@ -481,26 +481,26 @@ pub async fn submit(ctx: &StellarCtx<'_>, envelope_b64: &str, hash: &str) -> App
             let got = v["hash"].as_str().unwrap_or("");
             if !got.eq_ignore_ascii_case(hash) {
                 return Err(bad(format!(
-                    "Horizon a répondu un hash inattendu ({})",
+                    "Horizon answered an unexpected hash ({})",
                     got.chars().take(80).collect::<String>()
                 )));
             }
             if v["successful"] == false {
                 return Err(AppError::InvalidInput(
-                    "transaction Stellar incluse mais échouée (frais prélevés)".into(),
+                    "Stellar transaction included but failed (fees charged)".into(),
                 ));
             }
             Ok(hash.to_lowercase())
         }
         400 => Err(AppError::InvalidInput(format!(
-            "transaction Stellar refusée : {}",
+            "Stellar transaction refused: {}",
             explain_result(&v["extras"]["result_codes"])
         ))),
         // Timeout: the transaction may still land before its maxTime. Never resubmit blindly.
         504 => Err(bad(format!(
-            "Horizon n'a pas eu de réponse du réseau à temps : la transaction {hash} peut encore passer avant sa limite de temps, vérifie l'historique avant de réessayer"
+            "Horizon got no answer from the network in time: transaction {hash} may still go through before its time limit, check the history before retrying"
         ))),
-        s => Err(bad(format!("Horizon : HTTP {s} à l'envoi ({})", short(&bytes)))),
+        s => Err(bad(format!("Horizon: HTTP {s} on submit ({})", short(&bytes)))),
     }
 }
 
@@ -527,22 +527,22 @@ pub fn check_payment(c: &PaymentCheck<'_>) -> AppResult<()> {
     let xlm = |s: i64| crate::commands::format_units(&s.to_string(), 7);
     if !c.ours.exists {
         return Err(AppError::InvalidInput(
-            "ton compte Stellar n'est pas encore activé : il doit d'abord recevoir au moins 1 XLM"
+            "your Stellar account is not activated yet: it must first receive at least 1 XLM"
                 .into(),
         ));
     }
     if c.stroops <= 0 {
-        return Err(AppError::InvalidInput("montant nul".into()));
+        return Err(AppError::InvalidInput("zero amount".into()));
     }
     if c.dest.memo_required && !c.has_memo {
         return Err(AppError::InvalidInput(
-            "ce destinataire exige un mémo (SEP-0029, souvent une plateforme d'échange) : ajoute-le, sinon les fonds risquent d'être perdus".into(),
+            "this recipient requires a memo (SEP-0029, often an exchange): add it, otherwise the funds may be lost".into(),
         ));
     }
     let min_create = 2 * c.ledger.base_reserve;
     if !c.dest.exists && c.stroops < min_create {
         return Err(AppError::InvalidInput(format!(
-            "ce compte n'existe pas encore : il faut lui envoyer au moins {} XLM (2 × la réserve de base) pour le créer",
+            "this account does not exist yet: it must be sent at least {} XLM (2 × the base reserve) to create it",
             xlm(min_create)
         )));
     }
@@ -550,7 +550,7 @@ pub fn check_payment(c: &PaymentCheck<'_>) -> AppResult<()> {
     let need = c.stroops.saturating_add(i64::from(c.fee));
     if need > spendable {
         return Err(AppError::InvalidInput(format!(
-            "solde disponible insuffisant : {} XLM disponibles (solde − réserve), il en faut {}",
+            "insufficient available balance: {} XLM available (balance − reserve), {} needed",
             xlm(spendable),
             xlm(need)
         )));
@@ -669,11 +669,11 @@ mod tests {
             &json!({ "transaction": "tx_failed", "operations": ["op_underfunded"] }),
         );
         assert!(
-            e.contains("insuffisant") && e.contains("op_underfunded"),
+            e.contains("insufficient") && e.contains("op_underfunded"),
             "{e}"
         );
         let e = explain_result(&json!({ "transaction": "tx_bad_seq" }));
-        assert!(e.starts_with("numéro de séquence"), "{e}");
+        assert!(e.starts_with("stale sequence number"), "{e}");
     }
 
     fn acc(exists: bool, spendable: i64, memo_required: bool) -> StellarAccountInfo {
@@ -707,18 +707,18 @@ mod tests {
         assert!(ok(&acc(true, 0, false), 1, false).is_ok());
         let exchange = acc(true, 0, true);
         assert!(
-            matches!(ok(&exchange, 10, false), Err(AppError::InvalidInput(m)) if m.contains("exige un mémo"))
+            matches!(ok(&exchange, 10, false), Err(AppError::InvalidInput(m)) if m.contains("requires a memo"))
         );
         assert!(ok(&exchange, 10, true).is_ok());
         // Unfunded destination: at least 2 × base reserve (1 XLM).
         let new = acc(false, 0, false);
         assert!(
-            matches!(ok(&new, 9_999_999, false), Err(AppError::InvalidInput(m)) if m.contains("au moins 1 XLM"))
+            matches!(ok(&new, 9_999_999, false), Err(AppError::InvalidInput(m)) if m.contains("at least 1 XLM"))
         );
         assert!(ok(&new, 10_000_000, false).is_ok());
         // More than spendable (fee included).
         assert!(
-            matches!(ok(&acc(true, 0, false), 499_999_901, false), Err(AppError::InvalidInput(m)) if m.contains("insuffisant"))
+            matches!(ok(&acc(true, 0, false), 499_999_901, false), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
         assert!(ok(&acc(true, 0, false), 499_999_900, false).is_ok());
         assert!(ok(&acc(true, 0, false), 0, false).is_err());
@@ -843,7 +843,7 @@ mod live {
             let t = std::time::Instant::now();
             let r = check_network(&main).await.unwrap();
             eprintln!(
-                "mainnet Horizon {} « {} » in {:.1?}",
+                "mainnet Horizon {} \"{}\" in {:.1?}",
                 r["horizon_version"],
                 r["network_passphrase"],
                 t.elapsed()
@@ -881,7 +881,7 @@ mod live {
             let r = cmd::build(&c, &me, &a2, "5000000", None).await;
             eprintln!("0.5 XLM to unfunded {a2}: {:?}", r.as_ref().err());
             assert!(
-                matches!(r, Err(AppError::InvalidInput(ref m)) if m.contains("au moins 1 XLM"))
+                matches!(r, Err(AppError::InvalidInput(ref m)) if m.contains("at least 1 XLM"))
             );
             // 1) CreateAccount to an unfunded new account, 2) Payment with an id memo.
             if !account(&c, &a1, &ledger).await.unwrap().exists {

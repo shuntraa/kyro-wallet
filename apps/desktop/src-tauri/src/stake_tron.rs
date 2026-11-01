@@ -120,7 +120,7 @@ pub(crate) async fn unfreeze_delay_days(c: &TronCtx<'_>) -> AppResult<u64> {
         .and_then(|l| l.iter().find(|p| p["key"] == "getUnfreezeDelayDays"))
         .and_then(|p| p["value"].as_u64())
         .filter(|d| *d > 0 && *d <= 365)
-        .ok_or_else(|| AppError::ServerUnreachable("TRON : getUnfreezeDelayDays absent".into()))
+        .ok_or_else(|| AppError::ServerUnreachable("TRON: getUnfreezeDelayDays missing".into()))
 }
 
 pub(crate) async fn stake_account(c: &TronCtx<'_>, address: &str) -> AppResult<TronStakeAccount> {
@@ -281,7 +281,7 @@ async fn brokerage(c: &TronCtx<'_>, sr: &str) -> AppResult<u64> {
     v["brokerage"]
         .as_u64()
         .filter(|b| *b <= 100)
-        .ok_or_else(|| AppError::ServerUnreachable("TRON : getBrokerage invalide".into()))
+        .ok_or_else(|| AppError::ServerUnreachable("TRON: invalid getBrokerage".into()))
 }
 
 fn our_address(state: &AppState, account: Option<u32>) -> AppResult<String> {
@@ -342,7 +342,7 @@ fn sun(s: &str) -> AppResult<i64> {
         .parse::<i64>()
         .ok()
         .filter(|v| *v > 0)
-        .ok_or_else(|| invalid("montant en sun invalide"))
+        .ok_or_else(|| invalid("invalid amount in sun"))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -382,7 +382,9 @@ pub(crate) async fn context_for(
     let p = tron_backend::params(c).await?;
     let raw_acc = tron_backend::account(c, &s.owner).await?;
     if !raw_acc.exists {
-        return Err(invalid("compte TRON non activé : reçois d'abord des TRX"));
+        return Err(invalid(
+            "TRON account not activated: receive some TRX first",
+        ));
     }
     let estimate = tron_backend::estimate(&tron_backend::EstimateInput {
         account: &raw_acc,
@@ -402,11 +404,11 @@ pub(crate) async fn context_for(
         TronStakeAction::Freeze { amount, .. } => {
             let a = n(amount);
             if (a as i64) < MIN_FREEZE {
-                return Err(invalid("staking minimal : 1 TRX"));
+                return Err(invalid("minimum staking: 1 TRX"));
             }
             if a.saturating_add(burn) > balance {
                 return Err(invalid(format!(
-                    "solde insuffisant : {} disponibles",
+                    "insufficient balance: {} available",
                     trx(&acc.balance)
                 )));
             }
@@ -418,7 +420,7 @@ pub(crate) async fn context_for(
             });
             if n(amount) > staked {
                 return Err(invalid(format!(
-                    "seulement {} stakés pour cette ressource",
+                    "only {} staked for this resource",
                     trx(&staked.to_string())
                 )));
             }
@@ -429,7 +431,7 @@ pub(crate) async fn context_for(
                 .count();
             if pending >= MAX_PENDING_UNFREEZE {
                 return Err(invalid(
-                    "32 dégels déjà en attente : attends qu'un délai finisse",
+                    "32 unfreezes already pending: wait for a delay to end",
                 ));
             }
             let power_after = acc.tron_power_limit.saturating_sub(n(amount) / 1_000_000);
@@ -439,26 +441,28 @@ pub(crate) async fn context_for(
         }
         TronStakeAction::WithdrawUnfrozen => {
             if acc.withdrawable_now == "0" {
-                return Err(invalid("rien à retirer : aucun dégel n'a fini son délai"));
+                return Err(invalid(
+                    "nothing to withdraw: no unfreeze has finished its delay",
+                ));
             }
         }
         TronStakeAction::CancelAllUnfreeze => {
             if acc.unfreezing.is_empty() {
-                return Err(invalid("aucun dégel en cours"));
+                return Err(invalid("no pending unfreeze"));
             }
         }
         TronStakeAction::ClaimRewards => {
             if acc.reward == "0" {
-                return Err(invalid("aucune récompense de vote à réclamer"));
+                return Err(invalid("no voting rewards to claim"));
             }
             if acc.next_claim_time > now_ms() {
-                return Err(invalid("une réclamation par 24 h : réessaie plus tard"));
+                return Err(invalid("one claim per 24 h: try again later"));
             }
         }
         TronStakeAction::Vote { votes, total } => {
             if n(total) > acc.tron_power_limit {
                 return Err(invalid(format!(
-                    "{total} votes demandés, TRON Power disponible : {} (1 vote = 1 TRX staké)",
+                    "{total} votes requested, TRON Power available: {} (1 vote = 1 staked TRX)",
                     acc.tron_power_limit
                 )));
             }
@@ -470,7 +474,7 @@ pub(crate) async fn context_for(
                     .cloned()
                     .ok_or_else(|| {
                         invalid(format!(
-                            "{} n'est pas un candidat SR (listwitnesses) : refusé",
+                            "{} is not an SR candidate (listwitnesses): refused",
                             v.address
                         ))
                     })?;
@@ -492,7 +496,7 @@ pub(crate) async fn context_for(
         }
     }
     if burn > balance {
-        return Err(invalid("solde insuffisant pour la bande passante"));
+        return Err(invalid("insufficient balance for the bandwidth"));
     }
     Ok(TronStakeContext {
         account: acc,
@@ -530,7 +534,7 @@ pub(crate) fn contract_for(owner: [u8; 21], r: &TronStakeRequest) -> AppResult<T
         TronStakeRequest::ClaimRewards => TronContract::WithdrawBalance { owner },
         TronStakeRequest::Vote { votes } => {
             if votes.is_empty() || votes.len() > TRON_MAX_VOTES {
-                return Err(invalid(format!("1 à {TRON_MAX_VOTES} SR par vote")));
+                return Err(invalid(format!("1 to {TRON_MAX_VOTES} SRs per vote")));
             }
             TronContract::VoteWitness {
                 owner,
@@ -544,7 +548,7 @@ pub(crate) fn contract_for(owner: [u8; 21], r: &TronStakeRequest) -> AppResult<T
                                 .parse::<i64>()
                                 .ok()
                                 .filter(|c| *c > 0)
-                                .ok_or_else(|| invalid("nombre de votes invalide"))?,
+                                .ok_or_else(|| invalid("invalid number of votes"))?,
                         ))
                     })
                     .collect::<AppResult<Vec<_>>>()?,
@@ -899,7 +903,7 @@ pub async fn tron_stake_sign(
     let (sig, again) = blocking(move || Ok(wallet_core::tron_stake_sign(&seed, a, &r)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();

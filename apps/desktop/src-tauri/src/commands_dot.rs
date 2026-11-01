@@ -360,7 +360,7 @@ async fn live_context(
         }
         Some(id) => {
             let known = wallet_core::dot_known_asset(c.network, id)
-                .ok_or_else(|| AppError::InvalidInput(format!("actif {id} inconnu de Kyro")))?;
+                .ok_or_else(|| AppError::InvalidInput(format!("asset {id} unknown to Kyro")))?;
             let details = dot_backend::asset_details(c, &known).await?;
             let mine = dot_backend::asset_account(c, id, pk).await?;
             let theirs = dot_backend::asset_account(c, id, &t.dest).await?;
@@ -425,12 +425,12 @@ pub(crate) async fn build_any(
     if let Some(id) = asset {
         if wallet_core::dot_known_asset(c.network, id).is_none() {
             return Err(AppError::InvalidInput(format!(
-                "actif {id} inconnu de Kyro"
+                "asset {id} unknown to Kyro"
             )));
         }
         if let Err(why) = &rt.assets {
             return Err(AppError::InvalidInput(format!(
-                "pallet Assets différente de ce que Kyro connaît ({why}) : Kyro doit être mis à jour"
+                "Assets pallet differs from what Kyro knows ({why}): Kyro needs an update"
             )));
         }
     }
@@ -440,9 +440,9 @@ pub(crate) async fn build_any(
         .parse()
         .ok()
         .filter(|v| *v > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant en planck invalide".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("invalid amount in planck".into()))?;
     if &dest == pk {
-        return Err(AppError::InvalidInput("transfert à soi-même".into()));
+        return Err(AppError::InvalidInput("transfer to yourself".into()));
     }
     let (n, hash) = dot_backend::finalized(c).await?;
     let nonce = dot_backend::next_nonce(c, me).await?;
@@ -526,29 +526,29 @@ pub(crate) async fn prepare_sign(
     payload: &str,
 ) -> AppResult<(DotTxSummary, DotContext)> {
     let raw = hex::decode(payload.trim())
-        .map_err(|_| AppError::InvalidInput("charge à signer : hexadécimal attendu".into()))?;
+        .map_err(|_| AppError::InvalidInput("payload to sign: hexadecimal expected".into()))?;
     let t = wallet_core::dot_parse_payload(rt, &raw, pk)?;
     let summary = wallet_core::dot_decode_payload(rt, payload, pk)?;
     let birth = dot_backend::block_number(c, &t.block_hash).await?;
     if birth % t.era.period != t.era.phase {
         return Err(AppError::InvalidInput(
-            "ère incohérente avec son bloc de référence : reconstruis la transaction".into(),
+            "era inconsistent with its reference block: rebuild the transaction".into(),
         ));
     }
     let (n, _) = dot_backend::finalized(c).await?;
     if birth > n {
         return Err(AppError::InvalidInput(
-            "bloc de référence pas encore finalisé : reconstruis la transaction".into(),
+            "reference block not finalized yet: rebuild the transaction".into(),
         ));
     }
     if n + ERA_MARGIN >= birth + t.era.period {
         return Err(AppError::InvalidInput(
-            "transaction Polkadot expirée (ou sur le point de l'être) : reconstruis-la".into(),
+            "Polkadot transaction expired (or about to): rebuild it".into(),
         ));
     }
     if dot_backend::next_nonce(c, me).await? != t.nonce {
         return Err(AppError::InvalidInput(
-            "nonce périmé (une autre transaction est passée) : reconstruis la transaction".into(),
+            "stale nonce (another transaction went through): rebuild the transaction".into(),
         ));
     }
     let context = live_context(c, rt, me, pk, &t, birth, n).await?;
@@ -606,7 +606,7 @@ pub async fn dot_sign_tx(
         blocking(move || Ok(wallet_core::dot_sign(&root, a, &r, &p)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -631,7 +631,7 @@ pub(crate) async fn broadcast_checked(
     let (signer, hash, _) = wallet_core::dot_verify_extrinsic(rt, extrinsic, block_hash)?;
     if signer != wallet_core::dot_account_id(me, c.network)? {
         return Err(AppError::InvalidInput(
-            "cette transaction n'est pas signée par ton compte".into(),
+            "this transaction is not signed by your account".into(),
         ));
     }
     dot_backend::submit(c, extrinsic.trim(), &hash).await
@@ -641,7 +641,7 @@ fn hash_arg(s: &str, what: &str) -> AppResult<[u8; 32]> {
     hex::decode(s.trim().trim_start_matches("0x"))
         .ok()
         .and_then(|b| <[u8; 32]>::try_from(b).ok())
-        .ok_or_else(|| AppError::InvalidInput(format!("{what} : 64 caractères hexadécimaux")))
+        .ok_or_else(|| AppError::InvalidInput(format!("{what}: 64 hexadecimal characters")))
 }
 
 #[tauri::command]

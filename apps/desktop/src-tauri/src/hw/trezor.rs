@@ -98,11 +98,11 @@ pub fn enumerate() -> Vec<Found> {
 
 fn usb_err(e: rusb::Error) -> HwError {
     match e {
-        rusb::Error::Busy => HwError::Busy(
-            "l'appareil est utilisé par une autre application (ferme Trezor Suite)".into(),
-        ),
+        rusb::Error::Busy => {
+            HwError::Busy("the device is in use by another application (close Trezor Suite)".into())
+        }
         rusb::Error::Access => {
-            HwError::Busy("accès USB refusé (Linux : installe les règles udev de Trezor)".into())
+            HwError::Busy("USB access denied (Linux: install the Trezor udev rules)".into())
         }
         rusb::Error::NotFound | rusb::Error::NoDevice => HwError::NotFound,
         _ => HwError::Disconnected,
@@ -189,7 +189,7 @@ fn probe_v1<L: Link>(
         }
         return decode(resp).map(Some);
     }
-    Err(HwError::bad("réponse illisible à Initialize"))
+    Err(HwError::bad("unreadable response to Initialize"))
 }
 
 fn arm(limit: &Mutex<Limit>, deadline: Instant, cancel: Option<Arc<AtomicBool>>) {
@@ -246,7 +246,7 @@ impl PacketIo for UsbLink {
         let mut buf = [0u8; PACKET];
         match self.handle.read_interrupt(EP_IN, &mut buf, POLL) {
             Ok(PACKET) => Ok(Some(buf)),
-            Ok(n) => Err(HwError::bad(format!("paquet USB de {n} octets"))),
+            Ok(n) => Err(HwError::bad(format!("USB packet of {n} bytes"))),
             Err(rusb::Error::Timeout) => Ok(None),
             Err(e) => Err(usb_io_err(e)),
         }
@@ -320,7 +320,7 @@ fn map_terr(limit: &Mutex<Limit>, e: TErr) -> HwError {
         TErr::DeviceReadTimeout => lock(limit).stopped.take().unwrap_or(HwError::Timeout),
         TErr::Usb(rusb::Error::Busy | rusb::Error::Access) => usb_err(rusb::Error::Busy),
         TErr::Usb(_) | TErr::DeviceDisconnected | TErr::IO(_) => HwError::Disconnected,
-        other => HwError::bad(format!("transport Trezor : {other}")),
+        other => HwError::bad(format!("Trezor transport: {other}")),
     }
 }
 
@@ -343,7 +343,7 @@ pub struct ThpWire<P: PacketIo> {
 impl<P: PacketIo> Wire for ThpWire<P> {
     fn send_msg(&mut self, limit: &Mutex<Limit>, msg: ProtoMessage) -> HwResult<()> {
         let mt = u16::try_from(msg.message_type().value())
-            .map_err(|_| HwError::bad("type de message hors limites"))?;
+            .map_err(|_| HwError::bad("message type out of range"))?;
         self.ch.send_app(limit, self.session, mt, msg.payload())
     }
 
@@ -354,7 +354,7 @@ impl<P: PacketIo> Wire for ThpWire<P> {
                 continue; // not ours (Kyro only ever opens one session per channel)
             }
             let mt = MessageType::from_i32(i32::from(mt))
-                .ok_or_else(|| HwError::bad(format!("type de message inconnu {mt}")))?;
+                .ok_or_else(|| HwError::bad(format!("unknown message type {mt}")))?;
             return Ok(ProtoMessage::new(mt, data));
         }
     }
@@ -376,19 +376,19 @@ pub struct Trezor<W: Wire> {
 
 fn encode<M: Message>(m: &M) -> HwResult<Vec<u8>> {
     m.write_to_bytes()
-        .map_err(|e| HwError::bad(format!("encodage protobuf : {e}")))
+        .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))
 }
 
 pub fn decode<M: TrezorMessage>(resp: ProtoMessage) -> HwResult<M> {
     if resp.message_type() != M::MESSAGE_TYPE {
         return Err(HwError::bad(format!(
-            "message inattendu {:?} (attendu {:?})",
+            "unexpected message {:?} (expected {:?})",
             resp.message_type(),
             M::MESSAGE_TYPE
         )));
     }
     resp.into_message()
-        .map_err(|e| HwError::bad(format!("protobuf invalide : {e}")))
+        .map_err(|e| HwError::bad(format!("invalid protobuf: {e}")))
 }
 
 fn map_failure(f: &protos::Failure) -> HwError {
@@ -396,12 +396,12 @@ fn map_failure(f: &protos::Failure) -> HwError {
     match f.code() {
         F::Failure_ActionCancelled | F::Failure_PinCancelled => HwError::Rejected,
         F::Failure_PinInvalid | F::Failure_PinExpected => HwError::Locked,
-        F::Failure_Busy | F::Failure_InProgress => HwError::Busy("l'appareil est occupé".into()),
-        F::Failure_NotInitialized => HwError::unsupported("appareil non initialisé"),
+        F::Failure_Busy | F::Failure_InProgress => HwError::Busy("the device is busy".into()),
+        F::Failure_NotInitialized => HwError::unsupported("device not initialized"),
         // THP: the device forgot Kyro's session (restart, eviction): reconnect.
         F::Failure_ThpUnallocatedSession => HwError::Disconnected,
-        F::Failure_InvalidProtocol => HwError::bad("protocole refusé par l'appareil"),
-        code => HwError::bad(format!("Trezor : {code:?} « {} »", f.message())),
+        F::Failure_InvalidProtocol => HwError::bad("protocol rejected by the device"),
+        code => HwError::bad(format!("Trezor: {code:?} « {} »", f.message())),
     }
 }
 
@@ -472,8 +472,8 @@ impl<W: Wire> Trezor<W> {
         if passphrase {
             if !self.passphrase_on_device() {
                 return Err(HwError::unsupported(
-                    "passphrase à saisir sur l'ordinateur : Kyro ne fait jamais passer une \
-                     passphrase par l'interface",
+                    "passphrase to be typed on the computer: Kyro never passes a \
+                     passphrase through its interface",
                 ));
             }
             req.set_on_device(true);
@@ -492,7 +492,7 @@ impl<W: Wire> Trezor<W> {
     fn features(&self) -> HwResult<&protos::Features> {
         self.features
             .as_ref()
-            .ok_or_else(|| HwError::bad("caractéristiques de l'appareil inconnues"))
+            .ok_or_else(|| HwError::bad("unknown device features"))
     }
 
     fn firmware(&self) -> HwResult<String> {
@@ -520,16 +520,20 @@ impl<W: Wire> Trezor<W> {
             st
         };
         if f.bootloader_mode() {
-            return Ok(refuse(st, "appareil en mode bootloader", None));
+            return Ok(refuse(st, "device in bootloader mode", None));
         }
         if !f.initialized() {
-            return Ok(refuse(st, "appareil non initialisé", None));
+            return Ok(refuse(st, "device not initialized", None));
         }
         let (cap, min) = match chain {
             Chain::Btc => (C::Capability_Bitcoin, if one { "1.10.4" } else { "2.4.3" }),
             Chain::Evm => (C::Capability_Ethereum, if one { "1.10.4" } else { "2.4.2" }),
             Chain::Sol if one => {
-                return Ok(refuse(st, "Solana n'existe pas sur la Trezor One", None))
+                return Ok(refuse(
+                    st,
+                    "Solana is not available on the Trezor One",
+                    None,
+                ))
             }
             Chain::Sol => (C::Capability_Solana, "2.6.4"),
             other if super::ledger_apps::trezor_status(other).is_some() => {
@@ -544,10 +548,10 @@ impl<W: Wire> Trezor<W> {
         st.min = Some(min.into());
         if !version_at_least(&fw, min) {
             st.state = ChainState::Unsupported;
-            st.reason = Some(format!("firmware {fw} trop ancien"));
+            st.reason = Some(format!("firmware {fw} too old"));
         } else if !has(cap) {
             st.state = ChainState::Unsupported;
-            st.reason = Some("non disponible sur ce firmware (version Bitcoin-only ?)".into());
+            st.reason = Some("not available on this firmware (Bitcoin-only version?)".into());
         } else if f.unlocked.is_some_and(|u| !u) {
             st.state = ChainState::Unlock;
         }
@@ -626,8 +630,8 @@ impl<W: Wire> TrezorIo for Trezor<W> {
                     if !self.passphrase_on_device() {
                         self.abort();
                         return Err(HwError::unsupported(
-                            "passphrase à saisir sur l'ordinateur (Trezor One) : Kyro ne \
-                             fait jamais passer une passphrase par l'interface",
+                            "passphrase to be typed on the computer (Trezor One): Kyro never \
+                             passes a passphrase through its interface",
                         ));
                     }
                     ctl.prompt(Prompt::PassphraseOnDevice);
@@ -685,7 +689,7 @@ impl<W: Wire> HardwareWallet for Trezor<W> {
         let pk: protos::PublicKey = self.send(ctl, &req)?;
         let fp = pk
             .root_fingerprint
-            .ok_or_else(|| HwError::too_old("empreinte maître non fournie", "2.4.3"))?;
+            .ok_or_else(|| HwError::too_old("master fingerprint not provided", "2.4.3"))?;
         Ok(BtcAccount {
             kind,
             xpub: pk.xpub().to_string(),
@@ -733,7 +737,7 @@ impl<W: Wire> HardwareWallet for Trezor<W> {
         let node = pk
             .node
             .as_ref()
-            .ok_or_else(|| HwError::bad("nœud absent"))?;
+            .ok_or_else(|| HwError::bad("missing node"))?;
         wallet_core::evm_xpub_from_node(node.public_key(), node.chain_code())
             .map_err(|e| HwError::bad(e.to_string()))
     }
@@ -762,32 +766,30 @@ impl<W: Wire> HardwareWallet for Trezor<W> {
         let data = f.data;
         let first = data.len().min(1024);
         m.set_data_initial_chunk(data[..first].to_vec());
-        m.set_data_length(
-            u32::try_from(data.len()).map_err(|_| HwError::bad("données trop longues"))?,
-        );
+        m.set_data_length(u32::try_from(data.len()).map_err(|_| HwError::bad("data too long"))?);
         let mut offset = first;
         let mut resp: protos::EthereumTxRequest = self.send(ctl, &m)?;
         while resp.data_length() > 0 {
             let n = resp.data_length() as usize;
             let chunk = data
                 .get(offset..offset + n)
-                .ok_or_else(|| HwError::bad("l'appareil demande plus de données qu'il n'y en a"))?;
+                .ok_or_else(|| HwError::bad("the device asks for more data than there is"))?;
             offset += n;
             let mut ack = protos::EthereumTxAck::new();
             ack.set_data_chunk(chunk.to_vec());
             resp = self.send(ctl, &ack)?;
         }
         if offset != data.len() {
-            return Err(HwError::bad("l'appareil n'a pas lu toutes les données"));
+            return Err(HwError::bad("the device did not read all the data"));
         }
         let r: [u8; 32] = resp
             .signature_r()
             .try_into()
-            .map_err(|_| HwError::bad("r invalide"))?;
+            .map_err(|_| HwError::bad("invalid r"))?;
         let s: [u8; 32] = resp
             .signature_s()
             .try_into()
-            .map_err(|_| HwError::bad("s invalide"))?;
+            .map_err(|_| HwError::bad("invalid s"))?;
         Ok((r, s))
     }
 
@@ -833,7 +835,7 @@ fn account_index(a: &BtcAccount) -> HwResult<u32> {
         .rsplit('/')
         .next()
         .and_then(|s| s.parse().ok())
-        .ok_or_else(|| HwError::bad("chemin de compte invalide"))
+        .ok_or_else(|| HwError::bad("invalid account path"))
 }
 
 #[cfg(test)]

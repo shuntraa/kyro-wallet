@@ -204,7 +204,7 @@ mod tests {
         let n = ids.len();
         ids.sort_unstable();
         ids.dedup();
-        assert_eq!(ids.len(), n, "chain id en double");
+        assert_eq!(ids.len(), n, "duplicate chain id");
         let mut known: Vec<u64> = wallet_core::EVM_KNOWN_CHAINS
             .iter()
             .map(|(id, _)| *id)
@@ -229,7 +229,7 @@ mod tests {
                 TokenChain::Evm(_) => e.contract.to_ascii_lowercase(),
                 _ => e.contract.to_string(),
             };
-            assert!(seen.insert((e.network, e.chain, key)), "{e:?} en double");
+            assert!(seen.insert((e.network, e.chain, key)), "{e:?} duplicated");
             assert!(
                 !e.token.symbol.is_empty() && !e.token.name.is_empty(),
                 "{e:?}"

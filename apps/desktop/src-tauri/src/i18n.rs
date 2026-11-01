@@ -128,78 +128,94 @@ pub fn lang_from_locales<'a>(locales: impl IntoIterator<Item = &'a str>) -> Lang
     }
 }
 
-/// English version of the most common fixed error details (written in French where they are
-/// raised); any other detail is returned unchanged.
-pub fn detail_en(fr: &str) -> String {
+/// French version of the most common fixed error details (written in English where they are
+/// raised); any other detail is returned unchanged (English).
+pub fn detail_fr(en: &str) -> String {
     const EXACT: &[(&str, &str)] = &[
         (
-            "un coffre existe déjà sur cet appareil",
             "a vault already exists on this device",
+            "un coffre existe déjà sur cet appareil",
         ),
-        ("aucun coffre sur cet appareil", "no vault on this device"),
+        ("no vault on this device", "aucun coffre sur cet appareil"),
         (
-            "le mot de passe doit faire au moins 10 caractères",
             "the password must be at least 10 characters long",
+            "le mot de passe doit faire au moins 10 caractères",
         ),
-        ("phrase de récupération invalide", "invalid recovery phrase"),
-        ("12 ou 24 mots", "12 or 24 words"),
+        ("invalid recovery phrase", "phrase de récupération invalide"),
+        ("12 or 24 words", "12 ou 24 mots"),
         (
-            "Tor est désactivé dans les réglages",
             "Tor is turned off in the settings",
+            "Tor est désactivé dans les réglages",
         ),
-        ("Tor n'est pas prêt", "Tor is not ready"),
-        ("Tor n'est pas démarré", "Tor is not started"),
-        ("Tor arrêté", "Tor stopped"),
-        ("délai de démarrage dépassé", "start-up timed out"),
-        ("devise non proposée", "currency not offered"),
+        ("Tor is not ready", "Tor n'est pas prêt"),
+        ("Tor is not started", "Tor n'est pas démarré"),
+        ("Tor stopped", "Tor arrêté"),
+        ("start-up timed out", "délai de démarrage dépassé"),
+        ("currency not offered", "devise non proposée"),
         (
-            "verrouillage automatique : entre 1 et 60 minutes",
             "auto-lock: between 1 and 60 minutes",
+            "verrouillage automatique : entre 1 et 60 minutes",
         ),
         (
-            "langue : « auto », « fr » ou « en »",
             "language: « auto », « fr » or « en »",
+            "langue : « auto », « fr » ou « en »",
         ),
         (
-            "résumé différent entre l'aperçu et la signature",
             "summary differs between the preview and the signature",
+            "résumé différent entre l'aperçu et la signature",
         ),
-        ("URL invalide", "invalid URL"),
-        ("URL sans hôte", "URL without a host"),
-        ("nom d'hôte invalide", "invalid host name"),
-        ("aucun pair joignable", "no reachable peer"),
+        ("invalid URL", "URL invalide"),
+        ("URL without a host", "URL sans hôte"),
+        ("invalid host name", "nom d'hôte invalide"),
+        ("no reachable peer", "aucun pair joignable"),
         (
-            "ce compte n'a pas de clé EVM",
             "this account has no EVM key",
+            "ce compte n'a pas de clé EVM",
         ),
         (
-            "ce compte n'a pas de clé Solana",
             "this account has no Solana key",
+            "ce compte n'a pas de clé Solana",
         ),
         (
-            "compte hardware wallet inconnu",
             "unknown hardware-wallet account",
+            "compte hardware wallet inconnu",
         ),
         (
-            "cette transaction ne demande pas la signature de ton adresse Solana",
             "this transaction does not ask for your Solana address's signature",
+            "cette transaction ne demande pas la signature de ton adresse Solana",
         ),
         (
-            "ce compte n'est pas dans ta liste",
             "this account is not in your list",
+            "ce compte n'est pas dans ta liste",
         ),
         (
-            "fichier .cookie : chemin local attendu",
             ".cookie file: local path expected",
+            "fichier .cookie : chemin local attendu",
+        ),
+        ("invalid amount", "montant invalide"),
+        ("transfer to yourself", "transfert à soi-même"),
+        ("missing recipient", "destinataire manquant"),
+        ("hexadecimal expected", "hexadécimal attendu"),
+        ("insufficient balance", "solde insuffisant"),
+        (
+            "this transaction does not ask for this Solana address's signature",
+            "cette transaction ne demande pas la signature de cette adresse Solana",
         ),
     ];
-    if let Some((_, en)) = EXACT.iter().find(|(f, _)| *f == fr) {
-        return (*en).to_owned();
+    if let Some((_, fr)) = EXACT.iter().find(|(e, _)| *e == en) {
+        return (*fr).to_owned();
     }
-    if let Some(rest) = fr.strip_prefix("réglages invalides : ") {
-        return format!("invalid settings: {rest}");
+    const PREFIXES: &[(&str, &str)] = &[
+        ("invalid settings: ", "réglages invalides : "),
+        ("invalid PSBT: ", "PSBT invalide : "),
+        ("cryptographic failure: ", "échec cryptographique : "),
+    ];
+    for (e, fr) in PREFIXES {
+        if let Some(rest) = en.strip_prefix(e) {
+            return format!("{fr}{rest}");
+        }
     }
-    fr.to_owned()
+    en.to_owned()
 }
 
 /// The computer's language, read once from the OS.

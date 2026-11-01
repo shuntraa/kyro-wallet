@@ -126,14 +126,14 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function useApp(): AppContextValue {
   const v = useContext(AppContext);
-  if (!v) throw new Error('useApp hors AppProvider');
+  if (!v) throw new Error('useApp outside AppProvider');
   return v;
 }
 
 /** Convenience: only valid inside the unlocked app. */
 export function useVault(): AppContextValue & { accounts: WalletAccounts; adapters: AdapterSet } {
   const v = useApp();
-  if (!v.accounts || !v.adapters) throw new Error('Coffre verrouillé');
+  if (!v.accounts || !v.adapters) throw new Error('Vault locked');
   return v as AppContextValue & { accounts: WalletAccounts; adapters: AdapterSet };
 }
 

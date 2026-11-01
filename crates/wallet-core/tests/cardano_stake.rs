@@ -295,7 +295,7 @@ fn trezor_legacy_certificates_are_rebuilt_and_refused() {
         let e = cardano_decode_stake_tx(&unsigned(&b), &ctx(), &stake_pk, DEPOSIT)
             .unwrap_err()
             .to_string();
-        assert!(e.contains("ancien format"), "{e}");
+        assert!(e.contains("legacy"), "{e}");
     }
     // Trezor's withdrawal from m/1852'/1815'/0'/2/1: the encoding is the same as Kyro's, but it is
     // another stake credential than ours, so it is refused.
@@ -313,7 +313,7 @@ fn trezor_legacy_certificates_are_rebuilt_and_refused() {
     let e = cardano_sign_stake(&root(), 0, 0, 0, &u, &ctx(), DEPOSIT)
         .unwrap_err()
         .to_string();
-    assert!(e.contains("autre compte de récompenses"), "{e}");
+    assert!(e.contains("reward account other than yours"), "{e}");
 }
 
 /// Audit finding: « the only output is our own address » was a shell rule; wallet-core signed a
@@ -336,14 +336,14 @@ fn staking_transaction_pays_only_our_address() {
     // Same transaction, but the output is not one of our addresses.
     let not_ours = CardanoContext { own: &[], ..ctx() };
     let e = decode(&b, &not_ours).unwrap_err().to_string();
-    assert!(e.contains("ne paie que ta propre adresse"), "{e}");
+    assert!(e.contains("pays only your own address"), "{e}");
     let u = hex::encode(cardano_unsigned_tx(&b, None).unwrap());
     assert!(cardano_sign_stake(&root(), 0, 0, 0, &u, &not_ours, DEPOSIT).is_err());
     // A second output, even to our own address.
     let mut two = body(deleg(), vec![], true);
     two.outputs.push(two.outputs[0].clone());
     let e = decode(&two, &ctx()).unwrap_err().to_string();
-    assert!(e.contains("qu'une sortie"), "{e}");
+    assert!(e.contains("only one output"), "{e}");
 }
 
 #[test]
@@ -376,7 +376,7 @@ fn foreign_credentials_and_other_certificates_are_refused() {
             drep: CardanoDrep::AlwaysAbstain,
         },
     ] {
-        refused(body(vec![c], vec![], false), "autre clé de staking");
+        refused(body(vec![c], vec![], false), "stake key other than yours");
     }
     let me = stake_hash();
     // A deposit that is not the protocol's.
@@ -389,7 +389,7 @@ fn foreign_credentials_and_other_certificates_are_refused() {
             vec![],
             false,
         ),
-        "dépôt",
+        "deposit",
     );
     // Duplicates, register + deregister, delegate + deregister, registration not first.
     let reg = CardanoCert::StakeRegistration {
@@ -406,19 +406,19 @@ fn foreign_credentials_and_other_certificates_are_refused() {
     };
     refused(
         body(vec![deleg.clone(), deleg.clone()], vec![], false),
-        "double",
+        "duplicate",
     );
     refused(
         body(vec![reg.clone(), dereg.clone()], vec![], false),
-        "même transaction",
+        "same transaction",
     );
     refused(
         body(vec![deleg.clone(), dereg], vec![], false),
-        "même transaction",
+        "same transaction",
     );
     refused(
         body(vec![deleg.clone(), reg.clone()], vec![], false),
-        "premier",
+        "first",
     );
     // Withdrawals: someone else's reward account, zero, two of them.
     let mine = cardano_reward_address_bytes(Network::Mainnet, &me);
@@ -428,27 +428,27 @@ fn foreign_credentials_and_other_certificates_are_refused() {
             vec![(cardano_reward_address_bytes(Network::Mainnet, &other), 5)],
             false,
         ),
-        "autre compte",
+        "reward account other than yours",
     );
     refused(body(vec![], vec![(mine.clone(), 0)], false), "0 lovelace");
     let mut script = mine.clone();
     script[0] = 0xF1; // script reward address
     refused(
         body(vec![], vec![(mine.clone(), 5), (script, 5)], false),
-        "plusieurs",
+        "several",
     );
     // A plain payment is not a staking transaction.
-    refused(body(vec![], vec![], false), "aucune opération");
+    refused(body(vec![], vec![], false), "no staking operation");
 
     // Raw certificate forms Kyro never accepts: script credential, pool registration (3),
     // combined (13), DRep registration (16), committee (14); and governance body fields.
     let me_hex = hex::encode(me);
     for (cert, needle) in [
         (format!("830782 01581c{me_hex}1a001e8480"), "script"),
-        (format!("830382 00581c{me_hex}00"), "enregistrement de pool"),
-        (format!("830d82 00581c{me_hex}00"), "combiné"),
+        (format!("830382 00581c{me_hex}00"), "pool registration"),
+        (format!("830d82 00581c{me_hex}00"), "combined"),
         (format!("831082 00581c{me_hex}00"), "DRep"),
-        (format!("830e82 00581c{me_hex}00"), "comité"),
+        (format!("830e82 00581c{me_hex}00"), "committee"),
     ] {
         let b = body_hex(5, &format!("0481{cert}").replace(' ', ""));
         let e = cardano_decode_stake_tx(&unsigned(&b), &ctx(), &stake_pk, DEPOSIT)
@@ -457,7 +457,7 @@ fn foreign_credentials_and_other_certificates_are_refused() {
         assert!(e.contains(needle), "{needle}: {e}");
     }
     let deleg_hex = format!("830282 00581c{me_hex}581c{POOL}").replace(' ', "");
-    for (k, v, what) in [("13", "a0", "votes"), ("14", "80", "propositions")] {
+    for (k, v, what) in [("13", "a0", "votes"), ("14", "80", "proposals")] {
         let b = body_hex(6, &format!("0481{deleg_hex}{k}{v}"));
         let e = cardano_decode_stake_tx(&unsigned(&b), &ctx(), &stake_pk, DEPOSIT)
             .unwrap_err()
@@ -472,7 +472,7 @@ fn foreign_credentials_and_other_certificates_are_refused() {
     let e = cardano_decode_stake_tx(&u, &ctx(), &stake_pk, DEPOSIT)
         .unwrap_err()
         .to_string();
-    assert!(e.contains("métadonnées"), "{e}");
+    assert!(e.contains("metadata"), "{e}");
 }
 
 #[test]

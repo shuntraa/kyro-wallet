@@ -50,8 +50,8 @@ fn bad(msg: impl Into<String>) -> AppError {
 
 pub fn no_default_server() -> AppError {
     AppError::ServerInvalid(
-        "Zcash testnet : Kyro n'a pas de serveur public par défaut (aucun serveur Electrum \
-         Zcash testnet public et maintenu n'a été trouvé). Zcash fonctionne sur mainnet."
+        "Zcash testnet: Kyro has no default public server (no maintained public Zcash \
+         testnet Electrum server was found). Zcash works on mainnet."
             .into(),
     )
 }
@@ -113,7 +113,7 @@ fn check_genesis(net: Network, features: &Value) -> AppResult<String> {
         .unwrap_or_default();
     if genesis != expected {
         return Err(AppError::ServerWrongNetwork(format!(
-            "le serveur n'est pas sur Zcash {} (genesis {})",
+            "the server is not on Zcash {} (genesis {})",
             network_label(net),
             genesis.chars().take(64).collect::<String>()
         )));
@@ -132,10 +132,10 @@ fn check_address(net: Network, a: &str) -> AppResult<(String, String, String)> {
     let spk = wallet_core::zec_script_pubkey(a, net)?;
     // Only our own kind of address is queried (t1… / t3…, never a TEX form).
     let canonical = wallet_core::zec_address_of_script(&spk, net)
-        .ok_or_else(|| AppError::InvalidInput("adresse Zcash invalide".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("invalid Zcash address".into()))?;
     if canonical != a.trim() {
         return Err(AppError::InvalidInput(
-            "adresse Zcash : forme transparente t1… / t3… attendue".into(),
+            "Zcash address: transparent form t1… / t3… expected".into(),
         ));
     }
     Ok((
@@ -153,7 +153,7 @@ fn is_txid(t: &str) -> bool {
 fn parse_history(v: &Value) -> AppResult<Vec<(String, i64)>> {
     let list = v
         .as_array()
-        .ok_or_else(|| bad("Zcash : historique Electrum invalide"))?;
+        .ok_or_else(|| bad("Zcash: invalid Electrum history"))?;
     let mut out = Vec::with_capacity(list.len());
     let mut seen = HashSet::new();
     for h in list {
@@ -161,12 +161,12 @@ fn parse_history(v: &Value) -> AppResult<Vec<(String, i64)>> {
             .get("tx_hash")
             .and_then(Value::as_str)
             .filter(|t| is_txid(t))
-            .ok_or_else(|| bad("Zcash : tx_hash invalide"))?
+            .ok_or_else(|| bad("Zcash: invalid tx_hash"))?
             .to_ascii_lowercase();
         let height = h
             .get("height")
             .and_then(Value::as_i64)
-            .ok_or_else(|| bad("Zcash : hauteur invalide"))?;
+            .ok_or_else(|| bad("Zcash: invalid height"))?;
         if seen.insert(txid.clone()) {
             out.push((txid, height));
         }
@@ -186,8 +186,8 @@ struct ClaimedUtxo {
 fn parse_listunspent(v: &Value) -> AppResult<Vec<ClaimedUtxo>> {
     let list = v
         .as_array()
-        .ok_or_else(|| bad("Zcash : listunspent invalide"))?;
-    let err = |k: &str| bad(format!("Zcash : listunspent, champ « {k} » invalide"));
+        .ok_or_else(|| bad("Zcash: invalid listunspent"))?;
+    let err = |k: &str| bad(format!("Zcash: listunspent, invalid field \"{k}\""));
     let mut out = Vec::with_capacity(list.len());
     for u in list {
         out.push(ClaimedUtxo {
@@ -219,12 +219,12 @@ fn parse_listunspent(v: &Value) -> AppResult<Vec<ClaimedUtxo>> {
 fn verified_raw(net: Network, txid: &str, raw: &Value) -> AppResult<(ZecRawTx, String)> {
     let hex_tx = raw
         .as_str()
-        .ok_or_else(|| bad("Zcash : transaction non hexadécimale"))?;
+        .ok_or_else(|| bad("Zcash: non-hexadecimal transaction"))?;
     let tx = wallet_core::zec_decode_raw_tx(hex_tx, net)
-        .map_err(|_| bad(format!("Zcash : transaction {txid} illisible")))?;
+        .map_err(|_| bad(format!("Zcash: unreadable transaction {txid}")))?;
     if tx.txid != txid {
         return Err(bad(format!(
-            "Zcash : le serveur a renvoyé une transaction différente de {txid}"
+            "Zcash: the server returned a transaction different from {txid}"
         )));
     }
     Ok((tx, hex_tx.trim().to_owned()))
@@ -263,27 +263,24 @@ async fn fetch_raws(
 fn verified_utxos(claimed: &[ClaimedUtxo], raws: &Raws, our_spk: &str) -> AppResult<Value> {
     let mut out = Vec::with_capacity(claimed.len());
     for u in claimed {
-        let (tx, _) = raws.get(&u.txid).ok_or_else(|| {
-            bad(format!(
-                "Zcash : transaction précédente {} introuvable",
-                u.txid
-            ))
-        })?;
+        let (tx, _) = raws
+            .get(&u.txid)
+            .ok_or_else(|| bad(format!("Zcash: previous transaction {} not found", u.txid)))?;
         let (_, value, spk) = tx.outputs.get(u.vout as usize).ok_or_else(|| {
             bad(format!(
-                "Zcash : le serveur annonce une sortie {}:{} qui n'existe pas",
+                "Zcash: the server announces an output {}:{} that does not exist",
                 u.txid, u.vout
             ))
         })?;
         if spk != our_spk {
             return Err(bad(format!(
-                "Zcash : la sortie {}:{} annoncée ne paie pas cette adresse",
+                "Zcash: the announced output {}:{} does not pay this address",
                 u.txid, u.vout
             )));
         }
         if *value != u.value {
             return Err(bad(format!(
-                "Zcash : le serveur annonce {} pour {}:{}, la transaction dit {value}",
+                "Zcash: the server announces {} for {}:{}, the transaction says {value}",
                 u.value, u.txid, u.vout
             )));
         }
@@ -375,11 +372,11 @@ fn electrum_info(address: &str, balance: &Value, history: &Value) -> AppResult<V
         balance
             .get(k)
             .and_then(Value::as_i64)
-            .ok_or_else(|| bad(format!("Zcash : solde Electrum invalide ({k})")))
+            .ok_or_else(|| bad(format!("Zcash: invalid Electrum balance ({k})")))
     };
     let (confirmed, unconfirmed) = (field("confirmed")?, field("unconfirmed")?);
     if confirmed < 0 {
-        return Err(bad("Zcash : solde confirmé négatif"));
+        return Err(bad("Zcash: negative confirmed balance"));
     }
     let history = parse_history(history)?;
     let conf = history.iter().filter(|(_, h)| *h > 0).count();
@@ -402,7 +399,7 @@ pub async fn address_utxos(ctx: &ZecCtx<'_>, address: &str) -> AppResult<Value> 
     let claimed = parse_listunspent(&list)?;
     if claimed.len() > MAX_UTXOS {
         return Err(AppError::InvalidInput(format!(
-            "Zcash : plus de {MAX_UTXOS} pièces sur {a} — Kyro vérifie chacune"
+            "Zcash: more than {MAX_UTXOS} coins on {a} — Kyro checks each one"
         )));
     }
     let mut raws = HashMap::new();
@@ -468,7 +465,7 @@ async fn tip(conn: &mut Conn<BoxStream>) -> AppResult<u32> {
     r.get("height")
         .and_then(Value::as_u64)
         .and_then(|h| u32::try_from(h).ok())
-        .ok_or_else(|| bad("Zcash : hauteur invalide"))
+        .ok_or_else(|| bad("Zcash: invalid height"))
 }
 
 /// Chain tip height.
@@ -501,7 +498,7 @@ pub async fn chain_state(conn: &mut Conn<BoxStream>) -> AppResult<ChainState> {
             let txid = txid
                 .as_str()
                 .filter(|t| is_txid(t))
-                .ok_or_else(|| bad("Zcash : id_from_pos invalide"))?
+                .ok_or_else(|| bad("Zcash: invalid id_from_pos"))?
                 .to_ascii_lowercase();
             let raw = conn
                 .call("blockchain.transaction.get", json!([txid, false]))
@@ -509,7 +506,7 @@ pub async fn chain_state(conn: &mut Conn<BoxStream>) -> AppResult<ChainState> {
             let bytes = raw
                 .as_str()
                 .and_then(|h| hex::decode(h.trim()).ok())
-                .ok_or_else(|| bad("Zcash : transaction non hexadécimale"))?;
+                .ok_or_else(|| bad("Zcash: non-hexadecimal transaction"))?;
             if let Some(branch_id) = wallet_core::zec_header_branch_id(&bytes) {
                 return Ok(ChainState {
                     tip,
@@ -520,7 +517,7 @@ pub async fn chain_state(conn: &mut Conn<BoxStream>) -> AppResult<ChainState> {
         }
     }
     Err(bad(
-        "Zcash : aucune transaction récente ne donne la mise à niveau réseau en cours (branch id)",
+        "Zcash: no recent transaction gives the current network upgrade (branch id)",
     ))
 }
 
@@ -533,7 +530,7 @@ pub async fn prev_txs(
     for t in txids {
         if !is_txid(t) {
             return Err(AppError::InvalidInput(
-                "txid : 64 caractères hexadécimaux".into(),
+                "txid: 64 hexadecimal characters".into(),
             ));
         }
     }
@@ -553,7 +550,7 @@ pub async fn broadcast(ctx: &ZecCtx<'_>, hex_tx: &str) -> AppResult<String> {
     let decoded = wallet_core::zec_decode_raw_tx(hex_tx, ctx.network)?;
     if decoded.shielded {
         return Err(AppError::InvalidInput(
-            "Zcash : Kyro ne diffuse que des transactions transparentes".into(),
+            "Zcash: Kyro only broadcasts transparent transactions".into(),
         ));
     }
     let mut conn = session(ctx).await?;
@@ -566,7 +563,7 @@ pub async fn broadcast(ctx: &ZecCtx<'_>, hex_tx: &str) -> AppResult<String> {
 fn check_broadcast_txid(answer: &str, ours: &str) -> AppResult<String> {
     if answer.trim() != ours {
         return Err(bad(format!(
-            "le serveur a répondu un txid inattendu ({})",
+            "the server answered an unexpected txid ({})",
             answer.chars().take(80).collect::<String>()
         )));
     }

@@ -83,7 +83,7 @@ pub async fn hw_sign_hbar_tx(
         .collect::<Result<Vec<_>, _>>()?;
     if messages.len() != 1 {
         return Err(AppError::InvalidInput(
-            "hardware wallet : une seule copie (un nœud) attendue".into(),
+            "hardware wallet: a single copy (one node) expected".into(),
         ));
     }
     let info = check_device(&app, &state, &id, &acc, &key).await?;

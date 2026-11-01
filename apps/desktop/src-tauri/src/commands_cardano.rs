@@ -348,7 +348,7 @@ pub async fn ada_tx_status(state: State<'_, AppState>, hash: String) -> AppResul
     let h = hash.trim().to_ascii_lowercase();
     if h.len() != 64 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(AppError::InvalidInput(
-            "hash : 64 caractères hexadécimaux".into(),
+            "hash: 64 hexadecimal characters".into(),
         ));
     }
     Ok(CardanoTxStatus {
@@ -411,7 +411,7 @@ pub(crate) async fn build(
             s.parse::<u64>()
                 .ok()
                 .filter(|v| *v > 0)
-                .ok_or_else(|| AppError::InvalidInput("montant en lovelace invalide".into()))?,
+                .ok_or_else(|| AppError::InvalidInput("invalid lovelace amount".into()))?,
         ),
     };
     let token = token
@@ -424,7 +424,7 @@ pub(crate) async fn build(
                 || hex::decode(&name).is_err()
             {
                 return Err(AppError::InvalidInput(
-                    "token : policy id (56 hex) et nom d'asset (hex, 32 octets max)".into(),
+                    "token: policy id (56 hex) and asset name (hex, 32 bytes max)".into(),
                 ));
             }
             let q = t
@@ -433,7 +433,7 @@ pub(crate) async fn build(
                 .parse::<u64>()
                 .ok()
                 .filter(|q| *q > 0)
-                .ok_or_else(|| AppError::InvalidInput("quantité de token invalide".into()))?;
+                .ok_or_else(|| AppError::InvalidInput("invalid token quantity".into()))?;
             Ok((policy, name, q))
         })
         .transpose()?;
@@ -519,7 +519,7 @@ pub(crate) async fn prepare_sign(
     let tip = cardano_backend::tip(c).await?;
     if summary.ttl.is_some_and(|t| t <= tip.slot) {
         return Err(AppError::InvalidInput(
-            "transaction Cardano expirée (ttl dépassé) : reconstruis-la".into(),
+            "Cardano transaction expired (ttl passed): rebuild it".into(),
         ));
     }
     let (account, utxos) = account_and_utxos(c, me, &p).await?;
@@ -533,7 +533,7 @@ pub(crate) async fn prepare_sign(
     let min = p.min_fee(size);
     if body.fee < min {
         return Err(AppError::InvalidInput(format!(
-            "frais trop bas ({} lovelace, minimum {min}) : le nœud refuserait la transaction",
+            "fee too low ({} lovelace, minimum {min}): the node would reject the transaction",
             body.fee
         )));
     }
@@ -602,7 +602,7 @@ pub async fn ada_sign_tx(
     .await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -624,7 +624,7 @@ pub(crate) async fn broadcast_checked(
     let (tx_id, keys) = wallet_core::cardano_signed_witnesses(tx)?;
     if keys.as_slice() != [*our_key] {
         return Err(AppError::InvalidInput(
-            "cette transaction n'est pas signée (uniquement) par ta clé Cardano".into(),
+            "this transaction is not signed (only) by your Cardano key".into(),
         ));
     }
     let bytes = hex::decode(tx.trim()).map_err(|_| AppError::InvalidInput("tx hex".into()))?;

@@ -67,9 +67,9 @@ async fn send(ctx: &AptosCtx<'_>, req: ServerRequest, what: &str) -> AppResult<(
     let (status, bytes) = ctx.net_client.server_request(req, ctx.tor).await?;
     if status == 429 {
         return Err(bad(format!(
-            "Aptos Labs limite le débit des requêtes sans clé{} : réessaie dans quelques minutes",
+            "Aptos Labs rate-limits requests without a key{}: try again in a few minutes",
             if ctx.tor {
-                " (l'IP du relais de sortie Tor est partagée avec d'autres utilisateurs)"
+                " (the Tor exit relay's IP is shared with other users)"
             } else {
                 ""
             }
@@ -77,7 +77,7 @@ async fn send(ctx: &AptosCtx<'_>, req: ServerRequest, what: &str) -> AppResult<(
     }
     let v: Value = serde_json::from_slice(&bytes).map_err(|_| {
         bad(format!(
-            "Aptos : réponse illisible sur {what} (HTTP {status})"
+            "Aptos: unreadable response on {what} (HTTP {status})"
         ))
     })?;
     Ok((status, v))
@@ -85,7 +85,7 @@ async fn send(ctx: &AptosCtx<'_>, req: ServerRequest, what: &str) -> AppResult<(
 
 fn url(ctx: &AptosCtx<'_>, path: &str) -> AppResult<url::Url> {
     url::Url::parse(&format!("{}{path}", ctx.base))
-        .map_err(|_| AppError::Internal("URL Aptos invalide".into()))
+        .map_err(|_| AppError::Internal("invalid Aptos URL".into()))
 }
 
 async fn get(ctx: &AptosCtx<'_>, path: &str) -> AppResult<(u16, Value)> {
@@ -99,7 +99,7 @@ async fn get(ctx: &AptosCtx<'_>, path: &str) -> AppResult<(u16, Value)> {
 
 fn api_error(what: &str, status: u16, v: &Value) -> AppError {
     bad(format!(
-        "Aptos : HTTP {status} sur {what} ({})",
+        "Aptos: HTTP {status} on {what} ({})",
         v["message"]
             .as_str()
             .or(v["error_code"].as_str())
@@ -137,9 +137,9 @@ pub async fn ledger(ctx: &AptosCtx<'_>) -> AppResult<AptosLedger> {
     let chain_id = v["chain_id"]
         .as_u64()
         .and_then(|c| u8::try_from(c).ok())
-        .ok_or_else(|| bad("Aptos : chain_id absent"))?;
+        .ok_or_else(|| bad("Aptos: chain_id missing"))?;
     let ts =
-        u64_at(&v["ledger_timestamp"]).ok_or_else(|| bad("Aptos : ledger_timestamp absent"))?;
+        u64_at(&v["ledger_timestamp"]).ok_or_else(|| bad("Aptos: ledger_timestamp missing"))?;
     Ok(AptosLedger {
         chain_id,
         timestamp_secs: ts / 1_000_000,
@@ -152,7 +152,7 @@ pub async fn checked_ledger(ctx: &AptosCtx<'_>) -> AppResult<AptosLedger> {
     let l = ledger(ctx).await?;
     if l.chain_id != ctx.chain_id {
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce serveur Aptos est sur la chaîne {}, pas sur {} ({})",
+            "this Aptos server is on chain {}, not on {} ({})",
             l.chain_id,
             ctx.chain_id,
             if ctx.chain_id == 1 {
@@ -185,10 +185,10 @@ pub async fn account(ctx: &AptosCtx<'_>, address: &str) -> AppResult<AptosAccoun
     // address) on current nodes; an older node answers 404 account_not_found.
     let (seq, auth) = match status {
         200 => (
-            u64_at(&v["sequence_number"]).ok_or_else(|| bad("Aptos : sequence_number absent"))?,
+            u64_at(&v["sequence_number"]).ok_or_else(|| bad("Aptos: sequence_number missing"))?,
             v["authentication_key"]
                 .as_str()
-                .ok_or_else(|| bad("Aptos : authentication_key absent"))?
+                .ok_or_else(|| bad("Aptos: authentication_key missing"))?
                 .to_ascii_lowercase(),
         ),
         404 if v["error_code"] == "account_not_found" => (0, a.clone()),
@@ -196,7 +196,7 @@ pub async fn account(ctx: &AptosCtx<'_>, address: &str) -> AppResult<AptosAccoun
     };
     let (status, b) = get(ctx, &format!("/accounts/{a}/balance/{APT_COIN}")).await?;
     let balance = match status {
-        200 => u64_at(&b).ok_or_else(|| bad("Aptos : solde illisible"))?,
+        200 => u64_at(&b).ok_or_else(|| bad("Aptos: balance unreadable"))?,
         404 => 0,
         _ => return Err(api_error("/balance", status, &b)),
     };
@@ -216,7 +216,7 @@ pub async fn fa_balance(ctx: &AptosCtx<'_>, address: &str, metadata: &str) -> Ap
     let m = wallet_core::aptos_address_string(&wallet_core::aptos_parse_address(metadata)?);
     let (status, b) = get(ctx, &format!("/accounts/{a}/balance/{m}")).await?;
     match status {
-        200 => u64_at(&b).ok_or_else(|| bad("Aptos : solde de jeton illisible")),
+        200 => u64_at(&b).ok_or_else(|| bad("Aptos: token balance unreadable")),
         404 => Ok(0),
         _ => Err(api_error("/balance", status, &b)),
     }
@@ -322,10 +322,10 @@ pub async fn gas_price(ctx: &AptosCtx<'_>) -> AppResult<u64> {
     if status != 200 {
         return Err(api_error("/estimate_gas_price", status, &v));
     }
-    let p = u64_at(&v["gas_estimate"]).ok_or_else(|| bad("Aptos : gas_estimate absent"))?;
+    let p = u64_at(&v["gas_estimate"]).ok_or_else(|| bad("Aptos: gas_estimate missing"))?;
     if p == 0 || p > MAX_GAS_UNIT_PRICE {
         return Err(bad(format!(
-            "Aptos : prix du gaz annoncé hors limites ({p} octas par unité)"
+            "Aptos: announced gas price out of bounds ({p} octas per unit)"
         )));
     }
     Ok(p)
@@ -353,7 +353,7 @@ pub async fn simulate(ctx: &AptosCtx<'_>, body: Vec<u8>) -> AppResult<(bool, Str
             .chars()
             .take(200)
             .collect(),
-        u64_at(&r["gas_used"]).ok_or_else(|| bad("Aptos : gas_used absent de la simulation"))?,
+        u64_at(&r["gas_used"]).ok_or_else(|| bad("Aptos: gas_used missing from the simulation"))?,
     ))
 }
 
@@ -368,7 +368,7 @@ pub async fn submit(ctx: &AptosCtx<'_>, signed: Vec<u8>, hash: &str) -> AppResul
     let (status, v) = send(ctx, req, "/transactions").await?;
     if status != 202 && status != 200 {
         return Err(AppError::InvalidInput(format!(
-            "transaction Aptos refusée par le nœud (HTTP {status}) : {}",
+            "Aptos transaction refused by the node (HTTP {status}): {}",
             v["message"]
                 .as_str()
                 .unwrap_or("")
@@ -380,7 +380,7 @@ pub async fn submit(ctx: &AptosCtx<'_>, signed: Vec<u8>, hash: &str) -> AppResul
     let got = v["hash"].as_str().unwrap_or("");
     if !got.eq_ignore_ascii_case(hash) {
         return Err(bad(format!(
-            "le nœud a répondu un hash inattendu ({})",
+            "the node answered an unexpected hash ({})",
             got.chars().take(80).collect::<String>()
         )));
     }
@@ -547,7 +547,7 @@ pub fn max_gas_for(gas_used: u64) -> AppResult<u64> {
     let g = gas_used.saturating_mul(3).div_ceil(2).max(MIN_MAX_GAS);
     if g > MAX_MAX_GAS {
         return Err(AppError::InvalidInput(format!(
-            "transfert Aptos inhabituellement coûteux à la simulation ({gas_used} unités de gaz) : refusé"
+            "Aptos transfer unusually expensive in the simulation ({gas_used} gas units): refused"
         )));
     }
     Ok(g)
@@ -557,7 +557,7 @@ pub fn max_gas_for(gas_used: u64) -> AppResult<u64> {
 pub fn check_transfer(ours: &AptosAccountInfo, amount: u64, max_fee: u64) -> AppResult<()> {
     if !ours.key_matches {
         return Err(AppError::InvalidInput(format!(
-            "la clé de ce compte Aptos a été changée (clé d'authentification {}) : Kyro ne peut plus signer pour lui",
+            "the key of this Aptos account was changed (authentication key {}): Kyro can no longer sign for it",
             ours.authentication_key
         )));
     }
@@ -565,7 +565,7 @@ pub fn check_transfer(ours: &AptosAccountInfo, amount: u64, max_fee: u64) -> App
     let need = amount.saturating_add(max_fee);
     if need > balance {
         return Err(AppError::InvalidInput(format!(
-            "solde insuffisant : {} APT disponibles, il en faut {} (montant + frais maximum, que le réseau exige d'avance)",
+            "insufficient balance: {} APT available, {} needed (amount + maximum fee, which the network requires up front)",
             crate::commands::format_units(&balance.to_string(), 8),
             crate::commands::format_units(&need.to_string(), 8)
         )));
@@ -605,10 +605,10 @@ mod tests {
         };
         assert!(check_transfer(&me(1_000_000, true), 900_000, 100_000).is_ok());
         assert!(
-            matches!(check_transfer(&me(1_000_000, true), 900_001, 100_000), Err(AppError::InvalidInput(m)) if m.contains("insuffisant"))
+            matches!(check_transfer(&me(1_000_000, true), 900_001, 100_000), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
         assert!(
-            matches!(check_transfer(&me(10_000_000, false), 1, 1), Err(AppError::InvalidInput(m)) if m.contains("a été changée"))
+            matches!(check_transfer(&me(10_000_000, false), 1, 1), Err(AppError::InvalidInput(m)) if m.contains("was changed"))
         );
     }
 }

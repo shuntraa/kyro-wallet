@@ -165,12 +165,12 @@ pub fn stellar_account_id(address: &str) -> Result<[u8; 32]> {
             Ok(out)
         }
         Some((VERSION_MUXED, k)) if k.len() == 40 => Err(Error::input(
-            "les adresses M… (comptes multiplexés) ne sont pas prises en charge : demande l'adresse G… et le mémo",
+            "M… addresses (muxed accounts) are not supported: ask for the G… address and the memo",
         )),
         Some((VERSION_SEED, _)) => Err(Error::input(
-            "ceci est une CLÉ SECRÈTE Stellar (S…), pas une adresse : ne la donne jamais à personne",
+            "this is a Stellar SECRET KEY (S…), not an address: never give it to anyone",
         )),
-        _ => Err(Error::input("adresse Stellar invalide (G… attendue)")),
+        _ => Err(Error::input("invalid Stellar address (G… expected)")),
     }
 }
 
@@ -184,7 +184,7 @@ pub fn stellar_muxed_parts(address: &str) -> Result<(String, u64)> {
             id.copy_from_slice(&k[32..]);
             Ok((stellar_address_from_key(&key), u64::from_be_bytes(id)))
         }
-        _ => Err(Error::input("adresse M… invalide")),
+        _ => Err(Error::input("invalid M… address")),
     }
 }
 
@@ -248,13 +248,13 @@ pub fn stellar_asset(code: &str, issuer: &str) -> Result<StellarAsset> {
     let code = code.trim();
     if code.is_empty() || code.len() > 12 || !code.bytes().all(|b| b.is_ascii_alphanumeric()) {
         return Err(Error::input(
-            "code d'actif Stellar : 1 à 12 lettres ou chiffres",
+            "Stellar asset code: 1 to 12 letters or digits",
         ));
     }
     if code.eq_ignore_ascii_case("XLM") && code.len() == 3 {
         // Valid on chain, but a classic impersonation of the native asset.
         return Err(Error::input(
-            "« XLM » émis par un compte n'est pas le XLM natif",
+            "\"XLM\" issued by an account is not native XLM",
         ));
     }
     Ok(StellarAsset::Credit {
@@ -557,7 +557,7 @@ impl StellarEnvelope {
         use base64::Engine as _;
         let raw = base64::engine::general_purpose::STANDARD
             .decode(b64.trim())
-            .map_err(|_| bad("base64 invalide"))?;
+            .map_err(|_| bad("invalid base64"))?;
         StellarEnvelope::decode(&raw)
     }
 
@@ -567,18 +567,18 @@ impl StellarEnvelope {
     /// does not re-encode identically.
     pub fn decode(raw: &[u8]) -> Result<StellarEnvelope> {
         if raw.len() > MAX_ENVELOPE {
-            return Err(bad("trop grande"));
+            return Err(bad("too large"));
         }
         let mut r = Reader(raw);
         match r.u32()? {
             ENVELOPE_TYPE_TX => {}
-            ENVELOPE_TYPE_TX_V0 => {
-                return Err(bad("ancien format d'enveloppe (v0) non pris en charge"))
+            ENVELOPE_TYPE_TX_V0 => return Err(bad("old envelope format (v0) not supported")),
+            ENVELOPE_TYPE_TX_FEE_BUMP => {
+                return Err(bad(
+                    "\"fee bump\" transaction (fees paid by another account) not supported",
+                ))
             }
-            ENVELOPE_TYPE_TX_FEE_BUMP => return Err(bad(
-                "transaction « fee bump » (frais payés par un autre compte) non prise en charge",
-            )),
-            t => return Err(bad(format!("type d'enveloppe inconnu ({t})"))),
+            t => return Err(bad(format!("unknown envelope type ({t})"))),
         }
         let source = r.muxed()?;
         let fee = r.u32()?;
@@ -586,12 +586,8 @@ impl StellarEnvelope {
         let time_bounds = match r.u32()? {
             0 => None,
             1 => Some((r.u64()?, r.u64()?)),
-            2 => {
-                return Err(bad(
-                    "préconditions avancées (PRECOND_V2) non prises en charge",
-                ))
-            }
-            t => return Err(bad(format!("préconditions inconnues ({t})"))),
+            2 => return Err(bad("advanced preconditions (PRECOND_V2) not supported")),
+            t => return Err(bad(format!("unknown preconditions ({t})"))),
         };
         let memo = match r.u32()? {
             0 => StellarMemo::None,
@@ -599,18 +595,18 @@ impl StellarEnvelope {
             2 => StellarMemo::Id(r.u64()?),
             3 => StellarMemo::Hash(r.fixed32()?),
             4 => StellarMemo::Return(r.fixed32()?),
-            t => return Err(bad(format!("type de mémo inconnu ({t})"))),
+            t => return Err(bad(format!("unknown memo type ({t})"))),
         };
         let n = r.u32()?;
         if n > MAX_OPERATIONS {
-            return Err(bad("trop d'opérations"));
+            return Err(bad("too many operations"));
         }
         let mut operations = Vec::with_capacity(n as usize);
         for _ in 0..n {
             let source = match r.u32()? {
                 0 => None,
                 1 => Some(r.muxed()?),
-                _ => return Err(bad("source d'opération mal formée")),
+                _ => return Err(bad("malformed operation source")),
             };
             let body = match r.u32()? {
                 0 => StellarOperation::CreateAccount {
@@ -628,7 +624,7 @@ impl StellarEnvelope {
                 },
                 t => {
                     return Err(bad(format!(
-                        "opération « {} » (type {t}) non prise en charge : refusée",
+                        "operation \"{}\" (type {t}) not supported: refused",
                         op_name(t)
                     )))
                 }
@@ -637,12 +633,12 @@ impl StellarEnvelope {
         }
         match r.u32()? {
             0 => {}
-            1 => return Err(bad("transaction Soroban (contrat) non prise en charge")),
-            v => return Err(bad(format!("extension de transaction inconnue ({v})"))),
+            1 => return Err(bad("Soroban (contract) transaction not supported")),
+            v => return Err(bad(format!("unknown transaction extension ({v})"))),
         }
         let n = r.u32()?;
         if n > MAX_SIGNATURES {
-            return Err(bad("trop de signatures"));
+            return Err(bad("too many signatures"));
         }
         let mut signatures = Vec::with_capacity(n as usize);
         for _ in 0..n {
@@ -654,7 +650,7 @@ impl StellarEnvelope {
             });
         }
         if !r.0.is_empty() {
-            return Err(bad("octets en trop après l'enveloppe"));
+            return Err(bad("trailing bytes after the envelope"));
         }
         let env = StellarEnvelope {
             tx: StellarTransaction {
@@ -669,7 +665,7 @@ impl StellarEnvelope {
         };
         if env.encode() != raw {
             return Err(bad(
-                "encodage non canonique (remplissage, code d'actif ou disposition inconnue)",
+                "non-canonical encoding (padding, asset code or unknown layout)",
             ));
         }
         Ok(env)
@@ -702,12 +698,12 @@ fn op_name(t: u32) -> &'static str {
         24 => "InvokeHostFunction",
         25 => "ExtendFootprintTTL",
         26 => "RestoreFootprint",
-        _ => "inconnu",
+        _ => "unknown",
     }
 }
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("transaction Stellar : {}", msg.into()))
+    Error::input(format!("Stellar transaction: {}", msg.into()))
 }
 
 struct Reader<'a>(&'a [u8]);
@@ -715,7 +711,7 @@ struct Reader<'a>(&'a [u8]);
 impl<'a> Reader<'a> {
     fn take(&mut self, n: usize) -> Result<&'a [u8]> {
         if self.0.len() < n {
-            return Err(bad("tronquée"));
+            return Err(bad("truncated"));
         }
         let (head, rest) = self.0.split_at(n);
         self.0 = rest;
@@ -750,11 +746,11 @@ impl<'a> Reader<'a> {
     fn var(&mut self, max: usize) -> Result<Vec<u8>> {
         let len = self.u32()? as usize;
         if len > max {
-            return Err(bad("champ trop long"));
+            return Err(bad("field too long"));
         }
         let data = self.take(len)?.to_vec();
         if self.take((4 - len % 4) % 4)?.iter().any(|b| *b != 0) {
-            return Err(bad("remplissage non nul"));
+            return Err(bad("non-zero padding"));
         }
         Ok(data)
     }
@@ -762,17 +758,15 @@ impl<'a> Reader<'a> {
     fn account_id(&mut self) -> Result<[u8; 32]> {
         match self.u32()? {
             KEY_TYPE_ED25519 => self.fixed32(),
-            t => Err(bad(format!("type de clé inconnu ({t})"))),
+            t => Err(bad(format!("unknown key type ({t})"))),
         }
     }
 
     fn muxed(&mut self) -> Result<[u8; 32]> {
         match self.u32()? {
             KEY_TYPE_ED25519 => self.fixed32(),
-            KEY_TYPE_MUXED_ED25519 => {
-                Err(bad("comptes multiplexés (adresses M…) non pris en charge"))
-            }
-            t => Err(bad(format!("type de compte inconnu ({t})"))),
+            KEY_TYPE_MUXED_ED25519 => Err(bad("muxed accounts (M… addresses) not supported")),
+            t => Err(bad(format!("unknown account type ({t})"))),
         }
     }
 
@@ -780,15 +774,11 @@ impl<'a> Reader<'a> {
     fn asset(&mut self, trust: bool) -> Result<StellarAsset> {
         let width = match self.u32()? {
             0 if !trust => return Ok(StellarAsset::Native),
-            0 => return Err(bad("ligne de confiance vers le XLM natif")),
+            0 => return Err(bad("trustline to native XLM")),
             1 => 4,
             2 => 12,
-            3 if trust => {
-                return Err(bad(
-                    "ligne de confiance de pool de liquidité non prise en charge",
-                ))
-            }
-            t => return Err(bad(format!("type d'actif inconnu ({t})"))),
+            3 if trust => return Err(bad("liquidity pool trustline not supported")),
+            t => return Err(bad(format!("unknown asset type ({t})"))),
         };
         let raw = self.take(width)?;
         let len = raw.iter().position(|b| *b == 0).unwrap_or(width);
@@ -800,7 +790,7 @@ impl<'a> Reader<'a> {
             || pad.iter().any(|b| *b != 0)
             || (width == 12 && code.len() < 5)
         {
-            return Err(bad("code d'actif non canonique"));
+            return Err(bad("non-canonical asset code"));
         }
         let code = String::from_utf8_lossy(code).into_owned();
         Ok(StellarAsset::Credit {
@@ -972,36 +962,36 @@ fn summarize(
 ) -> Result<StellarTxSummary> {
     let t = &env.tx;
     if !env.signatures.is_empty() && !signed {
-        return Err(bad("déjà signée"));
+        return Err(bad("already signed"));
     }
     if &t.source != ours {
-        return Err(bad("la source n'est pas l'adresse de ce portefeuille"));
+        return Err(bad("the source is not this wallet's address"));
     }
     // Without maxTime a signed transaction stays valid for ever: whoever holds it could submit
     // it much later (same rule as XRP's LastLedgerSequence).
     let (min_time, max_time) = match t.time_bounds {
         Some((min, max)) if max != 0 && min <= max => (min, max),
-        Some(_) => return Err(bad("limites de temps invalides")),
+        Some(_) => return Err(bad("invalid time bounds")),
         None => {
             return Err(bad(
-                "aucune limite de temps : la transaction resterait valable indéfiniment",
+                "no time bounds: the transaction would stay valid forever",
             ))
         }
     };
     if t.fee == 0 {
-        return Err(bad("frais nuls"));
+        return Err(bad("zero fees"));
     }
     if t.sequence <= 0 {
-        return Err(bad("numéro de séquence invalide"));
+        return Err(bad("invalid sequence number"));
     }
     let [op] = t.operations.as_slice() else {
         return Err(bad(format!(
-            "{} opérations : Kyro ne signe qu'une opération à la fois",
+            "{} operations: Kyro signs only one operation at a time",
             t.operations.len()
         )));
     };
     if op.source.is_some() {
-        return Err(bad("opération avec sa propre source : refusée"));
+        return Err(bad("operation with its own source: refused"));
     }
     let mut warnings = Vec::new();
     let operation = match &op.body {
@@ -1010,10 +1000,10 @@ fn summarize(
             starting_balance,
         } => {
             if destination == ours {
-                return Err(bad("activation de son propre compte"));
+                return Err(bad("activation of its own account"));
             }
             if *starting_balance <= 0 {
-                return Err(bad("solde de départ nul"));
+                return Err(bad("zero starting balance"));
             }
             StellarOpView::CreateAccount {
                 destination: stellar_address_from_key(destination),
@@ -1026,10 +1016,10 @@ fn summarize(
             amount,
         } => {
             if destination == ours {
-                return Err(bad("paiement à soi-même"));
+                return Err(bad("payment to yourself"));
             }
             if *amount <= 0 {
-                return Err(bad("montant nul ou négatif"));
+                return Err(bad("zero or negative amount"));
             }
             StellarOpView::Payment {
                 destination: stellar_address_from_key(destination),
@@ -1040,11 +1030,11 @@ fn summarize(
         StellarOperation::ChangeTrust { asset, limit } => {
             if let StellarAsset::Credit { issuer, .. } = asset {
                 if issuer == ours {
-                    return Err(bad("ligne de confiance vers son propre actif"));
+                    return Err(bad("trustline to its own asset"));
                 }
             }
             if *limit < 0 {
-                return Err(bad("limite négative"));
+                return Err(bad("negative limit"));
             }
             if *limit == 0 {
                 warnings.push(StellarWarning::RemoveTrustline);
@@ -1118,7 +1108,7 @@ pub fn stellar_sign(
     let hash = env.tx.hash(net);
     let sig = key.sign(&hash);
     pk.verify_strict(&hash, &sig)
-        .map_err(|_| Error::crypto("échec de la vérification de la signature"))?;
+        .map_err(|_| Error::crypto("signature verification failed"))?;
     let mut hint = [0u8; 4];
     hint.copy_from_slice(&pk.as_bytes()[28..]);
     env.signatures = vec![StellarSignature {
@@ -1135,22 +1125,22 @@ pub fn stellar_sign(
 pub fn stellar_verify_signed(envelope_b64: &str, net: Network) -> Result<String> {
     let env = StellarEnvelope::from_base64(envelope_b64)?;
     let [s] = env.signatures.as_slice() else {
-        return Err(bad("une signature attendue"));
+        return Err(bad("one signature expected"));
     };
     let pk = ed25519_dalek::VerifyingKey::from_bytes(&env.tx.source)
-        .map_err(|_| bad("clé source invalide"))?;
+        .map_err(|_| bad("invalid source key"))?;
     if s.hint != env.tx.source[28..] {
-        return Err(bad("indice de signature (hint) d'une autre clé"));
+        return Err(bad("signature hint from another key"));
     }
     let sig: [u8; 64] = s
         .signature
         .as_slice()
         .try_into()
-        .map_err(|_| bad("signature : 64 octets attendus"))?;
+        .map_err(|_| bad("signature: 64 bytes expected"))?;
     let hash = env.tx.hash(net);
     pk.verify_strict(&hash, &ed25519_dalek::Signature::from_bytes(&sig))
         .map_err(|_| {
-            bad("la signature ne se vérifie pas sur ce réseau (mainnet / testnet inversés ?)")
+            bad("the signature does not verify on this network (mainnet / testnet swapped?)")
         })?;
     Ok(hex::encode(hash))
 }

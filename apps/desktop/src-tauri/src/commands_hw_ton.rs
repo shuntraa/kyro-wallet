@@ -28,7 +28,7 @@ fn wallet_of(state: &AppState, key: &HwWatchKey) -> AppResult<([u8; 32], TonAddr
     let me = wallet_core::ton_wallet_address(&pk, wallet_core::ton_wallet_id(t))?;
     if me.to_friendly(false, t) != key.address {
         return Err(AppError::Internal(
-            "adresse TON enregistrée différente de celle de la clé".into(),
+            "saved TON address differs from the key's".into(),
         ));
     }
     Ok((pk, me))
@@ -96,14 +96,14 @@ pub async fn hw_sign_ton_tx(
     let out = device_sign(&app, &state, &id, &acc, CHAIN, request).await?;
     if out.len() != 96 {
         return Err(AppError::Internal(
-            "réponse de l'appareil de longueur inattendue".into(),
+            "device response of unexpected length".into(),
         ));
     }
     let (hash, sig) = out.split_at(32);
     let signed = wallet_core::ton_hw_signed(&boc, &pk, testnet(net), sig, hash)?;
     if signed.summary != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();

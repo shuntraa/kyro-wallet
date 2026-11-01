@@ -408,7 +408,7 @@ export function createDemoStake(d: DemoStakeDeps) {
     return { tx: encode({ action, slot: ep.slot }), summary, context };
   };
   const adaDescribe = (s: CardanoStakeSummary, c: AdaStakeContext) => {
-    let out = `Staking Cardano${testnet ? ' (preprod)' : ''}\n`;
+    let out = `${l10n('Staking Cardano', 'Cardano staking')}${testnet ? ' (preprod)' : ''}\n`;
     for (const cert of s.certificates) {
       if (cert.type === 'stakeRegistration') out += l10n(`• Enregistrement de la clé de staking : dépôt ${units(cert.deposit, 6)} ADA (remboursé à la désinscription)\n`, `• Stake key registration: deposit ${units(cert.deposit, 6)} ADA (refunded on deregistration)\n`);
       if (cert.type === 'stakeDeregistration') out += l10n(`• Désinscription : remboursement du dépôt ${units(cert.refund, 6)} ADA\n`, `• Deregistration: deposit refund ${units(cert.refund, 6)} ADA\n`);
@@ -568,7 +568,7 @@ export function createDemoStake(d: DemoStakeDeps) {
   const tronDescribe = (s: TronStakeSummary, c: TronStakeContext) => {
     const a = s.action;
     const res = (r: TronResource) => l10n((r === 'ENERGY' ? 'énergie' : 'bande passante'), (r === 'ENERGY' ? l10n('énergie', 'energy') : l10n('bande passante', 'bandwidth')));
-    let out = `Staking TRON${testnet ? ' (Nile)' : ''}\n`;
+    let out = `${l10n('Staking TRON', 'TRON staking')}${testnet ? ' (Nile)' : ''}\n`;
     if (a.type === 'freeze') out += l10n(`Staker ${units(a.amount, 6)} TRX pour ${res(a.resource)} (+${Number(BigInt(a.amount) / SUN)} TRON Power)\n`, `Stake ${units(a.amount, 6)} TRX for ${res(a.resource)} (+${Number(BigInt(a.amount) / SUN)} TRON Power)\n`);
     if (a.type === 'unfreeze') out += l10n(`Dégeler ${units(a.amount, 6)} TRX (${res(a.resource)}) : disponibles dans ${c.account.unfreezeDelayDays} jour(s)\n`, `Unfreeze ${units(a.amount, 6)} TRX (${res(a.resource)}): available in ${c.account.unfreezeDelayDays} day(s)\n`);
     if (a.type === 'withdrawUnfrozen') out += l10n(`Retirer les dégels arrivés à terme : ${units(c.account.withdrawableNow, 6)} TRX\n`, `Withdraw completed unfreezes: ${units(c.account.withdrawableNow, 6)} TRX\n`);

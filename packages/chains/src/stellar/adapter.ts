@@ -204,7 +204,7 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
   readonly hw: HwSigner | null;
 
   constructor(opts: StellarAdapterOptions) {
-    if (!isStellarAddress(opts.address)) throw new Error('Adresse Stellar invalide');
+    if (!isStellarAddress(opts.address)) throw new Error(l10n('Adresse Stellar invalide', 'Invalid Stellar address'));
     this.chain = opts.chain;
     this.address = opts.address;
     this.hw = opts.hw ?? null;
@@ -308,7 +308,7 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
   /** `ChainAdapter` entry point. `max`: spendable (balance − reserve) minus the fee Rust bids, built twice. */
   async buildTx(params: BuildParams): Promise<StellarUnsigned> {
     if (params.asset.kind === 'xlmasset') return this.buildAssetPayment(params);
-    if (params.asset.kind !== 'native') throw new Error('Actif Stellar inattendu');
+    if (params.asset.kind !== 'native') throw new Error(l10n('Actif Stellar inattendu', 'Unexpected Stellar asset'));
     const memo = params.stellarMemo;
     if (!params.max) return this.buildPayment({ to: params.to, stroops: params.amount, ...(memo ? { memo } : {}) });
     const spendable = BigInt((await this.backend.account(this.address)).spendable);
@@ -325,7 +325,7 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
     const problem = stellarAddressProblem(to);
     if (problem) throw new Error(problem);
     if (to === this.address) throw new Error(l10n('Envoi à soi-même impossible', 'Cannot send to yourself'));
-    if (params.stroops <= 0n) throw new Error('Montant nul');
+    if (params.stroops <= 0n) throw new Error(l10n('Montant nul', 'Zero amount'));
     const built = await this.backend.build(to, params.stroops.toString(), params.memo);
     const s = built.summary;
     const op = s.operation;
@@ -350,7 +350,7 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
   /** Rust: live checks, native dialog (memo framed, reserve), signature. */
   async signTx(unsigned: StellarUnsigned, password: string): Promise<StellarSigned> {
     const res = await this.backend.sign(unsigned.envelope, password);
-    if (!/^[0-9a-f]{64}$/i.test(res.hash)) throw new Error('Hash Stellar inattendu');
+    if (!/^[0-9a-f]{64}$/i.test(res.hash)) throw new Error(l10n('Hash Stellar inattendu', 'Unexpected Stellar hash'));
     return { family: 'xlm', envelope: res.envelope, hash: res.hash, summary: res.summary };
   }
 
@@ -358,7 +358,7 @@ export class StellarAdapter implements ChainAdapter<'xlm'> {
   async signTxHw(unsigned: StellarUnsigned, deviceId: string): Promise<StellarSigned> {
     if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
     const res = await call('hw_sign_stellar_tx', { id: deviceId, accountId: this.hw.accountId, envelope: unsigned.envelope });
-    if (!/^[0-9a-f]{64}$/i.test(res.hash)) throw new Error('Hash Stellar inattendu');
+    if (!/^[0-9a-f]{64}$/i.test(res.hash)) throw new Error(l10n('Hash Stellar inattendu', 'Unexpected Stellar hash'));
     return { family: 'xlm', envelope: res.envelope, hash: res.hash, summary: res.summary };
   }
 

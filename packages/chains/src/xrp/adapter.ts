@@ -237,7 +237,7 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
   /** Rust: live checks, native dialog (tag highlighted, reserve), signature. */
   async signTx(unsigned: XrpUnsigned, password: string): Promise<XrpSigned> {
     const res = await this.backend.sign(unsigned.blob, password);
-    if (!/^[0-9A-F]{64}$/i.test(res.hash)) throw new Error('Hash XRP inattendu');
+    if (!/^[0-9A-F]{64}$/i.test(res.hash)) throw new Error(l10n('Hash XRP inattendu', 'Unexpected XRP hash'));
     return { family: 'xrp', blob: res.blob, hash: res.hash, summary: res.summary };
   }
 
@@ -245,7 +245,7 @@ export class XrpAdapter implements ChainAdapter<'xrp'> {
   async signTxHw(unsigned: XrpUnsigned, deviceId: string): Promise<XrpSigned> {
     if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
     const res = await call('hw_sign_xrp_tx', { id: deviceId, accountId: this.hw.accountId, blob: unsigned.blob });
-    if (!/^[0-9A-F]{64}$/i.test(res.hash)) throw new Error('Hash XRP inattendu');
+    if (!/^[0-9A-F]{64}$/i.test(res.hash)) throw new Error(l10n('Hash XRP inattendu', 'Unexpected XRP hash'));
     return { family: 'xrp', blob: res.blob, hash: res.hash, summary: res.summary };
   }
 

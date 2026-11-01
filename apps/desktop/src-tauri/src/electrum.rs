@@ -69,7 +69,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> Stream for T {}
 pub type BoxStream = Box<dyn Stream>;
 
 fn unreachable(host: &str, e: impl std::fmt::Display) -> AppError {
-    AppError::ServerUnreachable(format!("{host} : {e}"))
+    AppError::ServerUnreachable(format!("{host}: {e}"))
 }
 
 /// Raw transport (no TLS yet), following the transport rules above.
@@ -87,7 +87,7 @@ async fn raw_stream(
             tokio::net::TcpStream::connect((host, port)),
         )
         .await
-        .map_err(|_| unreachable(host, "délai de connexion dépassé"))?
+        .map_err(|_| unreachable(host, "connection timed out"))?
         .map_err(|e| unreachable(host, e))?;
         return Ok(Box::new(s));
     }
@@ -104,7 +104,7 @@ async fn raw_stream(
     }
     if onion {
         return Err(AppError::ServerInvalid(format!(
-            "{host} : adresse .onion refusée hors Tor"
+            "{host}: .onion address refused outside Tor"
         )));
     }
     let s = tokio::time::timeout(
@@ -112,7 +112,7 @@ async fn raw_stream(
         tokio::net::TcpStream::connect((host, port)),
     )
     .await
-    .map_err(|_| unreachable(host, "délai de connexion dépassé"))?
+    .map_err(|_| unreachable(host, "connection timed out"))?
     .map_err(|e| unreachable(host, e))?;
     Ok(Box::new(s))
 }
@@ -124,7 +124,7 @@ fn provider() -> Arc<CryptoProvider> {
 fn client_config(verifier: Arc<dyn ServerCertVerifier>) -> AppResult<rustls::ClientConfig> {
     Ok(rustls::ClientConfig::builder_with_provider(provider())
         .with_safe_default_protocol_versions()
-        .map_err(|e| AppError::Internal(format!("TLS : {e}")))?
+        .map_err(|e| AppError::Internal(format!("TLS: {e}")))?
         .dangerous()
         .with_custom_certificate_verifier(verifier)
         .with_no_client_auth())
@@ -250,7 +250,7 @@ fn webpki_verifier() -> AppResult<Arc<WebPkiServerVerifier>> {
     };
     WebPkiServerVerifier::builder_with_provider(Arc::new(roots), provider())
         .build()
-        .map_err(|e| AppError::Internal(format!("TLS : {e}")))
+        .map_err(|e| AppError::Internal(format!("TLS: {e}")))
 }
 
 fn server_name(host: &str) -> AppResult<ServerName<'static>> {
@@ -259,7 +259,7 @@ fn server_name(host: &str) -> AppResult<ServerName<'static>> {
             .trim_end_matches(']')
             .to_owned(),
     )
-    .map_err(|_| AppError::ServerInvalid(format!("nom d'hôte invalide « {host} »")))
+    .map_err(|_| AppError::ServerInvalid(format!("invalid host name \"{host}\"")))
 }
 
 /// Certificate presented by an Electrum TLS server, for the UI's trust-on-first-use prompt.
@@ -290,7 +290,7 @@ pub async fn fetch_certificate(
         sha256,
         webpki_valid,
     })
-    .ok_or_else(|| unreachable(host, "aucun certificat TLS reçu"))
+    .ok_or_else(|| unreachable(host, "no TLS certificate received"))
 }
 
 /// Opens an Electrum session (transport + TLS + `server.version` handshake) on the Bitcoin
@@ -308,7 +308,7 @@ pub async fn connect_family(
 ) -> AppResult<Conn<BoxStream>> {
     if t.tls == TlsMode::None && !(tor && t.host.ends_with(".onion")) {
         return Err(AppError::ServerInvalid(
-            "Electrum sans TLS : uniquement vers une adresse .onion via Tor".into(),
+            "Electrum without TLS: only to a .onion address via Tor".into(),
         ));
     }
     let raw = raw_stream(net, &t.host, t.port, tor, family).await?;
@@ -328,8 +328,8 @@ pub async fn connect_family(
                 connector.connect(server_name(&t.host)?, raw),
             )
             .await
-            .map_err(|_| unreachable(&t.host, "délai TLS dépassé"))?
-            .map_err(|e| unreachable(&t.host, format!("TLS : {e}")))?;
+            .map_err(|_| unreachable(&t.host, "TLS timed out"))?
+            .map_err(|e| unreachable(&t.host, format!("TLS: {e}")))?;
             Box::new(tls)
         }
     };
@@ -367,7 +367,7 @@ impl<S: AsyncRead + AsyncWrite> Conn<S> {
     pub async fn call(&mut self, method: &str, params: Value) -> AppResult<Value> {
         let mut out = self.batch(&[(method, params)]).await?;
         out.pop()
-            .ok_or_else(|| unreachable(&self.host, "réponse vide"))
+            .ok_or_else(|| unreachable(&self.host, "empty response"))
     }
 
     /// Pipelines several requests and returns their results in order.
@@ -375,7 +375,7 @@ impl<S: AsyncRead + AsyncWrite> Conn<S> {
         let host = self.host.clone();
         tokio::time::timeout(CALL_TIMEOUT, self.batch_inner(calls))
             .await
-            .map_err(|_| unreachable(&host, "délai dépassé"))?
+            .map_err(|_| unreachable(&host, "timed out"))?
     }
 
     async fn batch_inner(&mut self, calls: &[(&str, Value)]) -> AppResult<Vec<Value>> {
@@ -404,7 +404,7 @@ impl<S: AsyncRead + AsyncWrite> Conn<S> {
         while pending > 0 {
             let line = self.read_line().await?;
             let msg: Value = serde_json::from_slice(&line)
-                .map_err(|_| unreachable(&self.host, "réponse JSON invalide"))?;
+                .map_err(|_| unreachable(&self.host, "invalid JSON response"))?;
             // Notifications (no id) are ignored.
             let Some(id) = msg.get("id").and_then(Value::as_u64) else {
                 continue;
@@ -426,7 +426,7 @@ impl<S: AsyncRead + AsyncWrite> Conn<S> {
                     .map(str::to_owned)
                     .unwrap_or_else(|| err.to_string());
                 return Err(AppError::InvalidInput(format!(
-                    "Electrum : {}",
+                    "Electrum: {}",
                     truncate(&text)
                 )));
             }
@@ -446,12 +446,12 @@ impl<S: AsyncRead + AsyncWrite> Conn<S> {
                 .await
                 .map_err(|e| unreachable(&self.host, e))?;
             if buf.is_empty() {
-                return Err(unreachable(&self.host, "connexion fermée par le serveur"));
+                return Err(unreachable(&self.host, "connection closed by the server"));
             }
             let newline = buf.iter().position(|b| *b == b'\n');
             let take = newline.unwrap_or(buf.len());
             if line.len() + take > MAX_LINE {
-                return Err(unreachable(&self.host, "réponse trop volumineuse"));
+                return Err(unreachable(&self.host, "response too large"));
             }
             line.extend_from_slice(&buf[..take]);
             let consumed = newline.map_or(buf.len(), |i| i + 1);
@@ -593,7 +593,7 @@ mod tests {
             let mut c = Conn::new(client, "test".into());
             let e = c.call("x", json!([])).await.unwrap_err();
             assert!(
-                matches!(e, AppError::ServerUnreachable(ref m) if m.contains("volumineuse")),
+                matches!(e, AppError::ServerUnreachable(ref m) if m.contains("too large")),
                 "{e:?}"
             );
         });

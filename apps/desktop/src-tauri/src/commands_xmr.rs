@@ -169,7 +169,7 @@ pub async fn xmr_address(
         let c = xmr_backend::load(&state, a)?;
         if i > c.subaddresses {
             return Err(AppError::InvalidInput(
-                "sous-adresse Monero pas encore créée (xmr_new_subaddress)".into(),
+                "Monero subaddress not created yet (xmr_new_subaddress)".into(),
             ));
         }
         c.restore_height.is_some() || c.next > 0 || !c.txs.is_empty()
@@ -204,7 +204,7 @@ pub async fn xmr_new_subaddress(
     let mut c = xmr_backend::load(&state, a)?;
     if c.subaddresses >= wallet_core::XMR_MAX_SUBADDRESS {
         return Err(AppError::InvalidInput(
-            "trop de sous-adresses Monero".into(),
+            "too many Monero subaddresses".into(),
         ));
     }
     c.subaddresses += 1;
@@ -373,7 +373,7 @@ pub async fn xmr_set_restore_height(
     let a = account_arg(account)?;
     if state.xmr.progress(state.network, a).running {
         return Err(AppError::InvalidInput(
-            "Monero : un scan est en cours, réessaie quand il est terminé".into(),
+            "Monero: a scan is in progress, try again when it is finished".into(),
         ));
     }
     let lock = state.xmr.file_lock(state.network, a);
@@ -403,7 +403,7 @@ pub async fn xmr_prepare_tx(
                 .parse::<u64>()
                 .ok()
                 .filter(|v| *v > 0)
-                .ok_or_else(|| AppError::InvalidInput("montant en piconero invalide".into()))?,
+                .ok_or_else(|| AppError::InvalidInput("invalid piconero amount".into()))?,
         ),
     };
     xmr_backend::prepare(&state, a, to.trim(), amount).await
@@ -433,7 +433,7 @@ pub async fn xmr_send_tx(
     let pending = state.xmr.take_pending(id.trim())?;
     if pending.account != a || pending.network != state.network {
         return Err(AppError::InvalidInput(
-            "transfert préparé pour un autre compte ou réseau".into(),
+            "transfer prepared for another account or network".into(),
         ));
     }
     let summary = pending.unsigned.summary.clone();
@@ -462,7 +462,7 @@ pub async fn xmr_send_tx(
     let signed = blocking(move || Ok(wallet_core::xmr_sign(&seed, a, unsigned)?)).await?;
     if signed.summary != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     let mut revealed: Vec<String> = signed.key_images.iter().map(hex::encode).collect();
@@ -471,7 +471,7 @@ pub async fn xmr_send_tx(
     expected.sort();
     if revealed != expected {
         return Err(AppError::Internal(
-            "la transaction signée ne dépense pas les sorties prévues".into(),
+            "the signed transaction does not spend the expected outputs".into(),
         ));
     }
     xmr_backend::publish(&state, a, &signed, &pending.key_images).await?;

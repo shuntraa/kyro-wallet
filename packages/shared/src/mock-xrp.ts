@@ -248,7 +248,7 @@ export function createDemoXrp(d: DemoXrpDeps) {
     if (p.account !== me) throw invalidInput(l10n("transaction XRP : l'Account n'est pas l'adresse de ce portefeuille", 'XRP transaction: the Account is not this wallet’s address'));
     checkXrpAddress(p.destination);
     if (p.paths !== undefined) throw invalidInput(l10n('transaction XRP : les chemins (Paths) ne sont pas pris en charge', 'XRP transaction: paths (Paths) are not supported'));
-    if (p.deliverMin !== undefined) throw invalidInput("transaction XRP : DeliverMin (paiements partiels) n'est pas pris en charge");
+    if (p.deliverMin !== undefined) throw invalidInput(l10n("transaction XRP : DeliverMin (paiements partiels) n'est pas pris en charge", 'XRP transaction: DeliverMin (partial payments) is not supported'));
     if ((p.flags & TF_PARTIAL_PAYMENT) !== 0) throw invalidInput(l10n('transaction XRP : les paiements partiels (tfPartialPayment) sont refusés : le montant livré pourrait être presque nul', 'XRP transaction: partial payments (tfPartialPayment) are refused: the delivered amount could be almost zero'));
     if ((p.flags & ~TF_FULLY_CANONICAL_SIG) >>> 0 !== 0) throw invalidInput(l10n(`transaction XRP : flags inconnus 0x${((p.flags & ~TF_FULLY_CANONICAL_SIG) >>> 0).toString(16).padStart(8, '0')}`, `XRP transaction: unknown flags 0x${((p.flags & ~TF_FULLY_CANONICAL_SIG) >>> 0).toString(16).padStart(8, '0')}`));
     const warnings: XrpWarning[] = [];

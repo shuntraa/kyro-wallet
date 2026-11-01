@@ -305,11 +305,11 @@ impl NetContext {
 fn scheme_ok(url: &url::Url, host: &str, tor: bool, custom_onion: bool) -> Result<(), String> {
     if host.ends_with(".onion") {
         if !tor {
-            return Err(format!("{host} (adresse .onion refusée hors Tor)"));
+            return Err(format!("{host} (.onion address refused outside Tor)"));
         }
         if ONION_HOSTS.contains(&host) {
             if url.scheme() != "http" {
-                return Err(format!("{url} (service onion : http:// attendu)"));
+                return Err(format!("{url} (onion service: http:// expected)"));
             }
             return Ok(());
         }
@@ -319,7 +319,7 @@ fn scheme_ok(url: &url::Url, host: &str, tor: bool, custom_onion: bool) -> Resul
         return Err(host.to_owned());
     }
     if url.scheme() != "https" {
-        return Err(format!("{url} (HTTPS obligatoire)"));
+        return Err(format!("{url} (HTTPS required)"));
     }
     Ok(())
 }
@@ -414,7 +414,7 @@ pub fn onion_rewrite(url: &mut url::Url) -> AppResult<()> {
     if let Some((_, onion)) = ONION_REWRITES.iter().find(|(clear, _)| *clear == host) {
         url.set_scheme("http")
             .and_then(|()| url.set_host(Some(onion)).map_err(|_| ()))
-            .map_err(|()| AppError::Internal("réécriture .onion impossible".into()))?;
+            .map_err(|()| AppError::Internal(".onion rewrite impossible".into()))?;
     }
     Ok(())
 }
@@ -592,10 +592,10 @@ pub fn prepare(
     saved: &ApiKeys,
 ) -> AppResult<Prepared> {
     let mut url =
-        url::Url::parse(&req.url).map_err(|_| AppError::InvalidInput("URL invalide".into()))?;
+        url::Url::parse(&req.url).map_err(|_| AppError::InvalidInput("invalid URL".into()))?;
     if !url.username().is_empty() || url.password().is_some() {
         return Err(AppError::InvalidInput(
-            "URL avec identifiants refusée".into(),
+            "URL with credentials refused".into(),
         ));
     }
     if ctx.tor {
@@ -616,7 +616,7 @@ pub fn prepare(
     let method = match req.method.to_ascii_uppercase().as_str() {
         "GET" => Method::Get,
         "POST" => Method::Post,
-        _ => return Err(AppError::InvalidInput("méthode HTTP non autorisée".into())),
+        _ => return Err(AppError::InvalidInput("HTTP method not allowed".into())),
     };
     let mut headers: Vec<(String, String)> = req
         .headers
@@ -745,7 +745,7 @@ impl BodyCap {
 
     pub fn push(&mut self, chunk: &[u8]) -> AppResult<()> {
         if self.buf.len() + chunk.len() > self.limit {
-            return Err(AppError::Internal("réponse trop volumineuse".into()));
+            return Err(AppError::Internal("response too large".into()));
         }
         self.buf.extend_from_slice(chunk);
         Ok(())
@@ -837,7 +837,7 @@ impl NetClient {
         };
         let (status, bytes) = match sent {
             Err(e) if p.custom && !matches!(e, AppError::TorUnavailable(_)) => {
-                return Err(AppError::ServerUnreachable(format!("{} : {e}", p.host)))
+                return Err(AppError::ServerUnreachable(format!("{}: {e}", p.host)))
             }
             other => other?,
         };
@@ -870,7 +870,7 @@ impl NetClient {
         }
         let host = url
             .host_str()
-            .ok_or_else(|| AppError::ServerInvalid("URL sans hôte".into()))?
+            .ok_or_else(|| AppError::ServerInvalid("URL without a host".into()))?
             .to_owned();
         let onion = host.ends_with(".onion");
         let private = crate::servers::is_private_host(&host);
@@ -892,14 +892,14 @@ impl NetClient {
         } else if onion {
             if !tor {
                 return Err(AppError::ServerInvalid(format!(
-                    "{host} : adresse .onion refusée hors Tor"
+                    "{host}: .onion address refused outside Tor"
                 )));
             }
             self.tor.send(&p).await
         } else {
             if p.url.scheme() != "https" {
                 return Err(AppError::ServerInvalid(format!(
-                    "{} : HTTPS obligatoire",
+                    "{}: HTTPS required",
                     p.url
                 )));
             }
@@ -912,7 +912,7 @@ impl NetClient {
         };
         result.map_err(|e| match e {
             AppError::TorUnavailable(_) | AppError::ServerInvalid(_) => e,
-            other => AppError::ServerUnreachable(format!("{host} : {other}")),
+            other => AppError::ServerUnreachable(format!("{host}: {other}")),
         })
     }
 
@@ -978,7 +978,7 @@ impl NetClient {
             builder = builder.body(body.clone());
         }
         let net_err =
-            |e: reqwest::Error| AppError::Internal(format!("réseau : {}", e.without_url()));
+            |e: reqwest::Error| AppError::Internal(format!("network: {}", e.without_url()));
         let mut resp = builder.send().await.map_err(net_err)?;
         let status = resp.status().as_u16();
         let location = resp

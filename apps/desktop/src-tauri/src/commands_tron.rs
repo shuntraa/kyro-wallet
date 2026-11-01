@@ -336,7 +336,7 @@ pub fn tron_address(
 ) -> AppResult<String> {
     if index.unwrap_or(0) != 0 {
         return Err(AppError::InvalidInput(
-            "TRON : une seule adresse par compte (index 0)".into(),
+            "TRON: a single address per account (index 0)".into(),
         ));
     }
     our_address(&state, account_arg(account)?)
@@ -399,7 +399,7 @@ pub(crate) async fn build(
                 .parse()
                 .ok()
                 .filter(|v| *v > 0)
-                .ok_or_else(|| AppError::InvalidInput("montant TRX invalide".into()))?;
+                .ok_or_else(|| AppError::InvalidInput("invalid TRX amount".into()))?;
             let exists = tron_backend::account(c, to).await?.exists;
             (
                 TronContract::Transfer {
@@ -526,7 +526,7 @@ pub async fn tron_sign_tx(
     let (sig, again) = blocking(move || Ok(wallet_core::tron_sign(&seed, a, &raw2)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -548,10 +548,10 @@ pub(crate) async fn broadcast_checked(
     let sig: [u8; 65] = hex::decode(signature.trim())
         .ok()
         .and_then(|b| b.try_into().ok())
-        .ok_or_else(|| AppError::InvalidInput("signature : 65 octets hex".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("signature: 65 bytes hex".into()))?;
     if wallet_core::tron_recover_signer(raw, &sig)? != owner {
         return Err(AppError::InvalidInput(
-            "la signature ne correspond pas à ton adresse TRON".into(),
+            "the signature does not match your TRON address".into(),
         ));
     }
     tron_backend::broadcast(c, raw, &sig).await

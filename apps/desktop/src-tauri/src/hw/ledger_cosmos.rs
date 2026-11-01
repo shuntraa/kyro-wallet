@@ -24,7 +24,7 @@ const HRP: &str = "cosmos";
 
 fn path_bytes(path: &[u32]) -> HwResult<Vec<u8>> {
     if path.len() != 5 {
-        return Err(HwError::bad("app Cosmos : chemin à cinq niveaux attendu"));
+        return Err(HwError::bad("Cosmos app: five-level path expected"));
     }
     Ok(path.iter().flat_map(|p| p.to_le_bytes()).collect())
 }
@@ -38,14 +38,14 @@ pub fn get_address(path: &[u32], display: bool) -> HwResult<Vec<u8>> {
 
 pub fn parse_address(data: &[u8]) -> HwResult<Vec<u8>> {
     if data.len() <= 33 {
-        return Err(HwError::bad("adresse Cosmos mal formée"));
+        return Err(HwError::bad("malformed Cosmos address"));
     }
     let (pk, addr) = data.split_at(33);
     let ours =
         wallet_core::cosmos_address_of_pubkey(pk).map_err(|e| HwError::bad(e.to_string()))?;
     if addr != ours.as_bytes() {
         return Err(HwError::bad(
-            "adresse Cosmos de l'appareil incohérente avec sa clé",
+            "Cosmos address from the device does not match its key",
         ));
     }
     Ok(pk.to_vec())
@@ -85,7 +85,7 @@ pub fn sign(app: &App<'_>, path: &[u32], json: &[u8]) -> HwResult<Vec<u8>> {
     }
     // DER: 30 len … (70 to 72 bytes); parsed and verified by wallet-core.
     if last.len() < 8 || last.len() > 72 || last[0] != 0x30 {
-        return Err(HwError::bad("signature Cosmos (DER) mal formée"));
+        return Err(HwError::bad("malformed Cosmos (DER) signature"));
     }
     Ok(last)
 }

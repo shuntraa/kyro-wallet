@@ -88,7 +88,7 @@ fn tls_connector() -> AppResult<tokio_rustls::TlsConnector> {
         rustls::crypto::ring::default_provider(),
     ))
     .with_safe_default_protocol_versions()
-    .map_err(|e| AppError::Internal(format!("TLS : {e}")))?
+    .map_err(|e| AppError::Internal(format!("TLS: {e}")))?
     .with_root_certificates(roots)
     .with_no_client_auth();
     Ok(tokio_rustls::TlsConnector::from(Arc::new(config)))
@@ -194,11 +194,11 @@ impl TorManager {
         // per-user app data directory is accepted as is; no mistrust override is configured.
         let config = TorClientConfigBuilder::from_directories(&self.state_dir, &self.cache_dir)
             .build()
-            .map_err(|e| AppError::Internal(format!("configuration Tor : {e}")))?;
+            .map_err(|e| AppError::Internal(format!("Tor configuration: {e}")))?;
         let client = TorClient::builder()
             .config(config)
             .create_unbootstrapped()
-            .map_err(|e| AppError::Internal(format!("Tor : {e}")))?;
+            .map_err(|e| AppError::Internal(format!("Tor: {e}")))?;
         let mut events = client.bootstrap_events();
         let this = Arc::clone(self);
         tauri::async_runtime::spawn(async move {
@@ -216,7 +216,7 @@ impl TorManager {
         });
         tokio::time::timeout(BOOTSTRAP_TIMEOUT, client.bootstrap())
             .await
-            .map_err(|_| AppError::TorUnavailable("délai de démarrage dépassé".into()))?
+            .map_err(|_| AppError::TorUnavailable("start-up timed out".into()))?
             .map_err(|e| AppError::TorUnavailable(e.to_string()))?;
         Ok(client)
     }
@@ -231,24 +231,24 @@ impl TorManager {
                     TorState::Ready => return Ok(()),
                     TorState::Bootstrapping => {}
                     TorState::Off => {
-                        return Err(AppError::TorUnavailable("Tor n'est pas démarré".into()))
+                        return Err(AppError::TorUnavailable("Tor is not started".into()))
                     }
                     TorState::Error => {
                         return Err(AppError::TorUnavailable(
-                            s.message.unwrap_or_else(|| "échec du démarrage".into()),
+                            s.message.unwrap_or_else(|| "start-up failed".into()),
                         ))
                     }
                 }
                 if rx.changed().await.is_err() {
-                    return Err(AppError::TorUnavailable("Tor arrêté".into()));
+                    return Err(AppError::TorUnavailable("Tor stopped".into()));
                 }
             }
         });
         wait.await
-            .map_err(|_| AppError::TorUnavailable("délai de démarrage dépassé".into()))??;
+            .map_err(|_| AppError::TorUnavailable("start-up timed out".into()))??;
         let base = net::lock(&self.base)
             .clone()
-            .ok_or_else(|| AppError::TorUnavailable("Tor n'est pas prêt".into()))?;
+            .ok_or_else(|| AppError::TorUnavailable("Tor is not ready".into()))?;
         let mut isolated = net::lock(&self.isolated);
         Ok(Arc::clone(
             isolated
@@ -273,8 +273,10 @@ impl TorManager {
         let client = self.client_for(family).await?;
         tokio::time::timeout(CONNECT_TIMEOUT, connect_with_retry(&client, host, port))
             .await
-            .map_err(|_| AppError::Internal("réseau (Tor) : circuit non établi à temps".into()))?
-            .map_err(|e| AppError::Internal(format!("réseau (Tor) : {e}")))
+            .map_err(|_| {
+                AppError::Internal("network (Tor): circuit not established in time".into())
+            })?
+            .map_err(|e| AppError::Internal(format!("network (Tor): {e}")))
     }
 
     async fn send_following_redirects(
@@ -335,10 +337,10 @@ impl TorManager {
     ) -> AppResult<(u16, Option<String>, Vec<u8>)> {
         let host = url
             .host_str()
-            .ok_or_else(|| AppError::InvalidInput("URL sans hôte".into()))?
+            .ok_or_else(|| AppError::InvalidInput("URL without a host".into()))?
             .to_owned();
         let port = url.port_or_known_default().unwrap_or(443);
-        let net_err = |e: &dyn std::fmt::Display| AppError::Internal(format!("réseau (Tor) : {e}"));
+        let net_err = |e: &dyn std::fmt::Display| AppError::Internal(format!("network (Tor): {e}"));
 
         // Plain HTTP is only ever used for an allowlisted onion service (checked again here,
         // defence in depth): the onion protocol authenticates the service and encrypts.
@@ -346,20 +348,20 @@ impl TorManager {
         let onion_ok =
             net::ONION_HOSTS.contains(&host.as_str()) || (allow_plain && host.ends_with(".onion"));
         if plain && !onion_ok {
-            return Err(AppError::HostNotAllowed(format!(
-                "{url} (HTTPS obligatoire)"
-            )));
+            return Err(AppError::HostNotAllowed(format!("{url} (HTTPS required)")));
         }
         let stream = tokio::time::timeout(CONNECT_TIMEOUT, connect_with_retry(client, &host, port))
             .await
-            .map_err(|_| AppError::Internal("réseau (Tor) : circuit non établi à temps".into()))?
+            .map_err(|_| {
+                AppError::Internal("network (Tor): circuit not established in time".into())
+            })?
             .map_err(|e| net_err(&e))?;
         let exchange = async {
             if plain {
                 http_exchange(stream, url, &host, method, headers, body, max_body).await
             } else {
                 let server_name = rustls::pki_types::ServerName::try_from(host.clone())
-                    .map_err(|_| AppError::InvalidInput("nom d'hôte invalide".into()))?;
+                    .map_err(|_| AppError::InvalidInput("invalid host name".into()))?;
                 let tls = self
                     .tls
                     .connect(server_name, stream)
@@ -370,7 +372,7 @@ impl TorManager {
         };
         tokio::time::timeout(timeout, exchange)
             .await
-            .map_err(|_| AppError::Internal("réseau (Tor) : délai dépassé".into()))?
+            .map_err(|_| AppError::Internal("network (Tor): timed out".into()))?
     }
 }
 
@@ -387,7 +389,7 @@ async fn http_exchange<S>(
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
-    let net_err = |e: &dyn std::fmt::Display| AppError::Internal(format!("réseau (Tor) : {e}"));
+    let net_err = |e: &dyn std::fmt::Display| AppError::Internal(format!("network (Tor): {e}"));
     let host = host.to_owned();
     let (mut sender, conn) = hyper::client::conn::http1::handshake(TokioIo::new(io))
         .await

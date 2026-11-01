@@ -48,7 +48,7 @@ const RETRY: Duration = Duration::from_secs(15 * 60);
 const CHECKS: usize = 3;
 
 fn log(msg: impl std::fmt::Display) {
-    eprintln!("[maj] {msg}");
+    eprintln!("[update] {msg}");
 }
 
 // ---------------------------------------------------------------- versions and manifest
@@ -900,14 +900,14 @@ mod tests {
         }
         fn save(&self, s: &Staged) -> io::Result<()> {
             if self.fail_writes {
-                return Err(io::Error::other("disque plein"));
+                return Err(io::Error::other("disk full"));
             }
             *self.staged.borrow_mut() = Some(s.clone());
             Ok(())
         }
         fn write_package(&self, name: &str, bytes: &[u8]) -> io::Result<()> {
             if self.fail_writes {
-                return Err(io::Error::other("disque plein"));
+                return Err(io::Error::other("disk full"));
             }
             self.files.borrow_mut().insert(name.into(), bytes.into());
             Ok(())

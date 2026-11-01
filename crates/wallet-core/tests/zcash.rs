@@ -196,17 +196,17 @@ fn destinations_t_addresses_only() {
     ] {
         let e = zec_parse_address(z, MAIN).unwrap_err();
         assert!(
-            matches!(&e, Error::InvalidInput(m) if m.contains("protégée")),
+            matches!(&e, Error::InvalidInput(m) if m.contains("shielded")),
             "{z}: {e}"
         );
     }
     // Other network, Bitcoin, garbage: refused.
     let tm = zec_address(&s, TEST, 0, false, 0).unwrap();
     assert!(
-        matches!(zec_parse_address(&tm, MAIN), Err(Error::InvalidInput(m)) if m.contains("autre réseau"))
+        matches!(zec_parse_address(&tm, MAIN), Err(Error::InvalidInput(m)) if m.contains("another network"))
     );
     assert!(
-        matches!(zec_parse_address(&mine, TEST), Err(Error::InvalidInput(m)) if m.contains("autre réseau"))
+        matches!(zec_parse_address(&mine, TEST), Err(Error::InvalidInput(m)) if m.contains("another network"))
     );
     for bad in [
         "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
@@ -344,7 +344,7 @@ fn consensus_branch_is_read_from_the_chain_and_checked() {
     // A branch id this build does not know (a newer network upgrade): refused, says to update.
     let e = zec_consensus(MAIN, TIP, TIP, 0xdead_beef).unwrap_err();
     assert!(
-        matches!(&e, Error::InvalidInput(m) if m.contains("0xdeadbeef") && m.contains("mets Kyro à jour")),
+        matches!(&e, Error::InvalidInput(m) if m.contains("0xdeadbeef") && m.contains("update Kyro")),
         "{e}"
     );
     // A known branch that is not the one of this height (older NU6.1, or NU7 activated on the
@@ -352,7 +352,7 @@ fn consensus_branch_is_read_from_the_chain_and_checked() {
     for other in [0x4dec_4df0u32, 0x7719_0ad9] {
         let e = zec_consensus(MAIN, TIP, TIP, other).unwrap_err();
         assert!(
-            matches!(&e, Error::InvalidInput(m) if m.contains("mets Kyro à jour")),
+            matches!(&e, Error::InvalidInput(m) if m.contains("update Kyro")),
             "{e}"
         );
     }
@@ -640,52 +640,52 @@ fn refusals() {
     // Shielded / unified recipient.
     let mut r = ok();
     r.to = "zs1z7rejlpsa98s2rrrfkwmaxu53e4ue0ulcrw0h4x5g8jl04tak0d3mm47vdtahatqrlkngh9sly".into();
-    assert!(err(r).contains("protégée"));
+    assert!(err(r).contains("shielded"));
     // Insufficient funds, dust, no coin.
     let mut r = ok();
     r.amount = 995_000;
-    assert!(err(r).contains("insuffisant"));
+    assert!(err(r).contains("insufficient"));
     let mut r = ok();
     r.amount = 53;
-    assert!(err(r).contains("poussière"));
+    assert!(err(r).contains("dust"));
     let mut r = ok();
     r.coins.clear();
-    assert!(err(r).contains("aucune pièce"));
+    assert!(err(r).contains("no coin"));
     // A coin that pays another address of ours than claimed, another wallet, another account.
     let mut r = ok();
     r.coins[0].index = 1;
-    assert!(err(r).contains("ne paie pas"));
+    assert!(err(r).contains("does not pay"));
     let mut r = ok();
     r.coins[0].prev_tx = fake_prev(&[(1_000_000, our_script(LEGAL, 0, false, 0))], 9, false);
-    assert!(err(r).contains("ne paie pas"));
+    assert!(err(r).contains("does not pay"));
     assert!(zec_tx_summary(&s, MAIN, 1, &ok())
         .unwrap_err()
         .to_string()
-        .contains("ne paie pas"));
+        .contains("does not pay"));
     // vout out of range, malformed previous transaction, duplicate, coinbase.
     let mut r = ok();
     r.coins[0].vout = 1;
     assert!(err(r).contains("vout"));
     let mut r = ok();
     r.coins[0].prev_tx = "00".into();
-    assert!(err(r).contains("mal formée"));
+    assert!(err(r).contains("malformed"));
     let mut r = ok();
     r.coins.push(r.coins[0].clone());
-    assert!(err(r).contains("deux fois"));
+    assert!(err(r).contains("twice"));
     let mut r = ok();
     r.coins[0].prev_tx = fake_prev(&[(1_000_000, our_script(ABANDON, 0, false, 0))], 3, true);
     assert!(err(r).contains("coinbase"));
     // Change index beyond MAX_CHANGE_INDEX.
     let mut r = ok();
     r.change_index = 1_001;
-    assert!(err(r).contains("index de monnaie"));
+    assert!(err(r).contains("change index"));
     // Unknown network upgrade, mismatching branch.
     let mut r = ok();
     r.network_branch_id = 0x1234_5678;
-    assert!(err(r).contains("mets Kyro à jour"));
+    assert!(err(r).contains("update Kyro"));
     let mut r = ok();
     r.network_branch_id = 0x4dec_4df0;
-    assert!(err(r).contains("mets Kyro à jour"));
+    assert!(err(r).contains("update Kyro"));
     // The signing path refuses exactly the same things.
     let mut r = ok();
     r.network_branch_id = 0x1234_5678;

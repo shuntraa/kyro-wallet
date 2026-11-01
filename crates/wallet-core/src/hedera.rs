@@ -155,24 +155,22 @@ pub fn hbar_parse_account_id(s: &str, network: Network) -> Result<u64> {
     };
     let num = id
         .strip_prefix("0.0.")
-        .ok_or_else(|| Error::input("identifiant Hedera attendu : 0.0.nombre"))?;
+        .ok_or_else(|| Error::input("Hedera id expected: 0.0.number"))?;
     if num.is_empty()
         || num.len() > 19
         || !num.bytes().all(|b| b.is_ascii_digit())
         || (num.len() > 1 && num.starts_with('0'))
     {
-        return Err(Error::input("identifiant Hedera invalide"));
+        return Err(Error::input("invalid Hedera id"));
     }
-    let n: u64 = num
-        .parse()
-        .map_err(|_| Error::input("identifiant Hedera invalide"))?;
+    let n: u64 = num.parse().map_err(|_| Error::input("invalid Hedera id"))?;
     if n == 0 || n > i64::MAX as u64 {
-        return Err(Error::input("identifiant Hedera invalide"));
+        return Err(Error::input("invalid Hedera id"));
     }
     if let Some(sum) = sum {
         if sum != hbar_checksum(network, n) {
             return Err(Error::input(
-                "somme de contrôle de l'identifiant Hedera incorrecte (ou identifiant d'un autre réseau)",
+                "incorrect Hedera id checksum (or an id of another network)",
             ));
         }
     }
@@ -218,14 +216,14 @@ pub fn hbar_parse_recipient(s: &str, network: Network) -> Result<HbarRecipient> 
     let t = s.trim();
     if t.starts_with("0x") || t.starts_with("0X") {
         let a = crate::evm::evm_checksum_address(t)
-            .map_err(|_| Error::input("adresse EVM invalide (0x + 40 hexadécimaux, EIP-55)"))?;
+            .map_err(|_| Error::input("invalid EVM address (0x + 40 hex digits, EIP-55)"))?;
         let mut bytes = [0u8; 20];
         hex::decode_to_slice(&a[2..], &mut bytes)
-            .map_err(|_| Error::input("adresse EVM invalide"))?;
+            .map_err(|_| Error::input("invalid EVM address"))?;
         return Ok(match long_zero(&bytes) {
-            Some(0) => return Err(Error::input("adresse nulle refusée")),
+            Some(0) => return Err(Error::input("zero address refused")),
             Some(n) if n <= i64::MAX as u64 => HbarRecipient::Id(n),
-            Some(_) => return Err(Error::input("adresse EVM invalide")),
+            Some(_) => return Err(Error::input("invalid EVM address")),
             None => HbarRecipient::Evm(bytes),
         });
     }
@@ -237,7 +235,7 @@ pub fn hbar_parse_recipient(s: &str, network: Network) -> Result<HbarRecipient> 
 // ---------------------------------------------------------------------------------------------
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("transaction Hedera refusée : {}", msg.into()))
+    Error::input(format!("Hedera transaction refused: {}", msg.into()))
 }
 
 fn put_varint(o: &mut Vec<u8>, mut v: u64) {
@@ -282,17 +280,17 @@ enum Val<'a> {
 fn read_varint(b: &mut &[u8]) -> Result<u64> {
     let mut v = 0u64;
     for i in 0..10 {
-        let (&byte, rest) = b.split_first().ok_or_else(|| bad("varint tronqué"))?;
+        let (&byte, rest) = b.split_first().ok_or_else(|| bad("truncated varint"))?;
         *b = rest;
         if i == 9 && byte > 1 {
-            return Err(bad("varint trop long"));
+            return Err(bad("varint too long"));
         }
         v |= u64::from(byte & 0x7F) << (7 * i);
         if byte & 0x80 == 0 {
             return Ok(v);
         }
     }
-    Err(bad("varint trop long"))
+    Err(bad("varint too long"))
 }
 
 /// All fields of a message, in wire order.
@@ -300,22 +298,22 @@ fn fields(mut b: &[u8]) -> Result<Vec<(u32, Val<'_>)>> {
     let mut out = Vec::new();
     while !b.is_empty() {
         let key = read_varint(&mut b)?;
-        let field = u32::try_from(key >> 3).map_err(|_| bad("numéro de champ"))?;
+        let field = u32::try_from(key >> 3).map_err(|_| bad("field number"))?;
         if field == 0 {
-            return Err(bad("numéro de champ nul"));
+            return Err(bad("zero field number"));
         }
         match key & 7 {
             0 => out.push((field, Val::Varint(read_varint(&mut b)?))),
             2 => {
-                let len = usize::try_from(read_varint(&mut b)?).map_err(|_| bad("longueur"))?;
+                let len = usize::try_from(read_varint(&mut b)?).map_err(|_| bad("length"))?;
                 if len > b.len() {
-                    return Err(bad("champ tronqué"));
+                    return Err(bad("truncated field"));
                 }
                 let (v, rest) = b.split_at(len);
                 b = rest;
                 out.push((field, Val::Bytes(v)));
             }
-            w => return Err(bad(format!("type de champ {w} inattendu (champ {field})"))),
+            w => return Err(bad(format!("unexpected field type {w} (field {field})"))),
         }
     }
     Ok(out)
@@ -324,14 +322,14 @@ fn fields(mut b: &[u8]) -> Result<Vec<(u32, Val<'_>)>> {
 fn varint_of(v: &Val<'_>, what: &str) -> Result<u64> {
     match v {
         Val::Varint(x) => Ok(*x),
-        Val::Bytes(_) => Err(bad(format!("{what} : entier attendu"))),
+        Val::Bytes(_) => Err(bad(format!("{what}: integer expected"))),
     }
 }
 
 fn bytes_of<'a>(v: &Val<'a>, what: &str) -> Result<&'a [u8]> {
     match v {
         Val::Bytes(x) => Ok(x),
-        Val::Varint(_) => Err(bad(format!("{what} : message attendu"))),
+        Val::Varint(_) => Err(bad(format!("{what}: message expected"))),
     }
 }
 
@@ -360,38 +358,36 @@ fn dec_account(b: &[u8], allow_alias: bool, what: &str) -> Result<HbarRecipient>
         match f {
             1 | 2 => {
                 if varint_of(&v, what)? != 0 {
-                    return Err(bad(format!(
-                        "{what} : seuls les comptes 0.0.x sont pris en charge"
-                    )));
+                    return Err(bad(format!("{what}: only 0.0.x accounts are supported")));
                 }
             }
             3 => {
                 let n = varint_of(&v, what)?;
                 if n == 0 || n > i64::MAX as u64 {
-                    return Err(bad(format!("{what} : numéro de compte invalide")));
+                    return Err(bad(format!("{what}: invalid account number")));
                 }
                 out = Some(HbarRecipient::Id(n));
             }
             4 if allow_alias => {
                 let a: [u8; 20] = bytes_of(&v, what)?
                     .try_into()
-                    .map_err(|_| bad(format!("{what} : alias de 20 octets attendu")))?;
+                    .map_err(|_| bad(format!("{what}: 20-byte alias expected")))?;
                 if long_zero(&a).is_some() {
-                    return Err(bad(format!("{what} : alias « long-zero » refusé")));
+                    return Err(bad(format!("{what}: \"long-zero\" alias refused")));
                 }
                 out = Some(HbarRecipient::Evm(a));
             }
-            4 => return Err(bad(format!("{what} : alias refusé"))),
-            f => return Err(bad(format!("{what} : champ inconnu {f}"))),
+            4 => return Err(bad(format!("{what}: alias refused"))),
+            f => return Err(bad(format!("{what}: unknown field {f}"))),
         }
     }
-    out.ok_or_else(|| bad(format!("{what} : compte manquant")))
+    out.ok_or_else(|| bad(format!("{what}: missing account")))
 }
 
 fn dec_num(b: &[u8], what: &str) -> Result<u64> {
     match dec_account(b, false, what)? {
         HbarRecipient::Id(n) => Ok(n),
-        HbarRecipient::Evm(_) => Err(bad(format!("{what} : alias refusé"))),
+        HbarRecipient::Evm(_) => Err(bad(format!("{what}: alias refused"))),
     }
 }
 
@@ -495,14 +491,14 @@ fn dec_token_id(b: &[u8]) -> Result<u64> {
     for (f, v) in fields(b)? {
         match f {
             1 | 2 if varint_of(&v, "TokenID")? != 0 => {
-                return Err(bad("jeton : seuls les jetons 0.0.x sont pris en charge"))
+                return Err(bad("token: only 0.0.x tokens are supported"))
             }
             1 | 2 => {}
             3 => out = Some(varint_of(&v, "TokenID")?).filter(|n| *n > 0),
-            f => return Err(bad(format!("TokenID : champ inconnu {f}"))),
+            f => return Err(bad(format!("TokenID: unknown field {f}"))),
         }
     }
-    out.ok_or_else(|| bad("identifiant de jeton manquant"))
+    out.ok_or_else(|| bad("missing token id"))
 }
 
 /// `AccountAmount` entries (repeated field `field` of `list`).
@@ -510,23 +506,19 @@ fn dec_amounts(list: &[u8], field: u32, what: &str) -> Result<Vec<(HbarRecipient
     let mut entries = Vec::new();
     for (f, v) in fields(list)? {
         if f != field {
-            return Err(bad(format!("{what} : champ inconnu {f}")));
+            return Err(bad(format!("{what}: unknown field {f}")));
         }
         let (mut acc, mut amount) = (None, 0i64);
         for (g, w) in fields(bytes_of(&v, "accountAmounts")?)? {
             match g {
-                1 => acc = Some(dec_account(bytes_of(&w, "compte")?, true, "compte")?),
-                2 => amount = unzigzag(varint_of(&w, "montant")?),
-                3 => {
-                    return Err(bad(
-                        "is_approval refusé : dépense par autorisation (allowance)",
-                    ))
-                }
-                4 | 5 => return Err(bad("crochet (hook) refusé")),
-                g => return Err(bad(format!("AccountAmount : champ inconnu {g}"))),
+                1 => acc = Some(dec_account(bytes_of(&w, "account")?, true, "account")?),
+                2 => amount = unzigzag(varint_of(&w, "amount")?),
+                3 => return Err(bad("is_approval refused: spending through an allowance")),
+                4 | 5 => return Err(bad("hook refused")),
+                g => return Err(bad(format!("AccountAmount: unknown field {g}"))),
             }
         }
-        entries.push((acc.ok_or_else(|| bad("compte manquant"))?, amount));
+        entries.push((acc.ok_or_else(|| bad("missing account"))?, amount));
     }
     Ok(entries)
 }
@@ -598,7 +590,7 @@ impl HbarTransfer {
     /// identically.
     pub fn decode(raw: &[u8]) -> Result<HbarTransfer> {
         if raw.len() > MAX_BODY {
-            return Err(bad("trop grande"));
+            return Err(bad("too large"));
         }
         let (mut txid, mut node, mut fee, mut dur, mut memo, mut ct) =
             (None, None, 0u64, None, String::new(), None);
@@ -609,51 +601,51 @@ impl HbarTransfer {
                 2 => node = Some(dec_num(bytes_of(&v, "nodeAccountID")?, "nodeAccountID")?),
                 3 => fee = varint_of(&v, "transactionFee")?,
                 4 => dur = Some(bytes_of(&v, "transactionValidDuration")?),
-                5 => return Err(bad("generateRecord (obsolète) refusé")),
+                5 => return Err(bad("generateRecord (obsolete) refused")),
                 6 => {
                     memo = String::from_utf8(bytes_of(&v, "memo")?.to_vec())
-                        .map_err(|_| bad("mémo : UTF-8 invalide"))?
+                        .map_err(|_| bad("memo: invalid UTF-8"))?
                 }
                 14 => ct = Some(bytes_of(&v, "cryptoTransfer")?),
                 40 => assoc = Some(bytes_of(&v, "tokenAssociate")?),
                 f => {
                     return Err(bad(format!(
-                        "champ {f} : seuls un transfert (CryptoTransfer) et l'association d'un jeton connu (TokenAssociate) sont signés par Kyro"
+                        "field {f}: Kyro signs only a transfer (CryptoTransfer) and the association of a known token (TokenAssociate)"
                     )))
                 }
             }
         }
         // transactionID
-        let txid = txid.ok_or_else(|| bad("transactionID manquant"))?;
+        let txid = txid.ok_or_else(|| bad("missing transactionID"))?;
         let (mut start, mut payer) = (None, None);
         for (f, v) in fields(txid)? {
             match f {
                 1 => start = Some(bytes_of(&v, "transactionValidStart")?),
-                2 => payer = Some(dec_num(bytes_of(&v, "payeur")?, "payeur")?),
-                3 => return Err(bad("transaction programmée (scheduled) refusée")),
-                4 => return Err(bad("nonce refusé (transaction enfant)")),
-                f => return Err(bad(format!("transactionID : champ inconnu {f}"))),
+                2 => payer = Some(dec_num(bytes_of(&v, "payer")?, "payer")?),
+                3 => return Err(bad("scheduled transaction refused")),
+                4 => return Err(bad("nonce refused (child transaction)")),
+                f => return Err(bad(format!("transactionID: unknown field {f}"))),
             }
         }
         let (mut secs, mut nanos) = (0u64, 0u64);
-        for (f, v) in fields(start.ok_or_else(|| bad("transactionValidStart manquant"))?)? {
+        for (f, v) in fields(start.ok_or_else(|| bad("missing transactionValidStart"))?)? {
             match f {
-                1 => secs = varint_of(&v, "secondes")?,
-                2 => nanos = varint_of(&v, "nanosecondes")?,
-                f => return Err(bad(format!("Timestamp : champ inconnu {f}"))),
+                1 => secs = varint_of(&v, "seconds")?,
+                2 => nanos = varint_of(&v, "nanoseconds")?,
+                f => return Err(bad(format!("Timestamp: unknown field {f}"))),
             }
         }
         if secs == 0 || secs > i64::MAX as u64 || nanos >= 1_000_000_000 {
-            return Err(bad("transactionValidStart invalide"));
+            return Err(bad("invalid transactionValidStart"));
         }
         let mut duration = 0u64;
-        for (f, v) in fields(dur.ok_or_else(|| bad("transactionValidDuration manquant"))?)? {
+        for (f, v) in fields(dur.ok_or_else(|| bad("missing transactionValidDuration"))?)? {
             match f {
-                1 => duration = varint_of(&v, "durée")?,
-                f => return Err(bad(format!("Duration : champ inconnu {f}"))),
+                1 => duration = varint_of(&v, "duration")?,
+                f => return Err(bad(format!("Duration: unknown field {f}"))),
             }
         }
-        let payer = payer.ok_or_else(|| bad("payeur manquant"))?;
+        let payer = payer.ok_or_else(|| bad("missing payer"))?;
         let (to, credit, kind) = match (ct, assoc) {
             (Some(ct), None) => {
                 let (mut list, mut tokens) = (None, Vec::new());
@@ -661,7 +653,7 @@ impl HbarTransfer {
                     match f {
                         1 => list = Some(bytes_of(&v, "transfers")?),
                         2 => tokens.push(bytes_of(&v, "tokenTransfers")?),
-                        f => return Err(bad(format!("cryptoTransfer : champ inconnu {f}"))),
+                        f => return Err(bad(format!("cryptoTransfer: unknown field {f}"))),
                     }
                 }
                 let (entries, kind) = match (list, tokens.as_slice()) {
@@ -680,7 +672,7 @@ impl HbarTransfer {
                                     1,
                                     "TokenTransferList",
                                 )?),
-                                3 => return Err(bad("transfert de NFT refusé")),
+                                3 => return Err(bad("NFT transfer refused")),
                                 4 => {
                                     let mut d = 0u64;
                                     for (g, w) in fields(bytes_of(&v, "expected_decimals")?)? {
@@ -688,39 +680,40 @@ impl HbarTransfer {
                                             1 => d = varint_of(&w, "expected_decimals")?,
                                             g => {
                                                 return Err(bad(format!(
-                                                    "UInt32Value : champ inconnu {g}"
+                                                    "UInt32Value: unknown field {g}"
                                                 )))
                                             }
                                         }
                                     }
-                                    decimals =
-                                        Some(u32::try_from(d).map_err(|_| bad("décimales"))?);
+                                    decimals = Some(u32::try_from(d).map_err(|_| bad("decimals"))?);
                                 }
                                 f => {
                                     return Err(bad(format!(
-                                        "TokenTransferList : champ inconnu {f}"
+                                        "TokenTransferList: unknown field {f}"
                                     )))
                                 }
                             }
                         }
-                        let token = token.ok_or_else(|| bad("jeton manquant"))?;
+                        let token = token.ok_or_else(|| bad("missing token"))?;
                         let decimals = decimals.ok_or_else(|| {
-                            bad("expected_decimals manquant : Kyro fixe toujours les décimales du jeton")
+                            bad("missing expected_decimals: Kyro always pins the token's decimals")
                         })?;
                         (entries, HbarKind::Token { token, decimals })
                     }
                     (Some(_), [_, ..]) => {
-                        return Err(bad("HBAR et jetons dans la même transaction : refusé"))
+                        return Err(bad("HBAR and tokens in the same transaction: refused"))
                     }
-                    _ => return Err(bad("un seul transfert (HBAR ou un jeton) attendu")),
+                    _ => return Err(bad("a single transfer (HBAR or one token) expected")),
                 };
                 let [(from, debit), (to, credit)] = <[(HbarRecipient, i64); 2]>::try_from(entries)
-                    .map_err(|_| bad("exactement un débit et un crédit attendus"))?;
+                    .map_err(|_| bad("exactly one debit and one credit expected"))?;
                 if from != HbarRecipient::Id(payer) {
-                    return Err(bad("le compte débité n'est pas le payeur"));
+                    return Err(bad("the debited account is not the payer"));
                 }
                 if credit <= 0 || debit != -credit {
-                    return Err(bad("montants incohérents (un débit, puis un crédit égal)"));
+                    return Err(bad(
+                        "inconsistent amounts (one debit, then an equal credit)",
+                    ));
                 }
                 (to, credit as u64, kind)
             }
@@ -730,26 +723,26 @@ impl HbarTransfer {
                     match f {
                         1 => account = Some(dec_num(bytes_of(&v, "account")?, "account")?),
                         2 => tokens.push(dec_token_id(bytes_of(&v, "tokens")?)?),
-                        f => return Err(bad(format!("TokenAssociate : champ inconnu {f}"))),
+                        f => return Err(bad(format!("TokenAssociate: unknown field {f}"))),
                     }
                 }
                 if account != Some(payer) {
-                    return Err(bad("association pour un autre compte que le payeur"));
+                    return Err(bad("association for an account other than the payer"));
                 }
                 let [token] = <[u64; 1]>::try_from(tokens)
-                    .map_err(|_| bad("association d'exactement un jeton attendue"))?;
+                    .map_err(|_| bad("association of exactly one token expected"))?;
                 (HbarRecipient::Id(payer), 0, HbarKind::Associate(token))
             }
-            (None, None) => return Err(bad("cryptoTransfer manquant")),
-            (Some(_), Some(_)) => return Err(bad("deux opérations dans un corps")),
+            (None, None) => return Err(bad("missing cryptoTransfer")),
+            (Some(_), Some(_)) => return Err(bad("two operations in one body")),
         };
         let t = HbarTransfer {
             payer,
             valid_start_secs: secs as i64,
             valid_start_nanos: nanos as i32,
-            node: node.ok_or_else(|| bad("nodeAccountID manquant"))?,
+            node: node.ok_or_else(|| bad("missing nodeAccountID"))?,
             max_fee: fee,
-            valid_duration: i64::try_from(duration).map_err(|_| bad("durée"))?,
+            valid_duration: i64::try_from(duration).map_err(|_| bad("duration"))?,
             memo,
             to,
             amount: credit,
@@ -757,7 +750,7 @@ impl HbarTransfer {
         };
         if t.encode() != raw {
             return Err(bad(
-                "encodage non canonique (ordre, doublon, valeur par défaut ou disposition inconnue)",
+                "non-canonical encoding (order, duplicate, default value or unknown layout)",
             ));
         }
         Ok(t)
@@ -792,12 +785,12 @@ impl HbarTransfer {
 pub fn hbar_check_memo(memo: &str) -> Result<()> {
     if memo.len() > HBAR_MAX_MEMO_BYTES {
         return Err(Error::input(format!(
-            "mémo trop long : {HBAR_MAX_MEMO_BYTES} octets au plus"
+            "memo too long: {HBAR_MAX_MEMO_BYTES} bytes at most"
         )));
     }
     if sanitize_text(memo, HBAR_MAX_MEMO_BYTES + 1).altered {
         return Err(Error::input(
-            "mémo : caractères de contrôle, invisibles ou de direction refusés",
+            "memo: control, invisible or direction characters refused",
         ));
     }
     Ok(())
@@ -875,13 +868,13 @@ pub struct HbarTokenSummary {
 
 fn decode_bodies(bodies: &[String]) -> Result<Vec<(Vec<u8>, HbarTransfer)>> {
     if bodies.is_empty() || bodies.len() > HBAR_MAX_NODES {
-        return Err(bad(format!("1 à {HBAR_MAX_NODES} copies attendues")));
+        return Err(bad(format!("1 to {HBAR_MAX_NODES} copies expected")));
     }
     bodies
         .iter()
         .map(|b| {
             let raw =
-                hex::decode(b.trim()).map_err(|_| Error::input("corps : hexadécimal attendu"))?;
+                hex::decode(b.trim()).map_err(|_| Error::input("body: hexadecimal expected"))?;
             let t = HbarTransfer::decode(&raw)?;
             Ok((raw, t))
         })
@@ -895,19 +888,19 @@ fn summarize(
     allowed_nodes: &[u64],
     network: Option<Network>,
 ) -> Result<HbarTxSummary> {
-    let t = ts.first().ok_or_else(|| bad("aucune copie"))?;
+    let t = ts.first().ok_or_else(|| bad("no copy"))?;
     let token = match t.kind {
         HbarKind::Hbar => None,
         HbarKind::Token { token, .. } | HbarKind::Associate(token) => {
-            let net = network.ok_or_else(|| bad("jeton : réseau non précisé"))?;
+            let net = network.ok_or_else(|| bad("token: network not specified"))?;
             let k = hbar_known_token(net, token).ok_or_else(|| {
                 bad(format!(
-                    "jeton 0.0.{token} inconnu : Kyro ne signe que les jetons vérifiés de sa table"
+                    "unknown token 0.0.{token}: Kyro signs only the verified tokens of its table"
                 ))
             })?;
             if let HbarKind::Token { decimals, .. } = t.kind {
                 if decimals != k.decimals {
-                    return Err(bad("expected_decimals différent de la table de Kyro"));
+                    return Err(bad("expected_decimals differs from Kyro's table"));
                 }
             }
             Some(HbarTokenSummary {
@@ -921,26 +914,26 @@ fn summarize(
     };
     for (i, x) in ts.iter().enumerate() {
         if !t.same_except_node(x) {
-            return Err(bad("les copies pour plusieurs nœuds diffèrent"));
+            return Err(bad("the copies for several nodes differ"));
         }
         if !allowed_nodes.contains(&x.node) {
-            return Err(bad(format!("nœud 0.0.{} hors de la liste de Kyro", x.node)));
+            return Err(bad(format!("node 0.0.{} not in Kyro's list", x.node)));
         }
         if ts[..i].iter().any(|y| y.node == x.node) {
-            return Err(bad("nœud en double"));
+            return Err(bad("duplicate node"));
         }
     }
     if t.payer != our_account {
-        return Err(bad("le payeur n'est pas le compte de ce portefeuille"));
+        return Err(bad("the payer is not this wallet's account"));
     }
     if let HbarKind::Associate(_) = t.kind {
         if t.to != HbarRecipient::Id(our_account) || t.amount != 0 {
-            return Err(bad("association incohérente"));
+            return Err(bad("inconsistent association"));
         }
     } else {
         match t.to {
-            HbarRecipient::Id(n) if n == our_account => return Err(bad("transfert à soi-même")),
-            HbarRecipient::Evm(a) if a == *our_evm => return Err(bad("transfert à soi-même")),
+            HbarRecipient::Id(n) if n == our_account => return Err(bad("transfer to yourself")),
+            HbarRecipient::Evm(a) if a == *our_evm => return Err(bad("transfer to yourself")),
             _ => {}
         }
         let max = if t.kind == HbarKind::Hbar {
@@ -949,17 +942,17 @@ fn summarize(
             i64::MAX as u64
         };
         if t.amount == 0 || t.amount > max {
-            return Err(bad("montant invalide"));
+            return Err(bad("invalid amount"));
         }
     }
     if t.max_fee == 0 {
-        return Err(bad("frais maximum nuls"));
+        return Err(bad("zero maximum fee"));
     }
     if !(1..=HBAR_MAX_VALID_DURATION).contains(&t.valid_duration) {
-        return Err(bad("durée de validité hors de 1 à 180 s"));
+        return Err(bad("validity duration outside 1 to 180 s"));
     }
     if t.memo.len() > HBAR_MAX_MEMO_BYTES || t.memo.contains('\0') {
-        return Err(bad("mémo : 100 octets au plus, sans octet nul"));
+        return Err(bad("memo: 100 bytes at most, no null byte"));
     }
     let mut warnings = Vec::new();
     if t.max_fee > HBAR_HIGH_FEE_TINYBARS {
@@ -992,7 +985,7 @@ fn summarize(
 }
 
 fn evm_of_pubkey33(pk: &[u8]) -> Result<[u8; 20]> {
-    let pk = PublicKey::from_slice(pk).map_err(|_| Error::input("clé publique invalide"))?;
+    let pk = PublicKey::from_slice(pk).map_err(|_| Error::input("invalid public key"))?;
     Ok(evm_bytes_of_pubkey(&pk))
 }
 
@@ -1113,7 +1106,7 @@ fn sign_inner(
         let mut sig = secp.sign_ecdsa(&msg, sk);
         sig.normalize_s();
         secp.verify_ecdsa(&msg, &sig, &pk)
-            .map_err(|_| Error::crypto("échec de la vérification de la signature"))?;
+            .map_err(|_| Error::crypto("signature verification failed"))?;
         out.push(hex::encode(signed_transaction(
             raw,
             &pk33,
@@ -1139,7 +1132,7 @@ type SignedParts<'a> = (&'a [u8], &'a [u8], u32, &'a [u8]);
 
 fn parse_signed(raw: &[u8]) -> Result<SignedParts<'_>> {
     if raw.len() > MAX_BODY * 2 {
-        return Err(bad("trop grande"));
+        return Err(bad("too large"));
     }
     let mut st = None;
     for (f, v) in fields(raw)? {
@@ -1147,38 +1140,38 @@ fn parse_signed(raw: &[u8]) -> Result<SignedParts<'_>> {
             5 => st = Some(bytes_of(&v, "signedTransactionBytes")?),
             f => {
                 return Err(bad(format!(
-                    "Transaction : champ {f} refusé (obsolète ou inconnu)"
+                    "Transaction: field {f} refused (obsolete or unknown)"
                 )))
             }
         }
     }
     let (mut body, mut map) = (None, None);
-    for (f, v) in fields(st.ok_or_else(|| bad("signedTransactionBytes manquant"))?)? {
+    for (f, v) in fields(st.ok_or_else(|| bad("missing signedTransactionBytes"))?)? {
         match f {
             1 => body = Some(bytes_of(&v, "bodyBytes")?),
             2 => map = Some(bytes_of(&v, "sigMap")?),
-            f => return Err(bad(format!("SignedTransaction : champ {f} refusé"))),
+            f => return Err(bad(format!("SignedTransaction: field {f} refused"))),
         }
     }
-    let body = body.ok_or_else(|| bad("bodyBytes manquant"))?;
+    let body = body.ok_or_else(|| bad("missing bodyBytes"))?;
     let mut pairs = Vec::new();
-    for (f, v) in fields(map.ok_or_else(|| bad("sigMap manquant"))?)? {
+    for (f, v) in fields(map.ok_or_else(|| bad("missing sigMap"))?)? {
         if f != 1 {
-            return Err(bad(format!("SignatureMap : champ {f} refusé")));
+            return Err(bad(format!("SignatureMap: field {f} refused")));
         }
         pairs.push(bytes_of(&v, "sigPair")?);
     }
-    let [pair] = <[&[u8]; 1]>::try_from(pairs).map_err(|_| bad("une seule signature attendue"))?;
+    let [pair] = <[&[u8]; 1]>::try_from(pairs).map_err(|_| bad("a single signature expected"))?;
     let (mut prefix, mut sig) = (None, None);
     for (f, v) in fields(pair)? {
         match f {
             1 if prefix.is_none() => prefix = Some(bytes_of(&v, "pubKeyPrefix")?),
             3 | 6 if sig.is_none() => sig = Some((f, bytes_of(&v, "signature")?)),
-            f => return Err(bad(format!("SignaturePair : champ {f} refusé"))),
+            f => return Err(bad(format!("SignaturePair: field {f} refused"))),
         }
     }
-    let prefix = prefix.ok_or_else(|| bad("clé manquante"))?;
-    let (field, sig) = sig.ok_or_else(|| bad("signature manquante"))?;
+    let prefix = prefix.ok_or_else(|| bad("missing key"))?;
+    let (field, sig) = sig.ok_or_else(|| bad("missing signature"))?;
     Ok((body, prefix, field, sig))
 }
 
@@ -1186,30 +1179,30 @@ fn parse_signed(raw: &[u8]) -> Result<SignedParts<'_>> {
 /// [`HbarTransfer::decode`] accepts, exactly one `ECDSA_secp256k1` signature pair with a full
 /// 33-byte key — and checks the low-S signature over `keccak256(bodyBytes)`.
 pub fn hbar_verify_signed(tx_hex: &str) -> Result<HbarSignedTransfer> {
-    let raw = hex::decode(tx_hex.trim()).map_err(|_| Error::input("hexadécimal attendu"))?;
+    let raw = hex::decode(tx_hex.trim()).map_err(|_| Error::input("hexadecimal expected"))?;
     let (body, prefix, field, sig) = parse_signed(&raw)?;
     if field != 6 {
-        return Err(bad("signature ECDSA_secp256k1 attendue"));
+        return Err(bad("ECDSA_secp256k1 signature expected"));
     }
     let pk33: [u8; 33] = prefix
         .try_into()
-        .map_err(|_| bad("clé complète de 33 octets attendue"))?;
+        .map_err(|_| bad("full 33-byte key expected"))?;
     let sig64: [u8; 64] = sig
         .try_into()
-        .map_err(|_| bad("signature de 64 octets attendue"))?;
+        .map_err(|_| bad("64-byte signature expected"))?;
     let transfer = HbarTransfer::decode(body)?;
-    let pk = PublicKey::from_slice(&pk33).map_err(|_| bad("clé publique invalide"))?;
-    let sig = Signature::from_compact(&sig64).map_err(|_| bad("signature invalide"))?;
+    let pk = PublicKey::from_slice(&pk33).map_err(|_| bad("invalid public key"))?;
+    let sig = Signature::from_compact(&sig64).map_err(|_| bad("invalid signature"))?;
     let mut low = sig;
     low.normalize_s();
     if low != sig {
-        return Err(bad("la signature n'est pas low-S"));
+        return Err(bad("the signature is not low-S"));
     }
     Secp256k1::verification_only()
         .verify_ecdsa(&Message::from_digest(keccak256(body)), &sig, &pk)
-        .map_err(|_| bad("la signature ne se vérifie pas"))?;
+        .map_err(|_| bad("the signature does not verify"))?;
     if signed_transaction(body, &pk33, &sig64) != raw {
-        return Err(bad("encodage non canonique"));
+        return Err(bad("non-canonical encoding"));
     }
     Ok(HbarSignedTransfer {
         transfer,
@@ -1262,14 +1255,12 @@ pub fn hbar_decode_tx_ed25519(
 /// [`HBAR_HW_MAX_BODY`] bytes.
 pub fn hbar_hw_message(body_hex: &str) -> Result<Vec<u8>> {
     let raw =
-        hex::decode(body_hex.trim()).map_err(|_| Error::input("corps : hexadécimal attendu"))?;
+        hex::decode(body_hex.trim()).map_err(|_| Error::input("body: hexadecimal expected"))?;
     if HbarTransfer::decode(&raw)?.kind != HbarKind::Hbar {
-        return Err(bad("jetons Hedera : pas encore depuis un compte matériel"));
+        return Err(bad("Hedera tokens: not yet from a hardware account"));
     }
     if raw.len() > HBAR_HW_MAX_BODY {
-        return Err(bad(
-            "trop long pour l'app Ledger Hedera (mémo plus court ?)",
-        ));
+        return Err(bad("too long for the Ledger Hedera app (shorter memo?)"));
     }
     Ok(raw)
 }
@@ -1294,11 +1285,11 @@ pub fn hbar_hw_signed(body_hex: &str, pk: &[u8; 32], sig: &[u8]) -> Result<Strin
     let body = hbar_hw_message(body_hex)?;
     let sig: [u8; 64] = sig
         .try_into()
-        .map_err(|_| Error::crypto("signature de l'appareil : 64 octets attendus"))?;
+        .map_err(|_| Error::crypto("device signature: 64 bytes expected"))?;
     let out = hex::encode(signed_transaction_ed25519(&body, pk, &sig));
     let (_, signer) = hbar_verify_signed_ed25519(&out)?;
     if signer != *pk {
-        return Err(Error::crypto("signature d'une autre clé"));
+        return Err(Error::crypto("signature from another key"));
     }
     Ok(out)
 }
@@ -1307,24 +1298,24 @@ pub fn hbar_hw_signed(body_hex: &str, pk: &[u8; 32], sig: &[u8]) -> Result<Strin
 /// pair (full 32-byte key) and its strict verification over `bodyBytes`. Returns the body and
 /// the key.
 pub fn hbar_verify_signed_ed25519(tx_hex: &str) -> Result<(HbarTransfer, [u8; 32])> {
-    let raw = hex::decode(tx_hex.trim()).map_err(|_| Error::input("hexadécimal attendu"))?;
+    let raw = hex::decode(tx_hex.trim()).map_err(|_| Error::input("hexadecimal expected"))?;
     let (body, prefix, field, sig) = parse_signed(&raw)?;
     if field != 3 {
-        return Err(bad("signature ED25519 attendue"));
+        return Err(bad("ED25519 signature expected"));
     }
     let pk: [u8; 32] = prefix
         .try_into()
-        .map_err(|_| bad("clé complète de 32 octets attendue"))?;
+        .map_err(|_| bad("full 32-byte key expected"))?;
     let sig64: [u8; 64] = sig
         .try_into()
-        .map_err(|_| bad("signature de 64 octets attendue"))?;
+        .map_err(|_| bad("64-byte signature expected"))?;
     let transfer = HbarTransfer::decode(body)?;
     let key =
-        ed25519_dalek::VerifyingKey::from_bytes(&pk).map_err(|_| bad("clé publique invalide"))?;
+        ed25519_dalek::VerifyingKey::from_bytes(&pk).map_err(|_| bad("invalid public key"))?;
     key.verify_strict(body, &ed25519_dalek::Signature::from_bytes(&sig64))
-        .map_err(|_| bad("la signature ne se vérifie pas"))?;
+        .map_err(|_| bad("the signature does not verify"))?;
     if signed_transaction_ed25519(body, &pk, &sig64) != raw {
-        return Err(bad("encodage non canonique"));
+        return Err(bad("non-canonical encoding"));
     }
     Ok((transfer, pk))
 }
@@ -1339,10 +1330,7 @@ pub fn hbar_decode_precheck(raw: &[u8]) -> Result<(u32, u64)> {
             _ => {}
         }
     }
-    Ok((
-        u32::try_from(code).map_err(|_| bad("code de réponse"))?,
-        cost,
-    ))
+    Ok((u32::try_from(code).map_err(|_| bad("response code"))?, cost))
 }
 
 /// Name of a `ResponseCodeEnum` value (the ones a transfer can meet), else `CODE_n`.

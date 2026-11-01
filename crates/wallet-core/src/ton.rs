@@ -176,17 +176,15 @@ pub fn ton_parse_address(s: &str) -> Result<TonFriendly> {
     let s = s.trim();
     if s.contains(':') {
         return Err(Error::input(
-            "adresse TON brute (0:…) refusée : utilise la forme lisible EQ… / UQ…, qui a une somme de contrôle",
+            "raw TON address (0:…) refused: use the user-friendly EQ… / UQ… form, which has a checksum",
         ));
     }
     if s.len() != 48 {
-        return Err(Error::input(
-            "adresse TON invalide (48 caractères attendus)",
-        ));
+        return Err(Error::input("invalid TON address (48 characters expected)"));
     }
     let url = s.contains(['-', '_']);
     if url && s.contains(['+', '/']) {
-        return Err(Error::input("adresse TON invalide (base64 mélangé)"));
+        return Err(Error::input("invalid TON address (mixed base64)"));
     }
     let engine = if url {
         &base64::engine::general_purpose::URL_SAFE_NO_PAD
@@ -197,21 +195,19 @@ pub fn ton_parse_address(s: &str) -> Result<TonFriendly> {
         .decode(s)
         .ok()
         .and_then(|v| v.try_into().ok())
-        .ok_or_else(|| Error::input("adresse TON invalide"))?;
+        .ok_or_else(|| Error::input("invalid TON address"))?;
     if crc16(&b[..34]).to_be_bytes() != b[34..] {
-        return Err(Error::input("adresse TON invalide (somme de contrôle)"));
+        return Err(Error::input("invalid TON address (checksum)"));
     }
     let testnet = b[0] & 0x80 != 0;
     let bounceable = match b[0] & 0x7f {
         0x11 => true,
         0x51 => false,
-        _ => return Err(Error::input("adresse TON invalide (indicateur inconnu)")),
+        _ => return Err(Error::input("invalid TON address (unknown flag)")),
     };
     let workchain = i8::from_be_bytes([b[1]]);
     if workchain != 0 && workchain != -1 {
-        return Err(Error::input(
-            "adresse TON invalide (chaîne de travail inconnue)",
-        ));
+        return Err(Error::input("invalid TON address (unknown workchain)"));
     }
     let mut hash = [0u8; 32];
     hash.copy_from_slice(&b[2..34]);
@@ -227,21 +223,17 @@ pub fn ton_parse_raw_address(s: &str) -> Result<TonAddress> {
     let (wc, h) = s
         .trim()
         .split_once(':')
-        .ok_or_else(|| Error::input("adresse TON brute invalide"))?;
+        .ok_or_else(|| Error::input("invalid raw TON address"))?;
     let workchain = match wc {
         "0" => 0,
         "-1" => -1,
-        _ => {
-            return Err(Error::input(
-                "adresse TON brute invalide (chaîne de travail)",
-            ))
-        }
+        _ => return Err(Error::input("invalid raw TON address (workchain)")),
     };
     let hash: [u8; 32] = (h.len() == 64)
         .then(|| hex::decode(h).ok())
         .flatten()
         .and_then(|v| v.try_into().ok())
-        .ok_or_else(|| Error::input("adresse TON brute invalide"))?;
+        .ok_or_else(|| Error::input("invalid raw TON address"))?;
     Ok(TonAddress { workchain, hash })
 }
 
@@ -250,7 +242,7 @@ pub fn ton_parse_raw_address(s: &str) -> Result<TonAddress> {
 // ---------------------------------------------------------------------------------------------
 
 fn cell_err(_: tycho_types::error::Error) -> Error {
-    Error::input("cellule TON invalide")
+    Error::input("invalid TON cell")
 }
 
 fn v4r2_code() -> Result<Cell> {
@@ -305,7 +297,9 @@ fn store_addr(b: &mut CellBuilder, a: &TonAddress) -> Result<()> {
 
 fn load_addr(s: &mut CellSlice<'_>) -> Result<TonAddress> {
     if s.load_small_uint(3).map_err(cell_err)? != 0b100 {
-        return Err(Error::input("adresse TON attendue (addr_std sans anycast)"));
+        return Err(Error::input(
+            "TON address expected (addr_std without anycast)",
+        ));
     }
     let workchain = i8::from_be_bytes([s.load_u8().map_err(cell_err)?]);
     Ok(TonAddress {
@@ -327,7 +321,7 @@ fn store_grams(b: &mut CellBuilder, v: u64) -> Result<()> {
 fn load_grams(s: &mut CellSlice<'_>) -> Result<u64> {
     let len = s.load_small_uint(4).map_err(cell_err)?;
     if len > 8 {
-        return Err(Error::input("montant TON trop grand"));
+        return Err(Error::input("TON amount too large"));
     }
     let mut v = 0u64;
     for _ in 0..len {
@@ -346,11 +340,11 @@ fn comment_cell(text: &str) -> Result<Cell> {
 
 fn check_comment(text: &str) -> Result<()> {
     if text.is_empty() {
-        return Err(Error::input("commentaire vide : n'en mets pas"));
+        return Err(Error::input("empty comment: leave it out"));
     }
     if text.len() > TON_MAX_COMMENT_BYTES {
         return Err(Error::input(format!(
-            "commentaire trop long ({} octets, {TON_MAX_COMMENT_BYTES} au plus)",
+            "comment too long ({} bytes, {TON_MAX_COMMENT_BYTES} at most)",
             text.len()
         )));
     }
@@ -359,14 +353,14 @@ fn check_comment(text: &str) -> Result<()> {
 
 fn ensure_empty(s: &CellSlice<'_>) -> Result<()> {
     if s.size_bits() != 0 || s.size_refs() != 0 {
-        return Err(Error::input("champs TON inattendus (données en trop)"));
+        return Err(Error::input("unexpected TON fields (trailing data)"));
     }
     Ok(())
 }
 
 fn slice(c: &Cell) -> Result<CellSlice<'_>> {
     // Refuses exotic cells (pruned branches, library references…).
-    CellSlice::new(c.as_ref()).map_err(|_| Error::input("cellule TON spéciale refusée"))
+    CellSlice::new(c.as_ref()).map_err(|_| Error::input("special TON cell refused"))
 }
 
 /// BOC with CRC32-C, no index (`b5ee9c72`, the `te6cck…` form). The serializer's hash map only
@@ -381,8 +375,8 @@ fn encode_boc(c: &Cell) -> Vec<u8> {
 fn decode_boc_b64(text: &str) -> Result<(Vec<u8>, Cell)> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(text)
-        .map_err(|_| Error::input("BOC TON : base64 attendu"))?;
-    let root = Boc::decode(&bytes).map_err(|_| Error::input("BOC TON invalide"))?;
+        .map_err(|_| Error::input("TON BOC: base64 expected"))?;
+    let root = Boc::decode(&bytes).map_err(|_| Error::input("invalid TON BOC"))?;
     Ok((bytes, root))
 }
 
@@ -428,28 +422,26 @@ impl TonTransfer {
         match (self.mode, self.amount) {
             (TON_MODE_PAY_FEES, a) if a > 0 => {}
             (TON_MODE_ALL_BALANCE, 0) => {}
-            _ => {
-                return Err(Error::input(
-                    "transfert TON : mode d'envoi ou montant refusé (mode 3 avec un montant, ou 130 sans)",
-                ))
-            }
+            _ => return Err(Error::input(
+                "TON transfer: send mode or amount refused (mode 3 with an amount, or 130 without)",
+            )),
         }
         if self.amount > MAX_NANOTON {
-            return Err(Error::input("montant TON invalide"));
+            return Err(Error::input("invalid TON amount"));
         }
         if self.destination.workchain != 0 {
             return Err(Error::input(
-                "destinataire sur la masterchain (-1) refusé : seuls les comptes de la basechain (0) sont pris en charge",
+                "recipient on the masterchain (-1) refused: only basechain (0) accounts are supported",
             ));
         }
         if self.inline_empty_body && (self.comment.is_some() || self.jetton.is_some()) {
             return Err(Error::input(
-                "transfert TON : corps en ligne seulement sans commentaire ni jeton",
+                "TON transfer: inline body only without a comment or token",
             ));
         }
         if self.with_state_init && self.seqno != 0 {
             return Err(Error::input(
-                "StateInit seulement pour le premier transfert (seqno 0)",
+                "StateInit only for the first transfer (seqno 0)",
             ));
         }
         if let Some(c) = &self.comment {
@@ -458,7 +450,7 @@ impl TonTransfer {
         if let Some(j) = &self.jetton {
             if self.mode != TON_MODE_PAY_FEES || !self.bounce || self.comment.is_some() {
                 return Err(Error::input(
-                    "transfert de jeton : mode 3, rebond et commentaire dans le jeton seulement",
+                    "token transfer: mode 3, bounce, and the comment in the token only",
                 ));
             }
             j.check(self.amount, &self.wallet_address()?)?;
@@ -613,34 +605,32 @@ impl TonTransfer {
     ) -> Result<(Self, [u8; 64])> {
         let text = boc_b64.trim();
         if text.is_empty() || text.len() > MAX_BOC_BASE64 {
-            return Err(Error::input("BOC TON absent ou trop long"));
+            return Err(Error::input("TON BOC missing or too long"));
         }
         let (bytes, root) = decode_boc_b64(text)?;
         let mut s = slice(&root)?;
         if s.load_small_uint(4).map_err(cell_err)? != 0b1000 {
-            return Err(Error::input("message externe entrant attendu"));
+            return Err(Error::input("inbound external message expected"));
         }
         let wallet = load_addr(&mut s)?;
         if load_grams(&mut s)? != 0 {
-            return Err(Error::input("import_fee non nul"));
+            return Err(Error::input("non-zero import_fee"));
         }
         let with_state_init = match s.load_bit().map_err(cell_err)? {
             false => false,
             true => {
                 if !s.load_bit().map_err(cell_err)? {
-                    return Err(Error::input("StateInit attendu en référence"));
+                    return Err(Error::input("StateInit expected as a reference"));
                 }
                 let init = s.load_reference_cloned().map_err(cell_err)?;
                 if init.repr_hash().0 != state_init(public_key, wallet_id)?.repr_hash().0 {
-                    return Err(Error::input(
-                        "ce StateInit n'est pas celui de ton portefeuille v4R2",
-                    ));
+                    return Err(Error::input("this StateInit is not your v4R2 wallet's"));
                 }
                 true
             }
         };
         if !s.load_bit().map_err(cell_err)? {
-            return Err(Error::input("corps attendu en référence"));
+            return Err(Error::input("body expected as a reference"));
         }
         let body = s.load_reference_cloned().map_err(cell_err)?;
         ensure_empty(&s)?;
@@ -653,14 +643,14 @@ impl TonTransfer {
         let got_wallet_id = b.load_u32().map_err(cell_err)?;
         if got_wallet_id != wallet_id {
             return Err(Error::input(
-                "identifiant de portefeuille (wallet id) inattendu : autre réseau ou autre portefeuille",
+                "unexpected wallet id: another network or another wallet",
             ));
         }
         let valid_until = b.load_u32().map_err(cell_err)?;
         let seqno = b.load_u32().map_err(cell_err)?;
         if b.load_u8().map_err(cell_err)? != 0 {
             return Err(Error::input(
-                "opération de portefeuille refusée (seul l'envoi simple est accepté : pas de plugin)",
+                "wallet operation refused (only a simple send is accepted: no plugin)",
             ));
         }
         let mode = b.load_u8().map_err(cell_err)?;
@@ -672,27 +662,27 @@ impl TonTransfer {
         let head = m.load_small_uint(4).map_err(cell_err)?;
         if head & 0b1101 != 0b0100 {
             return Err(Error::input(
-                "message interne attendu (sans IHR, non rebondi)",
+                "internal message expected (without IHR, not bounced)",
             ));
         }
         let bounce = head & 0b0010 != 0;
         if m.load_small_uint(2).map_err(cell_err)? != 0 {
-            return Err(Error::input("source du message interne inattendue"));
+            return Err(Error::input("unexpected internal message source"));
         }
         let destination = load_addr(&mut m)?;
         let amount = load_grams(&mut m)?;
         if m.load_bit().map_err(cell_err)? {
-            return Err(Error::input("autres monnaies (extra currencies) refusées"));
+            return Err(Error::input("extra currencies refused"));
         }
         if load_grams(&mut m)? != 0 || load_grams(&mut m)? != 0 {
-            return Err(Error::input("frais IHR / de transfert non nuls"));
+            return Err(Error::input("non-zero IHR / forward fees"));
         }
         if m.load_u64().map_err(cell_err)? != 0 || m.load_u32().map_err(cell_err)? != 0 {
-            return Err(Error::input("created_lt / created_at non nuls"));
+            return Err(Error::input("non-zero created_lt / created_at"));
         }
         if m.load_bit().map_err(cell_err)? {
             return Err(Error::input(
-                "le message déploie un contrat (StateInit) : refusé",
+                "the message deploys a contract (StateInit): refused",
             ));
         }
         let inline_empty_body = !m.load_bit().map_err(cell_err)?;
@@ -717,22 +707,19 @@ impl TonTransfer {
         } else {
             if p.size_refs() != 0 || p.size_bits() < 32 || p.size_bits() % 8 != 0 {
                 return Err(Error::input(
-                    "contenu du message refusé (seul un commentaire texte est accepté)",
+                    "message content refused (only a text comment is accepted)",
                 ));
             }
             if p.load_u32().map_err(cell_err)? != 0 {
                 return Err(Error::input(
-                    "contenu du message refusé (opération de contrat, pas un commentaire texte)",
+                    "message content refused (contract operation, not a text comment)",
                 ));
             }
             let mut raw = Vec::with_capacity(usize::from(p.size_bits() / 8));
             while p.size_bits() > 0 {
                 raw.push(p.load_u8().map_err(cell_err)?);
             }
-            Some(
-                String::from_utf8(raw)
-                    .map_err(|_| Error::input("commentaire TON : UTF-8 invalide"))?,
-            )
+            Some(String::from_utf8(raw).map_err(|_| Error::input("TON comment: invalid UTF-8"))?)
         };
 
         let t = TonTransfer {
@@ -752,13 +739,11 @@ impl TonTransfer {
         t.check()?;
         if wallet != t.wallet_address()? {
             return Err(Error::input(
-                "ce message n'est pas adressé à ton portefeuille TON",
+                "this message is not addressed to your TON wallet",
             ));
         }
         if encode_boc(&t.external(&signature)?) != bytes {
-            return Err(Error::input(
-                "BOC TON non canonique (le ré-encodage diffère)",
-            ));
+            return Err(Error::input("non-canonical TON BOC (re-encoding differs)"));
         }
         Ok((t, signature))
     }
@@ -865,7 +850,7 @@ fn summarize(t: &TonTransfer, testnet: bool) -> Result<TonTxSummary> {
 pub fn ton_decode_tx(boc_b64: &str, public_key: &[u8; 32], testnet: bool) -> Result<TonTxSummary> {
     let (t, sig) = TonTransfer::decode(boc_b64, public_key, ton_wallet_id(testnet))?;
     if sig != [0u8; 64] {
-        return Err(Error::input("ce transfert TON est déjà signé"));
+        return Err(Error::input("this TON transfer is already signed"));
     }
     summarize(&t, testnet)
 }
@@ -906,7 +891,7 @@ pub fn ton_sign(seed: &Seed, account: u32, boc_b64: &str, testnet: bool) -> Resu
     let pk = key.verifying_key().to_bytes();
     let (t, sig) = TonTransfer::decode(boc_b64, &pk, ton_wallet_id(testnet))?;
     if sig != [0u8; 64] {
-        return Err(Error::input("ce transfert TON est déjà signé"));
+        return Err(Error::input("this TON transfer is already signed"));
     }
     sign_with(&key, &t, testnet)
 }
@@ -921,12 +906,12 @@ pub fn ton_verify_signed(
 ) -> Result<(TonTransfer, String, String)> {
     let (t, sig) = TonTransfer::decode(boc_b64, public_key, ton_wallet_id(testnet))?;
     let key = ed25519_dalek::VerifyingKey::from_bytes(public_key)
-        .map_err(|_| Error::input("clé publique TON invalide"))?;
+        .map_err(|_| Error::input("invalid TON public key"))?;
     key.verify_strict(
         &t.signing_hash()?,
         &ed25519_dalek::Signature::from_bytes(&sig),
     )
-    .map_err(|_| Error::input("signature TON invalide"))?;
+    .map_err(|_| Error::input("invalid TON signature"))?;
     let (_, h) = t.encode_signed(&sig)?;
     Ok((
         t.clone(),
@@ -954,7 +939,7 @@ const HW_HINT_COMMENT: u32 = 0x00;
 pub fn ton_hw_check_comment(text: &str) -> Result<()> {
     if text.len() > TON_HW_MAX_COMMENT || !text.bytes().all(|b| (0x20..0x7f).contains(&b)) {
         return Err(Error::input(
-            "commentaire TON sur Ledger : 120 caractères ASCII imprimables au plus (pas d'accents ni d'emoji)",
+            "TON comment on Ledger: 120 printable ASCII characters at most (no accents or emoji)",
         ));
     }
     check_comment(text)
@@ -986,16 +971,16 @@ pub fn ton_hw_request(
 ) -> Result<(Vec<u8>, [u8; 32])> {
     let (t, sig) = TonTransfer::decode(boc_b64, public_key, ton_wallet_id(testnet))?;
     if sig != [0u8; 64] {
-        return Err(Error::input("ce transfert TON est déjà signé"));
+        return Err(Error::input("this TON transfer is already signed"));
     }
     if t.jetton.is_some() {
         return Err(Error::input(
-            "transfert de jeton TON : pas encore pris en charge sur Ledger",
+            "TON token transfer: not supported on Ledger yet",
         ));
     }
     if t.comment.is_none() && !t.inline_empty_body {
         return Err(Error::input(
-            "transfert TON non construit pour le Ledger (corps vide en référence)",
+            "TON transfer not built for the Ledger (empty body as a reference)",
         ));
     }
     let mut r = vec![0x01];
@@ -1038,25 +1023,25 @@ pub fn ton_hw_signed(
 ) -> Result<TonSigned> {
     let (t, sig) = TonTransfer::decode(boc_b64, public_key, ton_wallet_id(testnet))?;
     if sig != [0u8; 64] {
-        return Err(Error::input("ce transfert TON est déjà signé"));
+        return Err(Error::input("this TON transfer is already signed"));
     }
     let expected = t.signing_hash()?;
     if hash != expected {
         return Err(Error::crypto(
-            "le Ledger a signé un autre message que celui préparé par Kyro",
+            "the Ledger signed a different message from the one Kyro prepared",
         ));
     }
     let sig: [u8; 64] = signature
         .try_into()
-        .map_err(|_| Error::crypto("signature de l'appareil : 64 octets attendus"))?;
+        .map_err(|_| Error::crypto("device signature: 64 bytes expected"))?;
     let key = ed25519_dalek::VerifyingKey::from_bytes(public_key)
-        .map_err(|_| Error::input("clé publique TON invalide"))?;
+        .map_err(|_| Error::input("invalid TON public key"))?;
     key.verify_strict(&expected, &ed25519_dalek::Signature::from_bytes(&sig))
-        .map_err(|_| Error::crypto("signature de l'appareil invalide"))?;
+        .map_err(|_| Error::crypto("invalid device signature"))?;
     let (boc, h) = t.encode_signed(&sig)?;
     let (_, hash_hex, normalized) = ton_verify_signed(&boc, public_key, testnet)?;
     if hash_hex != hex::encode(h) {
-        return Err(Error::crypto("hash du message signé incohérent"));
+        return Err(Error::crypto("inconsistent signed message hash"));
     }
     Ok(TonSigned {
         boc,

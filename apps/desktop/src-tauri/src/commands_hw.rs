@@ -61,7 +61,7 @@ pub(crate) fn guard(state: &AppState) -> AppResult<()> {
 pub(crate) fn check_account_number(account: u32) -> AppResult<()> {
     if account > MAX_HW_ACCOUNT {
         return Err(AppError::InvalidInput(format!(
-            "numéro de compte : 0 à {MAX_HW_ACCOUNT}"
+            "account number: 0 to {MAX_HW_ACCOUNT}"
         )));
     }
     Ok(())
@@ -69,10 +69,7 @@ pub(crate) fn check_account_number(account: u32) -> AppResult<()> {
 
 fn not_yet(chain: Chain) -> AppError {
     AppError::HwUnsupported {
-        what: format!(
-            "{} : pas encore pris en charge par Kyro (phase 4)",
-            chain.label()
-        ),
+        what: format!("{}: not yet supported by Kyro (phase 4)", chain.label()),
         min: None,
     }
 }
@@ -179,7 +176,7 @@ pub fn hw_pin_matrix(state: State<'_, AppState>, id: String, positions: String) 
         || positions.len() > 50
         || !positions.bytes().all(|b| (b'1'..=b'9').contains(&b))
     {
-        return Err(AppError::InvalidInput("positions : chiffres 1 à 9".into()));
+        return Err(AppError::InvalidInput("positions: digits 1 to 9".into()));
     }
     Ok(state.hw.submit_pin(&id, positions)?)
 }
@@ -189,14 +186,14 @@ pub fn hw_pin_matrix(state: State<'_, AppState>, id: String, positions: String) 
 fn check_pairing_code(code: &str) -> AppResult<()> {
     if code.len() != 6 || !code.bytes().all(|b| b.is_ascii_digit()) {
         return Err(AppError::InvalidInput(
-            "code d'appairage : les 6 chiffres affichés sur l'appareil".into(),
+            "pairing code: the 6 digits shown on the device".into(),
         ));
     }
     Ok(())
 }
 
 fn parse_thp_key(key: &str) -> AppResult<[u8; 32]> {
-    let bad = || AppError::InvalidInput("clé d'appareil invalide".into());
+    let bad = || AppError::InvalidInput("invalid device key".into());
     let v = hex::decode(key.trim()).map_err(|_| bad())?;
     v.try_into().map_err(|_| bad())
 }
@@ -296,7 +293,7 @@ async fn read_keys(
                         out.btc.push(dev.btc_account(ctl, net, kind, account)?);
                     }
                     if out.btc[0].fingerprint != out.btc[1].fingerprint {
-                        return Err(HwError::bad("empreintes maîtres différentes"));
+                        return Err(HwError::bad("master fingerprints differ"));
                     }
                 }
                 Chain::Evm => {
@@ -305,7 +302,7 @@ async fn read_keys(
                         .map_err(|e| HwError::bad(e.to_string()))?;
                     // The device's own address for that index must agree with the node.
                     if dev.evm_address(ctl, account, false)? != address {
-                        return Err(HwError::bad("adresse et nœud EVM incohérents"));
+                        return Err(HwError::bad("EVM address and node do not match"));
                     }
                     out.evm = Some(HwEvmKey {
                         xpub,
@@ -379,7 +376,7 @@ pub async fn hw_account_add(
             check_brand(&info, &acc)?;
             if acc.account != account {
                 return Err(AppError::InvalidInput(
-                    "numéro de compte différent de celui du compte existant".into(),
+                    "account number differs from the existing account's".into(),
                 ));
             }
             acc
@@ -467,7 +464,7 @@ pub fn hw_account_remove(state: State<'_, AppState>, account_id: String) -> AppR
     s.accounts.retain(|a| a.id != account_id);
     if s.accounts.len() == before {
         return Err(AppError::InvalidInput(
-            "compte hardware wallet inconnu".into(),
+            "unknown hardware-wallet account".into(),
         ));
     }
     store::save(&state.hw_accounts_path, &s, state.network)
@@ -477,7 +474,7 @@ pub fn hw_account_remove(state: State<'_, AppState>, account_id: String) -> AppR
 
 /// `m/a'/b'/…` → raw indices.
 pub fn parse_path(path: &str) -> AppResult<Vec<u32>> {
-    let bad = || AppError::InvalidInput(format!("chemin de dérivation invalide : {path}"));
+    let bad = || AppError::InvalidInput(format!("invalid derivation path: {path}"));
     let rest = path.trim().strip_prefix("m/").ok_or_else(bad)?;
     let mut out = Vec::new();
     for part in rest.split('/') {
@@ -522,8 +519,9 @@ pub fn resolve_target(
     chain: Chain,
     path: &[u32],
 ) -> AppResult<(Target, String)> {
-    let wrong =
-        || AppError::InvalidInput("ce chemin n'appartient pas à ce compte hardware wallet".into());
+    let wrong = || {
+        AppError::InvalidInput("this path does not belong to this hardware-wallet account".into())
+    };
     match chain {
         Chain::Btc => {
             let [purpose, coin, account, change, index] = path else {
@@ -709,13 +707,13 @@ pub async fn hw_sign_btc_psbt(
     check_brand(&info, &acc)?;
     if acc.btc.is_empty() {
         return Err(AppError::InvalidInput(
-            "ce compte n'a pas de clés Bitcoin".into(),
+            "this account has no Bitcoin keys".into(),
         ));
     }
     let plan = wallet_core::btc_hw_plan(net, &psbt, &acc.btc)?;
     if !plan.external_inputs.is_empty() {
         return Err(AppError::HwUnsupported {
-            what: "transaction avec des entrées qui n'appartiennent pas à ce compte".into(),
+            what: "transaction with inputs that do not belong to this account".into(),
             min: None,
         });
     }
@@ -725,8 +723,8 @@ pub async fn hw_sign_btc_psbt(
         .find(|i| i.kind == BtcKind::Segwit && !i.has_prev_tx)
     {
         return Err(AppError::InvalidInput(format!(
-            "la PSBT doit inclure la transaction précédente (non_witness_utxo) de l'entrée {} \
-             pour une signature sur hardware wallet",
+            "the PSBT must include the previous transaction (non_witness_utxo) of input {} \
+             for a hardware-wallet signature",
             i.index
         )));
     }
@@ -736,7 +734,7 @@ pub async fn hw_sign_btc_psbt(
     if decoded.fee_sats != plan.summary.fee_sats
         || decoded.outputs.len() != plan.summary.outputs.len()
     {
-        return Err(AppError::Internal("décodages PSBT incohérents".into()));
+        return Err(AppError::Internal("inconsistent PSBT decodings".into()));
     }
     let mut kinds: Vec<BtcKind> = plan.inputs.iter().map(|i| i.kind).collect();
     kinds.dedup();
@@ -774,7 +772,7 @@ pub async fn hw_sign_btc_psbt(
     }
     // 3. The device.
     let parsed = bitcoin::psbt::Psbt::from_str(psbt.trim())
-        .map_err(|_| AppError::InvalidInput("PSBT invalide".into()))?;
+        .map_err(|_| AppError::InvalidInput("invalid PSBT".into()))?;
     let accounts = acc.btc.clone();
     let plan2 = plan.clone();
     let sigs = state
@@ -818,7 +816,7 @@ pub async fn hw_sign_evm_tx(
     check_brand(&info, &acc)?;
     let expected = acc
         .evm_address()?
-        .ok_or_else(|| AppError::InvalidInput("ce compte n'a pas de clé EVM".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("this account has no EVM key".into()))?;
     let summary = wallet_core::evm_decode(&tx, state.network)?;
     let descriptor = match (info.kind, summary.kind, summary.token_contract.as_deref()) {
         (
@@ -916,13 +914,13 @@ pub async fn hw_sign_sol_tx(
         .sol
         .as_ref()
         .map(|s| s.address.clone())
-        .ok_or_else(|| AppError::InvalidInput("ce compte n'a pas de clé Solana".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("this account has no Solana key".into()))?;
     let bytes = solana::message_bytes(&message)?;
     let decoded = solana::decode(&state, &bytes, &me).await?;
     let summary = decoded.summary.clone();
     if summary.our_signer_index.is_none() {
         return Err(AppError::InvalidInput(
-            "cette transaction ne demande pas la signature de cette adresse Solana".into(),
+            "this transaction does not ask for this Solana address's signature".into(),
         ));
     }
     let acc2 = acc.clone();

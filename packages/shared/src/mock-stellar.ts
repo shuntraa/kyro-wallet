@@ -62,7 +62,7 @@ export function checkStellarAddress(a: unknown): string {
     case 'account':
       return s;
     case 'muxed':
-      throw invalidInput("les adresses M… (comptes multiplexés) ne sont pas prises en charge : demande l'adresse G… et le mémo");
+      throw invalidInput(l10n("les adresses M… (comptes multiplexés) ne sont pas prises en charge : demande l'adresse G… et le mémo", 'M… addresses (muxed accounts) are not supported: ask for the G… address and the memo'));
     case 'secret':
       throw invalidInput(l10n('ceci est une CLÉ SECRÈTE Stellar (S…), pas une adresse : ne la donne jamais à personne', 'this is a Stellar SECRET KEY (S…), not an address: never give it to anyone'));
     default:
@@ -217,7 +217,7 @@ export function createDemoStellar(d: DemoStellarDeps) {
   /** stellar_backend::check_payment, same order and messages. */
   const checkPayment = (ours: StellarAccountInfo, dest: StellarAccountInfo, stroops: bigint, fee: bigint, hasMemo: boolean) => {
     if (!ours.exists) throw invalidInput(l10n('ton compte Stellar n’est pas encore activé : il doit d’abord recevoir au moins 1 XLM', 'your Stellar account is not activated yet: it must first receive at least 1 XLM'));
-    if (stroops <= 0n) throw invalidInput('montant nul');
+    if (stroops <= 0n) throw invalidInput(l10n('montant nul', 'zero amount'));
     if (dest.memoRequired && !hasMemo) {
       throw invalidInput(l10n('ce destinataire exige un mémo (SEP-0029, souvent une plateforme d’échange) : ajoute-le, sinon les fonds risquent d’être perdus', 'this recipient requires a memo (SEP-0029, often an exchange): add it, otherwise the funds may be lost'));
     }
@@ -240,9 +240,9 @@ export function createDemoStellar(d: DemoStellarDeps) {
     try {
       e = JSON.parse(new TextDecoder().decode(base64.decode(String(envelope ?? '').trim()))) as DemoEnvelope;
     } catch {
-      throw invalidInput('transaction Stellar : base64 invalide');
+      throw invalidInput(l10n('transaction Stellar : base64 invalide', 'Stellar transaction: invalid base64'));
     }
-    if (e.source !== me) throw invalidInput("transaction Stellar : la source n'est pas l'adresse de ce portefeuille");
+    if (e.source !== me) throw invalidInput(l10n("transaction Stellar : la source n'est pas l'adresse de ce portefeuille", 'Stellar transaction: the source is not this wallet’s address'));
     if (!e.maxTime) throw invalidInput(l10n('transaction Stellar : aucune limite de temps : la transaction resterait valable indéfiniment', 'Stellar transaction: no time limit: the transaction would stay valid forever'));
     const op = e.operation;
     if (op.kind !== 'changeTrust') {
@@ -263,7 +263,7 @@ export function createDemoStellar(d: DemoStellarDeps) {
   const memoLine = (m: StellarMemoView) => {
     switch (m.kind) {
       case 'none':
-        return "AUCUN MÉMO\n(une plateforme d'échange en exige souvent un : sans lui, les fonds peuvent être perdus)\n";
+        return l10n("AUCUN MÉMO\n(une plateforme d'échange en exige souvent un : sans lui, les fonds peuvent être perdus)\n", 'NO MEMO\n(an exchange often requires one: without it, the funds may be lost)\n');
       case 'text':
         return m.text !== null ? l10n(`MÉMO (texte) : « ${m.text} »\n`, `MEMO (text): “${m.text}”\n`) : l10n(`MÉMO (texte non lisible, octets) : ${m.hex}\n`, `MEMO (unreadable text, bytes): ${m.hex}\n`);
       case 'id':
@@ -279,10 +279,10 @@ export function createDemoStellar(d: DemoStellarDeps) {
   const describe = (s: StellarTxSummary, c: StellarContext): string => {
     const line = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     const op = s.operation;
-    if (op.kind === 'changeTrust') return 'Ligne de confiance Stellar';
+    if (op.kind === 'changeTrust') return l10n('Ligne de confiance Stellar', 'Stellar trustline');
     let out = `${l10n('Envoi Stellar', 'Stellar send')}${op.kind === 'createAccount' ? l10n(' — création de compte', ' — account creation') : ''}${d.network === 'testnet' ? ' (testnet)' : ''}\n\n${l10n('À : ', 'To: ')}${op.destination}\n${line}\n${memoLine(s.memo)}${line}\n`;
     const amount = amountOf(op);
-    out += `Montant : ${demoXlmText(amount)} (${amount} stroops)\n`;
+    out += l10n(`Montant : ${demoXlmText(amount)} (${amount} stroops)\n`, `Amount: ${demoXlmText(amount)} (${amount} stroops)\n`);
     if (op.kind === 'createAccount') out += l10n(`\nCe compte n'existe pas encore : cet envoi le crée (opération CreateAccount). ${demoXlmText(2n * STELLAR_BASE_RESERVE)} de réserve y reste bloqué (2 × ${demoXlmText(STELLAR_BASE_RESERVE)}).\n`, `\nThis account does not exist yet: this send creates it (CreateAccount operation). ${demoXlmText(2n * STELLAR_BASE_RESERVE)} of reserve stays locked on it (2 × ${demoXlmText(STELLAR_BASE_RESERVE)}).\n`);
     out += l10n(`\nFrais maximum : ${demoXlmText(s.fee)} (${s.fee} stroops ; d'habitude seuls ${c.baseFee} stroops sont prélevés)\n`, `\nMaximum fee: ${demoXlmText(s.fee)} (${s.fee} stroops; usually only ${c.baseFee} stroops are charged)\n`);
     out += l10n(`Solde : ${demoXlmText(c.account.balance)} · réserve bloquée : ${demoXlmText(c.account.reserve)} ((2 + ${c.account.subentryCount} entrée(s)) × ${demoXlmText(c.baseReserve)}) · disponible : ${demoXlmText(c.account.spendable)}\n`, `Balance: ${demoXlmText(c.account.balance)} · locked reserve: ${demoXlmText(c.account.reserve)} ((2 + ${c.account.subentryCount} entr(ies)) × ${demoXlmText(c.baseReserve)}) · available: ${demoXlmText(c.account.spendable)}\n`);
@@ -315,7 +315,7 @@ export function createDemoStellar(d: DemoStellarDeps) {
       d.requireUnlocked();
       const to = checkStellarAddress(a.to);
       const amountStr = String(a.amount ?? '').trim();
-      if (!/^\d+$/.test(amountStr) || BigInt(amountStr) <= 0n) throw invalidInput('montant en stroops invalide');
+      if (!/^\d+$/.test(amountStr) || BigInt(amountStr) <= 0n) throw invalidInput(l10n('montant en stroops invalide', 'invalid amount in stroops'));
       const memo = demoParseMemo(a.memo as StellarMemoSpec | undefined);
       await backend();
       const context = contextFor(to);
@@ -331,7 +331,7 @@ export function createDemoStellar(d: DemoStellarDeps) {
       d.requireUnlocked();
       const { e, summary } = decode(a.envelope);
       const op = summary.operation;
-      if (op.kind === 'changeTrust' || (op.kind === 'payment' && op.asset.kind !== 'native')) throw invalidInput("Kyro ne signe que des envois de XLM pour l'instant");
+      if (op.kind === 'changeTrust' || (op.kind === 'payment' && op.asset.kind !== 'native')) throw invalidInput(l10n("Kyro ne signe que des envois de XLM pour l'instant", 'Kyro only signs XLM sends for now'));
       await backend();
       const context = contextFor(op.destination);
       if (summary.maxTime <= context.ledgerTime + MIN_REMAINING_SECS) throw invalidInput(l10n('transaction Stellar expirée (limite de temps presque atteinte) : reconstruis-la', 'Stellar transaction expired (time limit almost reached): rebuild it'));
@@ -348,7 +348,7 @@ export function createDemoStellar(d: DemoStellarDeps) {
     },
     stellar_broadcast: async (a) => {
       const { e, summary } = decode(a.envelope);
-      if (!e.signature) throw invalidInput('transaction Stellar : une signature attendue');
+      if (!e.signature) throw invalidInput(l10n('transaction Stellar : une signature attendue', 'Stellar transaction: one signature expected'));
       await backend();
       await wait(300);
       const hash = hashOf(String(a.envelope).trim());

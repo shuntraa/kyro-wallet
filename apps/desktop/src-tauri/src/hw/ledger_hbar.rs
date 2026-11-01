@@ -34,7 +34,7 @@ fn index_of(path: &[u32]) -> HwResult<[u8; 4]> {
             Ok((*i & 0x7fff_ffff).to_le_bytes())
         }
         _ => Err(HwError::bad(
-            "app Hedera : chemin m/44'/3030'/0'/0'/index' attendu",
+            "Hedera app: path m/44'/3030'/0'/0'/index' expected",
         )),
     }
 }
@@ -46,7 +46,7 @@ pub fn get_pubkey(path: &[u32], display: bool) -> HwResult<Vec<u8>> {
 
 pub fn sign_apdu(path: &[u32], body: &[u8]) -> HwResult<Vec<u8>> {
     if body.is_empty() || body.len() > MAX_BODY {
-        return Err(HwError::bad("corps Hedera trop long pour l'app Ledger"));
+        return Err(HwError::bad("Hedera body too long for the Ledger app"));
     }
     apdu::apdu(
         CLA,
@@ -65,7 +65,7 @@ pub fn pubkey(app: &App<'_>, path: &[u32], display: bool) -> HwResult<Vec<u8>> {
     };
     let pk = app.call(&get_pubkey(path, display)?, ctx)?;
     if pk.len() != 32 {
-        return Err(HwError::bad("clé publique Hedera de longueur inattendue"));
+        return Err(HwError::bad("Hedera public key of unexpected length"));
     }
     Ok(pk)
 }
@@ -73,7 +73,7 @@ pub fn pubkey(app: &App<'_>, path: &[u32], display: bool) -> HwResult<Vec<u8>> {
 pub fn sign(app: &App<'_>, path: &[u32], body: &[u8]) -> HwResult<Vec<u8>> {
     let sig = app.call(&sign_apdu(path, body)?, SwContext::Signing)?;
     if sig.len() != 64 {
-        return Err(HwError::bad("signature Hedera de longueur inattendue"));
+        return Err(HwError::bad("Hedera signature of unexpected length"));
     }
     Ok(sig)
 }

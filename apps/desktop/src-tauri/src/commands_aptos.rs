@@ -317,7 +317,7 @@ pub(crate) async fn build(
         .parse()
         .ok()
         .filter(|a| *a > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant en octas invalide".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("invalid amount in octas".into()))?;
     let ledger = aptos_backend::checked_ledger(c).await?;
     let account = aptos_backend::account(c, me).await?;
     // Key not rotated, amount within the balance (the fee is checked once simulated).
@@ -343,9 +343,9 @@ pub(crate) async fn build(
         aptos_backend::simulate(c, wallet_core::aptos_simulation_bytes(&raw, pubkey)?).await?;
     if !ok {
         return Err(AppError::InvalidInput(format!(
-            "la simulation du transfert échoue : {vm_status}{}",
+            "the transfer simulation fails: {vm_status}{}",
             if vm_status.contains("INSUFFICIENT_BALANCE") || vm_status.contains("MAX_GAS_UNITS") {
-                " (solde insuffisant pour le montant et les frais)"
+                " (insufficient balance for the amount and the fees)"
             } else {
                 ""
             }
@@ -371,7 +371,7 @@ pub(crate) async fn build(
 fn known_asset(c: &AptosCtx<'_>, metadata: &str) -> AppResult<[u8; 32]> {
     let m = wallet_core::aptos_parse_address(metadata)?;
     wallet_core::aptos_known_asset(&m, c.chain_id).ok_or_else(|| {
-        AppError::InvalidInput("jeton Aptos inconnu de Kyro sur ce réseau".into())
+        AppError::InvalidInput("Aptos token unknown to Kyro on this network".into())
     })?;
     Ok(m)
 }
@@ -380,12 +380,12 @@ fn known_asset(c: &AptosCtx<'_>, metadata: &str) -> AppResult<[u8; 32]> {
 async fn check_token(c: &AptosCtx<'_>, me: &str, metadata: &str, amount: u64) -> AppResult<u64> {
     let m = wallet_core::aptos_parse_address(metadata)?;
     let k = wallet_core::aptos_known_asset(&m, c.chain_id).ok_or_else(|| {
-        AppError::InvalidInput("jeton Aptos inconnu de Kyro sur ce réseau".into())
+        AppError::InvalidInput("Aptos token unknown to Kyro on this network".into())
     })?;
     let have = aptos_backend::fa_balance(c, me, k.metadata).await?;
     if amount > have {
         return Err(AppError::InvalidInput(format!(
-            "solde {} insuffisant : {} {}",
+            "insufficient {} balance: {} {}",
             k.symbol,
             crate::commands::format_units(&have.to_string(), usize::from(k.decimals)),
             k.symbol
@@ -412,7 +412,7 @@ pub(crate) async fn build_token(
         .parse()
         .ok()
         .filter(|a| *a > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant de jeton invalide".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("invalid token amount".into()))?;
     let ledger = aptos_backend::checked_ledger(c).await?;
     let account = aptos_backend::account(c, me).await?;
     aptos_backend::check_transfer(&account, 0, 0)?;
@@ -435,9 +435,9 @@ pub(crate) async fn build_token(
         aptos_backend::simulate(c, wallet_core::aptos_simulation_bytes(&raw, pubkey)?).await?;
     if !ok {
         return Err(AppError::InvalidInput(format!(
-            "la simulation du transfert échoue : {vm_status}{}",
+            "the transfer simulation fails: {vm_status}{}",
             if vm_status.contains("MAX_GAS_UNITS") || vm_status.contains("INSUFFICIENT_BALANCE") {
-                " (pas assez d'APT pour les frais)"
+                " (not enough APT for the fees)"
             } else {
                 ""
             }
@@ -507,7 +507,7 @@ pub(crate) async fn prepare_sign(
     let summary = wallet_core::aptos_decode_tx(raw, me)?;
     if summary.chain_id != c.chain_id {
         return Err(AppError::InvalidInput(format!(
-            "transaction pour la chaîne {}, pas pour celle de l'app ({})",
+            "transaction for chain {}, not for the app's ({})",
             summary.chain_id, c.chain_id
         )));
     }
@@ -515,21 +515,21 @@ pub(crate) async fn prepare_sign(
     if summary.expiration_timestamp_secs < ledger.timestamp_secs + aptos_backend::MIN_REMAINING_SECS
     {
         return Err(AppError::InvalidInput(
-            "transfert Aptos expiré ou sur le point de l'être : reconstruis-le".into(),
+            "Aptos transfer expired or about to expire: rebuild it".into(),
         ));
     }
     if summary.expiration_timestamp_secs
         > ledger.timestamp_secs + aptos_backend::EXPIRATION_SECS + 60
     {
         return Err(AppError::InvalidInput(
-            "expiration trop lointaine : Kyro ne signe pas un transfert valable plus de 10 minutes"
+            "expiration too far away: Kyro does not sign a transfer valid for more than 10 minutes"
                 .into(),
         ));
     }
     let account = aptos_backend::account(c, me).await?;
     if summary.sequence_number != account.sequence_number {
         return Err(AppError::InvalidInput(
-            "numéro de séquence périmé : reconstruis le transfert".into(),
+            "stale sequence number: rebuild the transfer".into(),
         ));
     }
     let amount: u64 = summary.amount.parse().unwrap_or(u64::MAX);
@@ -549,7 +549,7 @@ pub(crate) async fn prepare_sign(
         aptos_backend::simulate(c, wallet_core::aptos_simulation_bytes(raw, pubkey)?).await?;
     if !ok {
         return Err(AppError::InvalidInput(format!(
-            "la simulation du transfert échoue : {vm_status}"
+            "the transfer simulation fails: {vm_status}"
         )));
     }
     let recipient_new = match &summary.token {
@@ -619,7 +619,7 @@ pub async fn aptos_sign_tx(
         blocking(move || Ok(wallet_core::aptos_sign(&seed, a, &r)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -641,16 +641,16 @@ pub(crate) async fn broadcast_checked(
     let (hash, t) = wallet_core::aptos_verify_signed(signed)?;
     if t.sender != wallet_core::aptos_parse_address(me)? {
         return Err(AppError::InvalidInput(
-            "ce transfert n'est pas signé par ton compte".into(),
+            "this transfer is not signed by your account".into(),
         ));
     }
     if t.chain_id != c.chain_id {
         return Err(AppError::InvalidInput(
-            "transfert signé pour une autre chaîne".into(),
+            "transfer signed for another chain".into(),
         ));
     }
     let bytes = hex::decode(signed.trim().trim_start_matches("0x"))
-        .map_err(|_| AppError::InvalidInput("transaction : hexadécimal attendu".into()))?;
+        .map_err(|_| AppError::InvalidInput("transaction: hexadecimal expected".into()))?;
     aptos_backend::submit(c, bytes, &hash).await
 }
 
@@ -679,7 +679,7 @@ pub async fn aptos_tx_status(state: State<'_, AppState>, hash: String) -> AppRes
     let hex_part = h.strip_prefix("0x").unwrap_or(&h);
     if hex_part.len() != 64 || !hex_part.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(AppError::InvalidInput(
-            "hash : 0x suivi de 64 caractères hexadécimaux".into(),
+            "hash: 0x followed by 64 hexadecimal characters".into(),
         ));
     }
     let (committed, success, vm_status) =

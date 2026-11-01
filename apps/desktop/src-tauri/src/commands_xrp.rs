@@ -243,7 +243,7 @@ pub fn xrp_address(
 ) -> AppResult<String> {
     if index.unwrap_or(0) != 0 {
         return Err(AppError::InvalidInput(
-            "XRP : une seule adresse par compte (index 0)".into(),
+            "XRP: a single address per account (index 0)".into(),
         ));
     }
     Ok(ours(&state, account_arg(account)?)?.0)
@@ -331,7 +331,7 @@ pub(crate) async fn build(
                 .parse()
                 .ok()
                 .filter(|d| *d > 0)
-                .ok_or_else(|| AppError::InvalidInput("montant en drops invalide".into()))?,
+                .ok_or_else(|| AppError::InvalidInput("invalid amount in drops".into()))?,
         ),
         Some(i) => wallet_core::xrp_issued_amount(amount, &i.currency, &i.issuer)?,
     };
@@ -418,12 +418,12 @@ pub(crate) async fn prepare_sign(
     let (_, current) = xrp_backend::fee(c).await?;
     if summary.last_ledger_sequence.is_some_and(|l| l <= current) {
         return Err(AppError::InvalidInput(
-            "paiement XRP expiré (LastLedgerSequence dépassé) : reconstruis-le".into(),
+            "XRP payment expired (LastLedgerSequence passed): rebuild it".into(),
         ));
     }
     if summary.sequence != context.account.sequence {
         return Err(AppError::InvalidInput(
-            "numéro de séquence périmé : reconstruis le paiement".into(),
+            "stale sequence number: rebuild the payment".into(),
         ));
     }
     let fee: u64 = summary.fee.parse().unwrap_or(0);
@@ -478,7 +478,7 @@ pub async fn xrp_sign_tx(
     let (signed, hash, again) = blocking(move || Ok(wallet_core::xrp_sign(&seed, a, &b)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -495,11 +495,11 @@ pub(crate) async fn broadcast_checked(c: &XrpCtx<'_>, me: &str, blob: &str) -> A
     let hash = wallet_core::xrp_verify_signed(blob)?;
     let p = XrpPayment::decode(
         &hex::decode(blob.trim())
-            .map_err(|_| AppError::InvalidInput("blob : hexadécimal attendu".into()))?,
+            .map_err(|_| AppError::InvalidInput("blob: hexadecimal expected".into()))?,
     )?;
     if p.account != wallet_core::xrp_account_id(me)? {
         return Err(AppError::InvalidInput(
-            "ce paiement n'est pas signé par ton compte".into(),
+            "this payment is not signed by your account".into(),
         ));
     }
     xrp_backend::submit(c, blob.trim(), &hash).await
@@ -518,7 +518,7 @@ pub async fn xrp_tx_status(state: State<'_, AppState>, hash: String) -> AppResul
     let h = hash.trim();
     if h.len() != 64 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(AppError::InvalidInput(
-            "hash : 64 caractères hexadécimaux".into(),
+            "hash: 64 hexadecimal characters".into(),
         ));
     }
     let (validated, result) = xrp_backend::tx_status(&ctx(&state), h).await?;

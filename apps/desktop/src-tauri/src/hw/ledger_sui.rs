@@ -74,7 +74,7 @@ pub fn run(app: &App<'_>, ins: u8, params: &[Vec<u8>], ctx: SwContext) -> HwResu
         let resp = app.call(&apdu::apdu(CLA, ins, 0, 0, &payload)?, ctx)?;
         let (&kind, rest) = resp
             .split_first()
-            .ok_or_else(|| HwError::bad("réponse Sui vide"))?;
+            .ok_or_else(|| HwError::bad("empty Sui response"))?;
         payload = match kind {
             RESULT_ACCUMULATING | RESULT_FINAL => {
                 result.extend_from_slice(rest);
@@ -86,7 +86,7 @@ pub fn run(app: &App<'_>, ins: u8, params: &[Vec<u8>], ctx: SwContext) -> HwResu
             GET_CHUNK => {
                 let key: [u8; 32] = rest
                     .try_into()
-                    .map_err(|_| HwError::bad("demande de bloc Sui mal formée"))?;
+                    .map_err(|_| HwError::bad("malformed Sui block request"))?;
                 match store.get(&key) {
                     Some(b) => [&[GET_CHUNK_OK][..], b].concat(),
                     None => vec![GET_CHUNK_FAIL],
@@ -96,14 +96,14 @@ pub fn run(app: &App<'_>, ins: u8, params: &[Vec<u8>], ctx: SwContext) -> HwResu
                 store.insert(Sha256::digest(rest).into(), rest.to_vec());
                 vec![PUT_CHUNK_OK]
             }
-            _ => return Err(HwError::bad("instruction inconnue de l'app Sui")),
+            _ => return Err(HwError::bad("unknown instruction from the Sui app")),
         };
     }
-    Err(HwError::bad("app Sui : conversation trop longue"))
+    Err(HwError::bad("Sui app: conversation too long"))
 }
 
 pub fn parse_pubkey(data: &[u8]) -> HwResult<Vec<u8>> {
-    let bad = || HwError::bad("clé publique Sui mal formée");
+    let bad = || HwError::bad("malformed Sui public key");
     let (&n, rest) = data.split_first().ok_or_else(bad)?;
     if n != 32 || rest.len() < 32 {
         return Err(bad());
@@ -114,7 +114,7 @@ pub fn parse_pubkey(data: &[u8]) -> HwResult<Vec<u8>> {
         let (&m, addr) = tail.split_first().ok_or_else(bad)?;
         if m != 32 || addr.len() != 32 || addr != wallet_core::sui_address_bytes_of_pubkey(&pk) {
             return Err(HwError::bad(
-                "adresse Sui de l'appareil incohérente avec sa clé",
+                "Sui address from the device does not match its key",
             ));
         }
     }
@@ -144,7 +144,7 @@ pub fn sign(app: &App<'_>, path: &[u32], intent_message: &[u8]) -> HwResult<Vec<
         SwContext::Signing,
     )?;
     if sig.len() != 64 {
-        return Err(HwError::bad("signature Sui de longueur inattendue"));
+        return Err(HwError::bad("Sui signature of unexpected length"));
     }
     Ok(sig)
 }

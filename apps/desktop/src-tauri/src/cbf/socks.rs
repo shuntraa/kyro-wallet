@@ -66,10 +66,10 @@ impl SocksBridge {
     pub async fn start<U: Upstream>(upstream: Arc<U>, allowed: Allowed) -> AppResult<Self> {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
             .await
-            .map_err(|e| AppError::Internal(format!("pont SOCKS : {e}")))?;
+            .map_err(|e| AppError::Internal(format!("SOCKS bridge: {e}")))?;
         let addr = listener
             .local_addr()
-            .map_err(|e| AppError::Internal(format!("pont SOCKS : {e}")))?;
+            .map_err(|e| AppError::Internal(format!("SOCKS bridge: {e}")))?;
         let allowed = Arc::new(allowed);
         let handle = tauri::async_runtime::spawn(async move {
             loop {

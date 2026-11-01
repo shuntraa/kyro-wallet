@@ -108,14 +108,14 @@ impl CardanoRoot {
 
     fn account(&self, account: u32) -> Result<XPrv> {
         if account >= HARDENED {
-            return Err(Error::input("numéro de compte trop grand"));
+            return Err(Error::input("account number too large"));
         }
         Ok(self.derive(&[PURPOSE | HARDENED, COIN | HARDENED, account | HARDENED]))
     }
 
     fn key(&self, account: u32, role: u32, index: u32) -> Result<XPrv> {
         if index >= HARDENED {
-            return Err(Error::input("index d'adresse trop grand"));
+            return Err(Error::input("address index too large"));
         }
         Ok(self
             .account(account)?
@@ -163,8 +163,8 @@ fn hrp(net: Network) -> &'static str {
 }
 
 fn bech32_encode(hrp_s: &str, data: &[u8]) -> Result<String> {
-    let h = Hrp::parse(hrp_s).map_err(|_| Error::crypto("préfixe bech32"))?;
-    bech32::encode::<Bech32>(h, data).map_err(|_| Error::crypto("encodage bech32 impossible"))
+    let h = Hrp::parse(hrp_s).map_err(|_| Error::crypto("bech32 prefix"))?;
+    bech32::encode::<Bech32>(h, data).map_err(|_| Error::crypto("bech32 encoding failed"))
 }
 
 /// Base address (type 0: payment key hash ‖ stake key hash) from two Ed25519 public keys.
@@ -241,16 +241,16 @@ pub fn cardano_address_bytes(address: &str, net: Network) -> Result<Vec<u8>> {
     let a = address.trim();
     if a.starts_with("Ae2") || a.starts_with("DdzFF") || a.starts_with("37btjrVyb4K") {
         return Err(Error::input(
-            "les adresses Byron ne sont pas prises en charge : demande au destinataire une adresse Shelley (addr1…)",
+            "Byron addresses are not supported: ask the recipient for a Shelley address (addr1…)",
         ));
     }
     let checked =
-        CheckedHrpstring::new::<Bech32>(a).map_err(|_| Error::input("adresse Cardano invalide"))?;
+        CheckedHrpstring::new::<Bech32>(a).map_err(|_| Error::input("invalid Cardano address"))?;
     let h = checked.hrp();
     let data: Vec<u8> = checked.byte_iter().collect();
     if h.as_str() != hrp(net) {
         return Err(Error::input(
-            "adresse Cardano d'un autre réseau, ou pas une adresse de paiement",
+            "Cardano address of another network, or not a payment address",
         ));
     }
     check_address_bytes(&data, net)?;
@@ -258,26 +258,22 @@ pub fn cardano_address_bytes(address: &str, net: Network) -> Result<Vec<u8>> {
 }
 
 fn check_address_bytes(data: &[u8], net: Network) -> Result<()> {
-    let header = *data.first().ok_or_else(|| Error::input("adresse vide"))?;
+    let header = *data.first().ok_or_else(|| Error::input("empty address"))?;
     let (kind, nid) = (header >> 4, header & 0x0F);
     if nid != network_id(net) {
-        return Err(Error::input("adresse Cardano d'un autre réseau"));
+        return Err(Error::input("Cardano address of another network"));
     }
     match (kind, data.len()) {
         (0 | 2, 57) | (6, 29) => Ok(()),
         (1 | 3 | 7, _) => Err(Error::input(
-            "adresses de script refusées : un paiement sans datum pourrait bloquer les fonds",
+            "script addresses refused: a payment without a datum could lock the funds",
         )),
-        (4 | 5, _) => Err(Error::input(
-            "adresses pointeur obsolètes (Conway) : refusées",
-        )),
+        (4 | 5, _) => Err(Error::input("obsolete pointer addresses (Conway): refused")),
         (14 | 15, _) => Err(Error::input(
-            "une adresse de staking (stake…) ne peut pas recevoir de paiement",
+            "a staking address (stake…) cannot receive a payment",
         )),
-        (8, _) => Err(Error::input(
-            "les adresses Byron ne sont pas prises en charge",
-        )),
-        _ => Err(Error::input("adresse Cardano mal formée")),
+        (8, _) => Err(Error::input("Byron addresses are not supported")),
+        _ => Err(Error::input("malformed Cardano address")),
     }
 }
 
@@ -305,7 +301,7 @@ enum Cbor {
 }
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("transaction Cardano : {}", msg.into()))
+    Error::input(format!("Cardano transaction: {}", msg.into()))
 }
 
 fn put_head(out: &mut Vec<u8>, major: u8, v: u64) {
@@ -368,16 +364,16 @@ impl Cbor {
 
     fn decode(b: &mut &[u8], depth: usize) -> Result<Cbor> {
         if depth > 16 {
-            return Err(bad("imbrication trop profonde"));
+            return Err(bad("nesting too deep"));
         }
-        let (&first, rest) = b.split_first().ok_or_else(|| bad("tronquée"))?;
+        let (&first, rest) = b.split_first().ok_or_else(|| bad("truncated"))?;
         *b = rest;
         let (major, info) = (first >> 5, first & 0x1F);
         if major == 7 {
             return match info {
                 21 => Ok(Cbor::True),
                 22 => Ok(Cbor::Null),
-                _ => Err(bad("valeur simple ou flottant non pris en charge")),
+                _ => Err(bad("simple value or float not supported")),
             };
         }
         let v = match info {
@@ -385,7 +381,7 @@ impl Cbor {
             24..=27 => {
                 let n = 1usize << (info - 24);
                 if b.len() < n {
-                    return Err(bad("tronquée"));
+                    return Err(bad("truncated"));
                 }
                 let mut x = 0u64;
                 for byte in &b[..n] {
@@ -394,19 +390,19 @@ impl Cbor {
                 *b = &b[n..];
                 x
             }
-            31 => return Err(bad("longueurs indéfinies refusées")),
-            _ => return Err(bad("valeur CBOR réservée")),
+            31 => return Err(bad("indefinite lengths refused")),
+            _ => return Err(bad("reserved CBOR value")),
         };
         let len = |v: u64, b: &[u8]| -> Result<usize> {
-            let l = usize::try_from(v).map_err(|_| bad("longueur"))?;
+            let l = usize::try_from(v).map_err(|_| bad("length"))?;
             if l > b.len() {
-                return Err(bad("tronquée"));
+                return Err(bad("truncated"));
             }
             Ok(l)
         };
         Ok(match major {
             0 => Cbor::Uint(v),
-            1 => return Err(bad("entiers négatifs refusés")),
+            1 => return Err(bad("negative integers refused")),
             2 => {
                 let l = len(v, b)?;
                 let x = b[..l].to_vec();
@@ -416,7 +412,7 @@ impl Cbor {
             3 => {
                 let l = len(v, b)?;
                 let x =
-                    String::from_utf8(b[..l].to_vec()).map_err(|_| bad("texte UTF-8 invalide"))?;
+                    String::from_utf8(b[..l].to_vec()).map_err(|_| bad("invalid UTF-8 text"))?;
                 *b = &b[l..];
                 Cbor::Text(x)
             }
@@ -439,7 +435,7 @@ impl Cbor {
                 Cbor::Map(m)
             }
             6 => Cbor::Tag(v, Box::new(Cbor::decode(b, depth + 1)?)),
-            _ => return Err(bad("type CBOR non pris en charge")),
+            _ => return Err(bad("unsupported CBOR type")),
         })
     }
 }
@@ -448,11 +444,11 @@ fn parse_one(raw: &[u8]) -> Result<Cbor> {
     let mut b = raw;
     let c = Cbor::decode(&mut b, 0)?;
     if !b.is_empty() {
-        return Err(bad("octets en trop à la fin"));
+        return Err(bad("trailing bytes"));
     }
     if c.to_vec() != raw {
         return Err(bad(
-            "CBOR non canonique (entier ou longueur pas sous sa forme la plus courte)",
+            "non-canonical CBOR (integer or length not in its shortest form)",
         ));
     }
     Ok(c)
@@ -580,43 +576,43 @@ fn hash28(c: &Cbor, what: &str) -> Result<[u8; 28]> {
         Cbor::Bytes(b) => b
             .as_slice()
             .try_into()
-            .map_err(|_| bad(format!("{what} : 28 octets attendus"))),
-        _ => Err(bad(format!("{what} : octets attendus"))),
+            .map_err(|_| bad(format!("{what}: 28 bytes expected"))),
+        _ => Err(bad(format!("{what}: bytes expected"))),
     }
 }
 
 fn cert_name(t: u64) -> &'static str {
     match t {
-        0 => "enregistrement de clé de staking ancien format (dépôt implicite)",
-        1 => "désinscription ancien format",
-        3 => "enregistrement de pool",
-        4 => "retrait de pool",
-        5 => "délégation genesis",
-        6 => "transfert de récompenses (MIR)",
-        10..=13 => "certificat combiné (enregistrement / délégation / vote)",
-        14 | 15 => "comité constitutionnel",
-        16..=18 => "enregistrement / mise à jour de DRep",
-        _ => "inconnu",
+        0 => "legacy stake key registration (implicit deposit)",
+        1 => "legacy deregistration",
+        3 => "pool registration",
+        4 => "pool retirement",
+        5 => "genesis delegation",
+        6 => "rewards transfer (MIR)",
+        10..=13 => "combined certificate (registration / delegation / vote)",
+        14 | 15 => "constitutional committee",
+        16..=18 => "DRep registration / update",
+        _ => "unknown",
     }
 }
 
 fn decode_cert(c: &Cbor) -> Result<CardanoCert> {
     let Cbor::Array(a) = c else {
-        return Err(bad("certificat"));
+        return Err(bad("certificate"));
     };
     let Some(Cbor::Uint(t)) = a.first() else {
-        return Err(bad("type de certificat"));
+        return Err(bad("certificate type"));
     };
     let cred = |c: &Cbor| -> Result<[u8; 28]> {
         match c {
             Cbor::Array(x) => match x.as_slice() {
-                [Cbor::Uint(0), h] => hash28(h, "clé de staking"),
+                [Cbor::Uint(0), h] => hash28(h, "stake key"),
                 [Cbor::Uint(1), _] => Err(bad(
-                    "identifiant de staking de script : refusé (seule ta clé de staking est acceptée)",
+                    "script stake credential: refused (only your stake key is accepted)",
                 )),
-                _ => Err(bad("identifiant de staking")),
+                _ => Err(bad("stake credential")),
             },
-            _ => Err(bad("identifiant de staking")),
+            _ => Err(bad("stake credential")),
         }
     };
     match (*t, a.as_slice()) {
@@ -645,9 +641,9 @@ fn decode_cert(c: &Cbor) -> Result<CardanoCert> {
                 drep,
             })
         }
-        (2 | 7 | 8 | 9, _) => Err(bad("certificat mal formé")),
+        (2 | 7 | 8 | 9, _) => Err(bad("malformed certificate")),
         (other, _) => Err(bad(format!(
-            "certificat {other} ({}) : refusé",
+            "certificate {other} ({}): refused",
             cert_name(other)
         ))),
     }
@@ -816,14 +812,14 @@ impl CardanoBody {
 
     fn decode_cbor(c: &Cbor) -> Result<CardanoBody> {
         let Cbor::Map(m) = c else {
-            return Err(bad("le corps doit être une table CBOR"));
+            return Err(bad("the body must be a CBOR map"));
         };
         let (mut inputs, mut tagged, mut outputs, mut fee, mut ttl, mut aux, mut start) =
             (None, false, None, None, None, None, None);
         let (mut certs, mut withdrawals) = (Vec::new(), Vec::new());
         for (k, v) in m {
             let Cbor::Uint(k) = k else {
-                return Err(bad("clé du corps"));
+                return Err(bad("body key"));
             };
             match k {
                 0 => {
@@ -835,7 +831,7 @@ impl CardanoBody {
                         other => other,
                     };
                     let Cbor::Array(a) = arr else {
-                        return Err(bad("entrées"));
+                        return Err(bad("inputs"));
                     };
                     let mut list = Vec::with_capacity(a.len());
                     for i in a {
@@ -849,22 +845,22 @@ impl CardanoBody {
                                         index: *ix,
                                     });
                                 }
-                                _ => return Err(bad("entrée")),
+                                _ => return Err(bad("input")),
                             },
-                            _ => return Err(bad("entrée")),
+                            _ => return Err(bad("input")),
                         }
                     }
                     inputs = Some(list);
                 }
                 1 => {
                     let Cbor::Array(a) = v else {
-                        return Err(bad("sorties"));
+                        return Err(bad("outputs"));
                     };
                     outputs = Some(a.iter().map(decode_output).collect::<Result<Vec<_>>>()?);
                 }
                 2 => match v {
                     Cbor::Uint(f) => fee = Some(*f),
-                    _ => return Err(bad("frais")),
+                    _ => return Err(bad("fee")),
                 },
                 3 => match v {
                     Cbor::Uint(t) => ttl = Some(*t),
@@ -876,7 +872,7 @@ impl CardanoBody {
                         x.copy_from_slice(h);
                         aux = Some(x);
                     }
-                    _ => return Err(bad("hash des métadonnées")),
+                    _ => return Err(bad("metadata hash")),
                 },
                 4 => {
                     let list = match v {
@@ -884,49 +880,49 @@ impl CardanoBody {
                         other => other,
                     };
                     let Cbor::Array(a) = list else {
-                        return Err(bad("certificats"));
+                        return Err(bad("certificates"));
                     };
                     if a.is_empty() || a.len() > 8 {
-                        return Err(bad("liste de certificats vide ou trop longue"));
+                        return Err(bad("certificate list empty or too long"));
                     }
                     certs = a.iter().map(decode_cert).collect::<Result<Vec<_>>>()?;
                 }
                 5 => {
                     let Cbor::Map(w) = v else {
-                        return Err(bad("retraits"));
+                        return Err(bad("withdrawals"));
                     };
                     if w.is_empty() {
-                        return Err(bad("liste de retraits vide"));
+                        return Err(bad("empty withdrawal list"));
                     }
                     for (a, c) in w {
                         match (a, c) {
                             (Cbor::Bytes(a), Cbor::Uint(c)) => withdrawals.push((a.clone(), *c)),
-                            _ => return Err(bad("retrait")),
+                            _ => return Err(bad("withdrawal")),
                         }
                     }
                 }
-                6 => return Err(bad("mises à jour de paramètres de protocole : refusées")),
+                6 => return Err(bad("protocol parameter updates: refused")),
                 8 => match v {
                     Cbor::Uint(t) => start = Some(*t),
-                    _ => return Err(bad("début de validité")),
+                    _ => return Err(bad("validity start")),
                 },
-                9 => return Err(bad("création / destruction de tokens (mint) : refusée")),
-                11 => return Err(bad("hash de données de script (Plutus) : refusé")),
-                13 | 16 | 17 => return Err(bad("collatéral : refusé")),
-                14 => return Err(bad("signataires requis : refusés")),
-                15 => return Err(bad("champ network id non pris en charge")),
-                18 => return Err(bad("entrées de référence : refusées")),
-                19 => return Err(bad("votes : refusés")),
-                20 => return Err(bad("propositions de gouvernance : refusées")),
-                21 | 22 => return Err(bad("don au trésor : refusé")),
-                other => return Err(bad(format!("champ du corps inconnu {other}"))),
+                9 => return Err(bad("token minting / burning (mint): refused")),
+                11 => return Err(bad("script data hash (Plutus): refused")),
+                13 | 16 | 17 => return Err(bad("collateral: refused")),
+                14 => return Err(bad("required signers: refused")),
+                15 => return Err(bad("network id field not supported")),
+                18 => return Err(bad("reference inputs: refused")),
+                19 => return Err(bad("votes: refused")),
+                20 => return Err(bad("governance proposals: refused")),
+                21 | 22 => return Err(bad("treasury donation: refused")),
+                other => return Err(bad(format!("unknown body field {other}"))),
             }
         }
         let body = CardanoBody {
-            inputs: inputs.ok_or_else(|| bad("entrées absentes"))?,
+            inputs: inputs.ok_or_else(|| bad("inputs missing"))?,
             tagged_sets: tagged,
-            outputs: outputs.ok_or_else(|| bad("sorties absentes"))?,
-            fee: fee.ok_or_else(|| bad("frais absents"))?,
+            outputs: outputs.ok_or_else(|| bad("outputs missing"))?,
+            fee: fee.ok_or_else(|| bad("fee missing"))?,
             ttl,
             certs,
             withdrawals,
@@ -934,7 +930,7 @@ impl CardanoBody {
             validity_start: start,
         };
         if &body.cbor() != c {
-            return Err(bad("corps non canonique (ordre des champs, doublons)"));
+            return Err(bad("non-canonical body (field order, duplicates)"));
         }
         Ok(body)
     }
@@ -950,7 +946,7 @@ fn decode_value(v: &Cbor) -> Result<(u64, CardanoAssets)> {
         Cbor::Uint(c) => Ok((*c, Vec::new())),
         Cbor::Array(a) if a.len() == 2 => {
             let Cbor::Uint(c) = a[0] else {
-                return Err(bad("montant ADA"));
+                return Err(bad("ADA amount"));
             };
             let Cbor::Map(pol) = &a[1] else {
                 return Err(bad("multi-asset"));
@@ -958,30 +954,30 @@ fn decode_value(v: &Cbor) -> Result<(u64, CardanoAssets)> {
             let mut assets = Vec::with_capacity(pol.len());
             for (p, names) in pol {
                 let (Cbor::Bytes(p), Cbor::Map(names)) = (p, names) else {
-                    return Err(bad("entrée multi-asset"));
+                    return Err(bad("multi-asset entry"));
                 };
                 let policy: [u8; 28] = p
                     .as_slice()
                     .try_into()
-                    .map_err(|_| bad("policy id : 28 octets"))?;
+                    .map_err(|_| bad("policy id: 28 bytes"))?;
                 let mut list = Vec::with_capacity(names.len());
                 for (n, q) in names {
                     let (Cbor::Bytes(n), Cbor::Uint(q)) = (n, q) else {
-                        return Err(bad("entrée de token"));
+                        return Err(bad("token entry"));
                     };
                     if n.len() > 32 || *q == 0 {
-                        return Err(bad("nom de token de plus de 32 octets, ou quantité nulle"));
+                        return Err(bad("token name longer than 32 bytes, or zero quantity"));
                     }
                     list.push((n.clone(), *q));
                 }
                 if list.is_empty() {
-                    return Err(bad("policy vide"));
+                    return Err(bad("empty policy"));
                 }
                 assets.push((policy, list));
             }
             Ok((c, assets))
         }
-        _ => Err(bad("montant")),
+        _ => Err(bad("amount")),
     }
 }
 
@@ -997,8 +993,8 @@ fn decode_output(o: &Cbor) -> Result<CardanoOutput> {
                     map_form: false,
                 })
             }
-            [_, _, _] => Err(bad("sorties avec hash de datum : refusées")),
-            _ => Err(bad("sortie")),
+            [_, _, _] => Err(bad("outputs with a datum hash: refused")),
+            _ => Err(bad("output")),
         },
         Cbor::Map(m) => {
             let (mut addr, mut val) = (None, None);
@@ -1006,22 +1002,22 @@ fn decode_output(o: &Cbor) -> Result<CardanoOutput> {
                 match (k, v) {
                     (Cbor::Uint(0), Cbor::Bytes(a)) => addr = Some(a.clone()),
                     (Cbor::Uint(1), v) => val = Some(decode_value(v)?),
-                    (Cbor::Uint(2), _) => return Err(bad("sorties avec datum : refusées")),
+                    (Cbor::Uint(2), _) => return Err(bad("outputs with a datum: refused")),
                     (Cbor::Uint(3), _) => {
-                        return Err(bad("sorties avec script de référence : refusées"))
+                        return Err(bad("outputs with a reference script: refused"))
                     }
-                    _ => return Err(bad("champ de sortie inconnu")),
+                    _ => return Err(bad("unknown output field")),
                 }
             }
-            let (coin, assets) = val.ok_or_else(|| bad("montant de sortie"))?;
+            let (coin, assets) = val.ok_or_else(|| bad("output amount"))?;
             Ok(CardanoOutput {
-                address: addr.ok_or_else(|| bad("adresse de sortie"))?,
+                address: addr.ok_or_else(|| bad("output address"))?,
                 coin,
                 assets,
                 map_form: true,
             })
         }
-        _ => Err(bad("sortie")),
+        _ => Err(bad("output")),
     }
 }
 
@@ -1039,10 +1035,10 @@ pub fn cardano_cip20_aux(message: &str) -> Result<Vec<u8>> {
         lines.push(Cbor::Text(cur));
     }
     if lines.is_empty() {
-        return Err(Error::input("message vide"));
+        return Err(Error::input("empty message"));
     }
     if message.len() > 1024 {
-        return Err(Error::input("message trop long (1 024 octets max.)"));
+        return Err(Error::input("message too long (1,024 bytes max.)"));
     }
     Ok(Cbor::Map(vec![(
         Cbor::Uint(CIP20_LABEL),
@@ -1052,7 +1048,7 @@ pub fn cardano_cip20_aux(message: &str) -> Result<Vec<u8>> {
 }
 
 fn decode_cip20(c: &Cbor) -> Result<Vec<String>> {
-    let bad_meta = || bad("métadonnées autres qu'un message CIP-20 : refusées");
+    let bad_meta = || bad("metadata other than a CIP-20 message: refused");
     let Cbor::Map(m) = c else {
         return Err(bad_meta());
     };
@@ -1220,42 +1216,40 @@ fn decode_full(
     stake: Option<&StakeMode>,
 ) -> Result<Decoded> {
     let raw = hex::decode(raw_hex.trim())
-        .map_err(|_| Error::input("transaction : hexadécimal attendu"))?;
+        .map_err(|_| Error::input("transaction: hexadecimal expected"))?;
     if raw.len() > MAX_TX {
-        return Err(bad("trop grande"));
+        return Err(bad("too large"));
     }
     let tx = parse_one(&raw)?;
     let Cbor::Array(parts) = &tx else {
-        return Err(bad("la transaction doit être un tableau CBOR"));
+        return Err(bad("the transaction must be a CBOR array"));
     };
     let [body_c, wit, valid, aux] = parts.as_slice() else {
-        return Err(bad("la transaction doit avoir 4 parties"));
+        return Err(bad("the transaction must have 4 parts"));
     };
     if wit != &Cbor::Map(Vec::new()) {
-        return Err(bad("déjà signée (témoins présents)"));
+        return Err(bad("already signed (witnesses present)"));
     }
     if valid != &Cbor::True {
-        return Err(bad("is_valid doit valoir true"));
+        return Err(bad("is_valid must be true"));
     }
     let body = CardanoBody::decode_cbor(body_c)?;
     match stake {
         None => {
             if !body.certs.is_empty() {
                 return Err(bad(
-                    "certificats (staking, délégation) : refusés dans un paiement (écran Staking)",
+                    "certificates (staking, delegation): refused in a payment (Staking screen)",
                 ));
             }
             if !body.withdrawals.is_empty() {
                 return Err(bad(
-                    "retraits de récompenses : refusés dans un paiement (écran Staking)",
+                    "reward withdrawals: refused in a payment (Staking screen)",
                 ));
             }
         }
         Some(s) => {
             if !matches!(aux, Cbor::Null) || body.aux_hash.is_some() {
-                return Err(bad(
-                    "métadonnées dans une transaction de staking : refusées",
-                ));
+                return Err(bad("metadata in a staking transaction: refused"));
             }
             check_stake(&body, s, ctx)?;
         }
@@ -1268,25 +1262,21 @@ fn decode_full(
         (None, None) => None,
         (Some(a), Some(h)) => {
             if cardano_blake2b256(&a.to_vec()) != h {
-                return Err(bad("le hash des métadonnées ne correspond pas"));
+                return Err(bad("the metadata hash does not match"));
             }
             Some(decode_cip20(a)?)
         }
-        _ => {
-            return Err(bad(
-                "les métadonnées et leur hash doivent être présents ensemble",
-            ))
-        }
+        _ => return Err(bad("the metadata and its hash must be present together")),
     };
     if body.inputs.is_empty() || body.outputs.is_empty() {
-        return Err(bad("aucune entrée ou aucune sortie"));
+        return Err(bad("no input or no output"));
     }
     // A set: order is free (Kyro sorts its own), duplicates are refused.
     let mut sorted = body.inputs.clone();
     sorted.sort();
     sorted.dedup();
     if sorted.len() != body.inputs.len() {
-        return Err(bad("entrée en double"));
+        return Err(bad("duplicate input"));
     }
     let mut warnings = Vec::new();
     let mut unusual_text = false;
@@ -1307,7 +1297,7 @@ fn decode_full(
         let min = cardano_min_utxo(&o.address, &o.assets, ctx.coins_per_byte);
         if o.coin < min {
             return Err(bad(format!(
-                "une sortie porte {} lovelace, sous son minimum de {min} (min-UTxO)",
+                "an output carries {} lovelace, below its minimum of {min} (min-UTxO)",
                 o.coin
             )));
         }
@@ -1316,7 +1306,7 @@ fn decode_full(
             let mut prev: Option<&Vec<u8>> = None;
             for (n, q) in names {
                 if prev.is_some_and(|x| (x.len(), x) >= (n.len(), n)) {
-                    return Err(bad("noms de tokens hors de l'ordre canonique"));
+                    return Err(bad("token names out of canonical order"));
                 }
                 prev = Some(n);
                 let (ph, nh) = (hex::encode(p), hex::encode(n));
@@ -1351,7 +1341,7 @@ fn decode_full(
         }
         for w in o.assets.windows(2) {
             if w[0].0 >= w[1].0 {
-                return Err(bad("policies hors de l'ordre canonique"));
+                return Err(bad("policies out of canonical order"));
             }
         }
         outputs.push(CardanoOutputView {
@@ -1451,11 +1441,11 @@ pub fn cardano_reward_address_bytes(net: Network, stake_hash: &[u8; 28]) -> Vec<
 
 fn bech32_bytes(s: &str, hrps: &[&str]) -> Result<(String, Vec<u8>)> {
     let checked = CheckedHrpstring::new::<Bech32>(s.trim())
-        .map_err(|_| Error::input(format!("identifiant bech32 invalide : {}", s.trim())))?;
+        .map_err(|_| Error::input(format!("invalid bech32 identifier: {}", s.trim())))?;
     let h = checked.hrp().as_str().to_owned();
     if !hrps.contains(&h.as_str()) {
         return Err(Error::input(format!(
-            "préfixe « {h} » inattendu (attendu : {})",
+            "unexpected prefix \"{h}\" (expected: {})",
             hrps.join(", ")
         )));
     }
@@ -1468,11 +1458,11 @@ pub fn cardano_pool_id(s: &str) -> Result<[u8; 28]> {
     let bytes = if t.starts_with("pool1") {
         bech32_bytes(t, &["pool"])?.1
     } else {
-        hex::decode(t).map_err(|_| Error::input("identifiant de pool : pool1… ou 56 hex"))?
+        hex::decode(t).map_err(|_| Error::input("pool id: pool1… or 56 hex"))?
     };
     bytes
         .try_into()
-        .map_err(|_| Error::input("identifiant de pool : 28 octets attendus"))
+        .map_err(|_| Error::input("pool id: 28 bytes expected"))
 }
 
 /// `pool1…` form of a pool key hash.
@@ -1492,19 +1482,17 @@ pub fn cardano_drep_parse(s: &str) -> Result<CardanoDrep> {
     let (h, b) = bech32_bytes(s, &["drep", "drep_script"])?;
     let h28 = |x: &[u8]| -> Result<[u8; 28]> {
         x.try_into()
-            .map_err(|_| Error::input("identifiant de DRep : longueur invalide"))
+            .map_err(|_| Error::input("DRep id: invalid length"))
     };
     match (h.as_str(), b.len()) {
         ("drep", 29) => match b[0] {
             0x22 => Ok(CardanoDrep::Key(h28(&b[1..])?)),
             0x23 => Ok(CardanoDrep::Script(h28(&b[1..])?)),
-            _ => Err(Error::input(
-                "identifiant de DRep (CIP-129) : en-tête inconnu",
-            )),
+            _ => Err(Error::input("DRep id (CIP-129): unknown header")),
         },
         ("drep", 28) => Ok(CardanoDrep::Key(h28(&b)?)),
         ("drep_script", 28) => Ok(CardanoDrep::Script(h28(&b)?)),
-        _ => Err(Error::input("identifiant de DRep : longueur invalide")),
+        _ => Err(Error::input("DRep id: invalid length")),
     }
 }
 
@@ -1632,32 +1620,30 @@ pub struct CardanoStakeSummary {
 fn check_stake(body: &CardanoBody, s: &StakeMode, ctx: &CardanoContext<'_>) -> Result<()> {
     let net = ctx.net;
     if body.certs.is_empty() && body.withdrawals.is_empty() {
-        return Err(bad("aucune opération de staking dans cette transaction"));
+        return Err(bad("no staking operation in this transaction"));
     }
     // The only output is the change, back to our own address: a staking transaction pays no
     // one (deposits and fees are not outputs).
     let [out] = body.outputs.as_slice() else {
         return Err(bad(
-            "une transaction de staking n'a qu'une sortie, vers ta propre adresse : refusée",
+            "a staking transaction has only one output, to your own address: refused",
         ));
     };
     if !ctx.own.contains(&bech32_encode(hrp(net), &out.address)?) {
         return Err(bad(
-            "une transaction de staking ne paie que ta propre adresse : refusée",
+            "a staking transaction pays only your own address: refused",
         ));
     }
     let mut kinds = Vec::new();
     for c in &body.certs {
         if c.stake() != &s.stake_hash {
-            return Err(bad(
-                "certificat pour une autre clé de staking que la tienne : refusé",
-            ));
+            return Err(bad("certificate for a stake key other than yours: refused"));
         }
         let k = match c {
             CardanoCert::StakeRegistration { deposit, .. } => {
                 if *deposit != s.key_deposit {
                     return Err(bad(format!(
-                        "dépôt d'enregistrement de {deposit} lovelace, le protocole demande {} : refusé",
+                        "registration deposit of {deposit} lovelace, the protocol requires {}: refused",
                         s.key_deposit
                     )));
                 }
@@ -1668,37 +1654,37 @@ fn check_stake(body: &CardanoBody, s: &StakeMode, ctx: &CardanoContext<'_>) -> R
             CardanoCert::VoteDelegation { .. } => 9,
         };
         if kinds.contains(&k) {
-            return Err(bad("certificat en double : refusé"));
+            return Err(bad("duplicate certificate: refused"));
         }
         kinds.push(k);
     }
     if kinds.contains(&7) && kinds.contains(&8) {
         return Err(bad(
-            "enregistrement et désinscription dans la même transaction : refusé",
+            "registration and deregistration in the same transaction: refused",
         ));
     }
     if kinds.contains(&8) && (kinds.contains(&2) || kinds.contains(&9)) {
         return Err(bad(
-            "délégation et désinscription dans la même transaction : refusé",
+            "delegation and deregistration in the same transaction: refused",
         ));
     }
     if let Some(i) = kinds.iter().position(|k| *k == 7) {
         if i != 0 {
-            return Err(bad("l'enregistrement doit être le premier certificat"));
+            return Err(bad("the registration must be the first certificate"));
         }
     }
     let ours = cardano_reward_address_bytes(net, &s.stake_hash);
     if body.withdrawals.len() > 1 {
-        return Err(bad("plusieurs retraits : refusé"));
+        return Err(bad("several withdrawals: refused"));
     }
     for (a, c) in &body.withdrawals {
         if *a != ours {
             return Err(bad(
-                "retrait depuis un autre compte de récompenses que le tien : refusé",
+                "withdrawal from a reward account other than yours: refused",
             ));
         }
         if *c == 0 {
-            return Err(bad("retrait de 0 lovelace : refusé"));
+            return Err(bad("withdrawal of 0 lovelace: refused"));
         }
     }
     Ok(())
@@ -1901,12 +1887,12 @@ fn sign_extended(key: &XPrv, msg: &[u8], expected_pk: &[u8; 32]) -> Result<[u8; 
     let vk = VerifyingKey::from(&esk);
     if vk.as_bytes() != expected_pk {
         return Err(Error::crypto(
-            "clés publiques différentes entre ed25519-bip32 et ed25519-dalek",
+            "public keys differ between ed25519-bip32 and ed25519-dalek",
         ));
     }
     let sig = raw_sign::<sha2::Sha512>(&esk, msg, &vk);
     vk.verify_strict(msg, &sig)
-        .map_err(|_| Error::crypto("auto-vérification de la signature échouée"))?;
+        .map_err(|_| Error::crypto("signature self-check failed"))?;
     Ok(sig.to_bytes())
 }
 
@@ -1914,20 +1900,19 @@ fn sign_extended(key: &XPrv, msg: &[u8], expected_pk: &[u8; 32]) -> Result<[u8; 
 pub fn cardano_verify(public_key: &[u8], msg: &[u8], signature: &[u8]) -> Result<()> {
     let pk: [u8; 32] = public_key
         .try_into()
-        .map_err(|_| Error::input("clé publique : 32 octets"))?;
-    let vk = VerifyingKey::from_bytes(&pk).map_err(|_| Error::input("clé publique invalide"))?;
-    let sig =
-        Signature::from_slice(signature).map_err(|_| Error::input("signature : 64 octets"))?;
+        .map_err(|_| Error::input("public key: 32 bytes"))?;
+    let vk = VerifyingKey::from_bytes(&pk).map_err(|_| Error::input("invalid public key"))?;
+    let sig = Signature::from_slice(signature).map_err(|_| Error::input("signature: 64 bytes"))?;
     vk.verify_strict(msg, &sig)
         .or_else(|_| vk.verify(msg, &sig))
-        .map_err(|_| Error::input("la signature ne se vérifie pas"))
+        .map_err(|_| Error::input("the signature does not verify"))
 }
 
 /// Tx id, witness keys and signatures of a signed transaction (hex), each signature verified
 /// against the tx id. Used before broadcast and on real transactions in tests.
 pub fn cardano_signed_witnesses(raw_hex: &str) -> Result<(String, Vec<[u8; 32]>)> {
     let raw = hex::decode(raw_hex.trim())
-        .map_err(|_| Error::input("transaction : hexadécimal attendu"))?;
+        .map_err(|_| Error::input("transaction: hexadecimal expected"))?;
     let tx = parse_one(&raw)?;
     let Cbor::Array(parts) = &tx else {
         return Err(bad("transaction"));
@@ -1946,21 +1931,21 @@ pub fn cardano_signed_witnesses(raw_hex: &str) -> Result<(String, Vec<[u8; 32]>)
             other => other,
         };
         let Cbor::Array(list) = list else {
-            return Err(bad("témoins"));
+            return Err(bad("witnesses"));
         };
         for item in list {
             let Cbor::Array(pair) = item else {
-                return Err(bad("témoin"));
+                return Err(bad("witness"));
             };
             let [Cbor::Bytes(pk), Cbor::Bytes(sig)] = pair.as_slice() else {
-                return Err(bad("témoin"));
+                return Err(bad("witness"));
             };
             cardano_verify(pk, &tx_id, sig)?;
-            keys.push(pk.as_slice().try_into().map_err(|_| bad("clé du témoin"))?);
+            keys.push(pk.as_slice().try_into().map_err(|_| bad("witness key"))?);
         }
     }
     if keys.is_empty() {
-        return Err(bad("aucun témoin de signature"));
+        return Err(bad("no signature witness"));
     }
     Ok((hex::encode(tx_id), keys))
 }
@@ -1971,10 +1956,9 @@ pub fn cardano_signed_witnesses(raw_hex: &str) -> Result<(String, Vec<[u8; 32]>)
 
 /// Parses an account public key `m/1852'/1815'/account'` (public key ‖ chain code, 128 hex).
 fn account_xpub_of_hex(xpub_hex: &str) -> Result<ed25519_bip32::XPub> {
-    let b =
-        hex::decode(xpub_hex.trim()).map_err(|_| Error::input("clé de compte Cardano : hex"))?;
+    let b = hex::decode(xpub_hex.trim()).map_err(|_| Error::input("Cardano account key: hex"))?;
     ed25519_bip32::XPub::from_slice(&b)
-        .map_err(|_| Error::input("clé de compte Cardano : 64 octets attendus"))
+        .map_err(|_| Error::input("Cardano account key: 64 bytes expected"))
 }
 
 /// Public key `<account xpub>/role/index` (soft BIP32-Ed25519 derivation, `ed25519-bip32` V2:
@@ -1982,13 +1966,13 @@ fn account_xpub_of_hex(xpub_hex: &str) -> Result<ed25519_bip32::XPub> {
 pub fn cardano_xpub_child(xpub_hex: &str, role: u32, index: u32) -> Result<[u8; 32]> {
     if role >= HARDENED || index >= HARDENED {
         return Err(Error::input(
-            "dérivation durcie impossible depuis une clé publique",
+            "hardened derivation impossible from a public key",
         ));
     }
     let x = account_xpub_of_hex(xpub_hex)?
         .derive(DerivationScheme::V2, role)
         .and_then(|k| k.derive(DerivationScheme::V2, index))
-        .map_err(|_| Error::crypto("dérivation publique Cardano impossible"))?;
+        .map_err(|_| Error::crypto("Cardano public derivation failed"))?;
     Ok(x.public_key())
 }
 
@@ -2103,15 +2087,14 @@ pub fn cardano_hw_assemble(
     let tx_id = cardano_blake2b256(&d.body_cbor.to_vec());
     if device_tx_hash != tx_id {
         return Err(Error::crypto(
-            "l'appareil a signé un autre corps de transaction que celui de Kyro",
+            "the device signed a different transaction body than Kyro's",
         ));
     }
     let pk =
-        VerifyingKey::from_bytes(payment_pk).map_err(|_| Error::input("clé publique invalide"))?;
-    let sig =
-        Signature::from_slice(signature).map_err(|_| Error::input("signature : 64 octets"))?;
+        VerifyingKey::from_bytes(payment_pk).map_err(|_| Error::input("invalid public key"))?;
+    let sig = Signature::from_slice(signature).map_err(|_| Error::input("signature: 64 bytes"))?;
     pk.verify_strict(&tx_id, &sig).map_err(|_| {
-        Error::crypto("la signature de l'appareil ne se vérifie pas avec la clé du compte")
+        Error::crypto("the device's signature does not verify with the account key")
     })?;
     let wit = Cbor::Array(vec![
         Cbor::Bytes(payment_pk.to_vec()),

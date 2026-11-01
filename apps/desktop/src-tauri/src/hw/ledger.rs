@@ -210,7 +210,7 @@ impl<L: ApduLink> Ledger<L> {
     /// Fails unless the app for `chain` is open, recent enough.
     fn ensure_app(&self, ctl: &Ctl, chain: Chain, net: Network) -> HwResult<()> {
         let (expected, min) = app_for(chain, net)
-            .ok_or_else(|| HwError::unsupported(format!("{} sur Ledger", chain.label())))?;
+            .ok_or_else(|| HwError::unsupported(format!("{} on Ledger", chain.label())))?;
         let (name, version) = self.open_app(ctl)?;
         if name != expected {
             return Err(HwError::WrongApp {
@@ -220,7 +220,7 @@ impl<L: ApduLink> Ledger<L> {
         }
         if !version_at_least(&version, min) {
             return Err(HwError::too_old(
-                format!("app {expected} {version} trop ancienne : mets-la à jour"),
+                format!("{expected} app {version} too old: update it"),
                 min,
             ));
         }
@@ -293,17 +293,17 @@ fn client_err(e: ledger_bitcoin_client::error::BitcoinClientError<HwError>) -> H
     use ledger_bitcoin_client::error::BitcoinClientError as E;
     match e {
         E::Transport(e) => e,
-        E::UnsupportedAppVersion => HwError::too_old("app Bitcoin trop ancienne", "2.1.0"),
-        other => HwError::bad(format!("app Bitcoin : {other:?}")),
+        E::UnsupportedAppVersion => HwError::too_old("Bitcoin app too old", "2.1.0"),
+        other => HwError::bad(format!("Bitcoin app: {other:?}")),
     }
 }
 
 fn default_policy(acc: &BtcAccount) -> HwResult<WalletPolicy> {
-    let xpub = Xpub::from_str(&acc.xpub).map_err(|_| HwError::bad("xpub enregistrée invalide"))?;
+    let xpub = Xpub::from_str(&acc.xpub).map_err(|_| HwError::bad("invalid saved xpub"))?;
     let fp = Fingerprint::from_str(&acc.fingerprint)
-        .map_err(|_| HwError::bad("empreinte enregistrée invalide"))?;
-    let path = DerivationPath::from_str(&acc.path)
-        .map_err(|_| HwError::bad("chemin enregistré invalide"))?;
+        .map_err(|_| HwError::bad("invalid saved fingerprint"))?;
+    let path =
+        DerivationPath::from_str(&acc.path).map_err(|_| HwError::bad("invalid saved path"))?;
     let template = match acc.kind {
         BtcKind::Segwit => "wpkh(@0/**)",
         BtcKind::Taproot => "tr(@0/**)",
@@ -347,7 +347,7 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
                         st.state = ChainState::Ready;
                     } else {
                         st.state = ChainState::Unsupported;
-                        st.reason = Some(format!("app {expected} {} trop ancienne", a.version));
+                        st.reason = Some(format!("{expected} app {} too old", a.version));
                     }
                 }
                 Some(_) => {}
@@ -362,7 +362,7 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
             app: app.map(|a| {
                 if a.name == DASHBOARD {
                     AppInfo {
-                        name: "Tableau de bord".into(),
+                        name: "Dashboard".into(),
                         version: a.version,
                     }
                 } else {
@@ -431,15 +431,15 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
         let kind = req.plan.inputs[0].kind;
         if req.plan.inputs.iter().any(|i| i.kind != kind) {
             return Err(HwError::unsupported(
-                "Ledger : une transaction ne peut mélanger des entrées SegWit et Taproot \
-                 (une politique de portefeuille par signature)",
+                "Ledger: a transaction cannot mix SegWit and Taproot inputs \
+                 (one wallet policy per signature)",
             ));
         }
         let account = req
             .accounts
             .iter()
             .find(|a| a.kind == kind)
-            .ok_or_else(|| HwError::bad("compte Bitcoin manquant"))?;
+            .ok_or_else(|| HwError::bad("missing Bitcoin account"))?;
         let policy = default_policy(account)?;
         ctl.prompt(super::Prompt::ConfirmOnDevice);
         let yielded = self
@@ -462,7 +462,7 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
                         pubkey: Some(x.serialize().to_vec()),
                         signature: sig.to_vec(),
                     }),
-                _ => return Err(HwError::bad("objet inattendu renvoyé pendant la signature")),
+                _ => return Err(HwError::bad("unexpected object returned during signing")),
             }
         }
         Ok(out)
@@ -481,7 +481,7 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
         check_eth_address(&a)?;
         let cc = a
             .chain_code
-            .ok_or_else(|| HwError::bad("code de chaîne absent"))?;
+            .ok_or_else(|| HwError::bad("missing chain code"))?;
         wallet_core::evm_xpub_from_node(&a.pubkey, &cc).map_err(|e| HwError::bad(e.to_string()))
     }
 
@@ -567,7 +567,7 @@ impl<L: ApduLink> HardwareWallet for Ledger<L> {
             last = self.call(ctl, a, SwContext::Signing, "Solana")?;
         }
         if last.len() != 64 {
-            return Err(HwError::bad("signature Solana de longueur inattendue"));
+            return Err(HwError::bad("Solana signature of unexpected length"));
         }
         Ok(last)
     }
@@ -579,7 +579,7 @@ fn check_eth_address(a: &apdu::EthAddress) -> HwResult<String> {
         wallet_core::evm_address_of_pubkey(&a.pubkey).map_err(|e| HwError::bad(e.to_string()))?;
     if !from_key[2..].eq_ignore_ascii_case(&a.address_hex) {
         return Err(HwError::bad(
-            "l'adresse renvoyée ne correspond pas à la clé publique renvoyée",
+            "the returned address does not match the returned public key",
         ));
     }
     Ok(from_key)

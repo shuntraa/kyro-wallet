@@ -191,7 +191,7 @@ impl Ledger {
             let raw = wallet_core::btc_decode_raw_tx(&t.hex, net)?;
             if &raw.txid != txid {
                 return Err(AppError::Internal(
-                    "cbf : transaction stockée corrompue".into(),
+                    "cbf: corrupted stored transaction".into(),
                 ));
             }
             meta.insert(txid.clone(), (t.height, t.time));

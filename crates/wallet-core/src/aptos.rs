@@ -144,7 +144,7 @@ const FUNCTION_NAME: &[u8] = b"transfer";
 const MAX_BCS: usize = 4 * 1024;
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("transaction Aptos refusée : {}", msg.into()))
+    Error::input(format!("Aptos transaction refused: {}", msg.into()))
 }
 
 fn sha3(parts: &[&[u8]]) -> [u8; 32] {
@@ -200,9 +200,9 @@ pub fn aptos_address_string(bytes: &[u8; 32]) -> String {
 pub fn aptos_address_of_pubkey(pubkey: &[u8]) -> Result<String> {
     let bytes: [u8; 32] = pubkey
         .try_into()
-        .map_err(|_| Error::input("clé publique ed25519 : 32 octets attendus"))?;
+        .map_err(|_| Error::input("ed25519 public key: 32 bytes expected"))?;
     ed25519_dalek::VerifyingKey::from_bytes(&bytes)
-        .map_err(|_| Error::input("clé publique ed25519 invalide"))?;
+        .map_err(|_| Error::input("invalid ed25519 public key"))?;
     Ok(aptos_address_string(&aptos_address_bytes_of_pubkey(&bytes)))
 }
 
@@ -226,20 +226,20 @@ pub fn aptos_parse_address(address: &str) -> Result<[u8; 32]> {
     let a = address.trim();
     if a.ends_with(".apt") {
         return Err(Error::input(
-            "les noms ANS (.apt) ne sont pas pris en charge : colle l'adresse 0x… complète",
+            "ANS names (.apt) are not supported: paste the full 0x… address",
         ));
     }
     let h = a.strip_prefix("0x").ok_or_else(|| {
-        Error::input("adresse Aptos invalide : 0x suivi de 64 caractères hexadécimaux attendu")
+        Error::input("invalid Aptos address: 0x followed by 64 hexadecimal characters expected")
     })?;
     if h.len() != 64 {
         return Err(Error::input(
-            "adresse Aptos invalide : 64 caractères hexadécimaux attendus après 0x (forme courte refusée : demande l'adresse complète)",
+            "invalid Aptos address: 64 hexadecimal characters expected after 0x (short form refused: ask for the full address)",
         ));
     }
     let mut out = [0u8; 32];
     hex::decode_to_slice(h, &mut out)
-        .map_err(|_| Error::input("adresse Aptos invalide (caractère non hexadécimal)"))?;
+        .map_err(|_| Error::input("invalid Aptos address (non-hexadecimal character)"))?;
     Ok(out)
 }
 
@@ -267,7 +267,7 @@ struct Reader<'a>(&'a [u8]);
 impl<'a> Reader<'a> {
     fn take(&mut self, n: usize) -> Result<&'a [u8]> {
         if self.0.len() < n {
-            return Err(bad("données tronquées"));
+            return Err(bad("truncated data"));
         }
         let (h, t) = self.0.split_at(n);
         self.0 = t;
@@ -298,18 +298,18 @@ impl<'a> Reader<'a> {
             v |= u64::from(b & 0x7f) << (7 * i);
             if b & 0x80 == 0 {
                 if i > 0 && b == 0 {
-                    return Err(bad("ULEB128 non canonique"));
+                    return Err(bad("non-canonical ULEB128"));
                 }
-                return u32::try_from(v).map_err(|_| bad("ULEB128 trop grand"));
+                return u32::try_from(v).map_err(|_| bad("ULEB128 too large"));
             }
         }
-        Err(bad("ULEB128 trop long"))
+        Err(bad("ULEB128 too long"))
     }
 
     fn bytes(&mut self, max: usize) -> Result<&'a [u8]> {
         let n = self.uleb()? as usize;
         if n > max {
-            return Err(bad("champ trop long"));
+            return Err(bad("field too long"));
         }
         self.take(n)
     }
@@ -343,28 +343,28 @@ pub struct AptosTransfer {
 impl AptosTransfer {
     fn check(&self) -> Result<()> {
         if self.amount == 0 {
-            return Err(bad("montant nul"));
+            return Err(bad("zero amount"));
         }
         if let Some(m) = &self.token {
             if aptos_known_asset(m, self.chain_id).is_none() {
-                return Err(bad("jeton inconnu de Kyro sur ce réseau"));
+                return Err(bad("token unknown to Kyro on this network"));
             }
         }
         if self.max_gas_amount == 0 {
-            return Err(bad("gaz maximum nul"));
+            return Err(bad("zero max gas"));
         }
         if self.gas_unit_price == 0 {
-            return Err(bad("prix du gaz nul"));
+            return Err(bad("zero gas price"));
         }
         if self
             .max_gas_amount
             .checked_mul(self.gas_unit_price)
             .is_none()
         {
-            return Err(bad("frais maximum hors limites"));
+            return Err(bad("max fee out of range"));
         }
         if self.chain_id == 0 {
-            return Err(bad("identifiant de chaîne nul"));
+            return Err(bad("zero chain ID"));
         }
         Ok(())
     }
@@ -413,21 +413,21 @@ impl AptosTransfer {
     /// Strict decoding; the result re-encodes to exactly `bcs` (checked).
     pub fn decode(bcs: &[u8]) -> Result<AptosTransfer> {
         if bcs.len() > MAX_BCS {
-            return Err(bad("trop volumineuse"));
+            return Err(bad("too large"));
         }
         let mut r = Reader(bcs);
         let sender = r.arr32()?;
         let sequence_number = r.u64()?;
         match r.uleb()? {
             2 => {}
-            0 => return Err(bad("script Move : non pris en charge")),
-            3 => return Err(bad("transaction multisig : non prise en charge")),
+            0 => return Err(bad("Move script: not supported")),
+            3 => return Err(bad("multisig transaction: not supported")),
             4 => {
                 return Err(bad(
-                    "charge utile « Payload » (transaction sans séquence, multisig…) : non prise en charge",
+                    "payload \"Payload\" (orderless transaction, multisig…): not supported",
                 ))
             }
-            _ => return Err(bad("charge utile de type inconnu")),
+            _ => return Err(bad("payload of unknown type")),
         }
         let module_address = r.arr32()?;
         let module = r.bytes(128)?;
@@ -440,45 +440,45 @@ impl AptosTransfer {
             || function != FUNCTION_NAME
         {
             return Err(bad(format!(
-                "appel de fonction autre que {APTOS_TRANSFER_FUNCTION} ou {APTOS_FA_TRANSFER_FUNCTION} : non pris en charge"
+                "function call other than {APTOS_TRANSFER_FUNCTION} or {APTOS_FA_TRANSFER_FUNCTION}: not supported"
             )));
         }
         let token = if fa {
             let tag = metadata_type_tag();
             if r.uleb()? != 1 || r.take(tag.len())? != tag.as_slice() {
                 return Err(bad(
-                    "argument de type autre que 0x1::fungible_asset::Metadata : non pris en charge",
+                    "type argument other than 0x1::fungible_asset::Metadata: not supported",
                 ));
             }
             if r.uleb()? != 3 {
-                return Err(bad("nombre d'arguments inattendu"));
+                return Err(bad("unexpected number of arguments"));
             }
             let m: [u8; 32] = r
                 .bytes(64)?
                 .try_into()
-                .map_err(|_| bad("objet de métadonnées : 32 octets attendus"))?;
+                .map_err(|_| bad("metadata object: 32 bytes expected"))?;
             Some(m)
         } else {
             if r.uleb()? != 0 {
-                return Err(bad("arguments de type : non pris en charge"));
+                return Err(bad("type arguments: not supported"));
             }
             if r.uleb()? != 2 {
-                return Err(bad("nombre d'arguments inattendu"));
+                return Err(bad("unexpected number of arguments"));
             }
             None
         };
         let to = r.bytes(64)?;
         let recipient: [u8; 32] = to
             .try_into()
-            .map_err(|_| bad("destinataire : 32 octets attendus"))?;
+            .map_err(|_| bad("recipient: 32 bytes expected"))?;
         let amt = r.bytes(64)?;
-        let amount = u64::from_le_bytes(amt.try_into().map_err(|_| bad("montant : u64 attendu"))?);
+        let amount = u64::from_le_bytes(amt.try_into().map_err(|_| bad("amount: u64 expected"))?);
         let max_gas_amount = r.u64()?;
         let gas_unit_price = r.u64()?;
         let expiration_timestamp_secs = r.u64()?;
         let chain_id = r.u8()?;
         if !r.0.is_empty() {
-            return Err(bad("octets en trop après la transaction"));
+            return Err(bad("trailing bytes after the transaction"));
         }
         let t = AptosTransfer {
             sender,
@@ -492,7 +492,7 @@ impl AptosTransfer {
             token,
         };
         if t.encode()? != bcs {
-            return Err(bad("ré-encodage différent"));
+            return Err(bad("re-encoding differs"));
         }
         Ok(t)
     }
@@ -527,19 +527,19 @@ pub fn aptos_tx_hash(signed: &[u8]) -> String {
 fn unhex(s: &str, what: &str) -> Result<Vec<u8>> {
     let t = s.trim();
     hex::decode(t.strip_prefix("0x").unwrap_or(t))
-        .map_err(|_| Error::input(format!("{what} : hexadécimal attendu")))
+        .map_err(|_| Error::input(format!("{what}: hexadecimal expected")))
 }
 
 /// Splits signed transaction bytes into the transfer, the public key and the signature.
 /// Only a single ed25519 authenticator is accepted.
 fn split_signed(signed: &[u8]) -> Result<(AptosTransfer, [u8; 32], [u8; 64])> {
     if signed.len() < 99 {
-        return Err(bad("transaction signée tronquée"));
+        return Err(bad("truncated signed transaction"));
     }
     let (raw, auth) = signed.split_at(signed.len() - 99);
     if auth[0] != 0 || auth[1] != 32 || auth[34] != 64 {
         return Err(bad(
-            "authentification : une seule clé ed25519 attendue (multi-signature, fee payer, multi-agent refusés)",
+            "authenticator: a single ed25519 key expected (multi-signature, fee payer, multi-agent refused)",
         ));
     }
     let t = AptosTransfer::decode(raw)?;
@@ -610,7 +610,7 @@ pub struct AptosTokenSummary {
 
 fn summarize(t: &AptosTransfer, ours: &[u8; 32]) -> Result<AptosTxSummary> {
     if &t.sender != ours {
-        return Err(bad("l'expéditeur n'est pas l'adresse de ce compte"));
+        return Err(bad("the sender is not this account's address"));
     }
     let mut warnings = Vec::new();
     if t.recipient == t.sender {
@@ -623,7 +623,7 @@ fn summarize(t: &AptosTransfer, ours: &[u8; 32]) -> Result<AptosTxSummary> {
         None => None,
         Some(m) => {
             let k = aptos_known_asset(m, t.chain_id)
-                .ok_or_else(|| bad("jeton inconnu de Kyro sur ce réseau"))?;
+                .ok_or_else(|| bad("token unknown to Kyro on this network"))?;
             Some(AptosTokenSummary {
                 metadata: k.metadata.into(),
                 symbol: k.symbol.into(),
@@ -678,7 +678,7 @@ pub fn aptos_sign(
     let msg = aptos_signing_message(&raw);
     let sig = key.sign(&msg);
     pk.verify_strict(&msg, &sig)
-        .map_err(|_| Error::crypto("échec de la vérification de la signature"))?;
+        .map_err(|_| Error::crypto("signature verification failed"))?;
     let signed = t.signed_bytes(pk.as_bytes(), &sig.to_bytes())?;
     Ok((hex::encode(&signed), aptos_tx_hash(&signed), summary))
 }
@@ -687,20 +687,18 @@ pub fn aptos_sign(
 /// [`aptos_decode_tx`], the authenticator is a single ed25519 key whose address is the
 /// sender's, and the signature verifies (strict). Returns `(hash, transfer)`.
 pub fn aptos_verify_signed(signed_hex: &str) -> Result<(String, AptosTransfer)> {
-    let signed = unhex(signed_hex, "transaction signée")?;
+    let signed = unhex(signed_hex, "signed transaction")?;
     let (t, pk, sig) = split_signed(&signed)?;
     if aptos_address_bytes_of_pubkey(&pk) != t.sender {
-        return Err(bad(
-            "la clé de la signature n'est pas celle de l'expéditeur",
-        ));
+        return Err(bad("the signature's key is not the sender's"));
     }
     ed25519_dalek::VerifyingKey::from_bytes(&pk)
-        .map_err(|_| bad("clé publique invalide"))?
+        .map_err(|_| bad("invalid public key"))?
         .verify_strict(
             &aptos_signing_message(&t.encode()?),
             &ed25519_dalek::Signature::from_bytes(&sig),
         )
-        .map_err(|_| bad("la signature ne se vérifie pas"))?;
+        .map_err(|_| bad("the signature does not verify"))?;
     Ok((aptos_tx_hash(&signed), t))
 }
 
@@ -717,7 +715,7 @@ pub fn aptos_hw_message(raw_hex: &str) -> Result<Vec<u8>> {
 pub fn aptos_hw_signed(raw_hex: &str, pubkey: &[u8; 32], sig: &[u8]) -> Result<(String, String)> {
     let sig: [u8; 64] = sig
         .try_into()
-        .map_err(|_| bad("signature de l'appareil : 64 octets attendus"))?;
+        .map_err(|_| bad("device signature: 64 bytes expected"))?;
     let raw = unhex(raw_hex, "transaction")?;
     let signed = AptosTransfer::decode(&raw)?.signed_bytes(pubkey, &sig)?;
     let signed_hex = hex::encode(&signed);

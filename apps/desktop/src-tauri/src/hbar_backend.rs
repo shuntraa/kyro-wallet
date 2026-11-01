@@ -80,7 +80,7 @@ pub fn node_ids(net: Network) -> Vec<u64> {
 /// `GET` on the mirror node; `Ok(None)` on 404.
 async fn mirror(ctx: &HbarCtx<'_>, path: &str) -> AppResult<Option<Value>> {
     let u = url::Url::parse(&format!("{}{path}", mirror_base(ctx.network)))
-        .map_err(|_| AppError::Internal("URL du nœud miroir".into()))?;
+        .map_err(|_| AppError::Internal("mirror node URL".into()))?;
     let (status, bytes) = ctx
         .net_client
         .server_request(ServerRequest::get(u, Family::Hedera), ctx.tor)
@@ -90,7 +90,7 @@ async fn mirror(ctx: &HbarCtx<'_>, path: &str) -> AppResult<Option<Value>> {
     }
     if status != 200 {
         return Err(bad(format!(
-            "nœud miroir Hedera : HTTP {status} ({})",
+            "Hedera mirror node: HTTP {status} ({})",
             String::from_utf8_lossy(&bytes)
                 .chars()
                 .take(200)
@@ -99,7 +99,7 @@ async fn mirror(ctx: &HbarCtx<'_>, path: &str) -> AppResult<Option<Value>> {
     }
     serde_json::from_slice(&bytes)
         .map(Some)
-        .map_err(|_| bad("nœud miroir Hedera : JSON invalide"))
+        .map_err(|_| bad("Hedera mirror node: invalid JSON"))
 }
 
 /// `"0.0.123"` → 123.
@@ -179,12 +179,12 @@ pub async fn our_account(
         let mut a = parse_account(&v);
         if a.evm_address.as_deref() != Some(evm.as_str()) {
             return Err(bad(
-                "nœud miroir Hedera : le compte renvoyé n'a pas notre adresse EVM",
+                "Hedera mirror node: the returned account does not have our EVM address",
             ));
         }
         if !a.hollow && !key_is(&v, &pk_hex) {
             return Err(bad(
-                "ce compte Hedera a notre adresse EVM mais une autre clé : Kyro ne peut pas le dépenser",
+                "this Hedera account has our EVM address but another key: Kyro cannot spend from it",
             ));
         }
         a.found_by = Some("alias");
@@ -307,11 +307,11 @@ pub async fn token_holding(
 pub async fn exchange_rate(ctx: &HbarCtx<'_>) -> AppResult<(u64, u64)> {
     let v = mirror(ctx, "/api/v1/network/exchangerate")
         .await?
-        .ok_or_else(|| bad("nœud miroir Hedera : taux de change absent"))?;
+        .ok_or_else(|| bad("Hedera mirror node: exchange rate missing"))?;
     let r = &v["current_rate"];
     match (r["cent_equivalent"].as_u64(), r["hbar_equivalent"].as_u64()) {
         (Some(c), Some(h)) if c > 0 && h > 0 => Ok((c, h)),
-        _ => Err(bad("nœud miroir Hedera : taux de change invalide")),
+        _ => Err(bad("Hedera mirror node: invalid exchange rate")),
     }
 }
 
@@ -478,12 +478,12 @@ pub fn parse_grpc_web(body: &[u8]) -> AppResult<Precheck> {
     let mut status: Option<(String, String)> = None;
     while !b.is_empty() {
         if b.len() < 5 {
-            return Err(bad("gRPC-web : trame tronquée"));
+            return Err(bad("gRPC-web: truncated frame"));
         }
         let flag = b[0];
         let len = u32::from_be_bytes([b[1], b[2], b[3], b[4]]) as usize;
         if b.len() < 5 + len {
-            return Err(bad("gRPC-web : trame tronquée"));
+            return Err(bad("gRPC-web: truncated frame"));
         }
         let payload = &b[5..5 + len];
         b = &b[5 + len..];
@@ -501,18 +501,18 @@ pub fn parse_grpc_web(body: &[u8]) -> AppResult<Precheck> {
         } else if flag == 0 {
             data = Some(payload.to_vec());
         } else {
-            return Err(bad("gRPC-web : trame compressée inattendue"));
+            return Err(bad("gRPC-web: unexpected compressed frame"));
         }
     }
     if let Some((code, msg)) = &status {
         if code != "0" {
             return Err(bad(format!(
-                "nœud Hedera : erreur gRPC {code} ({})",
+                "Hedera node: gRPC error {code} ({})",
                 crate::dialog_text::sanitize(msg, 120)
             )));
         }
     }
-    let data = data.ok_or_else(|| bad("nœud Hedera : réponse vide"))?;
+    let data = data.ok_or_else(|| bad("Hedera node: empty response"))?;
     let (code, _) = wallet_core::hbar_decode_precheck(&data)?;
     Ok(Precheck { code })
 }
@@ -523,11 +523,11 @@ pub async fn submit_to_node(ctx: &HbarCtx<'_>, node: u64, tx: &[u8]) -> AppResul
         .iter()
         .find(|(n, _)| *n == node)
         .map(|(_, h)| *h)
-        .ok_or_else(|| AppError::InvalidInput(format!("nœud 0.0.{node} inconnu de Kyro")))?;
+        .ok_or_else(|| AppError::InvalidInput(format!("node 0.0.{node} unknown to Kyro")))?;
     let u = url::Url::parse(&format!(
         "https://{host}/proto.CryptoService/cryptoTransfer"
     ))
-    .map_err(|_| AppError::Internal("URL du nœud".into()))?;
+    .map_err(|_| AppError::Internal("node URL".into()))?;
     let mut framed = Vec::with_capacity(tx.len() + 5);
     framed.push(0);
     framed.extend_from_slice(&u32::try_from(tx.len()).unwrap_or(u32::MAX).to_be_bytes());
@@ -537,7 +537,7 @@ pub async fn submit_to_node(ctx: &HbarCtx<'_>, node: u64, tx: &[u8]) -> AppResul
     req.headers.push(("x-grpc-web".into(), "1".into()));
     let (status, body) = ctx.net_client.server_request(req, ctx.tor).await?;
     if status != 200 {
-        return Err(bad(format!("nœud Hedera {host} : HTTP {status}")));
+        return Err(bad(format!("Hedera node {host}: HTTP {status}")));
     }
     parse_grpc_web(&body)
 }
@@ -552,12 +552,12 @@ pub fn retryable(code: u32) -> bool {
 pub async fn probe(ctx: &HbarCtx<'_>) -> AppResult<u64> {
     let v = mirror(ctx, "/api/v1/network/nodes?limit=1")
         .await?
-        .ok_or_else(|| bad("nœud miroir Hedera : liste des nœuds absente"))?;
+        .ok_or_else(|| bad("Hedera mirror node: node list missing"))?;
     v["nodes"][0]["node_account_id"]
         .as_str()
         .and_then(|s| s.strip_prefix("0.0."))
         .and_then(|s| s.parse().ok())
-        .ok_or_else(|| bad("nœud miroir Hedera : réponse inattendue"))
+        .ok_or_else(|| bad("Hedera mirror node: unexpected response"))
 }
 
 #[cfg(test)]

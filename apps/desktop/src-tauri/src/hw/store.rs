@@ -30,7 +30,7 @@ pub fn find(store: &WatchOnlyStore, id: &str) -> AppResult<WatchOnlyAccount> {
         .iter()
         .find(|a| a.id == id)
         .cloned()
-        .ok_or_else(|| AppError::InvalidInput("compte hardware wallet inconnu".into()))
+        .ok_or_else(|| AppError::InvalidInput("unknown hardware-wallet account".into()))
 }
 
 /// `hw-` + 16 hex. Uniqueness only (not a secret): std's randomly keyed hasher + clock.

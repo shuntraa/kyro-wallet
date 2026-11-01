@@ -211,7 +211,7 @@ export function createDemoKaspa(d: DemoKaspaDeps) {
   const decode = (raw: unknown): DemoTx => {
     try {
       const tx = JSON.parse(String(raw ?? '')) as DemoTx;
-      if (tx.version !== 0 || !Array.isArray(tx.inputs) || !Array.isArray(tx.outputs)) throw new Error('forme');
+      if (tx.version !== 0 || !Array.isArray(tx.inputs) || !Array.isArray(tx.outputs)) throw new Error('shape');
       return tx;
     } catch {
       throw invalidInput('Kaspa: invalid transaction JSON');

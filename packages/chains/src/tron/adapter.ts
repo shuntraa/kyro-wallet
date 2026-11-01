@@ -283,7 +283,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
   async signTx(unsigned: TronUnsigned, password: string): Promise<TronSigned> {
     // No hint: Rust names a TRC-20 from its own table only (unknown: raw units, reinforced dialog).
     const res = await this.backend.sign(unsigned.raw, password);
-    if (res.txid !== unsigned.txid || !/^[0-9a-f]{130}$/.test(res.signature)) throw new Error('Signature TRON inattendue');
+    if (res.txid !== unsigned.txid || !/^[0-9a-f]{130}$/.test(res.signature)) throw new Error(l10n('Signature TRON inattendue', 'Unexpected TRON signature'));
     return { family: 'tron', raw: unsigned.raw, signature: res.signature, txid: res.txid, summary: res.summary, estimate: res.estimate };
   }
 
@@ -291,7 +291,7 @@ export class TronAdapter implements ChainAdapter<'tron'> {
   async signTxHw(unsigned: TronUnsigned, deviceId: string): Promise<TronSigned> {
     if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
     const res = await call('hw_sign_tron_tx', { id: deviceId, accountId: this.hw.accountId, raw: unsigned.raw });
-    if (res.txid !== unsigned.txid || !/^[0-9a-f]{130}$/.test(res.signature)) throw new Error('Signature TRON inattendue');
+    if (res.txid !== unsigned.txid || !/^[0-9a-f]{130}$/.test(res.signature)) throw new Error(l10n('Signature TRON inattendue', 'Unexpected TRON signature'));
     return { family: 'tron', raw: unsigned.raw, signature: res.signature, txid: res.txid, summary: res.summary, estimate: res.estimate };
   }
 

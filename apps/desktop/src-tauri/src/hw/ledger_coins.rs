@@ -35,7 +35,7 @@ pub fn xrp_get_address(path: &[u32], display: bool) -> HwResult<Vec<u8>> {
 
 /// `len ‖ key ‖ len ‖ address` → (key, address). Shared by the XRP and Tron apps.
 pub fn parse_key_and_address(data: &[u8]) -> HwResult<(Vec<u8>, String)> {
-    let bad = || HwError::bad("réponse « clé et adresse » mal formée");
+    let bad = || HwError::bad("malformed « key and address » response");
     let n = usize::from(*data.first().ok_or_else(bad)?);
     let key = data.get(1..1 + n).ok_or_else(bad)?.to_vec();
     let m = usize::from(*data.get(1 + n).ok_or_else(bad)?);
@@ -77,7 +77,7 @@ pub fn stellar_get_public_key(path: &[u32], display: bool) -> HwResult<Vec<u8>> 
 
 pub fn stellar_parse_public_key(data: &[u8]) -> HwResult<[u8; 32]> {
     data.try_into()
-        .map_err(|_| HwError::bad("clé Stellar : 32 octets attendus"))
+        .map_err(|_| HwError::bad("Stellar key: 32 bytes expected"))
 }
 
 /// Path ‖ `TransactionSignaturePayload`.
@@ -113,14 +113,14 @@ fn varint(data: &[u8], mut pos: usize) -> HwResult<(u64, usize)> {
     for shift in (0..64).step_by(7) {
         let b = *data
             .get(pos)
-            .ok_or_else(|| HwError::bad("raw_data tronqué"))?;
+            .ok_or_else(|| HwError::bad("truncated raw_data"))?;
         pos += 1;
         v |= u64::from(b & 0x7f) << shift;
         if b & 0x80 == 0 {
             return Ok((v, pos));
         }
     }
-    Err(HwError::bad("varint trop long"))
+    Err(HwError::bad("varint too long"))
 }
 
 /// Length of the protobuf field at the start of `tx` (hw-app-trx `getNextLength`: varint
@@ -133,13 +133,13 @@ fn next_field_len(tx: &[u8]) -> HwResult<usize> {
         2 => {
             let (n, q) = varint(tx, p)?;
             let end = q
-                .checked_add(usize::try_from(n).map_err(|_| HwError::bad("champ trop long"))?)
+                .checked_add(usize::try_from(n).map_err(|_| HwError::bad("field too long"))?)
                 .filter(|e| *e <= tx.len())
-                .ok_or_else(|| HwError::bad("raw_data tronqué"))?;
+                .ok_or_else(|| HwError::bad("truncated raw_data"))?;
             Ok(end)
         }
         _ => Err(HwError::unsupported(
-            "champ protobuf non pris en charge par l'app Tron",
+            "protobuf field not supported by the Tron app",
         )),
     }
 }
@@ -153,7 +153,7 @@ pub fn tron_sign(path: &[u32], raw: &[u8]) -> HwResult<Vec<Vec<u8>>> {
         let n = next_field_len(rest)?;
         if n > TRON_CHUNK {
             return Err(HwError::unsupported(
-                "transaction trop grande pour l'app Tron",
+                "transaction too large for the Tron app",
             ));
         }
         if cur.len() + n > TRON_CHUNK {
@@ -185,11 +185,11 @@ pub fn tron_parse_signature(data: &[u8]) -> HwResult<[u8; 65]> {
     let mut sig: [u8; 65] = data
         .get(..65)
         .and_then(|s| s.try_into().ok())
-        .ok_or_else(|| HwError::bad("signature Tron : 65 octets attendus"))?;
+        .ok_or_else(|| HwError::bad("Tron signature: 65 bytes expected"))?;
     sig[64] = match sig[64] {
         0 | 27 => 27,
         1 | 28 => 28,
-        _ => return Err(HwError::bad("signature Tron : v invalide")),
+        _ => return Err(HwError::bad("Tron signature: invalid v")),
     };
     Ok(sig)
 }

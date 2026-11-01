@@ -498,7 +498,7 @@ export function createDemoCardano(d: DemoCardanoDeps) {
     ada_address: (a): CardanoAddressInfo => {
       d.requireUnlocked();
       const index = Number(a.index);
-      if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw invalidInput("index d'adresse trop grand");
+      if (!Number.isInteger(index) || index < 0 || index > 2 ** 31 - 1) throw invalidInput(l10n("index d'adresse trop grand", 'address index too large'));
       if (index !== 0) throw invalidInput(l10n('démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)', 'demo: only the address at index 0 exists (Kyro only signs that one)'));
       const stake = new Uint8Array([0xe0 | netId(d.network), ...meBytes.slice(29)]);
       return { address: me, path: "m/1852'/1815'/0'/0/0", stakeAddress: cardanoAddressOf(stake, stakeHrpOf(d.network)), accountXpub: bytesToHex(sha256(new TextEncoder().encode('demo-ada-xpub'))).repeat(2) };

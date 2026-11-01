@@ -213,18 +213,18 @@ fn decoder_refuses_everything_else() {
         assert!(e.contains(needle), "{needle} not in {e}");
     };
     // Other transaction types / fields of TransactionBody.
-    refused(&with(CASE1, &[0x3a, 0x00]), "champ 7"); // contractCall
-    refused(&with(CASE1, &[0x5a, 0x00]), "champ 11"); // cryptoCreateAccount
-    refused(&with(CASE1, &[0xca, 0x3e, 0x00]), "champ 1001"); // max_custom_fees
+    refused(&with(CASE1, &[0x3a, 0x00]), "field 7"); // contractCall
+    refused(&with(CASE1, &[0x5a, 0x00]), "field 11"); // cryptoCreateAccount
+    refused(&with(CASE1, &[0xca, 0x3e, 0x00]), "field 1001"); // max_custom_fees
     refused(&with(CASE1, &[0x28, 0x01]), "generateRecord");
     // Duplicated / reordered field: re-encoding differs.
-    refused(&with(CASE1, &[0x18, 0x01]), "non canonique");
+    refused(&with(CASE1, &[0x18, 0x01]), "non-canonical");
     // A zero-valued field written explicitly (proto3 omits defaults).
     let mut t = case1();
     t.memo = String::new();
     let mut raw = t.encode();
     raw.extend_from_slice(&[0x32, 0x00]);
-    refused(&raw, "non canonique");
+    refused(&raw, "non-canonical");
     // Token transfers (field 2 of CryptoTransfer).
     let ct_tokens = {
         let mut b = Vec::new();
@@ -239,8 +239,8 @@ fn decoder_refuses_everything_else() {
         b.extend_from_slice(&inner);
         b
     };
-    refused(&ct_tokens, "HBAR et jetons");
-    refused(&with(CASE1, &[0xc2, 0x02, 0x00]), "deux opérations");
+    refused(&ct_tokens, "HBAR and tokens");
+    refused(&with(CASE1, &[0xc2, 0x02, 0x00]), "two operations");
     // scheduled flag in the transaction ID.
     let scheduled = hex::decode(CASE1.replacen("0a130a0b", "0a150a0b", 1).replacen(
         "12041887ad4b1202",
@@ -248,7 +248,7 @@ fn decoder_refuses_everything_else() {
         1,
     ))
     .unwrap();
-    refused(&scheduled, "programmée");
+    refused(&scheduled, "scheduled");
 }
 
 #[test]
@@ -269,7 +269,7 @@ fn decoder_refuses_odd_transfer_lists() {
     let other_payer = HbarTransfer::decode(
         &hex::decode(CASE1.replacen("0a0c0a041887ad4b10", "0a0c0a041888ad4b10", 1)).unwrap(),
     );
-    assert!(other_payer.unwrap_err().to_string().contains("payeur"));
+    assert!(other_payer.unwrap_err().to_string().contains("payer"));
     // Credit ≠ debit.
     let unbalanced =
         hex::decode(CASE1.replacen("0a0418cd83061080c6868f01", "0a0418cd83061082c6868f01", 1))
@@ -277,7 +277,7 @@ fn decoder_refuses_odd_transfer_lists() {
     assert!(HbarTransfer::decode(&unbalanced)
         .unwrap_err()
         .to_string()
-        .contains("incohérents"));
+        .contains("inconsistent"));
 }
 
 #[test]
@@ -325,7 +325,7 @@ fn sign_verify_round_trip() {
 
     // Refusals at signing.
     let not_ours = hbar_sign(&s, 0, 4_243, &bodies, &nodes);
-    assert!(not_ours.unwrap_err().to_string().contains("payeur"));
+    assert!(not_ours.unwrap_err().to_string().contains("payer"));
     let unknown_node = hbar_decode_tx(&bodies, 4_242, &pk, &[3, 4]);
     assert!(unknown_node.unwrap_err().to_string().contains("0.0.7"));
     let dup = vec![bodies[0].clone(), bodies[0].clone()];
@@ -344,7 +344,7 @@ fn sign_verify_round_trip() {
     assert!(hbar_decode_tx(&differ, 4_242, &pk, &nodes)
         .unwrap_err()
         .to_string()
-        .contains("diffèrent"));
+        .contains("differ"));
     // To ourselves: by account ID and by our own EVM address.
     let me = hex::encode(
         HbarTransfer {
@@ -512,7 +512,7 @@ fn tokens_are_signed_only_on_their_network() {
         hbar_decode_tx(std::slice::from_ref(&usdc), 4_242, &pk, &nodes)
             .unwrap_err()
             .to_string()
-            .contains("réseau")
+            .contains("network")
     );
     let sm = hbar_decode_tx_on(
         Network::Mainnet,
@@ -568,7 +568,7 @@ fn tokens_are_signed_only_on_their_network() {
         hbar_decode_tx_on(Network::Mainnet, &[other], 4_242, &pk, &nodes)
             .unwrap_err()
             .to_string()
-            .contains("inconnu")
+            .contains("unknown")
     );
     // Association: for ourselves only.
     let assoc = body(HbarKind::Associate(USDC_MAIN), HbarRecipient::Id(4_242), 0);

@@ -40,7 +40,7 @@ fn key(s: &str) -> Result<[u8; 32]> {
         .into_vec()
         .ok()
         .and_then(|v| v.try_into().ok())
-        .ok_or_else(|| Error::input(format!("adresse Solana invalide : {s}")))
+        .ok_or_else(|| Error::input(format!("invalid Solana address: {s}")))
 }
 
 fn b58(k: &[u8; 32]) -> String {
@@ -100,7 +100,7 @@ struct Ix {
 
 fn compact_u16(n: usize, out: &mut Vec<u8>) -> Result<()> {
     if n > 0xffff {
-        return Err(Error::input("message Solana trop grand"));
+        return Err(Error::input("Solana message too large"));
     }
     let mut n = n;
     loop {
@@ -142,7 +142,7 @@ fn legacy_message(payer: &[u8; 32], blockhash: &[u8; 32], ixs: &[Ix]) -> Result<
     let mut keys = vec![*payer];
     keys.extend_from_slice(&writable);
     keys.extend_from_slice(&readonly);
-    let ro = u8::try_from(readonly.len()).map_err(|_| Error::input("trop de comptes"))?;
+    let ro = u8::try_from(readonly.len()).map_err(|_| Error::input("too many accounts"))?;
     let mut m = vec![1, 0, ro];
     compact_u16(keys.len(), &mut m)?;
     for k in &keys {
@@ -154,7 +154,7 @@ fn legacy_message(payer: &[u8; 32], blockhash: &[u8; 32], ixs: &[Ix]) -> Result<
         keys.iter()
             .position(|x| x == k)
             .and_then(|p| u8::try_from(p).ok())
-            .ok_or_else(|| Error::input("compte absent du message"))
+            .ok_or_else(|| Error::input("account missing from the message"))
     };
     for ix in ixs {
         m.push(idx(&ix.program)?);
@@ -195,7 +195,7 @@ pub fn sol_stake_message(me: &str, op: &SolStakeOp, blockhash: &str) -> Result<V
             vote_account,
         } => {
             if seed.is_empty() || seed.len() > MAX_SEED_LEN || !seed.is_ascii() {
-                return Err(Error::input("seed : 1 à 32 caractères ASCII"));
+                return Err(Error::input("seed: 1 to 32 ASCII characters"));
             }
             let stake = create_with_seed(&me_k, seed, &stake_program)?;
             let mut create = 3u32.to_le_bytes().to_vec();
@@ -242,7 +242,7 @@ pub fn sol_stake_message(me: &str, op: &SolStakeOp, blockhash: &str) -> Result<V
             lamports,
         } => {
             if *lamports == 0 {
-                return Err(Error::input("montant du retrait nul"));
+                return Err(Error::input("zero withdrawal amount"));
             }
             let mut data = 4u32.to_le_bytes().to_vec();
             data.extend_from_slice(&lamports.to_le_bytes());
@@ -306,14 +306,14 @@ fn u64_at(d: &[u8], at: usize) -> Result<u64> {
     d.get(at..at + 8)
         .and_then(|b| b.try_into().ok())
         .map(u64::from_le_bytes)
-        .ok_or_else(|| Error::input("compte de staking tronqué"))
+        .ok_or_else(|| Error::input("truncated stake account"))
 }
 
 fn key_at(d: &[u8], at: usize) -> Result<String> {
     let k: [u8; 32] = d
         .get(at..at + 32)
         .and_then(|b| b.try_into().ok())
-        .ok_or_else(|| Error::input("compte de staking tronqué"))?;
+        .ok_or_else(|| Error::input("truncated stake account"))?;
     Ok(b58(&k))
 }
 
@@ -323,7 +323,7 @@ fn key_at(d: &[u8], at: usize) -> Result<String> {
 /// activation_epoch, deactivation_epoch, warmup_cooldown_rate f64 }` at 124..188.
 pub fn sol_parse_stake_account(data: &[u8]) -> Result<SolStakeAccount> {
     if data.len() as u64 != STAKE_STATE_SIZE {
-        return Err(Error::input("compte de staking : taille inattendue"));
+        return Err(Error::input("stake account: unexpected size"));
     }
     let tag = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
     let state = match tag {
@@ -331,7 +331,7 @@ pub fn sol_parse_stake_account(data: &[u8]) -> Result<SolStakeAccount> {
         1 => "initialized",
         2 => "delegated",
         3 => "rewardsPool",
-        _ => return Err(Error::input("compte de staking : état inconnu")),
+        _ => return Err(Error::input("stake account: unknown state")),
     };
     if tag == 0 || tag == 3 {
         return Ok(SolStakeAccount {
@@ -384,9 +384,9 @@ pub struct SolStakeHistoryEntry {
 /// Parses the StakeHistory sysvar (`Vec<(Epoch, StakeHistoryEntry)>`, bincode: `u64` length then
 /// 32-byte entries).
 pub fn sol_parse_stake_history(data: &[u8]) -> Result<Vec<SolStakeHistoryEntry>> {
-    let n = usize::try_from(u64_at(data, 0)?).map_err(|_| Error::input("historique invalide"))?;
+    let n = usize::try_from(u64_at(data, 0)?).map_err(|_| Error::input("invalid history"))?;
     if n > 512 || data.len() < 8 + n * 32 {
-        return Err(Error::input("historique de staking invalide"));
+        return Err(Error::input("invalid stake history"));
     }
     (0..n)
         .map(|i| {

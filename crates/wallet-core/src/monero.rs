@@ -110,14 +110,13 @@ fn public_of(s: &Scalar) -> Point {
 pub fn xmr_view_pair(seed: &Seed, account: u32) -> Result<ViewPair> {
     let spend = spend_key(seed, account)?;
     let view = view_key(&spend);
-    ViewPair::new(public_of(&spend), view)
-        .map_err(|_| Error::crypto("clé de dépense Monero invalide"))
+    ViewPair::new(public_of(&spend), view).map_err(|_| Error::crypto("invalid Monero spend key"))
 }
 
 fn subaddress_index(index: u32) -> Result<Option<SubaddressIndex>> {
     if index > XMR_MAX_SUBADDRESS {
         return Err(Error::input(format!(
-            "sous-adresse Monero : au plus {XMR_MAX_SUBADDRESS}"
+            "Monero subaddress: at most {XMR_MAX_SUBADDRESS}"
         )));
     }
     Ok(SubaddressIndex::new(0, index))
@@ -218,7 +217,7 @@ pub fn xmr_words_to_key(phrase: &str) -> Result<Zeroizing<[u8; 32]>> {
     const N: usize = ENGLISH.len();
     let words: Vec<&str> = phrase.split_whitespace().collect();
     if words.len() != 25 {
-        return Err(Error::input("phrase Monero : 25 mots attendus"));
+        return Err(Error::input("Monero phrase: 25 words expected"));
     }
     let find = |w: &str| {
         let p: String = w.chars().take(PREFIX).collect();
@@ -228,21 +227,21 @@ pub fn xmr_words_to_key(phrase: &str) -> Result<Zeroizing<[u8; 32]>> {
     };
     let mut idx = Zeroizing::new(Vec::with_capacity(24));
     for w in &words[..24] {
-        idx.push(find(w).ok_or_else(|| Error::input("mot Monero inconnu"))?);
+        idx.push(find(w).ok_or_else(|| Error::input("unknown Monero word"))?);
     }
     let expected = words[checksum_index(&words[..24])];
     let pfx = |w: &str| w.chars().take(PREFIX).collect::<String>();
     if pfx(expected) != pfx(words[24]) {
-        return Err(Error::input("phrase Monero : mot de contrôle faux"));
+        return Err(Error::input("Monero phrase: wrong checksum word"));
     }
     let mut out = Zeroizing::new([0u8; 32]);
     for (i, t) in idx.chunks_exact(3).enumerate() {
         let (w1, w2, w3) = (t[0], t[1], t[2]);
         let x = w1 + N * ((N - w1 + w2) % N) + N * N * ((N - w2 + w3) % N);
         if x % N != w1 {
-            return Err(Error::input("phrase Monero invalide"));
+            return Err(Error::input("invalid Monero phrase"));
         }
-        let v = u32::try_from(x).map_err(|_| Error::input("phrase Monero invalide"))?;
+        let v = u32::try_from(x).map_err(|_| Error::input("invalid Monero phrase"))?;
         out[i * 4..i * 4 + 4].copy_from_slice(&v.to_le_bytes());
     }
     Ok(out)
@@ -294,7 +293,7 @@ fn parse_destination(address: &str, net: Network) -> Result<(MoneroAddress, XmrD
     let s = address.trim();
     let want = xmr_net(net);
     let a = MoneroAddress::from_str_with_unchecked_network(s)
-        .map_err(|_| Error::input("adresse Monero invalide (format ou somme de contrôle)"))?;
+        .map_err(|_| Error::input("invalid Monero address (format or checksum)"))?;
     if a.network() != want {
         let name = |n: XmrNet| match n {
             XmrNet::Mainnet => "mainnet",
@@ -302,7 +301,7 @@ fn parse_destination(address: &str, net: Network) -> Result<(MoneroAddress, XmrD
             XmrNet::Testnet => "testnet",
         };
         return Err(Error::input(format!(
-            "adresse Monero {} : Kyro est sur {}",
+            "Monero {} address: Kyro is on {}",
             name(a.network()),
             name(want)
         )));
@@ -315,12 +314,12 @@ fn parse_destination(address: &str, net: Network) -> Result<(MoneroAddress, XmrD
         },
         AddressType::Featured { .. } => {
             return Err(Error::input(
-                "adresse Monero « featured » (format expérimental, non standard) refusée",
+                "\"featured\" Monero address (experimental, non-standard format) refused",
             ))
         }
     };
     if a.to_string() != s {
-        return Err(Error::input("adresse Monero non canonique"));
+        return Err(Error::input("non-canonical Monero address"));
     }
     Ok((
         a,
@@ -367,7 +366,9 @@ pub fn xmr_key_images(
         let x = Zeroizing::new(*b + o.key_offset().into());
         let key = o.key();
         if Point::from(&*x * ED25519_BASEPOINT_TABLE) != key {
-            return Err(Error::input("sortie Monero qui n'est pas à ce compte"));
+            return Err(Error::input(
+                "Monero output that does not belong to this account",
+            ));
         }
         let hp = Point::biased_hash(key.compress().to_bytes()).into();
         out.push(Point::from(*x * hp).compress().to_bytes());
@@ -430,7 +431,7 @@ fn cache_key(seed: &Seed, net: Network, account: u32) -> Result<Zeroizing<[u8; 3
 pub fn xmr_cache_seal(seed: &Seed, net: Network, account: u32, plain: &[u8]) -> Result<Vec<u8>> {
     let key = cache_key(seed, net, account)?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key[..])
-        .map_err(|_| Error::crypto("clé de cache invalide"))?;
+        .map_err(|_| Error::crypto("invalid cache key"))?;
     let mut nonce = [0u8; 24];
     getrandom::getrandom(&mut nonce).map_err(|_| Error::crypto("OS randomness unavailable"))?;
     let header = cache_header(net, account);
@@ -442,7 +443,7 @@ pub fn xmr_cache_seal(seed: &Seed, net: Network, account: u32, plain: &[u8]) -> 
                 aad: &header,
             },
         )
-        .map_err(|_| Error::crypto("chiffrement du cache impossible"))?;
+        .map_err(|_| Error::crypto("cache encryption failed"))?;
     let mut out = header;
     out.extend(nonce);
     out.extend(ct);
@@ -459,12 +460,12 @@ pub fn xmr_cache_open(
     let header = cache_header(net, account);
     if data.len() < header.len() + 24 + 16 || data[..header.len()] != header[..] {
         return Err(Error::input(
-            "cache Monero d'un autre réseau, compte ou format",
+            "Monero cache of another network, account or format",
         ));
     }
     let key = cache_key(seed, net, account)?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key[..])
-        .map_err(|_| Error::crypto("clé de cache invalide"))?;
+        .map_err(|_| Error::crypto("invalid cache key"))?;
     let (nonce, ct) = data[header.len()..].split_at(24);
     cipher
         .decrypt(
@@ -475,7 +476,7 @@ pub fn xmr_cache_open(
             },
         )
         .map(Zeroizing::new)
-        .map_err(|_| Error::input("cache Monero illisible (autre phrase ou fichier modifié)"))
+        .map_err(|_| Error::input("unreadable Monero cache (another phrase or modified file)"))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -559,23 +560,23 @@ pub fn xmr_build(
     own_addresses: &[String],
 ) -> Result<XmrUnsigned> {
     if amount == 0 {
-        return Err(Error::input("montant nul"));
+        return Err(Error::input("zero amount"));
     }
     if inputs.is_empty() {
-        return Err(Error::input("aucune sortie à dépenser"));
+        return Err(Error::input("no output to spend"));
     }
     if inputs
         .iter()
         .any(|i| i.decoys().len() != usize::from(XMR_RING_LEN))
     {
-        return Err(Error::input("anneau de taille inattendue"));
+        return Err(Error::input("ring of unexpected size"));
     }
     let (parsed, dest) = parse_destination(to, net)?;
     let vp = xmr_view_pair(seed, account)?;
     let inputs_total: u64 = inputs
         .iter()
         .try_fold(0u64, |acc, i| acc.checked_add(i.commitment().amount))
-        .ok_or_else(|| Error::input("montants d'entrée trop grands"))?;
+        .ok_or_else(|| Error::input("input amounts too large"))?;
     let input_count = inputs.len();
     let ovk = random32()?;
     let signable = SignableTransaction::new(
@@ -593,16 +594,16 @@ pub fn xmr_build(
             outputs,
             necessary_fee,
         } => Error::input(format!(
-            "fonds insuffisants : {inputs} piconero disponibles, {outputs} demandés + {} de frais",
+            "insufficient funds: {inputs} piconero available, {outputs} requested + {} fee",
             necessary_fee.unwrap_or(0)
         )),
-        other => Error::input(format!("transaction Monero impossible : {other}")),
+        other => Error::input(format!("Monero transaction failed: {other}")),
     })?;
     let fee = signable.necessary_fee();
     let change = inputs_total
         .checked_sub(amount)
         .and_then(|r| r.checked_sub(fee))
-        .ok_or_else(|| Error::input("fonds insuffisants pour les frais"))?;
+        .ok_or_else(|| Error::input("insufficient funds for the fee"))?;
     let mut warnings = Vec::new();
     if matches!(dest.kind, XmrAddressKind::Integrated { .. }) {
         warnings.push(XmrWarning::IntegratedAddress);
@@ -655,7 +656,7 @@ pub struct XmrSigned {
 /// outputs — payment and change — with the planned data) and that its fee is the one shown.
 pub fn xmr_sign(seed: &Seed, account: u32, unsigned: XmrUnsigned) -> Result<XmrSigned> {
     if unsigned.summary.account != account {
-        return Err(Error::input("transaction préparée pour un autre compte"));
+        return Err(Error::input("transaction prepared for another account"));
     }
     let XmrUnsigned { signable, summary } = unsigned;
     let eventuality = Eventuality::from(signable.clone());
@@ -663,15 +664,15 @@ pub fn xmr_sign(seed: &Seed, account: u32, unsigned: XmrUnsigned) -> Result<XmrS
     let mut rng = ChaCha20Rng::from_seed(*random32()?);
     let tx = signable
         .sign(&mut rng, &spend)
-        .map_err(|e| Error::crypto(format!("signature Monero impossible : {e}")))?;
+        .map_err(|e| Error::crypto(format!("Monero signing failed: {e}")))?;
     let pruned = Transaction::<Pruned>::from(tx.clone());
     if !eventuality.matches(&pruned) {
         return Err(Error::crypto(
-            "la transaction signée ne crée pas exactement les sorties prévues",
+            "the signed transaction does not create exactly the planned outputs",
         ));
     }
     if xmr_tx_fee(&pruned).map(|f| f.to_string()) != Some(summary.fee.clone()) {
-        return Err(Error::crypto("frais de la transaction signée différents"));
+        return Err(Error::crypto("the signed transaction's fee differs"));
     }
     Ok(XmrSigned {
         txid: hex::encode(tx.hash()),

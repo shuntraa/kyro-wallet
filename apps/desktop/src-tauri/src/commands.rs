@@ -169,7 +169,7 @@ pub(crate) fn words_text(lang: Lang, words: &[String]) -> Zeroizing<String> {
 fn check_password_strength(password: &str) -> AppResult<()> {
     if password.chars().count() < MIN_PASSWORD_LEN {
         return Err(AppError::InvalidInput(format!(
-            "le mot de passe doit faire au moins {MIN_PASSWORD_LEN} caractères"
+            "the password must be at least {MIN_PASSWORD_LEN} characters long"
         )));
     }
     Ok(())
@@ -208,7 +208,7 @@ async fn seal_and_start(
     let _creating = state.vault_create_lock.lock().await;
     if state.vault_exists() {
         return Err(AppError::InvalidInput(
-            "un coffre existe déjà sur cet appareil".into(),
+            "a vault already exists on this device".into(),
         ));
     }
     let seed = mnemonic.to_seed("");
@@ -265,7 +265,7 @@ pub async fn vault_create(
     let count = match words {
         12 => WordCount::W12,
         24 => WordCount::W24,
-        _ => return Err(AppError::InvalidInput("12 ou 24 mots".into())),
+        _ => return Err(AppError::InvalidInput("12 or 24 words".into())),
     };
     let mnemonic = Mnemonic::generate(count)?;
     let words = mnemonic.words();
@@ -336,7 +336,7 @@ pub fn vault_backup_verify(
     let answers = Zeroizing::new(answers);
     state.with_pending_backup(|slot| {
         let Some(p) = slot.as_mut() else {
-            return Err(AppError::Internal("sauvegarde absente".into()));
+            return Err(AppError::Internal("backup missing".into()));
         };
         if backup_answers_match(p, &answers) {
             *slot = None;
@@ -669,7 +669,7 @@ fn parse_kind(kind: &str) -> AppResult<BtcKind> {
         "segwit" => Ok(BtcKind::Segwit),
         "taproot" => Ok(BtcKind::Taproot),
         _ => Err(AppError::InvalidInput(
-            "type d'adresse : segwit ou taproot".into(),
+            "address type: segwit or taproot".into(),
         )),
     }
 }
@@ -1138,7 +1138,7 @@ pub async fn btc_sign_psbt(
         blocking(move || Ok(wallet_core::btc_sign_psbt(&seed, net, a, &psbt)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -1191,7 +1191,7 @@ pub async fn sol_sign_tx(
     let summary = decoded.summary.clone();
     if summary.our_signer_index.is_none() {
         return Err(AppError::InvalidInput(
-            "cette transaction ne demande pas la signature de ton adresse Solana".into(),
+            "this transaction does not ask for your Solana address's signature".into(),
         ));
     }
     let seed = seed_from_password(&state, Zeroizing::new(password)).await?;
@@ -1246,7 +1246,7 @@ pub fn tor_status(state: State<'_, AppState>) -> TorStatus {
 pub fn tor_retry(state: State<'_, AppState>) -> AppResult<TorStatus> {
     if !state.settings().tor.enabled {
         return Err(AppError::InvalidInput(
-            "Tor est désactivé dans les réglages".into(),
+            "Tor is turned off in the settings".into(),
         ));
     }
     state.net.tor.restart();
@@ -1291,7 +1291,7 @@ pub fn open_fees_page() -> AppResult<()> {
     fees_page_command()
         .spawn()
         .map(|_| ())
-        .map_err(|e| AppError::Internal(format!("navigateur introuvable : {e}")))
+        .map_err(|e| AppError::Internal(format!("browser not found: {e}")))
 }
 
 #[derive(Serialize)]

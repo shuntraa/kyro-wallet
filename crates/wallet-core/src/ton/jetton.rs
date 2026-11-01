@@ -95,7 +95,7 @@ fn def(master: &TonAddress, testnet: bool) -> Result<&'static JettonDef> {
     JETTONS
         .iter()
         .find(|d| d.testnet == testnet && master_of(d) == *master)
-        .ok_or_else(|| Error::input("jeton TON (jetton) inconnu de Kyro"))
+        .ok_or_else(|| Error::input("TON token (jetton) unknown to Kyro"))
 }
 
 /// The jetton Kyro knows at `master`, if any.
@@ -159,7 +159,7 @@ fn store_var16(b: &mut CellBuilder, v: u128) -> Result<()> {
     let skip = bytes.iter().take_while(|x| **x == 0).count();
     let len = 16 - skip;
     if len > 15 {
-        return Err(Error::input("montant de jeton trop grand"));
+        return Err(Error::input("token amount too large"));
     }
     b.store_small_uint(len as u8, 4).map_err(cell_err)?;
     b.store_raw(&bytes[skip..], (len * 8) as u16)
@@ -178,21 +178,21 @@ fn load_var16(s: &mut CellSlice<'_>) -> Result<u128> {
 impl TonJettonBody {
     pub(super) fn check(&self, attached: u64, wallet: &TonAddress) -> Result<()> {
         if self.amount == 0 || self.amount > MAX_JETTON_UNITS {
-            return Err(Error::input("montant de jeton invalide"));
+            return Err(Error::input("invalid token amount"));
         }
         if self.destination.workchain != 0 {
             return Err(Error::input(
-                "destinataire du jeton sur la masterchain (-1) refusé",
+                "token recipient on the masterchain (-1) refused",
             ));
         }
         if self.response_destination != *wallet {
             return Err(Error::input(
-                "le surplus de GRAM du transfert de jeton doit revenir à ton portefeuille",
+                "the token transfer's excess GRAM must come back to your wallet",
             ));
         }
         if attached == 0 || attached > MAX_ATTACHED_NANOTON || self.forward_ton_amount >= attached {
             return Err(Error::input(
-                "GRAM joints au transfert de jeton refusés (0,2 GRAM au plus, plus que le montant transmis)",
+                "GRAM attached to the token transfer refused (0.2 GRAM at most, more than the forwarded amount)",
             ));
         }
         if let Some(c) = &self.comment {
@@ -224,44 +224,41 @@ impl TonJettonBody {
     /// Strict decoding (the caller re-encodes the whole message and compares the bytes).
     pub(super) fn parse(s: &mut CellSlice<'_>) -> Result<Self> {
         if s.load_u32().map_err(cell_err)? != TON_JETTON_TRANSFER_OP {
-            return Err(Error::input("opération de jeton attendue (transfer)"));
+            return Err(Error::input("token operation expected (transfer)"));
         }
         let query_id = s.load_u64().map_err(cell_err)?;
         let amount = load_var16(s)?;
         let destination = load_addr(s)?;
         let response_destination = load_addr(s)?;
         if s.load_bit().map_err(cell_err)? {
-            return Err(Error::input("custom_payload de jeton refusé"));
+            return Err(Error::input("token custom_payload refused"));
         }
         let forward = load_var16(s)?;
         let forward_ton_amount =
-            u64::try_from(forward).map_err(|_| Error::input("montant transmis trop grand"))?;
+            u64::try_from(forward).map_err(|_| Error::input("forwarded amount too large"))?;
         let comment = if s.load_bit().map_err(cell_err)? {
             let c = s.load_reference_cloned().map_err(cell_err)?;
             let mut p = slice(&c)?;
             if p.size_refs() != 0 || p.size_bits() < 32 || p.size_bits() % 8 != 0 {
                 return Err(Error::input(
-                    "charge transmise refusée (seul un commentaire texte est accepté)",
+                    "forward payload refused (only a text comment is accepted)",
                 ));
             }
             if p.load_u32().map_err(cell_err)? != 0 {
                 return Err(Error::input(
-                    "charge transmise refusée (opération de contrat, pas un commentaire texte)",
+                    "forward payload refused (contract operation, not a text comment)",
                 ));
             }
             let mut raw = Vec::with_capacity(usize::from(p.size_bits() / 8));
             while p.size_bits() > 0 {
                 raw.push(p.load_u8().map_err(cell_err)?);
             }
-            Some(
-                String::from_utf8(raw)
-                    .map_err(|_| Error::input("commentaire TON : UTF-8 invalide"))?,
-            )
+            Some(String::from_utf8(raw).map_err(|_| Error::input("TON comment: invalid UTF-8"))?)
         } else {
             None
         };
         if s.size_bits() != 0 || s.size_refs() != 0 {
-            return Err(Error::input("champs de jeton inattendus (données en trop)"));
+            return Err(Error::input("unexpected token fields (trailing data)"));
         }
         Ok(Self {
             query_id,
@@ -308,13 +305,9 @@ pub(super) fn summarize(
     let d = JETTONS
         .iter()
         .filter(|d| d.testnet == testnet)
-        .find(|d| {
-            ton_jetton_wallet_address(&master_of(d), wallet, testnet).is_ok_and(|w| w == *to)
-        })
+        .find(|d| ton_jetton_wallet_address(&master_of(d), wallet, testnet).is_ok_and(|w| w == *to))
         .ok_or_else(|| {
-            Error::input(
-                "transfert de jeton vers un contrat qui n'est pas ton portefeuille d'un jeton connu",
-            )
+            Error::input("token transfer to a contract that is not your wallet for a known token")
         })?;
     Ok(TonJettonSummary {
         master: master_of(d).to_friendly(true, testnet),

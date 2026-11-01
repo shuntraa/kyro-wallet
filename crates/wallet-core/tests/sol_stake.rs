@@ -390,7 +390,7 @@ fn trezor_stake_fixtures_accepted_or_refused() {
             // address that is not derived from its base and seed.
             let e = r.expect_err(v.name).to_string();
             assert!(
-                e.contains("staking Solana") || e.contains("not derived"),
+                e.contains("Solana staking") || e.contains("not derived"),
                 "{}: {e}",
                 v.name
             );
@@ -419,8 +419,8 @@ fn trezor_stake_fixtures_accepted_or_refused() {
         ("Merge", "Merge"),
         ("Split", "Split"),
         ("Initialize Stake Account", "lockup"),
-        ("Stake instructions with warning", "autorités"),
-        ("Create Stake Account", "1000 octets"),
+        ("Stake instructions with warning", "authorities"),
+        ("Create Stake Account", "1000 bytes"),
         // Trezor's "claim" fixtures pass the Compute Budget program where the StakeHistory
         // sysvar belongs: Kyro checks every sysvar position.
         ("Claim instructions", "StakeHistory"),
@@ -602,7 +602,7 @@ fn tampered_stake_messages_are_refused() {
     let e = sol_decode_message(&only_create, &[], ME)
         .unwrap_err()
         .to_string();
-    assert!(e.contains("sans être initialisé"), "{e}");
+    assert!(e.contains("without being initialized"), "{e}");
 
     // 4. Delegation whose stake authority is another (co-signing) key.
     let other = key(OTHER);
@@ -623,7 +623,7 @@ fn tampered_stake_messages_are_refused() {
     let e = sol_decode_message(&delegate_other, &[], ME)
         .unwrap_err()
         .to_string();
-    assert!(e.contains("autorité de staking"), "{e}");
+    assert!(e.contains("stake authority"), "{e}");
 
     // 5. Withdrawal to another address.
     let mut wd = 4u32.to_le_bytes().to_vec();
@@ -643,7 +643,7 @@ fn tampered_stake_messages_are_refused() {
     let e = sol_decode_message(&to_other, &[], ME)
         .unwrap_err()
         .to_string();
-    assert!(e.contains("destinataire du retrait"), "{e}");
+    assert!(e.contains("withdrawal recipient"), "{e}");
 
     // 6. Deactivate with the wrong sysvar at position 1.
     let d = sol_stake_message(

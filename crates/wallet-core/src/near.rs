@@ -144,20 +144,20 @@ fn read_call(b: &mut &[u8]) -> Result<(String, Vec<u8>, u64, u128)> {
     let tag = read_u8(b)?;
     if tag != ACTION_FUNCTION_CALL {
         return Err(bad(format!(
-            "action {} ({tag}) refusée dans un transfert de jeton",
+            "action {} ({tag}) refused in a token transfer",
             action_name(tag)
         )));
     }
     let n = read_u32(b)? as usize;
     if n > 32 {
-        return Err(bad("nom de méthode trop long"));
+        return Err(bad("method name too long"));
     }
     let method = core::str::from_utf8(take(b, n)?)
-        .map_err(|_| bad("nom de méthode : UTF-8 invalide"))?
+        .map_err(|_| bad("method name: invalid UTF-8"))?
         .to_owned();
     let n = read_u32(b)? as usize;
     if n > 512 {
-        return Err(bad("arguments trop longs"));
+        return Err(bad("arguments too long"));
     }
     let args = take(b, n)?.to_vec();
     Ok((method, args, read_u64(b)?, read_u128(b)?))
@@ -212,14 +212,14 @@ pub fn near_parse_public_key(s: &str) -> Result<[u8; 32]> {
     let b58 = s
         .trim()
         .strip_prefix("ed25519:")
-        .ok_or_else(|| Error::input("clé publique NEAR : préfixe ed25519: attendu"))?;
+        .ok_or_else(|| Error::input("NEAR public key: ed25519: prefix expected"))?;
     let key: [u8; 32] = bs58::decode(b58)
         .into_vec()
         .ok()
         .and_then(|v| v.try_into().ok())
-        .ok_or_else(|| Error::input("clé publique NEAR invalide"))?;
+        .ok_or_else(|| Error::input("invalid NEAR public key"))?;
     ed25519_dalek::VerifyingKey::from_bytes(&key)
-        .map_err(|_| Error::input("clé publique NEAR invalide"))?;
+        .map_err(|_| Error::input("invalid NEAR public key"))?;
     Ok(key)
 }
 
@@ -229,7 +229,7 @@ pub fn near_parse_hash(s: &str) -> Result<[u8; 32]> {
         .into_vec()
         .ok()
         .and_then(|v| v.try_into().ok())
-        .ok_or_else(|| Error::input("hash NEAR invalide (32 octets en base58 attendus)"))
+        .ok_or_else(|| Error::input("invalid NEAR hash (32 bytes in base58 expected)"))
 }
 
 /// Base58 form of a 32-byte hash.
@@ -262,9 +262,7 @@ fn is_lower_hex(s: &str) -> bool {
 pub fn near_account_kind(id: &str) -> Result<NearAccountKind> {
     let b = id.as_bytes();
     if !(2..=64).contains(&b.len()) {
-        return Err(Error::input(
-            "identifiant de compte NEAR : 2 à 64 caractères",
-        ));
+        return Err(Error::input("NEAR account ID: 2 to 64 characters"));
     }
     let sep = |c: u8| matches!(c, b'-' | b'_' | b'.');
     let mut prev_sep = true; // no separator first
@@ -272,7 +270,7 @@ pub fn near_account_kind(id: &str) -> Result<NearAccountKind> {
         if sep(c) {
             if prev_sep {
                 return Err(Error::input(
-                    "identifiant de compte NEAR invalide (séparateur en tête ou doublé)",
+                    "invalid NEAR account ID (leading or doubled separator)",
                 ));
             }
             prev_sep = true;
@@ -280,14 +278,12 @@ pub fn near_account_kind(id: &str) -> Result<NearAccountKind> {
             prev_sep = false;
         } else {
             return Err(Error::input(
-                "identifiant de compte NEAR invalide (minuscules, chiffres, - _ . seulement)",
+                "invalid NEAR account ID (lowercase letters, digits, - _ . only)",
             ));
         }
     }
     if prev_sep {
-        return Err(Error::input(
-            "identifiant de compte NEAR invalide (séparateur final)",
-        ));
+        return Err(Error::input("invalid NEAR account ID (trailing separator)"));
     }
     if b.len() == 64 && is_lower_hex(id) {
         return Ok(NearAccountKind::Implicit);
@@ -303,12 +299,12 @@ pub fn near_account_kind(id: &str) -> Result<NearAccountKind> {
 // ---------------------------------------------------------------------------------------------
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("transaction NEAR : {}", msg.into()))
+    Error::input(format!("NEAR transaction: {}", msg.into()))
 }
 
 fn take<'a>(b: &mut &'a [u8], n: usize) -> Result<&'a [u8]> {
     if b.len() < n {
-        return Err(bad("tronquée"));
+        return Err(bad("truncated"));
     }
     let (head, rest) = b.split_at(n);
     *b = rest;
@@ -316,7 +312,7 @@ fn take<'a>(b: &mut &'a [u8], n: usize) -> Result<&'a [u8]> {
 }
 
 fn take_array<const N: usize>(b: &mut &[u8]) -> Result<[u8; N]> {
-    take(b, N)?.try_into().map_err(|_| bad("tronquée"))
+    take(b, N)?.try_into().map_err(|_| bad("truncated"))
 }
 
 fn read_u8(b: &mut &[u8]) -> Result<u8> {
@@ -338,11 +334,11 @@ fn read_u128(b: &mut &[u8]) -> Result<u128> {
 fn read_account_id(b: &mut &[u8], what: &str) -> Result<String> {
     let len = read_u32(b)? as usize;
     if len > 64 {
-        return Err(bad(format!("{what} : identifiant de plus de 64 octets")));
+        return Err(bad(format!("{what}: ID longer than 64 bytes")));
     }
     let raw = take(b, len)?;
-    let s = core::str::from_utf8(raw).map_err(|_| bad(format!("{what} : UTF-8 invalide")))?;
-    near_account_kind(s).map_err(|e| bad(format!("{what} : {e}")))?;
+    let s = core::str::from_utf8(raw).map_err(|_| bad(format!("{what}: invalid UTF-8")))?;
+    near_account_kind(s).map_err(|e| bad(format!("{what}: {e}")))?;
     Ok(s.to_owned())
 }
 
@@ -364,7 +360,7 @@ fn action_name(tag: u8) -> &'static str {
         8 => "Delegate",
         9 => "DeployGlobalContract",
         10 => "UseGlobalContract",
-        _ => "inconnue",
+        _ => "unknown",
     }
 }
 
@@ -437,39 +433,36 @@ impl NearTransfer {
     /// `[storage_deposit?, ft_transfer]` after the action count `n`.
     fn read_ft(b: &mut &[u8], n: u32) -> Result<NearFtTransfer> {
         if n != 1 && n != 2 {
-            return Err(bad(format!("{n} actions dans un transfert de jeton")));
+            return Err(bad(format!("{n} actions in a token transfer")));
         }
         let mut storage = None;
         if n == 2 {
             let (m, args, gas, deposit) = read_call(b)?;
             let a: StorageDepositArgs = serde_json::from_slice(&args)
-                .map_err(|_| bad("arguments de storage_deposit inattendus"))?;
+                .map_err(|_| bad("unexpected storage_deposit arguments"))?;
             if m != "storage_deposit" || gas != NEAR_FT_GAS || !a.registration_only {
-                return Err(bad("première action : storage_deposit attendu"));
+                return Err(bad("first action: storage_deposit expected"));
             }
             if deposit == 0 || deposit > NEAR_MAX_STORAGE_DEPOSIT {
-                return Err(bad("dépôt de stockage hors limites"));
+                return Err(bad("storage deposit out of bounds"));
             }
             storage = Some((a.account_id, deposit));
         }
         let (m, args, gas, deposit) = read_call(b)?;
         let a: FtTransferArgs = serde_json::from_slice(&args)
-            .map_err(|_| bad("arguments de ft_transfer inattendus (mémo refusé)"))?;
+            .map_err(|_| bad("unexpected ft_transfer arguments (memo refused)"))?;
         if m != "ft_transfer" || gas != NEAR_FT_GAS || deposit != 1 {
-            return Err(bad("ft_transfer attendu (30 Tgas, 1 yoctoNEAR)"));
+            return Err(bad("ft_transfer expected (30 Tgas, 1 yoctoNEAR)"));
         }
-        near_account_kind(&a.receiver_id).map_err(|e| bad(format!("destinataire : {e}")))?;
+        near_account_kind(&a.receiver_id).map_err(|e| bad(format!("recipient: {e}")))?;
         if let Some((acc, _)) = &storage {
             if acc != &a.receiver_id {
                 return Err(bad(
-                    "storage_deposit pour un autre compte que le destinataire",
+                    "storage_deposit for an account other than the recipient",
                 ));
             }
         }
-        let amount: u128 = a
-            .amount
-            .parse()
-            .map_err(|_| bad("montant de jeton invalide"))?;
+        let amount: u128 = a.amount.parse().map_err(|_| bad("invalid token amount"))?;
         Ok(NearFtTransfer {
             recipient: a.receiver_id,
             amount,
@@ -481,15 +474,13 @@ impl NearTransfer {
         // nearcore tells the versions apart by the first byte: a `TransactionV1` starts with the
         // tag 1, a `TransactionV0` with the length of `signer_id` (u32 LE, ≥ 2 for a valid id).
         if b.first() == Some(&1) {
-            return Err(bad(
-                "TransactionV1 (frais de priorité, clés de gas) non prise en charge",
-            ));
+            return Err(bad("TransactionV1 (priority fees, gas keys) not supported"));
         }
         let signer_id = read_account_id(b, "signer_id")?;
         let key_type = read_u8(b)?;
         if key_type != ED25519 {
             return Err(bad(format!(
-                "type de clé {key_type} (secp256k1, ML-DSA…) non pris en charge"
+                "key type {key_type} (secp256k1, ML-DSA…) not supported"
             )));
         }
         let public_key = take_array(b)?;
@@ -500,7 +491,7 @@ impl NearTransfer {
         if b.first() == Some(&ACTION_FUNCTION_CALL) {
             if near_known_token(&receiver_id).is_none() {
                 return Err(bad(
-                    "appel de contrat (FunctionCall) refusé : Kyro n'appelle que les contrats de jetons qu'il connaît",
+                    "contract call (FunctionCall) refused: Kyro only calls the token contracts it knows",
                 ));
             }
             let ft = NearTransfer::read_ft(b, n)?;
@@ -516,13 +507,13 @@ impl NearTransfer {
         }
         if n != 1 {
             return Err(bad(format!(
-                "{n} actions : Kyro ne signe qu'un seul Transfer"
+                "{n} actions: Kyro signs a single Transfer only"
             )));
         }
         let tag = read_u8(b)?;
         if tag != ACTION_TRANSFER {
             return Err(bad(format!(
-                "action {} ({tag}) refusée : Kyro ne signe que des Transfer",
+                "action {} ({tag}) refused: Kyro signs Transfer actions only",
                 action_name(tag)
             )));
         }
@@ -542,15 +533,15 @@ impl NearTransfer {
     /// identical re-encoding.
     pub fn decode(raw: &[u8]) -> Result<NearTransfer> {
         if raw.len() > MAX_TX {
-            return Err(bad("trop grande"));
+            return Err(bad("too large"));
         }
         let mut b = raw;
         let tx = NearTransfer::read(&mut b)?;
         if !b.is_empty() {
-            return Err(bad("octets en trop après la transaction"));
+            return Err(bad("trailing bytes after the transaction"));
         }
         if tx.encode() != raw {
-            return Err(bad("encodage non canonique"));
+            return Err(bad("non-canonical encoding"));
         }
         Ok(tx)
     }
@@ -571,19 +562,19 @@ impl NearTransfer {
     /// Strict decoding of a `SignedTransaction` (same rules as [`NearTransfer::decode`]).
     pub fn decode_signed(raw: &[u8]) -> Result<(NearTransfer, [u8; 64])> {
         if raw.len() > MAX_TX + 65 {
-            return Err(bad("trop grande"));
+            return Err(bad("too large"));
         }
         let mut b = raw;
         let tx = NearTransfer::read(&mut b)?;
         if read_u8(&mut b)? != ED25519 {
-            return Err(bad("signature : type de clé non pris en charge"));
+            return Err(bad("signature: key type not supported"));
         }
         let sig: [u8; 64] = take_array(&mut b)?;
         if !b.is_empty() {
-            return Err(bad("octets en trop après la signature"));
+            return Err(bad("trailing bytes after the signature"));
         }
         if tx.encode_signed(&sig) != raw {
-            return Err(bad("encodage non canonique"));
+            return Err(bad("non-canonical encoding"));
         }
         Ok((tx, sig))
     }
@@ -657,28 +648,26 @@ pub struct NearTokenSummary {
 
 fn summarize(tx: &NearTransfer, our_account: &str, our_pubkey: &[u8; 32]) -> Result<NearTxSummary> {
     if tx.signer_id != our_account {
-        return Err(bad("le signataire n'est pas le compte de ce portefeuille"));
+        return Err(bad("the signer is not this wallet's account"));
     }
     if &tx.public_key != our_pubkey {
-        return Err(bad(
-            "la clé de signature n'est pas celle de ce portefeuille",
-        ));
+        return Err(bad("the signing key is not this wallet's"));
     }
     if tx.receiver_id == tx.signer_id {
-        return Err(bad("transfert à soi-même"));
+        return Err(bad("transfer to yourself"));
     }
     if tx.nonce == 0 {
-        return Err(bad("nonce nul"));
+        return Err(bad("zero nonce"));
     }
     let receiver_kind = near_account_kind(&tx.receiver_id)?;
     let mut warnings = Vec::new();
     let token = match &tx.ft {
         None => {
             if tx.deposit == 0 {
-                return Err(bad("montant nul"));
+                return Err(bad("zero amount"));
             }
             if tx.deposit > MAX_DEPOSIT {
-                return Err(bad("montant invraisemblable"));
+                return Err(bad("implausible amount"));
             }
             if receiver_kind == NearAccountKind::EthImplicit {
                 warnings.push(NearWarning::EthImplicitReceiver);
@@ -687,12 +676,12 @@ fn summarize(tx: &NearTransfer, our_account: &str, our_pubkey: &[u8; 32]) -> Res
         }
         Some(f) => {
             let (k, testnet) = near_known_token(&tx.receiver_id)
-                .ok_or_else(|| bad("contrat de jeton inconnu de Kyro"))?;
+                .ok_or_else(|| bad("token contract unknown to Kyro"))?;
             if f.amount == 0 {
-                return Err(bad("montant nul"));
+                return Err(bad("zero amount"));
             }
             if f.recipient == tx.signer_id {
-                return Err(bad("transfert à soi-même"));
+                return Err(bad("transfer to yourself"));
             }
             let recipient_kind = near_account_kind(&f.recipient)?;
             if recipient_kind == NearAccountKind::EthImplicit {
@@ -727,7 +716,7 @@ fn summarize(tx: &NearTransfer, our_account: &str, our_pubkey: &[u8; 32]) -> Res
 }
 
 fn unhex(s: &str) -> Result<Vec<u8>> {
-    hex::decode(s.trim()).map_err(|_| Error::input("transaction NEAR : hexadécimal attendu"))
+    hex::decode(s.trim()).map_err(|_| Error::input("NEAR transaction: hexadecimal expected"))
 }
 
 /// Decodes an **unsigned** transfer (hex Borsh) for the dialog. Refused: anything
@@ -762,7 +751,7 @@ pub fn near_sign(
     let sig = key.sign(&hash);
     key.verifying_key()
         .verify_strict(&hash, &sig)
-        .map_err(|_| Error::crypto("échec de la vérification de la signature"))?;
+        .map_err(|_| Error::crypto("signature verification failed"))?;
     let signed = tx.encode_signed(&sig.to_bytes());
     Ok((hex::encode(signed), near_hash_string(&hash), summary))
 }
@@ -773,16 +762,14 @@ pub fn near_sign(
 pub fn near_verify_signed(signed_hex: &str) -> Result<(NearTransfer, String)> {
     let (tx, sig) = NearTransfer::decode_signed(&unhex(signed_hex)?)?;
     let key = ed25519_dalek::VerifyingKey::from_bytes(&tx.public_key)
-        .map_err(|_| bad("clé publique invalide"))?;
+        .map_err(|_| bad("invalid public key"))?;
     let hash = tx.hash();
     key.verify_strict(&hash, &ed25519_dalek::Signature::from_bytes(&sig))
-        .map_err(|_| bad("la signature ne se vérifie pas"))?;
+        .map_err(|_| bad("the signature does not verify"))?;
     if near_account_kind(&tx.signer_id)? == NearAccountKind::Implicit
         && tx.signer_id != hex::encode(tx.public_key)
     {
-        return Err(bad(
-            "la clé ne correspond pas au compte implicite signataire",
-        ));
+        return Err(bad("the key does not match the signing implicit account"));
     }
     Ok((tx, near_hash_string(&hash)))
 }
@@ -800,7 +787,7 @@ pub fn near_hw_message(tx_hex: &str) -> Result<Vec<u8>> {
 pub fn near_hw_signed(tx_hex: &str, sig: &[u8]) -> Result<(String, String)> {
     let sig: [u8; 64] = sig
         .try_into()
-        .map_err(|_| bad("signature de l'appareil : 64 octets attendus"))?;
+        .map_err(|_| bad("device signature: 64 bytes expected"))?;
     let tx = NearTransfer::decode(&unhex(tx_hex)?)?;
     let signed = hex::encode(tx.encode_signed(&sig));
     let (_, hash) = near_verify_signed(&signed)?;

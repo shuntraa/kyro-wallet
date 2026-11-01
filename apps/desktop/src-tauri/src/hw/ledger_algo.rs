@@ -33,12 +33,12 @@ pub fn get_address(account: u32, display: bool) -> HwResult<Vec<u8>> {
 
 pub fn parse_address(data: &[u8]) -> HwResult<Vec<u8>> {
     if data.len() != 32 + 58 {
-        return Err(HwError::bad("adresse Algorand mal formée"));
+        return Err(HwError::bad("malformed Algorand address"));
     }
-    let pk: [u8; 32] = data[..32].try_into().map_err(|_| HwError::bad("clé"))?;
+    let pk: [u8; 32] = data[..32].try_into().map_err(|_| HwError::bad("key"))?;
     if data[32..] != *wallet_core::algo_address_of_pubkey(&pk).as_bytes() {
         return Err(HwError::bad(
-            "adresse Algorand de l'appareil incohérente avec sa clé",
+            "Algorand address from the device does not match its key",
         ));
     }
     Ok(pk.to_vec())
@@ -83,7 +83,7 @@ pub fn sign(app: &App<'_>, account: u32, msgpack: &[u8]) -> HwResult<Vec<u8>> {
         last = app.call(&a, SwContext::Signing)?;
     }
     if last.len() != 64 {
-        return Err(HwError::bad("signature Algorand de longueur inattendue"));
+        return Err(HwError::bad("Algorand signature of unexpected length"));
     }
     Ok(last)
 }

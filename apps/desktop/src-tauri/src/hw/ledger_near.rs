@@ -26,7 +26,7 @@ const CHUNK: usize = 250;
 
 fn path_bytes(path: &[u32]) -> HwResult<Vec<u8>> {
     if path.len() != 5 {
-        return Err(HwError::bad("app NEAR : chemin à cinq niveaux attendu"));
+        return Err(HwError::bad("NEAR app: five-level path expected"));
     }
     Ok(path.iter().flat_map(|p| p.to_be_bytes()).collect())
 }
@@ -63,7 +63,7 @@ pub fn pubkey(app: &App<'_>, path: &[u32], display: bool) -> HwResult<Vec<u8>> {
     };
     let pk = app.call(&get_pubkey(path, display)?, ctx)?;
     if pk.len() != 32 {
-        return Err(HwError::bad("clé publique NEAR de longueur inattendue"));
+        return Err(HwError::bad("NEAR public key of unexpected length"));
     }
     Ok(pk)
 }
@@ -78,7 +78,7 @@ pub fn sign(app: &App<'_>, path: &[u32], borsh: &[u8]) -> HwResult<Vec<u8>> {
         last = app.call(&a, SwContext::Signing)?;
     }
     if last.len() != 64 {
-        return Err(HwError::bad("signature NEAR de longueur inattendue"));
+        return Err(HwError::bad("NEAR signature of unexpected length"));
     }
     Ok(last)
 }

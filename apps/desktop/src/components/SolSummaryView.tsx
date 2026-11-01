@@ -138,7 +138,7 @@ export function SolSummaryView({ s, unsigned, asset, sol, solPrice, currency }: 
         <Row k={t('send.solBaseFee')} v={`${fmtCrypto(base, 9, 'SOL', 9)}${fiat(base)}`} />
         <Row k="Priority fee" v={priority > 0n ? `${fmtCrypto(priority, 9, 'SOL', 9)}${fiat(priority)} · ${s.computeUnitPriceMicroLamports ?? '0'} µL × ${s.computeUnitLimit ?? '?'} CU` : t('send.solNone')} />
         {memos.map((m, i) => (
-          <Row key={i} k={t('send.solMemo')} v={<span className="text-text2">« {m.text} »</span>} />
+          <Row key={i} k={t('send.solMemo')} v={<span className="text-text2">{t('common.quoted', { text: m.text })}</span>} />
         ))}
         <Row k={t('send.solVersion')} v={`${s.version}${s.lookupTables.length ? ` · ${tp('send.solTables', s.lookupTables.length)}` : ''} · ${t('send.solSignature', { n: (s.ourSignerIndex ?? -1) + 1, total: s.signers.length })}`} />
       </dl>

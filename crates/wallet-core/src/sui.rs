@@ -70,9 +70,9 @@ pub fn sui_address_string(bytes: &[u8; 32]) -> String {
 pub fn sui_address_of_pubkey(pubkey: &[u8]) -> Result<String> {
     let bytes: [u8; 32] = pubkey
         .try_into()
-        .map_err(|_| Error::input("clé publique ed25519 : 32 octets attendus"))?;
+        .map_err(|_| Error::input("ed25519 public key: 32 bytes expected"))?;
     ed25519_dalek::VerifyingKey::from_bytes(&bytes)
-        .map_err(|_| Error::input("clé publique ed25519 invalide"))?;
+        .map_err(|_| Error::input("invalid ed25519 public key"))?;
     Ok(sui_address_string(&sui_address_bytes_of_pubkey(&bytes)))
 }
 
@@ -95,20 +95,20 @@ pub fn sui_parse_address(address: &str) -> Result<[u8; 32]> {
     let a = address.trim();
     if a.ends_with(".sui") || a.starts_with('@') {
         return Err(Error::input(
-            "les noms SuiNS ne sont pas pris en charge : colle l'adresse 0x… complète",
+            "SuiNS names are not supported: paste the full 0x… address",
         ));
     }
     let h = a.strip_prefix("0x").ok_or_else(|| {
-        Error::input("adresse Sui invalide : 0x suivi de 64 caractères hexadécimaux attendu")
+        Error::input("invalid Sui address: 0x followed by 64 hexadecimal characters expected")
     })?;
     if h.len() != 64 {
         return Err(Error::input(
-            "adresse Sui invalide : 64 caractères hexadécimaux attendus après 0x (forme courte refusée)",
+            "invalid Sui address: 64 hexadecimal characters expected after 0x (short form refused)",
         ));
     }
     let mut out = [0u8; 32];
     hex::decode_to_slice(h, &mut out)
-        .map_err(|_| Error::input("adresse Sui invalide (caractère non hexadécimal)"))?;
+        .map_err(|_| Error::input("invalid Sui address (non-hexadecimal character)"))?;
     Ok(out)
 }
 

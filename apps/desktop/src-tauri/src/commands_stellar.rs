@@ -60,34 +60,32 @@ pub fn parse_memo(m: Option<&MemoSpec>) -> AppResult<StellarMemo> {
                 return Ok(StellarMemo::None);
             }
             if value.len() > STELLAR_MAX_MEMO_TEXT {
-                return Err(bad("mémo texte : 28 octets au plus"));
+                return Err(bad("text memo: 28 bytes at most"));
             }
             if value
                 .chars()
                 .any(|c| c.is_control() || crate::dialog_text::is_invisible(c))
             {
-                return Err(bad(
-                    "mémo texte : caractère de contrôle ou invisible refusé",
-                ));
+                return Err(bad("text memo: control or invisible character refused"));
             }
             StellarMemo::Text(value.as_bytes().to_vec())
         }
         Some(MemoSpec::Id { value }) => {
             let v = value.trim();
             if v.is_empty() || v.len() > 20 || !v.bytes().all(|b| b.is_ascii_digit()) {
-                return Err(bad("mémo identifiant : un nombre entier positif"));
+                return Err(bad("ID memo: a positive integer"));
             }
             StellarMemo::Id(
                 v.parse()
-                    .map_err(|_| bad("mémo identifiant : au plus 18446744073709551615"))?,
+                    .map_err(|_| bad("ID memo: at most 18446744073709551615"))?,
             )
         }
         Some(MemoSpec::Hash { value }) => {
             let v = value.trim();
-            let raw = hex::decode(v).map_err(|_| bad("mémo hash : 64 caractères hexadécimaux"))?;
+            let raw = hex::decode(v).map_err(|_| bad("hash memo: 64 hexadecimal characters"))?;
             StellarMemo::Hash(
                 raw.try_into()
-                    .map_err(|_| bad("mémo hash : 64 caractères hexadécimaux"))?,
+                    .map_err(|_| bad("hash memo: 64 hexadecimal characters"))?,
             )
         }
     })
@@ -405,7 +403,7 @@ fn next_sequence(a: &StellarAccountInfo) -> AppResult<i64> {
         .parse::<i64>()
         .ok()
         .and_then(|s| s.checked_add(1))
-        .ok_or_else(|| AppError::ServerUnreachable("Horizon : numéro de séquence invalide".into()))
+        .ok_or_else(|| AppError::ServerUnreachable("Horizon: invalid sequence number".into()))
 }
 
 /// Builds an unsigned XLM transfer from live data: a Payment, or a CreateAccount when the
@@ -424,7 +422,7 @@ pub(crate) async fn build(
         .parse()
         .ok()
         .filter(|a| *a > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant en stroops invalide".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("invalid amount in stroops".into()))?;
     let memo = parse_memo(memo)?;
     let (ledger, context) = live_context(c, me, to).await?;
     let fee = stellar_backend::fee(c, &ledger).await?;
@@ -473,9 +471,10 @@ fn known_asset(net: Network, id: &str) -> AppResult<&'static StellarKnownAsset> 
     let (code, issuer) = id
         .trim()
         .split_once('-')
-        .ok_or_else(|| AppError::InvalidInput("actif Stellar : CODE-ÉMETTEUR attendu".into()))?;
-    wallet_core::stellar_known_asset(code, issuer, net)
-        .ok_or_else(|| AppError::InvalidInput("actif Stellar inconnu de Kyro sur ce réseau".into()))
+        .ok_or_else(|| AppError::InvalidInput("Stellar asset: CODE-ISSUER expected".into()))?;
+    wallet_core::stellar_known_asset(code, issuer, net).ok_or_else(|| {
+        AppError::InvalidInput("Stellar asset unknown to Kyro on this network".into())
+    })
 }
 
 fn trustline<'a>(
@@ -499,40 +498,40 @@ fn check_asset_payment(
 ) -> AppResult<()> {
     if !c.account.exists {
         return Err(AppError::InvalidInput(
-            "ton compte Stellar n'est pas encore activé : il doit d'abord recevoir au moins 1 XLM"
+            "your Stellar account is not activated yet: it must first receive at least 1 XLM"
                 .into(),
         ));
     }
     if amount <= 0 {
-        return Err(AppError::InvalidInput("montant nul".into()));
+        return Err(AppError::InvalidInput("zero amount".into()));
     }
     if !c.destination.exists {
         return Err(AppError::InvalidInput(format!(
-            "ce compte Stellar n'existe pas : il doit d'abord être activé (XLM) puis accepter {}",
+            "this Stellar account does not exist: it must first be activated (XLM) and then accept {}",
             k.code
         )));
     }
     if c.destination.memo_required && !has_memo {
         return Err(AppError::InvalidInput(
-            "ce destinataire exige un mémo (SEP-0029, souvent une plateforme d'échange) : ajoute-le, sinon les fonds risquent d'être perdus".into(),
+            "this recipient requires a memo (SEP-0029, often an exchange): add it, otherwise the funds may be lost".into(),
         ));
     }
     let Some(dest) = trustline(&c.destination, k) else {
         return Err(AppError::InvalidInput(format!(
-            "le destinataire n'a pas de ligne de confiance pour {} (émis par {}) : il doit d'abord l'activer, sinon le paiement est refusé",
+            "the recipient has no trustline for {} (issued by {}): they must enable it first, otherwise the payment is refused",
             k.code, k.issuer_name
         )));
     };
     if !dest.authorized {
         return Err(AppError::InvalidInput(format!(
-            "l'émetteur de {} n'autorise pas ce destinataire",
+            "the issuer of {} does not authorize this recipient",
             k.code
         )));
     }
     let room = dest.limit.parse::<i64>().unwrap_or(0) - dest.balance.parse::<i64>().unwrap_or(0);
     if amount > room {
         return Err(AppError::InvalidInput(
-            "la ligne de confiance du destinataire est pleine (limite atteinte)".into(),
+            "the recipient's trustline is full (limit reached)".into(),
         ));
     }
     let have = trustline(&c.account, k)
@@ -540,7 +539,7 @@ fn check_asset_payment(
         .unwrap_or(0);
     if amount > have {
         return Err(AppError::InvalidInput(format!(
-            "solde {} insuffisant : {} {}",
+            "insufficient {} balance: {} {}",
             k.code,
             crate::commands::format_units(&have.to_string(), 7),
             k.code
@@ -549,7 +548,7 @@ fn check_asset_payment(
     let spendable: i64 = c.account.spendable.parse().unwrap_or(0);
     if i64::from(fee) > spendable {
         return Err(AppError::InvalidInput(
-            "pas assez de XLM disponibles pour les frais (solde − réserve)".into(),
+            "not enough XLM available for the fees (balance − reserve)".into(),
         ));
     }
     Ok(())
@@ -560,7 +559,7 @@ fn check_asset_payment(
 fn check_trust(k: &StellarKnownAsset, c: &StellarContext, enable: bool, fee: u32) -> AppResult<()> {
     if !c.account.exists {
         return Err(AppError::InvalidInput(
-            "ton compte Stellar n'est pas encore activé : il doit d'abord recevoir au moins 1 XLM"
+            "your Stellar account is not activated yet: it must first receive at least 1 XLM"
                 .into(),
         ));
     }
@@ -569,7 +568,7 @@ fn check_trust(k: &StellarKnownAsset, c: &StellarContext, enable: bool, fee: u32
     if enable {
         if line.is_some() {
             return Err(AppError::InvalidInput(format!(
-                "{} est déjà activé sur ce compte",
+                "{} is already enabled on this account",
                 k.code
             )));
         }
@@ -577,7 +576,7 @@ fn check_trust(k: &StellarKnownAsset, c: &StellarContext, enable: bool, fee: u32
         let need = reserve.saturating_add(i64::from(fee));
         if need > spendable {
             return Err(AppError::InvalidInput(format!(
-                "pas assez de XLM disponibles : la ligne de confiance bloque {} XLM de réserve (+ frais), tu as {} XLM disponibles",
+                "not enough XLM available: the trustline locks {} XLM of reserve (+ fees), you have {} XLM available",
                 crate::commands::format_units(&reserve.to_string(), 7),
                 crate::commands::format_units(&spendable.to_string(), 7)
             )));
@@ -585,20 +584,20 @@ fn check_trust(k: &StellarKnownAsset, c: &StellarContext, enable: bool, fee: u32
     } else {
         let Some(l) = line else {
             return Err(AppError::InvalidInput(format!(
-                "{} n'est pas activé sur ce compte",
+                "{} is not enabled on this account",
                 k.code
             )));
         };
         if l.balance != "0" {
             return Err(AppError::InvalidInput(format!(
-                "il te reste {} {} : envoie-les d'abord, une ligne de confiance ne se supprime qu'à solde nul",
+                "you still have {} {}: send them first, a trustline can only be removed at a zero balance",
                 crate::commands::format_units(&l.balance, 7),
                 k.code
             )));
         }
         if i64::from(fee) > spendable {
             return Err(AppError::InvalidInput(
-                "pas assez de XLM disponibles pour les frais".into(),
+                "not enough XLM available for the fees".into(),
             ));
         }
     }
@@ -631,7 +630,7 @@ pub(crate) async fn build_asset(
         .parse()
         .ok()
         .filter(|a| *a > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant d'actif invalide".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("invalid asset amount".into()))?;
     let memo = parse_memo(memo)?;
     let (ledger, context) = live_context(c, me, to).await?;
     let fee = stellar_backend::fee(c, &ledger).await?;
@@ -770,8 +769,7 @@ pub(crate) async fn prepare_sign(
     let summary = wallet_core::stellar_decode_tx(envelope, me, c.network)?;
     let unknown = || {
         AppError::InvalidInput(
-            "Kyro ne signe que des envois de XLM et des actifs qu'il connaît (USDC de Circle)"
-                .into(),
+            "Kyro only signs sends of XLM and of assets it knows (Circle's USDC)".into(),
         )
     };
     let (to, shape) = match &summary.operation {
@@ -827,19 +825,17 @@ pub(crate) async fn prepare_sign(
     let (ledger, context) = live_context(c, me, &to).await?;
     if summary.max_time <= ledger.closed_at + MIN_REMAINING_SECS {
         return Err(AppError::InvalidInput(
-            "transaction Stellar expirée (limite de temps presque atteinte) : reconstruis-la"
-                .into(),
+            "Stellar transaction expired (time limit almost reached): rebuild it".into(),
         ));
     }
     if summary.max_time > ledger.closed_at + VALIDITY_SECS {
         return Err(AppError::InvalidInput(
-            "limite de temps trop lointaine (au plus 5 minutes) : reconstruis la transaction"
-                .into(),
+            "time limit too far away (5 minutes at most): rebuild the transaction".into(),
         ));
     }
     if summary.sequence != next_sequence(&context.account)?.to_string() {
         return Err(AppError::InvalidInput(
-            "numéro de séquence périmé : reconstruis la transaction".into(),
+            "stale sequence number: rebuild the transaction".into(),
         ));
     }
     let fee: u32 = summary.fee.parse().unwrap_or(u32::MAX);
@@ -849,9 +845,9 @@ pub(crate) async fn prepare_sign(
             if creates == context.destination.exists {
                 return Err(AppError::InvalidInput(
                     if creates {
-                        "ce compte existe maintenant : reconstruis la transaction (paiement simple)"
+                        "this account exists now: rebuild the transaction (simple payment)"
                     } else {
-                        "ce compte n'existe pas : reconstruis la transaction (création de compte)"
+                        "this account does not exist: rebuild the transaction (account creation)"
                     }
                     .into(),
                 ));
@@ -924,7 +920,7 @@ pub async fn stellar_sign_tx(
         blocking(move || Ok(wallet_core::stellar_sign(&seed, a, &e, net)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -947,7 +943,7 @@ pub(crate) async fn broadcast_checked(
     let env = StellarEnvelope::from_base64(envelope)?;
     if env.tx.source != wallet_core::stellar_account_id(me)? {
         return Err(AppError::InvalidInput(
-            "cette transaction n'est pas signée par ton compte".into(),
+            "this transaction is not signed by your account".into(),
         ));
     }
     stellar_backend::check_network(c).await?;
@@ -980,7 +976,7 @@ pub async fn stellar_tx_status(
     let h = hash.trim().to_ascii_lowercase();
     if h.len() != 64 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(AppError::InvalidInput(
-            "hash : 64 caractères hexadécimaux".into(),
+            "hash: 64 hexadecimal characters".into(),
         ));
     }
     let (found, successful) = stellar_backend::tx_status(&ctx(&state), &h).await?;

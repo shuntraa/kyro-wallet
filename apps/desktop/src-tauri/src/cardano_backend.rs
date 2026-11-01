@@ -47,7 +47,7 @@ pub fn url(ctx: &CardanoCtx<'_>) -> AppResult<String> {
 
 fn endpoint(ctx: &CardanoCtx<'_>, path: &str) -> AppResult<url::Url> {
     url::Url::parse(&format!("{}{path}", url(ctx)?))
-        .map_err(|_| AppError::ServerInvalid("URL Koios invalide".into()))
+        .map_err(|_| AppError::ServerInvalid("invalid Koios URL".into()))
 }
 
 fn snippet(bytes: &[u8]) -> String {
@@ -67,18 +67,18 @@ pub(crate) async fn call(
     let (status, bytes) = ctx.net_client.server_request(req, ctx.tor).await?;
     if status != 200 {
         return Err(bad(format!(
-            "Koios : HTTP {status} sur {path} ({})",
+            "Koios: HTTP {status} on {path} ({})",
             snippet(&bytes)
         )));
     }
-    serde_json::from_slice(&bytes).map_err(|_| bad(format!("Koios : JSON invalide sur {path}")))
+    serde_json::from_slice(&bytes).map_err(|_| bad(format!("Koios: invalid JSON on {path}")))
 }
 
 pub(crate) fn first(v: &Value, what: &str) -> AppResult<Value> {
     v.as_array()
         .and_then(|a| a.first())
         .cloned()
-        .ok_or_else(|| bad(format!("Koios : réponse vide ({what})")))
+        .ok_or_else(|| bad(format!("Koios: empty response ({what})")))
 }
 
 /// Koios returns some numbers as strings, others as JSON numbers.
@@ -103,7 +103,7 @@ pub struct Tip {
 pub async fn tip(ctx: &CardanoCtx<'_>) -> AppResult<Tip> {
     let t = first(&call(ctx, "/tip", None).await?, "tip")?;
     Ok(Tip {
-        slot: num(&t["abs_slot"]).ok_or_else(|| bad("Koios : abs_slot absent"))?,
+        slot: num(&t["abs_slot"]).ok_or_else(|| bad("Koios: abs_slot missing"))?,
         block_height: num(&t["block_height"]).or(num(&t["block_no"])).unwrap_or(0),
         epoch: num(&t["epoch_no"]).unwrap_or(0),
     })
@@ -140,7 +140,7 @@ pub async fn params(ctx: &CardanoCtx<'_>) -> AppResult<Params> {
         .await?,
         "epoch_params",
     )?;
-    let get = |k: &str| num(&p[k]).ok_or_else(|| bad(format!("Koios : {k} absent")));
+    let get = |k: &str| num(&p[k]).ok_or_else(|| bad(format!("Koios: {k} missing")));
     let out = Params {
         min_fee_a: get("min_fee_a")?,
         min_fee_b: get("min_fee_b")?,
@@ -156,7 +156,7 @@ pub async fn params(ctx: &CardanoCtx<'_>) -> AppResult<Params> {
         || !(1_024..=65_536).contains(&out.max_tx_size)
     {
         return Err(bad(format!(
-            "Koios : paramètres de protocole invraisemblables ({out:?})"
+            "Koios: implausible protocol parameters ({out:?})"
         )));
     }
     Ok(out)
@@ -165,17 +165,17 @@ pub async fn params(ctx: &CardanoCtx<'_>) -> AppResult<Params> {
 /// Network check: genesis `networkmagic` (preprod 1, mainnet 764824073; preview 2 is refused).
 pub async fn probe(ctx: &CardanoCtx<'_>) -> AppResult<Detected> {
     let g = first(&call(ctx, "/genesis", None).await?, "genesis")?;
-    let magic = num(&g["networkmagic"]).ok_or_else(|| bad("Koios : networkmagic absent"))?;
+    let magic = num(&g["networkmagic"]).ok_or_else(|| bad("Koios: networkmagic missing"))?;
     let want = cardano_network_magic(ctx.network);
     if magic != want {
         let name = |m: u64| match m {
             764_824_073 => "mainnet".to_owned(),
             1 => "preprod".to_owned(),
             2 => "preview".to_owned(),
-            other => format!("réseau magic {other}"),
+            other => format!("network magic {other}"),
         };
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce serveur Cardano est sur {}, pas sur {}",
+            "this Cardano server is on {}, not on {}",
             name(magic),
             name(want)
         )));
@@ -208,9 +208,9 @@ fn assets_of(list: &Value) -> AppResult<AssetMap> {
     for a in list.as_array().into_iter().flatten() {
         let policy = a["policy_id"].as_str().unwrap_or("").to_ascii_lowercase();
         let name = a["asset_name"].as_str().unwrap_or("").to_ascii_lowercase();
-        let q = num(&a["quantity"]).ok_or_else(|| bad("Koios : quantité de token invalide"))?;
+        let q = num(&a["quantity"]).ok_or_else(|| bad("Koios: invalid token quantity"))?;
         if policy.len() != 56 || hex::decode(&policy).is_err() || hex::decode(&name).is_err() {
-            return Err(bad("Koios : token invalide"));
+            return Err(bad("Koios: invalid token"));
         }
         *out.entry((policy, name)).or_default() += q;
     }
@@ -233,12 +233,12 @@ pub async fn utxos(ctx: &CardanoCtx<'_>, address: &str) -> AppResult<Vec<Utxo>> 
         }
         let tx_hash = u["tx_hash"].as_str().unwrap_or("").to_ascii_lowercase();
         if tx_hash.len() != 64 || hex::decode(&tx_hash).is_err() {
-            return Err(bad("Koios : tx_hash invalide"));
+            return Err(bad("Koios: invalid tx_hash"));
         }
         out.push(Utxo {
             tx_hash,
-            index: num(&u["tx_index"]).ok_or_else(|| bad("Koios : tx_index absent"))?,
-            lovelace: num(&u["value"]).ok_or_else(|| bad("Koios : valeur absente"))?,
+            index: num(&u["tx_index"]).ok_or_else(|| bad("Koios: tx_index missing"))?,
+            lovelace: num(&u["value"]).ok_or_else(|| bad("Koios: value missing"))?,
             assets: assets_of(&u["asset_list"])?,
         });
     }
@@ -448,7 +448,7 @@ pub async fn submit(ctx: &CardanoCtx<'_>, tx_cbor: Vec<u8>, tx_id: &str) -> AppR
     let (status, bytes) = ctx.net_client.server_request(req, ctx.tor).await?;
     if !(200..300).contains(&status) {
         return Err(AppError::InvalidInput(format!(
-            "transaction Cardano refusée par le nœud : HTTP {status} ({})",
+            "Cardano transaction rejected by the node: HTTP {status} ({})",
             snippet(&bytes)
         )));
     }
@@ -458,7 +458,7 @@ pub async fn submit(ctx: &CardanoCtx<'_>, tx_cbor: Vec<u8>, tx_id: &str) -> AppR
         .to_ascii_lowercase();
     if got != tx_id {
         return Err(bad(format!(
-            "le serveur a répondu un identifiant inattendu ({})",
+            "the server answered an unexpected identifier ({})",
             got.chars().take(80).collect::<String>()
         )));
     }
@@ -476,8 +476,8 @@ pub(crate) fn to_assets(m: &AssetMap) -> AppResult<CardanoAssets> {
         let policy: [u8; 28] = hex::decode(p)
             .ok()
             .and_then(|b| b.try_into().ok())
-            .ok_or_else(|| AppError::InvalidInput("policy id : 28 octets hex".into()))?;
-        let name = hex::decode(n).map_err(|_| AppError::InvalidInput("nom d'asset hex".into()))?;
+            .ok_or_else(|| AppError::InvalidInput("policy id: 28 bytes hex".into()))?;
+        let name = hex::decode(n).map_err(|_| AppError::InvalidInput("asset name hex".into()))?;
         by_policy.entry(policy).or_default().push((name, *q));
     }
     Ok(by_policy
@@ -527,7 +527,7 @@ pub fn plan(
     let mut send = AssetMap::new();
     if let Some((pol, name, q)) = &spec.token {
         if *q == 0 {
-            return Err(AppError::InvalidInput("quantité de token nulle".into()));
+            return Err(AppError::InvalidInput("zero token quantity".into()));
         }
         send.insert((pol.to_ascii_lowercase(), name.to_ascii_lowercase()), *q);
     }
@@ -536,18 +536,18 @@ pub fn plan(
     let coin = match spec.lovelace {
         Some(c) if c < min_to => {
             return Err(AppError::InvalidInput(format!(
-                "montant trop faible : cette sortie doit porter au moins {} ADA (min-UTxO{})",
+                "amount too low: this output must carry at least {} ADA (min-UTxO{})",
                 crate::commands::format_units(&min_to.to_string(), 6),
                 if send.is_empty() {
                     ""
                 } else {
-                    ", avec le token"
+                    ", with the token"
                 }
             )))
         }
         Some(c) => c,
         None if !send.is_empty() => min_to,
-        None => return Err(AppError::InvalidInput("montant ADA manquant".into())),
+        None => return Err(AppError::InvalidInput("missing ADA amount".into())),
     };
     let aux = spec
         .memo
@@ -580,7 +580,7 @@ pub fn plan(
             Err(e) => last_err = Some(e),
         }
     }
-    Err(last_err.unwrap_or_else(|| insufficient("aucun UTxO : adresse vide".into())))
+    Err(last_err.unwrap_or_else(|| insufficient("no UTxO: empty address".into())))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -607,7 +607,7 @@ fn finish(
         let have = left.get(k).copied().unwrap_or(0);
         if have < *q {
             return Err(insufficient(format!(
-                "token insuffisant : {have} disponible(s), {q} demandé(s)"
+                "insufficient token: {have} available, {q} requested"
             )));
         }
         left.insert(k.clone(), have - q);
@@ -619,7 +619,7 @@ fn finish(
             let tx_hash: [u8; 32] = hex::decode(&u.tx_hash)
                 .ok()
                 .and_then(|b| b.try_into().ok())
-                .ok_or_else(|| AppError::Internal("tx_hash d'UTxO invalide".into()))?;
+                .ok_or_else(|| AppError::Internal("invalid UTxO tx_hash".into()))?;
             Ok(CardanoInput {
                 tx_hash,
                 index: u.index,
@@ -639,14 +639,14 @@ fn finish(
         let need = coin.saturating_add(fee);
         let Some(rest) = in_coin.checked_sub(need) else {
             return Err(insufficient(format!(
-                "solde insuffisant : {} ADA en entrée, il faut {} ADA (montant + frais)",
+                "insufficient balance: {} ADA in inputs, {} ADA needed (amount + fees)",
                 crate::commands::format_units(&in_coin.to_string(), 6),
                 crate::commands::format_units(&need.to_string(), 6)
             )));
         };
         if rest < min_change {
             return Err(insufficient(format!(
-                "la monnaie rendue ({} ADA) serait sous son minimum de {} ADA (min-UTxO) : envoie un peu moins",
+                "the change ({} ADA) would be below its minimum of {} ADA (min-UTxO): send a little less",
                 crate::commands::format_units(&rest.to_string(), 6),
                 crate::commands::format_units(&min_change.to_string(), 6)
             )));
@@ -673,7 +673,7 @@ fn finish(
         let size = wallet_core::cardano_signed_size(&body, aux, 1)?;
         if size as u64 > p.max_tx_size {
             return Err(AppError::InvalidInput(format!(
-                "transaction trop grande ({size} octets, maximum {})",
+                "transaction too large ({size} bytes, maximum {})",
                 p.max_tx_size
             )));
         }
@@ -685,7 +685,7 @@ fn finish(
         fee = req;
     }
     Err(AppError::Internal(
-        "calcul des frais Cardano instable".into(),
+        "unstable Cardano fee calculation".into(),
     ))
 }
 
@@ -703,7 +703,7 @@ pub fn check_balance(body: &CardanoBody, ours: &[Utxo], own_address: &[u8]) -> A
             .find(|u| u.tx_hash == h && u.index == i.index)
             .ok_or_else(|| {
                 AppError::InvalidInput(format!(
-                    "entrée {h}#{} inconnue ou déjà dépensée : reconstruis la transaction",
+                    "input {h}#{} unknown or already spent: rebuild the transaction",
                     i.index
                 ))
             })?;
@@ -730,7 +730,7 @@ pub fn check_balance(body: &CardanoBody, ours: &[Utxo], own_address: &[u8]) -> A
     }
     if in_coin != out_coin || in_assets != out_assets {
         return Err(AppError::InvalidInput(
-            "transaction déséquilibrée (entrées ≠ sorties + frais) : refusée".into(),
+            "unbalanced transaction (inputs ≠ outputs + fees): refused".into(),
         ));
     }
     Ok(leaving)
@@ -862,7 +862,7 @@ mod tests {
             ..spec.clone()
         };
         assert!(
-            matches!(plan_err(&utxos, &own_b, &low), AppError::InvalidInput(m) if m.contains("au moins"))
+            matches!(plan_err(&utxos, &own_b, &low), AppError::InvalidInput(m) if m.contains("at least"))
         );
         // More tokens than held.
         let many = PaymentSpec {
@@ -870,7 +870,7 @@ mod tests {
             ..spec
         };
         assert!(
-            matches!(plan_err(&utxos, &own_b, &many), AppError::InvalidInput(m) if m.contains("token insuffisant"))
+            matches!(plan_err(&utxos, &own_b, &many), AppError::InvalidInput(m) if m.contains("insufficient token"))
         );
     }
 
@@ -897,7 +897,7 @@ mod tests {
             ..spec
         };
         assert!(
-            matches!(plan_err(&utxos, &own_b, &spec), AppError::InvalidInput(m) if m.contains("insuffisant"))
+            matches!(plan_err(&utxos, &own_b, &spec), AppError::InvalidInput(m) if m.contains("insufficient"))
         );
         assert!(plan(&[], &own_b, &spec, &P, 1).is_err());
 

@@ -805,10 +805,10 @@ impl Servers {
         }
         for (chain, s) in &self.evm {
             let id: u64 = chain.parse().map_err(|_| {
-                AppError::ServerInvalid(format!("evm : chainId invalide « {chain} »"))
+                AppError::ServerInvalid(format!("evm: invalid chainId « {chain} »"))
             })?;
             if id == 0 {
-                return Err(AppError::ServerInvalid("evm : chainId 0".into()));
+                return Err(AppError::ServerInvalid("evm: chainId 0".into()));
             }
             validate_http_url(&s.url, tor, false)
                 .map_err(|e| prefix(e, &format!("evm {chain}")))?;
@@ -816,7 +816,7 @@ impl Servers {
         for (cluster, s) in &self.solana {
             if !SOLANA_DEFAULTS.iter().any(|(c, _)| c == cluster) {
                 return Err(AppError::ServerInvalid(format!(
-                    "solana : cluster inconnu « {cluster} » (devnet ou mainnet-beta)"
+                    "solana: unknown cluster « {cluster} » (devnet or mainnet-beta)"
                 )));
             }
             validate_http_url(&s.url, tor, false)
@@ -905,7 +905,7 @@ impl Servers {
 
 fn prefix(e: AppError, what: &str) -> AppError {
     match e {
-        AppError::ServerInvalid(m) => AppError::ServerInvalid(format!("{what} : {m}")),
+        AppError::ServerInvalid(m) => AppError::ServerInvalid(format!("{what}: {m}")),
         other => other,
     }
 }
@@ -945,28 +945,28 @@ fn invalid(msg: impl Into<String>) -> AppError {
 
 /// HTTP(S) server URL rule. `allow_private_http` = Bitcoin Core only.
 pub fn validate_http_url(url: &str, tor: bool, allow_private_http: bool) -> AppResult<url::Url> {
-    let u = url::Url::parse(url.trim()).map_err(|_| invalid(format!("URL invalide « {url} »")))?;
+    let u = url::Url::parse(url.trim()).map_err(|_| invalid(format!("invalid URL « {url} »")))?;
     if !u.username().is_empty() || u.password().is_some() {
         return Err(invalid(
-            "pas d'identifiants dans l'URL (utilise les champs d'authentification)",
+            "no credentials in the URL (use the authentication fields)",
         ));
     }
     let host = u
         .host_str()
-        .ok_or_else(|| invalid("URL sans hôte"))?
+        .ok_or_else(|| invalid("URL without a host"))?
         .to_owned();
     let onion = host.ends_with(".onion");
     let private = is_private_host(&host);
     match u.scheme() {
-        "https" if onion && !tor => Err(invalid("adresse .onion : exige Tor activé")),
+        "https" if onion && !tor => Err(invalid(".onion address: requires Tor to be on")),
         "https" => Ok(u),
         "http" if onion && tor => Ok(u),
-        "http" if onion => Err(invalid("adresse .onion : exige Tor activé")),
+        "http" if onion => Err(invalid(".onion address: requires Tor to be on")),
         "http" if private && allow_private_http => Ok(u),
         "http" => Err(invalid(
-            "http:// n'est permis que pour une adresse .onion via Tor (ou un nœud Bitcoin Core local)",
+            "http:// is only allowed for a .onion address over Tor (or a local Bitcoin Core node)",
         )),
-        other => Err(invalid(format!("schéma non autorisé « {other} »"))),
+        other => Err(invalid(format!("scheme not allowed « {other} »"))),
     }
 }
 
@@ -976,7 +976,7 @@ fn validate_btc(s: &BtcServer, tor: bool) -> AppResult<()> {
         BtcServer::Cbf { peers, .. } => {
             if !cfg!(feature = "cbf") {
                 return Err(AppError::FeatureDisabled(
-                    "filtres compacts (BIP157/158) : disponible après revue (>= 2026-11-11)".into(),
+                    "compact filters (BIP157/158): available after review (>= 2026-11-11)".into(),
                 ));
             }
             let parsed = peers
@@ -990,7 +990,7 @@ fn validate_btc(s: &BtcServer, tor: bool) -> AppResult<()> {
                     .all(|p| matches!(p.host, PeerHost::Onion { .. }))
             {
                 return Err(invalid(
-                    "pairs .onion uniquement : exige Tor activé (ajoute un pair IP pour le mode clair)",
+                    ".onion peers only: requires Tor to be on (add an IP peer for clear mode)",
                 ));
             }
             Ok(())
@@ -1007,18 +1007,18 @@ fn validate_btc(s: &BtcServer, tor: bool) -> AppResult<()> {
                 || url::Host::parse(h).is_err()
                 || h.contains(['/', ':', '@']) && !h.starts_with('[')
             {
-                return Err(invalid(format!("hôte Electrum invalide « {host} »")));
+                return Err(invalid(format!("invalid Electrum host « {host} »")));
             }
             if *port == 0 {
-                return Err(invalid("port Electrum invalide"));
+                return Err(invalid("invalid Electrum port"));
             }
             let onion = h.ends_with(".onion");
             if onion && !tor {
-                return Err(invalid("adresse .onion : exige Tor activé"));
+                return Err(invalid(".onion address: requires Tor to be on"));
             }
             match tls {
                 ElectrumTls::None if !(onion && tor) => Err(invalid(
-                    "Electrum sans TLS : uniquement vers une adresse .onion via Tor",
+                    "Electrum without TLS: only to a .onion address over Tor",
                 )),
                 ElectrumTls::Pinned => {
                     parse_fingerprint(cert_sha256.as_deref().unwrap_or("")).map(|_| ())
@@ -1034,17 +1034,17 @@ fn validate_btc(s: &BtcServer, tor: bool) -> AppResult<()> {
                     // machine or the local network, never to a remote (or onion) host.
                     if !u.host_str().is_some_and(is_private_host) {
                         return Err(invalid(
-                            "fichier .cookie : seulement pour un nœud local (127.0.0.1, ::1) ou de ton réseau local ; pour un nœud distant, utilise rpcuser / rpcpassword",
+                            ".cookie file: only for a local node (127.0.0.1, ::1) or one on your local network; for a remote node, use rpcuser / rpcpassword",
                         ));
                     }
                     validate_cookie_path(cookie_path)
                 }
                 CoreAuth::Userpass { user, password, .. } => {
                     if user.is_empty() || user.contains(':') {
-                        return Err(invalid("utilisateur RPC invalide"));
+                        return Err(invalid("invalid RPC user"));
                     }
                     if password.as_deref().is_none_or(str::is_empty) {
-                        return Err(invalid("mot de passe RPC manquant"));
+                        return Err(invalid("missing RPC password"));
                     }
                     Ok(())
                 }
@@ -1062,7 +1062,7 @@ pub fn validate_cookie_path(path: &str) -> AppResult<()> {
     let p = std::path::Path::new(path.trim());
     if !p.is_absolute() || p.file_name().and_then(|n| n.to_str()) != Some(".cookie") {
         return Err(invalid(
-            "fichier .cookie : choisis le fichier « .cookie » du dossier de données de ton nœud",
+            ".cookie file: choose the « .cookie » file in your node's data folder",
         ));
     }
     Ok(())
@@ -1081,7 +1081,7 @@ pub fn read_cookie(path: &str) -> AppResult<zeroize::Zeroizing<String>> {
     use std::io::Read as _;
     let refused = || {
         AppError::ServerInvalid(
-            "Bitcoin Core : fichier .cookie illisible ou invalide (choisis à nouveau le fichier .cookie de ton nœud)".into(),
+            "Bitcoin Core: unreadable or invalid .cookie file (choose your node's .cookie file again)".into(),
         )
     };
     validate_cookie_path(path).map_err(|_| refused())?;
@@ -1148,9 +1148,9 @@ const ONION_ALPHABET: &[u8; 32] = b"abcdefghijklmnopqrstuvwxyz234567";
 pub fn parse_onion_v3(name: &str) -> AppResult<[u8; 32]> {
     let label = name
         .strip_suffix(".onion")
-        .ok_or_else(|| invalid("adresse .onion attendue"))?;
+        .ok_or_else(|| invalid(".onion address expected"))?;
     if label.len() != 56 {
-        return Err(invalid("adresse .onion v3 : 56 caractères attendus"));
+        return Err(invalid(".onion v3 address: 56 characters expected"));
     }
     let mut bits: u64 = 0;
     let mut nbits = 0u32;
@@ -1159,7 +1159,7 @@ pub fn parse_onion_v3(name: &str) -> AppResult<[u8; 32]> {
         let v = ONION_ALPHABET
             .iter()
             .position(|a| *a == c)
-            .ok_or_else(|| invalid("adresse .onion : caractère invalide"))? as u64;
+            .ok_or_else(|| invalid(".onion address: invalid character"))? as u64;
         bits = (bits << 5) | v;
         nbits += 5;
         if nbits >= 8 {
@@ -1169,7 +1169,7 @@ pub fn parse_onion_v3(name: &str) -> AppResult<[u8; 32]> {
         }
     }
     if out.len() != 35 || out[34] != 3 {
-        return Err(invalid("adresse .onion : version 3 attendue"));
+        return Err(invalid(".onion address: version 3 expected"));
     }
     use sha3::{Digest, Sha3_256};
     let mut h = Sha3_256::new();
@@ -1178,7 +1178,7 @@ pub fn parse_onion_v3(name: &str) -> AppResult<[u8; 32]> {
     h.update([3u8]);
     let sum = h.finalize();
     if sum[..2] != out[32..34] {
-        return Err(invalid("adresse .onion : somme de contrôle invalide"));
+        return Err(invalid(".onion address: invalid checksum"));
     }
     let mut key = [0u8; 32];
     key.copy_from_slice(&out[..32]);
@@ -1190,12 +1190,12 @@ pub fn parse_peer(s: &str) -> AppResult<Peer> {
     let s = s.trim();
     let (host, port) = s
         .rsplit_once(':')
-        .ok_or_else(|| invalid(format!("pair « {s} » : hôte:port attendu")))?;
+        .ok_or_else(|| invalid(format!("peer « {s} »: host:port expected")))?;
     let port: u16 = port
         .parse()
         .ok()
         .filter(|p| *p != 0)
-        .ok_or_else(|| invalid(format!("pair « {s} » : port invalide")))?;
+        .ok_or_else(|| invalid(format!("peer « {s} »: invalid port")))?;
     let host = host
         .trim_start_matches('[')
         .trim_end_matches(']')
@@ -1209,7 +1209,7 @@ pub fn parse_peer(s: &str) -> AppResult<Peer> {
     }
     let ip: IpAddr = host.parse().map_err(|_| {
         invalid(format!(
-            "pair « {s} » : adresse IP ou .onion attendue (pas de nom d'hôte : aucune requête DNS)"
+            "peer « {s} »: IP or .onion address expected (no host name: no DNS query)"
         ))
     })?;
     Ok(Peer {
@@ -1226,7 +1226,7 @@ pub fn parse_fingerprint(s: &str) -> AppResult<[u8; 32]> {
         .collect();
     let mut out = [0u8; 32];
     hex::decode_to_slice(&clean, &mut out).map_err(|_| {
-        invalid("empreinte SHA-256 du certificat : 64 caractères hexadécimaux attendus")
+        invalid("certificate SHA-256 fingerprint: 64 hexadecimal characters expected")
     })?;
     Ok(out)
 }

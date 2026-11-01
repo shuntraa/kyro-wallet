@@ -82,8 +82,8 @@ impl Drop for FileV1 {
 
 fn corrupt(why: &str) -> HwError {
     HwError::Internal(format!(
-        "fichier d'appairage Trezor (trezor-thp.json) illisible : {why}. « Oublier tous les \
-         appairages » le remet à zéro (il faudra réappairer)."
+        "unreadable Trezor pairing file (trezor-thp.json): {why}. « Forget all » \
+         resets it (you will need to pair again)."
     ))
 }
 
@@ -95,27 +95,27 @@ fn hex32(s: &str, what: &str) -> HwResult<[u8; 32]> {
 fn parse(raw: &str) -> HwResult<Stored> {
     let f: FileV1 = serde_json::from_str(raw).map_err(|e| corrupt(&e.to_string()))?;
     if f.version != 1 {
-        return Err(corrupt("version inconnue"));
+        return Err(corrupt("unknown version"));
     }
-    let host_key = Zeroizing::new(hex32(&f.host_key, "clé de l'hôte")?);
+    let host_key = Zeroizing::new(hex32(&f.host_key, "host key")?);
     let mut pairings = Vec::new();
     for p in &f.pairings {
-        let credential = hex::decode(&p.credential).map_err(|_| corrupt("identifiant"))?;
+        let credential = hex::decode(&p.credential).map_err(|_| corrupt("credential"))?;
         if credential.is_empty() || credential.len() > MAX_CREDENTIAL_LEN {
-            return Err(corrupt("identifiant de taille invalide"));
+            return Err(corrupt("credential of invalid size"));
         }
         if p.model.is_empty()
             || p.model.len() > 16
             || !p.model.bytes().all(|b| b.is_ascii_alphanumeric())
         {
-            return Err(corrupt("modèle"));
+            return Err(corrupt("model"));
         }
-        let trezor_key = hex32(&p.trezor_key, "clé de l'appareil")?;
+        let trezor_key = hex32(&p.trezor_key, "device key")?;
         if pairings
             .iter()
             .any(|q: &Pairing| q.trezor_key == trezor_key)
         {
-            return Err(corrupt("appareil en double"));
+            return Err(corrupt("duplicate device"));
         }
         pairings.push(Pairing {
             trezor_key,
@@ -134,7 +134,7 @@ fn render(s: &Stored) -> HwResult<Zeroizing<String>> {
     let key = s
         .host_key
         .as_ref()
-        .ok_or_else(|| HwError::Internal("clé de l'hôte absente".into()))?;
+        .ok_or_else(|| HwError::Internal("missing host key".into()))?;
     let f = FileV1 {
         version: 1,
         host_key: hex::encode(&key[..]),
@@ -157,7 +157,7 @@ fn render(s: &Stored) -> HwResult<Zeroizing<String>> {
 /// Atomic write (temporary file + rename), owner-only on Unix.
 fn write_private(path: &Path, bytes: &[u8]) -> HwResult<()> {
     use std::io::Write;
-    let io = |e: std::io::Error| HwError::Internal(format!("trezor-thp.json : {e}"));
+    let io = |e: std::io::Error| HwError::Internal(format!("trezor-thp.json: {e}"));
     let tmp = path.with_extension("tmp");
     let mut opts = std::fs::OpenOptions::new();
     opts.write(true).create(true).truncate(true);
@@ -213,7 +213,7 @@ impl ThpEnv {
         match std::fs::read_to_string(&path) {
             Ok(raw) => parse(&Zeroizing::new(raw)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Stored::default()),
-            Err(e) => Err(HwError::Internal(format!("trezor-thp.json : {e}"))),
+            Err(e) => Err(HwError::Internal(format!("trezor-thp.json: {e}"))),
         }
     }
 
@@ -234,7 +234,7 @@ impl ThpEnv {
         }
         let mut k = Zeroizing::new([0u8; 32]);
         getrandom::getrandom(&mut k[..])
-            .map_err(|_| HwError::Internal("aléa du système indisponible".into()))?;
+            .map_err(|_| HwError::Internal("system randomness unavailable".into()))?;
         self.write(Stored {
             host_key: Some(k.clone()),
             pairings: s.pairings.clone(),
@@ -247,7 +247,7 @@ impl ThpEnv {
         let _io = lock(&self.io);
         let mut s = self.read()?;
         if s.host_key.is_none() {
-            return Err(HwError::Internal("clé de l'hôte absente".into()));
+            return Err(HwError::Internal("missing host key".into()));
         }
         s.pairings.retain(|q| q.trezor_key != p.trezor_key);
         s.pairings.push(p);
@@ -293,7 +293,7 @@ impl ThpEnv {
                 Some(path) => match std::fs::remove_file(&path) {
                     Ok(()) => {}
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(e) => return Err(HwError::Internal(format!("trezor-thp.json : {e}"))),
+                    Err(e) => return Err(HwError::Internal(format!("trezor-thp.json: {e}"))),
                 },
                 None => *lock(&self.mem) = Stored::default(),
             }

@@ -79,7 +79,7 @@ fn short(v: &Value) -> String {
 /// `result.error` string some nodes still return for `query`).
 pub fn parse_rpc(bytes: &[u8], method: &str) -> Result<Value, RpcError> {
     let v: Value = serde_json::from_slice(bytes)
-        .map_err(|_| bad(format!("NEAR : JSON invalide sur {method}")))?;
+        .map_err(|_| bad(format!("NEAR: invalid JSON on {method}")))?;
     let e = &v["error"];
     if !e.is_null() {
         let name = e["cause"]["name"]
@@ -96,7 +96,7 @@ pub fn parse_rpc(bytes: &[u8], method: &str) -> Result<Value, RpcError> {
     }
     let r = v["result"].clone();
     if r.is_null() {
-        return Err(bad(format!("NEAR : réponse vide sur {method}")).into());
+        return Err(bad(format!("NEAR: empty response on {method}")).into());
     }
     if let Some(msg) = r["error"].as_str() {
         let name = if msg.contains("does not exist") {
@@ -114,15 +114,14 @@ pub fn parse_rpc(bytes: &[u8], method: &str) -> Result<Value, RpcError> {
 }
 
 async fn post(ctx: &NearCtx<'_>, url: &str, family_what: &str, body: String) -> AppResult<Vec<u8>> {
-    let u =
-        url::Url::parse(url).map_err(|_| AppError::ServerInvalid("URL NEAR invalide".into()))?;
+    let u = url::Url::parse(url).map_err(|_| AppError::ServerInvalid("invalid NEAR URL".into()))?;
     let (status, bytes) = ctx
         .net_client
         .server_request(ServerRequest::post_json(u, Family::Near, body), ctx.tor)
         .await?;
     if status != 200 {
         return Err(bad(format!(
-            "NEAR : HTTP {status} sur {family_what} ({})",
+            "NEAR: HTTP {status} on {family_what} ({})",
             String::from_utf8_lossy(&bytes)
                 .chars()
                 .take(200)
@@ -166,7 +165,7 @@ pub async fn status(ctx: &NearCtx<'_>) -> AppResult<NearStatus> {
         genesis_hash: r["genesis_hash"].as_str().unwrap_or("").to_owned(),
         height: r["sync_info"]["latest_block_height"]
             .as_u64()
-            .ok_or_else(|| bad("NEAR : hauteur absente"))?,
+            .ok_or_else(|| bad("NEAR: height missing"))?,
         syncing: r["sync_info"]["syncing"] == true,
     })
 }
@@ -176,12 +175,12 @@ pub fn check_status(s: &NearStatus, net: Network) -> AppResult<()> {
     let (chain, genesis) = near_genesis(net);
     if s.chain_id != chain || s.genesis_hash != genesis {
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce serveur NEAR est sur « {} », pas sur {chain}",
+            "this NEAR server is on \"{}\", not on {chain}",
             crate::dialog_text::sanitize(&s.chain_id, 40)
         )));
     }
     if s.syncing {
-        return Err(bad("NEAR : le serveur est en cours de synchronisation"));
+        return Err(bad("NEAR: the server is syncing"));
     }
     Ok(())
 }
@@ -234,7 +233,7 @@ fn cost(v: &Value, what: &str) -> AppResult<u128> {
     let get = |k: &str| {
         v[k].as_u64()
             .map(u128::from)
-            .ok_or_else(|| bad(format!("NEAR : coût {what}.{k} absent")))
+            .ok_or_else(|| bad(format!("NEAR: cost {what}.{k} missing")))
     };
     Ok(get("send_not_sir")? + get("execution")?)
 }
@@ -246,10 +245,10 @@ pub fn fee_params(config: &Value, gas_price: &Value) -> AppResult<NearFeeParams>
     let ac = &tc["action_creation_config"];
     let p = NearFeeParams {
         gas_price: u128_at(&gas_price["gas_price"])
-            .ok_or_else(|| bad("NEAR : prix du gas absent"))?,
+            .ok_or_else(|| bad("NEAR: gas price missing"))?,
         min_gas_price: u128_at(&config["min_gas_price"]).unwrap_or(0),
         storage_per_byte: u128_at(&rc["storage_amount_per_byte"])
-            .ok_or_else(|| bad("NEAR : prix du stockage absent"))?,
+            .ok_or_else(|| bad("NEAR: storage price missing"))?,
         transfer_gas: cost(&tc["action_receipt_creation_config"], "receipt")?
             + cost(&ac["transfer_cost"], "transfer")?,
         create_gas: cost(&ac["create_account_cost"], "create_account")?
@@ -257,7 +256,7 @@ pub fn fee_params(config: &Value, gas_price: &Value) -> AppResult<NearFeeParams>
     };
     // Sanity: a transfer is well under 100 Tgas, and the gas price is at most 10^13 yocto.
     if p.gas(true) > 100_000_000_000_000 || p.gas_price > 10_000_000_000_000 || p.gas_price == 0 {
-        return Err(bad("NEAR : paramètres de frais invraisemblables"));
+        return Err(bad("NEAR: implausible fee parameters"));
     }
     Ok(p)
 }
@@ -300,7 +299,7 @@ pub fn account_from(
     r: &Value,
     storage_per_byte: u128,
 ) -> AppResult<NearAccountInfo> {
-    let amount = u128_at(&r["amount"]).ok_or_else(|| bad("NEAR : solde absent"))?;
+    let amount = u128_at(&r["amount"]).ok_or_else(|| bad("NEAR: balance missing"))?;
     let locked = u128_at(&r["locked"]).unwrap_or(0);
     let usage = r["storage_usage"].as_u64().unwrap_or(0);
     let reserve = (u128::from(usage) * storage_per_byte).saturating_sub(locked);
@@ -371,7 +370,7 @@ pub async fn access_key(
             if code == "UNKNOWN_ACCESS_KEY" || code == "UNKNOWN_ACCOUNT" =>
         {
             return Err(AppError::InvalidInput(
-                "ton compte NEAR n'existe pas encore (aucun NEAR reçu) ou ta clé en a été retirée"
+                "your NEAR account does not exist yet (no NEAR received) or your key was removed from it"
                     .into(),
             ))
         }
@@ -383,14 +382,15 @@ pub async fn access_key(
 pub fn access_key_from(r: &Value) -> AppResult<(u64, [u8; 32], u64)> {
     if r["permission"] != "FullAccess" {
         return Err(AppError::InvalidInput(
-            "la clé de ce portefeuille n'a plus l'accès complet à ton compte NEAR : elle ne peut pas envoyer de NEAR".into(),
+            "this wallet's key no longer has full access to your NEAR account: it cannot send NEAR"
+                .into(),
         ));
     }
     let nonce = r["nonce"]
         .as_u64()
-        .ok_or_else(|| bad("NEAR : nonce absent"))?;
+        .ok_or_else(|| bad("NEAR: nonce missing"))?;
     let hash = wallet_core::near_parse_hash(r["block_hash"].as_str().unwrap_or(""))
-        .map_err(|_| bad("NEAR : hash de bloc absent"))?;
+        .map_err(|_| bad("NEAR: block hash missing"))?;
     let height = r["block_height"].as_u64().unwrap_or(0);
     Ok((nonce, hash, height))
 }
@@ -400,7 +400,7 @@ pub async fn block_height(ctx: &NearCtx<'_>, hash: &str) -> AppResult<u64> {
     let r = rpc(ctx, "block", json!({ "block_id": hash })).await?;
     r["header"]["height"]
         .as_u64()
-        .ok_or_else(|| bad("NEAR : hauteur du bloc absente"))
+        .ok_or_else(|| bad("NEAR: block height missing"))
 }
 
 // ---------------------------------------------------------------- NEP-141 tokens
@@ -424,12 +424,12 @@ pub async fn view_call(
     .await?;
     let bytes: Vec<u8> = r["result"]
         .as_array()
-        .ok_or_else(|| bad(format!("NEAR : résultat de {method} absent")))?
+        .ok_or_else(|| bad(format!("NEAR: {method} result missing")))?
         .iter()
         .map(|b| b.as_u64().and_then(|v| u8::try_from(v).ok()))
         .collect::<Option<_>>()
-        .ok_or_else(|| bad(format!("NEAR : résultat de {method} illisible")))?;
-    serde_json::from_slice(&bytes).map_err(|_| bad(format!("NEAR : résultat de {method} non JSON")))
+        .ok_or_else(|| bad(format!("NEAR: {method} result unreadable")))?;
+    serde_json::from_slice(&bytes).map_err(|_| bad(format!("NEAR: {method} result not JSON")))
 }
 
 /// `ft_balance_of(account_id)`, token units.
@@ -441,7 +441,7 @@ pub async fn ft_balance(ctx: &NearCtx<'_>, contract: &str, account_id: &str) -> 
         &json!({ "account_id": account_id }),
     )
     .await?;
-    u128_at(&v).ok_or_else(|| bad("NEAR : solde de jeton illisible"))
+    u128_at(&v).ok_or_else(|| bad("NEAR: token balance unreadable"))
 }
 
 /// `storage_balance_of(account_id)` is not null: the account is registered with the token
@@ -460,7 +460,7 @@ pub async fn ft_registered(ctx: &NearCtx<'_>, contract: &str, account_id: &str) 
 /// `storage_balance_bounds().min`, yoctoNEAR: what registering an account costs.
 pub async fn ft_storage_min(ctx: &NearCtx<'_>, contract: &str) -> AppResult<u128> {
     let v = view_call(ctx, contract, "storage_balance_bounds", &json!({})).await?;
-    u128_at(&v["min"]).ok_or_else(|| bad("NEAR : storage_balance_bounds illisible"))
+    u128_at(&v["min"]).ok_or_else(|| bad("NEAR: storage_balance_bounds unreadable"))
 }
 
 /// NEP-141 `ft_transfer` events (NEP-297 `EVENT_JSON` logs) involving `me` in an explorer
@@ -534,7 +534,7 @@ pub fn creates_account(receiver: &NearAccountInfo, kind: NearAccountKind) -> boo
 pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     if !c.ours.exists {
         return Err(AppError::InvalidInput(
-            "ton compte NEAR n'existe pas encore : il est créé par le premier NEAR reçu".into(),
+            "your NEAR account does not exist yet: it is created by the first NEAR received".into(),
         ));
     }
     if !c.receiver.exists {
@@ -542,13 +542,13 @@ pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
             NearAccountKind::Implicit => {}
             NearAccountKind::Named => {
                 return Err(AppError::InvalidInput(format!(
-                    "le compte « {} » n'existe pas : un compte nommé doit déjà exister (sinon les frais sont perdus)",
+                    "the account \"{}\" does not exist: a named account must already exist (otherwise the fees are lost)",
                     c.receiver.account_id
                 )))
             }
             NearAccountKind::EthImplicit => {
                 return Err(AppError::InvalidInput(
-                    "ce compte de style Ethereum (0x…) n'existe pas sur NEAR : Kyro ne le crée pas".into(),
+                    "this Ethereum-style account (0x…) does not exist on NEAR: Kyro does not create it".into(),
                 ))
             }
         }
@@ -557,7 +557,7 @@ pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     let bound = c.fees.bound(creates_account(c.receiver, c.receiver_kind));
     if c.deposit.saturating_add(bound) > spendable {
         return Err(AppError::InvalidInput(format!(
-            "solde disponible insuffisant : {} NEAR disponibles (solde − réserve de stockage), il en faut {} (montant + frais au plus)",
+            "insufficient available balance: {} NEAR available (balance − storage reserve), {} needed (amount + fees at most)",
             crate::commands::format_units(&spendable.to_string(), 24),
             crate::commands::format_units(&c.deposit.saturating_add(bound).to_string(), 24)
         )));
@@ -581,8 +581,7 @@ pub async fn txs(ctx: &NearCtx<'_>, account_id: &str) -> AppResult<Value> {
         json!({ "account_id": id, "limit": MAX_TXS, "desc": true }).to_string(),
     )
     .await?;
-    let list: Value =
-        serde_json::from_slice(&list).map_err(|_| bad("NEAR : historique illisible"))?;
+    let list: Value = serde_json::from_slice(&list).map_err(|_| bad("NEAR: history unreadable"))?;
     let hashes: Vec<String> = list["account_txs"]
         .as_array()
         .into_iter()
@@ -603,7 +602,7 @@ pub async fn txs(ctx: &NearCtx<'_>, account_id: &str) -> AppResult<Value> {
     )
     .await?;
     let details: Value =
-        serde_json::from_slice(&details).map_err(|_| bad("NEAR : historique illisible"))?;
+        serde_json::from_slice(&details).map_err(|_| bad("NEAR: history unreadable"))?;
     let testnet = ctx.network == Network::Testnet;
     Ok(Value::Array(
         details["transactions"]
@@ -679,7 +678,7 @@ pub fn outcome_from(r: &Value, hash: &str) -> AppResult<NearTxOutcome> {
         .unwrap_or("");
     if !got.is_empty() && got != hash {
         return Err(bad(format!(
-            "le serveur a répondu un hash inattendu ({})",
+            "the server answered an unexpected hash ({})",
             crate::dialog_text::sanitize(got, 80)
         )));
     }
@@ -718,7 +717,7 @@ pub async fn send(ctx: &NearCtx<'_>, signed: &[u8], hash: &str) -> AppResult<Nea
         }),
         Err(RpcError::Near(code, msg)) if code == "INVALID_TRANSACTION" => {
             Err(AppError::InvalidInput(format!(
-                "transaction NEAR refusée par le réseau : {}",
+                "NEAR transaction refused by the network: {}",
                 crate::dialog_text::sanitize(&msg, 200)
             )))
         }
@@ -870,13 +869,13 @@ mod tests {
         use NearAccountKind::*;
         assert!(ok(&info(true, 0), Named, YOCTO / 2).is_ok());
         assert!(
-            matches!(ok(&info(false, 0), Named, 1), Err(AppError::InvalidInput(m)) if m.contains("n'existe pas"))
+            matches!(ok(&info(false, 0), Named, 1), Err(AppError::InvalidInput(m)) if m.contains("does not exist"))
         );
         assert!(ok(&info(false, 0), Implicit, YOCTO / 2).is_ok());
         assert!(ok(&info(false, 0), EthImplicit, 1).is_err());
         // Amount + fee bound above spendable.
         assert!(
-            matches!(ok(&info(true, 0), Named, YOCTO - fees.bound(false) + 1), Err(AppError::InvalidInput(m)) if m.contains("insuffisant"))
+            matches!(ok(&info(true, 0), Named, YOCTO - fees.bound(false) + 1), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
         assert!(ok(&info(true, 0), Named, YOCTO - fees.bound(false)).is_ok());
         assert!(
@@ -1173,7 +1172,9 @@ mod live {
             let r = crate::commands_near::build(&c, &me, &pk, "kyro-nexiste-pas-0000.testnet", "1")
                 .await;
             eprintln!("to a missing named account: {:?}", r.as_ref().err());
-            assert!(matches!(r, Err(AppError::InvalidInput(ref m)) if m.contains("n'existe pas")));
+            assert!(
+                matches!(r, Err(AppError::InvalidInput(ref m)) if m.contains("does not exist"))
+            );
             // 1) creates implicit account 1, 2) to the named funding account.
             let h = transfer(&c, &k.seed, &me, &pk, &a1, "500000000000000000000000").await;
             eprintln!("TRANSFER CREATING AN IMPLICIT ACCOUNT: {h}");

@@ -71,7 +71,7 @@ const MAX_EXTRINSIC: usize = 1024;
 const MAX_ACCOUNT: u32 = 0x7FFF_FFFF;
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("transaction Polkadot refusée : {}", msg.into()))
+    Error::input(format!("Polkadot transaction refused: {}", msg.into()))
 }
 
 /// blake2b-256.
@@ -243,7 +243,7 @@ impl PolkadotRoot {
         let entropy = mnemonic.entropy();
         substrate_bip39::mini_secret_from_entropy(&entropy, passphrase)
             .map(PolkadotRoot)
-            .map_err(|_| Error::crypto("dérivation substrate-bip39 impossible"))
+            .map_err(|_| Error::crypto("substrate-bip39 derivation failed"))
     }
 
     /// The mini-secret, hex (tests only: compared with Polkadot.js).
@@ -254,7 +254,7 @@ impl PolkadotRoot {
 
     fn keypair(&self, account: u32) -> Result<Keypair> {
         if account > MAX_ACCOUNT {
-            return Err(Error::input("numéro de compte trop grand"));
+            return Err(Error::input("account number too large"));
         }
         let root = self.0.expand_to_keypair(ExpansionMode::Ed25519);
         if account == 0 {
@@ -274,7 +274,7 @@ impl PolkadotRoot {
 /// How account `account` is derived, for the dialog: `sr25519 · phrase` / `sr25519 · phrase//a`.
 pub fn dot_path(account: u32) -> String {
     if account == 0 {
-        "sr25519 · phrase (compte racine, comme Polkadot.js)".into()
+        "sr25519 · phrase (root account, like Polkadot.js)".into()
     } else {
         format!("sr25519 · phrase//{account}")
     }
@@ -315,20 +315,18 @@ pub fn dot_ss58_encode(public: &[u8; 32], prefix: u8) -> String {
 pub fn dot_ss58_decode(address: &str) -> Result<(u8, [u8; 32])> {
     let a = address.trim();
     if a.is_empty() || a.len() > 64 {
-        return Err(Error::input("adresse Polkadot invalide"));
+        return Err(Error::input("invalid Polkadot address"));
     }
     let raw = bs58::decode(a)
         .into_vec()
-        .map_err(|_| Error::input("adresse Polkadot invalide (base58)"))?;
+        .map_err(|_| Error::input("invalid Polkadot address (base58)"))?;
     if raw.len() != 35 || raw[0] >= 64 {
         return Err(Error::input(
-            "adresse Polkadot invalide (compte de 32 octets à préfixe d'un octet attendu)",
+            "invalid Polkadot address (32-byte account with a one-byte prefix expected)",
         ));
     }
     if ss58_checksum(&raw[..33]) != raw[33..] {
-        return Err(Error::input(
-            "adresse Polkadot invalide (somme de contrôle)",
-        ));
+        return Err(Error::input("invalid Polkadot address (checksum)"));
     }
     let mut pk = [0u8; 32];
     pk.copy_from_slice(&raw[1..33]);
@@ -341,10 +339,10 @@ pub fn dot_account_id(address: &str, network: Network) -> Result<[u8; 32]> {
     let (prefix, pk) = dot_ss58_decode(address)?;
     if prefix != chain.ss58 {
         return Err(Error::input(format!(
-            "adresse d'un autre réseau (préfixe SS58 {prefix}) : une adresse {} commence par le préfixe {} ({})",
+            "address of another network (SS58 prefix {prefix}): a {} address starts with prefix {} ({})",
             chain.name,
             chain.ss58,
-            if chain.ss58 == 0 { "« 1… »" } else { "« 5… »" }
+            if chain.ss58 == 0 { "\"1…\"" } else { "\"5…\"" }
         )));
     }
     Ok(pk)
@@ -418,7 +416,7 @@ impl<'a> Reg<'a> {
     fn ty(&self, id: u32) -> Result<&'a Type<PortableForm>> {
         self.0
             .resolve(id)
-            .ok_or_else(|| Error::input("métadonnées : type introuvable"))
+            .ok_or_else(|| Error::input("metadata: type not found"))
     }
 
     fn def(&self, id: u32) -> Result<&'a TypeDef<PortableForm>> {
@@ -551,17 +549,17 @@ impl<'a> Reg<'a> {
 /// types, `System.Account` layout, known extensions only).
 pub fn dot_runtime(network: Network, state_call_result: &[u8]) -> Result<DotRuntime> {
     let chain = dot_chain(network);
-    let md = |m: &str| Error::input(format!("métadonnées {} refusées : {m}", chain.name));
+    let md = |m: &str| Error::input(format!("{} metadata refused: {m}", chain.name));
     let opaque = Option::<Vec<u8>>::decode_all(&mut &state_call_result[..])
-        .map_err(|_| md("réponse illisible"))?
-        .ok_or_else(|| md("le runtime ne fournit pas de métadonnées V15"))?;
+        .map_err(|_| md("unreadable response"))?
+        .ok_or_else(|| md("the runtime does not provide V15 metadata"))?;
     let prefixed =
-        RuntimeMetadataPrefixed::decode_all(&mut &opaque[..]).map_err(|_| md("SCALE invalide"))?;
+        RuntimeMetadataPrefixed::decode_all(&mut &opaque[..]).map_err(|_| md("invalid SCALE"))?;
     if prefixed.0 != META_RESERVED {
-        return Err(md("en-tête « meta » absent"));
+        return Err(md("\"meta\" header missing"));
     }
     let RuntimeMetadata::V15(m) = prefixed.1 else {
-        return Err(md("version de métadonnées autre que V15"));
+        return Err(md("metadata version other than V15"));
     };
     runtime_from_v15(chain, &m).map_err(|e| match e {
         Error::InvalidInput(s) => md(&s),
@@ -574,10 +572,10 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
     let e = |s: &str| Error::input(s.to_owned());
     let x = &m.extrinsic;
     if x.version != 4 {
-        return Err(e("format d'extrinsèque autre que v4"));
+        return Err(e("extrinsic format other than v4"));
     }
     if !r.is_multiaddress(x.address_ty.id) {
-        return Err(e("type d'adresse inattendu (MultiAddress attendu)"));
+        return Err(e("unexpected address type (MultiAddress expected)"));
     }
     if !(r.path_is(x.signature_ty.id, &["sp_runtime", "MultiSignature"])
         && r.has_variant(x.signature_ty.id, "Sr25519", MULTISIG_SR25519, |f| {
@@ -585,7 +583,7 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
         }))
     {
         return Err(e(
-            "type de signature inattendu (MultiSignature::Sr25519 attendu)",
+            "unexpected signature type (MultiSignature::Sr25519 expected)",
         ));
     }
 
@@ -594,13 +592,13 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
         .pallets
         .iter()
         .find(|p| p.name == "System")
-        .ok_or_else(|| e("pallet System absente"))?;
+        .ok_or_else(|| e("System pallet missing"))?;
     let constant = |p: &frame_metadata::v15::PalletMetadata<PortableForm>, name: &str| {
         p.constants
             .iter()
             .find(|c| c.name == name)
             .map(|c| c.value.clone())
-            .ok_or_else(|| e(&format!("constante {}.{name} absente", p.name)))
+            .ok_or_else(|| e(&format!("constant {}.{name} missing", p.name)))
     };
     #[allow(clippy::type_complexity)]
     let (spec_name, _impl_name, _auth, spec_version, _impl_v, _apis, tx_version, _sys): (
@@ -613,19 +611,19 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
         u32,
         u8,
     ) = DecodeAll::decode_all(&mut &constant(system, "Version")?[..])
-        .map_err(|_| e("System.Version illisible"))?;
+        .map_err(|_| e("System.Version unreadable"))?;
     if spec_name != chain.spec_name {
         return Err(e(&format!(
-            "runtime « {} » au lieu de « {} » : ce nœud n'est pas {}",
+            "runtime \"{}\" instead of \"{}\": this node is not {}",
             crate::display::sanitize_text(&spec_name, 40).text,
             chain.spec_name,
             chain.name
         )));
     }
     let ss58 = u16::decode_all(&mut &constant(system, "SS58Prefix")?[..])
-        .map_err(|_| e("System.SS58Prefix illisible"))?;
+        .map_err(|_| e("System.SS58Prefix unreadable"))?;
     if ss58 != u16::from(chain.ss58) {
-        return Err(e("préfixe SS58 différent de celui attendu"));
+        return Err(e("SS58 prefix differs from the expected one"));
     }
     check_account_layout(&r, system).map_err(|s| e(&s))?;
 
@@ -634,28 +632,28 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
         .pallets
         .iter()
         .find(|p| p.name == "Balances")
-        .ok_or_else(|| e("pallet Balances absente"))?;
+        .ok_or_else(|| e("Balances pallet missing"))?;
     if balances.index != chain.balances_pallet {
         return Err(e(&format!(
-            "index de la pallet Balances {} au lieu de {} : Kyro doit être mis à jour",
+            "Balances pallet index {} instead of {}: Kyro must be updated",
             balances.index, chain.balances_pallet
         )));
     }
     let calls = balances
         .calls
         .as_ref()
-        .ok_or_else(|| e("Balances sans appels"))?;
+        .ok_or_else(|| e("Balances without calls"))?;
     let TypeDef::Variant(v) = r.def(calls.ty.id)? else {
-        return Err(e("appels de Balances illisibles"));
+        return Err(e("Balances calls unreadable"));
     };
     let call = v
         .variants
         .iter()
         .find(|c| c.name == "transfer_keep_alive")
-        .ok_or_else(|| e("Balances.transfer_keep_alive absent"))?;
+        .ok_or_else(|| e("Balances.transfer_keep_alive missing"))?;
     if call.index != chain.transfer_keep_alive {
         return Err(e(&format!(
-            "index de transfer_keep_alive {} au lieu de {} : Kyro doit être mis à jour",
+            "transfer_keep_alive index {} instead of {}: Kyro must be updated",
             call.index, chain.transfer_keep_alive
         )));
     }
@@ -671,11 +669,11 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
     );
     if !args_ok {
         return Err(e(
-            "arguments de transfer_keep_alive inattendus (dest: MultiAddress, value: Compact<u128>)",
+            "unexpected transfer_keep_alive arguments (dest: MultiAddress, value: Compact<u128>)",
         ));
     }
     let existential_deposit = u128::decode_all(&mut &constant(balances, "ExistentialDeposit")?[..])
-        .map_err(|_| e("Balances.ExistentialDeposit illisible"))?;
+        .map_err(|_| e("Balances.ExistentialDeposit unreadable"))?;
     let assets = check_assets(chain, &r, m);
 
     // Transaction extensions.
@@ -736,9 +734,9 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
             }
             other => {
                 return Err(e(&format!(
-                    "extension de transaction inconnue ou de forme inattendue « {} » : Kyro doit être mis à jour",
-                    crate::display::sanitize_text(other, 60).text
-                )))
+                "unknown or unexpectedly shaped transaction extension \"{}\": Kyro must be updated",
+                crate::display::sanitize_text(other, 60).text
+            )))
             }
         };
         extensions.push(kind);
@@ -751,7 +749,7 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
         DotExtension::Nonce,
     ] {
         if extensions.iter().filter(|k| **k == required).count() != 1 {
-            return Err(e(&format!("extension {required:?} absente ou en double")));
+            return Err(e(&format!("extension {required:?} missing or duplicated")));
         }
     }
     let payments = extensions
@@ -770,7 +768,7 @@ fn runtime_from_v15(chain: &'static DotChain, m: &RuntimeMetadataV15) -> Result<
             .count()
             > 1
     {
-        return Err(e("extensions de paiement des frais inattendues"));
+        return Err(e("unexpected fee payment extensions"));
     }
     Ok(DotRuntime {
         network: chain.network,
@@ -794,25 +792,25 @@ fn check_assets(
         .pallets
         .iter()
         .find(|p| p.name == "Assets")
-        .ok_or("pallet Assets absente")?;
+        .ok_or("Assets pallet missing")?;
     if p.index != chain.assets_pallet {
         return Err(format!(
-            "index de la pallet Assets {} au lieu de {}",
+            "Assets pallet index {} instead of {}",
             p.index, chain.assets_pallet
         ));
     }
-    let calls = p.calls.as_ref().ok_or("Assets sans appels")?;
+    let calls = p.calls.as_ref().ok_or("Assets without calls")?;
     let Ok(TypeDef::Variant(v)) = r.def(calls.ty.id) else {
-        return Err("appels de Assets illisibles".into());
+        return Err("Assets calls unreadable".into());
     };
     let call = v
         .variants
         .iter()
         .find(|c| c.name == "transfer_keep_alive")
-        .ok_or("Assets.transfer_keep_alive absent")?;
+        .ok_or("Assets.transfer_keep_alive missing")?;
     if call.index != chain.assets_transfer_keep_alive {
         return Err(format!(
-            "index de Assets.transfer_keep_alive {} au lieu de {}",
+            "Assets.transfer_keep_alive index {} instead of {}",
             call.index, chain.assets_transfer_keep_alive
         ));
     }
@@ -827,26 +825,26 @@ fn check_assets(
                 && r.is_multiaddress(*t)
                 && r.is_compact_of(*a, TypeDefPrimitive::U128))
     {
-        return Err("arguments de Assets.transfer_keep_alive inattendus".into());
+        return Err("unexpected Assets.transfer_keep_alive arguments".into());
     }
-    let storage = p.storage.as_ref().ok_or("Assets sans stockage")?;
+    let storage = p.storage.as_ref().ok_or("Assets without storage")?;
     let entry = |name: &str| {
         storage
             .entries
             .iter()
             .find(|e| e.name == name)
-            .ok_or(format!("Assets.{name} absent"))
+            .ok_or(format!("Assets.{name} missing"))
     };
     let map = |name: &str, n: usize| -> core::result::Result<u32, String> {
         let StorageEntryType::Map { hashers, value, .. } = &entry(name)?.ty else {
-            return Err(format!("Assets.{name} n'est pas une map"));
+            return Err(format!("Assets.{name} is not a map"));
         };
         if hashers.len() != n
             || !hashers
                 .iter()
                 .all(|h| *h == StorageHasher::Blake2_128Concat)
         {
-            return Err(format!("clé de Assets.{name} inattendue"));
+            return Err(format!("unexpected Assets.{name} key"));
         }
         Ok(value.id)
     };
@@ -857,18 +855,18 @@ fn check_assets(
     };
     // Account: (asset, account) → { balance: u128, status: Liquid | Frozen | Blocked, … }.
     let acc = map("Account", 2)?;
-    let f = r.fields(acc).ok_or("Assets.Account illisible")?;
+    let f = r.fields(acc).ok_or("Assets.Account unreadable")?;
     if names(acc) != ["balance", "status", "reason", "extra"]
         || !r.is_prim(f[0].1, TypeDefPrimitive::U128)
         || !(r.has_unit_variant(f[1].1, "Liquid", 0)
             && r.has_unit_variant(f[1].1, "Frozen", 1)
             && r.has_unit_variant(f[1].1, "Blocked", 2))
     {
-        return Err("AssetAccount inattendu".into());
+        return Err("unexpected AssetAccount".into());
     }
     // Asset: asset → AssetDetails (190 bytes, decoded by `dot_decode_asset_details`).
     let det = map("Asset", 1)?;
-    let f = r.fields(det).ok_or("Assets.Asset illisible")?;
+    let f = r.fields(det).ok_or("Assets.Asset unreadable")?;
     let want = [
         "owner",
         "issuer",
@@ -894,17 +892,17 @@ fn check_assets(
             .all(|x| r.is_prim(x.1, TypeDefPrimitive::U32))
         || !r.has_unit_variant(f[11].1, "Live", 0)
     {
-        return Err("AssetDetails inattendu".into());
+        return Err("unexpected AssetDetails".into());
     }
     // Metadata: asset → { deposit: u128, name, symbol: bytes, decimals: u8, is_frozen: bool }.
     let meta = map("Metadata", 1)?;
-    let f = r.fields(meta).ok_or("Assets.Metadata illisible")?;
+    let f = r.fields(meta).ok_or("Assets.Metadata unreadable")?;
     if names(meta) != ["deposit", "name", "symbol", "decimals", "is_frozen"]
         || !r.is_prim(f[0].1, TypeDefPrimitive::U128)
         || !r.is_prim(f[3].1, TypeDefPrimitive::U8)
         || !r.is_prim(f[4].1, TypeDefPrimitive::Bool)
     {
-        return Err("AssetMetadata inattendu".into());
+        return Err("unexpected AssetMetadata".into());
     }
     Ok(())
 }
@@ -921,31 +919,31 @@ fn check_account_layout(
         .storage
         .as_ref()
         .and_then(|s| s.entries.iter().find(|e| e.name == "Account"))
-        .ok_or("System.Account absent")?;
+        .ok_or("System.Account missing")?;
     let StorageEntryType::Map {
         hashers,
         key,
         value,
     } = &entry.ty
     else {
-        return Err("System.Account n'est pas une map".into());
+        return Err("System.Account is not a map".into());
     };
     if !matches!(hashers.as_slice(), [StorageHasher::Blake2_128Concat]) || !r.is_bytes(key.id, 32) {
-        return Err("clé de System.Account inattendue".into());
+        return Err("unexpected System.Account key".into());
     }
-    let info = r.fields(value.id).ok_or("System.Account illisible")?;
+    let info = r.fields(value.id).ok_or("System.Account unreadable")?;
     let names: Vec<&str> = info.iter().map(|f| f.0).collect();
     if names != ["nonce", "consumers", "providers", "sufficients", "data"]
         || !info[..4]
             .iter()
             .all(|f| r.is_prim(f.1, TypeDefPrimitive::U32))
     {
-        return Err("AccountInfo inattendu".into());
+        return Err("unexpected AccountInfo".into());
     }
-    let data = r.fields(info[4].1).ok_or("AccountData illisible")?;
+    let data = r.fields(info[4].1).ok_or("AccountData unreadable")?;
     let names: Vec<&str> = data.iter().map(|f| f.0).collect();
     if names != ["free", "reserved", "frozen", "flags"] || !data.iter().all(|f| r.is_u128ish(f.1)) {
-        return Err("AccountData inattendu".into());
+        return Err("unexpected AccountData".into());
     }
     Ok(())
 }
@@ -1038,13 +1036,13 @@ pub struct DotAssetAccount {
 /// (not needed; layout checked by [`dot_runtime`]).
 pub fn dot_decode_asset_account(bytes: &[u8]) -> Result<DotAssetAccount> {
     if bytes.len() < 18 {
-        return Err(Error::input("Assets.Account trop court"));
+        return Err(Error::input("Assets.Account too short"));
     }
     let mut b = [0u8; 16];
     b.copy_from_slice(&bytes[..16]);
     let status = bytes[16];
     if status > 2 {
-        return Err(Error::input("Assets.Account : statut inconnu"));
+        return Err(Error::input("Assets.Account: unknown status"));
     }
     Ok(DotAssetAccount {
         balance: u128::from_le_bytes(b),
@@ -1068,13 +1066,13 @@ pub struct DotAssetDetails {
 /// Decodes an `Assets.Asset` value (layout checked by [`dot_runtime`]).
 pub fn dot_decode_asset_details(bytes: &[u8]) -> Result<DotAssetDetails> {
     if bytes.len() != 190 {
-        return Err(Error::input("Assets.Asset : 190 octets attendus"));
+        return Err(Error::input("Assets.Asset: 190 bytes expected"));
     }
     let mut mb = [0u8; 16];
     mb.copy_from_slice(&bytes[160..176]);
     let suff = bytes[176];
     if suff > 1 || bytes[189] > 2 {
-        return Err(Error::input("Assets.Asset illisible"));
+        return Err(Error::input("Assets.Asset unreadable"));
     }
     Ok(DotAssetDetails {
         min_balance: u128::from_le_bytes(mb),
@@ -1085,7 +1083,7 @@ pub fn dot_decode_asset_details(bytes: &[u8]) -> Result<DotAssetDetails> {
 
 /// `(symbol, decimals)` of an `Assets.Metadata` value.
 pub fn dot_decode_asset_metadata(bytes: &[u8]) -> Result<(String, u8)> {
-    let bad_md = || Error::input("Assets.Metadata illisible");
+    let bad_md = || Error::input("Assets.Metadata unreadable");
     let (_deposit, _name, symbol, decimals, _frozen): (u128, Vec<u8>, Vec<u8>, u8, bool) =
         DecodeAll::decode_all(&mut &bytes[..]).map_err(|_| bad_md())?;
     let symbol = String::from_utf8(symbol).map_err(|_| bad_md())?;
@@ -1144,7 +1142,7 @@ pub fn dot_decode_account_info(bytes: &[u8]) -> Result<DotAccountInfo> {
         u128,
         u128,
     ) = DecodeAll::decode_all(&mut &bytes[..])
-        .map_err(|_| Error::input("System.Account : 80 octets attendus"))?;
+        .map_err(|_| Error::input("System.Account: 80 bytes expected"))?;
     Ok(DotAccountInfo {
         nonce,
         consumers,
@@ -1162,9 +1160,9 @@ pub fn dot_decode_account_info(bytes: &[u8]) -> Result<DotAccountInfo> {
 pub fn dot_decode_fee_info(bytes: &[u8]) -> Result<u128> {
     let (_rt, _ps, class, fee): (Compact<u64>, Compact<u64>, u8, u128) =
         DecodeAll::decode_all(&mut &bytes[..])
-            .map_err(|_| Error::input("réponse de frais Polkadot illisible"))?;
+            .map_err(|_| Error::input("unreadable Polkadot fee response"))?;
     if class > 2 {
-        return Err(Error::input("classe de transaction inattendue"));
+        return Err(Error::input("unexpected transaction class"));
     }
     Ok(fee)
 }
@@ -1227,7 +1225,7 @@ impl DotEra {
         let first = take(input, 1)?[0];
         if first == 0 {
             return Err(bad(
-                "transaction immortelle (valable indéfiniment) : Kyro ne signe que des transactions à durée limitée",
+                "immortal transaction (valid forever): Kyro signs only time-limited transactions",
             ));
         }
         let second = take(input, 1)?[0];
@@ -1236,7 +1234,7 @@ impl DotEra {
         let q = (period >> 12).max(1);
         let phase = (encoded >> 4) * q;
         if period < 4 || phase >= period {
-            return Err(bad("ère invalide"));
+            return Err(bad("invalid era"));
         }
         Ok(DotEra { period, phase })
     }
@@ -1244,7 +1242,7 @@ impl DotEra {
 
 fn take<'a>(input: &mut &'a [u8], n: usize) -> Result<&'a [u8]> {
     if input.len() < n {
-        return Err(bad("données tronquées"));
+        return Err(bad("truncated data"));
     }
     let (head, tail) = input.split_at(n);
     *input = tail;
@@ -1260,7 +1258,7 @@ fn take32(input: &mut &[u8]) -> Result<[u8; 32]> {
 fn compact_u128(input: &mut &[u8]) -> Result<u128> {
     Compact::<u128>::decode(input)
         .map(|c| c.0)
-        .map_err(|_| bad("entier compact invalide"))
+        .map_err(|_| bad("invalid compact integer"))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1376,26 +1374,26 @@ fn decode_call(rt: &DotRuntime, input: &mut &[u8]) -> Result<(Option<u32>, [u8; 
     } else if head == [c.assets_pallet, c.assets_transfer_keep_alive] {
         if let Err(why) = &rt.assets {
             return Err(bad(format!(
-                "pallet Assets différente de ce que Kyro connaît ({why}) : Kyro doit être mis à jour"
+                "Assets pallet differs from what Kyro knows ({why}): Kyro must be updated"
             )));
         }
         let id = Compact::<u32>::decode(input)
-            .map_err(|_| bad("identifiant d'actif invalide"))?
+            .map_err(|_| bad("invalid asset id"))?
             .0;
         if dot_known_asset(rt.network, id).is_none() {
             return Err(bad(format!(
-                "actif {id} inconnu : Kyro ne signe que les jetons vérifiés de sa table"
+                "unknown asset {id}: Kyro signs only the verified tokens of its table"
             )));
         }
         Some(id)
     } else {
         return Err(bad(format!(
-            "appel {:02x}{:02x} : seuls Balances.transfer_keep_alive ({:02x}{:02x}) et Assets.transfer_keep_alive ({:02x}{:02x}) sont acceptés",
+            "call {:02x}{:02x}: only Balances.transfer_keep_alive ({:02x}{:02x}) and Assets.transfer_keep_alive ({:02x}{:02x}) are accepted",
             head[0], head[1], c.balances_pallet, c.transfer_keep_alive, c.assets_pallet, c.assets_transfer_keep_alive
         )));
     };
     if take(input, 1)?[0] != MULTIADDRESS_ID {
-        return Err(bad("destinataire autre qu'un compte (MultiAddress::Id)"));
+        return Err(bad("recipient other than an account (MultiAddress::Id)"));
     }
     let dest = take32(input)?;
     let value = compact_u128(input)?;
@@ -1410,7 +1408,7 @@ fn decode_extra(rt: &DotRuntime, input: &mut &[u8]) -> Result<(DotEra, u32, u128
             DotExtension::Nonce => {
                 nonce = Some(
                     Compact::<u32>::decode(input)
-                        .map_err(|_| bad("nonce invalide"))?
+                        .map_err(|_| bad("invalid nonce"))?
                         .0,
                 )
             }
@@ -1418,14 +1416,14 @@ fn decode_extra(rt: &DotRuntime, input: &mut &[u8]) -> Result<(DotEra, u32, u128
                 tip = compact_u128(input)?;
                 if take(input, 1)?[0] != 0 {
                     return Err(bad(
-                        "frais payés dans un autre actif que le jeton natif : refusé",
+                        "fees paid in an asset other than the native token: refused",
                     ));
                 }
             }
             DotExtension::ChargeTransactionPayment => tip = compact_u128(input)?,
             DotExtension::MetadataHash => {
                 if take(input, 1)?[0] != 0 {
-                    return Err(bad("CheckMetadataHash activé : Kyro ne l'utilise pas"));
+                    return Err(bad("CheckMetadataHash enabled: Kyro does not use it"));
                 }
             }
             DotExtension::NoData
@@ -1436,7 +1434,7 @@ fn decode_extra(rt: &DotRuntime, input: &mut &[u8]) -> Result<(DotEra, u32, u128
     }
     match (era, nonce) {
         (Some(era), Some(nonce)) => Ok((era, nonce, tip)),
-        _ => Err(bad("extensions incomplètes")),
+        _ => Err(bad("incomplete extensions")),
     }
 }
 
@@ -1451,21 +1449,21 @@ fn decode_additional(rt: &DotRuntime, input: &mut &[u8]) -> Result<[u8; 32]> {
             DotExtension::SpecVersion => {
                 if u32_at(input)? != rt.spec_version {
                     return Err(bad(
-                        "spec_version différent du runtime actuel : reconstruis",
+                        "spec_version differs from the current runtime: rebuild",
                     ));
                 }
             }
             DotExtension::TxVersion => {
                 if u32_at(input)? != rt.tx_version {
                     return Err(bad(
-                        "transaction_version différent du runtime actuel : reconstruis",
+                        "transaction_version differs from the current runtime: rebuild",
                     ));
                 }
             }
             DotExtension::Genesis => {
                 if take32(input)? != rt.chain().genesis {
                     return Err(bad(format!(
-                        "genesis d'une autre chaîne que {}",
+                        "genesis of a chain other than {}",
                         rt.chain().name
                     )));
                 }
@@ -1473,7 +1471,7 @@ fn decode_additional(rt: &DotRuntime, input: &mut &[u8]) -> Result<[u8; 32]> {
             DotExtension::Mortality => block = Some(take32(input)?),
             DotExtension::MetadataHash => {
                 if take(input, 1)?[0] != 0 {
-                    return Err(bad("hash de métadonnées inattendu"));
+                    return Err(bad("unexpected metadata hash"));
                 }
             }
             DotExtension::NoData
@@ -1482,26 +1480,26 @@ fn decode_additional(rt: &DotRuntime, input: &mut &[u8]) -> Result<[u8; 32]> {
             | DotExtension::ChargeTransactionPayment => {}
         }
     }
-    block.ok_or_else(|| bad("hash de bloc absent"))
+    block.ok_or_else(|| bad("block hash missing"))
 }
 
 fn check_transfer(t: &DotTransfer, from: &[u8; 32]) -> Result<()> {
     if t.asset
         .is_some_and(|id| !POLKADOT_ASSETS.iter().any(|a| a.id == id))
     {
-        return Err(bad("actif inconnu"));
+        return Err(bad("unknown asset"));
     }
     if t.value == 0 {
-        return Err(bad("montant nul"));
+        return Err(bad("zero amount"));
     }
     if &t.dest == from {
-        return Err(bad("transfert à soi-même"));
+        return Err(bad("transfer to yourself"));
     }
     if t.tip != 0 {
-        return Err(bad("pourboire non nul : Kyro n'en ajoute jamais"));
+        return Err(bad("non-zero tip: Kyro never adds one"));
     }
     if t.era.period > 4096 {
-        return Err(bad("durée de validité trop longue (plus de 4096 blocs)"));
+        return Err(bad("validity period too long (more than 4096 blocks)"));
     }
     Ok(())
 }
@@ -1510,14 +1508,14 @@ fn check_transfer(t: &DotTransfer, from: &[u8; 32]) -> Result<()> {
 /// (see [`dot_decode_payload`]).
 pub fn dot_parse_payload(rt: &DotRuntime, payload: &[u8], from: &[u8; 32]) -> Result<DotTransfer> {
     if payload.len() > MAX_RAW_PAYLOAD {
-        return Err(bad("charge à signer trop longue pour un transfert"));
+        return Err(bad("signing payload too long for a transfer"));
     }
     let mut input = payload;
     let (asset, dest, value) = decode_call(rt, &mut input)?;
     let (era, nonce, tip) = decode_extra(rt, &mut input)?;
     let block_hash = decode_additional(rt, &mut input)?;
     if !input.is_empty() {
-        return Err(bad("octets en trop"));
+        return Err(bad("trailing bytes"));
     }
     let t = DotTransfer {
         dest,
@@ -1529,7 +1527,7 @@ pub fn dot_parse_payload(rt: &DotRuntime, payload: &[u8], from: &[u8; 32]) -> Re
         asset,
     };
     if t.payload(rt) != payload {
-        return Err(bad("encodage non canonique (ré-encodage différent)"));
+        return Err(bad("non-canonical encoding (re-encoding differs)"));
     }
     check_transfer(&t, from)?;
     Ok(t)
@@ -1635,7 +1633,7 @@ pub fn dot_decode_payload(
     payload_hex: &str,
     from: &[u8; 32],
 ) -> Result<DotTxSummary> {
-    let raw = hex::decode(payload_hex.trim()).map_err(|_| bad("hexadécimal attendu"))?;
+    let raw = hex::decode(payload_hex.trim()).map_err(|_| bad("hexadecimal expected"))?;
     let t = dot_parse_payload(rt, &raw, from)?;
     Ok(summarize(rt, &t, from))
 }
@@ -1648,7 +1646,7 @@ pub fn dot_fee_probe_extrinsic(
     payload_hex: &str,
     from: &[u8; 32],
 ) -> Result<Vec<u8>> {
-    let raw = hex::decode(payload_hex.trim()).map_err(|_| bad("hexadécimal attendu"))?;
+    let raw = hex::decode(payload_hex.trim()).map_err(|_| bad("hexadecimal expected"))?;
     let t = dot_parse_payload(rt, &raw, from)?;
     Ok(t.extrinsic(rt, from, &[0u8; 64]))
 }
@@ -1672,7 +1670,7 @@ pub fn dot_sign(
 ) -> Result<(String, String, DotTxSummary)> {
     let kp = root.keypair(account)?;
     let from = kp.public.to_bytes();
-    let raw = hex::decode(payload_hex.trim()).map_err(|_| bad("hexadécimal attendu"))?;
+    let raw = hex::decode(payload_hex.trim()).map_err(|_| bad("hexadecimal expected"))?;
     let t = dot_parse_payload(rt, &raw, &from)?;
     let ctx = schnorrkel::signing_context(SIGNING_CTX);
     let sig = kp.sign(ctx.bytes(&signing_message(&raw))).to_bytes();
@@ -1680,7 +1678,7 @@ pub fn dot_sign(
     let ext = t.extrinsic(rt, &from, &sig);
     let (signer, hash, summary) = dot_verify_extrinsic(rt, &hex::encode(&ext), &t.block_hash)?;
     if signer != from || summary != summarize(rt, &t, &from) {
-        return Err(Error::crypto("extrinsèque signé incohérent"));
+        return Err(Error::crypto("inconsistent signed extrinsic"));
     }
     Ok((hex::encode(ext), hash, summary))
 }
@@ -1695,31 +1693,31 @@ pub fn dot_verify_extrinsic(
     block_hash: &[u8; 32],
 ) -> Result<([u8; 32], String, DotTxSummary)> {
     let raw =
-        Zeroizing::new(hex::decode(extrinsic_hex.trim()).map_err(|_| bad("hexadécimal attendu"))?);
+        Zeroizing::new(hex::decode(extrinsic_hex.trim()).map_err(|_| bad("hexadecimal expected"))?);
     if raw.len() > MAX_EXTRINSIC {
-        return Err(bad("extrinsèque trop long"));
+        return Err(bad("extrinsic too long"));
     }
     let mut input = &raw[..];
     let len = Compact::<u32>::decode(&mut input)
-        .map_err(|_| bad("longueur invalide"))?
+        .map_err(|_| bad("invalid length"))?
         .0 as usize;
     if len != input.len() {
-        return Err(bad("longueur annoncée différente"));
+        return Err(bad("declared length differs"));
     }
     let head = take(&mut input, 2)?;
     if head != [EXTRINSIC_V4_SIGNED, MULTIADDRESS_ID] {
-        return Err(bad("extrinsèque v4 signé par un compte attendu"));
+        return Err(bad("v4 extrinsic signed by an account expected"));
     }
     let signer = take32(&mut input)?;
     if take(&mut input, 1)?[0] != MULTISIG_SR25519 {
-        return Err(bad("signature autre que sr25519"));
+        return Err(bad("signature other than sr25519"));
     }
     let mut sig = [0u8; 64];
     sig.copy_from_slice(take(&mut input, 64)?);
     let (era, nonce, tip) = decode_extra(rt, &mut input)?;
     let (asset, dest, value) = decode_call(rt, &mut input)?;
     if !input.is_empty() {
-        return Err(bad("octets en trop"));
+        return Err(bad("trailing bytes"));
     }
     let t = DotTransfer {
         dest,
@@ -1732,15 +1730,15 @@ pub fn dot_verify_extrinsic(
     };
     check_transfer(&t, &signer)?;
     if t.extrinsic(rt, &signer, &sig) != *raw {
-        return Err(bad("encodage non canonique (ré-encodage différent)"));
+        return Err(bad("non-canonical encoding (re-encoding differs)"));
     }
-    let public = PublicKey::from_bytes(&signer).map_err(|_| bad("clé publique invalide"))?;
-    let signature = Signature::from_bytes(&sig).map_err(|_| bad("signature mal formée"))?;
+    let public = PublicKey::from_bytes(&signer).map_err(|_| bad("invalid public key"))?;
+    let signature = Signature::from_bytes(&sig).map_err(|_| bad("malformed signature"))?;
     let ctx = schnorrkel::signing_context(SIGNING_CTX);
     public
         .verify(ctx.bytes(&signing_message(&t.payload(rt))), &signature)
         .map_err(|_| {
-            bad("signature invalide pour ce runtime, ce bloc et ce compte (rien n'est diffusé)")
+            bad("invalid signature for this runtime, block and account (nothing is broadcast)")
         })?;
     Ok((
         signer,

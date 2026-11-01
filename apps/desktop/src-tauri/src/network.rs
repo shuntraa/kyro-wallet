@@ -210,23 +210,22 @@ fn check_switch(
 ) -> AppResult<Network> {
     let n = parse(requested).ok_or_else(|| {
         AppError::InvalidInput(format!(
-            "réseau inconnu « {requested} » (mainnet ou testnet)"
+            "unknown network « {requested} » (mainnet or testnet)"
         ))
     })?;
     if source == Source::Env {
         return Err(AppError::InvalidInput(format!(
-            "le réseau est imposé par la variable d'environnement {ENV} : retire-la pour choisir depuis l'application"
+            "the network is set by the environment variable {ENV}: remove it to choose from the app"
         )));
     }
     if dialog_open {
         return Err(AppError::InvalidInput(
-            "une fenêtre de signature est ouverte : termine-la ou annule-la d'abord".into(),
+            "a signing window is open: finish or cancel it first".into(),
         ));
     }
     if hw_busy {
         return Err(AppError::InvalidInput(
-            "une opération est en cours sur le hardware wallet : termine-la ou annule-la d'abord"
-                .into(),
+            "an operation is in progress on the hardware wallet: finish or cancel it first".into(),
         ));
     }
     Ok(n)

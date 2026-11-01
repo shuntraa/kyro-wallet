@@ -319,7 +319,7 @@ async fn sign(
         blocking(move || Ok(wallet_core::utxo_sign_psbt(&seed, net, coin, a, &psbt)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();

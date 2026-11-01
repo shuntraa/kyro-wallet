@@ -54,19 +54,19 @@ async fn send(ctx: &AlgoCtx<'_>, req: ServerRequest, what: &str) -> AppResult<(u
     let v: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
     if !(200..300).contains(&status) && status != 404 && status != 400 {
         return Err(bad(format!(
-            "Algorand : HTTP {status} sur {what} ({})",
+            "Algorand: HTTP {status} on {what} ({})",
             snippet(&bytes)
         )));
     }
     if v.is_null() && status == 200 {
-        return Err(bad(format!("Algorand : JSON invalide sur {what}")));
+        return Err(bad(format!("Algorand: invalid JSON on {what}")));
     }
     Ok((status, v))
 }
 
 async fn get(ctx: &AlgoCtx<'_>, base: &str, path: &str) -> AppResult<(u16, Value)> {
     let u = url::Url::parse(&format!("{base}{path}"))
-        .map_err(|_| AppError::Internal("URL Algorand invalide".into()))?;
+        .map_err(|_| AppError::Internal("invalid Algorand URL".into()))?;
     send(ctx, ServerRequest::get(u, Family::Algorand), path).await
 }
 
@@ -107,23 +107,23 @@ pub fn parse_params(v: &Value, net: Network) -> AppResult<AlgoParams> {
     };
     if gen != want_id || gh != want_b64 {
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce serveur Algorand est sur « {} », pas sur {want_id}",
+            "this Algorand server is on \"{}\", not on {want_id}",
             crate::dialog_text::sanitize(&gen, 32)
         )));
     }
     Ok(AlgoParams {
         fee_per_byte: u64_at(&v["fee"]).unwrap_or(0),
-        min_fee: u64_at(&v["min-fee"]).ok_or_else(|| bad("Algorand : min-fee absent"))?,
+        min_fee: u64_at(&v["min-fee"]).ok_or_else(|| bad("Algorand: min-fee missing"))?,
         genesis_id: gen,
         genesis_hash: gh,
-        last_round: u64_at(&v["last-round"]).ok_or_else(|| bad("Algorand : last-round absent"))?,
+        last_round: u64_at(&v["last-round"]).ok_or_else(|| bad("Algorand: last-round missing"))?,
     })
 }
 
 pub async fn params(ctx: &AlgoCtx<'_>) -> AppResult<AlgoParams> {
     let (status, v) = get(ctx, algod_url(ctx.network), "/v2/transactions/params").await?;
     if status != 200 {
-        return Err(bad(format!("Algorand : HTTP {status} sur les paramètres")));
+        return Err(bad(format!("Algorand: HTTP {status} on the parameters")));
     }
     parse_params(&v, ctx.network)
 }
@@ -149,7 +149,7 @@ pub struct AlgoAccountInfo {
 }
 
 pub fn parse_account(v: &Value, address: &str) -> AppResult<AlgoAccountInfo> {
-    let balance = u64_at(&v["amount"]).ok_or_else(|| bad("Algorand : solde absent"))?;
+    let balance = u64_at(&v["amount"]).ok_or_else(|| bad("Algorand: balance missing"))?;
     let min = u64_at(&v["min-balance"]).unwrap_or(wallet_core::ALGO_MIN_BALANCE);
     let auth = v["auth-addr"]
         .as_str()
@@ -178,7 +178,7 @@ pub async fn account(ctx: &AlgoCtx<'_>, address: &str) -> AppResult<AlgoAccountI
     .await?;
     if status != 200 {
         return Err(bad(format!(
-            "Algorand : HTTP {status} sur le compte ({})",
+            "Algorand: HTTP {status} on the account ({})",
             crate::dialog_text::sanitize(v["message"].as_str().unwrap_or(""), 120)
         )));
     }
@@ -204,13 +204,13 @@ pub fn parse_holding(status: u16, v: &Value, asset_id: u64) -> AppResult<AlgoHol
         200 => {
             let h = &v["asset-holding"];
             if u64_at(&h["asset-id"]) != Some(asset_id) {
-                return Err(bad("Algorand : réponse pour un autre actif"));
+                return Err(bad("Algorand: response for another asset"));
             }
             Ok(AlgoHolding {
                 asset_id,
                 opted_in: true,
                 amount: u64_at(&h["amount"])
-                    .ok_or_else(|| bad("Algorand : solde d'actif absent"))?
+                    .ok_or_else(|| bad("Algorand: asset balance missing"))?
                     .to_string(),
                 frozen: h["is-frozen"].as_bool().unwrap_or(false),
             })
@@ -221,7 +221,7 @@ pub fn parse_holding(status: u16, v: &Value, asset_id: u64) -> AppResult<AlgoHol
             amount: "0".into(),
             frozen: false,
         }),
-        s => Err(bad(format!("Algorand : HTTP {s} sur l'actif {asset_id}"))),
+        s => Err(bad(format!("Algorand: HTTP {s} on asset {asset_id}"))),
     }
 }
 
@@ -252,12 +252,12 @@ pub struct AssetCheck<'a> {
 pub fn check_asset(c: &AssetCheck<'_>) -> AppResult<()> {
     if let Some(auth) = &c.ours.auth_addr {
         return Err(AppError::InvalidInput(format!(
-            "ce compte Algorand a été « rekeyé » vers {auth} : Kyro ne peut pas signer pour lui"
+            "this Algorand account was rekeyed to {auth}: Kyro cannot sign for it"
         )));
     }
     if !c.ours.exists {
         return Err(AppError::InvalidInput(
-            "ton compte Algorand n'est pas encore activé : reçois d'abord au moins 0,2 ALGO".into(),
+            "your Algorand account is not activated yet: first receive at least 0.2 ALGO".into(),
         ));
     }
     let spendable: u64 = c.ours.spendable.parse().unwrap_or(0);
@@ -265,13 +265,13 @@ pub fn check_asset(c: &AssetCheck<'_>) -> AppResult<()> {
     if c.opt_in {
         if c.mine.opted_in {
             return Err(AppError::InvalidInput(format!(
-                "{s} est déjà activé sur ce compte"
+                "{s} is already enabled on this account"
             )));
         }
         let need = c.fee.saturating_add(wallet_core::ALGO_MIN_BALANCE);
         if spendable < need {
             return Err(AppError::InvalidInput(format!(
-                "activer {s} bloque 0,1 ALGO de plus (solde minimum) : il faut {} disponibles, tu en as {}",
+                "enabling {s} locks 0.1 ALGO more (minimum balance): {} available needed, you have {}",
                 algo(need),
                 algo(spendable)
             )));
@@ -280,36 +280,36 @@ pub fn check_asset(c: &AssetCheck<'_>) -> AppResult<()> {
     }
     if !c.mine.opted_in {
         return Err(AppError::InvalidInput(format!(
-            "{s} n'est pas activé sur ce compte"
+            "{s} is not enabled on this account"
         )));
     }
     if c.mine.frozen {
         return Err(AppError::InvalidInput(format!(
-            "ton solde {s} est gelé par l'émetteur : envoi impossible"
+            "your {s} balance is frozen by the issuer: sending is impossible"
         )));
     }
     let have: u64 = c.mine.amount.parse().unwrap_or(0);
     if c.amount > have {
         return Err(AppError::InvalidInput(format!(
-            "solde {s} insuffisant : {} disponibles",
+            "insufficient {s} balance: {} available",
             crate::commands::format_units(&have.to_string(), usize::from(c.decimals))
         )));
     }
     if c.fee > spendable {
         return Err(AppError::InvalidInput(format!(
-            "pas assez d'ALGO pour les frais : {} disponibles (solde − solde minimum), il en faut {}",
+            "not enough ALGO for the fees: {} available (balance − minimum balance), {} needed",
             algo(spendable),
             algo(c.fee)
         )));
     }
     if !c.dest.opted_in {
         return Err(AppError::InvalidInput(format!(
-            "ce destinataire n'a pas activé {s} (opt-in) : il doit d'abord l'activer, sinon le transfert est rejeté"
+            "this recipient has not enabled {s} (opt-in): they must enable it first, otherwise the transfer is rejected"
         )));
     }
     if c.dest.frozen {
         return Err(AppError::InvalidInput(format!(
-            "le solde {s} de ce destinataire est gelé par l'émetteur : il ne peut rien recevoir"
+            "this recipient's {s} balance is frozen by the issuer: it cannot receive anything"
         )));
     }
     Ok(())
@@ -367,26 +367,26 @@ pub async fn txs(ctx: &AlgoCtx<'_>, address: &str) -> AppResult<Value> {
     match status {
         200 => Ok(parse_txs(&v)),
         404 => Ok(json!([])),
-        s => Err(bad(format!("Algorand : HTTP {s} sur l'historique"))),
+        s => Err(bad(format!("Algorand: HTTP {s} on the history"))),
     }
 }
 
 /// `POST /v2/transactions` (raw signed msgpack). The server's `txId` must be ours.
 pub async fn submit(ctx: &AlgoCtx<'_>, raw: Vec<u8>, txid: &str) -> AppResult<String> {
     let u = url::Url::parse(&format!("{}/v2/transactions", algod_url(ctx.network)))
-        .map_err(|_| AppError::Internal("URL Algorand invalide".into()))?;
+        .map_err(|_| AppError::Internal("invalid Algorand URL".into()))?;
     let req = ServerRequest::post_bytes(u, Family::Algorand, "application/x-binary", raw);
     let (status, v) = send(ctx, req, "/v2/transactions").await?;
     if status != 200 {
         return Err(AppError::InvalidInput(format!(
-            "paiement Algorand refusé : {}",
-            crate::dialog_text::sanitize(v["message"].as_str().unwrap_or("erreur inconnue"), 240)
+            "Algorand payment rejected: {}",
+            crate::dialog_text::sanitize(v["message"].as_str().unwrap_or("unknown error"), 240)
         )));
     }
     let got = v["txId"].as_str().unwrap_or("");
     if got != txid {
         return Err(bad(format!(
-            "le serveur a répondu un identifiant inattendu ({})",
+            "the server answered an unexpected identifier ({})",
             crate::dialog_text::sanitize(got, 80)
         )));
     }
@@ -475,19 +475,19 @@ fn algo(micro: u64) -> String {
 pub fn check_payment(c: &PaymentCheck<'_>) -> AppResult<()> {
     if let Some(auth) = &c.ours.auth_addr {
         return Err(AppError::InvalidInput(format!(
-            "ce compte Algorand a été « rekeyé » vers {auth} : sa clé de signature n'est plus celle de ce portefeuille, Kyro ne peut pas signer pour lui"
+            "this Algorand account was rekeyed to {auth}: its signing key is no longer this wallet's, Kyro cannot sign for it"
         )));
     }
     if !c.ours.exists {
         return Err(AppError::InvalidInput(
-            "ton compte Algorand n'est pas encore activé (aucun ALGO reçu)".into(),
+            "your Algorand account is not activated yet (no ALGO received)".into(),
         ));
     }
     let spendable: u64 = c.ours.spendable.parse().unwrap_or(0);
     let min: u64 = c.ours.min_balance.parse().unwrap_or(0);
     if c.amount.saturating_add(c.fee) > spendable {
         return Err(AppError::InvalidInput(format!(
-            "solde disponible insuffisant : {} disponibles (solde − solde minimum de {}), il en faut {}",
+            "insufficient available balance: {} available (balance − minimum balance of {}), {} needed",
             algo(spendable),
             algo(min),
             algo(c.amount.saturating_add(c.fee))
@@ -502,13 +502,13 @@ pub fn check_payment(c: &PaymentCheck<'_>) -> AppResult<()> {
     if dest_balance.saturating_add(c.amount) < dest_min {
         return Err(AppError::InvalidInput(if c.dest.exists {
             format!(
-                "ce destinataire resterait sous son solde minimum ({}) : envoie au moins {}",
+                "this recipient would stay below its minimum balance ({}): send at least {}",
                 algo(dest_min),
                 algo(dest_min - dest_balance)
             )
         } else {
             format!(
-                "ce compte n'existe pas encore : il faut lui envoyer au moins {} (solde minimum), sinon le paiement est rejeté",
+                "this account does not exist yet: you must send it at least {} (minimum balance), otherwise the payment is rejected",
                 algo(dest_min)
             )
         }));
@@ -579,10 +579,10 @@ mod tests {
         };
         assert!(ok(100_000, &dest).is_ok());
         assert!(
-            matches!(ok(99_999, &dest), Err(AppError::InvalidInput(m)) if m.contains("au moins 0,1 ALGO"))
+            matches!(ok(99_999, &dest), Err(AppError::InvalidInput(m)) if m.contains("at least 0,1 ALGO"))
         );
         assert!(
-            matches!(ok(4_799_001, &dest), Err(AppError::InvalidInput(m)) if m.contains("insuffisant") && m.contains("0,2 ALGO"))
+            matches!(ok(4_799_001, &dest), Err(AppError::InvalidInput(m)) if m.contains("insufficient") && m.contains("0,2 ALGO"))
         );
         assert!(ok(4_799_000, &dest).is_ok());
         let funded = AlgoAccountInfo {
@@ -592,7 +592,7 @@ mod tests {
             ..Default::default()
         };
         assert!(
-            matches!(ok(10, &funded), Err(AppError::InvalidInput(m)) if m.contains("sous son solde minimum"))
+            matches!(ok(10, &funded), Err(AppError::InvalidInput(m)) if m.contains("below its minimum balance"))
         );
         let rekeyed = AlgoAccountInfo {
             auth_addr: Some("XYZ".into()),
@@ -691,23 +691,23 @@ mod tests {
             spendable: "100500".into(),
             ..ours.clone()
         };
-        err(check(&none, &none, 0, true, &poor), "0,1 ALGO de plus");
-        err(check(&h, &h, 0, true, &ours), "déjà activé");
+        err(check(&none, &none, 0, true, &poor), "0.1 ALGO more");
+        err(check(&h, &h, 0, true, &ours), "already enabled");
         // Transfer: opted in on both sides, enough units, ALGO for the fee.
         assert!(check(&h, &h, 12_500_000, false, &ours).is_ok());
-        err(check(&h, &h, 12_500_001, false, &ours), "insuffisant");
-        err(check(&none, &h, 1, false, &ours), "n'est pas activé");
-        err(check(&h, &none, 1, false, &ours), "n'a pas activé USDC");
+        err(check(&h, &h, 12_500_001, false, &ours), "insufficient");
+        err(check(&none, &h, 1, false, &ours), "is not enabled");
+        err(check(&h, &none, 1, false, &ours), "has not enabled USDC");
         let frozen = AlgoHolding {
             frozen: true,
             ..h.clone()
         };
-        err(check(&frozen, &h, 1, false, &ours), "gelé");
-        err(check(&h, &frozen, 1, false, &ours), "gelé");
+        err(check(&frozen, &h, 1, false, &ours), "frozen");
+        err(check(&h, &frozen, 1, false, &ours), "frozen");
         let broke = AlgoAccountInfo {
             spendable: "0".into(),
             ..ours.clone()
         };
-        err(check(&h, &h, 1, false, &broke), "frais");
+        err(check(&h, &h, 1, false, &broke), "fees");
     }
 }

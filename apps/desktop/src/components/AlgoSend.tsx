@@ -105,7 +105,7 @@ export function AlgoSummaryView({ u, algoPrice, currency }: { u: AlgoUnsigned; a
       {s.asset?.optIn && <Line k={t('algo.lOptIn')} v={t('algo.lOptInValue', { symbol: s.asset.symbol })} warn />}
       {s.asset && !s.asset.optIn && <Line k={t('algo.lTokenAmount')} v={fmtCrypto(BigInt(s.asset.amount), s.asset.decimals, s.asset.symbol, s.asset.decimals)} />}
       {!s.asset && !c.destination.exists && <Line k={t('algo.lDest')} v={t('algo.lDestCreated', { min: ALGO(c.destination.minBalance) })} warn />}
-      {s.noteLen > 0 && <Line k={t('algo.lNote')} v={s.noteText !== null ? `« ${s.noteText} »` : t('algo.noteBinary', { len: s.noteLen })} warn />}
+      {s.noteLen > 0 && <Line k={t('algo.lNote')} v={s.noteText !== null ? t('common.quoted', { text: s.noteText }) : t('algo.noteBinary', { len: s.noteLen })} warn />}
       <Line k={t('algo.lFee')} v={`${ALGO(s.fee)}${fiat(s.fee)}`} />
       <Line k={t('algo.lBalance')} v={ALGO(c.account.balance)} />
       <Line k={t('algo.lMinBalance')} v={ALGO(c.account.minBalance)} />

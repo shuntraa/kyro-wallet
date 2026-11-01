@@ -71,7 +71,7 @@ fn snippet(bytes: &[u8]) -> String {
 
 fn endpoint(ctx: &KaspaCtx<'_>, path: &str) -> AppResult<url::Url> {
     url::Url::parse(&format!("{}{path}", base_url(ctx.network)))
-        .map_err(|_| AppError::Internal("URL Kaspa invalide".into()))
+        .map_err(|_| AppError::Internal("invalid Kaspa URL".into()))
 }
 
 async fn send(ctx: &KaspaCtx<'_>, path: &str, body: Option<Value>) -> AppResult<(u16, Vec<u8>)> {
@@ -87,12 +87,12 @@ async fn call(ctx: &KaspaCtx<'_>, path: &str, body: Option<Value>) -> AppResult<
     let (status, bytes) = send(ctx, path, body).await?;
     if status != 200 {
         return Err(bad(format!(
-            "API Kaspa : HTTP {status} sur {} ({})",
+            "Kaspa API: HTTP {status} on {} ({})",
             path.split('?').next().unwrap_or(path),
             snippet(&bytes)
         )));
     }
-    serde_json::from_slice(&bytes).map_err(|_| bad(format!("API Kaspa : JSON invalide sur {path}")))
+    serde_json::from_slice(&bytes).map_err(|_| bad(format!("Kaspa API: invalid JSON on {path}")))
 }
 
 /// Integer from a JSON number or a decimal string (the API uses both).
@@ -118,12 +118,12 @@ pub async fn network_info(ctx: &KaspaCtx<'_>) -> AppResult<u64> {
     let name = v["networkName"].as_str().unwrap_or_default();
     if name != network_name(ctx.network) {
         return Err(AppError::ServerWrongNetwork(format!(
-            "l'API Kaspa répond « {} » au lieu de « {} »",
+            "the Kaspa API answers \"{}\" instead of \"{}\"",
             crate::dialog_text::field(name, 40),
             network_name(ctx.network)
         )));
     }
-    as_u64(&v["virtualDaaScore"]).ok_or_else(|| bad("API Kaspa : virtualDaaScore absent"))
+    as_u64(&v["virtualDaaScore"]).ok_or_else(|| bad("Kaspa API: virtualDaaScore missing"))
 }
 
 fn addresses(keys: &[KaspaOwnKey]) -> Vec<String> {
@@ -148,16 +148,16 @@ pub fn parse_balances(v: &Value, keys: &[KaspaOwnKey]) -> AppResult<u64> {
     let mut total = 0u64;
     for e in v
         .as_array()
-        .ok_or_else(|| bad("API Kaspa : liste de soldes attendue"))?
+        .ok_or_else(|| bad("Kaspa API: list of balances expected"))?
     {
         let a = e["address"].as_str().unwrap_or_default();
         if !ours.contains(a) || !seen.insert(a.to_owned()) {
             continue;
         }
-        let b = as_u64(&e["balance"]).ok_or_else(|| bad("API Kaspa : solde invalide"))?;
+        let b = as_u64(&e["balance"]).ok_or_else(|| bad("Kaspa API: invalid balance"))?;
         total = total
             .checked_add(b)
-            .ok_or_else(|| bad("API Kaspa : solde invalide"))?;
+            .ok_or_else(|| bad("Kaspa API: invalid balance"))?;
     }
     Ok(total)
 }
@@ -181,10 +181,10 @@ pub fn parse_utxos(v: &Value, keys: &[KaspaOwnKey]) -> AppResult<Vec<KaspaSpenda
         .collect();
     let list = v
         .as_array()
-        .ok_or_else(|| bad("API Kaspa : liste de pièces attendue"))?;
+        .ok_or_else(|| bad("Kaspa API: list of coins expected"))?;
     if list.len() > MAX_UTXOS {
         return Err(AppError::InvalidInput(format!(
-            "plus de {MAX_UTXOS} pièces : envoie-toi d'abord une partie de ton solde pour les regrouper"
+            "more than {MAX_UTXOS} coins: first send part of your balance to yourself to consolidate them"
         )));
     }
     let mut seen = BTreeSet::new();
@@ -193,7 +193,7 @@ pub fn parse_utxos(v: &Value, keys: &[KaspaOwnKey]) -> AppResult<Vec<KaspaSpenda
         let address = u["address"].as_str().unwrap_or_default();
         let script = scripts
             .get(address)
-            .ok_or_else(|| bad("API Kaspa : pièce d'une adresse qui n'est pas à toi"))?;
+            .ok_or_else(|| bad("Kaspa API: coin from an address that is not yours"))?;
         let txid = u["outpoint"]["transactionId"].as_str().unwrap_or_default();
         let index = u["outpoint"]["index"]
             .as_u64()
@@ -208,18 +208,16 @@ pub fn parse_utxos(v: &Value, keys: &[KaspaOwnKey]) -> AppResult<Vec<KaspaSpenda
             as_u64(&e["blockDaaScore"]),
             e["isCoinbase"].as_bool(),
         ) else {
-            return Err(bad("API Kaspa : pièce mal formée"));
+            return Err(bad("Kaspa API: malformed coin"));
         };
         if !is_txid(txid) || amount == 0 {
-            return Err(bad("API Kaspa : pièce mal formée"));
+            return Err(bad("Kaspa API: malformed coin"));
         }
         if hex::decode(spk).ok().as_ref() != Some(script) {
-            return Err(bad(
-                "API Kaspa : le script d'une pièce n'est pas celui de ton adresse",
-            ));
+            return Err(bad("Kaspa API: a coin's script is not your address's"));
         }
         let mut tx_id = [0u8; 32];
-        hex::decode_to_slice(txid, &mut tx_id).map_err(|_| bad("API Kaspa : pièce mal formée"))?;
+        hex::decode_to_slice(txid, &mut tx_id).map_err(|_| bad("Kaspa API: malformed coin"))?;
         let outpoint = KaspaOutpoint { tx_id, index };
         if !seen.insert(outpoint) {
             continue;
@@ -262,9 +260,9 @@ pub fn parse_fee_estimate(v: &Value) -> AppResult<u64> {
     let f = v["normalBuckets"][0]["feerate"]
         .as_f64()
         .or_else(|| v["priorityBucket"]["feerate"].as_f64())
-        .ok_or_else(|| bad("API Kaspa : estimation de frais absente"))?;
+        .ok_or_else(|| bad("Kaspa API: fee estimate missing"))?;
     if !f.is_finite() || f < 0.0 {
-        return Err(bad("API Kaspa : estimation de frais invalide"));
+        return Err(bad("Kaspa API: invalid fee estimate"));
     }
     // Rounded up, bounded by wallet-core (`kaspa_priority_feerate`).
     Ok(f.ceil().min(1e9) as u64)
@@ -273,7 +271,7 @@ pub fn parse_fee_estimate(v: &Value) -> AppResult<u64> {
 /// Broadcast (`POST /transactions`). The id the server returns must be ours.
 pub async fn submit(ctx: &KaspaCtx<'_>, tx_json: &str, expected_id: &str) -> AppResult<String> {
     let tx: Value = serde_json::from_str(tx_json)
-        .map_err(|_| AppError::Internal("transaction Kaspa : JSON invalide".into()))?;
+        .map_err(|_| AppError::Internal("Kaspa transaction: invalid JSON".into()))?;
     let (status, bytes) = send(
         ctx,
         "/transactions",
@@ -288,15 +286,15 @@ pub async fn submit(ctx: &KaspaCtx<'_>, tx_json: &str, expected_id: &str) -> App
             .map(|m| crate::dialog_text::field(m, 200))
             .unwrap_or_else(|| snippet(&bytes));
         return Err(if status == 400 || status == 422 {
-            AppError::InvalidInput(format!("transaction refusée par le nœud Kaspa : {msg}"))
+            AppError::InvalidInput(format!("transaction refused by the Kaspa node: {msg}"))
         } else {
-            bad(format!("API Kaspa : HTTP {status} à la diffusion ({msg})"))
+            bad(format!("Kaspa API: HTTP {status} on broadcast ({msg})"))
         });
     }
     let id = v["transactionId"].as_str().unwrap_or_default();
     if id != expected_id {
         return Err(bad(format!(
-            "API Kaspa : identifiant renvoyé « {} » différent de celui de ta transaction",
+            "Kaspa API: returned id \"{}\" differs from your transaction's",
             crate::dialog_text::field(id, 70)
         )));
     }
@@ -307,7 +305,7 @@ pub async fn submit(ctx: &KaspaCtx<'_>, tx_json: &str, expected_id: &str) -> App
 pub async fn tx_status(ctx: &KaspaCtx<'_>, txid: &str) -> AppResult<Option<bool>> {
     if !is_txid(txid) {
         return Err(AppError::InvalidInput(
-            "identifiant : 64 caractères hexadécimaux minuscules".into(),
+            "id: 64 lowercase hexadecimal characters".into(),
         ));
     }
     let (status, bytes) = send(
@@ -320,10 +318,10 @@ pub async fn tx_status(ctx: &KaspaCtx<'_>, txid: &str) -> AppResult<Option<bool>
         404 => Ok(None),
         200 => {
             let v: Value = serde_json::from_slice(&bytes)
-                .map_err(|_| bad("API Kaspa : JSON invalide sur /transactions"))?;
+                .map_err(|_| bad("Kaspa API: invalid JSON on /transactions"))?;
             Ok(Some(v["is_accepted"].as_bool().unwrap_or(false)))
         }
-        _ => Err(bad(format!("API Kaspa : HTTP {status} sur /transactions"))),
+        _ => Err(bad(format!("Kaspa API: HTTP {status} on /transactions"))),
     }
 }
 
@@ -355,7 +353,7 @@ pub async fn active(ctx: &KaspaCtx<'_>, keys: &[KaspaOwnKey]) -> AppResult<Vec<S
     let ours: BTreeSet<&str> = keys.iter().map(|k| k.address.as_str()).collect();
     let mut found: Vec<(u64, String)> = v
         .as_array()
-        .ok_or_else(|| bad("API Kaspa : liste attendue sur /addresses/active"))?
+        .ok_or_else(|| bad("Kaspa API: list expected on /addresses/active"))?
         .iter()
         .filter(|e| e["active"].as_bool() == Some(true))
         .filter_map(|e| {

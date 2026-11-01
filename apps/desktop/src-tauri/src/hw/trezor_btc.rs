@@ -38,7 +38,7 @@ fn display_bytes(txid: &Txid) -> Vec<u8> {
 
 fn encode<M: Message>(m: &M) -> HwResult<Vec<u8>> {
     m.write_to_bytes()
-        .map_err(|e| HwError::bad(format!("encodage protobuf : {e}")))
+        .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))
 }
 
 /// The previous transaction with display-order txid `hash`, from `non_witness_utxo`.
@@ -49,23 +49,23 @@ fn prev_tx<'a>(req: &'a BtcSignRequest<'_>, hash: &[u8]) -> HwResult<&'a Transac
         }
         let tx = input.non_witness_utxo.as_ref().ok_or_else(|| {
             HwError::unsupported(
-                "la PSBT doit contenir la transaction précédente (non_witness_utxo) de \
-                 chaque entrée SegWit",
+                "the PSBT must contain the previous transaction (non_witness_utxo) of \
+                 every SegWit input",
             )
         })?;
         if tx.compute_txid() != txin.previous_output.txid {
-            return Err(HwError::bad("transaction précédente incohérente"));
+            return Err(HwError::bad("inconsistent previous transaction"));
         }
         return Ok(tx);
     }
-    Err(HwError::bad("l'appareil demande une transaction inconnue"))
+    Err(HwError::bad("the device asks for an unknown transaction"))
 }
 
 fn idx(details: &protos::tx_request::TxRequestDetailsType) -> HwResult<usize> {
     details
         .request_index
         .map(|i| i as usize)
-        .ok_or_else(|| HwError::bad("TxRequest sans index"))
+        .ok_or_else(|| HwError::bad("TxRequest without an index"))
 }
 
 fn ack_input(req: &BtcSignRequest<'_>, i: usize) -> HwResult<Vec<u8>> {
@@ -74,13 +74,13 @@ fn ack_input(req: &BtcSignRequest<'_>, i: usize) -> HwResult<Vec<u8>> {
         .inputs
         .iter()
         .find(|p| p.index == i)
-        .ok_or_else(|| HwError::unsupported("entrée qui n'appartient pas à ce compte"))?;
+        .ok_or_else(|| HwError::unsupported("input that does not belong to this account"))?;
     let txin = req
         .psbt
         .unsigned_tx
         .input
         .get(i)
-        .ok_or_else(|| HwError::bad("index d'entrée invalide"))?;
+        .ok_or_else(|| HwError::bad("invalid input index"))?;
     let mut input = protos::TxInput::new();
     input.address_n = ours.path.clone();
     input.set_prev_hash(display_bytes(&txin.previous_output.txid));
@@ -105,10 +105,10 @@ fn op_return_data(spk: &bitcoin::Script) -> HwResult<Vec<u8>> {
     let data = match it.next() {
         None => Vec::new(),
         Some(Ok(Instruction::PushBytes(b))) => b.as_bytes().to_vec(),
-        _ => return Err(HwError::unsupported("sortie OP_RETURN non standard")),
+        _ => return Err(HwError::unsupported("non-standard OP_RETURN output")),
     };
     if it.next().is_some() {
-        return Err(HwError::unsupported("sortie OP_RETURN non standard"));
+        return Err(HwError::unsupported("non-standard OP_RETURN output"));
     }
     Ok(data)
 }
@@ -119,7 +119,7 @@ fn ack_output(req: &BtcSignRequest<'_>, net: Network, j: usize) -> HwResult<Vec<
         .unsigned_tx
         .output
         .get(j)
-        .ok_or_else(|| HwError::bad("index de sortie invalide"))?;
+        .ok_or_else(|| HwError::bad("invalid output index"))?;
     let mut o = protos::TxOutput::new();
     o.set_amount(out.value.to_sat());
     if let Some(c) = req.plan.change.iter().find(|c| c.index == j) {
@@ -130,7 +130,7 @@ fn ack_output(req: &BtcSignRequest<'_>, net: Network, j: usize) -> HwResult<Vec<
         });
     } else if out.script_pubkey.is_op_return() {
         if out.value.to_sat() != 0 {
-            return Err(HwError::unsupported("OP_RETURN avec un montant non nul"));
+            return Err(HwError::unsupported("OP_RETURN with a non-zero amount"));
         }
         o.set_script_type(protos::OutputScriptType::PAYTOOPRETURN);
         o.set_op_return_data(op_return_data(&out.script_pubkey)?);
@@ -140,7 +140,7 @@ fn ack_output(req: &BtcSignRequest<'_>, net: Network, j: usize) -> HwResult<Vec<
             Network::Testnet => bitcoin::Network::Testnet,
         };
         let addr = Address::from_script(&out.script_pubkey, btc_net)
-            .map_err(|_| HwError::unsupported("sortie vers un script non standard"))?;
+            .map_err(|_| HwError::unsupported("output to a non-standard script"))?;
         o.set_address(addr.to_string());
         o.set_script_type(protos::OutputScriptType::PAYTOADDRESS);
     }
@@ -167,7 +167,7 @@ fn ack_prev_input(tx: &Transaction, i: usize) -> HwResult<Vec<u8>> {
     let txin = tx
         .input
         .get(i)
-        .ok_or_else(|| HwError::bad("index d'entrée précédente invalide"))?;
+        .ok_or_else(|| HwError::bad("invalid previous input index"))?;
     let mut p = protos::PrevInput::new();
     p.set_prev_hash(display_bytes(&txin.previous_output.txid));
     p.set_prev_index(txin.previous_output.vout);
@@ -184,7 +184,7 @@ fn ack_prev_output(tx: &Transaction, j: usize) -> HwResult<Vec<u8>> {
     let out = tx
         .output
         .get(j)
-        .ok_or_else(|| HwError::bad("index de sortie précédente invalide"))?;
+        .ok_or_else(|| HwError::bad("invalid previous output index"))?;
     let mut p = protos::PrevOutput::new();
     p.set_amount(out.value.to_sat());
     p.set_script_pubkey(out.script_pubkey.to_bytes());
@@ -205,7 +205,7 @@ pub fn sign(
 ) -> HwResult<Vec<HwBtcSignature>> {
     if !req.plan.external_inputs.is_empty() {
         return Err(HwError::unsupported(
-            "transaction avec des entrées qui n'appartiennent pas à ce compte",
+            "transaction with inputs that do not belong to this account",
         ));
     }
     let tx = &req.psbt.unsigned_tx;
@@ -240,13 +240,13 @@ pub fn sign(
             (RequestType::TXOUTPUT, Some(h)) => ack_prev_output(prev_tx(req, &h)?, idx(&details)?)?,
             (other, _) => {
                 return Err(HwError::unsupported(format!(
-                    "requête Trezor non prise en charge : {other:?}"
+                    "unsupported Trezor request: {other:?}"
                 )))
             }
         };
         resp = io.call(ctl, MessageType::MessageType_TxAck, ack)?;
     }
-    Err(HwError::bad("trop d'échanges avec l'appareil"))
+    Err(HwError::bad("too many exchanges with the device"))
 }
 
 #[cfg(test)]

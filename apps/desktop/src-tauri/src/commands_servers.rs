@@ -25,7 +25,7 @@ fn network_of(key: &str) -> AppResult<Network> {
         "mainnet" => Ok(Network::Mainnet),
         "testnet4" => Ok(Network::Testnet),
         other => Err(AppError::ServerInvalid(format!(
-            "réseau Bitcoin inconnu « {other} » (mainnet ou testnet4)"
+            "unknown Bitcoin network « {other} » (mainnet or testnet4)"
         ))),
     }
 }
@@ -36,7 +36,7 @@ fn utxo_network_of(key: &str) -> AppResult<Network> {
         "mainnet" => Ok(Network::Mainnet),
         "testnet" => Ok(Network::Testnet),
         other => Err(AppError::ServerInvalid(format!(
-            "réseau inconnu « {other} » (mainnet ou testnet)"
+            "unknown network « {other} » (mainnet or testnet)"
         ))),
     }
 }
@@ -77,14 +77,12 @@ async fn json_rpc(
         .server_request(ServerRequest::post_json(u, family, body), tor)
         .await?;
     let v: Value = serde_json::from_slice(&bytes).map_err(|_| {
-        AppError::ServerUnreachable(format!("{method} : HTTP {status}, réponse non JSON"))
+        AppError::ServerUnreachable(format!("{method}: HTTP {status}, non-JSON response"))
     })?;
     v.get("result")
         .cloned()
         .filter(|r| !r.is_null())
-        .ok_or_else(|| {
-            AppError::ServerUnreachable(format!("{method} : pas de résultat (HTTP {status})"))
-        })
+        .ok_or_else(|| AppError::ServerUnreachable(format!("{method}: no result (HTTP {status})")))
 }
 
 async fn probe_evm(net: &NetClient, chain: u64, s: &RpcServer, tor: bool) -> AppResult<Detected> {
@@ -92,10 +90,10 @@ async fn probe_evm(net: &NetClient, chain: u64, s: &RpcServer, tor: bool) -> App
     let found = r
         .as_str()
         .and_then(|h| u64::from_str_radix(h.trim_start_matches("0x"), 16).ok())
-        .ok_or_else(|| AppError::ServerUnreachable("eth_chainId invalide".into()))?;
+        .ok_or_else(|| AppError::ServerUnreachable("invalid eth_chainId".into()))?;
     if found != chain {
         return Err(AppError::ServerWrongNetwork(format!(
-            "chainId {found} au lieu de {chain}"
+            "chainId {found} instead of {chain}"
         )));
     }
     Ok(Detected {
@@ -114,16 +112,16 @@ async fn probe_solana(
         .iter()
         .find(|(c, _)| *c == cluster)
         .map(|(_, g)| *g)
-        .ok_or_else(|| AppError::ServerInvalid(format!("cluster inconnu « {cluster} »")))?;
+        .ok_or_else(|| AppError::ServerInvalid(format!("unknown cluster « {cluster} »")))?;
     let r = json_rpc(net, &s.url, tor, Family::Solana, "getGenesisHash").await?;
     let found = r.as_str().unwrap_or_default().to_owned();
     if found != expected {
         let what = SOLANA_GENESIS
             .iter()
             .find(|(_, g)| *g == found)
-            .map_or("cluster inconnu", |(c, _)| c);
+            .map_or("unknown cluster", |(c, _)| c);
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce RPC est sur {what}, pas sur {cluster}"
+            "this RPC is on {what}, not on {cluster}"
         )));
     }
     Ok(Detected {
@@ -200,7 +198,7 @@ async fn probe_changes(
         if old.evm.get(chain) != Some(s) {
             let id = chain
                 .parse()
-                .map_err(|_| AppError::ServerInvalid(format!("chainId invalide « {chain} »")))?;
+                .map_err(|_| AppError::ServerInvalid(format!("invalid chainId « {chain} »")))?;
             probe_evm(net, id, s, tor).await?;
         }
     }
@@ -241,7 +239,7 @@ pub(crate) fn check_cookie_paths(
     for p in cookie_paths(new) {
         if !known.contains(&p) && picked != Some(p) {
             return Err(AppError::ServerInvalid(
-                "fichier .cookie : choisis-le avec le bouton « Choisir le fichier .cookie »".into(),
+                ".cookie file: choose it with the « Choose the .cookie file » button".into(),
             ));
         }
     }
@@ -280,7 +278,7 @@ pub async fn btc_core_pick_cookie(
     };
     let path = file
         .into_path()
-        .map_err(|_| AppError::ServerInvalid("fichier .cookie : chemin local attendu".into()))?
+        .map_err(|_| AppError::ServerInvalid(".cookie file: local path expected".into()))?
         .to_string_lossy()
         .into_owned();
     crate::servers::read_cookie(&path)?;
@@ -599,12 +597,12 @@ pub async fn electrum_fetch_cert(
     let host = host.trim().to_owned();
     if host.is_empty() || url::Host::parse(&host).is_err() || port == 0 {
         return Err(AppError::ServerInvalid(
-            "hôte ou port Electrum invalide".into(),
+            "invalid Electrum host or port".into(),
         ));
     }
     if host.ends_with(".onion") && !tor {
         return Err(AppError::ServerInvalid(
-            "adresse .onion : exige Tor activé".into(),
+            ".onion address: requires Tor to be on".into(),
         ));
     }
     let endpoint = host_port_endpoint("Bitcoin (Electrum, lecture du certificat)", &host, port);
@@ -636,7 +634,7 @@ pub fn btc_backend_info(state: State<'_, AppState>) -> BtcBackendInfo {
             crate::servers::host_of(url).unwrap_or_default()
         }
         BtcServer::Electrum { host, port, .. } => format!("{host}:{port}"),
-        BtcServer::Cbf { .. } => "P2P (filtres compacts)".to_owned(),
+        BtcServer::Cbf { .. } => "P2P (compact filters)".to_owned(),
     };
     BtcBackendInfo {
         kind: server.kind_name(),
@@ -715,7 +713,7 @@ pub async fn btc_tx_hex(
         return r.and_then(|v| {
             v.as_str()
                 .map(str::to_owned)
-                .ok_or_else(|| AppError::Internal("cbf : réponse inattendue".into()))
+                .ok_or_else(|| AppError::Internal("cbf: unexpected response".into()))
         });
     }
     let s = state.settings();
@@ -753,7 +751,7 @@ fn core_settings(state: &AppState) -> AppResult<(String, crate::servers::CoreAut
     match s.servers.bitcoin_for(state.network) {
         BtcServer::Core { url, auth } => Ok((url, auth, s.tor.enabled)),
         _ => Err(AppError::InvalidInput(
-            "aucun nœud Bitcoin Core n'est configuré pour ce réseau".into(),
+            "no Bitcoin Core node is configured for this network".into(),
         )),
     }
 }
@@ -774,7 +772,7 @@ pub async fn btc_core_setup(
         RescanFrom::Keyword(k) if k == "now" => None,
         RescanFrom::Keyword(k) => {
             return Err(AppError::InvalidInput(format!(
-                "rescanFrom : « now » ou un horodatage UNIX attendu (reçu « {k} »)"
+                "rescanFrom: « now » or a UNIX timestamp expected (got « {k} »)"
             )))
         }
         RescanFrom::Timestamp(t) => Some(t),
@@ -825,7 +823,7 @@ pub async fn btc_core_status(state: State<'_, AppState>) -> AppResult<btc_backen
 #[cfg(not(feature = "cbf"))]
 fn cbf_disabled() -> AppError {
     AppError::FeatureDisabled(
-        "filtres compacts (BIP157/158) : disponible après revue (>= 2026-11-11)".into(),
+        "compact filters (BIP157/158): available after review (>= 2026-11-11)".into(),
     )
 }
 
@@ -845,7 +843,7 @@ mod cbf_glue {
         } = s.servers.bitcoin_for(state.network)
         else {
             return Err(AppError::InvalidInput(
-                "le serveur Bitcoin n'est pas en mode filtres compacts".into(),
+                "the Bitcoin server is not in compact-filters mode".into(),
             ));
         };
         if crate::cbf::is_running() {
@@ -896,7 +894,7 @@ mod cbf_glue {
         } = s.servers.bitcoin_for(state.network)
         else {
             return Err(AppError::InvalidInput(
-                "mode filtres compacts inactif".into(),
+                "compact-filters mode not active".into(),
             ));
         };
         Ok(crate::cbf::Params {
@@ -946,7 +944,7 @@ fn cbf_read(
             ("fees", _) => crate::cbf::fee_rates(&dir, net),
             ("tip", _) => crate::cbf::tip_height(&dir, net).map(|h| json!(h)),
             ("txhex", Some(t)) => crate::cbf::tx_hex(&dir, net, t).map(Value::String),
-            _ => Err(AppError::Internal("cbf : requête inconnue".into())),
+            _ => Err(AppError::Internal("cbf: unknown request".into())),
         };
         Some(r)
     }

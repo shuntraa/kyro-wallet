@@ -1169,7 +1169,7 @@ const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|si
 function decodeSolMessageArg(m: unknown): Uint8Array {
   try {
     const bytes = base64.decode(String(m ?? ''));
-    if (bytes.length === 0) throw new Error('vide');
+    if (bytes.length === 0) throw new Error('empty');
     return bytes;
   } catch {
     throw new IpcError('INVALID_INPUT', l10n('Message Solana invalide (base64 attendu).', 'Invalid Solana message (base64 expected).'));

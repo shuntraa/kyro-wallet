@@ -128,7 +128,7 @@ pub fn get_ext_public_key(account: u32) -> HwResult<Vec<u8>> {
 /// 32-byte public key ‖ 32-byte chain code.
 pub fn parse_ext_public_key(data: &[u8]) -> HwResult<[u8; 64]> {
     data.try_into()
-        .map_err(|_| HwError::bad("clé publique Cardano : 64 octets attendus"))
+        .map_err(|_| HwError::bad("Cardano public key: 64 bytes expected"))
 }
 
 /// Base address parameters: type, network id, payment path, "staking key path", stake path.
@@ -166,19 +166,19 @@ fn flag(b: bool) -> u8 {
 fn u16_be(n: usize, what: &str) -> HwResult<[u8; 2]> {
     u16::try_from(n)
         .map(u16::to_be_bytes)
-        .map_err(|_| HwError::unsupported(format!("{what} : trop grand pour l'app Cardano")))
+        .map_err(|_| HwError::unsupported(format!("{what}: too large for the Cardano app")))
 }
 
 fn u32_be(n: usize, what: &str) -> HwResult<[u8; 4]> {
     u32::try_from(n)
         .map(u32::to_be_bytes)
-        .map_err(|_| HwError::unsupported(format!("{what} : trop grand pour l'app Cardano")))
+        .map_err(|_| HwError::unsupported(format!("{what}: too large for the Cardano app")))
 }
 
 fn input_index(i: u64) -> HwResult<[u8; 4]> {
     u32::try_from(i)
         .map(u32::to_be_bytes)
-        .map_err(|_| HwError::unsupported("index d'entrée au-delà de 2³²"))
+        .map_err(|_| HwError::unsupported("input index beyond 2³²"))
 }
 
 fn options(plan: &CardanoHwPlan) -> [u8; 8] {
@@ -221,8 +221,8 @@ fn v7_init(plan: &CardanoHwPlan, net: Network) -> HwResult<Vec<u8>> {
     // donation: never in a Kyro payment.
     d.extend([NO; 7]);
     d.push(SIGNING_MODE_ORDINARY);
-    d.extend(u32_be(plan.inputs.len(), "entrées")?);
-    d.extend(u32_be(plan.outputs.len(), "sorties")?);
+    d.extend(u32_be(plan.inputs.len(), "inputs")?);
+    d.extend(u32_be(plan.outputs.len(), "outputs")?);
     // certificates, withdrawals, collateral inputs, required signers, reference inputs,
     // voting procedures.
     d.extend([0u8; 4 * 6]);
@@ -236,7 +236,7 @@ fn v7_output(o: &CardanoHwOutput, net: Network, account: u32) -> HwResult<Vec<Ve
     match &o.destination {
         CardanoHwDestination::Address(a) => {
             basic.push(DEST_THIRD_PARTY);
-            basic.extend(u32_be(a.len(), "adresse")?);
+            basic.extend(u32_be(a.len(), "address")?);
             basic.extend(a);
         }
         CardanoHwDestination::Own => {
@@ -254,7 +254,7 @@ fn v7_output(o: &CardanoHwOutput, net: Network, account: u32) -> HwResult<Vec<Ve
         g.extend(u32_be(tokens.len(), "tokens")?);
         out.push(sign(V7_OUTPUTS, V7_OUT_ASSET_GROUP, &g)?);
         for (name, qty) in tokens {
-            let mut t = u32_be(name.len(), "nom de token")?.to_vec();
+            let mut t = u32_be(name.len(), "token name")?.to_vec();
             t.extend(name);
             t.extend(qty.to_be_bytes());
             out.push(sign(V7_OUTPUTS, V7_OUT_TOKEN, &t)?);
@@ -301,7 +301,7 @@ fn v8_output(o: &CardanoHwOutput, net: Network, account: u32) -> HwResult<Vec<u8
     match &o.destination {
         CardanoHwDestination::Address(a) => {
             d.push(DEST_THIRD_PARTY);
-            d.extend(u16_be(a.len(), "adresse")?);
+            d.extend(u16_be(a.len(), "address")?);
             d.extend(a);
         }
         CardanoHwDestination::Own => {
@@ -320,7 +320,7 @@ fn v8_output(o: &CardanoHwOutput, net: Network, account: u32) -> HwResult<Vec<u8
         for (name, qty) in tokens {
             d.push(
                 u8::try_from(name.len())
-                    .map_err(|_| HwError::unsupported("nom de token trop long"))?,
+                    .map_err(|_| HwError::unsupported("token name too long"))?,
             );
             d.extend(name);
             d.extend(qty.to_be_bytes());
@@ -338,7 +338,7 @@ pub fn v8_raw_tx(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResult<V
     }
     for o in &plan.outputs {
         let b = v8_output(o, net, account)?;
-        raw.extend(u16_be(b.len(), "sortie")?);
+        raw.extend(u16_be(b.len(), "output")?);
         raw.extend(b);
     }
     raw.extend(plan.fee.to_be_bytes());
@@ -357,8 +357,8 @@ fn v8_init(plan: &CardanoHwPlan, net: Network, raw_len: usize) -> HwResult<Vec<u
     d.push(network_id(net));
     d.extend(protocol_magic(net).to_be_bytes());
     d.push(SIGNING_MODE_ORDINARY);
-    d.extend(u16_be(plan.inputs.len(), "entrées")?);
-    d.extend(u16_be(plan.outputs.len(), "sorties")?);
+    d.extend(u16_be(plan.inputs.len(), "inputs")?);
+    d.extend(u16_be(plan.outputs.len(), "outputs")?);
     d.push(flag(plan.ttl.is_some()));
     d.extend([0, 0, 0, 0]); // certificates, withdrawals
     d.push(flag(plan.aux_hash.is_some()));
@@ -414,11 +414,11 @@ pub fn sign_tx(
     let hash: [u8; 32] = last
         .as_slice()
         .try_into()
-        .map_err(|_| HwError::bad("hash du corps Cardano : 32 octets attendus"))?;
+        .map_err(|_| HwError::bad("Cardano body hash: 32 bytes expected"))?;
     let sig: [u8; 64] = call(&apdus.witness)?
         .as_slice()
         .try_into()
-        .map_err(|_| HwError::bad("signature Cardano : 64 octets attendus"))?;
+        .map_err(|_| HwError::bad("Cardano signature: 64 bytes expected"))?;
     Ok((hash, sig))
 }
 
@@ -428,15 +428,15 @@ pub fn sw_error(sw: u16) -> Option<HwError> {
         0x6E09 | 0x6985 => HwError::Rejected,
         0x6E11 => HwError::Locked,
         0x6E10 => HwError::unsupported(
-            "l'app Cardano refuse cette transaction (politique de sécurité de l'app) : mets-la à jour ou utilise le coffre Kyro",
+            "the Cardano app rejects this transaction (the app's security policy): update it or use the Kyro vault",
         ),
-        0x6E07 => HwError::bad("l'app Cardano juge les données invalides (6E07)"),
+        0x6E07 => HwError::bad("the Cardano app considers the data invalid (6E07)"),
         0x6E04 => HwError::bad(
-            "l'app Cardano était au milieu d'un autre échange : rouvre-la puis réessaie",
+            "the Cardano app was in the middle of another exchange: reopen it, then try again",
         ),
-        0x6E12 => HwError::unsupported("type d'adresse non pris en charge par l'app Cardano"),
+        0x6E12 => HwError::unsupported("address type not supported by the Cardano app"),
         sw if (0x6B00..=0x6BFF).contains(&sw) => HwError::bad(format!(
-            "l'app Cardano n'a pas pu lire la transaction ({sw:04X})"
+            "the Cardano app could not read the transaction ({sw:04X})"
         )),
         _ => return None,
     })

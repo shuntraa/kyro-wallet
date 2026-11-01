@@ -82,7 +82,7 @@ fn short(s: &str) -> String {
 /// server rejected as bad user input, e.g. a refused transaction), with the server's message.
 async fn gql(ctx: &SuiCtx<'_>, query: &str, variables: Value) -> AppResult<Value> {
     let u = url::Url::parse(&ctx.url)
-        .map_err(|_| AppError::ServerInvalid("URL GraphQL Sui invalide".into()))?;
+        .map_err(|_| AppError::ServerInvalid("invalid Sui GraphQL URL".into()))?;
     let body = json!({ "query": query, "variables": variables }).to_string();
     let (status, bytes) = ctx
         .net_client
@@ -90,7 +90,7 @@ async fn gql(ctx: &SuiCtx<'_>, query: &str, variables: Value) -> AppResult<Value
         .await?;
     let v: Value = serde_json::from_slice(&bytes).map_err(|_| {
         bad(format!(
-            "Sui : HTTP {status}, réponse non JSON ({})",
+            "Sui: HTTP {status}, non-JSON response ({})",
             short(&String::from_utf8_lossy(&bytes))
         ))
     })?;
@@ -148,10 +148,10 @@ fn check_chain(ctx: &SuiCtx<'_>, got: &Value) -> AppResult<()> {
         let name = match got {
             MAINNET_CHAIN_ID => "mainnet".to_owned(),
             TESTNET_CHAIN_ID => "testnet".to_owned(),
-            other => format!("un autre réseau ({})", short(other)),
+            other => format!("another network ({})", short(other)),
         };
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce serveur Sui est sur {name}, pas sur {}",
+            "this Sui server is on {name}, not on {}",
             crate::servers::utxo_network_key(ctx.network)
         )));
     }
@@ -168,10 +168,10 @@ pub async fn epoch(ctx: &SuiCtx<'_>) -> AppResult<SuiEpoch> {
     .await?;
     check_chain(ctx, &d["chainIdentifier"])?;
     Ok(SuiEpoch {
-        epoch: num(&d["epoch"]["epochId"]).ok_or_else(|| bad("Sui : époque absente"))?,
+        epoch: num(&d["epoch"]["epochId"]).ok_or_else(|| bad("Sui: epoch missing"))?,
         reference_gas_price: num(&d["epoch"]["referenceGasPrice"])
             .filter(|p| *p > 0)
-            .ok_or_else(|| bad("Sui : prix du gaz de référence absent"))?,
+            .ok_or_else(|| bad("Sui: reference gas price missing"))?,
     })
 }
 
@@ -261,24 +261,24 @@ async fn coins_of(
         for n in objs["nodes"].as_array().into_iter().flatten() {
             let c = &n["contents"];
             if c["type"]["repr"] != repr {
-                return Err(bad("Sui : objet d'un autre type dans la liste des pièces"));
+                return Err(bad("Sui: object of another type in the coin list"));
             }
             if n["owner"]["address"]["address"].as_str() != Some(a.as_str()) {
-                return Err(bad("Sui : pièce qui n'appartient pas à ce compte"));
+                return Err(bad("Sui: coin not owned by this account"));
             }
             let id = n["address"].as_str().unwrap_or("");
             if c["json"]["id"].as_str() != Some(id) {
-                return Err(bad("Sui : identifiant de pièce incohérent"));
+                return Err(bad("Sui: inconsistent coin ID"));
             }
             out.push(SuiCoin {
                 r: SuiObjectRef::parse(
                     id,
-                    num(&n["version"]).ok_or_else(|| bad("Sui : version de pièce absente"))?,
+                    num(&n["version"]).ok_or_else(|| bad("Sui: coin version missing"))?,
                     n["digest"].as_str().unwrap_or(""),
                 )
-                .map_err(|e| bad(format!("Sui : pièce invalide ({e})")))?,
+                .map_err(|e| bad(format!("Sui: invalid coin ({e})")))?,
                 balance: num(&c["json"]["balance"])
-                    .ok_or_else(|| bad("Sui : solde de pièce absent"))?,
+                    .ok_or_else(|| bad("Sui: coin balance missing"))?,
             });
         }
         if objs["pageInfo"]["hasNextPage"] != true {
@@ -432,7 +432,7 @@ pub async fn simulate(ctx: &SuiCtx<'_>, bcs_b64: &str, digest: &str) -> AppResul
     check_chain(ctx, &d["chainIdentifier"])?;
     let sim = parse_effects(&d["simulateTransaction"]["effects"])?;
     if sim.digest != digest {
-        return Err(bad("Sui : la simulation porte sur une autre transaction"));
+        return Err(bad("Sui: the simulation is about another transaction"));
     }
     Ok(sim)
 }
@@ -481,13 +481,13 @@ pub async fn execute(
     let e = parse_effects(&d["executeTransaction"]["effects"])?;
     if e.digest != digest {
         return Err(bad(format!(
-            "Sui : le serveur a répondu une empreinte inattendue ({})",
+            "Sui: the server answered an unexpected digest ({})",
             short(&e.digest)
         )));
     }
     if !e.success {
         return Err(AppError::InvalidInput(format!(
-            "transaction Sui {digest} exécutée mais échouée (frais de gaz prélevés) : {}",
+            "Sui transaction {digest} executed but failed (gas fees charged): {}",
             e.error.unwrap_or_default()
         )));
     }

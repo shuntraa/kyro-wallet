@@ -34,7 +34,7 @@ pub async fn hw_sui_build_tx(
                 .map(str::trim)
                 .and_then(|a| a.parse::<u64>().ok())
                 .filter(|a| *a > 0)
-                .ok_or_else(|| AppError::InvalidInput("montant en MIST invalide".into()))?,
+                .ok_or_else(|| AppError::InvalidInput("invalid amount in MIST".into()))?,
         )
     };
     build(&ctx(&state), &key.address, &to, amount).await

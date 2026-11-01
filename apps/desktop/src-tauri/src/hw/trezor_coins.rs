@@ -44,7 +44,7 @@ pub fn coin_name(coin: UtxoCoin, net: Network) -> HwResult<&'static str> {
         (UtxoCoin::Dash, Network::Testnet) => "Dash Testnet",
         (UtxoCoin::Dogecoin, Network::Testnet) => {
             return Err(HwError::unsupported(
-                "Dogecoin testnet n'existe pas sur Trezor",
+                "Dogecoin testnet is not available on Trezor",
             ))
         }
     })
@@ -66,7 +66,7 @@ fn output_script_type(coin: UtxoCoin) -> protos::OutputScriptType {
 
 fn encode<M: Message>(m: &M) -> HwResult<Vec<u8>> {
     m.write_to_bytes()
-        .map_err(|e| HwError::bad(format!("encodage protobuf : {e}")))
+        .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))
 }
 
 fn display_bytes(txid: &Txid) -> Vec<u8> {
@@ -96,19 +96,19 @@ pub fn account_xpub(pk: &protos::PublicKey, net: Network) -> HwResult<(String, S
     let node = pk
         .node
         .as_ref()
-        .ok_or_else(|| HwError::bad("nœud absent"))?;
+        .ok_or_else(|| HwError::bad("missing node"))?;
     let key = bitcoin::secp256k1::PublicKey::from_slice(node.public_key())
-        .map_err(|_| HwError::bad("clé publique invalide"))?;
+        .map_err(|_| HwError::bad("invalid public key"))?;
     let chain_code: [u8; 32] = node
         .chain_code()
         .try_into()
-        .map_err(|_| HwError::bad("code de chaîne invalide"))?;
+        .map_err(|_| HwError::bad("invalid chain code"))?;
     let xpub = bitcoin::bip32::Xpub {
         network: match net {
             Network::Mainnet => bitcoin::NetworkKind::Main,
             Network::Testnet => bitcoin::NetworkKind::Test,
         },
-        depth: u8::try_from(node.depth()).map_err(|_| HwError::bad("profondeur invalide"))?,
+        depth: u8::try_from(node.depth()).map_err(|_| HwError::bad("invalid depth"))?,
         parent_fingerprint: node.fingerprint().to_be_bytes().into(),
         child_number: node.child_num().into(),
         public_key: key,
@@ -116,7 +116,7 @@ pub fn account_xpub(pk: &protos::PublicKey, net: Network) -> HwResult<(String, S
     };
     let fp = pk
         .root_fingerprint
-        .ok_or_else(|| HwError::too_old("empreinte maître non fournie", "2.4.3"))?;
+        .ok_or_else(|| HwError::too_old("master fingerprint not provided", "2.4.3"))?;
     Ok((xpub.to_string(), format!("{fp:08x}")))
 }
 
@@ -148,14 +148,14 @@ impl Utxo<'_> {
                 continue;
             }
             let tx = input.non_witness_utxo.as_ref().ok_or_else(|| {
-                HwError::unsupported("la transaction précédente de chaque entrée est nécessaire")
+                HwError::unsupported("the previous transaction of every input is required")
             })?;
             if tx.compute_txid() != txin.previous_output.txid {
-                return Err(HwError::bad("transaction précédente incohérente"));
+                return Err(HwError::bad("inconsistent previous transaction"));
             }
             return Ok(tx);
         }
-        Err(HwError::bad("l'appareil demande une transaction inconnue"))
+        Err(HwError::bad("the device asks for an unknown transaction"))
     }
 
     fn ack_input(&self, i: usize) -> HwResult<Vec<u8>> {
@@ -164,13 +164,13 @@ impl Utxo<'_> {
             .inputs
             .iter()
             .find(|p| p.index == i)
-            .ok_or_else(|| HwError::unsupported("entrée qui n'appartient pas à ce compte"))?;
+            .ok_or_else(|| HwError::unsupported("input that does not belong to this account"))?;
         let txin = self
             .psbt
             .unsigned_tx
             .input
             .get(i)
-            .ok_or_else(|| HwError::bad("index d'entrée invalide"))?;
+            .ok_or_else(|| HwError::bad("invalid input index"))?;
         let mut input = protos::TxInput::new();
         input.address_n = ours.path.clone();
         input.set_prev_hash(display_bytes(&txin.previous_output.txid));
@@ -191,7 +191,7 @@ impl Utxo<'_> {
             .unsigned_tx
             .output
             .get(j)
-            .ok_or_else(|| HwError::bad("index de sortie invalide"))?;
+            .ok_or_else(|| HwError::bad("invalid output index"))?;
         let mut o = protos::TxOutput::new();
         o.set_amount(out.value.to_sat());
         if let Some(c) = self.plan.change.iter().find(|c| c.index == j) {
@@ -199,14 +199,14 @@ impl Utxo<'_> {
             o.set_script_type(output_script_type(self.coin));
         } else if out.script_pubkey.is_op_return() {
             if out.value.to_sat() != 0 {
-                return Err(HwError::unsupported("OP_RETURN avec un montant non nul"));
+                return Err(HwError::unsupported("OP_RETURN with a non-zero amount"));
             }
             let mut it = out.script_pubkey.instructions();
             it.next();
             let data = match (it.next(), it.next()) {
                 (None, _) => Vec::new(),
                 (Some(Ok(Instruction::PushBytes(b))), None) => b.as_bytes().to_vec(),
-                _ => return Err(HwError::unsupported("sortie OP_RETURN non standard")),
+                _ => return Err(HwError::unsupported("non-standard OP_RETURN output")),
             };
             o.set_script_type(protos::OutputScriptType::PAYTOOPRETURN);
             o.set_op_return_data(data);
@@ -216,7 +216,7 @@ impl Utxo<'_> {
                 self.net,
                 self.coin,
             )
-            .ok_or_else(|| HwError::unsupported("sortie vers un script non standard"))?;
+            .ok_or_else(|| HwError::unsupported("output to a non-standard script"))?;
             o.set_address(addr);
             o.set_script_type(protos::OutputScriptType::PAYTOADDRESS);
         }
@@ -244,7 +244,7 @@ fn ack_prev_input(tx: &Transaction, i: usize) -> HwResult<Vec<u8>> {
     let txin = tx
         .input
         .get(i)
-        .ok_or_else(|| HwError::bad("index d'entrée précédente invalide"))?;
+        .ok_or_else(|| HwError::bad("invalid previous input index"))?;
     let mut p = protos::PrevInput::new();
     p.set_prev_hash(display_bytes(&txin.previous_output.txid));
     p.set_prev_index(txin.previous_output.vout);
@@ -261,7 +261,7 @@ fn ack_prev_output(tx: &Transaction, j: usize) -> HwResult<Vec<u8>> {
     let out = tx
         .output
         .get(j)
-        .ok_or_else(|| HwError::bad("index de sortie précédente invalide"))?;
+        .ok_or_else(|| HwError::bad("invalid previous output index"))?;
     let mut p = protos::PrevOutput::new();
     p.set_amount(out.value.to_sat());
     p.set_script_pubkey(out.script_pubkey.to_bytes());
@@ -276,7 +276,7 @@ fn idx(details: &protos::tx_request::TxRequestDetailsType) -> HwResult<usize> {
     details
         .request_index
         .map(|i| i as usize)
-        .ok_or_else(|| HwError::bad("TxRequest sans index"))
+        .ok_or_else(|| HwError::bad("TxRequest without an index"))
 }
 
 /// The whole `SignTx` flow; returns the device's raw signatures (unverified).
@@ -291,7 +291,7 @@ pub fn sign_utxo(
     let tx = &psbt.unsigned_tx;
     if plan.inputs.len() != tx.input.len() {
         return Err(HwError::unsupported(
-            "transaction avec des entrées qui n'appartiennent pas à ce compte",
+            "transaction with inputs that do not belong to this account",
         ));
     }
     let u = Utxo {
@@ -330,13 +330,13 @@ pub fn sign_utxo(
             (RequestType::TXOUTPUT, Some(h)) => ack_prev_output(u.prev_tx(&h)?, idx(&details)?)?,
             (other, _) => {
                 return Err(HwError::unsupported(format!(
-                    "requête Trezor non prise en charge : {other:?}"
+                    "unsupported Trezor request: {other:?}"
                 )))
             }
         };
         resp = io.call(ctl, MessageType::MessageType_TxAck, ack)?;
     }
-    Err(HwError::bad("trop d'échanges avec l'appareil"))
+    Err(HwError::bad("too many exchanges with the device"))
 }
 
 // ---------------------------------------------------------------- Stellar
@@ -357,13 +357,13 @@ pub fn stellar_messages(
     m.set_source_account(wallet_core::stellar_address_from_key(&tx.source));
     m.set_fee(tx.fee);
     m.set_sequence_number(
-        u64::try_from(tx.sequence).map_err(|_| HwError::bad("séquence négative"))?,
+        u64::try_from(tx.sequence).map_err(|_| HwError::bad("negative sequence"))?,
     );
     let (start, end) = tx
         .time_bounds
-        .ok_or_else(|| HwError::unsupported("transaction Stellar sans limite de temps"))?;
+        .ok_or_else(|| HwError::unsupported("Stellar transaction without a time bound"))?;
     let u32_of = |v: u64| {
-        u32::try_from(v).map_err(|_| HwError::unsupported("limite de temps hors plage Trezor"))
+        u32::try_from(v).map_err(|_| HwError::unsupported("time bound outside the Trezor range"))
     };
     m.set_timebounds_start(u32_of(start)?);
     m.set_timebounds_end(u32_of(end)?);
@@ -374,7 +374,7 @@ pub fn stellar_messages(
             m.set_memo_type(T::TEXT);
             m.set_memo_text(
                 String::from_utf8(t.clone())
-                    .map_err(|_| HwError::unsupported("mémo texte non UTF-8"))?,
+                    .map_err(|_| HwError::unsupported("non-UTF-8 text memo"))?,
             );
         }
         StellarMemo::Id(id) => {
@@ -391,11 +391,11 @@ pub fn stellar_messages(
         }
     }
     let [op] = tx.operations.as_slice() else {
-        return Err(HwError::unsupported("une seule opération Stellar attendue"));
+        return Err(HwError::unsupported("a single Stellar operation expected"));
     };
     if op.source.is_some() {
         return Err(HwError::unsupported(
-            "opération avec son propre compte source",
+            "operation with its own source account",
         ));
     }
     m.set_num_operations(1);
@@ -424,7 +424,7 @@ pub fn stellar_messages(
         }
         _ => {
             return Err(HwError::unsupported(
-                "Kyro ne signe que des envois de XLM sur Trezor",
+                "Kyro only signs XLM payments on Trezor",
             ))
         }
     };

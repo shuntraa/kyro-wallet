@@ -98,7 +98,7 @@ async fn send(ctx: &TonCtx<'_>, req: ServerRequest) -> AppResult<(u16, Vec<u8>)>
         }
         if status == 429 {
             return Err(bad(
-                "TON Center : trop de requêtes (limite publique d'environ 1 par seconde, partagée par IP — via Tor, avec d'autres utilisateurs du même relais). Réessaie dans un moment.",
+                "TON Center: too many requests (public limit of about 1 per second, shared per IP — over Tor, with other users of the same relay). Try again in a moment.",
             ));
         }
         return Ok((status, bytes));
@@ -113,7 +113,7 @@ fn request(
 ) -> AppResult<ServerRequest> {
     let mut u = url::Url::parse(&base_url(ctx.network))
         .and_then(|b| b.join(path))
-        .map_err(|_| AppError::Internal("URL TON Center invalide".into()))?;
+        .map_err(|_| AppError::Internal("invalid TON Center URL".into()))?;
     if !query.is_empty() {
         u.query_pairs_mut().extend_pairs(query);
     }
@@ -131,12 +131,11 @@ async fn get(ctx: &TonCtx<'_>, path: &str, query: &[(&str, &str)]) -> AppResult<
     let (status, bytes) = send(ctx, request(ctx, path, query, None)?).await?;
     if status != 200 {
         return Err(bad(format!(
-            "TON Center : HTTP {status} sur {path} ({})",
+            "TON Center: HTTP {status} on {path} ({})",
             error_text(&bytes)
         )));
     }
-    serde_json::from_slice(&bytes)
-        .map_err(|_| bad(format!("TON Center : JSON invalide sur {path}")))
+    serde_json::from_slice(&bytes).map_err(|_| bad(format!("TON Center: invalid JSON on {path}")))
 }
 
 // ---------------------------------------------------------------- accounts
@@ -186,12 +185,12 @@ pub fn parse_wallet_info(v: &Value, addr: &TonAddress, net: Network) -> AppResul
         "nonexist" | "nonexistent" => TonStatus::Nonexist,
         other => {
             return Err(bad(format!(
-                "TON Center : état de compte inconnu « {} »",
+                "TON Center: unknown account state \"{}\"",
                 crate::dialog_text::sanitize(other, 40)
             )))
         }
     };
-    let balance = u64_of(&v["balance"]).ok_or_else(|| bad("TON Center : solde absent"))?;
+    let balance = u64_of(&v["balance"]).ok_or_else(|| bad("TON Center: balance missing"))?;
     let seqno = match status {
         TonStatus::Active => v["seqno"].as_u64().and_then(|s| u32::try_from(s).ok()),
         _ => None,
@@ -248,12 +247,12 @@ pub async fn emulate(
     let (status, bytes) = send(ctx, request(ctx, "estimateFee", &[], Some(body))?).await?;
     if status != 200 {
         return Err(bad(format!(
-            "TON Center : estimation des frais impossible ({})",
+            "TON Center: fee estimation failed ({})",
             error_text(&bytes)
         )));
     }
     let v: Value =
-        serde_json::from_slice(&bytes).map_err(|_| bad("TON Center : JSON invalide (frais)"))?;
+        serde_json::from_slice(&bytes).map_err(|_| bad("TON Center: invalid JSON (fees)"))?;
     parse_fee(&v)
 }
 
@@ -298,12 +297,12 @@ pub async fn submit(
     .await?;
     if status != 200 {
         return Err(AppError::InvalidInput(format!(
-            "transfert TON refusé par le nœud : {}",
+            "TON transfer refused by the node: {}",
             error_text(&bytes)
         )));
     }
     let v: Value =
-        serde_json::from_slice(&bytes).map_err(|_| bad("TON Center : JSON invalide (envoi)"))?;
+        serde_json::from_slice(&bytes).map_err(|_| bad("TON Center: invalid JSON (send)"))?;
     check_submit_reply(&v, hash, normalized)
 }
 
@@ -312,7 +311,7 @@ pub fn check_submit_reply(v: &Value, hash: &str, normalized: &str) -> AppResult<
     let got_norm = v["message_hash_norm"].as_str().and_then(b64_to_hex);
     if got.as_deref() != Some(hash) || got_norm.as_deref().is_some_and(|n| n != normalized) {
         return Err(bad(format!(
-            "TON Center a répondu un hash inattendu ({})",
+            "TON Center answered an unexpected hash ({})",
             crate::dialog_text::sanitize(&v.to_string(), 120)
         )));
     }
@@ -503,33 +502,34 @@ pub struct TransferCheck<'a> {
 pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     let balance: u64 = c.ours.balance.parse().unwrap_or(0);
     match c.ours.status {
-        TonStatus::Frozen => return Err(AppError::InvalidInput(
-            "ton portefeuille TON est gelé (frais de stockage impayés) : il ne peut rien envoyer"
-                .into(),
-        )),
+        TonStatus::Frozen => {
+            return Err(AppError::InvalidInput(
+                "your TON wallet is frozen (unpaid storage fees): it cannot send anything".into(),
+            ))
+        }
         TonStatus::Nonexist => {
             return Err(AppError::InvalidInput(
-                "ton portefeuille TON n'a encore rien reçu : il ne peut rien envoyer".into(),
+                "your TON wallet has not received anything yet: it cannot send anything".into(),
             ))
         }
         TonStatus::Uninit if balance == 0 => {
             return Err(AppError::InvalidInput(
-                "ton portefeuille TON n'a encore rien reçu : il ne peut rien envoyer".into(),
+                "your TON wallet has not received anything yet: it cannot send anything".into(),
             ))
         }
         TonStatus::Active if c.ours.seqno.is_none() => {
-            return Err(bad("TON Center : seqno du portefeuille absent"));
+            return Err(bad("TON Center: wallet seqno missing"));
         }
         _ => {}
     }
     let need = c.amount.unwrap_or(0).saturating_add(c.fee);
     if need >= balance {
         return Err(AppError::InvalidInput(format!(
-            "solde GRAM insuffisant : {} GRAM, il en faut plus de {} (montant + frais estimés{})",
+            "insufficient GRAM balance: {} GRAM, more than {} needed (amount + estimated fees{})",
             crate::commands::format_units(&balance.to_string(), 9),
             crate::commands::format_units(&need.to_string(), 9),
             if c.ours.status == TonStatus::Uninit {
-                ", dont le déploiement du portefeuille"
+                ", including the wallet deployment"
             } else {
                 ""
             }
@@ -911,7 +911,7 @@ mod tests {
         let active = acc(TonStatus::Active, 1_000_000_000, Some(3));
         assert!(ok(&active, Some(900_000_000)).is_ok());
         assert!(
-            matches!(ok(&active, Some(995_000_000)), Err(AppError::InvalidInput(m)) if m.contains("insuffisant"))
+            matches!(ok(&active, Some(995_000_000)), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
         assert!(ok(&active, None).is_ok());
         assert!(ok(&acc(TonStatus::Active, 4_000_000, Some(3)), None).is_err());
@@ -919,7 +919,7 @@ mod tests {
         let uninit = acc(TonStatus::Uninit, 1_000_000_000, None);
         assert!(ok(&uninit, Some(500_000_000)).is_ok());
         assert!(
-            matches!(ok(&uninit, Some(999_000_000)), Err(AppError::InvalidInput(m)) if m.contains("déploiement"))
+            matches!(ok(&uninit, Some(999_000_000)), Err(AppError::InvalidInput(m)) if m.contains("deployment"))
         );
         assert!(ok(&acc(TonStatus::Uninit, 0, None), Some(1)).is_err());
         assert!(ok(&acc(TonStatus::Frozen, 1_000_000_000, None), Some(1)).is_err());

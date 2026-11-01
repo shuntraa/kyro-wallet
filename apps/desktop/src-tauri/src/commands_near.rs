@@ -379,7 +379,7 @@ fn known_token(c: &NearCtx<'_>, contract: &str) -> AppResult<&'static wallet_cor
     match wallet_core::near_known_token(contract.trim()) {
         Some((k, tn)) if tn == (c.network == Network::Testnet) => Ok(k),
         _ => Err(AppError::InvalidInput(
-            "jeton NEAR inconnu de Kyro sur ce réseau".into(),
+            "NEAR token unknown to Kyro on this network".into(),
         )),
     }
 }
@@ -401,7 +401,7 @@ async fn token_context(
     let receiver = near_backend::account(c, to, fees.storage_per_byte).await?;
     if !receiver.exists && kind != NearAccountKind::Implicit {
         return Err(AppError::InvalidInput(format!(
-            "le compte « {to} » n'existe pas : les jetons seraient bloqués"
+            "the account \"{to}\" does not exist: the tokens would be stuck"
         )));
     }
     let balance = near_backend::ft_balance(c, k.contract, me).await?;
@@ -440,7 +440,7 @@ fn check_token(
     let amount: u128 = k.amount.parse().unwrap_or(u128::MAX);
     if amount > have {
         return Err(AppError::InvalidInput(format!(
-            "solde {} insuffisant : {} {}",
+            "insufficient {} balance: {} {}",
             k.symbol,
             crate::commands::format_units(&have.to_string(), usize::from(k.decimals)),
             k.symbol
@@ -448,7 +448,7 @@ fn check_token(
     }
     if !c.account.exists {
         return Err(AppError::InvalidInput(
-            "ton compte NEAR n'existe pas encore : il est créé par le premier NEAR reçu".into(),
+            "your NEAR account does not exist yet: it is created by the first NEAR received".into(),
         ));
     }
     let spendable: u128 = c.account.spendable.parse().unwrap_or(0);
@@ -459,7 +459,7 @@ fn check_token(
         .saturating_add(c.fee_bound.parse().unwrap_or(u128::MAX));
     if need > spendable {
         return Err(AppError::InvalidInput(format!(
-            "pas assez de NEAR pour les frais : {} NEAR disponibles, il en faut {} (gas des appels au contrat, remboursé en grande partie, + dépôt de stockage éventuel)",
+            "not enough NEAR for the fees: {} NEAR available, {} needed (gas of the contract calls, mostly refunded, + possible storage deposit)",
             crate::commands::format_units(&spendable.to_string(), 24),
             crate::commands::format_units(&need.to_string(), 24)
         )));
@@ -481,14 +481,14 @@ pub(crate) async fn build_token(
     let to = to.trim();
     wallet_core::near_account_kind(to)?;
     if to == me {
-        return Err(AppError::InvalidInput("transfert à soi-même".into()));
+        return Err(AppError::InvalidInput("transfer to yourself".into()));
     }
     let a = amount.trim();
     let units: u128 = (!a.is_empty() && a.len() <= 39 && a.bytes().all(|b| b.is_ascii_digit()))
         .then(|| a.parse().ok())
         .flatten()
         .filter(|v: &u128| *v > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant de jeton invalide".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("invalid token amount".into()))?;
     let registered = near_backend::ft_registered(c, k.contract, to).await?;
     let storage_deposit = if registered {
         None
@@ -496,7 +496,7 @@ pub(crate) async fn build_token(
         let min = near_backend::ft_storage_min(c, k.contract).await?;
         if min == 0 || min > wallet_core::NEAR_MAX_STORAGE_DEPOSIT {
             return Err(AppError::ServerUnreachable(
-                "NEAR : dépôt de stockage du jeton invraisemblable".into(),
+                "NEAR: implausible token storage deposit".into(),
             ));
         }
         Some(min)
@@ -509,7 +509,7 @@ pub(crate) async fn build_token(
         public_key: *pubkey,
         nonce: key_nonce
             .checked_add(1)
-            .ok_or_else(|| AppError::Internal("nonce NEAR au maximum".into()))?,
+            .ok_or_else(|| AppError::Internal("NEAR nonce at its maximum".into()))?,
         receiver_id: k.contract.to_owned(),
         block_hash,
         deposit: 0,
@@ -522,7 +522,7 @@ pub(crate) async fn build_token(
     let hex_tx = hex::encode(tx.encode());
     let summary = wallet_core::near_decode_tx(&hex_tx, me, pubkey)?;
     let Some(ts) = &summary.token else {
-        return Err(AppError::Internal("transfert de jeton non reconnu".into()));
+        return Err(AppError::Internal("unrecognized token transfer".into()));
     };
     check_token(&summary, ts, &context)?;
     Ok(NearBuilt {
@@ -553,7 +553,7 @@ fn check(s: &NearTxSummary, fees: &NearFeeParams, c: &NearContext) -> AppResult<
         deposit: s
             .deposit
             .parse()
-            .map_err(|_| AppError::Internal("montant NEAR illisible".into()))?,
+            .map_err(|_| AppError::Internal("unreadable NEAR amount".into()))?,
         fees,
     })
 }
@@ -562,14 +562,12 @@ fn check(s: &NearTxSummary, fees: &NearFeeParams, c: &NearContext) -> AppResult<
 fn parse_yocto(amount: &str) -> AppResult<u128> {
     let a = amount.trim();
     if a.is_empty() || a.len() > 40 || !a.bytes().all(|b| b.is_ascii_digit()) {
-        return Err(AppError::InvalidInput(
-            "montant en yoctoNEAR invalide".into(),
-        ));
+        return Err(AppError::InvalidInput("invalid amount in yoctoNEAR".into()));
     }
     a.parse::<u128>()
         .ok()
         .filter(|d| *d > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant en yoctoNEAR invalide".into()))
+        .ok_or_else(|| AppError::InvalidInput("invalid amount in yoctoNEAR".into()))
 }
 
 /// Builds an unsigned transfer of `amount` yoctoNEAR from live data.
@@ -590,7 +588,7 @@ pub(crate) async fn build(
         public_key: *pubkey,
         nonce: key_nonce
             .checked_add(1)
-            .ok_or_else(|| AppError::Internal("nonce NEAR au maximum".into()))?,
+            .ok_or_else(|| AppError::Internal("NEAR nonce at its maximum".into()))?,
         receiver_id: to.to_owned(),
         block_hash,
         deposit,
@@ -641,7 +639,7 @@ pub(crate) async fn prepare_sign(
             let k = known_token(c, &t.contract)?;
             if t.testnet != (c.network == Network::Testnet) {
                 return Err(AppError::InvalidInput(
-                    "contrat de jeton d'un autre réseau".into(),
+                    "token contract from another network".into(),
                 ));
             }
             let calls = if t.storage_deposit.is_some() { 2 } else { 1 };
@@ -652,7 +650,7 @@ pub(crate) async fn prepare_sign(
                 .is_some_and(|x| x.recipient_registered);
             if t.storage_deposit.is_none() && !registered {
                 return Err(AppError::InvalidInput(
-                    "le destinataire n'est plus inscrit auprès du jeton : reconstruis le transfert"
+                    "the recipient is no longer registered with the token: rebuild the transfer"
                         .into(),
                 ));
             }
@@ -663,15 +661,14 @@ pub(crate) async fn prepare_sign(
     let nonce: u64 = summary.nonce.parse().unwrap_or(0);
     if nonce <= key_nonce {
         return Err(AppError::InvalidInput(
-            "nonce périmé (une autre transaction est passée entre-temps) : reconstruis le transfert"
+            "stale nonce (another transaction went through in the meantime): rebuild the transfer"
                 .into(),
         ));
     }
     let built_at = near_backend::block_height(c, &summary.block_hash).await?;
     if height.saturating_sub(built_at) > MAX_BLOCK_AGE {
         return Err(AppError::InvalidInput(
-            "transfert NEAR trop ancien (bloc de référence de plus d'une heure) : reconstruis-le"
-                .into(),
+            "NEAR transfer too old (reference block more than an hour old): rebuild it".into(),
         ));
     }
     match &summary.token {
@@ -731,7 +728,7 @@ pub async fn near_sign_tx(
     let (signed, hash, again) = blocking(move || Ok(wallet_core::near_sign(&seed, a, &t)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -753,11 +750,11 @@ pub(crate) async fn broadcast_checked(
     let (tx, hash) = wallet_core::near_verify_signed(signed_hex)?;
     if tx.signer_id != me {
         return Err(AppError::InvalidInput(
-            "cette transaction n'est pas signée par ton compte".into(),
+            "this transaction is not signed by your account".into(),
         ));
     }
     let raw = hex::decode(signed_hex.trim())
-        .map_err(|_| AppError::InvalidInput("transaction : hexadécimal attendu".into()))?;
+        .map_err(|_| AppError::InvalidInput("transaction: hexadecimal expected".into()))?;
     near_backend::send(c, &raw, &hash).await
 }
 

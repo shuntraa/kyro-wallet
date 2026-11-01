@@ -365,7 +365,7 @@ fn unknown_assets_are_refused() {
     assert!(dot_decode_payload(&rt, &p, &from)
         .unwrap_err()
         .to_string()
-        .contains("inconnu"));
+        .contains("unknown"));
     assert!(dot_transfer_payload(&rt, &t, &from).is_err());
 }
 

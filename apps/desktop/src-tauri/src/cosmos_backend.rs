@@ -57,7 +57,7 @@ fn snippet(bytes: &[u8]) -> String {
 
 fn endpoint(ctx: &CosmosCtx<'_>, path: &str) -> AppResult<url::Url> {
     url::Url::parse(&format!("{}{path}", default_url(ctx.network)))
-        .map_err(|_| AppError::Internal("URL Cosmos invalide".into()))
+        .map_err(|_| AppError::Internal("invalid Cosmos URL".into()))
 }
 
 /// `(status, JSON)`; a body that is not JSON is an error whatever the status.
@@ -70,7 +70,7 @@ async fn call(ctx: &CosmosCtx<'_>, u: url::Url, body: Option<Value>) -> AppResul
     let (status, bytes) = ctx.net_client.server_request(req, ctx.tor).await?;
     let v = serde_json::from_slice(&bytes).map_err(|_| {
         bad(format!(
-            "Cosmos : réponse non JSON sur {path} (HTTP {status} : {})",
+            "Cosmos: non-JSON response on {path} (HTTP {status}: {})",
             snippet(&bytes)
         ))
     })?;
@@ -81,7 +81,7 @@ async fn get_ok(ctx: &CosmosCtx<'_>, path: &str) -> AppResult<Value> {
     let (status, v) = call(ctx, endpoint(ctx, path)?, None).await?;
     if status != 200 {
         return Err(bad(format!(
-            "Cosmos : HTTP {status} sur {path} ({})",
+            "Cosmos: HTTP {status} on {path} ({})",
             crate::dialog_text::sanitize(v["message"].as_str().unwrap_or(""), 200)
         )));
     }
@@ -137,13 +137,13 @@ pub async fn chain_info(ctx: &CosmosCtx<'_>) -> AppResult<CosmosChainInfo> {
     let want = wallet_core::cosmos_chain_id(ctx.network);
     if chain_id != want {
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce serveur Cosmos est sur « {} », pas sur « {want} »",
+            "this Cosmos server is on \"{}\", not on \"{want}\"",
             crate::dialog_text::sanitize(&chain_id, 64)
         )));
     }
     Ok(CosmosChainInfo {
         chain_id,
-        height: u64_at(&h["height"]).ok_or_else(|| bad("Cosmos : hauteur absente"))?,
+        height: u64_at(&h["height"]).ok_or_else(|| bad("Cosmos: height missing"))?,
     })
 }
 
@@ -176,7 +176,7 @@ fn base_account(a: &Value) -> AppResult<&Value> {
             Ok(&a["base_vesting_account"]["base_account"])
         }
         other => Err(AppError::InvalidInput(format!(
-            "type de compte Cosmos non pris en charge : {}",
+            "unsupported Cosmos account type: {}",
             crate::dialog_text::sanitize(other, 80)
         ))),
     }
@@ -192,7 +192,7 @@ async fn uatom(ctx: &CosmosCtx<'_>, kind: &str, address: &str) -> AppResult<u128
     if b.is_null() {
         return Ok(0);
     }
-    u128_at(&b["amount"]).ok_or_else(|| bad("Cosmos : solde illisible"))
+    u128_at(&b["amount"]).ok_or_else(|| bad("Cosmos: unreadable balance"))
 }
 
 pub async fn account(ctx: &CosmosCtx<'_>, address: &str) -> AppResult<CosmosAccountInfo> {
@@ -216,18 +216,18 @@ pub async fn account(ctx: &CosmosCtx<'_>, address: &str) -> AppResult<CosmosAcco
     }
     if status != 200 {
         return Err(bad(format!(
-            "Cosmos : HTTP {status} sur auth/accounts ({})",
+            "Cosmos: HTTP {status} on auth/accounts ({})",
             crate::dialog_text::sanitize(v["message"].as_str().unwrap_or(""), 200)
         )));
     }
     let b = base_account(&v["account"])?;
     if b["address"].as_str() != Some(a.as_str()) {
-        return Err(bad("Cosmos : le serveur a répondu pour une autre adresse"));
+        return Err(bad("Cosmos: the server answered for another address"));
     }
     Ok(CosmosAccountInfo {
         exists: true,
         account_number: u64_at(&b["account_number"])
-            .ok_or_else(|| bad("Cosmos : account_number absent"))?,
+            .ok_or_else(|| bad("Cosmos: account_number missing"))?,
         sequence: u64_at(&b["sequence"]).unwrap_or(0),
         pub_key: b["pub_key"]["key"].as_str().map(str::to_owned),
         address: a,
@@ -247,9 +247,9 @@ pub async fn gas_price(ctx: &CosmosCtx<'_>) -> AppResult<u128> {
         .as_str()
         .and_then(parse_dec)
         .filter(|_| v["price"]["denom"] == "uatom")
-        .ok_or_else(|| bad("Cosmos : prix du gas illisible"))?;
+        .ok_or_else(|| bad("Cosmos: unreadable gas price"))?;
     if p == 0 || p > MAX_GAS_PRICE {
-        return Err(bad("Cosmos : prix du gas anormal annoncé par le serveur"));
+        return Err(bad("Cosmos: abnormal gas price announced by the server"));
     }
     Ok(p)
 }
@@ -258,7 +258,7 @@ pub async fn gas_price(ctx: &CosmosCtx<'_>) -> AppResult<u128> {
 pub fn fee_for(gas_used: u64, price: u128) -> AppResult<(u64, u128)> {
     if gas_used == 0 || gas_used > MAX_GAS {
         return Err(bad(format!(
-            "Cosmos : simulation à {gas_used} gas, hors des bornes d'un envoi (≤ {MAX_GAS})"
+            "Cosmos: simulation at {gas_used} gas, outside the bounds of a send (≤ {MAX_GAS})"
         )));
     }
     let gas_limit = gas_used.saturating_mul(GAS_NUM).div_ceil(GAS_DEN);
@@ -280,11 +280,11 @@ pub async fn simulate(ctx: &CosmosCtx<'_>, tx: &[u8]) -> AppResult<u64> {
     if status != 200 {
         // Typically "insufficient funds" or "account sequence mismatch": the user's problem.
         return Err(AppError::InvalidInput(format!(
-            "simulation refusée par le réseau Cosmos : {}",
+            "simulation rejected by the Cosmos network: {}",
             crate::dialog_text::sanitize(v["message"].as_str().unwrap_or(""), 300)
         )));
     }
-    u64_at(&v["gas_info"]["gas_used"]).ok_or_else(|| bad("Cosmos : gas_used absent"))
+    u64_at(&v["gas_info"]["gas_used"]).ok_or_else(|| bad("Cosmos: gas_used missing"))
 }
 
 /// Broadcasts a signed `TxRaw` (sync mode: CheckTx passed = in the mempool). The server's hash
@@ -299,14 +299,14 @@ pub async fn broadcast(ctx: &CosmosCtx<'_>, tx_b64: &str, hash: &str) -> AppResu
     let r = &v["tx_response"];
     if status != 200 || r.is_null() {
         return Err(bad(format!(
-            "Cosmos : diffusion HTTP {status} ({})",
+            "Cosmos: broadcast HTTP {status} ({})",
             crate::dialog_text::sanitize(v["message"].as_str().unwrap_or(""), 200)
         )));
     }
     let got = r["txhash"].as_str().unwrap_or("");
     if !got.eq_ignore_ascii_case(hash) {
         return Err(bad(format!(
-            "le serveur a répondu un hash inattendu ({})",
+            "the server answered an unexpected hash ({})",
             crate::dialog_text::sanitize(got, 80)
         )));
     }
@@ -314,7 +314,7 @@ pub async fn broadcast(ctx: &CosmosCtx<'_>, tx_b64: &str, hash: &str) -> AppResu
     // 19 = ErrTxInMempoolCache: this very transaction is already in the mempool.
     if code != 0 && !(code == 19 && r["codespace"] == "sdk") {
         return Err(AppError::InvalidInput(format!(
-            "transaction Cosmos refusée (code {code}) : {}",
+            "Cosmos transaction rejected (code {code}): {}",
             crate::dialog_text::sanitize(r["raw_log"].as_str().unwrap_or(""), 300)
         )));
     }
@@ -350,14 +350,14 @@ pub async fn tx_status(ctx: &CosmosCtx<'_>, hash: &str) -> AppResult<CosmosTxSta
         });
     }
     if status != 200 {
-        return Err(bad(format!("Cosmos : HTTP {status} sur txs/{{hash}}")));
+        return Err(bad(format!("Cosmos: HTTP {status} on txs/{{hash}}")));
     }
     let r = &v["tx_response"];
     if !r["txhash"]
         .as_str()
         .is_some_and(|h| h.eq_ignore_ascii_case(hash))
     {
-        return Err(bad("Cosmos : réponse pour une autre transaction"));
+        return Err(bad("Cosmos: response for another transaction"));
     }
     let code = r["code"].as_u64();
     Ok(CosmosTxStatus {
@@ -460,7 +460,7 @@ pub async fn txs(ctx: &CosmosCtx<'_>, address: &str) -> AppResult<Value> {
         let (status, v) = call(ctx, u, None).await?;
         if status != 200 {
             return Err(bad(format!(
-                "Cosmos : historique HTTP {status} ({})",
+                "Cosmos: history HTTP {status} ({})",
                 crate::dialog_text::sanitize(v["message"].as_str().unwrap_or(""), 200)
             )));
         }
@@ -489,13 +489,13 @@ pub async fn probe(ctx: &CosmosCtx<'_>) -> AppResult<crate::btc_backend::Detecte
 pub fn check_send(ours: &CosmosAccountInfo, amount: u128, fee: u128) -> AppResult<()> {
     if !ours.exists {
         return Err(AppError::InvalidInput(
-            "ton compte Cosmos n'est pas encore connu du réseau (aucun ATOM reçu)".into(),
+            "your Cosmos account is not known to the network yet (no ATOM received)".into(),
         ));
     }
     let spendable: u128 = ours.spendable.parse().unwrap_or(0);
     if amount.saturating_add(fee) > spendable {
         return Err(AppError::InvalidInput(format!(
-            "solde disponible insuffisant : {} ATOM disponibles, il en faut {} (montant + frais)",
+            "insufficient available balance: {} ATOM available, {} needed (amount + fees)",
             crate::commands::format_units(&spendable.to_string(), 6),
             crate::commands::format_units(&amount.saturating_add(fee).to_string(), 6)
         )));
@@ -551,7 +551,7 @@ mod tests {
         };
         assert!(check_send(&acc(true, 1_000_000), 999_000, 1_000).is_ok());
         assert!(
-            matches!(check_send(&acc(true, 1_000_000), 999_001, 1_000), Err(AppError::InvalidInput(m)) if m.contains("insuffisant"))
+            matches!(check_send(&acc(true, 1_000_000), 999_001, 1_000), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
         assert!(check_send(&acc(false, 0), 1, 1).is_err());
     }

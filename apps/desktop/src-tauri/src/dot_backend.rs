@@ -58,7 +58,7 @@ impl From<RpcError> for AppError {
     fn from(e: RpcError) -> Self {
         match e {
             RpcError::App(e) => e,
-            RpcError::Node(code, msg) => bad(format!("Polkadot : erreur {code} ({msg})")),
+            RpcError::Node(code, msg) => bad(format!("Polkadot: error {code} ({msg})")),
         }
     }
 }
@@ -69,7 +69,7 @@ fn short(bytes: &[u8]) -> String {
 
 async fn rpc_raw(ctx: &DotCtx<'_>, method: &str, params: Value) -> Result<Value, RpcError> {
     let u = url::Url::parse(default_url(ctx.network))
-        .map_err(|_| AppError::Internal("URL Polkadot".into()))?;
+        .map_err(|_| AppError::Internal("Polkadot URL".into()))?;
     let body = json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params }).to_string();
     let (status, bytes) = ctx
         .net_client
@@ -77,13 +77,13 @@ async fn rpc_raw(ctx: &DotCtx<'_>, method: &str, params: Value) -> Result<Value,
         .await?;
     if status != 200 {
         return Err(bad(format!(
-            "Polkadot : HTTP {status} sur {method} ({})",
+            "Polkadot: HTTP {status} on {method} ({})",
             short(&bytes)
         ))
         .into());
     }
     let mut v: Value = serde_json::from_slice(&bytes)
-        .map_err(|_| bad(format!("Polkadot : JSON invalide sur {method}")))?;
+        .map_err(|_| bad(format!("Polkadot: invalid JSON on {method}")))?;
     if let Some(e) = v.get("error") {
         return Err(RpcError::Node(
             e["code"].as_i64().unwrap_or(0),
@@ -109,13 +109,13 @@ fn hex_bytes(v: &Value, what: &str) -> AppResult<Vec<u8>> {
     v.as_str()
         .and_then(|s| s.strip_prefix("0x"))
         .and_then(|s| hex::decode(s).ok())
-        .ok_or_else(|| bad(format!("Polkadot : {what} absent ou mal formé")))
+        .ok_or_else(|| bad(format!("Polkadot: {what} missing or malformed")))
 }
 
 fn hash32(v: &Value, what: &str) -> AppResult<[u8; 32]> {
     hex_bytes(v, what)?
         .try_into()
-        .map_err(|_| bad(format!("Polkadot : {what} de longueur inattendue")))
+        .map_err(|_| bad(format!("Polkadot: {what} of unexpected length")))
 }
 
 fn hex_param(b: &[u8]) -> String {
@@ -131,7 +131,7 @@ pub async fn check_genesis(ctx: &DotCtx<'_>) -> AppResult<[u8; 32]> {
     let chain = wallet_core::dot_chain(ctx.network);
     if g != chain.genesis {
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce nœud n'est pas sur {} (genesis 0x{}…)",
+            "this node is not on {} (genesis 0x{}…)",
             chain.name,
             &hex::encode(g)[..16]
         )));
@@ -145,7 +145,7 @@ pub async fn runtime_version(ctx: &DotCtx<'_>) -> AppResult<(u32, u32)> {
     let n = |k: &str| {
         r[k].as_u64()
             .and_then(|n| u32::try_from(n).ok())
-            .ok_or_else(|| bad(format!("Polkadot : {k} absent")))
+            .ok_or_else(|| bad(format!("Polkadot: {k} missing")))
     };
     Ok((n("specVersion")?, n("transactionVersion")?))
 }
@@ -175,7 +175,7 @@ pub async fn runtime(ctx: &DotCtx<'_>) -> AppResult<DotRuntime> {
                     json!(["Metadata_metadata_at_version", "0x0f000000"]),
                 )
                 .await?,
-                "métadonnées",
+                "metadata",
             )?;
             let net = ctx.network;
             let r =
@@ -188,7 +188,7 @@ pub async fn runtime(ctx: &DotCtx<'_>) -> AppResult<DotRuntime> {
     };
     if (rt.spec_version, rt.tx_version) != (spec, tx) {
         return Err(bad(
-            "Polkadot : versions du runtime incohérentes entre les métadonnées et le nœud (mise à jour en cours ?) : réessaie",
+            "Polkadot: runtime versions inconsistent between the metadata and the node (update in progress?): try again",
         ));
     }
     Ok(rt)
@@ -249,7 +249,7 @@ pub async fn asset_details(
         wallet_core::dot_decode_asset_metadata(&hex_bytes(&meta, "Assets.Metadata")?)?;
     if symbol != known.chain_symbol || decimals != known.decimals {
         return Err(AppError::InvalidInput(format!(
-            "actif {} : métadonnées on-chain inattendues (« {} », {decimals} décimales) : refusé",
+            "asset {}: unexpected on-chain metadata (\"{}\", {decimals} decimals): refused",
             known.id,
             crate::dialog_text::sanitize(&symbol, 16)
         )));
@@ -272,7 +272,7 @@ pub async fn next_nonce(ctx: &DotCtx<'_>, address: &str) -> AppResult<u32> {
         .await?
         .as_u64()
         .and_then(|n| u32::try_from(n).ok())
-        .ok_or_else(|| bad("Polkadot : nonce absent"))
+        .ok_or_else(|| bad("Polkadot: nonce missing"))
 }
 
 fn header_number(h: &Value) -> AppResult<u64> {
@@ -280,14 +280,14 @@ fn header_number(h: &Value) -> AppResult<u64> {
         .as_str()
         .and_then(|s| s.strip_prefix("0x"))
         .and_then(|s| u64::from_str_radix(s, 16).ok())
-        .ok_or_else(|| bad("Polkadot : numéro de bloc absent"))
+        .ok_or_else(|| bad("Polkadot: block number missing"))
 }
 
 /// `(number, hash)` of the last finalized block.
 pub async fn finalized(ctx: &DotCtx<'_>) -> AppResult<(u64, [u8; 32])> {
     let hash = hash32(
         &rpc(ctx, "chain_getFinalizedHead", json!([])).await?,
-        "bloc finalisé",
+        "finalized block",
     )?;
     let n = block_number(ctx, &hash).await?;
     Ok((n, hash))
@@ -298,7 +298,7 @@ pub async fn block_number(ctx: &DotCtx<'_>, hash: &[u8; 32]) -> AppResult<u64> {
     let h = rpc(ctx, "chain_getHeader", json!([hex_param(hash)])).await?;
     if h.is_null() {
         return Err(AppError::InvalidInput(
-            "bloc de référence inconnu du nœud : reconstruis la transaction".into(),
+            "reference block unknown to the node: rebuild the transaction".into(),
         ));
     }
     header_number(&h)
@@ -315,7 +315,7 @@ pub async fn fee(ctx: &DotCtx<'_>, extrinsic: &[u8]) -> AppResult<u128> {
         ]),
     )
     .await?;
-    Ok(wallet_core::dot_decode_fee_info(&hex_bytes(&r, "frais")?)?)
+    Ok(wallet_core::dot_decode_fee_info(&hex_bytes(&r, "fee")?)?)
 }
 
 /// `author_submitExtrinsic`; the node's hash must be ours.
@@ -331,7 +331,7 @@ pub async fn submit(ctx: &DotCtx<'_>, extrinsic_hex: &str, hash: &str) -> AppRes
         // 1010: invalid transaction (bad nonce, too low balance, outdated…): nothing happened.
         Err(RpcError::Node(code, msg)) => {
             return Err(AppError::InvalidInput(format!(
-                "transaction Polkadot refusée par le nœud ({code}) : {}",
+                "Polkadot transaction rejected by the node ({code}): {}",
                 crate::dialog_text::sanitize(&msg, 200)
             )))
         }
@@ -344,7 +344,7 @@ pub async fn submit(ctx: &DotCtx<'_>, extrinsic_hex: &str, hash: &str) -> AppRes
         .to_owned();
     if !got.eq_ignore_ascii_case(hash) {
         return Err(bad(format!(
-            "le nœud a répondu un hash inattendu ({})",
+            "the node answered an unexpected hash ({})",
             got.chars().take(80).collect::<String>()
         )));
     }
@@ -428,20 +428,20 @@ pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     };
     if !c.ours.exists() {
         return Err(AppError::InvalidInput(format!(
-            "ton compte n'existe pas encore sur la chaîne (aucun {} reçu)",
+            "your account does not exist on the chain yet (no {} received)",
             c.symbol
         )));
     }
     if !c.dest.exists() && c.value < c.existential_deposit {
         return Err(AppError::InvalidInput(format!(
-            "ce compte n'existe pas encore : il faut lui envoyer au moins le dépôt existentiel ({}), sinon le transfert échoue",
+            "this account does not exist yet: you must send it at least the existential deposit ({}), otherwise the transfer fails",
             fmt(c.existential_deposit)
         )));
     }
     let spendable = c.ours.spendable(c.existential_deposit);
     if c.value.saturating_add(c.fee) > spendable {
         return Err(AppError::InvalidInput(format!(
-            "solde disponible insuffisant : {} disponibles (solde − dépôt existentiel − part bloquée), il en faut {} avec les frais",
+            "insufficient available balance: {} available (balance − existential deposit − locked part), {} needed with the fees",
             fmt(spendable),
             fmt(c.value.saturating_add(c.fee))
         )));
@@ -476,24 +476,24 @@ pub fn check_asset_transfer(c: &AssetCheck<'_>) -> AppResult<()> {
     let s = c.symbol;
     if !c.details.live {
         return Err(AppError::InvalidInput(format!(
-            "{s} est gelé ou en cours de destruction par son émetteur : transferts impossibles"
+            "{s} is frozen or being destroyed by its issuer: transfers are impossible"
         )));
     }
     if c.mine.frozen || c.mine.blocked {
         return Err(AppError::InvalidInput(format!(
-            "ton solde {s} est gelé par l'émetteur : envoi impossible"
+            "your {s} balance is frozen by the issuer: sending is impossible"
         )));
     }
     if c.dest.blocked {
         return Err(AppError::InvalidInput(format!(
-            "ce destinataire est bloqué par l'émetteur de {s} : il ne peut rien recevoir"
+            "this recipient is blocked by the issuer of {s}: it cannot receive anything"
         )));
     }
     // transfer_keep_alive: our holding must stay ≥ min_balance.
     let sendable = c.mine.balance.saturating_sub(c.details.min_balance);
     if c.value > sendable {
         return Err(AppError::InvalidInput(format!(
-            "solde {s} insuffisant : au plus {} (solde {} − {} qui restent sur le compte)",
+            "insufficient {s} balance: at most {} (balance {} − {} that stay on the account)",
             tok(sendable),
             tok(c.mine.balance),
             tok(c.details.min_balance)
@@ -501,14 +501,14 @@ pub fn check_asset_transfer(c: &AssetCheck<'_>) -> AppResult<()> {
     }
     if c.dest.balance == 0 && c.value < c.details.min_balance {
         return Err(AppError::InvalidInput(format!(
-            "ce destinataire n'a pas encore de {s} : envoie au moins {} (solde minimum de l'actif)",
+            "this recipient has no {s} yet: send at least {} (the asset's minimum balance)",
             tok(c.details.min_balance)
         )));
     }
     let spendable = c.ours.spendable(c.existential_deposit);
     if !c.ours.exists() || c.fee > spendable {
         return Err(AppError::InvalidInput(format!(
-            "il faut des DOT pour les frais : {} disponibles, ≈ {} nécessaires",
+            "DOT is needed for the fees: {} available, ≈ {} needed",
             dot(spendable),
             dot(c.fee)
         )));
@@ -560,24 +560,27 @@ mod tests {
         assert!(check(&me, &h(1), 4_990_000, &ours, &det).is_ok());
         err(
             check(&me, &h(1), 4_990_001, &ours, &det),
-            "au plus 4,99 USDT",
+            "at most 4,99 USDT",
         );
-        err(check(&me, &h(0), 9_999, &ours, &det), "au moins 0,01 USDT");
+        err(check(&me, &h(0), 9_999, &ours, &det), "at least 0,01 USDT");
         assert!(check(&me, &h(0), 10_000, &ours, &det).is_ok());
         let frozen = wallet_core::DotAssetAccount { frozen: true, ..me };
-        err(check(&frozen, &h(1), 1, &ours, &det), "gelé");
+        err(check(&frozen, &h(1), 1, &ours, &det), "frozen");
         let blocked = wallet_core::DotAssetAccount {
             blocked: true,
             ..h(1)
         };
-        err(check(&me, &blocked, 1, &ours, &det), "bloqué");
+        err(check(&me, &blocked, 1, &ours, &det), "blocked");
         let dead = wallet_core::DotAssetDetails { live: false, ..det };
-        err(check(&me, &h(1), 1, &ours, &dead), "gelé ou en cours");
+        err(
+            check(&me, &h(1), 1, &ours, &dead),
+            "frozen or being destroyed",
+        );
         // DOT for the fee.
-        err(check(&me, &h(1), 1, &acc(100_000_000, 0), &det), "frais");
+        err(check(&me, &h(1), 1, &acc(100_000_000, 0), &det), "fees");
         err(
             check(&me, &h(1), 1, &DotAccountInfo::default(), &det),
-            "frais",
+            "fees",
         );
     }
 
@@ -609,13 +612,13 @@ mod tests {
         assert!(ok(&me, &exists, 1).is_ok());
         // New account: at least the existential deposit (0.01 DOT).
         assert!(
-            matches!(ok(&me, &new, 99_999_999), Err(AppError::InvalidInput(m)) if m.contains("dépôt existentiel (0,01 DOT)"))
+            matches!(ok(&me, &new, 99_999_999), Err(AppError::InvalidInput(m)) if m.contains("existential deposit (0,01 DOT)"))
         );
         assert!(ok(&me, &new, 100_000_000).is_ok());
         // Keep-alive: balance − ED − fee at most.
         assert!(ok(&me, &exists, 10_000_000_000 - 100_000_000 - 20_000_000).is_ok());
         assert!(
-            matches!(ok(&me, &exists, 10_000_000_000 - 100_000_000 - 19_999_999), Err(AppError::InvalidInput(m)) if m.contains("insuffisant"))
+            matches!(ok(&me, &exists, 10_000_000_000 - 100_000_000 - 19_999_999), Err(AppError::InvalidInput(m)) if m.contains("insufficient"))
         );
         // Frozen (staking, vesting) part is not spendable.
         let locked = acc(10_000_000_000, 9_000_000_000);

@@ -450,9 +450,9 @@ pub struct SuiBuilt {
 
 fn insufficient(have: u64, need: u64) -> AppError {
     AppError::InvalidInput(format!(
-        "solde insuffisant : {} dans les pièces SUI, il en faut {} (montant + budget de gaz)",
-        sui(Lang::Fr, &have.to_string()),
-        sui(Lang::Fr, &need.to_string())
+        "insufficient balance: {} in the SUI coins, {} needed (amount + gas budget)",
+        sui(Lang::En, &have.to_string()),
+        sui(Lang::En, &need.to_string())
     ))
 }
 
@@ -471,7 +471,7 @@ pub(crate) async fn build(
     let sender = wallet_core::sui_parse_address(me)?;
     let recipient = wallet_core::sui_parse_address(to)?;
     if amount == Some(0) {
-        return Err(AppError::InvalidInput("montant nul".into()));
+        return Err(AppError::InvalidInput("zero amount".into()));
     }
     let ep = sui_backend::epoch(c).await?;
     let coins = sui_backend::coins(c, me).await?;
@@ -479,11 +479,11 @@ pub(crate) async fn build(
         let b = sui_backend::balance(c, me).await?;
         return Err(AppError::InvalidInput(if b.address_balance != "0" {
             format!(
-                "aucune pièce SUI à dépenser : tes {} sont dans le « solde d'adresse » de Sui, que Kyro ne sait pas encore dépenser",
+                "no SUI coin to spend: your {} are in Sui's \"address balance\", which Kyro cannot spend yet",
                 sui(Lang::Fr, &b.address_balance)
             )
         } else {
-            "aucun SUI sur ce compte".into()
+            "no SUI on this account".into()
         }));
     }
     let price = ep.reference_gas_price;
@@ -521,7 +521,7 @@ pub(crate) async fn build(
     let sim = sui_backend::simulate(c, &b64(&draft), &wallet_core::sui_tx_digest(&draft)).await?;
     if !sim.success {
         return Err(AppError::InvalidInput(format!(
-            "la simulation du transfert échoue : {}",
+            "the transfer simulation fails: {}",
             sim.error.unwrap_or_default()
         )));
     }
@@ -541,7 +541,7 @@ pub(crate) async fn build(
 
 fn known_coin(c: &SuiCtx<'_>, coin_type: &str) -> AppResult<&'static wallet_core::SuiKnownCoin> {
     wallet_core::sui_known_coin(coin_type.trim(), c.network == Network::Testnet)
-        .ok_or_else(|| AppError::InvalidInput("jeton Sui inconnu de Kyro sur ce réseau".into()))
+        .ok_or_else(|| AppError::InvalidInput("Sui token unknown to Kyro on this network".into()))
 }
 
 /// Builds an unsigned token transfer of the known `coin_type`: `amount` in token units
@@ -557,7 +557,7 @@ pub(crate) async fn build_token(
     let sender = wallet_core::sui_parse_address(me)?;
     let recipient = wallet_core::sui_parse_address(to)?;
     if amount == Some(0) {
-        return Err(AppError::InvalidInput("montant nul".into()));
+        return Err(AppError::InvalidInput("zero amount".into()));
     }
     let ep = sui_backend::epoch(c).await?;
     let tokens = sui_backend::token_coins(c, me, coin).await?;
@@ -566,7 +566,7 @@ pub(crate) async fn build_token(
         Some(a) => sui_backend::select_up_to(&tokens, a, max),
         None if tokens.len() > max => {
             return Err(AppError::InvalidInput(format!(
-                "plus de {max} pièces {} : envoie un montant plutôt que tout le solde",
+                "more than {max} {} coins: send an amount rather than the whole balance",
                 coin.symbol
             )))
         }
@@ -578,12 +578,12 @@ pub(crate) async fn build_token(
     if selected.is_empty() || amount.is_some_and(|a| a > have) {
         let all: u64 = tokens.iter().fold(0u64, |s, c| s.saturating_add(c.balance));
         return Err(AppError::InvalidInput(format!(
-            "solde {} insuffisant : {} {} dans les pièces de ce jeton{}",
+            "insufficient {} balance: {} {} in this token's coins{}",
             coin.symbol,
             crate::commands::format_units(&all.to_string(), usize::from(coin.decimals)),
             coin.symbol,
             if all > have {
-                " (trop de petites pièces : envoie un montant plus petit)"
+                " (too many small coins: send a smaller amount)"
             } else {
                 ""
             }
@@ -599,7 +599,7 @@ pub(crate) async fn build_token(
     let draft_budget = gas_total.min(DRAFT_BUDGET);
     if draft_budget < min_budget {
         return Err(AppError::InvalidInput(format!(
-            "pas assez de SUI pour les frais : {} dans les pièces SUI, il en faut au moins {}",
+            "not enough SUI for the fees: {} in the SUI coins, at least {} needed",
             sui(Lang::Fr, &gas_total.to_string()),
             sui(Lang::Fr, &min_budget.to_string())
         )));
@@ -618,7 +618,7 @@ pub(crate) async fn build_token(
     let sim = sui_backend::simulate(c, &b64(&draft), &wallet_core::sui_tx_digest(&draft)).await?;
     if !sim.success {
         return Err(AppError::InvalidInput(format!(
-            "la simulation du transfert échoue : {}",
+            "the transfer simulation fails: {}",
             sim.error.unwrap_or_default()
         )));
     }
@@ -655,7 +655,7 @@ pub async fn sui_build_token_tx(
                 .map(str::trim)
                 .and_then(|a| a.parse::<u64>().ok())
                 .filter(|a| *a > 0)
-                .ok_or_else(|| AppError::InvalidInput("montant de jeton invalide".into()))?,
+                .ok_or_else(|| AppError::InvalidInput("invalid token amount".into()))?,
         )
     };
     build_token(&ctx(&state), &me, &to, &coin_type, amount).await
@@ -689,7 +689,7 @@ pub async fn sui_build_tx(
                 .map(str::trim)
                 .and_then(|a| a.parse::<u64>().ok())
                 .filter(|a| *a > 0)
-                .ok_or_else(|| AppError::InvalidInput("montant en MIST invalide".into()))?,
+                .ok_or_else(|| AppError::InvalidInput("invalid amount in MIST".into()))?,
         )
     };
     build(&ctx(&state), &me, &to, amount).await
@@ -706,14 +706,13 @@ pub(crate) async fn prepare_sign(
     let summary = decode(c, bcs, me, coin_type)?;
     let ep = sui_backend::epoch(c).await?;
     match summary.expiration_epoch {
-        None => {
-            return Err(AppError::InvalidInput(
-                "transfert Sui sans époque d'expiration : Kyro ne signe que ce qu'il construit, reconstruis-le".into(),
-            ))
-        }
+        None => return Err(AppError::InvalidInput(
+            "Sui transfer without an expiration epoch: Kyro only signs what it builds, rebuild it"
+                .into(),
+        )),
         Some(e) if e < ep.epoch => {
             return Err(AppError::InvalidInput(format!(
-                "transfert Sui expiré (époque {e} terminée, époque actuelle {}) : reconstruis-le",
+                "Sui transfer expired (epoch {e} is over, current epoch {}): rebuild it",
                 ep.epoch
             )))
         }
@@ -722,13 +721,12 @@ pub(crate) async fn prepare_sign(
     let price: u64 = summary.gas_price.parse().unwrap_or(0);
     if price < ep.reference_gas_price {
         return Err(AppError::InvalidInput(
-            "prix du gaz inférieur au prix de référence de l'époque : reconstruis le transfert"
-                .into(),
+            "gas price below the epoch's reference price: rebuild the transfer".into(),
         ));
     }
     if price > ep.reference_gas_price.saturating_mul(MAX_PRICE_FACTOR) {
         return Err(AppError::InvalidInput(format!(
-            "prix du gaz anormal : {price} MIST/unité pour une référence de {}",
+            "abnormal gas price: {price} MIST/unit for a reference of {}",
             ep.reference_gas_price
         )));
     }
@@ -743,8 +741,7 @@ pub(crate) async fn prepare_sign(
         )?;
         let coin = coins.iter().find(|c| c.r == r).ok_or_else(|| {
             AppError::InvalidInput(
-                "les pièces de gaz ont changé depuis la préparation : reconstruis le transfert"
-                    .into(),
+                "the gas coins changed since the preparation: rebuild the transfer".into(),
             )
         })?;
         gas_total = gas_total.saturating_add(coin.balance);
@@ -773,7 +770,7 @@ pub(crate) async fn prepare_sign(
     let sim = sui_backend::simulate(c, bcs, &summary.digest).await?;
     if !sim.success {
         return Err(AppError::InvalidInput(format!(
-            "la simulation du transfert échoue : {}",
+            "the transfer simulation fails: {}",
             sim.error.unwrap_or_default()
         )));
     }
@@ -781,14 +778,14 @@ pub(crate) async fn prepare_sign(
     // the same story as the bytes Kyro built.
     if !sui_backend::only_sui_between(&sim, me, &summary.recipient) {
         return Err(AppError::ServerUnreachable(
-            "Sui : la simulation déplace d'autres fonds que ce transfert".into(),
+            "Sui: the simulation moves funds other than this transfer".into(),
         ));
     }
     let received = sui_backend::sui_change(&sim, &summary.recipient);
     if let (Some(a), false) = (amount, summary.recipient == me) {
         if received != i128::from(a) {
             return Err(AppError::ServerUnreachable(
-                "Sui : la simulation ne crédite pas le montant prévu au destinataire".into(),
+                "Sui: the simulation does not credit the expected amount to the recipient".into(),
             ));
         }
     }
@@ -844,7 +841,7 @@ async fn prepare_token(
         )?;
         let found = live.iter().find(|x| x.r == r).ok_or_else(|| {
             AppError::InvalidInput(format!(
-                "les pièces {} ont changé depuis la préparation (ou ne sont pas de ce jeton) : reconstruis le transfert",
+                "the {} coins changed since the preparation (or are not of this token): rebuild the transfer",
                 coin.symbol
             ))
         })?;
@@ -854,27 +851,27 @@ async fn prepare_token(
     let amount: Option<u64> = summary.amount.as_deref().and_then(|a| a.parse().ok());
     if amount.is_some_and(|a| a > total) {
         return Err(AppError::InvalidInput(format!(
-            "solde {} insuffisant dans les pièces choisies : reconstruis le transfert",
+            "insufficient {} balance in the chosen coins: rebuild the transfer",
             coin.symbol
         )));
     }
     let sim = sui_backend::simulate(c, bcs, &summary.digest).await?;
     if !sim.success {
         return Err(AppError::InvalidInput(format!(
-            "la simulation du transfert échoue : {}",
+            "the transfer simulation fails: {}",
             sim.error.unwrap_or_default()
         )));
     }
     let to = &summary.recipient;
     if !sui_backend::only_token_between(&sim, me, to, coin.coin_type) {
         return Err(AppError::ServerUnreachable(
-            "Sui : la simulation déplace d'autres fonds que ce transfert".into(),
+            "Sui: the simulation moves funds other than this transfer".into(),
         ));
     }
     let received = sui_backend::coin_change(&sim, to, coin.coin_type);
     if to != me && received != i128::from(amount.unwrap_or(total)) {
         return Err(AppError::ServerUnreachable(
-            "Sui : la simulation ne crédite pas le montant prévu au destinataire".into(),
+            "Sui: the simulation does not credit the expected amount to the recipient".into(),
         ));
     }
     let e = &sim.estimate;
@@ -964,7 +961,7 @@ pub async fn sui_sign_tx(
     .await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -991,12 +988,12 @@ pub(crate) async fn broadcast_checked(
         use base64::Engine as _;
         base64::engine::general_purpose::STANDARD
             .decode(bcs.trim())
-            .map_err(|_| AppError::InvalidInput("transaction : base64 attendu".into()))?
+            .map_err(|_| AppError::InvalidInput("transaction: base64 expected".into()))?
     };
     let t = SuiTransfer::decode(&raw)?;
     if t.sender != wallet_core::sui_parse_address(me)? {
         return Err(AppError::InvalidInput(
-            "ce transfert n'est pas signé par ton compte".into(),
+            "this transfer is not signed by your account".into(),
         ));
     }
     sui_backend::execute(c, bcs.trim(), signature.trim(), &digest).await
@@ -1022,7 +1019,7 @@ pub async fn sui_tx_status(
     const B58: &str = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     if !(32..=44).contains(&d.len()) || !d.chars().all(|ch| B58.contains(ch)) {
         return Err(AppError::InvalidInput(
-            "empreinte Sui : base58 de 32 octets attendue".into(),
+            "Sui digest: base58 of 32 bytes expected".into(),
         ));
     }
     sui_backend::tx_status(&ctx(&state), d).await

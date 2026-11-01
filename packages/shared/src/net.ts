@@ -5,6 +5,7 @@
 // host allowlist of docs/IPC.md §3 and injects API keys on the Rust side.
 
 import { call, type NetRequest, type NetResponse } from './ipc';
+import { l10n } from './i18n';
 
 export type NetFetch = (req: NetRequest) => Promise<NetResponse>;
 
@@ -101,12 +102,12 @@ export async function jsonRpcBatch(fetcher: NetFetch, url: string, calls: Array<
     method: 'POST',
     body: calls.map((c, i) => ({ jsonrpc: '2.0', id: ids[i], method: c.method, params: c.params })),
   });
-  if (!Array.isArray(res)) throw new JsonRpcError(-32600, 'lot JSON-RPC non pris en charge par ce nœud');
+  if (!Array.isArray(res)) throw new JsonRpcError(-32600, l10n('lot JSON-RPC non pris en charge par ce nœud', 'JSON-RPC batch not supported by this node'));
   const byId = new Map<unknown, { result?: unknown; error?: { code: number; message: string; data?: unknown } }>();
   for (const r of res as Array<{ id?: unknown; result?: unknown; error?: { code: number; message: string; data?: unknown } }>) if (r && typeof r === 'object') byId.set(r.id, r);
   return ids.map((id) => {
     const r = byId.get(id);
-    if (!r) return { ok: false, error: new JsonRpcError(-32603, 'réponse absente du lot') };
+    if (!r) return { ok: false, error: new JsonRpcError(-32603, l10n('réponse absente du lot', 'response missing from the batch')) };
     if (r.error) return { ok: false, error: new JsonRpcError(r.error.code, r.error.message, r.error.data) };
     return { ok: true, result: r.result };
   });

@@ -347,7 +347,7 @@ fn dangerous_or_unknown_asset_transfers_are_refused() {
         f(p.asset.as_mut().unwrap());
         p
     };
-    refused(&with(&|a| a.asset_id = 1234), m, &me, "inconnu");
+    refused(&with(&|a| a.asset_id = 1234), m, &me, "unknown");
     refused(
         &with(&|a| a.close_to = Some(other)),
         m,
@@ -355,23 +355,23 @@ fn dangerous_or_unknown_asset_transfers_are_refused() {
         "asset-close-to",
     );
     refused(&with(&|a| a.asset_sender = Some(other)), m, &me, "clawback");
-    refused(&with(&|a| a.amount = 5), m, &me, "soi-même");
-    refused(&with(&|a| a.receiver = other), m, &me, "montant nul");
-    refused(&with(&|a| a.receiver = [0; 32]), m, &me, "destinataire nul");
+    refused(&with(&|a| a.amount = 5), m, &me, "yourself");
+    refused(&with(&|a| a.receiver = other), m, &me, "zero amount");
+    refused(&with(&|a| a.receiver = [0; 32]), m, &me, "null recipient");
     // Testnet USDC is not mainnet USDC.
-    refused(&usdc_opt_in(pk), Network::Testnet, &me, "réseau");
+    refused(&usdc_opt_in(pk), Network::Testnet, &me, "network");
     let mut t = kyro_payment(Network::Testnet, pk);
     t.amount = 0;
     t.receiver = [0; 32];
     t.asset = with(&|a| a.asset_id = 31_566_704).asset;
-    refused(&t, Network::Testnet, &me, "inconnu");
+    refused(&t, Network::Testnet, &me, "unknown");
     // ALGO fields inside an asset transfer, or asset fields inside a payment.
     let mut mixed = usdc_opt_in(pk);
     mixed.amount = 1;
     assert!(AlgoPayment::decode(&mixed.encode())
         .unwrap_err()
         .to_string()
-        .contains("champs de paiement"));
+        .contains("ALGO payment fields"));
 }
 
 #[test]
@@ -456,25 +456,25 @@ fn dangerous_or_odd_payments_are_refused() {
         "close-remainder-to",
     );
     refused(&with(&|p| p.rekey_to = Some(other)), t, &me, "rekey");
-    refused(&with(&|p| p.group = Some([7; 32])), t, &me, "groupée");
-    refused(&with(&|p| p.lease = Some([7; 32])), t, &me, "bail");
-    refused(&base, Network::Mainnet, &me, "réseau inattendu");
+    refused(&with(&|p| p.group = Some([7; 32])), t, &me, "grouped");
+    refused(&with(&|p| p.lease = Some([7; 32])), t, &me, "lease");
+    refused(&base, Network::Mainnet, &me, "unexpected network");
     refused(
         &with(&|p| p.genesis_id = "testnet-v2.0".into()),
         t,
         &me,
-        "réseau inattendu",
+        "unexpected network",
     );
     refused(
         &with(&|p| p.genesis_hash[0] ^= 1),
         t,
         &me,
-        "réseau inattendu",
+        "unexpected network",
     );
-    refused(&with(&|p| p.sender = other), t, &me, "expéditeur");
-    refused(&with(&|p| p.receiver = [0; 32]), t, &me, "destinataire nul");
-    refused(&with(&|p| p.receiver = pk), t, &me, "soi-même");
-    refused(&with(&|p| p.amount = 0), t, &me, "montant nul");
+    refused(&with(&|p| p.sender = other), t, &me, "sender");
+    refused(&with(&|p| p.receiver = [0; 32]), t, &me, "null recipient");
+    refused(&with(&|p| p.receiver = pk), t, &me, "yourself");
+    refused(&with(&|p| p.amount = 0), t, &me, "zero amount");
     refused(&with(&|p| p.fee = 999), t, &me, "minimum");
     refused(
         &with(&|p| p.last_valid = p.first_valid + 1001),
@@ -486,7 +486,7 @@ fn dangerous_or_odd_payments_are_refused() {
         &with(&|p| p.last_valid = p.first_valid - 1),
         t,
         &me,
-        "validité",
+        "validity",
     );
     refused(&with(&|p| p.note = vec![b'x'; 1025]), t, &me, "1024");
     // High fee and binary / unusual notes: accepted, with the reinforced confirmation.
@@ -539,7 +539,7 @@ fn non_canonical_or_foreign_encodings_are_refused() {
     let _old: Vec<u8> = x
         .splice(at..at + 5, [&[0xCFu8, 0, 0, 0, 0][..], &v[..]].concat())
         .collect();
-    assert!(dec(&x).unwrap_err().to_string().contains("non canonique"));
+    assert!(dec(&x).unwrap_err().to_string().contains("non-canonical"));
     // Explicit zero field (`amt: 0` would be omitted canonically).
     let mut x = vec![0x8A, 0xA3, b'a', b'm', b't', 0x00];
     x.extend_from_slice(&raw[1..]);
@@ -547,7 +547,7 @@ fn non_canonical_or_foreign_encodings_are_refused() {
     // Unknown field and other transaction types.
     let mut x = vec![0x8A, 0xA4, b'z', b'a', b'm', b't', 0x01];
     x.extend_from_slice(&raw[1..]);
-    assert!(dec(&x).unwrap_err().to_string().contains("champ inconnu"));
+    assert!(dec(&x).unwrap_err().to_string().contains("unknown field"));
     let mut x = raw.clone();
     let n = x.len();
     assert_eq!(&x[n - 4..], &[0xA3, b'p', b'a', b'y']);
@@ -557,9 +557,12 @@ fn non_canonical_or_foreign_encodings_are_refused() {
     assert!(dec(&x)
         .unwrap_err()
         .to_string()
-        .contains("champs de paiement ALGO dans un transfert d'actif"));
+        .contains("ALGO payment fields in an asset transfer"));
     let _old: Vec<u8> = x.splice(n - 4.., [0xA4, b'a', b'p', b'p', b'l']).collect();
-    assert!(dec(&x).unwrap_err().to_string().contains("« appl » refusé"));
+    assert!(dec(&x)
+        .unwrap_err()
+        .to_string()
+        .contains("\"appl\" refused"));
     // A signed transaction is not an unsigned one, and vice versa.
     let (signed, _, _) = algo_sign(&s, 0, Network::Testnet, &hex::encode(&raw)).unwrap();
     assert!(algo_decode_tx(&signed, Network::Testnet, &me).is_err());

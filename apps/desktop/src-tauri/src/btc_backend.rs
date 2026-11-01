@@ -54,14 +54,14 @@ fn bad(msg: impl Into<String>) -> AppError {
 
 async fn esplora_get(ctx: &Ctx<'_>, base: &str, path: &str) -> AppResult<Vec<u8>> {
     let url = url::Url::parse(&format!("{}{path}", base.trim_end_matches('/')))
-        .map_err(|_| AppError::ServerInvalid("URL Esplora invalide".into()))?;
+        .map_err(|_| AppError::ServerInvalid("invalid Esplora URL".into()))?;
     let (status, body) = ctx
         .net_client
         .server_request(ServerRequest::get(url, Family::Bitcoin), ctx.tor)
         .await?;
     if status != 200 {
         return Err(bad(format!(
-            "Esplora : HTTP {status} sur {path} ({})",
+            "Esplora: HTTP {status} on {path} ({})",
             String::from_utf8_lossy(&body)
                 .chars()
                 .take(200)
@@ -73,7 +73,7 @@ async fn esplora_get(ctx: &Ctx<'_>, base: &str, path: &str) -> AppResult<Vec<u8>
 
 async fn esplora_json(ctx: &Ctx<'_>, base: &str, path: &str) -> AppResult<Value> {
     serde_json::from_slice(&esplora_get(ctx, base, path).await?)
-        .map_err(|_| bad(format!("Esplora : JSON invalide sur {path}")))
+        .map_err(|_| bad(format!("Esplora: invalid JSON on {path}")))
 }
 
 fn esplora_base(ctx: &Ctx<'_>) -> AppResult<Option<String>> {
@@ -176,13 +176,13 @@ fn electrum_target(server: &BtcServer) -> AppResult<Option<electrum::Target>> {
 fn str_field<'v>(v: &'v Value, k: &str) -> AppResult<&'v str> {
     v.get(k)
         .and_then(Value::as_str)
-        .ok_or_else(|| bad(format!("Electrum : champ « {k} » manquant")))
+        .ok_or_else(|| bad(format!("Electrum: missing field \"{k}\"")))
 }
 
 fn u64_field(v: &Value, k: &str) -> AppResult<u64> {
     v.get(k)
         .and_then(Value::as_u64)
-        .ok_or_else(|| bad(format!("Electrum : champ « {k} » manquant")))
+        .ok_or_else(|| bad(format!("Electrum: missing field \"{k}\"")))
 }
 
 /// Block timestamp from an 80-byte header (hex): bytes 68..72, little-endian.
@@ -267,10 +267,12 @@ async fn electrum_raw_with_prevouts(
         for (txid, hex) in want.iter().zip(res) {
             let hex = hex
                 .as_str()
-                .ok_or_else(|| bad("Electrum : transaction non hexadécimale"))?;
+                .ok_or_else(|| bad("Electrum: non-hexadecimal transaction"))?;
             let tx = wallet_core::btc_decode_raw_tx(hex, net)?;
             if &tx.txid != txid {
-                return Err(bad("Electrum : transaction différente de celle demandée"));
+                return Err(bad(
+                    "Electrum: transaction different from the one requested",
+                ));
             }
             raws.insert(txid.clone(), tx);
         }
@@ -302,7 +304,7 @@ async fn core_wallet(c: &CoreClient<'_>, name: &str) -> AppResult<()> {
         Ok(())
     } else {
         Err(AppError::ServerInvalid(format!(
-            "portefeuille de surveillance « {name} » absent sur le nœud : lance la configuration (btc_core_setup)"
+            "watch-only wallet \"{name}\" missing on the node: run the setup (btc_core_setup)"
         )))
     }
 }
@@ -332,7 +334,7 @@ async fn core_raw(
             let hex = v
                 .get("hex")
                 .and_then(Value::as_str)
-                .ok_or_else(|| bad("gettransaction : hex manquant"))?;
+                .ok_or_else(|| bad("gettransaction: missing hex"))?;
             Some(wallet_core::btc_decode_raw_tx(hex, net)?)
         }
         // -5: not a wallet transaction (e.g. a prevout from someone else).
@@ -411,7 +413,7 @@ pub async fn address_info(ctx: &Ctx<'_>, address: &str) -> AppResult<Value> {
             .map_or(0, Vec::len);
         return Ok(stats_json(address, confirmed, unconfirmed, count, 0));
     }
-    Err(AppError::Internal("backend Bitcoin inconnu".into()))
+    Err(AppError::Internal("unknown Bitcoin backend".into()))
 }
 
 pub fn stats_json(
@@ -468,15 +470,15 @@ pub async fn address_utxos(ctx: &Ctx<'_>, address: &str) -> AppResult<Value> {
         let mut out = Vec::new();
         for u in list.as_array().into_iter().flatten() {
             out.push(json!({
-                "txid": u.get("txid").and_then(Value::as_str).ok_or_else(|| bad("listunspent : txid"))?,
-                "vout": u.get("vout").and_then(Value::as_u64).ok_or_else(|| bad("listunspent : vout"))?,
+                "txid": u.get("txid").and_then(Value::as_str).ok_or_else(|| bad("listunspent: txid"))?,
+                "vout": u.get("vout").and_then(Value::as_u64).ok_or_else(|| bad("listunspent: vout"))?,
                 "value": btc_to_sats(&u["amount"])?,
                 "status": { "confirmed": u.get("confirmations").and_then(Value::as_u64).unwrap_or(0) > 0 },
             }));
         }
         return Ok(Value::Array(out));
     }
-    Err(AppError::Internal("backend Bitcoin inconnu".into()))
+    Err(AppError::Internal("unknown Bitcoin backend".into()))
 }
 
 /// `GET /address/{a}/txs` shape (most recent first): `[{ txid, fee?, status: { confirmed,
@@ -588,7 +590,7 @@ pub async fn address_txs(ctx: &Ctx<'_>, address: &str) -> AppResult<Value> {
         }
         return Ok(Value::Array(esplora_txs(&order, &raws, &times)));
     }
-    Err(AppError::Internal("backend Bitcoin inconnu".into()))
+    Err(AppError::Internal("unknown Bitcoin backend".into()))
 }
 
 /// `GET /v1/fees/recommended` shape (sat/vB): `{ fastestFee, halfHourFee, hourFee,
@@ -647,7 +649,7 @@ pub async fn fee_rates(ctx: &Ctx<'_>) -> AppResult<Value> {
             sat(&pool["mempoolminfee"]),
         ));
     }
-    Err(AppError::Internal("backend Bitcoin inconnu".into()))
+    Err(AppError::Internal("unknown Bitcoin backend".into()))
 }
 
 /// Monotonic fee ladder; unknown estimates (-1 / missing) fall back to the next slower rate.
@@ -674,7 +676,7 @@ pub async fn tip_height(ctx: &Ctx<'_>) -> AppResult<u64> {
         return String::from_utf8_lossy(&body)
             .trim()
             .parse()
-            .map_err(|_| bad("Esplora : hauteur invalide"));
+            .map_err(|_| bad("Esplora: invalid height"));
     }
     if let Some(t) = electrum_target(&ctx.server)? {
         let mut conn = electrum::connect(ctx.net_client, &t, ctx.tor).await?;
@@ -686,16 +688,16 @@ pub async fn tip_height(ctx: &Ctx<'_>) -> AppResult<u64> {
             .call(None, "getblockcount", json!([]), false)
             .await
             .map_err(AppError::from)?;
-        return r.as_u64().ok_or_else(|| bad("getblockcount invalide"));
+        return r.as_u64().ok_or_else(|| bad("invalid getblockcount"));
     }
-    Err(AppError::Internal("backend Bitcoin inconnu".into()))
+    Err(AppError::Internal("unknown Bitcoin backend".into()))
 }
 
 fn check_txid(txid: &str) -> AppResult<String> {
     let t = txid.trim().to_ascii_lowercase();
     if t.len() != 64 || !t.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(AppError::InvalidInput(
-            "txid : 64 caractères hexadécimaux".into(),
+            "txid: 64 hexadecimal characters".into(),
         ));
     }
     Ok(t)
@@ -706,7 +708,7 @@ pub fn verified_tx_hex(raw: &str, txid: &str, source: &str) -> AppResult<String>
     let raw = raw.trim().to_owned();
     wallet_core::verify_tx_hex(&raw, txid).map_err(|_| {
         bad(format!(
-            "{source} : transaction illisible ou différente de {txid} (son hash ne correspond pas)"
+            "{source}: transaction unreadable or different from {txid} (its hash does not match)"
         ))
     })?;
     Ok(raw)
@@ -730,7 +732,7 @@ pub async fn tx_hex(ctx: &Ctx<'_>, txid: &str) -> AppResult<String> {
             .await?;
         let raw = r
             .as_str()
-            .ok_or_else(|| bad("Electrum : transaction non hexadécimale"))?;
+            .ok_or_else(|| bad("Electrum: non-hexadecimal transaction"))?;
         return verified_tx_hex(raw, &t, "Electrum");
     }
     if let Some((c, w)) = core_client(ctx)? {
@@ -742,7 +744,7 @@ pub async fn tx_hex(ctx: &Ctx<'_>, txid: &str) -> AppResult<String> {
             Ok(v) => v
                 .get("hex")
                 .and_then(Value::as_str)
-                .ok_or_else(|| bad("gettransaction : hex manquant"))?
+                .ok_or_else(|| bad("gettransaction: missing hex"))?
                 .to_owned(),
             // -5: not a wallet transaction: ask the node itself.
             Err(CallError::Rpc(r)) if r.code == -5 => {
@@ -752,13 +754,13 @@ pub async fn tx_hex(ctx: &Ctx<'_>, txid: &str) -> AppResult<String> {
                 {
                     Ok(v) => v
                         .as_str()
-                        .ok_or_else(|| bad("getrawtransaction : hex manquant"))?
+                        .ok_or_else(|| bad("getrawtransaction: missing hex"))?
                         .to_owned(),
                     Err(CallError::Rpc(r)) if r.code == -5 => {
                         return Err(AppError::InvalidInput(format!(
-                            "Bitcoin Core : transaction {t} introuvable — elle n'est pas dans le \
-                             portefeuille de surveillance, et le nœud ne la trouve pas (pour une \
-                             transaction confirmée hors portefeuille, il faut -txindex=1)"
+                            "Bitcoin Core: transaction {t} not found — it is not in the \
+                             watch-only wallet, and the node cannot find it (for a \
+                             confirmed transaction outside the wallet, -txindex=1 is needed)"
                         )))
                     }
                     Err(e) => return Err(e.into()),
@@ -768,7 +770,7 @@ pub async fn tx_hex(ctx: &Ctx<'_>, txid: &str) -> AppResult<String> {
         };
         return verified_tx_hex(&raw, &t, "Bitcoin Core");
     }
-    Err(AppError::Internal("backend Bitcoin inconnu".into()))
+    Err(AppError::Internal("unknown Bitcoin backend".into()))
 }
 
 /// `POST /tx` (hex) → txid. The txid returned by the server must match the transaction.
@@ -776,7 +778,7 @@ pub async fn broadcast(ctx: &Ctx<'_>, hex_tx: &str) -> AppResult<String> {
     let decoded = wallet_core::btc_decode_raw_tx(hex_tx, ctx.network)?;
     let txid = if let Some(base) = esplora_base(ctx)? {
         let url = url::Url::parse(&format!("{}/tx", base.trim_end_matches('/')))
-            .map_err(|_| AppError::ServerInvalid("URL Esplora invalide".into()))?;
+            .map_err(|_| AppError::ServerInvalid("invalid Esplora URL".into()))?;
         let req = ServerRequest {
             url,
             method: Method::Post,
@@ -791,7 +793,7 @@ pub async fn broadcast(ctx: &Ctx<'_>, hex_tx: &str) -> AppResult<String> {
         let text = String::from_utf8_lossy(&body).trim().to_owned();
         if status != 200 {
             return Err(AppError::InvalidInput(format!(
-                "diffusion refusée : {}",
+                "broadcast refused: {}",
                 text.chars().take(300).collect::<String>()
             )));
         }
@@ -809,11 +811,11 @@ pub async fn broadcast(ctx: &Ctx<'_>, hex_tx: &str) -> AppResult<String> {
             .map_err(AppError::from)?;
         r.as_str().unwrap_or_default().to_owned()
     } else {
-        return Err(AppError::Internal("backend Bitcoin inconnu".into()));
+        return Err(AppError::Internal("unknown Bitcoin backend".into()));
     };
     if txid != decoded.txid {
         return Err(bad(format!(
-            "le serveur a répondu un txid inattendu ({})",
+            "the server answered an unexpected txid ({})",
             txid.chars().take(80).collect::<String>()
         )));
     }
@@ -850,7 +852,7 @@ pub async fn probe(ctx: &Ctx<'_>) -> AppResult<Detected> {
     let expected = wallet_core::btc_genesis_hash(ctx.network);
     let mismatch = |found: &str| {
         AppError::ServerWrongNetwork(format!(
-            "le serveur n'est pas sur Bitcoin {} (trouvé : {found})",
+            "the server is not on Bitcoin {} (found: {found})",
             net_label(ctx.network)
         ))
     };
@@ -926,7 +928,7 @@ pub async fn probe(ctx: &Ctx<'_>) -> AppResult<Detected> {
             ..Default::default()
         });
     }
-    Err(AppError::Internal("backend Bitcoin inconnu".into()))
+    Err(AppError::Internal("unknown Bitcoin backend".into()))
 }
 
 /// State of the Bitcoin Core watch-only wallet setup (`btc_core_status`).
@@ -1005,7 +1007,7 @@ pub async fn core_prepare(
     let (chain, _) = c.chain().await?;
     if chain != core_rpc::expected_chain(network) {
         return Err(AppError::ServerWrongNetwork(format!(
-            "le nœud est sur « {chain} », pas sur Bitcoin {}",
+            "the node is on \"{chain}\", not on Bitcoin {}",
             net_label(network)
         )));
     }

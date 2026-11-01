@@ -61,24 +61,21 @@ pub(crate) async fn rpc(state: &AppState, method: &str, params: Value) -> AppRes
         )
         .await?;
     if resp.status != 200 {
-        return Err(bad(format!(
-            "RPC Solana : HTTP {} sur {method}",
-            resp.status
-        )));
+        return Err(bad(format!("Solana RPC: HTTP {} on {method}", resp.status)));
     }
     let v: Value = serde_json::from_str(&resp.body)
-        .map_err(|_| bad(format!("RPC Solana : réponse illisible ({method})")))?;
+        .map_err(|_| bad(format!("Solana RPC: unreadable response ({method})")))?;
     if let Some(e) = v.get("error") {
         let m: String = e["message"]
             .as_str()
-            .unwrap_or("erreur")
+            .unwrap_or("error")
             .chars()
             .take(300)
             .collect();
         return Err(if method == "sendTransaction" {
-            AppError::InvalidInput(format!("transaction Solana refusée par le réseau : {m}"))
+            AppError::InvalidInput(format!("Solana transaction refused by the network: {m}"))
         } else {
-            bad(format!("RPC Solana : {method} : {m}"))
+            bad(format!("Solana RPC: {method}: {m}"))
         });
     }
     Ok(v["result"].clone())
@@ -90,16 +87,16 @@ fn sol(lamports: &str) -> String {
 
 fn u64_of(v: &Value, what: &str) -> AppResult<u64> {
     v.as_u64()
-        .ok_or_else(|| bad(format!("RPC Solana : {what} absent")))
+        .ok_or_else(|| bad(format!("Solana RPC: {what} missing")))
 }
 
 fn b64(v: &Value) -> AppResult<Vec<u8>> {
     let (Some(d), Some("base64")) = (v[0].as_str(), v[1].as_str()) else {
-        return Err(bad("RPC Solana : encodage inattendu"));
+        return Err(bad("Solana RPC: unexpected encoding"));
     };
     base64::engine::general_purpose::STANDARD
         .decode(d)
-        .map_err(|_| bad("RPC Solana : base64 invalide"))
+        .map_err(|_| bad("Solana RPC: invalid base64"))
 }
 
 // ---------------------------------------------------------------- reads
@@ -275,7 +272,7 @@ async fn our_stake_accounts(
     for a in v.as_array().into_iter().flatten() {
         let address = a["pubkey"]
             .as_str()
-            .ok_or_else(|| bad("RPC Solana : pubkey absent"))?
+            .ok_or_else(|| bad("Solana RPC: pubkey missing"))?
             .to_owned();
         let acc = &a["account"];
         if acc["owner"].as_str() != Some(SOL_STAKE_PROGRAM) {
@@ -307,7 +304,7 @@ async fn stake_account(
     }
     if acc["owner"].as_str() != Some(SOL_STAKE_PROGRAM) {
         return Err(AppError::InvalidInput(format!(
-            "{address} n'est pas un compte de staking"
+            "{address} is not a stake account"
         )));
     }
     Ok(Some((
@@ -411,7 +408,7 @@ async fn validator(state: &AppState, vote: &str) -> AppResult<SolValidator> {
         .find(|x| x.vote_account == vote)
         .ok_or_else(|| {
             AppError::InvalidInput(format!(
-                "{vote} n'est pas un compte de vote connu du réseau (getVoteAccounts) : refusé"
+                "{vote} is not a vote account known to the network (getVoteAccounts): refused"
             ))
         })?;
     // Best effort: a missing name never blocks.
@@ -585,11 +582,8 @@ pub struct SolStakePreview {
 
 /// The operation a decoded message performs, if it is exactly one Kyro builds.
 pub(crate) fn classify(s: &SolTxSummary, me: &str) -> AppResult<SolStakeOp> {
-    let refuse = || {
-        AppError::InvalidInput(
-            "ce n'est pas une opération de staking construite par Kyro : refusée".into(),
-        )
-    };
+    let refuse =
+        || AppError::InvalidInput("this is not a staking operation built by Kyro: refused".into());
     if s.fee_payer != me
         || s.signers != [me.to_owned()]
         || !s.lookup_tables.is_empty()
@@ -701,15 +695,13 @@ pub(crate) async fn preview(
             let stake = wallet_core::sol_create_with_seed(me, seed, SOL_STAKE_PROGRAM)?;
             if stake_account(state, &stake).await?.is_some() {
                 return Err(invalid(format!(
-                    "le compte de staking {stake} existe déjà : reconstruis l'opération"
+                    "the stake account {stake} already exists: rebuild the operation"
                 )));
             }
             let delegated = lamports
                 .checked_sub(rent)
                 .filter(|d| *d > 0)
-                .ok_or_else(|| {
-                    invalid("montant inférieur à la réserve de rent du compte de staking")
-                })?;
+                .ok_or_else(|| invalid("amount below the stake account's rent reserve"))?;
             let min = u64_of(
                 &rpc(
                     state,
@@ -721,13 +713,13 @@ pub(crate) async fn preview(
             )?;
             if delegated < min {
                 return Err(invalid(format!(
-                    "délégation minimale : {} (le réseau refuse moins)",
+                    "minimum delegation: {} (the network refuses less)",
                     sol(&min.to_string())
                 )));
             }
             if bal < lamports.saturating_add(fee) {
                 return Err(invalid(format!(
-                    "solde insuffisant : {} disponibles, il faut {} + frais",
+                    "insufficient balance: {} available, {} + fees needed",
                     sol(&bal.to_string()),
                     sol(&lamports.to_string())
                 )));
@@ -750,19 +742,19 @@ pub(crate) async fn preview(
         } => {
             let (lamports, acc) = stake_account(state, sa)
                 .await?
-                .ok_or_else(|| invalid(format!("compte de staking {sa} introuvable")))?;
+                .ok_or_else(|| invalid(format!("stake account {sa} not found")))?;
             let history = stake_history(state).await?;
             let pos = position(sa, lamports, &acc, me, ep.epoch, &history);
             if !pos.ours {
                 return Err(invalid(
-                    "ce compte de staking n'est pas entièrement à toi (autorité ou blocage) : refusé",
+                    "this stake account is not entirely yours (authority or lockup): refused",
                 ));
             }
             let mut p = match op {
                 SolStakeOp::Delegate { vote_account, .. } => {
                     if !matches!(pos.state, "initialized" | "inactive") {
                         return Err(invalid(format!(
-                            "compte de staking « {} » : seule une délégation d'un compte inactif est possible",
+                            "stake account \"{}\": only an inactive account can be delegated",
                             pos.state
                         )));
                     }
@@ -777,7 +769,7 @@ pub(crate) async fn preview(
                 SolStakeOp::Deactivate { .. } => {
                     if !matches!(pos.state, "activating" | "active") {
                         return Err(invalid(format!(
-                            "compte de staking « {} » : rien à désactiver",
+                            "stake account \"{}\": nothing to deactivate",
                             pos.state
                         )));
                     }
@@ -796,12 +788,12 @@ pub(crate) async fn preview(
                     if (closes && !pos.can_close) || (!closes && *amount > partial) || *amount == 0
                     {
                         return Err(invalid(format!(
-                            "retrait impossible : au plus {} sans fermer le compte{}",
+                            "withdrawal impossible: at most {} without closing the account{}",
                             sol(&partial.to_string()),
                             if pos.can_close {
-                                format!(", ou tout le solde ({})", sol(&lamports.to_string()))
+                                format!(", or the whole balance ({})", sol(&lamports.to_string()))
                             } else {
-                                " (le stake doit d'abord finir son refroidissement)".into()
+                                " (the stake must first finish its cooldown)".into()
                             }
                         )));
                     }
@@ -810,7 +802,7 @@ pub(crate) async fn preview(
                     p.closes_account = closes;
                     p
                 }
-                SolStakeOp::CreateAndDelegate { .. } => return Err(invalid("opération")),
+                SolStakeOp::CreateAndDelegate { .. } => return Err(invalid("operation")),
             };
             p.account = Some(pos);
             p
@@ -825,7 +817,7 @@ fn parse_lamports(s: &str) -> AppResult<u64> {
         .parse::<u64>()
         .ok()
         .filter(|v| *v > 0)
-        .ok_or_else(|| invalid("montant en lamports invalide"))
+        .ok_or_else(|| invalid("invalid amount in lamports"))
 }
 
 /// Request → operation (seed choice for a new account, maximum for a withdrawal).
@@ -855,10 +847,10 @@ async fn operation(state: &AppState, me: &str, r: &SolStakeRequest) -> AppResult
                 }
             }
             SolStakeOp::CreateAndDelegate {
-                seed: chosen.ok_or_else(|| invalid("aucun seed libre"))?,
+                seed: chosen.ok_or_else(|| invalid("no free seed"))?,
                 lamports: stake
                     .checked_add(rent)
-                    .ok_or_else(|| invalid("montant trop grand"))?,
+                    .ok_or_else(|| invalid("amount too large"))?,
                 vote_account: vote_account.trim().to_owned(),
             }
         }
@@ -901,7 +893,7 @@ async fn operation(state: &AppState, me: &str, r: &SolStakeRequest) -> AppResult
 async fn stake_account_or_err(state: &AppState, a: &str) -> AppResult<(u64, SolStakeAccount)> {
     stake_account(state, a.trim())
         .await?
-        .ok_or_else(|| invalid(format!("compte de staking {a} introuvable")))
+        .ok_or_else(|| invalid(format!("stake account {a} not found")))
 }
 
 #[derive(Serialize)]
@@ -927,12 +919,12 @@ pub(crate) async fn build(
     .await?;
     let blockhash = bh["value"]["blockhash"]
         .as_str()
-        .ok_or_else(|| bad("RPC Solana : blockhash absent"))?;
+        .ok_or_else(|| bad("Solana RPC: blockhash missing"))?;
     let message = wallet_core::sol_stake_message(me, &op, blockhash)?;
     // Decoded again by wallet-core, with the rules used before signing.
     let summary = wallet_core::sol_decode_message(&message, &[], me)?;
     if classify(&summary, me)? != op {
-        return Err(AppError::Internal("message de staking inattendu".into()));
+        return Err(AppError::Internal("unexpected staking message".into()));
     }
     let fee: u64 = summary.base_fee_lamports.parse().unwrap_or(5000);
     let stake = preview(state, me, &op, fee).await?;
@@ -1210,7 +1202,7 @@ pub(crate) async fn prepare_sign(
     // through a table has no business here.
     if !decoded.from_tables.is_empty() {
         return Err(AppError::InvalidInput(
-            "staking : comptes lus dans une table d'adresses refusés".into(),
+            "staking: accounts read from an address lookup table refused".into(),
         ));
     }
     let summary = decoded.summary;
@@ -1285,7 +1277,7 @@ pub(crate) async fn broadcast(
     let summary = wallet_core::sol_decode_message(message, &[], me)?;
     classify(&summary, me)?;
     let sig = wallet_core::sol_verify_signature(me, message, signature)
-        .map_err(|_| invalid("signature invalide pour ton adresse Solana"))?;
+        .map_err(|_| invalid("invalid signature for your Solana address"))?;
     let mut tx = vec![1u8];
     tx.extend_from_slice(&sig);
     tx.extend_from_slice(message);
@@ -1299,7 +1291,7 @@ pub(crate) async fn broadcast(
     .await?;
     if r.as_str() != Some(expected.as_str()) {
         return Err(bad(format!(
-            "le RPC a répondu un identifiant inattendu ({})",
+            "the RPC answered an unexpected identifier ({})",
             r.to_string().chars().take(100).collect::<String>()
         )));
     }
@@ -1317,7 +1309,7 @@ pub async fn sol_stake_broadcast(
     let bytes = solana::message_bytes(&message)?;
     let sig = base64::engine::general_purpose::STANDARD
         .decode(signature.trim())
-        .map_err(|_| invalid("signature : base64 attendu"))?;
+        .map_err(|_| invalid("signature: base64 expected"))?;
     broadcast(&state, &me, &bytes, &sig).await
 }
 

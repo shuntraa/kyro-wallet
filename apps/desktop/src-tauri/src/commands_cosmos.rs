@@ -226,12 +226,12 @@ pub struct CosmosBuilt {
 fn parse_uatom(amount: &str) -> AppResult<u128> {
     let a = amount.trim();
     if a.is_empty() || a.len() > 30 || !a.bytes().all(|b| b.is_ascii_digit()) {
-        return Err(AppError::InvalidInput("montant en uatom invalide".into()));
+        return Err(AppError::InvalidInput("invalid amount in uatom".into()));
     }
     a.parse::<u128>()
         .ok()
         .filter(|v| *v > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant en uatom invalide".into()))
+        .ok_or_else(|| AppError::InvalidInput("invalid amount in uatom".into()))
 }
 
 /// Our account, checked: it exists and the key recorded on chain (if any) is ours.
@@ -246,8 +246,7 @@ async fn our_account(c: &CosmosCtx<'_>, me: &str, pk: &[u8; 33]) -> AppResult<Co
             != Some(pk.as_slice())
         {
             return Err(AppError::ServerUnreachable(
-                "Cosmos : la clé publique enregistrée sur la chaîne n'est pas celle de ce compte"
-                    .into(),
+                "Cosmos: the public key recorded on the chain is not this account's".into(),
             ));
         }
     }
@@ -265,12 +264,12 @@ pub(crate) async fn build(
 ) -> AppResult<CosmosBuilt> {
     let to = wallet_core::cosmos_normalize_address(to)?;
     if to == me {
-        return Err(AppError::InvalidInput("envoi à soi-même".into()));
+        return Err(AppError::InvalidInput("send to yourself".into()));
     }
     let amount = parse_uatom(amount)?;
     if memo.chars().count() > wallet_core::COSMOS_MAX_MEMO {
         return Err(AppError::InvalidInput(format!(
-            "mémo : au plus {} caractères",
+            "memo: at most {} characters",
             wallet_core::COSMOS_MAX_MEMO
         )));
     }
@@ -352,18 +351,17 @@ pub(crate) async fn prepare_sign(
     let account = our_account(c, me, pk).await?;
     if summary.timeout_height <= info.height {
         return Err(AppError::InvalidInput(
-            "transaction Cosmos expirée (timeout_height dépassé) : reconstruis-la".into(),
+            "Cosmos transaction expired (timeout_height passed): rebuild it".into(),
         ));
     }
     if summary.account_number != account.account_number {
         return Err(AppError::InvalidInput(
-            "numéro de compte Cosmos différent de celui du réseau : reconstruis la transaction"
-                .into(),
+            "Cosmos account number differs from the network's: rebuild the transaction".into(),
         ));
     }
     if summary.sequence != account.sequence {
         return Err(AppError::InvalidInput(
-            "numéro de séquence périmé : reconstruis la transaction".into(),
+            "stale sequence number: rebuild the transaction".into(),
         ));
     }
     cosmos_backend::check_send(
@@ -419,7 +417,7 @@ pub async fn cosmos_sign_tx(
         blocking(move || Ok(wallet_core::cosmos_sign(&seed, a, &d, net)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -443,7 +441,7 @@ pub(crate) async fn broadcast_checked(
     let (hash, summary) = wallet_core::cosmos_verify_signed(tx, c.network, account.account_number)?;
     if summary.from != me {
         return Err(AppError::InvalidInput(
-            "cette transaction n'est pas signée par ton compte".into(),
+            "this transaction is not signed by your account".into(),
         ));
     }
     cosmos_backend::broadcast(c, tx.trim(), &hash).await
@@ -467,7 +465,7 @@ pub async fn cosmos_tx_status(
     let h = hash.trim();
     if h.len() != 64 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(AppError::InvalidInput(
-            "hash : 64 caractères hexadécimaux".into(),
+            "hash: 64 hexadecimal characters".into(),
         ));
     }
     cosmos_backend::tx_status(&ctx(&state), &h.to_uppercase()).await

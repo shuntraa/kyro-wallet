@@ -154,7 +154,7 @@ pub struct Frame {
 /// Segments one transport payload: initiation packet (control byte, channel id, length of
 /// payload + CRC), then continuation packets (0x80, channel id); null-padded.
 pub fn packets(cb: u8, cid: u16, data: &[u8]) -> HwResult<Vec<Packet>> {
-    let len = u16::try_from(data.len() + 4).map_err(|_| HwError::bad("message THP trop long"))?;
+    let len = u16::try_from(data.len() + 4).map_err(|_| HwError::bad("THP message too long"))?;
     let mut body = Vec::with_capacity(5 + data.len() + 4);
     body.push(cb);
     body.extend(cid.to_be_bytes());
@@ -259,22 +259,22 @@ fn check(limit: &Mutex<Limit>) -> HwResult<()> {
 fn transport_error(code: Option<u8>) -> HwError {
     match code {
         Some(ERR_LOCKED) => HwError::Locked,
-        Some(ERR_BUSY) => HwError::Busy("l'appareil est occupé avec un autre canal".into()),
+        Some(ERR_BUSY) => HwError::Busy("the device is busy with another channel".into()),
         // The device dropped the channel (restart, too many hosts) or could not decrypt.
         Some(ERR_UNALLOCATED) | Some(ERR_DECRYPTION) => HwError::Disconnected,
-        other => HwError::bad(format!("erreur de transport THP {other:?}")),
+        other => HwError::bad(format!("THP transport error {other:?}")),
     }
 }
 
 fn random<const N: usize>() -> HwResult<Zeroizing<[u8; N]>> {
     let mut out = Zeroizing::new([0u8; N]);
     getrandom::getrandom(&mut out[..])
-        .map_err(|_| HwError::Internal("aléa du système indisponible".into()))?;
+        .map_err(|_| HwError::Internal("system randomness unavailable".into()))?;
     Ok(out)
 }
 
 fn snow_err(e: snow::Error) -> HwError {
-    HwError::bad(format!("poignée de main THP : {e}"))
+    HwError::bad(format!("THP handshake: {e}"))
 }
 
 // ---------------------------------------------------------------- crypto helpers
@@ -316,7 +316,7 @@ fn cpace_public(gen_str: &[u8], k: &[u8; 32]) -> HwResult<[u8; 32]> {
     #[allow(deprecated)] // the "nonspec" name refers to the hashing step, which matches CPace
     let g8 = EdwardsPoint::nonspec_map_to_curve::<Sha512>(gen_str);
     if g8.is_identity() {
-        return Err(HwError::bad("générateur CPace d'ordre faible"));
+        return Err(HwError::bad("low-order CPace generator"));
     }
     let mut c = *k;
     c[0] &= 248;
@@ -328,10 +328,10 @@ fn cpace_public(gen_str: &[u8], k: &[u8; 32]) -> HwResult<[u8; 32]> {
     }
     c.fill(0);
     let s = Option::<Scalar>::from(Scalar::from_canonical_bytes(*div8))
-        .ok_or_else(|| HwError::bad("scalaire CPace invalide"))?;
+        .ok_or_else(|| HwError::bad("invalid CPace scalar"))?;
     let public = (g8.to_montgomery() * s).to_bytes();
     if public.iter().all(|b| *b == 0) {
-        return Err(HwError::bad("clé CPace nulle"));
+        return Err(HwError::bad("zero CPace key"));
     }
     Ok(public)
 }
@@ -360,7 +360,7 @@ pub fn cpace_host(
     // on its side since 2.12.2).
     if shared.iter().all(|b| *b == 0) {
         return Err(HwError::PairingFailed(
-            "clé CPace de l'appareil invalide".into(),
+            "invalid CPace key from the device".into(),
         ));
     }
     Ok(CpaceHost {
@@ -409,7 +409,7 @@ pub struct DeviceProps {
 
 fn parse_props(raw: &[u8]) -> HwResult<DeviceProps> {
     let p = protos::ThpDeviceProperties::parse_from_bytes(raw)
-        .map_err(|e| HwError::bad(format!("propriétés THP invalides : {e}")))?;
+        .map_err(|e| HwError::bad(format!("invalid THP properties: {e}")))?;
     Ok(DeviceProps {
         internal_model: p.internal_model().to_string(),
         protocol_major: p.protocol_version_major(),
@@ -474,9 +474,7 @@ impl<P: PacketIo> Channel<P> {
                 }
                 let cid = u16::from_be_bytes([f.data[8], f.data[9]]);
                 if cid == 0 || cid >= 0xFFF0 {
-                    return Err(HwError::bad(format!(
-                        "identifiant de canal THP réservé {cid:04x}"
-                    )));
+                    return Err(HwError::bad(format!("reserved THP channel id {cid:04x}")));
                 }
                 let props = parse_props(&f.data[10..])?;
                 return Ok(Channel {
@@ -620,7 +618,7 @@ impl<P: PacketIo> Channel<P> {
     ) -> HwResult<Handshake> {
         let params = NOISE_PARAMS
             .parse()
-            .map_err(|_| HwError::Internal("paramètres Noise".into()))?;
+            .map_err(|_| HwError::Internal("Noise parameters".into()))?;
         let builder = snow::Builder::new(params)
             .local_private_key(host_key)
             .map_err(snow_err)?
@@ -644,7 +642,7 @@ impl<P: PacketIo> Channel<P> {
         let resp = self.recv(limit)?;
         test_hooks::record(&resp.data);
         if resp.cb & DATA_MASK != HS_INIT_RES || resp.data.len() != 32 + 48 + 16 {
-            return Err(HwError::bad("réponse d'initiation THP inattendue"));
+            return Err(HwError::bad("unexpected THP initiation response"));
         }
         let mut payload = Zeroizing::new(vec![0u8; HANDSHAKE_BUF]);
         if hs
@@ -652,17 +650,15 @@ impl<P: PacketIo> Channel<P> {
             .map_err(snow_err)?
             != 0
         {
-            return Err(HwError::bad(
-                "données inattendues dans la réponse d'initiation",
-            ));
+            return Err(HwError::bad("unexpected data in the initiation response"));
         }
         let masked: [u8; 32] = hs
             .get_remote_static()
             .and_then(|k| k.try_into().ok())
-            .ok_or_else(|| HwError::bad("clé statique de l'appareil absente"))?;
+            .ok_or_else(|| HwError::bad("missing device static key"))?;
         let eph: [u8; 32] = resp.data[..32]
             .try_into()
-            .map_err(|_| HwError::bad("clé éphémère"))?;
+            .map_err(|_| HwError::bad("ephemeral key"))?;
         let matched = known
             .iter()
             .position(|p| mask_matches(&p.trezor_key, &eph, &masked));
@@ -684,27 +680,27 @@ impl<P: PacketIo> Channel<P> {
         self.handshake_hash = hs
             .get_handshake_hash()
             .try_into()
-            .map_err(|_| HwError::bad("empreinte de poignée de main"))?;
+            .map_err(|_| HwError::bad("handshake hash"))?;
         test_hooks::record(&self.handshake_hash);
         let mut ts = hs.into_transport_mode().map_err(snow_err)?;
 
         let resp = self.recv(limit)?;
         test_hooks::record(&resp.data);
         if resp.cb & DATA_MASK != HS_COMP_RES {
-            return Err(HwError::bad(
-                "réponse de fin de poignée de main THP inattendue",
-            ));
+            return Err(HwError::bad("unexpected THP handshake completion response"));
         }
         let mut state = [0u8; 64];
         let n = ts
             .read_message(&resp.data, &mut state)
-            .map_err(|_| HwError::bad("état THP indéchiffrable"))?;
+            .map_err(|_| HwError::bad("undecryptable THP state"))?;
         if n != 1 || state[0] > STATE_PAIRED_AUTOCONNECT {
-            return Err(HwError::bad("état THP invalide"));
+            return Err(HwError::bad("invalid THP state"));
         }
         if matched.is_none() && state[0] != STATE_UNPAIRED {
             // HH3: without a credential the device cannot say "paired".
-            return Err(HwError::bad("l'appareil se dit appairé sans identifiant"));
+            return Err(HwError::bad(
+                "the device claims to be paired without a credential",
+            ));
         }
         self.noise = Some(ts);
         Ok(Handshake {
@@ -729,27 +725,27 @@ impl<P: PacketIo> Channel<P> {
         pt.extend(msg_type.to_be_bytes());
         pt.extend(payload);
         if pt.len() + 16 + 4 > usize::from(u16::MAX) {
-            return Err(HwError::bad("message trop long pour THP"));
+            return Err(HwError::bad("message too long for THP"));
         }
         let mut ct = vec![0u8; pt.len() + 16];
         let n = noise
             .write_message(&pt, &mut ct)
-            .map_err(|e| HwError::bad(format!("chiffrement THP : {e}")))?;
+            .map_err(|e| HwError::bad(format!("THP encryption: {e}")))?;
         self.send_reliable(limit, ENCRYPTED, &ct[..n])
     }
 
     pub fn recv_app(&mut self, limit: &Mutex<Limit>) -> HwResult<(u8, u16, Vec<u8>)> {
         let f = self.recv(limit)?;
         if f.cb & DATA_MASK != ENCRYPTED {
-            return Err(HwError::bad("message THP non chiffré"));
+            return Err(HwError::bad("unencrypted THP message"));
         }
         let noise = self.noise.as_mut().ok_or(HwError::Disconnected)?;
         let mut pt = vec![0u8; f.data.len()];
         let n = noise
             .read_message(&f.data, &mut pt)
-            .map_err(|_| HwError::bad("message THP indéchiffrable"))?;
+            .map_err(|_| HwError::bad("undecryptable THP message"))?;
         if n < 3 {
-            return Err(HwError::bad("message THP trop court"));
+            return Err(HwError::bad("THP message too short"));
         }
         pt.truncate(n);
         let session = pt[0];
@@ -761,26 +757,26 @@ impl<P: PacketIo> Channel<P> {
 // ---------------------------------------------------------------- pairing & credentials
 
 fn decode<M: Message>(data: &[u8], what: &str) -> HwResult<M> {
-    M::parse_from_bytes(data).map_err(|e| HwError::bad(format!("{what} invalide : {e}")))
+    M::parse_from_bytes(data).map_err(|e| HwError::bad(format!("invalid {what}: {e}")))
 }
 
 fn encode<M: Message>(m: &M) -> HwResult<Vec<u8>> {
     m.write_to_bytes()
-        .map_err(|e| HwError::bad(format!("encodage protobuf : {e}")))
+        .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))
 }
 
 fn pairing_failure(data: &[u8], wrong_code: bool) -> HwError {
     use protos::failure::FailureType as F;
     let Ok(f) = protos::Failure::parse_from_bytes(data) else {
-        return HwError::bad("échec THP illisible");
+        return HwError::bad("unreadable THP failure");
     };
     match f.code() {
         F::Failure_ActionCancelled | F::Failure_PinCancelled => HwError::Rejected,
         F::Failure_DataError if wrong_code => {
-            HwError::PairingFailed("code incorrect : l'appareil l'a refusé".into())
+            HwError::PairingFailed("wrong code: the device rejected it".into())
         }
-        F::Failure_Busy | F::Failure_InProgress => HwError::Busy("l'appareil est occupé".into()),
-        code => HwError::bad(format!("appairage THP : {code:?} « {} »", f.message())),
+        F::Failure_Busy | F::Failure_InProgress => HwError::Busy("the device is busy".into()),
+        code => HwError::bad(format!("THP pairing: {code:?} « {} »", f.message())),
     }
 }
 
@@ -808,7 +804,7 @@ impl<P: PacketIo> Channel<P> {
                 }
                 mt::FAILURE => return Err(pairing_failure(&data, wrong_code)),
                 t if t == expect => return Ok(data),
-                t => return Err(HwError::bad(format!("message THP inattendu {t}"))),
+                t => return Err(HwError::bad(format!("unexpected THP message {t}"))),
             }
         }
     }
@@ -818,7 +814,7 @@ impl<P: PacketIo> Channel<P> {
     pub fn pair_code_entry(&mut self, limit: &Mutex<Limit>, ctl: &Ctl) -> HwResult<()> {
         if !self.props.pairing_methods.contains(&METHOD_CODE_ENTRY) {
             return Err(HwError::unsupported(
-                "appairage THP par code indisponible sur cet appareil",
+                "THP code pairing unavailable on this device",
             ));
         }
         let mut req = protos::ThpPairingRequest::new();
@@ -844,11 +840,11 @@ impl<P: PacketIo> Channel<P> {
                 mt::CODE_ENTRY_COMMITMENT,
                 Prompt::ThpConfirmPairing,
             )?,
-            "engagement",
+            "commitment",
         )?;
         let commitment = c.commitment().to_vec();
         if commitment.len() != 32 {
-            return Err(HwError::bad("engagement THP de taille invalide"));
+            return Err(HwError::bad("THP commitment of invalid size"));
         }
 
         let challenge = random::<16>()?;
@@ -863,12 +859,12 @@ impl<P: PacketIo> Channel<P> {
                 mt::CODE_ENTRY_CPACE_TREZOR,
                 Prompt::ThpConfirmPairing,
             )?,
-            "clé CPace",
+            "CPace key",
         )?;
         let trezor_cpace: [u8; 32] = t
             .cpace_trezor_public_key()
             .try_into()
-            .map_err(|_| HwError::bad("clé CPace de taille invalide"))?;
+            .map_err(|_| HwError::bad("CPace key of invalid size"))?;
 
         // The device now shows the code: the user types it into Kyro.
         ctl.prompt(Prompt::ThpPairingCode);
@@ -878,7 +874,7 @@ impl<P: PacketIo> Channel<P> {
             .try_into()
             .ok()
             .filter(|c: &[u8; 6]| c.iter().all(u8::is_ascii_digit))
-            .ok_or_else(|| HwError::PairingFailed("le code a 6 chiffres".into()))?;
+            .ok_or_else(|| HwError::PairingFailed("the code has 6 digits".into()))?;
         let k = random::<32>()?;
         let cp = cpace_host(&code, &self.handshake_hash, &k, &trezor_cpace)?;
         let mut tag = protos::ThpCodeEntryCpaceHostTag::new();
@@ -906,7 +902,7 @@ impl<P: PacketIo> Channel<P> {
             )
         {
             return Err(HwError::PairingFailed(
-                "l'appareil n'a pas prouvé le code (engagement ou code différent)".into(),
+                "the device did not prove the code (different commitment or code)".into(),
             ));
         }
         Ok(())
@@ -933,20 +929,20 @@ impl<P: PacketIo> Channel<P> {
                 mt::CREDENTIAL_RESPONSE,
                 Prompt::ThpConfirmConnection,
             )?,
-            "identifiant THP",
+            "THP credential",
         )?;
         let key: [u8; 32] = r
             .trezor_static_public_key()
             .try_into()
-            .map_err(|_| HwError::bad("clé statique de taille invalide"))?;
+            .map_err(|_| HwError::bad("static key of invalid size"))?;
         if !mask_matches(&key, &hs.trezor_ephemeral, &hs.masked_static) {
             return Err(HwError::bad(
-                "la clé statique annoncée ne correspond pas à la poignée de main",
+                "the announced static key does not match the handshake",
             ));
         }
         let cred = r.credential().to_vec();
         if cred.is_empty() || cred.len() > MAX_CREDENTIAL_LEN {
-            return Err(HwError::bad("identifiant THP de taille invalide"));
+            return Err(HwError::bad("THP credential of invalid size"));
         }
         Ok((key, cred))
     }
@@ -997,7 +993,7 @@ pub fn connect<P: PacketIo>(
     let mut ch = Channel::allocate(io, limit)?;
     if ch.props.protocol_major != 2 {
         return Err(HwError::unsupported(format!(
-            "version THP {}.{} non prise en charge",
+            "THP version {}.{} not supported",
             ch.props.protocol_major, ch.props.protocol_minor
         )));
     }

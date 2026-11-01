@@ -44,7 +44,7 @@ fn call<M: TrezorMessage, R: TrezorMessage>(
 ) -> HwResult<R> {
     let bytes = m
         .write_to_bytes()
-        .map_err(|e| HwError::bad(format!("encodage protobuf : {e}")))?;
+        .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))?;
     decode(io.call(ctl, M::MESSAGE_TYPE, bytes)?)
 }
 
@@ -63,17 +63,17 @@ pub fn read_account_key(io: &mut dyn TrezorIo, ctl: &Ctl, account: u32) -> HwRes
     let node = pk
         .node
         .as_ref()
-        .ok_or_else(|| HwError::bad("nœud absent"))?;
+        .ok_or_else(|| HwError::bad("missing node"))?;
     let mut out = [0u8; 64];
     let key = node.public_key();
     // Trezor's Cardano node carries the raw 32-byte Ed25519 key.
     if key.len() != 32 || node.chain_code().len() != 32 {
-        return Err(HwError::bad("clé publique Cardano mal formée"));
+        return Err(HwError::bad("malformed Cardano public key"));
     }
     out[..32].copy_from_slice(key);
     out[32..].copy_from_slice(node.chain_code());
     if pk.xpub.as_deref().is_some_and(|x| x != hex::encode(out)) {
-        return Err(HwError::bad("xpub et nœud Cardano différents"));
+        return Err(HwError::bad("Cardano xpub and node differ"));
     }
     Ok(out)
 }
@@ -109,7 +109,7 @@ pub fn address(
     }
     let a: protos::CardanoAddress = call(io, ctl, &get_address(net, account, display))?;
     a.address
-        .ok_or_else(|| HwError::bad("adresse Cardano absente"))
+        .ok_or_else(|| HwError::bad("missing Cardano address"))
 }
 
 /// One message of the signing stream, with what it is answered by.
@@ -119,13 +119,13 @@ fn item<M: TrezorMessage>(m: &M) -> HwResult<Item> {
     Ok(Item(
         M::MESSAGE_TYPE,
         m.write_to_bytes()
-            .map_err(|e| HwError::bad(format!("encodage protobuf : {e}")))?,
+            .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))?,
     ))
 }
 
 /// `CardanoSignTxInit` of Kyro's payment (one witness: the payment key).
 pub fn sign_init(plan: &CardanoHwPlan, net: Network) -> HwResult<protos::CardanoSignTxInit> {
-    let n = |x: usize| u32::try_from(x).map_err(|_| HwError::unsupported("trop d'éléments"));
+    let n = |x: usize| u32::try_from(x).map_err(|_| HwError::unsupported("too many items"));
     let mut m = protos::CardanoSignTxInit::new();
     m.set_signing_mode(protos::CardanoTxSigningMode::ORDINARY_TRANSACTION);
     m.set_protocol_magic(protocol_magic(net));
@@ -156,14 +156,12 @@ pub fn sign_init(plan: &CardanoHwPlan, net: Network) -> HwResult<protos::Cardano
 
 /// Inputs, then each output and its tokens (all answered by `CardanoTxItemAck`).
 fn body_items(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResult<Vec<Item>> {
-    let n = |x: usize| u32::try_from(x).map_err(|_| HwError::unsupported("trop d'éléments"));
+    let n = |x: usize| u32::try_from(x).map_err(|_| HwError::unsupported("too many items"));
     let mut out = Vec::new();
     for i in &plan.inputs {
         let mut m = protos::CardanoTxInput::new();
         m.set_prev_hash(i.tx_hash.to_vec());
-        m.set_prev_index(
-            u32::try_from(i.index).map_err(|_| HwError::unsupported("index d'entrée"))?,
-        );
+        m.set_prev_index(u32::try_from(i.index).map_err(|_| HwError::unsupported("input index"))?);
         out.push(item(&m)?);
     }
     for o in &plan.outputs {
@@ -172,10 +170,10 @@ fn body_items(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResult<Vec<
             CardanoHwDestination::Own => {
                 m.address_parameters = MessageField::some(base_params(account))
             }
-            CardanoHwDestination::Address(a) => m
-                .set_address(wallet_core::cardano_address_string(a, net).ok_or_else(|| {
-                    HwError::unsupported("adresse de sortie non prise en charge")
-                })?),
+            CardanoHwDestination::Address(a) => m.set_address(
+                wallet_core::cardano_address_string(a, net)
+                    .ok_or_else(|| HwError::unsupported("unsupported output address"))?,
+            ),
         }
         m.set_amount(o.coin);
         m.set_asset_groups_count(n(o.assets.len())?);
@@ -204,7 +202,7 @@ fn body_items(plan: &CardanoHwPlan, net: Network, account: u32) -> HwResult<Vec<
 fn host_ack() -> HwResult<Vec<u8>> {
     protos::CardanoTxHostAck::new()
         .write_to_bytes()
-        .map_err(|e| HwError::bad(format!("encodage protobuf : {e}")))
+        .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))
 }
 
 /// The whole flow; returns the firmware's body hash and payment-key signature (unverified,
@@ -226,7 +224,7 @@ pub fn sign_tx(
         a.set_hash(h.to_vec());
         let s: protos::CardanoTxAuxiliaryDataSupplement = call(io, ctl, &a)?;
         if s.type_() != protos::CardanoTxAuxiliaryDataSupplementType::NONE {
-            return Err(HwError::bad("supplément de métadonnées inattendu"));
+            return Err(HwError::bad("unexpected metadata supplement"));
         }
         let _: protos::CardanoTxItemAck =
             decode(io.call(ctl, MessageType::MessageType_CardanoTxHostAck, host_ack()?)?)?;
@@ -235,22 +233,22 @@ pub fn sign_tx(
     w.path = payment_path(account).to_vec();
     let r: protos::CardanoTxWitnessResponse = call(io, ctl, &w)?;
     if r.type_() != protos::CardanoTxWitnessType::SHELLEY_WITNESS {
-        return Err(HwError::bad("témoin Cardano d'un type inattendu"));
+        return Err(HwError::bad("Cardano witness of an unexpected type"));
     }
     let pk: [u8; 32] = r
         .pub_key()
         .try_into()
-        .map_err(|_| HwError::bad("clé du témoin : 32 octets attendus"))?;
+        .map_err(|_| HwError::bad("witness key: 32 bytes expected"))?;
     let sig: [u8; 64] = r
         .signature()
         .try_into()
-        .map_err(|_| HwError::bad("signature Cardano : 64 octets attendus"))?;
+        .map_err(|_| HwError::bad("Cardano signature: 64 bytes expected"))?;
     let h: protos::CardanoTxBodyHash =
         decode(io.call(ctl, MessageType::MessageType_CardanoTxHostAck, host_ack()?)?)?;
     let hash: [u8; 32] = h
         .tx_hash()
         .try_into()
-        .map_err(|_| HwError::bad("hash du corps Cardano : 32 octets attendus"))?;
+        .map_err(|_| HwError::bad("Cardano body hash: 32 bytes expected"))?;
     let _: protos::CardanoSignTxFinished =
         decode(io.call(ctl, MessageType::MessageType_CardanoTxHostAck, host_ack()?)?)?;
     Ok((hash, sig, pk))

@@ -128,7 +128,7 @@ pub fn plan(peers: &[Peer], tor: bool) -> AppResult<Plan> {
     };
     match &plan {
         Plan::Tor(p) | Plan::Clear(p) if p.is_empty() => Err(AppError::ServerInvalid(
-            "filtres compacts : aucun pair utilisable".into(),
+            "compact filters: no usable peer".into(),
         )),
         _ => Ok(plan),
     }
@@ -474,9 +474,7 @@ async fn drive(
         })
         .await
         .map_err(|_| {
-            AppError::ServerUnreachable(
-                "filtres compacts : aucune progression (pairs injoignables ?)".into(),
-            )
+            AppError::ServerUnreachable("compact filters: no progress (peers unreachable?)".into())
         })?;
         match step {
             Some(Ok(Some(ev))) => match ev {
@@ -493,7 +491,7 @@ async fn drive(
                                 .client
                                 .requester
                                 .rescan_from(scan_from.saturating_sub(1))
-                                .map_err(|e| AppError::Internal(format!("cbf : {e}")))?;
+                                .map_err(|e| AppError::Internal(format!("cbf: {e}")))?;
                         }
                         Phase::Filters => {
                             if watch.take_extended() && rescans < MAX_RESCANS {
@@ -506,7 +504,7 @@ async fn drive(
                                     .client
                                     .requester
                                     .rescan_from(scan_from.saturating_sub(1))
-                                    .map_err(|e| AppError::Internal(format!("cbf : {e}")))?;
+                                    .map_err(|e| AppError::Internal(format!("cbf: {e}")))?;
                             } else {
                                 return Ok(());
                             }
@@ -525,7 +523,7 @@ async fn drive(
                             .get_block(f.block_hash())
                             .await
                             .map_err(|e| {
-                                AppError::ServerUnreachable(format!("cbf : bloc {height} : {e}"))
+                                AppError::ServerUnreachable(format!("cbf: block {height}: {e}"))
                             })?;
                         st.matched_blocks += 1;
                         let hash = block.block.block_hash().to_string();
@@ -579,7 +577,7 @@ async fn drive(
                         connected,
                         required,
                     } => {
-                        format!("connexion aux pairs ({connected}/{required})")
+                        format!("connecting to peers ({connected}/{required})")
                     }
                     other => other.to_string(),
                 });
@@ -587,7 +585,7 @@ async fn drive(
             // A channel closed: the node stopped (e.g. no reachable peer).
             _ => {
                 return Err(AppError::ServerUnreachable(
-                    "filtres compacts : aucun pair joignable".into(),
+                    "compact filters: no reachable peer".into(),
                 ))
             }
         }
@@ -630,7 +628,7 @@ async fn finish(running: &Running, store: &mut Store) {
 /// Broadcasts over P2P (same transport rules), then records the transaction as pending.
 pub async fn broadcast(tor_mgr: Arc<TorManager>, p: Params, hex_tx: &str) -> AppResult<String> {
     let tx: Transaction = deserialize_hex(hex_tx.trim())
-        .map_err(|_| AppError::InvalidInput("transaction Bitcoin invalide".into()))?;
+        .map_err(|_| AppError::InvalidInput("invalid Bitcoin transaction".into()))?;
     let path = store_path(&p.data_dir, p.network);
     let mut store = Store::load(&path);
     let running = start_node(&tor_mgr, &p, &store, true).await?;
@@ -640,7 +638,7 @@ pub async fn broadcast(tor_mgr: Arc<TorManager>, p: Params, hex_tx: &str) -> App
             match client.client.info_rx.recv().await {
                 Some(Info::ConnectionsMet | Info::SuccessfulHandshake) => break,
                 Some(_) => {}
-                None => return Err(AppError::ServerUnreachable("aucun pair joignable".into())),
+                None => return Err(AppError::ServerUnreachable("no reachable peer".into())),
             }
         }
         client
@@ -648,10 +646,10 @@ pub async fn broadcast(tor_mgr: Arc<TorManager>, p: Params, hex_tx: &str) -> App
             .requester
             .submit_package(tx.clone())
             .await
-            .map_err(|e| AppError::ServerUnreachable(format!("diffusion P2P : {e}")))
+            .map_err(|e| AppError::ServerUnreachable(format!("P2P broadcast: {e}")))
     })
     .await
-    .map_err(|_| AppError::ServerUnreachable("diffusion P2P : délai dépassé".into()))?;
+    .map_err(|_| AppError::ServerUnreachable("P2P broadcast: timed out".into()))?;
     stop_node(client).await;
     sent?;
     let txid = tx.compute_txid().to_string();
@@ -692,20 +690,18 @@ pub fn tx_hex(data_dir: &Path, net: Network, txid: &str) -> AppResult<String> {
     let t = txid.trim().to_ascii_lowercase();
     let stored = store.txs.get(&t).ok_or_else(|| {
         AppError::InvalidInput(format!(
-            "filtres compacts : transaction {t} absente des blocs synchronisés (seules les \
-             transactions qui touchent tes adresses sont gardées ; relance une synchronisation)"
+            "compact filters: transaction {t} missing from the synced blocks (only the \
+             transactions that touch your addresses are kept; run a sync again)"
         ))
     })?;
-    crate::btc_backend::verified_tx_hex(&stored.hex, &t, "filtres compacts")
+    crate::btc_backend::verified_tx_hex(&stored.hex, &t, "compact filters")
 }
 
 pub fn tip_height(data_dir: &Path, net: Network) -> AppResult<u64> {
     Store::load(&store_path(data_dir, net))
         .tip_height
         .map(u64::from)
-        .ok_or_else(|| {
-            AppError::ServerUnreachable("filtres compacts : pas encore synchronisé".into())
-        })
+        .ok_or_else(|| AppError::ServerUnreachable("compact filters: not synced yet".into()))
 }
 
 /// No mempool with compact filters: rates are the average fee paid (fees / weight) in the
@@ -714,7 +710,7 @@ pub fn fee_rates(data_dir: &Path, net: Network) -> AppResult<Value> {
     let s = Store::load(&store_path(data_dir, net));
     if s.block_fee_rates.is_empty() {
         return Err(AppError::ServerUnreachable(
-            "filtres compacts : pas encore d'estimation (synchronise d'abord)".into(),
+            "compact filters: no estimate yet (sync first)".into(),
         ));
     }
     let max = s.block_fee_rates.iter().copied().max().unwrap_or(1);
@@ -754,7 +750,7 @@ mod tests {
         assert_eq!(tx_hex(&dir, Network::Testnet, txid).unwrap(), raw);
         assert!(tx_hex(&dir, Network::Testnet, &wrong).is_err());
         let missing = tx_hex(&dir, Network::Testnet, &"cd".repeat(32));
-        assert!(matches!(missing, Err(AppError::InvalidInput(ref m)) if m.contains("absente")));
+        assert!(matches!(missing, Err(AppError::InvalidInput(ref m)) if m.contains("missing")));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

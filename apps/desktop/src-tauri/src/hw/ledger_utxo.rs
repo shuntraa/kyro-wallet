@@ -99,7 +99,7 @@ pub struct WalletPublicKey {
 }
 
 pub fn parse_wallet_public_key(data: &[u8]) -> HwResult<WalletPublicKey> {
-    let bad = || HwError::bad("réponse GET WALLET PUBLIC KEY mal formée");
+    let bad = || HwError::bad("malformed GET WALLET PUBLIC KEY response");
     let n = usize::from(*data.first().ok_or_else(bad)?);
     let key = data.get(1..1 + n).ok_or_else(bad)?;
     let pk = bitcoin::secp256k1::PublicKey::from_slice(key).map_err(|_| bad())?;
@@ -191,7 +191,7 @@ pub fn start_apdus(
     parts.push(first);
     for i in inputs {
         if i.trusted.len() != 56 {
-            return Err(HwError::bad("trusted input de longueur inattendue"));
+            return Err(HwError::bad("trusted input of unexpected length"));
         }
         let mut d = vec![0x01, i.trusted.len() as u8];
         d.extend_from_slice(i.trusted);
@@ -258,7 +258,7 @@ pub fn hash_sign_apdu(path: &[u32], lock_time: u32, sighash: u8) -> HwResult<Vec
 /// DER ‖ sighash type, first byte masked with `0xFE` (the app may set bit 0 for parity).
 pub fn parse_signature(mut resp: Vec<u8>, sighash: u8) -> HwResult<Vec<u8>> {
     if resp.len() < 9 || resp.last() != Some(&sighash) {
-        return Err(HwError::bad("signature de longueur ou de type inattendu"));
+        return Err(HwError::bad("signature of unexpected length or type"));
     }
     resp[0] &= 0xFE;
     if resp[0] != 0x30 {
@@ -288,17 +288,17 @@ pub fn sign(
     let tx = &psbt.unsigned_tx;
     if plan.inputs.len() != tx.input.len() {
         return Err(HwError::unsupported(
-            "transaction avec des entrées qui n'appartiennent pas à ce compte",
+            "transaction with inputs that do not belong to this account",
         ));
     }
     // 1. A trusted input per input (from the full previous transaction).
     let mut trusted = Vec::with_capacity(tx.input.len());
     for (txin, input) in tx.input.iter().zip(&psbt.inputs) {
         let prev = input.non_witness_utxo.as_ref().ok_or_else(|| {
-            HwError::unsupported("la transaction précédente de chaque entrée est nécessaire")
+            HwError::unsupported("the previous transaction of every input is required")
         })?;
         if prev.compute_txid() != txin.previous_output.txid {
-            return Err(HwError::bad("transaction précédente incohérente"));
+            return Err(HwError::bad("inconsistent previous transaction"));
         }
         let mut stripped = prev.clone();
         for i in &mut stripped.input {
@@ -309,7 +309,7 @@ pub fn sign(
             last = call(&a, SwContext::General)?;
         }
         if last.len() != 56 {
-            return Err(HwError::bad("trusted input de longueur inattendue"));
+            return Err(HwError::bad("trusted input of unexpected length"));
         }
         trusted.push(last);
     }

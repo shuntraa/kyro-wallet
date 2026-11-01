@@ -54,18 +54,18 @@ impl Deframer {
     /// complete. Any packet that does not continue the sequence is an error.
     pub fn push(&mut self, pkt: &[u8]) -> HwResult<Option<Vec<u8>>> {
         if pkt.len() < 5 || pkt[..2] != CHANNEL || pkt[2] != TAG_APDU {
-            return Err(HwError::bad("paquet HID inattendu"));
+            return Err(HwError::bad("unexpected HID packet"));
         }
         if u16::from_be_bytes([pkt[3], pkt[4]]) != self.seq {
-            return Err(HwError::bad("paquet HID hors séquence"));
+            return Err(HwError::bad("out-of-sequence HID packet"));
         }
         let data = if self.seq == 0 {
             if pkt.len() < 7 {
-                return Err(HwError::bad("paquet HID tronqué"));
+                return Err(HwError::bad("truncated HID packet"));
             }
             let len = usize::from(u16::from_be_bytes([pkt[5], pkt[6]]));
             if len < 2 {
-                return Err(HwError::bad("réponse sans statut"));
+                return Err(HwError::bad("response without a status"));
             }
             self.expected = Some(len);
             &pkt[7..]
@@ -87,7 +87,7 @@ impl Deframer {
 /// `CLA INS P1 P2 Lc data` (short APDU, at most 255 data bytes).
 pub fn apdu(cla: u8, ins: u8, p1: u8, p2: u8, data: &[u8]) -> HwResult<Vec<u8>> {
     if data.len() > MAX_DATA {
-        return Err(HwError::bad("APDU trop long"));
+        return Err(HwError::bad("APDU too long"));
     }
     let mut out = vec![cla, ins, p1, p2, data.len() as u8];
     out.extend_from_slice(data);
@@ -97,7 +97,7 @@ pub fn apdu(cla: u8, ins: u8, p1: u8, p2: u8, data: &[u8]) -> HwResult<Vec<u8>> 
 /// Splits `data || SW1 SW2`.
 pub fn split_sw(mut resp: Vec<u8>) -> HwResult<(Vec<u8>, u16)> {
     if resp.len() < 2 {
-        return Err(HwError::bad("réponse sans statut"));
+        return Err(HwError::bad("response without a status"));
     }
     let sw = u16::from_be_bytes([resp[resp.len() - 2], resp[resp.len() - 1]]);
     resp.truncate(resp.len() - 2);
@@ -126,7 +126,7 @@ pub fn get_app_and_version() -> Vec<u8> {
 
 /// `format (=1) || len || name || len || version || [len || flags]`.
 pub fn parse_app_and_version(data: &[u8]) -> HwResult<(String, String)> {
-    let bad = || HwError::bad("réponse « app et version » mal formée");
+    let bad = || HwError::bad("malformed « app and version » response");
     if data.first() != Some(&0x01) {
         return Err(bad());
     }
@@ -171,17 +171,17 @@ pub fn sw_error(sw: u16, ctx: SwContext) -> HwError {
             open: String::new(),
         },
         0x6A80 if ctx == SwContext::EthSigning => HwError::unsupported(
-            "ce Ledger ne peut pas afficher le détail de cette transaction : active \
-             « Blind signing » dans les réglages de l'app Ethereum (Kyro a affiché son \
-             propre résumé), ou refuse",
+            "this Ledger cannot show the details of this transaction: turn on \
+             « Blind signing » in the Ethereum app settings (Kyro showed its \
+             own summary), or reject",
         ),
         0x6808 => HwError::unsupported(
-            "ce Ledger ne peut pas afficher le détail de cette transaction : active \
-             « Blind signing » dans les réglages de l'app Solana, ou refuse",
+            "this Ledger cannot show the details of this transaction: turn on \
+             « Blind signing » in the Solana app settings, or reject",
         ),
-        0x6807 => HwError::unsupported("application non installée sur l'appareil"),
-        0xB008 => HwError::bad("signature ou HMAC refusé par l'appareil (B008)"),
-        other => HwError::bad(format!("statut de l'appareil {other:04X}")),
+        0x6807 => HwError::unsupported("app not installed on the device"),
+        0xB008 => HwError::bad("signature or HMAC rejected by the device (B008)"),
+        other => HwError::bad(format!("device status {other:04X}")),
     }
 }
 
@@ -204,7 +204,7 @@ pub struct EthAddress {
 
 /// `len || pubkey || len || ascii address || [chain code 32]`.
 pub fn eth_parse_address(data: &[u8]) -> HwResult<EthAddress> {
-    let bad = || HwError::bad("réponse « adresse Ethereum » mal formée");
+    let bad = || HwError::bad("malformed « Ethereum address » response");
     let pk_len = usize::from(*data.first().ok_or_else(bad)?);
     let pubkey = data.get(1..1 + pk_len).ok_or_else(bad)?.to_vec();
     let a = 1 + pk_len;
@@ -248,7 +248,7 @@ pub fn eth_sign(path: &[u32], payload: &[u8]) -> HwResult<Vec<Vec<u8>>> {
 /// `v (1) || r (32) || s (32)`.
 pub fn eth_parse_signature(data: &[u8]) -> HwResult<([u8; 32], [u8; 32])> {
     if data.len() != 65 {
-        return Err(HwError::bad("signature Ethereum de longueur inattendue"));
+        return Err(HwError::bad("Ethereum signature of unexpected length"));
     }
     let mut r = [0u8; 32];
     let mut s = [0u8; 32];

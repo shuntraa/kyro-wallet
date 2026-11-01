@@ -120,7 +120,7 @@ pub fn sui_known_coin(coin_type: &str, testnet: bool) -> Option<&'static SuiKnow
 }
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("transaction Sui refusée : {}", msg.into()))
+    Error::input(format!("Sui transaction refused: {}", msg.into()))
 }
 
 /// Reference to an owned object version (gas coin).
@@ -141,7 +141,7 @@ impl SuiObjectRef {
             .into_vec()
             .ok()
             .and_then(|v| v.try_into().ok())
-            .ok_or_else(|| Error::input("empreinte d'objet Sui invalide (base58, 32 octets)"))?;
+            .ok_or_else(|| Error::input("invalid Sui object digest (base58, 32 bytes)"))?;
         Ok(Self {
             object_id: sui_parse_address(object_id)?,
             version,
@@ -206,7 +206,7 @@ struct Reader<'a>(&'a [u8]);
 impl<'a> Reader<'a> {
     fn take(&mut self, n: usize) -> Result<&'a [u8]> {
         if self.0.len() < n {
-            return Err(bad("données tronquées"));
+            return Err(bad("truncated data"));
         }
         let (h, t) = self.0.split_at(n);
         self.0 = t;
@@ -242,18 +242,18 @@ impl<'a> Reader<'a> {
             v |= u64::from(b & 0x7f) << (7 * i);
             if b & 0x80 == 0 {
                 if i > 0 && b == 0 {
-                    return Err(bad("ULEB128 non canonique"));
+                    return Err(bad("non-canonical ULEB128"));
                 }
-                return u32::try_from(v).map_err(|_| bad("ULEB128 trop grand"));
+                return u32::try_from(v).map_err(|_| bad("ULEB128 too large"));
             }
         }
-        Err(bad("ULEB128 trop long"))
+        Err(bad("ULEB128 too long"))
     }
 
     fn len(&mut self, max: usize) -> Result<usize> {
         let n = self.uleb()? as usize;
         if n > max {
-            return Err(bad("vecteur trop long"));
+            return Err(bad("vector too long"));
         }
         Ok(n)
     }
@@ -284,7 +284,7 @@ fn read_ref(r: &mut Reader<'_>) -> Result<SuiObjectRef> {
     let object_id = r.arr32()?;
     let version = r.u64()?;
     if r.uleb()? != 32 {
-        return Err(bad("empreinte d'objet : 32 octets attendus"));
+        return Err(bad("object digest: 32 bytes expected"));
     }
     Ok(SuiObjectRef {
         object_id,
@@ -324,7 +324,7 @@ fn read_arg(r: &mut Reader<'_>) -> Result<Arg> {
         1 => Arg::Input(r.u16()?),
         2 => Arg::Result(r.u16()?),
         3 => Arg::NestedResult(r.u16()?, r.u16()?),
-        _ => return Err(bad("argument inconnu")),
+        _ => return Err(bad("unknown argument")),
     })
 }
 
@@ -341,20 +341,16 @@ fn read_cmd(r: &mut Reader<'_>) -> Result<Cmd> {
             let amounts = (0..n).map(|_| read_arg(r)).collect::<Result<Vec<_>>>()?;
             Ok(Cmd::SplitCoins(coin, amounts))
         }
-        0 => Err(bad(
-            "appel de fonction Move (MoveCall) : non pris en charge",
-        )),
+        0 => Err(bad("Move function call (MoveCall): not supported")),
         3 => {
             let into = read_arg(r)?;
             let n = r.len(SUI_MAX_TOKEN_COINS)?;
             let from = (0..n).map(|_| read_arg(r)).collect::<Result<Vec<_>>>()?;
             Ok(Cmd::MergeCoins(into, from))
         }
-        4 | 6 => Err(bad(
-            "publication / mise à jour de paquet : non prise en charge",
-        )),
-        5 => Err(bad("MakeMoveVec : non pris en charge")),
-        _ => Err(bad("commande inconnue")),
+        4 | 6 => Err(bad("package publish / upgrade: not supported")),
+        5 => Err(bad("MakeMoveVec: not supported")),
+        _ => Err(bad("unknown command")),
     }
 }
 
@@ -391,41 +387,37 @@ impl SuiTransfer {
     fn check(&self) -> Result<()> {
         if self.gas_payment.is_empty() {
             return Err(bad(
-                "aucune pièce de gaz (le paiement depuis le solde d'adresse n'est pas pris en charge)",
+                "no gas coin (payment from the address balance is not supported)",
             ));
         }
         if self.gas_payment.len() > SUI_MAX_GAS_OBJECTS {
-            return Err(bad(format!("plus de {SUI_MAX_GAS_OBJECTS} pièces de gaz")));
+            return Err(bad(format!("more than {SUI_MAX_GAS_OBJECTS} gas coins")));
         }
         for (i, a) in self.gas_payment.iter().enumerate() {
             if self.gas_payment[..i]
                 .iter()
                 .any(|b| b.object_id == a.object_id)
             {
-                return Err(bad("pièce de gaz en double"));
+                return Err(bad("duplicate gas coin"));
             }
         }
         if self.gas_price == 0 {
-            return Err(bad("prix du gaz nul"));
+            return Err(bad("zero gas price"));
         }
         if self.gas_budget == 0 {
-            return Err(bad("budget de gaz nul"));
+            return Err(bad("zero gas budget"));
         }
         if self.amount == SuiTransferAmount::Mist(0) {
-            return Err(bad("montant nul"));
+            return Err(bad("zero amount"));
         }
         if self.coins.len() > SUI_MAX_TOKEN_COINS {
-            return Err(bad(format!(
-                "plus de {SUI_MAX_TOKEN_COINS} pièces de jeton"
-            )));
+            return Err(bad(format!("more than {SUI_MAX_TOKEN_COINS} token coins")));
         }
         for (i, a) in self.coins.iter().enumerate() {
             if self.coins[..i].iter().any(|b| b.object_id == a.object_id)
                 || self.gas_payment.iter().any(|g| g.object_id == a.object_id)
             {
-                return Err(bad(
-                    "pièce de jeton en double ou aussi utilisée pour le gaz",
-                ));
+                return Err(bad("token coin duplicated or also used for gas"));
             }
         }
         Ok(())
@@ -526,14 +518,14 @@ impl SuiTransfer {
     /// Strict decoding; the result re-encodes to exactly `bcs` (checked).
     pub fn decode(bcs: &[u8]) -> Result<SuiTransfer> {
         if bcs.len() > MAX_BCS {
-            return Err(bad("trop volumineuse"));
+            return Err(bad("too large"));
         }
         let mut r = Reader(bcs);
         if r.uleb()? != 0 {
-            return Err(bad("version de TransactionData inconnue"));
+            return Err(bad("unknown TransactionData version"));
         }
         if r.uleb()? != 0 {
-            return Err(bad("transaction système ou de type inconnu"));
+            return Err(bad("system transaction or of unknown type"));
         }
         let n = r.len(SUI_MAX_TOKEN_COINS + 2)?;
         let mut inputs = Vec::with_capacity(n);
@@ -547,10 +539,10 @@ impl SuiTransfer {
                 // Owned coin objects of a token transfer: only before every pure input.
                 1 if inputs.is_empty() => match r.uleb()? {
                     0 => coins.push(read_ref(&mut r)?),
-                    _ => return Err(bad("objet partagé ou à recevoir : non pris en charge")),
+                    _ => return Err(bad("shared or receiving object: not supported")),
                 },
-                1 => return Err(bad("objet en entrée après une valeur : non pris en charge")),
-                _ => return Err(bad("entrée de type inconnu")),
+                1 => return Err(bad("object input after a pure value: not supported")),
+                _ => return Err(bad("input of unknown type")),
             }
         }
         let n = r.len(4)?;
@@ -569,21 +561,21 @@ impl SuiTransfer {
         let expiration_epoch = match r.uleb()? {
             0 => None,
             1 => Some(r.u64()?),
-            2 => return Err(bad("expiration ValidDuring : non prise en charge")),
-            _ => return Err(bad("expiration inconnue")),
+            2 => return Err(bad("ValidDuring expiration: not supported")),
+            _ => return Err(bad("unknown expiration")),
         };
         if !r.0.is_empty() {
-            return Err(bad("octets en trop après la transaction"));
+            return Err(bad("trailing bytes after the transaction"));
         }
         if owner != sender {
             return Err(bad(
-                "gaz payé par un autre compte (transaction parrainée) : non pris en charge",
+                "gas paid by another account (sponsored transaction): not supported",
             ));
         }
         let pure32 = |i: &Vec<u8>| -> Result<[u8; 32]> {
             i.as_slice()
                 .try_into()
-                .map_err(|_| bad("destinataire : 32 octets attendus"))
+                .map_err(|_| bad("recipient: 32 bytes expected"))
         };
         let (recipient, amount) = match (inputs.as_slice(), cmds.as_slice()) {
             // Token transfer: coin objects first, then (amount,) recipient; the commands are
@@ -592,12 +584,12 @@ impl SuiTransfer {
                 let m: [u8; 8] = amount
                     .as_slice()
                     .try_into()
-                    .map_err(|_| bad("montant : u64 attendu"))?;
+                    .map_err(|_| bad("amount: u64 expected"))?;
                 (pure32(to)?, SuiTransferAmount::Mist(u64::from_le_bytes(m)))
             }
             ([to], _) if !coins.is_empty() => (pure32(to)?, SuiTransferAmount::All),
             _ if !coins.is_empty() => {
-                return Err(bad("structure de transfert de jeton inconnue"));
+                return Err(bad("unknown token transfer structure"));
             }
             (
                 [amount, to],
@@ -606,7 +598,7 @@ impl SuiTransfer {
                 let m: [u8; 8] = amount
                     .as_slice()
                     .try_into()
-                    .map_err(|_| bad("montant : u64 attendu"))?;
+                    .map_err(|_| bad("amount: u64 expected"))?;
                 (pure32(to)?, SuiTransferAmount::Mist(u64::from_le_bytes(m)))
             }
             ([to], [Cmd::TransferObjects(o, Arg::Input(0))]) if o.as_slice() == [Arg::GasCoin] => {
@@ -614,7 +606,7 @@ impl SuiTransfer {
             }
             _ => {
                 return Err(bad(
-                    "structure inconnue : Kyro ne signe que les transferts de SUI qu'il construit",
+                    "unknown structure: Kyro signs only the SUI transfers it builds",
                 ))
             }
         };
@@ -629,7 +621,7 @@ impl SuiTransfer {
             coins,
         };
         if t.encode()? != bcs {
-            return Err(bad("ré-encodage différent"));
+            return Err(bad("re-encoding differs"));
         }
         Ok(t)
     }
@@ -647,7 +639,7 @@ fn signing_digest(bcs: &[u8]) -> [u8; 32] {
 fn b64(s: &str, what: &str) -> Result<Vec<u8>> {
     base64::engine::general_purpose::STANDARD
         .decode(s.trim())
-        .map_err(|_| Error::input(format!("{what} : base64 attendu")))
+        .map_err(|_| Error::input(format!("{what}: base64 expected")))
 }
 
 // ---------------------------------------------------------------- summary
@@ -741,7 +733,7 @@ fn summarize(
     coin: Option<&SuiKnownCoin>,
 ) -> Result<SuiTxSummary> {
     if &t.sender != ours {
-        return Err(bad("l'expéditeur n'est pas l'adresse de ce compte"));
+        return Err(bad("the sender is not this account's address"));
     }
     let token = match (coin, t.coins.is_empty()) {
         (None, true) => None,
@@ -752,8 +744,8 @@ fn summarize(
             decimals: c.decimals,
             coins: t.coins.iter().map(view).collect(),
         }),
-        (None, false) => return Err(bad("transfert de jeton : type de pièce non indiqué")),
-        (Some(_), true) => return Err(bad("transfert de SUI présenté comme un jeton")),
+        (None, false) => return Err(bad("token transfer: coin type not given")),
+        (Some(_), true) => return Err(bad("SUI transfer presented as a token")),
     };
     let mut warnings = Vec::new();
     if t.amount == SuiTransferAmount::All {
@@ -791,7 +783,7 @@ fn summarize(
 
 fn known(coin_type: &str, testnet: bool) -> Result<&'static SuiKnownCoin> {
     sui_known_coin(coin_type, testnet)
-        .ok_or_else(|| bad("type de pièce inconnu de Kyro sur ce réseau"))
+        .ok_or_else(|| bad("coin type unknown to Kyro on this network"))
 }
 
 /// Decodes an unsigned transfer (base64 BCS, as built by Kyro) for the dialog. Refused:
@@ -849,7 +841,7 @@ fn sign_inner(
     let msg = signing_digest(&bcs);
     let sig = key.sign(&msg);
     pk.verify_strict(&msg, &sig)
-        .map_err(|_| Error::crypto("échec de la vérification de la signature"))?;
+        .map_err(|_| Error::crypto("signature verification failed"))?;
     let mut out = Vec::with_capacity(97);
     out.push(SUI_ED25519_FLAG);
     out.extend_from_slice(&sig.to_bytes());
@@ -869,7 +861,7 @@ pub fn sui_verify_signed(bcs_b64: &str, signature_b64: &str) -> Result<String> {
     let s = b64(signature_b64, "signature")?;
     if s.len() != 97 || s[0] != SUI_ED25519_FLAG {
         return Err(bad(
-            "signature : ed25519 (0x00 || 64 octets || 32 octets) attendue",
+            "signature: ed25519 (0x00 || 64 bytes || 32 bytes) expected",
         ));
     }
     let mut sig = [0u8; 64];
@@ -877,17 +869,15 @@ pub fn sui_verify_signed(bcs_b64: &str, signature_b64: &str) -> Result<String> {
     let mut pk = [0u8; 32];
     pk.copy_from_slice(&s[65..97]);
     if sui_address_bytes_of_pubkey(&pk) != t.sender {
-        return Err(bad(
-            "la clé de la signature n'est pas celle de l'expéditeur",
-        ));
+        return Err(bad("the signature's key is not the sender's"));
     }
     ed25519_dalek::VerifyingKey::from_bytes(&pk)
-        .map_err(|_| bad("clé publique invalide"))?
+        .map_err(|_| bad("invalid public key"))?
         .verify_strict(
             &signing_digest(&bcs),
             &ed25519_dalek::Signature::from_bytes(&sig),
         )
-        .map_err(|_| bad("la signature ne se vérifie pas"))?;
+        .map_err(|_| bad("the signature does not verify"))?;
     Ok(sui_tx_digest(&bcs))
 }
 
@@ -905,7 +895,7 @@ pub fn sui_hw_message(bcs_b64: &str) -> Result<Vec<u8>> {
 /// returned by the device, checked like [`sui_verify_signed`] before it is returned.
 pub fn sui_hw_signature(bcs_b64: &str, pubkey: &[u8; 32], sig: &[u8]) -> Result<String> {
     if sig.len() != 64 {
-        return Err(bad("signature de l'appareil : 64 octets attendus"));
+        return Err(bad("device signature: 64 bytes expected"));
     }
     let mut out = Vec::with_capacity(97);
     out.push(SUI_ED25519_FLAG);

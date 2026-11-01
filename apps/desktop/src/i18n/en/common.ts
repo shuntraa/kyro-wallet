@@ -28,6 +28,7 @@ export const common: Record<keyof typeof fr, string> = {
   'common.no': 'No',
   'common.or': 'or',
   'common.none': 'None',
+  'common.quoted': '“{text}”',
   'common.unknown': 'unknown',
   'common.password': 'Password',
   'common.address': 'Address',

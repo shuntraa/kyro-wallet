@@ -76,7 +76,7 @@ impl AdaStakeKeys {
         let b = wallet_core::cardano_address_bytes(&self.address, net)?;
         if b.len() != 57 || b[29..] != self.stake_hash() {
             return Err(AppError::Internal(
-                "l'adresse ne porte pas cette clé de staking".into(),
+                "the address does not carry this stake key".into(),
             ));
         }
         Ok(b)
@@ -150,7 +150,7 @@ pub(crate) async fn stake_account(
         });
     };
     if a["stake_address"].as_str() != Some(stake_address) {
-        return Err(bad("Koios : account_info pour une autre adresse"));
+        return Err(bad("Koios: account_info for another address"));
     }
     Ok(AdaStakeAccount {
         stake_address: stake_address.to_owned(),
@@ -169,10 +169,10 @@ pub(crate) async fn key_deposit(c: &CardanoCtx<'_>) -> AppResult<u64> {
         &call(c, "/epoch_params?limit=1&select=epoch_no,key_deposit", None).await?,
         "epoch_params",
     )?;
-    let d = num(&p["key_deposit"]).ok_or_else(|| bad("Koios : key_deposit absent"))?;
+    let d = num(&p["key_deposit"]).ok_or_else(|| bad("Koios: key_deposit missing"))?;
     if d == 0 || d > 100_000_000 {
         return Err(bad(format!(
-            "Koios : dépôt de clé invraisemblable ({d} lovelace)"
+            "Koios: implausible key deposit ({d} lovelace)"
         )));
     }
     Ok(d)
@@ -195,11 +195,11 @@ pub(crate) async fn epoch(c: &CardanoCtx<'_>) -> AppResult<AdaEpoch> {
     let len = num(&g["epochlength"]).unwrap_or(432_000);
     let in_epoch = num(&t["epoch_slot"]).unwrap_or(0);
     Ok(AdaEpoch {
-        epoch: num(&t["epoch_no"]).ok_or_else(|| bad("Koios : epoch_no absent"))?,
+        epoch: num(&t["epoch_no"]).ok_or_else(|| bad("Koios: epoch_no missing"))?,
         slot_in_epoch: in_epoch,
         epoch_length: len,
         seconds_left: len.saturating_sub(in_epoch),
-        slot: num(&t["abs_slot"]).ok_or_else(|| bad("Koios : abs_slot absent"))?,
+        slot: num(&t["abs_slot"]).ok_or_else(|| bad("Koios: abs_slot missing"))?,
     })
 }
 
@@ -271,7 +271,7 @@ async fn pool(c: &CardanoCtx<'_>, pool_id: &str) -> AppResult<AdaPool> {
         .await?
         .into_iter()
         .find(|p| p.pool_id == id)
-        .ok_or_else(|| invalid(format!("pool {id} inconnu du réseau : refusé")))
+        .ok_or_else(|| invalid(format!("pool {id} unknown to the network: refused")))
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -455,7 +455,7 @@ pub(crate) fn plan(
                     tx_hash: hex::decode(&u.tx_hash)
                         .ok()
                         .and_then(|b| b.try_into().ok())
-                        .ok_or_else(|| AppError::Internal("tx_hash d'UTxO invalide".into()))?,
+                        .ok_or_else(|| AppError::Internal("invalid UTxO tx_hash".into()))?,
                     index: u.index,
                 })
             })
@@ -467,14 +467,14 @@ pub(crate) fn plan(
             let available = in_coin.saturating_add(credit);
             let Some(rest) = available.checked_sub(fee.saturating_add(deposit)) else {
                 last = Some(invalid(format!(
-                    "solde insuffisant : il faut {} (dépôt + frais)",
+                    "insufficient balance: {} needed (deposit + fees)",
                     ada(&(fee + deposit).to_string())
                 )));
                 break;
             };
             if rest < min_change {
                 last = Some(invalid(format!(
-                    "la monnaie rendue ({}) serait sous son minimum de {}",
+                    "the change ({}) would be below its minimum of {}",
                     ada(&rest.to_string()),
                     ada(&min_change.to_string())
                 )));
@@ -493,7 +493,7 @@ pub(crate) fn plan(
             };
             let size = wallet_core::cardano_signed_size(&body, None, WITNESSES)?;
             if size as u64 > p.max_tx_size {
-                return Err(invalid("transaction trop grande"));
+                return Err(invalid("transaction too large"));
             }
             let need = p.min_fee(size);
             if fee >= need {
@@ -506,7 +506,7 @@ pub(crate) fn plan(
             return Ok(b);
         }
     }
-    Err(last.unwrap_or_else(|| invalid("aucun UTxO : adresse vide")))
+    Err(last.unwrap_or_else(|| invalid("no UTxO: empty address")))
 }
 
 /// Inputs (our live UTxOs) + withdrawals + refunds = outputs + fee + deposits, lovelace and
@@ -525,7 +525,7 @@ pub(crate) fn check_balance(
             .find(|u| u.tx_hash == h && u.index == i.index)
             .ok_or_else(|| {
                 invalid(format!(
-                    "entrée {h}#{} inconnue ou déjà dépensée : reconstruis la transaction",
+                    "input {h}#{} unknown or already spent: rebuild the transaction",
                     i.index
                 ))
             })?;
@@ -550,7 +550,7 @@ pub(crate) fn check_balance(
     }
     if in_coin + refund + withdrawn != out_coin || in_assets != out_assets {
         return Err(invalid(
-            "transaction déséquilibrée (entrées + retraits + remboursement ≠ sorties + frais + dépôt) : refusée",
+            "unbalanced transaction (inputs + withdrawals + refund ≠ outputs + fees + deposit): refused",
         ));
     }
     Ok(i128::from(body.fee) + deposit as i128 - refund as i128 - withdrawn as i128)
@@ -618,12 +618,12 @@ pub(crate) async fn prepare_sign(
     let ep = epoch(c).await?;
     if summary.tx.ttl.is_some_and(|t| t <= ep.slot) {
         return Err(invalid(
-            "transaction Cardano expirée (ttl dépassé) : reconstruis-la",
+            "Cardano transaction expired (ttl passed): rebuild it",
         ));
     }
     if summary.tx.outputs.iter().any(|o| !o.is_change) {
         return Err(invalid(
-            "une transaction de staking ne paie que ta propre adresse : refusée",
+            "a staking transaction only pays your own address: refused",
         ));
     }
     let utxos = cardano_backend::utxos(c, &keys.address).await?;
@@ -632,7 +632,7 @@ pub(crate) async fn prepare_sign(
     let size = wallet_core::cardano_signed_size(&body, None, WITNESSES)?;
     if body.fee < p.min_fee(size) {
         return Err(invalid(format!(
-            "frais trop bas ({} lovelace, minimum {})",
+            "fees too low ({} lovelace, minimum {})",
             body.fee,
             p.min_fee(size)
         )));
@@ -642,35 +642,35 @@ pub(crate) async fn prepare_sign(
     let registers = has(|x| matches!(x, CardanoCertView::StakeRegistration { .. }));
     let deregisters = has(|x| matches!(x, CardanoCertView::StakeDeregistration { .. }));
     if registers && stake.registered {
-        return Err(invalid("ta clé de staking est déjà enregistrée"));
+        return Err(invalid("your stake key is already registered"));
     }
     if !registers && !stake.registered {
         return Err(invalid(
-            "ta clé de staking n'est pas enregistrée : cette opération serait refusée par le réseau",
+            "your stake key is not registered: the network would refuse this operation",
         ));
     }
     if deregisters && summary.refund != stake.deposit {
         return Err(invalid(format!(
-            "remboursement de {} lovelace, le dépôt payé est de {} : refusé",
+            "refund of {} lovelace, the deposit paid is {}: refused",
             summary.refund, stake.deposit
         )));
     }
     if !summary.withdrawals.is_empty() {
         if summary.withdrawn != stake.rewards_available {
             return Err(invalid(format!(
-                "retrait de {} lovelace, récompenses disponibles : {} (le réseau exige tout le solde)",
+                "withdrawal of {} lovelace, rewards available: {} (the network requires the whole balance)",
                 summary.withdrawn, stake.rewards_available
             )));
         }
         if stake.delegated_drep.is_none() {
             return Err(invalid(
-                "retrait impossible sans délégation de vote (règle du réseau depuis Plomin) : délègue d'abord ton vote, par exemple à « toujours s'abstenir »",
+                "withdrawal impossible without a vote delegation (network rule since Plomin): delegate your vote first, for example to \"always abstain\"",
             ));
         }
     }
     if deregisters && stake.rewards_available != "0" && summary.withdrawals.is_empty() {
         return Err(invalid(
-            "désinscription : les récompenses doivent être retirées dans la même transaction",
+            "deregistration: the rewards must be withdrawn in the same transaction",
         ));
     }
     let mut warnings = Vec::new();
@@ -687,7 +687,7 @@ pub(crate) async fn prepare_sign(
                     }),
                     other => {
                         return Err(invalid(format!(
-                            "pool {} : statut « {other} » : refusé",
+                            "pool {}: status \"{other}\": refused",
                             pl.pool_id
                         )))
                     }
@@ -706,7 +706,7 @@ pub(crate) async fn prepare_sign(
                 let d = drep_info(c, drep).await?;
                 if !d.registered {
                     return Err(invalid(
-                        "ce DRep n'est pas enregistré : délégation de vote refusée",
+                        "this DRep is not registered: vote delegation refused",
                     ));
                 }
                 if !d.active {
@@ -791,14 +791,14 @@ pub(crate) async fn build(
         }
         AdaStakeRequest::Withdraw => {
             if !stake.registered || rewards == 0 {
-                return Err(invalid("aucune récompense à retirer"));
+                return Err(invalid("no rewards to withdraw"));
             }
             withdrawals.push((reward, rewards));
             credit = rewards;
         }
         AdaStakeRequest::Deregister => {
             if !stake.registered {
-                return Err(invalid("ta clé de staking n'est pas enregistrée"));
+                return Err(invalid("your stake key is not registered"));
             }
             let refund: u64 = stake.deposit.parse().unwrap_or(0);
             if rewards > 0 {
@@ -1208,7 +1208,7 @@ pub async fn ada_stake_sign(
     .await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -1233,7 +1233,7 @@ pub(crate) async fn broadcast_checked(
     want.sort();
     if wit != want {
         return Err(invalid(
-            "cette transaction n'est pas signée (uniquement) par tes clés de paiement et de staking",
+            "this transaction is not signed (only) by your payment and stake keys",
         ));
     }
     let bytes = hex::decode(tx.trim()).map_err(|_| invalid("tx hex"))?;

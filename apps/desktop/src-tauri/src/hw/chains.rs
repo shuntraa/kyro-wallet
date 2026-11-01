@@ -37,7 +37,7 @@ use wallet_core::{CardanoHwPlan, ZecAccount, ZecHwPlan};
 /// `splitTransaction`). Kyro does not parse those bundles itself, Ledger publishes no recorded
 /// v5 exchanges to test against, and its own host library already refuses v6 previous
 /// transactions ("sign them through the Zcash signer kit"): not done without a device.
-pub const ZEC_LEDGER_REASON: &str = "Zcash : pas sur Ledger dans Kyro (l'app Zcash exige chaque transaction précédente en entier, parties protégées comprises) — utilise une Trezor ou le coffre Kyro";
+pub const ZEC_LEDGER_REASON: &str = "Zcash: not on Ledger in Kyro (the Zcash app requires every previous transaction in full, shielded parts included) — use a Trezor or the Kyro vault";
 
 pub fn utxo_coin(chain: Chain) -> Option<UtxoCoin> {
     match chain {
@@ -96,7 +96,7 @@ pub fn ledger_unavailable(chain: Chain, net: Network) -> Option<ChainStatus> {
     utxo_coin(chain)?;
     (net == Network::Testnet).then(|| ChainStatus {
         reason: Some(format!(
-            "{} : pas d'app Ledger de test (réseau principal uniquement)",
+            "{}: no Ledger app for testnet (mainnet only)",
             chain.label()
         )),
         ..ChainStatus::new(chain, ChainState::Unsupported)
@@ -116,11 +116,11 @@ pub fn trezor_support(
         }
         Chain::Stellar => Ok((Capability::Capability_Stellar, min)),
         Chain::Xrp => Err(Some(
-            "XRP : le firmware Trezor ne fournit pas la clé publique avant la signature \
-             (utilise un Ledger ou le coffre Kyro)",
+            "XRP: the Trezor firmware does not provide the public key before signing \
+             (use a Ledger or the Kyro vault)",
         )),
-        Chain::Tron => Err(Some("TRON n'est pas pris en charge par le firmware Trezor")),
-        Chain::Cardano if one => Err(Some("Cardano n'existe pas sur la Trezor One")),
+        Chain::Tron => Err(Some("TRON is not supported by the Trezor firmware")),
+        Chain::Cardano if one => Err(Some("Cardano is not available on the Trezor One")),
         Chain::Cardano => Ok((Capability::Capability_Cardano, trezor_cardano::MIN_FIRMWARE)),
         Chain::Zec => Ok((
             Capability::Capability_Bitcoin_like,
@@ -184,10 +184,10 @@ pub fn ledger_call(
                 .map(|(n, _)| n)
                 .unwrap_or_else(|_| "?".into()),
         },
-        (0x6C66, _) => HwError::unsupported(
-            "active « Hash signing » dans les réglages de l'app Stellar, ou refuse",
-        ),
-        (0xB004, _) => HwError::unsupported("transaction trop grande pour l'app Stellar"),
+        (0x6C66, _) => {
+            HwError::unsupported("turn on « Hash signing » in the Stellar app settings, or reject")
+        }
+        (0xB004, _) => HwError::unsupported("transaction too large for the Stellar app"),
         (_, e) => e,
     })
 }
@@ -210,7 +210,7 @@ pub fn ledger_ensure(
     let (expected, min) =
         ledger_app(chain, net).ok_or_else(|| match ledger_unavailable(chain, net) {
             Some(st) => HwError::unsupported(st.reason.unwrap_or_default()),
-            None => HwError::unsupported(format!("{} sur Ledger", chain.label())),
+            None => HwError::unsupported(format!("{} on Ledger", chain.label())),
         })?;
     let (name, version) = ledger_open_app(link, ctl)?;
     if name != expected {
@@ -221,7 +221,7 @@ pub fn ledger_ensure(
     }
     if !version_at_least(&version, min) {
         return Err(HwError::too_old(
-            format!("app {expected} {version} trop ancienne : mets-la à jour"),
+            format!("{expected} app {version} too old: update it"),
             min,
         ));
     }
@@ -277,7 +277,7 @@ fn ledger_utxo_account(
         parent_fingerprint: fingerprint_of(&parent.pubkey).into(),
         child_number: path[2].into(),
         public_key: bitcoin::secp256k1::PublicKey::from_slice(&node.pubkey)
-            .map_err(|_| HwError::bad("clé publique invalide"))?,
+            .map_err(|_| HwError::bad("invalid public key"))?,
         chain_code: node.chain_code.into(),
     };
     Ok(UtxoAccount {
@@ -297,7 +297,7 @@ fn tsend<M: TrezorMessage, R: TrezorMessage>(
 ) -> HwResult<R> {
     let bytes = m
         .write_to_bytes()
-        .map_err(|e| HwError::bad(format!("encodage protobuf : {e}")))?;
+        .map_err(|e| HwError::bad(format!("protobuf encoding: {e}")))?;
     decode(t.call(ctl, M::MESSAGE_TYPE, bytes)?)
 }
 
@@ -402,7 +402,7 @@ fn ledger_key(
     } else {
         SwContext::General
     };
-    let mismatch = || HwError::bad("l'adresse renvoyée ne correspond pas à la clé renvoyée");
+    let mismatch = || HwError::bad("the returned address does not match the returned key");
     match chain {
         Chain::Xrp => {
             let d = ledger_call(
@@ -506,12 +506,7 @@ pub fn read_keys(
                     out.key = Some(cardano_key(net, account, &k)?)
                 }
                 (None, Chain::Zec) => out.zec = Some(trezor_zec_account(t, ctl, net, account)?),
-                _ => {
-                    return Err(HwError::unsupported(format!(
-                        "{} sur Trezor",
-                        chain.label()
-                    )))
-                }
+                _ => return Err(HwError::unsupported(format!("{} on Trezor", chain.label()))),
             }
         }
         RawDevice::None => return Err(HwError::unsupported(chain.label())),
@@ -577,7 +572,7 @@ pub fn resolve_target(
     chain: Chain,
     path: &[u32],
 ) -> Result<(Target, String), String> {
-    let wrong = || "ce chemin n'appartient pas à ce compte hardware wallet".to_string();
+    let wrong = || "this path does not belong to this hardware-wallet account".to_string();
     if let Some(coin) = utxo_coin(chain) {
         let stored = acc.utxo_account(coin).ok_or_else(wrong)?;
         let [a, b, c, change, index] = path else {
@@ -685,7 +680,7 @@ pub fn display_address(
                 app,
             )?;
             let derived = wallet_core::cardano_address_string(&raw, net)
-                .ok_or_else(|| HwError::bad("adresse Cardano de l'appareil mal formée"))?;
+                .ok_or_else(|| HwError::bad("malformed Cardano address from the device"))?;
             ctl.prompt(Prompt::ConfirmOnDevice);
             ledger_call(
                 link,
@@ -707,7 +702,7 @@ pub fn display_address(
             Ok(a.address().to_string())
         }
         _ => Err(HwError::unsupported(
-            "adresse non affichable sur cet appareil",
+            "address cannot be shown on this device",
         )),
     }
 }
@@ -764,7 +759,7 @@ pub fn sign_xrp(
             let apdus = ledger_coins::xrp_sign(&key_path(Chain::Xrp, account)?, blob)?;
             ledger_sign_apdus(link, ctl, app, &apdus)
         }
-        _ => Err(HwError::unsupported("XRP sur cet appareil")),
+        _ => Err(HwError::unsupported("XRP on this device")),
     }
 }
 
@@ -782,7 +777,7 @@ pub fn sign_tron(
             let apdus = ledger_coins::tron_sign(&key_path(Chain::Tron, account)?, raw)?;
             ledger_coins::tron_parse_signature(&ledger_sign_apdus(link, ctl, app, &apdus)?)
         }
-        _ => Err(HwError::unsupported("TRON sur cet appareil")),
+        _ => Err(HwError::unsupported("TRON on this device")),
     }
 }
 

@@ -100,7 +100,7 @@ pub fn app_err(e: InterfaceError) -> AppError {
         return AppError::TorUnavailable(m.to_owned());
     }
     bad(format!(
-        "nœud Monero : {}",
+        "Monero node: {}",
         text.chars().take(300).collect::<String>()
     ))
 }
@@ -108,7 +108,7 @@ pub fn app_err(e: InterfaceError) -> AppError {
 fn tx_err(e: TransactionsError) -> AppError {
     match e {
         TransactionsError::InterfaceError(i) => app_err(i),
-        other => bad(format!("nœud Monero : {other}")),
+        other => bad(format!("Monero node: {other}")),
     }
 }
 
@@ -144,20 +144,20 @@ impl HttpTransport for NetTransport {
         let tor = self.tor;
         async move {
             let u = url::Url::parse(&url)
-                .map_err(|_| InterfaceError::InternalError("URL du nœud invalide".into()))?;
+                .map_err(|_| InterfaceError::InternalError("invalid node URL".into()))?;
             let mut req = ServerRequest::post_bytes(u, Family::Monero, content_type, body);
             req.bulk = true;
             let (status, bytes) = net.server_request(req, tor).await.map_err(interface_err)?;
             if status != 200 {
                 return Err(InterfaceError::InterfaceError(format!(
-                    "HTTP {status} sur {route_name}",
+                    "HTTP {status} on {route_name}",
                     route_name = url.rsplit('/').next().unwrap_or_default()
                 )));
             }
             if let Some(limit) = response_size_limit {
                 if limit > 0 && bytes.len() > limit {
                     return Err(InterfaceError::InvalidInterface(
-                        "réponse plus grande que prévu".into(),
+                        "response larger than expected".into(),
                     ));
                 }
             }
@@ -200,11 +200,11 @@ pub async fn connect(
             .await
             .map_err(app_err)?,
     )
-    .map_err(|_| bad("nœud Monero : get_info illisible"))?;
+    .map_err(|_| bad("Monero node: unreadable get_info"))?;
     let nettype = info["nettype"].as_str().unwrap_or_default().to_owned();
     if nettype != monero_nettype(network) {
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce nœud Monero est sur « {nettype} », pas sur {}",
+            "this Monero node is on \"{nettype}\", not on {}",
             monero_nettype(network)
         )));
     }
@@ -213,7 +213,7 @@ pub async fn connect(
         .map_err(app_err)?;
     if hex::encode(genesis) != monero_genesis(network) {
         return Err(AppError::ServerWrongNetwork(
-            "bloc 0 inattendu : ce n'est pas le réseau Monero attendu".into(),
+            "unexpected block 0: this is not the expected Monero network".into(),
         ));
     }
     Ok(daemon)
@@ -433,14 +433,14 @@ impl XmrCache {
         let number = block.block.number() as u64;
         if number != self.next {
             return Err(bad(format!(
-                "nœud Monero : bloc {number} reçu, {} attendu",
+                "Monero node: block {number} received, {} expected",
                 self.next
             )));
         }
         let hash = hex::encode(block.block.hash());
         if let Some((h, prev)) = self.hashes.last() {
             if *h + 1 == number && hex::encode(block.block.header.previous) != *prev {
-                return Err(bad("nœud Monero : chaîne incohérente (bloc précédent)"));
+                return Err(bad("Monero node: inconsistent chain (previous block)"));
             }
         }
         let time = block.block.header.timestamp;
@@ -469,7 +469,7 @@ impl XmrCache {
         }
         let found = scanner
             .scan(block)
-            .map_err(|e| bad(format!("bloc Monero illisible : {e}")))?;
+            .map_err(|e| bad(format!("unreadable Monero block: {e}")))?;
         let all = found.ignore_additional_timelock();
         let mut fresh = Vec::new();
         for o in all {
@@ -673,7 +673,7 @@ pub fn load(state: &AppState, account: u32) -> AppResult<XmrCache> {
         )?)
     })?;
     let c: XmrCache = serde_json::from_slice(&plain)
-        .map_err(|_| AppError::Internal("cache Monero illisible".into()))?;
+        .map_err(|_| AppError::Internal("unreadable Monero cache".into()))?;
     if c.version != CACHE_VERSION {
         return Ok(XmrCache::new());
     }
@@ -812,13 +812,11 @@ impl XmrManager {
 
     pub fn take_pending(&self, id: &str) -> AppResult<PendingTx> {
         let p = crate::net::lock(&self.pending).remove(id).ok_or_else(|| {
-            AppError::InvalidInput(
-                "transfert Monero inconnu ou expiré : prépare-le à nouveau".into(),
-            )
+            AppError::InvalidInput("unknown or expired Monero transfer: prepare it again".into())
         })?;
         if p.created.elapsed().as_secs() >= PENDING_TTL_SECS {
             return Err(AppError::InvalidInput(
-                "transfert Monero préparé il y a plus de 10 min : prépare-le à nouveau".into(),
+                "Monero transfer prepared more than 10 min ago: prepare it again".into(),
             ));
         }
         Ok(p)
@@ -1012,9 +1010,9 @@ pub fn candidates(c: &XmrCache, height: u64) -> Vec<&OwnedOutput> {
 
 fn wallet_output(o: &OwnedOutput) -> AppResult<WalletOutput> {
     let b =
-        hex::decode(&o.data).map_err(|_| AppError::Internal("cache Monero illisible".into()))?;
+        hex::decode(&o.data).map_err(|_| AppError::Internal("unreadable Monero cache".into()))?;
     WalletOutput::read(&mut b.as_slice())
-        .map_err(|_| AppError::Internal("cache Monero illisible".into()))
+        .map_err(|_| AppError::Internal("unreadable Monero cache".into()))
 }
 
 /// What `xmr_prepare_tx` returns.
@@ -1043,20 +1041,21 @@ pub async fn prepare(
     let c = load(state, account)?;
     if c.restore_height.is_none() || c.next + 2 < height {
         return Err(AppError::InvalidInput(format!(
-            "Monero : synchronisation incomplète (bloc {} sur {height}) : attends la fin du scan",
+            "Monero: sync incomplete (block {} of {height}): wait for the scan to finish",
             c.next
         )));
     }
     let fee_rate = ProvidesFeeRates::fee_rate(&daemon, FeePriority::Normal, MAX_FEE_PER_WEIGHT)
         .await
-        .map_err(|e| bad(format!("frais Monero refusés : {e}")))?;
+        .map_err(|e| bad(format!("Monero fees refused: {e}")))?;
     let cands = candidates(&c, height);
     if cands.is_empty() {
         let (total, _) = c.balance(height);
         return Err(AppError::InvalidInput(if total > 0 {
-            "Monero : fonds encore bloqués (10 confirmations, ≈ 20 min, avant de pouvoir les dépenser)".into()
+            "Monero: funds still locked (10 confirmations, ≈ 20 min, before they can be spent)"
+                .into()
         } else {
-            "Monero : aucun fonds disponible".into()
+            "Monero: no funds available".into()
         }));
     }
     // Rough fee to pick inputs: weight ≈ 1 500 + 700 per extra input.
@@ -1074,7 +1073,7 @@ pub async fn prepare(
             }
             if sum < a.saturating_add(est(chosen.len())) && chosen.len() >= MAX_INPUTS {
                 return Err(AppError::InvalidInput(format!(
-                    "Monero : ce montant demande plus de {MAX_INPUTS} sorties ; envoie moins à la fois"
+                    "Monero: this amount needs more than {MAX_INPUTS} outputs; send less at a time"
                 )));
             }
         }
@@ -1117,7 +1116,7 @@ pub async fn prepare(
             })?;
             let fee: u64 = probe.summary.fee.parse().unwrap_or(u64::MAX);
             total.checked_sub(fee).filter(|a| *a > 0).ok_or_else(|| {
-                AppError::InvalidInput("Monero : solde inférieur aux frais".into())
+                AppError::InvalidInput("Monero: balance lower than the fee".into())
             })?
         }
     };
@@ -1135,7 +1134,8 @@ pub async fn prepare(
     })?;
     let summary = unsigned.summary.clone();
     let mut idb = [0u8; 16];
-    getrandom::getrandom(&mut idb).map_err(|_| AppError::Internal("aléa indisponible".into()))?;
+    getrandom::getrandom(&mut idb)
+        .map_err(|_| AppError::Internal("randomness unavailable".into()))?;
     let id = hex::encode(idb);
     state.xmr.put_pending(
         id.clone(),
@@ -1167,10 +1167,10 @@ pub async fn publish(
             .outputs
             .iter()
             .find(|o| &o.key_image == ki)
-            .ok_or_else(|| AppError::InvalidInput("sortie Monero inconnue".into()))?;
+            .ok_or_else(|| AppError::InvalidInput("unknown Monero output".into()))?;
         if o.spent.is_some() {
             return Err(AppError::InvalidInput(
-                "une des sorties a déjà été dépensée : prépare le transfert à nouveau".into(),
+                "one of the outputs is already spent: prepare the transfer again".into(),
             ));
         }
     }
@@ -1179,7 +1179,7 @@ pub async fn publish(
         .map_err(|e| match e {
             PublishTransactionError::InterfaceError(i) => app_err(i),
             PublishTransactionError::TransactionRejected(r) => AppError::InvalidInput(format!(
-                "transaction refusée par le nœud Monero : {}",
+                "transaction refused by the Monero node: {}",
                 r.chars().take(200).collect::<String>()
             )),
         })?;
@@ -1422,8 +1422,8 @@ mod tests {
 
     #[test]
     fn tor_errors_stay_tor_errors() {
-        let e = app_err(interface_err(AppError::TorUnavailable("pas prêt".into())));
-        assert!(matches!(e, AppError::TorUnavailable(ref m) if m == "pas prêt"));
+        let e = app_err(interface_err(AppError::TorUnavailable("not ready".into())));
+        assert!(matches!(e, AppError::TorUnavailable(ref m) if m == "not ready"));
         assert!(matches!(
             app_err(InterfaceError::InvalidInterface("x".into())),
             AppError::ServerUnreachable(_)

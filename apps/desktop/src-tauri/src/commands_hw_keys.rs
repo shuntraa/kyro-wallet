@@ -29,7 +29,7 @@ pub(crate) fn stored_key(
     let acc = load_account(state, account_id)?;
     let key = acc.key(chain).cloned().ok_or_else(|| {
         AppError::InvalidInput(format!(
-            "ce compte hardware wallet n'a pas de clé {}",
+            "this hardware-wallet account has no {} key",
             ledger_apps::hw_chain(chain).label()
         ))
     })?;
@@ -109,7 +109,7 @@ pub async fn hw_key_add(
             check_brand(&info, &acc)?;
             if acc.account != account {
                 return Err(AppError::InvalidInput(
-                    "numéro de compte différent de celui du compte existant".into(),
+                    "account number differs from the existing account's".into(),
                 ));
             }
             if acc.key(chain).is_some_and(|k| k.pubkey != key.pubkey) {
@@ -193,5 +193,5 @@ pub async fn hw_key_verify(
 pub(crate) fn key_array<const N: usize>(key: &HwWatchKey) -> AppResult<[u8; N]> {
     key.pubkey_bytes()?
         .try_into()
-        .map_err(|_| AppError::Internal("clé enregistrée de longueur inattendue".into()))
+        .map_err(|_| AppError::Internal("saved key of unexpected length".into()))
 }

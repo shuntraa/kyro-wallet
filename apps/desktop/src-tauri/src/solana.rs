@@ -45,10 +45,10 @@ pub fn network_label(net: Network) -> &'static str {
 pub fn message_bytes(message_b64: &str) -> AppResult<Vec<u8>> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(message_b64.trim().as_bytes())
-        .map_err(|_| AppError::InvalidInput("message Solana invalide (base64)".into()))?;
+        .map_err(|_| AppError::InvalidInput("invalid Solana message (base64)".into()))?;
     if bytes.is_empty() || bytes.len() > MAX_TX_SIZE {
         return Err(AppError::InvalidInput(
-            "message Solana vide ou trop long".into(),
+            "Solana message empty or too long".into(),
         ));
     }
     Ok(bytes)
@@ -77,25 +77,25 @@ async fn fetch_lookup_table(state: &AppState, url: &str, key: &str) -> AppResult
             state.network,
         )
         .await?;
-    let fail = |why: &str| AppError::InvalidInput(format!("table d'adresses {key} : {why}"));
+    let fail = |why: &str| AppError::InvalidInput(format!("address table {key}: {why}"));
     if resp.status != 200 {
-        return Err(fail(&format!("réponse RPC {}", resp.status)));
+        return Err(fail(&format!("RPC response {}", resp.status)));
     }
-    let v: Value = serde_json::from_str(&resp.body).map_err(|_| fail("réponse RPC illisible"))?;
+    let v: Value = serde_json::from_str(&resp.body).map_err(|_| fail("unreadable RPC response"))?;
     let account = &v["result"]["value"];
     if account.is_null() {
-        return Err(fail("compte introuvable"));
+        return Err(fail("account not found"));
     }
     if account["owner"].as_str() != Some(SOL_LOOKUP_TABLE_PROGRAM) {
-        return Err(fail("ce compte n'est pas une table d'adresses"));
+        return Err(fail("this account is not an address table"));
     }
     let (Some(data), Some("base64")) = (account["data"][0].as_str(), account["data"][1].as_str())
     else {
-        return Err(fail("encodage inattendu"));
+        return Err(fail("unexpected encoding"));
     };
     let raw = base64::engine::general_purpose::STANDARD
         .decode(data)
-        .map_err(|_| fail("données base64 invalides"))?;
+        .map_err(|_| fail("invalid base64 data"))?;
     Ok(SolLookupTable {
         key: key.to_owned(),
         addresses: wallet_core::sol_parse_lookup_table(&raw)?,
@@ -119,7 +119,7 @@ pub struct SolDecoded {
 pub async fn decode(state: &AppState, message: &[u8], our_address: &str) -> AppResult<SolDecoded> {
     let keys = wallet_core::sol_message_lookup_tables(message)?;
     if keys.len() > MAX_LOOKUP_TABLES {
-        return Err(AppError::InvalidInput("trop de tables d'adresses".into()));
+        return Err(AppError::InvalidInput("too many address tables".into()));
     }
     let mut tables = Vec::with_capacity(keys.len());
     if !keys.is_empty() {

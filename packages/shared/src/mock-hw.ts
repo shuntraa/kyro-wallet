@@ -186,7 +186,9 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
   const firmware = scenario === 'old' ? '1.9.0' : one ? '1.12.1' : safe7 ? '2.9.3' : '2.8.7';
 
   let locked = scenario === 'locked';
-  let openApp = scenario === 'wrongapp' ? 'Tableau de bord' : testnet ? 'Bitcoin Test' : 'Bitcoin';
+  /** `null` = the Ledger dashboard (shown as « Tableau de bord » / "Dashboard"). */
+  let openApp: string | null = scenario === 'wrongapp' ? null : testnet ? 'Bitcoin Test' : 'Bitcoin';
+  const appName = (a: string | null): string => a ?? l10n('Tableau de bord', 'Dashboard');
   /** Trezor: the PIN was entered this session. */
   let pinOk = false;
   let pinWaiter: ((positions: string) => void) | null = null;
@@ -309,7 +311,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
       }
       const expected = appFor(chain);
       if (openApp !== expected) {
-        const open = openApp;
+        const open = appName(openApp);
         openApp = expected; // the simulated user opens it now
         throw new IpcError('HW_WRONG_APP', l10n(`Mauvaise application ouverte sur l’appareil : ouvre « ${expected} » (ouverte : « ${open} »).`, `Wrong app open on the device: open “${expected}” (open: “${open}”).`), { expected, open });
       }
@@ -334,7 +336,7 @@ export function createDemoHw(scenario: DemoHwScenario, d: DemoHwDeps) {
     };
     const st: HwDeviceStatus = { id: device.id, kind: device.kind, model: safe7 ? 'Trezor Safe 7' : device.model, locked: ledger ? locked : !pinOk, chains: (['btc', 'evm', 'sol', ...PHASE4] as HwChain[]).map(chain) };
     if (safe7) st.protocol = 'thp';
-    if (ledger) st.app = { name: openApp, version: openApp === 'Tableau de bord' ? '' : '2.2.4' };
+    if (ledger) st.app = { name: appName(openApp), version: openApp === null ? '' : '2.2.4' };
     else {
       st.firmware = firmware;
       st.passphrase = scenario === 'trezor-one-passphrase';

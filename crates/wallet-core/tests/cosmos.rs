@@ -320,40 +320,40 @@ fn refusals() {
                 "5",
             )]
         }),
-        "dénomination",
+        "denomination",
     );
     refused(
         tampered(&s, |_, m, _, _| m.amount.push(coin("uatom", "1"))),
-        "une seule pièce",
+        "a single coin",
     );
     refused(
         tampered(&s, |_, m, _, _| m.amount = vec![coin("uatom", "0")]),
-        "nul",
+        "zero",
     );
     refused(
         tampered(&s, |_, m, _, _| m.amount = vec![coin("uatom", "007")]),
-        "montant invalide",
+        "invalid amount",
     );
     refused(
         tampered(&s, |_, m, _, _| {
             m.from_address = "cosmos1jhg0e7s6gn44tfc5k37kr04sznyhedtc9rzys5".into()
         }),
-        "expéditeur",
+        "sender",
     );
     refused(
         tampered(&s, |_, m, _, _| m.to_address = m.from_address.clone()),
-        "soi-même",
+        "yourself",
     );
     refused(
         tampered(&s, |_, m, _, _| m.to_address = m.to_address.to_uppercase()),
-        "non canonique",
+        "non-canonical",
     );
     refused(
         tampered(&s, |b, _, _, _| {
             let again = b.messages[0].clone();
             b.messages.push(again);
         }),
-        "un seul message",
+        "a single message",
     );
     refused(
         tampered(&s, |b, _, _, _| {
@@ -365,7 +365,7 @@ fn refusals() {
         tampered(&s, |b, _, _, _| b.timeout_height = 0),
         "timeout_height",
     );
-    refused(tampered(&s, |b, _, _, _| b.memo = "x".repeat(513)), "mémo");
+    refused(tampered(&s, |b, _, _, _| b.memo = "x".repeat(513)), "memo");
     refused(
         tampered(&s, |_, _, a, _| {
             a.fee.as_mut().unwrap().granter = "cosmos1jhg0e7s6gn44tfc5k37kr04sznyhedtc9rzys5".into()
@@ -376,7 +376,7 @@ fn refusals() {
         tampered(&s, |_, _, a, _| {
             a.fee.as_mut().unwrap().amount = vec![coin("uosmo", "600")]
         }),
-        "dénomination",
+        "denomination",
     );
     refused(
         tampered(&s, |_, _, a, _| a.fee.as_mut().unwrap().gas_limit = 0),
@@ -395,7 +395,7 @@ fn refusals() {
             let again = a.signer_infos[0].clone();
             a.signer_infos.push(again);
         }),
-        "un seul signataire",
+        "a single signer",
     );
     refused(
         tampered(&s, |_, _, _, d| d.chain_id = "cosmoshub-4".into()),

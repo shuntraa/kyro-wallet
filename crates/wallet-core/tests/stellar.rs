@@ -365,7 +365,7 @@ fn sep0023_strkeys() {
     // A secret key pasted by mistake gets its own warning (SEP-0005 test 1, account 0).
     assert!(matches!(
         stellar_account_id("SBGWSG6BTNCKCOB3DIFBGCVMUPQFYPA2G4O34RMTB343OYPXU5DJDVMN"),
-        Err(Error::InvalidInput(e)) if e.contains("CLÉ SECRÈTE")
+        Err(Error::InvalidInput(e)) if e.contains("SECRET KEY")
     ));
     // Every invalid strkey of SEP-0023, plus lower case and the other key kinds.
     for bad in [
@@ -725,35 +725,35 @@ fn refusals() {
             time_bounds: None,
             ..base.clone()
         },
-        "aucune limite de temps",
+        "no time bounds",
     );
     refused(
         &StellarTransaction {
             time_bounds: Some((0, 0)),
             ..base.clone()
         },
-        "limites de temps",
+        "time bounds",
     );
     refused(
         &StellarTransaction {
             time_bounds: Some((10, 5)),
             ..base.clone()
         },
-        "limites de temps",
+        "time bounds",
     );
     refused(
         &StellarTransaction {
             fee: 0,
             ..base.clone()
         },
-        "frais nuls",
+        "zero fees",
     );
     refused(
         &StellarTransaction {
             sequence: 0,
             ..base.clone()
         },
-        "séquence",
+        "sequence",
     );
     // Another source, two operations, none, an operation with its own source.
     refused(
@@ -765,17 +765,17 @@ fn refusals() {
     );
     let mut two = base.clone();
     two.operations.push(two.operations[0].clone());
-    refused(&two, "2 opérations");
+    refused(&two, "2 operations");
     refused(
         &StellarTransaction {
             operations: vec![],
             ..base.clone()
         },
-        "0 opérations",
+        "0 operations",
     );
     let mut op_src = base.clone();
     op_src.operations[0].source = Some(key(&me));
-    refused(&op_src, "propre source");
+    refused(&op_src, "own source");
     // To oneself, zero / negative amount, negative trust limit, trust in one's own asset.
     refused(
         &base_tx(StellarOperation::Payment {
@@ -783,23 +783,23 @@ fn refusals() {
             asset: StellarAsset::Native,
             amount: 5,
         }),
-        "soi-même",
+        "yourself",
     );
-    refused(&base_tx(pay(0)), "montant");
-    refused(&base_tx(pay(-1)), "montant");
+    refused(&base_tx(pay(0)), "amount");
+    refused(&base_tx(pay(-1)), "amount");
     refused(
         &base_tx(StellarOperation::CreateAccount {
             destination: key(&me),
             starting_balance: 10_000_000,
         }),
-        "propre compte",
+        "own account",
     );
     refused(
         &base_tx(StellarOperation::CreateAccount {
             destination: key("GDVSYYTUAJ3ACHTPQNSTQBDQ4LDHQCMNY4FCEQH5TJUMSSLWQSTG42MV"),
             starting_balance: 0,
         }),
-        "solde de départ",
+        "starting balance",
     );
     let usdc = stellar_asset(
         "USDC",
@@ -811,7 +811,7 @@ fn refusals() {
             asset: usdc,
             limit: -1,
         }),
-        "limite négative",
+        "negative limit",
     );
     refused(
         &base_tx(StellarOperation::ChangeTrust {
@@ -821,7 +821,7 @@ fn refusals() {
             },
             limit: 1,
         }),
-        "propre actif",
+        "own asset",
     );
 }
 
@@ -855,27 +855,27 @@ fn strict_codec() {
     // Envelope types: v0, fee bump, unknown.
     refused(with(0, &[0, 0, 0, 0]), "v0");
     refused(with(0, &[0, 0, 0, 5]), "fee bump");
-    refused(with(0, &[0, 0, 0, 9]), "type d'enveloppe");
+    refused(with(0, &[0, 0, 0, 9]), "envelope type");
     // Muxed source (KEY_TYPE_MUXED_ED25519 = 0x100).
-    refused(with(4, &[0, 0, 1, 0]), "multiplexés");
+    refused(with(4, &[0, 0, 1, 0]), "muxed");
     // Layout: type(4) source(36) fee(4) seq(8) cond(4) tb(16) memo(4) nops(4) opsrc(4) optype(4)
     let cond = 4 + 36 + 4 + 8;
     refused(with(cond, &[0, 0, 0, 2]), "PRECOND_V2");
     let memo = cond + 4 + 16;
-    refused(with(memo, &[0, 0, 0, 5]), "type de mémo");
+    refused(with(memo, &[0, 0, 0, 5]), "memo type");
     let optype = memo + 4 + 4 + 4;
     refused(with(optype, &[0, 0, 0, 24]), "InvokeHostFunction");
     refused(with(optype, &[0, 0, 0, 8]), "AccountMerge");
     refused(with(optype, &[0, 0, 0, 5]), "SetOptions");
-    refused(with(optype - 4, &[0, 0, 0, 2]), "source d'opération");
+    refused(with(optype - 4, &[0, 0, 0, 2]), "operation source");
     // Soroban extension (ext v = 1), trailing byte, truncation.
     let ext = good.len() - 8;
     refused(with(ext, &[0, 0, 0, 1]), "Soroban");
     let mut trailing = good.clone();
     trailing.push(0);
-    refused(trailing, "octets en trop");
-    refused(good[..good.len() - 1].to_vec(), "tronquée");
-    refused(vec![0; 5000], "trop grande");
+    refused(trailing, "trailing bytes");
+    refused(good[..good.len() - 1].to_vec(), "truncated");
+    refused(vec![0; 5000], "too large");
 
     // Memo text with non-zero padding: refused (one encoding per value).
     let mut tx = base_tx(pay(1_000));
@@ -889,7 +889,7 @@ fn strict_codec() {
     assert_eq!(raw[pad], 0);
     let mut bad = raw.clone();
     bad[pad] = 1;
-    refused(bad, "remplissage");
+    refused(bad, "padding");
     // Memo text longer than 28 bytes.
     tx.memo = StellarMemo::Text(vec![b'a'; 29]);
     refused(
@@ -898,7 +898,7 @@ fn strict_codec() {
             signatures: vec![],
         }
         .encode(),
-        "trop long",
+        "too long",
     );
     // Asset codes: "USD" as ALPHANUM12 (second encoding of a 4-char code), a zero byte inside
     // the code, a non-alphanumeric code.
@@ -927,14 +927,14 @@ fn strict_codec() {
         r.splice(at + 4..at + 16, b"USD\0\0\0\0\0\0\0\0\0".iter().copied());
         r
     };
-    refused(usd12, "code d'actif");
+    refused(usd12, "asset code");
     let mut hole = credit("USDC");
     let at = optype + 4 + 36 + 4;
     hole[at + 1] = 0; // "U\0DC"
-    refused(hole, "code d'actif");
+    refused(hole, "asset code");
     let mut dash = credit("USDC");
     dash[at + 1] = b'-';
-    refused(dash, "code d'actif");
+    refused(dash, "asset code");
     // ChangeTrust to the native asset or to a liquidity-pool share.
     let trust = StellarEnvelope {
         tx: base_tx(StellarOperation::ChangeTrust {
@@ -949,7 +949,7 @@ fn strict_codec() {
     }
     .encode();
     let at = optype + 4;
-    refused(with_bytes(&trust, at, &[0, 0, 0, 0]), "XLM natif");
+    refused(with_bytes(&trust, at, &[0, 0, 0, 0]), "native XLM");
     refused(with_bytes(&trust, at, &[0, 0, 0, 3]), "pool");
 }
 

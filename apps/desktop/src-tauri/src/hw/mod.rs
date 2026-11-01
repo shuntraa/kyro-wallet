@@ -429,7 +429,7 @@ impl ChainStatus {
     pub fn not_yet(chain: Chain, app: Option<&str>) -> Self {
         ChainStatus {
             reason: Some(format!(
-                "{} : pas encore pris en charge par Kyro (phase 4)",
+                "{}: not yet supported by Kyro (phase 4)",
                 chain.label()
             )),
             app: app.map(str::to_string),
@@ -446,7 +446,7 @@ pub struct DeviceStatus {
     pub kind: HwDeviceKind,
     pub model: String,
     pub locked: bool,
-    /// Ledger: the app open right now (the dashboard is reported as « Tableau de bord »).
+    /// Ledger: the app open right now (the dashboard is reported as « Dashboard »).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app: Option<AppInfo>,
     /// Trezor: firmware version.
@@ -699,7 +699,7 @@ impl HwManager {
             .ok_or(HwError::NotFound)?;
         if slot.busy.swap(true, Ordering::SeqCst) {
             return Err(HwError::Busy(
-                "une autre opération est en cours sur cet appareil".into(),
+                "another operation is in progress on this device".into(),
             ));
         }
         let mut ctl = Ctl::new(timeout, prompt);
@@ -736,7 +736,7 @@ impl HwManager {
         // Backstop only: the blocking side already honours the deadline within ~POLL.
         match tokio::time::timeout(timeout + Duration::from_secs(3), handle).await {
             Ok(Ok(result)) => result,
-            Ok(Err(e)) => Err(HwError::bad(format!("tâche interrompue : {e}"))),
+            Ok(Err(e)) => Err(HwError::bad(format!("task interrupted: {e}"))),
             Err(_) => {
                 cancel.store(true, Ordering::SeqCst);
                 Err(HwError::Timeout)
@@ -779,9 +779,9 @@ impl HwManager {
         let tx = lock(&slot.pin_tx);
         let tx = tx
             .as_ref()
-            .ok_or_else(|| HwError::bad("aucune saisie de PIN en attente"))?;
+            .ok_or_else(|| HwError::bad("no PIN entry pending"))?;
         tx.try_send(positions)
-            .map_err(|_| HwError::bad("aucune saisie de PIN en attente"))
+            .map_err(|_| HwError::bad("no PIN entry pending"))
     }
 
     /// Hands the THP pairing code typed by the user to the pending `hw_open` on `id`.
@@ -793,9 +793,9 @@ impl HwManager {
         let tx = lock(&slot.code_tx);
         let tx = tx
             .as_ref()
-            .ok_or_else(|| HwError::bad("aucun appairage en attente"))?;
+            .ok_or_else(|| HwError::bad("no pairing pending"))?;
         tx.try_send(code)
-            .map_err(|_| HwError::bad("aucun appairage en attente"))
+            .map_err(|_| HwError::bad("no pairing pending"))
     }
 
     /// THP devices paired with this installation (public keys only).

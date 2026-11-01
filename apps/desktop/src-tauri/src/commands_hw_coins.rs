@@ -81,7 +81,7 @@ fn account_for(
     };
     if !has {
         return Err(AppError::InvalidInput(format!(
-            "ce compte hardware wallet n'a pas de clé {}",
+            "this hardware-wallet account has no {} key",
             chain.label()
         )));
     }
@@ -128,7 +128,7 @@ pub struct HwUtxoSigned {
 
 fn coin_of(chain: Chain) -> AppResult<UtxoCoin> {
     chains::utxo_coin(chain)
-        .ok_or_else(|| AppError::InvalidInput("chaîne attendue : ltc, doge, bch ou dash".into()))
+        .ok_or_else(|| AppError::InvalidInput("chain expected: ltc, doge, bch or dash".into()))
 }
 
 /// Signs a Litecoin / Dogecoin / Bitcoin Cash / Dash PSBT on the device. Every input must be
@@ -150,7 +150,7 @@ pub async fn hw_sign_utxo_psbt(
     let account = acc
         .utxo_account(coin)
         .cloned()
-        .ok_or_else(|| AppError::Internal("compte UTXO manquant".into()))?;
+        .ok_or_else(|| AppError::Internal("missing UTXO account".into()))?;
     let plan = wallet_core::utxo_hw_plan(net, coin, &account, &psbt)?;
     check_same_device(&app, &state, &id, &acc, chain).await?;
     let lang = crate::i18n::current();
@@ -170,7 +170,7 @@ pub async fn hw_sign_utxo_psbt(
         .await?;
     }
     let parsed = bitcoin::psbt::Psbt::from_str(psbt.trim())
-        .map_err(|_| AppError::InvalidInput("PSBT invalide".into()))?;
+        .map_err(|_| AppError::InvalidInput("invalid PSBT".into()))?;
     let plan2 = plan.clone();
     let sigs = state
         .hw
@@ -181,7 +181,7 @@ pub async fn hw_sign_utxo_psbt(
     let (signed, again) = wallet_core::utxo_hw_finalize(net, coin, &account, &psbt, &sigs)?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -194,12 +194,11 @@ pub async fn hw_sign_utxo_psbt(
 // ---------------------------------------------------------------- XRP
 
 fn xrp_key(acc: &WatchOnlyAccount) -> AppResult<(String, [u8; 33])> {
-    let k =
-        key_of(acc, Chain::Xrp).ok_or_else(|| AppError::InvalidInput("pas de clé XRP".into()))?;
+    let k = key_of(acc, Chain::Xrp).ok_or_else(|| AppError::InvalidInput("no XRP key".into()))?;
     let pk: [u8; 33] = k
         .pubkey_bytes()?
         .try_into()
-        .map_err(|_| AppError::InvalidInput("clé XRP invalide".into()))?;
+        .map_err(|_| AppError::InvalidInput("invalid XRP key".into()))?;
     Ok((k.address.clone(), pk))
 }
 
@@ -260,7 +259,7 @@ pub async fn hw_sign_xrp_tx(
         .await?;
     }
     let raw = hex::decode(blob.trim())
-        .map_err(|_| AppError::InvalidInput("blob : hexadécimal attendu".into()))?;
+        .map_err(|_| AppError::InvalidInput("blob: hexadecimal expected".into()))?;
     let (net, account) = (state.network, acc.account);
     let der = state
         .hw
@@ -294,7 +293,7 @@ pub async fn hw_xrp_broadcast(
 fn tron_address(acc: &WatchOnlyAccount) -> AppResult<String> {
     key_of(acc, Chain::Tron)
         .map(|k| k.address.clone())
-        .ok_or_else(|| AppError::InvalidInput("pas de clé TRON".into()))
+        .ok_or_else(|| AppError::InvalidInput("no TRON key".into()))
 }
 
 fn now_ms() -> i64 {
@@ -357,7 +356,7 @@ pub async fn hw_sign_tron_tx(
         .await?;
     }
     let bytes = hex::decode(raw.trim())
-        .map_err(|_| AppError::InvalidInput("raw_data n'est pas en hexadécimal".into()))?;
+        .map_err(|_| AppError::InvalidInput("raw_data is not hexadecimal".into()))?;
     let account = acc.account;
     let sig = state
         .hw
@@ -368,7 +367,7 @@ pub async fn hw_sign_tron_tx(
     // Never trust the device: the signature must recover to this account's address.
     if wallet_core::tron_recover_signer(&raw, &sig)? != me {
         return Err(AppError::HwBadResponse(
-            "la signature de l'appareil n'est pas celle de ce compte".into(),
+            "the device's signature is not this account's".into(),
         ));
     }
     state.touch();
@@ -402,11 +401,11 @@ pub async fn hw_tron_broadcast(
 
 fn stellar_key(acc: &WatchOnlyAccount) -> AppResult<(String, [u8; 32])> {
     let k = key_of(acc, Chain::Stellar)
-        .ok_or_else(|| AppError::InvalidInput("pas de clé Stellar".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("no Stellar key".into()))?;
     let pk: [u8; 32] = k
         .pubkey_bytes()?
         .try_into()
-        .map_err(|_| AppError::InvalidInput("clé Stellar invalide".into()))?;
+        .map_err(|_| AppError::InvalidInput("invalid Stellar key".into()))?;
     Ok((k.address.clone(), pk))
 }
 

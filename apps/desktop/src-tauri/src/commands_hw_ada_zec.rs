@@ -64,7 +64,7 @@ fn account_for(
     };
     if !has {
         return Err(AppError::InvalidInput(format!(
-            "ce compte hardware wallet n'a pas de clé {}",
+            "this hardware-wallet account has no {} key",
             chain.label()
         )));
     }
@@ -98,7 +98,7 @@ fn ada_keys(acc: &WatchOnlyAccount) -> AppResult<(String, [u8; 32])> {
     let k = acc
         .cardano
         .as_ref()
-        .ok_or_else(|| AppError::InvalidInput("pas de clé Cardano".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("no Cardano key".into()))?;
     Ok((
         k.address.clone(),
         wallet_core::cardano_xpub_child(&k.pubkey, 0, 0)?,
@@ -154,7 +154,7 @@ pub async fn hw_sign_ada_tx(
     let plan = wallet_core::cardano_hw_plan(&tx, &dctx, &me_b)?;
     if plan.summary != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     check_same_device(&app, &state, &id, &acc, Chain::Cardano).await?;
@@ -184,14 +184,14 @@ pub async fn hw_sign_ada_tx(
         .await?;
     if device_pk.is_some_and(|k| k != pk) {
         return Err(AppError::HwBadResponse(
-            "l'appareil a signé avec une autre clé que celle de ce compte".into(),
+            "the device signed with a key other than this account's".into(),
         ));
     }
     let (signed, tx_id, again) = wallet_core::cardano_hw_assemble(&tx, &dctx, &pk, &hash, &sig)
         .map_err(|e| AppError::HwBadResponse(e.to_string()))?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -220,7 +220,7 @@ pub async fn hw_ada_broadcast(
 fn zec_account(acc: &WatchOnlyAccount) -> AppResult<ZecAccount> {
     acc.zec
         .clone()
-        .ok_or_else(|| AppError::InvalidInput("pas de compte Zcash".into()))
+        .ok_or_else(|| AppError::InvalidInput("no Zcash account".into()))
 }
 
 /// What the device would be asked to sign (built from the stored xpub, as `hw_sign_zec_tx`).
@@ -284,7 +284,7 @@ pub async fn hw_sign_zec_tx(
         .map_err(|e| AppError::HwBadResponse(e.to_string()))?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();

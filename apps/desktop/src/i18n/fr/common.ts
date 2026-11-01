@@ -28,6 +28,7 @@ export const common = {
   'common.no': 'Non',
   'common.or': 'ou',
   'common.none': 'Aucun',
+  'common.quoted': '« {text} »',
   'common.unknown': 'inconnu',
   'common.password': 'Mot de passe',
   'common.address': 'Adresse',

@@ -54,7 +54,7 @@ impl From<CallError> for AppError {
         match e {
             CallError::App(e) => e,
             CallError::Rpc(r) => AppError::InvalidInput(format!(
-                "Bitcoin Core : {} (code {})",
+                "Bitcoin Core: {} (code {})",
                 r.message.chars().take(300).collect::<String>(),
                 r.code
             )),
@@ -73,12 +73,12 @@ pub struct CoreClient<'a> {
 pub fn parse_response(status: u16, body: &[u8]) -> Result<Value, CallError> {
     if status == 401 || status == 403 {
         return Err(CallError::App(AppError::ServerInvalid(
-            "Bitcoin Core : authentification RPC refusée".into(),
+            "Bitcoin Core: RPC authentication refused".into(),
         )));
     }
     let v: Value = serde_json::from_slice(body).map_err(|_| {
         CallError::App(AppError::ServerUnreachable(format!(
-            "Bitcoin Core : réponse non JSON (HTTP {status})"
+            "Bitcoin Core: non-JSON response (HTTP {status})"
         )))
     })?;
     if let Some(err) = v.get("error").filter(|e| !e.is_null()) {
@@ -87,7 +87,7 @@ pub fn parse_response(status: u16, body: &[u8]) -> Result<Value, CallError> {
             message: err
                 .get("message")
                 .and_then(Value::as_str)
-                .unwrap_or("erreur inconnue")
+                .unwrap_or("unknown error")
                 .to_owned(),
         }));
     }
@@ -98,10 +98,10 @@ pub fn parse_response(status: u16, body: &[u8]) -> Result<Value, CallError> {
 pub fn btc_to_sats(v: &Value) -> AppResult<u64> {
     let f = v
         .as_f64()
-        .ok_or_else(|| AppError::ServerUnreachable("Bitcoin Core : montant manquant".into()))?;
+        .ok_or_else(|| AppError::ServerUnreachable("Bitcoin Core: missing amount".into()))?;
     if !f.is_finite() || !(0.0..=21_000_000.0).contains(&f) {
         return Err(AppError::ServerUnreachable(
-            "Bitcoin Core : montant invalide".into(),
+            "Bitcoin Core: invalid amount".into(),
         ));
     }
     Ok((f * 100_000_000.0).round() as u64)
@@ -125,7 +125,7 @@ impl<'a> CoreClient<'a> {
             && !url.host_str().is_some_and(crate::servers::is_private_host)
         {
             return Err(AppError::ServerInvalid(
-                "Bitcoin Core : fichier .cookie refusé pour un nœud distant".into(),
+                "Bitcoin Core: .cookie file refused for a remote node".into(),
             ));
         }
         Ok(Self {
@@ -143,7 +143,7 @@ impl<'a> CoreClient<'a> {
             CoreAuth::Userpass { user, password, .. } => zeroize::Zeroizing::new(format!(
                 "{user}:{}",
                 password.as_deref().ok_or_else(|| AppError::ServerInvalid(
-                    "Bitcoin Core : mot de passe RPC manquant".into()
+                    "Bitcoin Core: missing RPC password".into()
                 ))?
             )),
         };
@@ -165,7 +165,7 @@ impl<'a> CoreClient<'a> {
         let mut url = self.url.clone();
         if let Some(w) = wallet {
             url.path_segments_mut()
-                .map_err(|()| CallError::App(AppError::ServerInvalid("URL Core invalide".into())))?
+                .map_err(|()| CallError::App(AppError::ServerInvalid("invalid Core URL".into())))?
                 .pop_if_empty()
                 .push("wallet")
                 .push(w);
@@ -187,7 +187,7 @@ impl<'a> CoreClient<'a> {
         let chain = info
             .get("chain")
             .and_then(Value::as_str)
-            .ok_or_else(|| AppError::ServerUnreachable("Bitcoin Core : chain manquant".into()))?
+            .ok_or_else(|| AppError::ServerUnreachable("Bitcoin Core: missing chain".into()))?
             .to_owned();
         let blocks = info.get("blocks").and_then(Value::as_u64).unwrap_or(0);
         Ok((chain, blocks))
@@ -224,7 +224,7 @@ impl<'a> CoreClient<'a> {
                     .await?;
                 if info.get("private_keys_enabled").and_then(Value::as_bool) != Some(false) {
                     return Err(AppError::ServerInvalid(format!(
-                        "le portefeuille « {name} » existe mais contient des clés privées"
+                        "the wallet \"{name}\" exists but contains private keys"
                     )));
                 }
                 Ok(())
@@ -242,12 +242,12 @@ impl<'a> CoreClient<'a> {
             .get("checksum")
             .and_then(Value::as_str)
             .ok_or_else(|| {
-                AppError::ServerUnreachable("getdescriptorinfo : checksum manquant".into())
+                AppError::ServerUnreachable("getdescriptorinfo: missing checksum".into())
             })?;
         if info.get("isrange").and_then(Value::as_bool) != Some(true)
             || info.get("hasprivatekeys").and_then(Value::as_bool) != Some(false)
         {
-            return Err(AppError::Internal("descripteur inattendu".into()));
+            return Err(AppError::Internal("unexpected descriptor".into()));
         }
         Ok(format!("{desc}#{checksum}"))
     }
@@ -278,10 +278,10 @@ impl<'a> CoreClient<'a> {
                     .map(|r| r.get("error").map(Value::to_string).unwrap_or_default())
                     .collect()
             })
-            .unwrap_or_else(|| vec!["réponse inattendue".into()]);
+            .unwrap_or_else(|| vec!["unexpected response".into()]);
         if !failures.is_empty() {
             return Err(AppError::InvalidInput(format!(
-                "importdescriptors : {}",
+                "importdescriptors: {}",
                 failures.join("; ")
             )));
         }

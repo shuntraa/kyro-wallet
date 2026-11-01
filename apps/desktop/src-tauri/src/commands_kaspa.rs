@@ -292,8 +292,8 @@ fn parse_amount(spec: &KaspaSendSpec) -> AppResult<KaspaAmount> {
             .ok()
             .filter(|v| *v > 0)
             .map(KaspaAmount::Exact)
-            .ok_or_else(|| AppError::InvalidInput("montant en sompi invalide".into())),
-        (None, false) => Err(AppError::InvalidInput("montant manquant".into())),
+            .ok_or_else(|| AppError::InvalidInput("invalid sompi amount".into())),
+        (None, false) => Err(AppError::InvalidInput("missing amount".into())),
     }
 }
 
@@ -320,7 +320,7 @@ pub(crate) async fn build(
     let change = ks
         .iter()
         .find(|k| k.change && k.index == 0)
-        .ok_or_else(|| AppError::Internal("adresse de monnaie absente".into()))?
+        .ok_or_else(|| AppError::Internal("change address missing".into()))?
         .script();
     let built = wallet_core::kaspa_build_send(&coins, &to, amount, &change, priority)?;
     let summary = wallet_core::kaspa_tx_summary(c.network, &built.tx, &built.entries, ks)?;
@@ -377,7 +377,7 @@ pub(crate) async fn live_entries(
                 .map(|c| c.entry.clone())
                 .ok_or_else(|| {
                     AppError::InvalidInput(format!(
-                        "entrée {i} : pièce déjà dépensée ou inconnue de ce compte, reconstruis la transaction"
+                        "input {i}: coin already spent or unknown to this account, rebuild the transaction"
                     ))
                 })
         })
@@ -402,7 +402,7 @@ pub(crate) async fn prepare_sign(
     let tx = wallet_core::kaspa_tx_from_json(tx_json)?;
     if tx.inputs.iter().any(|i| !i.signature_script.is_empty()) {
         return Err(AppError::InvalidInput(
-            "transaction Kaspa déjà signée".into(),
+            "Kaspa transaction already signed".into(),
         ));
     }
     let entries = live_entries(c, ks, &tx).await?;
@@ -463,7 +463,7 @@ pub async fn kas_sign_tx(
         blocking(move || Ok(wallet_core::kaspa_sign(&seed, net, a, &unsigned, &entries)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();

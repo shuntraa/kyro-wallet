@@ -59,7 +59,7 @@ pub(crate) async fn request(
 ) -> AppResult<Value> {
     let base = base(ctx)?;
     let url = url::Url::parse(&format!("{base}{path}"))
-        .map_err(|_| AppError::ServerInvalid("URL TRON invalide".into()))?;
+        .map_err(|_| AppError::ServerInvalid("invalid TRON URL".into()))?;
     let host = url.host_str().unwrap_or_default().to_owned();
     let mut req = match body {
         Some(b) => ServerRequest::post_json(url, Family::Tron, b.to_string()),
@@ -71,18 +71,18 @@ pub(crate) async fn request(
     let (status, bytes) = ctx.net_client.server_request(req, ctx.tor).await?;
     if status != 200 {
         return Err(bad(format!(
-            "TRON : HTTP {status} sur {path} ({})",
+            "TRON: HTTP {status} on {path} ({})",
             String::from_utf8_lossy(&bytes)
                 .chars()
                 .take(200)
                 .collect::<String>()
         )));
     }
-    let v: Value = serde_json::from_slice(&bytes)
-        .map_err(|_| bad(format!("TRON : JSON invalide sur {path}")))?;
+    let v: Value =
+        serde_json::from_slice(&bytes).map_err(|_| bad(format!("TRON: invalid JSON on {path}")))?;
     if let Some(e) = v.get("Error").and_then(Value::as_str) {
         return Err(bad(format!(
-            "TRON : {path} : {}",
+            "TRON: {path}: {}",
             e.chars().take(200).collect::<String>()
         )));
     }
@@ -104,13 +104,13 @@ pub async fn now_block(ctx: &TronCtx<'_>) -> AppResult<(u64, String, i64)> {
     let raw = &v["block_header"]["raw_data"];
     let number = raw["number"]
         .as_u64()
-        .ok_or_else(|| bad("TRON : bloc sans numéro"))?;
+        .ok_or_else(|| bad("TRON: block without a number"))?;
     let ts = raw["timestamp"]
         .as_i64()
-        .ok_or_else(|| bad("TRON : bloc sans horodatage"))?;
+        .ok_or_else(|| bad("TRON: block without a timestamp"))?;
     let id = v["blockID"]
         .as_str()
-        .ok_or_else(|| bad("TRON : bloc sans blockID"))?
+        .ok_or_else(|| bad("TRON: block without a blockID"))?
         .to_owned();
     Ok((number, id, ts))
 }
@@ -195,12 +195,12 @@ pub async fn params(ctx: &TronCtx<'_>) -> AppResult<TronParams> {
     let v = request(ctx, "/wallet/getchainparameters", Some(json!({}))).await?;
     let list = v["chainParameter"]
         .as_array()
-        .ok_or_else(|| bad("TRON : paramètres de chaîne absents"))?;
+        .ok_or_else(|| bad("TRON: chain parameters missing"))?;
     let get = |k: &str| {
         list.iter()
             .find(|p| p["key"] == k)
             .and_then(|p| p["value"].as_u64())
-            .ok_or_else(|| bad(format!("TRON : paramètre {k} absent")))
+            .ok_or_else(|| bad(format!("TRON: parameter {k} missing")))
     };
     Ok(TronParams {
         energy_fee: get("getEnergyFee")?,
@@ -228,8 +228,8 @@ pub async fn trc20_balance(ctx: &TronCtx<'_>, contract: &str, address: &str) -> 
     let r = v["constant_result"][0]
         .as_str()
         .filter(|r| r.len() == 64)
-        .ok_or_else(|| bad("TRON : balanceOf sans résultat"))?;
-    let raw = hex::decode(r).map_err(|_| bad("TRON : balanceOf invalide"))?;
+        .ok_or_else(|| bad("TRON: balanceOf without a result"))?;
+    let raw = hex::decode(r).map_err(|_| bad("TRON: invalid balanceOf"))?;
     Ok(be_to_decimal(&raw))
 }
 
@@ -262,9 +262,7 @@ pub async fn simulate_energy(
     data: &[u8],
 ) -> AppResult<u64> {
     if data.len() < 4 {
-        return Err(AppError::InvalidInput(
-            "données d'appel trop courtes".into(),
-        ));
+        return Err(AppError::InvalidInput("call data too short".into()));
     }
     let v = request(
         ctx,
@@ -278,14 +276,14 @@ pub async fn simulate_energy(
     .await?;
     if v["result"]["result"] != true {
         return Err(bad(format!(
-            "TRON : simulation refusée ({})",
+            "TRON: simulation rejected ({})",
             message(&v["result"])
         )));
     }
     if let Some(ret) = v["transaction"]["ret"][0]["ret"].as_str() {
         if ret != "SUCESS" && ret != "SUCCESS" {
             return Err(AppError::InvalidInput(format!(
-                "le transfert de token échouerait ({ret}) : solde de token insuffisant ?"
+                "the token transfer would fail ({ret}): insufficient token balance?"
             )));
         }
     }
@@ -441,12 +439,12 @@ pub fn check_expiration(summary: &TronTxSummary, now_ms: i64) -> AppResult<()> {
 pub fn check_expiration_ms(expiration: i64, now_ms: i64) -> AppResult<()> {
     if expiration <= now_ms {
         return Err(AppError::InvalidInput(
-            "transaction TRON expirée : reconstruis-la".into(),
+            "TRON transaction expired: rebuild it".into(),
         ));
     }
     if expiration > now_ms + MAX_EXPIRATION_MS {
         return Err(AppError::InvalidInput(
-            "expiration TRON à plus de 24 h : refusée".into(),
+            "TRON expiration more than 24 h away: refused".into(),
         ));
     }
     Ok(())
@@ -460,7 +458,7 @@ pub async fn broadcast(
     signature: &[u8; 65],
 ) -> AppResult<String> {
     let raw = hex::decode(raw_hex.trim())
-        .map_err(|_| AppError::InvalidInput("raw_data : hexadécimal attendu".into()))?;
+        .map_err(|_| AppError::InvalidInput("raw_data: hexadecimal expected".into()))?;
     let tx = wallet_core::TronRaw::decode(&raw)?;
     let txid = hex::encode(tx.txid());
     let signed = wallet_core::tron_signed_transaction(raw_hex, signature)?;
@@ -472,7 +470,7 @@ pub async fn broadcast(
     .await?;
     if v["result"] != true {
         return Err(AppError::InvalidInput(format!(
-            "diffusion TRON refusée : {} {}",
+            "TRON broadcast rejected: {} {}",
             v["code"].as_str().unwrap_or(""),
             message(&v)
         )));
@@ -480,7 +478,7 @@ pub async fn broadcast(
     let got = v["txid"].as_str().unwrap_or("");
     if got != txid {
         return Err(bad(format!(
-            "le serveur a répondu un txid inattendu ({})",
+            "the server answered an unexpected txid ({})",
             got.chars().take(80).collect::<String>()
         )));
     }
@@ -505,7 +503,7 @@ pub async fn history(ctx: &TronCtx<'_>, address: &str) -> AppResult<Value> {
     .await
     .map_err(|e| match e {
         AppError::ServerUnreachable(m) => {
-            AppError::ServerUnreachable(format!("{m} (l'historique exige l'API /v1 de TronGrid)"))
+            AppError::ServerUnreachable(format!("{m} (the history requires TronGrid's /v1 API)"))
         }
         other => other,
     })?;
@@ -560,9 +558,9 @@ pub async fn probe(ctx: &TronCtx<'_>) -> AppResult<Detected> {
         let what = TRON_GENESIS
             .iter()
             .find(|(_, g)| *g == found)
-            .map_or("réseau inconnu", |(n, _)| n);
+            .map_or("unknown network", |(n, _)| n);
         return Err(AppError::ServerWrongNetwork(format!(
-            "ce serveur TRON est sur {what}, pas sur {want}"
+            "this TRON server is on {what}, not on {want}"
         )));
     }
     let height = now_block(ctx).await.ok().map(|b| b.0);
@@ -1007,7 +1005,7 @@ mod live {
                 if info.get("blockNumber").is_some() {
                     let r = &info["receipt"];
                     eprintln!(
-                        "confirmed in block {} : result {}",
+                        "confirmed in block {}: result {}",
                         info["blockNumber"], r["result"]
                     );
                     eprintln!(

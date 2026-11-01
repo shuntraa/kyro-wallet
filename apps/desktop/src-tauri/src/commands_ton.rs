@@ -60,12 +60,12 @@ fn parse_user_address(s: &str, net: Network) -> AppResult<wallet_core::TonFriend
     let f = wallet_core::ton_parse_address(s)?;
     if f.testnet && net == Network::Mainnet {
         return Err(AppError::InvalidInput(
-            "adresse TON de testnet (kQ… / 0Q…) : refusée sur mainnet".into(),
+            "testnet TON address (kQ… / 0Q…): refused on mainnet".into(),
         ));
     }
     if f.address.workchain != 0 {
         return Err(AppError::InvalidInput(
-            "adresse de la masterchain (-1) : seuls les comptes de la basechain (0) sont pris en charge".into(),
+            "masterchain address (-1): only basechain (0) accounts are supported".into(),
         ));
     }
     Ok(f)
@@ -359,7 +359,7 @@ fn amount_of(amount: &str, send_all: bool) -> AppResult<u64> {
         .parse()
         .ok()
         .filter(|n| *n > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant en nanotons invalide".into()))
+        .ok_or_else(|| AppError::InvalidInput("invalid amount in nanotons".into()))
 }
 
 /// What the user asked: recipient, nanotons (ignored with `send_all`), optional comment.
@@ -388,7 +388,7 @@ pub(crate) async fn build(
     let destination = ton_backend::account(c, &dest.address).await?;
     if destination.status == TonStatus::Frozen {
         return Err(AppError::InvalidInput(
-            "le compte destinataire est gelé (frais de stockage impayés) : envoi refusé".into(),
+            "the recipient account is frozen (unpaid storage fees): send refused".into(),
         ));
     }
     let deploy = account.status == TonStatus::Uninit;
@@ -457,7 +457,7 @@ async fn check_jetton_balance(
         .unwrap_or(0);
     if amount > have {
         return Err(AppError::InvalidInput(format!(
-            "solde {} insuffisant : {} {}",
+            "insufficient {} balance: {} {}",
             j.symbol,
             crate::commands::format_units(&have.to_string(), usize::from(j.decimals)),
             j.symbol
@@ -479,7 +479,7 @@ pub(crate) async fn build_jetton(
     let tn = testnet(c.network);
     let master = wallet_core::ton_parse_address(master)?.address;
     if wallet_core::ton_known_jetton(&master, tn).is_none() {
-        return Err(AppError::InvalidInput("jeton TON inconnu de Kyro".into()));
+        return Err(AppError::InvalidInput("TON token unknown to Kyro".into()));
     }
     let dest = parse_user_address(req.to, c.network)?;
     let units: u128 = req
@@ -488,13 +488,13 @@ pub(crate) async fn build_jetton(
         .parse()
         .ok()
         .filter(|n| *n > 0)
-        .ok_or_else(|| AppError::InvalidInput("montant de jeton invalide".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("invalid token amount".into()))?;
     let jetton_wallet = wallet_core::ton_jetton_wallet_address(&master, me, tn)?;
     let account = ton_backend::account(c, me).await?;
     let jw = ton_backend::account(c, &jetton_wallet).await?;
     if jw.status != TonStatus::Active {
         return Err(AppError::InvalidInput(
-            "tu n'as encore reçu aucun jeton de ce type : ton portefeuille de jetons n'existe pas"
+            "you have not received any token of this type yet: your token wallet does not exist"
                 .into(),
         ));
     }
@@ -522,7 +522,7 @@ pub(crate) async fn build_jetton(
     };
     if t.with_state_init && t.seqno != 0 {
         return Err(AppError::InvalidInput(
-            "état du portefeuille TON incohérent".into(),
+            "inconsistent TON wallet state".into(),
         ));
     }
     let boc = wallet_core::ton_unsigned_transfer(&t)?;
@@ -534,7 +534,7 @@ pub(crate) async fn build_jetton(
     })?;
     let summary = wallet_core::ton_decode_tx(&boc, public_key, tn)?;
     let Some(j) = &summary.jetton else {
-        return Err(AppError::Internal("transfert de jeton non reconnu".into()));
+        return Err(AppError::Internal("unrecognized token transfer".into()));
     };
     check_jetton_balance(c, me, j, units).await?;
     Ok(TonBuilt {
@@ -606,12 +606,12 @@ pub struct TonSignedOut {
 fn check_validity(valid_until: u32, now: u32) -> AppResult<()> {
     if valid_until <= now.saturating_add(15) {
         return Err(AppError::InvalidInput(
-            "transfert TON expiré (valable 10 min après sa préparation) : reconstruis-le".into(),
+            "TON transfer expired (valid for 10 min after its preparation): rebuild it".into(),
         ));
     }
     if valid_until > now.saturating_add(VALID_FOR_SECS + 120) {
         return Err(AppError::InvalidInput(
-            "transfert TON valable trop longtemps (horloge ?) : reconstruis-le".into(),
+            "TON transfer valid for too long (clock?): rebuild it".into(),
         ));
     }
     Ok(())
@@ -641,8 +641,7 @@ pub(crate) async fn prepare_sign(
     };
     if !fresh && matches!(account.status, TonStatus::Active | TonStatus::Uninit) {
         return Err(AppError::InvalidInput(
-            "numéro de séquence (seqno) ou état du portefeuille périmé : reconstruis le transfert"
-                .into(),
+            "stale sequence number (seqno) or wallet state: rebuild the transfer".into(),
         ));
     }
     let fee = ton_backend::estimate_fee(c, me, &t.estimate_parts()?).await?;
@@ -705,7 +704,7 @@ pub async fn ton_sign_tx(
     let signed = blocking(move || Ok(wallet_core::ton_sign(&seed, a, &b, testnet(net))?)).await?;
     if signed.summary != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();
@@ -730,7 +729,7 @@ pub(crate) async fn broadcast_checked(
         wallet_core::ton_verify_signed(boc, public_key, testnet(c.network))?;
     if t.valid_until <= now {
         return Err(AppError::InvalidInput(
-            "transfert TON expiré : reconstruis-le".into(),
+            "TON transfer expired: rebuild it".into(),
         ));
     }
     ton_backend::submit(c, boc, &hash, &normalized).await
@@ -752,7 +751,7 @@ pub async fn ton_tx_status(state: State<'_, AppState>, hash: String) -> AppResul
     let h = hash.trim().to_ascii_lowercase();
     if h.len() != 64 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(AppError::InvalidInput(
-            "hash : 64 caractères hexadécimaux".into(),
+            "hash: 64 hexadecimal characters".into(),
         ));
     }
     ton_backend::tx_status(&ctx(&state), &h).await

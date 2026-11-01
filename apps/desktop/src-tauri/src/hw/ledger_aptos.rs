@@ -35,7 +35,7 @@ pub fn parse_pubkey(data: &[u8]) -> HwResult<Vec<u8>> {
         [33, 0x04, rest @ ..] if rest.len() == 32 + 1 + 32 && rest[32] == 32 => {
             Ok(rest[..32].to_vec())
         }
-        _ => Err(HwError::bad("clé publique Aptos mal formée")),
+        _ => Err(HwError::bad("malformed Aptos public key")),
     }
 }
 
@@ -49,7 +49,7 @@ pub fn sign_apdus(path: &[u32], message: &[u8]) -> HwResult<Vec<Vec<u8>>> {
     )?];
     let chunks: Vec<&[u8]> = message.chunks(CHUNK).collect();
     if chunks.len() > 254 {
-        return Err(HwError::bad("transaction Aptos trop grande"));
+        return Err(HwError::bad("Aptos transaction too large"));
     }
     for (i, c) in chunks.iter().enumerate() {
         let p2 = if i + 1 == chunks.len() {
@@ -78,7 +78,7 @@ pub fn sign(app: &App<'_>, path: &[u32], message: &[u8]) -> HwResult<Vec<u8>> {
     }
     match last.as_slice() {
         [64, sig @ ..] if sig.len() == 64 => Ok(sig.to_vec()),
-        _ => Err(HwError::bad("signature Aptos mal formée")),
+        _ => Err(HwError::bad("malformed Aptos signature")),
     }
 }
 

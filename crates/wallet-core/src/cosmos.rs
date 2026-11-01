@@ -90,12 +90,12 @@ pub fn cosmos_path(account: u32) -> String {
 }
 
 fn hrp() -> Result<Hrp> {
-    Hrp::parse(COSMOS_HRP).map_err(|_| Error::crypto("préfixe bech32"))
+    Hrp::parse(COSMOS_HRP).map_err(|_| Error::crypto("bech32 prefix"))
 }
 
 /// `cosmos1…` address of raw address bytes (20 bytes for a key, 32 for a module / ICA account).
 pub fn cosmos_address_from_bytes(bytes: &[u8]) -> Result<String> {
-    bech32::encode::<Bech32>(hrp()?, bytes).map_err(|_| Error::input("adresse Cosmos : encodage"))
+    bech32::encode::<Bech32>(hrp()?, bytes).map_err(|_| Error::input("Cosmos address: encoding"))
 }
 
 /// Raw bytes of a `cosmos1…` address: bech32 (not bech32m) checksum verified, prefix
@@ -104,17 +104,17 @@ pub fn cosmos_address_bytes(address: &str) -> Result<Vec<u8>> {
     use bech32::primitives::decode::CheckedHrpstring;
     let a = address.trim();
     let checked = CheckedHrpstring::new::<Bech32>(a)
-        .map_err(|_| Error::input("adresse Cosmos invalide (somme de contrôle bech32)"))?;
+        .map_err(|_| Error::input("invalid Cosmos address (bech32 checksum)"))?;
     if checked.hrp().to_lowercase() != COSMOS_HRP {
         return Err(Error::input(format!(
-            "adresse d'une autre chaîne (préfixe « {} », « cosmos » attendu)",
+            "address of another chain (prefix \"{}\", \"cosmos\" expected)",
             checked.hrp().to_lowercase()
         )));
     }
     let bytes: Vec<u8> = checked.byte_iter().collect();
     if bytes.len() != 20 && bytes.len() != 32 {
         return Err(Error::input(
-            "adresse Cosmos invalide (20 ou 32 octets attendus)",
+            "invalid Cosmos address (20 or 32 bytes expected)",
         ));
     }
     Ok(bytes)
@@ -128,7 +128,7 @@ pub fn cosmos_normalize_address(address: &str) -> Result<String> {
 /// `cosmos1…` address of a compressed secp256k1 public key.
 pub fn cosmos_address_of_pubkey(pk: &[u8]) -> Result<String> {
     let pk: [u8; 33] = PublicKey::from_slice(pk)
-        .map_err(|_| Error::input("clé publique invalide"))?
+        .map_err(|_| Error::input("invalid public key"))?
         .serialize();
     cosmos_address_from_bytes(&hash160::Hash::hash(&pk).to_byte_array())
 }
@@ -278,15 +278,15 @@ pub mod proto {
 }
 
 fn bad(msg: impl Into<String>) -> Error {
-    Error::input(format!("transaction Cosmos : {}", msg.into()))
+    Error::input(format!("Cosmos transaction: {}", msg.into()))
 }
 
 /// Decodes `bytes` as `M` and accepts it only if it re-encodes to exactly `bytes`.
 fn strict<M: prost::Message + Default>(bytes: &[u8], what: &str) -> Result<M> {
-    let m = M::decode(bytes).map_err(|_| bad(format!("{what} : protobuf invalide")))?;
+    let m = M::decode(bytes).map_err(|_| bad(format!("{what}: invalid protobuf")))?;
     if m.encode_to_vec() != bytes {
         return Err(bad(format!(
-            "{what} : encodage non canonique ou champ non pris en charge"
+            "{what}: non-canonical encoding or unsupported field"
         )));
     }
     Ok(m)
@@ -299,13 +299,13 @@ fn parse_amount(s: &str, what: &str) -> Result<u128> {
         || !s.bytes().all(|b| b.is_ascii_digit())
         || (s.len() > 1 && s.starts_with('0'))
     {
-        return Err(bad(format!("{what} : montant invalide « {s} »")));
+        return Err(bad(format!("{what}: invalid amount \"{s}\"")));
     }
     let v: u128 = s
         .parse()
-        .map_err(|_| bad(format!("{what} : montant invalide")))?;
+        .map_err(|_| bad(format!("{what}: invalid amount")))?;
     if v == 0 {
-        return Err(bad(format!("{what} : montant nul")));
+        return Err(bad(format!("{what}: zero amount")));
     }
     Ok(v)
 }
@@ -314,10 +314,10 @@ fn one_uatom(coins: &[proto::Coin], what: &str) -> Result<u128> {
     match coins {
         [c] if c.denom == COSMOS_DENOM => parse_amount(&c.amount, what),
         [c] => Err(bad(format!(
-            "{what} : dénomination « {} » refusée (uatom seulement)",
+            "{what}: denomination \"{}\" refused (uatom only)",
             sanitize_text(&c.denom, 80).text
         ))),
-        _ => Err(bad(format!("{what} : une seule pièce (uatom) attendue"))),
+        _ => Err(bad(format!("{what}: a single coin (uatom) expected"))),
     }
 }
 
@@ -362,7 +362,7 @@ fn any(type_url: &str, m: &impl prost::Message) -> proto::Any {
 pub fn cosmos_send_sign_doc(r: &CosmosSendRequest) -> Result<Vec<u8>> {
     if r.memo.chars().count() > COSMOS_MAX_MEMO {
         return Err(Error::input(format!(
-            "mémo : au plus {COSMOS_MAX_MEMO} caractères"
+            "memo: {COSMOS_MAX_MEMO} characters at most"
         )));
     }
     let from = cosmos_address_of_pubkey(&r.public_key)?;
@@ -485,50 +485,52 @@ struct Parsed {
 
 fn parse_sign_doc(doc_bytes: &[u8], our_pubkey: &[u8; 33], chain_id: &str) -> Result<Parsed> {
     if doc_bytes.len() > MAX_TX {
-        return Err(bad("trop grande"));
+        return Err(bad("too large"));
     }
     let doc: proto::SignDoc = strict(doc_bytes, "SignDoc")?;
     if doc.chain_id != chain_id {
         return Err(bad(format!(
-            "chain-id « {} » au lieu de « {chain_id} »",
+            "chain-id \"{}\" instead of \"{chain_id}\"",
             sanitize_text(&doc.chain_id, 64).text
         )));
     }
     let body: proto::TxBody = strict(&doc.body_bytes, "TxBody")?;
     let msg = match body.messages.as_slice() {
         [m] => m,
-        _ => return Err(bad("un seul message attendu")),
+        _ => return Err(bad("a single message expected")),
     };
     if msg.type_url != COSMOS_MSG_SEND {
         return Err(bad(format!(
-            "message « {} » refusé (MsgSend seulement)",
+            "message \"{}\" refused (MsgSend only)",
             sanitize_text(&msg.type_url, 80).text
         )));
     }
     let send: proto::MsgSend = strict(&msg.value, "MsgSend")?;
     if body.timeout_height == 0 {
         return Err(bad(
-            "timeout_height absent : la transaction resterait valable indéfiniment",
+            "missing timeout_height: the transaction would stay valid forever",
         ));
     }
     if body.memo.chars().count() > COSMOS_MAX_MEMO {
-        return Err(bad(format!("mémo de plus de {COSMOS_MAX_MEMO} caractères")));
+        return Err(bad(format!(
+            "memo longer than {COSMOS_MAX_MEMO} characters"
+        )));
     }
     let auth: proto::AuthInfo = strict(&doc.auth_info_bytes, "AuthInfo")?;
     let signer = match auth.signer_infos.as_slice() {
         [s] => s,
-        _ => return Err(bad("un seul signataire attendu")),
+        _ => return Err(bad("a single signer expected")),
     };
     let pk_any = signer
         .public_key
         .as_ref()
-        .ok_or_else(|| bad("clé publique du signataire absente"))?;
+        .ok_or_else(|| bad("missing signer public key"))?;
     if pk_any.type_url != COSMOS_SECP256K1_PUBKEY {
-        return Err(bad("clé publique : secp256k1 attendue"));
+        return Err(bad("public key: secp256k1 expected"));
     }
     let pk: proto::PubKey = strict(&pk_any.value, "PubKey")?;
     if pk.key.as_slice() != our_pubkey.as_slice() {
-        return Err(bad("la clé du signataire n'est pas celle de ce compte"));
+        return Err(bad("the signer's key is not this account's"));
     }
     let mode = signer
         .mode_info
@@ -537,33 +539,33 @@ fn parse_sign_doc(doc_bytes: &[u8], our_pubkey: &[u8; 33], chain_id: &str) -> Re
         .map(|s| s.mode);
     let mode = match mode {
         Some(m @ (COSMOS_SIGN_MODE_DIRECT | COSMOS_SIGN_MODE_AMINO_JSON)) => m,
-        _ => return Err(bad("mode de signature : SIGN_MODE_DIRECT attendu")),
+        _ => return Err(bad("sign mode: SIGN_MODE_DIRECT expected")),
     };
     if mode == COSMOS_SIGN_MODE_AMINO_JSON && !amino_safe_memo(&body.memo) {
         return Err(bad(
-            "mémo : avec un Ledger, caractères ASCII imprimables seulement (sans \" \\ < > &)",
+            "memo: with a Ledger, printable ASCII characters only (no \" \\ < > &)",
         ));
     }
-    let fee = auth.fee.as_ref().ok_or_else(|| bad("frais absents"))?;
+    let fee = auth.fee.as_ref().ok_or_else(|| bad("missing fees"))?;
     if !fee.payer.is_empty() || !fee.granter.is_empty() {
-        return Err(bad("frais payés par un tiers (payer / granter) refusés"));
+        return Err(bad("fees paid by a third party (payer / granter) refused"));
     }
-    let fee_amount = one_uatom(&fee.amount, "frais")?;
+    let fee_amount = one_uatom(&fee.amount, "fees")?;
     if fee.gas_limit == 0 {
-        return Err(bad("gas_limit nul"));
+        return Err(bad("zero gas_limit"));
     }
     let from = cosmos_address_of_pubkey(our_pubkey)?;
     if send.from_address != from {
-        return Err(bad("l'expéditeur n'est pas l'adresse de ce compte"));
+        return Err(bad("the sender is not this account's address"));
     }
     // Canonical lower-case form only: what the chain shows is what the dialog shows.
     if cosmos_normalize_address(&send.to_address)? != send.to_address {
-        return Err(bad("adresse du destinataire non canonique"));
+        return Err(bad("non-canonical recipient address"));
     }
     if send.to_address == from {
-        return Err(bad("envoi à soi-même"));
+        return Err(bad("send to yourself"));
     }
-    let amount = one_uatom(&send.amount, "montant")?;
+    let amount = one_uatom(&send.amount, "amount")?;
     let mut warnings = Vec::new();
     if fee_amount > HIGH_FEE_UATOM {
         warnings.push(CosmosWarning::HighFee);
@@ -634,7 +636,7 @@ fn amino_json(p: &Parsed) -> String {
 }
 
 fn sign_doc_bytes(sign_doc_hex: &str) -> Result<Vec<u8>> {
-    hex::decode(sign_doc_hex.trim()).map_err(|_| Error::input("SignDoc : hexadécimal attendu"))
+    hex::decode(sign_doc_hex.trim()).map_err(|_| Error::input("SignDoc: hexadecimal expected"))
 }
 
 /// Hardware wallet: the same transaction as a DIRECT SignDoc (hex) built by
@@ -675,7 +677,7 @@ pub fn cosmos_amino_json(
         cosmos_chain_id(net),
     )?;
     if parsed.mode != COSMOS_SIGN_MODE_AMINO_JSON {
-        return Err(bad("mode de signature : LEGACY_AMINO_JSON attendu"));
+        return Err(bad("sign mode: LEGACY_AMINO_JSON expected"));
     }
     Ok(amino_json(&parsed).into_bytes())
 }
@@ -696,16 +698,15 @@ pub fn cosmos_amino_signed(
         cosmos_chain_id(net),
     )?;
     if parsed.mode != COSMOS_SIGN_MODE_AMINO_JSON {
-        return Err(bad("mode de signature : LEGACY_AMINO_JSON attendu"));
+        return Err(bad("sign mode: LEGACY_AMINO_JSON expected"));
     }
-    let mut sig =
-        Signature::from_der(der_sig).map_err(|_| bad("signature DER de l'appareil invalide"))?;
+    let mut sig = Signature::from_der(der_sig).map_err(|_| bad("invalid device DER signature"))?;
     sig.normalize_s();
-    let pk = PublicKey::from_slice(our_pubkey).map_err(|_| bad("clé publique invalide"))?;
+    let pk = PublicKey::from_slice(our_pubkey).map_err(|_| bad("invalid public key"))?;
     let digest = sha256::Hash::hash(amino_json(&parsed).as_bytes()).to_byte_array();
     Secp256k1::verification_only()
         .verify_ecdsa(&Message::from_digest(digest), &sig, &pk)
-        .map_err(|_| bad("la signature de l'appareil ne se vérifie pas"))?;
+        .map_err(|_| bad("the device signature does not verify"))?;
     let tx = proto::TxRaw {
         body_bytes: parsed.doc.body_bytes,
         auth_info_bytes: parsed.doc.auth_info_bytes,
@@ -729,7 +730,7 @@ pub fn cosmos_decode_sign_doc(
     net: Network,
 ) -> Result<CosmosTxSummary> {
     let raw = hex::decode(sign_doc_hex.trim())
-        .map_err(|_| Error::input("SignDoc : hexadécimal attendu"))?;
+        .map_err(|_| Error::input("SignDoc: hexadecimal expected"))?;
     Ok(parse_sign_doc(&raw, our_pubkey, cosmos_chain_id(net))?.summary)
 }
 
@@ -744,7 +745,7 @@ pub fn cosmos_sign(
 ) -> Result<(String, String, CosmosTxSummary)> {
     use base64::Engine as _;
     let raw = hex::decode(sign_doc_hex.trim())
-        .map_err(|_| Error::input("SignDoc : hexadécimal attendu"))?;
+        .map_err(|_| Error::input("SignDoc: hexadecimal expected"))?;
     let secp = secp()?;
     let master = XprivGuard::master(seed, bitcoin::NetworkKind::Main)?;
     let key = master.derive(&secp, &path(account)?)?;
@@ -753,13 +754,13 @@ pub fn cosmos_sign(
     let pk = sk.public_key(&secp);
     let parsed = parse_sign_doc(&raw, &pk.serialize(), cosmos_chain_id(net))?;
     if parsed.mode != COSMOS_SIGN_MODE_DIRECT {
-        return Err(bad("mode de signature : SIGN_MODE_DIRECT attendu"));
+        return Err(bad("sign mode: SIGN_MODE_DIRECT expected"));
     }
     let msg = Message::from_digest(sha256::Hash::hash(&raw).to_byte_array());
     let mut sig = secp.sign_ecdsa(&msg, sk);
     sig.normalize_s();
     secp.verify_ecdsa(&msg, &sig, &pk)
-        .map_err(|_| Error::crypto("échec de la vérification de la signature"))?;
+        .map_err(|_| Error::crypto("signature verification failed"))?;
     let tx = proto::TxRaw {
         body_bytes: parsed.doc.body_bytes,
         auth_info_bytes: parsed.doc.auth_info_bytes,
@@ -787,14 +788,14 @@ pub fn cosmos_verify_signed(
     use base64::Engine as _;
     let raw = base64::engine::general_purpose::STANDARD
         .decode(tx_b64.trim())
-        .map_err(|_| Error::input("transaction : base64 attendu"))?;
+        .map_err(|_| Error::input("transaction: base64 expected"))?;
     if raw.len() > MAX_TX {
-        return Err(bad("trop grande"));
+        return Err(bad("too large"));
     }
     let tx: proto::TxRaw = strict(&raw, "TxRaw")?;
     let sig = match tx.signatures.as_slice() {
         [s] if s.len() == 64 => s,
-        _ => return Err(bad("une signature de 64 octets attendue")),
+        _ => return Err(bad("one 64-byte signature expected")),
     };
     let auth: proto::AuthInfo = strict(&tx.auth_info_bytes, "AuthInfo")?;
     let key = auth
@@ -802,11 +803,11 @@ pub fn cosmos_verify_signed(
         .first()
         .and_then(|s| s.public_key.as_ref())
         .filter(|a| a.type_url == COSMOS_SECP256K1_PUBKEY)
-        .ok_or_else(|| bad("clé publique du signataire absente"))?;
+        .ok_or_else(|| bad("missing signer public key"))?;
     let pk_bytes: [u8; 33] = strict::<proto::PubKey>(&key.value, "PubKey")?
         .key
         .try_into()
-        .map_err(|_| bad("clé publique : 33 octets attendus"))?;
+        .map_err(|_| bad("public key: 33 bytes expected"))?;
     let doc = proto::SignDoc {
         body_bytes: tx.body_bytes,
         auth_info_bytes: tx.auth_info_bytes,
@@ -815,13 +816,13 @@ pub fn cosmos_verify_signed(
     }
     .encode_to_vec();
     let parsed = parse_sign_doc(&doc, &pk_bytes, cosmos_chain_id(net))?;
-    let sig = Signature::from_compact(sig).map_err(|_| bad("signature invalide"))?;
+    let sig = Signature::from_compact(sig).map_err(|_| bad("invalid signature"))?;
     let mut low = sig;
     low.normalize_s();
     if low != sig {
-        return Err(bad("la signature n'est pas low-S (non canonique)"));
+        return Err(bad("the signature is not low-S (non-canonical)"));
     }
-    let pk = PublicKey::from_slice(&pk_bytes).map_err(|_| bad("clé publique invalide"))?;
+    let pk = PublicKey::from_slice(&pk_bytes).map_err(|_| bad("invalid public key"))?;
     let digest = if parsed.mode == COSMOS_SIGN_MODE_AMINO_JSON {
         sha256::Hash::hash(amino_json(&parsed).as_bytes())
     } else {
@@ -829,7 +830,7 @@ pub fn cosmos_verify_signed(
     };
     Secp256k1::verification_only()
         .verify_ecdsa(&Message::from_digest(digest.to_byte_array()), &sig, &pk)
-        .map_err(|_| bad("la signature ne se vérifie pas"))?;
+        .map_err(|_| bad("the signature does not verify"))?;
     Ok((
         hex::encode_upper(sha256::Hash::hash(&raw).to_byte_array()),
         parsed.summary,

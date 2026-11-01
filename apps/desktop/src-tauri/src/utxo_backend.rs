@@ -130,9 +130,9 @@ fn bad(msg: impl Into<String>) -> AppError {
 
 pub fn no_default_server(coin: UtxoCoin) -> AppError {
     AppError::ServerInvalid(format!(
-        "{} : Kyro n'a pas de serveur public par défaut sur ce réseau (aucun serveur public \
-         gratuit et maintenu n'a été trouvé). Configure ton serveur Esplora (electrs-{}) dans \
-         Réglages → Réseaux.",
+        "{}: Kyro has no default public server on this network (no free, maintained public \
+         server was found). Configure your Esplora server (electrs-{}) in \
+         Settings → Networks.",
         coin.name(),
         coin.name().to_lowercase().replace(' ', "")
     ))
@@ -167,7 +167,7 @@ pub fn backend(ctx: &UtxoCtx<'_>) -> AppResult<Backend> {
 
 fn url(base: &str, path: &str) -> AppResult<url::Url> {
     url::Url::parse(&format!("{}{path}", base.trim_end_matches('/')))
-        .map_err(|_| AppError::ServerInvalid("URL Esplora invalide".into()))
+        .map_err(|_| AppError::ServerInvalid("invalid Esplora URL".into()))
 }
 
 async fn get(ctx: &UtxoCtx<'_>, base: &str, path: &str) -> AppResult<Vec<u8>> {
@@ -180,7 +180,7 @@ async fn get(ctx: &UtxoCtx<'_>, base: &str, path: &str) -> AppResult<Vec<u8>> {
         .await?;
     if status != 200 {
         return Err(bad(format!(
-            "{} : HTTP {status} sur {path} ({})",
+            "{}: HTTP {status} on {path} ({})",
             ctx.coin.name(),
             String::from_utf8_lossy(&body)
                 .chars()
@@ -193,7 +193,7 @@ async fn get(ctx: &UtxoCtx<'_>, base: &str, path: &str) -> AppResult<Vec<u8>> {
 
 async fn get_json(ctx: &UtxoCtx<'_>, base: &str, path: &str) -> AppResult<Value> {
     serde_json::from_slice(&get(ctx, base, path).await?)
-        .map_err(|_| bad(format!("{} : JSON invalide sur {path}", ctx.coin.name())))
+        .map_err(|_| bad(format!("{}: invalid JSON on {path}", ctx.coin.name())))
 }
 
 fn check_address(ctx: &UtxoCtx<'_>, a: &str) -> AppResult<String> {
@@ -205,7 +205,7 @@ fn check_txid(txid: &str) -> AppResult<String> {
     let t = txid.trim().to_ascii_lowercase();
     if !is_txid(&t) {
         return Err(AppError::InvalidInput(
-            "txid : 64 caractères hexadécimaux".into(),
+            "txid: 64 hexadecimal characters".into(),
         ));
     }
     Ok(t)
@@ -257,7 +257,7 @@ fn check_genesis(ctx: &UtxoCtx<'_>, features: &Value) -> AppResult<String> {
         .unwrap_or_default();
     if genesis != expected {
         return Err(AppError::ServerWrongNetwork(format!(
-            "le serveur n'est pas sur {} {} (genesis {})",
+            "the server is not on {} {} (genesis {})",
             ctx.coin.name(),
             network_label(ctx.coin, ctx.network),
             genesis.chars().take(64).collect::<String>()
@@ -270,7 +270,7 @@ fn check_genesis(ctx: &UtxoCtx<'_>, features: &Value) -> AppResult<String> {
 /// height must hash to the checkpoint. `header_hex` is the 80-byte header the server returned;
 /// its hash is computed here, never taken from the server.
 fn check_checkpoint(ctx: &UtxoCtx<'_>, header_hex: &str) -> AppResult<()> {
-    let got = wallet_core::utxo_header_hash(header_hex).unwrap_or_else(|_| "illisible".into());
+    let got = wallet_core::utxo_header_hash(header_hex).unwrap_or_else(|_| "unreadable".into());
     check_checkpoint_hash(ctx, &got)
 }
 
@@ -286,7 +286,7 @@ fn scripthash(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<(String, String)> {
 fn parse_history(coin: UtxoCoin, v: &Value) -> AppResult<Vec<(String, i64)>> {
     let list = v
         .as_array()
-        .ok_or_else(|| bad(format!("{} : historique Electrum invalide", coin.name())))?;
+        .ok_or_else(|| bad(format!("{}: invalid Electrum history", coin.name())))?;
     let mut out = Vec::with_capacity(list.len());
     let mut seen = HashSet::new();
     for h in list {
@@ -294,12 +294,12 @@ fn parse_history(coin: UtxoCoin, v: &Value) -> AppResult<Vec<(String, i64)>> {
             .get("tx_hash")
             .and_then(Value::as_str)
             .filter(|t| is_txid(t))
-            .ok_or_else(|| bad(format!("{} : tx_hash invalide", coin.name())))?
+            .ok_or_else(|| bad(format!("{}: invalid tx_hash", coin.name())))?
             .to_ascii_lowercase();
         let height = h
             .get("height")
             .and_then(Value::as_i64)
-            .ok_or_else(|| bad(format!("{} : hauteur invalide", coin.name())))?;
+            .ok_or_else(|| bad(format!("{}: invalid height", coin.name())))?;
         if seen.insert(txid.clone()) {
             out.push((txid, height));
         }
@@ -319,10 +319,10 @@ struct ClaimedUtxo {
 fn parse_listunspent(coin: UtxoCoin, v: &Value) -> AppResult<Vec<ClaimedUtxo>> {
     let list = v
         .as_array()
-        .ok_or_else(|| bad(format!("{} : listunspent invalide", coin.name())))?;
+        .ok_or_else(|| bad(format!("{}: invalid listunspent", coin.name())))?;
     let err = |k: &str| {
         bad(format!(
-            "{} : listunspent, champ « {k} » invalide",
+            "{}: listunspent, invalid field \"{k}\"",
             coin.name()
         ))
     };
@@ -367,14 +367,14 @@ fn verified_utxos(
     for u in claimed {
         let tx = raws.get(&u.txid).ok_or_else(|| {
             bad(format!(
-                "{} : transaction précédente {} introuvable",
+                "{}: previous transaction {} not found",
                 coin.name(),
                 u.txid
             ))
         })?;
         let (_, value, spk) = tx.outputs.get(u.vout as usize).ok_or_else(|| {
             bad(format!(
-                "{} : le serveur annonce une sortie {}:{} qui n'existe pas",
+                "{}: the server announces an output {}:{} that does not exist",
                 coin.name(),
                 u.txid,
                 u.vout
@@ -382,7 +382,7 @@ fn verified_utxos(
         })?;
         if spk != our_spk {
             return Err(bad(format!(
-                "{} : la sortie {}:{} annoncée ne paie pas cette adresse",
+                "{}: the announced output {}:{} does not pay this address",
                 coin.name(),
                 u.txid,
                 u.vout
@@ -390,7 +390,7 @@ fn verified_utxos(
         }
         if *value != u.value {
             return Err(bad(format!(
-                "{} : le serveur annonce {} pour {}:{}, la transaction dit {value}",
+                "{}: the server announces {} for {}:{}, the transaction says {value}",
                 coin.name(),
                 u.value,
                 u.txid,
@@ -411,12 +411,12 @@ fn verified_utxos(
 fn verified_raw(coin: UtxoCoin, net: Network, txid: &str, raw: &Value) -> AppResult<BtcRawTx> {
     let hex_tx = raw
         .as_str()
-        .ok_or_else(|| bad(format!("{} : transaction non hexadécimale", coin.name())))?;
+        .ok_or_else(|| bad(format!("{}: non-hexadecimal transaction", coin.name())))?;
     let tx = wallet_core::utxo_decode_raw_tx(hex_tx, net, coin)
-        .map_err(|_| bad(format!("{} : transaction {txid} illisible", coin.name())))?;
+        .map_err(|_| bad(format!("{}: unreadable transaction {txid}", coin.name())))?;
     if tx.txid != txid {
         return Err(bad(format!(
-            "{} : le serveur a renvoyé une transaction différente de {txid}",
+            "{}: the server returned a transaction different from {txid}",
             coin.name()
         )));
     }
@@ -497,7 +497,7 @@ pub async fn address_info(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<Value> 
             for k in ["chain_stats", "mempool_stats"] {
                 if !v[k]["funded_txo_sum"].is_u64() || !v[k]["tx_count"].is_u64() {
                     return Err(bad(format!(
-                        "{} : réponse /address inattendue",
+                        "{}: unexpected /address response",
                         ctx.coin.name()
                     )));
                 }
@@ -531,11 +531,11 @@ fn electrum_info(
         balance
             .get(k)
             .and_then(Value::as_i64)
-            .ok_or_else(|| bad(format!("{} : solde Electrum invalide ({k})", coin.name())))
+            .ok_or_else(|| bad(format!("{}: invalid Electrum balance ({k})", coin.name())))
     };
     let (confirmed, unconfirmed) = (field("confirmed")?, field("unconfirmed")?);
     if confirmed < 0 {
-        return Err(bad(format!("{} : solde confirmé négatif", coin.name())));
+        return Err(bad(format!("{}: negative confirmed balance", coin.name())));
     }
     let history = parse_history(coin, history)?;
     let conf = history.iter().filter(|(_, h)| *h > 0).count();
@@ -557,7 +557,7 @@ pub async fn address_utxos(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<Value>
             let v = get_json(ctx, &base, &format!("/address/{a}/utxo")).await?;
             if !v.is_array() {
                 return Err(bad(format!(
-                    "{} : réponse /utxo inattendue",
+                    "{}: unexpected /utxo response",
                     ctx.coin.name()
                 )));
             }
@@ -575,8 +575,8 @@ pub async fn address_utxos(ctx: &UtxoCtx<'_>, address: &str) -> AppResult<Value>
             let mut claimed = parse_listunspent(ctx.coin, &list)?;
             if claimed.len() > MAX_UTXOS {
                 return Err(AppError::InvalidInput(format!(
-                    "{} : plus de {MAX_UTXOS} pièces sur {a} — Kyro vérifie chacune ; utilise ton \
-                     propre serveur pour une adresse aussi active",
+                    "{}: more than {MAX_UTXOS} coins on {a} — Kyro checks each one; use your \
+                     own server for such an active address",
                     ctx.coin.name()
                 )));
             }
@@ -689,20 +689,20 @@ pub async fn tx_hex(ctx: &UtxoCtx<'_>, txid: &str) -> AppResult<String> {
     };
     if wallet_core::utxo_is_special_tx(&hex_tx, ctx.coin) {
         return Err(AppError::InvalidInput(format!(
-            "{} : {t} est une transaction spéciale (DIP2) — ses sorties ne peuvent pas être \
-             dépensées par Kyro",
+            "{}: {t} is a special transaction (DIP2) — its outputs cannot be \
+             spent by Kyro",
             ctx.coin.name()
         )));
     }
     wallet_core::verify_tx_hex(&hex_tx, &t).map_err(|_| {
         bad(format!(
-            "{} : le serveur a renvoyé une transaction illisible ou différente de {t}",
+            "{}: the server returned an unreadable transaction or one different from {t}",
             ctx.coin.name()
         ))
     })?;
     // Dogecoin: no witness data (refused by the chain decoder).
     wallet_core::utxo_decode_raw_tx(&hex_tx, ctx.network, ctx.coin)
-        .map_err(|_| bad(format!("{} : transaction illisible", ctx.coin.name())))?;
+        .map_err(|_| bad(format!("{}: unreadable transaction", ctx.coin.name())))?;
     Ok(hex_tx)
 }
 
@@ -742,8 +742,7 @@ pub async fn fee_rates(ctx: &UtxoCtx<'_>) -> AppResult<Value> {
     };
     Ok(match fee_bounds(ctx.coin) {
         None => {
-            let v = raw
-                .ok_or_else(|| bad(format!("{} : aucune estimation de frais", ctx.coin.name())))?;
+            let v = raw.ok_or_else(|| bad(format!("{}: no fee estimate", ctx.coin.name())))?;
             ladder(&v, 1, u64::MAX)
         }
         Some((floor, ceil)) => match raw {
@@ -790,12 +789,9 @@ async fn get_json_opt(ctx: &UtxoCtx<'_>, base: &str, path: &str) -> AppResult<Op
     match status {
         200 => serde_json::from_slice(&body)
             .map(Some)
-            .map_err(|_| bad(format!("{} : JSON invalide sur {path}", ctx.coin.name()))),
+            .map_err(|_| bad(format!("{}: invalid JSON on {path}", ctx.coin.name()))),
         404 => Ok(None),
-        other => Err(bad(format!(
-            "{} : HTTP {other} sur {path}",
-            ctx.coin.name()
-        ))),
+        other => Err(bad(format!("{}: HTTP {other} on {path}", ctx.coin.name()))),
     }
 }
 
@@ -823,14 +819,14 @@ pub async fn tip_height(ctx: &UtxoCtx<'_>) -> AppResult<u64> {
             String::from_utf8_lossy(&get(ctx, &base, "/blocks/tip/height").await?)
                 .trim()
                 .parse()
-                .map_err(|_| bad(format!("{} : hauteur invalide", ctx.coin.name())))
+                .map_err(|_| bad(format!("{}: invalid height", ctx.coin.name())))
         }
         Backend::Electrum(targets) => {
             let mut conn = electrum_session(ctx, &targets).await?;
             let r = conn.call("blockchain.headers.subscribe", json!([])).await?;
             r.get("height")
                 .and_then(Value::as_u64)
-                .ok_or_else(|| bad(format!("{} : hauteur invalide", ctx.coin.name())))
+                .ok_or_else(|| bad(format!("{}: invalid height", ctx.coin.name())))
         }
     }
 }
@@ -855,7 +851,7 @@ pub async fn broadcast(ctx: &UtxoCtx<'_>, hex_tx: &str) -> AppResult<String> {
             let text = String::from_utf8_lossy(&body).trim().to_owned();
             if status != 200 {
                 return Err(AppError::InvalidInput(format!(
-                    "diffusion refusée : {}",
+                    "broadcast refused: {}",
                     text.chars().take(300).collect::<String>()
                 )));
             }
@@ -875,7 +871,7 @@ pub async fn broadcast(ctx: &UtxoCtx<'_>, hex_tx: &str) -> AppResult<String> {
 fn check_broadcast_txid(answer: &str, ours: &str) -> AppResult<String> {
     if answer.trim() != ours {
         return Err(bad(format!(
-            "le serveur a répondu un txid inattendu ({})",
+            "the server answered an unexpected txid ({})",
             answer.chars().take(80).collect::<String>()
         )));
     }
@@ -922,13 +918,13 @@ pub async fn probe(ctx: &UtxoCtx<'_>) -> AppResult<Detected> {
                 // Bitcoin Cash shares Bitcoin's genesis (and chipnet testnet4's).
                 |(c, n)| match c {
                     UtxoCoin::BitcoinCash => {
-                        format!("Bitcoin ou Bitcoin Cash {}", network_label(c, n))
+                        format!("Bitcoin or Bitcoin Cash {}", network_label(c, n))
                     }
                     _ => format!("{} {}", c.name(), network_label(c, n)),
                 },
             );
         return Err(AppError::ServerWrongNetwork(format!(
-            "le serveur n'est pas sur {} {} (trouvé : {what})",
+            "the server is not on {} {} (found: {what})",
             ctx.coin.name(),
             network_label(ctx.coin, ctx.network)
         )));
@@ -953,7 +949,7 @@ pub async fn probe(ctx: &UtxoCtx<'_>) -> AppResult<Detected> {
 fn check_checkpoint_hash(ctx: &UtxoCtx<'_>, hash: &str) -> AppResult<()> {
     match wallet_core::utxo_checkpoint(ctx.network, ctx.coin) {
         Some((height, expected)) if hash != expected => Err(AppError::ServerWrongNetwork(format!(
-            "le serveur n'est pas sur {} {} (bloc {height} : {}) — serveur Bitcoin ?",
+            "the server is not on {} {} (block {height}: {}) — a Bitcoin server?",
             ctx.coin.name(),
             network_label(ctx.coin, ctx.network),
             hash.chars().take(64).collect::<String>()
@@ -1214,7 +1210,7 @@ mod tests {
             c[0].value = lie;
             let e = verified_utxos(UtxoCoin::Dogecoin, &c, &r.raws, SPK).unwrap_err();
             assert!(
-                e.to_string().contains("la transaction dit 323699023"),
+                e.to_string().contains("the transaction says 323699023"),
                 "{e}"
             );
         }
@@ -1223,7 +1219,7 @@ mod tests {
         // fetched is refused.
         let other = &r.v["transactions"][RECEIVED];
         let e = verified_raw(UtxoCoin::Dogecoin, Network::Mainnet, SPENT_BY, other).unwrap_err();
-        assert!(e.to_string().contains("différente"), "{e}");
+        assert!(e.to_string().contains("different"), "{e}");
         assert!(verified_raw(UtxoCoin::Dogecoin, Network::Mainnet, SPENT_BY, &json!(42)).is_err());
         let mut missing = r.raws.clone();
         missing.remove(SPENT_BY);
@@ -1358,7 +1354,7 @@ mod tests {
         for h in [other, "00", ""] {
             assert!(matches!(
                 check_checkpoint(&main, h),
-                Err(AppError::ServerWrongNetwork(ref m)) if m.contains("478559") || m.contains("478 559") || m.contains("bloc")
+                Err(AppError::ServerWrongNetwork(ref m)) if m.contains("478559") || m.contains("478 559") || m.contains("block")
             ));
         }
         // Chipnet: block 200 000 accepted; testnet4's block 200 000 (another hash) refused.

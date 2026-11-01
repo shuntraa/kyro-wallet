@@ -73,11 +73,11 @@ impl ApiKeys {
     pub fn apply_patch(&mut self, patch: &serde_json::Value) -> AppResult<()> {
         let obj = patch
             .as_object()
-            .ok_or_else(|| AppError::InvalidInput("apiKeys : objet attendu".into()))?;
+            .ok_or_else(|| AppError::InvalidInput("apiKeys: object expected".into()))?;
         for (name, v) in obj {
             let slot = self
                 .slot(name)
-                .ok_or_else(|| AppError::InvalidInput(format!("clé API inconnue « {name} »")))?;
+                .ok_or_else(|| AppError::InvalidInput(format!("unknown API key « {name} »")))?;
             match v {
                 serde_json::Value::Null => {}
                 serde_json::Value::String(s) if s.is_empty() => *slot = None,
@@ -85,14 +85,14 @@ impl ApiKeys {
                     let t = s.trim();
                     if t.is_empty() || t.chars().any(char::is_control) {
                         return Err(AppError::InvalidInput(format!(
-                            "clé API « {name} » invalide (vide ou caractères de contrôle)"
+                            "invalid API key « {name} » (empty or control characters)"
                         )));
                     }
                     *slot = Some(t.to_owned());
                 }
                 _ => {
                     return Err(AppError::InvalidInput(format!(
-                        "clé API « {name} » : texte attendu"
+                        "API key « {name} »: text expected"
                     )))
                 }
             }
@@ -254,11 +254,11 @@ impl Settings {
         });
         if let Some(lang) = v.get("language") {
             serde_json::from_value::<crate::i18n::LanguagePref>(lang.clone()).map_err(|_| {
-                AppError::InvalidInput("langue : « auto », « fr » ou « en »".into())
+                AppError::InvalidInput("language: « auto », « fr » or « en »".into())
             })?;
         }
         let mut s: Settings = serde_json::from_value(v)
-            .map_err(|e| AppError::InvalidInput(format!("réglages invalides : {e}")))?;
+            .map_err(|e| AppError::InvalidInput(format!("invalid settings: {e}")))?;
         s.api_keys = current.clone();
         if let Some(p) = patch.filter(|p| !p.is_null()) {
             s.api_keys.apply_patch(&p)?;
@@ -273,11 +273,11 @@ impl Settings {
     /// Rejects values the rest of the app relies on being sane.
     pub fn validate(&self) -> AppResult<()> {
         if !crate::fiat::is_supported(&self.currency) {
-            return Err(AppError::InvalidInput("devise non proposée".into()));
+            return Err(AppError::InvalidInput("currency not offered".into()));
         }
         if !(60..=3600).contains(&self.auto_lock_secs) {
             return Err(AppError::InvalidInput(
-                "verrouillage automatique : entre 1 et 60 minutes".into(),
+                "auto-lock: between 1 and 60 minutes".into(),
             ));
         }
         self.servers.validate(self.tor.enabled)
@@ -329,7 +329,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
 /// place (atomic, fails if the target exists). A file system without hard links falls back to
 /// `create_new` on the target itself.
 pub fn write_new(path: &Path, bytes: &[u8]) -> AppResult<()> {
-    let exists = || AppError::InvalidInput("un coffre existe déjà sur cet appareil".into());
+    let exists = || AppError::InvalidInput("a vault already exists on this device".into());
     let tmp = sibling(path, "new.tmp");
     let _ = fs::remove_file(&tmp);
     write_private(&tmp, bytes, true)?;

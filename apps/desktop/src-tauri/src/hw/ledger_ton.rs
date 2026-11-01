@@ -30,7 +30,7 @@ const MAX_REQUEST: usize = 510;
 
 fn path_bytes(path: &[u32]) -> HwResult<Vec<u8>> {
     if path.len() < 3 || path.len() > 10 {
-        return Err(HwError::bad("app TON : chemin de 3 à 10 niveaux attendu"));
+        return Err(HwError::bad("TON app: path of 3 to 10 levels expected"));
     }
     let mut out = vec![path.len() as u8];
     out.extend(path.iter().flat_map(|p| p.to_be_bytes()));
@@ -54,9 +54,7 @@ pub fn get_pubkey(path: &[u32], display: Option<(bool, u32)>) -> HwResult<Vec<u8
 
 pub fn sign_apdus(path: &[u32], request: &[u8]) -> HwResult<Vec<Vec<u8>>> {
     if request.is_empty() || request.len() > MAX_REQUEST {
-        return Err(HwError::bad(
-            "requête de transfert TON de longueur inattendue",
-        ));
+        return Err(HwError::bad("TON transfer request of unexpected length"));
     }
     let mut out = vec![apdu::apdu(
         CLA,
@@ -85,7 +83,7 @@ pub fn pubkey(app: &App<'_>, path: &[u32], display: Option<(bool, u32)>) -> HwRe
     };
     let pk = app.call(&get_pubkey(path, display)?, ctx)?;
     if pk.len() != 32 {
-        return Err(HwError::bad("clé publique TON de longueur inattendue"));
+        return Err(HwError::bad("TON public key of unexpected length"));
     }
     Ok(pk)
 }
@@ -97,7 +95,7 @@ pub fn sign(app: &App<'_>, path: &[u32], request: &[u8]) -> HwResult<Vec<u8>> {
         last = app.call(&a, SwContext::Signing)?;
     }
     if last.len() != 98 || last[0] != 64 || last[65] != 32 {
-        return Err(HwError::bad("réponse de signature TON inattendue"));
+        return Err(HwError::bad("unexpected TON signature response"));
     }
     Ok([&last[66..98], &last[1..65]].concat())
 }

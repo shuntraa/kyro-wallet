@@ -125,11 +125,11 @@ fn parse_amount(args: &ZecSendArgs) -> AppResult<u64> {
     let a = args.amount.trim();
     if a.is_empty() || a.len() > 20 || !a.bytes().all(|b| b.is_ascii_digit()) {
         return Err(AppError::InvalidInput(
-            "montant : un nombre entier de zatoshis".into(),
+            "amount: a whole number of zatoshis".into(),
         ));
     }
     a.parse()
-        .map_err(|_| AppError::InvalidInput("montant hors limites".into()))
+        .map_err(|_| AppError::InvalidInput("amount out of range".into()))
 }
 
 /// Reads the chain state and the previous transaction of every candidate (one Electrum
@@ -140,11 +140,11 @@ pub(crate) async fn request(state: &AppState, args: &ZecSendArgs) -> AppResult<Z
     wallet_core::zec_parse_address(&args.to, net)?;
     let amount = parse_amount(args)?;
     if args.coins.is_empty() {
-        return Err(AppError::InvalidInput("aucune pièce à dépenser".into()));
+        return Err(AppError::InvalidInput("no coin to spend".into()));
     }
     if args.coins.len() > MAX_CANDIDATES {
         return Err(AppError::InvalidInput(format!(
-            "plus de {MAX_CANDIDATES} pièces proposées"
+            "more than {MAX_CANDIDATES} coins offered"
         )));
     }
     let c = ctx(state);
@@ -167,7 +167,7 @@ pub(crate) async fn request(state: &AppState, args: &ZecSendArgs) -> AppResult<Z
                 .cloned()
                 .ok_or_else(|| {
                     AppError::ServerUnreachable(format!(
-                        "Zcash : transaction précédente {} introuvable",
+                        "Zcash: previous transaction {} not found",
                         c.txid
                     ))
                 })?;
@@ -403,7 +403,7 @@ pub async fn zec_sign(
     let (hex, again) = blocking(move || Ok(wallet_core::zec_sign(&seed, net, a, &req)?)).await?;
     if again != summary {
         return Err(AppError::Internal(
-            "résumé différent entre l'aperçu et la signature".into(),
+            "summary differs between the preview and the signature".into(),
         ));
     }
     state.touch();

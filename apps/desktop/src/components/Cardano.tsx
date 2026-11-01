@@ -171,7 +171,7 @@ export function CardanoSummaryView({ u, adaPrice, currency }: { u: CardanoUnsign
       ))}
       <Line k={t('common.fees')} v={`${ADA(s.fee)}${fiat(s.fee)}`} />
       <Line k={t('send.adaTotalLeaving')} v={`${ADA(u.context.leaving)}${fiat(u.context.leaving)}`} strong />
-      {s.memo && <Line k={t('send.adaMemoLine')} v={`« ${s.memo.join('')} »`} warn />}
+      {s.memo && <Line k={t('send.adaMemoLine')} v={t('common.quoted', { text: s.memo.join('') })} warn />}
       <Line k={t('send.adaValid')} v={minutes !== null ? `≈ ${minutes} min (slot ${s.ttl})` : t('send.adaNoLimit')} last />
     </div>
   );

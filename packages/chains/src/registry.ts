@@ -940,7 +940,7 @@ export function evmChains(network: Network): EvmChain[] {
 /** The L1 Ethereum chain for the network (Sepolia / mainnet). */
 export function primaryEvmChain(network: Network): EvmChain {
   const c = evmChains(network)[0];
-  if (!c) throw new Error('registre EVM vide');
+  if (!c) throw new Error(l10n('registre EVM vide', 'empty EVM registry'));
   return c;
 }
 export function solChain(network: Network): SolChain {

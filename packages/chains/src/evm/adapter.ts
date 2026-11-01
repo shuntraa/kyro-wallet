@@ -51,7 +51,7 @@ export interface ContractCallParams {
 export const BALANCE_BATCH = 50;
 
 const hexToBigInt = (v: unknown): bigint => {
-  if (typeof v !== 'string' || !/^0x[0-9a-fA-F]+$/.test(v)) throw new Error('solde natif illisible');
+  if (typeof v !== 'string' || !/^0x[0-9a-fA-F]+$/.test(v)) throw new Error(l10n('solde natif illisible', 'unreadable native balance'));
   return BigInt(v);
 };
 
