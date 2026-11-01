@@ -104,11 +104,13 @@ export interface Accounts {
    * `UQ…` (testnet `0Q…`, another wallet id: another address) (§2.11).
    */
   ton: AddressInfo;
+  /** Cosmos Hub `m/44'/118'/a'/0/0` (same path on testnet), `cosmos1…` (§2.11). */
+  cosmos: AddressInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'bch' | 'dash' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm', 'near', 'bch', 'dash', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'bch' | 'dash' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm', 'near', 'bch', 'dash', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -1443,6 +1445,89 @@ export interface TonTxStatus {
   txHash: string | null;
 }
 
+// ---------------------------------------------------------------- Cosmos Hub (§2.11)
+
+export interface CosmosBackendInfo {
+  kind: 'default';
+  network: Network;
+  /** Host of the LCD (REST) server. */
+  label: string;
+  /** `cosmoshub-4` (mainnet) or `provider` (testnet). */
+  chainId: string;
+  tor: boolean;
+}
+
+/** `cosmos_account`: auth account + uatom balances. Amounts: uatom (1 ATOM = 1 000 000). */
+export interface CosmosAccountInfo {
+  address: string;
+  /** Known to the auth module (received something at least once). */
+  exists: boolean;
+  accountNumber: number;
+  sequence: number;
+  /** Public key recorded on chain (base64), once the account has sent a transaction. */
+  pubKey: string | null;
+  balance: string;
+  /** What can be spent now (balance minus what is still vesting). */
+  spendable: string;
+}
+
+/** Every warning → reinforced confirmation. */
+export type CosmosWarning = { kind: 'highFee' } | { kind: 'unusualText' };
+
+/** wallet-core `CosmosTxSummary`: Rust's strict decoding of the SignDoc (MsgSend of uatom). */
+export interface CosmosTxSummary {
+  chainId: string;
+  accountNumber: number;
+  sequence: number;
+  from: string;
+  to: string;
+  /** uatom. */
+  amount: string;
+  /** uatom. */
+  fee: string;
+  gasLimit: number;
+  /** Cleaned for display; null = no memo. */
+  memo: string | null;
+  /** Exact memo bytes, hex. */
+  memoHex: string | null;
+  /** Last block at which the transaction may be included. */
+  timeoutHeight: number;
+  warnings: CosmosWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+/** Live context Rust read for the dialog. */
+export interface CosmosContext {
+  account: CosmosAccountInfo;
+  /** Latest block height when it was read. */
+  height: number;
+}
+
+/** `cosmos_txs` entry: MsgSend of uatom only, newest first (the public node indexes recent blocks only). */
+export interface CosmosHistoryEntry {
+  hash: string;
+  height: number | null;
+  /** ms epoch. */
+  time: number | null;
+  from: string;
+  to: string;
+  /** uatom. */
+  amount: string;
+  /** uatom, `"0"` when we did not pay it. */
+  fee: string;
+  /** Cleaned, one line. */
+  memo: string;
+  success: boolean;
+}
+
+export interface CosmosTxStatus {
+  included: boolean;
+  success: boolean;
+  code: number | null;
+  height: number | null;
+  log: string;
+}
+
 // ---------------------------------------------------------------- Cardano (§2.7)
 
 export interface CardanoBackendInfo {
@@ -2340,6 +2425,23 @@ export interface Commands {
   /** Signature verified, message hashes returned by TON Center must be ours. Returns the normalized hash. */
   ton_broadcast: { args: { boc: string } & WithAccount; ret: string };
   ton_tx_status: { args: { hash: string }; ret: TonTxStatus };
+  // Cosmos Hub (§2.11): Rust builds the MsgSend (chain id, account number, sequence, timeout
+  // height, gas simulated, fee-market price), decodes the SignDoc strictly, re-reads the account
+  // live, signs behind the password and the native dialog. Hardware wallets: HW_UNSUPPORTED.
+  cosmos_backend_info: { args: undefined; ret: CosmosBackendInfo };
+  /** `m/44'/118'/{account}'/0/0`. */
+  cosmos_address: { args: WithAccount; ret: string };
+  cosmos_account: { args: { address: string }; ret: CosmosAccountInfo };
+  cosmos_txs: { args: { address: string }; ret: CosmosHistoryEntry[] };
+  /**
+   * `amount`: uatom. `memo`: at most 512 characters, public. Refused before building: self-send,
+   * our account unknown to the chain, amount + fee > spendable, failed simulation.
+   */
+  cosmos_build_tx: { args: { to: string; amount: string; memo?: string } & WithAccount; ret: { signDoc: string; summary: CosmosTxSummary; context: CosmosContext } };
+  cosmos_sign_tx: { args: { signDoc: string; password: string } & WithAccount; ret: { tx: string; hash: string; summary: CosmosTxSummary; context: CosmosContext } };
+  /** Code 0 (or 19, already in the mempool) accepted, else INVALID_INPUT with the code and log. */
+  cosmos_broadcast: { args: { tx: string } & WithAccount; ret: string };
+  cosmos_tx_status: { args: { hash: string }; ret: CosmosTxStatus };
   // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
   // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
   // Hardware wallets: HW_UNSUPPORTED.

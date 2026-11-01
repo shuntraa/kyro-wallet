@@ -61,6 +61,8 @@ import {
   type TonAdapter,
   tonCommentProblem,
   tonRecipientProblem,
+  type CosmosAdapter,
+  cosmosMemoProblem,
 } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -90,6 +92,7 @@ import { ALGO_ACTIVATION, AlgoNoteField, AlgoSpendable, AlgoSummaryView, AlgoTxS
 import { CardanoSendFields, CardanoSummaryView, CardanoTxStatusLine, tokenKey } from '../components/Cardano';
 import { KaspaSpendable, KaspaSummaryView, KaspaTxStatusLine } from '../components/KaspaSend';
 import { TonCommentField, TonSummaryView, TonTxStatusLine } from '../components/TonSend';
+import { CosmosMemoField, CosmosSpendable, CosmosSummaryView, CosmosTxStatusLine } from '../components/CosmosSend';
 import { DustOnlyNote, PoisoningWarning } from '../components/Poisoning';
 import { XmrDestinationLine, XmrLockedNote, XmrSendNotes, XmrSummaryView, XmrSyncLine, useXmrStatus } from '../components/Monero';
 import { SecondConfirmNotice, btcWarningText, evmWarningText } from '../components/SecondConfirm';
@@ -121,6 +124,7 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   if (asset.family === 'algo') return adapters.algo ?? undefined;
   if (asset.family === 'xmr') return adapters.xmr ?? undefined;
   if (asset.family === 'ton') return adapters.ton ?? undefined;
+  if (asset.family === 'cosmos') return adapters.cosmos ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -169,7 +173,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
   // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
-  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.ton?.address, accounts.xmr?.address, accounts.algo?.address, accounts.polkadot?.address, accounts.kas?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address.toLowerCase(), accounts.hbar?.address.toLowerCase(), ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' || x.family === 'sui' || x.family === 'hbar' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.cosmos?.address, accounts.ton?.address, accounts.xmr?.address, accounts.algo?.address, accounts.polkadot?.address, accounts.kas?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address.toLowerCase(), accounts.hbar?.address.toLowerCase(), ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' || x.family === 'sui' || x.family === 'hbar' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
   // TON: the EQ… and UQ… forms of one account are the same address.
   const isOwn = ownAddresses.includes(asset?.family === 'evm' || asset?.family === 'sui' || asset?.family === 'hbar' ? toTrim.toLowerCase() : toTrim) || (asset?.family === 'ton' && ownAddresses.some((a) => sameTonAccount(a, toTrim)));
   // « Mes comptes »: the user's OTHER accounts of this chain. A transfer between two of them is an
@@ -230,6 +234,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       algo: [accounts.algo?.address],
       xmr: [accounts.xmr?.address],
       ton: [accounts.ton?.address],
+      cosmos: [accounts.cosmos?.address],
     };
     // The other accounts of the vault are trusted too.
     for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
@@ -348,6 +353,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const tonBlocked = isTon && (!tonDestInfo || tonDestInfo.status === 'frozen' || tonCommentBad);
   /** Refused Cardano address types, in Rust's words (Byron, script, pointer, stake, other network). */
   const adaProblem = isAda && toTrim ? cardanoAddressProblem(toTrim, network) : null;
+  /** Cosmos Hub: no fee to choose; memo always visible (exchanges), §2.11. */
+  const isCosmos = asset?.family === 'cosmos';
+  const cosmosAdapter = isCosmos ? (adapter as CosmosAdapter | undefined) : undefined;
+  const cosmosMe = useAsync(cosmosAdapter ? () => cosmosAdapter.account() : null, [cosmosAdapter], { intervalMs: 30_000 });
+  const cosmosBlocked = isCosmos && cosmosMemoProblem(memo.trim()) !== null;
   const adaBlocked = isAda && (adaMemoTooLong || (adaTokenMode && (adaTokenQty === null || adaTokenQty <= 0n || adaTokenOver)));
   /** Hedera: memo always visible, recipient facts and our account from the mirror node (§2.11). */
   const isHbar = asset?.family === 'hbar';
@@ -445,12 +455,12 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const feeParams: FeeParams | null = choice === 'custom' ? custom?.params ?? null : fees.data?.options[choice].params ?? null;
 
   // Build (debounced) → unsigned tx + Rust decoding for EVM.
-  const buildKey = useDebounced(JSON.stringify([asset?.id, toTrim, isXmr && max ? 'max' : amountBase?.toString(), max, feeParams, addrValid, isXrp ? tagStr : null, xrpBlocked, dotBlocked, isXlm ? [xlmMemoKind, xlmMemo, xlmBlocked] : null, nearBlocked, isAda ? [tokenSel, tokenQty, memo.trim(), adaBlocked] : null, isHbar ? [memo.trim(), hbarBlocked] : null, isAlgo ? [memo.trim(), algoBlocked] : null, isXmr ? [xmrGo, xmrBlocked] : null, isTon ? [memo, tonBlocked] : null], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), 450);
+  const buildKey = useDebounced(JSON.stringify([asset?.id, toTrim, isXmr && max ? 'max' : amountBase?.toString(), max, feeParams, addrValid, isXrp ? tagStr : null, xrpBlocked, dotBlocked, isXlm ? [xlmMemoKind, xlmMemo, xlmBlocked] : null, nearBlocked, isAda ? [tokenSel, tokenQty, memo.trim(), adaBlocked] : null, isHbar ? [memo.trim(), hbarBlocked] : null, isAlgo ? [memo.trim(), algoBlocked] : null, isXmr ? [xmrGo, xmrBlocked] : null, isTon ? [memo, tonBlocked] : null, isCosmos ? [memo.trim(), cosmosBlocked] : null], (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)), 450);
   const [built, setBuilt] = useState<Built | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
   // XRP: what can be sent is the spendable part (balance − reserve), not the balance.
-  const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : null;
+  const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : isCosmos && cosmosMe.data ? BigInt(cosmosMe.data.spendable) : null;
   const kasSpendable = isKas && kasMe.data ? BigInt(kasMe.data.spendable) : isXlm && xlmMe.data ? BigInt(xlmMe.data.spendable) : null;
   // NEAR: likewise, balance − storage reserve.
   const nearSpendable = isNear && nearMe.data ? BigInt(nearMe.data.spendable) : null;
@@ -473,7 +483,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
     const xlm = isXlm && xlmMemoParsed.memo ? { stellarMemo: xlmMemoParsed.memo } : {};
     const hbarMemo = isHbar && memo.trim() ? { memo: memo.trim() } : {};
     const algoNote = isAlgo && memo.trim() ? { memo: memo.trim() } : {};
-    const ada = isAda ? { ...(adaToken && adaTokenQty !== null ? { cardanoToken: { policy: adaToken.policy, name: adaToken.name, quantity: adaTokenQty.toString() } } : {}), ...(memo.trim() ? { memo: memo.trim() } : {}) } : {};
+    const ada = isAda ? { ...(adaToken && adaTokenQty !== null ? { cardanoToken: { policy: adaToken.policy, name: adaToken.name, quantity: adaTokenQty.toString() } } : {}), ...(memo.trim() ? { memo: memo.trim() } : {}) } : isCosmos && memo.trim() ? { memo: memo.trim() } : {};
     const ton = isTon && memo ? { memo } : {};
     const unsigned = (await (adapter as { buildTx: (p: unknown) => Promise<AnyUnsigned> }).buildTx({ asset, to: toTrim, amount: amountBase ?? 0n, fee: feeParams, max: max && !adaTokenMode, ...tag, ...xlm, ...ada, ...hbarMemo, ...algoNote, ...ton })) as AnyUnsigned;
     let summary: EvmTxSummary | null = null;
@@ -497,7 +507,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   useEffect(() => {
     setBuilt(null);
     setBuildError(null);
-    if (!addrValid || !feeParams || dogeBelowDust || kasBelowMin || xrpBlocked || xlmBlocked || nearBlocked || dotBlocked || adaBlocked || hbarBlocked || algoBlocked || xmrBlocked || tonBlocked) return;
+    if (!addrValid || !feeParams || dogeBelowDust || kasBelowMin || xrpBlocked || xlmBlocked || nearBlocked || dotBlocked || adaBlocked || hbarBlocked || algoBlocked || xmrBlocked || tonBlocked || cosmosBlocked) return;
     // A Cardano token payment carries only its min-ADA: no ADA amount to type.
     if (!adaTokenMode && (overBalance || (!max && (amountBase === null || amountBase <= 0n)))) return;
     let alive = true;
@@ -628,6 +638,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
         {hbarAdapter && <HbarTxStatusLine adapter={hbarAdapter} id={done.id} recipient={toTrim} onDone={pf.refresh} />}
         {kasAdapter && <KaspaTxStatusLine adapter={kasAdapter} txid={done.id} onAccepted={pf.refresh} />}
         {tonAdapter && <TonTxStatusLine adapter={tonAdapter} hash={done.id} recipient={toTrim} onDone={pf.refresh} />}
+        {cosmosAdapter && <CosmosTxStatusLine adapter={cosmosAdapter} hash={done.id} recipient={toTrim} onIncluded={pf.refresh} />}
       </SendDone>
     );
   }
@@ -712,7 +723,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'ton' ? 'UQ… / EQ… (forme lisible)' : asset.family === 'xmr' ? (network === 'testnet' ? '5… ou 7… (stagenet)' : '4… ou 8…') : asset.family === 'algo' ? 'Adresse Algorand (58 caractères)' : asset.family === 'dot' ? (network === 'testnet' ? '5… (Westend)' : '1… (Polkadot)') : asset.family === 'kas' ? (network === 'testnet' ? 'kaspatest:q…' : 'kaspa:q…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : asset.family === 'sui' ? t('send.suiPlaceholder') : asset.family === 'hbar' ? t('send.hbarPlaceholder') : '0x…'}
+                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'cosmos' ? 'cosmos1…' : asset.family === 'ton' ? 'UQ… / EQ… (forme lisible)' : asset.family === 'xmr' ? (network === 'testnet' ? '5… ou 7… (stagenet)' : '4… ou 8…') : asset.family === 'algo' ? 'Adresse Algorand (58 caractères)' : asset.family === 'dot' ? (network === 'testnet' ? '5… (Westend)' : '1… (Polkadot)') : asset.family === 'kas' ? (network === 'testnet' ? 'kaspatest:q…' : 'kaspa:q…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : asset.family === 'sui' ? t('send.suiPlaceholder') : asset.family === 'hbar' ? t('send.hbarPlaceholder') : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -819,6 +830,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {isXmr && addrValid && <XmrDestinationLine dest={xmrDestInfo} error={xmrDest.error ? xmrDest.error.message : null} loading={xmrDest.loading} />}
             {isTon && <TonCommentField value={memo} onChange={setMemo} to={toTrim} dest={tonDestInfo} destLoading={addrValid && tonDest.loading && !tonDestInfo} />}
             {isTon && tonDest.error && addrValid && <span className="text-[12px] text-down">Compte destinataire illisible : {tonDest.error.message}</span>}
+            {isCosmos && <CosmosMemoField value={memo} onChange={setMemo} />}
             {guard.tampered && settings.clipboardGuard && (
               <Notice tone="error" icon={<IconWarn size={16} className="mt-0.5 shrink-0" />}>
                 {t('send.tampered')}
@@ -896,6 +908,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {algoBelowMinimum && <span className="text-[12px] text-down">{algoDestInfo?.exists ? `Ce destinataire resterait sous son solde minimum : envoie au moins ${fmtCrypto(algoDestMin, 6, 'ALGO', 6)}.` : 'Ce compte n’existe pas encore : il faut lui envoyer au moins 0,1 ALGO.'}</span>}
             {isXmr && <XmrLockedNote status={xmr.status} hidden={hideBalances} />}
             {isXmr && <XmrSyncLine status={xmr.status} error={xmr.error} onRetry={xmr.sync} />}
+            {isCosmos && <CosmosSpendable account={cosmosMe.data} hidden={hideBalances} />}
             {isAda && adaMe.data && (
               <span className="text-[12px] leading-[1.45] text-mute">
                 {t('send.adaBalance', {
@@ -1007,6 +1020,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 <strong className="font-semibold text-text">Rien à choisir sur TON.</strong> Les frais suivent le prix du réseau (d’habitude 0,003 à 0,01 TON, un peu plus pour ton tout premier envoi, qui déploie ton portefeuille). Le coffre les estime par émulation ; ils sont prélevés en plus du montant. MAX envoie tout le solde, frais déduits.
               </div>
             </div>
+          ) : isCosmos ? (
+            <div className="flex flex-col gap-2">
+              <span className="eyebrow">Frais réseau</span>
+              <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
+                <strong className="font-semibold text-text">Rien à choisir sur Cosmos Hub.</strong> Le coffre fait simuler la transaction exacte par le réseau, garde une marge sur le gas et paie le prix du marché des frais (d’habitude moins de 0,001 ATOM) ; le montant exact est dans la vérification.
+              </div>
+            </div>
           ) : isXrp ? (
             <div className="flex flex-col gap-2">
               <span className="eyebrow">{t('send.networkFees')}</span>
@@ -1090,7 +1110,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('send.review')}</span>
             <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[10.5px] font-medium tracking-[0.02em] text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'xlm' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'ton' || built?.unsigned.family === 'xmr' || built?.unsigned.family === 'algo' || built?.unsigned.family === 'dot' || built?.unsigned.family === 'kas' || built?.unsigned.family === 'hbar' || built?.unsigned.family === 'sui' || built?.unsigned.family === 'near' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
+              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'xlm' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'cosmos' || built?.unsigned.family === 'ton' || built?.unsigned.family === 'xmr' || built?.unsigned.family === 'algo' || built?.unsigned.family === 'dot' || built?.unsigned.family === 'kas' || built?.unsigned.family === 'hbar' || built?.unsigned.family === 'sui' || built?.unsigned.family === 'near' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
@@ -1160,6 +1180,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           )}
           {built?.unsigned.family === 'xmr' && <XmrSummaryView u={built.unsigned} xmrPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'ton' && <TonSummaryView u={built.unsigned} tonPrice={nativePrice} currency={cur} />}
+          {built?.unsigned.family === 'cosmos' && <CosmosSummaryView u={built.unsigned} atomPrice={nativePrice} currency={cur} />}
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
@@ -1237,6 +1258,17 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {built.unsigned.all ? ' Il ne restera aucun SUI sur ce compte : une 2ᵉ confirmation te sera demandée.' : ''}
             </EnClair>
           )}
+          {built && addrValid && sendAmount !== null && built.unsigned.family === 'cosmos' && (
+            <EnClair tone={built.unsigned.summary.memo === null ? 'warn' : 'ice'}>
+              {rt(built.unsigned.summary.memo !== null ? 'send.clearCosmosMemo' : 'send.clearCosmosNoMemo', { b: (c) => <strong>{c}</strong>, memo: (c) => <strong className="font-mono">{c}</strong> }, {
+                amount: fmtCrypto(sendAmount, decimals, asset.symbol),
+                recipient: recipientName,
+                memo: built.unsigned.summary.memo ?? '',
+                fee: fmtCrypto(built.unsigned.maxFee, 6, 'ATOM', 6),
+              })}
+              {built.unsigned.summary.memo === null ? t('send.clearXlmCheckMemo') : t('send.clearCosmosMemoPublic')}
+            </EnClair>
+          )}
           {built && addrValid && built.unsigned.family === 'ton' && (
             <EnClair tone={built.unsigned.summary.comment === null ? 'warn' : 'ice'}>
               {rt(built.unsigned.summary.comment !== null ? 'send.clearTonComment' : 'send.clearTonNoComment', { b: (c) => <strong>{c}</strong>, memo: (c) => <strong className="font-mono">{c}</strong> }, {
@@ -1282,7 +1314,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {built.unsigned.summary.memo === null ? ' Si c’est une plateforme d’échange, vérifie qu’elle ne t’a pas donné de mémo.' : ''}
             </EnClair>
           )}
-          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'xlm' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'near' && built.unsigned.family !== 'sui' && built.unsigned.family !== 'hbar' && built.unsigned.family !== 'kas' && built.unsigned.family !== 'dot' && built.unsigned.family !== 'algo' && built.unsigned.family !== 'xmr' && built.unsigned.family !== 'ton' && (
+          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'xlm' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'near' && built.unsigned.family !== 'sui' && built.unsigned.family !== 'hbar' && built.unsigned.family !== 'kas' && built.unsigned.family !== 'dot' && built.unsigned.family !== 'algo' && built.unsigned.family !== 'xmr' && built.unsigned.family !== 'ton' && built.unsigned.family !== 'cosmos' && (
             <EnClair>
               {rt('send.clearGeneric', { b: (c) => <strong>{c}</strong> }, {
                 amount: fmtCrypto(sendAmount, decimals, asset.symbol),
@@ -1360,6 +1392,7 @@ function dataLabel(b: Built | null, family?: string): string {
   }
   if (u.family === 'ada') return `${tp('send.dataInputs', u.summary.inputs.length)} · ${t('send.dataAdaOutputs', { n: u.summary.outputs.length })}${u.token ? ' · token' : ''}${u.summary.memo ? ` · ${t('send.dataMessage')}` : ''}`;
   if (u.family === 'xmr') return `${tp('send.dataInputs', u.summary.inputCount)} · ${t('send.dataXmrRings', { n: u.summary.ringSize })} · ${tp('send.dataOutputs', 2)}`;
+  if (u.family === 'cosmos') return `MsgSend · gas ${u.summary.gasLimit} · ${u.summary.memo !== null ? t('send.dataMemo') : t('send.dataNoMemo')}`;
   if (u.family === 'ton') return `${t('send.dataTon')}${u.summary.deploysWallet ? ` + ${t('send.dataTonDeploy')}` : ''}${u.summary.comment !== null ? ` · ${t('send.dataTonComment')}` : ''}${u.summary.sendAll ? ` · ${t('send.dataTonAll')}` : ''}`;
   if (u.family === 'algo') return `pay${u.summary.noteLen > 0 ? ` · ${t('send.dataAlgoNote', { n: u.summary.noteLen })}` : ''}`;
   if (u.family === 'dot') return `transfer_keep_alive · nonce ${u.summary.nonce}`;

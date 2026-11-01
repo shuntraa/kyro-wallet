@@ -10,6 +10,7 @@ mod cbf;
 mod commands;
 mod commands_algo;
 mod commands_cardano;
+mod commands_cosmos;
 mod commands_dot;
 mod commands_hbar;
 mod commands_hw;
@@ -24,6 +25,7 @@ mod commands_utxo;
 mod commands_xmr;
 mod commands_xrp;
 mod core_rpc;
+mod cosmos_backend;
 mod dialog_text;
 mod dot_backend;
 mod electrum;
@@ -267,6 +269,14 @@ pub fn run() {
             commands_ton::ton_sign_tx,
             commands_ton::ton_broadcast,
             commands_ton::ton_tx_status,
+            commands_cosmos::cosmos_backend_info,
+            commands_cosmos::cosmos_address,
+            commands_cosmos::cosmos_account,
+            commands_cosmos::cosmos_txs,
+            commands_cosmos::cosmos_build_tx,
+            commands_cosmos::cosmos_sign_tx,
+            commands_cosmos::cosmos_broadcast,
+            commands_cosmos::cosmos_tx_status,
             commands_cardano::ada_backend_info,
             commands_cardano::ada_address,
             commands_cardano::ada_account,

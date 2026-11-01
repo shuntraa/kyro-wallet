@@ -14,8 +14,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
 /** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). `kas`: Kaspa (KAS, `kas_*`, §2.11). `dot`: Polkadot Asset Hub (`dot_*`, §2.11). */
 /** `algo`: Algorand (ALGO payments, `algo_*`, §2.11). */
 /** `xmr`: Monero (scanned, built, signed and published by Rust, `xmr_*`, §2.10). */
-/** `ton`: TON (Toncoin, wallet v4R2, `ton_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton';
+/** `ton`: TON (Toncoin, wallet v4R2, `ton_*`, §2.11). `cosmos`: Cosmos Hub (ATOM, `cosmos_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
@@ -56,7 +56,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain | XmrChain | TonChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain | XmrChain | TonChain | CosmosChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -495,6 +495,29 @@ export function tonChain(network: Network): TonChain {
   return TON_CHAINS[network];
 }
 
+/**
+ * Cosmos Hub (phase 4): Rust `cosmos_*` commands and `CosmosAdapter` (`packages/chains/src/cosmos/`).
+ * Testnet = the Hub's public testnet (chain id `provider`). Part of `allChains()` / `assetsFor()`
+ * (ATOM only: IBC tokens are not listed nor sent). Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface CosmosChain extends Omit<ChainBase, 'phase'> {
+  family: 'cosmos';
+  phase: 4;
+  /** Chain id Rust checks on every read and signs into the SignDoc. */
+  chainId: string;
+}
+
+const COSMOS_CHAINS: Record<Network, CosmosChain> = {
+  testnet: { family: 'cosmos', key: 'cosmos', name: 'Cosmos Hub testnet', label: 'ATOM testnet', network: 'testnet', color: '#2E3148', glyph: '⚛',
+    nativeSymbol: 'ATOM', nativeName: 'Cosmos Hub', nativeDecimals: 6, coingeckoId: 'cosmos', phase: 4, blockTimeSecs: 6, chainId: 'provider' },
+  mainnet: { family: 'cosmos', key: 'cosmos', name: 'Cosmos Hub', label: 'ATOM', network: 'mainnet', color: '#2E3148', glyph: '⚛',
+    nativeSymbol: 'ATOM', nativeName: 'Cosmos Hub', nativeDecimals: 6, coingeckoId: 'cosmos', phase: 4, blockTimeSecs: 6, chainId: 'cosmoshub-4' },
+};
+
+export function cosmosChain(network: Network): CosmosChain {
+  return COSMOS_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -809,7 +832,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network), tonChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network), tonChain(network), cosmosChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -974,6 +997,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   list.push({ host: `${nk}-idx.algonode.cloud`, purpose: `Algorand${network === 'mainnet' ? '' : ' TestNet'} : historique (indexer AlgoNode / Nodely)` });
   // TON: reached by Rust only (ton_*), Tor circuits of the `ton` family; no custom server yet.
   list.push({ host: network === 'mainnet' ? 'toncenter.com' : 'testnet.toncenter.com', purpose: `TON${network === 'mainnet' ? '' : ' testnet'} : solde, seqno, historique, frais estimés, diffusion (TON Center, ≈ 1 requête/s sans clé)` });
+  // Cosmos Hub: reached by Rust only (cosmos_*), Tor circuits of the `cosmos` family; no custom server yet.
+  list.push({
+    host: network === 'mainnet' ? 'cosmos-rest.publicnode.com' : 'rest.provider-sentry-01.hub-testnet.polypore.xyz',
+    purpose: `Cosmos Hub${network === 'mainnet' ? '' : ' testnet'} : compte, soldes, simulation, historique, diffusion (LCD)`,
+  });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'

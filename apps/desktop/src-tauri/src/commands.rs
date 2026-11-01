@@ -512,6 +512,8 @@ pub struct Accounts {
     xmr: AddressOut,
     /// Wallet v4R2 of `m/44'/607'/a'`, non-bounceable form (`UQ…`, testnet `0Q…`).
     ton: AddressOut,
+    /// `m/44'/118'/a'/0/0`, `cosmos1…`.
+    cosmos: AddressOut,
 }
 
 fn utxo_account_out(
@@ -627,6 +629,10 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
             ton: AddressOut {
                 address: wallet_core::ton_address(seed, a, net == Network::Testnet)?,
                 path: wallet_core::ton_path(a),
+            },
+            cosmos: AddressOut {
+                address: wallet_core::cosmos_address(seed, a)?,
+                path: wallet_core::cosmos_path(a),
             },
         })
     })

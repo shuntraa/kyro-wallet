@@ -15,6 +15,7 @@ import type { DotSigned, DotUnsigned } from './polkadot/adapter';
 import type { AlgoSigned, AlgoUnsigned } from './algorand/adapter';
 import type { XmrSigned, XmrUnsigned } from './xmr/adapter';
 import type { TonSigned, TonUnsigned } from './ton/adapter';
+import type { CosmosSigned, CosmosUnsigned } from './cosmos/adapter';
 import type { CardanoTokenSpec, StellarMemoSpec } from '@kyro/shared';
 
 import { l10n } from '@kyro/shared';
@@ -49,7 +50,9 @@ export type FeeParams =
   /** Monero: no fee to choose. Rust takes the node's « normal » rate (bounded) × the exact weight. */
   | { family: 'xmr' }
   /** TON: no fee to choose. The network's price, estimated by emulation (TON Center). */
-  | { family: 'ton' };
+  | { family: 'ton' }
+  /** Cosmos Hub: no fee to choose. Rust simulates the gas and prices it at the fee market. */
+  | { family: 'cosmos' };
 
 export interface FeeOption {
   level: FeeLevel;
@@ -89,7 +92,8 @@ export type SizeHint =
   | { family: 'dot' }
   | { family: 'algo' }
   | { family: 'xmr' }
-  | { family: 'ton' };
+  | { family: 'ton' }
+  | { family: 'cosmos'; gasLimit: number };
 
 export interface Balance {
   assetId: string;
@@ -108,7 +112,7 @@ export interface BuildParams {
   destinationTag?: number;
   /** Cardano only: native token to send (its output carries the min-ADA; `amount` is then ignored). */
   cardanoToken?: CardanoTokenSpec;
-  /** Cardano: CIP-20 message; Hedera: transaction memo (≤ 100 bytes); Algorand: transaction note (≤ 1024 bytes); TON: text comment (≤ 123 bytes). Public and permanent. */
+  /** Cardano: CIP-20 message; Hedera: transaction memo (≤ 100 bytes); Algorand: transaction note (≤ 1024 bytes); TON: text comment (≤ 123 bytes); Cosmos Hub: memo, often required by exchanges. Public and permanent. */
   memo?: string;
   /** Stellar only: memo (text / id / hash), public and permanent; exchanges often require one. */
   stellarMemo?: StellarMemoSpec;
@@ -211,9 +215,11 @@ export interface FamilyTypes {
   xmr: { unsigned: XmrUnsigned; signed: XmrSigned };
   /** TON: v4R2 external message built and strictly decoded by Rust, with the live context. */
   ton: { unsigned: TonUnsigned; signed: TonSigned };
+  /** Cosmos Hub: MsgSend built (gas simulated, fee) and its SignDoc strictly decoded by Rust. */
+  cosmos: { unsigned: CosmosUnsigned; signed: CosmosSigned };
 }
-export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned | KaspaUnsigned | DotUnsigned | AlgoUnsigned | XmrUnsigned | TonUnsigned;
-export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned | KaspaSigned | DotSigned | AlgoSigned | XmrSigned | TonSigned;
+export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned | KaspaUnsigned | DotUnsigned | AlgoUnsigned | XmrUnsigned | TonUnsigned | CosmosUnsigned;
+export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned | KaspaSigned | DotSigned | AlgoSigned | XmrSigned | TonSigned | CosmosSigned;
 
 export type HistoryDirection = 'in' | 'out' | 'self';
 export type HistoryStatus = 'pending' | 'confirmed' | 'failed';
@@ -265,7 +271,7 @@ export type AnyAdapter =
   | ChainAdapter<'doge'>
   | ChainAdapter<'bch'> | ChainAdapter<'dash'> | ChainAdapter<'tron'>
   | ChainAdapter<'xrp'>
-  | ChainAdapter<'ada'> | ChainAdapter<'ton'> | ChainAdapter<'xmr'> | ChainAdapter<'algo'> | ChainAdapter<'dot'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>
+  | ChainAdapter<'ada'> | ChainAdapter<'cosmos'> | ChainAdapter<'ton'> | ChainAdapter<'xmr'> | ChainAdapter<'algo'> | ChainAdapter<'dot'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>
   | ChainAdapter<'kas'>;
 
 /** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin / Bitcoin Cash / Dash: Bitcoin's PSBT shape). */

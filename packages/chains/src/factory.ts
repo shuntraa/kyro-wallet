@@ -54,6 +54,8 @@ import { AlgorandAdapter } from './algorand/adapter';
 import { algorandChain } from './registry';
 import { XmrAdapter } from './xmr/adapter';
 import { TonAdapter } from './ton/adapter';
+import { CosmosAdapter } from './cosmos/adapter';
+import { cosmosChain } from './registry';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -93,6 +95,8 @@ export interface AdapterSet {
   xmr: XmrAdapter | null;
   /** TON: vault only (no hardware wallet support). */
   ton: TonAdapter | null;
+  /** Cosmos Hub: vault only (hardware wallets: HW_UNSUPPORTED for now). */
+  cosmos: CosmosAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -152,6 +156,8 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const xmr = accounts.xmr && !hw ? new XmrAdapter({ chain: xmrChain(network), address: accounts.xmr.address, ...a }) : null;
   // TON: Rust picks the server (TON Center).
   const ton = accounts.ton ? new TonAdapter({ chain: tonChain(network), address: accounts.ton.address, ...a }) : null;
+  // Cosmos Hub: Rust picks the server (default LCD, no custom server yet).
+  const cosmos = accounts.cosmos ? new CosmosAdapter({ chain: cosmosChain(network), address: accounts.cosmos.address, ...a }) : null;
   const all: AnyAdapter[] = [
     ...(btc ? [btc] : []),
     ...evm.values(),
@@ -166,8 +172,9 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
     ...(algo ? [algo] : []),
     ...(xmr ? [xmr] : []),
     ...(ton ? [ton] : []),
+    ...(cosmos ? [cosmos] : []),
   ];
-  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, xmr, ton, all, hw: hw ?? null };
+  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, xmr, ton, cosmos, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin, Bitcoin Cash, Dash
@@ -447,3 +454,25 @@ export {
   type TonUnsigned,
   type TonSigned,
 } from './ton/adapter';
+
+// ---------------------------------------------------------------- phase 4: Cosmos Hub
+
+export {
+  CosmosAdapter,
+  rustCosmosBackend,
+  isCosmosAddress,
+  cosmosAddressProblem,
+  cosmosMemoProblem,
+  atomToUatom,
+  COSMOS_MAX_MEMO,
+  type CosmosAdapterOptions,
+  type CosmosBackend,
+  type CosmosAccountInfo,
+  type CosmosContext,
+  type CosmosHistoryEntry,
+  type CosmosTxStatus,
+  type CosmosTxSummary,
+  type CosmosWarning,
+  type CosmosUnsigned,
+  type CosmosSigned,
+} from './cosmos/adapter';

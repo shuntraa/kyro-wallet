@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cosmos-txs"
+description = "Enables the cosmos_txs command without any pre-configured scope."
+commands.allow = ["cosmos_txs"]
+
+[[permission]]
+identifier = "deny-cosmos-txs"
+description = "Denies the cosmos_txs command without any pre-configured scope."
+commands.deny = ["cosmos_txs"]

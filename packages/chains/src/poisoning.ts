@@ -59,6 +59,7 @@ const TAIL = 4;
  * - Hedera: `0x` (EVM address, hex lowercase) or `0.0.` (account number; HIP-15 checksum dropped).
  * - Kaspa: `kaspa:` / `kaspatest:` + version char (`kaspa:q`, `kaspa:p`), bech32 lowercase.
  * - Polkadot (SS58): the first char (`1` for prefix 0, `5` for prefix 42).
+ * - Cosmos Hub: `cosmos1` + first data char, bech32 lowercase.
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -70,6 +71,7 @@ export function addressParts(address: string, family: Family): AddressParts & { 
     case 'btc':
     case 'ltc':
     case 'ada':
+    case 'cosmos':
       if (bech) {
         const prefix = `${bech[1]}1${bech[2]}`.toLowerCase();
         return { prefix, body: a.slice(prefix.length).toLowerCase(), caseInsensitive: true };

@@ -78,6 +78,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Rust's `xmr_*` commands. Blocks are scanned locally: no key, not even the view key, is sent.
     "xmr-node.cakewallet.com",
     "monero-stagenet.stackwallet.com",
+    // Cosmos Hub LCD (REST): mainnet (Allnodes PublicNode) and the Hub testnet's official sentry
+    // (Hypha, `provider` chain); only Rust's `cosmos_*` commands.
+    "cosmos-rest.publicnode.com",
+    "rest.provider-sentry-01.hub-testnet.polypore.xyz",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -409,6 +413,7 @@ pub enum Family {
     Polkadot,
     Algorand,
     Monero,
+    Cosmos,
     Evm,
     Solana,
     Market,
@@ -465,6 +470,10 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Algorand
     } else if host == "xmr-node.cakewallet.com" || host == "monero-stagenet.stackwallet.com" {
         Family::Monero
+    } else if host == "cosmos-rest.publicnode.com"
+        || host == "rest.provider-sentry-01.hub-testnet.polypore.xyz"
+    {
+        Family::Cosmos
     } else if host.ends_with("-rpc.publicnode.com") || EVM_OWN_RPC_HOSTS.contains(&host) {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1315,6 +1324,11 @@ mod tests {
         assert_eq!(
             family_for("polkadot-asset-hub-rpc.polkadot.io", &c),
             Family::Polkadot
+        );
+        assert_eq!(family_for("cosmos-rest.publicnode.com", &c), Family::Cosmos);
+        assert_eq!(
+            family_for("rest.provider-sentry-01.hub-testnet.polypore.xyz", &c),
+            Family::Cosmos
         );
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],

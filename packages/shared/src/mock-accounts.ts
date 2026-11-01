@@ -39,6 +39,7 @@ import { demoDotAddress } from './mock-dot';
 import { demoAlgoAddress } from './mock-algo';
 import { demoXmrAddress } from './mock-xmr';
 import { demoTonAddress } from './mock-ton';
+import { demoCosmosAddress } from './mock-cosmos';
 import { demoFund } from './mock-tx';
 import type { DemoChainState } from './mock-net';
 import { l10n } from './i18n';
@@ -68,6 +69,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   algo: 'Algorand',
   xmr: 'Monero',
   ton: 'TON',
+  cosmos: 'Cosmos',
 };
 
 export const defaultAccountName = (chain: AccountChain, index: number): string => `${ACCOUNT_CHAIN_LABEL[chain]} ${index + 1}`;
@@ -178,6 +180,7 @@ export function createDemoAccounts(d: {
       algo: { address: demoAlgoAddress(a), path: `m/44'/283'/${a}'/0/0` },
       xmr: { address: demoXmrAddress(d.network, a), path: `m/44'/128'/${a}'/0/0` },
       ton: { address: demoTonAddress(a, d.network), path: `m/44'/607'/${a}'` },
+      cosmos: { address: demoCosmosAddress(d.seed, a), path: `m/44'/118'/${a}'/0/0` },
     };
   };
 

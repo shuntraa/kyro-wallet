@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cosmos-address"
+description = "Enables the cosmos_address command without any pre-configured scope."
+commands.allow = ["cosmos_address"]
+
+[[permission]]
+identifier = "deny-cosmos-address"
+description = "Denies the cosmos_address command without any pre-configured scope."
+commands.deny = ["cosmos_address"]
