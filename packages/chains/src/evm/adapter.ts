@@ -240,18 +240,15 @@ export class EvmAdapter implements ChainAdapter<'evm'> {
   }
 
   async signTx(unsigned: EvmUnsigned, password: string): Promise<EvmSigned> {
-    const args: { tx: EvmTxRequest; password: string; token?: EvmTokenHint; account?: number } = { tx: unsigned.tx, password, ...accountArg(this.account) };
-    if (unsigned.token) args.token = unsigned.token;
-    const res = await call('evm_sign_tx', args);
+    // No token hint: Rust names tokens from its own table only (unknown = raw units).
+    const res = await call('evm_sign_tx', { tx: unsigned.tx, password, ...accountArg(this.account) });
     return { family: 'evm', rawTx: res.rawTx, hash: res.hash };
   }
 
   /** Signs on the hardware wallet `deviceId` (native dialog, 2nd one if blind signing, device). */
   async signTxHw(unsigned: EvmUnsigned, deviceId: string): Promise<EvmSigned> {
     if (!this.hw) throw new Error('Ce compte n’est pas un hardware wallet');
-    const args: { id: string; accountId: string; tx: EvmTxRequest; token?: EvmTokenHint } = { id: deviceId, accountId: this.hw.accountId, tx: unsigned.tx };
-    if (unsigned.token) args.token = unsigned.token;
-    const res = await call('hw_sign_evm_tx', args);
+    const res = await call('hw_sign_evm_tx', { id: deviceId, accountId: this.hw.accountId, tx: unsigned.tx });
     return { family: 'evm', rawTx: res.rawTx, hash: res.hash };
   }
 

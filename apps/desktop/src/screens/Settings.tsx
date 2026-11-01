@@ -217,45 +217,31 @@ function Privacy() {
 }
 
 function RevealPhrase() {
-  const { settings } = useApp();
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState('');
-  const [words, setWords] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [left, setLeft] = useState(60);
+  const [shown, setShown] = useState(false);
   const backup = getBackupState();
 
-  // Capture protection while visible; auto-hide after 60 s; never kept.
-  useEffect(() => {
-    if (!words) return;
-    void call('set_capture_protection', { enabled: true }).catch(() => undefined);
-    setLeft(60);
-    const id = window.setInterval(() => setLeft((l) => l - 1), 1000);
-    return () => {
-      window.clearInterval(id);
-      void call('set_capture_protection', { enabled: settings.captureProtection }).catch(() => undefined);
-    };
-  }, [words]);
-  useEffect(() => {
-    if (left <= 0) close();
-  }, [left]);
-
   const close = () => {
-    setWords(null);
     setPw('');
     setError(null);
+    setShown(false);
     setOpen(false);
   };
+  // Rust checks the password, asks in a native window, then shows the words in another native
+  // window: they never reach this interface (a compromised page could not read them).
   const reveal = async () => {
     setBusy(true);
     setError(null);
     try {
-      const res = await call('vault_reveal_mnemonic', { password: pw });
+      await call('vault_reveal_mnemonic', { password: pw });
       setPw('');
-      setWords(res.words);
+      setShown(true);
     } catch (e) {
-      setError(toIpcError(e).message);
+      const err = toIpcError(e);
+      setError(err.code === 'USER_REJECTED' ? 'Affichage annulé dans la fenêtre système.' : err.message);
     } finally {
       setBusy(false);
     }
@@ -270,7 +256,7 @@ function RevealPhrase() {
         <span className="flex items-center gap-2 text-[14px] font-semibold">
           Phrase de récupération {backup === 'unknown' && <Badge tone="warn">Sauvegarde non vérifiée</Badge>}
         </span>
-        <span className="text-[12px] leading-[1.5] text-mute">Mot de passe requis. Captures d’écran bloquées pendant l’affichage. Jamais copiée.</span>
+        <span className="text-[12px] leading-[1.5] text-mute">Mot de passe requis. Affichée dans une fenêtre du système, jamais dans l’interface. Jamais copiée.</span>
       </div>
       <Button variant="dangerOutline" size="md" onClick={() => setOpen(true)}>
         Afficher
@@ -279,34 +265,29 @@ function RevealPhrase() {
         Mot de passe
       </Button>
       <Dialog open={open} onOpenChange={(v) => (v ? setOpen(true) : close())} title="Phrase de récupération" className="w-[620px]">
-        {!words ? (
+        {!shown ? (
           <>
             <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-              Vérifie que personne ne regarde ton écran. Quiconque voit ces mots contrôle tes fonds.
+              Vérifie que personne ne regarde ton écran et qu’aucun partage d’écran n’est actif. Quiconque voit ces mots contrôle tes fonds.
             </Notice>
+            <p className="m-0 text-[13px] leading-[1.55] text-text2">
+              Après ton mot de passe, Kyro te demande une confirmation dans une fenêtre du système, puis y affiche les mots. Si une fenêtre te demande ta phrase au lieu de l’afficher, c’est une arnaque.
+            </p>
             <PasswordField id="reveal-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && void reveal()} />
             {error && <Notice tone="error">{error}</Notice>}
             <div className="flex justify-end gap-2">
               <Button onClick={close}>Annuler</Button>
               <Button variant="danger" disabled={!pw || busy} onClick={() => void reveal()}>
-                {busy && <Spinner />} Afficher la phrase
+                {busy && <Spinner />} {busy ? 'Fenêtre système ouverte…' : 'Afficher la phrase'}
               </Button>
             </div>
           </>
         ) : (
           <>
-            <ol className={cn('m-0 grid list-none gap-2 p-0', words.length === 24 ? 'grid-cols-4' : 'grid-cols-3')}>
-              {words.map((w, i) => (
-                <li key={i} className="flex h-10 items-center gap-2 rounded-ctl border border-line bg-raised px-2.5">
-                  <span className="w-5 font-mono text-[11px] text-faint">{i + 1}</span>
-                  <span className="font-mono text-[14px]">{w}</span>
-                </li>
-              ))}
-            </ol>
-            <div className="flex items-center justify-between">
-              <span className="text-[12px] text-mute">Masquage automatique dans {left} s</span>
+            <Notice tone="info">La fenêtre système est fermée : la phrase n’est plus affichée.</Notice>
+            <div className="flex justify-end">
               <Button variant="primary" onClick={close}>
-                Masquer
+                Fermer
               </Button>
             </div>
           </>

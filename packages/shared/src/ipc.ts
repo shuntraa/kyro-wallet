@@ -1035,7 +1035,8 @@ export interface NetworkInfo {
   otherVaultExists: boolean;
 }
 
-/** Token metadata passed to `evm_sign_tx` so the native dialog can show a readable amount. */
+/** Token metadata shown by the interface. Rust ignores it: the native dialog names tokens only
+ * from its own table (`known_tokens.rs`), an unknown token is shown in raw units. */
 export interface EvmTokenHint {
   symbol: string;
   decimals: number;
@@ -1220,11 +1221,19 @@ export const MAX_HW_ACCOUNT = 100;
 /** Every command: its arguments (`undefined` = none) and its resolved value. */
 export interface Commands {
   vault_status: { args: undefined; ret: VaultStatus };
-  vault_create: { args: { password: string; words: 12 | 24 }; ret: { words: string[] } };
+  /** The words are NOT returned: `vault_backup_show` displays them in a native dialog. */
+  vault_create: { args: { password: string; words: 12 | 24 }; ret: { wordCount: number } };
+  /** Native dialog with the phrase of the vault just created (resolves when it is closed), then
+   * the 0-based positions of the 3 words to type back. Only while that phrase is pending. */
+  vault_backup_show: { args: undefined; ret: { checks: [number, number, number] } };
+  /** Checks the 3 words (positions from `vault_backup_show`). After 5 wrong tries the pending
+   * phrase is dropped (`attemptsLeft: 0`): show it again from Réglages › Sécurité. */
+  vault_backup_verify: { args: { answers: string[] }; ret: { ok: boolean; attemptsLeft: number } };
   vault_import: { args: { password: string; phrase: string }; ret: void };
   vault_unlock: { args: { password: string }; ret: void };
   vault_lock: { args: undefined; ret: void };
-  vault_reveal_mnemonic: { args: { password: string }; ret: { words: string[] } };
+  /** Password, then a native confirmation, then the words in a native dialog. Returns nothing. */
+  vault_reveal_mnemonic: { args: { password: string }; ret: void };
   session_touch: { args: undefined; ret: void };
   accounts_get: { args: WithAccount | undefined; ret: Accounts };
   /** Account lists of the vault (§2.9). Add / rename / remove: vault unlocked. */
@@ -1236,7 +1245,7 @@ export interface Commands {
   btc_address: { args: { kind: BtcKind; change: boolean; index: number } & WithAccount; ret: string };
   evm_decode_tx: { args: { tx: EvmTxRequest }; ret: EvmTxSummary };
   evm_sign_tx: {
-    args: { tx: EvmTxRequest; password: string; token?: EvmTokenHint } & WithAccount;
+    args: { tx: EvmTxRequest; password: string } & WithAccount;
     ret: { rawTx: string; hash: string };
   };
   /** Signs only the inputs of `account` (others: `foreignInput`). */
@@ -1275,8 +1284,8 @@ export interface Commands {
   tron_txs: { args: { address: string }; ret: TronHistoryEntry[] };
   /** `amount`: sun (TRX) or raw token units. TRC-20: energy simulated, a failing transfer is refused. */
   tron_build_tx: { args: { to: string; amount: string; token?: string } & WithAccount; ret: TronBuilt };
-  /** `token`: UI hint for an unknown TRC-20 (shown « selon l'interface, non vérifié »). */
-  tron_sign_tx: { args: { raw: string; password: string; token?: { symbol: string; decimals: number } } & WithAccount; ret: { signature: string; txid: string; summary: TronTxSummary; estimate: TronEstimate } };
+  /** A TRC-20 Rust does not know is shown in raw units, « jeton inconnu », with the reinforced dialog. */
+  tron_sign_tx: { args: { raw: string; password: string } & WithAccount; ret: { signature: string; txid: string; summary: TronTxSummary; estimate: TronEstimate } };
   /** Signature must recover to our address; server txid = sha256(raw). */
   tron_broadcast: { args: { raw: string; signature: string } & WithAccount; ret: string };
   // XRP Ledger (§2.6): Rust builds the Payment (Sequence, Fee, LastLedgerSequence), decodes it
@@ -1340,6 +1349,10 @@ export interface Commands {
    * Bitcoin Core only, unlocked. Pre-flight checks are synchronous (reachable, auth, chain, watch
    * wallet created or loaded without private keys); only `importdescriptors` runs in the background.
    */
+  /** Native file picker for Bitcoin Core's `.cookie` (checked: name, no symlink, <= 256 bytes,
+   * `__cookie__:<64 hex>`). The only new cookie path `settings_set` / `server_test` accept.
+   * `path: null` = cancelled. */
+  btc_core_pick_cookie: { args: undefined; ret: { path: string | null } };
   btc_core_setup: { args: { rescanFrom: CoreRescanFrom }; ret: CoreStatus };
   /** `{ state: 'not-configured' }` when no Core server is set for this network. */
   btc_core_status: { args: undefined; ret: CoreStatus };
@@ -1375,7 +1388,7 @@ export interface Commands {
   /** Native dialog → device → each signature verified. Signed, NOT finalized. */
   hw_sign_btc_psbt: { args: { id: string; accountId: string; psbt: string }; ret: { psbt: string; summary: BtcTxSummary } };
   /** 2nd dialog for a contract call or blind signing. Signs for `m/44'/60'/0'/0/{account}`. */
-  hw_sign_evm_tx: { args: { id: string; accountId: string; tx: EvmTxRequest; token?: EvmTokenHint }; ret: { rawTx: string; hash: string } };
+  hw_sign_evm_tx: { args: { id: string; accountId: string; tx: EvmTxRequest }; ret: { rawTx: string; hash: string } };
   hw_sign_sol_tx: { args: { id: string; accountId: string; message: string }; ret: { signature: string; summary: SolTxSummary } };
   /** Restarts the bootstrap (after `error`). `INVALID_INPUT` when Tor is disabled. */
   tor_retry: { args: undefined; ret: TorStatus };

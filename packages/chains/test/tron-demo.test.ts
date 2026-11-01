@@ -138,8 +138,8 @@ describe('TRON in the app', () => {
     expect(await code(call('tron_txs', { address: accounts.tron.address }))).toBe('SERVER_UNREACHABLE');
   });
 
-  it('unknown TRC-20: the UI hint goes to Rust (« non vérifié »), never for USDT', async () => {
-    const seen: Array<{ symbol: string; decimals: number } | undefined> = [];
+  it('no token hint ever goes to Rust (it names tokens from its own table only)', async () => {
+    const seen: number[] = [];
     const real = createAdapters(accounts).tron!;
     const ME = accounts.tron.address;
     const FAKE = 'TFz2CJn9CJb8C4i1Gke3jmZX2fRMJxniH2';
@@ -153,8 +153,8 @@ describe('TRON in the app', () => {
         summary: { txid: 'ab'.repeat(32), owner: ME, action: { type: 'trc20Transfer', contract: token ?? '', to, amount, callValue: '0' }, feeLimit: '1000000', expiration: 1, timestamp: 0, refBlockBytes: '0000', refBlockHash: '00'.repeat(8), memo: '', rawSize: 209, warnings: [], requiresExtraConfirmation: false },
         estimate: (await real.buildTx({ asset: findAsset('testnet', 'trx')!, to: friend(), amount: 1n, fee: { family: 'tron' } })).estimate,
       }),
-      sign: async (_raw, _pw, token) => {
-        seen.push(token);
+      sign: async (...args: unknown[]) => {
+        seen.push(args.length);
         return { signature: 'cd'.repeat(65), txid: 'ab'.repeat(32), summary: null as never, estimate: null as never };
       },
       broadcast: async () => 'ab'.repeat(32),
@@ -162,6 +162,6 @@ describe('TRON in the app', () => {
     const a = new TronAdapter({ chain: tronChain('testnet'), address: ME, backend, tokens: [{ contract: NILE_USDT, symbol: 'USDT', name: 'Tether USD', decimals: 6 }, { contract: FAKE, symbol: 'FAKE', name: 'Fake', decimals: 2 }] });
     await a.signTx(await a.buildTransfer({ to: friend(), amount: 5n, token: a.tokens[1]! }), PASSWORD);
     await a.signTx(await a.buildTransfer({ to: friend(), amount: 5n, token: a.tokens[0]! }), PASSWORD);
-    expect(seen).toEqual([{ symbol: 'FAKE', decimals: 2 }, undefined]);
+    expect(seen).toEqual([2, 2]);
   });
 });

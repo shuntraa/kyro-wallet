@@ -109,7 +109,9 @@ describe('Bitcoin adapter over the Rust btc_* commands', () => {
   });
 
   it('Bitcoin Core: SERVER_INVALID until the watch wallet is set up, then reads work', async () => {
-    await saveServers((s) => ({ ...s.servers, bitcoin: { testnet4: { kind: 'core', url: 'http://127.0.0.1:48332', auth: { kind: 'cookie', cookiePath: '/home/me/.bitcoin/testnet4/.cookie' } } } }));
+    // The `.cookie` path comes from the native picker (a typed path is refused).
+    const cookiePath = (await call('btc_core_pick_cookie')).path ?? '';
+    await saveServers((s) => ({ ...s.servers, bitcoin: { testnet4: { kind: 'core', url: 'http://127.0.0.1:48332', auth: { kind: 'cookie', cookiePath } } } }));
     const btc = createAdapters(accounts).btc!;
     expect(await code(btc.getBalance())).toBe('SERVER_INVALID');
     expect((await call('btc_core_status')).state).toBe('idle');

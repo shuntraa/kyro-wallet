@@ -303,6 +303,22 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   let failed = 0;
   let blockedUntil = 0;
   let reveals: number[] = [];
+  /** Phrase of the vault just created, until the 3-word check passes (commands.rs PendingBackup). */
+  let pendingBackup: { words: string[]; checks: [number, number, number]; failures: number } | null = null;
+  const randomChecks = (n: number): [number, number, number] => {
+    const out = new Set<number>();
+    const buf = new Uint32Array(1);
+    while (out.size < 3) {
+      crypto.getRandomValues(buf);
+      out.add((buf[0] ?? 0) % n);
+    }
+    const [a = 0, b = 1, c = 2] = [...out].sort((x, y) => x - y);
+    return [a, b, c];
+  };
+  /** Custom server `host:port` approved in the (simulated) native dialog (server_approval.rs). */
+  const approvedHosts = new Set<string>();
+  /** `.cookie` chosen with the (simulated) native picker. */
+  let pickedCookie: string | null = null;
   let settings: Settings = structuredClone(DEFAULT_SETTINGS);
   /** API key values: write-only, never returned (settings_get / settings_set give `apiKeysSet`). */
   let apiKeys: Partial<Record<ApiKeyName, string>> = {};
@@ -412,6 +428,53 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const confirmFn =
     opts.confirm ??
     ((summary: string) => (typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm(`[MODE DÉMO — fenêtre système simulée]\n\n${summary}`) : true));
+
+  /** Every `host:port` of the servers in `v` (URLs, Electrum host/port), lower-cased. */
+  const hostsOf = (v: unknown): string[] => {
+    const out: string[] = [];
+    const walk = (x: unknown) => {
+      if (!x || typeof x !== 'object') return;
+      const o = x as Record<string, unknown>;
+      if (typeof o.url === 'string') {
+        try {
+          const u = new URL(o.url.trim());
+          out.push(`${u.hostname.toLowerCase()}:${u.port || (u.protocol === 'http:' ? '80' : '443')}`);
+        } catch {
+          /* invalid URL: refused later by validation */
+        }
+      }
+      if (typeof o.host === 'string' && typeof o.port === 'number') out.push(`${o.host.trim().toLowerCase()}:${o.port}`);
+      for (const val of Object.values(o)) walk(val);
+    };
+    walk(v);
+    return [...new Set(out)];
+  };
+  /** server_approval.rs: a host neither saved nor approved this session needs the native dialog. */
+  const approveHosts = (incoming: unknown, saved: unknown) => {
+    const known = new Set(hostsOf(saved));
+    const pending = hostsOf(incoming).filter((h) => !known.has(h) && !approvedHosts.has(h));
+    if (pending.length === 0) return;
+    if (!confirmFn(`Nouveau serveur\nKyro va contacter :\n${pending.map((h) => `• ${h}`).join('\n')}\nSi tu n’as pas saisi toi-même cette adresse, refuse.`)) throw new IpcError('USER_REJECTED', 'Action annulée.');
+    for (const h of pending) approvedHosts.add(h);
+  };
+  /** commands_servers.rs check_cookie_paths: a new `.cookie` path must come from the picker. */
+  const checkPickedCookie = (incoming: unknown, saved: unknown) => {
+    const paths = (v: unknown): string[] => {
+      const out: string[] = [];
+      const walk = (x: unknown) => {
+        if (!x || typeof x !== 'object') return;
+        const o = x as Record<string, unknown>;
+        if (o.kind === 'cookie' && typeof o.cookiePath === 'string') out.push(o.cookiePath);
+        for (const val of Object.values(o)) walk(val);
+      };
+      walk(v);
+      return out;
+    };
+    const known = new Set(paths(saved));
+    for (const p of paths(incoming)) {
+      if (!known.has(p) && p !== pickedCookie) throw new IpcError('SERVER_INVALID', 'Serveur invalide : fichier .cookie : choisis-le avec le bouton « Choisir le fichier .cookie »');
+    }
+  };
 
   const lockIfExpired = () => {
     if (unlocked && now() - lastTouch >= settings.autoLockSecs * 1000) {
@@ -532,7 +595,30 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       vault = { password, words };
       unlocked = true;
       lastTouch = now();
-      return { words: [...words] };
+      // Like Rust: the words are never returned, only shown in the native dialog.
+      pendingBackup = { words: [...words], checks: randomChecks(words.length), failures: 0 };
+      return { wordCount: words.length };
+    },
+    vault_backup_show: () => {
+      if (!pendingBackup) throw new IpcError('INVALID_INPUT', 'Entrée invalide : aucune phrase de récupération en attente de sauvegarde');
+      const w = pendingBackup.words;
+      confirmFn(`Ta phrase de récupération\n\n${w.map((x, i) => `${String(i + 1).padStart(2, ' ')}. ${x}`).join('   ')}`);
+      pendingBackup.checks = randomChecks(w.length);
+      return { checks: pendingBackup.checks };
+    },
+    vault_backup_verify: (a) => {
+      if (!pendingBackup) throw new IpcError('INVALID_INPUT', 'Entrée invalide : aucune phrase de récupération en attente de sauvegarde');
+      const answers = Array.isArray(a.answers) ? (a.answers as unknown[]).map((x) => String(x).trim().toLowerCase()) : [];
+      const p = pendingBackup;
+      const ok = answers.length === 3 && p.checks.every((idx, i) => p.words[idx] === answers[i]);
+      if (ok) {
+        pendingBackup = null;
+        return { ok: true, attemptsLeft: 0 };
+      }
+      p.failures += 1;
+      const left = Math.max(0, 5 - p.failures);
+      if (left === 0) pendingBackup = null;
+      return { ok: false, attemptsLeft: left };
     },
     vault_import: (a) => {
       if (vault) throw new IpcError('INVALID_INPUT', 'Un coffre existe déjà sur cet appareil.');
@@ -550,6 +636,7 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
     },
     vault_lock: () => {
       unlocked = false;
+      pendingBackup = null;
     },
     vault_reveal_mnemonic: (a) => {
       requireUnlocked();
@@ -557,7 +644,9 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       if (reveals.length >= 3) throw new IpcError('RATE_LIMITED', 'Trop de demandes. Réessaie dans une minute.');
       checkPassword(a.password);
       reveals.push(now());
-      return { words: [...(vault?.words ?? [])] };
+      // Like Rust: native confirmation, then the words in a native dialog; nothing returned.
+      if (!confirmFn('Afficher la phrase de récupération ?\nVérifie que personne ne regarde ton écran.')) throw new IpcError('USER_REJECTED', 'Action annulée.');
+      confirmFn(`Ta phrase de récupération\n\n${(vault?.words ?? []).map((x, i) => `${i + 1}. ${x}`).join('   ')}`);
     },
     session_touch: () => {
       lockIfExpired();
@@ -590,10 +679,10 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
       checkPassword(a.password);
       const tx = a.tx as EvmTxRequest;
       const s = decodeEvm(tx);
-      const token = a.token as { symbol: string; decimals: number } | undefined;
+      // No token hint from the interface (Rust names tokens from its own table only).
       const from = accts.get(account).evm;
       const signer = accts.signer('evm', account, from.path);
-      if (!confirmFn(`${signer.line}\n\nDe : ${from.address}\nSigner une transaction ${s.kind} sur la chaîne ${tx.chainId}\nVers : ${s.to}\nMontant : ${s.amount}${token ? ` (${token.symbol}, ${token.decimals} déc.)` : ' wei'}\nFrais max. : ${s.maxFeeWei} wei`)) {
+      if (!confirmFn(`${signer.line}\n\nDe : ${from.address}\nSigner une transaction ${s.kind} sur la chaîne ${tx.chainId}\nVers : ${s.to}\nMontant : ${s.amount} (unités brutes)\nFrais max. : ${s.maxFeeWei} wei`)) {
         throw new IpcError('USER_REJECTED', 'Signature refusée.');
       }
       if (signer.unknown && !confirmFn(signer.unknownText)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
@@ -696,6 +785,10 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
           nextKeys[name as ApiKeyName] = t;
         }
       }
+      // Like server_approval.rs: native confirmations before any request.
+      if (wasEnabled && !torEnabled && !confirmFn('Désactiver Tor ?\nSans Tor, chaque serveur contacté verra ton adresse IP.')) throw new IpcError('USER_REJECTED', 'Action annulée.');
+      checkPickedCookie(incoming, settings.servers);
+      approveHosts(incoming, settings.servers);
       const storedServers = await servers.prepareSave({ ...EMPTY_SERVERS, ...structuredClone(incoming) }, settings.servers, torEnabled);
       apiKeys = nextKeys;
       settings = { ...structuredClone(rest), servers: storedServers, tor: { enabled: torEnabled }, apiKeysSet: {} };
@@ -706,8 +799,22 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     set_capture_protection: (a) => {
       captureProtected = Boolean(a.enabled);
     },
-    server_test: (a) => servers.serverTest(a.target as Parameters<typeof servers.serverTest>[0]),
-    electrum_fetch_cert: (a) => servers.electrumFetchCert(a.host, a.port),
+    server_test: (a) => {
+      const target = a.target as Parameters<typeof servers.serverTest>[0];
+      const probe = { server: (target as { server?: unknown }).server };
+      checkPickedCookie(probe, settings.servers);
+      approveHosts(probe, settings.servers);
+      return servers.serverTest(target);
+    },
+    electrum_fetch_cert: (a) => {
+      approveHosts({ host: a.host, port: a.port }, settings.servers);
+      return servers.electrumFetchCert(a.host, a.port);
+    },
+    btc_core_pick_cookie: () => {
+      // Demo: the simulated picker always returns the same file.
+      pickedCookie = network === 'testnet' ? '/home/demo/.bitcoin/testnet4/.cookie' : '/home/demo/.bitcoin/.cookie';
+      return { path: pickedCookie };
+    },
     btc_backend_info: () => servers.btc.info(),
     btc_address_info: (a) => servers.btc.addressInfo(a.address),
     btc_address_utxos: (a) => servers.btc.addressUtxos(a.address),

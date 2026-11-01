@@ -32,7 +32,7 @@ export interface TronBackend {
   trc20Balance(contract: string, address: string): Promise<string>;
   txs(address: string): Promise<TronHistoryEntry[]>;
   build(to: string, amount: string, token?: string): Promise<{ raw: string; txid: string; summary: TronTxSummary; estimate: TronEstimate }>;
-  sign(raw: string, password: string, token?: { symbol: string; decimals: number }): Promise<{ signature: string; txid: string; summary: TronTxSummary; estimate: TronEstimate }>;
+  sign(raw: string, password: string): Promise<{ signature: string; txid: string; summary: TronTxSummary; estimate: TronEstimate }>;
   broadcast(raw: string, signature: string): Promise<string>;
 }
 
@@ -44,7 +44,7 @@ export function rustTronBackend(account = 0): TronBackend {
     trc20Balance: (contract, address) => call('tron_trc20_balance', { contract, address }),
     txs: (address) => call('tron_txs', { address }),
     build: (to, amount, token) => call('tron_build_tx', { to, amount, ...(token ? { token } : {}), ...acct }),
-    sign: (raw, password, token) => call('tron_sign_tx', { raw, password, ...(token ? { token } : {}), ...acct }),
+    sign: (raw, password) => call('tron_sign_tx', { raw, password, ...acct }),
     broadcast: (raw, signature) => call('tron_broadcast', { raw, signature, ...acct }),
   };
 }
@@ -264,9 +264,8 @@ export class TronAdapter implements ChainAdapter<'tron'> {
 
   /** Rust: password, decoding, live resources, native dialog (+ reinforced one), signature. */
   async signTx(unsigned: TronUnsigned, password: string): Promise<TronSigned> {
-    // Hint for a token Rust does not know (shown « selon l'interface, non vérifié »); never for USDT.
-    const hint = unsigned.token && !isKnownTronToken(this.chain.network, unsigned.token.contract) ? { symbol: unsigned.token.symbol, decimals: unsigned.token.decimals } : undefined;
-    const res = await this.backend.sign(unsigned.raw, password, hint);
+    // No hint: Rust names a TRC-20 from its own table only (unknown: raw units, reinforced dialog).
+    const res = await this.backend.sign(unsigned.raw, password);
     if (res.txid !== unsigned.txid || !/^[0-9a-f]{130}$/.test(res.signature)) throw new Error('Signature TRON inattendue');
     return { family: 'tron', raw: unsigned.raw, signature: res.signature, txid: res.txid, summary: res.summary, estimate: res.estimate };
   }

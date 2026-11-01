@@ -24,11 +24,22 @@ async function rejectCode(p: Promise<unknown>): Promise<string> {
 }
 
 describe('mock IPC backend', () => {
-  it('starts without a vault, creates one and shows 24 valid words once', async () => {
+  it('starts without a vault, creates one; the words only appear in the native dialog', async () => {
     expect(await call('vault_status')).toEqual({ exists: false, unlocked: false, autoLockSecs: 900, lockInSecs: null });
-    const { words } = await call('vault_create', { password: 'correct horse', words: 24 });
+    const shown: string[] = [];
+    const m = createMockBackend({ network: 'testnet', confirm: (x) => (shown.push(x), true) });
+    setBackend(m.invoke);
+    const created = await call('vault_create', { password: 'correct horse', words: 24 });
+    expect(created).toEqual({ wordCount: 24 });
+    const { checks } = await call('vault_backup_show');
+    const words = (shown.at(-1) ?? '').split('\n').at(-1)?.split(/\s+/).filter((w) => /^[a-z]+$/.test(w)) ?? [];
     expect(words).toHaveLength(24);
     expect(validateMnemonic(words.join(' '), wordlist)).toBe(true);
+    expect(checks).toHaveLength(3);
+    // Wrong answers: ok false, attempts counted; right ones: done, nothing pending any more.
+    expect(await call('vault_backup_verify', { answers: ['x', 'y', 'z'] })).toEqual({ ok: false, attemptsLeft: 4 });
+    expect(await call('vault_backup_verify', { answers: checks.map((i) => words[i] ?? '') })).toEqual({ ok: true, attemptsLeft: 0 });
+    expect(await rejectCode(call('vault_backup_show'))).toBe('INVALID_INPUT');
     const st = await call('vault_status');
     expect(st.exists && st.unlocked).toBe(true);
     expect(st.lockInSecs).toBeGreaterThan(890);
@@ -105,9 +116,15 @@ describe('mock IPC backend', () => {
     expect(Object.keys(cfg).sort()).toEqual(['hasCoingeckoKey', 'hasTrongridKey', 'hasZeroxKey', 'network']);
   });
 
-  it('reveal is password-gated and rate-limited', async () => {
-    const { words } = await call('vault_create', { password: 'correct horse', words: 12 });
-    expect((await call('vault_reveal_mnemonic', { password: 'correct horse' })).words).toEqual(words);
+  it('reveal is password-gated, native only and rate-limited', async () => {
+    const shown: string[] = [];
+    const m = createMockBackend({ network: 'testnet', confirm: (x) => (shown.push(x), true) });
+    setBackend(m.invoke);
+    await call('vault_create', { password: 'correct horse', words: 12 });
+    expect(await rejectCode(call('vault_reveal_mnemonic', { password: 'wrong horse' }))).toBe('WRONG_PASSWORD');
+    // Nothing is returned to the interface: the words are in the (simulated) native dialog.
+    expect(await call('vault_reveal_mnemonic', { password: 'correct horse' })).toBeUndefined();
+    expect(shown.at(-1)).toMatch(/^Ta phrase de récupération/);
     await call('vault_reveal_mnemonic', { password: 'correct horse' });
     await call('vault_reveal_mnemonic', { password: 'correct horse' });
     expect(await rejectCode(call('vault_reveal_mnemonic', { password: 'correct horse' }))).toBe('RATE_LIMITED');

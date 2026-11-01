@@ -289,7 +289,7 @@ export function createDemoTron(d: DemoTronDeps) {
   };
 
   /** commands_tron.rs describe_tron, same lines. */
-  const describe = (s: TronTxSummary, e: TronEstimate, hint?: { symbol: string; decimals: number }): string => {
+  const describe = (s: TronTxSummary, e: TronEstimate): string => {
     const units = (v: string, dec: number) => {
       const b = BigInt(v);
       const p = 10n ** BigInt(dec);
@@ -302,13 +302,10 @@ export function createDemoTron(d: DemoTronDeps) {
       out += `À : ${a.to}\nMontant : ${trxText(a.amount)}\n`;
       if (!e.recipientExists) out += `\nCe compte n'existe pas encore sur TRON : l'activer brûle ${trxText(e.activationFee)} en plus.\n`;
     } else if (a.type === 'trc20Transfer') {
-      const shown =
-        a.contract === usdt
-          ? `${units(a.amount, 6)} USDT (unités brutes : ${a.amount})`
-          : hint
-            ? `${a.amount} unités brutes (selon l'interface : ${units(a.amount, hint.decimals)} ${hint.symbol} — token non vérifié par Kyro)`
-            : `${a.amount} unités brutes (token inconnu de Kyro)`;
-      out += `Envoi de token TRC-20 : ${shown}\nContrat du token : ${a.contract}\nÀ : ${a.to}\n`;
+      // Like Rust: only its own table names a token; anything else is « jeton inconnu ».
+      const known = a.contract === usdt;
+      const shown = known ? `${units(a.amount, 6)} USDT (unités brutes : ${a.amount})` : `${a.amount} unités brutes (jeton inconnu : décimales non vérifiées)`;
+      out += `Envoi de token TRC-20${known ? '' : ' (JETON INCONNU)'} : ${shown}\nContrat du token : ${a.contract}\nÀ : ${a.to}\n`;
     } else {
       out += `Appel de contrat INCONNU : ${a.contract}\nFonction (sélecteur) : ${a.selector}\n`;
     }
@@ -411,9 +408,9 @@ export function createDemoTron(d: DemoTronDeps) {
       d.checkPassword(a.password);
       await backend();
       const est = estimateFor(summary);
-      const hint = a.token as { symbol: string; decimals: number } | undefined;
-      if (!d.confirm(`Confirmer la transaction TRON\n${describe(summary, est, hint)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
-      if (summary.requiresExtraConfirmation && !d.confirm('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      if (!d.confirm(`Confirmer la transaction TRON\n${describe(summary, est)}`)) throw new IpcError('USER_REJECTED', 'Signature refusée.');
+      const unknownToken = summary.action.type === 'trc20Transfer' && summary.action.contract !== usdt;
+      if ((summary.requiresExtraConfirmation || unknownToken) && !d.confirm('Attention : transaction à vérifier\nNe signe que si tu sais exactement pourquoi. Signer quand même ?')) throw new IpcError('USER_REJECTED', 'Signature refusée.');
       const r = sha256(new TextEncoder().encode(`r:${summary.txid}`));
       const s = sha256(new TextEncoder().encode(`s:${summary.txid}`));
       return { signature: bytesToHex(r) + bytesToHex(s) + '1b', txid: summary.txid, summary, estimate: est };

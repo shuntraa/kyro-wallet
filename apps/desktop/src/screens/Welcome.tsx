@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Onboarding: create a vault (24 words shown once, 3-word check) or import a
+// Onboarding: create a vault (phrase shown once in a native window, 3-word check by Rust) or import a
 // BIP39 phrase (wordlist autocomplete). Hardware wallets: coming soon.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -225,38 +225,27 @@ function useCaptureProtection(active: boolean) {
   }, [active]);
 }
 
-function randomIndexes(n: number, count: number): number[] {
-  const out = new Set<number>();
-  const buf = new Uint32Array(1);
-  while (out.size < Math.min(count, n)) {
-    crypto.getRandomValues(buf);
-    out.add((buf[0] ?? 0) % n);
-  }
-  return [...out].sort((a, b) => a - b);
-}
-
 function CreateFlow({ onCancel }: { onCancel: () => void }) {
   const { enterVault } = useApp();
   const [step, setStep] = useState<'password' | 'phrase' | 'verify'>('password');
   const [count, setCount] = useState<12 | 24>(24);
-  const [words, setWords] = useState<string[]>([]);
+  const [wordCount, setWordCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [seen, setSeen] = useState(false);
   const [written, setWritten] = useState(false);
   const [checks, setChecks] = useState<number[]>([]);
   const [answers, setAnswers] = useState<string[]>(['', '', '']);
   const [verifyError, setVerifyError] = useState<string | null>(null);
-
-  useCaptureProtection(step !== 'password');
-  // Never keep the phrase after leaving the flow.
-  useEffect(() => () => setWords([]), []);
+  const [giveUp, setGiveUp] = useState(false);
 
   const create = async (pw: string) => {
     setBusy(true);
     setError(null);
     try {
+      // Rust creates the vault and keeps the phrase: it is never sent to this interface.
       const res = await call('vault_create', { password: pw, words: count });
-      setWords(res.words);
+      setWordCount(res.wordCount);
       setStep('phrase');
     } catch (e) {
       setError(toIpcError(e).message);
@@ -265,21 +254,51 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
     }
   };
 
+  /** Opens the system window with the words (Rust), and gets the 3 positions to check. */
+  const show = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await call('vault_backup_show');
+      setChecks([...res.checks]);
+      setSeen(true);
+    } catch (e) {
+      setError(toIpcError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const goVerify = () => {
-    setChecks(randomIndexes(words.length, 3));
     setAnswers(['', '', '']);
     setVerifyError(null);
     setStep('verify');
   };
 
   const verify = async () => {
-    const ok = checks.every((idx, i) => (answers[i] ?? '').trim().toLowerCase() === words[idx]);
-    if (!ok) {
-      setVerifyError('Un ou plusieurs mots ne correspondent pas. Vérifie ta feuille, ou reviens à la phrase.');
-      return;
+    setBusy(true);
+    try {
+      const res = await call('vault_backup_verify', { answers: answers.map((a) => a.trim().toLowerCase()) });
+      if (res.ok) {
+        setBackupState('confirmed');
+        await enterVault();
+        return;
+      }
+      if (res.attemptsLeft === 0) {
+        setGiveUp(true);
+        setVerifyError('Trop d’essais. Ta sauvegarde n’est pas vérifiée : réaffiche ta phrase depuis Réglages › Sécurité (mot de passe demandé) et recopie-la.');
+      } else {
+        setVerifyError(`Un ou plusieurs mots ne correspondent pas (encore ${res.attemptsLeft} essai${res.attemptsLeft > 1 ? 's' : ''}). Vérifie ta feuille, ou réaffiche la phrase.`);
+      }
+    } catch (e) {
+      setVerifyError(toIpcError(e).message);
+    } finally {
+      setBusy(false);
     }
-    setBackupState('confirmed');
-    setWords([]);
+  };
+
+  const continueUnverified = async () => {
+    setBackupState('unknown');
     await enterVault();
   };
 
@@ -288,7 +307,7 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
       <OnboardingFrame>
         <div className="flex flex-col gap-7">
           <StepHeader step={1} total={3} title="Choisis ton mot de passe" onBack={onCancel}>
-            Ensuite, Kyro génère ta phrase de récupération. Elle ne sera affichée qu’une seule fois.
+            Ensuite, Kyro génère ta phrase de récupération et l’affiche dans une fenêtre du système.
           </StepHeader>
           <PasswordStep
             busy={busy}
@@ -309,27 +328,25 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
 
   if (step === 'phrase') {
     return (
-      <OnboardingFrame status={<span className="text-warn">Captures d’écran bloquées pendant l’affichage</span>}>
+      <OnboardingFrame>
         <div className="flex flex-col gap-6">
-          <StepHeader step={2} total={3} title="Écris ces mots sur papier">
-            Dans l’ordre, au stylo. Pas de photo, pas de copie, pas de cloud. Quiconque lit ces {words.length} mots contrôle tes fonds.
+          <StepHeader step={2} total={3} title="Écris ta phrase sur papier">
+            Kyro affiche tes {wordCount} mots dans une fenêtre du système, hors de cette interface : même un module compromis de l’interface ne peut pas les lire. Écris-les dans l’ordre, au stylo. Pas de photo, pas de copie, pas de cloud.
           </StepHeader>
-          <ol className={cn('stagger m-0 grid max-w-[640px] list-none gap-2 p-0', words.length === 24 ? 'grid-cols-4' : 'grid-cols-3')}>
-            {words.map((w, i) => (
-              <li key={i} className="flex h-11 items-center gap-2.5 rounded-ctl border border-line bg-card px-3" style={idx(i)}>
-                <span className="w-5 font-mono text-[11px] text-faint">{String(i + 1).padStart(2, '0')}</span>
-                <span className="font-mono text-[15px] font-medium">{w}</span>
-              </li>
-            ))}
-          </ol>
           <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
-            Il n’y a pas de bouton « Copier » : c’est volontaire. Kyro ne pourra plus jamais te réafficher cette phrase sans ton mot de passe.
+            Vérifie que personne ne regarde ton écran et qu’aucun partage d’écran n’est actif : le blocage des captures ne s’applique pas aux fenêtres du système.
           </Notice>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant={seen ? 'secondary' : 'primary'} size="xl" disabled={busy} onClick={() => void show()}>
+              {busy && <Spinner />} {busy ? 'Fenêtre système ouverte…' : seen ? 'Réafficher la phrase' : 'Afficher ma phrase'}
+            </Button>
+          </div>
+          {error && <Notice tone="error">{error}</Notice>}
           <label className="flex items-center gap-3 text-[14px]">
-            <input type="checkbox" checked={written} onChange={(e) => setWritten(e.target.checked)} className="size-4" />
-            J’ai écrit les {words.length} mots, dans l’ordre.
+            <input type="checkbox" checked={written} disabled={!seen} onChange={(e) => setWritten(e.target.checked)} className="size-4" />
+            J’ai écrit les {wordCount} mots, dans l’ordre.
           </label>
-          <Button variant="primary" size="xl" className="self-start" disabled={!written} onClick={goVerify}>
+          <Button variant="primary" size="xl" className="self-start" disabled={!seen || !written || busy} onClick={goVerify}>
             Vérifier ma sauvegarde
           </Button>
         </div>
@@ -341,13 +358,13 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
     <OnboardingFrame>
       <div className="flex flex-col gap-6">
         <StepHeader step={3} total={3} title="Vérifie trois mots" onBack={() => setStep('phrase')}>
-          Pour être sûr que ta feuille est juste, saisis les mots demandés.
+          Pour être sûr que ta feuille est juste, saisis les mots demandés (Kyro les vérifie sans te les montrer ici).
         </StepHeader>
         <div className="flex max-w-[520px] flex-col gap-3">
-          {checks.map((idx, i) => (
+          {checks.map((index, i) => (
             <WordInput
-              key={idx}
-              index={idx}
+              key={index}
+              index={index}
               value={answers[i] ?? ''}
               onChange={(v) => setAnswers((a) => a.map((x, j) => (j === i ? v : x)))}
               autoFocus={i === 0}
@@ -357,12 +374,28 @@ function CreateFlow({ onCancel }: { onCancel: () => void }) {
         </div>
         {verifyError && <Notice tone="error">{verifyError}</Notice>}
         <div className="flex gap-2">
-          <Button variant="primary" size="xl" disabled={answers.some((a) => !a.trim())} onClick={() => void verify()}>
-            Terminer
-          </Button>
-          <Button variant="secondary" size="xl" onClick={() => setStep('phrase')}>
-            Revoir la phrase
-          </Button>
+          {giveUp ? (
+            <Button variant="primary" size="xl" onClick={() => void continueUnverified()}>
+              Continuer sans vérification
+            </Button>
+          ) : (
+            <>
+              <Button variant="primary" size="xl" disabled={busy || answers.some((a) => !a.trim())} onClick={() => void verify()}>
+                {busy && <Spinner />} Terminer
+              </Button>
+              <Button
+                variant="secondary"
+                size="xl"
+                onClick={() => {
+                  setSeen(false);
+                  setWritten(false);
+                  setStep('phrase');
+                }}
+              >
+                Revoir la phrase
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </OnboardingFrame>
