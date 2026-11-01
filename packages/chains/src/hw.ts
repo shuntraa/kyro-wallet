@@ -36,6 +36,8 @@ export interface WalletAccounts {
   cardano?: { address: string; path?: string };
   /** Vault only: Stellar on a hardware wallet is HW_UNSUPPORTED. */
   stellar?: { address: string; path?: string };
+  /** Vault only: NEAR implicit account (hardware wallets: not supported). */
+  near?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {

@@ -7,6 +7,7 @@ import type { TronSigned, TronUnsigned } from './tron/adapter';
 import type { XrpSigned, XrpUnsigned } from './xrp/adapter';
 import type { CardanoSigned, CardanoUnsigned } from './cardano/adapter';
 import type { StellarSigned, StellarUnsigned } from './stellar/adapter';
+import type { NearSigned, NearUnsigned } from './near/adapter';
 import type { CardanoTokenSpec, StellarMemoSpec } from '@kyro/shared';
 
 import { l10n } from '@kyro/shared';
@@ -25,7 +26,9 @@ export type FeeParams =
   /** Cardano: no fee to choose. Rust computes min_fee_a × size + min_fee_b. */
   | { family: 'ada' }
   /** Stellar: no fee to choose. Rust bids from Horizon's fee stats (≤ 0.01 XLM, usually 100 stroops charged). */
-  | { family: 'xlm' };
+  | { family: 'xlm' }
+  /** NEAR: no fee to choose. Charged at the block's gas price; Rust checks a bound. */
+  | { family: 'near' };
 
 export interface FeeOption {
   level: FeeLevel;
@@ -57,7 +60,8 @@ export type SizeHint =
   | { family: 'tron'; bandwidth: number; energy: number }
   | { family: 'xrp' }
   | { family: 'ada' }
-  | { family: 'xlm' };
+  | { family: 'xlm' }
+  | { family: 'near' };
 
 export interface Balance {
   assetId: string;
@@ -160,9 +164,11 @@ export interface FamilyTypes {
   ada: { unsigned: CardanoUnsigned; signed: CardanoSigned };
   /** Stellar: transaction built (Payment or CreateAccount) and strictly decoded by Rust. */
   xlm: { unsigned: StellarUnsigned; signed: StellarSigned };
+  /** NEAR: one Transfer built and strictly decoded by Rust, with the live context. */
+  near: { unsigned: NearUnsigned; signed: NearSigned };
 }
-export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned;
-export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned;
+export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned;
+export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned;
 
 export type HistoryDirection = 'in' | 'out' | 'self';
 export type HistoryStatus = 'pending' | 'confirmed' | 'failed';
@@ -206,7 +212,7 @@ export interface ChainAdapter<F extends Family = Family> {
   getHistory(): Promise<HistoryItem[]>;
 }
 
-export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'tron'> | ChainAdapter<'xrp'> | ChainAdapter<'ada'> | ChainAdapter<'xlm'>;
+export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'tron'> | ChainAdapter<'xrp'> | ChainAdapter<'ada'> | ChainAdapter<'xlm'> | ChainAdapter<'near'>;
 
 /** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin: Bitcoin's PSBT shape). */
 export function unsignedFamilyOf(family: Family): AnyUnsigned['family'] {

@@ -60,6 +60,7 @@ export const staking = {
   'staking.otherUtxoNo': 'Pas de staking natif : ces protocoles n’en ont pas.',
   'staking.otherXrp': 'Pas de staking natif.',
   'staking.otherXlm': 'Pas de staking natif (l’inflation a été supprimée en 2019).',
+  'staking.otherNear': 'Staking via des pools (contrats) : pas encore dans Kyro.',
   'staking.otherEvmName': 'Ethereum et chaînes EVM',
   'staking.otherEvm': 'Non proposé : le staking natif exige 32 ETH et un validateur qui tourne en permanence, et Kyro ne passe pas par le contrat d’un tiers.',
 

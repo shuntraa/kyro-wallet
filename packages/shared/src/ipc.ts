@@ -65,11 +65,13 @@ export interface Accounts {
    * and change both use it; Rust signs with index 0 of the account only (§2.7).
    */
   cardano: AddressInfo;
+  /** NEAR `m/44'/397'/a'` (SLIP-10 ed25519), implicit account = 64 hex of the public key (§2.11). */
+  near: AddressInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm', 'near'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -684,6 +686,89 @@ export interface StellarHistoryEntry {
   memo: { kind: 'none' } | { kind: 'text'; text: string } | { kind: 'id'; id: string } | { kind: 'hash'; value: string } | { kind: 'return'; value: string };
   /** Source account of the transaction (who signed it). */
   txSource: string;
+}
+
+// ---------------------------------------------------------------- NEAR (§2.11)
+
+export interface NearBackendInfo {
+  kind: 'default';
+  network: UtxoNetworkKey;
+  /** RPC host (FastNEAR). */
+  label: string;
+  /** History host (FastNEAR explorer API). */
+  history: string;
+  tor: boolean;
+}
+
+/** `near_account`: `view_account` (finality final). Amounts: yoctoNEAR, decimal strings. */
+export interface NearAccountInfo {
+  accountId: string;
+  /** On chain. An implicit account is created by the first NEAR it receives. */
+  exists: boolean;
+  /** Liquid balance (`amount`). */
+  balance: string;
+  /** Locked by validator staking. */
+  locked: string;
+  storageUsage: number;
+  /** What the account must keep for its storage (`storage_usage` × price per byte − locked). */
+  storageReserve: string;
+  /** Balance − storage reserve: what can be sent (before fees). */
+  spendable: string;
+  hasContract: boolean;
+}
+
+/** `implicit`: 64 hex (ed25519 key); `ethImplicit`: `0x` + 40 hex (NEP-518); `named`: must exist. */
+export type NearAccountKind = 'implicit' | 'ethImplicit' | 'named';
+
+/** Every warning → reinforced confirmation. */
+export type NearWarning = { kind: 'ethImplicitReceiver' };
+
+/** wallet-core `NearTxSummary`: Rust's strict decoding of the transfer (one `Transfer` action). */
+export interface NearTxSummary {
+  signerId: string;
+  /** `ed25519:…`. */
+  publicKey: string;
+  nonce: string;
+  receiverId: string;
+  receiverKind: NearAccountKind;
+  /** yoctoNEAR. */
+  deposit: string;
+  blockHash: string;
+  /** Transaction hash (base58), known before broadcast. */
+  hash: string;
+  warnings: NearWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+/** Live context Rust read for the dialog. Fees are not in a NEAR transaction: `feeBound` is Kyro's bound. */
+export interface NearContext {
+  account: NearAccountInfo;
+  receiver: NearAccountInfo;
+  /** The transfer creates the receiver (implicit account not on chain yet). */
+  createsAccount: boolean;
+  gasPrice: string;
+  feeEstimate: string;
+  feeBound: string;
+}
+
+/** `near_txs` entry (last 20, newest first). `deposit`: the transaction's own Transfer actions. */
+export interface NearHistoryEntry {
+  hash: string;
+  from: string;
+  to: string;
+  kind: 'transfer' | 'other';
+  deposit: string;
+  fee: string;
+  height: number | null;
+  /** ms epoch. */
+  time: number | null;
+  success: boolean;
+}
+
+export interface NearTxOutcome {
+  hash: string;
+  status: 'success' | 'failure' | 'pending';
+  message: string;
 }
 
 // ---------------------------------------------------------------- Cardano (§2.7)
@@ -1462,6 +1547,25 @@ export interface Commands {
   /** Horizon waits for the ledger: the hash comes back once included and successful; else INVALID_INPUT with the result codes. */
   stellar_broadcast: { args: { envelope: string } & WithAccount; ret: string };
   stellar_tx_status: { args: { hash: string }; ret: { found: boolean; successful: boolean } };
+  // NEAR (§2.11): Rust builds the transfer (nonce = access key nonce + 1, final block hash),
+  // decodes it strictly (one Transfer, ed25519, TransactionV0), re-reads both accounts, the
+  // access key and the fee parameters live, signs behind the password and the native dialog.
+  // Hardware wallets: not supported.
+  near_backend_info: { args: undefined; ret: NearBackendInfo };
+  /** Implicit account of `m/44'/397'/{account}'`, vault unlocked. */
+  near_address: { args: WithAccount; ret: string };
+  near_account: { args: { accountId: string }; ret: NearAccountInfo };
+  near_txs: { args: { accountId: string }; ret: NearHistoryEntry[] };
+  /**
+   * `amount`: yoctoNEAR. Refused before building: our account not on chain; a named or `0x…`
+   * receiver that does not exist; amount + fee bound > spendable; a key without full access.
+   */
+  near_build_tx: { args: { to: string; amount: string } & WithAccount; ret: { tx: string; summary: NearTxSummary; context: NearContext } };
+  /** Stale nonce or a block older than ≈ 1 h → INVALID_INPUT « reconstruis ». */
+  near_sign_tx: { args: { tx: string; password: string } & WithAccount; ret: { signed: string; hash: string; summary: NearTxSummary; context: NearContext } };
+  /** Signature verified (ed25519 strict), signer = our account, server hash = ours. */
+  near_broadcast: { args: { signed: string } & WithAccount; ret: NearTxOutcome };
+  near_tx_status: { args: { hash: string } & WithAccount; ret: NearTxOutcome };
   // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
   // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
   // Hardware wallets: HW_UNSUPPORTED.

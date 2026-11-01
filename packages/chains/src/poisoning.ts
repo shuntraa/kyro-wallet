@@ -48,6 +48,7 @@ const TAIL = 4;
  * - Solana (base58): none.
  * - TRON: `T`. XRP: `r`. Stellar: `G` (base32, upper case).
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
+ * - NEAR: none (implicit 64 hex or named id, lowercase).
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -73,6 +74,9 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       return a.startsWith('G') ? { prefix: 'G', body: a.slice(1), caseInsensitive: false } : { prefix: '', body: a, caseInsensitive: false };
     case 'sol':
       return { prefix: '', body: a, caseInsensitive: false };
+    case 'near':
+      // Implicit (64 hex) or named account ids: always lowercase.
+      return { prefix: '', body: a.toLowerCase(), caseInsensitive: true };
   }
 }
 

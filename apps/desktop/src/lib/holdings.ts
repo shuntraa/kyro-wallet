@@ -83,8 +83,8 @@ export function computeHoldings({ network, sources: allSources, accountBalances,
     for (const x of allSources) if (x.family === family && x.chainKeys.includes(asset.chainKey) && !sources.some((s) => s.index === x.index)) sources.push(x);
     if (sources.length === 0) continue;
     const chain = findChain(network, asset.chainKey);
-    // Phase 1 natives, Litecoin / Dogecoin (« configure ton serveur »), TRX, XRP, ADA and XLM always show.
-    const always = asset.kind === 'native' && (chain?.phase === 1 || asset.family === 'ltc' || asset.family === 'doge' || asset.family === 'tron' || asset.family === 'xrp' || asset.family === 'ada' || asset.family === 'xlm');
+    // Phase 1 natives, Litecoin / Dogecoin (« configure ton serveur »), TRX, XRP, ADA, XLM and NEAR always show.
+    const always = asset.kind === 'native' && (chain?.phase === 1 || asset.family === 'ltc' || asset.family === 'doge' || asset.family === 'tron' || asset.family === 'xrp' || asset.family === 'ada' || asset.family === 'xlm' || asset.family === 'near');
     const errored = chainErrors[asset.chainKey] !== undefined;
     let sum = 0n;
     let known = false;

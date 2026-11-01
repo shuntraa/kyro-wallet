@@ -43,6 +43,8 @@ import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
 export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
 import { createDemoStellar, demoStellarAddress, type DemoStellarState } from './mock-stellar';
 export { demoStellarAddress } from './mock-stellar';
+import { createDemoNear, demoNearAddress, type DemoNearState } from './mock-near';
+export { demoNearAddress } from './mock-near';
 import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
 export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
 import { demoFund } from './mock-tx';
@@ -172,6 +174,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       xrp: { address: demoXrpAddress(demoSeed(), 0), path: "m/44'/144'/0'/0/0" },
       stellar: { address: demoStellarAddress(demoSeed(), 0), path: "m/44'/148'/0'" },
       cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
+      near: { address: demoNearAddress(0), path: "m/44'/397'/0'" },
     },
     ownBtc,
     receive,
@@ -295,6 +298,8 @@ export interface MockBackend {
   xrp: DemoXrpState;
   /** Stellar demo chain (tests). */
   stellar: DemoStellarState;
+  /** NEAR demo chain (tests). */
+  near: DemoNearState;
   /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
   /** Staking demo (tests). */
@@ -398,6 +403,16 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   const stellarChain = createDemoStellar({
     network,
     seed: demoSeed(),
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // NEAR (§2.11): `near_*`, storage reserve and fee bound like Rust.
+  const nearChain = createDemoNear({
+    network,
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -859,6 +874,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     ...tronChain.handlers,
     ...xrpChain.handlers,
     ...stellarChain.handlers,
+    ...nearChain.handlers,
     ...cardanoChain.handlers,
     ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
@@ -891,6 +907,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     tron: tronChain.state,
     xrp: xrpChain.state,
     stellar: stellarChain.state,
+    near: nearChain.state,
     cardano: cardanoChain.state,
     stake,
     advance(ms: number) {
@@ -899,14 +916,14 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     invoke: async (cmd, args = {}) => {
       const h = (handlers as Record<string, ((a: Record<string, unknown>) => unknown) | undefined>)[cmd] ?? utxoChains.handlers[cmd];
       if (!h) throw new IpcError('INVALID_INPUT', l10n(`Commande inconnue : ${cmd}`, `Unknown command: ${cmd}`));
-      // §2.9: the TRON, XRP, Stellar, Cardano and staking demo modules simulate account 0 only.
+      // §2.9: the TRON, XRP, Stellar, NEAR, Cardano and staking demo modules simulate account 0 only.
       if (cmd === 'ada_address' && accts.arg(args.account) !== 0) {
         requireUnlocked();
         if (Number(args.index ?? 0) !== 0) throw new IpcError('INVALID_INPUT', l10n('Entrée invalide : démo : seule l’adresse d’index 0 existe (Kyro ne signe que celle-là)', 'Invalid input: demo: only the address at index 0 exists (Kyro only signs that one)'));
         return accts.adaAddress(accts.arg(args.account));
       }
       if (DEMO_ACCOUNT0_ONLY.test(cmd) && accts.arg(args.account) !== 0) {
-        throw new IpcError('INVALID_INPUT', l10n('Mode démo : les comptes supplémentaires TRON, XRP, Stellar et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).', 'Demo mode: extra TRON, XRP, Stellar and Cardano accounts and staking are only simulated for the first account (the real app handles all of them).'));
+        throw new IpcError('INVALID_INPUT', l10n('Mode démo : les comptes supplémentaires TRON, XRP, Stellar, NEAR et Cardano et le staking ne sont simulés que pour le premier compte (l’application réelle les gère tous).', 'Demo mode: extra TRON, XRP, Stellar and Cardano accounts and staking are only simulated for the first account (the real app handles all of them).'));
       }
       void captureProtected;
       return await h(args);
@@ -915,7 +932,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
 }
 
 /** Demo commands simulated for account 0 only (§2.9). */
-const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|stellar_(build_tx|sign_tx|broadcast)|ada_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
+const DEMO_ACCOUNT0_ONLY = /^(tron_(build_tx|sign_tx|broadcast)|xrp_(build_tx|sign_tx|broadcast)|stellar_(build_tx|sign_tx|broadcast)|near_(build_tx|sign_tx|broadcast|tx_status)|ada_(build_tx|sign_tx|broadcast)|(sol|ada|tron)_stake_(overview|build|sign|broadcast))$/;
 
 function decodeSolMessageArg(m: unknown): Uint8Array {
   try {

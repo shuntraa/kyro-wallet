@@ -6,6 +6,7 @@ mod cbf;
 mod commands;
 mod commands_cardano;
 mod commands_hw;
+mod commands_near;
 mod commands_servers;
 mod commands_stellar;
 mod commands_tron;
@@ -19,6 +20,7 @@ mod hw;
 mod i18n;
 mod known_tokens;
 mod nav_guard;
+mod near_backend;
 mod net;
 mod network;
 mod server_approval;
@@ -175,6 +177,14 @@ pub fn run() {
             commands_stellar::stellar_sign_tx,
             commands_stellar::stellar_broadcast,
             commands_stellar::stellar_tx_status,
+            commands_near::near_backend_info,
+            commands_near::near_address,
+            commands_near::near_account,
+            commands_near::near_txs,
+            commands_near::near_build_tx,
+            commands_near::near_sign_tx,
+            commands_near::near_broadcast,
+            commands_near::near_tx_status,
             commands_cardano::ada_backend_info,
             commands_cardano::ada_address,
             commands_cardano::ada_account,

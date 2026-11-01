@@ -10,7 +10,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `xlm`: Stellar (XLM, `stellar_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm';
+/** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near';
 
 interface ChainBase {
   key: string;
@@ -47,7 +48,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -283,6 +284,28 @@ const STELLAR_CHAINS: Record<Network, StellarChain> = {
 
 export function stellarChain(network: Network): StellarChain {
   return STELLAR_CHAINS[network];
+}
+
+/**
+ * NEAR Protocol (phase 4): Rust `near_*` commands and `NearAdapter` (`packages/chains/src/near/`).
+ * Testnet = NEAR testnet. Our address is the implicit account (64 hex of the ed25519 key);
+ * named accounts are send destinations only. NEP-141 tokens are not listed (no function-call
+ * signing). Hardware wallets: not supported, the UI disables NEAR for such accounts.
+ */
+export interface NearChain extends Omit<ChainBase, 'phase'> {
+  family: 'near';
+  phase: 4;
+}
+
+const NEAR_CHAINS: Record<Network, NearChain> = {
+  testnet: { family: 'near', key: 'near', name: 'NEAR testnet', label: 'NEAR testnet', network: 'testnet', color: '#00C08B', glyph: 'N',
+    nativeSymbol: 'NEAR', nativeName: 'NEAR', nativeDecimals: 24, coingeckoId: 'near', phase: 4, blockTimeSecs: 1 },
+  mainnet: { family: 'near', key: 'near', name: 'NEAR', label: 'NEAR', network: 'mainnet', color: '#00C08B', glyph: 'N',
+    nativeSymbol: 'NEAR', nativeName: 'NEAR', nativeDecimals: 24, coingeckoId: 'near', phase: 4, blockTimeSecs: 1 },
+};
+
+export function nearChain(network: Network): NearChain {
+  return NEAR_CHAINS[network];
 }
 
 interface TokenSpec {
@@ -599,7 +622,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -721,6 +744,9 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   );
   // Stellar: reached by Rust only (stellar_*), Tor circuits of the `stellar` family; SDF's Horizon.
   list.push({ host: network === 'mainnet' ? 'horizon.stellar.org' : 'horizon-testnet.stellar.org', purpose: l10n(`Stellar${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (Horizon de la SDF)`, `Stellar${network === 'mainnet' ? '' : ' testnet'}: balances, reserve, history, broadcast (SDF Horizon)`) });
+  // NEAR: reached by Rust only (near_*), Tor circuits of the `near` family. Defaults only.
+  list.push({ host: network === 'mainnet' ? 'free.rpc.fastnear.com' : 'test.rpc.fastnear.com', purpose: `NEAR${network === 'mainnet' ? '' : ' testnet'} : solde, clé d’accès, frais, diffusion (RPC FastNEAR)` });
+  list.push({ host: network === 'mainnet' ? 'tx.main.fastnear.com' : 'tx.test.fastnear.com', purpose: `NEAR${network === 'mainnet' ? '' : ' testnet'} : historique des transactions (API FastNEAR)` });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'

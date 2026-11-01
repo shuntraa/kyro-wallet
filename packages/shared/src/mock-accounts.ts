@@ -31,6 +31,7 @@ import { demoUtxoAccount } from './mock-utxo';
 import { demoTronAddress } from './mock-tron';
 import { demoXrpAddress } from './mock-xrp';
 import { demoStellarAddress } from './mock-stellar';
+import { demoNearAddress } from './mock-near';
 import { demoFund } from './mock-tx';
 import type { DemoChainState } from './mock-net';
 import { l10n } from './i18n';
@@ -50,6 +51,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   xrp: 'XRP',
   ada: 'Cardano',
   xlm: 'Stellar',
+  near: 'NEAR',
 };
 
 export const defaultAccountName = (chain: AccountChain, index: number): string => `${ACCOUNT_CHAIN_LABEL[chain]} ${index + 1}`;
@@ -150,6 +152,7 @@ export function createDemoAccounts(d: {
       xrp: { address: demoXrpAddress(d.seed, a), path: `m/44'/144'/${a}'/0/0` },
       stellar: { address: demoStellarAddress(d.seed, a), path: `m/44'/148'/${a}'` },
       cardano: { address: cardanoOf(a), path: `m/1852'/1815'/${a}'/0/0` },
+      near: { address: demoNearAddress(a), path: `m/44'/397'/${a}'` },
     };
   };
 

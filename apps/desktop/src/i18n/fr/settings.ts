@@ -96,6 +96,7 @@ export const settings = {
   'settings.hintTron': 'TRX et TRC-20',
   'settings.hintXrp': 'XRP et monnaies émises',
   'settings.hintAda': 'ADA et tokens',
+  'settings.hintNear': 'NEAR (compte implicite)',
   'settings.nameEmpty': 'Donne un nom au compte.',
   'settings.nameTooLong': '32 caractères au plus.',
   'settings.nameBadChar': 'Caractère non autorisé.',

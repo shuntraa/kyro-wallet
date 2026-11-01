@@ -3346,6 +3346,7 @@ dependencies = [
  "bytes",
  "curve25519-dalek",
  "dotenvy",
+ "ed25519-dalek",
  "futures-util",
  "getrandom 0.2.17",
  "hex",

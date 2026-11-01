@@ -96,6 +96,9 @@ basic-udev = { version = "=0.1.2" }
 # Only for the #[ignore]d Solana devnet test: off-curve check of program-derived addresses
 # (already in the tree through ed25519-dalek).
 curve25519-dalek = { version = "=4.1.3", default-features = false }
+# Only for the #[ignore]d NEAR testnet test: signs the funding transfer of the faucet-created
+# named account (already in the tree through wallet-core, same version).
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["std"] }
 # Only for the #[ignore]d real-network Tor test (KYRO_TOR_TRACE=<filter> shows arti logs).
 tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt", "env-filter", "ansi"] }
 # Tests only: Trezor's own device-side THP implementation (the code that runs in the Safe 7

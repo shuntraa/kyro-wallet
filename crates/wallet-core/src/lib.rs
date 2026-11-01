@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84) and Dogecoin (BIP44) PSBT
-//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Stellar (XLM payments, SEP-0005) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Stellar (XLM payments, SEP-0005), NEAR (Transfer) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -32,6 +32,7 @@ mod evm;
 mod keys;
 mod ledger_cal;
 mod mnemonic;
+mod near;
 mod network;
 mod sol;
 mod sol_decode;
@@ -84,6 +85,11 @@ pub use ledger_cal::{
     LEDGER_ERC20_SIGNER,
 };
 pub use mnemonic::{Mnemonic, Seed, WordCount};
+pub use near::{
+    near_account_kind, near_address, near_decode_tx, near_hash_string, near_parse_hash,
+    near_parse_public_key, near_path, near_public_key, near_public_key_string, near_sign,
+    near_verify_signed, NearAccountKind, NearTransfer, NearTxSummary, NearWarning, NEAR_DECIMALS,
+};
 pub use network::{BtcKind, Network};
 pub use sol::{sol_address, sol_address_of_pubkey, sol_sign_message, sol_verify_signature};
 pub use sol_decode::{

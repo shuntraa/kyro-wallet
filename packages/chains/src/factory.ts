@@ -15,8 +15,9 @@ import { TronAdapter } from './tron/adapter';
 import { XrpAdapter } from './xrp/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
-import { stellarChain, xrpChain } from './registry';
+import { stellarChain, xrpChain, nearChain } from './registry';
 import { StellarAdapter } from './stellar/adapter';
+import { NearAdapter } from './near/adapter';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -37,6 +38,8 @@ export interface AdapterSet {
   cardano: CardanoAdapter | null;
   /** Stellar: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   stellar: StellarAdapter | null;
+  /** NEAR: vault only (hardware wallets: not supported). */
+  near: NearAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -80,8 +83,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...a }) : null;
   // Stellar: SDF's Horizon, reached by Rust only.
   const stellar = accounts.stellar ? new StellarAdapter({ chain: stellarChain(network), address: accounts.stellar.address, ...a }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : [])];
-  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, stellar, all, hw: hw ?? null };
+  // NEAR: Rust picks the server (default FastNEAR).
+  const near = accounts.near ? new NearAdapter({ chain: nearChain(network), address: accounts.near.address, ...a }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : []), ...(near ? [near] : [])];
+  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, stellar, near, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin
@@ -154,6 +159,27 @@ export {
   tronCoverage,
   isKnownTronToken,
 } from './tron/adapter';
+
+// ---------------------------------------------------------------- phase 4: NEAR
+
+export {
+  NearAdapter,
+  rustNearBackend,
+  isNearImplicit,
+  nearAccountKind,
+  nearAccountIdProblem,
+  type NearAdapterOptions,
+  type NearBackend,
+  type NearAccountInfo,
+  type NearAccountKind,
+  type NearContext,
+  type NearHistoryEntry,
+  type NearTxOutcome,
+  type NearTxSummary,
+  type NearWarning,
+  type NearUnsigned,
+  type NearSigned,
+} from './near/adapter';
 
 // ---------------------------------------------------------------- phase 4: XRP Ledger
 

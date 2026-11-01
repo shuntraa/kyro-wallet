@@ -96,6 +96,7 @@ export const settings: Record<keyof typeof fr, string> = {
   'settings.hintTron': 'TRX and TRC-20',
   'settings.hintXrp': 'XRP and issued currencies',
   'settings.hintAda': 'ADA and tokens',
+  'settings.hintNear': 'NEAR (implicit account)',
   'settings.nameEmpty': 'Give the account a name.',
   'settings.nameTooLong': '32 characters at most.',
   'settings.nameBadChar': 'Character not allowed.',

@@ -18,6 +18,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   xrp: 'XRP',
   ada: 'Cardano',
   xlm: 'Stellar',
+  near: 'NEAR',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -41,6 +42,8 @@ export function accountChainHint(chain: AccountChain): string {
       return t('settings.hintAda');
     case 'xlm':
       return 'XLM';
+    case 'near':
+      return t('settings.hintNear');
   }
 }
 
