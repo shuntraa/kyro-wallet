@@ -76,7 +76,7 @@ impl AdaStakeKeys {
         let b = wallet_core::cardano_address_bytes(&self.address, net)?;
         if b.len() != 57 || b[29..] != self.stake_hash() {
             return Err(AppError::Internal(
-                "the address does not carry this stake key".into(),
+                "the address does not contain this stake key".into(),
             ));
         }
         Ok(b)
@@ -632,7 +632,7 @@ pub(crate) async fn prepare_sign(
     let size = wallet_core::cardano_signed_size(&body, None, WITNESSES)?;
     if body.fee < p.min_fee(size) {
         return Err(invalid(format!(
-            "fees too low ({} lovelace, minimum {})",
+            "fee too low ({} lovelace, minimum {})",
             body.fee,
             p.min_fee(size)
         )));
@@ -646,7 +646,7 @@ pub(crate) async fn prepare_sign(
     }
     if !registers && !stake.registered {
         return Err(invalid(
-            "your stake key is not registered: the network would refuse this operation",
+            "your stake key is not registered: the network would reject this operation",
         ));
     }
     if deregisters && summary.refund != stake.deposit {
@@ -664,7 +664,7 @@ pub(crate) async fn prepare_sign(
         }
         if stake.delegated_drep.is_none() {
             return Err(invalid(
-                "withdrawal impossible without a vote delegation (network rule since Plomin): delegate your vote first, for example to \"always abstain\"",
+                "cannot withdraw without a vote delegation (network rule since Plomin): delegate your vote first, for example to \"always abstain\"",
             ));
         }
     }
@@ -850,13 +850,13 @@ fn drep_text(lang: Lang, d: &CardanoDrepView) -> String {
         CardanoDrepView::AlwaysAbstain => lang
             .pick(
                 "« toujours s'abstenir » (DRep prédéfini : ton stake ne vote pas)",
-                "« always abstain » (predefined DRep: your stake does not vote)",
+                "“always abstain” (predefined DRep: your stake does not vote)",
             )
             .into(),
         CardanoDrepView::AlwaysNoConfidence => lang
             .pick(
                 "« toujours défiance » (DRep prédéfini : vote de défiance envers le comité)",
-                "« always no confidence » (predefined DRep: no-confidence vote against the committee)",
+                "“always no confidence” (predefined DRep: no-confidence vote against the committee)",
             )
             .into(),
         CardanoDrepView::Key { id, .. } => format!("DRep {id} ({})", lang.pick("clé", "key")),
@@ -1054,7 +1054,7 @@ pub(crate) fn describe(
     }
     out += lang.pick(
         "Tes ADA restent sur ton adresse et restent dépensables : pas de blocage. Pas de slashing sur Cardano : un mauvais pool fait perdre des récompenses, jamais le stake.\n",
-        "Your ADA stay on your address and stay spendable: no lockup. No slashing on Cardano: a bad pool loses you rewards, never the stake.\n",
+        "Your ADA stays on your address and remains spendable: no lockup. No slashing on Cardano: a bad pool loses you rewards, never the stake.\n",
     );
     if let Some(t) = s.tx.ttl {
         out += &if fr {
@@ -1077,7 +1077,7 @@ pub(crate) fn describe(
 pub(crate) fn describe_extra(lang: Lang, c: &AdaStakeContext) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des points à vérifier :\n",
-        "Kyro found points to check:\n",
+        "Kyro found some things to check:\n",
     ));
     for w in &c.warnings {
         out += &match (w, lang) {
@@ -1085,7 +1085,7 @@ pub(crate) fn describe_extra(lang: Lang, c: &AdaStakeContext) -> String {
                 "• ce pool a annoncé son arrêt à l'époque {epoch} : ta délégation ne rapportera plus rien ensuite\n"
             ),
             (AdaStakeWarning::PoolRetiring { epoch }, Lang::En) => format!(
-                "• this pool announced it retires at epoch {epoch}: your delegation will earn nothing after that\n"
+                "• this pool has announced it will retire at epoch {epoch}: your delegation will earn nothing after that\n"
             ),
             (AdaStakeWarning::HighMargin { margin }, Lang::Fr) => format!(
                 "• ce pool garde {margin} % des récompenses (marge élevée{})\n",
@@ -1485,7 +1485,7 @@ mod tests {
             "2. Delegation to pool [ECS] « Easy Car Stake » (pool187jm",
             "margin 100% · fixed cost 340 ADA per epoch",
             "not verified by Kyro",
-            "3. Vote delegation: « always abstain »",
+            "3. Vote delegation: “always abstain”",
             "Change returned to your address",
             "Total cost (fee + deposit − refund − withdrawal): ",
             "Current epoch: 322 (ends in ≈ 59 h)",

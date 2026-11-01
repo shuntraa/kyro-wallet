@@ -404,7 +404,7 @@ pub(crate) async fn context_for(
         TronStakeAction::Freeze { amount, .. } => {
             let a = n(amount);
             if (a as i64) < MIN_FREEZE {
-                return Err(invalid("minimum staking: 1 TRX"));
+                return Err(invalid("minimum stake: 1 TRX"));
             }
             if a.saturating_add(burn) > balance {
                 return Err(invalid(format!(
@@ -431,7 +431,7 @@ pub(crate) async fn context_for(
                 .count();
             if pending >= MAX_PENDING_UNFREEZE {
                 return Err(invalid(
-                    "32 unfreezes already pending: wait for a delay to end",
+                    "32 unfreezes already pending: wait until one of them completes its delay",
                 ));
             }
             let power_after = acc.tron_power_limit.saturating_sub(n(amount) / 1_000_000);
@@ -658,7 +658,7 @@ pub(crate) fn describe(
                 )
             } else {
                 format!(
-                    "Operation: UNFREEZE {} of {}\nThese TRX can be withdrawn in {} (network parameter), then you will have to « Withdraw ». Meanwhile they give neither resources nor votes.\n",
+                    "Operation: UNFREEZE {} of {}\nThese TRX can be withdrawn in {} (network parameter), then you will have to “Withdraw” them. Meanwhile they give neither resources nor votes.\n",
                     trx(amount),
                     resource_name(lang, *resource),
                     days(lang, a.unfreeze_delay_days)
@@ -815,7 +815,7 @@ pub(crate) fn describe(
 pub(crate) fn describe_extra(lang: Lang, c: &TronStakeContext) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des points à vérifier :\n",
-        "Kyro found points to check:\n",
+        "Kyro found some things to check:\n",
     ));
     for w in &c.warnings {
         out += &match (w, lang) {
@@ -823,7 +823,7 @@ pub(crate) fn describe_extra(lang: Lang, c: &TronStakeContext) -> String {
                 "• {address} est classé {rank}e : hors des 127 premiers, ses électeurs ne reçoivent aucune récompense\n"
             ),
             (TronStakeWarning::SrNotPaid { address, rank }, Lang::En) => format!(
-                "• {address} is ranked no. {rank}: outside the top 127, its voters receive no rewards\n"
+                "• {address} is ranked #{rank}: outside the top 127, its voters receive no rewards\n"
             ),
             (TronStakeWarning::BrokerageAll { address }, Lang::Fr) => format!(
                 "• {address} garde 100 % des récompenses : tu ne recevrais RIEN\n"
@@ -1076,7 +1076,7 @@ mod tests {
         let x = describe_extra(Lang::Fr, &c);
         assert!(x.contains("200e") && x.contains("tu ne recevrais RIEN"));
         let x = describe_extra(Lang::En, &c);
-        assert!(x.contains("ranked no. 200") && x.contains("you would receive NOTHING"));
+        assert!(x.contains("ranked #200") && x.contains("you would receive NOTHING"));
     }
 
     #[test]

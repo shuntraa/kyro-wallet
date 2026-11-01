@@ -701,11 +701,12 @@ pub(crate) fn format_units(raw: &str, decimals: usize) -> String {
     if frac.is_empty() {
         int.to_string()
     } else {
-        format!("{int},{frac}")
+        format!("{int}.{frac}")
     }
 }
 
 /// [`format_units`] with the decimal mark of `lang` (« 0,25 » / « 0.25 »), for dialog text.
+/// [`format_units`] alone writes English (dot decimal mark): error details are English.
 pub(crate) fn format_units_in(lang: Lang, raw: &str, decimals: usize) -> String {
     lang.decimal(&format_units(raw, decimals))
 }
@@ -944,7 +945,7 @@ pub(crate) fn describe_evm_extra(
         "{}\n{}\n{}",
         lang.pick(
             "Kyro a trouvé des éléments à vérifier dans cette transaction :",
-            "Kyro found elements to check in this transaction:"
+            "Kyro found some things to check in this transaction:"
         ),
         evm_warning_lines(lang, s, token),
         lang.sign_anyway()
@@ -1606,10 +1607,17 @@ mod tests {
     #[test]
     fn units() {
         assert_eq!(format_units("0", 18), "0");
-        assert_eq!(format_units("250000000000000000", 18), "0,25");
+        assert_eq!(format_units("250000000000000000", 18), "0.25");
         assert_eq!(format_units("1000000", 6), "1");
-        assert_eq!(format_units("1234500", 6), "1,2345");
-        assert_eq!(format_units("12", 8), "0,00000012");
+        assert_eq!(format_units("1234500", 6), "1.2345");
+        assert_eq!(format_units("12", 8), "0.00000012");
+        assert_eq!(format_units("1234567000000", 6), "1234567");
+        // Dialogs: the decimal mark of the language, never any grouping.
+        assert_eq!(format_units_in(Lang::En, "1234500", 6), "1.2345");
+        assert_eq!(format_units_in(Lang::Fr, "1234500", 6), "1,2345");
+        assert_eq!(format_units_in(Lang::En, "100000", 6), "0.1");
+        assert_eq!(format_units_in(Lang::Fr, "100000", 6), "0,1");
+        assert_eq!(format_units_in(Lang::Fr, "5000000", 6), "5");
     }
 
     /// CRITIQUE 2: the phrase is shown natively, numbered; the check needs the 3 words Rust

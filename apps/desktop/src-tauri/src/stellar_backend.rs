@@ -85,7 +85,7 @@ async fn get(ctx: &StellarCtx<'_>, path: &str) -> AppResult<Option<Value>> {
 async fn get_found(ctx: &StellarCtx<'_>, path: &str) -> AppResult<Value> {
     get(ctx, path)
         .await?
-        .ok_or_else(|| bad(format!("Horizon : {path} introuvable (404)")))
+        .ok_or_else(|| bad(format!("Horizon: {path} not found (404)")))
 }
 
 /// `"12.3456789"` (Horizon amount, 7 decimals) → stroops, exactly.
@@ -431,8 +431,10 @@ pub fn explain_result(codes: &Value) -> String {
         ("tx_too_late", _) => "transaction expired (time limit passed): rebuild it",
         ("tx_too_early", _) => "transaction not valid yet",
         ("tx_insufficient_fee", _) => "fee too low for now (busy network): try again",
-        ("tx_insufficient_balance", _) => "insufficient balance for the fees and the reserve",
-        ("tx_bad_auth", _) => "signature refused by the network",
+        ("tx_insufficient_balance", _) => {
+            "insufficient balance for the network fee and the reserve"
+        }
+        ("tx_bad_auth", _) => "signature rejected by the network",
         ("tx_no_source_account", _) => "your account does not exist (yet) on this network",
         (_, "op_underfunded") => "insufficient available balance",
         (_, "op_low_reserve") => "amount too low to create this account, or insufficient reserve",
@@ -441,7 +443,7 @@ pub fn explain_result(codes: &Value) -> String {
         (_, "op_no_trust") => "the recipient has no trustline for this asset",
         (_, "op_line_full") => "the recipient's trustline is full",
         (_, "op_not_authorized") => "the asset's issuer does not authorize this account",
-        _ => "refused by the network",
+        _ => "rejected by the network",
     };
     format!(
         "{what} ({}{}{})",
@@ -481,19 +483,19 @@ pub async fn submit(ctx: &StellarCtx<'_>, envelope_b64: &str, hash: &str) -> App
             let got = v["hash"].as_str().unwrap_or("");
             if !got.eq_ignore_ascii_case(hash) {
                 return Err(bad(format!(
-                    "Horizon answered an unexpected hash ({})",
+                    "Horizon returned an unexpected hash ({})",
                     got.chars().take(80).collect::<String>()
                 )));
             }
             if v["successful"] == false {
                 return Err(AppError::InvalidInput(
-                    "Stellar transaction included but failed (fees charged)".into(),
+                    "Stellar transaction included but failed (network fee charged)".into(),
                 ));
             }
             Ok(hash.to_lowercase())
         }
         400 => Err(AppError::InvalidInput(format!(
-            "Stellar transaction refused: {}",
+            "Stellar transaction rejected: {}",
             explain_result(&v["extras"]["result_codes"])
         ))),
         // Timeout: the transaction may still land before its maxTime. Never resubmit blindly.

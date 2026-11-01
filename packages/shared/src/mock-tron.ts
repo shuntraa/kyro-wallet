@@ -34,7 +34,7 @@ import {
 } from './ipc';
 import { checkServerUrl } from './servers';
 import type { DemoTor } from './mock-tor';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 
 /** Same as TRON_USDT of packages/chains and KNOWN_TOKENS of commands_tron.rs. */
 export const DEMO_TRON_USDT: Record<Network, string> = {
@@ -123,7 +123,7 @@ const trxText = (sun: bigint | string) => {
   const v = BigInt(sun);
   const whole = v / 1_000_000n;
   const frac = (v % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
-  return `${whole}${frac ? `,${frac}` : ''} TRX`;
+  return `${whole}${frac ? `${decimalMark()}${frac}` : ''} TRX`;
 };
 
 interface DemoRaw {

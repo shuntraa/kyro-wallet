@@ -271,7 +271,7 @@ pub fn check_asset(c: &AssetCheck<'_>) -> AppResult<()> {
         let need = c.fee.saturating_add(wallet_core::ALGO_MIN_BALANCE);
         if spendable < need {
             return Err(AppError::InvalidInput(format!(
-                "enabling {s} locks 0.1 ALGO more (minimum balance): {} available needed, you have {}",
+                "enabling {s} locks an extra 0.1 ALGO (minimum balance): you need {} available, you have {}",
                 algo(need),
                 algo(spendable)
             )));
@@ -285,7 +285,7 @@ pub fn check_asset(c: &AssetCheck<'_>) -> AppResult<()> {
     }
     if c.mine.frozen {
         return Err(AppError::InvalidInput(format!(
-            "your {s} balance is frozen by the issuer: sending is impossible"
+            "your {s} balance is frozen by the issuer: you cannot send it"
         )));
     }
     let have: u64 = c.mine.amount.parse().unwrap_or(0);
@@ -297,7 +297,7 @@ pub fn check_asset(c: &AssetCheck<'_>) -> AppResult<()> {
     }
     if c.fee > spendable {
         return Err(AppError::InvalidInput(format!(
-            "not enough ALGO for the fees: {} available (balance − minimum balance), {} needed",
+            "not enough ALGO for the network fee: {} available (balance − minimum balance), {} needed",
             algo(spendable),
             algo(c.fee)
         )));
@@ -386,7 +386,7 @@ pub async fn submit(ctx: &AlgoCtx<'_>, raw: Vec<u8>, txid: &str) -> AppResult<St
     let got = v["txId"].as_str().unwrap_or("");
     if got != txid {
         return Err(bad(format!(
-            "the server answered an unexpected identifier ({})",
+            "the server returned an unexpected identifier ({})",
             crate::dialog_text::sanitize(got, 80)
         )));
     }
@@ -579,10 +579,10 @@ mod tests {
         };
         assert!(ok(100_000, &dest).is_ok());
         assert!(
-            matches!(ok(99_999, &dest), Err(AppError::InvalidInput(m)) if m.contains("at least 0,1 ALGO"))
+            matches!(ok(99_999, &dest), Err(AppError::InvalidInput(m)) if m.contains("at least 0.1 ALGO"))
         );
         assert!(
-            matches!(ok(4_799_001, &dest), Err(AppError::InvalidInput(m)) if m.contains("insufficient") && m.contains("0,2 ALGO"))
+            matches!(ok(4_799_001, &dest), Err(AppError::InvalidInput(m)) if m.contains("insufficient") && m.contains("0.2 ALGO"))
         );
         assert!(ok(4_799_000, &dest).is_ok());
         let funded = AlgoAccountInfo {
@@ -691,7 +691,7 @@ mod tests {
             spendable: "100500".into(),
             ..ours.clone()
         };
-        err(check(&none, &none, 0, true, &poor), "0.1 ALGO more");
+        err(check(&none, &none, 0, true, &poor), "an extra 0.1 ALGO");
         err(check(&h, &h, 0, true, &ours), "already enabled");
         // Transfer: opted in on both sides, enough units, ALGO for the fee.
         assert!(check(&h, &h, 12_500_000, false, &ours).is_ok());
@@ -708,6 +708,6 @@ mod tests {
             spendable: "0".into(),
             ..ours.clone()
         };
-        err(check(&h, &h, 1, false, &broke), "fees");
+        err(check(&h, &h, 1, false, &broke), "network fee");
     }
 }

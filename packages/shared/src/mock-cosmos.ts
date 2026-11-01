@@ -26,7 +26,7 @@ import {
   type Network,
   type Settings,
 } from './ipc';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 import { cosmosAddressOfBytes, cosmosAddressProblem } from './cosmos';
 
@@ -69,7 +69,7 @@ function cleanText(s: string): string {
 const atomText = (uatom: bigint | string) => {
   const v = BigInt(uatom);
   const frac = (v % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
-  return `${v / 1_000_000n}${frac ? `,${frac}` : ''} ATOM`;
+  return `${v / 1_000_000n}${frac ? `${decimalMark()}${frac}` : ''} ATOM`;
 };
 
 interface DemoCosmosAccount {

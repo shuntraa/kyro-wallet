@@ -73,7 +73,7 @@ pub struct CoreClient<'a> {
 pub fn parse_response(status: u16, body: &[u8]) -> Result<Value, CallError> {
     if status == 401 || status == 403 {
         return Err(CallError::App(AppError::ServerInvalid(
-            "Bitcoin Core: RPC authentication refused".into(),
+            "Bitcoin Core: RPC authentication rejected".into(),
         )));
     }
     let v: Value = serde_json::from_slice(body).map_err(|_| {

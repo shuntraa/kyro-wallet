@@ -70,7 +70,7 @@ pub fn app_for(chain: Chain) -> Option<(&'static str, &'static str)> {
 pub fn unavailable(chain: Chain) -> Option<&'static str> {
     Some(match chain {
         Chain::Dot => {
-            "Polkadot: the Ledger « Polkadot » app requires the CheckMetadataHash extension and a \
+            "Polkadot: the Ledger “Polkadot” app requires the CheckMetadataHash extension and a \
              runtime metadata proof (RFC-0078) with every transaction, and ed25519 keys \
              m/44'/354'/…; Kyro signs in sr25519 without this extension, and the \
              Parity library that builds the proof (merkleized-metadata) is not \
@@ -79,8 +79,8 @@ pub fn unavailable(chain: Chain) -> Option<&'static str> {
         Chain::Kas => {
             "Kaspa: the Ledger app signs version 0 transactions with the same signature \
              hash as Kyro (and returns it, so it can be checked), but spends from several \
-             m/44'/111111'/a'/0|1/i addresses: it would need an extended-key hardware-wallet \
-             account and an address walk, not written yet; not supported on a \
+             m/44'/111111'/a'/0|1/i addresses: it would need an extended-key hardware wallet \
+             account and an address walk, not implemented yet; not supported on a \
              hardware wallet"
         }
         _ => return None,

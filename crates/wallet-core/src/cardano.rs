@@ -250,7 +250,7 @@ pub fn cardano_address_bytes(address: &str, net: Network) -> Result<Vec<u8>> {
     let data: Vec<u8> = checked.byte_iter().collect();
     if h.as_str() != hrp(net) {
         return Err(Error::input(
-            "Cardano address of another network, or not a payment address",
+            "Cardano address from another network, or not a payment address",
         ));
     }
     check_address_bytes(&data, net)?;
@@ -261,7 +261,7 @@ fn check_address_bytes(data: &[u8], net: Network) -> Result<()> {
     let header = *data.first().ok_or_else(|| Error::input("empty address"))?;
     let (kind, nid) = (header >> 4, header & 0x0F);
     if nid != network_id(net) {
-        return Err(Error::input("Cardano address of another network"));
+        return Err(Error::input("Cardano address from another network"));
     }
     match (kind, data.len()) {
         (0 | 2, 57) | (6, 29) => Ok(()),
@@ -1269,7 +1269,7 @@ fn decode_full(
         _ => return Err(bad("the metadata and its hash must be present together")),
     };
     if body.inputs.is_empty() || body.outputs.is_empty() {
-        return Err(bad("no input or no output"));
+        return Err(bad("no inputs or no outputs"));
     }
     // A set: order is free (Kyro sorts its own), duplicates are refused.
     let mut sorted = body.inputs.clone();
@@ -1626,13 +1626,11 @@ fn check_stake(body: &CardanoBody, s: &StakeMode, ctx: &CardanoContext<'_>) -> R
     // one (deposits and fees are not outputs).
     let [out] = body.outputs.as_slice() else {
         return Err(bad(
-            "a staking transaction has only one output, to your own address: refused",
+            "a staking transaction must have a single output, to your own address",
         ));
     };
     if !ctx.own.contains(&bech32_encode(hrp(net), &out.address)?) {
-        return Err(bad(
-            "a staking transaction pays only your own address: refused",
-        ));
+        return Err(bad("a staking transaction may only pay your own address"));
     }
     let mut kinds = Vec::new();
     for c in &body.certs {
@@ -1675,7 +1673,7 @@ fn check_stake(body: &CardanoBody, s: &StakeMode, ctx: &CardanoContext<'_>) -> R
     }
     let ours = cardano_reward_address_bytes(net, &s.stake_hash);
     if body.withdrawals.len() > 1 {
-        return Err(bad("several withdrawals: refused"));
+        return Err(bad("multiple withdrawals: refused"));
     }
     for (a, c) in &body.withdrawals {
         if *a != ours {
@@ -1966,7 +1964,7 @@ fn account_xpub_of_hex(xpub_hex: &str) -> Result<ed25519_bip32::XPub> {
 pub fn cardano_xpub_child(xpub_hex: &str, role: u32, index: u32) -> Result<[u8; 32]> {
     if role >= HARDENED || index >= HARDENED {
         return Err(Error::input(
-            "hardened derivation impossible from a public key",
+            "hardened derivation is not possible from a public key",
         ));
     }
     let x = account_xpub_of_hex(xpub_hex)?

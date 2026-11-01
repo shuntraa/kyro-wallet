@@ -130,9 +130,8 @@ fn bad(msg: impl Into<String>) -> AppError {
 
 pub fn no_default_server(coin: UtxoCoin) -> AppError {
     AppError::ServerInvalid(format!(
-        "{}: Kyro has no default public server on this network (no free, maintained public \
-         server was found). Configure your Esplora server (electrs-{}) in \
-         Settings → Networks.",
+        "{}: no free public server on this network, so Kyro has no default server. Set up \
+         your Esplora server (electrs-{}) in Settings → Networks.",
         coin.name(),
         coin.name().to_lowercase().replace(' ', "")
     ))
@@ -374,7 +373,7 @@ fn verified_utxos(
         })?;
         let (_, value, spk) = tx.outputs.get(u.vout as usize).ok_or_else(|| {
             bad(format!(
-                "{}: the server announces an output {}:{} that does not exist",
+                "{}: the server reports an output {}:{} that does not exist",
                 coin.name(),
                 u.txid,
                 u.vout
@@ -382,7 +381,7 @@ fn verified_utxos(
         })?;
         if spk != our_spk {
             return Err(bad(format!(
-                "{}: the announced output {}:{} does not pay this address",
+                "{}: the reported output {}:{} does not pay this address",
                 coin.name(),
                 u.txid,
                 u.vout
@@ -390,7 +389,7 @@ fn verified_utxos(
         }
         if *value != u.value {
             return Err(bad(format!(
-                "{}: the server announces {} for {}:{}, the transaction says {value}",
+                "{}: the server reports {} for {}:{}, the transaction says {value}",
                 coin.name(),
                 u.value,
                 u.txid,
@@ -851,7 +850,7 @@ pub async fn broadcast(ctx: &UtxoCtx<'_>, hex_tx: &str) -> AppResult<String> {
             let text = String::from_utf8_lossy(&body).trim().to_owned();
             if status != 200 {
                 return Err(AppError::InvalidInput(format!(
-                    "broadcast refused: {}",
+                    "broadcast rejected: {}",
                     text.chars().take(300).collect::<String>()
                 )));
             }
@@ -871,7 +870,7 @@ pub async fn broadcast(ctx: &UtxoCtx<'_>, hex_tx: &str) -> AppResult<String> {
 fn check_broadcast_txid(answer: &str, ours: &str) -> AppResult<String> {
     if answer.trim() != ours {
         return Err(bad(format!(
-            "the server answered an unexpected txid ({})",
+            "the server returned an unexpected txid ({})",
             answer.chars().take(80).collect::<String>()
         )));
     }

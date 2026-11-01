@@ -610,7 +610,7 @@ fn describe_warning(lang: Lang, w: &SolWarning) -> String {
             if fr {
                 format!("Les frais sont payés par un autre compte : {fee_payer}")
             } else {
-                format!("The fees are paid by another account: {fee_payer}")
+                format!("The network fee is paid by another account: {fee_payer}")
             }
         }
         SolWarning::ExtraWritableSigner { address } => {
@@ -735,7 +735,7 @@ fn tables_line(lang: Lang, d: &SolDecoded) -> String {
             d.from_tables.len()
         ),
         Lang::En => format!(
-            "{} address(es) of this transaction are not written in the message: they were read from an address table provided by the Solana server (marked « [read from an address table] »). A lying server could put other accounts there.",
+            "{} address(es) of this transaction are not written in the message: they were read from an address table provided by the Solana server (marked “[read from an address table]”). A lying server could put other accounts there.",
             d.from_tables.len()
         ),
     }
@@ -981,7 +981,7 @@ mod tests {
             "Base fee: 0.000005 SOL",
             "Priority fee: 0.0000002 SOL",
             "Points to watch:",
-            "The fees are paid by another account: OTHER",
+            "The network fee is paid by another account: OTHER",
             "A lying server could put other accounts there.",
             "Memo (free text, not verified): « thanks »",
         ] {

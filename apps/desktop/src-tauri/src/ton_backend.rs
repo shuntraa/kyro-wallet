@@ -261,10 +261,8 @@ pub fn parse_fee(v: &Value) -> AppResult<u64> {
     let mut total = 0u64;
     for k in ["in_fwd_fee", "storage_fee", "gas_fee", "fwd_fee"] {
         total = total
-            .checked_add(
-                u64_of(&f[k]).ok_or_else(|| bad(format!("TON Center : frais {k} absents")))?,
-            )
-            .ok_or_else(|| bad("TON Center : frais invalides"))?;
+            .checked_add(u64_of(&f[k]).ok_or_else(|| bad(format!("TON Center: fee {k} missing")))?)
+            .ok_or_else(|| bad("TON Center: invalid fees"))?;
     }
     Ok(total)
 }
@@ -297,7 +295,7 @@ pub async fn submit(
     .await?;
     if status != 200 {
         return Err(AppError::InvalidInput(format!(
-            "TON transfer refused by the node: {}",
+            "TON transfer rejected by the node: {}",
             error_text(&bytes)
         )));
     }
@@ -311,7 +309,7 @@ pub fn check_submit_reply(v: &Value, hash: &str, normalized: &str) -> AppResult<
     let got_norm = v["message_hash_norm"].as_str().and_then(b64_to_hex);
     if got.as_deref() != Some(hash) || got_norm.as_deref().is_some_and(|n| n != normalized) {
         return Err(bad(format!(
-            "TON Center answered an unexpected hash ({})",
+            "TON Center returned an unexpected hash ({})",
             crate::dialog_text::sanitize(&v.to_string(), 120)
         )));
     }

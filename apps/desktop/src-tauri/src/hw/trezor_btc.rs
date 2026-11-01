@@ -58,7 +58,7 @@ fn prev_tx<'a>(req: &'a BtcSignRequest<'_>, hash: &[u8]) -> HwResult<&'a Transac
         }
         return Ok(tx);
     }
-    Err(HwError::bad("the device asks for an unknown transaction"))
+    Err(HwError::bad("the device requested an unknown transaction"))
 }
 
 fn idx(details: &protos::tx_request::TxRequestDetailsType) -> HwResult<usize> {

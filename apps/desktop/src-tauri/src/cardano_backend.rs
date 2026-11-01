@@ -458,7 +458,7 @@ pub async fn submit(ctx: &CardanoCtx<'_>, tx_cbor: Vec<u8>, tx_id: &str) -> AppR
         .to_ascii_lowercase();
     if got != tx_id {
         return Err(bad(format!(
-            "the server answered an unexpected identifier ({})",
+            "the server returned an unexpected identifier ({})",
             got.chars().take(80).collect::<String>()
         )));
     }
@@ -477,7 +477,8 @@ pub(crate) fn to_assets(m: &AssetMap) -> AppResult<CardanoAssets> {
             .ok()
             .and_then(|b| b.try_into().ok())
             .ok_or_else(|| AppError::InvalidInput("policy id: 28 bytes hex".into()))?;
-        let name = hex::decode(n).map_err(|_| AppError::InvalidInput("asset name hex".into()))?;
+        let name = hex::decode(n)
+            .map_err(|_| AppError::InvalidInput("asset name: hexadecimal expected".into()))?;
         by_policy.entry(policy).or_default().push((name, *q));
     }
     Ok(by_policy
@@ -607,7 +608,7 @@ fn finish(
         let have = left.get(k).copied().unwrap_or(0);
         if have < *q {
             return Err(insufficient(format!(
-                "insufficient token: {have} available, {q} requested"
+                "insufficient token balance: {have} available, {q} requested"
             )));
         }
         left.insert(k.clone(), have - q);

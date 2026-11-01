@@ -776,7 +776,7 @@ fn pairing_failure(data: &[u8], wrong_code: bool) -> HwError {
             HwError::PairingFailed("wrong code: the device rejected it".into())
         }
         F::Failure_Busy | F::Failure_InProgress => HwError::Busy("the device is busy".into()),
-        code => HwError::bad(format!("THP pairing: {code:?} « {} »", f.message())),
+        code => HwError::bad(format!("THP pairing: {code:?} “{}”", f.message())),
     }
 }
 
@@ -874,7 +874,7 @@ impl<P: PacketIo> Channel<P> {
             .try_into()
             .ok()
             .filter(|c: &[u8; 6]| c.iter().all(u8::is_ascii_digit))
-            .ok_or_else(|| HwError::PairingFailed("the code has 6 digits".into()))?;
+            .ok_or_else(|| HwError::PairingFailed("the code must have 6 digits".into()))?;
         let k = random::<32>()?;
         let cp = cpace_host(&code, &self.handshake_hash, &k, &trezor_cpace)?;
         let mut tag = protos::ThpCodeEntryCpaceHostTag::new();
@@ -902,7 +902,7 @@ impl<P: PacketIo> Channel<P> {
             )
         {
             return Err(HwError::PairingFailed(
-                "the device did not prove the code (different commitment or code)".into(),
+                "the device could not prove the code (commitment or code mismatch)".into(),
             ));
         }
         Ok(())

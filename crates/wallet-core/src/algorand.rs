@@ -819,7 +819,7 @@ fn summarize(p: &AlgoPayment, net: Network, our_address: &str) -> Result<AlgoTxS
     };
     let receiver = p.asset.as_ref().map_or(p.receiver, |a| a.receiver);
     if p.fee < ALGO_MIN_FEE {
-        return Err(bad("fees below the protocol minimum (0.001 ALGO)"));
+        return Err(bad("fee below the protocol minimum (0.001 ALGO)"));
     }
     if p.first_valid == 0 || p.last_valid < p.first_valid {
         return Err(bad("invalid validity window"));

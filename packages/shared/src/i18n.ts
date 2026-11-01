@@ -27,6 +27,11 @@ export function intlLocale(lang: Lang = current): string {
   return lang === 'fr' ? 'fr-FR' : 'en-US';
 }
 
+/** Decimal mark of the current language: `,` in French, `.` in English (« 0,1 ALGO » / « 0.1 ALGO »). */
+export function decimalMark(lang: Lang = current): string {
+  return lang === 'fr' ? ',' : '.';
+}
+
 /** The message in the current language. Call it when the message is built, never at module load. */
 export function l10n(fr: string, en: string): string {
   return current === 'fr' ? fr : en;

@@ -192,7 +192,7 @@ impl TonJettonBody {
         }
         if attached == 0 || attached > MAX_ATTACHED_NANOTON || self.forward_ton_amount >= attached {
             return Err(Error::input(
-                "GRAM attached to the token transfer refused (0.2 GRAM at most, more than the forwarded amount)",
+                "GRAM attached to the token transfer refused (0.2 GRAM at most, and more than the forwarded amount)",
             ));
         }
         if let Some(c) = &self.comment {

@@ -170,7 +170,7 @@ pub fn hbar_parse_account_id(s: &str, network: Network) -> Result<u64> {
     if let Some(sum) = sum {
         if sum != hbar_checksum(network, n) {
             return Err(Error::input(
-                "incorrect Hedera id checksum (or an id of another network)",
+                "incorrect Hedera id checksum (or an id from another network)",
             ));
         }
     }
@@ -610,7 +610,7 @@ impl HbarTransfer {
                 40 => assoc = Some(bytes_of(&v, "tokenAssociate")?),
                 f => {
                     return Err(bad(format!(
-                        "field {f}: Kyro signs only a transfer (CryptoTransfer) and the association of a known token (TokenAssociate)"
+                        "field {f}: Kyro signs only a transfer (CryptoTransfer) or the association of a known token (TokenAssociate)"
                     )))
                 }
             }
@@ -712,7 +712,7 @@ impl HbarTransfer {
                 }
                 if credit <= 0 || debit != -credit {
                     return Err(bad(
-                        "inconsistent amounts (one debit, then an equal credit)",
+                        "inconsistent amounts (one debit and an equal credit expected)",
                     ));
                 }
                 (to, credit as u64, kind)
@@ -914,7 +914,7 @@ fn summarize(
     };
     for (i, x) in ts.iter().enumerate() {
         if !t.same_except_node(x) {
-            return Err(bad("the copies for several nodes differ"));
+            return Err(bad("the copies for the different nodes differ"));
         }
         if !allowed_nodes.contains(&x.node) {
             return Err(bad(format!("node 0.0.{} not in Kyro's list", x.node)));
@@ -1257,7 +1257,9 @@ pub fn hbar_hw_message(body_hex: &str) -> Result<Vec<u8>> {
     let raw =
         hex::decode(body_hex.trim()).map_err(|_| Error::input("body: hexadecimal expected"))?;
     if HbarTransfer::decode(&raw)?.kind != HbarKind::Hbar {
-        return Err(bad("Hedera tokens: not yet from a hardware account"));
+        return Err(bad(
+            "Hedera tokens: not yet supported on a hardware wallet account",
+        ));
     }
     if raw.len() > HBAR_HW_MAX_BODY {
         return Err(bad("too long for the Ledger Hedera app (shorter memo?)"));

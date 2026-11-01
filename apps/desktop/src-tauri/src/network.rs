@@ -210,7 +210,7 @@ fn check_switch(
 ) -> AppResult<Network> {
     let n = parse(requested).ok_or_else(|| {
         AppError::InvalidInput(format!(
-            "unknown network « {requested} » (mainnet or testnet)"
+            "unknown network “{requested}” (mainnet or testnet)"
         ))
     })?;
     if source == Source::Env {

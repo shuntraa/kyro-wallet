@@ -141,7 +141,7 @@ pub(crate) fn describe_cosmos(
 pub(crate) fn describe_cosmos_extra(lang: Lang, s: &CosmosTxSummary) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des éléments inhabituels dans cet envoi :\n",
-        "Kyro found unusual elements in this send:\n",
+        "Kyro found unusual details in this send:\n",
     ));
     for w in &s.warnings {
         out += match w {
@@ -264,7 +264,7 @@ pub(crate) async fn build(
 ) -> AppResult<CosmosBuilt> {
     let to = wallet_core::cosmos_normalize_address(to)?;
     if to == me {
-        return Err(AppError::InvalidInput("send to yourself".into()));
+        return Err(AppError::InvalidInput("cannot send to yourself".into()));
     }
     let amount = parse_uatom(amount)?;
     if memo.chars().count() > wallet_core::COSMOS_MAX_MEMO {

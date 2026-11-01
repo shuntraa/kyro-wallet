@@ -61,7 +61,7 @@ impl From<RpcError> for AppError {
     fn from(e: RpcError) -> Self {
         match e {
             RpcError::App(e) => e,
-            RpcError::Near(code, msg) => bad(format!("NEAR : {code} ({msg})")),
+            RpcError::Near(code, msg) => bad(format!("NEAR: {code} ({msg})")),
         }
     }
 }
@@ -557,7 +557,7 @@ pub fn check_transfer(c: &TransferCheck<'_>) -> AppResult<()> {
     let bound = c.fees.bound(creates_account(c.receiver, c.receiver_kind));
     if c.deposit.saturating_add(bound) > spendable {
         return Err(AppError::InvalidInput(format!(
-            "insufficient available balance: {} NEAR available (balance − storage reserve), {} needed (amount + fees at most)",
+            "insufficient available balance: {} NEAR available (balance − storage reserve), {} needed (amount + maximum fees)",
             crate::commands::format_units(&spendable.to_string(), 24),
             crate::commands::format_units(&c.deposit.saturating_add(bound).to_string(), 24)
         )));
@@ -678,7 +678,7 @@ pub fn outcome_from(r: &Value, hash: &str) -> AppResult<NearTxOutcome> {
         .unwrap_or("");
     if !got.is_empty() && got != hash {
         return Err(bad(format!(
-            "the server answered an unexpected hash ({})",
+            "the server returned an unexpected hash ({})",
             crate::dialog_text::sanitize(got, 80)
         )));
     }
@@ -717,7 +717,7 @@ pub async fn send(ctx: &NearCtx<'_>, signed: &[u8], hash: &str) -> AppResult<Nea
         }),
         Err(RpcError::Near(code, msg)) if code == "INVALID_TRANSACTION" => {
             Err(AppError::InvalidInput(format!(
-                "NEAR transaction refused by the network: {}",
+                "NEAR transaction rejected by the network: {}",
                 crate::dialog_text::sanitize(&msg, 200)
             )))
         }

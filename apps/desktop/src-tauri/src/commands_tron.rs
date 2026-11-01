@@ -548,7 +548,7 @@ pub(crate) async fn broadcast_checked(
     let sig: [u8; 65] = hex::decode(signature.trim())
         .ok()
         .and_then(|b| b.try_into().ok())
-        .ok_or_else(|| AppError::InvalidInput("signature: 65 bytes hex".into()))?;
+        .ok_or_else(|| AppError::InvalidInput("signature: 65 hex bytes".into()))?;
     if wallet_core::tron_recover_signer(raw, &sig)? != owner {
         return Err(AppError::InvalidInput(
             "the signature does not match your TRON address".into(),

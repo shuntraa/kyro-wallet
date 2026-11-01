@@ -575,7 +575,7 @@ impl StellarEnvelope {
             ENVELOPE_TYPE_TX_V0 => return Err(bad("old envelope format (v0) not supported")),
             ENVELOPE_TYPE_TX_FEE_BUMP => {
                 return Err(bad(
-                    "\"fee bump\" transaction (fees paid by another account) not supported",
+                    "\"fee bump\" transaction (fee paid by another account) not supported",
                 ))
             }
             t => return Err(bad(format!("unknown envelope type ({t})"))),
@@ -979,7 +979,7 @@ fn summarize(
         }
     };
     if t.fee == 0 {
-        return Err(bad("zero fees"));
+        return Err(bad("zero fee"));
     }
     if t.sequence <= 0 {
         return Err(bad("invalid sequence number"));
@@ -1000,7 +1000,7 @@ fn summarize(
             starting_balance,
         } => {
             if destination == ours {
-                return Err(bad("activation of its own account"));
+                return Err(bad("activating your own account"));
             }
             if *starting_balance <= 0 {
                 return Err(bad("zero starting balance"));
@@ -1030,7 +1030,7 @@ fn summarize(
         StellarOperation::ChangeTrust { asset, limit } => {
             if let StellarAsset::Credit { issuer, .. } = asset {
                 if issuer == ours {
-                    return Err(bad("trustline to its own asset"));
+                    return Err(bad("trustline to your own asset"));
                 }
             }
             if *limit < 0 {

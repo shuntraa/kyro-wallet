@@ -841,7 +841,7 @@ fn summarize(
         return Err(bad("negative SendMax"));
     }
     if p.fee == 0 {
-        return Err(bad("zero fees"));
+        return Err(bad("zero fee"));
     }
     // Without LastLedgerSequence a signed payment stays valid for ever: whoever holds the blob
     // (a node, a log) could submit it months later.

@@ -169,7 +169,7 @@ fn plan_of(net: Network, psbt: &Psbt, accounts: &[BtcAccount]) -> Result<HwBtcPl
     let prevouts = prevouts(psbt)?;
     let accounts = parse_accounts(net, accounts)?;
     if accounts.is_empty() {
-        return Err(Error::input("no hardware-wallet account"));
+        return Err(Error::input("no hardware wallet account"));
     }
     let secp = Secp256k1::verification_only();
 
@@ -260,7 +260,7 @@ fn plan_of(net: Network, psbt: &Psbt, accounts: &[BtcAccount]) -> Result<HwBtcPl
     }
     if inputs.is_empty() {
         return Err(Error::psbt(
-            "no input belongs to this hardware-wallet account",
+            "no input belongs to this hardware wallet account",
         ));
     }
 

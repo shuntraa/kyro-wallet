@@ -222,7 +222,7 @@ pub async fn account(ctx: &CosmosCtx<'_>, address: &str) -> AppResult<CosmosAcco
     }
     let b = base_account(&v["account"])?;
     if b["address"].as_str() != Some(a.as_str()) {
-        return Err(bad("Cosmos: the server answered for another address"));
+        return Err(bad("Cosmos: the server responded for another address"));
     }
     Ok(CosmosAccountInfo {
         exists: true,
@@ -249,7 +249,7 @@ pub async fn gas_price(ctx: &CosmosCtx<'_>) -> AppResult<u128> {
         .filter(|_| v["price"]["denom"] == "uatom")
         .ok_or_else(|| bad("Cosmos: unreadable gas price"))?;
     if p == 0 || p > MAX_GAS_PRICE {
-        return Err(bad("Cosmos: abnormal gas price announced by the server"));
+        return Err(bad("Cosmos: abnormal gas price from the server"));
     }
     Ok(p)
 }
@@ -306,7 +306,7 @@ pub async fn broadcast(ctx: &CosmosCtx<'_>, tx_b64: &str, hash: &str) -> AppResu
     let got = r["txhash"].as_str().unwrap_or("");
     if !got.eq_ignore_ascii_case(hash) {
         return Err(bad(format!(
-            "the server answered an unexpected hash ({})",
+            "the server returned an unexpected hash ({})",
             crate::dialog_text::sanitize(got, 80)
         )));
     }

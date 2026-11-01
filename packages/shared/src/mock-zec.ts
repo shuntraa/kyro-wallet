@@ -13,7 +13,7 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { IpcError, type Network, type UtxoAccountInfo, type ZecSendArgs, type ZecTxSummary } from './ipc';
 import { zecDestinationKind, zecP2pkhAddress, zecShieldedRefusal } from './zcash';
 import type { DemoTor } from './mock-tor';
-import { l10n } from './i18n';
+import { intlLocale, l10n } from './i18n';
 import type { DemoAccountHooks } from './mock-accounts';
 
 const TESTNET_VERSIONS = { private: 0x04358394, public: 0x043587cf };
@@ -65,7 +65,7 @@ const fakeTxid = (tag: string) => bytesToHex(sha256(new TextEncoder().encode(`ky
 
 const zip317 = (inputs: number, outputs: number) => 5_000 * Math.max(2, Math.ceil((inputs * 150) / 150), Math.ceil((outputs * 34) / 34));
 
-const fmt = (z: number) => (z / 1e8).toLocaleString('fr-FR', { maximumFractionDigits: 8 });
+const fmt = (z: number) => (z / 1e8).toLocaleString(intlLocale(), { maximumFractionDigits: 8 });
 
 export function createDemoZec(d: DemoZecDeps) {
   const mainnet = d.network === 'mainnet';

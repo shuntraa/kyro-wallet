@@ -37,7 +37,7 @@ pub enum AppError {
     HwNotFound,
     #[error("Device locked: unlock it with your PIN, then try again.")]
     HwLocked,
-    #[error("Wrong app open on the device: open « {expected} » (open: « {open} »).")]
+    #[error("Wrong app open on the device: open “{expected}” (open: “{open}”).")]
     HwWrongApp { expected: String, open: String },
     #[error("Refused on the device.")]
     HwRejected,
@@ -49,9 +49,9 @@ pub enum AppError {
     HwBusy(String),
     #[error("Timed out: no answer from the device in time. Operation aborted.")]
     HwTimeout,
-    #[error("Device answer refused by Kyro: {0}")]
+    #[error("Device response refused by Kyro: {0}")]
     HwBadResponse(String),
-    #[error("DIFFERENT ADDRESSES: the device gives {device}, Kyro expected {expected}. Do not use this address.")]
+    #[error("DIFFERENT ADDRESSES: the device shows {device}, Kyro expected {expected}. Do not use this address.")]
     HwAddressMismatch { device: String, expected: String },
     #[error("This is not this account's device (different keys).")]
     HwWrongDevice,
@@ -250,7 +250,7 @@ mod tests {
                 open: "Ethereum".into()
             }
             .message(Lang::En),
-            "Wrong app open on the device: open « Bitcoin » (open: « Ethereum »)."
+            "Wrong app open on the device: open “Bitcoin” (open: “Ethereum”)."
         );
         assert!(AppError::HwAddressMismatch {
             device: "a".into(),

@@ -43,7 +43,7 @@ import {
   type TronStakeWarning,
   type TronWitness,
 } from './ipc';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 
 const invalid = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée invalide : ${m}`, `Invalid input: ${m}`));
 const units = (v: bigint | string, dec: number) => {
@@ -52,7 +52,7 @@ const units = (v: bigint | string, dec: number) => {
   const neg = b < 0n;
   const a = neg ? -b : b;
   const frac = (a % p).toString().padStart(dec, '0').replace(/0+$/, '');
-  return `${neg ? '−' : ''}${a / p}${frac ? `,${frac}` : ''}`;
+  return `${neg ? '−' : ''}${a / p}${frac ? `${decimalMark()}${frac}` : ''}`;
 };
 const h = (label: string) => bytesToHex(sha256(new TextEncoder().encode(label)));
 const b58 = (label: string) => base58.encode(sha256(new TextEncoder().encode(label)));

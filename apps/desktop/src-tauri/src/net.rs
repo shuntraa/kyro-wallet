@@ -414,7 +414,7 @@ pub fn onion_rewrite(url: &mut url::Url) -> AppResult<()> {
     if let Some((_, onion)) = ONION_REWRITES.iter().find(|(clear, _)| *clear == host) {
         url.set_scheme("http")
             .and_then(|()| url.set_host(Some(onion)).map_err(|_| ()))
-            .map_err(|()| AppError::Internal(".onion rewrite impossible".into()))?;
+            .map_err(|()| AppError::Internal("cannot rewrite the .onion address".into()))?;
     }
     Ok(())
 }

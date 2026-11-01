@@ -80,7 +80,7 @@ pub fn node_ids(net: Network) -> Vec<u64> {
 /// `GET` on the mirror node; `Ok(None)` on 404.
 async fn mirror(ctx: &HbarCtx<'_>, path: &str) -> AppResult<Option<Value>> {
     let u = url::Url::parse(&format!("{}{path}", mirror_base(ctx.network)))
-        .map_err(|_| AppError::Internal("mirror node URL".into()))?;
+        .map_err(|_| AppError::Internal("invalid mirror node URL".into()))?;
     let (status, bytes) = ctx
         .net_client
         .server_request(ServerRequest::get(u, Family::Hedera), ctx.tor)
@@ -527,7 +527,7 @@ pub async fn submit_to_node(ctx: &HbarCtx<'_>, node: u64, tx: &[u8]) -> AppResul
     let u = url::Url::parse(&format!(
         "https://{host}/proto.CryptoService/cryptoTransfer"
     ))
-    .map_err(|_| AppError::Internal("node URL".into()))?;
+    .map_err(|_| AppError::Internal("invalid node URL".into()))?;
     let mut framed = Vec::with_capacity(tx.len() + 5);
     framed.push(0);
     framed.extend_from_slice(&u32::try_from(tx.len()).unwrap_or(u32::MAX).to_be_bytes());

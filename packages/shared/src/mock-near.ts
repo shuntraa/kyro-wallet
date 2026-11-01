@@ -30,7 +30,7 @@ import {
   type Settings,
 } from './ipc';
 import { nearAccountKind } from './near';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const YOCTO = 10n ** 24n;
@@ -50,7 +50,7 @@ const invalidInput = (m: string) => new IpcError('INVALID_INPUT', l10n(`Entrée 
 export const nearText = (yocto: bigint | string): string => {
   const v = BigInt(yocto);
   const frac = (v % YOCTO).toString().padStart(24, '0').replace(/0+$/, '');
-  return `${v / YOCTO}${frac ? `,${frac}` : ''} NEAR`;
+  return `${v / YOCTO}${frac ? `${decimalMark()}${frac}` : ''} NEAR`;
 };
 
 /** wallet-core `near_account_kind`, same messages family as Rust. */

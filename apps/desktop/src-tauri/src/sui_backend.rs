@@ -95,15 +95,15 @@ async fn gql(ctx: &SuiCtx<'_>, query: &str, variables: Value) -> AppResult<Value
         ))
     })?;
     if let Some(e) = v["errors"].as_array().and_then(|a| a.first()) {
-        let msg = short(e["message"].as_str().unwrap_or("erreur"));
+        let msg = short(e["message"].as_str().unwrap_or("error"));
         return Err(if e["extensions"]["code"] == "BAD_USER_INPUT" {
-            AppError::InvalidInput(format!("Sui : {msg}"))
+            AppError::InvalidInput(format!("Sui: {msg}"))
         } else {
-            bad(format!("Sui : {msg}"))
+            bad(format!("Sui: {msg}"))
         });
     }
     if status != 200 {
-        return Err(bad(format!("Sui : HTTP {status}")));
+        return Err(bad(format!("Sui: HTTP {status}")));
     }
     Ok(v["data"].clone())
 }
@@ -394,7 +394,7 @@ const EFFECTS: &str = "digest status executionError { message } gasEffects { gas
 
 fn parse_effects(e: &Value) -> AppResult<SuiSimulation> {
     if e.is_null() {
-        return Err(bad("Sui : effets absents"));
+        return Err(bad("Sui: effects missing"));
     }
     let g = &e["gasEffects"]["gasSummary"];
     let c = num(&g["computationCost"]).unwrap_or(0);
@@ -432,7 +432,7 @@ pub async fn simulate(ctx: &SuiCtx<'_>, bcs_b64: &str, digest: &str) -> AppResul
     check_chain(ctx, &d["chainIdentifier"])?;
     let sim = parse_effects(&d["simulateTransaction"]["effects"])?;
     if sim.digest != digest {
-        return Err(bad("Sui: the simulation is about another transaction"));
+        return Err(bad("Sui: the simulation is for another transaction"));
     }
     Ok(sim)
 }
@@ -481,7 +481,7 @@ pub async fn execute(
     let e = parse_effects(&d["executeTransaction"]["effects"])?;
     if e.digest != digest {
         return Err(bad(format!(
-            "Sui: the server answered an unexpected digest ({})",
+            "Sui: the server returned an unexpected digest ({})",
             short(&e.digest)
         )));
     }

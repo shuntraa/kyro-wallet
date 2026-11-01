@@ -39,7 +39,7 @@ impl Mnemonic {
         getrandom::getrandom(entropy).map_err(|_| Error::crypto("OS randomness unavailable"))?;
         bip39::Mnemonic::from_entropy_in(bip39::Language::English, entropy)
             .map(Mnemonic)
-            .map_err(|_| Error::crypto("mnemonic generation failed"))
+            .map_err(|_| Error::crypto("recovery phrase generation failed"))
     }
 
     /// Parses an English BIP39 phrase. Case and whitespace are normalised (any run of

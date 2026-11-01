@@ -34,7 +34,7 @@ import {
   type XmrWarning,
 } from './ipc';
 import { checkServerUrl } from './servers';
-import { l10n } from './i18n';
+import { decimalMark, l10n } from './i18n';
 import type { DemoTor } from './mock-tor';
 
 const PICO = 1_000_000_000_000n;
@@ -82,7 +82,7 @@ const hostOf = (u: string) => {
 export const xmrText = (pico: bigint | string) => {
   const v = BigInt(pico);
   const frac = (v % PICO).toString().padStart(12, '0').replace(/0+$/, '');
-  return `${v / PICO}${frac ? `,${frac}` : ''} XMR`;
+  return `${v / PICO}${frac ? `${decimalMark()}${frac}` : ''} XMR`;
 };
 
 /** wallet-core `xmr_parse_address`, demo: base58 + checksum + network byte (same messages). */

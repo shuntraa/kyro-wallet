@@ -853,7 +853,7 @@ impl Signer {
         match &self.keys {
             Keys::Seed(master) => master.derive(&self.secp, path.as_ref()),
             Keys::Watch(_) => Err(Error::crypto(
-                "no private key for a hardware-wallet account",
+                "no private key for a hardware wallet account",
             )),
         }
     }

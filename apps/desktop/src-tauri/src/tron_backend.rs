@@ -478,7 +478,7 @@ pub async fn broadcast(
     let got = v["txid"].as_str().unwrap_or("");
     if got != txid {
         return Err(bad(format!(
-            "the server answered an unexpected txid ({})",
+            "the server returned an unexpected txid ({})",
             got.chars().take(80).collect::<String>()
         )));
     }

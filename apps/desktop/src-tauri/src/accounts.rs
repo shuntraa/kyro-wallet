@@ -113,7 +113,7 @@ impl Chain {
         Chain::ALL
             .into_iter()
             .find(|c| c.key() == s)
-            .ok_or_else(|| AppError::InvalidInput(format!("unknown chain « {s} »")))
+            .ok_or_else(|| AppError::InvalidInput(format!("unknown chain “{s}”")))
     }
 
     pub fn key(self) -> &'static str {
@@ -381,7 +381,7 @@ impl SignerInfo {
             Lang::En => format!(
                 "This signature uses a {} account that is NOT in your account list:\n\
                  • no. {n} — {}\n\n\
-                 Kyro did not add it for you: if you did not just choose this account, refuse.\n\
+                 Kyro did not add it for you: if you did not just choose this account, cancel.\n\
                  Sign anyway?",
                 self.chain.label(),
                 self.path

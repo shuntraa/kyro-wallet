@@ -1179,7 +1179,7 @@ pub async fn publish(
         .map_err(|e| match e {
             PublishTransactionError::InterfaceError(i) => app_err(i),
             PublishTransactionError::TransactionRejected(r) => AppError::InvalidInput(format!(
-                "transaction refused by the Monero node: {}",
+                "transaction rejected by the Monero node: {}",
                 r.chars().take(200).collect::<String>()
             )),
         })?;

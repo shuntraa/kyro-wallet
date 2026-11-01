@@ -73,7 +73,7 @@ pub(crate) async fn rpc(state: &AppState, method: &str, params: Value) -> AppRes
             .take(300)
             .collect();
         return Err(if method == "sendTransaction" {
-            AppError::InvalidInput(format!("Solana transaction refused by the network: {m}"))
+            AppError::InvalidInput(format!("Solana transaction rejected by the network: {m}"))
         } else {
             bad(format!("Solana RPC: {method}: {m}"))
         });
@@ -713,7 +713,7 @@ pub(crate) async fn preview(
             )?;
             if delegated < min {
                 return Err(invalid(format!(
-                    "minimum delegation: {} (the network refuses less)",
+                    "minimum delegation: {} (the network rejects less)",
                     sol(&min.to_string())
                 )));
             }
@@ -788,7 +788,7 @@ pub(crate) async fn preview(
                     if (closes && !pos.can_close) || (!closes && *amount > partial) || *amount == 0
                     {
                         return Err(invalid(format!(
-                            "withdrawal impossible: at most {} without closing the account{}",
+                            "cannot withdraw: at most {} without closing the account{}",
                             sol(&partial.to_string()),
                             if pos.can_close {
                                 format!(", or the whole balance ({})", sol(&lamports.to_string()))
@@ -1029,7 +1029,7 @@ pub(crate) fn describe(lang: Lang, p: &SolStakePreview, net: Network) -> String 
                 )
             } else {
                 format!(
-                    "Operation: create a stake account and delegate it\nStake account (new): {}\n   derived from your address and the seed « {seed} »\nAmount delegated: {delegated}\nRent reserve (recovered on withdrawal): {rent}\nTotal taken: {total} + fees\n",
+                    "Operation: create a stake account and delegate it\nStake account (new): {}\n   derived from your address and the seed “{seed}”\nAmount delegated: {delegated}\nRent reserve (recovered on withdrawal): {rent}\nTotal debited: {total} + fees\n",
                     p.stake_account
                 )
             };
@@ -1057,7 +1057,7 @@ pub(crate) fn describe(lang: Lang, p: &SolStakePreview, net: Network) -> String 
                 )
             } else {
                 format!(
-                    "Operation: DEACTIVATE the stake (start of the cooldown)\nStake account: {}\nAmount concerned: {delegated}\n",
+                    "Operation: DEACTIVATE the stake (start of the cooldown)\nStake account: {}\nAmount affected: {delegated}\n",
                     p.stake_account
                 )
             };
@@ -1150,13 +1150,13 @@ pub(crate) fn describe(lang: Lang, p: &SolStakePreview, net: Network) -> String 
 pub(crate) fn describe_extra(lang: Lang, p: &SolStakePreview) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des points à vérifier sur ce validateur :\n",
-        "Kyro found points to check about this validator:\n",
+        "Kyro found some things to check about this validator:\n",
     ));
     for w in &p.warnings {
         out += &match (w, lang) {
             (SolStakeWarning::Delinquent, _) => lang.pick(
                 "• il est EN RETARD (delinquent) : il ne vote plus, ton stake ne rapporterait rien tant qu'il le reste\n",
-                "• it is DELINQUENT: it no longer votes, your stake would earn nothing as long as it stays so\n",
+                "• it is DELINQUENT: it no longer votes, your stake would earn nothing as long as it stays that way\n",
             ).to_owned(),
             (SolStakeWarning::HighCommission { commission }, Lang::Fr) => format!(
                 "• il garde {commission} % des récompenses (commission élevée{})\n",
@@ -1291,7 +1291,7 @@ pub(crate) async fn broadcast(
     .await?;
     if r.as_str() != Some(expected.as_str()) {
         return Err(bad(format!(
-            "the RPC answered an unexpected identifier ({})",
+            "the RPC returned an unexpected identifier ({})",
             r.to_string().chars().take(100).collect::<String>()
         )));
     }
@@ -1469,7 +1469,7 @@ mod tests {
         let d = describe(Lang::En, &p, Network::Testnet);
         for needle in [
             "Operation: create a stake account and delegate it",
-            "the seed « kyro-stake-0 »",
+            "the seed “kyro-stake-0”",
             "Amount delegated: 1 SOL",
             "Rent reserve (recovered on withdrawal): 0.00166624 SOL",
             "Validator (vote account): ETxHeBBcuw9Yu4dGuP3oXrD12V5RECvmi8ogQ9PkjyVF",

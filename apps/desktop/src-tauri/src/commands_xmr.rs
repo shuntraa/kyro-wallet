@@ -102,7 +102,7 @@ pub(crate) fn describe_xmr(lang: Lang, s: &XmrTxSummary, node: &str) -> String {
 pub(crate) fn describe_xmr_extra(lang: Lang, s: &XmrTxSummary) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des éléments inhabituels dans cet envoi :\n",
-        "Kyro found unusual elements in this send:\n",
+        "Kyro found unusual details in this send:\n",
     ));
     for w in &s.warnings {
         out += match w {

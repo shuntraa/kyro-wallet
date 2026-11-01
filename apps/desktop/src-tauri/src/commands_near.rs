@@ -240,7 +240,7 @@ pub(crate) fn describe_near(
 pub(crate) fn describe_near_extra(lang: Lang, s: &NearTxSummary) -> String {
     let mut out = String::from(lang.pick(
         "Kyro a trouvé des éléments inhabituels dans ce transfert :\n",
-        "Kyro found unusual elements in this transfer:\n",
+        "Kyro found unusual details in this transfer:\n",
     ));
     for w in &s.warnings {
         out += match w {
@@ -459,7 +459,7 @@ fn check_token(
         .saturating_add(c.fee_bound.parse().unwrap_or(u128::MAX));
     if need > spendable {
         return Err(AppError::InvalidInput(format!(
-            "not enough NEAR for the fees: {} NEAR available, {} needed (gas of the contract calls, mostly refunded, + possible storage deposit)",
+            "not enough NEAR for the network fee: {} NEAR available, {} needed (gas for the contract calls, mostly refunded, + any storage deposit)",
             crate::commands::format_units(&spendable.to_string(), 24),
             crate::commands::format_units(&need.to_string(), 24)
         )));

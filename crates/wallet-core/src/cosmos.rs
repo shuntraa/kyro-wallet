@@ -546,11 +546,11 @@ fn parse_sign_doc(doc_bytes: &[u8], our_pubkey: &[u8; 33], chain_id: &str) -> Re
             "memo: with a Ledger, printable ASCII characters only (no \" \\ < > &)",
         ));
     }
-    let fee = auth.fee.as_ref().ok_or_else(|| bad("missing fees"))?;
+    let fee = auth.fee.as_ref().ok_or_else(|| bad("missing fee"))?;
     if !fee.payer.is_empty() || !fee.granter.is_empty() {
-        return Err(bad("fees paid by a third party (payer / granter) refused"));
+        return Err(bad("fee paid by a third party (payer / granter) refused"));
     }
-    let fee_amount = one_uatom(&fee.amount, "fees")?;
+    let fee_amount = one_uatom(&fee.amount, "fee")?;
     if fee.gas_limit == 0 {
         return Err(bad("zero gas_limit"));
     }

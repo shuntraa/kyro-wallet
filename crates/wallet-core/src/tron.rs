@@ -903,7 +903,7 @@ fn tron_decode_raw_at(raw_hex: &str, our_address: &str, now: i64) -> Result<Tron
                 return Err(bad("the amount must be positive"));
             }
             if to == tx.owner() {
-                return Err(bad("TRON refuses a transfer to yourself"));
+                return Err(bad("TRON rejects a transfer to yourself"));
             }
             TronAction::TrxTransfer {
                 to: tron_address_from_bytes(to),
@@ -1112,7 +1112,7 @@ fn tron_decode_stake_raw_at(
         TronContract::VoteWitness { votes, .. } => {
             if votes.is_empty() || votes.len() > TRON_MAX_VOTES {
                 return Err(bad(format!(
-                    "1 to {TRON_MAX_VOTES} votes per transaction (here {})",
+                    "1 to {TRON_MAX_VOTES} votes per transaction (got {})",
                     votes.len()
                 )));
             }
