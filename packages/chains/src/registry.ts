@@ -9,8 +9,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `ltc` / `doge`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*`, docs/IPC.md §2.4).
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
-/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `xlm`: Stellar (XLM, `stellar_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm';
 
 interface ChainBase {
   key: string;
@@ -47,7 +47,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -140,7 +140,7 @@ const SOL: Record<Network, SolChain> = {
   },
 };
 
-/** Phase 4: listed with their price, shown as "Bientôt". Empty now: Litecoin, Dogecoin, TRON, XRP and Cardano all have a full send path. */
+/** Phase 4: listed with their price, shown as "Bientôt". Empty now: Litecoin, Dogecoin, TRON, XRP, Cardano and Stellar all have a full send path. */
 export const WATCH_ONLY_CHAINS: WatchOnlyChain[] = [
 ];
 
@@ -240,6 +240,27 @@ export function cardanoChain(network: Network): CardanoChain {
   return CARDANO_CHAINS[network];
 }
 
+/**
+ * Stellar (phase 4): Rust `stellar_*` commands and `StellarAdapter` (`packages/chains/src/stellar/`).
+ * Testnet = SDF's test network (Friendbot). XLM only (asset id `xlm`); issued assets held by the
+ * account are listed by `stellar_account` but not sendable yet. Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface StellarChain extends Omit<ChainBase, 'phase'> {
+  family: 'xlm';
+  phase: 4;
+}
+
+const STELLAR_CHAINS: Record<Network, StellarChain> = {
+  testnet: { family: 'xlm', key: 'stellar', name: 'Stellar testnet', label: 'XLM testnet', network: 'testnet', color: '#7D00FF', glyph: '✦',
+    nativeSymbol: 'XLM', nativeName: 'Stellar', nativeDecimals: 7, coingeckoId: 'stellar', phase: 4, blockTimeSecs: 6 },
+  mainnet: { family: 'xlm', key: 'stellar', name: 'Stellar', label: 'XLM', network: 'mainnet', color: '#7D00FF', glyph: '✦',
+    nativeSymbol: 'XLM', nativeName: 'Stellar', nativeDecimals: 7, coingeckoId: 'stellar', phase: 4, blockTimeSecs: 6 },
+};
+
+export function stellarChain(network: Network): StellarChain {
+  return STELLAR_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -301,7 +322,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -412,6 +433,8 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       ? { host: host(xrp.url), purpose: 'XRP Ledger : ton serveur rippled', custom: true }
       : { host: network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net', purpose: `XRP Ledger${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (rippled)` },
   );
+  // Stellar: reached by Rust only (stellar_*), Tor circuits of the `stellar` family; SDF's Horizon.
+  list.push({ host: network === 'mainnet' ? 'horizon.stellar.org' : 'horizon-testnet.stellar.org', purpose: `Stellar${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (Horizon de la SDF)` });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'

@@ -55,6 +55,8 @@ export interface Accounts {
   tron: AddressInfo;
   /** XRP Ledger `m/44'/144'/a'/0/0` (same path on testnet), classic `r…` (§2.6). */
   xrp: AddressInfo;
+  /** Stellar `m/44'/148'/a'` (SEP-0005, same key on testnet), `G…` (§2.11). */
+  stellar: AddressInfo;
   /**
    * Cardano CIP-1852 (Icarus) base address `m/1852'/1815'/a'/0/0`. Single-address mode: receive
    * and change both use it; Rust signs with index 0 of the account only (§2.7).
@@ -63,8 +65,8 @@ export interface Accounts {
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'xlm'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -562,6 +564,118 @@ export interface XrpTrustLine {
   issuer: string;
   balance: string;
   limit: string;
+}
+
+// ---------------------------------------------------------------- Stellar (§2.11)
+
+export interface StellarBackendInfo {
+  /** SDF's public Horizon only (no custom server yet). */
+  kind: 'default';
+  network: UtxoNetworkKey;
+  label: string;
+  tor: boolean;
+}
+
+/** An issued asset held by the account (trustline). Amounts: stroops, decimal strings. */
+export interface StellarTrustline {
+  code: string;
+  issuer: string;
+  balance: string;
+  limit: string;
+}
+
+/** `stellar_account`: Horizon `/accounts/{id}` + base reserve of the latest ledger. Amounts: stroops. */
+export interface StellarAccountInfo {
+  address: string;
+  /** Created (funded with at least 2 × the base reserve). `false`: never funded. */
+  exists: boolean;
+  balance: string;
+  /** Current sequence number (decimal string: exceeds JavaScript's safe integers). */
+  sequence: string;
+  /** Trustlines, offers, signers, data entries: one base reserve each. */
+  subentryCount: number;
+  numSponsoring: number;
+  numSponsored: number;
+  sellingLiabilities: string;
+  /** Locked: (2 + subentries + sponsoring − sponsored) × base reserve + selling liabilities. */
+  reserve: string;
+  /** Balance − reserve (0 if negative): what can be sent. */
+  spendable: string;
+  /** SEP-0029 `config.memo_required`: a payment without a memo is refused before building. */
+  memoRequired: boolean;
+  trustlines: StellarTrustline[];
+  /** The network's base reserve (0.5 XLM). */
+  baseReserve: string;
+}
+
+/** serde tag `kind`. */
+export type StellarAssetView = { kind: 'native' } | { kind: 'credit'; code: string; issuer: string };
+
+/** `text: null` = not UTF-8 (only `hex`); text is cleaned for display (wallet-core sanitize_text). */
+export type StellarMemoView =
+  | { kind: 'none' }
+  | { kind: 'text'; text: string | null; hex: string }
+  | { kind: 'id'; id: string }
+  | { kind: 'hash'; hex: string }
+  | { kind: 'return'; hex: string };
+
+/** The only operation, decoded by Rust. Amounts: stroops, decimal strings. */
+export type StellarOpView =
+  | { kind: 'createAccount'; destination: string; startingBalance: string }
+  | { kind: 'payment'; destination: string; asset: StellarAssetView; amount: string }
+  | { kind: 'changeTrust'; asset: StellarAssetView; limit: string };
+
+/** Every warning → reinforced confirmation. */
+export type StellarWarning = { kind: 'highFee' } | { kind: 'unusualText' } | { kind: 'memoReturn' } | { kind: 'removeTrustline' };
+
+/** wallet-core `StellarTxSummary`: Rust's strict decoding of the envelope. */
+export interface StellarTxSummary {
+  /** Network whose passphrase is in the signed payload. */
+  network: Network;
+  source: string;
+  /** Maximum fee, stroops. */
+  fee: string;
+  sequence: string;
+  /** UNIX seconds; `maxTime` is never 0 (Rust refuses a transaction valid for ever). */
+  minTime: number;
+  maxTime: number;
+  memo: StellarMemoView;
+  operation: StellarOpView;
+  warnings: StellarWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+/** Live context Rust read for the dialog. */
+export interface StellarContext {
+  account: StellarAccountInfo;
+  destination: StellarAccountInfo;
+  /** Stroops. */
+  baseReserve: string;
+  /** Stroops per operation (what is usually charged). */
+  baseFee: number;
+  /** Close time of the latest ledger, UNIX seconds. */
+  ledgerTime: number;
+}
+
+/** Memo asked by the interface (serde tag `kind`): text ≤ 28 bytes, id = u64 decimal, hash = 64 hex. */
+export type StellarMemoSpec = { kind: 'text'; value: string } | { kind: 'id'; value: string } | { kind: 'hash'; value: string };
+
+/** `stellar_txs` entry: last 50 payments (Payment, CreateAccount, path payments: amount received). */
+export interface StellarHistoryEntry {
+  id: string;
+  hash: string;
+  type: 'payment' | 'create_account' | 'path_payment_strict_send' | 'path_payment_strict_receive';
+  from: string;
+  to: string;
+  amount: { kind: 'native'; stroops: string | null } | { kind: 'credit'; code: string; issuer: string; stroops: string | null };
+  /** Fee charged to the transaction source, stroops. */
+  fee: string | null;
+  /** ms epoch. */
+  time: number | null;
+  successful: boolean;
+  memo: { kind: 'none' } | { kind: 'text'; text: string } | { kind: 'id'; id: string } | { kind: 'hash'; value: string } | { kind: 'return'; value: string };
+  /** Source account of the transaction (who signed it). */
+  txSource: string;
 }
 
 // ---------------------------------------------------------------- Cardano (§2.7)
@@ -1320,6 +1434,24 @@ export interface Commands {
   xrp_broadcast: { args: { blob: string } & WithAccount; ret: string };
   /** `validated: true` + `result: 'tesSUCCESS'` once in a validated ledger; not found yet: `{ false, '' }`. */
   xrp_tx_status: { args: { hash: string }; ret: { validated: boolean; result: string } };
+  // Stellar (§2.11): Rust builds the transaction (sequence, fee, 5-minute time bounds; Payment, or
+  // CreateAccount for an unfunded destination), decodes it strictly, checks Horizon's network
+  // passphrase, re-reads both accounts and the reserve live, signs behind the password and the
+  // native dialog (memo framed). XLM only for now. Hardware wallets: HW_UNSUPPORTED.
+  stellar_backend_info: { args: undefined; ret: StellarBackendInfo };
+  /** `m/44'/148'/{account}'`, vault unlocked. */
+  stellar_address: { args: WithAccount | undefined; ret: string };
+  stellar_account: { args: { address: string }; ret: StellarAccountInfo };
+  stellar_txs: { args: { address: string }; ret: StellarHistoryEntry[] };
+  /**
+   * `amount`: stroops. Refused before building: missing memo for a `memoRequired` destination;
+   * unfunded destination with < 2 × base reserve; amount + fee > spendable; our account not created.
+   */
+  stellar_build_tx: { args: { to: string; amount: string; memo?: StellarMemoSpec } & WithAccount; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
+  stellar_sign_tx: { args: { envelope: string; password: string } & WithAccount; ret: { envelope: string; hash: string; summary: StellarTxSummary; context: StellarContext } };
+  /** Horizon waits for the ledger: the hash comes back once included and successful; else INVALID_INPUT with the result codes. */
+  stellar_broadcast: { args: { envelope: string } & WithAccount; ret: string };
+  stellar_tx_status: { args: { hash: string }; ret: { found: boolean; successful: boolean } };
   // Cardano (§2.7): Rust selects the UTxOs, computes fee (a·size + b) and min-UTxO, encodes the
   // CBOR, re-reads the UTxOs live before signing, shows every output in the native dialog.
   // Hardware wallets: HW_UNSUPPORTED.
