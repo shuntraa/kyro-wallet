@@ -282,34 +282,41 @@ impl TorManager {
         client: &Client,
         p: &Prepared,
     ) -> AppResult<(u16, Vec<u8>)> {
-        let mut url = p.url.clone();
-        let mut method = p.method;
-        let mut body = p.body.clone();
-        let mut headers = p.headers.clone();
+        let mut hop = net::Hop {
+            url: p.url.clone(),
+            method: p.method,
+            headers: p.headers.clone(),
+            body: p.body.clone(),
+        };
         let mut hops = 0;
         loop {
             // Plain HTTP stays limited to the original onion host the policy approved.
-            let allow_plain = p.allow_plain && url.host_str() == Some(p.host.as_str());
+            let allow_plain = p.allow_plain && hop.url.host_str() == Some(p.host.as_str());
             let (status, location, bytes) = self
-                .one_request(client, &url, method, &headers, body.as_deref(), allow_plain)
+                .one_request(
+                    client,
+                    &hop.url,
+                    hop.method,
+                    &hop.headers,
+                    hop.body.as_deref(),
+                    allow_plain,
+                )
                 .await?;
-            let next = match (status, location) {
-                (301 | 302 | 303 | 307 | 308, Some(loc)) => url.join(&loc).ok(),
-                _ => None,
-            };
-            match next {
-                Some(next) if net::redirect_allowed(&next, hops, true) => {
-                    if matches!(status, 301..=303) {
-                        method = Method::Get;
-                        body = None;
-                    }
-                    if next.host_str() != url.host_str() {
-                        headers.retain(|(k, _)| !p.secret_headers.contains(k));
-                    }
-                    url = next;
+            // Same rule as the clear transport (`net::redirect_hop`): allowlisted hosts only,
+            // API-key headers dropped when the host changes.
+            match net::redirect_hop(
+                status,
+                location.as_deref(),
+                &hop,
+                &p.secret_headers,
+                hops,
+                true,
+            ) {
+                Some(next) => {
+                    hop = next;
                     hops += 1;
                 }
-                _ => return Ok((status, bytes)),
+                None => return Ok((status, bytes)),
             }
         }
     }

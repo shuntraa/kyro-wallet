@@ -48,7 +48,10 @@ fn amount_text(a: &XrpAmountView) -> String {
             value,
             currency,
             issuer,
-        } => format!("{value} {currency} (émis par {issuer})"),
+        } => format!(
+            "{value} {} (émis par {issuer})",
+            crate::dialog_text::sanitize(currency, 40)
+        ),
     }
 }
 
@@ -108,13 +111,17 @@ pub(crate) fn describe_xrp(s: &XrpTxSummary, c: &XrpContext, net: Network) -> St
             s.sequence
         );
     }
+    // Untrusted text, after the amounts and fees, one quoted line each.
     for m in &s.memos {
         out += &format!(
-            "Mémo : {}\n",
-            m.text
-                .clone()
-                .or_else(|| m.memo_data.clone())
-                .unwrap_or_default()
+            "Mémo (texte libre, non vérifié) : {}\n",
+            crate::dialog_text::field(
+                m.text
+                    .as_deref()
+                    .or(m.memo_data.as_deref())
+                    .unwrap_or_default(),
+                crate::dialog_text::MAX_FIELD
+            )
         );
     }
     out

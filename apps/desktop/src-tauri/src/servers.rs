@@ -855,15 +855,17 @@ fn validate_btc(s: &BtcServer, tor: bool) -> AppResult<()> {
             }
         }
         BtcServer::Core { url, auth } => {
-            validate_http_url(url, tor, true)?;
+            let u = validate_http_url(url, tor, true)?;
             match auth {
                 CoreAuth::Cookie { cookie_path } => {
-                    if cookie_path.trim().is_empty()
-                        || !std::path::Path::new(cookie_path).is_absolute()
-                    {
-                        return Err(invalid("chemin du fichier .cookie : chemin absolu attendu"));
+                    // The cookie is a local secret: it is only ever sent to a node on this
+                    // machine or the local network, never to a remote (or onion) host.
+                    if !u.host_str().is_some_and(is_private_host) {
+                        return Err(invalid(
+                            "fichier .cookie : seulement pour un nœud local (127.0.0.1, ::1) ou de ton réseau local ; pour un nœud distant, utilise rpcuser / rpcpassword",
+                        ));
                     }
-                    Ok(())
+                    validate_cookie_path(cookie_path)
                 }
                 CoreAuth::Userpass { user, password, .. } => {
                     if user.is_empty() || user.contains(':') {
@@ -877,6 +879,57 @@ fn validate_btc(s: &BtcServer, tor: bool) -> AppResult<()> {
             }
         }
     }
+}
+
+/// Largest `.cookie` accepted (`__cookie__:` + 64 hex = 75 bytes, plus a newline).
+pub const MAX_COOKIE_LEN: u64 = 256;
+
+/// Syntax of a cookie path: absolute, file name exactly `.cookie`. The content is checked by
+/// [`read_cookie`]. Never echoes the path (it may come from a compromised interface).
+pub fn validate_cookie_path(path: &str) -> AppResult<()> {
+    let p = std::path::Path::new(path.trim());
+    if !p.is_absolute() || p.file_name().and_then(|n| n.to_str()) != Some(".cookie") {
+        return Err(invalid(
+            "fichier .cookie : choisis le fichier « .cookie » du dossier de données de ton nœud",
+        ));
+    }
+    Ok(())
+}
+
+/// `__cookie__:` followed by 64 lower-case hex characters (Bitcoin Core's cookie format).
+pub fn is_cookie_content(s: &str) -> bool {
+    s.strip_prefix("__cookie__:")
+        .is_some_and(|h| h.len() == 64 && h.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+}
+
+/// Reads a Bitcoin Core `.cookie` safely: the name must be `.cookie`, no symlink, a regular
+/// file of at most [`MAX_COOKIE_LEN`] bytes whose content is exactly `__cookie__:<64 hex>`.
+/// Errors never contain the path nor the OS error (no file-content oracle for the interface).
+pub fn read_cookie(path: &str) -> AppResult<zeroize::Zeroizing<String>> {
+    use std::io::Read as _;
+    let refused = || {
+        AppError::ServerInvalid(
+            "Bitcoin Core : fichier .cookie illisible ou invalide (choisis à nouveau le fichier .cookie de ton nœud)".into(),
+        )
+    };
+    validate_cookie_path(path).map_err(|_| refused())?;
+    let p = std::path::Path::new(path.trim());
+    let meta = std::fs::symlink_metadata(p).map_err(|_| refused())?;
+    if meta.file_type().is_symlink() || !meta.is_file() || meta.len() > MAX_COOKIE_LEN {
+        return Err(refused());
+    }
+    let mut buf = zeroize::Zeroizing::new(Vec::with_capacity(MAX_COOKIE_LEN as usize));
+    std::fs::File::open(p)
+        .and_then(|f| f.take(MAX_COOKIE_LEN + 1).read_to_end(&mut buf))
+        .map_err(|_| refused())?;
+    if buf.len() as u64 > MAX_COOKIE_LEN {
+        return Err(refused());
+    }
+    let text = std::str::from_utf8(&buf).map_err(|_| refused())?.trim();
+    if !is_cookie_content(text) {
+        return Err(refused());
+    }
+    Ok(zeroize::Zeroizing::new(text.to_owned()))
 }
 
 /// A P2P peer (`host:port`): an onion v3 service or an IP literal. Hostnames are refused so
@@ -1129,15 +1182,50 @@ mod tests {
         assert!(with_btc(core("http://node.example:8332", cookie.clone()))
             .validate(true)
             .is_err());
-        assert!(with_btc(core("https://node.example:8332", cookie))
+        // CRITIQUE 1: the cookie is a local secret, never sent to a remote or onion host.
+        for remote in [
+            "https://node.example:8332",
+            "https://8.8.8.8:8332",
+            "http://abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcd.onion:8332",
+        ] {
+            assert!(
+                with_btc(core(remote, cookie.clone()))
+                    .validate(true)
+                    .is_err(),
+                "{remote}"
+            );
+        }
+        assert!(with_btc(core("http://192.168.1.20:8332", cookie.clone()))
             .validate(true)
             .is_ok());
-        let relative = CoreAuth::Cookie {
-            cookie_path: ".cookie".into(),
-        };
-        assert!(with_btc(core("http://127.0.0.1:8332", relative))
+        assert!(with_btc(core("https://[::1]:8332", cookie))
             .validate(true)
-            .is_err());
+            .is_ok());
+        // File name must be exactly `.cookie` (no settings.json, vault, SSH key…), absolute.
+        let abs = |name: &str| {
+            if cfg!(windows) {
+                format!("C:\\btc\\{name}")
+            } else {
+                format!("/btc/{name}")
+            }
+        };
+        for bad in [
+            ".cookie".to_owned(),
+            abs("settings.json"),
+            abs("coffre-mainnet.kyrovault"),
+            abs("id_ed25519"),
+            abs(".cookie.bak"),
+            abs("x.cookie"),
+        ] {
+            let auth = CoreAuth::Cookie {
+                cookie_path: bad.clone(),
+            };
+            let err = with_btc(core("http://127.0.0.1:8332", auth))
+                .validate(true)
+                .unwrap_err();
+            // The path is never echoed back.
+            assert!(bad == ".cookie" || !err.to_string().contains(&bad), "{err}");
+        }
         let nopass = CoreAuth::Userpass {
             user: "kyro".into(),
             password: None,
@@ -1532,5 +1620,45 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    /// CRITIQUE 1: only a real Bitcoin Core cookie is ever read and sent.
+    #[test]
+    fn cookie_reading_is_strict() {
+        let dir = std::env::temp_dir().join(format!("kyro-cookie-strict-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(".cookie");
+        let p = path.to_string_lossy().into_owned();
+        let good = format!("__cookie__:{}", "a1".repeat(32));
+        std::fs::write(&path, format!("{good}\n")).unwrap();
+        assert_eq!(read_cookie(&p).unwrap().as_str(), good);
+        for bad in [
+            "__cookie__:abc".to_owned(),
+            format!("__cookie__:{}", "A1".repeat(32)),
+            format!("user:{}", "a1".repeat(32)),
+            "{\"tor\":{\"enabled\":true}}".to_owned(),
+            "x".repeat(300),
+        ] {
+            std::fs::write(&path, &bad).unwrap();
+            let e = read_cookie(&p).unwrap_err().to_string();
+            assert!(!e.contains(&p) && !e.contains("abc"), "{e}");
+        }
+        // Another file name (settings.json, the vault…) is refused before being opened.
+        let other = dir.join("settings.json");
+        std::fs::write(&other, &good).unwrap();
+        assert!(read_cookie(&other.to_string_lossy()).is_err());
+        // A symlink named .cookie is refused (Unix: creating one needs no privilege).
+        #[cfg(unix)]
+        {
+            std::fs::remove_file(&path).unwrap();
+            std::os::unix::fs::symlink(&other, &path).unwrap();
+            assert!(read_cookie(&p).is_err());
+        }
+        // Missing file: same generic error, no OS text.
+        let _ = std::fs::remove_file(&path);
+        let e = read_cookie(&p).unwrap_err().to_string();
+        assert!(!e.contains(&p), "{e}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

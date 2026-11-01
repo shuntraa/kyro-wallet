@@ -13,8 +13,11 @@ import {
   redactServers,
   setBackend,
   type Servers,
+  type Settings,
 } from '../src';
 import { createMockBackend, DEMO_RESCAN_MS } from '../src/mock';
+
+const core0 = (s: Settings, url: string, cookiePath: string) => ({ ...s, servers: { ...s.servers, bitcoin: { testnet4: { kind: 'core' as const, url, auth: { kind: 'cookie' as const, cookiePath } } } } });
 
 afterEach(() => {
   vi.clearAllTimers();
@@ -96,7 +99,9 @@ describe('mock: Bitcoin Core watch wallet', () => {
       return p;
     };
     const s = await call('settings_get');
-    await settle(call('settings_set', { settings: { ...s, servers: { ...s.servers, bitcoin: { testnet4: { kind: 'core', url: 'http://127.0.0.1:48332', auth: { kind: 'cookie', cookiePath: '/home/me/.bitcoin/testnet4/.cookie' } } } } } }));
+    // The cookie path comes from the native picker (a typed path is refused).
+    const { path } = await call('btc_core_pick_cookie');
+    await settle(call('settings_set', { settings: { ...s, servers: { ...s.servers, bitcoin: { testnet4: { kind: 'core', url: 'http://127.0.0.1:48332', auth: { kind: 'cookie', cookiePath: path ?? '' } } } } } }));
     expect((await settle(call('btc_core_status'))).state).toBe('idle');
     const started = await settle(call('btc_core_setup', { rescanFrom: 1_700_000_000 }));
     expect(started).toMatchObject({ state: 'importing', wallet: expect.stringMatching(/^kyro-watch-[0-9a-f]{8}$/) });
@@ -123,7 +128,10 @@ describe('mock: Bitcoin Core watch wallet', () => {
     const mock = createMockBackend({ network: 'testnet', preset: { password: 'correct horse', unlocked: true } });
     setBackend(mock.invoke);
     const s = await call('settings_get');
-    const core = (url: string, cookiePath = '/home/me/.bitcoin/testnet4/.cookie') => ({ ...s, servers: { ...s.servers, bitcoin: { testnet4: { kind: 'core' as const, url, auth: { kind: 'cookie' as const, cookiePath } } } } });
+    const picked = (await call('btc_core_pick_cookie')).path ?? '';
+    // A path typed by the interface (not from the picker) is refused before any request.
+    await expect(call('settings_set', { settings: core0(s, 'http://127.0.0.1:48332', '/home/me/.ssh/.cookie') })).rejects.toMatchObject({ code: 'SERVER_INVALID' });
+    const core = (url: string, cookiePath = picked) => ({ ...s, servers: { ...s.servers, bitcoin: { testnet4: { kind: 'core' as const, url, auth: { kind: 'cookie' as const, cookiePath } } } } });
     // A node that went down after the save: the setup call itself rejects (not a later status).
     await call('settings_set', { settings: core('http://127.0.0.1:48332/flaky') });
     await expect(call('btc_core_setup', { rescanFrom: 'now' })).rejects.toMatchObject({ code: 'SERVER_UNREACHABLE' });

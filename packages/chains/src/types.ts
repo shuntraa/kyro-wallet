@@ -84,7 +84,7 @@ export interface EvmUnsigned {
   recipient: string;
   maxFee: bigint;
   size: SizeHint;
-  /** Passed to `evm_sign_tx` so the native dialog shows a readable token amount. */
+  /** Shown by the interface only (the native dialog uses Rust's own token table). */
   token?: EvmTokenHint;
   kind: 'transfer' | 'approval' | 'swap' | 'contract';
 }

@@ -12,9 +12,10 @@ use wallet_core::{BtcKind, Network, UtxoCoin};
 use crate::btc_backend::{self, Ctx, Detected};
 use crate::error::{AppError, AppResult};
 use crate::net::{Family, NetClient, ServerRequest};
+use crate::server_approval::{confirm_endpoints, confirm_tor_off, endpoints, host_port_endpoint};
 use crate::servers::{
-    btc_network_key, validate_http_url, BtcServer, CardanoServer, RpcServer, Servers, TronServer,
-    UtxoServer, XrpServer, SOLANA_GENESIS,
+    btc_network_key, validate_http_url, BtcServer, CardanoServer, CoreAuth, RpcServer, Servers,
+    TronServer, UtxoServer, XrpServer, SOLANA_GENESIS,
 };
 use crate::settings::Settings;
 use crate::state::AppState;
@@ -201,6 +202,82 @@ async fn probe_changes(net: &NetClient, new: &Servers, old: &Servers, tor: bool)
     Ok(())
 }
 
+// ---------------------------------------------------------------- cookie gate
+
+/// `.cookie` paths of the Bitcoin Core entries of `s`.
+fn cookie_paths(s: &Servers) -> Vec<&str> {
+    [&s.bitcoin.mainnet, &s.bitcoin.testnet4]
+        .into_iter()
+        .flatten()
+        .filter_map(|b| match b {
+            BtcServer::Core {
+                auth: CoreAuth::Cookie { cookie_path },
+                ..
+            } => Some(cookie_path.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A cookie path is accepted only if it is already saved, or was just chosen by the user in
+/// the native file picker (`btc_core_pick_cookie`): the interface cannot point Kyro at any
+/// other file.
+pub(crate) fn check_cookie_paths(
+    new: &Servers,
+    saved: &Servers,
+    picked: Option<&str>,
+) -> AppResult<()> {
+    let known = cookie_paths(saved);
+    for p in cookie_paths(new) {
+        if !known.contains(&p) && picked != Some(p) {
+            return Err(AppError::ServerInvalid(
+                "fichier .cookie : choisis-le avec le bouton « Choisir le fichier .cookie »".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PickedCookie {
+    /// Path of the file the user chose (theirs to see; it is a `.cookie` that passed the
+    /// checks). `null` when the picker was cancelled.
+    pub path: Option<String>,
+}
+
+/// Opens the system file picker (owned by Rust, not the webview) to choose Bitcoin Core's
+/// `.cookie`. The file must pass the same checks as on every request (name `.cookie`, no
+/// symlink, <= 256 bytes, `__cookie__:<64 hex>`); it then becomes the one new cookie path
+/// that `settings_set` / `server_test` accept.
+#[tauri::command]
+pub async fn btc_core_pick_cookie(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<PickedCookie> {
+    use tauri_plugin_dialog::DialogExt as _;
+    let handle = app.clone();
+    let picked = crate::commands::blocking(move || {
+        Ok(handle
+            .dialog()
+            .file()
+            .set_title("Fichier .cookie de ton nœud Bitcoin Core")
+            .blocking_pick_file())
+    })
+    .await?;
+    let Some(file) = picked else {
+        return Ok(PickedCookie { path: None });
+    };
+    let path = file
+        .into_path()
+        .map_err(|_| AppError::ServerInvalid("fichier .cookie : chemin local attendu".into()))?
+        .to_string_lossy()
+        .into_owned();
+    crate::servers::read_cookie(&path)?;
+    state.set_picked_cookie(Some(path.clone()));
+    Ok(PickedCookie { path: Some(path) })
+}
+
 // ---------------------------------------------------------------- settings
 
 #[tauri::command]
@@ -209,10 +286,16 @@ pub fn settings_get(state: State<'_, AppState>) -> Value {
 }
 
 /// Validates (syntax, then a live check of every changed server: network/chain must match),
-/// saves, and starts/stops Tor. Errors: `SERVER_INVALID`, `SERVER_WRONG_NETWORK`,
-/// `SERVER_UNREACHABLE`, `TOR_UNAVAILABLE`, `INVALID_INPUT`.
+/// saves, and starts/stops Tor. Every new custom server host and Tor going off are confirmed
+/// in a native dialog first (`USER_REJECTED` if refused). Errors: `SERVER_INVALID`,
+/// `SERVER_WRONG_NETWORK`, `SERVER_UNREACHABLE`, `TOR_UNAVAILABLE`, `INVALID_INPUT`,
+/// `USER_REJECTED`.
 #[tauri::command]
-pub async fn settings_set(state: State<'_, AppState>, settings: Value) -> AppResult<Value> {
+pub async fn settings_set(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    settings: Value,
+) -> AppResult<Value> {
     let old = state.settings();
     // A caller that does not know `servers` yet (older UI) must not wipe them.
     let has_servers = settings.get("servers").is_some();
@@ -224,6 +307,12 @@ pub async fn settings_set(state: State<'_, AppState>, settings: Value) -> AppRes
     new.migrate_legacy_rpc(state.network);
     new.servers.merge_secrets_from(&old.servers);
     new.validate()?;
+    check_cookie_paths(&new.servers, &old.servers, state.picked_cookie().as_deref())?;
+    // Native confirmations BEFORE any request: Tor going off, then every new server host.
+    if old.tor.enabled && !new.tor.enabled {
+        confirm_tor_off(&app).await?;
+    }
+    confirm_endpoints(&app, &endpoints(&new.servers), &old.servers).await?;
     probe_changes(&state.net, &new.servers, &old.servers, new.tor.enabled).await?;
     let saved = state.save_settings(new)?;
     match (old.tor.enabled, saved.tor.enabled) {
@@ -289,15 +378,74 @@ pub struct ServerTestResult {
     pub detected: Detected,
 }
 
-/// Tests a server WITHOUT saving it (same checks as `settings_set`). For a Core `userpass`
-/// entry sent without `password`, the stored password of that slot is used.
+/// Servers of a test target, in a `Servers` value (for validation and native approval).
+fn probe_servers(target: &ServerTestTarget) -> AppResult<Servers> {
+    let mut probe = Servers::default();
+    match target {
+        ServerTestTarget::Bitcoin { network, server } => {
+            *match network_of(network)? {
+                Network::Mainnet => &mut probe.bitcoin.mainnet,
+                Network::Testnet => &mut probe.bitcoin.testnet4,
+            } = Some(server.clone());
+        }
+        ServerTestTarget::Litecoin { network, server }
+        | ServerTestTarget::Dogecoin { network, server } => {
+            let coin = if matches!(target, ServerTestTarget::Litecoin { .. }) {
+                UtxoCoin::Litecoin
+            } else {
+                UtxoCoin::Dogecoin
+            };
+            *match utxo_network_of(network)? {
+                Network::Mainnet => &mut probe.utxo_mut(coin).mainnet,
+                Network::Testnet => &mut probe.utxo_mut(coin).testnet,
+            } = Some(server.clone());
+        }
+        ServerTestTarget::Tron { network, server } => {
+            *match utxo_network_of(network)? {
+                Network::Mainnet => &mut probe.tron.mainnet,
+                Network::Testnet => &mut probe.tron.testnet,
+            } = Some(server.clone());
+        }
+        ServerTestTarget::Xrp { network, server } => {
+            *match utxo_network_of(network)? {
+                Network::Mainnet => &mut probe.xrp.mainnet,
+                Network::Testnet => &mut probe.xrp.testnet,
+            } = Some(server.clone());
+        }
+        ServerTestTarget::Cardano { network, server } => {
+            *match utxo_network_of(network)? {
+                Network::Mainnet => &mut probe.cardano.mainnet,
+                Network::Testnet => &mut probe.cardano.testnet,
+            } = Some(server.clone());
+        }
+        ServerTestTarget::Evm { chain_id, server } => {
+            probe.evm.insert(chain_id.to_string(), server.clone());
+        }
+        ServerTestTarget::Solana { cluster, server } => {
+            probe.solana.insert(cluster.clone(), server.clone());
+        }
+    }
+    Ok(probe)
+}
+
+/// Tests a server WITHOUT saving it (same checks as `settings_set`, including the native
+/// approval of a new host, BEFORE any request). For a Core `userpass` entry sent without
+/// `password`, the stored password of that slot is used.
 #[tauri::command]
 pub async fn server_test(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     target: ServerTestTarget,
 ) -> AppResult<ServerTestResult> {
     let settings = state.settings();
     let tor = settings.tor.enabled;
+    {
+        let mut probe = probe_servers(&target)?;
+        probe.merge_secrets_from(&settings.servers);
+        probe.validate(tor)?;
+        check_cookie_paths(&probe, &settings.servers, state.picked_cookie().as_deref())?;
+        confirm_endpoints(&app, &endpoints(&probe), &settings.servers).await?;
+    }
     let started = Instant::now();
     let detected = match target {
         ServerTestTarget::Bitcoin { network, server } => {
@@ -388,9 +536,11 @@ async fn probe_utxo(
 }
 
 /// Fetches an Electrum server's TLS certificate fingerprint for the trust-on-first-use prompt.
-/// The handshake is aborted right after the certificate is seen: nothing is sent.
+/// The handshake is aborted right after the certificate is seen: nothing else is sent. A host
+/// not saved nor approved yet is confirmed natively first (its name alone would leave).
 #[tauri::command]
 pub async fn electrum_fetch_cert(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     host: String,
     port: u16,
@@ -407,6 +557,8 @@ pub async fn electrum_fetch_cert(
             "adresse .onion : exige Tor activé".into(),
         ));
     }
+    let endpoint = host_port_endpoint("Bitcoin (Electrum, lecture du certificat)", &host, port);
+    confirm_endpoints(&app, &[endpoint], &state.settings().servers).await?;
     crate::electrum::fetch_certificate(&state.net, &host, port, tor).await
 }
 

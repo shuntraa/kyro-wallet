@@ -976,7 +976,10 @@ fn validator_lines(v: &SolValidator) -> String {
         v.identity,
         v.name
             .as_deref()
-            .map(|n| format!("« {n} » (déclaré par le validateur, non vérifié)"))
+            .map(|n| format!(
+                "{} (déclaré par le validateur, non vérifié)",
+                crate::dialog_text::field(n, 60)
+            ))
             .unwrap_or_else(|| "aucun".into()),
         v.commission,
         sol(&v.activated_stake),
@@ -997,7 +1000,7 @@ pub(crate) fn describe(p: &SolStakePreview, net: Network) -> String {
             out += &format!(
                 "Opération : créer un compte de staking et le déléguer\nCompte de staking (nouveau) : {}\n   dérivé de ton adresse et du seed « {} »\n",
                 p.stake_account,
-                p.seed.as_deref().unwrap_or("")
+                crate::dialog_text::sanitize(p.seed.as_deref().unwrap_or(""), 40)
             );
             out += &format!(
                 "Montant délégué : {}\nRéserve de rent (récupérée au retrait) : {}\nTotal prélevé : {} + frais\n",
@@ -1104,7 +1107,15 @@ pub(crate) async fn prepare_sign(
     me: &str,
     bytes: &[u8],
 ) -> AppResult<(SolTxSummary, SolStakePreview)> {
-    let summary = solana::decode(state, bytes, me).await?;
+    let decoded = solana::decode(state, bytes, me).await?;
+    // Kyro builds staking messages itself, without lookup tables: an account given by the RPC
+    // through a table has no business here.
+    if !decoded.from_tables.is_empty() {
+        return Err(AppError::InvalidInput(
+            "staking : comptes lus dans une table d'adresses refusés".into(),
+        ));
+    }
+    let summary = decoded.summary;
     let op = classify(&summary, me)?;
     let fee: u64 = summary.base_fee_lamports.parse().unwrap_or(5000);
     let p = preview(state, me, &op, fee).await?;

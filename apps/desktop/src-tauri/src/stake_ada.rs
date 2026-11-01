@@ -856,9 +856,12 @@ fn pool_text(p: &AdaPool) -> String {
         "{}{} ({})\n      marge {} % · coût fixe {} par époque · pledge {} · saturation {} · {} délégants\n      nom et ticker déclarés par le pool, non vérifiés par Kyro",
         p.ticker
             .as_deref()
-            .map(|t| format!("[{t}] "))
+            .map(|t| format!("[{}] ", crate::dialog_text::sanitize(t, 12)))
             .unwrap_or_default(),
-        p.name.as_deref().unwrap_or("pool sans métadonnées"),
+        p.name
+            .as_deref()
+            .map(|n| crate::dialog_text::field(n, 60))
+            .unwrap_or_else(|| "pool sans métadonnées".into()),
         p.pool_id,
         (p.margin * 1000.0).round() / 10.0,
         ada(&p.fixed_cost),
@@ -1322,7 +1325,7 @@ mod tests {
             "Staking Cardano (preprod)",
             "Clé de staking : stake_test1",
             "1. Enregistrement de ta clé de staking — DÉPÔT 2 ADA",
-            "2. Délégation au pool [ECS] Easy Car Stake (pool187jm",
+            "2. Délégation au pool [ECS] « Easy Car Stake » (pool187jm",
             "marge 100 % · coût fixe 340 ADA par époque",
             "non vérifiés par Kyro",
             "3. Délégation de vote : « toujours s'abstenir »",

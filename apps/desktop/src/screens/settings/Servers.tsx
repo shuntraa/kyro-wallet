@@ -873,9 +873,7 @@ function CoreForm({ d, set, savedIsCore, passwordLost, tor }: { d: BtcDraft; set
         />
       </div>
       {d.authKind === 'cookie' ? (
-        <Field label="Chemin du fichier .cookie" hint="Recommandé : Bitcoin Core le régénère à chaque démarrage et Kyro le relit à chaque requête, aucun mot de passe n’est stocké.">
-          <Input value={d.cookiePath} onChange={(e) => set({ cookiePath: e.target.value })} placeholder="C:\Users\toi\AppData\Roaming\Bitcoin\testnet4\.cookie" className="font-mono text-[13px]" />
-        </Field>
+        <CookiePicker d={d} set={set} local={local} />
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2.5">
@@ -893,6 +891,43 @@ function CoreForm({ d, set, savedIsCore, passwordLost, tor }: { d: BtcDraft; set
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * `.cookie` chosen in the system file picker opened by Rust (`btc_core_pick_cookie`): the
+ * interface cannot type a path, so it cannot point Kyro at another file (settings, vault…).
+ */
+function CookiePicker({ d, set, local }: { d: BtcDraft; set: (p: Partial<BtcDraft>) => void; local: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pick = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await call('btc_core_pick_cookie');
+      if (res.path) set({ cookiePath: res.path });
+    } catch (e) {
+      setError(toIpcError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Field label="Fichier .cookie" hint="Recommandé : Bitcoin Core le régénère à chaque démarrage et Kyro le relit à chaque requête, aucun mot de passe n’est stocké. Il se trouve dans le dossier de données du nœud (sous macOS et Linux, affiche les fichiers cachés pour le voir).">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2.5">
+          <Button variant="outline" size="md" disabled={busy || !local} onClick={() => void pick()}>
+            {busy && <Spinner />} Choisir le fichier .cookie
+          </Button>
+          <span className={cn('min-w-0 truncate font-mono text-[12.5px]', d.cookiePath ? 'text-text2' : 'text-faint')} title={d.cookiePath || undefined}>
+            {d.cookiePath || 'aucun fichier choisi'}
+          </span>
+        </div>
+        {!local && d.coreUrl.trim() && <span className="text-[12px] text-warn">Le fichier .cookie n’est envoyé qu’à un nœud local ou de ton réseau local. Pour un nœud distant, utilise l’utilisateur et le mot de passe RPC.</span>}
+        {error && <Notice tone="error">{error}</Notice>}
+      </div>
+    </Field>
   );
 }
 

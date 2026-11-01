@@ -125,9 +125,13 @@ pub fn account_arg(account: Option<u32>) -> AppResult<u32> {
 fn clean_name(name: &str) -> AppResult<String> {
     let n = name.trim();
     let len = n.chars().count();
-    if len == 0 || len > MAX_NAME || n.chars().any(char::is_control) {
+    if len == 0
+        || len > MAX_NAME
+        || n.chars()
+            .any(|c| c.is_control() || crate::dialog_text::is_invisible(c))
+    {
         return Err(AppError::InvalidInput(format!(
-            "nom du compte : 1 à {MAX_NAME} caractères, sans caractère de contrôle"
+            "nom du compte : 1 à {MAX_NAME} caractères, sans caractère de contrôle ni caractère invisible ou de direction"
         )));
     }
     Ok(n.to_owned())
@@ -276,7 +280,11 @@ impl SignerInfo {
     /// First line of every native signing dialog of the vault.
     pub fn line(&self) -> String {
         match &self.name {
-            Some(n) => format!("Compte signataire : {n} — {}", self.path),
+            Some(n) => format!(
+                "Compte signataire : {} — {}",
+                crate::dialog_text::field(n, MAX_NAME),
+                self.path
+            ),
             None => format!(
                 "Compte signataire : « inconnu » (n° {} {}, absent de ta liste) — {}",
                 u64::from(self.account) + 1,
@@ -432,7 +440,17 @@ mod tests {
     fn limits_and_names() {
         let mut a = VaultAccounts::default();
         assert!(a.add(T, Chain::Btc, MAX_ACCOUNT + 1, "x").is_err());
-        for bad in ["", "   ", "a\nb", &"x".repeat(MAX_NAME + 1)] {
+        // F6: bidi overrides, isolates and zero-width characters are refused too.
+        for bad in [
+            "",
+            "   ",
+            "a\nb",
+            &"x".repeat(MAX_NAME + 1),
+            "Épargne\u{202E}",
+            "a\u{2066}b",
+            "a\u{200B}b",
+            "\u{FEFF}x",
+        ] {
             assert!(a.add(T, Chain::Btc, 1, bad).is_err(), "{bad:?}");
         }
         for i in 1..MAX_ACCOUNTS_PER_CHAIN as u32 {
@@ -468,7 +486,16 @@ mod tests {
         };
         assert_eq!(
             known.line(),
-            "Compte signataire : Ethereum 2 — m/44'/60'/0'/0/1"
+            "Compte signataire : « Ethereum 2 » — m/44'/60'/0'/0/1"
+        );
+        // A name stored before the bidi rule (or edited on disk) cannot reorder the line.
+        let spoof = SignerInfo {
+            name: Some("Pro\u{202E}\nÀ : 0xEvil".into()),
+            ..known.clone()
+        };
+        assert_eq!(
+            spoof.line(),
+            "Compte signataire : « Pro À : 0xEvil » — m/44'/60'/0'/0/1"
         );
         assert!(!known.unknown());
         let unknown = SignerInfo {

@@ -2,11 +2,11 @@
 
 Kyro ne contacte **que** les serveurs ci-dessous, et seulement pour la raison indiquée. Il n'y a **aucune télémétrie**, aucun rapport de plantage automatique, aucune vérification de mise à jour en arrière-plan.
 
-L'interface (webview) ne peut joindre aucun serveur : la CSP n'autorise que le canal IPC de Tauri. Toutes les requêtes passent par la commande Rust `net_fetch`, qui :
-- refuse tout hôte absent de cette liste (et de tes RPC personnalisés) ;
-- n'accepte que HTTPS (seule exception : le service onion de mempool listé plus bas, en `http://` et **uniquement via Tor**), refuse les redirections vers un hôte hors liste ;
+L'interface (webview) ne peut joindre aucun serveur : la CSP n'autorise que le canal IPC de Tauri, et une **garde de navigation** (Rust) refuse toute navigation hors des pages de l'app (`tauri://localhost`, `http(s)://tauri.localhost`, le serveur de développement en debug) ainsi que toute nouvelle fenêtre (`window.open`) : une page compromise ne peut pas faire sortir de données par `location.href = "https://…/?d=…"` (ce qui partirait en clair, hors Tor). Toutes les requêtes passent par la commande Rust `net_fetch`, qui :
+- refuse tout hôte absent de cette liste (et de tes serveurs personnalisés **autorisés en fenêtre native**, voir plus bas) ;
+- n'accepte que HTTPS (seule exception : le service onion de mempool listé plus bas, en `http://` et **uniquement via Tor**), refuse les redirections vers un hôte hors liste ; les redirections sont suivies par Kyro lui-même (Tor comme mode clair) et une clé API n'est **jamais** renvoyée vers un autre hôte ;
 - plafonne la réponse à 5 Mo et la durée à 20 s ;
-- met en cache et limite le débit (CoinGecko) ;
+- met en cache (borné : 128 réponses, 16 Mio) et limite le débit (CoinGecko) ;
 - passe **par Tor intégré par défaut** (voir « Modes » ci-dessous).
 
 ## Modes : Tor (par défaut) ou en clair
@@ -27,7 +27,7 @@ Par serveur, en mode Tor : CoinGecko voit les cryptos et la devise demandées ; 
 
 Source de l'adresse onion : l'en-tête HTTP `Onion-Location` renvoyé par https://mempool.space/ (vérifié le 30/10/2026, authentifié par le certificat TLS de mempool.space) : `Onion-Location: http://mempoolhqx4isw62xs7abwphsq7ldayuidyx2v2oethdhhj6mlo2r6ad.onion/`.
 
-Repasser en clair est un choix explicite dans les Réglages (confirmation demandée). Tes RPC personnalisés passent aussi par Tor quand il est activé. Les données de Tor (consensus, état des gardes) sont stockées dans le dossier de l'app (`tor/`).
+Repasser en clair est un choix explicite dans les Réglages, confirmé dans une **fenêtre système native** (« Désactiver Tor ? ») : une interface compromise ne peut pas couper Tor sans toi. Tes RPC personnalisés passent aussi par Tor quand il est activé. Les données de Tor (consensus, état des gardes) sont stockées dans le dossier de l'app (`tor/`).
 
 Pourquoi l'onion : `mempool.space` ne répond pas aux relais de sortie Tor (délai dépassé à la sortie sur toutes nos tentatives, 30/10/2026) ; son service onion répond.
 
@@ -89,10 +89,12 @@ Les tables d'adresses (ALT) d'une transaction Solana v0 sont lues par Rust aupr�
 ## Serveurs personnalisés (Réglages → Réseaux)
 
 Tu peux remplacer le serveur par défaut de chaque chaîne : Bitcoin (Esplora, Electrum ou ton nœud Bitcoin Core), Litecoin et Dogecoin (Esplora ; pour Dogecoin mainnet, il remplace les ElectrumX de Komodo), TRON (API HTTP java-tron, comme TronGrid ; l'historique exige l'API `/v1` de TronGrid : avec un nœud seul, il est refusé avec un message clair), XRP Ledger (JSON-RPC rippled), Cardano (instance Koios), chaque chaîne EVM, chaque cluster Solana. Règles communes :
+- **chaque nouvel hôte est confirmé dans une fenêtre système native avant la moindre requête** (« Nouveau serveur » : à quoi il sert, `schéma://hôte:port`), que ce soit pour l'enregistrer, le tester ou lire le certificat d'un serveur Electrum. Sans ton accord, rien ne part : ni requête, ni résolution DNS, ni connexion à une adresse de ton réseau local. Un hôte déjà enregistré, ou autorisé plus tôt dans la session, n'est pas redemandé ; changer de port compte comme un nouvel hôte. Si tu n'as pas saisi l'adresse toi-même, refuse : une interface compromise pourrait s'en servir pour faire sortir des données (le nom d'hôte lui-même peut porter des données) ou sonder ton réseau local ;
 - un serveur personnalisé n'est autorisé **que pour sa propre famille** et passe par les **circuits Tor isolés** de cette famille ;
 - il est vérifié à l'enregistrement : il doit être sur le bon réseau (genesis Bitcoin, Litecoin, Dogecoin ou TRON, `network_id` XRPL, `networkmagic` Cardano, `eth_chainId`, genesis Solana), sinon il est refusé ;
 - dès qu'il est configuré, le serveur par défaut de cette chaîne est **refusé** : si ton serveur tombe, Kyro affiche une erreur (`SERVER_UNREACHABLE`) et **ne se rabat jamais** sur le serveur par défaut — sinon tes adresses partiraient chez le tiers que tu as justement voulu éviter ;
-- jamais d'identifiants dans une URL ; `http://` en clair n'est permis que pour une adresse `.onion` via Tor (le protocole onion authentifie le service et chiffre de bout en bout) et, pour Bitcoin Core seulement, pour une adresse locale.
+- jamais d'identifiants dans une URL ; `http://` en clair n'est permis que pour une adresse `.onion` via Tor (le protocole onion authentifie le service et chiffre de bout en bout) et, pour Bitcoin Core seulement, pour une adresse locale ;
+- Bitcoin Core : le fichier `.cookie` n'est utilisé que pour un nœud **local ou de ton réseau local**, et se choisit dans le sélecteur de fichiers du système (voir [SECURITY.md](../SECURITY.md)) ; pour un nœud distant, `rpcuser` / `rpcpassword`.
 
 | Serveur | Mode Tor (défaut) : ce que le serveur voit | Mode clair : ce que le serveur voit | Ne voit jamais |
 |---|---|---|---|
@@ -131,6 +133,10 @@ Remarques :
 - Avec Electrum ou Esplora, chaque consultation porte sur une adresse : le serveur peut regrouper tes adresses s'il les voit dans la même session. Avec Bitcoin Core, le nœud connaît ton xpub : n'utilise un nœud **distant** que s'il t'appartient.
 - Electrum : certificat validé normalement (autorités de certification), ou **épinglé** par son empreinte SHA-256 pour les serveurs auto-signés (Kyro affiche l'empreinte et te demande de la confirmer). Un certificat non validé et non épinglé n'est jamais accepté.
 - Un nœud Bitcoin Core local est joint en `http://` sur ta machine ou ton réseau local, sans Tor ni proxy.
+
+## Navigation de l'interface
+
+La fenêtre de Kyro n'affiche que ses propres pages. Toute autre navigation (lien externe, `location.href`, formulaire, `data:`, `file:`, `javascript:`) est refusée par Rust, et `window.open` n'ouvre rien. Il n'y a donc **aucun lien cliquable** vers un site extérieur dans l'app : les adresses de documentation sont affichées en texte.
 
 ## Ajouter un serveur
 

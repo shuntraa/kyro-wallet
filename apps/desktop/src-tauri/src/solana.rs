@@ -1,6 +1,8 @@
 //! Solana transaction preview: decoding in Rust (wallet-core), address-lookup-table resolution
 //! by the shell itself (never from the UI), and the text of the native confirmation dialogs.
 
+use std::collections::BTreeSet;
+
 use base64::Engine as _;
 use serde_json::{json, Value};
 use wallet_core::{
@@ -99,13 +101,21 @@ async fn fetch_lookup_table(state: &AppState, url: &str, key: &str) -> AppResult
     })
 }
 
+/// A decoded message plus what the dialog must say about where its accounts come from.
+#[derive(Debug, Clone)]
+pub struct SolDecoded {
+    pub summary: SolTxSummary,
+    /// Accounts used by an instruction that are NOT written in the message but were loaded
+    /// from an address lookup table, i.e. given by the RPC that served the table.
+    pub from_tables: BTreeSet<String>,
+}
+
 /// Decodes `message` (raw bytes), resolving v0 lookup tables from the chain. Fails closed if
-/// any table cannot be fetched or does not contain a referenced index.
-pub async fn decode(
-    state: &AppState,
-    message: &[u8],
-    our_address: &str,
-) -> AppResult<SolTxSummary> {
+/// any table cannot be fetched or does not contain a referenced index. An account that comes
+/// from a table (recipient, authority, token account…) forces the reinforced dialog: the RPC
+/// that served the table chose it, and a custom RPC can be swapped by the interface (each new
+/// server is confirmed natively, but a wrong table is still possible).
+pub async fn decode(state: &AppState, message: &[u8], our_address: &str) -> AppResult<SolDecoded> {
     let keys = wallet_core::sol_message_lookup_tables(message)?;
     if keys.len() > MAX_LOOKUP_TABLES {
         return Err(AppError::InvalidInput("trop de tables d'adresses".into()));
@@ -117,11 +127,110 @@ pub async fn decode(
             tables.push(fetch_lookup_table(state, &url, key).await?);
         }
     }
-    Ok(wallet_core::sol_decode_message(
-        message,
-        &tables,
-        our_address,
-    )?)
+    let summary = wallet_core::sol_decode_message(message, &tables, our_address)?;
+    let statics = if keys.is_empty() {
+        Vec::new()
+    } else {
+        wallet_core::sol_message_static_keys(message)?
+    };
+    Ok(mark_tables(summary, !keys.is_empty(), &statics))
+}
+
+/// Every account address an instruction refers to (not program ids, not data).
+fn instruction_accounts(ins: &SolInstruction) -> Vec<&str> {
+    match ins {
+        SolInstruction::SystemTransfer { from, to, .. } => vec![from, to],
+        SolInstruction::SystemTransferWithSeed { from, base, to, .. } => vec![from, base, to],
+        SolInstruction::SystemCreateAccount {
+            from, new_account, ..
+        } => vec![from, new_account],
+        SolInstruction::SystemCreateAccountWithSeed {
+            from,
+            new_account,
+            base,
+            ..
+        } => vec![from, new_account, base],
+        SolInstruction::TokenTransfer {
+            source,
+            destination,
+            authority,
+            mint,
+            multisig_signers,
+            ..
+        } => {
+            let mut v: Vec<&String> = vec![source, destination, authority];
+            v.extend(mint);
+            v.extend(multisig_signers);
+            v
+        }
+        SolInstruction::TokenApprove {
+            source,
+            delegate,
+            owner,
+            mint,
+            multisig_signers,
+            ..
+        } => {
+            let mut v: Vec<&String> = vec![source, delegate, owner];
+            v.extend(mint);
+            v.extend(multisig_signers);
+            v
+        }
+        SolInstruction::AtaCreate {
+            payer,
+            account,
+            owner,
+            mint,
+            ..
+        } => vec![payer, account, owner, mint],
+        SolInstruction::StakeInitialize {
+            stake_account,
+            staker,
+            withdrawer,
+        } => vec![stake_account, staker, withdrawer],
+        SolInstruction::StakeDelegate {
+            stake_account,
+            vote_account,
+            authority,
+        } => vec![stake_account, vote_account, authority],
+        SolInstruction::StakeDeactivate {
+            stake_account,
+            authority,
+        } => vec![stake_account, authority],
+        SolInstruction::StakeWithdraw {
+            stake_account, to, ..
+        } => vec![stake_account, to],
+        SolInstruction::Unknown { account_keys, .. } => account_keys.iter().collect(),
+        SolInstruction::ComputeUnitLimit { .. }
+        | SolInstruction::ComputeUnitPrice { .. }
+        | SolInstruction::Memo { .. } => Vec::new(),
+    }
+    .into_iter()
+    .map(String::as_str)
+    .collect()
+}
+
+/// Pure part of [`decode`]: which instruction accounts are not static keys of a v0 message
+/// with lookups, and the reinforced dialog if a recognised instruction uses one.
+pub fn mark_tables(mut summary: SolTxSummary, has_lookups: bool, statics: &[String]) -> SolDecoded {
+    let mut from_tables = BTreeSet::new();
+    if has_lookups {
+        for ins in &summary.instructions {
+            for a in instruction_accounts(ins) {
+                if !statics.iter().any(|k| k == a) {
+                    from_tables.insert(a.to_owned());
+                }
+            }
+        }
+        // Signers and the fee payer are always static keys; anything else counts.
+        if !from_tables.is_empty() {
+            summary.requires_extra_confirmation = true;
+        }
+    }
+    SolDecoded {
+        summary,
+        from_tables,
+    }
 }
 
 // ---------------------------------------------------------------- dialog text
@@ -147,23 +256,66 @@ fn token_amount(amount: &str, decimals: Option<u8>) -> String {
     }
 }
 
-fn describe_instruction(ins: &SolInstruction, me: &str) -> String {
-    let who = |a: &str| {
-        if a == me {
+/// How the dialog names an address: « toi », or the address, marked when a lookup table gave it.
+struct Names<'a> {
+    me: &'a str,
+    from_tables: &'a BTreeSet<String>,
+    net: Network,
+}
+
+impl Names<'_> {
+    fn who(&self, a: &str) -> String {
+        if a == self.me {
             "toi".to_owned()
+        } else {
+            self.addr(a)
+        }
+    }
+
+    fn addr(&self, a: &str) -> String {
+        if self.from_tables.contains(a) {
+            format!("{a} [lu dans une table d'adresses]")
         } else {
             a.to_owned()
         }
-    };
+    }
+
+    fn mint(&self, mint: Option<&str>) -> String {
+        match mint {
+            None => "non indiqué".into(),
+            Some(m) => {
+                let known = crate::known_tokens::lookup(
+                    self.net,
+                    crate::known_tokens::TokenChain::Solana,
+                    m,
+                )
+                .map_or_else(
+                    || " (jeton inconnu)".to_owned(),
+                    |t| format!(" ({})", t.symbol),
+                );
+                format!("{}{known}", self.addr(m))
+            }
+        }
+    }
+}
+
+fn describe_instruction(ins: &SolInstruction, n: &Names<'_>) -> String {
     match ins {
         SolInstruction::SystemTransfer { from, to, lamports } => {
-            format!("Envoi de {}\n   De : {}\n   À : {to}", sol(lamports), who(from))
+            format!(
+                "Envoi de {}\n   De : {}\n   À : {}",
+                sol(lamports),
+                n.who(from),
+                n.who(to)
+            )
         }
         SolInstruction::SystemTransferWithSeed {
             from, to, lamports, ..
         } => format!(
-            "Envoi de {} (compte dérivé)\n   De : {from}\n   À : {to}",
-            sol(lamports)
+            "Envoi de {} (compte dérivé)\n   De : {}\n   À : {}",
+            sol(lamports),
+            n.who(from),
+            n.who(to)
         ),
         SolInstruction::SystemCreateAccount {
             from,
@@ -172,8 +324,9 @@ fn describe_instruction(ins: &SolInstruction, me: &str) -> String {
             owner,
             ..
         } => format!(
-            "Création de compte {new_account}\n   Financé par : {} ({})\n   Propriétaire (programme) : {owner}",
-            who(from),
+            "Création de compte {}\n   Financé par : {} ({})\n   Propriétaire (programme) : {owner}",
+            n.addr(new_account),
+            n.who(from),
             sol(lamports)
         ),
         SolInstruction::SystemCreateAccountWithSeed {
@@ -183,8 +336,9 @@ fn describe_instruction(ins: &SolInstruction, me: &str) -> String {
             owner,
             ..
         } => format!(
-            "Création de compte {new_account} (dérivé)\n   Financé par : {} ({})\n   Propriétaire (programme) : {owner}",
-            who(from),
+            "Création de compte {} (dérivé)\n   Financé par : {} ({})\n   Propriétaire (programme) : {owner}",
+            n.addr(new_account),
+            n.who(from),
             sol(lamports)
         ),
         SolInstruction::TokenTransfer {
@@ -197,11 +351,13 @@ fn describe_instruction(ins: &SolInstruction, me: &str) -> String {
             decimals,
             ..
         } => format!(
-            "Envoi de token ({}) : {}\n   Mint : {}\n   Depuis le compte token : {source}\n   Vers le compte token : {destination}\n   Autorité : {}",
+            "Envoi de token ({}) : {}\n   Mint : {}\n   Depuis le compte token : {}\n   Vers le compte token : {}\n   Autorité : {}",
             token_program_label(*token_program),
             token_amount(amount, *decimals),
-            mint.as_deref().unwrap_or("non indiqué"),
-            who(authority)
+            n.mint(mint.as_deref()),
+            n.addr(source),
+            n.addr(destination),
+            n.who(authority)
         ),
         SolInstruction::TokenApprove {
             token_program,
@@ -213,11 +369,13 @@ fn describe_instruction(ins: &SolInstruction, me: &str) -> String {
             decimals,
             ..
         } => format!(
-            "⚠ DÉLÉGATION ({}) : {delegate} pourra dépenser jusqu'à {}\n   Depuis le compte token : {source}\n   Mint : {}\n   Propriétaire : {}",
+            "⚠ DÉLÉGATION ({}) : {} pourra dépenser jusqu'à {}\n   Depuis le compte token : {}\n   Mint : {}\n   Propriétaire : {}",
             token_program_label(*token_program),
+            n.who(delegate),
             token_amount(amount, *decimals),
-            mint.as_deref().unwrap_or("non indiqué"),
-            who(owner)
+            n.addr(source),
+            n.mint(mint.as_deref()),
+            n.who(owner)
         ),
         SolInstruction::AtaCreate {
             idempotent,
@@ -227,10 +385,12 @@ fn describe_instruction(ins: &SolInstruction, me: &str) -> String {
             mint,
             ..
         } => format!(
-            "Création du compte token associé{}\n   Compte : {account}\n   Titulaire : {}\n   Mint : {mint}\n   Payé par : {}",
+            "Création du compte token associé{}\n   Compte : {}\n   Titulaire : {}\n   Mint : {}\n   Payé par : {}",
             if *idempotent { " (si absent)" } else { "" },
-            who(owner),
-            who(payer)
+            n.addr(account),
+            n.who(owner),
+            n.mint(Some(mint)),
+            n.who(payer)
         ),
         SolInstruction::ComputeUnitLimit { units } => {
             format!("Limite de calcul : {units} unités")
@@ -238,33 +398,35 @@ fn describe_instruction(ins: &SolInstruction, me: &str) -> String {
         SolInstruction::ComputeUnitPrice { micro_lamports } => {
             format!("Prix du calcul : {micro_lamports} micro-lamports / unité")
         }
-        SolInstruction::Memo { text } => {
-            let t: String = text.chars().take(200).collect();
-            format!("Mémo : « {t} »")
-        }
+        // The text itself is shown at the end of the dialog, after the amounts and fees.
+        SolInstruction::Memo { .. } => "Mémo (texte affiché en bas de cette fenêtre)".into(),
         SolInstruction::StakeInitialize {
             stake_account,
             staker,
             withdrawer,
         } => format!(
-            "Staking : initialisation du compte {stake_account}\n   Autorités : {} (staker), {} (withdrawer), aucun blocage",
-            who(staker),
-            who(withdrawer)
+            "Staking : initialisation du compte {}\n   Autorités : {} (staker), {} (withdrawer), aucun blocage",
+            n.addr(stake_account),
+            n.who(staker),
+            n.who(withdrawer)
         ),
         SolInstruction::StakeDelegate {
             stake_account,
             vote_account,
             authority,
         } => format!(
-            "Staking : délégation du compte {stake_account}\n   Au validateur (compte de vote) : {vote_account}\n   Autorité : {}",
-            who(authority)
+            "Staking : délégation du compte {}\n   Au validateur (compte de vote) : {}\n   Autorité : {}",
+            n.addr(stake_account),
+            n.addr(vote_account),
+            n.who(authority)
         ),
         SolInstruction::StakeDeactivate {
             stake_account,
             authority,
         } => format!(
-            "Staking : désactivation du compte {stake_account}\n   Autorité : {}",
-            who(authority)
+            "Staking : désactivation du compte {}\n   Autorité : {}",
+            n.addr(stake_account),
+            n.who(authority)
         ),
         SolInstruction::StakeWithdraw {
             stake_account,
@@ -272,9 +434,10 @@ fn describe_instruction(ins: &SolInstruction, me: &str) -> String {
             lamports,
             ..
         } => format!(
-            "Staking : retrait de {} du compte {stake_account}\n   Vers : {}",
+            "Staking : retrait de {} du compte {}\n   Vers : {}",
             sol(lamports),
-            who(to)
+            n.addr(stake_account),
+            n.who(to)
         ),
         SolInstruction::Unknown {
             program_id,
@@ -337,8 +500,21 @@ fn describe_warning(w: &SolWarning) -> String {
     }
 }
 
+fn tables_line(d: &SolDecoded) -> String {
+    format!(
+        "{} adresse(s) de cette transaction ne sont pas écrites dans le message : elles ont été lues dans une table d'adresses fournie par le serveur Solana (marquées « [lu dans une table d'adresses] »). Un serveur menteur pourrait y mettre d'autres comptes.",
+        d.from_tables.len()
+    )
+}
+
 /// Main confirmation text, built only from the Rust-side decode.
-pub fn describe(s: &SolTxSummary, me: &str, net: Network) -> String {
+pub fn describe(d: &SolDecoded, me: &str, net: Network) -> String {
+    let s = &d.summary;
+    let names = Names {
+        me,
+        from_tables: &d.from_tables,
+        net,
+    };
     let mut out = format!(
         "Réseau : {}\nTransaction {} — {} instruction(s)\n\n",
         network_label(net),
@@ -346,32 +522,55 @@ pub fn describe(s: &SolTxSummary, me: &str, net: Network) -> String {
         s.instructions.len()
     );
     for (i, ins) in s.instructions.iter().enumerate() {
-        out += &format!("{}. {}\n", i + 1, describe_instruction(ins, me));
+        out += &format!("{}. {}\n", i + 1, describe_instruction(ins, &names));
     }
     out += &format!("\nFrais de base : {}", sol(&s.base_fee_lamports));
     if let Some(p) = &s.priority_fee_lamports {
         out += &format!("\nFrais prioritaires : {}", sol(p));
     }
-    if !s.warnings.is_empty() {
+    if !s.warnings.is_empty() || !d.from_tables.is_empty() {
         out += "\n\nPoints d'attention :";
         for w in &s.warnings {
             out += &format!("\n• {}", describe_warning(w));
         }
+        if !d.from_tables.is_empty() {
+            out += &format!("\n• {}", tables_line(d));
+        }
+    }
+    let memos: Vec<&String> = s
+        .instructions
+        .iter()
+        .filter_map(|i| match i {
+            SolInstruction::Memo { text } => Some(text),
+            _ => None,
+        })
+        .collect();
+    for m in memos {
+        out += &format!(
+            "\n\nMémo (texte libre, non vérifié) : {}",
+            crate::dialog_text::field(m, crate::dialog_text::MAX_FIELD)
+        );
     }
     out
 }
 
 /// Second, explicit warning shown when `requires_extra_confirmation` is set.
-pub fn describe_extra(s: &SolTxSummary) -> String {
+pub fn describe_extra(d: &SolDecoded) -> String {
     let mut out = String::from(
         "Instruction non reconnue ou inhabituelle — signer quand même ?\n\nKyro n'a pas pu tout vérifier :",
     );
-    for w in &s.warnings {
+    for w in &d.summary.warnings {
         if !matches!(
             w,
             SolWarning::PriorityFeeEstimated | SolWarning::Token2022ExtensionsUnverified { .. }
         ) {
             out += &format!("\n• {}", describe_warning(w));
+        }
+    }
+    if !d.from_tables.is_empty() {
+        out += &format!("\n• {}", tables_line(d));
+        for a in &d.from_tables {
+            out += &format!("\n   – {a}");
         }
     }
     out += "\n\nNe signe que si tu sais exactement ce que fait cette transaction.";
@@ -421,16 +620,76 @@ mod tests {
                 program_id: "PROG".into(),
             }],
         );
-        let text = describe(&s, "ME", Network::Testnet);
+        let d = mark_tables(s, false, &[]);
+        let text = describe(&d, "ME", Network::Testnet);
         assert!(text.contains("Envoi de 1,5 SOL"));
         assert!(text.contains("À : BOB"));
         assert!(text.contains("De : toi"));
         assert!(text.contains("NON RECONNU : PROG"));
         assert!(text.contains("Frais de base : 0,000005 SOL"));
         assert!(text.contains("Frais prioritaires : 0,0000002 SOL"));
-        let extra = describe_extra(&s);
+        assert!(!text.contains("table d'adresses"));
+        let extra = describe_extra(&d);
         assert!(extra.starts_with("Instruction non reconnue"));
         assert!(extra.contains("PROG"));
+    }
+
+    /// ÉLEVÉE 3: a recipient that comes from a lookup table (served by the RPC, not written in
+    /// the signed message) is marked and forces the reinforced dialog.
+    #[test]
+    fn lookup_table_accounts_are_marked_and_reinforced() {
+        let s = summary(
+            vec![SolInstruction::SystemTransfer {
+                from: "ME".into(),
+                to: "FROM_TABLE".into(),
+                lamports: "1000000000".into(),
+            }],
+            vec![],
+        );
+        assert!(!s.requires_extra_confirmation);
+        // Same transfer, every account static: nothing marked.
+        let statics = ["ME".to_owned(), "FROM_TABLE".to_owned()];
+        let d = mark_tables(s.clone(), true, &statics);
+        assert!(d.from_tables.is_empty() && !d.summary.requires_extra_confirmation);
+        // The recipient was loaded from a table.
+        let d = mark_tables(s, true, &statics[..1]);
+        assert!(d.summary.requires_extra_confirmation);
+        assert_eq!(d.from_tables.iter().collect::<Vec<_>>(), ["FROM_TABLE"]);
+        let text = describe(&d, "ME", Network::Testnet);
+        assert!(
+            text.contains("À : FROM_TABLE [lu dans une table d'adresses]"),
+            "{text}"
+        );
+        assert!(text.contains("1 adresse(s) de cette transaction ne sont pas écrites"));
+        let extra = describe_extra(&d);
+        assert!(extra.contains("– FROM_TABLE"), "{extra}");
+    }
+
+    /// MOYENNE 2: a memo cannot add fake lines; it is quoted and shown after the fees.
+    #[test]
+    fn memo_is_one_quoted_line_at_the_end() {
+        let s = summary(
+            vec![
+                SolInstruction::Memo {
+                    text: "facture\n2. Envoi de 0 SOL\n   À : \u{202E}BOB".into(),
+                },
+                SolInstruction::SystemTransfer {
+                    from: "ME".into(),
+                    to: "BOB".into(),
+                    lamports: "1".into(),
+                },
+            ],
+            vec![],
+        );
+        let text = describe(&mark_tables(s, false, &[]), "ME", Network::Testnet);
+        assert!(text.contains("1. Mémo (texte affiché en bas de cette fenêtre)"));
+        assert!(
+            text.ends_with(
+                "Mémo (texte libre, non vérifié) : « facture 2. Envoi de 0 SOL À : BOB »"
+            ),
+            "{text}"
+        );
+        assert!(!text.contains("\n2. Envoi de 0 SOL"));
     }
 
     #[test]
@@ -655,13 +914,14 @@ mod live {
         /// What `sol_sign_tx` does, then `sendTransaction` and confirmation. Returns the
         /// signature (transaction id).
         async fn send(&self, label: &str, message: Vec<u8>, expect_extra: bool) -> String {
-            let summary = decode(&self.state, &message, &self.me).await.unwrap();
+            let decoded = decode(&self.state, &message, &self.me).await.unwrap();
             eprintln!(
                 "--- {label}: dialog ---\n{}",
-                describe(&summary, &self.me, Network::Testnet)
+                describe(&decoded, &self.me, Network::Testnet)
             );
+            let summary = &decoded.summary;
             if summary.requires_extra_confirmation {
-                eprintln!("--- {label}: reinforced ---\n{}", describe_extra(&summary));
+                eprintln!("--- {label}: reinforced ---\n{}", describe_extra(&decoded));
             }
             assert_eq!(
                 summary.requires_extra_confirmation, expect_extra,
@@ -924,7 +1184,8 @@ mod live {
             compact(1, &mut v0);
             v0.push(0);
             compact(0, &mut v0);
-            let t = l.send("v0 + lookup table", v0, false).await;
+            // The recipient comes from the table: reinforced dialog since ÉLEVÉE 3.
+            let t = l.send("v0 + lookup table", v0, true).await;
             eprintln!("V0 TRANSFER: {t}");
             eprintln!(
                 "final balance {} / {}",

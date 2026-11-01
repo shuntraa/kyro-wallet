@@ -622,6 +622,17 @@ pub fn sol_message_lookup_tables(message: &[u8]) -> Result<Vec<String>> {
         .collect())
 }
 
+/// Account keys written in the message itself (base58). In a v0 message, every other account
+/// an instruction uses was loaded from a lookup table, i.e. comes from the RPC that served the
+/// table: the shell marks those in the confirmation dialog.
+pub fn sol_message_static_keys(message: &[u8]) -> Result<Vec<String>> {
+    Ok(parse_message(message)?
+        .static_keys
+        .iter()
+        .map(|k| b58(k))
+        .collect())
+}
+
 struct Account {
     key: String,
 }

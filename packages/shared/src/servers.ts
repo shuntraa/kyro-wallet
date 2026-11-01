@@ -133,8 +133,13 @@ export function checkBtcServer(s: BtcServer, tor: boolean): string | null {
       const bad = checkServerUrl(s.url, tor, true);
       if (bad) return bad;
       if (s.auth.kind === 'cookie') {
+        // Same rules as servers.rs: the cookie only goes to a local / LAN node, and the file is
+        // exactly `.cookie` (chosen with the native picker, `btc_core_pick_cookie`).
+        if (!coreIsLocal(s.url)) return 'fichier .cookie : seulement pour un nœud local (127.0.0.1, ::1) ou de ton réseau local ; pour un nœud distant, utilise rpcuser / rpcpassword';
         const p = s.auth.cookiePath.trim();
-        return p && (p.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('\\\\')) ? null : 'chemin du fichier .cookie : chemin absolu attendu';
+        const absolute = p.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('\\\\');
+        const name = p.split(/[\\/]/).pop();
+        return absolute && name === '.cookie' ? null : 'fichier .cookie : choisis le fichier « .cookie » du dossier de données de ton nœud';
       }
       if (!s.auth.user || s.auth.user.includes(':')) return 'utilisateur RPC invalide';
       return null;
