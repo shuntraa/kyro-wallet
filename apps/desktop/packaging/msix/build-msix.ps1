@@ -44,6 +44,10 @@ try {
   $cfg = Join-Path ([System.IO.Path]::GetTempPath()) ("kyro-priconfig-" + [guid]::NewGuid().ToString('N') + '.xml')
   & $makepri createconfig /cf $cfg /dq en-US /pv 10.0.0 /o | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "makepri createconfig failed ($LASTEXITCODE)" }
+  # One package, no resource packs: drop the <packaging> split (else scale-200 goes to its own .pri).
+  [xml]$x = Get-Content $cfg -Raw
+  $x.SelectNodes('//packaging') | ForEach-Object { [void]$_.ParentNode.RemoveChild($_) }
+  $x.Save($cfg)
   & $makepri new /pr $stage /cf $cfg /mn (Join-Path $stage 'AppxManifest.xml') /of (Join-Path $stage 'resources.pri') /o | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "makepri new failed ($LASTEXITCODE)" }
   Remove-Item $cfg
