@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
-import { btcChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain } from '@kyro/chains';
+import { btcChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, kaspaChain } from '@kyro/chains';
 import { useAsync } from '../lib/useAsync';
 import { useApp, useVault } from '../state/app';
 import { cn } from '../lib/cn';
@@ -18,17 +18,17 @@ import { AddressMismatchStop, DeviceBadge, HwErrorNotice, HwWaiting } from '../c
 import { AccountPicker, NewAccountButton } from '../components/AccountPicker';
 import { BRAND, isAddressMismatch, pickDevice, withDevice } from '../state/hw';
 
-type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
-const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'kas';
+const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'kas'];
 /** Vault-only chains (hardware wallets: HW_UNSUPPORTED for now). */
-const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'tron', 'xrp', 'ada'];
+const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'tron', 'xrp', 'ada', 'kas'];
 
 export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const { back, network, settings, navigate, selectedAccounts } = useApp();
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts, adapters, activeHw } = useVault();
   // Hardware-wallet accounts have no Litecoin / Dogecoin / TRON (HW_UNSUPPORTED for now).
-  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, tron: !!accounts.tron, xrp: !!accounts.xrp, ada: !!accounts.cardano };
+  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, tron: !!accounts.tron, xrp: !!accounts.xrp, ada: !!accounts.cardano, kas: !!accounts.kas };
   const [family, setFamilyRaw] = useState<Family>(has[initial] ? initial : FAMILIES.find((f) => has[f]) ?? initial);
   // Dogecoin has no public server: say so instead of showing an address as if payments would appear.
   const dogeInfo = useAsync(family === 'doge' ? () => call('doge_backend_info') : null, [family, JSON.stringify(settings.servers.dogecoin)]);
@@ -63,6 +63,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const tron = tronChain(network);
   const xrp = xrpChain(network);
   const ada = cardanoChain(network);
+  const kas = kaspaChain(network);
 
   const btcAcc = accounts.btc?.[kind];
   const utxoAcc = family === 'ltc' ? accounts.ltc : family === 'doge' ? accounts.doge : undefined;
@@ -82,6 +83,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             ? accounts.xrp?.address
             : family === 'ada'
               ? accounts.cardano?.address
+              : family === 'kas'
+                ? accounts.kas?.address
               : family === 'evm'
             ? accounts.evm?.address
             : accounts.sol?.address) ?? '';
@@ -98,6 +101,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             ? (accounts.xrp?.path ?? "m/44'/144'/0'/0/0")
             : family === 'ada'
               ? (accounts.cardano?.path ?? "m/1852'/1815'/0'/0/0")
+              : family === 'kas'
+                ? (accounts.kas?.path ?? "m/44'/111111'/0'/0/0")
               : family === 'evm'
           ? activeHw
             ? hwPaths.evm(activeHw)
@@ -107,11 +112,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             : (accounts.sol?.path ?? "m/44'/501'/0'/0'");
   const verifiedHere = verify.state === 'ok' && verify.address === address;
   const blocked = mismatch !== null || (verify.state === 'error' && isAddressMismatch(verify.error) && verify.address === address);
-  const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name, tron: tron.name, xrp: xrp.name, ada: ada.name }[family];
-  const decimals = { btc: 8, evm: 18, sol: 9, ltc: 8, doge: 8, tron: 6, xrp: 6, ada: 6 }[family];
-  const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', tron: 'TRX', xrp: 'XRP', ada: 'ADA' }[family];
-  // TRON, XRP and Cardano have no payment-link format Kyro relies on: the QR is the bare address.
-  const amountLink = family !== 'tron' && family !== 'xrp' && family !== 'ada';
+  const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name, tron: tron.name, xrp: xrp.name, ada: ada.name, kas: kas.name }[family];
+  const decimals = { btc: 8, evm: 18, sol: 9, ltc: 8, doge: 8, tron: 6, xrp: 6, ada: 6, kas: 8 }[family];
+  const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', tron: 'TRX', xrp: 'XRP', ada: 'ADA', kas: 'KAS' }[family];
+  // TRON, XRP, Cardano and Kaspa have no payment-link format Kyro relies on: the QR is the bare address.
+  const amountLink = family !== 'tron' && family !== 'xrp' && family !== 'ada' && family !== 'kas';
   // XRP: is our account activated yet (≥ 1 XRP base reserve received)?
   const xrpAccount = useAsync(family === 'xrp' && adapters.xrp ? () => adapters.xrp!.account() : null, [family, adapters.xrp]);
   const uriScheme = { btc: 'bitcoin', ltc: 'litecoin', doge: 'dogecoin' } as const;
@@ -122,7 +127,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
     const scheme = family === 'btc' || family === 'ltc' || family === 'doge' ? uriScheme[family] : null;
     if (!askAmount || !amountBase || amountBase <= 0n) return scheme ? `${scheme}:${address}` : address;
     if (scheme) return `${scheme}:${address}?amount=${dec}`;
-    if (family === 'tron' || family === 'xrp' || family === 'ada') return address;
+    if (family === 'tron' || family === 'xrp' || family === 'ada' || family === 'kas') return address;
     if (family === 'evm') return `ethereum:${address}@${evm.chainId}?value=${amountBase.toString()}`;
     return `solana:${address}?amount=${dec}`;
   }, [askAmount, amountBase, amount, family, address, evm.chainId]);
@@ -150,7 +155,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   };
 
   const verifyOnDevice = async () => {
-    if (!activeHw || family === 'ltc' || family === 'doge' || family === 'tron' || family === 'xrp' || family === 'ada') return;
+    if (!activeHw || family === 'ltc' || family === 'doge' || family === 'tron' || family === 'xrp' || family === 'ada' || family === 'kas') return;
     const chain: HwImplementedChain = family;
     const shown = address;
     let deviceId = '';
@@ -188,7 +193,9 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
                 ? 'Adresse classique XRP Ledger (r…). Pas de tag de destination à donner : ce compte est à toi seul.'
                 : family === 'ada'
                   ? 'Adresse de base Cardano (addr…) : pour les ADA et les tokens natifs.'
-                  : 'Pour SOL et les tokens SPL.';
+                  : family === 'kas'
+                    ? `Adresse Kaspa (${network === 'testnet' ? 'kaspatest:' : 'kaspa:'}…), clé Schnorr. Mêmes adresses que Kaspa NG et Kaspium avec la même phrase.`
+                    : 'Pour SOL et les tokens SPL.';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
@@ -212,6 +219,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               ['tron', 'TRON', 'T', '#EB0029'],
               ['xrp', 'XRP', 'X', '#3A3F48'],
               ['ada', 'Cardano', 'A', '#3468D1'],
+              ['kas', 'Kaspa', 'K', '#49C3B1'],
             ] as const
           ).map(([f, label, glyph, color]) => (
             <button
@@ -219,7 +227,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               type="button"
               aria-pressed={family === f}
               disabled={!has[f]}
-              title={has[f] ? undefined : VAULT_ONLY.includes(f) ? 'Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet (dans le coffre Kyro, oui)' : 'Ce compte hardware wallet n’a pas de clés pour cette chaîne'}
+              title={has[f] ? undefined : VAULT_ONLY.includes(f) ? 'Litecoin, Dogecoin, TRON, XRP, Cardano et Kaspa : pas encore sur hardware wallet (dans le coffre Kyro, oui)' : 'Ce compte hardware wallet n’a pas de clés pour cette chaîne'}
               onClick={() => {
                 setFamily(f);
                 setAmount('');
@@ -235,7 +243,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
         </div>
       </header>
       {activeHw && (
-        <span className="-mt-2 self-end text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP et Cardano : pas encore sur hardware wallet. Ils restent disponibles dans le coffre Kyro (Compte principal).</span>
+        <span className="-mt-2 self-end text-[12px] text-faint">Litecoin, Dogecoin, TRON, XRP, Cardano et Kaspa : pas encore sur hardware wallet. Ils restent disponibles dans le coffre Kyro (Compte principal).</span>
       )}
 
       <section className="relative flex min-h-0 flex-1 items-center-safe justify-center gap-14 overflow-y-auto rounded-panel border border-line bg-card p-8 scroll-thin">
@@ -248,7 +256,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
 
         <div key={family} className="rise relative flex w-[460px] flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="eyebrow">Ton adresse {{ btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', xrp: 'XRP', ada: 'Cardano' }[family]}</span>
+            <span className="eyebrow">Ton adresse {{ btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', kas: 'Kaspa' }[family]}</span>
             <span className="text-[15px] leading-[1.45] text-text2">{desc}</span>
           </div>
           {(family === 'ltc' || family === 'doge') && (
@@ -340,7 +348,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               <dt className="text-mute">Montant demandé</dt>
               <dd className="m-0">
                 {!amountLink ? (
-                  <span className="text-[12px] text-faint">pas de lien de paiement standard sur {family === 'xrp' ? 'XRP Ledger' : family === 'ada' ? 'Cardano' : 'TRON'}</span>
+                  <span className="text-[12px] text-faint">pas de lien de paiement standard sur {family === 'xrp' ? 'XRP Ledger' : family === 'ada' ? 'Cardano' : family === 'kas' ? 'Kaspa' : 'TRON'}</span>
                 ) : askAmount ? (
                   <span className="flex items-center gap-2">
                     <input autoFocus value={amount} inputMode="decimal" placeholder="0" onChange={(e) => setAmount(sanitizeDecimalInput(e.target.value, decimals))} className="h-8 w-[120px] rounded-ctl border border-line-2 bg-bg px-2 text-right text-[13px] focus:border-ice-line" />
@@ -371,6 +379,11 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           {family === 'ada' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
               <strong className="font-semibold text-text">Une seule adresse :</strong> Kyro reçoit et rend la monnaie toujours sur cette même adresse. C’est plus simple à vérifier, mais tous tes paiements Cardano sont liés publiquement à elle (et à sa clé de staking) : n’importe qui la connaissant voit ton solde et ton historique. Un paiement doit aussi porter au moins ≈ 1 ADA (min-UTxO).
+            </Notice>
+          )}
+          {family === 'kas' && (
+            <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>
+              <strong className="font-semibold text-text">Au moins 0,2 KAS par paiement :</strong> la masse de stockage de Kaspa (KIP-9) rend les très petites sorties coûteuses ou non standard. Kyro lit les 20 premières adresses de réception et de monnaie de ce compte (m/44’/111111’/…), comme Kaspa NG et Kaspium ; les anciens portefeuilles KDX / web (m/44’/972/…) ne sont pas lus.
             </Notice>
           )}
           {family === 'xrp' && (

@@ -29,7 +29,7 @@ export type Route =
   | { name: 'assets'; tab?: 'mine' | 'market' | 'favorites' }
   | { name: 'asset'; id: string }
   | { name: 'send'; assetId?: string; to?: string }
-  | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' }
+  | { name: 'receive'; family?: 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'kas' }
   | { name: 'swap'; sellAssetId?: string }
   | { name: 'history' }
   | { name: 'staking'; chain?: 'sol' | 'ada' | 'tron' }
@@ -358,7 +358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (!vaultAccounts) return null;
     const of = (c: AccountChain) => vaultSets.get(selectedAccounts[c])?.accounts ?? vaultAccounts;
-    return { network: vaultAccounts.network, btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano };
+    return { network: vaultAccounts.network, btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, ...(of('kas').kas ? { kas: of('kas').kas } : {}) };
   }, [activeHw, vaultAccounts, vaultSets, selectedAccounts]);
   const hwAdapters = useMemo<AdapterSet | null>(
     () => (activeHw && accounts ? createAdapters(accounts, settingsRef.current.servers, undefined, { accountId: activeHw.id, device: activeHw.device }) : null),
@@ -369,7 +369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const base = vaultSets.get(0)?.adapters;
     if (!base) return null;
     const of = (c: AccountChain) => vaultSets.get(selectedAccounts[c])?.adapters ?? base;
-    const set: AdapterSet = { btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, all: [], hw: null };
+    const set: AdapterSet = { btc: of('btc').btc, evm: of('evm').evm, sol: of('sol').sol, ltc: of('ltc').ltc, doge: of('doge').doge, tron: of('tron').tron, xrp: of('xrp').xrp, cardano: of('ada').cardano, kaspa: of('kas').kaspa, all: [], hw: null };
     set.all = ACCOUNT_CHAINS.flatMap((c) => familyAdapters(set, c));
     return set;
   }, [activeHw, hwAdapters, vaultSets, selectedAccounts]);
@@ -385,6 +385,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         tron: [a.tron?.address],
         xrp: [a.xrp?.address],
         ada: [a.cardano?.address],
+        kas: [a.kas?.address],
       })[c].filter((x): x is string => !!x);
     if (activeHw) {
       if (!hwAdapters || !accounts) return [];

@@ -60,11 +60,17 @@ export interface Accounts {
    * and change both use it; Rust signs with index 0 of the account only (§2.7).
    */
   cardano: AddressInfo;
+  /**
+   * Kaspa receive address `m/44'/111111'/a'/0/0` (same path on testnet-10, `kaspatest:`). Change
+   * goes to `…/1/0`; balance and history read the first 20 addresses of both chains (§2.11).
+   * Absent from hardware-wallet accounts.
+   */
+  kas?: AddressInfo;
 }
 
 /** Chains with an account list in the vault (§2.9). EVM chains share one list. */
-export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
-export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada'];
+export type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'kas';
+export const ACCOUNT_CHAINS: readonly AccountChain[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'tron', 'xrp', 'ada', 'kas'];
 
 /** One account of the user's list: a public bookmark (keys come from the seed). */
 export interface VaultAccountEntry {
@@ -562,6 +568,90 @@ export interface XrpTrustLine {
   issuer: string;
   balance: string;
   limit: string;
+}
+
+// ---------------------------------------------------------------- Kaspa (§2.11)
+
+export interface KaspaBackendInfo {
+  /** No custom Kaspa server yet. */
+  kind: 'default';
+  network: UtxoNetworkKey;
+  /** `api.kaspa.org` / `api-tn10.kaspa.org`. */
+  label: string;
+  tor: boolean;
+}
+
+/** `kas_account`: the whole account (receive + change chains, `scanned` addresses each). Sompi. */
+export interface KaspaAccountInfo {
+  /** Receive address shown (`…/0/0`). */
+  address: string;
+  balance: string;
+  /** Coins spendable now (immature coinbase excluded). */
+  spendable: string;
+  utxoCount: number;
+  scanned: number;
+}
+
+/** wallet-core `KaspaMass` (grams). */
+export interface KaspaMass {
+  compute: number;
+  transient: number;
+  storage: number;
+  /** max(compute, transient ÷ 2): the minimum relay fee is 100 sompi per gram of it. */
+  relay: number;
+  /** max(compute, storage, transient ÷ 2): at most 100 000. */
+  total: number;
+}
+
+export interface KaspaOutputView {
+  address: string | null;
+  script: string;
+  /** Sompi. */
+  amount: string;
+  /** Pays one of this account's addresses. */
+  isChange: boolean;
+  kind: 'address' | 'unknown';
+}
+
+/** serde tag `kind`. Every warning → reinforced confirmation. */
+export type KaspaWarning = { kind: 'unknownOutput'; index: number } | { kind: 'highFee' };
+
+/** wallet-core `KaspaTxSummary`: Rust's strict decoding (amounts: sompi, decimal strings). */
+export interface KaspaTxSummary {
+  txId: string;
+  outputs: KaspaOutputView[];
+  inputs: number;
+  inputTotal: string;
+  /** Outputs that do not come back to us. */
+  sent: string;
+  fee: string;
+  mass: KaspaMass;
+  minimumFee: string;
+  /** fee ÷ relay mass, sompi/gram. */
+  feeRate: number;
+  hasChange: boolean;
+  warnings: KaspaWarning[];
+  requiresExtraConfirmation: boolean;
+}
+
+export interface KaspaContext {
+  /** Server estimate, sompi/gram. */
+  feerateEstimate: number;
+  /** Applied to the whole mass; 0 = network not busy (minimum relay fee only). */
+  priorityFeerate: number;
+  spendable: string;
+}
+
+/** `kas_txs` entry, seen from the whole account. */
+export interface KaspaHistoryEntry {
+  txid: string;
+  /** ms epoch. */
+  time: number;
+  /** Received − spent, sompi (negative: sent). */
+  delta: string;
+  fee: string | null;
+  counterparty: string | null;
+  accepted: boolean;
 }
 
 // ---------------------------------------------------------------- Cardano (§2.7)
@@ -1340,6 +1430,26 @@ export interface Commands {
   ada_sign_tx: { args: { tx: string; password: string } & WithAccount; ret: { tx: string; txId: string; summary: CardanoTxSummary; context: CardanoContext } };
   /** Koios `submittx`; id must be blake2b-256(body). Node refusal → INVALID_INPUT with its message. */
   ada_broadcast: { args: { tx: string } & WithAccount; ret: string };
+  // Kaspa (§2.11): Rust reads the account's coins (20 receive + 20 change addresses), builds the
+  // payment (coin selection, KIP-9 mass, fee), re-reads every spent coin live before signing,
+  // shows it in the native dialog, signs (BIP340 Schnorr). Hardware wallets: not offered.
+  kas_backend_info: { args: undefined; ret: KaspaBackendInfo };
+  /** `m/44'/111111'/{account}'/0/0`, vault unlocked. */
+  kas_address: { args: WithAccount | undefined; ret: string };
+  kas_account: { args: WithAccount | undefined; ret: KaspaAccountInfo };
+  /** Last 50 transactions of the account's active addresses, newest first. */
+  kas_txs: { args: WithAccount | undefined; ret: KaspaHistoryEntry[] };
+  /** `found: false` until the indexer knows the transaction. */
+  kas_tx_status: { args: { txid: string }; ret: { found: boolean; accepted: boolean } };
+  /**
+   * `amount`: sompi, or `max: true` (everything spendable minus the fee, no change). Refused
+   * before building: invalid / other-network address, amount < 0.2 KAS (KIP-9 storage mass),
+   * not enough KAS, more than 84 coins needed.
+   */
+  kas_build_tx: { args: { to: string; amount?: string; max?: boolean } & WithAccount; ret: { tx: string; summary: KaspaTxSummary; context: KaspaContext } };
+  kas_sign_tx: { args: { tx: string; password: string } & WithAccount; ret: { tx: string; txId: string; summary: KaspaTxSummary } };
+  /** Signatures verified against the live coins; id returned by the server must be ours. */
+  kas_broadcast: { args: { tx: string } & WithAccount; ret: string };
   // Staking (§2.8): not available on hardware-wallet accounts (no hw_* command offers it).
   sol_stake_overview: { args: WithAccount | undefined; ret: SolStakeOverview };
   sol_stake_validators: { args: { withNames?: boolean }; ret: { validators: SolValidator[]; namesAvailable: boolean } };

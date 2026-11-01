@@ -48,6 +48,7 @@ const TAIL = 4;
  * - Solana (base58): none.
  * - TRON: `T`. XRP: `r`.
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
+ * - Kaspa: `kaspa:` / `kaspatest:` + version char (`kaspa:q`, `kaspa:p`), bech32 lowercase.
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -71,6 +72,15 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       return a.startsWith('r') ? { prefix: 'r', body: a.slice(1), caseInsensitive: false } : { prefix: '', body: a, caseInsensitive: false };
     case 'sol':
       return { prefix: '', body: a, caseInsensitive: false };
+    case 'kas': {
+      // `kaspa:` / `kaspatest:` + the version character (`q` P2PK, `p` P2SH), bech32 lowercase.
+      const k = /^(kaspa(?:test)?:)([a-z0-9])/i.exec(a);
+      if (k?.[1] && k[2]) {
+        const prefix = `${k[1]}${k[2]}`.toLowerCase();
+        return { prefix, body: a.slice(prefix.length).toLowerCase(), caseInsensitive: true };
+      }
+      return { prefix: '', body: a.toLowerCase(), caseInsensitive: true };
+    }
   }
 }
 

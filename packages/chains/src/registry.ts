@@ -9,8 +9,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `ltc` / `doge`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*`, docs/IPC.md §2.4).
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
-/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `kas`: Kaspa (KAS, `kas_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'kas';
 
 interface ChainBase {
   key: string;
@@ -47,7 +47,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | KaspaChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -240,6 +240,28 @@ export function cardanoChain(network: Network): CardanoChain {
   return CARDANO_CHAINS[network];
 }
 
+/**
+ * Kaspa (phase 4): Rust `kas_*` commands and `KaspaAdapter` (`packages/chains/src/kaspa/`).
+ * Testnet = testnet-10. Part of `allChains()` / `assetsFor()` (KAS). Receive address
+ * `m/44'/111111'/a'/0/0`; balance and history read 20 receive + 20 change addresses.
+ * Hardware wallets: not offered.
+ */
+export interface KaspaChain extends Omit<ChainBase, 'phase'> {
+  family: 'kas';
+  phase: 4;
+}
+
+const KASPA_CHAINS: Record<Network, KaspaChain> = {
+  testnet: { family: 'kas', key: 'kaspa', name: 'Kaspa testnet-10', label: 'KAS testnet', network: 'testnet', color: '#49C3B1', glyph: 'K',
+    nativeSymbol: 'KAS', nativeName: 'Kaspa', nativeDecimals: 8, coingeckoId: 'kaspa', phase: 4, blockTimeSecs: 1 },
+  mainnet: { family: 'kas', key: 'kaspa', name: 'Kaspa', label: 'KAS', network: 'mainnet', color: '#49C3B1', glyph: 'K',
+    nativeSymbol: 'KAS', nativeName: 'Kaspa', nativeDecimals: 8, coingeckoId: 'kaspa', phase: 4, blockTimeSecs: 1 },
+};
+
+export function kaspaChain(network: Network): KaspaChain {
+  return KASPA_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -301,7 +323,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), kaspaChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -412,6 +434,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       ? { host: host(xrp.url), purpose: 'XRP Ledger : ton serveur rippled', custom: true }
       : { host: network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net', purpose: `XRP Ledger${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (rippled)` },
   );
+  // Kaspa: reached by Rust only (kas_*), Tor circuits of the `kaspa` family. No custom server yet.
+  list.push({
+    host: network === 'mainnet' ? 'api.kaspa.org' : 'api-tn10.kaspa.org',
+    purpose: `Kaspa${network === 'mainnet' ? '' : ' testnet-10'} : soldes, pièces, frais, historique, diffusion (API REST publique des développeurs Kaspa)`,
+  });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'

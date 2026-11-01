@@ -43,6 +43,8 @@ import { createDemoXrp, demoXrpAddress, type DemoXrpState } from './mock-xrp';
 export { demoXrpAddress, xrpAddressOfId } from './mock-xrp';
 import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
 export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
+import { createDemoKaspa, demoKaspaAddress, type DemoKaspaState } from './mock-kaspa';
+export { demoKaspaAddress, demoKaspaMass } from './mock-kaspa';
 import { demoFund } from './mock-tx';
 import { createDemoHw, detectDemoHwScenario, type DemoHw, type DemoHwScenario } from './mock-hw';
 import { EMPTY_SERVERS, redactServers } from './servers';
@@ -161,6 +163,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       tron: { address: demoTronAddress(demoSeed(), 0), path: "m/44'/195'/0'/0/0" },
       xrp: { address: demoXrpAddress(demoSeed(), 0), path: "m/44'/144'/0'/0/0" },
       cardano: { address: demoCardanoAddress(network), path: "m/1852'/1815'/0'/0/0" },
+      kas: { address: demoKaspaAddress(demoSeed(), network, 0), path: "m/44'/111111'/0'/0/0" },
     },
     ownBtc,
     receive,
@@ -284,6 +287,8 @@ export interface MockBackend {
   xrp: DemoXrpState;
   /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
+  /** Kaspa demo chain (tests). */
+  kaspa: DemoKaspaState;
   /** Staking demo (tests). */
   stake: ReturnType<typeof createDemoStake>;
 }
@@ -384,6 +389,17 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   // Cardano (§2.7): `ada_*`, min-UTxO / fee / coin selection like Rust.
   const cardanoChain = createDemoCardano({
     network,
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // Kaspa (§2.11): `kas_*`, coin selection / KIP-9 mass / fee like Rust.
+  const kaspaChain = createDemoKaspa({
+    network,
+    seed: demoSeed(),
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -829,6 +845,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     ...tronChain.handlers,
     ...xrpChain.handlers,
     ...cardanoChain.handlers,
+    ...kaspaChain.handlers,
     ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
@@ -860,6 +877,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`)) {
     tron: tronChain.state,
     xrp: xrpChain.state,
     cardano: cardanoChain.state,
+    kaspa: kaspaChain.state,
     stake,
     advance(ms: number) {
       clockOffset += ms;

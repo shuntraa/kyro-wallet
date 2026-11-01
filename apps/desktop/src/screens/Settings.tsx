@@ -437,7 +437,7 @@ function Contacts() {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [family, setFamily] = useState<ContactFamily>('evm');
-  const adapter = family === 'evm' ? [...adapters.evm.values()][0] : family === 'ada' ? adapters.cardano : adapters[family];
+  const adapter = family === 'evm' ? [...adapters.evm.values()][0] : family === 'ada' ? adapters.cardano : family === 'kas' ? adapters.kaspa : adapters[family];
   const valid = !!adapter && adapter.isValidAddress(address.trim());
   const persist = (l: Contact[]) => {
     setList(l);
@@ -447,7 +447,7 @@ function Contacts() {
   // the new one with the other contacts and your own addresses before it goes into the book.
   const lookalike = (() => {
     if (!valid) return null;
-    const own = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address, accounts.sol?.address, accounts.ltc?.address, accounts.doge?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, ...accountSources.filter((x) => x.family === family).flatMap((x) => x.addresses)];
+    const own = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address, accounts.sol?.address, accounts.ltc?.address, accounts.doge?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.kas?.address, ...accountSources.filter((x) => x.family === family).flatMap((x) => x.addresses)];
     const ownOfFamily = own.filter((a): a is string => !!a && (adapter?.isValidAddress(a) ?? false));
     const known: KnownAddress[] = [
       ...list.filter((c) => c.family === family).map((c) => ({ address: c.address, source: 'contact' as const, label: c.name })),
@@ -482,7 +482,7 @@ function Contacts() {
         <span className="text-[13px] font-semibold">Ajouter</span>
         <div className="flex gap-2">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom" className="w-[160px]" />
-          <Segmented label="Réseau" value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'tron', label: 'TRON' }, { value: 'xrp', label: 'XRP' }, { value: 'ada', label: 'ADA' }]} />
+          <Segmented label="Réseau" value={family} onChange={setFamily} options={[{ value: 'evm', label: 'EVM' }, { value: 'btc', label: 'BTC' }, { value: 'sol', label: 'SOL' }, { value: 'ltc', label: 'LTC' }, { value: 'doge', label: 'DOGE' }, { value: 'tron', label: 'TRON' }, { value: 'xrp', label: 'XRP' }, { value: 'ada', label: 'ADA' }, { value: 'kas', label: 'KAS' }]} />
         </div>
         <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Adresse" className="font-mono text-[13px]" />
         {address && !valid && <span className="text-[12px] text-down">Adresse invalide pour ce réseau.</span>}
