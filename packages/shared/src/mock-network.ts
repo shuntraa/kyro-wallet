@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// MODE DÉMO — network choice (docs/IPC.md §2.10), mirroring src-tauri/src/network.rs:
+// DEMO ONLY — network choice (docs/IPC.md §2.10), mirroring src-tauri/src/network.rs:
 // `?network=` in the URL plays the role of KYRO_NETWORK (forces it, switching refused), then
 // the saved choice (localStorage, public data), then the default (testnet, like a debug build).
 // `network_set` saves and « restarts »: in a browser, the page reloads without `?network=`.

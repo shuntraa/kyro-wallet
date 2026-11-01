@@ -92,11 +92,11 @@ export function renderRust(f: Fixture): string {
   ].join('\n');
 }
 
-describe('table Rust des tokens connus (générée depuis registry.ts)', () => {
-  it('fixture JSON à jour', async () => {
+describe('Rust table of known tokens (generated from registry.ts)', () => {
+  it('JSON fixture up to date', async () => {
     await expect(JSON.stringify(knownTokensFixture(), null, 2) + '\n').toMatchFileSnapshot('../../../apps/desktop/src-tauri/fixtures/known_tokens.json');
   });
-  it('table Rust à jour', async () => {
+  it('Rust table up to date', async () => {
     await expect(renderRust(knownTokensFixture())).toMatchFileSnapshot('../../../apps/desktop/src-tauri/src/known_tokens/data.rs');
   });
 });

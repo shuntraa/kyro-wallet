@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// MODE DÉMO — in-memory backend used automatically when the UI runs outside
+// DEMO ONLY — in-memory backend used automatically when the UI runs outside
 // Tauri (plain `vite` in a browser, unit tests). It emulates every command of
 // docs/IPC.md with a fake vault and fake chains, so all screens are demoable.
 //

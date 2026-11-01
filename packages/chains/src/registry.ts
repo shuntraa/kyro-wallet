@@ -645,7 +645,7 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
     tok('AAVE', 'Aave', 18, 'aave', '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9', '#6E6E6E'),
     tok('ONDO', 'Ondo', 18, 'ondo-finance', '0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3', '#6B5B8C'),
     tok('USDf', 'Falcon USD', 18, 'falcon-finance', '0xFa2B947eEc368f42195f24F36d2aF29f7c24CeC2', '#4F7A6B'),
-    tok('PAXG', 'PAX Gold', 18, 'pax-gold', '0x45804880De22913dAFE09f4980848ECE6EcbAf78', '#6E6E6E'), // fee-on-transfer : Paxos annonce des frais de transfert (0,02 %) prélevés par le contrat, le destinataire peut recevoir un peu moins (non mesuré on-chain)
+    tok('PAXG', 'PAX Gold', 18, 'pax-gold', '0x45804880De22913dAFE09f4980848ECE6EcbAf78', '#6E6E6E'), // fee-on-transfer: Paxos announces a transfer fee (0.02 %) taken by the contract, the recipient may receive slightly less (not measured on-chain)
     tok('MORPHO', 'Morpho', 18, 'morpho', '0x58D97B57BB95320F9a05dC918Aef65434969c2B2', '#8C6B4F'),
     tok('WLFI', 'World Liberty Financial', 18, 'world-liberty-financial', '0xdA5e1988097297dCdc1f90D4dFE7909e847CBeF6', '#4F6F7A'),
     tok('SKY', 'Sky', 18, 'sky', '0x56072C95FAA701256059aa122697B133aDEd9279', '#5E7A4F'),
@@ -722,11 +722,11 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
     tok('CAP', 'Cap', 18, 'cap-4', '0x99991c6AAbba5a096f24f250b73580F5179b9999', '#6B5B8C'),
     tok('APE', 'ApeCoin', 18, 'apecoin', '0x4d224452801ACEd8B2F0aebE155379bb5D594381', '#6E6E6E'),
     tok('1INCH', '1INCH', 18, '1inch', '0x111111111117dC0aa78b770fA6A738034120C302', '#4F6F7A'),
-    { symbol: 'WBTC', name: 'Wrapped Bitcoin', decimals: 8, coingeckoId: 'wrapped-bitcoin', contract: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', color: '#F09242', glyph: '₿' }, // hors top 250, déjà présent
+    { symbol: 'WBTC', name: 'Wrapped Bitcoin', decimals: 8, coingeckoId: 'wrapped-bitcoin', contract: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', color: '#F09242', glyph: '₿' }, // outside the top 250, already listed
   ],
   // canonical bridge: `l1Address()` = Ethereum contract; or issuer list.
   arbitrum: [
-    USDT('0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9'), // USD₮0 (déjà présent)
+    USDT('0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9'), // USD₮0 (already listed)
     USDC('0xaf88d065e77c8cC2239327C5EDb3A432268e5831'),
     tok('LINK', 'Chainlink', 18, 'chainlink', '0xf97f4df75117a78c1A5a0DBb814Af92458539FB4', '#7A4F5E'),
     tok('RAIN', 'Rain', 18, 'rain', '0x25118290e6A5f4139381D072181157035864099d', '#5B6B8C'),
@@ -779,7 +779,7 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
   ],
   // PoS bridge: `childToRootToken()` = Ethereum contract; or issuer list.
   polygon: [
-    USDT('0xc2132D05D31c914a87C6611C10748AEb04B58e8F'), // pont PoS (déjà présent)
+    USDT('0xc2132D05D31c914a87C6611C10748AEb04B58e8F'), // pont PoS (already listed)
     USDC('0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359'),
     tok('LINK', 'Chainlink', 18, 'chainlink', '0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39', '#7A4F5E'),
     tok('UNI', 'Uniswap', 18, 'uniswap', '0xb33EaAd8d922B1083446DC23f610c2567fB5180f', '#5B6B8C'),
@@ -799,8 +799,8 @@ export const ERC20_TOKENS: Record<string, TokenSpec[]> = {
     tok('APE', 'ApeCoin', 18, 'apecoin', '0xB7b31a6BC18e48888545CE79e83E06003bE70930', '#6E6E6E'),
   ],
   bsc: [
-    USDT('0x55d398326f99059fF775485246999027B3197955', 18), // Binance-Peg (déjà présent)
-    USDC('0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', 18), // Binance-Peg (déjà présent)
+    USDT('0x55d398326f99059fF775485246999027B3197955', 18), // Binance-Peg (already listed)
+    USDC('0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', 18), // Binance-Peg (already listed)
     tok('USD1', 'USD1', 18, 'usd1-wlfi', '0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d', '#7A5E4F'),
     tok('ASTER', 'Aster', 18, 'aster-2', '0x000Ae314E2A2172a039B26378814C252734f556A', '#5E7A4F'),
     tok('BTW', 'Bitway', 18, 'bitway', '0x444045B0EE1ee319A660a5E3d604CA0ffA35ACaA', '#8C7F4F'),

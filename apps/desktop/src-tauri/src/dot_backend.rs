@@ -383,7 +383,7 @@ pub async fn tx_state(
 }
 
 /// Network check (genesis), with the node's runtime and finalized height.
-// Pas encore appelée : pas de serveur Polkadot personnalisé (docs/IPC.md §2.11).
+// Not called yet: no custom Polkadot server (docs/IPC.md §2.11).
 #[allow(dead_code)]
 pub async fn probe(ctx: &DotCtx<'_>) -> AppResult<Detected> {
     let g = check_genesis(ctx).await?;
