@@ -21,11 +21,12 @@
 //   `GenericSwapFacetV3.sol`, `LibSwap.SwapData`, `Periphery/FeeForwarder.sol`; calldata checked
 //   against two live li.quest quotes (Arbitrum USDC → ETH, Base ETH → USDC).
 
-import { decodeFunctionData, getAddress, isAddress, parseAbi, type Hex } from 'viem';
+import { decodeFunctionData, getAddress, isAddress, pad, parseAbi, toHex, type Hex } from 'viem';
+import { base58, bech32 } from '@scure/base';
 import type { ProviderFee } from './fees';
 import { applySlippage } from './compare';
-import { NATIVE_EVM, ZERO_ADDRESS, isNative } from './providers/common';
-import type { ProviderId, SwapToken } from './types';
+import { NATIVE_EVM, WSOL_MINT, ZERO_ADDRESS, isNative } from './providers/common';
+import type { ProviderId, SwapChain, SwapToken } from './types';
 
 /** 0x AllowanceHolder, same address on every Cancun chain (Ethereum, Arbitrum, Optimism, Base, Polygon, BSC, Avalanche). */
 export const ZEROX_ALLOWANCE_HOLDER = '0x0000000000001fF3684f28c67538d4D072C22734';
@@ -74,6 +75,63 @@ export const LIFI_ABI = parseAbi([
   `function swapTokensMultipleV3NativeToERC20(bytes32 transactionId, string integrator, string referrer, address receiver, uint256 minAmountOut, ${SWAP_DATA}[] swapData)`,
   `function swapTokensGeneric(bytes32 transactionId, string integrator, string referrer, address receiver, uint256 minAmountOut, ${SWAP_DATA}[] swapData)`,
 ]);
+const BRIDGE_DATA = '(bytes32 transactionId, string bridge, string integrator, address referrer, address sendingAssetId, address receiver, uint256 minAmount, uint256 destinationChainId, bool hasSourceSwaps, bool hasDestinationCall)';
+const NEAR_DATA = '(bytes32 nonEVMReceiver, bytes32 destinationAsset, address depositAddress, bytes32 quoteId, uint256 deadline, uint256 minAmountOut, address refundRecipient, bytes signature)';
+/**
+ * LI.FI `NEARIntentsFacet` v3 (lifinance/contracts `src/Facets/NEARIntentsFacet.sol`): the only
+ * bridge facet Kyro decodes. Selector checked against live li.quest calldata (01/11/2026):
+ * `swapAndStartBridgeTokensViaNEARIntents` = 0x02631b09.
+ */
+export const LIFI_NEAR_ABI = parseAbi([
+  `function startBridgeTokensViaNEARIntents(${BRIDGE_DATA} bridgeData, ${NEAR_DATA} nearData) payable`,
+  `function swapAndStartBridgeTokensViaNEARIntents(${BRIDGE_DATA} bridgeData, ${SWAP_DATA}[] swapData, ${NEAR_DATA} nearData) payable`,
+]);
+/** LI.FI chain ids of the non-EVM chains Kyro bridges to (li.quest `/v1/chains`). */
+export const LIFI_CHAIN_SOLANA = 1151111081099710;
+export const LIFI_CHAIN_BITCOIN = 20000000000001;
+/** `BridgeData.receiver` sentinel for a non-EVM destination (LiFiData.sol `NON_EVM_ADDRESS`); the real receiver is in the facet data. */
+export const LIFI_NON_EVM_ADDRESS = '0x11f111f111f111F111f111f111F111f111f111F1';
+
+/** LI.FI chain id of a Kyro swap chain. */
+export function lifiChainId(c: SwapChain): number {
+  return c === 'solana' ? LIFI_CHAIN_SOLANA : c === 'bitcoin' ? LIFI_CHAIN_BITCOIN : c;
+}
+
+/**
+ * `nonEVMReceiver` LI.FI writes for our address (live calldata, 01/11/2026): Solana = the 32-byte
+ * public key; Bitcoin SegWit v0 P2WPKH = its 32 five-bit program words (`bc1q` + 32 characters),
+ * one byte each. Other forms (Taproot…) are not representable unambiguously: null ⇒ refused.
+ */
+export function nonEvmReceiverWord(chain: 'solana' | 'bitcoin', address: string): Hex | null {
+  try {
+    if (chain === 'solana') {
+      const b = base58.decode(address);
+      return b.length === 32 ? toHex(b) : null;
+    }
+    const d = bech32.decode(address as `${string}1${string}`);
+    if (d.prefix !== 'bc' || d.words[0] !== 0 || d.words.length !== 33) return null;
+    return toHex(Uint8Array.from(d.words.slice(1)));
+  } catch {
+    return null;
+  }
+}
+
+/** `destinationAsset` LI.FI binds into the NEAR signature: padded token address, padded `0xEeee…` for a native coin, the mint bytes on Solana. */
+export function nearDestinationAsset(chain: SwapChain, token: string): Hex | null {
+  const native = chain === 'solana' ? token === WSOL_MINT || token === '11111111111111111111111111111111' : chain === 'bitcoin' ? token === 'bitcoin' : isNative(token);
+  if (native) return pad(NATIVE_EVM.toLowerCase() as Hex, { size: 32 });
+  if (chain === 'bitcoin') return null;
+  if (chain === 'solana') {
+    try {
+      const b = base58.decode(token);
+      return b.length === 32 ? toHex(b) : null;
+    } catch {
+      return null;
+    }
+  }
+  return isAddress(token, { strict: false }) ? pad(token.toLowerCase() as Hex, { size: 32 }) : null;
+}
+
 export const LIFI_FEE_FORWARDER_ABI = parseAbi([
   'function forwardERC20Fees(address token, (address recipient, uint256 amount)[] distributions)',
   'function forwardNativeFees((address recipient, uint256 amount)[] distributions) payable',
@@ -105,6 +163,11 @@ export interface EvmSwapCheckInput {
   fee: ProviderFee;
   /** 0x only: `fees.integratorFee` of the answer. */
   integratorFee?: { amount: bigint; token: string } | null;
+  /**
+   * LI.FI cross-chain route: destination chain and OUR address there. The calldata must then be a
+   * NEAR Intents bridge call (`LIFI_NEAR_ABI`) instead of a GenericSwapFacetV3 swap.
+   */
+  cross?: { toChain: SwapChain; recipient: string };
 }
 
 export interface EvmSwapCheck {
@@ -118,6 +181,8 @@ export interface EvmSwapCheck {
   settler?: string;
   /** Kyro fee read from the calldata (LI.FI) or the answer (0x), base units of the sold token. */
   kyroFee?: bigint;
+  /** Cross-chain (NEAR Intents): deposit address and amount, confirmed with NEAR Intents before signing. */
+  bridge?: { tool: 'near'; depositAddress: string; amountIn: bigint; deadline: bigint };
 }
 
 const same = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && isAddress(a, { strict: false }) && isAddress(b, { strict: false }) && getAddress(a) === getAddress(b);
@@ -152,7 +217,8 @@ export function verifyEvmSwap(i: EvmSwapCheckInput): EvmSwapCheck {
     if (!same(i.allowanceTarget, entry)) fail(name, `autorisation demandée pour ${i.allowanceTarget ?? '?'} au lieu de ${entry}`);
     if (i.tx.value !== 0n) fail(name, 'valeur native envoyée avec une vente de token');
   }
-  return i.provider === 'zerox' ? checkZeroEx(i, name, entry) : checkLifi(i, name, entry);
+  if (i.provider === 'zerox') return checkZeroEx(i, name, entry);
+  return i.cross ? checkLifiBridge(i, i.cross, name, entry) : checkLifi(i, name, entry);
 }
 
 function checkZeroEx(i: EvmSwapCheckInput, name: string, entry: string): EvmSwapCheck {
@@ -210,6 +276,13 @@ function checkLifi(i: EvmSwapCheckInput, name: string, entry: string): EvmSwapCh
   if (!same(first.sendingAssetId, asset(i.sell)) || first.fromAmount !== i.sellAmount) fail(name, 'première étape différente du token ou du montant vendus');
   if (!same(last.receivingAssetId, asset(i.buy))) fail(name, 'dernière étape différente du token demandé');
   const out: EvmSwapCheck = { contract: getAddress(entry), recipient: getAddress(receiver), minBuyAmount: minAmountOut };
+  const kyro = lifiFees(i, steps, name);
+  if (kyro !== null) out.kyroFee = kyro;
+  return out;
+}
+
+/** FeeForwarder steps of a LI.FI call: Kyro's share (null when the fee is off), total capped. */
+function lifiFees(i: EvmSwapCheckInput, steps: readonly SwapData[], name: string): bigint | null {
   const forwarder = SWAP_CONTRACTS[i.chainId]?.lifi?.feeForwarder ?? '';
   const feeSteps = steps.filter((s) => same(s.callTo, forwarder));
   let kyro = 0n;
@@ -228,10 +301,82 @@ function checkLifi(i: EvmSwapCheckInput, name: string, entry: string): EvmSwapCh
   if (i.fee.kind === 'fee') {
     if (kyro <= 0n) fail(name, 'frais Kyro absents de la transaction');
     if (kyro > maxKyroFee(i.sellAmount, i.fee.bps)) fail(name, 'frais Kyro supérieurs au taux configuré');
-    out.kyroFee = kyro;
   }
   const kyroBps = i.fee.kind === 'fee' ? BigInt(i.fee.bps) : 0n;
   if (total > (i.sellAmount * (kyroBps + LIFI_OWN_FEE_CAP_BPS) + 9_999n) / 10_000n) fail(name, 'frais prélevés au total plus élevés que prévu');
+  return i.fee.kind === 'fee' ? kyro : null;
+}
+
+interface BridgeData {
+  transactionId: Hex;
+  bridge: string;
+  integrator: string;
+  referrer: string;
+  sendingAssetId: string;
+  receiver: string;
+  minAmount: bigint;
+  destinationChainId: bigint;
+  hasSourceSwaps: boolean;
+  hasDestinationCall: boolean;
+}
+interface NearData {
+  nonEVMReceiver: Hex;
+  destinationAsset: Hex;
+  depositAddress: string;
+  quoteId: Hex;
+  deadline: bigint;
+  minAmountOut: bigint;
+  refundRecipient: string;
+  signature: Hex;
+}
+
+/**
+ * LI.FI cross-chain call through NEAR Intents: `BridgeData` (destination chain, receiver = us or
+ * the non-EVM sentinel with OUR address in `nonEVMReceiver`, no destination call), source steps
+ * (first = the token and amount sold, last = the bridged token, Kyro fee step), and the NEAR data
+ * (refund to us, minimum ≥ slippage bound, destination token = the one asked). The deposit address
+ * is then confirmed with NEAR Intents itself (near-intents.ts) before signing.
+ */
+function checkLifiBridge(i: EvmSwapCheckInput, cross: { toChain: SwapChain; recipient: string }, name: string, entry: string): EvmSwapCheck {
+  const d = decode(LIFI_NEAR_ABI, i.tx.data);
+  if (!d) return fail(name, 'fonction du Diamond inconnue de Kyro (pont NEAR Intents attendu)');
+  const withSwaps = d.functionName === 'swapAndStartBridgeTokensViaNEARIntents';
+  const bd = d.args[0] as BridgeData;
+  const steps: readonly SwapData[] = withSwaps ? (d.args[1] as readonly SwapData[]) : [];
+  const nd = (withSwaps ? d.args[2] : d.args[1]) as NearData;
+  if (bd.destinationChainId !== BigInt(lifiChainId(cross.toChain)) || cross.toChain === i.chainId) fail(name, 'chaîne de destination différente de celle demandée');
+  if (bd.hasDestinationCall) fail(name, 'appel de contrat à l’arrivée non autorisé');
+  if (typeof cross.toChain === 'number') {
+    if (!same(bd.receiver, cross.recipient)) fail(name, `destinataire ${bd.receiver} au lieu de ton adresse`);
+  } else {
+    const want = nonEvmReceiverWord(cross.toChain, cross.recipient);
+    if (!same(bd.receiver, LIFI_NON_EVM_ADDRESS)) fail(name, 'destinataire hors EVM mal indiqué');
+    if (!want || nd.nonEVMReceiver.toLowerCase() !== want.toLowerCase()) fail(name, 'destinataire à l’arrivée différent de ton adresse');
+  }
+  if (!same(nd.refundRecipient, i.taker)) fail(name, 'remboursement prévu vers une autre adresse que la tienne');
+  if (!minOk(nd.minAmountOut, i.buyAmount, i.slippageBps)) fail(name, 'minimum garanti plus bas que le slippage choisi');
+  const asset = nearDestinationAsset(cross.toChain, i.buy.address);
+  if (!asset || nd.destinationAsset.toLowerCase() !== asset.toLowerCase()) fail(name, 'token reçu différent de celui demandé');
+  if (withSwaps !== bd.hasSourceSwaps) fail(name, 'étapes de swap incohérentes');
+  const sold = isNative(i.sell.address) ? ZERO_ADDRESS : i.sell.address;
+  if (steps.length > 0) {
+    const first = steps[0] as SwapData;
+    const last = steps[steps.length - 1] as SwapData;
+    if (!same(first.sendingAssetId, sold) || first.fromAmount !== i.sellAmount) fail(name, 'première étape différente du token ou du montant vendus');
+    if (!same(last.receivingAssetId, bd.sendingAssetId)) fail(name, 'dernière étape différente du token envoyé au pont');
+    // Without a DEX step, the bridged amount is what is left after the fees: never more than sold.
+    if (same(bd.sendingAssetId, sold) && bd.minAmount > i.sellAmount) fail(name, 'montant envoyé au pont incohérent');
+  } else if (!same(bd.sendingAssetId, sold) || bd.minAmount !== i.sellAmount) fail(name, 'montant ou token envoyé au pont différent de ta saisie');
+  if (bd.minAmount <= 0n) fail(name, 'montant envoyé au pont nul');
+  if (same(nd.depositAddress, ZERO_ADDRESS)) fail(name, 'adresse de dépôt du pont invalide');
+  const kyro = lifiFees(i, steps, name);
+  const out: EvmSwapCheck = {
+    contract: getAddress(entry),
+    recipient: cross.recipient,
+    minBuyAmount: nd.minAmountOut,
+    bridge: { tool: 'near', depositAddress: getAddress(nd.depositAddress), amountIn: bd.minAmount, deadline: nd.deadline },
+  };
+  if (kyro !== null) out.kyroFee = kyro;
   return out;
 }
 

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import type { SolTxSummary } from '@kyro/shared';
 import type { EvmSwapCheck } from './verify';
 
 export type ProviderId = 'zerox' | 'jupiter' | 'lifi';
 
-/** EVM chain id, or 'solana'. */
-export type SwapChain = number | 'solana';
+/** EVM chain id, 'solana' or 'bitcoin' (Bitcoin: cross-chain destination only, see lifi-cross.ts). */
+export type SwapChain = number | 'solana' | 'bitcoin';
 
 export interface SwapToken {
   /** ERC-20 address, `0xEeee…` for the native coin, or a Solana mint. */
@@ -20,6 +21,11 @@ export interface QuoteParams {
   chain: SwapChain;
   /** Cross-chain destination (LI.FI only). Defaults to `chain`. */
   toChain?: SwapChain;
+  /**
+   * Cross-chain only: OUR OWN address on `toChain` (the account the UI selected for that chain,
+   * never typed by the user). Defaults to `taker` (same EVM address on another EVM chain).
+   */
+  recipient?: string;
   sell: SwapToken;
   buy: SwapToken;
   /** Base units of `sell`. */
@@ -36,8 +42,20 @@ export interface QuoteParams {
 
 export type SwapTx =
   | { kind: 'evm'; chainId: number; to: string; data: `0x${string}`; value: bigint; gas?: bigint }
-  /** Built on demand (the transaction embeds a recent blockhash). Returns a base64 wire transaction. */
-  | { kind: 'solana'; build: () => Promise<string> };
+  /**
+   * Built on demand (the transaction embeds a recent blockhash). Returns a base64 wire transaction.
+   * `verify` (LI.FI cross-chain): checks the built transaction against Rust's decoding and confirms
+   * the bridge deposit with NEAR Intents; throws on any mismatch. Without it: Jupiter (jupiter-verify.ts).
+   */
+  | { kind: 'solana'; build: () => Promise<string>; verify?: (wire: string, summary: SolTxSummary) => Promise<SolanaRouteCheck> };
+
+export interface SolanaRouteCheck {
+  depositAddress: string;
+  amountIn: bigint;
+  kyroFee: bigint;
+  /** Minimum the bridge guarantees on the destination chain. */
+  minAmountOut: bigint;
+}
 
 export interface Quote {
   provider: ProviderId;
@@ -67,6 +85,23 @@ export interface Quote {
   /** Human route ("Uniswap V3 + Curve"). */
   route?: string;
   etaSecs?: number;
+  /** Cross-chain route: what was checked and what the history tracks (lifi-cross.ts). */
+  cross?: CrossChainInfo;
+}
+
+export interface CrossChainInfo {
+  fromChain: SwapChain;
+  toChain: SwapChain;
+  /** Our address on `toChain` (checked in the transaction and with the bridge). */
+  recipient: string;
+  /** LI.FI bridge key (`near` = NEAR Intents) and its name. */
+  bridge: string;
+  bridgeName: string;
+  /**
+   * NEAR Intents deposit address bound to this quote (EVM source: read in the calldata; Solana
+   * source: read in the transaction built at signing time, so absent here).
+   */
+  depositAddress?: string;
 }
 
 export interface SwapProvider {
