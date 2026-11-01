@@ -424,7 +424,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const xrpBelowActivation = isXrp && !!xrpDestInfo && !xrpDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XRP_ACTIVATION;
   const xrpTagMissing = isXrp && !!xrpDestInfo?.requireDestTag && tagParsed.tag === undefined;
   // Stellar: creating an account needs at least 2 × base reserve (1 XLM).
-  const xlmBelowActivation = isXlm && !!xlmDestInfo && !xlmDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XLM_ACTIVATION;
+  const xlmBelowActivation = isXlm && asset?.kind === 'native' && !!xlmDestInfo && !xlmDestInfo.exists && !max && amountBase !== null && amountBase > 0n && amountBase < XLM_ACTIVATION;
   const xlmMemoMissing = isXlm && !!xlmDestInfo?.memoRequired && !xlmMemoParsed.memo;
   const xlmBlocked = isXlm && (!xlmDestInfo || !!xlmMemoParsed.error || xlmMemoMissing || xlmBelowActivation);
   /** XRP: everything that must be right before Rust is even asked to build. */
