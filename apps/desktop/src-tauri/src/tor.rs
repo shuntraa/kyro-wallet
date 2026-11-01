@@ -6,7 +6,7 @@
 //!   redirects, size cap) lives in `net.rs` and is identical to the clear transport.
 //! - **Fail closed**: if Tor is not ready within [`READY_WAIT`], the request fails with
 //!   `TOR_UNAVAILABLE`; it is never retried in clear.
-//! - Each activity family (bitcoin / litecoin / dogecoin / tron / xrp / cardano / evm / solana / market / swap) uses its own
+//! - Each activity family (bitcoin / litecoin / dogecoin / tron / xrp / cardano / sui / evm / solana / market / swap) uses its own
 //!   `isolated_client()`, so their streams never share a circuit.
 
 use std::collections::HashMap;

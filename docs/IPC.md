@@ -186,6 +186,30 @@ pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, M
 pub fn xrp_sign(seed, account, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
 pub fn xrp_verify_signed(blob_hex) -> Result<String /*hash*/>;   // signature DER low-S de SigningPubKey, clé = Account
 
+// --- Sui : m/44'/784'/a'/0'/0' (SLIP-10 ed25519, tous niveaux durcis ; compte 0 = celui de Sui Wallet / Slush, `sui keytool`
+//     et des SDK officiels), adresse = 0x + hex(BLAKE2b-256(0x00 || clé publique 32 o)), sans somme de contrôle ;
+//     BCS écrit à la main pour le SEUL transfert de SUI construit par Kyro, strict (ré-encodage identique exigé)
+pub fn sui_address(seed, account) -> Result<String>; pub fn sui_public_key(seed, account) -> Result<[u8; 32]>; pub fn sui_path(account) -> String;
+pub fn sui_parse_address(s) -> Result<[u8; 32]>;   // 0x + exactement 64 hex ; forme courte (0x2) et noms SuiNS refusés
+pub struct SuiObjectRef { object_id: [u8; 32], version: u64, digest: [u8; 32] }   // pièce de gaz (ObjectRef)
+pub enum SuiTransferAmount { Mist(u64), All }
+pub struct SuiTransfer { sender, recipient, amount, gas_payment: Vec<SuiObjectRef>, gas_price, gas_budget, expiration_epoch: Option<u64> }
+impl SuiTransfer { pub fn encode(&self) -> Result<Vec<u8>>; pub fn decode(bcs) -> Result<Self> }
+// TransactionData::V1 { ProgrammableTransaction { inputs: [Pure(u64), Pure(address)],
+//   commands: [SplitCoins(GasCoin, [Input(0)]), TransferObjects([NestedResult(0,0)], Input(1))] }   <- montant
+// | { inputs: [Pure(address)], commands: [TransferObjects([GasCoin], Input(0))] }                    <- tout le solde
+// sender, GasData { payment, owner = sender, price, budget }, expiration None | Epoch(e) }
+// decode refuse tout le reste : entrée Object, MoveCall, MergeCoins, Publish, Result(0) au lieu de NestedResult(0,0),
+// parrain (owner ≠ sender), gaz payé par le solde d'adresse (payment vide), expiration ValidDuring, octet en trop, ULEB non canonique.
+pub fn sui_decode_tx(bcs_b64, our_address) -> Result<SuiTxSummary>;   // + sender = nous
+pub struct SuiTxSummary { sender, recipient, coin_type /*"0x2::sui::SUI"*/, amount: Option<String> /*MIST ; None = tout*/, gas_budget,
+                          gas_price, gas_coins: Vec<{ object_id, version, digest }>, expiration_epoch, digest /*base58*/, warnings, requires_extra_confirmation }
+pub enum SuiWarning { SendAll, SelfTransfer, HighGasBudget /*> 0,1 SUI*/, NoExpiration }   // -> renforcée
+pub fn sui_sign(seed, account, bcs_b64) -> Result<(String /*flag 0x00 || sig 64 || pk 32, base64*/, SuiTxSummary)>;
+//   signe ed25519(BLAKE2b-256([0,0,0] || bcs)) (IntentMessage TransactionData/V0/Sui), vérifiée (verify_strict)
+pub fn sui_verify_signed(bcs_b64, signature_b64) -> Result<String /*digest*/>;   // flag ed25519, clé = sender, verify_strict
+pub fn sui_tx_digest(bcs) -> String;   // base58(BLAKE2b-256("TransactionData::" || bcs))
+
 // --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
 //     sel = ENTROPIE BIP39, puis clamping), dérivation BIP32-Ed25519 V2 par le crate ed25519-bip32 (aucune crypto écrite
 //     ici), signature ed25519-dalek (hazmat::raw_sign avec le scalaire étendu kL ‖ kR) vérifiée (verify_strict) ;
@@ -394,6 +418,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `ltc_*`, `doge_*` | voir §2.4 | | Litecoin, Dogecoin : mêmes formes Esplora que `btc_*`, signature avec dialogue natif |
 | `ada_*` | voir §2.7 | | Cardano : transaction construite **par Rust** depuis les UTxO et les paramètres de protocole, chaque sortie détaillée (ADA, tokens, min-ADA) |
 | `xrp_*` | voir §2.6 | | XRP Ledger : paiement construit **par Rust** (Sequence, Fee, LastLedgerSequence), tag de destination mis en évidence, réserve |
+| `sui_*` | voir §2.11 | | Sui : transfert de SUI construit **par Rust** (pièces de gaz, prix de référence, budget simulé, BCS), adresse complète dans le dialogue natif |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `sol_stake_*`, `ada_stake_*`, `tron_stake_*` | voir §2.8 | | Staking : Solana natif, délégation Cardano, TRON Stake 2.0 ; opérations construites **par Rust**, décodées et vérifiées en direct avant le dialogue natif |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
@@ -423,7 +448,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 type Accounts = {                 // accounts_get({ account? }) : tout est celui du compte `account` (0 = l'historique)
   network: 'mainnet' | 'testnet';
   account: number;
-  // evm, sol, tron, xrp, cardano : { address, path } (path = chemin de la clé, ex. m/44'/60'/0'/0/1)
+  // evm, sol, tron, xrp, cardano, sui : { address, path } (path = chemin de la clé, ex. m/44'/60'/0'/0/1)
   btc: { segwit: { address: string; xpub: string; fingerprint: string; path: string };
          taproot: { address: string; xpub: string; fingerprint: string; path: string } };
   evm: { address: string };
@@ -433,6 +458,7 @@ type Accounts = {                 // accounts_get({ account? }) : tout est celui
   tron: { address: string };                                                    // m/44'/195'/0'/0/0 (même chemin sur Nile)
   xrp: { address: string };                                                     // m/44'/144'/0'/0/0
   cardano: { address: string };   // adresse de base m/1852'/1815'/0'/0/0 + staking …/2/0 (CIP-1852, Icarus) ; addr_test1… sur preprod
+  sui: { address: string };       // m/44'/784'/0'/0'/0' (SLIP-10 ed25519, même chemin sur testnet), 0x + 64 hex (§2.11)
 };
 type ApiKeyName = 'coingecko' | 'zerox' | 'trongrid';   // toutes les clés que Settings connaît (1inch retiré : une ancienne clé est ignorée puis effacée)
 // coingecko : en-tête x-cg-demo-api-key / x-cg-pro-api-key (api / pro-api.coingecko.com) ; zerox : 0x-api-key (api.0x.org) ;
@@ -874,6 +900,7 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `tron` | `m/44'/195'/a'/0/0` (Ledger Live) | `m/44'/195'/0'/0/0` |
 | `xrp` | `m/44'/144'/a'/0/0` (Ledger Live, Trezor Suite) | `m/44'/144'/0'/0/0` |
 | `ada` | CIP-1852 `m/1852'/1815'/a'/0/0` + staking `…/a'/2/0` | `m/1852'/1815'/0'/…` |
+| `sui` | `m/44'/784'/a'/0'/0'` (Sui Wallet / Slush, `sui keytool`) | `m/44'/784'/0'/0'/0'` |
 
 | Commande | Arguments | Retour | Notes |
 |---|---|---|---|
@@ -883,11 +910,11 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `vault_account_remove` | `{ chain, account }` | `VaultAccountLists` | coffre déverrouillé ; compte 0 → `INVALID_INPUT` |
 
 ```ts
-type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'sui';
 type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[] };   // triées par index ; nom par défaut « Bitcoin 2 » pour l'index 1
 ```
 
-**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`. Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
+**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sui_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`. Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
 
 **Dialogue natif.** La première ligne de chaque fenêtre de signature du coffre dit **quel compte signe** : « Compte signataire : Bitcoin 2 — m/84'/1'/1' (SegWit), m/86'/1'/1' (Taproot) » (EVM : plus l'adresse « De »). Un compte qui n'est **pas** dans la liste de l'utilisateur est affiché « inconnu » (« n° N, absent de ta liste ») avec son chemin, et la signature exige une **2ᵉ fenêtre renforcée** (« Attention : compte inconnu »). Bitcoin, Litecoin, Dogecoin : seules les entrées du compte choisi sont signées ; une entrée d'un autre compte du coffre est étrangère (2ᵉ fenêtre déjà existante) et la monnaie n'est reconnue que dans le compte choisi.
 
@@ -926,6 +953,27 @@ type NetworkInfo = {
 
 **Fait côté UI** : Réglages › Réseaux et serveurs › « Réseau » (Réseau principal — fonds réels / Réseau de test — jetons sans valeur), fenêtre de confirmation qui rappelle que chaque réseau a son propre coffre (l'autre est gardé, pas supprimé), puis redémarrage ; écran d'accueil : une ligne « Le coffre sera créé sur le réseau … » avec un lien pour changer ; badge TESTNET de la barre d'état inchangé. **Mode démo** : `network_set` mémorise le choix (`localStorage`, comme l'environnement) et recharge la page sur `?network=…` ; `?network=` dans l'URL joue le rôle de `KYRO_NETWORK`.
 
+### 2.11 Sui (SUI)
+
+**Serveur** : l'API **GraphQL** publique de la Sui Foundation (`https://graphql.testnet.sui.io/graphql`, `https://graphql.mainnet.sui.io/graphql`), POST JSON en HTTPS, famille Tor `sui`, jamais de repli, pas (encore) de serveur personnalisé. Pourquoi pas JSON-RPC : il a été coupé sur les full nodes publics de la Sui Foundation la semaine du 27/07/2026 (`fullnode.testnet.sui.io` répond « Method not found. JSON-RPC on public fullnodes has been deprecated », vérifié le 01/11/2026) et retiré du code en octobre 2026 ; ses successeurs sont gRPC (HTTP/2 + protobuf, que `net.rs` ne parle pas) et GraphQL (même transport que les autres chaînes). Chaque réponse porte `chainIdentifier`, comparé au réseau attendu (mainnet `4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S`, testnet `69WiPg3DAQiwdxfncX6wYQ2siKwAe6L9BZthQea3JNMD`) : autre valeur → `SERVER_WRONG_NETWORK`. La Sui Foundation présente ces points d'accès comme limités en débit et « pour le développement » : un fournisseur ou ton propre nœud GraphQL seraient plus sûrs pour un usage intensif.
+
+**Rust construit le transfert** : pièces SUI de ton adresse (`address.objects(filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" })`, type, propriétaire et identifiant vérifiés), les plus grosses d'abord jusqu'à couvrir montant + 0,05 SUI (toutes, au plus 256, pour « tout le solde ») ; prix du gaz = prix de référence de l'époque (`epoch.referenceGasPrice`) ; expiration = époque courante + 1 ; budget = calcul + 1 000 unités × prix + max(0, stockage − remboursement) d'après la **simulation d'un brouillon** (`simulateTransaction` sur les octets BCS exacts, formule du SDK officiel) ; encodé par wallet-core. Une transaction construite par le serveur n'est jamais signée.
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `sui_backend_info` | — | `{ kind: 'default', network: 'mainnet' \| 'testnet', label, tor }` | |
+| `sui_address` | `{ account? }` | `string` | `m/44'/784'/{account}'/0'/0'`, coffre déverrouillé ; `sui_build_tx`, `sui_sign_tx`, `sui_broadcast` prennent le même `account?` |
+| `sui_balance` | `{ address }` | `{ address, total, coin, addressBalance }` (MIST) | `address.balance(coinType: "0x2::sui::SUI")` : `coin` = pièces (ce que Kyro dépense), `addressBalance` = « solde d'adresse » (accumulateur ajouté à Sui en 2026), **affiché mais pas dépensé** par Kyro |
+| `sui_txs` | `{ address }` | `[{ digest, timestamp, checkpoint, success, sender, change, fee, counterparty, otherCoins }]` | 20 dernières transactions qui touchent l'adresse (`relation: AFFECTED`), plus récentes d'abord ; `change` = variation nette de SUI de l'adresse (frais compris), `fee` = gaz net si elle l'a envoyée |
+| `sui_build_tx` | `{ to, amount? /*MIST*/, all?: boolean, account? }` | `{ bcs /*base64*/, summary: SuiTxSummary, context: SuiContext }` | refusé : adresse incomplète, forme courte, nom SuiNS ; aucune pièce SUI (message dédié si tout est dans le solde d'adresse) ; montant + budget > pièces ; simulation en échec. `context` = `{ balance, gasCoinsTotal, gasCoinBalances /*MIST de chaque pièce, ordre de summary.gasCoins*/, referenceGasPrice, epoch, computationCost, storageCost, storageRebate, fee /*signé*/, receives /*tout le solde : reçu selon la simulation*/ }` |
+| `sui_sign_tx` | `{ bcs, password, account? }` | `{ bcs, signature, digest, summary, context }` | décode (strict, expéditeur = nous) ; **relit en direct** : époque et prix de référence (expiration ≥ époque courante, prix ≥ référence et ≤ 10 × référence), chaque pièce de gaz encore à nous **à la même version et empreinte**, montant + budget ≤ pièces ; **simule les octets exacts** (succès exigé ; seuls des SUI bougent, entre toi et le destinataire ; le destinataire reçoit exactement le montant) ; mot de passe → dialogue natif : compte signataire, destinataire **en entier** (rappel : pas de somme de contrôle), montant (SUI et MIST) ou « TOUT LE SOLDE » avec le reçu simulé, jeton `SUI (0x2::sui::SUI)`, frais estimés (calcul + stockage − remboursement), budget max, prix du gaz et référence, nombre et total des pièces de gaz puis **chaque pièce** (identifiant d'objet complet et version décodés des octets, solde relu en direct ; au-delà de 5 : « … et N autres pièces » avec leur total), solde dépensable, époque limite, empreinte ; compte hors liste → « inconnu » + fenêtre renforcée ; 2ᵉ fenêtre renforcée si `requiresExtraConfirmation` ; résumé de la signature = résumé affiché. Sans époque d'expiration : refusé (Kyro en met toujours une) |
+| `sui_broadcast` | `{ bcs, signature, account? }` | `string` (digest) | `sui_verify_signed` (ed25519, clé = expéditeur = nous) puis `executeTransaction` (attend la finalité) ; empreinte des effets = empreinte locale sinon `SERVER_UNREACHABLE` ; exécutée mais en échec (gaz prélevé) → `INVALID_INPUT` avec l'erreur |
+| `sui_tx_status` | `{ digest }` | `{ found, success, error, checkpoint }` | `transaction(digest)` : `found: false` tant que l'indexeur ne l'a pas |
+
+Refusé avant toute signature (voir §1) : tout ce qui n'est pas ce transfert-là — appel Move, objet en entrée, autre jeton, transaction parrainée, gaz payé par le solde d'adresse, expiration `ValidDuring`, forme `Result(0)`… Plus strict que « inconnu → confirmation renforcée » : Kyro ne signe que les octets qu'il a construits. Hardware wallets : non pris en charge (`accounts.sui` absent → pas d'adaptateur). **USDC sur Sui : non fait** (il faudrait des entrées `Object` — pièces USDC — et `MergeCoins`, donc un second gabarit BCS et sa table de jetons ; laissé de côté pour garder un seul gabarit vérifié).
+
+**Côté UI** : `Family` `'sui'`, `suiChain(network)`, actif `sui` (9 décimales, CoinGecko `sui`), `SuiAdapter` (`packages/chains/src/sui/`), écrans Envoyer (pas de frais à choisir, adresse complète exigée, solde dépensable, récapitulatif décodé, suivi `sui_tx_status`), Recevoir (QR de l'adresse nue : pas de lien de paiement standard), Actif, Historique, comptes multiples, « Connexions sortantes », mode démo (`mock-sui.ts` : adresses de démo au bon format mais pas dérivées de la graine, BCS remplacé par du JSON base64).
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -934,6 +982,7 @@ type NetworkInfo = {
 | `mempool.space` | Bitcoin : UTXO, frais, diffusion (Esplora) |
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`) : utilisé par les commandes Rust `ltc_*`, famille Tor `litecoin` |
 | `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet et mainnet (JSON-RPC rippled) : utilisés par les commandes Rust `xrp_*`, famille Tor `xrp` |
+| `graphql.testnet.sui.io`, `graphql.mainnet.sui.io` | Sui testnet et mainnet (GraphQL de la Sui Foundation, POST JSON) : utilisés par les commandes Rust `sui_*` (solde, pièces de gaz, époque et prix de référence, simulation, exécution, historique), famille Tor `sui` |
 | `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |

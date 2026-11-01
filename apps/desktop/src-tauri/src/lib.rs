@@ -7,6 +7,7 @@ mod commands;
 mod commands_cardano;
 mod commands_hw;
 mod commands_servers;
+mod commands_sui;
 mod commands_tron;
 mod commands_utxo;
 mod commands_xrp;
@@ -27,6 +28,7 @@ mod stake_ada;
 mod stake_sol;
 mod stake_tron;
 mod state;
+mod sui_backend;
 mod tor;
 mod tron_backend;
 mod utxo_backend;
@@ -164,6 +166,14 @@ pub fn run() {
             commands_xrp::xrp_sign_tx,
             commands_xrp::xrp_broadcast,
             commands_xrp::xrp_tx_status,
+            commands_sui::sui_backend_info,
+            commands_sui::sui_address,
+            commands_sui::sui_balance,
+            commands_sui::sui_txs,
+            commands_sui::sui_build_tx,
+            commands_sui::sui_sign_tx,
+            commands_sui::sui_broadcast,
+            commands_sui::sui_tx_status,
             commands_cardano::ada_backend_info,
             commands_cardano::ada_address,
             commands_cardano::ada_account,

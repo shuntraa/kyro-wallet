@@ -35,6 +35,9 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
+    // Sui GraphQL RPC (Sui Foundation, testnet and mainnet): only Rust's `sui_*` commands.
+    "graphql.testnet.sui.io",
+    "graphql.mainnet.sui.io",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -294,6 +297,7 @@ pub enum Family {
     Tron,
     Xrp,
     Cardano,
+    Sui,
     Evm,
     Solana,
     Market,
@@ -317,6 +321,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
+    } else if host == "graphql.testnet.sui.io" || host == "graphql.mainnet.sui.io" {
+        Family::Sui
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1067,6 +1073,8 @@ mod tests {
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
+        assert_eq!(family_for("graphql.testnet.sui.io", &c), Family::Sui);
+        assert_eq!(family_for("graphql.mainnet.sui.io", &c), Family::Sui);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)
