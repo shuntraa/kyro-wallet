@@ -139,6 +139,15 @@ const COMMANDS: &[&str] = &[
     "ada_build_tx",
     "ada_sign_tx",
     "ada_broadcast",
+    // Kaspa (docs/IPC.md §2.11).
+    "kas_backend_info",
+    "kas_address",
+    "kas_account",
+    "kas_txs",
+    "kas_tx_status",
+    "kas_build_tx",
+    "kas_sign_tx",
+    "kas_broadcast",
     // Staking (docs/IPC.md §2.8).
     "sol_stake_overview",
     "sol_stake_validators",

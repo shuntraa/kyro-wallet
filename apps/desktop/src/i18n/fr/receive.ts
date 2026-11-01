@@ -26,6 +26,7 @@ export const receive = {
   'receive.descSui': 'Adresse Sui (0x + 64 caractères) : pour les SUI. Les autres jetons Sui reçus ici restent visibles sur l’explorateur, pas encore dans Kyro.',
   'receive.descHbarId': 'Identifiant de ton compte Hedera (0.0.x) : ce que demandent les plateformes d’échange. Pas de mémo à donner : ce compte est à toi seul.',
   'receive.descHbarEvm': 'Adresse EVM de ta clé Hedera : le premier HBAR reçu ici crée ton compte 0.0.x (création automatique).',
+  'receive.descKas': 'Adresse Kaspa ({prefix}…), clé Schnorr. Mêmes adresses que Kaspa NG et Kaspium avec la même phrase.',
   'receive.xlmReserve': '<b>Réserve de 1 XLM :</b> un compte Stellar n’existe qu’après avoir reçu au moins 1 XLM (2 × la réserve de base de 0,5 XLM), qui reste bloqué ; chaque ligne de confiance, offre ou signataire ajoute 0,5 XLM. Le premier envoi vers cette adresse doit donc être d’au moins 1 XLM (l’expéditeur crée ton compte avec une opération CreateAccount). N’envoie ici que des XLM : les autres actifs Stellar demandent une ligne de confiance, que Kyro ne gère pas encore.',
   'receive.xlmNotCreated': 'Ton compte n’est pas encore créé : demande au moins 1 XLM pour commencer.',
   'receive.xlmExists': 'Ton compte existe : réserve bloquée {reserve}.',

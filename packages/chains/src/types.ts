@@ -10,6 +10,7 @@ import type { StellarSigned, StellarUnsigned } from './stellar/adapter';
 import type { NearSigned, NearUnsigned } from './near/adapter';
 import type { SuiSigned, SuiUnsigned } from './sui/adapter';
 import type { HbarSigned, HbarUnsigned } from './hedera/adapter';
+import type { KaspaSigned, KaspaUnsigned } from './kaspa/adapter';
 import type { CardanoTokenSpec, StellarMemoSpec } from '@kyro/shared';
 
 import { l10n } from '@kyro/shared';
@@ -34,7 +35,9 @@ export type FeeParams =
   /** Sui: no fee to choose. Rust uses the reference gas price and a budget from a simulation. */
   | { family: 'sui' }
   /** Hedera: no fee to choose. Rust sets the max fee from the exchange rate (≈ $0.0001 charged). */
-  | { family: 'hbar' };
+  | { family: 'hbar' }
+  /** Kaspa: no fee to choose. Rust: 100 sompi per gram of relay mass (more when the network is busy). */
+  | { family: 'kas' };
 
 export interface FeeOption {
   level: FeeLevel;
@@ -69,7 +72,8 @@ export type SizeHint =
   | { family: 'xlm' }
   | { family: 'near' }
   | { family: 'sui' }
-  | { family: 'hbar' };
+  | { family: 'hbar' }
+  | { family: 'kas' };
 
 export interface Balance {
   assetId: string;
@@ -181,9 +185,11 @@ export interface FamilyTypes {
   sui: { unsigned: SuiUnsigned; signed: SuiSigned };
   /** Hedera: CryptoTransfer built (one copy per node) and decoded by Rust. */
   hbar: { unsigned: HbarUnsigned; signed: HbarSigned };
+  /** Kaspa: payment built (coin selection, KIP-9 mass, fee) and decoded by Rust. */
+  kas: { unsigned: KaspaUnsigned; signed: KaspaSigned };
 }
-export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned;
-export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned;
+export type AnyUnsigned = EvmUnsigned | BtcUnsigned | SolUnsigned | TronUnsigned | XrpUnsigned | CardanoUnsigned | StellarUnsigned | NearUnsigned | SuiUnsigned | HbarUnsigned | KaspaUnsigned;
+export type AnySigned = EvmSigned | BtcSigned | SolSigned | TronSigned | XrpSigned | CardanoSigned | StellarSigned | NearSigned | SuiSigned | HbarSigned | KaspaSigned;
 
 export type HistoryDirection = 'in' | 'out' | 'self';
 export type HistoryStatus = 'pending' | 'confirmed' | 'failed';
@@ -227,7 +233,16 @@ export interface ChainAdapter<F extends Family = Family> {
   getHistory(): Promise<HistoryItem[]>;
 }
 
-export type AnyAdapter = ChainAdapter<'btc'> | ChainAdapter<'evm'> | ChainAdapter<'sol'> | ChainAdapter<'ltc'> | ChainAdapter<'doge'> | ChainAdapter<'bch'> | ChainAdapter<'dash'> | ChainAdapter<'tron'> | ChainAdapter<'xrp'> | ChainAdapter<'ada'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>;
+export type AnyAdapter =
+  | ChainAdapter<'btc'>
+  | ChainAdapter<'evm'>
+  | ChainAdapter<'sol'>
+  | ChainAdapter<'ltc'>
+  | ChainAdapter<'doge'>
+  | ChainAdapter<'bch'> | ChainAdapter<'dash'> | ChainAdapter<'tron'>
+  | ChainAdapter<'xrp'>
+  | ChainAdapter<'ada'> | ChainAdapter<'xlm'> | ChainAdapter<'near'> | ChainAdapter<'sui'> | ChainAdapter<'hbar'>
+  | ChainAdapter<'kas'>;
 
 /** The `family` tag of the unsigned transactions an adapter builds (Litecoin / Dogecoin / Bitcoin Cash / Dash: Bitcoin's PSBT shape). */
 export function unsignedFamilyOf(family: Family): AnyUnsigned['family'] {

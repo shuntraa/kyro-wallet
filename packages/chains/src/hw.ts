@@ -45,6 +45,8 @@ export interface WalletAccounts {
   near?: { address: string; path?: string };
   /** Vault only: Sui on a hardware wallet is not supported. */
   sui?: { address: string; path?: string };
+  /** Vault only: Kaspa is not offered on hardware wallets. */
+  kas?: { address: string; path?: string };
 }
 
 export interface BtcAccountView {

@@ -1,0 +1,40 @@
+{
+ "source": "GET https://api.kaspa.org/transactions/b3f792cef931a80ffd83799272301f9a26e75cd8b9ce21817197ad09a4deb505?resolve_previous_outpoints=full (fetched 2026-11-01)",
+ "transaction_id": "b3f792cef931a80ffd83799272301f9a26e75cd8b9ce21817197ad09a4deb505",
+ "version": 0,
+ "mass": 3154,
+ "subnetwork_id": "0000000000000000000000000000000000000000",
+ "block_time": 1793508328612,
+ "inputs": [
+  {
+   "previous_outpoint_hash": "6b3cb28131c5543b27edc19ab429a1dd8e545209990d325a5fd7a0ded1d0ac74",
+   "previous_outpoint_index": 0,
+   "signature_script": "41529df16f5c8f61548ae37d43bb5bd4da465deaac9d38a337d497e0043ff6c10e695517e19e8535d8392e7918d704b83acc244aff791737f0c7b0b64c3557c67001",
+   "sig_op_count": 1,
+   "previous_amount": 18119625524,
+   "previous_script": "20124442ec290dec9772141a5c41ddc2fd5b673c250c4d608e2a0c448a5b9b8557ac",
+   "previous_address": "kaspa:qqfygshv9yx7e9mjzsd9cswact74keeuy5xy6cyw9gxyfzjmnwz4wsfsmukmu"
+  },
+  {
+   "previous_outpoint_hash": "a46f71caa1898ad22398a8d63fce4247280fc309432594f9ce8069fba0aef461",
+   "previous_outpoint_index": 0,
+   "signature_script": "41dfbd5249b072a285df5c7fa89274b82f04c92ea0ec118d45548cf415319bb82e7419b8596ddf110596ce2f77ef3bcedc5288dfc0b5e1e60352918919cf4595fb01",
+   "sig_op_count": 1,
+   "previous_amount": 2882624222,
+   "previous_script": "20124442ec290dec9772141a5c41ddc2fd5b673c250c4d608e2a0c448a5b9b8557ac",
+   "previous_address": "kaspa:qqfygshv9yx7e9mjzsd9cswact74keeuy5xy6cyw9gxyfzjmnwz4wsfsmukmu"
+  }
+ ],
+ "outputs": [
+  {
+   "amount": 20000000000,
+   "script_public_key": "20ec56e7099fea3e9339407486c578d69f417598fd83c6d241f1fa6eae93eec217ac",
+   "address": "kaspa:qrk9decfnl4rayeegp6gd3tc6605zavclkpud5jp78axat5namppwt050d57j"
+  },
+  {
+   "amount": 1001932146,
+   "script_public_key": "20124442ec290dec9772141a5c41ddc2fd5b673c250c4d608e2a0c448a5b9b8557ac",
+   "address": "kaspa:qqfygshv9yx7e9mjzsd9cswact74keeuy5xy6cyw9gxyfzjmnwz4wsfsmukmu"
+  }
+ ]
+}

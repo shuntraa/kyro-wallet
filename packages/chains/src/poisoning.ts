@@ -53,6 +53,7 @@ const TAIL = 4;
  * - NEAR: none (implicit 64 hex or named id, lowercase).
  * - Sui: `0x`, hex compared lowercase (no checksum at all).
  * - Hedera: `0x` (EVM address, hex lowercase) or `0.0.` (account number; HIP-15 checksum dropped).
+ * - Kaspa: `kaspa:` / `kaspatest:` + version char (`kaspa:q`, `kaspa:p`), bech32 lowercase.
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -92,6 +93,15 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       if (a.toLowerCase().startsWith('0x')) return { prefix: '0x', body: a.slice(2).toLowerCase(), caseInsensitive: true };
       if (a.startsWith('0.0.')) return { prefix: '0.0.', body: (a.slice(4).split('-')[0] ?? ''), caseInsensitive: true };
       return { prefix: '', body: a.toLowerCase(), caseInsensitive: true };
+    case 'kas': {
+      // `kaspa:` / `kaspatest:` + the version character (`q` P2PK, `p` P2SH), bech32 lowercase.
+      const k = /^(kaspa(?:test)?:)([a-z0-9])/i.exec(a);
+      if (k?.[1] && k[2]) {
+        const prefix = `${k[1]}${k[2]}`.toLowerCase();
+        return { prefix, body: a.slice(prefix.length).toLowerCase(), caseInsensitive: true };
+      }
+      return { prefix: '', body: a.toLowerCase(), caseInsensitive: true };
+    }
   }
 }
 

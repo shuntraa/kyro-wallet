@@ -3,7 +3,7 @@
 // fees slow/normal/fast/custom, recap decoded by the Rust core, password.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { call, toIpcError, type AccountChain, type EvmTxSummary, type SolTxSummary } from '@kyro/shared';
+import { call, kaspaAddressProblem, toIpcError, type AccountChain, type EvmTxSummary, type SolTxSummary } from '@kyro/shared';
 import {
   assetsFor,
   checkSolSummary,
@@ -52,6 +52,8 @@ import {
   type HbarAdapter,
   hbarMemoError,
   normalizeHbarRecipient,
+  type KaspaAdapter,
+  KASPA_MIN_SEND,
 } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -77,6 +79,7 @@ import { NearReceiverLine, NearSpendable, NearSummaryView, NearTxStatusLine, nea
 import { SuiSpendable, SuiSummaryView, SuiTxStatusLine } from '../components/SuiSend';
 import { HbarAccountState, HbarMemoField, HbarSummaryView, HbarTxStatusLine, hbarRecipientProblem } from '../components/HbarSend';
 import { CardanoSendFields, CardanoSummaryView, CardanoTxStatusLine, tokenKey } from '../components/Cardano';
+import { KaspaSpendable, KaspaSummaryView, KaspaTxStatusLine } from '../components/KaspaSend';
 import { DustOnlyNote, PoisoningWarning } from '../components/Poisoning';
 import { SecondConfirmNotice, btcWarningText, evmWarningText } from '../components/SecondConfirm';
 import { useHistory } from '../state/history';
@@ -102,6 +105,7 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   if (asset.family === 'near') return adapters.near ?? undefined;
   if (asset.family === 'sui') return adapters.sui ?? undefined;
   if (asset.family === 'hbar') return adapters.hbar ?? undefined;
+  if (asset.family === 'kas') return adapters.kaspa ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -150,7 +154,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
   // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
-  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address.toLowerCase(), accounts.hbar?.address.toLowerCase(), ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' || x.family === 'sui' || x.family === 'hbar' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.kas?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address.toLowerCase(), accounts.hbar?.address.toLowerCase(), ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' || x.family === 'sui' || x.family === 'hbar' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
   const isOwn = ownAddresses.includes(asset?.family === 'evm' || asset?.family === 'sui' || asset?.family === 'hbar' ? toTrim.toLowerCase() : toTrim);
   // « Mes comptes »: the user's OTHER accounts of this chain. A transfer between two of them is an
   // ordinary send (same Rust decoding, native dialog, poisoning check: own addresses are known).
@@ -205,6 +209,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       near: [accounts.near?.address],
       sui: [accounts.sui?.address],
       hbar: [accounts.hbar?.address],
+      kas: [accounts.kas?.address],
     };
     // The other accounts of the vault are trusted too.
     for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
@@ -316,6 +321,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const hbarMe = useAsync(hbarAdapter ? () => hbarAdapter.account() : null, [hbarAdapter], { intervalMs: 30_000 });
   const hbarProblem = isHbar ? hbarRecipientProblem(hbarDestInfo) : null;
   const hbarBlocked = isHbar && (!hbarDestInfo || !!hbarMemoError(memo.trim()) || !!hbarProblem || hbarMe.data?.exists === false);
+  /** Kaspa: no fee to choose; Rust builds from the account's coins (§2.11). */
+  const isKas = asset?.family === 'kas';
+  const kasAdapter = isKas ? (adapter as KaspaAdapter | undefined) : undefined;
+  const kasMe = useAsync(kasAdapter ? () => kasAdapter.account() : null, [kasAdapter], { intervalMs: 30_000 });
+  const kasProblem = isKas && toTrim ? kaspaAddressProblem(toTrim, network) : null;
   const amountBase = useMemo(() => {
     if (!amountStr) return null;
     if (fiatMode) {
@@ -338,6 +348,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const xrpBlocked = isXrp && (!xrpDestInfo || !!tagParsed.error || xrpTagMissing || xrpBelowActivation);
   // Dogecoin dust (Dogecoin Core policy): no output under 0.01 DOGE.
   const dogeBelowDust = asset?.family === 'doge' && amountBase !== null && amountBase > 0n && amountBase < DOGE_SOFT_DUST && !max;
+  // Kaspa: KIP-9 storage mass makes outputs under 0.2 KAS non-standard (Rust refuses them).
+  const kasBelowMin = isKas && amountBase !== null && amountBase > 0n && amountBase < KASPA_MIN_SEND && !max;
 
   // Fees.
   const fees = useAsync<FeeEstimates>(adapter ? () => adapter.estimateFees() : null, [adapter], { intervalMs: 30_000 });
@@ -375,12 +387,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [buildError, setBuildError] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
   // XRP: what can be sent is the spendable part (balance − reserve), not the balance.
-  const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : isXlm && xlmMe.data ? BigInt(xlmMe.data.spendable) : null;
+  const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : null;
+  const kasSpendable = isKas && kasMe.data ? BigInt(kasMe.data.spendable) : isXlm && xlmMe.data ? BigInt(xlmMe.data.spendable) : null;
   // NEAR: likewise, balance − storage reserve.
   const nearSpendable = isNear && nearMe.data ? BigInt(nearMe.data.spendable) : null;
   // Sui: the address balance is not spent by Kyro, only SUI coin objects.
   const suiSpendable = isSui && suiMe.data ? BigInt(suiMe.data.coin) : null;
-  const overBalance = !max && amountBase !== null && amountBase > (xrpSpendable ?? nearSpendable ?? suiSpendable ?? balance);
+  const overBalance = !max && amountBase !== null && amountBase > (xrpSpendable ?? nearSpendable ?? suiSpendable ?? kasSpendable ?? balance);
 
   const doBuild = async (): Promise<Built> => {
     if (!asset || !adapter || !feeParams) throw new Error(t('send.incompleteParams'));
@@ -410,7 +423,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   useEffect(() => {
     setBuilt(null);
     setBuildError(null);
-    if (!addrValid || !feeParams || dogeBelowDust || xrpBlocked || xlmBlocked || nearBlocked || adaBlocked || hbarBlocked) return;
+    if (!addrValid || !feeParams || dogeBelowDust || kasBelowMin || xrpBlocked || xlmBlocked || nearBlocked || adaBlocked || hbarBlocked) return;
     // A Cardano token payment carries only its min-ADA: no ADA amount to type.
     if (!adaTokenMode && (overBalance || (!max && (amountBase === null || amountBase <= 0n)))) return;
     let alive = true;
@@ -531,6 +544,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
         {nearAdapter && <NearTxStatusLine adapter={nearAdapter} hash={done.id} recipient={toTrim} onDone={pf.refresh} />}
         {suiAdapter && <SuiTxStatusLine adapter={suiAdapter} digest={done.id} recipient={toTrim} onIndexed={pf.refresh} />}
         {hbarAdapter && <HbarTxStatusLine adapter={hbarAdapter} id={done.id} recipient={toTrim} onDone={pf.refresh} />}
+        {kasAdapter && <KaspaTxStatusLine adapter={kasAdapter} txid={done.id} onAccepted={pf.refresh} />}
       </SendDone>
     );
   }
@@ -615,7 +629,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : asset.family === 'sui' ? t('send.suiPlaceholder') : asset.family === 'hbar' ? t('send.hbarPlaceholder') : '0x…'}
+                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'kas' ? (network === 'testnet' ? 'kaspatest:q…' : 'kaspa:q…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : asset.family === 'sui' ? t('send.suiPlaceholder') : asset.family === 'hbar' ? t('send.hbarPlaceholder') : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -692,8 +706,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             </div>
             {ownError && <span className="text-[12px] text-down">{ownError}</span>}
             {xlmProblem && <span className="text-[12px] text-down">{xlmProblem}</span>}
-            {toTrim && !addrValid && !xAddress && !adaProblem && !xlmProblem && <span className="text-[12px] text-down">{nearProblem ? `${nearProblem}.` : t('send.invalidAddressFor', { chain: chain.name })}</span>}
+            {toTrim && !addrValid && !xAddress && !adaProblem && !kasProblem && !xlmProblem && <span className="text-[12px] text-down">{nearProblem ? `${nearProblem}.` : t('send.invalidAddressFor', { chain: chain.name })}</span>}
             {adaProblem && <span className="text-[12px] text-down">{adaProblem.charAt(0).toUpperCase() + adaProblem.slice(1)}.</span>}
+            {kasProblem && <span className="text-[12px] text-down">{kasProblem.charAt(0).toUpperCase() + kasProblem.slice(1)}.</span>}
             {poisoning.lookalike && <PoisoningWarning recipient={toTrim} lookalike={poisoning.lookalike} family={asset.family} acknowledged={poisonAck} onAcknowledge={setPoisonAck} />}
             {!poisoning.lookalike && poisoning.suspect && !contact && !isOwn && <DustOnlyNote />}
             {xAddress && (
@@ -781,6 +796,8 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {isNear && <NearSpendable account={nearMe.data} hidden={hideBalances} />}
             {isSui && <SuiSpendable balance={suiMe.data} hidden={hideBalances} />}
             {isHbar && <HbarAccountState account={hbarMe.data} hidden={hideBalances} />}
+            {isKas && <KaspaSpendable account={kasMe.data} hidden={hideBalances} />}
+            {kasBelowMin && <span className="text-[12px] text-down">Minimum 0,2 KAS par envoi : en dessous, la masse de stockage de Kaspa (KIP-9) rend la sortie non standard et Kyro la refuse.</span>}
             {isAda && adaMe.data && (
               <span className="text-[12px] leading-[1.45] text-mute">
                 {t('send.adaBalance', {
@@ -816,7 +833,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           </>
           )}
           {/* Fees */}
-          {isAda ? (
+          {isKas ? (
+            <div className="flex flex-col gap-2">
+              <span className="eyebrow">Frais réseau</span>
+              <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
+                <strong className="font-semibold text-text">Rien à choisir sur Kaspa.</strong> Les frais dépendent de la masse de la transaction : 100 sompi par gramme (d’habitude ≈ 0,002 KAS), davantage si le réseau est chargé. Le coffre les calcule ; le montant exact et la masse sont dans la vérification.
+              </div>
+            </div>
+          ) : isAda ? (
             <div className="flex flex-col gap-2">
               <span className="eyebrow">{t('send.networkFees')}</span>
               <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
@@ -927,7 +951,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('send.review')}</span>
             <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[10.5px] font-medium tracking-[0.02em] text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'xlm' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'hbar' || built?.unsigned.family === 'sui' || built?.unsigned.family === 'near' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
+              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'xlm' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'kas' || built?.unsigned.family === 'hbar' || built?.unsigned.family === 'sui' || built?.unsigned.family === 'near' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
@@ -988,6 +1012,10 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {built?.unsigned.family === 'near' && <NearSummaryView u={built.unsigned} nearPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'sui' && <SuiSummaryView u={built.unsigned} suiPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'hbar' && <HbarSummaryView u={built.unsigned} hbarPrice={nativePrice} currency={cur} />}
+          {built?.unsigned.family === 'kas' && <KaspaSummaryView u={built.unsigned} kasPrice={nativePrice} currency={cur} />}
+          {built?.unsigned.family === 'kas' && built.unsigned.summary.requiresExtraConfirmation && (
+            <SecondConfirmNotice lines={built.unsigned.summary.warnings.map((w) => (w.kind === 'highFee' ? 'Frais élevés (réseau chargé, ou plus de 10 fois le minimum de relais)' : `Sortie ${w.index} : script inconnu`))} />
+          )}
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
@@ -1059,6 +1087,12 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {built.unsigned.all ? ' Il ne restera aucun SUI sur ce compte : une 2ᵉ confirmation te sera demandée.' : ''}
             </EnClair>
           )}
+          {built && addrValid && sendAmount !== null && built.unsigned.family === 'kas' && (
+            <EnClair tone={built.unsigned.summary.requiresExtraConfirmation ? 'warn' : 'ice'}>
+              {rt('send.clearKas', { b: (c) => <strong>{c}</strong> }, { amount: fmtCrypto(sendAmount, decimals, asset.symbol), recipient: recipientName, fee: fmtCrypto(built.unsigned.maxFee, 8, 'KAS', 8), fiat: feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : '' })}
+              {built.unsigned.summary.hasChange ? t('send.clearKasChange') : t('send.clearKasNoChange')}
+            </EnClair>
+          )}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'hbar' && (
             <EnClair tone={built.unsigned.summary.memo === null ? 'warn' : 'ice'}>
               Tu envoies <strong>{fmtCrypto(sendAmount, decimals, asset.symbol)}</strong> à <strong>{recipientName}</strong>
@@ -1074,7 +1108,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {built.unsigned.summary.memo === null ? ' Si c’est une plateforme d’échange, vérifie qu’elle ne t’a pas donné de mémo.' : ''}
             </EnClair>
           )}
-          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'xlm' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'near' && built.unsigned.family !== 'sui' && built.unsigned.family !== 'hbar' && (
+          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'xlm' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'near' && built.unsigned.family !== 'sui' && built.unsigned.family !== 'hbar' && built.unsigned.family !== 'kas' && (
             <EnClair>
               {rt('send.clearGeneric', { b: (c) => <strong>{c}</strong> }, {
                 amount: fmtCrypto(sendAmount, decimals, asset.symbol),
@@ -1089,7 +1123,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 : ''}
             </EnClair>
           )}
-          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? (xAddress ? t('send.hintXAddress') : t('send.hintRecipient')) : dogeBelowDust ? t('send.hintDogeDust') : xlmMemoMissing ? t('send.hintXlmMemo') : xlmBelowActivation ? t('send.hintXlmActivation') : isXlm && !xlmDestInfo ? t('send.hintXrpReading') : xrpTagMissing ? t('send.hintXrpTag') : xrpBelowActivation ? t('send.hintXrpActivation') : isXrp && !xrpDestInfo ? t('send.hintXrpReading') : isNear && nearRecvInfo && nearReceiverBlocked(toTrim, nearRecvInfo) ? t('send.hintNearNoReceiver') : isNear && !nearRecvInfo ? t('send.hintXrpReading') : isHbar && hbarMe.data?.exists === false ? t('send.hintHbarNoAccount') : isHbar && hbarProblem ? t('send.hintHbarRefused') : isHbar && !hbarDestInfo ? t('send.hintXrpReading') : t('send.hintAmount')}</p>}
+          {!built && !buildError && !building && <p className="m-0 text-[13px] leading-[1.5] text-mute">{!addrValid ? (xAddress ? t('send.hintXAddress') : t('send.hintRecipient')) : dogeBelowDust ? t('send.hintDogeDust') : kasBelowMin ? t('send.hintKasMin') : xlmMemoMissing ? t('send.hintXlmMemo') : xlmBelowActivation ? t('send.hintXlmActivation') : isXlm && !xlmDestInfo ? t('send.hintXrpReading') : xrpTagMissing ? t('send.hintXrpTag') : xrpBelowActivation ? t('send.hintXrpActivation') : isXrp && !xrpDestInfo ? t('send.hintXrpReading') : isNear && nearRecvInfo && nearReceiverBlocked(toTrim, nearRecvInfo) ? t('send.hintNearNoReceiver') : isNear && !nearRecvInfo ? t('send.hintXrpReading') : isHbar && hbarMe.data?.exists === false ? t('send.hintHbarNoAccount') : isHbar && hbarProblem ? t('send.hintHbarRefused') : isHbar && !hbarDestInfo ? t('send.hintXrpReading') : t('send.hintAmount')}</p>}
 
           {blindSigning && activeHw && (
             <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
@@ -1151,6 +1185,7 @@ function dataLabel(b: Built | null, family?: string): string {
     return `${tp('send.dataOutputs', outs)} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' || family === 'bch' || family === 'dash' ? t('send.dataBytes') : 'vB'}`;
   }
   if (u.family === 'ada') return `${tp('send.dataInputs', u.summary.inputs.length)} · ${t('send.dataAdaOutputs', { n: u.summary.outputs.length })}${u.token ? ' · token' : ''}`;
+  if (u.family === 'kas') return `${u.summary.inputs} entrée${u.summary.inputs > 1 ? 's' : ''} · ${u.summary.outputs.length} sortie${u.summary.outputs.length > 1 ? 's' : ''} · ${u.summary.mass.total} g`;
   if (u.family === 'hbar') return `CryptoTransfer${u.summary.memo !== null ? ' · mémo' : ' · sans mémo'} · ${u.summary.nodes.length} nœuds${u.summary.memo ? ` · ${t('send.dataMessage')}` : ''}`;
   if (u.family === 'sui') return u.all ? t('send.dataSuiAll') : 'SplitCoins + TransferObjects';
   if (u.family === 'near') return `Transfer · nonce ${u.summary.nonce}${u.context.createsAccount ? ` · ${t('send.dataNearCreates')}` : ''}`;

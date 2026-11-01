@@ -51,6 +51,8 @@ export { demoNearAddress } from './mock-near';
 export { demoHbarAddress, hbarChecksum, parseHbarRecipient } from './mock-hbar';
 import { createDemoCardano, demoCardanoAddress, type DemoCardanoState } from './mock-cardano';
 export { cardanoAddressOf, demoCardanoAddress } from './mock-cardano';
+import { createDemoKaspa, demoKaspaAddress, type DemoKaspaState } from './mock-kaspa';
+export { demoKaspaAddress, demoKaspaMass } from './mock-kaspa';
 import { demoFund } from './mock-tx';
 import { createDemoHw, detectDemoHwScenario, type DemoHw, type DemoHwScenario } from './mock-hw';
 import { EMPTY_SERVERS, redactServers } from './servers';
@@ -185,6 +187,7 @@ export function deriveDemoKeys(network: Network): DemoKeys {
       near: { address: demoNearAddress(0), path: "m/44'/397'/0'" },
       sui: { address: demoSuiAddress(0), path: "m/44'/784'/0'/0'/0'" },
       hbar: { address: demoHbarAddress(demoSeed(), 0), path: "m/44'/3030'/0'/0/0" },
+      kas: { address: demoKaspaAddress(demoSeed(), network, 0), path: "m/44'/111111'/0'/0/0" },
     },
     ownBtc,
     receive,
@@ -328,6 +331,8 @@ export interface MockBackend {
   hbar: DemoHbarState;
   /** Cardano demo chain (tests). */
   cardano: DemoCardanoState;
+  /** Kaspa demo chain (tests). */
+  kaspa: DemoKaspaState;
   /** Staking demo (tests). */
   stake: ReturnType<typeof createDemoStake>;
 }
@@ -470,6 +475,17 @@ export function createMockBackend(opts: MockOptions = {}): MockBackend {
   // Cardano (§2.7): `ada_*`, min-UTxO / fee / coin selection like Rust.
   const cardanoChain = createDemoCardano({
     network,
+    tor,
+    settings: () => settings,
+    requireUnlocked: () => requireUnlocked(),
+    checkPassword: (p) => checkPassword(p),
+    confirm: (text) => confirmFn(text),
+    now: () => now(),
+  });
+  // Kaspa (§2.11): `kas_*`, coin selection / KIP-9 mass / fee like Rust.
+  const kaspaChain = createDemoKaspa({
+    network,
+    seed: demoSeed(),
     tor,
     settings: () => settings,
     requireUnlocked: () => requireUnlocked(),
@@ -925,6 +941,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     ...suiChain.handlers,
     ...hbarChain.handlers,
     ...cardanoChain.handlers,
+    ...kaspaChain.handlers,
     ...stake.handlers,
     btc_core_setup: (a) => servers.coreSetup(a.rescanFrom),
     btc_core_status: () => servers.coreStatus(),
@@ -960,6 +977,7 @@ ${summary.warnings.map((w) => w.kind).join(', ')}`))) {
     sui: suiChain.state,
     hbar: hbarChain.state,
     cardano: cardanoChain.state,
+    kaspa: kaspaChain.state,
     stake,
     advance(ms: number) {
       clockOffset += ms;

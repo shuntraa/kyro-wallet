@@ -11,8 +11,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
 /** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `xlm`: Stellar (XLM, `stellar_*`, §2.11). */
-/** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar';
+/** `near`: NEAR Protocol (implicit accounts, `near_*`, §2.11). `sui`: Sui (SUI, `sui_*`, §2.11). `hbar`: Hedera (HBAR, `hbar_*`, §2.11). `kas`: Kaspa (KAS, `kas_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
@@ -53,7 +53,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -384,6 +384,28 @@ export function suiChain(network: Network): SuiChain {
   return SUI_CHAINS[network];
 }
 
+/**
+ * Kaspa (phase 4): Rust `kas_*` commands and `KaspaAdapter` (`packages/chains/src/kaspa/`).
+ * Testnet = testnet-10. Part of `allChains()` / `assetsFor()` (KAS). Receive address
+ * `m/44'/111111'/a'/0/0`; balance and history read 20 receive + 20 change addresses.
+ * Hardware wallets: not offered.
+ */
+export interface KaspaChain extends Omit<ChainBase, 'phase'> {
+  family: 'kas';
+  phase: 4;
+}
+
+const KASPA_CHAINS: Record<Network, KaspaChain> = {
+  testnet: { family: 'kas', key: 'kaspa', name: 'Kaspa testnet-10', label: 'KAS testnet', network: 'testnet', color: '#49C3B1', glyph: 'K',
+    nativeSymbol: 'KAS', nativeName: 'Kaspa', nativeDecimals: 8, coingeckoId: 'kaspa', phase: 4, blockTimeSecs: 1 },
+  mainnet: { family: 'kas', key: 'kaspa', name: 'Kaspa', label: 'KAS', network: 'mainnet', color: '#49C3B1', glyph: 'K',
+    nativeSymbol: 'KAS', nativeName: 'Kaspa', nativeDecimals: 8, coingeckoId: 'kaspa', phase: 4, blockTimeSecs: 1 },
+};
+
+export function kaspaChain(network: Network): KaspaChain {
+  return KASPA_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -698,7 +720,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -847,6 +869,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
   list.push({
     host: network === 'mainnet' ? 'node00.swirldslabs.com, node01-00-grpc.swirlds.com, node04.swirldslabs.com' : 'testnet-node00/01/02-00-grpc.hedera.com',
     purpose: `Hedera${network === 'mainnet' ? '' : ' testnet'} : diffusion des transferts signés (proxys gRPC-web des nœuds de consensus)`,
+  });
+  // Kaspa: reached by Rust only (kas_*), Tor circuits of the `kaspa` family. No custom server yet.
+  list.push({
+    host: network === 'mainnet' ? 'api.kaspa.org' : 'api-tn10.kaspa.org',
+    purpose: `Kaspa${network === 'mainnet' ? '' : ' testnet-10'} : soldes, pièces, frais, historique, diffusion (API REST publique des développeurs Kaspa)`,
   });
   const tron = servers.tron?.[nk];
   list.push(

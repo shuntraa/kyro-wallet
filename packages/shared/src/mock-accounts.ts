@@ -34,6 +34,7 @@ import { demoStellarAddress } from './mock-stellar';
 import { demoNearAddress } from './mock-near';
 import { demoSuiAddress } from './mock-sui';
 import { demoHbarAddress } from './mock-hbar';
+import { demoKaspaAddress } from './mock-kaspa';
 import { demoFund } from './mock-tx';
 import type { DemoChainState } from './mock-net';
 import { l10n } from './i18n';
@@ -58,6 +59,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   dash: 'Dash',
   sui: 'Sui',
   hbar: 'Hedera',
+  kas: 'Kaspa',
 };
 
 export const defaultAccountName = (chain: AccountChain, index: number): string => `${ACCOUNT_CHAIN_LABEL[chain]} ${index + 1}`;
@@ -163,6 +165,7 @@ export function createDemoAccounts(d: {
       near: { address: demoNearAddress(a), path: `m/44'/397'/${a}'` },
       sui: { address: demoSuiAddress(a), path: `m/44'/784'/${a}'/0'/0'` },
       hbar: { address: demoHbarAddress(d.seed, a), path: `m/44'/3030'/0'/0/${a}` },
+      kas: { address: demoKaspaAddress(d.seed, d.network, a), path: `m/44'/111111'/${a}'/0/0` },
     };
   };
 

@@ -3,7 +3,7 @@
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
 //! Bitcoin derivation and PSBT signing, Litecoin (BIP84), Dogecoin, Bitcoin Cash (CashAddr,
-//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer) and Cardano (CIP-1852 payments) signing, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
+//! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer) and Cardano (CIP-1852 payments) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
 //!
 //! Design rules:
@@ -31,6 +31,7 @@ mod display;
 mod error;
 mod evm;
 mod hedera;
+mod kaspa;
 mod keys;
 mod ledger_cal;
 mod mnemonic;
@@ -90,6 +91,21 @@ pub use hedera::{
     hbar_public_key, hbar_response_name, hbar_sign, hbar_verify_signed, HbarRecipient,
     HbarSignedTransfer, HbarTransfer, HbarTxSummary, HbarWarning, HBAR_HIGH_FEE_TINYBARS,
     HBAR_MAX_MEMO_BYTES, HBAR_MAX_NODES, HBAR_MAX_VALID_DURATION, HBAR_TINYBARS,
+};
+pub use kaspa::{
+    kaspa_account_path, kaspa_address, kaspa_address_decode, kaspa_address_encode,
+    kaspa_address_of_script, kaspa_address_of_xonly, kaspa_build_send, kaspa_compute_mass,
+    kaspa_hash, kaspa_keys_from_master, kaspa_mass, kaspa_own_keys, kaspa_path, kaspa_prefix,
+    kaspa_priority_feerate, kaspa_public_key, kaspa_script_pubkey, kaspa_serialized_size,
+    kaspa_sighash, kaspa_sign, kaspa_storage_mass, kaspa_tx_from_json, kaspa_tx_hash, kaspa_tx_id,
+    kaspa_tx_summary, kaspa_tx_to_json, kaspa_verify_signed, kaspa_with_dummy_signatures,
+    KaspaAddressKind, KaspaAmount, KaspaBuilt, KaspaHashDomain, KaspaInput, KaspaMass,
+    KaspaOutpoint, KaspaOutput, KaspaOutputKind, KaspaOutputView, KaspaOwnKey, KaspaSpendable,
+    KaspaTx, KaspaTxSummary, KaspaUtxoEntry, KaspaWarning, KASPA_COINBASE_MATURITY,
+    KASPA_COIN_TYPE, KASPA_HIGH_FEE, KASPA_HIGH_FEE_FACTOR, KASPA_MAX_FEERATE,
+    KASPA_MAX_FOLDED_CHANGE, KASPA_MAX_INPUTS, KASPA_MAX_SOMPI, KASPA_MAX_STANDARD_MASS,
+    KASPA_MIN_FEERATE, KASPA_MIN_SEND, KASPA_SCAN_WINDOW, KASPA_STORAGE_MASS_PARAMETER,
+    SOMPI_PER_KAS,
 };
 pub use ledger_cal::{
     ledger_erc20_lookup, ledger_erc20_payload, ledger_erc20_verify, LedgerErc20Descriptor,

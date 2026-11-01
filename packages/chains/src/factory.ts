@@ -46,6 +46,8 @@ import { NearAdapter } from './near/adapter';
 import { SuiAdapter } from './sui/adapter';
 import { suiChain } from './registry';
 import { HbarAdapter } from './hedera/adapter';
+import { KaspaAdapter } from './kaspa/adapter';
+import { kaspaChain } from './registry';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -75,6 +77,8 @@ export interface AdapterSet {
   sui: SuiAdapter | null;
   /** Hedera: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   hbar: HbarAdapter | null;
+  /** Kaspa: vault only (not offered on hardware wallets). */
+  kaspa: KaspaAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -124,8 +128,20 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const sui = accounts.sui ? new SuiAdapter({ chain: suiChain(network), address: accounts.sui.address, ...a }) : null;
   // Hedera: Rust reads the mirror node and submits to the nodes (no custom server).
   const hbar = accounts.hbar ? new HbarAdapter({ chain: hbarChain(network), address: accounts.hbar.address, ...a }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(bch ? [bch] : []), ...(dash ? [dash] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : []), ...(near ? [near] : []), ...(sui ? [sui] : []), ...(hbar ? [hbar] : [])];
-  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, all, hw: hw ?? null };
+  // Kaspa: Rust reads the account's 20 receive + 20 change addresses (api.kaspa.org).
+  const kaspa = accounts.kas && !hw ? new KaspaAdapter({ chain: kaspaChain(network), address: accounts.kas.address, ...a }) : null;
+  const all: AnyAdapter[] = [
+    ...(btc ? [btc] : []),
+    ...evm.values(),
+    ...(sol ? [sol] : []),
+    ...(ltc ? [ltc] : []),
+    ...(doge ? [doge] : []),
+    ...(bch ? [bch] : []), ...(dash ? [dash] : []), ...(tron ? [tron] : []),
+    ...(xrp ? [xrp] : []),
+    ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : []), ...(near ? [near] : []), ...(sui ? [sui] : []), ...(hbar ? [hbar] : []),
+    ...(kaspa ? [kaspa] : []),
+  ];
+  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin, Bitcoin Cash, Dash
@@ -315,3 +331,21 @@ export {
   type SuiUnsigned,
   type SuiSigned,
 } from './sui/adapter';
+
+// ---------------------------------------------------------------- phase 4: Kaspa
+
+export {
+  KaspaAdapter,
+  rustKaspaBackend,
+  kasToSompi,
+  KASPA_MIN_SEND,
+  type KaspaAdapterOptions,
+  type KaspaBackend,
+  type KaspaAccountInfo,
+  type KaspaContext,
+  type KaspaHistoryEntry,
+  type KaspaTxSummary,
+  type KaspaWarning,
+  type KaspaUnsigned,
+  type KaspaSigned,
+} from './kaspa/adapter';

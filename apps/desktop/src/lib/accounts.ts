@@ -23,6 +23,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   dash: 'Dash',
   sui: 'Sui',
   hbar: 'Hedera',
+  kas: 'Kaspa',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -56,6 +57,8 @@ export function accountChainHint(chain: AccountChain): string {
       return 'SUI';
     case 'hbar':
       return t('settings.hintHbar');
+    case 'kas':
+      return t('settings.hintKas');
   }
 }
 
@@ -76,6 +79,8 @@ export function familyAdapters(set: AdapterSet, family: AccountChain): AnyAdapte
       return set.cardano ? [set.cardano] : [];
     case 'xlm':
       return set.stellar ? [set.stellar] : [];
+    case 'kas':
+      return set.kaspa ? [set.kaspa] : [];
     default: {
       const a = set[family];
       return a ? [a] : [];
@@ -104,6 +109,8 @@ export function accountAddress(acc: Accounts, family: AccountChain): { address: 
       return acc.cardano;
     case 'xlm':
       return acc.stellar;
+    case 'kas':
+      return acc.kas ?? { address: '', path: '' };
     default:
       return acc[family];
   }

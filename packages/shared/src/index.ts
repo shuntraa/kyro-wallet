@@ -8,3 +8,4 @@ export * from './i18n';
 export * from './stellar';
 export * from './near';
 export * from './cashaddr';
+export * from './kaspa';

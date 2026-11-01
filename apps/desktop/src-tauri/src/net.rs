@@ -56,6 +56,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     "node00.swirldslabs.com",
     "node01-00-grpc.swirlds.com",
     "node04.swirldslabs.com",
+    // Kaspa (kaspa-rest-server of the Kaspa developers, keyless): mainnet and testnet-10;
+    // only Rust's `kas_*` commands.
+    "api.kaspa.org",
+    "api-tn10.kaspa.org",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -366,6 +370,7 @@ pub enum Family {
     Near,
     Sui,
     Hedera,
+    Kaspa,
     Evm,
     Solana,
     Market,
@@ -410,6 +415,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Sui
     } else if HEDERA_HOSTS.contains(&host) {
         Family::Hedera
+    } else if host == "api.kaspa.org" || host == "api-tn10.kaspa.org" {
+        Family::Kaspa
     } else if host.ends_with("-rpc.publicnode.com") || EVM_OWN_RPC_HOSTS.contains(&host) {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1199,6 +1206,9 @@ mod tests {
             assert!(HEDERA_HOSTS.contains(h), "{h}");
         }
         assert_eq!(family_for("mainnet.hashio.io", &c), Family::Other);
+        assert_eq!(family_for("api.kaspa.org", &c), Family::Kaspa);
+        assert_eq!(family_for("api-tn10.kaspa.org", &c), Family::Kaspa);
+        assert_eq!(family_for("evil.kaspa.org", &c), Family::Other);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)
