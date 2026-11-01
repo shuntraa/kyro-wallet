@@ -35,7 +35,7 @@ export const receive = {
   'receive.descTonTestnet': 'Adresse TON de testnet (0Q…, forme non rebondissante) : pour les Toncoin de test seulement.',
   'receive.descCosmos': 'Adresse Cosmos Hub (cosmos1…) : pour les ATOM. Pas de mémo à donner : ce compte est à toi seul.',
   'receive.descApt': 'Adresse Aptos (0x + 64 caractères) : pour les APT. Elle n’a pas de somme de contrôle : fais-la toujours copier, jamais recopier.',
-  'receive.xlmReserve': '<b>Réserve de 1 XLM :</b> un compte Stellar n’existe qu’après avoir reçu au moins 1 XLM (2 × la réserve de base de 0,5 XLM), qui reste bloqué ; chaque ligne de confiance, offre ou signataire ajoute 0,5 XLM. Le premier envoi vers cette adresse doit donc être d’au moins 1 XLM (l’expéditeur crée ton compte avec une opération CreateAccount). N’envoie ici que des XLM : les autres actifs Stellar demandent une ligne de confiance, que Kyro ne gère pas encore.',
+  'receive.xlmReserve': '<b>Réserve de 1 XLM :</b> un compte Stellar n’existe qu’après avoir reçu au moins 1 XLM (2 × la réserve de base de 0,5 XLM), qui reste bloqué ; chaque ligne de confiance, offre ou signataire ajoute 0,5 XLM. Le premier envoi vers cette adresse doit donc être d’au moins 1 XLM (l’expéditeur crée ton compte avec une opération CreateAccount). Les autres actifs Stellar demandent une ligne de confiance : Kyro gère celle de l’USDC de Circle (ci-dessous), n’envoie ici aucun autre actif.',
   'receive.xlmNotCreated': 'Ton compte n’est pas encore créé : demande au moins 1 XLM pour commencer.',
   'receive.xlmExists': 'Ton compte existe : réserve bloquée {reserve}.',
   'receive.descSol': 'Pour SOL et les tokens SPL.',

@@ -226,6 +226,8 @@ pub fn run() {
             commands_stellar::stellar_account,
             commands_stellar::stellar_txs,
             commands_stellar::stellar_build_tx,
+            commands_stellar::stellar_build_asset_tx,
+            commands_stellar::stellar_build_trust_tx,
             commands_stellar::stellar_sign_tx,
             commands_stellar::stellar_broadcast,
             commands_stellar::stellar_tx_status,

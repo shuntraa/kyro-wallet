@@ -112,6 +112,8 @@ const COMMANDS: &[&str] = &[
     "stellar_account",
     "stellar_txs",
     "stellar_build_tx",
+    "stellar_build_asset_tx",
+    "stellar_build_trust_tx",
     "stellar_sign_tx",
     "stellar_broadcast",
     "stellar_tx_status",

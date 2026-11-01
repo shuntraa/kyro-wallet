@@ -7,10 +7,13 @@
 // - the Rust-decoded transaction before the password, and the inclusion follow-up.
 
 import { useEffect, useState } from 'react';
-import type { Currency, StellarAccountInfo, StellarMemoSpec } from '@kyro/shared';
+import { toIpcError, type Currency, type StellarAccountInfo, type StellarMemoSpec } from '@kyro/shared';
 import type { StellarAdapter, StellarUnsigned } from '@kyro/chains';
 import { fmtCrypto, fmtFiat, shortAddress } from '../lib/format';
-import { Notice, Spinner } from './ui/primitives';
+import { useAsync } from '../lib/useAsync';
+import { PasswordField } from './kit';
+import { Dialog } from './ui/dialog';
+import { Button, Notice, Spinner } from './ui/primitives';
 import { IconCheck, IconInfo, IconWarn } from './icons';
 import { cn } from '../lib/cn';
 import { t, useT, type Key } from '../i18n';
@@ -21,6 +24,92 @@ export const XLM_ACTIVATION = 10_000_000n;
 const XLM = (stroops: bigint | string) => fmtCrypto(BigInt(stroops), 7, 'XLM', 7);
 
 export type StellarMemoKind = StellarMemoSpec['kind'];
+
+/**
+ * Receive side of Stellar's issued assets (Circle's USDC): a trustline is needed before the
+ * asset can be received. « Activer USDC » builds the ChangeTrust in Rust, which signs it behind
+ * the native dialog (asset, verified issuer, 0.5 XLM reserve); « Retirer » removes it at a zero
+ * balance (the reserve comes back).
+ */
+export function StellarTrustPanel({ adapter, hidden }: { adapter: StellarAdapter; hidden: boolean }) {
+  useT();
+  const lines = useAsync(() => adapter.trustlines(), [adapter]);
+  const [pending, setPending] = useState<{ contract: string; symbol: string; enable: boolean } | null>(null);
+  if (!lines.data) return lines.error ? <Notice tone="warn">{lines.error.message}</Notice> : null;
+  const acc = lines.data[0]?.account;
+  return (
+    <div className="flex flex-col gap-2 rounded-box border border-line px-3.5 py-3 text-[13px]">
+      <span className="eyebrow">{t('stellar.trustTitle')}</span>
+      {lines.data.map(({ asset, line }) => (
+        <div key={asset.contract} className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-text2">
+            {line
+              ? t('stellar.trustOn', { symbol: asset.symbol, balance: hidden ? '•••••' : fmtCrypto(BigInt(line.balance), 7, asset.symbol, 7) })
+              : t('stellar.trustOff', { symbol: asset.symbol, reserve: XLM(acc?.baseReserve ?? '5000000') })}
+          </span>
+          {line ? (
+            <Button size="sm" disabled={line.balance !== '0'} title={line.balance !== '0' ? t('stellar.trustRemoveNotEmpty') : undefined} onClick={() => setPending({ contract: asset.contract ?? '', symbol: asset.symbol, enable: false })}>
+              {t('stellar.trustRemove', { symbol: asset.symbol })}
+            </Button>
+          ) : (
+            <Button size="sm" variant="primary" disabled={!acc?.exists} onClick={() => setPending({ contract: asset.contract ?? '', symbol: asset.symbol, enable: true })}>
+              {t('stellar.trustEnable', { symbol: asset.symbol })}
+            </Button>
+          )}
+        </div>
+      ))}
+      <span className="text-[12px] leading-[1.45] text-mute">{rt('stellar.trustExplain', { b: (c) => <strong className="font-semibold text-text2">{c}</strong> }, { reserve: XLM(acc?.baseReserve ?? '5000000') })}</span>
+      {acc && !acc.exists && <span className="text-[12px] font-semibold text-warn">{t('stellar.trustNeedsAccount')}</span>}
+      {pending && (
+        <StellarTrustDialog
+          adapter={adapter}
+          {...pending}
+          reserve={acc?.baseReserve ?? '5000000'}
+          onClose={(done) => {
+            setPending(null);
+            if (done) lines.reload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function StellarTrustDialog({ adapter, contract, symbol, enable, reserve, onClose }: { adapter: StellarAdapter; contract: string; symbol: string; enable: boolean; reserve: string; onClose: (done: boolean) => void }) {
+  useT();
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const go = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const unsigned = await adapter.buildTrust(contract, enable);
+      const signed = await adapter.signTx(unsigned, pw);
+      await adapter.broadcast(signed);
+      onClose(true);
+    } catch (e) {
+      const err = toIpcError(e);
+      setError(err.code === 'USER_REJECTED' ? t('stellar.trustCancelled') : err.message);
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open onOpenChange={() => !busy && onClose(false)} title={enable ? t('stellar.trustEnable', { symbol }) : t('stellar.trustRemove', { symbol })}>
+      <p className="m-0 text-[13px] leading-[1.55] text-text2">{enable ? t('stellar.trustEnableExplain', { symbol, reserve: XLM(reserve) }) : t('stellar.trustRemoveExplain', { symbol, reserve: XLM(reserve) })}</p>
+      <PasswordField id="xlm-trust-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && !busy && void go()} />
+      {error && <Notice tone="error">{error}</Notice>}
+      <div className="flex justify-end gap-2">
+        <Button onClick={() => onClose(false)} disabled={busy}>
+          {t('common.cancel')}
+        </Button>
+        <Button variant={enable ? 'primary' : 'danger'} disabled={!pw || busy} onClick={() => void go()}>
+          {busy && <Spinner />} {enable ? t('stellar.trustEnable', { symbol }) : t('stellar.trustRemove', { symbol })}
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
 
 const KINDS: Array<{ value: StellarMemoKind; label: Key; placeholder: Key }> = [
   { value: 'id', label: 'stellar.kindId', placeholder: 'stellar.phId' },
@@ -175,6 +264,7 @@ export function StellarSummaryView({ u, xlmPrice, currency }: { u: StellarUnsign
         <span className={cn('block font-mono font-semibold break-all', memo ? 'text-text' : 'text-warn', memo && memo.value.length > 24 ? 'text-[12px]' : 'text-[18px]')}>{memo ? memo.value : t('stellar.memoNone')}</span>
       </div>
       {u.createsAccount && <Line k={t('stellar.lDest')} v={t('stellar.lDestCreated')} warn />}
+      {s.operation.kind === 'payment' && s.operation.asset.kind === 'credit' && <Line k={t('stellar.lVerifiedIssuer')} v={`${s.operation.asset.code} · ${shortAddress(s.operation.asset.issuer)}`} />}
       <Line k={t('stellar.lFee')} v={t('stellar.lFeeValue', { fee: `${XLM(s.fee)}${fiat(s.fee)}`, base: c.baseFee })} />
       <Line k={t('stellar.lBalance')} v={XLM(c.account.balance)} />
       <Line k={t('stellar.lReserve')} v={`${XLM(c.account.reserve)} ((2 + ${c.account.subentryCount}) × ${XLM(c.baseReserve)})`} />

@@ -735,6 +735,8 @@ export interface StellarTrustline {
   issuer: string;
   balance: string;
   limit: string;
+  /** The issuer authorizes this account to hold the asset (Horizon `is_authorized`). */
+  authorized?: boolean;
 }
 
 /** `stellar_account`: Horizon `/accounts/{id}` + base reserve of the latest ledger. Amounts: stroops. */
@@ -2513,6 +2515,10 @@ export interface Commands {
    */
   stellar_build_tx: { args: { to: string; amount: string; memo?: StellarMemoSpec } & WithAccount; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
   stellar_sign_tx: { args: { envelope: string; password: string } & WithAccount; ret: { envelope: string; hash: string; summary: StellarTxSummary; context: StellarContext } };
+  /** Payment of a known issued asset (`asset` = `CODE-ISSUER`, Circle's USDC); `amount` in units of 7 decimals. Refused: recipient without an authorized trustline, our trustline short. */
+  stellar_build_asset_tx: { args: { asset: string; to: string; amount: string; memo?: StellarMemoSpec } & WithAccount; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
+  /** ChangeTrust of a known asset: `enable` = no limit (one base reserve locked), else limit 0 (zero balance only). Signed by `stellar_sign_tx`. */
+  stellar_build_trust_tx: { args: { asset: string; enable: boolean } & WithAccount; ret: { envelope: string; summary: StellarTxSummary; context: StellarContext } };
   /** Horizon waits for the ledger: the hash comes back once included and successful; else INVALID_INPUT with the result codes. */
   stellar_broadcast: { args: { envelope: string } & WithAccount; ret: string };
   stellar_tx_status: { args: { hash: string }; ret: { found: boolean; successful: boolean } };

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stellar-build-trust-tx"
+description = "Enables the stellar_build_trust_tx command without any pre-configured scope."
+commands.allow = ["stellar_build_trust_tx"]
+
+[[permission]]
+identifier = "deny-stellar-build-trust-tx"
+description = "Denies the stellar_build_trust_tx command without any pre-configured scope."
+commands.deny = ["stellar_build_trust_tx"]

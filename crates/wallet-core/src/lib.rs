@@ -179,12 +179,12 @@ pub use sol_stake::{
 };
 pub use stellar::{
     stellar_account_id, stellar_address, stellar_address_from_key, stellar_asset,
-    stellar_decode_tx, stellar_muxed_parts, stellar_network_passphrase, stellar_path,
-    stellar_public_key, stellar_sign, stellar_verify_signed, StellarAsset, StellarAssetView,
-    StellarEnvelope, StellarMemo, StellarMemoView, StellarOp, StellarOpView, StellarOperation,
-    StellarSignature, StellarTransaction, StellarTxSummary, StellarWarning,
-    STELLAR_HIGH_FEE_STROOPS, STELLAR_MAINNET_PASSPHRASE, STELLAR_MAX_MEMO_TEXT,
-    STELLAR_TESTNET_PASSPHRASE, STROOPS_PER_XLM,
+    stellar_decode_tx, stellar_known_asset, stellar_known_assets, stellar_muxed_parts,
+    stellar_network_passphrase, stellar_path, stellar_public_key, stellar_sign,
+    stellar_verify_signed, StellarAsset, StellarAssetView, StellarEnvelope, StellarKnownAsset,
+    StellarMemo, StellarMemoView, StellarOp, StellarOpView, StellarOperation, StellarSignature,
+    StellarTransaction, StellarTxSummary, StellarWarning, STELLAR_HIGH_FEE_STROOPS,
+    STELLAR_MAINNET_PASSPHRASE, STELLAR_MAX_MEMO_TEXT, STELLAR_TESTNET_PASSPHRASE, STROOPS_PER_XLM,
 };
 pub use sui::{
     sui_address, sui_address_bytes_of_pubkey, sui_address_of_pubkey, sui_address_string,

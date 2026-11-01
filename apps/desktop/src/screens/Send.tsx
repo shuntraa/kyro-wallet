@@ -478,7 +478,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const [building, setBuilding] = useState(false);
   // XRP: what can be sent is the spendable part (balance − reserve), not the balance.
   const xrpSpendable = isXrp && xrpMe.data ? BigInt(xrpMe.data.spendable) : isCosmos && cosmosMe.data ? BigInt(cosmosMe.data.spendable) : null;
-  const kasSpendable = isKas && kasMe.data ? BigInt(kasMe.data.spendable) : isXlm && xlmMe.data ? BigInt(xlmMe.data.spendable) : null;
+  const kasSpendable = isKas && kasMe.data ? BigInt(kasMe.data.spendable) : isXlm && asset?.kind === 'native' && xlmMe.data ? BigInt(xlmMe.data.spendable) : null;
   // NEAR: likewise, balance − storage reserve.
   const nearSpendable = isNear && nearMe.data ? BigInt(nearMe.data.spendable) : null;
   // Sui: the address balance is not spent by Kyro, only SUI coin objects.

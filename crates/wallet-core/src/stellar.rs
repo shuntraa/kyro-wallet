@@ -263,6 +263,68 @@ pub fn stellar_asset(code: &str, issuer: &str) -> Result<StellarAsset> {
     })
 }
 
+/// An issued asset Kyro sends, shows and opens trustlines for, from the issuer's official list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StellarKnownAsset {
+    /// Asset code.
+    pub code: &'static str,
+    /// Issuer `G…` (verified id).
+    pub issuer: &'static str,
+    /// Display name.
+    pub name: &'static str,
+    /// Who issues it and where that is published.
+    pub issuer_name: &'static str,
+}
+
+impl StellarKnownAsset {
+    /// `CODE-ISSUER`, the form Circle publishes and Kyro's registry uses.
+    pub fn id(&self) -> String {
+        format!("{}-{}", self.code, self.issuer)
+    }
+
+    /// The XDR asset.
+    pub fn asset(&self) -> StellarAsset {
+        // Constant, checked by the tests.
+        stellar_asset(self.code, self.issuer).unwrap_or(StellarAsset::Native)
+    }
+}
+
+/// USDC issued by Circle: developers.circle.com › USDC contract addresses (`USDC-GA5Z…KZVN`),
+/// the issuer's `home_domain` is `circle.com` and circle.com/.well-known/stellar.toml lists it.
+const STELLAR_MAINNET_ASSETS: &[StellarKnownAsset] = &[StellarKnownAsset {
+    code: "USDC",
+    issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
+    name: "USD Coin",
+    issuer_name: "Circle (circle.com)",
+}];
+/// Circle's testnet USDC (same page, « Testnet » column).
+const STELLAR_TESTNET_ASSETS: &[StellarKnownAsset] = &[StellarKnownAsset {
+    code: "USDC",
+    issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+    name: "USD Coin",
+    issuer_name: "Circle (testnet)",
+}];
+
+/// The issued assets Kyro knows on `net`.
+pub fn stellar_known_assets(net: Network) -> &'static [StellarKnownAsset] {
+    match net {
+        Network::Mainnet => STELLAR_MAINNET_ASSETS,
+        Network::Testnet => STELLAR_TESTNET_ASSETS,
+    }
+}
+
+/// The known asset with this code and issuer `G…` on `net` (exact match).
+pub fn stellar_known_asset(
+    code: &str,
+    issuer: &str,
+    net: Network,
+) -> Option<&'static StellarKnownAsset> {
+    stellar_known_assets(net)
+        .iter()
+        .find(|a| a.code == code && a.issuer == issuer)
+}
+
 /// A transaction memo.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StellarMemo {

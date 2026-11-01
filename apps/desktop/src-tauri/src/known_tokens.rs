@@ -32,6 +32,8 @@ pub enum TokenChain {
     Sui,
     /// Aptos (fungible-asset metadata object `0x` + 64 hex, wallet-core `aptos_known_assets`).
     Aptos,
+    /// Stellar issued asset (`CODE-ISSUER`, wallet-core `stellar_known_assets`).
+    Stellar,
 }
 
 /// What Kyro knows about a curated token. Symbol and decimals were checked on chain against
@@ -135,6 +137,7 @@ mod tests {
             "tron" => TokenChain::Tron,
             "sui" => TokenChain::Sui,
             "aptos" => TokenChain::Aptos,
+            "stellar" => TokenChain::Stellar,
             evm => TokenChain::Evm(evm.strip_prefix("evm:").unwrap().parse().unwrap()),
         }
     }
@@ -258,6 +261,11 @@ mod tests {
                     assert_eq!(e.contract.len(), 66, "{e:?}");
                     wallet_core::aptos_parse_address(e.contract).unwrap();
                 }
+                TokenChain::Stellar => {
+                    let (code, issuer) = e.contract.split_once('-').unwrap();
+                    wallet_core::stellar_asset(code, issuer).unwrap();
+                    assert_eq!(e.token.decimals, 7, "{e:?}");
+                }
             }
         }
     }
@@ -290,6 +298,12 @@ mod tests {
                 .collect();
             apt.sort();
             assert_eq!(table(TokenChain::Aptos), apt);
+            let mut xlm: Vec<_> = wallet_core::stellar_known_assets(net)
+                .iter()
+                .map(|a| (a.id(), a.code, 7u8))
+                .collect();
+            xlm.sort();
+            assert_eq!(table(TokenChain::Stellar), xlm);
         }
     }
 

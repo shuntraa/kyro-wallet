@@ -71,7 +71,7 @@ export interface WatchOnlyChain {
   phase: 4;
 }
 
-export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'suicoin' | 'fa';
+export type AssetKind = 'native' | 'erc20' | 'spl' | 'trc20' | 'suicoin' | 'fa' | 'xlmasset';
 
 export interface AssetDef {
   /** Unique id, e.g. `btc`, `eth:1`, `erc20:11155111:0x1c7d…`. */
@@ -858,6 +858,19 @@ export const APTOS_ASSETS: Record<Network, TokenSpec[]> = {
   mainnet: [USDC('0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b'), USDT('0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b')],
 };
 
+/**
+ * Stellar issued assets (`contract` = `CODE-ISSUER`, the form Circle publishes; asset id
+ * `xlm:CODE:ISSUER`, the history's). USDC: issuer GA5Z…KZVN (developers.circle.com › USDC
+ * contract addresses), whose `home_domain` is circle.com and listed in circle.com's
+ * stellar.toml (read 2026-11-01); testnet issuer from the same page. Amounts: 7 decimals (every
+ * Stellar asset). Receiving needs a trustline (« Activer USDC », one 0.5 XLM base reserve).
+ * wallet-core (`stellar.rs`, `stellar_known_assets`) holds the same list.
+ */
+export const STELLAR_ASSETS: Record<Network, TokenSpec[]> = {
+  testnet: [USDC('USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5', 7)],
+  mainnet: [USDC('USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN', 7)],
+};
+
 export const SPL_TOKENS: Record<Network, TokenSpec[]> = {
   testnet: [USDC('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')],
   mainnet: [
@@ -974,6 +987,11 @@ export function assetsFor(network: Network): AssetDef[] {
     if (chain.family === 'apt') {
       for (const t of APTOS_ASSETS[network]) {
         out.push({ id: `fa:${t.contract}`, chainKey: chain.key, family: 'apt', kind: 'fa', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
+      }
+    }
+    if (chain.family === 'xlm') {
+      for (const t of STELLAR_ASSETS[network]) {
+        out.push({ id: `xlm:${t.contract.replace('-', ':')}`, chainKey: chain.key, family: 'xlm', kind: 'xlmasset', symbol: t.symbol, name: t.name, decimals: t.decimals, coingeckoId: t.coingeckoId, color: t.color, glyph: t.glyph, contract: t.contract });
       }
     }
   }

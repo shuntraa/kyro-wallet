@@ -2,7 +2,7 @@
 // Do not edit: pnpm --filter @kyro/chains exec vitest run -u test/known-tokens-table.test.ts
 
 use super::TokenChain::{Evm, Solana, Tron};
-use super::TokenChain::{Aptos, Sui};
+use super::TokenChain::{Aptos, Stellar, Sui};
 use super::{Entry as E, KnownEvmChain as C, KnownToken as K};
 use wallet_core::Network::{Mainnet as M, Testnet as N};
 
@@ -255,6 +255,8 @@ pub(super) const TOKENS: &[E] = &[
     E { network: M, chain: Sui, contract: "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC", token: K { symbol: "USDC", name: "USD Coin", decimals: 6 } },
     E { network: M, chain: Aptos, contract: "0xbae207659db88bea0cbead6da0ed00aac12edcdda169e591cd41c94180b46f3b", token: K { symbol: "USDC", name: "USD Coin", decimals: 6 } },
     E { network: M, chain: Aptos, contract: "0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b", token: K { symbol: "USDT", name: "Tether", decimals: 6 } },
+    E { network: M, chain: Stellar, contract: "USDC-GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", token: K { symbol: "USDC", name: "USD Coin", decimals: 7 } },
     E { network: N, chain: Sui, contract: "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC", token: K { symbol: "USDC", name: "USD Coin", decimals: 6 } },
     E { network: N, chain: Aptos, contract: "0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832", token: K { symbol: "USDC", name: "USD Coin", decimals: 6 } },
+    E { network: N, chain: Stellar, contract: "USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", token: K { symbol: "USDC", name: "USD Coin", decimals: 7 } },
 ];

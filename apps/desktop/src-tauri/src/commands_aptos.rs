@@ -995,7 +995,12 @@ mod live {
                 let (s, _) = prepare_sign(&c, me, &pk, &built.raw).await.unwrap();
                 assert_eq!(s, built.summary);
             }
-            assert!(!aptos_backend::token_txs(&c, me).await.unwrap().as_array().unwrap().is_empty());
+            assert!(!aptos_backend::token_txs(&c, me)
+                .await
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .is_empty());
         });
     }
 }

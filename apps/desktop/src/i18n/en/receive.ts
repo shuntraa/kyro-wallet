@@ -35,7 +35,7 @@ export const receive: Record<keyof typeof fr, string> = {
   'receive.descTonTestnet': 'TON testnet address (0Q…, non-bounceable form): for test Toncoin only.',
   'receive.descCosmos': 'Cosmos Hub address (cosmos1…): for ATOM. No memo to give: this account is yours alone.',
   'receive.descApt': 'Aptos address (0x + 64 characters): for APT. It has no checksum: always have it copied, never retyped.',
-  'receive.xlmReserve': '<b>1 XLM reserve:</b> a Stellar account only exists once it has received at least 1 XLM (2 × the 0.5 XLM base reserve), which stays locked; each trustline, offer or signer adds 0.5 XLM. The first send to this address must therefore be at least 1 XLM (the sender creates your account with a CreateAccount operation). Only send XLM here: other Stellar assets need a trustline, which Kyro does not handle yet.',
+  'receive.xlmReserve': '<b>1 XLM reserve:</b> a Stellar account only exists once it has received at least 1 XLM (2 × the 0.5 XLM base reserve), which stays locked; each trustline, offer or signer adds 0.5 XLM. The first send to this address must therefore be at least 1 XLM (the sender creates your account with a CreateAccount operation). Other Stellar assets need a trustline: Kyro handles Circle’s USDC one (below); do not send any other asset here.',
   'receive.xlmNotCreated': 'Your account is not created yet: ask for at least 1 XLM to start.',
   'receive.xlmExists': 'Your account exists: locked reserve {reserve}.',
   'receive.descSol': 'For SOL and SPL tokens.',
