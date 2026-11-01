@@ -9,7 +9,7 @@ import { useHistory, type HistoryEntry } from '../state/history';
 import { useOnTorReady } from '../state/tor';
 import { useOnCbfSynced } from '../state/cbf';
 import { cn } from '../lib/cn';
-import { fmtCrypto, fmtDayGroup, fmtFiat, fmtMonth, shortAddress } from '../lib/format';
+import { fmtCrypto, fmtDate, fmtDayGroup, fmtFiat, fmtIntl, fmtMonth, shortAddress } from '../lib/format';
 import { addLocalTx, getApprovals, removeApproval, type ApprovalRecord } from '../lib/storage';
 import { downloadText, toCsv } from '../lib/csv';
 import { useAsync } from '../lib/useAsync';
@@ -20,6 +20,13 @@ import { Dialog } from '../components/ui/dialog';
 import { Badge, Button, Notice, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
 import { IconImport } from '../components/icons';
 import { idx } from '../components/motion';
+import { getLanguage, useT } from '../i18n';
+import { rt } from '../i18n/rich';
+
+/** Plain amount for the CSV: no thousands separator (narrow NBSP in French, comma in English). */
+function csvAmount(s: string): string {
+  return getLanguage() === 'fr' ? s.replace(/\u202f/g, '') : s.replace(/,/g, '');
+}
 
 type Filter = 'all' | 'out' | 'in' | 'swap' | 'approval';
 
@@ -38,6 +45,7 @@ export function History() {
   useOnTorReady(history.reload);
   useOnCbfSynced(history.reload);
   const [filter, setFilter] = useState<Filter>('all');
+  const { t, tp, lang } = useT();
   const cur = settings.currency;
   const priceOf = (e: HistoryEntry) => (e.asset ? pf.price(e.asset.coingeckoId)?.price ?? null : null);
 
@@ -45,13 +53,13 @@ export function History() {
   const groups = useMemo(() => {
     const out: Array<{ label: string; items: HistoryEntry[] }> = [];
     for (const e of entries) {
-      const label = e.time ? fmtDayGroup(e.time) : 'En cours';
+      const label = e.time ? fmtDayGroup(e.time) : t('history.inProgress');
       const g = out[out.length - 1];
       if (g && g.label === label) g.items.push(e);
       else out.push({ label, items: [e] });
     }
     return out;
-  }, [entries]);
+  }, [entries, lang]);
 
   // Current month summary at today's prices.
   const month = useMemo(() => {
@@ -70,10 +78,10 @@ export function History() {
       if (e.fee && e.feeAsset && e.direction !== 'in') fees += unitsToNumber(e.fee, e.feeAsset.decimals) * (pf.price(e.feeAsset.coingeckoId)?.price ?? 0);
     }
     return { received, sent, fees, label: fmtMonth(Date.now()) };
-  }, [history.data, pf]);
+  }, [history.data, pf, lang]);
 
   const exportCsv = () => {
-    const rows: Array<Array<string | number>> = [['date', 'réseau', 'type', 'sens', 'actif', 'montant', 'frais', 'contrepartie', 'statut', 'identifiant']];
+    const rows: Array<Array<string | number>> = [[t('history.csvDate'), t('history.csvNetwork'), t('history.csvType'), t('history.csvDirection'), t('history.csvAsset'), t('history.csvAmount'), t('history.csvFee'), t('history.csvCounterparty'), t('history.csvStatus'), t('history.csvId')]];
     for (const e of history.data?.entries ?? []) {
       rows.push([
         e.time ? new Date(e.time).toISOString() : '',
@@ -81,14 +89,14 @@ export function History() {
         e.kind,
         e.direction,
         e.asset?.symbol ?? e.assetId,
-        e.asset ? fmtCrypto(e.amount, e.asset.decimals, undefined, e.asset.decimals).replace(/ /g, '') : e.amount.toString(),
-        e.fee && e.feeAsset ? fmtCrypto(e.fee, e.feeAsset.decimals, e.feeAsset.symbol, e.feeAsset.decimals).replace(/ /g, ' ') : '',
+        e.asset ? csvAmount(fmtCrypto(e.amount, e.asset.decimals, undefined, e.asset.decimals)) : e.amount.toString(),
+        e.fee && e.feeAsset ? csvAmount(fmtCrypto(e.fee, e.feeAsset.decimals, undefined, e.feeAsset.decimals)) + ' ' + e.feeAsset.symbol : '',
         e.counterparty ?? '',
         e.status,
         e.id,
       ]);
     }
-    downloadText(`kyro-historique-${network}-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
+    downloadText(t('history.csvFileName', { network, date: new Date().toISOString().slice(0, 10) }), toCsv(rows));
   };
 
   const pending = (history.data?.entries ?? []).filter((e) => e.status === 'pending').length;
@@ -96,22 +104,22 @@ export function History() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
       <header className="flex items-center justify-between gap-4 border-b border-line pb-4">
-        <h1 className="screen-title">Historique</h1>
+        <h1 className="screen-title">{t('common.history')}</h1>
         <div className="flex items-center gap-2.5">
           <Segmented<Filter>
-            label="Filtre"
+            label={t('history.filter')}
             value={filter}
             onChange={setFilter}
             options={[
-              { value: 'all', label: 'Tout' },
-              { value: 'out', label: 'Envois' },
-              { value: 'in', label: 'Réceptions' },
-              { value: 'swap', label: 'Swaps' },
-              { value: 'approval', label: 'Autorisations' },
+              { value: 'all', label: t('history.filterAll') },
+              { value: 'out', label: t('history.filterOut') },
+              { value: 'in', label: t('history.filterIn') },
+              { value: 'swap', label: t('history.filterSwaps') },
+              { value: 'approval', label: t('history.filterApprovals') },
             ]}
           />
           <Button variant="outline" size="lg" onClick={exportCsv} disabled={!history.data?.entries.length}>
-            <IconImport size={15} /> Exporter CSV
+            <IconImport size={15} /> {t('history.exportCsv')}
           </Button>
         </div>
       </header>
@@ -122,7 +130,7 @@ export function History() {
             {history.loading && !history.data ? (
               <div className="flex flex-col gap-3 p-5">{[0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-11 w-full" />)}</div>
             ) : groups.length === 0 ? (
-              <EmptyState title="Aucune transaction">{filter === 'all' ? 'Tes envois, réceptions, swaps et autorisations apparaîtront ici.' : 'Rien pour ce filtre.'}</EmptyState>
+              <EmptyState title={t('history.noTransactions')}>{filter === 'all' ? t('history.noTransactionsHint') : t('history.nothingForFilter')}</EmptyState>
             ) : (
               groups.map((g, gi) => (
                 <div key={g.label} className="stagger">
@@ -141,16 +149,16 @@ export function History() {
             {history.data && Object.entries(history.data.errors).some(([, v]) => tronNoHistory(v)) && <TronNoHistoryLine className="px-5 py-3" />}
             {history.data && Object.entries(history.data.errors).some(([, v]) => !tronNoHistory(v)) && (
               <ErrorLine className="px-5 py-3" onRetry={history.reload} error={Object.values(history.data.errors).filter((v) => !tronNoHistory(v)).join(' ')}>
-                Historique partiel : {Object.entries(history.data.errors).filter(([, v]) => !tronNoHistory(v)).map(([k, v]) => `${k} (${v})`).join(', ')}
+                {t('history.partial', { details: Object.entries(history.data.errors).filter(([, v]) => !tronNoHistory(v)).map(([k, v]) => `${k} (${v})`).join(', ') })}
               </ErrorLine>
             )}
             {history.data?.btcCapped && (
               <p className="m-0 px-[22px] pt-3 text-[12px] leading-[1.5] text-mute">
-                Bitcoin : {BTC_TXS_CAP} dernières transactions par adresse. Les plus anciennes ne sont pas listées (limite du serveur), ton solde reste exact.
+                {t('history.btcCapped', { cap: BTC_TXS_CAP })}
               </p>
             )}
             <p className="m-0 px-[22px] py-3 text-[11px] leading-[1.5] text-faint">
-              Sans indexeur tiers, les envois d’ETH natif n’apparaissent que s’ils ont été faits depuis cet appareil. Les transferts ERC-20 des {network === 'testnet' ? '5 000' : '5 000'} derniers blocs sont lus directement sur le nœud.
+              {t('history.ethNote', { blocks: fmtIntl(5000) })}
             </p>
           </div>
         </section>
@@ -159,11 +167,11 @@ export function History() {
           <section className="flex flex-col gap-3.5 rounded-panel border border-line bg-card px-[22px] py-[18px]">
             <span className="eyebrow">{month.label}</span>
             <div className="grid grid-cols-3 divide-x divide-line border-y border-line">
-              <MonthStat label="Reçu" value={hideBalances ? '•••' : `+${fmtFiat(month.received, cur, { decimals: 0 })}`} tone="text-up" />
-              <MonthStat label="Envoyé" value={hideBalances ? '•••' : `−${fmtFiat(month.sent, cur, { decimals: 0 })}`} />
-              <MonthStat label="Frais" value={hideBalances ? '•••' : fmtFiat(month.fees, cur)} />
+              <MonthStat label={t('history.received')} value={hideBalances ? '•••' : `+${fmtFiat(month.received, cur, { decimals: 0 })}`} tone="text-up" />
+              <MonthStat label={t('history.sent')} value={hideBalances ? '•••' : `−${fmtFiat(month.sent, cur, { decimals: 0 })}`} />
+              <MonthStat label={t('history.fees')} value={hideBalances ? '•••' : fmtFiat(month.fees, cur)} />
             </div>
-            <span className="text-[11px] text-faint">Au cours actuel.{pending ? ` ${pending} transaction${pending > 1 ? 's' : ''} en attente.` : ''}</span>
+            <span className="text-[11px] text-faint">{t('history.atCurrentPrice')}{pending ? ` ${tp('history.pendingCount', pending)}` : ''}</span>
           </section>
           <Approvals />
         </div>
@@ -209,17 +217,18 @@ function Approvals() {
     [network, adapters],
   );
   const list = state.data ?? [];
+  const { t } = useT();
   const risky = list.filter((a) => isUnlimitedAllowance(a.current)).length;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-panel border border-line bg-card px-[22px] py-[18px] scroll-thin">
       <div className="flex items-center justify-between">
-        <span className="text-[15px] font-medium tracking-[-0.01em]">Autorisations actives</span>
-        {risky > 0 && <Badge tone="down">{risky} à risque</Badge>}
+        <span className="text-[15px] font-medium tracking-[-0.01em]">{t('history.activeApprovals')}</span>
+        {risky > 0 && <Badge tone="down">{t('history.atRisk', { count: risky })}</Badge>}
       </div>
-      <p className="m-0 text-[13px] leading-[1.55] text-mute">Ces contrats peuvent encore dépenser tes tokens. Révoque ce dont tu ne te sers plus.</p>
+      <p className="m-0 text-[13px] leading-[1.55] text-mute">{t('history.approvalsHint')}</p>
       {state.loading && !state.data && <Skeleton className="h-24 w-full" />}
-      {state.data && list.length === 0 && <EmptyState className="py-6" title="Aucune autorisation ouverte">Les autorisations accordées depuis Kyro sont suivies ici.</EmptyState>}
+      {state.data && list.length === 0 && <EmptyState className="py-6" title={t('history.noApprovals')}>{t('history.noApprovalsHint')}</EmptyState>}
       {list.map((a) => {
         const unlimited = isUnlimitedAllowance(a.current);
         const asset = assetsFor(network).find((x) => x.contract?.toLowerCase() === a.token.toLowerCase());
@@ -229,13 +238,13 @@ function Approvals() {
               <span className="text-[14px] font-semibold">
                 {a.tokenSymbol} → {a.spenderLabel}
               </span>
-              <span className={cn('text-[13px] font-semibold', unlimited ? 'text-down' : 'text-text2')}>{unlimited ? 'Illimité' : fmtCrypto(a.current, a.tokenDecimals, a.tokenSymbol)}</span>
+              <span className={cn('text-[13px] font-semibold', unlimited ? 'text-down' : 'text-text2')}>{unlimited ? t('history.unlimited') : fmtCrypto(a.current, a.tokenDecimals, a.tokenSymbol)}</span>
             </div>
             <span className="text-[12px] text-mute">
-              {shortAddress(a.spender)} · accordée le {new Date(a.time).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} · {asset ? pf.holdings.find((h) => h.asset.id === asset.id) ? 'solde exposé' : '' : ''}
+              {shortAddress(a.spender)} · {t('history.grantedOn', { date: fmtDate(a.time, { day: 'numeric', month: 'short' }) })} · {asset ? pf.holdings.find((h) => h.asset.id === asset.id) ? t('history.balanceExposed') : '' : ''}
             </span>
             <Button variant={unlimited ? 'danger' : 'outline'} size="md" onClick={() => setRevoking(a)}>
-              Révoquer
+              {t('history.revoke')}
             </Button>
           </div>
         );
@@ -253,6 +262,7 @@ function RevokeDialog({ approval, onClose }: { approval: LiveApproval; onClose: 
   const [error, setError] = useState<string | null>(null);
   const ad = adapters.evm.get(approval.chainKey);
   const token = findAsset(network, `erc20:${approval.chainId}:${approval.token.toLowerCase()}`);
+  const { t } = useT();
 
   const revoke = async () => {
     if (!ad || !token) return;
@@ -261,36 +271,36 @@ function RevokeDialog({ approval, onClose }: { approval: LiveApproval; onClose: 
     try {
       const fees = await ad.estimateFees();
       const fee = fees.options.normal.params;
-      if (fee.family !== 'evm') throw new Error('Frais indisponibles');
+      if (fee.family !== 'evm') throw new Error(t('history.feesUnavailable'));
       const call = buildRevoke(approval.token, approval.spender);
       const unsigned = await ad.buildCall({ to: call.to, data: call.data, fee, kind: 'approval', asset: token, amount: 0n, token: { symbol: token.symbol, decimals: token.decimals } });
       const decoded = await ad.decode(unsigned);
-      if (decoded.kind !== 'Erc20Approve' || decoded.amount !== '0' || decoded.spender?.toLowerCase() !== approval.spender.toLowerCase()) throw new Error('Décodage inattendu : arrêt.');
+      if (decoded.kind !== 'Erc20Approve' || decoded.amount !== '0' || decoded.spender?.toLowerCase() !== approval.spender.toLowerCase()) throw new Error(t('history.unexpectedDecode'));
       const signed = await ad.signTx(unsigned, pw);
       const hash = await ad.broadcast(signed);
       removeApproval(network, approval.chainId, approval.token, approval.spender);
-      addLocalTx({ id: hash, network, chainKey: approval.chainKey, assetId: token.id, kind: 'approval', direction: 'self', amount: '0', label: `Révocation ${approval.tokenSymbol} pour ${approval.spenderLabel}`, time: Date.now(), status: 'pending' });
+      addLocalTx({ id: hash, network, chainKey: approval.chainKey, assetId: token.id, kind: 'approval', direction: 'self', amount: '0', label: t('history.revokeLabel', { token: approval.tokenSymbol, spender: approval.spenderLabel }), time: Date.now(), status: 'pending' });
       onClose(true);
     } catch (e) {
       const err = toIpcError(e);
-      setError(err.code === 'USER_REJECTED' ? 'Signature annulée.' : err.message);
+      setError(err.code === 'USER_REJECTED' ? t('history.signatureCancelled') : err.message);
       setBusy(false);
     }
   };
 
   return (
-    <Dialog open onOpenChange={() => !busy && onClose(false)} title={`Révoquer ${approval.tokenSymbol} → ${approval.spenderLabel}`}>
+    <Dialog open onOpenChange={() => !busy && onClose(false)} title={t('history.revokeTitle', { token: approval.tokenSymbol, spender: approval.spenderLabel })}>
       <p className="m-0 text-[13px] leading-[1.55] text-text2">
-        Une transaction <span className="font-mono">approve(spender, 0)</span> remet l’autorisation à zéro. Elle coûte des frais de réseau, comme un envoi.
+        {rt('history.revokeExplain', { code: (c) => <span className="font-mono">{c}</span> })}
       </p>
       <PasswordField id="revoke-pw" value={pw} onChange={setPw} autoFocus onEnter={() => pw && void revoke()} />
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex justify-end gap-2">
         <Button onClick={() => onClose(false)} disabled={busy}>
-          Annuler
+          {t('common.cancel')}
         </Button>
         <Button variant="danger" disabled={!pw || busy || !token} onClick={() => void revoke()}>
-          {busy && <Spinner />} Révoquer
+          {busy && <Spinner />} {t('history.revoke')}
         </Button>
       </div>
     </Dialog>
