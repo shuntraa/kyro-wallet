@@ -16,6 +16,8 @@ import { XrpAdapter } from './xrp/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
 import { xrpChain } from './registry';
+import { CosmosAdapter } from './cosmos/adapter';
+import { cosmosChain } from './registry';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -34,6 +36,8 @@ export interface AdapterSet {
   xrp: XrpAdapter | null;
   /** Cardano: vault only (hardware wallets: HW_UNSUPPORTED for now). */
   cardano: CardanoAdapter | null;
+  /** Cosmos Hub: vault only (hardware wallets: HW_UNSUPPORTED for now). */
+  cosmos: CosmosAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -74,8 +78,10 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...a }) : null;
   // Cardano: Rust picks the server (servers.cardano, default Koios).
   const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...a }) : null;
-  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : [])];
-  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, all, hw: hw ?? null };
+  // Cosmos Hub: Rust picks the server (default LCD, no custom server yet).
+  const cosmos = accounts.cosmos ? new CosmosAdapter({ chain: cosmosChain(network), address: accounts.cosmos.address, ...a }) : null;
+  const all: AnyAdapter[] = [...(btc ? [btc] : []), ...evm.values(), ...(sol ? [sol] : []), ...(ltc ? [ltc] : []), ...(doge ? [doge] : []), ...(tron ? [tron] : []), ...(xrp ? [xrp] : []), ...(cardano ? [cardano] : []), ...(cosmos ? [cosmos] : [])];
+  return { btc, evm, sol, ltc, doge, tron, xrp, cardano, cosmos, all, hw: hw ?? null };
 }
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin
@@ -192,3 +198,25 @@ export {
   cardanoAddressProblem,
   cardanoTokenLabel,
 } from './cardano/adapter';
+
+// ---------------------------------------------------------------- phase 4: Cosmos Hub
+
+export {
+  CosmosAdapter,
+  rustCosmosBackend,
+  isCosmosAddress,
+  cosmosAddressProblem,
+  cosmosMemoProblem,
+  atomToUatom,
+  COSMOS_MAX_MEMO,
+  type CosmosAdapterOptions,
+  type CosmosBackend,
+  type CosmosAccountInfo,
+  type CosmosContext,
+  type CosmosHistoryEntry,
+  type CosmosTxStatus,
+  type CosmosTxSummary,
+  type CosmosWarning,
+  type CosmosUnsigned,
+  type CosmosSigned,
+} from './cosmos/adapter';

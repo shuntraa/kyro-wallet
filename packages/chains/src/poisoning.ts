@@ -48,6 +48,7 @@ const TAIL = 4;
  * - Solana (base58): none.
  * - TRON: `T`. XRP: `r`.
  * - Cardano: hrp + `1` + header char (`addr1q`, `addr_test1v`, …), bech32 lowercase.
+ * - Cosmos Hub: `cosmos1` + first data char, bech32 lowercase.
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -58,6 +59,7 @@ export function addressParts(address: string, family: Family): AddressParts & { 
     case 'btc':
     case 'ltc':
     case 'ada':
+    case 'cosmos':
       if (bech) {
         const prefix = `${bech[1]}1${bech[2]}`.toLowerCase();
         return { prefix, body: a.slice(prefix.length).toLowerCase(), caseInsensitive: true };

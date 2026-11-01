@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cosmos-broadcast"
+description = "Enables the cosmos_broadcast command without any pre-configured scope."
+commands.allow = ["cosmos_broadcast"]
+
+[[permission]]
+identifier = "deny-cosmos-broadcast"
+description = "Denies the cosmos_broadcast command without any pre-configured scope."
+commands.deny = ["cosmos_broadcast"]

@@ -35,6 +35,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
+    // Cosmos Hub LCD (REST): mainnet (Allnodes PublicNode) and the Hub testnet's official sentry
+    // (Hypha, `provider` chain); only Rust's `cosmos_*` commands.
+    "cosmos-rest.publicnode.com",
+    "rest.provider-sentry-01.hub-testnet.polypore.xyz",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -294,6 +298,7 @@ pub enum Family {
     Tron,
     Xrp,
     Cardano,
+    Cosmos,
     Evm,
     Solana,
     Market,
@@ -317,6 +322,10 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
+    } else if host == "cosmos-rest.publicnode.com"
+        || host == "rest.provider-sentry-01.hub-testnet.polypore.xyz"
+    {
+        Family::Cosmos
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1067,6 +1076,11 @@ mod tests {
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
+        assert_eq!(family_for("cosmos-rest.publicnode.com", &c), Family::Cosmos);
+        assert_eq!(
+            family_for("rest.provider-sentry-01.hub-testnet.polypore.xyz", &c),
+            Family::Cosmos
+        );
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

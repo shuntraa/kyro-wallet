@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xmr-status"
+description = "Enables the xmr_status command without any pre-configured scope."
+commands.allow = ["xmr_status"]
+
+[[permission]]
+identifier = "deny-xmr-status"
+description = "Denies the xmr_status command without any pre-configured scope."
+commands.deny = ["xmr_status"]

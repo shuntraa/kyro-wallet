@@ -186,6 +186,32 @@ pub enum XrpWarning { SendMax, PathFlags /*tfNoRippleDirect, tfLimitQuality*/, M
 pub fn xrp_sign(seed, account, blob_hex) -> Result<(String /*blob signé*/, String /*hash*/, XrpTxSummary)>;   // DER low-S, vérifiée
 pub fn xrp_verify_signed(blob_hex) -> Result<String /*hash*/>;   // signature DER low-S de SigningPubKey, clé = Account
 
+// --- Cosmos Hub : m/44'/118'/a'/0/0 (Keplr, Leap, Ledger Live, gaiad), adresse cosmos1… = bech32 (BIP-173, pas bech32m) de
+//     RIPEMD160(SHA256(clé compressée)) ; MsgSend d'uatom en SIGN_MODE_DIRECT uniquement. Protobuf : les messages du SDK
+//     (Coin, MsgSend, Any, TxBody, PubKey, ModeInfo, SignerInfo, Fee, AuthInfo, SignDoc, TxRaw) déclarés à la main avec le derive
+//     de `prost` (pas de protoc), seulement les champs utilisés : tout octet décodé doit se ré-encoder à l'identique, à chaque
+//     niveau (le champ inconnu, le doublon ou le varint non minimal que prost accepterait sont ainsi refusés)
+pub const COSMOS_CHAIN_ID_MAINNET = "cosmoshub-4"; pub const COSMOS_CHAIN_ID_TESTNET = "provider";   pub fn cosmos_chain_id(net) -> &str;
+pub fn cosmos_path(account) -> String; pub fn cosmos_public_key(seed, account) -> Result<[u8; 33]>; pub fn cosmos_address(seed, account) -> Result<String>;
+pub fn cosmos_address_bytes(address) -> Result<Vec<u8>>;     // bech32 vérifié, préfixe cosmos, 20 ou 32 octets, casse mixte refusée
+pub fn cosmos_normalize_address(address) -> Result<String>;  // forme canonique minuscule ; cosmos_address_of_pubkey(sec1), cosmos_address_from_bytes(&[u8])
+pub struct CosmosSendRequest { chain_id, account_number, sequence, public_key: [u8; 33], to, amount /*uatom*/, fee /*uatom*/, gas_limit, memo, timeout_height }
+pub fn cosmos_send_sign_doc(&CosmosSendRequest) -> Result<Vec<u8>>;   // SignDoc sérialisé, revérifié par le décodeur
+pub fn cosmos_simulation_tx(sign_doc) -> Result<Vec<u8>>;               // TxRaw avec une signature vide (pour /simulate)
+pub fn cosmos_decode_sign_doc(sign_doc_hex, our_pubkey, net) -> Result<CosmosTxSummary>;
+// refuse : chain-id ≠ celui du réseau, autre message qu'un seul MsgSend, autre dénomination qu'uatom, plusieurs pièces, montant
+// ou frais non canoniques / nuls, expéditeur ≠ nous, envoi à soi-même, destinataire non canonique, plusieurs signataires, clé ≠ la
+// nôtre, mode ≠ SIGN_MODE_DIRECT, payer / granter, gas_limit 0, timeout_height absent, mémo > 512 caractères, TxBody.unordered,
+// timeout_timestamp, extension_options, AuthInfo.tip (champs non déclarés → ré-encodage différent)
+pub struct CosmosTxSummary { chain_id, account_number, sequence, from, to, amount, fee, gas_limit, memo /*nettoyé, 256 car.*/,
+                             memo_hex /*exact*/, timeout_height, warnings: Vec<CosmosWarning>, requires_extra_confirmation }   // serde camelCase
+pub enum CosmosWarning { HighFee /*> 0,1 ATOM*/, UnusualText /*mémo nettoyé*/ }   // → renforcée (le mémo seul ne l'est pas : il est encadré)
+pub fn cosmos_sign(seed, account, sign_doc_hex, net) -> Result<(String /*TxRaw base64*/, String /*hash SHA-256 hex*/, CosmosTxSummary)>;
+// décode d'abord ; SHA-256(SignDoc), libsecp256k1 RFC 6979, low-S, 64 octets r‖s, vérifiée
+pub fn cosmos_verify_signed(tx_b64, net, account_number) -> Result<(String /*hash*/, CosmosTxSummary)>;
+// mêmes règles + une seule signature de 64 octets, low-S, de la clé du signataire sur le SignDoc reconstruit (chain-id du réseau,
+// account_number lu en direct)
+
 // --- Cardano : CIP-1852 m/1852'/1815'/0'/{0,2}/i, racine CIP-0003 « Icarus » (PBKDF2-HMAC-SHA512, 4096 itérations,
 //     sel = ENTROPIE BIP39, puis clamping), dérivation BIP32-Ed25519 V2 par le crate ed25519-bip32 (aucune crypto écrite
 //     ici), signature ed25519-dalek (hazmat::raw_sign avec le scalaire étendu kL ‖ kR) vérifiée (verify_strict) ;
@@ -394,6 +420,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 | `ltc_*`, `doge_*` | voir §2.4 | | Litecoin, Dogecoin : mêmes formes Esplora que `btc_*`, signature avec dialogue natif |
 | `ada_*` | voir §2.7 | | Cardano : transaction construite **par Rust** depuis les UTxO et les paramètres de protocole, chaque sortie détaillée (ADA, tokens, min-ADA) |
 | `xrp_*` | voir §2.6 | | XRP Ledger : paiement construit **par Rust** (Sequence, Fee, LastLedgerSequence), tag de destination mis en évidence, réserve |
+| `cosmos_*` | voir §2.11 | | Cosmos Hub : MsgSend construit **par Rust** (account number, sequence, timeout height, gas simulé, prix du marché des frais), SignDoc décodé strictement, mémo encadré |
 | `tron_*` | voir §2.5 | | TRON : transaction construite **par Rust** depuis le dernier bloc, signature avec dialogue natif (ressources, TRX brûlés) |
 | `sol_stake_*`, `ada_stake_*`, `tron_stake_*` | voir §2.8 | | Staking : Solana natif, délégation Cardano, TRON Stake 2.0 ; opérations construites **par Rust**, décodées et vérifiées en direct avant le dialogue natif |
 | `btc_core_setup` | `{ rescanFrom: 'now' \| number /*horodatage UNIX en s*/ }` | `CoreStatus` (`state: 'importing'`) | Bitcoin Core uniquement, session déverrouillée. **Vérification préalable synchrone** (erreurs renvoyées par l'appel lui-même) : nœud joignable (`SERVER_UNREACHABLE`), authentification (`SERVER_INVALID`), bonne chaîne (`SERVER_WRONG_NETWORK`), portefeuille `kyro-watch-<empreinte8>` créé ou chargé et bien sans clé privée (`SERVER_INVALID`), checksums des descripteurs. Seul `importdescriptors` (et son rescan) tourne ensuite en arrière-plan. Aucun nœud Core configuré pour ce réseau : `INVALID_INPUT` |
@@ -423,7 +450,7 @@ Types TypeScript de référence : `packages/shared/src/ipc.ts`. Noms en `snake_c
 type Accounts = {                 // accounts_get({ account? }) : tout est celui du compte `account` (0 = l'historique)
   network: 'mainnet' | 'testnet';
   account: number;
-  // evm, sol, tron, xrp, cardano : { address, path } (path = chemin de la clé, ex. m/44'/60'/0'/0/1)
+  // evm, sol, tron, xrp, cardano, cosmos : { address, path } (path = chemin de la clé, ex. m/44'/60'/0'/0/1)
   btc: { segwit: { address: string; xpub: string; fingerprint: string; path: string };
          taproot: { address: string; xpub: string; fingerprint: string; path: string } };
   evm: { address: string };
@@ -433,6 +460,7 @@ type Accounts = {                 // accounts_get({ account? }) : tout est celui
   tron: { address: string };                                                    // m/44'/195'/0'/0/0 (même chemin sur Nile)
   xrp: { address: string };                                                     // m/44'/144'/0'/0/0
   cardano: { address: string };   // adresse de base m/1852'/1815'/0'/0/0 + staking …/2/0 (CIP-1852, Icarus) ; addr_test1… sur preprod
+  cosmos: { address: string };    // m/44'/118'/0'/0/0, cosmos1… (même chemin sur le testnet)
 };
 type ApiKeyName = 'coingecko' | 'zerox' | 'trongrid';   // toutes les clés que Settings connaît (1inch retiré : une ancienne clé est ignorée puis effacée)
 // coingecko : en-tête x-cg-demo-api-key / x-cg-pro-api-key (api / pro-api.coingecko.com) ; zerox : 0x-api-key (api.0x.org) ;
@@ -874,6 +902,7 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `tron` | `m/44'/195'/a'/0/0` (Ledger Live) | `m/44'/195'/0'/0/0` |
 | `xrp` | `m/44'/144'/a'/0/0` (Ledger Live, Trezor Suite) | `m/44'/144'/0'/0/0` |
 | `ada` | CIP-1852 `m/1852'/1815'/a'/0/0` + staking `…/a'/2/0` | `m/1852'/1815'/0'/…` |
+| `cosmos` | `m/44'/118'/a'/0/0` (Keplr, Leap, Ledger Live) | `m/44'/118'/0'/0/0` |
 
 | Commande | Arguments | Retour | Notes |
 |---|---|---|---|
@@ -883,11 +912,11 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `vault_account_remove` | `{ chain, account }` | `VaultAccountLists` | coffre déverrouillé ; compte 0 → `INVALID_INPUT` |
 
 ```ts
-type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'cosmos';
 type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[] };   // triées par index ; nom par défaut « Bitcoin 2 » pour l'index 1
 ```
 
-**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`. Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
+**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `cosmos_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`. Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
 
 **Dialogue natif.** La première ligne de chaque fenêtre de signature du coffre dit **quel compte signe** : « Compte signataire : Bitcoin 2 — m/84'/1'/1' (SegWit), m/86'/1'/1' (Taproot) » (EVM : plus l'adresse « De »). Un compte qui n'est **pas** dans la liste de l'utilisateur est affiché « inconnu » (« n° N, absent de ta liste ») avec son chemin, et la signature exige une **2ᵉ fenêtre renforcée** (« Attention : compte inconnu »). Bitcoin, Litecoin, Dogecoin : seules les entrées du compte choisi sont signées ; une entrée d'un autre compte du coffre est étrangère (2ᵉ fenêtre déjà existante) et la monnaie n'est reconnue que dans le compte choisi.
 
@@ -926,6 +955,34 @@ type NetworkInfo = {
 
 **Fait côté UI** : Réglages › Réseaux et serveurs › « Réseau » (Réseau principal — fonds réels / Réseau de test — jetons sans valeur), fenêtre de confirmation qui rappelle que chaque réseau a son propre coffre (l'autre est gardé, pas supprimé), puis redémarrage ; écran d'accueil : une ligne « Le coffre sera créé sur le réseau … » avec un lien pour changer ; badge TESTNET de la barre d'état inchangé. **Mode démo** : `network_set` mémorise le choix (`localStorage`, comme l'environnement) et recharge la page sur `?network=…` ; `?network=` dans l'URL joue le rôle de `KYRO_NETWORK`.
 
+### 2.11 Cosmos Hub (ATOM)
+
+Rust choisit le serveur : le LCD (REST) par défaut — `cosmos-rest.publicnode.com` (mainnet, `cosmoshub-4`) ou `rest.provider-sentry-01.hub-testnet.polypore.xyz` (testnet public du Hub, chain-id `provider`) —, famille Tor `cosmos`, jamais de repli (ni vers un autre serveur, ni en clair). **Pas encore de serveur personnalisé** pour Cosmos. Chaque lecture d'état vérifie le chain-id du dernier bloc (`blocks/latest`) : un autre réseau → `SERVER_WRONG_NETWORK`.
+
+**Rust construit la transaction** : chain-id et hauteur (`/cosmos/base/tendermint/v1beta1/blocks/latest`), `account_number` et `sequence` (`/cosmos/auth/v1beta1/accounts/{a}` : `BaseAccount` ou compte de vesting ; un autre type est refusé ; une clé publique enregistrée qui n'est pas la nôtre aussi), `timeout_height` = hauteur + 100 (≈ 10 min), un seul `MsgSend` d'uatom, mémo, SIGN_MODE_DIRECT ; la transaction **exacte** (frais 0, signature vide) est simulée (`POST /cosmos/tx/v1beta1/simulate`) : gas = utilisé × 1,4 (refusé au-delà de 500 000), frais = gas × prix du marché des frais (`/feemarket/v1/gas_price/uatom`, refusé au-delà de 1 uatom/gas ; 0,005 uatom/gas — le `min_base_gas_price` du Hub, lu le 01/11/2026 — si le serveur n'a pas ce module) × 1,2, arrondi au-dessus. Encodé par wallet-core ; une transaction construite par le serveur n'est jamais signée.
+
+| Commande | Arguments | Retour | Notes |
+|---|---|---|---|
+| `cosmos_backend_info` | — | `{ kind: 'default', network, label, chainId, tor }` | |
+| `cosmos_address` | `{ account? }` | `string` | `m/44'/118'/{account}'/0/0`, coffre déverrouillé ; une adresse par compte ; `cosmos_build_tx`, `cosmos_sign_tx`, `cosmos_broadcast` prennent le même `account?` |
+| `cosmos_account` | `{ address }` | `{ address, exists, accountNumber, sequence, pubKey /*base64 ou null*/, balance /*uatom*/, spendable /*uatom*/ }` | `auth/accounts` + `bank/balances/{a}/by_denom?denom=uatom` + `bank/spendable_balances/…` (vesting) ; compte jamais vu (gRPC NotFound, HTTP 404) : `exists: false` |
+| `cosmos_txs` | `{ address }` | `[{ hash, height, time, from, to, amount, fee, memo, success }]` | `MsgSend` d'uatom seulement (les autres messages et les tokens IBC sont ignorés), 25 derniers envoyés (`message.sender`) + 25 derniers reçus (`transfer.recipient`), triés, 50 au plus ; `memo` nettoyé ; `fee` = `"0"` si ce n'est pas nous qui l'avons payé. **Le nœud public n'indexe que les blocs récents** : l'historique ancien n'apparaît pas |
+| `cosmos_build_tx` | `{ to, amount /*uatom*/, memo?, account? }` | `{ signDoc /*hex*/, summary: CosmosTxSummary, context: { account, height } }` | refusé avant toute construction : envoi à soi-même, adresse invalide, mémo > 512 caractères, notre compte inconnu du réseau, montant + frais > `spendable`, simulation refusée (message du nœud, `INVALID_INPUT`) |
+| `cosmos_sign_tx` | `{ signDoc, password, account? }` | `{ tx /*TxRaw base64*/, hash, summary, context }` | décode (strict, clé = nous, chain-id du réseau), **relit en direct** le dernier bloc et notre compte : refuse `timeout_height` dépassé, `account_number` différent, séquence périmée, solde insuffisant ; mot de passe → dialogue natif : destinataire, montant (ATOM + uatom), frais (ATOM + uatom) et gas maximum, disponible et reste après l'envoi, chain-id, numéro de compte, séquence, bloc limite, puis **MÉMO encadré sur sa propre ligne** (ou « AUCUN MÉMO » avec l'avertissement des plateformes d'échange), après les montants ; 2ᵉ dialogue renforcé si `requiresExtraConfirmation` (avec le mémo exact en hexadécimal s'il a été nettoyé) ; résumé de la signature = résumé affiché |
+| `cosmos_broadcast` | `{ tx, account? }` | `string` (hash) | `cosmos_verify_signed` avec l'`account_number` lu en direct (signature low-S de notre clé sur le SignDoc reconstruit) puis `POST /cosmos/tx/v1beta1/txs` (`BROADCAST_MODE_SYNC`) ; code 0 (ou 19 du codespace `sdk` : déjà dans le mempool) accepté, sinon `INVALID_INPUT` avec le code et le journal ; hash du serveur = `SHA-256(TxRaw)` sinon `SERVER_UNREACHABLE` |
+| `cosmos_tx_status` | `{ hash }` | `{ included, success, code, height, log }` | `GET /cosmos/tx/v1beta1/txs/{hash}` ; pas encore dans un bloc : `included: false` |
+
+```ts
+type CosmosWarning = { kind: 'highFee' } | { kind: 'unusualText' };   // toutes → confirmation renforcée
+type CosmosTxSummary = { chainId; accountNumber; sequence; from; to; amount /*uatom*/; fee /*uatom*/; gasLimit;
+                         memo: string | null /*nettoyé*/; memoHex: string | null; timeoutHeight; warnings: CosmosWarning[];
+                         requiresExtraConfirmation: boolean };
+```
+
+Refusé avant toute signature : tout autre message (**MsgDelegate**, **MsgGrant** / authz, **MsgTransfer** IBC, MsgExec, MsgMultiSend…), une autre dénomination qu'`uatom` (tokens IBC), plusieurs messages ou pièces, SIGN_MODE_LEGACY_AMINO_JSON / TEXTUAL, multisig, frais payés par un tiers (`payer`, `granter` / feegrant), transactions « unordered » (SDK 0.53), `timeout_timestamp`, options d'extension, `tip`. Plus strict que « inconnu → confirmation renforcée » : un champ que Kyro ne déclare pas n'est jamais signé. Hardware wallets : pas de commande `hw_*` Cosmos (Ledger app « Cosmos », SIGN_MODE_LEGACY_AMINO_JSON : non fait) ; l'UI désactive Cosmos pour ces comptes.
+
+**Pour l'UI** : le champ **Mémo** est visible en permanence sous le destinataire (pas dans « options »), vide par défaut, avec l'avertissement « les plateformes d'échange exigent presque toujours un mémo » ; 256 caractères au plus et aucun caractère de contrôle (ce que la fenêtre native affiche en entier ; Rust en accepte 512 mais affiche alors un mémo coupé, donc renforcé) ; afficher `spendable` quand il diffère du solde (vesting) ; après `cosmos_broadcast`, suivre `cosmos_tx_status`.
+
 ## 3. Allowlist réseau (`net_fetch`)
 
 | Hôte | Usage |
@@ -934,6 +991,7 @@ type NetworkInfo = {
 | `mempool.space` | Bitcoin : UTXO, frais, diffusion (Esplora) |
 | `litecoinspace.org` | Litecoin (Esplora/mempool, mainnet `/api`, testnet4 `/testnet/api`) : utilisé par les commandes Rust `ltc_*`, famille Tor `litecoin` |
 | `s.altnet.rippletest.net` (port 51234), `xrplcluster.com` | XRP Ledger testnet et mainnet (JSON-RPC rippled) : utilisés par les commandes Rust `xrp_*`, famille Tor `xrp` |
+| `cosmos-rest.publicnode.com`, `rest.provider-sentry-01.hub-testnet.polypore.xyz` | Cosmos Hub mainnet et testnet (`provider`), LCD REST du Cosmos SDK : utilisés par les commandes Rust `cosmos_*`, famille Tor `cosmos` |
 | `preprod.koios.rest`, `api.koios.rest` | Cardano preprod et mainnet (Koios REST, offre publique sans clé) : utilisés par les commandes Rust `ada_*` et `ada_stake_*` (`account_info`, `pool_list`, `pool_info`, `drep_info`), famille Tor `cardano` |
 | `api.trongrid.io`, `nile.trongrid.io` | TRON mainnet et Nile (TronGrid, API HTTP java-tron + `/v1`) : utilisés par les commandes Rust `tron_*` et `tron_stake_*` (`getReward`, `listwitnesses`, `getBrokerage`, `getnextmaintenancetime`), famille Tor `tron` |
 | `ethereum-sepolia-rpc.publicnode.com`, `ethereum-rpc.publicnode.com` | RPC Ethereum |

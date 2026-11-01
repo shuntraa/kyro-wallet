@@ -9,8 +9,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers } from '@ky
  * `ltc` / `doge`: Bitcoin-derived UTXO chains (Rust `ltc_*` / `doge_*`, docs/IPC.md §2.4).
  * `tron`: TRX + TRC-20, everything built and signed by Rust (`tron_*`, §2.5).
  */
-/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada';
+/** `ada`: Cardano (ADA + native tokens, `ada_*`, §2.7). `cosmos`: Cosmos Hub (ATOM, `cosmos_*`, §2.11). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'cosmos';
 
 interface ChainBase {
   key: string;
@@ -47,7 +47,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | CosmosChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -240,6 +240,29 @@ export function cardanoChain(network: Network): CardanoChain {
   return CARDANO_CHAINS[network];
 }
 
+/**
+ * Cosmos Hub (phase 4): Rust `cosmos_*` commands and `CosmosAdapter` (`packages/chains/src/cosmos/`).
+ * Testnet = the Hub's public testnet (chain id `provider`). Part of `allChains()` / `assetsFor()`
+ * (ATOM only: IBC tokens are not listed nor sent). Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface CosmosChain extends Omit<ChainBase, 'phase'> {
+  family: 'cosmos';
+  phase: 4;
+  /** Chain id Rust checks on every read and signs into the SignDoc. */
+  chainId: string;
+}
+
+const COSMOS_CHAINS: Record<Network, CosmosChain> = {
+  testnet: { family: 'cosmos', key: 'cosmos', name: 'Cosmos Hub testnet', label: 'ATOM testnet', network: 'testnet', color: '#2E3148', glyph: '⚛',
+    nativeSymbol: 'ATOM', nativeName: 'Cosmos Hub', nativeDecimals: 6, coingeckoId: 'cosmos', phase: 4, blockTimeSecs: 6, chainId: 'provider' },
+  mainnet: { family: 'cosmos', key: 'cosmos', name: 'Cosmos Hub', label: 'ATOM', network: 'mainnet', color: '#2E3148', glyph: '⚛',
+    nativeSymbol: 'ATOM', nativeName: 'Cosmos Hub', nativeDecimals: 6, coingeckoId: 'cosmos', phase: 4, blockTimeSecs: 6, chainId: 'cosmoshub-4' },
+};
+
+export function cosmosChain(network: Network): CosmosChain {
+  return COSMOS_CHAINS[network];
+}
+
 interface TokenSpec {
   symbol: string;
   name: string;
@@ -301,7 +324,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), tronChain(network), xrpChain(network), cardanoChain(network), cosmosChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -412,6 +435,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
       ? { host: host(xrp.url), purpose: 'XRP Ledger : ton serveur rippled', custom: true }
       : { host: network === 'mainnet' ? 'xrplcluster.com' : 's.altnet.rippletest.net', purpose: `XRP Ledger${network === 'mainnet' ? '' : ' testnet'} : soldes, réserve, historique, diffusion (rippled)` },
   );
+  // Cosmos Hub: reached by Rust only (cosmos_*), Tor circuits of the `cosmos` family; no custom server yet.
+  list.push({
+    host: network === 'mainnet' ? 'cosmos-rest.publicnode.com' : 'rest.provider-sentry-01.hub-testnet.polypore.xyz',
+    purpose: `Cosmos Hub${network === 'mainnet' ? '' : ' testnet'} : compte, soldes, simulation, historique, diffusion (LCD)`,
+  });
   const tron = servers.tron?.[nk];
   list.push(
     tron?.kind === 'http'
