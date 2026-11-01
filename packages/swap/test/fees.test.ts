@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NetRequest, NetResponse } from '@kyro/shared';
+import { setLang, type NetRequest, type NetResponse } from '@kyro/shared';
 import { createProviders, feeLabel, fetchQuotes, JupiterProvider, KYRO_SWAP_FEE, LifiProvider, NATIVE_EVM, providerFee, ZeroExProvider, type SwapFeeConfig } from '../src';
 import { associatedTokenAccount } from '../src/providers/jupiter';
 import { LIFI_DIAMOND } from '../src';
@@ -46,6 +46,15 @@ describe('Kyro fee config', () => {
     expect(KYRO_SWAP_FEE.bps).toBe(70);
     expect(feeLabel(70)).toBe('0,7 %');
     expect(providerFee('zerox', cfg({ bps: 101 }))).toEqual({ kind: 'unavailable', reason: 'Frais Kyro mal configurés' });
+  });
+  it('labels and reasons follow the display language', () => {
+    setLang('en');
+    try {
+      expect(feeLabel(70)).toBe('0.7%');
+      expect(providerFee('zerox', cfg({ bps: 101 }))).toEqual({ kind: 'unavailable', reason: 'Kyro fees misconfigured' });
+    } finally {
+      setLang('fr');
+    }
   });
 
   it('0 bps means no fee parameters at all', () => {

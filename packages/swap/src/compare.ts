@@ -2,6 +2,7 @@
 
 import type { Quote, QuoteParams } from './types';
 
+import { l10n } from '@kyro/shared';
 /** Fiat value actually kept: received value − gas − provider fee (if not already deducted). */
 export function netValueFiat(q: Quote, buy: QuoteParams['buy']): number | null {
   if (buy.priceFiat === undefined) return null;
@@ -34,7 +35,7 @@ export interface QuoteResult {
 
 /** Apply slippage to an expected amount (floor). */
 export function applySlippage(amount: bigint, slippageBps: number): bigint {
-  if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps > 10_000) throw new Error('Slippage invalide');
+  if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps > 10_000) throw new Error(l10n('Slippage invalide', 'Invalid slippage'));
   return (amount * BigInt(10_000 - slippageBps)) / 10_000n;
 }
 

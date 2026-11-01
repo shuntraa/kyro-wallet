@@ -9,7 +9,7 @@
 // AllowanceHolder.exec → Settler.execute calldata (recipient = taker, enforced minimum, buy token)
 // and the fee (sell token, ≤ the configured rate, recipient written in the transaction).
 
-import { fetchJson, netFetch, type NetFetch } from '@kyro/shared';
+import { fetchJson, netFetch, type NetFetch, l10n } from '@kyro/shared';
 import { gasFiat } from '../compare';
 import type { Quote, QuoteParams, SwapProvider } from '../types';
 import type { ProviderFee } from '../fees';
@@ -55,7 +55,7 @@ export class ZeroExProvider implements SwapProvider {
   }
 
   async quote(p: QuoteParams): Promise<Quote> {
-    if (typeof p.chain !== 'number') throw new Error('0x : réseau non pris en charge');
+    if (typeof p.chain !== 'number') throw new Error(l10n('0x : réseau non pris en charge', '0x: network not supported'));
     const url = `https://api.0x.org/swap/allowance-holder/quote?${qs({
       chainId: p.chain,
       sellToken: p.sell.address,
@@ -71,8 +71,8 @@ export class ZeroExProvider implements SwapProvider {
     } catch (e) {
       throw providerError(this.name, e);
     }
-    if (r.liquidityAvailable === false) throw new Error('0x : pas de liquidité pour cette paire');
-    if (this.fee.kind === 'fee' && !(r.fees?.integratorFee && toBig(r.fees.integratorFee.amount) > 0n)) throw new Error('0x : frais Kyro non appliqués par le devis');
+    if (r.liquidityAvailable === false) throw new Error(l10n('0x : pas de liquidité pour cette paire', '0x: no liquidity for this pair'));
+    if (this.fee.kind === 'fee' && !(r.fees?.integratorFee && toBig(r.fees.integratorFee.amount) > 0n)) throw new Error(l10n('0x : frais Kyro non appliqués par le devis', '0x: Kyro fees not applied by the quote'));
     const gas = toBig(r.transaction.gas);
     const gasPrice = toBig(r.transaction.gasPrice);
     const networkWei = r.totalNetworkFee ? toBig(r.totalNetworkFee) : gas * gasPrice;

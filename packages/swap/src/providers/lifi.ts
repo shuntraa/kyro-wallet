@@ -10,7 +10,7 @@
 // FeeForwarder step (Kyro recipient, amount ≤ the configured rate). Cross-chain routes are not
 // offered by the UI and their calldata (`BridgeData.receiver`) is not decoded: refused.
 
-import { fetchJson, netFetch, type NetFetch } from '@kyro/shared';
+import { fetchJson, netFetch, type NetFetch, l10n } from '@kyro/shared';
 import type { Quote, QuoteParams, SwapProvider } from '../types';
 import type { ProviderFee } from '../fees';
 import { ZERO_ADDRESS, isNative, providerError, qs, toBig, unavailableReason, type ProviderOptions } from './common';
@@ -54,7 +54,7 @@ export class LifiProvider implements SwapProvider {
   }
 
   async quote(p: QuoteParams): Promise<Quote> {
-    if (typeof p.chain !== 'number') throw new Error('LI.FI : réseau non pris en charge');
+    if (typeof p.chain !== 'number') throw new Error(l10n('LI.FI : réseau non pris en charge', 'LI.FI: network not supported'));
     const toChain = typeof p.toChain === 'number' ? p.toChain : p.chain;
     const token = (a: string) => (isNative(a) ? ZERO_ADDRESS : a);
     const url = `https://li.quest/v1/quote?${qs({
@@ -77,13 +77,13 @@ export class LifiProvider implements SwapProvider {
       const want = this.fee.recipient.toLowerCase();
       const bps = this.fee.bps;
       const echoed = (r.estimate.feeCosts ?? []).some((f) => Math.round(Number(f.percentage ?? 0) * 10_000) === bps && (f.feeSplit?.recipients ?? []).some((x) => x.walletAddress?.toLowerCase() === want));
-      if (!echoed) throw new Error('LI.FI : frais Kyro non appliqués par le devis');
+      if (!echoed) throw new Error(l10n('LI.FI : frais Kyro non appliqués par le devis', 'LI.FI: Kyro fees not applied by the quote'));
     }
     const fx = p.usdToFiat ?? 1;
     const sum = (xs: Array<{ amountUSD?: string }> | undefined) => (xs ?? []).reduce((s, x) => s + Number(x.amountUSD ?? 0), 0);
     const fees = r.estimate.feeCosts ?? [];
     const gas = toBig(r.transactionRequest.gasLimit);
-    if (toChain !== p.chain) throw new Error('LI.FI : routes entre deux chaînes non prises en charge par Kyro');
+    if (toChain !== p.chain) throw new Error(l10n('LI.FI : routes entre deux chaînes non prises en charge par Kyro', 'LI.FI: routes between two chains are not supported by Kyro'));
     const allowanceTarget = isNative(p.sell.address) ? null : r.estimate.approvalAddress ?? r.transactionRequest.to;
     const value = toBig(r.transactionRequest.value);
     const check = verifyEvmSwap({

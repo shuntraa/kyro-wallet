@@ -5,6 +5,7 @@
 
 import { encodeFunctionData, erc20Abi, getAddress, maxUint256, type Hex } from 'viem';
 
+import { l10n } from '@kyro/shared';
 export interface ApprovalParams {
   token: string;
   spender: string;
@@ -24,7 +25,7 @@ export interface ApprovalCall {
 }
 
 export function buildApproval(p: ApprovalParams): ApprovalCall {
-  if (p.amount <= 0n && !p.unlimited) throw new Error('Montant d’autorisation invalide');
+  if (p.amount <= 0n && !p.unlimited) throw new Error(l10n('Montant d’autorisation invalide', 'Invalid approval amount'));
   const unlimited = p.unlimited === true;
   const amount = unlimited ? maxUint256 : p.amount;
   const spender = getAddress(p.spender);

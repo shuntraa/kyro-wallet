@@ -5,6 +5,8 @@
 // wallet. Before using it, compare it with what Kyro already knew: the last price seen on this
 // device (if recent) and the median of the 7-day sparkline. Too far from them → refused.
 
+import { l10n } from '@kyro/shared';
+
 /** Largest accepted gap with a reference (0,25 = 25 %). Beyond it, fiat entry is turned off. */
 export const PRICE_MAX_DEVIATION = 0.25;
 /** A « last known price » older than this is ignored. */
@@ -30,7 +32,7 @@ function median(xs: number[]): number | null {
  * that is not a finite positive number never is.
  */
 export function checkPricePlausible(price: number | null | undefined, refs: { sparkline7d?: number[]; lastKnown?: { price: number; at: number } | null; now?: number }): PriceCheck {
-  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return { ok: false, deviation: null, reason: 'Prix indisponible ou invalide.' };
+  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return { ok: false, deviation: null, reason: l10n('Prix indisponible ou invalide.', 'Price unavailable or invalid.') };
   const now = refs.now ?? Date.now();
   const ref: number[] = [];
   const spark = median(refs.sparkline7d ?? []);
@@ -38,6 +40,6 @@ export function checkPricePlausible(price: number | null | undefined, refs: { sp
   if (refs.lastKnown && Number.isFinite(refs.lastKnown.price) && refs.lastKnown.price > 0 && now - refs.lastKnown.at <= LAST_PRICE_MAX_AGE_MS) ref.push(refs.lastKnown.price);
   if (ref.length === 0) return { ok: true, deviation: null };
   const deviation = Math.max(...ref.map((r) => Math.abs(price / r - 1)));
-  if (deviation > PRICE_MAX_DEVIATION) return { ok: false, deviation, reason: `Prix douteux : ${Math.round(deviation * 100)} % d’écart avec le dernier prix connu.` };
+  if (deviation > PRICE_MAX_DEVIATION) return { ok: false, deviation, reason: l10n(`Prix douteux : ${Math.round(deviation * 100)} % d’écart avec le dernier prix connu.`, `Doubtful price: ${Math.round(deviation * 100)}% away from the last known price.`) };
   return { ok: true, deviation };
 }

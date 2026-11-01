@@ -9,7 +9,7 @@
 // The transaction it returns is third-party: before the password, the UI decodes it in Rust and
 // checks it with jupiter-verify.ts (programs, accounts, amounts, fee account).
 
-import { fetchJson, netFetch, type NetFetch } from '@kyro/shared';
+import { fetchJson, netFetch, type NetFetch, l10n } from '@kyro/shared';
 import { address, getAddressEncoder, getProgramDerivedAddress } from '@solana/kit';
 import type { ProviderFee } from '../fees';
 import type { Quote, QuoteParams, SwapProvider } from '../types';
@@ -71,7 +71,7 @@ export class JupiterProvider implements SwapProvider {
   async quote(p: QuoteParams): Promise<Quote> {
     const fee = this.fee.kind === 'fee' ? this.fee : null;
     const feeMint = fee ? [p.buy.address, p.sell.address].find((m) => this.feeMints.includes(m)) : undefined;
-    if (fee && !feeMint) throw new Error(`Jupiter : frais Kyro possibles seulement si ${this.feeMints.map(mintLabel).join(' ou ')} est dans la paire`);
+    if (fee && !feeMint) throw new Error(l10n(`Jupiter : frais Kyro possibles seulement si ${this.feeMints.map(mintLabel).join(' ou ')} est dans la paire`, `Jupiter: Kyro fees only possible if ${this.feeMints.map(mintLabel).join(' or ')} is in the pair`));
     const url = `https://lite-api.jup.ag/swap/v1/quote?${qs({
       inputMint: p.sell.address,
       outputMint: p.buy.address,
@@ -85,7 +85,7 @@ export class JupiterProvider implements SwapProvider {
     } catch (e) {
       throw providerError(this.name, e);
     }
-    if (fee && raw.platformFee?.feeBps !== fee.bps) throw new Error('Jupiter : frais Kyro non appliqués par le devis');
+    if (fee && raw.platformFee?.feeBps !== fee.bps) throw new Error(l10n('Jupiter : frais Kyro non appliqués par le devis', 'Jupiter: Kyro fees not applied by the quote'));
     const feeAccount = fee && feeMint ? await associatedTokenAccount(fee.recipient, feeMint) : null;
     const fetcher = this.fetcher;
     const labels = [...new Set((raw.routePlan ?? []).map((r) => r.swapInfo?.label).filter((x): x is string => !!x))];
