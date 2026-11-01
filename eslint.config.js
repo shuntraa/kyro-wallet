@@ -27,4 +27,13 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
+  // kyrowallet.com: Node build scripts, and the hand-written browser scripts it serves.
+  {
+    files: ["website/src/**/*.mjs"],
+    languageOptions: { ecmaVersion: 2023, sourceType: "module", globals: { ...globals.node } },
+  },
+  {
+    files: ["website/public/**/*.js"],
+    languageOptions: { ecmaVersion: 2023, sourceType: "script", globals: { ...globals.browser } },
+  },
 );

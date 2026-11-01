@@ -82,8 +82,8 @@ for (const f of readdirSync(ICONS).filter((f) => f.endsWith('.svg')).sort()) {
 const pages = [
   P.home(chains),
   P.features(chains),
-  P.security(chains),
-  P.fees(chains),
+  P.security(),
+  P.fees(),
   P.download(chains),
   P.faq(chains),
   P.chainsIndex(chains),

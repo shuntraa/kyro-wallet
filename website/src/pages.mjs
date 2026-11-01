@@ -630,7 +630,7 @@ export function features(chains) {
 
 // ------------------------------------------------------------------ security
 
-export function security(chains) {
+export function security() {
   const path = '/security/';
   const trail = [['/', 'Home'], [path, 'Security']];
   const title = 'Security: how Kyro Wallet protects your keys';
@@ -730,7 +730,7 @@ export function security(chains) {
 
 // ------------------------------------------------------------------ fees
 
-export function fees(chains) {
+export function fees() {
   const path = '/fees/';
   const trail = [['/', 'Home'], [path, 'Fees']];
   const title = 'Fees: free to use, swaps from 0.7% | Kyro Wallet';

@@ -23,10 +23,10 @@
     area.className = 'visually-hidden';
     document.body.appendChild(area);
     area.select();
-    var ok = false;
+    var ok;
     try {
       ok = document.execCommand('copy');
-    } catch (e) {
+    } catch {
       ok = false;
     }
     document.body.removeChild(area);

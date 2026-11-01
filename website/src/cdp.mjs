@@ -19,7 +19,9 @@ export async function launch({ port = 9333 } = {}) {
     await sleep(200);
     try {
       page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === 'page');
-    } catch {}
+    } catch {
+      // not ready yet
+    }
   }
   if (!page) throw new Error('Edge did not start (is EDGE set correctly?)');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
@@ -50,7 +52,9 @@ export async function launch({ port = 9333 } = {}) {
     await sleep(500);
     try {
       rmSync(dir, { recursive: true, force: true });
-    } catch {}
+    } catch {
+      // best effort: the browser may still hold the profile
+    }
   };
   await send('Page.enable');
   return { send, evaluate, close };
