@@ -772,9 +772,9 @@ mod tests {
         assert!(st.locked);
         for c in &st.chains {
             let want = match c.chain {
-                // No Ledger testnet app for these coins; Cardano / Zcash: not offered.
+                // No Ledger testnet app for these coins; Zcash: not offered on Ledger.
                 Chain::Ltc | Chain::Doge | Chain::Bch | Chain::Dash => ChainState::Unsupported,
-                Chain::Cardano | Chain::Zec => ChainState::Unsupported,
+                Chain::Zec => ChainState::Unsupported,
                 // No hardware support at all (reasons in `ledger_apps::unavailable`).
                 Chain::Dot | Chain::Kas => ChainState::Unsupported,
                 _ => ChainState::Unlock,

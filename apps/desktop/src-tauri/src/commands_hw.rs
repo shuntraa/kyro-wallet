@@ -257,9 +257,12 @@ pub struct HwXpub {
     /// Litecoin / Dogecoin / Bitcoin Cash / Dash account (`hw/chains.rs`).
     #[serde(skip_serializing_if = "Option::is_none")]
     utxo: Option<wallet_core::UtxoAccount>,
-    /// XRP / TRON / Stellar key (`hw/chains.rs`).
+    /// XRP / TRON / Stellar key, or the Cardano account key (`hw/chains.rs`).
     #[serde(skip_serializing_if = "Option::is_none")]
     key: Option<wallet_core::WatchKey>,
+    /// Zcash transparent account (Trezor, `hw/chains.rs`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    zec: Option<wallet_core::ZecAccount>,
 }
 
 async fn read_keys(
@@ -285,6 +288,7 @@ async fn read_keys(
                 sol: None,
                 utxo: None,
                 key: None,
+                zec: None,
             };
             match chain {
                 Chain::Btc => {
@@ -319,6 +323,7 @@ async fn read_keys(
                     let k = hw::chains::read_keys(dev, ctl, net, other, account)?;
                     out.utxo = k.utxo;
                     out.key = k.key;
+                    out.zec = k.zec;
                 }
                 other => return Err(HwError::unsupported(other.label())),
             }
@@ -394,6 +399,8 @@ pub async fn hw_account_add(
             tron: None,
             stellar: None,
             keys: Vec::new(),
+            cardano: None,
+            zec: None,
         },
     };
     if let Some(l) = label {
@@ -434,8 +441,15 @@ pub async fn hw_account_add(
             Chain::Xrp => acc.xrp = Some(k),
             Chain::Tron => acc.tron = Some(k),
             Chain::Stellar => acc.stellar = Some(k),
+            Chain::Cardano => acc.cardano = Some(k),
             _ => {}
         }
+    }
+    if let Some(z) = keys.zec {
+        if acc.fingerprint().is_some_and(|fp| fp != z.fingerprint) {
+            return Err(AppError::HwWrongDevice);
+        }
+        acc.zec = Some(z);
     }
     acc.validate()?;
     s.accounts.retain(|a| a.id != acc.id);
@@ -996,6 +1010,8 @@ mod tests {
             tron: None,
             stellar: None,
             keys: Vec::new(),
+            cardano: None,
+            zec: None,
         }
     }
 
@@ -1085,7 +1101,7 @@ mod tests {
         }
         assert!(matches!(
             resolve_target(&acc, Chain::Cardano, &[0]),
-            Err(AppError::HwUnsupported { .. })
+            Err(AppError::InvalidInput(_))
         ));
     }
 

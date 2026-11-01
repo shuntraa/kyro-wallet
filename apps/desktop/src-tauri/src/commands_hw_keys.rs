@@ -131,6 +131,8 @@ pub async fn hw_key_add(
             xrp: None,
             tron: None,
             stellar: None,
+            cardano: None,
+            zec: None,
             keys: Vec::new(),
         },
     };

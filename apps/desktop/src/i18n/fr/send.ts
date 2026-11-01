@@ -19,7 +19,7 @@ export const send = {
   'send.doneWhatToken': '{qty} {token} (+ {ada} de min-ADA)',
   'send.from': 'Depuis',
   'send.availableAmount': '{amount} disponibles',
-  'send.hwUnsupportedChains': 'Sur hardware wallet : Bitcoin, chaînes EVM, Solana, Litecoin, Dogecoin, Bitcoin Cash, Dash et Stellar (Ledger et Trezor), XRP, TRON, Sui, Aptos, Algorand, NEAR, Cosmos Hub, TON et Hedera (Ledger seulement) ; les autres chaînes restent disponibles dans le coffre Kyro.',
+  'send.hwUnsupportedChains': 'Sur hardware wallet : Bitcoin, chaînes EVM, Solana, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar et Cardano (Ledger et Trezor ; Cardano : pas sur la Trezor One), XRP, TRON, Sui, Aptos, Algorand, NEAR, Cosmos Hub, TON et Hedera (Ledger seulement), Zcash transparent (Trezor seulement) ; les autres chaînes restent disponibles dans le coffre Kyro.',
   'send.to': 'À',
   'send.xrpPlaceholder': 'r… (adresse classique)',
   'send.xlmPlaceholder': 'G… (56 caractères)',

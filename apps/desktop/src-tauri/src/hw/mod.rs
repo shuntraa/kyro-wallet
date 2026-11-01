@@ -19,6 +19,7 @@ pub mod chains;
 pub mod ledger;
 pub mod ledger_algo;
 pub mod ledger_apdu;
+pub mod ledger_cardano;
 pub mod ledger_coins;
 pub mod ledger_utxo;
 pub mod ledger_apps;
@@ -35,7 +36,9 @@ mod thp_sim;
 pub mod thp_store;
 pub mod trezor;
 pub mod trezor_btc;
+pub mod trezor_cardano;
 pub mod trezor_coins;
+pub mod trezor_zcash;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -67,7 +70,7 @@ pub enum Chain {
     Bch,
     Dash,
     Stellar,
-    /// Zcash (transparent): not offered on hardware wallets (HW_UNSUPPORTED), see IPC.md §2.3.
+    /// Zcash (transparent): Trezor only (no Ledger, see `chains::ZEC_LEDGER_REASON`).
     Zec,
     // Single-key chains, Ledger only (see `ledger_apps`).
     Sui,
@@ -107,6 +110,7 @@ impl Chain {
         Chain::Ton,
     ];
 
+    /// Every chain has device code; what a given device / app can do is in its status.
     pub fn implemented(self) -> bool {
         matches!(
             self,
@@ -120,6 +124,8 @@ impl Chain {
                 | Chain::Xrp
                 | Chain::Tron
                 | Chain::Stellar
+                | Chain::Cardano
+                | Chain::Zec
         ) || ledger_apps::key_chain(self).is_some()
     }
 

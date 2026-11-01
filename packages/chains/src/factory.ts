@@ -144,7 +144,7 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   // XRP Ledger: Rust picks the server (servers.xrp, default rippled).
   const xrp = accounts.xrp ? new XrpAdapter({ chain: xrpChain(network), address: accounts.xrp.address, ...h, ...a }) : null;
   // Cardano: Rust picks the server (servers.cardano, default Koios).
-  const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...a }) : null;
+  const cardano = accounts.cardano ? new CardanoAdapter({ chain: cardanoChain(network), address: accounts.cardano.address, ...h, ...a }) : null;
   // Stellar: SDF's Horizon, reached by Rust only.
   const stellar = accounts.stellar ? new StellarAdapter({ chain: stellarChain(network), address: accounts.stellar.address, ...h, ...a }) : null;
   // NEAR: Rust picks the server (default FastNEAR).
@@ -169,7 +169,7 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   // Aptos: Rust picks the server (Aptos Labs fullnode, no custom server yet).
   const aptos = accounts.aptos ? new AptosAdapter({ chain: aptosChain(network), address: accounts.aptos.address, ...h, ...a }) : null;
   // Zcash (transparent only): Rust picks the server (Komodo's ElectrumX on mainnet, none on testnet).
-  const zec = accounts.zec && !hw ? new ZcashAdapter({ chain: zecChain(network), account: accounts.zec, ...(account ? { vaultAccount: account } : {}) }) : null;
+  const zec = accounts.zec ? new ZcashAdapter({ chain: zecChain(network), account: accounts.zec, ...(account && !hw ? { vaultAccount: account } : {}), ...h }) : null;
   const all: AnyAdapter[] = [
     ...(btc ? [btc] : []),
     ...evm.values(),

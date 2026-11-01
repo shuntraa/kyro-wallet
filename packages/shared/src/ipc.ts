@@ -2321,10 +2321,16 @@ export interface SolTxSummary {
 // ---------------------------------------------------------------- hardware wallets (docs/IPC.md §2.3)
 
 export type HwDeviceKind = 'ledger' | 'trezor';
-/** `cardano`, `zec`, `xmr`, `dot` and `kas` answer HW_UNSUPPORTED. */
+/** `xmr`, `dot` and `kas` answer HW_UNSUPPORTED; `zec` is Trezor only, `cardano` not on the Trezor One. */
 export type HwChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'cardano' | 'xrp' | 'bch' | 'dash' | 'stellar' | 'zec' | 'xmr' | HwKeyChain | 'dot' | 'kas';
 /** The chains Kyro implements on hardware wallets (device support: `hw_open` → `chains`). */
-export type HwImplementedChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'xrp' | 'tron' | 'stellar';
+export type HwImplementedChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'xrp' | 'tron' | 'stellar' | 'cardano' | 'zec';
+/** Zcash transparent account of a hardware wallet (`m/44'/133'/a'`, Trezor). */
+export interface HwZecKey {
+  xpub: string;
+  fingerprint: string;
+  path: string;
+}
 /** Litecoin / Dogecoin / Bitcoin Cash / Dash account of a hardware wallet (`m/84'/2'/a'`, `m/44'/3'/a'`…). */
 export interface HwUtxoKey {
   coin: UtxoCoinKey;
@@ -2410,7 +2416,9 @@ export interface HwXpub {
   evm?: { xpub: string; path: string; address: string };
   sol?: { address: string; path: string };
   utxo?: HwUtxoKey;
+  /** XRP / TRON / Stellar key, or the Cardano account key (`pubkey`: key ‖ chain code, 64 bytes). */
   key?: HwChainKey;
+  zec?: HwZecKey;
 }
 
 /** Watch-only account backed by a hardware wallet (public keys only). */
@@ -2434,6 +2442,10 @@ export interface WatchOnlyAccount {
   stellar?: HwChainKey;
   /** Single-key chains (Sui, Aptos, Algorand, NEAR, Cosmos Hub). */
   keys?: HwWatchKey[];
+  /** `m/1852'/1815'/a'`: `pubkey` = account key ‖ chain code; `address` = base address `…/0/0` + `…/2/0`. */
+  cardano?: HwChainKey;
+  /** Trezor only. */
+  zec?: HwZecKey;
 }
 
 /** Event `hw-prompt`: what to tell the user while a device call is pending. */
@@ -2886,6 +2898,14 @@ export interface Commands {
   hw_cosmos_build_tx: { args: { accountId: string; to: string; amount: string; memo?: string }; ret: { signDoc: string; summary: CosmosTxSummary; context: CosmosContext } };
   hw_sign_cosmos_tx: { args: { id: string; accountId: string; signDoc: string }; ret: { tx: string; hash: string; summary: CosmosTxSummary; context: CosmosContext } };
   hw_cosmos_broadcast: { args: { accountId: string; tx: string }; ret: string };
+  hw_ada_build_tx: { args: { accountId: string; to: string; lovelace?: string; token?: CardanoTokenSpec; memo?: string }; ret: { tx: string; summary: CardanoTxSummary; context: CardanoContext } };
+  /** Ledger « Cardano ADA » app or Trezor T / Safe: body hash and witness verified in Rust. */
+  hw_sign_ada_tx: { args: { id: string; accountId: string; tx: string }; ret: { tx: string; txId: string; summary: CardanoTxSummary; context: CardanoContext } };
+  hw_ada_broadcast: { args: { accountId: string; tx: string }; ret: string };
+  /** What `hw_sign_zec_tx` would sign, built from the stored xpub. */
+  hw_zec_send_preview: { args: { accountId: string; request: ZecSendArgs }; ret: ZecTxSummary };
+  /** Trezor: every signature verified in Rust; broadcast with `zec_broadcast`. */
+  hw_sign_zec_tx: { args: { id: string; accountId: string; request: ZecSendArgs }; ret: { hex: string; txid: string; summary: ZecTxSummary } };
   /** Restarts the bootstrap (after `error`). `INVALID_INPUT` when Tor is disabled. */
   tor_retry: { args: undefined; ret: TorStatus };
   settings_get: { args: undefined; ret: Settings };

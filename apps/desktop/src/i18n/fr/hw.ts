@@ -108,7 +108,7 @@ export const hw = {
   'hw.setup.unlock': '<b>Déverrouille ton appareil</b> avec ton code PIN, puis clique sur « Actualiser ».',
   'hw.setup.passphraseOne': 'Passphrase activée : sur la Trezor One elle se taperait sur l’ordinateur, ce que Kyro refuse (aucun secret ne doit passer par l’interface). Désactive-la sur l’appareil pour l’utiliser avec Kyro.',
   'hw.setup.chains': 'Chaînes',
-  'hw.setup.notYet': 'Sur hardware wallet : Bitcoin, chaînes EVM, Solana, Litecoin, Dogecoin, Bitcoin Cash, Dash et Stellar (Ledger et Trezor), XRP, TRON, Sui, Aptos, Algorand, NEAR, Cosmos Hub, TON et Hedera (Ledger seulement). Polkadot, Kaspa et les autres chaînes restent disponibles dans le coffre Kyro.',
+  'hw.setup.notYet': 'Sur hardware wallet : Bitcoin, chaînes EVM, Solana, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar et Cardano (Ledger et Trezor ; Cardano : pas sur la Trezor One), XRP, TRON, Sui, Aptos, Algorand, NEAR, Cosmos Hub, TON et Hedera (Ledger seulement), Zcash transparent (Trezor seulement). Polkadot, Kaspa et les autres chaînes restent disponibles dans le coffre Kyro.',
   'hw.setup.keyChainsHint': 'Sui, Aptos, Algorand, NEAR, Cosmos Hub, TON, Hedera : ouvre chaque app Ledger tour à tour. Mêmes adresses que le coffre Kyro, sauf NEAR (chemin Ledger m/44\'/397\'/0\'/0\'/n\') TON (chemin Ledger m/44\'/607\'/0\'/0\'/n\'/0\') et Hedera (compte ED25519 m/44\'/3030\'/0\'/0\'/n\', à créer d’abord avec Ledger Live ou HashPack) : d’autres comptes.',
   'hw.setup.accountNumber': 'N° de compte',
   'hw.setup.nameOptional': 'Nom (facultatif)',

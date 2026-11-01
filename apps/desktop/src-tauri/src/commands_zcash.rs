@@ -134,7 +134,7 @@ fn parse_amount(args: &ZecSendArgs) -> AppResult<u64> {
 
 /// Reads the chain state and the previous transaction of every candidate (one Electrum
 /// session), then assembles the request wallet-core builds from.
-async fn request(state: &AppState, args: &ZecSendArgs) -> AppResult<ZecSendRequest> {
+pub(crate) async fn request(state: &AppState, args: &ZecSendArgs) -> AppResult<ZecSendRequest> {
     let net = state.network;
     // Local checks first: nothing is sent for a recipient Kyro would refuse anyway.
     wallet_core::zec_parse_address(&args.to, net)?;

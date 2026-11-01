@@ -19,6 +19,7 @@ import {
   type CardanoTxSummary,
   type CardanoWarning, l10n } from '@kyro/shared';
 import type { CardanoChain } from '../registry';
+import type { HwSigner } from '../hw';
 import type { Balance, BuildParams, ChainAdapter, FeeEstimates, HistoryItem } from '../types';
 
 // ---------------------------------------------------------------- Rust contract (§2.7)
@@ -57,6 +58,20 @@ export function rustCardanoBackend(account = 0): CardanoBackend {
     sign: (tx, password) => call('ada_sign_tx', { tx, password, ...acct }),
     broadcast: (tx) => call('ada_broadcast', { tx, ...acct }),
     txStatus: (hash) => call('ada_tx_status', { hash }),
+  };
+}
+
+/**
+ * Hardware-wallet account `accountId` (docs/IPC.md §2.3, Ledger « Cardano ADA » app or Trezor
+ * Model T / Safe): Rust builds and broadcasts with the account's stored key; signing is
+ * `hw_sign_ada_tx`.
+ */
+export function hwCardanoBackend(accountId: string): CardanoBackend {
+  return {
+    ...rustCardanoBackend(0),
+    build: (to, lovelace, token, memo) => call('hw_ada_build_tx', { accountId, to, ...(lovelace !== undefined ? { lovelace } : {}), ...(token ? { token } : {}), ...(memo ? { memo } : {}) }),
+    sign: () => Promise.reject(new Error(l10n('Compte hardware wallet : signature sur l’appareil', 'Hardware-wallet account: sign on the device'))),
+    broadcast: (tx) => call('hw_ada_broadcast', { accountId, tx }),
   };
 }
 
@@ -152,6 +167,8 @@ export interface CardanoAdapterOptions {
   backend?: CardanoBackend;
   /** Vault account (docs/IPC.md §2.9) passed to every signing command; absent = 0. */
   account?: number;
+  /** Hardware-wallet account (signing through `hw_sign_ada_tx`). */
+  hw?: HwSigner;
 }
 
 export class CardanoAdapter implements ChainAdapter<'ada'> {
@@ -159,12 +176,14 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
   readonly chain: CardanoChain;
   private readonly address: string;
   private readonly backend: CardanoBackend;
+  readonly hw: HwSigner | null;
 
   constructor(opts: CardanoAdapterOptions) {
     if (!isCardanoAddress(opts.address, opts.chain.network)) throw new Error(l10n('Adresse Cardano invalide', 'Invalid Cardano address'));
     this.chain = opts.chain;
     this.address = opts.address;
-    this.backend = opts.backend ?? rustCardanoBackend(opts.account ?? 0);
+    this.hw = opts.hw ?? null;
+    this.backend = opts.backend ?? (opts.hw ? hwCardanoBackend(opts.hw.accountId) : rustCardanoBackend(opts.account ?? 0));
   }
 
   getAddress(): string {
@@ -276,6 +295,14 @@ export class CardanoAdapter implements ChainAdapter<'ada'> {
   /** Rust: live checks, native dialog (each output, tokens, min-ADA, fee, ttl), signature. */
   async signTx(unsigned: CardanoUnsigned, password: string): Promise<CardanoSigned> {
     const res = await this.backend.sign(unsigned.tx, password);
+    if (!/^[0-9a-f]{64}$/.test(res.txId) || res.txId !== unsigned.summary.txId) throw new Error(l10n('Identifiant de transaction Cardano inattendu', 'Unexpected Cardano transaction ID'));
+    return { family: 'ada', tx: res.tx, txId: res.txId, summary: res.summary };
+  }
+
+  /** Hardware wallet: Rust's live checks and dialog, the device, then Rust checks the body hash and the witness. */
+  async signTxHw(unsigned: CardanoUnsigned, deviceId: string): Promise<CardanoSigned> {
+    if (!this.hw) throw new Error(l10n('Ce compte n’est pas un hardware wallet', 'This account is not a hardware wallet'));
+    const res = await call('hw_sign_ada_tx', { id: deviceId, accountId: this.hw.accountId, tx: unsigned.tx });
     if (!/^[0-9a-f]{64}$/.test(res.txId) || res.txId !== unsigned.summary.txId) throw new Error(l10n('Identifiant de transaction Cardano inattendu', 'Unexpected Cardano transaction ID'));
     return { family: 'ada', tx: res.tx, txId: res.txId, summary: res.summary };
   }

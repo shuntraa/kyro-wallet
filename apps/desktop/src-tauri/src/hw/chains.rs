@@ -1,4 +1,5 @@
-//! Hardware wallets for Litecoin, Dogecoin, Bitcoin Cash, Dash, XRP, TRON and Stellar: which
+//! Hardware wallets for Litecoin, Dogecoin, Bitcoin Cash, Dash, XRP, TRON, Stellar, Cardano and
+//! Zcash (transparent): which
 //! device / app supports what, and the device calls (keys, address on screen, signature) of
 //! these chains on top of [`HardwareWallet::raw`]. Nothing returned here is trusted: the
 //! commands (`commands_hw*.rs`) compare keys with the stored account and verify signatures in
@@ -10,7 +11,8 @@
 //! | XRP | "XRP" ≥ 2.0.0 | — (no public key before signing) |
 //! | TRON | "Tron" ≥ 0.5.0 | — (not in Trezor's firmware) |
 //! | Stellar | "Stellar" ≥ 5.0.0 | One ≥ 1.10.4, T/Safe ≥ 2.4.3 |
-//! | Cardano, Zcash | — (not offered) | — |
+//! | Cardano | "Cardano ADA" ≥ 7.0.0 (`ledger_cardano.rs`) | T/Safe ≥ 2.7.2, not the One (`trezor_cardano.rs`) |
+//! | Zcash (transparent) | — (see [`ZEC_LEDGER_REASON`]) | One ≥ 1.11.1, T/Safe ≥ 2.5.1 (`trezor_zcash.rs`) |
 
 use trezor_client::protos::{self, features::Capability};
 use trezor_client::TrezorMessage;
@@ -22,9 +24,20 @@ use super::ledger::ApduLink;
 use super::ledger_apdu::{self as apdu, SwContext, SW_OK};
 use super::trezor::{decode, TrezorDevice};
 use super::{
-    ledger_coins, ledger_utxo, path_string, trezor_coins, version_at_least, Chain, ChainState,
-    ChainStatus, Ctl, HardwareWallet, HwError, HwResult, Prompt, RawDevice, H,
+    ledger_cardano, ledger_coins, ledger_utxo, path_string, trezor_cardano, trezor_coins,
+    trezor_zcash, version_at_least, Chain, ChainState, ChainStatus, Ctl, HardwareWallet, HwError,
+    HwResult, Prompt, RawDevice, H,
 };
+use wallet_core::{CardanoHwPlan, ZecAccount, ZecHwPlan};
+
+/// Why Zcash is not offered on Ledger. Ledger's Zcash (transparent) app is the legacy Bitcoin
+/// app protocol: every previous transaction must be streamed in full through GET TRUSTED INPUT,
+/// and for v5 previous transactions that includes their Sapling / Orchard bundles, from which
+/// the app recomputes the ZIP-244 txid (`@ledgerhq/hw-app-btc` `getTrustedInput`,
+/// `splitTransaction`). Kyro does not parse those bundles itself, Ledger publishes no recorded
+/// v5 exchanges to test against, and its own host library already refuses v6 previous
+/// transactions ("sign them through the Zcash signer kit"): not done without a device.
+pub const ZEC_LEDGER_REASON: &str = "Zcash : pas sur Ledger dans Kyro (l'app Zcash exige chaque transaction précédente en entier, parties protégées comprises) — utilise une Trezor ou le coffre Kyro";
 
 pub fn utxo_coin(chain: Chain) -> Option<UtxoCoin> {
     match chain {
@@ -47,7 +60,11 @@ pub fn chain_of(coin: UtxoCoin) -> Chain {
 
 /// Whether this module handles `chain`.
 pub fn handles(chain: Chain) -> bool {
-    utxo_coin(chain).is_some() || matches!(chain, Chain::Xrp | Chain::Tron | Chain::Stellar)
+    utxo_coin(chain).is_some()
+        || matches!(
+            chain,
+            Chain::Xrp | Chain::Tron | Chain::Stellar | Chain::Cardano | Chain::Zec
+        )
 }
 
 // ---------------------------------------------------------------- support tables
@@ -63,12 +80,19 @@ pub fn ledger_app(chain: Chain, net: Network) -> Option<(&'static str, &'static 
         Chain::Xrp => Some(("XRP", "2.0.0")),
         Chain::Tron => Some(("Tron", "0.5.0")),
         Chain::Stellar => Some(("Stellar", "5.0.0")),
+        Chain::Cardano => Some((ledger_cardano::APP, ledger_cardano::MIN_VERSION)),
         _ => None,
     }
 }
 
 /// Ledger status of a chain that has no app on `net` (UTXO coins on testnet).
 pub fn ledger_unavailable(chain: Chain, net: Network) -> Option<ChainStatus> {
+    if chain == Chain::Zec {
+        return Some(ChainStatus {
+            reason: Some(ZEC_LEDGER_REASON.into()),
+            ..ChainStatus::new(chain, ChainState::Unsupported)
+        });
+    }
     utxo_coin(chain)?;
     (net == Network::Testnet).then(|| ChainStatus {
         reason: Some(format!(
@@ -96,6 +120,16 @@ pub fn trezor_support(
              (utilise un Ledger ou le coffre Kyro)",
         )),
         Chain::Tron => Err(Some("TRON n'est pas pris en charge par le firmware Trezor")),
+        Chain::Cardano if one => Err(Some("Cardano n'existe pas sur la Trezor One")),
+        Chain::Cardano => Ok((Capability::Capability_Cardano, trezor_cardano::MIN_FIRMWARE)),
+        Chain::Zec => Ok((
+            Capability::Capability_Bitcoin_like,
+            if one {
+                trezor_zcash::MIN_FIRMWARE_ONE
+            } else {
+                trezor_zcash::MIN_FIRMWARE
+            },
+        )),
         _ => Err(None),
     }
 }
@@ -137,6 +171,11 @@ pub fn ledger_call(
     let (data, sw) = link.exchange(ctl, cmd)?;
     if sw == SW_OK {
         return Ok(data);
+    }
+    if expected == ledger_cardano::APP {
+        if let Some(e) = ledger_cardano::sw_error(sw) {
+            return Err(e);
+        }
     }
     Err(match (sw, apdu::sw_error(sw, ctx)) {
         (_, HwError::WrongApp { .. }) => HwError::WrongApp {
@@ -286,7 +325,57 @@ fn trezor_utxo_account(
 #[derive(Debug, Clone, Default)]
 pub struct ChainKeys {
     pub utxo: Option<UtxoAccount>,
+    /// XRP / TRON / Stellar key, or the Cardano account key (`pubkey`: key ‖ chain code).
     pub key: Option<WatchKey>,
+    pub zec: Option<ZecAccount>,
+}
+
+/// Zcash account path `m/44'/133'/a'` (testnet `m/44'/1'/a'`).
+pub fn zec_account_path(net: Network, account: u32) -> [u32; 3] {
+    let coin = if net == Network::Mainnet { 133 } else { 1 };
+    [44 | H, coin | H, account | H]
+}
+
+fn cardano_key(net: Network, account: u32, xpub: &[u8; 64]) -> HwResult<WatchKey> {
+    let pubkey = hex::encode(xpub);
+    Ok(WatchKey {
+        address: wallet_core::cardano_address_from_xpub(&pubkey, net, 0)
+            .map_err(|e| HwError::bad(e.to_string()))?,
+        pubkey,
+        path: wallet_core::cardano_account_path(account),
+    })
+}
+
+fn ledger_cardano_key(
+    link: &dyn ApduLink,
+    ctl: &Ctl,
+    net: Network,
+    account: u32,
+) -> HwResult<WatchKey> {
+    let d = ledger_call(
+        link,
+        ctl,
+        &ledger_cardano::get_ext_public_key(account)?,
+        SwContext::General,
+        ledger_cardano::APP,
+    )?;
+    cardano_key(net, account, &ledger_cardano::parse_ext_public_key(&d)?)
+}
+
+fn trezor_zec_account(
+    t: &mut dyn TrezorDevice,
+    ctl: &Ctl,
+    net: Network,
+    account: u32,
+) -> HwResult<ZecAccount> {
+    let path = zec_account_path(net, account);
+    let pk: protos::PublicKey = tsend(t, ctl, &trezor_zcash::get_public_key(net, &path))?;
+    let (xpub, fingerprint) = trezor_coins::account_xpub(&pk, net)?;
+    Ok(ZecAccount {
+        xpub,
+        fingerprint,
+        path: path_string(&path),
+    })
 }
 
 fn watch_key(chain: Chain, account: u32, pubkey: &[u8], address: String) -> HwResult<WatchKey> {
@@ -397,6 +486,9 @@ pub fn read_keys(
                 Some(coin) => {
                     out.utxo = Some(ledger_utxo_account(link, ctl, app, coin, net, account)?)
                 }
+                None if chain == Chain::Cardano => {
+                    out.key = Some(ledger_cardano_key(link, ctl, net, account)?)
+                }
                 None => out.key = Some(ledger_key(link, ctl, chain, app, account, false)?),
             }
         }
@@ -409,6 +501,11 @@ pub fn read_keys(
                 (None, Chain::Stellar) => {
                     out.key = Some(trezor_stellar_key(t, ctl, account, false)?)
                 }
+                (None, Chain::Cardano) => {
+                    let k = trezor_cardano::read_account_key(t, ctl, account)?;
+                    out.key = Some(cardano_key(net, account, &k)?)
+                }
+                (None, Chain::Zec) => out.zec = Some(trezor_zec_account(t, ctl, net, account)?),
                 _ => {
                     return Err(HwError::unsupported(format!(
                         "{} sur Trezor",
@@ -435,11 +532,16 @@ pub fn same_device(
             (Some(s), Some(l)) => s.xpub == l.xpub && s.fingerprint == l.fingerprint,
             _ => false,
         },
+        None if chain == Chain::Zec => match (acc.zec.as_ref(), live.zec) {
+            (Some(s), Some(l)) => s.xpub == l.xpub && s.fingerprint == l.fingerprint,
+            _ => false,
+        },
         None => {
             let stored = match chain {
                 Chain::Xrp => acc.xrp.as_ref(),
                 Chain::Tron => acc.tron.as_ref(),
                 Chain::Stellar => acc.stellar.as_ref(),
+                Chain::Cardano => acc.cardano.as_ref(),
                 _ => None,
             };
             matches!((stored, live.key), (Some(s), Some(l)) if *s == l)
@@ -450,8 +552,17 @@ pub fn same_device(
 /// What to show on the device.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
-    Utxo { coin: UtxoCoin, path: Vec<u32> },
+    Utxo {
+        coin: UtxoCoin,
+        path: Vec<u32>,
+    },
     Key(Chain),
+    /// Kyro's Cardano base address (payment `…/0/0`, stake `…/2/0`).
+    Cardano,
+    /// A Zcash transparent address `…/change/index`.
+    Zec {
+        path: Vec<u32>,
+    },
 }
 
 /// Strips a CashAddr prefix (`bitcoincash:`, `bchtest:`): the Ledger app shows and returns the
@@ -490,6 +601,31 @@ pub fn resolve_target(
             },
             expected,
         ));
+    }
+    if chain == Chain::Zec {
+        let stored = acc.zec.as_ref().ok_or_else(wrong)?;
+        let [a, b, c, change, index] = path else {
+            return Err(wrong());
+        };
+        if path_string(&[*a, *b, *c]) != stored.path || *change > 1 || *index >= H {
+            return Err(wrong());
+        }
+        let expected =
+            wallet_core::zec_address_from_xpub(&stored.xpub, acc.network, *change == 1, *index)
+                .map_err(|e| e.to_string())?;
+        return Ok((
+            Target::Zec {
+                path: path.to_vec(),
+            },
+            expected,
+        ));
+    }
+    if chain == Chain::Cardano {
+        let stored = acc.cardano.as_ref().ok_or_else(wrong)?;
+        if path_string(path) != format!("{}/0/0", stored.path) {
+            return Err(wrong());
+        }
+        return Ok((Target::Cardano, stored.address.clone()));
     }
     let stored = match chain {
         Chain::Xrp => acc.xrp.as_ref(),
@@ -537,6 +673,38 @@ pub fn display_address(
         (RawDevice::Trezor(t), Target::Key(Chain::Stellar)) => {
             t.ensure_chain(Chain::Stellar)?;
             Ok(trezor_stellar_key(t, ctl, acc.account, true)?.address)
+        }
+        (RawDevice::Ledger(link), Target::Cardano) => {
+            let app = ledger_ensure(link, ctl, Chain::Cardano, net)?;
+            // The address the app derives from the two paths, then the same one on its screen.
+            let raw = ledger_call(
+                link,
+                ctl,
+                &ledger_cardano::derive_address(net, acc.account, false)?,
+                SwContext::General,
+                app,
+            )?;
+            let derived = wallet_core::cardano_address_string(&raw, net)
+                .ok_or_else(|| HwError::bad("adresse Cardano de l'appareil mal formée"))?;
+            ctl.prompt(Prompt::ConfirmOnDevice);
+            ledger_call(
+                link,
+                ctl,
+                &ledger_cardano::derive_address(net, acc.account, true)?,
+                SwContext::Signing,
+                app,
+            )?;
+            Ok(derived)
+        }
+        (RawDevice::Trezor(t), Target::Cardano) => {
+            t.ensure_chain(Chain::Cardano)?;
+            trezor_cardano::address(t, ctl, net, acc.account, true)
+        }
+        (RawDevice::Trezor(t), Target::Zec { path }) => {
+            t.ensure_chain(Chain::Zec)?;
+            ctl.prompt(Prompt::ConfirmOnDevice);
+            let a: protos::Address = tsend(t, ctl, &trezor_zcash::get_address(net, path, true))?;
+            Ok(a.address().to_string())
         }
         _ => Err(HwError::unsupported(
             "adresse non affichable sur cet appareil",
@@ -644,6 +812,53 @@ pub fn sign_stellar(
     }
 }
 
+/// Body hash, payment-key signature, and the witness key when the device reports one.
+pub type CardanoDeviceSignature = ([u8; 32], [u8; 64], Option<[u8; 32]>);
+
+/// Cardano payment on the device: `(body hash, payment-key signature, witness key if the
+/// device reported one)`, all to be verified by `wallet_core::cardano_hw_assemble`.
+pub fn sign_cardano(
+    dev: &mut dyn HardwareWallet,
+    ctl: &Ctl,
+    net: Network,
+    account: u32,
+    plan: &CardanoHwPlan,
+) -> HwResult<CardanoDeviceSignature> {
+    match dev.raw() {
+        RawDevice::Ledger(link) => {
+            ledger_ensure(link, ctl, Chain::Cardano, net)?;
+            let (_, version) = ledger_open_app(link, ctl)?;
+            ctl.prompt(Prompt::ConfirmOnDevice);
+            let mut call =
+                |cmd: &[u8]| ledger_call(link, ctl, cmd, SwContext::Signing, ledger_cardano::APP);
+            let (hash, sig) = ledger_cardano::sign_tx(&mut call, &version, plan, net, account)?;
+            Ok((hash, sig, None))
+        }
+        RawDevice::Trezor(t) => {
+            t.ensure_chain(Chain::Cardano)?;
+            let (hash, sig, pk) = trezor_cardano::sign_tx(t, ctl, plan, net, account)?;
+            Ok((hash, sig, Some(pk)))
+        }
+        RawDevice::None => Err(HwError::unsupported("Cardano")),
+    }
+}
+
+/// Zcash v5 transparent transaction on a Trezor: one DER signature per input (unverified).
+pub fn sign_zec(
+    dev: &mut dyn HardwareWallet,
+    ctl: &Ctl,
+    net: Network,
+    plan: &ZecHwPlan,
+) -> HwResult<Vec<Vec<u8>>> {
+    match dev.raw() {
+        RawDevice::Trezor(t) => {
+            t.ensure_chain(Chain::Zec)?;
+            trezor_zcash::sign_tx(t, ctl, plan, net)
+        }
+        _ => Err(HwError::unsupported(ZEC_LEDGER_REASON)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -688,7 +903,12 @@ mod tests {
         assert!(trezor_support(Chain::Tron, false).is_err());
         assert!(matches!(trezor_support(Chain::Xrp, false), Err(Some(_))));
         assert_eq!(trezor_support(Chain::Dash, true).unwrap().1, "1.10.4");
-        assert_eq!(trezor_support(Chain::Cardano, false), Err(None));
+        assert_eq!(trezor_support(Chain::Cardano, false).unwrap().1, "2.7.2");
+        assert!(matches!(trezor_support(Chain::Cardano, true), Err(Some(_))));
+        assert_eq!(trezor_support(Chain::Zec, true).unwrap().1, "1.11.1");
+        assert_eq!(trezor_support(Chain::Btc, false), Err(None));
+        assert!(ledger_unavailable(Chain::Zec, Network::Mainnet).is_some());
+        assert_eq!(ledger_app(Chain::Zec, Network::Mainnet), None);
         assert_eq!(
             path_string(&utxo_account_path(
                 UtxoCoin::BitcoinCash,

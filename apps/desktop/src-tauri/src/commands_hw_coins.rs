@@ -527,6 +527,8 @@ mod tests {
                 path: wallet_core::stellar_path(0),
             }),
             keys: Vec::new(),
+            cardano: None,
+            zec: None,
         };
         acc.validate().unwrap();
         let (t, expected) =

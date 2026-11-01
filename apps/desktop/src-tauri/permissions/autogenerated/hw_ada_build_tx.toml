@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hw-ada-build-tx"
+description = "Enables the hw_ada_build_tx command without any pre-configured scope."
+commands.allow = ["hw_ada_build_tx"]
+
+[[permission]]
+identifier = "deny-hw-ada-build-tx"
+description = "Denies the hw_ada_build_tx command without any pre-configured scope."
+commands.deny = ["hw_ada_build_tx"]

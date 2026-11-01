@@ -757,6 +757,12 @@ fn verified_coins(xpub: &Xpub, coins: &[ZecCoin]) -> Result<Vec<Spend>> {
 }
 
 fn plan(seed: &Seed, net: Network, account: u32, req: &ZecSendRequest) -> Result<Plan> {
+    let secp = secp()?;
+    let (xpub, _, _) = account_xpub(&secp, seed, net, account)?;
+    plan_xpub(&xpub, net, req)
+}
+
+fn plan_xpub(xpub: &Xpub, net: Network, req: &ZecSendRequest) -> Result<Plan> {
     let consensus = zec_consensus(
         net,
         req.tip_height,
@@ -769,11 +775,9 @@ fn plan(seed: &Seed, net: Network, account: u32, req: &ZecSendRequest) -> Result
             "index de monnaie au-delà de {MAX_CHANGE_INDEX}"
         )));
     }
-    let secp = secp()?;
-    let (xpub, _, _) = account_xpub(&secp, seed, net, account)?;
-    let change_pk = child_pubkey(&xpub, true, req.change_index)?;
+    let change_pk = child_pubkey(xpub, true, req.change_index)?;
     let change_script = own_script(&change_pk);
-    let coins = verified_coins(&xpub, &req.coins)?;
+    let coins = verified_coins(xpub, &req.coins)?;
     if coins.is_empty() {
         return Err(Error::input("aucune pièce à dépenser"));
     }
@@ -973,21 +977,13 @@ pub fn zec_sign(
         spends,
         summary,
     } = plan(seed, net, account, req)?;
-    let digests = unsigned.digest(TxIdDigester);
     let secp = secp()?;
     let master = XprivGuard::master(seed, net.btc_kind())?;
     let base = account_path(net, account)?;
-    let bundle = unsigned
-        .transparent_bundle()
-        .ok_or_else(|| Error::crypto("missing transparent bundle"))?;
-    let mut vin = Vec::with_capacity(spends.len());
-    for (i, sp) in spends.iter().enumerate() {
-        let spk = sp.coin.script_pubkey();
-        let input =
-            TransparentSignable::from_parts(bundle, SighashType::ALL, i, spk, spk, sp.coin.value())
-                .map_err(|_| Error::crypto("input index out of range"))?;
-        let digest = signature_hash(&unsigned, &SignableInput::Transparent(input), &digests);
-        let msg = Message::from_digest(*digest.as_ref());
+    let digests = input_digests(&unsigned, &spends)?;
+    let mut sigs = Vec::with_capacity(spends.len());
+    for (sp, digest) in spends.iter().zip(&digests) {
+        let msg = Message::from_digest(*digest);
         let path = [
             base[0],
             base[1],
@@ -1003,6 +999,46 @@ pub fn zec_sign(
         let sig = secp.sign_ecdsa(&msg, sk);
         secp.verify_ecdsa(&msg, &sig, &sp.pubkey)
             .map_err(|_| Error::crypto("signature self-check failed"))?;
+        sigs.push(sig);
+    }
+    let hex_tx = assemble(&unsigned, &spends, &sigs, net, &summary)?;
+    Ok((hex_tx, summary))
+}
+
+/// ZIP-244 `SIGHASH_ALL` digest of every input of `unsigned`, in input order.
+fn input_digests(
+    unsigned: &TransactionData<TransparentOnly>,
+    spends: &[Spend],
+) -> Result<Vec<[u8; 32]>> {
+    let digests = unsigned.digest(TxIdDigester);
+    let bundle = unsigned
+        .transparent_bundle()
+        .ok_or_else(|| Error::crypto("missing transparent bundle"))?;
+    let mut out = Vec::with_capacity(spends.len());
+    for (i, sp) in spends.iter().enumerate() {
+        let spk = sp.coin.script_pubkey();
+        let input =
+            TransparentSignable::from_parts(bundle, SighashType::ALL, i, spk, spk, sp.coin.value())
+                .map_err(|_| Error::crypto("input index out of range"))?;
+        out.push(*signature_hash(unsigned, &SignableInput::Transparent(input), &digests).as_ref());
+    }
+    Ok(out)
+}
+
+/// Puts the (already verified) signatures in the script sigs, encodes the transaction, parses
+/// it back and checks it says what `summary` says.
+fn assemble(
+    unsigned: &TransactionData<TransparentOnly>,
+    spends: &[Spend],
+    sigs: &[bitcoin::secp256k1::ecdsa::Signature],
+    net: Network,
+    summary: &ZecTxSummary,
+) -> Result<String> {
+    let bundle = unsigned
+        .transparent_bundle()
+        .ok_or_else(|| Error::crypto("missing transparent bundle"))?;
+    let mut vin = Vec::with_capacity(spends.len());
+    for (sp, sig) in spends.iter().zip(sigs) {
         let mut der = sig.serialize_der().to_vec();
         der.push(zcash_transparent::sighash::SIGHASH_ALL);
         let script_sig = bitcoin::ScriptBuf::builder()
@@ -1039,8 +1075,197 @@ pub fn zec_sign(
         .map_err(|_| Error::crypto("transaction encoding failed"))?;
     // What goes on the wire, parsed back by zcash_primitives, must be what the dialog shows.
     let reparsed = parse_tx(&bytes)?;
-    check_encoding(&reparsed, net, &summary, &spends)?;
-    Ok((hex::encode(bytes), summary))
+    check_encoding(&reparsed, net, summary, spends)?;
+    Ok(hex::encode(bytes))
+}
+
+/// The watch-only Zcash account of a hardware wallet must be `m/44'/133'/account'` (testnet
+/// `m/44'/1'/account'`) of this network, depth 3, with an 8-hex master fingerprint.
+pub(crate) fn check_watch_account(net: Network, acc: &ZecAccount, account: u32) -> Result<()> {
+    let xpub = Xpub::from_str(acc.xpub.trim()).map_err(|_| Error::input("invalid Zcash xpub"))?;
+    let path = account_path(net, account)?;
+    if xpub.network != net.btc_kind()
+        || xpub.depth != 3
+        || xpub.child_number != path[2]
+        || acc.path != path_string(&path)
+    {
+        return Err(Error::input(
+            "Zcash xpub does not match the network, path or account number",
+        ));
+    }
+    if acc.fingerprint.len() != 8
+        || !acc
+            .fingerprint
+            .bytes()
+            .all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(Error::input("master fingerprint must be 8 lowercase hex"));
+    }
+    Ok(())
+}
+
+/// One input of a hardware-wallet Zcash transaction (all ours).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ZecHwInput {
+    /// Previous transaction id, internal byte order (as in the outpoint).
+    pub prev_hash: [u8; 32],
+    /// Output index.
+    pub prev_index: u32,
+    /// Zatoshis (committed to by the ZIP-244 digest).
+    pub amount: u64,
+    /// Full path `m/44'/133'/account'/change/index`.
+    pub path: Vec<u32>,
+    /// Compressed public key of that path.
+    pub pubkey: [u8; 33],
+}
+
+/// One output: our change (`change_path`) or an address.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ZecHwOutput {
+    /// Zatoshis.
+    pub amount: u64,
+    /// Transparent address (`t1…` / `t3…`, testnet `tm…` / `t2…`).
+    pub address: String,
+    /// Our change path, when the output is our change.
+    pub change_path: Option<Vec<u32>>,
+}
+
+/// What a hardware wallet needs to sign Kyro's v5 transparent transaction (ZIP 225 / 244).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ZecHwPlan {
+    /// Inputs, in transaction order.
+    pub inputs: Vec<ZecHwInput>,
+    /// Outputs, in transaction order.
+    pub outputs: Vec<ZecHwOutput>,
+    /// Consensus branch id signed for.
+    pub branch_id: u32,
+    /// Expiry height.
+    pub expiry_height: u32,
+    /// nLockTime (always 0).
+    pub lock_time: u32,
+    /// ZIP-244 digest of each input (what the device must sign), in input order.
+    pub digests: Vec<[u8; 32]>,
+    /// The summary shown in the native dialog.
+    pub summary: ZecTxSummary,
+}
+
+/// v5 version group id (ZIP 225).
+pub const ZEC_V5_VERSION_GROUP_ID: u32 = 0x26A7_270A;
+
+fn hw_xpub(acc: &ZecAccount, net: Network) -> Result<Xpub> {
+    let xpub = Xpub::from_str(acc.xpub.trim()).map_err(|_| Error::input("invalid Zcash xpub"))?;
+    if xpub.network != net.btc_kind() || xpub.depth != 3 {
+        return Err(Error::input(
+            "xpub Zcash d'un autre réseau ou d'une autre profondeur",
+        ));
+    }
+    Ok(xpub)
+}
+
+fn hw_path(net: Network, xpub: &Xpub, change: bool, index: u32) -> Vec<u32> {
+    vec![
+        44 | 0x8000_0000,
+        coin_type(net) | 0x8000_0000,
+        u32::from(xpub.child_number),
+        u32::from(change),
+        index,
+    ]
+}
+
+/// Builds the transaction of `req` from the hardware account's xpub (same coin selection, fee,
+/// checks and summary as [`zec_tx_summary`]) and lists what the device needs.
+pub fn zec_hw_plan(acc: &ZecAccount, net: Network, req: &ZecSendRequest) -> Result<ZecHwPlan> {
+    let xpub = hw_xpub(acc, net)?;
+    let p = plan_xpub(&xpub, net, req)?;
+    let digests = input_digests(&p.unsigned, &p.spends)?;
+    let inputs = p
+        .spends
+        .iter()
+        .map(|sp| ZecHwInput {
+            prev_hash: *sp.outpoint.hash(),
+            prev_index: sp.outpoint.n(),
+            amount: sp.coin.value().into_u64(),
+            path: hw_path(net, &xpub, sp.change, sp.index),
+            pubkey: sp.pubkey.serialize(),
+        })
+        .collect();
+    let s = &p.summary;
+    let mut outputs = vec![ZecHwOutput {
+        amount: s
+            .amount
+            .parse()
+            .map_err(|_| Error::crypto("montant du résumé"))?,
+        address: s.to_address.clone(),
+        change_path: None,
+    }];
+    if let Some(c) = &s.change {
+        outputs.push(ZecHwOutput {
+            amount: c
+                .amount
+                .parse()
+                .map_err(|_| Error::crypto("monnaie du résumé"))?,
+            address: c.address.clone(),
+            change_path: Some(hw_path(net, &xpub, true, c.index)),
+        });
+    }
+    Ok(ZecHwPlan {
+        inputs,
+        outputs,
+        branch_id: u32::from(p.unsigned.consensus_branch_id()),
+        expiry_height: u32::from(p.unsigned.expiry_height()),
+        lock_time: p.unsigned.lock_time(),
+        digests,
+        summary: p.summary,
+    })
+}
+
+/// Rebuilds the transaction of `req`, verifies each device signature (DER, optionally followed
+/// by the `SIGHASH_ALL` byte) against the ZIP-244 digest of its input and the key Kyro derived
+/// for it, then assembles and re-checks the transaction. Returns `(signed hex, summary)`.
+pub fn zec_hw_finalize(
+    acc: &ZecAccount,
+    net: Network,
+    req: &ZecSendRequest,
+    signatures: &[Vec<u8>],
+) -> Result<(String, ZecTxSummary)> {
+    let xpub = hw_xpub(acc, net)?;
+    let p = plan_xpub(&xpub, net, req)?;
+    if signatures.len() != p.spends.len() {
+        return Err(Error::input("une signature par entrée est attendue"));
+    }
+    let digests = input_digests(&p.unsigned, &p.spends)?;
+    let verifier = Secp256k1::verification_only();
+    let mut sigs = Vec::with_capacity(signatures.len());
+    for (i, ((raw, sp), digest)) in signatures.iter().zip(&p.spends).zip(&digests).enumerate() {
+        let parsed = bitcoin::secp256k1::ecdsa::Signature::from_der(raw).or_else(|_| {
+            match raw.split_last() {
+                Some((&zcash_transparent::sighash::SIGHASH_ALL, der)) => {
+                    bitcoin::secp256k1::ecdsa::Signature::from_der(der)
+                }
+                _ => Err(bitcoin::secp256k1::Error::InvalidSignature),
+            }
+        });
+        let sig =
+            parsed.map_err(|_| Error::input(format!("entrée {i} : signature DER invalide")))?;
+        // Low-S only: a high-S signature is non-standard, refused rather than rewritten.
+        let mut low = sig;
+        low.normalize_s();
+        if low != sig {
+            return Err(Error::input(format!(
+                "entrée {i} : signature non canonique (high-S)"
+            )));
+        }
+        verifier
+            .verify_ecdsa(&Message::from_digest(*digest), &sig, &sp.pubkey)
+            .map_err(|_| {
+                Error::crypto(format!(
+                    "entrée {i} : la signature de l'appareil ne se vérifie pas"
+                ))
+            })?;
+        sigs.push(sig);
+    }
+    let hex_tx = assemble(&p.unsigned, &p.spends, &sigs, net, &p.summary)?;
+    Ok((hex_tx, p.summary))
 }
 
 /// ZIP-244 signature digest of transparent input `index` of `tx` (`SIGHASH_ALL`), given the
