@@ -28,6 +28,7 @@ import {
   type VaultAccountLists,
 } from './ipc';
 import { demoUtxoAccount, type DemoUtxoCoin } from './mock-utxo';
+import { demoZecAccount } from './mock-zec';
 import { demoTronAddress } from './mock-tron';
 import { demoXrpAddress } from './mock-xrp';
 import { demoStellarAddress } from './mock-stellar';
@@ -72,6 +73,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   ton: 'TON',
   cosmos: 'Cosmos',
   apt: 'Aptos',
+  zec: 'Zcash',
 };
 
 export const defaultAccountName = (chain: AccountChain, index: number): string => `${ACCOUNT_CHAIN_LABEL[chain]} ${index + 1}`;
@@ -184,6 +186,7 @@ export function createDemoAccounts(d: {
       ton: { address: demoTonAddress(a, d.network), path: `m/44'/607'/${a}'` },
       cosmos: { address: demoCosmosAddress(d.seed, a), path: `m/44'/118'/${a}'/0/0` },
       aptos: { address: demoAptosAddress(a), path: `m/44'/637'/${a}'/0'/0'` },
+      zec: demoZecAccount(d.seed, d.network, a).info,
     };
   };
 

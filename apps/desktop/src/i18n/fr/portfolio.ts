@@ -36,6 +36,7 @@ export const portfolio = {
   'portfolio.tabMine': 'Mes actifs',
   'portfolio.tabMarket': 'Marché · top 250',
   'portfolio.tabFavorites': 'Favoris',
+  'portfolio.zecTestnetNoServer': 'Zcash testnet : aucun serveur public, Kyro ne peut ni lire ni envoyer de ZEC de test (Zcash fonctionne sur le réseau principal).',
   'portfolio.filter': 'Filtrer',
   'portfolio.filterPlaceholder': 'Filtrer…',
   'portfolio.sortValue': 'Valeur',

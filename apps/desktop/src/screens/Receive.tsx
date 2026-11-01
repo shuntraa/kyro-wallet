@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Receive: real QR (qrcode), BTC SegWit/Taproot, Litecoin, Dogecoin, Bitcoin Cash (CashAddr), Dash,
+// Receive: real QR (qrcode), BTC SegWit/Taproot, Litecoin, Dogecoin, Zcash (transparent), Bitcoin Cash (CashAddr), Dash,
 // TRON, XRP, Cardano, Polkadot, Hedera, Sui, Stellar, Algorand, Monero (primary address + subaddresses), Cosmos Hub, TON, optional requested amount (BIP21-style / EIP-681 / Solana Pay / monero: / ton://transfer URI; none for
 // TRON, XRP,
 // Cardano, Stellar, NEAR, Sui, Hedera, Polkadot, Algorand, Cosmos), network warning.
@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { bitcoinServerFor, call, toIpcError, type BtcKind, type HwImplementedChain } from '@kyro/shared';
-import { aptosChain, bchChain, btcChain, dashChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, stellarChain, nearChain, suiChain, hbarChain, kaspaChain, polkadotChain, algorandChain, xmrChain, tonChain, cosmosChain } from '@kyro/chains';
+import { aptosChain, bchChain, btcChain, dashChain, dogeChain, hwPaths, ltcChain, primaryEvmChain, solChain, tronChain, tryParseUnits, xrpChain, cardanoChain, stellarChain, nearChain, suiChain, hbarChain, kaspaChain, polkadotChain, algorandChain, xmrChain, tonChain, cosmosChain, zecChain } from '@kyro/chains';
 import { useAsync } from '../lib/useAsync';
 import { useApp, useVault } from '../state/app';
 import { cn } from '../lib/cn';
@@ -23,12 +23,12 @@ import { AccountPicker, NewAccountButton } from '../components/AccountPicker';
 import { BRAND, isAddressMismatch, pickDevice, withDevice } from '../state/hw';
 import { XmrReceivePanel } from '../components/Monero';
 
-type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt';
-const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'tron', 'xrp', 'ada', 'xlm', 'near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
+type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'zec' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt';
+const FAMILIES: Family[] = ['btc', 'evm', 'sol', 'ltc', 'doge', 'bch', 'dash', 'zec', 'tron', 'xrp', 'ada', 'xlm', 'near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
 /** Vault-only chains (hardware wallets: HW_UNSUPPORTED for now). */
-const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'bch', 'dash', 'tron', 'xrp', 'ada', 'xlm', 'near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
+const VAULT_ONLY: readonly Family[] = ['ltc', 'doge', 'bch', 'dash', 'zec', 'tron', 'xrp', 'ada', 'xlm', 'near', 'sui', 'hbar', 'kas', 'dot', 'algo', 'xmr', 'ton', 'cosmos', 'apt'];
 /** UTXO chains with « Nouvelle adresse » (Rust `{prefix}_address`). */
-const UTXO_RECEIVE = ['ltc', 'doge', 'bch', 'dash'] as const;
+const UTXO_RECEIVE = ['ltc', 'doge', 'zec', 'bch', 'dash'] as const;
 type UtxoReceive = (typeof UTXO_RECEIVE)[number];
 const isUtxoReceive = (f: Family): f is UtxoReceive => (UTXO_RECEIVE as readonly Family[]).includes(f);
 
@@ -38,10 +38,12 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const cbfMode = bitcoinServerFor(settings.servers, network).kind === 'cbf';
   const { accounts, adapters, activeHw } = useVault();
   // Hardware-wallet accounts have no Litecoin / Dogecoin / TRON (HW_UNSUPPORTED for now).
-  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, bch: !!accounts.bch, dash: !!accounts.dash, tron: !!accounts.tron, xrp: !!accounts.xrp, ada: !!accounts.cardano, xlm: !!accounts.stellar, near: !!accounts.near, sui: !!accounts.sui, hbar: !!accounts.hbar, kas: !!accounts.kas, dot: !!accounts.polkadot, algo: !!accounts.algo, xmr: !!accounts.xmr && !activeHw, ton: !!accounts.ton, cosmos: !!accounts.cosmos, apt: !!accounts.aptos };
+  const has: Record<Family, boolean> = { btc: !!accounts.btc, evm: !!accounts.evm, sol: !!accounts.sol, ltc: !!accounts.ltc, doge: !!accounts.doge, bch: !!accounts.bch, dash: !!accounts.dash, zec: !!accounts.zec, tron: !!accounts.tron, xrp: !!accounts.xrp, ada: !!accounts.cardano, xlm: !!accounts.stellar, near: !!accounts.near, sui: !!accounts.sui, hbar: !!accounts.hbar, kas: !!accounts.kas, dot: !!accounts.polkadot, algo: !!accounts.algo, xmr: !!accounts.xmr && !activeHw, ton: !!accounts.ton, cosmos: !!accounts.cosmos, apt: !!accounts.aptos };
   const [family, setFamilyRaw] = useState<Family>(has[initial] ? initial : FAMILIES.find((f) => has[f]) ?? initial);
   // Dogecoin / Dash testnets have no public server: say so instead of showing an address as if payments would appear.
   const dogeInfo = useAsync(family === 'doge' ? () => call('doge_backend_info') : family === 'dash' ? () => call('dash_backend_info') : null, [family, JSON.stringify(settings.servers.dogecoin), JSON.stringify(settings.servers.dash)]);
+  // Zcash testnet has no public server either.
+  const zecInfo = useAsync(family === 'zec' ? () => call('zec_backend_info') : null, [family]);
   // Hardware wallet: on-device verification of the shown address (hw_verify_address).
   type Verify = { state: 'idle' } | { state: 'running'; deviceId: string } | { state: 'ok'; address: string } | { state: 'error'; error: unknown; address: string };
   const [verify, setVerify] = useState<Verify>({ state: 'idle' });
@@ -93,6 +95,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const ton = tonChain(network);
   const atom = cosmosChain(network);
   const apt = aptosChain(network);
+  const zec = zecChain(network);
 
   const btcAcc = accounts.btc?.[kind];
   const utxoAcc = isUtxoReceive(family) ? accounts[family] : undefined;
@@ -183,9 +186,9 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
             : (accounts.sol?.path ?? "m/44'/501'/0'/0'");
   const verifiedHere = verify.state === 'ok' && verify.address === address;
   const blocked = mismatch !== null || (verify.state === 'error' && isAddressMismatch(verify.error) && verify.address === address);
-  const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name, bch: bch.name, dash: dash.name, tron: tron.name, xrp: xrp.name, ada: ada.name, ton: ton.name, xmr: xmr.name, dot: dot.name, hbar: hbar.name, xlm: xlm.name, near: nearC.name, sui: sui.name, kas: kas.name, algo: algo.name, cosmos: atom.name, apt: apt.name }[family];
-  const decimals = { btc: 8, evm: 18, sol: 9, ltc: 8, doge: 8, bch: 8, dash: 8, tron: 6, xrp: 6, ada: 6, ton: 9, xmr: 12, dot: dot.nativeDecimals, hbar: 8, xlm: 7, near: 24, sui: 9, kas: 8, algo: 6, cosmos: 6, apt: 8 }[family];
-  const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', bch: 'BCH', dash: 'DASH', tron: 'TRX', xrp: 'XRP', ada: 'ADA', ton: 'TON', xmr: 'XMR', dot: dot.nativeSymbol, hbar: 'HBAR', xlm: 'XLM', near: 'NEAR', sui: 'SUI', kas: 'KAS', algo: 'ALGO', cosmos: 'ATOM', apt: 'APT' }[family];
+  const chainName = { btc: btc.name, evm: evm.name, sol: sol.name, ltc: ltc.name, doge: doge.name, zec: zec.name, bch: bch.name, dash: dash.name, tron: tron.name, xrp: xrp.name, ada: ada.name, ton: ton.name, xmr: xmr.name, dot: dot.name, hbar: hbar.name, xlm: xlm.name, near: nearC.name, sui: sui.name, kas: kas.name, algo: algo.name, cosmos: atom.name, apt: apt.name }[family];
+  const decimals = { btc: 8, evm: 18, sol: 9, ltc: 8, doge: 8, zec: 8, bch: 8, dash: 8, tron: 6, xrp: 6, ada: 6, ton: 9, xmr: 12, dot: dot.nativeDecimals, hbar: 8, xlm: 7, near: 24, sui: 9, kas: 8, algo: 6, cosmos: 6, apt: 8 }[family];
+  const symbol = { btc: 'BTC', evm: 'ETH', sol: 'SOL', ltc: 'LTC', doge: 'DOGE', zec: 'ZEC', bch: 'BCH', dash: 'DASH', tron: 'TRX', xrp: 'XRP', ada: 'ADA', ton: 'TON', xmr: 'XMR', dot: dot.nativeSymbol, hbar: 'HBAR', xlm: 'XLM', near: 'NEAR', sui: 'SUI', kas: 'KAS', algo: 'ALGO', cosmos: 'ATOM', apt: 'APT' }[family];
   // TRON, XRP, Cardano, Stellar, NEAR, Sui, Kaspa, Algorand, Cosmos and Aptos have no payment-link format Kyro relies on: the QR is the bare address.
   const amountLink = family !== 'tron' && family !== 'xrp' && family !== 'ada' && family !== 'dot' && family !== 'hbar' && family !== 'xlm' && family !== 'near' && family !== 'sui' && family !== 'kas' && family !== 'algo' && family !== 'cosmos' && family !== 'apt';
   // XRP: is our account activated yet (≥ 1 XRP base reserve received)?
@@ -199,13 +202,14 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
   const dotAccount = useAsync(family === 'dot' && adapters.polkadot ? () => adapters.polkadot!.account() : null, [family, adapters.polkadot]);
   // Algorand: does our account exist yet (≥ 0.1 ALGO received)? Rekeyed?
   const algoAccount = useAsync(family === 'algo' && adapters.algo ? () => adapters.algo!.account() : null, [family, adapters.algo]);
-  const uriScheme = { btc: 'bitcoin', ltc: 'litecoin', doge: 'dogecoin', dash: 'dash' } as const;
+  // ZIP 321 payment URIs (`zcash:t1…?amount=`), same shape as BIP 21.
+  const uriScheme = { btc: 'bitcoin', ltc: 'litecoin', doge: 'dogecoin', dash: 'dash', zec: 'zcash' } as const;
   // Monero URI (monero-project/monero docs: `monero:<address>?tx_amount=<XMR>`).
   const amountBase = amount ? tryParseUnits(amount, decimals) : null;
 
   const uri = useMemo(() => {
     const dec = amount.replace(',', '.');
-    const scheme = family === 'btc' || family === 'ltc' || family === 'doge' || family === 'dash' ? uriScheme[family] : null;
+    const scheme = family === 'btc' || family === 'ltc' || family === 'doge' || family === 'dash' || family === 'zec' ? uriScheme[family] : null;
     if (!askAmount || !amountBase || amountBase <= 0n) return scheme ? `${scheme}:${address}` : address;
     if (scheme) return `${scheme}:${address}?amount=${dec}`;
     if (family === 'bch') return `${address}?amount=${dec}`;
@@ -267,6 +271,8 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
           ? t('receive.descLtc')
           : family === 'doge'
             ? t('receive.descDoge')
+            : family === 'zec'
+              ? 'Adresse Zcash transparente (t1…, P2PKH) : publique comme une adresse Bitcoin.'
             : family === 'bch'
               ? 'Adresse Bitcoin Cash au format CashAddr (bitcoincash:q…). Ne donne jamais une adresse Bitcoin 1… pour recevoir des BCH. Les pièces portant des CashTokens ne sont pas affichées.'
               : family === 'dash'
@@ -330,6 +336,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               ['doge', 'Dogecoin', 'Ð', '#C2A633'],
               ['bch', 'Bitcoin Cash', 'Ƀ', '#0AC18E'],
               ['dash', 'Dash', 'Đ', '#008DE4'],
+              ['zec', 'Zcash', 'ⓩ', '#F4B728'],
               ['tron', 'TRON', 'T', '#EB0029'],
               ['xrp', 'XRP', 'X', '#3A3F48'],
               ['ada', 'Cardano', 'A', '#3468D1'],
@@ -380,7 +387,7 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
 
         <div key={family} className="rise relative flex w-[460px] flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', apt: 'Aptos', cosmos: 'Cosmos Hub', ton: 'TON', xmr: 'Monero', algo: 'Algorand', dot: 'Polkadot', kas: 'Kaspa', hbar: hbarShowId ? 'Hedera (compte)' : 'Hedera (adresse EVM)', sui: 'Sui', xlm: 'Stellar', near: 'NEAR' }[family] })}</span>
+            <span className="eyebrow">{t('receive.yourAddress', { chain: { btc: 'Bitcoin', evm: 'Ethereum', sol: 'Solana', ltc: 'Litecoin', doge: 'Dogecoin', zec: 'Zcash transparente', bch: 'Bitcoin Cash', dash: 'Dash', tron: 'TRON', xrp: 'XRP', ada: 'Cardano', apt: 'Aptos', cosmos: 'Cosmos Hub', ton: 'TON', xmr: 'Monero', algo: 'Algorand', dot: 'Polkadot', kas: 'Kaspa', hbar: hbarShowId ? 'Hedera (compte)' : 'Hedera (adresse EVM)', sui: 'Sui', xlm: 'Stellar', near: 'NEAR' }[family] })}</span>
             <span className="text-[15px] leading-[1.45] text-text2">{desc}</span>
           </div>
           {isUtxoReceive(family) && (
@@ -505,6 +512,12 @@ export function Receive({ family: initial = 'evm' }: { family?: Family }) {
               <span className="truncate font-mono text-[11px] text-mute">{uri}</span>
               <CopyButton text={uri} label={t('receive.copyLink')} />
             </div>
+          )}
+          {family === 'zec' && (
+            <Notice tone="warn" icon={<IconWarn size={16} className="mt-0.5 shrink-0 text-warn" />}>
+              <strong className="font-semibold">Adresses protégées pas encore prises en charge :</strong> Kyro ne gère que les adresses Zcash <strong>transparentes</strong> (t1…). Ton solde, tes paiements et leurs montants sont donc publics, comme sur Bitcoin. Kyro ne voit pas les fonds d’une adresse protégée (zs…) ou unifiée (u1…) d’un autre portefeuille, même issu de la même phrase.
+              {zecInfo.data && !zecInfo.data.available && <span className="mt-1 block font-semibold">Zcash testnet : aucun serveur public, Kyro ne peut pas suivre cette adresse (mainnet seulement).</span>}
+            </Notice>
           )}
           {family === 'tron' && (
             <Notice icon={<IconInfo size={16} className="mt-0.5 shrink-0 text-ice" />}>

@@ -156,6 +156,11 @@ pub const ALGORAND_HOSTS: &[&str] = &[
 /// connections that day. No public Dash **testnet** server was found.
 ///
 /// See docs/NETWORK.md.
+///
+/// Zcash mainnet (transparent addresses only): the same operator's ElectrumX servers for ZEC,
+/// listed in https://github.com/KomodoPlatform/coins/blob/master/electrums/ZEC, TLS port 20058,
+/// same Let's Encrypt `*.cipig.net` certificate (checked 2026-11-01), validated normally.
+/// `zec.electrum3.cipig.net`, also listed, refused connections on 2026-11-01.
 pub const ELECTRUM_HOSTS: &[(&str, u16, Family)] = &[
     ("doge.electrum1.cipig.net", 20060, Family::Dogecoin),
     ("doge.electrum2.cipig.net", 20060, Family::Dogecoin),
@@ -166,6 +171,8 @@ pub const ELECTRUM_HOSTS: &[(&str, u16, Family)] = &[
     ("chipnet.bch.ninja", 50002, Family::BitcoinCash),
     ("dash.electrum1.cipig.net", 20061, Family::Dash),
     ("dash.electrum2.cipig.net", 20061, Family::Dash),
+    ("zec.electrum1.cipig.net", 20058, Family::Zcash),
+    ("zec.electrum2.cipig.net", 20058, Family::Zcash),
 ];
 
 /// Whether `host:port` is an allowlisted default Electrum server of `family`.
@@ -405,6 +412,7 @@ pub enum Family {
     Dogecoin,
     BitcoinCash,
     Dash,
+    Zcash,
     Tron,
     Xrp,
     Stellar,
@@ -1347,6 +1355,17 @@ mod tests {
         assert_eq!(family_for("doge.my-node.example", &doge), Family::Dogecoin);
         assert_eq!(family_for("unknown.example", &c), Family::Other);
         assert_eq!(family_for("doge.electrum1.cipig.net", &c), Family::Dogecoin);
+        assert_eq!(family_for("zec.electrum1.cipig.net", &c), Family::Zcash);
+        assert!(electrum_default_allowed(
+            "zec.electrum2.cipig.net",
+            20058,
+            Family::Zcash
+        ));
+        assert!(!electrum_default_allowed(
+            "zec.electrum2.cipig.net",
+            20060,
+            Family::Zcash
+        ));
         assert!(electrum_default_allowed(
             "doge.electrum2.cipig.net",
             20060,

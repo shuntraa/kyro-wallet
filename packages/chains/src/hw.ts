@@ -59,6 +59,8 @@ export interface WalletAccounts {
   cosmos?: { address: string; path?: string };
   /** Vault only: Aptos has no hardware-wallet path. */
   aptos?: { address: string; path?: string };
+  /** Vault only: Zcash (transparent) on a hardware wallet is HW_UNSUPPORTED. */
+  zec?: { address: string; xpub: string; fingerprint: string; path: string };
 }
 
 export interface BtcAccountView {

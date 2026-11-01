@@ -36,6 +36,7 @@ export const portfolio: Record<keyof typeof fr, string> = {
   'portfolio.tabMine': 'My assets',
   'portfolio.tabMarket': 'Market · top 250',
   'portfolio.tabFavorites': 'Favorites',
+  'portfolio.zecTestnetNoServer': 'Zcash testnet: no public server, Kyro can neither read nor send test ZEC (Zcash works on mainnet).',
   'portfolio.filter': 'Filter',
   'portfolio.filterPlaceholder': 'Filter…',
   'portfolio.sortValue': 'Value',

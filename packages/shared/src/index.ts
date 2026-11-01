@@ -12,3 +12,4 @@ export * from './kaspa';
 export * from './algo';
 export * from './ton-address';
 export * from './cosmos';
+export * from './zcash';

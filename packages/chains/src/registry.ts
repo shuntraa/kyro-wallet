@@ -15,7 +15,8 @@ import { bitcoinServerFor, EMPTY_SERVERS, type Network, type Servers, l10n } fro
 /** `algo`: Algorand (ALGO payments, `algo_*`, §2.11). */
 /** `xmr`: Monero (scanned, built, signed and published by Rust, `xmr_*`, §2.10). */
 /** `ton`: TON (Toncoin, wallet v4R2, `ton_*`, §2.11). `cosmos`: Cosmos Hub (ATOM, `cosmos_*`, §2.11). `apt`: Aptos (APT, `aptos_*`, §2.11). */
-export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt';
+/** `zec`: Zcash, transparent addresses only (`zec_*`, §2.4b; Rust builds the transaction). */
+export type Family = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'bch' | 'dash' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'near' | 'sui' | 'hbar' | 'kas' | 'dot' | 'algo' | 'xmr' | 'ton' | 'cosmos' | 'apt' | 'zec';
 /** The Bitcoin-derived UTXO families (one `UtxoAdapter` each, Bitcoin's PSBT shapes). */
 export type UtxoFamily = 'ltc' | 'doge' | 'bch' | 'dash';
 export const UTXO_FAMILIES: readonly UtxoFamily[] = ['ltc', 'doge', 'bch', 'dash'];
@@ -56,7 +57,7 @@ export interface SolChain extends ChainBase {
   cluster: 'devnet' | 'mainnet-beta';
 }
 
-export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain | XmrChain | TonChain | CosmosChain | AptosChain;
+export type Chain = BtcChain | EvmChain | SolChain | UtxoChain | TronChain | XrpChain | CardanoChain | StellarChain | NearChain | SuiChain | HbarChain | KaspaChain | PolkadotChain | AlgorandChain | XmrChain | TonChain | CosmosChain | AptosChain | ZcashChain;
 
 /** Chains that are listed (price, "Bientôt") but not wired yet. */
 export interface WatchOnlyChain {
@@ -236,6 +237,30 @@ export function dashChain(network: Network): UtxoChain {
 /** The UTXO chain of a family on `network`. */
 export function utxoChainOf(family: UtxoFamily, network: Network): UtxoChain {
   return { ltc: LTC_CHAINS, doge: DOGE_CHAINS, bch: BCH_CHAINS, dash: DASH_CHAINS }[family][network];
+}
+
+/**
+ * Zcash, TRANSPARENT ADDRESSES ONLY (t1… / t3…): Rust `zec_*` commands and `ZcashAdapter`
+ * (`packages/chains/src/zcash/`). Shielded (zs…) and unified (u1…) addresses are refused.
+ * Mainnet: Komodo's public ElectrumX servers; testnet: no public server (reads fail, said in the
+ * UI). Hardware wallets: HW_UNSUPPORTED.
+ */
+export interface ZcashChain extends Omit<ChainBase, 'phase'> {
+  family: 'zec';
+  phase: 4;
+  /** Shielded pools are not supported: the UI says so wherever the address appears. */
+  transparentOnly: true;
+}
+
+const ZEC_CHAINS: Record<Network, ZcashChain> = {
+  testnet: { family: 'zec', key: 'zcash', name: 'Zcash testnet', label: 'ZEC testnet', network: 'testnet', color: '#F4B728', glyph: 'ⓩ',
+    nativeSymbol: 'ZEC', nativeName: 'Zcash', nativeDecimals: 8, coingeckoId: 'zcash', phase: 4, blockTimeSecs: 75, transparentOnly: true },
+  mainnet: { family: 'zec', key: 'zcash', name: 'Zcash', label: 'ZEC', network: 'mainnet', color: '#F4B728', glyph: 'ⓩ',
+    nativeSymbol: 'ZEC', nativeName: 'Zcash', nativeDecimals: 8, coingeckoId: 'zcash', phase: 4, blockTimeSecs: 75, transparentOnly: true },
+};
+
+export function zecChain(network: Network): ZcashChain {
+  return ZEC_CHAINS[network];
 }
 
 /**
@@ -855,7 +880,7 @@ export function solChain(network: Network): SolChain {
   return SOL[network];
 }
 export function allChains(network: Network): Chain[] {
-  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network), tonChain(network), cosmosChain(network), aptosChain(network)];
+  return [btcChain(network), ...evmChains(network), solChain(network), ltcChain(network), dogeChain(network), bchChain(network), dashChain(network), zecChain(network), tronChain(network), xrpChain(network), cardanoChain(network), stellarChain(network), nearChain(network), suiChain(network), hbarChain(network), kaspaChain(network), polkadotChain(network), algorandChain(network), xmrChain(network), tonChain(network), cosmosChain(network), aptosChain(network)];
 }
 export function findChain(network: Network, key: string): Chain | undefined {
   return allChains(network).find((c) => c.key === key);
@@ -979,6 +1004,11 @@ export function outgoingHosts(network: Network, servers: Servers = EMPTY_SERVERS
     list.push({ host: 'dash.electrum1.cipig.net:20061', purpose: 'Dash : soldes, historique, frais, diffusion (ElectrumX public de Komodo)' });
     list.push({ host: 'dash.electrum2.cipig.net:20061', purpose: 'Dash : serveur de secours (ElectrumX public de Komodo)' });
   } else list.push({ host: 'aucun serveur', purpose: 'Dash testnet : aucun serveur public gratuit, configure le tien (rien n’est contacté)' });
+  // Zcash (transparent only): Komodo's public ElectrumX servers, Rust only (zec_*), `zcash` Tor family.
+  if (network === 'mainnet') {
+    list.push({ host: 'zec.electrum1.cipig.net:20058', purpose: 'Zcash (transparent) : soldes, historique, mise à niveau réseau, diffusion (ElectrumX public de Komodo)' });
+    list.push({ host: 'zec.electrum2.cipig.net:20058', purpose: 'Zcash : serveur de secours (ElectrumX public de Komodo)' });
+  } else list.push({ host: 'aucun serveur', purpose: 'Zcash testnet : aucun serveur public, rien n’est contacté' });
   // TRON: reached by Rust only (tron_*), Tor circuits of the `tron` family.
   // Cardano: reached by Rust only (ada_*), Tor circuits of the `cardano` family.
   const ada = servers.cardano?.[nk];

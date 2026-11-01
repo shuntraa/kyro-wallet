@@ -43,7 +43,7 @@ describe('vault account lists (demo)', () => {
   it('account 0 always exists, cannot be removed, can be renamed', async () => {
     const l = await call('vault_accounts_get');
     expect(l.btc).toEqual([{ index: 0, name: 'Bitcoin 1' }]);
-    expect(Object.keys(l).sort()).toEqual(['ada', 'algo', 'apt', 'bch', 'btc', 'cosmos', 'dash', 'doge', 'dot', 'evm', 'hbar', 'kas', 'ltc', 'near', 'sol', 'sui', 'ton', 'tron', 'xlm', 'xmr', 'xrp']);
+    expect(Object.keys(l).sort()).toEqual(['ada', 'algo', 'apt', 'bch', 'btc', 'cosmos', 'dash', 'doge', 'dot', 'evm', 'hbar', 'kas', 'ltc', 'near', 'sol', 'sui', 'ton', 'tron', 'xlm', 'xmr', 'xrp', 'zec']);
     expect(await rejectCode(call('vault_account_remove', { chain: 'btc', account: 0 }))).toBe('INVALID_INPUT');
     const r = await call('vault_account_rename', { chain: 'btc', account: 0, name: '  Épargne ' });
     expect(r.btc).toEqual([{ index: 0, name: 'Épargne' }]);

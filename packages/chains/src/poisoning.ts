@@ -61,6 +61,7 @@ const TAIL = 4;
  * - Polkadot (SS58): the first char (`1` for prefix 0, `5` for prefix 42).
  * - Cosmos Hub: `cosmos1` + first data char, bech32 lowercase.
  * - Aptos: `0x`, hex compared lowercase (no checksum at all).
+ * - Zcash transparent (base58, two-byte version): `t1`, `t3`, `tm`, `t2`; TEX `tex1` / `textest1` (bech32m, lowercase).
  */
 export function addressParts(address: string, family: Family): AddressParts & { caseInsensitive: boolean } {
   const a = address.trim();
@@ -88,6 +89,12 @@ export function addressParts(address: string, family: Family): AddressParts & { 
       const bare = lower.includes(':') ? lower.slice(lower.indexOf(':') + 1) : lower;
       return { prefix: bare.slice(0, 1), body: bare.slice(1), caseInsensitive: true };
     }
+    case 'zec':
+      if (/^tex(test)?1/i.test(a)) {
+        const prefix = a.toLowerCase().startsWith('textest1') ? 'textest1' : 'tex1';
+        return { prefix, body: a.slice(prefix.length).toLowerCase(), caseInsensitive: true };
+      }
+      return { prefix: a.slice(0, 2), body: a.slice(2), caseInsensitive: false };
     case 'tron':
       return a.startsWith('T') ? { prefix: 'T', body: a.slice(1), caseInsensitive: false } : { prefix: '', body: a, caseInsensitive: false };
     case 'xrp':
@@ -234,9 +241,9 @@ export function isSuspectAddress(recipient: string, suspects: string[], family: 
 /**
  * Base-unit amounts at or under which a transfer counts as dust, per chain: 10 × the network's
  * dust limit (Bitcoin 546 sat, Litecoin 294 litoshis for ltc1, Dogecoin 0,01 DOGE, Bitcoin Cash
- * and Dash 546). Planting an address in someone's history costs at least that much on these chains.
+ * and Dash 546, Zcash 54 zatoshis). Planting an address in someone's history costs at least that much on these chains.
  */
-const DUST_UNITS: Partial<Record<Family, bigint>> = { btc: 5_460n, ltc: 2_940n, doge: 10_000_000n, bch: 5_460n, dash: 5_460n };
+const DUST_UNITS: Partial<Record<Family, bigint>> = { btc: 5_460n, ltc: 2_940n, doge: 10_000_000n, bch: 5_460n, dash: 5_460n, zec: 540n };
 
 /** Fiat value under which any transfer is dust (planting a look-alike costs less than that). */
 export const DUST_FIAT = 1;

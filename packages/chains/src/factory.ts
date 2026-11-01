@@ -40,7 +40,7 @@ export {
 } from './hedera/adapter';
 import { CardanoAdapter } from './cardano/adapter';
 import { cardanoChain } from './registry';
-import { stellarChain, xrpChain, nearChain, hbarChain, xmrChain, tonChain } from './registry';
+import { stellarChain, xrpChain, nearChain, hbarChain, xmrChain, tonChain, zecChain } from './registry';
 import { StellarAdapter } from './stellar/adapter';
 import { NearAdapter } from './near/adapter';
 import { SuiAdapter } from './sui/adapter';
@@ -58,6 +58,7 @@ import { CosmosAdapter } from './cosmos/adapter';
 import { cosmosChain } from './registry';
 import { AptosAdapter } from './aptos/adapter';
 import { aptosChain } from './registry';
+import { ZcashAdapter } from './zcash/adapter';
 import type { Network } from '@kyro/shared';
 
 export interface AdapterSet {
@@ -101,6 +102,8 @@ export interface AdapterSet {
   cosmos: CosmosAdapter | null;
   /** Aptos: vault only (no hardware-wallet path). */
   aptos: AptosAdapter | null;
+  /** Zcash, transparent addresses only: vault only (hardware wallets: HW_UNSUPPORTED). */
+  zec: ZcashAdapter | null;
   all: AnyAdapter[];
   /** Set when the active account is a hardware wallet: every signature goes through `hw_sign_*`. */
   hw: HwSigner | null;
@@ -164,13 +167,15 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
   const cosmos = accounts.cosmos ? new CosmosAdapter({ chain: cosmosChain(network), address: accounts.cosmos.address, ...a }) : null;
   // Aptos: Rust picks the server (Aptos Labs fullnode, no custom server yet).
   const aptos = accounts.aptos && !hw ? new AptosAdapter({ chain: aptosChain(network), address: accounts.aptos.address, ...a }) : null;
+  // Zcash (transparent only): Rust picks the server (Komodo's ElectrumX on mainnet, none on testnet).
+  const zec = accounts.zec && !hw ? new ZcashAdapter({ chain: zecChain(network), account: accounts.zec, ...(account ? { vaultAccount: account } : {}) }) : null;
   const all: AnyAdapter[] = [
     ...(btc ? [btc] : []),
     ...evm.values(),
     ...(sol ? [sol] : []),
     ...(ltc ? [ltc] : []),
     ...(doge ? [doge] : []),
-    ...(bch ? [bch] : []), ...(dash ? [dash] : []), ...(tron ? [tron] : []),
+    ...(bch ? [bch] : []), ...(dash ? [dash] : []), ...(zec ? [zec] : []), ...(tron ? [tron] : []),
     ...(xrp ? [xrp] : []),
     ...(cardano ? [cardano] : []), ...(stellar ? [stellar] : []), ...(near ? [near] : []), ...(sui ? [sui] : []), ...(hbar ? [hbar] : []),
     ...(kaspa ? [kaspa] : []),
@@ -181,8 +186,12 @@ export function createAdapters(accounts: WalletAccounts, servers?: Pick<Servers,
     ...(cosmos ? [cosmos] : []),
     ...(aptos ? [aptos] : []),
   ];
-  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, xmr, ton, cosmos, aptos, all, hw: hw ?? null };
+  return { btc, evm, sol, ltc, doge, bch, dash, tron, xrp, cardano, stellar, near, sui, hbar, kaspa, polkadot, algo, xmr, ton, cosmos, aptos, zec, all, hw: hw ?? null };
 }
+
+// ---------------------------------------------------------------- Zcash (transparent only)
+
+export { ZcashAdapter, rustZecBackend, zecAddressProblem, type ZecBackend, type ZecUnsigned, type ZecSigned, type DerivedZecAddress } from './zcash/adapter';
 
 // ---------------------------------------------------------------- phase 4: Litecoin, Dogecoin, Bitcoin Cash, Dash
 

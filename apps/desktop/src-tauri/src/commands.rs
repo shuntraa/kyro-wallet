@@ -516,6 +516,18 @@ pub struct Accounts {
     cosmos: AddressOut,
     /// `m/44'/637'/a'/0'/0'` (Petra, SLIP-10 ed25519), `0x` + 64 hex.
     aptos: AddressOut,
+    /// Zcash transparent `m/44'/133'/a'` (testnet `m/44'/1'/a'`): first `t1…` address.
+    zec: UtxoAccountOut,
+}
+
+fn zec_account_out(seed: &Seed, net: Network, account: u32) -> AppResult<UtxoAccountOut> {
+    let acc = wallet_core::zec_account(seed, net, account)?;
+    Ok(UtxoAccountOut {
+        address: wallet_core::zec_address(seed, net, account, false, 0)?,
+        xpub: acc.xpub,
+        fingerprint: acc.fingerprint,
+        path: acc.path,
+    })
 }
 
 fn utxo_account_out(
@@ -640,6 +652,7 @@ pub fn accounts_get(state: State<'_, AppState>, account: Option<u32>) -> AppResu
                 address: wallet_core::aptos_address(seed, a)?,
                 path: wallet_core::aptos_path(a),
             },
+            zec: zec_account_out(seed, net, a)?,
         })
     })
 }

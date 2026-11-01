@@ -2,7 +2,7 @@
 //!
 //! Pure, synchronous, I/O-free cryptographic core of the Kyro wallet:
 //! BIP39 mnemonics, an Argon2id + XChaCha20-Poly1305 vault, BIP32/BIP84/BIP86
-//! Bitcoin derivation and PSBT signing, Litecoin (BIP84), Dogecoin, Bitcoin Cash (CashAddr,
+//! Bitcoin derivation and PSBT signing, Litecoin (BIP84), Dogecoin, Zcash transparent (v5, ZIP 244), Bitcoin Cash (CashAddr,
 //! FORKID) and Dash (BIP44) PSBT signing, TRON (TRX / TRC-20), XRP Ledger (Payment), Aptos (APT transfers, BCS), Cosmos Hub (MsgSend, SIGN_MODE_DIRECT)
 //!, TON (wallet v4R2 transfers), Algorand (pay), Polkadot Asset Hub (sr25519, `transfer_keep_alive`), Hedera (HBAR CryptoTransfer), Sui (SUI transfers, BCS), Stellar (XLM payments, SEP-0005), NEAR (Transfer), Cardano (CIP-1852 payments) and Monero (CLSAG, via monero-oxide) signing, Kaspa (BIP340 Schnorr, KIP-9 mass) payments, EVM (EIP-1559) signing and Solana (SLIP-10 ed25519) signing, plus
 //! human-readable transaction decoding.
@@ -56,6 +56,7 @@ mod utxo;
 mod vault;
 mod watch;
 mod xrp;
+mod zcash;
 
 pub use algorand::{
     algo_address, algo_address_bytes, algo_address_of_pubkey, algo_decode_signed, algo_decode_tx,
@@ -233,5 +234,12 @@ pub use xrp::{
     xrp_public_key_at, xrp_sign, xrp_sign_at, xrp_verify_signed, XrpAmount, XrpAmountView, XrpMemo,
     XrpMemoView, XrpPayment, XrpTxSummary, XrpWarning, LSF_DISALLOW_XRP, LSF_REQUIRE_DEST_TAG,
     TF_FULLY_CANONICAL_SIG, TF_LIMIT_QUALITY, TF_NO_RIPPLE_DIRECT, TF_PARTIAL_PAYMENT,
+};
+pub use zcash::{
+    zec_account, zec_address, zec_address_from_xpub, zec_address_of_script, zec_consensus,
+    zec_decode_raw_tx, zec_genesis_hash, zec_header_branch_id, zec_input_sighash, zec_next_upgrade,
+    zec_parse_address, zec_script_pubkey, zec_sign, zec_tx_summary, ZecAccount, ZecAddressKind,
+    ZecChange, ZecCoin, ZecConsensus, ZecRawTx, ZecSendRequest, ZecTxSummary, ZecWarning, ZEC_DUST,
+    ZEC_EXPIRY_DELTA, ZEC_MAX_INPUTS, ZEC_MIN_CHANGE,
 };
 pub use zeroize::{Zeroize, Zeroizing};

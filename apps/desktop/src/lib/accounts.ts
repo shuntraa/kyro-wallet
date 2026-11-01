@@ -30,6 +30,7 @@ export const ACCOUNT_CHAIN_LABEL: Record<AccountChain, string> = {
   ton: 'TON',
   cosmos: 'Cosmos',
   apt: 'Aptos',
+  zec: 'Zcash',
 };
 
 /** What a chain's account list covers (EVM: one list, the same address on every EVM chain). */
@@ -77,6 +78,8 @@ export function accountChainHint(chain: AccountChain): string {
       return 'ATOM (Cosmos Hub)';
     case 'apt':
       return 'APT';
+    case 'zec':
+      return t('settings.hintZec');
   }
 }
 
@@ -127,6 +130,8 @@ export function accountAddress(acc: Accounts, family: AccountChain): { address: 
     case 'bch':
     case 'dash':
       return { address: acc[family].address, path: acc[family].path };
+    case 'zec':
+      return { address: acc.zec.address, path: acc.zec.path };
     case 'ada':
       return acc.cardano;
     case 'xlm':

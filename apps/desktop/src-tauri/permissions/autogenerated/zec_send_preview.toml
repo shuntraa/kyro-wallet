@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-zec-send-preview"
+description = "Enables the zec_send_preview command without any pre-configured scope."
+commands.allow = ["zec_send_preview"]
+
+[[permission]]
+identifier = "deny-zec-send-preview"
+description = "Denies the zec_send_preview command without any pre-configured scope."
+commands.deny = ["zec_send_preview"]

@@ -147,6 +147,27 @@ pub enum UtxoWarning {                         // JSON { "kind": "softDust", "in
 // DOGE_MIN_RELAY_FEE_PER_KB 100 000, DOGE_SOFT_DUST 1 000 000, DOGE_HARD_DUST 100 000 ; BCH_DASH_MIN_RELAY_FEE_PER_KB 1 000,
 // BCH_DASH_DUST_RELAY_FEE_PER_KB 3 000, BCH_SIGHASH_ALL_FORKID 0x41. Frais très élevés (HighFee) : > 100 sat/o (BCH), > 100 duffs/o (DASH).
 
+// --- Zcash, TRANSPARENT SEULEMENT : BIP44 m/44'/133'/a'/c/i (testnet m/44'/1'/…), P2PKH t1… (0x1cb8) / tm… (0x1d25) ; P2SH t3… / t2… ;
+//     format v5 (ZIP 225), txid et condensé de signature ZIP 244, branches et hauteurs d'activation, frais ZIP 317 : crates librustzcash
+//     (zcash_primitives 0.31.0-pre.2, zcash_transparent 0.11.0-pre.2, zcash_protocol 0.11.0-pre.1) ; ECDSA libsecp256k1 (crate bitcoin)
+pub fn zec_account(seed, net, account) -> Result<ZecAccount { xpub, fingerprint, path }>;
+pub fn zec_address(seed, net, account, change, index) -> Result<String>;          // t1… / tm…
+pub fn zec_address_from_xpub(xpub, net, change, index) -> Result<String>;
+pub fn zec_parse_address(address, net) -> Result<(Vec<u8> /*scriptPubKey*/, ZecAddressKind /*P2pkh|P2sh|Tex*/)>;  // refuse zs…, zc…, u1… (« protégée … ou unifiée : pas encore prise en charge »), autre réseau
+pub fn zec_address_of_script(script, net) -> Option<String>;
+pub fn zec_genesis_hash(net) -> &'static str;                                      // mainnet 00040fe8…, testnet 05a60a92…
+pub fn zec_decode_raw_tx(raw_hex, net) -> Result<ZecRawTx { txid, version, branch_id, inputs, outputs, shielded, coinbase }>;  // toute version, txid recalculé
+pub fn zec_header_branch_id(raw: &[u8]) -> Option<u32>;                            // nConsensusBranchId d'une transaction v5+ (octets 8..12), même inconnu
+pub fn zec_consensus(net, tip_height, observed_height, observed_branch_id) -> Result<ZecConsensus>;  // refus : branche inconnue, ou ≠ table de zcash_protocol à cette hauteur ; expiration +40, raccourcie avant une mise à niveau connue
+pub fn zec_tx_summary(seed, net, account, &ZecSendRequest) -> Result<ZecTxSummary>; // construit (sélection, ZIP 317, monnaie à nous) sans signer
+pub fn zec_sign(seed, net, account, &ZecSendRequest) -> Result<(String /*hex v5 signée*/, ZecTxSummary)>;  // SIGHASH_ALL, chaque signature vérifiée, encodage relu
+pub fn zec_input_sighash(raw_hex, prevouts, index) -> Result<[u8; 32]>;            // condensé ZIP 244 d'une entrée (vérification de vraies transactions)
+pub struct ZecSendRequest { coins: Vec<ZecCoin { prev_tx /*hex*/, vout, change, index }>, to, amount /*zatoshis*/, max, change_index, tip_height, network_branch_height, network_branch_id }
+// Refusé : destinataire protégé/unifié/autre réseau ; branche inconnue ou incohérente ; transaction précédente illisible ; sortie absente ou qui ne paie
+// pas la clé du compte à l'index annoncé ; coinbase ; pièce en double ; montant < 54 zatoshis ; solde insuffisant ; index de monnaie > 1000.
+// ZecWarning : HighFee (frais > 10 × ZIP 317 ou > montant : 2ᵉ fenêtre) · ExpiryCapped { next_upgrade_height } (informatif).
+// Constantes : ZEC_EXPIRY_DELTA 40, ZEC_DUST 54, ZEC_MIN_CHANGE 5 000, ZEC_MAX_INPUTS 50.
+
 // --- TRON : m/44'/195'/a'/0/0 (un compte = une adresse, comme Ledger Live ; compte 0 = l'historique m/44'/195'/0'/0/0), adresse = base58check(0x41 || keccak256(pubkey)[12..]) ; raw_data protobuf
 //     (codec écrit à la main, strict : refusé si le ré-encodage diffère d'un seul octet)
 pub fn tron_address(seed, account) -> Result<String>;                   // T…, m/44'/195'/account'/0/0
@@ -955,6 +976,53 @@ Règles de construction (TS) vérifiées par Rust :
 
 **Fait côté UI** (commit de l'UI Litecoin / Dogecoin) : types `Commands` de `@kyro/shared` (`ltc_*`, `doge_*`, `btc_tx_hex`, `Accounts.ltc/doge`, `Servers.litecoin/dogecoin`, `ServerTestTarget`), backend démo, écrans Envoyer/Recevoir/Actif/Historique pour ces familles, réglages serveurs, liste « Connexions sortantes », sortie de `WATCH_ONLY_CHAINS`.
 
+### 2.4b Zcash (adresses transparentes seulement)
+
+**Transparent uniquement** : adresses `t1…` (P2PKH) et `t3…` (P2SH) sur mainnet, `tm…` / `t2…` sur testnet ; comme destinataire, aussi `tex1…` (ZIP 320 : une P2PKH qui n'accepte que des fonds venus d'entrées transparentes — c'est le cas de toutes les transactions de Kyro). Les adresses **protégées** (Sapling `zs…`, Sprout `zc…`) et **unifiées** (`u1…`) sont **refusées** par Rust (`INVALID_INPUT`, « adresse Zcash protégée … ou unifiée … : pas encore prise en charge »), et l'UI le dit avant (Envoyer, Recevoir). Kyro ne construit et ne lit aucune partie protégée.
+
+Clés BIP44 `m/44'/133'/a'/c/i` (testnet `m/44'/1'/a'/…`, convention de zcashd), P2PKH, `xpub`/`tpub` standards. **Rust construit lui-même la transaction** (comme TRON, XRP, Cardano) : l'interface ne propose que les pièces candidates (outpoint + laquelle de nos adresses), le destinataire, le montant et l'index de la prochaine monnaie. Rust (`wallet-core` `zcash.rs`, crates officielles librustzcash `zcash_primitives` / `zcash_transparent` / `zcash_protocol`) :
+- lit lui-même au serveur la **transaction précédente de chaque pièce**, la ré-analyse et recalcule son txid (ZIP 244 pour v5+, double SHA-256 avant) : il doit être celui de l'outpoint ; la sortie doit exister et payer **la clé de ce compte** à l'index annoncé ; montant et script viennent de cette transaction, jamais de l'interface ni de la liste du serveur ; pièce de minage (coinbase) refusée (Zcash impose de la protéger) ;
+- choisit les pièces (les plus grosses d'abord, 50 au plus), calcule les **frais ZIP 317** (`zip317::FeeRule::standard()` : 5 000 zatoshis par action logique, 2 au minimum = 10 000), envoie la monnaie à **notre** adresse `…/1/changeIndex` (index ≤ 1000) ; une monnaie sous 5 000 zatoshis est ajoutée aux frais ; destinataire sous 54 zatoshis (poussière) refusé ;
+- **lit la branche de consensus sur la chaîne** : `headers.subscribe` puis `transaction.id_from_pos` + `transaction.get` d'une transaction v5+ des 3 derniers blocs (la coinbase d'abord), dont l'en-tête porte le `nConsensusBranchId` ; il doit être connu de `zcash_protocol` **et** égal à ce que sa table d'activation donne pour cette hauteur, sinon refus (« le réseau Zcash utilise la branche … inconnue de cette version de Kyro … : mets Kyro à jour ») — jamais de branche codée en dur ; la transaction est signée pour la branche du bloc suivant ;
+- construit une transaction **v5** (ZIP 225), `lock_time` 0, expiration = bloc suivant + 40 (ZIP 203), raccourcie avant une mise à niveau connue ; signature `SIGHASH_ALL` sur le **condensé ZIP 244** calculé par `zcash_primitives` (il engage le montant et le script de **chaque** entrée), ECDSA libsecp256k1 (crate `bitcoin`), low-S, chaque signature vérifiée ; l'encodage final est relu par `zcash_primitives` et doit dire exactement ce que montre le dialogue.
+
+| Commande (`zec_…`) | Arguments | Retour | Notes |
+|---|---|---|---|
+| `zec_backend_info` | — | `{ kind: 'default', network, label, available, tor }` | `label` = `zec.electrum1.cipig.net` sur mainnet ; testnet : `''`, `available: false` (aucun serveur public) |
+| `zec_address` | `{ change, index, account? }` | `string` | coffre déverrouillé ; `t1…` / `tm…` |
+| `zec_address_info` / `zec_address_utxos` / `zec_address_txs` | `{ address }` | formes Esplora (§2.2) | adresse transparente de ce réseau (forme `t…` canonique) vérifiée avant toute requête. Electrum : `get_balance` + `get_history` ; `listunspent` puis **chaque UTXO confronté à sa transaction précédente** (re-hachée par `zcash_primitives`, sortie existante, notre script, montant exact ; sinon `SERVER_UNREACHABLE` pour toute la liste ; 1 000 au plus ; `coinbase: true` = pièce de minage, non dépensable par Kyro) ; historique : 50 au plus, transaction qui ne touche pas l'adresse écartée, `shielded: true` (sans `fee`) quand la transaction déplace aussi une valeur protégée ; heure du bloc lue dans l'en-tête Zcash (`nTime`, octets 100..104) |
+| `zec_tip_height` | — | `number` | |
+| `zec_send_preview` | `{ request: ZecSendArgs, account? }` | `ZecTxSummary` | coffre déverrouillé, sans mot de passe : la même construction que `zec_sign` (lectures réseau comprises) |
+| `zec_sign` | `{ request: ZecSendArgs, password, account? }` | `{ hex, txid, summary: ZecTxSummary }` | mot de passe → construction et décodage par Rust → **dialogue natif** (compte signataire, destinataire — pour une TEX, l'adresse `t1…` qu'elle encode —, montant, monnaie et son adresse, frais et frais ZIP 317, reste ajouté aux frais, entrées, mise à niveau et branche, expiration, « Transparent : … publics ») → **2ᵉ dialogue renforcé** si `requiresExtraConfirmation` (frais > 10 × ZIP 317 ou > montant) → signature ; le résumé de la signature doit être identique à celui affiché |
+| `zec_broadcast` | `{ hex }` | `string` (txid) | transaction décodée d'abord (refusée si elle a une partie protégée) ; `blockchain.transaction.broadcast` ; txid du serveur = le nôtre (ZIP 244), sinon erreur |
+
+```ts
+type ZecSendArgs = {
+  to: string;                       // t1… / t3… / tex1… (refus : zs…, zc…, u1…)
+  amount: string;                   // zatoshis (entier décimal) ; ignoré avec max
+  max: boolean;                     // tout envoyer moins les frais, sans monnaie
+  coins: { txid: string; vout: number; change: boolean; index: number }[];   // candidates, 200 au plus, AUCUN montant (deny_unknown_fields)
+  changeIndex: number;              // m/44'/133'/a'/1/changeIndex, ≤ 1000
+};
+type ZecTxSummary = {
+  to: string; toKind: 'p2pkh' | 'p2sh' | 'tex'; toAddress: string;
+  amount: string; change: { address: string; amount: string; index: number } | null;
+  fee: string; zip317Fee: string; folded: string;            // zatoshis
+  inputs: number; inputTotal: string;
+  upgrade: string; branchId: string;                          // 'NU6.3', '0x37a5165b'
+  targetHeight: number; expiryHeight: number; txid: string;
+  warnings: ({ kind: 'highFee' } | { kind: 'expiryCapped'; nextUpgradeHeight: number })[];
+  requiresExtraConfirmation: boolean;
+};
+```
+
+- **Serveurs** : mainnet → ElectrumX publics de Komodo (`zec.electrum1.cipig.net:20058`, secours `zec.electrum2.cipig.net:20058`, allowlist `net::ELECTRUM_HOSTS` famille `zcash`, TLS validé normalement, genesis Zcash vérifié à chaque session, circuits Tor `zcash`, jamais en clair si Tor est activé) ; **testnet → aucun** : toute lecture `SERVER_INVALID`. Pas de serveur personnalisé Zcash pour l'instant. Voir NETWORK.md.
+- **Mise à niveau réseau** : la table d'activation vient de `zcash_protocol` 0.11.0-pre.1 (NU6.3 depuis le bloc 3 428 143 sur mainnet, en vigueur le 01/11/2026 ; NU7 : branche connue, **hauteur mainnet absente** de cette version). Quand le réseau passera à une branche que cette table ne donne pas pour la hauteur, Kyro refusera de signer (rien n'est perdu : pas de transaction invalide) jusqu'à la mise à jour des crates.
+- Hardware wallets : `HW_UNSUPPORTED` (pas de clés Zcash dans `WatchOnlyAccount`).
+- **Comptes** (§2.9) : chaîne `zec`, `m/44'/133'/a'`.
+
+**Fait côté UI** : types `ZecCommands` de `@kyro/shared` (`Accounts.zec`, `AccountChain` `zec`), `ZcashAdapter` (`packages/chains/src/zcash/`, balayage des adresses avec limite d'écart, historique, pièces candidates, aperçu Rust), chaîne `zcash` du registre (prix CoinGecko `zcash`), écrans Envoyer (refus clair des adresses protégées et unifiées, frais ZIP 317 « rien à choisir », récapitulatif décodé), Recevoir (adresse `t1…`, URI ZIP 321 `zcash:`, avertissement « adresses protégées pas encore prises en charge »), Actif, carnet d'adresses, Connexions sortantes ; backend démo (`mock-zec.ts`).
+
 ### 2.5 TRON (TRX, TRC-20)
 
 Rust choisit le serveur (`servers.tron`, sinon TronGrid), famille Tor `tron`, jamais de repli. **Rust construit lui-même `raw_data`** (wallet-core `TronRaw`) depuis `/wallet/getnowblock` : `ref_block_bytes` = octets 6..8 du numéro, `ref_block_hash` = octets 8..16 du `blockID` (vérifié : l'id commence par le numéro), `timestamp` = horodatage du bloc, `expiration` = bloc + 10 min. `createtransaction` du serveur n'est **jamais** utilisé pour ce qui est signé (le test réel compare seulement l'encodage de Kyro au sien : identique octet pour octet).
@@ -1160,6 +1228,7 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 |---|---|---|
 | `btc` | BIP84 `m/84'/c'/a'` + BIP86 `m/86'/c'/a'` (adresses `…/0\|1/i`) | `m/84'/c'/0'`, `m/86'/c'/0'` |
 | `ltc` / `doge` / `bch` / `dash` | `m/84'/2'/a'` / `m/44'/3'/a'` / `m/44'/145'/a'` / `m/44'/5'/a'` (testnet : `c` = 1) | `…/0'` |
+| `zec` | `m/44'/133'/a'` (testnet `m/44'/1'/a'`), transparent seulement | `m/44'/133'/0'` |
 | `evm` | **`m/44'/60'/0'/0/a`** (index d'adresse : MetaMask, Trezor Suite et les comptes hardware wallet de Kyro ; pas `m/44'/60'/a'/0/0` de Ledger Live — identique pour le compte 0, et une phrase importée de MetaMask retrouve ses comptes dans le même ordre) ; une seule liste pour toutes les chaînes EVM | `m/44'/60'/0'/0/0` |
 | `sol` | `m/44'/501'/a'/0'` (Phantom, Solflare) | `m/44'/501'/0'/0'` |
 | `tron` | `m/44'/195'/a'/0/0` (Ledger Live) | `m/44'/195'/0'/0/0` |
@@ -1179,11 +1248,11 @@ Les clés viennent toutes de la phrase : un « compte » n'est qu'un **marque-pa
 | `vault_account_remove` | `{ chain, account }` | `VaultAccountLists` | coffre déverrouillé ; compte 0 → `INVALID_INPUT` |
 
 ```ts
-type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'bch' | 'dash' | 'sui' | 'algo' | 'ton' | 'cosmos';
+type AccountChain = 'btc' | 'evm' | 'sol' | 'ltc' | 'doge' | 'tron' | 'xrp' | 'ada' | 'xlm' | 'bch' | 'dash' | 'sui' | 'algo' | 'ton' | 'cosmos' | 'zec';
 type VaultAccountLists = { [C in AccountChain]: { index: number; name: string }[] };   // triées par index ; nom par défaut « Bitcoin 2 » pour l'index 1
 ```
 
-**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `cosmos_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `algo_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `stellar_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sui_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`, `kas_address` / `_account` / `_txs` / `_build_tx` / `_sign_tx` / `_broadcast` (Kaspa lit les adresses du compte, donc ses lectures aussi). Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
+**`account?` sur les commandes du coffre.** Toutes les commandes qui dérivent une de nos adresses ou signent prennent `account?` (absent = 0, donc une ancienne UI marche sans changement ; > 100 → `INVALID_INPUT`) : `accounts_get`, `btc_address`, `btc_sign_psbt`, `evm_sign_tx`, `sol_decode_tx`, `sol_sign_tx`, `ltc_*`/`doge_*` `_address` et `_sign_psbt`, `zec_address` / `_send_preview` / `_sign`, `tron_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `xrp_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `ada_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `cosmos_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `algo_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `stellar_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sui_address` / `_build_tx` / `_sign_tx` / `_broadcast`, `sol_stake_overview` / `_build` / `_sign` / `_broadcast`, `ada_stake_overview` / `_build` / `_sign` / `_broadcast`, `tron_stake_overview` / `_build` / `_sign`, `kas_address` / `_account` / `_txs` / `_build_tx` / `_sign_tx` / `_broadcast` (Kaspa lit les adresses du compte, donc ses lectures aussi). Les commandes de lecture par adresse (`*_address_info`, `*_txs`, `tron_account`…) n'en ont pas besoin. `btc_core_setup` importe les descripteurs de **tous** les comptes Bitcoin de la liste (un compte ajouté ensuite demande de relancer la configuration) ; les filtres compacts (`cbf`, désactivés par défaut) ne surveillent encore que le compte 0.
 
 **Dialogue natif.** La première ligne de chaque fenêtre de signature du coffre dit **quel compte signe** : « Compte signataire : Bitcoin 2 — m/84'/1'/1' (SegWit), m/86'/1'/1' (Taproot) » (EVM : plus l'adresse « De »). Un compte qui n'est **pas** dans la liste de l'utilisateur est affiché « inconnu » (« n° N, absent de ta liste ») avec son chemin, et la signature exige une **2ᵉ fenêtre renforcée** (« Attention : compte inconnu »). Bitcoin, Litecoin, Dogecoin : seules les entrées du compte choisi sont signées ; une entrée d'un autre compte du coffre est étrangère (2ᵉ fenêtre déjà existante) et la monnaie n'est reconnue que dans le compte choisi.
 
@@ -1500,6 +1569,7 @@ Hardware wallets : non proposé (aucune commande `hw_*`). Ce qu'il faudrait : Le
 | Electrum et Bitcoin Core | **pas** joignables par `net_fetch` : uniquement via les commandes `btc_*` (Rust) |
 | `bch.imaginary.cash:50002`, `bch.loping.net:50002`, `cashnode.bch.ninja:50002`, `chipnet.imaginary.cash:50002`, `chipnet.bch.ninja:50002` (Fulcrum publics, défaut Bitcoin Cash mainnet / chipnet) ; `dash.electrum1.cipig.net:20061`, `dash.electrum2.cipig.net:20061` (ElectrumX de Komodo, défaut Dash mainnet) ; `net::ELECTRUM_HOSTS` | **pas** joignables par `net_fetch` (sockets TLS brutes) : uniquement via `bch_*` / `dash_*` (Rust), circuits Tor des familles `bitcoincash` / `dash`, hôte **et** port allowlistés |
 | `doge.electrum1.cipig.net:20060`, `doge.electrum2.cipig.net:20060` (ElectrumX de Komodo, défaut Dogecoin mainnet ; `net::ELECTRUM_HOSTS`) | **pas** joignables par `net_fetch` (sockets TLS brutes, hors `ALLOWED_HOSTS`) : uniquement via `doge_*` (Rust), circuits Tor `dogecoin`, hôte **et** port vérifiés |
+| `zec.electrum1.cipig.net:20058`, `zec.electrum2.cipig.net:20058` (ElectrumX de Komodo, défaut Zcash mainnet, transparent seulement ; `net::ELECTRUM_HOSTS`) | **pas** joignables par `net_fetch` (sockets TLS brutes, hors `ALLOWED_HOSTS`) : uniquement via `zec_*` (Rust), circuits Tor `zcash`, hôte **et** port vérifiés |
 | serveurs Esplora Litecoin / Dogecoin / Bitcoin Cash / Dash personnalisés (`servers.litecoin.*`, `servers.dogecoin.*`, `servers.bitcoincash.*`, `servers.dash.*`) | **pas** joignables par `net_fetch` : uniquement via `ltc_*` / `doge_*` (Rust), circuits Tor de leur famille ; le défaut remplacé (`litecoinspace.org`) est refusé (`DEFAULT_SERVER_DISABLED`) |
 
 HTTPS uniquement (sauf `.onion` via Tor : mempool, ou un serveur personnalisé), pas de redirection vers un hôte hors liste ni vers un serveur personnalisé (redirections suivies par Kyro lui-même dans les deux modes ; une clé API n'est jamais renvoyée vers un autre hôte), réponse plafonnée à 5 Mo, timeout 20 s, cache CoinGecko borné (128 réponses, 16 Mio). Un serveur personnalisé n'entre dans cette liste qu'après la fenêtre native « Nouveau serveur ».

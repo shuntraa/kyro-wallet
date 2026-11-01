@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-zec-address-utxos"
+description = "Enables the zec_address_utxos command without any pre-configured scope."
+commands.allow = ["zec_address_utxos"]
+
+[[permission]]
+identifier = "deny-zec-address-utxos"
+description = "Denies the zec_address_utxos command without any pre-configured scope."
+commands.deny = ["zec_address_utxos"]

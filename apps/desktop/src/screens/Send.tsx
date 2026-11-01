@@ -65,6 +65,7 @@ import {
   cosmosMemoProblem,
   type AptosAdapter,
   aptosAddressProblem,
+  zecAddressProblem,
 } from '@kyro/chains';
 import { useApp, useVault } from '../state/app';
 import { usePortfolio } from '../state/portfolio';
@@ -129,6 +130,7 @@ function adapterFor(asset: AssetDef, adapters: ReturnType<typeof useVault>['adap
   if (asset.family === 'ton') return adapters.ton ?? undefined;
   if (asset.family === 'cosmos') return adapters.cosmos ?? undefined;
   if (asset.family === 'apt') return adapters.aptos ?? undefined;
+  if (asset.family === 'zec') return adapters.zec ?? undefined;
   return adapters.evm.get(asset.chainKey);
 }
 
@@ -177,7 +179,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const addrValid = !!adapter && toTrim.length > 0 && adapter.isValidAddress(toTrim);
   const contact = asset && addrValid ? findContact(toTrim, asset.family as ContactFamily) : undefined;
   // Every account of the wallet counts as « own » (§2.9: a send between two of your accounts).
-  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.cosmos?.address, accounts.ton?.address, accounts.xmr?.address, accounts.algo?.address, accounts.polkadot?.address, accounts.kas?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address.toLowerCase(), accounts.hbar?.address.toLowerCase(), accounts.aptos?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' || x.family === 'apt' || x.family === 'sui' || x.family === 'hbar' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
+  const ownAddresses = [accounts.btc?.segwit.address, accounts.btc?.taproot.address, accounts.evm?.address.toLowerCase(), accounts.sol?.address, accounts.tron?.address, accounts.xrp?.address, accounts.cardano?.address, accounts.zec?.address, accounts.cosmos?.address, accounts.ton?.address, accounts.xmr?.address, accounts.algo?.address, accounts.polkadot?.address, accounts.kas?.address, accounts.stellar?.address, accounts.near?.address, accounts.sui?.address.toLowerCase(), accounts.hbar?.address.toLowerCase(), accounts.aptos?.address, ...accountSources.flatMap((x) => x.addresses.map((a) => (x.family === 'evm' || x.family === 'apt' || x.family === 'sui' || x.family === 'hbar' ? a.toLowerCase() : a)))].filter((a): a is string => !!a);
   // TON: the EQ… and UQ… forms of one account are the same address.
   const isOwn = ownAddresses.includes(asset?.family === 'evm' || asset?.family === 'sui' || asset?.family === 'hbar' || asset?.family === 'apt' ? toTrim.toLowerCase() : toTrim) || (asset?.family === 'ton' && ownAddresses.some((a) => sameTonAccount(a, toTrim)));
   // « Mes comptes »: the user's OTHER accounts of this chain. A transfer between two of them is an
@@ -240,6 +242,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
       ton: [accounts.ton?.address],
       cosmos: [accounts.cosmos?.address],
       apt: [accounts.aptos?.address],
+      zec: [accounts.zec?.address],
     };
     // The other accounts of the vault are trusted too.
     for (const x of accountSources) own[x.family] = [...(own[x.family] ?? []), ...x.addresses];
@@ -403,6 +406,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   const xmrSynced = !!xmr.status && !xmr.status.running && xmr.status.restoreHeight !== null && xmr.status.progress >= 1;
   const [xmrGo, setXmrGo] = useState(0);
   const xmrBlocked = isXmr && (!xmrDestInfo || !xmrSynced || xmrGo === 0);
+  /** Zcash: transparent addresses only; shielded / unified recipients get a clear refusal. */
+  const isZec = asset?.family === 'zec';
+  const zecProblem = isZec && toTrim ? zecAddressProblem(toTrim, network) : null;
   const amountBase = useMemo(() => {
     if (!amountStr) return null;
     if (fiatMode) {
@@ -735,7 +741,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   value={to}
                   spellCheck={false}
                   autoComplete="off"
-                  placeholder={asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'cosmos' ? 'cosmos1…' : asset.family === 'ton' ? 'UQ… / EQ… (forme lisible)' : asset.family === 'xmr' ? (network === 'testnet' ? '5… ou 7… (stagenet)' : '4… ou 8…') : asset.family === 'algo' ? 'Adresse Algorand (58 caractères)' : asset.family === 'dot' ? (network === 'testnet' ? '5… (Westend)' : '1… (Polkadot)') : asset.family === 'kas' ? (network === 'testnet' ? 'kaspatest:q…' : 'kaspa:q…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : asset.family === 'sui' ? t('send.suiPlaceholder') : asset.family === 'hbar' ? t('send.hbarPlaceholder') : asset.family === 'apt' ? t('send.suiPlaceholder') : '0x…'}
+                  placeholder={asset.family === 'zec' ? (network === 'testnet' ? 'tm… (adresse transparente)' : 't1… (adresse transparente)') : asset.family === 'btc' ? (network === 'testnet' ? 'tb1…' : 'bc1…') : asset.family === 'ltc' ? (network === 'testnet' ? 'tltc1…' : 'ltc1…') : asset.family === 'doge' ? (network === 'testnet' ? 'n…' : 'D…') : asset.family === 'bch' ? (network === 'testnet' ? 'bchtest:q…' : 'bitcoincash:q…') : asset.family === 'dash' ? (network === 'testnet' ? 'y…' : 'X…') : asset.family === 'tron' ? 'T…' : asset.family === 'xrp' ? t('send.xrpPlaceholder') : asset.family === 'xlm' ? t('send.xlmPlaceholder') : asset.family === 'ada' ? (network === 'testnet' ? 'addr_test1…' : 'addr1…') : asset.family === 'cosmos' ? 'cosmos1…' : asset.family === 'ton' ? 'UQ… / EQ… (forme lisible)' : asset.family === 'xmr' ? (network === 'testnet' ? '5… ou 7… (stagenet)' : '4… ou 8…') : asset.family === 'algo' ? 'Adresse Algorand (58 caractères)' : asset.family === 'dot' ? (network === 'testnet' ? '5… (Westend)' : '1… (Polkadot)') : asset.family === 'kas' ? (network === 'testnet' ? 'kaspatest:q…' : 'kaspa:q…') : asset.family === 'near' ? (network === 'testnet' ? t('send.nearPlaceholderTestnet') : t('send.nearPlaceholder')) : asset.family === 'sol' ? t('send.solPlaceholder') : asset.family === 'sui' ? t('send.suiPlaceholder') : asset.family === 'hbar' ? t('send.hbarPlaceholder') : asset.family === 'apt' ? t('send.suiPlaceholder') : '0x…'}
                   onChange={(e) => {
                     const v = e.target.value;
                     setTo(v);
@@ -813,13 +819,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             {ownError && <span className="text-[12px] text-down">{ownError}</span>}
             {dotProblem && <span className="text-[12px] text-down">{dotProblem}</span>}
             {xlmProblem && <span className="text-[12px] text-down">{xlmProblem}</span>}
-            {toTrim && !addrValid && !xAddress && !adaProblem && !aptProblem && !kasProblem && !xlmProblem && !dotProblem && !tonProblem && <span className="text-[12px] text-down">{nearProblem ? `${nearProblem}.` : t('send.invalidAddressFor', { chain: chain.name })}</span>}
+            {toTrim && !addrValid && !xAddress && !adaProblem && !zecProblem && !aptProblem && !kasProblem && !xlmProblem && !dotProblem && !tonProblem && <span className="text-[12px] text-down">{nearProblem ? `${nearProblem}.` : t('send.invalidAddressFor', { chain: chain.name })}</span>}
             {tonProblem && <span className="text-[12px] text-down">{tonProblem.charAt(0).toUpperCase() + tonProblem.slice(1)}.</span>}
             {aptProblem && <span className="text-[12px] text-down">{aptProblem}</span>}
             {isApt && addrValid && <span className="text-[12px] leading-[1.45] text-mute">Les adresses Aptos n’ont pas de somme de contrôle : une seule lettre fausse envoie ailleurs, sans retour possible. Compare-la en entier.{aptDestNew ? ' Ce compte n’a encore rien reçu : le transfert le crée (un peu plus de gaz).' : ''}</span>}
             {isApt && aptDest.error && addrValid && <span className="text-[12px] text-down">Compte destinataire illisible : {aptDest.error.message}</span>}
             {adaProblem && <span className="text-[12px] text-down">{adaProblem.charAt(0).toUpperCase() + adaProblem.slice(1)}.</span>}
             {kasProblem && <span className="text-[12px] text-down">{kasProblem.charAt(0).toUpperCase() + kasProblem.slice(1)}.</span>}
+            {zecProblem && <span className="text-[12px] text-down">{zecProblem}</span>}
             {poisoning.lookalike && <PoisoningWarning recipient={toTrim} lookalike={poisoning.lookalike} family={asset.family} acknowledged={poisonAck} onAcknowledge={setPoisonAck} />}
             {!poisoning.lookalike && poisoning.suspect && !contact && !isOwn && <DustOnlyNote />}
             {xAddress && (
@@ -949,6 +956,11 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 Dash : destinataire minimum {bchDashDust('p2pkh').toString()} duffs ; une monnaie plus petite est ajoutée aux frais. Envoi classique (pas de PrivateSend ni d’InstantSend demandé).
               </span>
             )}
+            {isZec && (
+              <span className="text-[12px] leading-[1.5] text-mute">
+                Zcash transparent : comme Bitcoin, le montant, ton adresse et le destinataire sont publics. Les adresses protégées (zs…) et unifiées (u1…) ne sont pas encore prises en charge. Une monnaie sous 0,00005 ZEC n’est pas créée, elle est ajoutée aux frais.
+              </span>
+            )}
             {asset.family === 'ltc' && (
               <span className="text-[12px] leading-[1.5] text-mute">
                 {t('send.ltcNote', { dust: litecoinDust('p2wpkh').toString() })}
@@ -985,6 +997,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                 {building && <Spinner />} Préparer le transfert
               </Button>
               {!xmrSynced && xmr.status && <span className="text-[12px] text-mute">Attends la fin du scan Monero pour préparer un transfert.</span>}
+            </div>
+          ) : isZec ? (
+            <div className="flex flex-col gap-2">
+              <span className="eyebrow">Frais réseau</span>
+              <div className="rounded-box border border-line-2 bg-bg px-4 py-3 text-[13px] leading-[1.5] text-text2">
+                <strong className="font-semibold text-text">Rien à choisir sur Zcash.</strong> Les frais suivent la règle ZIP 317 : 0,00005 ZEC par action logique, 0,0001 ZEC au minimum (un envoi simple). Le coffre les calcule et les montre dans la vérification.
+              </div>
             </div>
           ) : isAda ? (
             <div className="flex flex-col gap-2">
@@ -1132,7 +1151,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('send.review')}</span>
             <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[10.5px] font-medium tracking-[0.02em] text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
-              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'xlm' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'apt' || built?.unsigned.family === 'cosmos' || built?.unsigned.family === 'ton' || built?.unsigned.family === 'xmr' || built?.unsigned.family === 'algo' || built?.unsigned.family === 'dot' || built?.unsigned.family === 'kas' || built?.unsigned.family === 'hbar' || built?.unsigned.family === 'sui' || built?.unsigned.family === 'near' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
+              {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'xlm' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'zec' || built?.unsigned.family === 'apt' || built?.unsigned.family === 'cosmos' || built?.unsigned.family === 'ton' || built?.unsigned.family === 'xmr' || built?.unsigned.family === 'algo' || built?.unsigned.family === 'dot' || built?.unsigned.family === 'kas' || built?.unsigned.family === 'hbar' || built?.unsigned.family === 'sui' || built?.unsigned.family === 'near' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 border-b border-dashed border-line-2 pt-2 pb-4">
@@ -1204,13 +1223,16 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           {built?.unsigned.family === 'ton' && <TonSummaryView u={built.unsigned} tonPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'cosmos' && <CosmosSummaryView u={built.unsigned} atomPrice={nativePrice} currency={cur} />}
           {built?.unsigned.family === 'apt' && <AptosSummaryView u={built.unsigned} aptPrice={nativePrice} currency={cur} />}
+          {built?.unsigned.family === 'zec' && built.unsigned.summary.requiresExtraConfirmation && (
+            <SecondConfirmNotice lines={built.unsigned.summary.warnings.filter((w) => w.kind === 'highFee').map(() => 'Frais très élevés : plus de 10 fois les frais ZIP 317, ou plus que le montant envoyé.')} />
+          )}
 
           {building && (
             <span className="flex items-center gap-2 text-[12px] text-mute">
               <Spinner /> {t('send.preparing')}
             </span>
           )}
-          {buildError && (serverMissing(buildError) ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
+          {buildError && (serverMissing(buildError) && !isZec ? <ServerMissingLine coin={asset.name} /> : serverDown(buildError) ? <ServerDownLine /> : <Notice tone="error">{buildError}</Notice>)}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'tron' && (
             <EnClair tone={tronShort ? 'warn' : 'ice'}>
               {rt('send.clearTron', { b: (c) => <strong>{c}</strong> }, {
@@ -1281,6 +1303,13 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {built.unsigned.all ? ' Il ne restera aucun SUI sur ce compte : une 2ᵉ confirmation te sera demandée.' : ''}
             </EnClair>
           )}
+          {built && addrValid && built.unsigned.family === 'zec' && (
+            <EnClair>
+              {rt('send.clearZec', { b: (c) => <strong>{c}</strong> }, { amount: fmtCrypto(built.unsigned.amount, decimals, asset.symbol), recipient: recipientName, fee: fmtCrypto(built.unsigned.fee, decimals, asset.symbol), fiat: feeFiat !== null ? ` (${fmtFiat(feeFiat, cur)})` : '' , tex: built.unsigned.summary.toKind === 'tex' ? t('send.clearZecTex', { address: shortAddress(built.unsigned.summary.toAddress) }) : '', change: built.unsigned.summary.change ? t('send.clearZecChange') : '' })}
+              {built.unsigned.summary.folded !== '0' ? t('send.clearZecFolded', { n: built.unsigned.summary.folded }) : ''}
+              {t('send.clearZecTail', { upgrade: built.unsigned.summary.upgrade, height: built.unsigned.summary.expiryHeight })}
+            </EnClair>
+          )}
           {built && addrValid && sendAmount !== null && built.unsigned.family === 'apt' && (
             <EnClair>
               {rt('send.clearApt', { b: (c) => <strong>{c}</strong> }, { amount: fmtCrypto(sendAmount, decimals, asset.symbol), recipient: recipientName, fee: fmtCrypto(built.unsigned.estimatedFee, 8, 'APT', 8), max: fmtCrypto(built.unsigned.maxFee, 8, 'APT', 8) })}
@@ -1343,7 +1372,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               {built.unsigned.summary.memo === null ? ' Si c’est une plateforme d’échange, vérifie qu’elle ne t’a pas donné de mémo.' : ''}
             </EnClair>
           )}
-          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'xlm' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'near' && built.unsigned.family !== 'sui' && built.unsigned.family !== 'hbar' && built.unsigned.family !== 'kas' && built.unsigned.family !== 'dot' && built.unsigned.family !== 'algo' && built.unsigned.family !== 'xmr' && built.unsigned.family !== 'ton' && built.unsigned.family !== 'cosmos' && (
+          {built && addrValid && sendAmount !== null && built.unsigned.family !== 'tron' && built.unsigned.family !== 'xrp' && built.unsigned.family !== 'xlm' && built.unsigned.family !== 'ada' && built.unsigned.family !== 'near' && built.unsigned.family !== 'sui' && built.unsigned.family !== 'hbar' && built.unsigned.family !== 'kas' && built.unsigned.family !== 'dot' && built.unsigned.family !== 'algo' && built.unsigned.family !== 'xmr' && built.unsigned.family !== 'ton' && built.unsigned.family !== 'cosmos' && built.unsigned.family !== 'apt' && built.unsigned.family !== 'zec' && (
             <EnClair>
               {rt('send.clearGeneric', { b: (c) => <strong>{c}</strong> }, {
                 amount: fmtCrypto(sendAmount, decimals, asset.symbol),
@@ -1420,6 +1449,7 @@ function dataLabel(b: Built | null, family?: string): string {
     return `${tp('send.dataOutputs', outs)} · ${u.size.family === 'btc' ? u.size.vsize : '?'} ${family === 'doge' || family === 'bch' || family === 'dash' ? t('send.dataBytes') : 'vB'}`;
   }
   if (u.family === 'ada') return `${tp('send.dataInputs', u.summary.inputs.length)} · ${t('send.dataAdaOutputs', { n: u.summary.outputs.length })}${u.token ? ' · token' : ''}${u.summary.memo ? ` · ${t('send.dataMessage')}` : ''}`;
+  if (u.family === 'zec') return `v5 · ${tp('send.dataInputs', u.summary.inputs)} · ${tp('send.dataOutputs', u.summary.change ? 2 : 1)} · ${u.summary.upgrade}`;
   if (u.family === 'apt') return `0x1::aptos_account::transfer · ${t('send.dataAptSeq', { n: u.summary.sequenceNumber })}`;
   if (u.family === 'xmr') return `${tp('send.dataInputs', u.summary.inputCount)} · ${t('send.dataXmrRings', { n: u.summary.ringSize })} · ${tp('send.dataOutputs', 2)}`;
   if (u.family === 'cosmos') return `MsgSend · gas ${u.summary.gasLimit} · ${u.summary.memo !== null ? t('send.dataMemo') : t('send.dataNoMemo')}`;

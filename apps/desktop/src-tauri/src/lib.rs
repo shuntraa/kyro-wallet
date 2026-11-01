@@ -26,6 +26,7 @@ mod commands_tron;
 mod commands_utxo;
 mod commands_xmr;
 mod commands_xrp;
+mod commands_zcash;
 mod core_rpc;
 mod cosmos_backend;
 mod dialog_text;
@@ -57,6 +58,7 @@ mod tron_backend;
 mod utxo_backend;
 mod xmr_backend;
 mod xrp_backend;
+mod zcash_backend;
 
 use std::time::Duration;
 
@@ -193,6 +195,15 @@ pub fn run() {
             commands_utxo::dash_tip_height,
             commands_utxo::dash_broadcast,
             commands_utxo::dash_sign_psbt,
+            commands_zcash::zec_backend_info,
+            commands_zcash::zec_address,
+            commands_zcash::zec_address_info,
+            commands_zcash::zec_address_utxos,
+            commands_zcash::zec_address_txs,
+            commands_zcash::zec_tip_height,
+            commands_zcash::zec_broadcast,
+            commands_zcash::zec_send_preview,
+            commands_zcash::zec_sign,
             commands_tron::tron_backend_info,
             commands_tron::tron_address,
             commands_tron::tron_account,
