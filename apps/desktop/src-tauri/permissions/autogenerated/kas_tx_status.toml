@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kas-tx-status"
+description = "Enables the kas_tx_status command without any pre-configured scope."
+commands.allow = ["kas_tx_status"]
+
+[[permission]]
+identifier = "deny-kas-tx-status"
+description = "Denies the kas_tx_status command without any pre-configured scope."
+commands.deny = ["kas_tx_status"]

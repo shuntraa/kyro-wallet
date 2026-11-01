@@ -6,6 +6,7 @@ mod cbf;
 mod commands;
 mod commands_cardano;
 mod commands_hw;
+mod commands_kaspa;
 mod commands_servers;
 mod commands_tron;
 mod commands_utxo;
@@ -15,6 +16,7 @@ mod dialog_text;
 mod electrum;
 mod error;
 mod hw;
+mod kaspa_backend;
 mod known_tokens;
 mod nav_guard;
 mod net;
@@ -172,6 +174,14 @@ pub fn run() {
             commands_cardano::ada_build_tx,
             commands_cardano::ada_sign_tx,
             commands_cardano::ada_broadcast,
+            commands_kaspa::kas_backend_info,
+            commands_kaspa::kas_address,
+            commands_kaspa::kas_account,
+            commands_kaspa::kas_txs,
+            commands_kaspa::kas_tx_status,
+            commands_kaspa::kas_build_tx,
+            commands_kaspa::kas_sign_tx,
+            commands_kaspa::kas_broadcast,
             stake_sol::sol_stake_overview,
             stake_sol::sol_stake_validators,
             stake_sol::sol_stake_build,

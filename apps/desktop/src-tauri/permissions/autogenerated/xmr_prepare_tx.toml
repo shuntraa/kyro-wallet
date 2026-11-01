@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-xmr-prepare-tx"
+description = "Enables the xmr_prepare_tx command without any pre-configured scope."
+commands.allow = ["xmr_prepare_tx"]
+
+[[permission]]
+identifier = "deny-xmr-prepare-tx"
+description = "Denies the xmr_prepare_tx command without any pre-configured scope."
+commands.deny = ["xmr_prepare_tx"]

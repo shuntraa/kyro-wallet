@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kas-sign-tx"
+description = "Enables the kas_sign_tx command without any pre-configured scope."
+commands.allow = ["kas_sign_tx"]
+
+[[permission]]
+identifier = "deny-kas-sign-tx"
+description = "Denies the kas_sign_tx command without any pre-configured scope."
+commands.deny = ["kas_sign_tx"]

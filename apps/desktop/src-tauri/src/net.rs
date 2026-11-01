@@ -35,6 +35,10 @@ pub const ALLOWED_HOSTS: &[&str] = &[
     // Cardano (Koios REST, keyless public tier): preprod and mainnet; only Rust's `ada_*` commands.
     "preprod.koios.rest",
     "api.koios.rest",
+    // Kaspa (kaspa-rest-server of the Kaspa developers, keyless): mainnet and testnet-10;
+    // only Rust's `kas_*` commands.
+    "api.kaspa.org",
+    "api-tn10.kaspa.org",
     "ethereum-sepolia-rpc.publicnode.com",
     "ethereum-rpc.publicnode.com",
     "arbitrum-one-rpc.publicnode.com",
@@ -294,6 +298,7 @@ pub enum Family {
     Tron,
     Xrp,
     Cardano,
+    Kaspa,
     Evm,
     Solana,
     Market,
@@ -317,6 +322,8 @@ pub fn family_for(host: &str, ctx: &NetContext) -> Family {
         Family::Xrp
     } else if host == "preprod.koios.rest" || host == "api.koios.rest" {
         Family::Cardano
+    } else if host == "api.kaspa.org" || host == "api-tn10.kaspa.org" {
+        Family::Kaspa
     } else if host.ends_with("-rpc.publicnode.com") {
         Family::Evm
     } else if host.ends_with(".solana.com") {
@@ -1067,6 +1074,9 @@ mod tests {
         assert_eq!(family_for("xrplcluster.com", &c), Family::Xrp);
         assert_eq!(family_for("preprod.koios.rest", &c), Family::Cardano);
         assert_eq!(family_for("api.koios.rest", &c), Family::Cardano);
+        assert_eq!(family_for("api.kaspa.org", &c), Family::Kaspa);
+        assert_eq!(family_for("api-tn10.kaspa.org", &c), Family::Kaspa);
+        assert_eq!(family_for("evil.kaspa.org", &c), Family::Other);
         let doge = NetContext {
             custom: vec![("doge.my-node.example".into(), Family::Dogecoin)],
             ..ctx(true)

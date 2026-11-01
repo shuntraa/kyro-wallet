@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-kas-backend-info"
+description = "Enables the kas_backend_info command without any pre-configured scope."
+commands.allow = ["kas_backend_info"]
+
+[[permission]]
+identifier = "deny-kas-backend-info"
+description = "Denies the kas_backend_info command without any pre-configured scope."
+commands.deny = ["kas_backend_info"]
