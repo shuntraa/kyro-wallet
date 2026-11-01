@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security: how Kyro Wallet protects your keys</title>
+  <meta name="description" content="Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.">
+  <link rel="canonical" href="https://kyrowallet.com/security/">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#07080a">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chains.css">
+  <meta property="og:site_name" content="Kyro Wallet">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Security: how Kyro Wallet protects your keys">
+  <meta property="og:description" content="Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.">
+  <meta property="og:url" content="https://kyrowallet.com/security/">
+  <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Security: how Kyro Wallet protects your keys">
+  <meta name="twitter:description" content="Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.">
+  <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://kyrowallet.com/security/#page","url":"https://kyrowallet.com/security/","name":"Kyro Wallet security","description":"Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.","isPartOf":{"@id":"https://kyrowallet.com/#website"},"about":{"@id":"https://kyrowallet.com/#app"},"inLanguage":"en"},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"Security","item":"https://kyrowallet.com/security/"}]}]}</script>
+  <script src="/motion.js"></script>
+  <script src="/download.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+
+  <header class="site-header">
+    <div class="nav-pill">
+      <a class="brand" href="/" aria-label="Kyro Wallet, home">
+        <img src="/img/kyro-mark-dark.svg" width="26" height="26" alt="">
+        <span class="brand-name" aria-hidden="true">kyro</span>
+      </a>
+      <nav class="nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/" aria-current="page">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+          <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+        </ul>
+      </nav>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <details class="menu">
+        <summary aria-label="Menu"><span class="menu-bars"></span></summary>
+        <nav class="menu-panel" aria-label="Menu">
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/" aria-current="page">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/">FAQ</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          </ul>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <main id="content">
+
+    
+    <section class="page-hero" aria-labelledby="page-title">
+      <div class="aurora aurora-sm" aria-hidden="true"></div>
+      <div class="wrap">
+        <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">Security</span></li></ol></nav>
+        <div class="ph-grid">
+          <div class="ph-text">
+            
+            <p class="eyebrow" data-reveal>Security</p>
+            <h1 id="page-title" data-reveal>How Kyro protects your keys</h1>
+            <p class="lead" data-reveal>Kyro keeps your keys encrypted on your computer and asks you to confirm every signature in a system window. Here is what that covers, and what it does not.</p>
+            
+          </div>
+          
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tight" aria-labelledby="s-layers">
+      <div class="wrap split">
+        <div class="split-text" data-reveal>
+          <p class="eyebrow">Design</p>
+          <h2 id="s-layers">Three layers, one place for keys</h2>
+          <p>The interface you click is a sandboxed web view. It never sees a key. Keys live only in the Rust core, which encrypts them, signs and returns the signed transaction.</p>
+          <ul class="checks">
+            <li>Recovery phrase and keys encrypted with your password: Argon2id, then XChaCha20-Poly1305.</li>
+            <li>Stored only on your computer. No copy on a server, no cloud backup.</li>
+            <li>Standard 12 or 24-word BIP39 recovery phrases.</li>
+          </ul>
+        </div>
+        
+        <div class="layers" data-reveal role="list" aria-label="Kyro's three layers">
+          <div class="layer" role="listitem">
+            <span class="layer-n">01</span>
+            <div><b>Interface</b><span>Sandboxed web view. Never sees a key.</span></div>
+          </div>
+          <div class="layer" role="listitem">
+            <span class="layer-n">02</span>
+            <div><b>App shell</b><span>Tor, auto-lock, system confirmation window.</span></div>
+          </div>
+          <div class="layer layer-core" role="listitem">
+            <span class="layer-n">03</span>
+            <div><b>Rust core</b><span>Encryption, keys and signing.</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section seam" aria-labelledby="s-sign">
+      <div class="wrap feature-row flip">
+        <div class="feature-text" data-reveal>
+          <p class="eyebrow">Before you sign</p>
+          <h2 id="s-sign">Nothing is signed without you</h2>
+          <p>Every signature needs your password and a confirmation in a native system window, drawn by the app shell rather than the web view.</p>
+          <ul class="checks">
+            <li>The window shows the decoded transaction: amount, recipient, fee, account.</li>
+            <li>Unusual transactions ask for a second confirmation: contract calls, any token approval, value sent to a contract, an unknown chain ID, high fees.</li>
+            <li>Token approvals are for the exact amount by default.</li>
+            <li>Address-poisoning alerts and clipboard checks before you send.</li>
+          </ul>
+        </div>
+        <div class="feature-visual" data-reveal>
+          <figure class="win win-mac win-shot frame-glow hide-sm"><div class="win-bar" aria-hidden="true"><i class="tl"></i><i class="tl"></i><i class="tl"></i><span>Kyro</span></div><img src="/img/shot-approval.webp" width="1250" height="180" alt="Kyro token approval step: approved amount 200 USDC, exact; the unlimited approval switch is off." loading="lazy" decoding="async"><span class="win-glare" aria-hidden="true"></span></figure>
+          <div class="card card-sign spot">
+            <div class="sign-mock" aria-hidden="true">
+              <div class="sm-title">Kyro · confirm transaction</div>
+              <div class="sm-row"><span>Send</span><b class="num">0.25 ETH</b></div>
+              <div class="sm-row"><span>To</span><b class="mono">0x3f5C…9a1E</b></div>
+              <div class="sm-row"><span>Network fee</span><b class="num">0.00018 ETH</b></div>
+              <div class="sm-actions"><i>Cancel</i><i class="on">Confirm</i></div>
+            </div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section seam" aria-labelledby="s-net">
+      <div class="wrap feature-row">
+        <div class="feature-text" data-reveal>
+          <p class="eyebrow">Network</p>
+          <h2 id="s-net">Private by default</h2>
+          <p>Kyro talks to blockchains over Tor, which is built into the app. Your IP address is not linked to your addresses.</p>
+          <ul class="checks">
+            <li>A separate Tor circuit per blockchain.</li>
+            <li>If Tor fails, Kyro stops. It never falls back to a direct connection.</li>
+            <li>Every server Kyro contacts is listed in <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/NETWORK.md">NETWORK.md</a>.</li>
+            <li>Use your own node or server for each blockchain.</li>
+            <li>No telemetry, no analytics, no account.</li>
+          </ul>
+        </div>
+        <div class="feature-visual" data-reveal>
+          <figure class="win win-mac win-shot frame-narrow frame-glow"><div class="win-bar" aria-hidden="true"><i class="tl"></i><i class="tl"></i><i class="tl"></i><span>Kyro</span></div><img src="/img/shot-vault.webp" width="545" height="705" alt="Kyro vault panel: keys encrypted on this device, auto-lock timer, hardware wallet, unlimited approvals: none, recovery phrase: imported." loading="lazy" decoding="async"><span class="win-glare" aria-hidden="true"></span></figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section seam band" aria-labelledby="s-limits">
+      <div class="wrap">
+        <div class="prose" data-reveal>
+          <p class="eyebrow">Limits</p>
+          <h2 id="s-limits">What Kyro cannot protect you from</h2>
+          <p>No wallet can. Knowing these helps you avoid them.</p>
+          <ul class="checks minus">
+            <li>Malware with full control of your computer while the wallet is unlocked.</li>
+            <li>Anyone who gets your recovery phrase. Kyro never asks for it outside the app, and neither should anyone else.</li>
+            <li>A transaction you read and confirm. Check the recipient and amount in the system window every time.</li>
+            <li>A lost recovery phrase. Kyro has no copy and cannot reset it. Write it on paper and keep it offline.</li>
+          </ul>
+
+          <h2 id="s-audit">Audit status</h2>
+          <p>Kyro is open source under GPL-3.0-or-later, so anyone can review it. An internal security review has been done. <b>No external audit has been published yet.</b> Kyro is provided without warranty, as stated in the license.</p>
+          
+          <div class="doc-links">
+            <a href="https://github.com/shuntraa/kyro-wallet/blob/main/SECURITY.md">Threat model</a>
+            <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/NETWORK.md">Servers contacted</a>
+            <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/ARCHITECTURE.md">Architecture</a>
+          </div>
+
+          <h2 id="report">Report a vulnerability</h2>
+          <p>Please report security issues privately through <a href="https://github.com/shuntraa/kyro-wallet/security">GitHub security advisories</a>, not in a public issue. The <a href="https://github.com/shuntraa/kyro-wallet/blob/main/SECURITY.md">security policy</a> explains what is in scope and how reports are handled.</p>
+        </div>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="cta-title">
+      <div class="wrap">
+        <div class="download-panel" data-reveal>
+          <div class="aurora aurora-sm" aria-hidden="true"></div>
+          <h2 id="cta-title">Get Kyro</h2>
+          <p class="dl-sub">Version 1.0.0 · Free · Windows, macOS and Linux</p>
+          
+          <div class="os-cards">
+            <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+              <span class="os-icon os-windows" aria-hidden="true"></span>
+              <span class="os-name">Windows</span>
+              <span class="os-file">.exe installer</span>
+            </a>
+            <a class="os-card os-row" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+              <span class="os-icon os-apple" aria-hidden="true"></span>
+              <span class="os-name">macOS</span>
+              <span class="os-file">Apple Silicon &amp; Intel</span>
+            </a>
+            <a class="os-card os-row" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+              <span class="os-icon os-linux" aria-hidden="true"></span>
+              <span class="os-name">Linux</span>
+              <span class="os-file">AppImage</span>
+            </a>
+          </div>
+          <p class="small mute"><a href="/download/">All files, checksums and first-launch help</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer seam">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <a class="brand" href="/" aria-label="Kyro Wallet, home">
+            <img src="/img/kyro-mark-dark.svg" width="26" height="26" alt="">
+            <span class="brand-name" aria-hidden="true">kyro</span>
+          </a>
+          <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
+        </div>
+        <div>
+          <h2>Product</h2>
+          <ul>
+            <li><a href="/features/">Features</a></li>
+            <li><a href="/security/">Security</a></li>
+            <li><a href="/fees/">Fees</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="/faq/">FAQ</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Blockchains</h2>
+          <ul>
+            <li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/arbitrum/">Arbitrum</a></li><li><a href="/chains/optimism/">Optimism</a></li><li><a href="/chains/base/">Base</a></li>
+            <li><a href="/chains/">All 37</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet/blob/main/SECURITY.md">Security policy</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet/blob/main/LICENSE">License</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Help</h2>
+          <ul>
+            <li><a href="/download/#verify">Verify a download</a></li>
+            <li><a href="/download/#first-launch">First launch</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li>
+            <li><a href="/#support">Donate</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="footer-word" aria-hidden="true">kyro</p>
+      <div class="footer-bottom">
+        <span>Kyro 1.0.0 · GPL-3.0-or-later</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>)</span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

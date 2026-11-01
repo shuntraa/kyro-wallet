@@ -1,0 +1,72 @@
+# Kyro Wallet
+
+> Kyro Wallet is a free, open-source (GPL-3.0-or-later), non-custodial crypto wallet for Windows, macOS and Linux. Keys are encrypted on the user's computer and every transaction is decoded and confirmed in a system window before signing. Current version: 1.0.0.
+
+Key facts:
+
+- Price: free. Sending, receiving and staking cost only the network fee. Swaps from 0.7%: the Kyro swap fee depends on the swap value (5% for $5 or less, 0.7% from $10,000, 0.9% if the token price is unknown) and is already deducted from the amount received. Full table: https://kyrowallet.com/fees/
+- Custody: non-custodial. No account, no server holding funds. Standard 12 or 24-word BIP39 recovery phrases.
+- Blockchains (37): Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa, Hedera and Zcash. 220+ tokens.
+- Staking: SOL (Solana), ADA (Cardano), TRX (TRON).
+- Hardware wallets: Ledger and Trezor (including Trezor Safe 7) on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand, Hedera and Zcash.
+- Privacy: Tor built in and on by default, no telemetry, optional custom servers.
+- Security status: internal security review done; no external audit published yet.
+- Downloads: only from GitHub Releases (https://github.com/shuntraa/kyro-wallet/releases). No mobile app.
+- Vulnerability reports: privately via GitHub security advisories (https://github.com/shuntraa/kyro-wallet/security).
+
+## Pages
+
+- [Features](https://kyrowallet.com/features/): What Kyro Wallet does: one portfolio for 37 blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.
+- [Security](https://kyrowallet.com/security/): Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.
+- [Fees](https://kyrowallet.com/fees/): Kyro Wallet is free. Sending, receiving and staking cost only the network fee. Swaps carry a fee from 0.7% to 5% depending on the swap value, already included in the amount you receive.
+- [Download](https://kyrowallet.com/download/): Download Kyro Wallet 1.0.0: .exe and .msi for Windows, .dmg for macOS, AppImage and .deb for Linux. How to check the SHA-256 checksum and open the app the first time.
+- [FAQ](https://kyrowallet.com/faq/): Answers about Kyro Wallet: is it free, is it custodial, supported blockchains, swap fee, hardware wallets, recovery phrase, Tor, audits, and Windows or macOS warnings.
+- [Supported blockchains](https://kyrowallet.com/chains/): Kyro Wallet supports 37 blockchains and 220+ tokens from one recovery phrase: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche and more. See what works on each.
+
+## Blockchains
+
+- [Bitcoin (BTC)](https://kyrowallet.com/chains/bitcoin/): send and receive, swap, hardware wallet
+- [Ethereum (ETH)](https://kyrowallet.com/chains/ethereum/): send and receive, swap, hardware wallet
+- [BNB Chain (BNB)](https://kyrowallet.com/chains/bnb-chain/): send and receive, swap, hardware wallet
+- [Polygon (POL)](https://kyrowallet.com/chains/polygon/): send and receive, swap, hardware wallet
+- [Arbitrum (ETH)](https://kyrowallet.com/chains/arbitrum/): send and receive, swap, hardware wallet
+- [Optimism (ETH)](https://kyrowallet.com/chains/optimism/): send and receive, swap, hardware wallet
+- [Base (ETH)](https://kyrowallet.com/chains/base/): send and receive, swap, hardware wallet
+- [Avalanche (AVAX)](https://kyrowallet.com/chains/avalanche/): send and receive, swap, hardware wallet
+- [Cronos (CRO)](https://kyrowallet.com/chains/cronos/): send and receive, swap, hardware wallet
+- [Mantle (MNT)](https://kyrowallet.com/chains/mantle/): send and receive, swap, hardware wallet
+- [Sonic (S)](https://kyrowallet.com/chains/sonic/): send and receive, swap, hardware wallet
+- [Flare (FLR)](https://kyrowallet.com/chains/flare/): send and receive, swap, hardware wallet
+- [Kaia (KAIA)](https://kyrowallet.com/chains/kaia/): send and receive, swap, hardware wallet
+- [Gnosis (xDAI)](https://kyrowallet.com/chains/gnosis/): send and receive, swap, hardware wallet
+- [HyperEVM (HYPE)](https://kyrowallet.com/chains/hyperevm/): send and receive, swap, hardware wallet
+- [Sei (SEI)](https://kyrowallet.com/chains/sei/): send and receive, swap, hardware wallet
+- [Conflux (CFX)](https://kyrowallet.com/chains/conflux/): send and receive, hardware wallet
+- [Solana (SOL)](https://kyrowallet.com/chains/solana/): send and receive, swap, staking, hardware wallet
+- [TRON (TRX)](https://kyrowallet.com/chains/tron/): send and receive, swap, staking, hardware wallet
+- [Cardano (ADA)](https://kyrowallet.com/chains/cardano/): send and receive, swap, staking, hardware wallet
+- [XRP Ledger (XRP)](https://kyrowallet.com/chains/xrp/): send and receive, swap, hardware wallet
+- [Litecoin (LTC)](https://kyrowallet.com/chains/litecoin/): send and receive, swap, hardware wallet
+- [Dogecoin (DOGE)](https://kyrowallet.com/chains/dogecoin/): send and receive, swap, hardware wallet
+- [Bitcoin Cash (BCH)](https://kyrowallet.com/chains/bitcoin-cash/): send and receive, swap, hardware wallet
+- [Dash (DASH)](https://kyrowallet.com/chains/dash/): send and receive, swap, hardware wallet
+- [Stellar (XLM)](https://kyrowallet.com/chains/stellar/): send and receive, swap, hardware wallet
+- [NEAR (NEAR)](https://kyrowallet.com/chains/near/): send and receive, hardware wallet
+- [Sui (SUI)](https://kyrowallet.com/chains/sui/): send and receive, swap, hardware wallet
+- [Monero (XMR)](https://kyrowallet.com/chains/monero/): send and receive
+- [TON (GRAM)](https://kyrowallet.com/chains/ton/): send and receive, swap, hardware wallet
+- [Cosmos Hub (ATOM)](https://kyrowallet.com/chains/cosmos/): send and receive, hardware wallet
+- [Polkadot (DOT)](https://kyrowallet.com/chains/polkadot/): send and receive
+- [Aptos (APT)](https://kyrowallet.com/chains/aptos/): send and receive, swap, hardware wallet
+- [Algorand (ALGO)](https://kyrowallet.com/chains/algorand/): send and receive, hardware wallet
+- [Kaspa (KAS)](https://kyrowallet.com/chains/kaspa/): send and receive
+- [Hedera (HBAR)](https://kyrowallet.com/chains/hedera/): send and receive, hardware wallet
+- [Zcash (ZEC)](https://kyrowallet.com/chains/zcash/): send and receive, swap, hardware wallet
+
+## Optional
+
+- [Full text of every page](https://kyrowallet.com/llms-full.txt)
+- [Source code](https://github.com/shuntraa/kyro-wallet)
+- [Security policy and threat model](https://github.com/shuntraa/kyro-wallet/blob/main/SECURITY.md)
+- [Servers the app contacts](https://github.com/shuntraa/kyro-wallet/blob/main/docs/NETWORK.md)
+- [Swap fee details](https://github.com/shuntraa/kyro-wallet/blob/main/docs/SWAP_FEES.md)

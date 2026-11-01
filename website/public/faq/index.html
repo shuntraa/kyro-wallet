@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kyro Wallet FAQ: fees, security, blockchains, install</title>
+  <meta name="description" content="Answers about Kyro Wallet: is it free, is it custodial, supported blockchains, swap fee, hardware wallets, recovery phrase, Tor, audits, and Windows or macOS warnings.">
+  <link rel="canonical" href="https://kyrowallet.com/faq/">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#07080a">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/chains.css">
+  <meta property="og:site_name" content="Kyro Wallet">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Kyro Wallet FAQ: fees, security, blockchains, install">
+  <meta property="og:description" content="Answers about Kyro Wallet: is it free, is it custodial, supported blockchains, swap fee, hardware wallets, recovery phrase, Tor, audits, and Windows or macOS warnings.">
+  <meta property="og:url" content="https://kyrowallet.com/faq/">
+  <meta property="og:image" content="https://kyrowallet.com/img/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Kyro Wallet: Your keys. Your crypto. The portfolio window with swap and vault windows.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Kyro Wallet FAQ: fees, security, blockchains, install">
+  <meta name="twitter:description" content="Answers about Kyro Wallet: is it free, is it custodial, supported blockchains, swap fee, hardware wallets, recovery phrase, Tor, audits, and Windows or macOS warnings.">
+  <meta name="twitter:image" content="https://kyrowallet.com/img/og.jpg">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://kyrowallet.com/"},{"@type":"ListItem","position":2,"name":"FAQ","item":"https://kyrowallet.com/faq/"}]},{"@type":"FAQPage","@id":"https://kyrowallet.com/faq/#page","url":"https://kyrowallet.com/faq/","name":"Kyro Wallet FAQ","isPartOf":{"@id":"https://kyrowallet.com/#website"},"mainEntity":[{"@type":"Question","name":"Is Kyro Wallet free?","acceptedAnswer":{"@type":"Answer","text":"Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps from 0.7%, built into the rate. Fee details."}},{"@type":"Question","name":"Is Kyro custodial?","acceptedAnswer":{"@type":"Answer","text":"No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them."}},{"@type":"Question","name":"Which blockchains does Kyro support?","acceptedAnswer":{"@type":"Answer","text":"37 blockchains: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa, Hedera and Zcash. Plus 220+ tokens on them. What works on each one."}},{"@type":"Question","name":"Which computers does Kyro run on?","acceptedAnswer":{"@type":"Answer","text":"Windows (64-bit), macOS (Apple Silicon and Intel) and Linux (x86_64 AppImage or .deb). Download."}},{"@type":"Question","name":"Is there a mobile app?","acceptedAnswer":{"@type":"Answer","text":"No. Kyro is a desktop app only. An app in a mobile store using the Kyro name is not ours."}},{"@type":"Question","name":"How much does a swap cost?","acceptedAnswer":{"@type":"Answer","text":"The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. Full table."}},{"@type":"Question","name":"Can I stake with Kyro?","acceptedAnswer":{"@type":"Answer","text":"Yes, on Solana, Cardano and TRON. You delegate from your own accounts; your coins never go to Kyro. Kyro takes no fee on staking. How staking works."}},{"@type":"Question","name":"Does Kyro support hardware wallets?","acceptedAnswer":{"@type":"Answer","text":"Yes: Ledger and Trezor, including Trezor Safe 7. Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand, Hedera and Zcash."}},{"@type":"Question","name":"What happens if I lose my recovery phrase?","acceptedAnswer":{"@type":"Answer","text":"If you also lose your computer or password, your funds cannot be recovered. Kyro keeps no copy and cannot reset it. Write the phrase on paper, keep it offline, and never type it into a website."}},{"@type":"Question","name":"Can I import a recovery phrase from another wallet?","acceptedAnswer":{"@type":"Answer","text":"Yes. Kyro accepts standard 12 and 24-word BIP39 recovery phrases."}},{"@type":"Question","name":"Does Kyro use Tor?","acceptedAnswer":{"@type":"Answer","text":"Yes. Tor is built in and on by default, with a separate circuit per blockchain. If Tor fails, Kyro stops instead of connecting directly. You can also use your own servers."}},{"@type":"Question","name":"Does Kyro collect any data?","acceptedAnswer":{"@type":"Answer","text":"No. No account, no telemetry, no analytics. Every server the app contacts is listed in NETWORK.md. This website sets no cookies and loads nothing from other sites."}},{"@type":"Question","name":"Is Kyro open source? Has it been audited?","acceptedAnswer":{"@type":"Answer","text":"The full source is on GitHub under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet."}},{"@type":"Question","name":"How do I report a vulnerability?","acceptedAnswer":{"@type":"Answer","text":"Privately, through GitHub security advisories. Please do not open a public issue. See the security policy."}},{"@type":"Question","name":"Where should I download Kyro?","acceptedAnswer":{"@type":"Answer","text":"Only from GitHub Releases, or from the links on kyrowallet.com/download, which point there."}},{"@type":"Question","name":"How do I verify my download?","acceptedAnswer":{"@type":"Answer","text":"Compare the SHA-256 of your file with the matching line in SHA256SUMS.Get-FileHash .\\Kyro-windows-x64-setup.exe -Algorithm SHA256   # Windows\nshasum -a 256 Kyro-macos.dmg                                  # macOS\nsha256sum -c SHA256SUMS --ignore-missing                      # Linux"}},{"@type":"Question","name":"Windows says “Windows protected your PC”. What do I do?","acceptedAnswer":{"@type":"Answer","text":"That is SmartScreen: the installer is not code-signed yet. Verify the checksum, then click More info and Run anyway."}},{"@type":"Question","name":"macOS says Kyro can’t be opened. What do I do?","acceptedAnswer":{"@type":"Answer","text":"Right-click Kyro in Applications and choose Open, or go to System Settings › Privacy & Security and click Open Anyway."}}]}]}</script>
+  <script src="/motion.js"></script>
+  <script src="/download.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+
+  <header class="site-header">
+    <div class="nav-pill">
+      <a class="brand" href="/" aria-label="Kyro Wallet, home">
+        <img src="/img/kyro-mark-dark.svg" width="26" height="26" alt="">
+        <span class="brand-name" aria-hidden="true">kyro</span>
+      </a>
+      <nav class="nav" aria-label="Main navigation">
+        <ul>
+          <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/" aria-current="page">FAQ</a></li>
+          <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+        </ul>
+      </nav>
+      <a class="btn btn-primary btn-sm header-cta" href="/download/">Download</a>
+      <details class="menu">
+        <summary aria-label="Menu"><span class="menu-bars"></span></summary>
+        <nav class="menu-panel" aria-label="Menu">
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/features/">Features</a></li><li><a href="/chains/">Blockchains</a></li><li><a href="/security/">Security</a></li><li><a href="/fees/">Fees</a></li><li><a href="/faq/" aria-current="page">FAQ</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">GitHub</a></li>
+          </ul>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <main id="content">
+
+    
+    <section class="page-hero" aria-labelledby="page-title">
+      <div class="aurora aurora-sm" aria-hidden="true"></div>
+      <div class="wrap">
+        <nav class="crumbs" aria-label="Breadcrumb"><ol><li><a href="/">Home</a></li><li><span aria-current="page">FAQ</span></li></ol></nav>
+        <div class="ph-grid">
+          <div class="ph-text">
+            
+            <p class="eyebrow" data-reveal>18 questions</p>
+            <h1 id="page-title" data-reveal>Frequently asked questions</h1>
+            <p class="lead" data-reveal>Can’t find yours? Ask on <a href="https://github.com/shuntraa/kyro-wallet/issues">GitHub</a>.</p>
+            
+          </div>
+          
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tight" aria-label="Questions and answers">
+      <div class="wrap">
+        
+        <div class="faq" data-reveal>
+          <h2 id="faq-1">The basics</h2>
+          <details><summary>Is Kyro Wallet free?</summary><div class="answer"><p>Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps from 0.7%, built into the rate. <a href="/fees/">Fee details</a>.</p></div></details>
+          <details><summary>Is Kyro custodial?</summary><div class="answer"><p>No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them.</p></div></details>
+          <details><summary>Which blockchains does Kyro support?</summary><div class="answer"><p>37 blockchains: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa, Hedera and Zcash. Plus 220+ tokens on them. <a href="/chains/">What works on each one</a>.</p></div></details>
+          <details><summary>Which computers does Kyro run on?</summary><div class="answer"><p>Windows (64-bit), macOS (Apple Silicon and Intel) and Linux (x86_64 AppImage or .deb). <a href="/download/">Download</a>.</p></div></details>
+          <details><summary>Is there a mobile app?</summary><div class="answer"><p>No. Kyro is a desktop app only. An app in a mobile store using the Kyro name is not ours.</p></div></details>
+        </div>
+        <div class="faq" data-reveal>
+          <h2 id="faq-2">Swaps and staking</h2>
+          <details><summary>How much does a swap cost?</summary><div class="answer"><p>The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. <a href="/fees/">Full table</a>.</p></div></details>
+          <details><summary>Can I stake with Kyro?</summary><div class="answer"><p>Yes, on Solana, Cardano and TRON. You delegate from your own accounts; your coins never go to Kyro. Kyro takes no fee on staking. <a href="/features/#f-stake">How staking works</a>.</p></div></details>
+        </div>
+        <div class="faq" data-reveal>
+          <h2 id="faq-3">Security</h2>
+          <details><summary>Does Kyro support hardware wallets?</summary><div class="answer"><p>Yes: Ledger and Trezor, including Trezor Safe 7. Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand, Hedera and Zcash.</p></div></details>
+          <details><summary>What happens if I lose my recovery phrase?</summary><div class="answer"><p>If you also lose your computer or password, your funds cannot be recovered. Kyro keeps no copy and cannot reset it. Write the phrase on paper, keep it offline, and never type it into a website.</p></div></details>
+          <details><summary>Can I import a recovery phrase from another wallet?</summary><div class="answer"><p>Yes. Kyro accepts standard 12 and 24-word BIP39 recovery phrases.</p></div></details>
+          <details><summary>Does Kyro use Tor?</summary><div class="answer"><p>Yes. Tor is built in and on by default, with a separate circuit per blockchain. If Tor fails, Kyro stops instead of connecting directly. You can also use your own servers.</p></div></details>
+          <details><summary>Does Kyro collect any data?</summary><div class="answer"><p>No. No account, no telemetry, no analytics. Every server the app contacts is listed in <a href="https://github.com/shuntraa/kyro-wallet/blob/main/docs/NETWORK.md">NETWORK.md</a>. This website sets no cookies and loads nothing from other sites.</p></div></details>
+          <details><summary>Is Kyro open source? Has it been audited?</summary><div class="answer"><p>The full source is on <a href="https://github.com/shuntraa/kyro-wallet">GitHub</a> under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.</p></div></details>
+          <details><summary>How do I report a vulnerability?</summary><div class="answer"><p>Privately, through <a href="https://github.com/shuntraa/kyro-wallet/security">GitHub security advisories</a>. Please do not open a public issue. See the <a href="https://github.com/shuntraa/kyro-wallet/blob/main/SECURITY.md">security policy</a>.</p></div></details>
+        </div>
+        <div class="faq" data-reveal>
+          <h2 id="faq-4">Download and install</h2>
+          <details><summary>Where should I download Kyro?</summary><div class="answer"><p>Only from <a href="https://github.com/shuntraa/kyro-wallet/releases">GitHub Releases</a>, or from the links on <a href="/download/">kyrowallet.com/download</a>, which point there.</p></div></details>
+          <details><summary>How do I verify my download?</summary><div class="answer"><p>Compare the SHA-256 of your file with the matching line in <code>SHA256SUMS</code>.</p><pre><code>Get-FileHash .\Kyro-windows-x64-setup.exe -Algorithm SHA256   # Windows
+shasum -a 256 Kyro-macos.dmg                                  # macOS
+sha256sum -c SHA256SUMS --ignore-missing                      # Linux</code></pre></div></details>
+          <details><summary>Windows says “Windows protected your PC”. What do I do?</summary><div class="answer"><p>That is SmartScreen: the installer is not code-signed yet. Verify the checksum, then click <b>More info</b> and <b>Run anyway</b>.</p></div></details>
+          <details><summary>macOS says Kyro can’t be opened. What do I do?</summary><div class="answer"><p>Right-click Kyro in Applications and choose <b>Open</b>, or go to <b>System Settings › Privacy &amp; Security</b> and click <b>Open Anyway</b>.</p></div></details>
+        </div>
+      </div>
+    </section>
+    
+    <section class="section" aria-labelledby="cta-title">
+      <div class="wrap">
+        <div class="download-panel" data-reveal>
+          <div class="aurora aurora-sm" aria-hidden="true"></div>
+          <h2 id="cta-title">Get Kyro</h2>
+          <p class="dl-sub">Version 1.0.0 · Free · Windows, macOS and Linux</p>
+          
+          <div class="os-cards">
+            <a class="os-card os-row" data-os="windows" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-windows-x64-setup.exe">
+              <span class="os-icon os-windows" aria-hidden="true"></span>
+              <span class="os-name">Windows</span>
+              <span class="os-file">.exe installer</span>
+            </a>
+            <a class="os-card os-row" data-os="macos" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-macos.dmg">
+              <span class="os-icon os-apple" aria-hidden="true"></span>
+              <span class="os-name">macOS</span>
+              <span class="os-file">Apple Silicon &amp; Intel</span>
+            </a>
+            <a class="os-card os-row" data-os="linux" href="https://github.com/shuntraa/kyro-wallet/releases/latest/download/Kyro-linux-x86_64.AppImage">
+              <span class="os-icon os-linux" aria-hidden="true"></span>
+              <span class="os-name">Linux</span>
+              <span class="os-file">AppImage</span>
+            </a>
+          </div>
+          <p class="small mute"><a href="/download/">All files, checksums and first-launch help</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer seam">
+    <div class="wrap">
+      <div class="footer-cols">
+        <div class="footer-brand">
+          <a class="brand" href="/" aria-label="Kyro Wallet, home">
+            <img src="/img/kyro-mark-dark.svg" width="26" height="26" alt="">
+            <span class="brand-name" aria-hidden="true">kyro</span>
+          </a>
+          <p>Free, open-source crypto wallet for Windows, macOS and Linux.</p>
+        </div>
+        <div>
+          <h2>Product</h2>
+          <ul>
+            <li><a href="/features/">Features</a></li>
+            <li><a href="/security/">Security</a></li>
+            <li><a href="/fees/">Fees</a></li>
+            <li><a href="/download/">Download</a></li>
+            <li><a href="/faq/">FAQ</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Blockchains</h2>
+          <ul>
+            <li><a href="/chains/bitcoin/">Bitcoin</a></li><li><a href="/chains/ethereum/">Ethereum</a></li><li><a href="/chains/bnb-chain/">BNB Chain</a></li><li><a href="/chains/polygon/">Polygon</a></li><li><a href="/chains/arbitrum/">Arbitrum</a></li><li><a href="/chains/optimism/">Optimism</a></li><li><a href="/chains/base/">Base</a></li>
+            <li><a href="/chains/">All 37</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="https://github.com/shuntraa/kyro-wallet">Source code</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet/releases">Releases</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet/blob/main/SECURITY.md">Security policy</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet/blob/main/LICENSE">License</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Help</h2>
+          <ul>
+            <li><a href="/download/#verify">Verify a download</a></li>
+            <li><a href="/download/#first-launch">First launch</a></li>
+            <li><a href="https://github.com/shuntraa/kyro-wallet/security">Report a vulnerability</a></li>
+            <li><a href="/#support">Donate</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="footer-word" aria-hidden="true">kyro</p>
+      <div class="footer-bottom">
+        <span>Kyro 1.0.0 · GPL-3.0-or-later</span>
+        <span>No cookies, no trackers · Fonts: Geist (<a href="/fonts/OFL-Geist.txt">OFL</a>)</span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

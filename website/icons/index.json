@@ -1,0 +1,202 @@
+{
+  "btc": {
+    "name": "Bitcoin",
+    "color": "#F7931A"
+  },
+  "eth": {
+    "name": "Ethereum",
+    "color": "#627EEA"
+  },
+  "sol": {
+    "name": "Solana",
+    "color": "#35D0BA"
+  },
+  "bnb": {
+    "name": "BNB",
+    "color": "#F0B90B"
+  },
+  "trx": {
+    "name": "TRON",
+    "color": "#EB0029"
+  },
+  "xrp": {
+    "name": "XRP",
+    "color": "#23292F"
+  },
+  "ada": {
+    "name": "Cardano",
+    "color": "#2A5BD7"
+  },
+  "doge": {
+    "name": "Dogecoin",
+    "color": "#C2A633"
+  },
+  "ltc": {
+    "name": "Litecoin",
+    "color": "#345D9D"
+  },
+  "bch": {
+    "name": "Bitcoin Cash",
+    "color": "#0AC18E"
+  },
+  "dash": {
+    "name": "Dash",
+    "color": "#008CE7"
+  },
+  "xlm": {
+    "name": "Stellar",
+    "color": "#2B3040"
+  },
+  "near": {
+    "name": "NEAR",
+    "color": "#1E2124"
+  },
+  "sui": {
+    "name": "Sui",
+    "color": "#4DA2FF"
+  },
+  "pol": {
+    "name": "Polygon",
+    "color": "#8247E5"
+  },
+  "arb": {
+    "name": "Arbitrum",
+    "color": "#213147"
+  },
+  "op": {
+    "name": "Optimism",
+    "color": "#FF0420"
+  },
+  "base": {
+    "name": "Base",
+    "color": "#0052FF"
+  },
+  "avax": {
+    "name": "Avalanche",
+    "color": "#E84142"
+  },
+  "cro": {
+    "name": "Cronos",
+    "color": "#0F3C6E"
+  },
+  "mnt": {
+    "name": "Mantle",
+    "color": "#1C2B2A"
+  },
+  "s": {
+    "name": "Sonic",
+    "color": "#13306B"
+  },
+  "flr": {
+    "name": "Flare",
+    "color": "#E62058"
+  },
+  "kaia": {
+    "name": "Kaia",
+    "color": "#1F2219"
+  },
+  "gno": {
+    "name": "Gnosis",
+    "color": "#3E6957"
+  },
+  "hype": {
+    "name": "Hyperliquid",
+    "color": "#0B2E2A"
+  },
+  "sei": {
+    "name": "Sei",
+    "color": "#9E1F19"
+  },
+  "cfx": {
+    "name": "Conflux",
+    "color": "#26272A"
+  },
+  "usdt": {
+    "name": "Tether",
+    "color": "#26A17B"
+  },
+  "usdc": {
+    "name": "USD Coin",
+    "color": "#2775CA"
+  },
+  "dai": {
+    "name": "Dai",
+    "color": "#F5AC37"
+  },
+  "wbtc": {
+    "name": "Wrapped Bitcoin",
+    "color": "#5A5564"
+  },
+  "etc": {
+    "name": "Ethereum Classic",
+    "color": "#3AB83A"
+  },
+  "weth": {
+    "name": "Wrapped Ether",
+    "color": "#4A4E5C"
+  },
+  "steth": {
+    "name": "Lido Staked Ether",
+    "color": "#00A3FF"
+  },
+  "link": {
+    "name": "Chainlink",
+    "color": "#2A5ADA"
+  },
+  "uni": {
+    "name": "Uniswap",
+    "color": "#FF007A"
+  },
+  "aave": {
+    "name": "Aave",
+    "color": "#B6509E"
+  },
+  "shib": {
+    "name": "Shiba Inu",
+    "color": "#F2780C"
+  },
+  "pepe": {
+    "name": "Pepe",
+    "color": "#3D9E3A"
+  },
+  "qnt": {
+    "name": "Quant",
+    "color": "#3A4046"
+  },
+  "xmr": {
+    "name": "Monero",
+    "color": "#FF6600"
+  },
+  "gram": {
+    "name": "Gram",
+    "color": "#0098EA"
+  },
+  "atom": {
+    "name": "Cosmos",
+    "color": "#2E3148"
+  },
+  "dot": {
+    "name": "Polkadot",
+    "color": "#E6007A"
+  },
+  "apt": {
+    "name": "Aptos",
+    "color": "#24262B"
+  },
+  "algo": {
+    "name": "Algorand",
+    "color": "#26282C"
+  },
+  "kas": {
+    "name": "Kaspa",
+    "color": "#49C2B0"
+  },
+  "zec": {
+    "name": "Zcash",
+    "color": "#F4B728"
+  },
+  "hbar": {
+    "name": "Hedera",
+    "color": "#26272B"
+  }
+}

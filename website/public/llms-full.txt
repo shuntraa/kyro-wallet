@@ -1,0 +1,3690 @@
+# Kyro Wallet: full text of kyrowallet.com
+
+Generated 2026-11-01 from the published pages. Short index: https://kyrowallet.com/llms.txt
+
+================================================================
+Kyro Wallet: open-source crypto wallet for Windows, macOS and Linux
+URL: https://kyrowallet.com/
+================================================================
+
+1.0.0 Free and open source
+
+# Your keys. Your crypto.
+
+A desktop wallet for Bitcoin, Ethereum, Solana and 34 more blockchains. Send, swap and stake, with your keys kept on your own computer.
+
+Download Kyro  Windows, macOS and Linux
+
+- Open source: GPL-3.0, on GitHub
+
+- Self-custody: No account, no server
+
+- Ledger & Trezor: Hardware wallet support
+
+- Tor built in: No tracking, no telemetry
+
+Swap
+
+## Swap inside the wallet
+
+Kyro asks several providers for a quote and shows what you receive after fees. Token approvals are for the exact amount unless you change it.
+How swap fees work
+
+Send
+
+## Read it before you sign it
+
+The Rust core decodes every transaction and opens a separate system window with the amount, the recipient and the fee. Unusual transactions ask a second time.
+How signing works
+
+Assets
+
+## Every account in one list
+
+Prices, 7-day trends and balances for all your blockchains, from a single recovery phrase. Add as many accounts as you need.
+Supported blockchains
+
+Staking
+
+## Stake from your own accounts
+
+Delegate SOL, ADA and TRX to a validator, a pool or a Super Representative. Kyro takes no fee on staking.
+Staking details
+
+Hardware and privacy
+
+## Ledger, Trezor and Tor
+
+Keep keys on a hardware wallet and confirm on the device. Network traffic goes through the built-in Tor client, and the status bar shows when it is on.
+Privacy and network
+
+Features
+
+## Also in the app
+
+Small things that matter when you hold crypto yourself.
+
+### Many accounts
+
+Create as many as you need and move funds between them in two clicks.
+
+### Hardware wallets
+
+Ledger and Trezor, including Trezor Safe 7.
+
+### Scam protection
+
+Address-poisoning alerts, clipboard checks and exact token approvals.
+
+### Private by default
+
+Built-in Tor, no telemetry. Use your own nodes if you like.
+
+All features
+
+Getting started
+
+## Three steps, no account
+
+### Install
+
+Download Kyro from GitHub for Windows, macOS or Linux. Check the SHA-256 if you want to be sure.
+
+### Create or import
+
+Make a new 12 or 24-word recovery phrase, or import yours. It is encrypted with your password, on your computer.
+
+### Send, swap, stake
+
+Every transaction opens a system window that shows what you are signing. Nothing is sent until you confirm.
+
+Security
+
+## Built so you don't have to trust us
+
+Kyro is open source. Anyone can read the code and build the app themselves.
+
+- Keys are encrypted on your device and never leave the Rust core.
+
+- Every signature needs your password and a confirmation in a system window.
+
+- Unusual transactions ask for a second confirmation.
+
+- Traffic goes over Tor. Every server Kyro contacts is listed publicly.
+
+How Kyro protects your keys
+
+01
+
+InterfaceSandboxed web view. Never sees a key.
+
+02
+
+App shellTor, auto-lock, system confirmation window.
+
+03
+
+Rust coreEncryption, keys and signing.
+
+Blockchains
+
+## 37 blockchains. 220+ tokens.
+
+All in the same wallet, from the same recovery phrase.
+
+Swaps from 0.7%, built into the rate you see.
+
+What works on each blockchain
+
+Fees
+
+## Simple fees
+
+Kyro is free. Only swaps carry a fee, built into the rate.
+
+0% Send and receive Only the network fee.
+
+0% Staking Only the network fee.
+
+from 0.7% Swaps Built into the rate you see.
+
+Swap fee table and an example
+
+## Get Kyro
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+Also: .msi · .deb · SHA256SUMS · How to verify · Release notes
+
+Questions
+
+## Short answers
+
+Q: Is Kyro Wallet free?
+A: Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps from 0.7%, built into the rate. Fee details.
+
+Q: Is Kyro custodial?
+A: No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them.
+
+Q: Does Kyro support hardware wallets?
+A: Yes: Ledger and Trezor, including Trezor Safe 7. Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand, Hedera and Zcash.
+
+Q: Is Kyro open source? Has it been audited?
+A: The full source is on GitHub under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.
+
+All questions
+
+Support
+
+## Support the project
+
+Kyro is free. Donations help keep it going. You can also sponsor on GitHub.
+
+| Network | Address |
+
+| Bitcoin  | bc1qta8efdy72ge9qy8yj8s0ckwar0lg44ggwnaard  |
+
+| Ethereum & EVM  | 0x86cD9af8067fF5e0001c709a550cD62b5e968B44  |
+
+| Solana  | ptsbLdrhmEfC2eQ9gj4aieF4irdhQqYzK1fdNwHBZcM  |
+
+| Litecoin  | LWePW8iwa8RxxYB6av4KBriBNkRgLWvNyw  |
+
+| Dogecoin  | DKCSjtypvD9qg3R175YdijmwvKh5FnAU14  |
+
+| TRON  | TT9j25bsbBAgxCDEXTN1cpjcD54Jz51pES  |
+
+| Cardano  | addr1qy9d3jctafj2cgfm8sgllfjkrxrgxn9mz9dy0qzxuwscx6c2mr9sh6ny4ssnk0q3l7n9vxvxsdxtky26g7qydcapsd4sux3dj3  |
+
+================================================================
+Features: send, swap, stake and hardware wallets | Kyro Wallet
+URL: https://kyrowallet.com/features/
+================================================================
+
+Features
+
+# What Kyro does
+
+Send, receive, swap and stake on 37 blockchains from one recovery phrase. Every transaction is decoded and confirmed in a system window before it is signed.
+
+Portfolio
+
+## All your coins in one list
+
+One screen for every blockchain: total value, a price chart from one day to all time, and each asset with its balance, 7-day trend and share of the total.
+
+- Market tab with the top 200 coins, and favourites.
+
+- Search assets and addresses with Ctrl K.
+
+- Allocation by asset, and a vault panel with your security status.
+
+Swap
+
+## Swaps with the fee in plain sight
+
+Kyro asks several providers for a quote and picks the best price after fees. You see the amount you send and the amount you receive. The Kyro swap fee, from 0.7%, is already taken out of the amount you receive. How it is calculated.
+
+- Token approvals are for the exact amount. Unlimited approvals are off unless you turn them on.
+
+- The transaction is simulated just before you sign it.
+
+- Maximum slippage of 0.1%, 0.5%, 1% or your own value.
+
+- The provider's transaction is decoded and checked: recipient, minimum amount and fee.
+
+Staking
+
+## Stake SOL, ADA and TRX
+
+Delegate from your own accounts. Your coins never go to Kyro or to a pooled contract.
+
+- Solana: a stake account in your name, delegated to a validator. Activation and cooldown take about two days each.
+
+- Cardano: delegate to a pool. Your ADA stays on your address and stays spendable. 2 ADA deposit, returned when you stop.
+
+- TRON: stake for energy or bandwidth, then vote for Super Representatives. Unstaking takes 14 days.
+
+No slashing on these three networks: a validator, pool or SR cannot take your funds. Rewards depend on them and are never guaranteed.
+
+Transaction review
+
+## Read it before you sign it
+
+The Rust core decodes each transaction and shows it in a native system window, outside the app's web view. Sign only after you have read the amount, the recipient and the fee.
+
+- Contract calls, token approvals and high fees ask for a second confirmation.
+
+- On Bitcoin: unknown scripts, OP_RETURN data and fees above 100 sat/vB too.
+
+- Address-poisoning alerts and clipboard checks before you send.
+
+Hardware wallets
+
+## Ledger and Trezor
+
+Keep your keys on a hardware wallet and use Kyro as the screen. Trezor Safe 7 pairs with a code.
+
+- Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand, Hedera and Zcash.
+
+- Software accounts and hardware accounts side by side.
+
+And also
+
+## The details that matter
+
+### Many accounts
+
+Several accounts per blockchain from the same phrase. Move funds between them in two clicks.
+
+### Tor built in
+
+All traffic goes over Tor, with a separate circuit per blockchain. If Tor is down, Kyro does not fall back to a direct connection.
+
+### No telemetry
+
+No account and no analytics. Every server Kyro contacts is listed on GitHub.
+
+### Auto-lock
+
+The vault locks itself when the auto-lock timer runs out. Unlocking needs your password.
+
+### Your own servers
+
+Point each blockchain at your own node or server. Kyro checks it is on the right network first.
+
+### Approvals overview
+
+The vault panel shows whether any unlimited token approval is active.
+
+### 37 blockchains
+
+Bitcoin, Ethereum and EVM chains, Solana, TRON, Cardano, XRP Ledger and more. See the list.
+
+### Open source
+
+GPL-3.0-or-later. Read the code, build it yourself, or change it.
+
+## Get Kyro
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Security: how Kyro Wallet protects your keys
+URL: https://kyrowallet.com/security/
+================================================================
+
+Security
+
+# How Kyro protects your keys
+
+Kyro keeps your keys encrypted on your computer and asks you to confirm every signature in a system window. Here is what that covers, and what it does not.
+
+Design
+
+## Three layers, one place for keys
+
+The interface you click is a sandboxed web view. It never sees a key. Keys live only in the Rust core, which encrypts them, signs and returns the signed transaction.
+
+- Recovery phrase and keys encrypted with your password: Argon2id, then XChaCha20-Poly1305.
+
+- Stored only on your computer. No copy on a server, no cloud backup.
+
+- Standard 12 or 24-word BIP39 recovery phrases.
+
+01
+
+InterfaceSandboxed web view. Never sees a key.
+
+02
+
+App shellTor, auto-lock, system confirmation window.
+
+03
+
+Rust coreEncryption, keys and signing.
+
+Before you sign
+
+## Nothing is signed without you
+
+Every signature needs your password and a confirmation in a native system window, drawn by the app shell rather than the web view.
+
+- The window shows the decoded transaction: amount, recipient, fee, account.
+
+- Unusual transactions ask for a second confirmation: contract calls, any token approval, value sent to a contract, an unknown chain ID, high fees.
+
+- Token approvals are for the exact amount by default.
+
+- Address-poisoning alerts and clipboard checks before you send.
+
+Network
+
+## Private by default
+
+Kyro talks to blockchains over Tor, which is built into the app. Your IP address is not linked to your addresses.
+
+- A separate Tor circuit per blockchain.
+
+- If Tor fails, Kyro stops. It never falls back to a direct connection.
+
+- Every server Kyro contacts is listed in NETWORK.md.
+
+- Use your own node or server for each blockchain.
+
+- No telemetry, no analytics, no account.
+
+Limits
+
+## What Kyro cannot protect you from
+
+No wallet can. Knowing these helps you avoid them.
+
+- Malware with full control of your computer while the wallet is unlocked.
+
+- Anyone who gets your recovery phrase. Kyro never asks for it outside the app, and neither should anyone else.
+
+- A transaction you read and confirm. Check the recipient and amount in the system window every time.
+
+- A lost recovery phrase. Kyro has no copy and cannot reset it. Write it on paper and keep it offline.
+
+## Audit status
+
+Kyro is open source under GPL-3.0-or-later, so anyone can review it. An internal security review has been done. No external audit has been published yet. Kyro is provided without warranty, as stated in the license.
+
+Threat model Servers contacted Architecture
+
+## Report a vulnerability
+
+Please report security issues privately through GitHub security advisories, not in a public issue. The security policy explains what is in scope and how reports are handled.
+
+## Get Kyro
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Fees: free to use, swaps from 0.7% | Kyro Wallet
+URL: https://kyrowallet.com/fees/
+================================================================
+
+Fees
+
+# Kyro is free. Swaps from 0.7%.
+
+Downloading and using Kyro costs nothing. Sending, receiving and staking cost only the blockchain's network fee. Swaps carry a Kyro fee that depends on the swap value, already included in the amount you receive.
+
+0% Send and receive You pay the network fee only.
+
+0% Staking SOL, ADA, TRX. Network fee only.
+
+from 0.7% Swaps Included in the amount you receive.
+
+## Swap fee by swap value
+
+The Kyro fee is a percentage of the swap. Small swaps pay a higher rate and large swaps a lower one. The value is the size of the swap in US dollars.
+
+Kyro swap fee by swap value in US dollars
+
+| Swap value (USD) | Kyro fee
+
+| $5 or less | 5%
+
+| $10 | 2%
+
+| $25 | 1.8%
+
+| $50 | 1.6%
+
+| $80 | 1.4%
+
+| $100 | 1.2%
+
+| $1,000 | 0.9%
+
+| $10,000 and above | 0.7%
+
+How it is calculated:  The table gives the rate at each listed value. Between two values the rate moves smoothly, interpolated on a logarithmic scale, so there are no sudden jumps.
+
+Unknown token price:  If Kyro cannot find a price for the token, it cannot work out the swap value. The fee is then 0.9%.
+
+Already included:  The fee is deducted from the amount you receive. Kyro shows only what you send and what you receive, so the "you receive" amount is what arrives, with no further Kyro charge.
+
+Example
+
+## A $200 swap
+
+$200 falls between the $100 and $1,000 rows, so the rate is between 1.2% and 0.9%: about 1.11%.
+
+You send200 USDC ~ $200
+
+Kyro fee, about 1.11%~ $2.22 already deducted
+
+You receive~ $197.78 in the token you chose
+
+Network feeSeparate, paid to the network
+
+## How the swap fee works
+
+- The rate depends on the swap value, from 0.7% to 5%. It is already part of the quote: the amount you receive is after the fee.
+
+- It is collected by each provider's official integrator fee option. Kyro never adds a separate transfer to your transaction.
+
+- Quotes are compared after fees: the best price shown already includes them.
+
+- If a provider cannot apply the fee correctly, its quote is not shown.
+
+- Providers may charge their own fee. It is already in the price they quote.
+
+## Network fees
+
+Every blockchain charges a fee to process a transaction. It goes to the network's miners or validators, not to Kyro. Kyro estimates it and shows it before you confirm. On Ethereum layer 2s like Arbitrum, Optimism and Base it is usually a few cents; on Bitcoin and Ethereum it changes with demand.
+
+## Why a swap fee
+
+The fee pays for development. Kyro is open source, so the fee is public: the schedule is set in the code, and anyone can build a version without it. Full details are in SWAP_FEES.md.
+
+Kyro fees by action
+
+| Action | Kyro fee | Network fee
+
+| Receive | 0% | None
+
+| Send | 0% | Yes
+
+| Stake, unstake | 0% | Yes
+
+| Swap | From 0.7% | Yes
+
+## Get Kyro
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Download Kyro Wallet 1.0.0 for Windows, macOS and Linux
+URL: https://kyrowallet.com/download/
+================================================================
+
+Version 1.0.0
+
+# Download Kyro Wallet
+
+Free for Windows, macOS and Linux. Kyro is published only on GitHub Releases.
+
+Download Kyro Release notes
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+## All files
+
+Kyro 1.0.0 release files
+
+| File | System | Notes
+
+| Kyro-windows-x64-setup.exe | Windows 64-bit | Installer, recommended
+
+| Kyro-windows-x64.msi | Windows 64-bit | MSI package, for managed installs
+
+| Kyro-macos.dmg | macOS | Apple Silicon and Intel
+
+| Kyro-linux-x86_64.AppImage | Linux x86_64 | Runs on most distributions
+
+| Kyro-linux-amd64.deb | Debian, Ubuntu | Package for apt
+
+| SHA256SUMS | All | SHA-256 checksums of every file
+
+Only from GitHub. The files above come from github.com/shuntraa/kyro-wallet/releases. A copy offered anywhere else is not from us. Kyro has no mobile app: anything in an app store using the name is not ours.
+
+Checksum
+
+## Verify your download
+
+Download SHA256SUMS next to the installer, compute the SHA-256 of your file and compare it with the matching line. If they differ, delete the file and download it again.
+
+### Windows (PowerShell)
+
+```
+Get-FileHash .\Kyro-windows-x64-setup.exe -Algorithm SHA256
+```
+
+### macOS (Terminal)
+
+```
+shasum -a 256 Kyro-macos.dmg
+```
+
+### Linux
+
+```
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+First launch
+
+## Opening Kyro the first time
+
+The installers are not code-signed yet, so Windows and macOS show a warning the first time. Verify the checksum first, then:
+
+### Windows: "Windows protected your PC"
+
+- Click More info.
+
+- Check that the file name is Kyro-windows-x64-setup.exe.
+
+- Click Run anyway.
+
+### macOS: "Kyro can't be opened"
+
+- Drag Kyro into Applications.
+
+- Right-click Kyro in Applications and choose Open, then Open again.
+
+- Or go to System Settings > Privacy & Security and click Open Anyway.
+
+### Linux
+
+```
+chmod +x Kyro-linux-x86_64.AppImage
+./Kyro-linux-x86_64.AppImage
+# or
+sudo apt install ./Kyro-linux-amd64.deb
+```
+
+For a hardware wallet over USB, install the Ledger or Trezor udev rules.
+
+Source
+
+## Build it yourself
+
+You need Rust, Node.js 22+, pnpm 11 and the Tauri prerequisites. See the README.
+
+```
+git clone https://github.com/shuntraa/kyro-wallet.git
+cd kyro-wallet
+pnpm install --frozen-lockfile
+pnpm build
+```
+
+================================================================
+Kyro Wallet FAQ: fees, security, blockchains, install
+URL: https://kyrowallet.com/faq/
+================================================================
+
+18 questions
+
+# Frequently asked questions
+
+Can't find yours? Ask on GitHub.
+
+## The basics
+
+Q: Is Kyro Wallet free?
+A: Yes. Kyro is free to download and use, and open source under GPL-3.0-or-later. Sending, receiving and staking cost only the network fee. Swaps from 0.7%, built into the rate. Fee details.
+
+Q: Is Kyro custodial?
+A: No. Kyro is non-custodial. Your keys are created and encrypted on your computer. There is no account and no server holding your funds, so nobody, including us, can freeze, move or recover them.
+
+Q: Which blockchains does Kyro support?
+A: 37 blockchains: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, Monero, TON, Cosmos Hub, Polkadot, Aptos, Algorand, Kaspa, Hedera and Zcash. Plus 220+ tokens on them. What works on each one.
+
+Q: Which computers does Kyro run on?
+A: Windows (64-bit), macOS (Apple Silicon and Intel) and Linux (x86_64 AppImage or .deb). Download.
+
+Q: Is there a mobile app?
+A: No. Kyro is a desktop app only. An app in a mobile store using the Kyro name is not ours.
+
+## Swaps and staking
+
+Q: How much does a swap cost?
+A: The Kyro fee depends on the value of the swap: 5% for $5 or less, down to 0.7% from $10,000, and 0.9% if the token price is unknown. It is already taken out of the amount you receive. The blockchain charges a separate network fee, which goes to the network. Providers may add their own fee, already included in their quote. Full table.
+
+Q: Can I stake with Kyro?
+A: Yes, on Solana, Cardano and TRON. You delegate from your own accounts; your coins never go to Kyro. Kyro takes no fee on staking. How staking works.
+
+## Security
+
+Q: Does Kyro support hardware wallets?
+A: Yes: Ledger and Trezor, including Trezor Safe 7. Supported on Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, Avalanche, Cronos, Mantle, Sonic, Flare, Kaia, Gnosis, HyperEVM, Sei, Conflux, Solana, TRON, Cardano, XRP Ledger, Litecoin, Dogecoin, Bitcoin Cash, Dash, Stellar, NEAR, Sui, TON, Cosmos Hub, Aptos, Algorand, Hedera and Zcash.
+
+Q: What happens if I lose my recovery phrase?
+A: If you also lose your computer or password, your funds cannot be recovered. Kyro keeps no copy and cannot reset it. Write the phrase on paper, keep it offline, and never type it into a website.
+
+Q: Can I import a recovery phrase from another wallet?
+A: Yes. Kyro accepts standard 12 and 24-word BIP39 recovery phrases.
+
+Q: Does Kyro use Tor?
+A: Yes. Tor is built in and on by default, with a separate circuit per blockchain. If Tor fails, Kyro stops instead of connecting directly. You can also use your own servers.
+
+Q: Does Kyro collect any data?
+A: No. No account, no telemetry, no analytics. Every server the app contacts is listed in NETWORK.md. This website sets no cookies and loads nothing from other sites.
+
+Q: Is Kyro open source? Has it been audited?
+A: The full source is on GitHub under GPL-3.0-or-later. An internal security review has been done. No external audit has been published yet.
+
+Q: How do I report a vulnerability?
+A: Privately, through GitHub security advisories. Please do not open a public issue. See the security policy.
+
+## Download and install
+
+Q: Where should I download Kyro?
+A: Only from GitHub Releases, or from the links on kyrowallet.com/download, which point there.
+
+Q: How do I verify my download?
+A: Compare the SHA-256 of your file with the matching line in SHA256SUMS.
+
+```
+Get-FileHash .\Kyro-windows-x64-setup.exe -Algorithm SHA256   # Windows
+shasum -a 256 Kyro-macos.dmg                                  # macOS
+sha256sum -c SHA256SUMS --ignore-missing                      # Linux
+```
+
+Q: Windows says "Windows protected your PC". What do I do?
+A: That is SmartScreen: the installer is not code-signed yet. Verify the checksum, then click More info and Run anyway.
+
+Q: macOS says Kyro can't be opened. What do I do?
+A: Right-click Kyro in Applications and choose Open, or go to System Settings > Privacy & Security and click Open Anyway.
+
+## Get Kyro
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+37 supported blockchains | Kyro Wallet
+URL: https://kyrowallet.com/chains/
+================================================================
+
+Blockchains
+
+# 37 blockchains, one wallet
+
+Every blockchain below works from the same recovery phrase. Pick one to see what you can do on it.
+
+## Bitcoin and other UTXO coins
+
+- BitcoinBTC
+
+- LitecoinLTC
+
+- DogecoinDOGE
+
+- Bitcoin CashBCH
+
+- DashDASH
+
+- KaspaKAS
+
+- ZcashZEC
+
+## Ethereum and EVM chains
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+- MantleMNT
+
+- SonicS
+
+- FlareFLR
+
+- KaiaKAIA
+
+- GnosisxDAI
+
+- HyperEVMHYPE
+
+- SeiSEI
+
+- ConfluxCFX
+
+## Other networks
+
+- SolanaSOL
+
+- TRONTRX
+
+- CardanoADA
+
+- XRP LedgerXRP
+
+- StellarXLM
+
+- NEARNEAR
+
+- SuiSUI
+
+- MoneroXMR
+
+- TONGRAM
+
+- Cosmos HubATOM
+
+- PolkadotDOT
+
+- AptosAPT
+
+- AlgorandALGO
+
+- HederaHBAR
+
+Compare
+
+## What works where
+
+Staking is available for SOL, ADA and TRX. Hardware wallets work on Bitcoin, Ethereum, the main EVM chains and Solana.
+
+What Kyro supports on each blockchain
+
+| Blockchain | Send | Swap | Stake | Hardware
+
+| Bitcoin |  |  |  |
+
+| Ethereum |  |  |  |
+
+| BNB Chain |  |  |  |
+
+| Polygon |  |  |  |
+
+| Arbitrum |  |  |  |
+
+| Optimism |  |  |  |
+
+| Base |  |  |  |
+
+| Avalanche |  |  |  |
+
+| Cronos |  |  |  |
+
+| Mantle |  |  |  |
+
+| Sonic |  |  |  |
+
+| Flare |  |  |  |
+
+| Kaia |  |  |  |
+
+| Gnosis |  |  |  |
+
+| HyperEVM |  |  |  |
+
+| Sei |  |  |  |
+
+| Conflux |  |  |  |
+
+| Solana |  |  |  |
+
+| TRON |  |  |  |
+
+| Cardano |  |  |  |
+
+| XRP Ledger |  |  |  |
+
+| Litecoin |  |  |  |
+
+| Dogecoin |  |  |  |
+
+| Bitcoin Cash |  |  |  |
+
+| Dash |  |  |  |
+
+| Stellar |  |  |  |
+
+| NEAR |  |  |  |
+
+| Sui |  |  |  |
+
+| Monero |  |  |  |
+
+| TON |  |  |  |
+
+| Cosmos Hub |  |  |  |
+
+| Polkadot |  |  |  |
+
+| Aptos |  |  |  |
+
+| Algorand |  |  |  |
+
+| Kaspa |  |  |  |
+
+| Hedera |  |  |  |
+
+| Zcash |  |  |  |
+
+Missing a blockchain? Ask on GitHub.
+
+## Get Kyro
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Bitcoin wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/bitcoin/
+================================================================
+
+Bitcoin · BTC
+
+# Bitcoin wallet for Windows, macOS and Linux
+
+Send, receive and swap BTC, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive BTC, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap BTC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for BTC.
+No
+
+### Hardware wallet
+
+Sign Bitcoin transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Bitcoin in Kyro
+
+- Native SegWit (bc1q...) and Taproot (bc1p...) addresses.
+
+- Transactions are checked before you sign: unknown scripts, OP_RETURN data or a fee above 100 sat/vB ask for a second confirmation.
+
+- Bitcoin has no native staking.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- LitecoinLTC
+
+- DogecoinDOGE
+
+- Bitcoin CashBCH
+
+- DashDASH
+
+- KaspaKAS
+
+- ZcashZEC
+
+- EthereumETH
+
+- BNB ChainBNB
+
+All 37 blockchains
+
+## Get Kyro for Bitcoin
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Ethereum wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/ethereum/
+================================================================
+
+Ethereum · ETH
+
+# Ethereum wallet for Windows, macOS and Linux
+
+Send, receive and swap ETH and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive ETH and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for ETH.
+No
+
+### Hardware wallet
+
+Sign Ethereum transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Ethereum in Kyro
+
+- ETH and ERC-20 tokens in the same account.
+
+- Token approvals are set to the exact amount by default. Unlimited approvals are off unless you turn them on.
+
+- Contract calls, approvals and high fees ask for a second confirmation.
+
+- Native ETH staking is not offered: it needs 32 ETH and a validator running at all times, and Kyro does not route your coins through a third-party contract.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+- MantleMNT
+
+All 37 blockchains
+
+## Get Kyro for Ethereum
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+BNB Chain wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/bnb-chain/
+================================================================
+
+BNB Chain · BNB
+
+# BNB Chain wallet for Windows, macOS and Linux
+
+Send, receive and swap BNB and BEP-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive BNB and BEP-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap BNB in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for BNB.
+No
+
+### Hardware wallet
+
+Sign BNB Chain transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## BNB Chain in Kyro
+
+- Same address as your Ethereum account.
+
+- Network fees are paid in BNB.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+- MantleMNT
+
+All 37 blockchains
+
+## Get Kyro for BNB Chain
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Polygon wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/polygon/
+================================================================
+
+Polygon · POL
+
+# Polygon wallet for Windows, macOS and Linux
+
+Send, receive and swap POL and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive POL and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap POL in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for POL.
+No
+
+### Hardware wallet
+
+Sign Polygon transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Polygon in Kyro
+
+- Same address as your Ethereum account.
+
+- Network fees are paid in POL.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+- MantleMNT
+
+All 37 blockchains
+
+## Get Kyro for Polygon
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Arbitrum wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/arbitrum/
+================================================================
+
+Arbitrum · ETH
+
+# Arbitrum wallet for Windows, macOS and Linux
+
+Send, receive and swap ETH and ERC-20 tokens on Arbitrum, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive ETH and ERC-20 tokens on Arbitrum, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for ETH.
+No
+
+### Hardware wallet
+
+Sign Arbitrum transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Arbitrum in Kyro
+
+- Arbitrum One, an Ethereum layer 2.
+
+- Same address as your Ethereum account. Network fees are paid in ETH.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+- MantleMNT
+
+All 37 blockchains
+
+## Get Kyro for Arbitrum
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Optimism wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/optimism/
+================================================================
+
+Optimism · ETH
+
+# Optimism wallet for Windows, macOS and Linux
+
+Send, receive and swap ETH and ERC-20 tokens on Optimism, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive ETH and ERC-20 tokens on Optimism, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for ETH.
+No
+
+### Hardware wallet
+
+Sign Optimism transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Optimism in Kyro
+
+- OP Mainnet, an Ethereum layer 2.
+
+- Same address as your Ethereum account. Network fees are paid in ETH.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+- MantleMNT
+
+All 37 blockchains
+
+## Get Kyro for Optimism
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Base wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/base/
+================================================================
+
+Base · ETH
+
+# Base wallet for Windows, macOS and Linux
+
+Send, receive and swap ETH and ERC-20 tokens on Base, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive ETH and ERC-20 tokens on Base, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap ETH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for ETH.
+No
+
+### Hardware wallet
+
+Sign Base transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Base in Kyro
+
+- An Ethereum layer 2.
+
+- Same address as your Ethereum account. Network fees are paid in ETH.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+- MantleMNT
+
+All 37 blockchains
+
+## Get Kyro for Base
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Avalanche wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/avalanche/
+================================================================
+
+Avalanche · AVAX
+
+# Avalanche wallet for Windows, macOS and Linux
+
+Send, receive and swap AVAX and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive AVAX and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap AVAX in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for AVAX.
+No
+
+### Hardware wallet
+
+Sign Avalanche transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Avalanche in Kyro
+
+- Kyro uses the Avalanche C-Chain.
+
+- Same address as your Ethereum account. Network fees are paid in AVAX.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- CronosCRO
+
+- MantleMNT
+
+All 37 blockchains
+
+## Get Kyro for Avalanche
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Cronos wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/cronos/
+================================================================
+
+Cronos · CRO
+
+# Cronos wallet for Windows, macOS and Linux
+
+Send, receive and swap CRO and CRC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive CRO and CRC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap CRO in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for CRO.
+No
+
+### Hardware wallet
+
+Sign Cronos transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Cronos in Kyro
+
+- Cronos EVM. Same address as your Ethereum account.
+
+- Network fees are paid in CRO.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- MantleMNT
+
+All 37 blockchains
+
+## Get Kyro for Cronos
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Mantle wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/mantle/
+================================================================
+
+Mantle · MNT
+
+# Mantle wallet for Windows, macOS and Linux
+
+Send, receive and swap MNT and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive MNT and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap MNT in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for MNT.
+No
+
+### Hardware wallet
+
+Sign Mantle transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Mantle in Kyro
+
+- Same address as your Ethereum account.
+
+- Network fees are paid in MNT.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+All 37 blockchains
+
+## Get Kyro for Mantle
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Sonic wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/sonic/
+================================================================
+
+Sonic · S
+
+# Sonic wallet for Windows, macOS and Linux
+
+Send, receive and swap S and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive S and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap S in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for S.
+No
+
+### Hardware wallet
+
+Sign Sonic transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Sonic in Kyro
+
+- Same address as your Ethereum account.
+
+- Network fees are paid in S.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+All 37 blockchains
+
+## Get Kyro for Sonic
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Flare wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/flare/
+================================================================
+
+Flare · FLR
+
+# Flare wallet for Windows, macOS and Linux
+
+Send, receive and swap FLR and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive FLR and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap FLR in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for FLR.
+No
+
+### Hardware wallet
+
+Sign Flare transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Flare in Kyro
+
+- Same address as your Ethereum account.
+
+- Network fees are paid in FLR.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+All 37 blockchains
+
+## Get Kyro for Flare
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Kaia wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/kaia/
+================================================================
+
+Kaia · KAIA
+
+# Kaia wallet for Windows, macOS and Linux
+
+Send, receive and swap KAIA and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive KAIA and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap KAIA in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for KAIA.
+No
+
+### Hardware wallet
+
+Sign Kaia transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Kaia in Kyro
+
+- Same address as your Ethereum account.
+
+- Network fees are paid in KAIA.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+All 37 blockchains
+
+## Get Kyro for Kaia
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Gnosis wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/gnosis/
+================================================================
+
+Gnosis · xDAI
+
+# Gnosis wallet for Windows, macOS and Linux
+
+Send, receive and swap xDAI and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive xDAI and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap xDAI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for xDAI.
+No
+
+### Hardware wallet
+
+Sign Gnosis transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Gnosis in Kyro
+
+- Gnosis Chain. Same address as your Ethereum account.
+
+- Network fees are paid in xDAI.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+All 37 blockchains
+
+## Get Kyro for Gnosis
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+HyperEVM wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/hyperevm/
+================================================================
+
+HyperEVM · HYPE
+
+# HyperEVM wallet for Windows, macOS and Linux
+
+Send, receive and swap HYPE and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive HYPE and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap HYPE in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for HYPE.
+No
+
+### Hardware wallet
+
+Sign HyperEVM transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## HyperEVM in Kyro
+
+- The EVM side of Hyperliquid. Same address as your Ethereum account.
+
+- Network fees are paid in HYPE.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+All 37 blockchains
+
+## Get Kyro for HyperEVM
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Sei wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/sei/
+================================================================
+
+Sei · SEI
+
+# Sei wallet for Windows, macOS and Linux
+
+Send, receive and swap SEI and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive SEI and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap SEI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for SEI.
+No
+
+### Hardware wallet
+
+Sign Sei transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Sei in Kyro
+
+- Sei EVM. Same address as your Ethereum account.
+
+- Network fees are paid in SEI.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+All 37 blockchains
+
+## Get Kyro for Sei
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Conflux wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/conflux/
+================================================================
+
+Conflux · CFX
+
+# Conflux wallet for Windows, macOS and Linux
+
+Send and receive CFX and ERC-20 tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive CFX and ERC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swaps are not available on Conflux yet.
+No
+
+### Staking
+
+Kyro does not offer staking for CFX.
+No
+
+### Hardware wallet
+
+Sign Conflux transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Conflux in Kyro
+
+- Kyro uses Conflux eSpace, the EVM-compatible side of Conflux.
+
+- Same address as your Ethereum account. Network fees are paid in CFX.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+- CronosCRO
+
+All 37 blockchains
+
+## Get Kyro for Conflux
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Solana wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/solana/
+================================================================
+
+Solana · SOL
+
+# Solana wallet for Windows, macOS and Linux
+
+Send, receive, swap and stake SOL and SPL tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive SOL and SPL tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap SOL in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Stake SOL from your own account. Kyro takes no fee on staking.
+Yes
+
+### Hardware wallet
+
+Sign Solana transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Solana in Kyro
+
+Delegate SOL to a validator from a stake account in your name. Activation and cooldown take about one epoch each (around two days). A validator cannot take your SOL; your rewards depend on its commission and uptime.
+
+- SOL, SPL and Token-2022 tokens.
+
+- Versioned (v0) transactions and address lookup tables are decoded before you sign.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- BitcoinBTC
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+All 37 blockchains
+
+## Get Kyro for Solana
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+TRON wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/tron/
+================================================================
+
+TRON · TRX
+
+# TRON wallet for Windows, macOS and Linux
+
+Send, receive, swap and stake TRX and TRC-20 tokens, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive TRX and TRC-20 tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap TRX in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Stake TRX from your own account. Kyro takes no fee on staking.
+Yes
+
+### Hardware wallet
+
+Sign TRON transactions with a Ledger.
+Yes
+
+Details
+
+## TRON in Kyro
+
+Stake TRX (Stake 2.0) for energy or bandwidth, then vote for Super Representatives with your TRON Power. Unstaking takes 14 days. Votes do not put your TRX at risk.
+
+- TRX and TRC-20 tokens such as USDT.
+
+- Energy and bandwidth from staking lower the cost of TRC-20 transfers.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- BitcoinBTC
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+All 37 blockchains
+
+## Get Kyro for TRON
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Cardano wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/cardano/
+================================================================
+
+Cardano · ADA
+
+# Cardano wallet for Windows, macOS and Linux
+
+Send, receive, swap and stake ADA and native tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive ADA and native tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap ADA in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Stake ADA from your own account. Kyro takes no fee on staking.
+Yes
+
+### Hardware wallet
+
+Sign Cardano transactions with a Ledger or Trezor. Not on the Trezor One. A Ledger gives different Cardano addresses than the software wallet for the same phrase.
+Yes
+
+Details
+
+## Cardano in Kyro
+
+Delegate to a stake pool. Your ADA stays on your address and remains spendable. Registering costs a 2 ADA deposit, returned when you stop.
+
+- ADA and Cardano native tokens.
+
+- Standard Shelley addresses (addr1...).
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- BitcoinBTC
+
+- EthereumETH
+
+- BNB ChainBNB
+
+- PolygonPOL
+
+- ArbitrumETH
+
+- OptimismETH
+
+- BaseETH
+
+- AvalancheAVAX
+
+All 37 blockchains
+
+## Get Kyro for Cardano
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+XRP Ledger wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/xrp/
+================================================================
+
+XRP Ledger · XRP
+
+# XRP Ledger wallet for Windows, macOS and Linux
+
+Send, receive and swap XRP and issued currencies, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive XRP and issued currencies, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap XRP in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for XRP.
+No
+
+### Hardware wallet
+
+Sign XRP Ledger transactions with a Ledger.
+Yes
+
+Details
+
+## XRP Ledger in Kyro
+
+- XRP and issued currencies.
+
+- Destination tags for exchanges and custodial services.
+
+- Every XRP Ledger account keeps a small reserve that cannot be sent.
+
+- The XRP Ledger has no native staking.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- StellarXLM
+
+- NEARNEAR
+
+- SuiSUI
+
+- MoneroXMR
+
+- TONGRAM
+
+- Cosmos HubATOM
+
+- PolkadotDOT
+
+- AptosAPT
+
+All 37 blockchains
+
+## Get Kyro for XRP Ledger
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Litecoin wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/litecoin/
+================================================================
+
+Litecoin · LTC
+
+# Litecoin wallet for Windows, macOS and Linux
+
+Send, receive and swap LTC, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive LTC, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap LTC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for LTC.
+No
+
+### Hardware wallet
+
+Sign Litecoin transactions with a Ledger or Trezor. Ledger: main network only.
+Yes
+
+Details
+
+## Litecoin in Kyro
+
+- Native SegWit (ltc1...) addresses.
+
+- Litecoin has no native staking.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- BitcoinBTC
+
+- DogecoinDOGE
+
+- Bitcoin CashBCH
+
+- DashDASH
+
+- KaspaKAS
+
+- ZcashZEC
+
+- EthereumETH
+
+- BNB ChainBNB
+
+All 37 blockchains
+
+## Get Kyro for Litecoin
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Dogecoin wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/dogecoin/
+================================================================
+
+Dogecoin · DOGE
+
+# Dogecoin wallet for Windows, macOS and Linux
+
+Send, receive and swap DOGE, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive DOGE, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap DOGE in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for DOGE.
+No
+
+### Hardware wallet
+
+Sign Dogecoin transactions with a Ledger or Trezor. Ledger: main network only.
+Yes
+
+Details
+
+## Dogecoin in Kyro
+
+- Standard Dogecoin addresses (D...).
+
+- Input amounts are read from the previous transactions and checked before you sign.
+
+- Dogecoin has no native staking.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- BitcoinBTC
+
+- LitecoinLTC
+
+- Bitcoin CashBCH
+
+- DashDASH
+
+- KaspaKAS
+
+- ZcashZEC
+
+- EthereumETH
+
+- BNB ChainBNB
+
+All 37 blockchains
+
+## Get Kyro for Dogecoin
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Bitcoin Cash wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/bitcoin-cash/
+================================================================
+
+Bitcoin Cash · BCH
+
+# Bitcoin Cash wallet for Windows, macOS and Linux
+
+Send, receive and swap BCH, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive BCH, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap BCH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for BCH.
+No
+
+### Hardware wallet
+
+Sign Bitcoin Cash transactions with a Ledger or Trezor. Ledger: main network only.
+Yes
+
+Details
+
+## Bitcoin Cash in Kyro
+
+- Bitcoin Cash has no native staking.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- BitcoinBTC
+
+- LitecoinLTC
+
+- DogecoinDOGE
+
+- DashDASH
+
+- KaspaKAS
+
+- ZcashZEC
+
+- EthereumETH
+
+- BNB ChainBNB
+
+All 37 blockchains
+
+## Get Kyro for Bitcoin Cash
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Dash wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/dash/
+================================================================
+
+Dash · DASH
+
+# Dash wallet for Windows, macOS and Linux
+
+Send, receive and swap DASH, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive DASH, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap DASH in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for DASH.
+No
+
+### Hardware wallet
+
+Sign Dash transactions with a Ledger or Trezor. Ledger: main network only.
+Yes
+
+Details
+
+## Dash in Kyro
+
+- Standard Dash addresses (X...).
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- BitcoinBTC
+
+- LitecoinLTC
+
+- DogecoinDOGE
+
+- Bitcoin CashBCH
+
+- KaspaKAS
+
+- ZcashZEC
+
+- EthereumETH
+
+- BNB ChainBNB
+
+All 37 blockchains
+
+## Get Kyro for Dash
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Stellar wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/stellar/
+================================================================
+
+Stellar · XLM
+
+# Stellar wallet for Windows, macOS and Linux
+
+Send, receive and swap XLM and USDC tokens, and sign with a Ledger or Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive XLM and USDC tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap into XLM from other chains (Stellar is a destination only for now). The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for XLM.
+No
+
+### Hardware wallet
+
+Sign Stellar transactions with a Ledger or Trezor.
+Yes
+
+Details
+
+## Stellar in Kyro
+
+- Stellar accounts need a minimum balance of XLM to exist on the network.
+
+- USDC on Stellar is supported. The account needs a USDC trustline to hold it.
+
+- Stellar has no native staking.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- XRP LedgerXRP
+
+- NEARNEAR
+
+- SuiSUI
+
+- MoneroXMR
+
+- TONGRAM
+
+- Cosmos HubATOM
+
+- PolkadotDOT
+
+- AptosAPT
+
+All 37 blockchains
+
+## Get Kyro for Stellar
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+NEAR wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/near/
+================================================================
+
+NEAR · NEAR
+
+# NEAR wallet for Windows, macOS and Linux
+
+Send and receive NEAR and USDC and USDT tokens, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive NEAR and USDC and USDT tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swaps are not available on NEAR yet.
+No
+
+### Staking
+
+Kyro does not offer staking for NEAR.
+No
+
+### Hardware wallet
+
+Sign NEAR transactions with a Ledger. The Ledger account is a different account than the software wallet.
+Yes
+
+Details
+
+## NEAR in Kyro
+
+- NEAR Protocol mainnet.
+
+- USDC and USDT on NEAR are supported.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- XRP LedgerXRP
+
+- StellarXLM
+
+- SuiSUI
+
+- MoneroXMR
+
+- TONGRAM
+
+- Cosmos HubATOM
+
+- PolkadotDOT
+
+- AptosAPT
+
+All 37 blockchains
+
+## Get Kyro for NEAR
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Sui wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/sui/
+================================================================
+
+Sui · SUI
+
+# Sui wallet for Windows, macOS and Linux
+
+Send, receive and swap SUI and USDC tokens, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive SUI and USDC tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap SUI in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for SUI.
+No
+
+### Hardware wallet
+
+Sign Sui transactions with a Ledger.
+Yes
+
+Details
+
+## Sui in Kyro
+
+- Sui mainnet. Network fees are paid in SUI.
+
+- USDC on Sui is supported.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- XRP LedgerXRP
+
+- StellarXLM
+
+- NEARNEAR
+
+- MoneroXMR
+
+- TONGRAM
+
+- Cosmos HubATOM
+
+- PolkadotDOT
+
+- AptosAPT
+
+All 37 blockchains
+
+## Get Kyro for Sui
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Monero wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/monero/
+================================================================
+
+Monero · XMR
+
+# Monero wallet for Windows, macOS and Linux
+
+Send and receive XMR. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive XMR, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swaps are not available on Monero yet.
+No
+
+### Staking
+
+Kyro does not offer staking for XMR.
+No
+
+### Hardware wallet
+
+Not supported on Monero yet. Use a software account.
+No
+
+Details
+
+## Monero in Kyro
+
+- Your Kyro recovery phrase restores your Monero wallet too. To move it to another Monero wallet, Kyro can also show the matching 25-word Monero phrase, which works in Monero GUI, Feather and Cake.
+
+- Balance and history are scanned on your computer, so your view key never leaves it. Kyro scans against a regular monerod node, over Tor.
+
+- The first sync of an old restored wallet can take a while.
+
+- Monero has no native staking.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- XRP LedgerXRP
+
+- StellarXLM
+
+- NEARNEAR
+
+- SuiSUI
+
+- TONGRAM
+
+- Cosmos HubATOM
+
+- PolkadotDOT
+
+- AptosAPT
+
+All 37 blockchains
+
+## Get Kyro for Monero
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+TON wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/ton/
+================================================================
+
+TON · GRAM
+
+# TON wallet for Windows, macOS and Linux
+
+Send, receive and swap GRAM and USDT (jetton) tokens, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive GRAM and USDT (jetton) tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap GRAM in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for GRAM.
+No
+
+### Hardware wallet
+
+Sign TON transactions with a Ledger. The Ledger wallet has a different address than the software wallet. Comments: printable ASCII, up to 120 characters.
+Yes
+
+Details
+
+## TON in Kyro
+
+- TON is the network. Its coin is Gram (GRAM), renamed from Toncoin in June 2026.
+
+- USDT on TON is supported.
+
+- v4R2 wallet. The same recovery phrase gives the same address as Trust Wallet. Tonkeeper uses its own phrase format, so its addresses will not match.
+
+- The wallet contract is deployed on your first send.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- XRP LedgerXRP
+
+- StellarXLM
+
+- NEARNEAR
+
+- SuiSUI
+
+- MoneroXMR
+
+- Cosmos HubATOM
+
+- PolkadotDOT
+
+- AptosAPT
+
+All 37 blockchains
+
+## Get Kyro for TON
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Cosmos Hub wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/cosmos/
+================================================================
+
+Cosmos Hub · ATOM
+
+# Cosmos Hub wallet for Windows, macOS and Linux
+
+Send and receive ATOM, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive ATOM, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swaps are not available on Cosmos Hub yet.
+No
+
+### Staking
+
+Kyro does not offer staking for ATOM.
+No
+
+### Hardware wallet
+
+Sign Cosmos Hub transactions with a Ledger.
+Yes
+
+Details
+
+## Cosmos Hub in Kyro
+
+- Cosmos Hub addresses (cosmos1...).
+
+- Transfers are simulated before you sign.
+
+- Staking is not available yet.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- XRP LedgerXRP
+
+- StellarXLM
+
+- NEARNEAR
+
+- SuiSUI
+
+- MoneroXMR
+
+- TONGRAM
+
+- PolkadotDOT
+
+- AptosAPT
+
+All 37 blockchains
+
+## Get Kyro for Cosmos Hub
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Polkadot wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/polkadot/
+================================================================
+
+Polkadot · DOT
+
+# Polkadot wallet for Windows, macOS and Linux
+
+Send and receive DOT. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive DOT, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swaps are not available on Polkadot yet.
+No
+
+### Staking
+
+Kyro does not offer staking for DOT.
+No
+
+### Hardware wallet
+
+Not supported on Polkadot yet. Use a software account.
+No
+
+Details
+
+## Polkadot in Kyro
+
+- Balance and transfers are on Asset Hub.
+
+- The system confirmation window shows the existential deposit, the minimum balance an account must keep.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- XRP LedgerXRP
+
+- StellarXLM
+
+- NEARNEAR
+
+- SuiSUI
+
+- MoneroXMR
+
+- TONGRAM
+
+- Cosmos HubATOM
+
+- AptosAPT
+
+All 37 blockchains
+
+## Get Kyro for Polkadot
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Aptos wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/aptos/
+================================================================
+
+Aptos · APT
+
+# Aptos wallet for Windows, macOS and Linux
+
+Send, receive and swap APT and USDC and USDT tokens, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive APT and USDC and USDT tokens, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap APT in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for APT.
+No
+
+### Hardware wallet
+
+Sign Aptos transactions with a Ledger.
+Yes
+
+Details
+
+## Aptos in Kyro
+
+- Aptos mainnet. Network fees are paid in APT.
+
+- USDC and USDT on Aptos are supported.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- XRP LedgerXRP
+
+- StellarXLM
+
+- NEARNEAR
+
+- SuiSUI
+
+- MoneroXMR
+
+- TONGRAM
+
+- Cosmos HubATOM
+
+- PolkadotDOT
+
+All 37 blockchains
+
+## Get Kyro for Aptos
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Algorand wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/algorand/
+================================================================
+
+Algorand · ALGO
+
+# Algorand wallet for Windows, macOS and Linux
+
+Send and receive ALGO, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive ALGO, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swaps are not available on Algorand yet.
+No
+
+### Staking
+
+Kyro does not offer staking for ALGO.
+No
+
+### Hardware wallet
+
+Sign Algorand transactions with a Ledger.
+Yes
+
+Details
+
+## Algorand in Kyro
+
+- The minimum balance of the account is shown before you send.
+
+- Same address as the Ledger Algorand app for the same recovery phrase.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- XRP LedgerXRP
+
+- StellarXLM
+
+- NEARNEAR
+
+- SuiSUI
+
+- MoneroXMR
+
+- TONGRAM
+
+- Cosmos HubATOM
+
+- PolkadotDOT
+
+All 37 blockchains
+
+## Get Kyro for Algorand
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Kaspa wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/kaspa/
+================================================================
+
+Kaspa · KAS
+
+# Kaspa wallet for Windows, macOS and Linux
+
+Send and receive KAS. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive KAS, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swaps are not available on Kaspa yet.
+No
+
+### Staking
+
+Kyro does not offer staking for KAS.
+No
+
+### Hardware wallet
+
+Not supported on Kaspa yet. Use a software account.
+No
+
+Details
+
+## Kaspa in Kyro
+
+- Standard Kaspa addresses (kaspa:...).
+
+- Kaspa has no native staking.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- BitcoinBTC
+
+- LitecoinLTC
+
+- DogecoinDOGE
+
+- Bitcoin CashBCH
+
+- DashDASH
+
+- ZcashZEC
+
+- EthereumETH
+
+- BNB ChainBNB
+
+All 37 blockchains
+
+## Get Kyro for Kaspa
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Hedera wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/hedera/
+================================================================
+
+Hedera · HBAR
+
+# Hedera wallet for Windows, macOS and Linux
+
+Send and receive HBAR, and sign with a Ledger. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive HBAR, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swaps are not available on Hedera yet.
+No
+
+### Staking
+
+Kyro does not offer staking for HBAR.
+No
+
+### Hardware wallet
+
+Sign Hedera transactions with a Ledger. The account must be created with Ledger Live or HashPack first; it is a different account than the software wallet.
+Yes
+
+Details
+
+## Hedera in Kyro
+
+- Receive on the EVM-style address (0x...). The 0.0.x account is created when the first deposit arrives.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- XRP LedgerXRP
+
+- StellarXLM
+
+- NEARNEAR
+
+- SuiSUI
+
+- MoneroXMR
+
+- TONGRAM
+
+- Cosmos HubATOM
+
+- PolkadotDOT
+
+All 37 blockchains
+
+## Get Kyro for Hedera
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help
+
+================================================================
+Zcash wallet for Windows, macOS and Linux | Kyro
+URL: https://kyrowallet.com/chains/zcash/
+================================================================
+
+Zcash · ZEC
+
+# Zcash wallet for Windows, macOS and Linux
+
+Send, receive and swap ZEC, and sign with a Trezor. Kyro is free, open source and keeps your keys on your own computer.
+
+Download Kyro All blockchains
+
+### Send and receive
+
+Send and receive ZEC, with address-poisoning alerts and clipboard checks.
+Yes
+
+### Swap
+
+Swap ZEC in the app. The amount you receive already includes Kyro's swap fee, from 0.7%.
+Yes
+
+### Staking
+
+Kyro does not offer staking for ZEC.
+No
+
+### Hardware wallet
+
+Sign Zcash transactions with a Trezor. Transparent addresses only.
+Yes
+
+Details
+
+## Zcash in Kyro
+
+- Transparent addresses (t...) only. Shielded addresses are not supported.
+
+- Zcash has no native staking.
+
+- Same recovery phrase as your other 36 blockchains.
+
+- Keys encrypted on your computer; every signature confirmed in a system window.
+
+## Also in Kyro
+
+Every blockchain lives in the same app, under the same recovery phrase.
+
+- BitcoinBTC
+
+- LitecoinLTC
+
+- DogecoinDOGE
+
+- Bitcoin CashBCH
+
+- DashDASH
+
+- KaspaKAS
+
+- EthereumETH
+
+- BNB ChainBNB
+
+All 37 blockchains
+
+## Get Kyro for Zcash
+
+Version 1.0.0 · Free · Windows, macOS and Linux
+
+Windows .exe installer    macOS Apple Silicon & Intel    Linux AppImage
+
+All files, checksums and first-launch help

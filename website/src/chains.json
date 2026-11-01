@@ -1,0 +1,803 @@
+{
+  "_readme": "One entry per blockchain. status: \"live\" = page built, listed and in the sitemap; \"hidden\" = nothing is built or linked. After editing, run: node site-src/build.mjs. Required: slug, name, ticker, color, features, status. Optional: icon (file name in site-icons/ without .svg; defaults to the lower-case ticker), glyph and fg (no longer drawn; kept as fallback data), kind (evm | utxo | solana | tron | cardano | account), tokens, notes (short, factual sentences shown on the chain page), staking (how staking works there).",
+  "chains": [
+    {
+      "slug": "bitcoin",
+      "name": "Bitcoin",
+      "ticker": "BTC",
+      "color": "#f7931a",
+      "glyph": "₿",
+      "kind": "utxo",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Native SegWit (bc1q…) and Taproot (bc1p…) addresses.",
+        "Transactions are checked before you sign: unknown scripts, OP_RETURN data or a fee above 100 sat/vB ask for a second confirmation.",
+        "Bitcoin has no native staking."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "ethereum",
+      "name": "Ethereum",
+      "ticker": "ETH",
+      "color": "#627eea",
+      "glyph": "Ξ",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "ETH and ERC-20 tokens in the same account.",
+        "Token approvals are set to the exact amount by default. Unlimited approvals are off unless you turn them on.",
+        "Contract calls, approvals and high fees ask for a second confirmation.",
+        "Native ETH staking is not offered: it needs 32 ETH and a validator running at all times, and Kyro does not route your coins through a third-party contract."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "bnb-chain",
+      "name": "BNB Chain",
+      "ticker": "BNB",
+      "color": "#f0b90b",
+      "fg": "#1a1a1a",
+      "glyph": "B",
+      "kind": "evm",
+      "tokens": "BEP-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Same address as your Ethereum account.",
+        "Network fees are paid in BNB."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "polygon",
+      "name": "Polygon",
+      "ticker": "POL",
+      "color": "#8247e5",
+      "glyph": "P",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Same address as your Ethereum account.",
+        "Network fees are paid in POL."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "arbitrum",
+      "icon": "arb",
+      "name": "Arbitrum",
+      "ticker": "ETH",
+      "color": "#28a0f0",
+      "glyph": "A",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Arbitrum One, an Ethereum layer 2.",
+        "Same address as your Ethereum account. Network fees are paid in ETH."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "optimism",
+      "icon": "op",
+      "name": "Optimism",
+      "ticker": "ETH",
+      "color": "#ff0420",
+      "glyph": "O",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "OP Mainnet, an Ethereum layer 2.",
+        "Same address as your Ethereum account. Network fees are paid in ETH."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "base",
+      "icon": "base",
+      "name": "Base",
+      "ticker": "ETH",
+      "color": "#0052ff",
+      "glyph": "B",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "An Ethereum layer 2.",
+        "Same address as your Ethereum account. Network fees are paid in ETH."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "avalanche",
+      "name": "Avalanche",
+      "ticker": "AVAX",
+      "color": "#e84142",
+      "glyph": "A",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Kyro uses the Avalanche C-Chain.",
+        "Same address as your Ethereum account. Network fees are paid in AVAX."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "cronos",
+      "name": "Cronos",
+      "ticker": "CRO",
+      "color": "#1d5c94",
+      "glyph": "C",
+      "kind": "evm",
+      "tokens": "CRC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Cronos EVM. Same address as your Ethereum account.",
+        "Network fees are paid in CRO."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "mantle",
+      "name": "Mantle",
+      "ticker": "MNT",
+      "color": "#3a3a3a",
+      "glyph": "M",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Same address as your Ethereum account.",
+        "Network fees are paid in MNT."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "sonic",
+      "name": "Sonic",
+      "ticker": "S",
+      "color": "#f26b1d",
+      "glyph": "S",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Same address as your Ethereum account.",
+        "Network fees are paid in S."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "flare",
+      "name": "Flare",
+      "ticker": "FLR",
+      "color": "#e62058",
+      "glyph": "F",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Same address as your Ethereum account.",
+        "Network fees are paid in FLR."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "kaia",
+      "name": "Kaia",
+      "ticker": "KAIA",
+      "color": "#bff009",
+      "fg": "#111111",
+      "glyph": "K",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Same address as your Ethereum account.",
+        "Network fees are paid in KAIA."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "gnosis",
+      "icon": "gno",
+      "name": "Gnosis",
+      "ticker": "xDAI",
+      "color": "#3e6957",
+      "glyph": "G",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Gnosis Chain. Same address as your Ethereum account.",
+        "Network fees are paid in xDAI."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "hyperevm",
+      "name": "HyperEVM",
+      "ticker": "HYPE",
+      "color": "#97fce4",
+      "fg": "#0b2b26",
+      "glyph": "H",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "The EVM side of Hyperliquid. Same address as your Ethereum account.",
+        "Network fees are paid in HYPE."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "sei",
+      "name": "Sei",
+      "ticker": "SEI",
+      "color": "#9e1f19",
+      "glyph": "S",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Sei EVM. Same address as your Ethereum account.",
+        "Network fees are paid in SEI."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "conflux",
+      "name": "Conflux",
+      "ticker": "CFX",
+      "color": "#38a1db",
+      "glyph": "C",
+      "kind": "evm",
+      "tokens": "ERC-20",
+      "features": {
+        "send": true,
+        "swap": false,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Kyro uses Conflux eSpace, the EVM-compatible side of Conflux.",
+        "Same address as your Ethereum account. Network fees are paid in CFX."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "solana",
+      "name": "Solana",
+      "ticker": "SOL",
+      "color": "#14c8a6",
+      "glyph": "S",
+      "kind": "solana",
+      "tokens": "SPL",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": true,
+        "hardware": true
+      },
+      "status": "live",
+      "staking": "Delegate SOL to a validator from a stake account in your name. Activation and cooldown take about one epoch each (around two days). A validator cannot take your SOL; your rewards depend on its commission and uptime.",
+      "notes": [
+        "SOL, SPL and Token-2022 tokens.",
+        "Versioned (v0) transactions and address lookup tables are decoded before you sign."
+      ],
+      "hwDevices": "Ledger and Trezor"
+    },
+    {
+      "slug": "tron",
+      "name": "TRON",
+      "ticker": "TRX",
+      "color": "#e50914",
+      "glyph": "T",
+      "kind": "tron",
+      "tokens": "TRC-20",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": true,
+        "hardware": true
+      },
+      "status": "live",
+      "staking": "Stake TRX (Stake 2.0) for energy or bandwidth, then vote for Super Representatives with your TRON Power. Unstaking takes 14 days. Votes do not put your TRX at risk.",
+      "notes": [
+        "TRX and TRC-20 tokens such as USDT.",
+        "Energy and bandwidth from staking lower the cost of TRC-20 transfers."
+      ],
+      "hwDevices": "Ledger"
+    },
+    {
+      "slug": "cardano",
+      "name": "Cardano",
+      "ticker": "ADA",
+      "color": "#2a5ada",
+      "glyph": "A",
+      "kind": "cardano",
+      "tokens": "native tokens",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": true,
+        "hardware": true
+      },
+      "status": "live",
+      "staking": "Delegate to a stake pool. Your ADA stays on your address and remains spendable. Registering costs a 2 ADA deposit, returned when you stop.",
+      "notes": [
+        "ADA and Cardano native tokens.",
+        "Standard Shelley addresses (addr1…)."
+      ],
+      "hwDevices": "Ledger and Trezor",
+      "hwNote": "Not on the Trezor One. A Ledger gives different Cardano addresses than the software wallet for the same phrase."
+    },
+    {
+      "slug": "xrp",
+      "name": "XRP Ledger",
+      "ticker": "XRP",
+      "color": "#e8edf2",
+      "fg": "#111111",
+      "glyph": "X",
+      "kind": "account",
+      "tokens": "issued currencies",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "XRP and issued currencies.",
+        "Destination tags for exchanges and custodial services.",
+        "Every XRP Ledger account keeps a small reserve that cannot be sent.",
+        "The XRP Ledger has no native staking."
+      ],
+      "hwDevices": "Ledger"
+    },
+    {
+      "slug": "litecoin",
+      "name": "Litecoin",
+      "ticker": "LTC",
+      "color": "#345d9d",
+      "glyph": "Ł",
+      "kind": "utxo",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Native SegWit (ltc1…) addresses.",
+        "Litecoin has no native staking."
+      ],
+      "hwDevices": "Ledger and Trezor",
+      "hwNote": "Ledger: main network only."
+    },
+    {
+      "slug": "dogecoin",
+      "name": "Dogecoin",
+      "ticker": "DOGE",
+      "color": "#c2a633",
+      "glyph": "Ð",
+      "kind": "utxo",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Standard Dogecoin addresses (D…).",
+        "Input amounts are read from the previous transactions and checked before you sign.",
+        "Dogecoin has no native staking."
+      ],
+      "hwDevices": "Ledger and Trezor",
+      "hwNote": "Ledger: main network only."
+    },
+    {
+      "slug": "bitcoin-cash",
+      "name": "Bitcoin Cash",
+      "ticker": "BCH",
+      "color": "#0ac18e",
+      "glyph": "₿",
+      "kind": "utxo",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Bitcoin Cash has no native staking."
+      ],
+      "hwDevices": "Ledger and Trezor",
+      "hwNote": "Ledger: main network only."
+    },
+    {
+      "slug": "dash",
+      "name": "Dash",
+      "ticker": "DASH",
+      "color": "#008de4",
+      "glyph": "D",
+      "kind": "utxo",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Standard Dash addresses (X…)."
+      ],
+      "hwDevices": "Ledger and Trezor",
+      "hwNote": "Ledger: main network only."
+    },
+    {
+      "slug": "stellar",
+      "name": "Stellar",
+      "ticker": "XLM",
+      "color": "#d8dde3",
+      "fg": "#111111",
+      "glyph": "S",
+      "kind": "account",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Stellar accounts need a minimum balance of XLM to exist on the network.",
+        "USDC on Stellar is supported. The account needs a USDC trustline to hold it.",
+        "Stellar has no native staking."
+      ],
+      "hwDevices": "Ledger and Trezor",
+      "swapNote": "Swap into XLM from other chains (Stellar is a destination only for now).",
+      "tokens": "USDC"
+    },
+    {
+      "slug": "near",
+      "name": "NEAR",
+      "ticker": "NEAR",
+      "color": "#00ec97",
+      "fg": "#111111",
+      "glyph": "N",
+      "kind": "account",
+      "features": {
+        "send": true,
+        "swap": false,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "NEAR Protocol mainnet.",
+        "USDC and USDT on NEAR are supported."
+      ],
+      "hwDevices": "Ledger",
+      "hwNote": "The Ledger account is a different account than the software wallet.",
+      "tokens": "USDC and USDT"
+    },
+    {
+      "slug": "sui",
+      "name": "Sui",
+      "ticker": "SUI",
+      "color": "#4da2ff",
+      "glyph": "S",
+      "kind": "account",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Sui mainnet. Network fees are paid in SUI.",
+        "USDC on Sui is supported."
+      ],
+      "hwDevices": "Ledger",
+      "tokens": "USDC"
+    },
+    {
+      "slug": "monero",
+      "name": "Monero",
+      "ticker": "XMR",
+      "color": "#ff6600",
+      "glyph": "M",
+      "kind": "account",
+      "features": {
+        "send": true,
+        "swap": false,
+        "staking": false,
+        "hardware": false
+      },
+      "status": "live",
+      "notes": [
+        "Your Kyro recovery phrase restores your Monero wallet too. To move it to another Monero wallet, Kyro can also show the matching 25-word Monero phrase, which works in Monero GUI, Feather and Cake.",
+        "Balance and history are scanned on your computer, so your view key never leaves it. Kyro scans against a regular monerod node, over Tor.",
+        "The first sync of an old restored wallet can take a while.",
+        "Monero has no native staking."
+      ]
+    },
+    {
+      "slug": "ton",
+      "name": "TON",
+      "ticker": "GRAM",
+      "color": "#0098ea",
+      "glyph": "T",
+      "kind": "account",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "TON is the network. Its coin is Gram (GRAM), renamed from Toncoin in June 2026.",
+        "USDT on TON is supported.",
+        "v4R2 wallet. The same recovery phrase gives the same address as Trust Wallet. Tonkeeper uses its own phrase format, so its addresses will not match.",
+        "The wallet contract is deployed on your first send."
+      ],
+      "hwDevices": "Ledger",
+      "hwNote": "The Ledger wallet has a different address than the software wallet. Comments: printable ASCII, up to 120 characters.",
+      "tokens": "USDT (jetton)"
+    },
+    {
+      "slug": "cosmos",
+      "name": "Cosmos Hub",
+      "ticker": "ATOM",
+      "color": "#4b4f7a",
+      "glyph": "C",
+      "kind": "account",
+      "features": {
+        "send": true,
+        "swap": false,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Cosmos Hub addresses (cosmos1…).",
+        "Transfers are simulated before you sign.",
+        "Staking is not available yet."
+      ],
+      "hwDevices": "Ledger"
+    },
+    {
+      "slug": "polkadot",
+      "name": "Polkadot",
+      "ticker": "DOT",
+      "color": "#e6007a",
+      "glyph": "P",
+      "kind": "account",
+      "features": {
+        "send": true,
+        "swap": false,
+        "staking": false,
+        "hardware": false
+      },
+      "status": "live",
+      "notes": [
+        "Balance and transfers are on Asset Hub.",
+        "The system confirmation window shows the existential deposit, the minimum balance an account must keep."
+      ]
+    },
+    {
+      "slug": "aptos",
+      "name": "Aptos",
+      "ticker": "APT",
+      "color": "#2dd8a3",
+      "fg": "#0b2b26",
+      "glyph": "A",
+      "kind": "account",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Aptos mainnet. Network fees are paid in APT.",
+        "USDC and USDT on Aptos are supported."
+      ],
+      "hwDevices": "Ledger",
+      "tokens": "USDC and USDT"
+    },
+    {
+      "slug": "algorand",
+      "name": "Algorand",
+      "ticker": "ALGO",
+      "color": "#e8edf2",
+      "fg": "#111111",
+      "glyph": "A",
+      "kind": "account",
+      "features": {
+        "send": true,
+        "swap": false,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "The minimum balance of the account is shown before you send.",
+        "Same address as the Ledger Algorand app for the same recovery phrase."
+      ],
+      "hwDevices": "Ledger"
+    },
+    {
+      "slug": "kaspa",
+      "name": "Kaspa",
+      "ticker": "KAS",
+      "color": "#70c7ba",
+      "fg": "#0b2b26",
+      "glyph": "K",
+      "kind": "utxo",
+      "features": {
+        "send": true,
+        "swap": false,
+        "staking": false,
+        "hardware": false
+      },
+      "status": "live",
+      "notes": [
+        "Standard Kaspa addresses (kaspa:…).",
+        "Kaspa has no native staking."
+      ]
+    },
+    {
+      "slug": "hedera",
+      "name": "Hedera",
+      "ticker": "HBAR",
+      "color": "#3a3a3a",
+      "glyph": "H",
+      "kind": "account",
+      "features": {
+        "send": true,
+        "swap": false,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Receive on the EVM-style address (0x…). The 0.0.x account is created when the first deposit arrives."
+      ],
+      "hwDevices": "Ledger",
+      "hwNote": "The account must be created with Ledger Live or HashPack first; it is a different account than the software wallet."
+    },
+    {
+      "slug": "zcash",
+      "name": "Zcash",
+      "ticker": "ZEC",
+      "color": "#f4b728",
+      "fg": "#1a1a1a",
+      "glyph": "Z",
+      "kind": "utxo",
+      "features": {
+        "send": true,
+        "swap": true,
+        "staking": false,
+        "hardware": true
+      },
+      "status": "live",
+      "notes": [
+        "Transparent addresses (t…) only. Shielded addresses are not supported.",
+        "Zcash has no native staking."
+      ],
+      "hwDevices": "Trezor",
+      "hwNote": "Transparent addresses only."
+    }
+  ]
+}

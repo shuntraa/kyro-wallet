@@ -1,0 +1,3 @@
+# Cloudflare Pages redirects (this file is not served).
+/frais /fees/ 301
+/frais/ /fees/ 301
