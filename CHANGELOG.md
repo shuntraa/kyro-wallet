@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.3
+
+- Ledger: Kyro now opens the right app for you. Plug in and unlock the Ledger, click Connect,
+  and approve "Open Bitcoin" (or Ethereum, Solana…) on the device when asked. If another app
+  is open, Kyro closes it first. A missing app shows "Install the app with Ledger Live".
+  Same when signing from a Ledger account. Not yet tested on a real Ledger.
+
 ## 1.0.2
 
 - Tor: fixed history failing on EVM networks ("Protocol error while launching a data
