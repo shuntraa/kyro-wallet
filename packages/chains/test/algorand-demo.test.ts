@@ -98,7 +98,7 @@ describe('Algorand in the app', () => {
     expect(dest).toMatchObject({ exists: false, balance: '0', minBalance: '100000' });
     expect((await err(algo.buildTx({ asset: ALGO, to: mock.algo.empty, amount: 99_999n, fee: { family: 'algo' } }))).message).toContain('au moins 0,1 ALGO');
     expect((await algo.buildTx({ asset: ALGO, to: mock.algo.empty, amount: 100_000n, fee: { family: 'algo' } })).context.destination.exists).toBe(false);
-    expect((await err(algo.buildTx({ asset: ALGO, to: mock.algo.friend, amount: 42_299_001n, fee: { family: 'algo' } }))).message).toContain('solde disponible insuffisant');
+    expect((await err(algo.buildTx({ asset: ALGO, to: mock.algo.friend, amount: 42_299_001n, fee: { family: 'algo' } }))).message).toContain('Solde disponible insuffisant');
     const max = await algo.buildTx({ asset: ALGO, to: mock.algo.friend, amount: 0n, fee: { family: 'algo' }, max: true });
     expect(max.amount).toBe(42_300_000n - 1_000n);
   });

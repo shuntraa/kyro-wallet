@@ -70,7 +70,7 @@ describe('Aptos in the app', () => {
     const u = await apt.buildTx({ asset: APT, to: NEW, amount: 1n, fee: { family: 'apt' } });
     expect(u.context.recipientNew).toBe(true);
     expect(u.summary.maxGasAmount).toBe('1500');
-    expect(await err(apt.buildTx({ asset: APT, to: NEW, amount: 1_250_000_000n, fee: { family: 'apt' } }))).toMatchObject({ code: 'INVALID_INPUT', message: expect.stringMatching(/solde insuffisant/) });
+    expect(await err(apt.buildTx({ asset: APT, to: NEW, amount: 1_250_000_000n, fee: { family: 'apt' } }))).toMatchObject({ code: 'INVALID_INPUT', message: expect.stringMatching(/^Solde insuffisant/) });
     const max = await apt.buildTx({ asset: APT, to: NEW, amount: 0n, fee: { family: 'apt' }, max: true });
     expect(max.amount).toBe(1_250_000_000n - 150_000n);
     expect(await err(call('aptos_build_tx', { to: '0x1', amount: '1' }))).toMatchObject({ code: 'INVALID_INPUT', message: expect.stringMatching(/forme courte/) });

@@ -83,7 +83,7 @@ describe('Kaspa in the app', () => {
     expect((await err(kas.buildTx({ asset: KAS, to: FRIEND_TESTNET, amount: 10_000_000n, fee: { family: 'kas' } }))).message).toContain('0,2 KAS');
     const mainnet = 'kaspa:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkx9awp4e';
     expect((await err(kas.buildTx({ asset: KAS, to: mainnet, amount: kasToSompi('1'), fee: { family: 'kas' } }))).message).toContain('réseau principal');
-    expect((await err(kas.buildTx({ asset: KAS, to: FRIEND_TESTNET, amount: kasToSompi('500'), fee: { family: 'kas' } }))).message).toContain('insufficient funds');
+    expect((await err(kas.buildTx({ asset: KAS, to: FRIEND_TESTNET, amount: kasToSompi('500'), fee: { family: 'kas' } }))).message).toContain('Insufficient funds');
     expect((await err(call('kas_build_tx', { to: FRIEND_TESTNET, amount: '1.5' }))).code).toBe('INVALID_INPUT');
   });
 
