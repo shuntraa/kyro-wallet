@@ -21,7 +21,7 @@ use crate::zcash_backend::{self, ZecCtx};
 
 const MAX_CANDIDATES: usize = 200;
 
-fn ctx(state: &AppState) -> ZecCtx<'_> {
+pub(crate) fn ctx(state: &AppState) -> ZecCtx<'_> {
     ZecCtx {
         net_client: &state.net,
         network: state.network,

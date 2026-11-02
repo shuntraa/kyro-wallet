@@ -22,7 +22,7 @@ const DOGE: UtxoCoin = UtxoCoin::Dogecoin;
 const BCH: UtxoCoin = UtxoCoin::BitcoinCash;
 const DASH: UtxoCoin = UtxoCoin::Dash;
 
-fn ctx<'a>(state: &'a AppState, coin: UtxoCoin) -> UtxoCtx<'a> {
+pub(crate) fn ctx<'a>(state: &'a AppState, coin: UtxoCoin) -> UtxoCtx<'a> {
     let s = state.settings();
     UtxoCtx {
         net_client: &state.net,

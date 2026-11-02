@@ -26,7 +26,7 @@ pub(crate) fn ctx(state: &AppState) -> HbarCtx<'_> {
     }
 }
 
-fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
+pub(crate) fn ours(state: &AppState, account: u32) -> AppResult<(String, [u8; 33])> {
     state.with_seed(|seed| {
         Ok((
             wallet_core::hbar_evm_address(seed, account)?,

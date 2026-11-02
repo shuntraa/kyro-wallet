@@ -303,7 +303,7 @@ pub fn ada_address(
     })
 }
 
-async fn account_and_utxos(
+pub(crate) async fn account_and_utxos(
     c: &CardanoCtx<'_>,
     address: &str,
     p: &Params,

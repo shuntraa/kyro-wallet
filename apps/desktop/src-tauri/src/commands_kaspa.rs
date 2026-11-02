@@ -27,7 +27,7 @@ pub(crate) fn ctx(state: &AppState) -> KaspaCtx<'_> {
     }
 }
 
-fn keys(state: &AppState, account: u32) -> AppResult<Vec<KaspaOwnKey>> {
+pub(crate) fn keys(state: &AppState, account: u32) -> AppResult<Vec<KaspaOwnKey>> {
     let net = state.network;
     state.with_seed(|seed| {
         Ok(wallet_core::kaspa_own_keys(
