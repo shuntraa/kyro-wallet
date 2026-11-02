@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Integrated title bar (40 px): logo, breadcrumb, Ctrl K search, window controls.
+// Integrated title bar (40 px): logo, breadcrumb, search, window controls.
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { isTauri } from '@kyro/shared';
@@ -30,7 +30,6 @@ function onBarMouseDown(e: MouseEvent<HTMLElement>) {
     void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().startDragging()).catch(() => {});
 }
 
-const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent);
 
 export function WindowControls() {
   const { t } = useT();
@@ -102,18 +101,6 @@ function Slash() {
   );
 }
 
-function ShortcutHint() {
-  const keys = IS_MAC ? ['⌘', 'K'] : ['Ctrl', 'K'];
-  return (
-    <span aria-hidden="true" className="pointer-events-none flex shrink-0 items-center gap-[3px] transition-opacity duration-150 group-focus-within:opacity-0">
-      {keys.map((k) => (
-        <kbd key={k} className="flex h-[17px] min-w-[17px] items-center justify-center rounded-[4px] bg-control px-1 font-sans text-[10px] leading-none font-medium text-faint">
-          {k}
-        </kbd>
-      ))}
-    </span>
-  );
-}
 
 function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
   const { t } = useT();
@@ -177,7 +164,6 @@ function SearchBox({ search }: { search: (q: string) => SearchResult[] }) {
           }}
           className="min-w-0 flex-1 bg-transparent text-[12px] text-text"
         />
-        {!q && <ShortcutHint />}
       </label>
       {open && q.trim() && (
         <div data-no-drag className="pop-in absolute top-9 right-0 left-0 z-50 overflow-hidden rounded-box border border-line-2 bg-[#121418] p-1 shadow-[0_16px_40px_-16px_rgba(0,0,0,.8)]">

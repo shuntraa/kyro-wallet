@@ -100,7 +100,7 @@ export function History() {
   const pending = (history.data?.entries ?? []).filter((e) => e.status === 'pending').length;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
       <header className="flex items-center justify-between gap-4 border-b border-line pb-4">
         <h1 className="screen-title">{t('common.history')}</h1>
         <div className="flex items-center gap-2.5">
@@ -156,7 +156,7 @@ export function History() {
                 {t('history.btcCapped', { cap: BTC_TXS_CAP })}
               </p>
             )}
-            <p className="m-0 px-[22px] py-3 text-[11px] leading-[1.5] text-faint">
+            <p className="m-0 px-[22px] py-3 text-[12px] leading-[1.5] text-faint">
               {t('history.ethNote', { blocks: fmtIntl(5000) })}
             </p>
           </div>
@@ -170,7 +170,7 @@ export function History() {
               <MonthStat label={t('history.sent')} value={hideBalances ? '•••' : `−${fmtFiat(month.sent, cur, { decimals: 0 })}`} />
               <MonthStat label={t('history.fees')} value={hideBalances ? '•••' : fmtFiat(month.fees, cur)} />
             </div>
-            <span className="text-[11px] text-faint">{t('history.atCurrentPrice')}{pending ? ` ${tp('history.pendingCount', pending)}` : ''}</span>
+            {pending > 0 && <span className="text-[12px] text-faint">{tp('history.pendingCount', pending)}</span>}
           </section>
           <Approvals />
         </div>
@@ -225,9 +225,9 @@ function Approvals() {
         <span className="text-[15px] font-medium tracking-[-0.01em]">{t('history.activeApprovals')}</span>
         {risky > 0 && <Badge tone="down">{t('history.atRisk', { count: risky })}</Badge>}
       </div>
-      <p className="m-0 text-[13px] leading-[1.55] text-mute">{t('history.approvalsHint')}</p>
+      {list.length > 0 && <p className="m-0 text-[13px] leading-[1.55] text-mute">{t('history.approvalsHint')}</p>}
       {state.loading && !state.data && <Skeleton className="h-24 w-full" />}
-      {state.data && list.length === 0 && <EmptyState className="py-6" title={t('history.noApprovals')}>{t('history.noApprovalsHint')}</EmptyState>}
+      {state.data && list.length === 0 && <EmptyState className="py-6" title={t('history.noApprovals')} />}
       {list.map((a) => {
         const unlimited = isUnlimitedAllowance(a.current);
         const asset = assetsFor(network).find((x) => x.contract?.toLowerCase() === a.token.toLowerCase());

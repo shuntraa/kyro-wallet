@@ -143,7 +143,7 @@ export function StellarMemoField({
           {t('stellar.memo')} {required ? <span className="text-down">{t('stellar.memoRequired')}</span> : <span className="font-normal text-mute">{t('stellar.memoOptional')}</span>}
         </label>
         {destLoading && (
-          <span className="flex items-center gap-1.5 text-[11px] text-mute">
+          <span className="flex items-center gap-1.5 text-[12px] text-mute">
             <Spinner /> {t('stellar.readingAccount')}
           </span>
         )}
@@ -253,7 +253,7 @@ export function StellarSummaryView({ u, xlmPrice, currency }: { u: StellarUnsign
     <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('stellar.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">{u.createsAccount ? t('stellar.createTitle') : t('stellar.paymentTitle')}</span>
-        <span className="text-[11px] text-mute">{t('stellar.decodedByVault')}</span>
+        <span className="text-[12px] text-mute">{t('stellar.decodedByVault')}</span>
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', memo ? 'border-ice-line' : c.destination.memoRequired ? 'border-down/60' : 'border-warn/50')}>
         <span className="block text-[12px] font-medium text-mute">{t('stellar.memo')}{memo ? ` (${memo.kind})` : ''}</span>

@@ -417,7 +417,7 @@ function WordInput({ index, value, onChange, autoFocus, onEnter, onPasteMany, co
   return (
     <div className="relative">
       <label className={cn('flex items-center gap-2.5 rounded-ctl border bg-card px-3 transition-colors focus-within:border-ice-line', compact ? 'h-10' : 'h-12', invalid ? 'border-down/60' : 'border-line hover:border-line-2')}>
-        <span className="w-6 font-mono text-[11px] text-faint">{index + 1}</span>
+        <span className="w-6 font-mono text-[12px] text-faint">{index + 1}</span>
         <span className="sr-only">{t('welcome.wordN', { n: index + 1 })}</span>
         <input
           value={value}
@@ -445,7 +445,7 @@ function WordInput({ index, value, onChange, autoFocus, onEnter, onPasteMany, co
           }}
           className="min-w-0 flex-1 bg-transparent font-mono text-[15px]"
         />
-        {known && <span className="text-[11px] text-up">✓</span>}
+        {known && <span className="text-[12px] text-up">✓</span>}
       </label>
       {show && (
         <div className="pop-in absolute top-full right-0 left-0 z-20 mt-1 flex gap-1 rounded-ctl border border-line-2 bg-[#121418] p-1">

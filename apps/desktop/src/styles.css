@@ -3,31 +3,34 @@
 
 /* Design tokens — docs/DESIGN.md. */
 @theme {
-  --color-bg: #090a0c;
-  --color-bg-deep: #070809;
-  --color-panel: #0b0d0f;
-  --color-card: #0d0f12;
+  /* Surfaces: near-black page, cards lifted by a soft top-lit gradient (see .panel). */
+  --color-bg: #07080a;
+  --color-bg-deep: #060708;
+  --color-panel: #0b0d10;
+  --color-card: #0e1114;
+  --color-card-2: #13171b;
   --color-card-hero: #090a0c;
-  --color-raised: #13161a;
-  --color-control: #191c21;
-  --color-control-2: #20242a;
-  --color-line: #1e2228;
-  --color-line-2: #292e35;
-  --color-line-3: #353b44;
-  --color-rail: #15181c;
-  --color-text: #eef1f4;
-  --color-text2: #c3c9d1;
-  --color-mute: #878e99;
-  --color-faint: #5b616b;
+  --color-raised: #161a1f;
+  --color-control: #1a1e24;
+  --color-control-2: #222730;
+  --color-line: #1b1f25;
+  --color-line-2: #282e36;
+  --color-line-3: #39404a;
+  --color-rail: #14171b;
+  --color-text: #f1f4f7;
+  --color-text2: #c6ccd4;
+  --color-mute: #8d949f;
+  --color-faint: #636a75;
   /* Primary action: frosted white, ink text. */
-  --color-primary: #e4ecf3;
+  --color-primary: #eef3f8;
   --color-primary-hover: #ffffff;
-  --color-on-primary: #08090b;
+  --color-on-primary: #07080a;
   --color-ice: #7cc4ff;
-  --color-ice-line: #355b80;
+  --color-ice-line: #3a6890;
   --color-ice-deep: #16263a;
-  --color-ice-text: #cde9ff;
+  --color-ice-text: #d3ecff;
   --color-ice-text2: #a9d8ff;
+  --color-violet: #8b7cff;
   --color-up: #3ddc97;
   --color-down: #ff6b6b;
   --color-warn: #f5b74f;
@@ -35,13 +38,13 @@
   --font-sans: 'Geist Variable', 'Geist', system-ui, sans-serif;
   --font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, monospace;
 
-  /* Three radii only: surfaces, boxes, controls. */
-  --radius-panel: 10px;
-  --radius-box: 7px;
-  --radius-ctl: 6px;
-  --radius-card: 10px;
-  --radius-hero: 10px;
-  --radius-field: 6px;
+  /* Radii: surfaces, inner boxes, controls. */
+  --radius-panel: 18px;
+  --radius-box: 12px;
+  --radius-ctl: 10px;
+  --radius-card: 18px;
+  --radius-hero: 18px;
+  --radius-field: 10px;
 
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.2, 1.25, 0.35, 1);
@@ -99,7 +102,9 @@ body {
   font-variant-numeric: tabular-nums;
   /* Geist: straight-sided digits read better in tables. */
   font-feature-settings: 'tnum' 1, 'cv11' 1;
-  letter-spacing: -0.003em;
+  font-size: 14px;
+  line-height: 1.45;
+  letter-spacing: -0.006em;
   cursor: default;
   -webkit-font-smoothing: antialiased;
 }
@@ -146,15 +151,14 @@ input[type='radio'] {
   /* Screen title: one size for every screen, tight, slightly lighter than bold. */
   .screen-title {
     margin: 0;
-    font-size: 30px;
-    line-height: 1.05;
-    font-weight: 560;
-    letter-spacing: -0.038em;
+    font-size: 28px;
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.035em;
   }
-  /* Mono small caps label above a section ("SOLDE", "FRAIS RÉSEAU"…). */
-  /* Plain field / section label: sentence case, no tracking, no mono. */
+  /* Field / section label: sentence case, no tracking, no mono. */
   .eyebrow {
-    font-size: 12px;
+    font-size: 12.5px;
     font-weight: 500;
     color: var(--color-mute);
   }
@@ -177,12 +181,42 @@ input[type='radio'] {
     flex: 1;
     background: var(--color-line);
   }
-  /* Low-key surface: a hairline frame on the page tone, no fill contrast. */
   .panel {
     border: 1px solid var(--color-line);
     border-radius: var(--radius-panel);
-    background: var(--color-card);
+    background: linear-gradient(180deg, var(--color-card-2), var(--color-card));
   }
+}
+
+/*
+ * Surfaces. Every rounded card (rounded-panel + bg-card) gets the same top-lit gradient, a faint
+ * inner highlight and a deep soft shadow, so cards read as raised glass on the near-black page.
+ */
+.rounded-panel.bg-card,
+.panel {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0) 120px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 24px 48px -32px rgba(0, 0, 0, 0.9);
+}
+/* Page backdrop: a cold glow from the top, very low. */
+.app-backdrop {
+  background:
+    radial-gradient(ellipse 60% 42% at 62% -8%, rgba(124, 196, 255, 0.075), transparent 70%),
+    radial-gradient(ellipse 40% 30% at 92% 0%, rgba(139, 124, 255, 0.05), transparent 70%),
+    var(--color-bg);
+}
+/* Primary button: frosted white with a soft ice glow on hover. */
+.btn-primary {
+  background-image: linear-gradient(180deg, #ffffff, #e2e9f1);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+.btn-primary:not(:disabled):hover {
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 10px 30px -10px rgba(124, 196, 255, 0.5);
+}
+.btn-primary:disabled {
+  background-image: none;
+  box-shadow: none;
 }
 
 /* Thin dark scrollbars inside scrollable panels. */
@@ -195,14 +229,14 @@ input[type='radio'] {
   height: 8px;
 }
 .scroll-thin::-webkit-scrollbar-thumb {
-  background: #23272d;
+  background: #262b32;
   border-radius: 8px;
 }
 .scroll-thin::-webkit-scrollbar-track {
   background: transparent;
 }
 
-   Every animation here is decorative and enter-only: content is interactive from frame 0.
+/* Motion. Every animation here is decorative and enter-only: content is interactive from frame 0.
    All of it is switched off under prefers-reduced-motion (bottom of this file). */
 
 /* Skeleton: a slow cold shimmer instead of a blinking block. */

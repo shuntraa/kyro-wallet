@@ -78,7 +78,7 @@ function Root() {
 
 function Frame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-full flex-col bg-bg text-text">
+    <div className="app-backdrop flex h-full flex-col text-text">
       <TitleBar bordered={false} />
       {children}
       <StatusFrame left={<span className="text-mute">Kyro Wallet</span>} />
@@ -187,7 +187,7 @@ function Unlocked() {
   const failed = Object.entries(pf.chainErrors).filter(([, m]) => !serverMissing(m)).map(([k]) => k);
 
   return (
-    <div className="flex h-full flex-col bg-bg text-text">
+    <div className="app-backdrop flex h-full flex-col text-text">
       <TitleBar crumbs={crumbsOf(route, assetName)} search={search} account={<AccountSwitcher />} />
       <div className="flex min-h-0 flex-1">
         <NavRail />

@@ -26,14 +26,14 @@ export function TorIndicator() {
     case 'unknown':
       return (
         <span className={cn(base, 'text-mute')} title={t('shell.torReading')}>
-          <IconTor size={12} className="text-faint" /> Tor · …
+          <IconTor size={15} className="text-faint" /> Tor · …
         </span>
       );
     case 'bootstrapping': {
       const p = Math.max(0, Math.min(99, Math.round(tor.status?.progress ?? 0)));
       return (
         <span role="status" aria-label={t('shell.torBootAria', { p })} className={cn(base, 'text-mute')} title={t('shell.torBootTitle')}>
-          <IconTor size={12} className="animate-pulse text-faint" />
+          <IconTor size={15} className="animate-pulse text-faint" />
           <span className="tabular-nums">
             Tor · {p}
             {NNBSP}%
@@ -44,7 +44,7 @@ export function TorIndicator() {
     case 'ready':
       return (
         <span role="status" className={cn(base, 'text-ice')} title={t('shell.torReadyTitle')}>
-          <IconTor size={12} /> {t('shell.torActive')}
+          <IconTor size={15} /> <span className="sr-only">{t('shell.torActive')}</span>
         </span>
       );
     case 'failed':
@@ -138,7 +138,7 @@ export function TorDialogs() {
         <Notice icon={<IconShield size={16} className="mt-0.5 shrink-0 text-ice" />}>
           {rt('shell.torRefusesClear', { b: (c) => <strong className="font-semibold text-text">{c}</strong> })}
         </Notice>
-        {detail && <p className="m-0 font-mono text-[11px] leading-[1.5] break-words text-faint">{t('shell.detail', { detail })}</p>}
+        {detail && <p className="m-0 font-mono text-[12px] leading-[1.5] break-words text-faint">{t('shell.detail', { detail })}</p>}
         {tor.actionError && <Notice tone="error">{tor.actionError}</Notice>}
         <div className="flex items-center justify-between gap-2 pt-1">
           <Button variant="ghost" onClick={() => torStore.requestDisable('failure')} disabled={tor.busy}>

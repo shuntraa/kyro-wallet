@@ -120,7 +120,7 @@ export function AccountPicker({ family, className, label: labelProp }: { family:
         trigger={
           <button type="button" aria-label={t('settings.switchAccount', { chain: ACCOUNT_CHAIN_LABEL[family] })} className="flex min-w-0 items-center gap-1.5 rounded-[10px] border border-line-2 bg-raised px-2.5 py-1 text-[13px] hover:border-ice-line">
             <span className="truncate font-semibold">{current?.name ?? t('common.account')}</span>
-            {currentAddress && <span className="hidden truncate font-mono text-[11px] text-mute sm:inline">{shortAddress(currentAddress)}</span>}
+            {currentAddress && <span className="hidden truncate font-mono text-[12px] text-mute sm:inline">{shortAddress(currentAddress)}</span>}
             {busy ? <Spinner /> : <IconChevronDown size={13} className="shrink-0 text-mute" />}
           </button>
         }

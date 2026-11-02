@@ -106,10 +106,10 @@ function ChainAccounts({ family, list, onAdd, onBulk, onRename, onRemove }: { fa
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="flex items-center gap-2 text-[13px] font-semibold">
                 {e.name}
-                <span className="text-[11px] font-normal text-faint">{t('settings.accountNumber', { n: e.index + 1 })}</span>
+                <span className="text-[12px] font-normal text-faint">{t('settings.accountNumber', { n: e.index + 1 })}</span>
                 {active && <Badge tone="up">{t('settings.accountUsed')}</Badge>}
               </span>
-              <span className="truncate font-mono text-[11px] text-mute">{src ? `${shortAddress(src.addresses[0] ?? '', 10, 6)} · ${src.path}` : t('settings.loadingLower')}</span>
+              <span className="truncate font-mono text-[12px] text-mute">{src ? `${shortAddress(src.addresses[0] ?? '', 10, 6)} · ${src.path}` : t('settings.loadingLower')}</span>
               {bal && <span className="text-[12px] text-text2">{bal}</span>}
             </span>
             <span className="flex shrink-0 gap-1.5">
@@ -258,7 +258,7 @@ function AddAccountDialog({ family, list, onClose }: { family: AccountChain; lis
                 <span className="truncate font-mono text-[12px]">{preview.data.address}</span>
                 <CopyButton text={preview.data.address} />
               </span>
-              <span className="font-mono text-[11px] text-mute">{preview.data.path}</span>
+              <span className="font-mono text-[12px] text-mute">{preview.data.path}</span>
               <span className="text-[13px] text-text2">
                 {nonZero.length > 0
                   ? nonZero

@@ -80,16 +80,16 @@ export function AssetDetail({ id }: { id: string }) {
   }, [xmrRunning]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
       <header className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3.5">
           <IconButton label={t('common.back')} onClick={back} className="size-9">
             <IconBack size={16} />
           </IconButton>
-          <CoinIcon glyph={glyph} color={color} symbol={symbol} id={supported?.id ?? `cg:${coinId}`} chain={supported?.chainKey} size={36} />
+          <CoinIcon glyph={glyph} color={color} symbol={symbol} id={supported?.id ?? `cg:${coinId}`} chain={supported?.chainKey} size={40} />
           <h1 className="screen-title truncate">{name}</h1>
-          <span className="rounded-[4px] border border-line-3 px-1.5 py-0.5 font-mono text-[11px] font-medium text-text2">{symbol}</span>
-          {coin?.rank && <span className="font-mono text-[11px] text-faint">{t('portfolio.rank', { rank: coin.rank })}</span>}
+          <span className="rounded-full border border-line-3 px-2 py-0.5 font-mono text-[12px] font-medium text-text2">{symbol}</span>
+          {coin?.rank && <span className="font-mono text-[12px] text-faint">{t('portfolio.rank', { rank: coin.rank })}</span>}
           {supported && <AccountPicker family={supported.family} />}
           <button type="button" aria-label={fav ? t('portfolio.removeFavorite') : t('portfolio.addFavorite')} aria-pressed={fav} onClick={() => toggle(coinId)} className={cn('press flex size-8 items-center justify-center rounded-ctl', fav ? 'text-ice' : 'text-faint hover:text-text2')}>
             <span key={String(fav)} className={fav ? 'pop-in inline-flex' : 'inline-flex'}>
@@ -138,7 +138,7 @@ export function AssetDetail({ id }: { id: string }) {
               <span className="eyebrow">
                 {t('portfolio.priceOf', { symbol, currency: cur })}
               </span>
-              <span className="figure text-[56px] leading-none tracking-[-0.045em]">{price ? <BigFiat value={price.price} currency={cur} tick className="fade-in inline-block" /> : <Skeleton className="h-12 w-56" />}</span>
+              <span className="figure text-[60px] leading-none tracking-[-0.05em]">{price ? <BigFiat value={price.price} currency={cur} tick className="fade-in inline-block" /> : <Skeleton className="h-12 w-56" />}</span>
               {changeAbs !== null && change !== null && (
                 <span>
                   <TrendPill change={change}>
@@ -173,11 +173,11 @@ export function AssetDetail({ id }: { id: string }) {
           </div>
         </section>
 
-        <aside className="rise flex w-[360px] shrink-0 flex-col gap-3 rounded-panel border border-line bg-card px-[22px] py-5">
+        <aside className="rise flex w-[360px] shrink-0 flex-col gap-3 rounded-panel border border-line bg-card px-6 py-6">
           {supported && !watch ? (
             <>
               <span className="eyebrow">{t('portfolio.yourBalance')}</span>
-              <span className="figure text-[34px] leading-none">{hideBalances ? HIDDEN : holding ? fmtCrypto(holding.amount, supported.decimals, supported.symbol) : '—'}</span>
+              <span className="figure text-[36px] leading-none tracking-[-0.035em]">{hideBalances ? HIDDEN : holding ? fmtCrypto(holding.amount, supported.decimals, supported.symbol) : '—'}</span>
               <span className="text-[14px] text-text2">
                 {hideBalances ? HIDDEN : holding?.value !== null && holding?.value !== undefined ? t('portfolio.valueShare', { value: fmtFiat(holding.value, cur), share: fmtNumber(holding.share * 100, 0) }) : t('portfolio.priceUnavailable')}
               </span>
@@ -196,7 +196,7 @@ export function AssetDetail({ id }: { id: string }) {
                       <span className={a && amount && amount > 0n ? 'font-medium' : 'text-mute'}>{!a ? t('portfolio.notListed') : amount === null ? '—' : hideBalances ? HIDDEN : `${fmtCrypto(amount, a.decimals)}${chain.phase === 2 ? ` · ${t('portfolio.phase2')}` : ''}`}</span>
                     </div>
                   ))}
-                  {network === 'testnet' && <span className="pt-2 text-[11px] text-faint">{t('portfolio.l2OnMainnet')}</span>}
+                  {network === 'testnet' && <span className="pt-2 text-[12px] text-faint">{t('portfolio.l2OnMainnet')}</span>}
                 </div>
               )}
               {supported.family === 'ada' && <CardanoTokensPanel account={adaAccount.data} hidden={hideBalances} />}
@@ -237,7 +237,7 @@ export function AssetDetail({ id }: { id: string }) {
 
       <div className="flex min-h-0 flex-1 gap-5">
         <section className="rise flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card" style={idx(1)}>
-          <div className="flex h-[50px] shrink-0 items-center justify-between border-b border-line px-5">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-6">
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('portfolio.activityOf', { symbol })}</span>
             <button type="button" onClick={() => navigate({ name: 'history' })} className="text-[13px] font-medium text-ice hover:underline">
               {t('portfolio.seeAll')}
@@ -255,10 +255,9 @@ export function AssetDetail({ id }: { id: string }) {
             )}
           </div>
         </section>
-        <section className="rise flex w-[360px] shrink-0 flex-col rounded-panel border border-line bg-card px-5 py-4" style={idx(2)}>
+        <section className="rise flex w-[360px] shrink-0 flex-col rounded-panel border border-line bg-card px-6 py-5" style={idx(2)}>
           <div className="flex items-baseline justify-between pb-3">
-            <span className="text-[15px] font-medium tracking-[-0.01em]">{t('portfolio.market')}</span>
-            <span className="font-mono text-[10.5px] text-faint">CoinGecko{pf.marketUpdatedAt ? ` · ${fmtAgo(pf.marketUpdatedAt, now)}` : ''}</span>
+            <span className="text-[15px] font-medium tracking-[-0.01em]" title={`CoinGecko${pf.marketUpdatedAt ? ` · ${fmtAgo(pf.marketUpdatedAt, now)}` : ''}`}>{t('portfolio.market')}</span>
           </div>
           {[
             [t('portfolio.high24h'), coin?.high24h !== null && coin?.high24h !== undefined ? fmtFiat(coin.high24h, cur) : '—', ''],
@@ -266,12 +265,12 @@ export function AssetDetail({ id }: { id: string }) {
             [t('portfolio.change7d'), fmtPct(coin?.change7d), (coin?.change7d ?? 0) >= 0 ? 'text-up' : 'text-down'],
             [t('portfolio.change30d'), fmtPct(change30), (change30 ?? 0) >= 0 ? 'text-up' : 'text-down'],
           ].map(([k, v, c]) => (
-            <div key={k} className="flex h-9 items-center justify-between border-t border-line text-[13px]">
+            <div key={k} className="flex h-10 items-center justify-between border-t border-line text-[13.5px]">
               <span className="text-mute">{k}</span>
               <span className={cn('font-medium', v === '—' ? 'text-mute' : c)}>{v}</span>
             </div>
           ))}
-          {supported && findChain(network, supported.chainKey)?.network === 'testnet' && <p className="mt-auto pt-3 text-[11px] leading-[1.5] text-faint">{t('portfolio.testnetPricesNote')}</p>}
+          {supported && findChain(network, supported.chainKey)?.network === 'testnet' && <p className="mt-auto pt-3 text-[12px] leading-[1.5] text-faint">{t('portfolio.testnetPricesNote')}</p>}
         </section>
       </div>
     </div>

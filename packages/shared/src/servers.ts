@@ -186,7 +186,7 @@ export function mergeServerSecrets(next: Servers, stored: Servers): Servers {
 export interface CustomServerChain {
   family: string;
   network: Network;
-  chainId?: number;
+  chainId?: number | string;
   cluster?: SolanaCluster;
 }
 

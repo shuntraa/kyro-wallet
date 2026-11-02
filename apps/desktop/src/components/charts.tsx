@@ -86,7 +86,7 @@ export function SmoothChart({ values, height, renderTooltip, defaultPoint = 'las
               }}
               className="pointer-events-none flex flex-col items-center gap-px rounded-ctl border border-line-2 bg-[#121418]/95 px-2.5 py-1.5 whitespace-nowrap"
             >
-              <span className="font-mono text-[10px] tracking-[0.04em] text-faint">{hover === null && defaultLabel ? `${tip.label} · ${defaultLabel}` : tip.label}</span>
+              <span className="font-mono text-[12px] tracking-[0.04em] text-faint">{hover === null && defaultLabel ? `${tip.label} · ${defaultLabel}` : tip.label}</span>
               <span className="text-[13px] font-medium">{tip.value}</span>
             </div>
           )}

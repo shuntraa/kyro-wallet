@@ -41,11 +41,11 @@ export function TonCommentField({
           {t('ton.comment')} <span className="font-normal text-mute">{t('ton.commentHint')}</span>
         </label>
         {destLoading ? (
-          <span className="flex items-center gap-1.5 text-[11px] text-mute">
+          <span className="flex items-center gap-1.5 text-[12px] text-mute">
             <Spinner /> {t('ton.readingAccount')}
           </span>
         ) : (
-          <span className={cn('text-[11px]', bytes > TON_MAX_COMMENT_BYTES ? 'text-down' : 'text-faint')}>
+          <span className={cn('text-[12px]', bytes > TON_MAX_COMMENT_BYTES ? 'text-down' : 'text-faint')}>
             {t('ton.commentBytes', { bytes, max: TON_MAX_COMMENT_BYTES })}
           </span>
         )}
@@ -97,7 +97,7 @@ export function TonSummaryView({ u, tonPrice, currency }: { u: TonUnsigned; tonP
     <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('ton.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">{t('ton.title')}</span>
-        <span className="text-[11px] text-mute">{t('ton.decodedByVault')}</span>
+        <span className="text-[12px] text-mute">{t('ton.decodedByVault')}</span>
       </div>
       <div className={cn('mx-3 my-2.5 rounded-ctl border-2 px-3 py-2 text-center', s.comment !== null ? 'border-ice-line' : 'border-warn/50')}>
         <span className="block text-[12px] font-medium text-mute">{t('ton.comment')}</span>
@@ -133,7 +133,7 @@ function Line({ k, v, warn, mono, last }: { k: string; v: string; warn?: boolean
   return (
     <div className={cn('flex items-start justify-between gap-3 px-3.5 py-1.5', !last && 'border-b border-line')}>
       <span className="shrink-0 text-text2">{k}</span>
-      <span className={cn('text-right', mono && 'font-mono text-[11px] break-all', warn ? 'text-warn' : 'text-text2')}>{v}</span>
+      <span className={cn('text-right', mono && 'font-mono text-[12px] break-all', warn ? 'text-warn' : 'text-text2')}>{v}</span>
     </div>
   );
 }

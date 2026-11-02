@@ -44,7 +44,7 @@ export function SuiSummaryView({ u, suiPrice, currency }: { u: SuiUnsigned; suiP
     <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]" aria-label={t('sui.decodedLabel')}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
         <span className="font-semibold text-text">{t('sui.title')}</span>
-        <span className="text-[11px] text-mute">{t('sui.decodedByVault')}</span>
+        <span className="text-[12px] text-mute">{t('sui.decodedByVault')}</span>
       </div>
       {s.token ? (
         <>
@@ -76,7 +76,7 @@ export function SuiSummaryView({ u, suiPrice, currency }: { u: SuiUnsigned; suiP
 function Line({ k, v, warn, last, mono }: { k: string; v: string; warn?: boolean; last?: boolean; mono?: boolean }) {
   return (
     <div className={cn('flex items-start justify-between gap-3 px-3.5 py-1.5', !last && 'border-b border-line')}>
-      <span className={cn('text-text2', mono && 'pl-2 font-mono text-[11px] text-mute')}>{k}</span>
+      <span className={cn('text-text2', mono && 'pl-2 font-mono text-[12px] text-mute')}>{k}</span>
       <span className={cn('text-right', warn ? 'text-warn' : 'text-text2')}>{v}</span>
     </div>
   );

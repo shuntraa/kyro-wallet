@@ -641,7 +641,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 px-8 pt-7 pb-6">
       <header className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <IconButton label={t('send.backToWallet')} onClick={back} className="size-9">
@@ -714,9 +714,9 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
                   }}
                   className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-text2"
                 />
-                {guard.source === 'paste' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">{t('send.badgePasted')}</span>}
-                {guard.source === 'typed' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">{t('send.badgeTyped')}</span>}
-                {guard.source === 'picked' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[10.5px] tracking-[0.04em] text-text2">{t('send.badgePicked')}</span>}
+                {guard.source === 'paste' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[12px] tracking-[0.04em] text-text2">{t('send.badgePasted')}</span>}
+                {guard.source === 'typed' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[12px] tracking-[0.04em] text-text2">{t('send.badgeTyped')}</span>}
+                {guard.source === 'picked' && <span className="pop-in inline-flex h-6 items-center rounded-[4px] border border-line-3 px-2 font-mono text-[12px] tracking-[0.04em] text-text2">{t('send.badgePicked')}</span>}
                 {!activeHw && (
                   <Menu
                     align="end"
@@ -870,7 +870,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
               >
                 <IconUpDown size={16} />
               </button>
-              <button type="button" onClick={() => setMax(true)} className={cn('press h-10 rounded-ctl border px-3.5 font-mono text-[11px] font-medium tracking-[0.06em]', max ? 'border-ice/40 bg-ice/[.1] text-ice-text' : 'border-line-2 text-text hover:border-line-3 hover:bg-raised')}>
+              <button type="button" onClick={() => setMax(true)} className={cn('press h-10 rounded-ctl border px-3.5 font-mono text-[12px] font-medium tracking-[0.06em]', max ? 'border-ice/40 bg-ice/[.1] text-ice-text' : 'border-line-2 text-text hover:border-line-3 hover:bg-raised')}>
                 MAX
               </button>
             </div>
@@ -1112,7 +1112,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
         <aside aria-label={t('send.review')} className="relative flex w-[400px] shrink-0 flex-col gap-4 overflow-y-auto rounded-panel border border-line bg-panel px-6 py-[22px] scroll-thin before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-ice/70">
           <div className="flex items-center justify-between">
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('send.review')}</span>
-            <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[10.5px] font-medium tracking-[0.02em] text-ice-text2">
+            <span className="inline-flex h-6 items-center gap-1.5 rounded-[4px] border border-ice/25 px-2 font-mono text-[12px] font-medium tracking-[0.02em] text-ice-text2">
               <IconShield size={12} sw={2.2} className="text-ice" />
               {built?.summary || built?.sol || built?.unsigned.family === 'tron' || built?.unsigned.family === 'xrp' || built?.unsigned.family === 'xlm' || built?.unsigned.family === 'ada' || built?.unsigned.family === 'zec' || built?.unsigned.family === 'apt' || built?.unsigned.family === 'cosmos' || built?.unsigned.family === 'ton' || built?.unsigned.family === 'xmr' || built?.unsigned.family === 'algo' || built?.unsigned.family === 'dot' || built?.unsigned.family === 'kas' || built?.unsigned.family === 'hbar' || built?.unsigned.family === 'sui' || built?.unsigned.family === 'near' ? t('send.decodedInVault') : utxoLike ? t('send.psbtLocal') : t('send.localSummary')}
             </span>
@@ -1128,14 +1128,14 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
             <CoinIcon asset={asset} size={30} />
             <span className="flex flex-col text-[12px]">
               <span className="font-medium">{ownAccount && !activeHw ? accountName(asset.family) : t('send.you')}</span>
-              <span className="font-mono text-[11px] text-mute">{shortAddress(adapter.getAddress())}</span>
+              <span className="font-mono text-[12px] text-mute">{shortAddress(adapter.getAddress())}</span>
             </span>
             <span aria-hidden="true" className="relative h-0 flex-1 border-t-[1.5px] border-dashed border-ice-line">
-              <span className="absolute -top-[7px] -right-0.5 text-[10px] text-ice">▶</span>
+              <span className="absolute -top-[7px] -right-0.5 text-[12px] text-ice">▶</span>
             </span>
             <span className="flex flex-col items-end text-[12px]">
               <span className="font-medium">{addrValid ? (ownAccount ? ownAccountLabel(ownAccount.name) : (contact?.name ?? t('send.recipient'))) : '—'}</span>
-              <span className="font-mono text-[11px] text-mute">{addrValid ? shortAddress(toTrim) : ''}</span>
+              <span className="font-mono text-[12px] text-mute">{addrValid ? shortAddress(toTrim) : ''}</span>
             </span>
             <span className="flex size-[30px] items-center justify-center rounded-full bg-ice-deep text-[12px] font-semibold text-ice-text">{(ownAccount?.name ?? contact?.name ?? '?').slice(0, 1).toUpperCase()}</span>
           </div>
@@ -1392,7 +1392,7 @@ export function Send({ assetId, to: initialTo }: { assetId?: string; to?: string
           <Button variant="primary" size="xl" disabled={!canSign} onClick={() => void sign()}>
             {signing && <Spinner />} {activeHw ? t('send.signHw') : t('send.sign')}
           </Button>
-          <span className="text-center text-[11px] leading-[1.5] text-faint">
+          <span className="text-center text-[12px] leading-[1.5] text-faint">
             {activeHw ? t('send.footHw') : t('send.foot')}
           </span>
         </aside>
@@ -1446,7 +1446,7 @@ function dataLabel(b: Built | null, family?: string): string {
 function Step({ n, done, current, label }: { n: number; done: boolean; current: boolean; label: string }) {
   return (
     <li aria-current={current ? 'step' : undefined} className={cn('flex h-8 items-center gap-2 transition-colors duration-200', current ? 'font-medium text-text' : done ? 'text-text2' : 'text-faint')}>
-      <span className={cn('flex size-5 items-center justify-center rounded-[4px] border font-mono text-[10.5px] transition-colors duration-200', done ? 'border-up/40 text-up' : current ? 'border-ice bg-ice text-on-primary' : 'border-line-3 text-faint')}>
+      <span className={cn('flex size-5 items-center justify-center rounded-[4px] border font-mono text-[12px] transition-colors duration-200', done ? 'border-up/40 text-up' : current ? 'border-ice bg-ice text-on-primary' : 'border-line-3 text-faint')}>
         <span key={done ? 'done' : 'n'} className="pop-in">{done ? '✓' : n}</span>
       </span>
       {label}
@@ -1465,7 +1465,7 @@ function FeeOption({ active, onClick, title, sub, ice, disabled }: { active: boo
       className={cn('press flex h-14 flex-1 basis-0 flex-col items-start justify-center gap-0.5 rounded-box border px-3.5 text-left disabled:opacity-50', active ? 'border-ice bg-ice/[.07] shadow-[inset_0_0_0_0.5px_var(--color-ice)]' : 'border-line-2 bg-bg hover:border-line-3 hover:bg-raised/50')}
     >
       <span className="truncate text-[13px] font-medium">{title}</span>
-      <span className={cn('text-[11px]', active && ice ? 'text-ice-text2' : 'text-mute')}>{sub}</span>
+      <span className={cn('text-[12px]', active && ice ? 'text-ice-text2' : 'text-mute')}>{sub}</span>
     </button>
   );
 }

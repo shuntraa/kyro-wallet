@@ -45,7 +45,7 @@ export function PoisoningWarning({ recipient, lookalike, family, acknowledged, o
         <Highlighted address={recipient} family={family} />
         <span className="pt-1 text-[12px] font-medium text-mute">{t('send.poisonKnownAddress', { name: knownName })}</span>
         <Highlighted address={known.address} family={family} />
-        <span className="text-[11px] text-mute">{t('send.poisonSameEnds')}</span>
+        <span className="text-[12px] text-mute">{t('send.poisonSameEnds')}</span>
       </div>
       <label className="flex cursor-pointer items-center gap-2 font-semibold text-text">
         <input type="checkbox" checked={acknowledged} onChange={(e) => onAcknowledge(e.target.checked)} className="size-4" />

@@ -28,7 +28,7 @@ export function TronEstimateView({ u, network, trxPrice, currency }: { u: TronUn
       <div className="flex flex-col gap-0 rounded-box border border-line text-[12px]">
         <div className="flex items-center justify-between border-b border-line px-3.5 py-2">
           <span className="text-[12px] font-semibold text-text">{t('send.tronTitle')}</span>
-          <span className="text-[11px] text-mute">{t('send.tronEstimatedByVault')}</span>
+          <span className="text-[12px] text-mute">{t('send.tronEstimatedByVault')}</span>
         </div>
         <Line
           k={t('send.tronBandwidth')}
@@ -81,7 +81,7 @@ function Line({ k, sub, v, warn, strong, last }: { k: string; sub?: string; v: s
     <div className={`flex items-start justify-between gap-3 px-3.5 py-2 ${last ? '' : 'border-b border-line'}`}>
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className={strong ? 'font-semibold text-text' : 'text-text2'}>{k}</span>
-        {sub && <span className="text-[11px] leading-[1.4] text-mute">{sub}</span>}
+        {sub && <span className="text-[12px] leading-[1.4] text-mute">{sub}</span>}
       </span>
       <span className={`shrink-0 text-right ${warn ? 'text-warn' : strong ? 'font-semibold text-text' : 'text-text2'}`}>{v}</span>
     </div>

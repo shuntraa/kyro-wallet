@@ -52,7 +52,7 @@ export function Menu<T extends string>({
               {it.icon}
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate font-medium">{it.label}</span>
-                {it.hint && <span className="truncate text-[11px] text-mute">{it.hint}</span>}
+                {it.hint && <span className="truncate text-[12px] text-mute">{it.hint}</span>}
               </span>
               {value === it.value && <IconCheck size={14} className="text-ice" />}
             </M.Item>,
