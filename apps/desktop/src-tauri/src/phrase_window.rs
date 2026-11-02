@@ -9,7 +9,6 @@
 //! screenshots and screen sharing (content protection, Windows and macOS). The page is served
 //! only to that window and wiped when it closes.
 
-use std::borrow::Cow;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
@@ -249,7 +248,7 @@ pub fn render(lang: Lang, view: &PhraseView<'_>) -> Zeroizing<String> {
     out
 }
 
-fn respond(status: StatusCode, content_type: &str, body: Vec<u8>) -> Response<Cow<'static, [u8]>> {
+fn respond(status: StatusCode, content_type: &str, body: Vec<u8>) -> Response<Vec<u8>> {
     Response::builder()
         .status(status)
         .header(header::CONTENT_TYPE, content_type)
@@ -258,15 +257,15 @@ fn respond(status: StatusCode, content_type: &str, body: Vec<u8>) -> Response<Co
         .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
         .header(header::REFERRER_POLICY, "no-referrer")
         .header("Cross-Origin-Resource-Policy", "same-origin")
-        .body(Cow::Owned(body))
-        .unwrap_or_else(|_| Response::new(Cow::Borrowed(&[])))
+        .body(body)
+        .unwrap_or_else(|_| Response::new(Vec::new()))
 }
 
 /// The `kyrophrase` scheme handler. Serves only the `phrase` window: any other webview gets 403.
 pub fn protocol<R: Runtime>(
     ctx: UriSchemeContext<'_, R>,
     req: Request<Vec<u8>>,
-) -> Response<Cow<'static, [u8]>> {
+) -> Response<Vec<u8>> {
     if ctx.webview_label() != LABEL || req.method() != tauri::http::Method::GET {
         return respond(StatusCode::FORBIDDEN, "text/plain", Vec::new());
     }
