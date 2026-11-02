@@ -1,6 +1,6 @@
 # Kyro Wallet
 
-> Kyro Wallet is a free, open-source (GPL-3.0-or-later), non-custodial crypto wallet for Windows, macOS and Linux. Keys are encrypted on the user's computer and every transaction is decoded and confirmed in a system window before signing. Current version: 1.0.2.
+> Kyro Wallet is a free, open-source (GPL-3.0-or-later), non-custodial crypto wallet for Windows, macOS and Linux. Keys are encrypted on the user's computer and every transaction is decoded and confirmed in a system window before signing. Current version: 1.0.3.
 
 Key facts:
 
@@ -19,7 +19,7 @@ Key facts:
 - [Features](https://kyrowallet.com/features/): What Kyro Wallet does: one portfolio for 36 blockchains, token swaps, SOL, ADA and TRX staking, Ledger and Trezor, built-in Tor and transactions you can read before you sign.
 - [Security](https://kyrowallet.com/security/): Keys encrypted on your device with Argon2id and XChaCha20-Poly1305, signing in a Rust core, a system confirmation window, Tor by default. What Kyro protects against, what it cannot, and its audit status.
 - [Fees](https://kyrowallet.com/fees/): Kyro Wallet is free. Sending, receiving and staking cost only the network fee. Swaps carry a fee from 0.7% to 5% depending on the swap value, already included in the amount you receive.
-- [Download](https://kyrowallet.com/download/): Install Kyro Wallet 1.0.2 with one command on Windows, macOS or Linux, or download the .exe, .msi, .dmg, AppImage or .deb. How to check the SHA-256 checksum.
+- [Download](https://kyrowallet.com/download/): Install Kyro Wallet 1.0.3 with one command on Windows, macOS or Linux, or download the .exe, .msi, .dmg, AppImage or .deb. How to check the SHA-256 checksum.
 - [FAQ](https://kyrowallet.com/faq/): Answers about Kyro Wallet: is it free, is it custodial, supported blockchains, swap fee, hardware wallets, recovery phrase, Tor, audits, and Windows or macOS warnings.
 - [Supported blockchains](https://kyrowallet.com/chains/): Kyro Wallet supports 36 blockchains and 220+ tokens from one recovery phrase: Bitcoin, Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base and Avalanche and more. See what works on each.
 
@@ -53,7 +53,7 @@ Key facts:
 - [Stellar (XLM)](https://kyrowallet.com/chains/stellar/): send and receive, swap, hardware wallet
 - [NEAR (NEAR)](https://kyrowallet.com/chains/near/): send and receive, hardware wallet
 - [Sui (SUI)](https://kyrowallet.com/chains/sui/): send and receive, swap, hardware wallet
-- [Monero (XMR)](https://kyrowallet.com/chains/monero/): send and receive
+- [Monero (XMR)](https://kyrowallet.com/chains/monero/): send and receive, swap
 - [TON (GRAM)](https://kyrowallet.com/chains/ton/): send and receive, swap, hardware wallet
 - [Cosmos Hub (ATOM)](https://kyrowallet.com/chains/cosmos/): send and receive, hardware wallet
 - [Polkadot (DOT)](https://kyrowallet.com/chains/polkadot/): send and receive
