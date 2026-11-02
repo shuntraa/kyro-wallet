@@ -55,7 +55,7 @@ Hardware and privacy
 
 ## Ledger, Trezor and Tor
 
-Keep keys on a hardware wallet and confirm on the device. Network traffic goes through the built-in Tor client, and the status bar shows when it is on.
+Keep keys on a hardware wallet and confirm on the device. Network traffic goes through the built-in Tor client, on by default.
 Privacy and network
 
 Features

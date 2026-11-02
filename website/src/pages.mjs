@@ -163,11 +163,10 @@ function tour() {
       ${tourRow('t-assets', 'Assets', 'Every account in one list', 'Prices, 7-day trends and balances for all your blockchains, from a single recovery phrase. Add as many accounts as you need.', '<a class="more" href="/chains/">Supported blockchains</a>',
         win(IMG.assets.src, IMG.assets.alt, { w: IMG.assets.w, h: IMG.assets.h, title: 'Kyro · Assets', cls: 'win-main' }) + win(IMG.vault.src, '', { w: IMG.vault.w, h: IMG.vault.h, title: 'Vault', cls: 'win-side win-tall' }))}
       ${tourRow('t-stake', 'Staking', 'Stake from your own accounts', 'Delegate SOL, ADA and TRX to a validator, a pool or a Super Representative. Kyro takes no fee on staking.', '<a class="more" href="/features/">Staking details</a>',
-        win(W.staking.src, 'Kyro staking overview: Solana, Cardano and TRON cards, a note on risks, and chains without native staking.', { w: W.staking.w, h: W.staking.h, chrome: 'none', cls: 'win-main' }), true)}
-      ${tourRow('t-hw', 'Hardware and privacy', 'Ledger, Trezor and Tor', 'Keep keys on a hardware wallet and confirm on the device. Network traffic goes through the built-in Tor client, and the status bar shows when it is on.', '<a class="more" href="/security/">Privacy and network</a>',
+        win(W.staking.src, 'Kyro staking overview: Solana, Cardano and TRON cards.', { w: W.staking.w, h: W.staking.h, chrome: 'none', cls: 'win-main' }), true)}
+      ${tourRow('t-hw', 'Hardware and privacy', 'Ledger, Trezor and Tor', 'Keep keys on a hardware wallet and confirm on the device. Network traffic goes through the built-in Tor client, on by default.', '<a class="more" href="/security/">Privacy and network</a>',
         win(IMG.vault.src, IMG.vault.alt, { w: IMG.vault.w, h: IMG.vault.h, title: 'Kyro · Vault', cls: 'win-main win-narrow' }) +
-          dialog({ title: 'Trezor Safe 7', cls: 'win-side win-front', rows: [['Action', 'Confirm on device'], ['Address', 'bc1q…naard', 'mono']], actions: ['Waiting for the device'] }) +
-          win(W.status.src, 'Kyro status bar: synced, block height, server latency and Tor on.', { w: W.status.w, h: W.status.h, chrome: 'none', cls: 'win-strip' }))}
+          dialog({ title: 'Trezor Safe 7', cls: 'win-side win-front', rows: [['Action', 'Confirm on device'], ['Address', 'bc1q…naard', 'mono']], actions: ['Waiting for the device'] }))}
       </div>
     </section>`;
 }

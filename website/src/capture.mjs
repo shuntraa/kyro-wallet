@@ -103,7 +103,6 @@ const webp = (src, out, vf) => execFileSync('ffmpeg', ['-loglevel', 'error', '-y
 try {
   webp('app-portfolio.png', 'win-portfolio.webp', 'scale=2160:-2:flags=lanczos');
   webp('app-portfolio.png', 'win-portfolio-sm.webp', 'scale=1080:-2:flags=lanczos');
-  webp('app-portfolio.png', 'win-statusbar.webp', 'crop=iw:ih*0.0455:0:ih*0.9545,scale=1400:-2');
   webp('app-send.png', 'win-send.webp', 'scale=1416:-2:flags=lanczos');
   webp('app-staking.png', 'win-staking.webp', 'scale=1600:-2:flags=lanczos');
   webp('app-swap.png', 'win-swap.webp', 'crop=iw*0.9167:ih*0.447:iw*0.0694:ih*0.0606,scale=1400:-2:flags=lanczos');
