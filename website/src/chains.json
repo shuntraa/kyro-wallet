@@ -618,7 +618,7 @@
       "kind": "account",
       "features": {
         "send": true,
-        "swap": false,
+        "swap": true,
         "staking": false,
         "hardware": false
       },

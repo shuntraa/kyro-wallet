@@ -156,7 +156,7 @@ function tour() {
   return html`
     <section class="section tour" aria-label="A look at the app">
       <div class="wrap">
-      ${tourRow('t-swap', 'Swap', 'Swap inside the wallet', 'Kyro asks several providers for a quote and shows what you receive after fees. Token approvals are for the exact amount unless you change it.', '<a class="more" href="/fees/">How swap fees work</a>',
+      ${tourRow('t-swap', 'Swap', 'Swap inside the wallet', 'Kyro asks several providers for a quote (including NEAR Intents across chains and Exolix for Monero) and shows what you receive after fees. Token approvals are for the exact amount unless you change it.', '<a class="more" href="/fees/">How swap fees work</a>',
         win(IMG.swap.src, IMG.swap.alt, { w: IMG.swap.w, h: IMG.swap.h, title: 'Kyro · Swap', cls: 'win-main' }) + win(IMG.approval.src, IMG.approval.alt, { w: IMG.approval.w, h: IMG.approval.h, title: 'Approval', cls: 'win-side win-low' }))}
       ${tourRow('t-send', 'Send', 'Read it before you sign it', 'The Rust core decodes every transaction and opens a separate system window with the amount, the recipient and the fee. Unusual transactions ask a second time.', '<a class="more" href="/security/">How signing works</a>',
         win(W.send.src, 'Kyro send screen: from account, recipient, amount, network fee options and a review panel.', { w: W.send.w, h: W.send.h, chrome: 'none', cls: 'win-main' }) + confirmDialog('win-side win-front'), true)}
@@ -184,7 +184,6 @@ function coinWall(chains) {
 /** Usage counters, filled by stats.js from the public `stats` branch; hidden if unavailable. */
 const usage = () => `<p class="usage" data-usage hidden>
           <span data-usage-item="weekly_active" hidden><strong data-usage-n></strong> active wallets this week</span>
-          <span data-usage-item="downloads_week" hidden><strong data-usage-n></strong> downloads this week</span>
           <span class="usage-total" data-usage-item="downloads_total" hidden><strong data-usage-n></strong> downloads in total</span>
         </p>`;
 
