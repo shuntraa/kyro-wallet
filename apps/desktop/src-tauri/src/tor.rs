@@ -15,7 +15,7 @@ use futures_util::StreamExt;
 use http_body_util::{BodyExt, Full};
 use hyper_util::rt::TokioIo;
 use serde::Serialize;
-use tokio::sync::watch;
+use tokio::sync::{watch, Semaphore};
 use tor_rtcompat::PreferredRuntime;
 
 use crate::error::{AppError, AppResult};
@@ -26,6 +26,9 @@ const BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(120);
 /// Opening a Tor stream may first require building a 3-hop circuit (arti retries failed extends
 /// itself); this bounds that phase.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
+/// Requests in flight per family over Tor (the History screen fires every EVM chain at once on the
+/// single EVM circuit); the others wait their turn instead of piling streams onto the circuit.
+const MAX_IN_FLIGHT_PER_FAMILY: usize = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -64,6 +67,11 @@ pub struct TorManager {
     status: watch::Sender<TorStatus>,
     base: Mutex<Option<Client>>,
     isolated: Mutex<HashMap<Family, Client>>,
+    /// Hosts that refused the family's exit (403/429/challenge): their own isolation group,
+    /// derived from the bootstrapped client, so one refusing host never moves the whole family
+    /// onto new circuits.
+    rotated: Mutex<HashMap<(Family, String), Client>>,
+    in_flight: Mutex<HashMap<Family, Arc<Semaphore>>>,
     emitter: Mutex<Option<Emitter>>,
     generation: Mutex<u64>,
     tls: tokio_rustls::TlsConnector,
@@ -93,6 +101,8 @@ impl TorManager {
             status,
             base: Mutex::new(None),
             isolated: Mutex::new(HashMap::new()),
+            rotated: Mutex::new(HashMap::new()),
+            in_flight: Mutex::new(HashMap::new()),
             emitter: Mutex::new(None),
             generation: Mutex::new(0),
             tls: tls_connector()?,
@@ -148,8 +158,13 @@ impl TorManager {
     pub fn stop(&self) {
         let generation = self.next_generation();
         *net::lock(&self.base) = None;
-        net::lock(&self.isolated).clear();
+        self.clear_clients();
         self.publish(generation, TorStatus::new(TorState::Off, 0, None));
+    }
+
+    fn clear_clients(&self) {
+        net::lock(&self.isolated).clear();
+        net::lock(&self.rotated).clear();
     }
 
     fn next_generation(&self) -> u64 {
@@ -163,7 +178,7 @@ impl TorManager {
             Ok(client) => {
                 if *net::lock(&self.generation) == generation {
                     *net::lock(&self.base) = Some(client);
-                    net::lock(&self.isolated).clear();
+                    self.clear_clients();
                 }
                 self.publish(generation, TorStatus::new(TorState::Ready, 100, None));
             }
@@ -209,6 +224,12 @@ impl TorManager {
 
     /// Waits (bounded) for Tor to be ready, then returns the isolated client for `family`.
     async fn client_for(&self, family: Family) -> AppResult<Client> {
+        self.client_for_host(family, None).await
+    }
+
+    /// Like [`Self::client_for`], but a host that was moved to its own circuits after a refusal
+    /// keeps using them.
+    async fn client_for_host(&self, family: Family, host: Option<&str>) -> AppResult<Client> {
         let mut rx = self.status.subscribe();
         let wait = tokio::time::timeout(READY_WAIT, async {
             loop {
@@ -235,6 +256,11 @@ impl TorManager {
         let base = net::lock(&self.base)
             .clone()
             .ok_or_else(|| AppError::TorUnavailable("Tor is not ready".into()))?;
+        if let Some(host) = host {
+            if let Some(c) = net::lock(&self.rotated).get(&(family, host.to_owned())) {
+                return Ok(Arc::clone(c));
+            }
+        }
         let mut isolated = net::lock(&self.isolated);
         Ok(Arc::clone(
             isolated
@@ -243,30 +269,44 @@ impl TorManager {
         ))
     }
 
-    /// Replaces `family`'s client with a brand-new isolated one (new isolation group, so new
-    /// circuits and in practice a different exit), still isolated from every other family.
-    /// If another request already rotated it since `stale` was handed out, that newer client is
-    /// reused instead.
-    fn fresh_client_for(&self, family: Family, stale: &Client) -> AppResult<Client> {
+    /// Moves `host` (within `family`) onto a brand-new isolation group derived from the
+    /// bootstrapped client (new circuits, in practice a different exit). Other hosts of the family
+    /// keep their circuits; nothing is ever shared with another family. If another request
+    /// already rotated this host since `stale` was handed out, that newer client is reused.
+    fn fresh_client_for(&self, family: Family, host: &str, stale: &Client) -> AppResult<Client> {
         let base = net::lock(&self.base)
             .clone()
             .ok_or_else(|| AppError::TorUnavailable("Tor is not ready".into()))?;
-        let mut isolated = net::lock(&self.isolated);
-        match isolated.get(&family) {
+        let mut rotated = net::lock(&self.rotated);
+        let key = (family, host.to_owned());
+        match rotated.get(&key) {
             Some(cur) if !Arc::ptr_eq(cur, stale) => Ok(Arc::clone(cur)),
             _ => {
                 let fresh: Client = base.isolated_client();
-                isolated.insert(family, Arc::clone(&fresh));
+                rotated.insert(key, Arc::clone(&fresh));
                 Ok(fresh)
             }
         }
+    }
+
+    fn in_flight(&self, family: Family) -> Arc<Semaphore> {
+        Arc::clone(
+            net::lock(&self.in_flight)
+                .entry(family)
+                .or_insert_with(|| Arc::new(Semaphore::new(MAX_IN_FLIGHT_PER_FAMILY))),
+        )
     }
 
     /// Sends a request that already passed the policy, over Tor only, on `p.family`'s circuits.
     /// An exit-dependent refusal (403/429/challenge page) is retried on a fresh isolated circuit
     /// for the same family, up to [`net::TOR_FRESH_CIRCUIT_RETRIES`] times; never in clear.
     pub async fn send(&self, p: &Prepared) -> AppResult<(u16, Vec<u8>)> {
-        let mut client = self.client_for(p.family).await?;
+        let mut client = self.client_for_host(p.family, Some(&p.host)).await?;
+        let gate = self.in_flight(p.family);
+        let _permit = gate
+            .acquire()
+            .await
+            .map_err(|_| AppError::TorUnavailable("Tor stopped".into()))?;
         let onion = p.url.host_str().is_some_and(|h| h.ends_with(".onion"));
         let mut retries = 0;
         loop {
@@ -276,7 +316,7 @@ impl TorManager {
             }
             retries += 1;
             tokio::time::sleep(net::TOR_RETRY_BACKOFF * retries as u32).await;
-            client = self.fresh_client_for(p.family, &client)?;
+            client = self.fresh_client_for(p.family, &p.host, &client)?;
         }
     }
 
@@ -293,7 +333,7 @@ impl TorManager {
             .map_err(|_| {
                 AppError::Internal("network (Tor): circuit not established in time".into())
             })?
-            .map_err(|e| AppError::Internal(format!("network (Tor): {e}")))
+            .map_err(|e| AppError::Internal(format!("network (Tor): {}", error_chain(&e))))
     }
 
     async fn send_following_redirects(
@@ -370,7 +410,7 @@ impl TorManager {
             .map_err(|_| {
                 AppError::Internal("network (Tor): circuit not established in time".into())
             })?
-            .map_err(|e| net_err(&e))?;
+            .map_err(|e| net_err(&error_chain(&e)))?;
         let exchange = async {
             if plain {
                 http_exchange(stream, url, &host, method, headers, body, max_body).await
@@ -389,6 +429,18 @@ impl TorManager {
             .await
             .map_err(|_| AppError::Internal("network (Tor): timed out".into()))?
     }
+}
+
+/// `e` and its sources, for diagnostics (arti's top-level message omits the cause).
+fn error_chain(e: &(dyn std::error::Error + 'static)) -> String {
+    let mut out = e.to_string();
+    let mut cur = e.source();
+    while let Some(c) = cur {
+        out.push_str(": ");
+        out.push_str(&c.to_string());
+        cur = c.source();
+    }
+    out
 }
 
 /// HTTP/1.1 exchange over `io` (a TLS stream, or a raw onion-service stream).
@@ -476,6 +528,11 @@ async fn connect_with_retry(
                             | ErrorKind::RemoteConnectionRefused
                             | ErrorKind::RemoteNetworkFailed
                             | ErrorKind::RemoteStreamError
+                            | ErrorKind::CircuitCollapse
+                            | ErrorKind::TorNetworkTimeout
+                            // A stream begun on a circuit that closed meanwhile (tor-proto
+                            // `NotConnected`) surfaces as "bad API usage"; a new circuit fixes it.
+                            | ErrorKind::BadApiUsage
                     ) =>
             {
                 attempt += 1;
@@ -491,6 +548,19 @@ mod tests {
     use super::*;
     use crate::net::{prepare, EnvKeys, FetchRequest};
     use crate::settings::ApiKeys;
+
+    #[test]
+    fn tor_one_bounded_gate_per_family() {
+        let m = manager();
+        let a = m.in_flight(Family::Evm);
+        assert!(
+            Arc::ptr_eq(&a, &m.in_flight(Family::Evm)),
+            "one gate per family"
+        );
+        assert!(!Arc::ptr_eq(&a, &m.in_flight(Family::Solana)));
+        assert_eq!(a.available_permits(), MAX_IN_FLIGHT_PER_FAMILY);
+        assert!(m.rotated.lock().unwrap().is_empty());
+    }
 
     #[test]
     fn status_payload_shape() {

@@ -489,3 +489,101 @@ fn live_smoke_all_chains_mainnet() {
         assert!(failed.is_empty(), "failed: {failed:?}");
     });
 }
+
+/// History-shaped load over Tor (what the History screen does on every EVM chain at once):
+/// `eth_blockNumber`, then a JSON-RPC batch of `eth_getLogs` over the last 5000 blocks, on several
+/// chains in parallel, repeated a few times. `KYRO_SMOKE_ONLY` picks the chains (default: 3).
+#[test]
+#[ignore]
+fn live_smoke_evm_history_tor() {
+    std::env::set_var(crate::network::ENV, "mainnet");
+    let only: Vec<String> = std::env::var("KYRO_SMOKE_ONLY")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map_or_else(
+            || vec!["ethereum".into(), "base".into(), "arbitrum".into()],
+            |s| s.split(',').map(str::to_owned).collect(),
+        );
+    let dir = std::env::temp_dir().join(format!("kyro-smoke-hist-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let state = AppState::new(dir).unwrap();
+    let mut s = state.settings();
+    s.tor.enabled = true;
+    state.save_settings(s).unwrap();
+    let me = format!("0x{:0>64}", "d8da6bf26964af9d7eed9e03e53415d37aa96045");
+    let tokens: Vec<String> = (1..=20u8).map(|i| format!("0x{:040x}", i)).collect();
+
+    tauri::async_runtime::block_on(async {
+        let t0 = Instant::now();
+        state.net.tor.start();
+        let chains: Vec<(&str, &str)> = EVM
+            .iter()
+            .copied()
+            .filter(|(n, _)| only.iter().any(|o| o == n))
+            .collect();
+        let mut failed = Vec::new();
+        for round in 1..=3 {
+            let futs = chains.iter().map(|(name, url)| {
+                let (state, me, tokens) = (&state, &me, &tokens);
+                async move {
+                    let t = Instant::now();
+                    let r: Result<usize, String> = async {
+                        let n = rpc(state, url, "eth_blockNumber", json!([])).await?;
+                        let latest = u64::from_str_radix(
+                            n.as_str().unwrap_or("0x0").trim_start_matches("0x"),
+                            16,
+                        )
+                        .map_err(e)?;
+                        let range = json!({ "fromBlock": format!("0x{:x}", latest.saturating_sub(5000)), "toBlock": format!("0x{latest:x}") });
+                        let mut batch = Vec::new();
+                        for (i, chunk) in tokens.chunks(10).enumerate() {
+                            for topics in [json!([TRANSFER, null, me]), json!([TRANSFER, me])] {
+                                let mut q = range.clone();
+                                q["address"] = json!(chunk);
+                                q["topics"] = topics;
+                                batch.push(json!({ "jsonrpc": "2.0", "id": batch.len() + i, "method": "eth_getLogs", "params": [q] }));
+                            }
+                        }
+                        let req = FetchRequest {
+                            url: (*url).into(),
+                            method: "POST".into(),
+                            headers: [("content-type".to_owned(), "application/json".to_owned())]
+                                .into(),
+                            body: Some(Value::Array(batch).to_string()),
+                        };
+                        let r = state
+                            .net
+                            .fetch(req, &state.settings(), &state.env_keys, state.network)
+                            .await
+                            .map_err(e)?;
+                        if r.status != 200 {
+                            return Err(format!("HTTP {}", r.status));
+                        }
+                        Ok(r.body.len())
+                    }
+                    .await;
+                    (*name, r, t.elapsed())
+                }
+            });
+            for (name, r, dt) in futures_util::future::join_all(futs).await {
+                match r {
+                    Ok(len) => eprintln!(
+                        "round {round} OK   {name:<10} {:>5.1}s  {len} bytes",
+                        dt.as_secs_f32()
+                    ),
+                    Err(m) => {
+                        eprintln!(
+                            "round {round} FAIL {name:<10} {:>5.1}s  {m}",
+                            dt.as_secs_f32()
+                        );
+                        failed.push(format!("{round}:{name}"));
+                    }
+                }
+            }
+        }
+        eprintln!("total {:.1?}", t0.elapsed());
+        assert!(failed.is_empty(), "failed: {failed:?}");
+    });
+}
+
+const TRANSFER: &str = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
