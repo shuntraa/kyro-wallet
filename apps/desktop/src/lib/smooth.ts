@@ -80,3 +80,9 @@ export function downsample(values: number[], max: number): number[] {
   out.push(values[values.length - 1] as number);
   return out;
 }
+
+/** How many points a chart `width` px wide draws: about one every 2 px, between 16 and 240. */
+export function chartPointBudget(width: number): number {
+  if (!Number.isFinite(width) || width <= 0) return 240;
+  return Math.max(16, Math.min(240, Math.round(width / 2)));
+}

@@ -13,13 +13,17 @@ import { CardanoTokensPanel } from '../components/Cardano';
 import { XmrLockedNote, XmrSyncLine, useXmrStatus } from '../components/Monero';
 import { AddressShort, BigFiat, CoinIcon, EmptyState, ErrorLine, HIDDEN, TrendPill } from '../components/kit';
 import { SmoothChart } from '../components/charts';
-import { HistoryRow, LoadingLine } from '../components/HistoryRow';
+import { HistoryRow } from '../components/HistoryRow';
 import { useFavorites } from '../components/AssetLists';
 import { AccountPicker } from '../components/AccountPicker';
-import { Badge, Button, IconButton, Segmented, Skeleton } from '../components/ui/primitives';
+import { Badge, Button, IconButton, Segmented, Skeleton, Spinner } from '../components/ui/primitives';
 import { IconBack, IconDown, IconStake, IconStar, IconSwap, IconUp } from '../components/icons';
 import { idx } from '../components/motion';
 import { useT } from '../i18n';
+
+function pickForCoin(list: AssetDef[]): AssetDef | undefined {
+  return list.find((a) => a.kind === 'native') ?? list.find((a) => a.chainKey === 'ethereum') ?? list.find((a) => !a.readOnly) ?? list[0];
+}
 
 export function AssetDetail({ id }: { id: string }) {
   const { back, settings, navigate, hideBalances, network, activeHw, isMultiAccount, selectedAccounts, selectChainAccount } = useApp();
@@ -34,7 +38,8 @@ export function AssetDetail({ id }: { id: string }) {
   const coinId = asset?.coingeckoId ?? id.replace(/^cg:/, '');
   const coin = pf.marketById.get(coinId);
   const watch = WATCH_ONLY_CHAINS.find((w) => w.coingeckoId === coinId);
-  const supported = asset ?? assetsFor(network).find((a) => a.coingeckoId === coinId && a.kind === 'native');
+  // From the markets list (`cg:` id): the native coin, else the pinned token (Ethereum first).
+  const supported = asset ?? pickForCoin(assetsFor(network).filter((a) => a.coingeckoId === coinId));
   const multi = !!supported && isMultiAccount(supported.family);
   const holding = supported ? (multi ? pf.accountHoldings.find((h) => h.asset.id === supported.id && h.account?.index === selectedAccounts[supported.family]) : pf.holdings.find((h) => h.asset.id === supported.id)) : undefined;
   const accountRows = supported && multi ? pf.accountHoldings.filter((h) => h.asset.id === supported.id && h.account) : [];
@@ -259,6 +264,8 @@ export function AssetDetail({ id }: { id: string }) {
       </div>
 
       <div className="flex min-h-0 flex-1 gap-5">
+        {/* Price-only assets have no account here: no activity card. */}
+        {supported && (
         <section className="rise flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-card" style={idx(1)}>
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-6">
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('portfolio.activityOf', { symbol })}</span>
@@ -267,18 +274,19 @@ export function AssetDetail({ id }: { id: string }) {
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto scroll-thin">
-            {history.loading && activity.length === 0 ? (
-              <LoadingLine />
-            ) : activity.length === 0 && supported?.family === 'dot' && history.data?.dotHistory === 'unavailable' ? (
+            {activity.length === 0 && supported?.family === 'dot' && history.data?.dotHistory === 'unavailable' ? (
               <EmptyState title={t('portfolio.dotNoHistoryTitle')}>{network === 'testnet' ? t('portfolio.dotNoHistoryTestnet') : t('portfolio.dotNoHistory')}</EmptyState>
             ) : activity.length === 0 ? (
-              <EmptyState title={t('portfolio.noActivity')}>{supported ? t('portfolio.noActivityHint') : t('portfolio.noAccountHere')}</EmptyState>
+              <EmptyState title={t('portfolio.noActivity')} action={history.loading ? <Spinner className="size-3.5 text-mute" /> : undefined}>
+                {t('portfolio.noActivityHint')}
+              </EmptyState>
             ) : (
               <div className="stagger">{activity.map((e, i) => <HistoryRow key={e.id} i={i} e={e} compact price={price?.price ?? null} currency={cur} hidden={hideBalances} />)}</div>
             )}
           </div>
         </section>
-        <section className="rise flex w-[360px] shrink-0 flex-col rounded-panel border border-line bg-card px-6 py-5" style={idx(2)}>
+        )}
+        <section className={cn('rise flex shrink-0 flex-col rounded-panel border border-line bg-card px-6 py-5', supported ? 'w-[360px]' : 'flex-1')} style={idx(2)}>
           <div className="flex items-baseline justify-between pb-3">
             <span className="text-[15px] font-medium tracking-[-0.01em]">{t('portfolio.market')}</span>
           </div>

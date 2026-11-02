@@ -2,9 +2,9 @@
 // Charts: smooth Catmull-Rom curves (no angles), ice-blue line drawn from the left on mount, a
 // faint ice wash under it, hover crosshair + tooltip.
 
-import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { areaPath, downsample, fitSeries, smoothPath } from '../lib/smooth';
+import { areaPath, chartPointBudget, downsample, fitSeries, smoothPath } from '../lib/smooth';
 import { EASE_OUT } from './motion';
 import { t } from '../i18n';
 
@@ -28,9 +28,25 @@ export function SmoothChart({ values, height, renderTooltip, defaultPoint = 'las
   const gid = useId().replace(/:/g, '');
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
-  const data = useMemo(() => downsample(values, 240), [values]);
+  // Draw in real pixels: a stretched viewBox squeezed the curve sideways in a narrow window and
+  // parts of the stroke went missing. One point per ~2 px, re-measured on every resize.
+  const [vbW, setVbW] = useState(VB_W);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const w = Math.round(el.getBoundingClientRect().width);
+      if (w > 0) setVbW(w);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const data = useMemo(() => downsample(values, chartPointBudget(vbW)), [values, vbW]);
   const ratio = values.length > 1 ? (values.length - 1) / Math.max(1, data.length - 1) : 1;
-  const pts = useMemo(() => fitSeries(data, { width: VB_W, height, padTop, padBottom }), [data, height, padTop, padBottom]);
+  const pts = useMemo(() => fitSeries(data, { width: vbW, height, padTop, padBottom }), [data, vbW, height, padTop, padBottom]);
   const line = useMemo(() => smoothPath(pts), [pts]);
   const area = useMemo(() => areaPath(line, pts, height), [line, pts, height]);
 
@@ -57,7 +73,7 @@ export function SmoothChart({ values, height, renderTooltip, defaultPoint = 'las
 
   return (
     <div ref={ref} className={className} style={{ position: 'relative', height }} onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
-      <svg width="100%" height={height} viewBox={`0 0 ${VB_W} ${height}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel} className="chart-reveal">
+      <svg width="100%" height={height} viewBox={`0 0 ${vbW} ${height}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel} className="chart-reveal">
         <defs>
           <linearGradient id={`g${gid}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor={stroke} stopOpacity="0.16" />
@@ -66,21 +82,21 @@ export function SmoothChart({ values, height, renderTooltip, defaultPoint = 'las
           </linearGradient>
         </defs>
         {area && <path d={area} fill={`url(#g${gid})`} />}
-        {line && <path d={line} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" vectorEffect="non-scaling-stroke" />}
+        {line && <path d={line} fill="none" stroke={stroke} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />}
       </svg>
       {p && (
         <>
-          <div aria-hidden="true" style={{ position: 'absolute', left: `${(p.x / VB_W) * 100}%`, top: 0, bottom: 0, borderLeft: '1px solid rgba(124,196,255,.22)' }} />
+          <div aria-hidden="true" style={{ position: 'absolute', left: `${(p.x / vbW) * 100}%`, top: 0, bottom: 0, borderLeft: '1px solid rgba(124,196,255,.22)' }} />
           <div
             aria-hidden="true"
             className="fade-in"
-            style={{ position: 'absolute', left: `${(p.x / VB_W) * 100}%`, top: p.y, width: 9, height: 9, margin: '-4.5px 0 0 -4.5px', borderRadius: 999, background: '#090a0c', border: `2px solid ${stroke}`, transition: 'top 120ms ease-out' }}
+            style={{ position: 'absolute', left: `${(p.x / vbW) * 100}%`, top: p.y, width: 9, height: 9, margin: '-4.5px 0 0 -4.5px', borderRadius: 999, background: '#090a0c', border: `2px solid ${stroke}`, transition: 'top 120ms ease-out' }}
           />
           {tip && (
             <div
               style={{
                 position: 'absolute',
-                left: `clamp(110px, ${(p.x / VB_W) * 100}%, calc(100% - 110px))`,
+                left: `clamp(110px, ${(p.x / vbW) * 100}%, calc(100% - 110px))`,
                 top: Math.max(0, p.y - 80),
                 transform: 'translateX(-50%)',
               }}
